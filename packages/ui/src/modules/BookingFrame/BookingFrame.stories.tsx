@@ -1,5 +1,5 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
-import { useState } from 'react';
+import { useState, type ComponentProps } from 'react';
 import { expect, fn, userEvent } from 'storybook/test';
 import { Button } from '../../atoms/Button/Button.tsx';
 import { SegmentedControl } from '../../molecules/SegmentedControl/SegmentedControl.tsx';
@@ -40,47 +40,7 @@ type Story = StoryObj<typeof meta>;
 /** The first step: the rail beside the card, the month and the chosen day's times, and the Book bar. */
 export const ChooseATime: Story = {
   parameters: { crm: { preview: true } },
-  render: function Render(args) {
-    const [day, setDay] = useState('2026-10-08');
-    const [time, setTime] = useState<string | undefined>(undefined);
-    return (
-      <Stage width="fill" height="page">
-        <BookingFrame
-          {...args}
-          heading="Choose a time"
-          footer={
-            <Button variant="primary" size="lg" isFullWidth="center" isDisabled={time === undefined}>
-              {time === undefined ? 'Book' : `Book Thu Oct 8 at ${time}`}
-            </Button>
-          }
-          toolbar={
-            <SegmentedControl
-              label="View"
-              defaultValue="month"
-              segments={[
-                { value: 'month', label: 'Month', icon: 'calendar', isIconOnly: true },
-                { value: 'list', label: 'List', icon: 'list', isIconOnly: true },
-              ]}
-            />
-          }
-          aside={
-            <SlotList heading="Thu Oct 8" slots={TIMES} value={time} onChange={setTime} hour12 onHour12Change={fn()} />
-          }
-        >
-          <MonthTiles
-            month="2026-10"
-            today="2026-10-08"
-            openDays={OPEN}
-            value={day}
-            onChange={setDay}
-            onMonthChange={fn()}
-            canPrevious={false}
-            canNext
-          />
-        </BookingFrame>
-      </Stage>
-    );
-  },
+  render: (args) => <Interactive {...args} />,
   play: async ({ canvas }) => {
     await expect(canvas.getByRole('heading', { level: 1, name: 'Intro call · 30 min' })).toBeInTheDocument();
     await userEvent.click(canvas.getByRole('button', { name: /^9:30 AM/ }));
@@ -125,3 +85,46 @@ export const Failed: Story = {
     await expect(canvas.getByRole('heading', { name: 'This page didn’t load' })).toHaveFocus();
   },
 };
+
+/** The story's own state, in a component so the artifact's preview can render it too. */
+function Interactive(args: ComponentProps<typeof BookingFrame>) {
+  const [day, setDay] = useState('2026-10-08');
+  const [time, setTime] = useState<string | undefined>(undefined);
+  return (
+    <Stage width="fill" height="page">
+      <BookingFrame
+        {...args}
+        heading="Choose a time"
+        footer={
+          <Button variant="primary" size="lg" isFullWidth="center" isDisabled={time === undefined}>
+            {time === undefined ? 'Book' : `Book Thu Oct 8 at ${time}`}
+          </Button>
+        }
+        toolbar={
+          <SegmentedControl
+            label="View"
+            defaultValue="month"
+            segments={[
+              { value: 'month', label: 'Month', icon: 'calendar', isIconOnly: true },
+              { value: 'list', label: 'List', icon: 'list', isIconOnly: true },
+            ]}
+          />
+        }
+        aside={
+          <SlotList heading="Thu Oct 8" slots={TIMES} value={time} onChange={setTime} hour12 onHour12Change={fn()} />
+        }
+      >
+        <MonthTiles
+          month="2026-10"
+          today="2026-10-08"
+          openDays={OPEN}
+          value={day}
+          onChange={setDay}
+          onMonthChange={fn()}
+          canPrevious={false}
+          canNext
+        />
+      </BookingFrame>
+    </Stage>
+  );
+}

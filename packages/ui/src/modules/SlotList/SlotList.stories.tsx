@@ -1,5 +1,5 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
-import { useState } from 'react';
+import { useState, type ComponentProps } from 'react';
 import { expect, fn, userEvent } from 'storybook/test';
 import { Stage } from '../../workbench/Stage/Stage.tsx';
 import { SlotList, type Slot } from './SlotList.tsx';
@@ -38,14 +38,7 @@ type Story = StoryObj<typeof meta>;
 /** A day's times; the picked one fills. */
 export const Default: Story = {
   parameters: { crm: { preview: true } },
-  render: function Render(args) {
-    const [value, setValue] = useState(args.value);
-    return (
-      <Stage width="narrow" height="page">
-        <SlotList {...args} value={value} onChange={setValue} />
-      </Stage>
-    );
-  },
+  render: (args) => <Interactive {...args} />,
   play: async ({ canvas }) => {
     await userEvent.click(canvas.getByRole('button', { name: /^10:00 AM/ }));
     await expect(canvas.getByRole('button', { name: /^10:00 AM/ })).toHaveAttribute('aria-pressed', 'true');
@@ -110,3 +103,13 @@ export const Empty: Story = {
     </Stage>
   ),
 };
+
+/** The story's own state, in a component so the artifact's preview can render it too. */
+function Interactive(args: ComponentProps<typeof SlotList>) {
+  const [value, setValue] = useState(args.value);
+  return (
+    <Stage width="narrow" height="page">
+      <SlotList {...args} value={value} onChange={setValue} />
+    </Stage>
+  );
+}

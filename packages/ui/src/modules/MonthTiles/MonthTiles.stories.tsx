@@ -1,5 +1,5 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
-import { useState } from 'react';
+import { useState, type ComponentProps } from 'react';
 import { expect, fn, userEvent } from 'storybook/test';
 import { Stage } from '../../workbench/Stage/Stage.tsx';
 import { MonthTiles } from './MonthTiles.tsx';
@@ -35,14 +35,7 @@ type Story = StoryObj<typeof meta>;
 /** A month: open days filled, closed days quiet, today chosen with its dot. */
 export const Default: Story = {
   parameters: { crm: { preview: true } },
-  render: function Render(args) {
-    const [value, setValue] = useState(args.value);
-    return (
-      <Stage width="narrow">
-        <MonthTiles {...args} value={value} onChange={setValue} />
-      </Stage>
-    );
-  },
+  render: (args) => <Interactive {...args} />,
   play: async ({ canvas }) => {
     await userEvent.click(canvas.getByRole('button', { name: /Monday, October 12/ }));
     await expect(canvas.getByRole('button', { name: /Monday, October 12/ })).toHaveAttribute('aria-pressed', 'true');
@@ -94,3 +87,13 @@ export const LastMonth: Story = {
     await expect(args.onMonthChange).toHaveBeenCalledWith('2026-09');
   },
 };
+
+/** The story's own state, in a component so the artifact's preview can render it too. */
+function Interactive(args: ComponentProps<typeof MonthTiles>) {
+  const [value, setValue] = useState(args.value);
+  return (
+    <Stage width="narrow">
+      <MonthTiles {...args} value={value} onChange={setValue} />
+    </Stage>
+  );
+}
