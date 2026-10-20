@@ -42,6 +42,7 @@ export interface CalendarApi {
   readonly syncNow: (input: {
     readonly workspace: string;
     readonly connectionId: string;
+    readonly mutationId: string;
   }) => Promise<{ readonly queued: boolean }>;
   readonly settings: (input: { readonly workspace: string }) => Promise<CalendarSettingsView>;
   readonly updateSettings: (input: {
@@ -290,7 +291,7 @@ export function createCalendarStore(deps: CalendarDeps) {
     /** Brings a connection's next sync forward (Sync now); the list reads again shortly after. Answers whether it queued. */
     async syncNow(workspace: string, connectionId: string): Promise<boolean> {
       try {
-        const answer = await deps.api.syncNow({ workspace, connectionId });
+        const answer = await deps.api.syncNow({ workspace, connectionId, mutationId: deps.mintId() });
         later(() => viewOf(workspace).reload(), SYNC_POLL_MS);
         return answer.queued;
       } catch (error) {

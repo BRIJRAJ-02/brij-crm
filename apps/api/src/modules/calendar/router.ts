@@ -46,12 +46,12 @@ export const calendarRouter = member.calendar.router({
         removeCalendarConnection(context.scope, { connectionId: input.connectionId }, hooks),
       ),
     ),
-    // Sync now: the queued row wakes the worker like any other.
-    syncNow: member.calendar.connections.syncNow.handler(async ({ context, input }) => {
-      const answer = await syncCalendarNow(context.scope, { connectionId: input.connectionId });
-      if (answer.queued) context.wakeRelay();
-      return answer;
-    }),
+    // Sync now: a write like any other, so its commit (the queued job row) wakes the worker through the hooks.
+    syncNow: member.calendar.connections.syncNow.handler(({ context, input }) =>
+      commitWrite(context, { mutationId: input.mutationId }, () =>
+        syncCalendarNow(context.scope, { connectionId: input.connectionId }),
+      ),
+    ),
   },
   meetings: {
     forRecord: member.calendar.meetings.forRecord.handler(({ context, input }) =>

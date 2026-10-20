@@ -114,7 +114,7 @@ export const RemoveCalendarConnectionInput = WorkspaceScoped.extend({
 export type RemoveCalendarConnectionInput = z.infer<typeof RemoveCalendarConnectionInput>;
 
 /** Sync now: brings one of the member's own connections' next sync forward. */
-export const SyncCalendarNowInput = WorkspaceScoped.extend({ connectionId: z.uuid() });
+export const SyncCalendarNowInput = WorkspaceScoped.extend({ connectionId: z.uuid(), mutationId: z.uuid() });
 /** Sync now. */
 export type SyncCalendarNowInput = z.infer<typeof SyncCalendarNowInput>;
 

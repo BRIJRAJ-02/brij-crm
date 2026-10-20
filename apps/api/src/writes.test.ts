@@ -52,6 +52,7 @@ const READS: ReadonlySet<string> = new Set([
   'notes.list',
   'calendar.connections.list',
   'calendar.meetings.forRecord',
+  'calendar.settings.get',
   'forms.list',
   'forms.get',
   'forms.attributes',
@@ -772,6 +773,39 @@ const WRITES: Record<string, (m: Member, mutationId: string) => Promise<readonly
       { kind: 'meetings', item_ids: [meetingId], record_ids: [recordId], mutation_id: mutationId },
     ];
   },
+  // Sync now queues the connection's sync: a job row, no outbox row, and one poke so the worker wakes for it.
+  'calendar.connections.syncNow': async (m, mutationId) => {
+    const { connectionId, recordId } = await heldMeeting(m);
+    await m.client.calendar.connections.syncNow({ workspace: m.slug, connectionId, mutationId });
+    return [{ kind: 'records', record_ids: [recordId] }];
+  },
+  // Add as person (milestone 2): the new person's record, and the meeting now on the person's timeline too.
+  'calendar.meetings.addAttendee': async (m, mutationId) => {
+    const { meetingId, recordId } = await heldMeeting(m);
+    await testQuery(
+      ownerUrl,
+      `insert into meeting_attendees (workspace_id, meeting_id, email, name, position, match)
+       values ($1, $2, 'cy@initech.example', 'Cy Ng', 1, 'unknown')`,
+      [m.workspace.id, meetingId],
+    );
+    const added = await m.client.calendar.meetings.addAttendee({
+      workspace: m.slug,
+      recordId,
+      meetingId,
+      email: 'cy@initech.example',
+      mutationId,
+    });
+    return [
+      { kind: 'records', record_ids: [recordId] },
+      { kind: 'records', record_ids: [added.recordId], mutation_id: mutationId },
+      { kind: 'meetings', item_ids: [meetingId], mutation_id: mutationId },
+    ];
+  },
+  // The workspace's calendar settings: a setting, not CRM data, so no outbox row; one poke.
+  'calendar.settings.update': async (m, mutationId) => {
+    await m.client.calendar.settings.update({ workspace: m.slug, createUnknownPeople: true, mutationId });
+    return [];
+  },
   // Booking pages (spec 0025): settings, not CRM data, so no outbox row; still one poke per write.
   'bookingPages.create': async (m, mutationId) => {
     await m.client.bookingPages.create({ workspace: m.slug, id: newId(), title: 'Intro', timeZone: 'UTC', mutationId });
@@ -1038,6 +1072,8 @@ const WRITES_MADE: Readonly<Record<string, number>> = {
   'notes.restore': 4,
   'calendar.connections.update': 2,
   'calendar.connections.remove': 2,
+  'calendar.connections.syncNow': 2,
+  'calendar.meetings.addAttendee': 2,
   'bookingPages.update': 2,
   'bookingPages.delete': 2,
   'bookings.blocks.remove': 2,
