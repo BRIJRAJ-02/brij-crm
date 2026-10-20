@@ -14,6 +14,8 @@ import { strings } from './strings.ts';
 export interface SyncDialogProps {
   readonly slug: string;
   readonly formId: string;
+  /** Why it opened: a publish that changed where answers are filed, or the More menu. */
+  readonly reason: 'published' | 'menu';
   readonly isOpen: boolean;
   readonly onClose: () => void;
   /** The sync started: its job, to follow to its end. */
@@ -27,7 +29,7 @@ type PreviewState =
   | { readonly status: 'error'; readonly scope: SyncScope; readonly message: string };
 
 /** "Apply to the 42 earlier enquiries?": the preview, the scope, and Start or Not now. */
-export function SyncDialog({ slug, formId, isOpen, onClose, onStarted }: SyncDialogProps) {
+export function SyncDialog({ slug, formId, reason, isOpen, onClose, onStarted }: SyncDialogProps) {
   const { data } = useRouteContext({ from: '__root__' });
   const [scope, setScope] = useState<SyncScope>('unfiled');
   const [state, setState] = useState<PreviewState>({ status: 'loading', scope: 'unfiled' });
@@ -35,6 +37,18 @@ export function SyncDialog({ slug, formId, isOpen, onClose, onStarted }: SyncDia
   const [jobId, setJobId] = useState(() => data.submissions.newId());
   const [isStarting, setStarting] = useState(false);
   const [failure, setFailure] = useState<string | undefined>(undefined);
+  // Bumped by Try again, so the preview is read again.
+  const [attempt, setAttempt] = useState(0);
+  // Each opening starts afresh: no counts or failure from the last one.
+  const [wasOpen, setWasOpen] = useState(isOpen);
+  if (isOpen !== wasOpen) {
+    setWasOpen(isOpen);
+    if (isOpen) {
+      setState({ status: 'loading', scope });
+      setFailure(undefined);
+      setAttempt((count) => count + 1);
+    }
+  }
 
   useEffect(() => {
     if (!isOpen) return;
@@ -52,7 +66,7 @@ export function SyncDialog({ slug, formId, isOpen, onClose, onStarted }: SyncDia
     return () => {
       isCurrent = false;
     };
-  }, [data, slug, formId, scope, isOpen]);
+  }, [data, slug, formId, scope, isOpen, attempt]);
 
   // A scope just changed and its preview is on its way.
   const shown: PreviewState = state.scope === scope ? state : { status: 'loading', scope };
@@ -77,34 +91,35 @@ export function SyncDialog({ slug, formId, isOpen, onClose, onStarted }: SyncDia
 
   return (
     <Modal
-      title={preview === undefined ? strings.syncTitleAny : strings.syncTitle(preview.total)}
+      title={strings.syncTitle}
       isOpen={isOpen}
+      isBusy={isStarting}
       onOpenChange={(open) => {
         if (!open) onClose();
       }}
       actions={
         <>
-          <Button slot="close" isDisabled={isStarting}>
-            {strings.notNow}
+          <Button slot="close" isDisabled={isStarting} kbd="ESC">
+            {reason === 'published' ? strings.notNow : strings.cancel}
           </Button>
-          <Button
-            variant="primary"
-            isPending={isStarting}
-            isDisabled={preview === undefined || preview.total === 0}
-            onPress={start}
-          >
-            {isStarting ? strings.syncStarting : strings.syncStart}
-          </Button>
+          {preview?.total !== 0 && (
+            <Button variant="primary" isPending={isStarting} isDisabled={preview === undefined} onPress={start}>
+              {isStarting ? strings.syncStarting : strings.syncStart}
+            </Button>
+          )}
         </>
       }
     >
-      <p>{strings.syncText}</p>
+      <p>{reason === 'published' ? strings.syncTextPublished : strings.syncTextMenu}</p>
       <RadioGroup
         label={strings.syncScope}
         orientation="horizontal"
+        isDisabled={isStarting}
         value={scope}
         onChange={(value) => {
-          if (value === 'all' || value === 'unfiled') setScope(value);
+          if (value !== 'all' && value !== 'unfiled') return;
+          setScope(value);
+          setJobId(data.submissions.newId());
         }}
       >
         <Radio value="unfiled" description={strings.syncUnfiledText}>
@@ -115,9 +130,26 @@ export function SyncDialog({ slug, formId, isOpen, onClose, onStarted }: SyncDia
         </Radio>
       </RadioGroup>
       {shown.status === 'loading' && <Skeleton lines={4} />}
-      {shown.status === 'error' && <Callout tone="danger">{shown.message}</Callout>}
-      {preview !== undefined && (
+      {shown.status === 'error' && (
+        <Callout
+          tone="danger"
+          actions={
+            <Button
+              onPress={() => {
+                setAttempt((count) => count + 1);
+              }}
+            >
+              {strings.tryAgain}
+            </Button>
+          }
+        >
+          {shown.message}
+        </Callout>
+      )}
+      {preview?.total === 0 && <p>{strings.syncNothing}</p>}
+      {preview !== undefined && preview.total > 0 && (
         <>
+          <p>{strings.syncInScope(preview.total)}</p>
           <DescriptionList
             items={[
               { term: strings.syncCreates, description: String(preview.creates) },
@@ -126,6 +158,7 @@ export function SyncDialog({ slug, formId, isOpen, onClose, onStarted }: SyncDia
               { term: strings.syncFailures, description: String(preview.failures) },
             ]}
           />
+          {preview.failures > 0 && <p>{strings.syncFailuresText}</p>}
           {preview.capped && <p>{strings.syncCapped(preview.checked)}</p>}
         </>
       )}

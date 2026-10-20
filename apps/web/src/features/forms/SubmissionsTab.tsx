@@ -1,10 +1,11 @@
 // Brief
 // Purpose: a form's submissions (spec 0023): who sent what and when, newest first, with what needs a look on top.
 // Main task: scan the people and their first answers, open one in full, and settle many at once (spam or not).
-// Leaves out: CSV export, Add to CRM and Sync old records (the spam lane's backend), counts per state, server search
-// (search filters the rows loaded so far), and live arrival.
+// Also: Add to CRM, Sync earlier enquiries and CSV export, shown once their service is served (submissionsBackendReady).
+// Leaves out: counts per state, server search (search filters the rows loaded so far), and live arrival.
 import {
   isDataError,
+  type JobView,
   type ObjectSummary,
   type SubmissionAnswer,
   type SubmissionPage,
@@ -24,6 +25,7 @@ import {
   MenuTrigger,
   Modal,
   Panel,
+  Badge,
   RecordChip,
   RelativeTime,
   LinkListToolbar,
@@ -39,7 +41,7 @@ import { useState } from 'react';
 import { createPortal } from 'react-dom';
 import { recordLinks } from '../records/timeline.ts';
 import { formHref } from './paths.ts';
-import { useJobFollower } from './followJobs.ts';
+import { submissionsBackendReady } from './followJobs.ts';
 import { strings } from './strings.ts';
 import { SyncDialog } from './SyncDialog.tsx';
 import { useFormToolbarSlot } from './toolbarSlot.ts';
@@ -57,10 +59,18 @@ export interface SubmissionsTabProps {
   readonly questions: readonly { readonly id: string; readonly label: string }[];
   /** The form's public link, for the empty state's Copy link. */
   readonly link: string;
+  /** Follows a job this tab started to its end; the editor holds it, so a tab change never loses the result. */
+  readonly followJob: (jobId: string, onDone: (job: JobView) => void) => void;
 }
 
 /** How many answers get a column of their own; the rest are in the open submission. */
 const ANSWER_COLUMNS = 2;
+
+/** The most one Add to CRM call names (the contract's ADD_TO_CRM_MAX). */
+const ADD_MAX = 500;
+
+/** The most one export by id names (the contract's EXPORT_IDS_MAX). */
+const EXPORT_MAX = 1_000;
 
 const ALL = 'all';
 const FILTERS: readonly SubmissionState[] = ['processed', 'needs_review', 'spam', 'failed'];
@@ -98,6 +108,7 @@ export function SubmissionsTab({
   canManage,
   questions,
   link: formLink,
+  followJob,
 }: SubmissionsTabProps) {
   const slot = useFormToolbarSlot();
   const [query, setQuery] = useState('');
@@ -105,7 +116,6 @@ export function SubmissionsTab({
   const [bulk, setBulk] = useState<{ readonly label: string; readonly value: number } | undefined>(undefined);
   const [isSyncing, setSyncing] = useState(false);
   const { data, toasts } = useRouteContext({ from: '__root__' });
-  const jobs = useJobFollower(data.jobs.view(slug, 'mine'));
   const navigate = useNavigate();
   const router = useRouter();
   const link = recordLinks(slug, objects);
@@ -254,18 +264,26 @@ export function SubmissionsTab({
     );
   };
 
-  /** Files these in the CRM with the form's mapping, says how many it took, and follows the job to its end. */
+  /** Files these in the CRM the way the form files now, says how many it took, and follows the job to its end. */
   const addToCrm = (ids: readonly string[]) => {
-    if (ids.length === 0) return;
-    data.submissions.addToCrm(slug, formId, ids).then(
+    if (ids.length === 0 || busy !== undefined) return;
+    setBusy('add');
+    // At most the contract's ADD_TO_CRM_MAX in one call.
+    data.submissions.addToCrm(slug, formId, ids.slice(0, ADD_MAX)).then(
       (result) => {
+        setBusy(undefined);
         setSelected(new Set());
-        toasts.toast({ tone: 'success', message: strings.addQueued(result.queued, result.skipped) });
+        toasts.toast(
+          result.queued === 0
+            ? { tone: 'info', message: strings.nothingToAdd }
+            : { tone: 'info', message: strings.addQueued(result.queued, result.skipped) },
+        );
         if (result.jobId !== undefined) {
-          jobs.follow(result.jobId, (job) => {
+          followJob(result.jobId, (job) => {
             toasts.toast({
               tone: job.status === 'succeeded' ? 'success' : 'danger',
-              message: job.status === 'succeeded' ? strings.addDone(job.done) : strings.jobFailed(job.label),
+              message:
+                job.status === 'succeeded' ? strings.addDone(job.done, job.refused) : strings.jobFailed(job.label),
             });
             void router.invalidate();
           });
@@ -273,6 +291,7 @@ export function SubmissionsTab({
         void router.invalidate();
       },
       (error: unknown) => {
+        setBusy(undefined);
         toasts.toast({ tone: 'danger', message: isDataError(error) ? error.message : strings.failedText });
       },
     );
@@ -280,20 +299,21 @@ export function SubmissionsTab({
 
   /** Exports the picked rows, or else what the filter shows, as CSV; the file downloads once its job is done. */
   const exportCsv = () => {
-    const ids = picked.map((submission) => submission.id);
+    // The picked rows; else what the table shows when a search narrows it; else the filter.
+    const ids = (picked.length > 0 ? picked : query.trim() === '' ? [] : shown).map((submission) => submission.id);
     data.submissions
       .export(
         slug,
         data.submissions.newId(),
         formId,
         ids.length > 0
-          ? { kind: 'ids', submissionIds: ids }
+          ? { kind: 'ids', submissionIds: ids.slice(0, EXPORT_MAX) }
           : { kind: 'filter', ...(state === undefined ? {} : { state }) },
       )
       .then(
         (view) => {
           toasts.toast({ tone: 'info', message: strings.exportStarted });
-          jobs.follow(view.jobId, (job) => {
+          followJob(view.jobId, (job) => {
             toasts.toast(
               job.status === 'succeeded'
                 ? {
@@ -302,7 +322,8 @@ export function SubmissionsTab({
                     action: {
                       label: strings.download,
                       onAction: () => {
-                        window.location.assign(data.submissions.exportDownloadPath(slug, view.id));
+                        // A new tab, so an expired file's error never replaces the app.
+                        window.open(data.submissions.exportDownloadPath(slug, view.id), '_blank', 'noopener');
                       },
                     },
                   }
@@ -321,6 +342,7 @@ export function SubmissionsTab({
       <Button variant="ghost" icon="ellipsis" label={strings.moreSubmissionActions} />
       <Menu
         label={strings.moreSubmissionActions}
+        disabledKeys={rows.length === 0 ? ['export'] : []}
         onAction={(key) => {
           if (key === 'export') exportCsv();
           if (key === 'sync') setSyncing(true);
@@ -329,7 +351,13 @@ export function SubmissionsTab({
         <MenuItem
           id="export"
           icon="download"
-          description={picked.length > 0 ? strings.exportPicked(picked.length) : strings.exportFilter}
+          description={
+            picked.length > 0
+              ? strings.exportPicked(picked.length)
+              : query.trim() === ''
+                ? strings.exportFilter
+                : strings.exportShown
+          }
         >
           {strings.exportCsv}
         </MenuItem>
@@ -364,7 +392,7 @@ export function SubmissionsTab({
               );
             }}
           />
-          {canManage && moreActions}
+          {submissionsBackendReady() && canManage && moreActions}
         </>
       }
     />
@@ -377,8 +405,16 @@ export function SubmissionsTab({
       case 'person': {
         // The CRM link: the record it filed into, filing while its job runs, or the email and Not in CRM.
         const crm = submission.crm;
-        if (crm.state === 'filing') return strings.crmFiling(submission.email);
-        if (crm.state === 'not_in_crm') return strings.notInCrm(submission.email);
+        if (crm.state === 'filing' || crm.state === 'not_in_crm') {
+          // The note shows only where it helps: filing, or one Add to CRM can take.
+          const note = crm.state === 'filing' ? strings.crmFiling : crm.canAddToCrm ? strings.notInCrm : undefined;
+          return (
+            <>
+              <TruncatedText>{submission.email ?? ''}</TruncatedText>
+              {note !== undefined && <Badge text={note} />}
+            </>
+          );
+        }
         const href = link(crm.record.objectId, crm.record.recordId);
         return <RecordChip display={crm.record} {...(href === undefined ? {} : { href })} isFlat />;
       }
@@ -430,9 +466,9 @@ export function SubmissionsTab({
               {strings.notSpam}
             </Button>
           )}
-          {addable.length > 0 && (
+          {submissionsBackendReady() && addable.length > 0 && (
             <Button
-              icon="user-plus"
+              isPending={busy === 'add'}
               onPress={() => {
                 addToCrm(addable.map((submission) => submission.id));
               }}
@@ -506,8 +542,13 @@ export function SubmissionsTab({
                         {strings.release}
                       </Button>
                     )}
-                    {open.crm.state === 'not_in_crm' && open.crm.canAddToCrm && (
-                      <Button variant="primary" icon="user-plus" onPress={() => addToCrm([open.id])}>
+                    {submissionsBackendReady() && open.crm.state === 'not_in_crm' && open.crm.canAddToCrm && (
+                      // Retry is the one primary on a failed enquiry; Add to CRM files it with today's settings.
+                      <Button
+                        {...(open.state === 'failed' ? {} : { variant: 'primary' as const })}
+                        isPending={busy === 'add'}
+                        onPress={() => addToCrm([open.id])}
+                      >
                         {strings.addToCrm}
                       </Button>
                     )}
@@ -535,6 +576,7 @@ export function SubmissionsTab({
       <SyncDialog
         slug={slug}
         formId={formId}
+        reason="menu"
         isOpen={isSyncing}
         onClose={() => {
           setSyncing(false);
@@ -542,7 +584,7 @@ export function SubmissionsTab({
         onStarted={(jobId) => {
           setSyncing(false);
           toasts.toast({ tone: 'info', message: strings.syncStarted });
-          jobs.follow(jobId, (job) => {
+          followJob(jobId, (job) => {
             toasts.toast({
               tone: job.status === 'succeeded' ? 'success' : 'danger',
               message:
