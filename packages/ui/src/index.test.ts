@@ -151,6 +151,7 @@ describe('@crm/ui', () => {
       'VerifyEmail',
       'ViewBar',
       'ViewSettings',
+      'VisitorBar',
       'VisuallyHidden',
       'WeekCalendar',
       'arraySource',

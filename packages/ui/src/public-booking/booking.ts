@@ -23,6 +23,7 @@ export { BookingReceipt, type BookingReceiptState } from '../modules/BookingRece
 export { DayStrip } from '../modules/DayStrip/DayStrip.tsx';
 export { MonthTiles } from '../modules/MonthTiles/MonthTiles.tsx';
 export { SlotList, type Slot } from '../modules/SlotList/SlotList.tsx';
+export { VisitorBar, type VisitorBarCalendar } from '../modules/VisitorBar/VisitorBar.tsx';
 
 /** Props for BookingProvider. */
 export interface BookingProviderProps {

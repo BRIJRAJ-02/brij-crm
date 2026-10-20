@@ -70,6 +70,15 @@ export const strings = {
   failedTitle: 'This page didn’t load',
   failedText: 'Check your connection and try again.',
   retry: 'Try again',
+  // The visitor's calendar (spec 0028).
+  showAllTimes: 'Show all times',
+  allBusy: (host: string) => `You’re busy for every time ${host} has open.`,
+  connectResults: {
+    denied: 'Your calendar wasn’t connected. Every time still shows.',
+    scope: 'Timefix needs to see when you’re busy to compare calendars. Connect again and leave that box ticked.',
+    failed: 'Couldn’t connect your calendar. Try again in a moment.',
+    off: 'Connecting a calendar isn’t available on this page yet.',
+  },
   loading: 'Loading…',
   // The guest page.
   titles: {

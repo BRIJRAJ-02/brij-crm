@@ -215,6 +215,12 @@ export {
 export { DayStrip, type DayStripProps } from './modules/DayStrip/DayStrip.tsx';
 export { MonthTiles, type MonthTilesProps } from './modules/MonthTiles/MonthTiles.tsx';
 export { SlotList, type Slot, type SlotListProps } from './modules/SlotList/SlotList.tsx';
+export {
+  VisitorBar,
+  type VisitorBarCalendar,
+  type VisitorBarPerson,
+  type VisitorBarProps,
+} from './modules/VisitorBar/VisitorBar.tsx';
 export { SectionBar, type SectionBarProps } from './molecules/SectionBar/SectionBar.tsx';
 export { PageColumn, type PageColumnProps } from './modules/PageColumn/PageColumn.tsx';
 export { PreviewLayout, type PreviewDevice, type PreviewLayoutProps } from './modules/PreviewLayout/PreviewLayout.tsx';

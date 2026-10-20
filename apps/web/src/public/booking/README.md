@@ -14,7 +14,8 @@ Since 20 October 2026 the pages draw with the component library through `@crm/ui
 - The first open day is chosen on arrival. Picking a time never moves on: the Book bar names it ("Book Tue, Oct 20 at 9:30 AM"); before that it reads "Book", disabled. 12h or 24h is remembered.
 - The details step keeps the rail, now with the picked time, and the card holds Your name, Email, Add guests (up to 10), a number to call for a phone page, the note, then Back and Confirm booking. A taken time goes back to fresh times with "Someone just took that time. Pick another."
 - States: skeletons while the page loads, no times, the host's calendar unreachable, a failed read with Try again, paused, not found.
-- Prefill (`prefill.ts`): the seam for a form's signed, two hour, single use link, with "Booking as {name}. Not you?"; a stub until milestone 3. The visitor's own sign in and calendar (spec 0028) arrive next.
+- Prefill (`prefill.ts`): the seam for a form's signed, two hour, single use link, with "Booking as {name}. Not you?"; a stub until milestone 3.
+- The visitor's own calendar (spec 0028), in VisitorBar on top: someone signed in to Timefix in this browser is known (their name and email fill the form, their connected calendar is laid over the times); anyone else sees "See when you're both free" and Connect calendar, which goes to Google for this visit only and back to the same length, day and zone (`visitor.ts` writes and reads the return address, then tidies it). Times that clash are hidden unless Show all times is on, up to three carry Best (and mark their day), every time clashing says so with Show all times, and a calendar that can't be read shows every time. Not you forgets them for the visit (a guest's calendar at the server too). The host on their own page and the editor's preview get no bar.
 
 ## The guest page (`ManagePage.tsx`)
 

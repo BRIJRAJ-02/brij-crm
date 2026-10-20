@@ -1,12 +1,23 @@
 // Brief
 // Purpose: the visitor's booking page at /b/<publicKey> (spec 0025, 0025-experience.md): book time with a member.
-// Main task: see the first open day's times at once, pick a time, press Next beside it, give a name and email, confirm.
+// Main task: see the first open day's times at once, pick a time, press Book, give a name and email, confirm.
 // Leaves out: questions (milestone 2), the forms hand off's signed prefill (milestone 3, a seam), analytics and captcha.
+//
+// The visitor's own calendar (spec 0028): signed in to Timefix here, they are known (the bar on top, their name and
+// email filled, their calendar laid over the times); anyone else may connect Google for the visit. Clashing times
+// hide unless Show all times is on, up to three are marked Best, and a calendar that can't be read shows every time.
 //
 // Drawn with the library (`@crm/ui/public-booking`, since 20 October 2026, as the hosted form is): one card with
 // the host's rail, the month and the day's times, after the timefix booking page and calendars' scheduling pages.
 // This file holds the page's state and reads; the modules draw.
-import { createBookingClient, isDataError, withPreviewDraft, type PublicBookingPage } from '@crm/data/booking';
+import {
+  createBookingClient,
+  isDataError,
+  withPreviewDraft,
+  type PublicBookingPage,
+  type PublicViewerAnswer,
+  type SlotsOverlay,
+} from '@crm/data/booking';
 import {
   BookingDetails,
   BookingFrame,
@@ -18,6 +29,7 @@ import {
   SegmentedControl,
   Select,
   SlotList,
+  VisitorBar,
   type BookingDetailsOutcome,
   type BookingDetailsValues,
   type BookingFact,
@@ -39,6 +51,7 @@ import {
   timeLabel,
   zoneDisplay,
 } from './time.ts';
+import { readReturn, returnPath, tidiedAddress, type Chosen, type ConnectResult } from './visitor.ts';
 
 /** Props for the page: its key, the visitor's language and zone, the clock, a prefill, and where success goes. */
 export interface BookingPageProps {
@@ -76,6 +89,13 @@ const locationLabel = (location: PublicBookingPage['location']) =>
 export function BookingPage({ publicKey, locale, timeZone, now, prefill, onBooked }: BookingPageProps) {
   const client = useMemo(() => createBookingClient({ origin: globalThis.location.origin }), []);
   const [startedAt] = useState(now);
+  // What a return from Google carried (the choices and what happened), read once; the address is then tidied.
+  const [back] = useState(() => readReturn(new URL(globalThis.location.href)));
+  useEffect(() => {
+    const tidied = tidiedAddress(new URL(globalThis.location.href));
+    if (tidied !== undefined) globalThis.history.replaceState(globalThis.history.state, '', tidied);
+  }, []);
+  const isPreview = globalThis.parent !== globalThis.window;
   const [loaded, setLoaded] = useState<Loaded>({ state: 'loading' });
   // The last preview message, kept until the page loads to lay it over.
   const [preview, setPreview] = useState<unknown>(undefined);
@@ -114,6 +134,9 @@ export function BookingPage({ publicKey, locale, timeZone, now, prefill, onBooke
           now={now}
           startedAt={startedAt}
           onBooked={onBooked}
+          chosen={back.chosen}
+          isPreview={isPreview}
+          {...(back.result === undefined ? {} : { connected: back.result })}
           {...(prefill === undefined ? {} : { prefill })}
         />
       );
@@ -168,7 +191,15 @@ function Booking({
   startedAt,
   prefill,
   onBooked,
+  chosen,
+  connected,
+  isPreview,
 }: {
+  readonly chosen: Chosen;
+  /** What a guest connect just answered. */
+  readonly connected?: ConnectResult;
+  /** Inside the editor's preview: no visitor. */
+  readonly isPreview: boolean;
   readonly client: Client;
   readonly page: PublicBookingPage;
   readonly locale: string;
@@ -178,12 +209,12 @@ function Booking({
   readonly prefill?: Prefill;
   readonly onBooked: (manageToken: string) => void;
 }) {
-  const [zone, setZone] = useState(detected);
+  const [zone, setZone] = useState(chosen.zone ?? detected);
   const [hour12, setHour12] = useState(() => savedHour12() ?? localeUses12h(locale));
   const [view, setView] = useState<SlotView>(savedView);
-  const [chosen, setDuration] = useState<number>(page.durations[0] ?? 30);
+  const [length, setDuration] = useState<number>(chosen.duration ?? page.durations[0] ?? 30);
   // A length the page no longer offers (the editor's preview changed them) falls back to its first.
-  const duration = page.durations.some((minutes) => minutes === chosen) ? chosen : (page.durations[0] ?? 30);
+  const duration = page.durations.some((minutes) => minutes === length) ? length : (page.durations[0] ?? 30);
   const today = dayKey(now(), zone);
   const horizon = dayKey(now() + page.windowDays * 86_400_000, zone);
   const chunks = Math.max(1, Math.ceil(page.windowDays / CHUNK_DAYS));
@@ -191,14 +222,29 @@ function Booking({
   const [read, setRead] = useState<{
     readonly key: string;
     readonly loaded: ReadonlyMap<number, readonly string[]>;
+    /** The visitor's calendar over each chunk (spec 0028), when they have one. */
+    readonly overlays: ReadonlyMap<number, SlotsOverlay>;
     readonly unreachable: boolean;
     readonly failed: boolean;
-  }>({ key: '', loaded: new Map(), unreachable: false, failed: false });
-  const [wanted, setWanted] = useState(0);
+  }>({ key: '', loaded: new Map(), overlays: new Map(), unreachable: false, failed: false });
+  // A day brought back from Google is read with its chunk first.
+  const [wanted, setWanted] = useState(() =>
+    chosen.day === undefined || chosen.day < today
+      ? 0
+      : Math.max(
+          0,
+          Math.min(
+            chunks - 1,
+            Math.floor((startOfDay(chosen.day, zone) - startOfDay(today, zone)) / 86_400_000 / CHUNK_DAYS),
+          ),
+        ),
+  );
   const [reload, setReload] = useState(0);
   const readKey = `${zone}|${String(duration)}|${String(reload)}`;
-  const [day, setDay] = useState<string | undefined>(undefined);
-  const [month, setMonth] = useState(monthOf(today));
+  const [day, setDay] = useState<string | undefined>(
+    chosen.day !== undefined && chosen.day >= today ? chosen.day : undefined,
+  );
+  const [month, setMonth] = useState(monthOf(day ?? today));
   const [time, setTime] = useState<string | undefined>(undefined);
   const [step, setStep] = useState<{
     readonly step: 'pick' | 'details';
@@ -206,6 +252,26 @@ function Booking({
     readonly back: boolean;
   }>({ step: 'pick', attempt: '', back: false });
   const [notice, setNotice] = useState<string | undefined>(undefined);
+  // Who the visitor is (spec 0028): undefined while it loads, and in the editor's preview.
+  const [viewer, setViewer] = useState<PublicViewerAnswer | undefined>(undefined);
+  // "Not you?": no name, no email and no overlay for the rest of the visit.
+  const [notYou, setNotYou] = useState(false);
+  const [showAll, setShowAll] = useState(false);
+  useEffect(() => {
+    if (isPreview) return;
+    let isCurrent = true;
+    client.viewer(page.publicKey).then(
+      (answer) => {
+        if (isCurrent) setViewer(answer);
+      },
+      () => {
+        // Nobody in particular: the page works the same.
+      },
+    );
+    return () => {
+      isCurrent = false;
+    };
+  }, [client, page.publicKey, isPreview]);
   const zones = useMemo(() => zoneItems(zone, now()), [zone, now]);
   // The tab names the meeting and the host: "Intro call with Ada · Timefix".
   useEffect(() => {
@@ -231,7 +297,16 @@ function Booking({
             wanted,
             answer.slots.map((slot) => slot.start),
           );
-          setRead({ key: readKey, loaded: next, unreachable: answer.calendar === 'unreachable', failed: false });
+          const overlays = new Map(read.key === readKey ? read.overlays : []);
+          if (answer.viewer === undefined) overlays.delete(wanted);
+          else overlays.set(wanted, answer.viewer);
+          setRead({
+            key: readKey,
+            loaded: next,
+            overlays,
+            unreachable: answer.calendar === 'unreachable',
+            failed: false,
+          });
           // The first open day is chosen on arrival (AC-665); further chunks on until one has times.
           const first = [...next.values()].flat().sort()[0];
           if (first === undefined && wanted + 1 < chunks) setWanted(wanted + 1);
@@ -241,20 +316,35 @@ function Booking({
         },
         (error: unknown) => {
           if (error instanceof DOMException && error.name === 'AbortError') return;
-          setRead({ key: readKey, loaded: current, unreachable: false, failed: true });
+          setRead({
+            key: readKey,
+            loaded: current,
+            overlays: read.key === readKey ? read.overlays : new Map(),
+            unreachable: false,
+            failed: true,
+          });
         },
       );
     return () => controller.abort();
   }, [client, page.publicKey, zone, duration, wanted, readKey, read, today, chunks, now]);
 
   const loaded = read.key === readKey ? read.loaded : new Map<number, readonly string[]>();
-  const starts = [...loaded.values()].flat().sort();
+  const allStarts = [...loaded.values()].flat().sort();
+  // The visitor's calendar over what's read (spec 0028, AC-723 to AC-726), unless they said Not you.
+  const overlays = notYou || read.key !== readKey ? [] : [...read.overlays.values()];
+  const isOverlaid = overlays.some((each) => each.calendar === 'ok');
+  const isUnreadable = overlays.length > 0 && overlays.every((each) => each.calendar === 'unreachable');
+  const clashes = new Set(overlays.flatMap((each) => each.clashes));
+  const best = new Set(overlays.flatMap((each) => each.best));
+  const hidesClashes = isOverlaid && !showAll;
+  const starts = hidesClashes ? allStarts.filter((start) => !clashes.has(start)) : allStarts;
   const byDay = new Map<string, string[]>();
   for (const start of starts) {
     const key = dayKey(Date.parse(start), zone);
     byDay.set(key, [...(byDay.get(key) ?? []), start]);
   }
   const openDays = new Set(byDay.keys());
+  const bestDays = new Set(starts.filter((start) => best.has(start)).map((start) => dayKey(Date.parse(start), zone)));
   const isLoading = !loaded.has(0) && !read.failed;
   // Moving to a month past what's read asks for its chunk.
   const showMonth = (next: string) => {
@@ -397,21 +487,73 @@ function Booking({
       ),
     },
   );
+  // The visitor we know (from their sign in or the Google account they connected), unless they said Not you.
+  const person = notYou ? undefined : viewer?.viewer;
+  const known = person === undefined ? undefined : { name: person.name, email: person.email };
+  const forget = () => {
+    setNotYou(true);
+    setShowAll(false);
+    // A guest's calendar is forgotten at the server too, and the times read again without it.
+    if (person?.source === 'google') {
+      client.forget().then(
+        () => setReload((count) => count + 1),
+        () => setReload((count) => count + 1),
+      );
+    }
+  };
+  const connectHref =
+    viewer?.canConnect === true && (person === undefined || person.source === 'google')
+      ? client.connectUrl(
+          page.publicKey,
+          returnPath(page.publicKey, { duration, zone, ...(day === undefined ? {} : { day }) }),
+        )
+      : undefined;
+  const barCalendar =
+    person === undefined
+      ? undefined
+      : person.calendar === 'on'
+        ? isUnreadable
+          ? 'unreachable'
+          : 'on'
+        : person.calendar;
+  const showsBar = viewer !== undefined && !viewer.isHost && (person !== undefined || connectHref !== undefined);
+  const connectNote =
+    connected === undefined || connected === 'connected' || notYou ? undefined : strings.connectResults[connected];
+  const banner =
+    showsBar || connectNote !== undefined ? (
+      <>
+        {connectNote !== undefined && (
+          <Callout tone={connected === 'denied' ? 'info' : 'warning'}>{connectNote}</Callout>
+        )}
+        {showsBar && (
+          <VisitorBar
+            {...(person === undefined ? {} : { person: { name: person.name, email: person.email }, onNotYou: forget })}
+            {...(barCalendar === undefined ? {} : { calendar: barCalendar })}
+            {...(connectHref === undefined ? {} : { connectHref })}
+            showAll={showAll}
+            onShowAllChange={setShowAll}
+          />
+        )}
+      </>
+    ) : undefined;
   const frame = {
     host: { name: page.hostName },
     title: page.title,
     description: page.description,
     facts,
     claimHref: CLAIM_URL,
+    ...(banner === undefined ? {} : { banner }),
   };
 
   if (isDetails) {
+    // The form says who's booking, with its own Not you: the bar would say it twice.
+    const { banner: _bar, ...details } = frame;
     return (
-      <BookingFrame {...frame}>
+      <BookingFrame {...details}>
         <BookingDetails
           key={step.attempt}
           needsPhone={page.location.type === 'phone'}
-          {...(prefill === undefined ? {} : { prefill })}
+          {...(known === undefined ? (prefill === undefined ? {} : { prefill }) : { prefill: known })}
           onBack={() => {
             setStep({ step: 'pick', attempt: '', back: true });
             setNotice(undefined);
@@ -422,7 +564,9 @@ function Booking({
     );
   }
 
-  const noTimes = starts.length === 0 && loaded.size >= Math.min(chunks, 2);
+  const noTimes = allStarts.length === 0 && loaded.size >= Math.min(chunks, 2);
+  // Every open time clashes with the visitor's calendar: say so, with Show all times.
+  const allBusy = hidesClashes && allStarts.length > 0 && starts.length === 0 && loaded.size >= Math.min(chunks, 2);
   const message = read.unreachable ? (
     <Callout tone="warning">{strings.unreachable(page.hostName)}</Callout>
   ) : read.failed ? (
@@ -440,13 +584,23 @@ function Booking({
     <Callout tone="info" title={strings.noTimesTitle}>
       {strings.noTimesText}
     </Callout>
+  ) : allBusy ? (
+    <Callout tone="info" actions={<Button onPress={() => setShowAll(true)}>{strings.showAllTimes}</Button>}>
+      {strings.allBusy(page.hostName)}
+    </Callout>
   ) : undefined;
   const slotList = (
     <SlotList
       heading={dayHeading}
       slots={times.map((start) => {
         const label = timeLabel(start, zone, locale, hour12);
-        return { id: start, label, name: strings.timeName(label, dayHeading, duration) };
+        return {
+          id: start,
+          label,
+          name: strings.timeName(label, dayHeading, duration),
+          ...(best.has(start) && !notYou ? { isBest: true } : {}),
+          ...(isOverlaid && showAll && clashes.has(start) ? { isBusy: true } : {}),
+        };
       })}
       value={time}
       onChange={setTime}
@@ -506,6 +660,7 @@ function Booking({
             month={month}
             today={today}
             openDays={openDays}
+            bestDays={bestDays}
             value={day}
             onChange={pickDay}
             onMonthChange={showMonth}
@@ -515,7 +670,13 @@ function Booking({
           />
         ) : (
           <>
-            <DayStrip days={[...openDays].sort()} value={day} onChange={pickDay} focusesValue={step.back} />
+            <DayStrip
+              days={[...openDays].sort()}
+              bestDays={bestDays}
+              value={day}
+              onChange={pickDay}
+              focusesValue={step.back}
+            />
             {slotList}
           </>
         ))}
