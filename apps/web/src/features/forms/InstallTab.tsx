@@ -5,7 +5,7 @@
 // Leaves out: a QR code and the popup or button embeds (the 19 October revision keeps one inline embed; embed.js has
 // no other mode), and analytics.
 import type { FormView } from '@crm/data';
-import { Button, Callout, Card, CopyButton, Disclosure, Field, Switch } from '@crm/ui';
+import { Button, Card, CopyButton, Disclosure, Field, Switch } from '@crm/ui';
 import { useRouteContext } from '@tanstack/react-router';
 import { useState } from 'react';
 import { firstRefusal } from './refusals.ts';
@@ -18,12 +18,10 @@ export interface InstallTabProps {
   readonly form: FormView;
   readonly isReadOnly: boolean;
   readonly onFormChange: (view: FormView) => void;
-  /** Turns a paused form back on, from the note at the top. */
-  readonly onResume?: () => void;
 }
 
 /** Share your form, Put it on your website, then Advanced (closed): your own HTML, the sites and the secret. */
-export function InstallTab({ slug, form, isReadOnly, onFormChange, onResume }: InstallTabProps) {
+export function InstallTab({ slug, form, isReadOnly, onFormChange }: InstallTabProps) {
   const { data, toasts } = useRouteContext({ from: '__root__' });
   const link = data.forms.hostedUrl(form.publicKey);
   const script = data.forms.embedUrl();
@@ -52,17 +50,6 @@ export function InstallTab({ slug, form, isReadOnly, onFormChange, onResume }: I
 
   return (
     <>
-      {form.status === 'paused' && (
-        <Callout
-          tone="warning"
-          title={strings.pausedTitle}
-          {...(onResume === undefined || isReadOnly
-            ? {}
-            : { actions: <Button onPress={onResume}>{strings.resume}</Button> })}
-        >
-          {strings.pausedText}
-        </Callout>
-      )}
       <Card
         title={strings.shareTitle}
         description={link}
@@ -80,11 +67,15 @@ export function InstallTab({ slug, form, isReadOnly, onFormChange, onResume }: I
           </>
         }
       />
-      <Card title={strings.websiteTitle} description={strings.websiteText}>
+      <Card
+        title={strings.websiteTitle}
+        description={strings.websiteText}
+        footer={<CopyButton value={embed} label={strings.copyEmbed} variant="primary" />}
+      >
         <Field label={strings.embedSnippet} variant="copy" isMultiline copyLabel={strings.copyEmbed} value={embed} />
       </Card>
-      <Card title={strings.advancedTitle} description={strings.advancedText}>
-        <Disclosure title={strings.showAdvanced}>
+      <Disclosure title={strings.advancedTitle}>
+        <Card title={strings.ownFormTitle} description={strings.advancedText}>
           <Field
             label={strings.ownFormSnippet}
             variant="copy"
@@ -125,8 +116,8 @@ export function InstallTab({ slug, form, isReadOnly, onFormChange, onResume }: I
               value={form.signingSecret}
             />
           )}
-        </Disclosure>
-      </Card>
+        </Card>
+      </Disclosure>
     </>
   );
 }

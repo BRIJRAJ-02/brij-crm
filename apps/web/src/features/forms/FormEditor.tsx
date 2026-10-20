@@ -327,6 +327,15 @@ export function FormEditor(props: FormEditorProps) {
 
   const notices = (
     <>
+      {form.status === 'paused' && (
+        <Callout
+          tone="warning"
+          title={strings.pausedTitle}
+          {...(canManage ? { actions: <Button onPress={() => setStatus('live')}>{strings.resume}</Button> } : {})}
+        >
+          {strings.pausedText}
+        </Callout>
+      )}
       {!canManage && (
         <Callout tone="info" title={strings.readOnlyTitle}>
           {strings.readOnlyText}
@@ -362,17 +371,7 @@ export function FormEditor(props: FormEditorProps) {
           />
         );
       case 'install':
-        return (
-          <InstallTab
-            slug={slug}
-            form={form}
-            isReadOnly={!canManage}
-            onFormChange={setForm}
-            onResume={() => {
-              setStatus('live');
-            }}
-          />
-        );
+        return <InstallTab slug={slug} form={form} isReadOnly={!canManage} onFormChange={setForm} />;
       case 'submissions':
         return props.submissions === undefined ? null : (
           <SubmissionsTab
@@ -424,7 +423,8 @@ export function FormEditor(props: FormEditorProps) {
       notices={notices}
       // Settings and Install are groups of fields: side by side where there is room.
       bodyLayout={current === 'settings' || current === 'install' ? 'grid' : 'stack'}
-      {...(current === 'settings' ? { footer: settings.footer } : {})}
+      // On every tab, so a name, link or owner left unsaved still says so after a tab change.
+      footer={settings.footer}
       {...(current === 'form' || current === 'settings'
         ? {
             preview: <HostedFormPreview form={preview} />,
