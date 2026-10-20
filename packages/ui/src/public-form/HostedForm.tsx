@@ -14,6 +14,7 @@ import {
   TIMEFIX_LOGO,
 } from './FormParts.tsx';
 import styles from './HostedForm.module.css';
+import { FormBooking } from './FormBooking.tsx';
 import { Question } from './Question.tsx';
 import {
   useHostedForm,
@@ -62,7 +63,18 @@ export function HostedForm({
   const { words, preview } = state;
   let body;
   if (state.isClosed) body = <FormClosed state={state} mode={mode} heading={refs.heading} />;
-  else if (state.view.kind === 'thanks')
+  else if (state.view.kind === 'booking') {
+    body = (
+      <FormBooking
+        state={state}
+        mode={mode}
+        heading={refs.heading}
+        url={state.view.url}
+        seconds={state.view.seconds}
+        text={state.view.text}
+      />
+    );
+  } else if (state.view.kind === 'thanks')
     body = <FormThanks form={form} state={state} mode={mode} heading={refs.heading} />;
   else {
     body = (

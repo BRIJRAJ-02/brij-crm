@@ -1,6 +1,6 @@
 import type { PublicForm } from '@crm/contracts/forms';
 import type { Meta, StoryObj } from '@storybook/react-vite';
-import { expect, userEvent, waitFor } from 'storybook/test';
+import { expect, fn, userEvent, waitFor } from 'storybook/test';
 import { Stage } from '../workbench/Stage/Stage.tsx';
 import { HostedForm } from './HostedForm.tsx';
 
@@ -243,5 +243,37 @@ export const ThanksWithoutAddress: Story = {
     await userEvent.type(canvas.getByLabelText('Your name'), 'Ada Lovelace');
     await userEvent.click(canvas.getByRole('button', { name: 'Send' }));
     await waitFor(() => expect(canvas.getByText('We have it, and the team will read it shortly.')).toBeInTheDocument());
+  },
+};
+
+const booking = (seconds: number) => () =>
+  Promise.resolve({
+    kind: 'done' as const,
+    next: { kind: 'booking' as const, url: '/b/intro-call?p=token', countdownSeconds: seconds, text: '' },
+  });
+
+/** Sent, and on to book: "Taking you to book a time in 5…" with the ring draining, Book now and Stay here (AC-1059). */
+export const BookAfter: Story = {
+  args: { onSubmit: booking(30), onRedirect: fn() },
+  play: async ({ canvas, args }) => {
+    await userEvent.type(canvas.getByLabelText('Your name'), 'Ada Lovelace');
+    await userEvent.type(canvas.getByLabelText('Work email'), 'ada@example.com');
+    await userEvent.click(canvas.getByRole('button', { name: 'Send' }));
+    await waitFor(() => expect(canvas.getByRole('heading', { name: 'Thank you. That is with us.' })).toHaveFocus());
+    await expect(canvas.getByRole('button', { name: 'Book now' })).toBeInTheDocument();
+    await expect(args.onRedirect).not.toHaveBeenCalled();
+  },
+};
+
+/** After Stay here: the countdown is gone and Book a time stays for later. */
+export const BookAfterStayed: Story = {
+  args: { onSubmit: booking(30), onRedirect: fn() },
+  play: async ({ canvas, args }) => {
+    await userEvent.type(canvas.getByLabelText('Your name'), 'Ada Lovelace');
+    await userEvent.type(canvas.getByLabelText('Work email'), 'ada@example.com');
+    await userEvent.click(canvas.getByRole('button', { name: 'Send' }));
+    await userEvent.click(await canvas.findByRole('button', { name: 'Stay here' }));
+    await userEvent.click(canvas.getByRole('button', { name: 'Book a time' }));
+    await expect(args.onRedirect).toHaveBeenCalledWith('/b/intro-call?p=token');
   },
 };

@@ -36,7 +36,7 @@ Until 19 October 2026 this was plain DOM, drawn to look like the library, to sta
 
 ## States
 
-Classic, every answer type, embed, dark and square, errors with the summary, checked on blur, the email hint, sending, failed, thanks, paused (`HostedForm.stories.tsx`). Steps, a step's errors, the second step, the last step and its thanks, steps dark and square, one at a time, its next question, its error, and one at a time dark (`HostedFormSteps.stories.tsx`).
+Book after sending and its Stay here (`HostedForm.stories.tsx`; the countdown itself in `FormBooking.browser.test.tsx`). Classic, every answer type, embed, dark and square, errors with the summary, checked on blur, the email hint, sending, failed, thanks, paused (`HostedForm.stories.tsx`). Steps, a step's errors, the second step, the last step and its thanks, steps dark and square, one at a time, its next question, its error, and one at a time dark (`HostedFormSteps.stories.tsx`).
 
 ## Keyboard
 
