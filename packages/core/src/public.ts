@@ -6,6 +6,7 @@ export { enterBookingByToken, enterBookingPage, type BookingEntry } from './acce
 export {
   bookPublicSlot,
   getPublicBookingPage,
+  isPageHost,
   managedBookingIcs,
   readManagedBooking,
   readPublicSlots,

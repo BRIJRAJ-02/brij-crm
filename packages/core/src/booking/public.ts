@@ -18,7 +18,7 @@
 // 4. After the commit, the calendar event (three tries); a booking whose event
 //    failed stays confirmed and is marked for the host.
 import { createHash, randomBytes } from 'node:crypto';
-import { and, eq, sql } from 'drizzle-orm';
+import { and, eq, inArray, sql } from 'drizzle-orm';
 import type {
   PublicBookInput,
   PublicBooking,
@@ -104,6 +104,25 @@ export async function getPublicBookingPage(entry: BookingEntry): Promise<PublicB
       hostTimeZone: page.availability.timeZone,
       windowDays: page.windowDays,
     };
+  });
+}
+
+/**
+ * Whether the signed in person with this user id hosts the page (spec 0028,
+ * AC-720): on their own page they get neither the overlay nor the prefill.
+ */
+export async function isPageHost(entry: BookingEntry, userId: string): Promise<boolean> {
+  checkEntry(entry);
+  return inWorkspace(entry.scope, async (tx) => {
+    const page = await loadPage(tx, entry.pageId);
+    if (page === undefined) return false;
+    const hosts = [...new Set([page.ownerMemberId, ...(await membersOf(tx, page))])];
+    const found = await tx
+      .select({ id: members.id })
+      .from(members)
+      .where(and(inArray(members.id, hosts), eq(members.userId, userId)))
+      .limit(1);
+    return found.length > 0;
   });
 }
 

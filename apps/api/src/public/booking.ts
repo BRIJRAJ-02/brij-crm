@@ -10,26 +10,67 @@
 //   POST /api/public/booking/:publicKey/book     a visitor's booking, with the guest page's token
 //   GET  /api/public/booking/manage/:token       the guest page's booking
 //   GET  /api/public/booking/manage/:token/ics   the booking as a calendar file (Add to calendar)
-import { createHash } from 'node:crypto';
-import { errorStatus, PublicBookInput, PublicSlotsQuery, type ErrorCode } from '@crm/contracts';
-import { outboxHook, type BookingCalendar, type BusyReader } from '@crm/core';
+//   GET  /api/public/booking/:publicKey/viewer   who the visitor is (spec 0028)
+//   GET  /api/public/booking/:publicKey/connect  ?return: a guest connects Google for this visit
+//   GET  /api/public/booking/connect/callback    Google's answer: the guest's sealed cookie
+//   POST /api/public/booking/connect/forget      drops the guest's calendar
+//
+// A slots read from a recognised visitor with a calendar also reads their
+// busy times (at most 3 seconds, failing open) and answers which slots clash
+// and which are Best (spec 0028, AC-723 to AC-726), never the busy times.
+import { createHash, randomBytes, timingSafeEqual } from 'node:crypto';
+import {
+  errorStatus,
+  PublicBookInput,
+  PublicSlotsQuery,
+  type ErrorCode,
+  type PublicSlots,
+  type PublicViewerAnswer,
+  type SlotsOverlay,
+} from '@crm/contracts';
+import {
+  BEST_CLEAR_MS,
+  isProviderError,
+  outboxHook,
+  overlay,
+  signValue,
+  verifyValue,
+  type BookingCalendar,
+  type BusyInterval,
+  type BusyReader,
+} from '@crm/core';
 import {
   bookPublicSlot,
   enterBookingByToken,
   enterBookingPage,
   getPublicBookingPage,
+  isPageHost,
+  type BookingEntry,
   managedBookingIcs,
   readManagedBooking,
   readPublicSlots,
   type IcsOrigin,
 } from '@crm/core/public';
 import type { Database } from '@crm/db';
-import type { Hono } from 'hono';
+import type { Context, Hono } from 'hono';
 import { bodyLimit } from 'hono/body-limit';
+import { deleteCookie, getCookie, setCookie } from 'hono/cookie';
 import { toApiError } from '../errors.ts';
 import { errorFields, log } from '../log.ts';
 import type { WakeRelay } from '../realtime/wake.ts';
 import { BOOKING_LIMITS, looksLikeBot, type LimitRule, type PublicLimiter } from './limits.ts';
+import {
+  findVisitor,
+  GUEST_CALLBACK_PATH,
+  GUEST_CONNECT_PATH,
+  GUEST_COOKIE,
+  GUEST_COOKIE_PATH,
+  GUEST_STATE_COOKIE,
+  openGuest,
+  sealGuest,
+  type FoundVisitor,
+  type VisitorDeps,
+} from './visitor.ts';
 
 /** The largest booking body read: a name, an email, a few short fields. */
 export const BOOKING_BODY_LIMIT_BYTES = 16 * 1024;
@@ -43,6 +84,59 @@ export interface PublicBookingServices {
   readonly now?: () => Date;
   /** Where calendar files say they come from: the app's origin and the sending address. */
   readonly ics: IcsOrigin;
+  /** Knowing the visitor (spec 0028): sign in, the member door, and the guest leg where calendar sync is on. */
+  readonly visitor?: VisitorDeps & {
+    /** Signs a guest connect's state (derived from the calendar token key). */
+    readonly stateKey?: Buffer;
+    readonly appUrl: string;
+    /** Outside local the cookies are Secure. */
+    readonly secure: boolean;
+  };
+}
+
+/** The guest state's version. */
+const GUEST_STATE_VERSION = 'gs1';
+/** How long a guest may take at Google's consent screen. */
+const GUEST_STATE_SECONDS = 10 * 60;
+/** The longest a visitor's busy times may take before the page shows every time (AC-726). */
+export const VISITOR_BUSY_TIMEOUT_MS = 3000;
+
+/** What the page is told after a guest connect. */
+export type GuestConnectResult = 'connected' | 'denied' | 'scope' | 'off' | 'failed';
+
+/** A public key as the door takes it. */
+const PUBLIC_KEY = /^[A-Za-z0-9_-]{16}$/;
+
+/**
+ * The booking page path a guest returns to, or undefined: this page's own
+ * address, with at most a plain query, never another site or path.
+ */
+export function returnPath(publicKey: string, given: string | undefined): string | undefined {
+  if (given === undefined || given.length > 512 || !PUBLIC_KEY.test(publicKey)) return undefined;
+  const match = /^\/b\/([A-Za-z0-9_-]{16})(\?[A-Za-z0-9=&%._~+:-]*)?$/.exec(given);
+  return match?.[1] === publicKey ? given : undefined;
+}
+
+/** The return path with what happened in `?calendar=`, on the app's origin. */
+function backTo(appUrl: string, path: string, result: GuestConnectResult): string {
+  const url = new URL(path, new URL(appUrl).origin);
+  url.searchParams.set('calendar', result);
+  return url.toString();
+}
+
+/** A promise's answer, or `fallback` once `ms` pass. */
+async function within<T>(promise: Promise<T>, ms: number, fallback: T): Promise<T> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  try {
+    return await Promise.race([
+      promise,
+      new Promise<T>((resolve) => {
+        timer = setTimeout(() => resolve(fallback), ms);
+      }),
+    ]);
+  } finally {
+    clearTimeout(timer);
+  }
 }
 
 interface Variables {
@@ -72,9 +166,11 @@ function refusalAnswer(error: unknown): Response {
   return answer(code, message, data === undefined ? {} : { data });
 }
 
-/** A JSON answer, never cached (slots change by the minute; a page can be paused). */
-function ok(body: unknown): Response {
-  return Response.json(body, { headers: { 'cache-control': 'no-store', 'x-robots-tag': 'noindex' } });
+/** A JSON answer, never cached (slots change by the minute; a page can be paused; a visitor's overlay is theirs). */
+function ok(body: unknown, setCookies: readonly string[] = []): Response {
+  const headers = new Headers({ 'cache-control': 'private, no-store', 'x-robots-tag': 'noindex' });
+  for (const cookie of setCookies) headers.append('set-cookie', cookie);
+  return Response.json(body, { headers });
 }
 
 /** The client address as a short hash: limits key on it, and no raw address is kept. */
@@ -104,6 +200,19 @@ export function mountPublicBooking(app: Hono<{ Variables: Variables }>, services
       }
     }
     return undefined;
+  };
+
+  /** The request's visitor on this page: nobody without the visitor services. */
+  const visitorOf = (c: Context<{ Variables: Variables }>, entry: BookingEntry): Promise<FoundVisitor> => {
+    const visitor = services.visitor;
+    if (visitor === undefined) return Promise.resolve({ setCookies: [] });
+    return findVisitor(visitor, {
+      headers: c.req.raw.headers,
+      clientIp: c.get('clientIp'),
+      guestCookie: getCookie(c, GUEST_COOKIE),
+      isHost: (userId) => isPageHost(entry, userId),
+      now: services.now?.() ?? new Date(),
+    });
   };
 
   // The guest page (before the page routes, so `manage` is never read as a public key).
@@ -137,6 +246,68 @@ export function mountPublicBooking(app: Hono<{ Variables: Variables }>, services
     }
   });
 
+  // The guest connect's two fixed addresses (before the page routes, so `connect` is never read as a public key).
+  app.get('/public/booking/connect/callback', async (c) => {
+    const visitor = services.visitor;
+    const appUrl = visitor?.appUrl ?? services.ics.appOrigin;
+    const nonce = getCookie(c, GUEST_STATE_COOKIE);
+    // Single use: whatever happens next, this browser's state is spent.
+    deleteCookie(c, GUEST_STATE_COOKIE, { path: GUEST_CONNECT_PATH, secure: visitor?.secure ?? true });
+    const payload =
+      visitor?.stateKey === undefined
+        ? undefined
+        : verifyValue(visitor.stateKey, GUEST_STATE_VERSION, c.req.query('state'));
+    const back = typeof payload?.r === 'string' ? payload.r : undefined;
+    const key = back === undefined ? undefined : /^\/b\/([A-Za-z0-9_-]{16})/.exec(back)?.[1];
+    const path = key === undefined ? undefined : returnPath(key, back);
+    if (path === undefined) return c.redirect(new URL('/', new URL(appUrl).origin).toString());
+    const guest = visitor?.guest;
+    if (visitor === undefined || guest === undefined) return c.redirect(backTo(appUrl, path, 'off'));
+    const sameBrowser =
+      nonce !== undefined &&
+      typeof payload?.n === 'string' &&
+      payload.n.length === nonce.length &&
+      timingSafeEqual(Buffer.from(payload.n), Buffer.from(nonce));
+    if (!sameBrowser) {
+      log.warn('booking.guest_connect.refused', { requestId: c.get('requestId'), reason: 'state' });
+      return c.redirect(backTo(appUrl, path, 'failed'));
+    }
+    // The visitor said no on Google's screen.
+    if (c.req.query('error') !== undefined) return c.redirect(backTo(appUrl, path, 'denied'));
+    const code = c.req.query('code');
+    if (code === undefined || code.length > 2048) return c.redirect(backTo(appUrl, path, 'failed'));
+    try {
+      const grant = await guest.calendar.exchange(code, guestRedirectUri(appUrl));
+      const now = services.now?.() ?? new Date();
+      const sealed = sealGuest(guest.keys, grant, now);
+      setCookie(c, GUEST_COOKIE, sealed.value, {
+        path: GUEST_COOKIE_PATH,
+        httpOnly: true,
+        sameSite: 'Lax',
+        secure: visitor.secure,
+        maxAge: sealed.maxAge,
+      });
+      return c.redirect(backTo(appUrl, path, 'connected'));
+    } catch (error) {
+      if (!isProviderError(error)) throw error;
+      log.warn('booking.guest_connect.failed', { requestId: c.get('requestId'), code: error.code });
+      return c.redirect(backTo(appUrl, path, error.code === 'CALENDAR_SCOPE_DECLINED' ? 'scope' : 'failed'));
+    }
+  });
+
+  app.post('/public/booking/connect/forget', async (c) => {
+    const visitor = services.visitor;
+    const guest = visitor?.guest;
+    const grant =
+      guest === undefined
+        ? undefined
+        : openGuest(guest.keys, getCookie(c, GUEST_COOKIE), services.now?.() ?? new Date());
+    deleteCookie(c, GUEST_COOKIE, { path: GUEST_COOKIE_PATH, secure: visitor?.secure ?? true });
+    // Best effort, and never awaited past its own timeout: the token dies within the hour anyway.
+    if (guest !== undefined && grant !== undefined) await guest.calendar.revoke(grant.accessToken);
+    return c.json({}, 200, { 'cache-control': 'no-store' });
+  });
+
   app.get('/public/booking/:publicKey', async (c) => {
     const address = addressKey(c.get('clientIp'));
     const key = c.req.param('publicKey');
@@ -166,10 +337,78 @@ export function mountPublicBooking(app: Hono<{ Variables: Variables }>, services
       return answer('INPUT_INVALID', query.error.issues[0]?.message ?? 'The request could not be read.');
     try {
       const entry = await enterBookingPage({ db }, key);
-      return ok(await readPublicSlots(entry, deps, query.data));
+      const { from, to, tz } = query.data;
+      const found = visitorOf(c, entry);
+      // The visitor's busy times, with room for the Best rule's clear 15 minutes, read beside the host's.
+      const busy = found.then(({ visitor }) =>
+        visitor?.busy === undefined
+          ? undefined
+          : within(
+              visitor.busy(
+                new Date(Date.parse(from) - BEST_CLEAR_MS).toISOString(),
+                new Date(Date.parse(to) + BEST_CLEAR_MS).toISOString(),
+              ),
+              VISITOR_BUSY_TIMEOUT_MS,
+              'unreachable' as const,
+            ),
+      );
+      const [slots, { setCookies }, visitorBusy] = await Promise.all([
+        readPublicSlots(entry, deps, query.data),
+        found,
+        busy,
+      ]);
+      return ok(withOverlay(slots, visitorBusy, tz), setCookies);
     } catch (error) {
       return refusalAnswer(error);
     }
+  });
+
+  app.get('/public/booking/:publicKey/viewer', async (c) => {
+    const address = addressKey(c.get('clientIp'));
+    const key = c.req.param('publicKey');
+    const refused = limited([
+      [`booking:read:${address}`, BOOKING_LIMITS.readsPerAddress],
+      [`booking:read-page:${key}`, BOOKING_LIMITS.readsPerPage],
+    ]);
+    if (refused !== undefined) return refused;
+    try {
+      const entry = await enterBookingPage({ db }, key);
+      const { visitor, setCookies } = await visitorOf(c, entry);
+      const body: PublicViewerAnswer = visitor === undefined ? {} : { viewer: visitor.viewer };
+      return ok(body, setCookies);
+    } catch (error) {
+      return refusalAnswer(error);
+    }
+  });
+
+  app.get('/public/booking/:publicKey/connect', async (c) => {
+    const key = c.req.param('publicKey');
+    const back = returnPath(key, c.req.query('return'));
+    const appUrl = services.visitor?.appUrl ?? services.ics.appOrigin;
+    if (back === undefined) return c.redirect(new URL('/', new URL(appUrl).origin).toString());
+    const refused = limited([[`booking:connect:${addressKey(c.get('clientIp'))}`, BOOKING_LIMITS.readsPerAddress]]);
+    if (refused !== undefined) return c.redirect(backTo(appUrl, back, 'failed'));
+    const visitor = services.visitor;
+    const guest = visitor?.guest;
+    if (visitor === undefined || guest === undefined || visitor.stateKey === undefined) {
+      return c.redirect(backTo(appUrl, back, 'off'));
+    }
+    try {
+      await enterBookingPage({ db }, key);
+    } catch (error) {
+      if (!toApiError(error).expected) throw error;
+      return c.redirect(backTo(appUrl, back, 'failed'));
+    }
+    const nonce = randomBytes(18).toString('base64url');
+    const state = signValue(visitor.stateKey, GUEST_STATE_VERSION, { r: back, n: nonce }, GUEST_STATE_SECONDS);
+    setCookie(c, GUEST_STATE_COOKIE, nonce, {
+      path: GUEST_CONNECT_PATH,
+      httpOnly: true,
+      sameSite: 'Lax',
+      secure: visitor.secure,
+      maxAge: GUEST_STATE_SECONDS,
+    });
+    return c.redirect(guest.calendar.authorizeUrl(state, guestRedirectUri(appUrl)));
   });
 
   app.use(
@@ -218,4 +457,22 @@ export function mountPublicBooking(app: Hono<{ Variables: Variables }>, services
       return refusalAnswer(error);
     }
   });
+}
+
+/** Where Google sends a guest back: `<APP_URL>/api/public/booking/connect/callback`. */
+export function guestRedirectUri(appUrl: string): string {
+  return new URL(GUEST_CALLBACK_PATH, new URL(appUrl).origin).toString();
+}
+
+/** The slots with the visitor's overlay, when they have a calendar and the host's could be read. */
+function withOverlay(
+  slots: PublicSlots,
+  busy: readonly BusyInterval[] | 'unreachable' | undefined,
+  zone: string,
+): PublicSlots {
+  if (busy === undefined || slots.calendar === 'unreachable') return slots;
+  if (busy === 'unreachable') return { ...slots, viewer: { calendar: 'unreachable', clashes: [], best: [] } };
+  const { clashes, best } = overlay(slots.slots, busy, zone);
+  const viewer: SlotsOverlay = { calendar: 'ok', clashes: [...clashes], best: [...best] };
+  return { ...slots, viewer };
 }

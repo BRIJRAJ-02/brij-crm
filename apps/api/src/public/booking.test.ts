@@ -127,7 +127,7 @@ describe('the public page (AC-629, AC-632 to AC-634, AC-643, AC-644)', () => {
     const page = await pageOf(m);
     const facts = await visit(page.publicKey);
     expect(facts.status).toBe(200);
-    expect(facts.headers.get('cache-control')).toBe('no-store');
+    expect(facts.headers.get('cache-control')).toBe('private, no-store');
     const body = await facts.text();
     expect(body).not.toContain(m.email);
     expect(JSON.parse(body)).toMatchObject({ title: 'Intro call', durations: [30], location: { type: 'video' } });

@@ -30,20 +30,20 @@ Timefix itself only recognises its own signed in users (a shared cookie on its d
 
 ### Who the visitor is
 
-- `GET /api/public/booking/viewer` (no store) answers `{ name, email, image, source: 'account' | 'google', calendar: 'on' | 'none' | 'needs-reconnect' }` or `{}`. It reads the Better Auth session from the same origin cookie when there is one, else the guest cookie.
-- **Signed in visitor's calendar**: their calendar connections across the workspaces they are an active member of, each read inside that workspace (`withWorkspace`, row level security holds). The one whose account email matches their sign in email wins, else the most recently synced healthy one. Busy times come through the existing `BusyReader` for that connection.
+- `GET /api/public/booking/:publicKey/viewer` (private, no store) answers `{ viewer: { name, email, source: 'account' | 'google', calendar: 'on' | 'none' | 'needs-reconnect' } }` or `{}` (`PublicViewerAnswer`). It reads the Better Auth session from the same origin cookie when there is one, else the guest cookie. It is per page so the host on their own page answers `{}`.
+- **Signed in visitor's calendar**: their calendar connections across the workspaces they are an active member of (at most 10), each workspace entered through the member door and read with `listCalendarConnections`. The membership whose healthy connection matches their sign in email wins, else the one synced last. Busy times come through the existing `BusyReader` for that member (every connected calendar of theirs in that workspace), cached for its minute like a host's.
 - **Host on their own page**: the page's host member belongs to the signed in user, so the overlay and prefill are skipped.
 
 ### The guest connection
 
 - `GET /api/public/booking/:publicKey/connect?return=<path>` checks the page exists and `return` is a same origin booking page path, then redirects to Google with a state signed for 10 minutes (page key, return path, nonce). The nonce also goes into an http only cookie on the callback path, exactly like the member connect leg (spec 0024).
-- `GET /api/public/booking/connect/callback` takes the state only with that cookie, exchanges the code online (no `access_type=offline`), checks `calendar.freebusy` was granted (the existing capability check), reads the verified email and name from userinfo, and sets `crm_guest_calendar`: the access token, email, name and expiry, sealed with the calendar token key under a `guest` binding. `HttpOnly`, `Secure` outside local, `SameSite=Lax`, `Path=/api/public/booking`, `Max-Age` the token's life. It then redirects to the return path with `?calendar=connected` (or `denied`, `scope`, `failed`).
+- `GET /api/public/booking/connect/callback` takes the state only with that cookie, exchanges the code online (no `access_type=offline`), checks `calendar.freebusy` was granted (the existing capability check), reads the verified email and name from userinfo, and sets `crm_guest_calendar`: the access token sealed with the calendar token key (bound to the guest's email), and the email and name, all signed for the token's life less a minute with a key derived from the token key. `HttpOnly`, `Secure` outside local, `SameSite=Lax`, `Path=/api/public/booking`, `Max-Age` the token's life. It then redirects to the return path with `?calendar=connected` (or `denied`, `scope`, `failed`).
 - `POST /api/public/booking/connect/forget` clears the cookie and revokes the token at Google, best effort.
 - Google needs one more authorised redirect URI: `{APP_URL}/api/public/booking/connect/callback`.
 
 ### Slots with the overlay
 
-`PublicSlots` gains an optional `viewer: { calendar: 'ok' | 'unreachable', clashes: Timestamp[], best: Timestamp[] }`, present only when the request carries a recognised visitor with a calendar. `clashes` and `best` are slot starts. A pure core function `overlay(slots, busy, zone)` computes both and is unit tested; the route reads the visitor's busy times with a 3 second timeout and fails open.
+`PublicSlots` gains an optional `viewer: SlotsOverlay`, `{ calendar: 'ok' | 'unreachable', clashes: Timestamp[], best: Timestamp[] }`, present only when the request carries a recognised visitor with a calendar. `clashes` and `best` are slot starts. A pure core function `overlay(slots, busy, zone)` computes both and is unit tested; the route reads the visitor's busy times with a 3 second timeout and fails open.
 
 ### The page
 

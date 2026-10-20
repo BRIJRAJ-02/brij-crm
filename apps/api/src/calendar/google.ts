@@ -28,11 +28,18 @@ import {
   type ProviderResponse,
   type ProviderTime,
 } from '@crm/core';
-import { CALENDAR_CONNECT_SCOPES, missingCalendarCapabilities, parseGrantedScopes } from './scopes.ts';
+import {
+  CALENDAR_CONNECT_SCOPES,
+  GUEST_CONNECT_SCOPES,
+  grantsFreeBusy,
+  missingCalendarCapabilities,
+  parseGrantedScopes,
+} from './scopes.ts';
 
 const AUTHORIZE_ENDPOINT = 'https://accounts.google.com/o/oauth2/v2/auth';
 const TOKEN_ENDPOINT = 'https://oauth2.googleapis.com/token';
 const USERINFO_ENDPOINT = 'https://openidconnect.googleapis.com/v1/userinfo';
+const REVOKE_ENDPOINT = 'https://oauth2.googleapis.com/revoke';
 const CALENDAR_API = 'https://www.googleapis.com/calendar/v3';
 
 /** Events one list page asks for (Google's most). */
@@ -456,6 +463,119 @@ export function createGoogleCalendar(options: GoogleCalendarOptions): CalendarPr
         codeForStatus(response.status),
         `Google refused to stop the channel (${String(response.status)}).`,
       );
+    },
+  };
+}
+
+/** A guest's grant for one visit (spec 0028): an access token, its expiry, and who they are. Never stored. */
+export interface GuestGrant {
+  readonly accessToken: string;
+  /** When the access token stops working, ISO 8601 in UTC. */
+  readonly expiresAt: string;
+  readonly email: string;
+  readonly name: string;
+}
+
+/**
+ * A booking page visitor's own Google calendar, for one visit (spec 0028,
+ * AC-722): free and busy only, online access (no refresh token), and nothing
+ * kept but what the visitor's own cookie carries.
+ */
+export interface GuestCalendar {
+  authorizeUrl(state: string, redirectUri: string): string;
+  /** The code for a grant; a grant without free and busy is `CALENDAR_SCOPE_DECLINED`. */
+  exchange(code: string, redirectUri: string): Promise<GuestGrant>;
+  freeBusy(accessToken: string, from: string, to: string): Promise<readonly BusyInterval[]>;
+  /** Asks Google to forget the grant; best effort, never throws. */
+  revoke(accessToken: string): Promise<void>;
+}
+
+/** The guest leg over the same OAuth client, its free and busy read through `provider`. */
+export function createGoogleGuest(options: GoogleCalendarOptions, provider: CalendarProvider): GuestCalendar {
+  const send = options.fetch ?? fetch;
+  const now = options.now ?? (() => new Date());
+  const call = async (url: string, init: RequestInit = {}): Promise<Response> => {
+    try {
+      return await send(url, { ...init, signal: AbortSignal.timeout(CALL_TIMEOUT_MS) });
+    } catch {
+      throw providerError('CALENDAR_UNAVAILABLE', 'Google’s calendar didn’t answer.');
+    }
+  };
+  const json = async <T>(response: Response): Promise<T> => {
+    try {
+      return (await response.json()) as T;
+    } catch {
+      throw providerError('CALENDAR_UNAVAILABLE', 'Google answered with something that wasn’t JSON.');
+    }
+  };
+  return {
+    authorizeUrl(state, redirectUri) {
+      const url = new URL(AUTHORIZE_ENDPOINT);
+      url.searchParams.set('client_id', options.clientId);
+      url.searchParams.set('redirect_uri', redirectUri);
+      url.searchParams.set('response_type', 'code');
+      // Online: no refresh token, so nothing outlives the visit.
+      url.searchParams.set('access_type', 'online');
+      url.searchParams.set('prompt', 'select_account');
+      url.searchParams.set('scope', GUEST_CONNECT_SCOPES.join(' '));
+      url.searchParams.set('state', state);
+      return url.toString();
+    },
+
+    async exchange(code, redirectUri) {
+      const response = await call(TOKEN_ENDPOINT, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: new URLSearchParams({
+          grant_type: 'authorization_code',
+          code,
+          redirect_uri: redirectUri,
+          client_id: options.clientId,
+          client_secret: options.clientSecret,
+        }),
+      });
+      const answer = await json<TokenAnswer>(response);
+      if (response.status >= 500) throw providerError('CALENDAR_UNAVAILABLE', 'Google didn’t answer the sign in.');
+      if (response.status === 401 || answer.error === 'invalid_client') {
+        throw providerError('CALENDAR_UNAVAILABLE', 'Google refused Timefix’s own calendar client.');
+      }
+      if (response.status >= 400 || answer.access_token === undefined) {
+        throw providerError('CALENDAR_AUTH', 'Google didn’t accept that sign in. Try connecting again.');
+      }
+      if (!grantsFreeBusy(parseGrantedScopes(answer.scope))) {
+        throw providerError('CALENDAR_SCOPE_DECLINED', 'The calendar was connected without seeing when you’re busy.');
+      }
+      const profile = await call(USERINFO_ENDPOINT, { headers: { Authorization: `Bearer ${answer.access_token}` } });
+      if (!profile.ok) throw providerError(codeForStatus(profile.status), 'Google didn’t say whose calendar it is.');
+      const person = await json<{ readonly email?: string; readonly email_verified?: boolean; readonly name?: string }>(
+        profile,
+      );
+      if (person.email === undefined || person.email_verified === false) {
+        throw providerError('CALENDAR_AUTH', 'Google didn’t say whose calendar it is.');
+      }
+      const seconds = Math.min(3600, Math.max(0, answer.expires_in ?? 3600));
+      return {
+        accessToken: answer.access_token,
+        expiresAt: new Date(now().getTime() + seconds * 1000).toISOString(),
+        email: normaliseEmail(person.email),
+        name: (person.name ?? '').trim().slice(0, 200),
+      };
+    },
+
+    freeBusy(accessToken, from, to) {
+      return provider.freeBusy({ accessToken, refreshToken: '', expiresAt: '' }, from, to);
+    },
+
+    async revoke(accessToken) {
+      try {
+        await call(REVOKE_ENDPOINT, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+          body: new URLSearchParams({ token: accessToken }),
+        });
+      } catch {
+        // Best effort: the token dies within the hour anyway.
+      }
     },
   };
 }

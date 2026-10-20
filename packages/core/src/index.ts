@@ -166,7 +166,7 @@ export {
   type SyncWindow,
 } from './calendar/provider.ts';
 export { deriveKey, signValue, verifyValue } from './calendar/signing.ts';
-export { decodeTokenKey, type TokenKey } from './calendar/tokens.ts';
+export { decodeTokenKey, openTokens, sealTokens, type TokenBinding, type TokenKey } from './calendar/tokens.ts';
 // Booking pages (spec 0025): members' pages and bookings, and the calendar calls the api passes in.
 export {
   createBookingPage,
@@ -193,7 +193,7 @@ export {
   type WrittenEvent,
 } from './booking/calendar.ts';
 export { connectedCalendar, type ConnectedCalendarDeps } from './booking/connected.ts';
-export { BEST_MAX, overlay, type Overlay, type OverlaySlot } from './booking/overlay.ts';
+export { BEST_CLEAR_MS, BEST_MAX, overlay, type Overlay, type OverlaySlot } from './booking/overlay.ts';
 export { getMyAccess, listMembers, removeMember, setMemberRole, type MemberWithRole } from './members/members.ts';
 export { outboxEvent, stubEvent, wireEvent } from './realtime/events.ts';
 export {

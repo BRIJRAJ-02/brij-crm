@@ -68,13 +68,53 @@ export const PublicSlot = z.object({ start: Timestamp, end: Timestamp });
 export type PublicSlot = z.infer<typeof PublicSlot>;
 
 /**
+ * The visitor's own calendar laid over the slots (spec 0028, AC-723 to
+ * AC-726), present only for a recognised visitor with a calendar. Slot starts
+ * only: the visitor's busy times never leave the server. `unreachable` when
+ * their calendar couldn't be read: no clash is known then, and every time shows.
+ */
+export const SlotsOverlay = z.object({
+  calendar: z.enum(['ok', 'unreachable']),
+  clashes: z.array(Timestamp),
+  best: z.array(Timestamp),
+});
+/** The visitor's overlay on a slots answer. */
+export type SlotsOverlay = z.infer<typeof SlotsOverlay>;
+
+/**
  * The slots in the range, chronological. `calendar` is `unreachable` when the
  * host's calendar refuses us until they reconnect: nothing is offered then, and
  * the page says why (fail closed).
  */
-export const PublicSlots = z.object({ slots: z.array(PublicSlot), calendar: z.enum(['ok', 'unreachable']) });
+export const PublicSlots = z.object({
+  slots: z.array(PublicSlot),
+  calendar: z.enum(['ok', 'unreachable']),
+  viewer: SlotsOverlay.optional(),
+});
 /** The slots in the range. */
 export type PublicSlots = z.infer<typeof PublicSlots>;
+
+/**
+ * Who the visitor is (spec 0028, AC-720 and AC-721), by
+ * `GET /api/public/booking/:publicKey/viewer`: signed in to Timefix in this
+ * browser (`account`), or a guest who connected Google for this visit
+ * (`google`). Absent for anyone else, and for the page's own host. `calendar`:
+ * `on` when their busy times will be laid over the slots, `needs-reconnect`
+ * when their connected calendar refuses us until they reconnect it.
+ */
+export const PublicViewer = z.object({
+  name: z.string(),
+  email: z.email(),
+  source: z.enum(['account', 'google']),
+  calendar: z.enum(['on', 'none', 'needs-reconnect']),
+});
+/** A recognised visitor. */
+export type PublicViewer = z.infer<typeof PublicViewer>;
+
+/** The viewer read's answer: the visitor, when we know them. */
+export const PublicViewerAnswer = z.object({ viewer: PublicViewer.optional() });
+/** The viewer read's answer. */
+export type PublicViewerAnswer = z.infer<typeof PublicViewerAnswer>;
 
 /** The longest a visitor's name may be. */
 export const VISITOR_NAME_MAX = 200;

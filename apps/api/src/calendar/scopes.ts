@@ -37,6 +37,17 @@ export const CALENDAR_SCOPES = [
  */
 export const CALENDAR_CONNECT_SCOPES = ['openid', 'email', ...CALENDAR_SCOPES] as const;
 
+/**
+ * A booking page guest's list (spec 0028, AC-722): who they are, and free and
+ * busy only. `profile` too, for the name the booking form fills.
+ */
+export const GUEST_CONNECT_SCOPES = [
+  'openid',
+  'email',
+  'profile',
+  'https://www.googleapis.com/auth/calendar.freebusy',
+] as const;
+
 /** Granted scopes as Google returns them (space separated) or as stored (comma separated). */
 export function parseGrantedScopes(raw: string | undefined): ReadonlySet<string> {
   if (raw === undefined) return new Set();

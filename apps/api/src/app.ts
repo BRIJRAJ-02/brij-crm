@@ -27,6 +27,7 @@ import { errorFields, log } from './log.ts';
 import { type Analytics, NO_ANALYTICS } from './monitoring/posthog.ts';
 import { captureFault, nameRequest, withRequestScope } from './monitoring/sentry.ts';
 import { mountPublicBooking } from './public/booking.ts';
+import { guestKeys } from './public/visitor.ts';
 import { createMemoryLimiter, type PublicLimiter } from './public/limits.ts';
 import { createRealtimeTokens } from './realtime/tokens.ts';
 import { NO_WAKE, OVERDUE_WAKE_MS, throttleWake, type WakeRelay } from './realtime/wake.ts';
@@ -314,10 +315,12 @@ export function createApp({
   // It sees only the client IP the edge guard trusted.
   app.on(['GET', 'POST'], '/auth/*', (c) => auth.handle(c.req.raw, c.get('clientIp'), c.get('origin')));
 
+  // Hosts' and signed in visitors' busy times, each kept for its minute.
+  const bookingBusy = createBusyCache(booking.busy);
   // Booking pages' public routes (spec 0025): a page's public key, no session; writes passed the Origin check above.
   mountPublicBooking(app, {
     db,
-    calendar: { busy: createBusyCache(booking.busy), events: booking.events },
+    calendar: { busy: bookingBusy, events: booking.events },
     limiter: services.bookingLimiter ?? createMemoryLimiter(),
     ics: {
       appOrigin: new URL(env.APP_URL).origin,
@@ -326,6 +329,22 @@ export function createApp({
     },
     wakeRelay,
     ...(services.now === undefined ? {} : { now: services.now }),
+    // Knowing the visitor (spec 0028): their session through the member door, or a guest's own Google for the visit.
+    visitor: {
+      auth,
+      workspacesOf: (userId) => identity.workspacesOf(userId),
+      enter: (userId, slug) =>
+        enterWorkspace({ db, identity, log, ...(rules === undefined ? {} : { rules }) }, { userId, slug }),
+      memberBusy: bookingBusy,
+      ...(calendar === undefined
+        ? {}
+        : {
+            guest: { calendar: calendar.guest, keys: guestKeys(calendar.tokenKey) },
+            stateKey: calendar.guestStateKey,
+          }),
+      appUrl: env.APP_URL,
+      secure: env.APP_ENV !== 'local',
+    },
   });
 
   app.notFound(() => errorResponse('NOT_FOUND', 'There is nothing at this address.'));
