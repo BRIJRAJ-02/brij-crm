@@ -7,6 +7,7 @@ export const strings = {
   newStage: 'New stage',
   choiceLabel: (place: number) => `Choice ${String(place)}`,
   newChoice: 'New choice',
+  typeChoice: 'Type a choice',
   addChoice: 'Add choice',
   noChoices: 'No choices yet',
   removeOf: (label: string) => `Remove ${label === '' ? 'choice' : label}`,

@@ -150,7 +150,7 @@ export function changeQuestion(
       change.choices !== undefined
         ? [...change.choices]
         : CHOICE_TYPES.includes(answerType) && question.choices === undefined
-          ? ['']
+          ? []
           : question.choices;
     const filing =
       change.filedOn === null ? undefined : change.filedOn === undefined ? filedOn?.attributeId : change.filedOn;

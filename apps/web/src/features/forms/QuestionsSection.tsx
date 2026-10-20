@@ -72,11 +72,22 @@ export function QuestionsSection(props: QuestionsSectionProps) {
   const { draft, onChange, attributes, objectName, liveIds, newId, toasts, problem, isReadOnly } = props;
   const [open, setOpen] = useState<ReadonlySet<string>>(new Set());
   const [justAdded, setJustAdded] = useState<string | undefined>(undefined);
+  // Questions whose choices list holds a refused edit (a repeated choice): marked, and kept open, until it is put right.
+  const [refused, setRefused] = useState<ReadonlySet<string>>(new Set());
+  const markRefused = (id: string, isRefused: boolean) => {
+    setRefused((before) => {
+      if (before.has(id) === isRefused) return before;
+      const next = new Set(before);
+      if (isRefused) next.add(id);
+      else next.delete(id);
+      return next;
+    });
+  };
 
   // A question a publish refused is open, and stays open until it is fixed.
   const openIds = useMemo(
-    () => (problem === undefined ? open : new Set([...open, problem.questionId])),
-    [open, problem],
+    () => new Set([...open, ...refused, ...(problem === undefined ? [] : [problem.questionId])]),
+    [open, refused, problem],
   );
 
   const isFull = draft.questions.length >= FORM_QUESTIONS_MAX;
@@ -118,7 +129,7 @@ export function QuestionsSection(props: QuestionsSectionProps) {
       ? { choiceCount: (question.choices ?? []).filter((choice) => choice.trim() !== '').length }
       : {}),
     filed: filedLine(question, objectName, attributes),
-    hasProblem: problem?.questionId === question.id,
+    hasProblem: problem?.questionId === question.id || refused.has(question.id),
   }));
 
   return (
@@ -197,6 +208,9 @@ export function QuestionsSection(props: QuestionsSectionProps) {
             onChange={(change) => {
               onChange((before) => changeQuestion(before, id, change, liveIds));
             }}
+            onChoicesInvalid={(isInvalid) => {
+              markRefused(id, isInvalid);
+            }}
           />
         );
       }}
@@ -269,6 +283,8 @@ interface QuestionEditorProps {
   readonly isJustAdded: boolean;
   readonly problem?: string;
   readonly onChange: (change: QuestionChange) => void;
+  /** The choices list holds a refused edit, or no longer does. */
+  readonly onChoicesInvalid: (isInvalid: boolean) => void;
 }
 
 /** One question open: Question, Answer type, Choices, Placeholder, Where it goes, Visitors must answer. */
@@ -280,6 +296,7 @@ function QuestionEditor({
   isJustAdded,
   problem,
   onChange,
+  onChoicesInvalid,
 }: QuestionEditorProps) {
   const labelRef = useRef<HTMLInputElement & HTMLTextAreaElement>(null);
 
@@ -330,6 +347,7 @@ function QuestionEditor({
         <ChoicesEditor
           choices={choices}
           isReadOnly={isReadOnly}
+          onInvalidChange={onChoicesInvalid}
           onChange={(next) => {
             onChange({ choices: next });
           }}
@@ -376,7 +394,12 @@ interface ChoicesEditorProps {
   readonly choices: readonly string[];
   readonly isReadOnly: boolean;
   readonly onChange: (next: readonly string[]) => void;
+  /** Whether a row holds a refused edit (a repeated choice), so the question can say it needs a fix. */
+  readonly onInvalidChange: (isInvalid: boolean) => void;
 }
+
+/** The longest choice the form contract takes (`document.ts`: "Keep a choice to 80 characters."). */
+const FORM_CHOICE_LENGTH_MAX = 80;
 
 /** A row id the editor keys its rows by, for this session only: choices are plain words with no ids of their own. */
 function mintChoiceId(): string {
@@ -388,7 +411,18 @@ function mintChoiceId(): string {
  * the handle, rename in place, a quiet remove on each, and Add choice opens a
  * blank row where Enter adds it and stays for the next.
  */
-function ChoicesEditor({ choices, isReadOnly, onChange }: ChoicesEditorProps) {
+function ChoicesEditor({ choices, isReadOnly, onChange, onInvalidChange }: ChoicesEditorProps) {
+  // A refused edit leaves with the list (the answer type changed): the question no longer needs a fix for it.
+  const tellInvalid = useRef(onInvalidChange);
+  useEffect(() => {
+    tellInvalid.current = onInvalidChange;
+  });
+  useEffect(
+    () => () => {
+      tellInvalid.current(false);
+    },
+    [],
+  );
   // Each choice's row id, by place. Kept in step with the choices: an outside
   // change of length (Undo, a duplicate) mints fresh ids for the rows it adds.
   const [ids, setIds] = useState<readonly string[]>(() => choices.map(mintChoiceId));
@@ -414,8 +448,12 @@ function ChoicesEditor({ choices, isReadOnly, onChange }: ChoicesEditorProps) {
       kind="choice"
       options={options}
       limit={FORM_CHOICES_MAX}
+      labelMaxLength={FORM_CHOICE_LENGTH_MAX}
+      // A new choice question opens with the editor's blank row, which waits for Tab.
+      startsWithBlank={choices.length === 0}
       newId={mintChoiceId}
       isReadOnly={isReadOnly}
+      onInvalidChange={onInvalidChange}
       onAdd={(option) => {
         commit([...rowIds, option.id], [...choices, option.label]);
       }}

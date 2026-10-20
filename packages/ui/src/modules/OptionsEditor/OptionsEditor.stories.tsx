@@ -30,6 +30,7 @@ interface SampleProps {
   readonly limit?: number;
   readonly isReadOnly?: boolean;
   readonly startsWithBlank?: boolean;
+  readonly labelMaxLength?: number;
   /** Before create: Remove instead of Archive and Restore. */
   readonly isDraft?: boolean;
   readonly pending?: readonly string[];
@@ -47,6 +48,7 @@ function SampleOptions({
   limit = 500,
   isReadOnly = false,
   startsWithBlank = false,
+  labelMaxLength,
   isDraft = false,
   pending = [],
   errors = {},
@@ -69,6 +71,7 @@ function SampleOptions({
         limit={limit}
         isReadOnly={isReadOnly}
         startsWithBlank={startsWithBlank}
+        {...(labelMaxLength === undefined ? {} : { labelMaxLength })}
         pending={new Set(pending)}
         errors={errors}
         newId={() => {
@@ -355,5 +358,25 @@ export const ChoicesReadOnly: Story = {
     await expect(canvas.getByText('Medium')).toBeInTheDocument();
     await expect(canvas.queryByRole('button', { name: 'Add choice' })).toBeNull();
     await expect(canvas.queryByRole('button', { name: /^Remove/ })).toBeNull();
+  },
+};
+
+/** A choice question at its limit: Add choice is off and the note says why. */
+export const ChoicesFull: Story = {
+  args: { kind: 'choice', initial: SIZES, isDraft: true, limit: 3 },
+  play: async ({ canvas }) => {
+    await expect(canvas.getByRole('button', { name: 'Add choice' })).toBeDisabled();
+    await expect(canvas.getByText('A question holds at most 3 choices.')).toBeVisible();
+  },
+};
+
+/** A new choice question: one blank row waiting for Tab, its placeholder saying what to type, and 80 characters at most. */
+export const ChoicesStartBlank: Story = {
+  args: { kind: 'choice', initial: [], isDraft: true, limit: 40, startsWithBlank: true, labelMaxLength: 80 },
+  play: async ({ canvas }) => {
+    const blank = canvas.getByRole('textbox', { name: 'New choice' });
+    await expect(blank).not.toHaveFocus();
+    await expect(blank).toHaveAttribute('placeholder', 'Type a choice');
+    await expect(blank).toHaveAttribute('maxlength', '80');
   },
 };

@@ -82,6 +82,8 @@ export interface OptionsEditorProps {
   readonly errors?: Readonly<Partial<Record<string, string>>>;
   /** Shows the options with nothing to change (a member, a read only dialog). */
   readonly isReadOnly?: boolean;
+  /** The longest label a row takes (100 when left out): a form's choices take 80, as their contract does. */
+  readonly labelMaxLength?: number;
   /** Opens with one blank row, ready to type in (a new select). */
   readonly startsWithBlank?: boolean;
   /** A line under the group's label: how changes are kept ("Changes to options save as you make them."). */
@@ -145,6 +147,7 @@ export function OptionsEditor({
   errors = {},
   isReadOnly = false,
   startsWithBlank = false,
+  labelMaxLength = 100,
   hint,
   onInvalidChange,
 }: OptionsEditorProps) {
@@ -355,8 +358,9 @@ export function OptionsEditor({
                     <Field
                       label={newName}
                       isLabelHidden
+                      {...(isChoice ? { placeholder: strings.typeChoice } : {})}
                       size="sm"
-                      maxLength={100}
+                      maxLength={labelMaxLength}
                       autoComplete="off"
                       // A row asked for takes focus as it appears, to type in.
 
@@ -412,7 +416,7 @@ export function OptionsEditor({
                       label={placeName(index)}
                       isLabelHidden
                       size="sm"
-                      maxLength={100}
+                      maxLength={labelMaxLength}
                       autoComplete="off"
                       value={typedOf(option, 'label') ?? name}
                       onChange={(text) => {

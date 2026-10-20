@@ -103,9 +103,9 @@ describe('the builder’s draft changes', () => {
     expect(next.questions[2]?.filedOn?.attributeId).toBe(NAME);
   });
 
-  it('gives a choice type its first empty choice', () => {
+  it('gives a choice type an empty list of choices, for the editor blank row', () => {
     const next = changeQuestion(addQuestion(base, 'q1'), 'q1', { answerType: 'dropdown' });
-    expect(next.questions[2]?.choices).toEqual(['']);
+    expect(next.questions[2]?.choices).toEqual([]);
   });
 
   it('files questions by their labels, only onto free attributes that fit', () => {
