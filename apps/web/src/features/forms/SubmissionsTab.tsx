@@ -1,7 +1,8 @@
 // Brief
-// Purpose: a form's submissions, newest first, by state, and one in full beside them (spec 0023, 0023-experience.md, Submissions tab).
-// Main task: see what came in and what it became, and release, mark as spam, retry or delete one.
-// Leaves out: picking the right record for one that needs review, and live arrival (both later).
+// Purpose: a form's submissions (spec 0023): who sent what and when, newest first, with what needs a look on top.
+// Main task: scan the people and their first answers, open one in full, and settle many at once (spam or not).
+// Leaves out: CSV export, Add to CRM and Sync old records (the spam lane's backend), counts per state, server search
+// (search filters the rows loaded so far), and live arrival.
 import {
   isDataError,
   type ObjectSummary,
@@ -12,18 +13,19 @@ import {
   type SubmissionView,
 } from '@crm/data';
 import {
+  BulkActionBar,
   Button,
   Callout,
+  CopyButton,
   DescriptionList,
   EmptyState,
   Modal,
   Panel,
   RecordChip,
   RelativeTime,
+  LinkListToolbar,
   Select,
   Table,
-  Toolbar,
-  Link,
   TruncatedText,
   type TableColumn,
 } from '@crm/ui';
@@ -31,9 +33,11 @@ import {
 import { StatusDot } from '@crm/ui';
 import { useNavigate, useRouter, useRouteContext } from '@tanstack/react-router';
 import { useState } from 'react';
+import { createPortal } from 'react-dom';
 import { recordLinks } from '../records/timeline.ts';
 import { formHref } from './paths.ts';
 import { strings } from './strings.ts';
+import { useFormToolbarSlot } from './toolbarSlot.ts';
 
 /** Props for the Submissions tab: what its route loaded through the data layer. */
 export interface SubmissionsTabProps {
@@ -44,14 +48,14 @@ export interface SubmissionsTabProps {
   readonly state: SubmissionState | undefined;
   readonly open: SubmissionView | undefined;
   readonly canManage: boolean;
+  /** The form's questions, for the answer columns (the first two) by their labels. */
+  readonly questions: readonly { readonly id: string; readonly label: string }[];
+  /** The form's public link, for the empty state's Copy link. */
+  readonly link: string;
 }
 
-const COLUMNS: readonly TableColumn[] = [
-  { id: 'when', label: strings.when, isRowHeader: true },
-  { id: 'person', label: strings.person, isInline: true },
-  { id: 'state', label: strings.state },
-  { id: 'answers', label: strings.answers },
-];
+/** How many answers get a column of their own; the rest are in the open submission. */
+const ANSWER_COLUMNS = 2;
 
 const ALL = 'all';
 const FILTERS: readonly SubmissionState[] = ['processed', 'needs_review', 'spam', 'failed'];
@@ -79,7 +83,21 @@ function answerText(answer: SubmissionAnswer): string {
 }
 
 /** The filter, the table, Show more, and the open submission in a Panel. */
-export function SubmissionsTab({ slug, formId, objects, page, state, open, canManage }: SubmissionsTabProps) {
+export function SubmissionsTab({
+  slug,
+  formId,
+  objects,
+  page,
+  state,
+  open,
+  canManage,
+  questions,
+  link: formLink,
+}: SubmissionsTabProps) {
+  const slot = useFormToolbarSlot();
+  const [query, setQuery] = useState('');
+  const [selected, setSelected] = useState<ReadonlySet<string>>(new Set());
+  const [bulk, setBulk] = useState<{ readonly label: string; readonly value: number } | undefined>(undefined);
   const { data, toasts } = useRouteContext({ from: '__root__' });
   const navigate = useNavigate();
   const router = useRouter();
@@ -157,36 +175,69 @@ export function SubmissionsTab({ slug, formId, objects, page, state, open, canMa
     );
   };
 
-  const cell = (submission: SubmissionSummary, column: string) => {
-    switch (column) {
-      case 'when':
-        return <RelativeTime value={submission.receivedAt} />;
-      case 'person': {
-        const record = submission.mainRecord;
-        if (record === undefined) return submission.email ?? '';
-        const href = link(record.objectId, record.recordId);
-        return <RecordChip display={record} {...(href === undefined ? {} : { href })} isFlat />;
-      }
-      case 'state':
-        return <StatusDot hue={STATE_HUES[submission.state]}>{strings.states[submission.state]}</StatusDot>;
-      default:
-        // "Label: answer" pairs on one line, cut to the cell, the whole line in a tooltip when cut.
-        return (
-          <TruncatedText>
-            {submission.firstAnswers
-              .map((answer) => [answer.label, answerText(answer)] as const)
-              .filter(([, text]) => text !== '')
-              .map(([label, text]) => `${label}: ${text}`)
-              .join(' · ')}
-          </TruncatedText>
+  // Search narrows the rows loaded so far, by the person's name or email.
+  const needle = query.trim().toLowerCase();
+  const shown =
+    needle === ''
+      ? rows
+      : rows.filter((submission) =>
+          [submission.mainRecord?.name, submission.email].some((text) => text?.toLowerCase().includes(needle) === true),
         );
-    }
+  const waiting = rows.filter((submission) => submission.state === 'needs_review').length;
+  const columns: readonly TableColumn[] = [
+    { id: 'person', label: strings.person, isRowHeader: true, isInline: true },
+    { id: 'when', label: strings.when },
+    { id: 'state', label: strings.state },
+    // The questions the list carries answers for (the server sends each row's first answers), in the form's order.
+    ...questions
+      .filter((question) =>
+        rows.some((submission) => submission.firstAnswers.some((each) => each.questionId === question.id)),
+      )
+      .slice(0, ANSWER_COLUMNS)
+      .map((question) => ({ id: question.id, label: question.label })),
+  ];
+
+  /** Marks every picked submission spam, or not spam, one after another, with progress in the bar. */
+  const settleAll = (kind: 'spam' | 'release') => {
+    const ids = [...selected];
+    let done = 0;
+    const label = kind === 'spam' ? strings.markingSpam : strings.markingNotSpam;
+    setBulk({ label, value: 0 });
+    const step = (index: number): Promise<void> => {
+      const id = ids[index];
+      if (id === undefined) return Promise.resolve();
+      const call = kind === 'spam' ? data.submissions.markSpam(slug, id) : data.submissions.release(slug, id);
+      return call.then(() => {
+        done += 1;
+        setBulk({ label, value: Math.round((done / ids.length) * 100) });
+        return step(index + 1);
+      });
+    };
+    step(0).then(
+      () => {
+        setBulk(undefined);
+        setSelected(new Set());
+        toasts.toast({
+          tone: 'success',
+          message: kind === 'spam' ? strings.markedSpamMany(done) : strings.releasedMany(done),
+        });
+        void router.invalidate();
+      },
+      (error: unknown) => {
+        setBulk(undefined);
+        toasts.toast({ tone: 'danger', message: isDataError(error) ? error.message : strings.failedText });
+        void router.invalidate();
+      },
+    );
   };
 
-  return (
-    <>
-      {/* Five states are too many for segments (two to four): a filter Select, as Trash's object filter. */}
-      <Toolbar label={strings.filterLabel}>
+  const toolbar = (
+    <LinkListToolbar
+      searchLabel={strings.searchSubmissions}
+      query={query}
+      onQueryChange={setQuery}
+      size="sm"
+      actions={
         <Select
           label={strings.filterStates}
           isLabelHidden
@@ -203,24 +254,107 @@ export function SubmissionsTab({ slug, formId, objects, page, state, open, canMa
             );
           }}
         />
-      </Toolbar>
+      }
+    />
+  );
+
+  const cell = (submission: SubmissionSummary, column: string) => {
+    switch (column) {
+      case 'when':
+        return <RelativeTime value={submission.receivedAt} />;
+      case 'person': {
+        const record = submission.mainRecord;
+        if (record === undefined) return submission.email ?? '';
+        const href = link(record.objectId, record.recordId);
+        return <RecordChip display={record} {...(href === undefined ? {} : { href })} isFlat />;
+      }
+      case 'state':
+        return <StatusDot hue={STATE_HUES[submission.state]}>{strings.states[submission.state]}</StatusDot>;
+      default: {
+        // An answer column: this question's answer, cut to the cell, the whole of it in a tooltip when cut.
+        const answer = submission.firstAnswers.find((each) => each.questionId === column);
+        return <TruncatedText>{answer === undefined ? '' : answerText(answer)}</TruncatedText>;
+      }
+    }
+  };
+
+  return (
+    <>
+      {/* The filter and search sit at the end of the tab strip, as Captures' do: no row of their own. */}
+      {slot === null ? toolbar : createPortal(toolbar, slot)}
+      {state === undefined && waiting > 0 && (
+        <Callout
+          tone="warning"
+          actions={
+            <Button
+              onPress={() => {
+                go(undefined, 'needs_review');
+              }}
+            >
+              {strings.review}
+            </Button>
+          }
+        >
+          {strings.needReview(waiting)}
+        </Callout>
+      )}
+      {canManage && selected.size > 0 && (
+        <BulkActionBar
+          count={selected.size}
+          total={shown.length}
+          onClear={() => {
+            setSelected(new Set());
+          }}
+          {...(bulk === undefined ? {} : { progress: bulk })}
+        >
+          <Button
+            onPress={() => {
+              settleAll('release');
+            }}
+          >
+            {strings.notSpam}
+          </Button>
+          <Button
+            onPress={() => {
+              settleAll('spam');
+            }}
+          >
+            {strings.markSpam}
+          </Button>
+        </BulkActionBar>
+      )}
       <Table
         label={strings.tabSubmissions}
-        columns={COLUMNS}
-        rows={rows}
+        columns={columns}
+        rows={shown}
         getRowId={(submission) => submission.id}
         renderCell={cell}
+        isHeaderSticky
+        {...(canManage
+          ? {
+              selected,
+              onSelectedChange: setSelected,
+              getSelectLabel: (submission: SubmissionSummary) =>
+                submission.mainRecord?.name ?? submission.email ?? strings.submission,
+            }
+          : {})}
         onRowAction={(id) => {
           go(id);
         }}
         emptyState={
-          <EmptyState
-            icon="inbox"
-            title={state === undefined ? strings.noSubmissions : strings.noneIn[state]}
-            {...(state === undefined
-              ? { actions: <Link href={formHref(slug, formId, 'install')}>{strings.goToInstall}</Link> }
-              : {})}
-          />
+          query.trim() !== '' ? (
+            <EmptyState icon="search" title={strings.noMatch(query.trim())} />
+          ) : state === undefined ? (
+            <EmptyState
+              icon="inbox"
+              title={strings.noSubmissions}
+              actions={<CopyButton value={formLink} label={strings.copyLink} variant="primary" />}
+            >
+              {strings.noSubmissionsText}
+            </EmptyState>
+          ) : (
+            <EmptyState icon="inbox" title={strings.noneIn[state]} />
+          )
         }
       />
       {held.next !== undefined && (
