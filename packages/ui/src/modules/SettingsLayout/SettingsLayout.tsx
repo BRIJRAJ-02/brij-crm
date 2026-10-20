@@ -3,7 +3,9 @@
 // header (its title, a tile, a badge, a line of description and its actions)
 // over its body. The body is the screen's: Tabs, Cards, Tables, EmptyState.
 // Since spec 0026 the app's settings navigation is the Sidebar's settings
-// variant, so the page draws its own trail and h1, and `nav` is optional.
+// variant, so `nav` is optional. Since 21 Oct 2026 the app's settings pages
+// sit under a TopBar holding their trail and h1; `titleLevel={1}` with
+// `trail` is for a page with no TopBar above it.
 import { useContext, useId, type ReactNode, type Ref } from 'react';
 import { Icon } from '../../atoms/Icon/Icon.tsx';
 import type { IconName } from '../../atoms/Icon/icons.ts';

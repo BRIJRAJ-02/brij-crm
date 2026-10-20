@@ -3,12 +3,14 @@
 // Main task: hand SettingsLayout what the page's route loaded, so every settings page has the same header (AC-683).
 // Leaves out: loading anything itself (each settings route's loader read through the data layer), and the sidebar (the settings layout route draws it).
 import type { Hue, ObjectIcon } from '@crm/data';
-import { EmptyState, Link, SettingsLayout, type Crumb } from '@crm/ui';
+import { EmptyState, Link, SettingsLayout, TopBar, type Crumb } from '@crm/ui';
 import { useLocation, useParams } from '@tanstack/react-router';
 import type { ReactNode, Ref } from 'react';
+import { createPortal } from 'react-dom';
 import { WorkspacePage } from '../workspace/WorkspacePage.tsx';
 import { objectsSettingsHref, preferencesHref, settingsGroupOf, settingsNav, settingsPageOf } from './nav.ts';
 import { strings } from './strings.ts';
+import { useSettingsTopBarSlot } from './topBarSlot.ts';
 
 /** Props for one settings page. */
 export interface SettingsPageProps {
@@ -31,8 +33,10 @@ export interface SettingsPageProps {
 }
 
 /**
- * A settings page: SettingsLayout with the page's trail (its group, any
- * places between, then its title) over its h1, inside the settings frame.
+ * A settings page: a TopBar with the page's trail (Settings, its group, any
+ * places between, then its title; the bar holds the page's h1) in the frame's
+ * bar slot, as every page's TopBar sits, and SettingsLayout below it with the
+ * title, description and body.
  */
 export function SettingsPage({
   title,
@@ -51,32 +55,34 @@ export function SettingsPage({
   const page = useLocation({ select: (location) => settingsPageOf(location.pathname) });
   const group = settingsGroupOf(settingsNav(slug), page);
   // Settings heads the trail, so the page says where it is even on a phone, where the sidebar is a rail of icons.
+  // TopBar ends it with the title, as the current place.
   const trail: readonly Crumb[] = [
     { id: 'settings', label: strings.settings },
     ...(group === undefined ? [] : [{ id: group.id, label: group.label }]),
     ...crumbs,
-    { id: 'current', label: title },
   ];
+  const slot = useSettingsTopBarSlot();
   return (
     <WorkspacePage
       page={{
         topBar: undefined,
         body: (
-          <SettingsLayout
-            titleLevel={1}
-            trail={trail}
-            hasTabs={hasTabs}
-            title={title}
-            isLoading={isLoading}
-            {...(titleRef === undefined ? {} : { titleRef })}
-            {...(icon === undefined ? {} : { icon })}
-            {...(hue === undefined ? {} : { hue })}
-            {...(meta === undefined ? {} : { meta })}
-            {...(description === undefined ? {} : { description })}
-            {...(actions === undefined ? {} : { actions })}
-          >
-            {children}
-          </SettingsLayout>
+          <>
+            {slot !== null && createPortal(<TopBar title={title} crumbs={trail} />, slot)}
+            <SettingsLayout
+              hasTabs={hasTabs}
+              title={title}
+              isLoading={isLoading}
+              {...(titleRef === undefined ? {} : { titleRef })}
+              {...(icon === undefined ? {} : { icon })}
+              {...(hue === undefined ? {} : { hue })}
+              {...(meta === undefined ? {} : { meta })}
+              {...(description === undefined ? {} : { description })}
+              {...(actions === undefined ? {} : { actions })}
+            >
+              {children}
+            </SettingsLayout>
+          </>
         ),
       }}
     />
