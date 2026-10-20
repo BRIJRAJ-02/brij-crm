@@ -42,9 +42,14 @@ export function toTaskEntry(task: TaskView, members: readonly MemberSummary[], p
   };
 }
 
-/** A tab's count as its label carries it: the count, and whether it is a floor ("10,000+"). */
+/**
+ * A tab's count as its label carries it: the open tasks, and whether it is a
+ * floor ("10,000+"). None at all shows no count: a "0" beside Tasks read as
+ * though the record had no tasks, done ones included.
+ */
 export function tabCount(total: { readonly count: number; readonly atLeast: boolean } | undefined) {
-  return total === undefined ? {} : { count: total.count, countMax: 10_000, isCountAtLeast: total.atLeast };
+  if (total === undefined || (total.count === 0 && !total.atLeast)) return {};
+  return { count: total.count, countMax: 10_000, isCountAtLeast: total.atLeast };
 }
 
 /** Whether a `task` search param names a task (a uuid) or a new one. */

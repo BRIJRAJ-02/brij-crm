@@ -112,9 +112,11 @@ test('tasks on a record: quick add, the dialog, links, ticks and the timeline, l
   await expect(dialog).toBeVisible();
   await expect(page).toHaveURL(/\?task=/);
   await checkScreen(page, 'task-dialog');
-  await dialog.getByRole('button', { name: /Search in/ }).click();
-  await page.getByRole('option', { name: 'Companies' }).click();
+  // The object switcher sits in the picker's menu, above its search, and hands focus back to the search.
   await dialog.getByRole('button', { name: /Add another|Choose Records/ }).click();
+  await page.getByRole('button', { name: /Search in/ }).click();
+  await page.getByRole('option', { name: 'Companies' }).click();
+  await expect(page.getByRole('searchbox', { name: 'Search Records' })).toBeFocused();
   await page.keyboard.type('Acme');
   await page.getByRole('menuitem', { name: /Acme Corp/ }).click();
   await expect(dialog.getByRole('list', { name: 'Records' })).toContainText('Acme Corp');

@@ -32,7 +32,6 @@ export interface TasksTabProps {
 function QuickAdd({ slug, record, meId }: Pick<TasksTabProps, 'slug' | 'record' | 'meId'>) {
   const { data } = useRouteContext({ from: '__root__' });
   const [title, setTitle] = useState('');
-  const isLong = title.length > TASK_TITLE_MAX * 0.9;
   return (
     <Field
       label={strings.addTask}
@@ -41,7 +40,8 @@ function QuickAdd({ slug, record, meId }: Pick<TasksTabProps, 'slug' | 'record' 
       value={title}
       onChange={setTitle}
       maxLength={TASK_TITLE_MAX}
-      showCounter={isLong}
+      // The count shows only near the limit (Field's rule).
+      showCounter
       onSubmit={() => {
         const trimmed = title.trim();
         if (trimmed === '') return;
@@ -227,6 +227,8 @@ export function TasksTab({ slug, record, open, members, meId, canAdd, recordHref
               <>
                 <QuickAdd slug={slug} record={record} meId={meId} />
                 <Button
+                  // The composer's height: beside the 30px field.
+                  size="lg"
                   onPress={() => {
                     onOpenTask('new');
                   }}

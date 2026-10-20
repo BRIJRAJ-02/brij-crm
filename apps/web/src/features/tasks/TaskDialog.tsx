@@ -28,6 +28,7 @@ import {
   Form,
   Modal,
   RelativeTime,
+  Tooltip,
   type AttributeEditorProps,
   type FieldAttribute,
   type ListSource,
@@ -190,7 +191,7 @@ function TaskFields({
         }}
         onBlur={commitTitle}
         onSubmit={commitTitle}
-        isMultiline
+        isWrapping
         maxLength={TASK_TITLE_MAX}
         showCounter
         isRequired
@@ -371,10 +372,10 @@ function SavedTask({
     <TaskModal
       title={strings.task}
       onClose={onClose}
-      actions={
-        <Button variant="ghost" icon="link" onPress={copyLink}>
-          {strings.copyLink}
-        </Button>
+      headerActions={
+        <Tooltip content={strings.copyLink}>
+          <Button variant="ghost" icon="link" label={strings.copyLink} onPress={copyLink} />
+        </Tooltip>
       }
     >
       <Form id={`task-${task.id}`} onSubmit={() => undefined} label={strings.task}>
@@ -394,6 +395,7 @@ function SavedTask({
           {...(task.canChange ? {} : { readOnlyReason: strings.readOnly })}
         />
         <DescriptionList
+          layout="stacked"
           items={[
             {
               term: strings.created,
@@ -491,11 +493,14 @@ function TaskModal({
   title,
   onClose,
   actions,
+  headerActions,
   children,
 }: {
   readonly title: string;
   readonly onClose: () => void;
   readonly actions?: ReactNode;
+  /** Icon buttons in the title bar, before Close (Copy link). */
+  readonly headerActions?: ReactNode;
   readonly children: ReactNode;
 }) {
   return (
@@ -506,6 +511,7 @@ function TaskModal({
         if (!open) onClose();
       }}
       {...(actions === undefined ? {} : { actions })}
+      {...(headerActions === undefined ? {} : { headerActions })}
     >
       {children}
     </Modal>

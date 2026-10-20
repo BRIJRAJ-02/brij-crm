@@ -52,6 +52,9 @@ describe('tasks as the list draws them (spec 0019)', () => {
       isCountAtLeast: true,
     });
     expect(tabCount(undefined)).toEqual({});
+    // No open tasks shows no count at all, never a "0".
+    expect(tabCount({ count: 0, atLeast: false })).toEqual({});
+    expect(tabCount({ count: 2, atLeast: false })).toEqual({ count: 2, countMax: 10_000, isCountAtLeast: false });
     expect(isTaskParam('new')).toBe(true);
     expect(isTaskParam(task.id)).toBe(true);
     expect(isTaskParam('nope')).toBe(false);
