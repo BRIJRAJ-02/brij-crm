@@ -2,7 +2,8 @@
    hairline (3:1 on every surface, WCAG 1.4.11); focus turns it accent-line
    and adds the faint focus halo, an error turns
    the border danger. Read only fills the box with surface-subtle and shows a
-   lock; disabled fades it. The search variant is rounded with an icon. */
+   lock; disabled fades it. The search variant is rounded with an icon; the
+   copy variant is read only but drawn live, with a Copy button at its end. */
 @layer components {
   .root {
     display: flex;
@@ -177,6 +178,16 @@
     cursor: default;
   }
 
+  /* The copy variant: read only, yet drawn as a live field (its hairline, the
+     raised surface, the normal focus ring), since a link to copy is not a
+     value someone was refused. Its Copy button sits flush at the end. */
+  .root[data-variant='copy'] .box {
+    padding-inline-end: var(--space-2);
+    border-color: var(--field-border);
+    background: var(--surface-raised);
+    cursor: text;
+  }
+
   /* In a grid cell the cell is the field: it fills the cell, keeps the cell's
      padding and text line, and draws no box or ring of its own, focused or
      refused. The cell draws the one focus ring, and the danger edge while the
@@ -198,6 +209,23 @@
   .root[data-readonly] .box:focus-within {
     border-color: var(--border);
     box-shadow: none;
+  }
+
+  /* The copy variant's hover and focus, after the read only ones they undo. */
+  @media (hover: hover) and (pointer: fine) {
+    .root[data-variant='copy'] .box:hover:not(:focus-within) {
+      border-color: var(--control-border);
+    }
+  }
+
+  .root[data-variant='copy'] .box:focus-within {
+    border-color: var(--accent-line);
+    box-shadow: var(--shadow-focus);
+  }
+
+  .copy {
+    display: inline-flex;
+    flex: none;
   }
 
   .root[data-align='end'] .input {

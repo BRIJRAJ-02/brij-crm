@@ -1,6 +1,6 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
 import { useState } from 'react';
-import { expect, fn } from 'storybook/test';
+import { expect, fn, waitFor } from 'storybook/test';
 import { Stage } from '../../workbench/Stage/Stage.tsx';
 import { Field } from './Field.tsx';
 
@@ -115,4 +115,22 @@ export const Variants: Story = {
       <Field label="Name" isLabelHidden size="sm" defaultValue="Northwind Traders" />
     </Stage>
   ),
+};
+
+/** The copy variant: a public link to copy, read only but drawn live, with no lock. Focus selects the whole value. */
+export const Copy: Story = {
+  render: () => (
+    <Stage width="narrow">
+      <Field label="Public link" variant="copy" value="https://timefix.app/b/intro-call" copyLabel="Copy link" />
+    </Stage>
+  ),
+  play: async ({ canvas, userEvent }) => {
+    const input = canvas.getByRole<HTMLInputElement>('textbox', { name: 'Public link' });
+    await expect(input).toHaveAttribute('readonly');
+    await expect(canvas.queryByRole('img', { name: 'Read only' })).toBeNull();
+    await expect(canvas.getByRole('button', { name: 'Copy link' })).toBeInTheDocument();
+    await userEvent.click(input);
+    await waitFor(() => expect(input.selectionEnd).toBe(input.value.length));
+    await expect(input.selectionStart).toBe(0);
+  },
 };

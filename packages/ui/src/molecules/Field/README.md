@@ -22,6 +22,7 @@ Ported from the artifact's Field card. Every text, number and link attribute is 
 - `prefix` holds a unit (`USD`, `%`) or a picker (the currency editor's code Select); `suffix` a clear button or a trigger.
 - `isMultiline` is a textarea that grows with its content (long text); `maxLength` with `showCounter` shows "12/500".
 - `size="sm"` is the 26px field of a filter value or a record panel row; `variant="search"` the search field: a magnifier and the sunken fill, on the same corners as every other field (the owner's call, 20 October 2026).
+- `variant="copy"` is a value to copy and never to change, such as a booking page's public link: read only, but drawn as a live field (its hairline and surface, no lock), so it never reads as disabled, with an icon Copy button at its end (`copyLabel` names it, "Copy link") and the whole value selected when it takes focus. Why a variant: the read only look says "you may not change this", which made a link meant for sharing look switched off (owner feedback F18, 20 October 2026).
 - `variant="cell"` is what a grid cell becomes while it edits: the input fills the cell at the cell's height and padding, on the cell's text line, with no box, radius or ring of its own. The cell draws the one focus ring, and swaps it for the danger edge while the value is refused, so an editing cell never shows two rings. `align="end"` puts the typed text at the end, where a number's display sits.
 - A textarea (`isMultiline`) grows with its text at either size.
 - Typed numbers are parsed by the field set, never here (the input stays text, so nothing is lost to a JS number).
@@ -32,7 +33,7 @@ Ported from the artifact's Field card. Every text, number and link attribute is 
 
 ## States
 
-Empty (placeholder), filled, focus (a 1px `accent-line` border and the faint halo), invalid (danger border and message, in place of the hint), read only (filled, lock, reason), disabled (faded, reason). The `cell` variant has none of these looks of its own: its grid cell draws focus and the refusal, and the message floats under the cell on a raised surface.
+Empty (placeholder), filled, focus (a 1px `accent-line` border and the faint halo), invalid (danger border and message, in place of the hint), read only (filled, lock, reason), disabled (faded, reason), copy (read only, drawn live, with its Copy button). The `cell` variant has none of these looks of its own: its grid cell draws focus and the refusal, and the message floats under the cell on a raised surface.
 
 ## Keyboard
 

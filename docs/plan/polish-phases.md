@@ -60,7 +60,7 @@ Work that was in flight when the lanes stopped is kept on its lane branches (a `
 - F17. "add timefix across", "Add timefix logos as well". Done on the public pages.
 
 ### Booking page editor
-- F18. "fix UI": fields with no rhythm, the public link looking disabled, a stray "Edit my hours" line. Open.
+- F18. "fix UI": fields with no rhythm, the public link looking disabled, a stray "Edit my hours" line. Fixed: the public link is a copy row (Field `variant="copy"`) at the top of Page, Meeting and Hours carry live summaries in their headers, and "Edit my hours" is the Hours card's action, with the followed week as its summary.
 - F19. The New booking page panel should be a popup. Done.
 
 ### Captures lists

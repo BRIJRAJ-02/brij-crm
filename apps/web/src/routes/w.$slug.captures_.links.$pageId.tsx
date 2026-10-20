@@ -78,7 +78,14 @@ function EditorRoute() {
   if (page === undefined) return <Missing title={strings.notFoundTitle} text={strings.notFoundText} />;
   // A page of its own per id, so its draft starts afresh.
   return (
-    <PageEditor key={page.id} data={data} slug={slug} page={page} {...(myHours === undefined ? {} : { myHours })} />
+    <PageEditor
+      key={page.id}
+      data={data}
+      slug={slug}
+      page={page}
+      locale={navigator.languages[0] ?? 'en-US'}
+      {...(myHours === undefined ? {} : { myHours })}
+    />
   );
 }
 

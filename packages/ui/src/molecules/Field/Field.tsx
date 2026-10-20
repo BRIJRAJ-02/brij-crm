@@ -1,5 +1,6 @@
 import type { ReactNode, Ref } from 'react';
 import { FieldError, Input, Label, Text, TextArea, TextField } from 'react-aria-components';
+import { CopyButton } from '../../atoms/Button/CopyButton.tsx';
 import { Icon } from '../../atoms/Icon/Icon.tsx';
 import type { IconName } from '../../atoms/Icon/icons.ts';
 import { useFormatSettings } from '../../provider/context.ts';
@@ -9,8 +10,11 @@ import { strings } from './strings.ts';
 /** `md` (the default) is the 30px input of forms and panels; `sm` is the 26px of a cell editor or a toolbar. */
 export type FieldSize = 'md' | 'sm';
 
-/** `default` is the boxed field; `search` the rounded search field; `cell` the bare input a grid cell edits in. */
-export type FieldVariant = 'default' | 'search' | 'cell';
+/**
+ * `default` is the boxed field; `search` the rounded search field; `cell` the bare input a grid cell edits in;
+ * `copy` a value to copy, never to change: a public link, an embed code.
+ */
+export type FieldVariant = 'default' | 'search' | 'cell' | 'copy';
 
 /** Props for Field. */
 export interface FieldProps {
@@ -61,8 +65,13 @@ export interface FieldProps {
    * `cell` is the input a grid cell becomes while it edits: no box of its own,
    * the cell's height and padding, and no focus ring, since the cell draws the
    * one ring (and the danger edge while the value is refused).
+   * `copy` shows a value to copy and never to change (a public link): read
+   * only, but drawn as a live field with no lock, a Copy button at its end,
+   * and the whole value selected when it takes focus.
    */
   readonly variant?: FieldVariant;
+  /** The `copy` variant's button name ("Copy link"); "Copy" when left out. */
+  readonly copyLabel?: string;
   /** Where the typed text sits: `end` for numbers, which a cell aligns to its end. */
   readonly align?: 'start' | 'end';
   /** The error floats under the input, over what follows: in a grid cell, which is one line tall. */
@@ -97,7 +106,7 @@ export function Field({
   isMultiline = false,
   maxLength,
   showCounter = false,
-  isReadOnly = false,
+  isReadOnly: isReadOnlyGiven = false,
   readOnlyReason,
   isDisabled = false,
   disabledReason,
@@ -109,12 +118,16 @@ export function Field({
   name,
   size = 'md',
   variant = 'default',
+  copyLabel,
   align = 'start',
   isErrorFloating = false,
   autoFocus = false,
   ref,
 }: FieldProps) {
   const { locale } = useFormatSettings();
+  const isCopy = variant === 'copy';
+  // A value to copy is never typed over.
+  const isReadOnly = isReadOnlyGiven || isCopy;
   const reason = (isReadOnly ? readOnlyReason : undefined) ?? (isDisabled ? disabledReason : undefined);
   const length = (value ?? defaultValue ?? '').length;
   const leading = variant === 'search' ? 'search' : icon;
@@ -124,6 +137,16 @@ export function Field({
     ...(ref === undefined ? {} : { ref }),
     // A list's search field takes focus as the list opens, the pattern React Aria expects.
     ...(autoFocus ? { autoFocus: true } : {}),
+    // A value to copy is taken whole: focusing it selects all of it, ready for ⌘C.
+    ...(isCopy
+      ? {
+          // After the press that focused it, whose mouseup would otherwise drop the selection.
+          onFocus: (event: { readonly currentTarget: HTMLInputElement | HTMLTextAreaElement }) => {
+            const input = event.currentTarget;
+            requestAnimationFrame(() => input.select());
+          },
+        }
+      : {}),
   };
   return (
     <TextField
@@ -171,12 +194,22 @@ export function Field({
               {leading !== undefined && <Icon name={leading} size="sm" tone="muted" />}
               {prefix !== undefined && <span className={styles.prefix}>{prefix}</span>}
               {isMultiline ? <TextArea {...inputProps} /> : <Input {...inputProps} />}
-              {isReadOnly && (
+              {isReadOnly && !isCopy && (
                 <span className={styles.lock}>
                   <Icon name="lock" size="xs" label={strings.readOnly} />
                 </span>
               )}
               {suffix !== undefined && <span className={styles.suffix}>{suffix}</span>}
+              {isCopy && (
+                <span className={styles.copy}>
+                  <CopyButton
+                    value={value ?? defaultValue ?? ''}
+                    isIconOnly
+                    variant="ghost"
+                    {...(copyLabel === undefined ? {} : { label: copyLabel })}
+                  />
+                </span>
+              )}
             </span>
             {(description !== undefined || (showCounter && maxLength !== undefined)) && (
               <span className={styles.foot}>

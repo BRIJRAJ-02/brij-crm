@@ -71,7 +71,6 @@ export const strings = {
   where: 'Where',
   followMine: 'Follow my hours',
   ownHoursMode: 'Own hours',
-  followHint: 'This page books by your hours in Bookings › Availability.',
   editMyHours: 'Edit my hours',
   followOwnerHint: 'This page books by its owner’s hours.',
   readOnlyTitle: 'You can view this page',

@@ -1,6 +1,7 @@
 // Brief
 // Purpose: one booking page's editor (spec 0025, 0025-experience.md, AC-623, AC-624, AC-679): its groups beside a live preview.
 // Main task: change the page, the meeting, its hours and limits, and Save from the bar that appears while anything is unsaved.
+// Each group's header carries a live summary of what it holds (the meeting's lengths and place, the week it books on).
 // Leaves out: questions and the deal step (milestone 2), team members (milestone 3), and scrolling to a group from the preview.
 import {
   isDataError,
@@ -32,7 +33,7 @@ import { useBlocker } from '@tanstack/react-router';
 import { useEffect, useState, useMemo } from 'react';
 import { WorkspacePage } from '../workspace/WorkspacePage.tsx';
 import { DaysOff } from './DaysOff.tsx';
-import { availabilityIsValid, weekRows, withDay, zoneItems, zoneMatches } from './hours.ts';
+import { availabilityIsValid, weekRows, weekSummary, withDay, zoneItems, zoneMatches } from './hours.ts';
 import { availabilityHref, linksHref, publicBookingUrl } from './links.ts';
 import { strings } from './strings.ts';
 
@@ -41,6 +42,8 @@ export interface PageEditorProps {
   readonly data: DataLayer;
   readonly slug: string;
   readonly page: BookingPageView;
+  /** The reader's language, for the hours summary's days and clock. */
+  readonly locale: string;
   /** The reader's own hours, on their own page: what "Follow my hours" follows. */
   readonly myHours?: BookingAvailability;
 }
@@ -110,7 +113,7 @@ function sendable(draft: BookingPageSettings): boolean {
 }
 
 /** The editor. */
-export function PageEditor({ data, slug, page: loaded, myHours }: PageEditorProps) {
+export function PageEditor({ data, slug, page: loaded, locale, myHours }: PageEditorProps) {
   const [page, setPage] = useState(loaded);
   // A page the reader can't change shows as it is, every control read only, with no Save.
   const isLocked = !page.canChange;
@@ -156,6 +159,15 @@ export function PageEditor({ data, slug, page: loaded, myHours }: PageEditorProp
   };
   const slugError = failure?.field === 'slug' ? failure.message : undefined;
   const location = draft.location;
+  // The live summaries in the groups' headers: what the meeting is, and the week the page books on.
+  const meetingSummary = [
+    draft.durations.map((minutes) => strings.minutesShort(minutes)).join(', '),
+    strings.locations[location.type],
+  ]
+    .filter((part) => part !== '')
+    .join(' · ');
+  const followed = draft.hoursMode === 'mine' ? myHours : draft.availability;
+  const hoursSummary = followed === undefined ? strings.followOwnerHint : weekSummary(followed, locale).join(' · ');
   const zones = useMemo(() => zoneItems(draft.availability.timeZone, new Date()), [draft.availability.timeZone]);
 
   return (
@@ -229,6 +241,12 @@ export function PageEditor({ data, slug, page: loaded, myHours }: PageEditorProp
             </Callout>
             <Card title={strings.page}>
               <Field
+                label={strings.publicLink}
+                variant="copy"
+                copyLabel={strings.copyLink}
+                value={publicBookingUrl(page.publicKey)}
+              />
+              <Field
                 label={strings.description}
                 value={draft.description}
                 isMultiline
@@ -247,9 +265,8 @@ export function PageEditor({ data, slug, page: loaded, myHours }: PageEditorProp
                 onChange={(value) => change({ slug: value.toLowerCase() })}
                 {...(slugError === undefined ? {} : { error: slugError })}
               />
-              <Field label={strings.publicLink} value={publicBookingUrl(page.publicKey)} isReadOnly />
             </Card>
-            <Card title={strings.meeting}>
+            <Card title={strings.meeting} description={meetingSummary}>
               <Field
                 label={strings.title}
                 value={draft.title}
@@ -291,7 +308,13 @@ export function PageEditor({ data, slug, page: loaded, myHours }: PageEditorProp
               )}
             </Card>
             <div id="hours">
-              <Card title={strings.hours}>
+              <Card
+                title={strings.hours}
+                description={hoursSummary}
+                {...(draft.hoursMode === 'mine' && myHours !== undefined
+                  ? { actions: <Link href={availabilityHref(slug)}>{strings.editMyHours}</Link> }
+                  : {})}
+              >
                 <SegmentedControl
                   label={strings.hours}
                   segments={[
@@ -304,23 +327,7 @@ export function PageEditor({ data, slug, page: loaded, myHours }: PageEditorProp
                     if (value === 'mine' || value === 'own') change({ hoursMode: value });
                   }}
                 />
-                {draft.hoursMode === 'mine' ? (
-                  myHours === undefined ? (
-                    <Callout tone="info">{strings.followOwnerHint}</Callout>
-                  ) : (
-                    <>
-                      <Callout tone="info" actions={<Link href={availabilityHref(slug)}>{strings.editMyHours}</Link>}>
-                        {strings.followHint}
-                      </Callout>
-                      <HoursEditor
-                        label={strings.weeklyHours}
-                        rows={weekRows(myHours)}
-                        isReadOnly
-                        onChange={() => undefined}
-                      />
-                    </>
-                  )
-                ) : (
+                {draft.hoursMode === 'own' && (
                   <>
                     <Select
                       label={strings.timeZone}
