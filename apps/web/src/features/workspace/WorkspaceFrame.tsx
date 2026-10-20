@@ -98,9 +98,14 @@ export function WorkspaceFrame({
   const openHelp = useCallback(() => {
     setHelpOpen(true);
   }, []);
-  // ⌘, (Ctrl+, elsewhere) opens Settings from anywhere in the workspace (spec 0026, AC-685); inside it, nothing.
+  // ⌘, (Ctrl+, elsewhere) opens Settings from anywhere in the workspace (spec 0026, AC-685); inside it, it puts
+  // focus on the current page in the settings sidebar, so the key still answers.
   const openSettings = useCallback(() => {
-    if (settings === undefined) void navigate({ href: settingsHomeHref(slug) });
+    if (settings === undefined) {
+      void navigate({ href: settingsHomeHref(slug) });
+      return;
+    }
+    document.querySelector<HTMLElement>('nav[data-keyboard="arrows"] [aria-current="page"]')?.focus();
   }, [navigate, settings, slug]);
   useUndoShortcut(data, toasts, slug, openHelp, openSettings);
   const signOut = () => {

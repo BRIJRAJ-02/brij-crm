@@ -37,7 +37,7 @@ New (spec 0012, pulled forward from spec 0003's milestone 4; in the inventory as
 
 ## States
 
-Loaded, loading (the trail stays, skeletons for the title and description), with and without the navigation column, a trail, a tile, badge, description and actions, current entry, hover and focus on the entries (NavItem's), narrow. Empty, error and read only states are the body's (EmptyState, Callout).
+Loaded, loading (the trail stays, skeletons for the title and description), with and without the navigation column, a trail, a tile, badge, description and actions, current entry, hover and focus on the entries (NavItem's), narrow. Empty, error and read only states are the body's (EmptyState, Callout). SettingsRow: with and without a description, wide (control at the end) and narrow (control under the text); disabled and read only are its control's.
 
 ## Keyboard
 

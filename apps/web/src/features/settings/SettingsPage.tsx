@@ -50,7 +50,9 @@ export function SettingsPage({
   const { slug = '' } = useParams({ strict: false });
   const page = useLocation({ select: (location) => settingsPageOf(location.pathname) });
   const group = settingsGroupOf(settingsNav(slug), page);
+  // Settings heads the trail, so the page says where it is even on a phone, where the sidebar is a rail of icons.
   const trail: readonly Crumb[] = [
+    { id: 'settings', label: strings.settings },
     ...(group === undefined ? [] : [{ id: group.id, label: group.label }]),
     ...crumbs,
     { id: 'current', label: title },
@@ -81,22 +83,27 @@ export function SettingsPage({
   );
 }
 
-/** The places between a settings page's group and its title: none on Objects, Objects on an object's page. */
-export function settingsCrumbs(slug: string, depth: 'objects' | 'object'): readonly Crumb[] {
-  return depth === 'objects' ? [] : [{ id: 'objects', label: strings.objects, href: objectsSettingsHref(slug) }];
+/** The places between a settings page's group and its title on an object's page: Objects. */
+export function settingsCrumbs(slug: string): readonly Crumb[] {
+  return [{ id: 'objects', label: strings.objects, href: objectsSettingsHref(slug) }];
 }
 
-/** A settings address that names nothing (an unknown object or tab): said inside the frame, with the way back. */
+/**
+ * A settings address that names nothing: an unknown object or tab (the way
+ * back is Objects, under its trail), or any other address in Settings (the
+ * way back is where Settings opens).
+ */
 export function SettingsMissing({ backTo = 'objects' }: { readonly backTo?: 'objects' | 'home' }) {
   const { slug = '' } = useParams({ strict: false });
+  const isObject = backTo === 'objects';
   return (
-    <SettingsPage title={strings.missingTitle}>
+    <SettingsPage title={strings.missingTitle} {...(isObject ? { crumbs: settingsCrumbs(slug) } : {})}>
       <EmptyState
         icon="search"
         title={strings.missingText}
         actions={
-          <Link href={backTo === 'objects' ? objectsSettingsHref(slug) : preferencesHref(slug)}>
-            {strings.backToSettings}
+          <Link href={isObject ? objectsSettingsHref(slug) : preferencesHref(slug)}>
+            {isObject ? strings.backToObjects : strings.backToSettings}
           </Link>
         }
       >

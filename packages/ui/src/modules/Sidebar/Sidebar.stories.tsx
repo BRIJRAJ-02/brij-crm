@@ -250,7 +250,7 @@ function SampleSettingsSidebar({ isCollapsed = false }: { readonly isCollapsed?:
           </NavItem>
         </NavGroup>
         <NavGroup label="Scheduling" isLabelShown>
-          <NavItem icon="link" href="/captures/links" meta="Captures">
+          <NavItem icon="link" href="/captures/links" meta="In Captures">
             Booking pages
           </NavItem>
         </NavGroup>
@@ -316,6 +316,8 @@ export const SettingsCollapsed: Story = {
     await expect(canvas.getByRole('group', { name: 'Workspace' })).toContainElement(
       canvas.getByRole('link', { name: 'Objects' }),
     );
+    // The meta has no room on the rail, so it joins the name.
+    await expect(canvas.getByRole('link', { name: 'Booking pages · In Captures' })).toBeInTheDocument();
   },
 };
 

@@ -6,9 +6,8 @@ import type { DataLayer, JobsView, JobView, MemberSummary } from '@crm/data';
 import { useJobs } from '@crm/data/react';
 import { Badge, Button, EmptyState, Modal, ProgressBar, RelativeTime, Table, type TableColumn } from '@crm/ui';
 import { useEffect, useRef, useState } from 'react';
-import { useParams } from '@tanstack/react-router';
 import { useCan } from '../workspace/WorkspacePage.tsx';
-import { settingsCrumbs, SettingsPage } from './SettingsPage.tsx';
+import { SettingsPage } from './SettingsPage.tsx';
 import { strings } from './jobs-strings.ts';
 
 /** Props for the Background jobs screen: what its route loaded through the data layer. */
@@ -249,7 +248,6 @@ export function JobsScreen({ data, slug, view, isAll, members: loaded, canRunTes
   return (
     <SettingsPage
       title={strings.title}
-      crumbs={settingsCrumbs(slug, 'objects')}
       description={isAll ? strings.description : strings.descriptionMine}
       titleRef={titleRef}
       {...(canRunTest
@@ -269,15 +267,10 @@ export function JobsScreen({ data, slug, view, isAll, members: loaded, canRunTes
 
 /** Settings, Background jobs while it loads: the frame, the header and skeleton rows in their places. */
 export function JobsPending() {
-  const { slug = '' } = useParams({ strict: false });
   // The description the page arrives with, so the table doesn't move down when it does.
   const isAll = useCan('jobs.manage');
   return (
-    <SettingsPage
-      title={strings.title}
-      crumbs={settingsCrumbs(slug, 'objects')}
-      description={isAll ? strings.description : strings.descriptionMine}
-    >
+    <SettingsPage title={strings.title} description={isAll ? strings.description : strings.descriptionMine}>
       <Table
         label={strings.tableLabel}
         columns={isAll ? COLUMNS : COLUMNS.filter((column) => column.id !== 'startedBy')}

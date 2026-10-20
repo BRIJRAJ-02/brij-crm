@@ -20,14 +20,14 @@ import {
   Table,
   type TableColumn,
 } from '@crm/ui';
-import { useNavigate, useParams, useRouteContext } from '@tanstack/react-router';
+import { useNavigate, useRouteContext } from '@tanstack/react-router';
 import { useMemo, useState } from 'react';
 import { focusTitle } from '../navigation/focus-title.ts';
 import { useCan } from '../workspace/WorkspacePage.tsx';
 import { ArchiveObjectDialog } from './ArchiveObjectDialog.tsx';
 import { byPosition, objectSettingsHref } from './nav.ts';
 import { NewObjectDialog } from './NewObjectDialog.tsx';
-import { settingsCrumbs, SettingsPage } from './SettingsPage.tsx';
+import { SettingsPage } from './SettingsPage.tsx';
 import { strings } from './strings.ts';
 
 /** Props for Settings, Objects: what its route loaded through the data layer. */
@@ -212,7 +212,6 @@ export function ObjectsScreen({ slug, objects, usage }: ObjectsScreenProps) {
   return (
     <SettingsPage
       title={strings.objects}
-      crumbs={settingsCrumbs(slug, 'objects')}
       description={strings.objectsDescription}
       {...(canManage
         ? {
@@ -294,15 +293,10 @@ export function ObjectsScreen({ slug, objects, usage }: ObjectsScreenProps) {
 
 /** Settings, Objects while it loads: the header, a meter's place and skeleton rows (AC-247). */
 export function ObjectsPending() {
-  const { slug = '' } = useParams({ strict: false });
   // The meter's place only for those who get a meter, so nothing moves when the page arrives.
   const canManage = useCan('schema.manage');
   return (
-    <SettingsPage
-      title={strings.objects}
-      crumbs={settingsCrumbs(slug, 'objects')}
-      description={strings.objectsDescription}
-    >
+    <SettingsPage title={strings.objects} description={strings.objectsDescription}>
       {canManage && <Skeleton width="long" />}
       <Table
         label={strings.objects}

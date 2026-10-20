@@ -42,19 +42,8 @@
     outline: none;
   }
 
-  /* The settings variant's title, in the workspace name's type. */
-  .heading {
-    flex: 1;
-    min-inline-size: 0;
-    overflow: hidden;
-    color: var(--text);
-    font: var(--text-title);
-    letter-spacing: var(--tracking-title);
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  }
-
-  /* A labelled group's label: a folding section's quiet label, with no chevron and no fold. */
+  /* A labelled group's label: a folding section's quiet label, with no chevron
+     and no fold. Keep it in step with Disclosure's label variant (its title). */
   .groupLabel {
     padding: var(--space-4) var(--space-8);
     color: var(--text-secondary);

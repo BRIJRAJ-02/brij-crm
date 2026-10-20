@@ -243,7 +243,6 @@ export const RowsLoading: Story = {
 
 /** On a phone the control drops under its title and description. */
 export const RowsNarrow: Story = {
-  parameters: { crm: { screenshot: false } },
   render: () => (
     <Stage width="narrow">
       <SettingsLayout titleLevel={1} title="Preferences">
@@ -255,4 +254,42 @@ export const RowsNarrow: Story = {
       </SettingsLayout>
     </Stage>
   ),
+};
+
+/** A row's other states: no description, and a control that is disabled or read only (the control's own states). */
+export const RowStates: Story = {
+  render: () => (
+    <Stage>
+      <SettingsLayout titleLevel={1} title="Preferences">
+        <Card title="Appearance">
+          <SettingsRow title="Interface theme">
+            <Select label="Interface theme" isLabelHidden items={THEMES} defaultValue="system" />
+          </SettingsRow>
+          <SettingsRow title="Density" description="Coming with a later release.">
+            <Select
+              label="Density"
+              isLabelHidden
+              items={[{ id: 'compact', label: 'Compact' }]}
+              defaultValue="compact"
+              isDisabled
+            />
+          </SettingsRow>
+          <SettingsRow title="Language" description="Set by your workspace.">
+            <Select
+              label="Language"
+              isLabelHidden
+              items={[{ id: 'en', label: 'English' }]}
+              defaultValue="en"
+              isReadOnly
+              readOnlyReason="Set by your workspace."
+            />
+          </SettingsRow>
+        </Card>
+      </SettingsLayout>
+    </Stage>
+  ),
+  play: async ({ canvas }) => {
+    await expect(canvas.getByText('Interface theme')).toBeInTheDocument();
+    await expect(canvas.getByRole('button', { name: /Density/ })).toBeDisabled();
+  },
 };

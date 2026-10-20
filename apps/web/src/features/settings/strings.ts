@@ -11,7 +11,7 @@ export const strings = {
   bookingPages: 'Booking pages',
   forms: 'Forms',
   /** After Booking pages and Forms: they open in Captures, outside Settings. */
-  inCaptures: 'Captures',
+  inCaptures: 'In Captures',
   /** The settings navigation's entries. */
   objects: 'Objects',
   objectsDescription: 'Shape the records your workspace keeps.',
@@ -115,4 +115,5 @@ export const strings = {
   missingText: 'There’s nothing at this address.',
   checkAddress: 'Check the address for a typo, or go back to settings.',
   backToSettings: 'Back to settings',
+  backToObjects: 'Back to Objects',
 } as const;

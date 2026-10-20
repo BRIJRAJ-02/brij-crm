@@ -34,8 +34,8 @@ describe('settingsNav', () => {
       forms: '/w/acme/captures/forms',
     });
     expect(entries.filter((entry) => entry.meta !== undefined).map((entry) => [entry.id, entry.meta])).toEqual([
-      ['booking-pages', 'Captures'],
-      ['forms', 'Captures'],
+      ['booking-pages', 'In Captures'],
+      ['forms', 'In Captures'],
     ]);
     expect(preferencesHref('acme')).toBe('/w/acme/settings/account/preferences');
     expect(calendarSettingsHref('acme')).toBe('/w/acme/settings/account/calendars');

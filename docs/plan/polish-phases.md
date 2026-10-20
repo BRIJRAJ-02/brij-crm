@@ -76,8 +76,8 @@ Work that was in flight when the lanes stopped is kept on its lane branches (a `
 - F27. "Also make sure all input fields across needs to be as per the design system". Done outside the areas other builders hold (Settings, records, tasks, Availability, the public pages): apps/web draws no raw input; values to copy are Field's copy variant, the five state submissions filter is a Select, a page's hours mode is a RadioGroup, the icon picker searches with Field, and locked or disabled fields say why. The form builder's questions are compact rows with a footer line, its choices are OptionsEditor's choice kind, and the preview has a header with Colour and Corners.
 
 ### Settings and the shell
-- F28. "get rid of this from the bottom. build a proper settings": the theme switch out of the sidebar, Settings with grouped navigation (spec 0026). Open.
-- F29. "form booking and all should be sidebar as timefix. and call this timefix. and take the logo": done.
+- F28. "get rid of this from the bottom. build a proper settings": the theme switch out of the sidebar, Settings with grouped navigation (spec 0026). Done (20 Oct): the sidebar's foot holds Settings with ⌘,; Settings swaps in its own sidebar (Leave settings, then Account: Preferences, Calendars; Workspace: Objects, Background jobs; Scheduling: Booking pages and Forms, in Captures), each page under a trail, an h1 and a hairline; Preferences holds the Interface theme, applied at once; Calendar moved under Account (the old address redirects) with the Google Calendar mark on Connect.
+- F29. "form booking and all should be sidebar as timefix. and call this timefix. and take the logo": done; since 20 Oct the Timefix mark also heads the sidebar in place of the workspace's letter, as in timefix.
 - F30. "fix all the cursor across the dashboard": done.
 
 ### Sign in and onboarding

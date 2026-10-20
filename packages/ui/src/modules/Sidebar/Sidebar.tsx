@@ -296,7 +296,7 @@ function HeadingRow({
         <ButtonLink variant="ghost" icon="arrow-left" label={back.label} href={back.href} />
       </Tooltip>
       {/* Plain text, not a heading: it sits before the page's h1, and the landmark already carries the name. */}
-      {!isCollapsed && <span className={styles.heading}>{heading}</span>}
+      {!isCollapsed && <span className={styles.name}>{heading}</span>}
     </span>
   );
 }
@@ -356,7 +356,7 @@ interface NavItemFace {
   readonly hue?: Hue;
   /** In place of the icon: a list's emoji, the one place emoji appear. */
   readonly leading?: ReactNode;
-  /** A quiet word after the name: a favourite's object ("Companies"). */
+  /** A quiet word after the name: a favourite's object ("Companies"), where a link leads ("In Captures"). On the rail it joins the name and tooltip. */
   readonly meta?: string;
   /** A count that needs action (tasks due), never a total. */
   readonly badge?: number;
@@ -375,6 +375,8 @@ export type NavItemProps = NavItemFace &
 export function NavItem(props: NavItemProps) {
   const { children, icon, hue, leading, meta, badge, kbd } = props;
   const { isCollapsed } = useContext(SidebarContext);
+  // On the rail the meta has no room, so it joins the name and the tooltip ("Booking pages · In Captures").
+  const railName = meta === undefined ? children : `${children} · ${meta}`;
   const platform = useKeyboardPlatform();
   // The keycap is hidden from the name, so the shortcut is stated as aria-keyshortcuts ("Meta+,", "Control+," off a
   // Mac). React Aria's Link and Button don't pass the attribute through, so it goes on the element through `render`.
@@ -403,7 +405,7 @@ export function NavItem(props: NavItemProps) {
   const face = (
     <>
       {leading ?? (hue === undefined ? <Icon name={icon} /> : <Icon name={icon} tile={hue} />)}
-      {isCollapsed ? <VisuallyHidden>{children}</VisuallyHidden> : <span className={styles.label}>{children}</span>}
+      {isCollapsed ? <VisuallyHidden>{railName}</VisuallyHidden> : <span className={styles.label}>{children}</span>}
       {meta !== undefined && !isCollapsed && <span className={styles.meta}>{meta}</span>}
       {badge !== undefined && badge > 0 && (
         <span className={styles.badge}>
@@ -433,7 +435,7 @@ export function NavItem(props: NavItemProps) {
       </AriaLink>
     );
   return isCollapsed ? (
-    <Tooltip content={children} placement="end">
+    <Tooltip content={railName} placement="end">
       {item}
     </Tooltip>
   ) : (
