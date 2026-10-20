@@ -58,6 +58,10 @@ function CalendarRoute() {
         await data.bookings.blocks.create(slug, draft, preview);
       }}
       workingStart={(dayKey) => workingStartOf(availability, dayKey)}
+      onBookAsHost={async (meeting) => {
+        await data.bookings.bookAsHost(slug, { ...meeting, guests: [...meeting.guests] });
+      }}
+      newBookingKey={data.bookings.newKey}
       toasts={toasts}
       onSearch={(next) =>
         void navigate({

@@ -78,7 +78,7 @@ async function livePage(tx: WorkspaceTx, entry: BookingEntry): Promise<PageRecor
 }
 
 /** The host's name as the workspace shows it, never their email. */
-async function hostName(tx: WorkspaceTx, memberId: string): Promise<string> {
+export async function hostName(tx: WorkspaceTx, memberId: string): Promise<string> {
   const [row] = await tx.select({ name: members.name }).from(members).where(eq(members.id, memberId));
   return row?.name ?? '';
 }
@@ -196,7 +196,7 @@ interface Booked {
 }
 
 /** A fresh manage token and the hash the row keeps. */
-function newManageToken(): { readonly token: string; readonly hash: string } {
+export function newManageToken(): { readonly token: string; readonly hash: string } {
   const token = randomBytes(24).toString('base64url');
   return { token, hash: createHash('sha256').update(token).digest('hex') };
 }

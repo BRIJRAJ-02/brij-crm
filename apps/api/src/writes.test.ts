@@ -722,6 +722,29 @@ const WRITES: Record<string, (m: Member, mutationId: string) => Promise<readonly
     await m.client.bookings.setHours({ workspace: m.slug, availability, mutationId });
     return [];
   },
+  'bookings.bookAsHost': async (m, mutationId) => {
+    const page = await m.client.bookingPages.create({
+      workspace: m.slug,
+      id: newId(),
+      title: 'Intro',
+      timeZone: 'UTC',
+      mutationId: newId(),
+    });
+    await m.client.bookings.bookAsHost({
+      workspace: m.slug,
+      idempotencyKey: newId(),
+      pageId: page.id,
+      start: new Date(Date.now() + 86_400_000).toISOString(),
+      minutes: 30,
+      name: 'Grace Hopper',
+      // A free mail domain, so only the person is filed (no company).
+      email: 'grace@gmail.com',
+      timeZone: 'UTC',
+      guests: [],
+      mutationId,
+    });
+    return [{ kind: 'records', object_id: m.people.id, mutation_id: mutationId }];
+  },
   'bookings.blocks.create': async (m, mutationId) => {
     await m.client.bookings.blocks.create({
       workspace: m.slug,
@@ -915,6 +938,7 @@ const WRITES_MADE: Readonly<Record<string, number>> = {
   'bookingPages.update': 2,
   'bookingPages.delete': 2,
   'bookings.blocks.remove': 2,
+  'bookings.bookAsHost': 2,
   'attributes.restore': 2,
   'relationships.update': 2,
   'links.add': 3,

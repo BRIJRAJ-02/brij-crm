@@ -27,7 +27,7 @@ The behaviour follows the timefix app's "draw on the calendar"; the look is ours
 - **AC-708**: A booking page has a Private switch (the editor's last setting). A private page is still reached by its link; it is marked Private in the Links list.
 - **AC-709**: Book someone in opens a New meeting dialog for the span: With (name, searching people in the workspace as you type), Email, Their time zone (default the member's), Booking page (default the first), Length (15, 30, 45, 60, 90, 120 minutes, plus the drawn length, which is the default), Also invite (more emails), and Message. Book it creates a confirmed booking.
 - **AC-710**: A booking the member makes this way ignores which slots are on offer (they may book into their own block, a hold or outside their hours) but never overlaps another confirmed booking of theirs ("Something else is already in that time."). Its length is 5 minutes to 8 hours, and it cannot start in the past.
-- **AC-711**: The guest gets an invitation email that says the member booked it, quotes the message, and carries the manage link and an .ics; extra guests get the same invitation. The member gets no "new booking" email for their own booking. With a connected calendar, the event is written to the member's default calendar with every attendee. The booking files to the person (created or matched by email) as a page booking does.
+- **AC-711**: With a connected calendar, the event is written to the member's default calendar with every attendee, and the calendar invites them (the message is in the event). The booking files to the person (created or matched by email) as a page booking does. Timefix's own invitation email, with the manage link and an .ics, arrives with the booking emails in booking milestone 2 (polish phase 10), for page and member bookings alike; the member gets no "new booking" email for their own booking.
 - **AC-712**: Blocks, holds and host made bookings are the member's own: nobody else can see, create or remove another member's. Every write is checked by the access door, and goes to the audit log once it exists (#36).
 
 ## Decision
@@ -98,6 +98,10 @@ Tracer bullet, one strand at a time, each tested and driven in the browser befor
 - Bookings get a `source` value `host`; lists and the calendar show these like any booking.
 
 ## Follow-up
+
+- Picking a person from the workspace as you type in With (the record search answers no email today, so it needs a read that does); the server already files the booking to the person with that email.
+- Timefix's own invitation email for a member's booking, with the booking emails (booking milestone 2).
+- Drawing past the visible edge scrolls the grid (today: set the span with From and To).
 
 - A whole day block from the card (timefix keeps it on the day panel; days off already cover it under Availability).
 - A calendar choice in the New meeting dialog when a member has two or more calendars (calendar sync milestone 4).

@@ -259,6 +259,7 @@ describe('the walk: a principal without the access is refused', () => {
           'setMemberHours',
           'createTimeBlock',
           'removeTimeBlock',
+          'bookAsHost',
         ].includes(name)
       )
         return;

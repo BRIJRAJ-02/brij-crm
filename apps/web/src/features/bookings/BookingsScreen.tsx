@@ -47,6 +47,7 @@ import { availabilityHref } from '../booking/links.ts';
 import { linksHref } from '../captures/tabs.ts';
 import { recordLinks, type RecordLink } from '../records/timeline.ts';
 import { DrawCard } from './DrawCard.tsx';
+import { NewMeetingDialog, type NewMeeting } from './NewMeetingDialog.tsx';
 import { instantOf, spanNames, type DrawnSpan } from './span.ts';
 import { PAGE_SIZES, type BookingsSearch } from './search.ts';
 import { strings } from './strings.ts';
@@ -362,6 +363,10 @@ export interface BookingsCalendarScreenProps {
    * settles once the server has it, or throws a data error on a refusal.
    */
   readonly onBlock: (draft: BlockDraft, preview: readonly BlockPreview[]) => Promise<void>;
+  /** Books someone into a drawn span (spec 0027); settles once made, throws a data error on a refusal. */
+  readonly onBookAsHost: (meeting: NewMeeting) => Promise<void>;
+  /** Mints a new booking's idempotency key, once per New meeting dialog. */
+  readonly newBookingKey: () => string;
   /** Where the member's day starts, for a span drawn from the keyboard (their hours; 9:00 when unknown). */
   readonly workingStart: (dayKey: string) => number;
   /** Confirms and refuses what outlives its card (a removal, a refusal after the card closed). */
@@ -380,7 +385,10 @@ export function BookingsCalendarScreen(props: BookingsCalendarScreenProps) {
 /** The week view's toolbar, grid and count. */
 function WeekView(props: BookingsCalendarScreenProps) {
   const { slug, objects, search, week, pages, connections, locale, onSearch, onRemoveBlock, onBlock } = props;
-  const { workingStart, toasts } = props;
+  const { workingStart, toasts, onBookAsHost, newBookingKey } = props;
+  // Book someone in: the span the New meeting dialog books.
+  const [meeting, setMeeting] = useState<DrawnSpan | undefined>(undefined);
+  const bookable = pages.filter((page) => page.status === 'live');
   const personHref = usePersonHref(slug, objects);
   const state = useBookingsCalendar(week);
   const now = useNow();
@@ -641,6 +649,14 @@ function WeekView(props: BookingsCalendarScreenProps) {
                     });
                   }}
                   onDone={() => setDraft(undefined)}
+                  {...(bookable.length === 0 || instantOf(draft.dayKey, draft.startMinute) < now
+                    ? {}
+                    : {
+                        onBook: () => {
+                          setMeeting(draft);
+                          setDraft(undefined);
+                        },
+                      })}
                 />
               ),
             })}
@@ -654,6 +670,19 @@ function WeekView(props: BookingsCalendarScreenProps) {
         }}
       />
       <p>{strings.weekSummary(live)}</p>
+      {meeting !== undefined && (
+        <NewMeetingDialog
+          span={meeting}
+          locale={locale}
+          pages={bookable}
+          newKey={newBookingKey}
+          onBook={async (input) => {
+            await onBookAsHost(input);
+            toasts.toast({ tone: 'success', message: strings.booked(input.name) });
+          }}
+          onClose={() => setMeeting(undefined)}
+        />
+      )}
     </>
   );
 }

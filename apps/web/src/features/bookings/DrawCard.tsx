@@ -1,7 +1,7 @@
 // Brief
 // Purpose: the card a span drawn on Bookings › Calendar opens (spec 0027, AC-702 to AC-704): what the time is for.
-// Main task: pick Block this time (once or every week) or Hold it for a private page, with a reason only you see.
-// Leaves out: drawing (WeekCalendar), and what a block does to slots (the server); Book joins here next.
+// Main task: pick Book someone in, Block this time (once or every week) or Hold it for a private page.
+// Leaves out: drawing (WeekCalendar), what a block does to slots (the server), and the New meeting dialog's form.
 import { isDataError, type TimeBlockKind, type TimeBlockRepeat } from '@crm/data';
 import { Button, Callout, Field, Radio, RadioGroup, Select, SpanCard, type SpanCardChoice } from '@crm/ui';
 import { useState } from 'react';
@@ -32,6 +32,8 @@ export interface DrawCardProps {
   readonly onClose: (input: CloseInput) => Promise<void>;
   /** Closes the card (Done). */
   readonly onDone: () => void;
+  /** Book someone in: opens the New meeting dialog for the span; absent when it can't be booked (it has begun, no page). */
+  readonly onBook?: () => void;
 }
 
 type Mode =
@@ -44,7 +46,16 @@ type Mode =
 const ANY_PAGE = 'any';
 
 /** The drawn span's card: its choices, then the picked one's form, then what happened. */
-export function DrawCard({ span, locale, privatePages, overlapping, onSpanChange, onClose, onDone }: DrawCardProps) {
+export function DrawCard({
+  span,
+  locale,
+  privatePages,
+  overlapping,
+  onSpanChange,
+  onClose,
+  onDone,
+  onBook,
+}: DrawCardProps) {
   const [mode, setMode] = useState<Mode>({ kind: 'choose' });
   const { title, meta } = spanNames(span, locale);
   const weekday = new Intl.DateTimeFormat(locale, { weekday: 'long' }).format(dayStart(span.dayKey));
@@ -79,6 +90,9 @@ export function DrawCard({ span, locale, privatePages, overlapping, onSpanChange
     );
   }
   const choices: SpanCardChoice[] = [
+    ...(onBook === undefined
+      ? []
+      : [{ id: 'book', label: strings.bookSomeoneIn, icon: 'user-plus' as const, onPress: onBook }]),
     { id: 'block', label: strings.blockThisTime, icon: 'circle-slash', onPress: () => setMode({ kind: 'block' }) },
     { id: 'hold', label: strings.holdThisTime, icon: 'bookmark', onPress: () => setMode({ kind: 'hold' }) },
   ];

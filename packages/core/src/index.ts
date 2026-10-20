@@ -179,6 +179,7 @@ export {
   updateBookingPage,
 } from './booking/pages.ts';
 export { createTimeBlock, removeTimeBlock, type TimeBlockDraft } from './booking/blocks.ts';
+export { bookAsHost, HOST_BOOKING_MINUTES, type HostBookingDeps, type HostBookingInput } from './booking/host.ts';
 export { listWorkspaceBookings, readBookingsCalendar } from './booking/list.ts';
 export {
   createBusyCache,

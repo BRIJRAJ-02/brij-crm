@@ -168,6 +168,12 @@ export function createApp({
   // Calendar sync (spec 0024): off unless switched on, so the app boots without its settings.
   const calendar =
     services.calendar ?? (env.calendar === undefined ? undefined : createCalendarServices(env.calendar, env.APP_URL));
+  // Where a booking's event goes: the host's connected calendar, or nowhere without sync (public and member routes).
+  const booking =
+    services.bookingCalendar ??
+    (calendar === undefined
+      ? NO_CALENDAR
+      : connectedCalendar({ db, providers: calendar.providers, tokenKey: calendar.tokenKey }));
   const calendarRoutes = createCalendarRoutes({
     // The same door the RPC's `member` base opens (orpc.ts), with the same rules.
     enter: (userId, slug) =>
@@ -264,6 +270,7 @@ export function createApp({
         testFault,
         jobs,
         calendar,
+        bookingCalendar: booking,
         ...(rules === undefined ? {} : { rules }),
       },
     });
@@ -308,11 +315,6 @@ export function createApp({
   app.on(['GET', 'POST'], '/auth/*', (c) => auth.handle(c.req.raw, c.get('clientIp'), c.get('origin')));
 
   // Booking pages' public routes (spec 0025): a page's public key, no session; writes passed the Origin check above.
-  const booking =
-    services.bookingCalendar ??
-    (calendar === undefined
-      ? NO_CALENDAR
-      : connectedCalendar({ db, providers: calendar.providers, tokenKey: calendar.tokenKey }));
   mountPublicBooking(app, {
     db,
     calendar: { busy: createBusyCache(booking.busy), events: booking.events },

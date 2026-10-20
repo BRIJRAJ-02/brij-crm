@@ -7,6 +7,7 @@
 // while a screen shows a workspace (the realtime client loads with the first).
 import type {
   AttributeDefinition,
+  BookAsHostInput,
   BookingAvailability,
   CreateTimeBlockInput,
   TimeBlockOccurrence,
@@ -1911,6 +1912,25 @@ export function createDataLayer({
         availability: BookingAvailability,
       ): Promise<{ availability: BookingAvailability }> =>
         call((options) => api.bookings.setHours({ workspace, availability, mutationId: mintId() }, options)),
+      /**
+       * Book someone in, in the member's own time (spec 0027): settles once the
+       * booking is made, and every bookings list and range is read again.
+       * Refusals: `SLOT_TAKEN` (another booking is in that time),
+       * `CONFIG_INVALID` on `start` or `minutes`, `NOT_FOUND` on `pageId`.
+       * `idempotencyKey` is minted once per dialog, so a retry is the same booking.
+       */
+      bookAsHost: async (
+        workspace: string,
+        input: Omit<BookAsHostInput, 'workspace' | 'mutationId'>,
+      ): Promise<{ bookingId: string }> => {
+        const booked = await call((options) =>
+          api.bookings.bookAsHost({ ...input, workspace, mutationId: mintId() }, options),
+        );
+        bookingsLists.reloadAll(workspace);
+        return booked;
+      },
+      /** A new booking's idempotency key: mint it once per dialog. */
+      newKey: () => mintId(),
       /** Time the member closes on their own calendar (spec 0027): blocks, and holds for private pages. */
       blocks: {
         /**

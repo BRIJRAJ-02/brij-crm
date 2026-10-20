@@ -94,3 +94,34 @@ export const TimeBlockOccurrence = z.object({
 });
 /** One time a block closes inside a calendar read. */
 export type TimeBlockOccurrence = z.infer<typeof TimeBlockOccurrence>;
+
+/** The shortest and longest meeting a member books in themselves, in minutes. */
+export const HOST_BOOKING_LIMITS = { min: 5, max: 480 } as const;
+
+/**
+ * Book someone in (spec 0027, AC-709): a confirmed booking on one of the
+ * caller's pages, in their own time. It skips the page's slots, hours, holds,
+ * notice and buffers; only another of their bookings, the past, and a length
+ * out of bounds refuse it.
+ */
+export const BookAsHostInput = WorkspaceScoped.extend({
+  /** Minted once per dialog: a retry gives back the booking the first made. */
+  idempotencyKey: z.uuid(),
+  pageId: z.uuid(),
+  start: Timestamp,
+  minutes: z
+    .number()
+    .int()
+    .min(HOST_BOOKING_LIMITS.min, 'A meeting is at least 5 minutes.')
+    .max(HOST_BOOKING_LIMITS.max, 'A meeting is at most 8 hours.'),
+  name: z.string().trim().min(1, 'Who is it with?').max(200, 'Keep the name to 200 characters.'),
+  email: z.email({ error: 'That email doesn’t look right.' }).trim().toLowerCase().max(254),
+  timeZone: TimeZoneName,
+  guests: z
+    .array(z.email({ error: 'Give each guest’s email address.' }).trim().toLowerCase().max(254))
+    .max(10, { error: 'Invite at most 10 more people.' }),
+  message: z.string().trim().max(1000, { error: 'Keep the message to 1,000 characters.' }).optional(),
+  mutationId: z.uuid(),
+});
+/** Book someone in. */
+export type BookAsHostInput = z.infer<typeof BookAsHostInput>;

@@ -10,7 +10,7 @@
 // `context.db` nor `context.identity`, so the door is its only way to the data. The contract walking
 // test fails if a procedure outside the bootstrap list isn't built on `member`.
 import { type AppEnvironment, contract, WorkspaceScoped } from '@crm/contracts';
-import { enterWorkspace, type JobRegistry, type RuleSource } from '@crm/core';
+import { enterWorkspace, type BookingCalendar, type JobRegistry, type RuleSource } from '@crm/core';
 import type { Database, IdentityStore } from '@crm/db';
 import { implement, os } from '@orpc/server';
 import type { ResponseHeadersPluginContext } from '@orpc/server/plugins';
@@ -69,6 +69,8 @@ export interface RequestContext extends ResponseHeadersPluginContext {
   jobs: JobRegistry;
   /** Calendar sync (spec 0024): its provider and keys where `CALENDAR_SYNC=on`, else undefined. */
   calendar: CalendarServices | undefined;
+  /** Where a booking's event goes (the host's calendar, or nowhere without sync): Book someone in (spec 0027). */
+  bookingCalendar: BookingCalendar;
 }
 
 /** What `authed` adds: the signed in person. */

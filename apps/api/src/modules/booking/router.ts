@@ -1,4 +1,5 @@
 import {
+  bookAsHost,
   createBookingPage,
   createTimeBlock,
   deleteBookingPage,
@@ -14,6 +15,7 @@ import {
 } from '@crm/core';
 import { withInputFields } from '../../errors.ts';
 import { commitWrite } from '../../hooks.ts';
+import { log } from '../../log.ts';
 import { member } from '../../orpc.ts';
 
 // Booking pages (spec 0025), inside a workspace: the door has let in an active member, and `context.scope` is theirs.
@@ -69,6 +71,28 @@ export const bookingsRouter = member.bookings.router({
     commitWrite(context, { mutationId: input.mutationId }, () =>
       setMemberHours(context.scope, { availability: input.availability }),
     ),
+  ),
+  // Book someone in (spec 0027): a booking in the member's own time, its records live, its event after the commit.
+  bookAsHost: member.bookings.bookAsHost.handler(({ context, input }) =>
+    commitWrite(context, { mutationId: input.mutationId }, async (hooks) => {
+      const booked = await bookAsHost(
+        context.scope,
+        { calendar: context.bookingCalendar, log },
+        {
+          idempotencyKey: input.idempotencyKey,
+          pageId: input.pageId,
+          start: new Date(input.start),
+          minutes: input.minutes,
+          name: input.name,
+          email: input.email,
+          timeZone: input.timeZone,
+          guests: input.guests,
+          message: input.message,
+        },
+        hooks,
+      );
+      return { bookingId: booked.bookingId };
+    }),
   ),
   // Time the member closes on their own calendar (spec 0027): a block, or a hold for private pages.
   blocks: {

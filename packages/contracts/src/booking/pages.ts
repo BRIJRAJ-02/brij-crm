@@ -6,7 +6,13 @@ import { oc } from '@orpc/contract';
 import * as z from 'zod';
 import { Timestamp } from '../values/attribute-values.ts';
 import { WorkspaceScoped } from '../workspaces.ts';
-import { CreateTimeBlockInput, RemoveTimeBlockInput, TimeBlockOccurrence, TimeBlockView } from './blocks.ts';
+import {
+  BookAsHostInput,
+  CreateTimeBlockInput,
+  RemoveTimeBlockInput,
+  TimeBlockOccurrence,
+  TimeBlockView,
+} from './blocks.ts';
 import { BookingLocation, BookingPageSettings } from './settings.ts';
 
 /** A page as a member sees it in Settings › Booking pages. */
@@ -210,6 +216,8 @@ export const bookingsContract = {
   calendar: oc.input(BookingCalendarInput).output(BookingsCalendarView),
   hours: oc.input(GetMemberHoursInput).output(MemberHours),
   setHours: oc.input(UpdateMemberHoursInput).output(MemberHours),
+  /** Book someone in, in the caller's own time (spec 0027). */
+  bookAsHost: oc.input(BookAsHostInput).output(z.object({ bookingId: z.uuid() })),
   /** Time the caller closed on their own calendar (spec 0027). */
   blocks: {
     create: oc.input(CreateTimeBlockInput).output(TimeBlockView),
