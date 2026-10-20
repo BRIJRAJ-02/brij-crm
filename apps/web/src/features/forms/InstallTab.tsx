@@ -1,9 +1,11 @@
 // Brief
-// Purpose: a form's Install tab (spec 0023, Install tab): the three ways to put it in front of people, one at a time.
-// Main task: pick Link, Embed or Your own HTML, then copy what it gives; for your own HTML, list the sites that may post.
-// Leaves out: analytics, a QR code, and signing posts for a site (the site's server does that with the secret).
+// Purpose: a form's Install tab (spec 0023), in the order a person needs it: share the link, then put it on a
+// website, then (rarely) the advanced ways for a developer.
+// Main task: press Copy link. Embedding is one snippet to paste; nothing else needs touching for the form to work.
+// Leaves out: a QR code and the popup or button embeds (the 19 October revision keeps one inline embed; embed.js has
+// no other mode), and analytics.
 import type { FormView } from '@crm/data';
-import { Button, Card, Disclosure, Field, SegmentedControl, Switch } from '@crm/ui';
+import { Button, Callout, Card, CopyButton, Disclosure, Field, Switch } from '@crm/ui';
 import { useRouteContext } from '@tanstack/react-router';
 import { useState } from 'react';
 import { firstRefusal } from './refusals.ts';
@@ -16,18 +18,17 @@ export interface InstallTabProps {
   readonly form: FormView;
   readonly isReadOnly: boolean;
   readonly onFormChange: (view: FormView) => void;
+  /** Turns a paused form back on, from the note at the top. */
+  readonly onResume?: () => void;
 }
 
-type Way = 'link' | 'embed' | 'own';
-
-/** One Card to share the form (Link, Embed, Your own HTML), and for your own HTML the sites that may post. */
-export function InstallTab({ slug, form, isReadOnly, onFormChange }: InstallTabProps) {
+/** Share your form, Put it on your website, then Advanced (closed): your own HTML, the sites and the secret. */
+export function InstallTab({ slug, form, isReadOnly, onFormChange, onResume }: InstallTabProps) {
   const { data, toasts } = useRouteContext({ from: '__root__' });
   const link = data.forms.hostedUrl(form.publicKey);
   const script = data.forms.embedUrl();
   const embed = embedSnippet(script, form.publicKey, (form.live ?? form.draft).headline);
   const own = ownFormHtml(form, script);
-  const [way, setWay] = useState<Way>('link');
   const [sites, setSites] = useState(form.allowedOrigins.join('\n'));
   const [sitesError, setSitesError] = useState<string | undefined>(undefined);
 
@@ -49,26 +50,25 @@ export function InstallTab({ slug, form, isReadOnly, onFormChange }: InstallTabP
     );
   };
 
-  const siteCount = form.allowedOrigins.length;
-
   return (
     <>
-      <Card title={strings.shareTitle} description={strings.wayText[way]}>
-        <SegmentedControl
-          label={strings.shareHow}
-          segments={[
-            { value: 'link', label: strings.wayLink },
-            { value: 'embed', label: strings.wayEmbed },
-            { value: 'own', label: strings.wayOwn },
-          ]}
-          value={way}
-          onChange={(next) => {
-            if (next === 'link' || next === 'embed' || next === 'own') setWay(next);
-          }}
-        />
-        {way === 'link' && (
+      {form.status === 'paused' && (
+        <Callout
+          tone="warning"
+          title={strings.pausedTitle}
+          {...(onResume === undefined || isReadOnly
+            ? {}
+            : { actions: <Button onPress={onResume}>{strings.resume}</Button> })}
+        >
+          {strings.pausedText}
+        </Callout>
+      )}
+      <Card
+        title={strings.shareTitle}
+        description={link}
+        footer={
           <>
-            <Field label={strings.link} variant="copy" copyLabel={strings.copyLink} value={link} />
+            <CopyButton value={link} label={strings.copyLink} variant="primary" />
             <Button
               icon="external-link"
               onPress={() => {
@@ -78,25 +78,20 @@ export function InstallTab({ slug, form, isReadOnly, onFormChange }: InstallTabP
               {strings.openLink}
             </Button>
           </>
-        )}
-        {way === 'embed' && (
-          <Field label={strings.embedSnippet} variant="copy" isMultiline copyLabel={strings.copyEmbed} value={embed} />
-        )}
-        {way === 'own' && (
-          // The form HTML runs long: it waits behind a Disclosure, and its copy row's Copy takes it all.
-          <Disclosure title={strings.showFormHtml}>
-            <Field
-              label={strings.ownFormSnippet}
-              variant="copy"
-              isMultiline
-              copyLabel={strings.copyFormHtml}
-              value={own}
-            />
-          </Disclosure>
-        )}
+        }
+      />
+      <Card title={strings.websiteTitle} description={strings.websiteText}>
+        <Field label={strings.embedSnippet} variant="copy" isMultiline copyLabel={strings.copyEmbed} value={embed} />
       </Card>
-      {way === 'own' && (
-        <Card title={strings.sites} description={siteCount === 0 ? strings.noSitesYet : strings.siteCount(siteCount)}>
+      <Card title={strings.advancedTitle} description={strings.advancedText}>
+        <Disclosure title={strings.showAdvanced}>
+          <Field
+            label={strings.ownFormSnippet}
+            variant="copy"
+            isMultiline
+            copyLabel={strings.copyFormHtml}
+            value={own}
+          />
           <Field
             label={strings.sitesLabel}
             hint={strings.sitesHint}
@@ -130,8 +125,8 @@ export function InstallTab({ slug, form, isReadOnly, onFormChange }: InstallTabP
               value={form.signingSecret}
             />
           )}
-        </Card>
-      )}
+        </Disclosure>
+      </Card>
     </>
   );
 }
