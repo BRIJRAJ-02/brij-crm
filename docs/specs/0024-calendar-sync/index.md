@@ -1,6 +1,6 @@
 # 0024. Calendar sync: meetings on records, and free and busy for booking
 
-**Date**: 2026-10-19
+**Date**: 2026-10-19 (amended 2026-10-20: milestone 5, every calendar in each account, and milestone 4, Outlook, ship together in one release)
 **Status**: Proposed
 
 ## Summary
@@ -8,6 +8,8 @@
 A member connects their Google or Outlook calendar. Their meetings, past and upcoming, sync into the CRM and appear on the timeline of every person and company in them, live as they change. Each member chooses whether their meetings are shared with the workspace or kept private. The same connection gives the CRM free and busy times and lets it create, move and cancel events, which booking pages (#59, spec 0025) and later round robin (#58) build on. A connection that expires or is revoked says so in the app and is never silently stale.
 
 The owner asked for this spec to be written with the recommended answer to every open question (19 October 2026), so each call below is a default the owner may change; the ones worth a look are under **Calls for the owner**.
+
+**Amendment, 20 October 2026.** The owner decided that calendars follow the Calendly style and that Outlook comes in the same release. Milestone 5 lists every calendar in each connected account: each can check for conflicts, show on the member's week, and sync meetings, with its own colour; each member picks one calendar where new bookings go, and a booking page can name another. One failing calendar no longer closes a page. Milestone 4 adds Outlook through Microsoft Graph. Both ship together (Release 1). The new criteria are AC-991 to AC-1014; this amendment owns AC-991 to AC-1030.
 
 Reasoning and options: see [rationale.md](rationale.md).
 
@@ -38,7 +40,7 @@ Reasoning and options: see [rationale.md](rationale.md).
 *Connecting*
 - **AC-597**: A member connects a Google calendar from Settings › Calendar through Google's consent screen (scopes: read and write events, read free and busy). The connection shows the account's email and its status: syncing, connected, expired, revoked or failed.
 - **AC-598**: A member connects an Outlook (Microsoft 365 or outlook.com) calendar the same way through Microsoft's consent screen (milestone 4).
-- **AC-599**: One connection per member per provider account; a member may connect at most 3 accounts. Disconnecting stops sync at once, deletes the stored tokens, and removes that connection's meetings that no other connection also holds.
+- **AC-599**: One connection per member per provider account; a member may connect at most 3 accounts (amended: 6, AC-1000). Disconnecting stops sync at once, deletes the stored tokens, and removes that connection's meetings that no other connection also holds.
 - **AC-600**: Access and refresh tokens are encrypted at rest (AES 256 GCM, key `CALENDAR_TOKEN_KEY`), never logged, never sent to a browser, and never readable through the API.
 
 *Syncing*
@@ -62,8 +64,8 @@ Reasoning and options: see [rationale.md](rationale.md).
 - **AC-614**: Removing a member deletes their connections and the meetings only they held (spec 0009's `removeMember` hook).
 
 *Free and busy, and writing events (for #58 and #59)*
-- **AC-615**: `freeBusy(scope, { memberIds, from, to })` returns each member's busy intervals from their connected calendars (all of their connections), at most a 62 day range, answered in under 1 second at p95 for 5 members, cached 60 seconds per member and range.
-- **AC-616**: `createEvent(scope, { memberId, title, start, end, attendees, timeZone, video: true | false, description })` creates the event in the member's primary calendar of their default connection, with a Google Meet or Microsoft Teams link when `video` is true, and answers the meeting it made.
+- **AC-615**: `freeBusy(scope, { memberIds, from, to })` returns each member's busy intervals from their connected calendars (all of their connections; amended by AC-994 and AC-995: every conflict checked calendar, failures skipped), at most a 62 day range, answered in under 1 second at p95 for 5 members, cached 60 seconds per member and range.
+- **AC-616**: `createEvent(scope, { memberId, title, start, end, attendees, timeZone, video: true | false, description })` creates the event in the member's primary calendar of their default connection (amended by AC-996 to AC-998: in the destination calendar), with a Google Meet or Microsoft Teams link when `video` is true, and answers the meeting it made.
 - **AC-617**: `moveEvent` and `cancelEvent` change or cancel an event the CRM created (it keeps the provider's event id), sending updates to attendees through the provider.
 - **AC-618**: A member with no connection has no free and busy (callers treat them as unavailable), and `createEvent` refuses with `CALENDAR_NOT_CONNECTED`.
 
@@ -72,6 +74,34 @@ Reasoning and options: see [rationale.md](rationale.md).
 - **AC-620**: Other failures retry with backoff; after 6 hours of failures the connection is `failed`, with the same banner and the last error in Settings.
 - **AC-621**: The settings page shows each connection's last successful sync time.
 - **AC-622**: Push notification channels are renewed before they expire (Google channels last up to 7 days; renewed daily).
+
+*Calendars (milestone 5, amendment of 20 October 2026)*
+- **AC-991**: After connecting, once a day, and on Refresh in Settings › Calendar, each account's calendars are listed from the provider: name, provider colour, access role (owner, writer, reader, free and busy only), whether it is the account's main calendar, and its time zone. Calendars removed at the provider are removed here; new ones are added with the defaults of AC-992. At most 50 calendars per account are kept (main first, then by name).
+- **AC-992**: Defaults: an account's main calendar checks for conflicts, shows on my calendar and syncs meetings; every other calendar does none of these until the member turns it on. The backfill gives every existing connection its main calendar with these defaults, so nothing a member sees or a page offers changes on the day it ships.
+- **AC-993**: Settings › Calendar (Account › Calendars, spec 0026) shows each account as a card (provider mark, email, status, last synced, Sharing, Refresh, Disconnect) with its calendars under it: a colour dot, the name, a "Main" tag, and three switches, Check for conflicts, Show on my calendar and Sync meetings. The colour dot opens a palette of the design system's calendar hues; Reset goes back to the provider's colour. Each switch saves at once and rolls back with a toast on a refusal.
+- **AC-994**: `freeBusy` reads every calendar with Check for conflicts on, across all of the member's accounts, with one provider call per account per read (Google `freebusy.query` with each calendar as an item; Outlook as AC-1010). The 60 second cache is per member and range and is cleared when a switch or the destination changes.
+- **AC-995**: Each calendar's answer stands alone. A calendar or account that errors or doesn't answer within 3 seconds is skipped: slots come from the rest, the member sees "We couldn't check Work at 10:04, so it was left out" in Settings › Calendar and on Bookings, and the failure is logged. A page offers no times (fails closed) only when every conflict calendar of a required host failed, or when the grant of the account holding the destination calendar is expired or revoked. The public page's wording stays as it is.
+- **AC-996**: Each member has one destination calendar, "Add events to", chosen in Settings › Calendar among calendars they can write (owner or writer). The backfill sets it to the main calendar of their default connection. A change applies to new bookings only.
+- **AC-997**: The booking page editor has "Add events to": "My default (<calendar>)" or another writable calendar of the page owner. When the named calendar is gone, no longer writable, or its account disconnected, bookings go to the owner's default and the editor shows why. For team pages the override applies only when it names a calendar of the assigned host (spec 0029, AC-743).
+- **AC-998**: `createEvent`, `moveEvent` and `cancelEvent` take the calendar; a move or cancel acts on the calendar the event was created in (kept on its meeting source), even if the destination has changed since.
+- **AC-999**: An event marked private at the provider (Google visibility private or confidential; Outlook sensitivity private), in any calendar that syncs or checks conflicts, shows to anyone but its owner only as "Busy" with its times, on the team calendar (spec 0030, AC-770) and wherever else others could see it; never its title, attendees, location or calendar name.
+- **AC-1000**: A member may connect at most 6 accounts (supersedes AC-599's 3). The seventh is refused with "Connect at most 6 calendar accounts."
+- **AC-1001**: The Bookings week view's calendar filter lists my calendars grouped by account, each with its colour and a checkbox that is the same setting as Show on my calendar. Events draw in their calendar's colour (the override, else the provider's mapped to the nearest calendar hue). Busy blocks for events with no one else invited (the owner's 20 October call) keep their look, tinted by their calendar.
+- **AC-1002**: Meetings sync to records only from calendars with Sync meetings on. Turning it off removes meetings held only by that calendar, as a disconnect does (AC-599); turning it on runs a full sync of that calendar's window.
+- **AC-1003**: Push and the poll fallback work per calendar: each calendar that syncs or checks conflicts has its own watch channel (Google) or subscription (Outlook), renewed as AC-622 says, and its own sync token.
+- **AC-1004**: A calendar the member can only read can check for conflicts and show on their calendar, but can't be a destination; the Select doesn't offer it.
+- **AC-1005**: When the destination calendar is removed at the provider, the destination falls back to the main calendar of the default connection, and the member sees a banner saying so until they dismiss it or pick another.
+
+*Outlook (milestone 4, same release)*
+- **AC-1006**: A member connects Outlook (Microsoft 365 work or school, or a personal outlook.com account) from Settings › Calendar through Microsoft's consent screen (the `common` authority; scopes `offline_access`, `User.Read`, `Calendars.ReadWrite`). It has the same statuses, sharing level, health handling and calendars as Google.
+- **AC-1007**: Outlook calendars sync through Microsoft Graph's `calendarView` delta per calendar over the same window; an expired delta token (`syncStateNotFound` or 410) runs a full sync.
+- **AC-1008**: Push uses Graph change notification subscriptions on each calendar's events, with a random `clientState` stored hashed and checked on every notification; the validation request is answered with its token; subscriptions are renewed daily (they last at most about three days); a `reauthorizationRequired` or `subscriptionRemoved` lifecycle notice renews or recreates the subscription; the 15 minute poll covers any gap.
+- **AC-1009**: Outlook events map like Google's: iCalendar UID for dedupe, attendees and responses, `showAs` free or working elsewhere as not busy, everything else busy, `isCancelled` as cancelled, all day and declined rules as AC-605.
+- **AC-1010**: Free and busy on Outlook reads the account's main calendar through `getSchedule` and any other conflict calendar through `calendarView`, in one batch request per account.
+- **AC-1011**: `createEvent` on Outlook adds a Teams link when video is asked for and the account allows online meetings; when it doesn't (most personal accounts), the event is made without a link and the host's booking notice says "No Teams link: this Outlook account can't create one."
+- **AC-1012**: The API validates `MICROSOFT_CLIENT_ID`, `MICROSOFT_CLIENT_SECRET` and `MICROSOFT_TENANT` (default `common`) at startup only when `CALENDAR_OUTLOOK=on` (and `CALENDAR_SYNC=on`), and refuses to boot when one is missing then. With it off, Connect Outlook isn't shown.
+- **AC-1013**: Both adapters pass one shared adapter test suite run against recorded provider responses (no live calls in CI), and `verify.md` checks a real Google and a real Outlook account by hand before the release.
+- **AC-1014**: Milestones 4 and 5 ship in the same release: neither is announced done until both pass their criteria.
 
 ## Decision
 
@@ -124,7 +154,7 @@ interface CalendarProvider {
 }
 ```
 
-Google: Calendar API v3 with `singleEvents=true`, `showDeleted=true`, `timeMin`/`timeMax` from the window on full sync and the `syncToken` afterwards; free and busy from `freebusy.query`; Meet links by `conferenceData.createRequest` with `conferenceDataVersion=1`. Only the primary calendar syncs (more calendars are a Follow-up). A fake adapter in core tests stands in for both providers; no test calls a real provider.
+Google: Calendar API v3 with `singleEvents=true`, `showDeleted=true`, `timeMin`/`timeMax` from the window on full sync and the `syncToken` afterwards; free and busy from `freebusy.query`; Meet links by `conferenceData.createRequest` with `conferenceDataVersion=1`. Milestones 1 to 3 sync the primary calendar only; milestone 5 (below) syncs each calendar the member turns on. A fake adapter in core tests stands in for both providers; no test calls a real provider.
 
 ### Connecting (OAuth)
 
@@ -158,6 +188,66 @@ Google: Calendar API v3 with `singleEvents=true`, `showDeleted=true`, `timeMin`/
 - **Timeline entry**: the ActivityFeed's `meeting` entry: title, time range in the viewer's time zone, attendee chips (members, linked people, unknown emails with "Add as person"), the response of each, and the video link.
 - All from the component library; any new variant goes through `design-system-guardian` when testing resumes.
 
+### Calendars and Outlook (milestones 5 and 4, amendment of 20 October 2026)
+
+**`calendar_calendars`** (new tenant table: `workspace_id` first, forced RLS with the standard policy, audit columns)
+- `id`, `connection_id` (foreign key to `calendar_connections`, cascade on delete), `member_id` (copied from the connection, for the destination index and member reads), `provider_calendar_id` (text: Google's calendar id, Graph's calendar id), `name`, `provider_colour` (hex from the provider, shown only through the nearest calendar hue), `colour_override` (a calendar hue token name, nullable), `access_role` (`owner` | `writer` | `reader` | `free_busy`), `is_primary`, `check_conflicts`, `show_in_week`, `sync` (booleans, defaults by AC-992), `time_zone`, `is_destination` (boolean), `sync_state` (jsonb: this calendar's sync token or delta link), `channel` (jsonb: watch channel or Graph subscription id, expiry, hashed token or client state), `last_error` (code and message), `failing_since`.
+- Unique (`workspace_id`, `connection_id`, `provider_calendar_id`). Partial unique (`workspace_id`, `member_id`) where `is_destination`. Check: `not is_destination or access_role in ('owner', 'writer')`.
+- `calendar_connections.sync_state` and `.channel` move here (the expand migration copies the primary's; the contract migration a release later drops them); `calendar_connections.is_default` stops being read for writes once the destination exists and is dropped with them.
+- `booking_pages.destination_calendar_id` (uuid, nullable, foreign key with `on delete set null`).
+- `meeting_sources.calendar_id` keeps the provider calendar id; the backfill rewrites today's literal `'primary'` to the main calendar's real id.
+- `MAX_CALENDAR_CONNECTIONS` becomes 6 in contracts.
+
+**Provider interface changes** (`packages/core/src/calendar/provider.ts`):
+
+```ts
+listCalendars(tokens: Tokens): Promise<ProviderCalendar[]>;   // id, name, colour, accessRole, isPrimary, timeZone
+freeBusy(tokens: Tokens, calendarIds: readonly string[], from: string, to: string):
+  Promise<ReadonlyMap<string, { readonly busy: readonly Interval[] } | { readonly error: CalendarErrorCode }>>;
+createEvent(tokens: Tokens, calendarId: string, input: NewEvent): Promise<ProviderEvent>;
+updateEvent(tokens: Tokens, calendarId: string, eventId: string, input: Partial<NewEvent>): Promise<ProviderEvent>;
+cancelEvent(tokens: Tokens, calendarId: string, eventId: string): Promise<void>;
+watch(tokens: Tokens, calendarId: string, address: string, token: string): Promise<Channel>;
+```
+
+`listChanges` already takes a calendar id. Google replaces every `calendars/primary` path with the calendar's id. Microsoft lives in `apps/api/src/calendar/microsoft.ts`, the only module that calls Graph, with the same shape.
+
+**Free and busy with outcomes** (`packages/core/src/calendar/events.ts`): `freeBusy(scope, { memberIds, from, to })` now answers, per member, `{ busy, skipped: [{ calendarId, name, code }], closed: boolean }`. `closed` is true only by AC-995's two rules. The slot engine treats a closed host as unavailable and otherwise uses `busy`; `skipped` is written to `calendar_calendars.last_error` and shown to the member.
+
+**Destination** (`destinationFor(tx, { memberId, pageId? })`): the page's `destination_calendar_id` when it names a writable calendar of that member on a live connection, else the member's `is_destination` calendar, else `CALENDAR_NOT_CONNECTED`. The chosen calendar id is stored on the meeting source that `createEvent` writes, which is what move and cancel read (AC-998).
+
+**Jobs**: `calendar.calendars.refresh` (light lane, per connection) runs after connect, daily, and on Refresh, upserting `calendar_calendars` and removing the gone ones (AC-991, AC-1005). `calendar.sync` loops over the connection's calendars with `sync` or `check_conflicts` on. The notify endpoints (`/api/calendar/google/notify`, `/api/calendar/microsoft/notify`) map the channel or subscription to its calendar.
+
+**API**: `calendar.calendars.list` (the member's accounts with their calendars), `calendar.calendars.update` (`id`, `checkConflicts?`, `showInWeek?`, `sync?`, `colourOverride?`), `calendar.destination.set` (`calendarId`), `calendar.connections.refresh` (`id`); `booking.pages.update` takes `destinationCalendarId: uuid | null`. All own member only; errors `NOT_FOUND`, `CALENDAR_NOT_WRITABLE`, `CALENDAR_LIMIT`.
+
+**Microsoft env** (validated only when `CALENDAR_OUTLOOK=on`): `MICROSOFT_CLIENT_ID`, `MICROSOFT_CLIENT_SECRET`, `MICROSOFT_TENANT` (default `common`). An Entra app registration for "accounts in any organizational directory and personal Microsoft accounts", with the redirect URI `<API origin>/api/calendar/microsoft/callback` and the delegated permissions of AC-1006. Push notifications post to `<CALENDAR_WEBHOOK_ORIGIN>/api/calendar/microsoft/notify`.
+
+**Screens** (Calendly style, from the library only):
+- Settings › Calendar: "Add events to" (a Select of writable calendars grouped by account) at the top with one line of help; then each account as a Card, its calendars as rows (colour dot button, name, Main tag, three Switches with labels on the first row and as accessible names on every row); a skipped calendar's row shows its warning inline.
+- The colour palette: a Popover of the calendar hue tokens as swatches (radio group), with Reset.
+- The page editor: "Add events to" Select under Location.
+- The Bookings week view: the existing filter menu grows a section per account with each calendar's checkbox and swatch.
+
+**Value sourcing**:
+
+| Action | Value | Source |
+|---|---|---|
+| Calendar list | name, colour, role, main, zone | provider `listCalendars`, stored on refresh |
+| Shown colour | hue | `colour_override`, else `provider_colour` mapped to the nearest calendar hue |
+| Busy for slots | intervals | `freeBusy` over calendars with `check_conflicts`, per AC-994 and AC-995 |
+| Destination | calendar | page override, else member `is_destination`, per `destinationFor` |
+| Backfilled destination | calendar | main calendar of the connection with `is_default` |
+| Teams link possible | yes or no | Graph's answer to the online meeting request on create |
+
+**Critical test scenarios** (amendment):
+- Backfill: a member with two connections and pages keeps the same slots and the same event calendar after the migration; verifies **AC-992**, **AC-996**.
+- Partial failure: of three conflict calendars one times out; slots come from the other two and the warning shows; then all three fail and the page offers none; then only the destination's grant is revoked and the page offers none; verifies **AC-995**.
+- Override: a page names a secondary calendar, which is then deleted at the provider; the next booking lands in the default and the editor explains; verifies **AC-997**, **AC-1005**.
+- Move after change: an event made in calendar A moves in A after the destination became B; verifies **AC-998**.
+- Private: a private event in a secondary calendar shows as Busy to a colleague and in full to its owner; verifies **AC-999**.
+- Outlook: the shared adapter suite passes for both providers; a subscription validation and a lifecycle notice are handled; a personal account booking with video gets no link and the notice says so; verifies **AC-1007** to **AC-1011**, **AC-1013**.
+- Env: with `CALENDAR_OUTLOOK=on` and a missing secret the API refuses to boot; verifies **AC-1012**.
+
 ## Build plan
 
 **Milestone 1: Google meetings on timelines** (one thread through every layer)
@@ -178,13 +268,22 @@ Satisfies AC-602, AC-609, AC-619, AC-620, AC-622.
 9. `freeBusy` with its cache, `createEvent` with Meet links, `moveEvent`, `cancelEvent`, `CALENDAR_NOT_CONNECTED`.
 Satisfies AC-615 to AC-618.
 
-**Milestone 4: Outlook**
-10. The Microsoft adapter (Graph, delta queries, subscriptions for push, Teams links), its OAuth start and callback.
-Satisfies AC-598.
+**Milestone 5: calendars** (amendment; ships in the same release as milestone 4)
+10. Migration (expand): `calendar_calendars`, `booking_pages.destination_calendar_id`, the backfill (main calendar per connection with AC-992's defaults, destination from the default connection, `sync_state` and `channel` copied, `'primary'` source ids rewritten), guard tests, satisfies **AC-991**, **AC-992**, **AC-996**.
+11. Core and the Google adapter: `listCalendars`, calendar ids on every call, `freeBusy` with per calendar outcomes and the closed rule, `destinationFor`, the cache cleared on changes, `calendar.calendars.refresh`, per calendar sync and channels, the cap at 6, satisfies **AC-994**, **AC-995**, **AC-997**, **AC-998**, **AC-1000**, **AC-1002**, **AC-1003**, **AC-1004**, **AC-1005**.
+12. API and screens: the calendar procedures; Settings › Calendar accounts with calendars, switches, colours and Add events to; the page editor's Add events to; the week view filter by account; private events as Busy for others; `design-system-guardian`, `ux-interaction-reviewer`, satisfies **AC-993**, **AC-996**, **AC-997**, **AC-999**, **AC-1001**.
+
+**Milestone 4: Outlook** (same release)
+13. The Microsoft adapter (Graph `calendarView` delta, `getSchedule` and `calendarView` for free and busy in one batch, events with Teams links when allowed, subscriptions with validation, client state and lifecycle notices), its OAuth start and callback, env behind `CALENDAR_OUTLOOK`, satisfies **AC-598**, **AC-1006** to **AC-1012**.
+14. The shared adapter test suite over recorded responses for both providers; `verify.md` by hand with real accounts; `security-access-reviewer` (tokens, webhooks, client state), `state-performance-reviewer` (provider calls per read), satisfies **AC-1013**, **AC-1014**.
+15. One release later: the contract migration dropping `calendar_connections.sync_state`, `.channel` and `.is_default`.
 
 ## Calls for the owner
 
-- Only each member's primary calendar syncs; more calendars later.
+- Only each account's main calendar checks for conflicts, shows and syncs until the member turns others on (amended 20 October 2026 from "primary only"; owner decision).
+- A failing calendar is skipped with a warning; a page closes only when all of a host's conflict calendars fail or the destination's grant is gone (owner decision, 20 October 2026).
+- Private events show as Busy to everyone but their owner (owner decision, 20 October 2026).
+- Outlook needs an Entra app registration by the owner (redirect URI, client secret, `CALENDAR_OUTLOOK=on`) before it works in production.
 - Default sharing is `shared`; internal only meetings never show on records.
 - Unknown attendees are not created automatically unless an admin turns it on.
 - Descriptions and attachments are never stored.
@@ -196,10 +295,15 @@ Satisfies AC-598.
 - A new class of secret (members' calendar tokens) lives in the database, encrypted; losing `CALENDAR_TOKEN_KEY` means every member reconnects.
 - Google push needs a public https webhook origin, so local development runs on the poll fallback.
 - Google's OAuth verification is required before members outside the owner's test users can connect (sensitive scopes); until then the consent screen shows "unverified app".
+- Milestone 5 multiplies provider work by the calendars members turn on: one channel or subscription and one sync token per calendar, and a larger free and busy request per account. The 50 calendar cap and one call per account per read keep it bounded.
+- Outlook adds a second set of secrets, a second webhook, and Microsoft's publisher verification before work accounts outside the owner's tenant can consent without an admin.
+- Two providers in one release make the release larger and its verify longer; the owner chose that over shipping calendars first.
 
 ## Follow-up
 
-- [ ] Sync more than the primary calendar.
+- [x] Sync more than the primary calendar (milestone 5, amendment of 20 October 2026).
+- [ ] Microsoft publisher verification, and the admin consent link for tenants that block user consent.
+- [ ] Calendars shared with the member that aren't in their own list (Outlook shared calendars, Google calendars only subscribed), if members ask.
 - [ ] Notices and email for a disconnected calendar once #28 lands.
 - [ ] Meeting notes and recordings on meetings (later features).
 - [ ] Google OAuth app verification for the Calendar scopes before general release.
