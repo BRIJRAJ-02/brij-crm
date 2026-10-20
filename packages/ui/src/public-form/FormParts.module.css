@@ -1,0 +1,303 @@
+/* The hosted form's frame and shared pieces (spec 0023, 0023-form-design.md):
+   the library's controls in one calm column. This module lays them out and
+   draws nothing a component already draws. The look maps onto tokens:
+   `data-theme` (Colour) redefines them for light or dark, and
+   `data-corners='square'` (Corners) points the radius tokens at the smallest
+   step, so every control inside squares its corners. On its own page from the
+   page breakpoint, a card (Classic, Steps) sits centred on the ground colour;
+   the one at a time frame (`data-frame='open'`) has no card. */
+@layer components {
+  .root {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-24);
+    box-sizing: border-box;
+    inline-size: 100%;
+    padding: var(--space-24) var(--space-20);
+    background: var(--surface);
+    color: var(--text);
+    font: var(--text-body);
+    letter-spacing: var(--tracking-body);
+  }
+
+  /* On the page's root as well (the hosted page sets it), so lists opened in a popover square theirs too. */
+  :root[data-corners='square'],
+  .root[data-corners='square'] {
+    --radius-sm: var(--radius-xs);
+    --radius-md: var(--radius-xs);
+    --radius-lg: var(--radius-xs);
+    --radius-xl: var(--radius-xs);
+  }
+
+  /* Touch screens: 16px text in the inputs, so phones don't zoom into a field, and taller
+     inputs to tap. Drawn from the spacing scale until the design system has a touch type
+     size (0023-form-design.md, pending owner confirmation). */
+  @media (pointer: coarse) {
+    .root {
+      --text-body: 400 var(--space-16) / var(--space-24) var(--font-sans);
+      --size-input: calc(var(--space-20) + var(--space-24));
+    }
+  }
+
+  .root[data-mode='page'] {
+    min-block-size: 100dvb;
+    padding-block: var(--space-32) var(--space-24);
+  }
+
+  .card {
+    display: flex;
+    flex-direction: column;
+    box-sizing: border-box;
+    inline-size: 100%;
+    max-inline-size: var(--size-page-card);
+    margin-inline: auto;
+  }
+
+  @media (width >= 1024px) {
+    .root[data-mode='page'] {
+      justify-content: center;
+      padding-block: var(--space-32);
+    }
+
+    .root[data-mode='page'][data-frame='card'] {
+      background: var(--surface-subtle);
+    }
+
+    .root[data-mode='page'][data-frame='card'] .card {
+      max-inline-size: calc(var(--size-page-card) + 2 * var(--space-32));
+      padding: var(--space-32);
+      border: var(--border-width-hairline) solid var(--border);
+      border-radius: var(--radius-xl);
+      background: var(--surface-raised);
+      box-shadow: var(--shadow-md);
+      animation: rise var(--duration-modal) var(--ease-out) both;
+    }
+  }
+
+  .header {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-8);
+  }
+
+  .headline {
+    margin: 0;
+    color: var(--text);
+    font: var(--text-heading);
+    letter-spacing: var(--tracking-heading);
+    text-wrap: balance;
+  }
+
+  /* Alone on its page the headline leads; in a site or the builder it stays a heading among others. */
+  .headline[data-mode='page'] {
+    font: var(--text-note-title);
+    letter-spacing: var(--tracking-note-title);
+  }
+
+  .headline:focus {
+    outline: none;
+  }
+
+  .subheading {
+    margin: 0;
+    color: var(--text-secondary);
+    text-wrap: pretty;
+  }
+
+  .question {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-4);
+    min-inline-size: 0;
+  }
+
+  /* The email typo hint: a muted line under the field with its Use it. */
+  .suggestion {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--space-4);
+    color: var(--text-secondary);
+    font: var(--text-label);
+    letter-spacing: var(--tracking-label);
+  }
+
+  .suggestion:empty {
+    display: none;
+  }
+
+  /* After a submit that found problems: a red tinted box above the button, each question a link to it. */
+  .summary {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-4);
+    padding: var(--space-8) var(--space-12);
+    border: var(--border-width-hairline) solid var(--tag-red-border);
+    border-radius: var(--radius-lg);
+    background: var(--tag-red-bg);
+    color: var(--tag-red-text);
+    animation: fade var(--duration-popover) var(--ease-out) both;
+  }
+
+  .summary:not([data-shown]) {
+    display: none;
+  }
+
+  .summaryTitle {
+    display: flex;
+    align-items: center;
+    gap: var(--space-6);
+    margin: 0;
+    font: var(--text-body-strong);
+    letter-spacing: var(--tracking-body-strong);
+  }
+
+  .summaryList {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-2) var(--space-12);
+    margin: 0;
+    padding-inline-start: calc(var(--size-icon) + var(--space-6));
+    list-style: none;
+  }
+
+  .summaryLink {
+    border-radius: var(--radius-xs);
+    color: inherit;
+    font: var(--text-body-strong);
+    letter-spacing: var(--tracking-body-strong);
+    text-decoration: underline;
+    text-underline-offset: var(--space-2);
+  }
+
+  .summaryLink:focus-visible {
+    outline: var(--border-width-thick) solid var(--accent-line);
+    outline-offset: var(--space-2);
+  }
+
+  .alert {
+    margin: 0;
+    color: var(--danger);
+  }
+
+  .alert:empty {
+    display: none;
+  }
+
+  /* The thank you: the booking confirmation's badge, heading and muted line, centred. */
+  .thanks {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: var(--space-8);
+    padding-block: var(--space-24) var(--space-8);
+    text-align: center;
+  }
+
+  .badge {
+    display: inline-grid;
+    place-items: center;
+    inline-size: var(--size-toolbar);
+    block-size: var(--size-toolbar);
+    margin-block-end: var(--space-8);
+    border-radius: var(--radius-full);
+    background: var(--tag-green-bg);
+    color: var(--tag-green-text);
+    animation: grow var(--duration-modal) var(--ease-out) var(--duration-hover) both;
+  }
+
+  .again {
+    margin-block-start: var(--space-8);
+  }
+
+  /* Under the card: the captcha's notice, then the Timefix wordmark, quiet until pointed at. */
+  .foot {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: var(--space-8);
+    inline-size: 100%;
+    max-inline-size: var(--size-page-card);
+    margin-inline: auto;
+    text-align: center;
+  }
+
+  .root[data-mode='page'] .foot {
+    margin-block-start: auto;
+  }
+
+  @media (width >= 1024px) {
+    .root[data-mode='page'] .foot {
+      margin-block-start: 0;
+    }
+  }
+
+  .notice {
+    margin: 0;
+    color: var(--text-tertiary);
+    font: var(--text-label);
+    letter-spacing: var(--tracking-label);
+  }
+
+  .brand {
+    display: inline-flex;
+    border-radius: var(--radius-xs);
+    opacity: var(--opacity-busy);
+    transition: opacity var(--duration-hover) var(--ease-hover);
+  }
+
+  .brand:focus-visible {
+    outline: var(--border-width-thick) solid var(--accent-line);
+    outline-offset: var(--space-2);
+    opacity: 1;
+  }
+
+  .wordmark {
+    display: block;
+    block-size: var(--size-icon-sm);
+    inline-size: auto;
+  }
+
+  @media (hover: hover) and (pointer: fine) {
+    .brand:hover {
+      opacity: 1;
+    }
+  }
+
+  .hidden {
+    position: absolute;
+    inline-size: var(--space-2);
+    block-size: var(--space-2);
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+
+  @keyframes rise {
+    from {
+      opacity: 0;
+      translate: 0 var(--space-6);
+    }
+  }
+
+  @keyframes grow {
+    from {
+      opacity: 0;
+      scale: var(--scale-enter);
+    }
+  }
+
+  @keyframes fade {
+    from {
+      opacity: 0;
+    }
+  }
+
+  /* The fades stay; the rise and the growth go. */
+  @media (prefers-reduced-motion: reduce) {
+    .badge,
+    .root[data-mode='page'][data-frame='card'] .card {
+      animation-name: fade;
+    }
+  }
+}
