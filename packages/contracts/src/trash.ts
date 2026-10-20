@@ -77,14 +77,40 @@ export const RestoreTrashInput = WorkspaceScoped.extend({
 /** Records to restore. */
 export type RestoreTrashInput = z.infer<typeof RestoreTrashInput>;
 
+/** Up to 500 records in the trash to delete forever (owners and admins, `records.purge`). */
+export const DeleteForeverInput = RestoreTrashInput;
+/** Records to delete forever. */
+export type DeleteForeverInput = z.infer<typeof DeleteForeverInput>;
+
+/** One record's outcome in Delete forever: removed for good, or not in the trash (live, gone, or hidden). */
+export const PurgeOutcome = z.object({
+  recordId: z.uuid(),
+  state: z.enum(['purged', 'not-in-trash']),
+});
+/** One record's outcome in Delete forever. */
+export type PurgeOutcome = z.infer<typeof PurgeOutcome>;
+
+/** Delete forever's outcomes, one per record asked, and how many change events carry its `mutationId`. */
+export const DeleteForeverResults = z.object({
+  results: z.array(PurgeOutcome),
+  echoes: z.number().int().min(0),
+});
+/** Delete forever's outcomes. */
+export type DeleteForeverResults = z.infer<typeof DeleteForeverResults>;
+
 /**
  * The trash. `query` refuses a cursor that doesn't decode with
  * `FILTER_INVALID`, and an object the member can't see with `NOT_FOUND`;
  * `restore` answers each record's outcome (refused ones stay in the trash
- * with their reason), 422 `CONFIG_INVALID` over 500.
+ * with their reason), 422 `CONFIG_INVALID` over 500. `deleteForever` (spec
+ * 0022, milestone 4) answers 403 `FORBIDDEN` "Only workspace owners and admins
+ * can delete records forever." to anyone without `records.purge`, removing
+ * nothing; Empty trash and more than 500 start a `records.purge` job
+ * (`records.startBulk`).
  */
 export const trashContract = {
   query: oc.input(QueryTrashInput).output(TrashPage),
   count: oc.input(CountTrashInput).output(TrashCount),
   restore: oc.input(RestoreTrashInput).output(RestoreResults),
+  deleteForever: oc.input(DeleteForeverInput).output(DeleteForeverResults),
 };

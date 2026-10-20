@@ -21,11 +21,13 @@ export interface PurgeDependent {
 }
 
 /** Deletes with one statement and answers its row count. */
-const removing =
-  (name: string, statement: (ids: ReturnType<typeof uuidArray>) => ReturnType<typeof sql>): PurgeDependent => ({
-    name,
-    remove: async (tx, recordIds) => (await tx.execute(statement(uuidArray(recordIds)))).rowCount ?? 0,
-  });
+const removing = (
+  name: string,
+  statement: (ids: ReturnType<typeof uuidArray>) => ReturnType<typeof sql>,
+): PurgeDependent => ({
+  name,
+  remove: async (tx, recordIds) => (await tx.execute(statement(uuidArray(recordIds)))).rowCount ?? 0,
+});
 
 /**
  * Every registered dependent, in the order they run (before values, links,

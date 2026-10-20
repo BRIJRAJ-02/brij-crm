@@ -7,7 +7,14 @@
 // settles the open trash views 1.5 s after the last, spread 0 to 2 s, so
 // records deleted, restored or purged anywhere appear and vanish. Loaded
 // lazily, with the records layer's windows, view and store.
-import type { ChangeEvent, RestoreResults, TrashCount, TrashItem, TrashPage } from '@crm/contracts';
+import type {
+  ChangeEvent,
+  DeleteForeverResults,
+  RestoreResults,
+  TrashCount,
+  TrashItem,
+  TrashPage,
+} from '@crm/contracts';
 import { toDataError, type DataError } from '../errors.ts';
 import { createPlainStore } from '../records/plain-store.ts';
 import { TRASH_NAME_COLUMN } from './columns.ts';
@@ -96,7 +103,19 @@ export interface TrashApi {
     readonly recordIds: readonly string[];
     readonly mutationId: string;
   }) => Promise<RestoreResults>;
+  /** Deletes up to 500 trashed records forever (spec 0022, milestone 4; owners and admins). */
+  readonly deleteForever: (input: {
+    readonly workspace: string;
+    readonly recordIds: readonly string[];
+    readonly mutationId: string;
+  }) => Promise<DeleteForeverResults>;
 }
+
+/** What a Delete forever came to, for the screen's toast. */
+export type PurgeSummary =
+  | { readonly kind: 'too-many'; readonly limit: number }
+  | { readonly kind: 'failed'; readonly error: DataError }
+  | { readonly kind: 'done'; readonly purged: number; readonly skipped: number };
 
 /** What the trash needs from createDataLayer. */
 export interface TrashOptions {
@@ -451,6 +470,47 @@ export function createTrash({
         ),
       ];
       return { kind: 'done', restored: back.size, refused: refused.length, objectIds };
+    },
+
+    /**
+     * Deletes up to 500 trashed records forever (spec 0022, AC-535): their
+     * rows leave at once; what the server removed is gone for good, and a
+     * record no longer in the trash (restored elsewhere) comes back with the
+     * next settle. A refusal of the whole call (a member without
+     * `records.purge`, the network) brings every row back.
+     */
+    deleteForever: async (workspace: string, recordIds: readonly string[]): Promise<PurgeSummary> => {
+      const ids = [...new Set(recordIds)];
+      if (ids.length > MAX_RESTORE_RECORDS) return { kind: 'too-many', limit: MAX_RESTORE_RECORDS };
+      if (ids.length === 0) return { kind: 'done', purged: 0, skipped: 0 };
+      leaving = new Set([...leaving, ...ids]);
+      invalidateAll();
+      const mutationId = mintId();
+      mutations.sent(mutationId);
+      const stop = () => {
+        const done = new Set(ids);
+        leaving = new Set([...leaving].filter((id) => !done.has(id)));
+      };
+      let results: DeleteForeverResults['results'];
+      try {
+        const answer = await api.deleteForever({ workspace, recordIds: ids, mutationId });
+        mutations.answered(mutationId, answer.echoes);
+        results = answer.results;
+      } catch (error) {
+        mutations.forget(mutationId);
+        stop();
+        invalidateAll();
+        return { kind: 'failed', error: toDataError(error) };
+      }
+      const gone = new Set(results.filter((result) => result.state === 'purged').map((result) => result.recordId));
+      for (const entry of of(workspace)) {
+        entry.drop(gone);
+        entry.markDirty();
+      }
+      store.remove([...gone]);
+      stop();
+      invalidateAll();
+      return { kind: 'done', purged: gone.size, skipped: results.length - gone.size };
     },
 
     /**

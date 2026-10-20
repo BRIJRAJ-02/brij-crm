@@ -382,6 +382,7 @@ function fakeApi(overrides: Partial<Behaviour> = {}, auth: (path: string, body: 
         mutationIds.push(input.mutationId);
         return { results: behaviour.trashRestore(input.recordIds), echoes: 1 };
       }),
+      deleteForever: os.trash.deleteForever.handler(() => notServed()),
     },
     members: { list: os.members.list.handler(() => behaviour.members()) },
     access: { mine: os.access.mine.handler(() => behaviour.access()) },

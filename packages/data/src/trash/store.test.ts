@@ -2,7 +2,7 @@
 // AC-534): windows by cursor with the count, a restore that takes its rows
 // out at once and brings a refused one back with its reason, and the live
 // settle after a delete elsewhere.
-import type { ChangeEvent, RestoreResults, TrashItem, TrashPage } from '@crm/contracts';
+import type { ChangeEvent, DeleteForeverResults, RestoreResults, TrashItem, TrashPage } from '@crm/contracts';
 import { describe, expect, it } from 'vitest';
 import { dataError, type DataError } from '../errors.ts';
 import { createTrash, type TrashApi, type TrashView } from './store.ts';
@@ -34,6 +34,7 @@ function setup() {
   const queries: Pending<{ objectId?: string; cursor?: string; limit: number }, TrashPage>[] = [];
   const counts: Pending<{ objectId?: string }, { count: number; atLeast: boolean }>[] = [];
   const restores: Pending<readonly string[], RestoreResults['results']>[] = [];
+  const purges: Pending<readonly string[], DeleteForeverResults['results']>[] = [];
   const queue =
     <I, O>(list: Pending<I, O>[]) =>
     (input: I) =>
@@ -44,6 +45,7 @@ function setup() {
     query: ({ workspace: _workspace, ...input }) => queue(queries)(input),
     count: ({ workspace: _workspace, ...input }) => queue(counts)(input),
     restore: async (input) => ({ results: await queue(restores)(input.recordIds), echoes: 1 }),
+    deleteForever: async (input) => ({ results: await queue(purges)(input.recordIds), echoes: 1 }),
   };
   const frames: (() => void)[] = [];
   const timers: { ms: number; run: () => void; live: boolean }[] = [];
@@ -74,7 +76,7 @@ function setup() {
       else timers.push({ ...timer, ms: timer.ms - ms });
     }
   };
-  return { trash, queries, counts, restores, frame, tick, clock };
+  return { trash, queries, counts, restores, purges, frame, tick, clock };
 }
 
 async function readyTrash() {
@@ -212,6 +214,31 @@ describe('restoring (AC-534)', () => {
     release();
     frame();
     expect(view.getSnapshot().cellErrors.size).toBe(0);
+  });
+});
+
+describe('deleting forever (AC-535)', () => {
+  it('takes the rows out at once and keeps out what the server removed', async () => {
+    const { trash, view, purges, frame } = await readyTrash();
+    const purging = trash.deleteForever(WS, [idAt(0), idAt(1)]);
+    frame();
+    expect(names(view)).toEqual(['P2']);
+    await settle();
+    purges[0]?.answer([
+      { recordId: idAt(0), state: 'purged' },
+      { recordId: idAt(1), state: 'not-in-trash' },
+    ]);
+    expect(await purging).toEqual({ kind: 'done', purged: 1, skipped: 1 });
+  });
+
+  it('brings every row back when a member without records.purge is refused', async () => {
+    const { trash, view, purges, frame } = await readyTrash();
+    const purging = trash.deleteForever(WS, [idAt(0)]);
+    await settle();
+    purges[0]?.fail(dataError('FORBIDDEN', 'Only workspace owners and admins can delete records forever.'));
+    expect(await purging).toMatchObject({ kind: 'failed', error: { code: 'FORBIDDEN' } });
+    frame();
+    expect(names(view)).toEqual(['P0', 'P1', 'P2']);
   });
 });
 

@@ -250,7 +250,7 @@ function BulkEditForm({
             <AttributeEditor
               key={`${definition.id}:${shownOp === 'set' || shownOp === 'replace' ? 'whole' : 'items'}`}
               attribute={{ ...toFieldAttribute(definition), name: bulkStrings.value, isRequired: true }}
-              value={(value ?? null) as never}
+              value={value ?? null}
               surface="form"
               onCommit={(next) => {
                 setValue(definition.isMulti && next !== null && !Array.isArray(next) ? [next] : next);

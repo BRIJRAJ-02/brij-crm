@@ -1,4 +1,4 @@
-import { countTrash, queryTrash, restoreRecords } from '@crm/core';
+import { countTrash, deleteForever, queryTrash, restoreRecords } from '@crm/core';
 import { commitCounted } from '../../hooks.ts';
 import { member } from '../../orpc.ts';
 
@@ -26,6 +26,13 @@ export const trashRouter = member.trash.router({
   restore: member.trash.restore.handler(async ({ context, input }) => {
     const { result, echoes } = await commitCounted(context, { mutationId: input.mutationId }, (hooks) =>
       restoreRecords(context.scope, { recordIds: input.recordIds }, hooks),
+    );
+    return { results: [...result], echoes };
+  }),
+  // Owners and admins only (records.purge, spec 0022 milestone 4): up to 500 records removed for good.
+  deleteForever: member.trash.deleteForever.handler(async ({ context, input }) => {
+    const { result, echoes } = await commitCounted(context, { mutationId: input.mutationId }, (hooks) =>
+      deleteForever(context.scope, { recordIds: input.recordIds }, hooks),
     );
     return { results: [...result], echoes };
   }),

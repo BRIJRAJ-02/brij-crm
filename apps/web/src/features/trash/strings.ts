@@ -39,6 +39,22 @@ export const strings = {
       : `${new Intl.NumberFormat().format(refused)} couldn’t be restored; each row says why.`,
   noneRestored: (records: string) => `${records} couldn’t be restored. Each row says why.`,
   somethingWrong: 'Something went wrong. Try again in a moment.',
+  /** Delete forever and Empty trash (spec 0022, milestone 4): owners and admins only. */
+  deleteForever: 'Delete forever',
+  emptyTrash: 'Empty trash',
+  confirmPurgeTitle: (records: string) => `Delete ${records} forever?`,
+  confirmPurgeText: 'This can’t be undone.',
+  confirmEmptyTitle: 'Empty the trash?',
+  confirmEmptyText: (records: string) => `${records} will be deleted forever. This can’t be undone.`,
+  confirmRestoreTitle: (records: string) => `Restore ${records}?`,
+  confirmRestoreText: 'They come back with their links, list entries, notes and history.',
+  cancel: 'Cancel',
+  purgedOne: 'Deleted 1 record forever.',
+  purged: (records: string) => `Deleted ${records} forever.`,
+  purgedSkipped: (skipped: number) =>
+    skipped === 1
+      ? '1 was no longer in the trash.'
+      : `${new Intl.NumberFormat().format(skipped)} were no longer in the trash.`,
   failedTitle: 'Couldn’t load the trash',
   theSystem: 'The system',
   anApiKey: 'An API key',

@@ -75,9 +75,10 @@ describe('Delete forever (AC-535, AC-538)', () => {
     const w = await world();
     const [ada = '', bob = ''] = await w.trashed('Ada', 'Bob');
     const cy = await w.person('Cy');
-    expect(
-      await refusalOf(deleteForever(w.member, { recordIds: [ada] })),
-    ).toEqual({ code: 'FORBIDDEN', message: 'Only workspace owners and admins can delete records forever.' });
+    expect(await refusalOf(deleteForever(w.member, { recordIds: [ada] }))).toEqual({
+      code: 'FORBIDDEN',
+      message: 'Only workspace owners and admins can delete records forever.',
+    });
     expect(await exists([ada])).toEqual([ada]);
     const outcomes = await deleteForever(w.admin, { recordIds: [ada, bob, cy] }, [outboxHook()]);
     expect(outcomes).toEqual([
@@ -120,7 +121,9 @@ describe('the purge registry (AC-536, AC-537)', () => {
     const w = await world();
     const ids = await w.trashed('Ada', 'Bob');
     const { dependent, seen } = fakeDependent();
-    const { result } = await runWrite(w.admin, (context) => purgeRecords(context, { recordIds: ids, dependents: [dependent] }));
+    const { result } = await runWrite(w.admin, (context) =>
+      purgeRecords(context, { recordIds: ids, dependents: [dependent] }),
+    );
     expect(seen).toEqual([{ ids: [...ids].sort(), stillThere: 2 }]);
     expect(result.counts.dependents).toEqual({ fake: 2 });
     expect(await exists(ids)).toEqual([]);

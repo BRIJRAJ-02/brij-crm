@@ -90,7 +90,7 @@ import type { UndoKind } from './records/history.ts';
 import type { RecordAttributes, RecordSubscription } from './records/one.ts';
 import { createRecordSearch, type RecordSearch } from './records/search.ts';
 import type { BoardQuery, BoardStore } from './records/board.ts';
-import type { RestoreSummary, Trash, TrashView } from './trash/store.ts';
+import type { PurgeSummary, RestoreSummary, Trash, TrashView } from './trash/store.ts';
 import type {
   BulkEditRequest,
   BulkEditResult,
@@ -307,7 +307,7 @@ export { SEARCH_DELAY_MS, type RecordSearch, type RecordSearchState } from './re
 export type { BoardColumnState, BoardQuery, BoardState, BoardStatus, BoardStore } from './records/board.ts';
 export type { TrashedSource, TrashedState } from './records/trashed.ts';
 export type { RowNote } from './records/view.ts';
-export type { RestoreSummary, TrashRow, TrashState, TrashStatus, TrashView } from './trash/store.ts';
+export type { PurgeSummary, RestoreSummary, TrashRow, TrashState, TrashStatus, TrashView } from './trash/store.ts';
 export { TRASH_NAME_COLUMN } from './trash/columns.ts';
 export type { BulkAction, BulkEdit, BulkTarget } from '@crm/contracts';
 export {
@@ -1686,6 +1686,11 @@ export function createDataLayer({
               input.workspace,
               call((options) => api.trash.restore({ ...input, recordIds: [...input.recordIds] }, options)),
             ),
+          deleteForever: (input) =>
+            landed(
+              input.workspace,
+              call((options) => api.trash.deleteForever({ ...input, recordIds: [...input.recordIds] }, options)),
+            ),
         },
         mintId,
         watch,
@@ -2863,6 +2868,14 @@ export function createDataLayer({
         }
         return summary;
       },
+      /**
+       * Deletes up to 500 trashed records forever (spec 0022, AC-535; owners
+       * and admins): their rows leave at once and never come back. Empty
+       * trash and bigger selections run as a job (`records.startBulk` with
+       * `purge`).
+       */
+      deleteForever: async (workspace: string, recordIds: readonly string[]): Promise<PurgeSummary> =>
+        (await trashStore()).deleteForever(workspace, recordIds),
     },
     calendar: {
       /**

@@ -369,6 +369,36 @@ const WRITES: Record<string, (m: Member, mutationId: string) => Promise<readonly
       { kind: 'records', object_id: m.people.id, record_ids: [id], mutation_id: mutationId },
     ];
   },
+  'trash.deleteForever': async (m, mutationId) => {
+    const id = await personFor(m);
+    await m.client.records.deleteMany({
+      workspace: m.slug,
+      objectId: m.people.id,
+      recordIds: [id],
+      batchId: newId(),
+      mutationId: newId(),
+    });
+    await m.client.trash.deleteForever({ workspace: m.slug, recordIds: [id], mutationId });
+    return [
+      { kind: 'records', object_id: m.people.id, record_ids: [id] },
+      { kind: 'records', object_id: m.people.id, record_ids: [id] },
+      { kind: 'records', object_id: m.people.id, record_ids: [id], mutation_id: mutationId },
+    ];
+  },
+  'records.startBulk': async (m, mutationId) => {
+    const id = await personFor(m);
+    const job = await m.client.records.startBulk({
+      workspace: m.slug,
+      id: newId(),
+      action: 'delete',
+      target: { kind: 'ids', objectId: m.people.id, recordIds: [id] },
+      mutationId,
+    });
+    return [
+      { kind: 'records', object_id: m.people.id, record_ids: [id] },
+      { kind: 'jobs', item_ids: [job.id], mutation_id: mutationId },
+    ];
+  },
   'records.updateMany': async (m, mutationId) => {
     const id = await personFor(m);
     await m.client.records.updateMany({
@@ -1125,6 +1155,8 @@ const WRITES_MADE: Readonly<Record<string, number>> = {
   'records.deleteMany': 2,
   'records.restoreBatch': 3,
   'records.updateMany': 2,
+  'records.startBulk': 2,
+  'trash.deleteForever': 3,
   'trash.restore': 3,
   'jobs.cancel': 2,
   'jobs.confirm': 2,

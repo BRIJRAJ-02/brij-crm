@@ -3,8 +3,6 @@
 // Main task: tick rows (or "Select all N matching"), press Edit or Delete; up to 500 go at once, more are counted, confirmed and run in the background.
 // Leaves out: Add to list (#51), board cards (#21), several fields in one edit, and relationships (owner decision 3).
 import {
-  dataError,
-  isDataError,
   refusalSummary,
   type AttributeDefinition,
   type BulkAction,
@@ -17,7 +15,6 @@ import {
   type ViewQuery,
   type ViewState,
 } from '@crm/data';
-import { useJob } from '@crm/data/react';
 import { BulkActionBar, Button, Callout, Modal } from '@crm/ui';
 import { allMatching, noRows, selectedCount, type GridSelection } from '@crm/ui/grid';
 import { useRouteContext } from '@tanstack/react-router';
@@ -30,11 +27,11 @@ import {
   bulkStrings,
   deleteToast,
   editToast,
-  jobProgress,
   needsConfirm,
   recordsWord,
 } from './bulk.ts';
 import { runUndo } from './useUndoShortcut.ts';
+import { useBulkJob } from './useBulkJob.ts';
 
 /** A table's ticked rows, when "all matching" was pressed, and what changes them. */
 export interface TableSelection {
@@ -139,12 +136,6 @@ export interface BulkActionsOptions {
   readonly onDeleting: (recordIds: readonly string[]) => void;
 }
 
-/** A job this bar started and follows until it ends: what it does, and the object's names for its words. */
-interface Following {
-  readonly jobId: string;
-  readonly action: BulkAction;
-}
-
 /** What a confirm asks about: an inline delete's ids, or a counted job waiting in `ready`. */
 type Asking =
   { readonly kind: 'delete'; readonly ids: readonly string[] } | { readonly kind: 'job'; readonly jobId: string };
@@ -172,7 +163,6 @@ export function useBulkActions({
   const { selection, asOf } = ticked;
   const [asking, setAsking] = useState<Asking | undefined>(undefined);
   const [lastAsked, setLastAsked] = useState<Asking | undefined>(undefined);
-  if (asking !== undefined && asking !== lastAsked) setLastAsked(asking);
   const count = selectedCount(selection, total);
   const ids = selection.kind === 'some' ? [...selection.ids] : [];
   const path = bulkPath(selection, count);
@@ -183,32 +173,13 @@ export function useBulkActions({
     lastToast.current = toasts.toast(toast);
   };
 
-  // A background change this bar started, followed until it ends.
-  const [following, setFollowing] = useState<Following | undefined>(undefined);
-  const [starting, setStarting] = useState(false);
-  const [note, setNote] = useState<string | undefined>(undefined);
-  const job = useJob(data.jobs, slug, following?.jobId);
-  // A counted job waiting for its confirm opens it once; a job that ended lets the bar go.
-  const status = job?.status;
-  useEffect(() => {
-    if (following === undefined || status === undefined) return;
-    if (status === 'ready') setAsking({ kind: 'job', jobId: following.jobId });
-    if (status === 'succeeded' || status === 'failed' || status === 'cancelled') {
-      // A count of zero says so in the bar (AC-528); any other end has its toast.
-      if (status === 'succeeded' && (job?.total ?? 0) === 0) setNote(bulkStrings.nothingToChange);
-      setFollowing(undefined);
-      setAsking((open) => (open?.kind === 'job' ? undefined : open));
-    }
-  }, [status, following, job?.total]);
-  useEffect(() => {
-    if (note === undefined) return;
-    const timer = setTimeout(() => {
-      setNote(undefined);
-    }, 4000);
-    return () => {
-      clearTimeout(timer);
-    };
-  }, [note]);
+  // A background change this bar started, followed until it ends; its confirm opens once it is counted.
+  const bulkJob = useBulkJob(slug);
+  const jobAsking: Asking | undefined =
+    bulkJob.awaiting === undefined ? undefined : { kind: 'job', jobId: bulkJob.awaiting.id };
+  const open = asking ?? jobAsking;
+  if (open !== undefined && open !== lastAsked && (open.kind !== 'job' || lastAsked?.kind !== 'job'))
+    setLastAsked(open);
 
   const target = (): BulkTarget | undefined => {
     if (selection.kind === 'all-matching') {
@@ -228,23 +199,7 @@ export function useBulkActions({
   /** Starts a job for the selection; answers why it was refused, if it was. */
   const start = async (action: BulkAction, edit?: BulkEdit): Promise<DataError | undefined> => {
     const on = target();
-    if (on === undefined) return undefined;
-    setStarting(true);
-    setNote(undefined);
-    try {
-      const made = await data.records.startBulk(slug, {
-        id: data.jobs.newId(),
-        action,
-        target: on,
-        ...(edit === undefined ? {} : { edit }),
-      });
-      setFollowing({ jobId: made.id, action });
-      return undefined;
-    } catch (error) {
-      return isDataError(error) ? error : dataError('INTERNAL', bulkStrings.somethingWrong);
-    } finally {
-      setStarting(false);
-    }
+    return on === undefined ? undefined : bulkJob.start(action, on, edit);
   };
 
   const remove = (recordIds: readonly string[]) => {
@@ -314,13 +269,7 @@ export function useBulkActions({
       : { kind: 'failed', error: failure };
   };
 
-  const cancelJob = () => {
-    if (following === undefined) return;
-    void data.jobs.cancel(slug, following.jobId);
-  };
-
-  const progress = job === undefined ? (starting ? { label: bulkStrings.starting } : undefined) : jobProgress(job);
-  const isRunning = following !== undefined || starting;
+  const { job, note, progress, isRunning } = bulkJob;
   const shownCount = job?.total ?? count;
   const bar =
     count === 0 && !isRunning && note === undefined ? undefined : (
@@ -333,7 +282,7 @@ export function useBulkActions({
         {...(isRunning ? {} : { onSelectAllMatching: ticked.selectAll })}
         onClear={onClear}
         {...(progress === undefined ? {} : { progress })}
-        {...(following === undefined || job?.cancellable !== true ? {} : { onCancel: cancelJob })}
+        {...(job?.cancellable !== true ? {} : { onCancel: bulkJob.cancel })}
       >
         {note !== undefined ? (
           <Callout placement="bar" isAnnounced>
@@ -360,7 +309,7 @@ export function useBulkActions({
               onPress={() => {
                 if (path === 'job') {
                   void start('delete').then((failure) => {
-                    if (failure !== undefined) setNote(refusalSummary(failure));
+                    if (failure !== undefined) bulkJob.say(refusalSummary(failure));
                   });
                   return;
                 }
@@ -375,9 +324,9 @@ export function useBulkActions({
       </BulkActionBar>
     );
 
-  const shownAsk = asking ?? lastAsked;
+  const shownAsk = open ?? lastAsked;
   const askedJob = shownAsk?.kind === 'job' ? data.jobs.get(slug, shownAsk.jobId) : undefined;
-  const askedAction = following?.action ?? 'delete';
+  const askedAction = bulkJob.action ?? 'delete';
   const askedCount =
     shownAsk === undefined ? 0 : shownAsk.kind === 'delete' ? shownAsk.ids.length : (askedJob?.total ?? 0);
   const words = recordsWord(askedCount, object);
@@ -402,11 +351,11 @@ export function useBulkActions({
       <Modal
         title={isEditJob ? bulkStrings.confirmEditTitle(words) : bulkStrings.confirmTitle(words)}
         tone="danger"
-        isOpen={asking !== undefined}
-        onOpenChange={(open) => {
-          if (open) return;
+        isOpen={open !== undefined}
+        onOpenChange={(isOpen) => {
+          if (isOpen) return;
           // Closing a counted job's confirm without confirming cancels it: nothing was changed.
-          if (asking?.kind === 'job') void data.jobs.cancel(slug, asking.jobId);
+          if (open?.kind === 'job') bulkJob.cancel();
           setAsking(undefined);
         }}
         actions={
@@ -418,13 +367,13 @@ export function useBulkActions({
               variant="danger-solid"
               icon={isEditJob ? 'pencil' : 'trash'}
               onPress={() => {
-                const confirmed = asking;
+                const confirmed = open;
                 setAsking(undefined);
                 if (confirmed?.kind === 'delete') remove(confirmed.ids);
                 if (confirmed?.kind === 'job') {
                   // The selection clears once the job runs on its snapshot; the bar stays with its progress.
                   ticked.clear();
-                  void data.jobs.confirm(slug, confirmed.jobId);
+                  bulkJob.confirm();
                 }
               }}
             >

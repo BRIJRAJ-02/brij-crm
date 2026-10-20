@@ -6,6 +6,7 @@ import type {
   FieldAttributeShape,
   MemberSummary,
   ObjectSummary,
+  PurgeSummary,
   RestoreSummary,
   TrashRow,
 } from '@crm/data';
@@ -165,4 +166,29 @@ export function restoreToast(
   return summary.refused === 0
     ? { tone: 'success', message: restored }
     : { tone: 'danger', message: `${restored} ${strings.someRefused(summary.refused)}` };
+}
+
+/**
+ * Whether Restore may run for all matching (AC-534): at least one object in
+ * the list's scope (the object filter, or every object listed) is one the
+ * person may change.
+ */
+export function canRestoreAll(objectId: string | undefined, objects: readonly ObjectSummary[]): boolean {
+  return objects.some((object) => (objectId === undefined || object.id === objectId) && object.access === 'write');
+}
+
+/** The toast after Delete forever (AC-535): "Deleted 48 records forever.", and how many were no longer there. */
+export function purgeToast(summary: PurgeSummary, onRetry?: () => void): ToastContent | undefined {
+  if (summary.kind === 'too-many') return { tone: 'danger', message: strings.tooMany };
+  if (summary.kind === 'failed') {
+    const message = summary.error.message || strings.somethingWrong;
+    return onRetry !== undefined && isPassing(summary.error.code)
+      ? { tone: 'danger', message, action: { label: strings.retry, onAction: onRetry } }
+      : { tone: 'danger', message };
+  }
+  if (summary.purged === 0 && summary.skipped === 0) return undefined;
+  const purged = summary.purged === 1 ? strings.purgedOne : strings.purged(records(summary.purged));
+  return summary.skipped === 0
+    ? { tone: 'success', message: purged }
+    : { tone: 'success', message: `${purged} ${strings.purgedSkipped(summary.skipped)}` };
 }
