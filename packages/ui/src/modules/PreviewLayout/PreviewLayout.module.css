@@ -1,5 +1,5 @@
-/* PreviewLayout: inside the space-24 page gutter (PageColumn's, so a tab
-   strip above it lines its first label up with the body, as on Captures),
+/* PreviewLayout: inside the space-16 page gutter (PageColumn's, so an editor
+   sits under its tab strip exactly as Captures' lists do),
    the notices and the body. It follows its own width, not the window's: .measure is a size
    container whose content box is the width left for the body once the
    preview column (size-panel) and the gutter are taken (half the width when
@@ -23,7 +23,7 @@
     flex-direction: column;
     gap: var(--space-16);
     min-inline-size: 0;
-    padding: var(--space-24);
+    padding: var(--space-16);
   }
 
   .measure {
@@ -143,7 +143,7 @@
 
     .side {
       position: sticky;
-      inset-block-start: var(--space-24);
+      inset-block-start: var(--space-16);
       display: block;
       min-inline-size: 0;
     }

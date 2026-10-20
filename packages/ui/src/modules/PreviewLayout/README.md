@@ -14,10 +14,10 @@ It kept this name, not the form's: it is the general one (any editor beside its 
 - **Tabs** (optional): the library Tabs, edge to edge under the TopBar, with one TabPanel per tab holding a PreviewLayout, the Captures strip's way. The first tab's label lands on the page gutter, its hairline runs the view's width, and each tab is a real tab panel for screen readers.
 - **Notices** (`notices`, Callouts), full width inside the gutter.
 - **Body**: the children stacked `space-16` apart (SettingsStack's rhythm), groups of fields as `Card`s with a live summary as each Card's description, as on a settings page. It takes the whole width, with the preview column beside it (owner rule, 20 October 2026: every page is full width).
-- **Preview column**: a header row (a "Preview" heading that names the column, then `previewControls` at its end, level with the body's first header; owner feedback F27), then `previewNote` over the `preview` in one hairline frame with `radius-lg`, the panel's width (`size-panel`), sticky `space-24` from the top, right beside the body.
+- **Preview column**: a header row (a "Preview" heading that names the column, then `previewControls` at its end, level with the body's first header; owner feedback F27), then `previewNote` over the `preview` in one hairline frame with `radius-lg`, the panel's width (`size-panel`), sticky `space-16` from the top, right beside the body.
 - **Footer** (`footer`): a bar pinned to the body's foot while given.
 
-Everything under the tabs sits inside the page gutter, `space-24`, PageColumn's, so an editor lines up with the list it opened from.
+Everything under the tabs sits inside the page gutter, `space-16`, PageColumn's, so an editor lines up with the list it opened from.
 
 ## Use
 
