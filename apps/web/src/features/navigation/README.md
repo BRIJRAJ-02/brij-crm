@@ -4,7 +4,7 @@ Helpers, not a screen: what happens around every route change. `main.tsx` wires 
 
 ## `focus.ts` (`focusPage`)
 
-After a route change, focus goes to the new page's title, its one `h1` inside the main landmark, so a screen reader starts there and Tab continues from the top. The pages whose whole task is one field put focus in that field instead: the email on `/sign-in`, the first code box on `/verify`, so a phone's keyboard and its code suggestion come up at once. The first load moves nothing.
+After a route change, focus goes to the new page's title, its one `h1` inside the main landmark, so a screen reader starts there and Tab continues from the top. The pages whose whole task is a form put focus in its first field instead: the email on `/sign-in`, the first code box on `/verify`, your name on `/welcome`, so a phone's keyboard and its code suggestion come up at once. The first load does the same on those pages and moves nothing anywhere else.
 
 ## `title.ts` (`followPageTitle`)
 

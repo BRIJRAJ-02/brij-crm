@@ -39,15 +39,19 @@ describe('focusPage', () => {
     'main h1': { textContent: 'Sign in' },
     'main input[name="email"]': {},
     'main input[autocomplete="one-time-code"]': {},
+    'main input[name="memberName"]': {},
   };
 
-  it('puts focus in the email field on /sign-in and the code on /verify', () => {
+  it('puts focus in the email field on /sign-in, the code on /verify and your name on /welcome', () => {
     const signIn = fakeDocument(page);
     focusPage(signIn.asDocument, '/sign-in');
     expect(signIn.focused).toEqual(['main input[name="email"]']);
     const verify = fakeDocument(page);
     focusPage(verify.asDocument, '/verify');
     expect(verify.focused).toEqual(['main input[autocomplete="one-time-code"]']);
+    const welcome = fakeDocument(page);
+    focusPage(welcome.asDocument, '/welcome');
+    expect(welcome.focused).toEqual(['main input[name="memberName"]']);
   });
 
   it('leaves focus in a tab list, where the arrow keys chose a tab that is its own address', () => {
@@ -60,10 +64,10 @@ describe('focusPage', () => {
     expect(tabs.focused).toEqual([]);
   });
 
-  it('puts focus on the title everywhere else, and when a one field page has no field yet', () => {
-    const welcome = fakeDocument(page);
-    focusPage(welcome.asDocument, '/welcome');
-    expect(welcome.focused).toEqual(['main h1']);
+  it('puts focus on the title everywhere else, and when a form page has no field yet', () => {
+    const trash = fakeDocument(page);
+    focusPage(trash.asDocument, '/w/acme/trash');
+    expect(trash.focused).toEqual(['main h1']);
     const loading = fakeDocument({ 'main h1': { textContent: 'Sign in' } });
     focusPage(loading.asDocument, '/sign-in');
     expect(loading.focused).toEqual(['main h1']);
@@ -75,21 +79,25 @@ describe('focusFirstLoad', () => {
     'main h1': { textContent: 'Sign in' },
     'main input[name="email"]': {},
     'main input[autocomplete="one-time-code"]': {},
+    'main input[name="memberName"]': {},
   };
 
-  it('puts focus in the one field on /sign-in and /verify, as after a route change', () => {
+  it('puts focus in the first field on /sign-in, /verify and /welcome, as after a route change', () => {
     const signIn = fakeDocument(page);
     focusFirstLoad(signIn.asDocument, '/sign-in');
     expect(signIn.focused).toEqual(['main input[name="email"]']);
     const verify = fakeDocument(page);
     focusFirstLoad(verify.asDocument, '/verify');
     expect(verify.focused).toEqual(['main input[autocomplete="one-time-code"]']);
+    const welcome = fakeDocument(page);
+    focusFirstLoad(welcome.asDocument, '/welcome');
+    expect(welcome.focused).toEqual(['main input[name="memberName"]']);
   });
 
   it('leaves focus alone everywhere else, never moving it to the title', () => {
-    const welcome = fakeDocument(page);
-    focusFirstLoad(welcome.asDocument, '/welcome');
-    expect(welcome.focused).toEqual([]);
+    const trash = fakeDocument(page);
+    focusFirstLoad(trash.asDocument, '/w/acme/trash');
+    expect(trash.focused).toEqual([]);
   });
 
   it('never takes focus the person already moved', () => {

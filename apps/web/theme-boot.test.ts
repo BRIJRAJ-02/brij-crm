@@ -1,6 +1,7 @@
 // AC-7: theme-boot.js applies a saved Light or Dark choice before first paint,
 // using the same key as the controller, and follows the OS for anything else.
 // AC-11: it loads as a plain, blocking, same origin script, first in <head>.
+// F33: the theme-color metas match the surface token, so a phone's bar is the page.
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { runInNewContext } from 'node:vm';
@@ -54,5 +55,19 @@ describe('index.html', () => {
     const head = indexHtml.slice(0, indexHtml.indexOf('</head>'));
     const scripts = [...head.matchAll(/<script\b[^>]*>/g)].map((match) => match[0]);
     expect(scripts[0]).toBe('<script src="/theme-boot.js">');
+  });
+
+  it('colours the phone browser bar with the surface token, light and dark', () => {
+    const tokens = JSON.parse(readFileSync(path.join(ROOT, '../../packages/tokens/tokens.json'), 'utf8')) as {
+      color: { tokens: { name: string; value: Record<string, string> }[] };
+    };
+    const surface = tokens.color.tokens.find((token) => token.name === 'surface')?.value;
+    const metas = [...indexHtml.matchAll(/<meta name="theme-color" content="([^"]+)" media="([^"]+)" \/>/g)].map(
+      (match) => [match[2], match[1]],
+    );
+    expect(metas).toEqual([
+      ['(prefers-color-scheme: light)', surface?.light],
+      ['(prefers-color-scheme: dark)', surface?.dark],
+    ]);
   });
 });
