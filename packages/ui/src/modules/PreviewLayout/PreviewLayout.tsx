@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type ReactNode } from 'react';
+import { useEffect, useId, useRef, useState, type ReactNode } from 'react';
 import { StatusDot } from '../../atoms/StatusDot/StatusDot.tsx';
 import { Disclosure } from '../../molecules/Disclosure/Disclosure.tsx';
 import { SegmentedControl } from '../../molecules/SegmentedControl/SegmentedControl.tsx';
@@ -24,18 +24,15 @@ export interface PreviewLayoutProps {
    * fit. Leave it out on a tab with nothing to preview.
    */
   readonly preview?: ReactNode;
-  /** Above the preview: its controls (`PreviewDeviceSwitch`, a form's look Selects). */
+  /**
+   * The preview's controls, at the end of its header row beside its "Preview" heading (`PreviewDeviceSwitch`,
+   * a form's look Selects with hidden labels and `size="sm"`, their values saying what they set).
+   */
   readonly previewControls?: ReactNode;
   /** Between the controls and the preview, when what it shows needs a word ("This page is off"). */
   readonly previewNote?: ReactNode;
   /** A bar pinned to the body's foot while it has something to say: the SaveBar. */
   readonly footer?: ReactNode;
-  /**
-   * `readable` (the default) holds the body to the wide dialog's width, so
-   * fields keep a readable length; `full` lets a table take the whole width
-   * (a form's Submissions).
-   */
-  readonly bodyWidth?: 'readable' | 'full';
 }
 
 /** Where an editor's subject stands, as the TopBar's status says it. */
@@ -165,24 +162,36 @@ export function PreviewLayout({
   previewControls,
   previewNote,
   footer,
-  bodyWidth = 'readable',
 }: PreviewLayoutProps) {
   // The narrow preview is drawn only while open, so its page loads on demand.
   const [isOpen, setOpen] = useState(false);
   const hasPreview = preview !== undefined && preview !== null;
-  const column = hasPreview && (
-    <div className={styles.preview}>
-      {previewControls !== undefined && <div className={styles.controls}>{previewControls}</div>}
-      {previewNote}
-      <div className={styles.frame}>{preview}</div>
-    </div>
-  );
+  const headingId = useId();
+  // Beside the body, the column's header row names it, with the controls at its end, level with the body's
+  // first header. Under the body, in "Show preview", the Disclosure already names it: the controls sit alone.
+  const column = (isBeside: boolean) =>
+    hasPreview && (
+      <div className={styles.preview}>
+        {(isBeside || previewControls !== undefined) && (
+          <div className={styles.head}>
+            {isBeside && (
+              <h2 className={styles.heading} id={headingId}>
+                {strings.preview}
+              </h2>
+            )}
+            {previewControls !== undefined && <div className={styles.controls}>{previewControls}</div>}
+          </div>
+        )}
+        {previewNote}
+        <div className={styles.frame}>{preview}</div>
+      </div>
+    );
   return (
     <div className={styles.root}>
       <div className={styles.inner}>
         {notices}
         <div className={styles.measure}>
-          <div className={styles.body} data-preview={hasPreview || undefined} data-width={bodyWidth}>
+          <div className={styles.body} data-preview={hasPreview || undefined}>
             <div className={styles.main}>
               {children}
               {footer !== undefined && footer !== null && footer !== false && (
@@ -190,15 +199,15 @@ export function PreviewLayout({
               )}
             </div>
             {hasPreview && (
-              <aside className={styles.side} aria-label={strings.preview}>
-                {column}
+              <aside className={styles.side} aria-labelledby={headingId}>
+                {column(true)}
               </aside>
             )}
           </div>
           {hasPreview && (
             <div className={styles.below}>
               <Disclosure title={strings.showPreview} isExpanded={isOpen} onExpandedChange={setOpen}>
-                {isOpen ? column : null}
+                {isOpen ? column(false) : null}
               </Disclosure>
             </div>
           )}

@@ -400,7 +400,6 @@ export function FormEditor(props: FormEditorProps) {
   const layout = (
     <PreviewLayout
       notices={notices}
-      bodyWidth={current === 'submissions' ? 'full' : 'readable'}
       {...(current === 'form' || current === 'settings'
         ? {
             preview: <HostedFormPreview form={preview} />,

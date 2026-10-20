@@ -11,7 +11,7 @@ import {
   type ObjectSummary,
 } from '@crm/data';
 import { FORM_SLUG, publishProblem, slugFromName } from '@crm/data/forms';
-import { Button, Callout, Code, Field, Modal, Select } from '@crm/ui';
+import { Button, Callout, Field, Modal, Select } from '@crm/ui';
 import { useRouteContext } from '@tanstack/react-router';
 import { useEffect, useState } from 'react';
 import { changeQuestion, fileByLabel, fittingAttributes, publishAttributesOf } from './draft.ts';
@@ -349,11 +349,19 @@ export function PublishDialog(props: PublishDialogProps) {
       {step === 'live' && (
         <>
           <p>{strings.liveText}</p>
-          <Field label={strings.link} variant="copy" copyLabel={strings.copy} value={link} />
-          <p>{strings.wayText.embed}</p>
-          <Code variant="block" copyLabel={strings.copyEmbed}>
-            {embedSnippet(data.forms.embedUrl(), live?.publicKey ?? address, live?.draft.headline ?? draft.headline)}
-          </Code>
+          <Field label={strings.address} variant="copy" copyLabel={strings.copyLink} value={link} />
+          <Field
+            label={strings.embedSnippet}
+            hint={strings.embedText}
+            variant="copy"
+            isMultiline
+            copyLabel={strings.copyEmbed}
+            value={embedSnippet(
+              data.forms.embedUrl(),
+              live?.publicKey ?? address,
+              live?.draft.headline ?? draft.headline,
+            )}
+          />
           <p>{strings.ownFormLater}</p>
         </>
       )}

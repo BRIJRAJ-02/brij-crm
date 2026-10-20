@@ -11,10 +11,12 @@ import {
   type DataLayer,
 } from '@crm/data';
 import {
+  Button,
   Callout,
   Card,
   ChoiceChips,
   CopyButton,
+  EditorStatus,
   Field,
   HoursEditor,
   Link,
@@ -118,6 +120,27 @@ function sendable(draft: BookingPageSettings): boolean {
   );
 }
 
+/** Where the calendar note's "Not now" is kept, for this tab's session. */
+const dismissedKey = (slug: string) => `crm.booking.calendarNote.${slug}`;
+
+/** Whether the calendar note was put away in this tab's session (storage may be blocked: then it shows). */
+function readDismissed(slug: string): boolean {
+  try {
+    return globalThis.sessionStorage.getItem(dismissedKey(slug)) === '1';
+  } catch {
+    return false;
+  }
+}
+
+/** Puts the calendar note away for this tab's session, where storage allows. */
+function writeDismissed(slug: string): void {
+  try {
+    globalThis.sessionStorage.setItem(dismissedKey(slug), '1');
+  } catch {
+    // Blocked storage: the note stays away until the page reloads.
+  }
+}
+
 /** The editor. */
 export function PageEditor({ data, slug, page: loaded, locale, myHours }: PageEditorProps) {
   const [page, setPage] = useState(loaded);
@@ -138,7 +161,9 @@ export function PageEditor({ data, slug, page: loaded, locale, myHours }: PageEd
   const [device, setDevice] = useState<PreviewDevice>('phone');
   // The calendar note shows only to someone with no calendar connected yet (their own connections, spec 0024).
   const calendar = useCalendar(data.calendar.view(slug));
+  // The route primes the list, so the note is in the first paint's layout and never pushes the cards down.
   const hasNoCalendar = calendar.status === 'ready' && calendar.connections.length === 0;
+  const [isNoteDismissed, setNoteDismissed] = useState(() => readDismissed(slug));
 
   // Leaving with unsaved changes asks first, in the app and when the tab closes.
   useBlocker({
@@ -219,6 +244,13 @@ export function PageEditor({ data, slug, page: loaded, locale, myHours }: PageEd
             title={draft.title.trim() === '' ? strings.listLabel : draft.title}
             icon="link"
             crumbs={[{ id: 'links', label: strings.linksTitle, href: linksHref(slug) }]}
+            // The state, as the form editor shows its own; the Live switch beside it is what changes it.
+            meta={
+              <EditorStatus
+                tone={page.status === 'live' ? 'live' : 'paused'}
+                text={page.status === 'live' ? strings.statusLive : strings.statusOff}
+              />
+            }
           >
             <Switch
               label={strings.live}
@@ -262,13 +294,24 @@ export function PageEditor({ data, slug, page: loaded, locale, myHours }: PageEd
                     {strings.readOnlyText}
                   </Callout>
                 )}
-                {hasNoCalendar && (
+                {hasNoCalendar && !isNoteDismissed && (
                   <Callout
                     tone="info"
                     title={strings.noCalendarTitle}
-                    {...(calendar.enabled
-                      ? { actions: <Link href={calendarSettingsHref(slug)}>{strings.connectCalendar}</Link> }
-                      : {})}
+                    actions={
+                      <>
+                        {calendar.enabled && <Link href={calendarSettingsHref(slug)}>{strings.connectCalendar}</Link>}
+                        <Button
+                          variant="ghost"
+                          onPress={() => {
+                            setNoteDismissed(true);
+                            writeDismissed(slug);
+                          }}
+                        >
+                          {strings.notNow}
+                        </Button>
+                      </>
+                    }
                   >
                     {strings.noCalendar}
                   </Callout>

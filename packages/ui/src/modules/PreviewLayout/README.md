@@ -13,8 +13,8 @@ It kept this name, not the form's: it is the general one (any editor beside its 
 - **TopBar** (the shell's, above): crumbs back to the list, the name as the title, `EditorStatus` in its `meta` when the subject has a published state, and the actions.
 - **Tabs** (optional): the library Tabs, edge to edge under the TopBar, with one TabPanel per tab holding a PreviewLayout, the Captures strip's way. The first tab's label lands on the page gutter, its hairline runs the view's width, and each tab is a real tab panel for screen readers.
 - **Notices** (`notices`, Callouts), full width inside the gutter.
-- **Body**: the children stacked `space-16` apart (SettingsStack's rhythm), groups of fields as `Card`s with a live summary as each Card's description, as on a settings page. It keeps to the wide dialog's width (`size-dialog-wide`), so fields stay a readable length.
-- **Preview column**: `previewControls` over `previewNote` over the `preview` in one hairline frame with `radius-lg`, the panel's width (`size-panel`), sticky `space-24` from the top, right beside the body.
+- **Body**: the children stacked `space-16` apart (SettingsStack's rhythm), groups of fields as `Card`s with a live summary as each Card's description, as on a settings page. It takes the whole width, with the preview column beside it (owner rule, 20 October 2026: every page is full width).
+- **Preview column**: a header row (a "Preview" heading that names the column, then `previewControls` at its end, level with the body's first header; owner feedback F27), then `previewNote` over the `preview` in one hairline frame with `radius-lg`, the panel's width (`size-panel`), sticky `space-24` from the top, right beside the body.
 - **Footer** (`footer`): a bar pinned to the body's foot while given.
 
 Everything under the tabs sits inside the page gutter, `space-24`, PageColumn's, so an editor lines up with the list it opened from.
@@ -32,17 +32,16 @@ Everything under the tabs sits inside the page gutter, `space-24`, PageColumn's,
 </PreviewLayout>
 ```
 
-- **Two columns while the body keeps at least 480px** (`bp-container-md`) beside the 400px column and the gutter: a container query on the layout's own width, never the window's. Container conditions take only breakpoint tokens, so the container (`.measure`) is the width left for the body, and its children reach back over that padding to the full width. Narrower, the column hides and the preview sits under the body in a "Show preview" Disclosure, drawn only while open, so a narrow page loads no second frame until asked.
+- **Two columns while the body keeps at least 480px** (`bp-container-md`) beside the 400px column and the gutter: a container query on the layout's own width, never the window's. Container conditions take only breakpoint tokens, so the container (`.measure`) is the width left for the body, and its children reach back over that padding to the full width. Narrower, the column hides and the preview sits under the body in a "Show preview" Disclosure (the controls alone above the frame, the Disclosure naming it), drawn only while open, so a narrow page loads no second frame until asked.
 - **`footer` is the SaveBar's slot.** Pass the bar while there is something to save and leave it out otherwise; it sticks `space-16` above the view's foot while the body scrolls.
 - **`preview`** is a `PreviewFrame` or a drawn preview (`HostedFormPreview`). Leave it out on a tab with nothing to preview.
-- **`bodyWidth="full"`** lets a table take the whole width (a form's Submissions).
 - **`PreviewFrame`** loads `src` in a frame titled "Preview of {title}", laid out at the device's width (phone 390, tablet 768, desktop 1280) and scaled to fit, so nothing scrolls sideways. It loads again when `version` changes and posts `draft` (`{ type: 'crm:preview', draft }`, same origin only) when it changes and when the frame loads. The frame is `inert` and out of the tab order. What it shows is the public page itself, untouched.
 - **`PreviewDeviceSwitch`** is the Phone, Tablet and Desktop SegmentedControl for `previewControls`; the editor holds the device.
 - **`EditorStatus`** is the TopBar's status: a StatusDot, green when live, orange when changed since publishing, gray when not published or paused, and its words always say it. It is an editor's own state, not an attribute value, so StatusDot draws it here rather than through the field set.
 
 ## States
 
-With and without tabs (around it), notices, preview controls, a note and a footer; wide and narrow (the Disclosure closed and open); readable and full body; phone, tablet and desktop; each status tone. Loading, empty, error and read only are the body's (Skeleton, EmptyState, Callout, read only Fields).
+With and without tabs (around it), notices, preview controls, a note and a footer; wide and narrow (the Disclosure closed and open); phone, tablet and desktop; each status tone. Loading, empty, error and read only are the body's (Skeleton, EmptyState, Callout, read only Fields).
 
 ## Keyboard
 

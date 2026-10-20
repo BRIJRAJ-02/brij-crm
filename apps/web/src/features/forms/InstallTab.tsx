@@ -3,7 +3,7 @@
 // Main task: pick Link, Embed or Your own HTML, then copy what it gives; for your own HTML, list the sites that may post.
 // Leaves out: analytics, a QR code, and signing posts for a site (the site's server does that with the secret).
 import type { FormView } from '@crm/data';
-import { Button, Card, Code, Field, SegmentedControl, Switch } from '@crm/ui';
+import { Button, Card, Disclosure, Field, SegmentedControl, Switch } from '@crm/ui';
 import { useRouteContext } from '@tanstack/react-router';
 import { useState } from 'react';
 import { firstRefusal } from './refusals.ts';
@@ -80,14 +80,19 @@ export function InstallTab({ slug, form, isReadOnly, onFormChange }: InstallTabP
           </>
         )}
         {way === 'embed' && (
-          <Code variant="block" copyLabel={strings.copyEmbed}>
-            {embed}
-          </Code>
+          <Field label={strings.embedSnippet} variant="copy" isMultiline copyLabel={strings.copyEmbed} value={embed} />
         )}
         {way === 'own' && (
-          <Code variant="block" isClamped copyLabel={strings.copyHtml}>
-            {own}
-          </Code>
+          // The form HTML runs long: it waits behind a Disclosure, and its copy row's Copy takes it all.
+          <Disclosure title={strings.showFormHtml}>
+            <Field
+              label={strings.ownFormSnippet}
+              variant="copy"
+              isMultiline
+              copyLabel={strings.copyFormHtml}
+              value={own}
+            />
+          </Disclosure>
         )}
       </Card>
       {way === 'own' && (

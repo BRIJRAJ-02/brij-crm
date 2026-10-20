@@ -81,19 +81,21 @@ function FormEditorExample() {
         <>
           <Select
             label="Colour"
+            isLabelHidden
             size="sm"
             items={[
-              { id: 'light', label: 'Light' },
-              { id: 'dark', label: 'Dark' },
+              { id: 'light', label: 'Light form' },
+              { id: 'dark', label: 'Dark form' },
             ]}
             defaultValue="light"
           />
           <Select
             label="Corners"
+            isLabelHidden
             size="sm"
             items={[
-              { id: 'rounded', label: 'Rounded' },
-              { id: 'square', label: 'Square' },
+              { id: 'rounded', label: 'Rounded corners' },
+              { id: 'square', label: 'Square corners' },
             ]}
             defaultValue="rounded"
           />
@@ -138,6 +140,12 @@ export const Default: Story = {
 /** The form editor: tabs, a refused publish's Callout, and the drawn form with its look. */
 export const WithTabs: Story = {
   render: () => <FormEditorExample />,
+  play: async ({ canvas }) => {
+    // The column's header names it, with the look's Selects at its end.
+    await expect(canvas.getByRole('complementary', { name: 'Preview' })).toBeInTheDocument();
+    await expect(canvas.getByRole('heading', { name: 'Preview', level: 2 })).toBeInTheDocument();
+    await expect(canvas.getByRole('button', { name: /Rounded corners/ })).toBeInTheDocument();
+  },
 };
 
 /** Unsaved changes: the footer bar (the SaveBar's slot) pinned to the body's foot. */
@@ -195,11 +203,11 @@ export const WithNote: Story = {
   ),
 };
 
-/** The whole width for a table, with no preview (a form's Submissions). */
+/** No preview: the body takes the whole width (a form's Install and Submissions). */
 export const FullWidth: Story = {
   render: () => (
     <Stage height="page" width="fill">
-      <PreviewLayout bodyWidth="full">
+      <PreviewLayout>
         <Card title="Submissions" description="No enquiries yet">
           <Field label="Search" value="" />
         </Card>

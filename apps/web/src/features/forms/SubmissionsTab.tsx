@@ -20,9 +20,9 @@ import {
   Panel,
   RecordChip,
   RelativeTime,
-  SectionBar,
   Select,
   Table,
+  Toolbar,
   Link,
   TruncatedText,
   type TableColumn,
@@ -185,23 +185,25 @@ export function SubmissionsTab({ slug, formId, objects, page, state, open, canMa
 
   return (
     <>
-      <SectionBar
-        start={
-          // A Select, not segments: five states fit any width, and more can join.
-          <Select
-            label={strings.filterStates}
-            size="sm"
-            items={[
-              { id: ALL, label: strings.allStates },
-              ...FILTERS.map((each) => ({ id: each, label: strings.states[each] })),
-            ]}
-            value={state ?? ALL}
-            onChange={(value) => {
-              go(undefined, value === null || value === ALL ? undefined : (value as SubmissionState));
-            }}
-          />
-        }
-      />
+      {/* Five states are too many for segments (two to four): a filter Select, as Trash's object filter. */}
+      <Toolbar label={strings.filterLabel}>
+        <Select
+          label={strings.filterStates}
+          isLabelHidden
+          size="sm"
+          items={[
+            { id: ALL, label: strings.allStates },
+            ...FILTERS.map((each) => ({ id: each, label: strings.states[each] })),
+          ]}
+          value={state ?? ALL}
+          onChange={(value) => {
+            go(
+              undefined,
+              FILTERS.find((each) => each === value),
+            );
+          }}
+        />
+      </Toolbar>
       <Table
         label={strings.tabSubmissions}
         columns={COLUMNS}

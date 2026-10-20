@@ -6,8 +6,8 @@
    that is less), and its children reach back over that padding to the full
    width. When the body would keep at least bp-container-md (480px), the
    preview sits in a sticky column beside it; under that the column hides and
-   the preview waits under the body in a Disclosure. The body keeps to the
-   wide dialog's width unless it holds a table. The preview hangs in one
+   the preview waits under the body in a Disclosure. The body takes the
+   whole width (every page is full width). The preview hangs in one
    hairline frame with lg corners. The footer bar sticks to the body's foot. */
 @layer components {
   .root {
@@ -43,13 +43,9 @@
 
   .body {
     display: grid;
-    grid-template-columns: minmax(0, var(--size-dialog-wide));
+    grid-template-columns: minmax(0, 1fr);
     gap: var(--space-16);
     align-items: start;
-  }
-
-  .body[data-width='full'] {
-    grid-template-columns: minmax(0, 1fr);
   }
 
   .main {
@@ -80,21 +76,34 @@
     display: none;
   }
 
-  .below {
-    max-inline-size: var(--size-dialog-wide);
-  }
-
   .preview {
     display: flex;
     flex-direction: column;
     gap: var(--space-8);
   }
 
-  .controls {
-    display: grid;
-    grid-auto-columns: minmax(0, 1fr);
-    grid-auto-flow: column;
+  /* The column's header row: its heading, then the controls at the end, as tall as an input so it lines up with
+     the body's first header. */
+  .head {
+    display: flex;
+    flex-wrap: wrap;
     gap: var(--space-8);
+    align-items: center;
+    min-block-size: var(--size-input);
+  }
+
+  .heading {
+    flex: 1;
+    margin: 0;
+    color: var(--text);
+    font: var(--text-title);
+    letter-spacing: var(--tracking-title);
+  }
+
+  .controls {
+    display: flex;
+    gap: var(--space-8);
+    align-items: center;
   }
 
   .frame {
@@ -129,7 +138,7 @@
 
   @container (width >= 480px) {
     .body[data-preview] {
-      grid-template-columns: minmax(0, var(--size-dialog-wide)) var(--size-panel);
+      grid-template-columns: minmax(0, 1fr) var(--size-panel);
     }
 
     .side {

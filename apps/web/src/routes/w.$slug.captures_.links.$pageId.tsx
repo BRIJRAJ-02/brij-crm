@@ -16,6 +16,12 @@ export const Route = createFileRoute('/w/$slug/captures_/links/$pageId')({
       const [page, mine] = await Promise.all([
         context.data.bookingPages.get(params.slug, params.pageId),
         context.data.access.mine(params.slug),
+        // The reader's calendars, primed so the editor's calendar note is in its first paint; a failed read just
+        // leaves the note out.
+        context.data.calendar
+          .view(params.slug)
+          .ready()
+          .catch(() => undefined),
       ]);
       const myHours =
         page.ownerMemberId === mine.memberId

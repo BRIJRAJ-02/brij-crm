@@ -37,8 +37,6 @@ Props: `children` (the label, a string) or `icon` with `label` (icon only); `ico
 - `form` is the `id` of the form a `type="submit"` button sends when it sits outside it: a Modal's footer submitting the Form in its body (see Form's README).
 - `aria-describedby` points at text that says more about the button, most often the line under a disabled one that says when it turns on ("You can send another in 42 seconds."), so a screen reader reads the two together.
 
-- `aria-expanded` and `aria-controls` pass through for a button that opens something in the page (Code's Show all).
-
 ## States
 
 - **Hover**: `surface-hover` (the primary darkens to `accent-hover`), only on devices that can hover.
