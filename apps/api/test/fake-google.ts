@@ -6,7 +6,8 @@
 // person, as base64url JSON ({ sub, email, name }); this answers the code
 // exchange with an id token carrying those claims, verified. Every other
 // request goes to the real fetch. It refuses to load outside APP_ENV=local,
-// and nothing but a flow's api start ever imports it.
+// and nothing but a flow's api start ever imports it. It answers only the
+// sign in client's exchange (GOOGLE_CLIENT_ID), at the token endpoint exactly.
 import { Buffer } from 'node:buffer';
 import * as z from 'zod';
 
@@ -17,7 +18,7 @@ const TOKEN_ENDPOINT = 'https://oauth2.googleapis.com/token';
 const FakeGooglePerson = z.object({ sub: z.string().min(1), email: z.email(), name: z.string().min(1) });
 type FakeGooglePerson = z.infer<typeof FakeGooglePerson>;
 
-if (process.env.APP_ENV !== 'local') {
+if (process.env.APP_ENV !== 'local' || process.env.NODE_ENV === 'production') {
   throw new Error('The fake Google is for local flows only (APP_ENV=local).');
 }
 
@@ -52,8 +53,13 @@ const realFetch = globalThis.fetch;
 
 globalThis.fetch = async (input: string | URL | Request, init?: RequestInit): Promise<Response> => {
   const url = input instanceof Request ? input.url : String(input);
-  if (!url.startsWith(TOKEN_ENDPOINT)) return realFetch(input, init);
+  const { origin, pathname } = new URL(url);
+  if (`${origin}${pathname}` !== TOKEN_ENDPOINT) return realFetch(input, init);
   const form = new URLSearchParams(input instanceof Request ? await input.clone().text() : bodyText(init?.body));
+  // Only sign in's client: anything else (calendar connect's code exchange) is refused, never handed a person.
+  if (form.get('client_id') !== process.env.GOOGLE_CLIENT_ID) {
+    return Response.json({ error: 'invalid_client' }, { status: 401 });
+  }
   const person = FakeGooglePerson.safeParse(
     JSON.parse(Buffer.from(form.get('code') ?? '', 'base64url').toString('utf8') || 'null'),
   );
