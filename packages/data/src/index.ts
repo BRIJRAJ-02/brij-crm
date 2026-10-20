@@ -71,6 +71,8 @@ import {
   upsertFirst,
   type CaptureListView,
 } from './captures/list.ts';
+import type { NavOperation, NavUniverse } from '@crm/contracts/navigation';
+import { createNavStore, NAV_WORDS, type NavSource } from './navigation/store.ts';
 import { draftParam, isSameQuery, readDraft, type DraftQuery } from './views/draft.ts';
 import {
   createViewsStore,
@@ -231,6 +233,25 @@ export {
   type SignInCode,
 } from './errors.ts';
 export type { FetchLike } from './fetch.ts';
+export type { NavFavourite, NavState } from '@crm/contracts';
+export type { NavSnapshot, NavSource } from './navigation/store.ts';
+export {
+  EMPTY_NAV_UNIVERSE,
+  MAX_NAV_FAVOURITES,
+  moveIndexFor,
+  NAV_SCHEDULING_PAGES,
+  NAV_SECTIONS,
+  navKey,
+  sectionItems,
+  sectionOrder,
+  type NavEntry,
+  type NavItemKind,
+  type NavOperation,
+  type NavPage,
+  type NavPrefs,
+  type NavSectionKey,
+  type NavUniverse,
+} from '@crm/contracts/navigation';
 export type { JobsScope, JobsSnapshot, JobsView, TestJobSettings } from './jobs/store.ts';
 export { purgeLeftOf, type PurgeLeftEntry } from './jobs/left.ts';
 export type { View, ViewColumn, ViewConfig, ViewKind, ViewLayout, ViewSummary, ViewVisibility } from '@crm/contracts';
@@ -707,6 +728,7 @@ export function createDataLayer({
     });
     jobs.clear();
     views.clear();
+    nav.clear();
     void activity?.then((feeds) => {
       feeds.clear();
     });
@@ -1163,6 +1185,7 @@ export function createDataLayer({
   router.onResync((workspace) => {
     jobs.resync(workspace);
     views.resync(workspace);
+    nav.resync(workspace);
     void trash?.then((held) => {
       held.reload(workspace);
     });
@@ -1370,6 +1393,46 @@ export function createDataLayer({
     onLayoutRefused: (error) => {
       notify({ tone: 'danger', message: error.message });
     },
+  });
+
+  // The member's own sidebar (spec 0034): one copy per workspace, changes shown at once and sent one at a time,
+  // read again when another tab of theirs changes it (`nav`), and when a starred view or record may have changed.
+  const nav = createNavStore({
+    api: {
+      get: (workspace) => beforeRead(workspace).then(() => call((options) => api.nav.get({ workspace }, options))),
+      change: (workspace, op, mutationId) => call((options) => api.nav.change({ workspace, op, mutationId }, options)),
+    },
+    mintId,
+    mutations,
+    watch,
+    namesMe: (workspace, memberIds) => namesMe(workspace, memberIds),
+    onRefused: (error, retry) => {
+      notify({ tone: 'danger', message: error.message, action: { label: NAV_WORDS.retry, onAction: retry } });
+    },
+  });
+  /** One workspace's sidebar as `useNav` holds it: the same object each time, so React keeps one subscription. */
+  const navSources = new Map<string, NavSource>();
+  const navSource = (workspace: string): NavSource => {
+    const found = navSources.get(workspace);
+    if (found !== undefined) return found;
+    const made: NavSource = {
+      retain: () => nav.retain(workspace),
+      subscribe: (listener) => nav.subscribe(workspace, listener),
+      getSnapshot: () => nav.snapshot(workspace),
+    };
+    navSources.set(workspace, made);
+    return made;
+  };
+  router.on('nav', (workspace, event) => {
+    nav.navChanged(workspace, event);
+  });
+  router.on('views', (workspace, event) => {
+    nav.favouritesMayHaveChanged(workspace, event.viewIds, 'view', event.coarse === true);
+  });
+  router.on('records', (workspace, event) => {
+    // Only a record made unreadable or readable again moves a favourite: deleted, restored, or a coarse change.
+    const lifecycle = [...(event.deletedIds ?? []), ...(event.restoredIds ?? []), ...event.recordIds];
+    nav.favouritesMayHaveChanged(workspace, lifecycle, 'record', event.coarse === true);
   });
 
   /**
@@ -3208,6 +3271,20 @@ export function createDataLayer({
        * Answers whether it landed.
        */
       confirm: (workspace: string, jobId: string): Promise<boolean> => jobs.confirm(workspace, jobId),
+    },
+    /**
+     * The member's own sidebar (spec 0034): `load` for the workspace route's
+     * loader (the first paint has their order, AC-936), `source` for
+     * `useNav`, and `change` to apply one operation at once and send it
+     * (rolled back with a toast and Retry on a refusal, AC-937).
+     */
+    nav: {
+      load: (workspace: string) => nav.load(workspace),
+      source: (workspace: string): NavSource => navSource(workspace),
+      change: (workspace: string, op: NavOperation, universe: NavUniverse): void => {
+        nav.change(workspace, op, universe);
+      },
+      reload: (workspace: string) => nav.reload(workspace),
     },
     views: {
       /**

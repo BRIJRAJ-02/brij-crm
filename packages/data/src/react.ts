@@ -11,6 +11,7 @@ import type { CaptureListState, CaptureListView } from './captures/list.ts';
 import type { JobView } from '@crm/contracts';
 import type { JobsSnapshot, JobsView } from './jobs/store.ts';
 import type { LiveStatus } from './live/live.ts';
+import type { NavSnapshot, NavSource } from './navigation/store.ts';
 import type { PendingOptions } from './options.ts';
 import type { RecordsView, ViewReader, ViewState } from './records/layer.ts';
 import type { RecordState, RecordSubscription } from './records/one.ts';
@@ -328,4 +329,13 @@ export function useNoteTotal(list: NoteList): NoteListState['total'] {
 /** An open note (the note window), re-rendering as it saves. Held while the window is mounted. */
 export function useNoteSession(session: NoteSession): NoteSessionState {
   return useRetained(session);
+}
+
+/**
+ * The member's own sidebar in a workspace (spec 0034), with their changes
+ * waiting for an answer already applied, re-rendering when it changes. Held
+ * while the frame is mounted, so another tab's change reaches it live.
+ */
+export function useNav(source: NavSource): NavSnapshot {
+  return useRetained(source);
 }

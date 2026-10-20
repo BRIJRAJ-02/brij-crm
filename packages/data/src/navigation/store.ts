@@ -22,6 +22,9 @@ import { toDataError, type DataError } from '../errors.ts';
 import type { MutationLog } from '../live/mutations.ts';
 import type { LiveEventOf } from '../live/router.ts';
 
+/** The store's own words: the Retry on a refused change's toast. */
+export const NAV_WORDS = { retry: 'Retry' } as const;
+
 /** The least time between two coarse rereads of one workspace's sidebar (a burst of favourite changes). */
 export const NAV_REREAD_MS = 1000;
 
@@ -36,6 +39,13 @@ export type NavSnapshot =
   | { readonly status: 'loading' }
   | { readonly status: 'error'; readonly error: DataError }
   | { readonly status: 'ready'; readonly nav: NavState };
+
+/** One workspace's sidebar as a screen holds it (`useNav`). */
+export interface NavSource {
+  readonly retain: () => () => void;
+  readonly subscribe: (listener: () => void) => () => void;
+  readonly getSnapshot: () => NavSnapshot;
+}
 
 /** Dependencies, passed in by the layer. */
 export interface NavStoreDeps {
