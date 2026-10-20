@@ -1,10 +1,10 @@
 # VisitorBar
 
-The bar on top of a booking page (spec 0028, AC-720 to AC-726). A visitor we don't know is asked to connect their calendar ("See when you're both free", with what it reads and Connect calendar with Google's mark). A visitor we know (signed in to Timefix, or the Google account they connected) sees who they're booking as, whether their calendar is laid over the times, Show all times, and Not you.
+The visitor's tag on top of a booking page (spec 0028, AC-720 to AC-726): small, at the end of the row above the card (the owner, 20 October 2026: "a bit small instead of a whole bar on top", "top right"). A visitor we don't know gets Connect calendar with Google's mark; its tooltip says what it reads. A visitor we know gets their name and their calendar's state ("Ada Lovelace · Both free"), which opens a menu: who they're booking as, Show all times, Connect again (a guest whose calendar couldn't be read) and Not you.
 
 ## Why it exists
 
-New. Callout says something about the page in a tone (info, warning, danger) and goes when the state goes; this bar is the visitor's own standing control, there for the whole visit, holding a person, a switch and a link out. Card was the closest frame, but its header and body sections and its padding are a settings panel's; this is one row that must sit level with BookingFrame's card, so it draws that card's own edge one step quieter. BookingFrame's `banner` slot holds it.
+New. Callout says something about the page in a tone and goes when the state goes; this is the visitor's own standing control for the whole visit. It is built from the library's Button, ButtonLink, Tooltip and Menu; its stylesheet only places the control at the row's end, holds its space while loading and fades it in. BookingFrame's `banner` slot holds it.
 
 ## Use
 
@@ -15,23 +15,19 @@ New. Callout says something about the page in a tone (info, warning, danger) and
 
 ## States
 
-- Loading (`isLoading`): a Skeleton in the bar's space, so the page doesn't jump when it fills.
-- Unknown visitor: the calendar tile, the invitation, Connect calendar. With no `connectHref` the page leaves the bar out.
-- `on`: "Showing times you're both free", or with Show all times on, "Showing all times. Busy ones are marked."
-- `none`: "Booking as Ada" and their email.
-- `unreachable`: "Couldn't read your calendar. Showing all times.", with Connect again for a guest (`connectHref`).
-- `needs-reconnect`: says where to reconnect it in Timefix (Settings, then Calendar).
-- Not you, hover, focus, pressed (from Button, ButtonLink and Switch).
+- Loading (`isLoading`): a Skeleton in the tag's space, so the page doesn't jump when it fills.
+- Unknown visitor: Connect calendar. With no `connectHref` nothing is drawn.
+- `on`: "· Both free", or with Show all times on, "· All times".
+- `none`: their name alone.
+- `unreachable`: "· Calendar unavailable", with Connect again in the menu for a guest.
+- `needs-reconnect`: "· Reconnect calendar"; the status says where (Settings, then Calendar).
+- Hover, focus, pressed and open come from Button and Menu.
 
-The headline is a polite status region, so turning Show all times on is said (and only that, not who you are again). Not you moves focus to Connect calendar, or to the bar.
+A visually hidden status says the state in a sentence as it changes ("Showing all times. Busy ones are marked."), never who you are again. Not you moves focus to Connect calendar, or to the tag's place.
 
 ## Keyboard
 
-Tab reaches Show all times, Connect calendar and Not you, in that order; Space toggles the switch, Enter follows or presses.
-
-## Layout
-
-It fades in with no movement. One line in a wide card (the person, the words, then the controls at the end); under 480px of its own width the controls drop under the words.
+Tab reaches the tag; Enter, Space or Down opens the menu; the arrows move; Enter chooses; Escape closes.
 
 ## Differences from the artifact
 

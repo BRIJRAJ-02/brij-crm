@@ -1,10 +1,11 @@
 import { useRef } from 'react';
 import { Avatar } from '../../atoms/Avatar/Avatar.tsx';
 import { Button, ButtonLink } from '../../atoms/Button/Button.tsx';
-import { Icon } from '../../atoms/Icon/Icon.tsx';
 import { Skeleton } from '../../atoms/Skeleton/Skeleton.tsx';
-import { Switch } from '../../atoms/Switch/Switch.tsx';
+import { Tooltip } from '../../atoms/Tooltip/Tooltip.tsx';
+import { VisuallyHidden } from '../../atoms/VisuallyHidden/VisuallyHidden.tsx';
 import { focusLater } from '../../lib/focus-later.ts';
+import { Menu, MenuItem, MenuSeparator, MenuTrigger } from '../../molecules/Menu/Menu.tsx';
 import styles from './VisitorBar.module.css';
 import { strings } from './strings.ts';
 
@@ -31,15 +32,28 @@ export interface VisitorBarProps {
   /** Every time shows, the ones the visitor is busy for marked. */
   readonly showAll?: boolean;
   readonly onShowAllChange?: (showAll: boolean) => void;
-  /** "Not you?": forget who this is for the visit. Focus moves to the bar's next state. */
+  /** "Not you?": forget who this is for the visit. Focus moves to the tag's next state. */
   readonly onNotYou?: () => void;
-  /** While the page asks who the visitor is: the bar's space held, so nothing jumps when it fills. */
+  /** While the page asks who the visitor is: the tag's space held, so nothing jumps when it fills. */
   readonly isLoading?: boolean;
 }
 
-/** The bar's first line, by what the page knows. */
-function headline(person: VisitorBarPerson | undefined, calendar: VisitorBarCalendar, showAll: boolean): string {
-  if (person === undefined) return strings.invite;
+/** What the tag says after the visitor's name. */
+function stateLabel(calendar: VisitorBarCalendar, showAll: boolean): string | undefined {
+  switch (calendar) {
+    case 'on':
+      return showAll ? strings.tagAll : strings.tagBothFree;
+    case 'unreachable':
+      return strings.tagUnreachable;
+    case 'needs-reconnect':
+      return strings.tagReconnect;
+    case 'none':
+      return undefined;
+  }
+}
+
+/** The sentence a screen reader hears as the state changes. */
+function headline(calendar: VisitorBarCalendar, showAll: boolean, name: string): string {
   switch (calendar) {
     case 'on':
       return showAll ? strings.showingAll : strings.bothFree;
@@ -48,15 +62,16 @@ function headline(person: VisitorBarPerson | undefined, calendar: VisitorBarCale
     case 'needs-reconnect':
       return strings.reconnect;
     case 'none':
-      return strings.bookingAs(person.name === '' ? person.email : person.name);
+      return strings.bookingAs(name);
   }
 }
 
 /**
- * The bar on top of a booking page (spec 0028, AC-720 to AC-726): a visitor
- * we don't know is asked to connect their calendar, with what it reads; a
- * visitor we know sees who they're booking as, whether their calendar is
- * laid over the times, Show all times, and Not you.
+ * The visitor's tag on top of a booking page (spec 0028, AC-720 to AC-726),
+ * small, at the end of the row above the card. A visitor we don't know gets
+ * Connect calendar (Google's mark; what it reads in its tooltip). A visitor we
+ * know gets their name and their calendar's state, opening a menu with who
+ * they're booking as, Show all times, Connect again and Not you.
  */
 export function VisitorBar({
   person,
@@ -67,71 +82,74 @@ export function VisitorBar({
   onNotYou,
   isLoading = false,
 }: VisitorBarProps) {
-  const root = useRef<HTMLElement>(null);
+  const root = useRef<HTMLDivElement>(null);
   if (isLoading) {
     return (
-      <section className={styles.root} aria-label={strings.label} aria-busy="true">
-        <div className={styles.bar}>
-          <span className={styles.lead}>
-            <Skeleton shape="circle" />
-          </span>
-          <span className={styles.body}>
-            <Skeleton lines={2} width="medium" />
-          </span>
-        </div>
-      </section>
-    );
-  }
-  const title = headline(person, calendar, showAll);
-  const detail =
-    person === undefined
-      ? strings.readsOnly
-      : calendar === 'none'
-        ? person.email
-        : strings.bookingAs(person.name === '' ? person.email : person.name);
-  const canConnect = connectHref !== undefined && (person === undefined || calendar === 'unreachable');
-  return (
-    <section ref={root} className={styles.root} aria-label={strings.label} tabIndex={-1}>
-      <div className={styles.bar}>
-        <span className={styles.lead}>
-          {person === undefined ? (
-            <span className={styles.tile}>
-              <Icon name="calendar" size="sm" tone="muted" />
-            </span>
-          ) : (
-            <Avatar name={person.name === '' ? person.email : person.name} size="lg" isDecorative />
-          )}
-        </span>
-        <span className={styles.body}>
-          {/* Only the headline is live: turning Show all times on says what changed, not who you are again. */}
-          <span className={styles.title} role="status">
-            {title}
-          </span>
-          <span className={styles.detail}>{detail}</span>
-        </span>
-        <span className={styles.actions}>
-          {person !== undefined && calendar === 'on' && onShowAllChange !== undefined && (
-            <Switch label={strings.showAll} isSelected={showAll} onChange={onShowAllChange} />
-          )}
-          {canConnect && (
-            <ButtonLink href={connectHref} provider="google" variant={person === undefined ? 'secondary' : 'ghost'}>
-              {person === undefined ? strings.connect : strings.connectAgain}
-            </ButtonLink>
-          )}
-          {person !== undefined && onNotYou !== undefined && (
-            <Button
-              variant="ghost"
-              onPress={() => {
-                onNotYou();
-                // The button goes with the person: focus the bar's next control, or the bar itself.
-                focusLater(() => root.current?.querySelector<HTMLElement>('a[href]') ?? root.current);
-              }}
-            >
-              {strings.notYou}
-            </Button>
-          )}
+      <div className={styles.root} aria-busy="true">
+        <span className={styles.placeholder}>
+          <Skeleton width="short" />
         </span>
       </div>
-    </section>
+    );
+  }
+  if (person === undefined) {
+    if (connectHref === undefined) return null;
+    return (
+      <div ref={root} className={styles.root} tabIndex={-1}>
+        <VisuallyHidden>{strings.invite}</VisuallyHidden>
+        <Tooltip content={strings.readsOnly}>
+          <ButtonLink href={connectHref} provider="google">
+            {strings.connect}
+          </ButtonLink>
+        </Tooltip>
+      </div>
+    );
+  }
+  const name = person.name === '' ? person.email : person.name;
+  const state = stateLabel(calendar, showAll);
+  const canConnectAgain = connectHref !== undefined && calendar === 'unreachable';
+  const notYou = () => {
+    onNotYou?.();
+    // The tag changes with the person: focus Connect calendar, or the tag's place.
+    focusLater(() => root.current?.querySelector<HTMLElement>('a[href]') ?? root.current);
+  };
+  return (
+    <div ref={root} className={styles.root} tabIndex={-1}>
+      {/* Only the state is live: turning Show all times on says what changed, not who you are again. */}
+      <VisuallyHidden>
+        <span role="status">{headline(calendar, showAll, name)}</span>
+      </VisuallyHidden>
+      <MenuTrigger>
+        <Button icon={calendar === 'on' ? 'calendar-check' : 'calendar-days'} iconRight="chevron-down">
+          {state === undefined ? name : strings.tag(name, state)}
+        </Button>
+        <Menu label={strings.label} placement="bottom end">
+          <MenuItem
+            id="who"
+            leading={<Avatar name={name} size="sm" isDecorative />}
+            description={person.email}
+            isDisabled
+          >
+            {strings.bookingAs(name)}
+          </MenuItem>
+          <MenuSeparator />
+          {calendar === 'on' && onShowAllChange !== undefined ? (
+            <MenuItem id="all" icon="calendar-days" isChecked={showAll} onAction={() => onShowAllChange(!showAll)}>
+              {strings.showAll}
+            </MenuItem>
+          ) : null}
+          {canConnectAgain ? (
+            <MenuItem id="again" icon="refresh-cw" href={connectHref}>
+              {strings.connectAgain}
+            </MenuItem>
+          ) : null}
+          {onNotYou === undefined ? null : (
+            <MenuItem id="not-you" icon="user-x" onAction={notYou}>
+              {strings.notYou}
+            </MenuItem>
+          )}
+        </Menu>
+      </MenuTrigger>
+    </div>
   );
 }

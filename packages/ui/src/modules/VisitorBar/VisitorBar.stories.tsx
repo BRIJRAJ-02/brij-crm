@@ -1,15 +1,16 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
 import { useState } from 'react';
-import { expect, fn, userEvent, waitFor } from 'storybook/test';
+import { expect, fn, screen, userEvent, waitFor } from 'storybook/test';
 import { Stage } from '../../workbench/Stage/Stage.tsx';
 import { VisitorBar } from './VisitorBar.tsx';
 
 const ADA = { name: 'Ada Lovelace', email: 'ada@example.com' };
+const CONNECT = '/api/public/booking/abcdefghijklmnop/connect?return=%2Fb%2Fabcdefghijklmnop';
 
 const meta = {
   title: 'Modules/VisitorBar',
   component: VisitorBar,
-  args: { connectHref: '/api/public/booking/abcdefghijklmnop/connect?return=%2Fb%2Fabcdefghijklmnop' },
+  args: { connectHref: CONNECT },
   render: (args) => (
     <Stage width="fill">
       <VisitorBar {...args} />
@@ -20,19 +21,15 @@ const meta = {
 export default meta;
 type Story = StoryObj<typeof meta>;
 
-/** A visitor we don't know: connect a calendar to see when you're both free. */
+/** A visitor we don't know: Connect calendar, small, at the end of the row. */
 export const Invite: Story = {
   parameters: { crm: { preview: true } },
   play: async ({ canvas }) => {
-    await waitFor(() => expect(canvas.getByText('See when you’re both free')).toBeVisible());
-    await expect(canvas.getByRole('link', { name: 'Connect calendar' })).toHaveAttribute(
-      'href',
-      '/api/public/booking/abcdefghijklmnop/connect?return=%2Fb%2Fabcdefghijklmnop',
-    );
+    await expect(canvas.getByRole('link', { name: 'Connect calendar' })).toHaveAttribute('href', CONNECT);
   },
 };
 
-/** Their calendar is on: only times you're both free, and Show all times. */
+/** Their calendar is on: the tag opens a menu with Show all times and Not you. */
 export const BothFree: Story = {
   args: { person: ADA, calendar: 'on', onNotYou: fn() },
   render: function Render(args) {
@@ -44,29 +41,33 @@ export const BothFree: Story = {
     );
   },
   play: async ({ canvas, args }) => {
-    await waitFor(() => expect(canvas.getByText('Showing times you’re both free')).toBeVisible());
-    await userEvent.click(canvas.getByRole('switch', { name: 'Show all times' }));
-    await waitFor(() => expect(canvas.getByText('Showing all times. Busy ones are marked.')).toBeVisible());
-    await userEvent.click(canvas.getByRole('button', { name: 'Not you?' }));
+    const tag = canvas.getByRole('button', { name: /Ada Lovelace · Both free/ });
+    await userEvent.click(tag);
+    await userEvent.click(await screen.findByRole('menuitem', { name: /Show all times/ }));
+    await waitFor(() => expect(canvas.getByRole('button', { name: /Ada Lovelace · All times/ })).toBeVisible());
+    await expect(canvas.getByRole('status')).toHaveTextContent('Showing all times. Busy ones are marked.');
+    await userEvent.click(canvas.getByRole('button', { name: /Ada Lovelace/ }));
+    await userEvent.click(await screen.findByRole('menuitem', { name: 'Not you?' }));
     await expect(args.onNotYou).toHaveBeenCalledOnce();
   },
 };
 
-/** Signed in, with no calendar connected: who they're booking as. */
+/** Signed in, with no calendar connected: just who they're booking as. */
 export const Known: Story = {
   args: { person: ADA, calendar: 'none', onNotYou: fn() },
   play: async ({ canvas }) => {
-    await waitFor(() => expect(canvas.getByText('Booking as Ada Lovelace')).toBeVisible());
-    await expect(canvas.queryByRole('link')).toBeNull();
+    await waitFor(() => expect(canvas.getByRole('button', { name: /^Ada Lovelace/ })).toBeVisible());
   },
 };
 
-/** Their calendar couldn't be read: every time shows, and a guest may connect again. */
+/** Their calendar couldn't be read: every time shows, and a guest may connect again from the menu. */
 export const Unreachable: Story = {
   args: { person: ADA, calendar: 'unreachable', onNotYou: fn() },
   play: async ({ canvas }) => {
-    await waitFor(() => expect(canvas.getByText('Couldn’t read your calendar. Showing all times.')).toBeVisible());
-    await waitFor(() => expect(canvas.getByRole('link', { name: 'Connect again' })).toBeVisible());
+    await userEvent.click(canvas.getByRole('button', { name: /Calendar unavailable/ }));
+    const again = await screen.findByRole('menuitem', { name: 'Connect again' });
+    await waitFor(() => expect(again).toBeVisible());
+    await userEvent.keyboard('{Escape}');
   },
 };
 
@@ -75,18 +76,7 @@ export const NeedsReconnect: Story = {
   args: { person: ADA, calendar: 'needs-reconnect', onNotYou: fn(), connectHref: undefined },
 };
 
-/** On a phone: the controls drop under the words. */
-export const Narrow: Story = {
-  args: { person: ADA, calendar: 'on', onNotYou: fn(), onShowAllChange: fn() },
-  parameters: { crm: { screenshot: true } },
-  render: (args) => (
-    <Stage width="narrow">
-      <VisitorBar {...args} />
-    </Stage>
-  ),
-};
-
-/** While the page asks who the visitor is: the bar's space, held. */
+/** While the page asks who the visitor is: the tag's space, held. */
 export const Loading: Story = {
   args: { isLoading: true },
 };

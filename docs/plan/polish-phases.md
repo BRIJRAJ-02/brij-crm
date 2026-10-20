@@ -53,9 +53,9 @@ Work that was in flight when the lanes stopped is kept on its lane branches (a `
 - F12. The time zone should be the searchable list, and the start and end fields need room. Done: each zone with its GMT offset (also in the closed field), current names, search by place or offset; times in 12 hour form with room.
 
 ### Public booking page
-- F13. Timefix layout and interaction, our design language.
-- F14. "this could roll back to the same as timefix version", "same interaction and UX". Open.
-- F15. Remove the workspace name ("stealth's workspace") from the footer. Open.
+- F13. Timefix layout and interaction, our design language. Done (20 Oct): the page draws with the library (`@crm/ui/public-booking`), the host's rail beside one card, the month beside the times, the Book bar.
+- F14. "this could roll back to the same as timefix version", "same interaction and UX". Done (20 Oct), with the visitor's calendar on top (spec 0028): connect Google or be known from the Timefix sign in, clashes hidden, Best times, the form filled.
+- F15. Remove the workspace name ("stealth's workspace") from the footer. Done: the foot says Powered by Timefix only.
 - F16. The time zone trigger, the oversized slots, the Book button and alignment. Fixed in the timefix rework.
 - F17. "add timefix across", "Add timefix logos as well". Done on the public pages.
 
