@@ -640,7 +640,7 @@
   .monthGrid {
     display: grid;
     grid-template-columns: repeat(7, minmax(0, 1fr));
-    gap: var(--space-4) var(--space-2);
+    gap: var(--space-4);
   }
 
   .weekday {
@@ -666,9 +666,7 @@
     position: relative;
     display: grid;
     place-items: center;
-    justify-self: center;
     inline-size: 100%;
-    max-inline-size: calc(var(--size-row) + var(--space-6));
     aspect-ratio: 1;
     padding: 0;
     border: none;
