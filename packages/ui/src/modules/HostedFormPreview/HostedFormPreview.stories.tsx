@@ -60,6 +60,9 @@ export const Default: Story = {
     const frame = canvasElement.querySelector('[inert]');
     await expect(frame).not.toBeNull();
     await expect(canvas.getByRole('button', { name: 'Send' }).closest('[inert]')).toBe(frame);
+    // An optional question says so after its label; an unanswered dropdown asks, never looks answered.
+    await expect(canvas.getByText('Phone or WhatsApp (optional)')).toBeInTheDocument();
+    await expect(canvas.getByRole('button', { name: /^Choose one Budget \(optional\)/ })).toBeInTheDocument();
   },
 };
 

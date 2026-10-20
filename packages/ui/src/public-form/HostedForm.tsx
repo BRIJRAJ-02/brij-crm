@@ -97,7 +97,7 @@ function focusQuestion(container: HTMLElement | null, key: string): void {
   [...controls].find((control) => control.closest('[aria-hidden="true"]') === null && control.tabIndex >= 0)?.focus();
 }
 
-/** A question's label: its words, "optional" after an optional one, "Untitled question" while it has none. */
+/** A question's label: its words, "(optional)" after an optional one, "Untitled question" while it has none. */
 function labelOf(question: PublicQuestion, words: FormStrings): string {
   const named = question.label.trim() === '' ? words.untitledQuestion : question.label;
   const marked = question.required || question.answerType === 'checkbox' || question.answerType === 'yes_no';
@@ -144,7 +144,8 @@ function Question({
         <Select
           label={label}
           items={(question.choices ?? []).map((choice) => ({ id: choice, label: choice }))}
-          placeholder={question.required ? words.chooseOne : words.preferNot}
+          // Unanswered reads as unanswered: never a choice that looks picked.
+          placeholder={words.chooseOne}
           value={text === '' ? null : text}
           onChange={(id) => onChange(id ?? '')}
           isClearable={!question.required}
@@ -161,7 +162,7 @@ function Question({
           value={code}
           onChange={(next) => onChange(next === null ? '' : (countryNames.get(next) ?? ''))}
           searchLabel={words.searchCountries}
-          placeholder={question.required ? words.chooseOne : words.preferNot}
+          placeholder={words.chooseOne}
           {...(countryGuess === undefined ? {} : { guess: countryGuess })}
           {...errorProps}
         />

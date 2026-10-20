@@ -17,7 +17,6 @@ export interface FormStrings {
   readonly optional: string;
   readonly sending: string;
   readonly chooseOne: string;
-  readonly preferNot: string;
   readonly closed: string;
   readonly notFoundTitle: string;
   readonly notFound: string;
@@ -54,10 +53,9 @@ const EN: FormStrings = {
   number: 'Enter a number, such as 1500.',
   tooLong: 'That is longer than this question takes.',
   country: 'Pick a country from the list.',
-  optional: 'optional',
+  optional: '(optional)',
   sending: 'Sending…',
   chooseOne: 'Choose one',
-  preferNot: 'Prefer not to say',
   closed: 'This form isn’t taking enquiries right now.',
   notFoundTitle: 'Form not found',
   notFound: 'This form doesn’t exist, or its address changed.',

@@ -13,7 +13,7 @@ Until 19 October 2026 this was plain DOM, drawn to look like the library, to sta
 ## Rules it follows
 
 - Every word comes from `formStrings` in `@crm/contracts/forms`, and every check from `checkAnswers`, the one the submit endpoint runs again, so a visitor sees the server's own message.
-- Labels sit above inputs, "optional" follows an optional question's label, errors sit under their field, the first one takes focus, and the button stays enabled. Errors that aren't about a field show in one `role="alert"` line above the button.
+- Labels sit above inputs, "(optional)" follows an optional question's label, an unanswered Dropdown or Country says "Choose one", errors sit under their field, the first one takes focus, and the button stays enabled. Errors that aren't about a field show in one `role="alert"` line above the button.
 - A phone answer is `{ number, country }` with the number in E.164 (`toE164`); a country answer is the country's name in the form's language.
 - The honeypot, the fill time and the idempotency round work as before: "Send another" starts a new round, which the page gives a new idempotency key.
 - The thank you replaces the form in place, with focus on its heading, in the booking confirmation's shape: a green tinted check, the heading, a muted line, then Send another.
