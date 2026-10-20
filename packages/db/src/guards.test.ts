@@ -1230,6 +1230,62 @@ describe('booking pages (spec 0025, milestone 1)', () => {
     expect(missing.rows).toEqual([]);
   });
 
+  /** A schedule of the member's (spec 0035), made inside the workspace. */
+  const scheduleIn = async (workspaceId: string, memberId: string, name = 'Working hours', isDefault = true) => {
+    const id = randomUUID();
+    await db.withWorkspace(workspaceId, (tx) =>
+      tx.execute(
+        sql`insert into availability_schedules (workspace_id, id, member_id, name, is_default, availability, created_by_type, updated_by_type) values (${workspaceId}, ${id}, ${memberId}, ${name}, ${isDefault}, '{}', 'system', 'system')`,
+      ),
+    );
+    return id;
+  };
+
+  it("reads none of another workspace's schedules, and refuses a page naming one (spec 0035, AC-978)", async () => {
+    const a = await workspaceWithMember('schedules-a');
+    const b = await workspaceWithMember('schedules-b');
+    await scheduleIn(a.workspaceId, a.memberId);
+    const inB = await scheduleIn(b.workspaceId, b.memberId);
+    const rows = await db.withWorkspace(a.workspaceId, (tx) =>
+      tx.execute<{ workspace_id: string }>(sql`select workspace_id::text from availability_schedules`),
+    );
+    expect(rows.rows).toEqual([{ workspace_id: a.workspaceId }]);
+    const outside = await db.withWorkspace(randomUUID(), (tx) => tx.execute(sql`select * from availability_schedules`));
+    expect(outside.rows).toEqual([]);
+    const page = await pageIn(a.workspaceId, a.memberId);
+    await expect(
+      db.withWorkspace(a.workspaceId, (tx) =>
+        tx.execute(sql`update booking_pages set schedule_id = ${inB} where id = ${page.pageId}`),
+      ),
+    ).rejects.toMatchObject({ cause: { code: '23503', constraint: 'booking_pages_schedule' } });
+  });
+
+  it('keeps one default per member and names unique ignoring case; deleting a schedule frees its pages', async () => {
+    const a = await workspaceWithMember('schedules-rules');
+    await scheduleIn(a.workspaceId, a.memberId);
+    await expect(scheduleIn(a.workspaceId, a.memberId, 'Evenings', true)).rejects.toMatchObject({
+      cause: { code: '23505', constraint: 'availability_schedules_default' },
+    });
+    await expect(scheduleIn(a.workspaceId, a.memberId, 'WORKING HOURS', false)).rejects.toMatchObject({
+      cause: { code: '23505', constraint: 'availability_schedules_name' },
+    });
+    await expect(scheduleIn(a.workspaceId, a.memberId, '', false)).rejects.toMatchObject({
+      cause: { code: '23514', constraint: 'availability_schedules_name_length' },
+    });
+    const evenings = await scheduleIn(a.workspaceId, a.memberId, 'Evenings', false);
+    const page = await pageIn(a.workspaceId, a.memberId);
+    await db.withWorkspace(a.workspaceId, async (tx) => {
+      await tx.execute(sql`update booking_pages set schedule_id = ${evenings} where id = ${page.pageId}`);
+      await tx.execute(sql`delete from availability_schedules where id = ${evenings}`);
+    });
+    const after = await db.withWorkspace(a.workspaceId, (tx) =>
+      tx.execute<{ workspace_id: string; schedule_id: string | null }>(
+        sql`select workspace_id::text, schedule_id::text from booking_pages where id = ${page.pageId}`,
+      ),
+    );
+    expect(after.rows).toEqual([{ workspace_id: a.workspaceId, schedule_id: null }]);
+  });
+
   it('takes a booking page as an actor on records, with an id and no member', async () => {
     const a = await workspaceWithMember('booking-actor');
     const inA = await pageIn(a.workspaceId, a.memberId);
