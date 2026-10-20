@@ -7,6 +7,8 @@
 
 ## Owner decisions needed
 
+The owner accepted every recommendation below on 20 October 2026; each is now a decision.
+
 1. **When a person's role and teams disagree, who wins?** Recommended: the most open wins. A person sees the union of what their role sees and what each of their teams sees, so you restrict at the role ("Members: no access to Deals") and grant to a team ("Sales: can edit Deals"), as Attio does with a default plus grants. Runner up: the strictest wins (what spec 0009's `memberPolicy` does today), which makes "everyone but Sales" impossible to say.
 2. **Do rules apply to owners and admins?** Recommended: no. Owners and admins always see and edit everything, so nobody can lock the people who manage access out of the data. Runner up: rules apply to admins too, with owners exempt.
 3. **Who can a rule target?** Recommended: a role (Member or Guest) or a team; never one named person (make a team of one). Runner up: rules per person as well, as HubSpot does.

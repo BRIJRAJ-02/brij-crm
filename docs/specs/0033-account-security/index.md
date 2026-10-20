@@ -7,6 +7,8 @@
 
 ## Owner decisions needed
 
+The owner accepted every recommendation below on 20 October 2026; each is now a decision.
+
 1. **Second factor methods.** Recommended: an authenticator app (TOTP) with 10 backup codes, and passkeys, both through Better Auth (its `twoFactor` plugin, already installed, and `@better-auth/passkey`, a new pinned dependency). Runner up: TOTP and backup codes only, passkeys later.
 2. **Does two factor apply after Google sign in?** Recommended: yes, after every first step (email code or Google), so the setting means the same thing however you sign in. Runner up: trust Google's own two step check and skip ours after Google.
 3. **Can a passkey sign you in on its own?** Recommended: yes; a passkey is something you have plus your fingerprint or device PIN, so it counts as two factor by itself, and it is also offered as the second step. Runner up: passkeys only as the second step.

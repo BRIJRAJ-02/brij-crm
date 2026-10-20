@@ -7,6 +7,8 @@
 
 ## Owner decisions needed
 
+The owner accepted every recommendation below on 20 October 2026; each is now a decision.
+
 Short questions, each with my recommendation and the runner up. The spec is written to the recommendations; a different answer changes only the lines that name it.
 
 1. **The fourth role.** Recommended: `guest`, read only on the objects an admin shares with the Guest role (spec 0032), sees members by name only, and takes no seat. Runner up: no fourth role until a customer asks.
