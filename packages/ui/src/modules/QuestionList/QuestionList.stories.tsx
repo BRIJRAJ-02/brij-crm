@@ -25,16 +25,18 @@ interface SampleProps {
   readonly initialOpen?: readonly string[];
   readonly isReadOnly?: boolean;
   readonly withProblem?: boolean;
+  /** `fill` shows the builder's width, where each question is one line; `narrow` the two line phone layout. */
+  readonly width?: 'narrow' | 'fill';
 }
 
-/** The list holding its own order and open cards, as the form builder does. */
-function SampleQuestions({ initialOpen = [], isReadOnly = false, withProblem = false }: SampleProps) {
+/** The list holding its own order and open rows, as the form builder does. */
+function SampleQuestions({ initialOpen = [], isReadOnly = false, withProblem = false, width = 'fill' }: SampleProps) {
   const [items, setItems] = useState(
     withProblem ? QUESTIONS.map((item) => (item.id === 'new' ? { ...item, hasProblem: true } : item)) : QUESTIONS,
   );
   const [open, setOpen] = useState<ReadonlySet<string>>(new Set(initialOpen));
   return (
-    <Stage width="narrow">
+    <Stage width={width}>
       <QuestionList
         label="Questions"
         items={items}
@@ -100,7 +102,7 @@ const meta = {
 export default meta;
 type Story = StoryObj<typeof meta>;
 
-/** Closed cards: the handle, the question, its type, Required, its choices and where it is filed. */
+/** Closed rows at the builder's width, one line each: the handle, the question, its type, Required, its choices and where it is filed. */
 export const Default: Story = {
   parameters: { crm: { preview: true } },
   play: async ({ canvas }) => {
@@ -111,7 +113,7 @@ export const Default: Story = {
   },
 };
 
-/** Pressing a card's header opens its editor; pressing again closes it. */
+/** Pressing a row's line opens its editor; pressing again closes it. */
 export const Opening: Story = {
   play: async ({ canvas }) => {
     const toggle = canvas.getByRole('button', { name: /^Budget/ });
@@ -124,7 +126,7 @@ export const Opening: Story = {
   },
 };
 
-/** One card open, its editor under the header, and its footer row: Required at the start, Duplicate and Delete at the end. */
+/** One row open, its editor under the line, and its footer row: Required at the start, Duplicate and Delete at the end. */
 export const OneOpen: Story = {
   args: { initialOpen: ['email'] },
   play: async ({ canvas }) => {
@@ -133,16 +135,25 @@ export const OneOpen: Story = {
   },
 };
 
-/** A question a publish refused: marked, with the danger border. */
+/** A question a publish refused: marked, with the danger edge at its start. */
 export const WithProblem: Story = {
   args: { initialOpen: ['new'], withProblem: true },
   parameters: { crm: { screenshot: false } },
 };
 
-/** Read only: no handles, the cards still open to read. */
+/** Read only: no handles, the rows still open to read. */
 export const ReadOnly: Story = {
   args: { isReadOnly: true },
   play: async ({ canvas }) => {
     await expect(canvas.queryByRole('button', { name: /^Move/ })).toBeNull();
+  },
+};
+
+/** In a narrow column (a phone): each closed row splits in two, the question and its facts, then where it is filed. */
+export const Narrow: Story = {
+  args: { width: 'narrow' },
+  play: async ({ canvas }) => {
+    await expect(canvas.getAllByRole('row')).toHaveLength(4);
+    await expect(canvas.getByText('Person · Budget band')).toBeVisible();
   },
 };
