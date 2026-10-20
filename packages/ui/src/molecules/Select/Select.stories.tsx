@@ -126,3 +126,26 @@ export const Searchable: Story = {
     await waitFor(() => expect(document.querySelector('[role="listbox"]')).toBeNull());
   },
 };
+
+/** `showsDescription`: the chosen option's detail stays in the closed field (a time zone and its offset). */
+export const DescriptionInField: Story = {
+  args: {
+    label: 'Time zone',
+    optionStyle: 'plain',
+    placeholder: 'Choose',
+    showsDescription: true,
+    items: [
+      { id: 'Asia/Kolkata', label: 'Asia/Kolkata', description: 'GMT+05:30' },
+      { id: 'Europe/London', label: 'Europe/London', description: 'GMT+01:00' },
+    ],
+    defaultValue: 'Asia/Kolkata',
+  },
+  render: (args) => (
+    <Stage>
+      <Select {...args} />
+    </Stage>
+  ),
+  play: async ({ canvas }) => {
+    await expect(canvas.getByRole('button', { name: /Time zone/ })).toHaveTextContent('GMT+05:30');
+  },
+};

@@ -129,27 +129,53 @@ export function zoneOffset(zone: string, at: Date): string {
   return value === 'GMT' ? 'GMT+00:00' : value;
 }
 
-/** The picker's zones, the current one first, each with its offset (as timefix lists them). */
-export function zoneItems(current: string, at: Date): readonly ZoneItem[] {
-  const listed = timeZones(current).filter((zone) => zone !== current);
-  return [current, ...listed].map((zone) => ({
-    id: zone,
-    label: zone.replaceAll('_', ' '),
-    description: zoneOffset(zone, at),
-  }));
+/**
+ * Zones some browsers still name by their old spelling (Chrome answers Asia/Calcutta where Firefox and Safari answer
+ * Asia/Kolkata). The picker shows the current name and lists each place once; the stored value stays as it was.
+ */
+const RENAMED: Readonly<Record<string, string>> = Object.freeze({
+  'Asia/Calcutta': 'Asia/Kolkata',
+  'Asia/Katmandu': 'Asia/Kathmandu',
+  'Asia/Rangoon': 'Asia/Yangon',
+  'Asia/Saigon': 'Asia/Ho_Chi_Minh',
+  'Europe/Kiev': 'Europe/Kyiv',
+  'America/Godthab': 'America/Nuuk',
+  'Atlantic/Faeroe': 'Atlantic/Faroe',
+});
+
+/** A zone as people read it: its current name, with spaces ("Asia/Kolkata", "America/New York"). */
+export function zoneLabel(zone: string): string {
+  return (RENAMED[zone] ?? zone).replaceAll('_', ' ');
 }
 
-/** A zone search: every word typed is in the place or the offset ("new york", "gmt+5", "+05:30"). */
+/** The picker's zones, the current one first, each with its offset (as timefix lists them), each place once. */
+export function zoneItems(current: string, at: Date): readonly ZoneItem[] {
+  const seen = new Set<string>();
+  return [current, ...timeZones(current)].flatMap((zone) => {
+    const label = zoneLabel(zone);
+    if (seen.has(label)) return [];
+    seen.add(label);
+    return [{ id: zone, label, description: zoneOffset(zone, at) }];
+  });
+}
+
+/** An offset as typed, the way the list writes it: "utc+5", "+5:30" and "gmt+530" all read as "gmt+05:30". */
+function offsetWord(word: string): string {
+  return word
+    .replace(/^utc/, 'gmt')
+    .replace(/([+-])(\d)(\d\d)$/, '$10$2$3')
+    .replace(/([+-])(\d)(?=\D|$)/, '$10$2')
+    .replace(/([+-]\d\d)(\d\d)$/, '$1:$2');
+}
+
+/** A zone search: every word typed is in the place or the offset ("new york", "gmt+5", "+5:30", "utc-8"). */
 export function zoneMatches(item: { readonly label: string; readonly description?: string }, query: string): boolean {
   const text = `${item.label} ${item.description ?? ''}`.toLowerCase();
   return query
     .toLowerCase()
     .split(/\s+/)
     .filter((word) => word !== '')
-    .every(
-      (word) =>
-        text.includes(word) || (word.startsWith('gmt') && text.includes(word.replace(/^gmt([+-])(\d)$/, 'gmt$10$2'))),
-    );
+    .every((word) => text.includes(word) || text.includes(offsetWord(word)));
 }
 
 /** The browser's zone. */

@@ -3,8 +3,9 @@
 // Main task: see at a glance which pages follow these hours and which keep their own, and open one to change it.
 // Leaves out: changing a page's hours here (its editor does), and pages someone else owns.
 import type { BookingAvailability, BookingPageView } from '@crm/data';
-import { Card, LinkList, type LinkRow } from '@crm/ui';
-import { weekSummary } from './hours.ts';
+import { Card, EmptyState, Link, LinkList, type LinkRow } from '@crm/ui';
+import { weekSummary, zoneLabel, zoneOffset } from './hours.ts';
+import { linksHref } from './links.ts';
 import { strings } from './strings.ts';
 
 /** Props for PagesHours. */
@@ -24,7 +25,20 @@ export interface PagesHoursProps {
 
 /** The member's pages, each with the hours it books on: these, or its own. */
 export function PagesHours({ slug, pages, status, onRetry, mine, locale, onOpen }: PagesHoursProps) {
-  if (status === 'ready' && pages.length === 0) return null;
+  if (status === 'ready' && pages.length === 0) {
+    return (
+      <Card title={strings.yourPages}>
+        <EmptyState
+          icon="link"
+          title={strings.emptyTitle}
+          actions={<Link href={linksHref(slug)}>{strings.goToPages}</Link>}
+        >
+          {strings.emptyText}
+        </EmptyState>
+      </Card>
+    );
+  }
+  const now = new Date();
   const rows: readonly LinkRow[] = pages.map((page) => {
     const follows = page.hoursMode === 'mine';
     const hours = follows ? mine : page.availability;
@@ -33,7 +47,13 @@ export function PagesHours({ slug, pages, status, onRetry, mine, locale, onOpen 
       title: page.title,
       address: `/${slug}/${page.slug}`,
       description: weekSummary(hours, locale).join(' · '),
-      chips: [follows ? strings.followsYou : strings.ownHours, hours.timeZone.replaceAll('_', ' ')],
+      // The zone only where it isn't the one beside the week (a page with hours of its own, kept in another zone).
+      chips: [
+        follows ? strings.followsYou : strings.ownHours,
+        ...(hours.timeZone === mine.timeZone
+          ? []
+          : [`${zoneLabel(hours.timeZone)} ${zoneOffset(hours.timeZone, now)}`]),
+      ],
       ...(page.status === 'paused' ? { badge: strings.offTag } : page.isPrivate ? { badge: strings.private } : {}),
       isOff: page.status === 'paused',
     };

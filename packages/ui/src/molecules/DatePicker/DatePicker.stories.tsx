@@ -1,6 +1,7 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
-import { expect, fn, waitFor } from 'storybook/test';
+import { expect, fn, userEvent, waitFor } from 'storybook/test';
 import { Stage } from '../../workbench/Stage/Stage.tsx';
+import { Form } from '../Form/Form.tsx';
 import { DatePicker, DateRangePicker } from './DatePicker.tsx';
 
 const meta = {
@@ -98,5 +99,26 @@ export const Range: Story = {
     const calendar = await dialog();
     await expect(calendar.querySelector('[data-selection-start]')).toHaveTextContent('5');
     await expect(calendar.querySelector('[data-selection-end]')).toHaveTextContent('16');
+  },
+};
+
+/** In a form, Enter in the date submits it, as in any text field. */
+export const SubmitsOnEnter: Story = {
+  args: { onChange: fn() },
+  render: function Render(args) {
+    return (
+      <Stage>
+        <Form id="day-off" label="Add a day off" onSubmit={args.onChange ?? (() => undefined)}>
+          <DatePicker label="Day to close" defaultValue="2026-12-25" />
+        </Form>
+      </Stage>
+    );
+  },
+  play: async ({ canvas, args }) => {
+    const [month] = canvas.getAllByRole('spinbutton');
+    if (month === undefined) throw new Error('no date segments');
+    await userEvent.click(month);
+    await userEvent.keyboard('{Enter}');
+    await waitFor(() => expect(args.onChange).toHaveBeenCalled());
   },
 };

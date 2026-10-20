@@ -75,6 +75,8 @@ export interface SelectProps {
    * `leading` and `short` in place of the label, and the list a menu wide.
    */
   readonly variant?: 'default' | 'cell' | 'prefix';
+  /** The chosen option's `description` after its label in the closed field, muted (a time zone's "GMT+05:30"). */
+  readonly showsDescription?: boolean;
   /** A search field over the options, for long lists such as countries. */
   readonly isSearchable?: boolean;
   /**
@@ -153,6 +155,7 @@ export function Select({
   isDisabled = false,
   size = 'md',
   variant = 'default',
+  showsDescription = false,
   autoFocus = false,
   defaultOpen,
   onOpenChange,
@@ -280,7 +283,12 @@ export function Select({
                 <span className={styles.short}>{selected.short}</span>
               </>
             ) : (
-              <Face item={selected} optionStyle={optionStyle} />
+              <>
+                <Face item={selected} optionStyle={optionStyle} />
+                {showsDescription && selected.description !== undefined && (
+                  <span className={styles.description}>{selected.description}</span>
+                )}
+              </>
             );
           }}
         </SelectValue>

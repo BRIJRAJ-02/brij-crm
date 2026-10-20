@@ -7,6 +7,7 @@ import { Button, Callout, Card, HoursEditor, PageColumn, Select, Skeleton, TopBa
 import { useBlocker, useNavigate } from '@tanstack/react-router';
 import { useState, useMemo } from 'react';
 import { bookingsHref } from '../workspace/objects.ts';
+import { pageHeading } from '../navigation/focus.ts';
 import { WorkspacePage } from '../workspace/WorkspacePage.tsx';
 import { DaysOff } from './DaysOff.tsx';
 import { pageEditorHref } from './links.ts';
@@ -62,6 +63,8 @@ export function AvailabilityScreen({
         setSaved(availability);
         setDraft(availability);
         setJustSaved(true);
+        // Save leaves with the unsaved bar; the page's title takes focus, and the bar's status says Saved.
+        requestAnimationFrame(() => pageHeading(document)?.focus());
       },
       (error: unknown) => {
         setSaving(false);
@@ -90,6 +93,7 @@ export function AvailabilityScreen({
                   <Select
                     label={strings.timeZone}
                     isLabelHidden
+                    showsDescription
                     items={zones}
                     filter={zoneMatches}
                     isSearchable
@@ -110,14 +114,26 @@ export function AvailabilityScreen({
                   {...(isDirty
                     ? {
                         actions: (
-                          <Button
-                            variant="primary"
-                            isPending={isSaving}
-                            isDisabled={!availabilityIsValid(draft)}
-                            onPress={save}
-                          >
-                            {isSaving ? strings.saving : strings.save}
-                          </Button>
+                          <>
+                            <Button
+                              variant="ghost"
+                              isDisabled={isSaving}
+                              onPress={() => {
+                                setDraft(saved);
+                                setFailure(undefined);
+                              }}
+                            >
+                              {strings.discard}
+                            </Button>
+                            <Button
+                              variant="primary"
+                              isPending={isSaving}
+                              isDisabled={!availabilityIsValid(draft)}
+                              onPress={save}
+                            >
+                              {isSaving ? strings.saving : strings.save}
+                            </Button>
+                          </>
                         ),
                       }
                     : {})}
@@ -161,7 +177,7 @@ export function AvailabilityPending() {
       page={{
         topBar: <TopBar title={strings.availability} icon="clock" isLoading />,
         body: (
-          <PageColumn width="full">
+          <PageColumn width="full" aside={<Skeleton lines={4} />}>
             <Skeleton lines={8} />
           </PageColumn>
         ),

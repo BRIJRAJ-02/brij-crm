@@ -222,7 +222,20 @@ export function DatePicker({ value, defaultValue, onChange, showQuickPicks = tru
       }}
     >
       {look.isLabelHidden !== true && <Label className={styles.label}>{look.label}</Label>}
-      <Group className={styles.box}>
+      <Group
+        className={styles.box}
+        // Enter in the date submits its form, as it does in any text field (a day off's Add). On the way down,
+        // since a segment keeps its keys to itself.
+        onKeyDownCapture={(event) => {
+          if (
+            event.key !== 'Enter' ||
+            !(event.target instanceof HTMLElement) ||
+            event.target.closest('button') !== null
+          )
+            return;
+          event.target.closest('form')?.requestSubmit();
+        }}
+      >
         <DateInput className={styles.input}>
           {(segment) => <DateSegment segment={segment} className={styles.segment} />}
         </DateInput>

@@ -28,6 +28,20 @@ describe('zones', () => {
     expect(zoneMatches(item, 'gmt-5')).toBe(true);
     expect(zoneMatches(item, 'london')).toBe(false);
   });
+
+  it('reads an offset however it is typed', () => {
+    const india = { label: 'Asia/Kolkata', description: 'GMT+05:30' };
+    for (const typed of ['gmt+5:30', '+5:30', 'utc+5', 'gmt+530', '+05:30', '5:30'])
+      expect(zoneMatches(india, typed), typed).toBe(true);
+    expect(zoneMatches(india, 'gmt-5')).toBe(false);
+  });
+
+  it('shows an old spelling by its current name, keeps the stored id, and lists each place once', () => {
+    const items = zoneItems('Asia/Calcutta', JANUARY);
+    expect(items[0]).toEqual({ id: 'Asia/Calcutta', label: 'Asia/Kolkata', description: 'GMT+05:30' });
+    expect(items.filter((item) => item.label === 'Asia/Kolkata')).toHaveLength(1);
+    expect(zoneMatches(items[0] ?? { label: '' }, 'kolkata')).toBe(true);
+  });
 });
 
 describe('a week in a line per set of days', () => {

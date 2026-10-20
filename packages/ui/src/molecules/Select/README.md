@@ -30,6 +30,8 @@ Ported from the artifact's Select card (version 8). It is the editor for select 
 
 Placeholder, chosen, searching, offering Create, focus and open (a 1px `accent-line` border and the faint halo), outlined in `control-border` at rest like a Field (3:1 on every surface), invalid, read only, disabled. The list opens from the keyboard at once and grows from the trigger for a pointer.
 
+- `showsDescription` keeps the chosen option's `description` after its label in the closed field, muted: a time zone shows its offset ("Asia/Kolkata GMT+05:30") without opening the list.
+
 ## Keyboard
 
 Enter, Space or the arrow keys open it; arrows move; typing jumps to a match; Enter chooses; Esc closes it and returns focus.

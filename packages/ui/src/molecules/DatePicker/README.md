@@ -24,6 +24,8 @@ Empty (placeholder segments), chosen, focus (accent border and ring), invalid, r
 
 ## Keyboard
 
+Enter in the date submits the form around it, as in any text field (Availability's Add a day off).
+
 Type into each segment, or use Up and Down to change it and Left and Right to move. Alt Down (or the calendar button) opens the calendar; arrows move by day, Page Up and Page Down by month; Enter chooses; Esc closes it and returns focus.
 
 ## Differences from the artifact
