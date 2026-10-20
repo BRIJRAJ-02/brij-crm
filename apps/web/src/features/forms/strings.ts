@@ -172,7 +172,8 @@ export const strings = {
   thankYouDefault: 'We will come back to you at the address you gave.',
   offerMeeting: 'Offer a meeting',
   whichBookingPage: 'Which booking page',
-  noBookingPages: 'No booking pages yet',
+  offerMeetingSoon: 'Coming soon: after sending the form, visitors pick a time on one of your booking pages.',
+  chooseBookingPage: 'Choose a booking page',
   sendToAddress: 'Send them to a web address instead',
   redirectUrl: 'Web address',
   redirectHint: 'Starts with https://',
@@ -208,8 +209,9 @@ export const strings = {
   notLiveYet: 'Publish the form first.',
 
   // Submissions tab
-  allStates: 'All',
-  filterStates: 'Show',
+  allStates: 'All enquiries',
+  filterStates: 'Which enquiries',
+  filterLabel: 'Filter enquiries',
   noSubmissions: 'No enquiries yet. Share the link from Install.',
   noneInState: 'Nothing here.',
   when: 'When',

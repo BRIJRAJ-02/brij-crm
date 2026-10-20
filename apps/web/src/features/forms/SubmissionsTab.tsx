@@ -20,8 +20,9 @@ import {
   Panel,
   RecordChip,
   RelativeTime,
-  SegmentedControl,
+  Select,
   Table,
+  Toolbar,
   Badge,
   type TableColumn,
 } from '@crm/ui';
@@ -169,17 +170,25 @@ export function SubmissionsTab({ slug, formId, objects, page, state, open, canMa
 
   return (
     <>
-      <SegmentedControl
-        label={strings.filterStates}
-        value={state ?? ALL}
-        onChange={(value) => {
-          go(undefined, value === ALL ? undefined : (value as SubmissionState));
-        }}
-        segments={[
-          { value: ALL, label: strings.allStates },
-          ...FILTERS.map((each) => ({ value: each, label: strings.states[each] })),
-        ]}
-      />
+      {/* Five states are too many for segments (two to four): a filter Select, as Trash's object filter. */}
+      <Toolbar label={strings.filterLabel}>
+        <Select
+          label={strings.filterStates}
+          isLabelHidden
+          size="sm"
+          items={[
+            { id: ALL, label: strings.allStates },
+            ...FILTERS.map((each) => ({ id: each, label: strings.states[each] })),
+          ]}
+          value={state ?? ALL}
+          onChange={(value) => {
+            go(
+              undefined,
+              FILTERS.find((each) => each === value),
+            );
+          }}
+        />
+      </Toolbar>
       <Table
         label={strings.tabSubmissions}
         columns={COLUMNS}

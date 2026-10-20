@@ -138,14 +138,8 @@ export function SettingsTab({ slug, form, draft, members, isReadOnly, onDraftCha
                 onDraftChange((before) => ({ ...before, after: { kind: 'message', message } }));
               }}
             />
-            <Checkbox label={strings.offerMeeting} isDisabled />
-            <Select
-              label={strings.whichBookingPage}
-              items={[]}
-              placeholder={strings.noBookingPages}
-              hint={strings.noBookingPages}
-              isDisabled
-            />
+            <Checkbox label={strings.offerMeeting} description={strings.offerMeetingSoon} isDisabled />
+            <Select label={strings.whichBookingPage} items={[]} placeholder={strings.chooseBookingPage} isDisabled />
           </>
         )}
       </Card>
