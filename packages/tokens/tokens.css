@@ -1,4 +1,4 @@
-/* Generated from tokens.json (artifact version 1791787762-7e37) by packages/tokens/scripts/generate.ts. Do not edit. */
+/* Generated from tokens.json (artifact version 1792481155-987a) by packages/tokens/scripts/generate.ts. Do not edit. */
 
 @layer tokens {
   :root,
@@ -9,13 +9,14 @@
     --surface-raised: #feffff;
     --surface-subtle: #f6f7fa;
     --surface-sunken: #edeff4;
+    --surface-thumb: #feffff;
     --surface-hover: #f0f2f7;
     --surface-selected: #e8ecf2;
     --surface-column: #f5f8fd;
     --border-subtle: #e5e7eb;
     --border: #d8dbe1;
     --border-strong: #c3c7cf;
-    --field-border: #90949c;
+    --field-border: #80848c;
     --control-border: #757a84;
     --text: #18191d;
     --text-secondary: #575b62;
@@ -90,15 +91,16 @@
     --surface: #18191c;
     --surface-sidebar: #131518;
     --surface-raised: #202225;
-    --surface-subtle: #1c1d20;
+    --surface-subtle: #141518;
     --surface-sunken: #101214;
+    --surface-thumb: #2c2e33;
     --surface-hover: #282a2f;
     --surface-selected: #32353d;
     --surface-column: #1b1e24;
     --border-subtle: #2a2b2f;
     --border: #37393f;
     --border-strong: #4c5057;
-    --field-border: #686c74;
+    --field-border: #7a7e87;
     --control-border: #8a8f99;
     --text: #ebedef;
     --text-secondary: #a7abb3;
@@ -174,15 +176,16 @@
       --surface: #18191c;
       --surface-sidebar: #131518;
       --surface-raised: #202225;
-      --surface-subtle: #1c1d20;
+      --surface-subtle: #141518;
       --surface-sunken: #101214;
+      --surface-thumb: #2c2e33;
       --surface-hover: #282a2f;
       --surface-selected: #32353d;
       --surface-column: #1b1e24;
       --border-subtle: #2a2b2f;
       --border: #37393f;
       --border-strong: #4c5057;
-      --field-border: #686c74;
+      --field-border: #7a7e87;
       --control-border: #8a8f99;
       --text: #ebedef;
       --text-secondary: #a7abb3;

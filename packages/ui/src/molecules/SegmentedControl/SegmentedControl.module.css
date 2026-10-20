@@ -83,7 +83,7 @@
     inset: 0;
     border: var(--border-width-hairline) solid var(--border-subtle);
     border-radius: var(--radius-sm);
-    background: var(--surface-raised);
+    background: var(--surface-thumb);
     box-shadow: var(--shadow-control);
     transition-duration: var(--duration-move);
     transition-timing-function: var(--ease-in-out);

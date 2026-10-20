@@ -34,8 +34,8 @@
   }
 
   .day[aria-pressed='true'] {
-    background: var(--surface-inverse);
-    color: var(--on-inverse);
+    background: var(--accent);
+    color: var(--on-accent);
   }
 
   .day[data-best]::after {
@@ -50,7 +50,7 @@
   }
 
   .day[data-best][aria-pressed='true']::after {
-    background: var(--on-inverse);
+    background: var(--on-accent);
   }
 
   .day:focus-visible {

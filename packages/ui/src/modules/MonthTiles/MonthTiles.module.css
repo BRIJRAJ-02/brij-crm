@@ -1,6 +1,6 @@
 /* A booking page's month: square tiles that fill their columns with one even
    gap. Open days are filled and read at full strength, closed days are quiet
-   text, the chosen day is solid ink, and today carries a dot. */
+   text, the chosen day is the accent, and a day holding a Best time carries a dot. */
 @layer components {
   .root {
     display: flex;
@@ -91,9 +91,12 @@
     cursor: default;
   }
 
+  /* The chosen day in the accent, as the app's date picker chooses (the
+     owner's call, 20 October 2026: inverse ink was the page's brightest block
+     in dark). */
   .day[aria-pressed='true'] {
-    background: var(--surface-inverse);
-    color: var(--on-inverse);
+    background: var(--accent);
+    color: var(--on-accent);
     animation: day-pop var(--duration-popover) var(--ease-out) both;
   }
 
@@ -110,21 +113,12 @@
   }
 
   .day[data-best][aria-pressed='true']::after {
-    background: var(--on-inverse);
+    background: var(--on-accent);
   }
 
   .day:focus-visible {
     outline: var(--border-width-thick) solid var(--accent-line);
     outline-offset: var(--border-width-hairline);
-  }
-
-  .today {
-    position: absolute;
-    inset-block-end: var(--space-6);
-    inline-size: var(--space-4);
-    block-size: var(--space-4);
-    border-radius: var(--radius-full);
-    background: currentcolor;
   }
 
   .day:active:not(:disabled) {

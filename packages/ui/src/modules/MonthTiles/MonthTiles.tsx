@@ -33,7 +33,7 @@ function step(open: readonly string[], from: string, delta: number): string | un
 
 /**
  * A booking page's month (spec 0025, AC-665): every day a square tile, the
- * open ones filled and the chosen one solid, today with a dot. One day is
+ * open ones filled and the chosen one in the accent; only a Best day carries a dot (today is said, not marked). One day is
  * in the tab order; arrows move between open days, Up and Down a week, Home
  * and End to the first and last, and a swipe turns the month on touch.
  */
@@ -162,7 +162,6 @@ export function MonthTiles({
               }}
             >
               {labels.day}
-              {isToday && <span className={styles.today} aria-hidden="true" />}
             </button>
           );
         })}

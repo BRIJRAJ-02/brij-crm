@@ -108,9 +108,9 @@
   }
 
   .slot[aria-pressed='true'] {
-    border-color: var(--surface-inverse);
-    background: var(--surface-inverse);
-    color: var(--on-inverse);
+    border-color: var(--accent);
+    background: var(--accent);
+    color: var(--on-accent);
   }
 
   .slot[data-busy] {
