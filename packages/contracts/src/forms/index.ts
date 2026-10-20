@@ -3,6 +3,7 @@
 export * from './answer-types.ts';
 export * from './check.ts';
 export * from './dial-codes.ts';
+export * from './email-hint.ts';
 export * from './document.ts';
 export * from './forms.ts';
 export * from './presets.ts';

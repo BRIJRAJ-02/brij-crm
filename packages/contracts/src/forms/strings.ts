@@ -41,6 +41,24 @@ export interface FormStrings {
   readonly madeWith: string;
   /** The dial code picker's name with the country picked: "Country code, United States". */
   readonly dialCodeOf: (country: string) => string;
+  /** Above the button after a submit that found problems: "2 answers need a look". */
+  readonly needsALook: (count: number) => string;
+  /** Under an email that looks like a common provider misspelt. */
+  readonly didYouMean: (email: string) => string;
+  /** The button that takes the suggested address. */
+  readonly useSuggestion: string;
+  /** A step form's place: "Step 2 of 3". */
+  readonly stepOf: (step: number, steps: number) => string;
+  /** A one at a time form's place, for screen readers: "Question 2 of 7". */
+  readonly questionOf: (question: number, questions: number) => string;
+  /** Back to the previous step. */
+  readonly back: string;
+  /** On to the next step. */
+  readonly next: string;
+  /** On to the next question, in a one at a time form. */
+  readonly ok: string;
+  /** Beside OK in a one at a time form: the key that does the same. */
+  readonly pressEnter: string;
 }
 
 const EN: FormStrings = {
@@ -77,6 +95,15 @@ const EN: FormStrings = {
   untitledQuestion: 'Untitled question',
   madeWith: 'Made with Timefix',
   dialCodeOf: (country) => `Country code, ${country}`,
+  needsALook: (count) => (count === 1 ? '1 answer needs a look' : `${String(count)} answers need a look`),
+  didYouMean: (email) => `Did you mean ${email}?`,
+  useSuggestion: 'Use it',
+  stepOf: (step, steps) => `Step ${String(step)} of ${String(steps)}`,
+  questionOf: (question, questions) => `Question ${String(question)} of ${String(questions)}`,
+  back: 'Back',
+  next: 'Continue',
+  ok: 'OK',
+  pressEnter: 'press Enter',
 };
 
 const CATALOGUE: Readonly<Record<FormLanguage, Partial<FormStrings>>> = {

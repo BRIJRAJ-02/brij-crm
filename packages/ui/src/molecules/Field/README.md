@@ -34,6 +34,7 @@ Ported from the artifact's Field card. Every text, number and link attribute is 
 - `autoFocus` takes focus as it mounts. A list's search inside a popover takes focus through the list's focus scope instead (Select does this), so a popover around it never reads the move as focus leaving.
 - Inside a `Popover` (a grid cell's editor, a list's search, a filter's value) the field draws its focus with the accent border alone, no halo: the popover's own edge already frames it, and a halo inside it read as a second ring around the field (the owner, 21 October 2026). Popover tells it through its `InPopover` context; a Modal opened from a popover sets it back.
 - Inside a `Form`, a refusal the form holds under the field's `name` shows here like `error`, until the person changes the field. A given `error` wins. The browser's own checks (`required`, `type="email"`) never show their messages: a required field is marked `aria-required`, and the screen or module says what is wrong in the library's words.
+- `labelAside` puts a quiet word after the label, such as "(optional)" on a public form: `text-tertiary`, on the same line, and part of the field's accessible name.
 
 - `autoComplete="off"` also puts the password managers' opt outs on the input (`data-1p-ignore`, `data-lpignore`, `data-bwignore`, `data-form-type="other"`): a contact's phone or a search is never a login, and one manager drew its icon in a phone cell (the owner, 21 October 2026).
 

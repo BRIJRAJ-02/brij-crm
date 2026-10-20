@@ -251,3 +251,16 @@ export const Title: Story = {
     await expect(getComputedStyle(readOnlyBox).outlineStyle).toBe('solid');
   },
 };
+
+/** A quiet "(optional)" after the label, as a public form marks an optional question: muted, and part of the name. */
+export const OptionalMark: Story = {
+  parameters: { crm: { screenshot: false } },
+  render: () => (
+    <Stage width="narrow">
+      <Field label="Phone or WhatsApp" labelAside="(optional)" placeholder="555 000 1234" />
+    </Stage>
+  ),
+  play: async ({ canvas }) => {
+    await expect(canvas.getByRole('textbox', { name: 'Phone or WhatsApp (optional)' })).toBeInTheDocument();
+  },
+};

@@ -5,6 +5,7 @@
 export * from './answer-types.ts';
 export * from './check.ts';
 export * from './dial-codes.ts';
+export * from './email-hint.ts';
 export * from './presets.ts';
 export * from './publish.ts';
 export * from './strings.ts';

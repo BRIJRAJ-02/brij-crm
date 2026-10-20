@@ -20,6 +20,7 @@ Ported from the artifact's Radio card (version 8). Roles, plans, export formats 
 - `label` is the question; `isLabelHidden` keeps it for screen readers only.
 - `orientation="horizontal"` puts a few short choices in a row.
 - `error` marks the group invalid and says how to fix it. `errorId` names its line, so a control it turns off (a dialog's submit) can point `aria-describedby` at the reason.
+- `labelAside` puts a quiet word after the label, such as "(optional)" on a public form: `text-tertiary`, on the same line, and part of the group's accessible name.
 
 ## States
 
