@@ -460,6 +460,8 @@ function fakeApi(overrides: Partial<Behaviour> = {}, auth: (path: string, body: 
       setTarget: os.forms.setTarget.handler(notServed),
       duplicate: os.forms.duplicate.handler(notServed),
       delete: os.forms.delete.handler(notServed),
+      syncPreview: os.forms.syncPreview.handler(notServed),
+      syncStart: os.forms.syncStart.handler(notServed),
     },
     submissions: {
       list: os.submissions.list.handler(notServed),
@@ -469,6 +471,9 @@ function fakeApi(overrides: Partial<Behaviour> = {}, auth: (path: string, body: 
       resolve: os.submissions.resolve.handler(notServed),
       retry: os.submissions.retry.handler(notServed),
       delete: os.submissions.delete.handler(notServed),
+      addToCrm: os.submissions.addToCrm.handler(notServed),
+      export: os.submissions.export.handler(notServed),
+      getExport: os.submissions.getExport.handler(notServed),
     },
     bookingPages: {
       list: os.bookingPages.list.handler(notServed),

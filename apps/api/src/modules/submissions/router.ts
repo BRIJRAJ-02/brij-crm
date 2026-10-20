@@ -1,5 +1,8 @@
 import {
+  addToCrm,
   deleteSubmission,
+  getExport,
+  startSubmissionsExport,
   getSubmission,
   listSubmissions,
   markSubmissionSpam,
@@ -7,6 +10,7 @@ import {
   resolveSubmission,
   retrySubmission,
 } from '@crm/core';
+import { exportDownloadPath } from '@crm/contracts';
 import { commitWrite } from '../../hooks.ts';
 import { member } from '../../orpc.ts';
 
@@ -56,4 +60,21 @@ export const submissionsRouter = member.submissions.router({
       deleteSubmission(context.scope, { submissionId: input.submissionId }, hooks),
     ),
   ),
+  // Add to CRM (spec 0023 follow-up): the member's `forms.file` job over the submissions that qualify.
+  addToCrm: member.submissions.addToCrm.handler(({ context, input }) =>
+    commitWrite(context, { mutationId: input.mutationId }, (hooks) =>
+      addToCrm(context.scope, context.jobs, { formId: input.formId, submissionIds: input.submissionIds }, hooks),
+    ),
+  ),
+  // Export as CSV: the export's row and its `forms.export` job; the file downloads from its path once done.
+  export: member.submissions.export.handler(async ({ context, input }) => {
+    const started = await commitWrite(context, { mutationId: input.mutationId }, (hooks) =>
+      startSubmissionsExport(context.scope, context.jobs, { id: input.id, formId: input.formId, select: input.select }, hooks),
+    );
+    return { ...started, downloadPath: exportDownloadPath(input.workspace, started.id) };
+  }),
+  getExport: member.submissions.getExport.handler(async ({ context, input }) => {
+    const found = await getExport(context.scope, { exportId: input.exportId });
+    return { ...found, downloadPath: exportDownloadPath(input.workspace, found.id) };
+  }),
 });

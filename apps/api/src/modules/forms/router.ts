@@ -12,6 +12,8 @@ import {
   setFormStatus,
   setFormTarget,
   updateFormSettings,
+  previewSync,
+  startSync,
 } from '@crm/core';
 import { withInputFields } from '../../errors.ts';
 import { commitWrite } from '../../hooks.ts';
@@ -108,6 +110,15 @@ export const formsRouter = member.forms.router({
   delete: member.forms.delete.handler(({ context, input }) =>
     commitWrite(context, { mutationId: input.mutationId }, (hooks) =>
       deleteForm(context.scope, { formId: input.formId }, hooks),
+    ),
+  ),
+  // Sync old records (spec 0023 follow-up): a read only preview, then the member's `forms.sync` job.
+  syncPreview: member.forms.syncPreview.handler(({ context, input }) =>
+    previewSync(context.scope, { formId: input.formId, scope: input.scope }),
+  ),
+  syncStart: member.forms.syncStart.handler(({ context, input }) =>
+    commitWrite(context, { mutationId: input.mutationId }, (hooks) =>
+      startSync(context.scope, context.jobs, { formId: input.formId, scope: input.scope, jobId: input.jobId }, hooks),
     ),
   ),
 });

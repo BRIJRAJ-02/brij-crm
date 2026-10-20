@@ -14,6 +14,7 @@
 // 4. `jobs`: jobs finished more than 30 days ago, their items first.
 // 5. `requeue`: an unfinished job that should be running but has no queue
 //    row (a lost row) is queued again, and only then (AC-112's rule).
+// 6. `exports`: export files past their 7 days (spec 0023), chunks and all.
 // The outbox is no phase: the fan out prunes it once for every workspace.
 // Its result holds the totals per phase; `done` counts every row it removed.
 import { sql } from 'drizzle-orm';
@@ -39,7 +40,7 @@ export const MaintenanceParams = z.strictObject({ day: z.iso.date() });
 export type MaintenanceParams = z.infer<typeof MaintenanceParams>;
 
 /** The phases, in the order they run. */
-const PHASES = ['purge', 'notes_tasks', 'expired', 'items', 'jobs', 'requeue'] as const;
+const PHASES = ['purge', 'notes_tasks', 'expired', 'items', 'jobs', 'requeue', 'exports'] as const;
 
 /** How many items one `items` or `jobs` batch deletes at most, and how many finished jobs one `items` batch visits. */
 const ITEM_BATCH = 5_000;
@@ -63,6 +64,8 @@ const Totals = z.object({
   items: Count,
   jobs: Count,
   requeued: Count,
+  /** Export files past their 7 days (spec 0023's submissions export); a checkpoint from before them reads 0. */
+  exports: Count.default(0),
 });
 type Totals = z.infer<typeof Totals>;
 
@@ -77,6 +80,7 @@ const NO_TOTALS: Totals = {
   items: 0,
   jobs: 0,
   requeued: 0,
+  exports: 0,
 };
 
 /**
@@ -129,6 +133,7 @@ const plus = (totals: Totals, more: Partial<Totals>): Totals => ({
   items: totals.items + (more.items ?? 0),
   jobs: totals.jobs + (more.jobs ?? 0),
   requeued: totals.requeued + (more.requeued ?? 0),
+  exports: totals.exports + (more.exports ?? 0),
 });
 
 /** Phase 1: one purge batch; the phase ends with the first batch that comes back short. */
@@ -355,6 +360,17 @@ async function requeue(
  * queue row); the api registers the kind without one, to show and refuse to
  * cancel its jobs, and never runs a step.
  */
+/** Phase 6: export files past their expiry, `limit` at a time, their chunks with them (the foreign key cascades). */
+async function expiredExports(context: WriteContext, at: Checkpoint, limit: number): Promise<StepOutcome> {
+  const gone = await context.tx.execute(sql`
+    delete from exports where id in (
+      select id from exports where expires_at < now() order by expires_at limit ${limit}
+    )`);
+  const removed = gone.rowCount ?? 0;
+  const totals = plus(at.totals, { exports: removed });
+  return outcome(removed === limit ? { ...at, totals } : nextPhase(at, totals), at, totals, removed);
+}
+
 export function maintenanceDaily(queue?: QueueRows): KindDefinition<MaintenanceParams> {
   return defineKind<MaintenanceParams>({
     kind: MAINTENANCE_DAILY,
@@ -381,6 +397,8 @@ export function maintenanceDaily(queue?: QueueRows): KindDefinition<MaintenanceP
           return oldJobs(context, at, limit);
         case 'requeue':
           return requeue(context, at, limit, queue);
+        case 'exports':
+          return expiredExports(context, at, limit);
       }
     },
   });

@@ -9,6 +9,7 @@ import {
   SUBMISSIONS_PAGE,
   type FormDocument,
   type SubmissionAnswer,
+  type SubmissionCrm,
   type SubmissionPage,
   type SubmissionResolution,
   type SubmissionRecord,
@@ -54,7 +55,8 @@ function decodeCursor(cursor: string): z.infer<typeof Cursor> {
   }
 }
 
-interface Row {
+/** A submission row as the reads take it. */
+export interface Row {
   readonly id: string;
   readonly formId: string;
   readonly versionId: string;
@@ -71,7 +73,8 @@ interface Row {
   readonly processedAt: string | null;
 }
 
-const COLUMNS = {
+/** The columns every submission read selects. */
+export const COLUMNS = {
   id: formSubmissions.id,
   formId: formSubmissions.formId,
   versionId: formSubmissions.versionId,
@@ -97,7 +100,7 @@ const verdictOf = (spam: unknown): SubmissionSummary['verdict'] => {
 };
 
 /** The rows the reader may see: a visible main record, or none yet and `forms.manage`. */
-async function visibleRows(
+export async function visibleRows(
   tx: WorkspaceTx,
   scope: EngineScope,
   objectId: string,
@@ -114,7 +117,7 @@ async function visibleRows(
 }
 
 /** Records' displays, by id, as every read names them (only live ones the reader may see). */
-async function displays(
+export async function displays(
   tx: WorkspaceTx,
   scope: EngineScope,
   ids: readonly string[],
@@ -126,7 +129,7 @@ async function displays(
 }
 
 /** The answers the reader may see, in the form's question order (AC-573: one filed on a field hidden from them is absent). */
-function answersOf(scope: EngineScope, objectId: string, document: FormDocument, stored: unknown): SubmissionAnswer[] {
+export function answersOf(scope: EngineScope, objectId: string, document: FormDocument, stored: unknown): SubmissionAnswer[] {
   const answers = record(stored);
   return document.questions.flatMap((question): SubmissionAnswer[] => {
     if (!Object.hasOwn(answers, question.key)) return [];
@@ -145,6 +148,18 @@ function answersOf(scope: EngineScope, objectId: string, document: FormDocument,
   });
 }
 
+/**
+ * A submission's link to the CRM, as the reader sees it: linked to its main
+ * record when the reader can see it live; filing while a job may still file
+ * it; otherwise not in the CRM, and whether Add to CRM takes it (failed, or
+ * processed with no live record to show; the job checks again).
+ */
+export function crmOf(state: SubmissionState, main: RecordRefDisplay | undefined): SubmissionCrm {
+  if (main !== undefined) return { state: 'linked', record: main };
+  if (state === 'received' || state === 'processing') return { state: 'filing' };
+  return { state: 'not_in_crm', canAddToCrm: state === 'failed' || state === 'processed' };
+}
+
 /** The email answer, and the first two answers beside it, for a list row. */
 function summaryOf(answers: readonly SubmissionAnswer[]): { email?: string; firstAnswers: SubmissionAnswer[] } {
   const email = answers.find((answer) => answer.answerType === 'email' && typeof answer.value === 'string');
@@ -153,7 +168,7 @@ function summaryOf(answers: readonly SubmissionAnswer[]): { email?: string; firs
 }
 
 /** A form the reader may see, or NOT_FOUND. */
-async function readableForm(tx: WorkspaceTx, scope: EngineScope, formId: string) {
+export async function readableForm(tx: WorkspaceTx, scope: EngineScope, formId: string) {
   const form = await loadForm(tx, checkId(formId, UNKNOWN_FORM));
   if (form === undefined || objectLevel(scope.access, form.mainObjectId) === 'none') {
     throw refuse('NOT_FOUND', UNKNOWN_FORM);
@@ -214,6 +229,7 @@ export async function listSubmissions(
         verdict: verdictOf(row.spam),
         ...(main === undefined ? {} : { mainRecord: main }),
         ...summaryOf(answers),
+        crm: crmOf(row.state, main),
       };
     });
     return {
@@ -284,6 +300,7 @@ async function viewIn(tx: WorkspaceTx, scope: EngineScope, submissionId: string)
     verdict: verdictOf(row.spam),
     ...(main === undefined ? {} : { mainRecord: main }),
     ...summaryOf(answers),
+    crm: crmOf(row.state, main),
     versionNumber: version?.number ?? 1,
     answers,
     hidden,

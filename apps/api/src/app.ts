@@ -20,6 +20,7 @@ import { createFreeDomains } from './calendar/free-domains.ts';
 import { createCalendarServices, GOOGLE_NOTIFY_PATH, type CalendarServices } from './calendar/services.ts';
 import { backgroundHooks } from './hooks.ts';
 import { createEdgeGuard } from './edge.ts';
+import { mountExports } from './forms/exports.ts';
 import { hashAddress, mountPublicForms } from './forms/public.ts';
 import { createCaptchaVerifier, type CaptchaVerifier } from './forms/recaptcha.ts';
 import { createTicketBook, mountTickets } from './forms/ticket.ts';
@@ -317,6 +318,12 @@ export function createApp({
     tickets,
     limiter: createMemoryLimiter(),
     addressOf: (c) => hashAddress(ipSalt, c.get('clientIp')) ?? 'unknown',
+  });
+  // An export's download (spec 0023): the session and the same member door, only for its starter.
+  mountExports(app, {
+    auth,
+    enter: (userId, slug) =>
+      enterWorkspace({ db, identity, log, ...(rules === undefined ? {} : { rules }) }, { userId, slug }),
   });
   mountPublicForms(app, {
     db,

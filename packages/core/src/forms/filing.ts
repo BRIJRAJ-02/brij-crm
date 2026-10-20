@@ -1,0 +1,441 @@
+// Filing submissions with the form's current mapping, by a member (spec 0023
+// follow-up, the owner's asks): "Add to CRM" for submissions that aren't in
+// the CRM (failed, or whose record went to the trash), one or many, and "Sync
+// old records", which applies the current published mapping to earlier
+// submissions after it changed, previewed first. Both run as the member's own
+// background jobs (`forms.file`, `forms.sync`, heavy lane, cancellable), and
+// every record write goes through the engine as that member, so their access
+// decides what lands (an attribute they can't write is skipped and said),
+// with value history and change events as any write. Each submission is
+// locked while it files, and filing it again finds its record and writes
+// only what is new, so a retried batch or a second sync is safe.
+import { randomUUID } from 'node:crypto';
+import { sql } from 'drizzle-orm';
+import * as z from 'zod';
+import {
+  ADD_TO_CRM_MAX,
+  SYNC_PREVIEW_MAX,
+  type AddToCrmResult,
+  type FormDocument,
+  type SyncCounts,
+  type SyncPreview,
+  type SyncScope,
+  type SyncStarted,
+} from '@crm/contracts';
+import type { WorkspaceTx } from '@crm/db';
+import { checkId, uuidList } from '../engine/ids.ts';
+import { refuse } from '../engine/refusals.ts';
+import type { EngineScope } from '../engine/scope.ts';
+import { currentItems, loadAttributes, type AttributeDef } from '../engine/values.ts';
+import { runWrite, type AfterWrite, type WriteContext } from '../engine/write.ts';
+import { requirePermission } from '../access/check.ts';
+import { inWorkspace } from '../access/run.ts';
+import { defineKind, MAX_ATTEMPTS, type ItemOutcome, type KindDefinition, type StepOutcome } from '../jobs/registry.ts';
+import { startJob } from '../jobs/service.ts';
+import type { JobRegistry } from '../jobs/registry.ts';
+import { UNKNOWN_FORM } from './forms.ts';
+import {
+  answersOf,
+  changesFor,
+  chooseOwner,
+  fileAnswers,
+  heldValues,
+  matchKey,
+  optionsFor,
+  ownerAttribute,
+  plan,
+  settle,
+} from './process.ts';
+import { loadForm, loadVersions, type FormRow } from './shared.ts';
+
+/** The Add to CRM job's name. */
+export const FORMS_FILE = 'forms.file';
+/** The Sync old records job's name. */
+export const FORMS_SYNC = 'forms.sync';
+
+/** What a form with no published version answers to filing. */
+export const NOT_PUBLISHED = 'Publish the form first: filing uses its published questions.';
+
+/** What a submission no longer in scope says on its job item. */
+const NOT_ELIGIBLE = 'This submission is no longer one to file (it was filed, marked as spam, or deleted).';
+
+/** A form the member manages, with its live document, or a refusal. */
+async function mappingOf(
+  tx: WorkspaceTx,
+  formId: string,
+): Promise<
+  | {
+      readonly form: FormRow;
+      readonly document: FormDocument;
+      readonly versionNumber: number;
+      readonly attributes: ReadonlyMap<string, AttributeDef>;
+      readonly options: Awaited<ReturnType<typeof optionsFor>>;
+    }
+  | undefined
+> {
+  const form = await loadForm(tx, formId);
+  if (form === undefined || form.liveVersionId === null) return undefined;
+  const live = (await loadVersions(tx, [form.liveVersionId])).get(form.liveVersionId);
+  if (live === undefined) return undefined;
+  const attributes = await loadAttributes(tx, form.mainObjectId);
+  return {
+    form,
+    document: live.document,
+    versionNumber: live.number,
+    attributes,
+    options: await optionsFor(tx, live.document, attributes),
+  };
+}
+
+/** The form a member acts on: one they can see, or NOT_FOUND; published, or FORM_STATE. */
+async function managedForm(tx: WorkspaceTx, formId: string) {
+  const id = checkId(formId, UNKNOWN_FORM);
+  const mapping = await mappingOf(tx, id);
+  if (mapping === undefined) {
+    if ((await loadForm(tx, id)) === undefined) throw refuse('NOT_FOUND', UNKNOWN_FORM);
+    throw refuse('FORM_STATE', NOT_PUBLISHED);
+  }
+  return mapping;
+}
+
+/**
+ * The SQL test for a submission in a sync's scope (or, for `unfiled`, one Add
+ * to CRM takes): failed, or processed with no live record (`unfiled`); or
+ * every failed and processed one (`all`). `s` is the submission, `r` its live
+ * main record from a left join.
+ */
+function scopeTest(scope: SyncScope) {
+  return scope === 'unfiled'
+    ? sql`(s.state = 'failed' or (s.state = 'processed' and r.id is null))`
+    : sql`s.state in ('failed', 'processed')`;
+}
+
+/** A submission as filing reads it, with whether its main record is still live. */
+interface ScopedRow extends Record<string, unknown> {
+  readonly id: string;
+  readonly state: string;
+  readonly answers: unknown;
+  readonly live_record_id: string | null;
+}
+
+/** Totals a filing job keeps in its checkpoint and shows as its result. */
+const Totals = z.object({
+  created: z.number().int().min(0),
+  updated: z.number().int().min(0),
+  unchanged: z.number().int().min(0),
+  failures: z.number().int().min(0),
+  skipped: z.number().int().min(0),
+});
+type Totals = z.infer<typeof Totals>;
+const NO_TOTALS: Totals = { created: 0, updated: 0, unchanged: 0, failures: 0, skipped: 0 };
+
+function totalsOf(checkpoint: unknown): Totals {
+  const parsed = Totals.safeParse(checkpoint);
+  return parsed.success ? parsed.data : NO_TOTALS;
+}
+
+/**
+ * One batch of a filing job: each submission locked, checked against the
+ * scope again (it may have changed since the start), and filed with the
+ * form's live mapping as the member. A failed one that fails again keeps its
+ * new reason; a filed one whose update now fails keeps its record and state,
+ * and is counted and said on its item.
+ */
+async function fileBatch(
+  context: WriteContext,
+  input: {
+    readonly formId: string;
+    readonly scope: SyncScope;
+    readonly items: readonly { readonly position: number; readonly itemId: string }[];
+    readonly checkpoint: unknown;
+  },
+): Promise<StepOutcome> {
+  const { tx } = context;
+  const totals = { ...totalsOf(input.checkpoint) };
+  const mapping = await mappingOf(tx, input.formId);
+  if (mapping === undefined) {
+    return {
+      finished: true,
+      failed: { code: 'FORM_STATE', message: 'The form is gone or no longer published, so nothing more was filed.' },
+    };
+  }
+  const outcomes: ItemOutcome[] = [];
+  for (const item of input.items) {
+    const found = await tx.execute<ScopedRow>(sql`
+      select s.id::text, s.state, s.answers, r.id::text as live_record_id
+      from form_submissions s
+      left join records r on r.workspace_id = s.workspace_id and r.id = s.main_record_id and r.deleted_at is null
+      where s.id = ${item.itemId} and s.form_id = ${input.formId} and ${scopeTest(input.scope)}
+      for update of s
+    `);
+    const row = found.rows[0];
+    if (row === undefined) {
+      totals.skipped += 1;
+      outcomes.push({ position: item.position, state: 'skipped', code: 'FORM_STATE', message: NOT_ELIGIBLE });
+      continue;
+    }
+    const filed = await fileAnswers(context, {
+      submissionId: row.id,
+      answers: answersOf(row.answers),
+      form: mapping.form,
+      document: mapping.document,
+      attributes: mapping.attributes,
+      options: mapping.options,
+      ...(row.live_record_id === null ? {} : { keepRecordId: row.live_record_id }),
+      // The member writes, through their own access: the mapping's answers only.
+      writer: () => context,
+    });
+    if (filed.kind === 'failed') {
+      totals.failures += 1;
+      // A filed submission keeps its record and state; one not in the CRM records why it still isn't.
+      if (row.live_record_id === null) await settle(tx, row.id, filed, { filedWith: mapping.versionNumber });
+      outcomes.push({ position: item.position, state: 'refused', code: 'FORM_STATE', message: filed.failure });
+      continue;
+    }
+    if (filed.action === 'created') totals.created += 1;
+    else if (filed.action === 'updated') totals.updated += 1;
+    else totals.unchanged += 1;
+    await settle(tx, row.id, filed, { filedWith: mapping.versionNumber });
+    outcomes.push({ position: item.position, state: 'done' });
+  }
+  return { finished: false, items: outcomes, checkpoint: totals, result: { filing: totals } };
+}
+
+/** The Add to CRM job's params: the form (its items are the submissions). */
+export const FormsFileParams = z.strictObject({ formId: z.uuid() });
+/** The Add to CRM job's params. */
+export type FormsFileParams = z.infer<typeof FormsFileParams>;
+
+/** `forms.file`: the member's, heavy lane, cancellable, 20 submissions a batch. */
+export function formsFile(): KindDefinition<FormsFileParams> {
+  return defineKind<FormsFileParams>({
+    kind: FORMS_FILE,
+    lane: 'heavy',
+    actor: 'member',
+    mode: 'items',
+    params: FormsFileParams,
+    cancellable: true,
+    maxAttempts: MAX_ATTEMPTS.heavy,
+    batchSize: 20,
+    sample: { formId: '0199f0a0-0000-7000-8000-000000000001' },
+    step: (context, { job, items }) =>
+      fileBatch(context, {
+        formId: job.params.formId,
+        scope: 'unfiled',
+        items: items ?? [],
+        checkpoint: job.checkpoint,
+      }),
+  });
+}
+
+/**
+ * Add to CRM: starts one `forms.file` job for the named submissions of a form
+ * that aren't in the CRM (failed, or processed with no live record), in the
+ * order given. Ones that don't qualify are counted as skipped; when none
+ * does, no job starts. Needs `forms.manage` and a published form.
+ */
+export async function addToCrm(
+  scope: EngineScope,
+  registry: JobRegistry,
+  input: { readonly formId: string; readonly submissionIds: readonly string[] },
+  hooks: readonly AfterWrite[] = [],
+): Promise<AddToCrmResult> {
+  requirePermission(scope, 'forms.manage');
+  const ids = [...new Set(input.submissionIds)].slice(0, ADD_TO_CRM_MAX).map((id) => checkId(id, NOT_ELIGIBLE));
+  const { result } = await runWrite(
+    scope,
+    async (context) => {
+      const { form } = await managedForm(context.tx, input.formId);
+      const found = await context.tx.execute<{ id: string }>(sql`
+        select s.id::text from form_submissions s
+        left join records r on r.workspace_id = s.workspace_id and r.id = s.main_record_id and r.deleted_at is null
+        where s.form_id = ${form.id} and s.id = any(${uuidList(ids)}) and ${scopeTest('unfiled')}
+      `);
+      const eligible = new Set(found.rows.map((row) => row.id));
+      const queued = ids.filter((id) => eligible.has(id));
+      if (queued.length === 0) return { queued: 0, skipped: ids.length };
+      const { jobId } = await startJob(context, registry, {
+        kind: FORMS_FILE,
+        params: { formId: form.id },
+        items: queued,
+      });
+      return { jobId, queued: queued.length, skipped: ids.length - queued.length };
+    },
+    hooks,
+  );
+  return result;
+}
+
+/** How many of a form's submissions a scope holds. */
+async function countInScope(tx: WorkspaceTx, formId: string, scope: SyncScope): Promise<number> {
+  const counted = await tx.execute<{ n: number }>(sql`
+    select count(*)::int as n from form_submissions s
+    left join records r on r.workspace_id = s.workspace_id and r.id = s.main_record_id and r.deleted_at is null
+    where s.form_id = ${formId} and ${scopeTest(scope)}
+  `);
+  return counted.rows[0]?.n ?? 0;
+}
+
+/**
+ * What Sync old records would do (read only): the newest submissions in scope
+ * (at most `SYNC_PREVIEW_MAX`), each planned against the live mapping and
+ * compared with its record as it is, in a handful of reads for the whole
+ * page (one for the candidate matches, one for their values). An estimate:
+ * a refusal only the engine finds at write time (a rule, a required field)
+ * shows at the run, not here; two submissions for one new person count as a
+ * create and an update.
+ */
+export async function previewSync(
+  scope: EngineScope,
+  input: { readonly formId: string; readonly scope: SyncScope },
+): Promise<SyncPreview> {
+  requirePermission(scope, 'forms.manage');
+  return inWorkspace(scope, async (tx) => {
+    const mapping = await managedForm(tx, input.formId);
+    const { form, document, attributes, options } = mapping;
+    const total = await countInScope(tx, form.id, input.scope);
+    const page = await tx.execute<ScopedRow>(sql`
+      select s.id::text, s.state, s.answers, r.id::text as live_record_id
+      from form_submissions s
+      left join records r on r.workspace_id = s.workspace_id and r.id = s.main_record_id and r.deleted_at is null
+      where s.form_id = ${form.id} and ${scopeTest(input.scope)}
+      order by s.received_at desc, s.id desc
+      limit ${SYNC_PREVIEW_MAX}
+    `);
+    const planned = page.rows.map((row) => ({ row, ...plan(document, attributes, options, answersOf(row.answers)) }));
+
+    // Every candidate match in one read: the main object's records holding the planned match keys.
+    const keys = new Map<string, string>();
+    for (const each of planned) {
+      if (each.row.live_record_id !== null) continue;
+      const match = matchKey(each.planned, document.targets.main.matchAttributeId);
+      if (match !== undefined) keys.set(each.row.id, match.key);
+    }
+    const matchAttributeId = document.targets.main.matchAttributeId;
+    const matched = new Map<string, string>();
+    if (keys.size > 0 && matchAttributeId !== undefined) {
+      const hits = await tx.execute<{ unique_key: string; record_id: string }>(sql`
+        select distinct on (v.unique_key) v.unique_key, v.record_id::text
+        from "values" v join records r on r.workspace_id = v.workspace_id and r.id = v.record_id
+        where v.attribute_id = ${matchAttributeId} and v.unique_key = any(array(select jsonb_array_elements_text(${JSON.stringify([...new Set(keys.values())])}::jsonb)))
+          and v.active_until is null and r.object_id = ${form.mainObjectId} and r.deleted_at is null
+        order by v.unique_key, r.created_at, r.id
+      `);
+      for (const hit of hits.rows) matched.set(hit.unique_key, hit.record_id);
+    }
+
+    const owner = ownerAttribute(attributes);
+    const assignment = await chooseOwner(tx, form.ownerMemberId);
+    const ownerValue = assignment.memberId === undefined ? undefined : { type: 'member', id: assignment.memberId };
+    const targetOf = (each: (typeof planned)[number]) => {
+      if (each.row.live_record_id !== null) return each.row.live_record_id;
+      const key = keys.get(each.row.id);
+      return key === undefined ? undefined : matched.get(key);
+    };
+    const recordIds = [...new Set(planned.flatMap((each) => targetOf(each) ?? []))];
+    const attributeIds = [...attributes.keys()];
+    const items = recordIds.length === 0 ? [] : await currentItems(tx, recordIds, attributeIds);
+
+    const counts: { -readonly [K in keyof SyncCounts]: number } = { creates: 0, updates: 0, unchanged: 0, failures: 0 };
+    const createdKeys = new Set<string>();
+    for (const each of planned) {
+      const target = targetOf(each);
+      if (target === undefined) {
+        const key = keys.get(each.row.id);
+        if (each.planned.length === 0) counts.failures += 1;
+        else if (key !== undefined && createdKeys.has(key)) counts.updates += 1;
+        else {
+          counts.creates += 1;
+          if (key !== undefined) createdKeys.add(key);
+        }
+        continue;
+      }
+      const { changes } = await changesFor(tx, target, each.planned, owner, ownerValue, heldValues(items, target));
+      if (changes.size === 0) counts.unchanged += 1;
+      else counts.updates += 1;
+    }
+    return {
+      ...counts,
+      total,
+      checked: planned.length,
+      capped: total > planned.length,
+      versionNumber: mapping.versionNumber,
+    };
+  });
+}
+
+/** The Sync old records job's params: the form, the scope, and the moment it started (later submissions are left). */
+export const FormsSyncParams = z.strictObject({ formId: z.uuid(), scope: z.enum(['all', 'unfiled']), asOf: z.iso.datetime() });
+/** The Sync old records job's params. */
+export type FormsSyncParams = z.infer<typeof FormsSyncParams>;
+
+/**
+ * `forms.sync`: the member's, heavy lane, cancellable, 20 submissions a
+ * batch. Its snapshot walks the form's submissions in scope received up to
+ * its start, by id; each batch files them as `forms.file` does.
+ */
+export function formsSync(): KindDefinition<FormsSyncParams> {
+  return defineKind<FormsSyncParams>({
+    kind: FORMS_SYNC,
+    lane: 'heavy',
+    actor: 'member',
+    mode: 'items',
+    params: FormsSyncParams,
+    cancellable: true,
+    maxAttempts: MAX_ATTEMPTS.heavy,
+    batchSize: 20,
+    sample: { formId: '0199f0a0-0000-7000-8000-000000000001', scope: 'all', asOf: '2026-10-20T00:00:00.000Z' },
+    async snapshot(context, params, after, limit) {
+      const found = await context.tx.execute<{ id: string }>(sql`
+        select s.id::text from form_submissions s
+        left join records r on r.workspace_id = s.workspace_id and r.id = s.main_record_id and r.deleted_at is null
+        where s.form_id = ${params.formId} and s.received_at <= ${params.asOf}::timestamptz
+          and ${scopeTest(params.scope)} ${after === undefined ? sql`` : sql`and s.id > ${after}::uuid`}
+        order by s.id
+        limit ${limit}
+      `);
+      return found.rows.map((row) => row.id);
+    },
+    step: (context, { job, items }) =>
+      fileBatch(context, {
+        formId: job.params.formId,
+        scope: job.params.scope,
+        items: items ?? [],
+        checkpoint: job.checkpoint,
+      }),
+  });
+}
+
+/**
+ * Starts Sync old records: one `forms.sync` job (its id the caller's, so a
+ * retry starts one), which snapshots the submissions in scope, then files
+ * them. Answers how many are in scope now. Needs `forms.manage` and a
+ * published form.
+ */
+export async function startSync(
+  scope: EngineScope,
+  registry: JobRegistry,
+  input: { readonly formId: string; readonly scope: SyncScope; readonly jobId?: string },
+  hooks: readonly AfterWrite[] = [],
+): Promise<SyncStarted> {
+  requirePermission(scope, 'forms.manage');
+  const { result } = await runWrite(
+    scope,
+    async (context) => {
+      const { form } = await managedForm(context.tx, input.formId);
+      const total = await countInScope(context.tx, form.id, input.scope);
+      const asOf = await context.tx.execute<{ now: string }>(
+        sql`select to_char(now() at time zone 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.US"Z"') as now`,
+      );
+      const { jobId } = await startJob(context, registry, {
+        id: input.jobId ?? randomUUID(),
+        kind: FORMS_SYNC,
+        params: { formId: form.id, scope: input.scope, asOf: asOf.rows[0]?.now ?? new Date().toISOString() },
+        snapshot: true,
+      });
+      return { jobId, total };
+    },
+    hooks,
+  );
+  return result;
+}
