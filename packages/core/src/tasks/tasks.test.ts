@@ -526,7 +526,7 @@ describe('listTasks for My tasks (AC-436, AC-447)', () => {
 
     const assigned = await listTasks(w.scope, { scope: { mine: 'assigned' }, status: 'open' });
     expect(ids(assigned)).toEqual([mineSoon.id, mineLate.id, beasOwn.id]);
-    expect(assigned.total).toEqual({ count: 3, atLeast: false });
+    expect(assigned.total).toBeUndefined();
     expect(ids(await listTasks(w.scope, { scope: { mine: 'created' }, status: 'open' }))).toEqual([
       mineSoon.id,
       mineLate.id,
@@ -606,7 +606,7 @@ describe('listTasks for My tasks (AC-436, AC-447)', () => {
     const bea = w.as(w.bea, w.level(w.companies, 'none'));
     const page = await listTasks(bea, { scope: { mine: 'all' }, status: 'open' });
     expect(ids(page)).toEqual([both.id, free.id, trashedOnly.id]);
-    expect(page.total).toEqual({ count: 3, atLeast: false });
+
     expect(page.items.find((item) => item.id === both.id)?.records.map((record) => record.recordId)).toEqual([ada]);
     expect(ids(page)).not.toContain(hidden.id);
     // Cal is the assignee: his task shows whatever its links.
@@ -623,10 +623,7 @@ describe('listTasks for My tasks (AC-436, AC-447)', () => {
     await createTask(w.scope, { id: newId(), title: 'Free', assigneeMemberId: w.ownerId });
     const key = (level: 'none' | 'read') =>
       rescope(w.scope, { actor: { type: 'api_key', id: newId() }, scopes: level === 'read' ? ['data.read'] : [] });
-    expect(await listTasks(key('none'), { scope: { mine: 'all' }, status: 'open' })).toEqual({
-      items: [],
-      total: { count: 0, atLeast: false },
-    });
+    expect(await listTasks(key('none'), { scope: { mine: 'all' }, status: 'open' })).toEqual({ items: [] });
     expect((await listTasks(key('read'), { scope: { mine: 'assigned' }, status: 'open' })).items).toEqual([]);
   });
 });

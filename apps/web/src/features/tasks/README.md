@@ -1,12 +1,12 @@
 # Tasks
 
-Spec 0019, milestone 1: tasks on a record. My tasks (milestone 2) and deleting a task (milestone 4) come later; the side panel's Tasks tab waits for spec 0017's milestone 4 (the panel).
+Spec 0019: tasks on a record (milestone 1), My tasks (milestone 2) and deleting a task (milestone 4). The side panel's Tasks tab waits for spec 0017's milestone 4 (the panel).
 
 ## A record's Tasks tab (TasksTab)
 
 - **Purpose**: the follow ups about this record.
 - **Main task**: add a task (type its title, press Enter) and tick it off.
-- **Leaves out**: reminders (#28), tasks of related records, deleting a task (milestone 4).
+- **Leaves out**: reminders (#28), tasks of related records.
 
 ## Overview's Open tasks block (OpenTasksCard)
 
@@ -18,7 +18,13 @@ Spec 0019, milestone 1: tasks on a record. My tasks (milestone 2) and deleting a
 
 - **Purpose**: everything about one task, on `?task=<id>` (or `?task=new`) over whichever tab opened it.
 - **Main task**: set its title, when it's due, who has it and which records it is about.
-- **Leaves out**: comments on tasks, reminders, subtasks, deleting it (milestone 4).
+- **Leaves out**: comments on tasks, reminders, subtasks.
+
+## My tasks (MyTasksScreen)
+
+- **Purpose**: each person's to do list across the workspace, on `/w/$slug/tasks` ("My tasks" in the sidebar, above Records).
+- **Main task**: see what's due today and get it done.
+- **Leaves out**: search and saved filters (#33, #20), other people's lists except through "All tasks".
 
 ## Notes
 
@@ -28,7 +34,10 @@ Spec 0019, milestone 1: tasks on a record. My tasks (milestone 2) and deleting a
 - A tick shows at once; the task stays in the open list struck through until the list settles (1.5 seconds after the last change in it), then moves to Completed. A refused tick rolls back with a toast and Retry.
 - Completed is a Disclosure, closed by default; its done tasks are read when it first opens, newest done first, with their count.
 - The record chip on each row is the first linked record that isn't this one, with "+N" for the rest (`entries.ts`); this record shows only when it is the only link. A removed assignee reads "Former member". A task the person may not change has read only checkboxes and fields with "You can view this task but not change it."
-- The dialog's fields are the field set's own editors (Date, Member, record reference), committed one by one as Details commits (optimistic, the refusal under the field). The title is one line that wraps as it grows (Field's `isWrapping`; Enter commits), its count only near the limit. Assignee and Records are each one field, chips inside, the record picker's object switcher ("Search in") inside its menu above the search, starting on the page's object; a pick on an object the person may only read is refused under the field before anything is sent, and so is a 21st record. The search is spec 0014's `records.search` through `data.records.search` (`useRecordSearch` in `features/records/links.ts`): the 20 most recently updated with nothing typed, a name prefix for one or two characters, then names, emails and domains that contain the text, 150 ms after the last key. "Create task" closes the dialog at once; a refusal raises a toast with Retry. Under the fields, "Created by" names who made it and when, as the fields label their values (a stacked DescriptionList); "Copy link", an icon button with its tooltip in the title bar before Close, copies the page's address with `?task=`. A saved task has no footer. Deleting arrives with milestone 4, with the More menu.
+- The dialog's fields are the field set's own editors (Date, Member, record reference), committed one by one as Details commits (optimistic, the refusal under the field). The title is one line that wraps as it grows (Field's `isWrapping`; Enter commits), its count only near the limit. Assignee and Records are each one field, chips inside, the record picker's object switcher ("Search in") inside its menu above the search, starting on the page's object; a pick on an object the person may only read is refused under the field before anything is sent, and so is a 21st record. The search is spec 0014's `records.search` through `data.records.search` (`useRecordSearch` in `features/records/links.ts`): the 20 most recently updated with nothing typed, a name prefix for one or two characters, then names, emails and domains that contain the text, 150 ms after the last key. "Create task" closes the dialog at once; a refusal raises a toast with Retry. Under the fields, "Created by" names who made it and when, as the fields label their values (a stacked DescriptionList). The More menu in the title bar, before Close, holds "Copy link" (the page's address with `?task=`) and "Delete task". A saved task has no footer.
 - Opening the dialog pushes `?task=` (Back closes it); closing it steps back when this page opened it, else replaces the address.
 - A task in the timeline reads "added a task" or "completed a task" with its title, which opens the dialog.
+- My tasks reads `data.tasks.mine(workspace, filter, status)`: "Assigned to me" (the default), "Created by me" or "All tasks" (every task the person may see), and "Open" or "Completed", both in the address (`?filter=`, `?status=`; the defaults left out). The two switches sit in SectionBar's `bar` variant rather than a Toolbar, so each SegmentedControl keeps its own arrow keys; a switch on the page draws the new list loading in place, with no pending frame, so focus stays on the switch.
+- Open tasks group under Overdue, Today, Upcoming and No date by the browser's local day (`day.ts`); a timer set for the next local midnight (checked again when the tab is shown) moves them, with no server call. Completed tasks list newest done first, with no groups.
+- "Delete task" in the dialog's More menu (beside "Copy link") acts at once, with no confirm: the task leaves every list and the dialog closes, with "Task deleted" and Undo for 10 seconds.
 - Every string is in `strings.ts`.

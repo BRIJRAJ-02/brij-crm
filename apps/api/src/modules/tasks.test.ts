@@ -105,7 +105,7 @@ describe('tasks.*', () => {
       m.client.tasks.list({ workspace: m.slug, scope: { mine }, status });
     expect((await list('assigned')).items.map((task) => task.id)).toEqual([mine.id]);
     expect((await list('created')).items.map((task) => task.id)).toEqual([mine.id, loose.id]);
-    expect(await list('all')).toMatchObject({ total: { count: 2, atLeast: false } });
+    expect((await list('all')).items).toHaveLength(2);
     await m.client.tasks.update({ workspace: m.slug, taskId: mine.id, isDone: true, mutationId: newId() });
     expect((await list('assigned', 'done')).items.map((task) => task.id)).toEqual([mine.id]);
     const unknown = await failure(() =>

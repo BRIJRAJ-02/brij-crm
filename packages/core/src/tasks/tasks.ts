@@ -679,15 +679,21 @@ function taskVisibleSql(scope: Pick<EngineScope, 'access' | 'actor'>): SQL {
   const me = memberOf(scope.access);
   const { actor } = scope;
   const narrowed = recordVisibleSql(scope.access, 'r');
+  // Scalar subqueries, not EXISTS: Postgres turns an EXISTS under an OR into a hash of every link in the
+  // workspace (a second at 100,000 tasks); a scalar one runs per row, and a page stops after 50 rows. Each link
+  // finds its record by its key.
+  const linkedLive = sql`coalesce((select true from task_records l
+    where l.workspace_id = t.workspace_id and l.task_id = t.id
+      and coalesce((select r.deleted_at is null and o.archived_at is null
+        ${narrowed === undefined ? sql`` : sql`and ${narrowed}`}
+        from records r join objects o on o.workspace_id = r.workspace_id and o.id = r.object_id
+        where r.workspace_id = l.workspace_id and r.id = l.record_id), false)
+    limit 1), false)`;
   const parts = [
-    sql`not exists (select 1 from task_records l where l.workspace_id = t.workspace_id and l.task_id = t.id)`,
     ...(me === undefined ? [] : [sql`t.assignee_member_id = ${me}::uuid`]),
     actor.id === null ? sql`false` : sql`(t.created_by_type = ${actor.type} and t.created_by_id = ${actor.id}::uuid)`,
-    sql`exists (select 1 from task_records l
-      join records r on r.workspace_id = l.workspace_id and r.id = l.record_id
-      join objects o on o.workspace_id = r.workspace_id and o.id = r.object_id
-      where l.workspace_id = t.workspace_id and l.task_id = t.id and r.deleted_at is null and o.archived_at is null
-        ${narrowed === undefined ? sql`` : sql`and ${narrowed}`})`,
+    linkedLive,
+    sql`(select count(*) from task_records l where l.workspace_id = t.workspace_id and l.task_id = t.id) = 0`,
   ];
   return sql`(${sql.join(parts, sql` or `)})`;
 }
@@ -728,8 +734,8 @@ function listFrom(scope: EngineScope, input: ListTasksInput, recordId: string | 
  * SQL), each on its own partial index. Open ones by due date (earliest first,
  * no date last, then oldest first, then id), or done ones newest done first
  * (then id). A record's list needs no task rule: the record is visible, so
- * every task linked to it is. `total` (counted up to 10,001) only on the
- * first page. A hidden or trashed record is `NOT_FOUND`; a cursor the server
+ * every task linked to it is. `total` (counted up to 10,001) only on a
+ * record's first page (its tab's count); My tasks shows none, so reads none. A hidden or trashed record is `NOT_FOUND`; a cursor the server
  * didn't make is 400 `INPUT_INVALID` on `cursor`.
  */
 export async function listTasks(scope: EngineScope, input: ListTasksInput): Promise<TaskPage> {
@@ -746,14 +752,12 @@ export async function listTasks(scope: EngineScope, input: ListTasksInput): Prom
   }
   if (!principalReaches(scope.access, 'read')) {
     if (recordId !== undefined) throw refuse('NOT_FOUND', UNKNOWN_RECORD);
-    return { items: [], ...(after === undefined ? { total: { count: 0, atLeast: false } } : {}) };
+    return { items: [] };
   }
   return inWorkspace(scope, async (tx) => {
     if (recordId !== undefined) await checkListedRecord(tx, scope.access, recordId);
     const from = listFrom(scope, input, recordId);
-    if (from === undefined) {
-      return { items: [], ...(after === undefined ? { total: { count: 0, atLeast: false } } : {}) };
-    }
+    if (from === undefined) return { items: [] };
     let bound = sql``;
     if (after?.status === 'open') {
       const tail = sql`(t.created_at, t.id) > (${after.createdAt}::timestamptz, ${after.id}::uuid)`;
@@ -790,7 +794,10 @@ export async function listTasks(scope: EngineScope, input: ListTasksInput): Prom
             ? { status, dueOn: last.due_on, createdAt: last.created_at, id: last.id }
             : { status, doneAt: last.done_at ?? '', id: last.id },
         );
-    if (after !== undefined) return { items: [...items], ...(nextCursor === undefined ? {} : { nextCursor }) };
+    // Only a record's list is counted (its tab's label); My tasks shows no count, so it reads none.
+    if (after !== undefined || recordId === undefined) {
+      return { items: [...items], ...(nextCursor === undefined ? {} : { nextCursor }) };
+    }
     const counted = await tx.execute<{ n: number }>(
       sql`select count(*)::int as n from (select 1 ${from} limit ${TASK_COUNT_CAP + 1}) c`,
     );

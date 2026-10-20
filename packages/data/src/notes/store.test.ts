@@ -74,7 +74,7 @@ function setup() {
       const overwrote =
         held !== undefined && input.baseVersion !== held.version ? { by: held.updatedBy, at: 'then' } : undefined;
       server.set(input.id, next);
-      return { note: summary(input.id, next), ...(overwrote ? { overwrote } : {}) } as SaveNoteResult;
+      return { note: summary(input.id, next), ...(overwrote ? { overwrote } : {}) };
     },
     delete: ({ noteId }) => {
       server.delete(noteId);

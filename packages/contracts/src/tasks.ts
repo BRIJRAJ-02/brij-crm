@@ -155,7 +155,7 @@ export const TaskTotal = z.object({
 /** How many tasks a list holds. */
 export type TaskTotal = z.infer<typeof TaskTotal>;
 
-/** A page of tasks, the cursor for the next when there are more, and the list's total on the first page. */
+/** A page of tasks, the cursor for the next when there are more, and a record list's total on its first page (My tasks reads none). */
 export const TaskPage = z.object({
   items: z.array(TaskView),
   nextCursor: z.string().optional(),

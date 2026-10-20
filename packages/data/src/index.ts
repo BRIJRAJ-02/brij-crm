@@ -1761,7 +1761,7 @@ export function createDataLayer({
           save: ({ content, ...input }) =>
             call((options) =>
               api.notes.save(
-                { ...input, ...(content === undefined ? {} : { content: content as RichTextDocBody }) },
+                { ...input, ...(content === undefined ? {} : { content: content }) },
                 options,
               ),
             ),
