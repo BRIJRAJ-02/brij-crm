@@ -98,6 +98,11 @@ const NO_SCOPE: ReadonlySet<string> = new Set([
   // calendar reads a host's connections as the system for the public page, which has no scope of its own.
   'createBusyCache',
   'connectedCalendar',
+  // The visitor's calendar (spec 0028): the overlay is pure, and the token seal is the one calendar sync uses,
+  // bound here to the guest's cookie rather than a workspace.
+  'overlay',
+  'sealTokens',
+  'openTokens',
 ]);
 
 const exported = { ...core, ...system } as Record<string, unknown>;
