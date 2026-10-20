@@ -12,6 +12,8 @@ export interface ProgressBarProps {
   readonly isIndeterminate?: boolean;
   /** Keeps the label for screen readers only, when the text beside it already says. */
   readonly isLabelHidden?: boolean;
+  /** What screen readers hear for the value instead of a percentage: "2 of 7" for a form's steps. */
+  readonly valueLabel?: string;
   /** Shows the percentage after the label. */
   readonly showValue?: boolean;
 }
@@ -24,6 +26,7 @@ export function ProgressBar({
   isIndeterminate = value === undefined,
   isLabelHidden = false,
   showValue = false,
+  valueLabel,
 }: ProgressBarProps) {
   return (
     <AriaProgressBar
@@ -31,6 +34,7 @@ export function ProgressBar({
       maxValue={maxValue}
       isIndeterminate={isIndeterminate}
       {...(value === undefined ? {} : { value })}
+      {...(valueLabel === undefined ? {} : { valueLabel })}
       {...(isLabelHidden ? { 'aria-label': label } : {})}
     >
       {({ percentage, valueText }) => (

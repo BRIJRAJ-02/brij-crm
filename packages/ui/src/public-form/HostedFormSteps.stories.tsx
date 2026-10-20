@@ -82,8 +82,9 @@ type Story = StoryObj<typeof meta>;
 /** Steps, the first: the header, "Step 1 of 3" over the progress line, the step's title and its questions, Continue. */
 export const Steps: Story = {
   play: async ({ canvas }) => {
-    await expect(canvas.getByRole('progressbar', { name: 'Step 1 of 3' })).toBeInTheDocument();
-    await expect(canvas.getByText('About you')).toBeInTheDocument();
+    const progress = canvas.getByRole('progressbar', { name: 'Step 1 of 3' });
+    await expect(progress).toHaveAttribute('aria-valuetext', 'Step 1 of 3');
+    await expect(canvas.getByRole('heading', { level: 2, name: 'About you' })).toBeInTheDocument();
     await expect(canvas.queryByRole('button', { name: 'Back' })).not.toBeInTheDocument();
   },
 };
@@ -129,6 +130,10 @@ export const LastStep: Story = {
     await userEvent.click(canvas.getByRole('radio', { name: '5k to 20k' }));
     await userEvent.click(canvas.getByRole('button', { name: 'Send enquiry' }));
     await waitFor(() => expect(canvas.getByRole('heading', { name: 'Thank you. That is with us.' })).toHaveFocus());
+    // Send another starts again from the first step.
+    await userEvent.click(canvas.getByRole('button', { name: 'Send another' }));
+    await waitFor(() => expect(canvas.getByRole('progressbar', { name: 'Step 1 of 3' })).toBeInTheDocument());
+    await expect(canvas.getByLabelText('Your name')).toHaveValue('');
   },
 };
 

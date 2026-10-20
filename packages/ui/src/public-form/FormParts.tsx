@@ -220,17 +220,19 @@ export function FormAlert({ state }: { readonly state: HostedFormState }) {
 export function FormTrap({ form, state }: { readonly form: PublicForm; readonly state: HostedFormState }) {
   const id = `hf-${form.key}-${HONEYPOT_KEY}`;
   return (
-    <div className={styles.hidden} aria-hidden="true">
-      <label htmlFor={id}>{state.words.honeypot}</label>
-      <input
-        id={id}
-        type="text"
-        name={HONEYPOT_KEY}
-        tabIndex={-1}
-        autoComplete="off"
-        value={state.trap}
-        onChange={(event) => state.setTrap(event.target.value)}
-      />
+    <div aria-hidden="true">
+      <VisuallyHidden>
+        <label htmlFor={id}>{state.words.honeypot}</label>
+        <input
+          id={id}
+          type="text"
+          name={HONEYPOT_KEY}
+          tabIndex={-1}
+          autoComplete="off"
+          value={state.trap}
+          onChange={(event) => state.setTrap(event.target.value)}
+        />
+      </VisuallyHidden>
     </div>
   );
 }
