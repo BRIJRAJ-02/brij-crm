@@ -8,6 +8,7 @@
 // the size to a service that checks it itself (spec 0019: a note's size is
 // the service's 422, never the input parse's 400).
 import * as z from 'zod';
+import { isSafeLink } from './safe-link.ts';
 
 /** The node types a document may hold. */
 export const RICH_TEXT_NODES = [
@@ -36,20 +37,7 @@ export const RICH_TEXT_MAX_BYTES = 200 * 1024;
 /** How deep nodes may nest (a list in a list in a quote…): far past any real note, short of a parser's stack. */
 export const RICH_TEXT_MAX_DEPTH = 40;
 
-/** The protocols a link may use; paths on our own origin are allowed too (`/w/…`, never `//host`). */
-const SAFE_PROTOCOLS = new Set(['http:', 'https:', 'mailto:', 'tel:']);
-
-/** Whether a link may be stored: the rule `safeHref()` applies when one is drawn. */
-export function isSafeLink(href: string): boolean {
-  const value = href.trim();
-  if (value === '') return false;
-  if (value.startsWith('/')) return !/^\/[/\\]/.test(value);
-  try {
-    return SAFE_PROTOCOLS.has(new URL(value).protocol);
-  } catch {
-    return false;
-  }
-}
+export { isSafeLink, safeLink } from './safe-link.ts';
 
 /** How deep a JSON value nests, counted without recursion (so a hostile one can't blow the stack). */
 export function jsonDepth(value: unknown, limit: number): number {

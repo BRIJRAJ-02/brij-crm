@@ -10,6 +10,7 @@
     "./jump": "./src/values/jump.ts",
     "./validation": "./src/validation/index.ts",
     "./slugs": "./src/values/slugs.ts",
+    "./safe-link": "./src/values/safe-link.ts",
     "./picker": "./src/values/picker.ts",
     "./activity-keys": "./src/activity-keys.ts",
     "./task-limits": "./src/task-limits.ts",

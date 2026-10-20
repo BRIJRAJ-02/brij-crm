@@ -119,6 +119,7 @@ export {
 } from './validation-rules.ts';
 export {
   isSafeLink,
+  safeLink,
   jsonDepth,
   RICH_TEXT_MARKS,
   RICH_TEXT_MAX_BYTES,

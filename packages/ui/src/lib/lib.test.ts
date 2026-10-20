@@ -32,6 +32,13 @@ describe('safeHref', () => {
     '',
     '   ',
     undefined,
+    // Browsers strip tab, CR and LF while resolving, so each must be refused, never judged as text.
+    'https://example.com/\nsecond',
+    'https://exa\rmple.com',
+    '/people/\t1',
+    'java\nscript:alert(1)',
+    '/people\\..\\evil',
+    'https:\x00//example.com',
   ])('refuses %s', (href) => {
     expect(safeHref(href)).toBeUndefined();
   });
