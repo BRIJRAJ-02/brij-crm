@@ -46,6 +46,8 @@
 
   .choice[data-focus-visible] {
     box-shadow: var(--shadow-focus);
+    outline: var(--border-width-hairline) solid var(--accent-line);
+    outline-offset: var(--border-width-hairline);
   }
 
   /* In a grid cell the stars sit where the display had them, and the cell

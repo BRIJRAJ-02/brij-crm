@@ -111,6 +111,8 @@
 
   .message:focus-visible {
     box-shadow: var(--shadow-focus);
+    outline: var(--border-width-hairline) solid var(--accent-line);
+    outline-offset: var(--border-width-hairline);
   }
 
   @media (forced-colors: active) {

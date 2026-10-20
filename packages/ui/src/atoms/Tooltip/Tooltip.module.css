@@ -13,6 +13,8 @@
   .trigger[data-focus-visible] {
     border-radius: var(--radius-xs);
     box-shadow: var(--shadow-focus);
+    outline: var(--border-width-hairline) solid var(--accent-line);
+    outline-offset: var(--border-width-hairline);
   }
 
   .root {
