@@ -73,7 +73,7 @@ Work that was in flight when the lanes stopped is kept on its lane branches (a `
 - F24. "use the same": the form preview drew its own inputs. Now the library's.
 - F25. "add search box in phone number and country", "make it better instead of direct input field", "use our custom design language of input", "add it to design system": PhoneField and CountryPicker. Done.
 - F26. "borders look in too dark": text fields now use the softer field border at 3:1, the accessible minimum, as chosen.
-- F27. "Also make sure all input fields across needs to be as per the design system". Open across the app.
+- F27. "Also make sure all input fields across needs to be as per the design system". Done outside the areas other builders hold (Settings, records, tasks, Availability, the public pages): apps/web draws no raw input; values to copy are Field's copy variant, the five state submissions filter is a Select, a page's hours mode is a RadioGroup, the icon picker searches with Field, and locked or disabled fields say why. The form builder's questions are compact rows with a footer line, its choices are OptionsEditor's choice kind, and the preview has a header with Colour and Corners.
 
 ### Settings and the shell
 - F28. "get rid of this from the bottom. build a proper settings": the theme switch out of the sidebar, Settings with grouped navigation (spec 0026). Open.
