@@ -44,6 +44,7 @@ import { QuestionsSection } from './QuestionsSection.tsx';
 import { firstRefusal } from './refusals.ts';
 import { SettingsTab, useFormSettings } from './SettingsTab.tsx';
 import { strings } from './strings.ts';
+import { FormToolbarSlot } from './toolbarSlot.ts';
 import { SubmissionsTab } from './SubmissionsTab.tsx';
 
 /** Props for the editor: what its route loaded through the data layer. */
@@ -82,6 +83,8 @@ export function FormEditor(props: FormEditorProps) {
   const [isDeleting, setDeleting] = useState(false);
   // Publish leaves once there is nothing more to publish; focus then moves to the menu beside it.
   const moreRef = useRef<HTMLButtonElement>(null);
+  // The end of the tab strip, where a tab draws its own tools (Submissions' filter and search).
+  const [toolbarSlot, setToolbarSlot] = useState<HTMLElement | null>(null);
   // The name, address and owner, saved together from the SaveBar on the Settings tab.
   const settings = useFormSettings({
     slug,
@@ -380,6 +383,8 @@ export function FormEditor(props: FormEditorProps) {
             state={props.state}
             open={props.openSubmission}
             canManage={canManage}
+            questions={(form.live ?? form.draft).questions}
+            link={data.forms.hostedUrl(form.publicKey)}
           />
         );
       default:
@@ -544,10 +549,11 @@ export function FormEditor(props: FormEditorProps) {
       page={{
         topBar,
         body: (
-          <>
+          <FormToolbarSlot.Provider value={toolbarSlot}>
             {isPublished ? (
               // The Captures strip's way: the tabs edge to edge under the TopBar, the chosen tab's panel holding the layout.
               <Tabs
+                end={<div ref={setToolbarSlot} />}
                 label={strings.tabs}
                 selectedKey={current}
                 onSelectionChange={(value) => {
@@ -570,7 +576,7 @@ export function FormEditor(props: FormEditorProps) {
               layout
             )}
             {dialogs}
-          </>
+          </FormToolbarSlot.Provider>
         ),
       }}
     />
