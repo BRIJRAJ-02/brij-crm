@@ -79,3 +79,19 @@ export const States: Story = {
     );
   },
 };
+
+/** A quiet "(optional)" after the group's label, as a public form marks an optional question. */
+export const OptionalMark: Story = {
+  parameters: { crm: { screenshot: false } },
+  render: () => (
+    <Stage>
+      <RadioGroup label="Budget" labelAside="(optional)">
+        <Radio value="small">Under 5k</Radio>
+        <Radio value="large">Over 5k</Radio>
+      </RadioGroup>
+    </Stage>
+  ),
+  play: async ({ canvas }) => {
+    await expect(canvas.getByRole('radiogroup', { name: 'Budget (optional)' })).toBeInTheDocument();
+  },
+};

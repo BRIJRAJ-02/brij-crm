@@ -25,6 +25,8 @@ export interface FormStrings {
   readonly offline: string;
   readonly thanksTitle: string;
   readonly thanks: string;
+  /** The thank you's line when the form asked for no email or phone, so there is no address to come back to. */
+  readonly thanksNeutral: string;
   readonly thanksMeeting: string;
   readonly bookMeeting: string;
   readonly sendAnother: string;
@@ -82,6 +84,7 @@ const EN: FormStrings = {
   offline: 'That did not go through. Check your connection and try again.',
   thanksTitle: 'Thank you. That is with us.',
   thanks: 'We will come back to you at the address you gave.',
+  thanksNeutral: 'We have it, and the team will read it shortly.',
   thanksMeeting: 'We will come back to you at the address you gave, or book a time now and skip the wait.',
   bookMeeting: 'Book a quick meeting',
   sendAnother: 'Send another',

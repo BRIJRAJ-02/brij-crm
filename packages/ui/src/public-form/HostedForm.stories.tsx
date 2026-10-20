@@ -127,7 +127,7 @@ export const Errors: Story = {
     await userEvent.click(canvas.getByRole('button', { name: 'Send' }));
     await waitFor(() => expect(canvas.getByLabelText('Your name')).toHaveFocus());
     await expect(canvas.getAllByText('Answer this question.')).toHaveLength(2);
-    await expect(canvas.getByText('2 answers need a look')).toBeInTheDocument();
+    await waitFor(() => expect(canvas.getByText('2 answers need a look')).toBeInTheDocument());
     // A summary link takes focus to its question.
     await userEvent.click(canvas.getByRole('link', { name: 'Work email' }));
     await waitFor(() => expect(canvas.getByLabelText('Work email')).toHaveFocus());
@@ -209,4 +209,39 @@ export const Thanks: Story = {
 /** A form that stopped taking enquiries. */
 export const Paused: Story = {
   args: { form: { ...LEAD, status: 'paused', questions: [] } },
+};
+
+/** Tabbing through every question with nothing typed says nothing, a required tick box included: it waits for Send. */
+export const TabThroughIsQuiet: Story = {
+  parameters: { crm: { screenshot: false } },
+  args: {
+    form: {
+      ...LEAD,
+      questions: [
+        ...LEAD.questions.slice(0, 2),
+        { id: 'terms', key: 'terms', label: 'I agree to be contacted', answerType: 'checkbox', required: true },
+      ],
+    },
+  },
+  play: async ({ canvas }) => {
+    await userEvent.tab();
+    await userEvent.tab();
+    await userEvent.tab();
+    await userEvent.tab();
+    await expect(canvas.queryByText('Answer this question.')).not.toBeInTheDocument();
+    await expect(canvas.queryByText('Tick this to go on.')).not.toBeInTheDocument();
+    await userEvent.click(canvas.getByRole('button', { name: 'Send' }));
+    await waitFor(() => expect(canvas.getByText('Tick this to go on.')).toBeInTheDocument());
+  },
+};
+
+/** A form that asks for no email or phone thanks without promising to write back. */
+export const ThanksWithoutAddress: Story = {
+  parameters: { crm: { screenshot: false } },
+  args: { form: { ...LEAD, questions: LEAD.questions.slice(0, 1) } },
+  play: async ({ canvas }) => {
+    await userEvent.type(canvas.getByLabelText('Your name'), 'Ada Lovelace');
+    await userEvent.click(canvas.getByRole('button', { name: 'Send' }));
+    await waitFor(() => expect(canvas.getByText('We have it, and the team will read it shortly.')).toBeInTheDocument());
+  },
 };

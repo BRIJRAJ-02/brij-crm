@@ -30,9 +30,10 @@
   }
 
   /* Touch screens: 16px text in the inputs, so phones don't zoom into a field, and taller
-     inputs to tap. Drawn from the spacing scale until the design system has a touch type
+     inputs to tap; on the page's root too, so a list opened in a popover (a country search) matches. Drawn from the spacing scale until the design system has a touch type
      size (0023-form-design.md, pending owner confirmation). */
   @media (pointer: coarse) {
+    :root:has(.root),
     .root {
       --text-body: 400 var(--space-16) / var(--space-24) var(--font-sans);
       --size-input: calc(var(--space-20) + var(--space-24));
@@ -70,7 +71,6 @@
       border-radius: var(--radius-xl);
       background: var(--surface-raised);
       box-shadow: var(--shadow-md);
-      animation: rise var(--duration-modal) var(--ease-out) both;
     }
   }
 
@@ -126,53 +126,11 @@
     display: none;
   }
 
-  /* After a submit that found problems: a red tinted box above the button, each question a link to it. */
-  .summary {
-    display: flex;
-    flex-direction: column;
-    gap: var(--space-4);
-    padding: var(--space-8) var(--space-12);
-    border: var(--border-width-hairline) solid var(--tag-red-border);
-    border-radius: var(--radius-lg);
-    background: var(--tag-red-bg);
-    color: var(--tag-red-text);
-    animation: fade var(--duration-popover) var(--ease-out) both;
-  }
-
-  .summary:not([data-shown]) {
-    display: none;
-  }
-
-  .summaryTitle {
-    display: flex;
-    align-items: center;
-    gap: var(--space-6);
-    margin: 0;
-    font: var(--text-body-strong);
-    letter-spacing: var(--tracking-body-strong);
-  }
-
+  /* The error summary's links, in a row that wraps, inside its danger Callout. */
   .summaryList {
     display: flex;
     flex-wrap: wrap;
     gap: var(--space-2) var(--space-12);
-    margin: 0;
-    padding-inline-start: calc(var(--size-icon) + var(--space-6));
-    list-style: none;
-  }
-
-  .summaryLink {
-    border-radius: var(--radius-xs);
-    color: inherit;
-    font: var(--text-body-strong);
-    letter-spacing: var(--tracking-body-strong);
-    text-decoration: underline;
-    text-underline-offset: var(--space-2);
-  }
-
-  .summaryLink:focus-visible {
-    outline: var(--border-width-thick) solid var(--accent-line);
-    outline-offset: var(--space-2);
   }
 
   .alert {
@@ -273,13 +231,6 @@
     white-space: nowrap;
   }
 
-  @keyframes rise {
-    from {
-      opacity: 0;
-      translate: 0 var(--space-6);
-    }
-  }
-
   @keyframes grow {
     from {
       opacity: 0;
@@ -295,8 +246,7 @@
 
   /* The fades stay; the rise and the growth go. */
   @media (prefers-reduced-motion: reduce) {
-    .badge,
-    .root[data-mode='page'][data-frame='card'] .card {
+    .badge {
       animation-name: fade;
     }
   }

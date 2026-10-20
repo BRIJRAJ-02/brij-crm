@@ -3,8 +3,8 @@
 // gets a suggestion. A hint, never an error: the address may be right. Plain
 // TypeScript, no Zod: the hosted page loads it.
 
-/** The providers people misspell most, each exactly as it should read. */
-const PROVIDERS = [
+/** Providers whose names are long enough that a near miss is a typo, not another company: matched loosely. */
+const FUZZY = [
   'gmail.com',
   'googlemail.com',
   'yahoo.com',
@@ -14,21 +14,26 @@ const PROVIDERS = [
   'hotmail.com',
   'hotmail.co.uk',
   'outlook.com',
+  'icloud.com',
+  'protonmail.com',
+  'rediffmail.com',
+] as const;
+
+/** Every provider we know, so an exact one is never "corrected"; the short ones (me.com, aol.com) only match exactly. */
+const PROVIDERS: readonly string[] = [
+  ...FUZZY,
   'live.com',
   'msn.com',
-  'icloud.com',
   'me.com',
   'mac.com',
   'aol.com',
   'proton.me',
-  'protonmail.com',
   'gmx.com',
   'gmx.de',
   'web.de',
   'mail.com',
   'zoho.com',
-  'rediffmail.com',
-] as const;
+];
 
 /** Edits between two strings, a swap of neighbours counting as one (optimal string alignment). */
 function distance(a: string, b: string): number {
@@ -56,8 +61,9 @@ function distance(a: string, b: string): number {
  * The address the visitor probably meant, when its domain is one or two
  * keystrokes from a common provider's ("ada@gmial.com" → "ada@gmail.com");
  * undefined when it is a provider's, nothing close, or not an address yet.
- * Short domains allow one edit, longer ones two, so a company's own domain
- * is never "corrected" into a provider's.
+ * Only long provider names are matched loosely, from the same first letter,
+ * one edit away (two for the longest), so a company's own domain (ge.com,
+ * aon.com, cloud.com) is never "corrected" into a provider's.
  */
 export function suggestEmail(typed: string): string | undefined {
   const value = typed.trim();
@@ -65,10 +71,11 @@ export function suggestEmail(typed: string): string | undefined {
   if (at < 1 || at === value.length - 1) return undefined;
   const local = value.slice(0, at);
   const domain = value.slice(at + 1).toLowerCase();
-  if ((PROVIDERS as readonly string[]).includes(domain)) return undefined;
-  const allowed = domain.length >= 9 ? 2 : 1;
+  if (PROVIDERS.includes(domain) || domain.length < 6) return undefined;
   let best: { readonly provider: string; readonly edits: number } | undefined;
-  for (const provider of PROVIDERS) {
+  for (const provider of FUZZY) {
+    if (provider[0] !== domain[0]) continue;
+    const allowed = provider.length >= 13 ? 2 : 1;
     const edits = distance(domain, provider);
     if (edits <= allowed && (best === undefined || edits < best.edits)) best = { provider, edits };
   }

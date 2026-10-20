@@ -305,3 +305,17 @@ export const DescriptionInField: Story = {
     await expect(canvas.getByRole('button', { name: /Time zone/ })).toHaveTextContent('GMT+05:30');
   },
 };
+
+/** A quiet "(optional)" after the label and "Choose one" while empty, as a public form's optional dropdown. */
+export const OptionalMark: Story = {
+  parameters: { crm: { screenshot: false } },
+  args: { label: 'Size', labelAside: '(optional)', placeholder: 'Choose one', optionStyle: 'plain' },
+  render: (args) => (
+    <Stage width="narrow">
+      <Select {...args} />
+    </Stage>
+  ),
+  play: async ({ canvas }) => {
+    await expect(canvas.getByRole('button', { name: /Size \(optional\)/ })).toBeInTheDocument();
+  },
+};
