@@ -8,7 +8,9 @@ import {
   TableBody,
   TableHeader,
   useDragAndDrop,
+  type Key,
 } from 'react-aria-components';
+import { Checkbox } from '../../atoms/Checkbox/Checkbox.tsx';
 import { DragHandle } from '../../atoms/DragHandle/DragHandle.tsx';
 import { Skeleton } from '../../atoms/Skeleton/Skeleton.tsx';
 import { VisuallyHidden } from '../../atoms/VisuallyHidden/VisuallyHidden.tsx';
@@ -66,10 +68,23 @@ interface TableBase<T> {
   readonly isLoading?: boolean;
   /** What it shows with no rows: usually an EmptyState. */
   readonly emptyState?: ReactNode;
+  /**
+   * Rows picked for a bulk action: a leading column of checkboxes, with one in
+   * the header for every row. Give it with `onSelectedChange` and
+   * `getSelectLabel` (each checkbox's name, "Select Ada Lovelace").
+   */
+  readonly selected?: ReadonlySet<string>;
+  readonly onSelectedChange?: (ids: ReadonlySet<string>) => void;
+  readonly getSelectLabel?: (row: T) => string;
+  /** Keeps the header in view while the page scrolls under it (a long list on its own page). */
+  readonly isHeaderSticky?: boolean;
 }
 
 /** The handle column's id, kept apart from any column the caller names. */
 const HANDLE = '__handle';
+
+/** The selection column's id. */
+const SELECT = '__select';
 
 const SKELETON_ROWS = 3;
 
@@ -89,7 +104,13 @@ export function Table<T>({
   emptyState,
   onReorder,
   getRowLabel,
+  selected,
+  onSelectedChange,
+  getSelectLabel,
+  isHeaderSticky = false,
 }: TableProps<T>) {
+  const isSelectable = selected !== undefined && onSelectedChange !== undefined;
+  const ids = rows.map(getRowId);
   const showSkeleton = useDelayedLoading(isLoading);
   const { dragAndDropHooks } = useDragAndDrop({
     isDisabled: onReorder === undefined,
@@ -102,14 +123,27 @@ export function Table<T>({
     // Where the row would land: an accent line between rows, for a pointer and for the keyboard alike.
     renderDropIndicator: (target) => <DropIndicator target={target} className={styles.dropLine} />,
   });
-  const shown: readonly TableColumn[] =
-    onReorder === undefined ? columns : [{ id: HANDLE, label: strings.reorder, isLabelHidden: true }, ...columns];
+  const lead: TableColumn[] = [
+    ...(onReorder === undefined ? [] : [{ id: HANDLE, label: strings.reorder, isLabelHidden: true }]),
+    ...(isSelectable ? [{ id: SELECT, label: strings.selection, isLabelHidden: true }] : []),
+  ];
+  const shown: readonly TableColumn[] = [...lead, ...columns];
   return (
     <AriaTable
       className={styles.root}
       aria-label={label}
       {...(onRowAction === undefined ? {} : { onRowAction: (key) => onRowAction(String(key)) })}
       {...(onReorder === undefined ? {} : { dragAndDropHooks })}
+      {...(isSelectable
+        ? {
+            selectionMode: 'multiple' as const,
+            selectionBehavior: 'toggle' as const,
+            selectedKeys: selected,
+            onSelectionChange: (keys: 'all' | Set<Key>) => {
+              onSelectedChange(keys === 'all' ? new Set(ids) : new Set([...keys].map(String)));
+            },
+          }
+        : {})}
     >
       <TableHeader className={styles.header} columns={shown}>
         {(column) => (
@@ -118,9 +152,16 @@ export function Table<T>({
             isRowHeader={column.isRowHeader ?? false}
             className={styles.column}
             data-align={column.align ?? 'start'}
-            data-handle={column.id === HANDLE || undefined}
+            data-handle={column.id === HANDLE || column.id === SELECT || undefined}
+            data-sticky={isHeaderSticky || undefined}
           >
-            {column.isLabelHidden === true ? <VisuallyHidden>{column.label}</VisuallyHidden> : column.label}
+            {column.id === SELECT ? (
+              <Checkbox slot="selection" label={strings.selectAll} isLabelHidden />
+            ) : column.isLabelHidden === true ? (
+              <VisuallyHidden>{column.label}</VisuallyHidden>
+            ) : (
+              column.label
+            )}
           </Column>
         )}
       </TableHeader>
@@ -151,6 +192,14 @@ export function Table<T>({
               column.id === HANDLE ? (
                 <Cell className={styles.cell} data-handle>
                   <DragHandle label={strings.move(getRowLabel?.(item.row) ?? item.id)} />
+                </Cell>
+              ) : column.id === SELECT ? (
+                <Cell className={styles.cell} data-handle>
+                  <Checkbox
+                    slot="selection"
+                    label={strings.select(getSelectLabel?.(item.row) ?? item.id)}
+                    isLabelHidden
+                  />
                 </Cell>
               ) : (
                 <Cell className={styles.cell} data-align={column.align ?? 'start'}>

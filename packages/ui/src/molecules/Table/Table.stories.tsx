@@ -1,4 +1,5 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
+import { useState } from 'react';
 import { expect, fn, waitFor } from 'storybook/test';
 import { Badge } from '../../atoms/Badge/Badge.tsx';
 import { Button } from '../../atoms/Button/Button.tsx';
@@ -111,4 +112,33 @@ export const KeyboardMove: Story = {
 /** The first rows still loading. */
 export const Loading: Story = {
   args: { rows: [], isLoading: true },
+};
+
+/** Rows picked for a bulk action, with a sticky header: the header's checkbox picks every row. */
+function SelectableMembers() {
+  const [selected, setSelected] = useState<ReadonlySet<string>>(new Set());
+  return (
+    <Table
+      label="Members"
+      columns={COLUMNS}
+      rows={MEMBERS}
+      getRowId={(member) => member.id}
+      renderCell={cell}
+      selected={selected}
+      onSelectedChange={setSelected}
+      getSelectLabel={(member) => member.name}
+      isHeaderSticky
+    />
+  );
+}
+
+/** A checkbox per row and one in the header, for a bulk action. */
+export const Selectable: Story = {
+  render: () => <SelectableMembers />,
+  play: async ({ canvas, userEvent }) => {
+    await userEvent.click(canvas.getByRole('checkbox', { name: 'Select Ada Lovelace' }));
+    await expect(canvas.getByRole('checkbox', { name: /Select all/i })).toBePartiallyChecked();
+    await userEvent.click(canvas.getByRole('checkbox', { name: /Select all/i }));
+    await expect(canvas.getByRole('checkbox', { name: 'Select Grace Hopper' })).toBeChecked();
+  },
 };

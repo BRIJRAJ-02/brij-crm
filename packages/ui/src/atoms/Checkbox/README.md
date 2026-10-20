@@ -19,6 +19,8 @@ Ported from the artifact's Checkbox card (version 8). Forms, settings, table sel
 - As the checkbox attribute's editor, it toggles in place and never clears: unchecked is `false`.
 - `CheckboxMark` is the same look with no control. The checkbox attribute's display and the grid's selection column draw it, where the cell is the control (Space, or a click on the mark), so a scroll past hundreds of rows mounts no checkbox per row. Screen readers hear its label and state ("Is customer, checked"). It stays inside the library: screens draw a checkbox value through `AttributeDisplay`.
 
+- `slot="selection"` puts it in a selectable Table's selection column: the table says whether it is checked, and the header's is indeterminate while some rows are picked.
+
 ## States
 
 Unchecked, checked, indeterminate, hover (pointer only), focus, pressed (no shrink, owner 20 Oct 2026), invalid, read only, disabled. The mark has unchecked, checked, indeterminate and read only; whatever holds it draws the focus.

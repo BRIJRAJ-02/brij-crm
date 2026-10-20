@@ -56,7 +56,15 @@
   }
 
   /* The wrapper lets presses through to the body under it; the bar inside takes its own. */
+  /* As many columns of groups as fit, each at least the panel's width: no container query needed. */
+  .main[data-layout='grid'] {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(min(100%, var(--size-panel)), 1fr));
+    align-items: start;
+  }
+
   .footer {
+    grid-column: 1 / -1;
     position: sticky;
     z-index: var(--z-sticky);
     inset-block-end: var(--space-16);

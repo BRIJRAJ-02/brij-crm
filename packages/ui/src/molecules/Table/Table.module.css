@@ -60,6 +60,14 @@
     padding-inline: var(--space-4) 0;
   }
 
+  /* A sticky header stays in view while the page scrolls under it, on the page's surface. */
+  .column[data-sticky] {
+    position: sticky;
+    z-index: var(--z-sticky);
+    inset-block-start: 0;
+    background: var(--surface);
+  }
+
   /* An inline cell: its pieces on one line, centred, space-6 apart. */
   .inline {
     display: inline-flex;

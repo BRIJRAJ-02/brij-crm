@@ -215,3 +215,22 @@ export const FullWidth: Story = {
     </Stage>
   ),
 };
+
+/** Groups in as many columns as fit (a settings tab), the preview beside them. */
+export const Grid: Story = {
+  render: () => (
+    <Stage height="page" width="fill">
+      <PreviewLayout bodyLayout="grid" preview={<HostedFormPreview form={FORM} />}>
+        <Card title="After someone sends it" description="Shows a thank you message">
+          <Field label="Thank you message" value="" isMultiline />
+        </Card>
+        <Card title="Where answers go" description="Each send creates or updates a Person">
+          <Field label="Owner" value="" />
+        </Card>
+        <Card title="Name and address" description="/f/contact-us">
+          <Field label="Name" value="Contact us" />
+        </Card>
+      </PreviewLayout>
+    </Stage>
+  ),
+};
