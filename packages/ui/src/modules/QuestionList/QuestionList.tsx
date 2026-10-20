@@ -158,13 +158,18 @@ export function QuestionList({
                       )}
                     </span>
                     <span className={styles.meta}>
+                      {/* Each part stays whole: a narrow column breaks the line between parts, never inside one. */}
                       {[
                         item.typeLabel,
                         ...(item.choiceCount === undefined
                           ? []
                           : [item.choiceCount === 0 ? strings.noChoices : strings.choices(item.choiceCount)]),
                         item.filed,
-                      ].join(strings.separator)}
+                      ].map((part, at) => (
+                        <span key={at} className={styles.part}>
+                          {at === 0 ? part : `${strings.separator}${part}`}
+                        </span>
+                      ))}
                     </span>
                   </span>
                   <span className={styles.chevron} aria-hidden="true">

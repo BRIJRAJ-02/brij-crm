@@ -47,8 +47,8 @@ interface SampleProps {
   readonly initialOpen?: readonly string[];
   readonly isReadOnly?: boolean;
   readonly withProblem?: boolean;
-  /** `fill` shows the builder's full width; `narrow` a phone's column, where the second line wraps. */
-  readonly width?: 'narrow' | 'fill';
+  /** `fill` shows the builder's full width; `narrow-fill` a phone's column, where the second line wraps. */
+  readonly width?: 'narrow-fill' | 'fill';
   /** No questions yet: the header alone. */
   readonly isEmpty?: boolean;
 }
@@ -143,7 +143,7 @@ export const Default: Story = {
     await expect(canvas.getByRole('grid', { name: 'Questions' })).toBeInTheDocument();
     await expect(canvas.getAllByRole('row')).toHaveLength(4);
     await expect(canvas.getByText('Untitled question')).toBeInTheDocument();
-    await expect(canvas.getByText('Dropdown · 3 choices · Person › Budget band')).toBeInTheDocument();
+    await expect(canvas.getByText(/Person › Budget band/)).toBeInTheDocument();
   },
 };
 
@@ -185,10 +185,11 @@ export const ReadOnly: Story = {
 
 /** In a narrow column (a phone): the second line wraps rather than cutting where it is filed. */
 export const Narrow: Story = {
-  args: { width: 'narrow' },
+  args: { width: 'narrow-fill' },
   play: async ({ canvas }) => {
     await expect(canvas.getAllByRole('row')).toHaveLength(4);
-    await expect(canvas.getByText('Dropdown · 3 choices · Person › Budget band')).toBeVisible();
+    await expect(canvas.getAllByRole('row')[0]?.getBoundingClientRect().width).toBeGreaterThan(200);
+    await expect(canvas.getByText(/Person › Budget band/)).toBeVisible();
   },
 };
 

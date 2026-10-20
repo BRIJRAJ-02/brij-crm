@@ -8,8 +8,9 @@ export interface StageProps {
   /**
    * `narrow` holds the pieces to the sidebar's width, to show how they cut long text. `fill` stretches one piece
    * across the stage, for modules that take their container's width (a container query root has none of its own).
+   * `narrow-fill` does both: one piece stretched to the sidebar's width, a container query root in a phone's column.
    */
-  readonly width?: 'auto' | 'narrow' | 'fill';
+  readonly width?: 'auto' | 'narrow' | 'fill' | 'narrow-fill';
   /** `grid` gives a table a fixed height to scroll in: a header and twelve rows. `page` is an app window's height, for the shell, with no padding. */
   readonly height?: 'auto' | 'grid' | 'page';
   readonly children: ReactNode;

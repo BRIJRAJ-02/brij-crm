@@ -57,7 +57,7 @@ const TYPE_ICONS = {
   dropdown: 'chevrons-up-down',
   choice: 'circle-dot',
   checkbox: 'square-check',
-  yes_no: 'circle-check',
+  yes_no: 'toggle-right',
   country: 'globe',
   file: 'upload',
 } as const satisfies Record<AnswerType, IconName>;
@@ -82,6 +82,7 @@ export interface QuestionsSectionProps {
 const TYPE_ITEMS = ANSWER_TYPES.filter((type) => type !== 'file').map((type) => ({
   id: type,
   label: strings.answerTypes[type],
+  icon: TYPE_ICONS[type],
 }));
 
 /** The questions: a header with the count and Add a question, then the cards. */
@@ -146,7 +147,8 @@ export function QuestionsSection(props: QuestionsSectionProps) {
     ...(CHOICE_TYPES.includes(question.answerType)
       ? { choiceCount: (question.choices ?? []).filter((choice) => choice.trim() !== '').length }
       : {}),
-    filed: filedLine(question, objectName, attributes),
+    // The card's line is a list split by " · ": unfiled says so in two words, the full sentence lives in Where it goes.
+    filed: question.filedOn === undefined ? strings.notFiledShort : filedLine(question, objectName, attributes),
     hasProblem: problem?.questionId === question.id || refused.has(question.id),
   }));
 

@@ -103,6 +103,7 @@ export const strings = {
   placeholderHint: 'Shown until they type',
   whereItGoes: 'Where it goes',
   notFiled: 'Not filed, kept with the enquiry',
+  notFiledShort: 'Not filed',
   takenBy: (label: string) => `Used by “${label}”; choosing it moves it here`,
   cantWrite: 'You can’t write to this',
   mustAnswer: 'Visitors must answer',

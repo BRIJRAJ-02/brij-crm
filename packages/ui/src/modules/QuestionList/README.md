@@ -35,7 +35,7 @@ Each question is a hairline card, space-8 apart (owner feedback F27, 20 October 
 
 ## Keyboard
 
-- Tab moves through each question's handle, its head and, when open, its fields; Enter or Space on the header opens and closes it.
+- The arrow keys move between questions (with a question itself focused); Tab moves within one: its handle, its head and, when open, its fields; Enter or Space on the header opens and closes it.
 - On the handle: Enter picks the question up, arrows choose the drop line, Enter drops it, Esc cancels. The move is announced.
 - Keys typed in an open question's fields stay in the field: the list is in `tab` mode, so a row never takes arrows or type ahead from its children.
 

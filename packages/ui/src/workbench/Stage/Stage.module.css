@@ -13,10 +13,16 @@
     max-inline-size: var(--size-sidebar);
   }
 
-  .root[data-width='fill'] {
+  .root[data-width='fill'],
+  .root[data-width='narrow-fill'] {
     flex-direction: column;
     flex-wrap: nowrap;
     align-items: stretch;
+  }
+
+  .root[data-width='narrow-fill'] {
+    box-sizing: content-box;
+    max-inline-size: var(--size-sidebar);
   }
 
   .root[data-height='grid'] {

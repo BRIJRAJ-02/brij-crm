@@ -142,6 +142,7 @@
 
     .handle {
       position: absolute;
+      z-index: var(--z-raised);
       inset-block-start: 50%;
       inset-inline-start: var(--space-16);
       opacity: 0;
@@ -159,6 +160,12 @@
     .head:has(:focus-visible) .tile,
     .row[data-focus-visible] .tile {
       opacity: 0;
+      pointer-events: none;
+    }
+
+    /* The chevron answers a pointer too, so an open head (which keeps its selected fill) still reacts. */
+    .head:hover .chevron {
+      color: var(--text);
     }
 
     /* Reached from the keyboard, the swap is instant. */
@@ -238,7 +245,7 @@
     letter-spacing: var(--tracking-label);
   }
 
-  /* Line two, muted: the type, its choices, where it is filed. */
+  /* Line two, muted: the type, its choices, where it is filed, each part whole. */
   .meta {
     overflow: hidden;
     color: var(--text-secondary);
@@ -265,6 +272,10 @@
     }
   }
 
+  .part {
+    white-space: nowrap;
+  }
+
   /* An open question's editor, under a hairline, space-16 on every side: in line with the type tile for a pointer. */
   .body {
     display: flex;
@@ -276,6 +287,7 @@
 
   /* Where it would land: a zero height line that turns accent while it is the target, as in Table. */
   .indicator {
+    margin-block: calc(-1 * var(--space-4));
     outline: none;
   }
 
