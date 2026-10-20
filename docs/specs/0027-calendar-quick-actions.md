@@ -102,6 +102,9 @@ Tracer bullet, one strand at a time, each tested and driven in the browser befor
 - Picking a person from the workspace as you type in With (the record search answers no email today, so it needs a read that does); the server already files the booking to the person with that email.
 - Timefix's own invitation email for a member's booking, with the booking emails (booking milestone 2).
 - Drawing past the visible edge scrolls the grid (today: set the span with From and To).
+- Also invite as removable email chips (the field set's Email editor with several values), one guest control for this dialog and the public booking form.
+- The calendar event written by a job keyed by the booking, retried with backoff, so a process that dies after the commit still writes it (today: three tries in the request, and the event id from the booking keeps a retry from inviting twice).
+- A live change event for a booking (other tabs see it without a reload), and a per member rate limit on Book someone in, through the limits module.
 
 - A whole day block from the card (timefix keeps it on the day panel; days off already cover it under Availability).
 - A calendar choice in the New meeting dialog when a member has two or more calendars (calendar sync milestone 4).
