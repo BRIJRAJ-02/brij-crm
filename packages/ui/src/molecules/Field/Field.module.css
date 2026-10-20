@@ -1,5 +1,5 @@
 /* Field: an 11px text-secondary label over a 30px box with a field-border
-   hairline (3:1 on every surface, WCAG 1.4.11); focus turns it accent-line
+   quiet hairline (#eaeaea, below 3:1 by the owner's call, 20 Oct 2026); focus turns it accent-line
    and adds the faint focus halo, an error turns
    the border danger. Read only fills the box with surface-subtle and shows a
    lock; disabled fades it. The search variant is rounded with an icon; the
@@ -37,7 +37,7 @@
       background-color var(--duration-hover) var(--ease-hover);
   }
 
-  /* At rest the softer field-border (3:1); under a pointer it steps up to control-border. */
+  /* At rest the quiet field-border; under a pointer it steps up to control-border. */
   @media (hover: hover) and (pointer: fine) {
     .box:hover:not(:focus-within) {
       border-color: var(--control-border);
