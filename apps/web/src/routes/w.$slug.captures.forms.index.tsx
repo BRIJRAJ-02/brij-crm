@@ -1,5 +1,5 @@
 import { isDataError } from '@crm/data';
-import { EmptyState, PageColumn } from '@crm/ui';
+import { EmptyState, PageColumn, LoadingNow } from '@crm/ui';
 import { createFileRoute, useRouter, type ErrorComponentProps } from '@tanstack/react-router';
 import { FormsPending, FormsScreen } from '../features/forms/FormsScreen.tsx';
 import { strings } from '../features/forms/strings.ts';
@@ -19,7 +19,12 @@ export const Route = createFileRoute('/w/$slug/captures/forms/')({
       throw error;
     }
   },
-  pendingComponent: FormsPending,
+  // Shown only once the loading delay passed: its skeletons show at once.
+  pendingComponent: () => (
+    <LoadingNow>
+      <FormsPending />
+    </LoadingNow>
+  ),
   errorComponent: FormsError,
   component: FormsRoute,
 });

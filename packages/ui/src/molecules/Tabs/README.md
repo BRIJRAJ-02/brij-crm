@@ -25,6 +25,7 @@ Ported from the artifact's Tabs card. A record's Activity, Notes, Tasks, Emails 
 - One `TabPanel` per tab, with the same `id`.
 - `end` puts the chosen tab's own tools at the far end of the strip, on its hairline: Captures' search and New (LinkListToolbar at `size="sm"`). The tabs keep their place; when both don't fit (a phone), the tools wrap to a row of their own under the tabs and shrink to the width, so the tabs are never squeezed.
 - Only one panel shows at a time; use Disclosure for sections that can all be open.
+- When each tab is a page of its own, give each its `href`. It doesn't navigate (the page's `onSelectionChange` does); it marks the tab with `data-href`, so the app loads that page while a pointer rests on the tab.
 
 ## States
 

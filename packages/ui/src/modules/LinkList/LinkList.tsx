@@ -55,6 +55,11 @@ export interface LinkRow {
   readonly actions?: ReactNode;
   /** Shown before the server made it (a copy on its way): drawn quieter, and it doesn't open yet. */
   readonly isPending?: boolean;
+  /**
+   * The address opening it moves to. The row still opens through `onOpen`; this says where it leads as
+   * `data-href`, so the app can load that page while a pointer rests on the row.
+   */
+  readonly href?: string;
 }
 
 /** Props for LinkList. */
@@ -280,6 +285,7 @@ export function LinkList({
               data-pressable={row.isPending === true ? undefined : ''}
               data-pending={row.isPending === true || undefined}
               data-off={row.isOff === true || undefined}
+              data-href={row.isPending === true ? undefined : row.href}
             >
               <div className={styles.main}>
                 <div className={styles.titleLine}>

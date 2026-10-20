@@ -35,12 +35,13 @@ export function CapturesTabs({ slug, tab, children }: CapturesTabsProps) {
           if (isCaptureTab(next) && next !== tab) void navigate({ href: captureTabHref(slug, next) });
         }}
         tabs={[
-          { id: 'links', label: strings.linksTab },
-          { id: 'forms', label: strings.formsTab },
+          { id: 'links', label: strings.linksTab, href: captureTabHref(slug, 'links') },
+          { id: 'forms', label: strings.formsTab, href: captureTabHref(slug, 'forms') },
         ]}
       >
-        <TabPanel id="links">{tab === 'links' && children}</TabPanel>
-        <TabPanel id="forms">{tab === 'forms' && children}</TabPanel>
+        {/* One panel, always the chosen tab's: the page under it stays mounted while the next one loads, rather
+            than moving to another panel and mounting again before it is swapped. */}
+        <TabPanel id={tab}>{children}</TabPanel>
       </Tabs>
     </CapturesToolbarSlot.Provider>
   );

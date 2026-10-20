@@ -41,6 +41,7 @@ const toasts = createToasts(); // once, in main.tsx; also handed to the data lay
 ## States
 
 - `useDelayedLoading(isLoading)` says when to show a skeleton: only after 200 ms of loading, then for at least 300 ms, so quick loads never flash one.
+- `LoadingNow` wraps a page that only appears once that delay has passed (the router's pending page): its skeletons show at once, still for at least 300 ms, rather than waiting out the delay again behind a blank area.
 
 ## Keyboard
 

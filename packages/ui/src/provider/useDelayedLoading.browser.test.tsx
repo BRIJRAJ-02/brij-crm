@@ -3,6 +3,7 @@
 import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { LoadingNow } from './LoadingNow.tsx';
 import { useDelayedLoading } from './useDelayedLoading.ts';
 
 function Probe({ isLoading }: { isLoading: boolean }) {
@@ -62,6 +63,29 @@ describe('useDelayedLoading', () => {
     advance(50);
     render(false);
     advance(249);
+    expect(host.textContent).toBe('skeleton');
+    advance(1);
+    expect(host.textContent).toBe('content');
+  });
+
+  it('shows the skeleton at once inside LoadingNow, still for at least 300 ms', () => {
+    act(() => {
+      root.render(
+        <LoadingNow>
+          <Probe isLoading />
+        </LoadingNow>,
+      );
+    });
+    expect(host.textContent).toBe('skeleton');
+    advance(100);
+    act(() => {
+      root.render(
+        <LoadingNow>
+          <Probe isLoading={false} />
+        </LoadingNow>,
+      );
+    });
+    advance(199);
     expect(host.textContent).toBe('skeleton');
     advance(1);
     expect(host.textContent).toBe('content');

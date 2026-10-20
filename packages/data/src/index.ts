@@ -1953,6 +1953,15 @@ export function createDataLayer({
         call((options) => api.bookingPages.list({ workspace }, options)),
       /** The reader's pages as the held list Captures › Links shows; `useCaptureList` reads it. */
       view: (workspace: string): CaptureListView<BookingPageView> => bookingPageLists.view(workspace),
+      /**
+       * The pages from that same held list, for a loader beside other work (Bookings' Link filter, Availability):
+       * at once when it holds them (read again behind), else after its first read, rejecting as it did. One read
+       * serves every tab, so moving between them asks again only when the list is no longer fresh.
+       */
+      held: async (workspace: string): Promise<readonly BookingPageView[]> => {
+        await bookingPageLists.view(workspace).ready();
+        return bookingPageLists.items(workspace) ?? [];
+      },
       /** One page. `NOT_FOUND` for one the reader may not change. */
       get: (workspace: string, pageId: string): Promise<BookingPageView> =>
         call((options) => api.bookingPages.get({ workspace, pageId }, options)),

@@ -82,6 +82,7 @@ describe('@crm/ui', () => {
       'LinkGrid',
       'LinkList',
       'LinkListToolbar',
+      'LoadingNow',
       'LockReason',
       'Mention',
       'Menu',

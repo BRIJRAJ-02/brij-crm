@@ -11,6 +11,7 @@ import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import { signInHref } from './features/auth/redirect.ts';
 import { createFocusRecovery, focusFirstLoad, focusPage, isSamePage } from './features/navigation/focus.ts';
+import { PRELOAD_DELAY_MS, startIntentPreload } from './features/navigation/preload.ts';
 import { followPageTitle } from './features/navigation/title.ts';
 import { rememberPlace, safeSessionStorage } from './features/settings/back.ts';
 import { jobFinishedToast } from './features/settings/toast.ts';
@@ -126,6 +127,7 @@ const router = createRouter({
   routeTree,
   context: { data, theme, toasts },
   defaultPreload: 'intent',
+  defaultPreloadDelay: PRELOAD_DELAY_MS,
   // A pending route shows its skeleton on the same timing as everything else (AC-13).
   defaultPendingMs: LOADING_TIMING.delayMs,
   defaultPendingMinMs: LOADING_TIMING.minimumMs,
@@ -161,6 +163,23 @@ router.subscribe('onRendered', (event) => {
   requestAnimationFrame(() => {
     focusPage(document, pathname);
   });
+});
+
+// Every link, tab and row into a page preloads it on intent (its chunk and its loader's data), not only the
+// router's own Link: the sidebar and the library's links navigate through UiProvider (preload.ts).
+startIntentPreload({
+  target: document,
+  origin: window.location.origin,
+  preload: (href) => {
+    // An address, as the router's own navigate({ href }) takes; preloadRoute's type asks for `to`, which `href` replaces.
+    // eslint-disable-next-line @typescript-eslint/no-unnecessary-type-assertion -- tsc needs it; the lint resolves the type looser
+    router.preloadRoute({ href } as unknown as Parameters<typeof router.preloadRoute>[0]).catch(() => undefined);
+  },
+  delayMs: PRELOAD_DELAY_MS,
+  setTimer: (run, ms) => window.setTimeout(run, ms),
+  clearTimer: (timer) => {
+    window.clearTimeout(timer);
+  },
 });
 
 declare module '@tanstack/react-router' {

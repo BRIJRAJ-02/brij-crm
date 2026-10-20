@@ -64,7 +64,8 @@ export function CapturesList({
             onQueryChange={setQuery}
             size="sm"
             isSearchDisabled={isBusy}
-            {...(newAction === undefined || status === 'loading' ? {} : { actions: newAction })}
+            // New stays while the rows load, so the strip keeps its shape when they land.
+            {...(newAction === undefined ? {} : { actions: newAction })}
           />,
           slot,
         )}

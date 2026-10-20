@@ -34,13 +34,11 @@ export function BookingsTabs({ slug, tab, children }: BookingsTabsProps) {
         onSelectionChange={(next) => {
           if (isBookingsPageTab(next) && next !== tab) void navigate({ href: bookingsTabHref(slug, next) });
         }}
-        tabs={BOOKINGS_TABS.map((id) => ({ id, label: strings.pageTabs[id] }))}
+        tabs={BOOKINGS_TABS.map((id) => ({ id, label: strings.pageTabs[id], href: bookingsTabHref(slug, id) }))}
       >
-        {BOOKINGS_TABS.map((id) => (
-          <TabPanel key={id} id={id}>
-            {tab === id && children}
-          </TabPanel>
-        ))}
+        {/* One panel, always the chosen tab's: the page under it stays mounted while the next one loads, rather
+            than moving to another panel and mounting again before it is swapped. */}
+        <TabPanel id={tab}>{children}</TabPanel>
       </Tabs>
     </BookingsToolbarSlot.Provider>
   );

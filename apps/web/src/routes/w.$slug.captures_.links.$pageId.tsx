@@ -1,5 +1,5 @@
 import { isDataError } from '@crm/data';
-import { EmptyState, Link, PageColumn, TopBar } from '@crm/ui';
+import { EmptyState, Link, PageColumn, TopBar, LoadingNow } from '@crm/ui';
 import { createFileRoute, useParams, useRouter, type ErrorComponentProps } from '@tanstack/react-router';
 import { linksHref } from '../features/booking/links.ts';
 import { PageEditor, PageEditorPending } from '../features/booking/PageEditor.tsx';
@@ -33,7 +33,12 @@ export const Route = createFileRoute('/w/$slug/captures_/links/$pageId')({
       throw error;
     }
   },
-  pendingComponent: PageEditorPending,
+  // Shown only once the loading delay passed: its skeletons show at once.
+  pendingComponent: () => (
+    <LoadingNow>
+      <PageEditorPending />
+    </LoadingNow>
+  ),
   errorComponent: EditorError,
   component: EditorRoute,
 });

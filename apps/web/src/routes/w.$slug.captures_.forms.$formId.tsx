@@ -1,5 +1,5 @@
 import { isDataError, type SubmissionState } from '@crm/data';
-import { EmptyState, PreviewLayout, Skeleton, TopBar } from '@crm/ui';
+import { EmptyState, LoadingNow, PreviewLayout, Skeleton, TopBar } from '@crm/ui';
 import { createFileRoute, useRouter, type ErrorComponentProps } from '@tanstack/react-router';
 import { FormEditor } from '../features/forms/FormEditor.tsx';
 import { FORM_TABS, type FormTab } from '../features/forms/paths.ts';
@@ -30,17 +30,21 @@ export const Route = createFileRoute('/w/$slug/captures_/forms/$formId')({
       : {}),
     ...(typeof search.submission === 'string' && search.submission !== '' ? { submission: search.submission } : {}),
   }),
-  loaderDeps: ({ search }) => ({ tab: search.tab, state: search.state, submission: search.submission }),
+  // Only Submissions reads anything of its own, so Form, Settings and Install share one match: moving between them
+  // runs no loader and never shows the pending page; the editor stays as it is.
+  loaderDeps: ({ search }) =>
+    search.tab === 'submissions'
+      ? { tab: search.tab, state: search.state, submission: search.submission }
+      : { tab: 'form' as const, state: undefined, submission: undefined },
   loader: async ({ context, params, deps }) => {
     try {
-      const [form, target, members, objects] = await Promise.all([
+      const onSubmissions = deps.tab === 'submissions';
+      // Every read at once: one round trip, not the form first and then its submissions.
+      const [form, target, members, objects, submissions, openSubmission] = await Promise.all([
         context.data.forms.get(params.slug, params.formId),
         context.data.forms.attributes(params.slug, params.formId),
         context.data.members.list(params.slug),
         context.data.objects.list(params.slug),
-      ]);
-      const onSubmissions = deps.tab === 'submissions';
-      const [submissions, openSubmission] = await Promise.all([
         onSubmissions
           ? context.data.submissions.list(
               params.slug,
@@ -58,18 +62,21 @@ export const Route = createFileRoute('/w/$slug/captures_/forms/$formId')({
       throw error;
     }
   },
+  // Shown only once the loading delay passed: its skeletons show at once.
   pendingComponent: () => (
-    <WorkspacePage
-      currentPage="captures"
-      page={{
-        topBar: <TopBar title={strings.forms} icon="clipboard-list" isLoading />,
-        body: (
-          <PreviewLayout>
-            <Skeleton lines={10} />
-          </PreviewLayout>
-        ),
-      }}
-    />
+    <LoadingNow>
+      <WorkspacePage
+        currentPage="captures"
+        page={{
+          topBar: <TopBar title={strings.forms} icon="clipboard-list" isLoading />,
+          body: (
+            <PreviewLayout>
+              <Skeleton lines={10} />
+            </PreviewLayout>
+          ),
+        }}
+      />
+    </LoadingNow>
   ),
   errorComponent: FormError,
   component: FormRoute,

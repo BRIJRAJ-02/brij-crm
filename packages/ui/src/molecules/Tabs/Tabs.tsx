@@ -25,6 +25,12 @@ export interface TabItem {
   /** The count is a floor, not the total ("10,000+" for a capped count). */
   readonly isCountAtLeast?: boolean;
   readonly isDisabled?: boolean;
+  /**
+   * The address choosing it moves to, when each tab is a page of its own (Captures' Links · Forms). It doesn't
+   * navigate by itself (`onSelectionChange` still does); it says where the tab leads as `data-href`, so the app
+   * can load that page while a pointer rests on the tab.
+   */
+  readonly href?: string;
 }
 
 /**
@@ -100,6 +106,7 @@ export function Tabs({ label, tabs, selectedKey, defaultSelectedKey, onSelection
               id={tab.id}
               className={styles.tab}
               {...(tab.isDisabled === undefined ? {} : { isDisabled: tab.isDisabled })}
+              data-href={tab.href}
             >
               {tab.icon !== undefined && <Icon name={tab.icon} size="sm" />}
               <span>{tab.label}</span>

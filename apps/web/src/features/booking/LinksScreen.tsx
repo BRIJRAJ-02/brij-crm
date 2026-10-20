@@ -222,7 +222,7 @@ function DeletePageDialog({
   );
 }
 
-/** The list while its pages load, inside the Captures layout: skeleton cards in the cards' shape. */
+/** The list while its pages load, inside the Captures layout: skeleton cards in the cards' shape, New in its place. */
 export function LinksPending() {
   return (
     <CapturesList
@@ -230,6 +230,11 @@ export function LinksPending() {
       searchLabel={strings.searchPages}
       status="loading"
       cards={[]}
+      newAction={
+        <Button variant="primary" icon="plus" isDisabled>
+          {strings.newPage}
+        </Button>
+      }
       empty={{ title: strings.emptyTitle, text: strings.emptyText, icon: 'calendar-clock' }}
       errorTitle={strings.failedTitle}
       onRetry={() => undefined}

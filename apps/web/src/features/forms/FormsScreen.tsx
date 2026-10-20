@@ -238,12 +238,22 @@ function DeleteFormDialog({
 
 /** The list while its forms load, inside the Captures layout: skeleton cards in the cards' shape. */
 export function FormsPending() {
+  const canManage = useCan('forms.manage');
   return (
     <CapturesList
       label={strings.forms}
       searchLabel={strings.searchForms}
       status="loading"
       cards={[]}
+      {...(canManage
+        ? {
+            newAction: (
+              <Button variant="primary" icon="plus" isDisabled>
+                {strings.newForm}
+              </Button>
+            ),
+          }
+        : {})}
       empty={{ title: strings.noForms, text: strings.noFormsText, icon: 'clipboard-list' }}
       errorTitle={strings.failedTitle}
       onRetry={() => undefined}

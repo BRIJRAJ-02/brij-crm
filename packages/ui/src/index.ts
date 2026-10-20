@@ -379,3 +379,4 @@ export {
 } from './provider/toasts.tsx';
 export { UiProvider, useKeyboardPlatform, type FormatSettings, type UiProviderProps } from './provider/UiProvider.tsx';
 export { LOADING_TIMING, useDelayedLoading, type LoadingTiming } from './provider/useDelayedLoading.ts';
+export { LoadingNow, type LoadingNowProps } from './provider/LoadingNow.tsx';

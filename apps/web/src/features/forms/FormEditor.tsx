@@ -534,10 +534,10 @@ export function FormEditor(props: FormEditorProps) {
                   if ((FORM_TABS as readonly string[]).includes(value)) goTab(value as FormTab);
                 }}
                 tabs={[
-                  { id: 'form', label: strings.tabForm },
-                  { id: 'settings', label: strings.tabSettings },
-                  { id: 'install', label: strings.tabInstall },
-                  { id: 'submissions', label: strings.tabSubmissions },
+                  { id: 'form', label: strings.tabForm, href: formHref(slug, form.id) },
+                  { id: 'settings', label: strings.tabSettings, href: formHref(slug, form.id, 'settings') },
+                  { id: 'install', label: strings.tabInstall, href: formHref(slug, form.id, 'install') },
+                  { id: 'submissions', label: strings.tabSubmissions, href: formHref(slug, form.id, 'submissions') },
                 ]}
               >
                 {FORM_TABS.map((id) => (

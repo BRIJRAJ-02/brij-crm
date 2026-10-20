@@ -1,5 +1,5 @@
 import { isDataError } from '@crm/data';
-import { EmptyState, PageColumn, TopBar } from '@crm/ui';
+import { EmptyState, PageColumn, TopBar, LoadingNow } from '@crm/ui';
 import { createFileRoute, useRouter, type ErrorComponentProps } from '@tanstack/react-router';
 import { AvailabilityPending, AvailabilityScreen } from '../features/booking/AvailabilityScreen.tsx';
 import { browserZone } from '../features/booking/hours.ts';
@@ -13,7 +13,7 @@ export const Route = createFileRoute('/w/$slug/bookings/availability')({
     const [{ availability }, listed, access] = await Promise.all([
       context.data.bookings.hours(params.slug, browserZone()),
       // The pages beside the week. A member who may not list them sees no list; any other failure says so there.
-      context.data.bookingPages.list(params.slug).then(
+      context.data.bookingPages.held(params.slug).then(
         (pages) => ({ status: 'ready' as const, pages }),
         (error: unknown) =>
           isDataError(error) && error.code === 'FORBIDDEN'
@@ -28,7 +28,12 @@ export const Route = createFileRoute('/w/$slug/bookings/availability')({
       pages: listed.pages.filter((page) => page.ownerMemberId === access.memberId),
     };
   },
-  pendingComponent: AvailabilityPending,
+  // Shown only once the loading delay passed: its skeletons show at once.
+  pendingComponent: () => (
+    <LoadingNow>
+      <AvailabilityPending />
+    </LoadingNow>
+  ),
   errorComponent: AvailabilityError,
   component: AvailabilityRoute,
 });
