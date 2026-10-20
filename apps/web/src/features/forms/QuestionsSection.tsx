@@ -25,6 +25,7 @@ import {
   Select,
   SubmenuTrigger,
   Tooltip,
+  type IconName,
   type OptionsEditorOption,
   type QuestionListItem,
   type Toasts,
@@ -44,6 +45,22 @@ import {
   type QuestionChange,
 } from './draft.ts';
 import { strings } from './strings.ts';
+
+/** Each answer type's icon, on the tile that starts its question's row. */
+const TYPE_ICONS = {
+  short_text: 'type',
+  long_text: 'file-text',
+  email: 'mail',
+  phone: 'phone',
+  website: 'link',
+  number: 'hash',
+  dropdown: 'chevrons-up-down',
+  choice: 'circle-dot',
+  checkbox: 'square-check',
+  yes_no: 'circle-check',
+  country: 'globe',
+  file: 'upload',
+} as const satisfies Record<AnswerType, IconName>;
 
 /** Props for the questions section. */
 export interface QuestionsSectionProps {
@@ -124,6 +141,7 @@ export function QuestionsSection(props: QuestionsSectionProps) {
     id: question.id,
     label: question.label,
     typeLabel: strings.answerTypes[question.answerType],
+    typeIcon: TYPE_ICONS[question.answerType],
     isRequired: question.required,
     ...(CHOICE_TYPES.includes(question.answerType)
       ? { choiceCount: (question.choices ?? []).filter((choice) => choice.trim() !== '').length }
@@ -236,6 +254,7 @@ export function QuestionsSection(props: QuestionsSectionProps) {
             <Tooltip content={strings.duplicateQuestion}>
               <Button
                 variant="ghost"
+                size="lg"
                 icon="copy"
                 label={strings.duplicateQuestion}
                 onPress={() => {
@@ -251,6 +270,7 @@ export function QuestionsSection(props: QuestionsSectionProps) {
               <Tooltip content={strings.deleteQuestion}>
                 <Button
                   variant="ghost-danger"
+                  size="lg"
                   icon="trash"
                   label={strings.deleteQuestion}
                   onPress={() => {

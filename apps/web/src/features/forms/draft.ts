@@ -180,7 +180,7 @@ export function fittingAttributes(
   return attributes.filter((attribute) => fitsAttribute(answerType, attribute.type));
 }
 
-/** Where a question's answers go, as its closed card says it: "Person · Budget band", or Not filed. */
+/** Where a question's answers go, as its closed card says it: "Person › Budget band", or Not filed. */
 export function filedLine(
   question: FormQuestion,
   objectName: string,

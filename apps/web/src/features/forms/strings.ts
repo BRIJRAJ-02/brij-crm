@@ -112,7 +112,7 @@ export const strings = {
   questionDeleted: (label: string) => `Deleted “${label}”.`,
   questionDeletedFiled: (label: string, filed: string) => `Deleted “${label}”. Its answers went to ${filed}.`,
   undo: 'Undo',
-  filedLine: (objectName: string, title: string) => `${objectName} · ${title}`,
+  filedLine: (objectName: string, title: string) => `${objectName} › ${title}`,
   goneAttribute: 'An attribute that no longer exists',
   answerTypes: {
     short_text: 'Short text',

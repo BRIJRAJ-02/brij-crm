@@ -3,6 +3,7 @@ import { Button as AriaButton, DropIndicator, GridList, GridListItem, useDragAnd
 import { Badge } from '../../atoms/Badge/Badge.tsx';
 import { DragHandle } from '../../atoms/DragHandle/DragHandle.tsx';
 import { Icon } from '../../atoms/Icon/Icon.tsx';
+import type { IconName } from '../../atoms/Icon/icons.ts';
 import { VisuallyHidden } from '../../atoms/VisuallyHidden/VisuallyHidden.tsx';
 import { reorder } from '../../lib/reorder.ts';
 import styles from './QuestionList.module.css';
@@ -13,12 +14,14 @@ export interface QuestionListItem {
   readonly id: string;
   /** The question; empty shows "Untitled question", muted. */
   readonly label: string;
-  /** The answer type's name, shown as a quiet Badge, so the question leads. */
+  /** The answer type's name, first on the row's second line ("Short text"). */
   readonly typeLabel: string;
+  /** The answer type's icon, on a tile at the row's start ("type" for short text, "mail" for email). */
+  readonly typeIcon?: IconName;
   readonly isRequired: boolean;
   /** For a choice question: how many choices it has. */
   readonly choiceCount?: number;
-  /** Where its answers go, as a quiet line: "Person · Budget band", or "Not filed, kept with the enquiry". */
+  /** Where its answers go, after the type on the second line: "Person › Budget band", or "Not filed, kept with the enquiry". */
   readonly filed: string;
   /** The question a publish refused: marked, and the caller keeps it open until it is fixed. */
   readonly hasProblem?: boolean;
@@ -126,7 +129,11 @@ export function QuestionList({
               data-problem={item.hasProblem === true || undefined}
             >
               <div className={styles.head}>
-                {onMove !== undefined && <DragHandle label={strings.move(name)} />}
+                {onMove !== undefined && (
+                  <span className={styles.handle}>
+                    <DragHandle label={strings.move(name)} />
+                  </span>
+                )}
                 <AriaButton
                   className={styles.toggle}
                   aria-expanded={isOpen}
@@ -134,29 +141,36 @@ export function QuestionList({
                     onOpenChange(item.id, !isOpen);
                   }}
                 >
-                  <span className={styles.summary}>
-                    <span className={styles.name} data-untitled={item.label === '' || undefined}>
-                      {name}
-                    </span>
-                    <Badge text={item.typeLabel} />
-                    {item.isRequired && <span className={styles.fact}>{strings.required}</span>}
-                    {item.choiceCount !== undefined && (
-                      <span className={styles.fact}>
-                        {item.choiceCount === 0 ? strings.noChoices : strings.choices(item.choiceCount)}
-                      </span>
-                    )}
-                    {item.hasProblem === true && (
-                      <span className={styles.problem}>
-                        <Icon name="circle-alert" size="sm" />
-                        {strings.hasProblem}
-                      </span>
-                    )}
+                  <span className={styles.tile}>
+                    <Icon name={item.typeIcon ?? 'type'} tile="gray" />
                   </span>
-                  <span className={styles.filed}>{item.filed}</span>
+                  <span className={styles.text}>
+                    <span className={styles.title}>
+                      <span className={styles.name} data-untitled={item.label === '' || undefined}>
+                        {name}
+                      </span>
+                      {item.isRequired && <span className={styles.required}>{strings.required}</span>}
+                      {item.hasProblem === true && (
+                        <span className={styles.problem}>
+                          <Icon name="circle-alert" size="sm" />
+                          {strings.hasProblem}
+                        </span>
+                      )}
+                    </span>
+                    <span className={styles.meta}>
+                      {[
+                        item.typeLabel,
+                        ...(item.choiceCount === undefined
+                          ? []
+                          : [item.choiceCount === 0 ? strings.noChoices : strings.choices(item.choiceCount)]),
+                        item.filed,
+                      ].join(strings.separator)}
+                    </span>
+                  </span>
+                  <span className={styles.chevron} aria-hidden="true">
+                    <Icon name={isOpen ? 'chevron-up' : 'chevron-down'} size="sm" />
+                  </span>
                 </AriaButton>
-                <span className={styles.chevron} aria-hidden="true">
-                  <Icon name={isOpen ? 'chevron-up' : 'chevron-down'} size="sm" />
-                </span>
               </div>
               {isOpen && (
                 <div className={styles.body}>

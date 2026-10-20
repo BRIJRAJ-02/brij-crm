@@ -8,28 +8,50 @@ import { Stage } from '../../workbench/Stage/Stage.tsx';
 import { QuestionList, type QuestionListItem } from './QuestionList.tsx';
 
 const QUESTIONS: readonly QuestionListItem[] = [
-  { id: 'name', label: 'Your name', typeLabel: 'Short text', isRequired: true, filed: 'Person · Name' },
-  { id: 'email', label: 'Work email', typeLabel: 'Email', isRequired: true, filed: 'Person · Email addresses' },
+  {
+    id: 'name',
+    label: 'Your name',
+    typeLabel: 'Short text',
+    typeIcon: 'type',
+    isRequired: true,
+    filed: 'Person › Name',
+  },
+  {
+    id: 'email',
+    label: 'Work email',
+    typeLabel: 'Email',
+    typeIcon: 'mail',
+    isRequired: true,
+    filed: 'Person › Email addresses',
+  },
   {
     id: 'budget',
     label: 'Budget',
     typeLabel: 'Dropdown',
+    typeIcon: 'chevrons-up-down',
     isRequired: false,
     choiceCount: 3,
-    filed: 'Person · Budget band',
+    filed: 'Person › Budget band',
   },
-  { id: 'new', label: '', typeLabel: 'Short text', isRequired: false, filed: 'Not filed, kept with the enquiry' },
+  {
+    id: 'new',
+    label: '',
+    typeLabel: 'Short text',
+    typeIcon: 'type',
+    isRequired: false,
+    filed: 'Not filed, kept with the enquiry',
+  },
 ];
 
 interface SampleProps {
   readonly initialOpen?: readonly string[];
   readonly isReadOnly?: boolean;
   readonly withProblem?: boolean;
-  /** `fill` shows the builder's width, where each question is one line; `narrow` the two line phone layout. */
+  /** `fill` shows the builder's full width; `narrow` a phone's column, where the second line wraps. */
   readonly width?: 'narrow' | 'fill';
 }
 
-/** The list holding its own order and open rows, as the form builder does. */
+/** The list holding its own order and open questions, as the form builder does. */
 function SampleQuestions({ initialOpen = [], isReadOnly = false, withProblem = false, width = 'fill' }: SampleProps) {
   const [items, setItems] = useState(
     withProblem ? QUESTIONS.map((item) => (item.id === 'new' ? { ...item, hasProblem: true } : item)) : QUESTIONS,
@@ -102,18 +124,18 @@ const meta = {
 export default meta;
 type Story = StoryObj<typeof meta>;
 
-/** Closed rows at the builder's width, one line each: the handle, the question, its type, Required, its choices and where it is filed. */
+/** Closed questions at the builder's width, two lines each: a type tile, the question with Required, then the type, its choices and where it is filed. */
 export const Default: Story = {
   parameters: { crm: { preview: true } },
   play: async ({ canvas }) => {
     await expect(canvas.getByRole('grid', { name: 'Questions' })).toBeInTheDocument();
     await expect(canvas.getAllByRole('row')).toHaveLength(4);
     await expect(canvas.getByText('Untitled question')).toBeInTheDocument();
-    await expect(canvas.getByText('3 choices')).toBeInTheDocument();
+    await expect(canvas.getByText('Dropdown · 3 choices · Person › Budget band')).toBeInTheDocument();
   },
 };
 
-/** Pressing a row's line opens its editor; pressing again closes it. */
+/** Pressing a question's head opens its editor; pressing again closes it. */
 export const Opening: Story = {
   play: async ({ canvas }) => {
     const toggle = canvas.getByRole('button', { name: /^Budget/ });
@@ -126,7 +148,7 @@ export const Opening: Story = {
   },
 };
 
-/** One row open, its editor under the line, and its footer row: Required at the start, Duplicate and Delete at the end. */
+/** One question open, its head filled, its editor under it, and its footer row: Required at the start, Duplicate and Delete at the end. */
 export const OneOpen: Story = {
   args: { initialOpen: ['email'] },
   play: async ({ canvas }) => {
@@ -135,13 +157,13 @@ export const OneOpen: Story = {
   },
 };
 
-/** A question a publish refused: marked, with the danger edge at its start. */
+/** A question a publish refused: the danger edge, and Needs a fix by its title. */
 export const WithProblem: Story = {
   args: { initialOpen: ['new'], withProblem: true },
   parameters: { crm: { screenshot: false } },
 };
 
-/** Read only: no handles, the rows still open to read. */
+/** Read only: no handles, the questions still open to read. */
 export const ReadOnly: Story = {
   args: { isReadOnly: true },
   play: async ({ canvas }) => {
@@ -149,11 +171,11 @@ export const ReadOnly: Story = {
   },
 };
 
-/** In a narrow column (a phone): each closed row splits in two, the question and its facts, then where it is filed. */
+/** In a narrow column (a phone): the second line wraps rather than cutting where it is filed. */
 export const Narrow: Story = {
   args: { width: 'narrow' },
   play: async ({ canvas }) => {
     await expect(canvas.getAllByRole('row')).toHaveLength(4);
-    await expect(canvas.getByText('Person · Budget band')).toBeVisible();
+    await expect(canvas.getByText('Dropdown · 3 choices · Person › Budget band')).toBeVisible();
   },
 };

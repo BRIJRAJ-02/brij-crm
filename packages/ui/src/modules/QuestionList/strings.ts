@@ -8,4 +8,6 @@ export const strings = {
   moved: (name: string, position: number, total: number) =>
     `${name}, moved to position ${String(position)} of ${String(total)}`,
   hasProblem: 'Needs a fix',
+  /** Between the parts of a row's second line: "Dropdown · 3 choices · Person › Size". */
+  separator: ' · ',
 } as const;

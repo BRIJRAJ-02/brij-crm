@@ -1,11 +1,12 @@
 /* QuestionList: a plain section (its heading, count and actions on one
-   centred row, no frame of its own), then the questions as Table's rows:
-   size-row tall, hairline divided, a hover fill for a pointer. A row is one
-   line: the handle, the question (muted while untitled), its type Badge and
-   facts, where it is filed in text-secondary at the end, then a chevron.
-   An open row shows its editor under a hairline. A row a publish refused
-   takes a danger edge at its start. A dragged row fades; the drop line is
-   a thick accent rule. */
+   centred row, no frame of its own), then the questions as hairline cards,
+   space-8 apart. A closed card is two lines with room around them: a type
+   tile, the question (muted while untitled) with Required beside it, and
+   under it, muted, the type, its choices and where it is filed; a chevron
+   at the end. The drag handle shows on hover or focus for a pointer. An
+   open card fills its head and shows its editor under a hairline. A card a
+   publish refused takes the danger edge. A dragged card fades; the drop
+   line is a thick accent rule. */
 @layer components {
   .root {
     display: flex;
@@ -54,18 +55,21 @@
     min-inline-size: 0;
   }
 
+  /* Duplicate and Delete, space-8 apart. */
   .footerEnd {
     display: flex;
     flex: none;
-    gap: var(--space-4);
+    gap: var(--space-8);
     align-items: center;
   }
 
-  /* The questions as Table's rows: hairline divided, under a hairline, no card of their own. */
+  /* The questions as hairline cards, space-8 apart: at the builder's full
+     width a card bounds each question and, once open, the editor inside it,
+     where hairline divided rows ran together (owner feedback, 20 October 2026). */
   .list {
     display: flex;
     flex-direction: column;
-    border-block-start: var(--border-width-hairline) solid var(--border-subtle);
+    gap: var(--space-8);
     outline: none;
   }
 
@@ -73,48 +77,100 @@
     display: flex;
     flex-direction: column;
     min-inline-size: 0;
-    border-block-end: var(--border-width-hairline) solid var(--border-subtle);
-    border-inline-start: var(--border-width-thick) solid transparent;
+    overflow: clip;
+    border: var(--border-width-hairline) solid var(--border);
+    border-radius: var(--radius-md);
+    background: var(--surface-raised);
     outline: none;
   }
 
   .row[data-focus-visible] {
-    box-shadow: var(--shadow-focus-inset);
+    border-color: var(--accent-line);
+    box-shadow: var(--shadow-focus);
   }
 
-  /* A question a publish refused: a danger edge at its start, and "Needs a fix" in its line. */
+  /* An open question: its head takes the selected fill, so it reads as the one being edited. */
+  /* A question a publish refused: the danger edge, and "Needs a fix" by its title. */
   .row[data-problem] {
-    border-inline-start-color: var(--danger);
+    border-color: var(--danger);
   }
 
   .row[data-dragging] {
     opacity: var(--opacity-busy);
   }
 
+  /* Two lines with room around them: at least size-row plus space-12 above and below. */
   .head {
+    position: relative;
     display: flex;
     gap: var(--space-8);
     align-items: center;
-    min-block-size: var(--size-row);
-    padding-inline: var(--space-4) var(--space-8);
+    min-block-size: calc(var(--size-row) + 2 * var(--space-12));
+    padding-inline: var(--space-8) var(--space-12);
+    transition: background-color var(--duration-hover) var(--ease-hover);
   }
 
+  .row[data-open] .head {
+    background: var(--surface-selected);
+  }
+
+  .handle {
+    display: inline-flex;
+    flex: none;
+  }
+
+  .tile {
+    display: inline-flex;
+    flex: none;
+    transition: opacity var(--duration-hover) var(--ease-hover);
+  }
+
+  /* For a pointer, the handle sits on the type tile's place and takes it on
+     hover or keyboard focus, so a closed question starts with its type and
+     nothing is held empty. On touch the handle stays in the line, always shown. */
   @media (hover: hover) and (pointer: fine) {
+    .head {
+      padding-inline-start: var(--space-16);
+    }
+
     .head:hover {
       background: var(--surface-hover);
     }
+
+    .handle {
+      position: absolute;
+      inset-block-start: 50%;
+      inset-inline-start: var(--space-16);
+      opacity: 0;
+      transition: opacity var(--duration-hover) var(--ease-hover);
+      translate: 0 -50%;
+    }
+
+    .head:hover .handle,
+    .head:focus-within .handle,
+    .row[data-focus-visible] .handle {
+      opacity: 1;
+    }
+
+    .head:hover .tile,
+    .head:focus-within .tile,
+    .row[data-focus-visible] .tile {
+      opacity: 0;
+    }
   }
 
-  /* One line: the question, its type and facts, then where it is filed at the end. */
+  /* The whole head opens the question: the type tile, the two lines and the chevron. */
   .toggle {
     display: flex;
     flex: 1;
-    gap: var(--space-8);
+    gap: var(--space-12);
     align-items: center;
+    align-self: stretch;
     min-inline-size: 0;
-    min-block-size: var(--size-row);
-    padding: 0;
+    padding-block: var(--space-12);
+    padding-inline: 0;
     border: none;
+    border-radius: var(--radius-sm);
     background: transparent;
     color: inherit;
     font: inherit;
@@ -123,17 +179,22 @@
   }
 
   .toggle[data-focus-visible] {
-    border-radius: var(--radius-xs);
-    box-shadow: var(--shadow-focus);
-    outline: var(--border-width-hairline) solid var(--accent-line);
-    outline-offset: calc(-1 * var(--border-width-hairline));
+    box-shadow: var(--shadow-focus-inset);
   }
 
-  .summary {
+  .text {
     display: flex;
     flex: 1;
+    flex-direction: column;
+    gap: var(--space-2);
+    min-inline-size: 0;
+  }
+
+  /* Line one: the question, then Required (or the refusal) beside it. */
+  .title {
+    display: flex;
     gap: var(--space-8);
-    align-items: center;
+    align-items: baseline;
     min-inline-size: 0;
   }
 
@@ -150,7 +211,7 @@
     color: var(--text-tertiary);
   }
 
-  .fact {
+  .required {
     flex: none;
     color: var(--text-secondary);
     font: var(--text-label);
@@ -162,16 +223,15 @@
     flex: none;
     gap: var(--space-4);
     align-items: center;
+    align-self: center;
     color: var(--danger);
     font: var(--text-label);
     letter-spacing: var(--tracking-label);
   }
 
-  /* Where it is filed, at the line's end: it gives way first on a narrow page. */
-  .filed {
-    flex: 0 1 auto;
+  /* Line two, muted: the type, its choices, where it is filed. */
+  .meta {
     overflow: hidden;
-    max-inline-size: 40%;
     color: var(--text-secondary);
     font: var(--text-label);
     letter-spacing: var(--tracking-label);
@@ -179,38 +239,29 @@
     white-space: nowrap;
   }
 
+  /* The chevron in a 32px square, apart from the text. */
   .chevron {
-    display: inline-flex;
+    display: inline-grid;
     flex: none;
-    color: var(--text-tertiary);
+    place-items: center;
+    inline-size: calc(2 * var(--space-16));
+    block-size: calc(2 * var(--space-16));
+    color: var(--text-secondary);
   }
 
-  /* In a narrow column the line splits in two: the question and its facts, then where it is filed. */
+  /* In a narrow column the second line wraps rather than cutting where it is filed. */
   @container (width < 480px) {
-    .toggle {
-      flex-direction: column;
-      gap: var(--space-2);
-      align-items: flex-start;
-      padding-block: var(--space-6);
-    }
-
-    .summary {
-      flex: none;
-      flex-wrap: wrap;
-      max-inline-size: 100%;
-    }
-
-    .filed {
-      max-inline-size: 100%;
+    .meta {
+      white-space: normal;
     }
   }
 
-  /* An open question's editor, under a hairline, indented to the question's words. */
+  /* An open question's editor, under a hairline, with the head's side padding. */
   .body {
     display: flex;
     flex-direction: column;
     gap: var(--space-12);
-    padding: var(--space-12) var(--space-8) var(--space-12) var(--size-control);
+    padding: var(--space-16);
     border-block-start: var(--border-width-hairline) solid var(--border-subtle);
   }
 
@@ -228,6 +279,10 @@
     .row[data-focus-visible],
     .toggle[data-focus-visible] {
       outline: var(--border-width-thick) solid Highlight;
+    }
+
+    .handle {
+      opacity: 1;
     }
 
     .indicator[data-drop-target] {
