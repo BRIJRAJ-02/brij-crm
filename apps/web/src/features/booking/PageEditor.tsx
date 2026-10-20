@@ -11,7 +11,6 @@ import {
   type DataLayer,
 } from '@crm/data';
 import {
-  Button,
   Callout,
   Card,
   ChoiceChips,
@@ -22,15 +21,18 @@ import {
   Link,
   PageColumn,
   PreviewLayout,
+  SaveBar,
   SegmentedControl,
   Select,
   Skeleton,
   Switch,
   TopBar,
+  type SaveBarStatus,
   type SelectItem,
 } from '@crm/ui';
 import { useBlocker } from '@tanstack/react-router';
 import { useEffect, useState, useMemo } from 'react';
+import { pageHeading } from '../navigation/focus.ts';
 import { WorkspacePage } from '../workspace/WorkspacePage.tsx';
 import { DaysOff } from './DaysOff.tsx';
 import { availabilityIsValid, weekRows, weekSummary, withDay, zoneItems, zoneMatches } from './hours.ts';
@@ -123,7 +125,11 @@ export function PageEditor({ data, slug, page: loaded, locale, myHours }: PageEd
   const [failure, setFailure] = useState<{ readonly message: string; readonly field?: string } | undefined>(undefined);
   const dirty = changed(saved, draft);
   const isDirty = !isLocked && Object.keys(dirty).length > 0;
-  const change = (patch: Partial<BookingPageSettings>) => setDraft((current) => ({ ...current, ...patch }));
+  const [justSaved, setJustSaved] = useState(false);
+  const change = (patch: Partial<BookingPageSettings>) => {
+    setJustSaved(false);
+    setDraft((current) => ({ ...current, ...patch }));
+  };
   const setAvailability = (availability: BookingAvailability) => change({ availability });
 
   // Leaving with unsaved changes asks first, in the app and when the tab closes.
@@ -145,6 +151,8 @@ export function PageEditor({ data, slug, page: loaded, locale, myHours }: PageEd
         setSaving(false);
         setPage(next);
         setDraft((current) => ({ ...settingsOf(next), ...changed(settingsOf(next), current) }));
+        // Saved is said for the groups' save, not the Live switch's.
+        if (patch.status === undefined) setJustSaved(true);
       },
       (error: unknown) => {
         setSaving(false);
@@ -158,6 +166,17 @@ export function PageEditor({ data, slug, page: loaded, locale, myHours }: PageEd
     );
   };
   const slugError = failure?.field === 'slug' ? failure.message : undefined;
+  // The save bar speaks for the groups' changes; the Live switch saves on its own.
+  const barError = failure !== undefined && slugError === undefined ? failure.message : undefined;
+  const barStatus: SaveBarStatus = !isDirty
+    ? justSaved
+      ? 'saved'
+      : 'hidden'
+    : isSaving
+      ? 'saving'
+      : barError === undefined
+        ? 'unsaved'
+        : 'error';
   const location = draft.location;
   // The live summaries in the groups' headers: what the meeting is, and the week the page books on.
   const meetingSummary = [
@@ -209,27 +228,19 @@ export function PageEditor({ data, slug, page: loaded, locale, myHours }: PageEd
               durations: draft.durations,
               location: draft.location,
             }}
-            {...(isDirty
-              ? {
-                  footer: (
-                    <Callout
-                      tone={failure !== undefined && slugError === undefined ? 'danger' : 'info'}
-                      actions={
-                        <Button
-                          variant="primary"
-                          isPending={isSaving}
-                          isDisabled={!sendable(draft)}
-                          onPress={() => save(dirty)}
-                        >
-                          {isSaving ? strings.saving : strings.save}
-                        </Button>
-                      }
-                    >
-                      {failure !== undefined && slugError === undefined ? failure.message : strings.unsaved}
-                    </Callout>
-                  ),
-                }
-              : {})}
+            footer={
+              <SaveBar
+                status={barStatus}
+                {...(barError === undefined ? {} : { error: barError })}
+                {...(sendable(draft) ? {} : { blockedReason: strings.fixPage })}
+                onSave={() => save(dirty)}
+                onDiscard={() => {
+                  setDraft(saved);
+                  setFailure(undefined);
+                }}
+                onFocusAway={() => pageHeading(document)?.focus()}
+              />
+            }
           >
             {isLocked && (
               <Callout tone="info" title={strings.readOnlyTitle}>

@@ -181,13 +181,18 @@ export function zoneMatches(item: { readonly label: string; readonly description
 /** The browser's zone. */
 export const browserZone = (): string => new Intl.DateTimeFormat().resolvedOptions().timeZone;
 
-/** "9:00 AM" for a stored `HH:MM` in `locale`'s clock, Midnight for `24:00`. */
+/**
+ * "9:00 AM" for a stored `HH:MM` in `locale`'s clock. The day's end, `24:00`, reads as the week editor reads it:
+ * Midnight on a 12 hour clock (where "12:00 AM" would read as the day's start), "24:00" on a 24 hour one.
+ */
 export function clockLabel(time: string, locale: string): string {
-  if (time === '24:00') return strings.midnight;
+  const format = new Intl.DateTimeFormat(locale, { hour: 'numeric', minute: '2-digit', timeZone: 'UTC' });
+  if (time === '24:00') {
+    const cycle = format.resolvedOptions().hourCycle;
+    return cycle === 'h23' || cycle === 'h24' ? '24:00' : strings.midnight;
+  }
   const [hours = 0, minutes = 0] = time.split(':').map(Number);
-  return new Intl.DateTimeFormat(locale, { hour: 'numeric', minute: '2-digit', timeZone: 'UTC' }).format(
-    new Date(Date.UTC(2000, 0, 1, hours, minutes)),
-  );
+  return format.format(new Date(Date.UTC(2000, 0, 1, hours, minutes)));
 }
 
 /**

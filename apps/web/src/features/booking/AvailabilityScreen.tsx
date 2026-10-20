@@ -3,7 +3,7 @@
 // Main task: set the week's windows (all days at once, per day, or copied across), the zone and the days off, then Save.
 // Leaves out: a page's own hours (its editor) and anyone else's hours.
 import { isDataError, type BookingAvailability, type BookingPageView, type DataLayer } from '@crm/data';
-import { Button, Callout, Card, HoursEditor, PageColumn, Select, Skeleton, TopBar } from '@crm/ui';
+import { Card, HoursEditor, PageColumn, SaveBar, Select, Skeleton, TopBar, type SaveBarStatus } from '@crm/ui';
 import { useBlocker, useNavigate } from '@tanstack/react-router';
 import { useState, useMemo } from 'react';
 import { bookingsHref } from '../workspace/objects.ts';
@@ -57,14 +57,14 @@ export function AvailabilityScreen({
     if (isSaving) return;
     setSaving(true);
     setFailure(undefined);
-    data.bookings.setHours(slug, draft).then(
+    const sent = draft;
+    data.bookings.setHours(slug, sent).then(
       ({ availability }) => {
         setSaving(false);
         setSaved(availability);
-        setDraft(availability);
+        // An edit made while it saved stays, still unsaved.
+        setDraft((current) => (JSON.stringify(current) === JSON.stringify(sent) ? availability : current));
         setJustSaved(true);
-        // Save leaves with the unsaved bar; the page's title takes focus, and the bar's status says Saved.
-        requestAnimationFrame(() => pageHeading(document)?.focus());
       },
       (error: unknown) => {
         setSaving(false);
@@ -72,6 +72,19 @@ export function AvailabilityScreen({
       },
     );
   };
+  const discard = () => {
+    setDraft(saved);
+    setFailure(undefined);
+  };
+  const status: SaveBarStatus = isSaving
+    ? 'saving'
+    : isDirty
+      ? failure === undefined
+        ? 'unsaved'
+        : 'error'
+      : justSaved
+        ? 'saved'
+        : 'hidden';
   const zones = useMemo(() => zoneItems(draft.timeZone, new Date()), [draft.timeZone]);
   return (
     <WorkspacePage
@@ -90,57 +103,36 @@ export function AvailabilityScreen({
             aside={
               <>
                 <Card title={strings.timeZone} description={strings.timeZoneText}>
-                  <Select
-                    label={strings.timeZone}
-                    isLabelHidden
-                    showsDescription
-                    items={zones}
-                    filter={zoneMatches}
-                    isSearchable
-                    value={draft.timeZone}
-                    onChange={(zone) => {
-                      if (zone !== null) update({ ...draft, timeZone: zone });
-                    }}
-                  />
+                  {/* One box for the Select: React Aria puts a hidden template before it, which the card would
+                      count as its first child, doubling the space under the header. */}
+                  <div>
+                    <Select
+                      label={strings.timeZone}
+                      isLabelHidden
+                      showsDescription
+                      items={zones}
+                      filter={zoneMatches}
+                      isSearchable
+                      value={draft.timeZone}
+                      onChange={(zone) => {
+                        if (zone !== null) update({ ...draft, timeZone: zone });
+                      }}
+                    />
+                  </div>
                 </Card>
                 <DaysOff availability={draft} onChange={update} />
               </>
             }
             footer={
-              isDirty || justSaved ? (
-                <Callout
-                  tone={failure !== undefined ? 'danger' : isDirty ? 'info' : 'success'}
-                  isAnnounced={!isDirty}
-                  {...(isDirty
-                    ? {
-                        actions: (
-                          <>
-                            <Button
-                              variant="ghost"
-                              isDisabled={isSaving}
-                              onPress={() => {
-                                setDraft(saved);
-                                setFailure(undefined);
-                              }}
-                            >
-                              {strings.discard}
-                            </Button>
-                            <Button
-                              variant="primary"
-                              isPending={isSaving}
-                              isDisabled={!availabilityIsValid(draft)}
-                              onPress={save}
-                            >
-                              {isSaving ? strings.saving : strings.save}
-                            </Button>
-                          </>
-                        ),
-                      }
-                    : {})}
-                >
-                  {failure ?? (isDirty ? strings.unsaved : strings.saved)}
-                </Callout>
-              ) : undefined
+              <SaveBar
+                status={status}
+                {...(failure === undefined ? {} : { error: failure })}
+                {...(availabilityIsValid(draft) ? {} : { blockedReason: strings.fixHours })}
+                onSave={save}
+                onDiscard={discard}
+                // When Save or Discard goes with focus on it, the page's title takes it.
+                onFocusAway={() => pageHeading(document)?.focus()}
+              />
             }
           >
             <Card title={strings.weeklyHours} description={strings.availabilityText}>
@@ -177,8 +169,23 @@ export function AvailabilityPending() {
       page={{
         topBar: <TopBar title={strings.availability} icon="clock" isLoading />,
         body: (
-          <PageColumn width="full" aside={<Skeleton lines={4} />}>
-            <Skeleton lines={8} />
+          // The cards the page will show, each holding its place, so the page lands where the skeleton was.
+          <PageColumn
+            width="full"
+            aside={
+              <>
+                <Card title={strings.timeZone} isBusy>
+                  <Skeleton lines={1} />
+                </Card>
+                <Card title={strings.daysOff} isBusy>
+                  <Skeleton lines={3} />
+                </Card>
+              </>
+            }
+          >
+            <Card title={strings.weeklyHours} isBusy>
+              <Skeleton lines={8} />
+            </Card>
           </PageColumn>
         ),
       }}

@@ -3,7 +3,7 @@
 // Main task: see at a glance which pages follow these hours and which keep their own, and open one to change it.
 // Leaves out: changing a page's hours here (its editor does), and pages someone else owns.
 import type { BookingAvailability, BookingPageView } from '@crm/data';
-import { Card, EmptyState, Link, LinkList, type LinkRow } from '@crm/ui';
+import { Card, Link, LinkList, type LinkRow } from '@crm/ui';
 import { weekSummary, zoneLabel, zoneOffset } from './hours.ts';
 import { linksHref } from './links.ts';
 import { strings } from './strings.ts';
@@ -25,16 +25,12 @@ export interface PagesHoursProps {
 
 /** The member's pages, each with the hours it books on: these, or its own. */
 export function PagesHours({ slug, pages, status, onRetry, mine, locale, onOpen }: PagesHoursProps) {
+  // None yet: the card says so in its header and offers the way to make one, sized to that (no tall empty
+  // state framed inside the card).
   if (status === 'ready' && pages.length === 0) {
     return (
-      <Card title={strings.yourPages}>
-        <EmptyState
-          icon="link"
-          title={strings.emptyTitle}
-          actions={<Link href={linksHref(slug)}>{strings.goToPages}</Link>}
-        >
-          {strings.emptyText}
-        </EmptyState>
+      <Card title={strings.yourPages} description={strings.noPagesText}>
+        <Link href={linksHref(slug)}>{strings.goToPages}</Link>
       </Card>
     );
   }
