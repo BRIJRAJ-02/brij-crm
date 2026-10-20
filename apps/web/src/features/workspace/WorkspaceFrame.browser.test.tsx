@@ -18,8 +18,17 @@ import { afterEach, beforeAll, describe, expect, it } from 'vitest';
 import { page } from 'vitest/browser';
 import { WorkspaceFrame, type SettingsSidebar } from './WorkspaceFrame.tsx';
 
-// The frame reaches the data layer only on undo and sign out, which these tests never press.
-const data = {} as unknown as DataLayer;
+// The frame reaches the data layer on undo and sign out, which these tests never press, and for the calendar banner,
+// which reads the member's calendars: here none, still loading, so no banner shows.
+const loading = { status: 'loading' as const };
+const calendarView = {
+  subscribe: () => () => undefined,
+  getSnapshot: () => loading,
+  retain: () => () => undefined,
+  ready: () => Promise.resolve(),
+  reload: () => undefined,
+};
+const data = { calendar: { view: () => calendarView } } as unknown as DataLayer;
 
 // Wider than bp-page-compact, so the sidebar is open and shows its words and keycaps.
 beforeAll(async () => {
