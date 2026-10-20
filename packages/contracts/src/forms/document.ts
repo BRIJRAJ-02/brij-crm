@@ -65,9 +65,23 @@ export const RedirectUrl = z
     { error: 'Give a full address that starts with https://.' },
   );
 
+/** The countdown before a visitor goes on to book (AC-1056): 5 seconds unless set, 0 for at once, at most 30. */
+export const BOOKING_COUNTDOWN = { default: 5, min: 0, max: 30 } as const;
+
+/** Seconds before the visitor goes on to the booking page; 0 sends them at once. */
+export const BookingCountdown = z
+  .number()
+  .int({ error: 'Give the countdown in whole seconds.' })
+  .min(BOOKING_COUNTDOWN.min, { error: 'The countdown can’t be negative.' })
+  .max(BOOKING_COUNTDOWN.max, { error: `Keep the countdown to ${String(BOOKING_COUNTDOWN.max)} seconds.` });
+
 /**
- * What follows a submit (AC-570): the thank you, optionally offering a meeting
- * on a booking page (#59, hidden until booking pages exist), or a redirect.
+ * What follows a submit (AC-570, AC-1055): the thank you, a redirect, or on
+ * to one of the workspace's booking pages after a short countdown, with the
+ * visitor's name and email filled in there. `message` on `booking` is the
+ * thank you shown when the page is paused or gone at send time.
+ * `offerMeeting` on `message` is the old, never shown offer, kept so older
+ * documents still read.
  */
 export const FormAfter = z.discriminatedUnion('kind', [
   z.strictObject({
@@ -76,6 +90,12 @@ export const FormAfter = z.discriminatedUnion('kind', [
     offerMeeting: z.strictObject({ bookingPageId: Uuid }).optional(),
   }),
   z.strictObject({ kind: z.literal('redirect'), url: RedirectUrl }),
+  z.strictObject({
+    kind: z.literal('booking'),
+    bookingPageId: z.uuid({ error: 'Pick a booking page.' }),
+    countdownSeconds: BookingCountdown.default(BOOKING_COUNTDOWN.default),
+    message: z.string().trim().max(2_000).default(''),
+  }),
 ]);
 /** What follows a submit. */
 export type FormAfter = z.infer<typeof FormAfter>;

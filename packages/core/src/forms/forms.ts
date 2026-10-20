@@ -35,6 +35,7 @@ import { refuse, refuseOn } from '../engine/refusals.ts';
 import { actorRow, type EngineScope } from '../engine/scope.ts';
 import { runWrite, type AfterWrite } from '../engine/write.ts';
 import { requirePermission } from '../access/check.ts';
+import { bookingTargetProblem } from '../booking/pages.ts';
 import { can, fieldLevel, objectLevel } from '../access/policy.ts';
 import { inWorkspace } from '../access/run.ts';
 import { checkObject, UNKNOWN_OBJECT } from '../access/visibility.ts';
@@ -473,6 +474,31 @@ export async function createForm(
   return result;
 }
 
+/** The refusal on `after` when the booking page a draft points at can't be used (AC-1056). */
+async function checkBookingTarget(
+  tx: WorkspaceTx,
+  scope: EngineScope,
+  document: FormDocument,
+  check: 'seen' | 'live',
+): Promise<void> {
+  const { after } = document;
+  if (after.kind !== 'booking') return;
+  const problem = await bookingTargetProblem(tx, scope, after.bookingPageId, check);
+  if (problem === undefined) return;
+  throw refuseOn(
+    'CONFIG_INVALID',
+    check === 'seen'
+      ? 'Pick a booking page you can see that is taking bookings.'
+      : 'The booking page this form sends visitors to is paused or gone. Pick another, or thank them instead.',
+    'after',
+  );
+}
+
+/** The booking page a document sends visitors to, if any. */
+function bookingPageOf(document: FormDocument | undefined): string | undefined {
+  return document?.after.kind === 'booking' ? document.after.bookingPageId : undefined;
+}
+
 /** Refuses a document filed onto another object than the form's draft is set to (setFormTarget changes it). */
 function checkDraft(form: FormRow, document: FormDocument): void {
   if ((document.targets.main?.objectId ?? null) !== form.mainObjectId) {
@@ -536,6 +562,12 @@ export async function saveFormDraft(
       if (form.status === 'archived') throw refuse('FORM_STATE', 'Restore this form before you change it.');
       checkRevision(form, input.expectedRevision);
       checkDraft(form, input.document);
+      // A newly chosen booking page goes through the access door; one already chosen stays, so others can still edit.
+      const chosen = bookingPageOf(input.document);
+      if (chosen !== undefined && form.draftVersionId !== null) {
+        const before = (await loadVersions(tx, [form.draftVersionId])).get(form.draftVersionId);
+        if (bookingPageOf(before?.document) !== chosen) await checkBookingTarget(tx, scope, input.document, 'seen');
+      } else if (chosen !== undefined) await checkBookingTarget(tx, scope, input.document, 'seen');
       await writeDraft(tx, scope, form, input.document);
       const saved = await loadForm(tx, form.id);
       if (saved === undefined) throw new Error('The form went away under its save.');
@@ -581,6 +613,7 @@ export async function publishForm(
       const draft = (await loadVersions(tx, [form.draftVersionId])).get(form.draftVersionId);
       if (draft === undefined) throw new Error('The draft version went away.');
       checkDraft(form, draft.document);
+      await checkBookingTarget(tx, scope, draft.document, 'live');
       const problem = publishProblem({
         name: form.name,
         slug: form.publicKey,

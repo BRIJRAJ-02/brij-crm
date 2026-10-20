@@ -49,6 +49,19 @@ export interface FormStrings {
   readonly didYouMean: (email: string) => string;
   /** The button that takes the suggested address. */
   readonly useSuggestion: string;
+  /** Over the countdown to the booking page, read once: "Taking you to book a time in 5 seconds." */
+  readonly bookingIn: (seconds: number) => string;
+  /** The countdown's line with its number drawn apart: the words before and after it. */
+  readonly bookingInBefore: string;
+  readonly bookingInAfter: string;
+  /** Going on to the booking page at once (a countdown of 0). */
+  readonly bookingNow: string;
+  /** Goes to the booking page now. */
+  readonly bookNow: string;
+  /** Stops the countdown and stays on the thank you. */
+  readonly stayHere: string;
+  /** After Stay here: the way to the booking page, for later. */
+  readonly bookATime: string;
   /** A step form's place: "Step 2 of 3". */
   readonly stepOf: (step: number, steps: number) => string;
   /** A one at a time form's place, for screen readers: "2 of 7" (AC-1034). */
@@ -99,6 +112,13 @@ const EN: FormStrings = {
   needsALook: (count) => (count === 1 ? '1 answer needs a look' : `${String(count)} answers need a look`),
   didYouMean: (email) => `Did you mean ${email}?`,
   useSuggestion: 'Use it',
+  bookingIn: (seconds) => `Taking you to book a time in ${String(seconds)} ${seconds === 1 ? 'second' : 'seconds'}.`,
+  bookingInBefore: 'Taking you to book a time in',
+  bookingInAfter: '…',
+  bookingNow: 'Taking you to book a time…',
+  bookNow: 'Book now',
+  stayHere: 'Stay here',
+  bookATime: 'Book a time',
   stepOf: (step, steps) => `Step ${String(step)} of ${String(steps)}`,
   questionOf: (question, questions) => `${String(question)} of ${String(questions)}`,
   back: 'Back',

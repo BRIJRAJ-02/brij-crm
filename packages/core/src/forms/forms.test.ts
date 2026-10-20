@@ -12,6 +12,7 @@ import { createDatabase, type Database } from '@crm/db';
 import { enterPublicForm } from '../access/door.ts';
 import type { AccessRules } from '../access/policy.ts';
 import { createAttribute, editAttribute } from '../attributes/attributes.ts';
+import { createBookingPage, updateBookingPage } from '../booking/pages.ts';
 import { getActivity } from '../engine/activity.ts';
 import { newId } from '../engine/ids.ts';
 import { isRefusal } from '../engine/refusals.ts';
@@ -35,7 +36,7 @@ import {
   updateFormSettings,
 } from './forms.ts';
 import { processSubmission } from './process.ts';
-import { getPublicForm, postingRules, submitForm } from './public.ts';
+import { getPublicForm, postingRules, submitForm, visitorOf, type BookingHandoff } from './public.ts';
 import type { CaptchaVerdict } from './spam.ts';
 import {
   deleteSubmission,
@@ -635,5 +636,101 @@ describe('the submissions screen’s reads (AC-572, AC-573)', () => {
       submissionsThisMonth: 2,
       spamCount: 1,
     });
+  });
+});
+
+describe('book a meeting after sending (AC-1055 to AC-1057)', () => {
+  /** A draft of `form` that sends visitors on to `pageId`, saved; answers its new revision. */
+  async function pointAt(w: Workspace, pageId: string, seconds = 5) {
+    const created = await createForm(w.scope, { id: newId(), name: 'Book after' });
+    const document: FormDocument = {
+      ...created.draft,
+      after: { kind: 'booking', bookingPageId: pageId, countdownSeconds: seconds, message: 'Thanks, Ada.' },
+    };
+    const saved = await saveFormDraft(w.scope, { formId: created.id, document, expectedRevision: created.revision });
+    return { formId: created.id, saved };
+  }
+
+  it('refuses a page that is not there on save, and a page paused since on publish, on `after`', async () => {
+    const w = await workspace();
+    const created = await createForm(w.scope, { id: newId() });
+    const missing: FormDocument = {
+      ...created.draft,
+      after: { kind: 'booking', bookingPageId: newId(), countdownSeconds: 5, message: '' },
+    };
+    expect(
+      await refusalOf(
+        saveFormDraft(w.scope, { formId: created.id, document: missing, expectedRevision: created.revision }),
+      ),
+    ).toMatchObject([{ code: 'CONFIG_INVALID', field: 'after' }]);
+    const page = await createBookingPage(w.scope, { id: newId(), title: 'Intro call', timeZone: 'UTC' });
+    const { formId, saved } = await pointAt(w, page.id);
+    await updateBookingPage(w.scope, { pageId: page.id, settings: { status: 'paused' } });
+    expect(await refusalOf(publishForm(w.scope, { formId, expectedRevision: saved.revision }))).toMatchObject([
+      { code: 'CONFIG_INVALID', field: 'after' },
+    ]);
+  });
+
+  it('hands a visitor on with a signed token naming the submission, name and email; a paused page thanks instead', async () => {
+    const w = await workspace();
+    const page = await createBookingPage(w.scope, { id: newId(), title: 'Intro call', timeZone: 'UTC' });
+    const { formId, saved } = await pointAt(w, page.id, 3);
+    const live = await publishForm(w.scope, { formId, expectedRevision: saved.revision });
+    const signed: BookingHandoff[] = [];
+    const sign = (handoff: BookingHandoff) => {
+      signed.push(handoff);
+      return 'signed-token';
+    };
+    const attempt = body({ name: 'Ada Lovelace', email: 'ada@example.com' });
+    const { scope, formId: publicId } = await enterPublicForm({ db }, live.publicKey);
+    const first = await submitForm(scope, registry, {
+      formId: publicId,
+      body: attempt,
+      captcha: off,
+      signHandoff: sign,
+    });
+    expect(first.next).toEqual({
+      kind: 'booking',
+      url: `/b/${page.publicKey}?p=signed-token`,
+      countdownSeconds: 3,
+      text: 'Thanks, Ada.',
+    });
+    const [stored] = await submissionIds(w, formId);
+    expect(signed[0]).toEqual({
+      submissionId: stored?.id,
+      bookingPageId: page.id,
+      name: 'Ada Lovelace',
+      email: 'ada@example.com',
+    });
+    // A retry hands off the same submission.
+    const again = await submitForm(scope, registry, {
+      formId: publicId,
+      body: attempt,
+      captcha: off,
+      signHandoff: sign,
+    });
+    expect(again.replayed).toBe(true);
+    expect(signed[1]?.submissionId).toBe(stored?.id);
+    // Paused at send time: the form's own thank you, never a dead page.
+    await updateBookingPage(w.scope, { pageId: page.id, settings: { status: 'paused' } });
+    const later = await submitForm(scope, registry, {
+      formId: publicId,
+      body: body({ name: 'Grace', email: 'grace@example.com' }),
+      captcha: off,
+      signHandoff: sign,
+    });
+    expect(later.next).toEqual({ kind: 'message', text: 'Thanks, Ada.', offersMeeting: false });
+  });
+
+  it('reads the visitor’s name by key, else by label, and their email from the email question', () => {
+    const questions = [
+      question({ id: 'a', key: 'who', label: 'Your full name', answerType: 'short_text' }),
+      question({ id: 'b', key: 'mail', label: 'Email', answerType: 'email' }),
+    ];
+    expect(visitorOf({ questions }, { who: ' Ada ', mail: 'ada@example.com' })).toEqual({
+      name: 'Ada',
+      email: 'ada@example.com',
+    });
+    expect(visitorOf({ questions }, {})).toEqual({});
   });
 });
