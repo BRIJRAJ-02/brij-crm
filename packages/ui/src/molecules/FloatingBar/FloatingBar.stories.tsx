@@ -35,6 +35,22 @@ export const Default: Story = {
   },
 };
 
+/** In a page's footer: centred in it, and only the bar takes the pointer. */
+export const Footer: Story = {
+  args: { placement: 'footer' },
+  render: (args) => (
+    <Stage width="fill">
+      <FloatingBar {...args} />
+    </Stage>
+  ),
+  play: async ({ canvas, canvasElement }) => {
+    const frame = canvasElement.querySelector<HTMLElement>('[data-placement="footer"]');
+    await expect(frame).not.toBeNull();
+    await expect(getComputedStyle(frame ?? canvasElement).pointerEvents).toBe('none');
+    await expect(canvas.getByRole('button', { name: 'Delete' })).toBeInTheDocument();
+  },
+};
+
 /** Leaving: it sinks out, inert, then says it has gone. */
 export const Leaving: Story = {
   parameters: { crm: { screenshot: false } },

@@ -282,7 +282,7 @@ export function HoursEditor({
                       {to}
                       {time(strings.until(row.label), ends, range[1], (id) => replace(index, [range[0], id]))}
                       {index === 0 ? (
-                        <Tooltip content={strings.addHint}>
+                        <Tooltip content={hasRoomAfter(row.ranges) ? strings.addHint : strings.noRoom}>
                           <Button
                             variant="ghost"
                             icon="plus"

@@ -24,13 +24,13 @@ New (20 October 2026). Bookings › Availability and the booking page editor eac
 </PageColumn>
 ```
 
-- Put it in a page's `footer` (PageColumn, PreviewLayout), and keep it there while nothing is unsaved (`status="hidden"`), so it can play its exit. The footer sticks to the foot of the view and sits in the flow after the last card, so the bar never hides it; the bar centres itself there.
+- Put it in a page's `footer` (PageColumn, PreviewLayout), and keep it there while nothing is unsaved (`status="hidden"`), so it can play its exit. While hidden it draws nothing, but the footer's own slot stays (the column's gap under the last card). The footer sticks to the foot of the view and sits in the flow after the last card, so the bar never hides it; the bar centres itself there.
 - `status`: `unsaved` says "Unsaved changes"; `saving` keeps every word and width in place while Save's check gives way to a spinner; `saved` says "Saved" with a check for a moment, then the bar sinks out; `error` says `error` in the danger colour and Save becomes Try again; `hidden` sends it away (after a discard).
 - `blockedReason` says why the changes can't be saved yet, in place of "Unsaved changes", and Save waits.
 - `onDiscard` adds Discard (ghost), before Save. Esc never discards.
 - `onFocusAway` says where focus goes when Discard or Save leaves while it had focus (after a discard or a save), so it never falls to the page: the page's title.
 - The status is a polite live region, born with its first words: "Unsaved changes" arriving with your first edit stays quiet, and Saved or the failure is said.
-- ⌘S (Ctrl+S on other keyboards) saves from anywhere on the page while the bar shows, and ⌘↵ does too outside a form (a form's ⌘↵ submits that form). Save shows the ⌘S keycap (hidden on touch only devices, as every keycap is).
+- ⌘S (Ctrl+S on other keyboards) saves from anywhere on the page while the bar shows, and ⌘↵ does too outside a form (a form's ⌘↵ submits that form). Inside a dialog, a popover or an open list the keys stay theirs, so they never save the page under it. Save shows the ⌘S keycap (hidden on touch only devices, as every keycap is).
 - On a narrow view it spans the width inside the gutter, the status first and the buttons at the end; a failure's reason wraps them onto a second line.
 
 ## States

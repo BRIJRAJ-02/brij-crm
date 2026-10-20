@@ -77,7 +77,11 @@ export function SaveBar({ status, error, onSave, onDiscard, blockedReason, onFoc
     if (!isWanted || status === 'saved') return;
     const onKeyDown = (event: KeyboardEvent) => {
       const mod = platform === 'mac' ? event.metaKey : event.ctrlKey;
-      if (!mod || event.isComposing || event.altKey || event.shiftKey) return;
+      if (!mod || event.isComposing || event.altKey || event.shiftKey || event.defaultPrevented) return;
+      // A dialog or popover over the page keeps its keys: ⌘S there must not save the page under it.
+      const target = event.target instanceof Element ? event.target : null;
+      const layer = target?.closest('[role="dialog"], [role="alertdialog"], [aria-modal="true"], [role="listbox"]');
+      if (layer !== null && layer !== undefined) return;
       if (event.key.toLowerCase() !== 's' && event.key !== 'Enter') return;
       event.preventDefault();
       if (canSave) save.current();

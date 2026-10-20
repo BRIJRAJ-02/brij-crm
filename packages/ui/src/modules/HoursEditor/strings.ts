@@ -10,6 +10,7 @@ export const strings = {
   copyTitle: 'Copy times to',
   copyHint: 'Copy to other days',
   addHint: 'Add hours',
+  noRoom: 'No room for more hours this day',
   removeHint: 'Remove these hours',
   selectAll: 'Select all',
   apply: 'Apply',

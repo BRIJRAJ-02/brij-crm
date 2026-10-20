@@ -60,6 +60,21 @@ export const Failed: Story = {
   },
 };
 
+/** Failed, narrow: a long reason keeps its own lines and the buttons wrap under it, at the end. */
+export const FailedNarrow: Story = {
+  args: { status: 'error', error: 'Can’t reach Timefix. Check your connection, then try again.' },
+  render: (args) => (
+    <Stage width="narrow">
+      <SaveBar {...args} />
+    </Stage>
+  ),
+  play: async ({ canvas }) => {
+    const reason = canvas.getByRole('status').getBoundingClientRect();
+    const retry = canvas.getByRole('button', { name: 'Try again' }).getBoundingClientRect();
+    await expect(retry.top).toBeGreaterThanOrEqual(reason.bottom - 1);
+  },
+};
+
 /** Blocked: the changes can't be saved yet, the bar says why and Save waits, from the keyboard too. */
 export const Blocked: Story = {
   args: { blockedReason: 'Fix the hours marked in red to save.' },

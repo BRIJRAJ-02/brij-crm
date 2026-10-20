@@ -27,7 +27,7 @@ New (20 October 2026). The owner asked for the save bar to be the same family as
 
 ## States
 
-Shown, leaving; inline, in a footer and floating; wide and narrow.
+Shown, leaving; inline and in a footer (stories), floating (BulkActionBar's and DataGrid's stories); wide and narrow (SaveBar's narrow story).
 
 ## Keyboard
 
