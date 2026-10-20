@@ -19,6 +19,9 @@ export const objectHref = (slug: string, object: Pick<ObjectSummary, 'apiSlug'>)
 /** The workspace's trash (spec 0022). */
 export const trashHref = (slug: string) => `/w/${slug}/trash`;
 
+/** My tasks' address (spec 0019). */
+export const tasksHref = (slug: string) => `/w/${slug}/tasks`;
+
 /** The upcoming bookings' address. */
 export const bookingsHref = (slug: string) => `/w/${slug}/bookings`;
 

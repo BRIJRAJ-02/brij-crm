@@ -23,6 +23,9 @@ export const strings = {
   captures: 'Captures',
   /** The group holding Bookings, Captures and Trash after Records, for screen readers. */
   destinations: 'Workspace pages',
+  /** The sidebar group above Records holding My tasks (spec 0019). */
+  personal: 'Your work',
+  myTasks: 'My tasks',
   /** The workspace menu's way into settings (spec 0012), above Sign out. */
   settings: 'Settings',
   noObjects: 'No objects yet',

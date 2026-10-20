@@ -88,4 +88,33 @@ describe('tasks.*', () => {
       (await other.client.tasks.create({ workspace: other.slug, id, title: 'B', mutationId: newId() })).title,
     ).toBe('B');
   });
+
+  it('lists My tasks by filter and status, and refuses a scope it doesn’t know (AC-436)', async () => {
+    const { m, recordId } = await withRecord();
+    const me = (await m.client.access.mine({ workspace: m.slug })).memberId;
+    const mine = await m.client.tasks.create({
+      workspace: m.slug,
+      id: newId(),
+      title: 'Mine',
+      assigneeMemberId: me,
+      recordIds: [recordId],
+      mutationId: newId(),
+    });
+    const loose = await m.client.tasks.create({ workspace: m.slug, id: newId(), title: 'Loose', mutationId: newId() });
+    const list = (mine: 'assigned' | 'created' | 'all', status: 'open' | 'done' = 'open') =>
+      m.client.tasks.list({ workspace: m.slug, scope: { mine }, status });
+    expect((await list('assigned')).items.map((task) => task.id)).toEqual([mine.id]);
+    expect((await list('created')).items.map((task) => task.id)).toEqual([mine.id, loose.id]);
+    expect(await list('all')).toMatchObject({ total: { count: 2, atLeast: false } });
+    await m.client.tasks.update({ workspace: m.slug, taskId: mine.id, isDone: true, mutationId: newId() });
+    expect((await list('assigned', 'done')).items.map((task) => task.id)).toEqual([mine.id]);
+    const unknown = await failure(() =>
+      m.client.tasks.list({
+        workspace: m.slug,
+        scope: { mine: 'everyone' } as unknown as { mine: 'all' },
+        status: 'open',
+      }),
+    );
+    expect(unknown).toMatchObject({ code: 'INPUT_INVALID', status: 400 });
+  });
 });

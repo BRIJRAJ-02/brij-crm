@@ -1,6 +1,6 @@
 // Brief
 // Purpose: the frame every page inside a workspace sits in: the sidebar beside the page (inside Settings, the settings sidebar).
-// Main task: move between the workspace's objects, Bookings, Captures and the trash, open Settings (⌘,) and sign out; undo (⌘Z).
+// Main task: move between My tasks, the workspace's objects, Bookings, Captures and the trash, open Settings (⌘,) and sign out; undo (⌘Z).
 // Leaves out: switching or creating workspaces, Quick actions, favourites and lists (#23 and later); the theme (Settings › Preferences).
 import type { DataLayer, ObjectSummary, Permission } from '@crm/data';
 import {
@@ -22,13 +22,13 @@ import { useNavigate } from '@tanstack/react-router';
 import { useCallback, useState, type ReactNode } from 'react';
 import { settingsNav, visibleSettingsNav, type SettingsPageId } from '../settings/nav.ts';
 import { strings as settingsStrings } from '../settings/strings.ts';
-import { bookingsHref, capturesHref, navObjects, objectHref, settingsHomeHref, trashHref } from './objects.ts';
+import { bookingsHref, capturesHref, navObjects, objectHref, settingsHomeHref, tasksHref, trashHref } from './objects.ts';
 import { strings } from './strings.ts';
 import { SETTINGS_KEYS, UNDO_KEYS } from './undo.ts';
 import { useUndoShortcut } from './useUndoShortcut.ts';
 
 /** A page the sidebar lists that isn't an object's. */
-export type SidebarPage = 'bookings' | 'captures' | 'trash';
+export type SidebarPage = 'tasks' | 'bookings' | 'captures' | 'trash';
 
 /** Inside Settings (spec 0026): the settings sidebar's current page and the way back out. */
 export interface SettingsSidebar {
@@ -179,6 +179,14 @@ export function WorkspaceFrame({
               </NavItem>
             }
           >
+            {/* My tasks above the Records section, for every member (spec 0019, AC-436). */}
+            {!isMissing && (
+              <NavGroup label={strings.personal}>
+                <NavItem icon="square-check" href={tasksHref(slug)} isCurrent={currentPage === 'tasks'}>
+                  {strings.myTasks}
+                </NavItem>
+              </NavGroup>
+            )}
             {!isMissing && (
               <NavSection title={strings.records} isLoading={listed === undefined} emptyLabel={strings.noObjects}>
                 {listed?.map((object) => (

@@ -1,4 +1,4 @@
-/** The tasks screens' copy (spec 0019, milestone 1). */
+/** The tasks screens' copy (spec 0019). */
 export const strings = {
   tasks: 'Tasks',
   openTasks: 'Open tasks',
@@ -47,4 +47,24 @@ export const strings = {
   apiKey: 'An API key',
   automation: 'An automation',
   system: 'System',
+  // My tasks (milestone 2).
+  myTasks: 'My tasks',
+  /** The two switches' names, for screen readers. */
+  whoseTasks: 'Whose tasks',
+  taskStatus: 'Task status',
+  assignedToMe: 'Assigned to me',
+  createdByMe: 'Created by me',
+  allTasks: 'All tasks',
+  open: 'Open',
+  /** My tasks' list name per filter. */
+  listLabel: (filter: string, status: string) => `${filter}, ${status.toLowerCase()}`,
+  overdue: 'Overdue',
+  today: 'Today',
+  upcoming: 'Upcoming',
+  noDate: 'No date',
+  emptyAssigned: 'Nothing assigned to you',
+  emptyAssignedBody: 'Tasks assigned to you show here.',
+  emptyCreated: 'You haven’t created any open tasks.',
+  emptyAll: 'No open tasks in this workspace.',
+  failedTitle: 'My tasks didn’t load',
 } as const;

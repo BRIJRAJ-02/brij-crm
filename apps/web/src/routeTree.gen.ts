@@ -19,6 +19,7 @@ import { Route as WSlugIndexRouteImport } from './routes/w.$slug.index.tsx'
 import { Route as WSlugBookingsRouteImport } from './routes/w.$slug.bookings.tsx'
 import { Route as WSlugCapturesRouteImport } from './routes/w.$slug.captures.tsx'
 import { Route as WSlugSettingsRouteImport } from './routes/w.$slug.settings.tsx'
+import { Route as WSlugTasksRouteImport } from './routes/w.$slug.tasks.tsx'
 import { Route as WSlugTrashRouteImport } from './routes/w.$slug.trash.tsx'
 import { Route as WSlugBookingsIndexRouteImport } from './routes/w.$slug.bookings.index.tsx'
 import { Route as WSlugBookingsAvailabilityRouteImport } from './routes/w.$slug.bookings.availability.tsx'
@@ -92,6 +93,11 @@ const WSlugCapturesRoute = WSlugCapturesRouteImport.update({
 const WSlugSettingsRoute = WSlugSettingsRouteImport.update({
   id: '/settings',
   path: '/settings',
+  getParentRoute: () => WSlugRoute,
+} as any)
+const WSlugTasksRoute = WSlugTasksRouteImport.update({
+  id: '/tasks',
+  path: '/tasks',
   getParentRoute: () => WSlugRoute,
 } as any)
 const WSlugTrashRoute = WSlugTrashRouteImport.update({
@@ -238,6 +244,7 @@ export interface FileRoutesByFullPath {
   '/w/$slug/bookings': typeof WSlugBookingsRouteWithChildren
   '/w/$slug/captures': typeof WSlugCapturesRouteWithChildren
   '/w/$slug/settings': typeof WSlugSettingsRouteWithChildren
+  '/w/$slug/tasks': typeof WSlugTasksRoute
   '/w/$slug/trash': typeof WSlugTrashRoute
   '/w/$slug/': typeof WSlugIndexRoute
   '/w/$slug/bookings/availability': typeof WSlugBookingsAvailabilityRoute
@@ -270,6 +277,7 @@ export interface FileRoutesByTo {
   '/status': typeof StatusRoute
   '/verify': typeof VerifyRoute
   '/welcome': typeof WelcomeRoute
+  '/w/$slug/tasks': typeof WSlugTasksRoute
   '/w/$slug/trash': typeof WSlugTrashRoute
   '/w/$slug': typeof WSlugIndexRoute
   '/w/$slug/bookings/availability': typeof WSlugBookingsAvailabilityRoute
@@ -307,6 +315,7 @@ export interface FileRoutesById {
   '/w/$slug/bookings': typeof WSlugBookingsRouteWithChildren
   '/w/$slug/captures': typeof WSlugCapturesRouteWithChildren
   '/w/$slug/settings': typeof WSlugSettingsRouteWithChildren
+  '/w/$slug/tasks': typeof WSlugTasksRoute
   '/w/$slug/trash': typeof WSlugTrashRoute
   '/w/$slug/': typeof WSlugIndexRoute
   '/w/$slug/bookings/availability': typeof WSlugBookingsAvailabilityRoute
@@ -345,6 +354,7 @@ export interface FileRouteTypes {
     | '/w/$slug/bookings'
     | '/w/$slug/captures'
     | '/w/$slug/settings'
+    | '/w/$slug/tasks'
     | '/w/$slug/trash'
     | '/w/$slug/'
     | '/w/$slug/bookings/availability'
@@ -377,6 +387,7 @@ export interface FileRouteTypes {
     | '/status'
     | '/verify'
     | '/welcome'
+    | '/w/$slug/tasks'
     | '/w/$slug/trash'
     | '/w/$slug'
     | '/w/$slug/bookings/availability'
@@ -413,6 +424,7 @@ export interface FileRouteTypes {
     | '/w/$slug/bookings'
     | '/w/$slug/captures'
     | '/w/$slug/settings'
+    | '/w/$slug/tasks'
     | '/w/$slug/trash'
     | '/w/$slug/'
     | '/w/$slug/bookings/availability'
@@ -519,6 +531,13 @@ declare module '@tanstack/react-router' {
       path: '/settings'
       fullPath: '/w/$slug/settings'
       preLoaderRoute: typeof WSlugSettingsRouteImport
+      parentRoute: typeof WSlugRoute
+    }
+    '/w/$slug/tasks': {
+      id: '/w/$slug/tasks'
+      path: '/tasks'
+      fullPath: '/w/$slug/tasks'
+      preLoaderRoute: typeof WSlugTasksRouteImport
       parentRoute: typeof WSlugRoute
     }
     '/w/$slug/trash': {
@@ -758,6 +777,7 @@ interface WSlugRouteChildren {
   WSlugBookingsRoute: typeof WSlugBookingsRouteWithChildren
   WSlugCapturesRoute: typeof WSlugCapturesRouteWithChildren
   WSlugSettingsRoute: typeof WSlugSettingsRouteWithChildren
+  WSlugTasksRoute: typeof WSlugTasksRoute
   WSlugTrashRoute: typeof WSlugTrashRoute
   WSlugIndexRoute: typeof WSlugIndexRoute
   WSlugObjectsObjectRoute: typeof WSlugObjectsObjectRoute
@@ -773,6 +793,7 @@ const WSlugRouteChildren: WSlugRouteChildren = {
   WSlugBookingsRoute: WSlugBookingsRouteWithChildren,
   WSlugCapturesRoute: WSlugCapturesRouteWithChildren,
   WSlugSettingsRoute: WSlugSettingsRouteWithChildren,
+  WSlugTasksRoute: WSlugTasksRoute,
   WSlugTrashRoute: WSlugTrashRoute,
   WSlugIndexRoute: WSlugIndexRoute,
   WSlugObjectsObjectRoute: WSlugObjectsObjectRoute,
