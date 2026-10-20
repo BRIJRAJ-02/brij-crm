@@ -96,6 +96,7 @@ const data = createDataLayer({
 const theme = createThemeController({
   storage: safeLocalStorage(window),
   root: document.documentElement,
+  barMetas: [...document.querySelectorAll('meta[name="theme-color"]')],
   onStorage: (handler) => {
     const listener = (event: StorageEvent) => {
       handler(event.key, event.newValue);

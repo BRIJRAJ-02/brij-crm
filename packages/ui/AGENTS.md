@@ -12,7 +12,7 @@ The component library every screen draws with. It holds the root stylesheet (cas
 | `src/styles/index.css` | `@crm/ui/styles.css`: the layer order `reset, tokens, base, components, utilities`, then the tokens, the reset and the base styles |
 | `src/styles/reset.css`, `src/styles/base.css` | `@layer reset` and `@layer base`: the page background, and body type and colour, all from tokens |
 | `src/styles/cursors.css` | The one cursor rule, in `@layer base` with no specificity: pointer, text, the arrow, not-allowed, progress, grab and col-resize, by tag, role and React Aria's attributes |
-| `src/theme/theme.ts` | `@crm/ui/theme`: the `crm.theme` storage key, `parseThemeChoice`, `safeLocalStorage` and `createThemeController` |
+| `src/theme/theme.ts` | `@crm/ui/theme`: the `crm.theme` storage key, `parseThemeChoice`, `safeLocalStorage`, `createThemeController`, and `THEME_SURFACE` with `themeBarColor` for the phone browser bar |
 | `src/hue.ts` | `HUES` and `Hue`, the nine data hues used by tags and icon tiles |
 | `src/atoms/Icon/` | The Icon atom, its CSS module, its README, and `icons.ts` (the icon registry) |
 | `src/atoms/<Name>/` | One component: `<Name>.tsx`, its CSS module, `strings.ts` for its built in copy, `README.md` and `<Name>.stories.tsx` |

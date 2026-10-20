@@ -1,11 +1,15 @@
 // AC-7: a saved Light or Dark choice applies and survives, follows other
 // tabs, and blocked or odd storage falls back to System without throwing.
+// F33: the phone browser bar takes the chosen theme's surface token.
+import tokens from '@crm/tokens/tokens.json' with { type: 'json' };
 import { describe, expect, it, vi } from 'vitest';
 import {
   createThemeController,
   parseThemeChoice,
   safeLocalStorage,
   THEME_STORAGE_KEY,
+  THEME_SURFACE,
+  themeBarColor,
   type ThemeStorage,
 } from './theme.ts';
 
@@ -169,6 +173,53 @@ describe('createThemeController', () => {
     const { controller, tabs } = setup();
     controller.dispose();
     expect(tabs.unsubscribe).toHaveBeenCalledTimes(1);
+  });
+});
+
+/** The two theme-color metas index.html ships, one per OS theme. */
+function fakeBarMetas() {
+  return (['(prefers-color-scheme: light)', '(prefers-color-scheme: dark)'] as const).map((media) => {
+    const attributes = new Map<string, string>([['media', media]]);
+    return {
+      attributes,
+      getAttribute: (name: string) => attributes.get(name) ?? null,
+      setAttribute: (name: string, value: string) => {
+        attributes.set(name, value);
+      },
+    };
+  });
+}
+
+describe('the phone browser bar', () => {
+  it('uses the surface token of each theme', () => {
+    const surface = tokens.color.tokens.find((token) => token.name === 'surface')?.value;
+    expect(THEME_SURFACE).toEqual({ light: surface?.light, dark: surface?.dark });
+  });
+
+  it.each([
+    ['light', '(prefers-color-scheme: dark)', THEME_SURFACE.light],
+    ['dark', '(prefers-color-scheme: light)', THEME_SURFACE.dark],
+    ['system', '(prefers-color-scheme: light)', THEME_SURFACE.light],
+    ['system', '(prefers-color-scheme: dark)', THEME_SURFACE.dark],
+    ['system', null, THEME_SURFACE.light],
+  ] as const)('is %s on a meta for %s', (choice, media, colour) => {
+    expect(themeBarColor(choice, media)).toBe(colour);
+  });
+
+  it("takes the chosen theme on every meta, and goes back to each meta's own for System", () => {
+    const barMetas = fakeBarMetas();
+    const controller = createThemeController({
+      storage: fakeStorage({ [THEME_STORAGE_KEY]: 'dark' }),
+      root: fakeRoot(),
+      onStorage: fakeTabs().onStorage,
+      barMetas,
+    });
+    const contents = () => barMetas.map((meta) => meta.attributes.get('content'));
+    expect(contents()).toEqual([THEME_SURFACE.dark, THEME_SURFACE.dark]);
+    controller.set('light');
+    expect(contents()).toEqual([THEME_SURFACE.light, THEME_SURFACE.light]);
+    controller.set('system');
+    expect(contents()).toEqual([THEME_SURFACE.light, THEME_SURFACE.dark]);
   });
 });
 

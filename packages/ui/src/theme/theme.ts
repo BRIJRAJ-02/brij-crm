@@ -2,12 +2,21 @@
 // the tokens CSS follows the OS through prefers-color-scheme. A saved Light or
 // Dark choice sets `data-theme` on <html>; apps/web/public/theme-boot.js applies
 // it before first paint, and this controller keeps it in step after that.
+// Both also colour the phone browser bar (the theme-color metas) with the
+// surface of the chosen theme, so the bar matches the page, not the OS.
 
 /** The three choices the ThemeSwitch offers. `system` follows the OS. */
 export type ThemeChoice = 'light' | 'dark' | 'system';
 
 /** The localStorage key the choice lives under. theme-boot.js reads the same key. */
 export const THEME_STORAGE_KEY = 'crm.theme';
+
+/**
+ * The `surface` token of each theme, as the theme-color metas need a literal
+ * colour (a meta can't read a CSS variable). theme-boot.js and index.html
+ * carry the same two values; tests check all three against tokens.json.
+ */
+export const THEME_SURFACE = { light: '#fdfdff', dark: '#18191c' } as const;
 
 /** Reads any stored value as a choice. Only `light` and `dark` are kept; anything else is `system`. */
 export function parseThemeChoice(value: unknown): ThemeChoice {
@@ -20,6 +29,9 @@ export type ThemeStorage = Pick<Storage, 'getItem' | 'setItem' | 'removeItem'>;
 /** The part of the root element the controller writes `data-theme` on. */
 export type ThemeRoot = Pick<Element, 'setAttribute' | 'removeAttribute'>;
 
+/** A `<meta name="theme-color">`: its `media` says which OS theme it was written for. */
+export type ThemeBarMeta = Pick<Element, 'getAttribute' | 'setAttribute'>;
+
 /** Listens for storage changes made in other tabs, and returns a function that stops listening. */
 export type OnStorage = (handler: (key: string | null, value: string | null) => void) => () => void;
 
@@ -30,6 +42,8 @@ export interface ThemeControllerDeps {
   /** Usually `document.documentElement`. */
   readonly root: ThemeRoot;
   readonly onStorage: OnStorage;
+  /** The page's theme-color metas, recoloured to the chosen theme's surface. */
+  readonly barMetas?: readonly ThemeBarMeta[];
 }
 
 /** Reads and changes the theme choice, and tells subscribers when it changes. */
@@ -60,9 +74,19 @@ function readChoice(storage: ThemeStorage | undefined): ThemeChoice {
   }
 }
 
-function applyChoice(root: ThemeRoot, choice: ThemeChoice): void {
+/**
+ * The browser bar colour for a meta: the chosen theme's surface, or under
+ * System the surface of the OS theme the meta's `media` names.
+ */
+export function themeBarColor(choice: ThemeChoice, media: string | null): string {
+  if (choice !== 'system') return THEME_SURFACE[choice];
+  return media?.includes('dark') === true ? THEME_SURFACE.dark : THEME_SURFACE.light;
+}
+
+function applyChoice(root: ThemeRoot, barMetas: readonly ThemeBarMeta[], choice: ThemeChoice): void {
   if (choice === 'system') root.removeAttribute('data-theme');
   else root.setAttribute('data-theme', choice);
+  for (const meta of barMetas) meta.setAttribute('content', themeBarColor(choice, meta.getAttribute('media')));
 }
 
 /**
@@ -70,13 +94,18 @@ function applyChoice(root: ThemeRoot, choice: ThemeChoice): void {
  * straight away, saves new choices (falling back to this page only when
  * storage is blocked), and follows a choice made in another tab.
  */
-export function createThemeController({ storage, root, onStorage }: ThemeControllerDeps): ThemeController {
+export function createThemeController({
+  storage,
+  root,
+  onStorage,
+  barMetas = [],
+}: ThemeControllerDeps): ThemeController {
   let current = readChoice(storage);
   const listeners = new Set<(choice: ThemeChoice) => void>();
-  applyChoice(root, current);
+  applyChoice(root, barMetas, current);
 
   const change = (choice: ThemeChoice) => {
-    applyChoice(root, choice);
+    applyChoice(root, barMetas, choice);
     if (choice === current) return;
     current = choice;
     for (const listener of listeners) listener(choice);

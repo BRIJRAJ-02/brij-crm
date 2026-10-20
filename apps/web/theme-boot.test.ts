@@ -5,14 +5,14 @@
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { runInNewContext } from 'node:vm';
-import { THEME_STORAGE_KEY } from '@crm/ui/theme';
+import { THEME_STORAGE_KEY, THEME_SURFACE } from '@crm/ui/theme';
 import { describe, expect, it } from 'vitest';
 
 const ROOT = import.meta.dirname;
 const script = readFileSync(path.join(ROOT, 'public/theme-boot.js'), 'utf8');
 const indexHtml = readFileSync(path.join(ROOT, 'index.html'), 'utf8');
 
-/** Runs the boot script against a fake page, returning the data-theme it set and the keys it read. */
+/** Runs the boot script against a fake page, returning the data-theme it set, the keys it read and the bar colours. */
 function boot(stored: Record<string, string>, { blocked = false } = {}) {
   const attributes = new Map<string, string>();
   const readKeys: string[] = [];
@@ -24,13 +24,26 @@ function boot(stored: Record<string, string>, { blocked = false } = {}) {
     },
   };
   const documentElement = { setAttribute: (name: string, value: string) => attributes.set(name, value) };
-  runInNewContext(script, { window: { localStorage }, document: { documentElement } });
-  return { theme: attributes.get('data-theme'), readKeys };
+  const bar = [THEME_SURFACE.light, THEME_SURFACE.dark].map(
+    (content) => new Map<string, string>([['content', content]]),
+  );
+  const metas = bar.map((meta) => ({ setAttribute: (name: string, value: string) => meta.set(name, value) }));
+  const querySelectorAll = (selector: string) => (selector === 'meta[name="theme-color"]' ? metas : []);
+  runInNewContext(script, { window: { localStorage }, document: { documentElement, querySelectorAll } });
+  return { theme: attributes.get('data-theme'), readKeys, bar: bar.map((meta) => meta.get('content')) };
 }
 
 describe('theme-boot.js', () => {
   it.each(['light', 'dark'])('applies a saved %s choice', (choice) => {
     expect(boot({ [THEME_STORAGE_KEY]: choice }).theme).toBe(choice);
+  });
+
+  it.each(['light', 'dark'] as const)('colours the phone browser bar with the %s surface', (choice) => {
+    expect(boot({ [THEME_STORAGE_KEY]: choice }).bar).toEqual([THEME_SURFACE[choice], THEME_SURFACE[choice]]);
+  });
+
+  it("leaves the bar to the metas' media under System", () => {
+    expect(boot({}).bar).toEqual([THEME_SURFACE.light, THEME_SURFACE.dark]);
   });
 
   it('reads the same key the theme controller writes', () => {
@@ -42,6 +55,7 @@ describe('theme-boot.js', () => {
     ['an unknown value', { [THEME_STORAGE_KEY]: 'purple' }],
   ])('leaves the OS in charge with %s', (_name, stored) => {
     expect(boot(stored).theme).toBeUndefined();
+    expect(boot(stored).bar).toEqual([THEME_SURFACE.light, THEME_SURFACE.dark]);
   });
 
   it('does nothing, and never throws, when storage is blocked', () => {
