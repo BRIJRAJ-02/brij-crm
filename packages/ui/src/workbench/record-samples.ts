@@ -48,6 +48,7 @@ export const SAMPLE_ACTIVITY: readonly ActivityEntry[] = [
     actor: ADA,
     title: 'Send the security questionnaire',
     isDone: true,
+    href: '/people/p1/tasks?task=t1',
   },
   {
     id: 'e4',

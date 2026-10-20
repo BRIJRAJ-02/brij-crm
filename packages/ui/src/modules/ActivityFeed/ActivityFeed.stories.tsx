@@ -134,6 +134,10 @@ export const Default: Story = {
     await expect(canvas.getByRole('heading', { name: 'Earlier this week' })).toBeInTheDocument();
     await expect(canvas.getByRole('heading', { name: 'September' })).toBeInTheDocument();
     await expect(canvas.getAllByRole('article')[0]).toHaveAccessibleName(/Ada Lovelace changed Stage/);
+    // A task is one quiet row whose title opens it: no card, no underline.
+    const task = canvas.getByRole('link', { name: 'Send the security questionnaire' });
+    await expect(task).toHaveAttribute('href', '/people/p1/tasks?task=t1');
+    await expect(getComputedStyle(task).textDecorationLine).toBe('none');
   },
 };
 

@@ -61,11 +61,15 @@
     min-block-size: 0;
   }
 
+  /* A composer row: the quick add and its buttons at one height (a size-input
+     field beside size lg buttons), the field never wider than a column's
+     most, so its button stays beside it on a wide page. */
   .toolbar {
     display: flex;
     flex: none;
     gap: var(--space-8);
     align-items: flex-start;
+    max-inline-size: var(--size-column-max);
   }
 
   /* The toolbar's first part (a record's quick add) takes the room its buttons leave. */
@@ -79,6 +83,10 @@
     flex: 1;
     flex-direction: column;
     min-block-size: 0;
+  }
+
+  .body[data-empty] {
+    flex: none;
   }
 
   /* The Completed part: its own height up to half the slot, then it scrolls inside itself. */

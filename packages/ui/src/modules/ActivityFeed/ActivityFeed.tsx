@@ -19,6 +19,7 @@ import {
   type ReactNode,
   type RefObject,
 } from 'react';
+import { Link as AriaLink } from 'react-aria-components';
 import { Icon } from '../../atoms/Icon/Icon.tsx';
 import type { IconName } from '../../atoms/Icon/icons.ts';
 import { Link } from '../../atoms/Link/Link.tsx';
@@ -27,11 +28,12 @@ import { RelativeTime } from '../../atoms/RelativeTime/RelativeTime.tsx';
 import { Skeleton } from '../../atoms/Skeleton/Skeleton.tsx';
 import { VisuallyHidden } from '../../atoms/VisuallyHidden/VisuallyHidden.tsx';
 import { AttributeDisplay } from '../../fields/AttributeDisplay.tsx';
-import { fieldTypeOf } from '../../fields/registry.ts';
+import { iconOf } from '../../fields/registry.ts';
 import type { FieldAttribute } from '../../fields/types.ts';
 import { isEmptyValue } from '../../fields/values.ts';
 import { formatTimeRange } from '../../lib/format.ts';
 import { memoIntl } from '../../lib/intl-memo.ts';
+import { safeHref } from '../../lib/safe-href.ts';
 import type { ListSource } from '../../lib/list-source.ts';
 import type { LoadStatus } from '../../lib/load-status.ts';
 import { sizeToken } from '../../lib/token-values.ts';
@@ -639,6 +641,41 @@ function MeetingDetail({
   );
 }
 
+/**
+ * A task's entry: one quiet row, its icon (a check once done) and its title,
+ * a step quieter once done, the whole row opening the task when it has a
+ * page. A card with an underlined link read heavier than the line above it.
+ */
+function TaskRow({
+  entry,
+  title,
+  detailId,
+}: {
+  readonly entry: Extract<ActivityEntry, { kind: 'note' | 'task' | 'comment' | 'email' }>;
+  readonly title: string;
+  readonly detailId: string;
+}) {
+  const isDone = entry.isDone === true;
+  const face = (
+    <>
+      <Icon name={isDone ? 'circle-check' : 'list-todo'} size="sm" tone="muted" />
+      <span className={styles.taskTitle}>{title}</span>
+    </>
+  );
+  const href = safeHref(entry.href);
+  return (
+    <span id={detailId} className={styles.task} data-done={isDone || undefined}>
+      {href === undefined ? (
+        <span className={styles.taskFace}>{face}</span>
+      ) : (
+        <AriaLink className={styles.taskFace} href={href} data-pressable="">
+          {face}
+        </AriaLink>
+      )}
+    </span>
+  );
+}
+
 /** What can take focus by Tab, for the feed's way out. */
 const TABBABLE =
   'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
@@ -664,8 +701,7 @@ function hasDetail(entry: ActivityEntry): boolean {
 /** One entry: its marker on the rail, the actor and verb, the time, and what changed or was added. */
 /** Drawn again only when its entry changes, not with every scroll step of the feed. */
 const Entry = memo(function Entry({ entry, lineId, isLast }: EntryProps) {
-  const icon =
-    entry.kind === 'change' || entry.kind === 'links' ? fieldTypeOf(entry.attribute.type).icon : KIND_ICONS[entry.kind];
+  const icon = entry.kind === 'change' || entry.kind === 'links' ? iconOf(entry.attribute) : KIND_ICONS[entry.kind];
   let detail: ReactNode;
   if (entry.kind === 'change') {
     const valueOf = (value: unknown, display: unknown) => (
@@ -694,6 +730,8 @@ const Entry = memo(function Entry({ entry, lineId, isLast }: EntryProps) {
     );
   } else if (entry.kind === 'meeting') {
     detail = <MeetingDetail entry={entry} detailId={`${lineId}-detail`} />;
+  } else if (entry.kind === 'task' && entry.title !== undefined) {
+    detail = <TaskRow entry={entry} title={entry.title} detailId={`${lineId}-detail`} />;
   } else if (
     entry.kind !== 'created' &&
     entry.kind !== 'links' &&
@@ -721,7 +759,7 @@ const Entry = memo(function Entry({ entry, lineId, isLast }: EntryProps) {
         <span className={styles.line}>
           <span id={lineId} className={styles.what}>
             {/* A meeting is nobody's doing on the record: "Meeting: Intro with Northwind". */}
-            {entry.kind !== 'meeting' && <RecordChip display={entry.actor} isFlat />}
+            {entry.kind !== 'meeting' && <RecordChip display={entry.actor} isPlain />}
             {entry.kind === 'meeting' ? (
               <span className={styles.phrase}>
                 <span>{verbOf(entry)}</span>

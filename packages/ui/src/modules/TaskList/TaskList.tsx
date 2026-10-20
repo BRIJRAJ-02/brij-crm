@@ -209,6 +209,7 @@ export function TaskList({
   const list = (
     <TaskListContent
       {...{ label, tasks, onToggle, hideRecord, isReadOnly, status, layout, maxRows }}
+      isFramed={toolbar !== undefined || footer !== undefined}
       {...(onAction === undefined ? {} : { onAction })}
       {...(onRetry === undefined ? {} : { onRetry })}
       {...(recordHref === undefined ? {} : { recordHref })}
@@ -243,7 +244,10 @@ export function TaskList({
   return (
     <div className={styles.frame}>
       {toolbar !== undefined && <div className={styles.toolbar}>{toolbar}</div>}
-      <div className={styles.body}>{content}</div>
+      {/* Empty, the list takes only its row, so the part under it (Completed) follows rather than sinking. */}
+      <div className={styles.body} data-empty={(status === 'ready' && tasks.count === 0) || undefined}>
+        {content}
+      </div>
       {footer !== undefined && <div className={styles.footer}>{footer}</div>}
     </div>
   );
@@ -266,7 +270,11 @@ function TaskListContent({
   emptyTitle,
   emptyBody,
   maxRows = INLINE_TASKS,
-}: Omit<TaskListProps, 'toolbar' | 'footer' | 'onShowMore' | 'isLoadingMore'>) {
+  isFramed = false,
+}: Omit<TaskListProps, 'toolbar' | 'footer' | 'onShowMore' | 'isLoadingMore'> & {
+  /** A toolbar or a footer sits with it: an empty list says so in a row, so what follows stays near. */
+  readonly isFramed?: boolean;
+}) {
   const showSkeleton = useDelayedLoading(status === 'loading');
   const onShown = useRangeReporter(tasks);
   const dueOf = useDueOf();
@@ -312,7 +320,12 @@ function TaskListContent({
   }
   if (rows.length === 0) {
     return (
-      <EmptyState icon="list-todo" title={emptyTitle ?? strings.empty}>
+      <EmptyState
+        icon="list-todo"
+        title={emptyTitle ?? strings.empty}
+        // A list drawn in place, or with a quick add above and more under it, says so in one row of its own size.
+        layout={isInline || isFramed ? 'row' : 'block'}
+      >
         {emptyBody ?? (emptyTitle === undefined ? strings.emptyBody : undefined)}
       </EmptyState>
     );

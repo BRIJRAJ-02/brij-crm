@@ -23,18 +23,19 @@ New. The record page and the record panel (#18) list a record's attributes. `Des
 - Each item is an attribute, its value, the `display` shapes references need (names and pictures from the data layer), and an optional `error`, a refusal shown under the value.
 - A click on a value (not on a link inside it) opens its editor in place; so does its pencil button, which shows on hover and on focus. Typed values commit on Enter or on leaving; a single choice (a status, a date) commits on the pick; a list of several stays open until you leave it or press Esc.
 - A checkbox toggles where it is.
-- Leave out `onCommit` for a list nobody can edit. A value that is read only on its own (computed, set by the system) shows a `LockReason`: a lock whose tooltip says why, on hover and on keyboard focus.
-- An empty value that can change reads "Set Stage…".
+- Leave out `onCommit` for a list nobody can edit. A value that is read only on its own (computed, set by the system) has a small `LockReason` (`size="sm"`) after its name: a lock whose tooltip says why, on hover and on keyboard focus. It sat after the value before, where beside an empty value it read as a loose "— 🔒" (the owner's call, 20 October 2026).
+- An empty value that can change reads "Set Stage…"; an empty value that can't reads "Not set", quietly, never a lone dash.
+- Each name sits at the top of its row, level with the first line of its value, so a value or an editor that grows taller (a textarea, a hint under a field, chips that wrap) never moves its name.
 - `isLoading` shows skeleton rows after the loading delay.
 - Below 320px wide the name sits above the value (a container query), so it fits a narrow panel.
 
 ## States
 
-Default, empty values, editing, read only (with a lock and its reason), an error under a value, loading. Hover on a value (pointer only), focus on its pencil button.
+Default, empty values ("Set Stage…", or "Not set" when read only), editing, read only (a small lock after the name, with its reason), an error under a value, loading. Hover on a value (pointer only), focus on its pencil button.
 
 ## Keyboard
 
-Tab moves through each value's links and its pencil button. Enter or Space on the pencil opens the editor, focused. Enter commits a typed value, Esc cancels, and both bring focus back to the pencil. Space toggles a checkbox.
+Tab moves through each value's links and its pencil button; a read only value's lock, after its name, is a stop before the value. Enter or Space on the pencil opens the editor, focused. Enter commits a typed value, Esc cancels, and both bring focus back to the pencil. Space toggles a checkbox.
 
 ## Differences from the artifact
 

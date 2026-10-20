@@ -274,7 +274,7 @@ export const WithQuickAdd: Story = {
           toolbar={
             <>
               <Field label="Add a task" isLabelHidden placeholder="Add a task and press Enter" maxLength={2000} />
-              <Button>New task</Button>
+              <Button size="lg">New task</Button>
             </>
           }
           footer={
@@ -293,9 +293,58 @@ export const WithQuickAdd: Story = {
     );
   },
   play: async ({ canvas, userEvent }) => {
-    await expect(canvas.getByRole('textbox', { name: 'Add a task' })).toBeInTheDocument();
+    const field = canvas.getByRole('textbox', { name: 'Add a task' });
+    const add = canvas.getByRole('button', { name: 'New task' });
+    // One composer row: the field's box and its button at one height, side by side.
+    const box = field.parentElement?.getBoundingClientRect();
+    await expect(Math.round(box?.height ?? 0)).toBe(Math.round(add.getBoundingClientRect().height));
     await userEvent.click(canvas.getByRole('button', { name: /Completed/ }));
     await waitFor(() => expect(canvas.getByRole('grid', { name: 'Completed' })).toBeInTheDocument());
+  },
+};
+
+/**
+ * A record's Tasks tab with nothing open: the empty list says so in one row
+ * under the quick add, and Completed follows it rather than sinking to the
+ * foot of the slot.
+ */
+export const EmptyWithQuickAdd: Story = {
+  render: function Render() {
+    const done = SAMPLE_TASKS.filter((task) => task.isDone);
+    return (
+      <Stage height="grid">
+        <TaskList
+          label="Tasks"
+          tasks={arraySource([], (task: TaskEntry) => task.id)}
+          emptyTitle="No open tasks. Add one above."
+          onToggle={() => undefined}
+          toolbar={
+            <>
+              <Field label="Add a task" isLabelHidden placeholder="Add a task and press Enter" maxLength={2000} />
+              <Button size="lg">New task</Button>
+            </>
+          }
+          footer={
+            <Disclosure title="Completed" count={done.length}>
+              <TaskList
+                label="Completed"
+                layout="inline"
+                maxRows={1000}
+                tasks={arraySource(done, (task) => task.id)}
+                onToggle={() => undefined}
+              />
+            </Disclosure>
+          }
+        />
+      </Stage>
+    );
+  },
+  play: async ({ canvas }) => {
+    const empty = canvas.getByText('No open tasks. Add one above.');
+    const completed = canvas.getByRole('button', { name: /Completed/ });
+    // Completed sits right under the empty row, not at the foot of the slot.
+    const gap = completed.getBoundingClientRect().top - empty.getBoundingClientRect().bottom;
+    await expect(gap).toBeLessThan(40);
   },
 };
 

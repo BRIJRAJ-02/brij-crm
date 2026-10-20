@@ -156,9 +156,11 @@ export const ReadOnly: Story = {
   args: { isReadOnly: true },
   play: async ({ canvas }) => {
     await expect(canvas.queryByRole('button', { name: 'Edit Domain' })).not.toBeInTheDocument();
-    await expect(
-      canvas.getByRole('button', { name: 'The system sets this when the record is made.' }),
-    ).toBeInTheDocument();
+    const lock = canvas.getByRole('button', { name: 'The system sets this when the record is made.' });
+    // The lock sits with the name, small; an empty value says "Not set", never a lone dash.
+    await expect(lock.closest('dt')).not.toBeNull();
+    await expect(Math.round(lock.getBoundingClientRect().height)).toBe(20);
+    await expect(canvas.getAllByText('Not set').length).toBeGreaterThan(0);
   },
 };
 

@@ -1,8 +1,12 @@
-/* AttributeList: rows of a name column (an 11px label with its type's icon)
-   and a value column, each at least size-row tall. A value that can change
-   takes surface-hover under a pointer, with its pencil button showing on hover
-   or focus; an empty one reads "Set Name…" in text-tertiary. Below 320px the
-   name sits above the value. */
+/* AttributeList: rows of a name column (an 11px label with its type's icon,
+   and a small lock when it can't change) and a value column, each at least
+   size-row tall. Names sit at the top, centred on the first line of their
+   value (a size-control line, space-4 from the row's top), so a value or an
+   editor growing taller (a textarea, a hint under a field) never moves its
+   name. A value that can change takes surface-hover under a pointer, with
+   its pencil button showing on hover or focus; an empty one reads "Set
+   Name…" in text-tertiary, and an empty read only one "Not set". Below 320px
+   the name sits above the value. */
 @layer components {
   .root {
     display: flex;
@@ -23,14 +27,16 @@
     display: grid;
     grid-template-columns: calc(6 * var(--size-chip)) minmax(0, 1fr);
     column-gap: var(--space-12);
-    align-items: center;
+    align-items: start;
     min-block-size: var(--size-row);
   }
 
+  /* One row tall, so its line centres where the value's first line does. */
   .label {
     display: flex;
     gap: var(--space-8);
     align-items: center;
+    min-block-size: var(--size-row);
     min-inline-size: 0;
     color: var(--text-secondary);
     font: var(--text-label);
@@ -44,11 +50,14 @@
     white-space: nowrap;
   }
 
+  /* The value's first line (size-control tall) sits space-4 down: centred in a size-row, level with the name. */
   .cell {
     display: flex;
     flex-direction: column;
+    gap: var(--space-2);
     min-inline-size: 0;
     margin: 0;
+    padding-block: var(--space-4);
   }
 
   .editable {
@@ -105,7 +114,6 @@
 
   .editor {
     min-inline-size: 0;
-    padding-block: var(--space-4);
   }
 
   .error {
@@ -117,8 +125,16 @@
   @container (width < 320px) {
     .row {
       grid-template-columns: minmax(0, 1fr);
-      row-gap: var(--space-2);
+      row-gap: 0;
       padding-block: var(--space-4);
+    }
+
+    .label {
+      min-block-size: var(--size-chip);
+    }
+
+    .cell {
+      padding-block: 0;
     }
   }
 }

@@ -1,8 +1,9 @@
 /* ActivityFeed: a scrolling feed of entries placed by the virtualiser. Each
    entry has a size-chip marker on a hairline rail (the rail stops at the last
-   entry), the actor chip and verb in text-secondary with the time at the end,
-   and under it the change (old value, an arrow, new value) or a card with the
-   title and a two line excerpt. A links entry names its records as flat chips
+   entry), the actor (avatar and name, plain) and verb in text-secondary with the time at the end,
+   and under it the change (old value, an arrow, new value), a task as one
+   quiet row (its icon and its title), or a card with the title and a two
+   line excerpt. A links entry names its records as flat chips
    in the line. A meeting's card holds its time, its attendees and its video
    link. Period headings are 11px labels. The inline layout draws a few
    entries in place, with no scroll of its own. */
@@ -179,6 +180,53 @@
     font: var(--text-body-strong);
   }
 
+  /* A task's entry: one quiet row, its icon and its title, its icon level with
+     the actor's avatar above; the row opens the task, taking surface-hover
+     under a pointer and the inset ring on keyboard focus. */
+  .task {
+    display: flex;
+    min-inline-size: 0;
+  }
+
+  .taskFace {
+    display: inline-flex;
+    gap: var(--space-6);
+    align-items: center;
+    min-inline-size: 0;
+    max-inline-size: 100%;
+    min-block-size: var(--size-chip);
+    margin-inline-start: calc(-1 * var(--space-2));
+    padding-inline: var(--space-2) var(--space-6);
+    border-radius: var(--radius-sm);
+    color: var(--text);
+    font: var(--text-body);
+    letter-spacing: var(--tracking-body);
+    text-decoration: none;
+    outline: none;
+    transition: background-color var(--duration-hover) var(--ease-hover);
+  }
+
+  @media (hover: hover) and (pointer: fine) {
+    .taskFace[data-hovered] {
+      background: var(--surface-hover);
+    }
+  }
+
+  .taskFace[data-focus-visible] {
+    box-shadow: var(--shadow-focus-inset);
+  }
+
+  .taskTitle {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  /* Done reads from the verb and its check; the title stays readable, a step quieter. */
+  .task[data-done] .taskTitle {
+    color: var(--text-secondary);
+  }
+
   .excerpt {
     display: -webkit-box;
     overflow: hidden;
@@ -228,6 +276,10 @@
   }
 
   @media (forced-colors: active) {
+    .taskFace[data-focus-visible] {
+      outline: var(--border-width-thick) solid Highlight;
+    }
+
     .slot:focus-visible {
       outline: var(--border-width-thick) solid Highlight;
       outline-offset: calc(-1 * var(--border-width-thick));

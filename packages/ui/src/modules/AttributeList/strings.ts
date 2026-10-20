@@ -5,4 +5,6 @@ export const strings = {
   /** The pencil button's name: "Edit Stage". */
   edit: (name: string) => `Edit ${name}`,
   loading: 'Loading details',
+  /** A read only value with nothing in it: said quietly, in words. */
+  notSet: 'Not set',
 } as const;

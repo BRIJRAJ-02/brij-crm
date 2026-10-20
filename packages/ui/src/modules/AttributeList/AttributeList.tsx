@@ -11,7 +11,7 @@ import { LockReason } from '../../atoms/Tooltip/LockReason.tsx';
 import { VisuallyHidden } from '../../atoms/VisuallyHidden/VisuallyHidden.tsx';
 import { AttributeDisplay } from '../../fields/AttributeDisplay.tsx';
 import { AttributeEditor } from '../../fields/AttributeEditor.tsx';
-import { fieldTypeOf, readOnlyReasonOf } from '../../fields/registry.ts';
+import { fieldTypeOf, iconOf, readOnlyReasonOf } from '../../fields/registry.ts';
 import type { EditorProps, FieldAttribute } from '../../fields/types.ts';
 import { isEmptyValue } from '../../fields/values.ts';
 import { focusLater } from '../../lib/focus-later.ts';
@@ -56,7 +56,9 @@ export interface AttributeListProps {
  * A record's details: a row per attribute, the name and its type's icon on
  * the left, the value on the right, the same display as in a table cell. A
  * value that can change edits in place (Enter or a click); one that can't
- * shows a lock, and says why. Titled sections fold.
+ * has a small lock after its name that says why. Each name stays level with
+ * the first line of its value, however tall the value or its editor grows.
+ * Titled sections fold.
  */
 export function AttributeList({ label, sections, onCommit, editorProps, isLoading = false }: AttributeListProps) {
   const showSkeleton = useDelayedLoading(isLoading);
@@ -229,16 +231,18 @@ function Row({ item, onCommit, editorProps }: RowProps) {
     body = (
       // Focusable by script only: where focus goes when an open editor is taken away.
       <span ref={readOnlyValue} className={styles.value} data-readonly="" tabIndex={-1}>
-        {shown}
-        {reason !== undefined && <LockReason reason={reason} />}
+        {/* Nothing here and nothing to set: said in words, quietly, never a lone dash. */}
+        {isEmpty ? <span className={styles.placeholder}>{strings.notSet}</span> : shown}
       </span>
     );
   }
   return (
     <div className={styles.row} data-editing={isEditing || undefined}>
       <dt id={nameId} className={styles.label}>
-        <Icon name={definition.icon} size="sm" tone="muted" />
+        <Icon name={iconOf(attribute)} size="sm" tone="muted" />
         <span className={styles.name}>{attribute.name}</span>
+        {/* Why it can't change sits with its name: a small lock, the reason in its tooltip. */}
+        {!canEdit && reason !== undefined && <LockReason reason={reason} size="sm" />}
       </dt>
       <dd className={styles.cell}>
         {body}
