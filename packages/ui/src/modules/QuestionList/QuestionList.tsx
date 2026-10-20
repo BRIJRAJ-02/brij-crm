@@ -121,7 +121,7 @@ export function QuestionList({
             <GridListItem
               id={item.id}
               textValue={name}
-              className={styles.card}
+              className={styles.row}
               data-open={isOpen || undefined}
               data-problem={item.hasProblem === true || undefined}
             >

@@ -1,10 +1,10 @@
 /* QuestionList: a plain section (its heading, count and actions on one
-   centred row, no frame of its own), then cards on the raised surface, space-8 apart, each a
-   hairline border and radius-md. The header is one row: the handle, then
-   the question (muted while untitled), its type Badge and its facts, with
-   where it is filed under them in text-secondary, then a chevron. No hover
-   fill. An open card shows its editor under a hairline. A card a publish
-   refused takes the danger border. A dragged card fades; the drop line is
+   centred row, no frame of its own), then the questions as Table's rows:
+   size-row tall, hairline divided, a hover fill for a pointer. A row is one
+   line: the handle, the question (muted while untitled), its type Badge and
+   facts, where it is filed in text-secondary at the end, then a chevron.
+   An open row shows its editor under a hairline. A row a publish refused
+   takes a danger edge at its start. A dragged row fades; the drop line is
    a thick accent rule. */
 @layer components {
   .root {
@@ -12,6 +12,7 @@
     flex-direction: column;
     gap: var(--space-12);
     min-inline-size: 0;
+    container-type: inline-size;
   }
 
   /* The section's own header, not a card: the heading and its count, then the actions at the end, one centred row. */
@@ -60,35 +61,33 @@
     align-items: center;
   }
 
+  /* The questions as Table's rows: hairline divided, under a hairline, no card of their own. */
   .list {
     display: flex;
     flex-direction: column;
-    gap: var(--space-8);
+    border-block-start: var(--border-width-hairline) solid var(--border-subtle);
     outline: none;
   }
 
-  .card {
+  .row {
     display: flex;
     flex-direction: column;
     min-inline-size: 0;
-    border: var(--border-width-hairline) solid var(--border);
-    border-radius: var(--radius-md);
-    background: var(--surface-raised);
-    box-shadow: var(--shadow-xs);
+    border-block-end: var(--border-width-hairline) solid var(--border-subtle);
+    border-inline-start: var(--border-width-thick) solid transparent;
     outline: none;
   }
 
-  .card[data-focus-visible] {
-    box-shadow: var(--shadow-focus);
-    outline: var(--border-width-hairline) solid var(--accent-line);
-    outline-offset: var(--border-width-hairline);
+  .row[data-focus-visible] {
+    box-shadow: var(--shadow-focus-inset);
   }
 
-  .card[data-problem] {
-    border-color: var(--danger);
+  /* A question a publish refused: a danger edge at its start, and "Needs a fix" in its line. */
+  .row[data-problem] {
+    border-inline-start-color: var(--danger);
   }
 
-  .card[data-dragging] {
+  .row[data-dragging] {
     opacity: var(--opacity-busy);
   }
 
@@ -96,23 +95,30 @@
     display: flex;
     gap: var(--space-8);
     align-items: center;
-    padding: var(--space-8) var(--space-12);
+    min-block-size: var(--size-row);
+    padding-inline: var(--space-4) var(--space-8);
   }
 
+  @media (hover: hover) and (pointer: fine) {
+    .head:hover {
+      background: var(--surface-hover);
+    }
+  }
+
+  /* One line: the question, its type and facts, then where it is filed at the end. */
   .toggle {
     display: flex;
     flex: 1;
-    flex-direction: column;
-    gap: var(--space-2);
-    align-items: flex-start;
+    gap: var(--space-8);
+    align-items: center;
     min-inline-size: 0;
+    min-block-size: var(--size-row);
     padding: 0;
     border: none;
     background: transparent;
     color: inherit;
     font: inherit;
     text-align: start;
-    cursor: pointer;
     outline: none;
   }
 
@@ -120,13 +126,13 @@
     border-radius: var(--radius-xs);
     box-shadow: var(--shadow-focus);
     outline: var(--border-width-hairline) solid var(--accent-line);
-    outline-offset: var(--border-width-hairline);
+    outline-offset: calc(-1 * var(--border-width-hairline));
   }
 
   .summary {
     display: flex;
-    flex-wrap: wrap;
-    gap: var(--space-4) var(--space-8);
+    flex: 1;
+    gap: var(--space-8);
     align-items: center;
     min-inline-size: 0;
   }
@@ -145,6 +151,7 @@
   }
 
   .fact {
+    flex: none;
     color: var(--text-secondary);
     font: var(--text-label);
     letter-spacing: var(--tracking-label);
@@ -152,6 +159,7 @@
 
   .problem {
     display: inline-flex;
+    flex: none;
     gap: var(--space-4);
     align-items: center;
     color: var(--danger);
@@ -159,10 +167,16 @@
     letter-spacing: var(--tracking-label);
   }
 
+  /* Where it is filed, at the line's end: it gives way first on a narrow page. */
   .filed {
+    flex: 0 1 auto;
+    overflow: hidden;
+    max-inline-size: 40%;
     color: var(--text-secondary);
     font: var(--text-label);
     letter-spacing: var(--tracking-label);
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
 
   .chevron {
@@ -171,32 +185,53 @@
     color: var(--text-tertiary);
   }
 
+  /* In a narrow column the line splits in two: the question and its facts, then where it is filed. */
+  @container (width < 480px) {
+    .toggle {
+      flex-direction: column;
+      gap: var(--space-2);
+      align-items: flex-start;
+      padding-block: var(--space-6);
+    }
+
+    .summary {
+      flex: none;
+      flex-wrap: wrap;
+      max-inline-size: 100%;
+    }
+
+    .filed {
+      max-inline-size: 100%;
+    }
+  }
+
+  /* An open question's editor, under a hairline, indented to the question's words. */
   .body {
     display: flex;
     flex-direction: column;
     gap: var(--space-12);
-    padding: var(--space-12);
+    padding: var(--space-12) var(--space-8) var(--space-12) var(--size-control);
     border-block-start: var(--border-width-hairline) solid var(--border-subtle);
   }
 
+  /* Where it would land: a zero height line that turns accent while it is the target, as in Table. */
   .indicator {
-    block-size: var(--border-width-thick);
-    margin-block: calc(-1 * var(--space-6));
-    border-radius: var(--radius-full);
+    outline: none;
   }
 
   .indicator[data-drop-target] {
-    background: var(--accent);
+    outline: var(--border-width-thick) solid var(--accent);
+    outline-offset: calc(-1 * var(--border-width-hairline));
   }
 
   @media (forced-colors: active) {
-    .card[data-focus-visible],
+    .row[data-focus-visible],
     .toggle[data-focus-visible] {
       outline: var(--border-width-thick) solid Highlight;
     }
 
     .indicator[data-drop-target] {
-      background: Highlight;
+      outline-color: Highlight;
     }
   }
 }
