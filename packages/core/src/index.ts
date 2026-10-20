@@ -164,6 +164,7 @@ export {
   type FreeBusyInput,
   type MemberBusy,
   type MoveEventInput,
+  type SkippedCalendar,
 } from './calendar/events.ts';
 export {
   isProviderError,

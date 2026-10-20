@@ -1,7 +1,10 @@
 // Booking's calendar calls over spec 0024's connections (spec 0025, AC-630,
 // AC-633): the busy reader is spec 0024's `freeBusy` for the host (every
-// calendar they connected, unioned), and the event writer its `createEvent`
-// on the host's default calendar, which also writes the meeting row at once,
+// calendar they connected, unioned; a failing one is read past and named,
+// and only a refused default calendar, or every calendar failing, closes the
+// host's times), and the event writer its `createEvent` on the host's
+// default calendar (AC-711; their oldest live one while none is the
+// default), which also writes the meeting row at once,
 // linked to the booking. Both run as the system (the visitor has no scope of
 // their own in the workspace). A provider's failure becomes the answer
 // booking expects: a refused grant `blocked` (nothing offered), a passing
@@ -47,7 +50,12 @@ export function connectedCalendar(deps: ConnectedCalendarDeps): BookingCalendar 
         { fresh: true },
       );
       if (answer === undefined || answer.status === 'none') return { status: 'none' };
-      return answer.status === 'read' ? { status: 'read', busy: answer.busy } : { status: answer.status };
+      if (answer.status !== 'read') return { status: answer.status };
+      return {
+        status: 'read',
+        busy: answer.busy,
+        ...(answer.skipped === undefined ? {} : { skipped: answer.skipped }),
+      };
     },
     async events(event) {
       try {

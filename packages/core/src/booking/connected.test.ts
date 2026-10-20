@@ -4,7 +4,7 @@
 // passing outage `unavailable`, and an event lands on the host's calendar.
 import { afterAll, beforeAll, describe, expect, inject, it } from 'vitest';
 import { createDatabase, type Database } from '@crm/db';
-import { connectCalendar } from '../calendar/connections.ts';
+import { connectCalendar, updateCalendarConnection } from '../calendar/connections.ts';
 import { createFakeCalendarProvider } from '../calendar/fake.ts';
 import { decodeTokenKey } from '../calendar/tokens.ts';
 import { createWorkspace } from '../engine/workspaces.ts';
@@ -39,7 +39,12 @@ async function world() {
     await connectCalendar(owner, { provider: 'google', exchanged, tokenKey });
   };
   const ask = { workspaceId: created.workspaceId, memberId: created.memberId, from: FROM, to: TO };
-  return { created, fake, calendar, connect, ask };
+  /** Connects another account for the same host. */
+  const connectAs = async (account: string) => {
+    const exchanged = await fake.provider.exchangeCode(`code:${account}`, 'https://crm.test/callback');
+    return connectCalendar(owner, { provider: 'google', exchanged, tokenKey });
+  };
+  return { created, owner, fake, calendar, connect, connectAs, ask };
 }
 
 describe('connectedCalendar', () => {
@@ -88,5 +93,58 @@ describe('connectedCalendar', () => {
     await connect();
     await calendar.events(event);
     expect(fake.calls('createEvent')).toBe(1);
+  });
+
+  it('puts the booking on the host’s default calendar, not their oldest (AC-711)', async () => {
+    const { created, owner, fake, calendar, connect, connectAs } = await world();
+    await connect();
+    const work = await connectAs('ada@work.dev');
+    await updateCalendarConnection(owner, { connectionId: work.id, isDefault: true });
+    await calendar.events({
+      workspaceId: created.workspaceId,
+      hostMemberId: created.memberId,
+      bookingId: '019a0000-0000-7000-8000-000000000002',
+      title: 'Intro with Cy',
+      description: '',
+      start: '2026-11-02T10:00:00.000Z',
+      end: '2026-11-02T10:30:00.000Z',
+      attendees: [{ email: 'cy@example.com', name: 'Cy' }],
+      video: false,
+    });
+    // The fake keeps each account's calendar: the event is in the default one's.
+    const window = { from: FROM, to: TO };
+    const inWork = await fake.provider.freeBusy(fake.tokensFor('ada@work.dev'), window.from, window.to);
+    const inFirst = await fake.provider.freeBusy(fake.tokensFor('ada@acme.dev'), window.from, window.to);
+    expect(inWork).toHaveLength(1);
+    expect(inFirst).toEqual([]);
+  });
+
+  it('reads past one failing calendar and names it, and closes only when the default is refused or all fail', async () => {
+    const { fake, calendar, connect, connectAs, ask } = await world();
+    await connect();
+    const work = await connectAs('ada@work.dev');
+    fake.put('ada@acme.dev', {
+      id: 'e1',
+      status: 'confirmed',
+      start: { at: '2026-11-02T10:00:00.000Z', allDay: false },
+      end: { at: '2026-11-02T11:00:00.000Z', allDay: false },
+      attendees: [],
+      isPrivate: false,
+    });
+    // The second calendar (not the default) is refused: the default's times still answer, the other named.
+    fake.failFreeBusy('ada@work.dev', 'CALENDAR_AUTH_REVOKED');
+    expect(await calendar.busy(ask)).toEqual({
+      status: 'read',
+      busy: [{ start: '2026-11-02T10:00:00.000Z', end: '2026-11-02T11:00:00.000Z' }],
+      skipped: [{ connectionId: work.id, reason: 'blocked' }],
+    });
+    // A passing outage on both: unavailable (offered as if no calendar).
+    fake.failFreeBusy('ada@work.dev', 'CALENDAR_UNAVAILABLE');
+    fake.failFreeBusy('ada@acme.dev', 'CALENDAR_UNAVAILABLE');
+    expect(await calendar.busy(ask)).toEqual({ status: 'unavailable' });
+    // The default (where events go) refused: closed, whatever the other says.
+    fake.failFreeBusy('ada@work.dev', undefined);
+    fake.failFreeBusy('ada@acme.dev', 'CALENDAR_AUTH_REVOKED');
+    expect(await calendar.busy(ask)).toEqual({ status: 'blocked' });
   });
 });

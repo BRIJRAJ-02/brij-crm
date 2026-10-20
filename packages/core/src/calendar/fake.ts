@@ -31,6 +31,8 @@ export interface FakeCalendar {
   revoke(account: string): void;
   /** The next `listChanges` with a token answers 410 Gone. */
   expireSyncToken(account: string): void;
+  /** Every `freeBusy` for `account` fails with `code` until told otherwise (`undefined` heals it). */
+  failFreeBusy(account: string, code: CalendarErrorCode | undefined): void;
   /** The next calls of `method` fail with `code`, `times` times (1 by default). */
   failNext(method: keyof CalendarProvider, code: CalendarErrorCode, times?: number): void;
   /** How often each method was called. */
@@ -54,6 +56,7 @@ export function createFakeCalendarProvider(options: { readonly now?: () => Date 
   const revoked = new Set<string>();
   const expiring = new Set<string>();
   const failures = new Map<string, { code: CalendarErrorCode; times: number }>();
+  const accountFailures = new Map<string, CalendarErrorCode>();
   const counts = new Map<string, number>();
   const channels: { readonly channel: CalendarChannel; readonly address: string; readonly token: string }[] = [];
   let version = 0;
@@ -136,6 +139,9 @@ export function createFakeCalendarProvider(options: { readonly now?: () => Date 
     },
     freeBusy(tokens, from, to) {
       enter('freeBusy');
+      const failing = accountFailures.get(accountOf(tokens));
+      if (failing !== undefined)
+        return Promise.reject(providerError(failing, `The fake failed freeBusy with ${failing}.`));
       const busy = [...calendarOf(accountOf(tokens)).values()]
         .map((each) => each.event)
         .filter((event) => event.status !== 'cancelled' && event.start !== undefined && inWindow(event, from, to))
@@ -249,6 +255,10 @@ export function createFakeCalendarProvider(options: { readonly now?: () => Date 
     },
     expireSyncToken(account) {
       expiring.add(account);
+    },
+    failFreeBusy(account, code) {
+      if (code === undefined) accountFailures.delete(account);
+      else accountFailures.set(account, code);
     },
     failNext(method, code, times = 1) {
       failures.set(method, { code, times });

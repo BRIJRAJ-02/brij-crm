@@ -18,7 +18,12 @@ export type { BusyInterval };
 
 /** What a host's calendars said about a range. */
 export type BusyAnswer =
-  | { readonly status: 'read'; readonly busy: readonly BusyInterval[] }
+  | {
+      readonly status: 'read';
+      readonly busy: readonly BusyInterval[];
+      /** Calendars read past because they failed (spec 0024): the others still answered, and a screen may warn. */
+      readonly skipped?: readonly { readonly connectionId: string; readonly reason: 'blocked' | 'unavailable' }[];
+    }
   /** The host has no connected calendar (AC-631): availability and bookings only, and the builder warns. */
   | { readonly status: 'none' }
   /** A grant refused until the host reconnects: nothing is offered for them. */

@@ -57,9 +57,24 @@ export const UNKNOWN_EVENT = 'That calendar event does not exist.';
 
 const DAY_MS = 86_400_000;
 
-/** One member's busy times, or why there are none. */
+/** A connection a `freeBusy` read past because it failed: the others still answered. */
+export interface SkippedCalendar {
+  readonly connectionId: string;
+  /** `blocked`: its grant is refused until the member reconnects; `unavailable`: a passing failure. */
+  readonly reason: 'blocked' | 'unavailable';
+}
+
+/**
+ * One member's busy times, or why there are none. A `read` answer may have
+ * read past some of the member's calendars (`skipped`), so a screen can warn.
+ */
 export type MemberBusy =
-  | { readonly memberId: string; readonly status: 'read'; readonly busy: readonly BusyInterval[] }
+  | {
+      readonly memberId: string;
+      readonly status: 'read';
+      readonly busy: readonly BusyInterval[];
+      readonly skipped?: readonly SkippedCalendar[];
+    }
   /** No connected calendar: callers treat the member as unavailable (AC-618), booking as hours only (AC-631). */
   | { readonly memberId: string; readonly status: 'none' }
   /** A grant refused until the member reconnects. */
@@ -188,7 +203,14 @@ export function createCalendarEvents(deps: CalendarEventsDeps): CalendarEvents {
     return { provider, tokens };
   };
 
-  /** One member's busy times over every live connection, unioned. */
+  /**
+   * One member's busy times over every live connection, unioned, each read
+   * at once. A calendar that fails is read past and named in `skipped`, so
+   * one bad account never closes the member's whole day. It fails closed
+   * (`blocked`) only when the destination calendar (the default, where
+   * events go) has its grant refused, or every calendar fails and one is
+   * refused; when every calendar fails and none is refused, `unavailable`.
+   */
   const busyOf = async (
     scope: EngineScope,
     memberId: string,
@@ -198,21 +220,33 @@ export function createCalendarEvents(deps: CalendarEventsDeps): CalendarEvents {
   ): Promise<MemberBusy> => {
     const mine = rows.filter((row) => row.member_id === memberId);
     if (mine.length === 0) return { memberId, status: 'none' };
-    const busy: BusyInterval[] = [];
-    for (const row of mine) {
-      try {
-        const live = await tokensFor(scope, row);
-        if (live === undefined) continue;
-        busy.push(...(await live.provider.freeBusy(live.tokens, from, to)));
-      } catch (error) {
-        if (!isProviderError(error)) throw error;
-        // A refused grant fails closed until the member reconnects; anything passing fails open.
-        return error.code === 'CALENDAR_AUTH_REVOKED' || error.code === 'CALENDAR_SCOPE_DECLINED'
-          ? { memberId, status: 'blocked' }
-          : { memberId, status: 'unavailable' };
-      }
+    const answers = await Promise.all(
+      mine.map(async (row): Promise<{ readonly busy: readonly BusyInterval[] } | SkippedCalendar> => {
+        try {
+          const live = await tokensFor(scope, row);
+          if (live === undefined) return { busy: [] };
+          return { busy: await live.provider.freeBusy(live.tokens, from, to) };
+        } catch (error) {
+          if (!isProviderError(error)) throw error;
+          const refused = error.code === 'CALENDAR_AUTH_REVOKED' || error.code === 'CALENDAR_SCOPE_DECLINED';
+          return { connectionId: row.id, reason: refused ? 'blocked' : 'unavailable' };
+        }
+      }),
+    );
+    const skipped = answers.filter((answer): answer is SkippedCalendar => 'reason' in answer);
+    const [destination] = answers;
+    if (destination !== undefined && 'reason' in destination && destination.reason === 'blocked') {
+      return { memberId, status: 'blocked' };
     }
-    return { memberId, status: 'read', busy: busy.toSorted((a, b) => a.start.localeCompare(b.start)) };
+    if (skipped.length === answers.length) {
+      return skipped.some((each) => each.reason === 'blocked')
+        ? { memberId, status: 'blocked' }
+        : { memberId, status: 'unavailable' };
+    }
+    const busy = answers
+      .flatMap((answer) => ('busy' in answer ? answer.busy : []))
+      .toSorted((a, b) => a.start.localeCompare(b.start));
+    return { memberId, status: 'read', busy, ...(skipped.length === 0 ? {} : { skipped }) };
   };
 
   const keep = (key: string, answer: MemberBusy) => {
