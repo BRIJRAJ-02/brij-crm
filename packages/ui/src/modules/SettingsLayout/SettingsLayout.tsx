@@ -2,12 +2,16 @@
 // milestone 4): the settings navigation beside the page, and the page's
 // header (its title, a tile, a badge, a line of description and its actions)
 // over its body. The body is the screen's: Tabs, Cards, Tables, EmptyState.
+// Since spec 0026 the app's settings navigation is the Sidebar's settings
+// variant, so the page draws its own trail and h1, and `nav` is optional.
 import type { ReactNode, Ref } from 'react';
 import { Icon } from '../../atoms/Icon/Icon.tsx';
 import type { IconName } from '../../atoms/Icon/icons.ts';
 import { Skeleton } from '../../atoms/Skeleton/Skeleton.tsx';
 import { VisuallyHidden } from '../../atoms/VisuallyHidden/VisuallyHidden.tsx';
 import type { Hue } from '../../hue.ts';
+import { Breadcrumbs, type Crumb } from '../../molecules/Breadcrumbs/Breadcrumbs.tsx';
+import { CardTitleLevel } from '../../molecules/Card/Card.tsx';
 import { useDelayedLoading } from '../../provider/useDelayedLoading.ts';
 import { NavItem } from '../Sidebar/Sidebar.tsx';
 import styles from './SettingsLayout.module.css';
@@ -23,14 +27,33 @@ export interface SettingsNavEntry {
 
 /** Props for SettingsLayout. */
 export interface SettingsLayoutProps {
-  /** The settings pages, in order. Each feature adds its own (#8, #23 and later). */
-  readonly nav: readonly SettingsNavEntry[];
+  /**
+   * The settings pages, in order, as a column beside the page. Leave it out
+   * when the app's sidebar is the settings navigation (spec 0026).
+   */
+  readonly nav?: readonly SettingsNavEntry[];
   /** The id of the page shown, marked as the current one. */
   readonly currentNavId?: string;
   /** Names the navigation landmark ("Settings"). */
   readonly navLabel?: string;
-  /** The page's title, its second level heading (the TopBar above holds the h1). */
+  /** The page's title: its second level heading under a TopBar, or its h1 with `titleLevel={1}`. */
   readonly title: string;
+  /**
+   * 1 when no TopBar sits above (spec 0026): the title is the page's h1,
+   * which the app focuses after a route change, and Cards in the body take
+   * h2 titles. 2 (the default) under a TopBar.
+   */
+  readonly titleLevel?: 1 | 2;
+  /**
+   * Where the page sits, above the title ("Account › Preferences"): a place
+   * with an `href` is a link, one without is a group's name, the last is this page.
+   */
+  readonly trail?: readonly Crumb[];
+  /**
+   * The body opens with Tabs (an object's Attributes and Configuration): the
+   * header drops its hairline, since the tabs' own underline divides the page.
+   */
+  readonly hasTabs?: boolean;
   /** A tile before the title: an object's icon, on its hue. */
   readonly icon?: IconName;
   readonly hue?: Hue;
@@ -63,6 +86,9 @@ export function SettingsLayout({
   currentNavId,
   navLabel = strings.navLabel,
   title,
+  titleLevel = 2,
+  trail,
+  hasTabs = false,
   icon,
   hue,
   meta,
@@ -73,38 +99,58 @@ export function SettingsLayout({
   children,
 }: SettingsLayoutProps) {
   const showSkeleton = useDelayedLoading(isLoading);
+  const Heading = titleLevel === 1 ? 'h1' : 'h2';
+  const trailLine =
+    trail !== undefined && trail.length > 0 ? (
+      <span className={styles.trail}>
+        <Breadcrumbs items={trail} />
+      </span>
+    ) : null;
   return (
-    <div className={styles.root}>
-      <nav className={styles.nav} aria-label={navLabel}>
-        <ul className={styles.entries}>
-          {nav.map((entry) => (
-            <li key={entry.id}>
-              <NavItem icon={entry.icon} href={entry.href} isCurrent={entry.id === currentNavId}>
-                {entry.label}
-              </NavItem>
-            </li>
-          ))}
-        </ul>
-      </nav>
+    <div className={styles.root} data-has-nav={nav === undefined ? undefined : true}>
+      {nav !== undefined && (
+        <nav className={styles.nav} aria-label={navLabel}>
+          <ul className={styles.entries}>
+            {nav.map((entry) => (
+              <li key={entry.id}>
+                <NavItem icon={entry.icon} href={entry.href} isCurrent={entry.id === currentNavId}>
+                  {entry.label}
+                </NavItem>
+              </li>
+            ))}
+          </ul>
+        </nav>
+      )}
       <div className={styles.page}>
         {isLoading ? (
-          <div className={styles.header} aria-busy="true">
+          <div className={styles.header} aria-busy="true" data-has-tabs={hasTabs || undefined}>
+            {/* The trail is known before the page loads, so it stays put and the header doesn't shift. */}
+            {trailLine}
             {showSkeleton && (
               <span className={styles.text}>
                 <Skeleton width="medium" />
                 <Skeleton width="long" />
               </span>
             )}
+            {/* The h1 keeps the page's title for screen readers and the app's focus while it loads. */}
+            {titleLevel === 1 ? (
+              <VisuallyHidden>
+                <h1 ref={titleRef} tabIndex={-1}>
+                  {title}
+                </h1>
+              </VisuallyHidden>
+            ) : null}
             <VisuallyHidden>{strings.loading}</VisuallyHidden>
           </div>
         ) : (
-          <header className={styles.header}>
+          <header className={styles.header} data-has-tabs={hasTabs || undefined}>
+            {trailLine}
             {icon !== undefined && <Icon name={icon} tile={hue ?? 'gray'} />}
             <span className={styles.text}>
               <span className={styles.heading}>
-                <h2 className={styles.title} ref={titleRef} tabIndex={-1} data-settings-title>
+                <Heading className={styles.title} ref={titleRef} tabIndex={-1} data-settings-title>
                   {title}
-                </h2>
+                </Heading>
                 {meta}
               </span>
               {description !== undefined && <span className={styles.description}>{description}</span>}
@@ -112,7 +158,10 @@ export function SettingsLayout({
             {actions !== undefined && <span className={styles.actions}>{actions}</span>}
           </header>
         )}
-        <div className={styles.body}>{children}</div>
+        {/* Under an h1 title, the body's Cards take h2 titles. */}
+        <div className={styles.body}>
+          {titleLevel === 1 ? <CardTitleLevel value={2}>{children}</CardTitleLevel> : children}
+        </div>
       </div>
     </div>
   );
@@ -129,4 +178,31 @@ export interface SettingsStackProps {
  */
 export function SettingsStack({ children }: SettingsStackProps) {
   return <div className={styles.stack}>{children}</div>;
+}
+
+/** Props for SettingsRow. */
+export interface SettingsRowProps {
+  /** What the setting is ("Interface theme"); also name the control with it (its hidden label). */
+  readonly title: string;
+  /** One muted line on what it changes. */
+  readonly description?: string;
+  /** The control, at the end of the row: a Select, a Switch, a Button. */
+  readonly children: ReactNode;
+}
+
+/**
+ * One setting as a row (spec 0026, AC-683): its title over a muted
+ * description, and its control at the end. Rows stack inside a Card, a
+ * hairline between them; on a narrow page the control drops under the text.
+ */
+export function SettingsRow({ title, description, children }: SettingsRowProps) {
+  return (
+    <div className={styles.row}>
+      <span className={styles.rowText}>
+        <span className={styles.rowTitle}>{title}</span>
+        {description !== undefined && <span className={styles.description}>{description}</span>}
+      </span>
+      <span className={styles.rowControl}>{children}</span>
+    </div>
+  );
 }

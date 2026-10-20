@@ -20,7 +20,9 @@ Ported from the artifact's Sidebar card. Every screen inside the app shell (#10 
       <NavItem icon="user-plus" onPress={invite}>
         Invite teammates
       </NavItem>
-      <ThemeSwitch controller={context.theme} isCompact orientation={isCollapsed ? 'vertical' : 'horizontal'} />
+      <NavItem icon="settings" href="/settings" kbd="⌘,">
+        Settings
+      </NavItem>
     </>
   )}
 >
@@ -43,7 +45,24 @@ Ported from the artifact's Sidebar card. Every screen inside the app shell (#10 
 - The workspace button is named "<workspace>, workspace menu". `isWorkspaceBusy` says something chosen from that menu is under way (signing out, once the menu has closed): a `Spinner` named by `workspaceBusyLabel` replaces the chevron (the mark, on the rail), and the button ignores presses while staying focusable. Why: the menu closes on the choice, so without it nothing on screen said the sign out was happening.
 - `onQuickActions` shows Quick actions with its ⌘K keycap. The screen answers the shortcut itself.
 - `isCollapsed` makes it a `size-sidebar-collapsed` rail: icons only, each named in a tooltip, sections drawn as groups under a hairline, and the expand button at the bottom. `onCollapsedChange` shows the collapse and expand buttons. The app shell folds it below `bp-page-compact`.
-- The footer carries `ThemeSwitch` (compact), as the artifact's card does. `footer` may be a function of `{ isCollapsed }`, true whenever the sidebar is a rail (by `isCollapsed`, or folded by the app shell below `bp-page-compact`, which the screen can't see), so the footer fits the rail: the ThemeSwitch stacks (`orientation="vertical"`).
+- The footer holds Invite, help and the Settings entry (`NavItem` with `kbd="⌘,"`, spec 0026). `kbd` shows a soft keycap after an item's name (hidden from its accessible name and stated as `aria-keyshortcuts` instead, and left off on the rail); the screen answers the shortcut itself. The theme switch left the app's footer for Settings › Preferences (spec 0026), though the footer can still hold a compact `ThemeSwitch`, as the artifact's card does. `footer` may be a function of `{ isCollapsed }`, true whenever the sidebar is a rail (by `isCollapsed`, or folded by the app shell below `bp-page-compact`, which the screen can't see), so the footer fits the rail: the ThemeSwitch stacks (`orientation="vertical"`).
+
+## The settings variant (spec 0026)
+
+```tsx
+<Sidebar heading="Settings" back={{ label: 'Leave settings', href: from }} label="Settings" keyboard="arrows">
+  <NavGroup label="Account" isLabelShown>
+    <NavItem icon="sliders-horizontal" href="/settings/account/preferences" isCurrent>
+      Preferences
+    </NavItem>
+  </NavGroup>
+</Sidebar>
+```
+
+- `heading` with `back` replaces the workspace row: a ghost `ButtonLink` (arrow left, named by `back.label`, which is also its tooltip) back to where the person came from, then the title as plain text (not a heading: it comes before the page's h1, and `label` names the landmark). On the rail, the back link alone. The `workspace*` props don't apply.
+- `NavGroup` with `isLabelShown` puts its label on screen in a section label's type, with no fold: settings groups are short and always open. On the rail it draws as an unlabelled group (the label stays its name).
+- `keyboard="arrows"` makes the body one tab stop (a roving tab index): the item focused while focus is inside, else the current page's, else the first. Up and Down move between items, Home and End jump to the ends, and Tab leaves the list in one press. The nav carries `data-keyboard="arrows"`, so the app can leave focus in it after a route change. Why: the settings list is a navigation the person moves through often, and AC-687 asks for arrow keys inside it and Tab past it. The app's own sidebar keeps `tab`.
+- Why a variant and not a second navigation: the settings navigation is the same rows, groups, rail and states as the app's sidebar; only the head and the groups' labels differ.
 
 ## States
 
@@ -51,11 +70,11 @@ The current item takes `surface-selected`; hover (pointer only) `surface-hover`;
 
 ## Keyboard
 
-Tab moves through the workspace switcher, the collapse button, Quick actions, each item and each section label. Enter follows a link or presses a button; Enter or Space folds a section.
+Tab moves through the workspace switcher, the collapse button, Quick actions, each item and each section label. Enter follows a link or presses a button; Enter or Space folds a section. With `keyboard="arrows"`, the items are one tab stop and the arrow keys, Home and End move between them.
 
 ## Differences from the artifact
 
 - `workspace` is the name; the switcher is the `Menu` you pass as `workspaceMenu`, which the name opens.
 - `search` became `onQuickActions`: the row shows only when the screen opens a palette.
 - `current` became `isCurrent`, and `NavItem` takes `href` or `onPress`.
-- New: `NavGroup`, the collapsed rail, section loading and empty states, and `footer` as a function of the folded state.
+- New: `NavGroup` (with `isLabelShown`), the settings variant (`heading`, `back`, `keyboard`), `NavItem`'s `kbd`, the collapsed rail, section loading and empty states, and `footer` as a function of the folded state.

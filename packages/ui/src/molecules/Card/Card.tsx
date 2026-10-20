@@ -1,5 +1,12 @@
-import type { ReactNode } from 'react';
+import { createContext, useContext, type ReactNode } from 'react';
 import styles from './Card.module.css';
+
+/**
+ * The level an inline card's title takes: 3 by default, under a page's h2;
+ * 2 where the page's own title is the h1 above it (a settings page beside the
+ * settings sidebar, spec 0026), so headings never skip a level.
+ */
+export const CardTitleLevel = createContext<2 | 3>(3);
 
 interface CardBase {
   /** A line under the title. */
@@ -38,8 +45,9 @@ export function Card({
   placement = 'inline',
   isBusy = false,
 }: CardProps) {
+  const level = useContext(CardTitleLevel);
   const Root = placement === 'page' ? 'main' : 'section';
-  const Title = placement === 'page' ? 'h1' : 'h3';
+  const Title = placement === 'page' ? 'h1' : level === 2 ? 'h2' : 'h3';
   return (
     <Root className={styles.root} data-tone={tone} data-placement={placement} aria-busy={isBusy || undefined}>
       {(title !== undefined || actions !== undefined) && (

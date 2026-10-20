@@ -303,6 +303,7 @@ export {
   type NavGroupProps,
   type NavItemProps,
   type NavSectionProps,
+  type SidebarBack,
   type SidebarProps,
   type SidebarState,
 } from './modules/Sidebar/Sidebar.tsx';
@@ -322,8 +323,10 @@ export {
 } from './modules/RelationshipSettings/RelationshipSettings.tsx';
 export {
   SettingsLayout,
+  SettingsRow,
   SettingsStack,
   type SettingsLayoutProps,
+  type SettingsRowProps,
   type SettingsStackProps,
   type SettingsNavEntry,
 } from './modules/SettingsLayout/SettingsLayout.tsx';

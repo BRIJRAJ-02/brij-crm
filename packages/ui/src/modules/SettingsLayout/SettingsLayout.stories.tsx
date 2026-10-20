@@ -8,7 +8,8 @@ import { Card } from '../../molecules/Card/Card.tsx';
 import { EmptyState } from '../../molecules/EmptyState/EmptyState.tsx';
 import { TabPanel, Tabs } from '../../molecules/Tabs/Tabs.tsx';
 import { Stage } from '../../workbench/Stage/Stage.tsx';
-import { SettingsLayout, SettingsStack, type SettingsNavEntry } from './SettingsLayout.tsx';
+import { Select } from '../../molecules/Select/Select.tsx';
+import { SettingsLayout, SettingsRow, SettingsStack, type SettingsNavEntry } from './SettingsLayout.tsx';
 
 const NAV: readonly SettingsNavEntry[] = [
   { id: 'objects', label: 'Objects', href: '#objects', icon: 'box' },
@@ -32,6 +33,7 @@ function SampleSettings({ page = 'objects', isLoading = false, width = 'auto' }:
           nav={NAV}
           currentNavId="objects"
           title="Projects"
+          hasTabs
           icon="folder"
           hue="orange"
           meta={<Badge text="Custom" />}
@@ -165,4 +167,92 @@ export const Failed: Story = {
 export const Narrow: Story = {
   args: { width: 'narrow' },
   parameters: { crm: { screenshot: false } },
+};
+
+const THEMES = [
+  { id: 'system', label: 'System preference', icon: 'monitor' as const },
+  { id: 'light', label: 'Light', icon: 'sun' as const },
+  { id: 'dark', label: 'Dark', icon: 'moon' as const },
+];
+
+/**
+ * A page beside the app's settings sidebar (spec 0026): no navigation column,
+ * the trail over its h1, a hairline, then a Card of setting rows.
+ */
+export const Rows: Story = {
+  parameters: { crm: { preview: true } },
+  render: () => (
+    <Stage>
+      <SettingsLayout
+        titleLevel={1}
+        trail={[
+          { id: 'account', label: 'Account' },
+          { id: 'preferences', label: 'Preferences' },
+        ]}
+        title="Preferences"
+        description="How Timefix looks for you. Saved in this browser."
+      >
+        <Card title="Appearance">
+          <SettingsRow title="Interface theme" description="Choose a look, or follow your device’s setting.">
+            <Select label="Interface theme" isLabelHidden items={THEMES} defaultValue="system" />
+          </SettingsRow>
+          <SettingsRow title="Density" description="A second row, a hairline above it.">
+            <Select
+              label="Density"
+              isLabelHidden
+              items={[{ id: 'compact', label: 'Compact' }]}
+              defaultValue="compact"
+            />
+          </SettingsRow>
+        </Card>
+      </SettingsLayout>
+    </Stage>
+  ),
+  play: async ({ canvas }) => {
+    await expect(canvas.queryByRole('navigation', { name: 'Settings' })).toBeNull();
+    await expect(canvas.getByRole('heading', { level: 1, name: 'Preferences' })).toHaveAttribute('tabindex', '-1');
+    await expect(canvas.getByRole('heading', { level: 2, name: 'Appearance' })).toBeInTheDocument();
+    await expect(canvas.queryByRole('link', { name: 'Account' })).toBeNull();
+    await expect(canvas.getByRole('button', { name: /Interface theme/ })).toBeInTheDocument();
+  },
+};
+
+/** The same page loading: the trail stays, skeletons for the rest, and the h1 kept for screen readers and focus. */
+export const RowsLoading: Story = {
+  parameters: { crm: { screenshot: false } },
+  render: () => (
+    <Stage>
+      <SettingsLayout
+        titleLevel={1}
+        trail={[
+          { id: 'account', label: 'Account' },
+          { id: 'preferences', label: 'Preferences' },
+        ]}
+        title="Preferences"
+        isLoading
+      >
+        {null}
+      </SettingsLayout>
+    </Stage>
+  ),
+  play: async ({ canvas }) => {
+    await expect(canvas.getByRole('heading', { level: 1, name: 'Preferences' })).toBeInTheDocument();
+    await expect(canvas.getByText('Account')).toBeInTheDocument();
+  },
+};
+
+/** On a phone the control drops under its title and description. */
+export const RowsNarrow: Story = {
+  parameters: { crm: { screenshot: false } },
+  render: () => (
+    <Stage width="narrow">
+      <SettingsLayout titleLevel={1} title="Preferences">
+        <Card title="Appearance">
+          <SettingsRow title="Interface theme" description="Choose a look, or follow your device’s setting.">
+            <Select label="Interface theme" isLabelHidden items={THEMES} defaultValue="system" />
+          </SettingsRow>
+        </Card>
+      </SettingsLayout>
+    </Stage>
+  ),
 };

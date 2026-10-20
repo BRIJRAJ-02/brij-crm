@@ -22,9 +22,12 @@ New (spec 0012, pulled forward from spec 0003's milestone 4; in the inventory as
 </SettingsLayout>
 ```
 
-- `nav` lists the settings pages, in order; `currentNavId` marks the one shown (`aria-current="page"`). The navigation is a `nav` landmark named by `navLabel` ("Settings").
+- Beside the app's settings sidebar (spec 0026, the Sidebar's settings variant) a page passes no `nav`, `titleLevel={1}` and its `trail`: the trail ("Account › Preferences"; a place without `href` is a group's name, plain text) sits over the title, which is then the page's h1 (no TopBar above), and the header ends in a hairline before the body. Cards in the body then take h2 titles (`CardTitleLevel`). While loading, the trail stays and the h1 stays (visually hidden), so the header doesn't shift and the app's focus and the tab's title have it.
+- `hasTabs` says the body opens with Tabs (an object's page): the header drops its hairline, as the tabs' underline divides the page, so two rules never stack.
+- `SettingsRow` is one setting in a Card: its title over a muted description, its control at the end (a Select with `isLabelHidden` and the same label, a Switch, a Button), a hairline between rows, and the control dropping under the text when the row is narrow. Why a new part: no molecule drew a setting as title, description and a control on the right (Field puts its label above its box, DescriptionList is terms and values with no control, and Card is the group around the rows). It lives beside SettingsStack because the rhythm belongs to the settings page.
+- `nav` (optional) lists the settings pages as a column beside the page, in order; `currentNavId` marks the one shown (`aria-current="page"`). The navigation is a `nav` landmark named by `navLabel` ("Settings").
 - `titleRef` reaches the visible title, which takes focus by script (never a tab stop) when the control in use went away with its change (an archived row, a cancelled job's Cancel); the TopBar's h1 is visually hidden under a trail, so focus there would show nothing.
-- `title` is the page's second level heading: the `TopBar` above holds the h1 (as the crumbs' current place), which takes focus after a route change, as on a record page.
+- `title` is the page's second level heading by default: the `TopBar` above holds the h1 (as the crumbs' current place), which takes focus after a route change, as on a record page.
 - `icon` with `hue` draws an object's tile before the title; `meta` sits beside the title (a "Standard" or "Custom" Badge).
 - `description` is one line under the title; `actions` sit at the end of the header. One primary at most, as everywhere.
 - The body is the screen's: `Tabs` for an object's Attributes and Configuration, `Card`s for sections (a danger zone is a Card whose action is a `danger` Button), `Table` for lists, `EmptyState` for empty and failed reads, `Callout` for a read only note.
@@ -34,7 +37,7 @@ New (spec 0012, pulled forward from spec 0003's milestone 4; in the inventory as
 
 ## States
 
-Loaded, loading (the header's skeletons), with and without a tile, badge, description and actions, current entry, hover and focus on the entries (NavItem's), narrow. Empty, error and read only states are the body's (EmptyState, Callout).
+Loaded, loading (the trail stays, skeletons for the title and description), with and without the navigation column, a trail, a tile, badge, description and actions, current entry, hover and focus on the entries (NavItem's), narrow. Empty, error and read only states are the body's (EmptyState, Callout).
 
 ## Keyboard
 

@@ -31,3 +31,23 @@ export const Default: Story = {
     await expect(canvas.getByText('Companies').closest('[aria-current]')).toHaveAttribute('aria-current', 'page');
   },
 };
+
+/** A group's name in the trail (Account › Preferences): plain text, no link and no tab stop, then the current page. */
+export const Group: Story = {
+  args: {
+    items: [
+      { id: 'account', label: 'Account' },
+      { id: 'preferences', label: 'Preferences' },
+    ],
+  },
+  render: (args) => (
+    <Stage>
+      <Breadcrumbs {...args} />
+    </Stage>
+  ),
+  play: async ({ canvas }) => {
+    await expect(canvas.getByText('Account')).toBeInTheDocument();
+    await expect(canvas.queryByRole('link', { name: 'Account' })).toBeNull();
+    await expect(canvas.getByRole('link', { name: 'Preferences' })).toHaveAttribute('aria-current', 'page');
+  },
+};

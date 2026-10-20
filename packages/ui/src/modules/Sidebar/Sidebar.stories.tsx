@@ -220,3 +220,126 @@ export const CollapsedWorkspaceBusy: Story = {
     await expect(document.querySelector('[role="menu"]')).toBeNull();
   },
 };
+
+/** The settings navigation (spec 0026): a title with the way back, then labelled groups that never fold. */
+function SampleSettingsSidebar({ isCollapsed = false }: { readonly isCollapsed?: boolean }) {
+  return (
+    <Stage height="page">
+      <Sidebar
+        heading="Settings"
+        back={{ label: 'Leave settings', href: '/companies' }}
+        label="Settings"
+        keyboard="arrows"
+        isCollapsed={isCollapsed}
+      >
+        <NavGroup label="Account" isLabelShown>
+          <NavItem icon="sliders-horizontal" href="/settings/account/preferences" isCurrent>
+            Preferences
+          </NavItem>
+          <NavItem icon="calendar" href="/settings/account/calendars">
+            Calendars
+          </NavItem>
+        </NavGroup>
+        <NavGroup label="Workspace" isLabelShown>
+          <NavItem icon="box" href="/settings/objects">
+            Objects
+          </NavItem>
+          <NavItem icon="list-checks" href="/settings/jobs">
+            Background jobs
+          </NavItem>
+        </NavGroup>
+        <NavGroup label="Scheduling" isLabelShown>
+          <NavItem icon="link" href="/captures/links" meta="Captures">
+            Booking pages
+          </NavItem>
+        </NavGroup>
+      </Sidebar>
+    </Stage>
+  );
+}
+
+/** Settings: the title and its back link, the groups under their labels, Preferences current. */
+export const Settings: Story = {
+  render: () => <SampleSettingsSidebar />,
+  play: async ({ canvas }) => {
+    await expect(canvas.getByRole('navigation', { name: 'Settings' })).toBeInTheDocument();
+    await expect(canvas.getByText('Settings', { selector: 'span' })).toBeInTheDocument();
+    await expect(canvas.getByRole('link', { name: 'Leave settings' })).toHaveAttribute('href', '/companies');
+    const account = canvas.getByRole('group', { name: 'Account' });
+    await expect(account).toHaveTextContent('Account');
+    await expect(account).toContainElement(canvas.getByRole('link', { name: 'Preferences' }));
+    await expect(canvas.getByRole('link', { name: 'Preferences' })).toHaveAttribute('aria-current', 'page');
+    await expect(canvas.queryByRole('button', { name: 'Account' })).toBeNull();
+  },
+};
+
+/** One tab stop for the list, the current page's: the arrow keys, Home and End move inside it, and Tab passes it. */
+export const SettingsKeyboard: Story = {
+  render: () => (
+    <>
+      <SampleSettingsSidebar />
+      <button type="button">After</button>
+    </>
+  ),
+  parameters: { crm: { screenshot: false } },
+  play: async ({ canvas, userEvent }) => {
+    await userEvent.tab();
+    await expect(canvas.getByRole('link', { name: 'Leave settings' })).toHaveFocus();
+    await userEvent.tab();
+    const preferences = canvas.getByRole('link', { name: 'Preferences' });
+    await expect(preferences).toHaveFocus();
+    await userEvent.keyboard('{ArrowDown}');
+    await expect(canvas.getByRole('link', { name: 'Calendars' })).toHaveFocus();
+    await userEvent.keyboard('{End}');
+    const last = canvas.getByRole('link', { name: /Booking pages/ });
+    await expect(last).toHaveFocus();
+    await userEvent.keyboard('{ArrowDown}');
+    await expect(last).toHaveFocus();
+    await userEvent.keyboard('{Home}');
+    await expect(preferences).toHaveFocus();
+    await userEvent.keyboard('{ArrowUp}');
+    await expect(preferences).toHaveFocus();
+    await userEvent.tab();
+    await expect(canvas.getByRole('button', { name: 'After' })).toHaveFocus();
+    // Back in, focus lands on the current page's item.
+    await userEvent.tab({ shift: true });
+    await expect(preferences).toHaveFocus();
+  },
+};
+
+/** Settings on the rail: the back link alone at the top, each group under a hairline, names in tooltips. */
+export const SettingsCollapsed: Story = {
+  render: () => <SampleSettingsSidebar isCollapsed />,
+  play: async ({ canvas }) => {
+    await expect(canvas.getByRole('link', { name: 'Leave settings' })).toBeInTheDocument();
+    await expect(canvas.getByRole('group', { name: 'Workspace' })).toContainElement(
+      canvas.getByRole('link', { name: 'Objects' }),
+    );
+  },
+};
+
+/** A footer entry with its shortcut: Settings and ⌘, at the foot of the app's sidebar. */
+export const FooterShortcut: Story = {
+  render: () => (
+    <Stage height="page">
+      <Sidebar
+        workspace="Brightline"
+        footer={
+          <NavItem icon="settings" href="/settings" kbd="⌘,">
+            Settings
+          </NavItem>
+        }
+      >
+        <NavItem icon="bell" href="/notifications">
+          Notifications
+        </NavItem>
+      </Sidebar>
+    </Stage>
+  ),
+  play: async ({ canvas }) => {
+    // The keycap shows, hidden from the name; the shortcut is stated through aria-keyshortcuts.
+    const settings = canvas.getByRole('link', { name: 'Settings' });
+    await expect(settings.querySelector('kbd')).not.toBeNull();
+    await expect(settings.getAttribute('aria-keyshortcuts')).toMatch(/^(Meta|Control)\+,$/);
+  },
+};

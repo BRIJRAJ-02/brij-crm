@@ -8,7 +8,11 @@ import styles from './Breadcrumbs.module.css';
 export interface Crumb {
   readonly id: string;
   readonly label: string;
-  /** Where it goes. The last crumb is the current page and takes none. */
+  /**
+   * Where it goes. The last crumb is the current page and takes none. One
+   * before it without an `href` is a group's name, not a page ("Account" in
+   * Account › Preferences): plain text, no link and no tab stop.
+   */
   readonly href?: string;
   readonly icon?: IconName;
 }
@@ -21,16 +25,26 @@ export interface BreadcrumbsProps {
 
 /** Where a page sits: Settings › Objects › Companies. Each place but the last is a routed link. (Path is for attributes.) */
 export function Breadcrumbs({ items }: BreadcrumbsProps) {
+  const lastId = items.at(-1)?.id;
   return (
     <AriaBreadcrumbs className={styles.root} items={items}>
       {(item) => {
         const href = safeHref(item.href);
+        const face = (
+          <>
+            {item.icon !== undefined && <Icon name={item.icon} size="sm" />}
+            {item.label}
+          </>
+        );
         return (
           <Breadcrumb id={item.id} className={styles.crumb}>
-            <AriaLink className={styles.link} {...(href === undefined ? {} : { href })}>
-              {item.icon !== undefined && <Icon name={item.icon} size="sm" />}
-              {item.label}
-            </AriaLink>
+            {href === undefined && item.id !== lastId ? (
+              <span className={styles.link}>{face}</span>
+            ) : (
+              <AriaLink className={styles.link} {...(href === undefined ? {} : { href })}>
+                {face}
+              </AriaLink>
+            )}
             <span className={styles.separator} aria-hidden="true">
               <Icon name="chevron-right" size="xs" />
             </span>

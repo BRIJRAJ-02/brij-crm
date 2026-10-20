@@ -7,10 +7,14 @@
 @layer components {
   .root {
     display: grid;
-    grid-template-columns: var(--size-menu) minmax(0, 1fr);
+    grid-template-columns: minmax(0, 1fr);
     inline-size: 100%;
     min-block-size: 100%;
     container-type: inline-size;
+  }
+
+  .root[data-has-nav] {
+    grid-template-columns: var(--size-menu) minmax(0, 1fr);
   }
 
   .nav {
@@ -37,12 +41,28 @@
     padding: var(--space-16) var(--space-24);
   }
 
+  /* The header ends in a hairline (spec 0026, AC-683), the body below it. */
   .header {
     display: flex;
     flex-wrap: wrap;
     gap: var(--space-12);
     align-items: center;
     min-block-size: var(--size-bar);
+    padding-block-end: var(--space-16);
+    border-block-end: var(--border-width-hairline) solid var(--border-subtle);
+  }
+
+  /* Tabs follow: their own underline divides the page. */
+  .header[data-has-tabs] {
+    padding-block-end: 0;
+    border-block-end: none;
+  }
+
+  /* The trail takes its own line above the tile and title. */
+  .trail {
+    display: flex;
+    flex-basis: 100%;
+    min-inline-size: 0;
   }
 
   .text {
@@ -95,6 +115,41 @@
   /* Inside a tab's panel: a breath under the tabs' hairline. */
   .stack {
     padding-block-start: var(--space-16);
+  }
+
+  /* A setting: its title and description, its control at the end. The
+     Card's body spaces the rows; from the second on, a hairline sits midway. */
+  .row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-8) var(--space-16);
+    align-items: center;
+    justify-content: space-between;
+  }
+
+  .row + .row {
+    padding-block-start: var(--space-16);
+    border-block-start: var(--border-width-hairline) solid var(--border-subtle);
+  }
+
+  .rowText {
+    display: flex;
+    flex: 1 1 var(--size-measure);
+    flex-direction: column;
+    gap: var(--space-2);
+    min-inline-size: 0;
+  }
+
+  .rowTitle {
+    color: var(--text);
+    font: var(--text-body-strong);
+    letter-spacing: var(--tracking-body-strong);
+  }
+
+  .rowControl {
+    display: flex;
+    flex: none;
+    justify-content: flex-end;
   }
 
   @container (width < 480px) {

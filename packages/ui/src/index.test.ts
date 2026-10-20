@@ -121,6 +121,7 @@ describe('@crm/ui', () => {
       'Select',
       'Separator',
       'SettingsLayout',
+      'SettingsRow',
       'SettingsStack',
       'ShortcutHelp',
       'Sidebar',
