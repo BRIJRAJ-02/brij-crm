@@ -27,7 +27,7 @@ Built from library parts only: SettingsLayout (through `SettingsPage`), Settings
 - **Purpose**: one object, standard or custom alike, under its tile, name and Standard or Custom badge, in two tabs.
 - **Main task**: add, edit, move, archive and restore its attributes (Attributes), and rename, restyle, archive or restore it (Configuration).
 - **Leaves out**: changing a type (#14), and changing the API name (never).
-- **Layout**: the Configuration tab follows the settings page pattern (SettingsLayout's README): a Names and look section whose Form sits two fields to a row, then an Archive section with the danger Card. The Attributes tab's tables run the full width.
+- **Layout**: the Configuration tab follows the settings page pattern (SettingsLayout's README): a Names and look section whose Form sits two fields to a row with Save in its footer, an Identifiers section with the read only API name and object ID, then a Danger zone section (Restore once archived) with the archive Card. The Attributes tab's tables run the full width.
 
 ## An object's attributes (the Attributes tab, AttributesTab)
 
@@ -81,7 +81,9 @@ Built from library parts only: SettingsLayout (through `SettingsPage`), Table, B
 
 Its old address, `/w/$slug/settings/calendar`, where the API's Google callback still sends the browser, redirects here with its search (`?calendar=`) kept (AC-686).
 
-Built from library parts only: SettingsLayout (through `SettingsPage`), Card per connection (its account as the title, Google and Default as the line under it, Make default and Disconnect in its footer), DescriptionList (Status as a Badge with the last error, Last synced as a RelativeTime, the sharing control with a line saying what it means), Callout (how connecting went; the limit of 3 reached), Modal (the disconnect confirm) and EmptyState (no calendar yet, with Connect Google calendar; calendar sync not set up; error with Try again). Changes show at once through `data.calendar` and come back with a toast when refused; a connection still syncing is read again until it is done.
+Laid out in the settings page pattern (20 October 2026): a Connected calendars section holding the connections in a SettingsGrid (side by side where there’s room; the empty, off, loading and failed states span the page instead), then, for owners and admins, a For the workspace section with "Add people from meetings", a setting for every member that sits on this page because it is about calendars.
+
+Built from library parts only: SettingsLayout (through `SettingsPage`), SettingsSection, SettingsGrid, Card per connection (its account as the title, Google and Default as the line under it, Make default and Disconnect in its footer), DescriptionList (Status as a Badge with the last error, Last synced as a RelativeTime, the sharing control with a line saying what it means), Callout (how connecting went; the limit of 3 reached), Modal (the disconnect confirm) and EmptyState (no calendar yet, with Connect Google calendar; calendar sync not set up; error with Try again). Changes show at once through `data.calendar` and come back with a toast when refused; a connection still syncing is read again until it is done.
 
 ## The finish toast (toast.ts)
 

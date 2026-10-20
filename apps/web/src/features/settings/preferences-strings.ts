@@ -5,6 +5,7 @@ export const strings = {
   title: 'Preferences',
   description: 'How Timefix looks for you. Saved in this browser.',
   appearance: 'Appearance',
+  appearanceDescription: 'How the app looks on this browser.',
   theme: 'Interface theme',
   themeDescription: 'Choose a look, or follow your device’s setting.',
   system: 'System preference',

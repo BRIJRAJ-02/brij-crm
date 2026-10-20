@@ -62,7 +62,7 @@ function SampleSettings({ page = 'objects', isLoading = false, width = 'auto' }:
                 <SettingsSection title="Names and look" description="What it’s called, and its icon and colour.">
                   <Card>Project, Projects</Card>
                 </SettingsSection>
-                <SettingsSection title="Archive">
+                <SettingsSection title="Danger zone">
                   <Card
                     title="Archive Projects"
                     description="It leaves the sidebar; its records are kept."
@@ -137,6 +137,9 @@ export const ObjectPage: Story = {
   play: async ({ canvas }) => {
     await expect(canvas.getByRole('heading', { level: 2, name: 'Projects' })).toBeInTheDocument();
     await expect(canvas.getByRole('tab', { name: 'Configuration' })).toHaveAttribute('aria-selected', 'true');
+    // Under a TopBar: the page's h2, a section's h3, and its card's h4.
+    await expect(canvas.getByRole('heading', { level: 3, name: 'Danger zone' })).toBeInTheDocument();
+    await expect(canvas.getByRole('heading', { level: 4, name: 'Archive Projects' })).toBeInTheDocument();
   },
 };
 
@@ -394,4 +397,13 @@ export const SectionsNarrow: Story = {
       </SettingsLayout>
     </Stage>
   ),
+  play: async ({ canvas }) => {
+    // Narrow slot on a wide window: the container query stacks the title above its card.
+    const heading = canvas.getByRole('heading', { level: 2, name: 'Workspace' }).getBoundingClientRect();
+    const name = canvas.getByRole('textbox', { name: 'Name' }).getBoundingClientRect();
+    const slug = canvas.getByRole('textbox', { name: 'Web address' }).getBoundingClientRect();
+    await expect(name.top).toBeGreaterThan(heading.bottom);
+    await expect(name.width).toBeGreaterThan(100);
+    await expect(slug.top).toBeGreaterThan(name.top);
+  },
 };

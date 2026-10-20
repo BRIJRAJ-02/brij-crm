@@ -7,6 +7,11 @@ export const strings = {
   title: 'Calendars',
   description: 'Connect your calendar so your meetings show on the people and companies you meet.',
   connectGoogle: 'Connect Google calendar',
+  /** The page's sections. */
+  connectionsSection: 'Connected calendars',
+  connectionsSectionText: 'Each one’s state, who sees its meetings, and which one new bookings go to.',
+  workspaceSection: 'For the workspace',
+  workspaceSectionText: 'Owners and admins choose this for every member.',
   /** Calendar sync isn't set up on this deployment. */
   offTitle: 'Calendar sync isn’t set up for this workspace',
   offText: 'Ask whoever runs Timefix for you to switch it on.',

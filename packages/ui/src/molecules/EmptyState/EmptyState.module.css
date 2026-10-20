@@ -37,6 +37,7 @@
   .text {
     max-inline-size: var(--size-measure);
     color: var(--text-secondary);
+    text-wrap: pretty;
     font: var(--text-body);
     letter-spacing: var(--tracking-body);
   }

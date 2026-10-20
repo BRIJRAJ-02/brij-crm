@@ -14,6 +14,9 @@ import {
   Modal,
   RelativeTime,
   SegmentedControl,
+  SettingsGrid,
+  SettingsRow,
+  SettingsSection,
   Skeleton,
   Switch,
 } from '@crm/ui';
@@ -153,19 +156,21 @@ export function CalendarScreen({ data, slug, view, result, onResultSeen }: Calen
     );
   } else {
     body = (
-      <>
+      <SettingsSection title={strings.connectionsSection} description={strings.connectionsSectionText}>
         {isFull && <Callout tone="info">{strings.limitReached(number.format(state.max))}</Callout>}
-        {state.connections.map((connection) => (
-          <ConnectionCard
-            key={connection.id}
-            connection={connection}
-            onSharing={(sharing) => void data.calendar.setSharing(slug, connection.id, sharing)}
-            onDefault={() => void data.calendar.makeDefault(slug, connection.id)}
-            onDisconnect={() => setDisconnecting(connection)}
-            {...(import.meta.env.DEV ? { onSyncNow: () => void data.calendar.syncNow(slug, connection.id) } : {})}
-          />
-        ))}
-      </>
+        <SettingsGrid>
+          {state.connections.map((connection) => (
+            <ConnectionCard
+              key={connection.id}
+              connection={connection}
+              onSharing={(sharing) => void data.calendar.setSharing(slug, connection.id, sharing)}
+              onDefault={() => void data.calendar.makeDefault(slug, connection.id)}
+              onDisconnect={() => setDisconnecting(connection)}
+              {...(import.meta.env.DEV ? { onSyncNow: () => void data.calendar.syncNow(slug, connection.id) } : {})}
+            />
+          ))}
+        </SettingsGrid>
+      </SettingsSection>
     );
   }
 
@@ -199,15 +204,20 @@ export function CalendarScreen({ data, slug, view, result, onResultSeen }: Calen
         </Callout>
       )}
       {body}
-      {settings.status === 'ready' && settings.canManage && (
-        <Card>
-          <Switch
-            label={strings.createPeople}
-            description={strings.createPeopleHelp}
-            isSelected={settings.createUnknownPeople}
-            onChange={(isSelected) => void data.calendar.setCreateUnknownPeople(slug, isSelected)}
-          />
-        </Card>
+      {/* Off while calendar sync isn't set up here, where it could do nothing. */}
+      {settings.status === 'ready' && settings.canManage && state.status === 'ready' && state.enabled && (
+        <SettingsSection title={strings.workspaceSection} description={strings.workspaceSectionText}>
+          <Card>
+            <SettingsRow title={strings.createPeople} description={strings.createPeopleHelp}>
+              <Switch
+                label={strings.createPeople}
+                isLabelHidden
+                isSelected={settings.createUnknownPeople}
+                onChange={(isSelected) => void data.calendar.setCreateUnknownPeople(slug, isSelected)}
+              />
+            </SettingsRow>
+          </Card>
+        </SettingsSection>
       )}
       <Modal
         title={strings.disconnectTitle}

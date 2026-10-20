@@ -203,15 +203,15 @@ export function SettingsSection({ title, description, children }: SettingsSectio
   const Heading = level === 2 ? 'h2' : 'h3';
   return (
     <section className={styles.section} aria-labelledby={headingId}>
-      <span className={styles.sectionText}>
+      <div className={styles.sectionText}>
         <Heading className={styles.sectionTitle} id={headingId}>
           {title}
         </Heading>
-        {description !== undefined && <span className={styles.description}>{description}</span>}
-      </span>
+        {description !== undefined && <p className={styles.sectionDescription}>{description}</p>}
+      </div>
       <div className={styles.sectionBody}>
         {/* The cards sit under the section's heading. */}
-        <CardTitleLevel value={3}>{children}</CardTitleLevel>
+        <CardTitleLevel value={level === 2 ? 3 : 4}>{children}</CardTitleLevel>
       </div>
     </section>
   );

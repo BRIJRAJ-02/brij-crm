@@ -165,25 +165,29 @@ export function ConfigurationTab({ slug, object }: ConfigurationTabProps) {
               {...(canManage ? {} : { readOnlyReason: strings.readOnlyNote })}
             />
             <ObjectHueField hue={hue} onChange={setHue} isReadOnly={!canManage} />
-            <Field
-              label={strings.apiName}
-              value={object.apiSlug}
-              isReadOnly
-              readOnlyReason={strings.apiNameLocked}
-              suffix={<CopyButton value={object.apiSlug} label={strings.copyApiName} isIconOnly variant="ghost" />}
-            />
-            <Field
-              label={strings.objectId}
-              value={object.id}
-              isReadOnly
-              readOnlyReason={strings.objectIdReason}
-              suffix={<CopyButton value={object.id} label={strings.copyObjectId} isIconOnly variant="ghost" />}
-            />
           </Form>
         </Card>
       </SettingsSection>
+      <SettingsSection title={strings.idsSection} description={strings.idsSectionText}>
+        <Card>
+          <Field
+            label={strings.apiName}
+            value={object.apiSlug}
+            isReadOnly
+            readOnlyReason={strings.apiNameLocked}
+            suffix={<CopyButton value={object.apiSlug} label={strings.copyApiName} isIconOnly variant="ghost" />}
+          />
+          <Field
+            label={strings.objectId}
+            value={object.id}
+            isReadOnly
+            readOnlyReason={strings.objectIdReason}
+            suffix={<CopyButton value={object.id} label={strings.copyObjectId} isIconOnly variant="ghost" />}
+          />
+        </Card>
+      </SettingsSection>
       {canManage && (
-        <SettingsSection title={strings.dangerZone}>
+        <SettingsSection title={object.isArchived ? strings.restoreZone : strings.dangerZone}>
           {object.isArchived ? (
             <Card
               title={strings.dangerRestore(object.pluralName)}

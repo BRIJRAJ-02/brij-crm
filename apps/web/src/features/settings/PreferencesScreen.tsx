@@ -30,7 +30,7 @@ export function PreferencesScreen({ theme }: PreferencesScreenProps) {
   );
   return (
     <SettingsPage title={strings.title} description={strings.description}>
-      <SettingsSection title={strings.appearance}>
+      <SettingsSection title={strings.appearance} description={strings.appearanceDescription}>
         <Card>
           <SettingsRow title={strings.theme} description={strings.themeDescription}>
             <Select

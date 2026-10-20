@@ -135,9 +135,11 @@
     border-block-start: var(--border-width-hairline) solid var(--border-subtle);
   }
 
+  /* Never wider than a column's most, so a description keeps a readable line on a wide page. */
   .rowText {
     display: flex;
     flex: 1 1 var(--size-measure);
+    max-inline-size: var(--size-column-max);
     flex-direction: column;
     gap: var(--space-2);
     min-inline-size: 0;
@@ -180,8 +182,15 @@
   .sectionTitle {
     margin: 0;
     color: var(--text);
-    font: var(--text-body-strong);
-    letter-spacing: var(--tracking-body-strong);
+    font: var(--text-title);
+    letter-spacing: var(--tracking-title);
+  }
+
+  .sectionDescription {
+    margin: 0;
+    color: var(--text-secondary);
+    font: var(--text-body);
+    letter-spacing: var(--tracking-body);
   }
 
   .sectionBody {
@@ -214,6 +223,11 @@
     .nav {
       border-block-end: var(--border-width-hairline) solid var(--border-subtle);
       border-inline-end: none;
+    }
+
+    /* A narrow slot on a wide window: the title above the cards, whatever the window's width. */
+    .section {
+      grid-template-columns: minmax(0, 1fr);
     }
   }
 }
