@@ -28,9 +28,7 @@
     cursor: pointer;
     scroll-snap-align: start;
     -webkit-tap-highlight-color: transparent;
-    transition:
-      background-color var(--duration-hover) var(--ease-hover),
-      scale var(--duration-press) var(--ease-out);
+    transition: background-color var(--duration-hover) var(--ease-hover);
   }
 
   .day[aria-pressed='true'] {
@@ -58,10 +56,6 @@
     outline-offset: var(--border-width-hairline);
   }
 
-  .day:active {
-    scale: var(--scale-press);
-  }
-
   .weekday {
     font: var(--text-label-strong);
     letter-spacing: var(--tracking-label-strong);
@@ -87,12 +81,6 @@
 
     .day[aria-pressed='true'] {
       outline: var(--border-width-thick) solid Highlight;
-    }
-  }
-
-  @media (prefers-reduced-motion: reduce) {
-    .day:active {
-      scale: none;
     }
   }
 }

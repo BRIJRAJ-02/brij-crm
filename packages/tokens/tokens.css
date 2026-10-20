@@ -1,4 +1,4 @@
-/* Generated from tokens.json (artifact version 1792482669-9e73) by packages/tokens/scripts/generate.ts. Do not edit. */
+/* Generated from tokens.json (artifact version 1792482745-f8ed) by packages/tokens/scripts/generate.ts. Do not edit. */
 
 @layer tokens {
   :root,
@@ -327,8 +327,8 @@
     --opacity-disabled: 0.5;
     --opacity-busy: 0.7;
     --opacity-pulse: 0.45;
-    --scale-press: 0.97;
-    --scale-press-sm: 0.92;
+    --scale-press: 1;
+    --scale-press-sm: 1;
     --scale-enter: 0.97;
     --scale-shrunk: 0.5;
     --border-width-hairline: 1px;

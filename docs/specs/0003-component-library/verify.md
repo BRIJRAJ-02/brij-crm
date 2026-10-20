@@ -5,7 +5,7 @@ _Steps derived from spec 0003's acceptance criteria and its Value sourcing table
 
 ### UI / manual
 - [ ] `pnpm storybook` → Storybook opens on :6006 with Atoms (Button, Icon, Kbd, Spinner) and Provider (Toasts). Switch the toolbar's Theme to Dark and Language to Deutsch → the stories redraw in dark, with no errors in the console → AC-6, AC-11
-- [ ] In Storybook, Tab into Atoms/Button/Keyboard → the focus ring shows only for the keyboard; a mouse press shows no ring and scales the button to 0.97 while held → AC-6, AC-10
+- [ ] In Storybook, Tab into Atoms/Button/Keyboard → the focus ring shows only for the keyboard; a mouse press shows no ring and no shrink (the owner dropped the press scale on 20 Oct 2026) → AC-6, AC-10
 - [ ] Turn on the OS's reduce motion setting, press and hold a button → it no longer scales; the Pending spinner pulses instead of turning → AC-10
 - [ ] With Storybook running, run `/mcp` in Claude Code → `storybook` is connected, and its tools list stories and previews → AC-15
 - [ ] Open the design system artifact after the publish → Button, Icon, Kbd and Spinner render live on React 19 in light and dark, with their READMEs; the other cards show their guidance without a live preview until their milestone → AC-17

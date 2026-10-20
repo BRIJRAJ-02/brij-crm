@@ -29,19 +29,13 @@
   .choice {
     border-radius: var(--radius-xs);
     outline: none;
-    transition:
-      color var(--duration-hover) var(--ease-hover),
-      scale var(--duration-press) var(--ease-out);
+    transition: color var(--duration-hover) var(--ease-hover);
   }
 
   @media (hover: hover) and (pointer: fine) {
     .choice[data-hovered] {
       color: var(--accent);
     }
-  }
-
-  .choice[data-pressed] {
-    scale: var(--scale-press-sm);
   }
 
   .choice[data-focus-visible] {
@@ -64,12 +58,6 @@
 
   .root[data-disabled] {
     opacity: var(--opacity-disabled);
-  }
-
-  @media (prefers-reduced-motion: reduce) {
-    .choice[data-pressed] {
-      scale: none;
-    }
   }
 
   @media (forced-colors: active) {

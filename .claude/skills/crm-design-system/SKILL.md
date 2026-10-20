@@ -50,7 +50,7 @@ Use those numbers through their tokens, never as literals.
    - **Curves:** `ease-out` for enter and exit, the ease in out curve for movement, the drawer curve for side panels, and `ease-hover` for hover colour.
    - **Durations:** press 160ms, menus 180ms, sliding indicators 200ms, dialogs 240ms, and exits a faster 120ms. Always use the `duration-*` tokens; `duration-fast`, `duration-base` and `ease-standard` were renamed in version 8 and must not be used.
    - **Behaviour:**
-     - Buttons scale to 0.97 while pressed.
+     - Nothing shrinks on press (owner, 20 Oct 2026): `scale-press` is 1, and no component adds a press scale.
      - Menus grow from their trigger, dialogs from the centre, and toasts rise from below.
      - Tab and segment indicators slide.
      - Anything opened from the keyboard, including ⌘K, appears instantly.

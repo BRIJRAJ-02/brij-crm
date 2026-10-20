@@ -54,8 +54,7 @@
     box-shadow: var(--shadow-xs);
     transition:
       background-color var(--duration-hover) var(--ease-hover),
-      border-color var(--duration-hover) var(--ease-hover),
-      scale var(--duration-press) var(--ease-out);
+      border-color var(--duration-hover) var(--ease-hover);
   }
 
   .dot {
@@ -85,10 +84,6 @@
     .radio[data-hovered]:not([data-selected], [data-disabled]) .circle {
       border-color: var(--text-secondary);
     }
-  }
-
-  .radio[data-pressed] .circle {
-    scale: var(--scale-press-sm);
   }
 
   .radio[data-focus-visible] .circle {
@@ -130,8 +125,7 @@
   }
 
   @media (prefers-reduced-motion: reduce) {
-    .dot,
-    .radio[data-pressed] .circle {
+    .dot {
       scale: none;
     }
   }

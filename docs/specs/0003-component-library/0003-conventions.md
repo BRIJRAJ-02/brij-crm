@@ -116,7 +116,7 @@ Milestones 1 and 2 drew some sizes from tokens meant for other things (`size-sid
 - Values come from tokens:
   - Durations: `duration-press` 160 ms, `duration-popover` 180 ms, `duration-move` 200 ms, `duration-modal` 240 ms, `duration-exit` 120 ms.
   - Curves: `ease-out`, `ease-in-out`, `ease-drawer`, `ease-hover`.
-  - Scales: `scale-press` 0.97 and the popover start scale.
+  - Scales: `scale-press` 1 (no press shrink, owner 20 Oct 2026) and the popover start scale.
 - Origins: menus and popovers grow from their trigger (React Aria's `--trigger-anchor-point` variable gives the transform origin), dialogs from the centre, and toasts rise from below.
 - Tooltips open after 500 ms of resting (a constant in `packages/ui`, as the toast timing is). While one is showing, the next opens at once, and keyboard focus opens it at once.
 - Opened by keyboard means instant. Triggers record React Aria's interaction modality when an overlay opens (`getInteractionModality()`) as `data-opened-by="keyboard"`, and the module skips the animation for it. This includes ⌘K.

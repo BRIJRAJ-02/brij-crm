@@ -27,8 +27,7 @@
     transition:
       background-color var(--duration-hover) var(--ease-hover),
       border-color var(--duration-hover) var(--ease-hover),
-      color var(--duration-hover) var(--ease-hover),
-      scale var(--duration-press) var(--ease-out);
+      color var(--duration-hover) var(--ease-hover);
   }
 
   .label {
@@ -148,10 +147,6 @@
     }
   }
 
-  .root[data-pressed] {
-    scale: var(--scale-press);
-  }
-
   .root[data-focus-visible] {
     border-color: var(--accent-line);
     box-shadow: var(--shadow-focus);
@@ -250,12 +245,6 @@
   .group > .root[data-focus-visible] {
     position: relative;
     z-index: var(--z-raised);
-  }
-
-  @media (prefers-reduced-motion: reduce) {
-    .root[data-pressed] {
-      scale: none;
-    }
   }
 
   @media (forced-colors: active) {

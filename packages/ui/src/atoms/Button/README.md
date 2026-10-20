@@ -40,7 +40,7 @@ Props: `children` (the label, a string) or `icon` with `label` (icon only); `ico
 ## States
 
 - **Hover**: `surface-hover` (the primary darkens to `accent-hover`), only on devices that can hover.
-- **Pressed**: scales to 0.97 (`scale-press`, `duration-press`, `ease-out`), so a click is felt before anything else happens. Reduced motion drops the scale.
+- **Pressed**: no shrink (the owner, 20 October 2026); a press reads through the hover and active colours. `scale-press` is 1, so nothing in the library scales on press.
 - **Focus**: from the keyboard only, a 1px `accent-line` border (3:1 on every surface) plus the faint `shadow-focus` halo. Primary and danger keep their edge (blue, red), so their 1px `accent-line` ring sits just outside, past a 1px gap. In forced colours, a 2px `Highlight` outline.
 - **Disabled**: at `opacity-disabled`, skipped by Tab, never pressed. When a line beside it says why or until when, `aria-describedby` ties that line to it.
 - **Pending** (`isPending`): a spinner in place of the icon, presses ignored, still focusable, at `opacity-busy`. Screen readers hear the change. Change the label to the ongoing verb ("Saving").

@@ -31,7 +31,6 @@
     border: var(--border-width-hairline) solid;
     border-radius: var(--radius-sm);
     outline: none;
-    transition: scale var(--duration-press) var(--ease-out);
   }
 
   .swatch[data-hue='gray'] {
@@ -92,10 +91,6 @@
     box-shadow: var(--shadow-focus);
   }
 
-  .swatch[data-pressed] {
-    scale: var(--scale-press-sm);
-  }
-
   .swatch[data-focus-visible] {
     outline: var(--border-width-thick) solid var(--accent);
     outline-offset: var(--border-width-thick);
@@ -108,12 +103,6 @@
 
   .swatch[data-disabled] {
     opacity: var(--opacity-disabled);
-  }
-
-  @media (prefers-reduced-motion: reduce) {
-    .swatch[data-pressed] {
-      scale: none;
-    }
   }
 
   @media (forced-colors: active) {

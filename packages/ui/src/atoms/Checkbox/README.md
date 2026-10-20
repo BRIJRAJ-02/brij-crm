@@ -21,7 +21,7 @@ Ported from the artifact's Checkbox card (version 8). Forms, settings, table sel
 
 ## States
 
-Unchecked, checked, indeterminate, hover (pointer only), focus, pressed (scales to `scale-press-sm`), invalid, read only, disabled. The mark has unchecked, checked, indeterminate and read only; whatever holds it draws the focus.
+Unchecked, checked, indeterminate, hover (pointer only), focus, pressed (no shrink, owner 20 Oct 2026), invalid, read only, disabled. The mark has unchecked, checked, indeterminate and read only; whatever holds it draws the focus.
 
 ## Keyboard
 

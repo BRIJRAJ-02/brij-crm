@@ -34,8 +34,7 @@
     color: var(--on-accent);
     transition:
       background-color var(--duration-hover) var(--ease-hover),
-      border-color var(--duration-hover) var(--ease-hover),
-      scale var(--duration-press) var(--ease-out);
+      border-color var(--duration-hover) var(--ease-hover);
   }
 
   /* The edge is accent-line, which holds 3:1 on selected rows too. */
@@ -49,10 +48,6 @@
     .root[data-hovered]:not([data-selected], [data-indeterminate], [data-disabled]) .box {
       border-color: var(--text-secondary);
     }
-  }
-
-  .root[data-pressed] .box {
-    scale: var(--scale-press-sm);
   }
 
   .root[data-focus-visible] .box {
@@ -100,12 +95,6 @@
     color: var(--danger);
     font: var(--text-label);
     letter-spacing: var(--tracking-label);
-  }
-
-  @media (prefers-reduced-motion: reduce) {
-    .root[data-pressed] .box {
-      scale: none;
-    }
   }
 
   @media (forced-colors: active) {

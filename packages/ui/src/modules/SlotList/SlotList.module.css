@@ -103,8 +103,7 @@
     transition:
       border-color var(--duration-hover) var(--ease-hover),
       background-color var(--duration-hover) var(--ease-hover),
-      flex-grow var(--duration-move) var(--ease-out),
-      scale var(--duration-press) var(--ease-out);
+      flex-grow var(--duration-move) var(--ease-out);
   }
 
   .slot[aria-pressed='true'] {
@@ -121,10 +120,6 @@
   .slot:focus-visible {
     outline: var(--border-width-thick) solid var(--accent-line);
     outline-offset: var(--border-width-hairline);
-  }
-
-  .slot:active {
-    scale: var(--scale-press);
   }
 
   .time {
@@ -167,10 +162,6 @@
   @media (prefers-reduced-motion: reduce) {
     .item {
       animation-name: slot-fade;
-    }
-
-    .slot:active {
-      scale: none;
     }
   }
 
