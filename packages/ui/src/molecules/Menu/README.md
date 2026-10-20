@@ -32,6 +32,8 @@ Ported from the artifact's Menu card. Every dropdown of actions or choices in th
 - **Choices**: `selectionMode="single"` or `"multiple"` shows checks; `selectedKeys` and `onSelectionChange` hold the choice.
 - **Search**: `search={{ label: 'Search attributes' }}` puts a field above the items and filters them here. With `onSearch`, the caller searches (async) and sends back new items. `isFirstUnfocused` leaves the first item unfocused while typing: a lone "Create" item (spec 0012), which one Enter shouldn't choose. Why a variant: the select editor's Create is the one item an Enter must not reach by accident.
 - **Long lists**: `items` with `isVirtualized` draws only the rows on screen; `source` (a `ListSource`) does the same for lists loaded from outside, with skeleton rows until each loads (AC-9). Rows are `size-nav-item` tall, read from tokens.json.
+- `header` is a row above the search and the items, apart from them, so typing never filters it: a record search's object, "Search in People" (spec 0019). Why a slot: a task's record picker searches one object at a time, and the choice belongs inside the picker, not as a second control beside its field (the owner's call, 20 October 2026).
+- `anchorRef` lines the popover up with another element than its trigger, and takes that element's width with `width="trigger"`: a picker's whole field box, whose button fills only the room its chips leave.
 - `width`: `menu` (240px, or the trigger's width) or `trigger` (exactly the trigger's width).
 - `isInline` draws the menu in place, with no popover (inside a palette).
 - Inside a `MenuTrigger`, React Aria names the menu after its trigger; `label` is its name when inline.

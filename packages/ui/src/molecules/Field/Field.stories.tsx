@@ -80,30 +80,78 @@ export const ErrorReplacesHint: Story = {
   },
 };
 
-function Counted() {
+function Counted({ label, maxLength }: { readonly label: string; readonly maxLength: number }) {
   const [value, setValue] = useState('Met at SaaStr. Interested in the API.');
   return (
     <Field
-      label="Description"
+      label={label}
       isMultiline
-      maxLength={500}
+      maxLength={maxLength}
       showCounter
       value={value}
       onChange={setValue}
-      placeholder="Set Description…"
+      placeholder={`Set ${label}…`}
     />
   );
 }
 
-/** Long text: a textarea that grows, with a counter. */
+/** Long text: a textarea that grows. Its count shows only once the text nears the limit. */
 export const Multiline: Story = {
   render: () => (
-    <Stage width="narrow">
-      <Counted />
+    <Stage direction="column" width="narrow">
+      <Counted label="Description" maxLength={500} />
+      <Counted label="Summary" maxLength={40} />
     </Stage>
   ),
   play: async ({ canvas }) => {
-    await expect(canvas.getByText('37/500')).toBeInTheDocument();
+    await expect(canvas.queryByText('37/500')).toBeNull();
+    await expect(canvas.getByText('37/40')).toBeInTheDocument();
+  },
+};
+
+function Wrapping() {
+  const [value, setValue] = useState('Send the renewal proposal');
+  const [submitted, setSubmitted] = useState('');
+  return (
+    <>
+      <Field
+        label="Title"
+        isWrapping
+        maxLength={2000}
+        showCounter
+        value={value}
+        onChange={setValue}
+        onSubmit={() => {
+          setSubmitted(value);
+        }}
+      />
+      <Field
+        label="Long title"
+        isWrapping
+        defaultValue="Send the renewal proposal with the new pricing tiers, the security review answers and the case study"
+      />
+      <output>{submitted}</output>
+    </>
+  );
+}
+
+/** A one line value that wraps (a task's title): one line tall, a line more as it wraps, and Enter submits. */
+export const Wraps: Story = {
+  render: () => (
+    <Stage direction="column" width="narrow">
+      <Wrapping />
+    </Stage>
+  ),
+  play: async ({ canvas, userEvent }) => {
+    const title = canvas.getByRole('textbox', { name: 'Title' });
+    const long = canvas.getByRole('textbox', { name: 'Long title' });
+    // One line tall, and the long one taller as it wraps.
+    await expect(long.getBoundingClientRect().height).toBeGreaterThan(title.getBoundingClientRect().height);
+    await userEvent.click(title);
+    await userEvent.keyboard('{End} today{Enter}');
+    await expect(title).toHaveValue('Send the renewal proposal today');
+    await expect(canvas.getByText('Send the renewal proposal today', { selector: 'output' })).toBeInTheDocument();
+    await expect(canvas.queryByText(/\/2,000/)).toBeNull();
   },
 };
 

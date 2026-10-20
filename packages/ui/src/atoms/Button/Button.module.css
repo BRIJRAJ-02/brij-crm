@@ -66,6 +66,27 @@
     block-size: var(--size-input);
   }
 
+  /* A chip's height, for an icon only Remove beside a chip inside a field's box. */
+  .root[data-size='sm'] {
+    position: relative;
+    block-size: var(--size-chip);
+    padding-inline: var(--space-4);
+    border-radius: var(--radius-sm);
+  }
+
+  /* Drawn at a chip's size, pressed at 24px (WCAG 2.5.8), and wider still under a finger. */
+  .root[data-size='sm']::after {
+    position: absolute;
+    inset: calc(-1 * var(--space-2));
+    content: '';
+  }
+
+  @media (pointer: coarse) {
+    .root[data-size='sm']::after {
+      inset: calc(-1 * var(--space-6)) calc(-1 * var(--space-4));
+    }
+  }
+
   .root[data-icon-only] {
     inline-size: var(--size-control);
     padding-inline: 0;
@@ -73,6 +94,10 @@
 
   .root[data-icon-only][data-size='lg'] {
     inline-size: var(--size-input);
+  }
+
+  .root[data-icon-only][data-size='sm'] {
+    inline-size: var(--size-chip);
   }
 
   /* Variants */

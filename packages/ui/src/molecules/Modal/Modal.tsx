@@ -50,6 +50,12 @@ export interface ModalProps {
   readonly icon?: IconName;
   /** A window's header detail after the title: the record or list it works on. */
   readonly context?: ReactNode;
+  /**
+   * Quiet icon buttons in the title bar, before Close, each with its Tooltip
+   * (a task's Copy link): actions about the thing the dialog shows, which a
+   * footer band holding only them would make heavy.
+   */
+  readonly headerActions?: ReactNode;
   /** `danger` makes it an alert dialog that asks before something destructive; a click outside won't close it. */
   readonly tone?: 'default' | 'danger';
   /**
@@ -81,6 +87,7 @@ export function Modal({
   variant = 'dialog',
   icon,
   context,
+  headerActions,
   tone = 'default',
   isDismissable = true,
   isBusy = false,
@@ -127,6 +134,7 @@ export function Modal({
             {/* Every dialog but the palette and an alert has the close button in its title bar. */}
             {variant !== 'palette' && !isAlert && (
               <span className={styles.close}>
+                {headerActions}
                 <Button slot="close" variant="ghost" icon="x" label={strings.close} isDisabled={isBusy} />
               </span>
             )}

@@ -15,6 +15,12 @@ export interface RecordChipProps {
   readonly href?: string;
   /** Grey with no edge, for dense places (board cards, the timeline). */
   readonly isFlat?: boolean;
+  /**
+   * No edge and no fill: the avatar and the name as text, for who did
+   * something at the start of a line (the timeline's actor), where a pill
+   * read heavier than what they did.
+   */
+  readonly isPlain?: boolean;
 }
 
 const ACTOR_ICONS: Readonly<Record<'api_key' | 'automation' | 'system' | 'form' | 'booking', IconName>> = {
@@ -69,7 +75,8 @@ function Face({ display }: { readonly display: RecordRefDisplay | ActorDisplay }
  * system) as a chip with its avatar or icon. It is the one display for record
  * and actor references.
  */
-export function RecordChip({ display, href, isFlat = false }: RecordChipProps) {
+export function RecordChip({ display, href, isFlat = false, isPlain = false }: RecordChipProps) {
+  const look = { 'data-flat': (isFlat && !isPlain) || undefined, 'data-plain': isPlain || undefined };
   const name = !isRecord(display) && display.type === 'system' ? strings.system : display.name;
   const content = (
     <>
@@ -82,13 +89,13 @@ export function RecordChip({ display, href, isFlat = false }: RecordChipProps) {
   const safe = safeHref(href);
   if (safe === undefined) {
     return (
-      <span className={styles.root} data-flat={isFlat || undefined}>
+      <span className={styles.root} {...look}>
         {content}
       </span>
     );
   }
   return (
-    <AriaLink className={styles.root} href={safe} data-flat={isFlat || undefined}>
+    <AriaLink className={styles.root} href={safe} {...look}>
       {content}
     </AriaLink>
   );

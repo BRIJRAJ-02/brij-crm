@@ -8,6 +8,9 @@ import { useFormatSettings } from '../../provider/context.ts';
 import styles from './Field.module.css';
 import { strings } from './strings.ts';
 
+/** How far toward `maxLength` the text goes before the counter shows: until then a count is only noise. */
+export const COUNTER_FROM = 0.9;
+
 /** `md` (the default) is the 30px input of forms and panels; `sm` is the 26px of a cell editor or a toolbar. */
 export type FieldSize = 'md' | 'sm';
 
@@ -44,8 +47,15 @@ export interface FieldProps {
   readonly icon?: IconName;
   /** A textarea that grows with its content (long text). */
   readonly isMultiline?: boolean;
-  /** Shows "12/500" and stops typing at `maxLength`. */
+  /**
+   * A one line value that wraps as it grows (a task's title): one line tall
+   * at rest, growing a line at a time; Enter calls `onSubmit` rather than
+   * breaking the line, and a pasted line break becomes a space.
+   */
+  readonly isWrapping?: boolean;
+  /** Stops typing at `maxLength`. */
   readonly maxLength?: number;
+  /** Counts toward `maxLength` ("1,812/2,000"), shown once the text is near it (`COUNTER_FROM` of the way). */
   readonly showCounter?: boolean;
   readonly isReadOnly?: boolean;
   /** Why it is read only, shown as the hint ("Set by the system when the record is created."). */
@@ -105,6 +115,7 @@ export function Field({
   suffix,
   icon,
   isMultiline = false,
+  isWrapping = false,
   maxLength,
   showCounter = false,
   isReadOnly: isReadOnlyGiven = false,
@@ -150,6 +161,10 @@ export function Field({
       view.removeEventListener('resize', place);
     };
   }, [isErrorFloating, error]);
+  const isTextArea = isMultiline || isWrapping;
+  // The limit, once the text is near enough to it that a count helps.
+  const countedMax =
+    showCounter && maxLength !== undefined && length >= maxLength * COUNTER_FROM ? maxLength : undefined;
   const inputProps = {
     className: styles.input,
     ...(placeholder === undefined ? {} : { placeholder }),
@@ -166,6 +181,8 @@ export function Field({
           },
         }
       : {}),
+    // A wrapping field starts one line tall; its CSS grows it with its text.
+    ...(isWrapping ? { rows: 1 } : {}),
   };
   return (
     <TextField
@@ -186,13 +203,27 @@ export function Field({
       {...(isLabelHidden ? { 'aria-label': label } : {})}
       {...(value === undefined ? {} : { value })}
       {...(defaultValue === undefined ? {} : { defaultValue })}
-      {...(onChange === undefined ? {} : { onChange })}
+      {...(onChange === undefined
+        ? {}
+        : {
+            // A wrapping field holds one line: a pasted line break joins the lines with a space.
+            onChange: isWrapping
+              ? (next: string) => {
+                  onChange(next.replace(/\s*[\r\n]+\s*/g, ' '));
+                }
+              : onChange,
+          })}
       {...(onBlur === undefined ? {} : { onBlur })}
-      {...(onSubmit === undefined && onEscape === undefined
+      {...(onSubmit === undefined && onEscape === undefined && !isWrapping
         ? {}
         : {
             onKeyDown: (event) => {
-              if (event.key === 'Enter' && !isMultiline && onSubmit !== undefined) onSubmit();
+              // Enter that ends an input method's composition (a CJK word) is not a submit.
+              if (event.key === 'Enter' && isWrapping && !event.nativeEvent.isComposing) {
+                // Never a line break in a one line value: Enter submits, as in a single line field.
+                event.preventDefault();
+                onSubmit?.();
+              } else if (event.key === 'Enter' && !isMultiline && onSubmit !== undefined) onSubmit();
               else if (event.key === 'Escape' && onEscape !== undefined) onEscape();
               else event.continuePropagation();
             },
@@ -209,10 +240,14 @@ export function Field({
         return (
           <>
             {!isLabelHidden && <Label className={styles.label}>{label}</Label>}
-            <span className={styles.box} data-multiline={isMultiline || undefined}>
+            <span
+              className={styles.box}
+              data-multiline={isMultiline || undefined}
+              data-wrapping={(isWrapping && !isMultiline) || undefined}
+            >
               {leading !== undefined && <Icon name={leading} size="sm" tone="muted" />}
               {prefix !== undefined && <span className={styles.prefix}>{prefix}</span>}
-              {isMultiline ? <TextArea {...inputProps} /> : <Input {...inputProps} />}
+              {isTextArea ? <TextArea {...inputProps} /> : <Input {...inputProps} />}
               {isReadOnly && !isCopy && (
                 <span className={styles.lock}>
                   <Icon name="lock" size="xs" label={strings.readOnly} />
@@ -230,7 +265,7 @@ export function Field({
                 </span>
               )}
             </span>
-            {(description !== undefined || (showCounter && maxLength !== undefined)) && (
+            {(description !== undefined || countedMax !== undefined) && (
               <span className={styles.foot}>
                 {description !== undefined && (
                   <Text
@@ -243,11 +278,11 @@ export function Field({
                     {description}
                   </Text>
                 )}
-                {showCounter && maxLength !== undefined && (
+                {countedMax !== undefined && (
                   <span className={styles.counter} aria-hidden="true">
                     {strings.counter(
                       new Intl.NumberFormat(locale).format(length),
-                      new Intl.NumberFormat(locale).format(maxLength),
+                      new Intl.NumberFormat(locale).format(countedMax),
                     )}
                   </span>
                 )}

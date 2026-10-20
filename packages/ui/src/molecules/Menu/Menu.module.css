@@ -1,7 +1,8 @@
 /* Menu: 28px items (size-nav-item) with a 14px icon, inside the popover's
    4px inset. The focused item (keyboard or pointer) takes surface-hover; a
    destructive item is in the danger colour. A searchable menu puts its field
-   above the list, under a hairline. */
+   above the list, under a hairline, and a header row (a record search's
+   object) above that. */
 @layer components {
   .menu {
     box-sizing: border-box;
@@ -12,10 +13,11 @@
     outline: none;
   }
 
-  /* A virtualised list needs a bounded scroll box (ten rows) with no padding:
-     React Aria's layout places every row itself. */
+  /* A virtualised list needs a bounded scroll box (at most ten rows, fewer
+     when fewer results came back, so one result never sits in an empty
+     panel) with no padding: React Aria's layout places every row itself. */
   .menu[data-virtualized] {
-    block-size: calc(var(--size-nav-item) * 10);
+    max-block-size: calc(var(--size-nav-item) * 10);
     padding: 0;
   }
 
@@ -121,6 +123,20 @@
     display: flex;
     flex-direction: column;
     max-block-size: inherit;
+  }
+
+  /* A row above the search (a record search's object), under its own hairline. */
+  .header {
+    display: flex;
+    flex: none;
+    align-items: center;
+    gap: var(--space-6);
+    min-block-size: var(--size-nav-item);
+    padding-inline: var(--space-12);
+    border-block-end: var(--border-width-hairline) solid var(--border-subtle);
+    color: var(--text-secondary);
+    font: var(--text-label);
+    letter-spacing: var(--tracking-label);
   }
 
   .search {

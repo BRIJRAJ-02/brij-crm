@@ -18,8 +18,8 @@ import styles from './Button.module.css';
 /** `secondary` (the default) for view controls and Cancel, `primary` for the one action that commits, `danger` for a control that starts a destructive action (Delete in a bar, Archive in settings), `danger-solid` for the final commit that destroys (Delete in a confirm), `ghost` for quiet and undo style actions, `ghost-danger` for a quiet icon button that deletes at once with an Undo (red only under the pointer or focus), `dashed` for "add a condition". */
 export type ButtonVariant = 'secondary' | 'primary' | 'danger' | 'danger-solid' | 'ghost' | 'ghost-danger' | 'dashed';
 
-/** `md` is the 26px control height; `lg` matches a 30px input beside it. */
-export type ButtonSize = 'md' | 'lg';
+/** `md` is the 26px control height; `lg` matches a 30px input beside it; `sm` is a chip's 20px, for an icon only Remove beside a chip inside a field. */
+export type ButtonSize = 'sm' | 'md' | 'lg';
 
 interface ButtonLook {
   readonly variant?: ButtonVariant;
@@ -145,7 +145,7 @@ function Face({ face, look, isPending }: { face: ButtonFace; look: ButtonLook; i
       {isPending ? (
         <Spinner />
       ) : face.icon !== undefined ? (
-        <Icon name={face.icon} size="sm" />
+        <Icon name={face.icon} size={look.size === 'sm' ? 'xs' : 'sm'} />
       ) : (
         face.provider !== undefined && <ProviderMark provider={face.provider} size={look.size === 'lg' ? 'md' : 'sm'} />
       )}

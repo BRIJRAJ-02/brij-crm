@@ -24,7 +24,7 @@ New. Truncated text, exact times, icon only buttons and disabled reasons all nee
 
 ## LockReason
 
-`<LockReason reason="…" />` is a quiet lock button whose name is the reason, with the reason in this tooltip. Put it beside anything that can't change (a computed value, a locked card, a task you can't tick), so the reason is reachable by keyboard as well as by pointer.
+`<LockReason reason="…" />` is a quiet lock button whose name is the reason, with the reason in this tooltip. Put it beside anything that can't change (a computed value, a locked card, a task you can't tick), so the reason is reachable by keyboard as well as by pointer. `size="sm"` is a chip's 20px with a smaller lock, for beside an 11px label: a read only attribute's name in a record's details, where a full size button after the value read as a loose icon.
 
 ## States
 

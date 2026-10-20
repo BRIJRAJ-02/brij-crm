@@ -48,6 +48,16 @@ export const Flat: Story = {
   args: { isFlat: true },
 };
 
+/** Plain: the avatar and the name as text, for the timeline's actor at the start of a line. */
+export const Plain: Story = {
+  args: { display: { type: 'member', id: 'm1', name: 'Ada Lovelace', hue: 'orange' }, isPlain: true },
+  play: async ({ canvas }) => {
+    const chip = canvas.getByText('Ada Lovelace').parentElement;
+    if (chip === null) throw new Error('no chip');
+    await expect(getComputedStyle(chip).backgroundColor).toBe('rgba(0, 0, 0, 0)');
+  },
+};
+
 /** A long name is cut inside a narrow slot. */
 export const Long: Story = {
   render: (args) => (

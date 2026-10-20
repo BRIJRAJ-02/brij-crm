@@ -1,4 +1,4 @@
-import { useMemo, type ReactElement, type ReactNode } from 'react';
+import { useMemo, type ReactElement, type ReactNode, type RefObject } from 'react';
 import {
   Autocomplete,
   Header,
@@ -130,6 +130,18 @@ interface MenuLook {
   readonly placement?: PopoverPlacement;
   /** Draws the menu in place, with no popover (inside a palette or a panel). */
   readonly isInline?: boolean;
+  /**
+   * A row above the search and the items, apart from them: a record search's
+   * object ("Search in People", spec 0019). It sits outside the search, so
+   * typing never filters it.
+   */
+  readonly header?: ReactNode;
+  /**
+   * What the popover lines up with and takes its width from, when that isn't
+   * the trigger: a picker's whole field box, whose button fills only the room
+   * its chips leave.
+   */
+  readonly anchorRef?: RefObject<Element | null>;
 }
 
 /** Props for Menu: static MenuItems as children, items with a render function, or a ListSource for long and async lists. */
@@ -191,6 +203,7 @@ function sourceKey<T>(source: ListSource<T> | undefined, key: MenuKey): MenuKey 
 export function Menu<T extends object>(props: MenuProps<T>) {
   const { label, onAction, selectionMode, selectedKeys, defaultSelectedKeys, onSelectionChange, disabledKeys } = props;
   const { search, emptyLabel = strings.noResults, width = 'menu', placement, isInline = false } = props;
+  const { header, anchorRef } = props;
   const { contains } = useFilter({ sensitivity: 'base' });
   const onShown = useRangeReporter(props.source);
   const count = props.source?.count ?? 0;
@@ -296,10 +309,23 @@ export function Menu<T extends object>(props: MenuProps<T>) {
       </div>
     );
 
-  if (isInline) return content;
+  const body =
+    header === undefined ? (
+      content
+    ) : (
+      <div className={styles.searchable}>
+        <div className={styles.header}>{header}</div>
+        {content}
+      </div>
+    );
+  if (isInline) return body;
   return (
-    <Popover width={width} {...(placement === undefined ? {} : { placement })}>
-      {content}
+    <Popover
+      width={width}
+      {...(placement === undefined ? {} : { placement })}
+      {...(anchorRef === undefined ? {} : { triggerRef: anchorRef })}
+    >
+      {body}
     </Popover>
   );
 }

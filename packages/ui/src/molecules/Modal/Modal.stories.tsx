@@ -4,6 +4,7 @@ import { expect, waitFor } from 'storybook/test';
 import { Button } from '../../atoms/Button/Button.tsx';
 import { Checkbox } from '../../atoms/Checkbox/Checkbox.tsx';
 import { RecordChip } from '../../atoms/RecordChip/RecordChip.tsx';
+import { Tooltip } from '../../atoms/Tooltip/Tooltip.tsx';
 import { Stage } from '../../workbench/Stage/Stage.tsx';
 import { Field } from '../Field/Field.tsx';
 import { Form } from '../Form/Form.tsx';
@@ -217,5 +218,33 @@ export const Busy: Story = {
   play: async () => {
     const dialog = await openDialog();
     await expect(dialog.querySelector('button[aria-label="Close"]')).toHaveAttribute('disabled');
+  },
+};
+
+/** An action about what the dialog shows (a task's Copy link) sits in the title bar before Close, with its tooltip. */
+export const HeaderActions: Story = {
+  render: () => (
+    <Stage>
+      <Modal
+        title="Task"
+        isOpen
+        headerActions={
+          <Tooltip content="Copy link">
+            <Button variant="ghost" icon="link" label="Copy link" />
+          </Tooltip>
+        }
+      >
+        <Field label="Title" isWrapping defaultValue="Send the renewal proposal" />
+      </Modal>
+    </Stage>
+  ),
+  play: async () => {
+    const dialog = await openDialog();
+    const copy = dialog.querySelector('button[aria-label="Copy link"]');
+    const close = dialog.querySelector('button[aria-label="Close"]');
+    if (copy === null || close === null) throw new globalThis.Error('no header buttons');
+    // Copy link comes first, on the same line as Close.
+    await expect(copy.compareDocumentPosition(close) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    await expect(Math.round(copy.getBoundingClientRect().top)).toBe(Math.round(close.getBoundingClientRect().top));
   },
 };

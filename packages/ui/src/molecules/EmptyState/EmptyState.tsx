@@ -32,6 +32,13 @@ export interface EmptyStateProps {
    * them. `title` ("Loading") is read by screen readers.
    */
   readonly isLoading?: boolean;
+  /**
+   * `block` (the default) is centred in its slot under its icon tile. `row` is
+   * one quiet line at a list row's height, at the start: the icon, the title
+   * and the text after it, for a list that sits above more (a record's open
+   * tasks above Completed), where a block pushed the rest down the page.
+   */
+  readonly layout?: 'block' | 'row';
 }
 
 const TONE_ICONS: Readonly<Record<EmptyStateTone, IconName>> = {
@@ -53,6 +60,7 @@ export function EmptyState({
   actions,
   onRetry,
   isLoading = false,
+  layout = 'block',
 }: EmptyStateProps) {
   const showSkeleton = useDelayedLoading(isLoading);
   if (isLoading) {
@@ -73,9 +81,9 @@ export function EmptyState({
     );
   }
   return (
-    <div className={styles.root} data-tone={tone} role={tone === 'error' ? 'alert' : 'status'}>
+    <div className={styles.root} data-tone={tone} data-layout={layout} role={tone === 'error' ? 'alert' : 'status'}>
       <span className={styles.icon}>
-        <Icon name={icon ?? TONE_ICONS[tone]} size="md" />
+        <Icon name={icon ?? TONE_ICONS[tone]} size={layout === 'row' ? 'sm' : 'md'} />
       </span>
       <span className={styles.title}>{title}</span>
       {children !== undefined && <span className={styles.text}>{children}</span>}

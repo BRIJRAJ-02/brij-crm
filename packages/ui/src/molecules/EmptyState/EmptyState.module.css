@@ -1,5 +1,6 @@
 /* EmptyState: a 32px icon tile, a title, a line of text and the next step,
-   centred in its slot. The error tone's icon is danger. */
+   centred in its slot. The error tone's icon is danger. The row layout is one
+   quiet line at a list row's height, at the start. */
 @layer components {
   .root {
     display: flex;
@@ -53,6 +54,38 @@
     justify-content: center;
     gap: var(--space-8);
     margin-block-start: var(--space-8);
+  }
+
+  /* A row: one quiet line at a list row's height, at the start, its icon bare. */
+  .root[data-layout='row'] {
+    flex-direction: row;
+    flex-wrap: wrap;
+    gap: var(--space-8);
+    align-items: center;
+    min-block-size: var(--size-row);
+    padding-block: 0;
+    padding-inline: var(--space-8);
+    text-align: start;
+  }
+
+  .root[data-layout='row'] .icon {
+    display: inline-flex;
+    inline-size: auto;
+    block-size: auto;
+    margin: 0;
+    border: none;
+    background: transparent;
+    color: var(--text-tertiary);
+  }
+
+  .root[data-layout='row'] .title {
+    color: var(--text-secondary);
+    font: var(--text-body);
+    letter-spacing: var(--tracking-body);
+  }
+
+  .root[data-layout='row'] .actions {
+    margin-block-start: 0;
   }
 
   @media (forced-colors: active) {

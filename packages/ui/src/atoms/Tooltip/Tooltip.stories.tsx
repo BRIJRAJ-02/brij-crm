@@ -94,6 +94,7 @@ export const Lock: Story = {
   render: () => (
     <Stage>
       <LockReason reason="The system sets this when the record is made." />
+      <LockReason reason="You can’t change this here yet." size="sm" />
     </Stage>
   ),
   play: async ({ canvas, userEvent }) => {
@@ -101,5 +102,7 @@ export const Lock: Story = {
     const lock = canvas.getByRole('button', { name: 'The system sets this when the record is made.' });
     await expect(lock).toHaveFocus();
     await waitFor(() => expect(document.querySelector('[role="tooltip"]')).not.toBeNull());
+    const small = canvas.getByRole('button', { name: 'You can’t change this here yet.' });
+    await expect(Math.round(small.getBoundingClientRect().height)).toBe(20);
   },
 };

@@ -109,6 +109,19 @@ export const Large: Story = {
   ),
 };
 
+/** `sm` is a chip's 20px: an icon only Remove beside a chip inside a field's box. */
+export const Small: Story = {
+  render: () => (
+    <Stage>
+      <Button size="sm" variant="ghost" icon="x" label="Remove Ada Lovelace" />
+    </Stage>
+  ),
+  play: async ({ canvas }) => {
+    const button = canvas.getByRole('button', { name: 'Remove Ada Lovelace' });
+    await expect(Math.round(button.getBoundingClientRect().height)).toBe(20);
+  },
+};
+
 /**
  * Filling the row. `isFullWidth` puts the label at the start and the keycaps
  * at the end (the sidebar's Quick actions); `isFullWidth="center"` keeps the

@@ -1,5 +1,6 @@
 /* RecordChip: a 20px chip with a 16px avatar (or an actor's icon) and the
-   name. Flat chips drop the edge for dense places. */
+   name. Flat chips drop the edge for dense places; plain ones drop the fill
+   too, the avatar and name sitting in a line of text. */
 @layer components {
   .root {
     display: inline-flex;
@@ -23,6 +24,13 @@
   .root[data-flat] {
     border-color: transparent;
     background: var(--surface-hover);
+  }
+
+  /* Plain: the avatar and the name as text, in a line (the timeline's actor). */
+  .root[data-plain] {
+    padding-inline: 0;
+    border-color: transparent;
+    background: transparent;
   }
 
   .label {

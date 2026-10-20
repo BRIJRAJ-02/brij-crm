@@ -172,6 +172,36 @@ export const Searchable: Story = {
   },
 };
 
+/** A header row above the search, apart from it: typing never filters it. */
+export const WithHeader: Story = {
+  render: () => (
+    <Stage>
+      <MenuTrigger defaultOpen>
+        <Button icon="plus">Add column</Button>
+        <Menu
+          label="Company attributes"
+          header={<StatusDot hue="blue">Companies</StatusDot>}
+          search={{ label: 'Search attributes' }}
+        >
+          {ATTRIBUTES.map((attribute) => (
+            <MenuItem key={attribute.id} id={attribute.id} icon={attribute.icon}>
+              {attribute.name}
+            </MenuItem>
+          ))}
+        </Menu>
+      </MenuTrigger>
+    </Stage>
+  ),
+  play: async ({ userEvent }) => {
+    const menu = await openMenu();
+    const popover = menu.closest('[data-trigger]') ?? document.body;
+    await waitFor(() => expect(document.activeElement).toHaveAttribute('type', 'search'));
+    await userEvent.keyboard('zzz');
+    await waitFor(() => expect(menu).toHaveTextContent('No matches'));
+    await expect(popover).toHaveTextContent('Companies');
+  },
+};
+
 function StageChoice() {
   const [stage, setStage] = useState<ReadonlySet<string | number>>(new Set(['won']));
   return (

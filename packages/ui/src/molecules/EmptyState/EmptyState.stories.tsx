@@ -27,6 +27,16 @@ export const Default: Story = {
   },
 };
 
+/** A row: one quiet line at a list row's height, for a list that sits above more content. */
+export const Row: Story = {
+  args: { title: 'No open tasks.', children: undefined, icon: 'list-todo', layout: 'row' },
+  play: async ({ canvas }) => {
+    const status = canvas.getByRole('status');
+    await expect(status).toHaveTextContent('No open tasks.');
+    await expect(Math.round(status.getBoundingClientRect().height)).toBe(34);
+  },
+};
+
 /** A load that failed, with a retry. */
 export const Failed: Story = {
   args: {

@@ -3,7 +3,9 @@
    and adds the faint focus halo, an error turns
    the border danger. Read only fills the box with surface-subtle and shows a
    lock; disabled fades it. The search variant is rounded with an icon; the
-   copy variant is read only but drawn live, with a Copy button at its end. */
+   copy variant is read only but drawn live, with a Copy button at its end. A
+   wrapping field starts one line tall and grows as its text wraps; a counter
+   shows only near the limit. */
 @layer components {
   .root {
     display: flex;
@@ -92,6 +94,26 @@
     min-block-size: calc(3 * var(--space-20));
     field-sizing: content;
     white-space: pre-wrap;
+  }
+
+  /* A wrapping field: one body line in the box's single line height (a body
+     line, the hairlines and space-4 above and below make size-input; space-2
+     makes the small size), then a line more as its text wraps. */
+  .box[data-wrapping] {
+    align-items: flex-start;
+    block-size: auto;
+    min-block-size: var(--size-input);
+    padding-block: var(--space-4);
+  }
+
+  .root[data-size='sm'] .box[data-wrapping] {
+    min-block-size: var(--size-control);
+    padding-block: var(--space-2);
+  }
+
+  .box[data-wrapping] .input {
+    field-sizing: content;
+    overflow-wrap: anywhere;
   }
 
   .prefix,
