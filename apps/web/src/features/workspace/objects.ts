@@ -22,11 +22,11 @@ export const trashHref = (slug: string) => `/w/${slug}/trash`;
 /** My tasks' address (spec 0019). */
 export const tasksHref = (slug: string) => `/w/${slug}/tasks`;
 
-/** The upcoming bookings' address. */
-export const bookingsHref = (slug: string) => `/w/${slug}/bookings`;
+/** Bookings' address: its first tab, Calendar, named outright so the sidebar's link preloads that page itself. */
+export const bookingsHref = (slug: string) => `/w/${slug}/bookings/calendar`;
 
-/** The Captures page's address; it opens on its Links tab. */
-export const capturesHref = (slug: string) => `/w/${slug}/captures`;
+/** The Captures page's address: its first tab, Links, named outright so the sidebar's link preloads that page itself. */
+export const capturesHref = (slug: string) => `/w/${slug}/captures/links`;
 /** Settings, Background jobs (spec 0008). */
 export const jobsHref = (slug: string) => `/w/${slug}/settings/jobs`;
 /** Settings, Objects (spec 0012): where a workspace with no live object opens. */
