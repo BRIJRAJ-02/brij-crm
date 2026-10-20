@@ -93,6 +93,7 @@ export function HostedFormSteps({
   const [hasMoved, setMoved] = useState(false);
   // Continue and Back focus the new step's first question; a refusal that goes back focuses its problem instead.
   const [focusesStep, setFocusesStep] = useState(false);
+  const [round, setRound] = useState(0);
   const { state, refs } = useHostedForm({
     form,
     mode,
@@ -110,6 +111,13 @@ export function HostedFormSteps({
     },
   });
   const { words, preview } = state;
+  // Send another starts again from the first step.
+  if (state.round !== round) {
+    setRound(state.round);
+    setIndex(0);
+    setMoved(false);
+    setFocusesStep(false);
+  }
   const step = groups[Math.min(index, groups.length - 1)] ?? { questions: [] };
   const isLast = index >= groups.length - 1;
   const first = step.questions[0];
@@ -129,6 +137,8 @@ export function HostedFormSteps({
   const place =
     layout === 'conversational' ? words.questionOf(index + 1, groups.length) : words.stepOf(index + 1, groups.length);
   const isOpen = layout === 'conversational';
+  // A step's title names its questions: a heading a level under the form's.
+  const StepTitle = mode === 'page' ? 'h2' : 'h3';
 
   let body;
   if (state.isClosed) body = <FormClosed state={state} mode={mode} heading={refs.heading} />;
@@ -139,7 +149,7 @@ export function HostedFormSteps({
       <>
         {isOpen ? (
           <div className={styles.line}>
-            <ProgressBar label={place} value={index + 1} maxValue={groups.length} isLabelHidden />
+            <ProgressBar label={place} valueLabel={place} value={index + 1} maxValue={groups.length} isLabelHidden />
           </div>
         ) : null}
         {!isOpen || index === 0 ? (
@@ -152,8 +162,8 @@ export function HostedFormSteps({
         )}
         {!isOpen && (
           <div className={styles.progress}>
-            <ProgressBar label={place} value={index + 1} maxValue={groups.length} />
-            {step.title !== undefined && <p className={styles.title}>{step.title}</p>}
+            <ProgressBar label={place} valueLabel={place} value={index + 1} maxValue={groups.length} />
+            {step.title !== undefined && <StepTitle className={styles.title}>{step.title}</StepTitle>}
           </div>
         )}
         <VisuallyHidden>

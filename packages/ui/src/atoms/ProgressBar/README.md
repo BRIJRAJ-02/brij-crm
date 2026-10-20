@@ -16,6 +16,7 @@ New. Imports, exports, bulk edits and merges (#14, #22, #30, #55) report progres
 - `value` from 0 to `maxValue` (100); leave it out for an indeterminate bar.
 - `showValue` prints the percentage after the label.
 - `isLabelHidden` keeps the label for screen readers when the text beside it already says.
+- `valueLabel` replaces the percentage screen readers hear with words, such as "2 of 7" for a form's steps.
 
 ## States
 

@@ -59,8 +59,6 @@ export interface FormStrings {
   readonly next: string;
   /** On to the next question, in a one at a time form. */
   readonly ok: string;
-  /** Beside OK in a one at a time form: the key that does the same. */
-  readonly pressEnter: string;
 }
 
 const EN: FormStrings = {
@@ -106,7 +104,6 @@ const EN: FormStrings = {
   back: 'Back',
   next: 'Continue',
   ok: 'OK',
-  pressEnter: 'press Enter',
 };
 
 const CATALOGUE: Readonly<Record<FormLanguage, Partial<FormStrings>>> = {

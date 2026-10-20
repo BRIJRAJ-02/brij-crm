@@ -9,9 +9,9 @@ export interface LinkProps {
   readonly href: string;
   readonly children: ReactNode;
   /**
-   * Does something in the page instead of going to `href` (a form's summary
+   * Does something in the page instead of going anywhere (a form's summary
    * link that focuses its question). The link keeps its look, focus ring and
-   * keys; `href` is still checked, and names where it points.
+   * keys; `href` is not rendered then.
    */
   readonly onPress?: () => void;
 }
