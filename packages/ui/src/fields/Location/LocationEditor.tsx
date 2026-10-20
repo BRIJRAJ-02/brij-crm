@@ -3,7 +3,7 @@ import { useState } from 'react';
 import { useFocusWithin } from 'react-aria';
 import { Field } from '../../molecules/Field/Field.tsx';
 import type { EditorProps } from '../types.ts';
-import { CountryPicker } from './CountryPicker.tsx';
+import { CountryPicker } from '../../molecules/CountryPicker/CountryPicker.tsx';
 import { toCommittable } from '../values.ts';
 import styles from './LocationEditor.module.css';
 import { strings } from './strings.ts';
@@ -55,6 +55,10 @@ export function LocationEditor({ attribute, value, onCommit, error }: EditorProp
       ))}
       <CountryPicker
         label={strings.countryCode}
+        list="all"
+        isClearable
+        placeholder={strings.chooseCountry}
+        searchLabel={strings.searchCountries}
         value={draft.countryCode === undefined || draft.countryCode === '' ? null : draft.countryCode}
         onChange={(code) => {
           setDraft((previous) => ({ ...previous, countryCode: code ?? '' }));

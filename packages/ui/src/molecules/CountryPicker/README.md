@@ -18,12 +18,15 @@ A ComboBox was the other candidate. It types into the trigger itself, which suit
 ```tsx
 <CountryPicker label="Country" guess="IN" value={country} onChange={setCountry} />
 <CountryPicker label="Country code" variant="prefix" value={code} onChange={setCode} />
+<CountryPicker label="Country" list="all" size="sm" isClearable value={country} onChange={setCountry} />
 ```
 
 - `value` and `onChange` carry the ISO code ("IN"), or `null`.
 - `guess` is the visitor's own country (the hosted form guesses it from the browser's language); it is pinned first while the search is empty.
 - Each option is the flag (an emoji from the two letters), the name in the provider's language, and the dial code, muted.
-- `variant="prefix"` is for PhoneField; use PhoneField rather than building a phone field with it.
+- `variant="prefix"` is for PhoneField; use PhoneField rather than building a phone field with it. The field set's Phone editor uses PhoneField too, so a record's number and a form's answer pick their code the same way (F38).
+- `list="all"` lists every country and territory (ISO 3166-1), without dial codes, for a place: the Location editor's country and a filter's "country is". `size="sm"` is a filter value's or a panel row's trigger, and `isClearable` adds "Clear".
+- It is the design system's one country picker: the Location field kept a plain one of its own (names only, every ISO country) until the owner asked for one picker everywhere (20 October 2026); `list="all"` covers what it did, with the flags added.
 
 ## States
 

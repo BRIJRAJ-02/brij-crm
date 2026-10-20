@@ -5,6 +5,7 @@
 // DOM, so the library's CountryPicker and PhoneField and the hosted form's
 // plain renderer share one behaviour.
 import { DIAL_CODES } from '@crm/contracts/forms';
+import { COUNTRY_CODES } from '@crm/contracts/values';
 
 /** One country as the pickers show it. */
 export interface Country {
@@ -36,6 +37,23 @@ export function countriesIn(language: string): readonly Country[] {
     .sort((a, b) => a.name.localeCompare(b.name, language));
 }
 
+/**
+ * Every country and territory (ISO 3166-1), named in `language` and sorted by
+ * that name, for a place rather than a phone (an address's country, a
+ * filter's "country is"): those with no dialling code have an empty `dial`.
+ */
+export function allCountriesIn(language: string): readonly Country[] {
+  let names: Intl.DisplayNames | undefined;
+  try {
+    names = new Intl.DisplayNames([language], { type: 'region' });
+  } catch {
+    names = undefined;
+  }
+  return COUNTRY_CODES.map((code) => ({ code, dial: DIAL_CODES.get(code) ?? '', name: names?.of(code) ?? code })).sort(
+    (a, b) => a.name.localeCompare(b.name, language),
+  );
+}
+
 /** Lower case with the accents taken off, so "cote" finds Côte d'Ivoire. */
 const fold = (text: string) =>
   text
@@ -48,7 +66,7 @@ export function matchesCountry(country: Country, query: string): boolean {
   const typed = fold(query.trim());
   if (typed === '') return true;
   const digits = typed.replace(/^\+/, '');
-  if (/^\d+$/.test(digits)) return country.dial.startsWith(digits);
+  if (/^\d+$/.test(digits)) return country.dial !== '' && country.dial.startsWith(digits);
   return fold(country.name).includes(typed) || country.code.toLowerCase() === typed;
 }
 

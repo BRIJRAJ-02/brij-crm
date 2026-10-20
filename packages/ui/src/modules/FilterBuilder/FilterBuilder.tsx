@@ -11,7 +11,7 @@ import { Path } from '../../atoms/Path/Path.tsx';
 import { AttributeDisplay } from '../../fields/AttributeDisplay.tsx';
 import { AttributeEditor } from '../../fields/AttributeEditor.tsx';
 import { strings as interactionStrings } from '../../fields/Interaction/strings.ts';
-import { CountryPicker } from '../../fields/Location/CountryPicker.tsx';
+import { CountryPicker } from '../../molecules/CountryPicker/CountryPicker.tsx';
 import { iconOf, isSystemOnly } from '../../fields/registry.ts';
 import { strings as fieldStrings } from '../../fields/strings.ts';
 import type { EditorProps, FieldAttribute } from '../../fields/types.ts';
@@ -460,6 +460,10 @@ function OperandEditor({
         label={strings.value(attribute.name)}
         isLabelHidden
         size="sm"
+        list="all"
+        isClearable
+        placeholder={strings.chooseCountry}
+        searchLabel={strings.searchCountries}
         value={typeof leaf.value === 'string' ? leaf.value : null}
         onChange={(code) => {
           onChange({ ...leaf, value: code ?? undefined });

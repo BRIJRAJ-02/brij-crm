@@ -40,4 +40,7 @@ export const strings = {
   groupChip: (count: number) => (count === 1 ? '1 condition' : `${String(count)} conditions`),
   /** A condition whose attribute the view can't show. */
   unknownAttribute: 'Unavailable field',
+  /** A "country is" value's picker. */
+  chooseCountry: 'Choose a country',
+  searchCountries: 'Search countries',
 } as const;

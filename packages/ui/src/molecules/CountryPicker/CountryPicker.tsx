@@ -1,5 +1,5 @@
 import { useMemo, type Ref } from 'react';
-import { countriesIn, flagOf, matchesCountry, type Country } from '../../lib/countries.ts';
+import { allCountriesIn, countriesIn, flagOf, matchesCountry, type Country } from '../../lib/countries.ts';
 import { useFormatSettings } from '../../provider/context.ts';
 import { Select, type SelectItem } from '../Select/Select.tsx';
 import styles from './CountryPicker.module.css';
@@ -36,10 +36,31 @@ export interface CountryPickerProps {
   readonly triggerRef?: Ref<HTMLButtonElement>;
   /** The search field's name, in the page's language. Defaults to "Search country or code". */
   readonly searchLabel?: string;
+  /**
+   * `dialing` (the default) lists the countries with a dialling code, each
+   * showing it ("+91"), for a phone. `all` lists every country and territory
+   * with no codes, for a place: an address's country, a filter's "country is".
+   */
+  readonly list?: 'dialing' | 'all';
+  /** `sm` is a filter value's or a record panel row's 26px trigger. */
+  readonly size?: 'md' | 'sm';
+  /** Adds "Clear" while a country is chosen; leave it off for a required one. */
+  readonly isClearable?: boolean;
 }
 
 /** A country as one of Select's options: the flag, the name, the code muted, and the code as the prefix's face. */
 function itemOf(country: Country): SelectItem {
+  if (country.dial === '') {
+    return {
+      id: country.code,
+      label: country.name,
+      leading: (
+        <span className={styles.flag} aria-hidden="true">
+          {flagOf(country.code)}
+        </span>
+      ),
+    };
+  }
   return {
     id: country.code,
     label: country.name,
@@ -79,14 +100,19 @@ export function CountryPicker({
   defaultOpen,
   triggerRef,
   searchLabel = strings.search,
+  list = 'dialing',
+  size = 'md',
+  isClearable = false,
 }: CountryPickerProps) {
   const { locale } = useFormatSettings();
-  const countries = useMemo(() => countriesIn(locale), [locale]);
+  const isPlace = list === 'all';
+  const countries = useMemo(() => (isPlace ? allCountriesIn(locale) : countriesIn(locale)), [isPlace, locale]);
   const items = useMemo(() => {
-    const all = countries.map(itemOf);
+    // A place's country never shows a dialling code.
+    const all = countries.map((country) => itemOf(isPlace ? { ...country, dial: '' } : country));
     const pinned = all.find((item) => item.id === guess);
     return pinned === undefined ? all : [pinned, ...all.filter((item) => item !== pinned)];
-  }, [countries, guess]);
+  }, [countries, guess, isPlace]);
   const byCode = useMemo(() => new Map(countries.map((country) => [country.code, country])), [countries]);
   return (
     <Select
@@ -96,6 +122,8 @@ export function CountryPicker({
       placeholder={placeholder}
       isSearchable
       searchLabel={searchLabel}
+      size={size}
+      isClearable={isClearable}
       filter={(item, query) => {
         const country = byCode.get(item.id);
         return country !== undefined && matchesCountry(country, query);

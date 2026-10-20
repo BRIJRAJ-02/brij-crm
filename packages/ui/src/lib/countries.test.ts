@@ -1,6 +1,14 @@
 // The country and phone pickers' search, pinning and "+CC" reading.
 import { describe, expect, it } from 'vitest';
-import { countriesIn, countryOfNumber, flagOf, matchesCountry, searchCountries, withoutDialCode } from './countries.ts';
+import {
+  allCountriesIn,
+  countriesIn,
+  countryOfNumber,
+  flagOf,
+  matchesCountry,
+  searchCountries,
+  withoutDialCode,
+} from './countries.ts';
 
 const countries = countriesIn('en');
 const india = countries.find((country) => country.code === 'IN');
@@ -11,6 +19,14 @@ describe('the country list', () => {
     expect(countries[0]?.name).toBe('Afghanistan');
     expect(flagOf('IN')).toBe('🇮🇳');
     expect(flagOf('not')).toBe('');
+  });
+
+  it('lists every country and territory for a place, those with no dial code too', () => {
+    const all = allCountriesIn('en');
+    expect(all.length).toBeGreaterThanOrEqual(countries.length);
+    expect(all.find((country) => country.code === 'IN')).toEqual({ code: 'IN', name: 'India', dial: '91' });
+    const noDial = all.find((country) => country.dial === '');
+    if (noDial !== undefined) expect(matchesCountry(noDial, '9')).toBe(false);
   });
 
   it('finds a country by name, ISO code or dial code, accents aside', () => {
