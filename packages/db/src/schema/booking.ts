@@ -64,8 +64,17 @@ export const bookingPages = pgTable(
     /** `{ mode: 'create' | 'move_open', stageOptionId }` (milestone 2). */
     deal: jsonb('deal'),
     status: text('status').notNull().default('live'),
-    /** `mine` follows the owner's hours (`booking_member_hours`); `own` uses `availability` above. */
+    /**
+     * Spec 0035 replaced it with `schedule_id`; kept readable for one release (expand, then contract, AC-975).
+     * Writes mirror it from `schedule_id`: `mine` when null, `own` when a schedule is named.
+     */
     hoursMode: text('hours_mode').notNull().default('own'),
+    /**
+     * The schedule the page books by (spec 0035, AC-965): null follows the owner's default. Its foreign key
+     * (`booking_pages_schedule`, on delete set null on this column only) is hand written in migration 0052:
+     * drizzle can't say `set null (schedule_id)`, and a plain set null would null `workspace_id` too.
+     */
+    scheduleId: uuid('schedule_id'),
     /** A private page (spec 0027, AC-707, AC-708): it may book inside the host's holds, and waives its minimum notice. */
     isPrivate: boolean('is_private').notNull().default(false),
     ...auditColumns(),
@@ -85,6 +94,10 @@ export const bookingPages = pgTable(
     index('booking_pages_by_owner')
       .on(t.workspaceId, t.ownerMemberId, t.createdAt)
       .where(sql`${t.deletedAt} is null`),
+    // The pages naming a schedule: its "Used by" count and the repoint when it is deleted.
+    index('booking_pages_by_schedule')
+      .on(t.workspaceId, t.scheduleId)
+      .where(sql`${t.scheduleId} is not null`),
     check('booking_pages_public_key_shape', sql`${t.publicKey} ~ '^[A-Za-z0-9_-]{16}$'`),
     check('booking_pages_slug_shape', sql`${t.slug} ~ '^[a-z0-9]+(-[a-z0-9]+)*$' and char_length(${t.slug}) <= 60`),
     check('booking_pages_kind', sql`${t.kind} in ('personal', 'collective', 'round_robin')`),
@@ -114,7 +127,10 @@ export const bookingPages = pgTable(
   ],
 );
 
-/** A member's own weekly hours and days off (Bookings › Availability), which their pages may follow. */
+/**
+ * Spec 0035 moved these into `availability_schedules` (each row became the member's default "Working hours");
+ * kept readable for one release, then dropped by the contract migration (AC-975). Nothing writes it.
+ */
 export const bookingMemberHours = pgTable(
   'booking_member_hours',
   {
@@ -137,6 +153,56 @@ export const bookingMemberHours = pgTable(
       memberId: t.createdByMemberId,
     }),
     ...actorConstraints('booking_member_hours', 'updated_by', t.workspaceId, {
+      type: t.updatedByType,
+      id: t.updatedById,
+      memberId: t.updatedByMemberId,
+    }),
+  ],
+);
+
+/**
+ * A member's named set of hours (spec 0035, AC-961): weekly ranges and date
+ * overrides in its own zone, in the `BookingAvailability` shape a page's
+ * hours always had, so the slot engine reads it unchanged. At most one per
+ * member is the default (`availability_schedules_default`); a member with no
+ * stored default follows the virtual one (weekdays 09:00 to 17:00, AC-963).
+ * Hard deleted: deleting one points its pages back at the default first.
+ * The 20 per member limit is kept by core under the member's advisory lock.
+ */
+export const availabilitySchedules = pgTable(
+  'availability_schedules',
+  {
+    workspaceId: workspaceId(),
+    id: id(),
+    memberId: uuid('member_id').notNull(),
+    name: text('name').notNull(),
+    isDefault: boolean('is_default').notNull().default(false),
+    /** `{ timeZone, weekly: { mon: [[start, end]], … }, overrides: [{ date, ranges }] }`, times `HH:MM`. */
+    availability: jsonb('availability').notNull(),
+    ...auditColumns(),
+  },
+  (t) => [
+    primaryKey({ name: 'availability_schedules_pkey', columns: [t.workspaceId, t.id] }),
+    foreignKey({
+      name: 'availability_schedules_member',
+      columns: [t.workspaceId, t.memberId],
+      foreignColumns: [members.workspaceId, members.id],
+    }),
+    // A member's schedules, and the member foreign key's check.
+    index('availability_schedules_by_member').on(t.workspaceId, t.memberId),
+    // Names are unique per member, ignoring case.
+    uniqueIndex('availability_schedules_name').on(t.workspaceId, t.memberId, sql`lower(${t.name})`),
+    // At most one default per member.
+    uniqueIndex('availability_schedules_default')
+      .on(t.workspaceId, t.memberId)
+      .where(sql`${t.isDefault}`),
+    check('availability_schedules_name_length', sql`char_length(${t.name}) between 1 and 60`),
+    ...actorConstraints('availability_schedules', 'created_by', t.workspaceId, {
+      type: t.createdByType,
+      id: t.createdById,
+      memberId: t.createdByMemberId,
+    }),
+    ...actorConstraints('availability_schedules', 'updated_by', t.workspaceId, {
       type: t.updatedByType,
       id: t.updatedById,
       memberId: t.updatedByMemberId,
