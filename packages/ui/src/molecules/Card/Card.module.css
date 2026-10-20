@@ -71,6 +71,13 @@
     margin-block-start: var(--space-16);
   }
 
+  /* React Aria puts a hidden template (empty, with no class) or hidden markers before a Select or a Table.
+     When one comes first, the shown child after it takes the air above it as its margin, so the body's own
+     top padding steps aside rather than doubling it. */
+  .body:has(> :first-child:is([hidden], :empty:not([class]))) {
+    padding-block-start: 0;
+  }
+
   .foot {
     display: flex;
     justify-content: flex-end;

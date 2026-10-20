@@ -55,38 +55,35 @@ export function DaysOff({
   const columns = isReadOnly ? COLUMNS.filter((column) => column.id !== 'actions') : COLUMNS;
   return (
     <Card title={strings.daysOff} description={strings.daysOffText}>
-      {/* One box for the Table: React Aria's hidden markers beside it would count as the card's first child. */}
       {upcoming.length > 0 && (
-        <div>
-          <Table
-            label={strings.daysOff}
-            columns={columns}
-            rows={upcoming}
-            getRowId={(day) => day.date}
-            renderCell={(day, column) =>
-              column === 'date' ? (
-                dateLabel(day.date)
-              ) : column === 'why' ? (
-                (day.note ?? '')
-              ) : (
-                <Button
-                  variant="ghost"
-                  onPress={() => {
-                    const index = upcoming.findIndex((each) => each.date === day.date);
-                    onChange(openDay(availability, day.date));
-                    // The row goes with its button: focus the next day's Open (or the last), else the date to add one.
-                    focusLater((root) => {
-                      const opens = [...root.querySelectorAll<HTMLElement>('table button')];
-                      return opens[Math.min(index, opens.length - 1)] ?? dateField(root);
-                    });
-                  }}
-                >
-                  {strings.openDay}
-                </Button>
-              )
-            }
-          />
-        </div>
+        <Table
+          label={strings.daysOff}
+          columns={columns}
+          rows={upcoming}
+          getRowId={(day) => day.date}
+          renderCell={(day, column) =>
+            column === 'date' ? (
+              dateLabel(day.date)
+            ) : column === 'why' ? (
+              (day.note ?? '')
+            ) : (
+              <Button
+                variant="ghost"
+                onPress={() => {
+                  const index = upcoming.findIndex((each) => each.date === day.date);
+                  onChange(openDay(availability, day.date));
+                  // The row goes with its button: focus the next day's Open (or the last), else the date to add one.
+                  focusLater((root) => {
+                    const opens = [...root.querySelectorAll<HTMLElement>('table button')];
+                    return opens[Math.min(index, opens.length - 1)] ?? dateField(root);
+                  });
+                }}
+              >
+                {strings.openDay}
+              </Button>
+            )
+          }
+        />
       )}
       {!isReadOnly && upcoming.length > 0 && <Separator />}
       {!isReadOnly && (

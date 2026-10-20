@@ -104,22 +104,18 @@ export function AvailabilityScreen({
             aside={
               <>
                 <Card title={strings.timeZone} description={strings.timeZoneText}>
-                  {/* One box for the Select: React Aria puts a hidden template before it, which the card would
-                      count as its first child, doubling the space under the header. */}
-                  <div>
-                    <Select
-                      label={strings.timeZone}
-                      isLabelHidden
-                      showsDescription
-                      items={zones}
-                      filter={zoneMatches}
-                      isSearchable
-                      value={draft.timeZone}
-                      onChange={(zone) => {
-                        if (zone !== null) update({ ...draft, timeZone: zone });
-                      }}
-                    />
-                  </div>
+                  <Select
+                    label={strings.timeZone}
+                    isLabelHidden
+                    showsDescription
+                    items={zones}
+                    filter={zoneMatches}
+                    isSearchable
+                    value={draft.timeZone}
+                    onChange={(zone) => {
+                      if (zone !== null) update({ ...draft, timeZone: zone });
+                    }}
+                  />
                 </Card>
                 <DaysOff availability={draft} onChange={update} />
               </>
