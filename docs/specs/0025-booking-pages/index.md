@@ -61,6 +61,7 @@ Reasoning and options: see [rationale.md](rationale.md).
 - **AC-639**: Rescheduling shows the page's slots, moves the same event (`moveEvent`), keeps the booking's id, and sends a new confirmation; a booking can be rescheduled at most 5 times.
 - **AC-640**: The host can cancel or reschedule from the meeting on the timeline or from the bookings list, and the visitor is told.
 - **AC-641**: A booking whose event the host deletes in their calendar becomes `cancelled` at the next sync and the visitor is told.
+  - Note (20 October 2026, built with spec 0024 milestone 2): the sync cancels an upcoming confirmed booking in the same write that drops the event, with the reason "Removed from the host calendar", when the host's own copy goes or no calendar holds it any more; a co host's copy going changes nothing, and a booking that already began stays. We send no email of our own: Google already offers the host to tell the guests when they delete the event, so "the visitor is told" is Google's message. Open for the owner: whether Timefix should also send its own cancellation email.
 
 *Forms hand off*
 - **AC-642**: `bookingLink({ bookingPageId, prefill, submissionId })` returns the page address with a signed, 24 hour token holding the prefilled answers (attribute ids to values) and the submission id; the page fills those answers in (editable), and the booking stores `submission_id`.

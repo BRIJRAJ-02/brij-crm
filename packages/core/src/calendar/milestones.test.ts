@@ -8,7 +8,10 @@ import { afterAll, beforeAll, describe, expect, inject, it } from 'vitest';
 import { createDatabase, type Database } from '@crm/db';
 import { testQuery } from '@crm/db/testing';
 import { systemScope } from '../access/door.ts';
+import { connectedCalendar } from '../booking/connected.ts';
+import { bookAsHost } from '../booking/host.ts';
 import { readBookingsCalendar } from '../booking/list.ts';
+import { createBookingPage } from '../booking/pages.ts';
 import { newId } from '../engine/ids.ts';
 import { outboxHook } from '../engine/outbox.ts';
 import { isInputError, isRefusal } from '../engine/refusals.ts';
@@ -507,5 +510,97 @@ describe('free and busy, and events (AC-615 to AC-618)', () => {
     expect(await refusalOf(w.events.cancelEvent(w.system, { meetingId: theirs?.id ?? '' }))).toMatchObject({
       code: 'NOT_FOUND',
     });
+  });
+});
+
+describe('a booking whose event the host removes (owner report, 20 October 2026)', () => {
+  /** A booking the owner made for Grace `offset` days from now, its event on the owner's calendar. */
+  async function booked(w: World, offset: number) {
+    const page = await createBookingPage(w.owner, { id: newId(), title: 'Intro call', timeZone: 'UTC' });
+    const calendar = connectedCalendar({ db, providers: { google: w.fake.provider }, tokenKey, hooks: [outboxHook()] });
+    const made = await bookAsHost(
+      w.owner,
+      { calendar, now: () => new Date(Date.parse(day(offset)) - 3_600_000) },
+      {
+        idempotencyKey: newId(),
+        pageId: page.id,
+        start: new Date(day(offset)),
+        minutes: 30,
+        name: 'Grace Hopper',
+        email: 'grace@navy.example',
+        timeZone: 'UTC',
+        guests: [],
+        message: '',
+      },
+    );
+    const [source] = await w.query<{ event: string }>(sql`
+      select s.provider_event_id as event from meeting_sources s
+      join meetings m on m.id = s.meeting_id where m.booking_id = ${made.bookingId}::uuid
+    `);
+    return { bookingId: made.bookingId, eventId: source?.event ?? '' };
+  }
+  const bookingOf = async (w: World, id: string) =>
+    (
+      await w.query<{ status: string; cancel_reason: string | null; meeting_id: string | null }>(
+        sql`select status, cancel_reason, meeting_id::text from bookings where id = ${id}::uuid`,
+      )
+    )[0];
+
+  it('cancels an upcoming booking when the host deletes its event, in the sync’s write', async () => {
+    const w = await world();
+    const conn = await w.connect(w.ownerId, 'ada@acme.dev');
+    const { bookingId, eventId } = await booked(w, 3);
+    await w.sync(conn.id);
+    expect(await bookingOf(w, bookingId)).toMatchObject({ status: 'confirmed' });
+    w.fake.cancel('ada@acme.dev', eventId);
+    await w.sync(conn.id);
+    expect(await bookingOf(w, bookingId)).toEqual({
+      status: 'cancelled',
+      cancel_reason: 'Removed from the host calendar',
+      meeting_id: null,
+    });
+    // The meeting's change event went with it, so open timelines read again.
+    const events = await w.query<{ n: number }>(sql`select count(*)::int as n from outbox where kind = 'meetings'`);
+    expect(events[0]?.n).toBeGreaterThan(0);
+    // The slot is free again: the same time books.
+    const again = await booked(w, 3);
+    expect(again.bookingId).not.toBe(bookingId);
+  });
+
+  it('leaves a booking alone when another member’s copy goes, or when it already began', async () => {
+    const w = await world();
+    const mine = await w.connect(w.ownerId, 'ada@acme.dev');
+    const beas = await w.connect(w.bea, 'bea@acme.dev');
+    const { bookingId, eventId } = await booked(w, 2);
+    await w.sync(mine.id);
+    // Bea was invited too: her calendar holds a copy of the same event (one meeting, AC-603).
+    const [held] = await w.query<{ ical_uid: string; starts_at: string; ends_at: string }>(
+      sql`select ical_uid, starts_at::text, ends_at::text from meetings where booking_id = ${bookingId}::uuid`,
+    );
+    const copy = event(
+      'bea-copy',
+      new Date(held?.starts_at ?? 0).toISOString(),
+      [
+        { email: 'bea@acme.dev', response: 'accepted', isOrganizer: false, isSelf: true },
+        guest('ada@acme.dev'),
+        guest('grace@navy.example'),
+      ],
+      { icalUid: held?.ical_uid ?? '', end: { at: new Date(held?.ends_at ?? 0).toISOString(), allDay: false } },
+    );
+    w.fake.put('bea@acme.dev', copy);
+    await w.sync(beas.id);
+    w.fake.cancel('bea@acme.dev', 'bea-copy');
+    await w.sync(beas.id);
+    expect(await bookingOf(w, bookingId)).toMatchObject({ status: 'confirmed' });
+    // A booking that already began stays, whatever happens to its event.
+    await testQuery(
+      ownerUrl,
+      `update bookings set starts_at = now() - interval '2 hours', ends_at = now() - interval '1 hour',
+        during = tstzrange(now() - interval '2 hours', now() - interval '1 hour') where id = $1`,
+      [bookingId],
+    );
+    w.fake.cancel('ada@acme.dev', eventId);
+    await w.sync(mine.id);
+    expect(await bookingOf(w, bookingId)).toMatchObject({ status: 'confirmed', meeting_id: null });
   });
 });

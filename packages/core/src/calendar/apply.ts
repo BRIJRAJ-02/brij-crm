@@ -156,6 +156,7 @@ export async function dropSources(
   where:
     | { readonly eventIds: readonly string[] }
     | { readonly allBut: readonly string[]; readonly from: string; readonly to: string },
+  options: { readonly cancelBookings?: boolean } = {},
 ): Promise<readonly MeetingChange[]> {
   const dropped = await tx.execute<{ meeting_id: string }>(
     'eventIds' in where
@@ -173,13 +174,51 @@ export async function dropSources(
   const meetingIds = [...new Set(dropped.rows.map((row) => row.meeting_id))];
   if (meetingIds.length === 0) return [];
   const before = await recordsOf(tx, meetingIds);
+  if (options.cancelBookings !== false) await cancelRemovedBookings(tx, connectionId, meetingIds);
   // A meeting goes with its last source (its attendees and record links go with it).
-  await tx.execute(sql`
+  const gone = await tx.execute<{ id: string }>(sql`
     delete from meetings m where m.id = any(${uuidList(meetingIds)})
       and not exists (select 1 from meeting_sources s where s.workspace_id = m.workspace_id and s.meeting_id = m.id)
+    returning m.id::text as id
   `);
+  // A booking never points at a meeting that is gone.
+  if (gone.rows.length > 0) {
+    await tx.execute(sql`
+      update bookings set meeting_id = null
+      where meeting_id = any(${uuidList(gone.rows.map((row) => row.id))})
+    `);
+  }
   await recomputePrivacy(tx, meetingIds);
   return meetingIds.map((meetingId) => ({ meetingId, recordIds: before.get(meetingId) ?? [] }));
+}
+
+/** Why a booking whose event the host removed from their calendar is cancelled. */
+export const REMOVED_FROM_CALENDAR = 'Removed from the host calendar';
+
+/**
+ * Cancels the upcoming confirmed bookings whose event just left the host's
+ * calendar (spec 0025, the owner's report of 20 October 2026): the dropped
+ * copy was the host's own, or no calendar holds the meeting any more. A co
+ * host's copy going while the host's stays changes nothing, and a booking
+ * that already began stays as it was. The slot frees with the status (the
+ * exclusion constraint holds confirmed bookings only). It runs in the
+ * sync's own transaction, recorded as the system: the bookings table admits
+ * no `calendar` actor. No email is sent from here: Google already offered to
+ * tell the attendees when the host deleted the event.
+ */
+async function cancelRemovedBookings(tx: WorkspaceTx, connectionId: string, meetingIds: readonly string[]) {
+  await tx.execute(sql`
+    update bookings b set status = 'cancelled', cancel_reason = ${REMOVED_FROM_CALENDAR},
+      updated_at = now(), updated_by_type = 'system', updated_by_id = null, updated_by_member_id = null
+    from meetings m
+    where m.id = any(${uuidList(meetingIds)}) and m.workspace_id = b.workspace_id
+      and (b.meeting_id = m.id or m.booking_id = b.id)
+      and b.status = 'confirmed' and b.starts_at > now()
+      and (
+        b.host_member_id = (select c.member_id from calendar_connections c where c.id = ${connectionId}::uuid)
+        or not exists (select 1 from meeting_sources s where s.workspace_id = m.workspace_id and s.meeting_id = m.id)
+      )
+  `);
 }
 
 /** Plans the upserts for the events that sync, the last copy of a key winning within the batch. */

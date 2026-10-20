@@ -384,7 +384,15 @@ export function createCalendarEvents(deps: CalendarEventsDeps): CalendarEvents {
       await runWrite(
         scope,
         async (context) => {
-          context.record({ meetings: await dropSources(context.tx, row.id, { eventIds: [row.provider_event_id] }) });
+          // The caller (booking) cancels its own booking: the drop never does it for them.
+          context.record({
+            meetings: await dropSources(
+              context.tx,
+              row.id,
+              { eventIds: [row.provider_event_id] },
+              { cancelBookings: false },
+            ),
+          });
         },
         deps.hooks,
       );
