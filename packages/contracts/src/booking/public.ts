@@ -131,8 +131,10 @@ export const VISITOR_NAME_MAX = 200;
  * `POST /api/public/booking/:publicKey/book`. `idempotencyKey` is minted once
  * per chosen slot, so a retry, a double click or a second tab answers the
  * first booking. `company_url` is the honeypot (spec 0023's name) (a field people never see, which
- * must stay empty) and `startedAt` when the page loaded (advisory, for the
- * minimum fill time).
+ * must stay empty), `ticket` the fill ticket the page fetched when it loaded
+ * (spec 0023's, from `/api/public/booking/:address/ticket`: the server's clock
+ * decides the minimum fill time), and `startedAt` when the page loaded
+ * (advisory, used only without a ticket).
  */
 export const PublicBookInput = z.object({
   idempotencyKey: z.uuid(),
@@ -151,6 +153,7 @@ export const PublicBookInput = z.object({
   /** Anything else the host should know. */
   note: z.string().trim().max(2000, { error: 'Keep the note to 2,000 characters.' }).optional(),
   company_url: z.string().max(200).optional(),
+  ticket: z.string().max(200).optional(),
   startedAt: z.number().int().nonnegative().optional(),
 });
 /** A visitor's booking. */

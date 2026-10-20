@@ -66,11 +66,30 @@ export const SubmitHidden = z
 /** UTM tags, the page and the referrer. */
 export type SubmitHidden = z.infer<typeof SubmitHidden>;
 
+/** The longest fill ticket the endpoints read. */
+export const FILL_TICKET_MAX = 200;
+
+/**
+ * `GET /api/public/forms/:address/ticket` (and the booking page's
+ * `/api/public/booking/:address/ticket`): a fill ticket, the server's signed
+ * note of when the page loaded, for that address only. The page asks for one
+ * when it loads (never cached) and sends it back with the submit as
+ * `ticket`, so the minimum fill time is measured on the server's clock, not
+ * the visitor's. A new one per "Send another"; one ticket is good for a few
+ * submits within a day.
+ */
+export const FillTicket = z.object({ ticket: z.string().max(FILL_TICKET_MAX) });
+/** A fill ticket. */
+export type FillTicket = z.infer<typeof FillTicket>;
+
 /**
  * `POST /api/public/forms/:address/submissions`. `idempotencyKey` is minted by
- * the page once per load and attempt (AC-555); `fillMs` is the time from the
- * page loading to the submit (advisory only); `company_url`, the honeypot,
- * must be empty. Answers are keyed by question key.
+ * the page once per load and attempt (AC-555); `ticket` is the fill ticket the
+ * page fetched when it loaded (the server's clock decides the fill time);
+ * `fillMs` is the time from the page loading to the submit (advisory only,
+ * used when no ticket came); `company_url`, the honeypot, must be empty.
+ * Without a ticket or `fillMs` a submission is still taken, with a weaker
+ * score. Answers are keyed by question key.
  */
 export const SubmitBody = z.object({
   idempotencyKey: z.uuid(),
@@ -79,6 +98,7 @@ export const SubmitBody = z.object({
   hidden: SubmitHidden,
   captcha: z.string().max(4_096).optional(),
   company_url: z.string().max(1_000).optional(),
+  ticket: z.string().max(FILL_TICKET_MAX).optional(),
   fillMs: z.number().int().min(0).max(86_400_000).optional(),
 });
 /** The submit body. */

@@ -263,8 +263,12 @@ export const SubmissionSummary = z.object({
   state: SubmissionState,
   receivedAt: Timestamp,
   processedAt: Timestamp.optional(),
-  /** The bot checks' verdict: `unchecked` when reCAPTCHA is on and couldn't be asked. */
-  verdict: z.enum(['passed', 'spam', 'unchecked']),
+  /**
+   * The bot checks' verdict: `unchecked` when reCAPTCHA is on and couldn't be
+   * asked; `review` when the content looked doubtful, so it waits in Needs
+   * review for a member to say spam or not (`submissions.resolve`).
+   */
+  verdict: z.enum(['passed', 'spam', 'unchecked', 'review']),
   mainRecord: RecordRefDisplay.optional(),
   /** The email answer, shown until the person exists. */
   email: z.string().optional(),
@@ -324,6 +328,23 @@ export const SubmissionWriteInput = SubmissionIdInput.extend({ mutationId: z.uui
 /** A change to one submission. */
 export type SubmissionWriteInput = z.infer<typeof SubmissionWriteInput>;
 
+/**
+ * How a member settles a submission the content checks held for review:
+ * not spam (it is processed as any other) or spam. A record pick for an
+ * ambiguous match (AC-563) joins this union as its own kind.
+ */
+export const SubmissionResolution = z.discriminatedUnion('kind', [
+  z.object({ kind: z.literal('not_spam') }),
+  z.object({ kind: z.literal('spam') }),
+]);
+/** How a member settles a submission held for review. */
+export type SubmissionResolution = z.infer<typeof SubmissionResolution>;
+
+/** Settling one submission held for review. */
+export const ResolveSubmissionInput = SubmissionWriteInput.extend({ resolution: SubmissionResolution });
+/** Settling one submission held for review. */
+export type ResolveSubmissionInput = z.infer<typeof ResolveSubmissionInput>;
+
 /** The forms procedures (spec 0023). */
 export const formsContract = {
   list: oc.input(ListFormsInput).output(z.object({ items: z.array(FormSummary) })),
@@ -348,6 +369,7 @@ export const submissionsContract = {
   get: oc.input(SubmissionIdInput).output(SubmissionView),
   release: oc.input(SubmissionWriteInput).output(SubmissionView),
   markSpam: oc.input(SubmissionWriteInput).output(SubmissionView),
+  resolve: oc.input(ResolveSubmissionInput).output(SubmissionView),
   retry: oc.input(SubmissionWriteInput).output(SubmissionView),
   delete: oc.input(SubmissionWriteInput).output(z.object({ deleted: z.literal(true) })),
 };
