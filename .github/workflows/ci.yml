@@ -105,7 +105,9 @@ jobs:
   # the worker on the local ports against their own services, driven by
   # Playwright: sign in, People, session, keyboard, live, the record page,
   # options (spec 0012, milestone 3), validation rules (spec 0013,
-  # milestone 1) and delete, undo and the trash (spec 0022, milestone 1).
+  # milestone 1), delete, undo and the trash (spec 0022, milestone 1), and a
+  # Google sign in that succeeds (F34), against the fake Google the api loads
+  # here (apps/api/test/fake-google.ts; the browser half is in the flow).
   # They run in Chromium (1280 and 375 wide); the live flow's reader opens in
   # WebKit, so a change crosses two browser engines. The longer ones (catch
   # up, settle, versions, scale, hidden) stay local. Nothing here touches a
@@ -168,6 +170,9 @@ jobs:
       WORKER_WAKE_SECRET: local-only-worker-wake-secret-not-for-deployment
       VITE_REALTIME_URL: ws://localhost:8000/connection/websocket
       FLOW_READER_BROWSER: webkit
+      # Turns Google sign in on for the flows; a fake client, as the fake Google answers the code exchange.
+      GOOGLE_CLIENT_ID: flow-client.apps.googleusercontent.com
+      GOOGLE_CLIENT_SECRET: flow-only-google-secret
     steps:
       - uses: actions/checkout@v7
       - uses: pnpm/action-setup@v6
@@ -196,7 +201,7 @@ jobs:
       - name: Start the api, the worker and the built app
         run: |
           mkdir -p logs
-          (cd apps/api && nohup node --import ./src/monitoring/instrument.ts src/server.ts > ../../logs/api.log 2>&1 &)
+          (cd apps/api && nohup node --import ./src/monitoring/instrument.ts --import ./test/fake-google.ts src/server.ts > ../../logs/api.log 2>&1 &)
           (cd apps/api && nohup node --import ./src/monitoring/instrument.ts src/worker.ts > ../../logs/worker.log 2>&1 &)
           (cd apps/web && nohup pnpm exec vite preview --port 5173 --strictPort > ../../logs/web.log 2>&1 &)
           for url in http://localhost:5173/api/health/ready http://localhost:3001/health; do
@@ -206,7 +211,7 @@ jobs:
               sleep 1
             done
           done
-      - run: pnpm --filter @crm/web test:flow e2e/sign-in.flow.ts e2e/people.flow.ts e2e/session.flow.ts e2e/keyboard.flow.ts e2e/live.flow.ts e2e/record.flow.ts e2e/options.flow.ts e2e/rules.flow.ts e2e/relations.flow.ts e2e/links.flow.ts e2e/views.flow.ts e2e/views-manage.flow.ts e2e/trash.flow.ts e2e/tasks.flow.ts
+      - run: pnpm --filter @crm/web test:flow e2e/sign-in.flow.ts e2e/people.flow.ts e2e/session.flow.ts e2e/keyboard.flow.ts e2e/live.flow.ts e2e/record.flow.ts e2e/options.flow.ts e2e/rules.flow.ts e2e/relations.flow.ts e2e/links.flow.ts e2e/views.flow.ts e2e/views-manage.flow.ts e2e/trash.flow.ts e2e/tasks.flow.ts e2e/google.flow.ts
       - name: Keep the traces and the logs
         if: failure()
         uses: actions/upload-artifact@v7
