@@ -116,6 +116,12 @@
     overflow-wrap: anywhere;
   }
 
+  /* A multiline value to copy is code (an embed snippet, a form's HTML): the Code atom's monospace face. */
+  .input[data-code] {
+    font: var(--text-code);
+    letter-spacing: var(--tracking-code);
+  }
+
   .prefix,
   .suffix {
     display: inline-flex;

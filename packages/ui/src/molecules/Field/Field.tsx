@@ -167,6 +167,8 @@ export function Field({
     showCounter && maxLength !== undefined && length >= maxLength * COUNTER_FROM ? maxLength : undefined;
   const inputProps = {
     className: styles.input,
+    // A multiline value to copy is code: it takes the Code atom's face.
+    ...(isCopy && isMultiline ? { 'data-code': true } : {}),
     ...(placeholder === undefined ? {} : { placeholder }),
     ...(ref === undefined ? {} : { ref }),
     // A list's search field takes focus as the list opens, the pattern React Aria expects.

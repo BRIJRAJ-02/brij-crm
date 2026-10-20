@@ -62,7 +62,7 @@ export const strings = {
   status: { confirmed: 'Confirmed', cancelled: 'Canceled' },
   when: 'When',
   /** Under the new meeting's day, which the calendar chose. */
-  whenFixed: 'The day you picked on the calendar. To change it, close this and pick another.',
+  whenFixed: 'To change the day, close this and pick a time on the calendar.',
   who: 'Who',
   page: 'Booking page',
   guests: 'Also invited',

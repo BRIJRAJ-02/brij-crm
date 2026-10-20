@@ -210,7 +210,7 @@ export const strings = {
 
   // Submissions tab
   allStates: 'All enquiries',
-  filterStates: 'Which enquiries',
+  filterStates: 'State',
   filterLabel: 'Filter enquiries',
   noSubmissions: 'No enquiries yet. Share the link from Install.',
   noneInState: 'Nothing here.',
