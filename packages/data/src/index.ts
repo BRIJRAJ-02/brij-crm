@@ -1224,7 +1224,18 @@ export function createDataLayer({
         () => undefined,
       ),
     spread,
-    onFinished: onJobFinished,
+    onFinished: (workspace, job) => {
+      // A bulk change ended (spec 0022): the tables of its object and the open trash read again now, so they show
+      // its final state even where live updates are paused (its own coarse events reach live tabs anyway).
+      if (job.kind.startsWith('records.')) {
+        const objectId = job.subject?.type === 'object' ? job.subject.id : undefined;
+        void records?.then((layer) => {
+          layer.reload(workspace, objectId);
+        });
+        trashMoved(workspace);
+      }
+      onJobFinished(workspace, job);
+    },
   });
 
   // Bookings (spec 0025): the workspace's upcoming and past lists, read again when the person comes back.
@@ -3109,6 +3120,13 @@ export function createDataLayer({
       cancel: (workspace: string, jobId: string): Promise<boolean> => jobs.cancel(workspace, jobId),
       /** A job as held now (one this browser started or a view shows), or undefined (spec 0022's bar). */
       get: (workspace: string, jobId: string): JobView | undefined => jobs.get(workspace, jobId),
+      /**
+       * Reads a job again: a bar following one while live updates are paused
+       * or off asks every few seconds, since no event will come (spec 0022).
+       */
+      refresh: (workspace: string, jobId: string): void => {
+        jobs.refresh(workspace, jobId);
+      },
       /** Calls `listener` whenever a held job changes; the answer stops. Read it through `useJob`. */
       follow: (listener: () => void): (() => void) => jobs.follow(listener),
       /**

@@ -363,6 +363,10 @@ export function createJobsStore(deps: JobsDeps) {
   return {
     view,
     track,
+    /** Reads one job again (a bar following it while live updates are paused or off). */
+    refresh: (workspace: string, jobId: string): void => {
+      refetch(workspace, jobId);
+    },
     /** The job as held now, or undefined: a bar shows its progress through `follow`. */
     get: (workspace: string, jobId: string): JobView | undefined => jobsOf(workspace).get(jobId),
     /** Calls `listener` whenever a held job changes; the answer stops. */
