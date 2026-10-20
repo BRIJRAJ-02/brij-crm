@@ -195,14 +195,14 @@ export function PageEditor({ data, slug, page: loaded, locale, myHours }: PageEd
     .join(' · ');
   const followed = draft.hoursMode === 'mine' ? myHours : draft.availability;
   const hoursSummary = followed === undefined ? strings.followOwnerHint : weekSummary(followed, locale).join(' · ');
-  // Page: its short name, and whether only people with the link book it.
-  const pageSummary = [`/${draft.slug}`, draft.isPrivate ? strings.private : '']
-    .filter((part) => part !== '')
-    .join(' · ');
+  // Page: who can book it.
+  const pageSummary = draft.isPrivate ? strings.privateSummary : strings.publicSummary;
   // Limits: what holds bookings back, or that nothing does.
   const limitParts = [
     draft.bufferBefore + draft.bufferAfter > 0 ? strings.buffersSummary(draft.bufferBefore, draft.bufferAfter) : '',
-    draft.minNoticeMinutes > 0 ? (NOTICE.find((item) => item.id === String(draft.minNoticeMinutes))?.label ?? '') : '',
+    draft.minNoticeMinutes > 0
+      ? strings.noticeSummary(NOTICE.find((item) => item.id === String(draft.minNoticeMinutes))?.label ?? '')
+      : '',
     strings.aheadSummary(draft.windowDays),
     draft.dailyLimit === null ? '' : strings.dailySummary(draft.dailyLimit),
   ].filter((part) => part !== '');
@@ -314,6 +314,13 @@ export function PageEditor({ data, slug, page: loaded, locale, myHours }: PageEd
                 isReadOnly={isLocked}
                 onChange={(value) => change({ slug: value.toLowerCase() })}
                 {...(slugError === undefined ? {} : { error: slugError })}
+              />
+              <Switch
+                label={strings.private}
+                description={strings.privateHint}
+                isSelected={draft.isPrivate}
+                isReadOnly={isLocked}
+                onChange={(isPrivate) => change({ isPrivate })}
               />
             </Card>
             <Card title={strings.meeting} description={meetingSummary}>
@@ -453,13 +460,6 @@ export function PageEditor({ data, slug, page: loaded, locale, myHours }: PageEd
                 isReadOnly={isLocked}
                 value={draft.slotStep === null ? 'duration' : String(draft.slotStep)}
                 onChange={(id) => change({ slotStep: id === '15' ? 15 : id === '30' ? 30 : id === '60' ? 60 : null })}
-              />
-              <Switch
-                label={strings.private}
-                description={strings.privateHint}
-                isSelected={draft.isPrivate}
-                isReadOnly={isLocked}
-                onChange={(isPrivate) => change({ isPrivate })}
               />
             </Card>
           </PreviewLayout>

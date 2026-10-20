@@ -1,5 +1,6 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
-import { expect, fn } from 'storybook/test';
+import { StrictMode, useState } from 'react';
+import { expect, fn, waitFor } from 'storybook/test';
 import { Button } from '../../atoms/Button/Button.tsx';
 import { Stage } from '../../workbench/Stage/Stage.tsx';
 import { Field } from '../Field/Field.tsx';
@@ -118,5 +119,50 @@ export const WithEndNarrow: Story = {
     const button = canvas.getByRole('button', { name: 'New' }).getBoundingClientRect();
     await expect(button.top).toBeGreaterThanOrEqual(list.bottom - 1);
     await expect(button.right).toBeLessThanOrEqual(list.right + 1);
+  },
+};
+
+/** A strip whose page draws the chosen tab (a form's sections), switched under StrictMode, as the app runs. */
+function SwitchingStrip() {
+  const [tab, setTab] = useState('form');
+  return (
+    <StrictMode>
+      <Tabs
+        label="Form sections"
+        selectedKey={tab}
+        onSelectionChange={setTab}
+        tabs={[
+          { id: 'form', label: 'Form' },
+          { id: 'settings', label: 'Settings' },
+          { id: 'install', label: 'Install' },
+          { id: 'submissions', label: 'Submissions' },
+        ]}
+      >
+        {['form', 'settings', 'install', 'submissions'].map((id) => (
+          <TabPanel key={id} id={id}>
+            {id}
+          </TabPanel>
+        ))}
+      </Tabs>
+    </StrictMode>
+  );
+}
+
+/** The underline settles under the chosen tab, even when its effect runs twice (StrictMode, a re-rendering route). */
+export const LineFollowsChoice: Story = {
+  render: () => <SwitchingStrip />,
+  parameters: { crm: { screenshot: false } },
+  play: async ({ canvas, userEvent }) => {
+    for (const name of ['Install', 'Submissions']) {
+      const tab = canvas.getByRole('tab', { name });
+      await userEvent.click(tab);
+      await waitFor(() => {
+        const line = tab.querySelector('div');
+        const left = line?.getBoundingClientRect().left ?? Number.NaN;
+        const width = line?.getBoundingClientRect().width ?? Number.NaN;
+        void expect(Math.abs(left - tab.getBoundingClientRect().left)).toBeLessThan(1);
+        void expect(Math.abs(width - tab.getBoundingClientRect().width)).toBeLessThan(1);
+      });
+    }
   },
 };

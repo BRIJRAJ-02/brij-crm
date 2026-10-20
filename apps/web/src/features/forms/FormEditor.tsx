@@ -17,7 +17,10 @@ import { previewOf, publishProblem, type PublishProblem } from '@crm/data/forms'
 import {
   Button,
   Callout,
+  Card,
   EditorStatus,
+  Field,
+  focusLater,
   HostedFormPreview,
   Menu,
   MenuItem,
@@ -77,6 +80,8 @@ export function FormEditor(props: FormEditorProps) {
   const [isPublishing, setPublishing] = useState(false);
   const [isFirstPublish, setFirstPublish] = useState(false);
   const [isDeleting, setDeleting] = useState(false);
+  // Publish leaves once there is nothing more to publish; focus then moves to the menu beside it.
+  const moreRef = useRef<HTMLButtonElement>(null);
 
   // What the server holds: the draft last saved, and the revision a save names.
   const saved = useRef<{ document: FormDocument; revision: number }>({
@@ -193,6 +198,7 @@ export function FormEditor(props: FormEditorProps) {
           setPublishing(false);
           apply(view);
           toasts.toast({ tone: 'success', message: strings.published(view.liveVersionNumber ?? 1) });
+          focusLater(() => moreRef.current);
         },
         (error: unknown) => {
           setPublishing(false);
@@ -266,7 +272,7 @@ export function FormEditor(props: FormEditorProps) {
       )}
       {canManage && (
         <MenuTrigger>
-          <Button variant="ghost" icon="ellipsis" label={strings.moreActions} />
+          <Button ref={moreRef} variant="ghost" icon="ellipsis" label={strings.moreActions} />
           <Menu
             label={strings.moreActions}
             onAction={(key) => {
@@ -361,19 +367,32 @@ export function FormEditor(props: FormEditorProps) {
         );
       default:
         return (
-          <QuestionsSection
-            draft={draft}
-            onChange={setDraft}
-            attributes={target.items}
-            objectName={target.objectName}
-            liveIds={liveIds}
-            newId={() => data.forms.newId()}
-            toasts={toasts}
-            isReadOnly={!canManage}
-            {...(shown?.questionId === undefined
-              ? {}
-              : { problem: { questionId: shown.questionId, message: shown.message } })}
-          />
+          <>
+            {/* Before the first publish there is no Settings tab: the name is changed here, as a field. */}
+            {!isPublished && canManage && (
+              <DraftName
+                name={form.name}
+                onRename={(name) => {
+                  data.forms.updateSettings(slug, form.id, { name }).then((view) => {
+                    setForm((before) => ({ ...before, name: view.name, revision: before.revision }));
+                  }, failed);
+                }}
+              />
+            )}
+            <QuestionsSection
+              draft={draft}
+              onChange={setDraft}
+              attributes={target.items}
+              objectName={target.objectName}
+              liveIds={liveIds}
+              newId={() => data.forms.newId()}
+              toasts={toasts}
+              isReadOnly={!canManage}
+              {...(shown?.questionId === undefined
+                ? {}
+                : { problem: { questionId: shown.questionId, message: shown.message } })}
+            />
+          </>
         );
     }
   })();
@@ -523,5 +542,32 @@ export function FormEditor(props: FormEditorProps) {
         ),
       }}
     />
+  );
+}
+
+/** A draft's name, as a field: blur saves it, an empty one says so. */
+function DraftName({ name, onRename }: { readonly name: string; readonly onRename: (name: string) => void }) {
+  const [value, setValue] = useState(name);
+  const [error, setError] = useState<string | undefined>(undefined);
+  return (
+    <Card title={strings.name} description={strings.draftNameText}>
+      <Field
+        label={strings.name}
+        isLabelHidden
+        value={value}
+        maxLength={80}
+        isRequired
+        onChange={(text) => {
+          setValue(text);
+          setError(undefined);
+        }}
+        onBlur={() => {
+          const trimmed = value.trim();
+          if (trimmed === '') setError(strings.nameRequired);
+          else if (trimmed !== name) onRename(trimmed);
+        }}
+        {...(error === undefined ? {} : { error })}
+      />
+    </Card>
   );
 }

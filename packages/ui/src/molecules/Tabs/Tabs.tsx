@@ -1,4 +1,4 @@
-import type { ReactNode } from 'react';
+import { useEffect, useRef, type ReactNode } from 'react';
 import { useFocusVisible } from 'react-aria';
 import {
   SelectionIndicator,
@@ -25,6 +25,33 @@ export interface TabItem {
   /** The count is a floor, not the total ("10,000+" for a capped count). */
   readonly isCountAtLeast?: boolean;
   readonly isDisabled?: boolean;
+}
+
+/**
+ * The chosen tab's underline. React Aria slides it from the last tab by
+ * setting an inline `translate` and `width` for one frame. When its layout
+ * effect runs twice for one change (React's StrictMode does, and a route
+ * that re-renders mid change can), it keeps the overridden values as the ones
+ * to return to, and the line stays under the last tab (the form editor's
+ * Submissions with the line under Install). Two frames on, after its own
+ * frame, any override left is dropped, so the line always settles on its tab.
+ */
+function Indicator() {
+  const ref = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    let second = 0;
+    const first = requestAnimationFrame(() => {
+      second = requestAnimationFrame(() => {
+        ref.current?.style.removeProperty('translate');
+        ref.current?.style.removeProperty('width');
+      });
+    });
+    return () => {
+      cancelAnimationFrame(first);
+      cancelAnimationFrame(second);
+    };
+  });
+  return <SelectionIndicator ref={ref} className={styles.indicator} />;
 }
 
 /** Props for Tabs. */
@@ -83,7 +110,7 @@ export function Tabs({ label, tabs, selectedKey, defaultSelectedKey, onSelection
                   {...(tab.isCountAtLeast === true ? { isAtLeast: true } : {})}
                 />
               )}
-              <SelectionIndicator className={styles.indicator} />
+              <Indicator />
             </Tab>
           )}
         </TabList>

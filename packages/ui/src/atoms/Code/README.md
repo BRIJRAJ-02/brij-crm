@@ -13,7 +13,7 @@ New. API keys, webhook URLs, field API names and the developer settings (#34, #3
 <Code isCopyable copyLabel="Copy the webhook URL">https://hooks.example.com/abc</Code>
 ```
 
-- `variant="block"` is a snippet to paste (an embed snippet, a form's HTML): its own box with lines kept and wrapped, and a Copy button inside its top end, always. `isClamped` holds a long one to eight lines under a fade, with "Show all" under it. Why a variant and not a read only Field: a read only Field draws a lock, which reads as a permission problem on something you are meant to copy, and a snippet is code, not a value you could edit.
+- `variant="block"` is a snippet to paste (an embed snippet, a form's HTML): its own box with lines kept and wrapped, and a Copy button inside its top end, always. `isClamped` holds a long one to eight lines under a fade, with "Show all" under it (it says whether it is open, `aria-expanded`). Pass `isClamped` only for a snippet that runs past eight lines: the toggle shows either way. Why a variant and not a read only Field: a read only Field draws a lock, which reads as a permission problem on something you are meant to copy, and a snippet is code, not a value you could edit.
 - `isCopyable` adds an icon only CopyButton after it. A successful copy says so in a toast; if the browser refuses, an error toast says to copy by hand and the text is selected.
 
 ## States

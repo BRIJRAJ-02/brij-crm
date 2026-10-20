@@ -75,6 +75,9 @@ export type ButtonProps = ButtonLook &
     readonly form?: string;
     /** The `id` of text that says more about it, such as the line under a disabled button saying when it turns on. */
     readonly 'aria-describedby'?: string;
+    /** For a button that opens and closes something in the page (Code's Show all): whether it is open, and what it opens. */
+    readonly 'aria-expanded'?: boolean;
+    readonly 'aria-controls'?: string;
     /** Takes focus when it mounts: the safe choice a dialog opens on, such as Cancel beside Replace. */
     readonly autoFocus?: boolean;
     /**
@@ -210,6 +213,8 @@ function PlainButton(props: ButtonProps) {
       {...(onPress === undefined ? {} : { onPress })}
       {...(face.label === undefined ? {} : { 'aria-label': face.label })}
       {...(describedBy === undefined ? {} : { 'aria-describedby': describedBy })}
+      {...(props['aria-expanded'] === undefined ? {} : { 'aria-expanded': props['aria-expanded'] })}
+      {...(props['aria-controls'] === undefined ? {} : { 'aria-controls': props['aria-controls'] })}
       {...(props.autoFocus === true ? { autoFocus: true } : {})}
       {...shortcutAttribute(props.kbd, platform)}
       {...lookAttributes(props, face)}

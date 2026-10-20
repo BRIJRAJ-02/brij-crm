@@ -178,3 +178,32 @@ export const Status: Story = {
     </Stage>
   ),
 };
+
+/** A note over the preview: what it shows needs a word (a paused page shows its closed state). */
+export const WithNote: Story = {
+  render: () => (
+    <Stage height="page" width="fill">
+      <PreviewLayout
+        previewNote={<Callout tone="info">This page is off, so visitors see it closed.</Callout>}
+        preview={<HostedFormPreview form={FORM} />}
+      >
+        <Card title="Page" description="Anyone can book it">
+          <Field label="Description" value="" isMultiline />
+        </Card>
+      </PreviewLayout>
+    </Stage>
+  ),
+};
+
+/** The whole width for a table, with no preview (a form's Submissions). */
+export const FullWidth: Story = {
+  render: () => (
+    <Stage height="page" width="fill">
+      <PreviewLayout bodyWidth="full">
+        <Card title="Submissions" description="No enquiries yet">
+          <Field label="Search" value="" />
+        </Card>
+      </PreviewLayout>
+    </Stage>
+  ),
+};

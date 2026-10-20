@@ -58,7 +58,7 @@
 
   .pre[data-clamped] {
     overflow: hidden;
-    max-block-size: calc(var(--space-16) * 8 + var(--space-12));
+    max-block-size: calc(8lh + var(--space-12));
     mask-image: linear-gradient(to bottom, var(--surface) calc(100% - var(--space-32)), transparent);
   }
 

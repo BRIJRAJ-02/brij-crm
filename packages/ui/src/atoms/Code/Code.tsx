@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react';
+import { useId, useRef, useState } from 'react';
 import { Button } from '../Button/Button.tsx';
 import { CopyButton } from '../Button/CopyButton.tsx';
 import styles from './Code.module.css';
@@ -24,6 +24,7 @@ export interface CodeProps {
 /** A snippet in its own box: lines kept, Copy inside, and optionally held to a few lines until opened. */
 function CodeBlock({ children, copyLabel, isClamped }: Pick<CodeProps, 'children' | 'copyLabel' | 'isClamped'>) {
   const ref = useRef<HTMLElement>(null);
+  const id = useId();
   const [isOpen, setOpen] = useState(false);
   const isHeld = isClamped === true && !isOpen;
   return (
@@ -32,7 +33,7 @@ function CodeBlock({ children, copyLabel, isClamped }: Pick<CodeProps, 'children
         <span className={styles.copy}>
           <CopyButton value={children} sourceRef={ref} label={copyLabel ?? strings.copy} variant="ghost" />
         </span>
-        <pre className={styles.pre} data-clamped={isHeld || undefined}>
+        <pre id={id} className={styles.pre} data-clamped={isHeld || undefined}>
           <code ref={ref}>{children}</code>
         </pre>
       </div>
