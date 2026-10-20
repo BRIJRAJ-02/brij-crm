@@ -14,11 +14,11 @@ New. Screens may not carry CSS, and the frame's body is edge to edge for grids. 
 </PageColumn>
 ```
 
-`width="narrow"` keeps a form to the page card's width; `width="full"` takes the view's whole width inside the padding, for a list of rows (Captures › Links and Forms, whose LinkList rows read across the page). `align="center"` fills the view's height and centres what it holds, for a list's empty state alone on the page (Captures › Links and Forms). `actions` sit at the column's top end, for a page whose TopBar belongs to a layout (Captures › Links' New booking page). `footer` takes a bar (an "Unsaved changes" Callout with Save) that sticks to the foot of the view while the column scrolls, so it stays in sight wherever the person is editing.
+`width="narrow"` keeps a form to the page card's width; `width="full"` takes the view's whole width inside the padding, for a list of rows (Captures › Links and Forms, whose LinkList rows read across the page). `align="center"` fills the view's height and centres what it holds, for a list's empty state alone on the page (Captures › Links and Forms). `actions` sit at the column's top end, for a page whose TopBar belongs to a layout (Captures › Links' New booking page). `aside` adds a side column (the panel's width) beside the children, which take the rest; when the two can't keep the page card's and the panel's widths side by side, it wraps under them at full width: Bookings › Availability puts the time zone and days off beside the week. `footer` takes a bar (an "Unsaved changes" Callout with Save) that sticks to the foot of the view while the column scrolls, so it stays in sight wherever the person is editing.
 
 ## States
 
-Default, narrow and full width, centred; with or without a footer bar.
+Default, narrow and full width, centred; with or without a side column and a footer bar.
 
 ## Keyboard
 

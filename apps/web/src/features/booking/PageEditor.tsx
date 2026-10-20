@@ -29,10 +29,10 @@ import {
   type SelectItem,
 } from '@crm/ui';
 import { useBlocker } from '@tanstack/react-router';
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useMemo } from 'react';
 import { WorkspacePage } from '../workspace/WorkspacePage.tsx';
 import { DaysOff } from './DaysOff.tsx';
-import { availabilityIsValid, timeZones, weekRows, withDay } from './hours.ts';
+import { availabilityIsValid, weekRows, withDay, zoneItems, zoneMatches } from './hours.ts';
 import { availabilityHref, linksHref, publicBookingUrl } from './links.ts';
 import { strings } from './strings.ts';
 
@@ -156,7 +156,7 @@ export function PageEditor({ data, slug, page: loaded, myHours }: PageEditorProp
   };
   const slugError = failure?.field === 'slug' ? failure.message : undefined;
   const location = draft.location;
-  const zones = timeZones(draft.availability.timeZone).map((zone) => ({ id: zone, label: zone.replaceAll('_', ' ') }));
+  const zones = useMemo(() => zoneItems(draft.availability.timeZone, new Date()), [draft.availability.timeZone]);
 
   return (
     <WorkspacePage
@@ -325,6 +325,7 @@ export function PageEditor({ data, slug, page: loaded, myHours }: PageEditorProp
                     <Select
                       label={strings.timeZone}
                       items={zones}
+                      filter={zoneMatches}
                       isSearchable
                       isReadOnly={isLocked}
                       value={draft.availability.timeZone}

@@ -28,7 +28,7 @@ New. A booking page needs several windows a day (split shifts), a day turned off
 
 - **All days start** and **All days end** set the first window's start and the last window's end of every day that is on; each reads "Mixed" while the days differ.
 - The switch turns a day on (09:00 to 17:00) or off; a day with no window is off and reads "Unavailable".
-- Each window is a pair of time Selects every `stepMinutes` (30 by default), the last end "Midnight". **+** on the first window adds the hour after the last (at most 6 a day); **−** on any other removes it.
+- Each window is a pair of time Selects every `stepMinutes` (30 by default), in the reader's own clock from the provider's language ("9:30 AM", or "09:30" where the day runs to 24 hours), the last end "Midnight". Values stay `HH:MM`. **+** on the first window adds the hour after the last (at most 6 a day); **−** on any other removes it.
 - **Copy times to** opens a Popover of the other days with Select all and **Apply**, and calls `onChange` for each day chosen with this day's windows.
 - `isReadOnly` shows the week as text, each day's windows or "Unavailable", with no controls: hours that come from elsewhere, such as a page that follows its member's hours.
 - `error` on a row shows under its windows as an alert (overlapping windows, an end before its start: the caller checks).
@@ -39,7 +39,7 @@ On, off, several windows, Mixed, a row's error, disabled, read only; the control
 
 ## Keyboard
 
-Tab moves through All days start and end, then each row's switch, its Selects and buttons in order. Every control is labelled with its day ("Monday from", "Remove 13:00 to 17:00 on Monday", "Copy Friday's times to"). The Popover closes on Esc and returns focus to its button.
+Tab moves through All days start and end, then each row's switch, its Selects and buttons in order. Every control is labelled with its day ("Monday from", "Remove 1:00 PM to 5:00 PM on Monday", "Copy Friday's times to"). The Popover closes on Esc and returns focus to its button.
 
 ## Differences from the artifact
 

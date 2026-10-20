@@ -71,6 +71,29 @@ export const FullWidth: Story = {
   },
 };
 
+/** A side column at the end on a wide page (Availability: the week, then the time zone and days off), under it on a narrow one. */
+export const WithAside: Story = {
+  args: { width: 'full' },
+  render: (args) => (
+    <Stage width="fill">
+      <PageColumn
+        {...args}
+        aside={
+          <>
+            <Card title="Time zone">Europe/London</Card>
+            <Card title="Days off">None coming up.</Card>
+          </>
+        }
+      >
+        <Card title="Weekly hours">Monday to Friday, 09:00 to 17:00.</Card>
+      </PageColumn>
+    </Stage>
+  ),
+  play: async ({ canvas }) => {
+    await expect(canvas.getByText('Time zone')).toBeInTheDocument();
+  },
+};
+
 /** Alone on the page: the whole height, its child in the middle (a list's empty state). */
 export const Centered: Story = {
   args: { width: 'full', align: 'center' },

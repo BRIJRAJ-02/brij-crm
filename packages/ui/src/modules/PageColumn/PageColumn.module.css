@@ -25,6 +25,31 @@
     min-block-size: 100%;
   }
 
+  /* With a side column: the main column and the side one share a row, the main taking what's left; when
+     both can't keep their widths (the page card's and the panel's), the side one wraps under, full width. */
+  .split {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: flex-start;
+    gap: var(--space-16);
+  }
+
+  .main,
+  .aside {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-16);
+    min-inline-size: 0;
+  }
+
+  .main {
+    flex: 999 1 var(--size-page-card);
+  }
+
+  .aside {
+    flex: 1 1 var(--size-panel);
+  }
+
   .actions {
     display: flex;
     justify-content: flex-end;

@@ -4,8 +4,8 @@
 // Leaves out: picking a person from the workspace as you type, and the email invitation (the calendar invites them).
 import { isDataError, type BookingPageView } from '@crm/data';
 import { Button, Callout, Field, Form, Modal, Select, type FormRefusal } from '@crm/ui';
-import { useId, useState } from 'react';
-import { browserZone, timeZones } from '../booking/hours.ts';
+import { useId, useState, useMemo } from 'react';
+import { browserZone, zoneItems, zoneMatches } from '../booking/hours.ts';
 import { instantOf, spanNames, type DrawnSpan } from './span.ts';
 import { SpanTimes } from './SpanTimes.tsx';
 import { strings } from './strings.ts';
@@ -84,7 +84,7 @@ export function NewMeetingDialog({
   const minutes = span.endMinute - span.startMinute;
   // Once anything is typed, a stray click outside won't throw it away; Cancel and Esc still do.
   const isDirty = [name, email, guests, message].some((value) => value.trim() !== '');
-  const zones = timeZones(timeZone).map((zone) => ({ id: zone, label: zone.replaceAll('_', ' ') }));
+  const zones = useMemo(() => zoneItems(timeZone, new Date()), [timeZone]);
 
   const book = () => {
     if (busy) return;
@@ -211,6 +211,7 @@ export function NewMeetingDialog({
         <Select
           label={strings.theirTimeZone}
           items={zones}
+          filter={zoneMatches}
           isSearchable
           value={timeZone}
           isDisabled={busy}

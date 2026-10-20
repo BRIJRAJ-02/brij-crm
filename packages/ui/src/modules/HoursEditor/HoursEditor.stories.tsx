@@ -57,7 +57,7 @@ export const Week: Story = {
     await expect(canvas.getByText('Mixed')).toBeInTheDocument();
     await userEvent.click(canvas.getByRole('switch', { name: 'Saturday' }));
     await expect(args.onChange).toHaveBeenCalledWith('sat', [['09:00', '17:00']]);
-    await userEvent.click(canvas.getByRole('button', { name: 'Remove 13:00 to 17:00 on Monday' }));
+    await userEvent.click(canvas.getByRole('button', { name: 'Remove 1:00 PM to 5:00 PM on Monday' }));
     await expect(args.onChange).toHaveBeenCalledWith('mon', [['09:00', '12:00']]);
   },
 };
@@ -130,7 +130,7 @@ export const ReadOnly: Story = {
     onChange: fn(),
   },
   play: async ({ canvas }) => {
-    await expect(canvas.getByText('13:00 to Midnight')).toBeInTheDocument();
+    await expect(canvas.getByText('1:00 PM to Midnight')).toBeInTheDocument();
     await expect(canvas.queryByRole('switch')).not.toBeInTheDocument();
   },
 };

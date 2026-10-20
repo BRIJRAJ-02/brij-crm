@@ -113,5 +113,87 @@ export function timeZones(current: string): readonly string[] {
   return listed.includes(current) ? listed : [current, ...listed];
 }
 
+/** A zone as a picker shows it: the place, with its offset from GMT now beside it ("GMT+05:30"). */
+export interface ZoneItem {
+  readonly id: string;
+  readonly label: string;
+  readonly description: string;
+}
+
+/** The zone's offset from GMT at `at`, as "GMT+05:30" (none is "GMT+00:00", which engines spell either way). */
+export function zoneOffset(zone: string, at: Date): string {
+  const part = new Intl.DateTimeFormat('en-US', { timeZone: zone, timeZoneName: 'longOffset' })
+    .formatToParts(at)
+    .find((each) => each.type === 'timeZoneName');
+  const value = part?.value ?? 'GMT';
+  return value === 'GMT' ? 'GMT+00:00' : value;
+}
+
+/** The picker's zones, the current one first, each with its offset (as timefix lists them). */
+export function zoneItems(current: string, at: Date): readonly ZoneItem[] {
+  const listed = timeZones(current).filter((zone) => zone !== current);
+  return [current, ...listed].map((zone) => ({
+    id: zone,
+    label: zone.replaceAll('_', ' '),
+    description: zoneOffset(zone, at),
+  }));
+}
+
+/** A zone search: every word typed is in the place or the offset ("new york", "gmt+5", "+05:30"). */
+export function zoneMatches(item: { readonly label: string; readonly description?: string }, query: string): boolean {
+  const text = `${item.label} ${item.description ?? ''}`.toLowerCase();
+  return query
+    .toLowerCase()
+    .split(/\s+/)
+    .filter((word) => word !== '')
+    .every(
+      (word) =>
+        text.includes(word) || (word.startsWith('gmt') && text.includes(word.replace(/^gmt([+-])(\d)$/, 'gmt$10$2'))),
+    );
+}
+
 /** The browser's zone. */
 export const browserZone = (): string => new Intl.DateTimeFormat().resolvedOptions().timeZone;
+
+/** "9:00 AM" for a stored `HH:MM` in `locale`'s clock, Midnight for `24:00`. */
+export function clockLabel(time: string, locale: string): string {
+  if (time === '24:00') return strings.midnight;
+  const [hours = 0, minutes = 0] = time.split(':').map(Number);
+  return new Intl.DateTimeFormat(locale, { hour: 'numeric', minute: '2-digit', timeZone: 'UTC' }).format(
+    new Date(Date.UTC(2000, 0, 1, hours, minutes)),
+  );
+}
+
+/**
+ * A week in a line per set of days with the same hours, Monday first, as timefix prints a page's hours:
+ * "Mon – Fri, 9:00 AM – 5:00 PM" over "Sat, 10:00 AM – 1:00 PM". Three or more days in a row read as a run.
+ */
+export function weekSummary(availability: BookingAvailability, locale: string): readonly string[] {
+  const day = new Intl.DateTimeFormat(locale, { weekday: 'short', timeZone: 'UTC' });
+  // 5 January 2026 is a Monday.
+  const dayName = (index: number) => day.format(new Date(Date.UTC(2026, 0, 5 + index)));
+  const groups = new Map<string, number[]>();
+  WEEKDAYS.forEach((weekday, index) => {
+    const ranges = availability.weekly[weekday];
+    if (ranges.length === 0) return;
+    const key = ranges.map(([start, end]) => `${clockLabel(start, locale)} – ${clockLabel(end, locale)}`).join(', ');
+    groups.set(key, [...(groups.get(key) ?? []), index]);
+  });
+  if (groups.size === 0) return [strings.noDaysOpen];
+  return [...groups].map(([hours, days]) => `${daysLabel(days, dayName)}, ${hours}`);
+}
+
+/** Days as "Mon, Wed – Fri": runs of three or more in a row joined. */
+function daysLabel(days: readonly number[], dayName: (index: number) => string): string {
+  const runs: number[][] = [];
+  for (const index of days) {
+    const run = runs.at(-1);
+    if (run !== undefined && run.at(-1) === index - 1) run.push(index);
+    else runs.push([index]);
+  }
+  return runs
+    .flatMap((run) =>
+      run.length >= 3 ? [`${dayName(run[0] ?? 0)} – ${dayName(run.at(-1) ?? 0)}`] : run.map((index) => dayName(index)),
+    )
+    .join(', ');
+}

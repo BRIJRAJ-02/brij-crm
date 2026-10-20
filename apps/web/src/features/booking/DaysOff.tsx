@@ -3,8 +3,8 @@
 // Main task: see the upcoming ones, open one again, or add one with a reason only the member sees.
 // Leaves out: dates with different hours (the data keeps them; this lists days off only) and every week on a weekday (turn the day off in the week).
 import type { BookingAvailability } from '@crm/data';
-import { Button, Card, DatePicker, Field, Table, type TableColumn } from '@crm/ui';
-import { useState } from 'react';
+import { Button, Card, DatePicker, Field, Form, Table, type TableColumn } from '@crm/ui';
+import { useId, useState } from 'react';
 import { dateLabel, openDay, todayIn, upcomingDaysOff, withDayOff } from './hours.ts';
 import { strings } from './strings.ts';
 
@@ -27,7 +27,21 @@ export function DaysOff({
 }) {
   const [date, setDate] = useState<string | null>(null);
   const [why, setWhy] = useState('');
-  const upcoming = upcomingDaysOff(availability, todayIn(availability.timeZone));
+  const [dateError, setDateError] = useState<string | undefined>(undefined);
+  const formId = useId();
+  const today = todayIn(availability.timeZone);
+  const upcoming = upcomingDaysOff(availability, today);
+  const add = () => {
+    // Said on the field rather than a button that silently won't press, and a past day would vanish from the list.
+    if (date === null || date < today) {
+      setDateError(date === null ? strings.pickDate : strings.pickLaterDate);
+      return;
+    }
+    onChange(withDayOff(availability, date, why.trim()));
+    setDate(null);
+    setWhy('');
+    setDateError(undefined);
+  };
   const columns = isReadOnly ? COLUMNS.filter((column) => column.id !== 'actions') : COLUMNS;
   return (
     <Card title={strings.daysOff} description={strings.daysOffCount(upcoming.length)}>
@@ -51,22 +65,21 @@ export function DaysOff({
         />
       )}
       {!isReadOnly && (
-        <>
-          <DatePicker label={strings.dayOffDate} value={date} onChange={setDate} />
-          <Field label={strings.why} value={why} onChange={setWhy} maxLength={120} />
-          <Button
-            icon="plus"
-            isDisabled={date === null}
-            onPress={() => {
-              if (date === null) return;
-              onChange(withDayOff(availability, date, why.trim()));
-              setDate(null);
-              setWhy('');
+        <Form id={formId} label={strings.addDayOff} onSubmit={add}>
+          <DatePicker
+            label={strings.dayOffDate}
+            value={date}
+            onChange={(next) => {
+              setDate(next);
+              setDateError(undefined);
             }}
-          >
+            {...(dateError === undefined ? {} : { error: dateError })}
+          />
+          <Field label={strings.why} name="why" value={why} onChange={setWhy} maxLength={120} />
+          <Button icon="plus" type="submit" form={formId}>
             {strings.addDayOff}
           </Button>
-        </>
+        </Form>
       )}
     </Card>
   );

@@ -5,6 +5,8 @@ import { Checkbox } from '../../atoms/Checkbox/Checkbox.tsx';
 import { Switch } from '../../atoms/Switch/Switch.tsx';
 import { Popover } from '../../molecules/Popover/Popover.tsx';
 import { Select, type SelectItem } from '../../molecules/Select/Select.tsx';
+import { memoIntl } from '../../lib/intl-memo.ts';
+import { useFormatSettings } from '../../provider/context.ts';
 import styles from './HoursEditor.module.css';
 import { strings } from './strings.ts';
 
@@ -39,6 +41,17 @@ export interface HoursEditorProps {
 /** `HH:MM` for minutes from midnight. */
 function clock(minutes: number): string {
   return `${String(Math.floor(minutes / 60)).padStart(2, '0')}:${String(minutes % 60).padStart(2, '0')}`;
+}
+
+/** A stored `HH:MM` as the reader's clock reads it ("9:30 AM", or "09:30" where the day is 24 hours), `24:00` as Midnight. */
+function timeLabel(time: string, locale: string): string {
+  if (time === '24:00') return strings.midnight;
+  const minutes = minutesOf(time);
+  const format = memoIntl(
+    `hours-clock:${locale}`,
+    () => new Intl.DateTimeFormat(locale, { hour: 'numeric', minute: '2-digit', timeZone: 'UTC' }),
+  );
+  return format.format(new Date(Date.UTC(2000, 0, 1, Math.floor(minutes / 60), minutes % 60)));
 }
 
 function minutesOf(time: string): number {
@@ -142,13 +155,14 @@ export function HoursEditor({
   isDisabled = false,
   isReadOnly = false,
 }: HoursEditorProps) {
-  if (isReadOnly) return <ReadOnlyWeek label={label} rows={rows} />;
+  const { locale } = useFormatSettings();
+  if (isReadOnly) return <ReadOnlyWeek label={label} rows={rows} locale={locale} />;
   const step = stepMinutes > 0 ? stepMinutes : 30;
   const starts: SelectItem[] = [];
   const ends: SelectItem[] = [];
   for (let minutes = 0; minutes <= 1440; minutes += step) {
-    if (minutes < 1440) starts.push({ id: clock(minutes), label: clock(minutes) });
-    if (minutes > 0) ends.push({ id: clock(minutes), label: minutes === 1440 ? strings.midnight : clock(minutes) });
+    if (minutes < 1440) starts.push({ id: clock(minutes), label: timeLabel(clock(minutes), locale) });
+    if (minutes > 0) ends.push({ id: clock(minutes), label: timeLabel(clock(minutes), locale) });
   }
   const on = rows.filter((row) => row.ranges.length > 0);
   const allStart = shared(on.map((row) => row.ranges[0]?.[0] ?? ''));
@@ -250,7 +264,11 @@ export function HoursEditor({
                         <Button
                           variant="ghost"
                           icon="minus"
-                          label={strings.removeRange(row.label, range[0], range[1])}
+                          label={strings.removeRange(
+                            row.label,
+                            timeLabel(range[0], locale),
+                            timeLabel(range[1], locale),
+                          )}
                           isDisabled={isDisabled}
                           onPress={() =>
                             onChange(
@@ -291,12 +309,20 @@ export function HoursEditor({
   );
 }
 
-/** A window as text, "09:00 to 17:00" ("Midnight" at its end). */
-const rangeText = ([start, end]: HoursRange): string =>
-  `${start} ${strings.to} ${end === '24:00' ? strings.midnight : end}`;
+/** A window as text, "9:00 AM to 5:00 PM" ("Midnight" at its end). */
+const rangeText = ([start, end]: HoursRange, locale: string): string =>
+  `${timeLabel(start, locale)} ${strings.to} ${timeLabel(end, locale)}`;
 
 /** The week as text: each day's windows, or Unavailable. */
-function ReadOnlyWeek({ label, rows }: { readonly label: string; readonly rows: readonly HoursRow[] }) {
+function ReadOnlyWeek({
+  label,
+  rows,
+  locale,
+}: {
+  readonly label: string;
+  readonly rows: readonly HoursRow[];
+  readonly locale: string;
+}) {
   return (
     <ul className={styles.rows} aria-label={label} data-read-only="">
       {rows.map((row) => (
@@ -306,7 +332,7 @@ function ReadOnlyWeek({ label, rows }: { readonly label: string; readonly rows: 
             {row.ranges.length > 0 ? (
               row.ranges.map((range) => (
                 <span key={range[0]} className={styles.rangeText}>
-                  {rangeText(range)}
+                  {rangeText(range, locale)}
                 </span>
               ))
             ) : (

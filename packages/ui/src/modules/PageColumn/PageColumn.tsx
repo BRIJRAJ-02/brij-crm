@@ -15,6 +15,11 @@ export interface PageColumnProps {
   readonly align?: 'start' | 'center';
   /** The column's own actions ("New booking page"), at its top end, when the page's TopBar belongs to a layout. */
   readonly actions?: ReactNode;
+  /**
+   * A side column beside the children (Bookings › Availability: the time zone and days off beside the week),
+   * at the end when the page is wide enough, under them when it isn't.
+   */
+  readonly aside?: ReactNode;
   /** A bar that sticks to the foot of the view while it has something to say ("Unsaved changes", Save). */
   readonly footer?: ReactNode;
 }
@@ -23,15 +28,24 @@ export interface PageColumnProps {
  * A page's body that isn't a grid or a settings page (Captures › Links,
  * Bookings › Availability): padded from the frame, at most a readable width
  * (or the whole width),
- * its children stacked, and an optional footer bar that stays in view.
+ * its children stacked, an optional side column beside them, and an optional
+ * footer bar that stays in view.
  */
-export function PageColumn({ children, width = 'default', align = 'start', actions, footer }: PageColumnProps) {
+export function PageColumn({ children, width = 'default', align = 'start', actions, aside, footer }: PageColumnProps) {
+  const hasAside = aside !== undefined && aside !== null && aside !== false;
   return (
     <div className={styles.root} data-width={width} data-align={align === 'start' ? undefined : align}>
       {actions !== undefined && actions !== null && actions !== false && (
         <div className={styles.actions}>{actions}</div>
       )}
-      {children}
+      {hasAside ? (
+        <div className={styles.split}>
+          <div className={styles.main}>{children}</div>
+          <div className={styles.aside}>{aside}</div>
+        </div>
+      ) : (
+        children
+      )}
       {footer !== undefined && footer !== null && footer !== false && <div className={styles.footer}>{footer}</div>}
     </div>
   );
