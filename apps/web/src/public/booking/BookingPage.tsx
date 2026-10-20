@@ -67,19 +67,13 @@ function ClockIcon() {
 
 /**
  * Timefix under the booking: "Powered by" over the wordmark, in a quiet card at the rail's foot on wide
- * screens and centred at the page's end on a phone, with the workspace's name. The wordmark is one image
+ * screens and centred at the page's end on a phone. No workspace name: the visitor books the host, not the
+ * workspace (the owner's call, 20 October 2026). The wordmark is one image
  * per theme, and CSS shows the one for the theme in use.
  */
-export function Brand({
-  workspaceName,
-  placement,
-}: {
-  readonly workspaceName?: string;
-  readonly placement: 'rail' | 'page';
-}) {
+export function Brand({ placement }: { readonly placement: 'rail' | 'page' }) {
   return (
     <footer className={styles.brand} data-placement={placement}>
-      {workspaceName !== undefined && workspaceName !== '' && <p className={styles.brandWorkspace}>{workspaceName}</p>}
       <a className={styles.brandLink} href="https://timefix.ai" rel="noopener noreferrer">
         <span className={styles.brandLabel}>{strings.poweredBy}</span>
         <img
@@ -461,10 +455,10 @@ function Booking({
               </li>
             </ul>
           </div>
-          <Brand workspaceName={page.workspaceName} placement="rail" />
+          <Brand placement="rail" />
         </aside>
         <div className={styles.main}>{card}</div>
-        <Brand workspaceName={page.workspaceName} placement="page" />
+        <Brand placement="page" />
       </div>
     </main>
   );

@@ -144,10 +144,21 @@ export function offsetLabel(zone: string, at: number): string {
   }
 }
 
+/** Zones Chrome still names by their old spelling (Asia/Calcutta), by their current name. */
+const RENAMED: Readonly<Record<string, string>> = Object.freeze({
+  'Asia/Calcutta': 'Asia/Kolkata',
+  'Asia/Katmandu': 'Asia/Kathmandu',
+  'Asia/Rangoon': 'Asia/Yangon',
+  'Asia/Saigon': 'Asia/Ho_Chi_Minh',
+  'Europe/Kiev': 'Europe/Kyiv',
+  'America/Godthab': 'America/Nuuk',
+  'Atlantic/Faeroe': 'Atlantic/Faroe',
+});
+
 /** "Asia/Dubai" as a person says it: "Dubai time (GMT+4)"; a zone with no city keeps its name. */
 export function zoneDisplay(zone: string, at: number): string {
   if (!zone.includes('/') || zone.startsWith('Etc/')) return zone.replaceAll('_', ' ');
-  const city = zone.split('/').pop()?.replaceAll('_', ' ') ?? zone;
+  const city = (RENAMED[zone] ?? zone).split('/').pop()?.replaceAll('_', ' ') ?? zone;
   const offset = offsetLabel(zone, at);
   return offset === '' ? `${city} time` : `${city} time (${offset})`;
 }

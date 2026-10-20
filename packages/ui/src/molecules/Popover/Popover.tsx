@@ -3,7 +3,7 @@ import { useFocusVisible } from 'react-aria';
 import { Dialog, Popover as AriaPopover, type PopoverProps as AriaPopoverProps } from 'react-aria-components';
 import styles from './Popover.module.css';
 
-/** How wide a popover is: its content (the default), a menu (240px, or the trigger's width if wider), or exactly its trigger's width (a select). */
+/** How wide a popover is: its content (the default), a menu (240px, or the trigger's width if wider), or its trigger's width, wider when an option needs it (a select). */
 export type PopoverWidth = 'content' | 'menu' | 'trigger' | 'builder';
 
 /** Where a popover sits against its trigger, as React Aria names it ("bottom start", "top", "end"). */

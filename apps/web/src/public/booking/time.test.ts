@@ -89,3 +89,9 @@ describe('the weekdays and the meeting’s span', () => {
     );
   });
 });
+
+describe('old zone names', () => {
+  it('says a renamed zone by its current name', () => {
+    expect(zoneDisplay('Asia/Calcutta', Date.UTC(2026, 0, 15))).toBe('Kolkata time (GMT+5:30)');
+  });
+});

@@ -24,8 +24,11 @@
     transform-origin: var(--trigger-anchor-point);
   }
 
+  /* A select: at least its trigger's width, wider when an option needs it (a time in a narrow field), so an
+     option never wraps; never past the window. */
   .root[data-width='trigger'] {
-    inline-size: var(--trigger-width);
+    inline-size: max-content;
+    min-inline-size: var(--trigger-width);
   }
 
   /* 240px, the artifact's menu width, or the trigger's when that is wider. */

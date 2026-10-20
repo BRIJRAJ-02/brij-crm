@@ -48,9 +48,9 @@ Work that was in flight when the lanes stopped is kept on its lane branches (a `
 - F9. "calendar logo", "also a timefix next to timefix booking": the Timefix mark on bookings, the Google Calendar mark on synced events. Done.
 
 ### Availability
-- F10. "full width". Open.
-- F11. The days off date field is the browser's own, not the design system's. Open.
-- F12. The time zone should be the searchable list, and the start and end fields need room. Open.
+- F10. "full width". Done (20 Oct): full width, the week beside a side column of time zone and days off (Cal.com's layout), and your pages listed with the hours each books on (timefix's rows).
+- F11. The days off date field is the browser's own, not the design system's. Done: the library's DatePicker, in a Form, Enter adds, a missing or past date said on the field.
+- F12. The time zone should be the searchable list, and the start and end fields need room. Done: each zone with its GMT offset (also in the closed field), current names, search by place or offset; times in 12 hour form with room.
 
 ### Public booking page
 - F13. Timefix layout and interaction, our design language.

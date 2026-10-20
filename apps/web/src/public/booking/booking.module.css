@@ -190,13 +190,6 @@
     }
   }
 
-  .brandWorkspace {
-    margin: 0;
-    color: var(--text-secondary);
-    font: var(--text-label);
-    letter-spacing: var(--tracking-label);
-  }
-
   .brandLink {
     display: inline-flex;
     flex-direction: column;
