@@ -28,11 +28,13 @@ let identity: IdentityStore;
 let app: ReturnType<typeof createApp>;
 
 /** Busy times by workspace: the host's at noon, and a signed in visitor's where a test puts them. */
-const memberBusy = new Map<string, readonly BusyInterval[] | 'blocked'>();
+const memberBusy = new Map<string, readonly BusyInterval[] | 'blocked' | 'broken'>();
 const calendar: BookingCalendar = {
   busy: ({ workspaceId }) => {
     const busy = memberBusy.get(workspaceId);
     if (busy === 'blocked') return Promise.resolve({ status: 'blocked' });
+    // A connection whose sealed tokens no longer open, say: the reader throws.
+    if (busy === 'broken') return Promise.reject(new Error('The stored calendar tokens did not open.'));
     return Promise.resolve({ status: 'read', busy: busy ?? [{ start: at('12:00'), end: at('13:00') }] });
   },
   events: () => Promise.resolve({}),
@@ -192,6 +194,8 @@ describe('a guest connecting Google for the visit (AC-721, AC-722)', () => {
     expect(viewer.headers.get('cache-control')).toBe('private, no-store');
     expect(await viewer.json()).toEqual({
       viewer: { name: 'Grace Hopper', email: 'grace@navy.example', source: 'google', calendar: 'on' },
+      isHost: false,
+      canConnect: true,
     });
   });
 
@@ -243,8 +247,14 @@ describe('a guest connecting Google for the visit (AC-721, AC-722)', () => {
     expect(forgot.headers.getSetCookie().some((each) => each.startsWith(`${GUEST_COOKIE}=;`))).toBe(true);
     expect(revoked).toContain('guest:forget@navy.example');
     const tampered = `${cookie.slice(0, -4)}AAAA`;
-    expect(await (await browse(`/api/public/booking/${key}/viewer`, tampered)).json()).toEqual({});
-    expect(await (await browse(`/api/public/booking/${key}/viewer`)).json()).toEqual({});
+    expect(await (await browse(`/api/public/booking/${key}/viewer`, tampered)).json()).toEqual({
+      isHost: false,
+      canConnect: true,
+    });
+    expect(await (await browse(`/api/public/booking/${key}/viewer`)).json()).toEqual({
+      isHost: false,
+      canConnect: true,
+    });
   });
 });
 
@@ -303,6 +313,15 @@ describe('a signed in visitor (AC-720)', () => {
     const later = MONDAY.replace('2026-11-03T00:00:00.000Z', '2026-11-02T23:30:00.000Z');
     const blocked = await slotsOf(await browse(`/api/public/booking/${key}/slots?${later}`, visitor.cookie));
     expect(blocked.viewer).toEqual({ calendar: 'unreachable', clashes: [], best: [] });
+
+    // A reader that throws fails open too: the host's slots still answer.
+    memberBusy.set(visitor.workspace.id, 'broken');
+    const latest = MONDAY.replace('2026-11-03T00:00:00.000Z', '2026-11-02T23:00:00.000Z');
+    const broken = await browse(`/api/public/booking/${key}/slots?${latest}`, visitor.cookie);
+    expect(broken.status).toBe(200);
+    const failedOpen = await slotsOf(broken);
+    expect(failedOpen).toMatchObject({ calendar: 'ok', viewer: { calendar: 'unreachable', clashes: [], best: [] } });
+    expect(Object.keys(failedOpen).toSorted()).toEqual(['calendar', 'slots', 'viewer']);
   });
 
   it('knows a visitor with no calendar, and in no workspace at all, without an overlay', async () => {
@@ -324,7 +343,10 @@ describe('a signed in visitor (AC-720)', () => {
 
   it('is nobody on their own page: no prefill, no overlay', async () => {
     const { host, key } = await hostPage();
-    expect(await (await browse(`/api/public/booking/${key}/viewer`, host.cookie)).json()).toEqual({});
+    expect(await (await browse(`/api/public/booking/${key}/viewer`, host.cookie)).json()).toEqual({
+      isHost: true,
+      canConnect: true,
+    });
     expect((await slotsOf(await browse(`/api/public/booking/${key}/slots?${MONDAY}`, host.cookie))).viewer).toBe(
       undefined,
     );

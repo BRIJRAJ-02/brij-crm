@@ -57,6 +57,25 @@ describe('createBookingClient', () => {
     expect(JSON.parse(typeof body === 'string' ? body : '{}')).toMatchObject({ name: 'Grace' });
   });
 
+  it('sends cookies only to the viewer, the slots and forgetting, and builds the connect address', async () => {
+    const { client, calls } = fake(() => Response.json({}));
+    await client.slots(KEY, { from: 'a', to: 'b', duration: 30, tz: 'UTC' });
+    expect(calls[0]?.init).toMatchObject({ credentials: 'same-origin' });
+    expect(await client.viewer(KEY)).toEqual({});
+    expect(calls[1]).toMatchObject({
+      url: `https://app.test/api/public/booking/${KEY}/viewer`,
+      init: { credentials: 'same-origin' },
+    });
+    await client.forget();
+    expect(calls[2]).toMatchObject({
+      url: 'https://app.test/api/public/booking/connect/forget',
+      init: { method: 'POST', credentials: 'same-origin' },
+    });
+    expect(client.connectUrl(KEY, `/b/${KEY}?d=30`)).toBe(
+      `https://app.test/api/public/booking/${KEY}/connect?return=%2Fb%2F${KEY}%3Fd%3D30`,
+    );
+  });
+
   it('turns an answer with a code into that DataError, with the wait and the issues', async () => {
     const taken = fake(() =>
       Response.json({ code: 'SLOT_TAKEN', message: 'That time was just taken. Pick another.' }, { status: 409 }),

@@ -45,6 +45,17 @@ const COOKIE_VERSION = 'gc1';
 /** The most workspaces read for a signed in visitor's calendar. */
 const MAX_WORKSPACES = 10;
 
+/**
+ * A cookie's name as sent: `__Secure-` outside local, so no plain http page
+ * (or a sibling subdomain over http) can set it for us.
+ */
+export function cookieName(base: string, secure: boolean): string {
+  return secure ? `__Secure-${base}` : base;
+}
+
+/** The longest cookie value a browser keeps (and `verifyValue` reads): past it the guest would silently stay unknown. */
+const COOKIE_MAX = 3800;
+
 /** The keys a guest cookie is sealed and signed with: the token key, and one derived from it for the signature. */
 export interface GuestKeys {
   readonly tokenKey: TokenKey;
@@ -63,12 +74,15 @@ const bindingOf = (email: string): TokenBinding => ({
   accountEmail: email,
 });
 
-/** The cookie's value and life for a guest's grant: the token sealed, the rest signed, both ending with the token. */
+/**
+ * The cookie's value and life for a guest's grant: the token sealed, the rest
+ * signed, both ending with the token. Undefined when it won't fit a cookie.
+ */
 export function sealGuest(
   keys: GuestKeys,
   grant: GuestGrant,
   now: Date,
-): { readonly value: string; readonly maxAge: number } {
+): { readonly value: string; readonly maxAge: number } | undefined {
   const maxAge = Math.max(0, Math.floor((Date.parse(grant.expiresAt) - now.getTime()) / 1000) - 60);
   const sealed = sealTokens(
     keys.tokenKey,
@@ -82,7 +96,7 @@ export function sealGuest(
     maxAge,
     now,
   );
-  return { value, maxAge };
+  return value.length > COOKIE_MAX ? undefined : { value, maxAge };
 }
 
 /** A guest's grant from their cookie, or undefined for none, another key, tampering or an expired one. */
@@ -137,6 +151,8 @@ export interface VisitorRequest {
 /** The visitor, and any session cookies to send back (a session extended on use renews its cookie). */
 export interface FoundVisitor {
   readonly visitor?: Visitor;
+  /** The signed in person hosts this page. */
+  readonly isHost?: true;
   readonly setCookies: readonly string[];
 }
 
@@ -192,7 +208,7 @@ export async function findVisitor(deps: VisitorDeps, request: VisitorRequest): P
   const session = await deps.auth.session(request.headers, request.clientIp);
   if (session !== undefined) {
     const { setCookies, user } = session;
-    if (await request.isHost(user.id)) return { setCookies };
+    if (await request.isHost(user.id)) return { setCookies, isHost: true };
     const calendar = await memberCalendar(deps, user);
     return {
       setCookies,

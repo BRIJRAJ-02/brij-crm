@@ -63,6 +63,7 @@ import {
   findVisitor,
   GUEST_CALLBACK_PATH,
   GUEST_CONNECT_PATH,
+  cookieName,
   GUEST_COOKIE,
   GUEST_COOKIE_PATH,
   GUEST_STATE_COOKIE,
@@ -202,16 +203,21 @@ export function mountPublicBooking(app: Hono<{ Variables: Variables }>, services
     return undefined;
   };
 
-  /** The request's visitor on this page: nobody without the visitor services. */
+  /** The request's visitor on this page: nobody without the visitor services, or when finding them fails. */
   const visitorOf = (c: Context<{ Variables: Variables }>, entry: BookingEntry): Promise<FoundVisitor> => {
     const visitor = services.visitor;
     if (visitor === undefined) return Promise.resolve({ setCookies: [] });
+    const nobody: FoundVisitor = { setCookies: [] };
     return findVisitor(visitor, {
       headers: c.req.raw.headers,
       clientIp: c.get('clientIp'),
-      guestCookie: getCookie(c, GUEST_COOKIE),
+      guestCookie: getCookie(c, cookieName(GUEST_COOKIE, visitor.secure)),
       isHost: (userId) => isPageHost(entry, userId),
       now: services.now?.() ?? new Date(),
+    }).catch((error: unknown) => {
+      // The visitor is a nicety: the page works for nobody in particular.
+      log.warn('booking.visitor.failed', { requestId: c.get('requestId'), ...errorFields(error) });
+      return nobody;
     });
   };
 
@@ -250,9 +256,14 @@ export function mountPublicBooking(app: Hono<{ Variables: Variables }>, services
   app.get('/public/booking/connect/callback', async (c) => {
     const visitor = services.visitor;
     const appUrl = visitor?.appUrl ?? services.ics.appOrigin;
-    const nonce = getCookie(c, GUEST_STATE_COOKIE);
+    if (limited([[`booking:connect:${addressKey(c.get('clientIp'))}`, BOOKING_LIMITS.readsPerAddress]]) !== undefined) {
+      return c.redirect(new URL('/', new URL(appUrl).origin).toString());
+    }
+    const secure = visitor?.secure ?? false;
+    const stateCookie = cookieName(GUEST_STATE_COOKIE, secure);
+    const nonce = getCookie(c, stateCookie);
     // Single use: whatever happens next, this browser's state is spent.
-    deleteCookie(c, GUEST_STATE_COOKIE, { path: GUEST_CONNECT_PATH, secure: visitor?.secure ?? true });
+    deleteCookie(c, stateCookie, { path: GUEST_CONNECT_PATH, secure });
     const payload =
       visitor?.stateKey === undefined
         ? undefined
@@ -280,7 +291,11 @@ export function mountPublicBooking(app: Hono<{ Variables: Variables }>, services
       const grant = await guest.calendar.exchange(code, guestRedirectUri(appUrl));
       const now = services.now?.() ?? new Date();
       const sealed = sealGuest(guest.keys, grant, now);
-      setCookie(c, GUEST_COOKIE, sealed.value, {
+      if (sealed === undefined) {
+        log.warn('booking.guest_connect.failed', { requestId: c.get('requestId'), code: 'COOKIE_TOO_LARGE' });
+        return c.redirect(backTo(appUrl, path, 'failed'));
+      }
+      setCookie(c, cookieName(GUEST_COOKIE, visitor.secure), sealed.value, {
         path: GUEST_COOKIE_PATH,
         httpOnly: true,
         sameSite: 'Lax',
@@ -296,13 +311,16 @@ export function mountPublicBooking(app: Hono<{ Variables: Variables }>, services
   });
 
   app.post('/public/booking/connect/forget', async (c) => {
+    const refused = limited([[`booking:connect:${addressKey(c.get('clientIp'))}`, BOOKING_LIMITS.readsPerAddress]]);
+    if (refused !== undefined) return refused;
     const visitor = services.visitor;
     const guest = visitor?.guest;
+    const guestCookie = cookieName(GUEST_COOKIE, visitor?.secure ?? false);
     const grant =
       guest === undefined
         ? undefined
-        : openGuest(guest.keys, getCookie(c, GUEST_COOKIE), services.now?.() ?? new Date());
-    deleteCookie(c, GUEST_COOKIE, { path: GUEST_COOKIE_PATH, secure: visitor?.secure ?? true });
+        : openGuest(guest.keys, getCookie(c, guestCookie), services.now?.() ?? new Date());
+    deleteCookie(c, guestCookie, { path: GUEST_COOKIE_PATH, secure: visitor?.secure ?? false });
     // Best effort, and never awaited past its own timeout: the token dies within the hour anyway.
     if (guest !== undefined && grant !== undefined) await guest.calendar.revoke(grant.accessToken);
     return c.json({}, 200, { 'cache-control': 'no-store' });
@@ -338,17 +356,24 @@ export function mountPublicBooking(app: Hono<{ Variables: Variables }>, services
     try {
       const entry = await enterBookingPage({ db }, key);
       const { from, to, tz } = query.data;
-      const found = visitorOf(c, entry);
+      // Knowing the visitor and reading their busy times share one budget, and never fail the host's slots.
+      const deadline = performance.now() + VISITOR_BUSY_TIMEOUT_MS;
+      const found = within(visitorOf(c, entry), VISITOR_BUSY_TIMEOUT_MS, { setCookies: [] });
       // The visitor's busy times, with room for the Best rule's clear 15 minutes, read beside the host's.
       const busy = found.then(({ visitor }) =>
         visitor?.busy === undefined
           ? undefined
           : within(
-              visitor.busy(
-                new Date(Date.parse(from) - BEST_CLEAR_MS).toISOString(),
-                new Date(Date.parse(to) + BEST_CLEAR_MS).toISOString(),
-              ),
-              VISITOR_BUSY_TIMEOUT_MS,
+              visitor
+                .busy(
+                  new Date(Date.parse(from) - BEST_CLEAR_MS).toISOString(),
+                  new Date(Date.parse(to) + BEST_CLEAR_MS).toISOString(),
+                )
+                .catch((error: unknown) => {
+                  log.warn('booking.visitor_busy.failed', { requestId: c.get('requestId'), ...errorFields(error) });
+                  return 'unreachable' as const;
+                }),
+              Math.max(0, deadline - performance.now()),
               'unreachable' as const,
             ),
       );
@@ -373,8 +398,12 @@ export function mountPublicBooking(app: Hono<{ Variables: Variables }>, services
     if (refused !== undefined) return refused;
     try {
       const entry = await enterBookingPage({ db }, key);
-      const { visitor, setCookies } = await visitorOf(c, entry);
-      const body: PublicViewerAnswer = visitor === undefined ? {} : { viewer: visitor.viewer };
+      const { visitor, setCookies, isHost } = await visitorOf(c, entry);
+      const body: PublicViewerAnswer = {
+        ...(visitor === undefined ? {} : { viewer: visitor.viewer }),
+        isHost: isHost === true,
+        canConnect: services.visitor?.guest !== undefined && services.visitor.stateKey !== undefined,
+      };
       return ok(body, setCookies);
     } catch (error) {
       return refusalAnswer(error);
@@ -401,7 +430,7 @@ export function mountPublicBooking(app: Hono<{ Variables: Variables }>, services
     }
     const nonce = randomBytes(18).toString('base64url');
     const state = signValue(visitor.stateKey, GUEST_STATE_VERSION, { r: back, n: nonce }, GUEST_STATE_SECONDS);
-    setCookie(c, GUEST_STATE_COOKIE, nonce, {
+    setCookie(c, cookieName(GUEST_STATE_COOKIE, visitor.secure), nonce, {
       path: GUEST_CONNECT_PATH,
       httpOnly: true,
       sameSite: 'Lax',

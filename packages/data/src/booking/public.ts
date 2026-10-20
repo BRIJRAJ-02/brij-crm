@@ -1,6 +1,6 @@
 // `@crm/data/booking`: the public booking page's one way to the API (spec
 // 0025). The public bundle never loads the app's data layer, the oRPC client
-// or Zod: three plain calls to `/api/public/booking/*` on the page's own
+// or Zod: plain calls to `/api/public/booking/*` on the page's own
 // origin, each failure a `DataError` with the API's code (`SLOT_TAKEN`,
 // `BOOKING_CLOSED`, `NOT_FOUND`, `RATE_LIMITED` with its wait, `INPUT_INVALID`
 // with issues), and being offline `API_UNAVAILABLE`.
@@ -10,6 +10,7 @@ import type {
   PublicBookingPage,
   PublicManagedBooking,
   PublicSlots,
+  PublicViewerAnswer,
 } from '@crm/contracts/booking';
 import { dataError, isFetchFailure, parseRetryAfter, toDataError, type DataError } from '../errors.ts';
 import type { FetchLike } from '../fetch.ts';
@@ -22,6 +23,10 @@ export type {
   PublicBookingPage,
   PublicLocation,
   PublicSlot,
+  PublicSlots,
+  PublicViewer,
+  PublicViewerAnswer,
+  SlotsOverlay,
 } from '@crm/contracts/booking';
 export { isDataError, type DataError } from '../errors.ts';
 
@@ -39,6 +44,12 @@ export interface BookingClient {
   managed(token: string): Promise<PublicManagedBooking>;
   /** Where the booking's calendar file downloads from (a plain link: Add to calendar, Apple and .ics). */
   icsUrl(token: string): string;
+  /** Who the visitor is (spec 0028): signed in to Timefix here, a guest who connected Google, or nobody. */
+  viewer(publicKey: string): Promise<PublicViewerAnswer>;
+  /** Where Connect calendar goes: Google for this visit, then back to `returnPath` (this page's own address). */
+  connectUrl(publicKey: string, returnPath: string): string;
+  /** Forgets a guest's connected calendar at once. */
+  forget(): Promise<void>;
 }
 
 /** A failure answer as a DataError: the API's code and message, its wait, and its issues. */
@@ -70,6 +81,7 @@ export function createBookingClient(options: {
   const call = async <T>(path: string, init: RequestInit = {}): Promise<T> => {
     let response: Response;
     try {
+      // Cookies go only where they say who the visitor is (spec 0028): the viewer, the slots and forgetting.
       response = await send(`${base}/${path}`, { credentials: 'omit', ...init });
     } catch (error) {
       if (error instanceof DOMException && error.name === 'AbortError') throw error;
@@ -90,7 +102,7 @@ export function createBookingClient(options: {
           duration: String(query.duration),
           tz: query.tz,
         }).toString()}`,
-        signal === undefined ? {} : { signal },
+        { credentials: 'same-origin', ...(signal === undefined ? {} : { signal }) },
       ),
     book: (publicKey, input) =>
       call<PublicBooked>(`${encodeURIComponent(publicKey)}/book`, {
@@ -100,6 +112,13 @@ export function createBookingClient(options: {
       }),
     managed: (token) => call<PublicManagedBooking>(`manage/${encodeURIComponent(token)}`),
     icsUrl: (token) => `${base}/manage/${encodeURIComponent(token)}/ics`,
+    viewer: (publicKey) =>
+      call<PublicViewerAnswer>(`${encodeURIComponent(publicKey)}/viewer`, { credentials: 'same-origin' }),
+    connectUrl: (publicKey, returnPath) =>
+      `${base}/${encodeURIComponent(publicKey)}/connect?${new URLSearchParams({ return: returnPath }).toString()}`,
+    forget: async () => {
+      await call<unknown>('connect/forget', { method: 'POST', credentials: 'same-origin' });
+    },
   };
 }
 

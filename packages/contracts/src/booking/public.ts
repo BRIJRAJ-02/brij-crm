@@ -111,8 +111,16 @@ export const PublicViewer = z.object({
 /** A recognised visitor. */
 export type PublicViewer = z.infer<typeof PublicViewer>;
 
-/** The viewer read's answer: the visitor, when we know them. */
-export const PublicViewerAnswer = z.object({ viewer: PublicViewer.optional() });
+/**
+ * The viewer read's answer: the visitor, when we know them; `isHost` on the
+ * host's own page (no bar, no prefill); `canConnect` when a guest may connect
+ * Google here (calendar sync is set up).
+ */
+export const PublicViewerAnswer = z.object({
+  viewer: PublicViewer.optional(),
+  isHost: z.boolean(),
+  canConnect: z.boolean(),
+});
 /** The viewer read's answer. */
 export type PublicViewerAnswer = z.infer<typeof PublicViewerAnswer>;
 
