@@ -34,10 +34,9 @@ function chipsOf(form: FormSummary): readonly string[] {
   ];
 }
 
-/** Its grey badge, only when it isn't taking enquiries: Not published until its first publish, then Off (as a page). */
+/** Its grey badge: Not published until its first publish. Off needs none (the muted title and the switch say it). */
 function badgeOf(form: FormSummary): { readonly badge?: string } {
-  if (form.liveVersionNumber === undefined) return { badge: strings.notPublishedYet };
-  return form.status === 'paused' ? { badge: strings.offTag } : {};
+  return form.liveVersionNumber === undefined ? { badge: strings.notPublishedYet } : {};
 }
 
 /** Captures › Forms: New form, then one row per form, newest change first, read from the data layer's held list. */

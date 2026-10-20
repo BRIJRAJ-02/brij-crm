@@ -12,7 +12,7 @@ On 19 October 2026 the owner asked for Links and Forms to look the same, since a
 
 On 20 October 2026 the owner asked for the Captures screens, ported from timefix, to be built on our own design system: the records area's look, not Cal.com's event types cards. So LinkList has two densities.
 
-- `density="compact"`: the records area's rows. One line at size-row (34px), no frame and no raised box, rows parted by the grid's hairline (`border-subtle`). Each row is the title with its address inline and muted, then the facts (`chips`) as one inline cell of Badges, then the badge, the switch and the actions. The cells sit on a subgrid, so the facts and the ends line up down the list. `description` isn't shown. Under 480px of list, the facts and the address give way, so the title, switch and actions stay on one line. Captures › Links and Forms use it.
+- `density="compact"`: the records area's rows. One line at size-row (34px), no frame and no raised box, rows parted by the grid's hairline (`border-subtle`). Each row is the title with its address inline and muted, then the facts (`chips`) as one cell of muted text ("30 min · 60 min"), then the badge, the switch and the actions. Facts are text and states are Badges, so a count never reads as a state. An off row carries no Off badge in compact: its muted title and its switch say it (owner, 20 October 2026), so `badge` is for what they can't ("Not published", "Private", "Copying…"). The cells sit on a subgrid, so the facts and the ends line up down the list. `description` isn't shown. Under 480px of list, the facts and the address give way, so the title, switch and actions stay on one line. Captures › Links and Forms use it.
 - `density="comfortable"` (the default): rows about 60px tall in a raised, bordered box, with the description and the chips under the title.
 
 `placement` says where a compact list sits:
@@ -20,7 +20,7 @@ On 20 October 2026 the owner asked for the Captures screens, ported from timefix
 - `placement="page"` (the default): edge to edge across the view, with the page's 16px gutter inside each row, so hover and the dividers run the full width (Captures, under its tab strip, with no PageColumn around it).
 - `placement="card"`: inside a Card's padding, rows inset 8px like a Table's cells, and no hairline under the last row (the card's edge closes it). Under 480px of list a row takes more lines rather than hiding anything: the address wraps under the title and the facts sit under it, with the end beside them.
 
-The references (Mobbin, 20 October 2026): Attio's record lists gave the edge to edge one line rows, the hairlines and the facts lined up in a column; Notion's settings rows and Klaviyo's list gave the switch and the quiet menu at the row's end on one line; Stripe's invoice rows gave the status badge inline before the actions. Cal.com's event types and Calendly's cards are the framed, two and three line rows `comfortable` keeps, which `compact` moves away from.
+The references (Mobbin, 20 October 2026): Attio's record lists gave the edge to edge one line rows, the hairlines and the facts lined up in a column; Notion's settings rows and Klaviyo's list gave the switch and the quiet menu at the row's end on one line; Stripe's invoice rows gave the status badge inline before the actions, with the plain facts beside it as text. Cal.com's event types and Calendly's cards are the framed, two and three line rows `comfortable` keeps, which `compact` moves away from.
 
 ### In a Card: Bookings › Availability (PagesHours)
 

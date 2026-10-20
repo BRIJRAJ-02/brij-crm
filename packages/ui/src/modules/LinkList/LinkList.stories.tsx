@@ -283,13 +283,18 @@ export const NoAccess: Story = {
   },
 };
 
+/** Compact rows as the app builds them: off shows in the muted title and the switch, so no Off badge. */
+function withoutOff(rows: readonly LinkRow[]): LinkRow[] {
+  return rows.map(({ badge, ...row }) => (badge === undefined || badge === 'Off' ? row : { ...row, badge }));
+}
+
 /** Compact (Captures): one line rows at size-row with no frame, edge to edge with the page's gutter inside them. */
 export const Compact: Story = {
   args: { density: 'compact', isToolbarHidden: true },
   parameters: { crm: { preview: true } },
   render: (args) => (
     <Stage width="fill">
-      <LinkList {...args} rows={pages()} />
+      <LinkList {...args} rows={withoutOff(pages())} />
     </Stage>
   ),
   play: async ({ canvas, args }) => {
@@ -298,7 +303,8 @@ export const Compact: Story = {
     await expect(
       canvas.queryByText('A walk round the site with the project lead, then questions.'),
     ).not.toBeInTheDocument();
-    await expect(canvas.getByText('60 min')).toBeVisible();
+    await expect(canvas.getByText('30 min · 60 min')).toBeVisible();
+    await expect(canvas.queryByText('Off')).not.toBeInTheDocument();
     await userEvent.click(canvas.getByText('Site visit'));
     await expect(args.onOpen).toHaveBeenCalledWith('visit');
   },
@@ -309,11 +315,11 @@ export const CompactForms: Story = {
   args: { density: 'compact', isToolbarHidden: true, label: 'Forms', searchLabel: 'Search forms' },
   render: (args) => (
     <Stage width="fill">
-      <LinkList {...args} rows={forms()} />
+      <LinkList {...args} rows={withoutOff(forms())} />
     </Stage>
   ),
   play: async ({ canvas }) => {
-    const first = canvas.getByText('12 responses').getBoundingClientRect();
+    const first = canvas.getByText('12 responses · 2 spam').getBoundingClientRect();
     const second = canvas.getAllByText('0 responses')[0]?.getBoundingClientRect();
     await expect(second?.left).toBe(first.left);
   },
@@ -325,7 +331,7 @@ export const CompactKeyboard: Story = {
   parameters: { crm: { screenshot: false } },
   render: (args) => (
     <Stage width="fill">
-      <LinkList {...args} rows={pages()} />
+      <LinkList {...args} rows={withoutOff(pages())} />
     </Stage>
   ),
   play: async ({ canvas, args }) => {
@@ -344,11 +350,11 @@ export const CompactNarrow: Story = {
   args: { density: 'compact', isToolbarHidden: true },
   render: (args) => (
     <Stage width="narrow">
-      <LinkList {...args} rows={pages()} />
+      <LinkList {...args} rows={withoutOff(pages())} />
     </Stage>
   ),
   play: async ({ canvas }) => {
-    await expect(canvas.getByText('60 min')).not.toBeVisible();
+    await expect(canvas.getByText('30 min · 60 min')).not.toBeVisible();
     await expect(canvas.getByText('/acme/intro-call')).not.toBeVisible();
     for (const row of canvas.getAllByRole('row')) await expect(row.getBoundingClientRect().height).toBeLessThan(40);
   },
@@ -417,7 +423,7 @@ export const CompactNoMatches: Story = {
   args: { density: 'compact' },
   render: (args) => (
     <Stage width="fill">
-      <LinkList {...args} rows={pages()} />
+      <LinkList {...args} rows={withoutOff(pages())} />
     </Stage>
   ),
   play: async ({ canvas }) => {
@@ -446,7 +452,7 @@ export const CompactPending: Story = {
             actions: icons('Intro call (copy)', true),
             isPending: true,
           },
-          ...pages(),
+          ...withoutOff(pages()),
         ]}
       />
     </Stage>
@@ -464,7 +470,7 @@ export const CompactLongFacts: Story = {
     <Stage width="fill">
       <LinkList
         {...args}
-        rows={forms().map((row) =>
+        rows={withoutOff(forms()).map((row) =>
           row.id === 'contact'
             ? { ...row, chips: ['12 responses', '2 spam', 'Last enquiry Mon, Oct 19 · 3:42 PM', 'Shared with sales'] }
             : row,
@@ -492,7 +498,6 @@ export const CompactInCardNarrow: Story = {
               title: 'Site visit with the project lead',
               address: 'Mon to Fri, 9:00 AM to 5:00 PM',
               chips: ['Your hours'],
-              badge: 'Off',
               isOff: true,
             },
           ]}

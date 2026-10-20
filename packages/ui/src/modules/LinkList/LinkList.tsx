@@ -38,8 +38,9 @@ export interface LinkRow {
   /** Up to two lines under the title (a page's description). Left out of `density="compact"`'s one line rows. */
   readonly description?: string;
   /**
-   * Short facts as chips ("30 min", "60 min"; "4 questions", "12 responses"): under the title, or in
-   * `density="compact"` one inline cell after it, lined up down the list.
+   * Short facts ("30 min", "60 min"; "4 questions", "12 responses"): Badges under the title, or in
+   * `density="compact"` one cell of muted text after it ("30 min · 60 min"), lined up down the list, so they
+   * read apart from the states, which keep their Badge.
    */
   readonly chips: readonly string[];
   /** A grey badge before the switch, only when it isn't taking people ("Off", "Not published", "Copying…"). */
@@ -294,7 +295,7 @@ export function LinkList({
               </div>
               {isCompact && (
                 <div className={styles.facts}>
-                  <Chips chips={row.chips} />
+                  {row.chips.length > 0 && <span className={styles.factText}>{row.chips.join(' · ')}</span>}
                 </div>
               )}
               <div className={styles.end}>

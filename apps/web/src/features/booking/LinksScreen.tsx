@@ -71,13 +71,8 @@ export function LinksScreen({ data, slug }: LinksScreenProps) {
       title: page.title,
       address: `/${slug}/${page.slug}`,
       chips: chipsOf(page),
-      ...(isPending
-        ? { badge: strings.copying }
-        : page.status === 'paused'
-          ? { badge: strings.offTag }
-          : page.isPrivate
-            ? { badge: strings.private }
-            : {}),
+      // Off shows in the muted title and the switch; the badge is for what they can't say.
+      ...(isPending ? { badge: strings.copying } : page.isPrivate ? { badge: strings.private } : {}),
       isOff: page.status === 'paused',
       toggle: {
         label: strings.isOn(page.title),

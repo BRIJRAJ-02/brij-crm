@@ -51,7 +51,8 @@ export function PagesHours({ slug, pages, status, onRetry, mine, locale, onOpen 
           ? []
           : [`${zoneLabel(hours.timeZone)} ${zoneOffset(hours.timeZone, now)}`]),
       ],
-      ...(page.status === 'paused' ? { badge: strings.offTag } : page.isPrivate ? { badge: strings.private } : {}),
+      // Off shows in the muted title; the badge is for what it can't say.
+      ...(page.isPrivate ? { badge: strings.private } : {}),
       isOff: page.status === 'paused',
     };
   });

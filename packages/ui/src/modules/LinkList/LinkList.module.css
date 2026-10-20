@@ -272,8 +272,16 @@
     overflow: hidden;
   }
 
-  .frame[data-density='compact'] .chips {
-    flex-wrap: nowrap;
+  /* Compact facts are muted text, not Badges, so they read apart from the state Badge beside them. */
+  .factText {
+    min-inline-size: 0;
+    overflow: hidden;
+    color: var(--text-secondary);
+    font: var(--text-label);
+    font-variant-numeric: tabular-nums;
+    letter-spacing: var(--tracking-label);
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
 
   .frame[data-density='compact'] .end {
