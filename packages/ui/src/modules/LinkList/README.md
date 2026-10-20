@@ -15,7 +15,11 @@ On 19 October 2026 the owner asked for Links and Forms to look the same, since a
   <LinkList
     label="Booking pages"
     searchLabel="Search booking pages"
-    actions={<Button variant="primary" icon="plus">New booking page</Button>}
+    actions={
+      <Button variant="primary" icon="plus">
+        New booking page
+      </Button>
+    }
     rows={[
       {
         id,
@@ -50,6 +54,7 @@ On 19 October 2026 the owner asked for Links and Forms to look the same, since a
 - The search field narrows the rows by title or address as you type, and says when nothing matches, with Clear search. `actions` sit at the other end of its row.
 - `status`: `loading` (the search row, then three skeleton rows in the rows' shape, after the loading delay), `error` (the search row stays, so New still works, then an EmptyState with Try again from `onRetry`, titled `errorTitle`) or `no-access`.
 - A page that draws the search and action elsewhere passes `isToolbarHidden`, holds the search in `query` and `onQueryChange`, and draws `LinkListToolbar` where it wants them. Captures puts it at the end of its Links · Forms strip (Tabs' `end`, the owner's call on 20 October 2026), at `size="sm"`.
+- A short list beside other work leaves the search out the same way (`isToolbarHidden`, with no `LinkListToolbar` anywhere) and can leave out each row's `actions` and `toggle`: the row itself opens. Bookings › Availability lists the member's pages with the hours each books on like this, inside a Card.
 - `emptyState` shows with no rows at all, with no search. A screen whose list is empty draws its EmptyState in a centred PageColumn (`align="center"`), with the New button in it.
 
 ## States

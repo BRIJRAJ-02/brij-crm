@@ -17,7 +17,7 @@ export interface PageColumnProps {
   readonly actions?: ReactNode;
   /**
    * A side column beside the children (Bookings › Availability: the time zone and days off beside the week),
-   * at the end when the page is wide enough, under them when it isn't.
+   * at the end when the page is wide enough, under them when it isn't. Use it with `width="full"`.
    */
   readonly aside?: ReactNode;
   /** A bar that sticks to the foot of the view while it has something to say ("Unsaved changes", Save). */

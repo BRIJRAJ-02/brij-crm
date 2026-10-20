@@ -40,8 +40,11 @@ export interface LinkRow {
   /** Off (not taking people): the title reads in the secondary colour, as the switch says. */
   readonly isOff?: boolean;
   readonly toggle?: LinkToggle;
-  /** Open, Copy link and the row menu: quiet (ghost) icon Buttons at the row's end, the way the app's rows carry their actions. */
-  readonly actions: ReactNode;
+  /**
+   * Open, Copy link and the row menu: quiet (ghost) icon Buttons at the row's end, the way the app's rows carry
+   * their actions. Left out, the row has none (the row itself opens).
+   */
+  readonly actions?: ReactNode;
   /** Shown before the server made it (a copy on its way): drawn quieter, and it doesn't open yet. */
   readonly isPending?: boolean;
 }
@@ -269,9 +272,11 @@ export function LinkList({
               <div className={styles.end}>
                 {row.badge !== undefined && <Badge text={row.badge} />}
                 {row.toggle !== undefined && <RowSwitch toggle={row.toggle} isPending={row.isPending === true} />}
-                <div className={styles.rowActions} role="group" aria-label={row.title}>
-                  {row.actions}
-                </div>
+                {row.actions !== undefined && row.actions !== null && (
+                  <div className={styles.rowActions} role="group" aria-label={row.title}>
+                    {row.actions}
+                  </div>
+                )}
               </div>
             </GridListItem>
           )}

@@ -27,7 +27,7 @@ New. A booking page needs several windows a day (split shifts), a day turned off
 ```
 
 - **All days start** and **All days end** set the first window's start and the last window's end of every day that is on; each reads "Mixed" while the days differ.
-- The switch turns a day on (09:00 to 17:00) or off; a day with no window is off and reads "Unavailable".
+- The switch turns a day on (9:00 AM to 5:00 PM, stored as `09:00` to `17:00`) or off; a day with no window is off and reads "Unavailable".
 - Each window is a pair of time Selects every `stepMinutes` (30 by default), in the reader's own clock from the provider's language ("9:30 AM", or "09:30" where the day runs to 24 hours), the last end "Midnight". Values stay `HH:MM`. **+** on the first window adds the hour after the last (at most 6 a day); **−** on any other removes it.
 - **Copy times to** opens a Popover of the other days with Select all and **Apply**, and calls `onChange` for each day chosen with this day's windows.
 - `isReadOnly` shows the week as text, each day's windows or "Unavailable", with no controls: hours that come from elsewhere, such as a page that follows its member's hours.

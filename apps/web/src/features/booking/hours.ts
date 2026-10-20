@@ -166,7 +166,7 @@ export function clockLabel(time: string, locale: string): string {
 
 /**
  * A week in a line per set of days with the same hours, Monday first, as timefix prints a page's hours:
- * "Mon – Fri, 9:00 AM – 5:00 PM" over "Sat, 10:00 AM – 1:00 PM". Three or more days in a row read as a run.
+ * "Mon – Fri, 9:00 AM to 5:00 PM" over "Sat, 10:00 AM to 1:00 PM". Three or more days in a row read as a run.
  */
 export function weekSummary(availability: BookingAvailability, locale: string): readonly string[] {
   const day = new Intl.DateTimeFormat(locale, { weekday: 'short', timeZone: 'UTC' });
@@ -176,7 +176,10 @@ export function weekSummary(availability: BookingAvailability, locale: string): 
   WEEKDAYS.forEach((weekday, index) => {
     const ranges = availability.weekly[weekday];
     if (ranges.length === 0) return;
-    const key = ranges.map(([start, end]) => `${clockLabel(start, locale)} – ${clockLabel(end, locale)}`).join(', ');
+    // "to", as the week editor reads a window, so a page's hours read the same here and in its editor.
+    const key = ranges
+      .map(([start, end]) => `${clockLabel(start, locale)} ${strings.to} ${clockLabel(end, locale)}`)
+      .join(', ');
     groups.set(key, [...(groups.get(key) ?? []), index]);
   });
   if (groups.size === 0) return [strings.noDaysOpen];

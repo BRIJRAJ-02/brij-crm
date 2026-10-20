@@ -21,11 +21,22 @@ export interface AvailabilityScreenProps {
   readonly availability: BookingAvailability;
   /** The member's own pages, listed under the week with the hours each books on. */
   readonly pages: readonly BookingPageView[];
+  /** `error` when the pages didn't load: the list says so, with Try again. */
+  readonly pagesStatus: 'ready' | 'error';
+  readonly onRetryPages: () => void;
   readonly locale: string;
 }
 
 /** The week and the days off, saved together. */
-export function AvailabilityScreen({ data, slug, availability: loaded, pages, locale }: AvailabilityScreenProps) {
+export function AvailabilityScreen({
+  data,
+  slug,
+  availability: loaded,
+  pages,
+  pagesStatus,
+  onRetryPages,
+  locale,
+}: AvailabilityScreenProps) {
   const navigate = useNavigate();
   const [saved, setSaved] = useState(loaded);
   const [draft, setDraft] = useState(loaded);
@@ -129,6 +140,8 @@ export function AvailabilityScreen({ data, slug, availability: loaded, pages, lo
             <PagesHours
               slug={slug}
               pages={pages}
+              status={pagesStatus}
+              onRetry={onRetryPages}
               mine={draft}
               locale={locale}
               onOpen={(pageId) => void navigate({ href: pageEditorHref(slug, pageId) })}

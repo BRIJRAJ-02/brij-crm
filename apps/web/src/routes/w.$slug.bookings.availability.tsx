@@ -10,13 +10,23 @@ import { WorkspacePage } from '../features/workspace/WorkspacePage.tsx';
 // data layer (weekdays 09:00 to 17:00 in the browser's zone until set). The Bookings layout arrives with the shell lane.
 export const Route = createFileRoute('/w/$slug/bookings/availability')({
   loader: async ({ context, params }) => {
-    const [{ availability }, pages, access] = await Promise.all([
+    const [{ availability }, listed, access] = await Promise.all([
       context.data.bookings.hours(params.slug, browserZone()),
-      // The pages beside the week; a member who can't list them just doesn't see the list.
-      context.data.bookingPages.list(params.slug).catch(() => []),
+      // The pages beside the week. A member who may not list them sees no list; any other failure says so there.
+      context.data.bookingPages.list(params.slug).then(
+        (pages) => ({ status: 'ready' as const, pages }),
+        (error: unknown) =>
+          isDataError(error) && error.code === 'FORBIDDEN'
+            ? { status: 'ready' as const, pages: [] }
+            : { status: 'error' as const, pages: [] },
+      ),
       context.data.access.mine(params.slug),
     ]);
-    return { availability, pages: pages.filter((page) => page.ownerMemberId === access.memberId) };
+    return {
+      availability,
+      pagesStatus: listed.status,
+      pages: listed.pages.filter((page) => page.ownerMemberId === access.memberId),
+    };
   },
   pendingComponent: AvailabilityPending,
   errorComponent: AvailabilityError,
@@ -24,7 +34,8 @@ export const Route = createFileRoute('/w/$slug/bookings/availability')({
 });
 
 function AvailabilityRoute() {
-  const { availability, pages } = Route.useLoaderData();
+  const { availability, pages, pagesStatus } = Route.useLoaderData();
+  const router = useRouter();
   const { slug } = Route.useParams();
   const { data } = Route.useRouteContext();
   return (
@@ -33,7 +44,9 @@ function AvailabilityRoute() {
       slug={slug}
       availability={availability}
       pages={pages}
-      locale={navigator.languages[0] ?? 'en-GB'}
+      pagesStatus={pagesStatus}
+      onRetryPages={() => void router.invalidate()}
+      locale={navigator.languages[0] ?? 'en-US'}
     />
   );
 }

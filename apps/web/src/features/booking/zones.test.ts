@@ -43,11 +43,11 @@ describe('a week in a line per set of days', () => {
     const nine = [['09:00', '17:00']] as [string, string][];
     expect(
       weekSummary(week({ mon: nine, wed: nine, thu: nine, fri: nine, sat: [['10:00', '13:00']] }), 'en-US'),
-    ).toEqual(['Mon, Wed – Fri, 9:00 AM – 5:00 PM', 'Sat, 10:00 AM – 1:00 PM']);
+    ).toEqual(['Mon, Wed – Fri, 9:00 AM to 5:00 PM', 'Sat, 10:00 AM to 1:00 PM']);
   });
 
   it('says Midnight at a day’s end, and when nothing is open', () => {
-    expect(weekSummary(week({ sun: [['13:00', '24:00']] }), 'en-US')).toEqual(['Sun, 1:00 PM – Midnight']);
+    expect(weekSummary(week({ sun: [['13:00', '24:00']] }), 'en-US')).toEqual(['Sun, 1:00 PM to Midnight']);
     expect(weekSummary(week({}), 'en-US')).toEqual(['No days open']);
   });
 });

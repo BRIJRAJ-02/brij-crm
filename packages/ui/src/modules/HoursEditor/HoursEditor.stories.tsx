@@ -134,3 +134,17 @@ export const ReadOnly: Story = {
     await expect(canvas.queryByRole('switch')).not.toBeInTheDocument();
   },
 };
+
+/** In a language whose day runs to 24 hours (British English): the same week reads 13:00, not 1:00 PM. */
+export const TwentyFourHourClock: Story = {
+  globals: { locale: 'en-GB' },
+  args: {
+    label: 'Weekly hours',
+    isReadOnly: true,
+    rows: [{ id: 'mon', label: 'Monday', ranges: [['13:00', '24:00']] }],
+    onChange: fn(),
+  },
+  play: async ({ canvas }) => {
+    await expect(canvas.getByText('13:00 to Midnight')).toBeInTheDocument();
+  },
+};

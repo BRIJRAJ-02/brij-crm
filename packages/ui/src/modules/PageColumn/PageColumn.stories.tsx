@@ -94,6 +94,23 @@ export const WithAside: Story = {
   },
 };
 
+/** Too narrow for both: the side column wraps under the children at full width. */
+export const WithAsideNarrow: Story = {
+  args: { width: 'full' },
+  render: (args) => (
+    <Stage width="narrow">
+      <PageColumn {...args} aside={<Card title="Time zone">Europe/London</Card>}>
+        <Card title="Weekly hours">Monday to Friday, 09:00 to 17:00.</Card>
+      </PageColumn>
+    </Stage>
+  ),
+  play: async ({ canvas }) => {
+    const main = canvas.getByText('Weekly hours').getBoundingClientRect();
+    const side = canvas.getByText('Time zone').getBoundingClientRect();
+    await expect(side.top).toBeGreaterThan(main.bottom);
+  },
+};
+
 /** Alone on the page: the whole height, its child in the middle (a list's empty state). */
 export const Centered: Story = {
   args: { width: 'full', align: 'center' },
