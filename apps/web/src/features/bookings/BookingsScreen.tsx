@@ -777,7 +777,10 @@ function groupsOf(
       id: booking.id,
       date: shortDate(start),
       time: timeRange(booking.startsAt, booking.endsAt, locale),
-      ...(booking.videoUrl === undefined || booking.status === 'cancelled'
+      // Join only while it can still be joined: not once cancelled, nor once it has ended.
+      ...(booking.videoUrl === undefined ||
+      booking.status === 'cancelled' ||
+      Date.parse(booking.endsAt) <= now.getTime()
         ? {}
         : { join: { href: booking.videoUrl, provider: providerOf(booking.videoUrl) } }),
       title: booking.pageTitle,
