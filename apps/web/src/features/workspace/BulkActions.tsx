@@ -26,7 +26,7 @@ import {
   bulkPath,
   bulkStrings,
   deleteToast,
-  editToast,
+  bulkEditToast,
   needsConfirm,
   recordsWord,
 } from './bulk.ts';
@@ -235,7 +235,7 @@ export function useBulkActions({
   });
   if (editing !== undefined && editing !== lastEdited) setLastEdited(editing);
 
-  const edit = async (recordIds: readonly string[], choice: BulkEditChoice) => {
+  const edit = async (recordIds: readonly string[], choice: BulkEditChoice, fromToast = false) => {
     const result = await data.records.bulkEdit(slug, object.id, recordIds, {
       attributeId: choice.definition.id,
       type: choice.definition.type,
@@ -243,22 +243,27 @@ export function useBulkActions({
       op: choice.op,
       ...(Object.hasOwn(choice, 'value') ? { value: choice.value } : {}),
     });
-    const toast = editToast(
+    const toast = bulkEditToast(
       result,
       object,
       (undoId) => {
         runUndo(data, toasts, slug, undoId);
       },
       () => {
-        void edit(recordIds, choice);
+        void edit(recordIds, choice, true);
       },
+      { fromToast },
     );
     if (toast !== undefined) raise(toast);
     return result;
   };
 
+  // The change a counted edit job will make, restated in its confirm (the dialog is gone by then).
+  const [jobChange, setJobChange] = useState<BulkEditChoice | undefined>(undefined);
+
   /** An edit too big for one request starts a job; a refusal to start shows in the dialog that asked. */
   const editAsJob = async (choice: BulkEditChoice): Promise<BulkEditResult> => {
+    setJobChange(choice);
     const failure = await start('edit', {
       attributeId: choice.definition.id,
       op: choice.op,
@@ -280,13 +285,16 @@ export function useBulkActions({
         isTotalAtLeast={isTotalAtLeast}
         isAllMatching={selection.kind === 'all-matching'}
         {...(isRunning ? {} : { onSelectAllMatching: ticked.selectAll })}
-        onClear={onClear}
+        onClear={() => {
+          bulkJob.forget();
+          onClear();
+        }}
         {...(progress === undefined ? {} : { progress })}
         {...(job?.cancellable !== true ? {} : { onCancel: bulkJob.cancel })}
       >
         {note !== undefined ? (
-          <Callout placement="bar" isAnnounced>
-            {note}
+          <Callout placement="bar" tone={note.tone} isAnnounced>
+            {note.text}
           </Callout>
         ) : object.access !== 'write' ? (
           // Spec 0009's words for an object the person may only read; the server refuses them anyway.
@@ -309,7 +317,7 @@ export function useBulkActions({
               onPress={() => {
                 if (path === 'job') {
                   void start('delete').then((failure) => {
-                    if (failure !== undefined) bulkJob.say(refusalSummary(failure));
+                    if (failure !== undefined) bulkJob.say(refusalSummary(failure), 'danger');
                   });
                   return;
                 }
@@ -342,6 +350,11 @@ export function useBulkActions({
         object={object}
         attributes={attributes}
         count={editShown.count}
+        records={
+          selection.kind === 'all-matching' && isTotalAtLeast
+            ? bulkStrings.allMatchingRecords(editShown.count, object)
+            : recordsWord(editShown.count, object)
+        }
         onApply={(choice) =>
           editShown.ids.length > 0 && editShown.ids.length === editShown.count && path === 'inline'
             ? edit(editShown.ids, choice)
@@ -382,7 +395,9 @@ export function useBulkActions({
           </>
         }
       >
-        {isEditJob ? bulkStrings.confirmEditText : bulkStrings.confirmText}
+        {isEditJob
+          ? `${jobChange === undefined ? '' : `${bulkStrings.describeChange(jobChange.definition.title, jobChange.op)} `}${bulkStrings.confirmEditText}`
+          : bulkStrings.confirmText}
       </Modal>
     </>
   );

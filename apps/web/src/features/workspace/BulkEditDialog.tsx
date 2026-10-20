@@ -14,7 +14,7 @@ import {
   type ObjectSummary,
 } from '@crm/data';
 import { AttributeEditor, Button, Callout, Form, Modal, Radio, RadioGroup, Select, type FormRefusal } from '@crm/ui';
-import { useId, useMemo, useState } from 'react';
+import { useEffect, useId, useMemo, useState } from 'react';
 import { bulkStrings, recordsWord } from './bulk.ts';
 
 /** An attribute the dialog offers, with the changes its type takes (AC-529). */
@@ -59,14 +59,24 @@ export interface BulkEditDialogProps {
   readonly onOpenChange: (isOpen: boolean) => void;
   readonly object: ObjectSummary;
   readonly attributes: readonly AttributeDefinition[];
-  /** How many records it changes, for the title and Apply. */
+  /** How many records it changes (Set on a unique attribute is refused for more than one). */
   readonly count: number;
+  /** The records in words for the title and Apply ("48 people", "all 10,000+ matching people"). */
+  readonly records?: string;
   /** Sends the edit; the dialog waits for it, and shows a refusal of the whole edit above its fields. */
   readonly onApply: (choice: BulkEditChoice) => Promise<BulkEditResult>;
 }
 
 /** "Edit 48 people": a Modal with the field, the change, the value, and Apply. */
-export function BulkEditDialog({ isOpen, onOpenChange, object, attributes, count, onApply }: BulkEditDialogProps) {
+export function BulkEditDialog({
+  isOpen,
+  onOpenChange,
+  object,
+  attributes,
+  count,
+  records: named,
+  onApply,
+}: BulkEditDialogProps) {
   const formId = useId();
   const [isBusy, setBusy] = useState(false);
   const [wasOpen, setWasOpen] = useState(isOpen);
@@ -74,7 +84,10 @@ export function BulkEditDialog({ isOpen, onOpenChange, object, attributes, count
     setWasOpen(isOpen);
     if (isOpen) setBusy(false);
   }
-  const records = recordsWord(count, object);
+  const records = named ?? recordsWord(count, object);
+  // Nothing to offer: the dialog says so with Close only. A choice the rules refuse (unique) disables Apply.
+  const hasFields = useMemo(() => offeredAttributes(attributes).length > 0, [attributes]);
+  const [isBlocked, setBlocked] = useState(false);
   return (
     <Modal
       title={bulkStrings.editTitle(records)}
@@ -88,11 +101,13 @@ export function BulkEditDialog({ isOpen, onOpenChange, object, attributes, count
       actions={
         <>
           <Button slot="close" isDisabled={isBusy} kbd="ESC">
-            {bulkStrings.cancel}
+            {hasFields ? bulkStrings.cancel : bulkStrings.close}
           </Button>
-          <Button variant="primary" type="submit" form={formId} isPending={isBusy} kbd="⌘↵">
-            {isBusy ? bulkStrings.applying : bulkStrings.apply(records)}
-          </Button>
+          {hasFields && (
+            <Button variant="primary" type="submit" form={formId} isPending={isBusy} isDisabled={isBlocked} kbd="⌘↵">
+              {isBusy ? bulkStrings.applying : bulkStrings.apply(records)}
+            </Button>
+          )}
         </>
       }
     >
@@ -104,6 +119,7 @@ export function BulkEditDialog({ isOpen, onOpenChange, object, attributes, count
         records={records}
         isBusy={isBusy}
         onBusyChange={setBusy}
+        onBlockedChange={setBlocked}
         onApply={onApply}
         onDone={() => {
           onOpenChange(false);
@@ -119,6 +135,8 @@ interface BulkEditFormProps extends Pick<BulkEditDialogProps, 'object' | 'attrib
   readonly records: string;
   readonly isBusy: boolean;
   readonly onBusyChange: (isBusy: boolean) => void;
+  /** Whether a rule refuses the choice as it stands (Set on a unique attribute for several records). */
+  readonly onBlockedChange: (isBlocked: boolean) => void;
   readonly onDone: () => void;
 }
 
@@ -131,6 +149,7 @@ function BulkEditForm({
   records,
   isBusy,
   onBusyChange,
+  onBlockedChange,
   onApply,
   onDone,
 }: BulkEditFormProps) {
@@ -147,6 +166,9 @@ function BulkEditForm({
   const isCheckbox = definition?.type === 'checkbox';
   // AC-529: a unique attribute can't take one value on several records; the dialog says so before anything is sent.
   const breaksUnique = definition?.isUnique === true && shownOp === 'set' && count > 1;
+  useEffect(() => {
+    onBlockedChange(breaksUnique);
+  }, [breaksUnique, onBlockedChange]);
 
   const apply = () => {
     if (isBusy) return;
@@ -155,6 +177,11 @@ function BulkEditForm({
       return;
     }
     if (breaksUnique) return;
+    // A checkbox has no default here: one Enter must never untick every record.
+    if (isCheckbox && value === null) {
+      setValueError(bulkStrings.needsChoice);
+      return;
+    }
     const sent = isCheckbox ? value === true : value;
     if (opTakesValue(shownOp) && !isCheckbox && (sent === null || (Array.isArray(sent) && sent.length === 0))) {
       setValueError(bulkStrings.needsValue);
@@ -218,10 +245,12 @@ function BulkEditForm({
             <RadioGroup
               label={bulkStrings.change}
               orientation="horizontal"
-              value={value === true ? 'checked' : 'unchecked'}
+              value={value === null ? null : value === true ? 'checked' : 'unchecked'}
+              {...(valueError === undefined ? {} : { error: valueError })}
               onChange={(next) => {
                 setOp('set');
                 setValue(next === 'checked');
+                setValueError(undefined);
               }}
             >
               <Radio value="checked">{bulkStrings.checked}</Radio>

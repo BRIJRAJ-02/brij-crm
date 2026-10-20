@@ -45,6 +45,11 @@ export const strings = {
   confirmPurgeTitle: (records: string) => `Delete ${records} forever?`,
   confirmPurgeText: 'This can’t be undone.',
   confirmEmptyTitle: 'Empty the trash?',
+  /** Empty trash narrowed to one object by the filter: it says so (the button and the confirm). */
+  emptyObjectTrash: (pluralName: string) => `Empty deleted ${pluralName.toLowerCase()}`,
+  confirmEmptyObjectTitle: (pluralName: string) => `Delete every ${pluralName.toLowerCase()} in the trash forever?`,
+  restoreRecords: (records: string) => `Restore ${records}`,
+  deleteRecordsForever: (records: string) => `Delete ${records} forever`,
   confirmEmptyText: (records: string) => `${records} will be deleted forever. This can’t be undone.`,
   confirmRestoreTitle: (records: string) => `Restore ${records}?`,
   confirmRestoreText: 'They come back with their links, list entries, notes and history.',

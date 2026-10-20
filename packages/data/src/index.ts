@@ -2688,7 +2688,8 @@ export function createDataLayer({
         count: number,
       ): Promise<UndoResult> => {
         const outcome = await (await recordsLayer()).restoreDeleted(workspace, objectId, jobId, count);
-        trashMoved(workspace);
+        // Restored inline: the open trash settles now (a restore job's own events settle it as it runs).
+        if (outcome.kind === 'restored') trashMoved(workspace);
         if (outcome.kind === 'restoring') jobs.track(workspace, outcome.job);
         const object = (await allObjects(workspace).catch(() => [])).find((each) => each.id === objectId);
         const names = { singularName: object?.singularName ?? 'record', pluralName: object?.pluralName ?? 'records' };

@@ -37,8 +37,15 @@ export interface BulkJob {
   /** A counted job waiting for its confirm, with its exact total. */
   readonly awaiting: JobView | undefined;
   /** A short note for the bar: a count of zero, or why a start was refused. */
-  readonly note: string | undefined;
-  readonly say: (note: string) => void;
+  readonly note: { readonly text: string; readonly tone: 'info' | 'danger' } | undefined;
+  /**
+   * Says something in the bar: `info` ("Nothing left to change.") goes after
+   * a few seconds; `danger` (a refused start) stays until the next start or
+   * `forget`, so a refusal is never missed.
+   */
+  readonly say: (text: string, tone?: 'info' | 'danger') => void;
+  /** Lets the note go (the selection was cleared). */
+  readonly forget: () => void;
   /** Starts a job; answers why it was refused, if it was (nothing is followed then). */
   readonly start: (action: BulkAction, target: BulkTarget, edit?: BulkEdit) => Promise<DataError | undefined>;
   /** Confirms the counted job: it runs on its snapshot. */
@@ -54,15 +61,17 @@ export function useBulkJob(slug: string): BulkJob {
     undefined,
   );
   const [starting, setStarting] = useState(false);
-  const [note, setNote] = useState<string | undefined>(undefined);
+  const [note, setNote] = useState<BulkJob['note']>(undefined);
   const job = useJob(data.jobs, slug, following?.jobId);
   // Ended: the bar lets it go (a count of zero says so there; any other end has the app's toast).
   if (following !== undefined && job !== undefined && FINISHED.has(job.status)) {
     setFollowing(undefined);
-    if (job.status === 'succeeded' && (job.total ?? 0) === 0) setNote(bulkStrings.nothingToChange);
+    if (job.status === 'succeeded' && (job.total ?? 0) === 0) {
+      setNote({ text: bulkStrings.nothingToChange, tone: 'info' });
+    }
   }
   useEffect(() => {
-    if (note === undefined) return;
+    if (note === undefined || note.tone === 'danger') return;
     const timer = setTimeout(() => {
       setNote(undefined);
     }, NOTE_MS);
@@ -77,7 +86,12 @@ export function useBulkJob(slug: string): BulkJob {
     progress: job === undefined ? (starting ? { label: bulkStrings.starting } : undefined) : jobProgress(job),
     awaiting: job?.status === 'ready' ? job : undefined,
     note,
-    say: setNote,
+    say: (text, tone = 'info') => {
+      setNote({ text, tone });
+    },
+    forget: () => {
+      setNote(undefined);
+    },
     start: async (action, target, edit) => {
       setStarting(true);
       setNote(undefined);

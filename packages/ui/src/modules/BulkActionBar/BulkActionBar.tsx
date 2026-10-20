@@ -85,20 +85,26 @@ export function BulkActionBar({
     // Esc from anywhere in the bar clears the selection.
     <FloatingBar placement={placement} frameProps={keyboardProps}>
       <AriaToolbar className={styles.root} aria-label={strings.label}>
-        <span className={styles.count} role="status">
-          {isAllMatching ? strings.allMatching(chosen) : strings.selected(number(count))}
-        </span>
-        {!isAllMatching && onSelectAllMatching !== undefined && (count < total || isTotalAtLeast) && (
-          <Button
-            variant="ghost"
-            onPress={() => {
-              focusActions.current = true;
-              onSelectAllMatching();
-            }}
-          >
-            {strings.selectAllMatching(matching)}
-          </Button>
+        {/* While an action runs its progress speaks for it: the selection it started from may be gone. */}
+        {progress === undefined && (
+          <span className={styles.count} role="status">
+            {isAllMatching ? strings.allMatching(chosen) : strings.selected(number(count))}
+          </span>
         )}
+        {progress === undefined &&
+          !isAllMatching &&
+          onSelectAllMatching !== undefined &&
+          (count < total || isTotalAtLeast) && (
+            <Button
+              variant="ghost"
+              onPress={() => {
+                focusActions.current = true;
+                onSelectAllMatching();
+              }}
+            >
+              {strings.selectAllMatching(matching)}
+            </Button>
+          )}
         <span ref={actionsRef} className={styles.actions}>
           {progress === undefined ? (
             children

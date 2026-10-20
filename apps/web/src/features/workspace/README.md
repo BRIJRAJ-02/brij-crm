@@ -14,12 +14,12 @@ Spec 0005, milestones 1 to 3; spec 0012 makes the object pages generic. Every pa
 - **Main task**: read and edit records in place, sort a column for the visit, add a record ("New <singular>"), and add a column, seeing others' changes live.
 - **Leaves out**: filters, saved views and sorts that last past the visit, and presence (#7, #20).
 
-## Bulk delete (spec 0022, milestone 1: BulkDeleteBar.tsx, bulk.ts)
+## Bulk actions (spec 0022, milestones 1 to 3: BulkActions.tsx, BulkEditDialog.tsx, useBulkJob.ts, bulk.ts)
 
-- **Purpose**: act on the rows ticked in an object's table.
-- **Main task**: tick rows (the checkbox column, Space, Shift ranges, Mod+A), then Delete in the floating bar: one record goes at once, several after a danger confirm ("Delete 48 people? They stay in the trash for 30 days."); the toast says "Deleted 48 people" with Undo, and ⌘Z undoes it too. A refused row comes back with its reason on its name cell. Clear or Esc empties the selection and gives focus back to the table.
-- **Leaves out**: Edit (milestone 2), "Select all matching" and more than 500 at once (background jobs, milestone 3: the bar says "Changes to more than 500 records arrive soon."). A member who may only read the object sees why instead of Delete.
-- A new view (another sort, later a filter or view) starts with nothing ticked, and rows gone on the server leave the selection (the view's `gone`, and `confirm` after a coarse reload). ⌘Z after New <singular> moves the record to the trash ("Undid the create of Ada Lovelace.").
+- **Purpose**: act on the rows ticked in an object's table, a few or every one the view matches.
+- **Main task**: tick rows (the checkbox column, Space, Shift ranges, Mod+A) or press "Select all N matching" ("10,000+" when the count is capped), then Edit or Delete in the floating bar. Up to 500 picked records change in one request: a delete of one goes at once, several after a danger confirm ("Delete 48 people? They stay in the trash for 30 days."); Edit opens the dialog (the field, then Set, Clear, Add, Remove or Replace as its type takes, then the value through the type's own editor; Checked or Unchecked for a checkbox, with no default) and its toast says "Updated 48 people." with Undo, or "Updated 46 people. 2 were refused." with Retry, the refused cells marked. More than 500, or all matching, start a background change: the bar says "Starting…", then "Counting…", a confirm asks with the exact number ("Delete 12,345 people?", or "Update 12,345 people? Sets Stage on each of them. This can't be undone."), then the bar shows "Deleting 4,500 of 12,345" with Cancel. A count of zero says "Nothing left to change." in the bar; any other end raises the app's toast on whatever page is open ("Deleted 12,345 people." with Undo; a stopped delete offers Undo too).
+- **Leaves out**: Add to list (#51), board cards (#21), several fields in one edit, relationships (owner decision 3) and members (edited nowhere yet). A member who may only read the object sees why instead of the actions.
+- A new view (another sort, a filter, another view, someone else's save) starts with nothing ticked, and rows gone on the server leave the selection. At most 10,000 one by one and 1,000 left out of all matching: past either a toast says so and the ticks stay. ⌘Z after New <singular> moves the record to the trash ("Undid the create of Ada Lovelace."); ⌘Z after an inline edit puts back what the server read under each record's lock, keeping cells changed since.
 
 ## An archived object's page (ArchivedObjectScreen)
 

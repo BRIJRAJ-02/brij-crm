@@ -75,7 +75,8 @@ export function opTakesValue(op: BulkOp): boolean {
 
 /** A value's identity, ignoring object key order, so `{ number, country }` and its reordered twin compare equal. */
 function identityOf(value: unknown): string {
-  if (value === null || typeof value !== 'object') return JSON.stringify(value) ?? 'undefined';
+  if (value === undefined) return 'undefined';
+  if (value === null || typeof value !== 'object') return JSON.stringify(value);
   if (Array.isArray(value)) return `[${value.map(identityOf).join(',')}]`;
   const entries = Object.entries(value as Record<string, unknown>)
     .filter(([, item]) => item !== undefined)

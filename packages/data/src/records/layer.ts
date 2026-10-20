@@ -3530,11 +3530,6 @@ export function createRecordsLayer({
       trashRecords(workspace, objectId, recordIds, { undoable: true }),
 
     /**
-     * Edits one attribute of up to 500 records as one undoable action (spec
-     * 0022): loaded rows show it at once, the answer says how many changed and
-     * how many were refused (see `bulkEdit`).
-     */
-    /**
      * Undoes a delete job (spec 0022, AC-528): its batch is the job's id, so
      * `records.restoreBatch` restores it, inline or (past 500) as a restore
      * job. Never on the undo stack: the finish toast's Undo calls it.
@@ -3542,6 +3537,11 @@ export function createRecordsLayer({
     restoreDeleted: (workspace: string, objectId: string, batchId: string, count: number): Promise<UndoOutcome> =>
       undoDelete(workspace, { id: mintId(), kind: 'delete', objectId, batchId, count }, false),
 
+    /**
+     * Edits one attribute of up to 500 records as one undoable action (spec
+     * 0022): loaded rows show it at once, the answer says how many changed and
+     * how many were refused (see `bulkEdit`).
+     */
     bulkEdit: (
       workspace: string,
       objectId: string,

@@ -83,8 +83,9 @@ export const records = pgTable(
     index('records_trash_object')
       .on(t.workspaceId, t.objectId, t.deletedAt, t.id)
       .where(sql`${t.deletedAt} is not null`),
+    // With `id` (spec 0022, milestone 3): a restore job's snapshot pages through one batch in id order, unsorted.
     index('records_trash_batch')
-      .on(t.workspaceId, t.deletedBatchId)
+      .on(t.workspaceId, t.deletedBatchId, t.id)
       .where(sql`${t.deletedBatchId} is not null`),
     check('records_deleted', sql`(${t.deletedAt} is null) = (${t.deletedByType} is null)`),
     check('records_deleted_batch', sql`${t.deletedAt} is not null or ${t.deletedBatchId} is null`),

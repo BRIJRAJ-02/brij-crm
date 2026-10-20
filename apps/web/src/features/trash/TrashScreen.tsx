@@ -130,7 +130,7 @@ export function TrashScreen({ slug, objects, members, view, objectId }: TrashScr
   /** Starts a job; a refusal to start says why in the bar. */
   const startJob = (action: BulkAction, on: BulkTarget) => {
     void bulkJob.start(action, on).then((failure) => {
-      if (failure !== undefined) bulkJob.say(refusalSummary(failure));
+      if (failure !== undefined) bulkJob.say(refusalSummary(failure), 'danger');
     });
   };
   const filtered = objectId === undefined ? undefined : byId.get(objectId);
@@ -147,6 +147,7 @@ export function TrashScreen({ slug, objects, members, view, objectId }: TrashScr
     setFocusRow({ index: Math.max(0, Math.min(...rows, last)) });
   };
   const clear = () => {
+    bulkJob.forget();
     focusBackAt(ids, false);
     setHeld({ view, selection: noRows() });
   };
@@ -231,7 +232,9 @@ export function TrashScreen({ slug, objects, members, view, objectId }: TrashScr
   const isRestoreJob = shownAsk?.kind === 'job' && bulkJob.action === 'restore';
   const title =
     shownAsk?.kind === 'job' && isEmptying
-      ? strings.confirmEmptyTitle
+      ? filtered === undefined
+        ? strings.confirmEmptyTitle
+        : strings.confirmEmptyObjectTitle(filtered.pluralName)
       : isRestoreJob
         ? strings.confirmRestoreTitle(words)
         : strings.confirmPurgeTitle(words);
@@ -264,8 +267,8 @@ export function TrashScreen({ slug, objects, members, view, objectId }: TrashScr
           >
             {/* Owners and admins only (AC-535); always a job, counted and confirmed first. */}
             {canPurge && state.status === 'ready' && state.count.count > 0 && (
-              <Button variant="ghost" icon="trash" isDisabled={isRunning} onPress={emptyTrash}>
-                {strings.emptyTrash}
+              <Button variant="danger" icon="trash" isDisabled={isRunning} onPress={emptyTrash}>
+                {filtered === undefined ? strings.emptyTrash : strings.emptyObjectTrash(filtered.pluralName)}
               </Button>
             )}
           </TopBar>
@@ -363,8 +366,8 @@ export function TrashScreen({ slug, objects, members, view, objectId }: TrashScr
                     {...(job?.cancellable === true ? { onCancel: bulkJob.cancel } : {})}
                   >
                     {note !== undefined ? (
-                      <Callout placement="bar" isAnnounced>
-                        {note}
+                      <Callout placement="bar" tone={note.tone} isAnnounced>
+                        {note.text}
                       </Callout>
                     ) : (
                       <>
@@ -416,7 +419,7 @@ export function TrashScreen({ slug, objects, members, view, objectId }: TrashScr
                       }
                     }}
                   >
-                    {isRestoreJob ? strings.restore : strings.deleteForever}
+                    {isRestoreJob ? strings.restoreRecords(words) : strings.deleteRecordsForever(words)}
                   </Button>
                 </>
               }

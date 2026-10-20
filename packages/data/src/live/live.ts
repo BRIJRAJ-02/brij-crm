@@ -418,15 +418,14 @@ export function createLive({
   const paceJob = (workspace: string, entry: Watched, event: Extract<ChangeEvent, { kind: 'records' }>) => {
     const key = event.objectId;
     const paced = entry.jobPaced.get(key);
-    if (paced === undefined || now() - paced.last >= COARSE_JOB_MS) {
-      if (paced?.trailing === true) return;
-      entry.jobPaced.set(key, { last: now(), trailing: false });
-      router.dispatch(workspace, event);
-      return;
-    }
-    if (paced.trailing) return;
-    paced.trailing = true;
-    void wait(paced.last + COARSE_JOB_MS - now() + random() * REFETCH_JITTER_MS).then(() => {
+    // A refetch already waits: it reads after this event, so it covers it.
+    if (paced?.trailing === true) return;
+    const since = paced === undefined ? COARSE_JOB_MS : now() - paced.last;
+    // At once (after the spread, so a hundred tabs never refetch in the same instant) when the object's views
+    // haven't refetched for 5 seconds; else once those 5 seconds end, plus the spread.
+    const delay = Math.max(0, COARSE_JOB_MS - since) + random() * REFETCH_JITTER_MS;
+    entry.jobPaced.set(key, { last: paced?.last ?? 0, trailing: true });
+    void wait(delay).then(() => {
       if (entry.isStopped) return;
       entry.jobPaced.set(key, { last: now(), trailing: false });
       router.dispatch(workspace, event);

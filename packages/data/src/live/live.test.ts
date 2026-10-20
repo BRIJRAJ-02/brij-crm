@@ -11,6 +11,7 @@ import {
   HIDDEN_CATCH_UP_MS,
   HIDDEN_DISCONNECT_MS,
   parseChangeEvent,
+  COARSE_JOB_MS,
   REFETCH_JITTER_MS,
   type CaughtUp,
   type Granted,
@@ -30,7 +31,7 @@ const settle = () => new Promise((resolve) => setTimeout(resolve, 0));
 
 const event = (
   seq: number,
-  more: { recordIds?: string[]; mutationId?: string; coarse?: boolean } = {},
+  more: { recordIds?: string[]; mutationId?: string; coarse?: boolean; fromJob?: true } = {},
 ): ChangeEvent => ({
   seq,
   at: AT,
@@ -166,6 +167,9 @@ function setup(options: Setup = {}) {
     channel,
     subscribed,
     setHidden,
+    setTime: (at: number) => {
+      time = at;
+    },
     opened: () => opened,
     closed: () => closed,
   };
@@ -267,6 +271,24 @@ describe('the watermark', () => {
     expect(t.calls).toEqual([`definitions ${WS} ${PEOPLE}`]);
     await t.elapse(jitter);
     expect(t.calls).toEqual([`definitions ${WS} ${PEOPLE}`, `records ${WS}  coarse`]);
+  });
+
+  it('paces a job’s coarse events: after the spread, then once at the end of 5 seconds plus it (spec 0022, AC-532)', async () => {
+    const t = setup();
+    await t.subscribed();
+    t.channel().onPublication(event(1, { recordIds: [], coarse: true, fromJob: true }));
+    expect(t.calls).toEqual([]);
+    await t.elapse(jitter);
+    expect(t.calls).toEqual([`records ${WS}  coarse`]);
+    t.setTime(1000);
+    t.channel().onPublication(event(2, { recordIds: [], coarse: true, fromJob: true }));
+    t.setTime(2000);
+    t.channel().onPublication(event(3, { recordIds: [], coarse: true, fromJob: true }));
+    expect(t.calls).toHaveLength(1);
+    // The trailing refetch waits out the 5 seconds from the first, plus the spread: one for both.
+    t.setTime(6000);
+    await t.elapse(COARSE_JOB_MS - 1000 + jitter);
+    expect(t.calls).toEqual([`records ${WS}  coarse`, `records ${WS}  coarse`]);
   });
 
   it('ignores anything that is not a change event', async () => {
