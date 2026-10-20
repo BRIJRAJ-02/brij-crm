@@ -18,6 +18,7 @@ New. Object settings (#13) let people choose an icon for each object. It offers 
 ```
 
 - `hue` draws each icon on that hue's tile, as the object will show.
+- The search is the library's Field (`variant="search"`, `size="sm"`), as Select's searchable list draws it; it drew its own box before F27 (20 October 2026).
 - Typing filters by the icon's name ("build" finds Building and Building complex).
 
 ## States

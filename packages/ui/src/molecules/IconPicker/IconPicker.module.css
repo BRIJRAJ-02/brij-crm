@@ -1,4 +1,4 @@
-/* IconPicker: a search field over a grid of 28px icon cells; the focused cell
+/* IconPicker: the library's search Field over a grid of 28px icon cells; the focused cell
    takes surface-hover and the chosen one the accent's soft tint and edge. */
 @layer components {
   .root {
@@ -6,42 +6,6 @@
     flex-direction: column;
     gap: var(--space-8);
     inline-size: var(--size-menu);
-  }
-
-  .search {
-    display: flex;
-    align-items: center;
-    gap: var(--space-8);
-    block-size: var(--size-control);
-    padding-inline: var(--space-8);
-    border: var(--border-width-hairline) solid var(--border-subtle);
-    border-radius: var(--radius-md);
-    background: var(--surface-raised);
-  }
-
-  .search:focus-within {
-    border-color: var(--accent-line);
-    box-shadow: var(--shadow-focus);
-  }
-
-  .input {
-    flex: 1;
-    min-inline-size: 0;
-    padding: 0;
-    border: none;
-    background: transparent;
-    color: var(--text);
-    font: var(--text-body);
-    letter-spacing: var(--tracking-body);
-    outline: none;
-  }
-
-  .input::placeholder {
-    color: var(--text-tertiary);
-  }
-
-  .input::-webkit-search-cancel-button {
-    display: none;
   }
 
   .scroller {

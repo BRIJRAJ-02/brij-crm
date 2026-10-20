@@ -35,7 +35,7 @@ export const Search: Story = {
     </Stage>
   ),
   play: async ({ canvas, userEvent }) => {
-    await userEvent.click(canvas.getByRole('searchbox', { name: 'Search icons' }));
+    await userEvent.click(canvas.getByRole('textbox', { name: 'Search icons' }));
     await userEvent.keyboard('rocket');
     await waitFor(() => expect(canvas.getAllByRole('option')).toHaveLength(1));
   },

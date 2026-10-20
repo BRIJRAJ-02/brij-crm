@@ -1,7 +1,8 @@
 import { OBJECT_ICONS, type ObjectIcon } from '@crm/contracts/values';
-import { Autocomplete, Input, ListBox, ListBoxItem, SearchField, useFilter } from 'react-aria-components';
+import { Autocomplete, ListBox, ListBoxItem, useFilter } from 'react-aria-components';
 import { Icon } from '../../atoms/Icon/Icon.tsx';
 import type { Hue } from '../../hue.ts';
+import { Field } from '../Field/Field.tsx';
 import styles from './IconPicker.module.css';
 import { strings } from './strings.ts';
 
@@ -31,10 +32,14 @@ export function IconPicker({ label, value, onChange, hue }: IconPickerProps) {
   return (
     <div className={styles.root}>
       <Autocomplete filter={contains}>
-        <SearchField className={styles.search} aria-label={strings.search}>
-          <Icon name="search" size="sm" tone="muted" />
-          <Input className={styles.input} placeholder={strings.searchPlaceholder} />
-        </SearchField>
+        {/* The library's search field, as Select's searchable list has it. */}
+        <Field
+          label={strings.search}
+          isLabelHidden
+          variant="search"
+          size="sm"
+          placeholder={strings.searchPlaceholder}
+        />
         {/* The search keeps focus (the grid's focus is virtual), so the scroll box takes Tab itself. */}
         {/* eslint-disable-next-line jsx-a11y-x/no-noninteractive-tabindex */}
         <div className={styles.scroller} role="region" aria-label={label} tabIndex={0}>
