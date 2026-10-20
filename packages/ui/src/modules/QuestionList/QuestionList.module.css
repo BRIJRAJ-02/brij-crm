@@ -89,7 +89,6 @@
     box-shadow: var(--shadow-focus);
   }
 
-  /* An open question: its head takes the selected fill, so it reads as the one being edited. */
   /* A question a publish refused: the danger edge, and "Needs a fix" by its title. */
   .row[data-problem] {
     border-color: var(--danger);
@@ -106,17 +105,21 @@
     gap: var(--space-8);
     align-items: center;
     min-block-size: calc(var(--size-row) + 2 * var(--space-12));
-    padding-inline: var(--space-8) var(--space-12);
+    padding-inline: var(--space-4) var(--space-8);
     transition: background-color var(--duration-hover) var(--ease-hover);
   }
 
+  /* An open question: its head takes the selected fill, so it reads as the one being edited. */
   .row[data-open] .head {
     background: var(--surface-selected);
   }
 
+  /* As wide as the tile, so the grip sits on the tile's centre when it takes its place. */
   .handle {
     display: inline-flex;
     flex: none;
+    justify-content: center;
+    inline-size: var(--size-tile);
   }
 
   .tile {
@@ -130,7 +133,7 @@
      nothing is held empty. On touch the handle stays in the line, always shown. */
   @media (hover: hover) and (pointer: fine) {
     .head {
-      padding-inline-start: var(--space-16);
+      padding-inline-start: var(--space-12);
     }
 
     .head:hover {
@@ -157,6 +160,12 @@
     .row[data-focus-visible] .tile {
       opacity: 0;
     }
+
+    /* Reached from the keyboard, the swap is instant. */
+    .head:has(:focus-visible) .handle,
+    .head:has(:focus-visible) .tile {
+      transition: none;
+    }
   }
 
   /* The whole head opens the question: the type tile, the two lines and the chevron. */
@@ -168,7 +177,7 @@
     align-self: stretch;
     min-inline-size: 0;
     padding-block: var(--space-12);
-    padding-inline: 0;
+    padding-inline: var(--space-4);
     border: none;
     border-radius: var(--radius-sm);
     background: transparent;
@@ -239,13 +248,13 @@
     white-space: nowrap;
   }
 
-  /* The chevron in a 32px square, apart from the text. */
+  /* The chevron in a size-input square (as the footer's large icon buttons), apart from the text. */
   .chevron {
     display: inline-grid;
     flex: none;
     place-items: center;
-    inline-size: calc(2 * var(--space-16));
-    block-size: calc(2 * var(--space-16));
+    inline-size: var(--size-input);
+    block-size: var(--size-input);
     color: var(--text-secondary);
   }
 
@@ -256,7 +265,7 @@
     }
   }
 
-  /* An open question's editor, under a hairline, with the head's side padding. */
+  /* An open question's editor, under a hairline, space-16 on every side: in line with the type tile for a pointer. */
   .body {
     display: flex;
     flex-direction: column;
@@ -281,8 +290,11 @@
       outline: var(--border-width-thick) solid Highlight;
     }
 
+    /* In forced colours the handle stays in the line beside the tile, never over it. */
     .handle {
+      position: static;
       opacity: 1;
+      translate: none;
     }
 
     .indicator[data-drop-target] {

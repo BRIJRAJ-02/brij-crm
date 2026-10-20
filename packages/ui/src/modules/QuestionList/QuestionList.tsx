@@ -17,7 +17,7 @@ export interface QuestionListItem {
   /** The answer type's name, first on the row's second line ("Short text"). */
   readonly typeLabel: string;
   /** The answer type's icon, on a tile at the row's start ("type" for short text, "mail" for email). */
-  readonly typeIcon?: IconName;
+  readonly typeIcon: IconName;
   readonly isRequired: boolean;
   /** For a choice question: how many choices it has. */
   readonly choiceCount?: number;
@@ -142,7 +142,7 @@ export function QuestionList({
                   }}
                 >
                   <span className={styles.tile}>
-                    <Icon name={item.typeIcon ?? 'type'} tile="gray" />
+                    <Icon name={item.typeIcon} tile="gray" />
                   </span>
                   <span className={styles.text}>
                     <span className={styles.title}>

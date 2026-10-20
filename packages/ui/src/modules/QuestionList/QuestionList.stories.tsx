@@ -49,12 +49,24 @@ interface SampleProps {
   readonly withProblem?: boolean;
   /** `fill` shows the builder's full width; `narrow` a phone's column, where the second line wraps. */
   readonly width?: 'narrow' | 'fill';
+  /** No questions yet: the header alone. */
+  readonly isEmpty?: boolean;
 }
 
 /** The list holding its own order and open questions, as the form builder does. */
-function SampleQuestions({ initialOpen = [], isReadOnly = false, withProblem = false, width = 'fill' }: SampleProps) {
+function SampleQuestions({
+  initialOpen = [],
+  isReadOnly = false,
+  withProblem = false,
+  width = 'fill',
+  isEmpty = false,
+}: SampleProps) {
   const [items, setItems] = useState(
-    withProblem ? QUESTIONS.map((item) => (item.id === 'new' ? { ...item, hasProblem: true } : item)) : QUESTIONS,
+    isEmpty
+      ? []
+      : withProblem
+        ? QUESTIONS.map((item) => (item.id === 'new' ? { ...item, hasProblem: true } : item))
+        : QUESTIONS,
   );
   const [open, setOpen] = useState<ReadonlySet<string>>(new Set(initialOpen));
   return (
@@ -94,8 +106,8 @@ function SampleQuestions({ initialOpen = [], isReadOnly = false, withProblem = f
         renderFooter={() =>
           isReadOnly ? null : (
             <>
-              <Button variant="ghost" icon="copy" label="Duplicate" />
-              <Button variant="ghost-danger" icon="trash" label="Delete" />
+              <Button variant="ghost" size="lg" icon="copy" label="Duplicate" />
+              <Button variant="ghost-danger" size="lg" icon="trash" label="Delete" />
             </>
           )
         }
@@ -177,5 +189,30 @@ export const Narrow: Story = {
   play: async ({ canvas }) => {
     await expect(canvas.getAllByRole('row')).toHaveLength(4);
     await expect(canvas.getByText('Dropdown · 3 choices · Person › Budget band')).toBeVisible();
+  },
+};
+
+/** By keyboard: Tab reaches the first handle, which shows in its tile's place at once; Enter, an arrow and Enter move the question, and the move is said. */
+export const KeyboardReorder: Story = {
+  parameters: { crm: { screenshot: false } },
+  play: async ({ canvas, userEvent }) => {
+    const handle = canvas.getByRole('button', { name: 'Move Your name' });
+    // Tab enters the list on its first question, then reaches its handle.
+    for (let step = 0; step < 4 && document.activeElement !== handle; step += 1) await userEvent.tab();
+    await expect(handle).toHaveFocus();
+    await waitFor(() => expect(getComputedStyle(handle.parentElement ?? handle).opacity).toBe('1'));
+    await userEvent.keyboard('{Enter}');
+    await userEvent.keyboard('{ArrowDown}');
+    await userEvent.keyboard('{Enter}');
+    await waitFor(() => expect(canvas.getByRole('status')).toHaveTextContent('Your name, moved to position 2 of 4'));
+  },
+};
+
+/** No questions yet: the header alone, its count at 0. */
+export const Empty: Story = {
+  args: { isEmpty: true },
+  play: async ({ canvas }) => {
+    await expect(canvas.queryAllByRole('row')).toHaveLength(0);
+    await expect(canvas.getByRole('heading', { name: 'Questions' })).toBeInTheDocument();
   },
 };
