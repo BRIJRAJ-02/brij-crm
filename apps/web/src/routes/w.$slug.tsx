@@ -16,6 +16,8 @@ export const Route = createFileRoute('/w/$slug')({
     context.data.live.prepare(params.slug);
     const me = await context.data.me.get();
     if (me === undefined) throw redirect({ href: signInHref(location.href), replace: true });
+    // Remembered for `/` and sign in on every device (spec 0031, AC-802); never waited for, and silent on failure.
+    void context.data.me.rememberWorkspace(params.slug);
     return { me };
   },
   loader: async ({ context, params }) => {

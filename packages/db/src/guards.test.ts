@@ -1254,6 +1254,7 @@ describe('the auth schema: global identity, outside row level security (spec 000
     'rate_limit',
     'session',
     'user',
+    'user_prefs',
     'verification',
     'workspace_directory',
     'workspace_membership',

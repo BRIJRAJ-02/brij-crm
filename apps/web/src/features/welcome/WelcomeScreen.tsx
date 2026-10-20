@@ -1,9 +1,9 @@
 // Brief
-// Purpose: a signed in person without a workspace makes their first one.
+// Purpose: a signed in person makes a workspace: their first, or another from the workspace menu (spec 0031).
 // Main task: confirm your name and the workspace's name and address, then Create workspace.
-// Leaves out: inviting teammates, picking a template and settings; they come later (#23).
+// Leaves out: inviting teammates (Settings › Members does that), picking a template and settings.
 import { isDataError, type DataLayer, type SignedInUser } from '@crm/data';
-import { AuthLayout, Button, Field, Form, type Toasts } from '@crm/ui';
+import { AuthLayout, Button, ButtonLink, Field, Form, type Toasts } from '@crm/ui';
 import { useNavigate } from '@tanstack/react-router';
 import { useState } from 'react';
 import { addressAsTyped, SLUG_MAX, SLUG_RULE, slugFrom, suggestedWorkspaceName } from './names.ts';
@@ -49,10 +49,12 @@ export interface WelcomeScreenProps {
   readonly data: DataLayer;
   readonly toasts: Toasts;
   readonly user: SignedInUser;
+  /** Where Cancel goes when the person already has a workspace (creating another, spec 0031, AC-801). */
+  readonly back?: { readonly slug: string; readonly name: string } | undefined;
 }
 
 /** The welcome page: AuthLayout and a Form that creates the workspace, then opens it. */
-export function WelcomeScreen({ data, toasts, user }: WelcomeScreenProps) {
+export function WelcomeScreen({ data, toasts, user, back }: WelcomeScreenProps) {
   const navigate = useNavigate();
   // One id per visit, sent again on every try, so a retry after a lost answer makes nothing twice.
   const [id, setId] = useState(() => data.workspaces.newId());
@@ -101,12 +103,18 @@ export function WelcomeScreen({ data, toasts, user }: WelcomeScreenProps) {
     <AuthLayout
       productName={strings.product}
       logo={PRODUCT_LOGO}
-      title={strings.title}
-      description={strings.description}
+      title={back === undefined ? strings.title : strings.anotherTitle}
+      description={back === undefined ? strings.description : strings.anotherDescription}
       footer={
-        <Button variant="ghost" onPress={signOut} isPending={isSigningOut}>
-          {strings.signOut}
-        </Button>
+        back === undefined ? (
+          <Button variant="ghost" onPress={signOut} isPending={isSigningOut}>
+            {strings.signOut}
+          </Button>
+        ) : (
+          <ButtonLink variant="ghost" href={`/w/${back.slug}`}>
+            {strings.backTo(back.name)}
+          </ButtonLink>
+        )
       }
     >
       <Form<WelcomeRefusal>

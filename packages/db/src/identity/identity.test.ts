@@ -116,6 +116,43 @@ describe('the directory', () => {
   });
 });
 
+describe('the last workspace and leaving (spec 0031, AC-802, AC-812)', () => {
+  it('remembers the last workspace per user, writing only when it changes', async () => {
+    const userId = await createTestUser(identityUrl, { email: `${unique()}@example.com` });
+    const first = await listedWorkspace(userId);
+    const second = await listedWorkspace(userId);
+    expect(await identity.lastWorkspaceOf(userId)).toBeUndefined();
+    await identity.setLastWorkspace(userId, first.workspaceId);
+    expect(await identity.lastWorkspaceOf(userId)).toBe(first.workspaceId);
+    const stamp = async () =>
+      (
+        await identitySql.query<{ at: string }>(
+          'select updated_at::text as at from auth.user_prefs where user_id = $1',
+          [userId],
+        )
+      ).rows[0]?.at;
+    const before = await stamp();
+    await identity.setLastWorkspace(userId, first.workspaceId);
+    expect(await stamp()).toBe(before);
+    await identity.setLastWorkspace(userId, second.workspaceId);
+    expect(await identity.lastWorkspaceOf(userId)).toBe(second.workspaceId);
+    expect(await identity.lastWorkspaceOf(randomUUID())).toBeUndefined();
+    expect(await identity.lastWorkspaceOf('nope')).toBeUndefined();
+  });
+
+  it('drops one membership from the directory, and no other', async () => {
+    const userId = await createTestUser(identityUrl, { email: `${unique()}@example.com` });
+    const other = await createTestUser(identityUrl, { email: `${unique()}@example.com` });
+    const kept = await listedWorkspace(userId);
+    const left = await listedWorkspace(userId);
+    const theirs = await listedWorkspace(other);
+    await identity.dropMembership(userId, left.workspaceId);
+    await identity.dropMembership(userId, theirs.workspaceId);
+    expect((await identity.workspacesOf(userId)).map((workspace) => workspace.id)).toEqual([kept.workspaceId]);
+    expect((await identity.workspacesOf(other)).map((workspace) => workspace.id)).toEqual([theirs.workspaceId]);
+  });
+});
+
 describe('users', () => {
   it('reads a user, and nothing for an unknown or malformed id', async () => {
     const email = `${unique()}@example.com`;

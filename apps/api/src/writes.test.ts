@@ -23,6 +23,8 @@ const READS: ReadonlySet<string> = new Set([
   // Fails on purpose when switched on (spec 0010); it writes nothing either way.
   'system.testFault',
   'me.get',
+  // The caller's own preference in schema auth (spec 0031, AC-802): no tenant change, no outbox row.
+  'me.setLastWorkspace',
   'objects.list',
   'attributes.list',
   'members.list',

@@ -4,6 +4,8 @@ import { replacedStrings } from './replaced.ts';
 export const strings = {
   product: 'Timefix',
   workspaceMenu: 'Workspace',
+  workspaces: 'Workspaces',
+  createWorkspace: 'Create workspace',
   signOut: 'Sign out',
   /** An archived object's address (spec 0012, AC-226). */
   objectArchived: (plural: string) => `${plural} is archived`,

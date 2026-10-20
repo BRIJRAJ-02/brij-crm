@@ -33,3 +33,9 @@ export const jobsHref = (slug: string) => `/w/${slug}/settings/jobs`;
 export const settingsHref = (slug: string) => `/w/${slug}/settings/objects`;
 /** Where Settings opens (spec 0026, AC-686): Account › Preferences. The sidebar's Settings, the workspace menu's and ⌘, go here. */
 export const settingsHomeHref = (slug: string) => `/w/${slug}/settings/account/preferences`;
+
+/** A workspace's home (spec 0031, AC-801): the workspace menu's switcher opens it. */
+export const workspaceHref = (slug: string) => `/w/${slug}`;
+
+/** Creating another workspace from the workspace menu (spec 0031, AC-801): the welcome page, kept open. */
+export const newWorkspaceHref = '/welcome?another=1';

@@ -46,8 +46,10 @@ export {
 } from './access/policy.ts';
 export {
   getMe,
+  setLastWorkspace,
   startWorkspace,
   type AccountUser,
+  type LastWorkspaceDeps,
   type StartedWorkspace,
   type StartWorkspaceDeps,
 } from './account/account.ts';

@@ -4,6 +4,7 @@
 // workspace bootstrap builds its own system scope.
 import type { CreateWorkspaceInput, CreatedWorkspace, Me } from '@crm/contracts';
 import type { Database, IdentityStore } from '@crm/db';
+import { enterWorkspace, type DoorLog, type RuleSource } from '../access/door.ts';
 import { createUserWorkspace } from '../engine/workspaces.ts';
 import type { ReachedMilestone } from '../milestones/milestones.ts';
 
@@ -14,16 +15,48 @@ export interface AccountUser {
   readonly email: string;
 }
 
-/** Who is signed in and their workspaces, oldest first (from the directory, which grants nothing). */
+/**
+ * Who is signed in and their workspaces, oldest first (from the directory,
+ * which grants nothing), with the one they last opened while it is still
+ * among them (spec 0031, AC-802).
+ */
 export async function getMe(
-  deps: { readonly identity: Pick<IdentityStore, 'workspacesOf'> },
+  deps: { readonly identity: Pick<IdentityStore, 'workspacesOf' | 'lastWorkspaceOf'> },
   user: AccountUser,
 ): Promise<Me> {
-  const workspaces = await deps.identity.workspacesOf(user.id);
+  const [workspaces, last] = await Promise.all([
+    deps.identity.workspacesOf(user.id),
+    deps.identity.lastWorkspaceOf(user.id),
+  ]);
+  const lastWorkspaceId = workspaces.some((workspace) => workspace.id === last) ? last : undefined;
   return {
     user: { id: user.id, name: user.name, email: user.email },
     workspaces: workspaces.map(({ id, slug, name }) => ({ id, slug, name })),
+    ...(lastWorkspaceId === undefined ? {} : { lastWorkspaceId }),
   };
+}
+
+/** What remembering the last workspace needs: the door's deps, and the identity store to write the preference. */
+export interface LastWorkspaceDeps {
+  readonly db: Database;
+  readonly identity: Pick<IdentityStore, 'findWorkspace' | 'setLastWorkspace'>;
+  readonly log?: DoorLog;
+  /** The rule source every door names (spec 0009): the api's `APP_RULES`. */
+  readonly rules: RuleSource;
+}
+
+/**
+ * Remembers the workspace at `slug` as the one `user` last opened (spec
+ * 0031, AC-802). The access door lets them in first, so a workspace they are
+ * not an active member of is refused NOT_FOUND, as every member procedure
+ * refuses it, and nothing is written. The store writes only on a change.
+ */
+export async function setLastWorkspace(deps: LastWorkspaceDeps, user: AccountUser, slug: string): Promise<void> {
+  const scope = await enterWorkspace(
+    { db: deps.db, identity: deps.identity, rules: deps.rules, ...(deps.log === undefined ? {} : { log: deps.log }) },
+    { userId: user.id, slug },
+  );
+  await deps.identity.setLastWorkspace(user.id, scope.workspaceId);
 }
 
 /** What creating a workspace needs: the tenant database, and the identity store to fill in the account's name. */
