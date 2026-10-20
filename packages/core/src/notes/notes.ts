@@ -155,6 +155,8 @@ async function noteRow(
 
 /** A title as stored: at most 200 characters, refused on `title` past that. */
 function checkTitle(title: string): string {
+  // NUL can't be stored: refused as input (400), never a database error (500).
+  if (title.includes('\u0000')) throw inputInvalid('title', 'This text holds a character that can’t be stored.');
   if (title.length > NOTE_TITLE_MAX) {
     throw inputInvalid('title', `A note title holds at most ${String(NOTE_TITLE_MAX)} characters.`);
   }
@@ -196,6 +198,48 @@ export async function saveNote(
       const { tx } = context;
       const actor = scope.actor;
       const memberId = actor.type === 'member' ? actor.id : null;
+      /** A later save of a stored note (or a first save another try of the same note stored first). */
+      const saveExisting = async (
+        stored: NonNullable<Awaited<ReturnType<typeof noteRow>>>,
+      ): Promise<SaveNoteResult> => {
+        if (stored.record_id !== recordId) throw refuse('ID_TAKEN', 'A note with that id already exists.');
+        if (stored.deleted || !stored.record_live) throw refuse('NOT_FOUND', UNKNOWN_NOTE);
+        if (!(await recordVisible(tx, scope.access, stored.object_id, recordId))) {
+          throw refuse('NOT_FOUND', UNKNOWN_NOTE);
+        }
+        if (!canWrite(scope.access, stored.object_id)) throw refuse('FORBIDDEN', NOTE_READ_ONLY);
+        const changes = await tx.execute<{ title_changed: boolean; content_changed: boolean }>(sql`
+          select ${title === undefined ? sql`false` : sql`title <> ${title}`} as title_changed,
+            ${content === undefined ? sql`false` : sql`content <> ${JSON.stringify(content)}::jsonb`} as content_changed
+          from notes where id = ${id}::uuid
+        `);
+        const changed = changes.rows[0];
+        if (changed === undefined || (!changed.title_changed && !changed.content_changed)) {
+          return { note: summaryOf(stored, scope.access) };
+        }
+        await tx.execute(sql`
+          update notes set
+            ${changed.title_changed && title !== undefined ? sql`title = ${title},` : sql``}
+            ${
+              changed.content_changed && content !== undefined
+                ? sql`content = ${JSON.stringify(content)}::jsonb, content_text = ${richTextToPlain(content)},`
+                : sql``
+            }
+            version = version + 1, updated_at = now(), updated_by_type = ${actor.type},
+            updated_by_id = ${actor.id}::uuid, updated_by_member_id = ${memberId}::uuid
+          where id = ${id}::uuid
+        `);
+        context.record({ notes: [{ noteId: id, recordId, objectId: stored.object_id }] });
+        const saved = await noteRow(tx, id);
+        if (saved === undefined) throw new Error('A note just written could not be read back.');
+        // Whose save this one replaced: never the writer's own (a retry, or two of their tabs), only someone else's.
+        const ownLast = stored.updated_by_type === actor.type && stored.updated_by_id === actor.id;
+        const overwrote =
+          !ownLast && input.baseVersion !== undefined && input.baseVersion !== stored.version
+            ? { by: actorOf(stored.updated_by_type, stored.updated_by_id), at: stored.updated_at }
+            : undefined;
+        return { note: summaryOf(saved, scope.access), ...(overwrote === undefined ? {} : { overwrote }) };
+      };
       const existing = await noteRow(tx, id, true);
       if (existing === undefined) {
         // A new note: its record live, visible and changeable, locked against a purge (never against an edit).
@@ -215,48 +259,19 @@ export async function saveNote(
             ${text}, ${actor.type}, ${actor.id}::uuid, ${memberId}::uuid, ${actor.type}, ${actor.id}::uuid, ${memberId}::uuid)
           on conflict (workspace_id, id) do nothing
         `);
-        // Another save of this id committed meanwhile: the browser sends one at a time, so it was someone else's.
-        if (inserted.rowCount === 0) throw refuse('ID_TAKEN', 'A note with that id already exists.');
+        // Another try of this first save (a retry after a lost answer) committed meanwhile: read it, with its lock,
+        // and carry on as a later save, which answers the same note and writes nothing when nothing changed.
+        if (inserted.rowCount === 0) {
+          const raced = await noteRow(tx, id, true);
+          if (raced === undefined) throw new Error('A note that refused its insert could not be read.');
+          return saveExisting(raced);
+        }
         context.record({ notes: [{ noteId: id, recordId, objectId: record.objectId }] });
         const made = await noteRow(tx, id);
         if (made === undefined) throw new Error('A note just written could not be read back.');
         return { note: summaryOf(made, scope.access) };
       }
-      if (existing.record_id !== recordId) throw refuse('ID_TAKEN', 'A note with that id already exists.');
-      if (existing.deleted || !existing.record_live) throw refuse('NOT_FOUND', UNKNOWN_NOTE);
-      if (!(await recordVisible(tx, scope.access, existing.object_id, recordId))) {
-        throw refuse('NOT_FOUND', UNKNOWN_NOTE);
-      }
-      if (!canWrite(scope.access, existing.object_id)) throw refuse('FORBIDDEN', NOTE_READ_ONLY);
-      const changes = await tx.execute<{ title_changed: boolean; content_changed: boolean }>(sql`
-        select ${title === undefined ? sql`false` : sql`title <> ${title}`} as title_changed,
-          ${content === undefined ? sql`false` : sql`content <> ${JSON.stringify(content)}::jsonb`} as content_changed
-        from notes where id = ${id}::uuid
-      `);
-      const changed = changes.rows[0];
-      if (changed === undefined || (!changed.title_changed && !changed.content_changed)) {
-        return { note: summaryOf(existing, scope.access) };
-      }
-      await tx.execute(sql`
-        update notes set
-          ${changed.title_changed && title !== undefined ? sql`title = ${title},` : sql``}
-          ${
-            changed.content_changed && content !== undefined
-              ? sql`content = ${JSON.stringify(content)}::jsonb, content_text = ${richTextToPlain(content)},`
-              : sql``
-          }
-          version = version + 1, updated_at = now(), updated_by_type = ${actor.type},
-          updated_by_id = ${actor.id}::uuid, updated_by_member_id = ${memberId}::uuid
-        where id = ${id}::uuid
-      `);
-      context.record({ notes: [{ noteId: id, recordId, objectId: existing.object_id }] });
-      const saved = await noteRow(tx, id);
-      if (saved === undefined) throw new Error('A note just written could not be read back.');
-      const overwrote =
-        input.baseVersion !== undefined && input.baseVersion !== existing.version
-          ? { by: actorOf(existing.updated_by_type, existing.updated_by_id), at: existing.updated_at }
-          : undefined;
-      return { note: summaryOf(saved, scope.access), ...(overwrote === undefined ? {} : { overwrote }) };
+      return saveExisting(existing);
     },
     hooks,
   );

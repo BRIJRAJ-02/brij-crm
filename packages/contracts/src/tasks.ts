@@ -25,11 +25,19 @@ export const MAX_TASK_CURSOR = 256;
 /** The message for a title that is empty once trimmed. */
 const TITLE_REQUIRED = 'Give the task a title.';
 
+/** The message for text holding NUL, which Postgres can't store (400, never a 500). */
+const NUL_REFUSED = 'This text holds a character that can’t be stored.';
+
 /** The message for a title over `TASK_TITLE_MAX`. */
 const TITLE_TOO_LONG = `A task title holds at most ${TASK_TITLE_MAX.toLocaleString('en')} characters.`;
 
 /** A task's title: trimmed at its ends, then 1 to 2,000 characters. */
-export const TaskTitle = z.string().trim().min(1, TITLE_REQUIRED).max(TASK_TITLE_MAX, TITLE_TOO_LONG);
+export const TaskTitle = z
+  .string()
+  .trim()
+  .min(1, TITLE_REQUIRED)
+  .max(TASK_TITLE_MAX, TITLE_TOO_LONG)
+  .refine((title) => !title.includes('\u0000'), { error: NUL_REFUSED });
 /** A task's title. */
 export type TaskTitle = z.infer<typeof TaskTitle>;
 

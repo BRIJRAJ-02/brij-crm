@@ -72,7 +72,29 @@ async function workspace() {
         ),
       )
     ).rows;
-  return { scope, ownerId: created.memberId, bea, companies, company, level, as, outbox };
+  const ownedCompany = async (name: string, memberId: string) =>
+    (
+      await createRecord(scope, {
+        objectId: companies,
+        values: {
+          [ids['companies.name'] ?? '']: name,
+          [ids['companies.owner'] ?? '']: { type: 'member', id: memberId },
+        },
+      })
+    ).recordId;
+  /** A record rule: members see only the companies they own (spec 0009's `own`). */
+  const ownCompanies: AccessRules = {
+    levels: [],
+    records: [
+      {
+        subject: { type: 'role', role: 'member' },
+        objectId: companies,
+        kind: 'own',
+        attributeId: ids['companies.owner'] ?? '',
+      },
+    ],
+  };
+  return { scope, ownerId: created.memberId, bea, companies, company, level, as, outbox, ownedCompany, ownCompanies };
 }
 
 async function refusalOf(call: Promise<unknown>) {
@@ -303,5 +325,63 @@ describe('deleting, restoring and the record’s trash (AC-445, AC-446)', () => 
       code: 'RECORD_DELETED',
       message: 'Restore the record first.',
     });
+  });
+});
+
+describe('the security review (spec 0019, milestones 3 and 4)', () => {
+  it('applies an injected record rule: notes on a company the member doesn’t own are absent, in every read and write', async () => {
+    const w = await workspace();
+    const mine = await w.ownedCompany('Mine', w.bea);
+    const theirs = await w.ownedCompany('Theirs', w.ownerId);
+    const onMine = (await saveNote(w.scope, { id: newId(), recordId: mine, title: 'Mine' })).note;
+    const onTheirs = (await saveNote(w.scope, { id: newId(), recordId: theirs, title: 'Theirs' })).note;
+    const bea = w.as(w.ownCompanies);
+    expect((await listNotes(bea, { recordId: mine })).items.map((note) => note.id)).toEqual([onMine.id]);
+    expect(await refusalOf(listNotes(bea, { recordId: theirs }))).toMatchObject({ code: 'NOT_FOUND' });
+    expect(await refusalOf(getNote(bea, { noteId: onTheirs.id }))).toMatchObject({ code: 'NOT_FOUND' });
+    expect(await refusalOf(saveNote(bea, { id: onTheirs.id, recordId: theirs, title: 'Mine now' }))).toMatchObject({
+      code: 'NOT_FOUND',
+    });
+    expect(await refusalOf(saveNote(bea, { id: newId(), recordId: theirs, title: 'New' }))).toMatchObject({
+      code: 'NOT_FOUND',
+    });
+    expect(await refusalOf(deleteNote(bea, { noteId: onTheirs.id }))).toMatchObject({ code: 'NOT_FOUND' });
+  });
+
+  it('answers two tries of the same first save racing each other with the same note, stored once', async () => {
+    const w = await workspace();
+    const acme = await w.company('Acme');
+    const input = { id: newId(), recordId: acme, title: 'Race', content: doc('One') };
+    const [a, b] = await Promise.all([saveNote(w.scope, input, hooks()), saveNote(w.scope, input, hooks())]);
+    expect(a.note.id).toBe(b.note.id);
+    expect(b.note.version).toBe(1);
+    expect(await w.outbox()).toHaveLength(1);
+  });
+
+  it('never tells a writer their own earlier save was replaced', async () => {
+    const w = await workspace();
+    const acme = await w.company('Acme');
+    const id = newId();
+    await saveNote(w.scope, { id, recordId: acme, content: doc('One') });
+    await saveNote(w.scope, { id, recordId: acme, content: doc('Two'), baseVersion: 1 });
+    // A second tab of the same person still on version 1.
+    const stale = await saveNote(w.scope, { id, recordId: acme, content: doc('Three'), baseVersion: 1 });
+    expect(stale.overwrote).toBeUndefined();
+    expect(stale.note.version).toBe(3);
+  });
+
+  it('refuses NUL in a title or the body as invalid input, never a database error', async () => {
+    const w = await workspace();
+    const acme = await w.company('Acme');
+    expect(await refusalOf(saveNote(w.scope, { id: newId(), recordId: acme, title: 'a\u0000b' }))).toMatchObject({
+      code: 'INPUT_INVALID',
+      field: 'title',
+    });
+    expect(await refusalOf(saveNote(w.scope, { id: newId(), recordId: acme, content: doc('a\u0000b') }))).toMatchObject(
+      {
+        code: 'INPUT_INVALID',
+        field: 'content',
+      },
+    );
   });
 });

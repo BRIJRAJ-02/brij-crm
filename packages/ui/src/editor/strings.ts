@@ -31,4 +31,6 @@ export const strings = {
   markTask: (text: string, isChecked: boolean) =>
     isChecked ? `Mark “${text || 'Empty task'}” as not done` : `Mark “${text || 'Empty task'}” as done`,
   readOnly: 'Read only',
+  /** A mention of someone no longer in the workspace. */
+  formerMember: 'Former member',
 } as const;

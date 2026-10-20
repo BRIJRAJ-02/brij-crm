@@ -127,6 +127,11 @@ function OpenNote({ session, props }: { readonly session: NoteSession; readonly 
       },
     [members],
   );
+  // A mention draws the member's name now, from the members store, never the label the document stored.
+  const mentionName = useMemo(() => {
+    const names = new Map(members.map((member) => [member.id, member.name]));
+    return (id: string) => names.get(id);
+  }, [members]);
   const copyLink = () => {
     const url = new URL(window.location.href);
     url.searchParams.set('note', state.noteId);
@@ -259,6 +264,7 @@ function OpenNote({ session, props }: { readonly session: NoteSession; readonly 
           defaultValue={(state.doc ?? null) as RichTextDoc | null}
           onChange={session.setDoc}
           onSearchMentions={mentions}
+          mentionName={mentionName}
           isReadOnly={!isEditable}
         />
       </Suspense>

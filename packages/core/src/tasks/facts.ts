@@ -1,8 +1,11 @@
 // The facts spec 0009's `filterEvent` needs for a `tasks` row (spec 0019,
 // AC-447, AC-448): each task's creator, assignee and linked records, read
 // once per relay batch (`taskFacts`, the system's read) or per catch up page
-// (`readTaskFacts`, inside the caller's own transaction). A deleted task has
-// no fact, so it counts as visible to nobody.
+// (`readTaskFacts`, inside the caller's own transaction). A deleted task keeps
+// its fact and is judged by the same rule, so its delete (and its restore)
+// reaches those who saw it with the writer's mutation id. A link to a record
+// in the trash, or on an archived object, is marked `trashed`: it still
+// counts as a link, but shows nobody the task.
 import { sql } from 'drizzle-orm';
 import type { WorkspaceTx } from '@crm/db';
 import type { TaskFact } from '../access/events.ts';
@@ -21,10 +24,11 @@ interface FactRow extends Record<string, unknown> {
 }
 
 /**
- * Each live task's fact among `taskIds`, by id, read in `tx`: its creator and
- * assignee member ids, and every linked record with its object, a record in
- * the trash marked `trashed` (its link still counts as a link, but it shows
- * nobody the task). Ids that aren't uuids name nothing.
+ * Each task's fact among `taskIds` (deleted ones too), by id, read in `tx`:
+ * its creator and assignee member ids, and every linked record with its
+ * object, a record in the trash or on an archived object marked `trashed`
+ * (its link still counts as a link, but it shows nobody the task). Ids that
+ * aren't uuids name nothing.
  */
 export async function readTaskFacts(
   tx: WorkspaceTx,
@@ -35,12 +39,14 @@ export async function readTaskFacts(
   if (ids.length === 0) return facts;
   const rows = await tx.execute<FactRow>(sql`
     select t.id::text as id, t.created_by_member_id::text as creator, t.assignee_member_id::text as assignee,
-      (select json_agg(json_build_object('objectId', r.object_id, 'recordId', r.id, 'trashed', r.deleted_at is not null)
+      (select json_agg(json_build_object('objectId', r.object_id, 'recordId', r.id,
+            'trashed', r.deleted_at is not null or o.archived_at is not null)
           order by l.position)
         from task_records l join records r on r.workspace_id = l.workspace_id and r.id = l.record_id
+          join objects o on o.workspace_id = r.workspace_id and o.id = r.object_id
         where l.workspace_id = t.workspace_id and l.task_id = t.id) as records
     from tasks t
-    where t.id = any(${uuidList(ids)}) and t.deleted_at is null
+    where t.id = any(${uuidList(ids)})
   `);
   for (const row of rows.rows) {
     facts[row.id] = {

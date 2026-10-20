@@ -16,6 +16,7 @@ import type { EngineScope } from '../engine/scope.ts';
 import { createWorkspace } from '../engine/workspaces.ts';
 import { rescope, testScope } from '../testing.ts';
 import { readTaskFacts } from './facts.ts';
+import { archiveObject } from '../objects/objects.ts';
 import { createTask, deleteTask, getTasks, listTasks, POSITION_RENUMBER, restoreTask, updateTask } from './tasks.ts';
 
 const { appUrl } = inject('testDatabase');
@@ -75,7 +76,43 @@ async function workspace() {
         ),
       )
     ).rows;
-  return { scope, ownerId: created.memberId, bea, cal, companies, people, company, person, as, level, outbox };
+  const ownedCompany = async (name: string, memberId: string) =>
+    (
+      await createRecord(scope, {
+        objectId: companies,
+        values: {
+          [attribute('companies.name')]: name,
+          [attribute('companies.owner')]: { type: 'member', id: memberId },
+        },
+      })
+    ).recordId;
+  /** A record rule: members see only the companies they own (spec 0009's `own`). */
+  const ownCompanies: AccessRules = {
+    levels: [],
+    records: [
+      {
+        subject: { type: 'role', role: 'member' },
+        objectId: companies,
+        kind: 'own',
+        attributeId: attribute('companies.owner'),
+      },
+    ],
+  };
+  return {
+    scope,
+    ownerId: created.memberId,
+    bea,
+    cal,
+    companies,
+    people,
+    company,
+    person,
+    as,
+    level,
+    outbox,
+    ownedCompany,
+    ownCompanies,
+  };
 }
 
 async function refusalOf(call: Promise<unknown>) {
@@ -625,6 +662,70 @@ describe('listTasks for My tasks (AC-436, AC-447)', () => {
       rescope(w.scope, { actor: { type: 'api_key', id: newId() }, scopes: level === 'read' ? ['data.read'] : [] });
     expect(await listTasks(key('none'), { scope: { mine: 'all' }, status: 'open' })).toEqual({ items: [] });
     expect((await listTasks(key('read'), { scope: { mine: 'assigned' }, status: 'open' })).items).toEqual([]);
+  });
+});
+
+describe('the security review (spec 0019, milestones 2 to 4)', () => {
+  it('applies an injected record rule in All tasks: a task shows by a linked record the member may see, and only that one', async () => {
+    const w = await workspace();
+    const mine = await w.ownedCompany('Mine', w.bea);
+    const theirs = await w.ownedCompany('Theirs', w.ownerId);
+    const onTheirs = await createTask(w.scope, { id: newId(), title: 'On theirs', recordIds: [theirs] });
+    const onBoth = await createTask(w.scope, { id: newId(), title: 'On both', recordIds: [theirs, mine] });
+    const bea = w.as(w.bea, w.ownCompanies);
+    const page = await listTasks(bea, { scope: { mine: 'all' }, status: 'open' });
+    expect(page.items.map((item) => item.id)).toEqual([onBoth.id]);
+    expect(page.items[0]?.records.map((record) => record.recordId)).toEqual([mine]);
+    expect(await getTasks(bea, { ids: [onTheirs.id] })).toEqual([]);
+    expect(await refusalOf(listTasks(bea, { scope: { recordId: theirs }, status: 'open' }))).toMatchObject({
+      code: 'NOT_FOUND',
+    });
+    // Her edit of the task she can see keeps the link she can't.
+    await updateTask(bea, { taskId: onBoth.id, title: 'Renamed' });
+    expect((await getTasks(w.scope, { ids: [onBoth.id] }))[0]?.records.map((record) => record.recordId)).toEqual([
+      theirs,
+      mine,
+    ]);
+  });
+
+  it('treats a record on an archived object as not live: its task shows only to its assignee and creator', async () => {
+    const w = await workspace();
+    const acme = await w.company('Acme');
+    const task = await createTask(w.scope, {
+      id: newId(),
+      title: 'Archived link',
+      recordIds: [acme],
+      assigneeMemberId: w.bea,
+    });
+    await archiveObject(w.scope, { objectId: w.companies });
+    expect(await getTasks(w.as(w.cal), { ids: [task.id] })).toEqual([]);
+    expect(
+      (await listTasks(w.as(w.cal), { scope: { mine: 'all' }, status: 'open' })).items.map((item) => item.id),
+    ).not.toContain(task.id);
+    expect((await getTasks(w.as(w.bea), { ids: [task.id] }))[0]?.recordCount).toBe(0);
+    const facts = await db.withWorkspace(w.scope.workspaceId, (tx) => readTaskFacts(tx, [task.id]));
+    expect(facts[task.id]?.records).toEqual([{ objectId: w.companies, recordId: acme, trashed: true }]);
+  });
+
+  it('keeps a deleted task’s facts, so its delete event reaches those who saw it', async () => {
+    const w = await workspace();
+    const acme = await w.company('Acme');
+    const task = await createTask(w.scope, { id: newId(), title: 'Gone', recordIds: [acme], assigneeMemberId: w.bea });
+    await deleteTask(w.scope, { taskId: task.id });
+    const facts = await db.withWorkspace(w.scope.workspaceId, (tx) => readTaskFacts(tx, [task.id]));
+    expect(facts[task.id]).toEqual({
+      creatorMemberId: w.ownerId,
+      assigneeMemberIds: [w.bea],
+      records: [{ objectId: w.companies, recordId: acme }],
+    });
+  });
+
+  it('refuses NUL in a title as invalid input, never a database error', async () => {
+    const w = await workspace();
+    expect(await refusalOf(createTask(w.scope, { id: newId(), title: 'Call\u0000back' }))).toMatchObject({
+      code: 'INPUT_INVALID',
+      field: 'title',
+    });
   });
 });
 

@@ -144,7 +144,7 @@ async function taskRows(tx: WorkspaceTx, ids: readonly string[], lock = false): 
   return result.rows;
 }
 
-/** The linked records the reader may see, live, with their displays and objects, by id. */
+/** The linked records the reader may see, live (not in the trash, not on an archived object), with their displays, by id. */
 async function linkedDisplays(
   tx: WorkspaceTx,
   access: Access,
@@ -154,7 +154,14 @@ async function linkedDisplays(
   if (unique.length === 0) return new Map();
   // Live records only, and hidden is absent: a record on an object at none, or outside a record rule, is left out.
   const views = await readRecords(tx, access, unique, { attributeIds: [] });
-  return new Map(views.map((view) => [view.id, view.display]));
+  if (views.length === 0) return new Map();
+  // A record on an archived object is no more live than one in the trash (the task rule's "live").
+  const objectIds = [...new Set(views.map((view) => view.display.objectId))];
+  const archived = await tx.execute<{ id: string }>(
+    sql`select id::text as id from objects where id = any(${uuidList(objectIds)}) and archived_at is not null`,
+  );
+  const gone = new Set(archived.rows.map((row) => row.id));
+  return new Map(views.filter((view) => !gone.has(view.display.objectId)).map((view) => [view.id, view.display]));
 }
 
 /** Whether the actor made the task. */
@@ -259,6 +266,8 @@ async function readTaskViews(
 function checkTitle(title: string): string {
   const trimmed = title.trim();
   if (trimmed.length === 0) throw inputInvalid('title', 'Give the task a title.');
+  // NUL can't be stored: refused as input (400), never a database error (500).
+  if (trimmed.includes('\u0000')) throw inputInvalid('title', 'This text holds a character that can’t be stored.');
   if (trimmed.length > TASK_TITLE_MAX) {
     throw inputInvalid('title', `A task title holds at most ${TASK_TITLE_MAX.toLocaleString('en')} characters.`);
   }

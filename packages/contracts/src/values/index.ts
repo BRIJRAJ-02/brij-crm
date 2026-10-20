@@ -118,6 +118,7 @@ export {
   type RuleSettingsProblem,
 } from './validation-rules.ts';
 export {
+  hasNul,
   isSafeLink,
   safeLink,
   jsonDepth,

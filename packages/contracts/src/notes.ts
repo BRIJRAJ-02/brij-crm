@@ -69,6 +69,7 @@ export const SaveNoteInput = WorkspaceScoped.extend({
   title: z
     .string()
     .max(NOTE_TITLE_MAX, `A note title holds at most ${String(NOTE_TITLE_MAX)} characters.`)
+    .refine((title) => !title.includes('\u0000'), { error: 'This text holds a character that can’t be stored.' })
     .optional(),
   content: RichTextDocBody.optional(),
   baseVersion: z.number().int().min(1).nullable().optional(),

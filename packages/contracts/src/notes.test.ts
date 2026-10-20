@@ -3,6 +3,7 @@
 // `RichTextDoc` applies) and the server's plain text copy.
 import { describe, expect, it } from 'vitest';
 import { noteExcerpt, richTextToPlain, SaveNoteInput } from './notes.ts';
+import { TaskTitle } from './tasks.ts';
 import { RICH_TEXT_MAX_BYTES, RichTextDoc, RichTextDocBody } from './values/rich-text.ts';
 
 const text = (value: string, marks?: unknown[]) => ({ type: 'text', text: value, ...(marks ? { marks } : {}) });
@@ -51,6 +52,51 @@ describe('RichTextDoc', () => {
       mutationId: '0199a6f2-0000-7000-8000-000000000003',
     });
     expect(save.success).toBe(true);
+  });
+});
+
+describe('RichTextDoc attributes and NUL (spec 0019 review)', () => {
+  const docOf = (...content: unknown[]) => ({ type: 'doc', content });
+  it('takes each type’s own attributes only', () => {
+    expect(RichTextDoc.safeParse(docOf({ type: 'heading', attrs: { level: 2 }, content: [text('x')] })).success).toBe(
+      true,
+    );
+    expect(
+      RichTextDoc.safeParse(docOf({ type: 'heading', attrs: { level: 2, style: 'x' }, content: [text('x')] })).success,
+    ).toBe(false);
+    expect(RichTextDoc.safeParse(docOf({ type: 'heading', attrs: { level: 9 } })).success).toBe(false);
+    expect(RichTextDoc.safeParse(docOf({ type: 'paragraph', attrs: { onclick: 'x' } })).success).toBe(false);
+    expect(
+      RichTextDoc.safeParse(docOf(para({ type: 'mention', attrs: { id: 'm1', label: 'Ada', href: '/x' } }))).success,
+    ).toBe(false);
+    expect(
+      RichTextDoc.safeParse(docOf(para(text('x', [{ type: 'bold', attrs: { href: 'https://a.test' } }])))).success,
+    ).toBe(false);
+    expect(
+      RichTextDoc.safeParse(
+        docOf(
+          para(
+            text('x', [{ type: 'link', attrs: { href: 'https://a.test', target: '_blank', rel: null, class: null } }]),
+          ),
+        ),
+      ).success,
+    ).toBe(true);
+    expect(RichTextDoc.safeParse(docOf(para(text('x', [{ type: 'link' }])))).success).toBe(false);
+  });
+
+  it('refuses NUL in text and in titles, so it is a 400 and never a database error', () => {
+    expect(RichTextDoc.safeParse(docOf(para(text('a\u0000b')))).success).toBe(false);
+    expect(RichTextDoc.safeParse(docOf(para({ type: 'mention', attrs: { id: 'm1', label: 'A\u0000' } }))).success).toBe(
+      false,
+    );
+    const base = {
+      workspace: 'acme',
+      id: '0199a6f2-0000-7000-8000-000000000001',
+      recordId: '0199a6f2-0000-7000-8000-000000000002',
+      mutationId: '0199a6f2-0000-7000-8000-000000000003',
+    };
+    expect(SaveNoteInput.safeParse({ ...base, title: 'a\u0000' }).success).toBe(false);
+    expect(TaskTitle.safeParse('Call\u0000back').success).toBe(false);
   });
 });
 

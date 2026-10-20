@@ -60,7 +60,8 @@ describe('the editor schema', () => {
 
   it('writes documents that parse as RichTextDocBody, with no class names stored', () => {
     const json = Node.fromJSON(schema, EVERY_PART).toJSON() as unknown;
-    expect(RichTextDocBody.safeParse(json).success).toBe(true);
+    const parsed = RichTextDocBody.safeParse(json);
+    expect(parsed.success ? [] : parsed.error.issues).toEqual([]);
     expect(JSON.stringify(json)).not.toContain('ws-');
   });
 

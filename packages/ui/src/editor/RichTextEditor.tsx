@@ -13,7 +13,7 @@ import { Icon } from '../atoms/Icon/Icon.tsx';
 import { noteExtensions, type MentionSuggestion } from './extensions.ts';
 import { FormatToolbar } from './FormatToolbar.tsx';
 import { MentionList, mentionOptionId } from './MentionList.tsx';
-import { mentionView } from './MentionView.tsx';
+import { MentionNames, mentionView } from './MentionView.tsx';
 import styles from './RichTextEditor.module.css';
 import { strings } from './strings.ts';
 
@@ -40,6 +40,13 @@ export interface RichTextEditorProps {
   readonly placeholder?: string;
   /** Members matching what follows `@`; without it (when the editor mounts) `@` stays plain text. */
   readonly onSearchMentions?: (query: string) => Promise<readonly ActorDisplay[]>;
+  /**
+   * A mentioned member's name now, by id, from the screen's members: a
+   * mention draws this, never the label stored in the document (which anyone
+   * who could write the note could have set). Undefined (a member no longer
+   * here) draws the screen's word for that; without the prop, the stored label.
+   */
+  readonly mentionName?: (id: string) => string | undefined;
   readonly isReadOnly?: boolean;
   /** Why it is read only, shown under it. */
   readonly readOnlyReason?: string;
@@ -224,6 +231,7 @@ export function RichTextEditor({
   onChangeMaxWait,
   placeholder,
   onSearchMentions,
+  mentionName,
   isReadOnly = false,
   readOnlyReason,
   error,
@@ -332,7 +340,9 @@ export function RichTextEditor({
       data-invalid={error === undefined ? undefined : ''}
       data-readonly={isReadOnly || undefined}
     >
-      <EditorContent editor={editor} className={styles.frame} />
+      <MentionNames.Provider value={mentionName}>
+        <EditorContent editor={editor} className={styles.frame} />
+      </MentionNames.Provider>
       {!isReadOnly && <FormatToolbar editor={editor} />}
       {session !== undefined && (
         <MentionList

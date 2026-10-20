@@ -59,14 +59,91 @@ export function richTextBytes(doc: unknown): number {
   return new TextEncoder().encode(JSON.stringify(doc)).length;
 }
 
-/** A node's or a mark's attributes: plain scalars only. */
-const Attrs = z.record(z.string().max(64), z.union([z.string().max(2_048), z.number(), z.boolean(), z.null()]));
+/** Whether a string holds NUL, which Postgres can store neither in text nor in jsonb. */
+export function hasNul(value: string): boolean {
+  return value.includes('\u0000');
+}
 
-/** One mark on a text node; a link's `href` must be safe. */
+/** A string with no NUL, at most `max` characters (a text node has no cap of its own: the 200 KB one counts). */
+const Text = (max = Number.POSITIVE_INFINITY) =>
+  z
+    .string()
+    .max(max)
+    .refine((value) => !hasNul(value), { error: 'This text holds a character that can’t be stored.' });
+
+/** A string attribute, or null (Tiptap writes null for an attribute left unset). */
+const OptionalText = (max: number) => Text(max).nullable();
+
+/**
+ * Each node's and mark's attributes, by type: only these keys, each of its
+ * own kind; a type not listed takes none. What the editor writes, and nothing
+ * a document could use to carry something else (a test in packages/ui keeps
+ * the editor inside it).
+ */
+const NODE_ATTRS = {
+  heading: z.strictObject({ level: z.number().int().min(1).max(3) }),
+  orderedList: z.strictObject({
+    start: z.number().int().min(0).max(1_000_000).optional(),
+    type: OptionalText(8).optional(),
+  }),
+  taskItem: z.strictObject({ checked: z.boolean().optional() }),
+  codeBlock: z.strictObject({ language: OptionalText(32).optional() }),
+  // The label is a copy for plain text and search; a screen draws the member's name from its members, by id.
+  mention: z.strictObject({
+    id: OptionalText(64),
+    label: OptionalText(200).optional(),
+    mentionSuggestionChar: OptionalText(1).optional(),
+  }),
+} as const satisfies Partial<Record<(typeof RICH_TEXT_NODES)[number], z.ZodType>>;
+
+const MARK_ATTRS = {
+  link: z.strictObject({
+    href: Text(2_048).refine((href) => isSafeLink(href), {
+      error: 'A link must start with http, https, mailto or tel.',
+    }),
+    target: OptionalText(16).optional(),
+    rel: OptionalText(64).optional(),
+    class: OptionalText(64).optional(),
+    title: OptionalText(200).optional(),
+  }),
+} as const satisfies Partial<Record<(typeof RICH_TEXT_MARKS)[number], z.ZodType>>;
+
+/** A type's attributes checked against its allowlist; a type with no list takes none (or an empty object). */
+function attrsFit(
+  lists: Readonly<Partial<Record<string, z.ZodType>>>,
+  type: string,
+  attrs: unknown,
+  ctx: z.RefinementCtx,
+): void {
+  if (attrs === undefined) {
+    if (type === 'link' || type === 'mention' || type === 'heading') {
+      ctx.addIssue({ code: 'custom', message: `A ${type} needs its attributes.`, path: ['attrs'] });
+    }
+    return;
+  }
+  const list = lists[type];
+  if (list === undefined) {
+    if (typeof attrs !== 'object' || attrs === null || Object.keys(attrs).length > 0) {
+      ctx.addIssue({ code: 'custom', message: `A ${type} takes no attributes.`, path: ['attrs'] });
+    }
+    return;
+  }
+  const parsed = list.safeParse(attrs);
+  if (!parsed.success) {
+    for (const issue of parsed.error.issues) {
+      ctx.addIssue({ code: 'custom', message: issue.message, path: ['attrs', ...issue.path.map(String)] });
+    }
+  }
+}
+
+/** Attribute values as stored: plain scalars (each type's allowlist narrows them further). */
+const Attrs = z.record(z.string().max(64), z.union([z.string(), z.number(), z.boolean(), z.null()]));
+
+/** One mark on a text node; its attributes by its type (a link's `href` must be safe). */
 export const RichTextMark = z
   .object({ type: z.enum(RICH_TEXT_MARKS), attrs: Attrs.optional() })
-  .refine((mark) => mark.type !== 'link' || (typeof mark.attrs?.href === 'string' && isSafeLink(mark.attrs.href)), {
-    error: 'A link must start with http, https, mailto or tel.',
+  .superRefine((mark, ctx) => {
+    attrsFit(MARK_ATTRS, mark.type, mark.attrs, ctx);
   });
 /** One mark on a text node. */
 export type RichTextMark = z.infer<typeof RichTextMark>;
@@ -80,15 +157,19 @@ export interface RichTextNode {
   readonly marks?: readonly RichTextMark[];
 }
 
-/** One node of a document, its children by the same rule. */
+/** One node of a document, its attributes by its type, its children by the same rule. */
 export const RichTextNode: z.ZodType<RichTextNode> = z.lazy(() =>
-  z.object({
-    type: z.enum(RICH_TEXT_NODES),
-    attrs: Attrs.optional(),
-    content: z.array(RichTextNode).optional(),
-    text: z.string().optional(),
-    marks: z.array(RichTextMark).optional(),
-  }),
+  z
+    .object({
+      type: z.enum(RICH_TEXT_NODES),
+      attrs: Attrs.optional(),
+      content: z.array(RichTextNode).optional(),
+      text: Text().optional(),
+      marks: z.array(RichTextMark).optional(),
+    })
+    .superRefine((node, ctx) => {
+      attrsFit(NODE_ATTRS, node.type, node.attrs, ctx);
+    }),
 );
 
 const DEPTH_MESSAGE = 'This document nests too deeply.';
