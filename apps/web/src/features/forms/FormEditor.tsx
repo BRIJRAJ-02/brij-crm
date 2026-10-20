@@ -27,8 +27,8 @@ import {
   MenuTrigger,
   Modal,
   Popover,
-  SegmentedControl,
   Select,
+  Tabs,
   TopBar,
 } from '@crm/ui';
 import { useNavigate, useRouteContext } from '@tanstack/react-router';
@@ -438,17 +438,17 @@ export function FormEditor(props: FormEditorProps) {
             {...(isPublished
               ? {
                   tabs: (
-                    <SegmentedControl
+                    <Tabs
                       label={strings.tabs}
-                      value={current}
-                      onChange={(value) => {
+                      selectedKey={current}
+                      onSelectionChange={(value) => {
                         if ((FORM_TABS as readonly string[]).includes(value)) goTab(value as FormTab);
                       }}
-                      segments={[
-                        { value: 'form', label: strings.tabForm },
-                        { value: 'settings', label: strings.tabSettings },
-                        { value: 'install', label: strings.tabInstall },
-                        { value: 'submissions', label: strings.tabSubmissions },
+                      tabs={[
+                        { id: 'form', label: strings.tabForm },
+                        { id: 'settings', label: strings.tabSettings },
+                        { id: 'install', label: strings.tabInstall },
+                        { id: 'submissions', label: strings.tabSubmissions },
                       ]}
                     />
                   ),

@@ -37,8 +37,12 @@ export interface TabsProps {
   readonly onSelectionChange?: (id: string) => void;
   /** At the strip's far end, on its hairline: the chosen tab's own tools (a search, New). */
   readonly end?: ReactNode;
-  /** One TabPanel per tab, with the same ids. */
-  readonly children: ReactNode;
+  /**
+   * One TabPanel per tab, with the same ids. Leave it off for a strip whose
+   * chosen tab is drawn by the page under it (a published form's Form,
+   * Settings, Install and Submissions, each its own address).
+   */
+  readonly children?: ReactNode;
 }
 
 /**

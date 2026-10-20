@@ -17,7 +17,7 @@ export interface FormEditorLayoutProps {
   readonly status?: { readonly tone: FormEditorTone; readonly text: string };
   /** At the top, at the end of the row: a page's own action (the forms list's New form, under the Captures tabs). */
   readonly actions?: ReactNode;
-  /** Under the status line: the SegmentedControl of tabs, once the form was published. */
+  /** Under the status line: the Tabs strip (Form, Settings, Install, Submissions), once the form was published. */
   readonly tabs?: ReactNode;
   /** Above the body: a refused publish's Callout, a teammate's change. */
   readonly notices?: ReactNode;

@@ -43,6 +43,7 @@
 
   .tabs {
     display: flex;
+    flex-direction: column;
   }
 
   .actions {
