@@ -444,6 +444,12 @@ export function FormEditor(props: FormEditorProps) {
         : {})}
     >
       {body}
+    </PreviewLayout>
+  );
+
+  // The dialogs sit apart from the layout, so the body changing shape on the first publish never resets them.
+  const dialogs = (
+    <>
       {isFirstPublish && (
         <PublishDialog
           slug={slug}
@@ -470,6 +476,8 @@ export function FormEditor(props: FormEditorProps) {
           }}
           onClose={() => {
             setFirstPublish(false);
+            // Publish left once the form went live; focus goes to the menu beside where it was.
+            focusLater(() => moreRef.current);
           }}
         />
       )}
@@ -508,7 +516,7 @@ export function FormEditor(props: FormEditorProps) {
       >
         <p>{strings.deleteText(form.submissionCount)}</p>
       </Modal>
-    </PreviewLayout>
+    </>
   );
 
   return (
@@ -516,29 +524,34 @@ export function FormEditor(props: FormEditorProps) {
       currentPage="captures"
       page={{
         topBar,
-        body: isPublished ? (
-          // The Captures strip's way: the tabs edge to edge under the TopBar, the chosen tab's panel holding the layout.
-          <Tabs
-            label={strings.tabs}
-            selectedKey={current}
-            onSelectionChange={(value) => {
-              if ((FORM_TABS as readonly string[]).includes(value)) goTab(value as FormTab);
-            }}
-            tabs={[
-              { id: 'form', label: strings.tabForm },
-              { id: 'settings', label: strings.tabSettings },
-              { id: 'install', label: strings.tabInstall },
-              { id: 'submissions', label: strings.tabSubmissions },
-            ]}
-          >
-            {FORM_TABS.map((id) => (
-              <TabPanel key={id} id={id}>
-                {id === current && layout}
-              </TabPanel>
-            ))}
-          </Tabs>
-        ) : (
-          layout
+        body: (
+          <>
+            {isPublished ? (
+              // The Captures strip's way: the tabs edge to edge under the TopBar, the chosen tab's panel holding the layout.
+              <Tabs
+                label={strings.tabs}
+                selectedKey={current}
+                onSelectionChange={(value) => {
+                  if ((FORM_TABS as readonly string[]).includes(value)) goTab(value as FormTab);
+                }}
+                tabs={[
+                  { id: 'form', label: strings.tabForm },
+                  { id: 'settings', label: strings.tabSettings },
+                  { id: 'install', label: strings.tabInstall },
+                  { id: 'submissions', label: strings.tabSubmissions },
+                ]}
+              >
+                {FORM_TABS.map((id) => (
+                  <TabPanel key={id} id={id}>
+                    {id === current && layout}
+                  </TabPanel>
+                ))}
+              </Tabs>
+            ) : (
+              layout
+            )}
+            {dialogs}
+          </>
         ),
       }}
     />

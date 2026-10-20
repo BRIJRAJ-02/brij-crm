@@ -75,7 +75,9 @@ export const BlockClamped: Story = {
     </Stage>
   ),
   play: async ({ canvas, userEvent }) => {
-    await userEvent.click(canvas.getByRole('button', { name: 'Show all' }));
-    await expect(canvas.getByRole('button', { name: 'Show less' })).toBeInTheDocument();
+    const toggle = canvas.getByRole('button', { name: 'Show all' });
+    await expect(toggle).toHaveAttribute('aria-expanded', 'false');
+    await userEvent.click(toggle);
+    await expect(canvas.getByRole('button', { name: 'Show less' })).toHaveAttribute('aria-expanded', 'true');
   },
 };

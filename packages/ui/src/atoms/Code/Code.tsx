@@ -42,6 +42,8 @@ function CodeBlock({ children, copyLabel, isClamped }: Pick<CodeProps, 'children
           variant="ghost"
           size="sm"
           icon={isOpen ? 'chevron-up' : 'chevron-down'}
+          aria-expanded={isOpen}
+          aria-controls={id}
           onPress={() => {
             setOpen((open) => !open);
           }}

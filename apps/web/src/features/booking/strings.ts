@@ -86,6 +86,7 @@ export const strings = {
   private: 'Private',
   privateSummary: 'Private, only people with the link book it',
   publicSummary: 'Anyone can book it',
+  pausedSummary: 'Off, nobody can book it',
   noticeSummary: (notice: string) => `${notice} notice`,
   privateHint: 'Only people with the link book it. It may book inside the time you hold, and skips the minimum notice.',
   bufferBefore: 'Buffer before',
