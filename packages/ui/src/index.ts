@@ -224,7 +224,16 @@ export {
 } from './modules/VisitorBar/VisitorBar.tsx';
 export { SectionBar, type SectionBarProps } from './molecules/SectionBar/SectionBar.tsx';
 export { PageColumn, type PageColumnProps } from './modules/PageColumn/PageColumn.tsx';
-export { PreviewLayout, type PreviewDevice, type PreviewLayoutProps } from './modules/PreviewLayout/PreviewLayout.tsx';
+export {
+  EditorStatus,
+  PreviewDeviceSwitch,
+  PreviewFrame,
+  PreviewLayout,
+  type EditorStatusTone,
+  type PreviewDevice,
+  type PreviewFrameProps,
+  type PreviewLayoutProps,
+} from './modules/PreviewLayout/PreviewLayout.tsx';
 export {
   HoursEditor,
   type HoursClock,
@@ -264,12 +273,6 @@ export {
   type FilterEditorProps,
 } from './modules/FilterBuilder/FilterBuilder.tsx';
 export { completeFilters, conditionOn, countFilters } from './modules/FilterBuilder/filter-model.ts';
-export {
-  FormEditorLayout,
-  FormEditorStatus,
-  type FormEditorLayoutProps,
-  type FormEditorTone,
-} from './modules/FormEditorLayout/FormEditorLayout.tsx';
 export { HostedFormPreview, type HostedFormPreviewProps } from './modules/HostedFormPreview/HostedFormPreview.tsx';
 export {
   OptionsEditor,

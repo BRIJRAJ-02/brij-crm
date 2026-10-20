@@ -15,11 +15,11 @@ import {
   Card,
   ChoiceChips,
   CopyButton,
-  Disclosure,
   Field,
   HoursEditor,
   Link,
-  PageColumn,
+  PreviewDeviceSwitch,
+  PreviewFrame,
   PreviewLayout,
   Radio,
   RadioGroup,
@@ -29,10 +29,13 @@ import {
   Switch,
   TopBar,
   type SaveBarStatus,
+  type PreviewDevice,
   type SelectItem,
 } from '@crm/ui';
+import { useCalendar } from '@crm/data/react';
 import { useBlocker } from '@tanstack/react-router';
 import { useEffect, useState, useMemo } from 'react';
+import { calendarSettingsHref } from '../settings/nav.ts';
 import { pageHeading } from '../navigation/focus.ts';
 import { WorkspacePage } from '../workspace/WorkspacePage.tsx';
 import { DaysOff } from './DaysOff.tsx';
@@ -132,6 +135,10 @@ export function PageEditor({ data, slug, page: loaded, locale, myHours }: PageEd
     setDraft((current) => ({ ...current, ...patch }));
   };
   const setAvailability = (availability: BookingAvailability) => change({ availability });
+  const [device, setDevice] = useState<PreviewDevice>('phone');
+  // The calendar note shows only to someone with no calendar connected yet (their own connections, spec 0024).
+  const calendar = useCalendar(data.calendar.view(slug));
+  const hasNoCalendar = calendar.status === 'ready' && calendar.connections.length === 0;
 
   // Leaving with unsaved changes asks first, in the app and when the tab closes.
   useBlocker({
@@ -188,6 +195,18 @@ export function PageEditor({ data, slug, page: loaded, locale, myHours }: PageEd
     .join(' · ');
   const followed = draft.hoursMode === 'mine' ? myHours : draft.availability;
   const hoursSummary = followed === undefined ? strings.followOwnerHint : weekSummary(followed, locale).join(' · ');
+  // Page: its short name, and whether only people with the link book it.
+  const pageSummary = [`/${draft.slug}`, draft.isPrivate ? strings.private : '']
+    .filter((part) => part !== '')
+    .join(' · ');
+  // Limits: what holds bookings back, or that nothing does.
+  const limitParts = [
+    draft.bufferBefore + draft.bufferAfter > 0 ? strings.buffersSummary(draft.bufferBefore, draft.bufferAfter) : '',
+    draft.minNoticeMinutes > 0 ? (NOTICE.find((item) => item.id === String(draft.minNoticeMinutes))?.label ?? '') : '',
+    strings.aheadSummary(draft.windowDays),
+    draft.dailyLimit === null ? '' : strings.dailySummary(draft.dailyLimit),
+  ].filter((part) => part !== '');
+  const limitsSummary = limitParts.join(' · ');
   const zones = useMemo(() => zoneItems(draft.availability.timeZone, new Date()), [draft.availability.timeZone]);
 
   return (
@@ -217,18 +236,44 @@ export function PageEditor({ data, slug, page: loaded, locale, myHours }: PageEd
         ),
         body: (
           <PreviewLayout
-            previewSrc={`/b/${page.publicKey}`}
-            previewTitle={page.title}
-            previewVersion={page.updatedAt}
+            previewControls={<PreviewDeviceSwitch value={device} onChange={setDevice} />}
+            preview={
+              <PreviewFrame
+                src={`/b/${page.publicKey}`}
+                title={page.title}
+                device={device}
+                version={page.updatedAt}
+                draft={{
+                  title: draft.title,
+                  description: draft.description,
+                  durations: draft.durations,
+                  location: draft.location,
+                }}
+              />
+            }
             {...(page.status === 'paused'
               ? { previewNote: <Callout tone="info">{strings.pausedPreview}</Callout> }
               : {})}
-            previewDraft={{
-              title: draft.title,
-              description: draft.description,
-              durations: draft.durations,
-              location: draft.location,
-            }}
+            notices={
+              <>
+                {isLocked && (
+                  <Callout tone="info" title={strings.readOnlyTitle}>
+                    {strings.readOnlyText}
+                  </Callout>
+                )}
+                {hasNoCalendar && (
+                  <Callout
+                    tone="info"
+                    title={strings.noCalendarTitle}
+                    {...(calendar.enabled
+                      ? { actions: <Link href={calendarSettingsHref(slug)}>{strings.connectCalendar}</Link> }
+                      : {})}
+                  >
+                    {strings.noCalendar}
+                  </Callout>
+                )}
+              </>
+            }
             footer={
               <SaveBar
                 status={barStatus}
@@ -244,15 +289,7 @@ export function PageEditor({ data, slug, page: loaded, locale, myHours }: PageEd
               />
             }
           >
-            {isLocked && (
-              <Callout tone="info" title={strings.readOnlyTitle}>
-                {strings.readOnlyText}
-              </Callout>
-            )}
-            <Callout tone="info" title={strings.noCalendarTitle}>
-              {strings.noCalendar}
-            </Callout>
-            <Card title={strings.page}>
+            <Card title={strings.page} description={pageSummary}>
               <Field
                 label={strings.publicLink}
                 variant="copy"
@@ -374,7 +411,7 @@ export function PageEditor({ data, slug, page: loaded, locale, myHours }: PageEd
             {draft.hoursMode === 'own' && (
               <DaysOff availability={draft.availability} isReadOnly={isLocked} onChange={setAvailability} />
             )}
-            <Disclosure title={strings.limits} variant="fields">
+            <Card title={strings.limits} description={limitsSummary}>
               <Select
                 label={strings.bufferBefore}
                 items={BUFFERS}
@@ -424,7 +461,7 @@ export function PageEditor({ data, slug, page: loaded, locale, myHours }: PageEd
                 isReadOnly={isLocked}
                 onChange={(isPrivate) => change({ isPrivate })}
               />
-            </Disclosure>
+            </Card>
           </PreviewLayout>
         ),
       }}
@@ -440,9 +477,9 @@ export function PageEditorPending() {
       page={{
         topBar: <TopBar title={strings.listLabel} icon="link" isLoading />,
         body: (
-          <PageColumn>
+          <PreviewLayout>
             <Skeleton lines={10} />
-          </PageColumn>
+          </PreviewLayout>
         ),
       }}
     />

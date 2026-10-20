@@ -1,40 +1,52 @@
 # PreviewLayout
 
-An editor beside a live preview of what it edits, with a Phone, Tablet and Desktop width switch (spec 0025 experience, the booking page editor).
+Every Captures editor's body under its TopBar: the Tabs, notices, then the editor beside a sticky live preview (the booking page editor, spec 0025; the form editor, spec 0023).
 
 ## Why it exists
 
-New. The booking page editor shows the real public page beside its groups, sticky, at the width a visitor would see it. No layout in the library puts a sticky side column beside a form, and the public page can't render inside the app (it is its own bundle), so the preview is the page itself in a frame.
+New for the booking page editor (no layout put a sticky side column beside a form), then made the one editor layout on 20 October 2026. The two Captures editors had been built two ways: PreviewLayout (24px padding, a window media query, a footer bar) and FormEditorLayout (16, 24 and 32 padding, a measured width, a status line with its own dot). Two layouts for one job drift apart, so FormEditorLayout was merged into this one and removed.
+
+It kept this name, not the form's: it is the general one (any editor beside its preview, a page in a frame or a drawn one), and the booking page editor's footer, which the SaveBar replaces, already sat in its `footer`. SettingsLayout brings the settings navigation and has no side column; RecordLayout's side panel holds fields, not a preview; PageColumn has no sticky column or Disclosure. A variant of any of them would have bent it.
+
+## Anatomy
+
+- **TopBar** (the shell's, above): crumbs back to the list, the name as the title, `EditorStatus` in its `meta` when the subject has a published state, and the actions.
+- **Tabs** (optional): the library Tabs, edge to edge under the TopBar, with one TabPanel per tab holding a PreviewLayout, the Captures strip's way. The first tab's label lands on the page gutter, its hairline runs the view's width, and each tab is a real tab panel for screen readers.
+- **Notices** (`notices`, Callouts), full width inside the gutter.
+- **Body**: the children stacked `space-16` apart (SettingsStack's rhythm), groups of fields as `Card`s with a live summary as each Card's description, as on a settings page. It keeps to the wide dialog's width (`size-dialog-wide`), so fields stay a readable length.
+- **Preview column**: `previewControls` over `previewNote` over the `preview` in one hairline frame with `radius-lg`, the panel's width (`size-panel`), sticky `space-24` from the top, right beside the body.
+- **Footer** (`footer`): a bar pinned to the body's foot while given.
+
+Everything under the tabs sits inside the page gutter, `space-24`, PageColumn's, so an editor lines up with the list it opened from.
 
 ## Use
 
 ```tsx
 <PreviewLayout
-  previewSrc={`/b/${page.publicKey}`}
-  previewTitle={page.title}
-  previewVersion={page.updatedAt}
-  previewDraft={draft}
-  footer={isDirty ? <UnsavedBar /> : undefined}
+  notices={problem && <Callout tone="danger">{problem}</Callout>}
+  previewControls={<PreviewDeviceSwitch value={device} onChange={setDevice} />}
+  preview={<PreviewFrame src={`/b/${page.publicKey}`} title={page.title} device={device} version={page.updatedAt} draft={draft} />}
+  footer={isDirty ? <SaveBar … /> : undefined}
 >
-  <Card title="Meeting">…</Card>
+  <Card title="Meeting" description="30 min · Video">…</Card>
 </PreviewLayout>
 ```
 
-- The preview loads `previewSrc` in a frame titled "Preview of {title}", and loads again when `previewVersion` changes (after a save).
-- The switch sets the width the page is laid out at (phone 390, tablet 768, desktop 1280 CSS pixels); the frame scales that down to fit the side column (24rem, or 40% of a small screen), so the page never scrolls sideways.
-- `previewDraft` is posted to the frame (`{ type: 'crm:preview', draft }`, same origin only) when it changes and when the frame loads, so the page can show unsaved edits.
-- Below the page breakpoint, the preview sits under a "Show preview" Disclosure after the editor.
-- The frame is `inert` and out of the tab order: the preview is to look at, so pressing in it never books a real time.
-- `previewNote` is said above the frame when what it shows needs a word (a paused page shows its closed state).
-- `footer` sticks to the editor's foot while given.
+- **Two columns while the body keeps at least 480px** (`bp-container-md`) beside the 400px column and the gutter: a container query on the layout's own width, never the window's. Container conditions take only breakpoint tokens, so the container (`.measure`) is the width left for the body, and its children reach back over that padding to the full width. Narrower, the column hides and the preview sits under the body in a "Show preview" Disclosure, drawn only while open, so a narrow page loads no second frame until asked.
+- **`footer` is the SaveBar's slot.** Pass the bar while there is something to save and leave it out otherwise; it sticks `space-16` above the view's foot while the body scrolls.
+- **`preview`** is a `PreviewFrame` or a drawn preview (`HostedFormPreview`). Leave it out on a tab with nothing to preview.
+- **`bodyWidth="full"`** lets a table take the whole width (a form's Submissions).
+- **`PreviewFrame`** loads `src` in a frame titled "Preview of {title}", laid out at the device's width (phone 390, tablet 768, desktop 1280) and scaled to fit, so nothing scrolls sideways. It loads again when `version` changes and posts `draft` (`{ type: 'crm:preview', draft }`, same origin only) when it changes and when the frame loads. The frame is `inert` and out of the tab order. What it shows is the public page itself, untouched.
+- **`PreviewDeviceSwitch`** is the Phone, Tablet and Desktop SegmentedControl for `previewControls`; the editor holds the device.
+- **`EditorStatus`** is the TopBar's status: a StatusDot, green when live, orange when changed since publishing, gray when not published or paused, and its words always say it. It is an editor's own state, not an attribute value, so StatusDot draws it here rather than through the field set.
 
 ## States
 
-Phone, tablet and desktop; wide and narrow; with and without a footer.
+With and without tabs (around it), notices, preview controls, a note and a footer; wide and narrow (the Disclosure closed and open); readable and full body; phone, tablet and desktop; each status tone. Loading, empty, error and read only are the body's (Skeleton, EmptyState, Callout, read only Fields).
 
 ## Keyboard
 
-Tab moves through the editor, its footer, then the width switch (arrows change it) and into the frame.
+Tab moves through the notices, the body and its footer, then the preview's controls. The preview takes no focus. In the narrow layout, Enter or Space on "Show preview" opens it.
 
 ## Differences from the artifact
 

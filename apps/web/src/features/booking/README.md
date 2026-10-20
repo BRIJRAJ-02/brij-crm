@@ -14,7 +14,7 @@ Built from Table, Badge, CopyButton, Button, Modal (new page, and the delete con
 - Main task: change a setting and have it saved half a second after the last change; what failed is said where it happened (a taken web address on its field).
 - Leaves out: questions and the deal step (milestone 2), team members (milestone 3) and a live preview of the public page.
 
-Cards of Switch, Field, Checkbox, Select, DatePicker and HoursEditor (weekly hours, and date overrides with a remove per date). A range that ends before it starts or overlaps another is said on its row and holds the save back. Until calendar sync is wired in, a Callout says the page offers your hours minus its bookings (AC-631).
+Cards of Switch, Field, Checkbox, Select, DatePicker and HoursEditor (weekly hours, and date overrides with a remove per date). A range that ends before it starts or overlaps another is said on its row and holds the save back. While the reader has no calendar connected (`data.calendar.view`, read through `useCalendar`), a Callout says the page offers their hours minus its bookings (AC-631), with a link to Settings, Calendar when sync is on here. The editor sits in PreviewLayout, the one Captures editor layout it shares with the form editor: notices above, the groups as Cards with a live summary each (Page, Meeting, Hours, Days off, Limits) beside the sticky preview (the page in a frame, Phone, Tablet or Desktop wide), and the save bar in its `footer`.
 
 ## The public page (`/b/<publicKey>`)
 

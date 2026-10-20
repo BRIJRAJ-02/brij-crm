@@ -79,6 +79,10 @@ export const strings = {
   timeZoneText: 'Your hours follow this zone.',
   weeklyHours: 'Weekly hours',
   limits: 'Limits',
+  buffersSummary: (before: number, after: number) =>
+    before === after ? `${String(before)} min either side` : `${String(before)} min before, ${String(after)} after`,
+  aheadSummary: (days: number) => `Up to ${days === 1 ? '1 day' : `${String(days)} days`} ahead`,
+  dailySummary: (count: number) => (count === 1 ? '1 a day' : `${String(count)} a day`),
   private: 'Private',
   privateHint: 'Only people with the link book it. It may book inside the time you hold, and skips the minimum notice.',
   bufferBefore: 'Buffer before',
@@ -97,6 +101,7 @@ export const strings = {
   fixPage: 'Fix what’s marked in red to save.',
   leaveConfirm: 'You have unsaved changes. Leave without saving?',
   noCalendarTitle: 'No calendar connected',
+  connectCalendar: 'Connect a calendar',
   noCalendar: 'Until calendar sync is on, pages offer your hours minus their bookings, not your other meetings.',
   notFoundTitle: 'This booking page isn’t here',
   notFoundText: 'It was deleted, or it isn’t yours.',

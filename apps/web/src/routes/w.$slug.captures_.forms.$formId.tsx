@@ -1,5 +1,5 @@
 import { isDataError, type SubmissionState } from '@crm/data';
-import { EmptyState, TopBar } from '@crm/ui';
+import { EmptyState, PreviewLayout, Skeleton, TopBar } from '@crm/ui';
 import { createFileRoute, useRouter, type ErrorComponentProps } from '@tanstack/react-router';
 import { FormEditor } from '../features/forms/FormEditor.tsx';
 import { FORM_TABS, type FormTab } from '../features/forms/paths.ts';
@@ -61,7 +61,14 @@ export const Route = createFileRoute('/w/$slug/captures_/forms/$formId')({
   pendingComponent: () => (
     <WorkspacePage
       currentPage="captures"
-      page={{ topBar: <TopBar title={strings.forms} icon="clipboard-list" isLoading />, body: null }}
+      page={{
+        topBar: <TopBar title={strings.forms} icon="clipboard-list" isLoading />,
+        body: (
+          <PreviewLayout>
+            <Skeleton lines={10} />
+          </PreviewLayout>
+        ),
+      }}
     />
   ),
   errorComponent: FormError,

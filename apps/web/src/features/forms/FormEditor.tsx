@@ -17,17 +17,16 @@ import { previewOf, publishProblem, type PublishProblem } from '@crm/data/forms'
 import {
   Button,
   Callout,
-  Field,
-  FormEditorLayout,
-  FormEditorStatus,
+  EditorStatus,
   HostedFormPreview,
   Menu,
   MenuItem,
   MenuSeparator,
   MenuTrigger,
   Modal,
-  Popover,
+  PreviewLayout,
   Select,
+  TabPanel,
   Tabs,
   TopBar,
 } from '@crm/ui';
@@ -78,8 +77,6 @@ export function FormEditor(props: FormEditorProps) {
   const [isPublishing, setPublishing] = useState(false);
   const [isFirstPublish, setFirstPublish] = useState(false);
   const [isDeleting, setDeleting] = useState(false);
-  const [renaming, setRenaming] = useState<string | undefined>(undefined);
-  const renameRef = useRef<HTMLButtonElement>(null);
 
   // What the server holds: the draft last saved, and the revision a save names.
   const saved = useRef<{ document: FormDocument; revision: number }>({
@@ -228,15 +225,6 @@ export function FormEditor(props: FormEditorProps) {
     }, failed);
   };
 
-  const rename = (name: string) => {
-    setRenaming(undefined);
-    const trimmed = name.trim();
-    if (trimmed === '' || trimmed === form.name) return;
-    data.forms.updateSettings(slug, form.id, { name: trimmed }).then((view) => {
-      setForm((before) => ({ ...before, name: view.name, revision: before.revision }));
-    }, failed);
-  };
-
   const copyAddress = () => {
     void navigator.clipboard.writeText(data.forms.hostedUrl(form.publicKey)).then(() => {
       toasts.toast({ tone: 'success', message: strings.addressCopied });
@@ -254,45 +242,7 @@ export function FormEditor(props: FormEditorProps) {
       title={form.name}
       icon="clipboard-list"
       crumbs={[{ id: 'forms', label: strings.forms, href: formsHref(slug) }]}
-      {...(canManage
-        ? {
-            meta: (
-              <>
-                <Button
-                  ref={renameRef}
-                  variant="ghost"
-                  icon="pencil"
-                  label={strings.rename}
-                  onPress={() => {
-                    setRenaming(form.name);
-                  }}
-                />
-                <Popover
-                  triggerRef={renameRef}
-                  isOpen={renaming !== undefined}
-                  onOpenChange={(isOpen) => {
-                    if (!isOpen) setRenaming(undefined);
-                  }}
-                  label={strings.rename}
-                >
-                  <Field
-                    label={strings.renameLabel}
-                    value={renaming ?? ''}
-                    maxLength={80}
-                    // The popover opens to rename: its one field is what the press asked for.
-                    // eslint-disable-next-line jsx-a11y-x/no-autofocus
-                    autoFocus
-                    onChange={setRenaming}
-                    onSubmit={() => {
-                      rename(renaming ?? '');
-                    }}
-                  />
-                </Popover>
-                <FormEditorStatus tone={status.tone} text={status.text} />
-              </>
-            ),
-          }
-        : { meta: <FormEditorStatus tone={status.tone} text={status.text} /> })}
+      meta={<EditorStatus tone={status.tone} text={status.text} />}
     >
       <Button
         icon="eye"
@@ -308,13 +258,9 @@ export function FormEditor(props: FormEditorProps) {
       >
         {strings.previewOpen}
       </Button>
-      {canManage && (
-        <Button
-          variant="primary"
-          onPress={publish}
-          isPending={isPublishing}
-          isDisabled={isPublished && !isChanged && !form.hasUnpublished}
-        >
+      {/* Publish shows while there is something to publish; the status says when the live form is up to date. */}
+      {canManage && (!isPublished || isChanged || form.hasUnpublished) && (
+        <Button variant="primary" onPress={publish} isPending={isPublishing}>
           {isPublishing ? strings.publishing : strings.publish}
         </Button>
       )}
@@ -364,6 +310,11 @@ export function FormEditor(props: FormEditorProps) {
 
   const notices = (
     <>
+      {!canManage && (
+        <Callout tone="info" title={strings.readOnlyTitle}>
+          {strings.readOnlyText}
+        </Callout>
+      )}
       {conflict && (
         <Callout tone="warning" isAnnounced actions={<Button onPress={loadTheirs}>{strings.loadTheirs}</Button>}>
           {changedBy === undefined ? strings.someoneChanged : strings.changedBy(changedBy)}
@@ -427,141 +378,148 @@ export function FormEditor(props: FormEditorProps) {
     }
   })();
 
+  const layout = (
+    <PreviewLayout
+      notices={notices}
+      bodyWidth={current === 'submissions' ? 'full' : 'readable'}
+      {...(current === 'form' || current === 'settings'
+        ? {
+            preview: <HostedFormPreview form={preview} />,
+            previewControls: (
+              <>
+                <Select
+                  label={strings.colour}
+                  isLabelHidden
+                  size="sm"
+                  isReadOnly={!canManage}
+                  items={[
+                    { id: 'light', label: strings.light, icon: 'sun' },
+                    { id: 'dark', label: strings.dark, icon: 'moon' },
+                  ]}
+                  value={draft.look.colour}
+                  onChange={(colour) => {
+                    if (colour === 'light' || colour === 'dark') {
+                      setDraft((before) => ({ ...before, look: { ...before.look, colour } }));
+                    }
+                  }}
+                />
+                <Select
+                  label={strings.corners}
+                  isLabelHidden
+                  size="sm"
+                  isReadOnly={!canManage}
+                  items={[
+                    { id: 'rounded', label: strings.rounded },
+                    { id: 'square', label: strings.square },
+                  ]}
+                  value={draft.look.corners}
+                  onChange={(corners) => {
+                    if (corners === 'rounded' || corners === 'square') {
+                      setDraft((before) => ({ ...before, look: { ...before.look, corners } }));
+                    }
+                  }}
+                />
+              </>
+            ),
+          }
+        : {})}
+    >
+      {body}
+      {isFirstPublish && (
+        <PublishDialog
+          slug={slug}
+          form={form}
+          draft={draft}
+          target={target}
+          objects={objects}
+          canBuild={canBuild}
+          flush={flush}
+          onDraftChange={(next) => {
+            setDraft(next);
+            latest.current = next;
+          }}
+          onTargetChange={(view, choices) => {
+            apply(view);
+            setDraft(view.draft);
+            latest.current = view.draft;
+            setTarget(choices);
+          }}
+          onPublished={(view) => {
+            apply(view);
+            setDraft(view.draft);
+            latest.current = view.draft;
+          }}
+          onClose={() => {
+            setFirstPublish(false);
+          }}
+        />
+      )}
+      <Modal
+        title={strings.deleteTitle(form.name)}
+        tone="danger"
+        isOpen={isDeleting}
+        onOpenChange={setDeleting}
+        actions={
+          <>
+            <Button slot="close" isDisabled={isDeletingNow}>
+              {strings.cancel}
+            </Button>
+            <Button
+              variant="danger-solid"
+              isPending={isDeletingNow}
+              onPress={() => {
+                if (isDeletingNow) return;
+                setDeletingNow(true);
+                data.forms.delete(slug, form.id).then(
+                  () => {
+                    toasts.toast({ tone: 'success', message: strings.deleted(form.name) });
+                    void navigate({ href: formsHref(slug) });
+                  },
+                  (error: unknown) => {
+                    setDeletingNow(false);
+                    failed(error);
+                  },
+                );
+              }}
+            >
+              {strings.delete}
+            </Button>
+          </>
+        }
+      >
+        <p>{strings.deleteText(form.submissionCount)}</p>
+      </Modal>
+    </PreviewLayout>
+  );
+
   return (
     <WorkspacePage
       currentPage="captures"
       page={{
         topBar,
-        body: (
-          <FormEditorLayout
-            notices={notices}
-            {...(isPublished
-              ? {
-                  tabs: (
-                    <Tabs
-                      label={strings.tabs}
-                      selectedKey={current}
-                      onSelectionChange={(value) => {
-                        if ((FORM_TABS as readonly string[]).includes(value)) goTab(value as FormTab);
-                      }}
-                      tabs={[
-                        { id: 'form', label: strings.tabForm },
-                        { id: 'settings', label: strings.tabSettings },
-                        { id: 'install', label: strings.tabInstall },
-                        { id: 'submissions', label: strings.tabSubmissions },
-                      ]}
-                    />
-                  ),
-                }
-              : {})}
-            {...(current === 'form' || current === 'settings'
-              ? {
-                  preview: <HostedFormPreview form={preview} />,
-                  previewControls: (
-                    <>
-                      <Select
-                        label={strings.colour}
-                        isLabelHidden
-                        size="sm"
-                        isReadOnly={!canManage}
-                        items={[
-                          { id: 'light', label: strings.light, icon: 'sun' },
-                          { id: 'dark', label: strings.dark, icon: 'moon' },
-                        ]}
-                        value={draft.look.colour}
-                        onChange={(colour) => {
-                          if (colour === 'light' || colour === 'dark') {
-                            setDraft((before) => ({ ...before, look: { ...before.look, colour } }));
-                          }
-                        }}
-                      />
-                      <Select
-                        label={strings.corners}
-                        isLabelHidden
-                        size="sm"
-                        isReadOnly={!canManage}
-                        items={[
-                          { id: 'rounded', label: strings.rounded },
-                          { id: 'square', label: strings.square },
-                        ]}
-                        value={draft.look.corners}
-                        onChange={(corners) => {
-                          if (corners === 'rounded' || corners === 'square') {
-                            setDraft((before) => ({ ...before, look: { ...before.look, corners } }));
-                          }
-                        }}
-                      />
-                    </>
-                  ),
-                }
-              : {})}
+        body: isPublished ? (
+          // The Captures strip's way: the tabs edge to edge under the TopBar, the chosen tab's panel holding the layout.
+          <Tabs
+            label={strings.tabs}
+            selectedKey={current}
+            onSelectionChange={(value) => {
+              if ((FORM_TABS as readonly string[]).includes(value)) goTab(value as FormTab);
+            }}
+            tabs={[
+              { id: 'form', label: strings.tabForm },
+              { id: 'settings', label: strings.tabSettings },
+              { id: 'install', label: strings.tabInstall },
+              { id: 'submissions', label: strings.tabSubmissions },
+            ]}
           >
-            {body}
-            {isFirstPublish && (
-              <PublishDialog
-                slug={slug}
-                form={form}
-                draft={draft}
-                target={target}
-                objects={objects}
-                canBuild={canBuild}
-                flush={flush}
-                onDraftChange={(next) => {
-                  setDraft(next);
-                  latest.current = next;
-                }}
-                onTargetChange={(view, choices) => {
-                  apply(view);
-                  setDraft(view.draft);
-                  latest.current = view.draft;
-                  setTarget(choices);
-                }}
-                onPublished={(view) => {
-                  apply(view);
-                  setDraft(view.draft);
-                  latest.current = view.draft;
-                }}
-                onClose={() => {
-                  setFirstPublish(false);
-                }}
-              />
-            )}
-            <Modal
-              title={strings.deleteTitle(form.name)}
-              tone="danger"
-              isOpen={isDeleting}
-              onOpenChange={setDeleting}
-              actions={
-                <>
-                  <Button slot="close" isDisabled={isDeletingNow}>
-                    {strings.cancel}
-                  </Button>
-                  <Button
-                    variant="danger-solid"
-                    isPending={isDeletingNow}
-                    onPress={() => {
-                      if (isDeletingNow) return;
-                      setDeletingNow(true);
-                      data.forms.delete(slug, form.id).then(
-                        () => {
-                          toasts.toast({ tone: 'success', message: strings.deleted(form.name) });
-                          void navigate({ href: formsHref(slug) });
-                        },
-                        (error: unknown) => {
-                          setDeletingNow(false);
-                          failed(error);
-                        },
-                      );
-                    }}
-                  >
-                    {strings.delete}
-                  </Button>
-                </>
-              }
-            >
-              <p>{strings.deleteText(form.submissionCount)}</p>
-            </Modal>
-          </FormEditorLayout>
+            {FORM_TABS.map((id) => (
+              <TabPanel key={id} id={id}>
+                {id === current && layout}
+              </TabPanel>
+            ))}
+          </Tabs>
+        ) : (
+          layout
         ),
       }}
     />

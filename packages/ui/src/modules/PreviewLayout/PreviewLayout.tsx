@@ -1,10 +1,11 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react';
+import { StatusDot } from '../../atoms/StatusDot/StatusDot.tsx';
 import { Disclosure } from '../../molecules/Disclosure/Disclosure.tsx';
 import { SegmentedControl } from '../../molecules/SegmentedControl/SegmentedControl.tsx';
 import styles from './PreviewLayout.module.css';
 import { strings } from './strings.ts';
 
-/** The widths the preview shows a page at. */
+/** The widths a page preview lays the page out at. */
 export type PreviewDevice = 'phone' | 'tablet' | 'desktop';
 
 /** The width, in CSS pixels, each device lays the page out at. */
@@ -12,23 +13,85 @@ const DEVICE_WIDTHS: Readonly<Record<PreviewDevice, number>> = { phone: 390, tab
 
 /** Props for PreviewLayout. */
 export interface PreviewLayoutProps {
-  /** The editor's groups. */
+  /** The editor's groups: Cards of Fields, a list, a table. */
   readonly children: ReactNode;
+  /** Above the body, full width: a read only note, a refused publish's Callout, a teammate's change. */
+  readonly notices?: ReactNode;
+  /**
+   * What the editor shows itself as: a `PreviewFrame` (a page in a frame) or a
+   * drawn preview (`HostedFormPreview`). Sticky in a column the panel's width
+   * beside the body, or under the body in "Show preview" when they don't both
+   * fit. Leave it out on a tab with nothing to preview.
+   */
+  readonly preview?: ReactNode;
+  /** Above the preview: its controls (`PreviewDeviceSwitch`, a form's look Selects). */
+  readonly previewControls?: ReactNode;
+  /** Between the controls and the preview, when what it shows needs a word ("This page is off"). */
+  readonly previewNote?: ReactNode;
+  /** A bar pinned to the body's foot while it has something to say: the SaveBar. */
+  readonly footer?: ReactNode;
+  /**
+   * `readable` (the default) holds the body to the wide dialog's width, so
+   * fields keep a readable length; `full` lets a table take the whole width
+   * (a form's Submissions).
+   */
+  readonly bodyWidth?: 'readable' | 'full';
+}
+
+/** Where an editor's subject stands, as the TopBar's status says it. */
+export type EditorStatusTone = 'live' | 'changed' | 'draft' | 'paused';
+
+/** Each tone's dot: live green, changed orange, the rest gray. */
+const TONE_HUES = { live: 'green', changed: 'orange', draft: 'gray', paused: 'gray' } as const;
+
+/**
+ * The editor's status for the TopBar's meta, beside the name: a StatusDot,
+ * green when live, orange when changed since it was published, gray when not
+ * published or paused. The words always say it too.
+ */
+export function EditorStatus({ tone, text }: { readonly tone: EditorStatusTone; readonly text: string }) {
+  // An editor's own state, not an attribute value, so StatusDot draws it here.
+  return <StatusDot hue={TONE_HUES[tone]}>{text}</StatusDot>;
+}
+
+/** The Phone, Tablet and Desktop switch for a `PreviewFrame`, for `previewControls`. */
+export function PreviewDeviceSwitch({
+  value,
+  onChange,
+}: {
+  readonly value: PreviewDevice;
+  readonly onChange: (device: PreviewDevice) => void;
+}) {
+  return (
+    <SegmentedControl
+      label={strings.width}
+      segments={[
+        { value: 'phone', label: strings.phone },
+        { value: 'tablet', label: strings.tablet },
+        { value: 'desktop', label: strings.desktop },
+      ]}
+      value={value}
+      onChange={(next) => {
+        if (next === 'phone' || next === 'tablet' || next === 'desktop') onChange(next);
+      }}
+    />
+  );
+}
+
+/** Props for PreviewFrame. */
+export interface PreviewFrameProps {
   /** The page previewed: its address, loaded in a frame, and what it is. */
-  readonly previewSrc: string;
-  readonly previewTitle: string;
+  readonly src: string;
+  readonly title: string;
+  /** The width the page is laid out at. */
+  readonly device: PreviewDevice;
   /** Changes when what the preview shows was saved, so the frame loads it again. */
-  readonly previewVersion?: string;
+  readonly version?: string;
   /**
    * What the editor holds now, posted to the frame (same origin only) whenever
    * it changes and once the frame loads, so the page can show unsaved edits.
    */
-  readonly previewDraft?: unknown;
-  /** Said above the frame, when what it shows needs a word ("Turn the page on to preview it"). */
-  readonly previewNote?: ReactNode;
-  /** A bar pinned to the editor's foot while it has something to say ("Unsaved changes", Save). */
-  readonly footer?: ReactNode;
-  readonly defaultDevice?: PreviewDevice;
+  readonly draft?: unknown;
 }
 
 /** The scale that fits a device's width into the space the preview has (never above 1). */
@@ -51,24 +114,12 @@ function useFit(device: PreviewDevice) {
   return { ref, deviceWidth, scale };
 }
 
-/** One preview: the width switch and the page in a frame, laid out at the device's width and scaled to fit. */
-function Preview({
-  device,
-  onDevice,
-  src,
-  title,
-  version,
-  draft,
-  note,
-}: {
-  readonly device: PreviewDevice;
-  readonly onDevice: (device: PreviewDevice) => void;
-  readonly src: string;
-  readonly title: string;
-  readonly version: string | undefined;
-  readonly draft: unknown;
-  readonly note: ReactNode;
-}) {
+/**
+ * A page in a frame, laid out at its device's width and scaled down to fit
+ * the preview column, so nothing scrolls sideways. The page is to look at:
+ * the frame is inert and out of the tab order, so pressing in it never books.
+ */
+export function PreviewFrame({ src, title, device, version, draft }: PreviewFrameProps) {
   const { ref, deviceWidth, scale } = useFit(device);
   const frame = useRef<HTMLIFrameElement>(null);
   const post = () => {
@@ -77,85 +128,81 @@ function Preview({
   };
   useEffect(post);
   return (
-    <div className={styles.preview}>
-      <SegmentedControl
-        label={strings.width}
-        segments={[
-          { value: 'phone', label: strings.phone },
-          { value: 'tablet', label: strings.tablet },
-          { value: 'desktop', label: strings.desktop },
-        ]}
-        value={device}
-        onChange={(value) => {
-          if (value === 'phone' || value === 'tablet' || value === 'desktop') onDevice(value);
-        }}
+    <div
+      ref={ref}
+      className={styles.viewport}
+      // A picture of the page, not a second copy to use: nothing in it takes focus or a press.
+      inert
+      style={{ '--device-width': `${String(deviceWidth)}px`, '--preview-scale': String(scale) }}
+    >
+      <iframe
+        key={version ?? ''}
+        ref={frame}
+        className={styles.iframe}
+        src={src}
+        title={strings.previewOf(title)}
+        tabIndex={-1}
+        loading="lazy"
+        onLoad={post}
       />
-      {note}
-      <div
-        ref={ref}
-        className={styles.viewport}
-        // A picture of the page, not a second copy to use: nothing in it takes focus or a press, so it never books.
-        inert
-        style={{ '--device-width': `${String(deviceWidth)}px`, '--preview-scale': String(scale) }}
-      >
-        <iframe
-          key={version ?? ''}
-          ref={frame}
-          className={styles.frame}
-          src={src}
-          title={strings.previewOf(title)}
-          tabIndex={-1}
-          loading="lazy"
-          onLoad={post}
-        />
-      </div>
     </div>
   );
 }
 
 /**
- * An editor beside a live preview of what it edits (spec 0025 experience, the
- * booking page editor, AC-679): the editor on the left (the wide dialog's
- * width at most), the preview sticky on the right with a Phone, Tablet and
- * Desktop switch. The frame lays the page out at that device's width and
- * scales it down to fit the column, so the layout never scrolls sideways.
- * Below the page breakpoint the preview moves under a "Show preview"
- * Disclosure. The preview is the real page in a frame, loaded again whenever
- * `previewVersion` changes and sent `previewDraft` as it changes.
+ * Every Captures editor's body under its TopBar (the booking page editor, the
+ * form editor): the Tabs edge to edge under the TopBar, as on Captures, then
+ * any notices and the body at the page gutter (space-24, PageColumn's)
+ * beside a sticky preview column the panel's width. When the layout's own
+ * width can't hold both (a container query), the column hides and the
+ * preview waits under the body in a "Show preview" Disclosure. `footer` pins
+ * the SaveBar to the body's foot.
  */
 export function PreviewLayout({
   children,
-  previewSrc,
-  previewTitle,
-  previewVersion,
-  previewDraft,
+  notices,
+  preview,
+  previewControls,
   previewNote,
   footer,
-  defaultDevice = 'phone',
+  bodyWidth = 'readable',
 }: PreviewLayoutProps) {
-  const [device, setDevice] = useState<PreviewDevice>(defaultDevice);
-  const preview = (
-    <Preview
-      device={device}
-      onDevice={setDevice}
-      src={previewSrc}
-      title={previewTitle}
-      version={previewVersion}
-      draft={previewDraft}
-      note={previewNote}
-    />
+  // The narrow preview is drawn only while open, so its page loads on demand.
+  const [isOpen, setOpen] = useState(false);
+  const hasPreview = preview !== undefined && preview !== null;
+  const column = hasPreview && (
+    <div className={styles.preview}>
+      {previewControls !== undefined && <div className={styles.controls}>{previewControls}</div>}
+      {previewNote}
+      <div className={styles.frame}>{preview}</div>
+    </div>
   );
   return (
     <div className={styles.root}>
-      <div className={styles.editor}>
-        {children}
-        {footer !== undefined && footer !== null && footer !== false && <div className={styles.footer}>{footer}</div>}
-      </div>
-      <aside className={styles.side} aria-label={strings.preview}>
-        {preview}
-      </aside>
-      <div className={styles.below}>
-        <Disclosure title={strings.showPreview}>{preview}</Disclosure>
+      <div className={styles.inner}>
+        {notices}
+        <div className={styles.measure}>
+          <div className={styles.body} data-preview={hasPreview || undefined} data-width={bodyWidth}>
+            <div className={styles.main}>
+              {children}
+              {footer !== undefined && footer !== null && footer !== false && (
+                <div className={styles.footer}>{footer}</div>
+              )}
+            </div>
+            {hasPreview && (
+              <aside className={styles.side} aria-label={strings.preview}>
+                {column}
+              </aside>
+            )}
+          </div>
+          {hasPreview && (
+            <div className={styles.below}>
+              <Disclosure title={strings.showPreview} isExpanded={isOpen} onExpandedChange={setOpen}>
+                {isOpen ? column : null}
+              </Disclosure>
+            </div>
+          )}
+        </div>
       </div>
     </div>
   );

@@ -60,8 +60,6 @@ export const strings = {
   resumed: (name: string) => `${name} is taking enquiries again.`,
 
   // The editor
-  rename: 'Rename',
-  renameLabel: 'Form name',
   untitledForm: 'Untitled form',
   previewOpen: 'Preview',
   previewNotLive: 'Preview, not live. Answers are checked here, and nothing is sent.',
@@ -185,6 +183,8 @@ export const strings = {
   draftNote: 'The headline, sub heading and button text go live when you publish; the name and address change at once.',
 
   // Install tab
+  readOnlyTitle: 'You can view this form',
+  readOnlyText: 'Only people who manage forms can change it.',
   shareLink: 'Share a link',
   shareLinkText: 'Send people a link. You do not need a website.',
   link: 'Link',
