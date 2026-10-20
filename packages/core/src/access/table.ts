@@ -211,6 +211,16 @@ export const ACCESS_TABLE = {
   releaseSubmission: { permission: 'forms.manage' },
   markSubmissionSpam: { permission: 'forms.manage' },
   resolveSubmission: { permission: 'forms.manage' },
+  // Add to CRM and Sync old records need forms.manage; their jobs write as the member, through the door.
+  addToCrm: { permission: 'forms.manage' },
+  previewSync: { permission: 'forms.manage' },
+  startSync: { permission: 'forms.manage' },
+  // An export: any member who can read the form, rows and answers filtered as they read; only its starter
+  // reads it back.
+  startSubmissionsExport: { data: 'read' },
+  getExport: { data: 'read' },
+  exportFile: { data: 'read' },
+  exportPart: { data: 'read' },
   deleteSubmission: { permission: 'forms.manage' },
   getPublicForm: { publicForm: true },
   submitForm: { publicForm: true },

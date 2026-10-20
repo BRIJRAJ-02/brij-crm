@@ -3,6 +3,8 @@ import type { AppEnvironment } from '@crm/contracts';
 import { createRegistry, type AnyKind, type JobRegistry } from '../registry.ts';
 import { devSimulate, type Sleep } from './dev-simulate.ts';
 import { maintenanceDaily, type QueueRows } from './maintenance-daily.ts';
+import { formsExport } from '../../forms/export.ts';
+import { formsFile, formsSync } from '../../forms/filing.ts';
 import { formsProcess } from '../../forms/process.ts';
 import { bulkKinds } from '../../bulk/kinds.ts';
 
@@ -33,6 +35,9 @@ export function jobKinds(options: JobKindsOptions): JobRegistry {
   return createRegistry([
     maintenanceDaily(options.queue),
     formsProcess(),
+    formsFile() as AnyKind,
+    formsSync() as AnyKind,
+    formsExport() as AnyKind,
     ...(bulkKinds() as readonly AnyKind[]),
     ...tests,
     ...(options.extra ?? []),

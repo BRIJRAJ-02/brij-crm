@@ -60,6 +60,8 @@ const READS: ReadonlySet<string> = new Set([
   'forms.slugAvailable',
   'submissions.list',
   'submissions.get',
+  'submissions.getExport',
+  'forms.syncPreview',
   // Booking pages (spec 0025).
   'bookingPages.list',
   'bookingPages.get',
@@ -1129,6 +1131,28 @@ Object.assign(WRITES, {
     });
     return [{ kind: 'jobs', mutation_id: mutationId }];
   },
+  'submissions.addToCrm': async (m: Member, mutationId: string) => {
+    const form = await formOn(m, true);
+    const submissionId = await storedSubmission(m, form.id, 'failed');
+    await m.client.submissions.addToCrm({ workspace: m.slug, formId: form.id, submissionIds: [submissionId], mutationId });
+    return [{ kind: 'jobs', mutation_id: mutationId }];
+  },
+  'submissions.export': async (m: Member, mutationId: string) => {
+    const form = await formOn(m, true);
+    await m.client.submissions.export({
+      workspace: m.slug,
+      id: newId(),
+      formId: form.id,
+      select: { kind: 'filter' },
+      mutationId,
+    });
+    return [{ kind: 'jobs', mutation_id: mutationId }];
+  },
+  'forms.syncStart': async (m: Member, mutationId: string) => {
+    const form = await formOn(m, true);
+    await m.client.forms.syncStart({ workspace: m.slug, formId: form.id, scope: 'all', jobId: newId(), mutationId });
+    return [{ kind: 'jobs', mutation_id: mutationId }];
+  },
   'submissions.retry': async (m: Member, mutationId: string) => {
     const form = await formOn(m, true);
     const submissionId = await storedSubmission(m, form.id, 'failed');
@@ -1196,6 +1220,9 @@ const WRITES_MADE: Readonly<Record<string, number>> = {
   'submissions.release': 3,
   'submissions.markSpam': 3,
   'submissions.resolve': 3,
+  'submissions.addToCrm': 3,
+  'submissions.export': 3,
+  'forms.syncStart': 3,
   'submissions.retry': 3,
   'submissions.delete': 3,
 };

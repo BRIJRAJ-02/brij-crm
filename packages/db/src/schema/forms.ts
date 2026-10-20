@@ -215,6 +215,8 @@ export const formSubmissions = pgTable(
     uniqueIndex('form_submissions_attempt').on(t.workspaceId, t.formId, t.idempotencyKey),
     // A form's submissions, newest first.
     index('form_submissions_by_form').on(t.workspaceId, t.formId, t.receivedAt.desc(), t.id),
+    // A form's submissions by id: a sync's snapshot walks them as a keyset (spec 0023, Sync old records).
+    index('form_submissions_by_form_id').on(t.workspaceId, t.formId, t.id),
     // The same answers on one form lately (the spam checker's repeats), counted from the index alone.
     index('form_submissions_repeats')
       .on(t.workspaceId, t.formId, t.answersHash, t.receivedAt)

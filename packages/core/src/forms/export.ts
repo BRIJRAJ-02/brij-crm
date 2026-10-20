@@ -1,0 +1,457 @@
+// Exporting a form's submissions as CSV (spec 0023 follow-up, in spec 0037's
+// export shape): a member starts an export of the submissions a filter
+// matches or the ones they named; a `forms.export` job (theirs, heavy lane,
+// cancellable) reads them page by page as that member, so only submissions
+// and answers they may read are written (hidden means absent), and appends
+// the CSV text to `export_chunks`. Columns: when, the id, the state, one
+// column per question (the newest published wording first, then questions
+// only older versions asked), then the CRM link and where it came from.
+// Every text cell is guarded against spreadsheet formulas (`csvCell`). Only
+// the member who started an export reads it, for 7 days; the daily cleanup
+// deletes it after.
+import { and, desc, eq, inArray, lt, or, sql, type SQL } from 'drizzle-orm';
+import * as z from 'zod';
+import {
+  CSV_BOM,
+  csvLine,
+  EXPORT_ROWS_MAX,
+  type ExportView,
+  SubmissionSelection,
+  type FormDocument,
+} from '@crm/contracts';
+import { schema, type WorkspaceTx } from '@crm/db';
+import { checkId } from '../engine/ids.ts';
+import { refuse } from '../engine/refusals.ts';
+import type { EngineScope } from '../engine/scope.ts';
+import { runWrite, type AfterWrite, type WriteContext } from '../engine/write.ts';
+import { fieldLevel } from '../access/policy.ts';
+import { inWorkspace } from '../access/run.ts';
+import { defineKind, MAX_ATTEMPTS, type KindDefinition, type StepOutcome } from '../jobs/registry.ts';
+import type { JobRegistry } from '../jobs/registry.ts';
+import { startJob } from '../jobs/service.ts';
+import { loadVersions } from './shared.ts';
+import { answersOf, COLUMNS, crmOf, displays, readableForm, visibleRows, type Row } from './submissions.ts';
+
+const { exportChunks, exports, formSubmissions, formVersions } = schema;
+
+/** The export job's name. */
+export const FORMS_EXPORT = 'forms.export';
+
+/** How long an export file is kept. */
+export const EXPORT_KEPT_DAYS = 7;
+
+/** What an export the caller didn't start, or one that is gone, answers. */
+export const UNKNOWN_EXPORT = 'That export doesn’t exist, or it has expired. Export the submissions again.';
+
+/** What an export too big to write answers. */
+export const EXPORT_TOO_LARGE = `Export at most ${EXPORT_ROWS_MAX.toLocaleString('en')} submissions at a time; narrow the filter.`;
+
+/** How many submissions one batch reads, and the most text one chunk holds before a new one starts. */
+const PAGE = 200;
+const CHUNK_BYTES = 1_000_000;
+
+/** The context columns after the answers, and the hidden fields they read. */
+const HIDDEN_COLUMNS = [
+  ['UTM source', 'utm_source'],
+  ['UTM medium', 'utm_medium'],
+  ['UTM campaign', 'utm_campaign'],
+  ['UTM term', 'utm_term'],
+  ['UTM content', 'utm_content'],
+  ['Page', 'page'],
+  ['Referrer', 'referrer'],
+] as const;
+
+/** What a state reads as in the file. */
+const STATE_LABEL: Readonly<Record<string, string>> = {
+  received: 'Received',
+  processing: 'Processing',
+  processed: 'Processed',
+  spam: 'Spam',
+  held: 'Held',
+  needs_review: 'Needs review',
+  failed: 'Failed',
+};
+
+/** The member who acts, or a refusal: exports belong to a member. */
+function memberIdOf(scope: EngineScope): string {
+  const { principal } = scope.access;
+  if (principal.kind !== 'member') throw refuse('FORBIDDEN', 'Only a member can export submissions.');
+  return principal.memberId;
+}
+
+/** A file name with nothing a file system or a header refuses. */
+function fileNameFor(formName: string, day: string): string {
+  const safe = formName.replace(/[\\/:*?"<>|\p{Cc}]+/gu, ' ').replace(/\s+/gu, ' ').trim() || 'Form';
+  return `${safe.slice(0, 80)} - submissions - ${day}.csv`;
+}
+
+/** The SQL a selection reads, beside the form. */
+function selectionTest(select: SubmissionSelection): SQL | undefined {
+  if (select.kind === 'ids') return inArray(formSubmissions.id, select.submissionIds);
+  return and(
+    select.state === undefined ? undefined : eq(formSubmissions.state, select.state),
+    select.from === undefined ? undefined : sql`${formSubmissions.receivedAt} >= ${select.from}::timestamptz`,
+    select.to === undefined ? undefined : sql`${formSubmissions.receivedAt} < ${select.to}::timestamptz`,
+  );
+}
+
+/** An export row as the services read it. */
+const EXPORT_COLUMNS = {
+  id: exports.id,
+  formId: exports.formId,
+  fileName: exports.fileName,
+  jobId: exports.jobId,
+  rowCount: exports.rowCount,
+  selection: exports.selection,
+  createdByMemberId: exports.createdByMemberId,
+  expiresAt: sql<string>`to_char(${exports.expiresAt} at time zone 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"')`,
+};
+
+/** An export as members read it, but its download path (the router knows the workspace's address). */
+export type ExportRecord = Omit<ExportView, 'downloadPath'>;
+
+function viewOf(row: {
+  readonly id: string;
+  readonly formId: string | null;
+  readonly fileName: string;
+  readonly jobId: string;
+  readonly rowCount: number | null;
+  readonly expiresAt: string;
+}): ExportRecord {
+  return {
+    id: row.id,
+    formId: row.formId ?? '',
+    fileName: row.fileName,
+    jobId: row.jobId,
+    ...(row.rowCount === null ? {} : { rowCount: row.rowCount }),
+    expiresAt: row.expiresAt,
+  };
+}
+
+/** The caller's own live export, or NOT_FOUND. */
+async function ownExport(tx: WorkspaceTx, scope: EngineScope, exportId: string) {
+  const me = memberIdOf(scope);
+  const [row] = await tx
+    .select(EXPORT_COLUMNS)
+    .from(exports)
+    .where(
+      and(
+        eq(exports.id, checkId(exportId, UNKNOWN_EXPORT)),
+        eq(exports.createdByMemberId, me),
+        sql`${exports.expiresAt} > now()`,
+      ),
+    );
+  if (row === undefined) throw refuse('NOT_FOUND', UNKNOWN_EXPORT);
+  return row;
+}
+
+/**
+ * Starts an export of a form's submissions (any member who can see the
+ * form): the export's row and its `forms.export` job, in one write. The same
+ * id again answers the same export. More than `EXPORT_ROWS_MAX` matching
+ * submissions is refused before anything starts.
+ */
+export async function startSubmissionsExport(
+  scope: EngineScope,
+  registry: JobRegistry,
+  input: { readonly id: string; readonly formId: string; readonly select: SubmissionSelection },
+  hooks: readonly AfterWrite[] = [],
+): Promise<ExportRecord> {
+  const me = memberIdOf(scope);
+  const exportId = checkId(input.id, UNKNOWN_EXPORT);
+  const { result } = await runWrite(
+    scope,
+    async (context) => {
+      const { tx } = context;
+      const [held] = await tx.select(EXPORT_COLUMNS).from(exports).where(eq(exports.id, exportId));
+      if (held !== undefined) {
+        if (held.createdByMemberId !== me) throw refuse('NOT_FOUND', UNKNOWN_EXPORT);
+        return viewOf(held);
+      }
+      const form = await readableForm(tx, scope, input.formId);
+      const counted = await tx.execute<{ n: number }>(sql`
+        select count(*)::int as n from (
+          select 1 from ${formSubmissions}
+          where ${and(eq(formSubmissions.formId, form.id), selectionTest(input.select))}
+          limit ${EXPORT_ROWS_MAX + 1}
+        ) as matched`);
+      if ((counted.rows[0]?.n ?? 0) > EXPORT_ROWS_MAX) throw refuse('JOB_TOO_LARGE', EXPORT_TOO_LARGE);
+      const day = await tx.execute<{ day: string }>(sql`select to_char(now() at time zone 'UTC', 'YYYY-MM-DD') as day`);
+      const { jobId } = await startJob(context, registry, {
+        kind: FORMS_EXPORT,
+        params: { exportId },
+      });
+      const [row] = await tx
+        .insert(exports)
+        .values({
+          workspaceId: scope.workspaceId,
+          id: exportId,
+          source: 'form_submissions',
+          formId: form.id,
+          selection: input.select,
+          fileName: fileNameFor(form.name, day.rows[0]?.day ?? 'today'),
+          jobId,
+          createdByMemberId: me,
+          expiresAt: sql`now() + make_interval(days => ${EXPORT_KEPT_DAYS})`,
+        })
+        .returning(EXPORT_COLUMNS);
+      if (row === undefined) throw new Error('The export row was not stored.');
+      return viewOf(row);
+    },
+    hooks,
+  );
+  return result;
+}
+
+/** One export the caller started (AC: only its starter sees it). */
+export async function getExport(scope: EngineScope, input: { readonly exportId: string }): Promise<ExportRecord> {
+  return inWorkspace(scope, async (tx) => viewOf(await ownExport(tx, scope, input.exportId)));
+}
+
+/**
+ * A finished export the caller started, for its download: the file's name
+ * and how many chunks it holds. NOT_FOUND for anyone else, an expired one, or
+ * one still being written.
+ */
+export async function exportFile(
+  scope: EngineScope,
+  input: { readonly exportId: string },
+): Promise<{ readonly fileName: string; readonly parts: number }> {
+  return inWorkspace(scope, async (tx) => {
+    const row = await ownExport(tx, scope, input.exportId);
+    if (row.rowCount === null) throw refuse('NOT_FOUND', 'This export is still being written. Try again shortly.');
+    const [count] = await tx
+      .select({ parts: sql<number>`count(*)::int` })
+      .from(exportChunks)
+      .where(eq(exportChunks.exportId, row.id));
+    return { fileName: row.fileName, parts: count?.parts ?? 0 };
+  });
+}
+
+/** One chunk of a finished export the caller started, by its part (from 0). */
+export async function exportPart(
+  scope: EngineScope,
+  input: { readonly exportId: string; readonly part: number },
+): Promise<string> {
+  return inWorkspace(scope, async (tx) => {
+    const row = await ownExport(tx, scope, input.exportId);
+    const [chunk] = await tx
+      .select({ body: exportChunks.body })
+      .from(exportChunks)
+      .where(and(eq(exportChunks.exportId, row.id), eq(exportChunks.part, input.part)));
+    return chunk?.body ?? '';
+  });
+}
+
+/** The export job's params: the export it writes. */
+export const FormsExportParams = z.strictObject({ exportId: z.uuid() });
+/** The export job's params. */
+export type FormsExportParams = z.infer<typeof FormsExportParams>;
+
+/** One answer column: the question's key and its label. */
+const Column = z.object({ key: z.string(), label: z.string() });
+
+/** Where an export got to: its answer columns, the last row written (keyset), the next chunk, the totals. */
+const Checkpoint = z.object({
+  columns: z.array(Column),
+  after: z.object({ at: z.string(), id: z.uuid() }).optional(),
+  part: z.number().int().min(0),
+  rows: z.number().int().min(0),
+  bytes: z.number().int().min(0),
+});
+type Checkpoint = z.infer<typeof Checkpoint>;
+
+/**
+ * The answer columns: every question of the form's published versions, by
+ * key, the newest wording first, leaving out one filed on an attribute the
+ * reader can't see.
+ */
+async function columnsOf(
+  tx: WorkspaceTx,
+  scope: EngineScope,
+  formId: string,
+  objectId: string,
+): Promise<z.infer<typeof Column>[]> {
+  const ids = await tx
+    .select({ id: formVersions.id })
+    .from(formVersions)
+    .where(and(eq(formVersions.formId, formId), sql`${formVersions.publishedAt} is not null`))
+    .orderBy(desc(formVersions.number));
+  const versions = await loadVersions(
+    tx,
+    ids.map((row) => row.id),
+  );
+  const seen = new Map<string, z.infer<typeof Column>>();
+  const hidden = new Set<string>();
+  for (const { id } of ids) {
+    const document: FormDocument | undefined = versions.get(id)?.document;
+    for (const question of document?.questions ?? []) {
+      if (seen.has(question.key) || hidden.has(question.key)) continue;
+      const attributeId = question.filedOn?.attributeId;
+      if (attributeId !== undefined && fieldLevel(scope.access, { id: attributeId, objectId }) === 'hidden') {
+        hidden.add(question.key);
+        continue;
+      }
+      seen.set(question.key, { key: question.key, label: question.label });
+    }
+  }
+  return [...seen.values()];
+}
+
+/** An answer as a cell: text as itself, yes or no, a phone's number, several values joined. */
+function cellOf(value: unknown): string | number | boolean | undefined {
+  if (value === null || value === undefined) return undefined;
+  if (typeof value === 'string' || typeof value === 'number') return value;
+  if (typeof value === 'boolean') return value ? 'Yes' : 'No';
+  if (Array.isArray(value)) return value.map((each) => String(cellOf(each) ?? '')).join(', ');
+  if (typeof value === 'object' && 'number' in value && typeof value.number === 'string') return value.number;
+  return JSON.stringify(value);
+}
+
+/** The header line. */
+function headerOf(columns: readonly z.infer<typeof Column>[]): string {
+  return csvLine([
+    'Received at (UTC)',
+    'Submission ID',
+    'State',
+    ...columns.map((column) => column.label),
+    'In CRM',
+    'CRM record',
+    'CRM record ID',
+    ...HIDDEN_COLUMNS.map(([label]) => label),
+  ]);
+}
+
+/** One batch of an export: the header first, then a page of rows, appended as chunks. */
+async function exportStep(context: WriteContext, exportId: string, checkpoint: unknown): Promise<StepOutcome> {
+  const { tx, scope } = context;
+  const [held] = await tx
+    .select({ ...EXPORT_COLUMNS })
+    .from(exports)
+    .where(eq(exports.id, exportId));
+  if (held === undefined || held.formId === null) {
+    return { finished: true, failed: { code: 'NOT_FOUND', message: 'The export was deleted before it finished.' } };
+  }
+  const form = await readableForm(tx, scope, held.formId);
+  const select = SubmissionSelection.parse(held.selection);
+  const stored = Checkpoint.safeParse(checkpoint);
+  let at: Checkpoint;
+  if (stored.success) at = stored.data;
+  else {
+    const columns = await columnsOf(tx, scope, form.id, form.mainObjectId);
+    const header = CSV_BOM + headerOf(columns);
+    await tx
+      .insert(exportChunks)
+      .values({ workspaceId: scope.workspaceId, exportId, part: 0, body: header })
+      .onConflictDoUpdate({ target: [exportChunks.workspaceId, exportChunks.exportId, exportChunks.part], set: { body: header } });
+    at = { columns, part: 1, rows: 0, bytes: Buffer.byteLength(header) };
+  }
+
+  const rows: Row[] = await tx
+    .select(COLUMNS)
+    .from(formSubmissions)
+    .where(
+      and(
+        eq(formSubmissions.formId, form.id),
+        selectionTest(select),
+        at.after === undefined
+          ? undefined
+          : or(
+              lt(formSubmissions.receivedAt, sql`${at.after.at}::timestamptz`),
+              and(eq(formSubmissions.receivedAt, sql`${at.after.at}::timestamptz`), lt(formSubmissions.id, at.after.id)),
+            ),
+      ),
+    )
+    .orderBy(desc(formSubmissions.receivedAt), desc(formSubmissions.id))
+    .limit(PAGE);
+  const shown = await visibleRows(tx, scope, form.mainObjectId, rows);
+  const names = await displays(
+    tx,
+    scope,
+    shown.flatMap((row) => (row.mainRecordId === null ? [] : [row.mainRecordId])),
+  );
+  const versions = await loadVersions(tx, [...new Set(shown.map((row) => row.versionId))]);
+  const lines = shown.map((row) => {
+    const version = versions.get(row.versionId);
+    const answers = new Map(
+      (version === undefined ? [] : answersOf(scope, form.mainObjectId, version.document, row.answers)).map(
+        (answer) => [answer.key, answer.value],
+      ),
+    );
+    const main = row.mainRecordId === null ? undefined : names.get(row.mainRecordId);
+    const crm = crmOf(row.state, main);
+    const hidden =
+      typeof row.hidden === 'object' && row.hidden !== null ? (row.hidden as Record<string, unknown>) : {};
+    return csvLine([
+      row.receivedMicros,
+      row.id,
+      STATE_LABEL[row.state] ?? row.state,
+      ...at.columns.map((column) => cellOf(answers.get(column.key))),
+      crm.state === 'linked' ? 'Yes' : crm.state === 'filing' ? 'Filing' : 'No',
+      crm.state === 'linked' ? crm.record.name : undefined,
+      crm.state === 'linked' ? crm.record.recordId : undefined,
+      ...HIDDEN_COLUMNS.map(([, key]) => {
+        const value = hidden[key];
+        return typeof value === 'string' ? value : undefined;
+      }),
+    ]);
+  });
+
+  let part = at.part;
+  let bytes = at.bytes;
+  let buffer = '';
+  const flush = async () => {
+    if (buffer === '') return;
+    const body = buffer;
+    await tx
+      .insert(exportChunks)
+      .values({ workspaceId: scope.workspaceId, exportId, part, body })
+      .onConflictDoUpdate({ target: [exportChunks.workspaceId, exportChunks.exportId, exportChunks.part], set: { body } });
+    bytes += Buffer.byteLength(body);
+    part += 1;
+    buffer = '';
+  };
+  for (const line of lines) {
+    buffer += line;
+    if (buffer.length >= CHUNK_BYTES) await flush();
+  }
+  await flush();
+
+  const last = rows.at(-1);
+  const next: Checkpoint = {
+    ...at,
+    part,
+    bytes,
+    rows: at.rows + shown.length,
+    ...(last === undefined ? {} : { after: { at: last.receivedMicros, id: last.id } }),
+  };
+  const finished = rows.length < PAGE;
+  if (finished) {
+    await tx
+      .update(exports)
+      .set({ rowCount: next.rows, byteCount: next.bytes, updatedAt: sql`now()` })
+      .where(eq(exports.id, exportId));
+  }
+  return {
+    finished,
+    checkpoint: next,
+    counts: { done: shown.length, skipped: rows.length - shown.length },
+    result: { rows: next.rows },
+  };
+}
+
+/** `forms.export`: the member's, heavy lane, cancellable, 200 submissions a batch, read as the member. */
+export function formsExport(): KindDefinition<FormsExportParams> {
+  return defineKind<FormsExportParams>({
+    kind: FORMS_EXPORT,
+    lane: 'heavy',
+    actor: 'member',
+    mode: 'cursor',
+    params: FormsExportParams,
+    cancellable: true,
+    maxAttempts: MAX_ATTEMPTS.heavy,
+    batchSize: PAGE,
+    sample: { exportId: '0199f0a0-0000-7000-8000-000000000001' },
+    step: (context, { job }) => exportStep(context, job.params.exportId, job.checkpoint),
+  });
+}

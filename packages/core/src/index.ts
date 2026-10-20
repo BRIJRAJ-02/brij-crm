@@ -338,6 +338,16 @@ export {
   type SubmitOutcome,
 } from './forms/public.ts';
 export type { CaptchaVerdict, SpamJudgement, TicketVerdict } from './forms/spam.ts';
+export { addToCrm, FORMS_FILE, FORMS_SYNC, previewSync, startSync } from './forms/filing.ts';
+export {
+  exportFile,
+  exportPart,
+  FORMS_EXPORT,
+  getExport,
+  startSubmissionsExport,
+  UNKNOWN_EXPORT,
+  type ExportRecord,
+} from './forms/export.ts';
 export {
   deleteSubmission,
   getSubmission,

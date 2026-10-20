@@ -26,7 +26,7 @@ import type { WriteContext } from '../engine/write.ts';
 import { enterAsForm } from '../access/door.ts';
 import { formAccess } from '../access/policy.ts';
 import { defineKind, MAX_ATTEMPTS, type KindDefinition } from '../jobs/registry.ts';
-import { liveOptions, loadForm, loadVersions } from './shared.ts';
+import { liveOptions, loadForm, loadVersions, type FormRow } from './shared.ts';
 
 const { formSubmissionRecords, formSubmissions, members } = schema;
 
@@ -63,7 +63,7 @@ export async function chooseOwner(tx: WorkspaceTx, ownerMemberId: string | null)
 }
 
 /** The object's owner attribute, the standard `owner` actor reference, when it has a live one. */
-function ownerAttribute(attributes: ReadonlyMap<string, AttributeDef>): AttributeDef | undefined {
+export function ownerAttribute(attributes: ReadonlyMap<string, AttributeDef>): AttributeDef | undefined {
   return [...attributes.values()].find(
     (attribute) =>
       attribute.apiSlug === 'owner' &&
@@ -87,7 +87,7 @@ function actingAs(context: WriteContext, scope: EngineScope): WriteContext {
 }
 
 /** One answer bound for an attribute: the attribute, the value, and whether it overwrites. */
-interface Planned {
+export interface Planned {
   readonly attribute: AttributeDef;
   readonly questionId: string;
   readonly value: unknown;
@@ -141,22 +141,30 @@ function valueFor(
   }
 }
 
-/** The answers a version's questions file on live attributes, as each attribute takes them now. */
-async function plan(
+/** The options a document's choice questions file onto, loaded once for every submission it files. */
+export async function optionsFor(
   tx: WorkspaceTx,
   document: FormDocument,
   attributes: ReadonlyMap<string, AttributeDef>,
-  answers: Readonly<Record<string, unknown>>,
-): Promise<{ readonly planned: readonly Planned[]; readonly refused: { questionId: string; message: string }[] }> {
-  const planned: Planned[] = [];
-  const refused: { questionId: string; message: string }[] = [];
+): Promise<ReadonlyMap<string, readonly { id: string; label: string }[]>> {
   const filedSelects = document.questions.flatMap((question) => {
     const attribute = question.filedOn === undefined ? undefined : attributes.get(question.filedOn.attributeId);
     return attribute !== undefined && (attribute.type === 'select' || attribute.type === 'status')
       ? [attribute.id]
       : [];
   });
-  const options = await liveOptions(tx, filedSelects);
+  return liveOptions(tx, filedSelects);
+}
+
+/** The answers a version's questions file on live attributes, as each attribute takes them now (no I/O). */
+export function plan(
+  document: FormDocument,
+  attributes: ReadonlyMap<string, AttributeDef>,
+  options: ReadonlyMap<string, readonly { id: string; label: string }[]>,
+  answers: Readonly<Record<string, unknown>>,
+): { readonly planned: readonly Planned[]; readonly refused: { questionId: string; message: string }[] } {
+  const planned: Planned[] = [];
+  const refused: { questionId: string; message: string }[] = [];
   for (const question of document.questions) {
     if (question.filedOn === undefined || !Object.hasOwn(answers, question.key)) continue;
     const attribute = attributes.get(question.filedOn.attributeId);
@@ -183,7 +191,7 @@ async function plan(
 }
 
 /** The normalised key the main record is matched on, from its planned answer (AC-557). */
-function matchKey(
+export function matchKey(
   planned: readonly Planned[],
   matchAttributeId: string | undefined,
 ): { attribute: AttributeDef; key: string } | undefined {
@@ -199,7 +207,7 @@ function matchKey(
  * empty value, `always` overwrite; for a list (emails, domains) the answer's
  * items join the ones held, never replacing them. Undefined writes nothing.
  */
-function mergedValue(planned: Planned, current: unknown): unknown {
+export function mergedValue(planned: Planned, current: unknown): unknown {
   const { attribute, value } = planned;
   const isEmpty = current === null || current === undefined || (Array.isArray(current) && current.length === 0);
   if (attribute.isMulti && attribute.type !== 'select' && Array.isArray(value)) {
@@ -271,65 +279,71 @@ async function failSubmission(tx: WorkspaceTx, submissionId: string, failure: st
     .where(sql`${formSubmissions.id} = ${submissionId}`);
 }
 
+/** What filing a submission's answers ended as. */
+export type Filed =
+  | {
+      readonly kind: 'filed';
+      readonly recordId: string;
+      readonly action: 'created' | 'updated' | 'matched';
+      readonly refused: readonly { questionId: string; message: string }[];
+      readonly assignment: Assignment;
+    }
+  | {
+      readonly kind: 'failed';
+      readonly failure: string;
+      readonly refused: readonly { questionId: string; message: string }[];
+      readonly assignment: Assignment;
+    };
+
+/** What filing one submission reads: its answers, the form, the mapping to apply, and who writes. */
+export interface FileInput {
+  readonly submissionId: string;
+  readonly answers: Readonly<Record<string, unknown>>;
+  readonly form: FormRow;
+  readonly document: FormDocument;
+  readonly attributes: ReadonlyMap<string, AttributeDef>;
+  readonly options: ReadonlyMap<string, readonly { id: string; label: string }[]>;
+  /** A live record the submission already filed into: updated in place rather than matched again. */
+  readonly keepRecordId?: string;
+  /**
+   * Who writes the records: the form itself (`processSubmission`, AC-564), or
+   * a member through their own access (Add to CRM, Sync old records). Called
+   * with the attributes the mapping writes.
+   */
+  readonly writer: (writable: ReadonlySet<string>) => WriteContext;
+}
+
 /**
- * Processes one submission (see the file's header). Does nothing for a
- * submission that is gone or no longer `received` (processed already, spam,
- * failed), so a job run twice never writes twice. Runs inside the job's
- * transaction with the system's scope (`context`).
+ * Files one submission's answers into the main record (see the file's
+ * header): matches or creates it, writes only the mapping's attributes,
+ * records the touch in `form_submission_records`. Leaves the submission's
+ * own state to the caller. Runs inside the caller's transaction.
  */
-export async function processSubmission(context: WriteContext, submissionId: string): Promise<void> {
+export async function fileAnswers(context: WriteContext, input: FileInput): Promise<Filed> {
   const { tx } = context;
-  const found = await tx.execute<SubmissionRow>(sql`
-    select id::text, form_id::text, version_id::text, state, answers
-    from form_submissions where id = ${submissionId} for update
-  `);
-  const submission = found.rows[0];
-  if (submission === undefined || submission.state !== 'received') return;
-  const form = await loadForm(tx, submission.form_id);
-  if (form === undefined) return;
-  const version = (await loadVersions(tx, [submission.version_id])).get(submission.version_id);
-  if (version === undefined) throw new Error('A submission names a version that is gone.');
-  const { document } = version;
-  const answers =
-    typeof submission.answers === 'object' && submission.answers !== null
-      ? (submission.answers as Record<string, unknown>)
-      : {};
-  const attributes = await loadAttributes(tx, form.mainObjectId);
-  const { planned, refused } = await plan(tx, document, attributes, answers);
+  const { form, document, attributes } = input;
+  const { planned, refused } = plan(document, attributes, input.options, input.answers);
 
   // Who owns a new record: chosen once, before anything is written (round robin's seam).
   const assignment = await chooseOwner(tx, form.ownerMemberId);
   const owner = ownerAttribute(attributes);
   const ownerValue = assignment.memberId === undefined ? undefined : { type: 'member', id: assignment.memberId };
-
-  // The form acts with exactly its mapping: the answered attributes and, when it gives one, the owner.
   const writable = new Set([
     ...planned.map((each) => each.attribute.id),
     ...(owner !== undefined && ownerValue !== undefined ? [owner.id] : []),
   ]);
-  const access = formAccess(form.id, {
-    objectId: form.mainObjectId,
-    attributeIds: [...attributes.keys()],
-    writable,
-  });
-  const asForm = actingAs(context, enterAsForm(context.scope, form.id, access));
+  const writer = input.writer(writable);
 
-  // Two submissions for one new key take turns here, so the second finds the first's record (AC-562).
-  const match = matchKey(planned, document.targets.main.matchAttributeId);
-  let matchedId: string | undefined;
-  if (match !== undefined) {
-    await tx.execute(
-      sql`select pg_advisory_xact_lock(hashtextextended(${`form-match:${form.mainObjectId}:${match.attribute.id}:${match.key}`}, 0))`,
-    );
-    const hit = await tx.execute<{ record_id: string }>(sql`
-      select v.record_id::text from "values" v
-      join records r on r.workspace_id = v.workspace_id and r.id = v.record_id
-      where v.attribute_id = ${match.attribute.id} and v.unique_key = ${match.key} and v.active_until is null
-        and r.object_id = ${form.mainObjectId} and r.deleted_at is null
-      order by r.created_at, r.id
-      limit 1
-    `);
-    matchedId = hit.rows[0]?.record_id;
+  let matchedId: string | undefined = input.keepRecordId;
+  if (matchedId === undefined) {
+    // Two submissions for one new key take turns here, so the second finds the first's record (AC-562).
+    const match = matchKey(planned, document.targets.main.matchAttributeId);
+    if (match !== undefined) {
+      await tx.execute(
+        sql`select pg_advisory_xact_lock(hashtextextended(${`form-match:${form.mainObjectId}:${match.attribute.id}:${match.key}`}, 0))`,
+      );
+      matchedId = await matchedRecord(tx, form.mainObjectId, match.attribute.id, match.key);
+    }
   }
 
   let recordId: string;
@@ -342,52 +356,27 @@ export async function processSubmission(context: WriteContext, submissionId: str
       values.set(owner.id, owner.isMulti ? [ownerValue] : ownerValue);
       gaveOwner = true;
     }
-    const written = await writeSkipping(asForm, values, (inner, given) =>
+    const written = await writeSkipping(writer, values, (inner, given) =>
       insertRecord(inner, { objectId: form.mainObjectId, values: given }),
     );
-    if (!written.ok) {
-      await failSubmission(tx, submission.id, written.failure, { assignment, outcome: { refused } });
-      return;
-    }
+    if (!written.ok) return { kind: 'failed', failure: written.failure, refused, assignment };
     recordId = written.value.recordId;
     action = 'created';
     skipped = written.skipped;
   } else {
     recordId = matchedId;
-    const ids = [...writable];
-    const items = await currentItems(tx, [recordId], ids);
-    const currentOf = (attribute: AttributeDef) =>
-      decodeValue(
-        attribute.type,
-        attribute.isMulti,
-        items.filter((item) => item.attributeId === attribute.id).sort((a, b) => a.position - b.position),
-      );
-    const values = new Map<string, unknown>();
-    for (const each of planned) {
-      const next = mergedValue(each, currentOf(each.attribute));
-      if (next !== undefined) values.set(each.attribute.id, next);
-    }
-    // A matched record keeps its owner; one with none gets the form's choice (AC-567, processing rules).
-    if (owner !== undefined && ownerValue !== undefined) {
-      const held = currentOf(owner);
-      if (held === null || (Array.isArray(held) && held.length === 0)) {
-        values.set(owner.id, owner.isMulti ? [ownerValue] : ownerValue);
-        gaveOwner = true;
-      }
-    }
-    if (values.size === 0) {
+    const values = await changesFor(tx, recordId, planned, owner, ownerValue);
+    gaveOwner = values.gaveOwner;
+    if (values.changes.size === 0) {
       action = 'matched';
     } else {
-      const written = await writeSkipping(asForm, values, (inner, given) =>
+      const written = await writeSkipping(writer, values.changes, (inner, given) =>
         updateRecord(inner, {
           recordId,
           values: Object.fromEntries(Object.entries(given).map(([id, value]) => [id, { value }])),
         }),
       );
-      if (!written.ok) {
-        await failSubmission(tx, submission.id, written.failure, { assignment, outcome: { refused } });
-        return;
-      }
+      if (!written.ok) return { kind: 'failed', failure: written.failure, refused, assignment };
       skipped = written.skipped;
       action = Object.values(written.value).some((result) => result.versionId !== undefined) ? 'updated' : 'matched';
     }
@@ -409,25 +398,154 @@ export async function processSubmission(context: WriteContext, submissionId: str
     .insert(formSubmissionRecords)
     .values({
       workspaceId: context.scope.workspaceId,
-      submissionId: submission.id,
+      submissionId: input.submissionId,
       objectId: form.mainObjectId,
       recordId,
       action,
       role: 'main',
     })
     .onConflictDoNothing();
+  return { kind: 'filed', recordId, action, refused: allRefused, assignment: kept };
+}
+
+/** The oldest live record of `objectId` holding `key` on the unique attribute, if any. */
+export async function matchedRecord(
+  tx: WorkspaceTx,
+  objectId: string,
+  attributeId: string,
+  key: string,
+): Promise<string | undefined> {
+  const hit = await tx.execute<{ record_id: string }>(sql`
+    select v.record_id::text from "values" v
+    join records r on r.workspace_id = v.workspace_id and r.id = v.record_id
+    where v.attribute_id = ${attributeId} and v.unique_key = ${key} and v.active_until is null
+      and r.object_id = ${objectId} and r.deleted_at is null
+    order by r.created_at, r.id
+    limit 1
+  `);
+  return hit.rows[0]?.record_id;
+}
+
+/**
+ * The values filing would change on a matched record (AC-558): each planned
+ * answer merged with what the record holds, and the owner when it has none.
+ */
+export async function changesFor(
+  tx: WorkspaceTx,
+  recordId: string,
+  planned: readonly Planned[],
+  owner: AttributeDef | undefined,
+  ownerValue: unknown,
+  held?: ReturnType<typeof heldValues>,
+): Promise<{ readonly changes: ReadonlyMap<string, unknown>; readonly gaveOwner: boolean }> {
+  const ids = [...planned.map((each) => each.attribute.id), ...(owner === undefined ? [] : [owner.id])];
+  const currentOf = held ?? heldValues(await currentItems(tx, [recordId], ids), recordId);
+  const changes = new Map<string, unknown>();
+  for (const each of planned) {
+    const next = mergedValue(each, currentOf(each.attribute));
+    if (next !== undefined) changes.set(each.attribute.id, next);
+  }
+  let gaveOwner = false;
+  // A matched record keeps its owner; one with none gets the form's choice (AC-567, processing rules).
+  if (owner !== undefined && ownerValue !== undefined) {
+    const current = currentOf(owner);
+    if (current === null || (Array.isArray(current) && current.length === 0)) {
+      changes.set(owner.id, owner.isMulti ? [ownerValue] : ownerValue);
+      gaveOwner = true;
+    }
+  }
+  return { changes, gaveOwner };
+}
+
+/** A reader of one record's current values, by attribute, from items read for many records at once. */
+export function heldValues(
+  items: Awaited<ReturnType<typeof currentItems>>,
+  recordId: string,
+): (attribute: AttributeDef) => unknown {
+  return (attribute) =>
+    decodeValue(
+      attribute.type,
+      attribute.isMulti,
+      items
+        .filter((item) => item.ownerId === recordId && item.attributeId === attribute.id)
+        .sort((a, b) => a.position - b.position),
+    );
+}
+
+/**
+ * Processes one submission (see the file's header). Does nothing for a
+ * submission that is gone or no longer `received` (processed already, spam,
+ * failed), so a job run twice never writes twice. Runs inside the job's
+ * transaction with the system's scope (`context`), writing as the form.
+ */
+export async function processSubmission(context: WriteContext, submissionId: string): Promise<void> {
+  const { tx } = context;
+  const found = await tx.execute<SubmissionRow>(sql`
+    select id::text, form_id::text, version_id::text, state, answers
+    from form_submissions where id = ${submissionId} for update
+  `);
+  const submission = found.rows[0];
+  if (submission === undefined || submission.state !== 'received') return;
+  const form = await loadForm(tx, submission.form_id);
+  if (form === undefined) return;
+  const version = (await loadVersions(tx, [submission.version_id])).get(submission.version_id);
+  if (version === undefined) throw new Error('A submission names a version that is gone.');
+  const { document } = version;
+  const attributes = await loadAttributes(tx, form.mainObjectId);
+  const filed = await fileAnswers(context, {
+    submissionId: submission.id,
+    answers: answersOf(submission.answers),
+    form,
+    document,
+    attributes,
+    options: await optionsFor(tx, document, attributes),
+    // The form acts with exactly its mapping: the answered attributes and, when it gives one, the owner.
+    writer: (writable) =>
+      actingAs(
+        context,
+        enterAsForm(
+          context.scope,
+          form.id,
+          formAccess(form.id, { objectId: form.mainObjectId, attributeIds: [...attributes.keys()], writable }),
+        ),
+      ),
+  });
+  await settle(tx, submission.id, filed);
+}
+
+/** A stored answers column as a plain object. */
+export function answersOf(stored: unknown): Readonly<Record<string, unknown>> {
+  return typeof stored === 'object' && stored !== null && !Array.isArray(stored)
+    ? (stored as Record<string, unknown>)
+    : {};
+}
+
+/** Ends a submission as filing left it: `processed` with its record, or `failed` with why (AC-566). */
+export async function settle(
+  tx: WorkspaceTx,
+  submissionId: string,
+  filed: Filed,
+  extraOutcome: Readonly<Record<string, unknown>> = {},
+): Promise<void> {
+  if (filed.kind === 'failed') {
+    await failSubmission(tx, submissionId, filed.failure, {
+      assignment: filed.assignment,
+      outcome: { refused: filed.refused, ...extraOutcome },
+    });
+    return;
+  }
   await tx
     .update(formSubmissions)
     .set({
       state: 'processed',
       processedAt: sql`now()`,
-      mainRecordId: recordId,
-      assignment: kept,
-      outcome: { refused: allRefused },
+      mainRecordId: filed.recordId,
+      assignment: filed.assignment,
+      outcome: { refused: filed.refused, ...extraOutcome },
       failure: null,
       updatedAt: sql`now()`,
     })
-    .where(sql`${formSubmissions.id} = ${submission.id}`);
+    .where(sql`${formSubmissions.id} = ${submissionId}`);
 }
 
 /**
