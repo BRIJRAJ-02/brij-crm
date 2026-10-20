@@ -42,7 +42,7 @@ import { checkObject, farVisibleSql, hidesActors, UNKNOWN_OBJECT, visibleRecords
 export const MAX_INLINE_RECORDS = 500;
 
 /** What a bulk change of more than 500 records answers until jobs take it (spec 0022, milestone 3). */
-export const TOO_MANY_INLINE = 'Changes to more than 500 records arrive soon.';
+export const TOO_MANY_INLINE = 'Change at most 500 records in one request; more run as a background change.';
 
 /** The most rows one page of the trash answers. */
 export const MAX_TRASH_PAGE = 200;
@@ -212,60 +212,71 @@ export async function deleteRecords(
   const objectId = checkId(input.objectId, UNKNOWN_OBJECT);
   const batchId = checkId(input.batchId, 'Give the delete a batch id.');
   const ids = inlineIds(input.recordIds, 'That record does not exist.');
-  const { result } = await runWrite(
-    scope,
-    async (context) => {
-      const { tx } = context;
-      await checkObject(tx, scope.access, objectId, 'read');
-      await checkObject(tx, scope.access, objectId, 'write');
-      // One order for every caller, so two bulk deletes over the same records never deadlock.
-      const locked = await tx.execute<{ id: string; deleted: boolean; batch: string | null }>(sql`
-        select id::text, deleted_at is not null as deleted, deleted_batch_id::text as batch from records
-        where object_id = ${objectId}::uuid and id = any(${uuidArray(ids)})
-        order by id for no key update
-      `);
-      const seen = await visibleRecords(
-        tx,
-        scope.access,
-        locked.rows.map((row) => ({ objectId, recordId: row.id })),
-      );
-      const rows = new Map(locked.rows.filter((row) => seen.has(row.id)).map((row) => [row.id, row]));
-      const live = [...rows.values()].filter((row) => !row.deleted).map((row) => row.id);
-      if (live.length > 0) {
-        const by = actorRow(scope.actor);
-        await tx.execute(sql`
-          update records set deleted_at = clock_timestamp(), deleted_by_type = ${by.type}::actor_type,
-            deleted_by_id = ${by.id}::uuid, deleted_by_member_id = ${by.memberId}::uuid,
-            deleted_batch_id = ${batchId}::uuid, revision = revision + 1
-          where id = any(${uuidArray(live)})
-        `);
-        const refs = live.map((recordId) => ({ recordId, objectId }));
-        const entries = await entriesOf(tx, refs);
-        // The far references of the whole batch in one statement, capped per relationship end (spec 0007, AC-83).
-        const far = await farReferencesMany(tx, objectId, live);
-        await holdUniqueKeys(tx, [...live, ...entries.map((entry) => entry.entryId)]);
-        await hideRecordsKeys(tx, live);
-        // Last, as every write takes the counter row.
-        await takeRecordSlots(tx, scope, -live.length);
-        context.record({ deletedRecords: refs, hiddenEntries: entries, ...far });
-      }
-      const isLive = new Set(live);
-      return ids.map((recordId): DeleteOutcome => {
-        const row = rows.get(recordId);
-        if (row === undefined) {
-          return { recordId, state: 'refused', refusal: { code: 'NOT_FOUND', message: 'That record does not exist.' } };
-        }
-        if (isLive.has(recordId) || row.batch === batchId) return { recordId, state: 'deleted' };
-        return {
-          recordId,
-          state: 'already-deleted',
-          refusal: { code: 'RECORD_DELETED', message: 'That record was already deleted.' },
-        };
-      });
-    },
-    hooks,
-  );
+  const { result } = await runWrite(scope, (context) => deleteIn(context, { objectId, recordIds: ids, batchId }), hooks);
   return result;
+}
+
+/**
+ * A bulk delete inside a write (the inline call's, or one batch of a delete
+ * job, whose batch id is the job's id, spec 0022 milestone 3): object
+ * `write` checked once, then each record deleted, already in the trash, or
+ * refused `NOT_FOUND`, as `deleteRecords` answers.
+ */
+export async function deleteIn(
+  context: WriteContext,
+  input: { readonly objectId: string; readonly recordIds: readonly string[]; readonly batchId: string },
+): Promise<readonly DeleteOutcome[]> {
+  const { tx, scope } = context;
+  const objectId = checkId(input.objectId, UNKNOWN_OBJECT);
+  const batchId = checkId(input.batchId, 'Give the delete a batch id.');
+  const ids = [...new Set(input.recordIds.map((id) => checkId(id, 'That record does not exist.')))];
+  await checkObject(tx, scope.access, objectId, 'read');
+  await checkObject(tx, scope.access, objectId, 'write');
+  if (ids.length === 0) return [];
+  // One order for every caller, so two bulk deletes over the same records never deadlock.
+  const locked = await tx.execute<{ id: string; deleted: boolean; batch: string | null }>(sql`
+    select id::text, deleted_at is not null as deleted, deleted_batch_id::text as batch from records
+    where object_id = ${objectId}::uuid and id = any(${uuidArray(ids)})
+    order by id for no key update
+  `);
+  const seen = await visibleRecords(
+    tx,
+    scope.access,
+    locked.rows.map((row) => ({ objectId, recordId: row.id })),
+  );
+  const rows = new Map(locked.rows.filter((row) => seen.has(row.id)).map((row) => [row.id, row]));
+  const live = [...rows.values()].filter((row) => !row.deleted).map((row) => row.id);
+  if (live.length > 0) {
+    const by = actorRow(scope.actor);
+    await tx.execute(sql`
+      update records set deleted_at = clock_timestamp(), deleted_by_type = ${by.type}::actor_type,
+        deleted_by_id = ${by.id}::uuid, deleted_by_member_id = ${by.memberId}::uuid,
+        deleted_batch_id = ${batchId}::uuid, revision = revision + 1
+      where id = any(${uuidArray(live)})
+    `);
+    const refs = live.map((recordId) => ({ recordId, objectId }));
+    const entries = await entriesOf(tx, refs);
+    // The far references of the whole batch in one statement, capped per relationship end (spec 0007, AC-83).
+    const far = await farReferencesMany(tx, objectId, live);
+    await holdUniqueKeys(tx, [...live, ...entries.map((entry) => entry.entryId)]);
+    await hideRecordsKeys(tx, live);
+    // Last, as every write takes the counter row.
+    await takeRecordSlots(tx, scope, -live.length);
+    context.record({ deletedRecords: refs, hiddenEntries: entries, ...far });
+  }
+  const isLive = new Set(live);
+  return ids.map((recordId): DeleteOutcome => {
+    const row = rows.get(recordId);
+    if (row === undefined) {
+      return { recordId, state: 'refused', refusal: { code: 'NOT_FOUND', message: 'That record does not exist.' } };
+    }
+    if (isLive.has(recordId) || row.batch === batchId) return { recordId, state: 'deleted' };
+    return {
+      recordId,
+      state: 'already-deleted',
+      refusal: { code: 'RECORD_DELETED', message: 'That record was already deleted.' },
+    };
+  });
 }
 
 /** A trashed record's row as a restore reads it under its lock. */
@@ -474,6 +485,18 @@ export async function restoreRecords(
 }
 
 /**
+ * A restore inside a write (one batch of a restore job, spec 0022 milestone
+ * 3): the records locked in id order, then each restored or refused in its
+ * own savepoint, as `restoreRecords` answers.
+ */
+export async function restoreIn(context: WriteContext, recordIds: readonly string[]): Promise<readonly RestoreOutcome[]> {
+  const ids = [...new Set(recordIds.map((id) => checkId(id, EXPIRED)))];
+  if (ids.length === 0) return [];
+  const locked = await lockForRestore(context.tx, sql`id = any(${uuidArray(ids)})`);
+  return restoreLocked(context, ids, locked.rows);
+}
+
+/**
  * Undoes a delete (spec 0022, AC-526): restores the records still in the
  * trash with that delete's batch id, and only those (a record restored and
  * deleted again since carries another batch). Records the principal can't
@@ -564,7 +587,7 @@ function decodeTrashCursor(cursor: string): { readonly at: string; readonly id: 
  * 0009): never an object at `none`, and on an object with a record rule only
  * those inside it. Undefined under the open policy. One object when given.
  */
-async function trashScope(tx: WorkspaceTx, access: Access, objectId: string | undefined): Promise<SQL> {
+export async function trashScope(tx: WorkspaceTx, access: Access, objectId: string | undefined): Promise<SQL> {
   const parts: SQL[] = [sql`r.deleted_at is not null`];
   if (objectId !== undefined) {
     await checkObject(tx, access, objectId, 'read');

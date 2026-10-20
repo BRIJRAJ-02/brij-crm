@@ -36,6 +36,8 @@ export function outboxEvent(row: OutboxRow): EventRow | undefined {
         ...(row.deletedIds.length === 0 ? {} : { deletedIds: copy(row.deletedIds) }),
         ...(row.restoredIds.length === 0 ? {} : { restoredIds: copy(row.restoredIds) }),
         ...coarse,
+        // A job's batch wrote it (spec 0022): open views refetch at most every 5 seconds. The flag, never the id.
+        ...(row.fromJob === true ? { fromJob: true as const } : {}),
         // What the write replaced (spec 0006), copied, so the event shares nothing with its row.
         ...(row.replaced === undefined
           ? {}

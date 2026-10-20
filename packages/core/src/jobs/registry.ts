@@ -104,6 +104,11 @@ export interface KindDefinition<P> {
    * record is never counted or listed (hidden means absent).
    */
   snapshot?(context: WriteContext, params: P, after: string | undefined, limit: number): Promise<readonly string[]>;
+  /**
+   * A confirmed snapshot of zero ends the job `succeeded` with `total` 0 at
+   * once, with no confirm to ask (spec 0022: "Nothing left to change.").
+   */
+  readonly emptySnapshotSucceeds?: boolean;
   step(context: WriteContext, input: StepInput<P>): Promise<StepOutcome>;
   /**
    * Undoes or releases what the feature holds for a job that ended `failed`,

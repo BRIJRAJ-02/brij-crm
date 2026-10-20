@@ -8,6 +8,7 @@ import { afterAll, beforeAll, describe, expect, inject, it } from 'vitest';
 import { createDatabase, type Database } from '@crm/db';
 import { updateMany, BULK_EDIT_WORDS } from './bulk-edit.ts';
 import { defineAttribute } from './definitions.ts';
+import { defineOption } from './options.ts';
 import { getHistory } from './history.ts';
 import { newId } from './ids.ts';
 import { outboxHook } from './outbox.ts';
@@ -43,11 +44,6 @@ async function world() {
       sql`select id::text, object_id::text, api_slug from attributes where object_id is not null`,
     ),
   );
-  const options = await db.withWorkspace(created.workspaceId, (tx) =>
-    tx.execute<{ id: string; attribute_id: string }>(
-      sql`select id::text, attribute_id::text from attribute_options where archived_at is null order by position`,
-    ),
-  );
   const people = created.objects.people ?? '';
   const companies = created.objects.companies ?? '';
   const deals = created.objects.deals ?? '';
@@ -62,8 +58,6 @@ async function world() {
     person: (slug: string) => attribute(people, slug),
     company: (slug: string) => attribute(companies, slug),
     deal: (slug: string) => attribute(deals, slug),
-    optionsOf: (attributeId: string) =>
-      options.rows.filter((row) => row.attribute_id === attributeId).map((row) => row.id),
   };
 }
 type World = Awaited<ReturnType<typeof world>>;
@@ -131,7 +125,11 @@ describe('updateMany', () => {
   it('adds, removes, replaces and clears a multi select, keeping the existing order (AC-529)', async () => {
     const w = await world();
     const categories = w.company('categories');
-    const [first, second, third] = w.optionsOf(categories);
+    const made: string[] = [];
+    for (const label of ['SaaS', 'Fintech', 'Retail']) {
+      made.push((await defineOption(w.scope, { attributeId: categories, label })).optionId);
+    }
+    const [first, second, third] = made;
     if (first === undefined || second === undefined || third === undefined) throw new Error('Categories has options.');
     const acme = await company(w, 'Acme', { [categories]: [second] });
     const globex = await company(w, 'Globex');

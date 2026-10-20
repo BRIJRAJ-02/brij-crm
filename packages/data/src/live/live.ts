@@ -116,6 +116,14 @@ export interface LiveOptions {
 /** The longest spread before a refetch or catch up that many browsers make at once. */
 export const REFETCH_JITTER_MS = 2000;
 
+/**
+ * How often a background job's coarse records events refetch an object's
+ * open views (spec 0022, AC-532): at most once every 5 seconds per object,
+ * plus once 5 to 7 seconds after the last, so a long job never multiplies the
+ * read load.
+ */
+export const COARSE_JOB_MS = 5000;
+
 /** How long a tab may stay hidden before it catches up on coming back: 5 minutes (Centrifugo's history). */
 export const HIDDEN_CATCH_UP_MS = 5 * 60_000;
 
@@ -277,6 +285,8 @@ export function parseChangeEvent(data: unknown): Delivery | undefined {
   }
   if (shape.coarse === true && coarse === true) event.coarse = true;
   // What a records event's write replaced (spec 0006): kept only when the whole list is well formed.
+  // A job's batch wrote it (spec 0022): its views refetch at most every 5 seconds.
+  if (kind === 'records' && raw.fromJob === true) event.fromJob = true;
   if (kind === 'records' && raw.replaced !== undefined) {
     const replaced = replacedOf(raw.replaced);
     if (replaced !== undefined) event.replaced = replaced;
@@ -310,6 +320,11 @@ interface Watched {
   readonly held: Map<number, Delivery>;
   /** Refetches waiting out their spread, by what they refetch. */
   readonly due: Set<string>;
+  /**
+   * Job events per object (spec 0022): when one last refetched, and whether
+   * a trailing one waits for the end of its 5 seconds.
+   */
+  readonly jobPaced: Map<string, { last: number; trailing: boolean }>;
   stop: () => void;
 }
 
@@ -394,8 +409,36 @@ export function createLive({
     });
   };
 
+  /**
+   * A job's coarse records event (spec 0022, AC-532): the object's views
+   * refetch at once when they haven't for 5 seconds, else once when those 5
+   * seconds end, plus a random 0 to 2 seconds, however many events arrive
+   * meanwhile; the trailing one brings every view to the job's final state.
+   */
+  const paceJob = (workspace: string, entry: Watched, event: Extract<ChangeEvent, { kind: 'records' }>) => {
+    const key = event.objectId;
+    const paced = entry.jobPaced.get(key);
+    if (paced === undefined || now() - paced.last >= COARSE_JOB_MS) {
+      if (paced?.trailing === true) return;
+      entry.jobPaced.set(key, { last: now(), trailing: false });
+      router.dispatch(workspace, event);
+      return;
+    }
+    if (paced.trailing) return;
+    paced.trailing = true;
+    void wait(paced.last + COARSE_JOB_MS - now() + random() * REFETCH_JITTER_MS).then(() => {
+      if (entry.isStopped) return;
+      entry.jobPaced.set(key, { last: now(), trailing: false });
+      router.dispatch(workspace, event);
+    });
+  };
+
   /** Hands an event to its store: a coarse records event after its spread, once per object. */
   const apply = (workspace: string, entry: Watched, event: ChangeEvent) => {
+    if (event.kind === 'records' && event.coarse === true && event.fromJob === true) {
+      paceJob(workspace, entry, event);
+      return;
+    }
     if (event.kind === 'records' && event.coarse === true) {
       later(entry, `object:${event.objectId}`, () => {
         router.dispatch(workspace, event);
@@ -670,6 +713,7 @@ export function createLive({
         again: false,
         held: new Map(),
         due: new Set(),
+        jobPaced: new Map(),
         stop: () => undefined,
       };
       entry.watchers += 1;

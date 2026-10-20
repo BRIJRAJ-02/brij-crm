@@ -63,7 +63,7 @@ describe('records.deleteMany and records.restoreBatch', () => {
       atLeast: false,
     });
     const undone = await m.client.records.restoreBatch({ workspace: m.slug, batchId, mutationId: newId() });
-    expect(undone.mode).toBe('inline');
+    if (undone.mode !== 'inline') throw new Error('Two records restore inline.');
     expect(undone.results.map((result) => result.state)).toEqual(['restored', 'restored']);
     expect(
       await refusal(() => m.client.records.restoreBatch({ workspace: m.slug, batchId, mutationId: newId() })),
@@ -83,7 +83,7 @@ describe('records.deleteMany and records.restoreBatch', () => {
           mutationId: newId(),
         }),
       ),
-    ).toEqual({ code: 'CONFIG_INVALID', status: 422, message: 'Changes to more than 500 records arrive soon.' });
+    ).toEqual({ code: 'CONFIG_INVALID', status: 422, message: 'Change at most 500 records in one request; more run as a background change.' });
   });
 });
 

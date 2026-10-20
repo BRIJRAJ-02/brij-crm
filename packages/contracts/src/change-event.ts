@@ -86,6 +86,12 @@ export const RecordsEvent = z.object({
   coarse,
   mutationId,
   replaced: Replaced.optional(),
+  /**
+   * A background job's batch wrote it (spec 0022, milestone 3): open views
+   * of the object refetch what they show at most every 5 seconds. The flag
+   * only, never the job's id.
+   */
+  fromJob: z.literal(true).optional(),
 });
 
 /** These entries of the list changed, with their records (`objectId` is the list's parent object). */

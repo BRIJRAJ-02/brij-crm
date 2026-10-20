@@ -41,7 +41,7 @@ describe('the bulk bar', () => {
       ),
     ).toEqual({ tone: 'danger', message: 'You can view People but not change them.' });
     expect(deleteToast({ kind: 'too-many', limit: 500 }, PEOPLE, onUndo)?.message).toBe(
-      'Changes to more than 500 records arrive soon.',
+      'Change at most 500 records in one request; more run as a background change.',
     );
   });
 

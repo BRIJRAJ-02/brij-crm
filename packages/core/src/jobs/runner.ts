@@ -517,6 +517,9 @@ export function createRunner(deps: RunnerDeps): Runner {
         return { kind: failed === undefined ? 'done' : 'failed', finished, counts };
       },
       hooks,
+      'write',
+      // The batch's change names its job (spec 0022): stored in `outbox.job_id`, and `fromJob` on its records events.
+      { jobId },
     );
     if (event.stored) {
       lastSent.set(jobId, now());
@@ -526,7 +529,7 @@ export function createRunner(deps: RunnerDeps): Runner {
   }
 
   /** What one snapshot batch decided. */
-  type SnapshotBatch = 'cancelled' | 'ended' | 'more' | 'ready' | 'queued' | 'too-large';
+  type SnapshotBatch = 'cancelled' | 'ended' | 'empty' | 'more' | 'ready' | 'queued' | 'too-large';
 
   /**
    * Runs one snapshot batch (spec 0008, Snapshot) as one transaction: the
@@ -585,6 +588,22 @@ export function createRunner(deps: RunnerDeps): Runner {
         }
         context.record({ jobs: [starter] });
         event.stored = true;
+        // Nothing to do (spec 0022): a kind that says so ends now, with no confirm to ask for.
+        if (next.count === 0 && kind.emptySnapshotSucceeds === true) {
+          await tx
+            .update(jobs)
+            .set({
+              status: 'succeeded',
+              total: 0,
+              checkpoint: null,
+              finishedAt: sql`now()`,
+              leaseOwner: null,
+              leaseUntil: null,
+              updatedAt: sql`now()`,
+            })
+            .where(where);
+          return 'empty';
+        }
         if (at.confirm) {
           const expiresAt = instant(now() + confirmMs);
           // Queued while still `preparing`: the row at its expiry ends it if nobody confirms (AC-109).
@@ -693,6 +712,7 @@ export function createRunner(deps: RunnerDeps): Runner {
           const outcome = await snapshotBatch(scope, kind, params, row.id);
           batches += 1;
           if (outcome === 'ended') return finish('finished-already', { batches });
+          if (outcome === 'empty') return finish('succeeded', { batches });
           if (outcome === 'cancelled') return finish('cancelled', { batches });
           if (outcome === 'too-large') {
             await end(row, 'failed', 'JOB_TOO_LARGE', { event: true, kind, params });

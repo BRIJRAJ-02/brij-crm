@@ -22,6 +22,11 @@ export const JOB_KINDS = {
   'maintenance.daily': { label: 'Daily cleanup', lane: 'heavy', cancellable: false },
   // A form submission turned into records (spec 0023, AC-554, AC-566): the system's, on the light lane.
   'forms.process': { label: 'Form submission', lane: 'light', cancellable: false },
+  // Bulk changes (spec 0022, milestone 3): a member's, counted and confirmed first, in batches of 500.
+  'records.bulk_edit': { label: 'Bulk edit', lane: 'heavy', cancellable: true },
+  'records.bulk_delete': { label: 'Bulk delete', lane: 'heavy', cancellable: true },
+  'records.bulk_restore': { label: 'Restore from trash', lane: 'heavy', cancellable: true },
+  'records.purge': { label: 'Delete forever', lane: 'heavy', cancellable: true },
 } as const satisfies Record<
   string,
   { readonly label: string; readonly lane: 'heavy' | 'light'; readonly cancellable: boolean }

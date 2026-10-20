@@ -128,6 +128,11 @@ export function createJobsStore(deps: JobsDeps) {
   const startedHere = new Map<string, Set<string>>();
   const watching = new Map<string, () => void>();
   const fetching = new Set<string>();
+  // Screens following one job (a bulk bar's progress, spec 0022): told whenever a held job changes or goes.
+  const followers = new Set<() => void>();
+  const tellFollowers = () => {
+    for (const follower of followers) follower();
+  };
 
   const jobsOf = (workspace: string): Map<string, JobView> => {
     const found = held.get(workspace);
@@ -160,12 +165,14 @@ export function createJobsStore(deps: JobsDeps) {
     jobs.set(job.id, job);
     for (const view of viewsOf(workspace)) view.saw(job);
     tellIfEnded(workspace, job);
+    tellFollowers();
   };
 
   const drop = (workspace: string, jobId: string) => {
     jobsOf(workspace).delete(jobId);
     for (const view of viewsOf(workspace)) view.forget(jobId);
     startedHere.get(workspace)?.delete(jobId);
+    tellFollowers();
   };
 
   /**
@@ -342,8 +349,29 @@ export function createJobsStore(deps: JobsDeps) {
     return made.api;
   };
 
+  /** Follows a job this browser started elsewhere (a bulk change, spec 0022): live until it ends, then `onFinished`. */
+  const track = (workspace: string, job: JobView) => {
+    const mine = startedHere.get(workspace) ?? new Set<string>();
+    startedHere.set(workspace, mine);
+    if (!isFinished(job)) mine.add(job.id);
+    if (!watching.has(workspace) && !isFinished(job)) watching.set(workspace, deps.watch(workspace));
+    put(workspace, job, true);
+    // Finished already (a count of zero): nobody waits on it.
+    if (isFinished(job) && mine.size === 0) startedHere.delete(workspace);
+  };
+
   return {
     view,
+    track,
+    /** The job as held now, or undefined: a bar shows its progress through `follow`. */
+    get: (workspace: string, jobId: string): JobView | undefined => jobsOf(workspace).get(jobId),
+    /** Calls `listener` whenever a held job changes; the answer stops. */
+    follow: (listener: () => void): (() => void) => {
+      followers.add(listener);
+      return () => {
+        followers.delete(listener);
+      };
+    },
     /** A new job id: mint it once per form, and send the same one on a retry, so nothing starts twice. */
     newId: () => deps.mintId(),
     /**
@@ -458,6 +486,7 @@ export function createJobsStore(deps: JobsDeps) {
     /** Forgets everything: the session ended. */
     clear() {
       held.clear();
+      tellFollowers();
       views.clear();
       startedHere.clear();
       for (const stop of watching.values()) stop();

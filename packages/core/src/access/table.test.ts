@@ -668,6 +668,18 @@ const DATA_CASES: Readonly<Record<string, DataCase>> = {
       edit: { attributeId: world.jobTitle, op: 'clear' },
     }),
   ),
+  startBulk: refused('FORBIDDEN', (scope, world) =>
+    core.startBulk(scope, core.jobKinds({ environment: 'local' }), {
+      id: core.newId(),
+      action: 'delete',
+      target: { kind: 'ids', objectId: world.people, recordIds: [world.recordId] },
+    }),
+  ),
+  undoDelete: refused('FORBIDDEN', async (scope, world) =>
+    core.undoDelete(scope, core.jobKinds({ environment: 'local' }), { batchId: await batchOf(world) }).then((answer) =>
+      answer.mode === 'inline' ? refusedOutcome(answer.results) : answer,
+    ),
+  ),
   // Link deltas (spec 0014): a record the principal may only read refuses before any far record is looked at.
   changeLinks: refused('FORBIDDEN', (scope, world) =>
     core.changeLinks(scope, {

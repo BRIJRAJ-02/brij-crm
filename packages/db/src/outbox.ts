@@ -58,6 +58,8 @@ export interface OutboxRow {
   readonly mutationId: string | undefined;
   /** The member whose write stored the row. Never published. */
   readonly actorMemberId: string | undefined;
+  /** A background job's batch stored the row (spec 0022): its id stays in the table, only the flag is read. */
+  readonly fromJob?: true;
   /** The commit time (`created_at`), ISO 8601: the event's `at`. */
   readonly at: string;
   /** What a `records` row's write replaced that its author never saw (spec 0006), or undefined for none. */
@@ -267,6 +269,8 @@ export interface RawOutboxRow {
   readonly coarse: boolean;
   readonly mutation_id: string | null;
   readonly actor_member_id: string | null;
+  /** `job_id is not null`: a job's batch stored it (spec 0022). */
+  readonly from_job?: boolean;
   /** `created_at` as ISO 8601 in UTC, to the millisecond, formatted by Postgres (so no driver's parsing matters). */
   readonly at: string;
   /** As the outbox hook stored it (pg parses jsonb), or null. */
@@ -275,7 +279,7 @@ export interface RawOutboxRow {
 
 /** The columns an `OutboxRow` is read from, in SQL, for `outboxRowOf`. */
 export const OUTBOX_ROW_COLUMNS = `seq, kind, object_id, list_id, record_ids, attribute_ids, item_ids, created_ids, deleted_ids,
-  restored_ids, coarse, mutation_id, actor_member_id,
+  restored_ids, coarse, mutation_id, actor_member_id, job_id is not null as from_job,
   to_char(created_at at time zone 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"') as at, replaced`;
 
 /**
@@ -332,6 +336,7 @@ export function outboxRowOf(row: RawOutboxRow): OutboxRow {
     coarse: row.coarse,
     mutationId: row.mutation_id ?? undefined,
     actorMemberId: row.actor_member_id ?? undefined,
+    ...(row.from_job === true ? { fromJob: true as const } : {}),
     at: row.at,
     replaced: replacedOf(row.replaced),
   };

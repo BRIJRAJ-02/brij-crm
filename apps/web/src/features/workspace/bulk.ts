@@ -40,7 +40,7 @@ export const bulkStrings = {
   /** An object the person may only read (spec 0009's words). */
   readOnly: (pluralName: string) => `You can view ${pluralName} but not change them.`,
   /** A selection past what one request changes (spec 0022, milestones 1 and 2). */
-  tooMany: 'Changes to more than 500 records arrive soon.',
+  tooMany: 'Change at most 500 records in one request; more run as a background change.',
   /** "Delete 48 people?" (AC-525), danger tone. */
   confirmTitle: (records: string) => `Delete ${records}?`,
   confirmText: 'They stay in the trash for 30 days.',

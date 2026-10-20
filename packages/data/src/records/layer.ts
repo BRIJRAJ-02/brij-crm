@@ -16,6 +16,7 @@ import type {
   AddLinksInput,
   LinksWritten,
   RemoveLinksInput,
+  JobView,
   RestoreBatchInput,
   RestoreBatchResults,
   RecordCount,
@@ -367,6 +368,11 @@ export type UndoOutcome =
       readonly reason?: 'unique' | 'limit' | 'gone' | 'other';
       readonly recordName?: string;
     }
+  /**
+   * A delete too big for one request undone (spec 0022, AC-528): a restore
+   * job started over its batch; its progress and end come through `data.jobs`.
+   */
+  | { readonly kind: 'restoring'; readonly objectId: string; readonly job: JobView }
   /** A create undone (spec 0022, AC-541): the record went to the trash, or (`deleted` false) couldn't. */
   | { readonly kind: 'uncreated'; readonly objectId: string; readonly recordName: string; readonly deleted: boolean }
   /** A toast's Undo whose action is no longer the newest (a later change, or already undone): nothing was done. */
@@ -2859,18 +2865,21 @@ export function createRecordsLayer({
    * object settles at once so they return to their rows. Records that can't
    * come back stay in the trash; the answer counts them with the first reason.
    */
-  async function undoDelete(workspace: string, entry: DeleteEntry): Promise<UndoOutcome> {
+  async function undoDelete(workspace: string, entry: DeleteEntry, onStack = true): Promise<UndoOutcome> {
     const mutationId = mintId();
+    // Past 500 records (a delete job's batch), the server starts a restore job with this id: a retry starts none twice.
+    const jobId = mintId();
     mutations.sent(mutationId);
     const named = entry.recordName === undefined ? {} : { recordName: entry.recordName };
-    let results: RestoreBatchResults['results'];
+    let results: Extract<RestoreBatchResults, { mode: 'inline' }>['results'];
     let tries = 0;
     try {
       const answer = await delivered(() => {
         tries += 1;
-        return api.restoreBatch({ workspace, batchId: entry.batchId, mutationId });
+        return api.restoreBatch({ workspace, batchId: entry.batchId, jobId, mutationId });
       });
       mutations.answered(mutationId, answer.echoes);
+      if (answer.mode === 'job') return { kind: 'restoring', objectId: entry.objectId, job: answer.job };
       results = answer.results;
     } catch (error) {
       mutations.forget(mutationId);
@@ -2884,7 +2893,7 @@ export function createRecordsLayer({
         return { kind: 'restored', objectId: entry.objectId, restored: 0, kept: entry.count, reason: 'gone', ...named };
       }
       // Anything else (offline, the server busy): the delete stays on the stack, to undo again.
-      undo.push(workspace, entry);
+      if (onStack) undo.push(workspace, entry);
       throw failure;
     }
     const back = results.filter((result) => result.state !== 'refused').map((result) => result.recordId);
@@ -3525,6 +3534,14 @@ export function createRecordsLayer({
      * 0022): loaded rows show it at once, the answer says how many changed and
      * how many were refused (see `bulkEdit`).
      */
+    /**
+     * Undoes a delete job (spec 0022, AC-528): its batch is the job's id, so
+     * `records.restoreBatch` restores it, inline or (past 500) as a restore
+     * job. Never on the undo stack: the finish toast's Undo calls it.
+     */
+    restoreDeleted: (workspace: string, objectId: string, batchId: string, count: number): Promise<UndoOutcome> =>
+      undoDelete(workspace, { id: mintId(), kind: 'delete', objectId, batchId, count }, false),
+
     bulkEdit: (
       workspace: string,
       objectId: string,

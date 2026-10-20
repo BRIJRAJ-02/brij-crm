@@ -109,7 +109,7 @@ function fakeApi() {
   const batches: Pending<SetValuesBatchInput, BatchResults>[] = [];
   const gets: Pending<readonly string[], RecordView[]>[] = [];
   const deletes: Pending<DeleteManyInput, DeleteManyResults['results']>[] = [];
-  const restores: Pending<RestoreBatchInput, RestoreBatchResults['results']>[] = [];
+  const restores: Pending<RestoreBatchInput, Extract<RestoreBatchResults, { mode: 'inline' }>['results']>[] = [];
   const bulkEdits: Pending<UpdateManyInput, UpdateManyResults['results']>[] = [];
   // Link deltas (spec 0014): each answered with its record, the version it wrote and the records it changed.
   const linkAdds: Pending<AddLinksInput, Omit<LinksWritten, 'echoes'>>[] = [];

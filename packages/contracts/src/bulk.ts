@@ -5,9 +5,10 @@ import { oc } from '@orpc/contract';
 import * as z from 'zod';
 import { BULK_OPS } from './bulk-ops.ts';
 import { ApiRefusal } from './errors.ts';
+import { JobView } from './jobs.ts';
+import { FilterGroup } from './values/filters.ts';
 import { RecordView } from './records.ts';
 import { WorkspaceScoped } from './workspaces.ts';
-import { Uuid, uuidV7 } from './values/ids.ts';
 
 /** The most records one inline bulk call changes; more is refused 422 `CONFIG_INVALID`. */
 export const BULK_INLINE_MAX = 500;
@@ -15,8 +16,11 @@ export const BULK_INLINE_MAX = 500;
 /** The most records a selection holds one by one (spec 0022, AC-523). */
 export const BULK_IDS_MAX = 10_000;
 
-/** What a bulk change of more than 500 records says until background jobs take it (spec 0022, milestones 1 and 2). */
-export const BULK_TOO_MANY_MESSAGE = 'Changes to more than 500 records arrive soon.';
+/** The most records "all matching" may leave out (spec 0022, AC-523). */
+export const BULK_EXCEPT_MAX = 1_000;
+
+/** What an inline bulk call of more than 500 records answers: bigger changes start a job (`records.startBulk`). */
+export const BULK_TOO_MANY_MESSAGE = 'Change at most 500 records in one request; more run as a background change.';
 
 /**
  * Moves up to 500 records of one object to the trash in one write.
@@ -25,14 +29,14 @@ export const BULK_TOO_MANY_MESSAGE = 'Changes to more than 500 records arrive so
  * that batch (`records.restoreBatch`).
  */
 export const DeleteManyInput = WorkspaceScoped.extend({
-  objectId: Uuid,
+  objectId: z.uuid(),
   // Twice the cap, so a selection a little over it answers the engine's CONFIG_INVALID, and junk stops at parsing.
   recordIds: z
-    .array(Uuid)
+    .array(z.uuid())
     .min(1, 'Choose at least one record.')
     .max(BULK_INLINE_MAX * 2, BULK_TOO_MANY_MESSAGE),
-  batchId: uuidV7('The batch id must be a UUID v7.'),
-  mutationId: Uuid,
+  batchId: z.uuid({ version: 'v7', message: 'The batch id must be a UUID v7.' }),
+  mutationId: z.uuid(),
 });
 /** Records to move to the trash. */
 export type DeleteManyInput = z.infer<typeof DeleteManyInput>;
@@ -43,7 +47,7 @@ export type DeleteManyInput = z.infer<typeof DeleteManyInput>;
  * or `refused` (`NOT_FOUND`: unknown, of another object, or hidden).
  */
 export const DeleteOutcome = z.object({
-  recordId: Uuid,
+  recordId: z.uuid(),
   state: z.enum(['deleted', 'already-deleted', 'refused']),
   refusal: ApiRefusal.optional(),
 });
@@ -58,10 +62,15 @@ export const DeleteManyResults = z.object({
 /** A bulk delete's outcomes. */
 export type DeleteManyResults = z.infer<typeof DeleteManyResults>;
 
-/** Undoes a delete: restores the records still in the trash with its batch id. */
+/**
+ * Undoes a delete: restores the records still in the trash with its batch
+ * id; past 500 (only a delete job makes such a batch) it starts a restore job
+ * with `jobId`, the browser's uuid v7, so a retry starts nothing twice.
+ */
 export const RestoreBatchInput = WorkspaceScoped.extend({
-  batchId: Uuid,
-  mutationId: Uuid,
+  batchId: z.uuid(),
+  jobId: z.uuid({ version: 'v7', message: 'The job id must be a UUID v7.' }).optional(),
+  mutationId: z.uuid(),
 });
 /** A delete to undo. */
 export type RestoreBatchInput = z.infer<typeof RestoreBatchInput>;
@@ -73,10 +82,10 @@ export type RestoreBatchInput = z.infer<typeof RestoreBatchInput>;
  * `NOT_FOUND` past the 30 days or gone).
  */
 export const RestoreOutcome = z.object({
-  recordId: Uuid,
+  recordId: z.uuid(),
   state: z.enum(['restored', 'live', 'refused']),
   /** The record's object, on a record restored or live (one the member may see): its tables read again. */
-  objectId: Uuid.optional(),
+  objectId: z.uuid().optional(),
   refusal: ApiRefusal.optional(),
 });
 /** One record's outcome in a restore. */
@@ -91,10 +100,13 @@ export const RestoreResults = z.object({
 export type RestoreResults = z.infer<typeof RestoreResults>;
 
 /**
- * An undone delete: restored inline (milestone 3 adds `{ mode: 'job' }` for a
- * batch past 500, which only a delete job makes).
+ * An undone delete: restored inline, or (a batch past 500, which only a
+ * delete job makes) a restore job started, with no confirm (spec 0022).
  */
-export const RestoreBatchResults = RestoreResults.extend({ mode: z.literal('inline') });
+export const RestoreBatchResults = z.union([
+  RestoreResults.extend({ mode: z.literal('inline') }),
+  z.object({ mode: z.literal('job'), job: JobView, echoes: z.number().int().min(0) }),
+]);
 /** An undone delete's outcomes. */
 export type RestoreBatchResults = z.infer<typeof RestoreBatchResults>;
 
@@ -157,6 +169,69 @@ export const UpdateManyResults = z.object({
 export type UpdateManyResults = z.infer<typeof UpdateManyResults>;
 
 /**
+ * What a bulk job works on (spec 0022, `BulkTarget`): records by id (1 to
+ * 10,000); every record a view's filter matches when "Select all" was pressed
+ * (`asOf`), minus up to 1,000 left out; every trashed record (of one object
+ * or all) deleted by `asOf`, minus those left out; or one delete's batch.
+ */
+export const BulkTarget = z.discriminatedUnion('kind', [
+  z.strictObject({
+    kind: z.literal('ids'),
+    objectId: z.uuid().optional(),
+    recordIds: z
+      .array(z.uuid())
+      .min(1, 'Choose at least one record.')
+      .max(BULK_IDS_MAX, `Select at most ${BULK_IDS_MAX.toLocaleString('en')} records one by one, or select all matching.`),
+  }),
+  z.strictObject({
+    kind: z.literal('matching'),
+    objectId: z.uuid(),
+    filter: FilterGroup.optional(),
+    except: z
+      .array(z.uuid())
+      .max(BULK_EXCEPT_MAX, `You can leave out at most ${BULK_EXCEPT_MAX.toLocaleString('en')} records from all matching.`),
+    asOf: z.iso.datetime({ offset: true }),
+    now: z.iso.datetime({ offset: true }).optional(),
+    timeZone: z.string().min(1).max(64).optional(),
+  }),
+  z.strictObject({
+    kind: z.literal('trash'),
+    objectId: z.uuid().optional(),
+    except: z
+      .array(z.uuid())
+      .max(BULK_EXCEPT_MAX, `You can leave out at most ${BULK_EXCEPT_MAX.toLocaleString('en')} records from all matching.`),
+    asOf: z.iso.datetime({ offset: true }),
+  }),
+  z.strictObject({ kind: z.literal('batch'), batchId: z.uuid() }),
+]);
+/** What a bulk job works on. */
+export type BulkTarget = z.infer<typeof BulkTarget>;
+
+/** What a bulk job does: edit, move to the trash, restore from it, or delete forever. */
+export const BulkAction = z.enum(['edit', 'delete', 'restore', 'purge']);
+/** What a bulk job does. */
+export type BulkAction = z.infer<typeof BulkAction>;
+
+/**
+ * Starts a bulk job (spec 0022, AC-528, AC-531): `id` is the browser's uuid
+ * v7 (a retry answers the same job), and the job counts exactly what it will
+ * touch (`preparing`), then waits for `jobs.confirm` (`ready`, with `total`).
+ * An edit names its change. Refusals: 409 `LIMIT_REACHED` (20 unfinished
+ * jobs), 422 `CONFIG_INVALID` (limits, a target the action doesn't take, the
+ * edit's own rules), `FILTER_INVALID`, `JOB_TOO_LARGE`, 403 `FORBIDDEN`.
+ */
+export const StartBulkInput = WorkspaceScoped.extend({
+  id: z.uuid({ version: 'v7', message: 'The job id must be a UUID v7.' }),
+  action: BulkAction,
+  target: BulkTarget,
+  edit: BulkEdit.optional(),
+  timeZone: z.string().min(1).max(64).optional(),
+  mutationId: z.uuid(),
+});
+/** A bulk job to start. */
+export type StartBulkInput = z.infer<typeof StartBulkInput>;
+
+/**
  * Bulk record actions, joined into the `records` namespace. `deleteMany`
  * answers 200 with each record's outcome; 403 `FORBIDDEN` when the member
  * may only read the object (nothing deleted), 422 `CONFIG_INVALID` over 500.
@@ -171,4 +246,5 @@ export const bulkRecordsContract = {
   deleteMany: oc.input(DeleteManyInput).output(DeleteManyResults),
   restoreBatch: oc.input(RestoreBatchInput).output(RestoreBatchResults),
   updateMany: oc.input(UpdateManyInput).output(UpdateManyResults),
+  startBulk: oc.input(StartBulkInput).output(JobView),
 };

@@ -159,6 +159,12 @@ export interface Change {
   readonly notes: readonly NoteChange[];
   /** Meetings the write synced, changed or removed (spec 0024), each with every record shown on before or after. */
   readonly meetings: readonly MeetingChange[];
+  /**
+   * The background job whose batch made this write (spec 0022, milestone 3):
+   * the outbox stores it in `outbox.job_id`, never published, and its
+   * `records` rows carry `fromJob`.
+   */
+  readonly jobId?: string;
 }
 
 /**
@@ -391,6 +397,8 @@ export async function runWrite<T>(
   work: (context: WriteContext) => Promise<T>,
   hooks: readonly AfterWrite[] = [],
   kind: Change['kind'] = 'write',
+  /** A job's batch names its job (spec 0022): the change carries it to the outbox. */
+  options: { readonly jobId?: string } = {},
 ): Promise<{ result: T; change: Change }> {
   for (let attempt = 1; ; attempt += 1) {
     try {
@@ -492,6 +500,7 @@ export async function runWrite<T>(
           tasks: [...collected.tasks],
           notes: [...collected.notes],
           meetings: [...collected.meetings],
+          ...(options.jobId === undefined ? {} : { jobId: options.jobId }),
         };
         for (const hook of hooks) await hook(change, tx);
         return { result, change };

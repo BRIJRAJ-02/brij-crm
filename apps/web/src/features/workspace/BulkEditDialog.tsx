@@ -4,7 +4,6 @@
 // Leaves out: several fields in one go, relationships (owner decision 3), members (edited nowhere yet) and per record previews.
 import {
   bulkOpsFor,
-  isDataError,
   isEditableHere,
   opTakesValue,
   refusalSummary,
@@ -169,7 +168,7 @@ function BulkEditForm({
         if (result.kind === 'failed') {
           // Refused whole (a read only field, the network): said here, where it was asked, and nothing changed.
           const error = result.error;
-          setRefusals([{ code: error.code, message: isDataError(error) ? refusalSummary(error) : error.message }]);
+          setRefusals([{ code: error.code, message: refusalSummary(error) }]);
           return;
         }
         onDone();
@@ -183,7 +182,7 @@ function BulkEditForm({
 
   if (offered.length === 0) {
     return (
-      <Callout tone="neutral" isAnnounced>
+      <Callout tone="info" isAnnounced>
         {bulkStrings.noFields(object.pluralName)}
       </Callout>
     );
@@ -261,7 +260,7 @@ function BulkEditForm({
             />
           )}
           {shownOp === 'clear' && (
-            <Callout tone="neutral">{bulkStrings.clearsValue(definition.title, records)}</Callout>
+            <Callout tone="info">{bulkStrings.clearsValue(definition.title, records)}</Callout>
           )}
           {breaksUnique && (
             <Callout tone="danger" isAnnounced>

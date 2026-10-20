@@ -428,7 +428,7 @@ export function outboxHook(options: OutboxHookOptions = {}): AfterWrite {
       stored as (
         insert into outbox (
           workspace_id, seq, kind, object_id, list_id, record_ids, attribute_ids, item_ids, created_ids, deleted_ids,
-          restored_ids, coarse, mutation_id, actor_member_id, created_at, replaced
+          restored_ids, coarse, mutation_id, actor_member_id, created_at, replaced, job_id
         )
         select
           ${change.workspaceId}::uuid,
@@ -447,7 +447,9 @@ export function outboxHook(options: OutboxHookOptions = {}): AfterWrite {
           -- A jobs row names its jobs' starter; every other row the write's member.
           case when e.value ? 'starter' then (e.value ->> 'starter')::uuid else ${actorMemberId}::uuid end,
           clock_timestamp(),
-          e.value -> 'replaced'
+          e.value -> 'replaced',
+          -- A job's batch (spec 0022): stored, never published.
+          ${change.jobId ?? null}::uuid
         from counter, jsonb_array_elements(${json}::jsonb) with ordinality as e(value, ord)
         returning 1
       )

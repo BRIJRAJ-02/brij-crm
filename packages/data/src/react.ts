@@ -8,6 +8,7 @@ import type { ActivityFeed, ActivityState } from './activity/feed.ts';
 import type { BookingsCalendarHeld, BookingsCalendarState, BookingsState, BookingsView } from './bookings/store.ts';
 import type { CalendarSettingsHeld, CalendarSettingsState, CalendarState, CalendarView } from './calendar/store.ts';
 import type { CaptureListState, CaptureListView } from './captures/list.ts';
+import type { JobView } from '@crm/contracts';
 import type { JobsSnapshot, JobsView } from './jobs/store.ts';
 import type { LiveStatus } from './live/live.ts';
 import type { PendingOptions } from './options.ts';
@@ -140,6 +141,24 @@ export function useLiveStatus(live: LiveSource): LiveStatus {
 export function useJobs(view: JobsView): JobsSnapshot {
   useEffect(() => view.retain(), [view]);
   return useSyncExternalStore(view.subscribe, view.getSnapshot);
+}
+
+/** What `useJob` reads: one job by id, and a way to hear when held jobs change (`data.jobs`). */
+export interface JobSource {
+  readonly get: (workspace: string, jobId: string) => JobView | undefined;
+  readonly follow: (listener: () => void) => () => void;
+}
+
+/**
+ * One job this browser follows (a bulk change's bar, spec 0022): where it is
+ * and its progress, re-rendering as its events arrive; undefined with no id.
+ */
+export function useJob(jobs: JobSource, workspace: string, jobId: string | undefined): JobView | undefined {
+  const read = useCallback(
+    () => (jobId === undefined ? undefined : jobs.get(workspace, jobId)),
+    [jobs, workspace, jobId],
+  );
+  return useSyncExternalStore(jobs.follow, read);
 }
 
 /** Something a screen retains while it shows it, and reads through useSyncExternalStore. */

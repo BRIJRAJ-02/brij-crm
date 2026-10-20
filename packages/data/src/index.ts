@@ -9,6 +9,9 @@ import type {
   AttributeDefinition,
   BookAsHostInput,
   TaskMine,
+  BulkAction,
+  BulkEdit,
+  BulkTarget,
   BookingAvailability,
   CreateTimeBlockInput,
   TimeBlockOccurrence,
@@ -353,7 +356,9 @@ export type UndoResult =
   | { readonly kind: 'stale' }
   | (Extract<UndoOutcome, { kind: 'undone' }> & { readonly attributeTitle: string })
   | (Extract<UndoOutcome, { kind: 'restored' }> & { readonly singularName: string; readonly pluralName: string })
-  | Extract<UndoOutcome, { kind: 'uncreated' }>;
+  | Extract<UndoOutcome, { kind: 'uncreated' }>
+  /** A delete past 500 undone as a restore job (spec 0022): its end raises the finish toast. */
+  | (Extract<UndoOutcome, { kind: 'restoring' }> & { readonly singularName: string; readonly pluralName: string });
 
 /** What each API call carries to the link: where to report the answer's `Retry-After`, and that an answer came. */
 interface CallContext {
@@ -2623,6 +2628,63 @@ export function createDataLayer({
         request: BulkEditRequest,
       ): Promise<BulkEditResult> => (await recordsLayer()).bulkEdit(workspace, objectId, recordIds, request),
       /**
+       * Starts a bulk change as a background job (spec 0022, AC-528, AC-531):
+       * past 500 records, or every record a view matches. Mint `id` once
+       * (`jobs.newId`) and send the same one on a retry. The job counts what it
+       * will touch, then waits in `ready` for `jobs.confirm`; this browser
+       * follows it (`jobs.get`, `jobs.follow`) and hears its end
+       * (`onJobFinished`). Rejects with a `DataError` (limits, access, 20
+       * unfinished jobs), raising no toast: the bar says why.
+       */
+      startBulk: async (
+        workspace: string,
+        input: {
+          readonly id: string;
+          readonly action: BulkAction;
+          readonly target: BulkTarget;
+          readonly edit?: BulkEdit;
+        },
+      ): Promise<JobView> => {
+        const mutationId = mintId();
+        mutations.sent(mutationId);
+        try {
+          const job = await call((options) =>
+            api.records.startBulk(
+              {
+                workspace,
+                mutationId,
+                id: input.id,
+                action: input.action,
+                target: input.target,
+                ...(input.edit === undefined ? {} : { edit: input.edit }),
+                timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+              },
+              options,
+            ),
+          );
+          mutations.answered(mutationId, 1);
+          jobs.track(workspace, job);
+          return job;
+        } catch (error) {
+          mutations.forget(mutationId);
+          throw toDataError(error);
+        }
+      },
+      /**
+       * Undoes a delete job from its finish toast (spec 0022, AC-528): its
+       * batch is the job's id. Up to 500 come back at once; more start a
+       * restore job this browser follows. Answers as `undo.run` does.
+       */
+      restoreDeleted: async (workspace: string, objectId: string, jobId: string, count: number): Promise<UndoResult> => {
+        const outcome = await (await recordsLayer()).restoreDeleted(workspace, objectId, jobId, count);
+        trashMoved(workspace);
+        if (outcome.kind === 'restoring') jobs.track(workspace, outcome.job);
+        const object = (await allObjects(workspace).catch(() => [])).find((each) => each.id === objectId);
+        const names = { singularName: object?.singularName ?? 'record', pluralName: object?.pluralName ?? 'records' };
+        if (outcome.kind === 'restored' || outcome.kind === 'restoring') return { ...outcome, ...names };
+        return { kind: 'nothing' };
+      },
+      /**
        * One record with the attributes a screen shows (spec 0006, `records.one`;
        * the record page, spec 0017): served from the store every table reads
        * (one body), held while subscribed, reading only what it lacks, patched
@@ -2749,6 +2811,15 @@ export function createDataLayer({
       run: async (workspace: string, only?: string): Promise<UndoResult> => {
         const outcome = await (await recordsLayer()).undo.run(workspace, only);
         if (outcome.kind === 'restored' || outcome.kind === 'uncreated') trashMoved(workspace);
+        if (outcome.kind === 'restoring') {
+          jobs.track(workspace, outcome.job);
+          const object = (await allObjects(workspace).catch(() => [])).find((each) => each.id === outcome.objectId);
+          return {
+            ...outcome,
+            singularName: object?.singularName ?? 'record',
+            pluralName: object?.pluralName ?? 'records',
+          };
+        }
         if (outcome.kind === 'restored') {
           const object = (await allObjects(workspace).catch(() => [])).find((each) => each.id === outcome.objectId);
           return {
@@ -3016,6 +3087,10 @@ export function createDataLayer({
         jobs.startTest(workspace, id, settings),
       /** Cancels a job at once on screen; a refusal puts it back with a toast. Answers whether it landed. */
       cancel: (workspace: string, jobId: string): Promise<boolean> => jobs.cancel(workspace, jobId),
+      /** A job as held now (one this browser started or a view shows), or undefined (spec 0022's bar). */
+      get: (workspace: string, jobId: string): JobView | undefined => jobs.get(workspace, jobId),
+      /** Calls `listener` whenever a held job changes; the answer stops. Read it through `useJob`. */
+      follow: (listener: () => void): (() => void) => jobs.follow(listener),
       /**
        * Confirms a job waiting in `ready`: it shows queued at once; a refusal
        * (it expired, or finished) puts it back with a toast and reads it again.

@@ -10,11 +10,12 @@ import {
   queryRecords,
   readRecordsById,
   readTrashedRecord,
-  restoreBatch,
   searchRecords,
+  startBulk,
+  undoDelete,
 } from '@crm/core';
 import { withInputFields } from '../../errors.ts';
-import { commitCounted } from '../../hooks.ts';
+import { commitCounted, commitWrite } from '../../hooks.ts';
 import { member } from '../../orpc.ts';
 
 // Inside a workspace: the door has let in an active member, and `context.scope` is theirs.
@@ -170,12 +171,37 @@ export const recordsRouter = member.records.router({
     );
     return { results: [...result], echoes };
   }),
+  // Past 500 records (only a delete job makes such a batch) the undo starts a restore job (spec 0022, milestone 3).
   restoreBatch: member.records.restoreBatch.handler(async ({ context, input }) => {
     const { result, echoes } = await commitCounted(context, { mutationId: input.mutationId }, (hooks) =>
-      restoreBatch(context.scope, { batchId: input.batchId }, hooks),
+      undoDelete(
+        context.scope,
+        context.jobs,
+        { batchId: input.batchId, ...(input.jobId === undefined ? {} : { jobId: input.jobId }) },
+        hooks,
+      ),
     );
-    return { mode: 'inline' as const, results: [...result], echoes };
+    return result.mode === 'inline'
+      ? { mode: 'inline' as const, results: [...result.results], echoes }
+      : { mode: 'job' as const, job: result.job, echoes };
   }),
+  // A bulk change as a background job (spec 0022, milestone 3): counted, then confirmed with jobs.confirm.
+  startBulk: member.records.startBulk.handler(({ context, input }) =>
+    commitWrite(context, { mutationId: input.mutationId }, (hooks) =>
+      startBulk(
+        context.scope,
+        context.jobs,
+        {
+          id: input.id,
+          action: input.action,
+          target: input.target,
+          ...(input.edit === undefined ? {} : { edit: input.edit }),
+          ...(input.timeZone === undefined ? {} : { timeZone: input.timeZone }),
+        },
+        hooks,
+      ),
+    ),
+  ),
   // Bulk edit (spec 0022, milestone 2): one attribute of up to 500 records, each computed under its lock.
   updateMany: member.records.updateMany.handler(async ({ context, input }) => {
     const { result, echoes } = await commitCounted(context, { mutationId: input.mutationId }, (hooks) =>

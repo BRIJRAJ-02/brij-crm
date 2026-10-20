@@ -1189,3 +1189,53 @@ export async function countsWhole(
   const { context, level } = await prepare(tx, scope, query, false);
   return levelRule(context, level) === undefined;
 }
+
+/**
+ * A snapshot page of the records a view's filter matches (spec 0022, "all
+ * matching"): the next `limit` ids after `after` in id order (a keyset, so a
+ * big snapshot is many short reads), compiled through the access door exactly
+ * as a page is (hidden attributes refused, the record rule applied, so a
+ * record the principal can't see is never listed), created at or before
+ * `asOf`, minus `except`. A read only.
+ */
+export async function matchingIdsIn(
+  tx: WorkspaceTx,
+  scope: EngineScope,
+  query: { readonly objectId: string; readonly filter?: FilterGroup } & QueryClock,
+  page: {
+    readonly after: string | undefined;
+    readonly limit: number;
+    readonly asOf: string;
+    readonly except: readonly string[];
+  },
+): Promise<readonly string[]> {
+  const { context, level } = await prepare(tx, scope, query);
+  const filter = compileFilter(context, level, query.filter);
+  const { tables, where } = fromParts(context, level);
+  const after = page.after === undefined ? sql`true` : sql`r.id > ${page.after}::uuid`;
+  const except =
+    page.except.length === 0
+      ? sql`true`
+      : sql`not (r.id = any(array(select jsonb_array_elements_text(${JSON.stringify(page.except)}::jsonb)::uuid)))`;
+  const rows = await tx.execute<{ id: string }>(sql`
+    select r.id::text as id from ${tables}
+    where ${where} and ${filter} and r.created_at <= ${page.asOf}::timestamptz and ${after} and ${except}
+    order by r.id limit ${page.limit}
+  `);
+  return rows.rows.map((row) => row.id);
+}
+
+/**
+ * Checks an "all matching" filter the way its snapshot will run it (spec
+ * 0022): the object visible, every attribute along the filter visible and
+ * live, each operand well formed. Refuses `FILTER_INVALID` or `NOT_FOUND`;
+ * reads no records.
+ */
+export async function checkMatching(
+  tx: WorkspaceTx,
+  scope: EngineScope,
+  query: { readonly objectId: string; readonly filter?: FilterGroup } & QueryClock,
+): Promise<void> {
+  const { context, level } = await prepare(tx, scope, query, false);
+  compileFilter(context, level, query.filter);
+}

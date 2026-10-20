@@ -28,7 +28,7 @@ export const strings = {
   restore: 'Restore',
   /** No selected record's object is one the person may change (AC-534). */
   cannotRestore: 'You can view these records but not restore them.',
-  tooMany: 'Changes to more than 500 records arrive soon.',
+  tooMany: 'Change at most 500 records in one request; more run as a background change.',
   oneRecord: '1 record',
   records: (count: string) => `${count} records`,
   restoredOne: (name: string) => `Restored ${name}.`,

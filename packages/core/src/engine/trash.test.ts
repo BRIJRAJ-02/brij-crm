@@ -232,7 +232,7 @@ describe('deleteRecords', () => {
     const ids = Array.from({ length: 501 }, () => newId());
     expect(await refusalOf(deleteRecords(w.scope, { objectId: w.people, recordIds: ids, batchId: newId() }))).toEqual({
       code: 'CONFIG_INVALID',
-      message: 'Changes to more than 500 records arrive soon.',
+      message: 'Change at most 500 records in one request; more run as a background change.',
     });
   });
 

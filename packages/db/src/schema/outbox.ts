@@ -100,6 +100,13 @@ export const outbox = pgTable(
      */
     actorMemberId: uuid('actor_member_id'),
     /**
+     * The background job whose batch stored the row (spec 0022, milestone 3),
+     * or null. Never published: a `records` event carries only `fromJob`, so a
+     * job's id never reaches a member who may not read the job (spec 0009's
+     * `jobs` rule). Kept for the audit log (#36).
+     */
+    jobId: uuid('job_id'),
+    /**
      * The values this write replaced that its author never saw (spec 0006,
      * AC-46), on a `records` row: `{ by: { type, id }, cells: [{ recordId,
      * attributeId, versionId }] }`, ids only, `by` named once (owner decision,

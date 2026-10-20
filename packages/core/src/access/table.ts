@@ -127,6 +127,9 @@ export const ACCESS_TABLE = {
   // Bulk edits (spec 0022, milestone 2): object and field write, checked once for the call.
   updateMany: { data: 'write' },
   bulkEditRecords: { data: 'write' },
+  // Bulk jobs (spec 0022, milestone 3): the action's check at start (records.purge for a purge), then the runner's.
+  startBulk: { data: 'write' },
+  undoDelete: { data: 'write' },
   // Links from the table (spec 0014, milestone 2): write on the near side, every far record visible.
   changeLinks: { data: 'write' },
   addRecordLinks: { data: 'write' },
