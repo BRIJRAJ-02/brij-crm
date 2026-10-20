@@ -1,6 +1,6 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
 import { useState, type ReactNode } from 'react';
-import { expect, fn, screen, waitFor } from 'storybook/test';
+import { expect, fn, screen, waitFor, within } from 'storybook/test';
 import { Button } from '../../atoms/Button/Button.tsx';
 import { BulkActionBar } from '../BulkActionBar/BulkActionBar.tsx';
 import type { CellChange } from '../../fields/types.ts';
@@ -1103,8 +1103,11 @@ export const EditInPopover: Story = {
   play: async ({ userEvent }) => {
     await editColumn(userEvent, 'phone_many');
     const dialog = await openDialog();
-    await waitFor(() => expect(dialog).toHaveTextContent('+44 20 7123 4567'));
+    // The phone library loads on demand, so the chip is written the international way once it lands.
+    await waitFor(() => expect(dialog).toHaveTextContent('+44 20 7123 4567'), { timeout: 3000 });
     await expect(document.activeElement).toHaveAttribute('placeholder', 'Add another…');
+    // The add field has the country code picker before it (F38).
+    await expect(within(dialog).getByRole('button', { name: /Country code/ })).toBeInTheDocument();
   },
 };
 

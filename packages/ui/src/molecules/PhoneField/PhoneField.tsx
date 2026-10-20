@@ -1,9 +1,18 @@
 import { useRef, useState } from 'react';
-import { usePhoneLibrary, type PhoneLibrary } from '../../fields/Phone/phone-library.ts';
+import { Icon } from '../../atoms/Icon/Icon.tsx';
+import {
+  examplePhone,
+  phoneProblemOf,
+  usePhoneExamples,
+  usePhoneLibrary,
+  type PhoneLibrary,
+  type PhoneProblem,
+} from '../../fields/Phone/phone-library.ts';
 import { countryOfNumber, withoutDialCode } from '../../lib/countries.ts';
 import { focusLater } from '../../lib/focus-later.ts';
 import { CountryPicker } from '../CountryPicker/CountryPicker.tsx';
-import { Field } from '../Field/Field.tsx';
+import { Field, type FieldProps } from '../Field/Field.tsx';
+import styles from './PhoneField.module.css';
 import { strings } from './strings.ts';
 
 /** A phone number as PhoneField holds it: the country it is dialled from, and the number as typed there. */
@@ -38,7 +47,40 @@ export interface PhoneFieldProps {
   /** The code button's name and the search's, in the page's language. */
   readonly codeLabel?: string;
   readonly searchLabel?: string;
+  /**
+   * For a record's phone attribute (the field set's editor): the field's
+   * size and variant (`cell` in a grid cell), its keys and focus, the error
+   * floating under a cell, and autocomplete. A hosted form passes none of
+   * these and keeps its look.
+   */
+  readonly size?: FieldProps['size'];
+  readonly variant?: 'default' | 'cell';
+  readonly onBlur?: () => void;
+  readonly onSubmit?: () => void;
+  readonly onEscape?: () => void;
+  readonly autoFocus?: boolean;
+  readonly isErrorFloating?: boolean;
+  readonly autoComplete?: string;
+  /**
+   * With no `placeholder`, the chosen country's example number, written the
+   * national way ("081234 56789" for +91), loaded with the phone library.
+   */
+  readonly showsExample?: boolean;
+  /**
+   * Checks the number for the chosen country: a quiet check at the end of the
+   * box while it is a valid number, and, once focus leaves or Enter is
+   * pressed, a plain sentence when it is too short, too long or not a number
+   * there (unless `error` already says something).
+   */
+  readonly checksNumber?: boolean;
 }
+
+/** The sentence for what is wrong with a number. */
+const PROBLEMS: Readonly<Record<PhoneProblem, string>> = {
+  'too-short': strings.tooShort,
+  'too-long': strings.tooLong,
+  invalid: strings.invalid,
+};
 
 /** The number laid out for its country as it is typed, once the phone library has loaded; as typed until then. */
 function formatted(library: PhoneLibrary | undefined, country: string, national: string): string {
@@ -71,8 +113,21 @@ export function PhoneField({
   defaultOpen,
   codeLabel = strings.code,
   searchLabel,
+  size = 'md',
+  variant = 'default',
+  onBlur,
+  onSubmit,
+  onEscape,
+  autoFocus = false,
+  isErrorFloating = false,
+  autoComplete = 'tel-national',
+  showsExample = false,
+  checksNumber = false,
 }: PhoneFieldProps) {
   const library = usePhoneLibrary();
+  const examples = usePhoneExamples(showsExample && placeholder === undefined);
+  // What the checker found when the person last left the field or pressed Enter; typing clears it.
+  const [problem, setProblem] = useState<PhoneProblem | undefined>(undefined);
   const [own, setOwn] = useState<PhoneFieldValue>(defaultValue ?? { country: guess ?? 'US', national: '' });
   const current = value ?? own;
   const input = useRef<HTMLInputElement & HTMLTextAreaElement>(null);
@@ -87,14 +142,56 @@ export function PhoneField({
     // Laid out only while the caret is at the end, so an edit in the middle keeps its place.
     const atEnd = input.current === null || input.current.selectionStart === text.length;
     change({ country, national: atEnd ? formatted(library, country, national) : national });
+    setProblem(undefined);
   };
+  const check = () => {
+    if (checksNumber) setProblem(phoneProblemOf(library, current.national, current.country));
+  };
+  const isValid =
+    checksNumber &&
+    library !== undefined &&
+    current.national.trim() !== '' &&
+    phoneProblemOf(library, current.national, current.country) === undefined;
+  const shownPlaceholder = placeholder ?? (showsExample ? examplePhone(library, examples, current.country) : undefined);
+  const shownError = error ?? (problem === undefined ? undefined : PROBLEMS[problem]);
   return (
     <Field
       label={label}
       isLabelHidden={isLabelHidden}
       type="tel"
       inputMode="tel"
-      autoComplete="tel-national"
+      autoComplete={autoComplete}
+      size={size}
+      variant={variant}
+      isErrorFloating={isErrorFloating}
+      // eslint-disable-next-line jsx-a11y-x/no-autofocus -- a record's editor opened on purpose, from its value
+      autoFocus={autoFocus}
+      {...(onBlur === undefined && !checksNumber
+        ? {}
+        : {
+            onBlur: () => {
+              check();
+              onBlur?.();
+            },
+          })}
+      {...(onSubmit === undefined && !checksNumber
+        ? {}
+        : {
+            onSubmit: () => {
+              check();
+              onSubmit?.();
+            },
+          })}
+      {...(isValid
+        ? {
+            suffix: (
+              <span className={styles.valid}>
+                <Icon name="circle-check" size="sm" label={strings.valid} />
+              </span>
+            ),
+          }
+        : {})}
+      {...(onEscape === undefined ? {} : { onEscape })}
       value={current.national}
       onChange={type}
       ref={input}
@@ -118,9 +215,9 @@ export function PhoneField({
           {...(defaultOpen === undefined ? {} : { defaultOpen })}
         />
       }
-      {...(placeholder === undefined ? {} : { placeholder })}
+      {...(shownPlaceholder === undefined ? {} : { placeholder: shownPlaceholder })}
       {...(hint === undefined ? {} : { hint })}
-      {...(error === undefined ? {} : { error })}
+      {...(shownError === undefined ? {} : { error: shownError })}
       {...(readOnlyReason === undefined ? {} : { readOnlyReason })}
       {...(name === undefined ? {} : { name })}
     />

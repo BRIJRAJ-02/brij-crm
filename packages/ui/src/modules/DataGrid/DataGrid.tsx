@@ -217,6 +217,16 @@ const LOADING_ROWS = 8;
  * row (spec 0006, AC-52, AC-54). Under it nothing scales.
  */
 const MAX_BODY = 15_000_000;
+/**
+ * A key that belongs to an input method's composition (a CJK word being
+ * chosen): Enter confirms the word and Esc drops it, so neither ends an edit.
+ * Safari marks the Enter that ends a composition only by keyCode 229.
+ */
+function isComposing(event: KeyboardEvent<HTMLElement>): boolean {
+  // eslint-disable-next-line @typescript-eslint/no-deprecated -- Safari's only mark for the composition's last key
+  return event.nativeEvent.isComposing || event.nativeEvent.keyCode === 229;
+}
+
 /** Frames to wait at most for a closing overlay before moving focus to `focusRow`. */
 const OVERLAY_WAIT_FRAMES = 60;
 const TABBABLE = 'a[href], button, input, select, textarea, [tabindex]';
@@ -764,7 +774,14 @@ export function DataGrid<Row>({
         else if (tip?.via === 'focus') setTip(undefined);
         return;
       }
-      const input = cell.querySelector<HTMLElement>('input:checked, input, textarea');
+      // The editor's own input: a checked radio first, never one a control keeps hidden (a Select's native
+      // select and its autofill input, as in a phone number's country code before the number).
+      const inputs = [...cell.querySelectorAll<HTMLElement>('input, textarea')].filter(
+        (each) =>
+          !(each instanceof HTMLInputElement && each.type === 'hidden') &&
+          each.closest('[aria-hidden="true"]') === null,
+      );
+      const input = inputs.find((each) => each instanceof HTMLInputElement && each.checked) ?? inputs[0];
       (input ?? cell).focus({ preventScroll: true });
       if (input instanceof HTMLInputElement && input.type !== 'radio') {
         const end = input.value.length;
@@ -955,15 +972,15 @@ export function DataGrid<Row>({
       finishEditing(event.shiftKey ? 'left' : 'right');
       return;
     }
-    if (event.key === 'Enter' && mode === 'cell' && !event.nativeEvent.isComposing) {
+    if (event.key === 'Enter' && mode === 'cell' && !isComposing(event)) {
       finishEditing(event.shiftKey ? 'up' : 'down');
     }
   };
 
   const onKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
     if (editing !== undefined) {
-      // An in-cell editor that leaves Esc alone still cancels.
-      if (event.key === 'Escape' && !event.defaultPrevented) stopEditing();
+      // An in-cell editor that leaves Esc alone still cancels, unless it ends an input method's composition.
+      if (event.key === 'Escape' && !event.defaultPrevented && !isComposing(event)) stopEditing();
       return;
     }
     if (event.defaultPrevented) return;

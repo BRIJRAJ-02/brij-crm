@@ -19,6 +19,7 @@ It is not the field set's Phone editor, which edits a stored phone attribute and
 - Choosing a country moves focus to the number.
 - The number is laid out for its country as it is typed (libphonenumber-js, loaded on demand the way the Phone field loads it), and only while the caret is at the end, so an edit in the middle keeps its place.
 - A number pasted or typed with its "+" code ("+44 7700 900123") switches the country to match and keeps the rest as the number.
+- The field set's Phone editor draws it too (F38, the owner's call, 20 October 2026: "the same dropdown of country code and country as forms"), so it takes a few more props, all left out by the hosted form, which keeps its look: `size` and `variant` (`cell` in a grid cell, where the field is the cell), `onBlur`, `onSubmit` and `onEscape` (commit and cancel), `autoFocus`, `isErrorFloating` and `autoComplete` (`off` for a record's number, `tel-national` by default).
 
 ## States
 

@@ -1,0 +1,8 @@
+/* PhoneField: the checker's quiet mark at the end of the number's box, in the
+   success colour, while the number is valid for its country. */
+@layer components {
+  .valid {
+    display: inline-flex;
+    color: var(--success);
+  }
+}

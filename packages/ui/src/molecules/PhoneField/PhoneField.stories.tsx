@@ -1,5 +1,5 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
-import { expect, fn, waitFor } from 'storybook/test';
+import { expect, fn, waitFor, within } from 'storybook/test';
 import { Stage } from '../../workbench/Stage/Stage.tsx';
 import { PhoneField } from './PhoneField.tsx';
 
@@ -85,5 +85,58 @@ export const ReadOnly: Story = {
     defaultValue: { country: 'GB', national: '07700 900123' },
     isReadOnly: true,
     readOnlyReason: 'Taken from the enquiry.',
+  },
+};
+
+/**
+ * The chosen country's example number as the placeholder (`showsExample`),
+ * written the national way: +91 shows India's, +1 the United States'.
+ */
+export const ExamplePlaceholder: Story = {
+  args: { placeholder: undefined, showsExample: true },
+  play: async ({ canvas, userEvent }) => {
+    const number = canvas.getByRole('textbox', { name: 'Phone or WhatsApp' });
+    await waitFor(() => expect(number).toHaveAttribute('placeholder', '081234 56789'));
+    await userEvent.click(canvas.getByRole('button', { name: /Country code/ }));
+    await search();
+    await userEvent.keyboard('united states');
+    const option = await within(document.body).findByRole('option', { name: /^United States/ });
+    await userEvent.click(option);
+    await waitFor(() => expect(number).toHaveAttribute('placeholder', '(201) 555-0123'));
+  },
+};
+
+/** The checker (`checksNumber`): a quiet check while the number is valid for its country. */
+export const ValidNumber: Story = {
+  args: { checksNumber: true, defaultValue: { country: 'IN', national: '98765 43210' } },
+  play: async ({ canvas }) => {
+    await waitFor(() => expect(canvas.getByRole('img', { name: 'A valid number' })).toBeInTheDocument());
+  },
+};
+
+/** The checker says what is wrong only once focus leaves or Enter is pressed, never on each key. */
+export const TooShort: Story = {
+  args: { checksNumber: true },
+  play: async ({ canvas, userEvent }) => {
+    await userEvent.click(canvas.getByRole('textbox', { name: 'Phone or WhatsApp' }));
+    await userEvent.keyboard('98765');
+    await expect(canvas.queryByText('This number is too short for the country chosen.')).toBeNull();
+    await userEvent.keyboard('{Enter}');
+    await waitFor(() =>
+      expect(canvas.getByText('This number is too short for the country chosen.')).toBeInTheDocument(),
+    );
+    // Typing on clears it until the next check.
+    await userEvent.keyboard('4');
+    await expect(canvas.queryByText('This number is too short for the country chosen.')).toBeNull();
+  },
+};
+
+/** A full international number pasted in switches the country to match. */
+export const PasteSwitchesCountry: Story = {
+  parameters: { crm: { screenshot: false } },
+  play: async ({ canvas, userEvent }) => {
+    await userEvent.click(canvas.getByRole('textbox', { name: 'Phone or WhatsApp' }));
+    await userEvent.paste('+44 20 7123 4567');
+    await waitFor(() => expect(canvas.getByRole('button', { name: /Country code/ })).toHaveTextContent('+44'));
   },
 };

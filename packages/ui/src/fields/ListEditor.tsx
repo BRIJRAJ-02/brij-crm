@@ -25,6 +25,12 @@ export interface ListEditorProps<T extends AttributeType, V> extends EditorProps
   readonly type?: FieldProps['type'];
   readonly hint?: string;
   readonly prefix?: ReactNode;
+  /**
+   * The add field's text as typed, before it is kept: a phone number typed
+   * with its "+" code moves the code to the country picker in `prefix` and
+   * keeps the rest, laid out for that country.
+   */
+  readonly transformDraft?: (typed: string) => string;
 }
 
 /** Removable chips and an add Field; every change commits the whole list. */
@@ -42,6 +48,7 @@ export function ListEditor<T extends AttributeType, V>({
   type,
   hint,
   prefix,
+  transformDraft,
   autoOpen = false,
   startText,
 }: ListEditorProps<T, V>) {
@@ -95,7 +102,7 @@ export function ListEditor<T extends AttributeType, V>({
         placeholder={values.length === 0 ? fieldStrings.setAttribute(attribute.name) : strings.addAnotherPlaceholder}
         value={draft}
         onChange={(next) => {
-          setDraft(next);
+          setDraft(transformDraft === undefined ? next : transformDraft(next));
           setMessage(undefined);
         }}
         onSubmit={add}

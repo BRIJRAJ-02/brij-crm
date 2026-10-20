@@ -4,7 +4,7 @@ import { Stage } from '../../workbench/Stage/Stage.tsx';
 import { FIELD_SAMPLES } from '../../workbench/field-samples.ts';
 import { AttributeEditor } from '../AttributeEditor.tsx';
 import { loadPhoneLibrary } from './phone-library.ts';
-import { expect, fn, waitFor } from 'storybook/test';
+import { expect, fn, waitFor, within } from 'storybook/test';
 
 const sample = FIELD_SAMPLES.phone;
 
@@ -72,9 +72,73 @@ export const Invalid: Story = {
     await loadPhoneLibrary();
     await new Promise((resolve) => setTimeout(resolve, 50));
     await userEvent.click(canvas.getByRole('textbox', { name: 'Phone' }));
-    await userEvent.keyboard('not a number');
+    await userEvent.keyboard('12');
     await userEvent.tab();
-    await waitFor(() => expect(canvas.getByText(/Enter a phone number that exists/)).toBeInTheDocument());
+    await waitFor(() => expect(canvas.getByText(/too short for the country chosen/)).toBeInTheDocument());
     await expect(args.onCommit).not.toHaveBeenCalled();
+  },
+};
+
+/**
+ * The hosted form's country code before the number (F38): it starts in the
+ * attribute's country, its list searches by name or code, choosing moves
+ * focus to the number, and the number is checked for the country chosen.
+ */
+export const CountryCode: Story = {
+  args: {},
+  render: (args) => (
+    <Stage width="narrow">
+      <AttributeEditor {...args} />
+    </Stage>
+  ),
+  play: async ({ canvas, args, userEvent }) => {
+    await loadPhoneLibrary();
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    const code = canvas.getByRole('button', { name: /Country code/ });
+    await expect(code).toHaveTextContent('+44');
+    await userEvent.click(code);
+    const page = within(document.body);
+    await userEvent.keyboard('india');
+    await userEvent.click(await page.findByRole('option', { name: /^India/ }));
+    await waitFor(() => expect(canvas.getByRole('textbox', { name: 'Phone' })).toHaveFocus());
+    await expect(code).toHaveTextContent('+91');
+    await userEvent.keyboard('98765 43210');
+    await userEvent.tab();
+    await waitFor(() => expect(args.onCommit).toHaveBeenCalledWith({ number: '+919876543210', country: 'IN' }));
+  },
+};
+
+/** A stored number opens with its own country in the picker and the national number in the field. */
+export const StoredNumber: Story = {
+  parameters: { crm: { screenshot: false } },
+  args: { value: { number: '+442071234567', country: 'GB' } },
+  render: (args) => (
+    <Stage width="narrow">
+      <AttributeEditor {...args} />
+    </Stage>
+  ),
+  play: async ({ canvas }) => {
+    await loadPhoneLibrary();
+    await waitFor(() => expect(canvas.getByRole('textbox', { name: 'Phone' })).toHaveValue('020 7123 4567'));
+    await expect(canvas.getByRole('button', { name: /Country code/ })).toHaveTextContent('+44');
+  },
+};
+
+/** Several numbers: the same country code before the add field; a number typed with its + code moves the code there. */
+export const SeveralWithCode: Story = {
+  args: { attribute: sample.several?.attribute ?? sample.attribute, value: null },
+  render: (args) => (
+    <Stage width="narrow">
+      <AttributeEditor {...args} />
+    </Stage>
+  ),
+  play: async ({ canvas, args, userEvent }) => {
+    await loadPhoneLibrary();
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    await userEvent.click(canvas.getByRole('textbox', { name: 'Phones' }));
+    await userEvent.keyboard('+1 201 555 0123');
+    await waitFor(() => expect(canvas.getByRole('button', { name: /Country code/ })).toHaveTextContent('+1'));
+    await userEvent.keyboard('{Enter}');
+    await waitFor(() => expect(args.onCommit).toHaveBeenCalledWith([{ number: '+12015550123', country: 'US' }]));
   },
 };
