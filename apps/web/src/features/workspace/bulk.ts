@@ -2,7 +2,7 @@
 // delete confirm and their toasts, and the rules the screen applies before
 // anything is sent. Pure, so the node tests cover them; BulkDeleteBar does
 // the showing.
-import type { BulkEditResult, BulkOp, DeleteResult, UndoResult } from '@crm/data';
+import type { BulkEditResult, BulkOp, DeleteResult, JobView, UndoResult } from '@crm/data';
 import type { ToastContent } from '@crm/ui';
 
 /** The most records one request changes; past it, background jobs (milestone 3) take over. */
@@ -102,6 +102,25 @@ export const bulkStrings = {
       : `${count(refused)} records were refused. Each cell says why.`,
   nothingChanged: 'Nothing changed: every record already held that value.',
   undidBulk: (cells: string) => `Undid the edit of ${cells} records.`,
+  /** Background changes (spec 0022, milestone 3): the bar, the confirm, the finish toast. */
+  counting: 'Counting…',
+  nothingToChange: 'Nothing left to change.',
+  progress: {
+    delete: (done: string, total: string) => `Deleting ${done} of ${total}`,
+    edit: (done: string, total: string) => `Updating ${done} of ${total}`,
+    restore: (done: string, total: string) => `Restoring ${done} of ${total}`,
+    purge: (done: string, total: string) => `Deleting forever ${done} of ${total}`,
+  },
+  starting: 'Starting…',
+  confirmEditTitle: (records: string) => `Update ${records}?`,
+  confirmEditText: 'This can’t be undone.',
+  confirmEditAction: (records: string) => `Update ${records}`,
+  tooManyIds: 'Select at most 10,000 records one by one, or select all matching.',
+  tooManyExcept: 'You can leave out at most 1,000 records from all matching. Clear and select them one by one instead.',
+  cancelledAfter: (done: string, total: string) => `Cancelled after ${done} of ${total}.`,
+  jobFailed: (label: string) => `${label} stopped before it finished. What it finished is kept.`,
+  viewDetails: 'View details',
+  refusedCount: (refused: number) => `${count(refused)} ${refused === 1 ? 'was' : 'were'} refused.`,
   couldNotUndoCreate: (name: string) => `Couldn’t undo the create of ${name}.`,
 } as const;
 
@@ -186,6 +205,10 @@ export function lifecycleUndoToast(result: UndoResult): ToastContent | undefined
       ? { tone: 'success', message: bulkStrings.undidCreate(result.recordName) }
       : { tone: 'danger', message: bulkStrings.couldNotUndoCreate(result.recordName) };
   }
+  // A delete past 500 comes back as a job: its own toast says when it is done.
+  if (result.kind === 'restoring') {
+    return { tone: 'success', message: `Restoring ${result.pluralName.toLowerCase()} in the background.` };
+  }
   if (result.kind !== 'restored') return undefined;
   if (result.restored === 0) {
     return {
@@ -251,5 +274,93 @@ export function editToast(
             },
           },
         }),
+  };
+}
+
+/** The most records a selection holds one by one (AC-523). */
+export const BULK_IDS_MAX = 10_000;
+
+/** The most records "all matching" may leave out (AC-523). */
+export const BULK_EXCEPT_MAX = 1_000;
+
+/** The bulk job kinds by what they do (spec 0022, milestone 3). */
+export const BULK_JOB_ACTIONS = {
+  'records.bulk_edit': 'edit',
+  'records.bulk_delete': 'delete',
+  'records.bulk_restore': 'restore',
+  'records.purge': 'purge',
+} as const;
+
+/** What a bulk job does, or undefined for any other kind. */
+export function bulkActionOf(kind: string): (typeof BULK_JOB_ACTIONS)[keyof typeof BULK_JOB_ACTIONS] | undefined {
+  return Object.hasOwn(BULK_JOB_ACTIONS, kind) ? BULK_JOB_ACTIONS[kind as keyof typeof BULK_JOB_ACTIONS] : undefined;
+}
+
+/**
+ * Which path a selection takes (spec 0022, "Choosing the path"): up to 500
+ * picked records go in one request, anything bigger, or all matching, as a job.
+ */
+export function bulkPath(selection: { readonly kind: 'some' | 'all-matching' }, selected: number): 'inline' | 'job' {
+  return selection.kind === 'all-matching' || selected > BULK_INLINE_MAX ? 'job' : 'inline';
+}
+
+/** The bar's progress while a bulk job counts or runs (AC-528), or undefined when it waits or has ended. */
+export function jobProgress(
+  job: Pick<JobView, 'kind' | 'status' | 'done' | 'refused' | 'skipped' | 'total'>,
+): { readonly label: string; readonly value?: number } | undefined {
+  if (job.status === 'preparing') return { label: bulkStrings.counting };
+  const action = bulkActionOf(job.kind);
+  if (action === undefined) return undefined;
+  if (job.status !== 'queued' && job.status !== 'running' && job.status !== 'cancelling') return undefined;
+  const done = job.done + job.refused + job.skipped;
+  const total = job.total ?? 0;
+  return {
+    label: bulkStrings.progress[action](count(done), count(total)),
+    ...(total === 0 ? {} : { value: Math.min(100, Math.round((done / total) * 100)) }),
+  };
+}
+
+/**
+ * The toast a bulk job raises when it ends (AC-528, AC-531): "Deleted 12,345
+ * people." with Undo; "Updated 9,998 people. 2 were refused." with View
+ * details; "Restored …"; "Cancelled after 4,500 of 12,345."; a failure says so.
+ */
+export function bulkJobToast(
+  job: Pick<JobView, 'kind' | 'label' | 'status' | 'done' | 'refused' | 'skipped' | 'total'>,
+  names: ObjectNames,
+  actions: { readonly onUndo?: () => void; readonly onView: () => void },
+): ToastContent | undefined {
+  const action = bulkActionOf(job.kind);
+  if (action === undefined) return undefined;
+  const view = { label: bulkStrings.viewDetails, onAction: actions.onView };
+  if (job.status === 'failed') return { tone: 'danger', message: bulkStrings.jobFailed(job.label), action: view };
+  if (job.status === 'cancelled') {
+    return {
+      tone: 'success',
+      message: bulkStrings.cancelledAfter(count(job.done + job.refused + job.skipped), count(job.total ?? 0)),
+      action: view,
+    };
+  }
+  if (job.status !== 'succeeded') return undefined;
+  if ((job.total ?? 0) === 0) return { tone: 'success', message: bulkStrings.nothingToChange };
+  const records = recordsWord(job.done, names);
+  const what =
+    action === 'delete'
+      ? bulkStrings.deleted(records)
+      : action === 'edit'
+        ? bulkStrings.updated(records)
+        : action === 'restore'
+          ? bulkStrings.restored(records)
+          : `Deleted ${records} forever.`;
+  if (job.refused > 0) {
+    return { tone: 'danger', message: `${what} ${bulkStrings.refusedCount(job.refused)}`, action: view };
+  }
+  return {
+    tone: 'success',
+    message: what,
+    action:
+      action === 'delete' && actions.onUndo !== undefined && job.done > 0
+        ? { label: bulkStrings.undo, onAction: actions.onUndo }
+        : view,
   };
 }

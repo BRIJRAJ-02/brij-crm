@@ -3,7 +3,7 @@
 // stylesheet, since Vite links a shared chunk's CSS before this entry's
 // (build.test.ts checks).
 import '@crm/ui/styles.css';
-import { createDataLayer, createIdMinter } from '@crm/data';
+import { createDataLayer, createIdMinter, type JobView } from '@crm/data';
 import { createToasts, LOADING_TIMING, UiProvider } from '@crm/ui';
 import { createThemeController, safeLocalStorage } from '@crm/ui/theme';
 import { createRouter, RouterProvider } from '@tanstack/react-router';
@@ -14,6 +14,7 @@ import { createFocusRecovery, focusFirstLoad, focusPage, isSamePage } from './fe
 import { followPageTitle } from './features/navigation/title.ts';
 import { rememberPlace, safeSessionStorage } from './features/settings/back.ts';
 import { jobFinishedToast } from './features/settings/toast.ts';
+import { bulkActionOf, bulkJobToast, bulkStrings, lifecycleUndoToast } from './features/workspace/bulk.ts';
 import { jobsHref } from './features/workspace/objects.ts';
 import { replacedToast } from './features/workspace/undo.ts';
 import { startMonitoring } from './monitoring/index.ts';
@@ -81,15 +82,45 @@ const data = createDataLayer({
   },
   // A job this browser started ended (spec 0008, AC-119): say how, with a way to the Background jobs page.
   onJobFinished: (workspace, job) => {
-    toasts.toast(
-      jobFinishedToast(job, () => {
-        void router.navigate({ href: jobsHref(workspace) });
-      }),
-    );
+    const onView = () => {
+      void router.navigate({ href: jobsHref(workspace) });
+    };
+    // A bulk change (spec 0022): its own words, and Undo for a delete (its batch is the job's id).
+    if (bulkActionOf(job.kind) !== undefined) {
+      void bulkFinished(workspace, job, onView);
+      return;
+    }
+    toasts.toast(jobFinishedToast(job, onView));
   },
   // Faults the server never saw: an answer without one of our codes, or one thrown inside the layer.
   report: monitor.report,
 });
+
+/** The finish toast of a bulk job, with its object's names (spec 0022, AC-528, AC-531). */
+async function bulkFinished(workspace: string, job: JobView, onView: () => void): Promise<void> {
+  const objectId = job.subject?.type === 'object' ? job.subject.id : undefined;
+  const object = (await data.objects.list(workspace).catch(() => [])).find((each) => each.id === objectId);
+  const names = object ?? { singularName: 'record', pluralName: 'records' };
+  const toast = bulkJobToast(job, names, {
+    onView,
+    ...(objectId === undefined
+      ? {}
+      : {
+          onUndo: () => {
+            void data.records.restoreDeleted(workspace, objectId, job.id, job.done).then(
+              (result) => {
+                const undone = lifecycleUndoToast(result);
+                if (undone !== undefined) toasts.toast(undone);
+              },
+              () => {
+                toasts.toast({ tone: 'danger', message: bulkStrings.somethingWrong });
+              },
+            );
+          },
+        }),
+  });
+  if (toast !== undefined) toasts.toast(toast);
+}
 
 // theme-boot.js already applied a saved choice before first paint; this keeps
 // it in step with changes here and in other tabs.

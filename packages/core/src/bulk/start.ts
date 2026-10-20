@@ -64,7 +64,8 @@ function checkTarget(action: BulkAction, target: BulkTarget): void {
   }
   const live = action === 'edit' || action === 'delete';
   const fits = live ? target.kind === 'ids' || target.kind === 'matching' : target.kind !== 'matching';
-  if (!fits || (target.kind === 'batch' && action !== 'restore')) throw refuse('CONFIG_INVALID', BULK_START_WORDS.wrongTarget);
+  if (!fits || (target.kind === 'batch' && action !== 'restore'))
+    throw refuse('CONFIG_INVALID', BULK_START_WORDS.wrongTarget);
 }
 
 /**
@@ -197,7 +198,12 @@ export async function undoDelete(
   await runWrite(
     scope,
     (context) =>
-      startIn(context, registry, { id: jobId, action: 'restore', target: { kind: 'batch', batchId } }, { confirm: false }),
+      startIn(
+        context,
+        registry,
+        { id: jobId, action: 'restore', target: { kind: 'batch', batchId } },
+        { confirm: false },
+      ),
     hooks,
   );
   return { mode: 'job', job: await getJob(scope, registry, jobId) };

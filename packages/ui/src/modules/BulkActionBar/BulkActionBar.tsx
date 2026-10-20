@@ -18,6 +18,8 @@ export interface BulkActionBarProps {
   readonly count: number;
   /** How many records match the view, beyond those on screen. */
   readonly total: number;
+  /** `total` is a floor: the view's count stopped at it ("10,000+"). */
+  readonly isTotalAtLeast?: boolean;
   /** Every matching record is selected, not only those picked. */
   readonly isAllMatching?: boolean;
   /** Offers "Select all N matching" while only some are selected. */
@@ -47,6 +49,7 @@ export interface BulkActionBarProps {
 export function BulkActionBar({
   count,
   total,
+  isTotalAtLeast = false,
   isAllMatching = false,
   onSelectAllMatching,
   onClear,
@@ -74,14 +77,18 @@ export function BulkActionBar({
     if (lost || isRunning) actions.querySelector<HTMLElement>('button:not([disabled])')?.focus();
   }, [isAllMatching, isRunning]);
   const number = (value: number) => memoIntl(`plain:${locale}`, () => new Intl.NumberFormat(locale)).format(value);
+  // The view's count, with its floor marked ("10,000+").
+  const matching = `${number(total)}${isTotalAtLeast ? '+' : ''}`;
+  // All matching less any left out: the count itself (then a floor too, while the total is one).
+  const chosen = count === total ? matching : `${number(count)}${isTotalAtLeast ? '+' : ''}`;
   return (
     // Esc from anywhere in the bar clears the selection.
     <FloatingBar placement={placement} frameProps={keyboardProps}>
       <AriaToolbar className={styles.root} aria-label={strings.label}>
         <span className={styles.count} role="status">
-          {isAllMatching ? strings.allMatching(number(total)) : strings.selected(number(count))}
+          {isAllMatching ? strings.allMatching(chosen) : strings.selected(number(count))}
         </span>
-        {!isAllMatching && onSelectAllMatching !== undefined && count < total && (
+        {!isAllMatching && onSelectAllMatching !== undefined && (count < total || isTotalAtLeast) && (
           <Button
             variant="ghost"
             onPress={() => {
@@ -89,7 +96,7 @@ export function BulkActionBar({
               onSelectAllMatching();
             }}
           >
-            {strings.selectAllMatching(number(total))}
+            {strings.selectAllMatching(matching)}
           </Button>
         )}
         <span ref={actionsRef} className={styles.actions}>

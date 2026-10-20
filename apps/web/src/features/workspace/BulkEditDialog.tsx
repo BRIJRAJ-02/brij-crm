@@ -259,9 +259,7 @@ function BulkEditForm({
               {...(valueError === undefined ? {} : { error: valueError })}
             />
           )}
-          {shownOp === 'clear' && (
-            <Callout tone="info">{bulkStrings.clearsValue(definition.title, records)}</Callout>
-          )}
+          {shownOp === 'clear' && <Callout tone="info">{bulkStrings.clearsValue(definition.title, records)}</Callout>}
           {breaksUnique && (
             <Callout tone="danger" isAnnounced>
               {bulkStrings.uniqueRule(definition.title)}

@@ -50,16 +50,40 @@ export const Default: Story = {
 
 /** Every matching record selected: the offer goes, and the count says so. */
 export const AllMatching: Story = {
-  args: { isAllMatching: true },
+  args: { isAllMatching: true, count: 1234 },
   play: async ({ canvas }) => {
     await expect(canvas.getByText('All 1,234 matching selected')).toBeInTheDocument();
     await expect(canvas.queryByRole('button', { name: /Select all/ })).toBeNull();
   },
 };
 
+/** All matching with two left out: the count is what will change. */
+export const AllMatchingLeftOut: Story = {
+  args: { isAllMatching: true, count: 1232 },
+  play: async ({ canvas }) => {
+    await expect(canvas.getByText('All 1,232 matching selected')).toBeInTheDocument();
+  },
+};
+
+/** A view's count that stopped at its cap: the offer says "10,000+". */
+export const CappedCount: Story = {
+  args: { count: 40, total: 10_000, isTotalAtLeast: true },
+  play: async ({ canvas }) => {
+    await expect(canvas.getByRole('button', { name: 'Select all 10,000+ matching' })).toBeInTheDocument();
+  },
+};
+
+/** A background change counting what it will touch: progress with no value yet, and Cancel. */
+export const Counting: Story = {
+  args: { isAllMatching: true, count: 1234, progress: { label: 'Counting…' }, onCancel: fn() },
+  play: async ({ canvas }) => {
+    await expect(canvas.getByRole('progressbar', { name: 'Counting…' })).toBeInTheDocument();
+  },
+};
+
 /** An action running: its progress and Cancel in the actions' place, and Clear waits. */
 export const InProgress: Story = {
-  args: { isAllMatching: true, progress: { label: 'Deleting 1,234 records', value: 40 }, onCancel: fn() },
+  args: { isAllMatching: true, count: 1234, progress: { label: 'Deleting 1,234 records', value: 40 }, onCancel: fn() },
   play: async ({ args, canvas, userEvent }) => {
     await expect(canvas.getByRole('progressbar', { name: 'Deleting 1,234 records' })).toBeInTheDocument();
     await expect(canvas.getByRole('button', { name: 'Clear the selection' })).toBeDisabled();
@@ -92,14 +116,14 @@ export const SelectAllKeepsFocus: Story = {
   },
 };
 
-/** A note in an action's place: a selection too big for one request says so, quietly, in the bar. */
+/** A note in an action's place: a background change that had nothing left to do says so, quietly, in the bar. */
 export const WithNote: Story = {
   args: {
     count: 620,
-    children: <Callout placement="bar">Changes to more than 500 records arrive soon.</Callout>,
+    children: <Callout placement="bar">Nothing left to change.</Callout>,
   },
   play: async ({ canvas }) => {
-    await expect(canvas.getByText('Changes to more than 500 records arrive soon.')).toBeInTheDocument();
+    await expect(canvas.getByText('Nothing left to change.')).toBeInTheDocument();
     await expect(canvas.getByRole('status')).toHaveTextContent('620 selected');
   },
 };

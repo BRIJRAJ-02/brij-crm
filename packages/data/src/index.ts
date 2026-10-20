@@ -309,6 +309,7 @@ export type { TrashedSource, TrashedState } from './records/trashed.ts';
 export type { RowNote } from './records/view.ts';
 export type { RestoreSummary, TrashRow, TrashState, TrashStatus, TrashView } from './trash/store.ts';
 export { TRASH_NAME_COLUMN } from './trash/columns.ts';
+export type { BulkAction, BulkEdit, BulkTarget } from '@crm/contracts';
 export {
   applyOp,
   bulkExclusion,
@@ -2675,7 +2676,12 @@ export function createDataLayer({
        * batch is the job's id. Up to 500 come back at once; more start a
        * restore job this browser follows. Answers as `undo.run` does.
        */
-      restoreDeleted: async (workspace: string, objectId: string, jobId: string, count: number): Promise<UndoResult> => {
+      restoreDeleted: async (
+        workspace: string,
+        objectId: string,
+        jobId: string,
+        count: number,
+      ): Promise<UndoResult> => {
         const outcome = await (await recordsLayer()).restoreDeleted(workspace, objectId, jobId, count);
         trashMoved(workspace);
         if (outcome.kind === 'restoring') jobs.track(workspace, outcome.job);

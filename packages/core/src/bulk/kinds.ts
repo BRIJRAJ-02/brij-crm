@@ -112,7 +112,8 @@ export async function snapshotIds(
       );
     case 'ids': {
       // Live records for an edit or a delete, trashed ones for a restore or a purge; of the job's object when it has one.
-      const state = action === 'edit' || action === 'delete' ? sql`r.deleted_at is null` : sql`r.deleted_at is not null`;
+      const state =
+        action === 'edit' || action === 'delete' ? sql`r.deleted_at is null` : sql`r.deleted_at is not null`;
       const object = params.objectId === undefined ? sql`true` : sql`r.object_id = ${params.objectId}::uuid`;
       const where = sql`r.id = any(${uuidArray(target.recordIds)}) and ${state} and ${object}`;
       return filled((from, size) => rowsOf(where, from, size), visible, after, limit);
@@ -120,9 +121,12 @@ export async function snapshotIds(
     case 'trash': {
       // The trash's own scope: objects the starter may read, inside their record rules.
       const where = await trashScope(tx, scope.access, target.objectId);
-      const except =
-        target.except.length === 0 ? sql`true` : sql`not (r.id = any(${uuidArray(target.except)}))`;
-      const rows = await rowsOf(sql`${where} and r.deleted_at <= ${target.asOf}::timestamptz and ${except}`, after, limit);
+      const except = target.except.length === 0 ? sql`true` : sql`not (r.id = any(${uuidArray(target.except)}))`;
+      const rows = await rowsOf(
+        sql`${where} and r.deleted_at <= ${target.asOf}::timestamptz and ${except}`,
+        after,
+        limit,
+      );
       return rows.map((row) => row.id);
     }
     case 'batch':
@@ -188,7 +192,11 @@ export function bulkEditKind(): KindDefinition<BulkJobParams> {
       const outcomes = await updateManyIn(context, {
         objectId,
         recordIds: items.map((item) => item.itemId),
-        edit: { attributeId: edit.attributeId, op: edit.op, ...(edit.value === undefined ? {} : { value: edit.value }) },
+        edit: {
+          attributeId: edit.attributeId,
+          op: edit.op,
+          ...(edit.value === undefined ? {} : { value: edit.value }),
+        },
         timeZone,
       });
       context.record({ coarseObjects: [objectId] });
@@ -235,7 +243,11 @@ export function bulkDeleteKind(): KindDefinition<BulkJobParams> {
               ? { state: 'done' }
               : outcome.state === 'already-deleted'
                 ? { state: 'skipped', code: 'RECORD_DELETED' }
-                : { state: 'refused', code: outcome.refusal?.code ?? 'NOT_FOUND', message: 'That record does not exist.' },
+                : {
+                    state: 'refused',
+                    code: outcome.refusal?.code ?? 'NOT_FOUND',
+                    message: 'That record does not exist.',
+                  },
         ),
       };
     }),
@@ -250,7 +262,9 @@ export function bulkRestoreKind(): KindDefinition<BulkJobParams> {
         context,
         items.map((item) => item.itemId),
       );
-      const objects = [...new Set(outcomes.flatMap((outcome) => (outcome.objectId === undefined ? [] : [outcome.objectId])))];
+      const objects = [
+        ...new Set(outcomes.flatMap((outcome) => (outcome.objectId === undefined ? [] : [outcome.objectId]))),
+      ];
       if (objects.length > 0) context.record({ coarseObjects: objects });
       return {
         finished: false,

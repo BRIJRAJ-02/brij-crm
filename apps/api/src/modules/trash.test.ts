@@ -83,7 +83,11 @@ describe('records.deleteMany and records.restoreBatch', () => {
           mutationId: newId(),
         }),
       ),
-    ).toEqual({ code: 'CONFIG_INVALID', status: 422, message: 'Change at most 500 records in one request; more run as a background change.' });
+    ).toEqual({
+      code: 'CONFIG_INVALID',
+      status: 422,
+      message: 'Change at most 500 records in one request; more run as a background change.',
+    });
   });
 });
 

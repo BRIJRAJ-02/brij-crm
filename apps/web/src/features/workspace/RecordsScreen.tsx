@@ -41,7 +41,7 @@ import { ArchiveAttributeDialog } from '../settings/ArchiveAttributeDialog.tsx';
 import { AttributeDialog } from '../settings/AttributeDialog.tsx';
 import { useLinkEditing } from '../records/links.ts';
 import { strings as attributeStrings } from '../settings/attribute-strings.ts';
-import { useBulkDelete, useTableSelection } from './BulkDeleteBar.tsx';
+import { useBulkActions, useTableSelection } from './BulkActions.tsx';
 import type { ShownColumn, ShownLayout } from '../views/layout.ts';
 import { avatarAttribute } from './columns.ts';
 import { NewRecordDialog } from './NewRecordDialog.tsx';
@@ -286,7 +286,9 @@ export function RecordsScreen({
     setAnnounced({ key: wanted, text: announce?.(state.count) });
   }
   // The rows ticked (spec 0022, AC-522): a new view starts with none, and rows gone on the server leave.
-  const ticked = useTableSelection(view, state);
+  const ticked = useTableSelection(view, state, (message) => {
+    toasts.toast({ tone: 'danger', message });
+  });
   // Paused only while the live connection is down; off (previews) shows nothing.
   const live = useLiveStatus(data.live);
   const memberDisplays = useMemo(() => toActorDisplays(members), [members]);
@@ -349,12 +351,14 @@ export function RecordsScreen({
   };
   const tickedIds = ticked.selection.kind === 'some' ? [...ticked.selection.ids] : [];
   // The bar while rows are ticked (spec 0022): Delete, its confirm, and Clear; focus comes back to the table.
-  const bulk = useBulkDelete({
+  const bulk = useBulkActions({
     slug,
     object,
     attributes,
-    selection: ticked.selection,
+    ticked,
     total: state.count.count,
+    isTotalAtLeast: state.count.atLeast,
+    query: shown.query,
     onClear: () => {
       focusBackAt(tickedIds, false);
       ticked.clear();

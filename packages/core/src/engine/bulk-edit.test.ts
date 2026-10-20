@@ -161,7 +161,7 @@ describe('updateMany', () => {
       recordIds: [acme, globex],
       edit: { attributeId: categories, op: 'clear' },
     });
-    expect(await valuesOf(w, [acme, globex], categories)).toEqual([[], []]);
+    expect(await valuesOf(w, [acme, globex], categories)).toEqual([null, null]);
   });
 
   it('checks and unchecks a checkbox, and stores one outbox row for the object (AC-529)', async () => {

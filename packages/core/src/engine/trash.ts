@@ -212,7 +212,11 @@ export async function deleteRecords(
   const objectId = checkId(input.objectId, UNKNOWN_OBJECT);
   const batchId = checkId(input.batchId, 'Give the delete a batch id.');
   const ids = inlineIds(input.recordIds, 'That record does not exist.');
-  const { result } = await runWrite(scope, (context) => deleteIn(context, { objectId, recordIds: ids, batchId }), hooks);
+  const { result } = await runWrite(
+    scope,
+    (context) => deleteIn(context, { objectId, recordIds: ids, batchId }),
+    hooks,
+  );
   return result;
 }
 
@@ -489,7 +493,10 @@ export async function restoreRecords(
  * 3): the records locked in id order, then each restored or refused in its
  * own savepoint, as `restoreRecords` answers.
  */
-export async function restoreIn(context: WriteContext, recordIds: readonly string[]): Promise<readonly RestoreOutcome[]> {
+export async function restoreIn(
+  context: WriteContext,
+  recordIds: readonly string[],
+): Promise<readonly RestoreOutcome[]> {
   const ids = [...new Set(recordIds.map((id) => checkId(id, EXPIRED)))];
   if (ids.length === 0) return [];
   const locked = await lockForRestore(context.tx, sql`id = any(${uuidArray(ids)})`);

@@ -181,7 +181,10 @@ export const BulkTarget = z.discriminatedUnion('kind', [
     recordIds: z
       .array(z.uuid())
       .min(1, 'Choose at least one record.')
-      .max(BULK_IDS_MAX, `Select at most ${BULK_IDS_MAX.toLocaleString('en')} records one by one, or select all matching.`),
+      .max(
+        BULK_IDS_MAX,
+        `Select at most ${BULK_IDS_MAX.toLocaleString('en')} records one by one, or select all matching.`,
+      ),
   }),
   z.strictObject({
     kind: z.literal('matching'),
@@ -189,7 +192,10 @@ export const BulkTarget = z.discriminatedUnion('kind', [
     filter: FilterGroup.optional(),
     except: z
       .array(z.uuid())
-      .max(BULK_EXCEPT_MAX, `You can leave out at most ${BULK_EXCEPT_MAX.toLocaleString('en')} records from all matching.`),
+      .max(
+        BULK_EXCEPT_MAX,
+        `You can leave out at most ${BULK_EXCEPT_MAX.toLocaleString('en')} records from all matching.`,
+      ),
     asOf: z.iso.datetime({ offset: true }),
     now: z.iso.datetime({ offset: true }).optional(),
     timeZone: z.string().min(1).max(64).optional(),
@@ -199,7 +205,10 @@ export const BulkTarget = z.discriminatedUnion('kind', [
     objectId: z.uuid().optional(),
     except: z
       .array(z.uuid())
-      .max(BULK_EXCEPT_MAX, `You can leave out at most ${BULK_EXCEPT_MAX.toLocaleString('en')} records from all matching.`),
+      .max(
+        BULK_EXCEPT_MAX,
+        `You can leave out at most ${BULK_EXCEPT_MAX.toLocaleString('en')} records from all matching.`,
+      ),
     asOf: z.iso.datetime({ offset: true }),
   }),
   z.strictObject({ kind: z.literal('batch'), batchId: z.uuid() }),
