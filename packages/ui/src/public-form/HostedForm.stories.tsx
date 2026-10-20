@@ -252,8 +252,10 @@ const booking = (seconds: number) => () =>
     next: { kind: 'booking' as const, url: '/b/intro-call?p=token', countdownSeconds: seconds, text: '' },
   });
 
-/** Sent, and on to book: "Taking you to book a time in 5…" with the ring draining, Book now and Stay here (AC-1059). */
+/** Sent, and on to book: "Taking you to book a time in 30…" with the ring draining, Book now and Stay here (AC-1059). */
 export const BookAfter: Story = {
+  // The ring and the number move with time, so no screenshot.
+  parameters: { crm: { screenshot: false } },
   args: { onSubmit: booking(30), onRedirect: fn() },
   play: async ({ canvas, args }) => {
     await userEvent.type(canvas.getByLabelText('Your name'), 'Ada Lovelace');
@@ -273,7 +275,21 @@ export const BookAfterStayed: Story = {
     await userEvent.type(canvas.getByLabelText('Work email'), 'ada@example.com');
     await userEvent.click(canvas.getByRole('button', { name: 'Send' }));
     await userEvent.click(await canvas.findByRole('button', { name: 'Stay here' }));
+    // The one button now reads Book a time, and focus stays on it.
+    await waitFor(() => expect(canvas.getByRole('button', { name: 'Book a time' })).toHaveFocus());
     await userEvent.click(canvas.getByRole('button', { name: 'Book a time' }));
     await expect(args.onRedirect).toHaveBeenCalledWith('/b/intro-call?p=token');
+  },
+};
+
+/** A countdown of nought: "Taking you to book a time…", and off at once. */
+export const BookAfterAtOnce: Story = {
+  args: { onSubmit: booking(0), onRedirect: fn() },
+  play: async ({ canvas, args }) => {
+    await userEvent.type(canvas.getByLabelText('Your name'), 'Ada Lovelace');
+    await userEvent.type(canvas.getByLabelText('Work email'), 'ada@example.com');
+    await userEvent.click(canvas.getByRole('button', { name: 'Send' }));
+    await waitFor(() => expect(args.onRedirect).toHaveBeenCalledWith('/b/intro-call?p=token'));
+    await expect(canvas.getAllByText('Taking you to book a time…').length).toBeGreaterThan(0);
   },
 };

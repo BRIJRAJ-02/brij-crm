@@ -28,12 +28,15 @@ import {
 
 const { bookingPages, formSubmissions } = schema;
 
-/** What a form signs to hand its visitor to a booking page (AC-1057, spec 0025 AC-642). */
+/**
+ * What a form signs to hand its visitor to a booking page (AC-1057, spec 0025
+ * AC-642): the submission and the page, and nothing personal. The name and
+ * email are read from the stored submission when the page asks, so a link
+ * that is copied, logged or kept in history carries no one's details.
+ */
 export interface BookingHandoff {
   readonly submissionId: string;
   readonly bookingPageId: string;
-  readonly name?: string;
-  readonly email?: string;
 }
 
 /** Signs a hand off into the token the booking page's address carries; the API holds the key. */
@@ -65,8 +68,7 @@ export function visitorOf(
 async function nextOf(
   tx: WorkspaceTx,
   document: FormDocument,
-  submissionId: string,
-  answers: Readonly<Record<string, unknown>>,
+  submissionId: string | undefined,
   sign: SignHandoff | undefined,
 ): Promise<SubmitNext> {
   const { after } = document;
@@ -78,10 +80,32 @@ async function nextOf(
     .where(
       and(eq(bookingPages.id, after.bookingPageId), eq(bookingPages.status, 'live'), isNull(bookingPages.deletedAt)),
     );
-  if (page === undefined) return { kind: 'message', text: after.message, offersMeeting: false };
-  const token = sign?.({ submissionId, bookingPageId: after.bookingPageId, ...visitorOf(document, answers) });
+  if (page === undefined || submissionId === undefined) {
+    return { kind: 'message', text: after.message, offersMeeting: false };
+  }
+  const token = sign?.({ submissionId, bookingPageId: after.bookingPageId });
   const url = `/b/${encodeURIComponent(page.publicKey)}${token === undefined ? '' : `?p=${encodeURIComponent(token)}`}`;
   return { kind: 'booking', url, countdownSeconds: after.countdownSeconds, text: after.message };
+}
+
+/**
+ * The name and email a hand off's submission gave (AC-1058), read in the
+ * booking page's own workspace (row level security keeps another
+ * workspace's submission out); empty for one that isn't there.
+ */
+export async function handoffVisitor(
+  tx: WorkspaceTx,
+  submissionId: string,
+): Promise<{ readonly name?: string; readonly email?: string }> {
+  const [row] = await tx
+    .select({ versionId: formSubmissions.versionId, answers: formSubmissions.answers })
+    .from(formSubmissions)
+    .where(eq(formSubmissions.id, submissionId));
+  if (row === undefined) return {};
+  const version = (await loadVersions(tx, [row.versionId])).get(row.versionId);
+  const answers =
+    typeof row.answers === 'object' && row.answers !== null ? (row.answers as Record<string, unknown>) : {};
+  return version === undefined ? {} : visitorOf(version.document, answers);
 }
 
 /** What a form that isn't taking enquiries answers at its link (AC-549, AC-662). */
@@ -306,13 +330,13 @@ export async function submitForm(
           .select({ id: formSubmissions.id })
           .from(formSubmissions)
           .where(and(eq(formSubmissions.formId, form.id), eq(formSubmissions.idempotencyKey, body.idempotencyKey)));
-        const again = await nextOf(tx, live.document, first?.id ?? '', answers, input.signHandoff);
+        const again = await nextOf(tx, live.document, first?.id, input.signHandoff);
         return { next: again, verdict: judged.verdict, replayed: true };
       }
       if (state === 'received') {
         await startJob(context, registry, { kind: FORMS_PROCESS, params: { submissionId: row.id } });
       }
-      const next = await nextOf(tx, live.document, row.id, answers, input.signHandoff);
+      const next = await nextOf(tx, live.document, row.id, input.signHandoff);
       return { next, verdict: judged.verdict, replayed: false };
     },
     hooks,

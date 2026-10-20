@@ -19,9 +19,10 @@ const RESULTS: readonly ConnectResult[] = ['connected', 'denied', 'scope', 'off'
 const DAY = /^\d{4}-\d{2}-\d{2}$/;
 const ZONE = /^[A-Za-z_]+(?:\/[A-Za-z0-9_+-]+){0,2}$|^UTC$/;
 
-/** The page's own address with what was chosen, for the connect leg to come back to. */
-export function returnPath(publicKey: string, chosen: Chosen): string {
+/** The page's own address with what was chosen (and a form's hand off, kept), for the connect leg to come back to. */
+export function returnPath(publicKey: string, chosen: Chosen, handoff?: string): string {
   const query = new URLSearchParams();
+  if (handoff !== undefined) query.set('p', handoff);
   if (chosen.duration !== undefined) query.set('d', String(chosen.duration));
   if (chosen.day !== undefined) query.set('day', chosen.day);
   if (chosen.zone !== undefined) query.set('tz', chosen.zone);

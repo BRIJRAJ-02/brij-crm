@@ -851,7 +851,12 @@ export async function setFormTarget(
   return result;
 }
 
-/** Copies a form's draft as a new, never published form with its own address, named "<name> copy". */
+/**
+ * Copies a form's draft as a new, never published form with its own address,
+ * named "<name> copy". A booking page the draft sends visitors to comes along
+ * as chosen (AC-1056 checks a page when it is chosen), and publishing the copy
+ * still refuses one that is paused or gone.
+ */
 export async function duplicateForm(
   scope: EngineScope,
   input: { readonly formId: string; readonly id: string },

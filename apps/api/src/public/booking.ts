@@ -54,6 +54,7 @@ import {
   addGuests,
   bookPublicSlot,
   cancelBooking,
+  readHandoffPrefill,
   enterBookingByToken,
   guestTarget,
   moveBooking,
@@ -77,7 +78,7 @@ import { toApiError } from '../errors.ts';
 import { errorFields, log } from '../log.ts';
 import type { WakeRelay } from '../realtime/wake.ts';
 import type { TicketBook } from '../forms/ticket.ts';
-import { readHandoff } from '../forms/handoff.ts';
+import { handoffForPage } from '../forms/handoff.ts';
 import { BOOKING_LIMITS, looksLikeBot, type LimitRule, type PublicLimiter } from './limits.ts';
 import {
   findVisitor,
@@ -490,11 +491,8 @@ export function mountPublicBooking(app: Hono<{ Variables: Variables }>, services
   });
 
   /** A form's hand off for this page, or undefined: signed by us, unexpired, and naming this very page. */
-  const handoffFor = (entry: BookingEntry, token: string | undefined) => {
-    if (services.handoffKey === undefined || token === undefined || token === '') return undefined;
-    const handoff = readHandoff(services.handoffKey, token, services.now?.() ?? new Date());
-    return handoff?.bookingPageId === entry.pageId ? handoff : undefined;
-  };
+  const handoffFor = (entry: BookingEntry, token: string | undefined) =>
+    handoffForPage(services.handoffKey, token, entry.pageId, services.now?.() ?? new Date());
 
   // The name and email a form handed over (AC-1058): only from a token we signed for this page, never plain parameters.
   app.get('/public/booking/:publicKey/prefill', async (c) => {
@@ -505,9 +503,11 @@ export function mountPublicBooking(app: Hono<{ Variables: Variables }>, services
     try {
       const entry = await enterBookingPage({ db }, key);
       const handoff = handoffFor(entry, c.req.query('p'));
+      // The name and email come from the stored submission, never from the link.
+      const visitor = handoff === undefined ? {} : await readHandoffPrefill(entry, handoff.submissionId);
       const prefill: PublicPrefill = {
-        ...(handoff?.name === undefined ? {} : { name: handoff.name }),
-        ...(handoff?.email === undefined ? {} : { email: handoff.email }),
+        ...(visitor.name === undefined ? {} : { name: visitor.name }),
+        ...(visitor.email === undefined ? {} : { email: visitor.email }),
       };
       return c.json(prefill, 200, { 'cache-control': 'no-store' });
     } catch (error) {
