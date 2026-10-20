@@ -114,7 +114,7 @@ export const strings = {
   to: 'to',
   noDaysOpen: 'No days open',
   yourPages: 'Your pages',
-  goToPages: 'Make a booking page',
+  goToPages: 'Go to booking pages',
   noPagesText: 'No booking pages yet. Pages you make book inside these hours.',
   yourPagesText: 'The hours each page books on. Open one to change it.',
   pagesFailed: 'Your pages didn’t load.',

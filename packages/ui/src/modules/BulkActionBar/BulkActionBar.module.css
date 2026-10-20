@@ -5,6 +5,7 @@
   .root {
     display: flex;
     flex: 1;
+    flex-wrap: wrap;
     gap: var(--space-8);
     align-items: center;
     min-inline-size: 0;

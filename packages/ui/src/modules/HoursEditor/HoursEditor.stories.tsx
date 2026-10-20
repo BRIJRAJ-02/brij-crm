@@ -47,7 +47,7 @@ export const Week: Story = {
       );
     }
     return (
-      <Stage>
+      <Stage width="fill">
         <Editor />
       </Stage>
     );
@@ -70,7 +70,7 @@ export const CopyTimes: Story = {
   args: { rows: weekRows() },
   parameters: { crm: { screenshot: false } },
   render: (args) => (
-    <Stage>
+    <Stage width="fill">
       <HoursEditor {...args} />
     </Stage>
   ),
@@ -104,7 +104,7 @@ export const ErrorAndDisabled: Story = {
     ],
   },
   render: (args) => (
-    <Stage>
+    <Stage width="fill">
       <HoursEditor {...args} />
     </Stage>
   ),

@@ -75,6 +75,7 @@ export function AvailabilityScreen({
   const discard = () => {
     setDraft(saved);
     setFailure(undefined);
+    setJustSaved(false);
   };
   const status: SaveBarStatus = isSaving
     ? 'saving'

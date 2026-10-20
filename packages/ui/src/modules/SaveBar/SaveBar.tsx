@@ -74,7 +74,8 @@ export function SaveBar({ status, error, onSave, onDiscard, blockedReason, onFoc
     save.current = onSave;
   }, [onSave]);
   useEffect(() => {
-    if (!isWanted || status === 'saved') return;
+    // While the bar is up, ⌘S is always the page's (never the browser's Save Page), and saves when it can.
+    if (!isMounted) return;
     const onKeyDown = (event: KeyboardEvent) => {
       const mod = platform === 'mac' ? event.metaKey : event.ctrlKey;
       if (!mod || event.isComposing || event.altKey || event.shiftKey || event.defaultPrevented) return;
@@ -88,7 +89,7 @@ export function SaveBar({ status, error, onSave, onDiscard, blockedReason, onFoc
     };
     document.addEventListener('keydown', onKeyDown);
     return () => document.removeEventListener('keydown', onKeyDown);
-  }, [isWanted, status, canSave, platform]);
+  }, [isMounted, canSave, platform]);
 
   // Focus on Discard or Save when they go (a discard, a save that landed) is handed on, never dropped.
   const hadFocus = useRef(false);

@@ -237,6 +237,7 @@ export function PageEditor({ data, slug, page: loaded, locale, myHours }: PageEd
                 onDiscard={() => {
                   setDraft(saved);
                   setFailure(undefined);
+                  setJustSaved(false);
                 }}
                 onFocusAway={() => pageHeading(document)?.focus()}
               />
@@ -355,12 +356,13 @@ export function PageEditor({ data, slug, page: loaded, locale, myHours }: PageEd
                       label={strings.weeklyHours}
                       rows={weekRows(draft.availability)}
                       isReadOnly={isLocked}
-                      onChange={(day, ranges) =>
+                      onChange={(day, ranges) => {
+                        setJustSaved(false);
                         setDraft((current) => ({
                           ...current,
                           availability: withDay(current.availability, day, ranges),
-                        }))
-                      }
+                        }));
+                      }}
                     />
                   </>
                 )}

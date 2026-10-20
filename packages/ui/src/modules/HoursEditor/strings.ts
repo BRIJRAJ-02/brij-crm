@@ -15,8 +15,8 @@ export const strings = {
   selectAll: 'Select all',
   apply: 'Apply',
   copyTo: (day: string) => `Copy ${day}’s times to other days`,
-  from: (day: string) => `${day} from`,
-  until: (day: string) => `${day} until`,
+  from: (day: string, at = 1) => (at === 1 ? `${day} from` : `${day} from, hours ${String(at)}`),
+  until: (day: string, at = 1) => (at === 1 ? `${day} until` : `${day} until, hours ${String(at)}`),
   addRange: (day: string) => `Add more hours on ${day}`,
   removeRange: (day: string, start: string, end: string) => `Remove ${start} to ${end} on ${day}`,
 } as const;

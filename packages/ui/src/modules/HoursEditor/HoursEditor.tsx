@@ -278,9 +278,13 @@ export function HoursEditor({
                 {isOn ? (
                   row.ranges.map((range, index) => (
                     <div key={`${String(index)}-${range[0]}`} className={styles.range}>
-                      {time(strings.from(row.label), starts, range[0], (id) => replace(index, [id, range[1]]))}
+                      {time(strings.from(row.label, index + 1), starts, range[0], (id) =>
+                        replace(index, [id, range[1]]),
+                      )}
                       {to}
-                      {time(strings.until(row.label), ends, range[1], (id) => replace(index, [range[0], id]))}
+                      {time(strings.until(row.label, index + 1), ends, range[1], (id) =>
+                        replace(index, [range[0], id]),
+                      )}
                       {index === 0 ? (
                         <Tooltip content={hasRoomAfter(row.ranges) ? strings.addHint : strings.noRoom}>
                           <Button
