@@ -1,7 +1,10 @@
+import { useRef } from 'react';
 import { Avatar } from '../../atoms/Avatar/Avatar.tsx';
 import { Button, ButtonLink } from '../../atoms/Button/Button.tsx';
 import { Icon } from '../../atoms/Icon/Icon.tsx';
+import { Skeleton } from '../../atoms/Skeleton/Skeleton.tsx';
 import { Switch } from '../../atoms/Switch/Switch.tsx';
+import { focusLater } from '../../lib/focus-later.ts';
 import styles from './VisitorBar.module.css';
 import { strings } from './strings.ts';
 
@@ -28,8 +31,10 @@ export interface VisitorBarProps {
   /** Every time shows, the ones the visitor is busy for marked. */
   readonly showAll?: boolean;
   readonly onShowAllChange?: (showAll: boolean) => void;
-  /** "Not you?": forget who this is for the visit. */
+  /** "Not you?": forget who this is for the visit. Focus moves to the bar's next state. */
   readonly onNotYou?: () => void;
+  /** While the page asks who the visitor is: the bar's space held, so nothing jumps when it fills. */
+  readonly isLoading?: boolean;
 }
 
 /** The bar's first line, by what the page knows. */
@@ -60,7 +65,23 @@ export function VisitorBar({
   showAll = false,
   onShowAllChange,
   onNotYou,
+  isLoading = false,
 }: VisitorBarProps) {
+  const root = useRef<HTMLElement>(null);
+  if (isLoading) {
+    return (
+      <section className={styles.root} aria-label={strings.label} aria-busy="true">
+        <div className={styles.bar}>
+          <span className={styles.lead}>
+            <Skeleton shape="circle" />
+          </span>
+          <span className={styles.body}>
+            <Skeleton lines={2} width="medium" />
+          </span>
+        </div>
+      </section>
+    );
+  }
   const title = headline(person, calendar, showAll);
   const detail =
     person === undefined
@@ -70,7 +91,7 @@ export function VisitorBar({
         : strings.bookingAs(person.name === '' ? person.email : person.name);
   const canConnect = connectHref !== undefined && (person === undefined || calendar === 'unreachable');
   return (
-    <section className={styles.root} aria-label={strings.label}>
+    <section ref={root} className={styles.root} aria-label={strings.label} tabIndex={-1}>
       <div className={styles.bar}>
         <span className={styles.lead}>
           {person === undefined ? (
@@ -81,8 +102,11 @@ export function VisitorBar({
             <Avatar name={person.name === '' ? person.email : person.name} size="lg" isDecorative />
           )}
         </span>
-        <span className={styles.body} role="status">
-          <span className={styles.title}>{title}</span>
+        <span className={styles.body}>
+          {/* Only the headline is live: turning Show all times on says what changed, not who you are again. */}
+          <span className={styles.title} role="status">
+            {title}
+          </span>
           <span className={styles.detail}>{detail}</span>
         </span>
         <span className={styles.actions}>
@@ -95,7 +119,14 @@ export function VisitorBar({
             </ButtonLink>
           )}
           {person !== undefined && onNotYou !== undefined && (
-            <Button variant="ghost" onPress={onNotYou}>
+            <Button
+              variant="ghost"
+              onPress={() => {
+                onNotYou();
+                // The button goes with the person: focus the bar's next control, or the bar itself.
+                focusLater(() => root.current?.querySelector<HTMLElement>('a[href]') ?? root.current);
+              }}
+            >
               {strings.notYou}
             </Button>
           )}

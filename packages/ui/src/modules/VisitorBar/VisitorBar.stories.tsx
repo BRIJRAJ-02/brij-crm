@@ -46,7 +46,7 @@ export const BothFree: Story = {
   play: async ({ canvas, args }) => {
     await waitFor(() => expect(canvas.getByText('Showing times you’re both free')).toBeVisible());
     await userEvent.click(canvas.getByRole('switch', { name: 'Show all times' }));
-    await waitFor(() => expect(canvas.getByText('Showing all times, yours that clash marked busy')).toBeVisible());
+    await waitFor(() => expect(canvas.getByText('Showing all times. Busy ones are marked.')).toBeVisible());
     await userEvent.click(canvas.getByRole('button', { name: 'Not you?' }));
     await expect(args.onNotYou).toHaveBeenCalledOnce();
   },
@@ -84,4 +84,9 @@ export const Narrow: Story = {
       <VisitorBar {...args} />
     </Stage>
   ),
+};
+
+/** While the page asks who the visitor is: the bar's space, held. */
+export const Loading: Story = {
+  args: { isLoading: true },
 };

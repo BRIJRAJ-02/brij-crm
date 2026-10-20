@@ -241,11 +241,11 @@ function Booking({
   );
   const [reload, setReload] = useState(0);
   const readKey = `${zone}|${String(duration)}|${String(reload)}`;
-  const [day, setDay] = useState<string | undefined>(
+  const [pickedDay, setDay] = useState<string | undefined>(
     chosen.day !== undefined && chosen.day >= today ? chosen.day : undefined,
   );
-  const [month, setMonth] = useState(monthOf(day ?? today));
-  const [time, setTime] = useState<string | undefined>(undefined);
+  const [month, setMonth] = useState(monthOf(pickedDay ?? today));
+  const [pickedTime, setTime] = useState<string | undefined>(undefined);
   const [step, setStep] = useState<{
     readonly step: 'pick' | 'details';
     readonly attempt: string;
@@ -307,8 +307,17 @@ function Booking({
             unreachable: answer.calendar === 'unreachable',
             failed: false,
           });
-          // The first open day is chosen on arrival (AC-665); further chunks on until one has times.
-          const first = [...next.values()].flat().sort()[0];
+          // The first open day is chosen on arrival (AC-665); further chunks on until one has times, the
+          // visitor's clashes left out while they're hidden (spec 0028), so a busy first chunk reads on.
+          const hidden = new Set(
+            notYou || showAll
+              ? []
+              : [...overlays.values()].filter((each) => each.calendar === 'ok').flatMap((each) => each.clashes),
+          );
+          const first = [...next.values()]
+            .flat()
+            .filter((start) => !hidden.has(start))
+            .sort()[0];
           if (first === undefined && wanted + 1 < chunks) setWanted(wanted + 1);
           setDay((picked) => picked ?? (first === undefined ? undefined : dayKey(Date.parse(first), zone)));
           if (first !== undefined)
@@ -326,7 +335,7 @@ function Booking({
         },
       );
     return () => controller.abort();
-  }, [client, page.publicKey, zone, duration, wanted, readKey, read, today, chunks, now]);
+  }, [client, page.publicKey, zone, duration, wanted, readKey, read, today, chunks, now, notYou, showAll]);
 
   const loaded = read.key === readKey ? read.loaded : new Map<number, readonly string[]>();
   const allStarts = [...loaded.values()].flat().sort();
@@ -345,6 +354,14 @@ function Booking({
   }
   const openDays = new Set(byDay.keys());
   const bestDays = new Set(starts.filter((start) => best.has(start)).map((start) => dayKey(Date.parse(start), zone)));
+  // With clashes hidden, a day left with no time (the first day on arrival, or one brought back from Google)
+  // gives way to the first day that has one, and a picked time that now clashes is let go.
+  const day =
+    hidesClashes && (pickedDay === undefined || !openDays.has(pickedDay))
+      ? ([...openDays].sort()[0] ?? pickedDay)
+      : pickedDay;
+  const time = pickedTime !== undefined && hidesClashes && clashes.has(pickedTime) ? undefined : pickedTime;
+  const isAllHidden = hidesClashes && allStarts.length > 0 && starts.length === 0;
   const isLoading = !loaded.has(0) && !read.failed;
   // Moving to a month past what's read asks for its chunk.
   const showMonth = (next: string) => {
@@ -517,14 +534,19 @@ function Booking({
           : 'on'
         : person.calendar;
   const showsBar = viewer !== undefined && !viewer.isHost && (person !== undefined || connectHref !== undefined);
+  // Its space is held while the page asks who the visitor is, so the card doesn't jump down under a reaching hand.
+  const holdsBar = viewer === undefined && !isPreview;
   const connectNote =
     connected === undefined || connected === 'connected' || notYou ? undefined : strings.connectResults[connected];
   const banner =
-    showsBar || connectNote !== undefined ? (
+    showsBar || holdsBar || connectNote !== undefined ? (
       <>
         {connectNote !== undefined && (
-          <Callout tone={connected === 'denied' ? 'info' : 'warning'}>{connectNote}</Callout>
+          <Callout tone={connected === 'denied' ? 'info' : 'warning'} isAnnounced>
+            {connectNote}
+          </Callout>
         )}
+        {holdsBar && <VisitorBar isLoading />}
         {showsBar && (
           <VisitorBar
             {...(person === undefined ? {} : { person: { name: person.name, email: person.email }, onNotYou: forget })}
@@ -566,7 +588,7 @@ function Booking({
 
   const noTimes = allStarts.length === 0 && loaded.size >= Math.min(chunks, 2);
   // Every open time clashes with the visitor's calendar: say so, with Show all times.
-  const allBusy = hidesClashes && allStarts.length > 0 && starts.length === 0 && loaded.size >= Math.min(chunks, 2);
+  const allBusy = isAllHidden && loaded.size >= Math.min(chunks, 2);
   const message = read.unreachable ? (
     <Callout tone="warning">{strings.unreachable(page.hostName)}</Callout>
   ) : read.failed ? (
@@ -585,7 +607,22 @@ function Booking({
       {strings.noTimesText}
     </Callout>
   ) : allBusy ? (
-    <Callout tone="info" actions={<Button onPress={() => setShowAll(true)}>{strings.showAllTimes}</Button>}>
+    <Callout
+      tone="info"
+      actions={
+        <Button
+          onPress={() => {
+            setShowAll(true);
+            // The note goes as the times come: focus stays with the switch that now says Show all times.
+            globalThis.requestAnimationFrame(() =>
+              document.querySelector<HTMLElement>('[aria-label="Your calendar"] [role="switch"]')?.focus(),
+            );
+          }}
+        >
+          {strings.showAllTimes}
+        </Button>
+      }
+    >
       {strings.allBusy(page.hostName)}
     </Callout>
   ) : undefined;
@@ -598,7 +635,7 @@ function Booking({
           id: start,
           label,
           name: strings.timeName(label, dayHeading, duration),
-          ...(best.has(start) && !notYou ? { isBest: true } : {}),
+          ...(best.has(start) ? { isBest: true } : {}),
           ...(isOverlaid && showAll && clashes.has(start) ? { isBusy: true } : {}),
         };
       })}

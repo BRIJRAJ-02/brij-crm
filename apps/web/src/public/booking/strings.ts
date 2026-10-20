@@ -72,7 +72,7 @@ export const strings = {
   retry: 'Try again',
   // The visitor's calendar (spec 0028).
   showAllTimes: 'Show all times',
-  allBusy: (host: string) => `You’re busy for every time ${host} has open.`,
+  allBusy: (host: string) => `Every time ${host} has open clashes with your calendar.`,
   connectResults: {
     denied: 'Your calendar wasn’t connected. Every time still shows.',
     scope: 'Timefix needs to see when you’re busy to compare calendars. Connect again and leave that box ticked.',
