@@ -360,9 +360,14 @@ export function createGoogleCalendar(options: GoogleCalendarOptions): CalendarPr
       const params = new URLSearchParams({ sendUpdates: 'all' });
       // Version 1 is the only one that reads conferenceData; without it the Meet request is silently ignored.
       if (input.video) params.set('conferenceDataVersion', '1');
-      const made = await api<GoogleEvent>(tokens, `/calendars/primary/events?${params.toString()}`, {
+      // The event's id comes from the request id (Google takes base32hex, which a uuid's hex digits are), so a
+      // retry after a lost answer meets 409 and reads back the event the first try made: one invitation, never two.
+      const eventId = input.requestId.toLowerCase().replace(/[^0-9a-v]/g, '');
+      const response = await call(`${CALENDAR_API}/calendars/primary/events?${params.toString()}`, {
         method: 'POST',
+        headers: { Authorization: `Bearer ${tokens.accessToken}`, 'Content-Type': 'application/json' },
         body: JSON.stringify({
+          id: eventId,
           summary: input.title,
           ...(input.description === undefined ? {} : { description: input.description }),
           ...(input.location === undefined ? {} : { location: input.location }),
@@ -382,6 +387,16 @@ export function createGoogleCalendar(options: GoogleCalendarOptions): CalendarPr
             : {}),
         }),
       });
+      if (!response.ok && response.status !== 409) {
+        throw providerError(
+          codeForStatus(response.status),
+          `Google refused the calendar call (${String(response.status)}).`,
+        );
+      }
+      const made =
+        response.status === 409
+          ? await api<GoogleEvent>(tokens, `/calendars/primary/events/${encodeURIComponent(eventId)}`)
+          : await json<GoogleEvent>(response);
       const event = eventOf(made);
       if (event === undefined) throw providerError('CALENDAR_UNAVAILABLE', 'Google made no event.');
       return event;

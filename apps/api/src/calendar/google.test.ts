@@ -238,3 +238,36 @@ describe('events in core’s shape', () => {
     expect(eventOf({ status: 'cancelled' })).toBeUndefined();
   });
 });
+
+describe('writing a booking’s event', () => {
+  const event = {
+    id: '1f5fd6241f5fd6241f5fd6241f5fd624',
+    status: 'confirmed',
+    summary: 'Intro call with Grace',
+    start: { dateTime: '2026-11-02T20:00:00Z' },
+    end: { dateTime: '2026-11-02T20:45:00Z' },
+  };
+  const input = {
+    title: 'Intro call with Grace',
+    start: '2026-11-02T20:00:00.000Z',
+    end: '2026-11-02T20:45:00.000Z',
+    timeZone: 'UTC',
+    attendees: [{ email: 'grace@navy.example' }],
+    video: false,
+    requestId: '1F5FD624-1F5F-D624-1F5F-D6241F5FD624',
+  };
+
+  it('names the event by the request id, so a retry can’t invite anyone twice', async () => {
+    const g = google([json(event)]);
+    await expect(g.provider.createEvent(TOKENS, input)).resolves.toMatchObject({ id: event.id });
+    const body = g.calls[0]?.init?.body;
+    expect(JSON.parse(typeof body === 'string' ? body : '{}')).toMatchObject({ id: event.id });
+  });
+
+  it('reads a 409 as the first try having made it, and answers that event', async () => {
+    const g = google([json({ error: { code: 409 } }, 409), json(event)]);
+    await expect(g.provider.createEvent(TOKENS, input)).resolves.toMatchObject({ id: event.id });
+    expect(g.calls[1]?.url).toContain(`/calendars/primary/events/${event.id}`);
+    expect(g.calls[1]?.init?.method).toBeUndefined();
+  });
+});

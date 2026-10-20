@@ -100,7 +100,7 @@ export interface NewEvent {
   readonly attendees: readonly { readonly email: string; readonly name?: string }[];
   /** Ask the provider for a video link (Google Meet, Microsoft Teams). */
   readonly video: boolean;
-  /** The idempotency key for the video link: the same key never makes a second one. */
+  /** The idempotency key for the event and its video link (a uuid): the same key never makes a second of either. */
   readonly requestId: string;
   readonly description?: string;
   readonly location?: string;
