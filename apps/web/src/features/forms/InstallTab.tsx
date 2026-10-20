@@ -1,9 +1,9 @@
 // Brief
-// Purpose: a form's Install tab (spec 0023, 0023-experience.md, Install tab): the three ways to use it.
-// Main task: copy the link, the embed snippet or a form of your own, and list the sites that may post.
-// Leaves out: analytics, and signing posts for a site (the site's server does that with the secret).
+// Purpose: a form's Install tab (spec 0023, Install tab): the three ways to put it in front of people, one at a time.
+// Main task: pick Link, Embed or Your own HTML, then copy what it gives; for your own HTML, list the sites that may post.
+// Leaves out: analytics, a QR code, and signing posts for a site (the site's server does that with the secret).
 import type { FormView } from '@crm/data';
-import { Button, Card, Field, Switch } from '@crm/ui';
+import { Button, Card, Code, Field, SegmentedControl, Switch } from '@crm/ui';
 import { useRouteContext } from '@tanstack/react-router';
 import { useState } from 'react';
 import { firstRefusal } from './refusals.ts';
@@ -18,13 +18,16 @@ export interface InstallTabProps {
   readonly onFormChange: (view: FormView) => void;
 }
 
-/** Three Cards: Share a link, Embed on your site, Your own form. */
+type Way = 'link' | 'embed' | 'own';
+
+/** One Card to share the form (Link, Embed, Your own HTML), and for your own HTML the sites that may post. */
 export function InstallTab({ slug, form, isReadOnly, onFormChange }: InstallTabProps) {
   const { data, toasts } = useRouteContext({ from: '__root__' });
   const link = data.forms.hostedUrl(form.publicKey);
   const script = data.forms.embedUrl();
   const embed = embedSnippet(script, form.publicKey, (form.live ?? form.draft).headline);
   const own = ownFormHtml(form, script);
+  const [way, setWay] = useState<Way>('link');
   const [sites, setSites] = useState(form.allowedOrigins.join('\n'));
   const [sitesError, setSitesError] = useState<string | undefined>(undefined);
 
@@ -46,57 +49,84 @@ export function InstallTab({ slug, form, isReadOnly, onFormChange }: InstallTabP
     );
   };
 
+  const siteCount = form.allowedOrigins.length;
+
   return (
     <>
-      <Card
-        title={strings.shareLink}
-        description={strings.shareLinkText}
-        actions={
-          <Button
-            icon="external-link"
-            onPress={() => {
-              window.open(link, '_blank', 'noopener');
-            }}
-          >
-            {strings.openLink}
-          </Button>
-        }
-      >
-        <Field label={strings.link} variant="copy" copyLabel={strings.copyLink} value={link} />
-      </Card>
-      <Card title={strings.embed} description={strings.embedText}>
-        <Field label={strings.embedSnippet} variant="copy" isMultiline copyLabel={strings.copyEmbed} value={embed} />
-      </Card>
-      <Card title={strings.ownForm} description={strings.ownFormText}>
-        <Field label={strings.ownFormSnippet} variant="copy" isMultiline copyLabel={strings.copyFormHtml} value={own} />
-        <Field
-          label={strings.sites}
-          hint={strings.sitesHint}
-          isMultiline
-          value={sites}
-          isReadOnly={isReadOnly}
-          onChange={(text) => {
-            setSites(text);
-            setSitesError(undefined);
-          }}
-          onBlur={saveSites}
-          {...(sitesError === undefined ? {} : { error: sitesError })}
-        />
-        <Switch
-          label={strings.refuseUnsigned}
-          description={strings.refuseUnsignedHint}
-          isSelected={form.requireSignature}
-          isReadOnly={isReadOnly}
-          onChange={(requireSignature) => {
-            data.forms.updateSettings(slug, form.id, { requireSignature }).then(onFormChange, (error: unknown) => {
-              toasts.toast({ tone: 'danger', message: firstRefusal(error).message });
-            });
+      <Card title={strings.shareTitle} description={strings.wayText[way]}>
+        <SegmentedControl
+          label={strings.shareHow}
+          segments={[
+            { value: 'link', label: strings.wayLink },
+            { value: 'embed', label: strings.wayEmbed },
+            { value: 'own', label: strings.wayOwn },
+          ]}
+          value={way}
+          onChange={(next) => {
+            if (next === 'link' || next === 'embed' || next === 'own') setWay(next);
           }}
         />
-        {form.signingSecret !== undefined && (
-          <Field label={strings.secret} variant="copy" copyLabel={strings.copySecret} value={form.signingSecret} />
+        {way === 'link' && (
+          <>
+            <Field label={strings.link} variant="copy" copyLabel={strings.copyLink} value={link} />
+            <Button
+              icon="external-link"
+              onPress={() => {
+                window.open(link, '_blank', 'noopener');
+              }}
+            >
+              {strings.openLink}
+            </Button>
+          </>
+        )}
+        {way === 'embed' && (
+          <Code variant="block" copyLabel={strings.copyEmbed}>
+            {embed}
+          </Code>
+        )}
+        {way === 'own' && (
+          <Code variant="block" isClamped copyLabel={strings.copyHtml}>
+            {own}
+          </Code>
         )}
       </Card>
+      {way === 'own' && (
+        <Card title={strings.sites} description={siteCount === 0 ? strings.noSitesYet : strings.siteCount(siteCount)}>
+          <Field
+            label={strings.sitesLabel}
+            hint={strings.sitesHint}
+            isMultiline
+            value={sites}
+            isReadOnly={isReadOnly}
+            onChange={(text) => {
+              setSites(text);
+              setSitesError(undefined);
+            }}
+            onBlur={saveSites}
+            {...(sitesError === undefined ? {} : { error: sitesError })}
+          />
+          <Switch
+            label={strings.refuseUnsigned}
+            description={strings.refuseUnsignedHint}
+            isSelected={form.requireSignature}
+            isReadOnly={isReadOnly}
+            onChange={(requireSignature) => {
+              data.forms.updateSettings(slug, form.id, { requireSignature }).then(onFormChange, (error: unknown) => {
+                toasts.toast({ tone: 'danger', message: firstRefusal(error).message });
+              });
+            }}
+          />
+          {form.signingSecret !== undefined && (
+            <Field
+              label={strings.secret}
+              variant="copy"
+              copyLabel={strings.copySecret}
+              hint={strings.secretReason}
+              value={form.signingSecret}
+            />
+          )}
+        </Card>
+      )}
     </>
   );
 }

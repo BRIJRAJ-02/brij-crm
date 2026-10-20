@@ -20,12 +20,15 @@ import {
   Panel,
   RecordChip,
   RelativeTime,
+  SectionBar,
   Select,
   Table,
-  Toolbar,
-  Badge,
+  Link,
+  TruncatedText,
   type TableColumn,
 } from '@crm/ui';
+// eslint-disable-next-line no-restricted-imports -- a submission's state, not an attribute value
+import { StatusDot } from '@crm/ui';
 import { useNavigate, useRouter, useRouteContext } from '@tanstack/react-router';
 import { useState } from 'react';
 import { recordLinks } from '../records/timeline.ts';
@@ -51,7 +54,18 @@ const COLUMNS: readonly TableColumn[] = [
 ];
 
 const ALL = 'all';
-const FILTERS: readonly SubmissionState[] = ['processed', 'spam', 'needs_review', 'failed'];
+const FILTERS: readonly SubmissionState[] = ['processed', 'needs_review', 'spam', 'failed'];
+
+/** Each state's dot: filed green, a look needed orange, failed red, the rest gray. */
+const STATE_HUES = {
+  received: 'gray',
+  processing: 'gray',
+  processed: 'green',
+  spam: 'gray',
+  held: 'gray',
+  needs_review: 'orange',
+  failed: 'red',
+} as const satisfies Record<SubmissionState, 'gray' | 'green' | 'orange' | 'red'>;
 
 /** An answer as words: text, Yes or No, a phone's number. */
 function answerText(answer: SubmissionAnswer): string {
@@ -154,41 +168,40 @@ export function SubmissionsTab({ slug, formId, objects, page, state, open, canMa
         return <RecordChip display={record} {...(href === undefined ? {} : { href })} isFlat />;
       }
       case 'state':
-        return (
-          <Badge
-            text={strings.states[submission.state]}
-            tone={submission.state === 'processed' ? 'accent' : 'neutral'}
-          />
-        );
+        return <StatusDot hue={STATE_HUES[submission.state]}>{strings.states[submission.state]}</StatusDot>;
       default:
-        return submission.firstAnswers
-          .map(answerText)
-          .filter((text) => text !== '')
-          .join(' · ');
+        // "Label: answer" pairs on one line, cut to the cell, the whole line in a tooltip when cut.
+        return (
+          <TruncatedText>
+            {submission.firstAnswers
+              .map((answer) => [answer.label, answerText(answer)] as const)
+              .filter(([, text]) => text !== '')
+              .map(([label, text]) => `${label}: ${text}`)
+              .join(' · ')}
+          </TruncatedText>
+        );
     }
   };
 
   return (
     <>
-      {/* Five states are too many for segments (two to four): a filter Select, as Trash's object filter. */}
-      <Toolbar label={strings.filterLabel}>
-        <Select
-          label={strings.filterStates}
-          isLabelHidden
-          size="sm"
-          items={[
-            { id: ALL, label: strings.allStates },
-            ...FILTERS.map((each) => ({ id: each, label: strings.states[each] })),
-          ]}
-          value={state ?? ALL}
-          onChange={(value) => {
-            go(
-              undefined,
-              FILTERS.find((each) => each === value),
-            );
-          }}
-        />
-      </Toolbar>
+      <SectionBar
+        start={
+          // A Select, not segments: five states fit any width, and more can join.
+          <Select
+            label={strings.filterStates}
+            size="sm"
+            items={[
+              { id: ALL, label: strings.allStates },
+              ...FILTERS.map((each) => ({ id: each, label: strings.states[each] })),
+            ]}
+            value={state ?? ALL}
+            onChange={(value) => {
+              go(undefined, value === null || value === ALL ? undefined : (value as SubmissionState));
+            }}
+          />
+        }
+      />
       <Table
         label={strings.tabSubmissions}
         columns={COLUMNS}
@@ -199,7 +212,13 @@ export function SubmissionsTab({ slug, formId, objects, page, state, open, canMa
           go(id);
         }}
         emptyState={
-          <EmptyState icon="inbox" title={state === undefined ? strings.noSubmissions : strings.noneInState} />
+          <EmptyState
+            icon="inbox"
+            title={state === undefined ? strings.noSubmissions : strings.noneIn[state]}
+            {...(state === undefined
+              ? { actions: <Link href={formHref(slug, formId, 'install')}>{strings.goToInstall}</Link> }
+              : {})}
+          />
         }
       />
       {held.next !== undefined && (

@@ -9,7 +9,7 @@ import { useNavigate, useRouteContext } from '@tanstack/react-router';
 import { useState } from 'react';
 import { CapturesList } from '../captures/CapturesList.tsx';
 import { pageEditorHref, publicBookingUrl } from './links.ts';
-import { NewPagePanel } from './NewPagePanel.tsx';
+import { NewPageDialog } from './NewPageDialog.tsx';
 import { strings } from './strings.ts';
 
 /** Props for the list: the data layer, whose held list of pages the route loaded. */
@@ -153,7 +153,7 @@ export function LinksScreen({ data, slug }: LinksScreenProps) {
       }}
       dialogs={
         <>
-          <NewPagePanel
+          <NewPageDialog
             data={data}
             slug={slug}
             isOpen={isCreating}

@@ -25,7 +25,7 @@ function slugOf(title: string): string {
 }
 
 /** Props for the dialog. */
-export interface NewPagePanelProps {
+export interface NewPageDialogProps {
   readonly data: DataLayer;
   readonly slug: string;
   readonly isOpen: boolean;
@@ -34,7 +34,7 @@ export interface NewPagePanelProps {
 }
 
 /** The dialog: Title, Address, Duration, Hours, then Cancel or Continue. The id is minted once per opening, so a retry makes one page. */
-export function NewPagePanel({ data, slug, isOpen, onClose, onCreated }: NewPagePanelProps) {
+export function NewPageDialog({ data, slug, isOpen, onClose, onCreated }: NewPageDialogProps) {
   const [title, setTitle] = useState('');
   const [address, setAddress] = useState<string | undefined>(undefined);
   const [durations, setDurations] = useState<readonly Duration[]>([30]);

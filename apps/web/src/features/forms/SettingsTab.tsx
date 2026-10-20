@@ -1,11 +1,15 @@
 // Brief
-// Purpose: a form's Settings tab (spec 0023, 0023-experience.md, Settings tab): the basics, what happens after someone sends it, who handles the leads.
-// Main task: change the words a visitor sees (into the draft, live on Publish) and the settings that apply at once (name, address, owner).
-// Leaves out: round robin (#58), booking pages (#59; Offer a meeting waits for them), the look (beside the preview).
+// Purpose: a form's Settings tab (spec 0023, Settings tab), laid out as a settings page (spec 0026): one Card per group,
+// each with a live summary of what it holds.
+// Main task: change the words a visitor sees (into the draft: the preview beside shows them at once, live on Publish),
+// what happens after someone sends it, and the settings that apply at once (name, address, owner).
+// Leaves out: offering a meeting after a send (#59, shown once booking pages on forms work), round robin (#58), the
+// look (beside the preview).
 import type { FormDocument, FormView, MemberSummary } from '@crm/data';
-import { Card, Checkbox, Field, Select } from '@crm/ui';
+import { Card, Field, Radio, RadioGroup, Select } from '@crm/ui';
 import { useRouteContext } from '@tanstack/react-router';
 import { useState } from 'react';
+import { sameDocument } from './draft.ts';
 import { firstRefusal } from './refusals.ts';
 import { strings } from './strings.ts';
 
@@ -22,38 +26,97 @@ export interface SettingsTabProps {
 
 const NOBODY = 'nobody';
 
-/** Three Cards: The basics, After someone sends it, Who handles the leads. */
+/** A web address without its scheme, for a summary ("acme.com/thanks"). */
+function shortUrl(url: string): string {
+  return url.replace(/^https?:\/\//, '').replace(/\/$/, '');
+}
+
+/** Four Cards: Name and address, What visitors see, After someone sends it, Who handles the leads. */
 export function SettingsTab({ slug, form, draft, members, isReadOnly, onDraftChange, onFormChange }: SettingsTabProps) {
   const { data, toasts } = useRouteContext({ from: '__root__' });
   const [name, setName] = useState(form.name);
   const [address, setAddress] = useState(form.publicKey);
   const [addressError, setAddressError] = useState<string | undefined>(undefined);
+  const [nameError, setNameError] = useState<string | undefined>(undefined);
+  // What each after send choice last held, so switching back and forth keeps what was typed.
+  const [kept, setKept] = useState<{ readonly message: string; readonly url: string }>({
+    message: draft.after.kind === 'message' ? draft.after.message : '',
+    url: draft.after.kind === 'redirect' ? draft.after.url : 'https://',
+  });
 
   /** A setting that applies at once: saved on blur, a toast only when it fails. */
-  const apply = (settings: Parameters<typeof data.forms.updateSettings>[2], onRefused?: (message: string) => void) => {
-    data.forms.updateSettings(slug, form.id, settings).then(onFormChange, (error: unknown) => {
-      const { message } = firstRefusal(error);
-      if (onRefused === undefined) toasts.toast({ tone: 'danger', message: `${strings.settingsFailed} ${message}` });
-      else onRefused(message);
-    });
+  const apply = (
+    settings: Parameters<typeof data.forms.updateSettings>[2],
+    onRefused?: (message: string) => void,
+    onDone?: () => void,
+  ) => {
+    data.forms.updateSettings(slug, form.id, settings).then(
+      (view) => {
+        onFormChange(view);
+        onDone?.();
+      },
+      (error: unknown) => {
+        const { message } = firstRefusal(error);
+        if (onRefused === undefined) toasts.toast({ tone: 'danger', message: `${strings.settingsFailed} ${message}` });
+        else onRefused(message);
+      },
+    );
   };
 
   const after = draft.after;
-  const isRedirect = after.kind === 'redirect';
+  const live = form.live;
+  // Whether what a visitor sees differs from the live form: then it waits for Publish.
+  const seenChanged =
+    live !== undefined &&
+    (draft.headline !== live.headline ||
+      (draft.subheading ?? '') !== (live.subheading ?? '') ||
+      draft.buttonText !== live.buttonText);
+  const afterChanged = live !== undefined && !sameDocument({ ...draft, after }, { ...draft, after: live.after });
+  const owner = members.find((member) => member.id === form.ownerMemberId)?.name;
 
   return (
     <>
-      <Card title={strings.basics} description={strings.draftNote}>
+      <Card title={strings.nameAndAddress} description={data.forms.hostedUrl(form.publicKey)}>
         <Field
           label={strings.name}
+          hint={strings.nameHint}
           value={name}
           maxLength={80}
+          isRequired
           isReadOnly={isReadOnly}
-          onChange={setName}
-          onBlur={() => {
-            if (name.trim() !== '' && name.trim() !== form.name) apply({ name: name.trim() });
+          onChange={(text) => {
+            setName(text);
+            setNameError(undefined);
           }}
+          onBlur={() => {
+            if (name.trim() === '') setNameError(strings.nameRequired);
+            else if (name.trim() !== form.name) apply({ name: name.trim() }, setNameError);
+          }}
+          {...(nameError === undefined ? {} : { error: nameError })}
         />
+        <Field
+          label={strings.address}
+          prefix="/f/"
+          hint={strings.addressChangeWarning}
+          value={address}
+          maxLength={40}
+          isRequired
+          isReadOnly={isReadOnly}
+          onChange={(text) => {
+            setAddress(text.toLowerCase());
+            setAddressError(undefined);
+          }}
+          onBlur={() => {
+            if (address !== form.publicKey) {
+              apply({ slug: address }, setAddressError, () => {
+                toasts.toast({ tone: 'success', message: strings.addressChanged });
+              });
+            }
+          }}
+          {...(addressError === undefined ? {} : { error: addressError })}
+        />
+      </Card>
+      <Card title={strings.whatVisitorsSee} description={seenChanged ? strings.waitsForPublish : strings.liveNow}>
         <Field
           label={strings.headline}
           placeholder={strings.headlineDefault}
@@ -65,30 +128,13 @@ export function SettingsTab({ slug, form, draft, members, isReadOnly, onDraftCha
           }}
         />
         <Field
-          label={strings.subheading}
-          hint={strings.subheadingHint}
+          label={strings.subheadingOptional}
           value={draft.subheading ?? ''}
           maxLength={240}
           isReadOnly={isReadOnly}
           onChange={(subheading) => {
             onDraftChange((before) => ({ ...before, subheading }));
           }}
-        />
-        <Field
-          label={strings.address}
-          prefix="/f/"
-          hint={strings.addressChangeWarning}
-          value={address}
-          maxLength={40}
-          isReadOnly={isReadOnly}
-          onChange={(text) => {
-            setAddress(text.toLowerCase());
-            setAddressError(undefined);
-          }}
-          onBlur={() => {
-            if (address !== form.publicKey) apply({ slug: address }, setAddressError);
-          }}
-          {...(addressError === undefined ? {} : { error: addressError })}
         />
         <Field
           label={strings.buttonText}
@@ -101,49 +147,72 @@ export function SettingsTab({ slug, form, draft, members, isReadOnly, onDraftCha
           }}
         />
       </Card>
-      <Card title={strings.afterSent}>
-        <Checkbox
-          label={strings.sendToAddress}
-          isSelected={isRedirect}
+      <Card
+        title={strings.afterSent}
+        description={[
+          after.kind === 'message'
+            ? strings.showsMessage
+            : shortUrl(after.url) === ''
+              ? strings.noAddressYet
+              : strings.sendsTo(shortUrl(after.url)),
+          afterChanged ? strings.waitsForPublish : '',
+        ]
+          .filter((part) => part !== '')
+          .join(' · ')}
+      >
+        <RadioGroup
+          label={strings.afterChoice}
+          orientation="horizontal"
+          value={after.kind}
           isReadOnly={isReadOnly}
-          onChange={(redirect) => {
+          onChange={(kind) => {
+            if (kind === after.kind) return;
+            // Keep what the other choice held, then bring back what this one held.
+            setKept((before) =>
+              after.kind === 'message' ? { ...before, message: after.message } : { ...before, url: after.url },
+            );
             onDraftChange((before) => ({
               ...before,
-              after: redirect ? { kind: 'redirect', url: 'https://' } : { kind: 'message', message: '' },
+              after:
+                kind === 'redirect' ? { kind: 'redirect', url: kept.url } : { kind: 'message', message: kept.message },
             }));
           }}
-        />
+        >
+          <Radio value="message">{strings.showMessage}</Radio>
+          <Radio value="redirect">{strings.sendToAddress}</Radio>
+        </RadioGroup>
         {after.kind === 'redirect' ? (
           <Field
             label={strings.redirectUrl}
             hint={strings.redirectHint}
             type="url"
             value={after.url}
+            isRequired
             isReadOnly={isReadOnly}
             onChange={(url) => {
               onDraftChange((before) => ({ ...before, after: { kind: 'redirect', url } }));
             }}
           />
         ) : (
-          <>
-            <Field
-              label={strings.thankYou}
-              hint={strings.thankYouHint}
-              placeholder={strings.thankYouDefault}
-              isMultiline
-              value={after.message}
-              maxLength={2_000}
-              isReadOnly={isReadOnly}
-              onChange={(message) => {
-                onDraftChange((before) => ({ ...before, after: { kind: 'message', message } }));
-              }}
-            />
-            <Checkbox label={strings.offerMeeting} description={strings.offerMeetingSoon} isDisabled />
-            <Select label={strings.whichBookingPage} items={[]} placeholder={strings.chooseBookingPage} isDisabled />
-          </>
+          <Field
+            label={strings.thankYou}
+            hint={strings.thankYouHint}
+            placeholder={strings.thankYouDefault}
+            isMultiline
+            showCounter
+            value={after.message}
+            maxLength={2_000}
+            isReadOnly={isReadOnly}
+            onChange={(message) => {
+              onDraftChange((before) => ({
+                ...before,
+                after: { ...(before.after.kind === 'message' ? before.after : {}), kind: 'message', message },
+              }));
+            }}
+          />
         )}
       </Card>
-      <Card title={strings.whoHandles}>
+      <Card title={strings.whoHandles} description={owner ?? strings.nobodyYet}>
         <Select
           label={strings.owner}
           hint={strings.ownerHint}

@@ -1,4 +1,7 @@
-/* Code: mono text-code on the sunken surface with a hairline edge. */
+/* Code: mono text-code on the sunken surface with a hairline edge. Inline, a
+   chip in a line of text. Block, a snippet in its own box (radius-md,
+   space-12 in), lines kept and wrapped, Copy on a row at its top end; clamped, it holds
+   eight lines and fades out its foot until "Show all". */
 @layer components {
   .root {
     padding-inline: var(--space-4);
@@ -18,8 +21,50 @@
     max-inline-size: 100%;
   }
 
+  .block {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: var(--space-4);
+    min-inline-size: 0;
+  }
+
+  .box {
+    box-sizing: border-box;
+    display: flex;
+    flex-direction: column;
+    inline-size: 100%;
+    border: var(--border-width-hairline) solid var(--border-subtle);
+    border-radius: var(--radius-md);
+    background: var(--surface-sunken);
+  }
+
+  /* Copy on a row of its own at the box's top end, so it never covers a line of the snippet. */
+  .copy {
+    display: flex;
+    justify-content: flex-end;
+    padding: var(--space-4) var(--space-4) 0;
+  }
+
+  .pre {
+    margin: 0;
+    padding: 0 var(--space-12) var(--space-12);
+    color: var(--text);
+    font: var(--text-code);
+    letter-spacing: var(--tracking-code);
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+  }
+
+  .pre[data-clamped] {
+    overflow: hidden;
+    max-block-size: calc(var(--space-16) * 8 + var(--space-12));
+    mask-image: linear-gradient(to bottom, var(--surface) calc(100% - var(--space-32)), transparent);
+  }
+
   @media (forced-colors: active) {
-    .root {
+    .root,
+    .box {
       border-color: CanvasText;
     }
   }
