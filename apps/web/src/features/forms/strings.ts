@@ -88,8 +88,8 @@ export const strings = {
   light: 'Light',
   dark: 'Dark',
   corners: 'Corners',
-  rounded: 'Rounded',
-  square: 'Square',
+  rounded: 'Rounded corners',
+  square: 'Square corners',
 
   // Questions
   questions: 'Questions',

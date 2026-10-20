@@ -82,10 +82,28 @@
     gap: var(--space-12);
   }
 
-  .controls {
-    display: grid;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
+  /* The preview's header row: its heading, then the look's Selects at the
+     end, as tall as the body's first header so the two columns line up. */
+  .previewHead {
+    display: flex;
+    flex-wrap: wrap;
     gap: var(--space-8);
+    align-items: center;
+    min-block-size: var(--size-input);
+  }
+
+  .previewHeading {
+    flex: 1;
+    margin: 0;
+    color: var(--text);
+    font: var(--text-title);
+    letter-spacing: var(--tracking-title);
+  }
+
+  .controls {
+    display: flex;
+    gap: var(--space-8);
+    align-items: center;
   }
 
   .frame {

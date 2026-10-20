@@ -1,4 +1,4 @@
-import { useLayoutEffect, useRef, useState, type ReactNode } from 'react';
+import { useId, useLayoutEffect, useRef, useState, type ReactNode } from 'react';
 import { Disclosure } from '../../molecules/Disclosure/Disclosure.tsx';
 import styles from './FormEditorLayout.module.css';
 import { strings } from './strings.ts';
@@ -23,7 +23,11 @@ export interface FormEditorLayoutProps {
   readonly notices?: ReactNode;
   /** The live preview, sticky in a 400px column beside the body; under it, in "Show preview", when they don't both fit. */
   readonly preview?: ReactNode;
-  /** Above the preview: the look's Selects. */
+  /**
+   * The look's Selects (Colour, Corners), at the end of the preview's header
+   * row beside its "Preview" heading, level with the body's first header.
+   * Give them hidden labels and `size="sm"`; their values say what they set.
+   */
   readonly previewControls?: ReactNode;
   /** The tab's content: the questions, the settings, the install cards, the submissions. */
   readonly children: ReactNode;
@@ -61,6 +65,7 @@ export function FormEditorLayout({
   children,
 }: FormEditorLayoutProps) {
   const rootRef = useRef<HTMLDivElement>(null);
+  const previewHeadingId = useId();
   const [isWide, setWide] = useState(true);
 
   useLayoutEffect(() => {
@@ -77,9 +82,19 @@ export function FormEditorLayout({
     };
   }, []);
 
+  // Beside the body, the preview's header names it; under it, in "Show preview", the Disclosure already does.
   const previewBody = (
     <div className={styles.preview}>
-      {previewControls !== undefined && <div className={styles.controls}>{previewControls}</div>}
+      {(isWide || previewControls !== undefined) && (
+        <div className={styles.previewHead}>
+          {isWide && (
+            <h2 className={styles.previewHeading} id={previewHeadingId}>
+              {strings.preview}
+            </h2>
+          )}
+          {previewControls !== undefined && <div className={styles.controls}>{previewControls}</div>}
+        </div>
+      )}
       <div className={styles.frame}>{preview}</div>
     </div>
   );
@@ -93,7 +108,7 @@ export function FormEditorLayout({
       <div className={styles.body} data-columns={(preview !== undefined && isWide) || undefined}>
         <div className={styles.main}>{children}</div>
         {preview !== undefined && isWide && (
-          <aside className={styles.aside} aria-label={strings.preview}>
+          <aside className={styles.aside} aria-labelledby={previewHeadingId}>
             {previewBody}
           </aside>
         )}

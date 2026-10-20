@@ -58,12 +58,13 @@ export const Default: Story = {
     ),
     previewControls: (
       <>
-        <Select label="Colour" items={LOOK} defaultValue="light" size="sm" />
+        <Select label="Colour" isLabelHidden items={LOOK} defaultValue="light" size="sm" />
         <Select
           label="Corners"
+          isLabelHidden
           items={[
-            { id: 'rounded', label: 'Rounded' },
-            { id: 'square', label: 'Square' },
+            { id: 'rounded', label: 'Rounded corners' },
+            { id: 'square', label: 'Square corners' },
           ]}
           defaultValue="rounded"
           size="sm"
@@ -75,6 +76,9 @@ export const Default: Story = {
   play: async ({ canvas }) => {
     await expect(canvas.getByText('Published · v7')).toBeInTheDocument();
     await expect(canvas.getByRole('complementary', { name: 'Preview' })).toBeInTheDocument();
+    // The preview's header names it, with the look's Selects at its end.
+    await expect(canvas.getByRole('heading', { name: 'Preview', level: 2 })).toBeInTheDocument();
+    await expect(canvas.getByRole('button', { name: /Rounded corners/ })).toBeInTheDocument();
   },
 };
 

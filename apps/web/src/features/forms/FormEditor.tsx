@@ -461,11 +461,12 @@ export function FormEditor(props: FormEditorProps) {
                     <>
                       <Select
                         label={strings.colour}
+                        isLabelHidden
                         size="sm"
                         isReadOnly={!canManage}
                         items={[
-                          { id: 'light', label: strings.light },
-                          { id: 'dark', label: strings.dark },
+                          { id: 'light', label: strings.light, icon: 'sun' },
+                          { id: 'dark', label: strings.dark, icon: 'moon' },
                         ]}
                         value={draft.look.colour}
                         onChange={(colour) => {
@@ -476,6 +477,7 @@ export function FormEditor(props: FormEditorProps) {
                       />
                       <Select
                         label={strings.corners}
+                        isLabelHidden
                         size="sm"
                         isReadOnly={!canManage}
                         items={[

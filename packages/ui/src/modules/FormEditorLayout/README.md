@@ -13,7 +13,7 @@ New. The builder (spec 0023, `0023-experience.md`, The editor: layout) opens ful
   status={{ tone: 'changed', text: 'Published · Unpublished changes' }}
   tabs={<SegmentedControl … />}
   notices={problem && <Callout tone="danger">{problem}</Callout>}
-  previewControls={<><Select label="Colour" … /><Select label="Corners" … /></>}
+  previewControls={<><Select label="Colour" isLabelHidden size="sm" … /><Select label="Corners" isLabelHidden size="sm" … /></>}
   preview={<HostedFormPreview form={previewOf(draft)} />}
 >
   <QuestionList … />
@@ -22,6 +22,7 @@ New. The builder (spec 0023, `0023-experience.md`, The editor: layout) opens ful
 
 - `status.tone`: `live` (success dot), `changed` (warning dot), `draft` and `paused` (hollow dot).
 - Two columns from 880px of its own width; under that the preview sits in a Disclosure under the body. The width is measured, since a Disclosure can't be switched on and off by a container query.
+- Beside the body, the preview has its own header row, level with the body's first header: a "Preview" heading (which names the column) and, at its end, `previewControls`, the look's compact Selects with hidden labels and values that say what they set ("Light", "Rounded corners"). Under the body, in "Show preview", the controls sit alone above the frame. Why: the Selects sat over the frame with no heading, and did not read as the preview's settings (owner feedback F27, 20 October 2026).
 - Leave `tabs` out for a form that was never published, and `preview` out on tabs that have none.
 - `actions` puts a page's own action at the top end (the forms list's New form, which sits under the Captures tabs with no TopBar of its own).
 - `FormEditorStatus` is the status line on its own, for the TopBar's meta beside the form's name, so the header stays one line; the editor passes no `status` to the layout then.
