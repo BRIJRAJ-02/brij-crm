@@ -200,6 +200,20 @@ export function QuestionsSection(props: QuestionsSectionProps) {
           />
         );
       }}
+      renderFooterStart={(id) => {
+        const question = draft.questions.find((each) => each.id === id);
+        if (question === undefined) return null;
+        return (
+          <Checkbox
+            label={strings.mustAnswer}
+            isSelected={question.required}
+            isReadOnly={isReadOnly}
+            onChange={(required) => {
+              onChange((before) => changeQuestion(before, id, { required }, liveIds));
+            }}
+          />
+        );
+      }}
       renderFooter={(id) => {
         const question = draft.questions.find((each) => each.id === id);
         if (question === undefined || isReadOnly) return null;
@@ -351,14 +365,6 @@ function QuestionEditor({
         isReadOnly={isReadOnly || isLocked}
         onChange={(id) => {
           onChange({ filedOn: id === null || id === 'none' ? null : id });
-        }}
-      />
-      <Checkbox
-        label={strings.mustAnswer}
-        isSelected={question.required}
-        isReadOnly={isReadOnly}
-        onChange={(required) => {
-          onChange({ required });
         }}
       />
     </>

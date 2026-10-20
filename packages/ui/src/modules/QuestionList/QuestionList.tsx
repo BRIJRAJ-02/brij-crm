@@ -32,6 +32,8 @@ export interface QuestionListProps {
   readonly actions?: ReactNode;
   /** An open card's footer, at its end: Duplicate and Delete. */
   readonly renderFooter?: (id: string) => ReactNode;
+  /** An open card's footer, at its start, on the same row: a choice that closes the editor, such as Required. */
+  readonly renderFooterStart?: (id: string) => ReactNode;
   readonly items: readonly QuestionListItem[];
   /** The questions shown open. */
   readonly openIds: ReadonlySet<string>;
@@ -61,6 +63,7 @@ export function QuestionList({
   onMove,
   actions,
   renderFooter,
+  renderFooterStart,
 }: QuestionListProps) {
   const [said, setSaid] = useState('');
   const headingId = useId();
@@ -106,7 +109,7 @@ export function QuestionList({
         aria-label={label}
         items={items}
         // Rows draw again when what they show beside their item changes: which are open, and their editors.
-        dependencies={[openIds, renderOpen, renderFooter]}
+        dependencies={[openIds, renderOpen, renderFooter, renderFooterStart]}
         className={styles.list}
         keyboardNavigationBehavior="tab"
         {...(onMove === undefined ? {} : { dragAndDropHooks })}
@@ -158,7 +161,7 @@ export function QuestionList({
               {isOpen && (
                 <div className={styles.body}>
                   {renderOpen(item.id)}
-                  {renderFooter !== undefined && <div className={styles.footer}>{renderFooter(item.id)}</div>}
+                  <Footer start={renderFooterStart?.(item.id)} end={renderFooter?.(item.id)} />
                 </div>
               )}
             </GridListItem>
@@ -169,5 +172,17 @@ export function QuestionList({
         <span role="status">{said}</span>
       </VisuallyHidden>
     </section>
+  );
+}
+
+/** An open card's last row: what `renderFooterStart` gives at its start, the card's actions at its end; nothing when both are empty. */
+function Footer({ start, end }: { readonly start: ReactNode; readonly end: ReactNode }) {
+  const isEmpty = (node: ReactNode) => node === undefined || node === null || node === false;
+  if (isEmpty(start) && isEmpty(end)) return null;
+  return (
+    <div className={styles.footer}>
+      <span className={styles.footerStart}>{start}</span>
+      {!isEmpty(end) && <span className={styles.footerEnd}>{end}</span>}
+    </div>
   );
 }

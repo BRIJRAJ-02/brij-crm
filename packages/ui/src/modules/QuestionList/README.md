@@ -23,10 +23,11 @@ New. The form builder (spec 0023, `0023-experience.md`, Questions) needs cards t
 - Reorder by the handle, with a drop line, or by the keyboard: focus the handle, Enter to pick up, arrows to move, Enter to drop, Esc to cancel. Each move is announced: "Budget, moved to position 3 of 6".
 - `hasProblem` marks the card a publish refused; the caller keeps it open until it is fixed.
 - Without `onMove` the list is read only and shows no handles.
+- An open card ends in a footer row under a hairline: `renderFooter` puts the card's actions (Duplicate, Delete) at its end, and `renderFooterStart` a closing choice at its start on the same line (the form builder's "Visitors must answer"). Why a slot: the actions alone sat in an empty corner under the last field (owner feedback F27, 20 October 2026).
 
 ## States
 
-- Closed (the default), open (its editor under a hairline, Duplicate and Delete at the end), refused (`hasProblem`: the danger border and "Needs a fix"), untitled ("Untitled question", muted), dragging (faded, with the drop line), and read only (no handles).
+- Closed (the default), open (its editor under a hairline, then its footer row: a choice at the start, Duplicate and Delete at the end), refused (`hasProblem`: the danger border and "Needs a fix"), untitled ("Untitled question", muted), dragging (faded, with the drop line), and read only (no handles).
 - No questions: the header alone, with its count at 0 and its actions.
 
 ## Keyboard

@@ -36,11 +36,28 @@
     margin-inline-start: auto;
   }
 
-  /* An open card's Duplicate and Delete, at the end of its body. */
+  /* An open card's last row, under a hairline: a closing choice (Required)
+     at its start, Duplicate and Delete at its end, on one line. */
   .footer {
     display: flex;
+    gap: var(--space-8);
+    align-items: center;
+    padding-block-start: var(--space-8);
+    border-block-start: var(--border-width-hairline) solid var(--border-subtle);
+  }
+
+  .footerStart {
+    display: flex;
+    flex: 1;
+    align-items: center;
+    min-inline-size: 0;
+  }
+
+  .footerEnd {
+    display: flex;
+    flex: none;
     gap: var(--space-4);
-    justify-content: flex-end;
+    align-items: center;
   }
 
   .list {

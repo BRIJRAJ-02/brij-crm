@@ -1,6 +1,8 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
 import { useState } from 'react';
 import { expect, userEvent, waitFor } from 'storybook/test';
+import { Button } from '../../atoms/Button/Button.tsx';
+import { Checkbox } from '../../atoms/Checkbox/Checkbox.tsx';
 import { Field } from '../../molecules/Field/Field.tsx';
 import { Stage } from '../../workbench/Stage/Stage.tsx';
 import { QuestionList, type QuestionListItem } from './QuestionList.tsx';
@@ -55,6 +57,24 @@ function SampleQuestions({ initialOpen = [], isReadOnly = false, withProblem = f
             }}
           />
         )}
+        renderFooterStart={(id) => (
+          <Checkbox
+            label="Visitors must answer"
+            isSelected={items.find((item) => item.id === id)?.isRequired ?? false}
+            isReadOnly={isReadOnly}
+            onChange={(isRequired) => {
+              setItems((before) => before.map((item) => (item.id === id ? { ...item, isRequired } : item)));
+            }}
+          />
+        )}
+        renderFooter={() =>
+          isReadOnly ? null : (
+            <>
+              <Button variant="ghost" icon="copy" label="Duplicate" />
+              <Button variant="ghost-danger" icon="trash" label="Delete" />
+            </>
+          )
+        }
         {...(isReadOnly
           ? {}
           : {
@@ -104,9 +124,13 @@ export const Opening: Story = {
   },
 };
 
-/** One card open, its editor under the header. */
+/** One card open, its editor under the header, and its footer row: Required at the start, Duplicate and Delete at the end. */
 export const OneOpen: Story = {
   args: { initialOpen: ['email'] },
+  play: async ({ canvas }) => {
+    await expect(canvas.getByRole('checkbox', { name: 'Visitors must answer' })).toBeChecked();
+    await expect(canvas.getByRole('button', { name: 'Duplicate' })).toBeInTheDocument();
+  },
 };
 
 /** A question a publish refused: marked, with the danger border. */
