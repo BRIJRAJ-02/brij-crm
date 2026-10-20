@@ -18,6 +18,8 @@ New. Settings lists (#23, #25, #34, #35, #42) are short and need columns, a row 
 - A column with `isInline` lays its cells out as one centred line of pieces `space-6` apart: a tile before a name, several Badges side by side.
 - `isLoading` shows skeleton rows through `useDelayedLoading`; `emptyState` shows with no rows.
 - `onRowAction` opens a row on Enter or a click.
+- `selected` with `onSelectedChange` adds a leading column of Checkboxes for a bulk action (a form's submissions marked spam): the header's selects every row, indeterminate while some are picked; `getSelectLabel` names each ("Select Ada Lovelace"). Pair it with BulkActionBar. Why a variant: a short list needs a bulk action now and then, and DataGrid is for records only.
+- `isHeaderSticky` keeps the header in view while the page scrolls under it, on the page surface.
 - `onReorder` makes rows movable (objects in settings, #13): a leading column holds each row's `DragHandle` (named by `getRowLabel`, "Move Projects"), and a drop calls `onReorder(id, targetId, 'before' | 'after')`; while a row is held, an accent line shows where it would land, for the pointer and the keyboard alike (`DropIndicator`), and the held row fades (`opacity-busy`, as in ViewSettings and SortBuilder). `getRowLabel` comes with it. The screen saves the move and passes the new order back as `rows`. Pair it with Move up and Move down in a row menu, so a move is one keystroke away too. Why a variant: settings lists are short Tables, and React Aria's Table takes drag and drop hooks itself; a GridList copy of the table would have duplicated its columns, header and states.
 
 ## States

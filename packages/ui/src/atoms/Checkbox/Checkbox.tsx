@@ -21,6 +21,11 @@ export interface CheckboxProps {
   /** Why it is invalid, as a sentence that says how to fix it. */
   readonly error?: string;
   readonly name?: string;
+  /**
+   * `selection` inside a selectable Table: the table then owns whether it is
+   * checked (and indeterminate, in the header), so leave those props out.
+   */
+  readonly slot?: 'selection';
   readonly value?: string;
 }
 
@@ -36,17 +41,19 @@ export function Checkbox({
   isSelected,
   defaultSelected,
   onChange,
-  isIndeterminate = false,
+  isIndeterminate,
   isDisabled = false,
   isReadOnly = false,
   error,
   name,
   value,
+  slot,
 }: CheckboxProps) {
   return (
     <CheckboxField
       className={styles.field}
-      isIndeterminate={isIndeterminate}
+      {...(isIndeterminate === undefined ? {} : { isIndeterminate })}
+      {...(slot === undefined ? {} : { slot })}
       isDisabled={isDisabled}
       isReadOnly={isReadOnly}
       isInvalid={error !== undefined}

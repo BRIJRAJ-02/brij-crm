@@ -33,6 +33,12 @@ export interface PreviewLayoutProps {
   readonly previewNote?: ReactNode;
   /** A bar pinned to the body's foot while it has something to say: the SaveBar. */
   readonly footer?: ReactNode;
+  /**
+   * `stack` (the default) stacks the body's groups; `grid` sets them in as
+   * many columns as fit, each at least the panel's width (a settings tab's
+   * Cards, side by side where there is room).
+   */
+  readonly bodyLayout?: 'stack' | 'grid';
 }
 
 /** Where an editor's subject stands, as the TopBar's status says it. */
@@ -162,6 +168,7 @@ export function PreviewLayout({
   previewControls,
   previewNote,
   footer,
+  bodyLayout = 'stack',
 }: PreviewLayoutProps) {
   // The narrow preview is drawn only while open, so its page loads on demand.
   const [isOpen, setOpen] = useState(false);
@@ -192,7 +199,7 @@ export function PreviewLayout({
         {notices}
         <div className={styles.measure}>
           <div className={styles.body} data-preview={hasPreview || undefined}>
-            <div className={styles.main}>
+            <div className={styles.main} data-layout={bodyLayout}>
               {children}
               {footer !== undefined && footer !== null && footer !== false && (
                 <div className={styles.footer}>{footer}</div>
