@@ -70,11 +70,15 @@ export interface SelectProps {
    * least a menu wide.
    */
   /**
+   * `inline` sits in a line of text, the value and its chevron with no box
+   * (a booking page's time zone in its rail); its list opens a menu wide.
+   */
+  /**
    * `prefix` is the compact trigger joined to the start of a Field's box (a
    * phone number's country code): no box of its own, a hairline after it,
    * `leading` and `short` in place of the label, and the list a menu wide.
    */
-  readonly variant?: 'default' | 'cell' | 'prefix';
+  readonly variant?: 'default' | 'cell' | 'prefix' | 'inline';
   /** The chosen option's `description` after its label in the closed field, muted (a time zone's "GMT+05:30"). */
   readonly showsDescription?: boolean;
   /** A search field over the options, for long lists such as countries. */

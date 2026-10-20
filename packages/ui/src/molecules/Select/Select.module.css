@@ -79,6 +79,37 @@
     box-shadow: none;
   }
 
+  /* Inline in a line of text (a booking page's time zone): the value and its
+     chevron as text, no box; the keyboard's focus draws the outline. */
+  .root[data-variant='inline'] {
+    align-self: flex-start;
+    min-inline-size: 0;
+    max-inline-size: 100%;
+  }
+
+  .root[data-variant='inline'] .trigger {
+    inline-size: auto;
+    max-inline-size: 100%;
+    block-size: auto;
+    padding: 0;
+    border-color: transparent;
+    background: transparent;
+    box-shadow: none;
+    color: inherit;
+    font: inherit;
+    letter-spacing: inherit;
+  }
+
+  .root[data-variant='inline'] .trigger[data-pressed] {
+    border-color: transparent;
+    box-shadow: none;
+  }
+
+  .root[data-variant='inline'] .trigger[data-focus-visible] {
+    outline: var(--border-width-thick) solid var(--accent-line);
+    outline-offset: var(--border-width-thick);
+  }
+
   /* Joined to the start of a Field's box (a phone number's code): the Field draws the box, the focus ring and
      the error edge; this draws only a hairline after itself. */
   .root[data-variant='prefix'] {

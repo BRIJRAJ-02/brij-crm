@@ -1,6 +1,6 @@
 # MonthTiles
 
-A booking page's month (spec 0025, AC-665): every day a square tile that fills its column, open days filled and read at full strength, closed days quiet, the chosen day solid accent, today with a dot. With the visitor's calendar on (spec 0028), a day holding a Best time carries a small accent mark.
+A booking page's month (spec 0025, AC-665): every day a square tile that fills its column, open days filled and read at full strength, closed days quiet, the chosen day solid ink, today with a dot. With the visitor's calendar on (spec 0028), a day holding a Best time carries a small accent mark.
 
 ## Why it exists
 

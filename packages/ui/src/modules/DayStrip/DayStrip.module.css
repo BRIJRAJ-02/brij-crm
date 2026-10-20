@@ -1,5 +1,5 @@
 /* The List view's days: a row of tiles that scrolls sideways, each its
-   weekday over its date, the chosen one solid accent like the month's. */
+   weekday over its date, the chosen one solid ink like the month's. */
 @layer components {
   .root {
     display: flex;
@@ -34,8 +34,8 @@
   }
 
   .day[aria-pressed='true'] {
-    background: var(--accent);
-    color: var(--on-accent);
+    background: var(--surface-inverse);
+    color: var(--on-inverse);
   }
 
   .day[data-best]::after {
@@ -50,7 +50,7 @@
   }
 
   .day[data-best][aria-pressed='true']::after {
-    background: var(--on-accent);
+    background: var(--on-inverse);
   }
 
   .day:focus-visible {

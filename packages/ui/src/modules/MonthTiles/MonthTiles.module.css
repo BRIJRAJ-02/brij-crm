@@ -1,6 +1,6 @@
 /* A booking page's month: square tiles that fill their columns with one even
    gap. Open days are filled and read at full strength, closed days are quiet
-   text, the chosen day is solid accent, and today carries a dot. */
+   text, the chosen day is solid ink, and today carries a dot. */
 @layer components {
   .root {
     display: flex;
@@ -92,8 +92,8 @@
   }
 
   .day[aria-pressed='true'] {
-    background: var(--accent);
-    color: var(--on-accent);
+    background: var(--surface-inverse);
+    color: var(--on-inverse);
     animation: day-pop var(--duration-popover) var(--ease-out) both;
   }
 
@@ -110,7 +110,7 @@
   }
 
   .day[data-best][aria-pressed='true']::after {
-    background: var(--on-accent);
+    background: var(--on-inverse);
   }
 
   .day:focus-visible {

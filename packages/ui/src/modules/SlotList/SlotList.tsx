@@ -1,5 +1,4 @@
-import { useEffect, useRef, type ReactNode } from 'react';
-import { Button } from '../../atoms/Button/Button.tsx';
+import type { ReactNode } from 'react';
 import { Skeleton } from '../../atoms/Skeleton/Skeleton.tsx';
 import { VisuallyHidden } from '../../atoms/VisuallyHidden/VisuallyHidden.tsx';
 import { SegmentedControl } from '../../molecules/SegmentedControl/SegmentedControl.tsx';
@@ -28,8 +27,6 @@ export interface SlotListProps {
   /** The picked time's id. */
   readonly value: string | undefined;
   readonly onChange: (id: string) => void;
-  /** Moves on with the picked time: the button that sits beside it. */
-  readonly onConfirm: () => void;
   readonly hour12: boolean;
   readonly onHour12Change: (hour12: boolean) => void;
   /** `column` (one time per row, scrolling in its pane: Month) or `grid` (two to four across: List, and phones). */
@@ -44,8 +41,7 @@ export interface SlotListProps {
 /**
  * The times of one day on a booking page (spec 0025, AC-666 to AC-669): the
  * day, the 12h or 24h switch, then the times. Picking a time never moves on;
- * the picked one splits in two, the time and Next, as calendars' booking
- * pages do, so the commit sits where the eye already is. A Best time carries
+ * the picked one fills, and the page's Book bar names it. A Best time carries
  * a tag; a time the visitor is busy for reads quieter, and can still be
  * picked.
  */
@@ -54,7 +50,6 @@ export function SlotList({
   slots,
   value,
   onChange,
-  onConfirm,
   hour12,
   onHour12Change,
   layout = 'column',
@@ -62,13 +57,6 @@ export function SlotList({
   empty,
   drawKey,
 }: SlotListProps) {
-  const next = useRef<HTMLButtonElement>(null);
-  // A picked time's Next slides in; on a phone it scrolls into view with it.
-  useEffect(() => {
-    if (value === undefined) return;
-    const reduced = globalThis.matchMedia('(prefers-reduced-motion: reduce)').matches;
-    next.current?.scrollIntoView({ block: 'nearest', behavior: reduced ? 'auto' : 'smooth' });
-  }, [value]);
   return (
     <div className={styles.root} data-layout={layout}>
       <div className={styles.head}>
@@ -127,13 +115,6 @@ export function SlotList({
                     </span>
                   )}
                 </button>
-                {isPicked && (
-                  <span className={styles.next}>
-                    <Button ref={next} variant="primary" size="lg" isFullWidth onPress={onConfirm}>
-                      {strings.next}
-                    </Button>
-                  </span>
-                )}
               </li>
             );
           })}

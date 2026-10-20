@@ -3,7 +3,6 @@ export const strings = {
   clock: 'Clock',
   hours12: '12h',
   hours24: '24h',
-  next: 'Next',
   loading: 'Loading times…',
   times: (day: string) => `Times on ${day}`,
   bestTag: 'Best',

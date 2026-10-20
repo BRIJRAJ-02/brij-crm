@@ -19,6 +19,9 @@ const { js, css } = firstLoad(manifest);
 // and React Aria: 8.4 kB of JavaScript and 4.4 kB of CSS before, 197.8 kB and 12.2 kB after (gzipped, measured
 // on the built page). Its own budget leaves about 10% of room. The phone library loads later, on demand.
 const form = firstLoad(manifest, 'form.html');
+// The booking pages (spec 0025) draw with the library too since 20 October 2026, through @crm/ui/public-booking:
+// 211.5 kB of JavaScript and 15.8 kB of CSS (gzipped, as size-limit measures it), with about 10% of room.
+const book = firstLoad(manifest, 'book.html');
 const inDist = (files) => files.map((file) => path.join(DIST, file));
 
 // React's development build carries this message; production never does.
@@ -32,4 +35,6 @@ export default [
   { name: 'First load CSS (gzipped)', path: inDist(css), limit: '40 kB', gzip: true, running: false },
   { name: 'Hosted form JavaScript (gzipped)', path: inDist(form.js), limit: '220 kB', gzip: true, running: false },
   { name: 'Hosted form CSS (gzipped)', path: inDist(form.css), limit: '16 kB', gzip: true, running: false },
+  { name: 'Booking page JavaScript (gzipped)', path: inDist(book.js), limit: '230 kB', gzip: true, running: false },
+  { name: 'Booking page CSS (gzipped)', path: inDist(book.css), limit: '18 kB', gzip: true, running: false },
 ];

@@ -27,7 +27,6 @@ const meta = {
     slots: slots(8),
     value: undefined,
     onChange: fn(),
-    onConfirm: fn(),
     hour12: true,
     onHour12Change: fn(),
   },
@@ -36,7 +35,7 @@ const meta = {
 export default meta;
 type Story = StoryObj<typeof meta>;
 
-/** A day's times. Picking one splits it: the time, and Next beside it. */
+/** A day's times; the picked one fills. */
 export const Default: Story = {
   parameters: { crm: { preview: true } },
   render: function Render(args) {
@@ -47,11 +46,9 @@ export const Default: Story = {
       </Stage>
     );
   },
-  play: async ({ canvas, args }) => {
+  play: async ({ canvas }) => {
     await userEvent.click(canvas.getByRole('button', { name: /^10:00 AM/ }));
     await expect(canvas.getByRole('button', { name: /^10:00 AM/ })).toHaveAttribute('aria-pressed', 'true');
-    await userEvent.click(canvas.getByRole('button', { name: 'Next' }));
-    await expect(args.onConfirm).toHaveBeenCalled();
   },
 };
 

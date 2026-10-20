@@ -1,5 +1,5 @@
 /* The times of one day: a heading with the clock switch, then outlined time
-   buttons. The picked one fills, and Next opens beside it. In a column the
+   buttons. The picked one fills. In a column the
    list scrolls inside its pane with a fade at the foot; in a grid it runs two
    to four across as room allows. */
 @layer components {
@@ -53,14 +53,22 @@
     container-type: inline-size;
   }
 
+  /* Under the page breakpoint the times run under the month, two across at least. */
+  @media (width < 1024px) {
+    .list {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+  }
+
+  /* Wider than a pane (a phone's whole card, the List view), the times run three or four across. */
   @container (width >= 320px) {
-    .root[data-layout='grid'] .list {
+    .list {
       grid-template-columns: repeat(3, minmax(0, 1fr));
     }
   }
 
   @container (width >= 480px) {
-    .root[data-layout='grid'] .list {
+    .list {
       grid-template-columns: repeat(4, minmax(0, 1fr));
     }
   }
@@ -80,9 +88,9 @@
     justify-content: center;
     gap: var(--space-2);
     min-inline-size: 0;
-    min-block-size: var(--size-row);
+    min-block-size: calc(var(--size-row) + var(--space-8));
     padding: var(--space-6) var(--space-8);
-    border: var(--border-width-hairline) solid var(--control-border);
+    border: var(--border-width-hairline) solid var(--border-strong);
     border-radius: var(--radius-md);
     background: var(--surface);
     color: var(--text);
@@ -138,18 +146,6 @@
     color: inherit;
   }
 
-  .next {
-    display: flex;
-    flex: 1;
-    animation: next-in var(--duration-move) var(--ease-out) both;
-  }
-
-  /* Next's button takes the time's full height. */
-  .next > * {
-    flex: 1;
-    min-block-size: var(--size-row);
-  }
-
   .loading,
   .empty {
     padding-block: var(--space-8);
@@ -168,8 +164,7 @@
   }
 
   @media (prefers-reduced-motion: reduce) {
-    .item,
-    .next {
+    .item {
       animation-name: slot-fade;
     }
 
@@ -182,13 +177,6 @@
     from {
       opacity: 0;
       translate: 0 var(--space-4);
-    }
-  }
-
-  @keyframes next-in {
-    from {
-      opacity: 0;
-      translate: calc(-1 * var(--space-8)) 0;
     }
   }
 

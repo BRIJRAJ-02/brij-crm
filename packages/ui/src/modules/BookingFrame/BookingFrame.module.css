@@ -1,7 +1,9 @@
-/* A booking page: one card on the ground colour. From the page breakpoint the
-   rail, the middle pane and the end pane sit side by side, divided by
-   hairlines, at one height so the times scroll inside their pane; below it
-   they stack. The wordmark and the claim link sit centred under the card. */
+/* A booking page, laid out as the timefix booking page. From the page
+   breakpoint: the rail (the host, the meeting, its facts, and "Powered by
+   Timefix" pinned at its foot) beside one card (a heading row, the month and
+   the times side by side at one height so the times scroll in their pane, and
+   a band across the foot for the Book bar). Below it everything stacks and
+   Timefix moves to the page's end. */
 @layer components {
   .root {
     box-sizing: border-box;
@@ -15,87 +17,43 @@
     letter-spacing: var(--tracking-body);
   }
 
-  .column {
+  .layout {
     display: flex;
     flex-direction: column;
-    gap: var(--space-16);
+    gap: var(--space-24);
     inline-size: 100%;
-    max-inline-size: calc(var(--size-sidebar) + var(--size-panel-wide) + var(--size-column-wide));
+    max-inline-size: calc(var(--size-sidebar) + var(--size-panel-wide) + var(--size-column-wide) + var(--space-32));
   }
 
-  .column[data-width='narrow'] {
+  .narrow {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-20);
+    inline-size: 100%;
     max-inline-size: var(--size-page-card);
   }
 
-  .message {
+  .rail {
     display: flex;
     flex-direction: column;
-    gap: var(--space-12);
-    padding: var(--space-24);
-    border: var(--border-width-hairline) solid var(--border);
-    border-radius: var(--radius-xl);
-    background: var(--surface-raised);
-    box-shadow: var(--shadow-md);
-  }
-
-  .top {
-    display: flex;
-    flex-wrap: wrap;
-    align-items: center;
-    gap: var(--space-12);
-  }
-
-  .banner {
-    flex: 1 1 var(--size-panel);
+    gap: var(--space-24);
     min-inline-size: 0;
   }
 
-  .banner:empty {
-    display: none;
-  }
-
-  .toolbar {
+  .identity {
     display: flex;
-    margin-inline-start: auto;
-  }
-
-  .card {
-    display: grid;
-    grid-template-columns: minmax(0, 1fr);
-    border: var(--border-width-hairline) solid var(--border);
-    border-radius: var(--radius-xl);
-    background: var(--surface-raised);
-    box-shadow: var(--shadow-md);
+    flex-direction: column;
+    gap: var(--space-12);
     animation: frame-rise var(--duration-modal) var(--ease-out) both;
   }
 
-  .rail,
-  .main,
-  .aside {
-    box-sizing: border-box;
+  .names {
     display: flex;
     flex-direction: column;
-    min-inline-size: 0;
-    padding: var(--space-20);
-  }
-
-  .rail {
-    gap: var(--space-8);
-    border-block-end: var(--border-width-hairline) solid var(--border-subtle);
-  }
-
-  .aside {
-    border-block-start: var(--border-width-hairline) solid var(--border-subtle);
+    gap: var(--space-2);
   }
 
   .host {
-    margin: var(--space-4) 0 0;
-    color: var(--text-secondary);
-    font: var(--text-body-strong);
-    letter-spacing: var(--tracking-body-strong);
-  }
-
-  .title {
     margin: 0;
     color: var(--text);
     font: var(--text-heading);
@@ -103,8 +61,12 @@
     overflow-wrap: anywhere;
   }
 
-  .title:focus {
-    outline: none;
+  .title {
+    margin: 0;
+    color: var(--text-secondary);
+    font: var(--text-body);
+    letter-spacing: var(--tracking-body);
+    overflow-wrap: anywhere;
   }
 
   .description {
@@ -117,8 +79,8 @@
   .facts {
     display: flex;
     flex-direction: column;
-    gap: var(--space-8);
-    margin: var(--space-8) 0 0;
+    gap: var(--space-4);
+    margin: var(--space-4) 0 0;
     padding: 0;
     list-style: none;
   }
@@ -143,19 +105,122 @@
     overflow-wrap: anywhere;
   }
 
+  .main {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-16);
+    min-inline-size: 0;
+  }
+
+  .card {
+    display: flex;
+    flex-direction: column;
+    border: var(--border-width-hairline) solid var(--border);
+    border-radius: var(--radius-xl);
+    background: var(--surface-raised);
+    box-shadow: var(--shadow-md);
+    animation: frame-rise var(--duration-modal) var(--ease-out) calc(var(--duration-hover) / 2) both;
+  }
+
+  .head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--space-12);
+    padding: var(--space-20) var(--space-20) 0;
+  }
+
+  .heading {
+    margin: 0;
+    color: var(--text);
+    font: var(--text-title);
+    letter-spacing: var(--tracking-title);
+  }
+
+  .toolbar {
+    display: flex;
+    margin-inline-start: auto;
+  }
+
+  .panes {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .pane,
+  .aside {
+    box-sizing: border-box;
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-16);
+    min-inline-size: 0;
+    padding: var(--space-20);
+  }
+
+  .aside {
+    padding-block-start: 0;
+  }
+
+  .footer {
+    display: flex;
+    padding: var(--space-16) var(--space-20) var(--space-20);
+    border-block-start: var(--border-width-hairline) solid var(--border-subtle);
+  }
+
+  /* The Book bar spans the band, as tall as a time. */
+  .footer > * {
+    flex: 1;
+    min-block-size: calc(var(--size-row) + var(--space-8));
+  }
+
+  .message {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-12);
+    padding: var(--space-24);
+    border: var(--border-width-hairline) solid var(--border);
+    border-radius: var(--radius-xl);
+    background: var(--surface-raised);
+    box-shadow: var(--shadow-md);
+  }
+
+  .messageTitle {
+    margin: 0;
+    font: var(--text-heading);
+    letter-spacing: var(--tracking-heading);
+  }
+
+  .messageTitle:focus {
+    outline: none;
+  }
+
+  /* The foot: "Powered by" over the wordmark, then the claim link. */
   .foot {
     display: flex;
     flex-direction: column;
     align-items: center;
     gap: var(--space-8);
-    padding-block-start: var(--space-8);
+  }
+
+  .foot[data-placement='rail'] {
+    display: none;
   }
 
   .brand {
     display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: var(--space-4);
     border-radius: var(--radius-xs);
-    opacity: var(--opacity-busy);
-    transition: opacity var(--duration-hover) var(--ease-hover);
+    color: inherit;
+    text-decoration: none;
+  }
+
+  .powered {
+    color: var(--text-secondary);
+    font: var(--text-label-strong);
+    letter-spacing: var(--tracking-kbd);
+    text-transform: uppercase;
   }
 
   .wordmark {
@@ -210,43 +275,74 @@
       padding-block: var(--space-32);
     }
 
-    .card {
+    .layout {
+      display: grid;
       grid-template-columns: var(--size-sidebar) minmax(0, 1fr);
-    }
-
-    .card[data-panes='three'] {
-      grid-template-columns: var(--size-sidebar) minmax(0, 1fr) var(--size-column-wide);
+      gap: var(--space-32);
     }
 
     .rail {
-      border-block-end: none;
-      border-inline-end: var(--border-width-hairline) solid var(--border-subtle);
+      justify-content: space-between;
+      padding-block-start: var(--space-8);
     }
 
-    .aside {
-      border-block-start: none;
-      border-inline-start: var(--border-width-hairline) solid var(--border-subtle);
-      contain: size;
+    .foot[data-placement='rail'] {
+      display: flex;
+      align-items: stretch;
+      padding: var(--space-12) var(--space-16);
+      border: var(--border-width-hairline) solid var(--border);
+      border-radius: var(--radius-lg);
+      background: var(--surface-raised);
     }
 
-    .rail,
-    .main,
+    .foot[data-placement='rail'] .brand {
+      align-items: flex-start;
+    }
+
+    .foot[data-placement='rail'] .claim {
+      justify-content: space-between;
+      padding-block-start: var(--space-8);
+      border-block-start: var(--border-width-hairline) solid var(--border-subtle);
+    }
+
+    .foot[data-placement='page'] {
+      display: none;
+    }
+
+    .panes[data-panes='two'] {
+      grid-template-columns: minmax(0, 1fr) var(--size-column-wide);
+    }
+
+    .pane,
     .aside {
       padding: var(--space-24);
+    }
+
+    .head {
+      padding: var(--space-24) var(--space-24) 0;
+    }
+
+    .footer {
+      padding: var(--space-16) var(--space-24) var(--space-24);
+    }
+
+    /* The times take the month's height and scroll inside it, behind a hairline. */
+    .aside {
+      margin-block: var(--space-24);
+      padding-block: 0;
+      border-inline-start: var(--border-width-hairline) solid var(--border-subtle);
+      contain: size;
     }
   }
 
   @media (hover: hover) and (pointer: fine) {
-    .brand:hover {
-      opacity: 1;
-    }
-
     .claim:hover {
       color: var(--text);
     }
   }
 
   @media (prefers-reduced-motion: reduce) {
+    .identity,
     .card {
       animation-name: frame-fade;
     }

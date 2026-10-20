@@ -188,7 +188,9 @@ describe('screens preset (apps/web)', () => {
 
   it('lets the public bundle style its plain markup with its own stylesheet, and keeps the library and the network out', () => {
     expect(messagesFor(messages, 'src/public/Page.tsx').join()).not.toMatch(/library components|carry no CSS/);
-    expect(messagesFor(messages, 'src/public/library.ts').join()).toMatch(/plain inputs and its own stylesheet/);
+    expect(messagesFor(messages, 'src/public/library.ts').join()).toMatch(
+      /through @crm\/ui\/public-form or @crm\/ui\/public-booking/,
+    );
     expect(rulesFor(messages, 'src/public/fetches.ts')).toContain('no-restricted-globals');
   });
 

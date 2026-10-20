@@ -49,6 +49,32 @@ export const Default: Story = {
   },
 };
 
+/** Inline in a line of text, no box: a booking page's time zone. */
+export const Inline: Story = {
+  args: {
+    label: 'Time zone',
+    isLabelHidden: true,
+    variant: 'inline',
+    showsDescription: true,
+    optionStyle: 'plain',
+    items: [
+      { id: 'Asia/Kolkata', label: 'Kolkata time', description: 'GMT+5:30' },
+      { id: 'Europe/London', label: 'London time', description: 'GMT+1' },
+    ],
+    value: 'Asia/Kolkata',
+  },
+  render: (args) => (
+    <Stage width="narrow">
+      <Select {...args} />
+    </Stage>
+  ),
+  play: async ({ canvas, userEvent }) => {
+    await userEvent.click(canvas.getByRole('button', { name: /Kolkata time/ }));
+    await listbox();
+    await userEvent.keyboard('{Escape}');
+  },
+};
+
 /** Open, with status dots; the archived option can't be chosen. */
 export const Open: Story = {
   parameters: { crm: { preview: true } },

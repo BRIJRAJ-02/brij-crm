@@ -1,10 +1,10 @@
 # SlotList
 
-The times of one day on a booking page (spec 0025, AC-666 to AC-669): the day, the 12h or 24h switch, then the times as outlined buttons. Picking a time never moves on: the picked one fills and splits in two, the time and Next, as calendars' booking pages do, so the commit sits where the eye already is. With the visitor's calendar on (spec 0028), a Best time carries a tag, and a time the visitor is busy for (shown only when they ask to see every time) reads quieter with a dashed edge, and can still be picked.
+The times of one day on a booking page (spec 0025, AC-666 to AC-669): the day, the 12h or 24h switch, then the times as outlined buttons. Picking a time never moves on: the picked one fills, and the page's Book bar (BookingFrame's `footer`) names it and moves on. With the visitor's calendar on (spec 0028), a Best time carries a tag, and a time the visitor is busy for (shown only when they ask to see every time) reads quieter with a dashed edge, and can still be picked.
 
 ## Why it exists
 
-New. ChoiceChips hold a few labelled choices in a row; a day's times run long, scroll inside their pane in the Month view, stagger in as a day changes, and need the inline Next.
+New. ChoiceChips hold a few labelled choices in a row; a day's times run long, scroll inside their pane in the Month view, and stagger in as a day changes.
 
 ## Use
 
@@ -14,7 +14,6 @@ New. ChoiceChips hold a few labelled choices in a row; a day's times run long, s
   slots={slots}
   value={picked}
   onChange={setPicked}
-  onConfirm={toDetails}
   hour12={hour12}
   onHour12Change={setHour12}
 />
@@ -24,11 +23,11 @@ New. ChoiceChips hold a few labelled choices in a row; a day's times run long, s
 
 ## States
 
-Default, picked with Next, Best, busy, hover, focus, pressed, loading, empty.
+Default, picked, Best, busy, hover, focus, pressed, loading, empty.
 
 ## Keyboard
 
-Tab reaches each time and then Next; Enter or Space picks. The clock switch is a SegmentedControl (the arrows move).
+Tab reaches each time; Enter or Space picks. The clock switch is a SegmentedControl (the arrows move).
 
 ## Differences from the artifact
 

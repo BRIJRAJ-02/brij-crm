@@ -472,9 +472,9 @@ export function screens({ root, vendorWrappers = [] }) {
       },
     },
     restrictSyntax([syntax.defaultExport, ...syntax.classes, ...syntax.extensions, syntax.screenStyling]),
-    // The public pages' bundle (specs 0023 and 0025, `src/public/**`): plain HTML inputs and its own small
-    // stylesheet with the tokens compiled in, under a 40 kB budget, so it may style its markup and import its own
-    // CSS, and never imports the component library (the CRM's field editors and the app shell stay out of it).
+    // The public pages' bundle (specs 0023 and 0025, `src/public/**`): the hosted form and the booking pages draw
+    // with the library through its public entries (`@crm/ui/public-form`, `@crm/ui/public-booking`), never the
+    // whole of `@crm/ui`, so the CRM's field editors and the app shell stay out of a visitor's download.
     {
       files: PUBLIC_BUNDLE,
       rules: {
@@ -486,7 +486,8 @@ export function screens({ root, vendorWrappers = [] }) {
               ...screenDataImports.paths,
               {
                 name: '@crm/ui',
-                message: 'The public bundle uses plain inputs and its own stylesheet, never the library.',
+                message:
+                  'The public pages draw through @crm/ui/public-form or @crm/ui/public-booking, never the whole library.',
               },
               {
                 name: '@crm/data',

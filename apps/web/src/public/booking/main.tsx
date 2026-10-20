@@ -1,9 +1,10 @@
 // The public booking bundle's entry (spec 0025): `/b/<publicKey>` and its guest
 // page `/b/<publicKey>/manage?t=<token>` load this instead of the CRM app
 // (book.html, the second Vite input), so a visitor never downloads the app
-// shell or the component library: the compiled tokens, then the page with the
-// browser's language and zone. No analytics.
-import '@crm/tokens/tokens.css';
+// shell: the library's root stylesheet, then the page inside the library's
+// provider with the browser's language and zone. No analytics.
+import '@crm/ui/styles.css';
+import { BookingProvider } from '@crm/ui/public-booking';
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import { BookingPage } from './BookingPage.tsx';
@@ -22,28 +23,32 @@ const locale = navigator.languages[0] ?? 'en-US';
 const now = () => Date.now();
 const prefill = readPrefill(address);
 
+const timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+
 createRoot(root).render(
   <StrictMode>
-    {isManage ? (
-      <ManagePage
-        token={address.searchParams.get('t') ?? ''}
-        isWelcome={address.searchParams.get('welcome') === '1'}
-        locale={locale}
-        now={now}
-      />
-    ) : (
-      <BookingPage
-        publicKey={publicKey}
-        locale={locale}
-        timeZone={Intl.DateTimeFormat().resolvedOptions().timeZone}
-        now={now}
-        {...(prefill === undefined ? {} : { prefill })}
-        onBooked={(token) =>
-          globalThis.location.assign(
-            `/b/${encodeURIComponent(publicKey)}/manage?${new URLSearchParams({ t: token, welcome: '1' }).toString()}`,
-          )
-        }
-      />
-    )}
+    <BookingProvider locale={locale} timeZone={timeZone}>
+      {isManage ? (
+        <ManagePage
+          token={address.searchParams.get('t') ?? ''}
+          isWelcome={address.searchParams.get('welcome') === '1'}
+          locale={locale}
+          now={now}
+        />
+      ) : (
+        <BookingPage
+          publicKey={publicKey}
+          locale={locale}
+          timeZone={timeZone}
+          now={now}
+          {...(prefill === undefined ? {} : { prefill })}
+          onBooked={(token) =>
+            globalThis.location.assign(
+              `/b/${encodeURIComponent(publicKey)}/manage?${new URLSearchParams({ t: token, welcome: '1' }).toString()}`,
+            )
+          }
+        />
+      )}
+    </BookingProvider>
   </StrictMode>,
 );

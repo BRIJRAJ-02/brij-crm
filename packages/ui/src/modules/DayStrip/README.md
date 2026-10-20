@@ -1,6 +1,6 @@
 # DayStrip
 
-A booking page's List view (spec 0025, AC-666): only the days with times, in a row that scrolls sideways, each its weekday over its date. The chosen one is solid accent, like MonthTiles, and slides into view; a day holding a Best time (spec 0028) carries the same mark.
+A booking page's List view (spec 0025, AC-666): only the days with times, in a row that scrolls sideways, each its weekday over its date. The chosen one is solid ink, like MonthTiles, and slides into view; a day holding a Best time (spec 0028) carries the same mark.
 
 ## Why it exists
 
