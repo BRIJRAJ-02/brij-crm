@@ -116,6 +116,17 @@ export const requireSession = os.$context<RequestContext>().middleware(async ({ 
 const TAKEN_AWAY = undefined as never;
 
 /**
+ * What the member door opens with: the tenant database, the directory, the
+ * log and the request's rules (`APP_RULES` outside tests). `requireMember`
+ * opens with it, and so does the one bootstrap service that passes the door
+ * itself inside packages/core (`me.setLastWorkspace`, spec 0031), so both
+ * open with the same rules.
+ */
+export function memberDoor(context: Pick<RequestContext, 'db' | 'identity' | 'rules'>) {
+  return { db: context.db, identity: context.identity, log, rules: context.rules };
+}
+
+/**
  * The access door for a workspace procedure: reads `workspace` (its address)
  * from the input and puts the scope `enterWorkspace` returns in
  * `context.scope`. A non member, a removed member and an unknown address all
@@ -132,15 +143,10 @@ export const requireMember = os
         issues: [{ path: ['workspace'], message: 'Name the workspace by its address.' }],
       });
     }
-    const scope = await enterWorkspace(
-      {
-        db: context.db,
-        identity: context.identity,
-        log,
-        rules: context.rules,
-      },
-      { userId: context.user.id, slug: scoped.data.workspace },
-    );
+    const scope = await enterWorkspace(memberDoor(context), {
+      userId: context.user.id,
+      slug: scoped.data.workspace,
+    });
     // An error report from here on names the workspace the door let them into.
     setRequestScope({ workspaceId: scope.workspaceId });
     return next({ context: { scope, db: TAKEN_AWAY, identity: TAKEN_AWAY } });

@@ -178,3 +178,26 @@ export const workspaceMembership = auth.table(
     }),
   ],
 );
+
+/**
+ * A person's own preferences that follow them to every device (spec 0031):
+ * the workspace they last opened, where `/` and sign in take them. Written
+ * only for the caller, and only for a workspace the door let them into; read
+ * only to choose where to go, never for access.
+ */
+export const userPrefs = auth.table(
+  'user_prefs',
+  {
+    userId: uuid('user_id').notNull().primaryKey(),
+    lastWorkspaceId: uuid('last_workspace_id'),
+    updatedAt: updatedAt(),
+  },
+  (t) => [
+    foreignKey({ name: 'user_prefs_user', columns: [t.userId], foreignColumns: [user.id] }).onDelete('cascade'),
+    foreignKey({
+      name: 'user_prefs_last_workspace',
+      columns: [t.lastWorkspaceId],
+      foreignColumns: [workspaceDirectory.workspaceId],
+    }),
+  ],
+);

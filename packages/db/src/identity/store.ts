@@ -18,6 +18,7 @@ import {
   rateLimit,
   session,
   user,
+  userPrefs,
   verification,
   workspaceDirectory,
   workspaceMembership,
@@ -64,6 +65,21 @@ export interface IdentityStore {
   findWorkspace(slug: string): Promise<DirectoryWorkspace | undefined>;
   /** The workspaces this user was added to, oldest first (by when the directory row was made). */
   workspacesOf(userId: string): Promise<readonly DirectoryWorkspace[]>;
+  /** The workspace this user last opened (spec 0031, AC-802), or undefined. Where to go, never access. */
+  lastWorkspaceOf(userId: string): Promise<string | undefined>;
+  /**
+   * Remembers the workspace this user last opened (spec 0031, AC-802). The
+   * caller has passed the access door for it. Writes only when the value
+   * changes, so opening page after page in one workspace costs one read.
+   */
+  setLastWorkspace(userId: string, workspaceId: string): Promise<void>;
+  /**
+   * Drops the directory's note that this user is in this workspace, once the
+   * tenant transaction that removed their member row has committed (spec
+   * 0031, AC-812, AC-814), so their switcher stops listing it. Access never
+   * read it: the door already refuses them.
+   */
+  dropMembership(userId: string, workspaceId: string): Promise<void>;
   /** The user with this id, or undefined. */
   getUser(id: string): Promise<IdentityUser | undefined>;
   /** Saves the name only when the user has none yet (an email code sign up starts empty). True when it saved. */
@@ -137,6 +153,35 @@ export function createIdentityStore(options: DatabaseOptions): IdentityStore {
         .innerJoin(workspaceDirectory, eq(workspaceDirectory.workspaceId, workspaceMembership.workspaceId))
         .where(eq(workspaceMembership.userId, userId))
         .orderBy(asc(workspaceDirectory.createdAt), asc(workspaceDirectory.workspaceId));
+    },
+
+    async lastWorkspaceOf(userId) {
+      if (!UUID.test(userId)) return undefined;
+      const [row] = await db
+        .select({ workspaceId: userPrefs.lastWorkspaceId })
+        .from(userPrefs)
+        .where(eq(userPrefs.userId, userId))
+        .limit(1);
+      return row?.workspaceId ?? undefined;
+    },
+
+    async setLastWorkspace(userId, workspaceId) {
+      if (!UUID.test(userId) || !UUID.test(workspaceId)) throw new TypeError('Expected uuids.');
+      await db
+        .insert(userPrefs)
+        .values({ userId, lastWorkspaceId: workspaceId })
+        .onConflictDoUpdate({
+          target: userPrefs.userId,
+          set: { lastWorkspaceId: workspaceId, updatedAt: sql`now()` },
+          setWhere: sql`${userPrefs.lastWorkspaceId} is distinct from ${workspaceId}::uuid`,
+        });
+    },
+
+    async dropMembership(userId, workspaceId) {
+      if (!UUID.test(userId) || !UUID.test(workspaceId)) return;
+      await db
+        .delete(workspaceMembership)
+        .where(and(eq(workspaceMembership.userId, userId), eq(workspaceMembership.workspaceId, workspaceId)));
     },
 
     async getUser(id) {

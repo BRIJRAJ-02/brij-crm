@@ -79,12 +79,15 @@ function FramedWorkspacePage({ page, currentObject, currentPage, settings, isFai
   const { slug = '' } = useParams({ strict: false });
   const workspace = useMatch({ from: '/w/$slug', shouldThrow: false })?.loaderData;
   const workspaceName = useWorkspaceName();
+  // Every workspace the person is in, for the workspace menu's switcher (spec 0031, AC-801).
+  const me: Me | undefined = useMatch({ from: '/w/$slug', shouldThrow: false })?.context.me;
   return (
     <WorkspaceFrame
       data={data}
       toasts={toasts}
       slug={slug}
       {...(workspaceName === undefined ? {} : { workspaceName })}
+      {...(me === undefined ? {} : { workspaces: me.workspaces })}
       {...(workspace?.access === undefined ? {} : { roleLabel: workspace.access.roleLabel })}
       {...(workspace?.objects === undefined ? {} : { objects: workspace.objects })}
       // Loaded without objects (the door refused this workspace), or failed to load: no Records section.

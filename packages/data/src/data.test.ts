@@ -220,7 +220,12 @@ function fakeApi(overrides: Partial<Behaviour> = {}, auth: (path: string, body: 
       })),
       testFault: os.system.testFault.handler(notServed),
     },
-    me: { get: os.me.get.handler(() => behaviour.me()) },
+    me: {
+      get: os.me.get.handler(() => behaviour.me()),
+      setLastWorkspace: os.me.setLastWorkspace.handler(({ input }) => {
+        calls.push(`me.setLastWorkspace:${input.workspace}`);
+      }),
+    },
     workspaces: { create: os.workspaces.create.handler(() => behaviour.create()) },
     objects: {
       list: os.objects.list.handler(({ input }) => behaviour.objects(input.workspace)),

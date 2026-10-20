@@ -24,6 +24,8 @@ const NO_SCOPE: ReadonlySet<string> = new Set([
   // Before any workspace: the status check, the signed in account, the bootstrap.
   'getSystemStatus',
   'getMe',
+  // Spec 0031: passes the door itself (`enterWorkspace`) before it writes the caller's own preference.
+  'setLastWorkspace',
   'startWorkspace',
   'createWorkspace',
   'createUserWorkspace',

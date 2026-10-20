@@ -1,14 +1,16 @@
 // Brief
 // Purpose: the frame every page inside a workspace sits in: the sidebar beside the page (inside Settings, the settings sidebar).
 // Main task: move between My tasks, the workspace's objects, Bookings, Captures and the trash, open Settings (⌘,) and sign out; undo (⌘Z).
-// Leaves out: switching or creating workspaces, Quick actions, favourites and lists (#23 and later); the theme (Settings › Preferences).
-import type { DataLayer, ObjectSummary, Permission } from '@crm/data';
+// Leaves out: Quick actions, favourites and lists (later); the theme (Settings › Preferences). The workspace menu switches and creates workspaces (spec 0031).
+import type { DataLayer, ObjectSummary, Permission, WorkspaceSummary } from '@crm/data';
 import {
   AppShell,
+  Avatar,
   GRID_SHORTCUTS,
   Menu,
   MenuItem,
   MenuSection,
+  MenuSeparator,
   NavGroup,
   NavItem,
   NavSection,
@@ -26,10 +28,12 @@ import {
   bookingsHref,
   capturesHref,
   navObjects,
+  newWorkspaceHref,
   objectHref,
   settingsHomeHref,
   tasksHref,
   trashHref,
+  workspaceHref,
 } from './objects.ts';
 import { strings } from './strings.ts';
 import { SETTINGS_KEYS, UNDO_KEYS } from './undo.ts';
@@ -56,6 +60,8 @@ export interface WorkspaceFrameProps {
   readonly workspaceName?: string;
   /** The person's role here ("Owner", "Admin" or "Member"), heading the workspace menu once it is known. */
   readonly roleLabel?: string;
+  /** Every workspace the person is in, oldest first: the workspace menu lists them to switch (spec 0031, AC-801). */
+  readonly workspaces?: readonly WorkspaceSummary[];
   /** Its objects; undefined while they load, so the Records section shows skeleton rows. */
   readonly objects?: readonly ObjectSummary[];
   /** The workspace doesn't exist, isn't the person's, or failed to load: no Records section at all. */
@@ -88,6 +94,7 @@ export function WorkspaceFrame({
   toasts,
   slug,
   workspaceName,
+  workspaces,
   roleLabel,
   objects,
   isMissing = false,
@@ -158,6 +165,26 @@ export function WorkspaceFrame({
                   if (key === 'shortcuts') openHelp();
                 }}
               >
+                {/* Every workspace the person is in, the open one checked, then Create workspace (spec 0031, AC-801). */}
+                {workspaces !== undefined && (
+                  <MenuSection label={strings.workspaces}>
+                    {workspaces.map((each) => (
+                      <MenuItem
+                        key={each.id}
+                        id={`workspace:${each.id}`}
+                        leading={<Avatar name={each.name} hue="ink" shape="square" size="xs" isDecorative />}
+                        href={workspaceHref(each.slug)}
+                        isChecked={each.slug === slug}
+                      >
+                        {each.name}
+                      </MenuItem>
+                    ))}
+                    <MenuItem id="create-workspace" icon="plus" href={newWorkspaceHref}>
+                      {strings.createWorkspace}
+                    </MenuItem>
+                  </MenuSection>
+                )}
+                {workspaces !== undefined && <MenuSeparator />}
                 {roleLabel === undefined ? (
                   <>
                     <MenuItem id="settings" icon="settings" href={settingsHomeHref(slug)} kbd="⌘,">

@@ -1946,6 +1946,26 @@ export function createDataLayer({
         );
         return me;
       },
+      /**
+       * Remembers `workspace` (its address) as the one the person last opened
+       * (spec 0031, AC-802), so `/` and sign in bring them back to it on any
+       * device. Sends nothing when the cached answer already names it, and
+       * never fails: a refusal only means `/` falls back to the oldest.
+       */
+      async rememberWorkspace(workspace: string): Promise<void> {
+        const held = await (me ?? Promise.resolve(undefined)).catch(() => undefined);
+        const opened = held?.workspaces.find((each) => each.slug === workspace);
+        if (held === undefined || opened === undefined || held.lastWorkspaceId === opened.id) return;
+        try {
+          await call((options) => api.me.setLastWorkspace({ workspace }, options));
+          // Only while the cache still holds the same answer: a sign out or a new workspace replaced it.
+          if (me !== undefined && (await me.catch(() => undefined)) === held) {
+            me = Promise.resolve({ ...held, lastWorkspaceId: opened.id });
+          }
+        } catch {
+          // Best effort: the next workspace opened tries again.
+        }
+      },
     },
     workspaces: {
       /** A new workspace's id: mint it once per form, and send the same one again on a retry, so nothing is made twice. */

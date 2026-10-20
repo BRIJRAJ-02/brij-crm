@@ -4,16 +4,29 @@ import { AuthError, AuthPending } from '../features/auth/AuthStates.tsx';
 import { signInHref } from '../features/auth/redirect.ts';
 import { strings } from '../features/welcome/strings.ts';
 import { WelcomeScreen } from '../features/welcome/WelcomeScreen.tsx';
+import { homeWorkspace } from '../features/workspace/home.ts';
+
+/** `?another=1`: the workspace menu's Create workspace (spec 0031, AC-801), for someone who already has one. */
+interface WelcomeSearch {
+  readonly another?: true;
+}
 
 // Signed in, without a workspace yet: signed out goes to /sign-in (and comes
-// back here), and someone who has a workspace goes to it.
+// back here), and someone who has a workspace goes to it, unless they came
+// from the workspace menu to create another (`?another=1`).
 export const Route = createFileRoute('/welcome')({
-  loader: async ({ context }) => {
+  validateSearch: (search: Record<string, unknown>): WelcomeSearch =>
+    search.another === 1 || search.another === '1' || search.another === true ? { another: true } : {},
+  loaderDeps: ({ search }) => ({ another: search.another === true }),
+  loader: async ({ context, deps }) => {
     const me = await context.data.me.get();
-    if (me === undefined) throw redirect({ href: signInHref('/welcome'), replace: true });
-    const [first] = me.workspaces;
-    if (first !== undefined) throw redirect({ to: '/w/$slug', params: { slug: first.slug }, replace: true });
-    return { user: me.user };
+    if (me === undefined)
+      throw redirect({ href: signInHref(deps.another ? '/welcome?another=1' : '/welcome'), replace: true });
+    const home = homeWorkspace(me);
+    if (home !== undefined && !deps.another) {
+      throw redirect({ to: '/w/$slug', params: { slug: home.slug }, replace: true });
+    }
+    return { user: me.user, back: home };
   },
   pendingComponent: () => (
     <LoadingNow>
@@ -25,7 +38,7 @@ export const Route = createFileRoute('/welcome')({
 });
 
 function WelcomeRoute() {
-  const { user } = Route.useLoaderData();
+  const { user, back } = Route.useLoaderData();
   const { data, toasts } = Route.useRouteContext();
-  return <WelcomeScreen data={data} toasts={toasts} user={user} />;
+  return <WelcomeScreen data={data} toasts={toasts} user={user} back={back} />;
 }

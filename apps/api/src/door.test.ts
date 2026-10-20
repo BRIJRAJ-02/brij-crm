@@ -24,6 +24,8 @@ const BOOTSTRAP: ReadonlySet<string> = new Set([
   'system.status',
   'system.testFault',
   'me.get',
+  // Spec 0031: passes the door inside packages/core before it writes the caller's own preference.
+  'me.setLastWorkspace',
   'workspaces.create',
   'realtime.connectionToken',
 ]);
@@ -35,9 +37,11 @@ function isBootstrap(path: string): boolean {
 /**
  * The module files holding the bootstrap handlers that read the database
  * without a member scope: `system.status` (a health read) and
- * `workspaces.create` (the engine's bootstrap). No other module file may.
+ * `workspaces.create` (the engine's bootstrap), and `me.setLastWorkspace`
+ * (spec 0031), whose service passes the door in packages/core. No other
+ * module file may.
  */
-const RAW_DATABASE_FILES: ReadonlySet<string> = new Set(['system/router.ts', 'workspaces/router.ts']);
+const RAW_DATABASE_FILES: ReadonlySet<string> = new Set(['system/router.ts', 'workspaces/router.ts', 'me/router.ts']);
 
 /**
  * The module files holding the bootstrap handlers that read global identity:
