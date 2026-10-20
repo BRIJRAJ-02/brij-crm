@@ -56,7 +56,11 @@ type Messages = Readonly<Record<string, string>>;
 
 /** Which view the form shows. */
 export type HostedFormView =
-  { readonly kind: 'form' } | { readonly kind: 'thanks'; readonly text: string } | { readonly kind: 'closed' };
+  | { readonly kind: 'form' }
+  | { readonly kind: 'thanks'; readonly text: string }
+  | { readonly kind: 'closed' }
+  /** Sent, and going on to a booking page after a countdown (AC-1059). */
+  | { readonly kind: 'booking'; readonly url: string; readonly seconds: number; readonly text: string };
 
 /** The state and the handlers every layout draws with. */
 export interface HostedFormState {
@@ -86,6 +90,8 @@ export interface HostedFormState {
   /** Checks every question, then sends. */
   readonly submit: () => void;
   readonly sendAnother: () => void;
+  /** Goes to an address the form sends visitors to (a redirect, a booking page); nothing in a preview. */
+  readonly goTo: (url: string) => void;
   /** Moves focus to the first control of a question. */
   readonly focus: (key: string) => void;
 }
@@ -268,7 +274,12 @@ export function useHostedForm({ form, mode, countryGuess, onSubmit, onRedirect, 
       switch (outcome.kind) {
         case 'done':
           if (outcome.next.kind === 'redirect') onRedirect?.(outcome.next.url);
-          else thank(outcome.next.text);
+          else if (outcome.next.kind === 'booking') {
+            const { url, countdownSeconds, text } = outcome.next;
+            setView({ kind: 'booking', url, seconds: countdownSeconds, text });
+            setFocusTarget('heading');
+            if (countdownSeconds === 0) onRedirect?.(url);
+          } else thank(outcome.next.text);
           return;
         case 'invalid':
           setSubmitted(true);
@@ -328,6 +339,9 @@ export function useHostedForm({ form, mode, countryGuess, onSubmit, onRedirect, 
     checkStep,
     submit,
     sendAnother,
+    goTo: (url) => {
+      if (!preview) onRedirect?.(url);
+    },
     focus,
   };
   return { state, refs: { container, heading } };

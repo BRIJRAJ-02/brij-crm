@@ -298,3 +298,30 @@ export function FormMessage({
     </div>
   );
 }
+
+/** The thank you's green check, grown in once: shared by every view that confirms a send. */
+export function FormBadge() {
+  return (
+    <span className={styles.badge}>
+      <Icon name="check" />
+    </span>
+  );
+}
+
+/** A view's heading: an h1 at the page's size alone on its page, an h2 at heading size elsewhere; focus lands here. */
+export function FormHeadline({
+  mode,
+  heading,
+  children,
+}: {
+  readonly mode: HostedFormMode;
+  readonly heading: Ref<HTMLHeadingElement>;
+  readonly children: string;
+}) {
+  const Heading = mode === 'page' ? 'h1' : 'h2';
+  return (
+    <Heading ref={heading} tabIndex={-1} className={styles.headline} data-mode={mode}>
+      {children}
+    </Heading>
+  );
+}

@@ -17,6 +17,7 @@ import {
 } from './FormParts.tsx';
 import type { HostedFormProps } from './HostedForm.tsx';
 import styles from './HostedFormSteps.module.css';
+import { FormBooking } from './FormBooking.tsx';
 import { asideOf, labelOf, Question } from './Question.tsx';
 import { useHostedForm } from './use-hosted-form.ts';
 
@@ -142,7 +143,18 @@ export function HostedFormSteps({
 
   let body;
   if (state.isClosed) body = <FormClosed state={state} mode={mode} heading={refs.heading} />;
-  else if (state.view.kind === 'thanks')
+  else if (state.view.kind === 'booking') {
+    body = (
+      <FormBooking
+        state={state}
+        mode={mode}
+        heading={refs.heading}
+        url={state.view.url}
+        seconds={state.view.seconds}
+        text={state.view.text}
+      />
+    );
+  } else if (state.view.kind === 'thanks')
     body = <FormThanks form={form} state={state} mode={mode} heading={refs.heading} />;
   else {
     body = (
