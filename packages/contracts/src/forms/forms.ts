@@ -257,6 +257,20 @@ export const SubmissionAnswer = z.object({
 /** One answer as members read it. */
 export type SubmissionAnswer = z.infer<typeof SubmissionAnswer>;
 
+/**
+ * A submission's link to the CRM: `linked` to a record the reader can see;
+ * `filing` while a job is turning it into records (received, processing);
+ * `not_in_crm` otherwise (failed, never filed, spam, review, held, or its
+ * record is in the trash). `canAddToCrm` says whether Add to CRM takes it.
+ */
+export const SubmissionCrm = z.discriminatedUnion('state', [
+  z.object({ state: z.literal('linked'), record: RecordRefDisplay }),
+  z.object({ state: z.literal('filing') }),
+  z.object({ state: z.literal('not_in_crm'), canAddToCrm: z.boolean() }),
+]);
+/** A submission's link to the CRM. */
+export type SubmissionCrm = z.infer<typeof SubmissionCrm>;
+
 /** A submission in its form's list: when, where it is, the person, the email, and its first two answers. */
 export const SubmissionSummary = z.object({
   id: Uuid,
@@ -275,6 +289,8 @@ export const SubmissionSummary = z.object({
   email: z.string().optional(),
   /** The first two answers the reader may see, other than the email. */
   firstAnswers: z.array(SubmissionAnswer).max(2),
+  /** Its link to the CRM: "Not in CRM", filing, or the record it filed into. */
+  crm: SubmissionCrm,
 });
 /** A submission in its form's list. */
 export type SubmissionSummary = z.infer<typeof SubmissionSummary>;
@@ -346,6 +362,140 @@ export const ResolveSubmissionInput = SubmissionWriteInput.extend({ resolution: 
 /** Settling one submission held for review. */
 export type ResolveSubmissionInput = z.infer<typeof ResolveSubmissionInput>;
 
+/** The most submissions one Add to CRM call names. */
+export const ADD_TO_CRM_MAX = 500;
+
+/**
+ * Add to CRM: files submissions that aren't in the CRM (failed, or whose
+ * record went to the trash) with the form's current published mapping, one
+ * or many, in one `forms.file` job. Ones that don't qualify (spam, review,
+ * held, filing, already linked) are left out and counted in `skipped`.
+ */
+export const AddToCrmInput = WorkspaceScoped.extend({
+  formId: z.uuid(),
+  submissionIds: z.array(z.uuid()).min(1).max(ADD_TO_CRM_MAX),
+  mutationId: z.uuid(),
+});
+/** Add to CRM. */
+export type AddToCrmInput = z.infer<typeof AddToCrmInput>;
+
+/** What Add to CRM started: its job (absent when nothing qualified), how many it files and how many it left out. */
+export const AddToCrmResult = z.object({
+  jobId: z.uuid().optional(),
+  queued: z.number().int().min(0),
+  skipped: z.number().int().min(0),
+});
+/** What Add to CRM started. */
+export type AddToCrmResult = z.infer<typeof AddToCrmResult>;
+
+/**
+ * Which earlier submissions Sync old records applies the current mapping to:
+ * `all` filed or failed ones, or `unfiled` only (failed, or whose record is
+ * in the trash). Spam, review, held and filing ones are never touched.
+ */
+export const SyncScope = z.enum(['all', 'unfiled']);
+/** Which earlier submissions a sync touches. */
+export type SyncScope = z.infer<typeof SyncScope>;
+
+/** A sync's preview, or its scope. */
+export const SyncInput = WorkspaceScoped.extend({ formId: z.uuid(), scope: SyncScope });
+/** A sync's preview. */
+export type SyncInput = z.infer<typeof SyncInput>;
+
+/** The most submissions a preview reads; past it the counts are of the newest this many (`capped`). */
+export const SYNC_PREVIEW_MAX = 2_000;
+
+/**
+ * What a sync would do, submission by submission: create a record, update
+ * one, leave one as it is (`unchanged`: nothing new to write), or fail (a
+ * refusal no answer explains, such as a required field the form doesn't ask).
+ */
+export const SyncCounts = z.object({
+  creates: z.number().int().min(0),
+  updates: z.number().int().min(0),
+  unchanged: z.number().int().min(0),
+  failures: z.number().int().min(0),
+});
+/** What a sync would do, or did. */
+export type SyncCounts = z.infer<typeof SyncCounts>;
+
+/** A sync's preview: the counts, how many submissions are in scope, and whether the counts cover only the newest. */
+export const SyncPreview = SyncCounts.extend({
+  total: z.number().int().min(0),
+  checked: z.number().int().min(0),
+  capped: z.boolean(),
+  /** The live version the sync would apply. */
+  versionNumber: z.number().int().min(1),
+});
+/** A sync's preview. */
+export type SyncPreview = z.infer<typeof SyncPreview>;
+
+/** Starting a sync: its scope, and the job's id (client minted, so a retry starts one job). */
+export const SyncStartInput = SyncInput.extend({ jobId: z.uuid(), mutationId: z.uuid() });
+/** Starting a sync. */
+export type SyncStartInput = z.infer<typeof SyncStartInput>;
+
+/** A started sync: its `forms.sync` job (whose `result` ends as `SyncCounts` plus `skipped`) and how many it will go through. */
+export const SyncStarted = z.object({ jobId: z.uuid(), total: z.number().int().min(0) });
+/** A started sync. */
+export type SyncStarted = z.infer<typeof SyncStarted>;
+
+/** The most rows one submissions export holds. */
+export const EXPORT_ROWS_MAX = 100_000;
+
+/** The most submissions an export by id names. */
+export const EXPORT_IDS_MAX = 1_000;
+
+/** Which submissions an export holds: those a filter matches (a state, a received range), or the ones named. */
+export const SubmissionSelection = z.discriminatedUnion('kind', [
+  z.object({
+    kind: z.literal('filter'),
+    state: SubmissionState.optional(),
+    from: Timestamp.optional(),
+    to: Timestamp.optional(),
+  }),
+  z.object({ kind: z.literal('ids'), submissionIds: z.array(z.uuid()).min(1).max(EXPORT_IDS_MAX) }),
+]);
+/** Which submissions an export holds. */
+export type SubmissionSelection = z.infer<typeof SubmissionSelection>;
+
+/** Exporting a form's submissions as CSV: the export's id (client minted, so a retry makes one), the form, the selection. */
+export const ExportSubmissionsInput = WorkspaceScoped.extend({
+  id: z.uuid(),
+  formId: z.uuid(),
+  select: SubmissionSelection,
+  mutationId: z.uuid(),
+});
+/** Exporting a form's submissions. */
+export type ExportSubmissionsInput = z.infer<typeof ExportSubmissionsInput>;
+
+/** One export by id (only its starter sees it). */
+export const ExportIdInput = WorkspaceScoped.extend({ exportId: z.uuid() });
+/** One export by id. */
+export type ExportIdInput = z.infer<typeof ExportIdInput>;
+
+/**
+ * An export: its file's name, its job (follow it through `jobs`), its rows
+ * once written, when the file goes, and where to download it once the job
+ * succeeded (`GET`, the session's cookie; 404 for anyone but its starter).
+ */
+export const ExportView = z.object({
+  id: z.uuid(),
+  formId: z.uuid(),
+  fileName: z.string(),
+  jobId: z.uuid(),
+  rowCount: z.number().int().min(0).optional(),
+  expiresAt: Timestamp,
+  downloadPath: z.string(),
+});
+/** An export. */
+export type ExportView = z.infer<typeof ExportView>;
+
+/** Where an export downloads from: `/api/exports/<id>/download?workspace=<slug>`. */
+export function exportDownloadPath(workspace: string, exportId: string): string {
+  return `/api/exports/${encodeURIComponent(exportId)}/download?workspace=${encodeURIComponent(workspace)}`;
+}
+
 /** The forms procedures (spec 0023). */
 export const formsContract = {
   list: oc.input(ListFormsInput).output(z.object({ items: z.array(FormSummary) })),
@@ -362,6 +512,10 @@ export const formsContract = {
   setTarget: oc.input(SetFormTargetInput).output(FormView),
   duplicate: oc.input(DuplicateFormInput).output(FormView),
   delete: oc.input(FormWriteInput).output(z.object({ deleted: z.literal(true) })),
+  /** Sync old records: what applying the current mapping to earlier submissions would do (read only). */
+  syncPreview: oc.input(SyncInput).output(SyncPreview),
+  /** Sync old records: starts the `forms.sync` job. */
+  syncStart: oc.input(SyncStartInput).output(SyncStarted),
 };
 
 /** The submissions procedures (spec 0023). */
@@ -371,6 +525,12 @@ export const submissionsContract = {
   release: oc.input(SubmissionWriteInput).output(SubmissionView),
   markSpam: oc.input(SubmissionWriteInput).output(SubmissionView),
   resolve: oc.input(ResolveSubmissionInput).output(SubmissionView),
+  /** Add to CRM, one or many: starts a `forms.file` job. */
+  addToCrm: oc.input(AddToCrmInput).output(AddToCrmResult),
+  /** Export as CSV: starts a `forms.export` job; download from `downloadPath` once it succeeded. */
+  export: oc.input(ExportSubmissionsInput).output(ExportView),
+  /** One export the caller started. */
+  getExport: oc.input(ExportIdInput).output(ExportView),
   retry: oc.input(SubmissionWriteInput).output(SubmissionView),
   delete: oc.input(SubmissionWriteInput).output(z.object({ deleted: z.literal(true) })),
 };
