@@ -9,10 +9,12 @@
     min-block-size: 0;
   }
 
-  /* The tab list and, at its far end, the chosen tab's tools, on one hairline. */
+  /* The tab list and, at its far end, the chosen tab's tools, on one hairline. When both don't fit
+     (a phone), the tools wrap to a row of their own under the tabs, so the tabs never get squeezed. */
   .bar {
     display: flex;
-    gap: var(--space-12);
+    flex-wrap: wrap;
+    gap: 0 var(--space-12);
     border-block-end: var(--border-width-hairline) solid var(--border-subtle);
   }
 
@@ -27,12 +29,20 @@
     scrollbar-width: none;
   }
 
+  /* A grid, not a row: each tool (or a screen's portal slot holding them) may shrink below its
+     content, so a search field narrows on a phone instead of running off the edge. */
   .end {
-    display: flex;
-    flex: none;
+    display: grid;
+    grid-auto-columns: minmax(0, auto);
+    grid-auto-flow: column;
+    flex: 0 1 auto;
+    min-inline-size: 0;
+    max-inline-size: 100%;
     align-items: center;
     gap: var(--space-8);
-    padding-inline-end: var(--space-16);
+    min-block-size: calc(var(--space-32) + var(--space-8));
+    margin-inline-start: auto;
+    padding-inline: var(--space-16);
   }
 
   .tab {

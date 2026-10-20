@@ -1,6 +1,7 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
 import { expect, fn } from 'storybook/test';
 import { Button } from '../../atoms/Button/Button.tsx';
+import { Stage } from '../../workbench/Stage/Stage.tsx';
 import { Field } from '../Field/Field.tsx';
 import { Tabs, TabPanel } from './Tabs.tsx';
 
@@ -87,5 +88,35 @@ export const WithEnd: Story = {
     await expect(canvas.getByRole('tablist', { name: 'Record' })).toBeInTheDocument();
     await expect(canvas.getByRole('searchbox', { name: 'Search booking pages' })).toBeInTheDocument();
     await expect(canvas.getByRole('button', { name: 'New booking page' })).toBeInTheDocument();
+  },
+};
+
+/** On a phone: the tools take a row of their own under the tabs, and the search narrows to fit. */
+export const WithEndNarrow: Story = {
+  render: (args) => (
+    <Stage width="narrow">
+      <Tabs
+        {...args}
+        tabs={TABS.slice(0, 3)}
+        end={
+          <>
+            <Field label="Search booking pages" isLabelHidden variant="search" type="search" size="sm" />
+            <Button variant="primary" icon="plus">
+              New
+            </Button>
+          </>
+        }
+      >
+        <TabPanel id="activity">Field changes, notes and emails, newest first.</TabPanel>
+        <TabPanel id="notes">12 notes.</TabPanel>
+        <TabPanel id="tasks">3 open tasks.</TabPanel>
+      </Tabs>
+    </Stage>
+  ),
+  play: async ({ canvas }) => {
+    const list = canvas.getByRole('tablist', { name: 'Record' }).getBoundingClientRect();
+    const button = canvas.getByRole('button', { name: 'New' }).getBoundingClientRect();
+    await expect(button.top).toBeGreaterThanOrEqual(list.bottom - 1);
+    await expect(button.right).toBeLessThanOrEqual(list.right + 1);
   },
 };
