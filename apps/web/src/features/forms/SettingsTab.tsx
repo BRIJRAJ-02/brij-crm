@@ -60,13 +60,15 @@ export interface FormSettingsInput {
 export function useFormSettings({ slug, form, onFormChange }: FormSettingsInput) {
   const { data, toasts } = useRouteContext({ from: '__root__' });
   const saved: Applied = { name: form.name, address: form.publicKey, owner: form.ownerMemberId ?? NOBODY };
-  const [values, setValues] = useState<Applied>(saved);
+  // Only the edits are held, so a change made elsewhere (the first publish, a rename) shows here at once.
+  const [edits, setEdits] = useState<Partial<Applied>>({});
+  const values: Applied = { ...saved, ...edits };
   const [status, setStatus] = useState<'idle' | 'saving' | 'saved'>('idle');
   const [failure, setFailure] = useState<{ readonly message: string; readonly field?: string } | undefined>(undefined);
   const isDirty = values.name !== saved.name || values.address !== saved.address || values.owner !== saved.owner;
 
   const set = (patch: Partial<Applied>) => {
-    setValues((before) => ({ ...before, ...patch }));
+    setEdits((before) => ({ ...before, ...patch }));
     setFailure(undefined);
     if (status === 'saved') setStatus('idle');
   };
@@ -84,7 +86,7 @@ export function useFormSettings({ slug, form, onFormChange }: FormSettingsInput)
       .then(
         (view) => {
           onFormChange(view);
-          setValues({ name: view.name, address: view.publicKey, owner: view.ownerMemberId ?? NOBODY });
+          setEdits({});
           setStatus('saved');
           if (addressChanged) toasts.toast({ tone: 'success', message: strings.addressChanged });
         },
@@ -114,7 +116,7 @@ export function useFormSettings({ slug, form, onFormChange }: FormSettingsInput)
       {...(values.name.trim() === '' ? { blockedReason: strings.nameRequired } : {})}
       onSave={save}
       onDiscard={() => {
-        setValues(saved);
+        setEdits({});
         setFailure(undefined);
         setStatus('idle');
       }}
@@ -164,11 +166,14 @@ export function SettingsTab({
     url: draft.after.kind === 'redirect' ? draft.after.url : 'https://',
   });
   // Not in the form's document yet (wip/formdesign's contract): how long the meeting step waits.
-  const [delay, setDelay] = useState<number>(5);
+  const delay = 5;
 
   const after = draft.after;
-  const choice: AfterChoice =
+  const fromDraft: AfterChoice =
     after.kind === 'redirect' ? 'redirect' : after.offerMeeting === undefined ? 'message' : 'meeting';
+  // The picked follow up is held here too, so Book a meeting stays picked while no booking page is set yet.
+  const [picked, setPicked] = useState<AfterChoice>(fromDraft);
+  const choice: AfterChoice = picked === 'meeting' && after.kind === 'message' ? 'meeting' : fromDraft;
   const live = form.live;
   const seenChanged =
     live !== undefined &&
@@ -181,6 +186,7 @@ export function SettingsTab({
 
   const choose = (next: AfterChoice) => {
     if (next === choice) return;
+    setPicked(next);
     setKept((before) =>
       after.kind === 'message' ? { ...before, message: after.message } : { ...before, url: after.url },
     );
@@ -215,9 +221,7 @@ export function SettingsTab({
     choice === 'redirect'
       ? strings.previewRedirect(after.kind === 'redirect' ? shortUrl(after.url) : '')
       : choice === 'meeting'
-        ? delay === 0
-          ? strings.previewMeetingNow
-          : strings.previewMeeting(delay)
+        ? strings.previewMeeting(delay)
         : after.kind === 'message' && after.message.trim() !== ''
           ? after.message
           : strings.thankYouDefault;
@@ -225,16 +229,16 @@ export function SettingsTab({
   // Where each question's answer goes: the target's attribute, or kept with the submission only.
   const attributeTitle = (attributeId: string | undefined) =>
     target.items.find((item) => item.attributeId === attributeId)?.title;
-  const matchTitle = attributeTitle(draft.targets.main.matchAttributeId);
+  // The match, said by the question that carries it ("Work email"), or the attribute when no question does.
+  const matchQuestion = draft.questions.find(
+    (question) => question.filedOn?.attributeId === draft.targets.main.matchAttributeId,
+  );
+  const matchTitle = matchQuestion?.label ?? attributeTitle(draft.targets.main.matchAttributeId);
   const filing = draft.questions.map((question) => {
     const title = attributeTitle(question.filedOn?.attributeId);
     return {
       term: question.label.trim() === '' ? strings.untitledQuestion : question.label,
-      description: (
-        <Link href={formHref(slug, form.id)}>
-          {title === undefined ? strings.keptOnly : strings.filedOn(target.objectName, title)}
-        </Link>
-      ),
+      description: title === undefined ? strings.keptOnly : strings.filedOn(target.objectName, title),
     };
   });
   const filedCount = draft.questions.filter(
@@ -300,9 +304,13 @@ export function SettingsTab({
             <>
               <Select
                 label={strings.whichBookingPage}
+                isDisabled={pages.status !== 'ready'}
                 items={bookingPages.map((page) => ({
                   id: page.id,
-                  label: strings.bookingPageItem(page.title, page.durations[0] ?? 30),
+                  label:
+                    page.durations[0] === undefined
+                      ? page.title
+                      : strings.bookingPageItem(page.title, page.durations[0]),
                 }))}
                 value={after.offerMeeting?.bookingPageId ?? null}
                 isReadOnly={isReadOnly}
@@ -322,16 +330,17 @@ export function SettingsTab({
                 label={strings.meetingDelay}
                 items={DELAYS.map((seconds) => ({ id: String(seconds), label: strings.delayLabel(seconds) }))}
                 value={String(delay)}
-                isReadOnly={isReadOnly}
-                onChange={(id) => {
-                  setDelay(Number(id ?? 5));
-                }}
+                // Not in the form's document yet (wip/formdesign's contract): shown, fixed, with why.
+                isDisabled
+                hint={strings.delayComing}
               />
             </>
           ))}
-        <Card tone="sunken" title={strings.whatTheySee}>
-          {afterPreview}
-        </Card>
+        {choice !== 'message' && (
+          <Callout tone="info" title={strings.whatTheySee}>
+            {afterPreview}
+          </Callout>
+        )}
       </Card>
       <Card title={strings.answersTitle} description={strings.answersSummary(target.objectName, filedCount)}>
         <DescriptionList
@@ -340,21 +349,9 @@ export function SettingsTab({
             ...filing,
           ]}
         />
-        <Select
-          label={strings.owner}
-          hint={strings.ownerHint}
-          items={[
-            { id: NOBODY, label: strings.nobody },
-            ...members.map((member) => ({ id: member.id, label: member.name })),
-          ]}
-          value={settings.values.owner}
-          isReadOnly={isReadOnly}
-          onChange={(id) => {
-            settings.set({ owner: id ?? NOBODY });
-          }}
-        />
+        <Link href={formHref(slug, form.id)}>{strings.changeFiling}</Link>
       </Card>
-      <Card title={strings.wordsTitle} description={seenChanged ? strings.waitsForPublish : strings.liveNow}>
+      <Card title={strings.wordsTitle} {...(seenChanged ? { description: strings.waitsForPublish } : {})}>
         <Field
           label={strings.headline}
           placeholder={strings.headlineDefault}
@@ -385,7 +382,7 @@ export function SettingsTab({
           }}
         />
       </Card>
-      <Card title={strings.nameAndAddress} description={data.forms.hostedUrl(settings.values.address)}>
+      <Card title={strings.nameAndAddress} description={strings.savedWithSave}>
         <Field
           label={strings.name}
           hint={strings.nameHint}
@@ -404,7 +401,7 @@ export function SettingsTab({
         />
         <Field
           label={strings.address}
-          prefix="/f/"
+          prefix={data.forms.hostedUrl('').replace(/^https?:\/\//, '')}
           hint={strings.addressChangeWarning}
           value={settings.values.address}
           maxLength={40}
@@ -414,6 +411,19 @@ export function SettingsTab({
             settings.set({ address: text.toLowerCase() });
           }}
           {...(settings.fieldError('slug') === undefined ? {} : { error: settings.fieldError('slug') ?? '' })}
+        />
+        <Select
+          label={strings.owner}
+          hint={strings.ownerHint}
+          items={[
+            { id: NOBODY, label: strings.nobody },
+            ...members.map((member) => ({ id: member.id, label: member.name })),
+          ]}
+          value={settings.values.owner}
+          isReadOnly={isReadOnly}
+          onChange={(id) => {
+            settings.set({ owner: id ?? NOBODY });
+          }}
         />
       </Card>
       <Card title={strings.spamTitle} description={strings.spamSummary}>

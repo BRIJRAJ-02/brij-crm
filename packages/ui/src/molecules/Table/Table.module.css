@@ -35,8 +35,13 @@
     outline: none;
   }
 
+  /* A row picked for a bulk action: the accent's soft fill, which hover leaves alone. */
+  .row[data-selected] {
+    background: var(--accent-soft);
+  }
+
   @media (hover: hover) and (pointer: fine) {
-    .row[data-hovered] {
+    .row:not([data-selected])[data-hovered] {
       background: var(--surface-hover);
     }
   }

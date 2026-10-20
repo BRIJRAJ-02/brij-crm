@@ -120,6 +120,7 @@ export function SubmissionsTab({
   const [isConfirmingDelete, setConfirmingDelete] = useState(false);
 
   const go = (submissionId?: string, nextState: SubmissionState | undefined = state) => {
+    if (nextState !== state) setSelected(new Set());
     const href = formHref(slug, formId, 'submissions', submissionId);
     void navigate({ href: nextState === undefined ? href : `${href}&state=${nextState}` });
   };
@@ -184,14 +185,23 @@ export function SubmissionsTab({
           [submission.mainRecord?.name, submission.email].some((text) => text?.toLowerCase().includes(needle) === true),
         );
   const waiting = rows.filter((submission) => submission.state === 'needs_review').length;
+  // What a bulk action acts on: the picked rows still in view (a filter or a search may hide some).
+  const picked = shown.filter((submission) => selected.has(submission.id));
+  const canRelease = picked.some((submission) => submission.state === 'spam' || submission.state === 'needs_review');
+  const canMarkSpam = picked.some((submission) => submission.state !== 'spam');
   const columns: readonly TableColumn[] = [
     { id: 'person', label: strings.person, isRowHeader: true, isInline: true },
     { id: 'when', label: strings.when },
     { id: 'state', label: strings.state },
     // The questions the list carries answers for (the server sends each row's first answers), in the form's order.
+    // A question earns a column when some row has an answer to it that the Person column doesn't already say.
     ...questions
       .filter((question) =>
-        rows.some((submission) => submission.firstAnswers.some((each) => each.questionId === question.id)),
+        shown.some((submission) => {
+          const answer = submission.firstAnswers.find((each) => each.questionId === question.id);
+          const text = answer === undefined ? '' : answerText(answer).trim();
+          return text !== '' && text !== submission.mainRecord?.name;
+        }),
       )
       .slice(0, ANSWER_COLUMNS)
       .map((question) => ({ id: question.id, label: question.label })),
@@ -199,7 +209,9 @@ export function SubmissionsTab({
 
   /** Marks every picked submission spam, or not spam, one after another, with progress in the bar. */
   const settleAll = (kind: 'spam' | 'release') => {
-    const ids = [...selected];
+    const ids = picked
+      .filter((submission) => (kind === 'spam' ? submission.state !== 'spam' : submission.state !== 'processed'))
+      .map((submission) => submission.id);
     let done = 0;
     const label = kind === 'spam' ? strings.markingSpam : strings.markingNotSpam;
     setBulk({ label, value: 0 });
@@ -225,7 +237,10 @@ export function SubmissionsTab({
       },
       (error: unknown) => {
         setBulk(undefined);
-        toasts.toast({ tone: 'danger', message: isDataError(error) ? error.message : strings.failedText });
+        // Keep the ones that didn't change picked, and say how far it got.
+        setSelected(new Set(ids.slice(done)));
+        const reason = isDataError(error) ? error.message : strings.failedText;
+        toasts.toast({ tone: 'danger', message: `${strings.settledSome(done, ids.length)} ${reason}` });
         void router.invalidate();
       },
     );
@@ -298,29 +313,33 @@ export function SubmissionsTab({
           {strings.needReview(waiting)}
         </Callout>
       )}
-      {canManage && selected.size > 0 && (
+      {canManage && picked.length > 0 && (
         <BulkActionBar
-          count={selected.size}
+          count={picked.length}
           total={shown.length}
           onClear={() => {
             setSelected(new Set());
           }}
           {...(bulk === undefined ? {} : { progress: bulk })}
         >
-          <Button
-            onPress={() => {
-              settleAll('release');
-            }}
-          >
-            {strings.notSpam}
-          </Button>
-          <Button
-            onPress={() => {
-              settleAll('spam');
-            }}
-          >
-            {strings.markSpam}
-          </Button>
+          {canRelease && (
+            <Button
+              onPress={() => {
+                settleAll('release');
+              }}
+            >
+              {strings.notSpam}
+            </Button>
+          )}
+          {canMarkSpam && (
+            <Button
+              onPress={() => {
+                settleAll('spam');
+              }}
+            >
+              {strings.markSpam}
+            </Button>
+          )}
         </BulkActionBar>
       )}
       <Table
