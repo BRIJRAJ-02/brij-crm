@@ -4,6 +4,7 @@ import { sql } from 'drizzle-orm';
 import { afterAll, beforeAll, describe, expect, inject, it } from 'vitest';
 import { createDatabase, type Database } from '@crm/db';
 import type { EngineScope } from '../access/mint.ts';
+import type { AccessRules } from '../access/policy.ts';
 import { newId } from '../engine/ids.ts';
 import { isRefusal } from '../engine/refusals.ts';
 import { createWorkspace } from '../engine/workspaces.ts';
@@ -180,5 +181,46 @@ describe('book someone in (AC-709, AC-710)', () => {
     const page = await pageOf(w.owner);
     const key = testScope({ db, workspaceId: w.workspaceId, actor: { type: 'api_key', id: newId() }, scopes: [] });
     expect(await refusalOf(bookAsHost(key, calendar().deps, input(page.id)))).toMatchObject({ code: 'FORBIDDEN' });
+  });
+
+  it('a key another host on the page used books nothing, and never answers their booking', async () => {
+    const w = await workspace();
+    const page = await pageOf(w.owner);
+    const bea = await w.addMember('Bea');
+    const beaId = bea.actor.id;
+    await db.withWorkspace(w.workspaceId, (tx) =>
+      tx.execute(
+        sql`insert into booking_page_members (workspace_id, page_id, member_id, position) values (${w.workspaceId}, ${page.id}, ${beaId}, 1)`,
+      ),
+    );
+    const once = input(page.id);
+    await bookAsHost(w.owner, calendar().deps, once);
+    expect(
+      await refusalOf(bookAsHost(bea, calendar().deps, { ...once, start: new Date('2026-11-03T20:00:00.000Z') })),
+    ).toMatchObject({ code: 'ID_TAKEN' });
+  });
+
+  it('a host who can’t see People and Companies learns nothing of the guest’s records', async () => {
+    const w = await workspace();
+    // Ada files Grace first, so the person and company already exist.
+    await bookAsHost(w.owner, calendar().deps, input((await pageOf(w.owner)).id));
+    const objects = await db.withWorkspace(w.workspaceId, (tx) =>
+      tx.execute<{ id: string }>(sql`select id::text as id from objects where standard_key in ('people', 'companies')`),
+    );
+    const rules: AccessRules = {
+      levels: objects.rows.map((row) => ({
+        subject: { type: 'role', role: 'member' },
+        target: { type: 'object', objectId: row.id },
+        level: 'none',
+      })),
+      records: [],
+    };
+    const bea = rescope(await w.addMember('Bea'), { rules });
+    const page = await createBookingPage(bea, { id: newId(), title: 'Bea’s call', timeZone: 'UTC' }, NOW);
+    await bookAsHost(bea, calendar().deps, input(page.id, { start: new Date('2026-11-03T20:00:00.000Z') }));
+    const week = await readBookingsCalendar(bea, { from: '2026-11-03T00:00:00.000Z', to: '2026-11-04T00:00:00.000Z' });
+    expect(week.bookings).toHaveLength(1);
+    expect(week.bookings[0]).not.toHaveProperty('personRecordId');
+    expect(week.bookings[0]).not.toHaveProperty('companyRecordId');
   });
 });

@@ -7,7 +7,7 @@
 // minutes or past 8 hours. The guest is filed as a person like a visitor is;
 // the calendar event, with every guest invited, is written after the commit.
 import { and, eq, isNull, sql } from 'drizzle-orm';
-import { PERMISSIONS } from '@crm/contracts';
+import { HOST_BOOKING_LIMITS, PERMISSIONS } from '@crm/contracts';
 import { schema } from '@crm/db';
 import { requirePermission } from '../access/check.ts';
 import type { EngineScope } from '../access/mint.ts';
@@ -22,8 +22,8 @@ import { matchVisitor } from './visitor.ts';
 
 const { bookingPageMembers, bookings, objects } = schema;
 
-/** The shortest and longest meeting a member books in themselves, in minutes. */
-export const HOST_BOOKING_MINUTES = { min: 5, max: 480 } as const;
+/** The shortest and longest meeting a member books in themselves, in minutes: the contract's bounds, so they can't drift. */
+export const HOST_BOOKING_MINUTES = HOST_BOOKING_LIMITS;
 
 /** Book someone in: who, when, on which page, and what to tell them. */
 export interface HostBookingInput {
@@ -55,6 +55,7 @@ function bookingHost(scope: EngineScope): string {
 }
 
 const TAKEN = 'Something else is already in that time.';
+const REUSED = 'That request was already used. Open New meeting again to book.';
 
 /**
  * Books a guest into the member's own time (AC-709, AC-710): answers the
@@ -106,8 +107,14 @@ export async function bookAsHost(
       const [again] = await tx
         .select({ id: bookings.id })
         .from(bookings)
-        .where(and(eq(bookings.pageId, page.id), eq(bookings.idempotencyKey, input.idempotencyKey)));
-      if (again !== undefined) return { bookingId: again.id, replayed: true, title: page.title, video: false };
+        .where(
+          and(
+            eq(bookings.pageId, page.id),
+            eq(bookings.idempotencyKey, input.idempotencyKey),
+            eq(bookings.hostMemberId, host),
+          ),
+        );
+      if (again !== undefined) return { bookingId: again.id, replayed: true, title: page.title, place: undefined };
       const by = { type: 'member' as const, id: host, memberId: host };
       let bookingId: string;
       try {
@@ -142,6 +149,8 @@ export async function bookAsHost(
         bookingId = row.id;
       } catch (error) {
         if (postgresError(error)?.code === '23P01') throw refuse('SLOT_TAKEN', TAKEN);
+        // The same key on this page from someone else's booking: a client reused it, so nothing is booked.
+        if (postgresError(error)?.code === '23505') throw refuse('ID_TAKEN', REUSED);
         throw error;
       }
       // The guest's records, as for a visitor, in a savepoint: a refusal (no right to add people) keeps the booking.
@@ -163,7 +172,7 @@ export async function bookAsHost(
             .where(eq(bookings.id, bookingId));
         }
       }
-      return { bookingId, replayed: false, title: page.title, video: page.location.type === 'video' };
+      return { bookingId, replayed: false, title: page.title, place: page.location };
     },
     hooks,
   );
@@ -188,7 +197,11 @@ export async function bookAsHost(
           { email: input.email, name: input.name },
           ...guests.map((guest) => ({ email: guest, name: guest })),
         ],
-        video: result.video,
+        video: result.place?.type === 'video',
+        // In person or a custom place goes on the event; a phone page's number is the guest's, which isn't asked here.
+        ...(result.place === undefined || result.place.type === 'video' || result.place.type === 'phone'
+          ? {}
+          : { location: result.place.value }),
       });
     } catch (error) {
       deps.log?.warn('booking.event_failed', {

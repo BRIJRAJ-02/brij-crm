@@ -21,6 +21,7 @@ import type { EngineScope } from '../access/mint.ts';
 import { can } from '../access/policy.ts';
 import { inWorkspace } from '../access/run.ts';
 import { blockOccurrences } from './blocks.ts';
+import { linksOf, seenLinks } from './links.ts';
 
 const { bookingPages, bookings } = schema;
 
@@ -52,15 +53,18 @@ function visibleTo(reader: { readonly member?: string; readonly everyone: boolea
 }
 
 /** A booking row and its page as Bookings shows it. */
-function itemOf({
-  booking: row,
-  pageTitle,
-  location,
-}: {
-  readonly booking: typeof bookings.$inferSelect;
-  readonly pageTitle: string;
-  readonly location: unknown;
-}): BookingListItem {
+function itemOf(
+  {
+    booking: row,
+    pageTitle,
+    location,
+  }: {
+    readonly booking: typeof bookings.$inferSelect;
+    readonly pageTitle: string;
+    readonly location: unknown;
+  },
+  seen: ReadonlySet<string>,
+): BookingListItem {
   const place = BookingLocation.safeParse(location);
   return {
     id: row.id,
@@ -74,8 +78,7 @@ function itemOf({
     visitorEmail: row.visitorEmail,
     visitorTimeZone: row.visitorTimeZone,
     status: row.status === 'cancelled' ? 'cancelled' : 'confirmed',
-    ...(row.personRecordId === null ? {} : { personRecordId: row.personRecordId }),
-    ...(row.companyRecordId === null ? {} : { companyRecordId: row.companyRecordId }),
+    ...linksOf(row, seen),
     ...(row.videoUrl === null ? {} : { videoUrl: row.videoUrl }),
     ...(row.cancelReason === null ? {} : { cancelReason: row.cancelReason }),
     ...guestsAndNote(row.answers),
@@ -105,7 +108,12 @@ export async function listWorkspaceBookings(
       .where(and(shown, visibleTo(reader)))
       .orderBy(upcoming ? asc(bookings.startsAt) : desc(bookings.startsAt), asc(bookings.id))
       .limit(BOOKINGS_LIST_MAX);
-    return rows.map(itemOf);
+    const seen = await seenLinks(
+      tx,
+      scope.access,
+      rows.map(({ booking }) => booking),
+    );
+    return rows.map((row) => itemOf(row, seen));
   });
 }
 
@@ -199,6 +207,11 @@ export async function readBookingsCalendar(
       .sort((a, b) => a.startsAt.localeCompare(b.startsAt));
     // The reader's own closed time only (AC-712): another member's blocks never show, whatever the reader may see.
     const blocks = member === undefined ? [] : await blockOccurrences(tx, member, from, to);
-    return { bookings: rows.map(itemOf), events, blocks: [...blocks] };
+    const seen = await seenLinks(
+      tx,
+      scope.access,
+      rows.map(({ booking }) => booking),
+    );
+    return { bookings: rows.map((row) => itemOf(row, seen)), events, blocks: [...blocks] };
   });
 }

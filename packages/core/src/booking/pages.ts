@@ -27,6 +27,7 @@ import { can } from '../access/policy.ts';
 import { inWorkspace } from '../access/run.ts';
 import { postgresError, refuse, refuseOn } from '../engine/refusals.ts';
 import { actorRow } from '../engine/scope.ts';
+import { linksOf, seenLinks } from './links.ts';
 import { loadPage, pageOf, type PageRecord } from './slots.ts';
 
 const { bookingMemberHours, bookingPageMembers, bookingPages, bookings } = schema;
@@ -350,6 +351,7 @@ export async function listBookings(
       .where(and(eq(bookings.pageId, page.id), upcoming ? gte(bookings.endsAt, now) : lt(bookings.endsAt, now)))
       .orderBy(upcoming ? asc(bookings.startsAt) : desc(bookings.startsAt), asc(bookings.id))
       .limit(BOOKINGS_PAGE_MAX);
+    const seen = await seenLinks(tx, scope.access, rows);
     return rows.map((row): BookingView => ({
       id: row.id,
       pageId: row.pageId,
@@ -360,8 +362,7 @@ export async function listBookings(
       visitorEmail: row.visitorEmail,
       visitorTimeZone: row.visitorTimeZone,
       status: row.status === 'cancelled' ? 'cancelled' : 'confirmed',
-      ...(row.personRecordId === null ? {} : { personRecordId: row.personRecordId }),
-      ...(row.companyRecordId === null ? {} : { companyRecordId: row.companyRecordId }),
+      ...linksOf(row, seen),
       eventFailed: row.eventFailedAt !== null,
       createdAt: row.createdAt.toISOString(),
     }));
