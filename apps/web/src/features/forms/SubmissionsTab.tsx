@@ -19,6 +19,9 @@ import {
   CopyButton,
   DescriptionList,
   EmptyState,
+  Menu,
+  MenuItem,
+  MenuTrigger,
   Modal,
   Panel,
   RecordChip,
@@ -246,6 +249,24 @@ export function SubmissionsTab({
     );
   };
 
+  // Export, Add to CRM and Sync old records wait on the submissions backend (paused): shown, off, each saying so.
+  const moreActions = (
+    <MenuTrigger>
+      <Button variant="ghost" icon="ellipsis" label={strings.moreSubmissionActions} />
+      <Menu label={strings.moreSubmissionActions} disabledKeys={['export', 'file', 'sync']}>
+        <MenuItem id="export" icon="download" description={strings.exportSoon}>
+          {strings.exportCsv}
+        </MenuItem>
+        <MenuItem id="file" icon="user-plus" description={strings.addToCrmSoon}>
+          {strings.addToCrm}
+        </MenuItem>
+        <MenuItem id="sync" icon="refresh-cw" description={strings.syncSoon}>
+          {strings.syncOld}
+        </MenuItem>
+      </Menu>
+    </MenuTrigger>
+  );
+
   const toolbar = (
     <LinkListToolbar
       searchLabel={strings.searchSubmissions}
@@ -253,22 +274,25 @@ export function SubmissionsTab({
       onQueryChange={setQuery}
       size="sm"
       actions={
-        <Select
-          label={strings.filterStates}
-          isLabelHidden
-          size="sm"
-          items={[
-            { id: ALL, label: strings.allStates },
-            ...FILTERS.map((each) => ({ id: each, label: strings.states[each] })),
-          ]}
-          value={state ?? ALL}
-          onChange={(value) => {
-            go(
-              undefined,
-              FILTERS.find((each) => each === value),
-            );
-          }}
-        />
+        <>
+          <Select
+            label={strings.filterStates}
+            isLabelHidden
+            size="sm"
+            items={[
+              { id: ALL, label: strings.allStates },
+              ...FILTERS.map((each) => ({ id: each, label: strings.states[each] })),
+            ]}
+            value={state ?? ALL}
+            onChange={(value) => {
+              go(
+                undefined,
+                FILTERS.find((each) => each === value),
+              );
+            }}
+          />
+          {canManage && moreActions}
+        </>
       }
     />
   );
@@ -279,7 +303,8 @@ export function SubmissionsTab({
         return <RelativeTime value={submission.receivedAt} />;
       case 'person': {
         const record = submission.mainRecord;
-        if (record === undefined) return submission.email ?? '';
+        // Not filed: the email, and that it isn't in the CRM yet.
+        if (record === undefined) return strings.notInCrm(submission.email);
         const href = link(record.objectId, record.recordId);
         return <RecordChip display={record} {...(href === undefined ? {} : { href })} isFlat />;
       }
