@@ -8,10 +8,6 @@ export const strings = {
   workspace: 'Workspace',
   scheduling: 'Scheduling',
   preferences: 'Preferences',
-  bookingPages: 'Booking pages',
-  forms: 'Forms',
-  /** After Booking pages and Forms: they open in Captures, outside Settings. */
-  inCaptures: 'In Captures',
   /** The settings navigation's entries. */
   objects: 'Objects',
   objectsDescription: 'Shape the records your workspace keeps.',

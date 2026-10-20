@@ -13,30 +13,25 @@ import {
 } from './nav.ts';
 
 describe('settingsNav', () => {
-  it('lists Account, Workspace and Scheduling, in order, with their pages', () => {
+  it('lists Account and Workspace, in order, with their pages', () => {
     const groups = settingsNav('acme');
-    expect(groups.map((group) => group.label)).toEqual(['Account', 'Workspace', 'Scheduling']);
+    expect(groups.map((group) => group.label)).toEqual(['Account', 'Workspace']);
     expect(groups.map((group) => group.entries.map((entry) => entry.label))).toEqual([
       ['Preferences', 'Calendars'],
       ['Objects', 'Background jobs'],
-      ['Booking pages', 'Forms'],
     ]);
   });
 
-  it('puts Calendars under Account, and sends Scheduling into Captures, saying so', () => {
+  it('puts Calendars under Account, and every entry opens a page in Settings', () => {
     const entries = settingsNav('acme').flatMap((group) => group.entries);
     expect(Object.fromEntries(entries.map((entry) => [entry.id, entry.href]))).toEqual({
       preferences: '/w/acme/settings/account/preferences',
       calendars: '/w/acme/settings/account/calendars',
       objects: '/w/acme/settings/objects',
       jobs: '/w/acme/settings/jobs',
-      'booking-pages': '/w/acme/captures/links',
-      forms: '/w/acme/captures/forms',
     });
-    expect(entries.filter((entry) => entry.meta !== undefined).map((entry) => [entry.id, entry.meta])).toEqual([
-      ['booking-pages', 'In Captures'],
-      ['forms', 'In Captures'],
-    ]);
+    expect(entries.every((entry) => entry.href.startsWith('/w/acme/settings/'))).toBe(true);
+    expect(entries.filter((entry) => entry.meta !== undefined)).toEqual([]);
     expect(preferencesHref('acme')).toBe('/w/acme/settings/account/preferences');
     expect(calendarSettingsHref('acme')).toBe('/w/acme/settings/account/calendars');
   });

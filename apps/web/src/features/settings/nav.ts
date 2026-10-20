@@ -3,7 +3,6 @@
 // imports, so the routes' loaders (in the first load) can use them without
 // pulling a screen in.
 import type { ObjectSummary, Permission } from '@crm/data';
-import { formsHref, linksHref } from '../captures/tabs.ts';
 import { jobsHref, settingsHomeHref } from '../workspace/objects.ts';
 import { strings as calendar } from './calendar-strings.ts';
 import { strings as jobs } from './jobs-strings.ts';
@@ -33,10 +32,14 @@ export const preferencesHref = settingsHomeHref;
 /** Settings › Account › Calendars (specs 0024 and 0026): the member's own calendar connections. */
 export const calendarSettingsHref = (slug: string) => `/w/${slug}/settings/account/calendars`;
 
-/** The settings navigation's pages: Account's, Workspace's, then Scheduling's links into Captures. */
-export type SettingsPageId = 'preferences' | 'calendars' | 'objects' | 'jobs' | 'booking-pages' | 'forms';
+/** The settings navigation's pages: Account's, then Workspace's. */
+export type SettingsPageId = 'preferences' | 'calendars' | 'objects' | 'jobs';
 
-/** The settings navigation's groups, in order (spec 0026, AC-682). */
+/**
+ * The settings navigation's groups, in order (spec 0026, AC-682). Scheduling
+ * holds workspace wide scheduling settings (spam protection, defaults) once
+ * there are some; one booking page's or one form's settings stay in its editor.
+ */
 export type SettingsGroupId = 'account' | 'workspace' | 'scheduling';
 
 /** One entry in the settings navigation. */
@@ -44,8 +47,8 @@ export interface SettingsNavEntry {
   readonly id: SettingsPageId;
   readonly label: string;
   readonly href: string;
-  readonly icon: 'sliders-horizontal' | 'calendar' | 'box' | 'list-checks' | 'link' | 'clipboard-list';
-  /** A quiet word after the name: where an entry that leaves Settings goes ("Captures"). */
+  readonly icon: 'sliders-horizontal' | 'calendar' | 'box' | 'list-checks';
+  /** A quiet word after the name. Every entry opens a page in Settings, so none leaves it (20 Oct 2026). */
   readonly meta?: string;
   /** A permission the page needs before the member may open it at all; absent, every member may. */
   readonly requires?: Permission;
@@ -60,10 +63,11 @@ export interface SettingsNavGroup {
 
 /**
  * The settings navigation (spec 0026, AC-682): Account (Preferences,
- * Calendars), Workspace (Objects, Background jobs) and Scheduling (Booking
- * pages, Forms, which link into Captures until each has workspace wide
- * settings of its own, and say so). Every member may open each page today:
- * members read Objects, see their own jobs and use Captures.
+ * Calendars) and Workspace (Objects, Background jobs). Every entry is a page
+ * in Settings: the Booking pages and Forms links into Captures went on 20 Oct
+ * 2026, as neither has workspace wide settings yet (each page's and each
+ * form's own settings live in its editor). Every member may open each page
+ * today: members read Objects and see their own jobs.
  */
 export function settingsNav(slug: string): readonly SettingsNavGroup[] {
   return [
@@ -81,20 +85,6 @@ export function settingsNav(slug: string): readonly SettingsNavGroup[] {
       entries: [
         { id: 'objects', label: strings.objects, href: objectsSettingsHref(slug), icon: 'box' },
         { id: 'jobs', label: jobs.title, href: jobsHref(slug), icon: 'list-checks' },
-      ],
-    },
-    {
-      id: 'scheduling',
-      label: strings.scheduling,
-      entries: [
-        {
-          id: 'booking-pages',
-          label: strings.bookingPages,
-          href: linksHref(slug),
-          icon: 'link',
-          meta: strings.inCaptures,
-        },
-        { id: 'forms', label: strings.forms, href: formsHref(slug), icon: 'clipboard-list', meta: strings.inCaptures },
       ],
     },
   ];

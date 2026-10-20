@@ -37,6 +37,10 @@ import { Route as WSlugCapturesLinksPageIdRouteImport } from './routes/w.$slug.c
 import { Route as WSlugSettingsAccountIndexRouteImport } from './routes/w.$slug.settings.account.index.tsx'
 import { Route as WSlugSettingsAccountCalendarsRouteImport } from './routes/w.$slug.settings.account.calendars.tsx'
 import { Route as WSlugSettingsAccountPreferencesRouteImport } from './routes/w.$slug.settings.account.preferences.tsx'
+import { Route as WSlugSettingsBookingPagesIndexRouteImport } from './routes/w.$slug.settings.booking-pages.index.tsx'
+import { Route as WSlugSettingsBookingPagesPageIdRouteImport } from './routes/w.$slug.settings.booking-pages.$pageId.tsx'
+import { Route as WSlugSettingsFormsIndexRouteImport } from './routes/w.$slug.settings.forms.index.tsx'
+import { Route as WSlugSettingsFormsFormIdRouteImport } from './routes/w.$slug.settings.forms.$formId.tsx'
 import { Route as WSlugSettingsObjectsIndexRouteImport } from './routes/w.$slug.settings.objects.index.tsx'
 import { Route as WSlugCapturesFormsFormIdPreviewRouteImport } from './routes/w.$slug.captures_.forms.$formId_.preview.tsx'
 import { Route as WSlugObjectsObjectRecordIdIndexRouteImport } from './routes/w.$slug.objects.$object_.$recordId.index.tsx'
@@ -191,6 +195,29 @@ const WSlugSettingsAccountPreferencesRoute =
     path: '/account/preferences',
     getParentRoute: () => WSlugSettingsRoute,
   } as any)
+const WSlugSettingsBookingPagesIndexRoute =
+  WSlugSettingsBookingPagesIndexRouteImport.update({
+    id: '/booking-pages/',
+    path: '/booking-pages/',
+    getParentRoute: () => WSlugSettingsRoute,
+  } as any)
+const WSlugSettingsBookingPagesPageIdRoute =
+  WSlugSettingsBookingPagesPageIdRouteImport.update({
+    id: '/booking-pages/$pageId',
+    path: '/booking-pages/$pageId',
+    getParentRoute: () => WSlugSettingsRoute,
+  } as any)
+const WSlugSettingsFormsIndexRoute = WSlugSettingsFormsIndexRouteImport.update({
+  id: '/forms/',
+  path: '/forms/',
+  getParentRoute: () => WSlugSettingsRoute,
+} as any)
+const WSlugSettingsFormsFormIdRoute =
+  WSlugSettingsFormsFormIdRouteImport.update({
+    id: '/forms/$formId',
+    path: '/forms/$formId',
+    getParentRoute: () => WSlugSettingsRoute,
+  } as any)
 const WSlugSettingsObjectsIndexRoute =
   WSlugSettingsObjectsIndexRouteImport.update({
     id: '/objects/',
@@ -260,9 +287,13 @@ export interface FileRoutesByFullPath {
   '/w/$slug/captures/links/$pageId': typeof WSlugCapturesLinksPageIdRoute
   '/w/$slug/settings/account/calendars': typeof WSlugSettingsAccountCalendarsRoute
   '/w/$slug/settings/account/preferences': typeof WSlugSettingsAccountPreferencesRoute
+  '/w/$slug/settings/booking-pages/$pageId': typeof WSlugSettingsBookingPagesPageIdRoute
+  '/w/$slug/settings/forms/$formId': typeof WSlugSettingsFormsFormIdRoute
   '/w/$slug/captures/forms/': typeof WSlugCapturesFormsIndexRoute
   '/w/$slug/captures/links/': typeof WSlugCapturesLinksIndexRoute
   '/w/$slug/settings/account/': typeof WSlugSettingsAccountIndexRoute
+  '/w/$slug/settings/booking-pages/': typeof WSlugSettingsBookingPagesIndexRoute
+  '/w/$slug/settings/forms/': typeof WSlugSettingsFormsIndexRoute
   '/w/$slug/settings/objects/': typeof WSlugSettingsObjectsIndexRoute
   '/w/$slug/captures/forms/$formId/preview': typeof WSlugCapturesFormsFormIdPreviewRoute
   '/w/$slug/objects/$object/$recordId/$tab': typeof WSlugObjectsObjectRecordIdTabRoute
@@ -293,9 +324,13 @@ export interface FileRoutesByTo {
   '/w/$slug/captures/links/$pageId': typeof WSlugCapturesLinksPageIdRoute
   '/w/$slug/settings/account/calendars': typeof WSlugSettingsAccountCalendarsRoute
   '/w/$slug/settings/account/preferences': typeof WSlugSettingsAccountPreferencesRoute
+  '/w/$slug/settings/booking-pages/$pageId': typeof WSlugSettingsBookingPagesPageIdRoute
+  '/w/$slug/settings/forms/$formId': typeof WSlugSettingsFormsFormIdRoute
   '/w/$slug/captures/forms': typeof WSlugCapturesFormsIndexRoute
   '/w/$slug/captures/links': typeof WSlugCapturesLinksIndexRoute
   '/w/$slug/settings/account': typeof WSlugSettingsAccountIndexRoute
+  '/w/$slug/settings/booking-pages': typeof WSlugSettingsBookingPagesIndexRoute
+  '/w/$slug/settings/forms': typeof WSlugSettingsFormsIndexRoute
   '/w/$slug/settings/objects': typeof WSlugSettingsObjectsIndexRoute
   '/w/$slug/captures/forms/$formId/preview': typeof WSlugCapturesFormsFormIdPreviewRoute
   '/w/$slug/objects/$object/$recordId/$tab': typeof WSlugObjectsObjectRecordIdTabRoute
@@ -331,9 +366,13 @@ export interface FileRoutesById {
   '/w/$slug/captures_/links/$pageId': typeof WSlugCapturesLinksPageIdRoute
   '/w/$slug/settings/account/calendars': typeof WSlugSettingsAccountCalendarsRoute
   '/w/$slug/settings/account/preferences': typeof WSlugSettingsAccountPreferencesRoute
+  '/w/$slug/settings/booking-pages/$pageId': typeof WSlugSettingsBookingPagesPageIdRoute
+  '/w/$slug/settings/forms/$formId': typeof WSlugSettingsFormsFormIdRoute
   '/w/$slug/captures/forms/': typeof WSlugCapturesFormsIndexRoute
   '/w/$slug/captures/links/': typeof WSlugCapturesLinksIndexRoute
   '/w/$slug/settings/account/': typeof WSlugSettingsAccountIndexRoute
+  '/w/$slug/settings/booking-pages/': typeof WSlugSettingsBookingPagesIndexRoute
+  '/w/$slug/settings/forms/': typeof WSlugSettingsFormsIndexRoute
   '/w/$slug/settings/objects/': typeof WSlugSettingsObjectsIndexRoute
   '/w/$slug/captures_/forms/$formId_/preview': typeof WSlugCapturesFormsFormIdPreviewRoute
   '/w/$slug/objects/$object_/$recordId/$tab': typeof WSlugObjectsObjectRecordIdTabRoute
@@ -370,9 +409,13 @@ export interface FileRouteTypes {
     | '/w/$slug/captures/links/$pageId'
     | '/w/$slug/settings/account/calendars'
     | '/w/$slug/settings/account/preferences'
+    | '/w/$slug/settings/booking-pages/$pageId'
+    | '/w/$slug/settings/forms/$formId'
     | '/w/$slug/captures/forms/'
     | '/w/$slug/captures/links/'
     | '/w/$slug/settings/account/'
+    | '/w/$slug/settings/booking-pages/'
+    | '/w/$slug/settings/forms/'
     | '/w/$slug/settings/objects/'
     | '/w/$slug/captures/forms/$formId/preview'
     | '/w/$slug/objects/$object/$recordId/$tab'
@@ -403,9 +446,13 @@ export interface FileRouteTypes {
     | '/w/$slug/captures/links/$pageId'
     | '/w/$slug/settings/account/calendars'
     | '/w/$slug/settings/account/preferences'
+    | '/w/$slug/settings/booking-pages/$pageId'
+    | '/w/$slug/settings/forms/$formId'
     | '/w/$slug/captures/forms'
     | '/w/$slug/captures/links'
     | '/w/$slug/settings/account'
+    | '/w/$slug/settings/booking-pages'
+    | '/w/$slug/settings/forms'
     | '/w/$slug/settings/objects'
     | '/w/$slug/captures/forms/$formId/preview'
     | '/w/$slug/objects/$object/$recordId/$tab'
@@ -440,9 +487,13 @@ export interface FileRouteTypes {
     | '/w/$slug/captures_/links/$pageId'
     | '/w/$slug/settings/account/calendars'
     | '/w/$slug/settings/account/preferences'
+    | '/w/$slug/settings/booking-pages/$pageId'
+    | '/w/$slug/settings/forms/$formId'
     | '/w/$slug/captures/forms/'
     | '/w/$slug/captures/links/'
     | '/w/$slug/settings/account/'
+    | '/w/$slug/settings/booking-pages/'
+    | '/w/$slug/settings/forms/'
     | '/w/$slug/settings/objects/'
     | '/w/$slug/captures_/forms/$formId_/preview'
     | '/w/$slug/objects/$object_/$recordId/$tab'
@@ -659,6 +710,34 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof WSlugSettingsAccountPreferencesRouteImport
       parentRoute: typeof WSlugSettingsRoute
     }
+    '/w/$slug/settings/booking-pages/': {
+      id: '/w/$slug/settings/booking-pages/'
+      path: '/booking-pages'
+      fullPath: '/w/$slug/settings/booking-pages/'
+      preLoaderRoute: typeof WSlugSettingsBookingPagesIndexRouteImport
+      parentRoute: typeof WSlugSettingsRoute
+    }
+    '/w/$slug/settings/booking-pages/$pageId': {
+      id: '/w/$slug/settings/booking-pages/$pageId'
+      path: '/booking-pages/$pageId'
+      fullPath: '/w/$slug/settings/booking-pages/$pageId'
+      preLoaderRoute: typeof WSlugSettingsBookingPagesPageIdRouteImport
+      parentRoute: typeof WSlugSettingsRoute
+    }
+    '/w/$slug/settings/forms/': {
+      id: '/w/$slug/settings/forms/'
+      path: '/forms'
+      fullPath: '/w/$slug/settings/forms/'
+      preLoaderRoute: typeof WSlugSettingsFormsIndexRouteImport
+      parentRoute: typeof WSlugSettingsRoute
+    }
+    '/w/$slug/settings/forms/$formId': {
+      id: '/w/$slug/settings/forms/$formId'
+      path: '/forms/$formId'
+      fullPath: '/w/$slug/settings/forms/$formId'
+      preLoaderRoute: typeof WSlugSettingsFormsFormIdRouteImport
+      parentRoute: typeof WSlugSettingsRoute
+    }
     '/w/$slug/settings/objects/': {
       id: '/w/$slug/settings/objects/'
       path: '/objects'
@@ -751,7 +830,11 @@ interface WSlugSettingsRouteChildren {
   WSlugSettingsIndexRoute: typeof WSlugSettingsIndexRoute
   WSlugSettingsAccountCalendarsRoute: typeof WSlugSettingsAccountCalendarsRoute
   WSlugSettingsAccountPreferencesRoute: typeof WSlugSettingsAccountPreferencesRoute
+  WSlugSettingsBookingPagesPageIdRoute: typeof WSlugSettingsBookingPagesPageIdRoute
+  WSlugSettingsFormsFormIdRoute: typeof WSlugSettingsFormsFormIdRoute
   WSlugSettingsAccountIndexRoute: typeof WSlugSettingsAccountIndexRoute
+  WSlugSettingsBookingPagesIndexRoute: typeof WSlugSettingsBookingPagesIndexRoute
+  WSlugSettingsFormsIndexRoute: typeof WSlugSettingsFormsIndexRoute
   WSlugSettingsObjectsIndexRoute: typeof WSlugSettingsObjectsIndexRoute
   WSlugSettingsObjectsObjectTabRoute: typeof WSlugSettingsObjectsObjectTabRoute
   WSlugSettingsObjectsObjectIndexRoute: typeof WSlugSettingsObjectsObjectIndexRoute
@@ -763,7 +846,11 @@ const WSlugSettingsRouteChildren: WSlugSettingsRouteChildren = {
   WSlugSettingsIndexRoute: WSlugSettingsIndexRoute,
   WSlugSettingsAccountCalendarsRoute: WSlugSettingsAccountCalendarsRoute,
   WSlugSettingsAccountPreferencesRoute: WSlugSettingsAccountPreferencesRoute,
+  WSlugSettingsBookingPagesPageIdRoute: WSlugSettingsBookingPagesPageIdRoute,
+  WSlugSettingsFormsFormIdRoute: WSlugSettingsFormsFormIdRoute,
   WSlugSettingsAccountIndexRoute: WSlugSettingsAccountIndexRoute,
+  WSlugSettingsBookingPagesIndexRoute: WSlugSettingsBookingPagesIndexRoute,
+  WSlugSettingsFormsIndexRoute: WSlugSettingsFormsIndexRoute,
   WSlugSettingsObjectsIndexRoute: WSlugSettingsObjectsIndexRoute,
   WSlugSettingsObjectsObjectTabRoute: WSlugSettingsObjectsObjectTabRoute,
   WSlugSettingsObjectsObjectIndexRoute: WSlugSettingsObjectsObjectIndexRoute,
