@@ -21,6 +21,7 @@ New. The artifact composed its screens by hand from the shell pieces; every scre
 ```
 
 - It fills its parent: give it the window's height (the web app mounts in `data-app-root`, which the base layer sizes to the window).
+- `banner` sits under the bars on every page, for a state of the whole app for this person (a calendar that stopped syncing, spec 0024): pass a `Callout` with `placement="banner"`. A slot rather than markup in each page, so it shows on every page in the same place.
 - The main column is the `main` landmark; the sidebar is the navigation landmark; a side panel is an `aside`.
 - A skip link ("Skip to content") comes first in the tab order and shows while it has focus; it jumps past the sidebar to the main column.
 - Below `bp-page-compact` (1024px) the sidebar folds to its rail and stays folded, through `AppShellContext` (`isCompact`).

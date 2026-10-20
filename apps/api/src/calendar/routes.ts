@@ -22,7 +22,7 @@
 // origin check lets this one path by, and the channel's own token is the
 // only key (`takeCalendarNotice`). It answers 200 with no body whatever the
 // notice was, so a caller learns nothing, and a notice that queued a sync
-// pokes the worker. A caller sending more than 120 a minute is told to wait.
+// pokes the worker. A channel sent more than 120 a minute is told to wait.
 import { randomBytes, timingSafeEqual } from 'node:crypto';
 import { connectCalendar, isProviderError, isRefusal, signValue, takeCalendarNotice, verifyValue } from '@crm/core';
 import type { Database } from '@crm/db';
@@ -138,8 +138,9 @@ export function createCalendarRoutes(deps: CalendarRouteDeps) {
 
     /** `POST /api/calendar/google/notify`: Google's change notice, by its headers alone. */
     async notify(c: RouteContext): Promise<Response> {
-      const caller = c.get('clientIp') ?? 'unknown';
-      if (!deps.limiter(`calendar-notice:${caller}`, NOTICE_LIMIT).allowed) return c.body(null, 429);
+      // Per channel, not per caller: every real notice comes from a handful of Google's addresses.
+      const channel = (c.req.header('x-goog-channel-id') ?? '').slice(0, 64);
+      if (!deps.limiter(`calendar-notice:${channel}`, NOTICE_LIMIT).allowed) return c.body(null, 429);
       if (deps.calendar === undefined) return c.body(null, 200);
       const outcome = await takeCalendarNotice(deps.db, {
         channelId: c.req.header('x-goog-channel-id'),

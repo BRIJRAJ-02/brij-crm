@@ -39,11 +39,17 @@ export const strings = {
     private: 'Others see “Private meeting” and its time only.',
   },
   makeDefault: 'Make default',
+  /** Local development only: Google's notices can't reach a laptop, so sync waits for the 15 minute poll. */
+  syncNow: 'Sync now',
   disconnect: 'Disconnect',
   disconnectTitle: 'Disconnect this calendar?',
   disconnectText: (account: string) =>
     `Meetings from ${account} stop syncing, and the ones no one else’s calendar holds leave your records. Your calendar itself isn’t changed.`,
   keep: 'Keep it',
+  /** The workspace setting, for owners and admins (AC-609). */
+  createPeople: 'Add people from meetings',
+  createPeopleHelp:
+    'When someone outside the workspace is invited to a synced meeting and isn’t in Timefix yet, add them as a person, linked to their company.',
   /** Closes the note about how connecting went. */
   dismiss: 'Dismiss',
   /** What the browser came back from Google with (`?calendar=`). */

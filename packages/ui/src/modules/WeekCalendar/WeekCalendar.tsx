@@ -43,9 +43,11 @@ export interface WeekCalendarBlock {
   /**
    * `booking` is accent; `event` quieter, in its calendar's hue; `blocked` and
    * `held` are time the member closed (spec 0027), hatched and quiet, a solid
-   * edge for a block and a dashed one for a hold.
+   * edge for a block and a dashed one for a hold; `busy` is the member's own
+   * calendar time with nobody else invited (spec 0024), shown by its time
+   * alone, plain and quiet.
    */
-  readonly kind: 'booking' | 'event' | 'blocked' | 'held';
+  readonly kind: 'booking' | 'event' | 'blocked' | 'held' | 'busy';
   /** An event's calendar hue (each connection keeps one). */
   readonly hue?: Hue;
   readonly isCancelled?: boolean;
@@ -66,8 +68,9 @@ const SNAP = 15;
 /** How far a finger may move, in CSS pixels, and still be a tap rather than a scroll. */
 const TAP_SLOP = 8;
 
-/** Time the member closed: it sits under bookings and events rather than in their lanes. */
-const isClosed = (block: WeekCalendarBlock) => block.kind === 'blocked' || block.kind === 'held';
+/** Time the member closed, or is busy: it sits under bookings and events rather than in their lanes. */
+const isClosed = (block: WeekCalendarBlock) =>
+  block.kind === 'blocked' || block.kind === 'held' || block.kind === 'busy';
 
 /** Props for WeekCalendar. */
 export interface WeekCalendarProps {

@@ -1,9 +1,9 @@
 // Brief
 // Purpose: Settings › Account › Calendars: the member's own calendar connections, so their meetings reach the records they're with.
 // Main task: connect a Google calendar, see each one's state and last sync, choose who sees its meetings, disconnect.
-// Leaves out: other members' calendars, Outlook (milestone 4), the disconnected banner and Add as person (milestone 2).
+// Leaves out: other members' calendars and Outlook (milestone 4). Owners and admins also choose whether meetings add people.
 import type { CalendarConnectionView, CalendarView, DataLayer } from '@crm/data';
-import { useCalendar } from '@crm/data/react';
+import { useCalendar, useCalendarSettings } from '@crm/data/react';
 import {
   Badge,
   Button,
@@ -15,6 +15,7 @@ import {
   RelativeTime,
   SegmentedControl,
   Skeleton,
+  Switch,
 } from '@crm/ui';
 import { useState } from 'react';
 import { strings, type ConnectResult } from './calendar-strings.ts';
@@ -39,11 +40,14 @@ function ConnectionCard({
   onSharing,
   onDefault,
   onDisconnect,
+  onSyncNow,
 }: {
   readonly connection: CalendarConnectionView;
   readonly onSharing: (sharing: 'shared' | 'private') => void;
   readonly onDefault: () => void;
   readonly onDisconnect: () => void;
+  /** Local development only (no push notices reach a laptop). */
+  readonly onSyncNow?: () => void;
 }) {
   const status = (
     <>
@@ -57,6 +61,7 @@ function ConnectionCard({
       description={connection.isDefault ? `${strings.google} · ${strings.defaultBadge}` : strings.google}
       footer={
         <>
+          {onSyncNow !== undefined && <Button onPress={onSyncNow}>{strings.syncNow}</Button>}
           {!connection.isDefault && <Button onPress={onDefault}>{strings.makeDefault}</Button>}
           <Button variant="danger" onPress={onDisconnect}>
             {strings.disconnect}
@@ -98,6 +103,7 @@ function ConnectionCard({
 /** Settings, Calendar (spec 0024): the member's connections, live while shown, and Connect Google calendar. */
 export function CalendarScreen({ data, slug, view, result, onResultSeen }: CalendarScreenProps) {
   const state = useCalendar(view);
+  const settings = useCalendarSettings(data.calendar.settings(slug));
   const [disconnecting, setDisconnecting] = useState<CalendarConnectionView | undefined>(undefined);
   const outcome = result === undefined ? undefined : strings.results[result];
   // Connecting is the browser going to the API, which sends it on to Google's consent screen and back here.
@@ -156,6 +162,7 @@ export function CalendarScreen({ data, slug, view, result, onResultSeen }: Calen
             onSharing={(sharing) => void data.calendar.setSharing(slug, connection.id, sharing)}
             onDefault={() => void data.calendar.makeDefault(slug, connection.id)}
             onDisconnect={() => setDisconnecting(connection)}
+            {...(import.meta.env.DEV ? { onSyncNow: () => void data.calendar.syncNow(slug, connection.id) } : {})}
           />
         ))}
       </>
@@ -192,6 +199,16 @@ export function CalendarScreen({ data, slug, view, result, onResultSeen }: Calen
         </Callout>
       )}
       {body}
+      {settings.status === 'ready' && settings.canManage && (
+        <Card>
+          <Switch
+            label={strings.createPeople}
+            description={strings.createPeopleHelp}
+            isSelected={settings.createUnknownPeople}
+            onChange={(isSelected) => void data.calendar.setCreateUnknownPeople(slug, isSelected)}
+          />
+        </Card>
+      )}
       <Modal
         title={strings.disconnectTitle}
         tone="danger"

@@ -1191,6 +1191,7 @@ export function createDataLayer({
         beforeRead(input.workspace).then(() => call((options) => api.calendar.connections.list(input, options))),
       update: (input) => call((options) => api.calendar.connections.update(input, options)),
       remove: (input) => call((options) => api.calendar.connections.remove(input, options)),
+      syncNow: (input) => call((options) => api.calendar.connections.syncNow(input, options)),
       settings: (input) =>
         beforeRead(input.workspace).then(() => call((options) => api.calendar.settings.get(input, options))),
       updateSettings: (input) => call((options) => api.calendar.settings.update(input, options)),
@@ -2587,6 +2588,8 @@ export function createDataLayer({
       remove: (workspace: string, connectionId: string): Promise<boolean> => calendar.remove(workspace, connectionId),
       /** Where the browser goes to connect a Google calendar (the API sends it on to Google's consent). */
       connectUrl: (workspace: string): string => connectUrl(workspace),
+      /** Sync now: brings a connection's next sync forward; the list reads again shortly after. */
+      syncNow: (workspace: string, connectionId: string): Promise<boolean> => calendar.syncNow(workspace, connectionId),
       /** The workspace's calendar settings (spec 0024, AC-609), read when a screen first holds them. */
       settings: (workspace: string): CalendarSettingsHeld => calendar.settings(workspace),
       /** Makes people for unknown attendees, or stops (owners and admins): at once, put back with a toast if refused. */

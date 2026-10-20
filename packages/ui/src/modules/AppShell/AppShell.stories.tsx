@@ -1,6 +1,7 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
 import { expect } from 'storybook/test';
 import { Button } from '../../atoms/Button/Button.tsx';
+import { Callout } from '../../molecules/Callout/Callout.tsx';
 import { EmptyState } from '../../molecules/EmptyState/EmptyState.tsx';
 import { Stage } from '../../workbench/Stage/Stage.tsx';
 import { NavItem, NavSection, Sidebar } from '../Sidebar/Sidebar.tsx';
@@ -8,7 +9,13 @@ import { Toolbar, TopBar, ViewBar } from '../Toolbar/Toolbar.tsx';
 import { AppShell } from './AppShell.tsx';
 
 /** A screen in the shell: the sidebar, the three bars, and a view with nothing in it yet. */
-function SampleShell({ withPanel = false }: { readonly withPanel?: boolean }) {
+function SampleShell({
+  withPanel = false,
+  withBanner = false,
+}: {
+  readonly withPanel?: boolean;
+  readonly withBanner?: boolean;
+}) {
   return (
     <Stage height="page">
       <AppShell
@@ -40,6 +47,15 @@ function SampleShell({ withPanel = false }: { readonly withPanel?: boolean }) {
             </Button>
           </Toolbar>
         }
+        {...(withBanner
+          ? {
+              banner: (
+                <Callout tone="warning" placement="banner" actions={<Button variant="ghost">Reconnect</Button>}>
+                  Your Google calendar disconnected. Your meetings and busy times stop updating until you reconnect it.
+                </Callout>
+              ),
+            }
+          : {})}
         {...(withPanel
           ? {
               panel: (
@@ -84,6 +100,20 @@ export const SkipLink: Story = {
     await expect(skip).toHaveFocus();
     await expect(skip.getBoundingClientRect().width).toBeGreaterThan(1);
     await expect(skip).toHaveAttribute('href', `#${canvas.getByRole('main').id}`);
+  },
+};
+
+/** A banner under the bars, for a state of the whole app for this person: a calendar that stopped syncing. */
+export const WithBanner: Story = {
+  args: { withBanner: true },
+  parameters: { crm: { screenshot: false } },
+  play: async ({ canvas }) => {
+    const main = canvas.getByRole('main');
+    await expect(main).toHaveTextContent(/Your Google calendar disconnected/);
+    // It comes after the bars, so its action follows them in Tab order.
+    const filter = canvas.getByRole('button', { name: 'Filter' });
+    const reconnect = canvas.getByRole('button', { name: 'Reconnect' });
+    await expect(filter.compareDocumentPosition(reconnect) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   },
 };
 

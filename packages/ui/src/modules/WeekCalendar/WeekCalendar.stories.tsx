@@ -96,6 +96,44 @@ const meta = {
 export default meta;
 type Story = StoryObj<typeof meta>;
 
+/** Busy time (spec 0024): the member's own calendar time with nobody else invited, beside a booking and closed time. */
+export const Busy: Story = {
+  // Its screenshot baseline comes with the testing batch's run in the pinned image (phase 12).
+  parameters: { crm: { screenshot: false } },
+  render: (args) => (
+    <Stage width="fill">
+      <WeekCalendar
+        {...args}
+        days={days()}
+        blocks={[
+          ...blocks(),
+          {
+            id: 'busy-gym',
+            dayKey: '2026-10-07',
+            startMinute: 13 * 60,
+            endMinute: 14 * 60 + 30,
+            title: 'Busy',
+            time: '1:00 – 2:30 PM',
+            kind: 'busy',
+            provider: 'google-calendar',
+          },
+          {
+            id: 'busy-call',
+            dayKey: '2026-10-08',
+            startMinute: 15 * 60 + 45,
+            endMinute: 16 * 60 + 15,
+            title: 'Busy',
+            time: '3:45 – 4:15 PM',
+            kind: 'busy',
+            provider: 'google-calendar',
+          },
+        ]}
+        now={{ dayKey: '2026-10-08', minute: 15 * 60 + 30 }}
+      />
+    </Stage>
+  ),
+};
+
 /** A week with a booking beside an overlapping calendar event, a cancelled one, and the now line. */
 export const Default: Story = {
   parameters: { crm: { preview: true } },

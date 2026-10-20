@@ -113,6 +113,16 @@ export const RemoveCalendarConnectionInput = WorkspaceScoped.extend({
 /** Disconnecting one of the member's own connections. */
 export type RemoveCalendarConnectionInput = z.infer<typeof RemoveCalendarConnectionInput>;
 
+/** Sync now: brings one of the member's own connections' next sync forward. */
+export const SyncCalendarNowInput = WorkspaceScoped.extend({ connectionId: z.uuid() });
+/** Sync now. */
+export type SyncCalendarNowInput = z.infer<typeof SyncCalendarNowInput>;
+
+/** Whether Sync now queued a sync (a stopped connection queues none). */
+export const SyncCalendarNowResult = z.object({ queued: z.boolean() });
+/** Whether Sync now queued a sync. */
+export type SyncCalendarNowResult = z.infer<typeof SyncCalendarNowResult>;
+
 /** What a disconnect did: the meetings it removed, counted. */
 export const RemovedCalendarConnection = z.object({
   connectionId: z.uuid(),
@@ -258,6 +268,7 @@ export const calendarContract = {
     list: oc.input(ListCalendarConnectionsInput).output(CalendarConnections),
     update: oc.input(UpdateCalendarConnectionInput).output(CalendarConnectionView),
     remove: oc.input(RemoveCalendarConnectionInput).output(RemovedCalendarConnection),
+    syncNow: oc.input(SyncCalendarNowInput).output(SyncCalendarNowResult),
   },
   meetings: {
     forRecord: oc.input(MeetingsForRecordInput).output(MeetingPage),

@@ -181,7 +181,7 @@ export async function dropSources(
       and not exists (select 1 from meeting_sources s where s.workspace_id = m.workspace_id and s.meeting_id = m.id)
     returning m.id::text as id
   `);
-  // A booking never points at a meeting that is gone.
+  // A booking never points at a meeting that is gone (by `bookings_by_meeting`).
   if (gone.rows.length > 0) {
     await tx.execute(sql`
       update bookings set meeting_id = null
@@ -207,11 +207,17 @@ export const REMOVED_FROM_CALENDAR = 'Removed from the host calendar';
  * tell the attendees when the host deleted the event.
  */
 async function cancelRemovedBookings(tx: WorkspaceTx, connectionId: string, meetingIds: readonly string[]) {
+  // The bookings these meetings are for, each found by an index: the booking's meeting, or the meeting's booking.
   await tx.execute(sql`
     update bookings b set status = 'cancelled', cancel_reason = ${REMOVED_FROM_CALENDAR},
       updated_at = now(), updated_by_type = 'system', updated_by_id = null, updated_by_member_id = null
     from meetings m
     where m.id = any(${uuidList(meetingIds)}) and m.workspace_id = b.workspace_id
+      and b.id in (
+        select x.id from bookings x where x.meeting_id = any(${uuidList(meetingIds)})
+        union
+        select y.booking_id from meetings y where y.id = any(${uuidList(meetingIds)}) and y.booking_id is not null
+      )
       and (b.meeting_id = m.id or m.booking_id = b.id)
       and b.status = 'confirmed' and b.starts_at > now()
       and (
@@ -281,18 +287,21 @@ export async function applyEvents(
   isFreeDomain: (domain: string) => boolean,
 ): Promise<number | 'gone'> {
   const { tx } = context;
-  const held = await tx.execute<{ status: string }>(sql`
-    select status from calendar_connections where id = ${connection.id}::uuid for key share
+  const held = await tx.execute<{ status: string; sharing: string }>(sql`
+    select status, sharing from calendar_connections where id = ${connection.id}::uuid for key share
   `);
   const status = held.rows[0]?.status;
+  const isPrivateCalendar = held.rows[0]?.sharing === 'private';
   if (status !== 'syncing' && status !== 'connected' && status !== 'failed') return 'gone';
 
   await writeBusyTimes(context, connection.id, events);
   const syncing = events.filter(shouldSync);
   let lookups = await readLookups(tx, syncing, isFreeDomain);
-  // The workspace makes people for unknown attendees (AC-609): made first, so the meetings link them.
-  if (syncing.length > 0 && (await createsUnknownPeople(tx))) {
-    const made = await fileUnknownAttendees(context, syncing, connection.memberId, lookups);
+  // The workspace makes people for unknown attendees (AC-609): made first, so the meetings link them. Never from
+  // a private calendar or a private event (AC-611, AC-612): a person made from one would tell everyone who it was with.
+  const shareable = isPrivateCalendar ? [] : syncing.filter((event) => !event.isPrivate);
+  if (shareable.length > 0 && (await createsUnknownPeople(tx))) {
+    const made = await fileUnknownAttendees(context, shareable, connection.memberId, lookups);
     if (made > 0) lookups = await readLookups(tx, syncing, isFreeDomain);
   }
   const planned = plan(events, connection, lookups);

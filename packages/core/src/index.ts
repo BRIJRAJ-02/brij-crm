@@ -141,6 +141,7 @@ export {
   connectCalendar,
   listCalendarConnections,
   removeCalendarConnection,
+  syncCalendarNow,
   updateCalendarConnection,
   type ConnectCalendarInput,
   type UpdateCalendarConnectionInput,

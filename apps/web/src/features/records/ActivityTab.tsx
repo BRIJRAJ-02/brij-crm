@@ -4,7 +4,7 @@
 // Leaves out: notes (#19 milestone 3) and comments (#29), filters, and the record's own delete and restore (#36).
 import type { ActivityEntryShape, ActivityFeed as ActivityFeedSource, ActivityState, EntrySource } from '@crm/data';
 import { useActivity } from '@crm/data/react';
-import { ActivityFeed, type ActivityFeedLayout } from '@crm/ui';
+import { ActivityFeed, type ActivityFeedLayout, type MeetingAttendee, type MeetingEntry } from '@crm/ui';
 import { useMemo } from 'react';
 import { strings } from './strings.ts';
 import { linkedSource, type RecordLink, type TaskLink } from './timeline.ts';
@@ -26,10 +26,19 @@ export interface ActivityTabProps {
   readonly label?: string;
   /** `feed` fills its slot and scrolls inside it (the Activity tab); `inline` draws a few in place (Overview). */
   readonly layout?: ActivityFeedLayout;
+  /** Adds a meeting's unknown attendee as a person (spec 0024, AC-609): the meeting's id and the attendee. */
+  readonly onAddPerson?: (meetingId: string, attendee: MeetingAttendee) => Promise<void>;
 }
 
 /** A record's timeline, paging as it scrolls and live, with Try again when it fails. */
-export function ActivityTab({ feed, link, taskHref, label = strings.activity, layout = 'feed' }: ActivityTabProps) {
+export function ActivityTab({
+  feed,
+  link,
+  taskHref,
+  label = strings.activity,
+  layout = 'feed',
+  onAddPerson,
+}: ActivityTabProps) {
   const state = useActivity(feed);
   // One linked copy per entry while the links stay the same, so an entry draws again only when it changes.
   const linking = useMemo(() => {
@@ -37,7 +46,25 @@ export function ActivityTab({ feed, link, taskHref, label = strings.activity, la
     return (entries: EntrySource) => linkedSource(entries, link, cache, taskHref);
   }, [link, taskHref]);
   const source = useMemo(() => linking(state.source), [linking, state.source]);
+  // The feed hands back its own entry: the data layer's, which carries the meeting's id.
+  const addPerson = useMemo(
+    () =>
+      onAddPerson === undefined
+        ? undefined
+        : (meeting: MeetingEntry, attendee: MeetingAttendee) =>
+            'itemId' in meeting && typeof meeting.itemId === 'string'
+              ? onAddPerson(meeting.itemId, attendee)
+              : Promise.resolve(),
+    [onAddPerson],
+  );
   return (
-    <ActivityFeed label={label} entries={source} layout={layout} status={feedStatus(state)} onRetry={feed.retry} />
+    <ActivityFeed
+      label={label}
+      entries={source}
+      layout={layout}
+      status={feedStatus(state)}
+      onRetry={feed.retry}
+      {...(addPerson === undefined ? {} : { onAddPerson: addPerson })}
+    />
   );
 }

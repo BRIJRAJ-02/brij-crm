@@ -62,6 +62,7 @@ function setup(lists: CalendarConnections[]) {
         ? Promise.reject(new Error('Refused.'))
         : Promise.resolve({ connectionId: input.connectionId, meetingsRemoved: 2 });
     },
+    syncNow: () => Promise.resolve({ queued: true }),
     settings: () => Promise.resolve({ createUnknownPeople: false, canManage: true }),
     updateSettings: (input) => {
       sent.push(input);

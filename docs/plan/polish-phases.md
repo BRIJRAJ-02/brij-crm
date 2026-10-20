@@ -87,7 +87,7 @@ Work that was in flight when the lanes stopped is kept on its lane branches (a `
 - F34. "make a check on each one of it": every flow driven and checked.
 
 ### Calendar sync
-- F35. Google events with nobody else invited show as Busy blocks (owner, 20 Oct: "yes blocked"). Open.
+- F35. Google events with nobody else invited show as Busy blocks (owner, 20 Oct: "yes blocked"). Built (20 Oct), with spec 0024 milestones 2 and 3: an event that holds nobody else keeps only its start and end and shows as Busy on the Bookings week (all day ones and those shown as free are left out); push channels with the poll underneath, the disconnected banner on every page, a connection marked failed after 6 hours that heals itself, Add as person and the admin setting that adds people from meetings (never from a private event or calendar), free and busy and the event services booking calls, a booking's event on the host's default calendar, one failing calendar no longer closing the page, and a booking cancelled when the host deletes its event. Open: Outlook (milestone 4), the screenshot baseline for the Busy story (phase 12).
 
 ### Booking milestone 2
 - F36. Guest and host actions, emails and reminders. Open.

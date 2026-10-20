@@ -414,6 +414,7 @@ function fakeApi(overrides: Partial<Behaviour> = {}, auth: (path: string, body: 
         })),
         update: os.calendar.connections.update.handler(notServed),
         remove: os.calendar.connections.remove.handler(notServed),
+        syncNow: os.calendar.connections.syncNow.handler(notServed),
       },
       meetings: {
         forRecord: os.calendar.meetings.forRecord.handler(() => ({ items: [] })),

@@ -166,6 +166,7 @@ export {
   type ActivityFeedProps,
   type LinkedRecord,
   type MeetingAttendee,
+  type MeetingEntry,
 } from './modules/ActivityFeed/ActivityFeed.tsx';
 export { AppShell, AppShellContext, type AppShellProps } from './modules/AppShell/AppShell.tsx';
 export { AuthLayout, type AuthLayoutProps, type ProductLogo } from './modules/AuthLayout/AuthLayout.tsx';

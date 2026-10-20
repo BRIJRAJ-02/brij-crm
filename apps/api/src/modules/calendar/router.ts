@@ -5,6 +5,7 @@ import {
   listMeetingsForRecord,
   readCalendarSettings,
   removeCalendarConnection,
+  syncCalendarNow,
   updateCalendarConnection,
   updateCalendarSettings,
 } from '@crm/core';
@@ -45,6 +46,12 @@ export const calendarRouter = member.calendar.router({
         removeCalendarConnection(context.scope, { connectionId: input.connectionId }, hooks),
       ),
     ),
+    // Sync now: the queued row wakes the worker like any other.
+    syncNow: member.calendar.connections.syncNow.handler(async ({ context, input }) => {
+      const answer = await syncCalendarNow(context.scope, { connectionId: input.connectionId });
+      if (answer.queued) context.wakeRelay();
+      return answer;
+    }),
   },
   meetings: {
     forRecord: member.calendar.meetings.forRecord.handler(({ context, input }) =>

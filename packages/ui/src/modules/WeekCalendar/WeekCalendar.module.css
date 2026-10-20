@@ -257,6 +257,14 @@
     border-style: dashed;
   }
 
+  /* Busy (spec 0024): the member's own calendar time with nobody else invited. Plain, not hatched: nothing
+     here closed it, the calendar holds it. */
+  .block[data-kind='busy'] {
+    border: var(--border-width-hairline) solid var(--control-border);
+    background: var(--surface-subtle);
+    color: var(--text-secondary);
+  }
+
   .block[data-cancelled] {
     border-inline-start-color: var(--border-strong);
     background: var(--surface-subtle);

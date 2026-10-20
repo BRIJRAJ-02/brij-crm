@@ -18,7 +18,7 @@ import { isInputError, isRefusal } from '../engine/refusals.ts';
 import { createRecord } from '../engine/records.ts';
 import { createWorkspace } from '../engine/workspaces.ts';
 import { rescope, testScope } from '../testing.ts';
-import { connectCalendar, listCalendarConnections } from './connections.ts';
+import { connectCalendar, listCalendarConnections, syncCalendarNow, updateCalendarConnection } from './connections.ts';
 import { createCalendarEvents } from './events.ts';
 import { createFakeCalendarProvider } from './fake.ts';
 import { listMeetingsForRecord } from './meetings.ts';
@@ -328,6 +328,9 @@ describe('push channels (AC-602, AC-622)', () => {
     expect(await queued()).toEqual([]);
     expect(await takeCalendarNotice(db, { channelId, token, state: 'exists' })).toBe('queued');
     expect(await queued()).toHaveLength(1);
+    // Sync now (the member's own connection) moves the same keyed row: still one waiting sync.
+    expect(await syncCalendarNow(w.owner, { connectionId: conn.id })).toEqual({ queued: true });
+    expect(await queued()).toHaveLength(1);
     // Another workspace's ids with this secret find nothing.
     const other = await world({ push: true });
     const forged = token.replace(w.workspaceId, other.workspaceId);
@@ -432,6 +435,24 @@ describe('unknown attendees (AC-609)', () => {
     expect((await listMeetingsForRecord(w.owner, { recordId: eve })).items).toHaveLength(1);
     expect((await listMeetingsForRecord(w.owner, { recordId: northwind })).items).toHaveLength(1);
   });
+
+  it('makes nobody from a private event or a private calendar (AC-611, AC-612)', async () => {
+    const w = await world();
+    await updateCalendarSettings(w.owner, { createUnknownPeople: true });
+    const conn = await w.connect(w.ownerId, 'ada@acme.dev');
+    w.fake.put(
+      'ada@acme.dev',
+      event('therapy', day(1), [self('ada@acme.dev'), guest('dee@therapist.example', 'Dee')], { isPrivate: true }),
+    );
+    await w.sync(conn.id);
+    const beas = await w.connect(w.bea, 'bea@acme.dev');
+    await updateCalendarConnection(w.as(w.bea), { connectionId: beas.id, sharing: 'private' });
+    w.fake.put('bea@acme.dev', event('quiet', day(2), [self('bea@acme.dev'), guest('fay@elsewhere.example', 'Fay')]));
+    await w.sync(beas.id);
+    expect(
+      await w.query(sql`select match::text as match from meeting_attendees where match <> 'member' order by email`),
+    ).toEqual([{ match: 'unknown' }, { match: 'unknown' }]);
+  });
 });
 
 describe('free and busy, and events (AC-615 to AC-618)', () => {
@@ -477,6 +498,8 @@ describe('free and busy, and events (AC-615 to AC-618)', () => {
       requestId: newId(),
     };
     expect(await refusalOf(w.events.createEvent(w.system, input))).toMatchObject({ code: 'CALENDAR_NOT_CONNECTED' });
+    // Never a member's: these are booking's services, run as the system.
+    expect(await refusalOf(w.events.createEvent(w.owner, input))).toMatchObject({ code: 'FORBIDDEN' });
     const conn = await w.connect(w.ownerId, 'ada@acme.dev');
     const made = await w.events.createEvent(w.system, input);
     expect(made.videoUrl).toMatch(/^https:\/\/meet\.fake\//);

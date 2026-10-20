@@ -277,6 +277,28 @@ function EventCard({
   );
 }
 
+/** A busy time's card: when, that it is busy and why, and which calendar holds it. Nothing more is kept. */
+function BusyCard({
+  busy,
+  connection,
+  locale,
+}: {
+  readonly busy: { readonly startsAt: string; readonly endsAt: string };
+  readonly connection: CalendarConnectionView | undefined;
+  readonly locale: string;
+}) {
+  return (
+    <DescriptionList
+      layout="stacked"
+      items={[
+        { term: strings.when, description: whenOf(busy.startsAt, busy.endsAt, locale) },
+        { term: strings.busy, description: strings.busyNote },
+        ...(connection === undefined ? [] : [{ term: strings.calendar, description: connection.accountEmail }]),
+      ]}
+    />
+  );
+}
+
 /**
  * A block's or hold's card: when, why, whether it repeats, what it does, and
  * Remove (Release for a hold; for a weekly block, every week). Removing closes
@@ -497,12 +519,18 @@ function WeekView(props: BookingsCalendarScreenProps) {
   const byBooking = new Map(bookings.map((booking) => [booking.id, booking]));
   const byEvent = new Map(events.map((event) => [event.id, event]));
   const byTurn = new Map(state.blocks.map((turn) => [turn.key, turn]));
+  // Busy time (spec 0024): the member's own calendar time with nobody else invited, by its time alone.
+  const busyTimes = state.busy.filter((busy) => shownConnections.has(busy.connectionId));
+  const byBusy = new Map(busyTimes.map((busy) => [`busy:${busy.connectionId}:${busy.startsAt}:${busy.endsAt}`, busy]));
   const pieces = [
     ...bookingPieces(bookings, days).map((piece) => ({ piece, kind: 'booking' as const })),
     ...eventPieces(events, days).map((piece) => ({ piece, kind: 'event' as const })),
     ...state.blocks
       .flatMap((turn) => piecesOf(turn.key, turn.startsAt, turn.endsAt, days))
       .map((piece) => ({ piece, kind: 'closed' as const })),
+    ...[...byBusy]
+      .flatMap(([key, busy]) => piecesOf(key, busy.startsAt, busy.endsAt, days))
+      .map((piece) => ({ piece, kind: 'busy' as const })),
   ];
   const blocks: WeekCalendarBlock[] = pieces.flatMap(({ piece, kind }): WeekCalendarBlock[] => {
     if (kind === 'booking') {
@@ -520,6 +548,23 @@ function WeekView(props: BookingsCalendarScreenProps) {
           kind: 'booking',
           provider: 'timefix',
           isCancelled: booking.status === 'cancelled',
+        },
+      ];
+    }
+    if (kind === 'busy') {
+      const busy = byBusy.get(piece.sourceId);
+      if (busy === undefined) return [];
+      const provider = providerOf.get(busy.connectionId);
+      return [
+        {
+          id: piece.id,
+          dayKey: piece.dayKey,
+          startMinute: piece.startMinute,
+          endMinute: piece.endMinute,
+          title: strings.busy,
+          time: timeRange(busy.startsAt, busy.endsAt, locale),
+          kind: 'busy',
+          ...(provider === undefined ? {} : { provider }),
         },
       ];
     }
@@ -561,6 +606,7 @@ function WeekView(props: BookingsCalendarScreenProps) {
   const openBooking = open?.kind === 'booking' ? byBooking.get(open.piece.sourceId) : undefined;
   const openEvent = open?.kind === 'event' ? byEvent.get(open.piece.sourceId) : undefined;
   const openTurn = open?.kind === 'closed' ? byTurn.get(open.piece.sourceId) : undefined;
+  const openBusy = open?.kind === 'busy' ? byBusy.get(open.piece.sourceId) : undefined;
   const live = bookings.filter((booking) => booking.status === 'confirmed').length;
   const hourFormat = new Intl.DateTimeFormat(locale, { hour: 'numeric' });
   return (
@@ -596,7 +642,13 @@ function WeekView(props: BookingsCalendarScreenProps) {
         )}
         {...(openId === undefined ? {} : { openId })}
         detail={
-          openTurn !== undefined ? (
+          openBusy !== undefined ? (
+            <BusyCard
+              busy={openBusy}
+              connection={connections.find((connection) => connection.id === openBusy.connectionId)}
+              locale={locale}
+            />
+          ) : openTurn !== undefined ? (
             <BlockCard
               key={openTurn.key}
               turn={openTurn}

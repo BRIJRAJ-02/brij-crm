@@ -79,6 +79,10 @@ export const strings = {
   calendar: 'Calendar',
   fromCalendar: 'From your calendar. Timefix keeps the time blocked but doesn’t manage this event.',
   allDay: 'All day',
+  // The member's own calendar time with nobody else invited (spec 0024, the owner's call on 20 October 2026).
+  busy: 'Busy',
+  busyNote:
+    'Something on your calendar with nobody else invited. Its details stay in your calendar, and nobody can book this time.',
   // Time the member closed (spec 0027).
   blocked: 'Blocked',
   held: 'Held',

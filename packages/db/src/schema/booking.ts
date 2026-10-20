@@ -227,6 +227,10 @@ export const bookings = pgTable(
     index('bookings_by_host')
       .on(t.workspaceId, t.hostMemberId, t.startsAt)
       .where(sql`${t.status} = 'confirmed'`),
+    // The booking a calendar meeting is for (spec 0024): the sync cancels it, or lets go of a meeting that is gone.
+    index('bookings_by_meeting')
+      .on(t.workspaceId, t.meetingId)
+      .where(sql`${t.meetingId} is not null`),
     // A person's bookings, for their timeline.
     index('bookings_by_person')
       .on(t.workspaceId, t.personRecordId, t.createdAt)

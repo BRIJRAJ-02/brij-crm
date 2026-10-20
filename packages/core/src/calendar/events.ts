@@ -24,7 +24,7 @@
 import { sql } from 'drizzle-orm';
 import type { Database } from '@crm/db';
 import { systemScope } from '../access/door.ts';
-import type { EngineScope } from '../access/mint.ts';
+import { checkScope, type EngineScope } from '../access/mint.ts';
 import { inWorkspace } from '../access/run.ts';
 import { checkId } from '../engine/ids.ts';
 import { inputInvalid, refuse } from '../engine/refusals.ts';
@@ -156,6 +156,15 @@ export interface CalendarEvents {
   readonly createEvent: (scope: EngineScope, input: CreateEventInput) => Promise<CreatedEvent>;
   readonly moveEvent: (scope: EngineScope, input: MoveEventInput) => Promise<{ readonly meetingId: string }>;
   readonly cancelEvent: (scope: EngineScope, input: { readonly meetingId: string }) => Promise<void>;
+}
+
+/** What a scope other than the system's answers: these services are booking's and round robin's, never a member's. */
+export const SYSTEM_ONLY = 'Calendar events are written by the system.';
+
+/** Refuses any scope but the system's (`calendarEventsScope`). */
+function checkSystem(scope: EngineScope): void {
+  checkScope(scope);
+  if (scope.access.principal.kind !== 'system') throw refuse('FORBIDDEN', SYSTEM_ONLY);
 }
 
 /** Refuses a range that is not two ISO moments in order, at most 62 days apart. */
@@ -308,6 +317,7 @@ export function createCalendarEvents(deps: CalendarEventsDeps): CalendarEvents {
 
   return {
     async freeBusy(scope, input, options = {}) {
+      checkSystem(scope);
       checkRange(input.from, input.to);
       const memberIds = [...new Set(input.memberIds.map((id) => checkId(id, 'That member does not exist.')))];
       if (memberIds.length > FREE_BUSY_MAX_MEMBERS) {
@@ -338,6 +348,7 @@ export function createCalendarEvents(deps: CalendarEventsDeps): CalendarEvents {
     },
 
     async createEvent(scope, input) {
+      checkSystem(scope);
       const memberId = checkId(input.memberId, NOT_CONNECTED);
       const [row] = await connectionsOf(scope, [memberId]);
       if (row === undefined) throw refuse('CALENDAR_NOT_CONNECTED', NOT_CONNECTED);
@@ -363,6 +374,7 @@ export function createCalendarEvents(deps: CalendarEventsDeps): CalendarEvents {
     },
 
     async moveEvent(scope, input) {
+      checkSystem(scope);
       checkRange(input.start, input.end);
       const { meetingId, row } = await sourceOf(scope, input.meetingId);
       const live = await tokensFor(scope, row);
@@ -376,6 +388,7 @@ export function createCalendarEvents(deps: CalendarEventsDeps): CalendarEvents {
     },
 
     async cancelEvent(scope, input) {
+      checkSystem(scope);
       const { row } = await sourceOf(scope, input.meetingId);
       const live = await tokensFor(scope, row);
       if (live === undefined) throw refuse('CALENDAR_NOT_CONNECTED', NOT_CONNECTED);

@@ -316,6 +316,13 @@
       "when": 1792489109313,
       "tag": "0044_calendar_busy_times",
       "breakpoints": true
+    },
+    {
+      "idx": 45,
+      "version": "7",
+      "when": 1792502960025,
+      "tag": "0045_calendar_lookup_indexes",
+      "breakpoints": true
     }
   ]
 }

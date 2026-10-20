@@ -124,6 +124,8 @@ export interface MeetingAttendeeShape {
   readonly display?: RecordRefDisplay | ActorDisplay;
   readonly href?: string;
   readonly response: 'accepted' | 'declined' | 'tentative' | 'needs_action';
+  /** How the address matched the CRM: `unknown` may be added as a person (spec 0024, AC-609). */
+  readonly match: 'linked' | 'ambiguous' | 'unknown' | 'member';
 }
 
 /** Entries from outside, as the library's `ListSource` reads them. */
@@ -276,6 +278,7 @@ export function toActivityEntry(item: ActivityItem, context: EntryContext): Acti
           ...(attendee.name === undefined ? {} : { name: attendee.name }),
           ...(display === undefined ? {} : { display }),
           response: attendee.response,
+          match: attendee.match,
         };
       }),
       ...(meeting.videoUrl === undefined ? {} : { videoUrl: meeting.videoUrl }),

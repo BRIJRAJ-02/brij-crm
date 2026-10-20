@@ -27,6 +27,8 @@ export const strings = {
   linkCopied: 'Link copied',
   copyFailed: 'Couldn’t copy the link. Copy it from the address bar.',
   unnamed: (singularName: string) => `Unnamed ${singularName.toLowerCase()}`,
+  /** A meeting's attendee added as a person (spec 0024, AC-609). */
+  addedPerson: (name: string) => `${name} added as a person`,
   /** A linked record this person can't see, or that was deleted. */
   unavailableRecord: 'Unavailable',
   /** Why a reference or member value can't be edited here yet (#15 brings the record picker). */

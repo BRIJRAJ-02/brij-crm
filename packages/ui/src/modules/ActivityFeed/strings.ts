@@ -57,6 +57,11 @@ export const strings = {
   responses: { declined: 'declined', tentative: 'maybe', needs_action: 'no reply' },
   /** A meeting's video link. */
   joinVideo: 'Join video call',
+  /** An attendee the CRM doesn't know (spec 0024, AC-609). */
+  addPerson: 'Add as person',
+  addingPerson: 'Adding',
+  /** Several people hold the attendee's address, so none is linked. */
+  ambiguous: 'several people match',
   /** A private meeting the reader doesn't hold: its time only. */
   privateMeeting: 'Only the people whose calendar holds it see its details.',
 } as const;

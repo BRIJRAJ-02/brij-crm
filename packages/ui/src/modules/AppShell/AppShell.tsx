@@ -32,6 +32,11 @@ export interface AppShellProps {
   readonly viewBar?: ReactNode;
   /** The `Toolbar`, on a view. */
   readonly toolbar?: ReactNode;
+  /**
+   * A state of the whole app for this person, under the bars on every page:
+   * a `Callout` with `placement="banner"` (a disconnected calendar, spec 0024).
+   */
+  readonly banner?: ReactNode;
   /** The view or page itself. */
   readonly children: ReactNode;
   /** A side panel beside the view: a record's details, a settings pane. */
@@ -44,7 +49,7 @@ export interface AppShellProps {
  * A skip link, first in the tab order, jumps past the sidebar to the main
  * column. The view adapts to its width with container queries.
  */
-export function AppShell({ sidebar, topBar, viewBar, toolbar, children, panel }: AppShellProps) {
+export function AppShell({ sidebar, topBar, viewBar, toolbar, banner, children, panel }: AppShellProps) {
   const mainId = useId();
   const isCompact = useSyncExternalStore(subscribe, isCompactNow, () => false);
   return (
@@ -60,6 +65,7 @@ export function AppShell({ sidebar, topBar, viewBar, toolbar, children, panel }:
           {topBar}
           {viewBar}
           {toolbar}
+          {banner}
           <div className={styles.content}>
             <div className={styles.view}>{children}</div>
             {panel !== undefined && <aside className={styles.panel}>{panel}</aside>}

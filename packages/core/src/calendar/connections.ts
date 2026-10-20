@@ -235,6 +235,27 @@ export async function updateCalendarConnection(
 }
 
 /**
+ * Brings one of the member's own connections' next sync forward to now
+ * (Sync now): the same keyed queue row a push notice moves, so pressing it
+ * twice is one sync. Answers whether a sync was queued (a stopped connection
+ * queues none).
+ */
+export async function syncCalendarNow(
+  scope: EngineScope,
+  input: { readonly connectionId: string },
+): Promise<{ readonly queued: boolean }> {
+  checkScope(scope);
+  const memberId = actingMember(scope);
+  return inWorkspace(scope, async (tx) => {
+    const row = await ownConnection(tx, memberId, input.connectionId);
+    const queued = await tx.execute<{ queued: boolean }>(
+      sql`select crm_enqueue_calendar_sync(${row.id}::uuid) as queued`,
+    );
+    return { queued: queued.rows[0]?.queued === true };
+  });
+}
+
+/**
  * Deletes connections (with their tokens and sources) and every meeting only
  * they held, in the write's transaction: what a disconnect and a member's
  * removal share. Answers how many meetings went.

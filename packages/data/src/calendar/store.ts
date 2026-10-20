@@ -39,6 +39,10 @@ export interface CalendarApi {
     readonly connectionId: string;
     readonly mutationId: string;
   }) => Promise<RemovedCalendarConnection>;
+  readonly syncNow: (input: {
+    readonly workspace: string;
+    readonly connectionId: string;
+  }) => Promise<{ readonly queued: boolean }>;
   readonly settings: (input: { readonly workspace: string }) => Promise<CalendarSettingsView>;
   readonly updateSettings: (input: {
     readonly workspace: string;
@@ -283,6 +287,17 @@ export function createCalendarStore(deps: CalendarDeps) {
 
   return {
     view: (workspace: string): CalendarView => viewOf(workspace),
+    /** Brings a connection's next sync forward (Sync now); the list reads again shortly after. Answers whether it queued. */
+    async syncNow(workspace: string, connectionId: string): Promise<boolean> {
+      try {
+        const answer = await deps.api.syncNow({ workspace, connectionId });
+        later(() => viewOf(workspace).reload(), SYNC_POLL_MS);
+        return answer.queued;
+      } catch (error) {
+        refused(error);
+        return false;
+      }
+    },
     /** The workspace's calendar settings, read when a screen first holds them. */
     settings: (workspace: string): CalendarSettingsHeld => settingsOf(workspace),
     /** Makes people for unknown attendees, or stops (owners and admins): at once, put back with a toast if refused. */

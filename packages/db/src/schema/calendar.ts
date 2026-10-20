@@ -244,6 +244,10 @@ export const meetingAttendees = pgTable(
     index('meeting_attendees_by_person')
       .on(t.workspaceId, t.personRecordId)
       .where(sql`${t.personRecordId} is not null`),
+    // Add as person (milestone 2): every meeting that lists an address no one in the CRM holds.
+    index('meeting_attendees_unknown')
+      .on(t.workspaceId, t.email)
+      .where(sql`${t.match} = 'unknown'`),
     check('meeting_attendees_email', sql`char_length(${t.email}) between 3 and 320`),
     check('meeting_attendees_name', sql`char_length(${t.name}) <= 320`),
     check('meeting_attendees_linked', sql`(${t.match} = 'linked') = (${t.personRecordId} is not null)`),

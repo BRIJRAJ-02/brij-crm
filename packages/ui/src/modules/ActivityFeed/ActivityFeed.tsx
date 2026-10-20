@@ -20,6 +20,7 @@ import {
   type RefObject,
 } from 'react';
 import { Link as AriaLink } from 'react-aria-components';
+import { Button } from '../../atoms/Button/Button.tsx';
 import { Icon } from '../../atoms/Icon/Icon.tsx';
 import type { IconName } from '../../atoms/Icon/icons.ts';
 import { Link } from '../../atoms/Link/Link.tsx';
@@ -129,7 +130,16 @@ export interface MeetingAttendee {
   /** The person's page, routed. */
   readonly href?: string;
   readonly response: 'accepted' | 'declined' | 'tentative' | 'needs_action';
+  /**
+   * How the calendar's address matched the CRM (spec 0024): `unknown` offers
+   * Add as person (when the feed has `onAddPerson`), `ambiguous` says several
+   * people hold the address and links none.
+   */
+  readonly match?: 'linked' | 'ambiguous' | 'unknown' | 'member';
 }
+
+/** A meeting entry, as `onAddPerson` hands it back. */
+export type MeetingEntry = Extract<ActivityEntry, { kind: 'meeting' }>;
 
 /** How the feed lays out: scrolling inside its slot, or a few entries drawn in place. */
 export type ActivityFeedLayout = 'feed' | 'inline';
@@ -154,6 +164,12 @@ export interface ActivityFeedProps {
   readonly status?: LoadStatus;
   /** Try again, when `status` is `error`. */
   readonly onRetry?: () => void;
+  /**
+   * Adds a meeting's attendee the CRM doesn't know as a person (spec 0024,
+   * AC-609). Its button shows on each `unknown` attendee while given, and
+   * spins until the promise settles; the screen says how it went.
+   */
+  readonly onAddPerson?: (meeting: MeetingEntry, attendee: MeetingAttendee) => Promise<void>;
 }
 
 const KIND_ICONS: Readonly<Record<Exclude<ActivityEntry['kind'], 'change' | 'links'>, IconName>> = {
@@ -271,7 +287,14 @@ function useKeepReading({ entries, isActive, isScrolling, scrollRef, virtualizer
  * layout only the entries on screen draw, and those not loaded yet draw as
  * skeletons.
  */
-export function ActivityFeed({ label, entries, layout = 'feed', status = 'ready', onRetry }: ActivityFeedProps) {
+export function ActivityFeed({
+  label,
+  entries,
+  layout = 'feed',
+  status = 'ready',
+  onRetry,
+  onAddPerson,
+}: ActivityFeedProps) {
   const isInline = layout === 'inline';
   const { locale, timeZone } = useFormatSettings();
   const now = useNow();
@@ -489,6 +512,7 @@ export function ActivityFeed({ label, entries, layout = 'feed', status = 'ready'
                   entry={entry}
                   lineId={`${idBase}-${String(item.index)}`}
                   isLast={item.index === shownCount - 1}
+                  onAddPerson={onAddPerson}
                 />
               )}
             </div>
@@ -561,6 +585,7 @@ interface EntryProps {
   /** Names the article: the actor and what they did. */
   readonly lineId: string;
   readonly isLast: boolean;
+  readonly onAddPerson: ActivityFeedProps['onAddPerson'];
 }
 
 /** What a links entry says after the actor: "added A, B and C to Team, and removed D from Team". */
@@ -592,13 +617,39 @@ function LinksLine({ entry }: { readonly entry: Extract<ActivityEntry, { kind: '
   );
 }
 
+/** Add as person beside an unknown attendee: spins while the person is made. */
+function AddPersonButton({ onAdd, nameId }: { readonly onAdd: () => Promise<void>; readonly nameId: string }) {
+  const [isAdding, setAdding] = useState(false);
+  return (
+    <Button
+      variant="ghost"
+      icon="user-plus"
+      isPending={isAdding}
+      aria-describedby={nameId}
+      onPress={() => {
+        if (isAdding) return;
+        setAdding(true);
+        void onAdd()
+          .catch(() => undefined)
+          .finally(() => {
+            setAdding(false);
+          });
+      }}
+    >
+      {isAdding ? strings.addingPerson : strings.addPerson}
+    </Button>
+  );
+}
+
 /** A meeting's detail: when, who comes (each one's chip, and their answer unless they accepted), and the video link. */
 function MeetingDetail({
   entry,
   detailId,
+  onAddPerson,
 }: {
-  readonly entry: Extract<ActivityEntry, { kind: 'meeting' }>;
+  readonly entry: MeetingEntry;
   readonly detailId: string;
+  readonly onAddPerson: ActivityFeedProps['onAddPerson'];
 }) {
   const { locale, timeZone } = useFormatSettings();
   const when = formatTimeRange(entry.startsAt, entry.endsAt, entry.allDay === true, locale, timeZone);
@@ -612,10 +663,12 @@ function MeetingDetail({
           {entry.attendees.length > 0 && (
             <span className={styles.attendees}>
               <VisuallyHidden>{strings.attendees}</VisuallyHidden>
-              {entry.attendees.map((attendee) => (
+              {entry.attendees.map((attendee, index) => (
                 <span key={attendee.email} className={styles.attendee}>
                   {attendee.display === undefined ? (
-                    <span className={styles.address}>{attendee.name ?? attendee.email}</span>
+                    <span id={`${detailId}-attendee-${String(index)}`} className={styles.address}>
+                      {attendee.name ?? attendee.email}
+                    </span>
                   ) : (
                     <RecordChip
                       display={attendee.display}
@@ -623,8 +676,19 @@ function MeetingDetail({
                       {...(attendee.href === undefined ? {} : { href: attendee.href })}
                     />
                   )}
-                  {attendee.response !== 'accepted' && (
-                    <span className={styles.response}>{strings.responses[attendee.response]}</span>
+                  {(attendee.response !== 'accepted' || attendee.match === 'ambiguous') && (
+                    <span className={styles.response}>
+                      {[
+                        ...(attendee.response === 'accepted' ? [] : [strings.responses[attendee.response]]),
+                        ...(attendee.match === 'ambiguous' ? [strings.ambiguous] : []),
+                      ].join(', ')}
+                    </span>
+                  )}
+                  {attendee.match === 'unknown' && attendee.display === undefined && onAddPerson !== undefined && (
+                    <AddPersonButton
+                      nameId={`${detailId}-attendee-${String(index)}`}
+                      onAdd={() => onAddPerson(entry, attendee)}
+                    />
                   )}
                 </span>
               ))}
@@ -700,7 +764,7 @@ function hasDetail(entry: ActivityEntry): boolean {
 
 /** One entry: its marker on the rail, the actor and verb, the time, and what changed or was added. */
 /** Drawn again only when its entry changes, not with every scroll step of the feed. */
-const Entry = memo(function Entry({ entry, lineId, isLast }: EntryProps) {
+const Entry = memo(function Entry({ entry, lineId, isLast, onAddPerson }: EntryProps) {
   const icon = entry.kind === 'change' || entry.kind === 'links' ? iconOf(entry.attribute) : KIND_ICONS[entry.kind];
   let detail: ReactNode;
   if (entry.kind === 'change') {
@@ -729,7 +793,7 @@ const Entry = memo(function Entry({ entry, lineId, isLast }: EntryProps) {
       </span>
     );
   } else if (entry.kind === 'meeting') {
-    detail = <MeetingDetail entry={entry} detailId={`${lineId}-detail`} />;
+    detail = <MeetingDetail entry={entry} detailId={`${lineId}-detail`} onAddPerson={onAddPerson} />;
   } else if (entry.kind === 'task' && entry.title !== undefined) {
     detail = <TaskRow entry={entry} title={entry.title} detailId={`${lineId}-detail`} />;
   } else if (

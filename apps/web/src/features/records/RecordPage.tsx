@@ -226,6 +226,17 @@ function RecordScreen({
   const live = useLiveStatus(data.live);
   const unnamed = strings.unnamed(object.singularName);
   const link = useMemo(() => recordLinks(slug, objects), [slug, objects]);
+  // Add as person on a meeting (spec 0024, AC-609): one function while the page stays, so timeline entries keep
+  // their memo. The data layer says why in a toast when it is refused; the meetings event updates the timeline.
+  const addPerson = useCallback(
+    async (meetingId: string, attendee: { readonly email: string; readonly name?: string }) => {
+      const added = await data.calendar.addAttendee(slug, { recordId, meetingId, email: attendee.email });
+      if (added !== undefined) {
+        toasts.toast({ tone: 'success', message: strings.addedPerson(attendee.name ?? attendee.email) });
+      }
+    },
+    [data, slug, recordId, toasts],
+  );
   const router = useRouter();
   const openTotal = useTaskTotal(open);
   // Whether the task dialog was opened from this page, so closing it steps Back rather than adding a step.
@@ -289,7 +300,7 @@ function RecordScreen({
   const canAddTasks = object.access === 'write' && trashed?.status !== 'trashed' && state.status === 'ready';
   let tabContent: ReactNode;
   if (tab === 'activity') {
-    tabContent = <ActivityTab feed={feed} link={link} taskHref={taskHref} />;
+    tabContent = <ActivityTab feed={feed} link={link} taskHref={taskHref} onAddPerson={addPerson} />;
   } else if (tab === 'tasks' && pageRecord !== undefined) {
     tabContent = (
       <TasksTab

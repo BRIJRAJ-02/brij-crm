@@ -165,6 +165,7 @@ export const ACCESS_TABLE = {
   connectCalendar: { ownConnection: true },
   updateCalendarConnection: { ownConnection: true },
   removeCalendarConnection: { ownConnection: true },
+  syncCalendarNow: { ownConnection: true },
   listMeetingsForRecord: { data: 'read' },
   meetingFacts: { system: true },
   // Milestone 2: Add as person creates a person through the door (write on People, the record's own read first);

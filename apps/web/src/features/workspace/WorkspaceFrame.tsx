@@ -17,6 +17,7 @@ import {
   Sidebar,
   type Toasts,
 } from '@crm/ui';
+import { CalendarBanner } from './CalendarBanner.tsx';
 import { useNavigate } from '@tanstack/react-router';
 import { useCallback, useState, type ReactNode } from 'react';
 import { settingsNav, visibleSettingsNav, type SettingsPageId } from '../settings/nav.ts';
@@ -127,6 +128,8 @@ export function WorkspaceFrame({
       topBar={topBar}
       viewBar={viewBar}
       toolbar={toolbar}
+      // A calendar that stopped syncing says so on every page (spec 0024, AC-619).
+      banner={isMissing ? undefined : <CalendarBanner data={data} slug={slug} />}
       sidebar={
         settings !== undefined ? (
           <SettingsNavigation slug={slug} settings={settings} permissions={permissions} />

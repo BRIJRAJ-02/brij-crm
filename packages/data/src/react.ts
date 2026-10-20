@@ -6,7 +6,7 @@ import type { BoardStatus, BoardStore } from './records/board.ts';
 import type { DataError } from './errors.ts';
 import type { ActivityFeed, ActivityState } from './activity/feed.ts';
 import type { BookingsCalendarHeld, BookingsCalendarState, BookingsState, BookingsView } from './bookings/store.ts';
-import type { CalendarState, CalendarView } from './calendar/store.ts';
+import type { CalendarSettingsHeld, CalendarSettingsState, CalendarState, CalendarView } from './calendar/store.ts';
 import type { CaptureListState, CaptureListView } from './captures/list.ts';
 import type { JobsSnapshot, JobsView } from './jobs/store.ts';
 import type { LiveStatus } from './live/live.ts';
@@ -278,6 +278,11 @@ export function useBookingsCalendar(view: BookingsCalendarHeld): BookingsCalenda
  */
 export function useCalendar(view: CalendarView): CalendarState {
   return useRetained(view);
+}
+
+/** The workspace's calendar settings (spec 0024, AC-609), read when the screen first holds them. */
+export function useCalendarSettings(held: CalendarSettingsHeld): CalendarSettingsState {
+  return useRetained(held);
 }
 
 /**

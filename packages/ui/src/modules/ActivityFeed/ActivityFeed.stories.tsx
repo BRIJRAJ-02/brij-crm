@@ -279,6 +279,52 @@ export const Meetings: Story = {
   },
 };
 
+/**
+ * Add as person (spec 0024, AC-609): an attendee the CRM doesn't know offers
+ * the button while the screen gives `onAddPerson`; one several people match
+ * says so beside their answer.
+ */
+const ADD_PERSON_ENTRIES: readonly ActivityEntry[] = [
+  {
+    id: 'm5',
+    kind: 'meeting',
+    at: '2026-10-13T09:00:00.000Z',
+    actor: ADA,
+    title: 'Intro with Initech',
+    startsAt: '2026-10-13T09:00:00.000Z',
+    endsAt: '2026-10-13T09:30:00.000Z',
+    attendees: [
+      { email: 'new@initech.com', name: 'Peter Gibbons', response: 'accepted', match: 'unknown' },
+      { email: 'bill@initech.com', response: 'needs_action', match: 'ambiguous' },
+    ],
+  },
+];
+const addPerson = fn(() => Promise.resolve());
+
+export const MeetingsAddPerson: Story = {
+  render: () => (
+    <Stage height="grid">
+      <ActivityFeed
+        label="Activity"
+        entries={arraySource(ADD_PERSON_ENTRIES, (entry) => entry.id)}
+        onAddPerson={addPerson}
+      />
+    </Stage>
+  ),
+  parameters: { crm: { screenshot: false } },
+  play: async ({ canvas, userEvent }) => {
+    // Its name is what it shows; the attendee's name describes it.
+    const add = await canvas.findByRole('button', { name: 'Add as person' });
+    await expect(add).toHaveAccessibleDescription('Peter Gibbons');
+    await expect(canvas.getByText('no reply, several people match')).toBeVisible();
+    await userEvent.click(add);
+    await expect(addPerson).toHaveBeenCalledWith(
+      expect.objectContaining({ id: 'm5' }),
+      expect.objectContaining({ email: 'new@initech.com' }),
+    );
+  },
+};
+
 /** Tab moves from the entry into its linked names, and on out of the feed. */
 export const LinksKeyboard: Story = {
   args: { entries: arraySource(SAMPLE_LINK_ACTIVITY, (entry) => entry.id) },
