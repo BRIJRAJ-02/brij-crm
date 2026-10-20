@@ -1,4 +1,4 @@
-import { useId, useState, type KeyboardEvent, type ReactNode } from 'react';
+import { Fragment, useId, useState, type KeyboardEvent, type ReactNode } from 'react';
 import { Button as AriaButton, DropIndicator, GridList, GridListItem, useDragAndDrop } from 'react-aria-components';
 import { Badge } from '../../atoms/Badge/Badge.tsx';
 import { DragHandle } from '../../atoms/DragHandle/DragHandle.tsx';
@@ -166,9 +166,11 @@ export function QuestionList({
                           : [item.choiceCount === 0 ? strings.noChoices : strings.choices(item.choiceCount)]),
                         item.filed,
                       ].map((part, at) => (
-                        <span key={at} className={styles.part}>
-                          {at === 0 ? part : `${strings.separator}${part}`}
-                        </span>
+                        // The separator stays outside the part, so its spaces are where a line may break.
+                        <Fragment key={at}>
+                          {at === 0 ? null : strings.separator}
+                          <span className={styles.part}>{part}</span>
+                        </Fragment>
                       ))}
                     </span>
                   </span>
