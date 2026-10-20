@@ -245,6 +245,8 @@ export const GroupedAndLocked: Story = {
     await expect(within(menu).getByRole('group', { name: 'Private' })).toBeInTheDocument();
     await expect(within(menu).getByRole('menuitemradio', { name: /Pipeline/ })).toHaveTextContent('Locked');
     await expect(within(menu).getByRole('menuitemradio', { name: 'Create view' })).toBeInTheDocument();
+    // The menu fades in; axe reads colours next, so let the fade end (Firefox was measuring mid fade).
+    await Promise.all(document.getAnimations().map((animation) => animation.finished.catch(() => undefined)));
   },
 };
 
