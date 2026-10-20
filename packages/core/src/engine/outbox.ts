@@ -51,7 +51,7 @@ export const LIFECYCLE_CAP = MAX_LIFECYCLE_IDS;
 
 /** One outbox row before it gets its number. */
 export interface OutboxEvent {
-  readonly kind: 'records' | 'entries' | 'definitions' | 'members' | 'jobs' | 'views' | 'tasks' | 'notes' | 'meetings';
+  readonly kind: 'records' | 'entries' | 'definitions' | 'members' | 'jobs' | 'views' | 'tasks' | 'notes' | 'meetings' | 'nav';
   /** The object: a `records` row's, an `entries` row's list's parent, a `definitions` row's when it names one. */
   readonly objectId?: string;
   /** The list: an `entries` row's, a `definitions` row's when it names one. */
@@ -348,6 +348,10 @@ function kindRows(change: CappedChange): OutboxEvent[] {
       recordIds: coarse ? [] : recordIds,
       coarse,
     });
+  }
+  // A member's own sidebar (spec 0034): one row naming the members whose rows the write changed, nothing else.
+  if (change.nav.length > 0) {
+    rows.push({ kind: 'nav', ...NO_IDS, itemIds: [...change.nav].sort(byId), coarse: false });
   }
   return rows;
 }

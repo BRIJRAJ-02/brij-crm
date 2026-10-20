@@ -35,6 +35,7 @@ export const EVENT_KINDS = [
   'members',
   'access',
   'jobs',
+  'nav',
 ] as const satisfies readonly EventRow['kind'][];
 
 /** One member of an audience: who, and what they may do. */
@@ -332,8 +333,11 @@ export function filterEvent(audience: Audience, row: EventRow, facts: EventFacts
       const removed = cut || !sameList(meetingIds, row.meetingIds);
       return settle({ ...row, meetingIds, recordIds, ...(cut ? { coarse: true } : {}) }, removed);
     }
+    // A member's own sidebar (spec 0034) names one member id and nothing else, the same exposure as a `members`
+    // event, so every audience receives it and only that member's clients act on it.
     case 'members':
     case 'access':
+    case 'nav':
       return row;
     case 'jobs': {
       const { actorMemberId, ...event } = row;

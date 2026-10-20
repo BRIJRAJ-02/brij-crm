@@ -187,6 +187,18 @@ export const AccessEvent = z.object({
   mutationId,
 });
 
+/**
+ * A member's own sidebar changed (spec 0034, AC-937): the member, and nothing
+ * else, so it carries no more than a `members` event. Every audience receives
+ * it; a client acts only on its own member id and reads `nav.get` again.
+ */
+export const NavEvent = z.object({
+  ...place,
+  kind: z.literal('nav'),
+  memberIds: ids,
+  mutationId,
+});
+
 /** Background jobs changed (spec 0008): refetch them, or when `coarse` the unfinished jobs you hold. */
 export const JobsEvent = z.object({
   ...place,
@@ -221,6 +233,7 @@ export const ChangeEvent = z.discriminatedUnion('kind', [
   MembersEvent,
   AccessEvent,
   JobsEvent,
+  NavEvent,
   RestrictedEvent,
 ]);
 /** One change event on a workspace's channel, or in a catch up. */
@@ -238,6 +251,7 @@ export const CHANGE_EVENT_KINDS = [
   'members',
   'access',
   'jobs',
+  'nav',
   'restricted',
 ] as const satisfies readonly ChangeEvent['kind'][];
 

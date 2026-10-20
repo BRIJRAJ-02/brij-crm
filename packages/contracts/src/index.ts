@@ -6,6 +6,7 @@ import { calendarContract } from './calendar.ts';
 import { formsContract, submissionsContract } from './forms/forms.ts';
 import { jobsContract } from './jobs.ts';
 import { meContract } from './me.ts';
+import { navContract } from './navigation.ts';
 import { membersContract } from './members.ts';
 import { objectsContract } from './objects.ts';
 import { optionsContract } from './options.ts';
@@ -36,6 +37,8 @@ export * from './forms/index.ts';
 export * from './jobs.ts';
 export * from './me.ts';
 export * from './members.ts';
+export * from './nav-model.ts';
+export * from './navigation.ts';
 export * from './objects.ts';
 export * from './options.ts';
 export * from './realtime.ts';
@@ -82,4 +85,6 @@ export const contract = {
   submissions: submissionsContract,
   bookingPages: bookingPagesContract,
   bookings: bookingsContract,
+  // The sidebar (spec 0034): each member's own order, folds, hidden items, favourites and rail.
+  nav: navContract,
 };

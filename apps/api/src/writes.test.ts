@@ -70,6 +70,8 @@ const READS: ReadonlySet<string> = new Set([
   // Where a booking could move (its page's slots), and the guest page's address: both read only.
   'bookings.moveSlots',
   'bookings.guestLink',
+  // The sidebar (spec 0034).
+  'nav.get',
 ]);
 
 let db: Database;
@@ -712,6 +714,10 @@ const WRITES: Record<string, (m: Member, mutationId: string) => Promise<readonly
     ];
   },
   // Tasks (spec 0019, AC-448): one tasks row per write, naming the task and every record linked before or after.
+  'nav.change': async (m, mutationId) => {
+    await m.client.nav.change({ workspace: m.slug, op: { op: 'rail', on: true }, mutationId });
+    return [{ kind: 'nav', mutation_id: mutationId }];
+  },
   'tasks.create': async (m, mutationId) => {
     const record = await m.client.records.create({
       workspace: m.slug,

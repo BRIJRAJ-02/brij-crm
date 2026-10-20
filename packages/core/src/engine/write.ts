@@ -165,6 +165,8 @@ export interface Change {
    * `records` rows carry `fromJob`.
    */
   readonly jobId?: string;
+  /** Members whose own sidebar the write changed (spec 0034): one `nav` row names them. */
+  readonly nav: readonly string[];
 }
 
 /**
@@ -309,6 +311,7 @@ const LIST_KEYS = [
   'tasks',
   'notes',
   'meetings',
+  'nav',
 ] as const satisfies readonly (keyof ChangeLists)[];
 
 /**
@@ -426,6 +429,7 @@ export async function runWrite<T>(
           tasks: [] as TaskChange[],
           notes: [] as NoteChange[],
           meetings: [] as MeetingChange[],
+          nav: [] as string[],
         };
         const context: WriteContext = {
           tx,
@@ -456,6 +460,7 @@ export async function runWrite<T>(
             append(collected.tasks, part.tasks);
             append(collected.notes, part.notes);
             append(collected.meetings, part.meetings);
+            append(collected.nav, part.nav);
           },
           async perRecord(step) {
             const marks = LIST_KEYS.map((key) => collected[key].length);
@@ -501,6 +506,7 @@ export async function runWrite<T>(
           notes: [...collected.notes],
           meetings: [...collected.meetings],
           ...(options.jobId === undefined ? {} : { jobId: options.jobId }),
+          nav: [...new Set(collected.nav)],
         };
         for (const hook of hooks) await hook(change, tx);
         return { result, change };

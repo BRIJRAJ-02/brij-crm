@@ -32,7 +32,12 @@ export type AccessEntry =
    * Booking pages (spec 0025): `booking.manage` first (403 `FORBIDDEN`), then the reader's own pages, or anyone's
    * with `booking.admin`; another's page answers as absent.
    */
-  | { readonly bookingPages: true };
+  | { readonly bookingPages: true }
+  /**
+   * The caller's own sidebar (spec 0034): a member reads and changes only their own row (no member id is ever
+   * taken), and a principal that isn't a member gets the defaults on a read and `FORBIDDEN` on a change.
+   */
+  | { readonly ownNav: true };
 
 /** Every exported service that takes a scope, and what it checks. */
 export const ACCESS_TABLE = {
@@ -79,6 +84,9 @@ export const ACCESS_TABLE = {
   setMemberRole: { ownerRules: true },
   removeMember: { ownerRules: true },
   listMembers: { anyMember: true },
+  // The sidebar (spec 0034): the caller's own row only.
+  readNav: { ownNav: true },
+  changeNav: { ownNav: true },
   getMyAccess: { anyMember: true },
   // The limits' usage (spec 0012, AC-243): any member, filtered by their access inside.
   getUsage: { anyMember: true },

@@ -48,6 +48,8 @@ export const ENGINE_REFUSAL_CODES = [
   'BOOKING_CLOSED',
   // Calendar sync (spec 0024, AC-618): the member has no connected calendar to write an event to.
   'CALENDAR_NOT_CONNECTED',
+  // The sidebar (spec 0034, AC-934): 50 favourites, or 400 stored items.
+  'NAV_LIMIT',
 ] as const;
 
 /** One of the engine's refusal codes. */

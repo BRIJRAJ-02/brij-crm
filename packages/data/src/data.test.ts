@@ -493,6 +493,10 @@ function fakeApi(overrides: Partial<Behaviour> = {}, auth: (path: string, body: 
         remove: os.bookings.blocks.remove.handler(notServed),
       },
     },
+    nav: {
+      get: os.nav.get.handler(notServed),
+      change: os.nav.change.handler(notServed),
+    },
   });
   const handler = new RPCHandler(router);
   const fetch = async (input: RequestInfo | URL, init?: RequestInit): Promise<Response> => {

@@ -1213,6 +1213,7 @@ describe('deletion', () => {
       tasks: [],
       notes: [],
       meetings: [],
+      nav: [],
       values: ids.slice(half).map((ownerId) => ({
         ownerId,
         ownerKind: 'record' as const,

@@ -94,6 +94,8 @@ export function outboxEvent(row: OutboxRow): EventRow | undefined {
       return { ...place, kind: 'members', memberIds: copy(row.itemIds) };
     case 'access':
       return { ...place, kind: 'access', memberIds: copy(row.itemIds) };
+    case 'nav':
+      return { ...place, kind: 'nav', memberIds: copy(row.itemIds) };
     case 'jobs':
       return {
         ...place,
