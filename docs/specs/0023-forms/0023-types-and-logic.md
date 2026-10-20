@@ -1,5 +1,7 @@
 # 0023. Forms: types, steps and conditions, more questions, filing, notices and routing
 
+The owner accepted every recommendation in this spec, including its open questions, on 20 October 2026: Help shows keyboard shortcuts until a help centre exists; a page with its own hours becomes a schedule named after the page; only `booking.admin` edits a colleague's schedules; an Outlook personal account books without a Teams link and the host is told; steps go live in release 1 and one at a time in release 2; the form layout data change is accepted; sidebar changes reach the member's other tabs through the workspace `nav` event.
+
 **Date**: 2026-10-20 (revision asked for by the owner's roadmap decisions of 20 October 2026)
 **Revises**: [0023-experience.md](0023-experience.md) ("one page, no steps, no conditions"; AC-547 and AC-589 moved to Follow-up) and the contract in that file. **Aligns with**: [0023-form-design.md](0023-form-design.md) on branch `wip/formdesign` (the Classic redesign, the field checker, Steps and Conversational drawn as stories). Where this file and the experience file differ on types, steps, conditions or routing, this file wins; on the look of the visitor's page, the form design file wins.
 **Owns**: AC-1031 to AC-1070.

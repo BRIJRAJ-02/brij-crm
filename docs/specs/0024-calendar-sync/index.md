@@ -105,6 +105,8 @@ Reasoning and options: see [rationale.md](rationale.md).
 
 ## Decision
 
+The owner accepted every recommendation in this spec, including its open questions, on 20 October 2026: Help shows keyboard shortcuts until a help centre exists; a page with its own hours becomes a schedule named after the page; only `booking.admin` edits a colleague's schedules; an Outlook personal account books without a Teams link and the host is told; steps go live in release 1 and one at a time in release 2; the form layout data change is accepted; sidebar changes reach the member's other tabs through the workspace `nav` event.
+
 Build calendar sync in the API and worker as a provider adapter (Google first, Outlook in milestone 4) behind one internal interface, store meetings as their own tables linked to records, sync incrementally with the provider's sync tokens, wake on provider push notifications with a 15 minute poll as the fallback, and expose free and busy and event writes as core services for booking and round robin. See [rationale.md](rationale.md).
 
 ## Feature design

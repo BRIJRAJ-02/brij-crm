@@ -62,6 +62,8 @@ The public booking page (`/b/:key`) is frozen by the owner: nothing here changes
 
 ## Decision
 
+The owner accepted every recommendation in this spec, including its open questions, on 20 October 2026: Help shows keyboard shortcuts until a help centre exists; a page with its own hours becomes a schedule named after the page; only `booking.admin` edits a colleague's schedules; an Outlook personal account books without a Teams link and the host is told; steps go live in release 1 and one at a time in release 2; the form layout data change is accepted; sidebar changes reach the member's other tabs through the workspace `nav` event.
+
 Make schedules their own tenant table owned by a member, with the hours in today's `BookingAvailability` shape so the slot engine is unchanged, a partial unique index for the one default, and `booking_pages.schedule_id` (null means "the owner's default") replacing `hours_mode`. Migrate in place with an expand and contract pair, proving slots are identical. The Availability screen becomes a list with a detail editor that wraps the redesigned hours editor. See [rationale.md](rationale.md).
 
 ## Feature design

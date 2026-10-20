@@ -69,6 +69,8 @@ Reasoning and options: see [rationale.md](rationale.md).
 
 ## Decision
 
+The owner accepted every recommendation in this spec, including its open questions, on 20 October 2026: Help shows keyboard shortcuts until a help centre exists; a page with its own hours becomes a schedule named after the page; only `booking.admin` edits a colleague's schedules; an Outlook personal account books without a Teams link and the host is told; steps go live in release 1 and one at a time in release 2; the form layout data change is accepted; sidebar changes reach the member's other tabs through the workspace `nav` event.
+
 Rebuild the sidebar's contents in `WorkspaceFrame` from one item model (fixed destinations, objects, lists, favourites and Scheduling pages), resolved on the server per member through the access door and stored in one `member_nav_prefs` row per member, changed by small operations that are optimistic in the data layer and live through a new `nav` outbox kind. The library's Sidebar gains reorder, item menus, a controlled fold and the rail; no second navigation component. See [rationale.md](rationale.md).
 
 ## Feature design

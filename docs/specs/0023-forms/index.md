@@ -127,6 +127,8 @@ All of these come earlier in the build order (forms sit in Slice 15).
 
 ## Decision
 
+The owner accepted every recommendation in this spec, including its open questions, on 20 October 2026: Help shows keyboard shortcuts until a help centre exists; a page with its own hours becomes a schedule named after the page; only `booking.admin` edits a colleague's schedules; an Outlook personal account books without a Teams link and the host is told; steps go live in release 1 and one at a time in release 2; the form layout data change is accepted; sidebar changes reach the member's other tabs through the workspace `nav` event.
+
 **Chosen option**: Option 1: store first, process in a job, one versioned form document, served by a small public bundle on the existing host.
 
 A form is a row plus versioned JSON documents; the public surface is a small separate build on the existing Vercel project with a REST endpoint on the API; each submission is stored in one insert and turned into records by a background job that writes through the engine as a form actor.
