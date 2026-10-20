@@ -147,31 +147,48 @@ function setup() {
 const offline = () => dataError('API_UNAVAILABLE', 'You’re offline.');
 
 describe('the note session (spec 0019)', () => {
-  it('stores nothing until the note holds text, then saves 300 ms after typing stops (AC-439, AC-440)', async () => {
+  it('stores nothing until the note holds text, then saves the body at once and the title 300 ms after typing stops (AC-439, AC-440)', async () => {
     const t = setup();
     const id = t.store.newId();
-    const session = t.store.open(WS, { noteId: id, recordId: ACME, isNew: true, canChange: true });
+    const session = t.store.open(WS, { noteId: id, recordId: ACME, objectId: 'o1', isNew: true, canChange: true });
     const release = session.retain();
     session.setTitle('   ');
     await t.advance(5_000);
     expect(t.saves).toEqual([]);
+    // The body comes from the editor's own 300 ms wait, so it saves at once; the blank title was never held.
     session.setDoc(doc('Met at the fair'));
+    await t.advance(0);
+    expect(t.saves).toEqual([{ content: doc('Met at the fair'), baseVersion: null }]);
+    // A title waits 300 ms after typing stops.
+    session.setTitle('Fair');
     await t.advance(299);
-    expect(t.saves).toEqual([]);
+    expect(t.saves).toHaveLength(1);
     await t.advance(1);
-    expect(t.saves).toEqual([{ title: '   ', content: doc('Met at the fair'), baseVersion: null }]);
+    expect(t.saves[1]).toMatchObject({ title: 'Fair', baseVersion: 1 });
     expect(session.getSnapshot()).toMatchObject({ isNew: false, saveState: 'saved' });
     release();
     // Closing a new note that never held text stores nothing.
-    const empty = t.store.open(WS, { noteId: t.store.newId(), recordId: ACME, isNew: true, canChange: true });
+    const empty = t.store.open(WS, {
+      noteId: t.store.newId(),
+      recordId: ACME,
+      objectId: 'o1',
+      isNew: true,
+      canChange: true,
+    });
     empty.retain()();
     await t.advance(5_000);
-    expect(t.saves).toHaveLength(1);
+    expect(t.saves).toHaveLength(2);
   });
 
   it('saves at least every 2 seconds while typing goes on, one save out at a time, the latest next', async () => {
     const t = setup();
-    const session = t.store.open(WS, { noteId: t.store.newId(), recordId: ACME, isNew: true, canChange: true });
+    const session = t.store.open(WS, {
+      noteId: t.store.newId(),
+      recordId: ACME,
+      objectId: 'o1',
+      isNew: true,
+      canChange: true,
+    });
     session.retain();
     for (let i = 1; i <= 25; i += 1) {
       session.setDoc(doc('x'.repeat(i)));
@@ -194,7 +211,13 @@ describe('the note session (spec 0019)', () => {
 
   it('tries a save with no answer again after 1, 2, 4, 8 and 15 s, then says Not saved with Retry, keeping the text', async () => {
     const t = setup();
-    const session = t.store.open(WS, { noteId: t.store.newId(), recordId: ACME, isNew: true, canChange: true });
+    const session = t.store.open(WS, {
+      noteId: t.store.newId(),
+      recordId: ACME,
+      objectId: 'o1',
+      isNew: true,
+      canChange: true,
+    });
     session.retain();
     t.failWith(...Array.from({ length: NOTE_RETRY_SECONDS.length + 1 }, offline));
     session.setDoc(doc('On a plane'));
@@ -212,7 +235,13 @@ describe('the note session (spec 0019)', () => {
 
   it('never sends a body over 200 KB, and says why with the text kept (AC-441)', async () => {
     const t = setup();
-    const session = t.store.open(WS, { noteId: t.store.newId(), recordId: ACME, isNew: true, canChange: true });
+    const session = t.store.open(WS, {
+      noteId: t.store.newId(),
+      recordId: ACME,
+      objectId: 'o1',
+      isNew: true,
+      canChange: true,
+    });
     session.retain();
     session.setDoc(doc('x'.repeat(250 * 1024)));
     await t.advance(2_000);
@@ -225,7 +254,7 @@ describe('the note session (spec 0019)', () => {
     const t = setup();
     const id = '0199a6f2-0000-7000-8000-0000000000f1';
     t.server.set(id, { title: 'Plan', content: doc('v1'), version: 1, updatedBy: ME });
-    const session = t.store.open(WS, { noteId: id, recordId: ACME, isNew: false, canChange: true });
+    const session = t.store.open(WS, { noteId: id, recordId: ACME, objectId: 'o1', isNew: false, canChange: true });
     session.retain();
     await t.advance(0);
     expect(session.getSnapshot()).toMatchObject({ status: 'ready', title: 'Plan', docKey: 0 });
@@ -239,7 +268,7 @@ describe('the note session (spec 0019)', () => {
     const t = setup();
     const id = '0199a6f2-0000-7000-8000-0000000000f2';
     t.server.set(id, { title: 'Plan', content: doc('v1'), version: 1, updatedBy: ME });
-    const session = t.store.open(WS, { noteId: id, recordId: ACME, isNew: false, canChange: true });
+    const session = t.store.open(WS, { noteId: id, recordId: ACME, objectId: 'o1', isNew: false, canChange: true });
     session.retain();
     await t.advance(0);
     session.setDoc(doc('mine'));
@@ -252,7 +281,13 @@ describe('the note session (spec 0019)', () => {
 
   it('lets a pending save finish after the window closes, and offers the note again if it fails (AC-440)', async () => {
     const t = setup();
-    const session = t.store.open(WS, { noteId: t.store.newId(), recordId: ACME, isNew: true, canChange: true });
+    const session = t.store.open(WS, {
+      noteId: t.store.newId(),
+      recordId: ACME,
+      objectId: 'o1',
+      isNew: true,
+      canChange: true,
+    });
     const release = session.retain();
     session.setDoc(doc('closing'));
     t.failWith(dataError('FORBIDDEN', 'You can view this note but not change it.'));
@@ -261,11 +296,68 @@ describe('the note session (spec 0019)', () => {
     expect(t.saves).toHaveLength(1);
     expect(t.notices).toMatchObject([{ message: 'Your note wasn’t saved.' }]);
     let opened = '';
-    t.store.setOpener((_workspace, _record, noteId) => {
+    t.store.setOpener((_workspace, _object, _record, noteId) => {
       opened = noteId;
     });
     t.notices[0]?.action?.();
     expect(opened).not.toBe('');
+  });
+});
+
+describe('the note session after review (spec 0019)', () => {
+  it('holds nothing for a new note of spaces, so leaving asks nothing and closing sends nothing', async () => {
+    const t = setup();
+    const session = t.store.open(WS, {
+      noteId: t.store.newId(),
+      recordId: ACME,
+      objectId: 'o1',
+      isNew: true,
+      canChange: true,
+    });
+    const release = session.retain();
+    session.setTitle('   ');
+    session.setDoc(doc('  '));
+    expect(t.unsaved()).toBe(false);
+    release();
+    await t.advance(5_000);
+    expect(t.saves).toEqual([]);
+    expect(t.notices).toEqual([]);
+  });
+
+  it('saves a long run of title typing about every 2 seconds, never back to back', async () => {
+    const t = setup();
+    const session = t.store.open(WS, {
+      noteId: t.store.newId(),
+      recordId: ACME,
+      objectId: 'o1',
+      isNew: true,
+      canChange: true,
+    });
+    session.retain();
+    for (let i = 1; i <= 50; i += 1) {
+      session.setTitle('x'.repeat(i));
+      await t.advance(100);
+    }
+    // 5 seconds of typing a key every 100 ms: about one save each 2 seconds.
+    expect(t.saves.length).toBeGreaterThanOrEqual(2);
+    expect(t.saves.length).toBeLessThanOrEqual(4);
+  });
+
+  it('drops the last text of an editor that someone else’s version replaced', async () => {
+    const t = setup();
+    const id = '0199a6f2-0000-7000-8000-0000000000f9';
+    t.server.set(id, { title: 'Plan', content: doc('v1'), version: 1, updatedBy: ME });
+    const session = t.store.open(WS, { noteId: id, recordId: ACME, objectId: 'o1', isNew: false, canChange: true });
+    session.retain();
+    await t.advance(0);
+    t.server.set(id, { title: 'Plan', content: doc('theirs'), version: 2, updatedBy: BEA });
+    t.store.changed(WS, { seq: 2, at: '', kind: 'notes', recordIds: [ACME], noteIds: [id] });
+    await t.advance(0);
+    expect(session.getSnapshot().docKey).toBe(1);
+    // The old editor unmounting hands over its text: older than what shows now, so nothing is sent.
+    session.setDoc(doc('mine, stale'), 0);
+    await t.advance(3_000);
+    expect(t.saves).toEqual([]);
   });
 });
 

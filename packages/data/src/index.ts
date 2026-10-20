@@ -2627,6 +2627,7 @@ export function createDataLayer({
         input: {
           readonly noteId: string;
           readonly recordId: string;
+          readonly objectId: string;
           readonly isNew: boolean;
           readonly canChange: boolean;
         },
@@ -2634,7 +2635,9 @@ export function createDataLayer({
       /** A new note's id: mint it once when the window opens on a new note. */
       newId: (): string => mintId(),
       /** The app's way to open a note window again, for a failed save's toast ("Open note"). */
-      setOpener: async (open: (workspace: string, recordId: string, noteId: string) => void): Promise<void> => {
+      setOpener: async (
+        open: (workspace: string, objectId: string, recordId: string, noteId: string) => void,
+      ): Promise<void> => {
         (await notesStore()).setOpener(open);
       },
       /** Deletes a note at once on screen; a refusal puts it back, answered for the screen's toast. */

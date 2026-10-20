@@ -34,7 +34,7 @@ export const strings = {
   taskDeleted: 'Task deleted',
   undo: 'Undo',
   notDeleted: 'The task wasn’t deleted.',
-  notRestored: 'The task couldn’t come back.',
+  notRestored: 'Couldn’t restore the task.',
   linkCopied: 'Link copied',
   copyFailed: 'Couldn’t copy the link. Copy it from the address bar.',
   /** The footer line's term: who made it and when. */
@@ -68,7 +68,7 @@ export const strings = {
   today: 'Today',
   upcoming: 'Upcoming',
   noDate: 'No date',
-  emptyAssigned: 'Nothing assigned to you',
+  emptyAssigned: 'Nothing assigned to you.',
   emptyAssignedBody: 'Tasks assigned to you show here.',
   emptyCreated: 'You haven’t created any open tasks.',
   emptyAll: 'No open tasks in this workspace.',

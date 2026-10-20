@@ -175,8 +175,13 @@ export interface NoteSession {
   /** Holds the session while the window shows it; the answer lets go (a pending save still finishes). */
   readonly retain: () => () => void;
   readonly setTitle: (title: string) => void;
-  /** The editor's `onChange`, already debounced by the editor itself. */
-  readonly setDoc: (doc: unknown) => void;
+  /**
+   * The editor's `onChange`, already debounced by the editor itself, so it
+   * saves at once (one save out at a time). `fromDocKey` is the `docKey` the
+   * editor was made for: text from an editor someone else's version replaced
+   * is dropped.
+   */
+  readonly setDoc: (doc: unknown, fromDocKey?: number) => void;
   /** Saves now what is unsaved (the window closing, or Retry). */
   readonly flush: () => void;
   /** Tries a failed save again, or reads a failed note again. */
@@ -202,7 +207,7 @@ export function createNotesStore(deps: NotesDeps) {
   const lists = new Map<string, ReturnType<typeof makeList>>();
   const sessions = new Map<string, ReturnType<typeof makeSession>>();
   // A function the app gives, to open a note window again (a failed save's toast).
-  let opener: ((workspace: string, recordId: string, noteId: string) => void) | undefined;
+  let opener: ((workspace: string, objectId: string, recordId: string, noteId: string) => void) | undefined;
   let unsavedSaid = false;
 
   const keyOf = (workspace: string, id: string) => `${workspace}\u0000${id}`;
@@ -266,6 +271,22 @@ export function createNotesStore(deps: NotesDeps) {
     };
 
     /** Reads the first `upTo` notes again: the list's truth from the top. */
+    // One reread out at a time: one asked for meanwhile runs when it lands, so a busy note never starves the list.
+    let reading: Promise<void> | undefined;
+    let readAgain = false;
+    const rereadTop = () => {
+      if (reading !== undefined) {
+        readAgain = true;
+        return;
+      }
+      reading = readTop(Math.max(Math.min(items.length, NOTE_PAGE_MAX), NOTE_PAGE)).finally(() => {
+        reading = undefined;
+        if (readAgain) {
+          readAgain = false;
+          rereadTop();
+        }
+      });
+    };
     const readTop = (upTo: number): Promise<void> => {
       turn += 1;
       const mine = turn;
@@ -341,7 +362,7 @@ export function createNotesStore(deps: NotesDeps) {
         const wait = Math.max(0, lastRead + LIST_REREAD_MS - now());
         cancelReread = later(() => {
           cancelReread = undefined;
-          void readTop(Math.max(items.length, NOTE_PAGE));
+          rereadTop();
         }, wait);
       },
       /** This tab's own save: the summary takes its place at the top at once (last edited first). */
@@ -406,7 +427,14 @@ export function createNotesStore(deps: NotesDeps) {
     return list;
   }
 
-  function makeSession(workspace: string, noteId: string, recordId: string, isNewNote: boolean, canChange: boolean) {
+  function makeSession(
+    workspace: string,
+    noteId: string,
+    recordId: string,
+    objectId: string,
+    isNewNote: boolean,
+    canChange: boolean,
+  ) {
     let status: NoteSessionState['status'] = isNewNote ? 'ready' : 'loading';
     let isNew = isNewNote;
     let title = '';
@@ -431,6 +459,8 @@ export function createNotesStore(deps: NotesDeps) {
     let retained = 0;
     let release: (() => void) | undefined;
     let closed = false;
+    // Deleted from this tab: a save of it failing afterwards stays quiet.
+    let deletedHere = false;
     const listeners = new Set<() => void>();
 
     const current = (): NoteSessionState => ({
@@ -473,13 +503,31 @@ export function createNotesStore(deps: NotesDeps) {
     };
 
     /** Reads the note (opening it, or someone else saved it), replacing the body when nothing is unsaved here. */
+    // One read out at a time per session: events arriving meanwhile ask for one more read when it lands.
+    let readOut = false;
+    let readNext = false;
     const read = (fromEvent: boolean) => {
+      if (readOut) {
+        readNext = true;
+        return;
+      }
+      readOut = true;
+      const done = () => {
+        readOut = false;
+        if (readNext) {
+          readNext = false;
+          read(true);
+        }
+      };
       deps.api.get({ workspace, noteId }).then(
         (note) => {
+          done();
           if (fromEvent && (hasPending() || inFlight)) return;
           const newer = version === null || note.version > version;
           if (!newer) return;
           const replaced = fromEvent && version !== null;
+          // The editor starts again only when the body changed (their edit may have been the title alone).
+          const bodyChanged = JSON.stringify(note.content) !== JSON.stringify(doc);
           version = note.version;
           title = note.title;
           doc = note.content;
@@ -488,12 +536,13 @@ export function createNotesStore(deps: NotesDeps) {
           status = 'ready';
           error = undefined;
           if (replaced) {
-            docKey += 1;
+            if (bodyChanged) docKey += 1;
             notice = { kind: 'theirs', by: note.updatedBy };
           }
           announce();
         },
         (failed: unknown) => {
+          done();
           const failure = toDataError(failed);
           if (failure.code === 'NOT_FOUND') {
             if (status === 'ready') isUnavailable = true;
@@ -510,6 +559,14 @@ export function createNotesStore(deps: NotesDeps) {
     /** Sends what is unsaved, unless a save is out (the latest state goes once it lands). */
     const fire = () => {
       clearTimers();
+      // A new note with no text yet (spaces, or text typed and deleted) holds nothing to save (AC-439).
+      if (isNew && !hasText(title, doc)) {
+        pending = {};
+        firstPendingAt = undefined;
+        sayUnsaved();
+        maybeEnd();
+        return;
+      }
       if (inFlight || !hasPending() || isUnavailable) return;
       cancelRetry?.();
       cancelRetry = undefined;
@@ -523,6 +580,8 @@ export function createNotesStore(deps: NotesDeps) {
       }
       isTooLong = false;
       inFlight = true;
+      // The next change starts its own 2 second most wait from here.
+      firstPendingAt = undefined;
       saveState = tries === 0 ? 'saving' : 'retrying';
       announce();
       const mutationId = deps.mintId();
@@ -549,13 +608,13 @@ export function createNotesStore(deps: NotesDeps) {
             // What was sent is saved; anything typed since stays pending.
             if (pending.title === sent.title) delete pending.title;
             if (pending.doc === sent.doc) delete pending.doc;
-            if (!hasPending()) firstPendingAt = undefined;
             if (answer.overwrote !== undefined) notice = { kind: 'overwrote', by: answer.overwrote.by };
             saveState = hasPending() ? 'saving' : 'saved';
             for (const list of listsOf(workspace)) if (list.recordId === recordId) list.put(answer.note);
             deps.timelines(workspace, [recordId]);
             announce();
-            if (hasPending()) fire();
+            // Anything typed meanwhile waits its own turn (300 ms, at most 2 s), never straight after this save.
+            if (hasPending()) schedule();
             else maybeEnd();
           },
           (failed: unknown) => {
@@ -582,7 +641,8 @@ export function createNotesStore(deps: NotesDeps) {
               if (failure.code === 'NOT_FOUND') isUnavailable = true;
             }
             announce();
-            if (closed && retained === 0) {
+            // A note deleted from this tab meanwhile says nothing more: its delete was the person's last word.
+            if (closed && retained === 0 && !deletedHere) {
               // The window is gone: a toast offers it again, with the text this session still holds.
               deps.notify({
                 tone: 'danger',
@@ -590,7 +650,7 @@ export function createNotesStore(deps: NotesDeps) {
                 action: {
                   label: NOTE_WORDS.openNote,
                   onAction: () => {
-                    opener?.(workspace, recordId, noteId);
+                    opener?.(workspace, objectId, recordId, noteId);
                   },
                 },
               });
@@ -599,30 +659,39 @@ export function createNotesStore(deps: NotesDeps) {
         );
     };
 
-    /** A change typed: saved 300 ms after typing stops, at most 2 seconds after the first unsaved change. */
-    const changed = () => {
-      notice = notice?.kind === 'overwrote' ? undefined : notice;
-      if (isNew && !hasText(title, doc)) {
-        // Nothing stored until there is text (AC-439); the pending change waits.
-        announce();
-        return;
-      }
+    /**
+     * Sets the save's timers: 300 ms after the last change (at once for the
+     * body, which the editor already waited 300 ms for), at most 2 seconds
+     * after the first unsaved change.
+     */
+    const schedule = (delay: number = NOTE_SAVE_DELAY_MS) => {
       const at = now();
       firstPendingAt ??= at;
       cancelDebounce?.();
-      cancelDebounce = later(fire, NOTE_SAVE_DELAY_MS);
+      cancelDebounce = later(fire, delay);
       if (cancelMax === undefined) {
         cancelMax = later(fire, Math.max(0, firstPendingAt + NOTE_SAVE_MAX_WAIT_MS - at));
       }
+    };
+
+    /** A change typed: the title saved 300 ms after typing stops, the body when the editor hands it over. */
+    const changed = (delay: number = NOTE_SAVE_DELAY_MS) => {
+      notice = notice?.kind === 'overwrote' ? undefined : notice;
+      if (isNew && !hasText(title, doc)) {
+        // Nothing stored until there is text (AC-439), and nothing held as unsaved either.
+        pending = {};
+        announce();
+        return;
+      }
+      schedule(delay);
       if (saveState === 'saved' || saveState === 'idle') saveState = 'saving';
       announce();
     };
-
     const session = {
       workspace,
       noteId,
       recordId,
-      hasUnsaved: () => hasPending() || inFlight,
+      hasUnsaved: () => (hasPending() && !(isNew && !hasText(title, doc))) || inFlight,
       /** A live event named this note: someone else saved it, or it went away. */
       changedElsewhere() {
         if (status === 'loading' || isNew) return;
@@ -635,6 +704,7 @@ export function createNotesStore(deps: NotesDeps) {
       },
       /** Deleted from this tab: unavailable at once, nothing more is sent. */
       gone() {
+        deletedHere = true;
         clearTimers();
         cancelRetry?.();
         pending = {};
@@ -676,11 +746,13 @@ export function createNotesStore(deps: NotesDeps) {
           pending = { ...pending, title: next };
           changed();
         },
-        setDoc(next: unknown) {
-          if (!may || isUnavailable) return;
+        setDoc(next: unknown, fromDocKey?: number) {
+          // An editor that was replaced (someone else's version came in) hands over its last text as it goes:
+          // that text is older than what shows now, so it is dropped rather than saved over theirs.
+          if (!may || isUnavailable || (fromDocKey !== undefined && fromDocKey !== docKey)) return;
           doc = next;
           pending = { ...pending, doc: next };
-          changed();
+          changed(0);
         },
         flush: fire,
         retry() {
@@ -724,6 +796,8 @@ export function createNotesStore(deps: NotesDeps) {
       input: {
         readonly noteId: string;
         readonly recordId: string;
+        /** The record's object, for the "Open note" link a failed save's toast offers. */
+        readonly objectId: string;
         readonly isNew: boolean;
         readonly canChange: boolean;
       },
@@ -731,7 +805,7 @@ export function createNotesStore(deps: NotesDeps) {
       const key = keyOf(workspace, input.noteId);
       const found = sessions.get(key);
       if (found !== undefined) return found.api;
-      const made = makeSession(workspace, input.noteId, input.recordId, input.isNew, input.canChange);
+      const made = makeSession(workspace, input.noteId, input.recordId, input.objectId, input.isNew, input.canChange);
       sessions.set(key, made);
       return made.api;
     },
@@ -740,7 +814,7 @@ export function createNotesStore(deps: NotesDeps) {
     /** Whether any note has changes not yet saved (the page's "Leave site?"). */
     hasUnsaved: () => [...sessions.values()].some((each) => each.hasUnsaved()),
     /** The app's way to open a note window again, for a failed save's toast. */
-    setOpener(open: (workspace: string, recordId: string, noteId: string) => void) {
+    setOpener(open: (workspace: string, objectId: string, recordId: string, noteId: string) => void) {
       opener = open;
     },
     /**

@@ -81,6 +81,17 @@
     margin-inline-start: auto;
   }
 
+  /* A note's "Saved": quiet, beside the actions it explains. */
+  .status {
+    display: inline-flex;
+    gap: var(--space-4);
+    align-items: center;
+    padding-inline-end: var(--space-4);
+    color: var(--text-secondary);
+    font: var(--text-label);
+    letter-spacing: var(--tracking-label);
+  }
+
   .alert {
     display: inline-flex;
     color: var(--danger);

@@ -248,3 +248,30 @@ export const HeaderActions: Story = {
     await expect(Math.round(copy.getBoundingClientRect().top)).toBe(Math.round(close.getBoundingClientRect().top));
   },
 };
+
+/** A short word about what the dialog shows (a note's "Saved") sits before the header actions, quiet. */
+export const Status: Story = {
+  render: () => (
+    <Stage>
+      <Modal
+        title="Kickoff call"
+        variant="window"
+        icon="notebook"
+        isOpen
+        status="Saved"
+        headerActions={
+          <Tooltip content="More actions">
+            <Button variant="ghost" icon="ellipsis" label="More actions" />
+          </Tooltip>
+        }
+      >
+        <Field label="Title" isLabelHidden defaultValue="Kickoff call" />
+      </Modal>
+    </Stage>
+  ),
+  play: async () => {
+    const dialog = await openDialog();
+    const status = dialog.querySelector('[role="status"]');
+    await expect(status).toHaveTextContent('Saved');
+  },
+};

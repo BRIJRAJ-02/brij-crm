@@ -398,6 +398,12 @@ export function createTasksStore(deps: TasksDeps) {
           (found) => {
             put(workspace, found);
             for (const task of found) for (const list of listsOf(workspace)) list.place(task);
+            // A My tasks list settles only for a task it holds or that now belongs in it, never for every event.
+            const read = new Set(found.map((task) => task.id));
+            for (const list of listsOf(workspace)) {
+              if (list.mine === undefined || !list.isShown()) continue;
+              if (list.holdsAny(read) || found.some((task) => list.belongs(task))) list.dirty(true);
+            }
             const answered = new Set(found.map((task) => task.id));
             drop(
               workspace,
@@ -667,6 +673,8 @@ export function createTasksStore(deps: TasksDeps) {
       ids: () => ids,
       announce,
       holdsAny: (named: ReadonlySet<string>) => ids.some((id) => named.has(id)),
+      /** Whether a screen shows it now. */
+      isShown: () => retained > 0,
       /**
        * A change in the list: it settles `TASK_SETTLE_MS` after the last one,
        * at most `SETTLE_MAX_MS` after the first; a change someone else made
@@ -755,6 +763,8 @@ export function createTasksStore(deps: TasksDeps) {
               cursor = undefined;
               shownTo = 0;
               stale = true;
+              // Not ready any more: a live event places nothing in it, and keeps no body for it.
+              state = 'loading';
               announce();
               sweep(workspace);
             }, UNUSED_MS);
@@ -874,10 +884,15 @@ export function createTasksStore(deps: TasksDeps) {
    * tasks list: a change in them settles them (any task change may move a
    * task into or out of My tasks).
    */
-  const dirtyRecords = (workspace: string, recordIds: readonly string[], fromElsewhere = false) => {
+  const dirtyRecords = (
+    workspace: string,
+    recordIds: readonly string[],
+    fromElsewhere = false,
+    mineToo = !fromElsewhere,
+  ) => {
     const named = new Set(recordIds);
     for (const list of listsOf(workspace)) {
-      if (list.mine !== undefined || (list.recordId !== undefined && named.has(list.recordId)))
+      if ((mineToo && list.mine !== undefined) || (list.recordId !== undefined && named.has(list.recordId)))
         list.dirty(fromElsewhere);
     }
   };
@@ -1138,8 +1153,10 @@ export function createTasksStore(deps: TasksDeps) {
       // Bodies held are read again; one no screen holds yet is read at once too when a loaded list of a record the
       // event names could show it (someone else's new task shows within a second, AC-432).
       const named = new Set(event.recordIds);
+      // Only lists a screen shows now: a My tasks list nobody shows hears nothing.
       const shows = listsOf(workspace).some(
-        (list) => list.mine !== undefined || (list.recordId !== undefined && named.has(list.recordId)),
+        (list) =>
+          list.isShown() && (list.mine !== undefined || (list.recordId !== undefined && named.has(list.recordId))),
       );
       refetch(
         workspace,
@@ -1165,7 +1182,7 @@ export function createTasksStore(deps: TasksDeps) {
       }
       const lifecycle = [...(event.deletedIds ?? []), ...(event.restoredIds ?? [])];
       // A trash or a restore changes which tasks All tasks shows; any other records event leaves My tasks alone.
-      if (lifecycle.length > 0) dirtyRecords(workspace, lifecycle, true);
+      if (lifecycle.length > 0) dirtyRecords(workspace, lifecycle, true, true);
       const reread = (recordIds: readonly string[]) => {
         const named = new Set(recordIds);
         refetch(

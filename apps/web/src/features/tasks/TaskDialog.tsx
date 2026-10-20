@@ -39,11 +39,9 @@ import {
 import { useRouteContext } from '@tanstack/react-router';
 import { useEffect, useId, useState, type ReactNode } from 'react';
 import { memberDisplay } from './entries.ts';
+import { deleteWithUndo } from './undo-delete.ts';
 import { strings } from './strings.ts';
 import { useRecordSearch } from '../records/links.ts';
-
-/** How long a deleted task's Undo stays (AC-445). */
-const UNDO_MS = 10_000;
 
 /** Props for the task dialog. */
 export interface TaskDialogProps {
@@ -59,6 +57,8 @@ export interface TaskDialogProps {
   readonly meId: string | undefined;
   /** Closes it (the address loses `?task`). */
   readonly onClose: () => void;
+  /** The list the dialog opened from, by its name: it takes focus back after a delete. */
+  readonly listLabel?: string;
 }
 
 /**
@@ -316,6 +316,7 @@ function SavedTask({
   members,
   meId,
   onClose,
+  listLabel,
 }: Omit<TaskDialogProps, 'task' | 'pageRecord'> & { readonly subscription: TaskSubscription }) {
   const { data, toasts } = useRouteContext({ from: '__root__' });
   const state = useTask(subscription);
@@ -358,28 +359,17 @@ function SavedTask({
   const remove = () => {
     const taskId = task.id;
     onClose();
-    void data.tasks.remove(slug, taskId).then((failure) => {
-      if (failure !== undefined) {
-        toasts.toast({ tone: 'danger', message: `${strings.notDeleted} ${refusalSummary(failure)}` });
-        return;
-      }
-      const key = toasts.toast({
-        tone: 'success',
-        message: strings.taskDeleted,
-        action: {
-          label: strings.undo,
-          onAction: () => {
-            void data.tasks.restore(slug, taskId).then((refused) => {
-              if (refused !== undefined) {
-                toasts.toast({ tone: 'danger', message: `${strings.notRestored} ${refusalSummary(refused)}` });
-              }
-            });
-          },
-        },
-      });
-      setTimeout(() => {
-        toasts.dismiss(key);
-      }, UNDO_MS);
+    deleteWithUndo({
+      toasts,
+      remove: () => data.tasks.remove(slug, taskId),
+      restore: () => data.tasks.restore(slug, taskId),
+      words: {
+        deleted: strings.taskDeleted,
+        undo: strings.undo,
+        notDeleted: (reason) => `${strings.notDeleted} ${reason}`,
+        notRestored: (reason) => `${strings.notRestored} ${reason}`,
+      },
+      ...(listLabel === undefined ? {} : { listLabel }),
     });
   };
   const copyLink = () => {

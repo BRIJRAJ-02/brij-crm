@@ -327,10 +327,13 @@ function RecordScreen({
   );
   // The failed save's toast ("Open note") opens the window on that note again, from wherever the person is.
   useEffect(() => {
-    void data.notes.setOpener((workspace, noteRecordId, noteId) => {
-      void navigate({ href: `${recordHref(workspace, object.apiSlug, noteRecordId, 'notes')}?note=${noteId}` });
+    void data.notes.setOpener((workspace, noteObjectId, noteRecordId, noteId) => {
+      // The note's own object, which may not be the one whose page is open now.
+      const objectSlug = objects.find((each) => each.id === noteObjectId)?.apiSlug;
+      if (objectSlug === undefined) return;
+      void navigate({ href: `${recordHref(workspace, objectSlug, noteRecordId, 'notes')}?note=${noteId}` });
     });
-  }, [data, navigate, object.apiSlug]);
+  }, [data, navigate, objects]);
   const chipHref = useCallback(
     (display: { readonly objectId: string; readonly recordId: string }) => link(display.objectId, display.recordId),
     [link],
@@ -420,6 +423,7 @@ function RecordScreen({
         members={members}
         meId={meId}
         onClose={closeTask}
+        {...(tab === 'tasks' ? { listLabel: taskStrings.openTasks } : {})}
       />
     );
 

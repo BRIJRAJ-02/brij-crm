@@ -363,6 +363,13 @@ export {
   type ViewBarProps,
   type ViewChoice,
 } from './modules/Toolbar/Toolbar.tsx';
-export { createToasts, type ToastAction, type ToastContent, type Toasts, type ToastTone } from './provider/toasts.tsx';
+export {
+  createToasts,
+  type ToastAction,
+  type ToastContent,
+  type ToastOptions,
+  type Toasts,
+  type ToastTone,
+} from './provider/toasts.tsx';
 export { UiProvider, useKeyboardPlatform, type FormatSettings, type UiProviderProps } from './provider/UiProvider.tsx';
 export { LOADING_TIMING, useDelayedLoading, type LoadingTiming } from './provider/useDelayedLoading.ts';

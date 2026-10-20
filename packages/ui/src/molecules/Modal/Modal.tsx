@@ -56,6 +56,12 @@ export interface ModalProps {
    * footer band holding only them would make heavy.
    */
   readonly headerActions?: ReactNode;
+  /**
+   * A short word about what the dialog shows, before the header actions, in
+   * the secondary colour and announced politely when it changes: a note's
+   * "Saving…" or "Saved".
+   */
+  readonly status?: ReactNode;
   /** `danger` makes it an alert dialog that asks before something destructive; a click outside won't close it. */
   readonly tone?: 'default' | 'danger';
   /**
@@ -88,6 +94,7 @@ export function Modal({
   icon,
   context,
   headerActions,
+  status,
   tone = 'default',
   isDismissable = true,
   isBusy = false,
@@ -134,6 +141,11 @@ export function Modal({
             {/* Every dialog but the palette and an alert has the close button in its title bar. */}
             {variant !== 'palette' && !isAlert && (
               <span className={styles.close}>
+                {status !== undefined && (
+                  <span className={styles.status} role="status" aria-live="polite">
+                    {status}
+                  </span>
+                )}
                 {headerActions}
                 <Button slot="close" variant="ghost" icon="x" label={strings.close} isDisabled={isBusy} />
               </span>

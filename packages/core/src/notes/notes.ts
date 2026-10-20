@@ -349,7 +349,7 @@ export async function listNotes(
         : sql` and (n.updated_at < ${after.updatedAt}::timestamptz or (n.updated_at = ${after.updatedAt}::timestamptz and n.id > ${after.id}::uuid))`;
     const page = await tx.execute<NoteRow>(sql`
       select ${NOTE_COLUMNS} ${from}${bound}
-      order by n.updated_at desc, n.id
+      order by n.updated_at desc nulls last, n.id
       limit ${limit + 1}
     `);
     const rows = page.rows.slice(0, limit);

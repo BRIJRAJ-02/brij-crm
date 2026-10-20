@@ -47,10 +47,19 @@ export interface ToastContent {
   readonly action?: ToastAction;
 }
 
+/** How long one toast stays, when its kind's rule isn't the one wanted. */
+export interface ToastOptions {
+  readonly timeout?: number;
+}
+
 /** The app's toasts: raise and dismiss them, and the queue the region draws. Made once in main.tsx. */
 export interface Toasts {
-  /** Shows a toast and returns its key. */
-  readonly toast: (content: ToastContent) => string;
+  /**
+   * Shows a toast and returns its key. `timeout` (milliseconds) gives a toast
+   * with an action a life of its own (an Undo that lasts 10 seconds); like
+   * every timer here it pauses while the toast is hovered or focused.
+   */
+  readonly toast: (content: ToastContent, options?: ToastOptions) => string;
   /** Closes the toast with this key. */
   readonly dismiss: (key: string) => void;
   /** The queue ToastRegion draws from. */
@@ -93,8 +102,8 @@ function withViewTransition(update: () => void): void {
 export function createToasts(): Toasts {
   const queue = new ToastQueue<ToastContent>({ maxVisibleToasts: MAX_VISIBLE_TOASTS, wrapUpdate: withViewTransition });
   return {
-    toast: (content) => {
-      const timeout = toastTimeout(content);
+    toast: (content, options) => {
+      const timeout = options?.timeout ?? toastTimeout(content);
       return queue.add(content, timeout === undefined ? {} : { timeout });
     },
     dismiss: (key) => {
