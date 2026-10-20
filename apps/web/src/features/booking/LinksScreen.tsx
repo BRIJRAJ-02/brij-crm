@@ -4,18 +4,7 @@
 // Leaves out: editing a page (its editor), forms (their own tab) and the bookings list (Bookings).
 import { isDataError, type BookingPageView, type DataLayer } from '@crm/data';
 import { useCaptureList } from '@crm/data/react';
-import {
-  Button,
-  HUES,
-  Menu,
-  MenuItem,
-  MenuSeparator,
-  MenuTrigger,
-  Modal,
-  Tooltip,
-  type Hue,
-  type LinkGridCard,
-} from '@crm/ui';
+import { Button, Menu, MenuItem, MenuSeparator, MenuTrigger, Modal, Tooltip, type LinkGridCard } from '@crm/ui';
 import { useNavigate, useRouteContext } from '@tanstack/react-router';
 import { useState } from 'react';
 import { CapturesList } from '../captures/CapturesList.tsx';
@@ -29,27 +18,14 @@ export interface LinksScreenProps {
   readonly slug: string;
 }
 
-/** A page's facts: its lengths, its kind, own hours, and a location that isn't video ("30 min · One on one"). */
+/** A page's facts: its lengths, its kind, own hours, and a location that isn't video ("30 or 60 min · One on one"). */
 function factsOf(page: BookingPageView): readonly string[] {
   return [
-    ...page.durations.map((minutes) => strings.minutesShort(minutes)),
+    ...(page.durations.length === 0 ? [] : [strings.minutesChoice(page.durations)]),
     strings.kindLabel[page.kind],
     ...(page.hoursMode === 'own' ? [strings.ownHours] : []),
     ...(page.location.type === 'video' ? [] : [strings.locationChip[page.location.type]]),
   ];
-}
-
-/** The hues a page's edge may take: every data hue but grey, which marks a form, or a page that's off. */
-const PAGE_HUES = HUES.filter((hue) => hue !== 'gray');
-
-/**
- * A page's colour edge. Pages have no colour of their own yet, so each takes one from its id: the same page
- * keeps the same colour everywhere, and neighbours mostly differ.
- */
-function hueOf(pageId: string): Hue {
-  let sum = 0;
-  for (const char of pageId) sum = (sum * 31 + char.charCodeAt(0)) % 997;
-  return PAGE_HUES[sum % PAGE_HUES.length] ?? 'blue';
 }
 
 /** The cards, New booking page, and each card's switch, Copy link, Open and menu, read from the data layer's held list. */
@@ -96,9 +72,11 @@ export function LinksScreen({ data, slug }: LinksScreenProps) {
       id: page.id,
       title: page.title,
       href: pageEditorHref(slug, page.id),
-      hue: hueOf(page.id),
+      // Pages have no colour of their own yet: the card takes a stable one from the page's id.
+      colourKey: page.id,
       facts: factsOf(page),
-      address: `/${slug}/${page.slug}`,
+      // The link Copy link copies, as a path.
+      address: new URL(publicBookingUrl(page.publicKey)).pathname,
       // Off shows in the muted title and the switch; the badge is for what they can't say.
       ...(isPending ? { badge: strings.copying } : page.isPrivate ? { badge: strings.private } : {}),
       isOff,
@@ -115,18 +93,21 @@ export function LinksScreen({ data, slug }: LinksScreenProps) {
       copyValue: publicBookingUrl(page.publicKey),
       actions: (
         <>
-          <Tooltip content={isOff ? strings.turnedOff : strings.openInNewTab} isDisabled={isPending}>
-            <Button
-              variant="ghost"
-              size="lg"
-              icon="external-link"
-              label={strings.openPage(page.title)}
-              isDisabled={isPending || isOff}
-              onPress={() => {
-                globalThis.open(publicBookingUrl(page.publicKey), '_blank', 'noopener');
-              }}
-            />
-          </Tooltip>
+          {/* Off, there is nothing to open: the muted title and the switch say why. */}
+          {!isOff && (
+            <Tooltip content={strings.openInNewTab} isDisabled={isPending}>
+              <Button
+                variant="ghost"
+                size="lg"
+                icon="external-link"
+                label={strings.openPage(page.title)}
+                isDisabled={isPending}
+                onPress={() => {
+                  globalThis.open(publicBookingUrl(page.publicKey), '_blank', 'noopener');
+                }}
+              />
+            </Tooltip>
+          )}
           {page.canChange && (
             <MenuTrigger>
               <Button

@@ -5,12 +5,15 @@ import { Tooltip } from '../../atoms/Tooltip/Tooltip.tsx';
 import { Stage } from '../../workbench/Stage/Stage.tsx';
 import { LinkCard, LinkCardSkeleton } from './LinkCard.tsx';
 
-function actions(title: string, isOpenDisabled = false) {
+/** Open (only while it is on: there is nothing to open on an off link) and the ··· menu. */
+function actions(title: string, canOpen = true) {
   return (
     <>
-      <Tooltip content={`Open ${title} in a new tab`}>
-        <Button variant="ghost" size="lg" icon="external-link" label={`Open ${title}`} isDisabled={isOpenDisabled} />
-      </Tooltip>
+      {canOpen && (
+        <Tooltip content="Open in a new tab">
+          <Button variant="ghost" size="lg" icon="external-link" label={`Open ${title} in a new tab`} />
+        </Tooltip>
+      )}
       <Button variant="ghost" size="lg" icon="ellipsis" label={`More for ${title}`} />
     </>
   );
@@ -30,7 +33,7 @@ const meta = {
   },
   render: (args) => (
     <Stage width="narrow">
-      <LinkCard {...args} actions={actions(args.title)} />
+      <LinkCard {...args} actions={actions(args.title, args.isOff !== true)} />
     </Stage>
   ),
 } satisfies Meta<typeof LinkCard>;
@@ -58,6 +61,7 @@ export const Off: Story = {
   },
   play: async ({ canvas }) => {
     await expect(canvas.queryByText('Off')).not.toBeInTheDocument();
+    await expect(canvas.queryByRole('button', { name: /^Open/ })).not.toBeInTheDocument();
     await expect(canvas.getByRole('switch', { name: 'Intro call is on' })).not.toBeChecked();
   },
 };
@@ -72,6 +76,7 @@ export const NotPublished: Story = {
     address: '/f/untitled-form',
     badge: 'Not published',
     isOff: true,
+    copyValue: undefined,
     toggle: {
       label: 'Accepting submissions on Untitled form',
       isSelected: false,
@@ -83,6 +88,8 @@ export const NotPublished: Story = {
   play: async ({ canvas }) => {
     await expect(canvas.getByText('Not published')).toBeInTheDocument();
     await expect(canvas.getByRole('switch', { name: 'Accepting submissions on Untitled form' })).toBeDisabled();
+    // Nothing to copy or open until it is published.
+    await expect(canvas.queryByRole('button', { name: 'Copy link' })).not.toBeInTheDocument();
   },
 };
 
@@ -125,7 +132,7 @@ export const ReadOnly: Story = {
         {...args}
         actions={
           <Tooltip content="Open Intro call in a new tab">
-            <Button variant="ghost" size="lg" icon="external-link" label="Open Intro call" />
+            <Button variant="ghost" size="lg" icon="external-link" label="Open Intro call in a new tab" />
           </Tooltip>
         }
       />
@@ -147,6 +154,14 @@ export const Pending: Story = {
   },
 };
 
+/** Focused from the keyboard: the whole card rings (in forced colours, the title draws an outline). */
+export const Focused: Story = {
+  play: async ({ canvas }) => {
+    await userEvent.tab();
+    await expect(canvas.getByRole('link', { name: 'Intro call' })).toHaveFocus();
+  },
+};
+
 /** By keyboard: the title link first, then the switch, Copy link, Open and the menu. */
 export const Keyboard: Story = {
   parameters: { crm: { screenshot: false } },
@@ -158,22 +173,27 @@ export const Keyboard: Story = {
     await userEvent.tab();
     await expect(canvas.getByRole('button', { name: 'Copy link' })).toHaveFocus();
     await userEvent.tab();
-    await expect(canvas.getByRole('button', { name: 'Open Intro call' })).toHaveFocus();
+    await expect(canvas.getByRole('button', { name: 'Open Intro call in a new tab' })).toHaveFocus();
     await userEvent.tab();
     await expect(canvas.getByRole('button', { name: 'More for Intro call' })).toHaveFocus();
   },
 };
 
-/** Its footer controls are 30px tall and at least space-8 apart, so none is missed. */
+/** Its footer controls are 30px tall and at least space-8 apart, and a press that misses one does nothing. */
 export const Targets: Story = {
   parameters: { crm: { screenshot: false } },
   play: async ({ canvas }) => {
     const copy = canvas.getByRole('button', { name: 'Copy link' }).getBoundingClientRect();
-    const open = canvas.getByRole('button', { name: 'Open Intro call' }).getBoundingClientRect();
+    const open = canvas.getByRole('button', { name: 'Open Intro call in a new tab' }).getBoundingClientRect();
     const more = canvas.getByRole('button', { name: 'More for Intro call' }).getBoundingClientRect();
     for (const box of [copy, open, more]) await expect(box.height).toBeGreaterThanOrEqual(30);
     await expect(more.left - open.right).toBeGreaterThanOrEqual(8);
     await expect(open.left - copy.right).toBeGreaterThanOrEqual(8);
+    const link = canvas.getByRole('link', { name: 'Intro call' });
+    // Just past Copy link, and just beside the switch: neither lands on the card's link.
+    await expect(document.elementFromPoint(copy.right + 4, copy.top + copy.height / 2)).not.toBe(link);
+    const toggle = canvas.getByRole('switch', { name: 'Intro call is on' }).getBoundingClientRect();
+    await expect(document.elementFromPoint(toggle.left - 2, toggle.bottom + 4)).not.toBe(link);
   },
 };
 

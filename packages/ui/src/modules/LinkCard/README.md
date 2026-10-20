@@ -26,9 +26,10 @@ References (Mobbin, 20 October 2026):
 <LinkCard
   title="Intro call"
   href={pageEditorHref(slug, page.id)}
-  hue={hueOf(page.id)}
-  facts={['30 min', 'One on one']}
-  address="/acme/intro-call"
+  colourKey={page.id}
+  titleLevel={2}
+  facts={['30 or 60 min', 'One on one']}
+  address="/b/k3x9"
   badge={page.isPrivate ? 'Private' : undefined}
   isOff={page.status === 'paused'}
   toggle={{ label: 'Intro call is on', isSelected, onChange }}
@@ -47,21 +48,41 @@ References (Mobbin, 20 October 2026):
 />
 ```
 
-- **`href`:** the editor. The title is the card's one link, and its `::after` covers the card, so a press anywhere opens it. The switch and the footer's controls sit above that link, so each does its own thing. A press on the footer's empty space still opens the card. Left out, or while `isPending`, the card is not a link.
-- **`hue`:** the colour edge on the start side, `dot-<hue>`. Forms have no colour, so they leave it out and get the neutral `dot-gray`. Booking pages have no colour field yet, so Captures picks a stable hue from the page's id.
+- **`href`:** the editor. The title is the card's one link, and its `::after` covers the card, so a press on the card's body opens it.
+  - The switch sits in a 32px box above that link, and the footer and the address sit above it too. So a press that just misses a control does nothing, rather than opening the editor ("too close, and will be missed").
+  - Left out, or while `isPending`, the card is not a link.
+- **`hue` or `colourKey`:** the colour edge on the start side, `dot-<hue>`.
+  - `colourKey` (a booking page's id) picks a stable hue for a link with no colour of its own, leaving out grey and red. Pages have no colour field yet.
+  - Forms leave both out and get the neutral `dot-gray`, as the owner asked.
+  - The edge never says a state: an off card keeps its colour.
+- **`titleLevel`:** 2 on a page whose h1 is the TopBar (LinkGrid passes it), 3 inside a section (the default).
 - **`facts`:** one line of muted text under the title, joined with " · " ("30 min · One on one"; "12 responses · 2 spam").
-- **`address`:** the public link, muted, truncated to one line.
+- **`address`:** the public link as a path, muted, truncated to one line ("/b/k3x9", "/f/contact-us"). It can be selected, and Copy link selects it when the clipboard refuses.
 - **`badge`:** a grey Badge beside the title, for a state the switch can't say ("Not published", "Private", "Copying…"). Never "Off".
-- **`isOff`:** the card reads quieter: its title in text-secondary and its edge grey. No badge; the switch says it.
+- **`isOff`:** the card reads quieter, its title in text-secondary. No badge: the switch says it.
 - **`toggle`:** the Switch at the top end, its label hidden (read by screen readers). `isDisabled` with `disabledReason` puts the reason in a tooltip.
-- **`copyValue`:** a labelled secondary "Copy link" button at the start of the footer. `copyDisabledReason` disables it and puts the reason in a tooltip ("Publish it first").
-- **`actions`:** Open and the ··· menu, ghost icon Buttons at `size="lg"`, at the footer's end in a group named for the card.
+- **`copyValue`:** a labelled secondary "Copy link" button at the start of the footer. Leave it out when there is nothing to copy (a form not published yet), rather than showing a disabled button whose reason can't be reached.
+- **`actions`:** Open and the ··· menu, ghost icon Buttons at `size="lg"`, at the footer's end. Leave Open out when the link is off.
+- **The footer group:** the whole footer is a group named for the card ("Actions for Intro call"), so each card's "Copy link" is told apart.
 - **Footer size:** every footer control is 30px tall (size-input, the library's largest control), and they sit at least space-8 apart.
 - **`LinkCardSkeleton`:** the card's shape in skeletons, for a grid that is loading.
 
 ## States
 
-Default (live), off, not published (badge, switch and Copy link disabled with the reason), private (badge), pending (quieter, not a link, controls wait), read only (switch disabled with why, no menu), and a long title (two lines, then cut). Hover (fine pointer only) raises the border. Focus on the title rings the whole card. The switch and the buttons have their own hover, focus and pressed states. Nothing moves on press.
+**States:**
+- default (live);
+- off (no Open);
+- not published (badge, switch disabled with the reason, no Copy link or Open);
+- private (badge);
+- pending (quieter, not a link, controls wait);
+- read only (switch disabled with why, no menu);
+- a long title (two lines, then cut).
+
+**Hover:** fine pointer only; it raises the border.
+
+**Focus:** focus on the title rings the whole card in accent-line. In forced colours the title draws a Highlight outline.
+
+The switch and the buttons have their own hover, focus and pressed states. Nothing moves on press.
 
 ## Keyboard
 

@@ -6,13 +6,11 @@ export const strings = {
   listLabel: 'Booking pages',
   newPage: 'New booking page',
   copyLink: 'Copy link',
-  copyLinkTo: (title: string) => `Copy link to ${title}`,
   more: (title: string) => `More for ${title}`,
   openNewTab: 'Open in a new tab',
   visibility: 'Visibility',
   on: 'On: the link works',
   off: 'Off: the link stops working',
-  offTag: 'Off',
   isOn: (title: string) => `${title} is on`,
   openPage: (title: string) => `Open ${title} in a new tab`,
   /** Open's tooltip on a link card. */
@@ -26,7 +24,6 @@ export const strings = {
   turnOnFailed: (title: string) => `Couldn’t turn on ${title}. It’s off again.`,
   duplicateFailed: (title: string) => `Couldn’t duplicate ${title}.`,
   deleteFailed: (title: string) => `Couldn’t delete ${title}. It’s back in the list.`,
-  turnedOff: 'Turned off: turn it on to open it',
   notYours: 'Only its owner or a workspace admin can change it',
   deleted: (title: string) => `Deleted “${title}”.`,
   duplicate: 'Duplicate',
@@ -34,6 +31,13 @@ export const strings = {
   delete: 'Delete',
   copyOf: (title: string) => `${title} (copy)`,
   minutesShort: (count: number) => `${String(count)} min`,
+  /** A page's lengths on its card: "30 min", "30 or 60 min", "15, 30 or 60 min". */
+  minutesChoice: (counts: readonly number[]) => {
+    const all = counts.map(String);
+    const last = all.at(-1);
+    if (last === undefined) return '';
+    return all.length === 1 ? `${last} min` : `${all.slice(0, -1).join(', ')} or ${last} min`;
+  },
   ownHours: 'Own hours',
   locationChip: { phone: 'Phone', address: 'In person', custom: 'Custom place' },
   emptyTitle: 'No booking pages yet',

@@ -114,7 +114,8 @@ export function LinkGrid({
     <ul className={styles.grid} aria-label={label}>
       {shown.map(({ id, ...card }) => (
         <li key={id} className={styles.item}>
-          <LinkCard {...card} />
+          {/* On a page the grid's cards are its sections, under the TopBar's h1. */}
+          <LinkCard titleLevel={2} {...card} />
         </li>
       ))}
     </ul>

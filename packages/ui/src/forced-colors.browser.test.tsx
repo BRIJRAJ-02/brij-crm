@@ -7,12 +7,14 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { commands } from 'vitest/browser';
 import preview from '../.storybook/preview.tsx';
 import * as ButtonStories from './atoms/Button/Button.stories.tsx';
+import * as LinkCardStories from './modules/LinkCard/LinkCard.stories.tsx';
 
 setProjectAnnotations(preview);
 
 /** The story per interactive component whose play leaves keyboard focus on it. */
 const FOCUS_STORIES = {
   Button: composeStories(ButtonStories).Focused,
+  LinkCard: composeStories(LinkCardStories).Focused,
 };
 
 describe('forced colours', () => {

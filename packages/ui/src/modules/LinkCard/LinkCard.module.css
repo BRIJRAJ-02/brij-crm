@@ -1,12 +1,13 @@
 /* LinkCard (the owner's card grid, 20 October 2026, after Calendly's event types): a raised card in Card's
    own look (hairline border-subtle, radius-lg, surface-raised, shadow-xs) with a 4px colour edge on the
-   start side, dot-<hue>, or dot-gray for a form, an off card or a pending one.
+   start side, dot-<hue>, or dot-gray for a link with no colour (a form). The edge never says a state.
    The body: the title (text-title, two lines at most) with a state Badge beside it and the switch at the top
    end; the facts in text-secondary; the public link muted in the label type.
    The foot, on surface-subtle over a hairline like Card's: Copy link at the start, the actions at the end,
    space-8 apart, every control at size-input (30px).
-   The title is the card's one link: its ::after covers the card, so a press anywhere opens it. The controls
-   sit above it. Hover (a fine pointer only) raises the border to border-strong; focus on the title rings the
+   The title is the card's one link: its ::after covers the card's body, so a press there opens it. The
+   switch (in a 32px box, so a near miss does nothing rather than opening the card), the address (so it can
+   be selected) and the foot sit above it; a miss in the foot does nothing. Hover (a fine pointer only) raises the border to border-strong; focus on the title rings the
    whole card. An off card's title reads in text-secondary; a pending one in text-tertiary. Nothing moves on
    press. */
 @layer components {
@@ -78,7 +79,7 @@
   }
 
   .root:has(.title[data-focus-visible]) {
-    border-color: var(--accent);
+    border-color: var(--accent-line);
     box-shadow: var(--shadow-focus);
   }
 
@@ -150,6 +151,10 @@
   }
 
   .address {
+    position: relative;
+    z-index: var(--z-raised);
+    align-self: flex-start;
+    max-inline-size: 100%;
     margin: 0;
     overflow: hidden;
     color: var(--text-tertiary);
@@ -167,7 +172,17 @@
     flex: none;
   }
 
-  /* The foot lets a press on its empty space through to the card's link; its controls take their own. */
+  /* The switch's box: 32px square, so a press that just misses the switch lands here and does nothing,
+     rather than on the card's link. */
+  .head .control {
+    align-items: center;
+    justify-content: flex-end;
+    min-inline-size: var(--space-32);
+    min-block-size: var(--space-32);
+    margin-block: calc(-1 * var(--space-6));
+  }
+
+  /* The foot sits above the card's link, so a press that misses a control does nothing. */
   .foot {
     position: relative;
     z-index: var(--z-raised);
@@ -179,12 +194,6 @@
     padding-inline: calc(var(--space-16) + var(--space-4)) var(--space-16);
     border-block-start: var(--border-width-hairline) solid var(--border-subtle);
     background: var(--surface-subtle);
-    pointer-events: none;
-  }
-
-  .foot .control,
-  .actions {
-    pointer-events: auto;
   }
 
   .actions {
@@ -215,6 +224,12 @@
 
     .root::before {
       background: CanvasText;
+    }
+
+    /* Shadows go in forced colours, so focus draws a real outline. */
+    .title[data-focus-visible] {
+      outline: var(--border-width-thick) solid Highlight;
+      outline-offset: var(--border-width-hairline);
     }
   }
 }

@@ -111,25 +111,24 @@ export function FormsScreen({ slug }: FormsScreenProps) {
         isDisabled: !canManage || !isPublished,
         disabledReason: isPublished ? strings.manageOnly : strings.publishFirst,
       },
-      copyValue: data.forms.hostedUrl(form.publicKey),
-      ...(isPublished ? {} : { copyDisabledReason: strings.publishFirst }),
+      // Not published, there is nothing to copy or open: the badge says why.
+      ...(isPublished ? { copyValue: data.forms.hostedUrl(form.publicKey) } : {}),
       actions: (
         <>
-          <Tooltip
-            content={isLive ? strings.openInNewTab : isPublished ? strings.turnedOff : strings.publishFirst}
-            isDisabled={isPending}
-          >
-            <Button
-              variant="ghost"
-              size="lg"
-              icon="external-link"
-              label={strings.openForm(form.name)}
-              isDisabled={isPending || !isLive}
-              onPress={() => {
-                globalThis.open(data.forms.hostedUrl(form.publicKey), '_blank', 'noopener');
-              }}
-            />
-          </Tooltip>
+          {isLive && (
+            <Tooltip content={strings.openInNewTab} isDisabled={isPending}>
+              <Button
+                variant="ghost"
+                size="lg"
+                icon="external-link"
+                label={strings.openForm(form.name)}
+                isDisabled={isPending}
+                onPress={() => {
+                  globalThis.open(data.forms.hostedUrl(form.publicKey), '_blank', 'noopener');
+                }}
+              />
+            </Tooltip>
+          )}
           {canManage && (
             <MenuTrigger>
               <Button

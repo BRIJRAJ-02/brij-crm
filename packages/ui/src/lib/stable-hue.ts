@@ -1,15 +1,18 @@
 import { HUES, type Hue } from '../hue.ts';
 import { memoIntl } from './intl-memo.ts';
 
-/** The hue for something with no hue of its own (an avatar with no picture): a stable hash of its id over the nine hues. */
-export function stableHue(id: string): Hue {
+/**
+ * The hue for something with no hue of its own (an avatar with no picture): a stable hash of its id over the
+ * nine hues, or over `among` (a link card's edge leaves out grey and red).
+ */
+export function stableHue(id: string, among: readonly Hue[] = HUES): Hue {
   // FNV-1a: small, fast and spreads short ids well.
   let hash = 0x811c9dc5;
   for (const char of id) {
     hash ^= char.codePointAt(0) ?? 0;
     hash = Math.imul(hash, 0x01000193);
   }
-  return HUES[(hash >>> 0) % HUES.length] ?? 'gray';
+  return among[(hash >>> 0) % among.length] ?? 'gray';
 }
 
 /** Up to two initials from a name: the first letters of its first and last words ("Ada Lovelace" gives "AL"). */

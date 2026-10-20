@@ -1,12 +1,13 @@
-import { useId, type ReactNode } from 'react';
+import { useId, useRef, type ReactNode } from 'react';
 import { Link as AriaLink } from 'react-aria-components';
 import { Badge } from '../../atoms/Badge/Badge.tsx';
 import { CopyButton } from '../../atoms/Button/CopyButton.tsx';
 import { Skeleton } from '../../atoms/Skeleton/Skeleton.tsx';
 import { Switch } from '../../atoms/Switch/Switch.tsx';
 import { Tooltip } from '../../atoms/Tooltip/Tooltip.tsx';
-import type { Hue } from '../../hue.ts';
+import { HUES, type Hue } from '../../hue.ts';
 import { safeHref } from '../../lib/safe-href.ts';
+import { stableHue } from '../../lib/stable-hue.ts';
 import styles from './LinkCard.module.css';
 import { strings } from './strings.ts';
 
@@ -30,23 +31,29 @@ export interface LinkCardProps {
    * card doesn't open.
    */
   readonly href?: string;
-  /** The colour edge on the start side: the page's hue. Left out, a neutral edge (a form). */
+  /** The colour edge on the start side: the link's own hue. Left out (and no `colourKey`), a neutral edge (a form). */
   readonly hue?: Hue;
+  /**
+   * For a link with no hue of its own (a booking page today): a stable id the edge takes its colour from, so
+   * the same link keeps the same colour everywhere. Grey (the neutral edge) and red (which reads as an error)
+   * are left out.
+   */
+  readonly colourKey?: string;
+  /** The title's heading level: 2 on a page whose h1 is the TopBar (Captures), 3 inside a section (default). */
+  readonly titleLevel?: 2 | 3;
   /** Short facts on one line under the title ("30 min · One on one"; "12 submissions · 2 spam"). */
   readonly facts: readonly string[];
-  /** The public link, muted ("/acme/intro-call", "/f/contact-us"). */
+  /** The public link, muted ("/b/k3x9", "/f/contact-us"). It can be selected, and Copy link selects it if the clipboard refuses. */
   readonly address: string;
   /** A state the switch can't say, beside the title ("Not published", "Private", "Copying…"). Never "Off". */
   readonly badge?: string;
-  /** Off (not taking people): the card reads quieter, its title muted and its edge grey. */
+  /** Off (not taking people): the card reads quieter, its title muted. Its edge keeps its colour: the edge never says a state. */
   readonly isOff?: boolean;
   /** Shown before the server made it: quieter still, and nothing in it works yet. */
   readonly isPending?: boolean;
   readonly toggle?: LinkCardToggle;
-  /** The public link Copy link copies. Left out, no Copy link. */
+  /** The public link Copy link copies. Left out (a form not published yet: there is nothing to copy), no Copy link. */
   readonly copyValue?: string;
-  /** Copy link can't be used yet, and why, in a tooltip on it ("Publish it first"). */
-  readonly copyDisabledReason?: string;
   /** Open and the ··· menu: ghost icon Buttons at the footer's end, 8px apart. */
   readonly actions?: ReactNode;
 }
@@ -61,6 +68,8 @@ export function LinkCard({
   title,
   href,
   hue,
+  colourKey,
+  titleLevel = 3,
   facts,
   address,
   badge,
@@ -68,24 +77,26 @@ export function LinkCard({
   isPending = false,
   toggle,
   copyValue,
-  copyDisabledReason,
   actions,
 }: LinkCardProps) {
   const titleId = useId();
+  const addressRef = useRef<HTMLParagraphElement>(null);
+  const edge = hue ?? (colourKey === undefined ? undefined : stableHue(colourKey, EDGE_HUES));
+  const Heading = titleLevel === 2 ? 'h2' : 'h3';
   const safe = href === undefined || isPending ? undefined : safeHref(href);
   const hasFoot = copyValue !== undefined || (actions !== undefined && actions !== null && actions !== false);
   return (
     <article
       className={styles.root}
       aria-labelledby={titleId}
-      data-hue={isOff || isPending ? undefined : hue}
+      data-hue={edge}
       data-off={isOff || undefined}
       data-pending={isPending || undefined}
     >
       <div className={styles.body}>
         <div className={styles.head}>
           <div className={styles.titleRow}>
-            <h3 className={styles.heading}>
+            <Heading className={styles.heading}>
               {safe === undefined ? (
                 <span id={titleId} className={styles.title}>
                   {title}
@@ -95,38 +106,40 @@ export function LinkCard({
                   {title}
                 </AriaLink>
               )}
-            </h3>
+            </Heading>
             {badge !== undefined && <Badge text={badge} />}
           </div>
           {toggle !== undefined && <CardSwitch toggle={toggle} isPending={isPending} />}
         </div>
         {facts.length > 0 && <p className={styles.facts}>{facts.join(' · ')}</p>}
-        <p className={styles.address}>{address}</p>
+        <p ref={addressRef} className={styles.address}>
+          {address}
+        </p>
       </div>
       {hasFoot && (
-        <div className={styles.foot}>
+        <div className={styles.foot} role="group" aria-label={strings.actionsFor(title)}>
           {copyValue !== undefined && (
-            <Tooltip content={copyDisabledReason ?? ''} isDisabled={copyDisabledReason === undefined} isTextTrigger>
-              <span className={styles.control}>
-                <CopyButton
-                  value={copyValue}
-                  label={strings.copyLink}
-                  isDisabled={isPending || copyDisabledReason !== undefined}
-                  size="lg"
-                />
-              </span>
-            </Tooltip>
+            <span className={styles.control}>
+              <CopyButton
+                value={copyValue}
+                label={strings.copyLink}
+                isDisabled={isPending}
+                size="lg"
+                sourceRef={addressRef}
+              />
+            </span>
           )}
           {actions !== undefined && actions !== null && actions !== false && (
-            <div className={styles.actions} role="group" aria-label={strings.actionsFor(title)}>
-              {actions}
-            </div>
+            <div className={styles.actions}>{actions}</div>
           )}
         </div>
       )}
     </article>
   );
 }
+
+/** The hues a link's edge may take from its `colourKey`: every data hue but grey (neutral) and red (an error). */
+const EDGE_HUES = HUES.filter((hue) => hue !== 'gray' && hue !== 'red');
 
 /** The card's switch, with the reason it is off limits in a tooltip when it is. */
 function CardSwitch({ toggle, isPending }: { readonly toggle: LinkCardToggle; readonly isPending: boolean }) {
