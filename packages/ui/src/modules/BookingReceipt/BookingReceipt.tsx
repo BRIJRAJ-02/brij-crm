@@ -1,5 +1,6 @@
 import { useEffect, useRef, type ReactNode } from 'react';
 import { Avatar } from '../../atoms/Avatar/Avatar.tsx';
+import type { ProductLogo } from '../AuthLayout/AuthLayout.tsx';
 import { ButtonLink } from '../../atoms/Button/Button.tsx';
 import { Icon } from '../../atoms/Icon/Icon.tsx';
 import { Link } from '../../atoms/Link/Link.tsx';
@@ -38,7 +39,19 @@ export interface BookingReceiptProps {
   readonly changes?: ReactNode;
   /** A line over the card after a change ("Moved. Both calendars are updated…"): a Callout. */
   readonly notice?: ReactNode;
+  /**
+   * The Timefix wordmark under the card, as the hosted form ends: where it
+   * goes (opened in a new tab) and its accessible name. Without it, the
+   * booking page's own foot.
+   */
+  readonly brand?: { readonly href: string; readonly label: string; readonly logo?: ProductLogo };
 }
+
+/** The web app's own wordmark files (apps/web/public/brand). */
+const TIMEFIX_LOGO: ProductLogo = {
+  light: '/brand/timefix-wordmark-light.png',
+  dark: '/brand/timefix-wordmark-dark.png',
+};
 
 /**
  * A guest's booking page (spec 0025, AC-674): the host with the state's mark,
@@ -61,6 +74,7 @@ export function BookingReceipt({
   again,
   changes,
   notice,
+  brand,
 }: BookingReceiptProps) {
   const heading = useRef<HTMLHeadingElement>(null);
   // The heading takes focus as the page arrives, and again when the booking's state changes (cancelled from here).
@@ -138,7 +152,32 @@ export function BookingReceipt({
             </p>
           )}
         </article>
-        <BookingFoot />
+        {brand === undefined ? (
+          <BookingFoot />
+        ) : (
+          <footer className={styles.foot}>
+            <a
+              className={styles.brand}
+              href={brand.href}
+              target="_blank"
+              rel="noopener noreferrer"
+              aria-label={brand.label}
+            >
+              <img
+                className={styles.wordmark}
+                data-scheme="light"
+                src={(brand.logo ?? TIMEFIX_LOGO).light}
+                alt={strings.product}
+              />
+              <img
+                className={styles.wordmark}
+                data-scheme="dark"
+                src={(brand.logo ?? TIMEFIX_LOGO).dark}
+                alt={strings.product}
+              />
+            </a>
+          </footer>
+        )}
       </div>
     </main>
   );

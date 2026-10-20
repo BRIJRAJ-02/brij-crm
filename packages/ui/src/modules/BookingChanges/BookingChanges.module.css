@@ -103,6 +103,25 @@
     white-space: nowrap;
   }
 
+  /* One email field and Add beside it, the field taking the room; on a narrow card Add goes under it, full width. */
+  .add {
+    display: flex;
+    align-items: flex-start;
+    gap: var(--space-8);
+  }
+
+  .addField {
+    flex: 1;
+    min-inline-size: 0;
+  }
+
+  @container (width < 480px) {
+    .add {
+      flex-direction: column;
+      align-items: stretch;
+    }
+  }
+
   .form {
     display: flex;
     flex-direction: column;

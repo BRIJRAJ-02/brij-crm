@@ -469,6 +469,7 @@ describe('the guest page (AC-674)', () => {
       note: 'About the compiler.',
       canChange: true,
       canMove: true,
+      workspaceSlug: expect.stringMatching(/^booking-/) as string,
     });
     expect((await readManagedBooking(guest, new Date('2026-11-03T00:00:00Z'))).state).toBe('past');
     const origin = {

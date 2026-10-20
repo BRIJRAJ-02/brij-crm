@@ -2,6 +2,7 @@
 // page's first load carries none of it: the guest page loads in its own chunk.
 export const changeStrings = {
   guestsTerm: 'Guests',
+  poweredBy: 'Powered by Timefix (opens in a new tab)',
   pickNewTime: 'Pick a new time',
   timesIn: (zone: string) => `Times in ${zone}`,
   moveTo: (time: string, day: string) => `Move to ${time} on ${day}`,

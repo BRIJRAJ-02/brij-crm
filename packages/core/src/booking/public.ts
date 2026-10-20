@@ -53,7 +53,7 @@ import { MAX_RESCHEDULES } from './change.ts';
 import { enqueueBookingMail, recordEvent } from './mail-queue.ts';
 import { ensureManageToken, manageTokenFor, type ManageLinkKey } from './tokens.ts';
 
-const { bookings, members } = schema;
+const { bookings, members, workspaces } = schema;
 
 /** What the public services need: the calendar calls, the manage link key, and the clock. */
 export interface PublicBookingDeps {
@@ -453,7 +453,9 @@ export async function readManagedBooking(
     if (row === undefined || page === undefined) throw refuse('NOT_FOUND', 'This link doesn’t open a booking.');
     const answers = storedAnswers(row.answers);
     const canChange = row.status === 'confirmed' && row.startsAt.getTime() > now.getTime();
+    const [workspace] = await tx.select({ slug: workspaces.slug }).from(workspaces).limit(1);
     return {
+      workspaceSlug: workspace?.slug ?? '',
       canChange,
       canMove: canChange && !page.isDeleted && page.status === 'live' && row.reschedules < MAX_RESCHEDULES,
       ...(row.cancelReason === null ? {} : { cancelReason: row.cancelReason }),

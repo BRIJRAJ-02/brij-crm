@@ -69,3 +69,19 @@ export const Past: Story = {
     </Stage>
   ),
 };
+
+/** The guest's own pages end as the hosted form does: the Timefix wordmark alone, opening in a new tab. */
+export const WithBrand: Story = {
+  parameters: { crm: { screenshot: false } },
+  args: { brand: { href: 'https://timefix.ai/?utm_source=timefix', label: 'Powered by Timefix (opens in a new tab)' } },
+  render: (args) => (
+    <Stage width="fill" height="page">
+      <BookingReceipt {...args} />
+    </Stage>
+  ),
+  play: async ({ canvas }) => {
+    const link = canvas.getByRole('link', { name: 'Powered by Timefix (opens in a new tab)' });
+    await expect(link).toHaveAttribute('target', '_blank');
+    await expect(link).toHaveAttribute('rel', 'noopener noreferrer');
+  },
+};

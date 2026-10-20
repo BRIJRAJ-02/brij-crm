@@ -13,7 +13,9 @@
     "./grid": "./src/grid.ts",
     "./editor": "./src/editor/index.ts",
     "./public-form": "./src/public-form/hosted-form.ts",
-    "./public-booking": "./src/public-booking/booking.ts"
+    "./public-booking": "./src/public-booking/booking.ts",
+    "./public-booking/visitor": "./src/public-booking/visitor.ts",
+    "./public-booking/details": "./src/public-booking/details.ts"
   },
   "scripts": {
     "typecheck": "tsc --noEmit",

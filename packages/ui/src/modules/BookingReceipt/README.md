@@ -8,6 +8,8 @@ New, for the public booking pages' move onto the library. A record's page (Recor
 
 While it's ahead, the card's foot takes `changes` (BookingChanges: move, add guests, cancel), and `notice` puts a line over the card after a change ("Moved. Both calendars are updated…").
 
+`brand` swaps the booking page's foot for the hosted form's: the Timefix wordmark alone, centred and quiet under the card, opening its link in a new tab under the accessible name it is given (the guest's pages after booking).
+
 ## Use
 
 ```tsx

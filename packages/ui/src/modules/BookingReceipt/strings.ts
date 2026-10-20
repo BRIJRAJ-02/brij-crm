@@ -6,6 +6,7 @@ export const strings = {
   past: 'This booking has passed',
   marks: { confirmed: 'Confirmed', cancelled: 'Cancelled', past: 'Finished' },
   join: 'Join the call',
+  product: 'Timefix',
   addToCalendar: 'Add to calendar',
   google: 'Google',
   outlook: 'Outlook',

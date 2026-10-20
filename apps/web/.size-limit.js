@@ -21,9 +21,8 @@ const { js, css } = firstLoad(manifest);
 const form = firstLoad(manifest, 'form.html');
 // The booking pages (spec 0025) draw with the library too since 20 October 2026, through @crm/ui/public-booking:
 // 211.5 kB of JavaScript and 15.8 kB of CSS (gzipped, as size-limit measures it), with about 10% of room.
-// On 20 October 2026 landing2 measured 230.64 kB, already past the 230 kB budget; booking milestone 2 adds the
-// guest page's lazy loader (its changes load in their own chunk) for 231.6 kB, so the budget is 236 kB, the
-// owner's call to confirm (spec 0025).
+// On 20 October 2026 landing2 measured 230.64 kB, past the budget. Booking milestone 2 loads the guest page, the
+// visitor bar (its Not you menu) and the details step beside the first paint rather than in it: 214.5 kB.
 const book = firstLoad(manifest, 'book.html');
 const inDist = (files) => files.map((file) => path.join(DIST, file));
 
@@ -38,6 +37,6 @@ export default [
   { name: 'First load CSS (gzipped)', path: inDist(css), limit: '40 kB', gzip: true, running: false },
   { name: 'Hosted form JavaScript (gzipped)', path: inDist(form.js), limit: '220 kB', gzip: true, running: false },
   { name: 'Hosted form CSS (gzipped)', path: inDist(form.css), limit: '16 kB', gzip: true, running: false },
-  { name: 'Booking page JavaScript (gzipped)', path: inDist(book.js), limit: '236 kB', gzip: true, running: false },
+  { name: 'Booking page JavaScript (gzipped)', path: inDist(book.js), limit: '230 kB', gzip: true, running: false },
   { name: 'Booking page CSS (gzipped)', path: inDist(book.css), limit: '18 kB', gzip: true, running: false },
 ];

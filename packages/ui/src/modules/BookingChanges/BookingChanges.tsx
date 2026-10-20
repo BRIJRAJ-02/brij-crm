@@ -75,8 +75,13 @@ export function BookingChanges({
   const cancelButton = useRef<HTMLButtonElement>(null);
   const opened = useRef(false);
   // An opened panel takes focus, so a keyboard or a screen reader lands in it (not on arrival from an email link).
+  // Keep it hands focus back to Cancel booking once the confirm is gone.
+  const backToCancel = useRef(false);
   useEffect(() => {
-    if (opened.current) panel.current?.focus();
+    if (backToCancel.current) {
+      backToCancel.current = false;
+      cancelButton.current?.focus();
+    } else if (opened.current) panel.current?.focus();
   }, [mode]);
   const toggle = (next: Mode) => () => {
     opened.current = true;
@@ -145,8 +150,8 @@ export function BookingChanges({
               hostName={hostName}
               onCancel={onCancel}
               onKeep={() => {
+                backToCancel.current = true;
                 setMode('idle');
-                globalThis.requestAnimationFrame(() => cancelButton.current?.focus());
               }}
             />
           )}
@@ -184,7 +189,7 @@ function GuestsPanel({
 
   const add = async () => {
     const value = email.trim().toLowerCase();
-    if (isAdding || value === '') return;
+    if (isAdding) return;
     if (!EMAIL.test(value)) {
       setError(strings.guestInvalid);
       return;
@@ -243,33 +248,30 @@ function GuestsPanel({
       {isFull ? (
         <p className={styles.text}>{strings.full(maxGuests)}</p>
       ) : (
-        <Field
-          ref={field}
-          label={strings.addGuest}
-          isLabelHidden
-          name="guest"
-          type="email"
-          autoComplete="email"
-          placeholder={strings.guestPlaceholder}
-          maxLength={254}
-          value={email}
-          onChange={(next) => {
-            setEmail(next);
-            setError('');
-          }}
-          onSubmit={() => void add()}
-          suffix={
-            <Button
-              variant="secondary"
-              isPending={isAdding}
-              isDisabled={email.trim() === ''}
-              onPress={() => void add()}
-            >
-              {isAdding ? strings.adding : strings.add}
-            </Button>
-          }
-          {...(error === '' ? {} : { error })}
-        />
+        <div className={styles.add}>
+          <span className={styles.addField}>
+            <Field
+              ref={field}
+              label={strings.addGuest}
+              isLabelHidden
+              name="guest"
+              type="email"
+              autoComplete="email"
+              placeholder={strings.guestPlaceholder}
+              maxLength={254}
+              value={email}
+              onChange={(next) => {
+                setEmail(next);
+                setError('');
+              }}
+              onSubmit={() => void add()}
+              {...(error === '' ? {} : { error })}
+            />
+          </span>
+          <Button size="lg" icon="plus" isPending={isAdding} onPress={() => void add()}>
+            {isAdding ? strings.adding : strings.add}
+          </Button>
+        </div>
       )}
       {failure !== '' && (
         <Callout tone="danger" isAnnounced>

@@ -198,6 +198,8 @@ export const PublicManagedBooking = z.object({
   note: z.string().optional(),
   /** Why it was cancelled, when someone said. */
   cancelReason: z.string().optional(),
+  /** The workspace's web address, which the page's Timefix link carries as its referrer (`ref`). */
+  workspaceSlug: z.string(),
   /** Whether the guest may still cancel it or add guests: confirmed, and not yet started. */
   canChange: z.boolean(),
   /** Whether it may still move: it can change, its page takes bookings, and it has moved fewer than 5 times. */

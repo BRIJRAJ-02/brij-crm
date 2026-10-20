@@ -41,6 +41,9 @@ export const Guests: Story = {
     await expect(canvas.getByText('1 of 10')).toBeInTheDocument();
     await userEvent.type(canvas.getByRole('textbox', { name: 'Add a guest by email' }), 'Bob@navy.example{Enter}');
     await expect(args.onInvite).toHaveBeenCalledWith('bob@navy.example');
+    // Enter added them: the field is empty again and keeps focus.
+    await expect(canvas.getByRole('textbox', { name: 'Add a guest by email' })).toHaveValue('');
+    await expect(canvas.getByRole('textbox', { name: 'Add a guest by email' })).toHaveFocus();
     await expect(canvas.getByText('2 of 10')).toBeInTheDocument();
     await expect(await canvas.findByRole('status')).toHaveTextContent('Invited bob@navy.example.');
     await userEvent.click(canvas.getByRole('button', { name: 'Remove ann@navy.example' }));
@@ -54,6 +57,9 @@ export const GuestInvalid: Story = {
   render: (args) => <OnReceipt {...args} />,
   play: async ({ canvas, args }) => {
     await userEvent.click(canvas.getByRole('button', { name: 'Add guests' }));
+    // Add with nothing typed says what's missing rather than looking disabled.
+    await userEvent.click(canvas.getByRole('button', { name: 'Add' }));
+    await expect(canvas.getByText('Give an email address such as name@example.com.')).toBeInTheDocument();
     await userEvent.type(canvas.getByRole('textbox', { name: 'Add a guest by email' }), 'not an email{Enter}');
     await expect(canvas.getByText('Give an email address such as name@example.com.')).toBeInTheDocument();
     await expect(args.onInvite).not.toHaveBeenCalled();

@@ -24,6 +24,7 @@ import {
 import { useEffect, useMemo, useState } from 'react';
 import { saveHour12, savedHour12 } from './prefs.ts';
 import { changeStrings } from './change-strings.ts';
+import { poweredByHref } from './powered-by.ts';
 import { strings } from './strings.ts';
 import {
   dayKey,
@@ -209,6 +210,10 @@ export function ManagePage({ token, isWelcome, locale, now }: ManagePageProps) {
           : [{ term: changeStrings.reason, description: booking.cancelReason }]),
       ]}
       {...(booking.videoUrl === undefined ? {} : { joinUrl: booking.videoUrl })}
+      brand={{
+        href: poweredByHref(isWelcome ? 'booking_confirmation' : 'booking_manage', booking.workspaceSlug),
+        label: changeStrings.poweredBy,
+      }}
       calendars={{ google, outlook, ics: client.icsUrl(token) }}
       again={{
         label: booking.state === 'cancelled' ? strings.bookAnother(booking.hostName) : strings.bookAgain,

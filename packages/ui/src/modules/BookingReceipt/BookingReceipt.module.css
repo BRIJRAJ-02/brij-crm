@@ -198,6 +198,60 @@
     color: var(--text-secondary);
   }
 
+  /* The Timefix wordmark under the card, as the hosted form ends: quiet until pointed at. */
+  .foot {
+    display: flex;
+    justify-content: center;
+  }
+
+  .brand {
+    display: inline-flex;
+    border-radius: var(--radius-xs);
+    opacity: var(--opacity-busy);
+    transition: opacity var(--duration-hover) var(--ease-hover);
+  }
+
+  .brand:focus-visible {
+    outline: var(--border-width-thick) solid var(--accent-line);
+    outline-offset: var(--border-width-hairline);
+    opacity: 1;
+  }
+
+  @media (hover: hover) and (pointer: fine) {
+    .brand:hover {
+      opacity: 1;
+    }
+  }
+
+  .wordmark {
+    display: block;
+    block-size: var(--space-16);
+    inline-size: auto;
+  }
+
+  /* One wordmark per theme: dark ink on light, white on dark. */
+  .wordmark[data-scheme='dark'] {
+    display: none;
+  }
+
+  :root[data-theme='dark'] .wordmark[data-scheme='light'] {
+    display: none;
+  }
+
+  :root[data-theme='dark'] .wordmark[data-scheme='dark'] {
+    display: block;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme='light']) .wordmark[data-scheme='light'] {
+      display: none;
+    }
+
+    :root:not([data-theme='light']) .wordmark[data-scheme='dark'] {
+      display: block;
+    }
+  }
+
   @media (prefers-reduced-motion: reduce) {
     .card {
       animation-name: receipt-fade;

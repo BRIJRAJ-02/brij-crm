@@ -18,8 +18,8 @@ import {
   type PublicViewerAnswer,
   type SlotsOverlay,
 } from '@crm/data/booking';
+import type { BookingDetailsOutcome, BookingDetailsValues } from '@crm/ui/public-booking/details';
 import {
-  BookingDetails,
   BookingFrame,
   BookingMessage,
   Button,
@@ -29,13 +29,10 @@ import {
   SegmentedControl,
   Select,
   SlotList,
-  VisitorBar,
-  type BookingDetailsOutcome,
-  type BookingDetailsValues,
   type BookingFact,
   type SelectItem,
 } from '@crm/ui/public-booking';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { lazy, Suspense, useCallback, useEffect, useMemo, useState } from 'react';
 import type { Prefill } from './prefill.ts';
 import { saveHour12, savedHour12, savedView, saveView, type SlotView } from './prefs.ts';
 import { strings } from './strings.ts';
@@ -52,6 +49,13 @@ import {
   zoneDisplay,
 } from './time.ts';
 import { readReturn, returnPath, tidiedAddress, type Chosen, type ConnectResult } from './visitor.ts';
+
+// The visitor bar and the details step load beside the first paint, not in it (the page's size budget): both
+// start loading as this module does, so they are there long before the page's own read answers.
+const visitorModule = import('@crm/ui/public-booking/visitor');
+const detailsModule = import('@crm/ui/public-booking/details');
+const VisitorBar = lazy(() => visitorModule.then((module) => ({ default: module.VisitorBar })));
+const BookingDetails = lazy(() => detailsModule.then((module) => ({ default: module.BookingDetails })));
 
 /** Props for the page: its key, the visitor's language and zone, the clock, a prefill, and where success goes. */
 export interface BookingPageProps {
@@ -546,16 +550,20 @@ function Booking({
             {connectNote}
           </Callout>
         )}
-        {holdsBar && <VisitorBar isLoading />}
-        {showsBar && (
-          <VisitorBar
-            {...(person === undefined ? {} : { person: { name: person.name, email: person.email }, onNotYou: forget })}
-            {...(barCalendar === undefined ? {} : { calendar: barCalendar })}
-            {...(connectHref === undefined ? {} : { connectHref })}
-            showAll={showAll}
-            onShowAllChange={setShowAll}
-          />
-        )}
+        <Suspense fallback={null}>
+          {holdsBar && <VisitorBar isLoading />}
+          {showsBar && (
+            <VisitorBar
+              {...(person === undefined
+                ? {}
+                : { person: { name: person.name, email: person.email }, onNotYou: forget })}
+              {...(barCalendar === undefined ? {} : { calendar: barCalendar })}
+              {...(connectHref === undefined ? {} : { connectHref })}
+              showAll={showAll}
+              onShowAllChange={setShowAll}
+            />
+          )}
+        </Suspense>
       </>
     ) : undefined;
   const frame = {
@@ -572,16 +580,18 @@ function Booking({
     const { banner: _bar, ...details } = frame;
     return (
       <BookingFrame {...details}>
-        <BookingDetails
-          key={step.attempt}
-          needsPhone={page.location.type === 'phone'}
-          {...(known === undefined ? (prefill === undefined ? {} : { prefill }) : { prefill: known })}
-          onBack={() => {
-            setStep({ step: 'pick', attempt: '', back: true });
-            setNotice(undefined);
-          }}
-          onSubmit={book}
-        />
+        <Suspense fallback={null}>
+          <BookingDetails
+            key={step.attempt}
+            needsPhone={page.location.type === 'phone'}
+            {...(known === undefined ? (prefill === undefined ? {} : { prefill }) : { prefill: known })}
+            onBack={() => {
+              setStep({ step: 'pick', attempt: '', back: true });
+              setNotice(undefined);
+            }}
+            onSubmit={book}
+          />
+        </Suspense>
       </BookingFrame>
     );
   }
