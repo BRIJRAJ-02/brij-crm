@@ -141,7 +141,7 @@ export const StepsDarkSquare: Story = {
 export const Conversational: Story = {
   args: { layout: 'conversational' },
   play: async ({ canvas }) => {
-    await expect(canvas.getByRole('progressbar', { name: 'Question 1 of 7' })).toBeInTheDocument();
+    await expect(canvas.getByRole('progressbar', { name: '1 of 7' })).toBeInTheDocument();
     await expect(canvas.getByRole('textbox', { name: 'Your name' })).toBeInTheDocument();
   },
 };
@@ -154,7 +154,7 @@ export const ConversationalNext: Story = {
     await waitFor(() => expect(canvas.getByRole('textbox', { name: 'Work email' })).toHaveFocus());
     await userEvent.type(canvas.getByRole('textbox', { name: 'Work email' }), 'ada@example.com{Enter}');
     await waitFor(() => expect(canvas.getByRole('textbox', { name: 'Phone or WhatsApp (optional)' })).toHaveFocus());
-    await expect(canvas.getByRole('progressbar', { name: 'Question 3 of 7' })).toBeInTheDocument();
+    await expect(canvas.getByRole('progressbar', { name: '3 of 7' })).toBeInTheDocument();
   },
 };
 
@@ -164,11 +164,28 @@ export const ConversationalError: Story = {
   play: async ({ canvas }) => {
     await userEvent.click(canvas.getByRole('button', { name: /OK/ }));
     await waitFor(() => expect(canvas.getByText('Answer this question.')).toBeInTheDocument());
-    await expect(canvas.getByRole('progressbar', { name: 'Question 1 of 7' })).toBeInTheDocument();
+    await expect(canvas.getByRole('progressbar', { name: '1 of 7' })).toBeInTheDocument();
   },
 };
 
 /** One at a time in the dark colour. */
 export const ConversationalDark: Story = {
   args: { layout: 'conversational', form: { ...ENQUIRY, look: { colour: 'dark', corners: 'rounded' } } },
+};
+
+/** One at a time, Enter on a chosen choice goes on, as from a text field. */
+export const ConversationalChoice: Story = {
+  parameters: { crm: { screenshot: false } },
+  args: {
+    layout: 'conversational',
+    form: {
+      ...ENQUIRY,
+      questions: ENQUIRY.questions.filter((question) => question.key === 'budget' || question.key === 'name').reverse(),
+    },
+  },
+  play: async ({ canvas }) => {
+    await userEvent.click(canvas.getByRole('radio', { name: '5k to 20k' }));
+    await userEvent.keyboard('{Enter}');
+    await waitFor(() => expect(canvas.getByRole('progressbar', { name: '2 of 2' })).toBeInTheDocument());
+  },
 };

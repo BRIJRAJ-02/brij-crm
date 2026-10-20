@@ -51,7 +51,7 @@ export interface FormStrings {
   readonly useSuggestion: string;
   /** A step form's place: "Step 2 of 3". */
   readonly stepOf: (step: number, steps: number) => string;
-  /** A one at a time form's place, for screen readers: "Question 2 of 7". */
+  /** A one at a time form's place, for screen readers: "2 of 7" (AC-1034). */
   readonly questionOf: (question: number, questions: number) => string;
   /** Back to the previous step. */
   readonly back: string;
@@ -102,7 +102,7 @@ const EN: FormStrings = {
   didYouMean: (email) => `Did you mean ${email}?`,
   useSuggestion: 'Use it',
   stepOf: (step, steps) => `Step ${String(step)} of ${String(steps)}`,
-  questionOf: (question, questions) => `Question ${String(question)} of ${String(questions)}`,
+  questionOf: (question, questions) => `${String(question)} of ${String(questions)}`,
   back: 'Back',
   next: 'Continue',
   ok: 'OK',
