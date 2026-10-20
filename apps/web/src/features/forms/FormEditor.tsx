@@ -33,7 +33,7 @@ import {
   Tabs,
   TopBar,
 } from '@crm/ui';
-import { useNavigate, useRouteContext } from '@tanstack/react-router';
+import { useNavigate, useRouteContext, useRouter } from '@tanstack/react-router';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useCan, WorkspacePage } from '../workspace/WorkspacePage.tsx';
 import { publishAttributesOf, sameDocument, statusOf } from './draft.ts';
@@ -43,7 +43,7 @@ import { PublishDialog } from './PublishDialog.tsx';
 import { QuestionsSection } from './QuestionsSection.tsx';
 import { firstRefusal } from './refusals.ts';
 import { SettingsTab, useFormSettings } from './SettingsTab.tsx';
-import { useJobFollower } from './followJobs.ts';
+import { submissionsBackendReady, useJobFollower } from './followJobs.ts';
 import { strings } from './strings.ts';
 import { SyncDialog } from './SyncDialog.tsx';
 import { FormToolbarSlot } from './toolbarSlot.ts';
@@ -65,9 +65,12 @@ export interface FormEditorProps {
 /** A document's mapping, as one comparable string: the target, its match, and where each question files. */
 function filingOf(document: FormDocument | undefined): string {
   if (document === undefined) return '';
+  // Only the filed questions, by id: reordering, or an unfiled question coming or going, changes nothing filed.
   return JSON.stringify([
     document.targets.main,
-    document.questions.map((question) => [question.id, question.filedOn?.attributeId ?? null]),
+    document.questions
+      .flatMap((question) => (question.filedOn === undefined ? [] : [[question.id, question.filedOn.attributeId]]))
+      .sort(([a], [b]) => String(a).localeCompare(String(b))),
   ]);
 }
 
@@ -79,6 +82,7 @@ export function FormEditor(props: FormEditorProps) {
   const { slug, members, objects, tab } = props;
   const { data, toasts } = useRouteContext({ from: '__root__' });
   const navigate = useNavigate();
+  const router = useRouter();
   const canManage = useCan('forms.manage') && props.form.canManage;
   const canBuild = useCan('schema.manage');
 
@@ -220,12 +224,12 @@ export function FormEditor(props: FormEditorProps) {
       .then(
         (view) => {
           setPublishing(false);
-          const mappingChanged = filingOf(form.live) !== filingOf(view.live);
+          const filingChanged = form.live !== undefined && filingOf(form.live) !== filingOf(view.live);
           apply(view);
           toasts.toast({ tone: 'success', message: strings.published(view.liveVersionNumber ?? 1) });
-          focusLater(() => moreRef.current);
-          // A new mapping went live: offer to apply it to the enquiries that came before.
-          if (mappingChanged && view.submissionCount > 0) setOfferingSync(true);
+          // Where answers are filed changed: offer to file the enquiries that came before the same way.
+          if (submissionsBackendReady() && filingChanged && view.submissionCount > 0) setOfferingSync(true);
+          else focusLater(() => moreRef.current);
         },
         (error: unknown) => {
           setPublishing(false);
@@ -400,6 +404,7 @@ export function FormEditor(props: FormEditorProps) {
             canManage={canManage}
             questions={(form.live ?? form.draft).questions}
             link={data.forms.hostedUrl(form.publicKey)}
+            followJob={jobs.follow}
           />
         );
       default:
@@ -493,12 +498,15 @@ export function FormEditor(props: FormEditorProps) {
       <SyncDialog
         slug={slug}
         formId={form.id}
+        reason="published"
         isOpen={isOfferingSync}
         onClose={() => {
           setOfferingSync(false);
+          focusLater(() => moreRef.current);
         }}
         onStarted={(jobId) => {
           setOfferingSync(false);
+          focusLater(() => moreRef.current);
           toasts.toast({ tone: 'info', message: strings.syncStarted });
           jobs.follow(jobId, (job) => {
             toasts.toast({
@@ -506,6 +514,7 @@ export function FormEditor(props: FormEditorProps) {
               message:
                 job.status === 'succeeded' ? strings.syncDone(job.done, job.refused) : strings.jobFailed(job.label),
             });
+            void router.invalidate();
           });
         }}
       />

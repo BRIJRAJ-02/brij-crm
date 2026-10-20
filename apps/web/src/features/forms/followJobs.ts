@@ -15,7 +15,10 @@ const FINISHED: readonly JobView['status'][] = ['succeeded', 'failed', 'cancelle
 export function useJobFollower(view: JobsView) {
   const snapshot = useJobs(view);
   const waiting = useRef(new Map<string, (job: JobView) => void>());
+  // The latest jobs, so `follow` can answer at once for a job that finished before it was followed.
+  const latest = useRef(snapshot.jobs);
   useEffect(() => {
+    latest.current = snapshot.jobs;
     for (const job of snapshot.jobs) {
       const done = waiting.current.get(job.id);
       if (done !== undefined && FINISHED.includes(job.status)) {
@@ -26,7 +29,9 @@ export function useJobFollower(view: JobsView) {
   }, [snapshot]);
   return {
     follow: (jobId: string, onDone: (job: JobView) => void) => {
-      waiting.current.set(jobId, onDone);
+      const known = latest.current.find((each) => each.id === jobId);
+      if (known !== undefined && FINISHED.includes(known.status)) onDone(known);
+      else waiting.current.set(jobId, onDone);
     },
     job: (jobId: string | undefined) =>
       jobId === undefined ? undefined : snapshot.jobs.find((each) => each.id === jobId),
@@ -38,3 +43,12 @@ export function progressOf(job: JobView | undefined): number | undefined {
   if (job?.total === undefined || job.total === 0) return undefined;
   return Math.round(((job.done + job.refused + job.skipped) / job.total) * 100);
 }
+
+/**
+ * Whether the submissions backend (Add to CRM, Sync earlier enquiries, CSV
+ * export) is served. Its contracts are in; its service is the submissions
+ * lane's (wip/spam), and until it lands the API answers those calls 501. Off,
+ * the screens leave the actions out rather than offer what can't work. Turn it
+ * on with the service.
+ */
+export const submissionsBackendReady = (): boolean => false;

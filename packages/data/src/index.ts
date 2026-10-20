@@ -3153,13 +3153,13 @@ export function createDataLayer({
           land: landForm(id),
         });
       },
-      /** Deletes a form and its submissions, gone from the list at once and back on a refusal; the records they made stay. */
       /** What Sync old records would do to earlier submissions (`all`, or `unfiled` only), counted on the newest 2,000. */
       syncPreview: (workspace: string, formId: string, scope: SyncScope): Promise<SyncPreview> =>
         call((options) => api.forms.syncPreview({ workspace, formId, scope }, options)),
       /** Starts Sync old records as a `forms.sync` job (`jobId` minted once, so a retry starts one job). */
       syncStart: (workspace: string, formId: string, scope: SyncScope, jobId: string): Promise<SyncStarted> =>
         call((options) => api.forms.syncStart({ workspace, formId, scope, jobId, mutationId: mintId() }, options)),
+      /** Deletes a form and its submissions, gone from the list at once and back on a refusal; the records they made stay. */
       delete: (workspace: string, formId: string) =>
         formLists.write(workspace, {
           send: () => call((options) => api.forms.delete({ workspace, formId, mutationId: mintId() }, options)),
