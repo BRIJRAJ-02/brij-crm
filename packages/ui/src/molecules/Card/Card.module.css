@@ -66,6 +66,11 @@
     letter-spacing: var(--tracking-body);
   }
 
+  /* What a card holds stacks with a form's rhythm: a field, its hint, then air before the next. */
+  .body > :not(:first-child) {
+    margin-block-start: var(--space-16);
+  }
+
   .foot {
     display: flex;
     justify-content: flex-end;

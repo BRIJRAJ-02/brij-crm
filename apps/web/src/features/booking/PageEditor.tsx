@@ -351,7 +351,7 @@ export function PageEditor({ data, slug, page: loaded, myHours }: PageEditorProp
             {draft.hoursMode === 'own' && (
               <DaysOff availability={draft.availability} isReadOnly={isLocked} onChange={setAvailability} />
             )}
-            <Disclosure title={strings.limits}>
+            <Disclosure title={strings.limits} variant="fields">
               <Select
                 label={strings.bufferBefore}
                 items={BUFFERS}
