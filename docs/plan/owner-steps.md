@@ -19,6 +19,13 @@ Everything here needs you: an account, a secret, a decision or a push. The build
 
 ## Production settings, with the calendar sync merge
 
+What production does today (Railway variables checked 20 October 2026, names only):
+- **Calendar sync stays off** until you set the variables below. `CALENDAR_SYNC` isn't set on Railway, so pushing the sync code is safe: it simply won't run. It turns on when you add `CALENDAR_SYNC=on`, `CALENDAR_WEBHOOK_ORIGIN` and the Google settings.
+- **Google sign in stays off**, because `GOOGLE_CLIENT_ID` isn't set. Email sign in works as before.
+- **The spam checker needs nothing new.** `FORMS_IP_SALT` is already set in production.
+
+What to set to turn them on:
+
 - [ ] **On Railway, api and worker:** set `CALENDAR_WEBHOOK_ORIGIN=https://brij-crm-phi.vercel.app`, `CALENDAR_SYNC=on`, and the calendar token key.
 - [ ] **In Google Cloud:**
   - Turn on the Calendar API.
