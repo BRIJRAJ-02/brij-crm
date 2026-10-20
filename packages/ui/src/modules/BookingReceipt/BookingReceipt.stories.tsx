@@ -1,0 +1,71 @@
+import type { Meta, StoryObj } from '@storybook/react-vite';
+import { expect } from 'storybook/test';
+import { Stage } from '../../workbench/Stage/Stage.tsx';
+import { BookingReceipt } from './BookingReceipt.tsx';
+
+const meta = {
+  title: 'Modules/BookingReceipt',
+  component: BookingReceipt,
+  args: {
+    state: 'confirmed',
+    isWelcome: true,
+    hostName: 'Ada Lovelace',
+    date: { weekday: 'Fri', day: '9', month: 'Oct' },
+    range: '9:30 – 10:00 AM',
+    when: 'Friday, October 9, 2026 · London time (GMT+1)',
+    relative: 'Tomorrow morning',
+    facts: [
+      { term: 'What', description: 'Intro call' },
+      { term: 'Who', description: 'Ada Lovelace (host), Grace Hopper' },
+      { term: 'Where', description: 'Video call' },
+    ],
+    joinUrl: 'https://meet.google.com/abc-defg-hij',
+    calendars: {
+      google: 'https://calendar.google.com/calendar/render',
+      outlook: 'https://outlook.live.com/calendar/0/deeplink/compose',
+      ics: '/booking.ics',
+    },
+  },
+} satisfies Meta<typeof BookingReceipt>;
+
+export default meta;
+type Story = StoryObj<typeof meta>;
+
+/** Right after booking: "You're booked", Join the call and Add to calendar. */
+export const Welcome: Story = {
+  parameters: { crm: { preview: true } },
+  render: (args) => (
+    <Stage width="fill" height="page">
+      <BookingReceipt {...args} />
+    </Stage>
+  ),
+  play: async ({ canvas }) => {
+    await expect(canvas.getByRole('heading', { name: 'You’re booked' })).toHaveFocus();
+    await expect(canvas.getByRole('link', { name: 'Join the call' })).toHaveAttribute('target', '_blank');
+  },
+};
+
+/** Cancelled: the time struck through, and a way to book again. */
+export const Cancelled: Story = {
+  args: {
+    state: 'cancelled',
+    isWelcome: false,
+    again: { label: 'Book another time with Ada Lovelace', href: '/b/abc' },
+  },
+  render: (args) => (
+    <Stage width="fill" height="page">
+      <BookingReceipt {...args} />
+    </Stage>
+  ),
+};
+
+/** Passed. */
+export const Past: Story = {
+  parameters: { crm: { screenshot: false } },
+  args: { state: 'past', isWelcome: false, again: { label: 'Book again', href: '/b/abc' } },
+  render: (args) => (
+    <Stage width="fill" height="page">
+      <BookingReceipt {...args} />
+    </Stage>
+  ),
+};

@@ -19,6 +19,7 @@
     color: var(--text);
     font: var(--text-body-strong);
     letter-spacing: var(--tracking-body-strong);
+    text-decoration: none;
     white-space: nowrap;
     outline: none;
     user-select: none;

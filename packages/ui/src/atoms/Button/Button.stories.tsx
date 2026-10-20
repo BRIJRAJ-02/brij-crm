@@ -3,7 +3,7 @@ import { Menu, MenuItem } from '../../molecules/Menu/Menu.tsx';
 import { expect, fn, waitFor } from 'storybook/test';
 import { hoverFresh, hoverUntilHovered, shownTooltip } from '../../workbench/pointer.ts';
 import { Stage } from '../../workbench/Stage/Stage.tsx';
-import { Button, ButtonGroup, ToggleButton } from './Button.tsx';
+import { Button, ButtonGroup, ButtonLink, ToggleButton } from './Button.tsx';
 import { SplitButton } from './SplitButton.tsx';
 
 const meta = {
@@ -17,6 +17,30 @@ type Story = StoryObj<typeof meta>;
 
 /** Secondary, the default: view controls, Import / Export, Cancel. */
 export const Default: Story = {};
+
+/** Links drawn as buttons: an action that goes somewhere, in a new tab or as a download. */
+export const Links: Story = {
+  render: () => (
+    <Stage>
+      <ButtonLink variant="primary" icon="video" href="https://meet.google.com/abc-defg-hij" isExternal>
+        Join the call
+      </ButtonLink>
+      <ButtonLink provider="google" href="https://calendar.google.com/calendar/render" isExternal>
+        Google
+      </ButtonLink>
+      <ButtonLink icon="download" href="/booking.ics" download="booking.ics">
+        Apple / .ics
+      </ButtonLink>
+      <ButtonLink href="javascript:alert(1)">Unsafe</ButtonLink>
+    </Stage>
+  ),
+  play: async ({ canvas }) => {
+    const join = canvas.getByRole('link', { name: 'Join the call' });
+    await expect(join).toHaveAttribute('target', '_blank');
+    await expect(canvas.getByRole('link', { name: 'Apple / .ics' })).toHaveAttribute('download', 'booking.ics');
+    await expect(canvas.getByRole('link', { name: 'Unsafe' })).not.toHaveAttribute('href');
+  },
+};
 
 /** The variants. One primary per surface, on the action that commits; `danger-solid` takes its place in a destructive confirm. */
 export const Variants: Story = {

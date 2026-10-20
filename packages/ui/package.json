@@ -11,7 +11,8 @@
     "./theme": "./src/theme/theme.ts",
     "./vite": "./src/vite.ts",
     "./grid": "./src/grid.ts",
-    "./public-form": "./src/public-form/hosted-form.ts"
+    "./public-form": "./src/public-form/hosted-form.ts",
+    "./public-booking": "./src/public-booking/booking.ts"
   },
   "scripts": {
     "typecheck": "tsc --noEmit",

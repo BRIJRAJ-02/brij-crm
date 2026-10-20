@@ -1,6 +1,6 @@
 # Button
 
-The one button: 26px tall with a 13px medium label, in five variants, built on React Aria so it works the same by mouse, touch and keyboard. This folder also holds `ToggleButton` (a button that stays pressed), `SplitButton` (a main action with a menu of its variants), `ButtonGroup` (a few buttons joined into one control) and `CopyButton` (copies a value and says so in a toast). `SplitButton` (SplitButton.tsx) and the cut label tooltip (CutButton.tsx, loaded on demand) sit in files of their own, so the menu and overlay code they need stays out of the first load, which draws only plain Buttons; SplitButton draws its halves with `SplitFrame` and `SplitHalf` from Button.tsx.
+The one button: 26px tall with a 13px medium label, in five variants, built on React Aria so it works the same by mouse, touch and keyboard. This folder also holds `ToggleButton` (a button that stays pressed), `SplitButton` (a main action with a menu of its variants), `ButtonGroup` (a few buttons joined into one control) `CopyButton` (copies a value and says so in a toast) and `ButtonLink` (a link drawn as a Button, for an action that goes somewhere: Join the call, Add to Google Calendar, the .ics download on a booking's page). `SplitButton` (SplitButton.tsx) and the cut label tooltip (CutButton.tsx, loaded on demand) sit in files of their own, so the menu and overlay code they need stays out of the first load, which draws only plain Buttons; SplitButton draws its halves with `SplitFrame` and `SplitHalf` from Button.tsx.
 
 ## Why it exists
 
@@ -62,6 +62,7 @@ Props: `children` (the label, a string) or `icon` with `label` (icon only); `ico
 - `provider` puts a brand's own mark (ProviderMark) where the icon goes, for an action named after that brand: `<Button provider="google">Continue with Google</Button>`, Add to Google Calendar. It is decorative there, since the label names the brand. Why a prop and not an `icon`: the marks are the brands' own artwork, not Lucide glyphs, so they never join the icon registry.
 - The label is `children: string`. An icon only button takes `label` instead, and TypeScript refuses one without it.
 - No `className`, `style` or other HTML attributes pass through: one look, set here.
+- `ButtonLink` is new (spec 0025, the guest's booking page): the same looks and sizes on a real link, so a new tab, a copied address and a download work as the browser's own. `href` passes `safeHref`; one that fails draws disabled.
 - `ToggleButton` is new (the artifact had no pressed state), for format toolbars and view toggles.
 - `SplitButton` takes its `menu` instead of an `onMenu` callback, so the menu opens from the chevron with focus handled by React Aria.
 - No `disabledReason` tooltip yet: a disabled button gets no hover or focus, so a tooltip on it would reach no one by keyboard. Until a disabled button can stay focusable, write the reason beside it and tie it with `aria-describedby`, or put a `LockReason` beside it.

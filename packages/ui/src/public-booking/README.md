@@ -1,0 +1,3 @@
+# Public booking entry
+
+`@crm/ui/public-booking`: what the public booking pages (`/b/<key>` and the guest's `/b/<key>/manage`) draw with, since 20 October 2026, when they moved onto the library as the hosted form did ("one input system everywhere"). It exports `BookingProvider` (UiProvider for a page outside the app: the visitor's language and zone, full page navigation, its own toasts), the booking modules (BookingFrame, BookingFoot, BookingMessage, MonthTiles, DayStrip, SlotList, BookingDetails, BookingReceipt) and the few controls the page puts around them. The page's client reads slots and books; nothing here touches the network.

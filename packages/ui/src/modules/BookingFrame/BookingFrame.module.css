@@ -1,0 +1,267 @@
+/* A booking page: one card on the ground colour. From the page breakpoint the
+   rail, the middle pane and the end pane sit side by side, divided by
+   hairlines, at one height so the times scroll inside their pane; below it
+   they stack. The wordmark and the claim link sit centred under the card. */
+@layer components {
+  .root {
+    box-sizing: border-box;
+    display: flex;
+    justify-content: center;
+    min-block-size: 100dvb;
+    padding: var(--space-24) var(--space-16) var(--space-32);
+    background: var(--surface-subtle);
+    color: var(--text);
+    font: var(--text-body);
+    letter-spacing: var(--tracking-body);
+  }
+
+  .column {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-16);
+    inline-size: 100%;
+    max-inline-size: calc(var(--size-sidebar) + var(--size-panel-wide) + var(--size-column-wide));
+  }
+
+  .column[data-width='narrow'] {
+    max-inline-size: var(--size-page-card);
+  }
+
+  .message {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-12);
+    padding: var(--space-24);
+    border: var(--border-width-hairline) solid var(--border);
+    border-radius: var(--radius-xl);
+    background: var(--surface-raised);
+    box-shadow: var(--shadow-md);
+  }
+
+  .top {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--space-12);
+  }
+
+  .banner {
+    flex: 1 1 var(--size-panel);
+    min-inline-size: 0;
+  }
+
+  .banner:empty {
+    display: none;
+  }
+
+  .toolbar {
+    display: flex;
+    margin-inline-start: auto;
+  }
+
+  .card {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    border: var(--border-width-hairline) solid var(--border);
+    border-radius: var(--radius-xl);
+    background: var(--surface-raised);
+    box-shadow: var(--shadow-md);
+    animation: frame-rise var(--duration-modal) var(--ease-out) both;
+  }
+
+  .rail,
+  .main,
+  .aside {
+    box-sizing: border-box;
+    display: flex;
+    flex-direction: column;
+    min-inline-size: 0;
+    padding: var(--space-20);
+  }
+
+  .rail {
+    gap: var(--space-8);
+    border-block-end: var(--border-width-hairline) solid var(--border-subtle);
+  }
+
+  .aside {
+    border-block-start: var(--border-width-hairline) solid var(--border-subtle);
+  }
+
+  .host {
+    margin: var(--space-4) 0 0;
+    color: var(--text-secondary);
+    font: var(--text-body-strong);
+    letter-spacing: var(--tracking-body-strong);
+  }
+
+  .title {
+    margin: 0;
+    color: var(--text);
+    font: var(--text-heading);
+    letter-spacing: var(--tracking-heading);
+    overflow-wrap: anywhere;
+  }
+
+  .title:focus {
+    outline: none;
+  }
+
+  .description {
+    margin: 0;
+    color: var(--text-secondary);
+    white-space: pre-line;
+    overflow-wrap: anywhere;
+  }
+
+  .facts {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-8);
+    margin: var(--space-8) 0 0;
+    padding: 0;
+    list-style: none;
+  }
+
+  .fact {
+    display: flex;
+    align-items: center;
+    gap: var(--space-8);
+    min-block-size: var(--size-control);
+    color: var(--text);
+    font: var(--text-body-strong);
+    letter-spacing: var(--tracking-body-strong);
+  }
+
+  .factIcon {
+    display: flex;
+    flex: none;
+  }
+
+  .factBody {
+    min-inline-size: 0;
+    overflow-wrap: anywhere;
+  }
+
+  .foot {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: var(--space-8);
+    padding-block-start: var(--space-8);
+  }
+
+  .brand {
+    display: flex;
+    border-radius: var(--radius-xs);
+    opacity: var(--opacity-busy);
+    transition: opacity var(--duration-hover) var(--ease-hover);
+  }
+
+  .wordmark {
+    display: block;
+    block-size: var(--space-20);
+    inline-size: auto;
+  }
+
+  /* One wordmark per theme: dark ink on light, white on dark, the other out of the tree. */
+  .wordmark[data-scheme='dark'] {
+    display: none;
+  }
+
+  :root[data-theme='dark'] .wordmark[data-scheme='light'] {
+    display: none;
+  }
+
+  :root[data-theme='dark'] .wordmark[data-scheme='dark'] {
+    display: block;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme='light']) .wordmark[data-scheme='light'] {
+      display: none;
+    }
+
+    :root:not([data-theme='light']) .wordmark[data-scheme='dark'] {
+      display: block;
+    }
+  }
+
+  .claim {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-4);
+    border-radius: var(--radius-xs);
+    color: var(--text-secondary);
+    font: var(--text-body);
+    text-decoration: none;
+    transition: color var(--duration-hover) var(--ease-hover);
+  }
+
+  .brand:focus-visible,
+  .claim:focus-visible {
+    outline: var(--border-width-thick) solid var(--accent-line);
+    outline-offset: var(--border-width-thick);
+  }
+
+  @media (width >= 1024px) {
+    .root {
+      align-items: center;
+      padding-block: var(--space-32);
+    }
+
+    .card {
+      grid-template-columns: var(--size-sidebar) minmax(0, 1fr);
+    }
+
+    .card[data-panes='three'] {
+      grid-template-columns: var(--size-sidebar) minmax(0, 1fr) var(--size-column-wide);
+    }
+
+    .rail {
+      border-block-end: none;
+      border-inline-end: var(--border-width-hairline) solid var(--border-subtle);
+    }
+
+    .aside {
+      border-block-start: none;
+      border-inline-start: var(--border-width-hairline) solid var(--border-subtle);
+      contain: size;
+    }
+
+    .rail,
+    .main,
+    .aside {
+      padding: var(--space-24);
+    }
+  }
+
+  @media (hover: hover) and (pointer: fine) {
+    .brand:hover {
+      opacity: 1;
+    }
+
+    .claim:hover {
+      color: var(--text);
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .card {
+      animation-name: frame-fade;
+    }
+  }
+
+  @keyframes frame-rise {
+    from {
+      opacity: 0;
+      translate: 0 var(--space-8);
+    }
+  }
+
+  @keyframes frame-fade {
+    from {
+      opacity: 0;
+    }
+  }
+}

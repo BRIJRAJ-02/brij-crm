@@ -1,5 +1,11 @@
 import { lazy, Suspense, useRef, type JSX, type ReactNode, type Ref } from 'react';
-import { Button as AriaButton, ToggleButton as AriaToggleButton, type PressEvent } from 'react-aria-components';
+import {
+  Button as AriaButton,
+  Link as AriaLink,
+  ToggleButton as AriaToggleButton,
+  type PressEvent,
+} from 'react-aria-components';
+import { safeHref } from '../../lib/safe-href.ts';
 import { Icon } from '../Icon/Icon.tsx';
 import type { IconName } from '../Icon/icons.ts';
 import { Kbd } from '../Kbd/Kbd.tsx';
@@ -210,6 +216,41 @@ function PlainButton(props: ButtonProps) {
     >
       <Face face={face} look={props} isPending={isPending} />
     </AriaButton>
+  );
+}
+
+/** Props for ButtonLink: a Button's look and face, and where it goes. */
+export type ButtonLinkProps = Omit<ButtonLook, 'kbd' | 'slot' | 'ref'> &
+  ButtonFace & {
+    /** An `http`, `https`, `mailto` or `tel` address, or a path; anything else draws a disabled button. */
+    readonly href: string;
+    /** Opens in a new tab: a link out of a page the visitor should keep. */
+    readonly isExternal?: boolean;
+    /** Saves the address as a file with this name (a calendar's .ics) instead of opening it. */
+    readonly download?: string;
+  };
+
+/**
+ * A link drawn as a Button, for an action that goes somewhere: Join the call,
+ * Add to Google Calendar. Same looks, sizes and press, but it is a link, so it
+ * opens in a new tab with the browser's own gestures.
+ */
+export function ButtonLink(props: ButtonLinkProps) {
+  const { href, isExternal = false, download, isDisabled } = props;
+  const face: ButtonFace = props;
+  const safe = safeHref(href);
+  return (
+    <AriaLink
+      className={styles.root}
+      {...(safe === undefined ? {} : { href: safe })}
+      isDisabled={(isDisabled ?? false) || safe === undefined}
+      {...(isExternal ? { target: '_blank', rel: 'noopener noreferrer' } : {})}
+      {...(download === undefined ? {} : { download })}
+      {...(face.label === undefined ? {} : { 'aria-label': face.label })}
+      {...lookAttributes(props, face)}
+    >
+      <Face face={face} look={props} isPending={false} />
+    </AriaLink>
   );
 }
 

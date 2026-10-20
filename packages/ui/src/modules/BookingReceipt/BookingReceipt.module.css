@@ -1,0 +1,230 @@
+/* A guest's booking page: a centred head (the host with the state's mark,
+   the heading), then one card: the time band, the facts, and the actions. */
+@layer components {
+  .root {
+    box-sizing: border-box;
+    display: flex;
+    justify-content: center;
+    min-block-size: 100dvb;
+    padding: var(--space-32) var(--space-16);
+    background: var(--surface-subtle);
+    color: var(--text);
+    font: var(--text-body);
+    letter-spacing: var(--tracking-body);
+  }
+
+  .column {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-20);
+    inline-size: 100%;
+    max-inline-size: var(--size-page-card);
+  }
+
+  .head {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: var(--space-12);
+    text-align: center;
+  }
+
+  .avatar {
+    position: relative;
+    display: inline-flex;
+  }
+
+  .mark {
+    position: absolute;
+    inset-block-end: calc(-1 * var(--space-4));
+    inset-inline-end: calc(-1 * var(--space-4));
+    display: inline-grid;
+    place-items: center;
+    inline-size: var(--size-chip);
+    block-size: var(--size-chip);
+    border: var(--border-width-thick) solid var(--surface-subtle);
+    border-radius: var(--radius-full);
+    background: var(--tag-green-bg);
+    color: var(--tag-green-text);
+    animation: mark-pop var(--duration-modal) var(--ease-out) var(--duration-hover) both;
+  }
+
+  .mark[data-state='cancelled'] {
+    background: var(--tag-red-bg);
+    color: var(--tag-red-text);
+  }
+
+  .mark[data-state='past'] {
+    background: var(--tag-gray-bg);
+    color: var(--tag-gray-text);
+  }
+
+  .title {
+    margin: 0;
+    font: var(--text-heading);
+    letter-spacing: var(--tracking-heading);
+  }
+
+  .title:focus {
+    outline: none;
+  }
+
+  .card {
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    border: var(--border-width-hairline) solid var(--border);
+    border-radius: var(--radius-xl);
+    background: var(--surface-raised);
+    box-shadow: var(--shadow-md);
+    container-type: inline-size;
+    animation: receipt-rise var(--duration-modal) var(--ease-out) var(--duration-hover) both;
+  }
+
+  .band {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-16);
+    padding: var(--space-20);
+    border-block-end: var(--border-width-hairline) solid var(--border-subtle);
+  }
+
+  @container (width >= 320px) {
+    .band {
+      flex-direction: row;
+      align-items: center;
+    }
+  }
+
+  .chip {
+    display: flex;
+    flex: none;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    inline-size: calc(var(--size-toolbar) + var(--space-16));
+    block-size: calc(var(--size-toolbar) + var(--space-16));
+    border: var(--border-width-hairline) solid var(--border);
+    border-radius: var(--radius-lg);
+    color: var(--text-secondary);
+  }
+
+  .chip[data-live] {
+    border-color: var(--accent);
+    background: var(--accent);
+    color: var(--on-accent);
+  }
+
+  .chipWeekday,
+  .chipMonth {
+    font: var(--text-label-strong);
+    letter-spacing: var(--tracking-label-strong);
+    text-transform: uppercase;
+  }
+
+  .chipDay {
+    font: var(--text-heading);
+    letter-spacing: var(--tracking-heading);
+    font-variant-numeric: tabular-nums;
+  }
+
+  .when {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-2);
+    min-inline-size: 0;
+  }
+
+  .range {
+    margin: 0;
+    font: var(--text-title);
+    letter-spacing: var(--tracking-title);
+  }
+
+  .band:not([data-state='confirmed']) .range {
+    color: var(--text-secondary);
+    text-decoration: line-through;
+  }
+
+  .muted {
+    margin: 0;
+    color: var(--text-secondary);
+  }
+
+  .relative {
+    margin: 0;
+    color: var(--link);
+    font: var(--text-body-strong);
+    letter-spacing: var(--tracking-body-strong);
+  }
+
+  .facts {
+    padding: var(--space-20);
+  }
+
+  .actions {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-16);
+    padding: var(--space-20);
+    border-block-start: var(--border-width-hairline) solid var(--border-subtle);
+  }
+
+  .calendars {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-8);
+  }
+
+  .label {
+    color: var(--text-secondary);
+    font: var(--text-label-strong);
+    letter-spacing: var(--tracking-label-strong);
+  }
+
+  .links {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-8);
+  }
+
+  .again {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-4);
+    margin: 0;
+    padding: var(--space-20);
+    border-block-start: var(--border-width-hairline) solid var(--border-subtle);
+    color: var(--text-secondary);
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .card {
+      animation-name: receipt-fade;
+    }
+
+    .mark {
+      animation: none;
+    }
+  }
+
+  @keyframes receipt-rise {
+    from {
+      opacity: 0;
+      translate: 0 var(--space-8);
+    }
+  }
+
+  @keyframes receipt-fade {
+    from {
+      opacity: 0;
+    }
+  }
+
+  @keyframes mark-pop {
+    from {
+      scale: var(--scale-shrunk);
+      opacity: 0;
+    }
+  }
+}

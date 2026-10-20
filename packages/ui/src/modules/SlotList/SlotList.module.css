@@ -1,0 +1,200 @@
+/* The times of one day: a heading with the clock switch, then outlined time
+   buttons. The picked one fills, and Next opens beside it. In a column the
+   list scrolls inside its pane with a fade at the foot; in a grid it runs two
+   to four across as room allows. */
+@layer components {
+  .root {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-12);
+    min-inline-size: 0;
+    min-block-size: 0;
+  }
+
+  .head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--space-8);
+    min-block-size: var(--size-control);
+  }
+
+  .heading {
+    margin: 0;
+    color: var(--text);
+    font: var(--text-title);
+    letter-spacing: var(--tracking-title);
+  }
+
+  .list {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    gap: var(--space-8);
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+
+  .root[data-layout='column'] {
+    container-type: inline-size;
+    flex: 1;
+  }
+
+  .root[data-layout='column'] .list {
+    flex: 1;
+    min-block-size: 0;
+    padding-block-end: var(--space-16);
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    mask-image: linear-gradient(to bottom, var(--surface) calc(100% - var(--space-24)), transparent);
+  }
+
+  .root[data-layout='grid'] {
+    container-type: inline-size;
+  }
+
+  @container (width >= 320px) {
+    .root[data-layout='grid'] .list {
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+    }
+  }
+
+  @container (width >= 480px) {
+    .root[data-layout='grid'] .list {
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+    }
+  }
+
+  .item {
+    display: flex;
+    gap: var(--space-8);
+    animation: slot-in var(--duration-popover) var(--ease-out) both;
+    animation-delay: calc(var(--slot-index, 0) * var(--duration-hover) / 6);
+  }
+
+  .slot {
+    display: flex;
+    flex: 1;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: var(--space-2);
+    min-inline-size: 0;
+    min-block-size: var(--size-row);
+    padding: var(--space-6) var(--space-8);
+    border: var(--border-width-hairline) solid var(--control-border);
+    border-radius: var(--radius-md);
+    background: var(--surface);
+    color: var(--text);
+    font: var(--text-body-strong);
+    letter-spacing: var(--tracking-body-strong);
+    font-variant-numeric: tabular-nums;
+    cursor: pointer;
+    -webkit-tap-highlight-color: transparent;
+    transition:
+      border-color var(--duration-hover) var(--ease-hover),
+      background-color var(--duration-hover) var(--ease-hover),
+      flex-grow var(--duration-move) var(--ease-out),
+      scale var(--duration-press) var(--ease-out);
+  }
+
+  .slot[aria-pressed='true'] {
+    border-color: var(--surface-inverse);
+    background: var(--surface-inverse);
+    color: var(--on-inverse);
+  }
+
+  .slot[data-busy] {
+    border-style: dashed;
+    color: var(--text-secondary);
+  }
+
+  .slot:focus-visible {
+    outline: var(--border-width-thick) solid var(--accent-line);
+    outline-offset: var(--border-width-hairline);
+  }
+
+  .slot:active {
+    scale: var(--scale-press);
+  }
+
+  .time {
+    white-space: nowrap;
+  }
+
+  .best,
+  .busy {
+    font: var(--text-label);
+    letter-spacing: var(--tracking-label);
+  }
+
+  .best {
+    color: var(--link);
+    font: var(--text-label-strong);
+  }
+
+  .slot[aria-pressed='true'] .best,
+  .slot[aria-pressed='true'] .busy {
+    color: inherit;
+  }
+
+  .next {
+    display: flex;
+    flex: 1;
+    animation: next-in var(--duration-move) var(--ease-out) both;
+  }
+
+  /* Next's button takes the time's full height. */
+  .next > * {
+    flex: 1;
+    min-block-size: var(--size-row);
+  }
+
+  .loading,
+  .empty {
+    padding-block: var(--space-8);
+  }
+
+  @media (hover: hover) and (pointer: fine) {
+    .slot:not([aria-pressed='true']):hover {
+      border-color: var(--text);
+    }
+  }
+
+  @media (forced-colors: active) {
+    .slot[aria-pressed='true'] {
+      outline: var(--border-width-thick) solid Highlight;
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .item,
+    .next {
+      animation-name: slot-fade;
+    }
+
+    .slot:active {
+      scale: none;
+    }
+  }
+
+  @keyframes slot-in {
+    from {
+      opacity: 0;
+      translate: 0 var(--space-4);
+    }
+  }
+
+  @keyframes next-in {
+    from {
+      opacity: 0;
+      translate: calc(-1 * var(--space-8)) 0;
+    }
+  }
+
+  @keyframes slot-fade {
+    from {
+      opacity: 0;
+    }
+  }
+}

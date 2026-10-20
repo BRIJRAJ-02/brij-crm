@@ -1,0 +1,98 @@
+/* The List view's days: a row of tiles that scrolls sideways, each its
+   weekday over its date, the chosen one solid accent like the month's. */
+@layer components {
+  .root {
+    display: flex;
+    gap: var(--space-8);
+    padding-block: var(--space-2);
+    overflow-x: auto;
+    overscroll-behavior-x: contain;
+    scroll-snap-type: x proximity;
+    scrollbar-width: none;
+  }
+
+  .day {
+    position: relative;
+    display: flex;
+    flex: none;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: var(--space-2);
+    inline-size: calc(var(--size-row) * 1.5);
+    padding-block: var(--space-8);
+    border: none;
+    border-radius: var(--radius-md);
+    background: var(--surface-selected);
+    color: var(--text);
+    cursor: pointer;
+    scroll-snap-align: start;
+    -webkit-tap-highlight-color: transparent;
+    transition:
+      background-color var(--duration-hover) var(--ease-hover),
+      scale var(--duration-press) var(--ease-out);
+  }
+
+  .day[aria-pressed='true'] {
+    background: var(--accent);
+    color: var(--on-accent);
+  }
+
+  .day[data-best]::after {
+    position: absolute;
+    inset-block-start: var(--space-6);
+    inset-inline-end: var(--space-6);
+    inline-size: var(--space-6);
+    block-size: var(--space-6);
+    border-radius: var(--radius-full);
+    background: var(--accent);
+    content: '';
+  }
+
+  .day[data-best][aria-pressed='true']::after {
+    background: var(--on-accent);
+  }
+
+  .day:focus-visible {
+    outline: var(--border-width-thick) solid var(--accent-line);
+    outline-offset: var(--border-width-hairline);
+  }
+
+  .day:active {
+    scale: var(--scale-press);
+  }
+
+  .weekday {
+    font: var(--text-label-strong);
+    letter-spacing: var(--tracking-label-strong);
+    text-transform: uppercase;
+  }
+
+  .date {
+    font: var(--text-title);
+    letter-spacing: var(--tracking-title);
+    font-variant-numeric: tabular-nums;
+  }
+
+  @media (hover: hover) and (pointer: fine) {
+    .day:not([aria-pressed='true']):hover {
+      background: var(--accent-border);
+    }
+  }
+
+  @media (forced-colors: active) {
+    .day {
+      border: var(--border-width-hairline) solid ButtonText;
+    }
+
+    .day[aria-pressed='true'] {
+      outline: var(--border-width-thick) solid Highlight;
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .day:active {
+      scale: none;
+    }
+  }
+}
