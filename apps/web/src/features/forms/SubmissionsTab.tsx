@@ -39,7 +39,9 @@ import { useState } from 'react';
 import { createPortal } from 'react-dom';
 import { recordLinks } from '../records/timeline.ts';
 import { formHref } from './paths.ts';
+import { useJobFollower } from './followJobs.ts';
 import { strings } from './strings.ts';
+import { SyncDialog } from './SyncDialog.tsx';
 import { useFormToolbarSlot } from './toolbarSlot.ts';
 
 /** Props for the Submissions tab: what its route loaded through the data layer. */
@@ -101,7 +103,9 @@ export function SubmissionsTab({
   const [query, setQuery] = useState('');
   const [selected, setSelected] = useState<ReadonlySet<string>>(new Set());
   const [bulk, setBulk] = useState<{ readonly label: string; readonly value: number } | undefined>(undefined);
+  const [isSyncing, setSyncing] = useState(false);
   const { data, toasts } = useRouteContext({ from: '__root__' });
+  const jobs = useJobFollower(data.jobs.view(slug, 'mine'));
   const navigate = useNavigate();
   const router = useRouter();
   const link = recordLinks(slug, objects);
@@ -192,6 +196,7 @@ export function SubmissionsTab({
   const picked = shown.filter((submission) => selected.has(submission.id));
   const canRelease = picked.some((submission) => submission.state === 'spam' || submission.state === 'needs_review');
   const canMarkSpam = picked.some((submission) => submission.state !== 'spam');
+  const addable = picked.filter((submission) => submission.crm.state === 'not_in_crm' && submission.crm.canAddToCrm);
   const columns: readonly TableColumn[] = [
     { id: 'person', label: strings.person, isRowHeader: true, isInline: true },
     { id: 'when', label: strings.when },
@@ -249,18 +254,86 @@ export function SubmissionsTab({
     );
   };
 
-  // Export, Add to CRM and Sync old records wait on the submissions backend (paused): shown, off, each saying so.
+  /** Files these in the CRM with the form's mapping, says how many it took, and follows the job to its end. */
+  const addToCrm = (ids: readonly string[]) => {
+    if (ids.length === 0) return;
+    data.submissions.addToCrm(slug, formId, ids).then(
+      (result) => {
+        setSelected(new Set());
+        toasts.toast({ tone: 'success', message: strings.addQueued(result.queued, result.skipped) });
+        if (result.jobId !== undefined) {
+          jobs.follow(result.jobId, (job) => {
+            toasts.toast({
+              tone: job.status === 'succeeded' ? 'success' : 'danger',
+              message: job.status === 'succeeded' ? strings.addDone(job.done) : strings.jobFailed(job.label),
+            });
+            void router.invalidate();
+          });
+        }
+        void router.invalidate();
+      },
+      (error: unknown) => {
+        toasts.toast({ tone: 'danger', message: isDataError(error) ? error.message : strings.failedText });
+      },
+    );
+  };
+
+  /** Exports the picked rows, or else what the filter shows, as CSV; the file downloads once its job is done. */
+  const exportCsv = () => {
+    const ids = picked.map((submission) => submission.id);
+    data.submissions
+      .export(
+        slug,
+        data.submissions.newId(),
+        formId,
+        ids.length > 0
+          ? { kind: 'ids', submissionIds: ids }
+          : { kind: 'filter', ...(state === undefined ? {} : { state }) },
+      )
+      .then(
+        (view) => {
+          toasts.toast({ tone: 'info', message: strings.exportStarted });
+          jobs.follow(view.jobId, (job) => {
+            toasts.toast(
+              job.status === 'succeeded'
+                ? {
+                    tone: 'success',
+                    message: strings.exportReady(view.fileName),
+                    action: {
+                      label: strings.download,
+                      onAction: () => {
+                        window.location.assign(data.submissions.exportDownloadPath(slug, view.id));
+                      },
+                    },
+                  }
+                : { tone: 'danger', message: strings.jobFailed(job.label) },
+            );
+          });
+        },
+        (error: unknown) => {
+          toasts.toast({ tone: 'danger', message: isDataError(error) ? error.message : strings.failedText });
+        },
+      );
+  };
+
   const moreActions = (
     <MenuTrigger>
       <Button variant="ghost" icon="ellipsis" label={strings.moreSubmissionActions} />
-      <Menu label={strings.moreSubmissionActions} disabledKeys={['export', 'file', 'sync']}>
-        <MenuItem id="export" icon="download" description={strings.exportSoon}>
+      <Menu
+        label={strings.moreSubmissionActions}
+        onAction={(key) => {
+          if (key === 'export') exportCsv();
+          if (key === 'sync') setSyncing(true);
+        }}
+      >
+        <MenuItem
+          id="export"
+          icon="download"
+          description={picked.length > 0 ? strings.exportPicked(picked.length) : strings.exportFilter}
+        >
           {strings.exportCsv}
         </MenuItem>
-        <MenuItem id="file" icon="user-plus" description={strings.addToCrmSoon}>
-          {strings.addToCrm}
-        </MenuItem>
-        <MenuItem id="sync" icon="refresh-cw" description={strings.syncSoon}>
+        <MenuItem id="sync" icon="refresh-cw" description={strings.syncOldText}>
           {strings.syncOld}
         </MenuItem>
       </Menu>
@@ -302,11 +375,12 @@ export function SubmissionsTab({
       case 'when':
         return <RelativeTime value={submission.receivedAt} />;
       case 'person': {
-        const record = submission.mainRecord;
-        // Not filed: the email, and that it isn't in the CRM yet.
-        if (record === undefined) return strings.notInCrm(submission.email);
-        const href = link(record.objectId, record.recordId);
-        return <RecordChip display={record} {...(href === undefined ? {} : { href })} isFlat />;
+        // The CRM link: the record it filed into, filing while its job runs, or the email and Not in CRM.
+        const crm = submission.crm;
+        if (crm.state === 'filing') return strings.crmFiling(submission.email);
+        if (crm.state === 'not_in_crm') return strings.notInCrm(submission.email);
+        const href = link(crm.record.objectId, crm.record.recordId);
+        return <RecordChip display={crm.record} {...(href === undefined ? {} : { href })} isFlat />;
       }
       case 'state':
         return <StatusDot hue={STATE_HUES[submission.state]}>{strings.states[submission.state]}</StatusDot>;
@@ -354,6 +428,16 @@ export function SubmissionsTab({
               }}
             >
               {strings.notSpam}
+            </Button>
+          )}
+          {addable.length > 0 && (
+            <Button
+              icon="user-plus"
+              onPress={() => {
+                addToCrm(addable.map((submission) => submission.id));
+              }}
+            >
+              {strings.addToCrm}
             </Button>
           )}
           {canMarkSpam && (
@@ -422,6 +506,11 @@ export function SubmissionsTab({
                         {strings.release}
                       </Button>
                     )}
+                    {open.crm.state === 'not_in_crm' && open.crm.canAddToCrm && (
+                      <Button variant="primary" icon="user-plus" onPress={() => addToCrm([open.id])}>
+                        {strings.addToCrm}
+                      </Button>
+                    )}
                     {open.state === 'failed' && (
                       <Button variant="primary" isPending={busy === 'retry'} onPress={() => act('retry', open.id)}>
                         {strings.retry}
@@ -443,6 +532,26 @@ export function SubmissionsTab({
           <SubmissionDetail submission={open} link={link} />
         </Panel>
       )}
+      <SyncDialog
+        slug={slug}
+        formId={formId}
+        isOpen={isSyncing}
+        onClose={() => {
+          setSyncing(false);
+        }}
+        onStarted={(jobId) => {
+          setSyncing(false);
+          toasts.toast({ tone: 'info', message: strings.syncStarted });
+          jobs.follow(jobId, (job) => {
+            toasts.toast({
+              tone: job.status === 'succeeded' ? 'success' : 'danger',
+              message:
+                job.status === 'succeeded' ? strings.syncDone(job.done, job.refused) : strings.jobFailed(job.label),
+            });
+            void router.invalidate();
+          });
+        }}
+      />
       <Modal
         title={strings.deleteSubmissionTitle}
         tone="danger"

@@ -5,7 +5,14 @@
 // store, a view per object, and optimistic creates and edits (loaded when a
 // screen first asks for records), patched in place by live change events
 // while a screen shows a workspace (the realtime client loads with the first).
+import { exportDownloadPath } from '@crm/contracts';
 import type {
+  AddToCrmResult,
+  ExportView,
+  SubmissionSelection,
+  SyncPreview,
+  SyncScope,
+  SyncStarted,
   AttributeDefinition,
   BookAsHostInput,
   TaskMine,
@@ -174,13 +181,20 @@ export type {
   RelationshipView,
   SearchResult,
   SignedInUser,
+  AddToCrmResult,
+  ExportView,
   SubmissionAnswer,
+  SubmissionCrm,
   SubmissionPage,
+  SubmissionSelection,
   SubmissionRecord,
   SubmissionState,
   SubmissionSummary,
   SubmissionView,
   TaskMine,
+  SyncPreview,
+  SyncScope,
+  SyncStarted,
   TaskTotal,
   TaskView,
   Note,
@@ -3140,6 +3154,12 @@ export function createDataLayer({
         });
       },
       /** Deletes a form and its submissions, gone from the list at once and back on a refusal; the records they made stay. */
+      /** What Sync old records would do to earlier submissions (`all`, or `unfiled` only), counted on the newest 2,000. */
+      syncPreview: (workspace: string, formId: string, scope: SyncScope): Promise<SyncPreview> =>
+        call((options) => api.forms.syncPreview({ workspace, formId, scope }, options)),
+      /** Starts Sync old records as a `forms.sync` job (`jobId` minted once, so a retry starts one job). */
+      syncStart: (workspace: string, formId: string, scope: SyncScope, jobId: string): Promise<SyncStarted> =>
+        call((options) => api.forms.syncStart({ workspace, formId, scope, jobId, mutationId: mintId() }, options)),
       delete: (workspace: string, formId: string) =>
         formLists.write(workspace, {
           send: () => call((options) => api.forms.delete({ workspace, formId, mutationId: mintId() }, options)),
@@ -3175,6 +3195,32 @@ export function createDataLayer({
       /** Deletes a submission; the records it made stay (AC-575). */
       delete: (workspace: string, submissionId: string) =>
         call((options) => api.submissions.delete({ workspace, submissionId, mutationId: mintId() }, options)),
+      /**
+       * Add to CRM: files submissions that aren't in the CRM with the form's
+       * published mapping, in one `forms.file` job (follow it with `jobs`).
+       * Answers how many it queued and how many it left out.
+       */
+      addToCrm: (workspace: string, formId: string, submissionIds: readonly string[]): Promise<AddToCrmResult> =>
+        call((options) =>
+          api.submissions.addToCrm(
+            { workspace, formId, submissionIds: [...submissionIds], mutationId: mintId() },
+            options,
+          ),
+        ),
+      /**
+       * Starts a CSV export of a form's submissions (a filter, or named ones)
+       * as a `forms.export` job. `id` is minted once per press (`newId`), so a
+       * retry makes one export.
+       */
+      export: (workspace: string, id: string, formId: string, select: SubmissionSelection): Promise<ExportView> =>
+        call((options) => api.submissions.export({ workspace, id, formId, select, mutationId: mintId() }, options)),
+      /** One export again: its row count once written, and where it downloads from. */
+      getExport: (workspace: string, exportId: string): Promise<ExportView> =>
+        call((options) => api.submissions.getExport({ workspace, exportId }, options)),
+      /** Where an export's file downloads from (the session's cookie; only its starter gets it). */
+      exportDownloadPath: (workspace: string, exportId: string): string => exportDownloadPath(workspace, exportId),
+      /** A new id for an export or a sync's job. */
+      newId: () => mintId(),
     },
     jobs: {
       /**
