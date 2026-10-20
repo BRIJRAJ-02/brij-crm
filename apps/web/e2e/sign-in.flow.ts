@@ -158,7 +158,7 @@ test('signs in by code, names the workspace, lands on People, signs out, and com
   // The right code signs in; with no workspace yet, /welcome.
   await page.getByLabel('Code').fill(code);
   await expect(page).toHaveURL(/\/welcome$/);
-  await expect(page.getByRole('heading', { level: 1, name: 'Name your workspace' })).toBeFocused();
+  await expect(page.getByLabel('Your name')).toBeFocused();
   await expect(page).toHaveTitle('Name your workspace · Timefix');
 
   // The workspace name follows "Your name", and the address follows the workspace name.

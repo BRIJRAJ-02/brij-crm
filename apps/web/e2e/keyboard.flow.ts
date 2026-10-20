@@ -76,10 +76,8 @@ test.describe('the core loop by keyboard', () => {
     await focusedWithRing(page, page.getByLabel('Code'), 'the code field', page.locator('main [data-next]'));
     await page.keyboard.type(await codeFor(page.request, email));
 
-    // Welcome: the title has focus, Tab reaches the first field, Enter creates.
+    // Welcome: the first field has focus (F33), Enter creates.
     await expect(page).toHaveURL(/\/welcome$/);
-    await expect(page.getByRole('heading', { level: 1, name: 'Name your workspace' })).toBeFocused();
-    await page.keyboard.press('Tab');
     await focusedWithRing(page, page.getByLabel('Your name'), 'Your name');
     await page.keyboard.type('Ada Lovelace');
     await tabTo(page, page.getByLabel('Web address'));
