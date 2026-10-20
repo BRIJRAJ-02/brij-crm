@@ -10,6 +10,7 @@ import {
   type FormDocument,
   type SubmissionAnswer,
   type SubmissionPage,
+  type SubmissionResolution,
   type SubmissionRecord,
   type SubmissionState,
   type SubmissionSummary,
@@ -92,7 +93,7 @@ const record = (value: unknown): Readonly<Record<string, unknown>> =>
 
 const verdictOf = (spam: unknown): SubmissionSummary['verdict'] => {
   const verdict = record(spam).verdict;
-  return verdict === 'spam' || verdict === 'unchecked' ? verdict : 'passed';
+  return verdict === 'spam' || verdict === 'unchecked' || verdict === 'review' ? verdict : 'passed';
 };
 
 /** The rows the reader may see: a visible main record, or none yet and `forms.manage`. */
@@ -392,6 +393,57 @@ export async function markSubmissionSpam(
           updatedAt: sql`now()`,
         })
         .where(eq(formSubmissions.id, row.id));
+      return viewIn(tx, scope, row.id);
+    },
+    hooks,
+  );
+  return result;
+}
+
+/** What resolving a submission that isn't held for review answers. */
+export const NOT_IN_REVIEW = 'Only a submission waiting in Needs review for a spam check can be resolved this way.';
+
+/**
+ * Settles a submission the content checks held in Needs review (AC-563's
+ * state, spec 0023 spam follow-up): `not_spam` sends it to processing as any
+ * other (back to `received`, its job queued); `spam` moves it to spam, where
+ * Release still brings it back. Only a submission whose spam verdict is
+ * `review` qualifies, so an ambiguous match waiting for a record pick is
+ * never settled here. Needs `forms.manage`; who settled it and how is kept
+ * on the submission's `spam`.
+ */
+export async function resolveSubmission(
+  scope: EngineScope,
+  registry: JobRegistry,
+  input: { readonly submissionId: string; readonly resolution: SubmissionResolution },
+  hooks: readonly AfterWrite[] = [],
+): Promise<SubmissionView> {
+  requirePermission(scope, 'forms.manage');
+  const { result } = await runWrite(
+    scope,
+    async (context) => {
+      const { tx } = context;
+      const row = await lockedSubmission(tx, scope, input.submissionId);
+      const [held] = await tx
+        .select({ verdict: sql<string | null>`${formSubmissions.spam}->>'verdict'` })
+        .from(formSubmissions)
+        .where(eq(formSubmissions.id, row.id));
+      if (row.state !== 'needs_review' || held?.verdict !== 'review') throw refuse('FORM_STATE', NOT_IN_REVIEW);
+      const notSpam = input.resolution.kind === 'not_spam';
+      const resolved = {
+        verdict: notSpam ? 'passed' : 'spam',
+        resolved: input.resolution.kind,
+        resolvedBy: scope.actor,
+      };
+      await tx
+        .update(formSubmissions)
+        .set({
+          state: notSpam ? 'received' : 'spam',
+          spam: sql`${formSubmissions.spam} || ${JSON.stringify(resolved)}::jsonb`,
+          updatedAt: sql`now()`,
+        })
+        .where(eq(formSubmissions.id, row.id));
+      if (notSpam) await startJob(context, registry, { kind: FORMS_PROCESS, params: { submissionId: row.id } });
       return viewIn(tx, scope, row.id);
     },
     hooks,

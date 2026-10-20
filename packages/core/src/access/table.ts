@@ -194,6 +194,7 @@ export const ACCESS_TABLE = {
   retrySubmission: { permission: 'forms.manage' },
   releaseSubmission: { permission: 'forms.manage' },
   markSubmissionSpam: { permission: 'forms.manage' },
+  resolveSubmission: { permission: 'forms.manage' },
   deleteSubmission: { permission: 'forms.manage' },
   getPublicForm: { publicForm: true },
   submitForm: { publicForm: true },

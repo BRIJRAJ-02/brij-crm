@@ -5,8 +5,9 @@
 // the form as the actor and no data access, so they read only the form's own
 // rows and never a record. A submission is stored first, in one insert with
 // its job queued in the same transaction (AC-554); processing happens there.
-import { checkAnswers, HONEYPOT_KEY, SubmitBody, type PublicForm, type SubmitNext } from '@crm/contracts';
-import { schema } from '@crm/db';
+import { checkAnswers, SubmitBody, type PublicForm, type SubmitNext } from '@crm/contracts';
+import { schema, type WorkspaceTx } from '@crm/db';
+import { sql } from 'drizzle-orm';
 import { refuse, refuseAll } from '../engine/refusals.ts';
 import type { EngineScope } from '../engine/scope.ts';
 import { runWrite, type AfterWrite } from '../engine/write.ts';
@@ -15,6 +16,14 @@ import { startJob } from '../jobs/service.ts';
 import type { JobRegistry } from '../jobs/registry.ts';
 import { FORMS_PROCESS } from './process.ts';
 import { loadForm, loadVersions, publicFormOf, type FormRow } from './shared.ts';
+import {
+  judgeSubmission,
+  REPEAT_WINDOW_HOURS,
+  scoreContent,
+  type CaptchaVerdict,
+  type SpamJudgement,
+  type TicketVerdict,
+} from './spam.ts';
 
 const { formSubmissions } = schema;
 
@@ -77,51 +86,37 @@ export async function postingRules(scope: EngineScope, input: { readonly formId:
   });
 }
 
-/**
- * What the API's reCAPTCHA check found, when reCAPTCHA is on: a score, no
- * token, a refused token, Google not answering; `off` when no keys are set
- * (the default), so the honeypot, timing and limits decide alone.
- */
-export type CaptchaVerdict =
-  | { readonly kind: 'off' }
-  | { readonly kind: 'score'; readonly score: number }
-  | { readonly kind: 'missing' }
-  | { readonly kind: 'invalid' }
-  | { readonly kind: 'unavailable' };
-
 /** What storing a submission takes besides the body. */
 export interface SubmitInput {
   readonly formId: string;
   readonly body: SubmitBody;
   readonly captcha: CaptchaVerdict;
+  /** What the API made of the fill ticket; `missing` when the API checked none. */
+  readonly ticket?: TicketVerdict;
   /** The client address, already hashed with the salt. */
   readonly ipHash?: string;
 }
 
-/** What storing a submission answered: the visitor's next step, and how the bot checks judged it. */
+/** What storing a submission answered: the visitor's next step, and how the spam checks judged it. */
 export interface SubmitOutcome {
   readonly next: SubmitNext;
-  readonly verdict: 'passed' | 'spam' | 'unchecked';
+  readonly verdict: SpamJudgement['verdict'];
   /** True when this attempt was already stored (a retry of the same idempotency key). */
   readonly replayed: boolean;
 }
 
-/** The bot signals of a submission (spec 0023, Bots and abuse, adjusted): what made it spam, or none. */
-function spamSignals(
-  body: ReturnType<typeof SubmitBody.parse>,
-  captcha: CaptchaVerdict,
-  spam: { readonly minFillMs: number; readonly scoreThreshold: number },
-): { readonly signals: readonly string[]; readonly verdict: SubmitOutcome['verdict'] } {
-  const signals: string[] = [];
-  const trap = body[HONEYPOT_KEY];
-  if (trap !== undefined && trap.trim() !== '') signals.push('honeypot');
-  if (body.fillMs === undefined || body.fillMs < spam.minFillMs) signals.push('too_fast');
-  if (captcha.kind === 'missing') signals.push('captcha_missing');
-  if (captcha.kind === 'invalid') signals.push('captcha_invalid');
-  if (captcha.kind === 'score' && captcha.score < spam.scoreThreshold) signals.push('captcha_low_score');
-  if (signals.length > 0) return { signals, verdict: 'spam' };
-  if (captcha.kind === 'unavailable') return { signals: ['captcha_unavailable'], verdict: 'unchecked' };
-  return { signals: [], verdict: 'passed' };
+/** How many submissions to this form in the last day carried exactly these answers (at most 3 are counted). */
+async function repeatsOf(tx: WorkspaceTx, formId: string, answers: Readonly<Record<string, unknown>>): Promise<number> {
+  if (Object.keys(answers).length === 0) return 0;
+  const result = await tx.execute<{ repeats: number }>(sql`
+    select count(*)::int as repeats from (
+      select 1 from ${formSubmissions}
+      where ${formSubmissions.formId} = ${formId}
+        and ${formSubmissions.receivedAt} > now() - make_interval(hours => ${REPEAT_WINDOW_HOURS})
+        and ${formSubmissions.answers} = ${JSON.stringify(answers)}::jsonb
+      limit 3
+    ) as same`);
+  return result.rows[0]?.repeats ?? 0;
 }
 
 /**
@@ -129,10 +124,13 @@ function spamSignals(
  * one is 410 `FORM_CLOSED`, AC-662), and its answers are checked against the
  * live version whatever version the page loaded (unknown keys dropped; a
  * question added since and left empty fails only if it is required). A
- * submission the bot checks flag is stored as `spam` with its answers to
- * known questions and gets the same answer as success (AC-586); any other is
- * checked (`checkAnswers`, field errors as refusals on each question key,
- * nothing stored) and stored as `received` with its job queued. The same
+ * submission a bot signal flags (`judgeSubmission`) is stored as `spam` with
+ * its answers to known questions and gets the same answer as success
+ * (AC-586); any other is checked (`checkAnswers`, field errors as refusals on
+ * each question key, nothing stored), its content scored (`scoreContent`,
+ * with the same answers' repeats on this form in the last day), and stored
+ * as `spam`, `needs_review` (waiting for `resolveSubmission`, no job) or
+ * `received` with its job queued. Spam and review answer as success too. The same
  * idempotency key again answers the same next step and stores nothing more
  * (AC-555). The answer never says whether a record already exists.
  */
@@ -162,11 +160,22 @@ export async function submitForm(
         status: 'live',
         versionNumber: live.number,
       });
-      const judged = spamSignals(body, input.captcha, live.document.spam);
+      const ticket = input.ticket ?? { kind: 'missing' };
+      const known = new Set(rendered.questions.map((question) => question.key));
+      // Bot signals need no answers: one of them stores the submission as spam, its answers unchecked.
+      const bot = judgeSubmission({
+        ...(body.company_url === undefined ? {} : { honeypot: body.company_url }),
+        ...(body.fillMs === undefined ? {} : { fillMs: body.fillMs }),
+        ticket,
+        captcha: input.captcha,
+        settings: live.document.spam,
+        content: { score: 0, signals: [] },
+      });
       let answers: Readonly<Record<string, unknown>>;
-      if (judged.verdict === 'spam') {
-        const known = new Set(rendered.questions.map((question) => question.key));
+      let judged: SpamJudgement;
+      if (bot.verdict === 'spam') {
         answers = Object.fromEntries(Object.entries(body.answers).filter(([key]) => known.has(key)));
+        judged = bot;
       } else {
         const checked = checkAnswers(rendered, body.answers);
         if (!checked.ok) {
@@ -178,7 +187,22 @@ export async function submitForm(
           if (first !== undefined) throw refuseAll([first, ...rest]);
         }
         answers = checked.ok ? checked.answers : {};
+        const content = scoreContent({
+          questions: rendered.questions,
+          answers,
+          repeats: await repeatsOf(tx, form.id, answers),
+          ticket,
+          ...(body.fillMs === undefined ? {} : { fillMs: body.fillMs }),
+        });
+        judged = judgeSubmission({
+          ...(body.fillMs === undefined ? {} : { fillMs: body.fillMs }),
+          ticket,
+          captcha: input.captcha,
+          settings: live.document.spam,
+          content,
+        });
       }
+      const state = judged.verdict === 'spam' ? 'spam' : judged.verdict === 'review' ? 'needs_review' : 'received';
       const inserted = await tx
         .insert(formSubmissions)
         .values({
@@ -186,12 +210,13 @@ export async function submitForm(
           formId: form.id,
           versionId: live.id,
           idempotencyKey: body.idempotencyKey,
-          state: judged.verdict === 'spam' ? 'spam' : 'received',
+          state,
           answers,
           hidden: body.hidden,
           spam: {
             verdict: judged.verdict,
             signals: judged.signals,
+            contentScore: judged.score,
             ...(input.captcha.kind === 'score' ? { score: input.captcha.score } : {}),
           },
           ipHash: input.ipHash ?? null,
@@ -200,7 +225,7 @@ export async function submitForm(
         .returning({ id: formSubmissions.id });
       const [row] = inserted;
       if (row === undefined) return { next, verdict: judged.verdict, replayed: true };
-      if (judged.verdict !== 'spam') {
+      if (state === 'received') {
         await startJob(context, registry, { kind: FORMS_PROCESS, params: { submissionId: row.id } });
       }
       return { next, verdict: judged.verdict, replayed: false };

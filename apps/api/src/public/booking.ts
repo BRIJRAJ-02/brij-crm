@@ -58,6 +58,7 @@ import { deleteCookie, getCookie, setCookie } from 'hono/cookie';
 import { toApiError } from '../errors.ts';
 import { errorFields, log } from '../log.ts';
 import type { WakeRelay } from '../realtime/wake.ts';
+import type { TicketBook } from '../forms/ticket.ts';
 import { BOOKING_LIMITS, looksLikeBot, type LimitRule, type PublicLimiter } from './limits.ts';
 import {
   findVisitor,
@@ -81,6 +82,8 @@ export interface PublicBookingServices {
   readonly db: Database;
   readonly calendar: BookingCalendar & { readonly busy: BusyReader & { readonly fresh?: BusyReader } };
   readonly limiter: PublicLimiter;
+  /** Fill tickets (spec 0023): the server's clock for the minimum fill time, when the page sends one. */
+  readonly tickets?: TicketBook;
   readonly wakeRelay: WakeRelay;
   readonly now?: () => Date;
   /** Where calendar files say they come from: the app's origin and the sending address. */
@@ -469,7 +472,9 @@ export function mountPublicBooking(app: Hono<{ Variables: Variables }>, services
         .map((issue) => ({ path: issue.path.map(String), message: issue.message }));
       return answer('INPUT_INVALID', issues[0]?.message ?? 'Some of the input is invalid.', { data: { issues } });
     }
-    if (looksLikeBot(input.data, (services.now?.() ?? new Date()).getTime())) {
+    const ticket = services.tickets?.check(`booking:${key}`, input.data.ticket);
+    const elapsed = ticket?.kind === 'valid' ? ticket.elapsedMs : undefined;
+    if (looksLikeBot(input.data, (services.now?.() ?? new Date()).getTime(), elapsed)) {
       log.warn('booking.bot_refused', { requestId: c.get('requestId') });
       return answer('INPUT_INVALID', 'We couldn’t take that booking. Try again in a moment.');
     }

@@ -11,9 +11,10 @@ import { signInApp, testConnections } from '../../test/sign-in.ts';
 import { memberWithWorkspace } from '../../test/workspace.ts';
 import { EDGE_HEADER, ORIGIN_HEADER } from '../edge.ts';
 import { APP_URL, TEST_EDGE_SECRET } from '../testing.ts';
-import { createRateLimiter, FORM_LIMITS } from './limits.ts';
-import { SIGNATURE_HEADER, signatureOf } from './public.ts';
+import { createMemoryLimiter, FORM_LIMITS } from '../limits.ts';
+import { limitEmails, SIGNATURE_HEADER, signatureOf } from './public.ts';
 import { CAPTCHA_ACTION, createCaptchaVerifier, VERIFY_IN_FLIGHT } from './recaptcha.ts';
+import { createTicketBook, TICKET_TTL_MS } from './ticket.ts';
 
 const { ownerUrl } = inject('testDatabase');
 
@@ -215,6 +216,90 @@ describe('POST /api/public/forms/:publicKey/submissions', () => {
   });
 });
 
+describe('the spam checks over HTTP (AC-584, AC-585)', () => {
+  const stored = (formId: string) =>
+    testQuery<{ state: string; signals: string[] }>(
+      ownerUrl,
+      `select state, spam->'signals' as signals from form_submissions where form_id = $1 order by received_at`,
+      [formId],
+    );
+
+  it('hands out a fill ticket, never cached, and judges the fill time on the server’s clock', async () => {
+    const { live } = await liveForm();
+    const response = await call(`/forms/${live.publicKey}/ticket`, { ip: '198.51.100.40' });
+    expect(response.status).toBe(200);
+    expect(response.headers.get('cache-control')).toBe('private, no-store');
+    const { ticket } = (await response.json()) as { ticket: string };
+    expect(ticket).toMatch(/^t1\./);
+    // Sent at once, with the page claiming it took a minute: the server's clock says too fast. Same answer as success.
+    const fast = await call(`/forms/${live.publicKey}/submissions`, {
+      method: 'POST',
+      ip: '198.51.100.41',
+      body: submission({ ticket, fillMs: 60_000 }),
+    });
+    expect(fast.status).toBe(200);
+    expect(await fast.json()).toEqual({ next: { kind: 'message', text: '', offersMeeting: false } });
+    // A ticket for another form doesn't count, and neither timing nor ticket is a weak sign only: received.
+    const elsewhere = (await (await call('/forms/another-form/ticket', { ip: '198.51.100.40' })).json()) as {
+      ticket: string;
+    };
+    const forged = await call(`/forms/${live.publicKey}/submissions`, {
+      method: 'POST',
+      ip: '198.51.100.42',
+      body: submission({ ticket: elsewhere.ticket, answers: { ...answers, email: 'grace@example.com' } }),
+    });
+    expect(forged.status).toBe(200);
+    const untimed = await call(`/forms/${live.publicKey}/submissions`, {
+      method: 'POST',
+      ip: '198.51.100.43',
+      body: { ...submission({ answers: { ...answers, email: 'alan@example.com' } }), fillMs: undefined },
+    });
+    expect(untimed.status).toBe(200);
+    expect(await stored(live.id)).toEqual([
+      { state: 'spam', signals: ['too_fast'] },
+      { state: 'needs_review', signals: ['ticket_invalid'] },
+      { state: 'received', signals: ['no_timing'] },
+    ]);
+  });
+
+  it('answers 429 past 5 an hour from one email on one form, whatever its case or +tag', async () => {
+    const { live } = await liveForm();
+    const statuses: number[] = [];
+    for (let index = 0; index < 6; index += 1) {
+      const response = await call(`/forms/${live.publicKey}/submissions`, {
+        method: 'POST',
+        ip: `198.51.100.${String(50 + index)}`,
+        body: submission({ answers: { name: `Ada ${String(index)}`, email: `ADA+${String(index)}@example.com` } }),
+      });
+      statuses.push(response.status);
+    }
+    expect(statuses).toEqual([200, 200, 200, 200, 200, 429]);
+  });
+
+  it('stores link spam as spam and a doubtful one in Needs review, both answered as success, with no job', async () => {
+    const { m, live } = await liveForm();
+    const spam = await call(`/forms/${live.publicKey}/submissions`, {
+      method: 'POST',
+      ip: '198.51.100.70',
+      body: submission({ answers: { name: '<a href="http://pills.example">Buy now</a>', email: 'x@example.com' } }),
+    });
+    const doubtful = await call(`/forms/${live.publicKey}/submissions`, {
+      method: 'POST',
+      ip: '198.51.100.71',
+      body: submission({ answers: { name: 'Xkcdqwrt', email: 'someone@mailinator.com' } }),
+    });
+    expect([spam.status, doubtful.status]).toEqual([200, 200]);
+    expect(await stored(live.id)).toEqual([
+      { state: 'spam', signals: ['markup_links', 'link_in_name'] },
+      { state: 'needs_review', signals: ['gibberish_name', 'disposable_email'] },
+    ]);
+    const jobs = await testQuery(ownerUrl, `select 1 from jobs where workspace_id = $1 and kind = 'forms.process'`, [
+      m.workspace.id,
+    ]);
+    expect(jobs).toEqual([]);
+  });
+});
+
 describe('the reCAPTCHA verifier (AC-583)', () => {
   const hosts = new Set(['app.test']);
   const google = (answer: unknown, status = 200) =>
@@ -269,12 +354,42 @@ describe('the reCAPTCHA verifier (AC-583)', () => {
 describe('the rate limiter (AC-585)', () => {
   it('counts per key in fixed windows, and says when the window ends', () => {
     let now = 0;
-    const limiter = createRateLimiter(() => now);
+    const limiter = createMemoryLimiter({ now: () => now });
     const limit = FORM_LIMITS.perAddress;
-    const results = Array.from({ length: 6 }, () => limiter.hit('k', limit));
-    expect(results.filter((result) => result === true)).toHaveLength(5);
-    expect(results[5]).toEqual({ retryAfterSeconds: 60 });
+    const results = Array.from({ length: 6 }, () => limiter('k', limit));
+    expect(results.filter((result) => result.allowed)).toHaveLength(5);
+    expect(results[5]).toEqual({ allowed: false, retryAfterSeconds: 60 });
     now += limit.windowMs;
-    expect(limiter.hit('k', limit)).toBe(true);
+    expect(limiter('k', limit)).toEqual({ allowed: true });
+  });
+
+  it('normalises the emails it limits: lowercased, trimmed, the +tag dropped, at most three', () => {
+    expect(
+      limitEmails({ email: ' Ada+news@Example.com ', other: 'ada@example.com', name: 'Ada', n: 3, x: 'no@tld' }),
+    ).toEqual(['ada@example.com']);
+  });
+});
+
+describe('fill tickets', () => {
+  const salt = 'a-salt-for-fill-tickets-in-the-tests-only';
+
+  it('says how long ago it was issued, for its own subject only, until spent or a day old', () => {
+    let now = 1_000_000;
+    const book = createTicketBook({ salt, limiter: createMemoryLimiter({ now: () => now }), now: () => now });
+    const ticket = book.issue('form:contact');
+    now += 4_000;
+    expect(book.check('form:contact', ticket)).toEqual({ kind: 'valid', elapsedMs: 4_000 });
+    expect(book.check('form:other', ticket)).toEqual({ kind: 'invalid' });
+    expect(book.check('booking:contact', ticket)).toEqual({ kind: 'invalid' });
+    expect(book.check('form:contact', undefined)).toEqual({ kind: 'missing' });
+    expect(book.check('form:contact', `${ticket.slice(0, -2)}xx`)).toEqual({ kind: 'invalid' });
+    expect(book.check('form:contact', 'not a ticket')).toEqual({ kind: 'invalid' });
+    const other = createTicketBook({ salt: `${salt}-rotated`, limiter: createMemoryLimiter() });
+    expect(other.check('form:contact', ticket)).toEqual({ kind: 'invalid' });
+    for (let use = 0; use < 4; use += 1) expect(book.check('form:contact', ticket).kind).toBe('valid');
+    expect(book.check('form:contact', ticket)).toEqual({ kind: 'reused' });
+    const fresh = book.issue('form:contact');
+    now += TICKET_TTL_MS + 1;
+    expect(book.check('form:contact', fresh)).toEqual({ kind: 'expired' });
   });
 });

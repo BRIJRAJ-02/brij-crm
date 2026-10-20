@@ -294,17 +294,18 @@ export {
   getPublicForm,
   postingRules,
   submitForm,
-  type CaptchaVerdict,
   type PostingRules,
   type SubmitInput,
   type SubmitOutcome,
 } from './forms/public.ts';
+export type { CaptchaVerdict, SpamJudgement, TicketVerdict } from './forms/spam.ts';
 export {
   deleteSubmission,
   getSubmission,
   listSubmissions,
   markSubmissionSpam,
   releaseSubmission,
+  resolveSubmission,
   retrySubmission,
   UNKNOWN_SUBMISSION,
 } from './forms/submissions.ts';

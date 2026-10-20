@@ -20,9 +20,9 @@ import { createFreeDomains } from './calendar/free-domains.ts';
 import { createCalendarServices, GOOGLE_NOTIFY_PATH, type CalendarServices } from './calendar/services.ts';
 import { backgroundHooks } from './hooks.ts';
 import { createEdgeGuard } from './edge.ts';
-import { mountPublicForms } from './forms/public.ts';
-import { createRateLimiter, type RateLimiter } from './forms/limits.ts';
+import { hashAddress, mountPublicForms } from './forms/public.ts';
 import { createCaptchaVerifier, type CaptchaVerifier } from './forms/recaptcha.ts';
+import { createTicketBook, mountTickets } from './forms/ticket.ts';
 import { LOCAL_FORMS_IP_SALT, wakesOnUse, type ApiEnv } from './env.ts';
 import { createReadGate } from './gate.ts';
 import { errorFields, log } from './log.ts';
@@ -30,7 +30,7 @@ import { type Analytics, NO_ANALYTICS } from './monitoring/posthog.ts';
 import { captureFault, nameRequest, withRequestScope } from './monitoring/sentry.ts';
 import { mountPublicBooking } from './public/booking.ts';
 import { guestKeys } from './public/visitor.ts';
-import { createMemoryLimiter, type PublicLimiter } from './public/limits.ts';
+import { createMemoryLimiter, type PublicLimiter } from './limits.ts';
 import { createRealtimeTokens } from './realtime/tokens.ts';
 import { NO_WAKE, OVERDUE_WAKE_MS, throttleWake, type WakeRelay } from './realtime/wake.ts';
 import { router as appRouter } from './router.ts';
@@ -124,8 +124,8 @@ export interface AppServices {
   readonly calendar?: CalendarServices;
   /** The public forms' reCAPTCHA check (spec 0023): Google with `RECAPTCHA_SECRET_KEY` unless a test passes one. */
   readonly captcha?: CaptchaVerifier;
-  /** The public forms' rate limits (spec 0023): this process's memory unless a test passes its own. */
-  readonly formLimits?: RateLimiter;
+  /** The public forms' and fill tickets' rate limits (spec 0023): the central limiter unless a test passes its own. */
+  readonly formLimits?: PublicLimiter;
   /**
    * The calendar calls booking pages make (spec 0025): busy times and the
    * booking's event, over spec 0024's connections when calendar sync is on,
@@ -298,6 +298,17 @@ export function createApp({
   app.get('/calendar/google/start', (c) => calendarRoutes.start(c));
   app.get('/calendar/google/callback', (c) => calendarRoutes.callback(c));
   app.post('/calendar/google/notify', (c) => calendarRoutes.notify(c));
+
+  // The one limiter every public surface counts in (`limits.ts`), and the fill tickets they share.
+  const publicLimiter = createMemoryLimiter();
+  const formLimiter = services.formLimits ?? publicLimiter;
+  const ipSalt = env.FORMS_IP_SALT ?? LOCAL_FORMS_IP_SALT;
+  const tickets = createTicketBook({ salt: ipSalt, limiter: formLimiter });
+  mountTickets(app, {
+    tickets,
+    limiter: formLimiter,
+    addressOf: (c) => hashAddress(ipSalt, c.get('clientIp')) ?? 'unknown',
+  });
   mountPublicForms(app, {
     db,
     jobs,
@@ -305,9 +316,10 @@ export function createApp({
     captcha:
       services.captcha ??
       createCaptchaVerifier(env.RECAPTCHA_SECRET_KEY === undefined ? {} : { secret: env.RECAPTCHA_SECRET_KEY }),
-    limiter: services.formLimits ?? createRateLimiter(),
+    limiter: formLimiter,
+    tickets,
     publicOrigin: formsOrigin,
-    ipSalt: env.FORMS_IP_SALT ?? LOCAL_FORMS_IP_SALT,
+    ipSalt,
     ...(env.RECAPTCHA_SITE_KEY === undefined ? {} : { recaptchaSiteKey: env.RECAPTCHA_SITE_KEY }),
   });
 
@@ -338,7 +350,8 @@ export function createApp({
   mountPublicBooking(app, {
     db,
     calendar: { busy: bookingBusy, events: booking.events },
-    limiter: services.bookingLimiter ?? createMemoryLimiter(),
+    limiter: services.bookingLimiter ?? publicLimiter,
+    tickets,
     ics: {
       appOrigin: new URL(env.APP_URL).origin,
       organizerEmail: senderAddress(env.MAIL_FROM) ?? `bookings@${new URL(env.APP_URL).hostname}`,

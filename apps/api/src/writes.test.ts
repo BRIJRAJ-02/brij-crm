@@ -822,13 +822,13 @@ async function formOn(m: Member, publish = false) {
 }
 
 /** A submission of the form, stored straight in the table as the owner, in `state`. */
-async function storedSubmission(m: Member, formId: string, state: string): Promise<string> {
+async function storedSubmission(m: Member, formId: string, state: string, spam: object = {}): Promise<string> {
   const [row] = await testQuery<{ id: string }>(
     ownerUrl,
-    `insert into form_submissions (workspace_id, form_id, version_id, idempotency_key, answers, state)
-     select f.workspace_id, f.id, f.live_version_id, gen_random_uuid(), '{}', $2 from forms f where f.id = $1
+    `insert into form_submissions (workspace_id, form_id, version_id, idempotency_key, answers, state, spam)
+     select f.workspace_id, f.id, f.live_version_id, gen_random_uuid(), '{}', $2, $3::jsonb from forms f where f.id = $1
      returning id::text`,
-    [formId, state],
+    [formId, state, JSON.stringify(spam)],
   );
   if (row === undefined) throw new Error('No submission stored.');
   return row.id;
@@ -903,6 +903,17 @@ Object.assign(WRITES, {
     await m.client.submissions.markSpam({ workspace: m.slug, submissionId, mutationId });
     return [];
   },
+  'submissions.resolve': async (m: Member, mutationId: string) => {
+    const form = await formOn(m, true);
+    const submissionId = await storedSubmission(m, form.id, 'needs_review', { verdict: 'review' });
+    await m.client.submissions.resolve({
+      workspace: m.slug,
+      submissionId,
+      resolution: { kind: 'not_spam' },
+      mutationId,
+    });
+    return [{ kind: 'jobs', mutation_id: mutationId }];
+  },
   'submissions.retry': async (m: Member, mutationId: string) => {
     const form = await formOn(m, true);
     const submissionId = await storedSubmission(m, form.id, 'failed');
@@ -957,6 +968,7 @@ const WRITES_MADE: Readonly<Record<string, number>> = {
   'forms.delete': 2,
   'submissions.release': 3,
   'submissions.markSpam': 3,
+  'submissions.resolve': 3,
   'submissions.retry': 3,
   'submissions.delete': 3,
 };

@@ -4,6 +4,7 @@ import {
   listSubmissions,
   markSubmissionSpam,
   releaseSubmission,
+  resolveSubmission,
   retrySubmission,
 } from '@crm/core';
 import { commitWrite } from '../../hooks.ts';
@@ -32,6 +33,17 @@ export const submissionsRouter = member.submissions.router({
   markSpam: member.submissions.markSpam.handler(({ context, input }) =>
     commitWrite(context, { mutationId: input.mutationId }, (hooks) =>
       markSubmissionSpam(context.scope, { submissionId: input.submissionId }, hooks),
+    ),
+  ),
+  // Settling one the content checks held in Needs review: not spam (processed) or spam; forms.manage, in the core.
+  resolve: member.submissions.resolve.handler(({ context, input }) =>
+    commitWrite(context, { mutationId: input.mutationId }, (hooks) =>
+      resolveSubmission(
+        context.scope,
+        context.jobs,
+        { submissionId: input.submissionId, resolution: input.resolution },
+        hooks,
+      ),
     ),
   ),
   retry: member.submissions.retry.handler(({ context, input }) =>

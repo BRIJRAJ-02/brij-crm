@@ -35,13 +35,16 @@ import {
   updateFormSettings,
 } from './forms.ts';
 import { processSubmission } from './process.ts';
-import { getPublicForm, postingRules, submitForm, type CaptchaVerdict } from './public.ts';
+import { getPublicForm, postingRules, submitForm } from './public.ts';
+import type { CaptchaVerdict } from './spam.ts';
 import {
   deleteSubmission,
   getSubmission,
   listSubmissions,
   markSubmissionSpam,
+  NOT_IN_REVIEW,
   releaseSubmission,
+  resolveSubmission,
   retrySubmission,
 } from './submissions.ts';
 
@@ -356,6 +359,74 @@ describe('the public form and submit (AC-553 to AC-556, AC-659)', () => {
       { state: 'spam', signals: ['captcha_low_score'] },
     ]);
     expect(await w.query(sql`select 1 from jobs where kind = 'forms.process'`)).toEqual([]);
+  });
+});
+
+describe('the content checks and Needs review (AC-563, AC-584, the spam follow-up)', () => {
+  it('holds a doubtful one in Needs review and makes spam of a repeated, doubtful one, with no job', async () => {
+    const w = await workspace();
+    const live = await liveForm(w);
+    const doubtful = { name: 'Xkcdqwrt', email: 'someone@yopmail.com' };
+    const first = await submit(live.publicKey, body(doubtful));
+    expect(first).toMatchObject({ verdict: 'review', next: { kind: 'message' } });
+    await submit(live.publicKey, body(doubtful));
+    await submit(live.publicKey, body(doubtful));
+    await submit(live.publicKey, body(doubtful));
+    expect(
+      await w.query<{ state: string; signals: string[]; score: number }>(
+        sql`select state, spam->'signals' as signals, (spam->>'contentScore')::int as score
+            from form_submissions order by received_at, id`,
+      ),
+    ).toEqual([
+      { state: 'needs_review', signals: ['gibberish_name', 'disposable_email'], score: 4 },
+      { state: 'spam', signals: ['gibberish_name', 'disposable_email', 'repeated'], score: 6 },
+      { state: 'spam', signals: ['gibberish_name', 'disposable_email', 'repeated'], score: 6 },
+      { state: 'spam', signals: ['gibberish_name', 'disposable_email', 'repeated'], score: 8 },
+    ]);
+    expect(await w.query(sql`select 1 from jobs where kind = 'forms.process'`)).toEqual([]);
+    expect((await listSubmissions(w.scope, { formId: live.id, state: 'needs_review' })).items).toMatchObject([
+      { verdict: 'review', email: 'someone@yopmail.com' },
+    ]);
+  });
+
+  it('lets a member with forms.manage resolve one as not spam (processed) or spam, and refuses anyone else', async () => {
+    const w = await workspace();
+    const live = await liveForm(w);
+    await submit(live.publicKey, body({ name: 'Xkcdqwrt', email: 'one@mailinator.com' }));
+    await submit(live.publicKey, body({ name: 'Bcdfghj', email: 'two@mailinator.com' }));
+    await submit(live.publicKey, body({ name: 'Ada', email: 'ada@example.com' }));
+    const [one, two, clean] = await submissionIds(w, live.id);
+    if (one === undefined || two === undefined || clean === undefined) throw new Error('Three submissions expected.');
+    expect([one.state, two.state, clean.state]).toEqual(['needs_review', 'needs_review', 'received']);
+    // A member without forms.manage is refused, and nothing changes.
+    const member = rescope(w.scope, { role: 'member' });
+    expect(
+      await refusalOf(resolveSubmission(member, registry, { submissionId: one.id, resolution: { kind: 'not_spam' } })),
+    ).toMatchObject([{ code: 'FORBIDDEN' }]);
+    expect((await submissionIds(w, live.id))[0]?.state).toBe('needs_review');
+    // Not spam: back to received with its job; spam: to spam, where Release still works.
+    const released = await resolveSubmission(w.scope, registry, {
+      submissionId: one.id,
+      resolution: { kind: 'not_spam' },
+    });
+    expect(released).toMatchObject({ state: 'received', verdict: 'passed' });
+    expect(await w.query(sql`select 1 from jobs where kind = 'forms.process'`)).toHaveLength(2);
+    await processNow(w, one.id);
+    expect((await getSubmission(w.scope, { submissionId: one.id })).state).toBe('processed');
+    const binned = await resolveSubmission(w.scope, registry, { submissionId: two.id, resolution: { kind: 'spam' } });
+    expect(binned).toMatchObject({ state: 'spam', verdict: 'spam' });
+    expect(
+      await w.query<{ resolved: string; by: string }>(
+        sql`select spam->>'resolved' as resolved, spam->'resolvedBy'->>'id' as by from form_submissions
+            where id = ${two.id}`,
+      ),
+    ).toEqual([{ resolved: 'spam', by: w.ownerId }]);
+    // Only one held for review resolves: not one already settled, nor a clean one.
+    for (const submissionId of [one.id, two.id, clean.id]) {
+      expect(
+        await refusalOf(resolveSubmission(w.scope, registry, { submissionId, resolution: { kind: 'spam' } })),
+      ).toEqual([{ code: 'FORM_STATE', message: NOT_IN_REVIEW }]);
+    }
   });
 });
 

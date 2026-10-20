@@ -5,9 +5,11 @@
 // whose posts may have to be signed with the form's secret), the rate limits,
 // the bot checks and the server side answer check. The order on submit: the
 // instance's ceiling, the address and its form, the Origin or the signature,
-// the per address and per form limits, the body's size and shape, reCAPTCHA
-// when it is on, then the core's honeypot, timing and answer check and one
-// insert. Answers never say whether an email already exists, never carry
+// the per address, per address in the workspace and per form limits, the
+// body's size and shape, the per email limit, the fill ticket, reCAPTCHA when
+// it is on, then the core's spam checks (honeypot, fill time, content score)
+// and answer check and one insert. Spam and Needs review answer exactly as
+// success does. Answers never say whether an email already exists, never carry
 // record data, and never log an answer.
 import { createHmac, timingSafeEqual } from 'node:crypto';
 import { ERROR_MAP, formStrings, SUBMIT_BODY_MAX_BYTES, SubmitBody, type ErrorCode } from '@crm/contracts';
@@ -27,8 +29,9 @@ import { commitWrite } from '../hooks.ts';
 import { errorFields, log } from '../log.ts';
 import { captureFault } from '../monitoring/sentry.ts';
 import type { WakeRelay } from '../realtime/wake.ts';
-import { FORM_LIMITS, type RateLimiter } from './limits.ts';
+import { FORM_LIMITS, type LimitRule, type PublicLimiter } from '../limits.ts';
 import type { CaptchaVerifier } from './recaptcha.ts';
+import type { TicketBook } from './ticket.ts';
 
 /** The header a site's server signs its posts in: `sha256=` and the hex HMAC of the body with the form's secret. */
 export const SIGNATURE_HEADER = 'x-crm-signature';
@@ -39,7 +42,10 @@ export interface PublicFormsDeps {
   readonly jobs: JobRegistry;
   readonly wakeRelay: WakeRelay;
   readonly captcha: CaptchaVerifier;
-  readonly limiter: RateLimiter;
+  /** The central limiter (`../limits.ts`). */
+  readonly limiter: PublicLimiter;
+  /** Fill tickets: the server's clock for the minimum fill time. */
+  readonly tickets: TicketBook;
   /** The origin hosted pages (and the embed's frame) are served from. */
   readonly publicOrigin: string;
   readonly recaptchaSiteKey?: string;
@@ -70,6 +76,23 @@ function answer(
 /** A client address hashed with the salt: what limits and abuse review key on, never the address itself. */
 export function hashAddress(salt: string, address: string | undefined): string | undefined {
   return address === undefined ? undefined : createHmac('sha256', salt).update(address).digest('hex').slice(0, 32);
+}
+
+const EMAIL_SHAPED = /^[^\s@]{1,64}@[^\s@]{1,255}\.[^\s@]{2,63}$/u;
+
+/**
+ * The email shaped answers of a submission, normalised for the per email
+ * limit (spec 0023: lowercased, trimmed, a `+tag` dropped), at most three.
+ */
+export function limitEmails(answers: Readonly<Record<string, unknown>>): readonly string[] {
+  const found = Object.values(answers).flatMap((value) => {
+    if (typeof value !== 'string') return [];
+    const email = value.trim().toLowerCase();
+    if (!EMAIL_SHAPED.test(email)) return [];
+    const at = email.lastIndexOf('@');
+    return [`${email.slice(0, at).replace(/\+.*$/u, '')}${email.slice(at)}`];
+  });
+  return [...new Set(found)].slice(0, 3);
 }
 
 /** The signature a site's server sends for `body` with `secret`: `sha256=` and the hex HMAC. */
@@ -165,8 +188,8 @@ export function mountPublicForms(app: Hono<{ Variables: Variables }>, deps: Publ
     }),
     async (c: Context<{ Variables: Variables }>) => {
       // The instance's own ceiling first: nothing below runs in a flood.
-      const ceiling = deps.limiter.hit('instance', FORM_LIMITS.perInstance);
-      if (ceiling !== true) {
+      const ceiling = deps.limiter('forms:instance', FORM_LIMITS.perInstance);
+      if (!ceiling.allowed) {
         return answer('RATE_LIMITED', words.tooMany, { headers: { 'retry-after': String(ceiling.retryAfterSeconds) } });
       }
       let entered: Awaited<ReturnType<typeof enterPublicForm>>;
@@ -185,17 +208,25 @@ export function mountPublicForms(app: Hono<{ Variables: Variables }>, deps: Publ
       if (!from.allowed)
         return answer('FORBIDDEN_ORIGIN', 'This form takes submissions only from its own page and the sites it lists.');
       const ipHash = hashAddress(deps.ipSalt, c.get('clientIp'));
-      for (const [key, limit] of [
-        [`address:${ipHash ?? 'unknown'}`, FORM_LIMITS.perAddress],
-        [`form:${scope.workspaceId}:${formId}`, FORM_LIMITS.perForm],
-      ] as const) {
-        const hit = deps.limiter.hit(key, limit);
-        if (hit !== true) {
-          return answer('RATE_LIMITED', words.tooMany, {
-            headers: headers({ 'retry-after': String(hit.retryAfterSeconds) }),
-          });
+      const address = ipHash ?? 'unknown';
+      /** 429 at the first spent limit, else undefined. */
+      const limited = (checks: readonly (readonly [string, LimitRule])[]): Response | undefined => {
+        for (const [key, limit] of checks) {
+          const hit = deps.limiter(key, limit);
+          if (!hit.allowed) {
+            return answer('RATE_LIMITED', words.tooMany, {
+              headers: headers({ 'retry-after': String(hit.retryAfterSeconds) }),
+            });
+          }
         }
-      }
+        return undefined;
+      };
+      const spent = limited([
+        [`forms:address:${address}`, FORM_LIMITS.perAddress],
+        [`forms:address-in:${scope.workspaceId}:${address}`, FORM_LIMITS.perAddressInWorkspace],
+        [`forms:form:${scope.workspaceId}:${formId}`, FORM_LIMITS.perForm],
+      ]);
+      if (spent !== undefined) return spent;
       let raw: unknown;
       try {
         raw = JSON.parse(text);
@@ -207,16 +238,29 @@ export function mountPublicForms(app: Hono<{ Variables: Variables }>, deps: Publ
         return answer('INPUT_INVALID', 'This submission is not in the shape a form takes.', { headers: headers() });
       }
       const body = parsed.data;
+      const emailSpent = limited(
+        limitEmails(body.answers).map(
+          (email) => [`forms:email:${formId}:${hashAddress(deps.ipSalt, email) ?? ''}`, FORM_LIMITS.perEmail] as const,
+        ),
+      );
+      if (emailSpent !== undefined) return emailSpent;
+      const ticket = deps.tickets.check(`form:${c.req.param('publicKey') ?? ''}`, body.ticket);
       const captcha = await deps.captcha.verify(body.captcha, allowedHosts);
       try {
         // The visitor's idempotency key doubles as the write's mutation id: no browser follows this write's events.
         const outcome = await commitWrite({ wakeRelay: deps.wakeRelay }, { mutationId: body.idempotencyKey }, (hooks) =>
-          submitForm(scope, deps.jobs, { formId, body, captcha, ...(ipHash === undefined ? {} : { ipHash }) }, hooks),
+          submitForm(
+            scope,
+            deps.jobs,
+            { formId, body, captcha, ticket, ...(ipHash === undefined ? {} : { ipHash }) },
+            hooks,
+          ),
         );
         log.info('form.submission', {
           requestId: c.get('requestId'),
           formId,
           verdict: outcome.verdict,
+          ticket: ticket.kind,
           replayed: outcome.replayed,
         });
         return c.json({ next: outcome.next }, 200, headers());
