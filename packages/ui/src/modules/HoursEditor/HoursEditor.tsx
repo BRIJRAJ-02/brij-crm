@@ -37,6 +37,11 @@ export interface HoursEditorProps {
   readonly isDisabled?: boolean;
   /** Shows the week as text, no controls: hours that come from elsewhere (a page that follows its member's). */
   readonly isReadOnly?: boolean;
+  /**
+   * The clock the times read in: `12` (the default, the owner's call: "9:30 AM" in every language) or `locale`,
+   * the reader's own ("09:30" where the day runs to 24 hours).
+   */
+  readonly hourClock?: HoursClock;
 }
 
 /** `HH:MM` for minutes from midnight. */
@@ -44,27 +49,35 @@ function clock(minutes: number): string {
   return `${String(Math.floor(minutes / 60)).padStart(2, '0')}:${String(minutes % 60).padStart(2, '0')}`;
 }
 
-/** Whether the reader's clock runs to 24 hours ("13:00"), not 12 ("1:00 PM"). */
-function isDayClock(locale: string): boolean {
-  const cycle = memoIntl(
-    `hours-clock:${locale}`,
-    () => new Intl.DateTimeFormat(locale, { hour: 'numeric', minute: '2-digit', timeZone: 'UTC' }),
-  ).resolvedOptions().hourCycle;
-  return cycle === 'h23' || cycle === 'h24';
+/** Which clock the times read in: `12` hours ("1:00 PM", the default) or the reader's own (`locale`). */
+export type HoursClock = '12' | 'locale';
+
+/** The formatter for a clock in a language, cached. */
+function clockFormat(locale: string, hourClock: HoursClock): Intl.DateTimeFormat {
+  return memoIntl(
+    `hours-clock:${locale}:${hourClock}`,
+    () =>
+      new Intl.DateTimeFormat(locale, {
+        hour: 'numeric',
+        minute: '2-digit',
+        timeZone: 'UTC',
+        ...(hourClock === '12' ? { hourCycle: 'h12' as const } : {}),
+      }),
+  );
 }
 
 /**
- * A stored `HH:MM` as the reader's clock reads it ("9:30 AM", or "09:30" where the day is 24 hours). The end of
- * the day, `24:00`, is "Midnight" on a 12 hour clock (where "12:00 AM" would read as the day's start) and "24:00"
- * on a 24 hour one.
+ * A stored `HH:MM` on the editor's clock: "9:30 AM" on the 12 hour clock, or the reader's own ("09:30" where the
+ * day runs to 24 hours). The end of the day, `24:00`, is "Midnight" on a 12 hour clock (where "12:00 AM" would
+ * read as the day's start) and "24:00" on a 24 hour one.
  */
-function timeLabel(time: string, locale: string): string {
-  if (time === '24:00') return isDayClock(locale) ? '24:00' : strings.midnight;
+function timeLabel(time: string, locale: string, hourClock: HoursClock): string {
+  const format = clockFormat(locale, hourClock);
+  if (time === '24:00') {
+    const cycle = format.resolvedOptions().hourCycle;
+    return cycle === 'h23' || cycle === 'h24' ? '24:00' : strings.midnight;
+  }
   const minutes = minutesOf(time);
-  const format = memoIntl(
-    `hours-clock:${locale}`,
-    () => new Intl.DateTimeFormat(locale, { hour: 'numeric', minute: '2-digit', timeZone: 'UTC' }),
-  );
   return format.format(new Date(Date.UTC(2000, 0, 1, Math.floor(minutes / 60), minutes % 60)));
 }
 
@@ -175,17 +188,18 @@ export function HoursEditor({
   rows,
   onChange,
   stepMinutes = 30,
+  hourClock = '12',
   isDisabled = false,
   isReadOnly = false,
 }: HoursEditorProps) {
   const { locale } = useFormatSettings();
-  if (isReadOnly) return <ReadOnlyWeek label={label} rows={rows} locale={locale} />;
+  if (isReadOnly) return <ReadOnlyWeek label={label} rows={rows} locale={locale} hourClock={hourClock} />;
   const step = stepMinutes > 0 ? stepMinutes : 30;
   const starts: SelectItem[] = [];
   const ends: SelectItem[] = [];
   for (let minutes = 0; minutes <= 1440; minutes += step) {
-    if (minutes < 1440) starts.push({ id: clock(minutes), label: timeLabel(clock(minutes), locale) });
-    if (minutes > 0) ends.push({ id: clock(minutes), label: timeLabel(clock(minutes), locale) });
+    if (minutes < 1440) starts.push({ id: clock(minutes), label: timeLabel(clock(minutes), locale, hourClock) });
+    if (minutes > 0) ends.push({ id: clock(minutes), label: timeLabel(clock(minutes), locale, hourClock) });
   }
   const on = rows.filter((row) => row.ranges.length > 0);
   const allStart = shared(on.map((row) => row.ranges[0]?.[0] ?? ''));
@@ -284,8 +298,8 @@ export function HoursEditor({
                             icon="minus"
                             label={strings.removeRange(
                               row.label,
-                              timeLabel(range[0], locale),
-                              timeLabel(range[1], locale),
+                              timeLabel(range[0], locale, hourClock),
+                              timeLabel(range[1], locale, hourClock),
                             )}
                             isDisabled={isDisabled}
                             onPress={() =>
@@ -329,18 +343,20 @@ export function HoursEditor({
 }
 
 /** A window as text, "9:00 AM to 5:00 PM" ("Midnight" at its end). */
-const rangeText = ([start, end]: HoursRange, locale: string): string =>
-  `${timeLabel(start, locale)} ${strings.to} ${timeLabel(end, locale)}`;
+const rangeText = ([start, end]: HoursRange, locale: string, hourClock: HoursClock): string =>
+  `${timeLabel(start, locale, hourClock)} ${strings.to} ${timeLabel(end, locale, hourClock)}`;
 
 /** The week as text: each day's windows, or Unavailable. */
 function ReadOnlyWeek({
   label,
   rows,
   locale,
+  hourClock,
 }: {
   readonly label: string;
   readonly rows: readonly HoursRow[];
   readonly locale: string;
+  readonly hourClock: HoursClock;
 }) {
   return (
     <ul className={styles.rows} aria-label={label} data-read-only="">
@@ -351,7 +367,7 @@ function ReadOnlyWeek({
             {row.ranges.length > 0 ? (
               row.ranges.map((range) => (
                 <span key={range[0]} className={styles.rangeText}>
-                  {rangeText(range, locale)}
+                  {rangeText(range, locale, hourClock)}
                 </span>
               ))
             ) : (

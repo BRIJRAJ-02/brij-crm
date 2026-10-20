@@ -227,6 +227,7 @@ export { PageColumn, type PageColumnProps } from './modules/PageColumn/PageColum
 export { PreviewLayout, type PreviewDevice, type PreviewLayoutProps } from './modules/PreviewLayout/PreviewLayout.tsx';
 export {
   HoursEditor,
+  type HoursClock,
   type HoursEditorProps,
   type HoursRange,
   type HoursRow,

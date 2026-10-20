@@ -138,12 +138,27 @@ export const ReadOnly: Story = {
   },
 };
 
-/** In a language whose day runs to 24 hours (British English): the same week reads 13:00, not 1:00 PM. */
-export const TwentyFourHourClock: Story = {
+/** British English, by default: still the 12 hour clock (the owner's call), in that language's own form. */
+export const TwelveHourByDefault: Story = {
   globals: { locale: 'en-GB' },
   args: {
     label: 'Weekly hours',
     isReadOnly: true,
+    rows: [{ id: 'mon', label: 'Monday', ranges: [['13:00', '24:00']] }],
+    onChange: fn(),
+  },
+  play: async ({ canvas }) => {
+    await expect(canvas.getByText(/^1:00\s?pm to Midnight$/i)).toBeInTheDocument();
+  },
+};
+
+/** `hourClock="locale"` in a language whose day runs to 24 hours: 13:00, and 24:00 at the day's end. */
+export const LocaleClock: Story = {
+  globals: { locale: 'en-GB' },
+  args: {
+    label: 'Weekly hours',
+    isReadOnly: true,
+    hourClock: 'locale',
     rows: [{ id: 'mon', label: 'Monday', ranges: [['13:00', '24:00']] }],
     onChange: fn(),
   },

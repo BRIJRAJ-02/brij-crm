@@ -65,7 +65,9 @@ describe('a week in a line per set of days', () => {
     expect(weekSummary(week({}), 'en-US')).toEqual(['No days open']);
   });
 
-  it('says 24:00 at a day’s end on a 24 hour clock, where Midnight would stand out from the figures', () => {
-    expect(weekSummary(week({ sun: [['13:00', '24:00']] }), 'en-GB')).toEqual(['Sun, 13:00 to 24:00']);
+  it('reads the 12 hour clock in any language, as the week editor does', () => {
+    expect(weekSummary(week({ sun: [['13:00', '24:00']] }), 'en-GB')).toEqual([
+      expect.stringMatching(/^Sun, 1:00\s?pm to Midnight$/i),
+    ]);
   });
 });
