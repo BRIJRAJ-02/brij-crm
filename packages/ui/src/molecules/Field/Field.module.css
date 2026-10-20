@@ -20,6 +20,11 @@
     letter-spacing: var(--tracking-label);
   }
 
+  /* "(optional)" after a label: the same line, a step quieter. */
+  .aside {
+    color: var(--text-tertiary);
+  }
+
   .box {
     display: flex;
     align-items: center;

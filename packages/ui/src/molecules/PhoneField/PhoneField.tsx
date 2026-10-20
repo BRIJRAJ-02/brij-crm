@@ -29,6 +29,8 @@ export interface PhoneFieldProps {
   /** What is asked ("Phone or WhatsApp"). */
   readonly label: string;
   readonly isLabelHidden?: boolean;
+  /** A quiet word after the label, such as "(optional)" on a public form. */
+  readonly labelAside?: string;
   readonly value?: PhoneFieldValue;
   readonly defaultValue?: PhoneFieldValue;
   readonly onChange?: (value: PhoneFieldValue) => void;
@@ -105,6 +107,7 @@ function formatted(library: PhoneLibrary | undefined, country: string, national:
 export function PhoneField({
   label,
   isLabelHidden = false,
+  labelAside,
   value,
   defaultValue,
   onChange,
@@ -175,6 +178,7 @@ export function PhoneField({
   const field = (
     <Field
       label={label}
+      {...(labelAside === undefined ? {} : { labelAside })}
       isLabelHidden={isLabelHidden}
       type="tel"
       inputMode="tel"

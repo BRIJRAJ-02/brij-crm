@@ -23,6 +23,7 @@ The field set's Phone editor draws it too, so a record's number and a form's ans
 - `showsExample` puts the chosen country's example number in the placeholder when none is given, written the national way ("081234 56789" for +91, "(201) 555-0123" for +1), from libphonenumber-js's examples, loaded on demand with the library and never in the first load. The owner's call (20 October 2026): the placeholder follows the country chosen.
 - `checksNumber` checks the number for the chosen country: a quiet check (Icon's `success` tone, named "A valid number") at the end of the box while it is a number that exists there, and a plain sentence when it is too short, too long or not a number there, said only once focus leaves the whole field or Enter is pressed, never on each key; typing or choosing another country clears it. `error` wins over it.
 - Both are left out by the hosted form for now, so the public page keeps its look; the form designer can turn them on.
+- `labelAside` puts a quiet word after the label, such as "(optional)" on a public form: `text-tertiary`, on the same line, and part of the field's accessible name.
 
 ## States
 

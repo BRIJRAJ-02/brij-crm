@@ -49,6 +49,8 @@ export interface SelectProps {
   /** What is chosen ("Stage"). Always given; `isLabelHidden` keeps it for screen readers only. */
   readonly label: string;
   readonly isLabelHidden?: boolean;
+  /** A quiet word after the label, such as "(optional)" on a public form: muted, and part of the field's name. */
+  readonly labelAside?: string;
   readonly items: readonly SelectItem[];
   readonly optionStyle?: SelectOptionStyle;
   readonly value?: string | null;
@@ -153,6 +155,7 @@ function Face({ item, optionStyle }: { readonly item: SelectItem; readonly optio
 export function Select({
   label,
   isLabelHidden = false,
+  labelAside,
   items,
   optionStyle = 'plain',
   value,
@@ -286,7 +289,17 @@ export function Select({
         onChange?.(next === CLEAR || next === null ? null : String(next));
       }}
     >
-      {!isLabelHidden && <Label className={styles.label}>{label}</Label>}
+      {!isLabelHidden && (
+        <Label className={styles.label}>
+          {label}
+          {labelAside !== undefined && (
+            <>
+              {' '}
+              <span className={styles.aside}>{labelAside}</span>
+            </>
+          )}
+        </Label>
+      )}
       <AriaButton className={styles.trigger} {...(triggerRef === undefined ? {} : { ref: triggerRef })}>
         <SelectValue<SelectItem> className={styles.value}>
           {({ selectedItems, isPlaceholder, defaultChildren }) => {

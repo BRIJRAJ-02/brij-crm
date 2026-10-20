@@ -27,6 +27,7 @@ A ComboBox was the other candidate. It types into the trigger itself, which suit
 - `variant="prefix"` is for PhoneField; use PhoneField rather than building a phone field with it. The field set's Phone editor uses PhoneField too, so a record's number and a form's answer pick their code the same way (F38).
 - `list="all"` lists every country and territory (ISO 3166-1), without dial codes, for a place: the Location editor's country and a filter's "country is". `size="sm"` is a filter value's or a panel row's trigger, and `isClearable` adds "Clear".
 - It is the design system's one country picker: the Location field kept a plain one of its own (names only, every ISO country) until the owner asked for one picker everywhere (20 October 2026); `list="all"` covers what it did, with the flags added.
+- `labelAside` puts a quiet word after the label, such as "(optional)" on a public form: `text-tertiary`, on the same line, and part of the field's accessible name.
 
 ## States
 

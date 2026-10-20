@@ -13,6 +13,12 @@
     letter-spacing: var(--tracking-label-strong);
   }
 
+  /* "(optional)" after the group's label: the same line, a step quieter. */
+  .aside {
+    color: var(--text-tertiary);
+    font-weight: normal;
+  }
+
   .choices {
     display: flex;
     flex-direction: column;

@@ -25,6 +25,8 @@ export interface FieldProps {
   /** What the field is ("Domain"). Always given; `isLabelHidden` keeps it for screen readers only (cell editors). */
   readonly label: string;
   readonly isLabelHidden?: boolean;
+  /** A quiet word after the label, such as "(optional)" on a public form: muted, and part of the field's name. */
+  readonly labelAside?: string;
   readonly value?: string;
   readonly defaultValue?: string;
   readonly onChange?: (value: string) => void;
@@ -102,6 +104,7 @@ export interface FieldProps {
 export function Field({
   label,
   isLabelHidden = false,
+  labelAside,
   value,
   defaultValue,
   onChange,
@@ -248,7 +251,17 @@ export function Field({
         const description = reason ?? (isInvalid ? undefined : hint);
         return (
           <>
-            {!isLabelHidden && <Label className={styles.label}>{label}</Label>}
+            {!isLabelHidden && (
+              <Label className={styles.label}>
+                {label}
+                {labelAside !== undefined && (
+                  <>
+                    {' '}
+                    <span className={styles.aside}>{labelAside}</span>
+                  </>
+                )}
+              </Label>
+            )}
             <span
               className={styles.box}
               data-multiline={isMultiline || undefined}

@@ -10,6 +10,8 @@ export interface CountryPickerProps {
   /** What is asked ("Country"). Always given; `isLabelHidden` keeps it for screen readers only. */
   readonly label: string;
   readonly isLabelHidden?: boolean;
+  /** A quiet word after the label, such as "(optional)" on a public form. */
+  readonly labelAside?: string;
   /** The chosen country's ISO code ("IN"), or `null` for none. */
   readonly value?: string | null;
   readonly defaultValue?: string | null;
@@ -86,6 +88,7 @@ function itemOf(country: Country): SelectItem {
 export function CountryPicker({
   label,
   isLabelHidden = false,
+  labelAside,
   value,
   defaultValue,
   onChange,
@@ -120,6 +123,7 @@ export function CountryPicker({
   return (
     <Select
       label={label}
+      {...(labelAside === undefined ? {} : { labelAside })}
       isLabelHidden={isLabelHidden || variant === 'prefix'}
       items={items}
       placeholder={placeholder}
