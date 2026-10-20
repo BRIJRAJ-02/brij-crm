@@ -916,6 +916,9 @@ describe('isolation', () => {
         await tx.execute(
           sql`insert into calendar_settings (workspace_id, created_by_type, updated_by_type) values (${workspaceId}, 'system', 'system')`,
         );
+        await tx.execute(
+          sql`insert into calendar_busy_times (workspace_id, connection_id, provider_event_id, starts_at, ends_at) values (${workspaceId}, ${connectionId}, 'solo-1', now(), now() + interval '1 hour')`,
+        );
       });
       return { recordId, connectionId, meetingId };
     };
@@ -934,6 +937,7 @@ describe('isolation', () => {
       'meeting_attendees',
       'meeting_records',
       'calendar_settings',
+      'calendar_busy_times',
     ]) {
       expect((await read(table)).rows, table).toEqual([{ workspace_id: a.workspaceId }]);
     }
@@ -952,6 +956,14 @@ describe('isolation', () => {
         ),
       ),
     ).rejects.toMatchObject({ cause: { code: '23503', constraint: 'meeting_sources_meeting' } });
+    // A busy time in A under B's connection: the composite key finds no such connection in A.
+    await expect(
+      db.withWorkspace(a.workspaceId, (tx) =>
+        tx.execute(
+          sql`insert into calendar_busy_times (workspace_id, connection_id, provider_event_id, starts_at, ends_at) values (${a.workspaceId}, ${inB.connectionId}, 'solo-2', now(), now() + interval '1 hour')`,
+        ),
+      ),
+    ).rejects.toMatchObject({ cause: { code: '23503', constraint: 'calendar_busy_times_connection' } });
     // A record removed for good while a meeting still shows on it fails: the purge removes the links first.
     await expect(
       db.withWorkspace(a.workspaceId, (tx) => tx.execute(sql`delete from records where id = ${inA.recordId}`)),

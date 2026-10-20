@@ -16,6 +16,7 @@ export { taskRecords, tasks } from './tasks.ts';
 export {
   attendeeMatch,
   attendeeResponse,
+  calendarBusyTimes,
   calendarConnections,
   calendarProvider,
   calendarSettings,

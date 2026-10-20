@@ -305,3 +305,34 @@ export const calendarSettings = pgTable(
     }),
   ],
 );
+
+/**
+ * A member's own time that holds nobody else (the owner's call, 20 October
+ * 2026: such events show as Busy on the Bookings week). An event with no
+ * other attendee is no meeting (AC-605), so it never reaches a record; the
+ * sync keeps only when it starts and ends, under the connection that holds
+ * it, never its title, place or anything else. Gone with the connection.
+ */
+export const calendarBusyTimes = pgTable(
+  'calendar_busy_times',
+  {
+    workspaceId: workspaceId(),
+    connectionId: uuid('connection_id').notNull(),
+    providerEventId: text('provider_event_id').notNull(),
+    startsAt: timestamptz('starts_at').notNull(),
+    endsAt: timestamptz('ends_at').notNull(),
+    updatedAt: timestamptz('updated_at').notNull().defaultNow(),
+  },
+  (t) => [
+    primaryKey({ name: 'calendar_busy_times_pkey', columns: [t.workspaceId, t.connectionId, t.providerEventId] }),
+    foreignKey({
+      name: 'calendar_busy_times_connection',
+      columns: [t.workspaceId, t.connectionId],
+      foreignColumns: [calendarConnections.workspaceId, calendarConnections.id],
+    }).onDelete('cascade'),
+    check('calendar_busy_times_times', sql`${t.endsAt} > ${t.startsAt}`),
+    check('calendar_busy_times_event', sql`char_length(${t.providerEventId}) between 1 and 1024`),
+    // The week calendar's read: one connection's busy times ending after the week starts.
+    index('calendar_busy_times_by_end').on(t.workspaceId, t.connectionId, t.endsAt),
+  ],
+);
