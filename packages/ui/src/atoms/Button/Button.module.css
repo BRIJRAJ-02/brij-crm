@@ -63,7 +63,16 @@
   }
 
   .root[data-size='lg'] {
+    position: relative;
     block-size: var(--size-input);
+  }
+
+  /* Drawn at 30px (size-input), pressed at 32: an invisible pixel past the border all round (the inset counts
+     from inside the border), so a large control (a link card's footer) can't be missed. Nothing drawn changes. */
+  .root[data-size='lg']::after {
+    position: absolute;
+    inset: calc(-1 * var(--space-2));
+    content: '';
   }
 
   /* A chip's height, for an icon only Remove beside a chip inside a field's box. */

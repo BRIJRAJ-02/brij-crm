@@ -109,6 +109,33 @@ export const Large: Story = {
   ),
 };
 
+/** `lg` is drawn at 30px and pressed at 32: an invisible pixel past its border all round. */
+export const LargeHitArea: Story = {
+  parameters: { crm: { screenshot: false } },
+  render: () => (
+    <Stage>
+      <Button size="lg" variant="ghost" icon="ellipsis" label="More for Intro call" />
+    </Stage>
+  ),
+  play: async ({ canvas }) => {
+    const button = canvas.getByRole('button', { name: 'More for Intro call' });
+    const box = button.getBoundingClientRect();
+    await expect(Math.round(box.height)).toBe(30);
+    const middle = { x: box.left + box.width / 2, y: box.top + box.height / 2 };
+    // Half a pixel outside what is drawn, on each side, still lands on the button.
+    for (const [x, y] of [
+      [middle.x, box.top - 0.5],
+      [middle.x, box.bottom + 0.5],
+      [box.left - 0.5, middle.y],
+      [box.right + 0.5, middle.y],
+    ] as const) {
+      await expect(button.contains(document.elementFromPoint(x, y))).toBe(true);
+    }
+    // Past 32px it doesn't.
+    await expect(button.contains(document.elementFromPoint(middle.x, box.top - 2))).toBe(false);
+  },
+};
+
 /** `sm` is a chip's 20px: an icon only Remove beside a chip inside a field's box. */
 export const Small: Story = {
   render: () => (

@@ -39,7 +39,7 @@ export function Switch({
       {...(onChange === undefined ? {} : { onChange })}
       {...(name === undefined ? {} : { name })}
     >
-      <SwitchButton className={styles.root}>
+      <SwitchButton className={styles.root} data-label-hidden={isLabelHidden || undefined}>
         <span className={styles.track} aria-hidden="true">
           <span className={styles.knob} />
         </span>

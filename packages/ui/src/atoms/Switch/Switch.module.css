@@ -19,6 +19,15 @@
     -webkit-tap-highlight-color: transparent;
   }
 
+  /* With its label hidden the switch is only its 28px track, so an invisible hit area grows it to at
+     least 32px each way (32 by 34), the way Button sm grows: a press just beside it still toggles it. Nothing
+     drawn changes. */
+  .root[data-label-hidden]::after {
+    position: absolute;
+    inset: calc(-1 * var(--space-8)) calc(-1 * var(--space-2));
+    content: '';
+  }
+
   .track {
     position: relative;
     display: block;

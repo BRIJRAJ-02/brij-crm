@@ -23,6 +23,37 @@ export const Default: Story = {
   },
 };
 
+/**
+ * With its label hidden (a link card's switch), the switch is only its 28px track, so an invisible hit area
+ * grows it to at least 32 by 32: a press just beside it still toggles it.
+ */
+export const HiddenLabelHitArea: Story = {
+  args: { label: 'Intro call is on', isLabelHidden: true },
+  parameters: { crm: { screenshot: false } },
+  play: async ({ canvas, args, userEvent }) => {
+    const control = canvas.getByRole('switch', { name: 'Intro call is on' }).closest('label');
+    if (control === null) throw new Error('the switch has no label element');
+    const box = control.getBoundingClientRect();
+    const middle = { x: box.left + box.width / 2, y: box.top + box.height / 2 };
+    // The hit area reaches 16px either side of the middle across, and 16px up and down.
+    for (const [x, y] of [
+      [middle.x - 15.5, middle.y],
+      [middle.x + 15.5, middle.y],
+      [middle.x, middle.y - 15.5],
+      [middle.x, middle.y + 15.5],
+    ] as const) {
+      await expect(control.contains(document.elementFromPoint(x, y))).toBe(true);
+    }
+    // A press 15px above the middle, outside the track, still toggles it.
+    await userEvent.pointer({
+      keys: '[MouseLeft]',
+      target: control,
+      coords: { clientX: middle.x, clientY: middle.y - 15 },
+    });
+    await expect(args.onChange).toHaveBeenCalledWith(true);
+  },
+};
+
 /** Off, on, with a description, read only and disabled. */
 export const States: Story = {
   parameters: { crm: { preview: true } },

@@ -64,7 +64,8 @@ References (Mobbin, 20 October 2026):
 - **`copyValue`:** a labelled secondary "Copy link" button at the start of the footer. Leave it out when there is nothing to copy (a form not published yet), rather than showing a disabled button whose reason can't be reached.
 - **`actions`:** Open and the ··· menu, ghost icon Buttons at `size="lg"`, at the footer's end. Leave Open out when the link is off.
 - **The footer group:** the whole footer is a group named for the card ("Actions for Intro call"), so each card's "Copy link" is told apart.
-- **Footer size:** every footer control is 30px tall (size-input, the library's largest control), and they sit at least space-8 apart.
+- **Footer size:** every footer control is drawn at 30px (Button `lg`) and pressed at 32px, and they sit at least space-8 apart.
+- **The switch:** pressed at 32 by 34 with its label hidden, inside a 32px box above the card's link.
 - **`LinkCardSkeleton`:** the card's shape in skeletons, for a grid that is loading.
 
 ## States

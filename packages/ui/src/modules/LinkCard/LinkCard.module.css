@@ -4,7 +4,7 @@
    The body: the title (text-title, two lines at most) with a state Badge beside it and the switch at the top
    end; the facts in text-secondary; the public link muted in the label type.
    The foot, on surface-subtle over a hairline like Card's: Copy link at the start, the actions at the end,
-   space-8 apart, every control at size-input (30px).
+   space-8 apart, every control drawn at size-input (30px) and pressed at 32 (Button lg's hit area).
    The title is the card's one link: its ::after covers the card's body, so a press there opens it. The
    switch (in a 32px box, so a near miss does nothing rather than opening the card), the address (so it can
    be selected) and the foot sit above it; a miss in the foot does nothing. Hover (a fine pointer only) raises the border to border-strong; focus on the title rings the
