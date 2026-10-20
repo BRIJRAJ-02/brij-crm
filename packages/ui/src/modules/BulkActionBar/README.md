@@ -4,7 +4,7 @@ The bar that shows while records are selected: how many, "Select all N matching"
 
 ## Why it exists
 
-New. Bulk actions and trash (#22) act on a selection that can be every record matching a view, a million of them, so the bar says how many and offers all of them. It is a React Aria `Toolbar` holding `Button`s and a `ProgressBar`; the screen places it, usually with `placement="floating"` in the DataGrid's `floatingBar`, which floats it over the grid's foot.
+New. Bulk actions and trash (#22) act on a selection that can be every record matching a view, a million of them, so the bar says how many and offers all of them. It is a React Aria `Toolbar` holding `Button`s and a `ProgressBar`, in the `FloatingBar` shell it shares with SaveBar (the same size, corners, shadow and motion); the screen places it, usually with `placement="floating"` in the DataGrid's `floatingBar`, which floats it over the grid's foot.
 
 ## Use
 

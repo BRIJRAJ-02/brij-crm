@@ -6,6 +6,7 @@ import { useKeyboard } from 'react-aria';
 import { Toolbar as AriaToolbar } from 'react-aria-components';
 import { Button } from '../../atoms/Button/Button.tsx';
 import { ProgressBar } from '../../atoms/ProgressBar/ProgressBar.tsx';
+import { FloatingBar } from '../../molecules/FloatingBar/FloatingBar.tsx';
 import { memoIntl } from '../../lib/intl-memo.ts';
 import { useFormatSettings } from '../../provider/context.ts';
 import styles from './BulkActionBar.module.css';
@@ -75,7 +76,7 @@ export function BulkActionBar({
   const number = (value: number) => memoIntl(`plain:${locale}`, () => new Intl.NumberFormat(locale)).format(value);
   return (
     // Esc from anywhere in the bar clears the selection.
-    <div className={styles.frame} data-placement={placement} {...keyboardProps}>
+    <FloatingBar placement={placement} frameProps={keyboardProps}>
       <AriaToolbar className={styles.root} aria-label={strings.label}>
         <span className={styles.count} role="status">
           {isAllMatching ? strings.allMatching(number(total)) : strings.selected(number(count))}
@@ -114,6 +115,6 @@ export function BulkActionBar({
         </span>
         <Button variant="ghost" icon="x" label={strings.clear} onPress={onClear} isDisabled={progress !== undefined} />
       </AriaToolbar>
-    </div>
+    </FloatingBar>
   );
 }

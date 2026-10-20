@@ -78,7 +78,12 @@ export interface SelectProps {
    * phone number's country code): no box of its own, a hairline after it,
    * `leading` and `short` in place of the label, and the list a menu wide.
    */
-  readonly variant?: 'default' | 'cell' | 'prefix' | 'inline';
+  /**
+   * `time` is a time of day in a row of them (weekly hours): one fixed width for
+   * every time and figures of one width, so nothing beside it moves when the
+   * value changes; its list opens at its own width.
+   */
+  readonly variant?: 'default' | 'cell' | 'prefix' | 'inline' | 'time';
   /** The chosen option's `description` after its label in the closed field, muted (a time zone's "GMT+05:30"). */
   readonly showsDescription?: boolean;
   /** A search field over the options, for long lists such as countries. */
@@ -307,7 +312,7 @@ export function Select({
         <Icon name="circle-alert" size="xs" />
         {error}
       </FieldError>
-      <Popover width={variant === 'default' ? 'trigger' : 'menu'}>
+      <Popover width={variant === 'default' || variant === 'time' ? 'trigger' : 'menu'}>
         {hasSearch ? (
           <div className={styles.searchable}>
             <Autocomplete

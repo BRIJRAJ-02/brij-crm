@@ -1,0 +1,85 @@
+/* FloatingBar: the shell the bulk bar and the save bar share. A size-toolbar
+   tall bar on surface-raised with a hairline, shadow-md and radius-lg, its
+   content in one row (a second when it can't fit). It rises space-8 as it
+   mounts (duration-popover, ease-out) and sinks out in duration-exit;
+   reduced motion keeps the fade. In a page's footer it is centred there;
+   floating, it sits centred space-16 above the bottom of its nearest
+   positioned container. Centred, only the bar takes the pointer. On a narrow
+   view it spans the width. */
+@layer components {
+  .frame {
+    display: contents;
+  }
+
+  /* In a page's sticky footer: centred in it. */
+  .frame[data-placement='footer'] {
+    display: flex;
+    justify-content: center;
+    pointer-events: none;
+  }
+
+  .frame[data-placement='floating'] {
+    position: absolute;
+    z-index: var(--z-sticky);
+    display: flex;
+    justify-content: center;
+    inset-block-end: var(--space-16);
+    inset-inline: var(--space-16);
+    pointer-events: none;
+  }
+
+  .surface {
+    box-sizing: border-box;
+    display: inline-flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--space-8);
+    max-inline-size: 100%;
+    min-block-size: var(--size-toolbar);
+    padding-block: var(--space-8);
+    padding-inline: var(--space-12) var(--space-8);
+    border: var(--border-width-hairline) solid var(--border);
+    border-radius: var(--radius-lg);
+    background: var(--surface-raised);
+    box-shadow: var(--shadow-md);
+    pointer-events: auto;
+    transition:
+      opacity var(--duration-popover) var(--ease-out),
+      translate var(--duration-popover) var(--ease-out);
+
+    @starting-style {
+      opacity: 0;
+      translate: 0 var(--space-8);
+    }
+  }
+
+  .surface[data-leaving] {
+    opacity: 0;
+    translate: 0 var(--space-8);
+    transition-duration: var(--duration-exit);
+  }
+
+  /* A phone: the bar spans the view, inside its gutter. */
+  @container (inline-size < 480px) {
+    .surface {
+      inline-size: 100%;
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .surface,
+    .surface[data-leaving] {
+      translate: none;
+
+      @starting-style {
+        translate: none;
+      }
+    }
+  }
+
+  @media (forced-colors: active) {
+    .surface {
+      border-color: CanvasText;
+    }
+  }
+}

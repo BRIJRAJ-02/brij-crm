@@ -1,0 +1,50 @@
+/* SaveBar: in the FloatingBar's shell, a quiet status in text-secondary at
+   the start (success with a check once saved, danger with an alert when the
+   save failed), then Discard and Save after a hairline, as the bulk bar sets
+   its actions. On a narrow view the status takes the room, so the buttons
+   sit at the end; a failure's long reason wraps them under it. */
+@layer components {
+  .status {
+    display: inline-flex;
+    flex: 1 1 auto;
+    align-items: center;
+    gap: var(--space-6);
+    color: var(--text-secondary);
+    font: var(--text-body);
+    letter-spacing: var(--tracking-body);
+  }
+
+  /* Saved stands alone in the bar: as much room after it as before. */
+  .status[data-tone='success'] {
+    padding-inline-end: var(--space-4);
+    color: var(--success);
+  }
+
+  /* A failure's reason may be long: it keeps a column's width, and the buttons wrap under it, at the end. */
+  .status[data-tone='danger'] {
+    flex-basis: var(--size-column);
+    min-inline-size: 0;
+    color: var(--danger);
+  }
+
+  /* "Unsaved changes" and "Saved" stay on one line; a failure's reason may wrap. */
+  .message {
+    white-space: nowrap;
+  }
+
+  .status[data-tone='danger'] .message {
+    min-inline-size: 0;
+    white-space: normal;
+    overflow-wrap: anywhere;
+  }
+
+  .actions {
+    display: inline-flex;
+    flex: none;
+    align-items: center;
+    gap: var(--space-8);
+    margin-inline-start: auto;
+    padding-inline-start: var(--space-8);
+    border-inline-start: var(--border-width-hairline) solid var(--border-subtle);
+  }
+}

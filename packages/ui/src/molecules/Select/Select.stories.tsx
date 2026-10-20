@@ -75,6 +75,35 @@ export const Inline: Story = {
   },
 };
 
+/** Times of day: every one the same width whatever it says, so what follows never moves. */
+export const Time: Story = {
+  args: {
+    label: 'Start',
+    isLabelHidden: true,
+    size: 'sm',
+    variant: 'time',
+    optionStyle: 'plain',
+    items: [
+      { id: '00:00', label: '12:00 AM' },
+      { id: '09:00', label: '9:00 AM' },
+      { id: '24:00', label: 'Midnight' },
+    ],
+  },
+  render: (args) => (
+    <Stage>
+      <Select {...args} label="Start" value="00:00" />
+      <Select {...args} label="Middle" value="09:00" />
+      <Select {...args} label="End" value="24:00" />
+    </Stage>
+  ),
+  play: async ({ canvas }) => {
+    const widths = new Set(
+      canvas.getAllByRole('button').map((trigger) => Math.round(trigger.getBoundingClientRect().width)),
+    );
+    await expect(widths.size).toBe(1);
+  },
+};
+
 /** Open, with status dots; the archived option can't be chosen. */
 export const Open: Story = {
   parameters: { crm: { preview: true } },

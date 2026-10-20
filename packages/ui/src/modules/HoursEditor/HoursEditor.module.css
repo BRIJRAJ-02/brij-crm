@@ -1,19 +1,42 @@
-/* HoursEditor: All days start and end side by side at the top, then one row
-   per day: its switch and name in a fixed column, its windows stacked beside
-   it, Copy times to at the end; a day off reads "Unavailable" in the
-   secondary colour. Rows part with a hairline. */
+/* HoursEditor: one grid for the week. Every row, All days included, has its
+   day in a size-column-narrow column, then its windows: fixed width time
+   Selects with "to" between at a fixed width, and + or − after them, so each
+   control sits at the same place down the week. Copy times to follows the
+   first window. The All days row sits over a hairline rule, which is the only
+   line: the days part by their rhythm (a row's height), not by rules, so no
+   line competes with the fields. A day off reads "Unavailable" in the
+   secondary colour; a row's error sits under its windows, at their start. */
 @layer components {
   .root {
     display: flex;
     flex-direction: column;
-    gap: var(--space-12);
     container-type: inline-size;
   }
 
-  .all {
+  .all,
+  .row {
     display: grid;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: var(--space-12);
+    grid-template-columns: var(--size-column-narrow) auto auto;
+    align-items: start;
+    justify-content: start;
+    column-gap: var(--space-8);
+    row-gap: var(--space-4);
+    padding-block: var(--space-4);
+  }
+
+  .all {
+    margin-block-end: var(--space-4);
+    padding-block-end: var(--space-8);
+    border-block-end: var(--border-width-hairline) solid var(--border-subtle);
+  }
+
+  .allLabel {
+    display: flex;
+    align-items: center;
+    min-block-size: var(--size-control);
+    color: var(--text-secondary);
+    font: var(--text-label-strong);
+    letter-spacing: var(--tracking-label-strong);
   }
 
   .rows {
@@ -22,33 +45,6 @@
     margin: 0;
     padding: 0;
     list-style: none;
-  }
-
-  .copy {
-    display: flex;
-    flex-direction: column;
-    gap: var(--space-8);
-    padding: var(--space-12);
-  }
-
-  .copyTitle {
-    margin: 0;
-    color: var(--text-secondary);
-    font: var(--text-label-strong);
-    letter-spacing: var(--tracking-label-strong);
-  }
-
-  .row {
-    display: grid;
-    grid-template-columns: var(--size-column-narrow) minmax(0, 1fr) auto;
-    align-items: start;
-    gap: var(--space-8);
-    padding-block: var(--space-8);
-    border-block-end: var(--border-width-hairline) solid var(--border);
-  }
-
-  .row:last-child {
-    border-block-end: none;
   }
 
   .day {
@@ -60,7 +56,7 @@
   .ranges {
     display: flex;
     flex-direction: column;
-    gap: var(--space-6);
+    gap: var(--space-4);
     min-inline-size: 0;
   }
 
@@ -70,10 +66,34 @@
     gap: var(--space-6);
   }
 
+  /* One width for "to", so the second time starts at one place in every row. */
   .to {
+    flex: none;
+    inline-size: var(--space-16);
     color: var(--text-secondary);
     font: var(--text-body);
     letter-spacing: var(--tracking-body);
+    text-align: center;
+  }
+
+  .copy {
+    display: flex;
+    align-items: center;
+    min-block-size: var(--size-control);
+  }
+
+  .copyList {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-8);
+    padding: var(--space-12);
+  }
+
+  .copyTitle {
+    margin: 0;
+    color: var(--text-secondary);
+    font: var(--text-label-strong);
+    letter-spacing: var(--tracking-label-strong);
   }
 
   .dayName,
@@ -99,27 +119,38 @@
     letter-spacing: var(--tracking-body);
   }
 
+  /* At the windows' start, as wide as they are: a long message wraps rather than widening the row. */
   .error {
+    inline-size: 0;
+    min-inline-size: 100%;
     margin: 0;
     color: var(--danger);
     font: var(--text-label);
     letter-spacing: var(--tracking-label);
   }
 
-  .actions {
-    display: flex;
-    gap: var(--space-2);
-  }
-
-  /* A narrow card: the ranges move under the day. */
+  /* A narrow card: the day and Copy on one line, the windows under them at the card's start, so two times,
+     "to" and + still fit a phone; All days' label sits over its times the same way. A day off keeps one line. */
   @container (inline-size < 480px) {
+    .all,
     .row {
       grid-template-columns: minmax(0, 1fr) auto;
+      justify-content: stretch;
     }
 
+    .range {
+      gap: var(--space-4);
+    }
+
+    .all .range,
     .ranges {
       grid-column: 1 / -1;
       grid-row: 2;
+    }
+
+    .row[data-off] .ranges {
+      grid-column: 2;
+      grid-row: 1;
     }
   }
 }

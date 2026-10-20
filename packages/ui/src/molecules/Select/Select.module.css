@@ -110,6 +110,17 @@
     outline-offset: var(--border-width-thick);
   }
 
+  /* A time of day (weekly hours): one width for every time, wide enough for the longest ("12:00 AM",
+     "Midnight"), and figures of one width, so a row's "to" and buttons never move when a time changes. */
+  .root[data-variant='time'] {
+    flex: none;
+    inline-size: calc(var(--size-column-min) + var(--space-24));
+  }
+
+  .root[data-variant='time'] .trigger {
+    font-variant-numeric: tabular-nums;
+  }
+
   /* Joined to the start of a Field's box (a phone number's code): the Field draws the box, the focus ring and
      the error edge; this draws only a hairline after itself. */
   .root[data-variant='prefix'] {

@@ -55,6 +55,9 @@ export const Week: Story = {
   play: async ({ canvas, args }) => {
     await expect(canvas.getAllByText('Unavailable')).toHaveLength(2);
     await expect(canvas.getByText('Mixed')).toBeInTheDocument();
+    // Every "to", All days' included, at one place: the times are one width, whatever they say.
+    const lefts = new Set(canvas.getAllByText('to').map((to) => Math.round(to.getBoundingClientRect().left)));
+    await expect(lefts.size).toBe(1);
     await userEvent.click(canvas.getByRole('switch', { name: 'Saturday' }));
     await expect(args.onChange).toHaveBeenCalledWith('sat', [['09:00', '17:00']]);
     await userEvent.click(canvas.getByRole('button', { name: 'Remove 1:00 PM to 5:00 PM on Monday' }));
@@ -72,7 +75,7 @@ export const CopyTimes: Story = {
     </Stage>
   ),
   play: async ({ canvas, args, canvasElement }) => {
-    await userEvent.click(canvas.getByRole('button', { name: 'Copy Friday’s times to' }));
+    await userEvent.click(canvas.getByRole('button', { name: 'Copy Friday’s times to other days' }));
     const body = within(canvasElement.ownerDocument.body);
     await userEvent.click(await body.findByRole('checkbox', { name: 'Monday' }));
     await userEvent.click(body.getByRole('checkbox', { name: 'Tuesday' }));
@@ -96,7 +99,7 @@ export const ErrorAndDisabled: Story = {
           ['09:00', '12:00'],
           ['11:00', '13:00'],
         ],
-        error: 'Windows on one day can’t overlap.',
+        error: 'Hours on one day can’t overlap.',
       },
     ],
   },
@@ -106,7 +109,7 @@ export const ErrorAndDisabled: Story = {
     </Stage>
   ),
   play: async ({ canvas }) => {
-    await expect(canvas.getByRole('alert')).toHaveTextContent('Windows on one day can’t overlap.');
+    await expect(canvas.getByRole('alert')).toHaveTextContent('Hours on one day can’t overlap.');
     await expect(canvas.getByRole('switch', { name: 'Monday' })).toBeDisabled();
   },
 };
@@ -145,6 +148,6 @@ export const TwentyFourHourClock: Story = {
     onChange: fn(),
   },
   play: async ({ canvas }) => {
-    await expect(canvas.getByText('13:00 to Midnight')).toBeInTheDocument();
+    await expect(canvas.getByText('13:00 to 24:00')).toBeInTheDocument();
   },
 };

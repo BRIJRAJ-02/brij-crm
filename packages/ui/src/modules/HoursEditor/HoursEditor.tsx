@@ -3,6 +3,7 @@ import { DialogTrigger } from 'react-aria-components';
 import { Button } from '../../atoms/Button/Button.tsx';
 import { Checkbox } from '../../atoms/Checkbox/Checkbox.tsx';
 import { Switch } from '../../atoms/Switch/Switch.tsx';
+import { Tooltip } from '../../atoms/Tooltip/Tooltip.tsx';
 import { Popover } from '../../molecules/Popover/Popover.tsx';
 import { Select, type SelectItem } from '../../molecules/Select/Select.tsx';
 import { memoIntl } from '../../lib/intl-memo.ts';
@@ -43,9 +44,22 @@ function clock(minutes: number): string {
   return `${String(Math.floor(minutes / 60)).padStart(2, '0')}:${String(minutes % 60).padStart(2, '0')}`;
 }
 
-/** A stored `HH:MM` as the reader's clock reads it ("9:30 AM", or "09:30" where the day is 24 hours), `24:00` as Midnight. */
+/** Whether the reader's clock runs to 24 hours ("13:00"), not 12 ("1:00 PM"). */
+function isDayClock(locale: string): boolean {
+  const cycle = memoIntl(
+    `hours-clock:${locale}`,
+    () => new Intl.DateTimeFormat(locale, { hour: 'numeric', minute: '2-digit', timeZone: 'UTC' }),
+  ).resolvedOptions().hourCycle;
+  return cycle === 'h23' || cycle === 'h24';
+}
+
+/**
+ * A stored `HH:MM` as the reader's clock reads it ("9:30 AM", or "09:30" where the day is 24 hours). The end of
+ * the day, `24:00`, is "Midnight" on a 12 hour clock (where "12:00 AM" would read as the day's start) and "24:00"
+ * on a 24 hour one.
+ */
 function timeLabel(time: string, locale: string): string {
-  if (time === '24:00') return strings.midnight;
+  if (time === '24:00') return isDayClock(locale) ? '24:00' : strings.midnight;
   const minutes = minutesOf(time);
   const format = memoIntl(
     `hours-clock:${locale}`,
@@ -65,6 +79,12 @@ function nextRange(ranges: readonly HoursRange[]): HoursRange {
   if (last === undefined) return ['09:00', '17:00'];
   const start = Math.min(minutesOf(last[1]) + 60, 1380);
   return [clock(start), clock(Math.min(start + 60, 1440))];
+}
+
+/** Whether the day has room for another window after its last: an hour's gap and half an hour, before midnight. */
+function hasRoomAfter(ranges: readonly HoursRange[]): boolean {
+  const last = ranges.at(-1);
+  return ranges.length < 6 && (last === undefined || minutesOf(last[1]) <= 1440 - 90);
 }
 
 /** The one value every on day shares, or undefined when they differ ("Mixed"). */
@@ -98,9 +118,11 @@ function CopyTo({
         if (!open) setChosen(new Set());
       }}
     >
-      <Button ref={trigger} variant="ghost" icon="copy" label={strings.copyTo(from.label)} isDisabled={isDisabled} />
+      <Tooltip content={strings.copyHint}>
+        <Button ref={trigger} variant="ghost" icon="copy" label={strings.copyTo(from.label)} isDisabled={isDisabled} />
+      </Tooltip>
       <Popover label={strings.copyTo(from.label)} triggerRef={trigger} placement="bottom end">
-        <div className={styles.copy}>
+        <div className={styles.copyList}>
           <p className={styles.copyTitle}>{strings.copyTitle}</p>
           <Checkbox
             label={strings.selectAll}
@@ -141,11 +163,12 @@ function CopyTo({
 }
 
 /**
- * Weekly hours (spec 0025 experience, AC-624, AC-680): All days start and All
- * days end at the top ("Mixed" while days differ), then one row per day: a
- * switch turns it on (09:00 to 17:00) or off, each window is a pair of time
- * Selects on a 30 minute step ("Midnight" the last end) with + to add another
- * and − to remove one, and Copy times to puts this day's windows on others.
+ * Weekly hours (spec 0025 experience, AC-624, AC-680): an All days row at the
+ * top ("Mixed" while days differ), then one row per day in the same columns: a
+ * switch turns it on (09:00 to 17:00) or off, each window is a pair of fixed
+ * width time Selects on a 30 minute step ("Midnight" the last end on a 12 hour
+ * clock) with + to add another and − to remove one, and Copy times to puts
+ * this day's windows on others.
  */
 export function HoursEditor({
   label,
@@ -179,31 +202,45 @@ export function HoursEditor({
       onChange(row.id, ranges);
     }
   };
+  // A time Select: one fixed width, so "to" and the buttons sit on one line down the week and never move.
+  const time = (
+    name: string,
+    items: readonly SelectItem[],
+    value: string | null,
+    onPick: (id: string) => void,
+    isOff = false,
+  ) => (
+    <Select
+      label={name}
+      isLabelHidden
+      size="sm"
+      variant="time"
+      items={items}
+      value={value}
+      placeholder={strings.mixed}
+      isDisabled={isDisabled || isOff}
+      onChange={(id) => {
+        if (id !== null) onPick(id);
+      }}
+    />
+  );
+  const to = (
+    <span className={styles.to} aria-hidden="true">
+      {strings.to}
+    </span>
+  );
   return (
     <div className={styles.root}>
-      <div className={styles.all}>
-        <Select
-          label={strings.allStart}
-          size="sm"
-          items={starts}
-          value={allStart ?? null}
-          placeholder={strings.mixed}
-          isDisabled={isDisabled || on.length === 0}
-          onChange={(id) => {
-            if (id !== null) setAll('start', id);
-          }}
-        />
-        <Select
-          label={strings.allEnd}
-          size="sm"
-          items={ends}
-          value={allEnd ?? null}
-          placeholder={strings.mixed}
-          isDisabled={isDisabled || on.length === 0}
-          onChange={(id) => {
-            if (id !== null) setAll('end', id);
-          }}
-        />
+      {/* All days: the same columns as the days under it, a rule between, so it reads as acting on them. */}
+      <div className={styles.all} role="group" aria-label={strings.allDays}>
+        <span className={styles.allLabel} aria-hidden="true">
+          {strings.allDays}
+        </span>
+        <div className={styles.range}>
+          {time(strings.allStart, starts, allStart ?? null, (id) => setAll('start', id), on.length === 0)}
+          {to}
+          {time(strings.allEnd, ends, allEnd ?? null, (id) => setAll('end', id), on.length === 0)}
+        </div>
       </div>
       <ul className={styles.rows} aria-label={label}>
         {rows.map((row) => {
@@ -227,56 +264,38 @@ export function HoursEditor({
                 {isOn ? (
                   row.ranges.map((range, index) => (
                     <div key={`${String(index)}-${range[0]}`} className={styles.range}>
-                      <Select
-                        label={strings.from(row.label)}
-                        isLabelHidden
-                        size="sm"
-                        items={starts}
-                        value={range[0]}
-                        isDisabled={isDisabled}
-                        onChange={(id) => {
-                          if (id !== null) replace(index, [id, range[1]]);
-                        }}
-                      />
-                      <span className={styles.to} aria-hidden="true">
-                        {strings.to}
-                      </span>
-                      <Select
-                        label={strings.until(row.label)}
-                        isLabelHidden
-                        size="sm"
-                        items={ends}
-                        value={range[1]}
-                        isDisabled={isDisabled}
-                        onChange={(id) => {
-                          if (id !== null) replace(index, [range[0], id]);
-                        }}
-                      />
+                      {time(strings.from(row.label), starts, range[0], (id) => replace(index, [id, range[1]]))}
+                      {to}
+                      {time(strings.until(row.label), ends, range[1], (id) => replace(index, [range[0], id]))}
                       {index === 0 ? (
-                        <Button
-                          variant="ghost"
-                          icon="plus"
-                          label={strings.addRange(row.label)}
-                          isDisabled={isDisabled || row.ranges.length >= 6}
-                          onPress={() => onChange(row.id, [...row.ranges, nextRange(row.ranges)])}
-                        />
+                        <Tooltip content={strings.addHint}>
+                          <Button
+                            variant="ghost"
+                            icon="plus"
+                            label={strings.addRange(row.label)}
+                            isDisabled={isDisabled || !hasRoomAfter(row.ranges)}
+                            onPress={() => onChange(row.id, [...row.ranges, nextRange(row.ranges)])}
+                          />
+                        </Tooltip>
                       ) : (
-                        <Button
-                          variant="ghost"
-                          icon="minus"
-                          label={strings.removeRange(
-                            row.label,
-                            timeLabel(range[0], locale),
-                            timeLabel(range[1], locale),
-                          )}
-                          isDisabled={isDisabled}
-                          onPress={() =>
-                            onChange(
-                              row.id,
-                              row.ranges.filter((_, at) => at !== index),
-                            )
-                          }
-                        />
+                        <Tooltip content={strings.removeHint}>
+                          <Button
+                            variant="ghost"
+                            icon="minus"
+                            label={strings.removeRange(
+                              row.label,
+                              timeLabel(range[0], locale),
+                              timeLabel(range[1], locale),
+                            )}
+                            isDisabled={isDisabled}
+                            onPress={() =>
+                              onChange(
+                                row.id,
+                                row.ranges.filter((_, at) => at !== index),
+                              )
+                            }
+                          />
+                        </Tooltip>
                       )}
                     </div>
                   ))
@@ -289,8 +308,8 @@ export function HoursEditor({
                   </p>
                 )}
               </div>
-              <div className={styles.actions}>
-                {isOn && (
+              {isOn && (
+                <div className={styles.copy}>
                   <CopyTo
                     from={row}
                     rows={rows}
@@ -299,8 +318,8 @@ export function HoursEditor({
                       for (const id of ids) onChange(id, row.ranges);
                     }}
                   />
-                )}
-              </div>
+                </div>
+              )}
             </li>
           );
         })}

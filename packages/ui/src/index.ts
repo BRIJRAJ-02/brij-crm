@@ -87,6 +87,7 @@ export { safeHref } from './lib/safe-href.ts';
 export { safeImageSrc } from './lib/safe-image-src.ts';
 export { Breadcrumbs, type BreadcrumbsProps, type Crumb } from './molecules/Breadcrumbs/Breadcrumbs.tsx';
 export { Callout, type CalloutPlacement, type CalloutProps, type CalloutTone } from './molecules/Callout/Callout.tsx';
+export { FloatingBar, type FloatingBarProps } from './molecules/FloatingBar/FloatingBar.tsx';
 export { Card, type CardProps } from './molecules/Card/Card.tsx';
 export { CodeInput, type CodeInputProps } from './molecules/CodeInput/CodeInput.tsx';
 export {
@@ -248,6 +249,7 @@ export {
 export { Board, type BoardProps } from './modules/Board/Board.tsx';
 export type { BoardCard, BoardColumn, BoardMove } from './modules/Board/types.ts';
 export { BulkActionBar, type BulkActionBarProps } from './modules/BulkActionBar/BulkActionBar.tsx';
+export { SaveBar, type SaveBarProps, type SaveBarStatus } from './modules/SaveBar/SaveBar.tsx';
 export {
   CommandPalette,
   type CommandPaletteProps,
