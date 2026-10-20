@@ -1,10 +1,10 @@
-// Settings, Calendar: the page's copy (spec 0024), apart from the other settings pages' own.
+// Settings › Account › Calendars: the page's copy (spec 0024), apart from the other settings pages' own.
 import type { CalendarStatus } from '@crm/data';
 
-/** Settings, Calendar: the page's copy (spec 0024, AC-597, AC-599, AC-611, AC-621). */
+/** Settings › Account › Calendars: the page's copy (spec 0024, AC-597, AC-599, AC-611, AC-621). */
 export const strings = {
   /** The page's title, and its entry in the settings navigation. */
-  title: 'Calendar',
+  title: 'Calendars',
   description: 'Connect your calendar so your meetings show on the people and companies you meet.',
   connectGoogle: 'Connect Google calendar',
   /** Calendar sync isn't set up on this deployment. */

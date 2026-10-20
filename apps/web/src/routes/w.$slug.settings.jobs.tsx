@@ -36,7 +36,7 @@ function JobsRoute() {
   const { slug } = Route.useParams();
   const { data } = Route.useRouteContext();
   if (page === undefined) {
-    return <SettingsMissing current="jobs" />;
+    return <SettingsMissing backTo="home" />;
   }
   return (
     <JobsScreen
@@ -59,7 +59,6 @@ function JobsError({ error }: ErrorComponentProps) {
       heading={jobs.failedTitle}
       text={isDataError(error) ? error.message : jobs.failedText}
       onRetry={() => void router.invalidate()}
-      current="jobs"
     />
   );
 }

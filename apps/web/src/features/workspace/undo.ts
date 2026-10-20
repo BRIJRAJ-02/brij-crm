@@ -33,6 +33,15 @@ export function isHelpKey(press: KeyPress): boolean {
   return press.key === '?' && !press.metaKey && !press.ctrlKey && !press.altKey;
 }
 
+/**
+ * Whether a key press opens Settings (spec 0026, AC-685): Cmd+, on a Mac
+ * keyboard, Ctrl+, on any other, with no Shift or Alt, never a held key's repeats.
+ */
+export function isSettingsKey(press: KeyPress, platform: KeyboardPlatform): boolean {
+  if (press.key !== ',' || press.shiftKey || press.altKey || press.repeat === true) return false;
+  return platform === 'mac' ? press.metaKey && !press.ctrlKey : press.ctrlKey && !press.metaKey;
+}
+
 /** What the shortcut reads of a key press's target (an Element in the browser). */
 export interface KeyTarget {
   readonly isContentEditable?: boolean;
@@ -56,6 +65,9 @@ export function belongsElsewhere(target: KeyTarget | null): boolean {
   if (target.closest(TEXT_FIELDS) !== null) return true;
   return target.closest(DIALOGS) !== null && target.closest(TOASTS) === null;
 }
+
+/** Settings' keycaps for the shortcut list, with Mac symbols (Kbd shows Ctrl elsewhere). */
+export const SETTINGS_KEYS: readonly string[] = ['⌘', ','];
 
 /** Undo's keycaps for the shortcut list, with Mac symbols as ShortcutHelp takes them (Kbd shows Ctrl elsewhere). */
 export const UNDO_KEYS: readonly string[] = ['⌘', 'Z'];

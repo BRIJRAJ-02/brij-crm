@@ -1,12 +1,13 @@
 // The workspace frame's keyboard (spec 0006, AC-48): Cmd+Z on Apple
 // platforms and Ctrl+Z elsewhere undoes this tab's last change, and ? opens
 // the shortcut list, unless the key belongs to a text field, an editor or an
-// open dialog. One listener on the document while the frame is mounted.
+// open dialog; Cmd+, (Ctrl+,) opens Settings (spec 0026) on the same terms.
+// One listener on the document while the frame is mounted.
 import type { DataLayer } from '@crm/data';
 import { useKeyboardPlatform, type Toasts } from '@crm/ui';
 import { useEffect } from 'react';
 import { strings } from './strings.ts';
-import { belongsElsewhere, isHelpKey, isUndoKey, undoToast, type KeyTarget } from './undo.ts';
+import { belongsElsewhere, isHelpKey, isSettingsKey, isUndoKey, undoToast, type KeyTarget } from './undo.ts';
 
 /**
  * Undoes the last change in the workspace (with `only`, that action alone,
@@ -25,15 +26,25 @@ export function runUndo(data: DataLayer, toasts: Toasts, slug: string, only?: st
   );
 }
 
-/** Listens for undo and ? on the document while the frame shows `slug`; `onHelp` opens the shortcut list. */
-export function useUndoShortcut(data: DataLayer, toasts: Toasts, slug: string, onHelp: () => void): void {
+/** Listens for undo, ? and ⌘, on the document while the frame shows `slug`; `onHelp` opens the shortcut list, `onSettings` Settings. */
+export function useUndoShortcut(
+  data: DataLayer,
+  toasts: Toasts,
+  slug: string,
+  onHelp: () => void,
+  onSettings: () => void,
+): void {
   const platform = useKeyboardPlatform();
   useEffect(() => {
     const listener = (event: KeyboardEvent) => {
       if (event.defaultPrevented) return;
       const target = event.target instanceof Element ? (event.target as Element & KeyTarget) : null;
       if (belongsElsewhere(target)) return;
-      if (isUndoKey(event, platform)) {
+      // A text field, an editor (a draft in a cell) or a dialog keeps its keys, so ⌘, never leaves one behind.
+      if (isSettingsKey(event, platform)) {
+        event.preventDefault();
+        onSettings();
+      } else if (isUndoKey(event, platform)) {
         event.preventDefault();
         runUndo(data, toasts, slug);
       } else if (isHelpKey(event)) {
@@ -45,5 +56,5 @@ export function useUndoShortcut(data: DataLayer, toasts: Toasts, slug: string, o
     return () => {
       document.removeEventListener('keydown', listener);
     };
-  }, [data, toasts, slug, platform, onHelp]);
+  }, [data, toasts, slug, platform, onHelp, onSettings]);
 }

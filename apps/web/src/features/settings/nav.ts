@@ -1,8 +1,10 @@
-// Where settings pages are, and which ones exist (spec 0012). Plain functions
-// with no React or library imports, so the routes' loaders (in the first load)
-// can use them without pulling a screen in.
-import type { ObjectSummary } from '@crm/data';
-import { jobsHref } from '../workspace/objects.ts';
+// Where settings pages are, which ones exist and how the settings navigation
+// groups them (specs 0012 and 0026). Plain functions with no React or library
+// imports, so the routes' loaders (in the first load) can use them without
+// pulling a screen in.
+import type { ObjectSummary, Permission } from '@crm/data';
+import { formsHref, linksHref } from '../captures/tabs.ts';
+import { jobsHref, settingsHomeHref } from '../workspace/objects.ts';
 import { strings as calendar } from './calendar-strings.ts';
 import { strings as jobs } from './jobs-strings.ts';
 import { strings } from './strings.ts';
@@ -25,19 +27,115 @@ export const objectSettingsHref = (
   tab: ObjectTab = 'attributes',
 ) => `/w/${slug}/settings/objects/${object.apiSlug}/${tab}`;
 
-/** The settings pages, as the navigation names them: Objects (spec 0012), Background jobs (spec 0008), Calendar (spec 0024). */
-export type SettingsPageId = 'objects' | 'jobs' | 'calendar';
+/** Settings › Account › Preferences (spec 0026): the interface theme. Where Settings opens. */
+export const preferencesHref = settingsHomeHref;
 
-/** Settings, Calendar (spec 0024): every member's own calendar connections. */
-export const calendarSettingsHref = (slug: string) => `/w/${slug}/settings/calendar`;
+/** Settings › Account › Calendars (specs 0024 and 0026): the member's own calendar connections. */
+export const calendarSettingsHref = (slug: string) => `/w/${slug}/settings/account/calendars`;
 
-/** The settings navigation: Objects, Background jobs and Calendar; #23 and later features add theirs. */
-export function settingsNav(slug: string) {
+/** The settings navigation's pages: Account's, Workspace's, then Scheduling's links into Captures. */
+export type SettingsPageId = 'preferences' | 'calendars' | 'objects' | 'jobs' | 'booking-pages' | 'forms';
+
+/** The settings navigation's groups, in order (spec 0026, AC-682). */
+export type SettingsGroupId = 'account' | 'workspace' | 'scheduling';
+
+/** One entry in the settings navigation. */
+export interface SettingsNavEntry {
+  readonly id: SettingsPageId;
+  readonly label: string;
+  readonly href: string;
+  readonly icon: 'sliders-horizontal' | 'calendar' | 'box' | 'list-checks' | 'link' | 'clipboard-list';
+  /** A quiet word after the name: where an entry that leaves Settings goes ("Captures"). */
+  readonly meta?: string;
+  /** A permission the page needs before the member may open it at all; absent, every member may. */
+  readonly requires?: Permission;
+}
+
+/** One group of the settings navigation, under its label. */
+export interface SettingsNavGroup {
+  readonly id: SettingsGroupId;
+  readonly label: string;
+  readonly entries: readonly SettingsNavEntry[];
+}
+
+/**
+ * The settings navigation (spec 0026, AC-682): Account (Preferences,
+ * Calendars), Workspace (Objects, Background jobs) and Scheduling (Booking
+ * pages, Forms, which link into Captures until each has workspace wide
+ * settings of its own, and say so). Every member may open each page today:
+ * members read Objects, see their own jobs and use Captures.
+ */
+export function settingsNav(slug: string): readonly SettingsNavGroup[] {
   return [
-    { id: 'objects', label: strings.objects, href: objectsSettingsHref(slug), icon: 'box' as const },
-    { id: 'jobs', label: jobs.title, href: jobsHref(slug), icon: 'list-checks' as const },
-    { id: 'calendar', label: calendar.title, href: calendarSettingsHref(slug), icon: 'calendar' as const },
+    {
+      id: 'account',
+      label: strings.account,
+      entries: [
+        { id: 'preferences', label: strings.preferences, href: preferencesHref(slug), icon: 'sliders-horizontal' },
+        { id: 'calendars', label: calendar.title, href: calendarSettingsHref(slug), icon: 'calendar' },
+      ],
+    },
+    {
+      id: 'workspace',
+      label: strings.workspace,
+      entries: [
+        { id: 'objects', label: strings.objects, href: objectsSettingsHref(slug), icon: 'box' },
+        { id: 'jobs', label: jobs.title, href: jobsHref(slug), icon: 'list-checks' },
+      ],
+    },
+    {
+      id: 'scheduling',
+      label: strings.scheduling,
+      entries: [
+        {
+          id: 'booking-pages',
+          label: strings.bookingPages,
+          href: linksHref(slug),
+          icon: 'link',
+          meta: strings.inCaptures,
+        },
+        { id: 'forms', label: strings.forms, href: formsHref(slug), icon: 'clipboard-list', meta: strings.inCaptures },
+      ],
+    },
   ];
+}
+
+/**
+ * The groups as this member sees them: entries they may not open are left
+ * out, and so is a group left with none, never shown locked (AC-682).
+ * `permissions` undefined (still loading) keeps only entries that need none.
+ */
+export function visibleSettingsNav(
+  groups: readonly SettingsNavGroup[],
+  permissions: readonly Permission[] | undefined,
+): readonly SettingsNavGroup[] {
+  return groups
+    .map((group) => ({
+      ...group,
+      entries: group.entries.filter(
+        (entry) => entry.requires === undefined || (permissions?.includes(entry.requires) ?? false),
+      ),
+    }))
+    .filter((group) => group.entries.length > 0);
+}
+
+/** The settings page an address shows, as the navigation marks it current; undefined for none (an unknown address). */
+export function settingsPageOf(pathname: string): SettingsPageId | undefined {
+  const match = /^\/w\/[^/]+\/settings\/(.+?)\/*$/.exec(pathname);
+  const rest = match?.[1] ?? '';
+  if (rest === 'account/preferences') return 'preferences';
+  if (rest === 'account/calendars' || rest === 'calendar') return 'calendars';
+  if (rest === 'objects' || rest.startsWith('objects/')) return 'objects';
+  if (rest === 'jobs') return 'jobs';
+  return undefined;
+}
+
+/** The group a settings page sits in, for its trail ("Account › Preferences"). */
+export function settingsGroupOf(
+  groups: readonly SettingsNavGroup[],
+  page: SettingsPageId | undefined,
+): SettingsNavGroup | undefined {
+  return page === undefined ? undefined : groups.find((group) => group.entries.some((entry) => entry.id === page));
 }
 
 /** The workspace's objects in its order, live ones and archived ones apart (settings lists them in two sections). */

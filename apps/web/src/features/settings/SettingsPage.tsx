@@ -1,67 +1,69 @@
 // Brief
-// Purpose: puts one settings page inside the workspace frame: the TopBar's trail and h1, then SettingsLayout.
-// Main task: hand the frame and the layout what the page's route loaded, so every settings page sits the same way.
-// Leaves out: loading anything itself; each settings route's loader read through the data layer.
+// Purpose: puts one settings page beside the settings sidebar: its trail ("Account › Preferences"), h1, description and body.
+// Main task: hand SettingsLayout what the page's route loaded, so every settings page has the same header (AC-683).
+// Leaves out: loading anything itself (each settings route's loader read through the data layer), and the sidebar (the settings layout route draws it).
 import type { Hue, ObjectIcon } from '@crm/data';
-import { EmptyState, Link, SettingsLayout, TopBar, type Crumb } from '@crm/ui';
-import { useParams } from '@tanstack/react-router';
+import { EmptyState, Link, SettingsLayout, type Crumb } from '@crm/ui';
+import { useLocation, useParams } from '@tanstack/react-router';
 import type { ReactNode, Ref } from 'react';
 import { WorkspacePage } from '../workspace/WorkspacePage.tsx';
-import { objectsSettingsHref, settingsNav, type SettingsPageId } from './nav.ts';
+import { objectsSettingsHref, preferencesHref, settingsGroupOf, settingsNav, settingsPageOf } from './nav.ts';
 import { strings } from './strings.ts';
 
 /** Props for one settings page. */
 export interface SettingsPageProps {
-  /** The page's h1 in the TopBar, and its heading in the layout ("Objects", "Projects"). */
+  /** The page's h1 ("Objects", "Projects"), and the last place in its trail. */
   readonly title: string;
-  /** The trail before the title. */
+  /** Places between the page's group and its title: Objects, on an object's page. */
   readonly crumbs?: readonly Crumb[];
   readonly icon?: ObjectIcon;
   readonly hue?: Hue;
-  /** Beside the layout's title: a Standard or Custom badge. */
+  /** Beside the title: a Standard or Custom badge. */
   readonly meta?: ReactNode;
   readonly description?: string;
   readonly actions?: ReactNode;
   readonly isLoading?: boolean;
-  /** Which settings page this is, marked current in the navigation (Objects by default). */
-  readonly current?: SettingsPageId;
   /** The visible title, for a page that moves focus to it itself (a cancelled job's Cancel goes away). */
   readonly titleRef?: Ref<HTMLHeadingElement>;
+  /** The body opens with Tabs: their underline divides the page in place of the header's hairline. */
+  readonly hasTabs?: boolean;
   readonly children: ReactNode;
 }
 
-/** A settings page: the TopBar with its trail, then SettingsLayout with its page current. */
+/**
+ * A settings page: SettingsLayout with the page's trail (its group, any
+ * places between, then its title) over its h1, inside the settings frame.
+ */
 export function SettingsPage({
   title,
-  crumbs,
+  crumbs = [],
   icon,
   hue,
   meta,
   description,
   actions,
   isLoading = false,
-  current = 'objects',
   titleRef,
+  hasTabs = false,
   children,
 }: SettingsPageProps) {
   const { slug = '' } = useParams({ strict: false });
+  const page = useLocation({ select: (location) => settingsPageOf(location.pathname) });
+  const group = settingsGroupOf(settingsNav(slug), page);
+  const trail: readonly Crumb[] = [
+    ...(group === undefined ? [] : [{ id: group.id, label: group.label }]),
+    ...crumbs,
+    { id: 'current', label: title },
+  ];
   return (
     <WorkspacePage
       page={{
-        topBar: (
-          <TopBar
-            title={title}
-            isLoading={isLoading}
-            {...(crumbs === undefined ? {} : { crumbs })}
-            {...(icon === undefined ? {} : { icon })}
-            {...(hue === undefined ? {} : { hue })}
-          />
-        ),
+        topBar: undefined,
         body: (
           <SettingsLayout
-            nav={settingsNav(slug)}
-            currentNavId={current}
-            navLabel={strings.settings}
+            titleLevel={1}
+            trail={trail}
+            hasTabs={hasTabs}
             title={title}
             isLoading={isLoading}
             {...(titleRef === undefined ? {} : { titleRef })}
@@ -79,23 +81,24 @@ export function SettingsPage({
   );
 }
 
-/** The trail to a settings page: Settings, then Objects on an object's page. */
+/** The places between a settings page's group and its title: none on Objects, Objects on an object's page. */
 export function settingsCrumbs(slug: string, depth: 'objects' | 'object'): readonly Crumb[] {
-  const settings: Crumb = { id: 'settings', label: strings.settings, href: objectsSettingsHref(slug) };
-  return depth === 'objects'
-    ? [settings]
-    : [settings, { id: 'objects', label: strings.objects, href: objectsSettingsHref(slug) }];
+  return depth === 'objects' ? [] : [{ id: 'objects', label: strings.objects, href: objectsSettingsHref(slug) }];
 }
 
 /** A settings address that names nothing (an unknown object or tab): said inside the frame, with the way back. */
-export function SettingsMissing({ current = 'objects' }: { readonly current?: SettingsPageId }) {
+export function SettingsMissing({ backTo = 'objects' }: { readonly backTo?: 'objects' | 'home' }) {
   const { slug = '' } = useParams({ strict: false });
   return (
-    <SettingsPage title={strings.missingTitle} crumbs={settingsCrumbs(slug, 'objects')} current={current}>
+    <SettingsPage title={strings.missingTitle}>
       <EmptyState
         icon="search"
         title={strings.missingText}
-        actions={<Link href={objectsSettingsHref(slug)}>{strings.backToSettings}</Link>}
+        actions={
+          <Link href={backTo === 'objects' ? objectsSettingsHref(slug) : preferencesHref(slug)}>
+            {strings.backToSettings}
+          </Link>
+        }
       >
         {strings.checkAddress}
       </EmptyState>
@@ -109,7 +112,6 @@ export function SettingsFailed({
   heading,
   text,
   onRetry,
-  current = 'objects',
 }: {
   /** The page's title ("Objects"). */
   readonly title: string;
@@ -118,12 +120,9 @@ export function SettingsFailed({
   /** Why, in the data layer's words ("Can't reach the CRM" only when the network failed). */
   readonly text: string;
   readonly onRetry: () => void;
-  /** Which settings page failed, kept current in the navigation. */
-  readonly current?: SettingsPageId;
 }) {
-  const { slug = '' } = useParams({ strict: false });
   return (
-    <SettingsPage title={title} crumbs={settingsCrumbs(slug, 'objects')} current={current}>
+    <SettingsPage title={title}>
       <EmptyState tone="error" title={heading} onRetry={onRetry}>
         {text}
       </EmptyState>

@@ -1,6 +1,14 @@
 # Settings
 
-Spec 0012, milestone 1 (objects and attributes, #13), and spec 0008 (background jobs, #8). Every settings page sits in the workspace frame through `SettingsPage`: the TopBar holds the trail and the page's h1, then the library's `SettingsLayout` holds the settings navigation (Objects, Background jobs and Calendar; #23 and later add theirs) beside the page. Settings opens from the workspace menu, above Sign out, the one way in. The routes load lazily, outside the first load. Each page keeps its own copy: `strings.ts` for the objects pages, `jobs-strings.ts` for Background jobs.
+Spec 0012, milestone 1 (objects and attributes, #13), spec 0008 (background jobs, #8) and spec 0026 (the settings area). Every settings page sits under the settings layout route (`routes/w.$slug.settings.tsx`), which swaps the app's sidebar for the settings sidebar (the library Sidebar's settings variant): "Settings" with a back link to the page Settings was opened from (`back.ts`: main.tsx remembers each workspace page reached outside Settings in this tab's sessionStorage; with none, the workspace's home), then Account (Preferences, Calendars), Workspace (Objects, Background jobs) and Scheduling (Booking pages and Forms, marked "Captures": they link into Captures until each has workspace wide settings of its own). A group with no page the member may open is left out (`visibleSettingsNav`); today every member may open every page. The frame stays mounted between settings pages, so the list keeps its place, and focus stays in it after a route change (`focus.ts`); the arrow keys move inside it and Tab passes it. Each page draws through `SettingsPage`: `SettingsLayout` with the trail ("Account › Preferences", `nav.ts` names the group by the address), the title as the page's h1, a one line description, a hairline (left off when Tabs follow), then the body. Settings opens on Account › Preferences, from the sidebar's foot (Settings, ⌘,), the workspace menu, or ⌘, (Ctrl+, off a Mac) from anywhere but a text field, an editor or a dialog. The routes load lazily, outside the first load. Each page keeps its own copy: `strings.ts` for the frame and the objects pages, `jobs-strings.ts`, `calendar-strings.ts` and `preferences-strings.ts`.
+
+## Settings › Account › Preferences (`/w/$slug/settings/account/preferences`, PreferencesScreen)
+
+- **Purpose**: how the app looks for this person (spec 0026, AC-684).
+- **Main task**: pick the interface theme (System preference, Light or Dark) in a Select row; it applies the moment it changes, with no Save, and is kept in this browser by the theme controller (spec 0003), so another tab follows.
+- **Leaves out**: time format, start of week, language and time zone, which need a stored per member preference (a later spec).
+
+Built from library parts only: SettingsLayout (through `SettingsPage`), Card ("Appearance"), SettingsRow and Select (`isLabelHidden`, its label the row's title).
 
 ## Settings, Objects (`/w/$slug/settings/objects`, ObjectsScreen)
 
@@ -64,11 +72,13 @@ The library's RelationshipSettings, connected. Creating (`useRelationshipCreate`
 
 Built from library parts only: SettingsLayout (through `SettingsPage`), Table, Badge (the status), ProgressBar ("done of total", indeterminate when the size isn't known), RelativeTime, Button, Modal (the cancel confirm, `tone="danger"`) and EmptyState (empty, and error with Try again); while it loads, the frame, the header and the Table's skeleton rows hold their places (`JobsPending`). Members see their own jobs without the Started by column, which would always name them. "Run a test job" shows for `jobs.manage` locally and in previews (AC-123): 20,000 synthetic items, every 50th refused, so the bar and the refusal summary both show.
 
-## Settings, Calendar (`/w/$slug/settings/calendar`, CalendarScreen)
+## Settings › Account › Calendars (`/w/$slug/settings/account/calendars`, CalendarScreen)
 
-- **Purpose**: Settings, Calendar (spec 0024): the member's own calendar connections, so their meetings reach the people and companies they meet.
-- **Main task**: connect a Google calendar (the browser goes to the API's start address, on to Google's consent and back with `?calendar=` saying how it went, shown once in a Callout), see each connection's account, status and last sync, choose who sees its meetings (Shared or Private, a SegmentedControl), make one the default, and disconnect one (a danger confirm).
+- **Purpose**: Settings › Account › Calendars (specs 0024 and 0026): the member's own calendar connections, so their meetings reach the people and companies they meet.
+- **Main task**: connect a Google calendar (the button carries the Google Calendar mark; the browser goes to the API's start address, on to Google's consent and back with `?calendar=` saying how it went, shown once in a Callout), see each connection's account, status and last sync, choose who sees its meetings (Shared or Private, a SegmentedControl), make one the default, and disconnect one (a danger confirm).
 - **Leaves out**: other members' connections, Outlook (milestone 4), the disconnected banner, the workspace's "Create people for unknown attendees" setting and Add as person (milestone 2).
+
+Its old address, `/w/$slug/settings/calendar`, where the API's Google callback still sends the browser, redirects here with its search (`?calendar=`) kept (AC-686).
 
 Built from library parts only: SettingsLayout (through `SettingsPage`), Card per connection (its account as the title, Google and Default as the line under it, Make default and Disconnect in its footer), DescriptionList (Status as a Badge with the last error, Last synced as a RelativeTime, the sharing control with a line saying what it means), Callout (how connecting went; the limit of 3 reached), Modal (the disconnect confirm) and EmptyState (no calendar yet, with Connect Google calendar; calendar sync not set up; error with Try again). Changes show at once through `data.calendar` and come back with a toast when refused; a connection still syncing is read again until it is done.
 

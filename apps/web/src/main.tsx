@@ -12,6 +12,7 @@ import { createRoot } from 'react-dom/client';
 import { signInHref } from './features/auth/redirect.ts';
 import { createFocusRecovery, focusFirstLoad, focusPage, isSamePage } from './features/navigation/focus.ts';
 import { followPageTitle } from './features/navigation/title.ts';
+import { rememberPlace, safeSessionStorage } from './features/settings/back.ts';
 import { jobFinishedToast } from './features/settings/toast.ts';
 import { jobsHref } from './features/workspace/objects.ts';
 import { replacedToast } from './features/workspace/undo.ts';
@@ -120,6 +121,10 @@ const router = createRouter({
 // on /sign-in and /verify, to their one field (focus.ts). On the first load,
 // only those one field pages move focus, into their field.
 const focusRecovery = createFocusRecovery(document);
+// Each workspace page reached outside Settings is where Settings' back link returns (spec 0026, AC-681).
+router.subscribe('onResolved', (event) => {
+  rememberPlace(safeSessionStorage(window), event.toLocation.href);
+});
 router.subscribe('onRendered', (event) => {
   const { pathname } = event.toLocation;
   if (event.fromLocation === undefined) {

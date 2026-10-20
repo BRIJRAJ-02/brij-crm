@@ -76,6 +76,7 @@ export function ObjectSettingsScreen({
     <SettingsPage
       title={object.pluralName}
       crumbs={settingsCrumbs(slug, 'object')}
+      hasTabs
       icon={object.icon}
       hue={object.hue}
       meta={<ObjectBadges object={object} />}
@@ -151,7 +152,7 @@ export function ObjectSettingsPending() {
   // The meter's place only for those who get a meter, so nothing moves when the page arrives.
   const canManage = useCan('schema.manage');
   return (
-    <SettingsPage title={strings.loading} crumbs={settingsCrumbs(slug, 'object')} isLoading>
+    <SettingsPage title={strings.loading} crumbs={settingsCrumbs(slug, 'object')} hasTabs isLoading>
       <Tabs
         label={strings.loading}
         selectedKey={isObjectTab(tab) ? tab : 'attributes'}

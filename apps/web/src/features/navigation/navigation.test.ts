@@ -56,12 +56,23 @@ describe('focusPage', () => {
 
   it('leaves focus in a tab list, where the arrow keys chose a tab that is its own address', () => {
     const tabs = fakeDocument(page);
-    const inTabList = { closest: (selector: string) => (selector === '[role="tablist"]' ? {} : null) };
+    const inTabList = {
+      closest: (selector: string) => (selector.split(', ').includes('[role="tablist"]') ? {} : null),
+    };
     focusPage(
       { ...tabs.doc, activeElement: inTabList } as unknown as Document,
       '/w/acme/settings/objects/people/configuration',
     );
     expect(tabs.focused).toEqual([]);
+  });
+
+  it('leaves focus in the settings sidebar, which keeps its place as its pages load (spec 0026, AC-687)', () => {
+    const settings = fakeDocument(page);
+    const inNav = {
+      closest: (selector: string) => (selector.split(', ').includes('nav[data-keyboard="arrows"]') ? {} : null),
+    };
+    focusPage({ ...settings.doc, activeElement: inNav } as unknown as Document, '/w/acme/settings/jobs');
+    expect(settings.focused).toEqual([]);
   });
 
   it('puts focus on the title everywhere else, and when a form page has no field yet', () => {

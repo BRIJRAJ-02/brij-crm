@@ -1,5 +1,5 @@
 // Brief
-// Purpose: Settings, Calendar: the member's own calendar connections, so their meetings reach the records they're with.
+// Purpose: Settings › Account › Calendars: the member's own calendar connections, so their meetings reach the records they're with.
 // Main task: connect a Google calendar, see each one's state and last sync, choose who sees its meetings, disconnect.
 // Leaves out: other members' calendars, Outlook (milestone 4), the disconnected banner and Add as person (milestone 2).
 import type { CalendarConnectionView, CalendarView, DataLayer } from '@crm/data';
@@ -18,7 +18,7 @@ import {
 } from '@crm/ui';
 import { useState } from 'react';
 import { strings, type ConnectResult } from './calendar-strings.ts';
-import { settingsCrumbs, SettingsPage } from './SettingsPage.tsx';
+import { SettingsPage } from './SettingsPage.tsx';
 
 /** Props for the Calendar screen: what its route loaded through the data layer. */
 export interface CalendarScreenProps {
@@ -136,7 +136,7 @@ export function CalendarScreen({ data, slug, view, result, onResultSeen }: Calen
         title={strings.emptyTitle}
         actions={
           canConnect ? (
-            <Button variant="primary" icon="calendar" onPress={connect}>
+            <Button provider="google-calendar" onPress={connect}>
               {strings.connectGoogle}
             </Button>
           ) : undefined
@@ -165,14 +165,12 @@ export function CalendarScreen({ data, slug, view, result, onResultSeen }: Calen
   return (
     <SettingsPage
       title={strings.title}
-      crumbs={settingsCrumbs(slug, 'objects')}
       description={strings.description}
-      current="calendar"
       isLoading={state.status === 'loading'}
       {...(canConnect && hasList
         ? {
             actions: (
-              <Button icon="calendar" onPress={connect}>
+              <Button provider="google-calendar" onPress={connect}>
                 {strings.connectGoogle}
               </Button>
             ),

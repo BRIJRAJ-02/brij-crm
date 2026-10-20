@@ -1,8 +1,8 @@
 import { createFileRoute, redirect } from '@tanstack/react-router';
 
-// Settings opens on Objects (spec 0012), the one settings page so far; #8, #23 and later features add theirs.
+// Settings opens on Account › Preferences (spec 0026, AC-686).
 export const Route = createFileRoute('/w/$slug/settings/')({
   beforeLoad: ({ params }) => {
-    throw redirect({ to: '/w/$slug/settings/objects', params: { slug: params.slug }, replace: true });
+    throw redirect({ to: '/w/$slug/settings/account/preferences', params: { slug: params.slug }, replace: true });
   },
 });

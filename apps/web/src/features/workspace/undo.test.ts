@@ -8,7 +8,9 @@ import {
   editToast,
   isClear,
   isHelpKey,
+  isSettingsKey,
   isUndoKey,
+  SETTINGS_KEYS,
   replacedToast,
   UNDO_KEYS,
   undoToast,
@@ -31,6 +33,24 @@ const press = (
 const target = (inside: readonly string[], isContentEditable = false): KeyTarget => ({
   isContentEditable,
   closest: (selector) => (inside.some((part) => selector.split(', ').some((one) => one.includes(part))) ? {} : null),
+});
+
+describe('the settings shortcut (spec 0026, AC-685)', () => {
+  it('is Cmd+, on a Mac keyboard and Ctrl+, on any other, never with Shift or Alt, nor a held key', () => {
+    expect(isSettingsKey(press(',', { metaKey: true }), 'mac')).toBe(true);
+    expect(isSettingsKey(press(',', { ctrlKey: true }), 'mac')).toBe(false);
+    expect(isSettingsKey(press(',', { ctrlKey: true }), 'other')).toBe(true);
+    expect(isSettingsKey(press(',', { metaKey: true }), 'other')).toBe(false);
+    expect(isSettingsKey(press(',', { metaKey: true, shiftKey: true }), 'mac')).toBe(false);
+    expect(isSettingsKey(press(',', { metaKey: true, altKey: true }), 'mac')).toBe(false);
+    expect(isSettingsKey({ ...press(',', { metaKey: true }), repeat: true }, 'mac')).toBe(false);
+    expect(isSettingsKey(press(','), 'mac')).toBe(false);
+    expect(isSettingsKey(press('.', { metaKey: true }), 'mac')).toBe(false);
+  });
+
+  it('is listed with Mac symbols', () => {
+    expect(SETTINGS_KEYS).toEqual(['⌘', ',']);
+  });
 });
 
 describe('the undo shortcut', () => {

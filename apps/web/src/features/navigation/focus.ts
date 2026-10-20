@@ -27,18 +27,22 @@ export function focusFirstLoad(doc: Document, pathname: string): void {
   doc.querySelector<HTMLElement>(field)?.focus();
 }
 
-/** True when focus sits in a tab list: tabs that are pages (an object's settings tabs) moved it there themselves. */
+/**
+ * True when focus sits in a tab list, or in a navigation the arrow keys move
+ * through (the settings sidebar, spec 0026, AC-687): their entries are pages,
+ * and the person moved focus there themselves, so it keeps its place.
+ */
 function isInTabList(doc: Document): boolean {
   const active: unknown = doc.activeElement;
   if (typeof active !== 'object' || active === null || !('closest' in active)) return false;
-  return (active as Element).closest('[role="tablist"]') !== null;
+  return (active as Element).closest('[role="tablist"], nav[data-keyboard="arrows"]') !== null;
 }
 
 /**
  * Moves focus to a form page's first field, else to the page's title,
  * if the page has one. Focus already in a tab list stays: the arrow keys there
  * choose a tab that is its own address (spec 0012), and the next press must
- * reach the next tab, not the title.
+ * reach the next tab, not the title. So does focus in the settings sidebar.
  */
 export function focusPage(doc: Document, pathname: string): void {
   if (isInTabList(doc)) return;

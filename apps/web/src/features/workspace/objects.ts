@@ -26,5 +26,7 @@ export const bookingsHref = (slug: string) => `/w/${slug}/bookings`;
 export const capturesHref = (slug: string) => `/w/${slug}/captures`;
 /** Settings, Background jobs (spec 0008). */
 export const jobsHref = (slug: string) => `/w/${slug}/settings/jobs`;
-/** Settings, Objects (spec 0012): where a workspace with no live object opens, and the workspace menu's Settings. */
+/** Settings, Objects (spec 0012): where a workspace with no live object opens. */
 export const settingsHref = (slug: string) => `/w/${slug}/settings/objects`;
+/** Where Settings opens (spec 0026, AC-686): Account › Preferences. The sidebar's Settings, the workspace menu's and ⌘, go here. */
+export const settingsHomeHref = (slug: string) => `/w/${slug}/settings/account/preferences`;

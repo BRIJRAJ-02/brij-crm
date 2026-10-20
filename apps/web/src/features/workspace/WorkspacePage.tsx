@@ -5,7 +5,7 @@
 import type { Me, MyAccess, Permission } from '@crm/data';
 import { useMatch, useParams, useRouteContext } from '@tanstack/react-router';
 import { createContext, useContext, type ReactNode } from 'react';
-import { WorkspaceFrame, type SidebarPage } from './WorkspaceFrame.tsx';
+import { WorkspaceFrame, type SettingsSidebar, type SidebarPage } from './WorkspaceFrame.tsx';
 
 /** One page in the frame: its TopBar (its title, the h1), on a view its ViewBar, and its body. */
 export interface FramedPage {
@@ -46,6 +46,8 @@ export interface WorkspacePageProps {
   readonly currentObject?: string;
   /** A page of the sidebar's that isn't an object's: Bookings, Captures or the trash (spec 0022). */
   readonly currentPage?: SidebarPage;
+  /** Inside Settings: the settings sidebar in place of the app's (spec 0026). */
+  readonly settings?: SettingsSidebar;
   /** The workspace itself failed to load: no Records section, rather than one loading for ever. */
   readonly isFailed?: boolean;
 }
@@ -72,15 +74,14 @@ export function WorkspacePage(props: WorkspacePageProps) {
 }
 
 /** The frame itself, with the page's bars and body. */
-function FramedWorkspacePage({ page, currentObject, currentPage, isFailed = false }: WorkspacePageProps) {
-  const { data, theme, toasts } = useRouteContext({ from: '__root__' });
+function FramedWorkspacePage({ page, currentObject, currentPage, settings, isFailed = false }: WorkspacePageProps) {
+  const { data, toasts } = useRouteContext({ from: '__root__' });
   const { slug = '' } = useParams({ strict: false });
   const workspace = useMatch({ from: '/w/$slug', shouldThrow: false })?.loaderData;
   const workspaceName = useWorkspaceName();
   return (
     <WorkspaceFrame
       data={data}
-      theme={theme}
       toasts={toasts}
       slug={slug}
       {...(workspaceName === undefined ? {} : { workspaceName })}
@@ -90,6 +91,8 @@ function FramedWorkspacePage({ page, currentObject, currentPage, isFailed = fals
       isMissing={workspace === undefined ? isFailed : workspace.objects === undefined}
       {...(currentObject === undefined ? {} : { currentObject })}
       {...(currentPage === undefined ? {} : { currentPage })}
+      {...(settings === undefined ? {} : { settings })}
+      {...(workspace?.access === undefined ? {} : { permissions: workspace.access.permissions })}
       topBar={page.topBar}
       viewBar={page.viewBar}
       toolbar={page.toolbar}

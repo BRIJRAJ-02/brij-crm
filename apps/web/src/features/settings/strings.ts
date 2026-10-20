@@ -2,6 +2,16 @@
 export const strings = {
   settings: 'Settings',
   loading: 'Loading',
+  /** The settings sidebar (spec 0026): its way back out, its groups and the entries the other pages' copy doesn't name. */
+  leaveSettings: 'Leave settings',
+  account: 'Account',
+  workspace: 'Workspace',
+  scheduling: 'Scheduling',
+  preferences: 'Preferences',
+  bookingPages: 'Booking pages',
+  forms: 'Forms',
+  /** After Booking pages and Forms: they open in Captures, outside Settings. */
+  inCaptures: 'Captures',
   /** The settings navigation's entries. */
   objects: 'Objects',
   objectsDescription: 'Shape the records your workspace keeps.',

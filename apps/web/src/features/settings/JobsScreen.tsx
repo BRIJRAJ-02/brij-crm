@@ -251,7 +251,6 @@ export function JobsScreen({ data, slug, view, isAll, members: loaded, canRunTes
       title={strings.title}
       crumbs={settingsCrumbs(slug, 'objects')}
       description={isAll ? strings.description : strings.descriptionMine}
-      current="jobs"
       titleRef={titleRef}
       {...(canRunTest
         ? {
@@ -278,7 +277,6 @@ export function JobsPending() {
       title={strings.title}
       crumbs={settingsCrumbs(slug, 'objects')}
       description={isAll ? strings.description : strings.descriptionMine}
-      current="jobs"
     >
       <Table
         label={strings.tableLabel}
