@@ -48,6 +48,8 @@ interface SampleGridProps {
   readonly onCreateOption?: (rowId: string, columnId: string, label: string) => void;
   /** A bar floating over the grid's foot (spec 0022): the BulkActionBar while rows are ticked. */
   readonly floatingBar?: ReactNode;
+  /** `narrow` holds the grid to a phone's width less its gutters, or narrower. */
+  readonly stageWidth?: 'auto' | 'narrow';
 }
 
 /** A grid over sample companies that keeps its own edits, columns and selection, as a screen would. */
@@ -71,6 +73,7 @@ function SampleGrid({
   columnActions,
   onCreateOption,
   floatingBar,
+  stageWidth = 'auto',
 }: SampleGridProps) {
   const [data, setData] = useState(() =>
     sampleRows(count).map((row) =>
@@ -116,7 +119,7 @@ function SampleGrid({
     return {};
   };
   return (
-    <Stage height="grid">
+    <Stage height="grid" width={stageWidth}>
       <DataGrid<SampleRow>
         label="Companies"
         columns={layout.columns}
@@ -587,6 +590,70 @@ export const RowPicturesAndUnnamed: Story = {
   play: async ({ canvas }) => {
     await expect(canvas.getByText('Unnamed company')).toBeVisible();
     await expect(canvas.getByRole('row', { name: /Unnamed company/ })).toBeInTheDocument();
+  },
+};
+
+/** Opens the last column's editor (Open deals, a number), types a word and presses Enter, which it refuses. */
+async function refuseInLastColumn(canvasElement: HTMLElement, userEvent: { keyboard: Keys; tab: () => Promise<void> }) {
+  const press = presser((keys) => userEvent.keyboard(keys));
+  await userEvent.tab();
+  await waitFor(() => expect(focused()).toBe('0:1'));
+  await press(['{End}'], '0:12');
+  const grid = canvasElement.querySelector<HTMLElement>('[role="grid"]');
+  const scrollWidth = grid?.scrollWidth ?? 0;
+  await press(['m']);
+  await waitFor(() => expect(document.activeElement?.tagName).toBe('INPUT'));
+  await userEvent.keyboard('any{Enter}');
+  const error = await waitFor(() => {
+    const found = cell(canvasElement, 0, 12)?.querySelector<HTMLElement>('[slot="errorMessage"]');
+    if (found === null || found === undefined) throw new globalThis.Error('No error under the cell yet.');
+    return found;
+  });
+  return { grid, error, scrollWidth };
+}
+
+/** Waits until `inner` sits wholly inside the grid's visible box and the window, sideways and down. */
+async function expectInside(grid: HTMLElement | null, inner: HTMLElement) {
+  if (grid === null) throw new globalThis.Error('No grid.');
+  await waitFor(() => {
+    const box = inner.getBoundingClientRect();
+    const frame = grid.getBoundingClientRect();
+    const start = Math.max(frame.left + grid.clientLeft, 0);
+    const end = Math.min(frame.left + grid.clientLeft + grid.clientWidth, document.documentElement.clientWidth);
+    const top = frame.top + grid.clientTop;
+    const outside = {
+      start: box.left < start - 0.5 ? start - box.left : 0,
+      end: box.right > end + 0.5 ? box.right - end : 0,
+      top: box.top < top - 0.5 ? top - box.top : 0,
+      bottom: box.bottom > top + grid.clientHeight + 0.5 ? box.bottom - top - grid.clientHeight : 0,
+    };
+    return expect(outside).toEqual({ start: 0, end: 0, top: 0, bottom: 0 });
+  });
+}
+
+/**
+ * A value refused in the last column (F37): its error shifts in from the grid's end edge, so all of it shows,
+ * and the grid gains no sideways scroll for it.
+ */
+export const LastColumnError: Story = {
+  args: { columnCount: 12 },
+  parameters: { crm: { screenshot: false } },
+  play: async ({ canvasElement, userEvent }) => {
+    const { grid, error, scrollWidth } = await refuseInLastColumn(canvasElement, userEvent);
+    await expectInside(grid, error);
+    await expect(error).toHaveTextContent(/\S/);
+    // The error adds nothing to scroll to.
+    await expect(grid?.scrollWidth).toBe(scrollWidth);
+  },
+};
+
+/** The same refusal on a phone's narrow grid: the error is no wider than the grid, and stays inside it. */
+export const LastColumnErrorNarrow: Story = {
+  args: { columnCount: 12, stageWidth: 'narrow' },
+  parameters: { crm: { screenshot: false } },
+  play: async ({ canvasElement, userEvent }) => {
+    const { grid, error } = await refuseInLastColumn(canvasElement, userEvent);
+    await expectInside(grid, error);
   },
 };
 

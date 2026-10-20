@@ -1,8 +1,9 @@
-import type { ReactNode, Ref } from 'react';
+import { useLayoutEffect, useRef, type ReactNode, type Ref } from 'react';
 import { FieldError, Input, Label, Text, TextArea, TextField } from 'react-aria-components';
 import { CopyButton } from '../../atoms/Button/CopyButton.tsx';
 import { Icon } from '../../atoms/Icon/Icon.tsx';
 import type { IconName } from '../../atoms/Icon/icons.ts';
+import { keepInside } from '../../lib/float-inside.ts';
 import { useFormatSettings } from '../../provider/context.ts';
 import styles from './Field.module.css';
 import { strings } from './strings.ts';
@@ -131,6 +132,24 @@ export function Field({
   const reason = (isReadOnly ? readOnlyReason : undefined) ?? (isDisabled ? disabledReason : undefined);
   const length = (value ?? defaultValue ?? '').length;
   const leading = variant === 'search' ? 'search' : icon;
+  // A floating error stays inside what would clip it: in from the grid's end
+  // edge in its last column, no wider than a phone's grid, over the cell when
+  // the rows below run out. Placed again as the error or the window changes.
+  const errorRef = useRef<HTMLElement>(null);
+  useLayoutEffect(() => {
+    const element = errorRef.current;
+    const anchor = element?.parentElement;
+    const view = element?.ownerDocument.defaultView;
+    if (!isErrorFloating || element === null || !anchor || !view) return;
+    const place = () => {
+      keepInside(element, anchor);
+    };
+    place();
+    view.addEventListener('resize', place);
+    return () => {
+      view.removeEventListener('resize', place);
+    };
+  }, [isErrorFloating, error]);
   const inputProps = {
     className: styles.input,
     ...(placeholder === undefined ? {} : { placeholder }),
@@ -234,7 +253,7 @@ export function Field({
                 )}
               </span>
             )}
-            <FieldError className={styles.error}>
+            <FieldError ref={errorRef} className={styles.error}>
               {({ validationErrors }) => (
                 <>
                   <Icon name="circle-alert" size="xs" />
