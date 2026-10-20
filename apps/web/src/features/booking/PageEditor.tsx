@@ -21,8 +21,9 @@ import {
   Link,
   PageColumn,
   PreviewLayout,
+  Radio,
+  RadioGroup,
   SaveBar,
-  SegmentedControl,
   Select,
   Skeleton,
   Switch,
@@ -327,18 +328,20 @@ export function PageEditor({ data, slug, page: loaded, locale, myHours }: PageEd
                   ? { actions: <Link href={availabilityHref(slug)}>{strings.editMyHours}</Link> }
                   : {})}
               >
-                <SegmentedControl
+                {/* A saved setting, so a RadioGroup: SegmentedControl only switches how a screen shows. */}
+                <RadioGroup
                   label={strings.hours}
-                  segments={[
-                    { value: 'mine', label: strings.followMine },
-                    { value: 'own', label: strings.ownHoursMode },
-                  ]}
+                  isLabelHidden
+                  orientation="horizontal"
                   value={draft.hoursMode}
-                  isDisabled={isLocked}
+                  isReadOnly={isLocked}
                   onChange={(value) => {
                     if (value === 'mine' || value === 'own') change({ hoursMode: value });
                   }}
-                />
+                >
+                  <Radio value="mine">{strings.followMine}</Radio>
+                  <Radio value="own">{strings.ownHoursMode}</Radio>
+                </RadioGroup>
                 {draft.hoursMode === 'own' && (
                   <>
                     <Select

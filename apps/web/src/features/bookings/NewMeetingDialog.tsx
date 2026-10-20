@@ -170,7 +170,7 @@ export function NewMeetingDialog({
           value={email}
           onChange={setEmail}
         />
-        <Field label={strings.when} value={meta} isReadOnly />
+        <Field label={strings.when} value={meta} isReadOnly readOnlyReason={strings.whenFixed} />
         <SpanTimes
           span={span}
           locale={locale}
