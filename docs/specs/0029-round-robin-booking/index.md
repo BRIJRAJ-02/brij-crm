@@ -17,7 +17,7 @@ Each has my recommendation; answer only where you disagree.
 1. **Is the pool its own thing (a rotation) shared by booking pages and forms, or a list on each page?** Recommend: its own thing, shared. Runner up: per page (simpler, but forms need a second pool and fairness splits per page).
 2. **How is the host picked by default?** Recommend: **Fair** (fewest bookings in the window for their weight, among those free at the chosen time), with **Priority** (highest priority free member first) as the second option. Runner up: strict turn (only the next member's times shown), deferred.
 3. **Fairness window?** Recommend: rolling 30 days, counted by when the booking was made. Runner up: calendar month.
-4. **Who can be in a pool?** Recommend: any active member with their own hours set or a calendar connected, added by an admin; a member without a calendar is allowed with a warning. Runner up: calendar required.
+4. **Who can be in a pool?** Recommend: any active member with a schedule (spec 0035) or a calendar connected, added by an admin; a member without a calendar is allowed with a warning. Runner up: calendar required.
 5. **Reschedule: same host or back through the rotation?** Recommend: same host when free, otherwise the rotation, as a per page choice. Runner up: always the rotation.
 6. **Known people go to their owner?** Recommend: yes, on by default, when the owner is in the pool and free at that time. Runner up: rotation only.
 7. **When a member leaves the workspace, their future round robin bookings?** Recommend: reassigned automatically through the rotation, guest told the new host; any that can't be placed are flagged for an admin. Runner up: flag all for an admin to reassign by hand.
@@ -30,8 +30,9 @@ Each has my recommendation; answer only where you disagree.
 | Feature | What this spec needs | When it is missing |
 |---|---|---|
 | Spec 0025 booking pages | pages, `pickHost` seam, the booking flow under host locks, emails, manage links | hard prerequisite (built) |
-| Spec 0024 calendar sync | `freeBusy` per member, `createEvent`, `moveEvent`, `cancelEvent` | a member without a calendar books from hours and bookings only (AC-631) |
-| Spec 0023 forms | the processing transaction that calls `assignOwner` | milestone 3 only |
+| Spec 0024 calendar sync, and its M5 "calendars" | `freeBusy` over every conflict checked calendar of each member, `createEvent` on the member's destination calendar, `moveEvent`, `cancelEvent` | before M5, busy reads the primary calendar and events go there; a member without a calendar books from hours and bookings only (AC-631) |
+| Spec 0035 availability schedules | each member's schedules (several per person, migrated "Working hours" as default), and `booking_pages.schedule_id` replacing `hours_mode` | milestone 1 reads `booking_member_hours` as each member's one schedule; the switch is a column swap |
+| Spec 0023 forms (its routing revision) | routing a submission to a page, a member or a rotation; for a rotation it calls `assignOwner` on this spec's ledger | milestone 3 only |
 | Spec 0009 access | `booking.admin`, the access door | hard prerequisite (built) |
 | #23 teams | "create a rotation from a team" | rotations are member lists until then |
 
@@ -53,12 +54,12 @@ Each has my recommendation; answer only where you disagree.
 - **AC-731**: A member switched off, at their daily cap, or on a day off is skipped by the rotation until they are back; their existing bookings stay theirs.
 
 *Team page*
-- **AC-732**: The page builder's `round_robin` kind (no longer "Coming soon") picks a rotation or creates one inline, and offers "Hours: each member's own (default) | the page's hours for everyone", "Reschedule: same host when free (default) | through the rotation", and "Send known people to their owner" (on by default).
+- **AC-732**: The page builder's `round_robin` kind (no longer "Coming soon") picks a rotation or creates one inline, and offers "Hours: each member's default schedule (default) | one schedule for everyone" (spec 0035; a rotation member may also pin which of their schedules this rotation uses), "Reschedule: same host when free (default) | through the rotation", and "Send known people to their owner" (on by default).
 - **AC-733**: The public page (`/b/:key`, frozen) adds only the team avatar stack in the existing rail: up to 4 avatars of switched on members plus "+N", from each member's profile image or initials, with no names and no emails. Every other part of the page is unchanged.
 
 *Slots*
-- **AC-734**: Round robin slots are the **union** of each eligible member's slots, each computed by the existing engine with that member's hours (or the page's), their busy times, their bookings across every page and their blocks. A slot is offered when at least one member is free for it.
-- **AC-735**: Collective slots become the **intersection** of each required member's slots computed the same way, so each member's own hours and bookings count (today only the page's hours do).
+- **AC-734**: Round robin slots are the **union** of each eligible member's slots, each computed by the existing engine with that member's schedule (spec 0035), their busy times across every conflict checked calendar (spec 0024 M5), their bookings across every page (`booking_hosts`) and their blocks. A slot is offered when at least one member is free for it.
+- **AC-735**: Collective slots become the **intersection** of each required member's slots computed the same way, so each member's own hours and their bookings on other pages count. Today a collective page ignores a second member's bookings elsewhere and can double book them; this is fixed in milestone 1.
 - **AC-736**: A member whose calendar refuses us (`blocked`) is dropped from the union for that read instead of closing the page; the page closes only when every member is blocked. Collective still closes when any required member is blocked.
 - **AC-737**: The slots answer for a 20 member page stays inside spec 0025's 1.5 second p75, using the 60 second busy cache and one parallel read per member.
 
@@ -70,7 +71,7 @@ Each has my recommendation; answer only where you disagree.
 - **AC-742**: Every assignment writes one ledger row with its reason: `fair`, `priority`, `owner`, `only_free` (one member was free), `manual` or `reassigned`, plus the counts and weights it compared. The booking's detail shows it in plain words ("Assigned to Sam: fewest bookings this month (4, weight 100)").
 
 *After booking*
-- **AC-743**: The event is created on the assigned host's calendar (`createEvent`) with the host as organiser, the confirmation page and email name the host, and the host notice email goes to the assigned host only.
+- **AC-743**: The event is created on the assigned host's destination calendar (spec 0024 M5; the page's override when it names a calendar of that host, else the host's default) with the host as organiser, the confirmation page and email name the host, and the host notice email goes to the assigned host only.
 - **AC-744**: A person, company or deal created by the booking gets the assigned host as owner (when the object has an owner attribute); an existing record's owner never changes.
 - **AC-745**: A booking occupies its host's time through a `booking_hosts` row (one per member it occupies, with its own exclusion constraint), so it blocks the member on every page they are on. Collective bookings write one row per required member.
 
@@ -108,7 +109,7 @@ Tenant tables with forced row level security, the standard policy, created and u
 
 **`rotations`**: `id`, `name`, `strategy` (`fair` | `priority`), `window_days` (7 | 30 | 90), `owner_first` (bool, default true), `deleted_at`.
 
-**`rotation_members`**: (`rotation_id`, `member_id`) primary key, `weight` (smallint 1 to 100, default 100), `priority` (smallint 0 to 4, default 2), `daily_cap` (smallint, nullable), `is_on` (bool), `calibration` (numeric, the count credited on join), `position`. Check: 2 to 20 members per rotation (enforced in core).
+**`rotation_members`**: (`rotation_id`, `member_id`) primary key, `weight` (smallint 1 to 100, default 100), `priority` (smallint 0 to 4, default 2), `daily_cap` (smallint, nullable), `is_on` (bool), `schedule_id` (nullable, spec 0035: which of the member's schedules this rotation books on; their default when null), `calibration` (numeric, the count credited on join), `position`. Check: 2 to 20 members per rotation (enforced in core).
 
 **`rotation_assignments`** (the ledger, append only apart from `voided_at`): `id`, `rotation_id`, `member_id`, `source` (`booking` | `form`), `booking_id` (nullable), `record_id` (nullable), `reason` (`fair` | `priority` | `owner` | `only_free` | `manual` | `reassigned`), `detail` (jsonb: the compared counts and weights, the actor for manual), `assigned_at`, `voided_at` (nullable).
 - Index: (`workspace_id`, `rotation_id`, `assigned_at`) where `voided_at is null`, for the window count.
@@ -116,13 +117,13 @@ Tenant tables with forced row level security, the standard policy, created and u
 
 **`booking_hosts`**: (`booking_id`, `member_id`) primary key, `during` (tstzrange, copied from the booking), `status` mirror. Exclusion constraint: `exclude using gist (workspace_id with =, member_id with =, during with &&) where (status = 'confirmed')`. The existing `bookings_no_overlap` stays as is.
 
-**`booking_pages`** gains: `rotation_id` (nullable, required when `kind = round_robin`), `reschedule_host` (`same` | `rotation`, default `same`). `hours_mode` gains `members` (each member's own hours; the default for team pages).
+**`booking_pages`** gains: `rotation_id` (nullable, required when `kind = round_robin`), `reschedule_host` (`same` | `rotation`, default `same`). Until spec 0035, `hours_mode` gains `members` (each member's own hours, the default for team pages); spec 0035 replaces it with `schedule_id`, where null on a team page means each member's own schedule.
 
 **`bookings`** gains `needs_host_at` (nullable timestamp, AC-749).
 
 ### Slots (core)
 
-- `memberSlots(page, member, reads)`: the existing `pageSlots` with that member's hours (`booking_member_hours`, or the page's), their busy, their bookings from `booking_hosts` and their blocks. Pure apart from its reads.
+- `memberSlots(page, member, reads)`: the existing `pageSlots` with that member's schedule (spec 0035; `booking_member_hours` before it), their busy, their bookings from `booking_hosts` and their blocks. Pure apart from its reads.
 - `unionSlots(perMember)` and `intersectSlots(perMember)`: pure, keyed by slot start, each slot carrying the free member ids (union) so booking knows the candidates. Unit tested on their own, including DST days and members in different zones.
 - `readPublicSlots` picks union or intersection by kind; members blocked by their calendar are left out of the union (AC-736).
 
@@ -131,6 +132,7 @@ Tenant tables with forced row level security, the standard policy, created and u
 - `pickMember(candidates, counts, rotation, { ownerId })`: pure. Owner first, then the strategy's sort (AC-738). Returns `{ memberId, reason, detail }`.
 - `windowCounts(tx, rotationId, since)`: one grouped count over the ledger plus each member's calibration.
 - `assignHost(tx, page, slot, visitorEmail)`: lock `rotation:<workspace>:<id>`, read counts, order candidates, then for each: lock the host, recheck with `memberSlots`, insert the booking, `booking_hosts` and ledger rows; first success wins (AC-740).
+- The ledger has one entry point, `assignFrom(tx, rotationId, { source, candidates, ownerId, subject })`, which takes the lock, counts, picks and writes the row. `assignHost` passes the free members at a slot; `assignOwner` passes everyone eligible today. Forms routing (spec 0023 revision) calls `assignOwner` for a rotation target, so leads and meetings share one count.
 - `assignOwner(tx, rotationId, { objectId, recordId })`: lock, eligibility for "today" in each member's zone, pick, write the ledger and the owner value through the records service (as the `form` actor), return `{ memberId, reason }`.
 - `reassign(tx, bookingId, { to: 'next' | memberId, actor })`: void the old ledger row, assign, then `cancelEvent` and `createEvent` after commit, queue the guest and host emails.
 
@@ -184,15 +186,15 @@ Rotations and team pages: `booking.admin`. Ledger: the host sees their own rows,
 
 ## Build plan
 
-**Milestone 1: a round robin page books the fairest free member** (thin thread, end to end)
+**Milestone 1: a round robin page books the fairest free member, and collective stops double booking** (thin thread, end to end)
 1. Migration: `rotations`, `rotation_members`, `rotation_assignments`, `booking_hosts` (backfilled from confirmed bookings), the new columns; guard tests. AC-741, AC-745.
 2. Core: `memberSlots`, `unionSlots`, `pickMember` (Fair only), `windowCounts`, `assignHost` with the two locks and recheck; tests including the race. AC-734, AC-736, AC-738, AC-740, AC-741, AC-742.
 3. API and builder: `rotations.create/list`, the round robin kind in the page builder, the rail avatar stack. AC-728, AC-729, AC-732, AC-733, AC-751.
 4. Event, emails and owner on the assigned host. AC-743, AC-744, AC-753, AC-754.
+5. Collective as the intersection on `booking_hosts`, fixing today's double booking of a second member. AC-735.
 
 **Milestone 2: control and change**
-5. Priority strategy, caps, switch off, calibration, owner first. AC-730, AC-731, AC-739.
-6. Collective as intersection on `booking_hosts`. AC-735.
+6. Priority strategy, caps, switch off, calibration, owner first. AC-730, AC-731, AC-739.
 7. Reschedule rules, cancel voids, manual reassign, member leaves. AC-746 to AC-750.
 8. Rotation screen with shares, delete guard, the load check for 20 members. AC-737, AC-752, AC-757, AC-758, AC-759.
 

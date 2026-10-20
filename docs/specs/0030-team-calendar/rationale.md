@@ -34,23 +34,26 @@ Forces:
 
 ### Decision 2: who sees whom
 
-**Option 1: two permissions, `bookings.read.team` and `bookings.read.all`, absent means own only (chosen).** Fits flat roles: each is a plain permission. Team scope switches on when #23 fills `teamIds`.
-- Pros: one door, testable, no special cases; matches timefix's split (a receptionist sees everyone, a doctor sees themselves).
-- Cons: two more permissions in the catalog.
+**Option 1: one permission, `schedule.manage`, gating every teammate's column (chosen).** Timefix's model (`canSeeEveryone = may(actor, "schedule.manage")`, enforced in the SQL, not the UI): a receptionist sees every doctor, a doctor sees only themselves. Owners and admins have it; a team scoped variant follows #23.
+- Pros: one door, one flat permission, no special cases; the same permission covers acting on the column, so "can see" and "can book for" never disagree.
+- Cons: plain members see only themselves until roles become editable (#24).
 
-**Option 2: one workspace setting (Everyone, Team, Admins only).**
-- Pros: one switch for the admin.
+**Option 2: two read permissions (`bookings.read.team`, `bookings.read.all`) granted to members too.**
+- Pros: open teams see each other at once.
+- Cons: splits seeing from acting, and a default that shows everyone's day to every member is hard to walk back.
+
+**Option 3: one workspace setting (Everyone, Team, Admins only).**
 - Cons: bypasses roles, so a future custom role can't differ.
 
-### Decision 3: what another member's synced events show
+### Decision 3: what a colleague's outside calendar shows
 
-**Option 1: follow spec 0024 sharing (chosen).** A shared connection shows the title; a private connection or a private event shows "Busy" with its time only. Bookings made through Timefix show the guest and page title to anyone who may see the column.
-- Pros: one rule across timelines and the team calendar; members already chose.
-- Cons: a member who leaves sharing on shows titles to teammates; the settings copy must say so.
+**Option 1: Busy blocks only, read as free and busy (chosen).** Each member's conflict calendars (spec 0024 M5) are read through the busy cache, so only start and end ever reach the server's answer.
+- Pros: nothing private can leak, whatever a member set for sharing; covers calendars that aren't synced into `meetings`.
+- Cons: a provider read per member per day on a cold cache; assistants can't see what a busy block is.
 
-**Option 2: always "Busy" for other people's synced events.**
-- Pros: safest.
-- Cons: less useful for assistants and managers, and contradicts what shared means on timelines.
+**Option 2: follow spec 0024 sharing (shared shows titles).**
+- Pros: richer for assistants.
+- Cons: titles of shared calendars land in a view meant for scheduling; one more place a sharing mistake leaks.
 
 ### Decision 4: one teammate's week
 
@@ -58,13 +61,13 @@ Forces:
 
 ### Decision 5: booking on someone's behalf
 
-**Anyone who sees the column in full and has `booking.manage` may "Book someone in" on that column, as that member, inside their hours (chosen)**; blocks, hours and time off on someone else's column need `booking.admin`. Runner up: admins only for all of it. Timefix offers book, set hours and time off on a colleague's column, each checked again on the server, and checks the target belongs to the workspace.
+**`schedule.manage` holders may book, block, set time off and change hours on a teammate's column, inside their hours unless they choose otherwise (chosen)**. Runner up: booking for anyone with `booking.manage`, the rest admins only. Timefix offers book, set hours and time off on a colleague's column, each checked again on the server, and checks the target belongs to the workspace.
 
 ## Rationale
 
-The day with people across is what every reference converges on, and timefix already proved it for this product. Permissions as two flat entries keep the access door the only gate, which the house rules require, and leave a clean seam for #23. Following spec 0024 for titles means the team view adds no new privacy rule, only reuses one.
+The day with people across is what every reference converges on, and timefix already proved it for this product. One flat permission keeps the access door the only gate, which the house rules require, and leaves a clean seam for #23. Busy only for outside calendars means the team view can't leak a title, whatever each member's sharing says.
 
-For scale, one procedure returns the whole day for every visible member: bookings from `booking_hosts` (spec 0029), blocks and synced meetings, each one query with `member_id in (…)` and a range overlap, capped like timefix (2,000 rows). The browser virtualises columns past twelve. Synced events come from the `meetings` table, never a live `freeBusy` call, so a 50 member day costs no provider calls.
+For scale, one procedure returns the whole day for every visible member: bookings from `booking_hosts` (spec 0029) and blocks, each one query with `member_id in (…)` and a range overlap, capped like timefix (2,000 rows), and busy spans read in parallel through the 60 second busy cache. The browser virtualises columns past twelve.
 
 Calls made without a question, each with its runner up:
 - Columns: me first, then by name (runner up: by role, as timefix sorts by job title, which the CRM doesn't store).
@@ -77,7 +80,7 @@ Calls made without a question, each with its runner up:
 **Project sources**:
 - Polish plan F2 (docs/plan/polish-phases.md).
 - `apps/web/src/routes/w.$slug.bookings.calendar.tsx`, `apps/web/src/features/bookings/BookingsScreen.tsx`, `DrawCard.tsx`, `NewMeetingDialog.tsx`; `packages/ui/src/modules/WeekCalendar/`; `packages/core/src/booking/list.ts`; `packages/data/src/bookings/store.ts`.
-- Spec 0009 access (`packages/contracts/src/access.ts`, `packages/core/src/access/`), spec 0024 AC-611 and AC-612 (sharing and private meetings), spec 0027 quick actions, spec 0029 round robin (`booking_hosts`, reassign).
+- Spec 0009 access (`packages/contracts/src/access.ts`, `packages/core/src/access/`), spec 0024 AC-611 and AC-612 (sharing and private meetings) and its M5 calendars, spec 0027 quick actions, spec 0029 round robin (`booking_hosts`, reassign), spec 0035 availability schedules.
 - Timefix, read only: `timefixapp/src/components/bookings/team-day.tsx`, `team-draw.tsx`, `packages/core/src/db/queries/team-calendar.ts`, `docs/team-calendar.md`.
 
 **Practices and standards**:

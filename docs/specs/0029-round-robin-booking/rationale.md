@@ -13,6 +13,7 @@ The forces that shape the design:
 - **The slots engine is pure and per host.** `computeSlots` in `packages/core/src/booking/engine.ts` takes one set of hours, busy spans and bookings. Team pages need many members' slots combined, and today's collective page uses the page's hours for everyone and only reads bookings where a member is the host, so the other members' bookings elsewhere don't block them.
 - **The public page is frozen** (`/b/:key`, owner, 20 October). A team page may only add the host avatar stack in the existing rail.
 - **Teams as an entity don't exist yet** (#23 is planned). A pool must work from a list of members today.
+- **Hours and calendars are being reshaped.** Spec 0035 (availability schedules) gives each person several schedules and each page one, and spec 0024 M5 checks every calendar for conflicts and writes to a chosen destination calendar. A pool member's slots must read both, not today's single `booking_member_hours` row and primary calendar.
 - **Calendars may be missing or expired.** Spec 0025 offers hours minus bookings for a host with no calendar, and closes the page when a calendar refuses us.
 
 ## Options considered
