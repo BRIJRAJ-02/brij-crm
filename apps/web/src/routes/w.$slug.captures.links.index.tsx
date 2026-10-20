@@ -32,7 +32,7 @@ function LinksRoute() {
 function LinksError({ error }: ErrorComponentProps) {
   const router = useRouter();
   return (
-    <PageColumn width="full">
+    <PageColumn>
       <EmptyState tone="error" title={strings.failedTitle} onRetry={() => void router.invalidate()}>
         {isDataError(error) ? error.message : strings.failedText}
       </EmptyState>

@@ -8,7 +8,7 @@ Spec 0012, milestone 1 (objects and attributes, #13), spec 0008 (background jobs
 - **Main task**: pick the interface theme (System preference, Light or Dark) in a Select row; it applies the moment it changes, with no Save, and is kept in this browser by the theme controller (spec 0003), so another tab follows.
 - **Leaves out**: time format, start of week, language and time zone, which need a stored per member preference (a later spec).
 
-Built from library parts only: SettingsLayout (through `SettingsPage`), Card ("Appearance"), SettingsRow and Select (`isLabelHidden`, its label the row's title).
+Built from library parts only: SettingsLayout (through `SettingsPage`), SettingsSection ("Appearance") around a Card, SettingsRow and Select (`isLabelHidden`, its label the row's title).
 
 ## Settings, Objects (`/w/$slug/settings/objects`, ObjectsScreen)
 
@@ -27,6 +27,7 @@ Built from library parts only: SettingsLayout (through `SettingsPage`), Card ("A
 - **Purpose**: one object, standard or custom alike, under its tile, name and Standard or Custom badge, in two tabs.
 - **Main task**: add, edit, move, archive and restore its attributes (Attributes), and rename, restyle, archive or restore it (Configuration).
 - **Leaves out**: changing a type (#14), and changing the API name (never).
+- **Layout**: the Configuration tab follows the settings page pattern (SettingsLayout's README): a Names and look section whose Form sits two fields to a row, then an Archive section with the danger Card. The Attributes tab's tables run the full width.
 
 ## An object's attributes (the Attributes tab, AttributesTab)
 

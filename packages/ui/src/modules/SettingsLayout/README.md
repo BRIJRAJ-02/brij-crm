@@ -33,11 +33,41 @@ New (spec 0012, pulled forward from spec 0003's milestone 4; in the inventory as
 - The body is the screen's: `Tabs` for an object's Attributes and Configuration, `Card`s for sections (a danger zone is a Card whose action is a `danger` Button), `Table` for lists, `EmptyState` for empty and failed reads, `Callout` for a read only note.
 - `SettingsStack` keeps that rhythm inside a tab's panel: its sections stack `space-16` apart, under a breath below the tabs, as they do directly in the body. Why: a `TabPanel` lays out nothing itself, so an object's Attributes and Configuration tabs would otherwise butt their Cards together. Not a TabPanel variant: the record panel's tabs fill their slot edge to edge with one scrolling region, and the rhythm belongs to the settings page (its body's gap, below the tabs' hairline), so it lives beside the layout that owns it.
 - `isLoading` holds the header's place with skeletons after the loading delay (marked busy, "Loading settings" for screen readers); the navigation stays usable.
-- The page is capped at `size-dialog-wide`. Below 480px wide (a container query, as RecordHeader) the navigation sits above the page.
+- The page takes the view's whole width inside the app's `space-16` gutter, like every other page (owner, 20 October 2026); it used to stop at `size-dialog-wide`. Below 480px wide (a container query, as RecordHeader) the navigation sits above the page.
+
+### The settings page pattern
+
+Every settings page builds its body from three pieces, so Profile, Security, Workspace › General, Members and the rest read as one product:
+
+1. **Settings in sections.** `SettingsSection` takes a `title` and an optional `description`, and holds the section's Cards. From the page breakpoint (`bp-page-compact`, 1024px, a media query, so the split matches on every settings page at one window width) the title and description take a `size-column-wide` column at the start and the cards the rest of the width, as Vercel and Linear lay out their settings; below it the title sits above the cards. A hairline sits between one section and the next. The title is an h2 under the page's h1 (an h3 under a TopBar), the section is a region named by it, and Cards inside take h3 titles. Inside a section:
+   - a **Card of `SettingsRow`s**, one setting per row (title and description at the start, its control at the end): Preferences › Appearance.
+   - a **Card holding a `Form` with `columns={2}`**, its Save in the Card's `footer`: the fields sit two to a row, so none stretches across the page. Leave the Card's `title` out when the section's title already says it (an object's Names and look).
+   - **`SettingsGrid`** for several cards of one kind (a card per calendar, per integration): as many columns as keep each card at least `size-panel` wide, one on a phone.
+   - a **danger section last** (Archive, Delete): a Card with a `danger` Button in its `actions`.
+2. **Lists run the full width.** A `Table` (Objects, an object's attributes, Background jobs, Members) goes straight in the body with no section, so its columns get the room.
+3. **Page level notes and states span the width too:** a read only `Callout`, a result `Callout`, and an `EmptyState` for empty and failed reads sit in the body outside any section.
+
+```tsx
+<SettingsLayout titleLevel={1} trail={trail} title="General" description="Your workspace’s name and address.">
+  <SettingsSection title="Workspace" description="What members see in the sidebar and in emails.">
+    <Card footer={<Button variant="primary" type="submit" form="workspace">Save</Button>}>
+      <Form id="workspace" columns={2} onSubmit={save}>
+        <Field label="Name" name="name" />
+        <Field label="Web address" name="slug" />
+      </Form>
+    </Card>
+  </SettingsSection>
+  <SettingsSection title="Danger zone">
+    <Card title="Delete workspace" description="…" actions={<Button variant="danger">Delete workspace</Button>} />
+  </SettingsSection>
+</SettingsLayout>
+```
+
+Inside an object's tabs, wrap the sections in `SettingsStack` as before. Why `SettingsSection` and `SettingsGrid` are new parts here: nothing in the library put a group's title beside its cards (Card's own title sits inside its frame, and SectionBar is a list's header), and the split and the grid belong to the settings page's layout, so they live beside it rather than as Card variants.
 
 ## States
 
-Loaded, loading (the trail stays, skeletons for the title and description), with and without the navigation column, a trail, a tile, badge, description and actions, current entry, hover and focus on the entries (NavItem's), narrow. Empty, error and read only states are the body's (EmptyState, Callout). SettingsRow: with and without a description, wide (control at the end) and narrow (control under the text); disabled and read only are its control's.
+Loaded, loading (the trail stays, skeletons for the title and description), sections (wide: title beside the cards; narrow: above them), a grid of cards, with and without the navigation column, a trail, a tile, badge, description and actions, current entry, hover and focus on the entries (NavItem's), narrow. Empty, error and read only states are the body's (EmptyState, Callout). SettingsRow: with and without a description, wide (control at the end) and narrow (control under the text); disabled and read only are its control's.
 
 ## Keyboard
 

@@ -510,3 +510,38 @@ export const LinkedFieldRefusalClears: Story = {
     await expect(slug).not.toHaveAttribute('aria-invalid');
   },
 };
+
+/**
+ * Two columns (a settings form across the page): the fields sit two to a
+ * row, and the refusal about no field and the submit span the row.
+ */
+export const TwoColumns: Story = {
+  args: { columns: 2, refusals: [{ code: 'RATE_LIMITED', message: 'Too many tries. Wait a minute.' }] },
+  render: (args) => (
+    <Stage width="fill">
+      <Form {...args}>
+        <Field label="Workspace name" name="name" defaultValue="Halcyon Labs" />
+        <Field label="Web address" name="slug" defaultValue="halcyon-labs" hint="Letters, numbers and dashes." />
+        <Field label="Workspace ID" name="id" defaultValue="01a159c4" isReadOnly readOnlyReason="Set by the system." />
+      </Form>
+    </Stage>
+  ),
+  play: async ({ canvas }) => {
+    const name = canvas.getByRole('textbox', { name: 'Workspace name' }).getBoundingClientRect();
+    const slug = canvas.getByRole('textbox', { name: 'Web address' }).getBoundingClientRect();
+    // Side by side when the stage is wide enough for two wide columns.
+    if (canvas.getByRole('alert').getBoundingClientRect().width >= 600) await expect(slug.top).toBe(name.top);
+    const form = canvas.getByRole('alert').closest('form')?.getBoundingClientRect().width;
+    await expect(canvas.getByRole('alert').getBoundingClientRect().width).toBe(form);
+  },
+};
+
+/** Two columns in a narrow slot: one field to a row, as without them. */
+export const TwoColumnsNarrow: Story = {
+  args: { columns: 2 },
+  play: async ({ canvas }) => {
+    const name = canvas.getByRole('textbox', { name: 'Workspace name' }).getBoundingClientRect();
+    const slug = canvas.getByRole('textbox', { name: 'Web address' }).getBoundingClientRect();
+    await expect(slug.top).toBeGreaterThan(name.top);
+  },
+};

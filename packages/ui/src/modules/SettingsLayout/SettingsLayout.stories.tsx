@@ -9,7 +9,16 @@ import { EmptyState } from '../../molecules/EmptyState/EmptyState.tsx';
 import { TabPanel, Tabs } from '../../molecules/Tabs/Tabs.tsx';
 import { Stage } from '../../workbench/Stage/Stage.tsx';
 import { Select } from '../../molecules/Select/Select.tsx';
-import { SettingsLayout, SettingsRow, SettingsStack, type SettingsNavEntry } from './SettingsLayout.tsx';
+import { Field } from '../../molecules/Field/Field.tsx';
+import { Form } from '../../molecules/Form/Form.tsx';
+import {
+  SettingsGrid,
+  SettingsLayout,
+  SettingsRow,
+  SettingsSection,
+  SettingsStack,
+  type SettingsNavEntry,
+} from './SettingsLayout.tsx';
 
 const NAV: readonly SettingsNavEntry[] = [
   { id: 'objects', label: 'Objects', href: '#objects', icon: 'box' },
@@ -50,16 +59,20 @@ function SampleSettings({ page = 'objects', isLoading = false, width = 'auto' }:
             <TabPanel id="attributes">{null}</TabPanel>
             <TabPanel id="configuration">
               <SettingsStack>
-                <Card title="Configuration" description="Its names and look." />
-                <Card
-                  title="Archive Projects"
-                  description="It leaves the sidebar; its records are kept."
-                  actions={
-                    <Button variant="danger" icon="archive">
-                      Archive Projects
-                    </Button>
-                  }
-                />
+                <SettingsSection title="Names and look" description="What it’s called, and its icon and colour.">
+                  <Card>Project, Projects</Card>
+                </SettingsSection>
+                <SettingsSection title="Archive">
+                  <Card
+                    title="Archive Projects"
+                    description="It leaves the sidebar; its records are kept."
+                    actions={
+                      <Button variant="danger" icon="archive">
+                        Archive Projects
+                      </Button>
+                    }
+                  />
+                </SettingsSection>
               </SettingsStack>
             </TabPanel>
           </Tabs>
@@ -177,7 +190,8 @@ const THEMES = [
 
 /**
  * A page beside the app's settings sidebar (spec 0026): no navigation column,
- * the trail over its h1, a hairline, then a Card of setting rows.
+ * the trail over its h1, a hairline, then a section: its title at the start,
+ * a Card of setting rows across the rest of the width.
  */
 export const Rows: Story = {
   parameters: { crm: { preview: true } },
@@ -192,19 +206,21 @@ export const Rows: Story = {
         title="Preferences"
         description="How Timefix looks for you. Saved in this browser."
       >
-        <Card title="Appearance">
-          <SettingsRow title="Interface theme" description="Choose a look, or follow your device’s setting.">
-            <Select label="Interface theme" isLabelHidden items={THEMES} defaultValue="system" />
-          </SettingsRow>
-          <SettingsRow title="Density" description="A second row, a hairline above it.">
-            <Select
-              label="Density"
-              isLabelHidden
-              items={[{ id: 'compact', label: 'Compact' }]}
-              defaultValue="compact"
-            />
-          </SettingsRow>
-        </Card>
+        <SettingsSection title="Appearance" description="How the app looks on this browser.">
+          <Card>
+            <SettingsRow title="Interface theme" description="Choose a look, or follow your device’s setting.">
+              <Select label="Interface theme" isLabelHidden items={THEMES} defaultValue="system" />
+            </SettingsRow>
+            <SettingsRow title="Density" description="A second row, a hairline above it.">
+              <Select
+                label="Density"
+                isLabelHidden
+                items={[{ id: 'compact', label: 'Compact' }]}
+                defaultValue="compact"
+              />
+            </SettingsRow>
+          </Card>
+        </SettingsSection>
       </SettingsLayout>
     </Stage>
   ),
@@ -212,6 +228,7 @@ export const Rows: Story = {
     await expect(canvas.queryByRole('navigation', { name: 'Settings' })).toBeNull();
     await expect(canvas.getByRole('heading', { level: 1, name: 'Preferences' })).toHaveAttribute('tabindex', '-1');
     await expect(canvas.getByRole('heading', { level: 2, name: 'Appearance' })).toBeInTheDocument();
+    await expect(canvas.getByRole('region', { name: 'Appearance' })).toBeInTheDocument();
     await expect(canvas.queryByRole('link', { name: 'Account' })).toBeNull();
     await expect(canvas.getByRole('button', { name: /Interface theme/ })).toBeInTheDocument();
   },
@@ -241,16 +258,18 @@ export const RowsLoading: Story = {
   },
 };
 
-/** On a phone the control drops under its title and description. */
+/** On a phone the section's title sits above its card, and the control drops under its title and description. */
 export const RowsNarrow: Story = {
   render: () => (
     <Stage width="narrow">
       <SettingsLayout titleLevel={1} title="Preferences">
-        <Card title="Appearance">
-          <SettingsRow title="Interface theme" description="Choose a look, or follow your device’s setting.">
-            <Select label="Interface theme" isLabelHidden items={THEMES} defaultValue="system" />
-          </SettingsRow>
-        </Card>
+        <SettingsSection title="Appearance">
+          <Card>
+            <SettingsRow title="Interface theme" description="Choose a look, or follow your device’s setting.">
+              <Select label="Interface theme" isLabelHidden items={THEMES} defaultValue="system" />
+            </SettingsRow>
+          </Card>
+        </SettingsSection>
       </SettingsLayout>
     </Stage>
   ),
@@ -292,4 +311,87 @@ export const RowStates: Story = {
     await expect(canvas.getByText('Interface theme')).toBeInTheDocument();
     await expect(canvas.getByRole('button', { name: /Density/ })).toBeDisabled();
   },
+};
+
+/**
+ * The pattern every settings page follows (20 Oct 2026): sections across the
+ * page's width, each with its title and description at the start; a form
+ * section whose fields sit two to a row (Form's `columns={2}`); cards of one
+ * kind side by side in a SettingsGrid; and a danger section last.
+ */
+export const Sections: Story = {
+  parameters: { crm: { preview: true } },
+  render: () => (
+    <Stage width="fill">
+      <SettingsLayout
+        titleLevel={1}
+        trail={[
+          { id: 'workspace', label: 'Workspace' },
+          { id: 'general', label: 'General' },
+        ]}
+        title="General"
+        description="Your workspace’s name and address."
+      >
+        <SettingsSection title="Workspace" description="What members see in the sidebar and in emails.">
+          <Card footer={<Button variant="primary">Save</Button>}>
+            <Form id="workspace" label="Workspace" columns={2} onSubmit={() => undefined}>
+              <Field label="Name" name="name" defaultValue="Acme" />
+              <Field label="Web address" name="slug" defaultValue="acme" />
+              <Field
+                label="Workspace ID"
+                name="id"
+                defaultValue="01a159c4-5ab4"
+                isReadOnly
+                readOnlyReason="Set by the system."
+              />
+            </Form>
+          </Card>
+        </SettingsSection>
+        <SettingsSection title="Calendars" description="One card for each connected calendar.">
+          <SettingsGrid>
+            <Card title="ada@acme.com" description="Google · Default" />
+            <Card title="ada@personal.com" description="Google" />
+          </SettingsGrid>
+        </SettingsSection>
+        <SettingsSection title="Danger zone">
+          <Card
+            title="Delete workspace"
+            description="Everything in it goes, for every member."
+            actions={<Button variant="danger">Delete workspace</Button>}
+          />
+        </SettingsSection>
+      </SettingsLayout>
+    </Stage>
+  ),
+  play: async ({ canvas }) => {
+    await expect(canvas.getByRole('heading', { level: 2, name: 'Workspace' })).toBeInTheDocument();
+    await expect(canvas.getByRole('region', { name: 'Danger zone' })).toBeInTheDocument();
+    // Cards in a section take the level under the section's heading.
+    await expect(canvas.getByRole('heading', { level: 3, name: 'Delete workspace' })).toBeInTheDocument();
+    await expect(canvas.getByLabelText('Web address')).toHaveValue('acme');
+  },
+};
+
+/** The same sections in a narrow slot: each title above its cards, the fields one to a row, the cards stacked. */
+export const SectionsNarrow: Story = {
+  render: () => (
+    <Stage width="narrow">
+      <SettingsLayout titleLevel={1} title="General">
+        <SettingsSection title="Workspace" description="What members see in the sidebar and in emails.">
+          <Card>
+            <Form id="workspace-narrow" label="Workspace" columns={2} onSubmit={() => undefined}>
+              <Field label="Name" name="name" defaultValue="Acme" />
+              <Field label="Web address" name="slug" defaultValue="acme" />
+            </Form>
+          </Card>
+        </SettingsSection>
+        <SettingsSection title="Calendars">
+          <SettingsGrid>
+            <Card title="ada@acme.com" description="Google · Default" />
+            <Card title="ada@personal.com" description="Google" />
+          </SettingsGrid>
+        </SettingsSection>
+      </SettingsLayout>
+    </Stage>
+  ),
 };

@@ -4,7 +4,7 @@
 // over its body. The body is the screen's: Tabs, Cards, Tables, EmptyState.
 // Since spec 0026 the app's settings navigation is the Sidebar's settings
 // variant, so the page draws its own trail and h1, and `nav` is optional.
-import type { ReactNode, Ref } from 'react';
+import { useContext, useId, type ReactNode, type Ref } from 'react';
 import { Icon } from '../../atoms/Icon/Icon.tsx';
 import type { IconName } from '../../atoms/Icon/icons.ts';
 import { Skeleton } from '../../atoms/Skeleton/Skeleton.tsx';
@@ -178,6 +178,57 @@ export interface SettingsStackProps {
  */
 export function SettingsStack({ children }: SettingsStackProps) {
   return <div className={styles.stack}>{children}</div>;
+}
+
+/** Props for SettingsSection. */
+export interface SettingsSectionProps {
+  /** What the section holds ("Appearance"): its heading, one level under the page's title. */
+  readonly title: string;
+  /** One or two muted lines on what the settings in it change. */
+  readonly description?: ReactNode;
+  /** The section's settings: Cards (of SettingsRows, or a Form), a SettingsGrid of Cards, a Callout. */
+  readonly children: ReactNode;
+}
+
+/**
+ * One group of settings across the page's width (20 Oct 2026): its title and
+ * description in a column at the start, its cards across the rest, and a
+ * hairline before the next section. Below the page breakpoint the title sits
+ * above the cards. A list (a Table) needs no section: it runs the full width.
+ */
+export function SettingsSection({ title, description, children }: SettingsSectionProps) {
+  const headingId = useId();
+  // The page's h1 makes the body's headings h2 (SettingsLayout's CardTitleLevel); under a TopBar they are h3.
+  const level = useContext(CardTitleLevel);
+  const Heading = level === 2 ? 'h2' : 'h3';
+  return (
+    <section className={styles.section} aria-labelledby={headingId}>
+      <span className={styles.sectionText}>
+        <Heading className={styles.sectionTitle} id={headingId}>
+          {title}
+        </Heading>
+        {description !== undefined && <span className={styles.description}>{description}</span>}
+      </span>
+      <div className={styles.sectionBody}>
+        {/* The cards sit under the section's heading. */}
+        <CardTitleLevel value={3}>{children}</CardTitleLevel>
+      </div>
+    </section>
+  );
+}
+
+/** Props for SettingsGrid. */
+export interface SettingsGridProps {
+  /** Cards of the same kind: one per calendar, one per integration. */
+  readonly children: ReactNode;
+}
+
+/**
+ * Cards of one kind side by side: as many columns as keep each card at least
+ * the panel's width (one on a phone), every card the same width.
+ */
+export function SettingsGrid({ children }: SettingsGridProps) {
+  return <div className={styles.grid}>{children}</div>;
 }
 
 /** Props for SettingsRow. */

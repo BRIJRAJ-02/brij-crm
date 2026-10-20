@@ -15,7 +15,7 @@ const meta = {
 export default meta;
 type Story = StoryObj<typeof meta>;
 
-/** Two cards in a readable column. */
+/** Two cards, stacked across the view's whole width. */
 export const Default: Story = {
   parameters: { crm: { preview: true } },
   render: (args) => (
@@ -49,31 +49,8 @@ export const WithFooter: Story = {
   },
 };
 
-/** The whole width inside the padding (Bookings' tabs). */
-export const FullWidth: Story = {
-  args: { width: 'full' },
-  render: (args) => (
-    <Stage>
-      <PageColumn
-        {...args}
-        actions={
-          <Button variant="primary" icon="plus">
-            New form
-          </Button>
-        }
-      >
-        <Card title="Contact us">3 enquiries this month.</Card>
-      </PageColumn>
-    </Stage>
-  ),
-  play: async ({ canvas }) => {
-    await expect(canvas.getByRole('button', { name: 'New form' })).toBeInTheDocument();
-  },
-};
-
 /** A side column at the end on a wide page (Availability: the week, then the time zone and days off), under it on a narrow one. */
 export const WithAside: Story = {
-  args: { width: 'full' },
   render: (args) => (
     <Stage width="fill">
       <PageColumn
@@ -96,7 +73,6 @@ export const WithAside: Story = {
 
 /** Too narrow for both: the side column wraps under the children at full width. */
 export const WithAsideNarrow: Story = {
-  args: { width: 'full' },
   render: (args) => (
     <Stage width="narrow">
       <PageColumn {...args} aside={<Card title="Time zone">Europe/London</Card>}>
@@ -113,7 +89,7 @@ export const WithAsideNarrow: Story = {
 
 /** Alone on the page: the whole height, its child in the middle (a list's empty state). */
 export const Centered: Story = {
-  args: { width: 'full', align: 'center' },
+  args: { align: 'center' },
   parameters: { crm: { screenshot: false } },
   render: (args) => (
     <Stage>
@@ -129,7 +105,7 @@ export const Centered: Story = {
 
 /** Stacked with `stack="aside-first"`: on a narrow page the side column comes before the children. */
 export const AsideFirstNarrow: Story = {
-  args: { width: 'full', stack: 'aside-first' },
+  args: { stack: 'aside-first' },
   render: (args) => (
     <Stage width="narrow">
       <PageColumn {...args} aside={<Card title="Time zone">Europe/London</Card>}>
@@ -149,7 +125,7 @@ export const AsideFirstNarrow: Story = {
 
 /** `stack="aside-first"` changes nothing side by side: the side column stays at the end, tops level. */
 export const AsideFirstWide: Story = {
-  args: { width: 'full', stack: 'aside-first' },
+  args: { stack: 'aside-first' },
   parameters: { crm: { screenshot: false } },
   render: (args) => (
     <Stage width="fill">

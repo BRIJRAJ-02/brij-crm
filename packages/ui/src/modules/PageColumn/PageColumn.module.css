@@ -1,5 +1,6 @@
-/* PageColumn: the body's padding (space-16, the gutter RecordLayout, Toolbar and Tabs keep), a readable
-   width (or the whole width), children stacked, and an optional footer bar that sticks to the view's foot. */
+/* PageColumn: the body's padding (space-16, the gutter RecordLayout, Toolbar and Tabs keep), the view's
+   whole width (every page is full width, 20 Oct 2026), children stacked, and an optional footer bar that
+   sticks to the view's foot. */
 @layer components {
   .root {
     box-sizing: border-box;
@@ -7,16 +8,7 @@
     flex-direction: column;
     gap: var(--space-16);
     inline-size: 100%;
-    max-inline-size: var(--size-dialog-wide);
     padding: var(--space-16);
-  }
-
-  .root[data-width='narrow'] {
-    max-inline-size: var(--size-page-card);
-  }
-
-  .root[data-width='full'] {
-    max-inline-size: none;
   }
 
   /* Alone on the page (a list's empty state): the view's whole height, its children in the middle. */

@@ -59,7 +59,7 @@ function AvailabilityError({ error }: ErrorComponentProps) {
       page={{
         topBar: <TopBar title={strings.availability} icon="clock" />,
         body: (
-          <PageColumn width="narrow">
+          <PageColumn>
             <EmptyState tone="error" title={strings.availabilityFailed} onRetry={() => void router.invalidate()}>
               {isDataError(error) ? error.message : strings.failedText}
             </EmptyState>

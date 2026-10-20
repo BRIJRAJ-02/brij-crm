@@ -329,11 +329,15 @@ export {
   type RelationshipSettingsValues,
 } from './modules/RelationshipSettings/RelationshipSettings.tsx';
 export {
+  SettingsGrid,
   SettingsLayout,
   SettingsRow,
+  SettingsSection,
   SettingsStack,
+  type SettingsGridProps,
   type SettingsLayoutProps,
   type SettingsRowProps,
+  type SettingsSectionProps,
   type SettingsStackProps,
   type SettingsNavEntry,
 } from './modules/SettingsLayout/SettingsLayout.tsx';

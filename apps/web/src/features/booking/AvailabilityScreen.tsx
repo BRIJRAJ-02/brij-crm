@@ -100,7 +100,6 @@ export function AvailabilityScreen({
         ),
         body: (
           <PageColumn
-            width="full"
             // On a phone the time zone comes first: the week below reads in it.
             stack="aside-first"
             aside={
@@ -170,7 +169,6 @@ export function AvailabilityPending() {
         body: (
           // The cards the page will show, each holding its place, so the page lands where the skeleton was.
           <PageColumn
-            width="full"
             stack="aside-first"
             aside={
               <>

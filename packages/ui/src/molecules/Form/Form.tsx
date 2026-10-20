@@ -48,6 +48,12 @@ interface FormBase<R extends FormRefusal> {
    * filled in (New person). The dialog keeps that focus rather than its own.
    */
   readonly focusesFirstField?: boolean;
+  /**
+   * `2` lays the fields out two to a row while each keeps at least a wide
+   * column's width, one to a row when it can't: a settings form across the
+   * page (an object's names, look and IDs). `1` (the default) stacks them.
+   */
+  readonly columns?: 1 | 2;
 }
 
 /** The submit under the fields, filling the width, as on a sign in page. */
@@ -175,6 +181,7 @@ export function Form<R extends FormRefusal = FormRefusal>({
   id,
   label,
   focusesFirstField = false,
+  columns = 1,
 }: FormProps<R>) {
   const formRef = useRef<HTMLFormElement>(null);
   const spokenRef = useRef<HTMLSpanElement>(null);
@@ -336,6 +343,7 @@ export function Form<R extends FormRefusal = FormRefusal>({
     <AriaForm
       ref={formRef}
       className={styles.root}
+      data-columns={columns === 2 ? columns : undefined}
       validationBehavior="aria"
       validationErrors={errors}
       onSubmit={submit}
@@ -344,14 +352,14 @@ export function Form<R extends FormRefusal = FormRefusal>({
       {...(label === undefined ? {} : { 'aria-label': label })}
     >
       {banner.length > 0 && (
-        // A new alert for each submit, so the same refusal again is announced again.
-        <Callout key={attempt} tone="danger">
-          {banner.join(' ')}
-        </Callout>
+        // A new alert for each submit, so the same refusal again is announced again. It spans every column.
+        <div key={attempt} className={styles.wide}>
+          <Callout tone="danger">{banner.join(' ')}</Callout>
+        </div>
       )}
       {children}
       {submitLabel !== undefined && (
-        <div className={styles.actions}>
+        <div className={`${styles.actions} ${styles.wide}`}>
           <Button
             type="submit"
             variant="primary"

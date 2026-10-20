@@ -2,7 +2,7 @@
 // Purpose: Settings › Account › Preferences (spec 0026): how the app looks for this person.
 // Main task: pick the interface theme (System preference, Light or Dark); it applies the moment it changes, with no Save.
 // Leaves out: time format, start of week, language and time zone (they need a stored per member preference, a later spec).
-import { Card, Select, SettingsRow } from '@crm/ui';
+import { Card, Select, SettingsRow, SettingsSection } from '@crm/ui';
 import { parseThemeChoice, type ThemeChoice, type ThemeController } from '@crm/ui/theme';
 import { useSyncExternalStore } from 'react';
 import { strings } from './preferences-strings.ts';
@@ -21,7 +21,7 @@ export interface PreferencesScreenProps {
   readonly theme: ThemeController;
 }
 
-/** Settings › Account › Preferences: an Appearance card with the Interface theme row (AC-684). */
+/** Settings › Account › Preferences: an Appearance section, its card holding the Interface theme row (AC-684). */
 export function PreferencesScreen({ theme }: PreferencesScreenProps) {
   // The controller is the one source: a change here, in another tab or on the status page shows at once.
   const choice = useSyncExternalStore(
@@ -30,20 +30,22 @@ export function PreferencesScreen({ theme }: PreferencesScreenProps) {
   );
   return (
     <SettingsPage title={strings.title} description={strings.description}>
-      <Card title={strings.appearance}>
-        <SettingsRow title={strings.theme} description={strings.themeDescription}>
-          <Select
-            label={strings.theme}
-            isLabelHidden
-            items={THEMES}
-            value={choice}
-            onChange={(next) => {
-              // Never cleared (no isClearable); anything unknown is System.
-              theme.set(parseThemeChoice(next));
-            }}
-          />
-        </SettingsRow>
-      </Card>
+      <SettingsSection title={strings.appearance}>
+        <Card>
+          <SettingsRow title={strings.theme} description={strings.themeDescription}>
+            <Select
+              label={strings.theme}
+              isLabelHidden
+              items={THEMES}
+              value={choice}
+              onChange={(next) => {
+                // Never cleared (no isClearable); anything unknown is System.
+                theme.set(parseThemeChoice(next));
+              }}
+            />
+          </SettingsRow>
+        </Card>
+      </SettingsSection>
     </SettingsPage>
   );
 }

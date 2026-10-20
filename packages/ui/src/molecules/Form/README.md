@@ -57,10 +57,11 @@ New (spec 0005, pulled forward from spec 0003's milestone 4). Sign in, verify, t
   ```
 - It checks nothing itself and the browser's checks are off: a module or screen says what is wrong in the library's words, as a refusal (SignInForm turns its "Enter your email address." into one) or a Field `error`.
 - `label` names the form for screen readers when no heading near it does.
+- `columns={2}` lays the fields out two to a row, each at least `size-column-wide`, and one to a row when the form is too narrow for two: a settings form across a full width page (an object's names, look and IDs in Settings), so no field stretches across the whole page. The refusal above the fields and the submit span the row. Why a variant and not a layout around the Form: the fields are the Form's own children, and the banner and submit it draws have to span the columns, which only the Form can arrange. Leave it out in a dialog or a sign in card, where one field to a row reads best.
 
 ## States
 
-Idle, field refused (on the field, in its hint's place, which reads as invalid, until its value changes, and then not again until the next answer), form refused (Callout above the fields, also for a refusal mapped to a field the form lacks), busy (the submit spins, refusals hidden), disabled (the submit is off), another way to go on (under the submit), in a Modal (the submit in its footer).
+Idle, field refused (on the field, in its hint's place, which reads as invalid, until its value changes, and then not again until the next answer), form refused (Callout above the fields, also for a refusal mapped to a field the form lacks), busy (the submit spins, refusals hidden), disabled (the submit is off), another way to go on (under the submit), in a Modal (the submit in its footer), two columns (wide and narrow).
 
 ## Keyboard
 

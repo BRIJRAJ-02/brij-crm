@@ -89,6 +89,9 @@ export const strings = {
   rulesColumn: 'Rules',
   noAttributes: 'No attributes yet',
   archivedObjectAttributes: (plural: string) => `${plural} is archived. Restore it to see its attributes here.`,
+  /** The Configuration tab's first section: the form. */
+  lookSection: 'Names and look',
+  lookSectionText: 'What it’s called, its icon and colour, and the names integrations use.',
   /** The danger zone. */
   dangerZone: 'Archive',
   dangerArchive: (plural: string) => `Archive ${plural}`,

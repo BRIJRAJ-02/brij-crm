@@ -3,7 +3,17 @@
 // Main task: owners and admins rename or restyle the object and Save; or archive (or restore) it from the danger zone.
 // Leaves out: changing the API name (never, AC-224) and the attributes (the Attributes tab).
 import { isDataError, type Hue, type ObjectIcon, type ObjectSummary } from '@crm/data';
-import { Button, Callout, Card, CopyButton, Field, Form, type FormRefusal, SettingsStack } from '@crm/ui';
+import {
+  Button,
+  Callout,
+  Card,
+  CopyButton,
+  Field,
+  Form,
+  type FormRefusal,
+  SettingsSection,
+  SettingsStack,
+} from '@crm/ui';
 import { useRouteContext } from '@tanstack/react-router';
 import { useId, useState } from 'react';
 import { focusTitle } from '../navigation/focus-title.ts';
@@ -104,94 +114,99 @@ export function ConfigurationTab({ slug, object }: ConfigurationTabProps) {
   return (
     <SettingsStack>
       {!canManage && <Callout>{strings.readOnlyNote}</Callout>}
-      <Card
-        title={strings.configurationTab}
-        {...(canManage
-          ? {
-              footer: (
-                <Button
-                  variant="primary"
-                  type="submit"
-                  form={formId}
-                  isPending={isBusy}
-                  isDisabled={!isChanged}
-                  kbd="⌘↵"
-                >
-                  {isBusy ? strings.saving : strings.save}
-                </Button>
-              ),
-            }
-          : {})}
-      >
-        <Form
-          id={formId}
-          isBusy={isBusy}
-          isDisabled={!canManage || !isChanged}
-          refusals={refusals}
-          fieldFor={(refusal) => refusal.attributeId}
-          onSubmit={save}
-          label={strings.configurationTab}
+      <SettingsSection title={strings.lookSection} description={strings.lookSectionText}>
+        <Card
+          {...(canManage
+            ? {
+                footer: (
+                  <Button
+                    variant="primary"
+                    type="submit"
+                    form={formId}
+                    isPending={isBusy}
+                    isDisabled={!isChanged}
+                    kbd="⌘↵"
+                  >
+                    {isBusy ? strings.saving : strings.save}
+                  </Button>
+                ),
+              }
+            : {})}
         >
-          <Field
-            label={strings.singularName}
-            prefix={<ObjectIconButton icon={icon} hue={hue} onChange={setIcon} isReadOnly={!canManage} />}
-            name="singularName"
-            autoComplete="off"
-            maxLength={100}
-            value={singular}
-            onChange={setSingular}
-            isReadOnly={!canManage}
-            {...(canManage ? {} : { readOnlyReason: strings.readOnlyNote })}
-          />
-          <Field
-            label={strings.pluralName}
-            name="pluralName"
-            autoComplete="off"
-            maxLength={100}
-            value={plural}
-            onChange={setPlural}
-            isReadOnly={!canManage}
-            {...(canManage ? {} : { readOnlyReason: strings.readOnlyNote })}
-          />
-          <ObjectHueField hue={hue} onChange={setHue} isReadOnly={!canManage} />
-          <Field
-            label={strings.apiName}
-            value={object.apiSlug}
-            isReadOnly
-            readOnlyReason={strings.apiNameLocked}
-            suffix={<CopyButton value={object.apiSlug} label={strings.copyApiName} isIconOnly variant="ghost" />}
-          />
-          <Field
-            label={strings.objectId}
-            value={object.id}
-            isReadOnly
-            readOnlyReason={strings.objectIdReason}
-            suffix={<CopyButton value={object.id} label={strings.copyObjectId} isIconOnly variant="ghost" />}
-          />
-        </Form>
-      </Card>
-      {canManage &&
-        (object.isArchived ? (
-          <Card
-            title={strings.dangerRestore(object.pluralName)}
-            description={strings.dangerRestoreText}
-            actions={
-              <Button icon="archive-restore" isPending={isRestoring} onPress={restore}>
-                {isRestoring ? strings.restoring : strings.restore}
-              </Button>
-            }
-          />
-        ) : (
-          <Card
-            title={strings.dangerArchive(object.pluralName)}
-            description={strings.dangerArchiveText}
-            actions={
-              <Button variant="danger" icon="archive" onPress={() => setArchiving(true)}>
-                {strings.archive}
-              </Button>
-            }
-          />
-        ))}
+          <Form
+            id={formId}
+            isBusy={isBusy}
+            isDisabled={!canManage || !isChanged}
+            refusals={refusals}
+            fieldFor={(refusal) => refusal.attributeId}
+            onSubmit={save}
+            label={strings.configurationTab}
+            columns={2}
+          >
+            <Field
+              label={strings.singularName}
+              prefix={<ObjectIconButton icon={icon} hue={hue} onChange={setIcon} isReadOnly={!canManage} />}
+              name="singularName"
+              autoComplete="off"
+              maxLength={100}
+              value={singular}
+              onChange={setSingular}
+              isReadOnly={!canManage}
+              {...(canManage ? {} : { readOnlyReason: strings.readOnlyNote })}
+            />
+            <Field
+              label={strings.pluralName}
+              name="pluralName"
+              autoComplete="off"
+              maxLength={100}
+              value={plural}
+              onChange={setPlural}
+              isReadOnly={!canManage}
+              {...(canManage ? {} : { readOnlyReason: strings.readOnlyNote })}
+            />
+            <ObjectHueField hue={hue} onChange={setHue} isReadOnly={!canManage} />
+            <Field
+              label={strings.apiName}
+              value={object.apiSlug}
+              isReadOnly
+              readOnlyReason={strings.apiNameLocked}
+              suffix={<CopyButton value={object.apiSlug} label={strings.copyApiName} isIconOnly variant="ghost" />}
+            />
+            <Field
+              label={strings.objectId}
+              value={object.id}
+              isReadOnly
+              readOnlyReason={strings.objectIdReason}
+              suffix={<CopyButton value={object.id} label={strings.copyObjectId} isIconOnly variant="ghost" />}
+            />
+          </Form>
+        </Card>
+      </SettingsSection>
+      {canManage && (
+        <SettingsSection title={strings.dangerZone}>
+          {object.isArchived ? (
+            <Card
+              title={strings.dangerRestore(object.pluralName)}
+              description={strings.dangerRestoreText}
+              actions={
+                <Button icon="archive-restore" isPending={isRestoring} onPress={restore}>
+                  {isRestoring ? strings.restoring : strings.restore}
+                </Button>
+              }
+            />
+          ) : (
+            <Card
+              title={strings.dangerArchive(object.pluralName)}
+              description={strings.dangerArchiveText}
+              actions={
+                <Button variant="danger" icon="archive" onPress={() => setArchiving(true)}>
+                  {strings.archive}
+                </Button>
+              }
+            />
+          )}
+        </SettingsSection>
+      )}
       <ArchiveObjectDialog
         data={data}
         slug={slug}

@@ -1,13 +1,28 @@
 /* Form: the fields stacked space-16 apart, a form level refusal above them,
    and the buttons last, under one another space-8 apart. Each button fills
    the width through its own isFullWidth="center"; the column never stretches
-   them. */
+   them. With two columns, the fields sit two to a row while each keeps
+   size-column-wide, one to a row when they can't; the refusal and the
+   buttons span the row. */
 @layer components {
   .root {
     display: flex;
     flex-direction: column;
     gap: var(--space-16);
     min-inline-size: 0;
+  }
+
+  .root[data-columns='2'] {
+    display: grid;
+    grid-template-columns: repeat(
+      auto-fit,
+      minmax(min(100%, max(var(--size-column-wide), calc((100% - var(--space-16)) / 2))), 1fr)
+    );
+    align-items: start;
+  }
+
+  .wide {
+    grid-column: 1 / -1;
   }
 
   .actions {

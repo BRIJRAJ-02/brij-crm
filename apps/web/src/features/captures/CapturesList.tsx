@@ -45,7 +45,7 @@ export function CapturesList({
   const [query, setQuery] = useState('');
   if (status === 'ready' && cards.length === 0) {
     return (
-      <PageColumn width="full" align="center">
+      <PageColumn align="center">
         <EmptyState title={empty.title} icon={empty.icon} {...(newAction === undefined ? {} : { actions: newAction })}>
           {empty.text}
         </EmptyState>

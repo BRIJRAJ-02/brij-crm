@@ -400,7 +400,7 @@ export interface BookingsCalendarScreenProps {
 /** Bookings › Calendar: the range, previous week, Today, next week and Filter, then the grid and the week's count. */
 export function BookingsCalendarScreen(props: BookingsCalendarScreenProps) {
   return (
-    <PageColumn width="full">
+    <PageColumn>
       <WeekView {...props} />
     </PageColumn>
   );
@@ -997,7 +997,7 @@ export function BookingsListScreen({ slug, search, lists, objects, pages, locale
     };
   })();
   return (
-    <PageColumn width="full">
+    <PageColumn>
       <Toolbar>{body.bar}</Toolbar>
       {body.list}
       {open !== undefined && (
@@ -1019,7 +1019,7 @@ function usePersonHref(slug: string, objects: readonly ObjectSummary[]) {
 /** A Bookings tab while its first read loads. */
 export function BookingsPending() {
   return (
-    <PageColumn width="full">
+    <PageColumn>
       <Skeleton shape="block" />
     </PageColumn>
   );
@@ -1028,7 +1028,7 @@ export function BookingsPending() {
 /** A Bookings tab when its first read failed, with Try again. */
 export function BookingsFailed({ message, onRetry }: { readonly message: string; readonly onRetry: () => void }) {
   return (
-    <PageColumn width="full">
+    <PageColumn>
       <EmptyState tone="error" title={strings.failedTitle} onRetry={onRetry}>
         {message}
       </EmptyState>
