@@ -154,6 +154,8 @@ export const PublicBookInput = z.object({
   company_url: z.string().max(200).optional(),
   ticket: z.string().max(200).optional(),
   startedAt: z.number().int().nonnegative().optional(),
+  /** The signed hand off a form sent the visitor with (AC-1058): links the booking to that submission. */
+  prefill: z.string().max(4096).optional(),
 });
 /** A visitor's booking. */
 export type PublicBookInput = z.infer<typeof PublicBookInput>;
@@ -169,6 +171,15 @@ export const PublicBooking = z.object({
 });
 /** A confirmed booking. */
 export type PublicBooking = z.infer<typeof PublicBooking>;
+
+/**
+ * `GET /api/public/booking/:publicKey/prefill?p=<token>` (AC-1058, spec 0025
+ * AC-642): the name and email a form handed over, read back only from a token
+ * the server signed for this page and not yet expired; empty for anything else.
+ */
+export const PublicPrefill = z.object({ name: z.string().optional(), email: z.string().optional() });
+/** The name and email a form handed over. */
+export type PublicPrefill = z.infer<typeof PublicPrefill>;
 
 /** The book answer: the booking, and the guest page's token (only this answer ever carries it). */
 export const PublicBooked = z.object({ booking: PublicBooking, manageToken: z.string() });

@@ -53,7 +53,7 @@ import { MAX_RESCHEDULES } from './change.ts';
 import { enqueueBookingMail, recordEvent } from './mail-queue.ts';
 import { ensureManageToken, manageTokenFor, type ManageLinkKey } from './tokens.ts';
 
-const { bookings, members, workspaces } = schema;
+const { bookings, formSubmissions, members, workspaces } = schema;
 
 /** What the public services need: the calendar calls, the manage link key, and the clock. */
 export interface PublicBookingDeps {
@@ -226,6 +226,8 @@ export async function bookPublicSlot(
   deps: PublicBookingDeps,
   input: PublicBookInput,
   hooks: readonly AfterWrite[] = [],
+  /** The form submission a verified hand off named (AC-1058): stored on the booking when it is this workspace's. */
+  link?: { readonly submissionId: string },
 ): Promise<Booked> {
   checkEntry(entry);
   const now = deps.now?.() ?? new Date();
@@ -321,6 +323,16 @@ export async function bookPublicSlot(
       const actor = { type: 'booking' as const, id: page.id, memberId: null };
       let bookingId: string;
       try {
+        // A hand off names a submission; it is linked only when it is this workspace's.
+        const submissionId =
+          link === undefined
+            ? undefined
+            : (
+                await tx
+                  .select({ id: formSubmissions.id })
+                  .from(formSubmissions)
+                  .where(eq(formSubmissions.id, link.submissionId))
+              )[0]?.id;
         const [row] = await tx
           .insert(bookings)
           .values({
@@ -335,6 +347,7 @@ export async function bookPublicSlot(
             visitorEmail: input.email,
             visitorTimeZone: input.timeZone,
             answers: answersOf(input),
+            ...(submissionId === undefined ? {} : { submissionId }),
             manageTokenHash: tokenHash,
             manageTokenDerived: true,
             idempotencyKey: input.idempotencyKey,

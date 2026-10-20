@@ -21,6 +21,7 @@ import { createCalendarServices, GOOGLE_NOTIFY_PATH, type CalendarServices } fro
 import { backgroundHooks } from './hooks.ts';
 import { createEdgeGuard } from './edge.ts';
 import { mountExports } from './forms/exports.ts';
+import { handoffKey } from './forms/handoff.ts';
 import { hashAddress, mountPublicForms } from './forms/public.ts';
 import { createCaptchaVerifier, type CaptchaVerifier } from './forms/recaptcha.ts';
 import { createTicketBook, mountTickets } from './forms/ticket.ts';
@@ -325,6 +326,8 @@ export function createApp({
     auth,
     enter: (userId, slug) => enterWorkspace({ db, identity, log, rules }, { userId, slug }),
   });
+  // The form to booking hand off (spec 0023 AC-1057): one key, signing on the form's side and reading on the page's.
+  const formsHandoffKey = handoffKey(env.BETTER_AUTH_SECRET);
   mountPublicForms(app, {
     db,
     jobs,
@@ -337,6 +340,7 @@ export function createApp({
     publicOrigin: formsOrigin,
     ipSalt,
     answersKey: createHmac('sha256', ipSalt).update('crm-answers-hash-v1').digest('hex'),
+    handoffKey: formsHandoffKey,
     ...(env.RECAPTCHA_SITE_KEY === undefined ? {} : { recaptchaSiteKey: env.RECAPTCHA_SITE_KEY }),
   });
 
@@ -366,6 +370,7 @@ export function createApp({
   // Booking pages' public routes (spec 0025): a page's public key, no session; writes passed the Origin check above.
   mountPublicBooking(app, {
     db,
+    handoffKey: formsHandoffKey,
     calendar: {
       busy: bookingBusy,
       events: booking.events,

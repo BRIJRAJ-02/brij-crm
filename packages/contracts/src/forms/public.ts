@@ -105,10 +105,22 @@ export const SubmitBody = z.object({
 /** The submit body. */
 export type SubmitBody = z.input<typeof SubmitBody>;
 
-/** What the visitor gets next (AC-570): the thank you, or where to go. */
+/**
+ * What the visitor gets next (AC-570, AC-1057): the thank you, where to go,
+ * or the booking page to go on to after `countdownSeconds` (0: at once). The
+ * booking `url` is same origin (`/b/<page>?p=<token>`), its token signed by
+ * the server and carrying the visitor's name, email and the submission.
+ */
 export const SubmitNext = z.discriminatedUnion('kind', [
   z.object({ kind: z.literal('message'), text: z.string(), offersMeeting: z.boolean().optional() }),
   z.object({ kind: z.literal('redirect'), url: z.string() }),
+  z.object({
+    kind: z.literal('booking'),
+    url: z.string(),
+    countdownSeconds: z.number().int().min(0).max(30),
+    /** The thank you's own words, shown above the countdown when the form has them. */
+    text: z.string(),
+  }),
 ]);
 /** What the visitor gets next. */
 export type SubmitNext = z.infer<typeof SubmitNext>;

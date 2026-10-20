@@ -333,7 +333,10 @@ export {
   getPublicForm,
   postingRules,
   submitForm,
+  visitorOf,
+  type BookingHandoff,
   type PostingRules,
+  type SignHandoff,
   type SubmitInput,
   type SubmitOutcome,
 } from './forms/public.ts';

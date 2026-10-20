@@ -5,10 +5,10 @@
 // the form as the actor and no data access, so they read only the form's own
 // rows and never a record. A submission is stored first, in one insert with
 // its job queued in the same transaction (AC-554); processing happens there.
-import { checkAnswers, SubmitBody, type PublicForm, type SubmitNext } from '@crm/contracts';
+import { checkAnswers, SubmitBody, type FormDocument, type PublicForm, type SubmitNext } from '@crm/contracts';
 import { schema, type WorkspaceTx } from '@crm/db';
 import { createHmac } from 'node:crypto';
-import { sql } from 'drizzle-orm';
+import { and, eq, isNull, sql } from 'drizzle-orm';
 import { refuse, refuseAll } from '../engine/refusals.ts';
 import type { EngineScope } from '../engine/scope.ts';
 import { runWrite, type AfterWrite } from '../engine/write.ts';
@@ -26,7 +26,63 @@ import {
   type TicketVerdict,
 } from './spam.ts';
 
-const { formSubmissions } = schema;
+const { bookingPages, formSubmissions } = schema;
+
+/** What a form signs to hand its visitor to a booking page (AC-1057, spec 0025 AC-642). */
+export interface BookingHandoff {
+  readonly submissionId: string;
+  readonly bookingPageId: string;
+  readonly name?: string;
+  readonly email?: string;
+}
+
+/** Signs a hand off into the token the booking page's address carries; the API holds the key. */
+export type SignHandoff = (handoff: BookingHandoff) => string;
+
+/** The visitor's email (the form's first email question) and name (the `name` question, else a short text labelled with "name"). */
+export function visitorOf(
+  document: Pick<FormDocument, 'questions'>,
+  answers: Readonly<Record<string, unknown>>,
+): { readonly name?: string; readonly email?: string } {
+  const text = (key: string | undefined) => {
+    const value = key === undefined ? undefined : answers[key];
+    return typeof value === 'string' && value.trim() !== '' ? value.trim().slice(0, 200) : undefined;
+  };
+  const email = text(document.questions.find((question) => question.answerType === 'email')?.key);
+  const named =
+    document.questions.find(
+      (question) => question.answerType === 'short_text' && ['name', 'full_name', 'your_name'].includes(question.key),
+    ) ?? document.questions.find((question) => question.answerType === 'short_text' && /name/i.test(question.label));
+  const name = text(named?.key);
+  return { ...(name === undefined ? {} : { name }), ...(email === undefined ? {} : { email }) };
+}
+
+/**
+ * The next step a stored submission gives (AC-570, AC-1057): the thank you,
+ * the redirect, or the booking page with a signed hand off when that page is
+ * live right now; a paused or deleted page falls back to the thank you.
+ */
+async function nextOf(
+  tx: WorkspaceTx,
+  document: FormDocument,
+  submissionId: string,
+  answers: Readonly<Record<string, unknown>>,
+  sign: SignHandoff | undefined,
+): Promise<SubmitNext> {
+  const { after } = document;
+  if (after.kind === 'redirect') return { kind: 'redirect', url: after.url };
+  if (after.kind === 'message') return { kind: 'message', text: after.message, offersMeeting: false };
+  const [page] = await tx
+    .select({ publicKey: bookingPages.publicKey })
+    .from(bookingPages)
+    .where(
+      and(eq(bookingPages.id, after.bookingPageId), eq(bookingPages.status, 'live'), isNull(bookingPages.deletedAt)),
+    );
+  if (page === undefined) return { kind: 'message', text: after.message, offersMeeting: false };
+  const token = sign?.({ submissionId, bookingPageId: after.bookingPageId, ...visitorOf(document, answers) });
+  const url = `/b/${encodeURIComponent(page.publicKey)}${token === undefined ? '' : `?p=${encodeURIComponent(token)}`}`;
+  return { kind: 'booking', url, countdownSeconds: after.countdownSeconds, text: after.message };
+}
 
 /** What a form that isn't taking enquiries answers at its link (AC-549, AC-662). */
 export const FORM_CLOSED_MESSAGE = 'This form isn’t taking enquiries right now.';
@@ -102,6 +158,8 @@ export interface SubmitInput {
   readonly emailOverLimit?: boolean;
   /** The server key answers are hashed with for repeats; without it repeats aren't looked for. */
   readonly answersKey?: string;
+  /** Signs the booking hand off when the form sends visitors on to book (AC-1057). */
+  readonly signHandoff?: SignHandoff;
 }
 
 /** What storing a submission answered: the visitor's next step, and how the spam checks judged it. */
@@ -165,11 +223,6 @@ export async function submitForm(
       if (form.status !== 'live') throw refuse('FORM_CLOSED', FORM_CLOSED_MESSAGE);
       const live = (await loadVersions(tx, [form.liveVersionId])).get(form.liveVersionId);
       if (live === undefined) throw new Error('A live form names a version that is gone.');
-      const { after } = live.document;
-      const next: SubmitNext =
-        after.kind === 'message'
-          ? { kind: 'message', text: after.message, offersMeeting: false }
-          : { kind: 'redirect', url: after.url };
       const rendered = publicFormOf(live.document, {
         publicKey: form.publicKey,
         status: 'live',
@@ -247,10 +300,19 @@ export async function submitForm(
         .onConflictDoNothing()
         .returning({ id: formSubmissions.id });
       const [row] = inserted;
-      if (row === undefined) return { next, verdict: judged.verdict, replayed: true };
+      if (row === undefined) {
+        // A retry: the same next step, handed off for the submission the first attempt stored.
+        const [first] = await tx
+          .select({ id: formSubmissions.id })
+          .from(formSubmissions)
+          .where(and(eq(formSubmissions.formId, form.id), eq(formSubmissions.idempotencyKey, body.idempotencyKey)));
+        const again = await nextOf(tx, live.document, first?.id ?? '', answers, input.signHandoff);
+        return { next: again, verdict: judged.verdict, replayed: true };
+      }
       if (state === 'received') {
         await startJob(context, registry, { kind: FORMS_PROCESS, params: { submissionId: row.id } });
       }
+      const next = await nextOf(tx, live.document, row.id, answers, input.signHandoff);
       return { next, verdict: judged.verdict, replayed: false };
     },
     hooks,
