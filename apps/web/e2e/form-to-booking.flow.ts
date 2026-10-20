@@ -103,9 +103,15 @@ test.describe('a form that sends its visitor on to book', () => {
     const handoff = new URL(visitor.url()).searchParams.get('p') ?? '';
 
     // Pick the first open time, then the details start filled in.
-    await visitor.locator('button[aria-pressed]').first().click();
+    await visitor
+      .getByRole('list', { name: /^Times on / })
+      .getByRole('button')
+      .first()
+      .click();
     await visitor.getByRole('button', { name: /^Book / }).click();
     await expect(visitor.getByText('Booking as Ada Lovelace.')).toBeVisible();
+    // The booking's bot check wants a human's pace too.
+    await visitor.waitForTimeout(3_500);
     await visitor.getByRole('button', { name: 'Confirm booking' }).click();
     await expect(visitor).toHaveURL(/\/manage\?/);
 
