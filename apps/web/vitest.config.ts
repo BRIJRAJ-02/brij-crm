@@ -8,6 +8,11 @@ import viteConfig from './vite.config.ts';
 export default mergeConfig(
   viteConfig,
   defineConfig({
+    // The phone field's library loads on demand from @crm/ui. Bundled up front, so the browser tests' server
+    // never finds it halfway through a run and reloads the page under them.
+    optimizeDeps: {
+      include: ['@crm/ui > libphonenumber-js/max', '@crm/ui > libphonenumber-js/mobile/examples'],
+    },
     test: {
       projects: [
         {

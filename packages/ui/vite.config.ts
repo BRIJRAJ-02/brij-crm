@@ -16,6 +16,7 @@ export default defineConfig({
       'lucide-react',
       '@crm/contracts > zod',
       'libphonenumber-js/max',
+      'libphonenumber-js/mobile/examples',
       'react-dom/client',
       '@tanstack/react-virtual',
     ],
