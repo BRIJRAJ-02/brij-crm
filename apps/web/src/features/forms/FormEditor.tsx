@@ -42,7 +42,7 @@ import { formHref, formPreviewHref, formsHref, FORM_TABS, type FormTab } from '.
 import { PublishDialog } from './PublishDialog.tsx';
 import { QuestionsSection } from './QuestionsSection.tsx';
 import { firstRefusal } from './refusals.ts';
-import { SettingsTab } from './SettingsTab.tsx';
+import { SettingsTab, useFormSettings } from './SettingsTab.tsx';
 import { strings } from './strings.ts';
 import { SubmissionsTab } from './SubmissionsTab.tsx';
 
@@ -82,6 +82,14 @@ export function FormEditor(props: FormEditorProps) {
   const [isDeleting, setDeleting] = useState(false);
   // Publish leaves once there is nothing more to publish; focus then moves to the menu beside it.
   const moreRef = useRef<HTMLButtonElement>(null);
+  // The name, address and owner, saved together from the SaveBar on the Settings tab.
+  const settings = useFormSettings({
+    slug,
+    form,
+    onFormChange: (view) => {
+      setForm((before) => ({ ...view, revision: before.revision }));
+    },
+  });
 
   // What the server holds: the draft last saved, and the revision a save names.
   const saved = useRef<{ document: FormDocument; revision: number }>({
@@ -343,16 +351,25 @@ export function FormEditor(props: FormEditorProps) {
             slug={slug}
             form={form}
             draft={draft}
+            target={target}
             members={members}
             isReadOnly={!canManage}
+            settings={settings}
             onDraftChange={setDraft}
-            onFormChange={(view) => {
-              setForm((before) => ({ ...view, revision: before.revision }));
-            }}
           />
         );
       case 'install':
-        return <InstallTab slug={slug} form={form} isReadOnly={!canManage} onFormChange={setForm} />;
+        return (
+          <InstallTab
+            slug={slug}
+            form={form}
+            isReadOnly={!canManage}
+            onFormChange={setForm}
+            onResume={() => {
+              setStatus('live');
+            }}
+          />
+        );
       case 'submissions':
         return props.submissions === undefined ? null : (
           <SubmissionsTab
@@ -400,6 +417,9 @@ export function FormEditor(props: FormEditorProps) {
   const layout = (
     <PreviewLayout
       notices={notices}
+      // Settings and Install are groups of fields: side by side where there is room.
+      bodyLayout={current === 'settings' || current === 'install' ? 'grid' : 'stack'}
+      {...(current === 'settings' ? { footer: settings.footer } : {})}
       {...(current === 'form' || current === 'settings'
         ? {
             preview: <HostedFormPreview form={preview} />,
