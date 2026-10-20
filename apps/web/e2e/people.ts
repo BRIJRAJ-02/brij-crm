@@ -8,7 +8,7 @@ import { expect, test, type Page } from '@playwright/test';
 import { codeFor } from './mailpit.ts';
 
 /** Making a workspace writes its standard objects in one transaction; on a busy machine that takes a while. */
-const WORKSPACE_MADE_MS = 30_000;
+const WORKSPACE_MADE_MS = Number(process.env.FLOW_WORKSPACE_MS ?? 30_000);
 
 const SHOTS = process.env.FLOW_SCREENSHOTS;
 const AXE = createRequire(import.meta.url).resolve('axe-core/axe.min.js');

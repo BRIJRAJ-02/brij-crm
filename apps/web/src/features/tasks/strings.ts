@@ -29,6 +29,12 @@ export const strings = {
   cancel: 'Cancel',
   close: 'Close',
   copyLink: 'Copy link',
+  more: 'More actions',
+  deleteTask: 'Delete task',
+  taskDeleted: 'Task deleted',
+  undo: 'Undo',
+  notDeleted: 'The task wasn’t deleted.',
+  notRestored: 'The task couldn’t come back.',
   linkCopied: 'Link copied',
   copyFailed: 'Couldn’t copy the link. Copy it from the address bar.',
   /** The footer line's term: who made it and when. */

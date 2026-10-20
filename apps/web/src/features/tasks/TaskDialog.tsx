@@ -1,7 +1,7 @@
 // Brief
 // Purpose: everything about one task, on `?task=<id>` (or `?task=new`) over the page it opened from.
 // Main task: set its title, when it's due, who has it and which records it is about.
-// Leaves out: comments on tasks, reminders (#28), subtasks, and deleting it (milestone 4).
+// Leaves out: comments on tasks, reminders (#28), subtasks.
 import {
   refusalSummary,
   TASK_RECORDS_MAX,
@@ -26,6 +26,9 @@ import {
   EmptyState,
   Field,
   Form,
+  Menu,
+  MenuItem,
+  MenuTrigger,
   Modal,
   RelativeTime,
   Tooltip,
@@ -38,6 +41,9 @@ import { useEffect, useId, useState, type ReactNode } from 'react';
 import { memberDisplay } from './entries.ts';
 import { strings } from './strings.ts';
 import { useRecordSearch } from '../records/links.ts';
+
+/** How long a deleted task's Undo stays (AC-445). */
+const UNDO_MS = 10_000;
 
 /** Props for the task dialog. */
 export interface TaskDialogProps {
@@ -348,6 +354,34 @@ function SavedTask({
       if (failure !== undefined) setErrors((held) => ({ ...held, [field]: refusalSummary(failure) }));
     });
   };
+  // Deleting acts at once, with no confirm, and offers Undo for 10 seconds (AC-445).
+  const remove = () => {
+    const taskId = task.id;
+    onClose();
+    void data.tasks.remove(slug, taskId).then((failure) => {
+      if (failure !== undefined) {
+        toasts.toast({ tone: 'danger', message: `${strings.notDeleted} ${refusalSummary(failure)}` });
+        return;
+      }
+      const key = toasts.toast({
+        tone: 'success',
+        message: strings.taskDeleted,
+        action: {
+          label: strings.undo,
+          onAction: () => {
+            void data.tasks.restore(slug, taskId).then((refused) => {
+              if (refused !== undefined) {
+                toasts.toast({ tone: 'danger', message: `${strings.notRestored} ${refusalSummary(refused)}` });
+              }
+            });
+          },
+        },
+      });
+      setTimeout(() => {
+        toasts.dismiss(key);
+      }, UNDO_MS);
+    });
+  };
   const copyLink = () => {
     const href = new URL(window.location.href);
     href.searchParams.set('task', task.id);
@@ -373,9 +407,28 @@ function SavedTask({
       title={strings.task}
       onClose={onClose}
       headerActions={
-        <Tooltip content={strings.copyLink}>
-          <Button variant="ghost" icon="link" label={strings.copyLink} onPress={copyLink} />
-        </Tooltip>
+        // More: Copy link, and Delete task for someone who may change it (milestone 4).
+        <MenuTrigger>
+          <Tooltip content={strings.more}>
+            <Button variant="ghost" icon="ellipsis" label={strings.more} />
+          </Tooltip>
+          <Menu
+            label={strings.more}
+            onAction={(key) => {
+              if (key === 'copy') copyLink();
+              if (key === 'delete') remove();
+            }}
+          >
+            <MenuItem id="copy" icon="link">
+              {strings.copyLink}
+            </MenuItem>
+            {task.canChange ? (
+              <MenuItem id="delete" icon="trash" isDanger>
+                {strings.deleteTask}
+              </MenuItem>
+            ) : null}
+          </Menu>
+        </MenuTrigger>
       }
     >
       <Form id={`task-${task.id}`} onSubmit={() => undefined} label={strings.task}>

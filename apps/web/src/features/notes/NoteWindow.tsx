@@ -33,6 +33,9 @@ import { strings } from './strings.ts';
 /** The editor, in its own chunk: loaded when a note first opens, never with the app (AC-451). */
 const NoteEditor = lazy(() => import('@crm/ui/editor').then((module) => ({ default: module.NoteEditor })));
 
+/** How long a deleted note's Undo stays (AC-445). */
+const UNDO_MS = 10_000;
+
 /** Props for the note window. */
 export interface NoteWindowProps {
   readonly slug: string;
@@ -161,7 +164,7 @@ function OpenNote({ session, props }: { readonly session: NoteSession; readonly 
       });
       setTimeout(() => {
         toasts.dismiss(key);
-      }, 10_000);
+      }, UNDO_MS);
     });
   };
   const words = saveWords(state);
