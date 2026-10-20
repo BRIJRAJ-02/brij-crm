@@ -218,8 +218,11 @@ export function Field({
         ? {}
         : {
             onKeyDown: (event) => {
-              // Enter that ends an input method's composition (a CJK word) is not a submit.
-              if (event.key === 'Enter' && isWrapping && !event.nativeEvent.isComposing) {
+              // Enter that ends an input method's composition (a CJK word) is not a submit (Safari sends it as 229).
+              // eslint-disable-next-line @typescript-eslint/no-deprecated -- Safari marks the Enter that ends a composition only by keyCode 229
+              if (event.key === 'Enter' && (event.nativeEvent.isComposing || event.nativeEvent.keyCode === 229)) {
+                event.continuePropagation();
+              } else if (event.key === 'Enter' && isWrapping) {
                 // Never a line break in a one line value: Enter submits, as in a single line field.
                 event.preventDefault();
                 onSubmit?.();

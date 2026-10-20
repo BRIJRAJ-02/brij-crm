@@ -152,6 +152,10 @@ export const Wraps: Story = {
     await expect(title).toHaveValue('Send the renewal proposal today');
     await expect(canvas.getByText('Send the renewal proposal today', { selector: 'output' })).toBeInTheDocument();
     await expect(canvas.queryByText(/\/2,000/)).toBeNull();
+    // Enter that ends an input method's composition never submits.
+    await userEvent.type(title, ' 東京');
+    title.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', isComposing: true, bubbles: true }));
+    await expect(canvas.getByText('Send the renewal proposal today', { selector: 'output' })).toBeInTheDocument();
   },
 };
 
