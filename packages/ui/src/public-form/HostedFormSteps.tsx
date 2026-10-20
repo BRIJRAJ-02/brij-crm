@@ -36,9 +36,12 @@ export interface HostedFormStepsProps extends HostedFormProps {
   readonly steps?: readonly FormStep[];
 }
 
-/** True for a question whose control goes on with Enter (one line of text), so OK shows its keycap. */
+/** True for a question whose control goes on with Enter (one line of text, or a choice), so OK shows its keycap. */
 function takesEnter(question: PublicQuestion | undefined): boolean {
-  return question !== undefined && ['short_text', 'email', 'phone', 'website', 'number'].includes(question.answerType);
+  return (
+    question !== undefined &&
+    ['short_text', 'email', 'phone', 'website', 'number', 'choice'].includes(question.answerType)
+  );
 }
 
 interface ResolvedStep {
@@ -156,11 +159,24 @@ export function HostedFormSteps({
         <VisuallyHidden>
           <span aria-live="polite">{hasMoved ? place : ''}</span>
         </VisuallyHidden>
+        {/* eslint-disable-next-line jsx-a11y-x/no-noninteractive-element-interactions -- the form hears Enter from its own radios, which stay the interactive elements */}
         <form
           key={`${String(state.round)}-${String(index)}`}
           className={styles.form}
           data-layout={layout}
           noValidate
+          // One at a time, Enter on a choice goes on too (AC-1034); a browser submits only from a text field.
+          onKeyDown={(event) => {
+            if (
+              isOpen &&
+              event.key === 'Enter' &&
+              event.target instanceof HTMLInputElement &&
+              event.target.type === 'radio'
+            ) {
+              event.preventDefault();
+              event.currentTarget.requestSubmit();
+            }
+          }}
           onSubmit={(event) => {
             event.preventDefault();
             if (!isLast) {

@@ -1,7 +1,7 @@
 # 0023. Forms: the visitor's form, its design and its types
 
 **Date**: 2026-10-20
-**Status**: Classic redesign built; Steps and Conversational drawn as library stories, pending owner confirmation
+**Status**: Classic redesign built; Steps and Conversational drawn as library stories. The owner accepted the layout and steps data change on 20 October 2026 ([0023-types-and-logic.md](0023-types-and-logic.md), AC-1031 to AC-1035: Steps live in release 1, One at a time in release 2); attribute rules on the visitor's page and the touch type token are still open.
 **Extends**: [0023-experience.md](0023-experience.md), The visitor. Where this file and that section differ on the look, this file wins; the contract stays as that file has it until the owner confirms the changes below.
 
 ## The brief
@@ -62,11 +62,11 @@ The questions list (QuestionsSection, owned by the inputs builder) would need:
 
 Steps and Conversational are built now as **library stories only** (`Public form/Steps`, `Public form/Conversational`), drawn by `HostedFormSteps` in `@crm/ui/public-form`, so the owner can try them. Nothing on the live page or in the editor switches to them.
 
-## Data each type needs: pending owner confirmation
+## Data each type needs: accepted 20 October 2026
 
 These change `FormDocument` and `PublicForm` (spec 0023, Contract changes) and need a migration of nothing (the document is JSON, the defaults fill in), but they are load bearing for the published version, so they wait for the owner.
 
-**Recommended (pending owner confirmation):**
+**Accepted by the owner (20 October 2026), as recommended; built with release 1 (0023-types-and-logic.md):**
 
 - `FormDocument.layout: 'classic' | 'steps' | 'conversational'`, default `'classic'`. It lives in the version's document, so it publishes with the questions and a live form never changes shape under a visitor mid fill.
 - `FormDocument.steps: { id, title?, startsAt: questionId }[]`, default `[]`: each step starts at a question and runs to the next step's start. Kept as breaks rather than nesting questions inside steps, so reordering questions never loses one, Classic ignores it, and Conversational ignores it.
