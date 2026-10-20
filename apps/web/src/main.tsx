@@ -133,6 +133,15 @@ const router = createRouter({
   defaultPendingMinMs: LOADING_TIMING.minimumMs,
 });
 
+// Every route a navigation matches starts loading its code (its page and its pending page) as the navigation
+// begins. The router itself starts only after a route's beforeLoad (the workspace frame's waits on `me.get`), so
+// a pending page could show before its own chunk had arrived: its lazy component suspended, painting nothing, and
+// React warned "This library called use() to suspend…" on every first load.
+router.subscribe('onBeforeLoad', ({ toLocation }) => {
+  const [routes] = router.getMatchedRoutes(toLocation.pathname);
+  for (const route of routes) router.loadRouteChunk(route)?.catch(() => undefined);
+});
+
 // After moving to another page, focus goes to its title (the page's h1), so
 // a screen reader starts there and Tab continues from the top of the page;
 // on /sign-in and /verify, to their one field (focus.ts). On the first load,
