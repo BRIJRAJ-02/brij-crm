@@ -34,4 +34,12 @@
     font: var(--text-title);
     letter-spacing: var(--tracking-title);
   }
+
+  /* A switch wider than a phone scrolls inside the bar rather than past the page's edge. */
+  .root[data-variant='bar'] > .group {
+    flex-wrap: nowrap;
+    max-inline-size: 100%;
+    overflow-x: auto;
+    scrollbar-width: none;
+  }
 }

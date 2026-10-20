@@ -95,6 +95,7 @@ describe('@crm/ui', () => {
       'NavGroup',
       'NavItem',
       'NavSection',
+      'NoteList',
       'OptionsEditor',
       'PageColumn',
       'Pagination',

@@ -12,6 +12,7 @@ New. Names, titles and text values in cells, chips and headers must stay on one 
 <TruncatedText>{record.name}</TruncatedText>
 ```
 
+- `lines={2}` lets it wrap to two lines before the ellipsis, for an excerpt (NoteList); the tooltip then shows when either line is cut.
 - `isNumeric` uses tabular figures, so numbers line up in a column.
 - It measures only as the tooltip is about to open (on hover, or when something focuses it), so it always sees the current width, and a table of hundreds reads no layout while it draws or scrolls.
 - Screen readers always get the full text: it is all in the page, only cut on screen.
@@ -19,7 +20,7 @@ New. Names, titles and text values in cells, chips and headers must stay on one 
 
 ## States
 
-Fits, cut (with the tooltip).
+Fits, cut (with the tooltip), two lines.
 
 ## Keyboard
 

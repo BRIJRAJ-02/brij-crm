@@ -1,4 +1,4 @@
-/* TruncatedText: one line, cut with an ellipsis. */
+/* TruncatedText: one line, cut with an ellipsis; or two (data-lines), clamped, the second ending in the ellipsis. */
 @layer components {
   .root {
     display: block;
@@ -6,6 +6,13 @@
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
+  }
+
+  .root[data-lines='2'] {
+    display: -webkit-box;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+    white-space: normal;
   }
 
   .root[data-numeric] {

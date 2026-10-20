@@ -41,3 +41,21 @@ export const Cut: Story = {
     await expect(await shownTooltip()).toHaveTextContent('Forwarding Limited');
   },
 };
+
+/** An excerpt wraps to two lines, then ends in an ellipsis; the whole of it shows on hover. */
+export const TwoLines: Story = {
+  render: () => (
+    <Stage width="narrow">
+      <TruncatedText lines={2}>
+        Met Ada at the Portland office to walk through the renewal. They want the API limits raised before signing, and
+        a second workspace for the EU team.
+      </TruncatedText>
+    </Stage>
+  ),
+  play: async ({ canvas, userEvent }) => {
+    const text = canvas.getByText(/Met Ada at the Portland office/);
+    await waitFor(() => expect(text.scrollHeight).toBeGreaterThan(text.clientHeight));
+    await hoverFresh(userEvent, text);
+    await expect(await shownTooltip()).toHaveTextContent('EU team');
+  },
+};

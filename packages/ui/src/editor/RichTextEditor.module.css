@@ -1,0 +1,242 @@
+/* RichTextEditor: the document in a Field's box (the quiet field-border
+   hairline, control-border under a pointer, accent-line and the focus halo
+   while writing, danger when refused, surface-subtle when read only), at
+   least six rows tall and growing with its text. Blocks sit space-8 apart;
+   headings take the heading, title and body-strong type for levels 1 to 3.
+   Bold, italic, strike and underline keep the browser's own look. Inline code matches the Code atom, highlight the yellow tag, links the link
+   colour, quotes a thick border-strong edge in text-secondary, code blocks the
+   sunken surface. Task items carry the native checkbox in the accent colour,
+   their text struck through in text-tertiary once ticked. The placeholder is
+   text-tertiary. Tiptap's own stylesheet is off (`injectCSS: false`), so
+   ProseMirror's one requirement, pre-wrap white space, is here. */
+@layer components {
+  .root {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-4);
+    min-inline-size: 0;
+  }
+
+  .frame {
+    position: relative;
+    min-inline-size: 0;
+  }
+
+  .content {
+    box-sizing: border-box;
+    min-block-size: calc(var(--size-row) * 6);
+    padding-block: var(--space-8);
+    padding-inline: var(--space-12);
+    border: var(--border-width-hairline) solid var(--field-border);
+    border-radius: var(--radius-md);
+    background: var(--surface-raised);
+    color: var(--text);
+    font: var(--text-body);
+    letter-spacing: var(--tracking-body);
+    white-space: pre-wrap;
+    overflow-wrap: break-word;
+    outline: none;
+    transition: border-color var(--duration-hover) var(--ease-hover);
+  }
+
+  @media (hover: hover) and (pointer: fine) {
+    .content:hover:not(:focus) {
+      border-color: var(--control-border);
+    }
+  }
+
+  .content:focus {
+    border-color: var(--accent-line);
+    box-shadow: var(--shadow-focus);
+  }
+
+  .root[data-invalid] .content {
+    border-color: var(--danger);
+  }
+
+  .root[data-readonly] .content {
+    background: var(--surface-subtle);
+  }
+
+  .content > :last-child {
+    margin-block-end: 0;
+  }
+
+  .paragraph {
+    margin-block: 0 var(--space-8);
+  }
+
+  .heading {
+    margin-block: var(--space-16) var(--space-8);
+    color: var(--text);
+  }
+
+  .content > .heading:first-child {
+    margin-block-start: 0;
+  }
+
+  .heading[data-level='1'] {
+    font: var(--text-heading);
+    letter-spacing: var(--tracking-heading);
+  }
+
+  .heading[data-level='2'] {
+    font: var(--text-title);
+    letter-spacing: var(--tracking-title);
+  }
+
+  .heading[data-level='3'] {
+    font: var(--text-body-strong);
+    letter-spacing: var(--tracking-body-strong);
+  }
+
+  .bulletList,
+  .orderedList {
+    margin-block: 0 var(--space-8);
+    padding-inline-start: var(--space-20);
+  }
+
+  .bulletList {
+    list-style: disc;
+  }
+
+  .orderedList {
+    list-style: decimal;
+  }
+
+  .listItem > .paragraph,
+  .taskItem .paragraph {
+    margin-block: 0;
+  }
+
+  .taskList {
+    margin-block: 0 var(--space-8);
+    padding: 0;
+    list-style: none;
+  }
+
+  .taskItem {
+    display: flex;
+    gap: var(--space-8);
+    align-items: flex-start;
+  }
+
+  /* The checkbox's label, which Tiptap marks as not editable. */
+  .taskItem > :first-child {
+    display: flex;
+    flex: none;
+    align-items: center;
+    block-size: var(--size-chip);
+  }
+
+  .taskItem [type='checkbox'] {
+    inline-size: var(--size-icon-sm);
+    block-size: var(--size-icon-sm);
+    margin: 0;
+    accent-color: var(--accent);
+  }
+
+  .taskItem > :last-child {
+    flex: 1;
+    min-inline-size: 0;
+  }
+
+  .taskItem[data-checked='true'] > :last-child {
+    color: var(--text-tertiary);
+    text-decoration: line-through;
+  }
+
+  .blockquote {
+    margin-block: 0 var(--space-8);
+    margin-inline: 0;
+    padding-inline-start: var(--space-12);
+    border-inline-start: var(--border-width-thick) solid var(--border-strong);
+    color: var(--text-secondary);
+  }
+
+  .codeBlock {
+    margin-block: 0 var(--space-8);
+    padding-block: var(--space-8);
+    padding-inline: var(--space-12);
+    overflow-x: auto;
+    border: var(--border-width-hairline) solid var(--border-subtle);
+    border-radius: var(--radius-md);
+    background: var(--surface-sunken);
+    color: var(--text);
+    font: var(--text-code);
+    letter-spacing: var(--tracking-code);
+    white-space: pre;
+  }
+
+  .horizontalRule {
+    block-size: var(--border-width-hairline);
+    margin-block: var(--space-16);
+    border: none;
+    background: var(--border-subtle);
+  }
+
+  .code {
+    padding-inline: var(--space-4);
+    border: var(--border-width-hairline) solid var(--border-subtle);
+    border-radius: var(--radius-xs);
+    background: var(--surface-sunken);
+    color: var(--text);
+    font: var(--text-code);
+    letter-spacing: var(--tracking-code);
+  }
+
+  .highlight {
+    padding-inline: var(--space-2);
+    border-radius: var(--radius-xs);
+    background: var(--tag-yellow-bg);
+    color: var(--tag-yellow-text);
+  }
+
+  /* Links: Tiptap stores a link's class with the document, so links are found by their address instead. */
+  .content [href] {
+    color: var(--link);
+    text-decoration: underline;
+  }
+
+  /* The placeholder, while the whole document is empty. */
+  .empty::before {
+    float: inline-start;
+    block-size: 0;
+    color: var(--text-tertiary);
+    content: attr(data-placeholder);
+    pointer-events: none;
+  }
+
+  .note {
+    display: flex;
+    align-items: center;
+    gap: var(--space-4);
+    color: var(--text-secondary);
+    font: var(--text-label);
+    letter-spacing: var(--tracking-label);
+  }
+
+  .error {
+    display: flex;
+    align-items: center;
+    gap: var(--space-4);
+    color: var(--danger);
+    font: var(--text-label);
+    letter-spacing: var(--tracking-label);
+  }
+
+  @media (forced-colors: active) {
+    .content {
+      border-color: CanvasText;
+    }
+
+    .content:focus {
+      outline: var(--border-width-thick) solid Highlight;
+    }
+
+    .highlight {
+      background: Mark;
+      color: MarkText;
+    }
+  }
+}

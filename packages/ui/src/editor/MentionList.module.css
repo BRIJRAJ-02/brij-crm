@@ -1,0 +1,66 @@
+/* MentionList: a Menu's rows (size-nav-item tall, the popover's 4px inset,
+   body-strong names) for members to mention; the highlighted row takes
+   surface-hover, as a Menu's focused item does, and the email trails in
+   text-secondary. At most ten rows show before it scrolls. */
+@layer components {
+  .root {
+    box-sizing: border-box;
+    max-block-size: calc(var(--size-nav-item) * 10);
+    padding: var(--space-4);
+    overflow: auto;
+    outline: none;
+  }
+
+  .option {
+    display: flex;
+    align-items: center;
+    gap: var(--space-8);
+    box-sizing: border-box;
+    min-block-size: var(--size-nav-item);
+    padding-block: var(--space-4);
+    padding-inline: var(--space-8);
+    border-radius: var(--radius-sm);
+    color: var(--text);
+    font: var(--text-body-strong);
+    letter-spacing: var(--tracking-body-strong);
+    outline: none;
+  }
+
+  .option[data-active] {
+    background: var(--surface-hover);
+  }
+
+  .name {
+    flex: none;
+    max-inline-size: 60%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .email {
+    flex: 1;
+    min-inline-size: 0;
+    overflow: hidden;
+    color: var(--text-secondary);
+    font: var(--text-label);
+    letter-spacing: var(--tracking-label);
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .empty {
+    display: block;
+    padding: var(--space-8);
+    color: var(--text-secondary);
+    font: var(--text-body);
+    letter-spacing: var(--tracking-body);
+  }
+
+  @media (forced-colors: active) {
+    .option[data-active] {
+      outline: var(--border-width-thick) solid Highlight;
+      outline-offset: calc(-1 * var(--border-width-thick));
+    }
+  }
+}
