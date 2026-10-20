@@ -1,6 +1,6 @@
 // Brief
 // Purpose: the card a span drawn on Bookings › Calendar opens (spec 0027, AC-702 to AC-704): what the time is for.
-// Main task: pick Book someone in, Block this time (once or every week) or Hold it for a private page.
+// Main task: pick Book someone in, Block this time (once or every week) or Hold it for a private page; saving closes it.
 // Leaves out: drawing (WeekCalendar), what a block does to slots (the server), and the New meeting dialog's form.
 import { isDataError, type TimeBlockKind, type TimeBlockRepeat } from '@crm/data';
 import { Button, Callout, Field, Radio, RadioGroup, Select, SpanCard, type SpanCardChoice } from '@crm/ui';
@@ -28,64 +28,31 @@ export interface DrawCardProps {
   readonly overlapping: number;
   /** Moves or resizes the span (From and To, for the keyboard and for fine changes). */
   readonly onSpanChange: (span: DrawnSpan) => void;
-  /** Closes the time; settles once the server has it, throws a data error on a refusal. */
+  /** Closes the time; settles once the server has it (the screen then closes the card), throws a data error on a refusal. */
   readonly onClose: (input: CloseInput) => Promise<void>;
-  /** Closes the card (Done). */
-  readonly onDone: () => void;
   /** Book someone in: opens the New meeting dialog for the span; absent when it can't be booked (it has begun, no page). */
   readonly onBook?: () => void;
 }
 
-type Mode =
-  | { readonly kind: 'choose' }
-  | { readonly kind: 'block' }
-  | { readonly kind: 'hold' }
-  | { readonly kind: 'done'; readonly message: string };
+type Mode = { readonly kind: 'choose' } | { readonly kind: 'block' } | { readonly kind: 'hold' };
 
 /** Any private page: a hold's shared choice. */
 const ANY_PAGE = 'any';
 
 /** The drawn span's card: its choices, then the picked one's form, then what happened. */
-export function DrawCard({
-  span,
-  locale,
-  privatePages,
-  overlapping,
-  onSpanChange,
-  onClose,
-  onDone,
-  onBook,
-}: DrawCardProps) {
+export function DrawCard({ span, locale, privatePages, overlapping, onSpanChange, onClose, onBook }: DrawCardProps) {
   const [mode, setMode] = useState<Mode>({ kind: 'choose' });
   const { title, meta } = spanNames(span, locale);
   const weekday = new Intl.DateTimeFormat(locale, { weekday: 'long' }).format(dayStart(span.dayKey));
   const back = () => setMode({ kind: 'choose' });
 
-  if (mode.kind === 'done') {
-    return (
-      <SpanCard title={title} meta={meta} focusKey="done">
-        <Callout tone="success" isAnnounced>
-          {mode.message}
-        </Callout>
-        <Button onPress={onDone}>{strings.done}</Button>
-      </SpanCard>
-    );
-  }
   if (mode.kind === 'block' || mode.kind === 'hold') {
     const isHold = mode.kind === 'hold';
     return (
       <SpanCard title={title} meta={meta} onBack={back} focusKey={mode.kind}>
         {overlapping > 0 && <Callout tone="info">{strings.overlaps(overlapping)}</Callout>}
         <SpanTimes span={span} locale={locale} onChange={onSpanChange} />
-        <CloseForm
-          weekday={weekday}
-          isHold={isHold}
-          privatePages={privatePages}
-          onClose={async (input) => {
-            await onClose(input);
-            setMode({ kind: 'done', message: isHold ? strings.timeHeld : strings.timeBlocked });
-          }}
-        />
+        <CloseForm weekday={weekday} isHold={isHold} privatePages={privatePages} onClose={onClose} />
       </SpanCard>
     );
   }

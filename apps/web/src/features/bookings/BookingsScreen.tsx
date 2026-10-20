@@ -362,7 +362,7 @@ export interface BookingsCalendarScreenProps {
    * Closes a drawn span (spec 0027): `preview` shows at once, and the promise
    * settles once the server has it, or throws a data error on a refusal.
    */
-  readonly onBlock: (draft: BlockDraft, preview: readonly BlockPreview[]) => Promise<void>;
+  readonly onBlock: (draft: BlockDraft, preview: readonly BlockPreview[]) => Promise<{ readonly id: string }>;
   /** Books someone into a drawn span (spec 0027); settles once made, throws a data error on a refusal. */
   readonly onBookAsHost: (meeting: NewMeeting) => Promise<void>;
   /** Mints a new booking's idempotency key, once per New meeting dialog. */
@@ -637,18 +637,35 @@ function WeekView(props: BookingsCalendarScreenProps) {
                         ...(pageId === undefined ? {} : { pageId }),
                       },
                       [preview],
-                    ).catch((error: unknown) => {
-                      // The card shows a refusal while it is open; once closed, only a toast can.
-                      if (draftRef.current !== drawn) {
+                    ).then(
+                      (made) => {
+                        // Saved: the card closes, and the toast offers Undo (as calendars do).
+                        if (draftRef.current === drawn) setDraft(undefined);
                         toasts.toast({
-                          tone: 'danger',
-                          message: kind === 'hold' ? strings.holdFailed : strings.blockFailed,
+                          tone: 'success',
+                          message: kind === 'hold' ? strings.timeHeld : strings.timeBlocked,
+                          action: {
+                            label: strings.undo,
+                            onAction: () => {
+                              onRemoveBlock(made.id).catch(() =>
+                                toasts.toast({ tone: 'danger', message: strings.removeFailed }),
+                              );
+                            },
+                          },
                         });
-                      }
-                      throw error;
-                    });
+                      },
+                      (error: unknown) => {
+                        // The card shows a refusal while it is open; once closed, only a toast can.
+                        if (draftRef.current !== drawn) {
+                          toasts.toast({
+                            tone: 'danger',
+                            message: kind === 'hold' ? strings.holdFailed : strings.blockFailed,
+                          });
+                        }
+                        throw error;
+                      },
+                    );
                   }}
-                  onDone={() => setDraft(undefined)}
                   {...(bookable.length === 0 || instantOf(draft.dayKey, draft.startMinute) < now
                     ? {}
                     : {

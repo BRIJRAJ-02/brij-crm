@@ -135,5 +135,5 @@ export const strings = {
   holdIt: 'Hold it',
   holdFailed: 'That time couldn’t be held. Try again.',
   timeHeld: 'Held. Only a private booking page can book it.',
-  done: 'Done',
+  undo: 'Undo',
 } as const;

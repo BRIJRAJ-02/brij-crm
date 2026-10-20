@@ -44,7 +44,7 @@ Work that was in flight when the lanes stopped is kept on its lane branches (a `
 - F5. "show active day": tint today's column. Done.
 - F6. "fix this and padding": one strip, then content.
 - F7. "tab is still not changed in here": the underline stays on Calendar on the Availability tab. Done (checked 20 Oct, the tabs rework fixed it).
-- F8. "quick action to block, book, etc from here": drag or click empty time, then Book someone in, Block time (this date or every week) or Hold for a private meeting type. Owner chose all three, like timefix (20 Oct). Open.
+- F8. "quick action to block, book, etc from here": drag or click empty time, then Book someone in, Block time (this date or every week) or Hold for a private meeting type. Owner chose all three, like timefix (20 Oct). Built; saving closes the card with an Undo toast (owner: industry standard). Step 4 review and screenshots left.
 - F9. "calendar logo", "also a timefix next to timefix booking": the Timefix mark on bookings, the Google Calendar mark on synced events. Done.
 
 ### Availability

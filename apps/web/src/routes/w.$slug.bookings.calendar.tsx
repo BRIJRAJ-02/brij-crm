@@ -54,9 +54,7 @@ function CalendarRoute() {
       connections={connections}
       locale={navigator.languages[0] ?? 'en-GB'}
       onRemoveBlock={(blockId) => data.bookings.blocks.remove(slug, blockId)}
-      onBlock={async (draft, preview) => {
-        await data.bookings.blocks.create(slug, draft, preview);
-      }}
+      onBlock={(draft, preview) => data.bookings.blocks.create(slug, draft, preview)}
       workingStart={(dayKey) => workingStartOf(availability, dayKey)}
       onBookAsHost={async (meeting) => {
         await data.bookings.bookAsHost(slug, { ...meeting, guests: [...meeting.guests] });
