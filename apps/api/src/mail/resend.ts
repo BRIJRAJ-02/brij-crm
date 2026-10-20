@@ -20,6 +20,15 @@ export function createResendMailer(options: ResendOptions): Mailer {
         subject: message.subject,
         html: message.html,
         text: message.text,
+        ...(message.attachments === undefined || message.attachments.length === 0
+          ? {}
+          : {
+              attachments: message.attachments.map((file) => ({
+                filename: file.filename,
+                content: Buffer.from(file.content, 'utf8'),
+                contentType: file.contentType,
+              })),
+            }),
       });
       // Only the error's name: its message can quote the recipient.
       if (error) throw new Error(`Resend refused the message (${error.name}).`);

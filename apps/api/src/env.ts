@@ -42,6 +42,17 @@ const wakeSecret = optional(
     .regex(/^[\x21-\x7e]+$/, 'WORKER_WAKE_SECRET may hold only printable ASCII characters, with no spaces.'),
 );
 
+// The key a booking's guest page token derives from (spec 0025, milestone 2): the api and the worker hold the same
+// value. Unset, it derives from WORKER_WAKE_SECRET, which both already share (`booking-link.ts`).
+const bookingLinkSecret = optional(
+  z
+    .string()
+    .min(32, 'BOOKING_LINK_SECRET must be at least 32 characters.')
+    .refine((value) => !value.includes('local-only'), {
+      error: 'That is a local placeholder. Generate one: `openssl rand -hex 32`.',
+    }),
+);
+
 /** The marker `.env.example`'s placeholder secret carries: fine on a laptop, refused anywhere else. */
 export const LOCAL_SECRET_MARKER = 'local-only';
 
@@ -248,6 +259,7 @@ export const ApiEnv = z
     // The relay's wake up call (spec 0005): the worker's internal address, and the secret it checks.
     WORKER_INTERNAL_URL: optional(internalUrl('WORKER_INTERNAL_URL')),
     WORKER_WAKE_SECRET: wakeSecret,
+    BOOKING_LINK_SECRET: bookingLinkSecret,
     // Spec 0008's wake on use: every signed in request wakes the worker at most once a minute, so it sleeps only when
     // nobody uses the app. Unset is `on` locally and in previews and `off` in production, where the worker's jobs
     // (and so its sleep) stay off until the owner turns them on; set it `on` with JOBS_RUNNER (verify.md).
@@ -394,6 +406,14 @@ export const WorkerEnv = z
     CENTRIFUGO_API_KEY: optional(z.string()),
     // The api's poke must carry it (spec 0005). Required outside local; locally, unset takes any poke.
     WORKER_WAKE_SECRET: wakeSecret,
+    // Booking emails (spec 0025, milestone 2): the app's address for their links, the guest page key, and the mail
+    // transport the api uses (Resend, or Mailpit locally). Without APP_URL and a transport, booking mail is off and
+    // each queued email is logged and dropped.
+    APP_URL: optional(z.url()),
+    BOOKING_LINK_SECRET: bookingLinkSecret,
+    RESEND_API_KEY: optional(z.string()),
+    MAIL_FROM: optional(sender),
+    MAILPIT_URL: optional(z.url()),
     // The background jobs' runners (spec 0008): `on` or `off`. Unset is `on` locally and in previews and `off` in
     // production, where Graphile's LISTEN and poll would keep Neon's compute awake until milestone 3's sleep lands.
     JOBS_RUNNER: optional(z.enum(['on', 'off'])),
@@ -451,6 +471,9 @@ export const WorkerEnv = z
       WORKER_PORT: WORKER_PORT ?? PORT ?? 3001,
       JOBS_RUNNER: JOBS_RUNNER ?? (rest.APP_ENV === 'production' ? 'off' : 'on'),
       WORKER_IDLE_SLEEP_SECONDS: rest.WORKER_IDLE_SLEEP_SECONDS ?? DEFAULT_IDLE_SLEEP_SECONDS,
+      MAIL_FROM: namedSender(rest.MAIL_FROM ?? DEFAULT_LOCAL_SENDER),
+      // Mailpit is a laptop's inbox; a deployed worker never sends there.
+      MAILPIT_URL: rest.APP_ENV === 'local' ? rest.MAILPIT_URL : undefined,
       // The relay's Centrifugo, when it is on.
       centrifugo:
         CENTRIFUGO_API_URL === undefined || CENTRIFUGO_API_KEY === undefined

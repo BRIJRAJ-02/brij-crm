@@ -55,6 +55,7 @@ function calendar() {
     events,
     deps: {
       now: () => NOW,
+      linkKey: Buffer.alloc(32, 7),
       calendar: {
         events: (event: BookingEvent) => {
           events.push(event);

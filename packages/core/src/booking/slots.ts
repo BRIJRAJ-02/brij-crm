@@ -3,7 +3,7 @@
 // read through the `BusyReader`, the host's confirmed bookings read from
 // Postgres, then the pure engine. Shared by the public slots read and the
 // booking's recheck under the host lock.
-import { and, asc, eq, gt, inArray, lt, sql } from 'drizzle-orm';
+import { and, asc, eq, gt, inArray, lt, ne, sql } from 'drizzle-orm';
 import {
   BookingAvailability,
   BookingLocation,
@@ -135,6 +135,8 @@ export async function bookedSpans(
   pageId: string,
   from: Date,
   to: Date,
+  /** A booking being moved: its own time never blocks it. */
+  except?: string,
 ): Promise<readonly BookedSpan[]> {
   const rows = await tx
     .select({
@@ -149,6 +151,7 @@ export async function bookedSpans(
       and(
         inArray(bookings.hostMemberId, [...memberIds]),
         eq(bookings.status, 'confirmed'),
+        ...(except === undefined ? [] : [ne(bookings.id, except)]),
         lt(bookings.startsAt, new Date(to.getTime() + 86_400_000)),
         gt(bookings.endsAt, new Date(from.getTime() - 86_400_000)),
       ),

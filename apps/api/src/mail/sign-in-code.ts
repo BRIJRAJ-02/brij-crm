@@ -1,5 +1,5 @@
-// The "Your sign in code" email (spec 0005), a React Email template. The only
-// module that imports React Email. Node runs this file without a build step,
+// The "Your sign in code" email (spec 0005), a React Email template. One of the
+// two modules that import React Email (with booking.ts). Node runs this file without a build step,
 // and type stripping has no JSX, so the elements are made with createElement.
 import { createElement as h } from 'react';
 import { Body, Container, Head, Heading, Html, Preview, render, Text } from 'react-email';

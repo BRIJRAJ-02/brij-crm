@@ -81,7 +81,16 @@ const UNHELD_RANGES_MAX = 12;
 /** The bookings store: every workspace's lists and ranges. */
 export function createBookingsStore(deps: BookingsDeps) {
   const onReturn = deps.onReturn ?? browserReturn;
-  const lists = new Map<string, BookingsView>();
+  const lists = new Map<
+    string,
+    BookingsView & {
+      readonly patch: (
+        edit: (shown: { readonly bookings: readonly BookingListItem[] }) => {
+          readonly bookings: readonly BookingListItem[];
+        },
+      ) => () => void;
+    }
+  >();
   const ranges = new Map<
     string,
     BookingsCalendarHeld & {
@@ -145,9 +154,11 @@ export function createBookingsStore(deps: BookingsDeps) {
       patch(edit: (shown: T) => T): () => void {
         if (state.status !== 'ready') return () => undefined;
         const before = state;
-        set({ ...before, ...edit(before) });
+        const patched: HeldState<T> = { ...before, ...edit(before) };
+        set(patched);
+        // Only while nothing newer landed: a read or another change since then is left as it is.
         return () => {
-          if (state !== before) set(before);
+          if (state === patched) set(before);
         };
       },
       isHeld: () => held > 0,
@@ -183,6 +194,31 @@ export function createBookingsStore(deps: BookingsDeps) {
       const restores = [...ranges.entries()]
         .filter(([key]) => key.startsWith(`${workspace}:`))
         .map(([, view]) => view.patch(edit));
+      return () => {
+        for (const restore of restores) restore();
+      };
+    },
+    /**
+     * Shows `edit` of one booking in every list and range of the workspace at
+     * once (an optimistic cancel or move); answers how to put them all back.
+     * The lists are read again after the server answers, so a booking that
+     * changed tabs lands in the right one.
+     */
+    patchBooking(
+      workspace: string,
+      bookingId: string,
+      edit: (booking: BookingListItem) => BookingListItem,
+    ): () => void {
+      const each = (bookings: readonly BookingListItem[]) =>
+        bookings.map((booking) => (booking.id === bookingId ? edit(booking) : booking));
+      const restores = [
+        ...[...lists.entries()]
+          .filter(([key]) => key.startsWith(`${workspace}:`))
+          .map(([, view]) => view.patch((shown) => ({ bookings: each(shown.bookings) }))),
+        ...[...ranges.entries()]
+          .filter(([key]) => key.startsWith(`${workspace}:`))
+          .map(([, view]) => view.patch((shown) => ({ ...shown, bookings: each(shown.bookings) }))),
+      ];
       return () => {
         for (const restore of restores) restore();
       };

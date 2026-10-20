@@ -18,6 +18,7 @@ const booking = (id: string): BookingListItem => ({
   visitorTimeZone: 'Europe/London',
   status: 'confirmed',
   guests: [],
+  reschedules: 0,
   eventFailed: false,
   createdAt: '2026-11-01T00:00:00.000Z',
 });
@@ -132,5 +133,31 @@ describe('the bookings store', () => {
     expect(loading.getSnapshot()).toEqual({ status: 'loading' });
     restore();
     expect(week.getSnapshot()).toMatchObject({ status: 'ready', blocks: [] });
+  });
+
+  it('shows one booking changed in every list and range at once, and puts it back', async () => {
+    const store = createBookingsStore({
+      api: {
+        listAll: () => Promise.resolve([booking('a'), booking('b')]),
+        calendar: () => Promise.resolve({ bookings: [booking('a')], events: [], busy: [], blocks: [] }),
+      },
+      onReturn: () => () => undefined,
+    });
+    const list = store.view('acme', 'upcoming');
+    const range = store.calendar('acme', '2026-11-02T00:00:00.000Z', '2026-11-09T00:00:00.000Z');
+    list.retain();
+    range.retain();
+    await settle();
+    const restore = store.patchBooking('acme', 'a', (each) => ({ ...each, status: 'cancelled' }));
+    expect(list.getSnapshot()).toMatchObject({
+      bookings: [
+        { id: 'a', status: 'cancelled' },
+        { id: 'b', status: 'confirmed' },
+      ],
+    });
+    expect(range.getSnapshot()).toMatchObject({ bookings: [{ id: 'a', status: 'cancelled' }] });
+    restore();
+    expect(list.getSnapshot()).toMatchObject({ bookings: [{ id: 'a', status: 'confirmed' }, { id: 'b' }] });
+    expect(range.getSnapshot()).toMatchObject({ bookings: [{ id: 'a', status: 'confirmed' }] });
   });
 });

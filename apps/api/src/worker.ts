@@ -25,7 +25,11 @@ import {
   openQueueConnection,
   type QueueConnection,
 } from '@crm/db';
+import { bookingLinkKey } from './booking-link.ts';
 import { backgroundHooks } from './hooks.ts';
+import { runBookingMail } from './jobs/booking-mail.ts';
+import { createMailer } from './mail/mailer.ts';
+import { parseSender } from './mail/mailpit.ts';
 import { createFreeDomains } from './calendar/free-domains.ts';
 import { createGoogleCalendar } from './calendar/google.ts';
 import { GOOGLE_NOTIFY_PATH } from './calendar/services.ts';
@@ -197,6 +201,33 @@ const calendarSync =
       })();
 if (env.calendar === undefined) log.info('calendar.off', { reason: 'CALENDAR_SYNC is not on' });
 
+// Booking emails (spec 0025, milestone 2): sent through the api's own transport (Resend, or Mailpit locally) with links
+// to the app, each guest page link derived with the key the api mints tokens with. Without APP_URL or a transport,
+// each queued email is logged and dropped.
+const bookingMailer =
+  env.APP_URL === undefined || (env.RESEND_API_KEY === undefined && env.MAILPIT_URL === undefined)
+    ? undefined
+    : createMailer({ RESEND_API_KEY: env.RESEND_API_KEY, MAIL_FROM: env.MAIL_FROM, MAILPIT_URL: env.MAILPIT_URL });
+if (bookingMailer === undefined) log.info('booking.mail.off', { reason: 'APP_URL or a mail transport is not set' });
+const bookingLinks =
+  env.APP_URL === undefined
+    ? undefined
+    : {
+        appOrigin: new URL(env.APP_URL).origin,
+        linkKey: bookingLinkKey(env),
+        organizerEmail: parseSender(env.MAIL_FROM).email,
+      };
+const bookingMail = (payload: unknown) =>
+  runBookingMail(
+    {
+      systemScope: (workspaceId) => systemScope(db, workspaceId),
+      mailer: bookingMailer,
+      links: bookingLinks,
+      log,
+    },
+    payload,
+  );
+
 /** Opens the queue pool and starts the runners: what waking means. The NOTIFY check proves the direct host first. */
 async function openWorker(hooks: {
   readonly onActivity: () => void;
@@ -222,6 +253,7 @@ async function openWorker(hooks: {
       onActivity: hooks.onActivity,
       onFailed: hooks.onFailed,
       ...(calendarSync === undefined ? {} : { calendar: calendarSync }),
+      bookingMail,
       // The daily cleanup (milestone 3): the outbox, the dead queue rows, then one maintenance job a workspace.
       daily: (input) =>
         runDailyCleanup(

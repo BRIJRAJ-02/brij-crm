@@ -27,3 +27,14 @@ export {
   type CalendarSyncInput,
   type CalendarSyncOutcome,
 } from './calendar/sync.ts';
+// Booking emails (spec 0025, milestone 2): what each queued kind sends, read as the system by the worker's task.
+export {
+  markInvited,
+  prepareBookingMail,
+  whenLine,
+  type BookingMail,
+  type BookingMailDeps,
+  type MailRow,
+  type PreparedMail,
+} from './booking/mail.ts';
+export { BOOKING_MAIL_KINDS, type BookingMailKind } from './booking/mail-queue.ts';

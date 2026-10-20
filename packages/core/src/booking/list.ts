@@ -81,6 +81,10 @@ function itemOf(
     ...linksOf(row, seen),
     ...(row.videoUrl === null ? {} : { videoUrl: row.videoUrl }),
     ...(row.cancelReason === null ? {} : { cancelReason: row.cancelReason }),
+    ...(row.cancelledBy === 'guest' || row.cancelledBy === 'host' || row.cancelledBy === 'calendar'
+      ? { cancelledBy: row.cancelledBy }
+      : {}),
+    reschedules: row.reschedules,
     ...guestsAndNote(row.answers),
     eventFailed: row.eventFailedAt !== null,
     createdAt: row.createdAt.toISOString(),

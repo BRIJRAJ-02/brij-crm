@@ -216,6 +216,12 @@ export {
   type BookingReceiptProps,
   type BookingReceiptState,
 } from './modules/BookingReceipt/BookingReceipt.tsx';
+export {
+  BookingChanges,
+  type BookingChangesProps,
+  type CancelOutcome,
+  type GuestsOutcome,
+} from './modules/BookingChanges/BookingChanges.tsx';
 export { DayStrip, type DayStripProps } from './modules/DayStrip/DayStrip.tsx';
 export { MonthTiles, type MonthTilesProps } from './modules/MonthTiles/MonthTiles.tsx';
 export { SlotList, type Slot, type SlotListProps } from './modules/SlotList/SlotList.tsx';

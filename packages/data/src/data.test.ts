@@ -473,6 +473,10 @@ function fakeApi(overrides: Partial<Behaviour> = {}, auth: (path: string, body: 
       hours: os.bookings.hours.handler(notServed),
       setHours: os.bookings.setHours.handler(notServed),
       bookAsHost: os.bookings.bookAsHost.handler(notServed),
+      cancel: os.bookings.cancel.handler(notServed),
+      move: os.bookings.move.handler(notServed),
+      moveSlots: os.bookings.moveSlots.handler(notServed),
+      guestLink: os.bookings.guestLink.handler(notServed),
       blocks: {
         create: os.bookings.blocks.create.handler(notServed),
         remove: os.bookings.blocks.remove.handler(notServed),

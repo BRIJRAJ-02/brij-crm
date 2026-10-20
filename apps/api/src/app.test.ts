@@ -2,7 +2,7 @@
 // limits on /api/rpc and /api/auth, the Better Auth routes it serves, and
 // the shared error shape on each.
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { AUTH_BODY_LIMIT_BYTES, RPC_BODY_LIMIT_BYTES } from './app.ts';
+import { AUTH_BODY_LIMIT_BYTES, redactedPath, routeOf, RPC_BODY_LIMIT_BYTES } from './app.ts';
 import { EDGE_HEADER, ORIGIN_HEADER } from './edge.ts';
 import { APP_URL, captureLogs, createTestApp } from './testing.ts';
 
@@ -278,5 +278,17 @@ describe('the shared error shape', () => {
     const response = await app.fetch(rpcRequest('context', { headers: { origin: 'https://evil.test' } }));
     expect(response.status).toBe(403);
     expect(((await response.json()) as { code: string }).code).toBe('FORBIDDEN_ORIGIN');
+  });
+});
+
+describe('redactedPath', () => {
+  it('keeps a guest’s manage token out of logs and error reports', () => {
+    expect(redactedPath('/api/public/booking/manage/abcdefghijklmnopqrstuvwxyz012345/move')).toBe(
+      '/api/public/booking/manage/:token/move',
+    );
+    expect(routeOf('/api/public/booking/manage/abcdefghijklmnopqrstuvwxyz012345')).toBe(
+      '/api/public/booking/manage/:token',
+    );
+    expect(redactedPath('/api/rpc/records/list')).toBe('/api/rpc/records/list');
   });
 });

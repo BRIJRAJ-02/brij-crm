@@ -19,6 +19,8 @@
 // from a connect or a push notice, keeps its time): 15 minutes after a sync
 // (the poll fallback), sooner after a failure, never for a connection that
 // stopped. A sleeping worker wakes for that row like any other due row.
+// The light runner also takes `crm_booking_mail` (spec 0025, milestone 2):
+// one queued booking email kind, its retries Graphile's (5 tries).
 import { QueuePayload } from '@crm/contracts';
 import type { Runner } from '@crm/core';
 import type { CalendarSyncInput, CalendarSyncOutcome, DailyCleanupInput, DailyCleanupReport } from '@crm/core/system';
@@ -26,6 +28,7 @@ import type { QueueConnection } from '@crm/db';
 import { Logger, run, type Runner as GraphileRunner, type Task } from 'graphile-worker';
 import * as z from 'zod';
 import { errorFields } from '../log.ts';
+import { BOOKING_MAIL_TASK } from './booking-mail.ts';
 
 /** The two lanes: their task and how many slices each runs at once (AC-108). */
 export const LANES = {
@@ -52,7 +55,7 @@ export const CALENDAR_TASK = 'crm_calendar_sync';
  * worker's check awake. With calendar sync on, `CALENDAR_TASK` joins them
  * (`runnerTasks`); off, its rows wait and never wake a worker that won't run them.
  */
-export const RUNNER_TASKS: readonly string[] = [LANES.heavy.task, LANES.light.task, DAILY_TASK];
+export const RUNNER_TASKS: readonly string[] = [LANES.heavy.task, LANES.light.task, DAILY_TASK, BOOKING_MAIL_TASK];
 
 /** The tasks this worker runs: calendar sync's too when it is on. */
 export function runnerTasks(calendar: boolean): readonly string[] {
@@ -127,6 +130,12 @@ export interface JobRunnersOptions {
    * worker's deps). With it, the light runner takes `crm_calendar_sync`.
    */
   readonly calendar?: (input: CalendarSyncInput) => Promise<CalendarSyncOutcome>;
+  /**
+   * Booking emails (spec 0025, milestone 2): one queued kind's send
+   * (`runBookingMail` with the worker's deps). With it, the light runner takes
+   * `crm_booking_mail`; it throws plainly for a retry.
+   */
+  readonly bookingMail?: (payload: unknown) => Promise<void>;
   /**
    * Hears every task call start and end (the worker's idle clock starts
    * again, spec 0008's sleep): a slice, or the daily task.
@@ -319,6 +328,7 @@ export async function startJobRunners(options: JobRunnersOptions): Promise<JobRu
       // The light runner alone holds the crontab, so the cron fires once whatever the lanes.
       const daily = lane === LANES.light ? options.daily : undefined;
       const calendar = lane === LANES.light ? options.calendar : undefined;
+      const bookingMail = lane === LANES.light ? options.bookingMail : undefined;
       runners.push(
         watch(
           await run({
@@ -335,6 +345,9 @@ export async function startJobRunners(options: JobRunnersOptions): Promise<JobRu
               ...(calendar === undefined
                 ? {}
                 : { [CALENDAR_TASK]: counted(calendarTask(options, calendar), inFlight, options.onActivity) }),
+              ...(bookingMail === undefined
+                ? {}
+                : { [BOOKING_MAIL_TASK]: counted((payload) => bookingMail(payload), inFlight, options.onActivity) }),
             },
             ...(daily === undefined ? {} : { crontab: DAILY_CRONTAB }),
             // Completions and failures go through Graphile's batcher (with no wait), which a stop flushes before

@@ -23,6 +23,7 @@ import { createEdgeGuard } from './edge.ts';
 import { hashAddress, mountPublicForms } from './forms/public.ts';
 import { createCaptchaVerifier, type CaptchaVerifier } from './forms/recaptcha.ts';
 import { createTicketBook, mountTickets } from './forms/ticket.ts';
+import { bookingLinkKey } from './booking-link.ts';
 import { LOCAL_FORMS_IP_SALT, wakesOnUse, type ApiEnv } from './env.ts';
 import { createReadGate } from './gate.ts';
 import { errorFields, log } from './log.ts';
@@ -80,9 +81,14 @@ function errorResponse(code: ErrorCode, message: string): Response {
   return Response.json({ code, message }, { status: errorStatus(code) });
 }
 
+/** A path as logs and error reports may hold it: a guest's manage token (their key to a booking) stands as `:token`. */
+export function redactedPath(path: string): string {
+  return path.replace(/(\/public\/booking\/manage\/)[^/]+/, '$1:token');
+}
+
 /** The route an error report names: a sign in route by its Better Auth path (`auth /sign-in/email-otp`), else the path. */
 export function routeOf(path: string): string {
-  return path.startsWith(`${AUTH_BASE_PATH}/`) ? `auth ${path.slice(AUTH_BASE_PATH.length)}` : path;
+  return path.startsWith(`${AUTH_BASE_PATH}/`) ? `auth ${path.slice(AUTH_BASE_PATH.length)}` : redactedPath(path);
 }
 
 /** What the API serves with: the tenant database, global identity, sign in, and the relay's wake up call. */
@@ -186,6 +192,8 @@ export function createApp({
           hooks: backgroundHooks(),
           isFreeDomain: calendar.isFreeDomain,
         }));
+  // The key every booking's guest page token derives from, shared with the worker's emails.
+  const linkKey = bookingLinkKey(env);
   const calendarRoutes = createCalendarRoutes({
     // The same door the RPC's `member` base opens (orpc.ts), with the same rules.
     enter: (userId, slug) =>
@@ -288,6 +296,7 @@ export function createApp({
         calendar,
         isFreeDomain,
         bookingCalendar: booking,
+        bookingLinkKey: linkKey,
         ...(rules === undefined ? {} : { rules }),
       },
     });
@@ -350,7 +359,12 @@ export function createApp({
   // Booking pages' public routes (spec 0025): a page's public key, no session; writes passed the Origin check above.
   mountPublicBooking(app, {
     db,
-    calendar: { busy: bookingBusy, events: booking.events },
+    calendar: {
+      busy: bookingBusy,
+      events: booking.events,
+      ...(booking.existing === undefined ? {} : { existing: booking.existing }),
+    },
+    linkKey,
     limiter: services.bookingLimiter ?? createMemoryLimiter(),
     tickets,
     ics: {
@@ -380,7 +394,11 @@ export function createApp({
 
   app.notFound(() => errorResponse('NOT_FOUND', 'There is nothing at this address.'));
   app.onError((error, c) => {
-    log.error('Unhandled error', { requestId: c.get('requestId'), path: c.req.path, ...errorFields(error) });
+    log.error('Unhandled error', {
+      requestId: c.get('requestId'),
+      path: redactedPath(c.req.path),
+      ...errorFields(error),
+    });
     captureFault(error, { requestId: c.get('requestId'), route: routeOf(c.req.path) });
     return errorResponse('INTERNAL', 'Something went wrong. Try again.');
   });

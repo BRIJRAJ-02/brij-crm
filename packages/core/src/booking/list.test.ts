@@ -56,7 +56,7 @@ const book = async (publicKey: string, start: string, name: string) => {
   const entry = await enterBookingPage({ db }, publicKey);
   return bookPublicSlot(
     entry,
-    { calendar: NO_CALENDAR, now: () => NOW },
+    { calendar: NO_CALENDAR, now: () => NOW, linkKey: Buffer.alloc(32, 7) },
     {
       idempotencyKey: newId(),
       start,

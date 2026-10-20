@@ -85,7 +85,7 @@ const vendorSdks = {
         'posthog-js/*',
         'posthog-node',
         // Mail: only apps/api/src/mail/resend.ts; email templates (React Email)
-        // only in the template module, apps/api/src/mail/sign-in-code.ts.
+        // only in the template modules, apps/api/src/mail/sign-in-code.ts and booking.ts.
         'resend',
         'react-email',
         '@react-email/*',

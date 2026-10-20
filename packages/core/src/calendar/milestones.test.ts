@@ -543,7 +543,7 @@ describe('a booking whose event the host removes (owner report, 20 October 2026)
     const calendar = connectedCalendar({ db, providers: { google: w.fake.provider }, tokenKey, hooks: [outboxHook()] });
     const made = await bookAsHost(
       w.owner,
-      { calendar, now: () => new Date(Date.parse(day(offset)) - 3_600_000) },
+      { calendar, linkKey: Buffer.alloc(32, 1), now: () => new Date(Date.parse(day(offset)) - 3_600_000) },
       {
         idempotencyKey: newId(),
         pageId: page.id,

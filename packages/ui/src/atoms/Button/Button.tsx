@@ -84,6 +84,14 @@ export type ButtonProps = ButtonLook &
     readonly form?: string;
     /** The `id` of text that says more about it, such as the line under a disabled button saying when it turns on. */
     readonly 'aria-describedby'?: string;
+    /**
+     * A disclosure: the button opens and closes the region `controls` names
+     * (a guest's Move or Guests panel). Read out as expanded or collapsed, and
+     * drawn as a ToggleButton held down while open (a danger button keeps its red).
+     */
+    readonly isExpanded?: boolean;
+    /** The `id` of the region an `isExpanded` button opens. */
+    readonly controls?: string;
     /** Takes focus when it mounts: the safe choice a dialog opens on, such as Cancel beside Replace. */
     readonly autoFocus?: boolean;
     /**
@@ -219,6 +227,9 @@ function PlainButton(props: ButtonProps) {
       {...(onPress === undefined ? {} : { onPress })}
       {...(face.label === undefined ? {} : { 'aria-label': face.label })}
       {...(describedBy === undefined ? {} : { 'aria-describedby': describedBy })}
+      {...(props.isExpanded === undefined ? {} : { 'aria-expanded': props.isExpanded })}
+      {...(props.isExpanded === true && props.controls !== undefined ? { 'aria-controls': props.controls } : {})}
+      {...(props.isExpanded === true ? { 'data-expanded': '' } : {})}
       {...(props.autoFocus === true ? { autoFocus: true } : {})}
       {...shortcutAttribute(props.kbd, platform)}
       {...lookAttributes(props, face)}
@@ -342,6 +353,12 @@ export interface ButtonGroupProps {
   readonly label: string;
   /** Secondary icon Buttons, a CopyButton, a MenuTrigger with its Button (a Tooltip around one is fine). */
   readonly children: ReactNode;
+  /**
+   * `joined` (the default) draws them as one bordered control; `row` keeps
+   * each its own button, spaced and wrapping, for a card's few labelled
+   * actions (a booking's Reschedule, Copy guest link, Cancel booking).
+   */
+  readonly layout?: 'joined' | 'row';
 }
 
 /**
@@ -349,9 +366,9 @@ export interface ButtonGroupProps {
  * halves: shared edges, one outer radius, one drop (a list row's Open, Copy
  * link and More). A `group` for screen readers; Tab still stops at each one.
  */
-export function ButtonGroup({ label, children }: ButtonGroupProps) {
+export function ButtonGroup({ label, children, layout = 'joined' }: ButtonGroupProps) {
   return (
-    <div className={styles.group} role="group" aria-label={label}>
+    <div className={styles.group} role="group" aria-label={label} data-layout={layout}>
       {children}
     </div>
   );

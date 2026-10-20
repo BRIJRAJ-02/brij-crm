@@ -29,8 +29,6 @@ export const PublicBookingPage = z.object({
   description: z.string(),
   /** The host's name as the workspace shows it (never their email). */
   hostName: z.string(),
-  /** The workspace's name, for the page's foot. */
-  workspaceName: z.string(),
   durations: z.array(BookingDuration),
   location: PublicLocation,
   /** The host's zone, for "times shown in …" when the visitor changes theirs. */
@@ -198,6 +196,69 @@ export const PublicManagedBooking = z.object({
   visitorEmail: z.string(),
   guests: z.array(z.string()),
   note: z.string().optional(),
+  /** Why it was cancelled, when someone said. */
+  cancelReason: z.string().optional(),
+  /** Whether the guest may still cancel it or add guests: confirmed, and not yet started. */
+  canChange: z.boolean(),
+  /** Whether it may still move: it can change, its page takes bookings, and it has moved fewer than 5 times. */
+  canMove: z.boolean(),
 });
 /** The booking as its guest sees it. */
 export type PublicManagedBooking = z.infer<typeof PublicManagedBooking>;
+
+/** `GET /api/public/booking/manage/:token/slots?from&to&tz`: where the booking could move, its own length. */
+export const PublicMoveSlotsQuery = z.object({ from: Timestamp, to: Timestamp, tz: TimeZoneName }).refine(
+  ({ from, to }) => {
+    const span = Date.parse(to) - Date.parse(from);
+    return span > 0 && span <= PUBLIC_SLOTS_MAX_DAYS * 86_400_000;
+  },
+  { error: `Ask for a range of at most ${String(PUBLIC_SLOTS_MAX_DAYS)} days.` },
+);
+/** A move's slots read. */
+export type PublicMoveSlotsQuery = z.infer<typeof PublicMoveSlotsQuery>;
+
+/** `POST /api/public/booking/manage/:token/move`: the new start, one the slots read offered. */
+export const PublicMoveInput = z.object({ start: Timestamp });
+/** A guest's move. */
+export type PublicMoveInput = z.infer<typeof PublicMoveInput>;
+
+/** The longest reason a cancel carries. */
+export const CANCEL_REASON_MAX = 500;
+
+/** `POST /api/public/booking/manage/:token/cancel`: an optional reason, shared with the host. */
+export const PublicCancelInput = z.object({
+  reason: z
+    .string()
+    .trim()
+    .max(CANCEL_REASON_MAX, { error: `Keep the reason to ${String(CANCEL_REASON_MAX)} characters.` })
+    .optional(),
+});
+/** A guest's cancel. */
+export type PublicCancelInput = z.infer<typeof PublicCancelInput>;
+
+/** `POST /api/public/booking/manage/:token/guests`: more people to invite, at most 10 guests in all. */
+export const PublicGuestsInput = z.object({
+  emails: z
+    .array(z.email({ error: 'Give each guest’s email address.' }).trim().toLowerCase().max(254))
+    .min(1, { error: 'Add at least one email address.' })
+    .max(10, { error: 'Invite at most 10 guests.' }),
+});
+/** A guest's new guests. */
+export type PublicGuestsInput = z.infer<typeof PublicGuestsInput>;
+
+/** `POST /api/public/booking/manage/:token/guests/remove`: one guest to take off. */
+export const PublicRemoveGuestInput = z.object({
+  email: z.email({ error: 'That isn’t an email address.' }).trim().toLowerCase().max(254),
+});
+/** A guest's removal. */
+export type PublicRemoveGuestInput = z.infer<typeof PublicRemoveGuestInput>;
+
+/** The guests answer: how many were new, and everyone now invited. */
+export const PublicGuestsAnswer = z.object({ added: z.number().int().min(0), guests: z.array(z.string()) });
+/** The guests answer. */
+export type PublicGuestsAnswer = z.infer<typeof PublicGuestsAnswer>;
+
+/** A move or cancel's answer: the booking as it is now. */
+export const PublicChanged = z.object({ booking: PublicManagedBooking });
+/** A move or cancel's answer. */
+export type PublicChanged = z.infer<typeof PublicChanged>;

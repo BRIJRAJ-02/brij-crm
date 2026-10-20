@@ -65,10 +65,22 @@ export interface BookingEvent {
   readonly location?: string;
 }
 
-/** What the writer made: spec 0024's meeting row, when it wrote one, and the video link. */
+/** What the writer made: spec 0024's meeting row, when it wrote one, the video link, and where the event lives. */
 export interface WrittenEvent {
   readonly meetingId?: string;
   readonly videoUrl?: string;
+}
+
+/** A booking's event, as a move or a cancel reaches it: spec 0024's meeting row its event wrote. */
+export interface EventRef {
+  readonly workspaceId: string;
+  readonly meetingId: string;
+}
+
+/** A move: the event's new time. */
+export interface EventChange {
+  readonly start: string;
+  readonly end: string;
 }
 
 /**
@@ -78,10 +90,23 @@ export interface WrittenEvent {
  */
 export type EventWriter = (event: BookingEvent) => Promise<WrittenEvent>;
 
+/**
+ * Moves or cancels a booking's event (spec 0024's `moveEvent` and
+ * `cancelEvent`): the provider tells the attendees. Throws when it can't; the
+ * caller retries, then marks the booking for the host. Guests added later
+ * aren't put on the event; their emails carry the calendar file instead.
+ */
+export interface EventChanger {
+  readonly move: (ref: EventRef, change: EventChange) => Promise<void>;
+  readonly cancel: (ref: EventRef) => Promise<void>;
+}
+
 /** The calendar calls booking takes. */
 export interface BookingCalendar {
   readonly busy: BusyReader;
   readonly events: EventWriter;
+  /** Moving, inviting more people to and cancelling an event the booking made. */
+  readonly existing?: EventChanger;
 }
 
 /**

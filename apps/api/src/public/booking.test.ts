@@ -225,3 +225,104 @@ describe('the public page (AC-629, AC-632 to AC-634, AC-643, AC-644)', () => {
     expect((await visit(page.publicKey, { ip })).status).toBe(429);
   });
 });
+
+describe('the guest page’s changes and the host’s (milestone 2: AC-638 to AC-640, AC-675 to AC-677)', () => {
+  async function booked() {
+    const m = await memberWithWorkspace(app);
+    const page = await pageOf(m);
+    const answer = await visit(`${page.publicKey}/book`, { method: 'POST', body: booking() });
+    const { manageToken } = (await answer.json()) as { manageToken: string };
+    return { m, page, token: manageToken };
+  }
+
+  it('moves to a time the page offers, adds guests, then cancels with a reason', async () => {
+    const { m, token } = await booked();
+    const slots = await visit(`manage/${token}/slots?from=2026-11-02T00:00:00.000Z&to=2026-11-03T00:00:00.000Z&tz=UTC`);
+    expect(slots.status).toBe(200);
+    const { slots: offered } = (await slots.json()) as { slots: { start: string }[] };
+    expect(offered.map((slot) => slot.start)).toContain('2026-11-02T10:00:00.000Z');
+
+    const moved = await visit(`manage/${token}/move`, { method: 'POST', body: { start: '2026-11-02T10:00:00.000Z' } });
+    expect(moved.status).toBe(200);
+    expect(await moved.json()).toMatchObject({
+      booking: { start: '2026-11-02T10:00:00.000Z', state: 'confirmed', canMove: true },
+    });
+
+    const guests = await visit(`manage/${token}/guests`, {
+      method: 'POST',
+      body: { emails: ['ann@navy.example', 'grace@navy.example'] },
+    });
+    expect(await guests.json()).toEqual({ added: 1, guests: ['ann@navy.example'] });
+    const removed = await visit(`manage/${token}/guests/remove`, {
+      method: 'POST',
+      body: { email: 'ann@navy.example' },
+    });
+    expect(await removed.json()).toEqual({ guests: [] });
+
+    // A taken time names it, and a bad body says what is wrong.
+    const taken = await visit(`manage/${token}/move`, { method: 'POST', body: { start: '2026-11-02T12:00:00.000Z' } });
+    expect(taken.status).toBe(409);
+    expect(await taken.json()).toMatchObject({ code: 'SLOT_TAKEN' });
+    const bad = await visit(`manage/${token}/guests`, { method: 'POST', body: { emails: ['not an email'] } });
+    expect(bad.status).toBe(400);
+
+    const cancelled = await visit(`manage/${token}/cancel`, { method: 'POST', body: { reason: 'Something came up.' } });
+    expect(await cancelled.json()).toMatchObject({
+      booking: { state: 'cancelled', canChange: false, cancelReason: 'Something came up.' },
+    });
+    const listed = await m.client.bookings.listAll({ workspace: m.slug, when: 'cancelled' });
+    expect(listed[0]).toMatchObject({ cancelledBy: 'guest', cancelReason: 'Something came up.', reschedules: 1 });
+  });
+
+  it('refuses a change from a foreign origin, and an unknown token', async () => {
+    const { token } = await booked();
+    const foreign = await visit(`manage/${token}/cancel`, { method: 'POST', body: {}, origin: 'https://evil.example' });
+    expect(foreign.status).toBe(403);
+    const unknown = await visit(`manage/${'x'.repeat(32)}/cancel`, { method: 'POST', body: {} });
+    expect(unknown.status).toBe(404);
+  });
+
+  it('limits one booking to 8 changes a minute, whatever the address', async () => {
+    const { token } = await booked();
+    const statuses: number[] = [];
+    for (let index = 0; index < 9; index += 1) {
+      const answer = await visit(`manage/${token}/guests`, { method: 'POST', body: { emails: ['ann@navy.example'] } });
+      statuses.push(answer.status);
+    }
+    expect(statuses.slice(0, 8).every((status) => status === 200)).toBe(true);
+    expect(statuses[8]).toBe(429);
+  });
+
+  it('lets the host move, copy the guest link and cancel; a stranger gets nothing', async () => {
+    const { m, page, token } = await booked();
+    const [listed] = await m.client.bookings.listAll({ workspace: m.slug, when: 'upcoming' });
+    if (listed === undefined) throw new Error('No booking listed.');
+    const link = await m.client.bookings.guestLink({ workspace: m.slug, bookingId: listed.id });
+    expect(link.path).toBe(`/b/${page.publicKey}/manage?t=${token}`);
+    const slots = await m.client.bookings.moveSlots({
+      workspace: m.slug,
+      bookingId: listed.id,
+      from: '2026-11-02T00:00:00.000Z',
+      to: '2026-11-03T00:00:00.000Z',
+    });
+    expect(slots.slots.length).toBeGreaterThan(0);
+    expect(
+      await m.client.bookings.move({
+        workspace: m.slug,
+        bookingId: listed.id,
+        start: '2026-11-02T11:00:00.000Z',
+        mutationId: newId(),
+      }),
+    ).toEqual({ moved: true });
+    const stranger = await memberWithWorkspace(app);
+    const refused = await failure(() =>
+      stranger.client.bookings.cancel({ workspace: m.slug, bookingId: listed.id, mutationId: newId() }),
+    );
+    expect(refused.code).toBe('NOT_FOUND');
+    expect(
+      await m.client.bookings.cancel({ workspace: m.slug, bookingId: listed.id, reason: 'Ill.', mutationId: newId() }),
+    ).toEqual({ cancelled: true });
+    const seen = await visit(`manage/${token}`);
+    expect(await seen.json()).toMatchObject({ state: 'cancelled', cancelReason: 'Ill.' });
+  });
+});

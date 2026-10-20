@@ -1,8 +1,10 @@
 import { isDataError } from '@crm/data';
+import { useMemo } from 'react';
 import { createFileRoute, useNavigate, useRouter, type ErrorComponentProps } from '@tanstack/react-router';
 import { BookingsCalendarScreen, BookingsFailed, BookingsPending } from '../features/bookings/BookingsScreen.tsx';
 import { bookingsSearchOf, parseBookingsSearch, rawOf } from '../features/bookings/search.ts';
 import { strings } from '../features/bookings/strings.ts';
+import { hostActions } from '../features/bookings/hostActions.ts';
 import { workingStartOf } from '../features/bookings/span.ts';
 import { dayKeyOf, weekOf, weekRange } from '../features/bookings/week.ts';
 import { browserZone } from '../features/booking/hours.ts';
@@ -44,6 +46,8 @@ function CalendarRoute() {
   const search = bookingsSearchOf(Route.useSearch());
   const navigate = useNavigate();
   const { data, toasts } = Route.useRouteContext();
+  // One set of calls per workspace: a dialog holding them never reads again because the route drew again.
+  const actions = useMemo(() => hostActions(data, toasts, slug), [data, toasts, slug]);
   return (
     <BookingsCalendarScreen
       slug={slug}
@@ -61,6 +65,7 @@ function CalendarRoute() {
       }}
       newBookingKey={data.bookings.newKey}
       toasts={toasts}
+      actions={actions}
       onSearch={(next) =>
         void navigate({
           to: '/w/$slug/bookings/calendar',

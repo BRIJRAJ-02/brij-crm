@@ -13,6 +13,7 @@ import { createRecord } from '../engine/records.ts';
 import { createWorkspace } from '../engine/workspaces.ts';
 import { rescope, testScope } from '../testing.ts';
 import { NO_CALENDAR, type BookingCalendar, type BookingEvent, type BusyAnswer } from './calendar.ts';
+import { manageTokenFor } from './tokens.ts';
 import {
   createBookingPage,
   deleteBookingPage,
@@ -32,6 +33,8 @@ import {
 } from './public.ts';
 
 const { appUrl } = inject('testDatabase');
+/** The manage link key the tests derive tokens with. */
+const LINK_KEY = Buffer.alloc(32, 7);
 let db: Database;
 
 beforeAll(() => {
@@ -96,7 +99,7 @@ function fakeCalendar(
   return { calendar, events };
 }
 
-const deps = (calendar: BookingCalendar = NO_CALENDAR) => ({ calendar, now: () => NOW });
+const deps = (calendar: BookingCalendar = NO_CALENDAR) => ({ calendar, now: () => NOW, linkKey: LINK_KEY });
 
 const bookInput = (over: Partial<PublicBookInput> = {}): PublicBookInput => ({
   idempotencyKey: newId(),
@@ -207,7 +210,6 @@ describe('the public page and its slots (AC-629, AC-631, AC-644)', () => {
       title: 'Intro call',
       description: '',
       hostName: 'Ada Host',
-      workspaceName: 'Booking',
       durations: [30],
       location: { type: 'video' },
       hostTimeZone: 'UTC',
@@ -446,7 +448,7 @@ describe('no double booking (AC-632)', () => {
 });
 
 describe('the guest page (AC-674)', () => {
-  it('opens the booking by its token: state, time, facts, guests and note; a replay rotates the token', async () => {
+  it('opens the booking by its token: state, time, facts, guests and note; a replay answers the same token', async () => {
     const w = await workspace();
     const { page, entry } = await livePage(w);
     const input = bookInput({ guests: ['ann@navy.example', 'grace@navy.example'], note: 'About the compiler.' });
@@ -465,6 +467,8 @@ describe('the guest page (AC-674)', () => {
       visitorEmail: 'grace@navy.example',
       guests: ['ann@navy.example'],
       note: 'About the compiler.',
+      canChange: true,
+      canMove: true,
     });
     expect((await readManagedBooking(guest, new Date('2026-11-03T00:00:00Z'))).state).toBe('past');
     const origin = {
@@ -475,11 +479,11 @@ describe('the guest page (AC-674)', () => {
     expect(await managedBookingIcs(guest, booked.manageToken, origin, NOW)).toContain(
       `UID:${booked.bookingId}@app.example`,
     );
-    // A retry of the same attempt answers the same booking with a new token; the old one stops opening it.
+    // A retry of the same attempt answers the same booking and the same token, derived from its id.
     const again = await bookPublicSlot(entry, deps(), input);
     expect(again.bookingId).toBe(booked.bookingId);
-    expect(again.manageToken).not.toBe(booked.manageToken);
-    expect(await refusalOf(enterBookingByToken({ db }, booked.manageToken))).toMatchObject({ code: 'NOT_FOUND' });
+    expect(again.manageToken).toBe(booked.manageToken);
+    expect(again.manageToken).toBe(manageTokenFor(LINK_KEY, booked.bookingId).token);
     expect(await refusalOf(enterBookingByToken({ db }, 'short'))).toMatchObject({ code: 'NOT_FOUND' });
   });
 

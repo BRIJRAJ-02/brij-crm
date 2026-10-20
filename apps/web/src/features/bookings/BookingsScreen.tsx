@@ -41,7 +41,7 @@ import {
   type Toasts,
   type WeekCalendarBlock,
 } from '@crm/ui';
-import { useEffect, useRef, useState, type ReactNode } from 'react';
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import { browserZone } from '../booking/hours.ts';
 import { availabilityHref } from '../booking/links.ts';
@@ -52,6 +52,7 @@ import { DrawCard } from './DrawCard.tsx';
 import { NewMeetingDialog, type NewMeeting } from './NewMeetingDialog.tsx';
 import { instantOf, spanNames, type DrawnSpan } from './span.ts';
 import { PAGE_SIZES, type BookingsSearch } from './search.ts';
+import { BookingActions, type HostBookingActions } from './BookingActions.tsx';
 import { strings } from './strings.ts';
 import { useBookingsToolbarSlot } from './toolbarSlot.ts';
 import {
@@ -199,16 +200,19 @@ function FilterMenu({
   );
 }
 
-/** A booking's card: its state, the guest, when, who, the note, and Join call. */
+/** A booking's card: its state, the guest, when, who, the note, Join call, and the host's changes while it's ahead. */
 function BookingCard({
   booking,
   personHref,
   locale,
+  actions,
 }: {
   readonly booking: BookingListItem;
   readonly personHref: string | undefined;
   readonly locale: string;
+  readonly actions?: HostBookingActions | undefined;
 }) {
+  const now = useNow();
   return (
     <>
       <Badge text={strings.status[booking.status]} tone={booking.status === 'confirmed' ? 'accent' : 'neutral'} />
@@ -244,6 +248,9 @@ function BookingCard({
       />
       {booking.status === 'confirmed' && booking.videoUrl !== undefined && (
         <Link href={booking.videoUrl}>{`${strings.joinCall}: ${providerOf(booking.videoUrl)}`}</Link>
+      )}
+      {actions !== undefined && booking.status === 'confirmed' && Date.parse(booking.startsAt) > now.getTime() && (
+        <BookingActions booking={booking} actions={actions} locale={locale} />
       )}
     </>
   );
@@ -395,6 +402,8 @@ export interface BookingsCalendarScreenProps {
   readonly workingStart: (dayKey: string) => number;
   /** Confirms and refuses what outlives its card (a removal, a refusal after the card closed). */
   readonly toasts: Toasts;
+  /** The host's changes to a booking from its card (AC-640). */
+  readonly actions?: HostBookingActions;
 }
 
 /** Bookings › Calendar: the range, previous week, Today, next week and Filter, then the grid and the week's count. */
@@ -670,7 +679,12 @@ function WeekView(props: BookingsCalendarScreenProps) {
               />
             )
           ) : (
-            <BookingCard booking={openBooking} personHref={personHref(openBooking)} locale={locale} />
+            <BookingCard
+              booking={openBooking}
+              personHref={personHref(openBooking)}
+              locale={locale}
+              actions={props.actions}
+            />
           )
         }
         onOpen={(id) => {
@@ -900,6 +914,8 @@ export interface BookingsListScreenProps {
   readonly objects: readonly ObjectSummary[];
   readonly pages: readonly BookingPageView[];
   readonly locale: string;
+  /** The host's changes to a booking from its card (AC-640). */
+  readonly actions?: HostBookingActions;
   readonly onSearch: (next: Partial<BookingsSearch>) => void;
 }
 
@@ -908,12 +924,35 @@ export interface BookingsListScreenProps {
  * a page of bookings under day bands, the sort and the pages; a row opens its
  * card in a Panel.
  */
-export function BookingsListScreen({ slug, search, lists, objects, pages, locale, onSearch }: BookingsListScreenProps) {
+export function BookingsListScreen({
+  slug,
+  search,
+  lists,
+  objects,
+  pages,
+  locale,
+  onSearch,
+  actions,
+}: BookingsListScreenProps) {
   const personHref = usePersonHref(slug, objects);
-  const [open, setOpen] = useState<BookingListItem | undefined>(undefined);
+  // The open booking by id, read from the list as it is now: a change (here or by the guest) shows in the panel.
+  const [openId, setOpenId] = useState<string | undefined>(undefined);
   const tab = search.tab;
   const view = lists[tab];
   const state = useBookings(view);
+  const open = state.status === 'ready' ? state.bookings.find((booking) => booking.id === openId) : undefined;
+  // A change closes the panel: the lists are read again, and the booking may move tabs.
+  const panelActions = useMemo(
+    () =>
+      actions === undefined
+        ? undefined
+        : {
+            ...actions,
+            cancel: (id: string, reason: string) => actions.cancel(id, reason).then(() => setOpenId(undefined)),
+            move: (id: string, start: string) => actions.move(id, start).then(() => setOpenId(undefined)),
+          },
+    [actions],
+  );
   const body = (() => {
     if (state.status === 'loading')
       return { bar: <ListBar search={search} pages={pages} onSearch={onSearch} />, list: <Skeleton shape="block" /> };
@@ -962,7 +1001,7 @@ export function BookingsListScreen({ slug, search, lists, objects, pages, locale
             groups={groupsOf(shown, personHref, locale)}
             onOpen={(id) => {
               const booking = byId.get(id);
-              if (booking !== undefined) setOpen(booking);
+              if (booking !== undefined) setOpenId(booking.id);
             }}
             emptyState={
               <EmptyState
@@ -1001,8 +1040,8 @@ export function BookingsListScreen({ slug, search, lists, objects, pages, locale
       <Toolbar>{body.bar}</Toolbar>
       {body.list}
       {open !== undefined && (
-        <Panel title={strings.details} isOpen onClose={() => setOpen(undefined)}>
-          <BookingCard booking={open} personHref={personHref(open)} locale={locale} />
+        <Panel title={strings.details} isOpen onClose={() => setOpenId(undefined)}>
+          <BookingCard booking={open} personHref={personHref(open)} locale={locale} actions={panelActions} />
         </Panel>
       )}
     </PageColumn>

@@ -29,7 +29,7 @@ afterAll(async () => {
 
 /** Sunday 1 November 2026, midnight UTC. */
 const NOW = new Date('2026-11-01T00:00:00.000Z');
-const deps = { calendar: NO_CALENDAR, now: () => NOW };
+const deps = { calendar: NO_CALENDAR, now: () => NOW, linkKey: Buffer.alloc(32, 7) };
 
 let count = 0;
 async function workspace() {

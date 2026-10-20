@@ -1,20 +1,21 @@
 // The public booking client (spec 0025) against a fake fetch: the paths it
 // calls, its body, and each failure as a DataError with the API's code.
 import { describe, expect, it } from 'vitest';
+import { createManageClient } from './manage.ts';
 import { createBookingClient, isDataError, withPreviewDraft, type PublicBookingPage } from './public.ts';
 
 function fake(answer: (url: string, init?: RequestInit) => Response) {
   const calls: { url: string; init?: RequestInit }[] = [];
-  const client = createBookingClient({
+  const options = {
     origin: 'https://app.test',
     now: () => 0,
-    fetch: (input, init) => {
+    fetch: (input: RequestInfo | URL, init?: RequestInit) => {
       const url = input instanceof Request ? input.url : String(input);
       calls.push({ url, ...(init === undefined ? {} : { init }) });
       return Promise.resolve(answer(url, init));
     },
-  });
-  return { client, calls };
+  };
+  return { client: createBookingClient(options), manage: createManageClient(options), calls };
 }
 
 const KEY = 'abcdefghijklmnop';
@@ -105,6 +106,29 @@ describe('createBookingClient', () => {
     expect(isDataError(error) && error.data).toEqual({ issues: [{ path: ['name'], message: 'Give your name.' }] });
   });
 
+  it('reads where the booking could move, then moves, invites and cancels it by the token, cookies left out', async () => {
+    const { manage: client, calls } = fake((url) =>
+      Response.json(url.endsWith('/guests') ? { added: 1, guests: ['ann@example.com'] } : { booking: { state: 'x' } }),
+    );
+    await client.moveSlots('tok', { from: '2026-11-02T00:00:00.000Z', to: '2026-11-03T00:00:00.000Z', tz: 'UTC' });
+    expect(calls[0]?.url).toBe(
+      'https://app.test/api/public/booking/manage/tok/slots?from=2026-11-02T00%3A00%3A00.000Z&to=2026-11-03T00%3A00%3A00.000Z&tz=UTC',
+    );
+    await client.move('tok', '2026-11-02T10:00:00.000Z');
+    expect(await client.addGuests('tok', ['ann@example.com'])).toEqual({ added: 1, guests: ['ann@example.com'] });
+    await client.cancel('tok', '');
+    await client.cancel('tok', 'Ill.');
+    expect(
+      calls.slice(1).map((call) => [call.url.replace('https://app.test/api/public/booking/', ''), call.init?.body]),
+    ).toEqual([
+      ['manage/tok/move', JSON.stringify({ start: '2026-11-02T10:00:00.000Z' })],
+      ['manage/tok/guests', JSON.stringify({ emails: ['ann@example.com'] })],
+      ['manage/tok/cancel', '{}'],
+      ['manage/tok/cancel', JSON.stringify({ reason: 'Ill.' })],
+    ]);
+    expect(calls.every((call) => call.init?.credentials === 'omit')).toBe(true);
+  });
+
   it('says offline when the server can’t be reached', async () => {
     const client = createBookingClient({
       origin: 'https://app.test',
@@ -120,7 +144,6 @@ describe('withPreviewDraft', () => {
     title: 'Intro',
     description: '',
     hostName: 'Ada',
-    workspaceName: 'Acme',
     durations: [30],
     location: { type: 'video' },
     hostTimeZone: 'Europe/London',

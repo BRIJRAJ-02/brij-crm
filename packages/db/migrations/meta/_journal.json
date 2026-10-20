@@ -337,6 +337,13 @@
       "when": 1792518190527,
       "tag": "0047_notes",
       "breakpoints": true
+    },
+    {
+      "idx": 48,
+      "version": "7",
+      "when": 1792525891494,
+      "tag": "0048_booking_changes",
+      "breakpoints": true
     }
   ]
 }

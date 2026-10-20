@@ -214,6 +214,18 @@ export {
 export { createTimeBlock, removeTimeBlock, type TimeBlockDraft } from './booking/blocks.ts';
 export { bookAsHost, HOST_BOOKING_MINUTES, type HostBookingDeps, type HostBookingInput } from './booking/host.ts';
 export { listWorkspaceBookings, readBookingsCalendar } from './booking/list.ts';
+// Changing a booking from Bookings (spec 0025, AC-640): its host moves or cancels it, or copies the guest's link.
+export {
+  bookingGuestPath,
+  cancelBooking,
+  hostTarget,
+  MAX_GUESTS,
+  MAX_RESCHEDULES,
+  moveBooking,
+  readMoveSlots,
+  type ChangeDeps,
+} from './booking/change.ts';
+export { type ManageLinkKey } from './booking/tokens.ts';
 export {
   createBusyCache,
   NO_CALENDAR,
@@ -222,6 +234,9 @@ export {
   type BusyAnswer,
   type BusyReader,
   type EventAttendee,
+  type EventChange,
+  type EventChanger,
+  type EventRef,
   type EventWriter,
   type WrittenEvent,
 } from './booking/calendar.ts';

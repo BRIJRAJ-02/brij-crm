@@ -34,6 +34,15 @@ export function createMailpitMailer(options: MailpitOptions): Mailer {
           Subject: message.subject,
           HTML: message.html,
           Text: message.text,
+          ...(message.attachments === undefined || message.attachments.length === 0
+            ? {}
+            : {
+                Attachments: message.attachments.map((file) => ({
+                  Content: Buffer.from(file.content, 'utf8').toString('base64'),
+                  Filename: file.filename,
+                  ContentType: file.contentType,
+                })),
+              }),
         }),
         signal: AbortSignal.timeout(10_000),
       });

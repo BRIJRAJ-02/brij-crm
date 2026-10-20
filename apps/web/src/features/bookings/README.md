@@ -13,7 +13,7 @@ A sidebar destination after Records, as Timefix's rail has it.
 
 - **Purpose**: the week: bookings beside the member's own calendar events.
 - **Main task**: see the week at a glance and open a booking or an event for its details.
-- **Leaves out**: changing a booking from here (the actions come next), the new meeting dialog, team views and filing, and live arrival.
+- **Leaves out**: team views and filing, and live arrival.
 - The strip's end: the range, previous week, Today ("Today · 19 Oct" off this week), next week, Filter.
 - The library's WeekCalendar: blocks by time, a booking's title and time with the guest on a third line, events quieter in their calendar's hue; today's column tinted with the now line in it; it opens an hour before now (8 AM outside the working day). Pressing a block opens its card beside it. "N bookings this week." under it. At phone width, the picked day under the seven day buttons.
 - The address: `w` the week's Monday, `d` the picked day, `link` one booking page, `conn` the calendars shown.
@@ -22,10 +22,14 @@ A sidebar destination after Records, as Timefix's rail has it.
 
 - **Purpose**: every booking the member may see, Upcoming, Past or Canceled, paged.
 - **Main task**: page through them and open one for its details.
-- **Leaves out**: changing a booking (the actions come next), filters beyond the link, live arrival.
+- **Leaves out**: filters beyond the link, live arrival.
 - The strip's end: Upcoming · Past · Canceled (a SegmentedControl), the sort, Filter.
 - Each tab has its own empty state; Upcoming's links to Captures › Links and Availability. The library's BookingList draws the rows under day bands; Pagination (10, 25, 50 or 100) at the foot; a row's title opens its card in a Panel.
 - The address: `tab` (`past`, `cancelled`), `page`, `per`, `sort`, `link`.
+
+## A booking's card (both tabs)
+
+- While a booking is ahead, its card ends with **Reschedule** (the page's free times for the next two weeks, days over times, and a commit that names the new time), **Copy guest link** (read only when pressed: it is the guest's key) and **Cancel booking** (asks first, with an optional reason the guest's email carries), in a row (`BookingActions.tsx`, `hostActions.ts`, spec 0025 AC-640). A change shows at once in every list and range, says so in a toast, and is undone on a refusal.
 
 ## Notes
 

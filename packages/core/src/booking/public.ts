@@ -17,7 +17,7 @@
 //    their email, in a savepoint, so a record refusal never loses the booking.
 // 4. After the commit, the calendar event (three tries); a booking whose event
 //    failed stays confirmed and is marked for the host.
-import { createHash, randomBytes } from 'node:crypto';
+import { randomUUID } from 'node:crypto';
 import { and, eq, inArray, sql } from 'drizzle-orm';
 import type {
   PublicBookInput,
@@ -49,12 +49,17 @@ import {
 import { hostLockKey, lockKey } from './locks.ts';
 import { buildBookingIcs } from './ics.ts';
 import { matchVisitor } from './visitor.ts';
+import { MAX_RESCHEDULES } from './change.ts';
+import { enqueueBookingMail, recordEvent } from './mail-queue.ts';
+import { ensureManageToken, manageTokenFor, type ManageLinkKey } from './tokens.ts';
 
-const { bookings, members, workspaces } = schema;
+const { bookings, members } = schema;
 
-/** What the public services need: the calendar calls, and the clock. */
+/** What the public services need: the calendar calls, the manage link key, and the clock. */
 export interface PublicBookingDeps {
   readonly calendar: BookingCalendar & { readonly busy: BusyReader & { readonly fresh?: BusyReader } };
+  /** Derives each booking's guest page token (`tokens.ts`). */
+  readonly linkKey: ManageLinkKey;
   readonly now?: () => Date;
   /** Where a failed calendar event is reported (the booking itself stands). */
   readonly log?: { warn(message: string, fields: Readonly<Record<string, unknown>>): void };
@@ -98,7 +103,6 @@ export async function getPublicBookingPage(entry: BookingEntry): Promise<PublicB
       title: page.title,
       description: page.description,
       hostName: await hostName(tx, page.ownerMemberId),
-      workspaceName: (await tx.select({ name: workspaces.name }).from(workspaces).limit(1))[0]?.name ?? '',
       durations: page.durations,
       location: publicLocation(page),
       hostTimeZone: page.availability.timeZone,
@@ -207,17 +211,8 @@ interface Booked {
   readonly bookingId: string;
   readonly replayed: boolean;
   readonly booking: PublicBooking;
-  /**
-   * The guest page's token. Only its hash is kept, so a replay mints a new one
-   * and the link the lost first answer carried stops working.
-   */
+  /** The guest page's token, derived from the booking's id: a replay answers the same one. */
   readonly manageToken: string;
-}
-
-/** A fresh manage token and the hash the row keeps. */
-export function newManageToken(): { readonly token: string; readonly hash: string } {
-  const token = randomBytes(24).toString('base64url');
-  return { token, hash: createHash('sha256').update(token).digest('hex') };
 }
 
 /**
@@ -244,12 +239,10 @@ export async function bookPublicSlot(
       .from(bookings)
       .where(and(eq(bookings.pageId, page.id), eq(bookings.idempotencyKey, input.idempotencyKey)));
     if (row === undefined) return undefined;
-    const fresh = newManageToken();
-    await tx.update(bookings).set({ manageTokenHash: fresh.hash }).where(eq(bookings.id, row.id));
     return {
       bookingId: row.id,
       replayed: true,
-      manageToken: fresh.token,
+      manageToken: await ensureManageToken(tx, deps.linkKey, row),
       booking: {
         start: row.startsAt.toISOString(),
         end: row.endsAt.toISOString(),
@@ -292,8 +285,9 @@ export async function bookPublicSlot(
   );
   if (busy.blocked) throw refuse('BOOKING_CLOSED', 'This page can’t take bookings right now. Try again later.');
 
-  // 3. Check and reserve, atomically, under the hosts' locks.
-  const { token, hash: tokenHash } = newManageToken();
+  // 3. Check and reserve, atomically, under the hosts' locks. The id is made here, so the token derives from it.
+  const newId = randomUUID();
+  const { token, hash: tokenHash } = manageTokenFor(deps.linkKey, newId);
   const name = await inWorkspace(entry.scope, (tx) => hostName(tx, host));
   const { result } = await runWrite(
     entry.scope,
@@ -331,6 +325,7 @@ export async function bookPublicSlot(
           .insert(bookings)
           .values({
             workspaceId,
+            id: newId,
             pageId: page.id,
             hostMemberId: host,
             startsAt: start,
@@ -341,6 +336,7 @@ export async function bookPublicSlot(
             visitorTimeZone: input.timeZone,
             answers: answersOf(input),
             manageTokenHash: tokenHash,
+            manageTokenDerived: true,
             idempotencyKey: input.idempotencyKey,
             createdByType: actor.type,
             createdById: actor.id,
@@ -352,6 +348,8 @@ export async function bookPublicSlot(
           .returning({ id: bookings.id });
         if (row === undefined) throw new Error('The booking was not stored.');
         bookingId = row.id;
+        // The reminders with the booking; the confirmation after its event, so it knows whether the calendar invited them.
+        await enqueueBookingMail(tx, bookingId, ['reminder_24h', 'reminder_1h']);
       } catch (error) {
         // The lock should make this unreachable: a write that skipped it, refused by the database.
         if (postgresError(error)?.code === '23P01')
@@ -420,16 +418,11 @@ export async function bookPublicSlot(
       });
     }
   }
-  await inWorkspace(entry.scope, (tx) =>
-    tx
-      .update(bookings)
-      .set(
-        written === undefined
-          ? { eventFailedAt: sql`now()` }
-          : { meetingId: written.meetingId ?? null, videoUrl: written.videoUrl ?? null, updatedAt: sql`now()` },
-      )
-      .where(eq(bookings.id, result.bookingId)),
-  );
+  // The outcome, and the emails (after the event, so the confirmation knows whether the calendar already invited them).
+  await inWorkspace(entry.scope, async (tx) => {
+    await recordEvent(tx, result.bookingId, written);
+    await enqueueBookingMail(tx, result.bookingId, ['confirmed']);
+  });
   return result;
 }
 
@@ -459,7 +452,11 @@ export async function readManagedBooking(
     const page = await loadPage(tx, entry.pageId);
     if (row === undefined || page === undefined) throw refuse('NOT_FOUND', 'This link doesn’t open a booking.');
     const answers = storedAnswers(row.answers);
+    const canChange = row.status === 'confirmed' && row.startsAt.getTime() > now.getTime();
     return {
+      canChange,
+      canMove: canChange && !page.isDeleted && page.status === 'live' && row.reschedules < MAX_RESCHEDULES,
+      ...(row.cancelReason === null ? {} : { cancelReason: row.cancelReason }),
       state: row.status === 'cancelled' ? 'cancelled' : row.endsAt.getTime() <= now.getTime() ? 'past' : 'confirmed',
       publicKey: page.publicKey,
       title: page.title,
@@ -509,7 +506,8 @@ export async function managedBookingIcs(
     organizerEmail: origin.organizerEmail,
     organizerName: origin.organizerName,
     attendees: [{ name: booking.visitorName, email: booking.visitorEmail }],
-    sequence: 0,
+    // Grows with each download, so a calendar holding an earlier copy takes this one (a move's new time).
+    sequence: Math.floor(now.getTime() / 1000),
     now,
   });
 }

@@ -193,6 +193,8 @@ export const bookings = pgTable(
     reschedules: smallint('reschedules').notNull().default(0),
     /** SHA-256 of the cancel and reschedule link's token (milestone 2 sends the link). */
     manageTokenHash: text('manage_token_hash').notNull(),
+    /** The token derives from the booking's id (milestone 2); false for an older random one, moved once when next written. */
+    manageTokenDerived: boolean('manage_token_derived').notNull().default(false),
     /** One booking per attempt: a retry of the same attempt answers the first booking. */
     idempotencyKey: uuid('idempotency_key').notNull(),
     meetingId: uuid('meeting_id'),
@@ -200,6 +202,11 @@ export const bookings = pgTable(
     videoUrl: text('video_url'),
     /** Set when the calendar event couldn't be made after the booking committed (spec: the booking stays). */
     eventFailedAt: timestamptz('event_failed_at'),
+    /** When and by whom it was cancelled: the guest from their page, the host, or the host's calendar (AC-641). */
+    cancelledAt: timestamptz('cancelled_at'),
+    cancelledBy: text('cancelled_by'),
+    /** The start before the last move, for the moved email's "Was" line. */
+    previousStartsAt: timestamptz('previous_starts_at'),
     personRecordId: uuid('person_record_id'),
     companyRecordId: uuid('company_record_id'),
     dealRecordId: uuid('deal_record_id'),
@@ -247,6 +254,10 @@ export const bookings = pgTable(
       sql`char_length(${t.visitorName}) between 1 and 200 and char_length(${t.visitorEmail}) between 3 and 254`,
     ),
     check('bookings_reschedules', sql`${t.reschedules} between 0 and 5`),
+    check(
+      'bookings_cancelled_by',
+      sql`(${t.cancelledBy} is null and ${t.cancelledAt} is null) or (${t.status} = 'cancelled' and ${t.cancelledBy} in ('guest', 'host', 'calendar') and ${t.cancelledAt} is not null)`,
+    ),
     check('bookings_video_url', sql`${t.videoUrl} is null or char_length(${t.videoUrl}) <= 2000`),
     ...actorConstraints('bookings', 'created_by', t.workspaceId, {
       type: t.createdByType,

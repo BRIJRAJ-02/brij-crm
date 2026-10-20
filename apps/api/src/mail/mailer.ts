@@ -5,12 +5,20 @@ import type { ApiEnv } from '../env.ts';
 import { createMailpitMailer } from './mailpit.ts';
 import { createResendMailer } from './resend.ts';
 
-/** One email, in both an HTML and a plain text part. */
+/** A file sent with an email: a booking's calendar file. */
+export interface MailAttachment {
+  readonly filename: string;
+  readonly content: string;
+  readonly contentType: string;
+}
+
+/** One email, in both an HTML and a plain text part, with any files. */
 export interface MailMessage {
   readonly to: string;
   readonly subject: string;
   readonly html: string;
   readonly text: string;
+  readonly attachments?: readonly MailAttachment[];
 }
 
 /** Sends an email, or throws. Callers decide what a failure means (a code email answers the same either way). */

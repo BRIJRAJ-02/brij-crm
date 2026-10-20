@@ -4,12 +4,15 @@
 // shell: the library's root stylesheet, then the page inside the library's
 // provider with the browser's language and zone. No analytics.
 import '@crm/ui/styles.css';
-import { BookingProvider } from '@crm/ui/public-booking';
-import { StrictMode } from 'react';
+import { BookingMessage, BookingProvider } from '@crm/ui/public-booking';
+import { lazy, StrictMode, Suspense } from 'react';
 import { createRoot } from 'react-dom/client';
 import { BookingPage } from './BookingPage.tsx';
-import { ManagePage } from './ManagePage.tsx';
 import { readPrefill } from './prefill.ts';
+import { strings } from './strings.ts';
+
+// The guest page loads on its own: a visitor booking never downloads its changes (move, guests, cancel).
+const ManagePage = lazy(() => import('./ManagePage.tsx').then((module) => ({ default: module.ManagePage })));
 
 const root = document.getElementById('root');
 if (root === null) throw new Error('The booking page has no #root.');
@@ -29,12 +32,14 @@ createRoot(root).render(
   <StrictMode>
     <BookingProvider locale={locale} timeZone={timeZone}>
       {isManage ? (
-        <ManagePage
-          token={address.searchParams.get('t') ?? ''}
-          isWelcome={address.searchParams.get('welcome') === '1'}
-          locale={locale}
-          now={now}
-        />
+        <Suspense fallback={<BookingMessage title={strings.loading} isLoading />}>
+          <ManagePage
+            token={address.searchParams.get('t') ?? ''}
+            isWelcome={address.searchParams.get('welcome') === '1'}
+            locale={locale}
+            now={now}
+          />
+        </Suspense>
       ) : (
         <BookingPage
           publicKey={publicKey}

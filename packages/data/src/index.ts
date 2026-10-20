@@ -14,6 +14,7 @@ import type {
   TimeBlockOccurrence,
   TimeBlockView,
   BookingsTab,
+  PublicSlots,
   BookingPageSettings,
   BookingPageView,
   BookingView,
@@ -123,6 +124,7 @@ export type {
   AttributeValidation,
   BookingAvailability,
   BookingListItem,
+  PublicSlots,
   BookingLocation,
   BookingsCalendarView,
   BookingsTab,
@@ -2007,6 +2009,63 @@ export function createDataLayer({
       },
       /** A new booking's idempotency key: mint it once per dialog. */
       newKey: () => mintId(),
+      /**
+       * Cancels a booking (AC-640): shown cancelled at once, back on a
+       * refusal; the guest is emailed, with the reason when there is one.
+       * Every list and range is read again once the server has it.
+       */
+      cancel: async (workspace: string, bookingId: string, reason: string): Promise<void> => {
+        const restore = bookingsLists.patchBooking(workspace, bookingId, (booking) => ({
+          ...booking,
+          status: 'cancelled',
+          cancelledBy: 'host',
+          ...(reason === '' ? {} : { cancelReason: reason }),
+        }));
+        try {
+          await call((options) =>
+            api.bookings.cancel(
+              { workspace, bookingId, ...(reason === '' ? {} : { reason }), mutationId: mintId() },
+              options,
+            ),
+          );
+        } catch (error) {
+          restore();
+          // A refusal after the server may have changed it (an email queue that failed): read what it holds.
+          bookingsLists.reloadAll(workspace);
+          throw error;
+        }
+        bookingsLists.reloadAll(workspace);
+      },
+      /**
+       * Moves a booking to a time its page offers (AC-640): at its new time at
+       * once, back on a refusal (`SLOT_TAKEN` when the time just went,
+       * `LIMIT_REACHED` after 5 moves). The guest is emailed.
+       */
+      move: async (workspace: string, bookingId: string, start: string): Promise<void> => {
+        const restore = bookingsLists.patchBooking(workspace, bookingId, (booking) => {
+          const length = Date.parse(booking.endsAt) - Date.parse(booking.startsAt);
+          return {
+            ...booking,
+            startsAt: start,
+            endsAt: new Date(Date.parse(start) + length).toISOString(),
+            reschedules: booking.reschedules + 1,
+          };
+        });
+        try {
+          await call((options) => api.bookings.move({ workspace, bookingId, start, mutationId: mintId() }, options));
+        } catch (error) {
+          restore();
+          bookingsLists.reloadAll(workspace);
+          throw error;
+        }
+        bookingsLists.reloadAll(workspace);
+      },
+      /** Where a booking could move in a range: its page's times of its length, its own time free. */
+      moveSlots: (workspace: string, bookingId: string, from: string, to: string): Promise<PublicSlots> =>
+        call((options) => api.bookings.moveSlots({ workspace, bookingId, from, to }, options)),
+      /** The guest page's path for a booking (`/b/<key>/manage?t=…`), read only when asked: it is the guest's key. */
+      guestLink: (workspace: string, bookingId: string): Promise<{ path: string }> =>
+        call((options) => api.bookings.guestLink({ workspace, bookingId }, options)),
       /** Time the member closes on their own calendar (spec 0027): blocks, and holds for private pages. */
       blocks: {
         /**

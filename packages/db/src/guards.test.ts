@@ -127,7 +127,7 @@ describe('every tenant table', () => {
 });
 
 describe('the holes in row level security (crm_search_text, spec 0004 AC-24; the outbox relay, spec 0005; the daily cleanup, spec 0008)', () => {
-  it('has exactly eight security definer functions, each owned by its own narrow role', async () => {
+  it('has exactly ten security definer functions, each owned by its own narrow role', async () => {
     const definers = await owner.query<{ name: string; owner: string }>(`
       select p.proname as name, pg_get_userbyid(p.proowner) as owner
       from pg_proc p join pg_namespace n on n.oid = p.pronamespace
@@ -138,6 +138,7 @@ describe('the holes in row level security (crm_search_text, spec 0004 AC-24; the
     expect(definers.rows).toEqual([
       { name: 'crm_booking_by_token', owner: 'crm_booking_lookup' },
       { name: 'crm_booking_page_by_key', owner: 'crm_booking_lookup' },
+      { name: 'crm_enqueue_booking_mail', owner: 'crm_queue' },
       { name: 'crm_enqueue_calendar_sync', owner: 'crm_queue' },
       { name: 'crm_enqueue_job', owner: 'crm_queue' },
       { name: 'crm_form_by_key', owner: 'crm_form_lookup' },
@@ -157,6 +158,7 @@ describe('the holes in row level security (crm_search_text, spec 0004 AC-24; the
     expect(hardening.rows).toEqual([
       { name: 'crm_booking_by_token', config: ['search_path=pg_catalog, pg_temp'], atomic: true },
       { name: 'crm_booking_page_by_key', config: ['search_path=pg_catalog, pg_temp'], atomic: true },
+      { name: 'crm_enqueue_booking_mail', config: ['search_path=pg_catalog, pg_temp'], atomic: false },
       { name: 'crm_enqueue_calendar_sync', config: ['search_path=pg_catalog, pg_temp'], atomic: false },
       { name: 'crm_enqueue_job', config: ['search_path=pg_catalog, pg_temp'], atomic: false },
       { name: 'crm_form_by_key', config: ['search_path=pg_catalog, pg_temp'], atomic: true },
@@ -198,9 +200,13 @@ describe('the holes in row level security (crm_search_text, spec 0004 AC-24; the
     ],
     [
       'crm_queue',
-      ['crm_enqueue_job', 'crm_enqueue_calendar_sync'],
-      ['crm_enqueue_job(uuid, timestamp with time zone)', 'crm_enqueue_calendar_sync(uuid, timestamp with time zone)'],
-      ['app', 'app'],
+      ['crm_enqueue_job', 'crm_enqueue_calendar_sync', 'crm_enqueue_booking_mail'],
+      [
+        'crm_enqueue_job(uuid, timestamp with time zone)',
+        'crm_enqueue_calendar_sync(uuid, timestamp with time zone)',
+        'crm_enqueue_booking_mail(uuid, text)',
+      ],
+      ['app', 'app', 'app'],
     ],
     ['crm_sweep', ['crm_workspace_ids'], ['crm_workspace_ids(uuid, integer)'], ['worker']],
     ['crm_form_lookup', ['crm_form_by_key'], ['crm_form_by_key(text)'], ['app']],

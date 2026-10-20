@@ -20,6 +20,7 @@ export {
 } from '../modules/BookingDetails/BookingDetails.tsx';
 export { BookingFoot, BookingFrame, BookingMessage, type BookingFact } from '../modules/BookingFrame/BookingFrame.tsx';
 export { BookingReceipt, type BookingReceiptState } from '../modules/BookingReceipt/BookingReceipt.tsx';
+export { BookingChanges, type CancelOutcome, type GuestsOutcome } from '../modules/BookingChanges/BookingChanges.tsx';
 export { DayStrip } from '../modules/DayStrip/DayStrip.tsx';
 export { MonthTiles } from '../modules/MonthTiles/MonthTiles.tsx';
 export { SlotList, type Slot } from '../modules/SlotList/SlotList.tsx';

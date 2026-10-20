@@ -10,7 +10,8 @@ export default server({
     // Sign in, mail and the React Email template (spec 0005).
     { files: ['src/auth/auth.ts'], allow: ['better-auth', 'better-auth/api', 'better-auth/plugins/email-otp'] },
     { files: ['src/mail/resend.ts'], allow: ['resend'] },
-    { files: ['src/mail/sign-in-code.ts'], allow: ['react-email'] },
+    // Email templates (React Email): the sign in code, and a booking's emails (spec 0025).
+    { files: ['src/mail/sign-in-code.ts', 'src/mail/booking.ts'], allow: ['react-email'] },
     // The job runners (spec 0008): Graphile Worker only here.
     { files: ['src/jobs/graphile.ts'], allow: ['graphile-worker'] },
   ],

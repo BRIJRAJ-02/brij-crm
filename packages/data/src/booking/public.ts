@@ -17,6 +17,8 @@ import type { FetchLike } from '../fetch.ts';
 
 export type {
   PublicBooked,
+  PublicChanged,
+  PublicGuestsAnswer,
   PublicBookInput,
   PublicBooking,
   PublicManagedBooking,
@@ -69,12 +71,18 @@ async function failureOf(response: Response, now: number): Promise<DataError> {
   return dataError(error.code, error.message, data ?? error.data, wait ?? error.retryAfterSeconds);
 }
 
-/** The client, on `origin` (the page's own), with `fetch` passed in for tests. */
-export function createBookingClient(options: {
+/** What a public client is made on: the page's own origin, and `fetch` and the clock for tests. */
+export interface PublicClientOptions {
   readonly origin: string;
   readonly fetch?: FetchLike;
   readonly now?: () => number;
-}): BookingClient {
+}
+
+/**
+ * The plain calls the public clients make to `/api/public/booking/*`: each
+ * failure a DataError with the API's code, being offline `API_UNAVAILABLE`.
+ */
+export function publicCaller(options: PublicClientOptions) {
   const send = options.fetch ?? ((input, init) => globalThis.fetch(input, init));
   const now = options.now ?? Date.now;
   const base = `${options.origin}/api/public/booking`;
@@ -92,6 +100,14 @@ export function createBookingClient(options: {
     if (!response.ok) throw await failureOf(response, now());
     return (await response.json()) as T;
   };
+  const post = <T>(path: string, body: unknown): Promise<T> =>
+    call<T>(path, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) });
+  return { base, call, post };
+}
+
+/** The client, on `origin` (the page's own), with `fetch` passed in for tests. */
+export function createBookingClient(options: PublicClientOptions): BookingClient {
+  const { base, call } = publicCaller(options);
   return {
     page: (publicKey) => call<PublicBookingPage>(encodeURIComponent(publicKey)),
     slots: (publicKey, query, signal) =>

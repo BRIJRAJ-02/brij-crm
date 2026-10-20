@@ -13,3 +13,5 @@ export {
   type IcsOrigin,
   type PublicBookingDeps,
 } from './booking/public.ts';
+// The guest page's changes (milestone 2): move, add guests, cancel, and where it could move.
+export { addGuests, cancelBooking, guestTarget, moveBooking, readMoveSlots, removeGuest } from './booking/change.ts';

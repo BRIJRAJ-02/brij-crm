@@ -6,6 +6,8 @@ A guest's booking page (spec 0025, AC-674), kept without an account: the host wi
 
 New, for the public booking pages' move onto the library. A record's page (RecordLayout) is an app screen; this is a page a guest opens from an email.
 
+While it's ahead, the card's foot takes `changes` (BookingChanges: move, add guests, cancel), and `notice` puts a line over the card after a change ("Moved. Both calendars are updated…").
+
 ## Use
 
 ```tsx

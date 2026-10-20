@@ -1,8 +1,10 @@
 import { isDataError, type BookingsTab } from '@crm/data';
+import { useMemo } from 'react';
 import { createFileRoute, useNavigate, useRouter, type ErrorComponentProps } from '@tanstack/react-router';
 import { BookingsFailed, BookingsListScreen, BookingsPending } from '../features/bookings/BookingsScreen.tsx';
 import { bookingsSearchOf, parseBookingsSearch, rawOf } from '../features/bookings/search.ts';
 import { strings } from '../features/bookings/strings.ts';
+import { hostActions } from '../features/bookings/hostActions.ts';
 
 // Bookings › List (spec 0025, AC-646): Upcoming, Past (`tab=past`) or Canceled (`tab=cancelled`), a page of them
 // (`page`, `per`), the sort (`sort`) and one booking page (`link`). The loader waits for the tab's first read
@@ -35,6 +37,9 @@ function ListRoute() {
   const { slug } = Route.useParams();
   const search = bookingsSearchOf(Route.useSearch());
   const navigate = useNavigate();
+  const { data, toasts } = Route.useRouteContext();
+  // One set of calls per workspace: a dialog holding them never reads again because the route drew again.
+  const actions = useMemo(() => hostActions(data, toasts, slug), [data, toasts, slug]);
   return (
     <BookingsListScreen
       slug={slug}
@@ -43,6 +48,7 @@ function ListRoute() {
       objects={objects}
       pages={pages}
       locale={navigator.languages[0] ?? 'en-GB'}
+      actions={actions}
       onSearch={(next) =>
         void navigate({
           to: '/w/$slug/bookings/list',

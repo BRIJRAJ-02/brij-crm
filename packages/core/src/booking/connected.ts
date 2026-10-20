@@ -83,5 +83,20 @@ export function connectedCalendar(deps: ConnectedCalendarDeps): BookingCalendar 
         throw error;
       }
     },
+    // A booking's move and cancel (milestone 2): spec 0024's own, by the meeting its event wrote; the provider tells
+    // the attendees.
+    existing: {
+      async move(ref, change) {
+        await events.moveEvent(systemScope(deps.db, ref.workspaceId), {
+          meetingId: ref.meetingId,
+          start: change.start,
+          end: change.end,
+          timeZone: 'UTC',
+        });
+      },
+      async cancel(ref) {
+        await events.cancelEvent(systemScope(deps.db, ref.workspaceId), { meetingId: ref.meetingId });
+      },
+    },
   };
 }

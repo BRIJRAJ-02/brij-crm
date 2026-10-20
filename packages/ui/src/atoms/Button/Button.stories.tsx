@@ -510,3 +510,47 @@ export const Group: Story = {
     await expect(canvas.getAllByRole('button')).toHaveLength(3);
   },
 };
+
+/** A row: a card's few labelled actions, each its own button, spaced and wrapping. */
+export const GroupRow: Story = {
+  render: () => (
+    <Stage>
+      <ButtonGroup label="Change booking" layout="row">
+        <Button icon="calendar-clock">Reschedule</Button>
+        <Button icon="link">Copy guest link</Button>
+        <Button variant="danger" icon="circle-x">
+          Cancel booking
+        </Button>
+      </ButtonGroup>
+    </Stage>
+  ),
+  play: async ({ canvas }) => {
+    await expect(canvas.getByRole('group', { name: 'Change booking' })).toHaveAttribute('data-layout', 'row');
+  },
+};
+
+/** A disclosure: open, it reads as expanded and draws held down; a danger one keeps its red. */
+export const Disclosure: Story = {
+  render: () => (
+    <Stage>
+      <Button icon="user-plus" isExpanded controls="guests-panel">
+        Guests (2)
+      </Button>
+      <Button icon="calendar-clock" isExpanded={false}>
+        Move to another time
+      </Button>
+      <Button variant="danger" icon="circle-x" isExpanded controls="cancel-panel">
+        Cancel booking
+      </Button>
+      <div id="guests-panel" role="region" aria-label="Guests" />
+      <div id="cancel-panel" role="region" aria-label="Cancel" />
+    </Stage>
+  ),
+  play: async ({ canvas }) => {
+    await expect(canvas.getByRole('button', { name: 'Guests (2)' })).toHaveAttribute('aria-expanded', 'true');
+    await expect(canvas.getByRole('button', { name: 'Move to another time' })).toHaveAttribute(
+      'aria-expanded',
+      'false',
+    );
+  },
+};

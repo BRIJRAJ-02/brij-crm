@@ -13,6 +13,7 @@ import {
   TimeBlockOccurrence,
   TimeBlockView,
 } from './blocks.ts';
+import { CANCEL_REASON_MAX, PublicSlots } from './public.ts';
 import { BookingLocation, BookingPageSettings } from './settings.ts';
 
 /** A page as a member sees it in Settings › Booking pages. */
@@ -143,6 +144,10 @@ export const BookingListItem = BookingView.extend({
   guests: z.array(z.string()),
   note: z.string().optional(),
   cancelReason: z.string().optional(),
+  /** Who cancelled it: the guest from their page, the host, or the host's calendar. */
+  cancelledBy: z.enum(['guest', 'host', 'calendar']).optional(),
+  /** How many times it has moved (at most 5). */
+  reschedules: z.number().int().min(0),
 });
 /** A booking in Bookings. */
 export type BookingListItem = z.infer<typeof BookingListItem>;
@@ -227,6 +232,47 @@ export const BookingsCalendarView = z.object({
 /** A calendar read's answer. */
 export type BookingsCalendarView = z.infer<typeof BookingsCalendarView>;
 
+/** Cancelling a booking from Bookings (AC-640): the guest is told, with the reason when one is given. */
+export const CancelBookingInput = WorkspaceScoped.extend({
+  bookingId: z.uuid(),
+  reason: z
+    .string()
+    .trim()
+    .max(CANCEL_REASON_MAX, { error: `Keep the reason to ${String(CANCEL_REASON_MAX)} characters.` })
+    .optional(),
+  mutationId: z.uuid(),
+});
+/** Cancelling a booking. */
+export type CancelBookingInput = z.infer<typeof CancelBookingInput>;
+
+/** Moving a booking from Bookings (AC-640): to a time its page offers now. */
+export const MoveBookingInput = WorkspaceScoped.extend({ bookingId: z.uuid(), start: Timestamp, mutationId: z.uuid() });
+/** Moving a booking. */
+export type MoveBookingInput = z.infer<typeof MoveBookingInput>;
+
+/** The longest range one move slots read covers: 31 days. */
+export const MOVE_SLOTS_MAX_DAYS = 31;
+
+/** Where a booking could move in a range: its page's slots of its length, its own time free. */
+export const BookingMoveSlotsInput = WorkspaceScoped.extend({
+  bookingId: z.uuid(),
+  from: Timestamp,
+  to: Timestamp,
+}).refine(
+  ({ from, to }) => {
+    const span = Date.parse(to) - Date.parse(from);
+    return span > 0 && span <= MOVE_SLOTS_MAX_DAYS * 86_400_000;
+  },
+  { error: `Ask for a range of at most ${String(MOVE_SLOTS_MAX_DAYS)} days.`, path: ['to'] },
+);
+/** A move slots read. */
+export type BookingMoveSlotsInput = z.infer<typeof BookingMoveSlotsInput>;
+
+/** The guest page's address for a booking (Copy guest link): read on demand, since it carries the guest's key. */
+export const BookingGuestLinkInput = WorkspaceScoped.extend({ bookingId: z.uuid() });
+/** A guest link read. */
+export type BookingGuestLinkInput = z.infer<typeof BookingGuestLinkInput>;
+
 /** Member procedures for bookings. */
 export const bookingsContract = {
   list: oc.input(ListBookingsInput).output(z.array(BookingView)),
@@ -236,6 +282,14 @@ export const bookingsContract = {
   setHours: oc.input(UpdateMemberHoursInput).output(MemberHours),
   /** Book someone in, in the caller's own time (spec 0027). */
   bookAsHost: oc.input(BookAsHostInput).output(z.object({ bookingId: z.uuid() })),
+  /** Cancel a booking: the guest is told (AC-640). */
+  cancel: oc.input(CancelBookingInput).output(z.object({ cancelled: z.boolean() })),
+  /** Move a booking to a time its page offers (AC-640). */
+  move: oc.input(MoveBookingInput).output(z.object({ moved: z.boolean() })),
+  /** Where a booking could move. */
+  moveSlots: oc.input(BookingMoveSlotsInput).output(PublicSlots),
+  /** The guest page's path, `/b/<key>/manage?t=<token>`. */
+  guestLink: oc.input(BookingGuestLinkInput).output(z.object({ path: z.string() })),
   /** Time the caller closed on their own calendar (spec 0027). */
   blocks: {
     create: oc.input(CreateTimeBlockInput).output(TimeBlockView),

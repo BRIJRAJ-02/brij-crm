@@ -10,6 +10,11 @@
 //   POST /api/public/booking/:publicKey/book     a visitor's booking, with the guest page's token
 //   GET  /api/public/booking/manage/:token       the guest page's booking
 //   GET  /api/public/booking/manage/:token/ics   the booking as a calendar file (Add to calendar)
+//   GET  /api/public/booking/manage/:token/slots ?from&to&tz: where the booking could move
+//   POST /api/public/booking/manage/:token/move  moves it (milestone 2)
+//   POST /api/public/booking/manage/:token/guests  invites more people
+//   POST /api/public/booking/manage/:token/guests/remove  takes one off
+//   POST /api/public/booking/manage/:token/cancel  cancels it, with an optional reason
 //   GET  /api/public/booking/:publicKey/viewer   who the visitor is (spec 0028)
 //   GET  /api/public/booking/:publicKey/connect  ?return: a guest connects Google for this visit
 //   GET  /api/public/booking/connect/callback    Google's answer: the guest's sealed cookie
@@ -22,6 +27,11 @@ import { createHash, randomBytes, timingSafeEqual } from 'node:crypto';
 import {
   errorStatus,
   PublicBookInput,
+  PublicCancelInput,
+  PublicGuestsInput,
+  PublicMoveInput,
+  PublicMoveSlotsQuery,
+  PublicRemoveGuestInput,
   PublicSlotsQuery,
   type ErrorCode,
   type PublicSlots,
@@ -40,8 +50,14 @@ import {
   type BusyReader,
 } from '@crm/core';
 import {
+  addGuests,
   bookPublicSlot,
+  cancelBooking,
   enterBookingByToken,
+  guestTarget,
+  moveBooking,
+  readMoveSlots,
+  removeGuest,
   enterBookingPage,
   getPublicBookingPage,
   isPageHost,
@@ -51,6 +67,7 @@ import {
   readPublicSlots,
   type IcsOrigin,
 } from '@crm/core/public';
+import type { ManageLinkKey } from '@crm/core';
 import type { Database } from '@crm/db';
 import type { Context, Hono } from 'hono';
 import { bodyLimit } from 'hono/body-limit';
@@ -86,6 +103,8 @@ export interface PublicBookingServices {
   readonly tickets?: TicketBook;
   readonly wakeRelay: WakeRelay;
   readonly now?: () => Date;
+  /** The key every booking's guest page token derives from (`booking-link.ts`). */
+  readonly linkKey: ManageLinkKey;
   /** Where calendar files say they come from: the app's origin and the sending address. */
   readonly ics: IcsOrigin;
   /** Knowing the visitor (spec 0028): sign in, the member door, and the guest leg where calendar sync is on. */
@@ -188,7 +207,12 @@ function addressKey(clientIp: string | undefined): string {
 /** Mounts the public booking routes on the app (its base path is `/api`). */
 export function mountPublicBooking(app: Hono<{ Variables: Variables }>, services: PublicBookingServices): void {
   const { db, calendar, limiter, wakeRelay } = services;
-  const deps = { calendar, ...(services.now === undefined ? {} : { now: services.now }), log };
+  const deps = {
+    calendar,
+    linkKey: services.linkKey,
+    ...(services.now === undefined ? {} : { now: services.now }),
+    log,
+  };
 
   /** Answers 429 when any of the limits is spent, else undefined. */
   const limited = (checks: readonly (readonly [string, LimitRule])[]): Response | undefined => {
@@ -250,6 +274,122 @@ export function mountPublicBooking(app: Hono<{ Variables: Variables }>, services
           'cache-control': 'no-store',
         },
       });
+    } catch (error) {
+      return refusalAnswer(error);
+    }
+  });
+
+  // The guest's changes (milestone 2): the token is the only key. Limited per address before the token is looked up,
+  // then per booking (by its id: the token is a credential and never becomes a limiter key).
+  app.use(
+    '/public/booking/manage/:token/*',
+    bodyLimit({
+      maxSize: BOOKING_BODY_LIMIT_BYTES,
+      onError: () => answer('PAYLOAD_TOO_LARGE', 'This request is larger than a change needs.'),
+    }),
+  );
+
+  /** The guest's entry for a change: their token's booking, or the refusal to answer with. */
+  const changeEntry = async (c: Context<{ Variables: Variables }>) => {
+    const refused = limited([[`booking:manage:${addressKey(c.get('clientIp'))}`, BOOKING_LIMITS.managePerAddress]]);
+    if (refused !== undefined) return { refused };
+    const entry = await enterBookingByToken({ db }, c.req.param('token') ?? '');
+    const busy = limited([[`booking:change:${entry.bookingId}`, BOOKING_LIMITS.managePerBooking]]);
+    return busy === undefined ? { entry } : { refused: busy };
+  };
+
+  /** A change's body read as JSON, or the refusal. */
+  const jsonOf = async (c: Context<{ Variables: Variables }>): Promise<{ readonly body: unknown } | undefined> => {
+    try {
+      return { body: await c.req.json() };
+    } catch {
+      return undefined;
+    }
+  };
+
+  /** The refusal for a body its schema didn't take: the first issue, and up to ten with their paths. */
+  const invalid = (issues: readonly { readonly path: readonly PropertyKey[]; readonly message: string }[]) => {
+    const listed = issues.slice(0, 10).map((issue) => ({ path: issue.path.map(String), message: issue.message }));
+    return answer('INPUT_INVALID', listed[0]?.message ?? 'Some of the input is invalid.', { data: { issues: listed } });
+  };
+
+  app.get('/public/booking/manage/:token/slots', async (c) => {
+    const refused = limited([[`booking:manage:${addressKey(c.get('clientIp'))}`, BOOKING_LIMITS.managePerAddress]]);
+    if (refused !== undefined) return refused;
+    const query = PublicMoveSlotsQuery.safeParse(c.req.query());
+    if (!query.success) return invalid(query.error.issues);
+    try {
+      const entry = await enterBookingByToken({ db }, c.req.param('token'));
+      return ok(
+        await readMoveSlots(guestTarget(entry), deps, {
+          from: new Date(query.data.from),
+          to: new Date(query.data.to),
+        }),
+      );
+    } catch (error) {
+      return refusalAnswer(error);
+    }
+  });
+
+  app.post('/public/booking/manage/:token/move', async (c) => {
+    const read = await jsonOf(c);
+    if (read === undefined) return answer('INPUT_INVALID', 'The request could not be read.');
+    const input = PublicMoveInput.safeParse(read.body);
+    if (!input.success) return invalid(input.error.issues);
+    try {
+      const found = await changeEntry(c);
+      if ('refused' in found) return found.refused;
+      const { moved } = await moveBooking(guestTarget(found.entry), deps, { start: new Date(input.data.start) });
+      // The emails it queued: wake the worker.
+      if (moved) wakeRelay();
+      return ok({ booking: await readManagedBooking(found.entry, services.now?.() ?? new Date()) });
+    } catch (error) {
+      return refusalAnswer(error);
+    }
+  });
+
+  app.post('/public/booking/manage/:token/guests', async (c) => {
+    const read = await jsonOf(c);
+    if (read === undefined) return answer('INPUT_INVALID', 'The request could not be read.');
+    const input = PublicGuestsInput.safeParse(read.body);
+    if (!input.success) return invalid(input.error.issues);
+    try {
+      const found = await changeEntry(c);
+      if ('refused' in found) return found.refused;
+      const added = await addGuests(guestTarget(found.entry), deps, { emails: input.data.emails });
+      if (added.added > 0) wakeRelay();
+      return ok({ added: added.added, guests: [...added.guests] });
+    } catch (error) {
+      return refusalAnswer(error);
+    }
+  });
+
+  app.post('/public/booking/manage/:token/guests/remove', async (c) => {
+    const read = await jsonOf(c);
+    if (read === undefined) return answer('INPUT_INVALID', 'The request could not be read.');
+    const input = PublicRemoveGuestInput.safeParse(read.body);
+    if (!input.success) return invalid(input.error.issues);
+    try {
+      const found = await changeEntry(c);
+      if ('refused' in found) return found.refused;
+      const left = await removeGuest(guestTarget(found.entry), deps, { email: input.data.email });
+      return ok({ guests: [...left.guests] });
+    } catch (error) {
+      return refusalAnswer(error);
+    }
+  });
+
+  app.post('/public/booking/manage/:token/cancel', async (c) => {
+    const read = await jsonOf(c);
+    if (read === undefined) return answer('INPUT_INVALID', 'The request could not be read.');
+    const input = PublicCancelInput.safeParse(read.body);
+    if (!input.success) return invalid(input.error.issues);
+    try {
+      const found = await changeEntry(c);
+      if ('refused' in found) return found.refused;
+      const { cancelled } = await cancelBooking(guestTarget(found.entry), deps, { reason: input.data.reason });
+      if (cancelled) wakeRelay();
+      return ok({ booking: await readManagedBooking(found.entry, services.now?.() ?? new Date()) });
     } catch (error) {
       return refusalAnswer(error);
     }

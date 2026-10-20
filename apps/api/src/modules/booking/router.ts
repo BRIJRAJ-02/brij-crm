@@ -1,5 +1,10 @@
 import {
   bookAsHost,
+  bookingGuestPath,
+  cancelBooking,
+  hostTarget,
+  moveBooking,
+  readMoveSlots,
   createBookingPage,
   createTimeBlock,
   deleteBookingPage,
@@ -77,7 +82,7 @@ export const bookingsRouter = member.bookings.router({
     commitWrite(context, { mutationId: input.mutationId }, async (hooks) => {
       const booked = await bookAsHost(
         context.scope,
-        { calendar: context.bookingCalendar, log },
+        { calendar: context.bookingCalendar, linkKey: context.bookingLinkKey, log },
         {
           idempotencyKey: input.idempotencyKey,
           pageId: input.pageId,
@@ -93,6 +98,37 @@ export const bookingsRouter = member.bookings.router({
       );
       return { bookingId: booked.bookingId };
     }),
+  ),
+  // Changing a booking (AC-640): its host, the page's owner or an admin moves or cancels it; the guest is emailed.
+  // Bookings write no change event: the screen reads its lists again after the change.
+  cancel: member.bookings.cancel.handler(({ context, input }) =>
+    commitWrite(context, { mutationId: input.mutationId }, () =>
+      cancelBooking(
+        hostTarget(context.scope, input.bookingId),
+        { calendar: context.bookingCalendar, log },
+        { reason: input.reason },
+      ),
+    ),
+  ),
+  move: member.bookings.move.handler(({ context, input }) =>
+    commitWrite(context, { mutationId: input.mutationId }, () =>
+      moveBooking(
+        hostTarget(context.scope, input.bookingId),
+        { calendar: context.bookingCalendar, log },
+        { start: new Date(input.start) },
+      ),
+    ),
+  ),
+  moveSlots: member.bookings.moveSlots.handler(({ context, input }) =>
+    readMoveSlots(
+      hostTarget(context.scope, input.bookingId),
+      { calendar: context.bookingCalendar, log },
+      { from: new Date(input.from), to: new Date(input.to) },
+    ),
+  ),
+  // The guest page's address, read only when the member asks: it carries the guest's key.
+  guestLink: member.bookings.guestLink.handler(({ context, input }) =>
+    bookingGuestPath(context.scope, { linkKey: context.bookingLinkKey }, { bookingId: input.bookingId }),
   ),
   // Time the member closes on their own calendar (spec 0027): a block, or a hold for private pages.
   blocks: {

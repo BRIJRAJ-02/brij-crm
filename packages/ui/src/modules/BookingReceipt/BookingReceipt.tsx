@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, type ReactNode } from 'react';
 import { Avatar } from '../../atoms/Avatar/Avatar.tsx';
 import { ButtonLink } from '../../atoms/Button/Button.tsx';
 import { Icon } from '../../atoms/Icon/Icon.tsx';
@@ -34,6 +34,10 @@ export interface BookingReceiptProps {
   readonly calendars?: { readonly google: string; readonly outlook: string; readonly ics: string };
   /** For a cancelled or past booking: a way to book again ("Book another time with Ada"). */
   readonly again?: { readonly label: string; readonly href: string };
+  /** What the guest may change, at the card's foot while it's ahead (BookingChanges). */
+  readonly changes?: ReactNode;
+  /** A line over the card after a change ("Moved. Both calendars are updated…"): a Callout. */
+  readonly notice?: ReactNode;
 }
 
 /**
@@ -55,9 +59,12 @@ export function BookingReceipt({
   joinUrl,
   calendars,
   again,
+  changes,
+  notice,
 }: BookingReceiptProps) {
   const heading = useRef<HTMLHeadingElement>(null);
-  useEffect(() => heading.current?.focus(), []);
+  // The heading takes focus as the page arrives, and again when the booking's state changes (cancelled from here).
+  useEffect(() => heading.current?.focus(), [state]);
   const isLive = state === 'confirmed';
   const title =
     state === 'cancelled'
@@ -81,6 +88,7 @@ export function BookingReceipt({
             {title}
           </h1>
         </header>
+        {notice}
         <article className={styles.card} aria-label={strings.marks[state]}>
           <div className={styles.band} data-state={state}>
             <div className={styles.chip} data-live={isLive ? '' : undefined} aria-hidden="true">
@@ -122,6 +130,7 @@ export function BookingReceipt({
               )}
             </section>
           )}
+          {isLive && changes}
           {!isLive && again !== undefined && (
             <p className={styles.again}>
               <span>{state === 'cancelled' ? strings.cancelledNext : strings.pastNext}</span>

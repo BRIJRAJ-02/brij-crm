@@ -6,6 +6,7 @@
 // lock, then the exclusion constraint), is in the past, or runs under 5
 // minutes or past 8 hours. The guest is filed as a person like a visitor is;
 // the calendar event, with every guest invited, is written after the commit.
+import { randomUUID } from 'node:crypto';
 import { and, eq, isNull, sql } from 'drizzle-orm';
 import { HOST_BOOKING_LIMITS, PERMISSIONS } from '@crm/contracts';
 import { schema } from '@crm/db';
@@ -16,8 +17,9 @@ import { postgresError, refuse, refuseOn } from '../engine/refusals.ts';
 import { runWrite, type AfterWrite } from '../engine/write.ts';
 import type { BookingCalendar } from './calendar.ts';
 import { hostLockKey, lockKey } from './locks.ts';
-import { newManageToken } from './public.ts';
+import { enqueueBookingMail, recordEvent } from './mail-queue.ts';
 import { loadPage } from './slots.ts';
+import { manageTokenFor, type ManageLinkKey } from './tokens.ts';
 import { matchVisitor } from './visitor.ts';
 
 const { bookingPageMembers, bookings, objects } = schema;
@@ -42,6 +44,8 @@ export interface HostBookingInput {
 /** What the member's booking needs from outside: the calendar to write its event to, and the clock. */
 export interface HostBookingDeps {
   readonly calendar: Pick<BookingCalendar, 'events'>;
+  /** Derives the guest page's token (`tokens.ts`), which their email carries. */
+  readonly linkKey: ManageLinkKey;
   readonly now?: () => Date;
   readonly log?: { warn(message: string, fields: Readonly<Record<string, unknown>>): void };
 }
@@ -82,8 +86,9 @@ export async function bookAsHost(
     throw refuseOn('CONFIG_INVALID', 'That time has gone by. Pick a time from now on.', 'start');
   }
   const end = new Date(input.start.getTime() + input.minutes * 60_000);
-  // The guest page's token: only its hash is kept, and the guest reaches the booking from the invitation (emails, M2).
-  const { hash } = newManageToken();
+  // The guest page's token: only its hash is kept, and the guest reaches the booking from their email.
+  const newId = randomUUID();
+  const { hash } = manageTokenFor(deps.linkKey, newId);
   const guests = [...new Set(input.guests.map((guest) => guest.trim().toLowerCase()))].filter(
     (guest) => guest !== '' && guest !== input.email,
   );
@@ -122,6 +127,7 @@ export async function bookAsHost(
           .insert(bookings)
           .values({
             workspaceId: scope.workspaceId,
+            id: newId,
             pageId: page.id,
             hostMemberId: host,
             startsAt: input.start,
@@ -136,6 +142,7 @@ export async function bookAsHost(
               bookedBy: 'host',
             },
             manageTokenHash: hash,
+            manageTokenDerived: true,
             idempotencyKey: input.idempotencyKey,
             createdByType: by.type,
             createdById: by.id,
@@ -147,6 +154,8 @@ export async function bookAsHost(
           .returning({ id: bookings.id });
         if (row === undefined) throw new Error('The booking was not stored.');
         bookingId = row.id;
+        // The reminders with the booking; the confirmation after its event, so it knows whether the calendar invited them.
+        await enqueueBookingMail(tx, bookingId, ['reminder_24h', 'reminder_1h']);
       } catch (error) {
         if (postgresError(error)?.code === '23P01') throw refuse('SLOT_TAKEN', TAKEN);
         // The same key on this page from someone else's booking: a client reused it, so nothing is booked.
@@ -211,15 +220,9 @@ export async function bookAsHost(
       });
     }
   }
-  await inWorkspace(scope, (tx) =>
-    tx
-      .update(bookings)
-      .set(
-        written === undefined
-          ? { eventFailedAt: sql`now()` }
-          : { meetingId: written.meetingId ?? null, videoUrl: written.videoUrl ?? null, updatedAt: sql`now()` },
-      )
-      .where(eq(bookings.id, result.bookingId)),
-  );
+  await inWorkspace(scope, async (tx) => {
+    await recordEvent(tx, result.bookingId, written);
+    await enqueueBookingMail(tx, result.bookingId, ['confirmed']);
+  });
   return { bookingId: result.bookingId, replayed: false };
 }
