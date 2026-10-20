@@ -22,7 +22,7 @@
     flex-direction: column;
     gap: var(--space-24);
     inline-size: 100%;
-    max-inline-size: calc(var(--size-sidebar) + var(--size-panel-wide) + var(--size-column-wide) + var(--space-32));
+    max-inline-size: calc(var(--size-measure) + var(--size-panel-wide) + var(--size-column-wide) + var(--space-32));
   }
 
   .narrow {
@@ -277,7 +277,7 @@
 
     .layout {
       display: grid;
-      grid-template-columns: var(--size-sidebar) minmax(0, 1fr);
+      grid-template-columns: var(--size-measure) minmax(0, 1fr);
       gap: var(--space-32);
     }
 
