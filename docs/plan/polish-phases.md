@@ -38,13 +38,13 @@ Work that was in flight when the lanes stopped is kept on its lane branches (a `
 
 ### Bookings
 - F1. "booked but nothing comes up": Bookings showed nothing after a real booking. Fixed by the Bookings list.
-- F2. "fix. need to add calendar", "and all": the whole timefix bookings page, the week calendar, actions, new meeting, team views, filing.
-- F3. "bookings tab should be like capture": underline tabs under the TopBar.
+- F2. "fix. need to add calendar", "and all": the whole timefix bookings page, the week calendar, actions, new meeting, team views, filing. Done: the week calendar, quick actions, New meeting, and filing the guest as a person and company. Open: timefix's team calendar (one column per member, needs its own spec and permissions) and linking a booking to a deal or a custom object by hand.
+- F3. "bookings tab should be like capture": underline tabs under the TopBar. Done; on a phone the tab's tools wrap under the tabs (20 Oct).
 - F4. "this is same why two? check": a booking and its own Google event showed twice. Fixed.
 - F5. "show active day": tint today's column. Done.
-- F6. "fix this and padding": one strip, then content.
+- F6. "fix this and padding": one strip, then content. Done.
 - F7. "tab is still not changed in here": the underline stays on Calendar on the Availability tab. Done (checked 20 Oct, the tabs rework fixed it).
-- F8. "quick action to block, book, etc from here": drag or click empty time, then Book someone in, Block time (this date or every week) or Hold for a private meeting type. Owner chose all three, like timefix (20 Oct). Built; saving closes the card with an Undo toast (owner: industry standard). Step 4 review and screenshots left.
+- F8. "quick action to block, book, etc from here": drag or click empty time, then Book someone in, Block time (this date or every week) or Hold for a private meeting type. Owner chose all three, like timefix (20 Oct). Built and reviewed; saving closes the card with an Undo toast (owner: industry standard). Done (20 Oct); the spec turns Accepted once it ships.
 - F9. "calendar logo", "also a timefix next to timefix booking": the Timefix mark on bookings, the Google Calendar mark on synced events. Done.
 
 ### Availability
