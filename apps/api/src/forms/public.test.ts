@@ -258,11 +258,11 @@ describe('the spam checks over HTTP (AC-584, AC-585)', () => {
     expect(await stored(live.id)).toEqual([
       { state: 'spam', signals: ['too_fast'] },
       { state: 'needs_review', signals: ['ticket_invalid'] },
-      { state: 'received', signals: ['no_timing'] },
+      { state: 'needs_review', signals: ['no_timing'] },
     ]);
   });
 
-  it('answers 429 past 5 an hour from one email on one form, whatever its case or +tag', async () => {
+  it('holds the sixth in an hour from one email on one form for review, whatever its case or +tag, never a 429', async () => {
     const { live } = await liveForm();
     const statuses: number[] = [];
     for (let index = 0; index < 6; index += 1) {
@@ -273,7 +273,15 @@ describe('the spam checks over HTTP (AC-584, AC-585)', () => {
       });
       statuses.push(response.status);
     }
-    expect(statuses).toEqual([200, 200, 200, 200, 200, 429]);
+    expect(statuses).toEqual([200, 200, 200, 200, 200, 200]);
+    expect((await stored(live.id)).map((row) => row.state)).toEqual([
+      'received',
+      'received',
+      'received',
+      'received',
+      'received',
+      'needs_review',
+    ]);
   });
 
   it('stores link spam as spam and a doubtful one in Needs review, both answered as success, with no job', async () => {

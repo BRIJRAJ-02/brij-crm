@@ -6,7 +6,8 @@
 // the bot checks and the server side answer check. The order on submit: the
 // instance's ceiling, the address and its form, the Origin or the signature,
 // the per address, per address in the workspace and per form limits, the
-// body's size and shape, the per email limit, the fill ticket, reCAPTCHA when
+// body's size and shape, the per email limit (a spam sign, never a 429), the
+// fill ticket, reCAPTCHA when
 // it is on, then the core's spam checks (honeypot, fill time, content score)
 // and answer check and one insert. Spam and Needs review answer exactly as
 // success does. Answers never say whether an email already exists, never carry
@@ -51,6 +52,8 @@ export interface PublicFormsDeps {
   readonly recaptchaSiteKey?: string;
   /** The salt client addresses are hashed with. */
   readonly ipSalt: string;
+  /** The key answers are hashed with to find repeats (derived from the salt). */
+  readonly answersKey: string;
 }
 
 interface Variables {
@@ -139,14 +142,14 @@ function postFrom(
   origin: string | undefined,
   body: string,
   signature: string | null,
-): { readonly allowed: boolean; readonly cors?: string } {
-  if (origin === publicOrigin) return { allowed: true };
+): { readonly allowed: boolean; readonly signed: boolean; readonly cors?: string } {
   const signed = isSigned(posting.signingSecret, body, signature);
+  if (origin === publicOrigin) return { allowed: true, signed };
   if (origin !== undefined && posting.allowedOrigins.includes(origin)) {
-    return { allowed: !posting.requireSignature || signed, cors: origin };
+    return { allowed: !posting.requireSignature || signed, signed, cors: origin };
   }
   // A site's server posting with no Origin at all: only with the form's signature.
-  return { allowed: origin === undefined && signed };
+  return { allowed: origin === undefined && signed, signed };
 }
 
 /** Mounts the public form endpoints on the app (`/api` is its base path). */
@@ -238,12 +241,11 @@ export function mountPublicForms(app: Hono<{ Variables: Variables }>, deps: Publ
         return answer('INPUT_INVALID', 'This submission is not in the shape a form takes.', { headers: headers() });
       }
       const body = parsed.data;
-      const emailSpent = limited(
-        limitEmails(body.answers).map(
-          (email) => [`forms:email:${formId}:${hashAddress(deps.ipSalt, email) ?? ''}`, FORM_LIMITS.perEmail] as const,
-        ),
+      // Spent per email limits are a spam sign, not a 429, so nobody can lock a person out of a form.
+      const emailOverLimit = limitEmails(body.answers).some(
+        (email) =>
+          !deps.limiter(`forms:email:${formId}:${hashAddress(deps.ipSalt, email) ?? ''}`, FORM_LIMITS.perEmail).allowed,
       );
-      if (emailSpent !== undefined) return emailSpent;
       const ticket = deps.tickets.check(`form:${c.req.param('publicKey') ?? ''}`, body.ticket);
       const captcha = await deps.captcha.verify(body.captcha, allowedHosts);
       try {
@@ -252,7 +254,16 @@ export function mountPublicForms(app: Hono<{ Variables: Variables }>, deps: Publ
           submitForm(
             scope,
             deps.jobs,
-            { formId, body, captcha, ticket, ...(ipHash === undefined ? {} : { ipHash }) },
+            {
+              formId,
+              body,
+              captcha,
+              ticket,
+              signed: from.signed,
+              emailOverLimit,
+              answersKey: deps.answersKey,
+              ...(ipHash === undefined ? {} : { ipHash }),
+            },
             hooks,
           ),
         );

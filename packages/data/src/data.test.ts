@@ -445,6 +445,7 @@ function fakeApi(overrides: Partial<Behaviour> = {}, auth: (path: string, body: 
       get: os.submissions.get.handler(notServed),
       release: os.submissions.release.handler(notServed),
       markSpam: os.submissions.markSpam.handler(notServed),
+      resolve: os.submissions.resolve.handler(notServed),
       retry: os.submissions.retry.handler(notServed),
       delete: os.submissions.delete.handler(notServed),
     },

@@ -7,6 +7,7 @@
 // its job queued in the same transaction (AC-554); processing happens there.
 import { checkAnswers, SubmitBody, type PublicForm, type SubmitNext } from '@crm/contracts';
 import { schema, type WorkspaceTx } from '@crm/db';
+import { createHmac } from 'node:crypto';
 import { sql } from 'drizzle-orm';
 import { refuse, refuseAll } from '../engine/refusals.ts';
 import type { EngineScope } from '../engine/scope.ts';
@@ -95,6 +96,12 @@ export interface SubmitInput {
   readonly ticket?: TicketVerdict;
   /** The client address, already hashed with the salt. */
   readonly ipHash?: string;
+  /** True when a site's server signed the post with the form's secret. */
+  readonly signed?: boolean;
+  /** True when the per form and email limit was spent: a content sign, not a refusal. */
+  readonly emailOverLimit?: boolean;
+  /** The server key answers are hashed with for repeats; without it repeats aren't looked for. */
+  readonly answersKey?: string;
 }
 
 /** What storing a submission answered: the visitor's next step, and how the spam checks judged it. */
@@ -105,15 +112,23 @@ export interface SubmitOutcome {
   readonly replayed: boolean;
 }
 
+/** HMAC-SHA256 of answers with their keys in order, under the server's key and the form's id: the same answers on one form always hash the same, and nothing links them elsewhere. */
+function answersHash(key: string, formId: string, answers: Readonly<Record<string, unknown>>): string {
+  const sorted = Object.fromEntries(Object.entries(answers).sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0)));
+  return createHmac('sha256', key)
+    .update(`${formId}\n${JSON.stringify(sorted)}`)
+    .digest('hex');
+}
+
 /** How many submissions to this form in the last day carried exactly these answers (at most 3 are counted). */
-async function repeatsOf(tx: WorkspaceTx, formId: string, answers: Readonly<Record<string, unknown>>): Promise<number> {
-  if (Object.keys(answers).length === 0) return 0;
+async function repeatsOf(tx: WorkspaceTx, workspaceId: string, formId: string, hash: string): Promise<number> {
   const result = await tx.execute<{ repeats: number }>(sql`
     select count(*)::int as repeats from (
       select 1 from ${formSubmissions}
-      where ${formSubmissions.formId} = ${formId}
+      where ${formSubmissions.workspaceId} = ${workspaceId}
+        and ${formSubmissions.formId} = ${formId}
+        and ${formSubmissions.answersHash} = ${hash}
         and ${formSubmissions.receivedAt} > now() - make_interval(hours => ${REPEAT_WINDOW_HOURS})
-        and ${formSubmissions.answers} = ${JSON.stringify(answers)}::jsonb
       limit 3
     ) as same`);
   return result.rows[0]?.repeats ?? 0;
@@ -173,6 +188,7 @@ export async function submitForm(
       });
       let answers: Readonly<Record<string, unknown>>;
       let judged: SpamJudgement;
+      let hash: string | undefined;
       if (bot.verdict === 'spam') {
         answers = Object.fromEntries(Object.entries(body.answers).filter(([key]) => known.has(key)));
         judged = bot;
@@ -187,12 +203,18 @@ export async function submitForm(
           if (first !== undefined) throw refuseAll([first, ...rest]);
         }
         answers = checked.ok ? checked.answers : {};
+        hash =
+          Object.keys(answers).length === 0 || input.answersKey === undefined
+            ? undefined
+            : answersHash(input.answersKey, form.id, answers);
         const content = scoreContent({
           questions: rendered.questions,
           answers,
-          repeats: await repeatsOf(tx, form.id, answers),
+          repeats: hash === undefined ? 0 : await repeatsOf(tx, scope.workspaceId, form.id, hash),
           ticket,
           ...(body.fillMs === undefined ? {} : { fillMs: body.fillMs }),
+          ...(input.signed === true ? { signed: true } : {}),
+          ...(input.emailOverLimit === true ? { emailOverLimit: true } : {}),
         });
         judged = judgeSubmission({
           ...(body.fillMs === undefined ? {} : { fillMs: body.fillMs }),
@@ -220,6 +242,7 @@ export async function submitForm(
             ...(input.captcha.kind === 'score' ? { score: input.captcha.score } : {}),
           },
           ipHash: input.ipHash ?? null,
+          answersHash: hash ?? null,
         })
         .onConflictDoNothing()
         .returning({ id: formSubmissions.id });

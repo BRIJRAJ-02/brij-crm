@@ -143,7 +143,7 @@ function body(answers: Record<string, unknown>, extra: Partial<SubmitBody> = {})
 
 async function submit(publicKey: string, input: SubmitBody, captcha: CaptchaVerdict = off) {
   const { scope, formId } = await enterPublicForm({ db }, publicKey);
-  return submitForm(scope, registry, { formId, body: input, captcha });
+  return submitForm(scope, registry, { formId, body: input, captcha, answersKey: 'a-test-answers-key' });
 }
 
 /** Runs processing for a submission as the job does: in one write under the system's scope. */

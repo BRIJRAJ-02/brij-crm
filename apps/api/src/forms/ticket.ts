@@ -68,7 +68,8 @@ export function createTicketBook(deps: TicketDeps): TicketBook {
  * Mounts the two ticket endpoints, never cached: `GET
  * /public/forms/:publicKey/ticket` and `GET /public/booking/:publicKey/ticket`.
  * They read nothing (an unknown key gets a ticket no submit will match), so
- * they say nothing about which forms or pages exist. 30 a minute per address.
+ * they say nothing about which forms or pages exist. 30 a minute per address,
+ * 200 a second per instance, on their own limiter.
  */
 export function mountTickets<E extends Env>(
   app: Hono<E>,
@@ -80,7 +81,10 @@ export function mountTickets<E extends Env>(
   },
 ): void {
   const handler = (kind: 'form' | 'booking') => (c: Context<E>) => {
-    const limit = deps.limiter(`ticket:issue:${deps.addressOf(c)}`, TICKET_LIMITS.issuePerAddress);
+    const ceiling = deps.limiter('ticket:instance', TICKET_LIMITS.issuePerInstance);
+    const limit = ceiling.allowed
+      ? deps.limiter(`ticket:issue:${deps.addressOf(c)}`, TICKET_LIMITS.issuePerAddress)
+      : ceiling;
     if (!limit.allowed) {
       return c.json({ code: 'RATE_LIMITED', message: 'Too many requests. Wait a moment and try again.' }, 429, {
         'retry-after': String(limit.retryAfterSeconds),

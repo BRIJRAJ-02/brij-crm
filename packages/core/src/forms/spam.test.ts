@@ -74,11 +74,27 @@ describe('scoreContent', () => {
   it('weighs repeats, and timing it couldn’t measure or a ticket it couldn’t trust', () => {
     expect(score({ name: 'Ada' }, { repeats: 1 })).toEqual({ score: 2, signals: ['repeated'] });
     expect(score({ name: 'Ada' }, { repeats: 3 })).toEqual({ score: 4, signals: ['repeated'] });
-    expect(score({ name: 'Ada' }, { ticket: { kind: 'missing' } })).toEqual({ score: 1, signals: ['no_timing'] });
+    expect(score({ name: 'Ada' }, { ticket: { kind: 'missing' } })).toEqual({ score: 3, signals: ['no_timing'] });
+    expect(
+      scoreContent({ questions, answers: { name: 'Ada' }, repeats: 0, ticket: { kind: 'missing' }, signed: true }),
+    ).toEqual(clean);
+    expect(
+      scoreContent({ questions, answers: { name: 'Ada' }, repeats: 0, ticket: valid, emailOverLimit: true }),
+    ).toEqual({ score: 3, signals: ['email_limit'] });
     expect(scoreContent({ questions, answers: {}, repeats: 0, ticket: { kind: 'expired' }, fillMs: 5_000 })).toEqual(
       clean,
     );
     expect(score({ name: 'Ada' }, { ticket: { kind: 'reused' } })).toEqual({ score: 3, signals: ['ticket_reused'] });
+  });
+});
+
+describe('the markup check on hostile input', () => {
+  it('stays linear: 20 answers of 2,000 characters of unclosed tags score in well under a second', () => {
+    const hostile = '<a '.repeat(667);
+    const answers = Object.fromEntries(Array.from({ length: 20 }, (_, i) => [`q${String(i)}`, hostile]));
+    const started = performance.now();
+    scoreContent({ questions, answers, repeats: 0, ticket: valid });
+    expect(performance.now() - started).toBeLessThan(500);
   });
 });
 

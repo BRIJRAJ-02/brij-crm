@@ -19,9 +19,11 @@ export type LimitDecision =
 export type PublicLimiter = (key: string, rule: LimitRule) => LimitDecision;
 
 /**
- * A fixed window limiter in memory, at most `maxKeys` keys (expired windows
- * swept first, then the oldest), so memory stays bounded under a flood.
- * `now` is passed in for tests.
+ * A fixed window limiter in memory, at most `maxKeys` keys: when full, expired
+ * windows are swept, then the oldest dropped down to 90%, so memory stays
+ * bounded and a flood costs one scan per `maxKeys / 10` new keys. Each
+ * surface gets its own (forms, booking, ticket uses), so a flood on one
+ * never evicts another's windows. `now` is passed in for tests.
  */
 export function createMemoryLimiter(
   options: { readonly now?: () => number; readonly maxKeys?: number } = {},
@@ -34,11 +36,12 @@ export function createMemoryLimiter(
     const current = windows.get(key);
     if (current === undefined || at - current.start >= rule.windowMs) {
       if (windows.size >= maxKeys) {
+        // Full: drop what has expired, then the oldest down to 90%, so the next full scan is maxKeys / 10 inserts away.
         for (const [each, window] of windows) if (at - window.start >= window.windowMs) windows.delete(each);
-        while (windows.size >= maxKeys) {
-          const oldest = windows.keys().next();
-          if (oldest.done === true) break;
-          windows.delete(oldest.value);
+        const keep = Math.floor(maxKeys * 0.9);
+        for (const each of windows.keys()) {
+          if (windows.size <= keep) break;
+          windows.delete(each);
         }
       }
       windows.delete(key);
@@ -56,9 +59,9 @@ export function createMemoryLimiter(
 /**
  * The public form limits (spec 0023, AC-585; 0023-experience.md, Bots and
  * abuse, adjusted): 5 a minute per client address, 30 an hour per address
- * within one workspace, 120 an hour per form, 5 an hour per form and
- * normalised email, 50 a second across the instance. Beyond any, 429 with
- * `Retry-After`.
+ * within one workspace, 120 an hour per form, 50 a second across the
+ * instance: beyond any, 429 with `Retry-After`. 5 an hour per form and
+ * normalised email: beyond it, a spam sign (Needs review), never a 429.
  */
 export const FORM_LIMITS = {
   perAddress: { max: 5, windowMs: 60_000 },
@@ -70,10 +73,12 @@ export const FORM_LIMITS = {
 
 /**
  * Fill tickets (spec 0023 spam follow-up): 30 a minute per address (a page
- * asks once per load and once per "Send another"), and 5 submits per ticket
+ * asks once per load and once per "Send another"), 200 a second across the
+ * instance, and 5 submits per ticket
  * in a day, past which a ticket counts as spent.
  */
 export const TICKET_LIMITS = {
   issuePerAddress: { max: 30, windowMs: 60_000 },
+  issuePerInstance: { max: 200, windowMs: 1_000 },
   usesPerTicket: { max: 5, windowMs: 86_400_000 },
 } as const satisfies Record<string, LimitRule>;

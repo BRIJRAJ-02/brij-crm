@@ -315,7 +315,11 @@ async function lockedSubmission(tx: WorkspaceTx, scope: EngineScope, submissionI
   const id = checkId(submissionId, UNKNOWN_SUBMISSION);
   await viewIn(tx, scope, id);
   const [row] = await tx
-    .select({ id: formSubmissions.id, state: formSubmissions.state })
+    .select({
+      id: formSubmissions.id,
+      state: formSubmissions.state,
+      verdict: sql<string | null>`${formSubmissions.spam}->>'verdict'`,
+    })
     .from(formSubmissions)
     .where(eq(formSubmissions.id, id))
     .for('update');
@@ -424,16 +428,12 @@ export async function resolveSubmission(
     async (context) => {
       const { tx } = context;
       const row = await lockedSubmission(tx, scope, input.submissionId);
-      const [held] = await tx
-        .select({ verdict: sql<string | null>`${formSubmissions.spam}->>'verdict'` })
-        .from(formSubmissions)
-        .where(eq(formSubmissions.id, row.id));
-      if (row.state !== 'needs_review' || held?.verdict !== 'review') throw refuse('FORM_STATE', NOT_IN_REVIEW);
+      if (row.state !== 'needs_review' || row.verdict !== 'review') throw refuse('FORM_STATE', NOT_IN_REVIEW);
       const notSpam = input.resolution.kind === 'not_spam';
       const resolved = {
         verdict: notSpam ? 'passed' : 'spam',
         resolved: input.resolution.kind,
-        resolvedBy: scope.actor,
+        resolvedBy: { type: scope.actor.type, id: scope.actor.id },
       };
       await tx
         .update(formSubmissions)

@@ -194,6 +194,8 @@ export const formSubmissions = pgTable(
     failure: text('failure'),
     /** The client address, hashed with a salt: rate limits and abuse review only. */
     ipHash: text('ip_hash'),
+    /** SHA-256 of the stored answers in key order: finds the same answers sent again (the spam checker's repeats). */
+    answersHash: text('answers_hash'),
     receivedAt: timestamptz('received_at').notNull().defaultNow(),
     processedAt: timestamptz('processed_at'),
     updatedAt: timestamptz('updated_at').notNull().defaultNow(),
@@ -213,6 +215,10 @@ export const formSubmissions = pgTable(
     uniqueIndex('form_submissions_attempt').on(t.workspaceId, t.formId, t.idempotencyKey),
     // A form's submissions, newest first.
     index('form_submissions_by_form').on(t.workspaceId, t.formId, t.receivedAt.desc(), t.id),
+    // The same answers on one form lately (the spam checker's repeats), counted from the index alone.
+    index('form_submissions_repeats')
+      .on(t.workspaceId, t.formId, t.answersHash, t.receivedAt)
+      .where(sql`${t.answersHash} is not null`),
     // The ones still to look at.
     index('form_submissions_open')
       .on(t.workspaceId, t.state)

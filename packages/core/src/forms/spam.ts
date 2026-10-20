@@ -104,7 +104,8 @@ export interface ContentScore {
 }
 
 const LINK = /\bhttps?:\/\/|\bwww\.[a-z0-9-]+\.[a-z]/giu;
-const MARKUP = /<\s*a\s[^>]*href|\[url[=\]]|\[link[=\]]/iu;
+// Bounded, and run per answer: an unbounded `[^>]*` over joined answers is quadratic on hostile input.
+const MARKUP = /<\s{0,8}a\s[^>]{0,256}href|\[url[=\]]|\[link[=\]]/iu;
 const NAME_KEY = /(^|_)name$/u;
 
 /** How many links a text holds. */
@@ -151,8 +152,9 @@ function domainOf(email: string): string | undefined {
  * to the same form in the last day carried exactly these answers. Weights:
  * markup links 3; links 1 for 2, 2 for 3 or 4, 4 for 5 or more; a link in a
  * name 3; a disposable email domain 2; a gibberish name 2; one or two repeats
- * 2, three or more 4; no measurable fill time (no ticket and no `fillMs`) 1;
- * a ticket that wasn't ours, or was spent, 3.
+ * 2, three or more 4; no measurable fill time (no ticket and no `fillMs`,
+ * on a post that isn't signed) 3; a ticket that wasn't ours, or was spent, 3;
+ * the per form and email limit spent 3.
  */
 export function scoreContent(input: {
   readonly questions: readonly Pick<PublicQuestion, 'key' | 'answerType'>[];
@@ -160,13 +162,16 @@ export function scoreContent(input: {
   readonly repeats: number;
   readonly ticket: TicketVerdict;
   readonly fillMs?: number;
+  /** Posted by a site's server with the form's signature: no page, so no timing to expect. */
+  readonly signed?: boolean;
+  /** The per form and email limit was spent (spec 0023 follow-up: a sign, never a 429, so nobody locks a person out). */
+  readonly emailOverLimit?: boolean;
   readonly disposable?: ReadonlySet<string>;
 }): ContentScore {
   const disposable = input.disposable ?? DISPOSABLE_DOMAINS;
   const signals: [string, number][] = [];
   const texts = Object.values(input.answers).filter((value): value is string => typeof value === 'string');
-  const all = texts.join('\n');
-  if (MARKUP.test(all)) signals.push(['markup_links', 3]);
+  if (texts.some((text) => MARKUP.test(text))) signals.push(['markup_links', 3]);
   const links = texts.reduce((sum, text) => sum + linkCount(text), 0);
   if (links >= 5) signals.push(['many_links', 4]);
   else if (links >= 3) signals.push(['links', 2]);
@@ -190,7 +195,10 @@ export function scoreContent(input: {
   else if (input.repeats >= 1) signals.push(['repeated', 2]);
   if (input.ticket.kind === 'invalid' || input.ticket.kind === 'reused')
     signals.push([`ticket_${input.ticket.kind}`, 3]);
-  else if (input.ticket.kind !== 'valid' && input.fillMs === undefined) signals.push(['no_timing', 1]);
+  else if (input.ticket.kind !== 'valid' && input.fillMs === undefined && input.signed !== true) {
+    signals.push(['no_timing', 3]);
+  }
+  if (input.emailOverLimit === true) signals.push(['email_limit', 3]);
   return {
     score: signals.reduce((sum, [, weight]) => sum + weight, 0),
     signals: signals.map(([signal]) => signal),

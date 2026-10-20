@@ -1,4 +1,4 @@
-import { randomUUID } from 'node:crypto';
+import { createHmac, randomUUID } from 'node:crypto';
 import { type ErrorCode, errorStatus } from '@crm/contracts';
 import {
   connectedCalendar,
@@ -299,14 +299,14 @@ export function createApp({
   app.get('/calendar/google/callback', (c) => calendarRoutes.callback(c));
   app.post('/calendar/google/notify', (c) => calendarRoutes.notify(c));
 
-  // The one limiter every public surface counts in (`limits.ts`), and the fill tickets they share.
-  const publicLimiter = createMemoryLimiter();
-  const formLimiter = services.formLimits ?? publicLimiter;
+  // The central limits module (`limits.ts`): one limiter per surface, so a flood on one never evicts another's
+  // windows; ticket uses (a day long) count apart from everything. The fill tickets forms and booking share.
+  const formLimiter = services.formLimits ?? createMemoryLimiter();
   const ipSalt = env.FORMS_IP_SALT ?? LOCAL_FORMS_IP_SALT;
-  const tickets = createTicketBook({ salt: ipSalt, limiter: formLimiter });
+  const tickets = createTicketBook({ salt: ipSalt, limiter: createMemoryLimiter() });
   mountTickets(app, {
     tickets,
-    limiter: formLimiter,
+    limiter: createMemoryLimiter(),
     addressOf: (c) => hashAddress(ipSalt, c.get('clientIp')) ?? 'unknown',
   });
   mountPublicForms(app, {
@@ -320,6 +320,7 @@ export function createApp({
     tickets,
     publicOrigin: formsOrigin,
     ipSalt,
+    answersKey: createHmac('sha256', ipSalt).update('crm-answers-hash-v1').digest('hex'),
     ...(env.RECAPTCHA_SITE_KEY === undefined ? {} : { recaptchaSiteKey: env.RECAPTCHA_SITE_KEY }),
   });
 
@@ -350,7 +351,7 @@ export function createApp({
   mountPublicBooking(app, {
     db,
     calendar: { busy: bookingBusy, events: booking.events },
-    limiter: services.bookingLimiter ?? publicLimiter,
+    limiter: services.bookingLimiter ?? createMemoryLimiter(),
     tickets,
     ics: {
       appOrigin: new URL(env.APP_URL).origin,
