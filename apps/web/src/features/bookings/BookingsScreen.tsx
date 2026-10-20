@@ -33,6 +33,7 @@ import {
   Panel,
   SectionBar,
   SegmentedControl,
+  useKeyboardPlatform,
   Skeleton,
   WeekCalendar,
   type BookingListGroup,
@@ -46,6 +47,7 @@ import { browserZone } from '../booking/hours.ts';
 import { availabilityHref } from '../booking/links.ts';
 import { linksHref } from '../captures/tabs.ts';
 import { recordLinks, type RecordLink } from '../records/timeline.ts';
+import { belongsElsewhere, isUndoKey, type KeyTarget } from '../workspace/undo.ts';
 import { DrawCard } from './DrawCard.tsx';
 import { NewMeetingDialog, type NewMeeting } from './NewMeetingDialog.tsx';
 import { instantOf, spanNames, type DrawnSpan } from './span.ts';
@@ -401,6 +403,34 @@ function WeekView(props: BookingsCalendarScreenProps) {
   useEffect(() => {
     draftRef.current = draft;
   }, [draft]);
+  // The newest block or hold made here, and its toast: Undo and ⌘Z take it back.
+  const lastBlock = useRef<{ readonly id: string; readonly toast: string } | undefined>(undefined);
+  const undoBlock = (id: string) => {
+    if (lastBlock.current?.id === id) {
+      toasts.dismiss(lastBlock.current.toast);
+      lastBlock.current = undefined;
+    }
+    onRemoveBlock(id).then(
+      () => toasts.toast({ tone: 'success', message: strings.reopened }),
+      () => toasts.toast({ tone: 'danger', message: strings.removeFailed }),
+    );
+  };
+  const undoRef = useRef(undoBlock);
+  useEffect(() => {
+    undoRef.current = undoBlock;
+  });
+  const platform = useKeyboardPlatform();
+  useEffect(() => {
+    // Ahead of the workspace's own ⌘Z (record edits), which would undo something else: here it takes the block back.
+    const listener = (event: KeyboardEvent) => {
+      const target = event.target instanceof Element ? (event.target as Element & KeyTarget) : null;
+      if (lastBlock.current === undefined || !isUndoKey(event, platform) || belongsElsewhere(target)) return;
+      event.preventDefault();
+      undoRef.current(lastBlock.current.id);
+    };
+    document.addEventListener('keydown', listener, true);
+    return () => document.removeEventListener('keydown', listener, true);
+  }, [platform]);
   const days = weekDays(search.week);
   const today = dayKeyOf(now);
   const isThisWeek = weekOf(today) === search.week;
@@ -601,82 +631,82 @@ function WeekView(props: BookingsCalendarScreenProps) {
           setDrawCount((count) => count + 1);
           setDraft(span);
         }}
-        {...(draft === undefined
-          ? {}
-          : {
-              draft,
-              draftLabel: strings.drawCard(spanNames(draft, locale).title),
-              draftCard: (
-                <DrawCard
-                  key={drawCount}
-                  span={draft}
-                  locale={locale}
-                  privatePages={pages
-                    .filter((page) => page.isPrivate)
-                    .map((page) => ({ id: page.id, title: page.title }))}
-                  overlapping={overlapping(bookings, draft)}
-                  onSpanChange={setDraft}
-                  onClose={({ kind, repeat, label, pageId }) => {
-                    const drawn = draft;
-                    const preview: BlockPreview = {
-                      kind,
-                      repeat,
-                      ...(label === undefined ? {} : { label }),
-                      startsAt: instantOf(drawn.dayKey, drawn.startMinute).toISOString(),
-                      endsAt: instantOf(drawn.dayKey, drawn.endMinute).toISOString(),
-                    };
-                    return onBlock(
-                      {
+        {...(meeting !== undefined
+          ? // The span stays drawn behind New meeting, so the week shows where it will go.
+            { draft: meeting, draftLabel: strings.drawCard(spanNames(meeting, locale).title) }
+          : draft === undefined
+            ? {}
+            : {
+                draft,
+                draftLabel: strings.drawCard(spanNames(draft, locale).title),
+                draftCard: (
+                  <DrawCard
+                    key={drawCount}
+                    span={draft}
+                    locale={locale}
+                    privatePages={pages
+                      .filter((page) => page.isPrivate)
+                      .map((page) => ({ id: page.id, title: page.title }))}
+                    overlapping={overlapping(bookings, draft)}
+                    onSpanChange={setDraft}
+                    onClose={({ kind, repeat, label, pageId }) => {
+                      const drawn = draft;
+                      const preview: BlockPreview = {
                         kind,
                         repeat,
-                        date: drawn.dayKey,
-                        startMinute: drawn.startMinute,
-                        endMinute: drawn.endMinute,
-                        timeZone: browserZone(),
                         ...(label === undefined ? {} : { label }),
-                        ...(pageId === undefined ? {} : { pageId }),
-                      },
-                      [preview],
-                    ).then(
-                      (made) => {
-                        // Saved: the card closes, and the toast offers Undo (as calendars do).
-                        if (draftRef.current === drawn) setDraft(undefined);
-                        toasts.toast({
-                          tone: 'success',
-                          message: kind === 'hold' ? strings.timeHeld : strings.timeBlocked,
-                          action: {
-                            label: strings.undo,
-                            onAction: () => {
-                              onRemoveBlock(made.id).catch(() =>
-                                toasts.toast({ tone: 'danger', message: strings.removeFailed }),
-                              );
-                            },
-                          },
-                        });
-                      },
-                      (error: unknown) => {
-                        // The card shows a refusal while it is open; once closed, only a toast can.
-                        if (draftRef.current !== drawn) {
-                          toasts.toast({
-                            tone: 'danger',
-                            message: kind === 'hold' ? strings.holdFailed : strings.blockFailed,
-                          });
-                        }
-                        throw error;
-                      },
-                    );
-                  }}
-                  {...(bookable.length === 0 || instantOf(draft.dayKey, draft.startMinute) < now
-                    ? {}
-                    : {
-                        onBook: () => {
-                          setMeeting(draft);
-                          setDraft(undefined);
+                        startsAt: instantOf(drawn.dayKey, drawn.startMinute).toISOString(),
+                        endsAt: instantOf(drawn.dayKey, drawn.endMinute).toISOString(),
+                      };
+                      return onBlock(
+                        {
+                          kind,
+                          repeat,
+                          date: drawn.dayKey,
+                          startMinute: drawn.startMinute,
+                          endMinute: drawn.endMinute,
+                          timeZone: browserZone(),
+                          ...(label === undefined ? {} : { label }),
+                          ...(pageId === undefined ? {} : { pageId }),
                         },
-                      })}
-                />
-              ),
-            })}
+                        [preview],
+                      ).then(
+                        (made) => {
+                          // Saved: the card closes, and the toast offers Undo (as calendars do).
+                          if (draftRef.current === drawn) setDraft(undefined);
+                          const toast = toasts.toast({
+                            tone: 'success',
+                            message: kind === 'hold' ? strings.timeHeld : strings.timeBlocked,
+                            action: {
+                              label: strings.undo,
+                              onAction: () => undoBlock(made.id),
+                            },
+                          });
+                          lastBlock.current = { id: made.id, toast };
+                        },
+                        (error: unknown) => {
+                          // The card shows a refusal while it is open; once closed, only a toast can.
+                          if (draftRef.current !== drawn) {
+                            toasts.toast({
+                              tone: 'danger',
+                              message: kind === 'hold' ? strings.holdFailed : strings.blockFailed,
+                            });
+                          }
+                          throw error;
+                        },
+                      );
+                    }}
+                    {...(bookable.length === 0 || instantOf(draft.dayKey, draft.startMinute) < now
+                      ? {}
+                      : {
+                          onBook: () => {
+                            setMeeting(draft);
+                            setDraft(undefined);
+                          },
+                        })}
+                  />
+                ),
+              })}
         onDraftClose={() => setDraft(undefined)}
         drawMinutes={pages[0]?.durations[0] ?? 30}
         drawStartMinute={workingStart}
@@ -690,12 +720,17 @@ function WeekView(props: BookingsCalendarScreenProps) {
       {meeting !== undefined && (
         <NewMeetingDialog
           span={meeting}
+          onSpanChange={setMeeting}
           locale={locale}
+          hasCalendar={connections.length > 0}
           pages={bookable}
           newKey={newBookingKey}
           onBook={async (input) => {
             await onBookAsHost(input);
-            toasts.toast({ tone: 'success', message: strings.booked(input.name) });
+            toasts.toast({
+              tone: 'success',
+              message: connections.length > 0 ? strings.booked(input.name) : strings.bookedQuietly(input.name),
+            });
           }}
           onClose={() => setMeeting(undefined)}
         />

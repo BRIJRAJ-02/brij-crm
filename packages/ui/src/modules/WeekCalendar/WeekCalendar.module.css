@@ -69,7 +69,8 @@
   }
 
   .dayButton:focus-visible {
-    outline: var(--border-width-thick) solid var(--focus-ring);
+    outline: var(--border-width-thick) solid var(--accent-line);
+    outline-offset: var(--border-width-hairline);
   }
 
   .weekday {
@@ -160,7 +161,7 @@
   }
 
   .column:focus-visible {
-    outline: var(--border-width-thick) solid var(--focus-ring);
+    outline: var(--border-width-thick) solid var(--accent-line);
     outline-offset: calc(-1 * var(--border-width-thick));
   }
 
@@ -266,8 +267,9 @@
   .block[data-open],
   .block:focus-visible {
     z-index: var(--z-raised);
-    box-shadow: 0 0 0 var(--border-width-thick) var(--focus-ring);
-    outline: none;
+    box-shadow: var(--shadow-focus);
+    outline: var(--border-width-hairline) solid var(--accent-line);
+    outline-offset: var(--border-width-hairline);
   }
 
   .blockHead {

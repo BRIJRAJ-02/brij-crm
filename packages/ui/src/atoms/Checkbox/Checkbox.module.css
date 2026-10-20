@@ -73,6 +73,12 @@
     box-shadow: none;
   }
 
+  /* An invalid box keeps its red edge, so focus shows as the accent ring just outside (as Button's danger does). */
+  .root[data-invalid][data-focus-visible] .box {
+    outline: var(--border-width-hairline) solid var(--accent-line);
+    outline-offset: var(--border-width-hairline);
+  }
+
   .label[data-described] {
     font: var(--text-body-strong);
     letter-spacing: var(--tracking-body-strong);

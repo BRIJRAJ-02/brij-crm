@@ -24,7 +24,7 @@ export const Choices: Story = {
     choices: [
       { id: 'book', label: 'Book someone in', icon: 'user-plus', onPress: fn() },
       { id: 'block', label: 'Block this time', icon: 'circle-slash', onPress: fn() },
-      { id: 'hold', label: 'Hold for a private meeting type', icon: 'bookmark', onPress: fn() },
+      { id: 'hold', label: 'Hold for a private page', icon: 'bookmark', onPress: fn() },
     ],
   },
   render: (args) => (
@@ -59,15 +59,15 @@ export const Form: Story = {
   },
 };
 
-/** Saving: the button says so, and Enter waits for it. */
+/** Saving: Back and the fields wait, the button says so, and Enter waits for it. */
 export const Pending: Story = {
-  args: { onBack: fn() },
+  args: { onBack: fn(), isBusy: true },
   render: (args) => (
     <Stage>
       <SpanCard {...args}>
-        <Field label="Why" hint="Only you see this." value="Gym" />
+        <Field label="Why" hint="Only you see this." value="Gym" isDisabled />
         <Button variant="primary" isPending>
-          Block it
+          Blocking…
         </Button>
       </SpanCard>
     </Stage>
@@ -88,31 +88,28 @@ export const Error: Story = {
   ),
 };
 
-/** Done: what happened, and Done, which takes focus as the card changes. */
-export const Done: Story = {
+/** Picking a choice swaps the card's body, and focus moves to the first control of the new one. */
+export const Picked: Story = {
   render: function Render(args) {
-    const [isDone, setDone] = useState(false);
+    const [isPicked, setPicked] = useState(false);
     return (
       <Stage>
-        {isDone ? (
-          <SpanCard {...args} focusKey="done">
-            <Callout tone="success" isAnnounced>
-              Time blocked.
-            </Callout>
-            <Button>Done</Button>
+        {isPicked ? (
+          <SpanCard {...args} focusKey="block" onBack={() => setPicked(false)}>
+            <Button variant="primary">Block it</Button>
           </SpanCard>
         ) : (
-          <SpanCard {...args} focusKey="block">
-            <Button variant="primary" onPress={() => setDone(true)}>
-              Block it
-            </Button>
-          </SpanCard>
+          <SpanCard
+            {...args}
+            focusKey="choose"
+            choices={[{ id: 'block', label: 'Block this time', icon: 'circle-slash', onPress: () => setPicked(true) }]}
+          />
         )}
       </Stage>
     );
   },
   play: async ({ canvas }) => {
-    await userEvent.click(canvas.getByRole('button', { name: 'Block it' }));
-    await waitFor(() => expect(canvas.getByRole('button', { name: 'Done' })).toHaveFocus());
+    await userEvent.click(canvas.getByRole('button', { name: 'Block this time' }));
+    await waitFor(() => expect(canvas.getByRole('button', { name: 'Block it' })).toHaveFocus());
   },
 };

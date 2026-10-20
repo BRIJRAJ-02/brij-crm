@@ -100,6 +100,12 @@
     border-color: var(--danger);
   }
 
+  /* An invalid circle keeps its red edge, so focus shows as the accent ring just outside (as Button's danger does). */
+  .radio[data-invalid][data-focus-visible] .circle {
+    outline: var(--border-width-hairline) solid var(--accent-line);
+    outline-offset: var(--border-width-hairline);
+  }
+
   /* The control and its label fade; a description under it stays readable. */
   .radio[data-disabled] {
     opacity: var(--opacity-disabled);

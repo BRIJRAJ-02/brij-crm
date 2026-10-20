@@ -6,7 +6,8 @@ import { isDataError, type TimeBlockKind, type TimeBlockRepeat } from '@crm/data
 import { Button, Callout, Field, Radio, RadioGroup, Select, SpanCard, type SpanCardChoice } from '@crm/ui';
 import { useState } from 'react';
 import { strings } from './strings.ts';
-import { instantOf, spanNames, type DrawnSpan } from './span.ts';
+import { spanNames, type DrawnSpan } from './span.ts';
+import { SpanTimes } from './SpanTimes.tsx';
 import { dayStart } from './week.ts';
 
 /** What the member closes the span as. */
@@ -39,9 +40,11 @@ type Mode = { readonly kind: 'choose' } | { readonly kind: 'block' } | { readonl
 /** Any private page: a hold's shared choice. */
 const ANY_PAGE = 'any';
 
-/** The drawn span's card: its choices, then the picked one's form, then what happened. */
+/** The drawn span's card: its choices, then the picked one's form; saving closes it (the screen does). */
 export function DrawCard({ span, locale, privatePages, overlapping, onSpanChange, onClose, onBook }: DrawCardProps) {
   const [mode, setMode] = useState<Mode>({ kind: 'choose' });
+  // Saving: the span, Back and the form wait, so nothing changes under the save.
+  const [pending, setPending] = useState(false);
   const { title, meta } = spanNames(span, locale);
   const weekday = new Intl.DateTimeFormat(locale, { weekday: 'long' }).format(dayStart(span.dayKey));
   const back = () => setMode({ kind: 'choose' });
@@ -49,10 +52,17 @@ export function DrawCard({ span, locale, privatePages, overlapping, onSpanChange
   if (mode.kind === 'block' || mode.kind === 'hold') {
     const isHold = mode.kind === 'hold';
     return (
-      <SpanCard title={title} meta={meta} onBack={back} focusKey={mode.kind}>
+      <SpanCard title={title} meta={meta} onBack={back} isBusy={pending} focusKey={mode.kind}>
         {overlapping > 0 && <Callout tone="info">{strings.overlaps(overlapping)}</Callout>}
-        <SpanTimes span={span} locale={locale} onChange={onSpanChange} />
-        <CloseForm weekday={weekday} isHold={isHold} privatePages={privatePages} onClose={onClose} />
+        <SpanTimes span={span} locale={locale} onChange={onSpanChange} isDisabled={pending} />
+        <CloseForm
+          weekday={weekday}
+          isHold={isHold}
+          privatePages={privatePages}
+          pending={pending}
+          onPending={setPending}
+          onClose={onClose}
+        />
       </SpanCard>
     );
   }
@@ -66,43 +76,6 @@ export function DrawCard({ span, locale, privatePages, overlapping, onSpanChange
   return <SpanCard title={title} meta={meta} choices={choices} focusKey="choose" />;
 }
 
-/** The span's start and end in 15 minute steps, so it can be set exactly, from the keyboard too. */
-function SpanTimes({
-  span,
-  locale,
-  onChange,
-}: {
-  readonly span: DrawnSpan;
-  readonly locale: string;
-  readonly onChange: (span: DrawnSpan) => void;
-}) {
-  const clock = new Intl.DateTimeFormat(locale, { hour: 'numeric', minute: '2-digit' });
-  const label = (minute: number) => clock.format(instantOf(span.dayKey, minute));
-  const steps = Array.from({ length: 96 }, (_, index) => index * 15);
-  return (
-    <>
-      <Select
-        label={strings.from}
-        items={steps.map((minute) => ({ id: String(minute), label: label(minute) }))}
-        value={String(span.startMinute)}
-        onChange={(id) => {
-          const startMinute = Number(id ?? span.startMinute);
-          const length = span.endMinute - span.startMinute;
-          onChange({ ...span, startMinute, endMinute: Math.min(1440, startMinute + length) });
-        }}
-      />
-      <Select
-        label={strings.to}
-        items={[...steps.slice(1), 1440]
-          .filter((minute) => minute > span.startMinute)
-          .map((minute) => ({ id: String(minute), label: label(minute) }))}
-        value={String(span.endMinute)}
-        onChange={(id) => onChange({ ...span, endMinute: Number(id ?? span.endMinute) })}
-      />
-    </>
-  );
-}
-
 /**
  * Block this time (how often) or Hold it (for which private page), and why,
  * which only the member sees. A hold is always this one date.
@@ -111,22 +84,25 @@ function CloseForm({
   weekday,
   isHold,
   privatePages,
+  pending,
+  onPending,
   onClose,
 }: {
   readonly weekday: string;
   readonly isHold: boolean;
   readonly privatePages: readonly { readonly id: string; readonly title: string }[];
+  readonly pending: boolean;
+  readonly onPending: (pending: boolean) => void;
   readonly onClose: (input: CloseInput) => Promise<void>;
 }) {
   const [repeat, setRepeat] = useState<TimeBlockRepeat>('once');
   const [page, setPage] = useState(ANY_PAGE);
   const [label, setLabel] = useState('');
-  const [pending, setPending] = useState(false);
   const [failure, setFailure] = useState<string | undefined>(undefined);
   const submit = () => {
     // Enter in Why while saving would send it twice.
     if (pending) return;
-    setPending(true);
+    onPending(true);
     setFailure(undefined);
     const trimmed = label.trim();
     onClose({
@@ -134,10 +110,11 @@ function CloseForm({
       repeat: isHold ? 'once' : repeat,
       ...(trimmed === '' ? {} : { label: trimmed }),
       ...(isHold && page !== ANY_PAGE ? { pageId: page } : {}),
-    }).catch((error: unknown) => {
-      setPending(false);
-      setFailure(isDataError(error) ? error.message : isHold ? strings.holdFailed : strings.blockFailed);
-    });
+    })
+      .catch((error: unknown) => {
+        setFailure(isDataError(error) ? error.message : isHold ? strings.holdFailed : strings.blockFailed);
+      })
+      .finally(() => onPending(false));
   };
   return (
     <>
@@ -150,12 +127,14 @@ function CloseForm({
             ...privatePages.map((each) => ({ id: each.id, label: each.title })),
           ]}
           value={page}
+          isDisabled={pending}
           onChange={(id) => setPage(id ?? ANY_PAGE)}
         />
       ) : (
         <RadioGroup
           label={strings.howOften}
           value={repeat}
+          isDisabled={pending}
           onChange={(value) => setRepeat(value === 'weekly' ? 'weekly' : 'once')}
         >
           <Radio value="once">{strings.justThis(weekday)}</Radio>
@@ -166,13 +145,14 @@ function CloseForm({
         label={strings.why}
         hint={strings.onlyYou}
         value={label}
+        isDisabled={pending}
         onChange={setLabel}
         onSubmit={submit}
         maxLength={200}
       />
       {failure !== undefined && <Callout tone="danger">{failure}</Callout>}
       <Button variant="primary" isPending={pending} onPress={submit}>
-        {isHold ? strings.holdIt : strings.blockIt}
+        {pending ? (isHold ? strings.holding : strings.blocking) : isHold ? strings.holdIt : strings.blockIt}
       </Button>
     </>
   );

@@ -190,3 +190,32 @@ export const FormDialog: Story = {
     await centred();
   },
 };
+
+/** Saving: the title bar's close is disabled, and so is a click on the scrim, so what was typed stays. */
+export const Busy: Story = {
+  render: () => (
+    <Stage>
+      <Modal
+        title="New person"
+        isOpen
+        isBusy
+        actions={
+          <>
+            <Button slot="close" isDisabled>
+              Cancel
+            </Button>
+            <Button variant="primary" isPending>
+              Creating…
+            </Button>
+          </>
+        }
+      >
+        <Field label="Name" defaultValue="Grace Hopper" />
+      </Modal>
+    </Stage>
+  ),
+  play: async () => {
+    const dialog = await openDialog();
+    await expect(dialog.querySelector('button[aria-label="Close"]')).toHaveAttribute('disabled');
+  },
+};

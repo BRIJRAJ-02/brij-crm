@@ -1,19 +1,20 @@
 // Brief
 // Purpose: Book someone in from a span drawn on Bookings › Calendar (spec 0027, AC-709 to AC-711).
-// Main task: name who it is with and their email, then Book it: a confirmed booking in the member's own time.
+// Main task: name who it is with and their email, set the time, then Book it: a confirmed booking in the member's own time.
 // Leaves out: picking a person from the workspace as you type, and the email invitation (the calendar invites them).
 import { isDataError, type BookingPageView } from '@crm/data';
-import { Button, Field, Form, Modal, Select, type FormRefusal } from '@crm/ui';
+import { Button, Callout, Field, Form, Modal, Select, type FormRefusal } from '@crm/ui';
 import { useId, useState } from 'react';
 import { browserZone, timeZones } from '../booking/hours.ts';
-import { instantOf, lengthLabel, spanNames, type DrawnSpan } from './span.ts';
+import { instantOf, spanNames, type DrawnSpan } from './span.ts';
+import { SpanTimes } from './SpanTimes.tsx';
 import { strings } from './strings.ts';
 
 /** The fields a refusal may land on, by the server's names; any other (the time, the page) shows above them. */
 const FIELDS = ['name', 'email', 'guests', 'message'] as const;
 
-/** The lengths offered, beside the one drawn. */
-const LENGTHS = [15, 30, 45, 60, 90, 120] as const;
+/** The longest meeting a member books in (the server holds the same bound). */
+const MAX_MINUTES = 480;
 
 /** What Book it sends. */
 export interface NewMeeting {
@@ -32,7 +33,11 @@ export interface NewMeeting {
 /** Props for NewMeetingDialog. */
 export interface NewMeetingDialogProps {
   readonly span: DrawnSpan;
+  /** Moves the span (From and To), so the week's ghost follows and a clash can be fixed in place. */
+  readonly onSpanChange: (span: DrawnSpan) => void;
   readonly locale: string;
+  /** Whether the member has a calendar connected: without one, nobody is invited yet. */
+  readonly hasCalendar: boolean;
   /** The member's live pages: the booking goes on one. */
   readonly pages: readonly BookingPageView[];
   /** Mints the booking's idempotency key, once per dialog. */
@@ -54,24 +59,31 @@ export function guestEmails(text: string): readonly string[] {
 }
 
 /** New meeting: with whom, their email and zone, on which page, how long, who else, and a message. */
-export function NewMeetingDialog({ span, locale, pages, newKey, onBook, onClose }: NewMeetingDialogProps) {
+export function NewMeetingDialog({
+  span,
+  onSpanChange,
+  locale,
+  hasCalendar,
+  pages,
+  newKey,
+  onBook,
+  onClose,
+}: NewMeetingDialogProps) {
   const formId = useId();
   const [idempotencyKey] = useState(newKey);
-  const drawn = span.endMinute - span.startMinute;
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [timeZone, setTimeZone] = useState(browserZone);
   const [pageId, setPageId] = useState(pages[0]?.id ?? '');
-  const [minutes, setMinutes] = useState(Math.max(5, drawn));
   const [guests, setGuests] = useState('');
   const [message, setMessage] = useState('');
   const [busy, setBusy] = useState(false);
   const [refusals, setRefusals] = useState<readonly FormRefusal[]>([]);
-  const { meta } = spanNames({ ...span, endMinute: Math.min(1440, span.startMinute + minutes) }, locale);
-  const clock = new Intl.DateTimeFormat(locale, { hour: 'numeric', minute: '2-digit' });
+  const { meta } = spanNames(span, locale);
   const start = instantOf(span.dayKey, span.startMinute);
-  const end = new Date(start.getTime() + minutes * 60_000);
-  const lengths = [...new Set([...LENGTHS, Math.max(5, drawn)])].sort((a, b) => a - b);
+  const minutes = span.endMinute - span.startMinute;
+  // Once anything is typed, a stray click outside won't throw it away; Cancel and Esc still do.
+  const isDirty = [name, email, guests, message].some((value) => value.trim() !== '');
   const zones = timeZones(timeZone).map((zone) => ({ id: zone, label: zone.replaceAll('_', ' ') }));
 
   const book = () => {
@@ -112,13 +124,15 @@ export function NewMeetingDialog({ span, locale, pages, newKey, onBook, onClose 
     <Modal
       title={strings.newMeeting}
       isOpen
+      isDismissable={!isDirty}
+      isBusy={busy}
       onOpenChange={(open) => {
         if (!open && !busy) onClose();
       }}
       actions={
         <>
           <Button slot="close" isDisabled={busy} kbd="ESC">
-            {strings.close}
+            {strings.cancel}
           </Button>
           <Button variant="primary" type="submit" form={formId} isPending={busy} kbd="⌘↵">
             {busy ? strings.booking : strings.bookIt}
@@ -144,7 +158,6 @@ export function NewMeetingDialog({ span, locale, pages, newKey, onBook, onClose 
           maxLength={200}
           value={name}
           onChange={setName}
-          hint={`${clock.format(start)} – ${clock.format(end)}, ${meta}`}
         />
         <Field
           label={strings.email}
@@ -157,31 +170,26 @@ export function NewMeetingDialog({ span, locale, pages, newKey, onBook, onClose 
           value={email}
           onChange={setEmail}
         />
-        <Select
-          label={strings.theirTimeZone}
-          items={zones}
-          isSearchable
-          value={timeZone}
-          onChange={(zone) => {
-            if (zone !== null) setTimeZone(zone);
-          }}
+        <Field label={strings.when} value={meta} isReadOnly />
+        <SpanTimes
+          span={span}
+          locale={locale}
+          onChange={onSpanChange}
+          maxMinutes={MAX_MINUTES}
+          showsLength
+          isDisabled={busy}
         />
-        <Select
-          label={strings.about}
-          items={pages.map((page) => ({ id: page.id, label: page.title }))}
-          value={pageId}
-          onChange={(id) => {
-            if (id !== null) setPageId(id);
-          }}
-        />
-        <Select
-          label={strings.length}
-          items={lengths.map((each) => ({ id: String(each), label: lengthLabel(each) }))}
-          value={String(minutes)}
-          onChange={(id) => {
-            if (id !== null) setMinutes(Number(id));
-          }}
-        />
+        {pages.length > 1 && (
+          <Select
+            label={strings.about}
+            items={pages.map((page) => ({ id: page.id, label: page.title }))}
+            value={pageId}
+            isDisabled={busy}
+            onChange={(id) => {
+              if (id !== null) setPageId(id);
+            }}
+          />
+        )}
         <Field
           label={strings.alsoInvite}
           name="guests"
@@ -200,6 +208,17 @@ export function NewMeetingDialog({ span, locale, pages, newKey, onBook, onClose 
           value={message}
           onChange={setMessage}
         />
+        <Select
+          label={strings.theirTimeZone}
+          items={zones}
+          isSearchable
+          value={timeZone}
+          isDisabled={busy}
+          onChange={(zone) => {
+            if (zone !== null) setTimeZone(zone);
+          }}
+        />
+        {!hasCalendar && <Callout tone="info">{strings.noCalendar}</Callout>}
       </Form>
     </Modal>
   );

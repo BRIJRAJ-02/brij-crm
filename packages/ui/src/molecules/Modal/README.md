@@ -34,6 +34,7 @@ Ported from the artifact's Modal card. Confirms, invites, exports, imports and m
 - Every modal but the palette is centred in the viewport, across and up and down (the owner's call on 19 October 2026, replacing the earlier fixed distance from the top). The palette alone sits near the top (twice `size-bar`), as command palettes do.
 - `actions` is the footer: Cancel first (`slot="close"` closes the modal), the primary last. Give Cancel `kbd="ESC"` and a form's primary `kbd="⌘↵"`: a `Form` submits on ⌘↵ (Ctrl+Enter elsewhere) from any of its fields. A destructive confirm uses `tone="danger"` with a `danger` Button.
 - `tone="danger"` makes it an alert dialog with a warning icon; a click outside won't close it, so a destructive answer is always deliberate.
+- `isDismissable={false}` keeps a click outside from closing a form once something is typed in it, so only Cancel or Esc throws input away (as Outlook does). `isBusy` while its form saves disables the title bar's close button and the click outside too; disable the footer's Cancel yourself.
 - Open it from a `ModalTrigger`, or control it with `isOpen` and `onOpenChange`.
 
 ## States
@@ -47,4 +48,4 @@ Focus moves into it when it opens and stays inside; Tab cycles. The title bar an
 ## Differences from the artifact
 
 - `variant`, `icon`, `actions` and `context` keep their meaning; `width` is gone (`size-dialog` 480px or `size-dialog-wide` 780px); `ariaLabel` is the `title`.
-- `tone="danger"` (an alert dialog that a click outside won't close) and the exit animation are new.
+- `tone="danger"` (an alert dialog that a click outside won't close), `isDismissable`, `isBusy` and the exit animation are new.

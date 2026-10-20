@@ -52,6 +52,13 @@ export interface ModalProps {
   readonly context?: ReactNode;
   /** `danger` makes it an alert dialog that asks before something destructive; a click outside won't close it. */
   readonly tone?: 'default' | 'danger';
+  /**
+   * `false` keeps a click outside from closing it: a form with typed input,
+   * which only Cancel or Esc should throw away. An alert is never dismissable.
+   */
+  readonly isDismissable?: boolean;
+  /** While its form saves: the title bar's close button is disabled and a click outside does nothing. */
+  readonly isBusy?: boolean;
   /** For a Modal opened without a ModalTrigger. */
   readonly isOpen?: boolean;
   readonly onOpenChange?: (isOpen: boolean) => void;
@@ -65,7 +72,7 @@ export interface ModalProps {
  * grows from the centre over a scrim; opened from the keyboard it appears at
  * once. Focus stays inside until it closes, then goes
  * back to its trigger. Esc closes it, and so does a click outside unless it
- * asks before something destructive.
+ * asks before something destructive, holds typed input, or is busy saving.
  */
 export function Modal({
   title,
@@ -75,6 +82,8 @@ export function Modal({
   icon,
   context,
   tone = 'default',
+  isDismissable = true,
+  isBusy = false,
   isOpen,
   onOpenChange,
 }: ModalProps) {
@@ -84,7 +93,7 @@ export function Modal({
     <ModalOverlay
       className={styles.scrim}
       data-variant={variant}
-      isDismissable={!isAlert}
+      isDismissable={!isAlert && isDismissable && !isBusy}
       data-opened-by={isFocusVisible ? 'keyboard' : 'pointer'}
       {...(isOpen === undefined ? {} : { isOpen })}
       {...(onOpenChange === undefined ? {} : { onOpenChange })}
@@ -118,7 +127,7 @@ export function Modal({
             {/* Every dialog but the palette and an alert has the close button in its title bar. */}
             {variant !== 'palette' && !isAlert && (
               <span className={styles.close}>
-                <Button slot="close" variant="ghost" icon="x" label={strings.close} />
+                <Button slot="close" variant="ghost" icon="x" label={strings.close} isDisabled={isBusy} />
               </span>
             )}
           </div>

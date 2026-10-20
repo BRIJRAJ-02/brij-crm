@@ -20,6 +20,8 @@ export interface SpanCardProps {
   readonly meta: string;
   /** Shows Back, to the choices, while a choice's form is open. */
   readonly onBack?: () => void;
+  /** While its form saves: Back is disabled, so the span can't change under the save. */
+  readonly isBusy?: boolean;
   /** What the span can become, as a list; or leave it off and pass the form open. */
   readonly choices?: readonly SpanCardChoice[];
   readonly children?: ReactNode;
@@ -37,7 +39,7 @@ export interface SpanCardProps {
  * form of the one picked, with Back to the choices. It sits in WeekCalendar's
  * draft card; the screen owns what each choice does.
  */
-export function SpanCard({ title, meta, onBack, choices, children, focusKey }: SpanCardProps) {
+export function SpanCard({ title, meta, onBack, isBusy = false, choices, children, focusKey }: SpanCardProps) {
   const body = useRef<HTMLDivElement>(null);
   const shown = useRef(focusKey);
   useEffect(() => {
@@ -48,7 +50,9 @@ export function SpanCard({ title, meta, onBack, choices, children, focusKey }: S
   return (
     <div className={styles.root}>
       <div className={styles.head}>
-        {onBack !== undefined && <Button variant="ghost" icon="chevron-left" label={strings.back} onPress={onBack} />}
+        {onBack !== undefined && (
+          <Button variant="ghost" icon="chevron-left" label={strings.back} onPress={onBack} isDisabled={isBusy} />
+        )}
         <div className={styles.names}>
           <span className={styles.title}>{title}</span>
           <span className={styles.meta}>{meta}</span>

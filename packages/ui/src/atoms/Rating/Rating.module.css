@@ -59,6 +59,7 @@
 
   .root[data-variant='cell'] .choice[data-focus-visible][data-selected] {
     box-shadow: none;
+    outline: none;
   }
 
   .root[data-disabled] {
