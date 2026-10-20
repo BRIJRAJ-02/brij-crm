@@ -20,8 +20,14 @@ describe('suggestEmail', () => {
     expect(suggestEmail('@gmial.com')).toBeUndefined();
   });
 
-  it('allows one edit on a short domain, so a near company domain stays', () => {
-    expect(suggestEmail('ada@me.co')).toBe('ada@me.com');
-    expect(suggestEmail('ada@msm.co')).toBeUndefined();
+  it('never corrects a company domain near a provider', () => {
+    for (const domain of ['ge.com', 'aon.com', 'max.com', 'lime.com', 'cloud.com', 'me.co', 'gmx.co', 'zohoo.com']) {
+      expect(suggestEmail(`ada@${domain}`)).toBeUndefined();
+    }
+  });
+
+  it('allows two edits on the longest names', () => {
+    expect(suggestEmail('ada@protonmial.cmo')).toBe('ada@protonmail.com');
+    expect(suggestEmail('ada@gmial.con')).toBeUndefined();
   });
 });

@@ -187,14 +187,19 @@ export function useHostedForm({ form, mode, countryGuess, onSubmit, onRedirect, 
     if (!isBlank(answerOf(question, value)) && !touched.has(question.key)) {
       setTouched((current) => new Set([...current, question.key]));
     }
-    // A shown error clears the moment the answer passes; it never changes while typing.
-    if (errors[question.key] !== undefined && messageOf(form, question, answerOf(question, value)) === undefined) {
+    // A shown error clears the moment it stops being true (the answer passes, or now fails for another
+    // reason, which focus leaving will say); a new one never appears while typing.
+    if (
+      errors[question.key] !== undefined &&
+      messageOf(form, question, answerOf(question, value)) !== errors[question.key]
+    ) {
       setErrors((current) => without(current, question.key));
     }
   };
 
   const blur = (question: PublicQuestion, event: FocusEvent<HTMLElement>) => {
-    if (preview) return;
+    // A tick box or a yes or no is never blank, so it waits for submit: tabbing past one says nothing.
+    if (preview || question.answerType === 'checkbox' || question.answerType === 'yes_no') return;
     const next = event.relatedTarget;
     if (next instanceof Node && event.currentTarget.contains(next)) return;
     if (intoItsPopover(next)) return;

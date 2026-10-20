@@ -62,7 +62,8 @@ export function HostedForm({
   const { words, preview } = state;
   let body;
   if (state.isClosed) body = <FormClosed state={state} mode={mode} heading={refs.heading} />;
-  else if (state.view.kind === 'thanks') body = <FormThanks state={state} mode={mode} heading={refs.heading} />;
+  else if (state.view.kind === 'thanks')
+    body = <FormThanks form={form} state={state} mode={mode} heading={refs.heading} />;
   else {
     body = (
       <>

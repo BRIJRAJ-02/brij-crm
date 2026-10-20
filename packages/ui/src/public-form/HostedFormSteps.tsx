@@ -36,6 +36,11 @@ export interface HostedFormStepsProps extends HostedFormProps {
   readonly steps?: readonly FormStep[];
 }
 
+/** True for a question whose control goes on with Enter (one line of text), so OK shows its keycap. */
+function takesEnter(question: PublicQuestion | undefined): boolean {
+  return question !== undefined && ['short_text', 'email', 'phone', 'website', 'number'].includes(question.answerType);
+}
+
 interface ResolvedStep {
   readonly title?: string | undefined;
   readonly questions: readonly PublicQuestion[];
@@ -83,6 +88,8 @@ export function HostedFormSteps({
   const groups = resolve(form.questions, layout, steps);
   const [index, setIndex] = useState(0);
   const [hasMoved, setMoved] = useState(false);
+  // Continue and Back focus the new step's first question; a refusal that goes back focuses its problem instead.
+  const [focusesStep, setFocusesStep] = useState(false);
   const { state, refs } = useHostedForm({
     form,
     mode,
@@ -93,7 +100,10 @@ export function HostedFormSteps({
     // A refusal for an earlier step goes back to it, where its errors show.
     onRefused: (keys) => {
       const at = groups.findIndex((group) => group.questions.some((question) => keys.includes(question.key)));
-      if (at !== -1) setIndex(at);
+      if (at !== -1) {
+        setFocusesStep(false);
+        setIndex(at);
+      }
     },
   });
   const { words, preview } = state;
@@ -103,13 +113,14 @@ export function HostedFormSteps({
 
   // A step reached by Continue or Back puts focus on its first question.
   useEffect(() => {
-    if (!hasMoved || first === undefined) return;
+    if (!focusesStep || first === undefined) return;
     state.focus(first.key);
     // eslint-disable-next-line react-hooks/exhaustive-deps -- only when the step changes
   }, [index]);
 
   const go = (next: number) => {
     setMoved(true);
+    setFocusesStep(true);
     setIndex(next);
   };
   const place =
@@ -118,7 +129,8 @@ export function HostedFormSteps({
 
   let body;
   if (state.isClosed) body = <FormClosed state={state} mode={mode} heading={refs.heading} />;
-  else if (state.view.kind === 'thanks') body = <FormThanks state={state} mode={mode} heading={refs.heading} />;
+  else if (state.view.kind === 'thanks')
+    body = <FormThanks form={form} state={state} mode={mode} heading={refs.heading} />;
   else {
     body = (
       <>
@@ -127,8 +139,13 @@ export function HostedFormSteps({
             <ProgressBar label={place} value={index + 1} maxValue={groups.length} isLabelHidden />
           </div>
         ) : null}
-        {(!isOpen || index === 0) && (
+        {!isOpen || index === 0 ? (
           <FormHeader form={form} mode={mode} heading={refs.heading} isSubheadingShown={index === 0} />
+        ) : (
+          // Past the first question the page keeps its heading, for screen readers only.
+          <VisuallyHidden>
+            <FormHeader form={form} mode={mode} heading={refs.heading} isSubheadingShown={false} />
+          </VisuallyHidden>
         )}
         {!isOpen && (
           <div className={styles.progress}>
@@ -198,7 +215,7 @@ export function HostedFormSteps({
                 variant="primary"
                 size="lg"
                 type={preview ? 'button' : 'submit'}
-                {...(isOpen ? { kbd: '↵' } : { isFullWidth: 'center' as const })}
+                {...(isOpen ? (takesEnter(step.questions[0]) ? { kbd: '↵' } : {}) : { isFullWidth: 'center' as const })}
               >
                 {state.isSending ? words.sending : isLast ? form.buttonText : isOpen ? words.ok : words.next}
               </Button>

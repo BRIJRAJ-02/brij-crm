@@ -93,7 +93,7 @@ export const StepErrors: Story = {
   play: async ({ canvas }) => {
     await userEvent.click(canvas.getByRole('button', { name: 'Continue' }));
     await waitFor(() => expect(canvas.getByLabelText('Your name')).toHaveFocus());
-    await expect(canvas.getByText('2 answers need a look')).toBeInTheDocument();
+    await waitFor(() => expect(canvas.getByText('2 answers need a look')).toBeInTheDocument());
     await expect(canvas.getByRole('progressbar', { name: 'Step 1 of 3' })).toBeInTheDocument();
   },
 };

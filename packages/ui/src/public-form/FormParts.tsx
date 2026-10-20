@@ -2,6 +2,9 @@ import { HONEYPOT_KEY, type PublicForm, type PublicQuestion } from '@crm/contrac
 import type { ReactNode, Ref } from 'react';
 import { Button } from '../atoms/Button/Button.tsx';
 import { Icon } from '../atoms/Icon/Icon.tsx';
+import { Link } from '../atoms/Link/Link.tsx';
+import { VisuallyHidden } from '../atoms/VisuallyHidden/VisuallyHidden.tsx';
+import { Callout } from '../molecules/Callout/Callout.tsx';
 import type { ProductLogo } from '../modules/AuthLayout/AuthLayout.tsx';
 import styles from './FormParts.module.css';
 import { labelOf } from './Question.tsx';
@@ -35,7 +38,11 @@ export function FormFrame({
 }) {
   return (
     <div ref={container}>
-      {previewNote !== undefined && <p className={styles.hidden}>{previewNote}</p>}
+      {previewNote !== undefined && (
+        <VisuallyHidden>
+          <p>{previewNote}</p>
+        </VisuallyHidden>
+      )}
       <div
         className={styles.root}
         data-theme={form.look.colour}
@@ -76,10 +83,12 @@ export function FormHeader({
 
 /** The thank you, in the booking confirmation's shape: the green check, the heading, a muted line, then Send another. */
 export function FormThanks({
+  form,
   state,
   mode,
   heading,
 }: {
+  readonly form: PublicForm;
   readonly state: HostedFormState;
   readonly mode: HostedFormMode;
   readonly heading: Ref<HTMLHeadingElement>;
@@ -94,7 +103,9 @@ export function FormThanks({
       <Heading ref={heading} tabIndex={-1} className={styles.headline} data-mode={mode}>
         {state.words.thanksTitle}
       </Heading>
-      <p className={styles.subheading}>{text === '' ? state.words.thanks : text}</p>
+      <p className={styles.subheading}>
+        {text !== '' ? text : asksForAddress(form) ? state.words.thanks : state.words.thanksNeutral}
+      </p>
       <span className={styles.again}>
         <Button variant="ghost" onPress={state.sendAnother}>
           {state.words.sendAnother}
@@ -102,6 +113,11 @@ export function FormThanks({
       </span>
     </div>
   );
+}
+
+/** True when the form asks for an email or a phone, so "at the address you gave" is true. */
+function asksForAddress(form: PublicForm): boolean {
+  return form.questions.some((question) => question.answerType === 'email' || question.answerType === 'phone');
 }
 
 /** A paused form's one line, in the headline's place. */
@@ -176,33 +192,18 @@ export function ErrorSummary({
 }) {
   const listed = among === undefined ? state.summary : state.summary.filter((question) => among.includes(question));
   const count = listed.length;
+  if (count === 0) return null;
+  // A status, not an alert: focus already went to the first problem, so this is said politely.
   return (
-    <div className={styles.summary} aria-live="polite" data-shown={count > 0 || undefined}>
-      {count > 0 && (
-        <>
-          <p className={styles.summaryTitle}>
-            <Icon name="circle-alert" size="sm" />
-            {state.words.needsALook(count)}
-          </p>
-          <ul className={styles.summaryList}>
-            {listed.map((question) => (
-              <li key={question.key}>
-                <a
-                  className={styles.summaryLink}
-                  href={`#question-${question.key}`}
-                  onClick={(event) => {
-                    event.preventDefault();
-                    state.focus(question.key);
-                  }}
-                >
-                  {labelOf(question, state.words)}
-                </a>
-              </li>
-            ))}
-          </ul>
-        </>
-      )}
-    </div>
+    <Callout tone="danger" isPolite title={state.words.needsALook(count)}>
+      <span className={styles.summaryList}>
+        {listed.map((question) => (
+          <Link key={question.key} href={`#question-${question.key}`} onPress={() => state.focus(question.key)}>
+            {labelOf(question, state.words)}
+          </Link>
+        ))}
+      </span>
+    </Callout>
   );
 }
 
