@@ -24,7 +24,12 @@ const NOT_FOUND = { code: 'NOT_FOUND', message: 'This export doesn’t exist, or
 /** A file name as a header carries it: ASCII in `filename`, the full name in `filename*`. */
 function disposition(fileName: string): string {
   const ascii = fileName.replace(/[^\x20-\x7e]/gu, '_').replace(/["\\]/gu, '_');
-  return `attachment; filename="${ascii}"; filename*=UTF-8''${encodeURIComponent(fileName)}`;
+  // RFC 8187 allows no `'`, `(`, `)`, `*` or `!` unescaped in `filename*`; encodeURIComponent leaves them.
+  const encoded = encodeURIComponent(fileName).replace(
+    /['()*!]/gu,
+    (char) => `%${char.charCodeAt(0).toString(16).toUpperCase()}`,
+  );
+  return `attachment; filename="${ascii}"; filename*=UTF-8''${encoded}`;
 }
 
 /** Mounts the download on an app whose base path is `/api`. */

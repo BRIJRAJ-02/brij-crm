@@ -35,9 +35,9 @@ export function jobKinds(options: JobKindsOptions): JobRegistry {
   return createRegistry([
     maintenanceDaily(options.queue),
     formsProcess(),
-    formsFile() as AnyKind,
-    formsSync() as AnyKind,
-    formsExport() as AnyKind,
+    formsFile(),
+    formsSync(),
+    formsExport(),
     ...(bulkKinds() as readonly AnyKind[]),
     ...tests,
     ...(options.extra ?? []),

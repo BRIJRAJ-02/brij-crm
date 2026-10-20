@@ -69,7 +69,12 @@ export const submissionsRouter = member.submissions.router({
   // Export as CSV: the export's row and its `forms.export` job; the file downloads from its path once done.
   export: member.submissions.export.handler(async ({ context, input }) => {
     const started = await commitWrite(context, { mutationId: input.mutationId }, (hooks) =>
-      startSubmissionsExport(context.scope, context.jobs, { id: input.id, formId: input.formId, select: input.select }, hooks),
+      startSubmissionsExport(
+        context.scope,
+        context.jobs,
+        { id: input.id, formId: input.formId, select: input.select },
+        hooks,
+      ),
     );
     return { ...started, downloadPath: exportDownloadPath(input.workspace, started.id) };
   }),

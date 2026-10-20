@@ -1134,7 +1134,12 @@ Object.assign(WRITES, {
   'submissions.addToCrm': async (m: Member, mutationId: string) => {
     const form = await formOn(m, true);
     const submissionId = await storedSubmission(m, form.id, 'failed');
-    await m.client.submissions.addToCrm({ workspace: m.slug, formId: form.id, submissionIds: [submissionId], mutationId });
+    await m.client.submissions.addToCrm({
+      workspace: m.slug,
+      formId: form.id,
+      submissionIds: [submissionId],
+      mutationId,
+    });
     return [{ kind: 'jobs', mutation_id: mutationId }];
   },
   'submissions.export': async (m: Member, mutationId: string) => {

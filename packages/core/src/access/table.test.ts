@@ -487,6 +487,20 @@ const empty = (call: DataCase['call'], leaves: DataCase['leaves'] = none): DataC
 const refused = (code: 'NOT_FOUND' | 'FORBIDDEN', call: DataCase['call']): DataCase => ({ call, expect: code });
 const named = (world: DataWorld) => ({ [world.name]: { value: 'Renamed' } });
 
+/** An export of the world's form the owner started, written (its row count set), made once per world. */
+async function ownerExport(world: DataWorld): Promise<string> {
+  const exportId = `${world.formId.slice(0, 24)}0000000000e1`;
+  await core.startSubmissionsExport(world.owner, core.jobKinds({ environment: 'local' }), {
+    id: exportId,
+    formId: world.formId,
+    select: { kind: 'filter' },
+  });
+  await db.withWorkspace(world.owner.workspaceId, (tx) =>
+    tx.execute(sql`update exports set row_count = 0 where id = ${exportId}`),
+  );
+  return exportId;
+}
+
 /** A meeting on the world's record with one attendee the CRM doesn't know, made once per world. */
 async function meetingOn(world: DataWorld): Promise<string> {
   const meetingId = `${world.recordId.slice(0, 24)}000000000001`;
@@ -607,6 +621,23 @@ const DATA_CASES: Readonly<Record<string, DataCase>> = {
   // Notes (spec 0019): a hidden record's notes are absent, its list NOT_FOUND as the record is.
   getNote: refused('NOT_FOUND', (scope, world) => core.getNote(scope, { noteId: world.noteId })),
   listNotes: refused('NOT_FOUND', (scope, world) => core.listNotes(scope, { recordId: world.recordId })),
+  // A submissions export (spec 0023 follow-up): a form on a hidden object is absent, and so is anyone's export.
+  startSubmissionsExport: refused('NOT_FOUND', (scope, world) =>
+    core.startSubmissionsExport(scope, core.jobKinds({ environment: 'local' }), {
+      id: core.newId(),
+      formId: world.formId,
+      select: { kind: 'filter' },
+    }),
+  ),
+  getExport: refused('NOT_FOUND', async (scope, world) =>
+    core.getExport(scope, { exportId: await ownerExport(world) }),
+  ),
+  exportFile: refused('NOT_FOUND', async (scope, world) =>
+    core.exportFile(scope, { exportId: await ownerExport(world) }),
+  ),
+  exportPart: refused('NOT_FOUND', async (scope, world) =>
+    core.exportPart(scope, { exportId: await ownerExport(world), part: 0 }),
+  ),
   listTasks: refused('NOT_FOUND', (scope, world) =>
     core.listTasks(scope, { scope: { recordId: world.recordId }, status: 'open' }),
   ),

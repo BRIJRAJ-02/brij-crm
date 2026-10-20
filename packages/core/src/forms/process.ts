@@ -311,7 +311,16 @@ export interface FileInput {
    * with the attributes the mapping writes.
    */
   readonly writer: (writable: ReadonlySet<string>) => WriteContext;
+  /**
+   * Whether the writer may file into an existing record (a member's filing:
+   * only records they can see). Absent for the form's own processing.
+   */
+  readonly canUse?: (recordId: string) => Promise<boolean>;
 }
+
+/** What filing into a record the member can't open says, without saying whose it is. */
+export const HIDDEN_TARGET =
+  'This submission belongs with a record you can’t open, so it wasn’t filed. Ask someone who can.';
 
 /**
  * Files one submission's answers into the main record (see the file's
@@ -344,6 +353,10 @@ export async function fileAnswers(context: WriteContext, input: FileInput): Prom
       );
       matchedId = await matchedRecord(tx, form.mainObjectId, match.attribute.id, match.key);
     }
+  }
+
+  if (matchedId !== undefined && input.canUse !== undefined && !(await input.canUse(matchedId))) {
+    return { kind: 'failed', failure: HIDDEN_TARGET, refused, assignment };
   }
 
   let recordId: string;
@@ -439,7 +452,7 @@ export async function changesFor(
   held?: ReturnType<typeof heldValues>,
 ): Promise<{ readonly changes: ReadonlyMap<string, unknown>; readonly gaveOwner: boolean }> {
   const ids = [...planned.map((each) => each.attribute.id), ...(owner === undefined ? [] : [owner.id])];
-  const currentOf = held ?? heldValues(await currentItems(tx, [recordId], ids), recordId);
+  const currentOf = held ?? heldValues(indexHeld(await currentItems(tx, [recordId], ids)), recordId);
   const changes = new Map<string, unknown>();
   for (const each of planned) {
     const next = mergedValue(each, currentOf(each.attribute));
@@ -457,19 +470,25 @@ export async function changesFor(
   return { changes, gaveOwner };
 }
 
-/** A reader of one record's current values, by attribute, from items read for many records at once. */
-export function heldValues(
-  items: Awaited<ReturnType<typeof currentItems>>,
-  recordId: string,
-): (attribute: AttributeDef) => unknown {
-  return (attribute) =>
-    decodeValue(
-      attribute.type,
-      attribute.isMulti,
-      items
-        .filter((item) => item.ownerId === recordId && item.attributeId === attribute.id)
-        .sort((a, b) => a.position - b.position),
-    );
+/** Current items grouped by record and attribute, each group in position order: built once for many records. */
+export type HeldIndex = ReadonlyMap<string, Awaited<ReturnType<typeof currentItems>>>;
+
+/** Groups items read for many records at once by `record:attribute`, each group sorted by position. */
+export function indexHeld(items: Awaited<ReturnType<typeof currentItems>>): HeldIndex {
+  const groups = new Map<string, (typeof items)[number][]>();
+  for (const item of items) {
+    const key = `${item.ownerId}:${item.attributeId}`;
+    const group = groups.get(key);
+    if (group === undefined) groups.set(key, [item]);
+    else group.push(item);
+  }
+  for (const group of groups.values()) group.sort((a, b) => a.position - b.position);
+  return groups;
+}
+
+/** A reader of one record's current values, by attribute, from an index of many records' items. */
+export function heldValues(index: HeldIndex, recordId: string): (attribute: AttributeDef) => unknown {
+  return (attribute) => decodeValue(attribute.type, attribute.isMulti, index.get(`${recordId}:${attribute.id}`) ?? []);
 }
 
 /**

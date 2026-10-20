@@ -4,7 +4,7 @@
 // read its main record; one with no main record yet (received, spam,
 // failed) only with `forms.manage`. Answers to attributes the reader can't
 // see are left out, the same rule as everywhere else (hidden means absent).
-import { and, desc, eq, lt, or, sql } from 'drizzle-orm';
+import { and, desc, eq, lt, lte, or, sql } from 'drizzle-orm';
 import {
   SUBMISSIONS_PAGE,
   type FormDocument,
@@ -129,7 +129,12 @@ export async function displays(
 }
 
 /** The answers the reader may see, in the form's question order (AC-573: one filed on a field hidden from them is absent). */
-export function answersOf(scope: EngineScope, objectId: string, document: FormDocument, stored: unknown): SubmissionAnswer[] {
+export function answersOf(
+  scope: EngineScope,
+  objectId: string,
+  document: FormDocument,
+  stored: unknown,
+): SubmissionAnswer[] {
   const answers = record(stored);
   return document.questions.flatMap((question): SubmissionAnswer[] => {
     if (!Object.hasOwn(answers, question.key)) return [];
@@ -199,9 +204,13 @@ export async function listSubmissions(
           input.state === undefined ? undefined : eq(formSubmissions.state, input.state),
           after === undefined
             ? undefined
-            : or(
-                lt(formSubmissions.receivedAt, sql`${after.at}::timestamptz`),
-                and(eq(formSubmissions.receivedAt, sql`${after.at}::timestamptz`), lt(formSubmissions.id, after.id)),
+            : and(
+                // The redundant bound lets the index start at the cursor rather than at the newest row.
+                lte(formSubmissions.receivedAt, sql`${after.at}::timestamptz`),
+                or(
+                  lt(formSubmissions.receivedAt, sql`${after.at}::timestamptz`),
+                  and(eq(formSubmissions.receivedAt, sql`${after.at}::timestamptz`), lt(formSubmissions.id, after.id)),
+                ),
               ),
         ),
       )
