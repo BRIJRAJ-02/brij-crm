@@ -147,13 +147,13 @@
     }
 
     .head:hover .handle,
-    .head:focus-within .handle,
+    .head:has(:focus-visible) .handle,
     .row[data-focus-visible] .handle {
       opacity: 1;
     }
 
     .head:hover .tile,
-    .head:focus-within .tile,
+    .head:has(:focus-visible) .tile,
     .row[data-focus-visible] .tile {
       opacity: 0;
     }

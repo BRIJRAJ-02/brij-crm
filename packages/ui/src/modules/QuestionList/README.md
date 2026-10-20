@@ -22,7 +22,7 @@ Each question is a hairline card, space-8 apart (owner feedback F27, 20 October 
 ```
 
 - The whole head (tile, lines, chevron) opens and closes its question on press, Enter or Space. A pointer's hover fills the head; an open question's head takes `surface-selected`.
-- For a pointer, the drag handle takes the type tile's place on hover or keyboard focus, so a closed question starts with its type and nothing is held empty; on touch the handle stays in the line, always shown. Keyboard reorder is unchanged.
+- For a pointer, the drag handle takes the type tile’s place on hover or keyboard focus (not after a click, which leaves the tile), so a closed question starts with its type and nothing is held empty; on touch the handle stays in the line, always shown. Keyboard reorder is unchanged.
 - Reorder by the handle, with a drop line, or by the keyboard: focus the handle, Enter to pick up, arrows to move, Enter to drop, Esc to cancel. Each move is announced: "Budget, moved to position 3 of 6".
 - `hasProblem` marks the question a publish refused (the danger edge, and "Needs a fix" by its title); the caller keeps it open until it is fixed.
 - Without `onMove` the list is read only and shows no handles.
