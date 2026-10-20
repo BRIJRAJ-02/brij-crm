@@ -1,6 +1,7 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
 import { expect } from 'storybook/test';
 import { Button } from '../../atoms/Button/Button.tsx';
+import { SegmentedControl } from '../SegmentedControl/SegmentedControl.tsx';
 import { Stage } from '../../workbench/Stage/Stage.tsx';
 import { SectionBar } from './SectionBar.tsx';
 
@@ -33,5 +34,42 @@ export const Default: Story = {
   play: async ({ canvas }) => {
     await expect(canvas.getByRole('heading', { name: '19 – 25 October 2026' })).toBeInTheDocument();
     await expect(canvas.getByRole('button', { name: 'Next week' })).toBeInTheDocument();
+  },
+};
+
+/** As a page's bar (My tasks): two switches that keep their own arrow keys, the second at the end. */
+export const Bar: Story = {
+  render: () => (
+    <Stage>
+      <SectionBar
+        variant="bar"
+        start={
+          <SegmentedControl
+            label="Whose tasks"
+            segments={[
+              { value: 'assigned', label: 'Assigned to me' },
+              { value: 'created', label: 'Created by me' },
+              { value: 'all', label: 'All tasks' },
+            ]}
+            defaultValue="assigned"
+          />
+        }
+        end={
+          <SegmentedControl
+            label="Task status"
+            segments={[
+              { value: 'open', label: 'Open' },
+              { value: 'done', label: 'Completed' },
+            ]}
+            defaultValue="open"
+          />
+        }
+      />
+    </Stage>
+  ),
+  play: async ({ canvas, userEvent }) => {
+    await userEvent.click(canvas.getByRole('radio', { name: 'Assigned to me' }));
+    await userEvent.keyboard('{ArrowRight}');
+    await expect(canvas.getByRole('radio', { name: 'Created by me' })).toBeChecked();
   },
 };

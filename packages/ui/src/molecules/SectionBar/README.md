@@ -18,6 +18,7 @@ New. Screens can't lay out a row of controls themselves (no styles in `apps/web`
 
 - `title` is an h2: the section's heading under the page's TopBar.
 - `end` sits at the end and moves under the rest when the row wraps.
+- `variant="bar"` draws it as a page's bar under the TopBar, with the toolbar's height, padding and bottom edge (My tasks, spec 0019). Use it rather than Toolbar for controls that keep their own arrow keys, such as SegmentedControls: Toolbar's arrow key roving would move focus off a segment instead of choosing the next one.
 
 ## States
 

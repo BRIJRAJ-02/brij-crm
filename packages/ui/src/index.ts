@@ -225,7 +225,7 @@ export {
   type VisitorBarPerson,
   type VisitorBarProps,
 } from './modules/VisitorBar/VisitorBar.tsx';
-export { SectionBar, type SectionBarProps } from './molecules/SectionBar/SectionBar.tsx';
+export { SectionBar, type SectionBarProps, type SectionBarVariant } from './molecules/SectionBar/SectionBar.tsx';
 export { PageColumn, type PageColumnProps } from './modules/PageColumn/PageColumn.tsx';
 export {
   EditorStatus,

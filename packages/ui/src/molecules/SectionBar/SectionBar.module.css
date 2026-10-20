@@ -8,6 +8,14 @@
     gap: var(--space-8) var(--space-12);
   }
 
+  /* As a page's bar under the TopBar: the toolbar's height, padding and edge. */
+  .root[data-variant='bar'] {
+    min-block-size: var(--size-toolbar);
+    padding: var(--space-4) var(--space-16);
+    border-block-end: var(--border-width-hairline) solid var(--border-subtle);
+    background: var(--surface);
+  }
+
   .group,
   .end {
     display: flex;

@@ -39,7 +39,7 @@ export const Route = createFileRoute('/w/$slug/tasks')({
     filter: search.filter ?? ('assigned' as const),
     status: search.status ?? ('open' as const),
   }),
-  loader: async ({ context, params, deps }) => {
+  loader: async ({ context, params, deps, cause }) => {
     try {
       const [objects, members, access, list] = await Promise.all([
         context.data.objects.list(params.slug),
@@ -47,6 +47,10 @@ export const Route = createFileRoute('/w/$slug/tasks')({
         context.data.access.mine(params.slug).catch(() => undefined),
         context.data.tasks.mine(params.slug, deps.filter, deps.status),
       ]);
+      // Entering the page waits a moment for the first page. A switch of filter or status on the page draws
+      // the new list loading in place at once, so the page never steps through its pending frame and the
+      // person's focus stays on the switch they're using.
+      if (cause !== 'enter') return { page: { objects, members, meId: access?.memberId, list, ...deps } };
       let timer: ReturnType<typeof setTimeout> | undefined;
       await Promise.race([
         list.ready(),

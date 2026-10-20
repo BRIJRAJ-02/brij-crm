@@ -118,7 +118,9 @@ export function MyTasksScreen({ slug, filter, status, task, list, objects, membe
           </TopBar>
         ),
         toolbar: (
+          // A page bar rather than Toolbar: Toolbar's arrow keys would move focus off a segment instead of choosing.
           <SectionBar
+            variant="bar"
             start={
               <SegmentedControl
                 label={strings.whoseTasks}
