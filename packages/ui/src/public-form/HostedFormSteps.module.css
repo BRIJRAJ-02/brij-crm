@@ -1,0 +1,100 @@
+/* The step layouts (spec 0023, 0023-form-design.md, Form types). Steps: the
+   Classic card with a progress line and the step's title under the header,
+   the step's questions, then Back and Continue in one row. One at a time: no
+   card, a thin line at the top, the question large with its number, and OK
+   with its Enter keycap. Each step fades in with a short rise; under reduced
+   motion it only fades. */
+@layer components {
+  .line {
+    margin-block-end: var(--space-32);
+  }
+
+  .progress {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-8);
+    margin-block-start: var(--space-24);
+  }
+
+  .title {
+    margin: 0;
+    color: var(--text);
+    font: var(--text-title);
+    letter-spacing: var(--tracking-title);
+  }
+
+  .form {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-20);
+    margin-block-start: var(--space-20);
+    animation: rise var(--duration-modal) var(--ease-out) both;
+  }
+
+  .form[data-layout='conversational'] {
+    margin-block-start: var(--space-32);
+  }
+
+  /* The question, large, with its number before it in the accent. */
+  .ask {
+    display: flex;
+    gap: var(--space-8);
+    margin: 0 0 var(--space-8);
+    color: var(--text);
+    font: var(--text-heading);
+    letter-spacing: var(--tracking-heading);
+    text-wrap: balance;
+  }
+
+  .ask[data-mode='page'] {
+    font: var(--text-note-title);
+    letter-spacing: var(--tracking-note-title);
+  }
+
+  .number {
+    flex: none;
+    color: var(--accent);
+    font-variant-numeric: tabular-nums;
+  }
+
+  .aside {
+    color: var(--text-tertiary);
+    font-weight: normal;
+  }
+
+  .actions {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-12);
+    margin-block-start: var(--space-4);
+  }
+
+  .buttons {
+    display: flex;
+    gap: var(--space-8);
+  }
+
+  /* Steps: Back keeps its size and Continue takes the rest of the row. */
+  .buttons[data-layout='steps'] > :last-child {
+    flex: 1;
+  }
+
+  @keyframes rise {
+    from {
+      opacity: 0;
+      translate: 0 var(--space-6);
+    }
+  }
+
+  @keyframes fade {
+    from {
+      opacity: 0;
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .form {
+      animation-name: fade;
+    }
+  }
+}
