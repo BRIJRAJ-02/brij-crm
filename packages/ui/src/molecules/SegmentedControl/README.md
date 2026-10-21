@@ -1,6 +1,6 @@
 # SegmentedControl and ThemeSwitch
 
-Two to four equal segments that switch how you see something; and its Light, Dark and System preset.
+Two to five equal segments that switch how you see something, or pick one short value in a small form; and its Light, Dark and System preset.
 
 ## Why it exists
 
@@ -14,8 +14,9 @@ Ported from the artifact's SegmentedControl card (version 8). Table or Board (#2
 <ThemeSwitch controller={context.theme} isCompact orientation="vertical" />
 ```
 
-- Use it when the choice changes the current view. A setting that is saved is a RadioGroup, with one exception: a short exclusive choice of two to four one word options that reveals its own fields below it, such as a form's After sending (Message, Web page, Booking), may be a `size="compact"` SegmentedControl. Why: the owner, 22 October 2026, found the radios with their sentences too heavy for that card ("the buttons should be buttons"); the choice still reads as one control and is saved like a RadioGroup's.
+- Use it when the choice changes the current view. A setting that is saved is a RadioGroup, with one exception: a short exclusive choice of two to four one word options that reveals its own fields below it, such as a form's After sending (Message, Web page, Booking), may be a `size="compact"` SegmentedControl. Why: the owner, 22 October 2026, found the radios with their sentences too heavy for that card ("the buttons should be buttons"); the choice still reads as one control and is saved like a RadioGroup's. Inside a short form, a choice of a few short values may show its label with `isLabelVisible`.
 - `isReadOnly` keeps the chosen segment at full contrast and focusable, but no segment can be chosen: someone who may view a saved choice but not change it. Prefer it to `isDisabled` for a saved setting.
+- `isLabelVisible` shows `label` above the track, as a Field's label (`text-label` in `text-secondary`, `space-4` above the track), and names the group by it. Why a variant: a new booking page's Duration (15, 30, 45, 60 or Custom) sits among Fields in a dialog, where five ChoiceChips made a row of large pills and a RadioGroup's rows a column taller than the form (the owner, 22 October 2026).
 - `isIconOnly` on a segment shows its icon alone; its label stays its name.
 - `size="compact"` makes the whole control, track and hairline included, exactly `size-control` (26px) tall, with `space-8` inside each segment. Why a variant: the default is a hairline and a track taller than a button, so beside View settings in the view bar the two sat on different lines (the owner, 22 October 2026).
 - `isLabelCollapsible` shows only the icon of each segment that has one when the control's container is under 480px (a phone); a visually hidden copy of the label stays its name. Why: the view bar's Table and Board must fit a phone.
@@ -33,4 +34,4 @@ Tab reaches the chosen segment; the arrow keys move and choose (left and right i
 
 ## Differences from the artifact
 
-- `segments` replace `options` (`title` becomes `label` with `isIconOnly`); `ThemeSwitch` takes the theme `controller` instead of writing `data-theme` itself, and `compact` is `isCompact`. `orientation`, `size` and `isLabelCollapsible` are new.
+- `segments` replace `options` (`title` becomes `label` with `isIconOnly`); `ThemeSwitch` takes the theme `controller` instead of writing `data-theme` itself, and `compact` is `isCompact`. `orientation`, `size`, `isLabelCollapsible` and `isLabelVisible` are new.

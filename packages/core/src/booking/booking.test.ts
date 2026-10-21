@@ -248,6 +248,50 @@ describe('the public page and its slots (AC-629, AC-631, AC-644)', () => {
     ).toMatchObject({ code: 'CONFIG_INVALID', field: 'duration' });
   });
 
+  it('offers and books custom lengths, 25 and 120 minutes, and the database refuses one off the 5 minute steps', async () => {
+    const w = await workspace();
+    const { page, entry } = await livePage(w, { durations: [25, 120] });
+    expect(page.durations).toEqual([25, 120]);
+    expect((await getPublicBookingPage(entry)).durations).toEqual([25, 120]);
+    const slotsOf = async (duration: number) =>
+      (
+        await readPublicSlots(entry, deps(), {
+          from: '2026-11-02T00:00:00.000Z',
+          to: '2026-11-03T00:00:00.000Z',
+          duration,
+          tz: 'UTC',
+        })
+      ).slots.map((slot) => slot.start);
+    // 09:00 to 17:00 holds nineteen 25 minute meetings back to back, the last at 16:30, and four of 120.
+    const short = await slotsOf(25);
+    expect(short).toHaveLength(19);
+    expect(short.slice(0, 2)).toEqual(['2026-11-02T09:00:00.000Z', '2026-11-02T09:25:00.000Z']);
+    expect(short.at(-1)).toBe('2026-11-02T16:30:00.000Z');
+    expect(await slotsOf(120)).toEqual([
+      '2026-11-02T09:00:00.000Z',
+      '2026-11-02T11:00:00.000Z',
+      '2026-11-02T13:00:00.000Z',
+      '2026-11-02T15:00:00.000Z',
+    ]);
+    // A two hour booking at 09:00 takes the morning's first two hours from both lengths.
+    const booked = await bookPublicSlot(entry, deps(), bookInput({ duration: 120 }));
+    expect(Date.parse(booked.booking.end) - Date.parse(booked.booking.start)).toBe(120 * 60_000);
+    expect((await slotsOf(25)).filter((start) => start < '2026-11-02T11:00:00.000Z')).toEqual([]);
+    expect(await slotsOf(120)).not.toContain(MONDAY_9);
+    // The 25 minute steps run on from 09:00, so the first free one after the booking is 11:05.
+    expect((await slotsOf(25))[0]).toBe('2026-11-02T11:05:00.000Z');
+    await bookPublicSlot(entry, deps(), bookInput({ duration: 25, start: '2026-11-02T11:05:00.000Z' }));
+    expect(await slotsOf(25)).not.toContain('2026-11-02T11:05:00.000Z');
+    expect(
+      await refusalOf(
+        readPublicSlots(entry, deps(), { from: MONDAY_9, to: '2026-11-03T00:00:00.000Z', duration: 30, tz: 'UTC' }),
+      ),
+    ).toMatchObject({ code: 'CONFIG_INVALID', field: 'duration' });
+    await expect(
+      createBookingPage(w.owner, { id: newId(), title: 'Odd', timeZone: 'UTC', settings: { durations: [22] } }, NOW),
+    ).rejects.toThrow();
+  });
+
   it('stops offering a day at its daily limit', async () => {
     const w = await workspace();
     const { entry } = await livePage(w, { dailyLimit: 1 });

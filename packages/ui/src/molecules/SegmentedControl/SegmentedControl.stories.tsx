@@ -151,3 +151,34 @@ export const CompactAndCollapsible: Story = {
     await expect(canvas.getAllByRole('radio', { name: 'Board' })[1]).toBeChecked();
   },
 };
+
+/**
+ * `isLabelVisible` with `size="compact"`: a short value picked inside a form, its label shown above the track as a
+ * Field's, and the group named by it.
+ */
+export const VisibleLabel: Story = {
+  args: {
+    label: 'Duration',
+    size: 'compact',
+    isLabelVisible: true,
+    defaultValue: '30',
+    segments: [
+      { value: '15', label: '15 min' },
+      { value: '30', label: '30 min' },
+      { value: '45', label: '45 min' },
+      { value: '60', label: '60 min' },
+      { value: 'custom', label: 'Custom' },
+    ],
+  },
+  play: async ({ canvas, args, userEvent }) => {
+    const group = canvas.getByRole('radiogroup', { name: 'Duration' });
+    await expect(group).toBeVisible();
+    await userEvent.click(canvas.getByRole('radio', { name: 'Custom' }));
+    await expect(args.onChange).toHaveBeenCalledWith('custom');
+  },
+};
+
+/** `isLabelVisible`, disabled: the label dims with the track. */
+export const VisibleLabelDisabled: Story = {
+  args: { ...VisibleLabel.args, isDisabled: true },
+};

@@ -393,3 +393,27 @@ export const Grouped: Story = {
     await expect(options[options.length - 1]).toHaveTextContent('Clear');
   },
 };
+
+/** An option's `badge`: a short Badge after its name, in the list and on the trigger (a schedule's "Default"). */
+export const OptionBadge: Story = {
+  args: {
+    label: 'Schedule',
+    items: [
+      { id: 'default', label: 'Working hours', badge: 'Default' },
+      { id: 'evenings', label: 'Evenings' },
+    ],
+    optionStyle: 'plain',
+    value: 'default',
+  },
+  render: (args) => (
+    <Stage width="narrow">
+      <Select {...args} />
+    </Stage>
+  ),
+  play: async ({ canvas, userEvent }) => {
+    await userEvent.click(canvas.getByRole('button', { name: /Working hours/ }));
+    const list = await listbox();
+    if (!(list instanceof HTMLElement)) throw new Error('the list is not an element');
+    await expect(within(list).getByRole('option', { name: /Working hours.*Default/ })).toBeVisible();
+  },
+};

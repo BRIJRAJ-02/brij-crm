@@ -233,7 +233,7 @@ export async function switchingWorkspace(
   if (!(await has('Intro call'))) {
     await page.getByRole('button', { name: 'New booking page' }).first().click();
     await page.getByLabel('Title').fill('Intro call');
-    await page.getByRole('button', { name: 'Continue' }).click();
+    await page.getByRole('button', { name: 'Create page' }).click();
     await expect(page).toHaveURL(/captures\/links\/[0-9a-f-]{36}/, { timeout: 60_000 });
   }
   await page.goto(`/w/${slug}/captures/forms`);

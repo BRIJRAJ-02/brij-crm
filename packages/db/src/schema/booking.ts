@@ -30,6 +30,8 @@ import { auditColumns, id, timestamptz, workspaceId } from './common.ts';
 import { actorConstraints, members } from './workspaces.ts';
 
 /** A `tstzrange`, read and written as Postgres' text form (`["2026-10-19 09:45:00+00","2026-10-19 10:45:00+00")`). */
+/** Every meeting length a page may offer, as a Postgres array literal: 5 to 480 minutes in steps of 5 (contracts' `BookingDuration`). */
+const DURATION_SET = `'{${Array.from({ length: 96 }, (_, index) => String((index + 1) * 5)).join(',')}}'`;
 const tstzrange = customType<{ data: string }>({ dataType: () => 'tstzrange' });
 
 /** One booking page. Deleting one keeps its bookings (AC-648): it is hidden, its link answers no longer available. */
@@ -46,7 +48,7 @@ export const bookingPages = pgTable(
     ownerMemberId: uuid('owner_member_id').notNull(),
     title: text('title').notNull(),
     description: text('description').notNull().default(''),
-    /** Meeting lengths offered, in minutes: one or more of 15, 30, 45, 60, 90. */
+    /** Meeting lengths offered, in minutes: one to five, each 5 to 480 in steps of 5. */
     durations: smallint('durations').array().notNull(),
     /** `{ type: 'video' | 'phone' | 'address' | 'custom', value? }`. */
     location: jsonb('location').notNull(),
@@ -125,7 +127,7 @@ export const bookingPages = pgTable(
     check('booking_pages_description', sql`char_length(${t.description}) <= 2000`),
     check(
       'booking_pages_durations',
-      sql`cardinality(${t.durations}) between 1 and 5 and ${t.durations} <@ '{15,30,45,60,90}'::smallint[]`,
+      sql`cardinality(${t.durations}) between 1 and 5 and ${t.durations} <@ ${sql.raw(DURATION_SET)}::smallint[]`,
     ),
     check('booking_pages_buffers', sql`${t.bufferBefore} between 0 and 60 and ${t.bufferAfter} between 0 and 60`),
     check('booking_pages_notice', sql`${t.minNoticeMinutes} between 0 and 20160`),

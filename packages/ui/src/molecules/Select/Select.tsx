@@ -13,6 +13,7 @@ import {
   Text,
 } from 'react-aria-components';
 import { FocusScope, useFilter } from 'react-aria';
+import { Badge } from '../../atoms/Badge/Badge.tsx';
 import { Icon } from '../../atoms/Icon/Icon.tsx';
 import type { IconName } from '../../atoms/Icon/icons.ts';
 import { StatusDot } from '../../atoms/StatusDot/StatusDot.tsx';
@@ -42,6 +43,8 @@ export interface SelectItem {
   readonly leading?: ReactNode;
   /** What the `prefix` trigger shows instead of the label, beside `leading`: a country's "+91". */
   readonly short?: string;
+  /** A short label after the option's name, in the list and on the trigger: a schedule's "Default". Plain options only. */
+  readonly badge?: string;
   /** Set apart under a hairline: a choice unlike the rest, last in the list ("Don't add to the CRM" after the objects). */
   readonly isApart?: boolean;
   /**
@@ -161,6 +164,7 @@ function Face({ item, optionStyle }: { readonly item: SelectItem; readonly optio
     <>
       {item.leading ?? (item.icon !== undefined && <Icon name={item.icon} size="sm" tone="muted" />)}
       <span className={styles.plain}>{item.label}</span>
+      {item.badge !== undefined && <Badge text={item.badge} />}
     </>
   );
 }

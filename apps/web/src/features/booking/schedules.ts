@@ -25,3 +25,38 @@ export function deleteSentence(pages: readonly string[], fallback: string, isOwn
     ? scheduleStrings.deleteUnused
     : scheduleStrings.deleteUsed(listOfNames(pages), fallback, isOwn);
 }
+
+/** One schedule as the page's Schedule select needs it. */
+export interface ScheduleChoiceSource {
+  readonly id: string | null;
+  readonly name: string;
+  readonly isDefault: boolean;
+}
+
+/**
+ * The page's Schedule choices: `default` (the page follows whichever schedule is the default) named after that
+ * schedule with a Default badge, then the others. The default schedule is listed again by its id only when the page
+ * is pinned to it (`chosenId`), so a pinned page still shows its choice.
+ */
+export function scheduleChoices(
+  schedules: readonly ScheduleChoiceSource[],
+  chosenId: string | null,
+): readonly { readonly id: string; readonly label: string; readonly badge?: string; readonly description?: string }[] {
+  const fallback = schedules.find((each) => each.isDefault);
+  return [
+    fallback === undefined
+      ? { id: 'default', label: scheduleStrings.defaultSchedule(undefined) }
+      : { id: 'default', label: fallback.name, badge: scheduleStrings.defaultBadge },
+    ...schedules.flatMap((each) =>
+      each.id === null || (each.isDefault && each.id !== chosenId)
+        ? []
+        : [
+            {
+              id: each.id,
+              label: each.name,
+              ...(each.isDefault ? { description: scheduleStrings.staysOn(each.name) } : {}),
+            },
+          ],
+    ),
+  ];
+}

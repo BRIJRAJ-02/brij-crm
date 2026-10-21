@@ -15,6 +15,7 @@ import {
 } from '@crm/data';
 import { useCalendar, useCaptureList, useSchedules } from '@crm/data/react';
 import {
+  Button,
   Callout,
   Card,
   ChoiceChips,
@@ -42,6 +43,7 @@ import { useEffect, useState } from 'react';
 import { pageHeading } from '../navigation/focus.ts';
 import { WorkspacePage } from '../workspace/WorkspacePage.tsx';
 import { calendarSettingsHref } from '../settings/nav.ts';
+import { lengthChoices, lengthOf, LENGTHS_MAX } from './durations.ts';
 import { CalendarNote, readDismissed, writeDismissed } from './CalendarNote.tsx';
 import { PageDestination } from './PageDestination.tsx';
 import { HostsCard } from './HostsCard.tsx';
@@ -53,6 +55,7 @@ import { weekSummary, zoneLabel } from './hours.ts';
 import { linksHref, publicBookingUrl, scheduleHref } from './links.ts';
 import { scheduleStrings } from './schedule-strings.ts';
 import { strings as rotationStrings } from './rotation-strings.ts';
+import { scheduleChoices } from './schedules.ts';
 import { strings } from './strings.ts';
 
 /** Props for the editor: the page its route loaded. */
@@ -74,7 +77,6 @@ export interface PageEditorProps {
   readonly recordFields?: RecordFields;
 }
 
-const DURATIONS = [15, 30, 45, 60, 90] as const;
 const LOCATIONS = ['video', 'address', 'phone', 'custom'] as const;
 
 /** The help beside a setting's label, from its `strings.tips` entry. */
@@ -172,12 +174,33 @@ export function PageEditor({
     setJustSaved(false);
     setDraft((current) => ({ ...current, ...patch }));
   };
+  // The ready picks plus any custom length the page has saved or the draft holds, so turning one off keeps its chip.
+  const lengths = lengthChoices(page.durations, draft.durations);
+  const addLength = () => {
+    const minutes = lengthOf(lengthText);
+    if (minutes === undefined) {
+      setLengthError(strings.customMinutesInvalid);
+      return;
+    }
+    if (!draft.durations.includes(minutes)) {
+      if (draft.durations.length >= LENGTHS_MAX) {
+        setLengthError(strings.lengthsFull);
+        return;
+      }
+      change({ durations: [...draft.durations, minutes].sort((left, right) => left - right) });
+    }
+    setLengthText('');
+    setLengthError(undefined);
+  };
   const [device, setDevice] = useState<PreviewDevice>('phone');
   // The calendar note shows only to someone with no calendar connected yet (their own connections, spec 0024).
   const calendar = useCalendar(data.calendar.view(slug));
   // The route primes the list, so the note is in the first paint's layout and never pushes the cards down.
   const hasNoCalendar = calendar.status === 'ready' && calendar.connections.length === 0;
   const [isNoteDismissed, setNoteDismissed] = useState(() => readDismissed(slug));
+  // A custom length typed in minutes, added to the page's lengths on Add or Enter.
+  const [lengthText, setLengthText] = useState('');
+  const [lengthError, setLengthError] = useState<string | undefined>(undefined);
 
   // Leaving with unsaved changes asks first, in the app and when the tab closes.
   useBlocker({
@@ -212,9 +235,8 @@ export function PageEditor({
       },
     );
   };
-  const slugError = failure?.field === 'slug' ? failure.message : undefined;
   // The save bar speaks for the groups' changes; the Live switch saves on its own.
-  const barError = failure !== undefined && slugError === undefined ? failure.message : undefined;
+  const barError = failure?.message;
   const barStatus: SaveBarStatus = !isDirty
     ? justSaved
       ? 'saved'
@@ -370,16 +392,6 @@ export function PageEditor({
                 isReadOnly={isLocked}
                 onChange={(description) => change({ description })}
               />
-              <Field
-                label={strings.address}
-                value={draft.slug}
-                hint={strings.addressHint}
-                maxLength={60}
-                isRequired
-                isReadOnly={isLocked}
-                onChange={(value) => change({ slug: value.toLowerCase() })}
-                {...(slugError === undefined ? {} : { error: slugError })}
-              />
               <Switch
                 label={strings.private}
                 description={strings.privateHint}
@@ -400,12 +412,41 @@ export function PageEditor({
               />
               <ChoiceChips
                 label={strings.durations}
-                choices={DURATIONS.map((minutes) => ({ id: String(minutes), label: strings.minutesShort(minutes) }))}
+                choices={lengths.map((minutes) => ({ id: String(minutes), label: strings.minutesShort(minutes) }))}
                 selected={draft.durations.map(String)}
                 isDisabled={isLocked}
-                onChange={(ids) => change({ durations: DURATIONS.filter((minutes) => ids.includes(String(minutes))) })}
+                onChange={(ids) => {
+                  const durations = lengths.filter((minutes) => ids.includes(String(minutes)));
+                  // A fifth is refused here as the server would: the public page shows four.
+                  if (durations.length > LENGTHS_MAX) {
+                    setLengthError(strings.lengthsFull);
+                    return;
+                  }
+                  setLengthError(undefined);
+                  change({ durations });
+                }}
                 {...(draft.durations.length === 0 ? { error: strings.durationRequired } : {})}
               />
+              {!isLocked && (
+                <Field
+                  label={strings.addLength}
+                  inputMode="numeric"
+                  maxLength={3}
+                  hint={strings.customMinutesHint}
+                  value={lengthText}
+                  onChange={(value) => {
+                    setLengthText(value);
+                    setLengthError(undefined);
+                  }}
+                  onSubmit={addLength}
+                  suffix={
+                    <Button variant="ghost" onPress={addLength} isDisabled={lengthText.trim() === ''}>
+                      {strings.add}
+                    </Button>
+                  }
+                  {...(lengthError === undefined ? {} : { error: lengthError })}
+                />
+              )}
               <Select
                 label={strings.location}
                 items={LOCATIONS.map((type) => ({ id: type, label: strings.locations[type] }))}
@@ -655,10 +696,7 @@ function useHours(
   // The virtual default books in each page's own zone, which the server read for a page that follows it.
   const isVirtualSaved = chosen?.id === null && page.scheduleId === null;
   return {
-    items: [
-      { id: 'default', label: scheduleStrings.defaultSchedule(fallback?.name) },
-      ...state.flatMap((each) => (each.id === null ? [] : [{ id: each.id, label: each.name }])),
-    ],
+    items: scheduleChoices(state, scheduleId),
     availability: isVirtualSaved ? page.availability : (chosen?.availability ?? page.availability),
     // The owner's schedule; an admin's view of a colleague's page opens it as theirs (`?member=`).
     editHref: chosen === undefined ? undefined : scheduleHref(slug, chosen.id ?? 'default', ownerMember),

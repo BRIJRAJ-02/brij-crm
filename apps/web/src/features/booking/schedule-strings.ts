@@ -11,6 +11,8 @@ export const scheduleStrings = {
   nameHint: 'Your booking pages pick a schedule by its name.',
   nameRequired: 'Give the schedule a name.',
   defaultBadge: 'Default',
+  /** A pinned page's choice of the default schedule itself, set apart from the Default one that follows any change. */
+  staysOn: (name: string) => `Stays on ${name} if your default changes`,
   /** The Default badge's InfoTip on a schedule's page. */
   defaultHelp:
     'Booking pages set to Default schedule book inside these hours. Set as default on another schedule, and they follow that one.',

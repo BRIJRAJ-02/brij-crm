@@ -66,10 +66,10 @@ test.describe('availability schedules', () => {
     await page.goto(`/w/${slug}/captures/links`);
     await page.getByRole('button', { name: 'New booking page' }).first().click();
     await page.getByLabel('Title').fill('Intro call');
-    await page.getByRole('button', { name: 'Continue' }).click();
+    await page.getByRole('button', { name: 'Create page' }).click();
     await expect(page).toHaveURL(/captures\/links\/[0-9a-f-]{36}/, { timeout: 60_000 });
     const pageUrl = page.url();
-    await expect(page.getByText('Default schedule (Working hours)').first()).toBeVisible();
+    await expect(page.getByRole('button', { name: /Working hours.*Default/ }).first()).toBeVisible();
     const key = /\/b\/([A-Za-z0-9_-]{16})/.exec((await page.getByLabel('Public link').inputValue()) || '')?.[1];
     expect(key).toBeDefined();
     expect(await localStarts(page.request, key ?? '')).toEqual(halfHours(9, 17));
