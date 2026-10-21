@@ -197,6 +197,44 @@ export const OpenCard: Story = {
   },
 };
 
+/**
+ * A block removed outside its card (the screen's confirm): its card closed, the block went, and the screen asks for
+ * its day, which takes focus once nothing else has it.
+ */
+export const FocusRequest: Story = {
+  parameters: { crm: { screenshot: false } },
+  render: function Render(args) {
+    const [shown, setShown] = useState(blocks);
+    const [request, setRequest] = useState<{ readonly dayKey: string } | undefined>(undefined);
+    return (
+      <Stage width="fill">
+        {/* The confirm's commit, gone with the block it removed, as a confirm's is: focus falls to the page. */}
+        {request === undefined && (
+          <button
+            type="button"
+            onClick={() => {
+              setShown((before) => before.filter((block) => block.id !== 'dentist'));
+              setRequest({ dayKey: '2026-10-07' });
+            }}
+          >
+            Remove the block
+          </button>
+        )}
+        <WeekCalendar
+          {...args}
+          days={days()}
+          blocks={shown}
+          {...(request === undefined ? {} : { focusRequest: request })}
+        />
+      </Stage>
+    );
+  },
+  play: async ({ canvas }) => {
+    await userEvent.click(canvas.getByRole('button', { name: 'Remove the block' }));
+    await waitFor(() => expect(canvas.getByRole('group', { name: 'Wednesday, 7 October, nothing on' })).toHaveFocus());
+  },
+};
+
 /** The keyboard: Right moves to the next day and selects it. */
 export const Keyboard: Story = {
   parameters: { crm: { screenshot: false } },
