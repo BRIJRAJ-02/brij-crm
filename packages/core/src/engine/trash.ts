@@ -594,7 +594,9 @@ function decodeTrashCursor(cursor: string): { readonly at: string; readonly id: 
  * 0009): never an object at `none`, and on an object with a record rule only
  * those inside it. Undefined under the open policy. One object when given.
  */
-export async function trashScope(tx: WorkspaceTx, access: Access, objectId: string | undefined): Promise<SQL> {
+export async function trashScope(tx: WorkspaceTx, access: Access, named: string | undefined): Promise<SQL> {
+  // Canonical (lower case): the record rule is looked up by the id as stored, never the caller's spelling.
+  const objectId = named === undefined ? undefined : checkId(named, UNKNOWN_OBJECT);
   const parts: SQL[] = [sql`r.deleted_at is not null`];
   if (objectId !== undefined) {
     await checkObject(tx, access, objectId, 'read');

@@ -106,11 +106,19 @@ async function checkAction(context: WriteContext, input: StartBulkInput, objectI
   }
 }
 
-/** The target with `asOf` no later than now: a record made after the start is never caught (AC-528). */
-function boundedTarget(target: BulkTarget): BulkTarget {
-  if (target.kind !== 'matching' && target.kind !== 'trash') return target;
-  const asOf = Date.parse(target.asOf);
-  return Number.isNaN(asOf) || asOf <= Date.now() ? target : { ...target, asOf: new Date().toISOString() };
+/**
+ * The target as the job keeps it: its object id as stored (lower case, so the
+ * snapshot's record rule is the one the start checked), and `asOf` no later
+ * than now, so a record made after the start is never caught (AC-528).
+ */
+function storedTarget(target: BulkTarget, objectId: string | undefined): BulkTarget {
+  const named =
+    objectId !== undefined && (target.kind === 'matching' || target.kind === 'ids' || target.kind === 'trash')
+      ? { ...target, objectId }
+      : target;
+  if (named.kind !== 'matching' && named.kind !== 'trash') return named;
+  const asOf = Date.parse(named.asOf);
+  return Number.isNaN(asOf) || asOf <= Date.now() ? named : { ...named, asOf: new Date().toISOString() };
 }
 
 /** Starts the job inside a write, after the door's check. */
@@ -126,7 +134,7 @@ async function startIn(
   await checkAction(context, input, objectId);
   const params: BulkJobParams = {
     ...(objectId === undefined ? {} : { objectId }),
-    target: boundedTarget(input.target),
+    target: storedTarget(input.target, objectId),
     ...(input.edit === undefined ? {} : { edit: input.edit }),
     ...(input.timeZone === undefined ? {} : { timeZone: input.timeZone }),
   };

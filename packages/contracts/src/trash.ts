@@ -84,7 +84,7 @@ export type DeleteForeverInput = z.infer<typeof DeleteForeverInput>;
 
 /** One record's outcome in Delete forever: removed for good, or not in the trash (live, gone, or hidden). */
 export const PurgeOutcome = z.object({
-  recordId: z.uuid(),
+  recordId: Uuid,
   state: z.enum(['purged', 'not-in-trash']),
 });
 /** One record's outcome in Delete forever. */
