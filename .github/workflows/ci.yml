@@ -238,7 +238,6 @@ jobs:
           e2e/notes.flow.ts
           e2e/google.flow.ts
           e2e/my-tasks.flow.ts
-          e2e/notes.flow.ts
           e2e/timeline.flow.ts
           e2e/switching.flow.ts
           e2e/forms-publish.flow.ts
