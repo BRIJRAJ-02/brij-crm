@@ -131,6 +131,13 @@ export interface RelayDeps {
    */
   readonly facts?: (workspaceId: string, rows: readonly OutboxRow[]) => Promise<EventFacts>;
   readonly publishBatch: PublishBatch;
+  /**
+   * Cuts off the members an `access` row names who are no longer in the
+   * workspace (spec 0031, AC-817), once that row went out, so their open tabs
+   * stop hearing it. Best effort: a failure is logged, and their subscription
+   * token runs out within the hour anyway.
+   */
+  readonly cutOff?: (workspaceId: string, memberIds: readonly string[]) => Promise<void>;
   readonly log: RelayLog;
   /**
    * The safety poll's waits over a quiet spell, the last repeating (default
@@ -517,7 +524,18 @@ export function createRelay(deps: RelayDeps): Relay {
       })),
     );
     // The row that may change the audiences went out: the next one is planned with them read again.
-    if (cut !== -1 && outcome.published > cut) audienceCache.delete(workspaceId);
+    if (cut !== -1 && outcome.published > cut) {
+      audienceCache.delete(workspaceId);
+      const row = rows[cut];
+      if (row?.kind === 'access' && deps.cutOff !== undefined) {
+        await deps.cutOff(workspaceId, row.itemIds).catch((error: unknown) => {
+          log.warn('Cutting removed members off the live channel failed; their token runs out within the hour', {
+            workspaceId,
+            ...errorFields(error),
+          });
+        });
+      }
+    }
     const landed = rows[outcome.published - 1];
     if (outcome.error !== undefined) {
       failed(workspaceId, rows[outcome.published]?.seq, outcome.error, 'publish');

@@ -179,8 +179,8 @@ export async function liveTokens(
  * then the row goes with its sealed tokens; the meetings it held stay,
  * flagged when the member was removed. A provider failure throws, so the
  * task tries again later, and never blocked the removal, which committed
- * long before. A provider the worker doesn't run, or a grant already gone,
- * still lets the row go.
+ * long before. A grant already gone still lets the row go; a provider the
+ * worker doesn't run keeps the row for one that does.
  */
 async function revokeConnection(
   deps: Pick<CalendarSyncDeps, 'tokenKey'>,
@@ -189,12 +189,12 @@ async function revokeConnection(
   row: Pick<ConnectionRow, 'id' | 'tokens'>,
   binding: TokenBinding,
 ): Promise<CalendarSyncOutcome> {
-  if (provider !== undefined) {
-    try {
-      await provider.revoke(openTokens(deps.tokenKey, row.tokens, binding));
-    } catch (error) {
-      if (!isProviderError(error, 'CALENDAR_AUTH_REVOKED') && !isProviderError(error, 'CALENDAR_AUTH')) throw error;
-    }
+  // A worker without this provider leaves the row for one that has it, so the grant is still ended.
+  if (provider === undefined) return { kind: 'stopped', reason: 'no-provider' };
+  try {
+    await provider.revoke(openTokens(deps.tokenKey, row.tokens, binding));
+  } catch (error) {
+    if (!isProviderError(error, 'CALENDAR_AUTH_REVOKED') && !isProviderError(error, 'CALENDAR_AUTH')) throw error;
   }
   await inWorkspace(scope, (tx) =>
     tx.execute(sql`delete from calendar_connections where id = ${row.id}::uuid and status = 'revoked'`),

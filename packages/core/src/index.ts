@@ -276,6 +276,7 @@ export {
   leaveWorkspace,
   listMembers,
   listRoles,
+  previewRemoval,
   removeMember,
   setMemberRole,
   transferOwnership,

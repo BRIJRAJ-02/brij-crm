@@ -1,6 +1,7 @@
 import {
   leaveWorkspace,
   listMembers,
+  previewRemoval,
   removeMember,
   setMemberRole,
   transferOwnership,
@@ -49,11 +50,20 @@ export const membersRouter = member.members.router({
       }),
     ),
   ),
+  removalPreview: member.members.removalPreview.handler(({ context, input }) =>
+    previewRemoval(context.scope, { memberId: input.memberId }),
+  ),
   remove: member.members.remove.handler(async ({ context, input }) => {
     const removed = await commitWrite(context, { mutationId: input.mutationId }, (hooks) =>
-      removeMember(context.scope, { memberId: input.memberId }, hooks, { source: sourceOf(context) }),
+      removeMember(
+        context.scope,
+        { memberId: input.memberId, ...(input.reassignTo === undefined ? {} : { reassignTo: input.reassignTo }) },
+        hooks,
+        { source: sourceOf(context), jobs: context.jobs },
+      ),
     );
     await forget(context, context.scope.workspaceId, removed);
+    return removed.jobId === undefined ? {} : { jobId: removed.jobId };
   }),
   leave: member.members.leave.handler(async ({ context, input }) => {
     const removed = await commitWrite(context, { mutationId: input.mutationId }, (hooks) =>

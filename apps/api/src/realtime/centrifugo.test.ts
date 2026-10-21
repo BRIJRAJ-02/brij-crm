@@ -144,6 +144,25 @@ describe("Centrifugo's workspace namespace (compose and CI)", () => {
     await expect.poll(seqs).toEqual([1, 3, 4]);
   });
 
+  it('unsubscribes a removed person from the channel, and they hear nothing more (spec 0031, AC-817)', async () => {
+    const userId = randomUUID();
+    const channel = `workspace:${randomUUID()}`;
+    const client = await connected(userId);
+    await client.call({ subscribe: { channel, token: token({ sub: userId, channel }) } });
+    const { publishBatch, unsubscribe } = createCentrifugoPublisher({ apiUrl: API_URL, apiKey: API_KEY });
+    await unsubscribe(channel, [userId]);
+    // Centrifugo tells the client its subscription ended.
+    await expect
+      .poll(() => client.pushes.some((push) => (push.push as { unsubscribe?: unknown } | undefined)?.unsubscribe))
+      .toBe(true);
+    await publishBatch([{ channel, data: { seq: 1 }, idempotencyKey: randomUUID() }]);
+    await new Promise((resolve) => setTimeout(resolve, 200));
+    expect(client.pushes.some((push) => (push.push as { pub?: unknown } | undefined)?.pub)).toBe(false);
+    await expect(
+      createCentrifugoPublisher({ apiUrl: API_URL, apiKey: 'wrong' }).unsubscribe(channel, [userId]),
+    ).rejects.toMatchObject({ code: 'PUBLISH_FAILED' });
+  });
+
   it('refuses the server API without its key', async () => {
     const { publishBatch } = createCentrifugoPublisher({ apiUrl: API_URL, apiKey: 'wrong' });
     const outcome = await publishBatch([

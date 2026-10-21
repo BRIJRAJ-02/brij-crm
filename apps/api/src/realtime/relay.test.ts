@@ -137,6 +137,7 @@ interface RelayOptions extends Partial<
     | 'lag'
     | 'selfDormant'
     | 'onWork'
+    | 'cutOff'
   >
 > {
   readonly applicationName?: string;
@@ -196,6 +197,7 @@ function relayTo(centrifugoUrl: string, options: RelayOptions = {}) {
     ...(options.lag === undefined ? {} : { lag: options.lag }),
     ...(options.selfDormant === undefined ? {} : { selfDormant: options.selfDormant }),
     ...(options.onWork === undefined ? {} : { onWork: options.onWork }),
+    ...(options.cutOff === undefined ? {} : { cutOff: options.cutOff }),
   });
   started.push(relay);
   relay.start();
@@ -1187,7 +1189,7 @@ describe('the relay plans each row for its workspace’s audience (spec 0007, mi
   async function row(
     workspaceId: string,
     seq: number,
-    kind: 'members' | 'jobs' | 'tasks',
+    kind: 'members' | 'access' | 'jobs' | 'tasks',
     itemIds: readonly string[],
     actorMemberId?: string,
   ): Promise<void> {
@@ -1238,6 +1240,34 @@ describe('the relay plans each row for its workspace’s audience (spec 0007, mi
     await expect.poll(() => centrifugo.seqs(workspaceId), WAIT).toEqual([1, 2, 3, 4, 5, 6]);
     expect(loader.loads(workspaceId)).toBe(2);
     expect(relay.cachedAudiences()).toBeGreaterThanOrEqual(1);
+  });
+
+  it('cuts off the members an access row names once it went out, and carries on when that fails (spec 0031, AC-817)', async () => {
+    const centrifugo = await fakeCentrifugo();
+    servers.push(centrifugo);
+    const workspaceId = await workspace();
+    const ada = await member(workspaceId);
+    await row(workspaceId, 1, 'members', [ada]);
+    await row(workspaceId, 2, 'access', [ada]);
+    await events(workspaceId, [3]);
+    const cut: { workspaceId: string; memberIds: readonly string[]; published: readonly unknown[] }[] = [];
+    let fails = true;
+    const { warnings } = relayTo(centrifugo.url, {
+      cutOff: (id, memberIds) => {
+        cut.push({ workspaceId: id, memberIds, published: centrifugo.seqs(id) });
+        if (fails) {
+          fails = false;
+          return Promise.reject(new Error('Centrifugo could not be reached.'));
+        }
+        return Promise.resolve();
+      },
+    });
+    await expect.poll(() => centrifugo.seqs(workspaceId), WAIT).toEqual([1, 2, 3]);
+    // Once, after the access row itself went out; the members row cuts nobody off.
+    expect(cut).toEqual([{ workspaceId, memberIds: [ada], published: [1, 2] }]);
+    expect(warnings.map((warning) => warning.message)).toContain(
+      'Cutting removed members off the live channel failed; their token runs out within the hour',
+    );
   });
 
   it('forgets the audiences when it goes dormant, and reads them again after the wake', async () => {

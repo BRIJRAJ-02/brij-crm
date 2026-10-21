@@ -52,16 +52,7 @@ export const LIFECYCLE_CAP = MAX_LIFECYCLE_IDS;
 /** One outbox row before it gets its number. */
 export interface OutboxEvent {
   readonly kind:
-    | 'records'
-    | 'entries'
-    | 'definitions'
-    | 'members'
-    | 'access'
-    | 'jobs'
-    | 'views'
-    | 'tasks'
-    | 'notes'
-    | 'meetings';
+    'records' | 'entries' | 'definitions' | 'members' | 'access' | 'jobs' | 'views' | 'tasks' | 'notes' | 'meetings';
   /** The object: a `records` row's, an `entries` row's list's parent, a `definitions` row's when it names one. */
   readonly objectId?: string;
   /** The list: an `entries` row's, a `definitions` row's when it names one. */

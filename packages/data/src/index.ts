@@ -39,6 +39,7 @@ import type {
   ObjectSummary,
   RecordView,
   RelationshipView,
+  RemovalPreview,
   Role,
   RolesList,
   SubmissionState,
@@ -180,6 +181,7 @@ export type {
   MyAccess,
   ObjectSummary,
   Permission,
+  RemovalPreview,
   Role,
   RoleOption,
   RolesList,
@@ -2388,10 +2390,30 @@ export function createDataLayer({
         access.delete(workspace);
         return changed;
       },
-      /** Removes a member (spec 0031, AC-811). Refusals: `FORBIDDEN`, `LAST_OWNER`, `NOT_FOUND`. */
-      async remove(workspace: string, memberId: string): Promise<void> {
-        await call((options) => api.members.remove({ workspace, memberId, mutationId: mintId() }, options));
+      /**
+       * What removing a member will do (spec 0031, AC-816), for the remove
+       * dialog: pages that pause, calendars disconnected, open tasks and
+       * records naming them. Read fresh each time. Refusals: `FORBIDDEN`,
+       * `NOT_FOUND`.
+       */
+      removalPreview: (workspace: string, memberId: string): Promise<RemovalPreview> =>
+        beforeRead(workspace).then(() =>
+          call((options) => api.members.removalPreview({ workspace, memberId }, options)),
+        ),
+      /**
+       * Removes a member (spec 0031, AC-811, AC-816), handing their records
+       * and open tasks to `reassignTo` as a background job when one is given
+       * (its id answers). Refusals: `FORBIDDEN`, `LAST_OWNER`, `NOT_FOUND`.
+       */
+      async remove(workspace: string, memberId: string, reassignTo?: string): Promise<{ readonly jobId?: string }> {
+        const removed = await call((options) =>
+          api.members.remove(
+            { workspace, memberId, ...(reassignTo === undefined ? {} : { reassignTo }), mutationId: mintId() },
+            options,
+          ),
+        );
         members.delete(workspace);
+        return removed;
       },
       /**
        * The person leaves the workspace (spec 0031, AC-812). Refuses

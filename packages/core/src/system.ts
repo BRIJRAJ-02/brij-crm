@@ -20,6 +20,8 @@ export {
 export { viewFacts } from './views/facts.ts';
 export { taskFacts } from './tasks/facts.ts';
 export { meetingFacts } from './calendar/facts.ts';
+// Spec 0031, AC-817: whom an `access` row's removal cuts off the workspace's live channel.
+export { removedUserIds } from './members/facts.ts';
 export {
   POLL_INTERVAL_MS,
   syncConnection,

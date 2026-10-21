@@ -163,6 +163,9 @@ test('invites two people: the wrong address is refused, the invited one joins, a
   await expect(grace).toBeVisible();
   await page.getByRole('button', { name: /^Actions for grace/ }).click();
   await page.getByRole('menuitem', { name: 'Remove from workspace' }).click();
+  // Slice 5: it reads what the removal does first; nothing names them, so there is nobody to hand work to.
+  await expect(remove.getByRole('button', { name: 'Remove member' })).toBeEnabled();
+  await expect(remove.getByRole('button', { name: /Hand their open tasks/ })).toHaveCount(0);
   await remove.getByRole('button', { name: 'Remove member' }).click();
   await expect(page.getByText(/was removed from the workspace\./)).toBeVisible();
   await expect(grace).toHaveCount(0);

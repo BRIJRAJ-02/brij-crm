@@ -137,6 +137,36 @@ describe('removing and leaving (AC-811, AC-812)', () => {
   });
 });
 
+describe('the remove dialog (AC-816)', () => {
+  it('counts what a removal will do, and hands their work on as a job', async () => {
+    const owner = await memberWithWorkspace(app);
+    const gone = await teammate(owner);
+    const heir = await teammate(owner);
+    expect(await owner.client.members.removalPreview({ workspace: owner.slug, memberId: gone.memberId })).toEqual({
+      pausedPages: 0,
+      calendars: 0,
+      openTasks: 0,
+      records: 0,
+    });
+    // A member asks about nobody but themself.
+    expect(
+      await refusal(() => heir.client.members.removalPreview({ workspace: owner.slug, memberId: gone.memberId })),
+    ).toMatchObject({ code: 'FORBIDDEN', status: 403 });
+    const removed = await owner.client.members.remove({
+      workspace: owner.slug,
+      memberId: gone.memberId,
+      reassignTo: heir.memberId,
+      mutationId: newId(),
+    });
+    expect(removed.jobId).toEqual(expect.any(String));
+    // Without anyone chosen, no job.
+    const other = await teammate(owner);
+    expect(
+      await owner.client.members.remove({ workspace: owner.slug, memberId: other.memberId, mutationId: newId() }),
+    ).toEqual({});
+  });
+});
+
 describe('the Members page’s list (AC-810)', () => {
   it('pages with a cursor and searches by name or email', async () => {
     const owner = await memberWithWorkspace(app);

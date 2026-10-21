@@ -298,8 +298,8 @@ describe('the audit log for members (spec 0031, AC-830)', () => {
   it('writes member.removed for a removal and member.left for leaving, and answers who to forget', async () => {
     const t = await team(['member', 'member']);
     const [gone = '', leaving = ''] = t.ids;
-    expect(await removeMember(t.as(t.owner, 'owner'), { memberId: gone })).toEqual({});
-    expect(await leaveWorkspace(t.as(leaving, 'member'))).toEqual({});
+    expect(await removeMember(t.as(t.owner, 'owner'), { memberId: gone })).toEqual({ memberId: gone });
+    expect(await leaveWorkspace(t.as(leaving, 'member'))).toEqual({ memberId: leaving });
     expect((await auditOf(t.workspaceId)).map(({ action, target_id }) => ({ action, target_id }))).toEqual([
       { action: 'member.removed', target_id: gone },
       { action: 'member.left', target_id: leaving },

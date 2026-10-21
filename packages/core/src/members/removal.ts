@@ -33,7 +33,9 @@ const tasksRemoval: RemovalEffect = {
 /**
  * Live records whose member typed values (an Owner) name them: they keep
  * naming them unless the remover hands them on (the reassignment job). Values
- * carry no foreign key to `members`, so this effect only counts.
+ * carry no foreign key to `members`, so this effect only counts. The count
+ * is across the workspace, whatever the asker may read: a number, never which
+ * records, for someone who holds `members.manage` or asks about themself.
  */
 const recordsRemoval: RemovalEffect = {
   feature: 'records',
@@ -45,8 +47,9 @@ const recordsRemoval: RemovalEffect = {
       join attributes a on a.workspace_id = v.workspace_id and a.id = v.attribute_id
       join records r on r.workspace_id = v.workspace_id and r.id = v.owner_id
       where v.workspace_id = ${workspaceId}::uuid and v.active_until is null and not v.is_cleared
-        and v.actor_type = 'member' and v.actor_member_id = ${memberId}::uuid
-        and a.type = 'actor_reference' and not a.is_system and a.object_id is not null
+        -- actor_id (equal to actor_member_id for a member, by the check) lets values_actor serve it.
+        and v.actor_type = 'member' and v.actor_id = ${memberId}::uuid
+        and a.type = 'actor_reference' and not a.is_system and a.archived_at is null and a.object_id is not null
         and r.deleted_at is null
     `);
     return { records: found.rows[0]?.n ?? 0 };
@@ -83,9 +86,11 @@ export const KEPT_ON_REMOVAL: Readonly<Record<string, string>> = {
   tasks_done_by: 'history: who completed a task',
   meeting_attendees_member: 'history: they attended; the meeting stays, flagged when they organised it',
   form_versions_published_by: 'history: who published a form version',
-  forms_owner: 'the form keeps working; its submissions get no owner while this one has left (owner_removed, spec 0023)',
+  forms_owner:
+    'the form keeps working; its submissions get no owner while this one has left (owner_removed, spec 0023)',
   bookings_host: 'their bookings stay for admins to hand on (AC-815)',
-  booking_member_hours: 'their weekly hours: no page offers them once their pages pause and they leave every pool',
+  booking_member_hours_member:
+    'their weekly hours: no page offers them once their pages pause and they leave every pool',
   booking_time_blocks_member: 'their holds: no page offers their time once they leave every pool',
   notes_deleted_by: 'history: who deleted a note',
   invitations_used_by: 'history: who an invitation made',

@@ -116,6 +116,7 @@ function viewOf(scope: EngineScope, page: PageRecord, count: number): BookingPag
     status: page.status,
     hoursMode: page.hoursMode,
     isPrivate: page.isPrivate,
+    ...(page.status === 'paused' && page.pausedReason !== undefined ? { pausedReason: page.pausedReason } : {}),
     bookingsThisMonth: count,
     canChange: mayChange(scope, page),
     createdAt: page.createdAt.toISOString(),
@@ -480,4 +481,3 @@ export const bookingPagesRemoval: RemovalEffect = {
     `);
   },
 };
-

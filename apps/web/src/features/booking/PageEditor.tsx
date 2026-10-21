@@ -200,7 +200,13 @@ export function PageEditor({ data, slug, page: loaded, locale, myHours }: PageEd
   const hoursSummary = followed === undefined ? strings.followOwnerHint : weekSummary(followed, locale).join(' · ');
   // Page: who can book it.
   const pageSummary =
-    page.status === 'paused' ? strings.pausedSummary : draft.isPrivate ? strings.privateSummary : strings.publicSummary;
+    page.status === 'paused'
+      ? page.pausedReason === 'host_removed'
+        ? strings.hostRemovedSummary
+        : strings.pausedSummary
+      : draft.isPrivate
+        ? strings.privateSummary
+        : strings.publicSummary;
   // Limits: what holds bookings back, or that nothing does.
   const limitParts = [
     draft.bufferBefore + draft.bufferAfter > 0 ? strings.buffersSummary(draft.bufferBefore, draft.bufferAfter) : '',

@@ -78,6 +78,8 @@ export const ACCESS_TABLE = {
   // Members.
   setMemberRole: { ownerRules: true },
   removeMember: { ownerRules: true },
+  // Spec 0031, AC-816: the remove dialog's counts, for `members.manage` or about oneself.
+  previewRemoval: { ownerRules: true },
   // Spec 0031: leaving is the removal on oneself, open to any member; the only owner is refused LAST_OWNER.
   leaveWorkspace: { anyMember: true },
   // Spec 0031, AC-813: an owner hands the workspace on; anyone else is refused.
@@ -195,6 +197,8 @@ export const ACCESS_TABLE = {
   syncCalendarNow: { ownConnection: true },
   listMeetingsForRecord: { data: 'read' },
   meetingFacts: { system: true },
+  // Spec 0031, AC-817: the relay's read of whom a removal cuts off.
+  removedUserIds: { system: true },
   // Milestone 2: Add as person creates a person through the door (write on People, the record's own read first);
   // the workspace's calendar settings are read by any member and changed by owners and admins.
   addMeetingAttendee: { data: 'write' },

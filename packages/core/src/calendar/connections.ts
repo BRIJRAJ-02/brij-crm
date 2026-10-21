@@ -317,34 +317,38 @@ export async function removeCalendarConnection(
  * queued for the calendar task and marked `revoked` (the queue row lands
  * with the commit, and the task ends the grant with the provider, then
  * deletes the row and its tokens, retrying on failure without ever holding
- * up the removal); one that can't (expired, failed) goes now with its
- * tokens, its grant already dead or past saving.
+ * up the removal); a failed one too, its grant possibly still alive at the
+ * provider. An expired one goes now with its tokens, its grant already dead.
  */
 async function revokeMemberCalendars(context: WriteContext, memberId: string): Promise<void> {
-  const { tx } = context;
+  const { tx, scope } = context;
   const held = await tx.execute<{ id: string; status: string }>(sql`
     select id::text as id, status::text as status from calendar_connections
-    where member_id = ${memberId}::uuid order by id for update
+    where workspace_id = ${scope.workspaceId}::uuid and member_id = ${memberId}::uuid order by id for update
   `);
   if (held.rows.length === 0) return;
   const ids = held.rows.map((row) => row.id);
   await tx.execute(sql`
     update meetings m set organizer_removed = true
-    where exists (
+    where m.workspace_id = ${scope.workspaceId}::uuid and exists (
       select 1 from meeting_sources s
       where s.workspace_id = m.workspace_id and s.meeting_id = m.id and s.connection_id = any(${uuidList(ids)})
     )
   `);
-  const live = held.rows.filter((row) => row.status === 'syncing' || row.status === 'connected').map((row) => row.id);
-  // Queued while it may still sync (the queue function only takes such a connection), then marked revoked.
-  for (const id of live) await tx.execute(sql`select crm_enqueue_calendar_sync(${id}::uuid)`);
+  const live = held.rows.filter((row) => row.status !== 'expired' && row.status !== 'revoked').map((row) => row.id);
   if (live.length > 0) {
+    // The queue function only takes a connection that may sync, so a failed one is marked syncing for the
+    // moment it is queued; all of this is one transaction, so nobody sees it.
+    await tx.execute(sql`
+      update calendar_connections set status = 'syncing' where id = any(${uuidList(live)}) and status = 'failed'
+    `);
+    for (const id of live) await tx.execute(sql`select crm_enqueue_calendar_sync(${id}::uuid)`);
     await tx.execute(sql`
       update calendar_connections set status = 'revoked', is_default = false, updated_at = now()
       where id = any(${uuidList(live)})
     `);
   }
-  const dead = ids.filter((id) => !live.includes(id));
+  const dead = held.rows.filter((row) => row.status === 'expired').map((row) => row.id);
   if (dead.length > 0) await tx.execute(sql`delete from calendar_connections where id = any(${uuidList(dead)})`);
 }
 
@@ -353,9 +357,10 @@ export const calendarsRemoval: RemovalEffect = {
   feature: 'calendars',
   // Their connections are revoked; their meeting attendance stays as history.
   constraints: ['calendar_connections_member'],
-  count: async (tx, _workspaceId, memberId) => {
+  count: async (tx, workspaceId, memberId) => {
     const found = await tx.execute<{ n: number }>(sql`
-      select count(*)::int as n from calendar_connections where member_id = ${memberId}::uuid and status <> 'revoked'
+      select count(*)::int as n from calendar_connections
+      where workspace_id = ${workspaceId}::uuid and member_id = ${memberId}::uuid and status <> 'revoked'
     `);
     return { calendars: found.rows[0]?.n ?? 0 };
   },

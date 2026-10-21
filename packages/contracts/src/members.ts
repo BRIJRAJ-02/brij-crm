@@ -67,6 +67,35 @@ export const MemberInput = WorkspaceScoped.extend({ memberId: Uuid, mutationId: 
 /** One member of the workspace, by id. */
 export type MemberInput = z.infer<typeof MemberInput>;
 
+/** One member of the workspace, by id, to read something about them. */
+export const MemberRead = WorkspaceScoped.extend({ memberId: Uuid });
+/** One member of the workspace, by id, to read something about them. */
+export type MemberRead = z.infer<typeof MemberRead>;
+
+/** What removing a member will do, as the remove dialog lists it (spec 0031, AC-816). */
+export const RemovalPreview = z.object({
+  /** Booking pages that will pause, nobody being left to host them. */
+  pausedPages: z.number().int().min(0),
+  /** Calendar connections that will be disconnected. */
+  calendars: z.number().int().min(0),
+  /** Open tasks assigned to them. */
+  openTasks: z.number().int().min(0),
+  /** Live records whose member values (an Owner) name them. */
+  records: z.number().int().min(0),
+});
+/** What removing a member will do. */
+export type RemovalPreview = z.infer<typeof RemovalPreview>;
+
+/** A removal (AC-814, AC-816): optionally who their open tasks and records go to. */
+export const RemoveMemberInput = MemberInput.extend({ reassignTo: Uuid.optional() });
+/** A removal. */
+export type RemoveMemberInput = z.infer<typeof RemoveMemberInput>;
+
+/** A removal's answer: the job handing their work on, when someone was chosen. */
+export const RemovedMemberResult = z.object({ jobId: Uuid.optional() });
+/** A removal's answer. */
+export type RemovedMemberResult = z.infer<typeof RemovedMemberResult>;
+
 /** A role change (spec 0009, AC-137; spec 0031, AC-811). */
 export const SetRoleInput = MemberInput.extend({ role: Role });
 /** A role change. */
@@ -81,7 +110,9 @@ export type SetRoleInput = z.infer<typeof SetRoleInput>;
 export const membersContract = {
   list: oc.input(MembersInput).output(MembersPage),
   setRole: oc.input(SetRoleInput).output(MemberView),
-  remove: oc.input(MemberInput).output(z.void()),
+  /** What removing a member will do (AC-816): `members.manage`, or about oneself. */
+  removalPreview: oc.input(MemberRead).output(RemovalPreview),
+  remove: oc.input(RemoveMemberInput).output(RemovedMemberResult),
   leave: oc.input(WorkspaceScoped.extend({ mutationId: Uuid })).output(z.void()),
   /**
    * Hands the workspace to another member (spec 0031, AC-813): an owner

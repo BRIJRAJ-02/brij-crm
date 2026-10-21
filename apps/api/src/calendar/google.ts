@@ -474,7 +474,10 @@ export function createGoogleCalendar(options: GoogleCalendarOptions): CalendarPr
         body: new URLSearchParams({ token: tokens.refreshToken }),
       });
       if (response.ok || response.status === 400) return;
-      throw providerError(codeForStatus(response.status), `Google refused to revoke the grant (${String(response.status)}).`);
+      throw providerError(
+        codeForStatus(response.status),
+        `Google refused to revoke the grant (${String(response.status)}).`,
+      );
     },
   };
 }

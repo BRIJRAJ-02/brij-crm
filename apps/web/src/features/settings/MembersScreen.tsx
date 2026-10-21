@@ -41,6 +41,7 @@ import { useEffect, useState } from 'react';
 import { useCan } from '../workspace/WorkspacePage.tsx';
 import { InviteDialog } from './InviteDialog.tsx';
 import { MemberConfirm, type MemberQuestion } from './MemberConfirm.tsx';
+import { RemoveMemberDialog } from './RemoveMemberDialog.tsx';
 import { canRemove, grantableRoles, invitableRoles } from './members.ts';
 import { strings } from './members-strings.ts';
 import { SettingsPage } from './SettingsPage.tsx';
@@ -106,6 +107,8 @@ export function MembersScreen({
   const [busy, setBusy] = useState<ReadonlySet<string>>(new Set());
   // The change the page is asking about, if any, and what to say once it is done.
   const [question, setQuestion] = useState<(MemberQuestion & { readonly done: string }) | undefined>(undefined);
+  // The member the remove dialog asks about, if any (it reads what their removal does, AC-816).
+  const [removing, setRemoving] = useState<MemberView | undefined>(undefined);
   // A role shown at once while its change is sent, put back if the server refuses (by member id).
   const [pendingRoles, setPendingRoles] = useState<ReadonlyMap<string, Role>>(new Map());
   // The search as typed; the route searches once typing pauses.
@@ -212,13 +215,7 @@ export function MembersScreen({
   };
 
   const remove = (member: MemberView) => {
-    setQuestion({
-      title: strings.removeTitle(member.name, workspaceName),
-      text: strings.removeText,
-      action: strings.removeAction,
-      run: () => data.members.remove(slug, member.id),
-      done: strings.removed(member.name),
-    });
+    setRemoving(member);
   };
 
   const invited = (result: InviteResult) => {
@@ -489,6 +486,20 @@ export function MembersScreen({
           setQuestion(undefined);
           void reload();
           if (said !== undefined) toasts.toast({ tone: 'success', message: said });
+        }}
+      />
+      <RemoveMemberDialog
+        data={data}
+        slug={slug}
+        workspaceName={workspaceName}
+        member={removing}
+        onClose={() => {
+          setRemoving(undefined);
+        }}
+        onDone={(message) => {
+          setRemoving(undefined);
+          void reload();
+          toasts.toast({ tone: 'success', message });
         }}
       />
       {canInvite && (

@@ -216,6 +216,7 @@ function BookingCard({
   return (
     <>
       <Badge text={strings.status[booking.status]} tone={booking.status === 'confirmed' ? 'accent' : 'neutral'} />
+      {booking.hostRemoved === true && <Badge text={strings.hostRemoved} />}
       {booking.eventFailed && booking.status === 'confirmed' && <Callout tone="warning">{strings.eventFailed}</Callout>}
       <DescriptionList
         layout="stacked"

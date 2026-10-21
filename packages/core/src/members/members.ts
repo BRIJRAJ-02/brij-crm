@@ -17,6 +17,7 @@ import {
   type MembersPage,
   type MemberView,
   type MyAccess,
+  type RemovalPreview,
   type Role,
   type RolesList,
 } from '@crm/contracts';
@@ -32,7 +33,7 @@ import { inWorkspace } from '../access/run.ts';
 import { startJob } from '../jobs/service.ts';
 import type { JobRegistry } from '../jobs/registry.ts';
 import { REASSIGN_KIND } from './reassign.ts';
-import { runRemovalEffects } from './removal.ts';
+import { countRemoval, runRemovalEffects } from './removal.ts';
 import { writeAudit, type AuditSource } from './audit.ts';
 
 const { members } = schema;
@@ -378,6 +379,8 @@ export async function removeMember(
   checkManages(scope, actingRole(scope), memberId);
   const reassignTo = input.reassignTo === undefined ? undefined : checkId(input.reassignTo, REASSIGNEE_NOT_FOUND);
   if (reassignTo === memberId) throw refuse('NOT_FOUND', REASSIGNEE_NOT_FOUND);
+  // Leaving hands nothing on: the job would run as someone no longer here.
+  if (reassignTo !== undefined && isSelf(scope, memberId)) throw inputInvalid('reassignTo', LEAVING_HANDS_NOTHING_ON);
   if (reassignTo !== undefined && options.jobs === undefined) throw new Error('Reassigning needs the job kinds.');
   const { result } = await runWrite(
     scope,
@@ -457,6 +460,32 @@ export interface RemovedMember {
 }
 
 const REASSIGNEE_NOT_FOUND = "The member to hand their work to isn't in this workspace.";
+const LEAVING_HANDS_NOTHING_ON = 'Someone leaving can’t hand their work on; an owner or admin can, after.';
+
+/**
+ * What removing a member will do (spec 0031, AC-816): the booking pages that
+ * pause, the calendars disconnected, their open tasks and the records naming
+ * them, counted for the remove dialog with no lock. A holder of
+ * `members.manage` may ask about anyone, any member about themself (before
+ * leaving); anyone else is refused FORBIDDEN. A member who isn't active here
+ * is NOT_FOUND.
+ */
+export async function previewRemoval(
+  scope: EngineScope,
+  input: { readonly memberId: string },
+): Promise<RemovalPreview> {
+  checkScope(scope);
+  const memberId = checkId(input.memberId, MEMBER_NOT_FOUND);
+  checkManages(scope, actingRole(scope), memberId);
+  return inWorkspace(scope, async (tx) => {
+    const [target] = await tx
+      .select({ id: members.id })
+      .from(members)
+      .where(and(eq(members.workspaceId, scope.workspaceId), eq(members.id, memberId), eq(members.status, 'active')));
+    if (target === undefined) throw refuse('NOT_FOUND', MEMBER_NOT_FOUND);
+    return countRemoval(tx, scope.workspaceId, memberId);
+  });
+}
 
 /**
  * The caller leaves the workspace (spec 0031, AC-812): the removal on

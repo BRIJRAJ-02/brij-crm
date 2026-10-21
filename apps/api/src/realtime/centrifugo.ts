@@ -53,11 +53,51 @@ function publishFailed(message: string, cause?: unknown): PublishError {
   return Object.assign(new Error(message, { cause }), { code: 'PUBLISH_FAILED' as const });
 }
 
-/** The relay's publisher: `POST {apiUrl}/api/batch`, sequential. */
-export function createCentrifugoPublisher(options: CentrifugoOptions): { readonly publishBatch: PublishBatch } {
+/**
+ * Ends users' subscriptions to one channel (spec 0031, AC-817: a removed
+ * person's live connection to the workspace is cut). Throws a
+ * `PUBLISH_FAILED` error when Centrifugo can't be reached or refuses.
+ */
+export type Unsubscribe = (channel: string, userIds: readonly string[]) => Promise<void>;
+
+/** The relay's publisher: `POST {apiUrl}/api/batch`, sequential; and its unsubscribe, through the same endpoint. */
+export function createCentrifugoPublisher(options: CentrifugoOptions): {
+  readonly publishBatch: PublishBatch;
+  readonly unsubscribe: Unsubscribe;
+} {
   const endpoint = `${options.apiUrl.replace(/\/+$/, '')}/api/batch`;
   const timeoutMs = options.timeoutMs ?? 5_000;
   return {
+    async unsubscribe(channel, userIds) {
+      if (userIds.length === 0) return;
+      let response: Response;
+      try {
+        response = await fetch(endpoint, {
+          method: 'POST',
+          headers: { 'content-type': 'application/json', 'x-api-key': options.apiKey },
+          body: JSON.stringify({
+            commands: userIds.map((user) => ({ unsubscribe: { channel, user } })),
+            parallel: false,
+          }),
+          signal: AbortSignal.timeout(timeoutMs),
+        });
+      } catch (error) {
+        throw publishFailed('Centrifugo could not be reached.', error);
+      }
+      if (!response.ok) {
+        await response.body?.cancel();
+        throw publishFailed(`Centrifugo answered ${String(response.status)}.`);
+      }
+      const reply = BatchReply.safeParse(await response.json().catch(() => undefined));
+      const refused = reply.success
+        ? (reply.data.error ?? reply.data.replies?.find((item) => item.error)?.error)
+        : undefined;
+      if (!reply.success || refused !== undefined) {
+        throw publishFailed(
+          `Centrifugo refused the unsubscribe${refused === undefined ? '' : ` (${String(refused.code)})`}.`,
+        );
+      }
+    },
     async publishBatch(items) {
       if (items.length === 0) return { published: 0 };
       let response: Response;

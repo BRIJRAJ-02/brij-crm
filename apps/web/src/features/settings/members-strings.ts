@@ -1,4 +1,4 @@
-import { INVITE_BATCH_MAX } from '@crm/data';
+import { INVITE_BATCH_MAX, type RemovalPreview } from '@crm/data';
 
 /** Settings › Workspace › Members' copy (spec 0031). */
 export const strings = {
@@ -46,9 +46,32 @@ export const strings = {
   revokeText: 'The link in their email stops working at once. You can invite them again any time.',
   revokeAction: 'Revoke invitation',
   removeTitle: (name: string, workspace: string) => `Remove ${name} from ${workspace}?`,
-  removeText:
-    'They lose access at once. Their records, notes and tasks stay, and their calendar connections here are disconnected.',
+  removeText: 'They lose access at once. Their records, notes, tasks and meetings stay.',
   removeAction: 'Remove member',
+  removedHandingOn: (name: string, to: string) =>
+    `${name} was removed. Their open tasks and records are moving to ${to}, shown in Background jobs.`,
+  removalEffects: (counts: RemovalPreview) =>
+    [
+      counts.openTasks > 0
+        ? `${String(counts.openTasks)} open ${counts.openTasks === 1 ? 'task is' : 'tasks are'} assigned to them.`
+        : '',
+      counts.records > 0
+        ? `${String(counts.records)} ${counts.records === 1 ? 'record names' : 'records name'} them as owner.`
+        : '',
+      counts.pausedPages > 0
+        ? `${String(counts.pausedPages)} booking ${counts.pausedPages === 1 ? 'page pauses' : 'pages pause'}, with nobody left to host.`
+        : '',
+      counts.calendars > 0
+        ? `${String(counts.calendars)} calendar ${counts.calendars === 1 ? 'connection is' : 'connections are'} disconnected.`
+        : '',
+    ]
+      .filter((sentence) => sentence !== '')
+      .join(' '),
+  previewFailed: 'We couldn’t check what else this changes. You can still remove them.',
+  handTo: 'Hand their open tasks and records to',
+  handToHint: 'They move in the background. Leave it empty to keep them as they are.',
+  handToNobody: 'Keep them as they are',
+  handToSearch: 'Search members',
   transferTitle: (name: string, workspace: string) => `Make ${name} the owner of ${workspace}?`,
   transferText:
     'They get every permission, including billing and deleting the workspace, and you become an admin. Only an owner can make you an owner again.',
