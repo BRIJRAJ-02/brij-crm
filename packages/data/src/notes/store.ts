@@ -166,6 +166,8 @@ export interface NoteSessionState {
   readonly notice?: NoteNotice;
   /** The last read's failure, for the window's error state. */
   readonly error?: DataError;
+  /** When it was last saved, by anyone (the window's "Edited 3 hours ago"); undefined until it is stored. */
+  readonly updatedAt?: string;
 }
 
 /** One open note, as the note window holds it. */
@@ -457,8 +459,11 @@ export function createNotesStore(deps: NotesDeps) {
     let isUnavailable = false;
     let notice: NoteNotice | undefined;
     let error: DataError | undefined;
+    let updatedAt: string | undefined;
     // What changed since the last save went out: sent next.
     let pending: { title?: string; doc?: unknown } = {};
+    // What was unsaved when a delete from this tab went out: sent after all if the delete is refused.
+    let heldBack: { title?: string; doc?: unknown } = {};
     let firstPendingAt: number | undefined;
     let cancelDebounce: (() => void) | undefined;
     let cancelMax: (() => void) | undefined;
@@ -487,6 +492,7 @@ export function createNotesStore(deps: NotesDeps) {
       isUnavailable,
       ...(notice === undefined ? {} : { notice }),
       ...(error === undefined ? {} : { error }),
+      ...(updatedAt === undefined ? {} : { updatedAt }),
     });
     let snapshot = current();
     const announce = () => {
@@ -541,6 +547,7 @@ export function createNotesStore(deps: NotesDeps) {
           title = note.title;
           doc = note.content;
           may = note.canChange;
+          updatedAt = note.updatedAt;
           isNew = false;
           status = 'ready';
           error = undefined;
@@ -611,6 +618,7 @@ export function createNotesStore(deps: NotesDeps) {
             inFlight = false;
             tries = 0;
             version = answer.note.version;
+            updatedAt = answer.note.updatedAt;
             isNew = false;
             may = answer.note.canChange;
             refusal = undefined;
@@ -716,10 +724,21 @@ export function createNotesStore(deps: NotesDeps) {
         deletedHere = true;
         clearTimers();
         cancelRetry?.();
+        heldBack = { ...heldBack, ...pending };
         pending = {};
         isUnavailable = true;
         announce();
         maybeEnd();
+      },
+      /** The delete from this tab was refused: the note is back as it was, and anything unsaved goes after all. */
+      kept() {
+        if (!deletedHere) return;
+        deletedHere = false;
+        isUnavailable = false;
+        pending = { ...heldBack, ...pending };
+        heldBack = {};
+        announce();
+        if (hasPending()) schedule();
       },
       api: {
         subscribe(listener: () => void) {
@@ -833,7 +852,8 @@ export function createNotesStore(deps: NotesDeps) {
     },
     /**
      * Deletes a note (AC-445): out of every list and its window at once; the
-     * answer says whether it landed (a refusal puts it back in its lists).
+     * answer says whether it landed (a refusal puts it back in its lists, and
+     * its open window shows it again, with anything unsaved sent after all).
      */
     async remove(workspace: string, recordId: string, noteId: string): Promise<DataError | undefined> {
       for (const list of listsOf(workspace)) if (list.recordId === recordId) list.forget(noteId);
@@ -848,6 +868,7 @@ export function createNotesStore(deps: NotesDeps) {
       } catch (failed) {
         deps.mutations.forget(mutationId);
         dirtyRecord(workspace, recordId);
+        sessions.get(keyOf(workspace, noteId))?.kept();
         return toDataError(failed);
       }
     },

@@ -26,6 +26,7 @@ interface Stored {
   content: unknown;
   version: number;
   updatedBy: typeof ME;
+  updatedAt?: string;
 }
 
 function setup() {
@@ -37,6 +38,7 @@ function setup() {
   let gate: Promise<void> | undefined;
   let open: () => void = () => undefined;
   let failNext: Error[] = [];
+  let failDelete: Error | undefined;
   const summary = (id: string, held: Stored): NoteSummary => ({
     id,
     recordId: ACME,
@@ -46,7 +48,7 @@ function setup() {
     canChange: true,
     createdAt: '2026-10-20T10:00:00.000Z',
     createdBy: ME,
-    updatedAt: '2026-10-20T10:00:00.000Z',
+    updatedAt: held.updatedAt ?? '2026-10-20T10:00:00.000Z',
     updatedBy: held.updatedBy,
   });
   const api: NotesApi = {
@@ -70,6 +72,7 @@ function setup() {
         content: input.content ?? held?.content ?? doc(''),
         version: (held?.version ?? 0) + 1,
         updatedBy: ME,
+        updatedAt: `2026-10-21T09:00:0${String((held?.version ?? 0) + 1)}.000Z`,
       };
       const overwrote =
         held !== undefined && input.baseVersion !== held.version ? { by: held.updatedBy, at: 'then' } : undefined;
@@ -77,6 +80,9 @@ function setup() {
       return { note: summary(input.id, next), ...(overwrote ? { overwrote } : {}) };
     },
     delete: ({ noteId }) => {
+      const refused = failDelete;
+      failDelete = undefined;
+      if (refused !== undefined) return Promise.reject(refused);
       server.delete(noteId);
       return Promise.resolve({ ok: true });
     },
@@ -131,6 +137,9 @@ function setup() {
     unsaved: () => unsaved,
     failWith: (...errors: Error[]) => {
       failNext = errors;
+    },
+    failDeleteWith: (refused: Error) => {
+      failDelete = refused;
     },
     hold: () => {
       gate = new Promise((resolve) => {
@@ -358,6 +367,59 @@ describe('the note session after review (spec 0019)', () => {
     session.setDoc(doc('mine, stale'), 0);
     await t.advance(3_000);
     expect(t.saves).toEqual([]);
+  });
+});
+
+describe('the note window in its page look (21 October 2026)', () => {
+  it('says when the note was last edited: from its read, then from each save', async () => {
+    const t = setup();
+    const id = '0199a6f2-0000-7000-8000-0000000000fa';
+    t.server.set(id, {
+      title: 'Plan',
+      content: doc('v1'),
+      version: 1,
+      updatedBy: BEA,
+      updatedAt: '2026-10-19T08:00:00.000Z',
+    });
+    const session = t.store.open(WS, { noteId: id, recordId: ACME, objectId: 'o1', isNew: false, canChange: true });
+    session.retain();
+    await t.advance(0);
+    expect(session.getSnapshot()).toMatchObject({ status: 'ready', updatedAt: '2026-10-19T08:00:00.000Z' });
+    session.setDoc(doc('v2'));
+    await t.advance(0);
+    expect(session.getSnapshot()).toMatchObject({ saveState: 'saved', updatedAt: '2026-10-21T09:00:02.000Z' });
+    // A new note has no edit time until its first save stores it.
+    const fresh = t.store.open(WS, {
+      noteId: t.store.newId(),
+      recordId: ACME,
+      objectId: 'o1',
+      isNew: true,
+      canChange: true,
+    });
+    expect(fresh.getSnapshot().updatedAt).toBeUndefined();
+  });
+
+  it('shows the note again when its delete is refused, and sends what was unsaved after all', async () => {
+    const t = setup();
+    const id = '0199a6f2-0000-7000-8000-0000000000fb';
+    t.server.set(id, { title: 'Plan', content: doc('v1'), version: 1, updatedBy: ME });
+    const session = t.store.open(WS, { noteId: id, recordId: ACME, objectId: 'o1', isNew: false, canChange: true });
+    session.retain();
+    await t.advance(0);
+    session.setTitle('Plan B');
+    t.failDeleteWith(dataError('FORBIDDEN', 'You can view this note but not change it.'));
+    const removing = t.store.remove(WS, ACME, id);
+    expect(session.getSnapshot().isUnavailable).toBe(true);
+    expect(await removing).toMatchObject({ code: 'FORBIDDEN' });
+    expect(session.getSnapshot().isUnavailable).toBe(false);
+    await t.advance(300);
+    expect(t.saves).toEqual([expect.objectContaining({ title: 'Plan B' })]);
+    // A delete that lands sends nothing more.
+    session.setTitle('Plan C');
+    expect(await t.store.remove(WS, ACME, id)).toBeUndefined();
+    await t.advance(3_000);
+    expect(t.saves).toHaveLength(1);
+    expect(session.getSnapshot().isUnavailable).toBe(true);
   });
 });
 
