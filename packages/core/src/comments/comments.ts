@@ -30,7 +30,7 @@ import { can, objectLevel, type Access } from '../access/policy.ts';
 import { inWorkspace } from '../access/run.ts';
 import { UNKNOWN_RECORD, visibleRecords } from '../access/visibility.ts';
 import { canonicalId, checkId, isUuid, isUuidV7, uuidList } from '../engine/ids.ts';
-import { inputInvalid, refuse } from '../engine/refusals.ts';
+import { inputInvalid, isRefusal, refuse } from '../engine/refusals.ts';
 import type { Actor, EngineScope } from '../engine/scope.ts';
 import { runWrite, type AfterWrite, type WriteContext } from '../engine/write.ts';
 import { notifyComment, withdrawComment } from '../notifications/notify.ts';
@@ -43,8 +43,6 @@ export const NOT_YOUR_COMMENT = 'Only its author can edit a comment.';
 export const MEMBERS_ONLY = 'Only members can comment.';
 /** What a thread past `THREAD_COMMENTS_MAX` answers. */
 export const THREAD_FULL = 'This thread is full. Start a new one.';
-/** What a mention of someone who isn't an active member answers. */
-export const UNKNOWN_MENTION = "You mentioned someone who isn't in this workspace.";
 /** What a cursor the server didn't make answers, on `cursor`. */
 export const THREAD_CURSOR_MESSAGE = 'That comments cursor is not valid here. Start again from the top.';
 
@@ -112,6 +110,8 @@ export async function readableRecords(
 function checkBody(body: string): string {
   const trimmed = body.trim();
   if (trimmed.length === 0) throw inputInvalid('body', "A comment can't be empty.");
+  // NUL can't be stored: refused as input (400), never a database error (500).
+  if (trimmed.includes('\u0000')) throw inputInvalid('body', 'This text holds a character that can’t be stored.');
   if (trimmed.length > COMMENT_MAX) {
     throw inputInvalid('body', `A comment holds at most ${COMMENT_MAX.toLocaleString('en')} characters.`);
   }
@@ -119,25 +119,26 @@ function checkBody(body: string): string {
 }
 
 /**
- * The members a text mentions, each an active member of the workspace, else
- * `INPUT_INVALID` on `body`; at most `COMMENT_MENTIONS_MAX`.
+ * The members a text mentions who are active members of the workspace, in
+ * order (spec 0038's mention parsing): a token naming anyone else stays in
+ * the text as it is and counts as no mention, so an old comment that
+ * mentions someone since removed can still be edited. At most
+ * `COMMENT_MENTIONS_MAX` tokens, else `INPUT_INVALID` on `body`.
  */
 async function checkMentions(context: WriteContext, body: string): Promise<readonly string[]> {
-  const ids = mentionedIds(body);
+  const ids = mentionedIds(body).filter(isUuid);
   if (ids.length === 0) return [];
   if (ids.length > COMMENT_MENTIONS_MAX) {
     throw inputInvalid('body', `A comment mentions at most ${String(COMMENT_MENTIONS_MAX)} people.`);
   }
-  if (!ids.every(isUuid)) throw inputInvalid('body', UNKNOWN_MENTION);
   const unknown = ids.filter((id) => !context.activeMembers.has(id));
   if (unknown.length > 0) {
     const rows = await context.tx.execute<{ id: string }>(
       sql`select id::text as id from members where id = any(${uuidList(unknown)}) and status = 'active'`,
     );
     for (const row of rows.rows) context.activeMembers.add(row.id);
-    if (rows.rows.length < unknown.length) throw inputInvalid('body', UNKNOWN_MENTION);
   }
-  return ids;
+  return ids.filter((id) => context.activeMembers.has(id));
 }
 
 /** A stored comment, as the views and the rules need it. */
@@ -158,7 +159,8 @@ interface CommentRow extends Record<string, unknown> {
   readonly deleted: boolean;
 }
 
-const COMMENT_COLUMNS = sql`c.id::text as id, c.thread_id::text as thread_id, c.record_id::text as record_id, c.body,
+const COMMENT_COLUMNS = sql`c.id::text as id, c.thread_id::text as thread_id, c.record_id::text as record_id,
+  case when c.deleted_at is null then c.body else '' end as body,
   c.mention_member_ids::text[] as mention_member_ids, c.version, ${millis('c.edited_at')} as edited_at,
   ${millis('c.created_at')} as created_at, c.created_by_type, c.created_by_id::text as created_by_id,
   ${millis('c.resolved_at')} as resolved_at, c.resolved_by_type, c.resolved_by_id::text as resolved_by_id,
@@ -188,15 +190,27 @@ async function readThreads(
   tx: WorkspaceTx,
   scope: Pick<EngineScope, 'access' | 'actor'>,
   threadIds: readonly string[],
+  whole = false,
 ): Promise<readonly ThreadView[]> {
   const ids = [...new Set(threadIds)];
   if (ids.length === 0) return [];
-  const rows = await tx.execute<CommentRow>(sql`
-    select ${COMMENT_COLUMNS} from comments c
-    where c.thread_id = any(${uuidList(ids)})
-    order by c.thread_id, c.created_at, c.id
+  // Each thread's first comment and its newest `REPLY_WINDOW` replies (the whole thread when asked): a busy
+  // thread never makes every reader pull its 500 comments again on each event. The first comment sorts first
+  // by being the thread's, never by its time, which a reply's transaction could have begun before.
+  const rows = await tx.execute<CommentRow & { size: number; live: number }>(sql`
+    select * from (
+      select ${COMMENT_COLUMNS},
+        row_number() over (partition by c.thread_id order by c.created_at desc, c.id desc) as from_end,
+        count(*) over (partition by c.thread_id)::int as size,
+        (count(*) filter (where c.deleted_at is null) over (partition by c.thread_id))::int as live,
+        (c.id = c.thread_id) as is_first
+      from comments c
+      where c.thread_id = any(${uuidList(ids)})
+    ) w
+    where w.is_first or ${whole ? sql`true` : sql`w.from_end <= ${REPLY_WINDOW}`}
+    order by w.thread_id, w.is_first desc, w.created_at, w.id
   `);
-  const byThread = new Map<string, CommentRow[]>();
+  const byThread = new Map<string, (CommentRow & { size: number; live: number })[]>();
   for (const row of rows.rows) {
     const list = byThread.get(row.thread_id) ?? [];
     list.push(row);
@@ -208,7 +222,7 @@ async function readThreads(
     [...byThread.values()].flatMap((list) => list.slice(0, 1).map((row) => row.record_id)),
   );
   const shownIds = [...byThread.values()].flatMap((list) =>
-    list.some((row) => !row.deleted) && readable.has(list[0]?.record_id ?? '')
+    (list[0]?.live ?? 0) > 0 && readable.has(list[0]?.record_id ?? '')
       ? list.filter((row) => !row.deleted).map((row) => row.id)
       : [],
   );
@@ -219,7 +233,7 @@ async function readThreads(
     const list = byThread.get(threadId);
     const first = list?.[0];
     if (list === undefined || first === undefined || first.id !== threadId) return [];
-    if (!list.some((row) => !row.deleted) || !readable.has(first.record_id)) return [];
+    if (first.live === 0 || !readable.has(first.record_id)) return [];
     const comments: CommentView[] = list.map((row) => {
       if (row.deleted) {
         return {
@@ -256,6 +270,7 @@ async function readThreads(
         ...(first.resolved_at === null || first.resolved_by_type === null
           ? {}
           : { resolvedAt: first.resolved_at, resolvedBy: { type: first.resolved_by_type, id: first.resolved_by_id } }),
+        earlierCount: whole ? 0 : Math.max(first.size - 1 - REPLY_WINDOW, 0),
         comments,
       },
     ];
@@ -323,6 +338,9 @@ function decodeCursor(cursor: string, resolved: boolean): ThreadCursor {
 /** The threads of a record that still show: at least one live comment. */
 const LIVE_THREAD = sql`exists (select 1 from comments l where l.workspace_id = t.workspace_id and l.thread_id = t.id and l.deleted_at is null)`;
 
+/** A thread's newest replies a read carries; earlier ones come with `comments.get` and `whole`. */
+export const REPLY_WINDOW = 20;
+
 /** The most threads a count reads before it stops: a record with more says "10,000+". */
 const COUNT_CAP = 10_000;
 
@@ -383,20 +401,38 @@ export async function listThreads(
 
 /**
  * Threads by id (`comments.get`, what a `comments` event's ids are read back
- * through): up to 50, in the order asked; missing, emptied and hidden ones
+ * through): up to 20, in the order asked; missing, emptied and hidden ones
  * are left out alike.
  */
 export async function getThreads(
   scope: EngineScope,
-  input: { readonly threadIds: readonly string[] },
+  input: { readonly threadIds: readonly string[]; readonly whole?: boolean },
 ): Promise<ThreadView[]> {
   checkScope(scope);
   if (input.threadIds.length > THREAD_GET_MAX) {
     throw refuse('CONFIG_INVALID', `Read at most ${String(THREAD_GET_MAX)} threads at once.`);
   }
+  // Every reply of a thread (its "Show earlier replies"): one thread at a time.
+  if (input.whole === true && input.threadIds.length > 1) {
+    throw refuse('CONFIG_INVALID', 'Read one whole thread at a time.');
+  }
   const ids = [...new Set(input.threadIds.filter(isUuid).map(canonicalId))];
   if (ids.length === 0) return [];
-  return inWorkspace(scope, async (tx) => [...(await readThreads(tx, scope, ids))]);
+  return inWorkspace(scope, async (tx) => [...(await readThreads(tx, scope, ids, input.whole === true))]);
+}
+
+/** Refuses `NOT_FOUND` unless the reader may read the thread's record. */
+async function readableRecordOf(tx: WorkspaceTx, scope: EngineScope, threadId: string): Promise<void> {
+  const rows = await tx.execute<{ record_id: string }>(
+    sql`select record_id::text as record_id from comments where id = ${threadId}::uuid`,
+  );
+  const [row] = rows.rows;
+  if (row === undefined) throw refuse('NOT_FOUND', UNKNOWN_COMMENT);
+  try {
+    await readableRecord(tx, scope.access, row.record_id);
+  } catch (error) {
+    throw hiddenAsUnknown(error);
+  }
 }
 
 /** The thread a write just touched, read back for its writer, who can see it. */
@@ -454,9 +490,9 @@ export async function createComment(
     scope,
     async (context) => {
       const { tx } = context;
+      const objectId = await readableRecord(tx, scope.access, recordId, true);
       const replayed = await replayOf(tx, scope, id);
       if (replayed !== undefined) return threadAfterWrite(tx, scope, replayed);
-      const objectId = await readableRecord(tx, scope.access, recordId, true);
       const mentioned = await checkMentions(context, body);
       let threadId = id;
       let participants: readonly string[] | undefined;
@@ -519,6 +555,13 @@ export async function createComment(
   return result;
 }
 
+/** A hidden record's refusal as the comment's own (the same for missing and hidden); anything else as it is. */
+function hiddenAsUnknown(error: unknown): unknown {
+  return isRefusal(error) && error.refusals.every((refusal) => refusal.code === 'NOT_FOUND')
+    ? refuse('NOT_FOUND', UNKNOWN_COMMENT)
+    : error;
+}
+
 /**
  * The live comment the writer may act on, locked: `NOT_FOUND` when it is
  * missing, deleted, or on a record they can't read (or one in the trash).
@@ -532,8 +575,8 @@ async function lockedComment(
   try {
     const objectId = await readableRecord(context.tx, context.scope.access, row.record_id, true);
     return { row, objectId };
-  } catch {
-    throw refuse('NOT_FOUND', UNKNOWN_COMMENT);
+  } catch (error) {
+    throw hiddenAsUnknown(error);
   }
 }
 
@@ -609,6 +652,16 @@ export async function deleteComment(
     scope,
     async (context) => {
       const { tx } = context;
+      // A retry of a delete that landed (its answer lost): the same answer, nothing written.
+      const gone = await tx.execute<{ thread_id: string }>(sql`
+        select thread_id::text as thread_id from comments
+        where id = ${commentId}::uuid and deleted_at is not null and deleted_by_member_id = ${me}::uuid
+      `);
+      const [already] = gone.rows;
+      if (already !== undefined) {
+        await readableRecordOf(tx, scope, already.thread_id);
+        return { threadId: already.thread_id };
+      }
       const { row, objectId } = await lockedComment(context, commentId);
       if (!isAuthor(row, scope.actor) && !can(scope.access, 'comments.manage')) {
         throw refuse('FORBIDDEN', 'Only its author, or a workspace owner or admin, can delete a comment.');
@@ -651,8 +704,8 @@ export async function setThreadResolved(
       let objectId: string;
       try {
         objectId = await readableRecord(tx, scope.access, thread.record_id, true);
-      } catch {
-        throw refuse('NOT_FOUND', UNKNOWN_COMMENT);
+      } catch (error) {
+        throw hiddenAsUnknown(error);
       }
       if (thread.resolved === input.resolved) return threadAfterWrite(tx, scope, threadId);
       await tx.execute(
@@ -716,8 +769,8 @@ export async function commentVersions(
     if (row === undefined) throw refuse('NOT_FOUND', UNKNOWN_COMMENT);
     try {
       await readableRecord(tx, scope.access, row.record_id);
-    } catch {
-      throw refuse('NOT_FOUND', UNKNOWN_COMMENT);
+    } catch (error) {
+      throw hiddenAsUnknown(error);
     }
     const versions = await tx.execute<{ version: number; body: string; at: string }>(sql`
       select version, body, ${millis('created_at')} as at from comment_versions

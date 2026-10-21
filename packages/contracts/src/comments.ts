@@ -77,12 +77,17 @@ export const CommentView = z.object({
 /** One comment as a reader sees it. */
 export type CommentView = z.infer<typeof CommentView>;
 
-/** A thread: its first comment, then its replies, oldest first, with its resolved state. */
+/**
+ * A thread: its first comment, then its newest replies (at most 20, all of
+ * them when read `whole`), oldest first, with its resolved state.
+ */
 export const ThreadView = z.object({
   id: z.uuid(),
   recordId: z.uuid(),
   resolvedAt: Timestamp.optional(),
   resolvedBy: ActorReferenceValue.optional(),
+  /** Replies before the newest 20 that this read left out; `comments.get` with `whole` brings them. */
+  earlierCount: z.number().int().min(0),
   comments: z.array(CommentView).min(1),
 });
 /** A thread. */
@@ -116,6 +121,8 @@ export const GetThreadsInput = WorkspaceScoped.extend({
     .array(z.uuid())
     .min(1)
     .max(THREAD_GET_MAX, `Read at most ${String(THREAD_GET_MAX)} threads at once.`),
+  /** Every reply of the one thread asked for, not only the newest 20. */
+  whole: z.boolean().optional(),
 });
 /** Threads by id. */
 export type GetThreadsInput = z.infer<typeof GetThreadsInput>;

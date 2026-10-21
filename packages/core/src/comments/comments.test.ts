@@ -155,7 +155,7 @@ describe('comments (AC-1151 to AC-1158)', () => {
     ).toMatchObject({ code: 'ID_TAKEN' });
   });
 
-  it('refuses an empty or oversized comment, an unknown mention and a reply to another record’s thread', async () => {
+  it('refuses an empty, oversized or unstorable comment and a reply to another record’s thread, and keeps an unknown mention as text', async () => {
     const w = await workspace();
     const acme = await w.company('Acme');
     const globex = await w.company('Globex');
@@ -167,8 +167,13 @@ describe('comments (AC-1151 to AC-1158)', () => {
       await refusalOf(createComment(w.scope, { id: newId(), recordId: acme, body: 'x'.repeat(10_001) })),
     ).toMatchObject({ code: 'INPUT_INVALID', field: 'body' });
     expect(
-      await refusalOf(createComment(w.scope, { id: newId(), recordId: acme, body: `Hi ${mentionToken(newId())}` })),
+      await refusalOf(createComment(w.scope, { id: newId(), recordId: acme, body: 'Nul \u0000 here' })),
     ).toMatchObject({ code: 'INPUT_INVALID', field: 'body' });
+    // A token naming nobody in the workspace stays in the text and notifies no one.
+    const stranger = mentionToken(newId());
+    const kept = await createComment(w.scope, { id: newId(), recordId: acme, body: `Hi ${stranger}` });
+    expect(kept.comments[0]?.body).toBe(`Hi ${stranger}`);
+    expect(await w.notifications()).toEqual([]);
     const first = newId();
     await createComment(w.scope, { id: first, recordId: acme, body: 'On Acme' });
     expect(
@@ -261,6 +266,55 @@ describe('comments (AC-1151 to AC-1158)', () => {
     expect(
       await refusalOf(createComment(w.scope, { id: newId(), recordId: acme, threadId: first, body: 'One more' })),
     ).toMatchObject({ code: 'LIMIT_REACHED', message: 'This thread is full. Start a new one.' });
+  });
+});
+
+describe('access to comments (AC-1162, AC-1181)', () => {
+  it('answers every read and write as unknown on a record the reader can’t see, and writes nothing', async () => {
+    const w = await workspace();
+    const acme = await w.company('Acme');
+    const first = newId();
+    await createComment(w.as(w.bea), { id: first, recordId: acme, body: 'Mine' });
+    const before = (await w.outbox('comments')).length;
+    const hidden = w.as(w.bea, w.none);
+    const calls: readonly (readonly [string, () => Promise<unknown>])[] = [
+      ['list', () => listThreads(hidden, { recordId: acme })],
+      ['create', () => createComment(hidden, { id: newId(), recordId: acme, body: 'Hi' }, hooks())],
+      ['reply', () => createComment(hidden, { id: newId(), recordId: acme, threadId: first, body: 'Hi' }, hooks())],
+      ['update', () => updateComment(hidden, { commentId: first, body: 'Changed' }, hooks())],
+      ['delete', () => deleteComment(hidden, { commentId: first }, hooks())],
+      ['resolve', () => setThreadResolved(hidden, { threadId: first, resolved: true }, hooks())],
+      ['react', () => toggleReaction(hidden, { commentId: first, emoji: '👀', on: true }, hooks())],
+      ['versions', () => commentVersions(hidden, { commentId: first })],
+    ];
+    for (const [name, call] of calls) expect(await refusalOf(call()), name).toMatchObject({ code: 'NOT_FOUND' });
+    expect(await getThreads(hidden, { threadIds: [first] })).toEqual([]);
+    // In the trash, the same for everyone, the owner too.
+    await deleteRecord(w.scope, { recordId: acme });
+    expect(await getThreads(w.scope, { threadIds: [first] })).toEqual([]);
+    expect(await refusalOf(listThreads(w.scope, { recordId: acme }))).toMatchObject({ code: 'NOT_FOUND' });
+    expect(await refusalOf(updateComment(w.as(w.bea), { commentId: first, body: 'Now?' }))).toMatchObject({
+      code: 'NOT_FOUND',
+    });
+    expect((await w.outbox('comments')).length).toBe(before);
+  });
+
+  it('carries the newest 20 replies of a busy thread, and the whole thread when asked', async () => {
+    const w = await workspace();
+    const acme = await w.company('Acme');
+    const first = newId();
+    await createComment(w.scope, { id: first, recordId: acme, body: 'Busy' });
+    for (let index = 0; index < 23; index += 1) {
+      await createComment(w.scope, { id: newId(), recordId: acme, threadId: first, body: `Reply ${String(index)}` });
+    }
+    const [windowed] = await getThreads(w.scope, { threadIds: [first] });
+    expect(windowed?.comments).toHaveLength(21);
+    expect(windowed?.comments[0]?.id).toBe(first);
+    expect(windowed?.comments[1]?.body).toBe('Reply 3');
+    expect(windowed?.earlierCount).toBe(3);
+    const [whole] = await getThreads(w.scope, { threadIds: [first], whole: true });
+    expect(whole?.comments).toHaveLength(24);
+    expect(whole?.earlierCount).toBe(0);
   });
 });
 
@@ -360,6 +414,9 @@ describe('the inbox (AC-1169 to AC-1171, AC-1179, AC-1181)', () => {
     expect(await countUnread(bea)).toEqual({ count: 0, atLeast: false });
     await markNotifications(bea, { ids: [latest.id], read: false }, hooks());
     expect(await markAllRead(bea, { status: 'inbox' }, hooks())).toEqual({ changed: 1 });
+    expect(await refusalOf(markNotifications(bea, { ids: [latest.id], read: false, done: true }))).toMatchObject({
+      code: 'INPUT_INVALID',
+    });
     // Ada can't touch Bea's, by id or at all.
     expect(await refusalOf(markNotifications(w.scope, { ids: [latest.id], read: true }))).toMatchObject({
       code: 'NOT_FOUND',

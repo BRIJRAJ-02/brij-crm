@@ -24,7 +24,12 @@ export const commentsRouter = member.comments.router({
       ...(input.cursor === undefined ? {} : { cursor: input.cursor }),
     }),
   ),
-  get: member.comments.get.handler(({ context, input }) => getThreads(context.scope, { threadIds: input.threadIds })),
+  get: member.comments.get.handler(({ context, input }) =>
+    getThreads(context.scope, {
+      threadIds: input.threadIds,
+      ...(input.whole === undefined ? {} : { whole: input.whole }),
+    }),
+  ),
   create: member.comments.create.handler(async ({ context, input }) => {
     try {
       return await commitWrite(context, { mutationId: input.mutationId }, (hooks) =>

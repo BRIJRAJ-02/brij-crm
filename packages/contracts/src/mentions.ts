@@ -17,7 +17,7 @@ export const THREAD_COMMENTS_MAX = 500;
 export const THREAD_PAGE = 20;
 
 /** The most threads `comments.get` reads at once. */
-export const THREAD_GET_MAX = 50;
+export const THREAD_GET_MAX = 20;
 
 /** The reactions a comment may carry (decision 6), in the menu's order. */
 export const COMMENT_EMOJI = ['👍', '❤️', '🎉', '😄', '👀', '✅'] as const;
