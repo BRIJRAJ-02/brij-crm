@@ -36,6 +36,15 @@ describe('the notifications email', () => {
     expect(email.subject).toBe('1 new notification in Acme');
   });
 
+  it('names the daily digest in its subject and heading', async () => {
+    const email = await renderNotificationsEmail(
+      { ...PARAMS, digest: true },
+      { appOrigin: ORIGIN, workspaceName: 'Acme' },
+    );
+    expect(email.subject).toBe('Your daily digest: 3 new notifications in Acme');
+    expect(email.text).toContain('Your daily digest');
+  });
+
   it('refuses a link off the app', async () => {
     const context = { appOrigin: ORIGIN, workspaceName: 'Acme' };
     await expect(renderNotificationsEmail({ ...PARAMS, inboxPath: '//evil.example/x' }, context)).rejects.toThrow();

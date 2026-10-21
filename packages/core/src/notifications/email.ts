@@ -14,7 +14,7 @@ import { inWorkspace } from '../access/run.ts';
 import { uuidList } from '../engine/ids.ts';
 import { isRefusal } from '../engine/refusals.ts';
 import type { EngineScope } from '../engine/scope.ts';
-import { unemailedNotifications } from './inbox.ts';
+import { claimDigest, unemailedNotifications } from './inbox.ts';
 
 /** The name a mention or an actor no longer a member reads as. */
 const FORMER_MEMBER = 'Former member';
@@ -51,11 +51,12 @@ function named(text: string, nameOf: (memberId: string) => string): string {
 /**
  * The notifications email for one member of one workspace, read as that
  * member now (AC-1177): `removed` for a member no longer active (never
- * emailed), `nothing` when no notification is due.
+ * emailed), `nothing` when no notification is due. `digest` makes it the
+ * daily digest (AC-1178): every kind, once a day.
  */
 export async function prepareNotificationEmail(
   deps: ActorDoorDeps,
-  input: { readonly workspaceId: string; readonly memberId: string },
+  input: { readonly workspaceId: string; readonly memberId: string; readonly digest?: boolean },
 ): Promise<PreparedNotificationEmail> {
   let scope: EngineScope;
   try {
@@ -67,7 +68,9 @@ export async function prepareNotificationEmail(
     if (isRefusal(error) && error.refusal.code === 'NOT_FOUND') return { skipped: 'removed' };
     throw error;
   }
-  const batch = await unemailedNotifications(scope);
+  // The daily digest (AC-1178): one a day, the day claimed before anything is read or sent.
+  if (input.digest === true && !(await claimDigest(scope))) return { skipped: 'nothing' };
+  const batch = await unemailedNotifications(scope, { digest: input.digest === true });
   if (batch.items.length === 0) return { skipped: 'nothing' };
   const memberIds = new Set<string>([input.memberId]);
   for (const view of batch.items) {
@@ -131,6 +134,7 @@ export async function prepareNotificationEmail(
       more: batch.more,
       inboxPath: `${base}/inbox`,
       settingsPath: `${base}/settings/account/notifications`,
+      ...(input.digest === true ? { digest: true } : {}),
     },
     ids: sent,
     hasMore: batch.more > 0,

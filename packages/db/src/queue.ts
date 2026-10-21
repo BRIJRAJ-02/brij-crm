@@ -15,6 +15,12 @@ import { pruneOutbox } from './outbox.ts';
 export const QUEUE_SCHEMA = 'graphile_worker';
 
 /** The queue's pool and what the worker asks of it. */
+/** A member due a daily digest: their workspace and member ids. */
+export interface DigestMember {
+  readonly workspaceId: string;
+  readonly memberId: string;
+}
+
 export interface QueueConnection {
   /** The pool Graphile's runners share (LISTEN included): at most `max` connections. */
   readonly pool: pg.Pool;
@@ -43,6 +49,12 @@ export interface QueueConnection {
   deleteDead(): Promise<number>;
   /** The ids of workspaces not deleted, after `after`, in id order, at most `max` (1 to 500): `crm_workspace_ids`. */
   workspaceIds(after: string | undefined, max: number): Promise<readonly string[]>;
+  /**
+   * Members due a daily digest now (spec 0038, AC-1178), ids only, in
+   * (workspace, member) order after `after`, at most `max` (1 to 500):
+   * `crm_notification_digests_due`.
+   */
+  digestsDue(after: DigestMember | undefined, max: number): Promise<readonly DigestMember[]>;
   /** One outbox prune batch (`pruneOutbox`, spec 0007) on this connection: only crm_worker may run it. */
   pruneOutbox(): Promise<number>;
   /**
@@ -174,6 +186,13 @@ export function openQueueConnection(options: {
         max,
       ]);
       return result.rows.map((row) => row.id);
+    },
+    async digestsDue(after, max) {
+      const result = await pool.query<{ workspace_id: string; member_id: string }>(
+        'select workspace_id, member_id from public.crm_notification_digests_due($1, $2, $3)',
+        [after?.workspaceId ?? null, after?.memberId ?? null, max],
+      );
+      return result.rows.map((row) => ({ workspaceId: row.workspace_id, memberId: row.member_id }));
     },
     pruneOutbox: () => pruneOutbox(pool),
     async sleepCheck({ outbox, stuck = [], tasks }) {

@@ -20,16 +20,19 @@ export const notifications: Template<NotificationsEmail> = (params, context) => 
     value: item.excerpt === '' ? 'Open it' : clip(item.excerpt, 200),
     url: context.link(item.path),
   }));
+  const isDigest = params.digest === true;
   return {
-    subject: `${countOf(total)} in ${workspace}`,
+    subject: isDigest ? `Your daily digest: ${countOf(total)} in ${workspace}` : `${countOf(total)} in ${workspace}`,
     preheader: first === undefined ? countOf(total) : first.sentence,
     eyebrow: workspace,
-    heading: `${countOf(total)} for you`,
+    heading: isDigest ? 'Your daily digest' : `${countOf(total)} for you`,
     blocks: [
       { type: 'rows', layout: 'stacked', rows },
       ...(params.more > 0 ? [{ type: 'note' as const, text: `And ${String(params.more)} more in your inbox.` }] : []),
       { type: 'button', label: 'Open your inbox', url: context.link(params.inboxPath) },
     ],
-    why: `You got this email because you get email for these notifications in ${workspace}.`,
+    why: isDigest
+      ? `You got this email because you turned on the daily digest in ${workspace}.`
+      : `You got this email because you get email for these notifications in ${workspace}.`,
   };
 };

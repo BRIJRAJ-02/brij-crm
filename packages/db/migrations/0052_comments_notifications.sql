@@ -251,3 +251,53 @@ alter function crm_enqueue_notification_email(uuid) owner to crm_queue;
 revoke create on schema public from crm_queue;
 --> statement-breakpoint
 revoke crm_queue from current_user;
+--> statement-breakpoint
+-- The daily digest (spec 0038, milestone 4, AC-1178): crm_notification_digests_due(after_workspace, after_member, max)
+-- names, ids only, the active members of live workspaces whose digest is on and whose own day has reached 08:00 in
+-- their time zone without a digest yet (digest_sent_on before that day), in (workspace, member) order after the pair
+-- given. It reaches across every workspace, so it is the worker's alone (crm_worker), owned by crm_sweep like
+-- crm_workspace_ids, which gets select on just the columns it reads. The worker's hourly task queues one email a
+-- member from it; the email claims the day (digest_sent_on) before it goes, so a member gets one digest a day.
+grant select (workspace_id, member_id, digest, time_zone, digest_sent_on) on notification_settings to crm_sweep;
+--> statement-breakpoint
+grant select (workspace_id, id, status) on members to crm_sweep;
+--> statement-breakpoint
+create function crm_notification_digests_due(after_workspace uuid, after_member uuid, max integer)
+  returns table (workspace_id uuid, member_id uuid)
+  language sql
+  stable
+  security definer
+  set search_path = pg_catalog, pg_temp
+  rows 500
+begin atomic
+  select s.workspace_id, s.member_id
+  from public.notification_settings s
+  join public.members m on m.workspace_id = s.workspace_id and m.id = s.member_id
+  join public.workspaces w on w.id = s.workspace_id
+  where s.digest
+    and s.time_zone is not null
+    and m.status = 'active'
+    and w.deleted_at is null
+    and pg_catalog.date_part('hour', pg_catalog.timezone(s.time_zone, pg_catalog.now())) >= 8
+    and (s.digest_sent_on is null or s.digest_sent_on < pg_catalog.timezone(s.time_zone, pg_catalog.now())::date)
+    and (s.workspace_id, s.member_id) > (
+      coalesce(crm_notification_digests_due.after_workspace, '00000000-0000-0000-0000-000000000000'::uuid),
+      coalesce(crm_notification_digests_due.after_member, '00000000-0000-0000-0000-000000000000'::uuid)
+    )
+  order by s.workspace_id, s.member_id
+  limit least(greatest(crm_notification_digests_due.max, 1), 500);
+end;
+--> statement-breakpoint
+revoke all on function crm_notification_digests_due(uuid, uuid, integer) from public;
+--> statement-breakpoint
+grant execute on function crm_notification_digests_due(uuid, uuid, integer) to crm_worker;
+--> statement-breakpoint
+grant crm_sweep to current_user with inherit false, set true;
+--> statement-breakpoint
+grant create on schema public to crm_sweep;
+--> statement-breakpoint
+alter function crm_notification_digests_due(uuid, uuid, integer) owner to crm_sweep;
+--> statement-breakpoint
+revoke create on schema public from crm_sweep;
+--> statement-breakpoint
+revoke crm_sweep from current_user;

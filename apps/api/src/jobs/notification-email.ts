@@ -26,6 +26,8 @@ export const NOTIFICATION_EMAIL_TASK = 'crm_notification_email';
 export const NotificationEmailPayload = z.strictObject({
   workspaceId: z.uuid(),
   memberId: z.uuid(),
+  /** The daily digest (AC-1178), queued by the hourly `crm_notification_digest`: every kind, once a day. */
+  digest: z.literal(true).optional(),
 });
 export type NotificationEmailPayload = z.infer<typeof NotificationEmailPayload>;
 
@@ -49,13 +51,14 @@ export async function runNotificationEmail(deps: NotificationEmailTaskDeps, payl
     return;
   }
   const { workspaceId, memberId } = parsed.data;
+  const digest = parsed.data.digest === true;
   if (deps.mailer === undefined || deps.appOrigin === undefined) {
     deps.log.info('notification.email.skipped', { workspaceId, memberId, reason: 'mail is off' });
     return;
   }
-  const prepared = await prepareNotificationEmail(deps.door, { workspaceId, memberId });
+  const prepared = await prepareNotificationEmail(deps.door, { workspaceId, memberId, digest });
   if (prepared.skipped !== undefined) {
-    deps.log.info('notification.email.skipped', { workspaceId, memberId, reason: prepared.skipped });
+    deps.log.info('notification.email.skipped', { workspaceId, memberId, digest, reason: prepared.skipped });
     return;
   }
   const email = await renderNotificationsEmail(prepared.params, {
@@ -72,11 +75,11 @@ export async function runNotificationEmail(deps: NotificationEmailTaskDeps, payl
       (error: unknown) => (error instanceof Error ? error.name : 'unknown'),
     );
   if (failure !== undefined) {
-    await releaseEmailed(prepared.scope, prepared.ids);
+    await releaseEmailed(prepared.scope, prepared.ids, { digest });
     deps.log.warn('notification.email.failed', { workspaceId, memberId, error: failure });
     throw new Error('A notifications email failed to send; the worker log has its member id.');
   }
   // At most 20 a time: the rest go in the next email, queued now (one waiting email per member, keyed).
   if (prepared.hasMore) await queueNextEmail(prepared.scope);
-  deps.log.info('notification.email.sent', { workspaceId, memberId, notifications: prepared.ids.length });
+  deps.log.info('notification.email.sent', { workspaceId, memberId, digest, notifications: prepared.ids.length });
 }

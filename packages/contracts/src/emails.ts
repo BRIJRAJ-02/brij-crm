@@ -339,6 +339,8 @@ export const NotificationsEmail = z.strictObject({
   inboxPath: AppPath,
   /** Settings › Account › Notifications, the footer's preferences link. */
   settingsPath: AppPath,
+  /** The daily digest (AC-1178): named so in its subject and heading. */
+  digest: z.boolean().optional(),
 });
 /** The notifications email's params. */
 export type NotificationsEmail = z.infer<typeof NotificationsEmail>;

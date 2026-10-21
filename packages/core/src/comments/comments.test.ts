@@ -619,4 +619,19 @@ describe('the notifications email (AC-1176, AC-1177)', () => {
     expect(next.hasMore).toBe(false);
     expect(next.ids.some((id) => first.ids.includes(id))).toBe(false);
   });
+
+  it('sends the daily digest once a day, of every kind still unread (AC-1178)', async () => {
+    const w = await workspace();
+    const acme = await w.company('Acme');
+    // Bea writes in a thread, Ada replies: a reply, whose email is off by default, still goes in the digest.
+    const thread = await createComment(w.as(w.bea), { id: newId(), recordId: acme, body: 'First' }, hooks());
+    await createComment(w.scope, { id: newId(), recordId: acme, body: 'Thanks', threadId: thread.id }, hooks());
+    await setNotificationSettings(w.as(w.bea), { digest: true, timeZone: 'UTC' }, hooks());
+    const door = { db, rules: NO_RULE_SOURCE };
+    const input = { workspaceId: w.scope.workspaceId, memberId: w.bea, digest: true };
+    const digest = await prepareNotificationEmail(door, input);
+    if (digest.skipped !== undefined) throw new Error(`Skipped: ${digest.skipped}`);
+    expect(digest.params.items.map((item) => item.sentence)).toEqual(['Ada replied in a thread']);
+    expect((await prepareNotificationEmail(door, input)).skipped).toBe('nothing');
+  });
 });

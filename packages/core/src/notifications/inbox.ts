@@ -492,21 +492,28 @@ export interface NotificationEmailBatch {
 
 /**
  * The caller's notifications an email may carry now (AC-1176, AC-1177): unread,
- * not done, not yet emailed, of a kind whose email the caller has on, and that
+ * not done, not yet emailed, of a kind whose email the caller has on (every
+ * kind for the daily digest, AC-1178), and that
  * they may see at this moment (the inbox's own rule, read as them). At most
  * `NOTIFICATION_EMAIL_MAX`, newest first; `more` counts the rest.
  */
-export async function unemailedNotifications(scope: EngineScope): Promise<NotificationEmailBatch> {
+export async function unemailedNotifications(
+  scope: EngineScope,
+  options: { readonly digest?: boolean } = {},
+): Promise<NotificationEmailBatch> {
   checkScope(scope);
   const me = callerOf(scope);
   if (me === undefined) return { items: [], more: 0 };
   return inWorkspace(scope, async (tx) => {
     const settings = settingsOf(await settingsRow(tx, me));
-    const kinds: NotificationKind[] = [
-      ...(settings.emailMentions ? (['mention'] as const) : []),
-      ...(settings.emailReplies ? (['reply'] as const) : []),
-      ...(settings.emailAssignments ? (['task_assigned'] as const) : []),
-    ];
+    // The digest holds every kind still unread (AC-1178); an email after a notification, the kinds switched on.
+    const kinds: NotificationKind[] = options.digest
+      ? ['mention', 'reply', 'task_assigned']
+      : [
+          ...(settings.emailMentions ? (['mention'] as const) : []),
+          ...(settings.emailReplies ? (['reply'] as const) : []),
+          ...(settings.emailAssignments ? (['task_assigned'] as const) : []),
+        ];
     if (kinds.length === 0) return { items: [], more: 0 };
     const rows = await tx.execute<NotificationRow>(sql`
       select ${NOTIFICATION_COLUMNS}, ${micros('n.created_at')} as at
@@ -538,16 +545,28 @@ export async function markEmailed(scope: EngineScope, ids: readonly string[]): P
   });
 }
 
-/** Gives back notifications claimed for an email that failed to send, for the task's retry to carry. */
-export async function releaseEmailed(scope: EngineScope, ids: readonly string[]): Promise<void> {
+/**
+ * Gives back notifications claimed for an email that failed to send, and the
+ * day's digest when it was one, for the task's retry to carry.
+ */
+export async function releaseEmailed(
+  scope: EngineScope,
+  ids: readonly string[],
+  options: { readonly digest?: boolean } = {},
+): Promise<void> {
   checkScope(scope);
   const me = callerOf(scope);
-  if (me === undefined || ids.length === 0) return;
+  if (me === undefined) return;
   await inWorkspace(scope, async (tx) => {
-    await tx.execute(sql`
-      update notifications set emailed_at = null
-      where member_id = ${me}::uuid and id = any(${uuidList(ids)})
-    `);
+    if (ids.length > 0) {
+      await tx.execute(sql`
+        update notifications set emailed_at = null
+        where member_id = ${me}::uuid and id = any(${uuidList(ids)})
+      `);
+    }
+    if (options.digest === true) {
+      await tx.execute(sql`update notification_settings set digest_sent_on = null where member_id = ${me}::uuid`);
+    }
   });
 }
 
@@ -563,5 +582,25 @@ export async function queueNextEmail(scope: EngineScope): Promise<void> {
   if (me === undefined) return;
   await inWorkspace(scope, async (tx) => {
     await tx.execute(sql`select crm_enqueue_notification_email(${me}::uuid)`);
+  });
+}
+
+/**
+ * Claims today's daily digest for the caller (AC-1178): their digest is on and
+ * their own day (in the time zone they turned it on in) has none yet, so the
+ * day is marked now, before the email goes, and a second run that day gets
+ * false. Answers whether this run may send it.
+ */
+export async function claimDigest(scope: EngineScope): Promise<boolean> {
+  checkScope(scope);
+  const me = callerOf(scope);
+  if (me === undefined) return false;
+  return inWorkspace(scope, async (tx) => {
+    const claimed = await tx.execute(sql`
+      update notification_settings set digest_sent_on = (now() at time zone time_zone)::date
+      where member_id = ${me}::uuid and digest and time_zone is not null
+        and (digest_sent_on is null or digest_sent_on < (now() at time zone time_zone)::date)
+    `);
+    return (claimed.rowCount ?? 0) > 0;
   });
 }

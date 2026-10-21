@@ -131,7 +131,7 @@ describe('every tenant table', () => {
 });
 
 describe('the holes in row level security (crm_search_text, spec 0004 AC-24; the outbox relay, spec 0005; the daily cleanup, spec 0008)', () => {
-  it('has exactly thirteen security definer functions, each owned by its own narrow role', async () => {
+  it('has exactly fourteen security definer functions, each owned by its own narrow role', async () => {
     const definers = await owner.query<{ name: string; owner: string }>(`
       select p.proname as name, pg_get_userbyid(p.proowner) as owner
       from pg_proc p join pg_namespace n on n.oid = p.pronamespace
@@ -150,6 +150,7 @@ describe('the holes in row level security (crm_search_text, spec 0004 AC-24; the
       { name: 'crm_form_by_key', owner: 'crm_form_lookup' },
       { name: 'crm_invitation_by_token', owner: 'crm_invitation_lookup' },
       { name: 'crm_invitation_open_for', owner: 'crm_invitation_lookup' },
+      { name: 'crm_notification_digests_due', owner: 'crm_sweep' },
       { name: 'crm_outbox_prune', owner: 'crm_relay' },
       { name: 'crm_outbox_workspaces', owner: 'crm_relay' },
       { name: 'crm_search_text', owner: 'crm_search' },
@@ -174,6 +175,7 @@ describe('the holes in row level security (crm_search_text, spec 0004 AC-24; the
       { name: 'crm_form_by_key', config: ['search_path=pg_catalog, pg_temp'], atomic: true },
       { name: 'crm_invitation_by_token', config: ['search_path=pg_catalog, pg_temp'], atomic: true },
       { name: 'crm_invitation_open_for', config: ['search_path=pg_catalog, pg_temp'], atomic: true },
+      { name: 'crm_notification_digests_due', config: ['search_path=pg_catalog, pg_temp'], atomic: true },
       { name: 'crm_outbox_prune', config: ['search_path=pg_catalog, pg_temp', 'lock_timeout=1s'], atomic: true },
       { name: 'crm_outbox_workspaces', config: ['search_path=pg_catalog, pg_temp'], atomic: true },
       { name: 'crm_search_text', config: ['search_path=pg_catalog, pg_temp'], atomic: true },
@@ -229,7 +231,12 @@ describe('the holes in row level security (crm_search_text, spec 0004 AC-24; the
       ],
       ['app', 'app', 'app', 'app', 'app'],
     ],
-    ['crm_sweep', ['crm_workspace_ids'], ['crm_workspace_ids(uuid, integer)'], ['worker']],
+    [
+      'crm_sweep',
+      ['crm_workspace_ids', 'crm_notification_digests_due'],
+      ['crm_workspace_ids(uuid, integer)', 'crm_notification_digests_due(uuid, uuid, integer)'],
+      ['worker', 'worker'],
+    ],
     ['crm_form_lookup', ['crm_form_by_key'], ['crm_form_by_key(text)'], ['app']],
     [
       'crm_invitation_lookup',
@@ -591,7 +598,7 @@ describe('the holes in row level security (crm_search_text, spec 0004 AC-24; the
   });
 
   describe('crm_workspace_ids (spec 0008, milestone 3, AC-112, AC-115)', () => {
-    it('gives crm_sweep select on workspaces.id and workspaces.deleted_at and nothing else', async () => {
+    it('gives crm_sweep select on workspaces.id and deleted_at, and the digest’s columns, and nothing else', async () => {
       // From the catalog, by every route, as for crm_relay: no table privilege, two column grants, no role.
       const tables = await owner.query<{ table: string }>(`
         select n.nspname || '.' || c.relname as table
@@ -608,6 +615,14 @@ describe('the holes in row level security (crm_search_text, spec 0004 AC-24; the
         where a.grantee = 'crm_sweep'::regrole order by 1
       `);
       expect(columns.rows).toEqual([
+        { column: 'members.id', privilege: 'SELECT' },
+        { column: 'members.status', privilege: 'SELECT' },
+        { column: 'members.workspace_id', privilege: 'SELECT' },
+        { column: 'notification_settings.digest', privilege: 'SELECT' },
+        { column: 'notification_settings.digest_sent_on', privilege: 'SELECT' },
+        { column: 'notification_settings.member_id', privilege: 'SELECT' },
+        { column: 'notification_settings.time_zone', privilege: 'SELECT' },
+        { column: 'notification_settings.workspace_id', privilege: 'SELECT' },
         { column: 'workspaces.deleted_at', privilege: 'SELECT' },
         { column: 'workspaces.id', privilege: 'SELECT' },
       ]);
