@@ -14,6 +14,12 @@ export const strings = {
   type: 'Type',
   /** Under the type once it exists (#14 removes it when types can change). */
   typeLater: 'Changing the type comes later.',
+  /** Under the type while creating, for the types whose name alone doesn't say what they hold. */
+  typeHints: {
+    status: 'Stages a record moves through, like a deal’s pipeline. Each record is at one stage.',
+    actor_reference: 'Someone in this workspace, like a record’s owner.',
+    domain: 'A website without its path, like acme.com.',
+  } as Partial<Record<string, string>>,
   /** The picker's own labels where they differ from the type's (AC-228). */
   multiSelect: 'Multi select',
   link: 'Link',
