@@ -108,8 +108,10 @@ export const strings = {
   handOnAction: (count: number) => (count === 1 ? 'Reassign 1 upcoming' : `Reassign ${String(count)} upcoming`),
   handOnTitle: (name: string, count: number) =>
     count === 1 ? `Reassign ${name}’s upcoming booking?` : `Reassign ${name}’s ${String(count)} upcoming bookings?`,
-  handOnText: (rotation: string) =>
-    `Each goes to the next free member of ${rotation}, who is emailed with the guest. Any nobody can take stays where it is.`,
+  handOnText: (rotation: string, count: number) =>
+    count === 1
+      ? `It goes to the next free member of ${rotation}, who is emailed with the guest. If nobody is free then, it stays where it is.`
+      : `Each goes to the next free member of ${rotation}, who is emailed with the guest. Any nobody can take stays where it is.`,
   handOnConfirm: (count: number) => (count === 1 ? 'Reassign it' : `Reassign ${String(count)}`),
   keepThem: 'Keep them',
   handedOn: (moved: number, kept: number) =>

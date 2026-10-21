@@ -311,7 +311,7 @@ export function RotationsScreen({ data, slug, people, canManage }: RotationsScre
           </>
         }
       >
-        {strings.handOnText(handing?.rotation.name ?? '')}
+        {strings.handOnText(handing?.rotation.name ?? '', handing?.count ?? 0)}
       </Modal>
       <Modal
         title={strings.deleteTitle(deleting?.name ?? '')}
