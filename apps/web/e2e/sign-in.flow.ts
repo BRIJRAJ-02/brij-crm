@@ -154,13 +154,15 @@ test('signs in by code, names the workspace, lands on People, signs out, and com
   await expect(page).toHaveTitle('Sign in or sign up · Timefix');
   // A one field page puts focus in its field on the first load too.
   await expect(page.getByLabel('Email')).toBeFocused();
-  // One narrow card (spec 0036): at most 400 px, and 16 px from each edge on a phone.
+  // One narrow column for the form (spec 0036): at most 400 px, and 16 px from each edge on a phone. On a wide
+  // screen the split card puts the sketch beside it, so the field's column is measured, not the whole card.
   const card = page.getByRole('main');
   const signInBox = await card.boundingBox();
-  const viewport = page.viewportSize();
-  expect(signInBox !== null && viewport !== null).toBe(true);
-  if (signInBox !== null && viewport !== null) {
-    expect(signInBox.width).toBeLessThanOrEqual(400);
+  const fieldBox = await page.getByLabel('Email').boundingBox();
+  expect(signInBox !== null && fieldBox !== null).toBe(true);
+  if (signInBox !== null && fieldBox !== null) {
+    expect(fieldBox.width).toBeLessThanOrEqual(400);
+    expect(fieldBox.x).toBeGreaterThanOrEqual(16);
     expect(signInBox.x).toBeGreaterThanOrEqual(16);
   }
   await checkScreen(page, '1-sign-in');
@@ -314,8 +316,21 @@ test('says each refusal on its field and drops it as the field changes, so one p
   await page.getByRole('button', { name: 'Continue', exact: true }).click();
   await skipDetailsStep(page);
 
-  // Your workspace: the address someone holds is said to be taken as it is typed, on its field, and Create waits.
+  // Your workspace. A check that can't answer (offline) says nothing, and Create still has the last word: taken,
+  // on the field, in the server's words. This runs first: an answer the check once gave is kept for the visit, so
+  // an address already found taken never reaches the server.
   const address = page.getByLabel('Web address');
+  await page.route('**/api/rpc/workspaces/slugAvailable', (route) => route.abort('connectionrefused'));
+  await address.fill(taken);
+  await expect(page.getByText('Not checked. Create will check it.')).toBeVisible();
+  await expect(page.getByText('Available', { exact: true })).toBeHidden();
+  await page.getByRole('button', { name: 'Create workspace' }).click();
+  await expect(address).toHaveAttribute('aria-invalid', 'true');
+  await expect(page.getByText('That workspace address is taken. Pick another.')).toBeVisible();
+  await page.unroute('**/api/rpc/workspaces/slugAvailable');
+
+  // Back online, the address someone holds is said to be taken as it is typed, on its field, and Create waits.
+  await address.fill('');
   await address.fill(taken);
   await expect(address).toHaveAttribute('aria-invalid', 'true');
   await expect(page.getByText('Taken', { exact: true })).toBeVisible();
@@ -329,16 +344,9 @@ test('says each refusal on its field and drops it as the field changes, so one p
   await expect(address).not.toHaveAttribute('aria-invalid');
   await expect(page.getByText('Available', { exact: true })).toBeVisible();
 
-  // A check that can't answer (offline) says nothing, and Create still has the last word: taken, on the field.
-  await page.route('**/api/rpc/workspaces/slugAvailable', (route) => route.abort('connectionrefused'));
+  // Taken again from the kept answer, then fixed again: one press of Create sends it.
   await address.fill(taken);
-  await expect(page.getByText('Available', { exact: true })).toBeHidden();
-  await page.getByRole('button', { name: 'Create workspace' }).click();
   await expect(address).toHaveAttribute('aria-invalid', 'true');
-  await expect(page.getByText('That workspace address is taken. Pick another.')).toBeVisible();
-  await page.unroute('**/api/rpc/workspaces/slugAvailable');
-
-  // Fixed again: one press of Create sends it.
   await address.fill(`${taken}-two`);
   await expect(address).not.toHaveAttribute('aria-invalid');
   await expect(page.getByText('Available', { exact: true })).toBeVisible();
