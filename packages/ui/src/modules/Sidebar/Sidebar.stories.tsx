@@ -20,7 +20,10 @@ interface SampleSidebarProps {
   readonly isWorkspaceLoading?: boolean;
 }
 
-/** The sidebar as the app draws it: the fixed destinations, then Favorites, Records and Lists, then Bookings, Captures and the trash in a group of their own. */
+/**
+ * The sidebar as the app draws it: the fixed destinations, then Favorites, Records and Lists, then Bookings and
+ * Captures in a group of their own, and the trash, Settings and Help at the foot (owner, 22 October 2026).
+ */
 function SampleSidebar({
   isCollapsed = false,
   isWorkspaceBusy = false,
@@ -30,7 +33,6 @@ function SampleSidebar({
   isWorkspaceLoading = false,
 }: SampleSidebarProps) {
   const [collapsed, setCollapsed] = useState(isCollapsed);
-  const [theme] = useState(fakeThemeController);
   return (
     <Stage height="page">
       <Sidebar
@@ -39,22 +41,36 @@ function SampleSidebar({
         isWorkspaceBusy={isWorkspaceBusy}
         workspaceBusyLabel="Signing out"
         workspaceMenu={
-          <Menu label="Workspaces">
-            <MenuItem id="brightline">Brightline</MenuItem>
+          <Menu label="Workspace menu">
+            {/* The role sits with the open workspace's name, not as a heading over the shortcuts. */}
+            <MenuItem id="brightline" isChecked description="Owner">
+              Brightline
+            </MenuItem>
             <MenuItem id="northwind">Northwind</MenuItem>
+            <MenuItem id="shortcuts" icon="keyboard" kbd="?">
+              Keyboard shortcuts
+            </MenuItem>
+            <MenuItem id="sign-out" icon="log-out">
+              Sign out
+            </MenuItem>
           </Menu>
         }
         onQuickActions={onQuickActions ?? (() => undefined)}
         isCollapsed={collapsed}
         onCollapsedChange={setCollapsed}
-        footer={({ isCollapsed: isRail }) => (
+        footer={
           <>
-            <NavItem icon="user-plus" onPress={() => undefined}>
-              Invite teammates
+            <NavItem icon="trash" href="/trash">
+              Trash
             </NavItem>
-            <ThemeSwitch controller={theme} isCompact={isRail} orientation={isRail ? 'vertical' : 'horizontal'} />
+            <NavItem icon="settings" href="/settings" kbd="⌘,">
+              Settings
+            </NavItem>
+            <NavItem icon="circle-question-mark" onPress={() => undefined} kbd="?">
+              Help and shortcuts
+            </NavItem>
           </>
-        )}
+        }
       >
         <NavItem icon="bell" href="/notifications">
           Notifications
@@ -94,9 +110,6 @@ function SampleSidebar({
           </NavItem>
           <NavItem icon="link" href="/captures">
             Captures
-          </NavItem>
-          <NavItem icon="trash" href="/trash">
-            Trash
           </NavItem>
         </NavGroup>
       </Sidebar>
@@ -146,17 +159,40 @@ export const Keyboard: Story = {
 };
 
 /**
- * Collapsed: a rail of icons, each named in a tooltip, with the expand button
- * at the bottom. The footer is told the sidebar is folded, so the theme
- * switch stacks and stays inside the rail.
+ * Collapsed (owner, 22 October 2026): a calm rail. Every item a plain icon in a 32px square (object tiles are the
+ * open sidebar's), Expand at the top where Collapse sits when open, then Quick actions with its shortcut in the
+ * tooltip rather than a keycap, a hairline only where the open sidebar has a section label, the current item
+ * highlighted as when open, and the foot's trash, Settings and Help alike. Every icon is named in a tooltip.
  */
 export const Collapsed: Story = {
   args: { isCollapsed: true },
   play: async ({ canvas, userEvent }) => {
     const nav = canvas.getByRole('navigation', { name: 'Main navigation' });
-    const theme = canvas.getByRole('radiogroup', { name: 'Theme' });
-    await expect(theme).toHaveAttribute('aria-orientation', 'vertical');
-    await expect(theme.getBoundingClientRect().right).toBeLessThanOrEqual(nav.getBoundingClientRect().right);
+    // No keycap squeezed into the rail, and no hue tile beside the plain icons.
+    await expect(nav.querySelector('kbd')).toBeNull();
+    await expect(nav.querySelector('[data-hue]')).toBeNull();
+    // Expand comes first after the workspace, then Quick actions, at the top.
+    const controls = [...nav.querySelectorAll('a[href], button')].map((each) => each.textContent.trim());
+    await expect(controls.slice(1, 3)).toEqual(['Expand the sidebar', 'Quick actions']);
+    // Every item on the rail is a 32px square target, the foot's too.
+    for (const name of ['Expand the sidebar', 'Quick actions', 'Help and shortcuts']) {
+      const box = canvas.getByRole('button', { name }).getBoundingClientRect();
+      await expect([Math.round(box.width), Math.round(box.height)]).toEqual([32, 32]);
+    }
+    for (const name of ['Companies', 'People', 'Bookings', 'Trash', 'Settings']) {
+      const box = canvas.getByRole('link', { name }).getBoundingClientRect();
+      await expect([Math.round(box.width), Math.round(box.height)]).toEqual([32, 32]);
+    }
+    await expect(canvas.getByRole('link', { name: 'Companies' })).toHaveAttribute('aria-current', 'page');
+    // The unlabelled Scheduling group keeps its space but draws no rule; Records keeps its hairline.
+    const style = (name: string) => getComputedStyle(canvas.getByRole('group', { name }));
+    await expect(style('Scheduling').borderTopStyle).toBe('none');
+    await expect(style('Records').borderTopStyle).toBe('solid');
+    const search = canvas.getByRole('button', { name: 'Quick actions' });
+    await hoverFresh(userEvent, search);
+    await expect(await shownTooltip()).toHaveTextContent(/^Quick actions (⌘K|Ctrl\+K)$/);
+    await userEvent.unhover(search);
+    await waitFor(() => expect(document.querySelector('[role="tooltip"]')).toBeNull());
     const people = canvas.getByRole('link', { name: 'People' });
     await hoverFresh(userEvent, people);
     await expect(await shownTooltip()).toHaveTextContent('People');
@@ -165,9 +201,67 @@ export const Collapsed: Story = {
   },
 };
 
+/** The workspace's mark on the rail is named in a tooltip, as every rail icon is. */
+export const CollapsedWorkspaceTip: Story = {
+  args: { isCollapsed: true },
+  play: async ({ canvas, userEvent }) => {
+    const mark = canvas.getByRole('button', { name: 'Brightline, workspace menu' });
+    await hoverFresh(userEvent, mark);
+    await expect(await shownTooltip()).toHaveTextContent('Brightline');
+    // The tooltip never stands in the way: pressing the mark still opens the workspace menu, and the tip goes.
+    await userEvent.click(mark);
+    await waitFor(() => expect(document.querySelector('[role="menu"]')).not.toBeNull());
+    await waitFor(() => expect(document.querySelector('[role="tooltip"]')).toBeNull());
+  },
+};
+
+/** The workspace menu: the workspaces with the role under the open one, the shortcuts and Sign out; no trash. */
+export const WorkspaceMenu: Story = {
+  play: async ({ canvas, userEvent }) => {
+    await userEvent.click(canvas.getByRole('button', { name: 'Brightline, workspace menu' }));
+    const menu = await waitFor(() => {
+      const found = document.querySelector('[role="menu"]');
+      if (found === null) throw new Error('the menu did not open');
+      return found;
+    });
+    await expect(menu).toHaveTextContent('Owner');
+    await expect(menu.querySelector('header')).toBeNull();
+    await expect(menu).not.toHaveTextContent('Trash');
+  },
+};
+
+/** A ThemeSwitch in the foot, as the artifact's card has it: on the rail it stacks and stays inside. */
+export const RailThemeSwitch: Story = {
+  render: () => {
+    const theme = fakeThemeController();
+    return (
+      <Stage height="page">
+        <Sidebar
+          workspace="Brightline"
+          isCollapsed
+          onCollapsedChange={() => undefined}
+          footer={({ isCollapsed: isRail }) => (
+            <ThemeSwitch controller={theme} isCompact={isRail} orientation={isRail ? 'vertical' : 'horizontal'} />
+          )}
+        >
+          <NavItem icon="house" href="/home">
+            Home
+          </NavItem>
+        </Sidebar>
+      </Stage>
+    );
+  },
+  play: async ({ canvas }) => {
+    const nav = canvas.getByRole('navigation', { name: 'Main navigation' });
+    const theme = canvas.getByRole('radiogroup', { name: 'Theme' });
+    await expect(theme).toHaveAttribute('aria-orientation', 'vertical');
+    await expect(theme.getBoundingClientRect().right).toBeLessThanOrEqual(nav.getBoundingClientRect().right);
+  },
+};
+
 /**
- * The rail keeps favourites as their objects' tiles (spec 0034, AC-935): a
- * view's tooltip names it with its object, a record's with its name.
+ * The rail keeps favourites (spec 0034, AC-935), as plain icons like every rail item: a view's tooltip names it
+ * with its object, a record's with its name.
  */
 export const RailFavourites: Story = {
   render: () => (

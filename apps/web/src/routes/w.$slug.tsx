@@ -68,7 +68,7 @@ function WorkspaceRoute() {
   const { objects, deleted } = Route.useLoaderData();
   const { slug } = Route.useParams();
   // A form's preview stands outside the app frame, as a visitor sees it (its own main landmark).
-  const isPreview = useMatch({ from: '/w/$slug/forms_/$formId_/preview', shouldThrow: false }) !== undefined;
+  const isPreview = useMatch({ from: '/w/$slug/captures_/forms/$formId_/preview', shouldThrow: false }) !== undefined;
   // The frame is mounted here, once, so moving between the pages inside never remounts the sidebar or a menu or
   // confirm open in it; each page fills its bars (WorkspaceLayout).
   const { data, toasts } = Route.useRouteContext();

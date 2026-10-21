@@ -1,15 +1,14 @@
 // Brief
-// Purpose: Scheduling › Availability (spec 0035, AC-969; a page of its own since spec 0034): the member's schedules, each with its Default badge, its week, its zone and how many booking pages use it.
+// Purpose: Bookings › Availability (spec 0035, AC-969): the member's schedules as full width rows, each with its Default badge by its name, its week, its zone and how many booking pages use it.
 // Main task: open a schedule to edit it, make a new one, or set the default, duplicate or delete one from its menu.
 // Leaves out: editing hours (each schedule's own editor) and a calendar view of a schedule (a follow up).
 import { isDataError, type DataLayer, type ScheduleMember, type ScheduleView } from '@crm/data';
 import { useSchedules } from '@crm/data/react';
-import { Button, LinkList, PageColumn, SectionBar, Select, Tooltip, TopBar, type LinkRow } from '@crm/ui';
+import { Button, LinkList, SectionBar, Select, Tooltip, TopBar, type LinkRow } from '@crm/ui';
 import { useNavigate, useRouteContext } from '@tanstack/react-router';
 import { useState, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import { useBookingsToolbarSlot } from '../bookings/toolbarSlot.ts';
-import { SCHEDULING_HUE } from '../scheduling.ts';
 import { useCan, WorkspacePage } from '../workspace/WorkspacePage.tsx';
 import { DeleteScheduleDialog } from './DeleteScheduleDialog.tsx';
 import { weekSummary, zoneLabel } from './hours.ts';
@@ -34,7 +33,10 @@ export interface AvailabilityScreenProps {
   readonly me: string;
 }
 
-/** A schedule's row: its name, zone, week, use, the Default badge and its menu (none on the virtual default). */
+/**
+ * A schedule's row, one line (the owner, 22 October 2026): its name with Default right after it, its week, then
+ * its zone and its use as plain muted facts, and its menu at the end (none on the virtual default).
+ */
 function rowOf(
   slug: string,
   member: string | undefined,
@@ -47,11 +49,13 @@ function rowOf(
   return {
     id: schedule.id ?? 'default',
     title: schedule.name,
-    address: zoneLabel(schedule.availability.timeZone),
-    description: weekSummary(schedule.availability, locale).join(' · '),
-    chips: [schedule.pages.length === 0 ? scheduleStrings.usedByNone : scheduleStrings.usedBy(schedule.pages.length)],
+    address: weekSummary(schedule.availability, locale).join(' · '),
+    chips: [
+      zoneLabel(schedule.availability.timeZone),
+      schedule.pages.length === 0 ? scheduleStrings.usedByNone : scheduleStrings.usedBy(schedule.pages.length),
+    ],
     ...(isPending ? { badge: scheduleStrings.copying, isPending } : {}),
-    ...(!isPending && schedule.isDefault ? { badge: scheduleStrings.defaultBadge } : {}),
+    ...(!isPending && schedule.isDefault ? { titleBadge: scheduleStrings.defaultBadge } : {}),
     ...(schedule.id === null ? {} : { actions: menu }),
     href: scheduleHref(slug, schedule.id ?? 'default', member),
   };
@@ -137,24 +141,20 @@ export function AvailabilityScreen({ data, slug, locale, member, members, me }: 
   );
   return (
     <WorkspacePage
-      currentPage="availability"
+      currentPage="bookings"
       page={{
-        topBar: (
-          // A page of its own under Scheduling (spec 0034), no longer a Bookings tab: the scheduling tile, no trail.
-          <TopBar title={strings.availability} icon="clock" hue={SCHEDULING_HUE} />
-        ),
+        topBar: <TopBar title={strings.availability} icon="clock" />,
         body: (
           <>
             {slot !== null && createPortal(tools, slot)}
-            <PageColumn {...(slot === null ? { actions: tools } : {})}>
-              <AvailabilityList
-                label={owner === undefined ? scheduleStrings.schedules : scheduleStrings.viewingTheirs(owner)}
-                rows={rows}
-                status={state.status === 'ready' ? 'ready' : state.status}
-                onOpen={(id) => void navigate({ href: scheduleHref(slug, id, member) })}
-                onRetry={() => view.reload()}
-              />
-            </PageColumn>
+            {slot === null && tools}
+            <AvailabilityList
+              label={owner === undefined ? scheduleStrings.schedules : scheduleStrings.viewingTheirs(owner)}
+              rows={rows}
+              status={state.status === 'ready' ? 'ready' : state.status}
+              onOpen={(id) => void navigate({ href: scheduleHref(slug, id, member) })}
+              onRetry={() => view.reload()}
+            />
             {memberId !== undefined && (
               <NewScheduleDialog
                 data={data}
@@ -187,7 +187,10 @@ export function AvailabilityScreen({ data, slug, locale, member, members, me }: 
   );
 }
 
-/** The rows, in every state: loading draws the rows' shape, a failed read says so with Try again. */
+/**
+ * The rows, in every state, as Captures' lists draw theirs: one line each, edge to edge with the page's gutter
+ * inside them; loading draws the rows' shape, a failed read says so with Try again.
+ */
 function AvailabilityList({
   label,
   rows,
@@ -205,6 +208,7 @@ function AvailabilityList({
     <LinkList
       label={label}
       searchLabel={label}
+      density="compact"
       isToolbarHidden
       rows={rows}
       onOpen={onOpen}
@@ -282,21 +286,20 @@ export function AvailabilityPending() {
   );
   return (
     <WorkspacePage
-      currentPage="availability"
+      currentPage="bookings"
       page={{
-        topBar: <TopBar title={strings.availability} icon="clock" hue={SCHEDULING_HUE} isLoading />,
+        topBar: <TopBar title={strings.availability} icon="clock" isLoading />,
         body: (
           <>
             {slot !== null && createPortal(tools, slot)}
-            <PageColumn {...(slot === null ? { actions: tools } : {})}>
-              <AvailabilityList
-                label={scheduleStrings.schedules}
-                rows={[]}
-                status="loading"
-                onOpen={() => undefined}
-                onRetry={() => undefined}
-              />
-            </PageColumn>
+            {slot === null && tools}
+            <AvailabilityList
+              label={scheduleStrings.schedules}
+              rows={[]}
+              status="loading"
+              onOpen={() => undefined}
+              onRetry={() => undefined}
+            />
           </>
         ),
       }}

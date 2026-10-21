@@ -1,9 +1,9 @@
 /** The Bookings page's copy. */
 export const strings = {
   title: 'Bookings',
-  /** The page's tab strip, in the row People's views take: its name, read by screen readers, and each tab. */
+  /** The page's tab strip, as Captures has: its name, read by screen readers, and each tab. */
   pageTabsLabel: 'Bookings',
-  pageTabs: { calendar: 'Calendar', list: 'List' },
+  pageTabs: { calendar: 'Calendar', list: 'List', availability: 'Availability' },
   tabsLabel: 'Which bookings',
   tabs: { upcoming: 'Upcoming', past: 'Past', cancelled: 'Canceled' },
   listLabel: { upcoming: 'Upcoming meetings', past: 'Past meetings', cancelled: 'Canceled meetings' },
@@ -19,8 +19,8 @@ export const strings = {
     past: { title: 'Nothing behind you yet' },
     cancelled: { title: 'Nothing has been called off' },
   },
-  /** The way to the booking pages (Scheduling › Booking pages, spec 0034). */
-  openLinks: 'Go to your booking pages',
+  /** The way to the booking links, under Captures. */
+  openLinks: 'Go to your booking links',
   /** The way to the member's own weekly hours and days off. */
   openAvailability: 'Set your availability',
   failedTitle: 'Bookings didn’t load',
@@ -137,7 +137,7 @@ export const strings = {
   timeBlocked: 'Time blocked.',
   bookSomeoneIn: 'Book someone in',
   newMeeting: 'New meeting',
-  /** The TopBar's New: it reads New, as Booking pages' and Forms' do, and is named New meeting. */
+  /** The TopBar's New: it reads New, as Captures' does, and is named New meeting. */
   newButton: 'New',
   /** Why the TopBar's New is off: a meeting goes on a booking page that is on. */
   turnOnPageFirst: 'Turn on a booking page to book someone in',

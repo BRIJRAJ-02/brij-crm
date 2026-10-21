@@ -26,7 +26,7 @@ import { Button, ButtonLink } from '../../atoms/Button/Button.tsx';
 import { Icon } from '../../atoms/Icon/Icon.tsx';
 import type { IconName } from '../../atoms/Icon/icons.ts';
 import { Kbd } from '../../atoms/Kbd/Kbd.tsx';
-import { keyShortcuts } from '../../atoms/Kbd/shortcuts.ts';
+import { keycapText, keyShortcuts } from '../../atoms/Kbd/shortcuts.ts';
 import { Skeleton } from '../../atoms/Skeleton/Skeleton.tsx';
 import { Spinner } from '../../atoms/Spinner/Spinner.tsx';
 import { Tooltip } from '../../atoms/Tooltip/Tooltip.tsx';
@@ -107,7 +107,7 @@ export type SidebarProps = (WorkspaceHead | HeadingHead) & {
   /** `NavItem`s for the fixed destinations, then `NavSection`s or `NavGroup`s. */
   readonly children: ReactNode;
   /**
-   * Invite, help and Settings, at the bottom. A function gets whether the
+   * the trash, Settings and Help, at the bottom. A function gets whether the
    * sidebar is folded to its rail (by `isCollapsed`, or by the app shell
    * below `bp-page-compact`), so the footer can fit it.
    */
@@ -130,7 +130,7 @@ export type SidebarProps = (WorkspaceHead | HeadingHead) & {
 
 /**
  * The 260px left column, or the 48px rail when collapsed. It is the app's
- * navigation landmark. Items are 28px; the current page takes
+ * navigation landmark. Items are size-nav-item tall; the current page takes
  * `surface-selected`, hover `surface-hover`.
  */
 export function Sidebar(props: SidebarProps) {
@@ -178,24 +178,34 @@ export function Sidebar(props: SidebarProps) {
           )}
           {collapse}
         </div>
-        {onQuickActions !== undefined && (
-          <div className={styles.search}>
-            {isCollapsed ? (
-              <Tooltip content={strings.quickActions} placement="end">
-                <Button
-                  variant="ghost"
-                  icon="search"
-                  label={strings.quickActions}
-                  kbd={strings.quickActionsKey}
-                  onPress={onQuickActions}
-                />
-              </Tooltip>
-            ) : (
+        {isCollapsed && (onQuickActions !== undefined || onCollapsedChange !== undefined) ? (
+          // The rail's top: Expand, under the head where Collapse sits when open, then Quick actions, each a 32px
+          // item like every other on the rail, named with its shortcut in a tooltip (no keycap squeezed in).
+          <div className={styles.railTop}>
+            {onCollapsedChange !== undefined && (
+              <NavItem
+                icon="panel-left-open"
+                onPress={() => {
+                  onCollapsedChange(false);
+                }}
+              >
+                {strings.expand}
+              </NavItem>
+            )}
+            {onQuickActions !== undefined && (
+              <NavItem icon="search" kbd={strings.quickActionsKey} onPress={onQuickActions}>
+                {strings.quickActions}
+              </NavItem>
+            )}
+          </div>
+        ) : (
+          onQuickActions !== undefined && (
+            <div className={styles.search}>
               <Button size="lg" icon="search" isFullWidth kbd={strings.quickActionsKey} onPress={onQuickActions}>
                 {strings.quickActions}
               </Button>
-            )}
-          </div>
+            </div>
+          )
         )}
         <div className={styles.scroll}>
           <div
@@ -212,23 +222,7 @@ export function Sidebar(props: SidebarProps) {
             {children}
           </div>
         </div>
-        {(foot !== undefined || (isCollapsed && onCollapsedChange !== undefined)) && (
-          <div className={styles.foot}>
-            {foot}
-            {isCollapsed && onCollapsedChange !== undefined && (
-              <Tooltip content={strings.expand} placement="end">
-                <Button
-                  variant="ghost"
-                  icon="panel-left-open"
-                  label={strings.expand}
-                  onPress={() => {
-                    onCollapsedChange(false);
-                  }}
-                />
-              </Tooltip>
-            )}
-          </div>
-        )}
+        {foot !== undefined && <div className={styles.foot}>{foot}</div>}
       </nav>
     </SidebarContext>
   );
@@ -273,13 +267,23 @@ function WorkspaceRow({
       </span>
     );
   }
+  const switcher = (
+    <AriaButton className={styles.switcher} aria-label={strings.workspaceMenu(workspace)} isPending={isWorkspaceBusy}>
+      {mark}
+      {name}
+      {!isCollapsed && (isWorkspaceBusy ? spinner : <Icon name="chevron-down" size="sm" tone="muted" />)}
+    </AriaButton>
+  );
   return (
     <MenuTrigger>
-      <AriaButton className={styles.switcher} aria-label={strings.workspaceMenu(workspace)} isPending={isWorkspaceBusy}>
-        {mark}
-        {name}
-        {!isCollapsed && (isWorkspaceBusy ? spinner : <Icon name="chevron-down" size="sm" tone="muted" />)}
-      </AriaButton>
+      {/* On the rail the mark alone shows, so a tooltip names the workspace, as every rail item is named. */}
+      {isCollapsed ? (
+        <Tooltip content={workspace} placement="end">
+          {switcher}
+        </Tooltip>
+      ) : (
+        switcher
+      )}
       {workspaceMenu}
     </MenuTrigger>
   );
@@ -384,13 +388,15 @@ export type NavItemProps = NavItemFace &
     | { readonly onPress: () => void; readonly href?: never; readonly isCurrent?: never }
   );
 
-/** One 28px row in the sidebar: a routed link with `aria-current` on the current page, or a button. */
+/** One size-nav-item row in the sidebar: a routed link with `aria-current` on the current page, or a button. */
 export function NavItem(props: NavItemProps) {
   const { children, icon, hue, leading, meta, badge, kbd } = props;
   const { isCollapsed } = useContext(SidebarContext);
-  // On the rail the meta has no room, so it joins the name and the tooltip ("Booking pages · In Captures").
+  // On the rail the meta has no room, so it joins the name and the tooltip ("Booking pages · In Captures"); the
+  // tooltip names the shortcut too ("Settings ⌘,", "Settings Ctrl ," off a Mac), as the keycap has no room either.
   const railName = meta === undefined ? children : `${children} · ${meta}`;
   const platform = useKeyboardPlatform();
+  const railTip = kbd === undefined ? railName : `${railName} ${keycapText(kbd, platform)}`;
   // The keycap is hidden from the name, so the shortcut is stated as aria-keyshortcuts ("Meta+,", "Control+," off a
   // Mac). React Aria's Link and Button don't pass the attribute through, so it goes on the element through `render`.
   const shortcut = kbd === undefined ? undefined : keyShortcuts([kbd], platform);
@@ -417,7 +423,8 @@ export function NavItem(props: NavItemProps) {
         };
   const face = (
     <>
-      {leading ?? (hue === undefined ? <Icon name={icon} /> : <Icon name={icon} tile={hue} />)}
+      {/* On the rail every item draws its plain icon, one size and one style; the hue tile is the open sidebar's. */}
+      {leading ?? (hue === undefined || isCollapsed ? <Icon name={icon} /> : <Icon name={icon} tile={hue} />)}
       {isCollapsed ? <VisuallyHidden>{railName}</VisuallyHidden> : <span className={styles.label}>{children}</span>}
       {meta !== undefined && !isCollapsed && <span className={styles.meta}>{meta}</span>}
       {badge !== undefined && badge > 0 && (
@@ -449,7 +456,7 @@ export function NavItem(props: NavItemProps) {
     );
   if (isCollapsed) {
     return (
-      <Tooltip content={railName} placement="end">
+      <Tooltip content={railTip} placement="end">
         {item}
       </Tooltip>
     );
@@ -1000,17 +1007,19 @@ export interface NavGroupProps {
 
 /**
  * Destinations set apart as one group. Without a label on screen, fixed
- * destinations after a section (Bookings, Captures and the trash after
- * Records); with `isLabelShown`, a labelled group that never folds (the
+ * destinations after a section (Bookings and Captures after Records); with `isLabelShown`, a labelled group that never folds (the
  * settings navigation's). Open, it takes a section's space above; on the
- * rail, a section's hairline, the label left to its name.
+ * rail, a labelled group a section's hairline (the label left to its name),
+ * an unlabelled one the same space with no rule.
  */
 export function NavGroup({ label, isLabelShown = false, children }: NavGroupProps) {
   const { isCollapsed } = useContext(SidebarContext);
   const labelId = useId();
   if (!isLabelShown || isCollapsed) {
     return (
-      <div role="group" aria-label={label} className={isCollapsed ? styles.rail : styles.group}>
+      // On the rail a labelled group keeps a section's hairline; an unlabelled one (Tasks) only its space, so the
+      // rail draws a rule where the open sidebar draws a label, and nowhere else.
+      <div role="group" aria-label={label} className={isCollapsed && isLabelShown ? styles.rail : styles.group}>
         {children}
       </div>
     );

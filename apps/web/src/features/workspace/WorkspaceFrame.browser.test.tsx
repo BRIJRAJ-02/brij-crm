@@ -1,8 +1,8 @@
 // The workspace frame's sidebar in Chromium (spec 0026, AC-681, AC-685; spec 0034, milestone 1): the theme switch
 // left its footer for Settings, which sits there with ⌘, and opens on that shortcut (but not from a text field);
 // inside Settings the settings sidebar takes its place. The app's sidebar draws Home, then the member's sections in
-// their order and folds, then Tasks, and Settings and Help at the foot, the trash in the workspace menu (AC-921,
-// AC-928, AC-930; owner, 21 October 2026); a fold or the rail goes
+// their order and folds (Scheduling's two rows, Bookings and Captures), then Tasks, and the trash, Settings and Help
+// at the foot (AC-921, AC-928, AC-930; owner, 21 and 22 October 2026); a fold or the rail goes
 // through the data layer (AC-931, AC-935), and [ toggles the rail outside a text field; while the member's sidebar
 // loads nothing guesses at their order, and one that couldn't be read draws the defaults. Sign out asks first (the
 // owner, 21 October 2026).
@@ -45,7 +45,7 @@ const STORED: NavState = {
   version: 0,
   favourites: [],
   top: ['tasks'],
-  scheduling: ['bookings', 'availability', 'booking_pages', 'forms'],
+  scheduling: ['bookings', 'captures'],
 };
 
 let snapshot: NavSnapshot = { status: 'ready', nav: STORED };
@@ -143,7 +143,7 @@ afterEach(() => {
 /** Renders the frame at `/w/acme/start` inside a memory router, with a settings page to go to. */
 async function renderFrame(
   settings?: SettingsSidebar,
-  more: Partial<Pick<WorkspaceFrameProps, 'objects' | 'currentPage' | 'isMissing'>> & {
+  more: Partial<Pick<WorkspaceFrameProps, 'objects' | 'currentPage' | 'isMissing' | 'roleLabel' | 'workspaces'>> & {
     readonly layer?: DataLayer;
     readonly roleLabel?: string;
   } = {},
@@ -161,6 +161,7 @@ async function renderFrame(
       {...(more.currentPage === undefined ? {} : { currentPage: more.currentPage })}
       {...(more.isMissing === undefined ? {} : { isMissing: more.isMissing })}
       {...(more.roleLabel === undefined ? {} : { roleLabel: more.roleLabel })}
+      {...(more.workspaces === undefined ? {} : { workspaces: more.workspaces })}
       {...(settings === undefined ? {} : { settings })}
     >
       <input aria-label="Draft" />
@@ -283,6 +284,31 @@ describe('signing out from the workspace menu', () => {
     await page.getByRole('menuitem', { name: 'Sign out' }).click();
   }
 
+  it('holds the workspaces with the role under the open one, the shortcuts and Sign out, and no trash', async () => {
+    await renderFrame(undefined, {
+      roleLabel: 'Owner',
+      workspaces: [
+        { id: '01900000-0000-7000-8000-0000000000a1', slug: 'acme', name: 'Acme' },
+        { id: '01900000-0000-7000-8000-0000000000a2', slug: 'globex', name: 'Globex' },
+      ] as unknown as NonNullable<WorkspaceFrameProps['workspaces']>,
+    });
+    await page.getByRole('button', { name: /workspace menu/ }).click();
+    const items = [
+      ...document.querySelectorAll<HTMLElement>('[role="menuitem"], [role="menuitemcheckbox"], [role="menuitemradio"]'),
+    ];
+    const names = items.map((each) => each.textContent.trim());
+    expect(names.some((name) => name.includes('Acme') && name.includes('Owner'))).toBe(true);
+    expect(names.some((name) => name.includes('Globex') && name.includes('Owner'))).toBe(false);
+    expect(names.some((name) => name.startsWith('Keyboard shortcuts'))).toBe(true);
+    expect(names).toContain('Sign out');
+    // The trash lives in the sidebar's foot (the owner, 22 October 2026), and no section is headed by the role.
+    expect(names.some((name) => name.startsWith('Trash'))).toBe(false);
+    const headings = [...document.querySelectorAll('[role="menu"] header, [role="menu"] [role="presentation"]')].map(
+      (each) => each.textContent.trim(),
+    );
+    expect(headings).not.toContain('Owner');
+  });
+
   it('asks first: Cancel signs nobody out and puts focus back on the menu’s button', async () => {
     const counted = signOutLayer();
     await renderFrame(undefined, { layer: counted.layer });
@@ -342,7 +368,7 @@ const button = (name: string) =>
   [...document.querySelectorAll<HTMLButtonElement>('nav button')].find((each) => nameOf(each) === name);
 
 describe('the app’s sidebar (spec 0034)', () => {
-  it('draws Home, Records and Scheduling with its four pages, then Tasks, and Settings and Help at the foot', async () => {
+  it('draws Home, Records and Scheduling with Bookings and Captures, then Tasks, and the trash, Settings and Help at the foot', async () => {
     await renderFrame(undefined, { objects: OBJECTS });
     const names = sidebarNames();
     const expected = [
@@ -352,31 +378,28 @@ describe('the app’s sidebar (spec 0034)', () => {
       'Companies',
       'Scheduling',
       'Bookings',
-      'Availability',
-      'Booking pages',
-      'Forms',
+      'Captures',
       'Tasks',
+      'Trash',
       'Settings',
       'Help and shortcuts',
     ];
     expect(names.filter((name) => expected.includes(name))).toEqual(expected);
-    expect(names).not.toContain('Captures');
-    // The trash left the list for the workspace menu (owner, 21 October 2026).
-    expect(names).not.toContain('Trash');
+    // Availability, Booking pages and Forms are tabs inside Bookings and Captures, never rows (the owner, 22 October 2026).
+    for (const tab of ['Availability', 'Booking pages', 'Forms']) expect(names).not.toContain(tab);
     const link = (name: string) =>
       [...document.querySelectorAll<HTMLAnchorElement>('nav a')].find((each) => each.textContent.trim() === name);
     expect(link('Home')?.getAttribute('href')).toBe('/w/acme/home');
     expect(link('Tasks')?.getAttribute('href')).toBe('/w/acme/tasks');
     expect(link('Bookings')?.getAttribute('href')).toBe('/w/acme/bookings/calendar');
-    expect(link('Availability')?.getAttribute('href')).toBe('/w/acme/availability');
-    expect(link('Booking pages')?.getAttribute('href')).toBe('/w/acme/booking-pages');
-    expect(link('Forms')?.getAttribute('href')).toBe('/w/acme/forms');
+    expect(link('Captures')?.getAttribute('href')).toBe('/w/acme/captures/links');
+    expect(link('Trash')?.getAttribute('href')).toBe('/w/acme/trash');
   });
 
   it('marks the page that is open as current', async () => {
-    await renderFrame(undefined, { objects: OBJECTS, currentPage: 'booking_pages' });
+    await renderFrame(undefined, { objects: OBJECTS, currentPage: 'captures' });
     const current = document.querySelectorAll('nav a[aria-current="page"]');
-    expect([...current].map((each) => each.textContent.trim())).toEqual(['Booking pages']);
+    expect([...current].map((each) => each.textContent.trim())).toEqual(['Captures']);
   });
 
   it('draws the member’s section order and folds', async () => {
@@ -458,7 +481,7 @@ describe('the app’s sidebar (spec 0034)', () => {
     snapshot = { status: 'error', error: { code: 'INTERNAL', message: 'Down.' } as never };
     await renderFrame(undefined, { objects: OBJECTS });
     const names = sidebarNames();
-    for (const name of ['Tasks', 'Records', 'Scheduling', 'Bookings', 'Availability', 'Booking pages', 'Forms']) {
+    for (const name of ['Tasks', 'Records', 'Scheduling', 'Bookings', 'Captures', 'Trash']) {
       expect(names).toContain(name);
     }
   });
@@ -526,8 +549,8 @@ describe('the app’s sidebar (spec 0034)', () => {
     const dialog = document.querySelector('[role="dialog"]');
     expect(dialog?.textContent).toContain('Customise sidebar');
     expect(dialog?.textContent).toContain('Your work');
-    // Tasks, People, Companies and the four Scheduling pages, each with its switch.
-    expect(dialog?.querySelectorAll('[role="switch"]')).toHaveLength(7);
+    // Tasks, People, Companies, Bookings and Captures, each with its switch.
+    expect(dialog?.querySelectorAll('[role="switch"]')).toHaveLength(5);
   });
 
   it('badges Tasks with my open tasks overdue or due today, and draws none at zero (AC-924)', async () => {

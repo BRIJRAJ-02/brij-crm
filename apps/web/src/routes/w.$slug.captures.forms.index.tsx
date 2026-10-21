@@ -4,12 +4,11 @@ import { createFileRoute, useRouter, type ErrorComponentProps } from '@tanstack/
 import { FormsPending, FormsScreen } from '../features/forms/FormsScreen.tsx';
 import { strings } from '../features/forms/strings.ts';
 
-// Scheduling › Forms (spec 0023; a page of its own since spec 0034): the workspace's forms on objects the person can
-// see, from the data layer's held list (`forms.view`), which every form write patches (a create, the builder's
-// rename and publish, a pause, a copy, a delete), so the list shows them without a refresh. The loader waits for the
-// first read only; coming back, the held rows show at once and are read again behind them. The layout draws the
-// frame, the TopBar and the bar with the search.
-export const Route = createFileRoute('/w/$slug/forms/')({
+// Captures › Forms (spec 0023): the workspace's forms on objects the person can see, from the data layer's held list
+// (`forms.view`), which every form write patches (a create, the builder's rename and publish, a pause, a copy, a
+// delete), so the list shows them without a refresh. The loader waits for the first read only; coming back, the held
+// rows show at once and are read again behind them. The Captures layout draws the frame, the TopBar and the tabs.
+export const Route = createFileRoute('/w/$slug/captures/forms/')({
   loader: async ({ context, params }) => {
     try {
       await context.data.forms.view(params.slug).ready();
@@ -27,10 +26,10 @@ export const Route = createFileRoute('/w/$slug/forms/')({
     </LoadingNow>
   ),
   errorComponent: FormsError,
-  component: FormsListRoute,
+  component: FormsRoute,
 });
 
-function FormsListRoute() {
+function FormsRoute() {
   const { isMissing } = Route.useLoaderData();
   const { slug } = Route.useParams();
   if (isMissing) return <EmptyState title={strings.missingTitle}>{strings.failedText}</EmptyState>;

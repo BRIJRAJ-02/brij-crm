@@ -1,0 +1,49 @@
+// Brief
+// Purpose: the Links · Forms bar under Captures' TopBar, in the row People's ViewBar takes, one tab per child route, with that tab's search at its end.
+// Main task: switch between the booking links and the forms, each with its own address.
+// Leaves out: what each tab shows (its child route renders that into the chosen panel).
+import { TabPanel, Tabs } from '@crm/ui';
+import { useNavigate } from '@tanstack/react-router';
+import { useState, type ReactNode } from 'react';
+import { strings } from './strings.ts';
+import { captureTabHref, isCaptureTab, type CaptureTab } from './tabs.ts';
+import { CapturesToolbarSlot } from './toolbarSlot.ts';
+
+/** Props for CapturesTabs. */
+export interface CapturesTabsProps {
+  readonly slug: string;
+  /** The tab the address names. */
+  readonly tab: CaptureTab;
+  /** The child route's page (an `Outlet`), drawn in the chosen tab's panel. */
+  readonly children: ReactNode;
+}
+
+/**
+ * Links · Forms, as the page's second bar. Choosing a tab moves to its address; the panel holds whatever that
+ * address renders, and the bar's end holds that tab's search (New is the TopBar's).
+ */
+export function CapturesTabs({ slug, tab, children }: CapturesTabsProps) {
+  const navigate = useNavigate();
+  const [slot, setSlot] = useState<HTMLElement | null>(null);
+  return (
+    <CapturesToolbarSlot.Provider value={slot}>
+      <Tabs
+        variant="bar"
+        end={<div ref={setSlot} />}
+        label={strings.tabsLabel}
+        selectedKey={tab}
+        onSelectionChange={(next) => {
+          if (isCaptureTab(next) && next !== tab) void navigate({ href: captureTabHref(slug, next) });
+        }}
+        tabs={[
+          { id: 'links', label: strings.linksTab, href: captureTabHref(slug, 'links') },
+          { id: 'forms', label: strings.formsTab, href: captureTabHref(slug, 'forms') },
+        ]}
+      >
+        {/* One panel, always the chosen tab's: the page under it stays mounted while the next one loads, rather
+            than moving to another panel and mounting again before it is swapped. */}
+        <TabPanel id={tab}>{children}</TabPanel>
+      </Tabs>
+    </CapturesToolbarSlot.Provider>
+  );
+}

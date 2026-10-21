@@ -26,7 +26,7 @@ const universe: NavUniverse = {
   top: [],
   records: [PEOPLE, COMPANIES, DEALS],
   lists: [],
-  scheduling: ['bookings', 'availability', 'booking_pages', 'forms'],
+  scheduling: ['bookings', 'captures'],
   favourites: new Set([`view:${VIEW}`, `record:${RECORD}`]),
 };
 
@@ -44,7 +44,7 @@ const ids = (prefs: NavPrefs, section: Parameters<typeof sectionItems>[2]) =>
 describe('the sidebar model', () => {
   it('shows the defaults with nothing stored: the workspace order, every Scheduling page, no favourites', () => {
     expect(ids(DEFAULT_NAV_PREFS, 'records')).toEqual([PEOPLE, COMPANIES, DEALS]);
-    expect(ids(DEFAULT_NAV_PREFS, 'scheduling')).toEqual(['bookings', 'availability', 'booking_pages', 'forms']);
+    expect(ids(DEFAULT_NAV_PREFS, 'scheduling')).toEqual(['bookings', 'captures']);
     expect(ids(DEFAULT_NAV_PREFS, 'favourites')).toEqual([]);
     expect(sectionOrder(DEFAULT_NAV_PREFS)).toEqual(['favourites', 'records', 'lists', 'scheduling']);
   });
@@ -80,10 +80,10 @@ describe('the sidebar model', () => {
     const hidden = apply(
       DEFAULT_NAV_PREFS,
       { op: 'hide', kind: 'object', id: DEALS },
-      { op: 'hide', kind: 'page', id: 'forms' },
+      { op: 'hide', kind: 'page', id: 'captures' },
     );
     expect(sectionItems(hidden, universe, 'records').find((entry) => entry.id === DEALS)?.hidden).toBe(true);
-    expect(sectionItems(hidden, universe, 'scheduling').find((entry) => entry.id === 'forms')?.hidden).toBe(true);
+    expect(sectionItems(hidden, universe, 'scheduling').find((entry) => entry.id === 'captures')?.hidden).toBe(true);
     const shown = apply(hidden, { op: 'show', kind: 'object', id: DEALS });
     expect(sectionItems(shown, universe, 'records').every((entry) => !entry.hidden)).toBe(true);
     expect(shown.items.find((item) => item.id === DEALS)).toEqual({ kind: 'object', id: DEALS });
@@ -217,7 +217,7 @@ describe('the sidebar model', () => {
 
 describe('the operation schema', () => {
   it('takes a page by its key and anything else by its id', () => {
-    expect(NavOp.safeParse({ op: 'hide', kind: 'page', id: 'forms' }).success).toBe(true);
+    expect(NavOp.safeParse({ op: 'hide', kind: 'page', id: 'captures' }).success).toBe(true);
     expect(NavOp.safeParse({ op: 'hide', kind: 'page', id: 'trash' }).success).toBe(false);
     expect(NavOp.safeParse({ op: 'hide', kind: 'object', id: 'people' }).success).toBe(false);
     expect(NavOp.safeParse({ op: 'move', kind: 'object', id: PEOPLE, toIndex: 2 }).success).toBe(true);

@@ -1,8 +1,8 @@
-// The Bookings page's tabs and their addresses, kept apart from the tab
+// The Bookings page's three tabs and their addresses, kept apart from the tab
 // strip so routes and other screens can link to a tab without loading it.
 
-/** Bookings' tabs, in their order: the week calendar, then the list. Availability is its own page (spec 0034). */
-export const BOOKINGS_TABS = ['calendar', 'list'] as const;
+/** Bookings' tabs, in their order: the week calendar, the list, then the member's own hours. */
+export const BOOKINGS_TABS = ['calendar', 'list', 'availability'] as const;
 
 /** One of Bookings' tabs. */
 export type BookingsPageTab = (typeof BOOKINGS_TABS)[number];

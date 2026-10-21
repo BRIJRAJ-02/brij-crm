@@ -1,9 +1,9 @@
-// The sidebar v2 (spec 0034, milestone 1): the order (Home, Records, Scheduling's four pages, then Tasks, and
-// Settings and Help at the foot, the trash in the workspace menu; AC-921, AC-928, AC-930, owner 21 October 2026);
+// The sidebar v2 (spec 0034, milestone 1): the order (Home, Records, Scheduling's two rows, Bookings and Captures,
+// then Tasks, and the trash, Settings and Help at the foot; AC-921, AC-928, AC-930, owner 21 and 22 October 2026);
 // the workspace opens on Home; the member folds Scheduling and turns the rail on with [
 // in one browser, and their second browser follows within a second (AC-931, AC-935, AC-937); a reload keeps both
-// (AC-936); and every old Captures and Bookings › Availability address lands on its new page with its query kept,
-// replacing the history entry (AC-929). Milestone 2: an object hidden from its menu and back from Customise
+// (AC-936); and every address round 7 gave Availability, Booking pages and Forms lands back inside Bookings or
+// Captures with its query kept, replacing the history entry. Milestone 2: an object hidden from its menu and back from Customise
 // sidebar, an item and a section reordered by keyboard, live in the second browser, and Reset to default behind its
 // confirm (AC-932, AC-933). Milestone 3: a view and a record starred from their headers sit in Favourites; the
 // record drops out while it is in the trash and comes back on restore; Remove from favourites unstars it (AC-925,
@@ -36,7 +36,7 @@ async function order(page: Page): Promise<string[]> {
 test.describe('sidebar', () => {
   test.skip(({ viewport }) => (viewport?.width ?? 0) < 1000, 'The sidebar flow runs at desktop width.');
 
-  test('draws the new order, keeps the member’s folds and rail, live in their second browser, and redirects the old addresses', async ({
+  test('draws the order, keeps the member’s folds and rail, live in their second browser, and redirects round 7’s addresses', async ({
     browser,
     page,
   }, testInfo) => {
@@ -47,8 +47,8 @@ test.describe('sidebar', () => {
     const code = await newWorkspace(page, email, slug);
     await expect(nav(page).getByRole('link', { name: 'Deals', exact: true })).toBeVisible();
 
-    // The order (AC-921, owner 21 October 2026): the workspace menu, Home, Records, Scheduling and its pages, Tasks,
-    // then the foot; the trash is in the workspace menu, not the list.
+    // The order (AC-921, owner 21 and 22 October 2026): the workspace menu, Home, Records, Scheduling with Bookings
+    // and Captures, Tasks, then the foot with the trash; Availability, Booking pages and Forms are tabs, not rows.
     const names = await order(page);
     const at = (name: string) => names.indexOf(name);
     for (const [before, after] of [
@@ -56,26 +56,29 @@ test.describe('sidebar', () => {
       ['Records', 'People'],
       ['Deals', 'Scheduling'],
       ['Scheduling', 'Bookings'],
-      ['Bookings', 'Availability'],
-      ['Availability', 'Booking pages'],
-      ['Booking pages', 'Forms'],
-      ['Forms', 'Tasks'],
-      ['Tasks', 'Settings'],
+      ['Bookings', 'Captures'],
+      ['Captures', 'Tasks'],
+      ['Tasks', 'Trash'],
+      ['Trash', 'Settings'],
       ['Settings', 'Help and shortcuts'],
     ] as const) {
       expect(at(before), `${before} before ${after} in ${names.join(', ')}`).toBeLessThan(at(after));
       expect(at(before)).toBeGreaterThanOrEqual(0);
     }
-    expect(names.some((name) => name === 'Captures' || name === 'Trash')).toBe(false);
-    // Home is where the workspace opens; the trash is a row of the workspace menu.
+    for (const tab of ['Availability', 'Booking pages', 'Forms']) expect(names).not.toContain(tab);
+    // Home is where the workspace opens; the trash is a row of the foot, and not in the workspace menu.
     await page.goto(`/w/${slug}`);
     await expect(page).toHaveURL(new RegExp(`/w/${slug}/home$`));
     await expect(page.getByRole('heading', { level: 1, name: 'Home' })).toBeVisible();
     await nav(page)
       .getByRole('button', { name: /workspace menu/ })
       .click();
-    await page.getByRole('menuitem', { name: 'Trash' }).click();
+    await expect(page.getByRole('menuitem', { name: 'Sign out' })).toBeVisible();
+    await expect(page.getByRole('menuitem', { name: 'Trash' })).toHaveCount(0);
+    await page.keyboard.press('Escape');
+    await nav(page).getByRole('link', { name: 'Trash', exact: true }).click();
     await expect(page).toHaveURL(new RegExp(`/w/${slug}/trash$`));
+    await expect(nav(page).getByRole('link', { name: 'Trash', exact: true })).toHaveAttribute('aria-current', 'page');
     await page.goto(`/w/${slug}/objects/people`);
     await expect(page).toHaveURL(objectUrl(slug, 'people'));
 
@@ -109,25 +112,43 @@ test.describe('sidebar', () => {
     await nav(page).getByRole('button', { name: 'Expand the sidebar' }).click();
     await expect(scheduling(page)).toHaveAttribute('aria-expanded', 'false');
     await scheduling(page).click();
-    await expect(nav(page).getByRole('link', { name: 'Booking pages', exact: true })).toBeVisible();
+    await expect(nav(page).getByRole('link', { name: 'Captures', exact: true })).toBeVisible();
 
-    // The Scheduling pages open with their item current (AC-928, AC-942).
-    await nav(page).getByRole('link', { name: 'Forms', exact: true }).click();
-    await expect(page).toHaveURL(new RegExp(`/w/${slug}/forms$`));
-    await expect(page.getByRole('heading', { level: 1, name: 'Forms' })).toBeVisible();
-    await expect(nav(page).getByRole('link', { name: 'Forms', exact: true })).toHaveAttribute('aria-current', 'page');
+    // Captures opens on Links with its row current, Forms a tab inside it (AC-928, AC-942; owner, 22 October 2026).
+    await nav(page).getByRole('link', { name: 'Captures', exact: true }).click();
+    await expect(page).toHaveURL(new RegExp(`/w/${slug}/captures/links$`));
+    await expect(page.getByRole('heading', { level: 1, name: 'Captures' })).toBeVisible();
+    await expect(nav(page).getByRole('link', { name: 'Captures', exact: true })).toHaveAttribute(
+      'aria-current',
+      'page',
+    );
+    await page.getByRole('tab', { name: 'Forms' }).click();
+    await expect(page).toHaveURL(new RegExp(`/w/${slug}/captures/forms$`));
+    await expect(nav(page).getByRole('link', { name: 'Captures', exact: true })).toHaveAttribute(
+      'aria-current',
+      'page',
+    );
+    // Availability is a tab of Bookings, with Bookings current.
+    await nav(page).getByRole('link', { name: 'Bookings', exact: true }).click();
+    await page.getByRole('tab', { name: 'Availability' }).click();
+    await expect(page).toHaveURL(new RegExp(`/w/${slug}/bookings/availability$`));
+    await expect(nav(page).getByRole('link', { name: 'Bookings', exact: true })).toHaveAttribute(
+      'aria-current',
+      'page',
+    );
 
-    // The old addresses land on the new pages, keeping the query, in place of the old entry (AC-929).
-    await page.goto(`/w/${slug}/captures/forms?from=old`);
-    await expect(page).toHaveURL(new RegExp(`/w/${slug}/forms\\?from=old$`));
-    await page.goto(`/w/${slug}/captures`);
-    await expect(page).toHaveURL(new RegExp(`/w/${slug}/booking-pages$`));
-    await expect(page.getByRole('heading', { level: 1, name: 'Booking pages' })).toBeVisible();
-    await page.goto(`/w/${slug}/bookings/availability`);
-    await expect(page).toHaveURL(new RegExp(`/w/${slug}/availability$`));
-    await expect(page.getByRole('heading', { level: 1, name: 'Availability' })).toBeVisible();
+    // Round 7's addresses land back inside Bookings and Captures, keeping the query, in place of their entry.
+    await page.goto(`/w/${slug}/home`);
+    await page.goto(`/w/${slug}/forms?from=old`);
+    await expect(page).toHaveURL(new RegExp(`/w/${slug}/captures/forms\\?from=old$`));
+    await page.goto(`/w/${slug}/booking-pages`);
+    await expect(page).toHaveURL(new RegExp(`/w/${slug}/captures/links$`));
+    await expect(page.getByRole('heading', { level: 1, name: 'Captures' })).toBeVisible();
+    await page.goto(`/w/${slug}/availability`);
+    await expect(page).toHaveURL(new RegExp(`/w/${slug}/bookings/availability$`));
+    await expect(page.getByRole('tab', { name: 'Availability' })).toHaveAttribute('aria-selected', 'true');
     await page.goBack();
-    await expect(page).toHaveURL(new RegExp(`/w/${slug}/booking-pages$`));
+    await expect(page).toHaveURL(new RegExp(`/w/${slug}/captures/links$`));
     await other.close();
   });
 

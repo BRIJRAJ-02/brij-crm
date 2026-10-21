@@ -1,10 +1,10 @@
 // The sidebar's model (spec 0034): every page it links to is a route (AC-944), so a renamed route can't leave a
-// dead item; every moved address keeps a route that redirects (AC-929); the sections it draws, in the member's
+// dead item; every address round 7 moved keeps a route that redirects; the sections it draws, in the member's
 // order and folds (AC-921, AC-931); and the first paint's rail hint (AC-935).
 import { readFileSync } from 'node:fs';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { NavState, ObjectSummary } from '@crm/data';
-import { capturesPath, movedHref } from './moved.ts';
+import { movedHref, movedPath } from './moved.ts';
 import { settingsHomeHref, trashHref } from './objects.ts';
 import { keepRailHint, readRailHint } from './rail.ts';
 import { drawnSections, PAGE_LINKS, sectionMoveIndex, topEntries, universeOf } from './sidebar.ts';
@@ -25,7 +25,7 @@ describe('the sidebar’s routes (AC-944)', () => {
   });
 
   it('links each page to the page itself, never to an address that redirects, so hovering preloads it', () => {
-    const redirects = ['/w/$slug/bookings', '/w/$slug/captures/links', '/w/$slug/captures/forms'];
+    const redirects = ['/w/$slug/bookings', '/w/$slug/captures', '/w/$slug/forms', '/w/$slug/booking-pages'];
     for (const link of Object.values(PAGE_LINKS)) expect(redirects).not.toContain(link.href('$slug'));
   });
 
@@ -34,38 +34,55 @@ describe('the sidebar’s routes (AC-944)', () => {
     expect(isRoute(settingsHomeHref('$slug'))).toBe(true);
   });
 
-  it('keeps a route at every moved address, which redirects (AC-929)', () => {
-    for (const old of ['/w/$slug/captures/$', '/w/$slug/bookings/availability']) expect(isRoute(old), old).toBe(true);
+  it('draws one Bookings row and one Captures row, as round 6 did (the owner, 22 October 2026)', () => {
+    expect(Object.keys(PAGE_LINKS)).toEqual(['tasks', 'bookings', 'captures']);
+    expect(PAGE_LINKS.bookings?.href('acme')).toBe('/w/acme/bookings/calendar');
+    expect(PAGE_LINKS.captures?.href('acme')).toBe('/w/acme/captures/links');
   });
 
-  it('no longer has the Captures pages or the Availability tab', () => {
-    for (const gone of ['/w/$slug/captures/links', '/w/$slug/captures/forms', '/w/$slug/captures']) {
-      expect(fullPaths.has(gone), gone).toBe(false);
+  it('keeps Availability inside Bookings and Booking pages and Forms inside Captures', () => {
+    for (const path of [
+      '/w/$slug/bookings/availability',
+      '/w/$slug/bookings/availability/$scheduleId',
+      '/w/$slug/captures/links',
+      '/w/$slug/captures/links/$pageId',
+      '/w/$slug/captures/forms',
+      '/w/$slug/captures/forms/$formId',
+      '/w/$slug/captures/forms/$formId/preview',
+    ]) {
+      expect(isRoute(path), path).toBe(true);
+    }
+  });
+
+  it('keeps a route at each address round 7 used, which redirects', () => {
+    for (const old of ['/w/$slug/availability/$', '/w/$slug/booking-pages/$', '/w/$slug/forms/$']) {
+      expect(isRoute(old), old).toBe(true);
     }
   });
 });
 
-describe('a moved address (AC-929)', () => {
-  it('sends each Captures address to its new page', () => {
-    expect(capturesPath('')).toBe('/booking-pages');
-    expect(capturesPath('links')).toBe('/booking-pages');
-    expect(capturesPath('links/')).toBe('/booking-pages');
-    expect(capturesPath('links/p1')).toBe('/booking-pages/p1');
-    expect(capturesPath('forms')).toBe('/forms');
-    expect(capturesPath('forms/')).toBe('/forms');
-    expect(capturesPath('forms/f1')).toBe('/forms/f1');
-    expect(capturesPath('forms/f1/preview')).toBe('/forms/f1/preview');
-    expect(capturesPath('anything/else')).toBe('/booking-pages');
+describe('a round 7 address', () => {
+  it('goes back to its place inside Bookings or Captures', () => {
+    expect(movedPath('availability', '')).toBe('/bookings/availability');
+    expect(movedPath('availability', 'default')).toBe('/bookings/availability/default');
+    expect(movedPath('booking-pages', '')).toBe('/captures/links');
+    expect(movedPath('booking-pages', '/')).toBe('/captures/links');
+    expect(movedPath('booking-pages', 'p1')).toBe('/captures/links/p1');
+    expect(movedPath('forms', '')).toBe('/captures/forms');
+    expect(movedPath('forms', 'f1')).toBe('/captures/forms/f1');
+    expect(movedPath('forms', 'f1/preview')).toBe('/captures/forms/f1/preview');
   });
 
   it('keeps an id one segment, whatever was typed', () => {
-    expect(capturesPath('forms/a b')).toBe('/forms/a%20b');
-    expect(capturesPath('links/a?b')).toBe('/booking-pages/a%3Fb');
+    expect(movedPath('forms', 'a b')).toBe('/captures/forms/a%20b');
+    expect(movedPath('booking-pages', 'a?b')).toBe('/captures/links/a%3Fb');
   });
 
   it('keeps the query', () => {
-    expect(movedHref('acme', '/forms/f1', '?tab=install&state=held')).toBe('/w/acme/forms/f1?tab=install&state=held');
-    expect(movedHref('acme', '/booking-pages', '')).toBe('/w/acme/booking-pages');
+    expect(movedHref('acme', '/captures/forms/f1', '?tab=install&state=held')).toBe(
+      '/w/acme/captures/forms/f1?tab=install&state=held',
+    );
+    expect(movedHref('acme', '/bookings/availability', '')).toBe('/w/acme/bookings/availability');
   });
 });
 
@@ -84,7 +101,7 @@ const navOf = (over: Partial<NavState> = {}): NavState => ({
   version: 0,
   favourites: [],
   top: ['tasks'],
-  scheduling: ['bookings', 'availability', 'booking_pages', 'forms'],
+  scheduling: ['bookings', 'captures'],
   ...over,
 });
 
@@ -95,12 +112,7 @@ describe('the sections the sidebar draws (AC-921, AC-928, AC-931)', () => {
     expect(sections.map((section) => section.key)).toEqual(['records', 'scheduling']);
     // The live objects in the workspace's order; an archived one isn't in the sidebar.
     expect(sections[0]?.entries.map((entry) => entry.id)).toEqual([PEOPLE, COMPANIES]);
-    expect(sections[1]?.entries.map((entry) => entry.id)).toEqual([
-      'bookings',
-      'availability',
-      'booking_pages',
-      'forms',
-    ]);
+    expect(sections[1]?.entries.map((entry) => entry.id)).toEqual(['bookings', 'captures']);
   });
 
   it('follows the member’s section order and folds', () => {

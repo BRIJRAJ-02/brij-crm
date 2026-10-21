@@ -1,7 +1,7 @@
 // Brief
-// Purpose: the one New of Booking pages and of Forms, owned by each page's layout, so it sits in the TopBar at one place and one width, loading or not.
-// Main task: make a booking page (its dialog, then its editor) or a form (made at once, then its builder).
-// Leaves out: the lists themselves (each page's screen) and what a new page or form holds (their editors).
+// Purpose: Captures' one New, owned by the Captures layout, so it sits in the TopBar at one place and one width on both tabs, loading or not.
+// Main task: make a booking page on Links (its dialog, then its editor) and a form on Forms (made at once, then its builder).
+// Leaves out: the lists themselves (each tab's screen) and what a new page or form holds (their editors).
 import { isDataError } from '@crm/data';
 import { Button, Tooltip } from '@crm/ui';
 import { useNavigate, useRouteContext } from '@tanstack/react-router';
@@ -12,9 +12,9 @@ import { strings as bookingStrings } from '../booking/strings.ts';
 import { formHref } from '../forms/paths.ts';
 import { strings as formStrings } from '../forms/strings.ts';
 import { useCan } from '../workspace/WorkspacePage.tsx';
-import type { CapturePage } from './pages.ts';
+import type { CaptureTab } from './tabs.ts';
 
-/** The page's New, as the TopBar and an empty list offer it. */
+/** The tab's New, as the TopBar and an empty list offer it. */
 export interface CapturesCreate {
   /** Its full name, for screen readers and speech input: "New booking page", "New form". */
   readonly label: string;
@@ -28,19 +28,18 @@ export interface CapturesCreate {
 
 const CapturesCreateContext = createContext<CapturesCreate | undefined>(undefined);
 
-/** The page's New, inside a Booking pages or Forms layout; undefined outside them. */
+/** The chosen tab's New, inside the Captures layout; undefined outside it. */
 export const useCapturesCreate = () => useContext(CapturesCreateContext);
 
 /** Props for CapturesCreateProvider. */
 export interface CapturesCreateProviderProps {
   readonly slug: string;
-  /** Which list page: Booking pages (`links`) or Forms. */
-  readonly page: CapturePage;
+  readonly tab: CaptureTab;
   readonly children: ReactNode;
 }
 
-/** Holds the page's New and its New booking page dialog for the whole layout, so the list loading under it remounts neither. */
-export function CapturesCreateProvider({ slug, page, children }: CapturesCreateProviderProps) {
+/** Holds the tab's New and its New booking page dialog for the whole layout, so switching tabs remounts neither. */
+export function CapturesCreateProvider({ slug, tab, children }: CapturesCreateProviderProps) {
   const { data, toasts } = useRouteContext({ from: '__root__' });
   const navigate = useNavigate();
   const canManageForms = useCan('forms.manage');
@@ -68,7 +67,7 @@ export function CapturesCreateProvider({ slug, page, children }: CapturesCreateP
   };
 
   const value: CapturesCreate =
-    page === 'links'
+    tab === 'links'
       ? {
           label: bookingStrings.newPage,
           create: () => {
@@ -92,9 +91,9 @@ export function CapturesCreateProvider({ slug, page, children }: CapturesCreateP
         onClose={() => {
           setAddingPage(false);
         }}
-        onCreated={(made) => {
+        onCreated={(page) => {
           setAddingPage(false);
-          void navigate({ to: pageEditorHref(slug, made.id) });
+          void navigate({ to: pageEditorHref(slug, page.id) });
         }}
       />
     </CapturesCreateContext>
@@ -102,9 +101,9 @@ export function CapturesCreateProvider({ slug, page, children }: CapturesCreateP
 }
 
 /**
- * The TopBar's New: it reads New on both pages (named in full for screen readers: New booking page, New form), so
- * it keeps one place and one width from page to page, and while a form is being made its spinner takes the icon's
- * place. Someone who may not make forms finds it turned off on Forms, with the reason, rather than gone.
+ * The TopBar's New: it reads New on both tabs (named in full for screen readers), so it keeps one place and one
+ * width as the tabs change, and while a form is being made its spinner takes the icon's place. Someone who may
+ * not make forms finds it turned off on Forms, with the reason, rather than gone.
  */
 export function CapturesNewButton() {
   const create = useCapturesCreate();

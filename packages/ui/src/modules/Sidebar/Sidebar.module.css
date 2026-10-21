@@ -1,9 +1,11 @@
 /* Sidebar: a size-sidebar column on surface-sidebar with a hairline end
    edge: the workspace row (size-bar tall, a hairline under it on the same
    pixel row as the page's TopBar's), Quick actions, a scrolling body of
-   28px items and folding sections, and a footer. Collapsed, it is a
-   size-sidebar-collapsed rail of centred icons. The current item takes
-   surface-selected, hover surface-hover. */
+   size-nav-item items and folding sections, and a footer. Collapsed, it is a
+   size-sidebar-collapsed rail of centred plain icons in size-nav-item
+   squares: Expand and Quick actions under the head, a hairline only where
+   the open sidebar has a section label, and the footer's items alike. The
+   current item takes surface-selected, hover surface-hover. */
 @layer components {
   .root {
     display: flex;
@@ -83,7 +85,8 @@
   .foot,
   .items,
   .group,
-  .rail {
+  .rail,
+  .railTop {
     display: flex;
     flex-direction: column;
     gap: var(--border-width-hairline);
@@ -91,6 +94,12 @@
 
   .body {
     padding: 0 var(--space-8) var(--space-8);
+  }
+
+  /* The rail's top, under the head: Expand, then Quick actions, 32px items like the rest of the rail. */
+  .railTop {
+    flex: none;
+    padding: var(--space-8);
   }
 
   .foot {
@@ -277,8 +286,7 @@
     inline-size: var(--size-sidebar-collapsed);
   }
 
-  .root[data-collapsed] .head,
-  .root[data-collapsed] .search {
+  .root[data-collapsed] .head {
     justify-content: center;
     padding-inline: 0;
   }

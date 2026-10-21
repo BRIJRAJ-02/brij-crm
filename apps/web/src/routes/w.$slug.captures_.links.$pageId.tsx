@@ -12,12 +12,12 @@ import { WorkspacePage } from '../features/workspace/WorkspacePage.tsx';
 
 // One booking page's editor (spec 0025, AC-623, AC-624): the page read through the data layer; one that was
 // deleted or isn't the reader's answers NOT_FOUND, said in the page with the way back. It sits outside the
-// Booking pages layout (`booking-pages_`), as a form's editor does: it needs the whole width and its own TopBar. The owner's
+// Captures layout (`captures_`), as a form's editor does: it needs the whole width and its own TopBar. The owner's
 // schedules load too (spec 0035, AC-965) when the reader may read them (their own page, or any with `booking.admin`):
 // the Hours card picks one and says its week. The reader's own are read beside the page, since most pages are
 // theirs; a colleague's, once the page names its owner. Either way the page shows: a failed read of the schedules
 // leaves the card with the hours the page books by now.
-export const Route = createFileRoute('/w/$slug/booking-pages_/$pageId')({
+export const Route = createFileRoute('/w/$slug/captures_/links/$pageId')({
   loader: async ({ context, params }) => {
     try {
       const [page, mine] = await Promise.all([
@@ -72,7 +72,6 @@ function PageEditorPending() {
   const hasNote = calendar.status === 'ready' && calendar.connections.length === 0 && !readDismissed(slug);
   return (
     <EditorPending
-      currentPage="booking_pages"
       title={strings.listLabel}
       icon="link"
       cards={[strings.page, strings.meeting, strings.hours, strings.limits]}
@@ -81,7 +80,7 @@ function PageEditorPending() {
   );
 }
 
-/** Not found or failed, inside the frame, with the way back to Booking pages. */
+/** Not found or failed, inside the frame, with the way back to Links. */
 function Missing({
   title,
   text,
@@ -94,12 +93,11 @@ function Missing({
   const { slug = '' } = useParams({ strict: false });
   return (
     <WorkspacePage
-      currentPage="booking_pages"
+      currentPage="captures"
       page={{
         topBar: (
-          // The trail names what went wrong after the way back: "Booking pages › This booking page isn’t here".
           <TopBar
-            title={title}
+            title={strings.listLabel}
             icon="link"
             crumbs={[{ id: 'links', label: strings.linksTitle, href: linksHref(slug) }]}
           />

@@ -1,33 +1,32 @@
 // Brief
-// Purpose: the TopBar of Booking pages and of Forms, drawn once by each page's layout: the scheduling tile, the title, the count and New, as People's TopBar has.
-// Main task: say how many booking pages or forms there are and make a new one, from one place that never moves while the list loads.
-// Leaves out: the search bar and the list (the layout's bar and the page's screen).
+// Purpose: the Captures TopBar, drawn once by the layout: the scheduling tile, the title, the chosen tab's count and New, as People's TopBar has.
+// Main task: say how many links or forms there are and make a new one, from one place that never moves between tabs.
+// Leaves out: the tab strip and the lists (the layout's tabs and each tab's screen).
 import type { CaptureListView } from '@crm/data';
 import { useCaptureList } from '@crm/data/react';
 import { Badge, TopBar } from '@crm/ui';
 import { useRouteContext } from '@tanstack/react-router';
 import { SCHEDULING_HUE } from '../scheduling.ts';
 import { CapturesNewButton } from './create.tsx';
-import type { CapturePage } from './pages.ts';
 import { strings } from './strings.ts';
+import type { CaptureTab } from './tabs.ts';
 
 /** Props for CapturesTopBar. */
 export interface CapturesTopBarProps {
   readonly slug: string;
-  /** Which list page: Booking pages (`links`) or Forms. */
-  readonly page: CapturePage;
+  readonly tab: CaptureTab;
 }
 
-/** The TopBar: the tile, the page's title, how many it lists once the list is in, and New at the end. */
-export function CapturesTopBar({ slug, page }: CapturesTopBarProps) {
+/** Captures' TopBar: the tile, Captures, how many on the chosen tab once the list is in, and New at the end. */
+export function CapturesTopBar({ slug, tab }: CapturesTopBarProps) {
   const { data } = useRouteContext({ from: '__root__' });
   return (
     <TopBar
-      title={page === 'links' ? strings.linksTitle : strings.formsTitle}
-      icon={page === 'links' ? 'link' : 'clipboard-list'}
+      title={strings.title}
+      icon="link"
       hue={SCHEDULING_HUE}
       meta={
-        page === 'links' ? (
+        tab === 'links' ? (
           <ListCount key="links" view={data.bookingPages.view(slug)} label={strings.linksCount} />
         ) : (
           <ListCount key="forms" view={data.forms.view(slug)} label={strings.formsCount} />
@@ -39,7 +38,7 @@ export function CapturesTopBar({ slug, page }: CapturesTopBarProps) {
   );
 }
 
-/** A list's count beside the title, once the list is in: the same held list the page's screen reads. */
+/** A list's count beside the title, once the list is in: the same held list the tab's screen reads. */
 function ListCount<Item>({ view, label }: { readonly view: CaptureListView<Item>; readonly label: string }) {
   const list = useCaptureList(view);
   if (list.status !== 'ready') return null;

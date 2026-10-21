@@ -1,6 +1,6 @@
 # Booking pages (spec 0025)
 
-## Scheduling › Booking pages (`/w/$slug/booking-pages`, spec 0034; `/captures/links` and the old `/settings/booking-pages` redirect here)
+## Captures › Links (`/w/$slug/captures/links`; the old `/settings/booking-pages` redirects here)
 
 - Purpose: the member's booking pages (an admin sees everyone's) with their status and bookings this month (AC-645).
 - Main task: make a page and open its builder; copy a link, pause or take bookings again, delete one after a confirm.
@@ -8,7 +8,7 @@
 
 Built from Table, Badge, CopyButton, Button, Modal (new page, and the delete confirm with `tone="danger"`: Delete page stays busy until the server answers while the card has already left, a refusal shows inside it with the card back, and once deleted focus goes to the page's title), Field, Callout and EmptyState. Pause shows at once and rolls back on a refusal.
 
-## The builder (`/w/$slug/booking-pages/$pageId`; `/captures/links/$pageId` and the old `/settings/booking-pages/$pageId` redirect here)
+## The builder (`/w/$slug/captures/links/$pageId`; the old `/settings/booking-pages/$pageId` redirects here)
 
 - Purpose: one page's details, meeting lengths, location, availability and limits (AC-623, AC-624).
 - Main task: change a setting and have it saved half a second after the last change; what failed is said where it happened (a taken web address on its field).
@@ -18,7 +18,7 @@ Cards of Switch, Field, Checkbox, Select and DatePicker. The Hours card picks th
 
 The Meeting card ends with Add events to (`PageDestination.tsx`, spec 0024 AC-997): for the page's owner, Your default (naming it) then each calendar they can write, under its account when there are two or more, with its colour, saved at once like the Live switch; an error when the chosen calendar can't take bookings now (they go to the default); a colleague reads it only, never a name (spec 0037). Under it, Conflicts says how many calendars hold the page's times back, linking to Settings › Calendars, where that switch lives. The Limits card groups its six settings as rows (Buffers, Booking window, Pace, the library's SettingsRowGroup), each with an InfoTip saying what it does with an example, and its line sums up what is set ("15 min buffers · 4 h notice · up to 60 days").
 
-## Availability (`/w/$slug/availability`, spec 0035; a page of its own since spec 0034)
+## Availability (`/w/$slug/bookings/availability`, spec 0035)
 
 - Purpose: the member's schedules, each with its Default badge, its week, its zone and how many booking pages use it (AC-969).
 - Main task: open a schedule, make one (New schedule asks for a name, then opens it), or set the default, duplicate or delete one from its ··· menu.
@@ -30,7 +30,7 @@ An admin (`booking.admin`) has a Viewing Select at the strip's end, before New s
 
 Deleting asks first (the owner's confirm rule, 21 October 2026): "Delete the Evenings schedule?", one sentence naming the pages it moves to the default and that it can't be undone, Cancel (Esc) then Delete schedule. The dialog waits for the server and says a refusal inside itself; the schedule leaves the list once it's gone. The default can't be deleted: its menu item says to set another first.
 
-## A schedule (`/w/$slug/availability/$scheduleId`, spec 0035)
+## A schedule (`/w/$slug/bookings/availability/$scheduleId`, spec 0035)
 
 - Purpose: one schedule's name, time zone, weekly hours, days off and the booking pages that use it (AC-970). `default` opens whichever schedule is the default, the virtual one included.
 - Main task: change the hours, the zone, the days off or the name, then Save from the SaveBar; Enter in the name saves, Esc puts the saved name back; set it as default, duplicate or delete it from the ··· menu in the bar.

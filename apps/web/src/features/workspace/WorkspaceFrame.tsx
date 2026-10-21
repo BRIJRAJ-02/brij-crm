@@ -64,7 +64,7 @@ const DEFAULT_NAV: NavState = {
   version: 0,
   favourites: [],
   top: ['tasks'],
-  scheduling: ['bookings', 'availability', 'booking_pages', 'forms'],
+  scheduling: ['bookings', 'captures'],
 };
 
 /** Nothing read, ever: one snapshot, so React sees no change. */
@@ -93,7 +93,7 @@ export interface WorkspaceFrameProps {
   readonly slug: string;
   /** Its name at the top of the sidebar; the product's name while it isn't known. */
   readonly workspaceName?: string;
-  /** The person's role here ("Owner", "Admin" or "Member"), heading the workspace menu once it is known. */
+  /** The person's role here ("Owner", "Admin" or "Member"), under the open workspace's name in its menu once known. */
   readonly roleLabel?: string;
   /** Every workspace the person is in, oldest first: the workspace menu lists them to switch (spec 0031, AC-801). */
   readonly workspaces?: readonly WorkspaceSummary[];
@@ -121,10 +121,10 @@ export interface WorkspaceFrameProps {
 }
 
 /**
- * AppShell and the Sidebar (spec 0034): the workspace's name with the trash
- * and Sign out in its menu (the button spins while it signs out), Home, the
- * member's sections in their order and folds, then Tasks, and Settings and
- * Help at the foot; the rail as they left it. Inside Settings, the settings sidebar
+ * AppShell and the Sidebar (spec 0034): the workspace's name with the
+ * workspaces, the shortcuts and Sign out in its menu (the button spins while it signs out), Home, the
+ * member's sections in their order and folds, then Tasks, and the trash,
+ * Settings and Help at the foot; the rail as they left it. Inside Settings, the settings sidebar
  * instead: the way back, then the settings pages in their groups.
  */
 export function WorkspaceFrame({
@@ -253,6 +253,8 @@ export function WorkspaceFrame({
                         leading={<Avatar name={each.name} hue="ink" shape="square" size="xs" isDecorative />}
                         href={workspaceHref(each.slug)}
                         isChecked={each.slug === slug}
+                        // The person's role here sits with the open workspace's name (spec 0009, AC-136).
+                        {...(each.slug === slug && roleLabel !== undefined ? { description: roleLabel } : {})}
                       >
                         {each.name}
                       </MenuItem>
@@ -263,26 +265,11 @@ export function WorkspaceFrame({
                   </MenuSection>
                 )}
                 {workspaces !== undefined && <MenuSeparator />}
-                {/* The trash, out of the sidebar's list (owner, 21 October 2026); deleted records' toasts link to it too. */}
-                {!isMissing && (
-                  <MenuItem id="trash" icon="trash" href={trashHref(slug)}>
-                    {strings.trash}
-                  </MenuItem>
-                )}
-                {/* The shortcut list, also on ?, so it can be found with the pointer too. Settings lives in the
-                    sidebar's foot (and on ⌘,), not here (the owner, 21 October 2026). */}
-                {roleLabel === undefined ? (
-                  <MenuItem id="shortcuts" icon="keyboard" kbd="?">
-                    {strings.keyboardShortcuts}
-                  </MenuItem>
-                ) : (
-                  // The person's role heads their part of the menu (spec 0009, AC-136).
-                  <MenuSection label={roleLabel}>
-                    <MenuItem id="shortcuts" icon="keyboard" kbd="?">
-                      {strings.keyboardShortcuts}
-                    </MenuItem>
-                  </MenuSection>
-                )}
+                {/* The shortcut list, also on ?, so it can be found with the pointer too. Settings and the trash live in
+                    the sidebar's foot (Settings on ⌘ , too), not here (the owner, 21 and 22 October 2026). */}
+                <MenuItem id="shortcuts" icon="keyboard" kbd="?">
+                  {strings.keyboardShortcuts}
+                </MenuItem>
                 <MenuSeparator />
                 {/* Leaving comes last, where people look for it: this workspace (anyone in it, spec 0031, AC-812),
                     then Timefix on this device. */}
@@ -300,10 +287,16 @@ export function WorkspaceFrame({
             // the buttons wait for their sidebar, so a press never lands on a guess.
             isCollapsed={isRail}
             {...(nav === undefined || isMissing ? {} : { onCollapsedChange: setRail })}
-            // The foot (AC-930): Settings with ⌘, (spec 0026, AC-685), and Help, which opens the keyboard shortcuts
-            // until a help centre exists; the trash moved to the workspace menu (owner, 21 October 2026). Invite teammates joins with spec 0031's invite flow.
+            // The foot (AC-930): the trash (out of the main list and the workspace menu, the owner, 22 October 2026),
+            // Settings with ⌘, (spec 0026, AC-685), and Help, which opens the keyboard shortcuts until a help centre
+            // exists. Invite teammates joins with spec 0031's invite flow.
             footer={
               <>
+                {!isMissing && (
+                  <NavItem icon="trash" href={trashHref(slug)} isCurrent={currentPage === 'trash'}>
+                    {strings.trash}
+                  </NavItem>
+                )}
                 <NavItem icon="settings" href={settingsHomeHref(slug)} kbd="⌘,">
                   {strings.settings}
                 </NavItem>
