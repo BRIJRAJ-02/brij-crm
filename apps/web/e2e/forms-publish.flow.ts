@@ -42,6 +42,6 @@ test.describe('a form’s first publish', () => {
     await expect(page.getByRole('dialog')).toHaveCount(0);
     // Publish left once the form went live; focus is on More actions, beside where it was.
     await expect(page.getByRole('button', { name: 'More actions' })).toBeFocused();
-    await expect(page.getByText(/Published · v1/)).toBeVisible();
+    await expect(page.getByText(/Live · v1/)).toBeVisible();
   });
 });

@@ -6,13 +6,13 @@
 import type { FormView } from '@crm/data';
 import {
   Button,
-  Callout,
   Card,
   Code,
   CopyButton,
   DescriptionList,
   Disclosure,
   Field,
+  InfoTip,
   SegmentedControl,
   Switch,
 } from '@crm/ui';
@@ -123,6 +123,9 @@ export function InstallTab({ slug, form, isReadOnly, onFormChange }: InstallTabP
     );
   };
 
+  /** Code names inside help text, drawn so they read and copy exactly. */
+  const code = (text: string) => <Code key={text}>{text}</Code>;
+
   return (
     <>
       <Card
@@ -143,7 +146,7 @@ export function InstallTab({ slug, form, isReadOnly, onFormChange }: InstallTabP
         }
       />
       {/* One way to copy: the code block's own Copy, as the owner asked (no second button under it). */}
-      <Card title={strings.websiteTitle} description={strings.websiteText}>
+      <Card title={strings.websiteTitle} actions={<InfoTip label={strings.websiteTitle}>{strings.websiteTip}</InfoTip>}>
         <SegmentedControl
           label={strings.embedMode}
           segments={EMBED_MODES.map((each) => ({ value: each, label: MODE_WORDS[each].label }))}
@@ -163,7 +166,14 @@ export function InstallTab({ slug, form, isReadOnly, onFormChange }: InstallTabP
         />
       </Card>
       <Disclosure title={strings.advancedTitle}>
-        <Card title={strings.ownFormTitle} description={strings.advancedText}>
+        <Card
+          title={strings.ownFormTitle}
+          actions={
+            <InfoTip label={strings.ownFormTitle} example={<>{strings.taggingConsent(code)}</>}>
+              {strings.taggingText}
+            </InfoTip>
+          }
+        >
           <Field
             label={strings.ownFormSnippet}
             variant="copy"
@@ -171,18 +181,11 @@ export function InstallTab({ slug, form, isReadOnly, onFormChange }: InstallTabP
             copyLabel={strings.copyFormHtml}
             value={own}
           />
-          <Callout tone="info" title={strings.taggingTitle}>
-            <p>{strings.taggingText}</p>
-            <p>
-              {strings.taggingConsent((text) => (
-                <Code key={text}>{text}</Code>
-              ))}
-            </p>
-          </Callout>
         </Card>
         <Card
           title={strings.sitesTitle}
-          description={strings.sitesText}
+          {...(form.allowedOrigins.length === 0 ? { description: strings.sitesEmpty } : {})}
+          actions={<InfoTip label={strings.sitesTitle}>{strings.sitesTip}</InfoTip>}
           {...(isReadOnly
             ? {}
             : {
@@ -193,9 +196,7 @@ export function InstallTab({ slug, form, isReadOnly, onFormChange }: InstallTabP
                 ),
               })}
         >
-          {form.allowedOrigins.length === 0 ? (
-            <Callout tone="warning">{strings.sitesEmpty}</Callout>
-          ) : (
+          {form.allowedOrigins.length > 0 && (
             <DescriptionList
               items={form.allowedOrigins.map((origin) => ({
                 term: origin,
@@ -217,7 +218,7 @@ export function InstallTab({ slug, form, isReadOnly, onFormChange }: InstallTabP
           {!isReadOnly && (
             <Field
               label={strings.siteNew}
-              hint={strings.siteNewHint}
+              placeholder={strings.siteNewPlaceholder}
               type="url"
               inputMode="url"
               value={site}
@@ -231,8 +232,12 @@ export function InstallTab({ slug, form, isReadOnly, onFormChange }: InstallTabP
           )}
         </Card>
         <Card
-          title={strings.refuseUnsigned}
-          description={strings.refuseUnsignedHint}
+          title={strings.signedTitle}
+          actions={
+            <InfoTip label={strings.signedTitle} example={<>{strings.signHowText(code)}</>}>
+              {strings.refuseUnsignedHint}
+            </InfoTip>
+          }
           {...(form.signingSecret === undefined
             ? {}
             : {
@@ -264,7 +269,6 @@ export function InstallTab({ slug, form, isReadOnly, onFormChange }: InstallTabP
         >
           <Switch
             label={strings.refuseUnsigned}
-            isLabelHidden
             isSelected={form.requireSignature}
             isReadOnly={isReadOnly}
             onChange={(requireSignature) => {
@@ -286,13 +290,6 @@ export function InstallTab({ slug, form, isReadOnly, onFormChange }: InstallTabP
               );
             }}
           />
-          <Disclosure title={strings.signHowTitle}>
-            <p>
-              {strings.signHowText((text) => (
-                <Code key={text}>{text}</Code>
-              ))}
-            </p>
-          </Disclosure>
           {form.signingSecret !== undefined && (
             <Field
               label={strings.secret}

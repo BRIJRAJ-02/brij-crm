@@ -20,9 +20,6 @@ import {
   CopyButton,
   DescriptionList,
   EmptyState,
-  Menu,
-  MenuItem,
-  MenuTrigger,
   Modal,
   Panel,
   RecordChip,
@@ -42,7 +39,6 @@ import { recordLinks } from '../records/timeline.ts';
 import { cameFromOf } from './came-from.ts';
 import { formHref } from './paths.ts';
 import { strings } from './strings.ts';
-import { SyncDialog } from './SyncDialog.tsx';
 import { useFormToolbarSlot } from './toolbarSlot.ts';
 
 /** Props for the Submissions tab: what its route loaded through the data layer. */
@@ -55,13 +51,19 @@ export interface SubmissionsTabProps {
   readonly open: SubmissionView | undefined;
   readonly canManage: boolean;
   /** The form's questions, for the answer columns (the first two) by their labels; the `name` one names the person. */
-  readonly questions: readonly { readonly id: string; readonly key: string; readonly label: string }[];
+  readonly questions: readonly {
+    readonly id: string;
+    readonly key: string;
+    readonly label: string;
+  }[];
   /** The form's public link, for the empty state's Copy link. */
   readonly link: string;
   /** Follows a job this tab started to its end; the editor holds it, so a tab change never loses the result. */
   readonly followJob: (jobId: string, onDone: (job: JobView) => void) => void;
   /** The live form adds submissions to the CRM; one that keeps them only offers no Add to CRM or sync. */
   readonly isFiling: boolean;
+  /** Whether the form has any submission at all, spam included; without one the tab shows only its empty state. */
+  readonly hasSubmissions: boolean;
 }
 
 /** How many answers get a column of their own; the rest are in the open submission. */
@@ -126,12 +128,12 @@ export function SubmissionsTab({
   link: formLink,
   followJob,
   isFiling,
+  hasSubmissions,
 }: SubmissionsTabProps) {
   const slot = useFormToolbarSlot();
   const [query, setQuery] = useState('');
   const [selected, setSelected] = useState<ReadonlySet<string>>(new Set());
   const [bulk, setBulk] = useState<{ readonly label: string; readonly value: number } | undefined>(undefined);
-  const [isSyncing, setSyncing] = useState(false);
   const { data, toasts } = useRouteContext({ from: '__root__' });
   const navigate = useNavigate();
   const router = useRouter();
@@ -383,38 +385,14 @@ export function SubmissionsTab({
       );
   };
 
-  const moreActions = (
-    <MenuTrigger>
-      <Button variant="ghost" icon="ellipsis" label={strings.moreSubmissionActions} />
-      <Menu
-        label={strings.moreSubmissionActions}
-        disabledKeys={rows.length === 0 ? ['export'] : []}
-        onAction={(key) => {
-          if (key === 'export') exportCsv();
-          if (key === 'sync') setSyncing(true);
-        }}
-      >
-        <MenuItem
-          id="export"
-          icon="download"
-          description={
-            picked.length > 0
-              ? strings.exportPicked(picked.length)
-              : query.trim() === ''
-                ? strings.exportFilter
-                : strings.exportShown
-          }
-        >
-          {strings.exportCsv}
-        </MenuItem>
-        {isFiling && (
-          <MenuItem id="sync" icon="refresh-cw" description={strings.syncOldText}>
-            {strings.syncOld}
-          </MenuItem>
-        )}
-      </Menu>
-    </MenuTrigger>
+  // One clear action for the rows: Export, only when there are rows. Form wide actions live in the top bar's menu.
+  const exportButton = (
+    <Button size="sm" icon="download" onPress={exportCsv}>
+      {strings.exportButton}
+    </Button>
   );
+
+  const isEmpty = !hasSubmissions && rows.length === 0 && state === undefined && query.trim() === '';
 
   const toolbar = (
     <LinkListToolbar
@@ -443,7 +421,7 @@ export function SubmissionsTab({
               );
             }}
           />
-          {canManage && moreActions}
+          {canManage && rows.length > 0 && exportButton}
         </>
       }
     />
@@ -476,7 +454,8 @@ export function SubmissionsTab({
   return (
     <>
       {/* The filter and search sit at the end of the tab strip, as Captures' do: no row of their own. */}
-      {slot === null ? toolbar : createPortal(toolbar, slot)}
+      {/* Before the first submission there is nothing to search, filter or export: only the empty state shows. */}
+      {isEmpty ? null : slot === null ? toolbar : createPortal(toolbar, slot)}
       {state === undefined && waiting > 0 && (
         <Callout
           tone="warning"
@@ -538,40 +517,50 @@ export function SubmissionsTab({
           )}
         </BulkActionBar>
       )}
-      <Table
-        label={strings.tabSubmissions}
-        columns={columns}
-        rows={shown}
-        getRowId={(submission) => submission.id}
-        renderCell={cell}
-        isHeaderSticky
-        {...(canManage
-          ? {
-              selected,
-              onSelectedChange: setSelected,
-              getSelectLabel: (submission: SubmissionSummary) =>
-                submission.mainRecord?.name ?? submission.email ?? strings.submission,
-            }
-          : {})}
-        onRowAction={(id) => {
-          go(id);
-        }}
-        emptyState={
-          query.trim() !== '' ? (
-            <EmptyState icon="search" title={strings.noMatch(query.trim())} />
-          ) : state === undefined ? (
-            <EmptyState
-              icon="inbox"
-              title={strings.noSubmissions}
-              actions={<CopyButton value={formLink} label={strings.copyLink} variant="primary" />}
-            >
-              {strings.noSubmissionsText}
-            </EmptyState>
-          ) : (
-            <EmptyState icon="inbox" title={strings.noneIn[state]} />
-          )
-        }
-      />
+      {isEmpty ? (
+        <EmptyState
+          icon="inbox"
+          title={strings.noSubmissions}
+          actions={<CopyButton value={formLink} label={strings.copyLink} variant="primary" />}
+        >
+          {strings.noSubmissionsText}
+        </EmptyState>
+      ) : (
+        <Table
+          label={strings.tabSubmissions}
+          columns={columns}
+          rows={shown}
+          getRowId={(submission) => submission.id}
+          renderCell={cell}
+          isHeaderSticky
+          {...(canManage
+            ? {
+                selected,
+                onSelectedChange: setSelected,
+                getSelectLabel: (submission: SubmissionSummary) =>
+                  submission.mainRecord?.name ?? submission.email ?? strings.submission,
+              }
+            : {})}
+          onRowAction={(id) => {
+            go(id);
+          }}
+          emptyState={
+            query.trim() !== '' ? (
+              <EmptyState icon="search" title={strings.noMatch(query.trim())} />
+            ) : state === undefined ? (
+              <EmptyState
+                icon="inbox"
+                title={strings.noSubmissions}
+                actions={<CopyButton value={formLink} label={strings.copyLink} variant="primary" />}
+              >
+                {strings.noSubmissionsText}
+              </EmptyState>
+            ) : (
+              <EmptyState icon="inbox" title={strings.noneIn[state]} />
+            )
+          }
+        />
+      )}
       {held.next !== undefined && (
         <Button onPress={loadMore} isPending={busy === 'more'}>
           {strings.loadMore}
@@ -624,27 +613,6 @@ export function SubmissionsTab({
           <SubmissionDetail submission={open} link={link} isFiling={isFiling} />
         </Panel>
       )}
-      <SyncDialog
-        slug={slug}
-        formId={formId}
-        reason="menu"
-        isOpen={isSyncing}
-        onClose={() => {
-          setSyncing(false);
-        }}
-        onStarted={(jobId) => {
-          setSyncing(false);
-          toasts.toast({ tone: 'info', message: strings.syncStarted });
-          followJob(jobId, (job) => {
-            toasts.toast({
-              tone: job.status === 'succeeded' ? 'success' : 'danger',
-              message:
-                job.status === 'succeeded' ? strings.syncDone(job.done, job.refused) : strings.jobFailed(job.label),
-            });
-            void router.invalidate();
-          });
-        }}
-      />
       <Modal
         title={strings.deleteSubmissionTitle(
           open === undefined ? undefined : (open.mainRecord?.name ?? nameOf(open) ?? open.email),

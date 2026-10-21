@@ -74,10 +74,10 @@ export const strings = {
   moreActions: 'More actions',
   pause: 'Pause',
   resume: 'Resume',
-  statusLive: (version: number) => `Published · v${String(version)}`,
-  statusChanged: 'Published · Unpublished changes',
-  statusDraft: 'Not published',
-  statusPaused: 'Not accepting',
+  statusLive: (version: number) => `Live · v${String(version)}`,
+  statusChanged: 'Live · edited',
+  statusDraft: 'Draft',
+  statusPaused: 'Paused',
   tabs: 'Form sections',
   tabForm: 'Form',
   tabSettings: 'Settings',
@@ -180,13 +180,14 @@ export const strings = {
   buttonDefault: 'Send',
   wordsTitle: 'The words on the form',
   waitsForPublish: 'Changed, goes live when you publish',
-  afterTitle: 'What people see after sending',
+  afterTitle: 'After sending',
+  afterTip:
+    'What a visitor sees once they press Send: your thank you message, another web page, or one of your booking pages to book a meeting, with their name and email already filled in.',
+  afterTipExample:
+    'Book a meeting with “After 5 seconds” shows the thank you message and a countdown with Book now and Stay here, then opens the booking page.',
   afterChoice: 'What they see next',
   showMessage: 'A thank you message',
-  showsMessage: 'Shows a thank you message',
   sendToAddress: 'Another web page',
-  noAddressYet: 'Sends them to a page, no address yet',
-  sendsTo: (address: string) => `Sends them to ${address}`,
   thankYou: 'Thank you message',
   thankYouDefault: 'Thank you. We will come back to you at the address you gave.',
   redirectUrl: 'Web address',
@@ -194,10 +195,9 @@ export const strings = {
   // Book a meeting after sending (AC-1055 to AC-1059)
   bookMeeting: 'Book a meeting',
   bookingPage: 'Booking page',
-  bookingPageHint: 'Visitors go on to book a time here, with their name and email filled in.',
   pageItem: (title: string, minutes: number) => `${title} · ${String(minutes)} min`,
   pageNotUsable: 'Paused, or not yours to use: pick another',
-  noBookingPages: 'Needs a booking page of yours that is on',
+  noBookingPages: 'Needs a booking page that is on',
   bookingPagesFailed: 'Your booking pages didn’t load',
   createBookingPage: 'Create a booking page',
   countdown: 'Send them there',
@@ -208,25 +208,14 @@ export const strings = {
       ? 'Visitors go straight on to book once they send.'
       : `Visitors see “Taking you to book a time in ${String(seconds)}…” with Book now and Stay here.`,
   bookingThankYouHint: 'Shown above the countdown, and on its own if the booking page is off when they send.',
-  sendsToBook: (title: string | undefined, seconds: number) =>
-    title === undefined
-      ? 'Sends them on to book a time'
-      : seconds === 0
-        ? `Sends them on to book ${title} at once`
-        : `Sends them on to book ${title} after ${String(seconds)} seconds`,
   addToCrmSwitch: 'Add each submission to the CRM',
   addToCrmOn: (object: string, match: string | undefined) =>
     match === undefined
       ? `Each submission makes a ${object}.`
       : `Each submission makes a ${object}, or updates the one with the same ${match}.`,
   addToCrmOff: 'Submissions stay in the Submissions tab. Nothing is added to the CRM.',
-  keptOnlySummary: 'Kept in Submissions only',
   whichObject: 'Where submissions go',
   retargetFailed: 'That didn’t change where submissions go.',
-  answersSummary: (object: string, filed: number) =>
-    filed === 0
-      ? `Adds or updates a ${object}`
-      : `Adds or updates a ${object} · ${count(filed, 'answer', 'answers')} filed`,
   eachSend: 'Each submission',
   createsOrUpdates: (object: string, match: string | undefined) =>
     match === undefined ? `Creates a ${object}` : `Creates a ${object}, or updates the one with the same ${match}`,
@@ -243,7 +232,7 @@ export const strings = {
   // Install tab
   readOnlyTitle: 'You can view this form',
   readOnlyText: 'Only people who manage forms can change it.',
-  shareTitle: 'Share your form',
+  shareTitle: 'Share',
   link: 'Link',
   copy: 'Copy',
   copyLink: 'Copy link',
@@ -251,8 +240,9 @@ export const strings = {
   copyEmbed: 'Copy snippet',
   copyFormHtml: 'Copy form HTML',
   copySecret: 'Copy signing secret',
-  websiteTitle: 'Put it on your website',
-  websiteText: 'Paste this into your page. One script tag serves every form and booking page on your site.',
+  websiteTitle: 'Put it on your site',
+  websiteTip:
+    'Paste the snippet where the form should show. One script tag serves every form and booking page on your site, so add it once.',
   embedMode: 'How it shows',
   embedInline: 'In the page',
   embedPopup: 'Popup',
@@ -265,11 +255,9 @@ export const strings = {
   embedButtonText: 'Contact us',
   embedSnippet: 'Embed snippet',
   embedText: 'Put the form on a page of your own site.',
-  advancedTitle: 'Advanced: for a developer',
+  advancedTitle: 'For developers',
   ownFormTitle: 'Your own HTML',
-  advancedText: 'Your own HTML form, the sites it may post from, and signed posts.',
   ownFormSnippet: 'Form HTML',
-  taggingTitle: 'How tagging works',
   taggingText:
     'The form names your workspace, this form and its version. Each field’s name is its question’s key, so renaming a question never breaks your page. With each post the script sends the page, its title, the visit’s first page and referrer, and the UTM tags, shown on the submission as Came from.',
   /** The consent line, with its code names drawn by `code` so they read and copy exactly. */
@@ -287,11 +275,11 @@ export const strings = {
   ownFormTrapLabel: 'Leave this empty',
   ownFormNoFiles: (label: string) => `${label}: file questions work on the hosted form only.`,
   copied: 'Copied.',
-  sitesTitle: 'Which sites can send us leads',
-  sitesText: 'Your own HTML only works from these addresses. Embeds work anywhere.',
-  sitesEmpty: 'No sites yet, so posts from your own HTML are refused. Add the address of the site it lives on.',
+  sitesTitle: 'Allowed sites',
+  sitesTip: 'Your own HTML only posts from these addresses. Embeds and the hosted page work on any site.',
+  sitesEmpty: 'None yet, so your own HTML can’t post.',
   siteNew: 'Site address',
-  siteNewHint: 'Its https address, such as https://acme.com.',
+  siteNewPlaceholder: 'https://acme.com',
   siteAdd: 'Add site',
   siteRemove: (origin: string) => `Remove ${origin}`,
   siteRemoveTitle: (origin: string) => `Remove ${origin}?`,
@@ -305,9 +293,9 @@ export const strings = {
   unsignedRefused: 'Unsigned posts are refused now.',
   unsignedAllowed: 'Unsigned posts are taken again.',
   refuseUnsigned: 'Refuse unsigned posts',
+  signedTitle: 'Signed posts',
   refuseUnsignedHint:
-    'Turn this on when only your site’s server posts to the form. Each post must then carry a signature made with the secret below, so your own HTML posting from a browser is refused. The hosted page and embeds keep working.',
-  signHowTitle: 'How to sign a post',
+    'Turn on Refuse unsigned posts when only your server posts to the form. Each post must then carry a signature made with the secret, so your own HTML in a browser is refused. The hosted page and embeds keep working.',
   /** How to sign, with its code names drawn by `code`. */
   signHowText: <T>(code: (text: string) => T): readonly (string | T)[] => [
     'On your server, take the exact body you send, make its HMAC with SHA 256 and the signing secret, and send it in the ',
@@ -388,6 +376,7 @@ export const strings = {
   notSpam: 'Not spam',
   moreSubmissionActions: 'More submission actions',
   exportCsv: 'Export as CSV',
+  exportButton: 'Export CSV',
   exportFilter: 'What this filter shows, every answer as a column',
   exportShown: 'What the table shows for this search, every answer as a column',
   exportPicked: (n: number) => `The ${count(n, 'picked submission', 'picked submissions')}, every answer as a column`,

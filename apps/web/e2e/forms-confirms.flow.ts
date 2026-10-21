@@ -201,7 +201,7 @@ test.describe('confirms on forms', () => {
     // Removing a site from the Install tab asks first; Escape keeps it; Remove site saves the list without it.
     const settings = calls(page, 'forms/updateSettings');
     await page.goto(`/w/${slug}/captures/forms/${live.id}?tab=install`);
-    await page.getByRole('button', { name: 'Advanced: for a developer' }).click();
+    await page.getByRole('button', { name: 'For developers' }).click();
     await page.getByLabel('Site address').fill('https://acme.com');
     await page.getByRole('button', { name: 'Add site' }).click();
     const removeSite = page.getByRole('button', { name: 'Remove https://acme.com' });

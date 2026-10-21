@@ -131,10 +131,10 @@ describe('the builder’s draft changes', () => {
 
   it('says where the form stands', () => {
     const form = { status: 'live' as const, liveVersionNumber: 7, hasUnpublished: false };
-    expect(statusOf(form, false)).toEqual({ tone: 'live', text: 'Published · v7' });
+    expect(statusOf(form, false)).toEqual({ tone: 'live', text: 'Live · v7' });
     expect(statusOf(form, true).tone).toBe('changed');
-    expect(statusOf({ ...form, status: 'paused' }, false).text).toBe('Not accepting');
-    expect(statusOf({ status: 'draft', hasUnpublished: true }, true).text).toBe('Not published');
+    expect(statusOf({ ...form, status: 'paused' }, false).text).toBe('Paused');
+    expect(statusOf({ status: 'draft', hasUnpublished: true }, true).text).toBe('Draft');
   });
 
   it('compares documents whatever their key order', () => {
