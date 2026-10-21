@@ -47,7 +47,6 @@ export type EditorPart =
   | 'mention'
   | 'emptyEditor'
   | 'emptyLine'
-  | 'slashQuery'
   | 'slashQueryEmpty';
 
 /** The mention list's options, as the Suggestion utility takes them (members in, `{ id, label }` out). */
@@ -107,7 +106,6 @@ function slashCommands(slash: SlashSuggestion | undefined, classes: NoteExtensio
             const $from = state.doc.resolve(range.from);
             return $from.parent.type.name !== 'codeBlock' && !$from.marks().some((mark) => mark.type.name === 'code');
           },
-          ...(classes?.slashQuery === undefined ? {} : { decorationClass: classes.slashQuery }),
           ...(classes?.slashQueryEmpty === undefined ? {} : { decorationEmptyClass: classes.slashQueryEmpty }),
           ...slash,
         }),

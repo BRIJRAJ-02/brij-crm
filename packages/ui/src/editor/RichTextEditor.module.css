@@ -186,6 +186,36 @@
     text-decoration: underline;
   }
 
+  /* What has no caret to show focus: a block or chip selected whole (a
+     divider or a mention reached with the arrows) takes the accent outline,
+     and the gap cursor between two blocks that hold no text is a short line
+     in the text colour while the text has focus. Tiptap's stylesheet is off,
+     so ProseMirror's classes are found by attribute. */
+  .content [class~='ProseMirror-selectednode'] {
+    border-radius: var(--radius-xs);
+    outline: var(--border-width-thick) solid var(--accent-line);
+    outline-offset: var(--space-2);
+  }
+
+  .content [class~='ProseMirror-gapcursor'] {
+    position: absolute;
+    display: none;
+    pointer-events: none;
+  }
+
+  .content:focus [class~='ProseMirror-gapcursor'] {
+    display: block;
+  }
+
+  .content [class~='ProseMirror-gapcursor']::after {
+    position: absolute;
+    inset-block-start: calc(-1 * var(--space-2));
+    display: block;
+    inline-size: var(--space-20);
+    border-block-start: var(--border-width-hairline) solid var(--text);
+    content: '';
+  }
+
   /* The placeholders: the note's while all of it is empty, and an empty line's
      (or heading's) under the caret only while the text has focus. */
   .empty::before,

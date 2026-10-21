@@ -300,7 +300,11 @@ function useSlashMenu() {
   return { suggestion, pluginKey, ...list };
 }
 
-/** Up from the text to its editor's title, the caret at the title's end; nothing when the editor has no title. */
+/**
+ * Up from the text to its editor's title, the caret at the title's end; nothing when the editor has no title. Found
+ * from the text's own element rather than through a ref, since the extension set takes it while the editor is made,
+ * during render, where reading a ref is refused (react-hooks/refs).
+ */
 function focusTitleAbove(text: HTMLElement): boolean {
   const input = text.closest('[data-mode]')?.querySelector<HTMLTextAreaElement>('[data-title] textarea');
   if (input === null || input === undefined) return false;
@@ -487,7 +491,7 @@ export function RichTextEditor({
     (): readonly SuggestionRow[] =>
       (slash.session?.items ?? []).map((command) => ({
         key: command.id,
-        leading: <Icon name={command.icon} size="md" tone="muted" />,
+        leading: <Icon name={command.icon} size="sm" tone="muted" />,
         label: command.label,
         ...(command.markdown === undefined ? {} : { hint: command.markdown }),
       })),
@@ -497,12 +501,7 @@ export function RichTextEditor({
   const slashSession = slash.session;
 
   return (
-    <div
-      className={styles.root}
-      data-mode={mode}
-      data-invalid={error === undefined ? undefined : ''}
-      data-readonly={isReadOnly || undefined}
-    >
+    <div className={styles.root} data-mode={mode} data-readonly={isReadOnly || undefined}>
       {title !== undefined && (
         <div className={styles.title} data-title>
           <Field
