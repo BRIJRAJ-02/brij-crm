@@ -98,6 +98,15 @@ const NO_SCOPE: ReadonlySet<string> = new Set([
   // calendar reads a host's connections as the system for the public page, which has no scope of its own.
   'createBusyCache',
   'connectedCalendar',
+  // Booking changes (spec 0025, milestone 2): moving, cancelling and the move slots read take the target a door
+  // made (hostTarget, which checks booking.manage, or the guest's token entry), not a scope, and the row decides
+  // which bookings. The booking mail job's parts run as the system in the booking's workspace; its when line is pure.
+  'cancelBooking',
+  'moveBooking',
+  'readMoveSlots',
+  'prepareBookingMail',
+  'markInvited',
+  'whenLine',
   // Calendar sync milestones 2 and 3 (spec 0024): a push notice comes from outside any workspace and reads as the
   // system in the one its channel token names; the events factory takes no scope (its services run as the system).
   'takeCalendarNotice',
@@ -255,7 +264,9 @@ describe('the walk: a principal without the access is refused', () => {
     async (name) => {
       const { scope, workspaceId, ownerId } = await memberOf('member');
       const key = testScope({ db, workspaceId, actor: { type: 'api_key', id: core.newId() }, scopes: [] });
-      expect(await refusalOf(service(name)(key, {}))).toEqual({
+      // Through a promise, since a change target is made at once (hostTarget throws rather than rejects), and
+      // with an empty input too, for the services that take their deps before it (bookingGuestPath).
+      expect(await refusalOf(Promise.resolve().then(() => service(name)(key, {}, {})))).toEqual({
         code: 'FORBIDDEN',
         message: PERMISSIONS['booking.manage'].message,
       });
@@ -270,6 +281,9 @@ describe('the walk: a principal without the access is refused', () => {
           'createTimeBlock',
           'removeTimeBlock',
           'bookAsHost',
+          // A member's change target and the guest link name a booking, not a page; the row decides (change.test.ts).
+          'hostTarget',
+          'bookingGuestPath',
         ].includes(name)
       )
         return;

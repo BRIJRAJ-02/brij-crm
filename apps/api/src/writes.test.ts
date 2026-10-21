@@ -67,6 +67,9 @@ const READS: ReadonlySet<string> = new Set([
   'bookings.listAll',
   'bookings.calendar',
   'bookings.hours',
+  // Where a booking could move (its page's slots), and the guest page's address: both read only.
+  'bookings.moveSlots',
+  'bookings.guestLink',
 ]);
 
 let db: Database;
@@ -222,6 +225,34 @@ async function heldMeeting(m: Member): Promise<{ connectionId: string; meetingId
  * store in the outbox (one row per object it touched), given the member's
  * workspace and the mutation id it sent.
  */
+/**
+ * A booking a member made for a guest on a new page, through the API: two writes before the case's (the page,
+ * then the booking, whose person's records row comes first in the outbox).
+ */
+async function hostBooking(m: Member): Promise<string> {
+  const page = await m.client.bookingPages.create({
+    workspace: m.slug,
+    id: newId(),
+    title: 'Intro',
+    timeZone: 'UTC',
+    mutationId: newId(),
+  });
+  const { bookingId } = await m.client.bookings.bookAsHost({
+    workspace: m.slug,
+    idempotencyKey: newId(),
+    pageId: page.id,
+    start: new Date(Date.now() + 86_400_000).toISOString(),
+    minutes: 30,
+    name: 'Grace Hopper',
+    // A free mail domain, so only the person is filed (no company).
+    email: 'grace@gmail.com',
+    timeZone: 'UTC',
+    guests: [],
+    mutationId: newId(),
+  });
+  return bookingId;
+}
+
 /** A shared view on People, made through the API (its own write and outbox row before the case's). */
 async function sharedViewOf(m: Member, name = 'Pipeline'): Promise<string> {
   const id = newId();
@@ -866,6 +897,25 @@ const WRITES: Record<string, (m: Member, mutationId: string) => Promise<readonly
     });
     return [{ kind: 'records', object_id: m.people.id, mutation_id: mutationId }];
   },
+  'bookings.cancel': async (m, mutationId) => {
+    const bookingId = await hostBooking(m);
+    await m.client.bookings.cancel({ workspace: m.slug, bookingId, reason: 'Clash', mutationId });
+    return [{ kind: 'records', object_id: m.people.id }];
+  },
+  'bookings.move': async (m, mutationId) => {
+    const bookingId = await hostBooking(m);
+    // To a time the page offers (a move refuses any other), read first: a read, so no poke.
+    const { slots } = await m.client.bookings.moveSlots({
+      workspace: m.slug,
+      bookingId,
+      from: new Date(Date.now() + 2 * 86_400_000).toISOString(),
+      to: new Date(Date.now() + 16 * 86_400_000).toISOString(),
+    });
+    const start = slots[0]?.start;
+    if (start === undefined) throw new Error('The page offers no time to move to.');
+    await m.client.bookings.move({ workspace: m.slug, bookingId, start, mutationId });
+    return [{ kind: 'records', object_id: m.people.id }];
+  },
   'bookings.blocks.create': async (m, mutationId) => {
     await m.client.bookings.blocks.create({
       workspace: m.slug,
@@ -1078,6 +1128,8 @@ const WRITES_MADE: Readonly<Record<string, number>> = {
   'bookingPages.delete': 2,
   'bookings.blocks.remove': 2,
   'bookings.bookAsHost': 2,
+  'bookings.cancel': 3,
+  'bookings.move': 3,
   'attributes.restore': 2,
   'relationships.update': 2,
   'links.add': 3,

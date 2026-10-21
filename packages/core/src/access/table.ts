@@ -221,4 +221,7 @@ export const ACCESS_TABLE = {
   createTimeBlock: { bookingPages: true },
   removeTimeBlock: { bookingPages: true },
   bookAsHost: { bookingPages: true },
+  // Changing a booking from Bookings (spec 0025, milestone 2): booking.manage first, then the booking's row.
+  hostTarget: { bookingPages: true },
+  bookingGuestPath: { bookingPages: true },
 } as const satisfies Record<string, AccessEntry>;

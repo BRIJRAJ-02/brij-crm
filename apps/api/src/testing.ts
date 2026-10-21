@@ -42,6 +42,9 @@ export function testEnv(overrides: Partial<ApiEnv> = {}): ApiEnv {
     MAIL_FROM: 'Timefix <sign-in@crm.localhost>',
     MAILPIT_URL: 'http://127.0.0.1:1',
     EDGE_SECRET: TEST_EDGE_SECRET,
+    // The guest link key's secret, so a test app in any APP_ENV can derive the key (outside local, booking-link.ts
+    // refuses to without one, as a deployed api would never start without the wake secret it falls back to).
+    BOOKING_LINK_SECRET: 'a-test-booking-link-secret-of-32-plus-characters',
     calendar: undefined,
     ...overrides,
   };

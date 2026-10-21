@@ -147,11 +147,14 @@ describe('a booking queues its emails, and its token derives from its id', () =>
     const booked = await s.book();
     expect(booked.manageToken).toBe(manageTokenFor(LINK_KEY, booked.bookingId).token);
     const rows = await queued(booked.bookingId);
-    expect(rows.map((each) => each.kind)).toEqual(['confirmed', 'reminder_24h', 'reminder_1h']);
-    expect(rows[1]?.run_at.toISOString()).toBe('2026-11-01T09:00:00.000Z');
-    expect(rows[2]?.run_at.toISOString()).toBe('2026-11-02T08:00:00.000Z');
-    expect(rows[1]?.key).toBe(`crm-booking:${s.workspaceId}:${booked.bookingId}:reminder_24h`);
-    expect(rows[0]?.key).toBeNull();
+    // The reminders queue with the booking, the confirmation after its calendar event (public.ts), so it knows
+    // whether the calendar invited the guest.
+    expect(rows.map((each) => each.kind)).toEqual(['reminder_24h', 'reminder_1h', 'confirmed']);
+    const ofKind = (kind: string) => rows.find((each) => each.kind === kind);
+    expect(ofKind('reminder_24h')?.run_at.toISOString()).toBe('2026-11-01T09:00:00.000Z');
+    expect(ofKind('reminder_1h')?.run_at.toISOString()).toBe('2026-11-02T08:00:00.000Z');
+    expect(ofKind('reminder_24h')?.key).toBe(`crm-booking:${s.workspaceId}:${booked.bookingId}:reminder_24h`);
+    expect(ofKind('confirmed')?.key).toBeNull();
   });
 });
 
@@ -177,7 +180,7 @@ describe('the guest moves their booking (AC-639, AC-675)', () => {
     expect(recorder.changes[0]?.change).toEqual({ start: MONDAY_10.toISOString(), end: '2026-11-02T10:30:00.000Z' });
     // The moved email, and the reminders again for the new time (the same keys, replaced).
     const rows = await queued(booked.bookingId);
-    expect(rows.map((each) => each.kind)).toEqual(['confirmed', 'reminder_24h', 'reminder_1h', 'moved']);
+    expect(rows.map((each) => each.kind)).toEqual(['reminder_24h', 'reminder_1h', 'confirmed', 'moved']);
     expect(rows.find((each) => each.kind === 'reminder_1h')?.run_at.toISOString()).toBe('2026-11-02T09:00:00.000Z');
   });
 
