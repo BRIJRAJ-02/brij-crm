@@ -250,6 +250,39 @@ export const Searchable: Story = {
   },
 };
 
+/**
+ * A search lists the options whose label starts with what is typed first, and marks the first: "cl" puts
+ * "Closed won" and "Closed lost" before "Declined", which only holds it, so Enter chooses what was meant.
+ */
+export const SearchBestMatchFirst: Story = {
+  args: {
+    label: 'Outcome',
+    isSearchable: true,
+    optionStyle: 'plain',
+    items: [
+      { id: 'declined', label: 'Declined' },
+      { id: 'won', label: 'Closed won' },
+      { id: 'lost', label: 'Closed lost' },
+    ],
+  },
+  parameters: { crm: { screenshot: false } },
+  render: (args) => (
+    <Stage width="narrow">
+      <Select {...args} />
+    </Stage>
+  ),
+  play: async ({ canvas, args, userEvent }) => {
+    await userEvent.click(canvas.getByRole('button', { name: /Outcome/ }));
+    const list = await listbox();
+    await userEvent.keyboard('cl');
+    await waitFor(() => expect(list.querySelector('[role="option"]')).toHaveTextContent('Closed won'));
+    await waitFor(() => expect(list.querySelector('[role="option"][data-focused]')).toHaveTextContent('Closed won'));
+    await expect(list.querySelectorAll('[role="option"]')[2]).toHaveTextContent('Declined');
+    await userEvent.keyboard('{Enter}');
+    await expect(args.onChange).toHaveBeenCalledWith('won');
+  },
+};
+
 /** `showsDescription`: the chosen option's detail stays in the closed field (a time zone and its offset). */
 export const DescriptionInField: Story = {
   args: {

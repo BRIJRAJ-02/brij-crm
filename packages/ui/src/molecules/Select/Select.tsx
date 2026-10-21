@@ -202,7 +202,9 @@ export function Select({
   // While searching, the best matches come first (by default, labels that start with what is typed), so Enter on
   // the first one chooses what was meant; the rest keep their order.
   const rankOf = rank ?? ((item: SelectItem, input: string) => (startsWith(item.label, input) ? 0 : 1));
-  const ranked = hasSearch && typed !== '' ? [...items].sort((a, b) => rankOf(a, typed) - rankOf(b, typed)) : items;
+  const ranks = hasSearch && typed !== '' ? new Map(items.map((item) => [item.id, rankOf(item, typed)])) : undefined;
+  const ranked =
+    ranks === undefined ? items : [...items].sort((a, b) => (ranks.get(a.id) ?? 0) - (ranks.get(b.id) ?? 0));
   // React Aria marks the first match as the typed text changes, in the list as it stood a moment before (its
   // collection takes the new order one render later), so a match ranked up by this key was left unmarked below
   // the top. Once the order changes, ask it again, with the event its own search sends to its list.

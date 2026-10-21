@@ -1,5 +1,13 @@
 import { useMemo, type Ref } from 'react';
-import { allCountriesIn, countriesIn, countryRank, flagOf, matchesCountry, type Country } from '../../lib/countries.ts';
+import {
+  allCountriesIn,
+  countriesIn,
+  countryRank,
+  flagOf,
+  mainCountriesOf,
+  matchesCountry,
+  type Country,
+} from '../../lib/countries.ts';
 import { useFormatSettings } from '../../provider/context.ts';
 import { Select, type SelectItem } from '../Select/Select.tsx';
 import styles from './CountryPicker.module.css';
@@ -117,6 +125,8 @@ export function CountryPicker({
     return pinned === undefined ? all : [pinned, ...all.filter((item) => item !== pinned)];
   }, [countries, guess, isPlace]);
   const byCode = useMemo(() => new Map(countries.map((country) => [country.code, country])), [countries]);
+  // Each shared dial code's own country, worked out once per list rather than on every key of a search.
+  const mains = useMemo(() => mainCountriesOf(countries), [countries]);
   return (
     <Select
       label={label}
@@ -133,7 +143,7 @@ export function CountryPicker({
       }}
       rank={(item, query) => {
         const country = byCode.get(item.id);
-        return country === undefined ? 1 : countryRank(country, query);
+        return country === undefined ? 1 : countryRank(country, query, mains);
       }}
       isRequired={isRequired}
       isReadOnly={isReadOnly}

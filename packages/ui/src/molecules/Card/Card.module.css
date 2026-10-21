@@ -67,7 +67,8 @@
 
   /* The actions stand on the title's line: their box is one title line tall (1lh of text-title) and centres
      what it holds, so a control taller than that line ("View all", "Add a task") sits level with the title
-     rather than hanging below it, and the header keeps the title's height. */
+     rather than hanging below it, and the header keeps the title's height. Under a title with a description
+     they centre on the two lines instead, as a setting's control does. */
   .actions {
     display: inline-flex;
     flex: none;
@@ -76,6 +77,17 @@
     block-size: 1lh;
     font: var(--text-title);
     letter-spacing: var(--tracking-title);
+  }
+
+  .head:has(.description) .actions {
+    align-self: center;
+  }
+
+  /* What the actions hold reads in the body's type, whatever box they stand in. */
+  .actionsType {
+    display: contents;
+    font: var(--text-body);
+    letter-spacing: var(--tracking-body);
   }
 
   .body {

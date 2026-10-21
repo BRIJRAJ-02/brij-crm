@@ -299,8 +299,9 @@
   }
 
   /* In a popover (a grid cell's editor, a list's search) the popover's own edge frames the field: its focus is
-     the accent edge alone, since a halo inside the popover read as a second ring around it. */
-  .root[data-in-popover] .box:focus-within {
+     the accent edge alone, since a halo inside the popover read as a second ring around it. A refused field
+     keeps its halo: its edge stays danger, so the halo is its only sign of focus. */
+  .root[data-in-popover]:not([data-invalid]) .box:focus-within {
     box-shadow: none;
   }
 

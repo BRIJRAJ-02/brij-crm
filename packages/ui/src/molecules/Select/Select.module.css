@@ -141,6 +141,12 @@
     box-shadow: none;
   }
 
+  /* The code button's own mark when the keyboard reaches it: the Field's ring takes in the number too, and with
+     no caret on the button nothing else said which part had focus. */
+  .root[data-variant='prefix'] .trigger[data-focus-visible] {
+    box-shadow: var(--shadow-focus-inset);
+  }
+
   .short {
     color: var(--text);
     font: var(--text-body);
@@ -270,8 +276,10 @@
     color: var(--accent);
   }
 
-  /* In a popover the popover's own edge frames the trigger: focus is the accent edge alone, as a Field's there. */
-  .root[data-in-popover] .trigger:is([data-focus-visible], [data-pressed]) {
+  /* In a popover the popover's own edge frames the trigger: focus is the accent edge alone, as a Field's there;
+     a refused one keeps its halo (its edge stays danger), and the prefix has a mark of its own. */
+  .root[data-in-popover]:not([data-invalid], [data-variant='prefix'])
+    .trigger:is([data-focus-visible], [data-pressed]) {
     box-shadow: none;
   }
 
