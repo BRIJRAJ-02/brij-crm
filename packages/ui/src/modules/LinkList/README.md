@@ -17,8 +17,6 @@ On 20 October 2026 the owner asked for the Captures screens, ported from timefix
 - `density="compact"`: the records area's rows. One line at size-row (34px), no frame and no raised box, rows parted by the grid's hairline (`border-subtle`). Each row is the title with its address inline and muted, then the facts (`chips`) as one cell of muted text ("30 min · 60 min"), then the badge, the switch and the actions. Facts are text and states are Badges, so a count never reads as a state. An off row carries no Off badge in compact: its muted title and its switch say it (owner, 20 October 2026), so `badge` is for what they can't ("Not published", "Private", "Copying…"). The cells sit on a subgrid, so the facts and the ends line up down the list. `description` isn't shown. Under 480px of list, the facts and the address give way, so the title, switch and actions stay on one line. Captures › Links and Forms use it.
 - `density="comfortable"` (the default): rows about 60px tall in a raised, bordered box, with the description and the chips under the title.
 
-`value` (compact only) puts one attribute value in its field set display before the facts: Home's Needs attention shows each deal's Stage as its StatusDot (spec 0041). Why a variant: the facts are text by design, and a status as text would break the one field design rule; the row is otherwise the same row.
-
 `placement` says where a compact list sits:
 
 - `placement="page"` (the default): edge to edge across the view, with the page's 16px gutter inside each row, so hover and the dividers run the full width (Captures, under its tab strip, with no PageColumn around it).

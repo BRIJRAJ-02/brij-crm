@@ -145,7 +145,6 @@ export {
 } from './molecules/Modal/Modal.tsx';
 export { Panel, type PanelProps, type PanelVariant, type PanelWidth } from './molecules/Panel/Panel.tsx';
 export { PhoneField, type PhoneFieldProps, type PhoneFieldValue } from './molecules/PhoneField/PhoneField.tsx';
-export { InfoTip, type InfoTipProps } from './molecules/InfoTip/InfoTip.tsx';
 export { Popover, type PopoverPlacement, type PopoverProps, type PopoverWidth } from './molecules/Popover/Popover.tsx';
 export {
   SegmentedControl,

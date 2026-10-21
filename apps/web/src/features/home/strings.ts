@@ -38,18 +38,8 @@ export const strings = {
   moreTasks: (count: number) => (count === 1 ? '1 more task' : `${count.toLocaleString('en')} more tasks`),
   moreInTasks: 'More in My tasks',
 
-  // Needs attention
-  needsAttention: 'Needs attention',
-  openDeals: 'Deals',
-  unnamedDeal: 'Unnamed deal',
-  attentionText: 'Open deals you own, unchanged for 14 days or more.',
-  attentionFailed: 'Deals didn’t load',
-  changed: (when: string) => `Changed ${when}`,
-  more: (count: number, atLeast = false) =>
-    count === 1 ? '1 more deal' : `${count.toLocaleString('en')}${atLeast ? '+' : ''} more deals`,
-
   // The page
   quietTitle: 'Nothing needs you right now',
-  quietText: 'Meetings today, tasks due and deals going quiet show up here.',
+  quietText: 'Meetings today and tasks due show up here.',
   failedText: 'Check your connection and try again.',
 } as const;

@@ -156,53 +156,18 @@ function filterAttributes(group: FilterGroup | undefined): readonly string[] {
 /**
  * What a change must touch to move a window's order or membership: the
  * attributes its filter and sorts name. `any` when every write can (a sort or
- * filter on updated at or updated by, which every write moves), except when
- * the only filter on them is a top level `before` a time already past, with
- * any sort on that same attribute (Home's Needs attention, spec 0041): a
- * write then sets updated at to now, after the cut off, so it can only take
- * the record it names out of the window and never bring one in or move
- * another. Such a window is `shrinks`: it settles for a write to a record it
- * shows, or to the other attributes it names, not for every write.
+ * filter on updated at or updated by, which every write moves).
  */
-function orderAttributesOf(query: ViewQuery, shape: ObjectShape | undefined, now: number): OrderAttributes {
-  const named = [...filterAttributes(query.filter), ...(query.sorts ?? []).map((sort) => sort.attributeId)];
+function orderAttributesOf(query: ViewQuery, shape: ObjectShape | undefined): OrderAttributes {
+  const ids = new Set([...filterAttributes(query.filter), ...(query.sorts ?? []).map((sort) => sort.attributeId)]);
   const moving = (shape?.attributes ?? []).filter(
     (attribute) => attribute.isSystem && (attribute.apiSlug === 'updated_at' || attribute.apiSlug === 'updated_by'),
   );
-  const movingIds = new Set(moving.map((attribute) => attribute.id));
-  const shrinks = shrinksOnly(query, moving, now);
   return {
-    ids: new Set(shrinks ? named.filter((id) => !movingIds.has(id)) : named),
-    any: !shrinks && named.some((id) => movingIds.has(id)),
-    moving: movingIds,
-    shrinks,
+    ids,
+    any: moving.some((attribute) => ids.has(attribute.id)),
+    moving: new Set(moving.map((attribute) => attribute.id)),
   };
-}
-
-/** True when updated at is named only by top level `before` a past time, and by sorts on that same attribute. */
-function shrinksOnly(
-  query: ViewQuery,
-  moving: readonly { readonly id: string; readonly apiSlug: string }[],
-  now: number,
-): boolean {
-  const updatedAt = moving.find((attribute) => attribute.apiSlug === 'updated_at')?.id;
-  const filter = query.filter;
-  if (updatedAt === undefined || filter?.conjunction !== 'and') return false;
-  const cutoffs = filter.conditions.filter(
-    (condition) =>
-      !('conditions' in condition) &&
-      'attributeId' in condition &&
-      condition.attributeId === updatedAt &&
-      condition.operator === 'before' &&
-      'value' in condition &&
-      typeof condition.value === 'string' &&
-      Date.parse(condition.value) <= now,
-  );
-  if (cutoffs.length === 0) return false;
-  const movingIds = new Set(moving.map((attribute) => attribute.id));
-  const filterUses = filterAttributes(filter).filter((id) => movingIds.has(id));
-  const sortUses = (query.sorts ?? []).filter((sort) => movingIds.has(sort.attributeId));
-  return filterUses.length === cutoffs.length && sortUses.every((sort) => sort.attributeId === updatedAt);
 }
 
 /** The attributes a window's order and membership depend on (`orderAttributesOf`). */
@@ -211,8 +176,6 @@ interface OrderAttributes {
   readonly any: boolean;
   /** The object's updated at and updated by: every write moves them. */
   readonly moving: ReadonlySet<string>;
-  /** A write can only take the record it names out (see `orderAttributesOf`): settle for a shown record's write. */
-  readonly shrinks: boolean;
 }
 
 /** The calls the records layer makes, each mapped to a DataError on failure (a 401 has already signed out). */
@@ -1810,7 +1773,7 @@ export function createRecordsLayer({
         }
       },
       markDirty,
-      orderAttributes: () => orderAttributesOf(query, shape, now()),
+      orderAttributes: () => orderAttributesOf(query, shape),
       attributes: () => readSet,
       edited: (ids) => {
         for (const id of ids) if (windows.has(id) || created.has(id)) edited.add(id);
@@ -3292,8 +3255,7 @@ export function createRecordsLayer({
             change.attributes === 'all' ||
             change.attributes.size === 0 ||
             order.any ||
-            [...change.attributes].some((id) => order.ids.has(id)) ||
-            (order.shrinks && ids.some((id) => entry.shows(id)));
+            [...change.attributes].some((id) => order.ids.has(id));
           // A record the event names as made, deleted or restored moves the count and maybe the rows; an edit to a
           // record out of sight, naming only attributes the order ignores, moves nothing, so no tab rereads for it.
           if (touches || change.lifecycle.size > 0) entry.markDirty();
