@@ -68,8 +68,11 @@ export const Bar: Story = {
     </Stage>
   ),
   play: async ({ canvas, userEvent }) => {
-    await userEvent.click(canvas.getByRole('radio', { name: 'Assigned to me' }));
+    const assigned = canvas.getByRole('radio', { name: 'Assigned to me' });
+    await userEvent.click(assigned);
     await userEvent.keyboard('{ArrowRight}');
     await expect(canvas.getByRole('radio', { name: 'Created by me' })).toBeChecked();
+    // The pointer leaves, so the picture never depends on whether Assigned to me still shows its hover.
+    await userEvent.unhover(assigned);
   },
 };
