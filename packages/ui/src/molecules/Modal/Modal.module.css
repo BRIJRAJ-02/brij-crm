@@ -6,7 +6,10 @@
    duration-modal and leaves in duration-exit; opened from the keyboard it
    appears at once. The footer sits on surface-subtle under a hairline. */
 @layer components {
+  /* The viewport's width, less its padding, for the footer's phone layout (a media query takes only the page
+     breakpoint). */
   .scrim {
+    container: modal-scrim / inline-size;
     position: fixed;
     inset: 0;
     z-index: var(--z-modal);
@@ -119,6 +122,15 @@
     padding-inline: var(--space-12);
     border-block-start: var(--border-width-hairline) solid var(--border-subtle);
     background: var(--surface-subtle);
+  }
+
+  /* On a phone the footer's buttons stack, each the dialog's width, the primary (listed last, after Cancel) on
+     top. */
+  @container modal-scrim (width < 480px) {
+    .foot {
+      flex-direction: column-reverse;
+      align-items: stretch;
+    }
   }
 
   /* The palette: flush, its title for screen readers only. */

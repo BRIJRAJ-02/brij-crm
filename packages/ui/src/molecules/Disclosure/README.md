@@ -22,6 +22,7 @@ New. Attribute groups on the record panel (#18), advanced settings and import op
 - `variant="label"` draws the title as a sidebar section label (11px, `text-secondary`, the chevron after it) with its items flush under it: the sidebar's Favorites, Records and Lists.
 
 - `actions` (spec 0034): quiet controls after the title, outside its toggle (a sidebar section's grip and menu). In the `label` variant they show while the row is hovered or holds focus. Why: a section's menu can't sit inside the toggle button, and every sidebar section would otherwise draw its own heading row.
+- Directly in a settings page's body (SettingsLayout sets the library's page edge) the default variant's title row runs out through the page's gutter like a Table's rows, a row's height, its chevron on the content edge and its count at the far one; its panel does too, so a Table inside it lines up with the one above it (Objects' Archived, 22 October 2026).
 
 ## States
 

@@ -1,6 +1,6 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
 import { useState } from 'react';
-import { expect, fn, waitFor } from 'storybook/test';
+import { expect, fn, waitFor, within } from 'storybook/test';
 import { Button } from '../../atoms/Button/Button.tsx';
 import { Checkbox } from '../../atoms/Checkbox/Checkbox.tsx';
 import { RecordChip } from '../../atoms/RecordChip/RecordChip.tsx';
@@ -97,7 +97,17 @@ export const ConfirmOpen: Story = {
     </Stage>
   ),
   play: async () => {
-    await openDialog();
+    const dialog = await openDialog();
+    // The footer: Cancel, then the primary, on one row at the end, the same height (on a phone they stack).
+    const cancel = within(dialog as HTMLElement)
+      .getByRole('button', { name: 'Cancel' })
+      .getBoundingClientRect();
+    const primary = within(dialog as HTMLElement)
+      .getByRole('button', { name: 'Delete records' })
+      .getBoundingClientRect();
+    await expect(primary.top).toBe(cancel.top);
+    await expect(primary.height).toBe(cancel.height);
+    await expect(primary.left).toBeGreaterThan(cancel.right);
   },
 };
 

@@ -10,6 +10,8 @@ import { Callout } from '../../molecules/Callout/Callout.tsx';
 import { Card } from '../../molecules/Card/Card.tsx';
 import { EmptyState } from '../../molecules/EmptyState/EmptyState.tsx';
 import { TabPanel, Tabs } from '../../molecules/Tabs/Tabs.tsx';
+import { Disclosure } from '../../molecules/Disclosure/Disclosure.tsx';
+import { Table } from '../../molecules/Table/Table.tsx';
 import { Stage } from '../../workbench/Stage/Stage.tsx';
 import { TopBar } from '../Toolbar/Toolbar.tsx';
 import { Select } from '../../molecules/Select/Select.tsx';
@@ -540,5 +542,94 @@ export const RowWithInfo: Story = {
   play: async ({ canvas }) => {
     await expect(canvas.getByRole('button', { name: 'About Daily digest' })).toBeInTheDocument();
     await expect(canvas.getByRole('switch', { name: 'Daily digest' })).toBeInTheDocument();
+  },
+};
+
+const EDGE_ROWS = [
+  { id: 'people', name: 'People', count: '17 attributes' },
+  { id: 'companies', name: 'Companies', count: '22 attributes' },
+  { id: 'deals', name: 'Deals', count: '13 attributes' },
+] as const;
+const EDGE_COLUMNS = [
+  { id: 'name', label: 'Object', isRowHeader: true },
+  { id: 'count', label: 'Attributes', align: 'end' as const },
+];
+
+/** Where an element's text starts: its box's start plus its own start padding. */
+function textStart(element: Element): number {
+  return element.getBoundingClientRect().left + Number.parseFloat(getComputedStyle(element).paddingInlineStart);
+}
+
+/**
+ * One content edge under the bar (22 Oct 2026): the tabs sit right under the TopBar as the page's second bar,
+ * and the first tab's label, the Meter, a reorderable Table's first column (its handles in the gutter before
+ * it), a plain Table's and the Disclosure's title row all start on the same line; the rows run out to the
+ * page's edges.
+ */
+export const ContentEdge: Story = {
+  render: () => (
+    <Stage width="fill" direction="column">
+      <TopBar
+        title="Objects"
+        crumbs={[
+          { id: 'settings', label: 'Settings' },
+          { id: 'workspace', label: 'Workspace' },
+        ]}
+      >
+        <Button variant="primary" icon="plus">
+          New object
+        </Button>
+      </TopBar>
+      <SettingsLayout header="bar" title="Objects" hasTabs>
+        <Tabs
+          label="Objects"
+          tabs={[
+            { id: 'live', label: 'Objects', count: 3 },
+            { id: 'about', label: 'About' },
+          ]}
+        >
+          <TabPanel id="live">
+            <SettingsStack>
+              <Meter label="Custom objects" value={0} maxValue={50} />
+              <Table
+                label="Objects"
+                columns={EDGE_COLUMNS}
+                rows={EDGE_ROWS}
+                getRowId={(row) => row.id}
+                getRowLabel={(row) => row.name}
+                renderCell={(row, column) => (column === 'name' ? row.name : row.count)}
+                onReorder={() => undefined}
+              />
+              <Disclosure title="Archived" count={1} defaultExpanded>
+                <Table
+                  label="Archived objects"
+                  columns={EDGE_COLUMNS}
+                  rows={[{ id: 'projects', name: 'Projects', count: '4 attributes' }]}
+                  getRowId={(row) => row.id}
+                  renderCell={(row, column) => (column === 'name' ? row.name : row.count)}
+                />
+              </Disclosure>
+            </SettingsStack>
+          </TabPanel>
+          <TabPanel id="about">{null}</TabPanel>
+        </Tabs>
+      </SettingsLayout>
+    </Stage>
+  ),
+  play: async ({ canvas }) => {
+    const edge = canvas.getByText('Custom objects').getBoundingClientRect().left;
+    const tab = canvas.getByRole('tab', { name: /Objects/ });
+    const [liveHeader] = canvas.getAllByRole('columnheader', { name: 'Object' });
+    const archived = canvas.getByRole('rowheader', { name: 'Projects' });
+    const trigger = canvas.getByRole('button', { name: /Archived/ });
+    if (liveHeader === undefined) throw new Error('no header');
+    await expect(textStart(tab)).toBeCloseTo(edge, 0);
+    await expect(textStart(liveHeader)).toBeCloseTo(edge, 0);
+    await expect(textStart(canvas.getByRole('rowheader', { name: /People/ }))).toBeCloseTo(edge, 0);
+    await expect(textStart(archived)).toBeCloseTo(edge, 0);
+    await expect(textStart(trigger)).toBeCloseTo(edge, 0);
+    // The handle sits before the content edge, in the gutter, not in a column of its own.
+    const handle = canvas.getByRole('button', { name: 'Move People' }).getBoundingClientRect();
+    await expect(handle.right).toBeLessThanOrEqual(edge + 1);
   },
 };

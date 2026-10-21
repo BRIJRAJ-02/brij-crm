@@ -4,7 +4,7 @@
 // Leaves out: the invite link and email domains (slice 6), and a seat line (until #38 sets plan limits).
 import { isDataError, ROLE_DESCRIPTIONS, ROLE_LABELS, type DataLayer, type InviteResult, type Role } from '@crm/data';
 import { Button, Field, Form, Modal, Select } from '@crm/ui';
-import { useState } from 'react';
+import { useId, useState } from 'react';
 import { parseEmails } from './members.ts';
 import { strings } from './members-strings.ts';
 
@@ -31,6 +31,7 @@ interface InviteRefusal {
 export function InviteDialog({ data, slug, isOpen, onClose, roles, onInvited }: InviteDialogProps) {
   const [text, setText] = useState('');
   const [role, setRole] = useState<Role>(roles.includes('member') ? 'member' : (roles[0] ?? 'member'));
+  const formId = useId();
   const [isBusy, setBusy] = useState(false);
   const [refusals, setRefusals] = useState<readonly InviteRefusal[]>([]);
 
@@ -83,19 +84,24 @@ export function InviteDialog({ data, slug, isOpen, onClose, roles, onInvited }: 
       // Typed addresses aren't thrown away by a stray click outside.
       isDismissable={text.trim() === ''}
       isBusy={isBusy}
+      // The dialog's footer, as every dialog's: Cancel, then the primary, on one row at the end.
+      actions={
+        <>
+          <Button slot="close" kbd="ESC" isDisabled={isBusy} onPress={close}>
+            {strings.cancel}
+          </Button>
+          <Button variant="primary" type="submit" form={formId} isPending={isBusy} kbd="⌘↵">
+            {isBusy ? strings.sending : strings.send}
+          </Button>
+        </>
+      }
     >
       <Form<InviteRefusal>
-        submitLabel={strings.send}
-        busyLabel={strings.sending}
+        id={formId}
         isBusy={isBusy}
         refusals={refusals}
         fieldFor={(refusal) => refusal.field}
         onSubmit={send}
-        actions={
-          <Button slot="close" kbd="ESC" isDisabled={isBusy} onPress={close}>
-            {strings.cancel}
-          </Button>
-        }
       >
         <Field
           label={strings.emails}

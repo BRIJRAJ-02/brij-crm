@@ -1,4 +1,4 @@
-import { useEffect, useRef, type ReactNode } from 'react';
+import { useContext, useEffect, useRef, type ReactNode } from 'react';
 import { useFocusVisible } from 'react-aria';
 import {
   SelectionIndicator,
@@ -11,6 +11,7 @@ import {
 import { Badge } from '../../atoms/Badge/Badge.tsx';
 import { Icon } from '../../atoms/Icon/Icon.tsx';
 import type { IconName } from '../../atoms/Icon/icons.ts';
+import { PageEdge } from '../../lib/page-edge.ts';
 import styles from './Tabs.module.css';
 
 /** One tab. */
@@ -81,6 +82,9 @@ export interface TabsProps {
    * lines up with a full width Table's first column under it and the tools
    * end at the table's edge (a settings page's Members, Invitations). The
    * default keeps the inset a record panel's tabs need from the panel's edge.
+   * Directly in a settings page's body (SettingsLayout) neither applies: the
+   * strip runs out to the page's edges, the bar's height, its first label on
+   * the content edge where the body's headings and table text start.
    */
   readonly inset?: 'default' | 'none';
   /**
@@ -109,6 +113,8 @@ export function Tabs({
   children,
 }: TabsProps) {
   const { isFocusVisible } = useFocusVisible();
+  // Directly in a settings page's body, the strip runs to the page's edges with its first label on the content edge.
+  const atPageEdge = useContext(PageEdge) && variant === 'strip';
   return (
     <AriaTabs
       className={styles.root}
@@ -125,7 +131,8 @@ export function Tabs({
       <div
         className={styles.bar}
         data-variant={variant === 'bar' ? 'bar' : undefined}
-        data-inset={inset === 'none' ? 'none' : undefined}
+        data-inset={inset === 'none' && !atPageEdge ? 'none' : undefined}
+        data-edge={atPageEdge ? 'page' : undefined}
       >
         <TabList className={styles.list} aria-label={label} items={tabs} data-instant={isFocusVisible || undefined}>
           {(tab) => (

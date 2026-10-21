@@ -71,6 +71,8 @@ Every settings page builds its body from three pieces, so Profile, Security, Wor
 </SettingsLayout>
 ```
 
+**One top gap, one content edge** (owner feedback, 22 October 2026). Every page's body starts `space-16` under the TopBar; a body that opens with Tabs (`hasTabs`) puts them right under it instead, as the page's second bar, its hairline across the page as on Bookings and Captures. Headings, Cards, a Meter and Callouts start on the gutter's inner edge, and the body's rows run out into the `space-16` gutter to the page's edges with their text on that same edge: a Table's first column (a reorderable table's handles in the gutter before it), the Tabs' first label and a Disclosure's chevron. The layout gives its body the library's page edge (`PageEdge`), which Table, Tabs and Disclosure read, so no page asks for it; a Card, Modal, Popover or Panel sets it back, so a table inside a card keeps to the card. Build a settings page from these parts and it lines up; never pad or pull a part by hand.
+
 Inside an object's tabs, wrap the sections in `SettingsStack` as before. Why `SettingsSection` and `SettingsGrid` are new parts here: nothing in the library put a group's title beside its cards (Card's own title sits inside its frame, and SectionBar is a list's header), and the split and the grid belong to the settings page's layout, so they live beside it rather than as Card variants.
 
 ## States
