@@ -49,7 +49,7 @@ type AfterKind = FormDocument['after']['kind'];
  * Kept beside its one link rather than in paths.ts, which the routes load up front.
  */
 const questionHref = (slug: string, formId: string, questionId: string) =>
-  `/w/${slug}/forms/${formId}?question=${encodeURIComponent(questionId)}`;
+  `/w/${slug}/captures/forms/${formId}?question=${encodeURIComponent(questionId)}`;
 
 /** The settings that apply when saved: the name, the address and the owner. */
 interface Applied {

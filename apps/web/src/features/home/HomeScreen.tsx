@@ -281,9 +281,9 @@ function hrefOf(slug: string, id: SetupStepId): string {
     case 'calendar':
       return `/w/${slug}/settings/scheduling/calendars`;
     case 'bookingPage':
-      return `/w/${slug}/booking-pages`;
+      return `/w/${slug}/captures/links`;
     case 'form':
-      return `/w/${slug}/forms`;
+      return `/w/${slug}/captures/forms`;
     case 'invite':
       return `/w/${slug}/settings/members`;
   }
