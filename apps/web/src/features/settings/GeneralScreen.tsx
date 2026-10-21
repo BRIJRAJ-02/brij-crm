@@ -4,18 +4,7 @@
 // Leaves out: the logo (no row until upload arrives with #32), renaming the address (waits for the shared
 // address check, spec 0036), and members (their own page).
 import { isDataError, type DataLayer, type WorkspaceSettings } from '@crm/data';
-import {
-  Button,
-  Card,
-  Field,
-  InfoTip,
-  Select,
-  SettingsRow,
-  SettingsSection,
-  SettingsStack,
-  Skeleton,
-  type Toasts,
-} from '@crm/ui';
+import { Button, Card, Field, InfoTip, Select, SettingsRow, SettingsSection, Skeleton, type Toasts } from '@crm/ui';
 import { useBlocker } from '@tanstack/react-router';
 import { useMemo, useState } from 'react';
 import { zoneItems, zoneLabel, zoneMatches } from '../booking/hours.ts';
@@ -134,70 +123,69 @@ export function GeneralScreen({
         ) : undefined
       }
     >
-      <SettingsStack>
-        <SettingsSection title={strings.workspaceSection}>
-          <Card>
-            <SettingsRow title={strings.name}>
-              <Field
-                label={strings.name}
-                isLabelHidden
-                value={name}
-                onChange={(next) => {
-                  setName(next);
-                  setNameError(undefined);
-                }}
-                onSubmit={save}
-                maxLength={64}
-                isReadOnly={!mayManage}
-                {...(mayManage ? {} : { readOnlyReason: strings.readOnly })}
-                {...(nameError === undefined ? {} : { error: nameError })}
-              />
-            </SettingsRow>
-            <SettingsRow
-              title={strings.timeZone}
-              meta={<InfoTip label={strings.timeZone}>{strings.timeZoneInfo}</InfoTip>}
-            >
-              <Select
-                label={strings.timeZone}
-                isLabelHidden
-                showsDescription
-                items={zones}
-                filter={zoneMatches}
-                isSearchable
-                value={settings.timeZone}
-                isReadOnly={!mayManage}
-                {...(mayManage ? {} : { readOnlyReason: strings.readOnly })}
-                isDisabled={zoneBusy}
-                onChange={(zone) => {
-                  if (zone !== null && zone !== settings.timeZone) setZone(zone, settings.timeZone, true);
-                }}
-              />
-            </SettingsRow>
-          </Card>
-          {/* The whole link in a Card of its own, wrapping where it must: a row's end would cut it off. */}
-          <Card title={strings.address}>
+      <SettingsSection title={strings.workspaceSection}>
+        <Card>
+          <SettingsRow title={strings.name} control="field">
             <Field
-              label={strings.address}
+              label={strings.name}
               isLabelHidden
-              variant="copy"
-              isWrapping
-              copyLabel={strings.copyAddress}
-              value={`${origin}/w/${settings.slug}`}
+              value={name}
+              onChange={(next) => {
+                setName(next);
+                setNameError(undefined);
+              }}
+              onSubmit={save}
+              maxLength={64}
+              isReadOnly={!mayManage}
+              {...(mayManage ? {} : { readOnlyReason: strings.readOnly })}
+              {...(nameError === undefined ? {} : { error: nameError })}
             />
+          </SettingsRow>
+          <SettingsRow
+            title={strings.timeZone}
+            control="field"
+            meta={<InfoTip label={strings.timeZone}>{strings.timeZoneInfo}</InfoTip>}
+          >
+            <Select
+              label={strings.timeZone}
+              isLabelHidden
+              showsDescription
+              items={zones}
+              filter={zoneMatches}
+              isSearchable
+              value={settings.timeZone}
+              isReadOnly={!mayManage}
+              {...(mayManage ? {} : { readOnlyReason: strings.readOnly })}
+              isDisabled={zoneBusy}
+              onChange={(zone) => {
+                if (zone !== null && zone !== settings.timeZone) setZone(zone, settings.timeZone, true);
+              }}
+            />
+          </SettingsRow>
+        </Card>
+        {/* The whole link in a Card of its own, wrapping where it must: a row's end would cut it off. */}
+        <Card title={strings.address}>
+          <Field
+            label={strings.address}
+            isLabelHidden
+            variant="copy"
+            isWrapping
+            copyLabel={strings.copyAddress}
+            value={`${origin}/w/${settings.slug}`}
+          />
+        </Card>
+      </SettingsSection>
+      {mayDelete && (
+        <SettingsSection title={strings.danger}>
+          <Card>
+            <SettingsRow title={strings.deleteRow} description={strings.deleteRowText}>
+              <Button variant="danger" onPress={() => setDeleting(true)}>
+                {strings.deleteAction}
+              </Button>
+            </SettingsRow>
           </Card>
         </SettingsSection>
-        {mayDelete && (
-          <SettingsSection title={strings.danger}>
-            <Card>
-              <SettingsRow title={strings.deleteRow} description={strings.deleteRowText}>
-                <Button variant="danger" onPress={() => setDeleting(true)}>
-                  {strings.deleteAction}
-                </Button>
-              </SettingsRow>
-            </Card>
-          </SettingsSection>
-        )}
-      </SettingsStack>
+      )}
       {mayDelete && (
         <DeleteWorkspaceDialog
           data={data}
@@ -221,32 +209,30 @@ export function GeneralPending() {
   const mayDelete = useCan('workspace.delete');
   return (
     <SettingsPage title={strings.generalTitle} isLoading>
-      <SettingsStack>
-        <SettingsSection title={strings.workspaceSection}>
-          <Card isBusy>
-            <SettingsRow title={strings.name}>
-              <Skeleton shape="field" />
+      <SettingsSection title={strings.workspaceSection}>
+        <Card isBusy>
+          <SettingsRow title={strings.name} control="field">
+            <Skeleton shape="field" />
+          </SettingsRow>
+          <SettingsRow title={strings.timeZone} control="field">
+            <Skeleton shape="field" />
+          </SettingsRow>
+        </Card>
+        <Card title={strings.address} isBusy>
+          <Skeleton shape="field" width="full" />
+        </Card>
+      </SettingsSection>
+      {mayDelete && (
+        <SettingsSection title={strings.danger}>
+          <Card>
+            <SettingsRow title={strings.deleteRow} description={strings.deleteRowText}>
+              <Button variant="danger" isDisabled>
+                {strings.deleteAction}
+              </Button>
             </SettingsRow>
-            <SettingsRow title={strings.timeZone}>
-              <Skeleton shape="field" />
-            </SettingsRow>
-          </Card>
-          <Card title={strings.address} isBusy>
-            <Skeleton shape="field" width="full" />
           </Card>
         </SettingsSection>
-        {mayDelete && (
-          <SettingsSection title={strings.danger}>
-            <Card>
-              <SettingsRow title={strings.deleteRow} description={strings.deleteRowText}>
-                <Button variant="danger" isDisabled>
-                  {strings.deleteAction}
-                </Button>
-              </SettingsRow>
-            </Card>
-          </SettingsSection>
-        )}
-      </SettingsStack>
+      )}
     </SettingsPage>
   );
 }

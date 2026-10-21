@@ -75,7 +75,7 @@ export function PreferencesScreen({
     <SettingsPage title={strings.title}>
       <SettingsSection title={strings.appearance}>
         <Card>
-          <SettingsRow title={strings.theme} description={strings.themeDescription}>
+          <SettingsRow title={strings.theme} description={strings.themeDescription} control="field">
             <Select
               label={strings.theme}
               isLabelHidden
@@ -172,7 +172,7 @@ function MemberSections({
     <>
       <SettingsSection title={strings.dates}>
         <Card>
-          <SettingsRow title={strings.timeZone} description={strings.timeZoneDescription}>
+          <SettingsRow title={strings.timeZone} description={strings.timeZoneDescription} control="field">
             <Select
               label={strings.timeZone}
               isLabelHidden
@@ -183,7 +183,7 @@ function MemberSections({
               onChange={(id) => pick('timeZone', id)}
             />
           </SettingsRow>
-          <SettingsRow title={strings.dateFormat}>
+          <SettingsRow title={strings.dateFormat} control="field">
             <Select
               label={strings.dateFormat}
               isLabelHidden
@@ -192,7 +192,7 @@ function MemberSections({
               onChange={(id) => pick('dateFormat', id)}
             />
           </SettingsRow>
-          <SettingsRow title={strings.weekStart}>
+          <SettingsRow title={strings.weekStart} control="field">
             <Select
               label={strings.weekStart}
               isLabelHidden
@@ -205,7 +205,7 @@ function MemberSections({
       </SettingsSection>
       <SettingsSection title={strings.startPage}>
         <Card>
-          <SettingsRow title={strings.landing} description={strings.landingDescription}>
+          <SettingsRow title={strings.landing} description={strings.landingDescription} control="field">
             <Select
               label={strings.landing}
               isLabelHidden

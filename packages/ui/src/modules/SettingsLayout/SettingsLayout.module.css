@@ -176,6 +176,15 @@
     align-self: flex-start;
   }
 
+  /* A person's picture: the text centred on it, the picture too. */
+  .rowMain[data-align='center'] {
+    align-items: center;
+  }
+
+  .rowMain[data-align='center'] > .rowLeading {
+    align-self: center;
+  }
+
   .rowHeading {
     display: flex;
     gap: var(--space-6);
@@ -215,6 +224,23 @@
     gap: var(--space-8);
     align-items: center;
     justify-content: flex-end;
+  }
+
+  /* An input row: one column wide, its Field or Select filling it, so every input on the page lines up; a
+     plain value (a sign in email) wraps inside it rather than being cut off. */
+  .rowControl[data-control='field'] {
+    flex: 0 1 var(--size-column-wide);
+    min-inline-size: var(--size-column);
+    justify-content: flex-start;
+    overflow-wrap: anywhere;
+    color: var(--text);
+    font: var(--text-body);
+    letter-spacing: var(--tracking-body);
+  }
+
+  .rowControl[data-control='field'] > * {
+    flex: 1 1 auto;
+    min-inline-size: 0;
   }
 
   /* A section: its heading (and a line of description, when it needs one) over its cards, one column across
@@ -260,6 +286,11 @@
   }
 
   @container (width < 480px) {
+    /* On a phone an input takes the row's width under its title. */
+    .rowControl[data-control='field'] {
+      flex-basis: 100%;
+    }
+
     .root {
       grid-template-columns: minmax(0, 1fr);
     }
