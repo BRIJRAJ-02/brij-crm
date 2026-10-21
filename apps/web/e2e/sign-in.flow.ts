@@ -183,11 +183,11 @@ test('signs in by code, names the workspace, lands on People, signs out, and com
   const nav = page.getByRole('navigation', { name: 'Main navigation' });
   await expect(nav.getByRole('link', { name: 'People' })).toHaveAttribute('aria-current', 'page');
   await expect(nav.getByText('Ada’s workspace')).toBeAttached();
-  // The sidebar's order (spec 0034, AC-921): Records, then Scheduling with its four pages, then the foot's Trash,
-  // Settings and Help and shortcuts, inside the sidebar at every width (on the rail too). The theme switch left the
-  // sidebar for Settings › Preferences (spec 0026).
-  await expect(nav.getByRole('button', { name: 'Scheduling', exact: true })).toHaveAttribute('aria-expanded', 'true');
-  for (const name of ['Bookings', 'Availability', 'Booking pages', 'Forms', 'Trash']) {
+  // The sidebar (spec 0034, AC-921): Tasks, Records, then Scheduling with its four pages, then the foot's Trash,
+  // Settings and Help and shortcuts, inside the sidebar at every width (on the rail, each a named icon in its
+  // group). The theme switch left the sidebar for Settings › Preferences (spec 0026).
+  await expect(nav.getByRole('group', { name: 'Scheduling' })).toBeVisible();
+  for (const name of ['Tasks', 'Bookings', 'Availability', 'Booking pages', 'Forms', 'Trash']) {
     await expect(nav.getByRole('link', { name, exact: true })).toBeVisible();
   }
   const settings = nav.getByRole('link', { name: 'Settings', exact: true });
