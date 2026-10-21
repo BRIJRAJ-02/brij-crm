@@ -45,6 +45,7 @@ export {
 export { Radio, RadioGroup, type RadioGroupProps, type RadioProps } from './atoms/Radio/Radio.tsx';
 export { Rating, type RatingProps } from './atoms/Rating/Rating.tsx';
 export { RecordChip, type RecordChipProps } from './atoms/RecordChip/RecordChip.tsx';
+export { QrCode, type QrCodeProps } from './atoms/QrCode/QrCode.tsx';
 export { RelativeTime, type RelativeTimeProps } from './atoms/RelativeTime/RelativeTime.tsx';
 export { RemoteCursor, type RemoteCursorProps } from './atoms/RemoteCursor/RemoteCursor.tsx';
 export { Separator, type SeparatorProps } from './atoms/Separator/Separator.tsx';

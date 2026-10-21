@@ -51,8 +51,13 @@ export function VerifyScreen({ data, pending, redirect }: VerifyScreenProps) {
   const verify = (code: string) => {
     setVerifying(true);
     data.auth.verify(pending.email, code).then(
-      () => {
+      (outcome) => {
         clearPending(sessionStore(window));
+        // Two factor is on (spec 0033): no session yet, the second step comes first.
+        if (outcome === 'second-step') {
+          void navigate({ to: '/two-factor', search: redirect === undefined ? {} : { redirect }, replace: true });
+          return;
+        }
         void navigate({ href: safeRedirect(redirect), replace: true });
       },
       (failure: unknown) => {

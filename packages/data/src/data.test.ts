@@ -459,6 +459,11 @@ function fakeApi(overrides: Partial<Behaviour> = {}, auth: (path: string, body: 
         revoke: os.account.sessions.revoke.handler(notServed),
         revokeOthers: os.account.sessions.revokeOthers.handler(notServed),
       },
+      security: { get: os.account.security.get.handler(notServed) },
+      stepUp: {
+        start: os.account.stepUp.start.handler(notServed),
+        verify: os.account.stepUp.verify.handler(notServed),
+      },
     },
     calendar: {
       connections: {

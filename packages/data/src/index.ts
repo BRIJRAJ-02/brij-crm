@@ -72,6 +72,12 @@ import type { FetchLike } from './fetch.ts';
 import { delivered } from './delivered.ts';
 import { createJobsStore, type JobsScope, type JobsView, type TestJobSettings } from './jobs/store.ts';
 import { createBookingsStore, type BookingsCalendarHeld, type BookingsView } from './bookings/store.ts';
+import {
+  createAccountSecurityStore,
+  isFresh as isSessionFresh,
+  type AccountSecurityView,
+  type StepUpResult,
+} from './account/security.ts';
 import { createAccountSessionsStore, type AccountSessionsView, type SignOutOthersResult } from './account/sessions.ts';
 import {
   createEmailPreferences,
@@ -252,6 +258,14 @@ export type {
 export type { ScheduleList, ScheduleMember, ScheduleUser, ScheduleView } from '@crm/contracts';
 export type { SchedulesState, SchedulesView } from './schedules/store.ts';
 export type { AccountSessionsState, AccountSessionsView, SignOutOthersResult } from './account/sessions.ts';
+export {
+  isFresh as isSessionFresh,
+  type AccountSecurityState,
+  type AccountSecurityView,
+  type StepUpResult,
+} from './account/security.ts';
+export type { SecondFactorKind, SignInOutcome, TwoFactorSetup } from './auth/auth.ts';
+export type { StepUpMethod } from '@crm/contracts';
 export type { AccountSession } from '@crm/contracts';
 export { STEP_UP_MINUTES } from '@crm/contracts/account-limits';
 export type { CalendarSettingsHeld, CalendarSettingsState, CalendarState, CalendarView } from './calendar/store.ts';
@@ -1409,6 +1423,13 @@ export function createDataLayer({
       schedules.changed(workspace);
       return answer;
     };
+  // Account security (spec 0033): two factor's state and this session's freshness, one held value.
+  const accountSecurity = createAccountSecurityStore({
+    get: () => call((options) => api.account.security.get(undefined, options)),
+    startStepUp: () => call((options) => api.account.stepUp.start({ method: 'email' }, options)),
+    verifyStepUp: (input) => call((options) => api.account.stepUp.verify(input, options)),
+  });
+
   // Account security (spec 0033): the person's own sessions, one list for the app load.
   const accountSessions = createAccountSessionsStore({
     api: {
@@ -3225,6 +3246,46 @@ export function createDataLayer({
        * STEP_UP_REQUIRED (no toast) when the server wants a recent sign in first.
        */
       signOutOthers: (): Promise<SignOutOthersResult> => accountSessions.signOutOthers(),
+      /** Two factor on or off, backup codes left, and whether this session is fresh (spec 0033). */
+      security: (): AccountSecurityView => accountSecurity.view(),
+      /** Whether a security state says this session may make a sensitive change now. */
+      isFresh: isSessionFresh,
+      /**
+       * A step up (AC-896): `sendCode` emails a code while two factor is off;
+       * `verify` checks an email, app or backup code and makes this session
+       * fresh for 10 minutes. Each answers how it went, never throwing.
+       */
+      stepUp: {
+        sendCode: (): Promise<StepUpResult> => accountSecurity.sendCode(),
+        verify: (method: 'email' | 'totp' | 'backup', code: string): Promise<StepUpResult> =>
+          accountSecurity.verify(method, code),
+      },
+      /**
+       * Two factor's setup and changes, each after a step up: start (the
+       * app's address and the backup codes, shown once), confirm with a
+       * first code (on), turn off, and new backup codes. The state and the
+       * device list are read again after each. Refusals throw a DataError.
+       */
+      twoFactor: {
+        start: () => auth.twoFactor.start(),
+        confirm: async (code: string): Promise<void> => {
+          await auth.twoFactor.confirm(code);
+          // The change renewed this session in place: the device list reads its new id.
+          accountSessions.view().reload();
+          await accountSecurity.view().reload();
+        },
+        turnOff: async (): Promise<void> => {
+          await auth.twoFactor.turnOff();
+          // The change renewed this session in place: the device list reads its new id.
+          accountSessions.view().reload();
+          await accountSecurity.view().reload();
+        },
+        newBackupCodes: async (): Promise<readonly string[]> => {
+          const codes = await auth.twoFactor.newBackupCodes();
+          await accountSecurity.view().reload();
+          return codes;
+        },
+      },
     },
     calendar: {
       /**

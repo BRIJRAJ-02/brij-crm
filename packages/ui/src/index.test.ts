@@ -111,6 +111,7 @@ describe('@crm/ui', () => {
       'PreviewLayout',
       'ProgressBar',
       'ProviderMark',
+      'QrCode',
       'QuestionList',
       'Radio',
       'RadioGroup',

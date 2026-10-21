@@ -3,7 +3,7 @@
 // person to another site after they sign in.
 
 /** The sign in pages themselves, lowercase: going back to one after signing in would loop. */
-const SIGN_IN_PATHS = ['/sign-in', '/verify'];
+const SIGN_IN_PATHS = ['/sign-in', '/verify', '/two-factor'];
 
 /**
  * A stand in origin to resolve paths against. Any value that leaves it (a

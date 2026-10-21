@@ -48,7 +48,8 @@
     "react": "catalog:",
     "react-aria": "catalog:",
     "react-aria-components": "catalog:",
-    "react-dom": "catalog:"
+    "react-dom": "catalog:",
+    "uqr": "catalog:"
   },
   "devDependencies": {
     "@crm/config": "workspace:*",

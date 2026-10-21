@@ -3,23 +3,14 @@
 // Main task: see each device (browser and system, rough place, last use) and sign one out, or every other one, after a confirm.
 // Leaves out: two factor and passkeys (milestones 2 and 3), recent activity and alerts (milestone 4), signing this device out (the account menu does).
 import { STEP_UP_MINUTES, type AccountSession, type DataLayer } from '@crm/data';
-import { useAccountSessions } from '@crm/data/react';
-import {
-  Badge,
-  Button,
-  Callout,
-  EmptyState,
-  InfoTip,
-  Modal,
-  RelativeTime,
-  Table,
-  type TableColumn,
-  type Toasts,
-} from '@crm/ui';
-import { useEffect, useRef, useState } from 'react';
+import { useAccountSecurity, useAccountSessions } from '@crm/data/react';
+import { Badge, Button, EmptyState, InfoTip, Modal, RelativeTime, Table, type TableColumn, type Toasts } from '@crm/ui';
+import { useRef, useState } from 'react';
 import { currentFirst, deviceName, devicePlace } from './security-lines.ts';
 import { strings } from './security-strings.ts';
 import { SettingsPage } from './SettingsPage.tsx';
+import { useStepUp } from './StepUp.tsx';
+import { TwoFactorSection } from './TwoFactorSection.tsx';
 
 /** How long the confirm takes to leave (`duration-exit` and a frame), before focus is checked again. */
 const CONFIRM_EXIT_MS = 200;
@@ -57,16 +48,13 @@ export function SecurityScreen({ data, toasts }: SecurityScreenProps) {
   const [confirm, setConfirm] = useState<Confirm>({ kind: 'others' });
   const [isOpen, setIsOpen] = useState(false);
   const [isBusy, setIsBusy] = useState(false);
-  const [needsSignIn, setNeedsSignIn] = useState(false);
-  const closeRef = useRef<HTMLButtonElement>(null);
-  // The confirm button goes when a sign in is needed: Close, the one way on, takes its focus.
-  useEffect(() => {
-    if (needsSignIn) closeRef.current?.focus();
-  }, [needsSignIn]);
+  // Signing a device out needs a recent check (AC-896): asked inline in the confirm when this session isn't fresh.
+  const security = useAccountSecurity(data.account.security());
+  const stepUp = useStepUp(data, security);
 
   const ask = (next: Confirm) => {
     setConfirm(next);
-    setNeedsSignIn(false);
+    stepUp.reset();
     setIsOpen(true);
   };
 
@@ -78,7 +66,11 @@ export function SecurityScreen({ data, toasts }: SecurityScreenProps) {
     }, CONFIRM_EXIT_MS);
   };
 
-  const signOutOne = (session: AccountSession) => {
+  const signOutOne = async (session: AccountSession) => {
+    setIsBusy(true);
+    const proven = await stepUp.prove();
+    setIsBusy(false);
+    if (!proven) return;
     setIsOpen(false);
     focusTitle();
     // Gone from the table at once; a refusal puts it back with a toast from the data layer.
@@ -89,6 +81,10 @@ export function SecurityScreen({ data, toasts }: SecurityScreenProps) {
 
   const signOutOthers = async () => {
     setIsBusy(true);
+    if (!(await stepUp.prove())) {
+      setIsBusy(false);
+      return;
+    }
     const answer = await data.account.signOutOthers();
     setIsBusy(false);
     if (answer.ok) {
@@ -96,8 +92,8 @@ export function SecurityScreen({ data, toasts }: SecurityScreenProps) {
       focusTitle();
       toasts.toast({ tone: 'success', message: strings.signedOutOthers(answer.count) });
     } else if (answer.code === 'STEP_UP_REQUIRED') {
-      // Said inside the confirm, where the person is looking; the layer raised no toast.
-      setNeedsSignIn(true);
+      // The check ran out meanwhile: read the state again, so the confirm asks for it inline.
+      void data.account.security().reload();
     } else {
       setIsOpen(false);
     }
@@ -179,6 +175,7 @@ export function SecurityScreen({ data, toasts }: SecurityScreenProps) {
           }
         : {})}
     >
+      <TwoFactorSection data={data} security={security} toasts={toasts} />
       {body}
       <Modal
         title={one === undefined ? strings.signOutOthersTitle : strings.signOutTitle(deviceName(one))}
@@ -190,33 +187,24 @@ export function SecurityScreen({ data, toasts }: SecurityScreenProps) {
         }}
         actions={
           <>
-            <Button slot="close" kbd="ESC" isDisabled={isBusy} ref={closeRef}>
-              {needsSignIn ? strings.close : strings.cancel}
+            <Button slot="close" kbd="ESC" isDisabled={isBusy}>
+              {strings.cancel}
             </Button>
-            {!needsSignIn && (
-              <Button
-                variant="danger-solid"
-                isPending={isBusy}
-                onPress={() => {
-                  if (one === undefined) void signOutOthers();
-                  else signOutOne(one);
-                }}
-              >
-                {isBusy ? strings.signingOut : one === undefined ? strings.signOutOthers : strings.signOut}
-              </Button>
-            )}
+            <Button
+              variant="danger-solid"
+              isPending={isBusy}
+              onPress={() => {
+                if (one === undefined) void signOutOthers();
+                else void signOutOne(one);
+              }}
+            >
+              {isBusy ? strings.signingOut : one === undefined ? strings.signOutOthers : strings.signOut}
+            </Button>
           </>
         }
       >
-        {needsSignIn ? (
-          <Callout tone="warning" title={strings.stepUpTitle} isAnnounced>
-            {strings.stepUpText(STEP_UP_MINUTES)}
-          </Callout>
-        ) : one === undefined ? (
-          strings.signOutOthersText
-        ) : (
-          strings.signOutText(onePlace)
-        )}
+        {one === undefined ? strings.signOutOthersText : strings.signOutText(onePlace)}
+        {stepUp.fields}
       </Modal>
     </SettingsPage>
   );

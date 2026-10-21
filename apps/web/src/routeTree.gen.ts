@@ -13,6 +13,7 @@ import { Route as IndexRouteImport } from './routes/index.tsx'
 import { Route as EmailPreferencesRouteImport } from './routes/email-preferences.tsx'
 import { Route as SignInRouteImport } from './routes/sign-in.tsx'
 import { Route as StatusRouteImport } from './routes/status.tsx'
+import { Route as TwoFactorRouteImport } from './routes/two-factor.tsx'
 import { Route as VerifyRouteImport } from './routes/verify.tsx'
 import { Route as WelcomeRouteImport } from './routes/welcome.tsx'
 import { Route as InviteTokenRouteImport } from './routes/invite.$token.tsx'
@@ -72,6 +73,11 @@ const SignInRoute = SignInRouteImport.update({
 const StatusRoute = StatusRouteImport.update({
   id: '/status',
   path: '/status',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const TwoFactorRoute = TwoFactorRouteImport.update({
+  id: '/two-factor',
+  path: '/two-factor',
   getParentRoute: () => rootRouteImport,
 } as any)
 const VerifyRoute = VerifyRouteImport.update({
@@ -298,6 +304,7 @@ export interface FileRoutesByFullPath {
   '/email-preferences': typeof EmailPreferencesRoute
   '/sign-in': typeof SignInRoute
   '/status': typeof StatusRoute
+  '/two-factor': typeof TwoFactorRoute
   '/verify': typeof VerifyRoute
   '/welcome': typeof WelcomeRoute
   '/invite/$token': typeof InviteTokenRoute
@@ -344,6 +351,7 @@ export interface FileRoutesByTo {
   '/email-preferences': typeof EmailPreferencesRoute
   '/sign-in': typeof SignInRoute
   '/status': typeof StatusRoute
+  '/two-factor': typeof TwoFactorRoute
   '/verify': typeof VerifyRoute
   '/welcome': typeof WelcomeRoute
   '/invite/$token': typeof InviteTokenRoute
@@ -387,6 +395,7 @@ export interface FileRoutesById {
   '/email-preferences': typeof EmailPreferencesRoute
   '/sign-in': typeof SignInRoute
   '/status': typeof StatusRoute
+  '/two-factor': typeof TwoFactorRoute
   '/verify': typeof VerifyRoute
   '/welcome': typeof WelcomeRoute
   '/invite/$token': typeof InviteTokenRoute
@@ -435,6 +444,7 @@ export interface FileRouteTypes {
     | '/email-preferences'
     | '/sign-in'
     | '/status'
+    | '/two-factor'
     | '/verify'
     | '/welcome'
     | '/invite/$token'
@@ -481,6 +491,7 @@ export interface FileRouteTypes {
     | '/email-preferences'
     | '/sign-in'
     | '/status'
+    | '/two-factor'
     | '/verify'
     | '/welcome'
     | '/invite/$token'
@@ -523,6 +534,7 @@ export interface FileRouteTypes {
     | '/email-preferences'
     | '/sign-in'
     | '/status'
+    | '/two-factor'
     | '/verify'
     | '/welcome'
     | '/invite/$token'
@@ -570,6 +582,7 @@ export interface RootRouteChildren {
   EmailPreferencesRoute: typeof EmailPreferencesRoute
   SignInRoute: typeof SignInRoute
   StatusRoute: typeof StatusRoute
+  TwoFactorRoute: typeof TwoFactorRoute
   VerifyRoute: typeof VerifyRoute
   WelcomeRoute: typeof WelcomeRoute
   InviteTokenRoute: typeof InviteTokenRoute
@@ -604,6 +617,13 @@ declare module '@tanstack/react-router' {
       path: '/status'
       fullPath: '/status'
       preLoaderRoute: typeof StatusRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/two-factor': {
+      id: '/two-factor'
+      path: '/two-factor'
+      fullPath: '/two-factor'
+      preLoaderRoute: typeof TwoFactorRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/verify': {
@@ -1005,6 +1025,7 @@ const rootRouteChildren: RootRouteChildren = {
   EmailPreferencesRoute: EmailPreferencesRoute,
   SignInRoute: SignInRoute,
   StatusRoute: StatusRoute,
+  TwoFactorRoute: TwoFactorRoute,
   VerifyRoute: VerifyRoute,
   WelcomeRoute: WelcomeRoute,
   InviteTokenRoute: InviteTokenRoute,
