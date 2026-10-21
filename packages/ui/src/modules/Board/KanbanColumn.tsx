@@ -16,6 +16,7 @@ import {
 import { Skeleton } from '../../atoms/Skeleton/Skeleton.tsx';
 import { StatusDot } from '../../atoms/StatusDot/StatusDot.tsx';
 import type { FieldAttribute } from '../../fields/types.ts';
+import { useFontsSettled } from '../../lib/fonts-settled.ts';
 import { memoIntl } from '../../lib/intl-memo.ts';
 import { itemOfKey, keyedRows, type KeyedRow } from '../../lib/keyed-rows.ts';
 import { RowShown, useRangeReporter } from '../../lib/range-reporter.tsx';
@@ -97,6 +98,7 @@ export function KanbanColumn({
   const { locale } = useFormatSettings();
   const onShown = useRangeReporter(column.cards);
   const rows = useMemo(() => keyedRows(column.cards), [column.cards]);
+  const fontsSettled = useFontsSettled();
   const number = memoIntl(`plain:${locale}`, () => new Intl.NumberFormat(locale)).format(column.count);
   const plural = memoIntl(`plural:${locale}`, () => new Intl.PluralRules(locale)).select(column.count);
   const isArchived = column.isArchived === true;
@@ -199,7 +201,8 @@ export function KanbanColumn({
           className={styles.cards}
           aria-labelledby={titleId}
           items={rows}
-          dependencies={[column.cards, fields, canMove]}
+          // Fonts in: each card built, and so measured, again (a card measured in the fallback face is too short).
+          dependencies={[column.cards, fields, canMove, fontsSettled]}
           dragAndDropHooks={dragAndDropHooks}
           renderEmptyState={() => <span className={styles.empty}>{strings.noCards}</span>}
           {...(onOpen === undefined

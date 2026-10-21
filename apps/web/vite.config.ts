@@ -1,6 +1,6 @@
 import { readdirSync, readFileSync, rmSync } from 'node:fs';
 import path from 'node:path';
-import { layerOrder, uiVite } from '@crm/ui/vite';
+import { layerOrder, preloadFonts, uiVite } from '@crm/ui/vite';
 import { sentryVitePlugin } from '@sentry/vite-plugin';
 import { tanstackRouter } from '@tanstack/router-plugin/vite';
 import react from '@vitejs/plugin-react';
@@ -176,6 +176,8 @@ export default defineConfig({
     uiVite(),
     // The cascade layer order as /layers.css, linked ahead of every bundled stylesheet.
     layerOrder(),
+    // Inter preloaded by its built name, so a cold first visit paints in it from the start (never fallback, then Inter).
+    preloadFonts(),
     // Live updates' socket must be one vercel.json's CSP allows.
     realtimeCsp(),
     // A web DSN must be on Sentry's EU ingest and allowed by the same CSP; both checks run on every build.

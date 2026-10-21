@@ -9,6 +9,7 @@ import { RelativeTime } from '../../atoms/RelativeTime/RelativeTime.tsx';
 import { Skeleton } from '../../atoms/Skeleton/Skeleton.tsx';
 import { TruncatedText } from '../../atoms/TruncatedText/TruncatedText.tsx';
 import { VisuallyHidden } from '../../atoms/VisuallyHidden/VisuallyHidden.tsx';
+import { useFontsSettled } from '../../lib/fonts-settled.ts';
 import { keyedRows, itemOfKey, type KeyedRow } from '../../lib/keyed-rows.ts';
 import type { ListSource } from '../../lib/list-source.ts';
 import type { LoadStatus } from '../../lib/load-status.ts';
@@ -94,6 +95,7 @@ function NoteListContent({
   const showSkeleton = useDelayedLoading(status === 'loading');
   const onShown = useRangeReporter(notes);
   const rows = useMemo(() => keyedRows(notes), [notes]);
+  const fontsSettled = useFontsSettled();
 
   if (status === 'error') {
     return (
@@ -177,7 +179,8 @@ function NoteListContent({
         className={styles.root}
         aria-label={label}
         items={rows}
-        dependencies={[notes]}
+        // Fonts in: each row built, and so measured, again (a row measured in the fallback face is too short).
+        dependencies={[notes, fontsSettled]}
         onAction={(key) => {
           const note = itemOfKey(notes, rows, key);
           if (note !== undefined) onAction(note.id);

@@ -2,7 +2,14 @@
 // Storybook and the artifact (AC-17).
 import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
-import { layerOrderStatement, linkLayerOrder, scopedClassName, uiVite } from './vite.ts';
+import {
+  FIRST_SCREEN_FONTS,
+  layerOrderStatement,
+  linkFontPreloads,
+  linkLayerOrder,
+  scopedClassName,
+  uiVite,
+} from './vite.ts';
 
 describe('scopedClassName', () => {
   it('names a class after its component and its local name', () => {
@@ -55,5 +62,29 @@ describe('layerOrder', () => {
     expect(linkLayerOrder('<head><title>CRM</title></head>', '/app/')).toContain(
       '<link rel="stylesheet" href="/app/layers.css">\n  </head>',
     );
+  });
+});
+
+describe('font preloads', () => {
+  it('preloads Inter, the face the first screen draws with, and never the code face', () => {
+    const built = [
+      'assets/Inter-Variable-latin-Bx3k9.woff2',
+      'assets/JetBrainsMono-Variable-latin-Q1.woff2',
+      'assets/index-a1.js',
+    ];
+    expect(built.filter((file) => FIRST_SCREEN_FONTS.some((font) => font.test(file)))).toEqual([
+      'assets/Inter-Variable-latin-Bx3k9.woff2',
+    ]);
+  });
+
+  it('links each one ahead of the first stylesheet, fetched as a font the way the stylesheet fetches it', () => {
+    const html = '<head>\n    <link rel="stylesheet" href="/layers.css">\n  </head>';
+    expect(linkFontPreloads(html, '/', ['assets/Inter-Variable-latin-Bx3k9.woff2'])).toBe(
+      '<head>\n    <link rel="preload" href="/assets/Inter-Variable-latin-Bx3k9.woff2" as="font" type="font/woff2" crossorigin>\n    <link rel="stylesheet" href="/layers.css">\n  </head>',
+    );
+    expect(linkFontPreloads('<head></head>', '/app/', ['assets/a.woff2'])).toBe(
+      '<head>  <link rel="preload" href="/app/assets/a.woff2" as="font" type="font/woff2" crossorigin>\n  </head>',
+    );
+    expect(linkFontPreloads(html, '/', [])).toBe(html);
   });
 });

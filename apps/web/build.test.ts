@@ -68,6 +68,17 @@ describe('the built stylesheet', () => {
     expect(css).toContain('prefers-color-scheme:dark');
   });
 
+  it('preloads Inter, the face the first screen draws with, by its built name, and no other font', () => {
+    const preloads = [
+      ...html.matchAll(/<link rel="preload" href="\/([^"]+)" as="font" type="font\/woff2" crossorigin>/g),
+    ].map((match) => match[1] ?? '');
+    expect(preloads).toHaveLength(1);
+    expect(preloads[0]).toMatch(/^assets\/Inter-Variable-latin[\w.-]*\.woff2$/);
+    expect(assets).toContain(preloads[0]?.replace('assets/', ''));
+    // Ahead of the stylesheets, so the font starts with the page.
+    expect(html.indexOf('rel="preload"')).toBeLessThan(html.search(/<link[^>]+rel="stylesheet"/));
+  });
+
   it('loads both fonts as same origin woff2 files, never as data: URIs', () => {
     const fontUrls = [...css.matchAll(/url\(([^)]+)\)/g)].map((match) => match[1]?.replaceAll(/["']/g, '') ?? '');
     expect(fontUrls.length).toBeGreaterThanOrEqual(2);

@@ -96,3 +96,47 @@ export function layerOrder(): Plugin {
     transformIndexHtml: { order: 'post', handler: (html) => linkLayerOrder(html, base) },
   };
 }
+
+/**
+ * The font files an app's first screen draws with: Inter, one variable face holding every weight the shell, the
+ * pages' bars and the grid use. JetBrains Mono (code) is left to load when a code block needs it.
+ */
+export const FIRST_SCREEN_FONTS: readonly RegExp[] = [/(^|\/)Inter-Variable-latin[\w.-]*\.woff2$/];
+
+/** `html` with a preload for each font file, just ahead of its first stylesheet, or at the end of its head. */
+export function linkFontPreloads(html: string, base: string, files: readonly string[]): string {
+  if (files.length === 0) return html;
+  // crossorigin: fonts are fetched in CORS mode, so a preload without it would be fetched twice.
+  const links = files
+    .map((file) => `<link rel="preload" href="${base}${file}" as="font" type="font/woff2" crossorigin>`)
+    .join('\n    ');
+  const first = html.search(/<link[^>]+rel="stylesheet"/);
+  if (first === -1) return html.replace('</head>', `  ${links}\n  </head>`);
+  return `${html.slice(0, first)}${links}\n    ${html.slice(first)}`;
+}
+
+/**
+ * For an app's index.html: a preload for the faces its first screen draws with, by their built (hashed) names.
+ * Inter is `font-display: swap`, and the browser only finds it once the stylesheet has arrived and text needs it,
+ * so on a cold visit the first screen painted in the fallback face, then again in Inter, and a list that measured
+ * its rows in between kept the fallback's heights. Preloaded, Inter starts with the page. Build only (a dev
+ * server reads the font from disk), and only `page`: the public pages draw with their own faces.
+ */
+export function preloadFonts(fonts: readonly RegExp[] = FIRST_SCREEN_FONTS, page = '/index.html'): Plugin {
+  let base = '/';
+  return {
+    name: 'crm-ui-font-preload',
+    apply: 'build',
+    configResolved: (config) => {
+      base = config.base;
+    },
+    transformIndexHtml: {
+      order: 'post',
+      handler: (html, context) => {
+        if (context.path !== page) return html;
+        const files = Object.keys(context.bundle ?? {}).filter((file) => fonts.some((font) => font.test(file)));
+        return linkFontPreloads(html, base, files);
+      },
+    },
+  };
+}
