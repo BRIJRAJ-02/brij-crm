@@ -105,7 +105,7 @@ const personRow = (index: number, title = 'Engineer'): RecordView => {
 
 /** What each stand in procedure does; a test overrides the ones it needs. */
 interface Behaviour {
-  me: () => Me;
+  me: () => Me | Promise<Me>;
   objects: (workspace: string) => ObjectSummary[];
   create: () => { workspace: Me['workspaces'][number] };
   members: () => MemberSummary[];
@@ -660,6 +660,50 @@ describe('objects.list', () => {
     expect(endings).toEqual([false]);
     expect(notices).toEqual([]);
     expect(await data.me.get()).toBeUndefined();
+  });
+
+  it('ends no session on a 401 while nobody is signed in, even one that answers before who is', async () => {
+    const api = fakeApi({
+      me: async () => {
+        await new Promise((resolve) => setTimeout(resolve, 5));
+        throw unauthenticated();
+      },
+      objects: () => {
+        throw unauthenticated();
+      },
+    });
+    const { data, signedOut, events } = layer(api);
+    // A visit before sign in: the workspace's first read and the question of who is signed in go out together,
+    // and the read's 401 answers first. The route takes the visitor to sign in, keeping their address.
+    const asked = data.me.get();
+    expect((await failure(data.objects.list('acme'))).code).toBe('UNAUTHENTICATED');
+    expect(await asked).toBeUndefined();
+    expect(signedOut).toEqual([]);
+    expect(events).toEqual([]);
+  });
+
+  it('still signs a person out when the held me was dropped and asked again after their session ended', async () => {
+    let session = true;
+    const api = fakeApi({
+      me: () => {
+        if (!session) throw unauthenticated();
+        return ME;
+      },
+      objects: () => {
+        if (!session) throw unauthenticated();
+        throw new ORPCError('NOT_FOUND', { status: 404, message: 'Not here.' });
+      },
+    });
+    const { data, signedOut } = layer(api);
+    expect(await data.me.get()).toEqual(ME);
+    // A NOT_FOUND drops the held me; the session ends; a preload asks again and hears nobody.
+    await failure(data.objects.list('acme'));
+    session = false;
+    expect(await data.me.get()).toBeUndefined();
+    // The screens still showing get 401s: the person was signed in, so they go to sign in, once.
+    await failure(data.objects.list('acme'));
+    await failure(data.objects.list('beta'));
+    expect(signedOut).toHaveLength(1);
   });
 
   it('goes to sign in first, then says the session changed, so the app drops the last person’s pages', async () => {

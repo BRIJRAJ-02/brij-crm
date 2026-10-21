@@ -600,7 +600,9 @@ function toFormSummary(form: FormView): FormSummary {
  * call the network themselves. Every failure rejects with a DataError
  * (`{ code, message, data?, retryAfterSeconds? }`); a 401 from any call but
  * `me.get` also runs `onSignedOut` once, forgets what was cached for the
- * person and runs `onSessionChange`.
+ * person and runs `onSessionChange`, except while nobody has been signed in
+ * and `me.get` answers nobody (a visit before sign in, whose route goes to
+ * sign in itself).
  */
 export function createDataLayer({
   origin,
@@ -662,6 +664,8 @@ export function createDataLayer({
   );
   // Set by the first 401, so a burst of failed calls signs out once.
   let ended = false;
+  // Whether `me.get` has answered a person since the last sign in or out: a 401 then always ends their session.
+  let seenPerson = false;
   // Live updates: loaded with the first watched workspace, and this tab's writes waiting for their echo.
   let live: Promise<Live> | undefined;
   const mutations = createMutationLog();
@@ -723,6 +727,7 @@ export function createDataLayer({
   const reset = () => {
     forget();
     ended = false;
+    seenPerson = false;
     onSessionChange();
   };
 
@@ -760,12 +765,26 @@ export function createDataLayer({
     }
   }
 
+  /** Whether the app's question of who is signed in answered nobody (a failed question counts as someone). */
+  function nobodyAsked(asked: Promise<Me | undefined>): Promise<boolean> {
+    return asked.then(
+      (answer) => answer === undefined,
+      () => false,
+    );
+  }
+
   /** Runs a call, mapping its failure to a DataError; a 401 ends the session here. */
   async function call<T>(run: (options: CallOptions) => Promise<T>, signal?: AbortSignal): Promise<T> {
     try {
       return await attempt(run, signal);
     } catch (error) {
       const failure = toDataError(error);
+      // Someone must have been signed in for a session to end. Before anyone has been seen, once the app has asked
+      // who is, a 401 while nobody is (a visit before sign in, whose route goes to sign in itself with the address
+      // kept) ends nothing. Once a person has been seen, every 401 ends their session, as before.
+      if (failure.code === 'UNAUTHENTICATED' && !ended && !seenPerson && me !== undefined && (await nobodyAsked(me))) {
+        throw failure;
+      }
       if (failure.code === 'UNAUTHENTICATED' && !ended) {
         ended = true;
         // A write still waiting for its answer is lost with the session (its layer leaves with the records), so
@@ -1915,6 +1934,7 @@ export function createDataLayer({
           (answer) => {
             // Someone is signed in again (in another tab, say): the next 401 ends their session too.
             ended = false;
+            seenPerson = true;
             return answer;
           },
           (error: unknown) => {
