@@ -53,6 +53,9 @@ function stepUpDeps(context: RequestContext): StepUpDeps {
   };
 }
 
+/** Account deletion's join request step until the members lane's table lands: there is nothing to close. */
+const closeNoJoinRequests = async (_userId: string): Promise<void> => {};
+
 /** What deleting the account needs, from the request (spec 0033, AC-902 to AC-907). */
 function deletionDeps(context: RequestContext): AccountDeletionDeps {
   const calendar = context.calendar;
@@ -72,6 +75,8 @@ function deletionDeps(context: RequestContext): AccountDeletionDeps {
               grant.provider === 'google' ? calendar.guest.revoke(grant.tokens.refreshToken) : Promise.resolve(),
           },
         }),
+    // No join requests table on this base yet: the members lane (spec 0031 slice 6b) wires its close here.
+    closeJoinRequests: closeNoJoinRequests,
     sendFarewell: async (email) => {
       try {
         const message = await renderAccountDeleted(new Date(), { appOrigin: new URL(context.appUrl).origin });

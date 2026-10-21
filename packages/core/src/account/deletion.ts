@@ -6,7 +6,10 @@
 // longer names them, and one `account.deleted` audit row is written; records
 // they made stay, credited to "Deleted user". Then calendar grants are revoked
 // with the provider (best effort), the `auth` rows go in one transaction, live
-// connections are cut, and a last email goes to the old address. Every step
+// connections are cut, and a last email goes to the old address. Before the
+// `auth` rows go, the person's open join requests in workspaces they never
+// joined are closed (`closeJoinRequests`), so no admin is left deciding on
+// someone who no longer exists. Every step
 // can run again: a workspace already left is skipped.
 import type { AccountDeletionCheck, DeleteAccountInput, DeletionBlocker } from '@crm/contracts';
 import { schema, type Database, type IdentityStore } from '@crm/db';
@@ -64,6 +67,12 @@ export interface AccountDeletionDeps {
     readonly tokenKey: TokenKey;
     readonly revoke: (grant: CalendarGrant) => Promise<void>;
   };
+  /**
+   * Closes the person's open workspace join requests, in every workspace, before their `auth` rows go. The join
+   * requests table arrives with the members lane (spec 0031 slice 6b); until then the api wires a step with
+   * nothing to close.
+   */
+  readonly closeJoinRequests: (userId: string) => Promise<void>;
   /** The last email, to the old address. Never throws. */
   readonly sendFarewell: (email: string) => Promise<void>;
   readonly now?: () => number;
@@ -206,6 +215,7 @@ export async function deleteMyAccount(
       ]);
     await Promise.all(grants.map(capped));
   }
+  await deps.closeJoinRequests(caller.userId);
   await deps.identity.deleteUser(caller.userId);
   await deps.signedOut(caller.userId);
   await deps.sendFarewell(caller.email);
