@@ -1164,12 +1164,8 @@ export function createDataLayer({
     void tasks?.then((store) => {
       store.changed(workspace, event);
     });
-    // A tasks event names no assignee, so a held badge reads again, spread so a whole team doesn't read in step.
-    if (dueTasks.isHeld(workspace)) {
-      spread(`due ${workspace}`, () => {
-        dueTasks.changed(workspace);
-      });
-    }
+    // A tasks event names no assignee, so a held badge reads again, coalesced and spread (`changedLater`).
+    dueTasks.changedLater(workspace);
   });
   router.on('notes', (workspace, event) => {
     void notes?.then((store) => {
@@ -1198,7 +1194,7 @@ export function createDataLayer({
     jobs.resync(workspace);
     views.resync(workspace);
     navStore?.resync(workspace);
-    dueTasks.changed(workspace);
+    dueTasks.changedLater(workspace);
     void trash?.then((held) => {
       held.reload(workspace);
     });

@@ -862,5 +862,21 @@ describe('countDueTasks, the sidebar’s Tasks badge (spec 0034, AC-924)', () =>
     await updateTask(w.scope, { taskId: overdue.id, isDone: true });
     expect(await countDueTasks(w.scope, { today: '2026-10-21' })).toEqual({ count: 1, atLeast: false });
     expect(await refusalOf(countDueTasks(w.scope, { today: 'yesterday' }))).toMatchObject({ code: 'INPUT_INVALID' });
+    // An API key has no tasks of its own, whatever it may read.
+    const key = rescope(w.scope, { actor: { type: 'api_key', id: newId() }, scopes: ['data.read'] });
+    expect(await countDueTasks(key, { today: '2026-10-21' })).toEqual({ count: 0, atLeast: false });
+  });
+
+  it('counts up to 99, then says at least', async () => {
+    const w = await workspace();
+    const ids = Array.from({ length: 100 }, () => newId());
+    await db.withWorkspace(w.scope.workspaceId, (tx) =>
+      tx.execute(
+        sql`insert into tasks (workspace_id, id, title, due_on, assignee_member_id, created_by_type, created_by_id, created_by_member_id, updated_by_type, updated_by_id, updated_by_member_id)
+            select ${w.scope.workspaceId}, id, 'Due', '2026-10-01', ${w.ownerId}, 'member', ${w.ownerId}, ${w.ownerId}, 'member', ${w.ownerId}, ${w.ownerId}
+            from unnest(${`{${ids.join(',')}}`}::uuid[]) as id`,
+      ),
+    );
+    expect(await countDueTasks(w.scope, { today: '2026-10-21' })).toEqual({ count: 99, atLeast: true });
   });
 });
