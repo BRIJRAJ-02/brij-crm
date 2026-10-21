@@ -7,6 +7,7 @@ import {
   createContext,
   isValidElement,
   useContext,
+  useEffect,
   useId,
   useLayoutEffect,
   useRef,
@@ -674,6 +675,18 @@ function useReorder(children: ReactNode, onReorder: ((id: string, toIndex: numbe
   const [announcement, setAnnouncement] = useState('');
   const describedBy = useId();
   const ids = idsOf(children);
+  // A pointer drag's listeners read the latest order and callback when it ends, and end with the section.
+  const latest = useRef({ ids, onReorder });
+  useLayoutEffect(() => {
+    latest.current = { ids, onReorder };
+  });
+  const dragEnd = useRef<((cancelled: boolean) => void) | undefined>(undefined);
+  useEffect(
+    () => () => {
+      dragEnd.current?.(true);
+    },
+    [],
+  );
   if (onReorder === undefined || ids.length < 2) return undefined;
   const count = ids.length;
   const nameOf = new Map<string, string>();
@@ -757,21 +770,38 @@ function useReorder(children: ReactNode, onReorder: ((id: string, toIndex: numbe
         return { id: row.dataset.reorderId ?? '', middle: rect.top + rect.height / 2 };
       });
       const from = ids.indexOf(id);
+      const others = rows.map((row) => row.id).filter((each) => each !== id);
       let to = from;
       setDrag({ id, to });
       const move = (moved: PointerEvent) => {
-        to = dropIndexAt(rows, id, moved.clientY);
+        const next = dropIndexAt(rows, id, moved.clientY);
+        if (next === to) return;
+        to = next;
         setDrag({ id, to });
       };
       const end = (cancelled: boolean) => {
+        dragEnd.current = undefined;
         window.removeEventListener('pointermove', move);
         window.removeEventListener('pointerup', up);
+        window.removeEventListener('pointercancel', cancel);
         window.removeEventListener('keydown', escape, true);
         setDrag(undefined);
-        if (!cancelled) drop(id, from, to);
+        if (cancelled) return;
+        // The order may have moved under the drag (a live change): land beside the item it was dropped next to,
+        // in the order as it is now.
+        const now = latest.current.ids.filter((each) => each !== id);
+        const before = others[to];
+        const at = before === undefined ? now.length : Math.max(now.indexOf(before), 0);
+        const was = latest.current.ids.indexOf(id);
+        const name = nameOf.get(id) ?? id;
+        if (at !== was) latest.current.onReorder?.(id, at);
+        say(at === was ? strings.reorderStayed(name, at + 1, count) : strings.reorderMoved(name, at + 1, count));
       };
       const up = () => {
         end(false);
+      };
+      const cancel = () => {
+        end(true);
       };
       const escape = (pressed: globalThis.KeyboardEvent) => {
         if (pressed.key !== 'Escape') return;
@@ -779,8 +809,10 @@ function useReorder(children: ReactNode, onReorder: ((id: string, toIndex: numbe
         pressed.stopPropagation();
         end(true);
       };
+      dragEnd.current = end;
       window.addEventListener('pointermove', move);
       window.addEventListener('pointerup', up);
+      window.addEventListener('pointercancel', cancel);
       window.addEventListener('keydown', escape, true);
     },
   });
@@ -809,6 +841,18 @@ function useSectionMove(
   const [lift, setLift] = useState<{ readonly to: number } | undefined>(undefined);
   const [announcement, setAnnouncement] = useState('');
   const describedBy = useId();
+  // A pointer drag reads the latest callback when it ends, and ends with the section.
+  const latest = useRef(onMoveSection);
+  useLayoutEffect(() => {
+    latest.current = onMoveSection;
+  });
+  const dragEnd = useRef<((cancelled: boolean) => void) | undefined>(undefined);
+  useEffect(
+    () => () => {
+      dragEnd.current?.(true);
+    },
+    [],
+  );
   if (onMoveSection === undefined || position === undefined || position.count < 2) return undefined;
   const { index, count } = position;
   const handle = {
@@ -878,16 +922,21 @@ function useSectionMove(
         mark();
       };
       const end = (cancelled: boolean) => {
+        dragEnd.current = undefined;
         window.removeEventListener('pointermove', move);
         window.removeEventListener('pointerup', up);
+        window.removeEventListener('pointercancel', cancel);
         window.removeEventListener('keydown', escape, true);
         for (const row of others) delete row.dataset.drop;
         if (cancelled || to === index) return;
-        onMoveSection(to);
+        latest.current?.(to);
         setAnnouncement(strings.reorderMoved(title, to + 1, count));
       };
       const up = () => {
         end(false);
+      };
+      const cancel = () => {
+        end(true);
       };
       const escape = (pressed: globalThis.KeyboardEvent) => {
         if (pressed.key !== 'Escape') return;
@@ -895,8 +944,10 @@ function useSectionMove(
         pressed.stopPropagation();
         end(true);
       };
+      dragEnd.current = end;
       window.addEventListener('pointermove', move);
       window.addEventListener('pointerup', up);
+      window.addEventListener('pointercancel', cancel);
       window.addEventListener('keydown', escape, true);
     },
   };

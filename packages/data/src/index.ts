@@ -3370,7 +3370,15 @@ export function createDataLayer({
         universe: NavUniverse,
         options: NavChangeOptions = {},
       ): Promise<void> => {
-        const made = loadNav().then((store) => store.change(workspace, op, universe, options));
+        const made = loadNav().then(
+          (store) => store.change(workspace, op, universe, options),
+          // The store's code didn't load: nothing changed. Say so (unless the screen does), with the layer's words.
+          (error: unknown) => {
+            const failure = toDataError(error);
+            if (options.isSaidHere !== true) notify({ tone: 'danger', message: failure.message });
+            throw failure;
+          },
+        );
         // Most screens don't wait on a change: its refusal is said by the toast, never left unhandled.
         made.catch(() => undefined);
         return made;

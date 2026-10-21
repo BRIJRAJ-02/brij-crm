@@ -5,11 +5,16 @@
 import type { DataLayer, ObjectSummary } from '@crm/data';
 import { useNav } from '@crm/data/react';
 import { Button } from '@crm/ui';
-import { lazy, Suspense, useState } from 'react';
+import { lazy, Suspense, useState, type ReactNode } from 'react';
+import type { CustomiseSidebarDialogProps } from './CustomiseSidebarDialog.tsx';
 import { strings } from './strings.ts';
 
 const CustomiseSidebarDialog = lazy(() =>
-  import('./CustomiseSidebarDialog.tsx').then((module) => ({ default: module.CustomiseSidebarDialog })),
+  // A dialog whose code didn't load (a deploy moved it) opens nothing, rather than taking the page down.
+  import('./CustomiseSidebarDialog.tsx').then(
+    (module) => ({ default: module.CustomiseSidebarDialog }),
+    (): { default: (props: CustomiseSidebarDialogProps) => ReactNode } => ({ default: () => null }),
+  ),
 );
 
 /** Props for CustomiseSidebarButton. */

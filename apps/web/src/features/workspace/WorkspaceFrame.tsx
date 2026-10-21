@@ -20,6 +20,7 @@ import {
   type Toasts,
 } from '@crm/ui';
 import { useNavigate } from '@tanstack/react-router';
+import type { CustomiseSidebarDialogProps } from './CustomiseSidebarDialog.tsx';
 import { lazy, Suspense, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
 import { settingsNav, visibleSettingsNav, type SettingsPageId } from '../settings/nav.ts';
 import { strings as settingsStrings } from '../settings/strings.ts';
@@ -36,7 +37,11 @@ export type { SidebarPage } from './sidebar.ts';
 
 // Behind a section's menu, so it loads only when first opened.
 const CustomiseSidebarDialog = lazy(() =>
-  import('./CustomiseSidebarDialog.tsx').then((module) => ({ default: module.CustomiseSidebarDialog })),
+  // A dialog whose code didn't load (a deploy moved it) opens nothing, rather than taking the page down.
+  import('./CustomiseSidebarDialog.tsx').then(
+    (module) => ({ default: module.CustomiseSidebarDialog }),
+    (): { default: (props: CustomiseSidebarDialogProps) => ReactNode } => ({ default: () => null }),
+  ),
 );
 
 /**

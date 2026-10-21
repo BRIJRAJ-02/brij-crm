@@ -21,7 +21,7 @@
 // order (AC-936).
 import type { NavState } from '@crm/contracts';
 import { applyNavOp, navKey, type NavOperation, type NavPrefs, type NavUniverse } from '@crm/contracts/navigation';
-import { toDataError, type DataError } from '../errors.ts';
+import { dataError, toDataError, type DataError } from '../errors.ts';
 import type { MutationLog } from '../live/mutations.ts';
 import type { LiveEventOf } from '../live/router.ts';
 
@@ -31,6 +31,8 @@ export const NAV_WORDS = {
   /** Before the refusal's reason: what was put back. */
   notChanged: 'Your sidebar wasn’t changed.',
   unavailable: 'Couldn’t load your sidebar, so it shows the default order.',
+  /** A change still waiting when the person signed out. */
+  signedOut: 'You signed out before that change was saved.',
 } as const;
 
 /**
@@ -277,7 +279,10 @@ export function createNavStore(deps: NavStoreDeps) {
       ({ version }) => {
         // Every change stores exactly one `nav` row.
         deps.mutations.answered(mutationId, 1);
-        if (!isCurrent(workspace, entry)) return;
+        if (!isCurrent(workspace, entry)) {
+          next.settle.landed();
+          return;
+        }
         entry.pending.shift();
         entry.sending = false;
         // Another tab's change landed between the base and this one: the base misses it, so read it.
@@ -299,7 +304,10 @@ export function createNavStore(deps: NavStoreDeps) {
       },
       (error: unknown) => {
         deps.mutations.forget(mutationId);
-        if (!isCurrent(workspace, entry)) return;
+        if (!isCurrent(workspace, entry)) {
+          next.settle.refused(toDataError(error));
+          return;
+        }
         entry.pending.shift();
         entry.sending = false;
         publish(entry);
@@ -440,7 +448,13 @@ export function createNavStore(deps: NavStoreDeps) {
     },
     /** Signed out: forget everything. */
     clear: (): void => {
-      for (const entry of entries.values()) entry.release?.();
+      for (const entry of entries.values()) {
+        entry.release?.();
+        // The one out settles with its answer; the ones waiting behind it never go, so they are refused now.
+        for (const waiting of entry.pending.slice(entry.sending ? 1 : 0)) {
+          waiting.settle.refused(dataError('UNAUTHENTICATED', NAV_WORDS.signedOut));
+        }
+      }
       entries.clear();
     },
   };
