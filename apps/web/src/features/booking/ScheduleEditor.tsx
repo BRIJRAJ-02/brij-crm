@@ -114,7 +114,7 @@ function Frame({
 }) {
   return (
     <WorkspacePage
-      currentPage="availability"
+      currentPage="bookings"
       page={{
         topBar: (
           <TopBar
@@ -356,7 +356,7 @@ function UsedBy({
 export function ScheduleEditorPending() {
   return (
     <WorkspacePage
-      currentPage="availability"
+      currentPage="bookings"
       page={{
         topBar: <TopBar title={scheduleStrings.schedule} icon="clock" isLoading />,
         body: (

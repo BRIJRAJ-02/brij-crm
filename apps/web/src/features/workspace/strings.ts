@@ -26,10 +26,8 @@ export const strings = {
   trash: 'Trash',
   /** The sidebar's way to the bookings, first under Scheduling (spec 0034, AC-928). */
   bookings: 'Bookings',
-  /** The Scheduling section's pages (spec 0034, AC-928). */
-  availability: 'Availability',
-  bookingPages: 'Booking pages',
-  forms: 'Forms',
+  /** The sidebar's way to the booking pages and forms, after Bookings (spec 0022; one row, the owner, 22 October 2026). */
+  captures: 'Captures',
   /** The sidebar's first row and the workspace's landing page (owner, 21 October 2026). */
   home: 'Home',
   /** The tasks page's row (spec 0019), after the sections, as timefix has it; Tasks, as the page is named (owner, 21 October 2026). */

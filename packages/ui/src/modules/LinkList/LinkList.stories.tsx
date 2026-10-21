@@ -310,6 +310,42 @@ export const Compact: Story = {
   },
 };
 
+/** Schedules (Bookings › Availability): the Default badge right after its name, the week inline, the zone and use as facts. */
+export const CompactSchedules: Story = {
+  args: { density: 'compact', isToolbarHidden: true, label: 'Schedules', searchLabel: 'Schedules' },
+  render: (args) => (
+    <Stage width="fill">
+      <LinkList
+        {...args}
+        rows={[
+          {
+            id: 'working',
+            title: 'Working hours',
+            titleBadge: 'Default',
+            address: 'Mon – Fri, 9:00 AM to 5:00 PM',
+            chips: ['Europe/London', 'Used by 2 booking pages'],
+            actions: <Button variant="ghost" icon="ellipsis" label="More for Working hours" />,
+          },
+          {
+            id: 'evenings',
+            title: 'Evenings',
+            address: 'Mon – Thu, 6:00 PM to 8:00 PM',
+            chips: ['Europe/London', 'No booking pages'],
+            actions: <Button variant="ghost" icon="ellipsis" label="More for Evenings" />,
+          },
+        ]}
+      />
+    </Stage>
+  ),
+  play: async ({ canvas }) => {
+    const name = canvas.getByText('Working hours').getBoundingClientRect();
+    const badge = canvas.getByText('Default').getBoundingClientRect();
+    // Right after the name, not at the row's far end.
+    await expect(badge.left - name.right).toBeLessThan(16);
+    await expect(canvas.getByText('Europe/London · No booking pages')).toBeVisible();
+  },
+};
+
 /** Compact forms: the Not published badge, the facts lined up in one column down the list. */
 export const CompactForms: Story = {
   args: { density: 'compact', isToolbarHidden: true, label: 'Forms', searchLabel: 'Search forms' },

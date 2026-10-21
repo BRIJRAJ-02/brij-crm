@@ -6,7 +6,7 @@ import { strings } from '../features/forms/strings.ts';
 
 // A draft opened in a new tab to try (spec 0023, The editor: layout): the hosted page's own renderer, marked
 // "Preview, not live", checking answers and sending nothing. Outside the app frame, as a visitor would see it.
-export const Route = createFileRoute('/w/$slug/forms_/$formId_/preview')({
+export const Route = createFileRoute('/w/$slug/captures_/forms/$formId_/preview')({
   loader: async ({ context, params }) => {
     try {
       return { form: await context.data.forms.get(params.slug, params.formId) };

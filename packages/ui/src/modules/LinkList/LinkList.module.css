@@ -115,6 +115,13 @@
     white-space: nowrap;
   }
 
+  /* What the row is (Default), right after its name, centred on the line rather than on the text's baseline. */
+  .titleBadge {
+    display: inline-flex;
+    flex: none;
+    align-self: center;
+  }
+
   .address {
     min-inline-size: 0;
     overflow: hidden;

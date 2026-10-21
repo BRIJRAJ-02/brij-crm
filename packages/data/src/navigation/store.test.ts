@@ -9,7 +9,7 @@ const ME = '01900000-0000-7000-8000-0000000000a1';
 const OTHER = '01900000-0000-7000-8000-0000000000a2';
 const PEOPLE = '01900000-0000-7000-8000-000000000001';
 const DEALS = '01900000-0000-7000-8000-000000000003';
-const universe: NavUniverse = { ...EMPTY_NAV_UNIVERSE, records: [PEOPLE, DEALS], scheduling: ['bookings', 'forms'] };
+const universe: NavUniverse = { ...EMPTY_NAV_UNIVERSE, records: [PEOPLE, DEALS], scheduling: ['bookings', 'captures'] };
 
 const state = (over: Partial<NavState> = {}): NavState => ({
   items: [],
@@ -18,7 +18,7 @@ const state = (over: Partial<NavState> = {}): NavState => ({
   version: 0,
   favourites: [],
   top: [],
-  scheduling: ['bookings', 'forms'],
+  scheduling: ['bookings', 'captures'],
   ...over,
 });
 

@@ -5,14 +5,11 @@
 import type { NavEntry, NavPage, NavPrefs, NavSectionKey, NavState, NavUniverse, ObjectSummary } from '@crm/data';
 import { navKey, sectionItems, sectionOrder } from '@crm/data/navigation';
 import type { IconName } from '@crm/ui';
-import { availabilityHref } from '../booking/links.ts';
-import { formsHref, linksHref } from '../captures/pages.ts';
-import { bookingsHref, navObjects, tasksHref } from './objects.ts';
+import { bookingsHref, capturesHref, navObjects, tasksHref } from './objects.ts';
 import { strings } from './strings.ts';
 
-/** A page the sidebar marks current that isn't an object's: Tasks, the Scheduling pages and the trash. */
-export type SidebarPage =
-  'home' | 'inbox' | 'tasks' | 'bookings' | 'availability' | 'booking_pages' | 'forms' | 'trash';
+/** A page the sidebar marks current that isn't an object's: Tasks, Bookings, Captures and the trash. */
+export type SidebarPage = 'home' | 'inbox' | 'tasks' | 'bookings' | 'captures' | 'trash';
 
 /** One page the sidebar links to: its name, its icon and its address. */
 export interface SidebarPageLink {
@@ -29,9 +26,7 @@ export interface SidebarPageLink {
 export const PAGE_LINKS: { readonly [Page in NavPage]?: SidebarPageLink } = {
   tasks: { label: strings.tasks, icon: 'square-check', href: tasksHref },
   bookings: { label: strings.bookings, icon: 'calendar-days', href: bookingsHref },
-  availability: { label: strings.availability, icon: 'clock', href: availabilityHref },
-  booking_pages: { label: strings.bookingPages, icon: 'link', href: linksHref },
-  forms: { label: strings.forms, icon: 'clipboard-list', href: formsHref },
+  captures: { label: strings.captures, icon: 'link', href: capturesHref },
 };
 
 /** Each section's title. */

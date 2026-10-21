@@ -20,8 +20,12 @@ export type NavSectionKey = (typeof NAV_SECTIONS)[number];
 
 /** Inbox and Tasks, above the sections. */
 export const NAV_TOP_PAGES = ['inbox', 'tasks'] as const;
-/** The Scheduling section's pages, in their default order (AC-928). */
-export const NAV_SCHEDULING_PAGES = ['bookings', 'availability', 'booking_pages', 'forms'] as const;
+/**
+ * The Scheduling section's pages, in their default order: Bookings (its Availability a tab of it) and Captures (its
+ * Booking pages and Forms tabs), two rows as round 6 had them (the owner, 22 October 2026). A stored choice for a
+ * page no longer here is skipped on read and dropped on the next write.
+ */
+export const NAV_SCHEDULING_PAGES = ['bookings', 'captures'] as const;
 /** Every page the sidebar may store a choice for. Fixed items (Trash, Settings) are never stored. */
 export const NAV_PAGES = [...NAV_TOP_PAGES, ...NAV_SCHEDULING_PAGES] as const;
 /** A page the sidebar stores choices for. */

@@ -7,8 +7,8 @@ import type { ObjectSummary, Permission } from '@crm/data';
 import type { IconName } from '@crm/ui';
 import type { ThemeChoice } from '@crm/ui/theme';
 import { settingsNav, visibleSettingsNav } from '../settings/nav.ts';
-import { availabilityHref } from '../booking/links.ts';
-import { formsHref, linksHref } from '../captures/pages.ts';
+import { availabilityHref, linksHref } from '../booking/links.ts';
+import { formsHref } from '../forms/paths.ts';
 import { bookingsHref, homeHref, navObjects, objectHref, tasksHref, trashHref } from '../workspace/objects.ts';
 import { strings } from './strings.ts';
 

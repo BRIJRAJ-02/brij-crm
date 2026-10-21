@@ -103,7 +103,7 @@ describe('the sidebar', { timeout: 120_000 }, () => {
       favourites: [],
       // Tasks (My tasks, spec 0019) for every member; Inbox waits for notifications (#28).
       top: ['tasks'],
-      scheduling: ['bookings', 'availability', 'booking_pages', 'forms'],
+      scheduling: ['bookings', 'captures'],
     });
     const changed = await changeNav(w.bea, { op: 'fold', section: 'scheduling', folded: true });
     expect(changed.version).toBe(2);

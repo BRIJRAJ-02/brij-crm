@@ -106,7 +106,7 @@ test.describe('confirms on forms', () => {
 
     // Turning the form off from its card asks first; Cancel leaves it on and sends nothing.
     const setStatus = calls(page, 'forms/setStatus');
-    await page.goto(`/w/${slug}/forms`);
+    await page.goto(`/w/${slug}/captures/forms`);
     const accepting = page.getByRole('switch', { name: `Accepting submissions on ${live.name}` });
     await expect(accepting).toBeChecked();
     await accepting.press('Space');
@@ -132,7 +132,7 @@ test.describe('confirms on forms', () => {
 
     // Adding many to the CRM at once asks first and counts them; Escape is Cancel and sends nothing.
     const addToCrm = calls(page, 'submissions/addToCrm');
-    await page.goto(`/w/${slug}/forms/${live.id}?tab=submissions`);
+    await page.goto(`/w/${slug}/captures/forms/${live.id}?tab=submissions`);
     for (const name of ['Grace Hopper', 'Alan Turing']) {
       await page.getByRole('row').filter({ hasText: name }).getByRole('checkbox').click({ force: true });
     }
@@ -150,7 +150,7 @@ test.describe('confirms on forms', () => {
 
     // Deleting a submission asks first and names who sent it; Escape is Cancel, the submission stays open; Cancel keeps it.
     const deleteSubmission = calls(page, 'submissions/delete');
-    await page.goto(`/w/${slug}/forms/${live.id}?tab=submissions`);
+    await page.goto(`/w/${slug}/captures/forms/${live.id}?tab=submissions`);
     await page.getByRole('row').filter({ hasText: 'Grace Hopper' }).first().click();
     await page.getByRole('button', { name: 'Delete', exact: true }).click();
     const confirm = page.getByRole('alertdialog', { name: 'Delete the submission from Grace Hopper?' });
@@ -190,7 +190,7 @@ test.describe('confirms on forms', () => {
     expect(deleteSubmission()).toBe(2);
 
     // The editor's Pause asks the same question; Cancel leaves it live.
-    await page.goto(`/w/${slug}/forms/${live.id}`);
+    await page.goto(`/w/${slug}/captures/forms/${live.id}`);
     await page.getByRole('button', { name: 'More actions' }).click();
     await page.getByRole('menuitem', { name: 'Pause' }).click();
     await expect(page.getByRole('dialog', { name: `Pause the ${live.name} form?` })).toBeVisible();
@@ -200,7 +200,7 @@ test.describe('confirms on forms', () => {
 
     // Removing a site from the Install tab asks first; Escape keeps it; Remove site saves the list without it.
     const settings = calls(page, 'forms/updateSettings');
-    await page.goto(`/w/${slug}/forms/${live.id}?tab=install`);
+    await page.goto(`/w/${slug}/captures/forms/${live.id}?tab=install`);
     await page.getByRole('button', { name: 'For developers' }).click();
     await page.getByLabel('Site address').fill('https://acme.com');
     await page.getByRole('button', { name: 'Add site' }).click();
@@ -222,7 +222,7 @@ test.describe('confirms on forms', () => {
 
     // Deleting the form from its card asks first; Cancel keeps it; Delete form removes it, once.
     const deleteForm = calls(page, 'forms/delete');
-    await page.goto(`/w/${slug}/forms`);
+    await page.goto(`/w/${slug}/captures/forms`);
     const card = page.getByRole('link', { name: live.name });
     await expect(card).toBeVisible();
     await page.getByRole('button', { name: `More for ${live.name}` }).click();

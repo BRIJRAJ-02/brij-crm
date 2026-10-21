@@ -43,6 +43,11 @@ export interface LinkRow {
    * read apart from the states, which keep their Badge.
    */
   readonly chips: readonly string[];
+  /**
+   * A Badge right after the title, for what the row is rather than whether it takes people: the default schedule
+   * ("Default"), read with the name. States that come and go (`badge`) stay at the row's end.
+   */
+  readonly titleBadge?: string;
   /** A grey badge before the switch, only when it isn't taking people ("Off", "Not published", "Copying…"). */
   readonly badge?: string;
   /** Off (not taking people): the title reads in the secondary colour, as the switch says. */
@@ -292,6 +297,11 @@ export function LinkList({
                   <span className={styles.title} title={isCompact ? row.title : undefined}>
                     {row.title}
                   </span>
+                  {row.titleBadge !== undefined && (
+                    <span className={styles.titleBadge}>
+                      <Badge text={row.titleBadge} />
+                    </span>
+                  )}
                   <span className={styles.address}>{row.address}</span>
                 </div>
                 {!isCompact && row.description !== undefined && row.description !== '' && (

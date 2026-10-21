@@ -18,9 +18,7 @@ const SECTIONS = [
     title: 'Scheduling',
     items: [
       { id: 'bookings', name: 'Bookings', icon: 'calendar-days', isShown: true },
-      { id: 'availability', name: 'Availability', icon: 'clock', isShown: true },
-      { id: 'booking_pages', name: 'Booking pages', icon: 'link', isShown: true },
-      { id: 'forms', name: 'Forms', icon: 'clipboard-list', isShown: true },
+      { id: 'captures', name: 'Captures', icon: 'link', isShown: true },
     ],
   },
 ] as const;

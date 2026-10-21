@@ -17,7 +17,7 @@ export const NavSection = z.enum(NAV_SECTIONS);
 /** One of the sidebar's sections. */
 export type NavSection = z.infer<typeof NavSection>;
 
-/** A page the sidebar stores choices for (Inbox, Tasks, and the four Scheduling pages). */
+/** A page the sidebar stores choices for (Inbox, Tasks, Bookings and Captures). */
 export const NavPageKey = z.enum(NAV_PAGES);
 /** A page the sidebar stores choices for. */
 export type NavPageKey = z.infer<typeof NavPageKey>;

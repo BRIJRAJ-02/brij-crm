@@ -229,17 +229,17 @@ export async function switchingWorkspace(
     .click();
   await expect(page).toHaveURL(/\/objects\/people\/[0-9a-f-]{36}\/overview$/, { timeout: 30_000 });
   const recordId = /\/people\/([0-9a-f-]{36})\//.exec(page.url())?.[1] ?? '';
-  await page.goto(`/w/${slug}/booking-pages`);
+  await page.goto(`/w/${slug}/captures/links`);
   if (!(await has('Intro call'))) {
     await page.getByRole('button', { name: 'New booking page' }).first().click();
     await page.getByLabel('Title').fill('Intro call');
     await page.getByRole('button', { name: 'Continue' }).click();
-    await expect(page).toHaveURL(/booking-pages\/[0-9a-f-]{36}/, { timeout: 60_000 });
+    await expect(page).toHaveURL(/captures\/links\/[0-9a-f-]{36}/, { timeout: 60_000 });
   }
-  await page.goto(`/w/${slug}/forms`);
+  await page.goto(`/w/${slug}/captures/forms`);
   if (!(await has('Untitled form'))) {
     await page.getByRole('button', { name: 'New form' }).first().click();
-    await expect(page).toHaveURL(/forms\/[0-9a-f-]{36}/, { timeout: 60_000 });
+    await expect(page).toHaveURL(/captures\/forms\/[0-9a-f-]{36}/, { timeout: 60_000 });
   }
   return { slug, recordId };
 }
@@ -435,9 +435,8 @@ export async function loadingAndLoaded(
 }
 
 /**
- * A page's chrome, by box: its TopBar, the New at the TopBar's end, and the bar under it (People's ViewBar, which
- * Booking pages and Forms take too, or the tabs' bar on Bookings). Switching tabs and pages must leave these where
- * they were.
+ * A page's chrome, by box: its TopBar, the New at the TopBar's end, and the bar under it (People's ViewBar, or
+ * the tabs' bar on Captures and Bookings). Switching tabs and pages must leave these where they were.
  */
 export async function chromeOf(page: Page): Promise<Record<string, Box>> {
   return page.evaluate(() => {

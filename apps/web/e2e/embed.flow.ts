@@ -268,7 +268,7 @@ test.describe('embeds and the site’s own form', () => {
       allowedOrigins: [HOST],
       mutationId: randomUUID(),
     });
-    await page.goto(`/w/${workspace}/forms/${live.id}?tab=install`);
+    await page.goto(`/w/${workspace}/captures/forms/${live.id}?tab=install`);
     await page.getByRole('button', { name: 'For developers' }).click();
     const own = await page.getByRole('textbox', { name: 'Form HTML' }).inputValue();
     expect(own).toContain(`data-timefix-form="${live.publicKey}"`);
