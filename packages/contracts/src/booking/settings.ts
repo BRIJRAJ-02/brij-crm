@@ -13,8 +13,8 @@ export const BOOKING_DURATION_MIN = 5;
 export const BOOKING_DURATION_MAX = 480;
 /** Every meeting length is a whole multiple of this many minutes. */
 export const BOOKING_DURATION_STEP = 5;
-/** At most this many lengths on one page. */
-export const BOOKING_DURATIONS_MAX = 5;
+/** At most this many lengths on one page: the public page's length switch shows four, so none is ever hidden. */
+export const BOOKING_DURATIONS_MAX = 4;
 /** The slot steps a page may set, in minutes (none: the duration). */
 export const BOOKING_SLOT_STEPS = [15, 30, 60] as const;
 /** The weekdays as the availability keys them, Monday first. */
@@ -180,7 +180,7 @@ export const BookingPageSettings = z.object({
   durations: z
     .array(BookingDuration)
     .min(1, 'Offer at least one meeting length.')
-    .max(BOOKING_DURATIONS_MAX, { error: 'Offer at most 5 lengths.' })
+    .max(BOOKING_DURATIONS_MAX, { error: 'A page offers at most 4 lengths.' })
     .refine((durations) => new Set(durations).size === durations.length, { error: 'Offer each length once.' }),
   location: BookingLocation,
   bufferBefore: z.number().int().min(0).max(60, 'Buffers are 0 to 60 minutes.'),

@@ -3,8 +3,8 @@
 
 /** The lengths offered as ready picks, in minutes. */
 export const PRESET_LENGTHS: readonly number[] = [15, 30, 45, 60, 90];
-/** At most this many lengths on one page (the server's `BOOKING_DURATIONS_MAX`). */
-export const LENGTHS_MAX = 5;
+/** At most this many lengths on one page (the server's `BOOKING_DURATIONS_MAX`): the public page shows four. */
+export const LENGTHS_MAX = 4;
 
 /** A typed length in minutes the server takes (5 to 480, in steps of 5), or undefined. */
 export function lengthOf(text: string): number | undefined {

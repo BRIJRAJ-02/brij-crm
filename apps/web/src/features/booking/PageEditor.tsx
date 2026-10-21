@@ -366,7 +366,16 @@ export function PageEditor({ data, slug, page: loaded, locale, schedules, ownerM
                 choices={lengths.map((minutes) => ({ id: String(minutes), label: strings.minutesShort(minutes) }))}
                 selected={draft.durations.map(String)}
                 isDisabled={isLocked}
-                onChange={(ids) => change({ durations: lengths.filter((minutes) => ids.includes(String(minutes))) })}
+                onChange={(ids) => {
+                  const durations = lengths.filter((minutes) => ids.includes(String(minutes)));
+                  // A fifth is refused here as the server would: the public page shows four.
+                  if (durations.length > LENGTHS_MAX) {
+                    setLengthError(strings.lengthsFull);
+                    return;
+                  }
+                  setLengthError(undefined);
+                  change({ durations });
+                }}
                 {...(draft.durations.length === 0 ? { error: strings.durationRequired } : {})}
               />
               {!isLocked && (

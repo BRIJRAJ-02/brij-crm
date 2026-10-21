@@ -67,7 +67,7 @@ export const strings = {
   customMinutesInvalid: 'Type 5 to 480 minutes, in steps of 5.',
   addLength: 'Add a length',
   add: 'Add',
-  lengthsFull: 'A page offers at most 5 lengths. Turn one off to add another.',
+  lengthsFull: 'A page offers at most 4 lengths. Turn one off to add another.',
   minutesUnit: 'min',
   createPage: 'Create page',
   creating: 'Creating',
