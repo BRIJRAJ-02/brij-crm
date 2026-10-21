@@ -420,12 +420,18 @@ export interface MenuSectionProps {
   /** The section's heading ("Company attributes"). */
   readonly label: string;
   readonly children: ReactNode;
+  /**
+   * The section's own selection, over the menu's: `none` makes its items
+   * plain actions in a menu of choices (a view's Rename under the views to
+   * switch to), so they read as menu items, never as choices.
+   */
+  readonly selectionMode?: 'none' | 'single' | 'multiple';
 }
 
 /** A labelled group of items in a Menu. */
-export function MenuSection({ label, children }: MenuSectionProps) {
+export function MenuSection({ label, children, selectionMode }: MenuSectionProps) {
   return (
-    <AriaMenuSection className={styles.section}>
+    <AriaMenuSection className={styles.section} {...(selectionMode === undefined ? {} : { selectionMode })}>
       <Header className={styles.heading}>{label}</Header>
       {children}
     </AriaMenuSection>

@@ -77,10 +77,16 @@
     white-space: nowrap;
   }
 
+  /* A description wraps within the menu's width and never sets it (no width of its own, then the full width):
+     the labels and the menu's minimum size the menu, so a long reason on a disabled item ("This is the default
+     view for People. Make another view the default first.") never stretches it across the page. */
   .description {
+    inline-size: 0;
+    min-inline-size: 100%;
     color: var(--text-secondary);
     font: var(--text-label);
     letter-spacing: var(--tracking-label);
+    overflow-wrap: anywhere;
   }
 
   .meta {
