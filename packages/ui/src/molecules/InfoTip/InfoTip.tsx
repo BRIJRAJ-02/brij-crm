@@ -14,7 +14,7 @@ export interface InfoTipProps {
   /** A worked example, under the text: "With 4 hours, a 9:00 slot can't be booked after 5:00 that morning." */
   readonly example?: ReactNode;
   readonly placement?: PopoverPlacement;
-  /** `sm` (the default) sits beside a 13px label or a row's title; `md` beside a control. */
+  /** `sm` (the default) sits beside a label or a row's title; `md` beside a control. */
   readonly size?: 'sm' | 'md';
 }
 

@@ -9,7 +9,7 @@ New (the owner, 21 October 2026: "add some info tag … where it can go confusin
 ## Use
 
 ```tsx
-<SettingsRow title="Minimum notice" info={<InfoTip label="Minimum notice" example="With 4 hours, …">How far ahead someone has to book.</InfoTip>}>
+<SettingsRow title="Minimum notice" meta={<InfoTip label="Minimum notice" example="With 4 hours, …">How far ahead someone has to book.</InfoTip>}>
   …
 </SettingsRow>
 <span>Unique <InfoTip label="Unique">No two records can share a value.</InfoTip></span>
@@ -18,7 +18,7 @@ New (the owner, 21 October 2026: "add some info tag … where it can go confusin
 - `label` is what it explains, as the label beside it says it; the button and the popover are named "About <label>".
 - `children` is one or two plain sentences on what the setting does. `example` adds a worked example under its own quiet label.
 - Use it only where the label alone isn't clear. Never on an obvious field (Name, Email), and never to repeat the label.
-- `size`: `sm` (the default, 20px) beside a label or a row's title; `md` (26px) beside a control.
+- `size`: `sm` (the default, a chip's size) beside a label or a row's title; `md` (a control's height) beside a control.
 - `placement` follows Popover (`bottom start` by default) and flips when there is no room.
 
 ## States
