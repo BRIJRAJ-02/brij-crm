@@ -3,6 +3,7 @@
 // identity store, the sign up allowlist, and rate limits that hold across
 // instances. Nothing outside this folder imports Better Auth; the rest of the
 // API sees only `Auth`.
+import { createHmac } from 'node:crypto';
 import { isIP } from 'node:net';
 import { EmailValue, emailDomain, errorStatus, type SignInMethod, type SignInProviders } from '@crm/contracts';
 import { renderSignInCode, SIGN_IN_CODE_MINUTES } from '@crm/emails';
@@ -173,6 +174,8 @@ export interface Auth {
   checkSecondFactor(userId: string, method: 'totp' | 'backup', code: string): Promise<boolean>;
   /** How many unused backup codes the person has, or undefined without two factor. */
   backupCodesLeft(userId: string): Promise<number | undefined>;
+  /** A step up email code as kept: keyed with the server's secret, so the table never yields a code. */
+  hashStepUpCode(code: string): string;
 }
 
 /** What sign in needs: the environment, the identity store (its database), and a mailer for codes. */
@@ -350,6 +353,9 @@ function presentText<K extends string>(key: K, value: unknown): { [P in K]?: str
 /** What enabling two factor may send: the app only (the email second factor is off), and never our issuer. */
 const EnableBody = z.strictObject({ method: z.literal('totp').optional() });
 
+/** What a second step's backup code may send: the code, and whether to remember the device. */
+const SecondStepBody = z.strictObject({ code: z.string().max(40), trustDevice: z.boolean().optional() });
+
 /** Whether a session's user has two factor on (the plugin's field on Better Auth's loose user). */
 function isTwoFactorUser(user: unknown): boolean {
   return typeof user === 'object' && user !== null && 'twoFactorEnabled' in user && user.twoFactorEnabled === true;
@@ -431,9 +437,18 @@ export function createAuth({ env, identity, mailer, analytics = NO_ANALYTICS, in
   /** The person's two factor row, as the plugin keeps it (encrypted), or undefined. */
   async function twoFactorRow(
     userId: string,
-  ): Promise<{ readonly id: string; readonly secret: string; readonly backupCodes: string } | undefined> {
+  ): Promise<
+    | { readonly id: string; readonly secret: string; readonly backupCodes: string; readonly lockedUntil: Date | null }
+    | undefined
+  > {
     const context = await auth.$context;
-    const row = await context.adapter.findOne<{ id: string; secret: string; backupCodes: string; verified: boolean }>({
+    const row = await context.adapter.findOne<{
+      id: string;
+      secret: string;
+      backupCodes: string;
+      verified: boolean;
+      lockedUntil: Date | null;
+    }>({
       model: 'twoFactor',
       where: [{ field: 'userId', value: userId }],
     });
@@ -614,24 +629,36 @@ export function createAuth({ env, identity, mailer, analytics = NO_ANALYTICS, in
         }
         // Two factor's routes from a browser (spec 0033): setup and new codes need a recent check, turning off a
         // second factor's (AC-885, AC-896); the second step's routes are only for a sign in held back for one. A call
-        // from our own code (a step up's check) has no request and passes.
-        if (ctx.path.startsWith('/two-factor/') && ctx.request !== undefined) {
+        // from our own code is held to the same rules.
+        if (ctx.path.startsWith('/two-factor/')) {
           const current = await getSessionFromCtx(ctx);
           const owner = current === null ? undefined : { userId: current.user.id, sessionId: current.session.id };
-          if (ctx.path === '/two-factor/enable' || ctx.path === '/two-factor/generate-backup-codes') {
-            if (owner === undefined)
+          const signedIn = () => {
+            if (owner === undefined) {
               throw new APIError('UNAUTHORIZED', { code: 'UNAUTHENTICATED', message: 'Sign in first.' });
-            const body = EnableBody.safeParse(ctx.body ?? {});
+            }
+            return owner;
+          };
+          if (ctx.path === '/two-factor/enable') {
+            const { userId, sessionId } = signedIn();
             // Only the app: the email second factor is off, and the issuer is ours.
-            if (!body.success) throw inputInvalid();
-            await requireFreshSession(owner.userId, owner.sessionId);
+            if (!EnableBody.safeParse(ctx.body ?? {}).success) throw inputInvalid();
+            await requireFreshSession(userId, sessionId);
+          } else if (ctx.path === '/two-factor/generate-backup-codes') {
+            const { userId, sessionId } = signedIn();
+            // New codes replace the old ones, so only a second factor may make them: an email code alone (on a
+            // remembered device) must never turn into control of the second factor.
+            await requireFreshSession(userId, sessionId, { secondFactor: true });
           } else if (ctx.path === '/two-factor/disable') {
-            if (owner === undefined)
-              throw new APIError('UNAUTHORIZED', { code: 'UNAUTHENTICATED', message: 'Sign in first.' });
-            await requireFreshSession(owner.userId, owner.sessionId, { secondFactor: true });
-          } else if (ctx.path === '/two-factor/verify-backup-code' && owner !== undefined) {
-            // A step up uses a backup code through `account.stepUp.verify`, never here.
-            throw new APIError('BAD_REQUEST', { code: 'INPUT_INVALID', message: 'Backup codes are for signing in.' });
+            const { userId, sessionId } = signedIn();
+            await requireFreshSession(userId, sessionId, { secondFactor: true });
+          } else if (ctx.path === '/two-factor/verify-backup-code') {
+            // A step up uses a backup code through `account.stepUp.verify`, never here; and a sign in's code always
+            // makes its session (no `disableSession`), so a code is never used up unseen.
+            if (owner !== undefined) {
+              throw new APIError('BAD_REQUEST', { code: 'INPUT_INVALID', message: 'Backup codes are for signing in.' });
+            }
+            if (!SecondStepBody.safeParse(ctx.body ?? {}).success) throw inputInvalid();
           } else if (ctx.path === '/two-factor/verify-totp' && owner !== undefined) {
             // Signed in, this route only finishes setting the app up.
             const state = await identity.twoFactorState(owner.userId);
@@ -741,7 +768,6 @@ export function createAuth({ env, identity, mailer, analytics = NO_ANALYTICS, in
                 const made = ctx.context.newSession;
                 if (made === null || !isTwoFactorUser(made.user)) return;
                 const userId = made.user.id;
-                if (!(await identity.twoFactorState(userId)).appVerified) return;
                 // A remembered device (AC-884) passes, and its cookie is renewed, as the plugin's own hold does.
                 const trust = ctx.context.createAuthCookie(TRUST_DEVICE_COOKIE, { maxAge: TRUST_DEVICE_SECONDS });
                 const trusted = await ctx.getSignedCookie(trust.name, ctx.context.secret);
@@ -833,7 +859,8 @@ export function createAuth({ env, identity, mailer, analytics = NO_ANALYTICS, in
 
     async checkSecondFactor(userId, method, code) {
       const row = await twoFactorRow(userId);
-      if (row === undefined) return false;
+      // An account whose second step is locked after too many wrong codes can't step up meanwhile either.
+      if (row === undefined || (row.lockedUntil instanceof Date && row.lockedUntil > new Date())) return false;
       const context = await auth.$context;
       if (method === 'totp') {
         const secret = await symmetricDecrypt({ key: context.secretConfig, data: row.secret }).catch(() => undefined);
@@ -857,6 +884,10 @@ export function createAuth({ env, identity, mailer, analytics = NO_ANALYTICS, in
       if (used === null) return false;
       await keepEvent({ userId, kind: 'backup_code_used', detail: { stepUp: true } });
       return true;
+    },
+
+    hashStepUpCode(code) {
+      return createHmac('sha256', env.BETTER_AUTH_SECRET).update(`step-up:${code}`).digest('hex');
     },
 
     async backupCodesLeft(userId) {

@@ -1,4 +1,4 @@
-import { createHash, randomInt } from 'node:crypto';
+import { randomInt } from 'node:crypto';
 import {
   accountSecurity,
   listMySessions,
@@ -45,7 +45,7 @@ function stepUpDeps(context: RequestContext): StepUpDeps {
       log.info('Step up code sent', { mail: context.mailer.transport });
     },
     mintCode: () => String(randomInt(0, 1_000_000)).padStart(6, '0'),
-    hashCode: (code) => createHash('sha256').update(code).digest('hex'),
+    hashCode: (code) => context.auth.hashStepUpCode(code),
   };
 }
 

@@ -144,6 +144,50 @@ describe('two factor sign in (spec 0033, milestone 2)', () => {
     await expect(rpcClient(app, withCookies(remembered, trusted.cookie)).me.get()).resolves.toBeDefined();
   });
 
+  it("keeps the second factor's own routes from an email checked session, and its sign in routes from any", async () => {
+    const { email, cookie, backupCodes } = await withTwoFactor();
+    // Proven by email alone: no new backup codes.
+    const codes = await authPost(app, '/two-factor/generate-backup-codes', {}, { cookie });
+    expect(codes.status).toBe(403);
+    expect(await codes.json()).toMatchObject({ code: 'SECOND_FACTOR_REQUIRED' });
+    // Signed in, the second step's routes are shut: no guessing app codes past the lockout.
+    expect((await authPost(app, '/two-factor/verify-totp', { code: '000000' }, { cookie })).status).toBe(400);
+    expect((await authPost(app, '/two-factor/verify-backup-code', { code: backupCodes[0] }, { cookie })).status).toBe(
+      400,
+    );
+    // A sign in's backup code always makes its session.
+    const held = await emailSignIn(email);
+    const quiet = await authPost(
+      app,
+      '/two-factor/verify-backup-code',
+      { code: backupCodes[0], disableSession: true },
+      { cookie: held.cookie },
+    );
+    expect(quiet.status).toBe(400);
+  });
+
+  it('forgets remembered devices when two factor is turned off', async () => {
+    const { email, cookie, secret, backupCodes } = await withTwoFactor();
+    const held = await emailSignIn(email);
+    const used = await authPost(
+      app,
+      '/two-factor/verify-backup-code',
+      { code: backupCodes[0], trustDevice: true },
+      { cookie: held.cookie },
+    );
+    const remembered = cookieFrom(used);
+    await rpcClient(app, cookie).account.stepUp.verify({ method: 'totp', code: totpCode(secret) });
+    expect((await authPost(app, '/two-factor/disable', {}, { cookie })).status).toBe(200);
+    const rows = await testQuery<{ count: string }>(
+      identityUrl,
+      `select count(*) from auth.verification v join auth."user" u on v.value = u.id::text
+        where u.email = $1 and v.identifier like 'trust-device-%'`,
+      [email],
+    );
+    expect(rows[0]?.count).toBe('0');
+    expect(remembered).toContain('trust_device');
+  });
+
   it('steps up with an app code, and turns off only after a second factor', async () => {
     const { cookie, secret } = await withTwoFactor();
     const client = rpcClient(app, cookie);
