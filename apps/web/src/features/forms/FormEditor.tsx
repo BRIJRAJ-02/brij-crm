@@ -102,7 +102,7 @@ export function FormEditor(props: FormEditorProps) {
   // Publish leaves once there is nothing more to publish; focus then moves to the menu beside it.
   const moreRef = useRef<HTMLButtonElement>(null);
   // After a publish that changed where answers go: offer to file the submissions before it the same way.
-  const [syncOffer, setSyncOffer] = useState<'published' | 'connected' | undefined>(undefined);
+  const [syncOffer, setSyncOffer] = useState<'published' | 'connected' | 'menu' | undefined>(undefined);
   const [isRetargeting, setRetargeting] = useState(false);
   const jobs = useJobFollower(data.jobs.view(slug, 'mine'));
   // The end of the tab strip, where a tab draws its own tools (Submissions' filter and search).
@@ -349,6 +349,7 @@ export function FormEditor(props: FormEditorProps) {
                   void navigate({ href: formHref(slug, copy.id) });
                 }, failed);
               }
+              if (key === 'sync') setSyncOffer('menu');
               if (key === 'delete') setDeleting(true);
             }}
           >
@@ -368,6 +369,12 @@ export function FormEditor(props: FormEditorProps) {
             <MenuItem id="duplicate" icon="layers">
               {strings.duplicate}
             </MenuItem>
+            {/* Earlier submissions filed again the way the form files now: once it files and has some. */}
+            {form.live?.targets.main !== undefined && form.submissionCount > 0 && (
+              <MenuItem id="sync" icon="refresh-cw" description={strings.syncOldText}>
+                {strings.syncOld}
+              </MenuItem>
+            )}
             <MenuSeparator />
             <MenuItem id="delete" icon="trash" isDanger>
               {strings.deleteForm}
@@ -442,6 +449,7 @@ export function FormEditor(props: FormEditorProps) {
             link={data.forms.hostedUrl(form.publicKey)}
             followJob={jobs.follow}
             isFiling={form.live?.targets.main !== undefined}
+            hasSubmissions={form.submissionCount > 0}
           />
         );
       default:
@@ -480,8 +488,8 @@ export function FormEditor(props: FormEditorProps) {
   const layout = (
     <PreviewLayout
       notices={notices}
-      // Settings and Install are groups of fields: side by side where there is room.
-      bodyLayout={current === 'settings' || current === 'install' ? 'grid' : 'stack'}
+      // Settings is a group of fields beside its preview; Install reads top to bottom, full width.
+      bodyLayout={current === 'settings' ? 'grid' : 'stack'}
       // On every tab, so a name, link or owner left unsaved still says so after a tab change.
       footer={settings.footer}
       {...(current === 'form' || current === 'settings'

@@ -19,6 +19,7 @@ import {
   Card,
   DescriptionList,
   Field,
+  InfoTip,
   Link,
   Radio,
   RadioGroup,
@@ -50,11 +51,6 @@ type AfterKind = FormDocument['after']['kind'];
  */
 const questionHref = (slug: string, formId: string, questionId: string) =>
   `/w/${slug}/captures/forms/${formId}?question=${encodeURIComponent(questionId)}`;
-
-/** A web address without its scheme, for a summary ("acme.com/thanks"). */
-function shortUrl(url: string): string {
-  return url.replace(/^https?:\/\//, '').replace(/\/$/, '');
-}
 
 /** The settings that apply when saved: the name, the address and the owner. */
 interface Applied {
@@ -235,15 +231,6 @@ export function SettingsTab({
   };
 
   const bookingPage = after.kind === 'booking' ? pageList.find((page) => page.id === after.bookingPageId) : undefined;
-  const afterSummary =
-    after.kind === 'redirect'
-      ? shortUrl(after.url) === ''
-        ? strings.noAddressYet
-        : strings.sendsTo(shortUrl(after.url))
-      : after.kind === 'booking'
-        ? strings.sendsToBook(bookingPage?.title, after.countdownSeconds)
-        : strings.showsMessage;
-
   // Where each question's answer goes: the target's attribute, or kept with the submission only.
   const isFiling = draft.targets.main !== undefined && target.objectName !== undefined;
   const objectName = target.objectName ?? '';
@@ -265,26 +252,20 @@ export function SettingsTab({
       ),
     };
   });
-  const filedCount = draft.questions.filter(
-    (question) => attributeTitle(question.filedOn?.attributeId) !== undefined,
-  ).length;
   // The object a submission goes to when the switch is turned on: People, else the first live object.
   const liveObjects = objects.filter((object) => !object.isArchived && object.access === 'write');
   const firstObject = liveObjects.find((object) => object.standardKey === 'people') ?? liveObjects[0];
-  const answersSummary = [
-    isFiling ? strings.answersSummary(objectName, filedCount) : strings.keptOnlySummary,
-    targetChanged ? strings.waitsForPublish : '',
-  ]
-    .filter((part) => part !== '')
-    .join(' · ');
 
   return (
     <>
       <Card
         title={strings.afterTitle}
-        description={[afterSummary, afterChanged ? strings.waitsForPublish : '']
-          .filter((part) => part !== '')
-          .join(' · ')}
+        {...(afterChanged ? { description: strings.waitsForPublish } : {})}
+        actions={
+          <InfoTip label={strings.afterTitle} example={strings.afterTipExample}>
+            {strings.afterTip}
+          </InfoTip>
+        }
       >
         <RadioGroup
           label={strings.afterChoice}
@@ -316,7 +297,6 @@ export function SettingsTab({
           <>
             <Select
               label={strings.bookingPage}
-              hint={strings.bookingPageHint}
               items={[
                 ...usable.map((page) => ({
                   id: page.id,
@@ -397,7 +377,11 @@ export function SettingsTab({
           />
         )}
       </Card>
-      <Card title={strings.answersTitle} description={answersSummary} isBusy={isRetargeting}>
+      <Card
+        title={strings.answersTitle}
+        {...(targetChanged ? { description: strings.waitsForPublish } : {})}
+        isBusy={isRetargeting}
+      >
         <Switch
           label={strings.addToCrmSwitch}
           description={isFiling ? strings.addToCrmOn(objectName, matchTitle) : strings.addToCrmOff}
