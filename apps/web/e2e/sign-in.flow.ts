@@ -183,10 +183,14 @@ test('signs in by code, names the workspace, lands on People, signs out, and com
   const nav = page.getByRole('navigation', { name: 'Main navigation' });
   await expect(nav.getByRole('link', { name: 'People' })).toHaveAttribute('aria-current', 'page');
   await expect(nav.getByText('Ada’s workspace')).toBeAttached();
-  // The theme switch stays inside the sidebar at every width (stacked on the rail).
-  const theme = nav.getByRole('radiogroup', { name: 'Theme' });
-  const [themeBox, navBox] = [await theme.boundingBox(), await nav.boundingBox()];
-  expect(themeBox !== null && navBox !== null && themeBox.x + themeBox.width <= navBox.x + navBox.width).toBe(true);
+  // Settings sits at the sidebar's foot, inside it at every width (on the rail too). The theme switch left the
+  // sidebar for Settings › Preferences (spec 0026).
+  const settings = nav.getByRole('link', { name: 'Settings', exact: true });
+  const [settingsBox, navBox] = [await settings.boundingBox(), await nav.boundingBox()];
+  expect(settingsBox !== null && navBox !== null && settingsBox.x + settingsBox.width <= navBox.x + navBox.width).toBe(
+    true,
+  );
+  await expect(nav.getByRole('radiogroup', { name: 'Theme' })).toHaveCount(0);
   await checkScreen(page, '5-people-empty');
 
   // A workspace that isn't yours says so inside the frame.
