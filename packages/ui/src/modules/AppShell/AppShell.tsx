@@ -41,8 +41,12 @@ export interface AppShellProps {
   readonly children: ReactNode;
   /** A side panel beside the view: a record's details, a settings pane. */
   readonly panel?: ReactNode;
-  /** The view's scroll box, for a frame that stays mounted across pages and puts each new page at its top. */
-  readonly viewRef?: Ref<HTMLDivElement>;
+  /**
+   * Names the page the view shows, for a frame that stays mounted across
+   * pages: a new name draws a new view box (at its top), so another page
+   * arrives fresh rather than as the last page's box moved under new bars.
+   */
+  readonly viewKey?: string;
 }
 
 /** Props for AppShellSlot. */
@@ -67,7 +71,7 @@ export function AppShellSlot({ ref }: AppShellSlotProps) {
  * A skip link, first in the tab order, jumps past the sidebar to the main
  * column. The view adapts to its width with container queries.
  */
-export function AppShell({ sidebar, topBar, viewBar, toolbar, banner, children, panel, viewRef }: AppShellProps) {
+export function AppShell({ sidebar, topBar, viewBar, toolbar, banner, children, panel, viewKey }: AppShellProps) {
   const mainId = useId();
   const isCompact = useSyncExternalStore(subscribe, isCompactNow, () => false);
   return (
@@ -85,7 +89,7 @@ export function AppShell({ sidebar, topBar, viewBar, toolbar, banner, children, 
           {toolbar}
           {banner}
           <div className={styles.content}>
-            <div ref={viewRef} className={styles.view}>
+            <div key={viewKey} className={styles.view}>
               {children}
             </div>
             {panel !== undefined && <aside className={styles.panel}>{panel}</aside>}

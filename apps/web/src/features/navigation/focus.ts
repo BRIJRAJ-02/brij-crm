@@ -114,8 +114,8 @@ export function createFocusRecovery(doc: Document): { readonly recover: (pathnam
   };
 }
 
-/** A record page's address: its tab is the last segment (spec 0017). A saved view's (`views/<id>`) is not one. */
-const RECORD_PAGE = /^(\/w\/[^/]+\/objects\/[^/]+\/(?!views\/)[^/]+)\/[^/]+\/?$/;
+/** A record page's address: its tab is the last segment (spec 0017). */
+const RECORD_PAGE = /^(\/w\/[^/]+\/objects\/[^/]+\/[^/]+)\/[^/]+\/?$/;
 
 /**
  * Whether a route change is the same page showing another of its tabs (a

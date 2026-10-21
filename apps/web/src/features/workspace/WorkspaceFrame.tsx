@@ -32,7 +32,7 @@ import {
 } from '@crm/ui';
 import { useNavigate } from '@tanstack/react-router';
 import { LazyCustomiseSidebarDialog } from './LazyCustomiseSidebarDialog.tsx';
-import { Suspense, useCallback, useContext, useEffect, useMemo, useState, type ReactNode, type Ref } from 'react';
+import { Suspense, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
 import { settingsNav, visibleSettingsNav, type SettingsPageId } from '../settings/nav.ts';
 import { useToday } from '../tasks/day.ts';
 import { useCommandMenu } from '../command/CommandMenuProvider.tsx';
@@ -114,8 +114,8 @@ export interface WorkspaceFrameProps {
   readonly viewBar?: ReactNode;
   /** The view's Toolbar (its sorts, filters and Save), on a view (spec 0020). */
   readonly toolbar?: ReactNode;
-  /** The view's scroll box (AppShell's `viewRef`), for the frame the workspace layout mounts once. */
-  readonly viewRef?: Ref<HTMLDivElement>;
+  /** The page the view shows (AppShell's `viewKey`), for the frame the workspace layout mounts once. */
+  readonly viewKey?: string;
   readonly children: ReactNode;
 }
 
@@ -142,7 +142,7 @@ export function WorkspaceFrame({
   topBar,
   viewBar,
   toolbar,
-  viewRef,
+  viewKey,
   children,
 }: WorkspaceFrameProps) {
   const navigate = useNavigate();
@@ -209,7 +209,7 @@ export function WorkspaceFrame({
       topBar={topBar}
       viewBar={viewBar}
       toolbar={toolbar}
-      {...(viewRef === undefined ? {} : { viewRef })}
+      {...(viewKey === undefined ? {} : { viewKey })}
       // A calendar that stopped syncing says so on every page (spec 0024, AC-619).
       // Not on Settings › Calendars, where the stopped calendar's own row offers Reconnect (the owner, 21 Oct).
       banner={isMissing || settings?.current === 'calendars' ? undefined : <CalendarBanner data={data} slug={slug} />}

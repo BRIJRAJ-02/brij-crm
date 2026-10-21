@@ -7,19 +7,8 @@
 import type { Me, MyAccess, Permission } from '@crm/data';
 import { AppShellSlot } from '@crm/ui';
 import { useMatch, useParams, useRouteContext, useRouterState } from '@tanstack/react-router';
-import {
-  createContext,
-  useCallback,
-  useContext,
-  useLayoutEffect,
-  useMemo,
-  useRef,
-  useState,
-  type ReactNode,
-  type Ref,
-} from 'react';
+import { createContext, useCallback, useContext, useLayoutEffect, useMemo, useState, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
-import { isSamePage } from '../navigation/focus.ts';
 import { WorkspaceFrame, type SettingsSidebar, type SidebarPage } from './WorkspaceFrame.tsx';
 
 /** One page in the frame: its TopBar (its title, the h1), on a view its ViewBar, and its body. */
@@ -177,19 +166,15 @@ export function WorkspaceLayout({ children }: WorkspaceLayoutProps) {
   const setNav = useCallback((next: FrameNav) => {
     setNavState((current) => (isSameNav(current, next) ? current : next));
   }, []);
-  // The view scrolls inside the frame, which no longer remounts: another page starts at its top, in the commit
-  // that draws it (so ahead of its own effects, such as a scroll to `#hours`), while another tab of the same record
-  // page, the same page again, or an address with a fragment keeps its place.
-  const view = useRef<HTMLDivElement>(null);
-  const pathname = useRouterState({ select: (state) => state.location.pathname });
-  const hash = useRouterState({ select: (state) => state.location.hash });
-  const shownPath = useRef(pathname);
-  useLayoutEffect(() => {
-    const from = shownPath.current;
-    shownPath.current = pathname;
-    if (from === pathname || isSamePage(from, pathname) || hash !== '') return;
-    view.current?.scrollTo({ top: 0 });
-  }, [pathname, hash]);
+  // The page under the workspace's own route (Settings and Bookings are one page with their tabs): another one gets
+  // a new view box, at its top, as when each page drew its own frame; a record's other tab, or another record or
+  // view of the same route, keeps its box and its scroll.
+  const viewKey = useRouterState({
+    select: (state) => {
+      const at = state.matches.findIndex((match) => match.routeId === '/w/$slug');
+      return at === -1 ? undefined : state.matches[at + 1]?.routeId;
+    },
+  });
   const frame = useMemo(() => ({ topBar, viewBar, toolbar, setNav }), [topBar, viewBar, toolbar, setNav]);
   const settings: SettingsSidebar | undefined =
     nav.settingsBackHref === undefined
@@ -207,7 +192,7 @@ export function WorkspaceLayout({ children }: WorkspaceLayoutProps) {
         topBar={<AppShellSlot ref={setTopBar} />}
         viewBar={<AppShellSlot ref={setViewBar} />}
         toolbar={<AppShellSlot ref={setToolbar} />}
-        viewRef={view}
+        {...(viewKey === undefined ? {} : { viewKey })}
       >
         {children}
       </FrameWithData>
@@ -241,7 +226,7 @@ interface FrameWithDataProps {
   readonly topBar: ReactNode;
   readonly viewBar: ReactNode;
   readonly toolbar: ReactNode;
-  readonly viewRef?: Ref<HTMLDivElement>;
+  readonly viewKey?: string;
   readonly children: ReactNode;
 }
 
@@ -254,7 +239,7 @@ function FrameWithData({
   topBar,
   viewBar,
   toolbar,
-  viewRef,
+  viewKey,
   children,
 }: FrameWithDataProps) {
   const { data, toasts } = useRouteContext({ from: '__root__' });
@@ -279,7 +264,7 @@ function FrameWithData({
       {...(currentPage === undefined ? {} : { currentPage })}
       {...(settings === undefined ? {} : { settings })}
       {...(workspace?.access === undefined ? {} : { permissions: workspace.access.permissions })}
-      {...(viewRef === undefined ? {} : { viewRef })}
+      {...(viewKey === undefined ? {} : { viewKey })}
       topBar={topBar}
       viewBar={viewBar}
       toolbar={toolbar}
