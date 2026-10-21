@@ -39,7 +39,7 @@ Unsaved, unsaved with a reason it can't save, saving, saved, failed, and leaving
 
 ## Keyboard
 
-Tab reaches Discard, then Save, after the page's content. ⌘S or ⌘↵ saves. Esc does nothing here. Enter on Discard opens its confirm, where focus starts; Esc closes it and focus goes back to Discard.
+Tab reaches Discard, then Save, after the page's content. ⌘S or ⌘↵ saves. Esc does nothing here. Enter on Discard opens its confirm, where focus starts; Esc closes it and focus goes back to Discard, and ⌘S there closes it and saves, since it means keep the changes after all.
 
 ## Differences from the artifact
 

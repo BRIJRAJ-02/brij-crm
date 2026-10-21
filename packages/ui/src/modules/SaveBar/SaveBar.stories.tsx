@@ -54,7 +54,7 @@ export const DiscardAsksFirst: Story = {
     discard.focus();
     await userEvent.keyboard('{Enter}');
     const confirm = await discardConfirm();
-    await expect(confirm).toHaveTextContent('You can’t undo this.');
+    await expect(confirm).toHaveTextContent('This can’t be undone.');
     // The safe answer comes first, and focus starts inside.
     const [keep, commit] = within(confirm).getAllByRole('button');
     await expect(keep).toHaveAccessibleName(/^Keep editing/);
@@ -73,6 +73,22 @@ export const DiscardAsksFirst: Story = {
     await userEvent.click(within(await discardConfirm()).getByRole('button', { name: 'Discard changes' }));
     await confirmGone();
     await expect(args.onDiscard).toHaveBeenCalledTimes(1);
+  },
+};
+
+/** ⌘S inside Discard's confirm keeps the changes after all: the confirm closes and the page saves. */
+export const SaveFromConfirm: Story = {
+  parameters: { crm: { screenshot: false } },
+  play: async ({ args, canvas, userEvent }) => {
+    canvas.getByRole('button', { name: 'Discard' }).focus();
+    await userEvent.keyboard('{Enter}');
+    const confirm = await discardConfirm();
+    await waitFor(() => expect(confirm.contains(document.activeElement)).toBe(true));
+    await userEvent.keyboard('{Meta>}s{/Meta}');
+    await userEvent.keyboard('{Control>}s{/Control}');
+    await confirmGone();
+    await expect(args.onSave).toHaveBeenCalledTimes(1);
+    await expect(args.onDiscard).not.toHaveBeenCalled();
   },
 };
 
