@@ -297,20 +297,32 @@ describe('maintenance.daily (AC-112, AC-121)', () => {
     const t = await team([]);
     const gone = await person(t.owner, 'Gone');
     const kept = await person(t.owner, 'Kept');
+    const trashed = await person(t.owner, 'Trashed');
     await deleteRecord(t.owner, { recordId: gone });
+    await deleteRecord(t.owner, { recordId: trashed });
     await testQuery(ownerUrl, `update records set deleted_at = now() - interval '31 days' where id = $1`, [gone]);
     const deletedView = newId();
     const items = [
       { kind: 'record', id: gone, pinned: true },
       { kind: 'view', id: deletedView, pinned: true },
       { kind: 'record', id: kept, pinned: true },
+      { kind: 'record', id: trashed, pinned: true },
       { kind: 'page', id: 'forms', hidden: true },
     ];
+    // Another workspace's row, naming the same missing view, is another workspace's cleanup's.
+    const elsewhere = await team([]);
+    const theirs = JSON.stringify([{ kind: 'view', id: deletedView, pinned: true }]);
     await testQuery(
       ownerUrl,
       `insert into member_nav_prefs (workspace_id, member_id, items, created_by_type, created_by_id, created_by_member_id, updated_by_type, updated_by_id, updated_by_member_id)
        values ($1, $2, $3::jsonb, 'member', $2, $2, 'member', $2, $2)`,
       [t.workspaceId, t.ownerId, JSON.stringify(items)],
+    );
+    await testQuery(
+      ownerUrl,
+      `insert into member_nav_prefs (workspace_id, member_id, items, created_by_type, created_by_id, created_by_member_id, updated_by_type, updated_by_id, updated_by_member_id)
+       values ($1, $2, $3::jsonb, 'member', $2, $2, 'member', $2, $2)`,
+      [elsewhere.workspaceId, elsewhere.ownerId, theirs],
     );
     const { jobId, outcomes } = await cleanUp(t.workspaceId, '2026-10-15');
     expect(outcomes.at(-1)).toBe('succeeded');
@@ -319,11 +331,19 @@ describe('maintenance.daily (AC-112, AC-121)', () => {
       'select items, version from member_nav_prefs where member_id = $1',
       [t.ownerId],
     );
+    // A record in the trash still exists: it comes back with a restore.
     expect(row?.items).toEqual([
       { kind: 'record', id: kept, pinned: true },
+      { kind: 'record', id: trashed, pinned: true },
       { kind: 'page', id: 'forms', hidden: true },
     ]);
     expect(row?.version).toBe(2);
+    const [other] = await testQuery<{ items: unknown }>(
+      ownerUrl,
+      'select items from member_nav_prefs where member_id = $1',
+      [elsewhere.ownerId],
+    );
+    expect(other?.items).toEqual(JSON.parse(theirs));
     expect((await getJob(systemScope(db, t.workspaceId), registry(), jobId)).result).toMatchObject({
       cleanup: { records: 1, sidebars: 1 },
     });

@@ -422,7 +422,8 @@ export async function changeNav(
 
 /**
  * The daily cleanup's sidebar phase (AC-940): up to `limit` stored rows after member `after`, by member id, each
- * losing its views and records that point at nothing any more; a row that changes gets a new version. Answers how
+ * losing its views and records that point at nothing any more (a record in the trash still exists, and stays); a
+ * row that changes gets a new version, and no event, since every read already left those items out. Answers how
  * many rows it looked at, how many changed, and the last member id, where the next batch starts.
  */
 export async function pruneNavRows(
@@ -448,10 +449,18 @@ export async function pruneNavRows(
     .orderBy(asc(memberNavPrefs.memberId))
     .limit(limit)
     .for('update', { skipLocked: true });
+  // One lookup per kind for the whole batch, then each row pruned in memory, so the locks are held briefly.
+  const reads = rows.map((row) => ({ row, read: prefsOf(row) }));
+  const found = await existing(
+    tx,
+    scope,
+    reads.flatMap(({ read }) => read.items),
+  );
   let changed = 0;
-  for (const row of rows) {
-    const read = prefsOf(row);
-    const kept = await pruned(tx, scope, read);
+  for (const { row, read } of reads) {
+    const kept = pruneNavItems(read, (item) =>
+      item.kind === 'view' || item.kind === 'record' ? found.has(navKey(item)) : true,
+    );
     // Junk that `prefsOf` skipped goes too, so compare with what is stored.
     const stored = Array.isArray(row.items) ? row.items.length : 0;
     if (kept.items.length === stored) continue;

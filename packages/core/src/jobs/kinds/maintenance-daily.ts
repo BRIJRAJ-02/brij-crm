@@ -177,7 +177,8 @@ async function notesAndTasks(context: WriteContext, at: Checkpoint, limit: numbe
 /**
  * Phase 1c (spec 0034, AC-940): the members' stored sidebars, `limit` rows a batch by member id, each losing the
  * views and records that point at nothing any more (a view deleted, a record purged, today's purge included). Their
- * items were already left out of every read, so no event is stored.
+ * items were already left out of every read, so no event is stored, and none is needed: a browser takes a read at
+ * the row's new version as newer than the copy it holds.
  */
 async function navRows(context: WriteContext, at: Checkpoint, limit: number): Promise<StepOutcome> {
   const { seen, changed, last } = await pruneNavRows(context, at.after, limit);
