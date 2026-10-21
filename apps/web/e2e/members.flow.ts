@@ -50,7 +50,7 @@ async function inviteLinkFor(request: APIRequestContext, email: string): Promise
 /** Opens an invitation signed out, takes Sign in to accept, and signs `email` in; lands back on the invitation. */
 async function signInThrough(page: Page, link: string, email: string): Promise<void> {
   await page.goto(link);
-  await expect(page.getByRole('heading', { level: 1, name: 'Join a workspace' })).toBeVisible();
+  await expect(page.getByRole('heading', { level: 1, name: /^Join / })).toBeVisible();
   await page.getByRole('link', { name: 'Sign in to accept' }).click();
   await expect(page).toHaveURL(/\/sign-in\?redirect=/);
   await page.getByLabel('Email').fill(email);
@@ -58,7 +58,7 @@ async function signInThrough(page: Page, link: string, email: string): Promise<v
   await expect(page).toHaveURL(/\/verify/);
   await page.getByLabel('Code').fill(await codeFor(page.request, email));
   await expect(page).toHaveURL(new RegExp(`${link}$`));
-  await expect(page.getByText(`Signed in as ${email}.`)).toBeVisible();
+  await expect(page.getByText(`Signed in as ${email}`)).toBeVisible();
 }
 
 /** The workspaces the page's signed in person is in, by address, through the API as their browser calls it. */
@@ -100,14 +100,20 @@ test('invites two people: the wrong address is refused, the invited one joins, a
   const otherContext = await browser.newContext();
   const stranger = await otherContext.newPage();
   await stranger.goto(link);
-  await expect(stranger.getByText(/This invitation is for g\*\*\*@example\.com\./)).toBeVisible();
+  await expect(stranger.getByText(/Sign in as g\*\*\*@example\.com to accept\./)).toBeVisible();
   await checkScreen(stranger, 'invite-signed-out');
   await signInThrough(stranger, link, other);
   await stranger.getByRole('button', { name: 'Accept invitation' }).click();
   await expect(
     stranger.getByText('This invitation is for g***@example.com. Sign in with that address to accept.'),
   ).toBeVisible();
-  await expect(stranger.getByRole('button', { name: 'Sign in with another address' })).toBeVisible();
+  // Signing in with another address signs this one out, so it asks first; Cancel changes nothing.
+  await stranger.getByRole('button', { name: 'Sign in with another address' }).click();
+  const signOutConfirm = stranger.getByRole('dialog', { name: 'Sign out?' });
+  await expect(signOutConfirm).toBeVisible();
+  await signOutConfirm.getByRole('button', { name: 'Cancel' }).click();
+  await expect(signOutConfirm).toBeHidden();
+  await expect(stranger.getByText(`Signed in as ${other}`)).toBeVisible();
   expect(await workspacesOf(stranger)).toEqual([]);
 
   // The invited person signs in through their link, accepts, and lands in the workspace.

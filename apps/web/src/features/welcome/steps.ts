@@ -2,7 +2,7 @@
 // workspace once it is made, and what a calendar connect came back with.
 // Pure, so the rules are tested on their own. The route's search reads it, so
 // it stays in the first load: no screen code, no copy.
-import { SLUG_RULE } from './names.ts';
+import { SLUG_RULE } from '../address/address.ts';
 
 /** What a calendar connect comes back with in `?calendar=` (the API's `ConnectResult`). */
 export type ConnectResult = 'connected' | 'denied' | 'scope' | 'limit' | 'off' | 'failed';

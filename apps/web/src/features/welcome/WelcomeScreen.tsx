@@ -25,11 +25,12 @@ import { answersToSend } from './details.ts';
 import { DetailsStep } from './DetailsStep.tsx';
 import { InviteStep } from './InviteStep.tsx';
 import { clearDraft, readDraft, saveDraft } from './draft.ts';
-import { addressCandidates, memberNameFor, suggestedWorkspaceName } from './names.ts';
+import { addressCandidates } from '../address/address.ts';
+import { memberNameFor, suggestedWorkspaceName } from './names.ts';
 import { refusalsOf, type WelcomeRefusal } from './refusals.ts';
 import { nextStep, previousStep, welcomeSteps, type ConnectResult, type WelcomeStep } from './steps.ts';
 import { strings } from './strings.ts';
-import { useAddress } from './useAddress.ts';
+import { useAddress } from '../address/useAddress.ts';
 import { WorkspaceStep } from './WorkspaceStep.tsx';
 
 /** Each step's title and the line under it. */

@@ -2,7 +2,7 @@
 // the name (and a company email), checked through the one address check, and
 // free suggestions when the typed address is taken or the default had to move.
 import { useEffect, useRef, useState } from 'react';
-import { SLUG_RULE } from './names.ts';
+import { SLUG_RULE } from './address.ts';
 
 /** How long after the last key the address is checked (spec 0036, AC-1207). */
 export const SLUG_CHECK_DELAY_MS = 300;

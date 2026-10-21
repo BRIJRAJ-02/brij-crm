@@ -97,7 +97,7 @@ export function SignInScreen({ data, google, redirect, returnTo, googleError, si
   };
 
   return (
-    <AuthLayout productName={strings.product} logo={PRODUCT_LOGO} title={strings.signInTitle} {...signInFrame('email')}>
+    <AuthLayout productName={strings.product} logo={PRODUCT_LOGO} title={strings.signInTitle} {...signInFrame()}>
       <SignInForm
         status={status}
         onContinue={sendCode}

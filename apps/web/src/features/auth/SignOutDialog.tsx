@@ -13,6 +13,8 @@ export interface SignOutDialogProps {
   readonly isBusy: boolean;
   /** Why the last try failed, shown inside the dialog, which stays open. */
   readonly failure: string | undefined;
+  /** What signing out means here, when it says more than the default (the invitation page: you come back to it). */
+  readonly text?: string;
   readonly onSignOut: () => void;
   readonly onClose: () => void;
 }
@@ -21,7 +23,14 @@ export interface SignOutDialogProps {
  * "Sign out?": a plain dialog (signing out destroys nothing), Cancel (ESC)
  * first, Sign out last. Cancel or Esc puts focus back on what opened it.
  */
-export function SignOutDialog({ isOpen, isBusy, failure, onSignOut, onClose }: SignOutDialogProps) {
+export function SignOutDialog({
+  isOpen,
+  isBusy,
+  failure,
+  text = strings.signOutText,
+  onSignOut,
+  onClose,
+}: SignOutDialogProps) {
   return (
     <Modal
       title={strings.signOutTitle}
@@ -42,7 +51,7 @@ export function SignOutDialog({ isOpen, isBusy, failure, onSignOut, onClose }: S
       }
     >
       {failure !== undefined && <Callout tone="danger">{failure}</Callout>}
-      {strings.signOutText}
+      {text}
     </Modal>
   );
 }

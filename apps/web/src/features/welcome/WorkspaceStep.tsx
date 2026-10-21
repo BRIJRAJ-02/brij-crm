@@ -4,10 +4,10 @@
 // Leaves out: a logo, templates and settings; the workspace can't be skipped, since everything lives in one.
 import { Field, Form, Icon, Spinner, VisuallyHidden } from '@crm/ui';
 import { useState } from 'react';
-import { addressAsTyped, SLUG_MAX } from './names.ts';
+import { addressAsTyped, SLUG_MAX } from '../address/address.ts';
 import type { WelcomeRefusal } from './refusals.ts';
 import { strings } from './strings.ts';
-import type { Address } from './useAddress.ts';
+import type { Address } from '../address/useAddress.ts';
 
 const FIELDS = { name: 'name', slug: 'slug' } as const;
 

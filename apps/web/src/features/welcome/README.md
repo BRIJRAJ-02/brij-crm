@@ -5,7 +5,7 @@ Spec 0005, milestone 1 (AC-30), redesigned by spec 0036 (AC-1203 to AC-1214).
 ## `/welcome` (WelcomeScreen)
 
 - **Purpose**: first run. A new person says who they are, names their workspace and may connect a calendar, watching the workspace take shape beside each step.
-- **Main task**: Your name, About you, Your workspace (Create workspace), Invite your team, then Connect your calendar or Skip for now, into People. Sign in and the code page come first in the same split card ("Step N of 2" and the empty sketch, `signInFrame` in `features/auth/AuthStates.tsx`).
+- **Main task**: Your name, About you, Your workspace (Create workspace), Invite your team, then Connect your calendar or Skip for now, into People. Sign in and the code page come first in the same split card (the empty sketch, with no step count, `signInFrame` in `features/auth/AuthStates.tsx`); the count starts here at Step 1 of 5.
 - **Leaves out**: a photo (file storage, #32), templates, and roles for invited people (they join as members); someone who already has a workspace is sent to it.
 
 ## The steps

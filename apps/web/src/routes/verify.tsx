@@ -22,7 +22,7 @@ export const Route = createFileRoute('/verify')({
   },
   pendingComponent: () => (
     <LoadingNow>
-      <AuthPending title={strings.verifyTitle} step="code" />
+      <AuthPending title={strings.verifyTitle} isSplit />
     </LoadingNow>
   ),
   errorComponent: () => <AuthError title={strings.verifyTitle} isSplit />,

@@ -97,7 +97,7 @@ export function VerifyScreen({ data, pending, redirect }: VerifyScreenProps) {
   };
 
   return (
-    <AuthLayout productName={strings.product} logo={PRODUCT_LOGO} title={strings.verifyTitle} {...signInFrame('code')}>
+    <AuthLayout productName={strings.product} logo={PRODUCT_LOGO} title={strings.verifyTitle} {...signInFrame()}>
       <VerifyEmail
         email={pending.email}
         onVerify={verify}

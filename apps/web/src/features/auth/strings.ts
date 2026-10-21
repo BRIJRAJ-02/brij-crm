@@ -15,10 +15,6 @@ export const strings = {
   /** One way in for both (spec 0036): the server decides whether it signs in or signs up. */
   signInTitle: 'Sign in or sign up',
   verifyTitle: 'Check your email',
-  /** The step count's name on sign in: the email, then the code. */
-  signInSteps: 'Signing in',
-  emailStep: 'Email',
-  codeStep: 'Code',
   failedTitle: 'Can’t reach Timefix',
   failedText: 'Check your connection, then try again.',
   /** `/` while it works out where to send you. */
