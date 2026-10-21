@@ -6,6 +6,11 @@
 // screen first asks for records), patched in place by live change events
 // while a screen shows a workspace (the realtime client loads with the first).
 import type {
+  ImportRows,
+  ImportSettings,
+  ImportView,
+  StagedRow,
+  StageResult,
   AddToCrmResult,
   ExportView,
   SubmissionSelection,
@@ -65,6 +70,7 @@ import {
 } from './errors.ts';
 import type { FetchLike } from './fetch.ts';
 import { delivered } from './delivered.ts';
+import { stageChunks } from './imports/stage.ts';
 import { createJobsStore, type JobsScope, type JobsView, type TestJobSettings } from './jobs/store.ts';
 import { createBookingsStore, type BookingsCalendarHeld, type BookingsView } from './bookings/store.ts';
 import { connectUrl, createCalendarStore, type CalendarSettingsHeld, type CalendarView } from './calendar/store.ts';
@@ -325,6 +331,20 @@ export type { RowNote } from './records/view.ts';
 export type { PurgeSummary, RestoreSummary, TrashRow, TrashState, TrashStatus, TrashView } from './trash/store.ts';
 export { TRASH_NAME_COLUMN } from './trash/columns.ts';
 export type { BulkAction, BulkEdit, BulkTarget } from '@crm/contracts';
+export type {
+  ImportColumn,
+  ImportCounts,
+  ImportOnMatch,
+  ImportOnNoMatch,
+  ImportRowRefusal,
+  ImportRows,
+  ImportSettings,
+  ImportStatus,
+  ImportTarget,
+  ImportView,
+  StagedRow,
+  StageResult,
+} from '@crm/contracts';
 export {
   applyOp,
   bulkExclusion,
@@ -1576,6 +1596,27 @@ export function createDataLayer({
       mutations.forget(mutationId);
       throw error;
     }
+  }
+
+  /** Which import each import job this tab started belongs to (spec 0040), for the finish toast's link. */
+  const importJobs = new Map<string, string>();
+
+  /** One import write: a write whose answer was lost goes again with the same ids, and the server answers the same. */
+  async function sendImport<T>(make: (mutationId: string) => (options: CallOptions) => Promise<T>): Promise<T> {
+    const write = make(mintId());
+    try {
+      return await delivered(() => call(write), resendAfter);
+    } catch (error) {
+      throw toDataError(error);
+    }
+  }
+
+  /** Follows an import's job (its run, or its undo) like any job this tab started. */
+  async function followImportJob(workspace: string, importId: string, jobId: string | undefined): Promise<void> {
+    if (jobId === undefined) return;
+    importJobs.set(jobId, importId);
+    const job = await call((options) => api.jobs.get({ workspace, jobId }, options)).catch(() => undefined);
+    if (job !== undefined) jobs.track(workspace, job);
   }
 
   /**
@@ -3221,6 +3262,84 @@ export function createDataLayer({
       getExport: (workspace: string, exportId: string): Promise<ExportView> =>
         call((options) => api.submissions.getExport({ workspace, exportId }, options)),
       /** A new id for an export or a sync's job. */
+      newId: () => mintId(),
+    },
+    imports: {
+      /**
+       * Makes an import (spec 0040, AC-1120): `id` is minted once per file
+       * (`newId`), so a retry answers the same import. Rejects with a
+       * `DataError` (`LIMIT_REACHED` past three unfinished, access, settings).
+       */
+      create: (
+        workspace: string,
+        input: {
+          readonly id: string;
+          readonly objectId: string;
+          readonly fileName: string;
+          readonly rowCount: number;
+          readonly errorRows: number;
+          readonly settings: ImportSettings;
+        },
+      ): Promise<ImportView> =>
+        sendImport((mutationId) => (options) => api.imports.create({ workspace, ...input, mutationId }, options)),
+      /**
+       * Sends an import's ready rows in file order, in chunks of at most
+       * 1,000 rows and `TRANSFER_LIMITS.stageBytes` of JSON; a chunk whose
+       * answer was lost goes again (sending one twice changes nothing).
+       * `onChunk` hears the rows sent so far. Answers the totals.
+       */
+      stage: async (
+        workspace: string,
+        importId: string,
+        rows: readonly StagedRow[],
+        onChunk: (sent: number) => void = () => undefined,
+      ): Promise<StageResult> => {
+        let staged = 0;
+        let matched = 0;
+        let sent = 0;
+        for (const chunk of stageChunks(rows)) {
+          const answer = await sendImport(
+            (mutationId) => (options) =>
+              api.imports.stage({ workspace, importId, rows: [...chunk], mutationId }, options),
+          );
+          staged += answer.staged;
+          matched += answer.matched;
+          sent += chunk.length;
+          onChunk(sent);
+        }
+        return { staged, matched };
+      },
+      /**
+       * Starts the import's job once its rows are staged, and follows it
+       * (`jobs.get`, `jobs.follow`, `onJobFinished`); `forJob` names the
+       * import a finished job belongs to.
+       */
+      start: async (workspace: string, importId: string): Promise<ImportView> => {
+        const view = await sendImport(
+          (mutationId) => (options) => api.imports.start({ workspace, importId, mutationId }, options),
+        );
+        await followImportJob(workspace, importId, view.jobId);
+        return view;
+      },
+      /** Starts an import's undo (AC-1128) and follows its job; rejects with `IMPORT_RUNNING` or `IMPORT_UNDO_CLOSED`. */
+      undo: async (workspace: string, importId: string): Promise<ImportView> => {
+        const view = await sendImport(
+          (mutationId) => (options) => api.imports.undo({ workspace, importId, mutationId }, options),
+        );
+        await followImportJob(workspace, importId, view.undoJobId);
+        return view;
+      },
+      /** One import as its summary shows it: counts by outcome, its jobs, and whether undo is open. */
+      get: (workspace: string, importId: string): Promise<ImportView> =>
+        call((options) => api.imports.get({ workspace, importId }, options)),
+      /** A page of an import's refused and noted rows, after the row number `cursor`. */
+      rows: (workspace: string, importId: string, cursor?: number): Promise<ImportRows> =>
+        call((options) =>
+          api.imports.rows({ workspace, importId, ...(cursor === undefined ? {} : { cursor }) }, options),
+        ),
+      /** The import a job this tab started belongs to (its import or its undo job), for the finish toast. */
+      forJob: (jobId: string): string | undefined => importJobs.get(jobId),
+      /** A new import id (UUID v7): mint it once per file, and send the same on a retry. */
       newId: () => mintId(),
     },
     jobs: {
