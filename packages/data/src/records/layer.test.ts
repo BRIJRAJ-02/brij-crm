@@ -2269,6 +2269,40 @@ describe('deleting records, the state review (spec 0022)', () => {
   });
 });
 
+describe('a delete job on the undo stack (spec 0022, AC-526)', () => {
+  const JOB = '0199a6f2-0000-7000-8000-0000000009ab';
+
+  it('puts the job’s batch on the stack when it ends, so Cmd+Z restores it', async () => {
+    const { layer, restores } = await readyView();
+    layer.rememberDeleteJob(WS, { objectId: PEOPLE, batchId: JOB, count: 1200 });
+    expect(layer.undo.depth(WS)).toBe(1);
+    const undone = layer.undo.run(WS);
+    await settle();
+    expect(restores[0]?.input).toMatchObject({ workspace: WS, batchId: JOB });
+    restores[0]?.answer([{ recordId: idAt(0), state: 'restored' }]);
+    expect(await undone).toMatchObject({ kind: 'restored', objectId: PEOPLE, restored: 1, kept: 0 });
+    expect(layer.undo.depth(WS)).toBe(0);
+  });
+
+  it('takes it off the stack when the finish toast’s Undo restores it, wherever it sits', async () => {
+    const { layer, restores, deletes } = await readyView();
+    layer.rememberDeleteJob(WS, { objectId: PEOPLE, batchId: JOB, count: 1200 });
+    // A newer action above it.
+    const deleting = layer.deleteMany(WS, PEOPLE, [idAt(0)]);
+    await settle();
+    deletes[0]?.answer([{ recordId: idAt(0), state: 'deleted' }]);
+    await deleting;
+    expect(layer.undo.depth(WS)).toBe(2);
+    const restoring = layer.restoreDeleted(WS, PEOPLE, JOB, 1200);
+    await settle();
+    expect(restores[0]?.input).toMatchObject({ batchId: JOB });
+    restores[0]?.answer([{ recordId: idAt(1), state: 'restored' }]);
+    await restoring;
+    // Only the inline delete is left to undo.
+    expect(layer.undo.depth(WS)).toBe(1);
+  });
+});
+
 describe('link deltas (spec 0014, milestone 2)', () => {
   const TEAM = 'attr-team';
   const LEAD = 'attr-lead';

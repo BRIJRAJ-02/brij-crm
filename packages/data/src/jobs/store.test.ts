@@ -5,7 +5,8 @@
 import type { JobView } from '@crm/contracts';
 import { describe, expect, it } from 'vitest';
 import { createMutationLog } from '../live/mutations.ts';
-import { createJobsStore, type JobsApi } from './store.ts';
+import { purgeLeftOf } from './left.ts';
+import { createJobsStore, JOB_POLL_FIRST_MS, JOB_POLL_MAX_MS, type JobsApi } from './store.ts';
 
 const ME = '0199a6f2-0000-7000-8000-000000000001';
 const OTHER = '0199a6f2-0000-7000-8000-000000000002';
@@ -197,5 +198,140 @@ describe('the jobs store', () => {
     await flush();
     expect(gets).toContain(late.id);
     expect(view.getSnapshot().jobs.find((shown) => shown.id === late.id)?.status).toBe('cancelled');
+  });
+});
+
+describe('following a job while live updates are paused or off (spec 0022)', () => {
+  /** The jobs store with live updates paused, its timers and the live status in the test's hands. */
+  function paused(server: Map<string, JobView>) {
+    const gets: string[] = [];
+    const finished: JobView[] = [];
+    const timers: { ms: number; run: () => void; live: boolean }[] = [];
+    const listeners = new Set<() => void>();
+    let status: 'live' | 'paused' | 'off' = 'paused';
+    let minted = 0;
+    const store = createJobsStore({
+      api: {
+        list: () => Promise.resolve({ jobs: [] }),
+        get: ({ jobId }) => {
+          gets.push(jobId);
+          const found = server.get(jobId);
+          return found === undefined ? Promise.reject(new Error('gone')) : Promise.resolve(found);
+        },
+        cancel: () => Promise.reject(new Error('not used')),
+        confirm: () => Promise.reject(new Error('not used')),
+        startTest: () => Promise.reject(new Error('not used')),
+      },
+      mintId: () => `0199a6f2-0000-7000-8000-${String((minted += 1)).padStart(12, '0')}`,
+      mutations: createMutationLog(),
+      notify: () => undefined,
+      watch: () => () => undefined,
+      memberOf: () => Promise.resolve(ME),
+      spread: (_key, work) => {
+        work();
+      },
+      onFinished: (_workspace, ended) => finished.push(ended),
+      live: {
+        status: () => status,
+        subscribe: (listener) => {
+          listeners.add(listener);
+          return () => {
+            listeners.delete(listener);
+          };
+        },
+      },
+      later: (run, ms) => {
+        const timer = { ms, run, live: true };
+        timers.push(timer);
+        return () => {
+          timer.live = false;
+        };
+      },
+      // The middle of the spread: each wait as it stands.
+      random: () => 0.5,
+    });
+    const setLive = (next: 'live' | 'paused' | 'off') => {
+      status = next;
+      for (const listener of listeners) listener();
+    };
+    /** Runs the timer waiting now, as its wait ran out; answers how long it waited. */
+    const next = () => {
+      const timer = timers.find((each) => each.live);
+      if (timer === undefined) return undefined;
+      timer.live = false;
+      timer.run();
+      return timer.ms;
+    };
+    const waiting = () => timers.filter((timer) => timer.live).length;
+    return { store, gets, finished, setLive, next, waiting };
+  }
+
+  it('reads it again on its own timer, waiting longer while it stays at one step, until it ends', async () => {
+    const counting: JobView = { ...job(20, 'preparing'), cancellable: true };
+    const server = new Map([[counting.id, counting]]);
+    const { store, gets, finished, next, waiting } = paused(server);
+    store.track('acme', counting);
+    expect(next()).toBe(JOB_POLL_FIRST_MS);
+    await flush();
+    expect(gets).toEqual([counting.id]);
+    // Counted meanwhile: the read after the next wait finds it, and the waits start again for the new step.
+    server.set(counting.id, { ...counting, status: 'ready', total: 10 });
+    expect(next()).toBe(JOB_POLL_FIRST_MS * 2);
+    await flush();
+    expect(next()).toBe(JOB_POLL_FIRST_MS * 4);
+    await flush();
+    expect(next()).toBe(JOB_POLL_FIRST_MS);
+    await flush();
+    // It ends: the read that finds it so stops the timer, and the app hears it once.
+    server.set(counting.id, { ...counting, status: 'cancelled', total: 10 });
+    next();
+    await flush();
+    expect(finished.map((each) => each.status)).toEqual(['cancelled']);
+    expect(waiting()).toBe(0);
+  });
+
+  it('never waits longer than the longest wait between reads', () => {
+    const running: JobView = job(21, 'running', 1);
+    const { store, next } = paused(new Map([[running.id, running]]));
+    store.track('acme', running);
+    const waits = Array.from({ length: 8 }, () => next());
+    expect(Math.max(...waits.map((ms) => ms ?? 0))).toBe(JOB_POLL_MAX_MS);
+  });
+
+  it('stops when live updates come back, starts again when they pause, and never runs while live', () => {
+    const running: JobView = job(22, 'running', 1);
+    const { store, setLive, waiting } = paused(new Map([[running.id, running]]));
+    store.track('acme', running);
+    expect(waiting()).toBe(1);
+    setLive('live');
+    expect(waiting()).toBe(0);
+    setLive('off');
+    expect(waiting()).toBe(1);
+    setLive('live');
+    const other: JobView = job(23, 'running', 1);
+    store.track('acme', other);
+    expect(waiting()).toBe(0);
+  });
+});
+
+describe('what a purge job left in the trash (spec 0022, AC-538 as amended)', () => {
+  it('reads `left` from the result, leaving out anything of another shape', () => {
+    const purged = { ...job(30, 'succeeded', 10), kind: 'records.purge' };
+    expect(purgeLeftOf(purged)).toEqual([]);
+    expect(
+      purgeLeftOf({
+        ...purged,
+        result: {
+          left: [
+            { objectId: 'people', count: 12 },
+            { objectId: 'deals', count: 0 },
+            { objectId: 7, count: 2 },
+            { objectId: 'companies', count: 1.5 },
+            'nonsense',
+          ],
+        },
+      }),
+    ).toEqual([{ objectId: 'people', count: 12 }]);
+    expect(purgeLeftOf({ ...purged, result: { left: 'nonsense' } })).toEqual([]);
   });
 });

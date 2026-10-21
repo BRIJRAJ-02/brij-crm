@@ -13,16 +13,13 @@ import {
   type DataError,
   type JobView,
 } from '@crm/data';
-import { useJob, useLiveStatus } from '@crm/data/react';
+import { useJob } from '@crm/data/react';
 import { useRouteContext } from '@tanstack/react-router';
 import { useEffect, useState } from 'react';
 import { bulkStrings, jobProgress } from './bulk.ts';
 
 /** The statuses a job never leaves. */
 const FINISHED: ReadonlySet<string> = new Set(['succeeded', 'failed', 'cancelled']);
-
-/** How often a followed job is read again while live updates are paused or off. */
-const PAUSED_POLL_MS = 3000;
 
 /** How long a note in the bar stays ("Nothing left to change."). */
 const NOTE_MS = 4000;
@@ -65,19 +62,8 @@ export function useBulkJob(slug: string): BulkJob {
   );
   const [starting, setStarting] = useState(false);
   const [note, setNote] = useState<BulkJob['note']>(undefined);
+  // Kept current by the jobs store: live, or read again on its own timer while live updates are paused or off.
   const job = useJob(data.jobs, slug, following?.jobId);
-  // No events while live updates are paused or off: the job is read again every few seconds instead, until it ends.
-  const live = useLiveStatus(data.live);
-  const followedId = following?.jobId;
-  useEffect(() => {
-    if (followedId === undefined || live === 'live') return;
-    const timer = setInterval(() => {
-      data.jobs.refresh(slug, followedId);
-    }, PAUSED_POLL_MS);
-    return () => {
-      clearInterval(timer);
-    };
-  }, [data, slug, followedId, live]);
   // Ended: the bar lets it go (a count of zero says so there; any other end has the app's toast).
   if (following !== undefined && job !== undefined && FINISHED.has(job.status)) {
     setFollowing(undefined);

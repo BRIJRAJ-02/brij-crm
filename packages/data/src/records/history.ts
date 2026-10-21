@@ -156,6 +156,8 @@ export interface UndoStack {
   readonly pop: (workspace: string) => UndoEntry | undefined;
   /** The newest entry, left on the stack. */
   readonly top: (workspace: string) => UndoEntry | undefined;
+  /** Takes the entry with this id off the stack, wherever it sits (a delete job undone from its toast). */
+  readonly drop: (workspace: string, id: string) => void;
   /**
    * Cells an undo just put back, by `${recordId}:${attributeId}:${from}` to
    * the version it wrote: an older entry that wrote `from` there (the version
@@ -210,6 +212,14 @@ export function createUndoStack(depth: number = UNDO_DEPTH, cellBudget: number =
       return top;
     },
     top: (workspace) => stacks.get(workspace)?.at(-1),
+    drop: (workspace, id) => {
+      const stack = stacks.get(workspace);
+      if (stack === undefined || !stack.some((entry) => entry.id === id)) return;
+      stacks.set(
+        workspace,
+        stack.filter((entry) => entry.id !== id),
+      );
+    },
     size: (workspace) => stacks.get(workspace)?.length ?? 0,
     clear: () => {
       stacks.clear();

@@ -34,6 +34,7 @@ import { applyOp, type BulkOp } from '@crm/contracts/bulk-ops';
 import { canJump, type JumpAttribute } from '@crm/contracts/jump';
 import type { FilterGroup, Hue, RecordRefDisplay, SortRules } from '@crm/contracts/values';
 import type { PatternCompiler, RuleFailure } from '@crm/contracts/validation';
+import { delivered as sendDelivered } from '../delivered.ts';
 import { dataError, refusalFor, refusalSummary, toDataError, type DataError } from '../errors.ts';
 import type { Notice } from '../notice.ts';
 import {
@@ -78,8 +79,6 @@ const MAX_CELL_LINKS = 20;
 const BLOCK_SIZE = 100;
 /** How many times a read the server turned away for being busy (429) is tried again. */
 const BUSY_TRIES = 5;
-/** How many times a write that never reached the server is sent again (the same ids, so nothing happens twice). */
-const OFFLINE_TRIES = 2;
 /** The wait before trying again when the answer named none, in seconds. */
 const DEFAULT_WAIT_SECONDS = 1;
 /** The longest wait before a block that failed to load is tried again, in ms. */
@@ -1119,17 +1118,7 @@ export function createRecordsLayer({
   }
 
   /** Sends a write, sending it again when it never reached the server (its ids make a repeat harmless). */
-  async function delivered<T>(run: () => Promise<T>): Promise<T> {
-    for (let attempt = 1; ; attempt += 1) {
-      try {
-        return await run();
-      } catch (error) {
-        const failure = toDataError(error);
-        if (failure.code !== 'API_UNAVAILABLE' || attempt > OFFLINE_TRIES) throw failure;
-        await wait((failure.retryAfterSeconds ?? DEFAULT_WAIT_SECONDS) * 1000);
-      }
-    }
-  }
+  const delivered = <T>(run: () => Promise<T>): Promise<T> => sendDelivered(run, wait);
 
   /**
    * Records gone from a window: out of its rows (the later ones reload), and
@@ -3530,12 +3519,30 @@ export function createRecordsLayer({
       trashRecords(workspace, objectId, recordIds, { undoable: true }),
 
     /**
-     * Undoes a delete job (spec 0022, AC-528): its batch is the job's id, so
-     * `records.restoreBatch` restores it, inline or (past 500) as a restore
-     * job. Never on the undo stack: the finish toast's Undo calls it.
+     * A delete job this tab started has ended (spec 0022, AC-526): its batch
+     * (the job's id) goes on the undo stack as one delete, so Cmd+Z restores
+     * it as the finish toast's Undo does. Its id is the job's, which the toast
+     * names.
      */
-    restoreDeleted: (workspace: string, objectId: string, batchId: string, count: number): Promise<UndoOutcome> =>
-      undoDelete(workspace, { id: mintId(), kind: 'delete', objectId, batchId, count }, false),
+    rememberDeleteJob: (
+      workspace: string,
+      job: { readonly objectId: string; readonly batchId: string; readonly count: number },
+    ): void => {
+      if (job.count === 0) return;
+      undo.push(workspace, { id: job.batchId, kind: 'delete', ...job });
+    },
+
+    /**
+     * Undoes a delete job from its finish toast (spec 0022, AC-528): its
+     * batch is the job's id, so `records.restoreBatch` restores it, inline or
+     * (past 500) as a restore job, wherever it sits on the stack. Its entry
+     * leaves the stack, so Cmd+Z never restores it twice; one that fails for a
+     * passing reason (offline) goes back on top, to undo again.
+     */
+    restoreDeleted: (workspace: string, objectId: string, batchId: string, count: number): Promise<UndoOutcome> => {
+      undo.drop(workspace, batchId);
+      return undoDelete(workspace, { id: batchId, kind: 'delete', objectId, batchId, count });
+    },
 
     /**
      * Edits one attribute of up to 500 records as one undoable action (spec

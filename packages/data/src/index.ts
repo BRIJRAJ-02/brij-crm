@@ -58,6 +58,7 @@ import {
   withRetryAfter,
 } from './errors.ts';
 import type { FetchLike } from './fetch.ts';
+import { delivered } from './delivered.ts';
 import { createJobsStore, type JobsScope, type JobsView, type TestJobSettings } from './jobs/store.ts';
 import { createBookingsStore, type BookingsCalendarHeld, type BookingsView } from './bookings/store.ts';
 import { connectUrl, createCalendarStore, type CalendarSettingsHeld, type CalendarView } from './calendar/store.ts';
@@ -231,6 +232,7 @@ export {
 } from './errors.ts';
 export type { FetchLike } from './fetch.ts';
 export type { JobsScope, JobsSnapshot, JobsView, TestJobSettings } from './jobs/store.ts';
+export { purgeLeftOf, type PurgeLeftEntry } from './jobs/left.ts';
 export type { View, ViewColumn, ViewConfig, ViewKind, ViewLayout, ViewSummary, ViewVisibility } from '@crm/contracts';
 export {
   CREATED_AT_SLUG,
@@ -381,6 +383,15 @@ interface CallOptions {
   readonly context: CallContext;
   readonly signal?: AbortSignal;
 }
+
+/** The background job kind a bulk delete runs as (spec 0022): its end puts its batch on this tab's undo stack. */
+const DELETE_JOB = 'records.bulk_delete';
+
+/** Waits `ms` before a write that never arrived goes again (`delivered`). */
+const resendAfter = (ms: number): Promise<void> =>
+  new Promise((resolve) => {
+    setTimeout(resolve, ms);
+  });
 
 /** How long a read waits for the workspace's head before going ahead without it (spec 0007: the token call is usually beside `me.get`). */
 const HEAD_WAIT_MS = 5_000;
@@ -1224,15 +1235,38 @@ export function createDataLayer({
         () => undefined,
       ),
     spread,
+    // While live updates are paused or off, the jobs this browser follows are read again on a timer (spec 0022).
+    live: {
+      status: () => liveStatus,
+      subscribe: (listener) => {
+        liveListeners.add(listener);
+        return () => {
+          liveListeners.delete(listener);
+        };
+      },
+    },
     onFinished: (workspace, job) => {
       // A bulk change ended (spec 0022): the tables of its object and the open trash read again now, so they show
       // its final state even where live updates are paused (its own coarse events reach live tabs anyway).
+      const objectId = job.subject?.type === 'object' ? job.subject.id : undefined;
       if (job.kind.startsWith('records.')) {
-        const objectId = job.subject?.type === 'object' ? job.subject.id : undefined;
         void records?.then((layer) => {
           layer.reload(workspace, objectId);
         });
         trashMoved(workspace);
+      }
+      // A delete job this tab started goes on its undo stack as one delete of its batch (the job's id), so Cmd+Z
+      // restores it as the finish toast's Undo does (AC-526); the toast is raised once it is there.
+      if (job.kind === DELETE_JOB && job.done > 0 && objectId !== undefined) {
+        void recordsLayer()
+          .then((layer) => {
+            layer.rememberDeleteJob(workspace, { objectId, batchId: job.id, count: job.done });
+          })
+          .catch(() => undefined)
+          .finally(() => {
+            onJobFinished(workspace, job);
+          });
+        return;
       }
       onJobFinished(workspace, job);
     },
@@ -2665,19 +2699,24 @@ export function createDataLayer({
         const mutationId = mintId();
         mutations.sent(mutationId);
         try {
-          const job = await call((options) =>
-            api.records.startBulk(
-              {
-                workspace,
-                mutationId,
-                id: input.id,
-                action: input.action,
-                target: input.target,
-                ...(input.edit === undefined ? {} : { edit: input.edit }),
-                timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone,
-              },
-              options,
-            ),
+          // A start whose answer was lost goes again with the same ids: the server answers the job it made.
+          const job = await delivered(
+            () =>
+              call((options) =>
+                api.records.startBulk(
+                  {
+                    workspace,
+                    mutationId,
+                    id: input.id,
+                    action: input.action,
+                    target: input.target,
+                    ...(input.edit === undefined ? {} : { edit: input.edit }),
+                    timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+                  },
+                  options,
+                ),
+              ),
+            resendAfter,
           );
           mutations.answered(mutationId, 1);
           jobs.track(workspace, job);
@@ -3118,15 +3157,12 @@ export function createDataLayer({
         jobs.startTest(workspace, id, settings),
       /** Cancels a job at once on screen; a refusal puts it back with a toast. Answers whether it landed. */
       cancel: (workspace: string, jobId: string): Promise<boolean> => jobs.cancel(workspace, jobId),
-      /** A job as held now (one this browser started or a view shows), or undefined (spec 0022's bar). */
-      get: (workspace: string, jobId: string): JobView | undefined => jobs.get(workspace, jobId),
       /**
-       * Reads a job again: a bar following one while live updates are paused
-       * or off asks every few seconds, since no event will come (spec 0022).
+       * A job as held now (one this browser started or a view shows), or
+       * undefined (spec 0022's bar). One this browser started stays current:
+       * live, or read again on a timer while live updates are paused or off.
        */
-      refresh: (workspace: string, jobId: string): void => {
-        jobs.refresh(workspace, jobId);
-      },
+      get: (workspace: string, jobId: string): JobView | undefined => jobs.get(workspace, jobId),
       /** Calls `listener` whenever a held job changes; the answer stops. Read it through `useJob`. */
       follow: (listener: () => void): (() => void) => jobs.follow(listener),
       /**
