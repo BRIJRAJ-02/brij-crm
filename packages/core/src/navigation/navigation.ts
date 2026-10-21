@@ -13,6 +13,7 @@ import type { NavFavourite, NavState } from '@crm/contracts';
 import {
   applyNavOp,
   DEFAULT_NAV_PREFS,
+  EMPTY_NAV_UNIVERSE,
   NAV_ITEM_KINDS,
   NAV_PAGES,
   NAV_SCHEDULING_PAGES,
@@ -216,6 +217,9 @@ function schedulingFor(scope: EngineScope): readonly NavPage[] {
   return scope.actor.type === 'member' ? NAV_SCHEDULING_PAGES : [];
 }
 
+/** The changes `applyNavOp` reads the universe for. */
+const USES_UNIVERSE: ReadonlySet<NavOperation['op']> = new Set(['move', 'hide', 'show', 'star']);
+
 /** What the caller's sidebar may show today, and the favourites resolved. */
 async function universeOf(
   tx: WorkspaceTx,
@@ -396,7 +400,12 @@ export async function changeNav(
       const row = await readRow(tx, scope, caller, true);
       if (row === undefined) throw new Error('The sidebar row vanished under its own lock.');
       const prefs = await pruned(tx, scope, prefsOf(row));
-      const { universe } = await universeOf(tx, scope, prefs);
+      // Only a move, a hide or show (which index into what the member sees) and a star (its cap counts the
+      // favourites they see) need the universe; a fold, a section move, the rail, an unstar and a reset don't, so
+      // they skip its reads.
+      const { universe } = USES_UNIVERSE.has(op.op)
+        ? await universeOf(tx, scope, prefs)
+        : { universe: EMPTY_NAV_UNIVERSE };
       if (op.op === 'star') await checkStar(tx, scope, op, new Set(universe.records));
       const applied = applyNavOp(prefs, op, universe);
       if (!applied.ok) throw refuse(applied.refusal.code, applied.refusal.message);

@@ -115,7 +115,7 @@ describe('the sidebar model', () => {
     expect(sectionItems(unstarred, universe, 'favourites').map(navKey)).toEqual([`record:${RECORD}`]);
   });
 
-  it('refuses the 51st favourite (AC-934)', () => {
+  it('refuses the 51st favourite (AC-934), counting only the favourites the member can see', () => {
     const full: NavPrefs = {
       ...DEFAULT_NAV_PREFS,
       items: Array.from({ length: MAX_NAV_FAVOURITES }, (_, index) => ({
@@ -124,10 +124,16 @@ describe('the sidebar model', () => {
         pinned: true,
       })),
     };
-    expect(applyNavOp(full, { op: 'star', kind: 'view', id: VIEW }, universe)).toEqual({
+    const seen: NavUniverse = { ...universe, favourites: new Set(full.items.map(navKey)) };
+    expect(applyNavOp(full, { op: 'star', kind: 'view', id: VIEW }, seen)).toEqual({
       ok: false,
       refusal: { code: 'NAV_LIMIT', message: NAV_FAVOURITES_LIMIT_MESSAGE },
     });
+    // One of the fifty went out of sight (access, the trash): it keeps its place for its return, and frees a star.
+    const lost: NavUniverse = { ...universe, favourites: new Set(full.items.slice(1).map(navKey)) };
+    const starred = applyNavOp(full, { op: 'star', kind: 'view', id: VIEW }, lost);
+    expect(starred.ok).toBe(true);
+    if (starred.ok) expect(starred.prefs.items).toHaveLength(MAX_NAV_FAVOURITES + 1);
   });
 
   it('folds, moves sections, sets the rail, and answers the same row for a change that changes nothing', () => {

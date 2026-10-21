@@ -293,7 +293,7 @@ function setHidden(prefs: NavPrefs, universe: NavUniverse, kind: NavItemKind, id
  * runs it under the row lock and the browser runs it before the answer, and
  * both reach the same row. `universe` says what each section may show, which
  * a move indexes into. Refuses (never throws) a favourite past
- * `MAX_NAV_FAVOURITES` or a row past `MAX_NAV_ITEMS` (`NAV_LIMIT`), and
+ * `MAX_NAV_FAVOURITES` shown ones or a row past `MAX_NAV_ITEMS` (`NAV_LIMIT`), and
  * hiding or starring a kind that can't be (`CONFIG_INVALID`). A change that
  * changes nothing answers the same row.
  */
@@ -318,7 +318,11 @@ export function applyNavOp(prefs: NavPrefs, op: NavOperation, universe: NavUnive
       if (!(NAV_STARRABLE_KINDS as readonly string[]).includes(op.kind))
         return invalid('Only views and records can be favourites.');
       if (prefs.items.some((item) => matches(op.kind, op.id)(item) && item.pinned === true)) return ok(prefs);
-      const starred = prefs.items.filter((item) => item.pinned === true).length;
+      // The cap counts the favourites the member can see: one they lost access to (or that sits in the trash) is
+      // kept for its return, but doesn't hold a place they can't see to free.
+      const starred = prefs.items.filter(
+        (item) => item.pinned === true && universe.favourites.has(navKey(item)),
+      ).length;
       if (starred >= MAX_NAV_FAVOURITES) {
         return { ok: false, refusal: { code: 'NAV_LIMIT', message: NAV_FAVOURITES_LIMIT_MESSAGE } };
       }
