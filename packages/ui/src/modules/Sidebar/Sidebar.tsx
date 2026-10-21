@@ -179,7 +179,7 @@ export function Sidebar(props: SidebarProps) {
           {collapse}
         </div>
         {isCollapsed && (onQuickActions !== undefined || onCollapsedChange !== undefined) ? (
-          // The rail's top: Expand, under the head where Collapse sits when open, then Quick actions, each a 32px
+          // The rail's top: Expand, under the head where Collapse sits when open, then Quick actions, each a size-nav-item
           // item like every other on the rail, named with its shortcut in a tooltip (no keycap squeezed in).
           <div className={styles.railTop}>
             {onCollapsedChange !== undefined && (

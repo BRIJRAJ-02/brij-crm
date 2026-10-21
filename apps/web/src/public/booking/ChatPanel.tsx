@@ -114,7 +114,7 @@ export function ChatPanel(props: ChatPanelProps) {
     client
       .chat(page.publicKey, {
         conversationId,
-        duration: duration as 15 | 30 | 45 | 60 | 90,
+        duration,
         timeZone: zone,
         hour12,
         messages: said,

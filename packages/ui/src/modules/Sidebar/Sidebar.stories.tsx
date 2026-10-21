@@ -156,7 +156,7 @@ export const Keyboard: Story = {
 };
 
 /**
- * Collapsed (owner, 22 October 2026): a calm rail. Every item a plain icon in a 32px square (object tiles are the
+ * Collapsed (owner, 22 October 2026): a calm rail. Every item a plain icon in a size-nav-item square (object tiles are the
  * open sidebar's), Expand at the top where Collapse sits when open, then Quick actions with its shortcut in the
  * tooltip rather than a keycap, a hairline only where the open sidebar has a section label, the current item
  * highlighted as when open, and the foot's trash, Settings and Help alike. Every icon is named in a tooltip.
@@ -171,14 +171,15 @@ export const Collapsed: Story = {
     // Expand comes first after the workspace, then Quick actions, at the top.
     const controls = [...nav.querySelectorAll('a[href], button')].map((each) => each.textContent.trim());
     await expect(controls.slice(1, 3)).toEqual(['Expand the sidebar', 'Quick actions']);
-    // Every item on the rail is a 32px square target, the foot's too.
+    // Every item on the rail is a size-nav-item square target, the foot's too.
+    const side = Math.round(Number.parseFloat(getComputedStyle(nav).getPropertyValue('--size-nav-item')));
     for (const name of ['Expand the sidebar', 'Quick actions', 'Help and shortcuts']) {
       const box = canvas.getByRole('button', { name }).getBoundingClientRect();
-      await expect([Math.round(box.width), Math.round(box.height)]).toEqual([32, 32]);
+      await expect([name, Math.round(box.width), Math.round(box.height)]).toEqual([name, side, side]);
     }
     for (const name of ['Companies', 'People', 'Bookings', 'Trash', 'Settings']) {
       const box = canvas.getByRole('link', { name }).getBoundingClientRect();
-      await expect([Math.round(box.width), Math.round(box.height)]).toEqual([32, 32]);
+      await expect([name, Math.round(box.width), Math.round(box.height)]).toEqual([name, side, side]);
     }
     await expect(canvas.getByRole('link', { name: 'Companies' })).toHaveAttribute('aria-current', 'page');
     // The unlabelled Scheduling group keeps its space but draws no rule; Records keeps its hairline.

@@ -302,6 +302,8 @@
 
   .root[data-collapsed] .item {
     justify-content: center;
+    inline-size: var(--size-nav-item);
+    margin-inline: auto;
     padding-inline: 0;
   }
 
