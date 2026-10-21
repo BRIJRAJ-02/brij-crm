@@ -14,6 +14,8 @@ export interface MetricFigure {
   readonly value: string;
   readonly lastWeek: string;
   readonly trend: 'up' | 'down' | 'same';
+  /** Anything this week or last: a row of only zeros is left out. */
+  readonly moved: boolean;
 }
 
 const trendOf = (now: number, before: number): MetricFigure['trend'] =>
@@ -31,6 +33,7 @@ export function metricFigures(metrics: HomeMetricsView, locale: string): readonl
             value: number.format(figure.thisWeek),
             lastWeek: number.format(figure.lastWeek),
             trend: trendOf(figure.thisWeek, figure.lastWeek),
+            moved: figure.thisWeek > 0 || figure.lastWeek > 0,
           },
         ];
   const money = (figure: WeekMoney | undefined): MetricFigure[] => {
@@ -38,7 +41,15 @@ export function metricFigures(metrics: HomeMetricsView, locale: string): readonl
     const format = moneyFormat(locale, figure.currency);
     const now = Number(figure.thisWeek);
     const before = Number(figure.lastWeek);
-    return [{ id: 'won', value: format(now), lastWeek: format(before), trend: trendOf(now, before) }];
+    return [
+      {
+        id: 'won',
+        value: format(now),
+        lastWeek: format(before),
+        trend: trendOf(now, before),
+        moved: now > 0 || before > 0,
+      },
+    ];
   };
   return [
     ...count('meetings', metrics.meetings),

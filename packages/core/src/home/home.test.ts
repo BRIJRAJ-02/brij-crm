@@ -128,7 +128,7 @@ describe('Team today', () => {
     const linusPage = await createBookingPage(linus, { id: newId(), title: 'Linus intro', timeZone: 'UTC' }, NOW);
     await book(linusPage.publicKey, '2026-11-02T09:00:00.000Z', 'Visitor');
 
-    const seen = await readTeamToday(grace, DAY);
+    const seen = await readTeamToday(grace, DAY, { now: NOW });
     expect(seen.members[0]?.memberId).toBe(memberOf(grace));
     expect(seen.members.map((each) => each.memberId).sort()).toEqual(
       [w.memberId, memberOf(grace), memberOf(linus), memberOf(admin)].sort(),
@@ -147,13 +147,13 @@ describe('Team today', () => {
     expect(JSON.stringify(seen)).not.toContain('Linus intro');
 
     // Linus sees Grace's shared meeting by its title, her private event as Busy.
-    const fromLinus = await readTeamToday(linus, DAY);
+    const fromLinus = await readTeamToday(linus, DAY, { now: NOW });
     expect(day(grace, fromLinus).map((item) => item.title)).toEqual(['Pipeline review', undefined]);
     expect(JSON.stringify(fromLinus)).not.toContain('Doctor');
     expect(day(linus, fromLinus).map((item) => item.title)).toEqual(['Linus intro', 'Salary talk']);
 
     // An admin sees every booking's page title (as on Bookings), still never a Busy only calendar's titles.
-    const fromAdmin = await readTeamToday(admin, DAY);
+    const fromAdmin = await readTeamToday(admin, DAY, { now: NOW });
     expect(day(linus, fromAdmin).map((item) => item.title)).toEqual(['Linus intro', undefined]);
   });
 
@@ -175,7 +175,7 @@ describe('Team today', () => {
         values (${w.workspaceId}, ${graceHidden}, 'focus', '2026-11-02T15:00:00Z', '2026-11-02T16:00:00Z')
       `),
     );
-    const view = await readTeamToday(w.owner, DAY);
+    const view = await readTeamToday(w.owner, DAY, { now: NOW });
     const graceDay = view.members.find((each) => each.memberId === memberOf(grace))?.items ?? [];
     expect(graceDay).toEqual([
       expect.objectContaining({ kind: 'meeting', title: 'Both of us' }),
@@ -195,10 +195,17 @@ describe('Team today', () => {
     const otherCalendar = await connect(other.owner, 'shared');
     await meeting(other.workspaceId, [otherCalendar], 'Elsewhere', '2026-11-02T10:00:00Z', '2026-11-02T11:00:00Z');
     const key = rescope(w.owner, { actor: { type: 'api_key', id: newId() } });
-    expect(await readTeamToday(key, DAY)).toEqual({ members: [] });
-    const view = await readTeamToday(w.owner, DAY);
+    expect(await readTeamToday(key, DAY, { now: NOW })).toEqual({ members: [] });
+    const view = await readTeamToday(w.owner, DAY, { now: NOW });
     expect(view.members.map((each) => each.memberId)).toEqual([w.memberId]);
     expect(JSON.stringify(view)).not.toContain('Elsewhere');
+  });
+
+  it('refuses a day that isn’t today', async () => {
+    const w = await workspace();
+    await expect(
+      readTeamToday(w.owner, { from: '2026-12-01T00:00:00.000Z', to: '2026-12-02T00:00:00.000Z' }, { now: NOW }),
+    ).rejects.toMatchObject({ inputProblem: { field: 'from' } });
   });
 });
 
@@ -294,6 +301,10 @@ describe('the metrics row', () => {
   it('refuses a week that isn’t this one, and keeps the figures a minute per workspace', async () => {
     const w = await workspace();
     await expect(readHomeMetrics(w.owner, { weekStart: '2020-01-06T00:00:00.000Z' })).rejects.toMatchObject({
+      inputProblem: { field: 'weekStart' },
+    });
+    const odd = new Date(Date.parse(thisMonday()) + 1).toISOString();
+    await expect(readHomeMetrics(w.owner, { weekStart: odd })).rejects.toMatchObject({
       inputProblem: { field: 'weekStart' },
     });
     let clock = 0;

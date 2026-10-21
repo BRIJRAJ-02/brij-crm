@@ -18,7 +18,7 @@ New. Team today shows every member with a presence ("Free now", "In a meeting") 
 />
 ```
 
-- A `<ul>` labelled by `label`; each row's avatar is decorative, since the name is beside it.
+- A `<ul>` labelled by `label`; each row's avatar is decorative, since the name is beside it. A long name is cut by TruncatedText, its whole in a tooltip.
 - `presence` picks the dot's hue: `free` green, `busy` orange, `clear` gray (a clear or finished day). The words come from `status`, so colour never carries the meaning alone.
 - `detail` wraps under the status on a narrow card rather than pushing the row wide.
 - The screen decides what a teammate's meeting shows: a title only where the reader may see it, else "Busy".
@@ -27,6 +27,7 @@ New. Team today shows every member with a presence ("Free now", "In a meeting") 
 
 - Default: the rows.
 - `isLoading`: three skeleton rows, `aria-busy`.
+- Empty: no rows draws nothing (the Empty story), so the screen leaves its card out.
 - Empty, error and no access belong to the card around it (EmptyState).
 
 ## Keyboard

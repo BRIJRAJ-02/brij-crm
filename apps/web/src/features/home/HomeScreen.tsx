@@ -50,7 +50,7 @@ import { useToday } from '../tasks/day.ts';
 import { useTaskEntries } from '../tasks/useTaskEntries.ts';
 import { WorkspacePage } from '../workspace/WorkspacePage.tsx';
 import { agendaOf, dayRange, minutesOf, splitAgenda, type AgendaItem } from './agenda.ts';
-import { metricFigures, weekStartOf } from './metrics.ts';
+import { metricFigures, weekStartOf, type MetricFigure } from './metrics.ts';
 import { nextStep, setupSteps, type SetupFacts, type SetupStepId } from './setup.ts';
 import { strings } from './strings.ts';
 import { standingOf, teamDaysOf, type TeamMemberDay } from './team.ts';
@@ -103,8 +103,12 @@ export function HomeScreen({ slug, objects, members, meId, permissions, tasks, i
   const metricsView = useMemo(() => data.home.metrics(slug, weekStart), [data, slug, weekStart]);
   const metrics = useHomeMetrics(metricsView);
   const teamDays = useMemo(
-    () => (team.status === 'ready' ? teamDaysOf(team.members, members, meId) : []),
+    () => (team.status === 'ready' ? teamDaysOf(team.members, members, meId, strings.aTeammate) : []),
     [team, members, meId],
+  );
+  const figures = useMemo(
+    () => (metrics.status === 'ready' ? metricFigures(metrics.metrics, locale()) : []),
+    [metrics],
   );
   const setup = useSetupFacts(slug, meId, permissions, members, invitations);
 
@@ -115,9 +119,12 @@ export function HomeScreen({ slug, objects, members, meId, permissions, tasks, i
   const showsToday = day.status !== 'ready' || agenda.length > 0;
   const showsTasks =
     taskState.status !== 'unavailable' && !(taskState.status === 'ready' && taskState.source.count === 0);
-  // One member is not a team: their own day is Today's (timefix's rule).
-  const showsTeam = team.status !== 'ready' || teamDays.length > 1;
-  const showsMetrics = metrics.status !== 'ready' || metricFigures(metrics.metrics, locale()).length > 0;
+  // One member is not a team: their own day is Today's (timefix's rule). Known from the member list before the read,
+  // so a team of one never sees the card load and go; nor does a member without Bookings (the read's gate).
+  const showsTeam =
+    members.length > 1 && permissions.includes('booking.manage') && (team.status !== 'ready' || teamDays.length > 1);
+  // A row of zeros says nothing: like any section with nothing in it, it is left out.
+  const showsMetrics = metrics.status !== 'ready' || figures.some((figure) => figure.moved);
   const isQuiet = !setup.isLoading && !showsSetup && !showsToday && !showsTasks && !showsTeam && !showsMetrics;
 
   return (
@@ -159,6 +166,7 @@ export function HomeScreen({ slug, objects, members, meId, permissions, tasks, i
             {showsMetrics && (
               <MetricsCard
                 state={metrics}
+                figures={figures}
                 onRetry={() => {
                   metricsView.reload();
                 }}
@@ -517,35 +525,34 @@ function TasksDueCard({
   );
 }
 
-/** "In a meeting" or "Busy": what a member's current span says, its title only where the reader may see it. */
-function titleOf(item: { readonly title?: string }): string {
-  return item.title ?? strings.busy;
-}
+/** How many members Team today draws, as Tasks due draws its first five: the rest are counted. */
+export const TEAM_SHOWN = 8;
 
-/** One member's row: where they stand at `now`, and when that changes. */
-function teamRowOf(day: TeamMemberDay, meId: string | undefined, now: Date): TeamRow {
-  const time = new Intl.DateTimeFormat(locale(), { hour: 'numeric', minute: '2-digit' });
+/** One member's row: where they stand at `now`, and when that changes. A title shows only where the server sent one. */
+function teamRowOf(day: TeamMemberDay, meId: string | undefined, now: Date, time: Intl.DateTimeFormat): TeamRow {
   const at = (iso: string) => time.format(new Date(iso));
   const standing = standingOf(day.items, now);
   const next =
-    standing.next === undefined ? undefined : strings.next(titleOf(standing.next), at(standing.next.startsAt));
-  const detail =
-    standing.presence === 'busy'
-      ? [strings.until(at(standing.until ?? now.toISOString())), next].filter((part) => part !== undefined).join(' · ')
-      : (next ?? strings.nothingElse);
+    standing.next === undefined
+      ? undefined
+      : standing.next.title === undefined
+        ? strings.busyFrom(at(standing.next.startsAt))
+        : strings.next(standing.next.title, at(standing.next.startsAt));
+  const busy = standing.presence === 'busy';
+  const until = at(standing.until ?? now.toISOString());
+  const title = standing.current?.title;
+  const detail = busy
+    ? [title === undefined ? strings.until(until) : strings.titleUntil(title, until), next]
+        .filter((part) => part !== undefined)
+        .join(' · ')
+    : (next ?? strings.nothingElse);
   return {
     id: day.member.id,
     name: day.member.id === meId ? strings.you(day.member.name) : day.member.name,
     ...(day.member.avatarUrl === undefined ? {} : { avatarSrc: day.member.avatarUrl }),
-    presence: standing.presence,
-    status:
-      standing.presence === 'busy'
-        ? standing.current?.kind === 'busy' || standing.current?.title === undefined
-          ? strings.busy
-          : strings.inMeeting
-        : standing.presence === 'free'
-          ? strings.freeNow
-          : strings.free,
+    // A clear day is free too: the dot never makes the most available person look the least.
+    presence: busy ? 'busy' : 'free',
+    status: busy ? (title === undefined ? strings.busy : strings.inMeeting) : strings.freeNow,
     detail,
   };
 }
@@ -563,7 +570,12 @@ function TeamTodayCard({
   readonly onRetry: () => void;
 }) {
   const now = useNow();
-  const rows = useMemo(() => days.map((day) => teamRowOf(day, meId, now)), [days, meId, now]);
+  const time = useMemo(() => new Intl.DateTimeFormat(locale(), { hour: 'numeric', minute: '2-digit' }), []);
+  const rows = useMemo(
+    () => days.slice(0, TEAM_SHOWN).map((day) => teamRowOf(day, meId, now, time)),
+    [days, meId, now, time],
+  );
+  const hidden = days.length - TEAM_SHOWN;
   if (state.status === 'error') {
     return (
       <Card title={strings.teamToday}>
@@ -572,14 +584,27 @@ function TeamTodayCard({
     );
   }
   return (
-    <Card title={strings.teamToday} isBusy={state.status === 'loading'}>
+    <Card
+      title={strings.teamToday}
+      description={strings.teamDescription}
+      isBusy={state.status === 'loading'}
+      {...(hidden > 0 ? { footer: strings.moreTeam(hidden) } : {})}
+    >
       <TeamList label={strings.teamToday} rows={rows} isLoading={state.status === 'loading'} />
     </Card>
   );
 }
 
 /** The metrics row: this week so far against all of last week, only the figures the reader may see. */
-function MetricsCard({ state, onRetry }: { readonly state: HomeMetricsState; readonly onRetry: () => void }) {
+function MetricsCard({
+  state,
+  figures,
+  onRetry,
+}: {
+  readonly state: HomeMetricsState;
+  readonly figures: readonly MetricFigure[];
+  readonly onRetry: () => void;
+}) {
   if (state.status === 'error') {
     return (
       <Card title={strings.thisWeek}>
@@ -587,7 +612,6 @@ function MetricsCard({ state, onRetry }: { readonly state: HomeMetricsState; rea
       </Card>
     );
   }
-  const figures = state.status === 'ready' ? metricFigures(state.metrics, locale()) : [];
   const others = state.status === 'ready' && state.metrics.won?.others === true;
   return (
     <Card

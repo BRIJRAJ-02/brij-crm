@@ -47,21 +47,28 @@ export interface TeamMemberDay {
 }
 
 /**
- * The days of the members the reader knows, the reader first, then by name.
- * A member the list doesn't hold (joined since it was read) is left out
- * until it is read again.
+ * Every member's day, the reader first, then by name. A member the list
+ * doesn't hold (joined since it was read, or the list failed) still shows,
+ * named `unknownName`, until the list is read again.
  */
 export function teamDaysOf(
   days: readonly TeamTodayMember[],
   members: readonly MemberView[],
   meId: string | undefined,
+  unknownName: string,
 ): readonly TeamMemberDay[] {
   const byId = new Map(members.map((member) => [member.id, member]));
   return days
-    .flatMap((day) => {
-      const member = byId.get(day.memberId);
-      return member === undefined ? [] : [{ member, items: day.items }];
-    })
+    .map((day) => ({
+      member: byId.get(day.memberId) ?? {
+        id: day.memberId,
+        name: unknownName,
+        email: '',
+        role: 'member' as const,
+        joinedAt: new Date(0).toISOString(),
+      },
+      items: day.items,
+    }))
     .toSorted((a, b) => {
       if (a.member.id === meId) return -1;
       if (b.member.id === meId) return 1;

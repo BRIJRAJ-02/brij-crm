@@ -52,6 +52,20 @@ export const Default: Story = {
   },
 };
 
+/** No rows: nothing at all. */
+export const Empty: Story = {
+  args: { rows: [] },
+  parameters: { crm: { screenshot: false } },
+  render: (args) => (
+    <Stage width="narrow-fill">
+      <TeamList {...args} />
+    </Stage>
+  ),
+  play: async ({ canvas }) => {
+    await expect(canvas.queryByRole('list')).toBeNull();
+  },
+};
+
 /** Loading: three skeleton rows. */
 export const Loading: Story = {
   args: { isLoading: true, rows: [] },

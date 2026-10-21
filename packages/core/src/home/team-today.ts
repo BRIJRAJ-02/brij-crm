@@ -7,9 +7,11 @@
 // page's, one they host, or everyone's with `booking.admin`); a meeting the
 // reader's own calendar holds too, or one that isn't private and whose every
 // holding calendar of that member shows Full details to teammates (sharing
-// `shared`). Anything else is Busy, by its time alone: never its title,
-// place, link or attendees. Only a member reads it (a key or a form reads
-// nothing), and it writes nothing.
+// `shared`, the setting Teammates see: Full details, the owner's call of
+// 22 October 2026). Anything else is Busy, by its time alone: never its
+// title, place, link or attendees. It needs `booking.manage` (scheduling:
+// Bookings' own gate), only a member reads it (a key reads an empty team), the
+// day must be today's (within 36 hours of now), and it writes nothing.
 import { sql } from 'drizzle-orm';
 import {
   TEAM_TODAY_ITEMS_MAX,
@@ -19,11 +21,16 @@ import {
   type TeamTodayView,
 } from '@crm/contracts';
 import type { EngineScope } from '../access/mint.ts';
+import { requirePermission } from '../access/check.ts';
 import { can } from '../access/policy.ts';
 import { inWorkspace } from '../access/run.ts';
+import { inputInvalid } from '../engine/refusals.ts';
 
 /** How far before the day a meeting may start and still reach into it (all day and multi day events). */
 const LOOKBACK_MS = 48 * 3_600_000;
+
+/** How far from now the day may start: today's midnight in any time zone. */
+const TODAY_MS = 36 * 3_600_000;
 
 /** How far before the day a booking may start and still reach into it (a booking is at most a day). */
 const BOOKING_LOOKBACK_MS = 24 * 3_600_000;
@@ -62,19 +69,25 @@ interface BusyRow extends Record<string, unknown> {
 export async function readTeamToday(
   scope: EngineScope,
   input: { readonly from: string; readonly to: string },
+  deps: { readonly now?: Date } = {},
 ): Promise<TeamTodayView> {
+  requirePermission(scope, 'booking.manage');
   const { principal } = scope.access;
   if (principal.kind !== 'member') return { members: [] };
   const reader = principal.memberId;
   const everyone = can(scope.access, 'booking.admin');
   const from = new Date(input.from);
   const to = new Date(input.to);
+  const now = deps.now ?? new Date();
+  if (Number.isNaN(from.getTime()) || Math.abs(from.getTime() - now.getTime()) > TODAY_MS) {
+    throw inputInvalid('from', 'Ask for today.');
+  }
   return inWorkspace(scope, async (tx) => {
     const roster = (
       await tx.execute<{ id: string }>(sql`
         select id::text as id from members
         where status = 'active'
-        order by (id = ${reader}::uuid) desc, id
+        order by (id = ${reader}::uuid) desc, lower(name), id
         limit ${TEAM_TODAY_MEMBERS_MAX}
       `)
     ).rows.map((row) => row.id);
@@ -127,7 +140,9 @@ export async function readTeamToday(
         from calendar_connections c
         join calendar_busy_times b on b.workspace_id = c.workspace_id and b.connection_id = c.id
         where c.member_id = any(${ids})
-          and b.ends_at > ${from.toISOString()}::timestamptz and b.starts_at < ${to.toISOString()}::timestamptz
+          and b.ends_at > ${from.toISOString()}::timestamptz
+          and b.ends_at < ${iso(new Date(to.getTime() + LOOKBACK_MS))}::timestamptz
+          and b.starts_at < ${to.toISOString()}::timestamptz
         order by b.starts_at, b.ends_at, member_id
         limit ${ROWS_MAX}
       `)

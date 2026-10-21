@@ -45,14 +45,18 @@ export const strings = {
   inMeeting: 'In a meeting',
   busy: 'Busy',
   freeNow: 'Free now',
-  free: 'Free',
+  teamDescription: 'By their calendars, on your clock',
+  aTeammate: 'A teammate',
   until: (time: string) => `Until ${time}`,
+  titleUntil: (title: string, time: string) => `${title} until ${time}`,
   next: (title: string, time: string) => `Next: ${title}, ${time}`,
+  busyFrom: (time: string) => `Busy from ${time}`,
   nothingElse: 'Nothing else today',
+  moreTeam: (count: number) => (count === 1 ? '1 more person' : `${count.toLocaleString('en')} more people`),
 
   // The metrics row
   thisWeek: 'This week',
-  againstLastWeek: 'So far, against all of last week',
+  againstLastWeek: 'Since Monday, compared with all of last week',
   metricsFailed: 'This week’s figures didn’t load',
   metricLabels: {
     meetings: 'Meetings booked',
@@ -62,7 +66,7 @@ export const strings = {
     submissions: 'Form submissions',
   },
   lastWeek: (value: string) => `${value} last week`,
-  otherCurrencies: 'Deals won in other currencies aren’t added in.',
+  otherCurrencies: 'Deals won in other currencies aren’t counted.',
 
   // The page
   quietTitle: 'Nothing needs you right now',

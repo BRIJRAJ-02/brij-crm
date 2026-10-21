@@ -28,12 +28,10 @@
   }
 
   .name {
-    overflow: hidden;
+    min-inline-size: 0;
     font: var(--text-body-strong);
     letter-spacing: var(--tracking-body-strong);
     color: var(--text);
-    text-overflow: ellipsis;
-    white-space: nowrap;
   }
 
   .line {

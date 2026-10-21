@@ -2,7 +2,8 @@
 // day, and the metrics row, one per workspace and week. Neither is CRM data
 // with a change event of its own (bookings and synced meetings have none
 // yet), so, like Bookings, each is read when a screen first holds it and
-// again whenever the person comes back to the page. Nothing polls: Team
+// again whenever the person comes back to the page (at most once per 30
+// seconds). Nothing polls: Team
 // today holds the whole day, so the screen works out "Free now" from the
 // clock as time passes. A failed read keeps what is shown; only a first read
 // shows the failure. Nothing is ever fetched for a read no screen holds.
@@ -24,6 +25,8 @@ export interface HomeDeps {
   readonly api: HomeApi;
   /** Calls `refresh` whenever the person comes back to the page (focus, visible again); answers how to stop. */
   readonly onReturn?: (refresh: () => void) => () => void;
+  /** The clock, for tests. */
+  readonly now?: () => number;
 }
 
 /** One held read's state: loading, failed, or what the server last said. */
@@ -50,6 +53,9 @@ export interface HomeHeld<State> {
   readonly reload: () => void;
 }
 
+/** How soon after an answer coming back to the page reads again. Try again always reads. */
+export const RETURN_GAP_MS = 30_000;
+
 /** At most this many reads are kept that no screen holds (yesterday's day, last week's row). */
 const UNHELD_MAX = 4;
 
@@ -70,6 +76,7 @@ function browserReturn(refresh: () => void): () => void {
 /** The home store: every workspace's Team today and metrics reads. */
 export function createHomeStore(deps: HomeDeps) {
   const onReturn = deps.onReturn ?? browserReturn;
+  const clock = deps.now ?? Date.now;
   const reads = new Map<string, HomeHeld<HomeReadState<object>> & { readonly isHeld: () => boolean }>();
 
   function makeHeld<T extends object>(load: () => Promise<T>) {
@@ -83,10 +90,14 @@ export function createHomeStore(deps: HomeDeps) {
       state = next;
       for (const listener of listeners) listener();
     };
+    let readAt = Number.NEGATIVE_INFINITY;
     const read = (): Promise<void> => {
       reading ??= load()
         .then(
-          (answer) => set({ status: 'ready', ...answer }),
+          (answer) => {
+            readAt = clock();
+            set({ status: 'ready', ...answer });
+          },
           (error: unknown) => {
             if (state.status !== 'ready') set({ status: 'error', message: toDataError(error).message });
           },
@@ -106,7 +117,10 @@ export function createHomeStore(deps: HomeDeps) {
         held += 1;
         if (held === 1) {
           void read();
-          release = onReturn(() => void read());
+          // Coming back within RETURN_GAP_MS of the last answer reads nothing: focus fires on every click back.
+          release = onReturn(() => {
+            if (clock() - readAt >= RETURN_GAP_MS) void read();
+          });
         }
         return () => {
           held -= 1;

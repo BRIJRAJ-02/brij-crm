@@ -11,6 +11,7 @@
 
   .stat {
     display: flex;
+    overflow: hidden;
     flex-direction: column;
     gap: var(--space-4);
     min-inline-size: 0;
@@ -28,7 +29,7 @@
     letter-spacing: var(--tracking-heading);
     font-variant-numeric: tabular-nums;
     color: var(--text);
-    overflow-wrap: anywhere;
+    white-space: nowrap;
   }
 
   .comparison {

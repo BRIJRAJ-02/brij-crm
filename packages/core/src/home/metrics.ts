@@ -93,16 +93,30 @@ interface Weeks {
   readonly now: Date;
 }
 
-/** Home's metrics as the reader may see them. `weekStart` must be within the last 8 days. */
+/** This UTC week's Monday: the week a read without one takes. */
+function utcMonday(now: Date): string {
+  const day = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
+  day.setUTCDate(day.getUTCDate() - ((day.getUTCDay() + 6) % 7));
+  return day.toISOString();
+}
+
+/** Every time zone's midnight falls on a quarter hour: anything else is refused, so the cache keys stay few. */
+const QUARTER_MS = 15 * 60_000;
+
+/**
+ * Home's metrics as the reader may see them. `weekStart` (the reader's
+ * Monday's midnight, on a quarter hour) must be within the last 8 days;
+ * without one, this UTC week.
+ */
 export async function readHomeMetrics(
   scope: EngineScope,
-  input: { readonly weekStart: string },
+  input: { readonly weekStart?: string } = {},
   deps: { readonly now?: Date; readonly cache?: HomeMetricsCache } = {},
 ): Promise<HomeMetricsView> {
   const now = deps.now ?? new Date();
-  const start = new Date(input.weekStart);
+  const start = new Date(input.weekStart ?? utcMonday(now));
   const age = now.getTime() - start.getTime();
-  if (Number.isNaN(age) || age < 0 || age > WEEK_MS + DAY_MS) {
+  if (Number.isNaN(age) || age < 0 || age > WEEK_MS + DAY_MS || start.getTime() % QUARTER_MS !== 0) {
     throw inputInvalid('weekStart', 'Ask for a week that started in the last 8 days.');
   }
   const weeks: Weeks = {
@@ -207,7 +221,7 @@ async function workspaceFigures(tx: WorkspaceTx, weeks: Weeks): Promise<Workspac
         select count(*) filter (where received_at >= ${start}::timestamptz) as this_week,
           count(*) filter (where received_at < ${start}::timestamptz) as last_week
         from form_submissions
-        where form_id in (select id from forms)
+        where form_id = any(array(select id from forms))
           and received_at >= ${last}::timestamptz and received_at < ${now}::timestamptz
       `)
     ).rows[0],

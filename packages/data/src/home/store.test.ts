@@ -8,7 +8,9 @@ const DAY = { members: [{ memberId: '00000000-0000-4000-8000-000000000001', item
 function harness(answers: (() => Promise<typeof DAY>)[]) {
   const calls: string[] = [];
   let comeBack: () => void = () => undefined;
+  let clock = 0;
   const store = createHomeStore({
+    now: () => clock,
     api: {
       teamToday: ({ from }) => {
         calls.push(`team:${from}`);
@@ -26,20 +28,34 @@ function harness(answers: (() => Promise<typeof DAY>)[]) {
       };
     },
   });
-  return { store, calls, comeBack: () => comeBack() };
+  return {
+    store,
+    calls,
+    comeBack: () => {
+      clock += 31_000;
+      comeBack();
+    },
+    comeBackSoon: () => {
+      clock += 1_000;
+      comeBack();
+    },
+  };
 }
 
 const settle = () => new Promise((resolve) => setTimeout(resolve, 0));
 
 describe('the home store', () => {
   it('reads Team today when held, again when the person comes back, and never once let go', async () => {
-    const { store, calls, comeBack } = harness([]);
+    const { store, calls, comeBack, comeBackSoon } = harness([]);
     const view = store.teamToday('acme', 'a', 'b');
     expect(store.teamToday('acme', 'a', 'b')).toBe(view);
     expect(calls).toEqual([]);
     const release = view.retain();
     await settle();
     expect(view.getSnapshot()).toMatchObject({ status: 'ready', members: DAY.members });
+    comeBackSoon();
+    await settle();
+    expect(calls).toEqual(['team:a']);
     comeBack();
     await settle();
     expect(calls).toEqual(['team:a', 'team:a']);

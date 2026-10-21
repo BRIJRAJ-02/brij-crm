@@ -1,6 +1,7 @@
 import { Avatar } from '../../atoms/Avatar/Avatar.tsx';
 import { Skeleton } from '../../atoms/Skeleton/Skeleton.tsx';
 import { StatusDot } from '../../atoms/StatusDot/StatusDot.tsx';
+import { TruncatedText } from '../../atoms/TruncatedText/TruncatedText.tsx';
 import type { Hue } from '../../hue.ts';
 import styles from './TeamList.module.css';
 
@@ -34,6 +35,7 @@ export interface TeamListProps {
 
 /** Members as rows, each with their picture, name, where they stand now and what is next: Home's Team today. */
 export function TeamList({ label, rows, isLoading = false }: TeamListProps) {
+  if (!isLoading && rows.length === 0) return null;
   if (isLoading) {
     return (
       <ul className={styles.root} aria-label={label} aria-busy="true">
@@ -60,7 +62,9 @@ export function TeamList({ label, rows, isLoading = false }: TeamListProps) {
             isDecorative
           />
           <span className={styles.text}>
-            <span className={styles.name}>{row.name}</span>
+            <span className={styles.name}>
+              <TruncatedText>{row.name}</TruncatedText>
+            </span>
             <span className={styles.line}>
               <StatusDot hue={HUE[row.presence]}>{row.status}</StatusDot>
               {row.detail !== undefined && <span className={styles.detail}>{row.detail}</span>}

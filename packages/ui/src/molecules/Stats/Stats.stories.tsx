@@ -30,6 +30,7 @@ export const Default: Story = {
     </Stage>
   ),
   play: async ({ canvas }) => {
+    await expect(canvas.getByRole('group', { name: 'This week' })).toBeInTheDocument();
     await expect(canvas.getAllByRole('term')).toHaveLength(5);
     await expect(canvas.getByText(/Up from/)).toBeInTheDocument();
   },
@@ -42,6 +43,20 @@ export const Narrow: Story = {
       <Stats {...args} />
     </Stage>
   ),
+};
+
+/** No figures: nothing at all, so the screen leaves its card out. */
+export const Empty: Story = {
+  args: { items: [] },
+  parameters: { crm: { screenshot: false } },
+  render: (args) => (
+    <Stage width="fill">
+      <Stats {...args} />
+    </Stage>
+  ),
+  play: async ({ canvas }) => {
+    await expect(canvas.queryByRole('group')).toBeNull();
+  },
 };
 
 /** Loading: a skeleton per figure. */

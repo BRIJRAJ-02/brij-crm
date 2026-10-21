@@ -57,7 +57,7 @@ describe('teamDaysOf', () => {
     joinedAt: '2026-10-01T00:00:00.000Z',
   });
 
-  it('puts the reader first, then everyone by name, leaving out a member the list doesn’t hold', () => {
+  it('puts the reader first, then everyone by name, naming a member the list doesn’t hold', () => {
     const days = teamDaysOf(
       [
         { memberId: 'c', items: [] },
@@ -67,8 +67,9 @@ describe('teamDaysOf', () => {
       ],
       [member('a', 'Zed'), member('c', 'Ada'), member('me', 'Me')],
       'me',
+      'A teammate',
     );
-    expect(days.map((day) => day.member.name)).toEqual(['Me', 'Ada', 'Zed']);
+    expect(days.map((day) => day.member.name)).toEqual(['Me', 'A teammate', 'Ada', 'Zed']);
   });
 });
 
@@ -89,11 +90,15 @@ describe('the metrics row', () => {
       'en-US',
     );
     expect(figures).toEqual([
-      { id: 'meetings', value: '12', lastWeek: '8', trend: 'up' },
-      { id: 'deals', value: '1', lastWeek: '1', trend: 'same' },
-      { id: 'won', value: '$1,201', lastWeek: '$0', trend: 'up' },
-      { id: 'submissions', value: '1,234', lastWeek: '2,000', trend: 'down' },
+      { id: 'meetings', value: '12', lastWeek: '8', trend: 'up', moved: true },
+      { id: 'deals', value: '1', lastWeek: '1', trend: 'same', moved: true },
+      { id: 'won', value: '$1,201', lastWeek: '$0', trend: 'up', moved: true },
+      { id: 'submissions', value: '1,234', lastWeek: '2,000', trend: 'down', moved: true },
     ]);
+  });
+
+  it('marks a figure with nothing either week, so a row of zeros is left out', () => {
+    expect(metricFigures({ people: { thisWeek: 0, lastWeek: 0 } }, 'en-US')[0]?.moved).toBe(false);
   });
 
   it('shows an unknown currency code beside the amount', () => {
