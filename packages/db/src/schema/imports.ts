@@ -99,7 +99,10 @@ export const importRows = pgTable(
     /** `{ [attributeId]: value }`, or `{ names: string[] }` for a relationship attribute; checked when written. */
     values: jsonb('values').notNull(),
     /** The row's normalised keys on the import's match attribute (`uniqueKeyOf`). */
-    matchKeys: text('match_keys').array().notNull().default(sql`'{}'::text[]`),
+    matchKeys: text('match_keys')
+      .array()
+      .notNull()
+      .default(sql`'{}'::text[]`),
     outcome: importRowOutcome('outcome').notNull().default('pending'),
     recordId: uuid('record_id'),
     errorCode: text('error_code'),

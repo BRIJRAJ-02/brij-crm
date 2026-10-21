@@ -69,6 +69,8 @@ export async function newWorkspace(page: Page, email: string, slug: string): Pro
   await page.getByLabel('Web address').fill(slug);
   await page.getByRole('button', { name: 'Create workspace' }).click();
   await expect(page).toHaveURL(objectUrl(slug, 'people'), { timeout: WORKSPACE_MADE_MS });
+  // The page takes focus to its title once it has loaded; wait for that, so a press after this lands where it's aimed.
+  await expect(page.getByRole('heading', { level: 1, name: 'People' })).toBeFocused();
   return code;
 }
 

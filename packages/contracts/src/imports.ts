@@ -78,7 +78,11 @@ export type CreateImportInput = z.infer<typeof CreateImportInput>;
  * relationship attribute (the far records' names, matched by the job).
  */
 export const StagedRow = z.strictObject({
-  rowNumber: z.number().int().min(2).max(TRANSFER_LIMITS.importRows + 1),
+  rowNumber: z
+    .number()
+    .int()
+    .min(2)
+    .max(TRANSFER_LIMITS.importRows + 1),
   values: z.record(z.uuid(), z.unknown()),
 });
 /** One ready row. */
