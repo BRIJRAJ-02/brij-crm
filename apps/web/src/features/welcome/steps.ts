@@ -46,15 +46,18 @@ export interface WelcomeSearch {
   readonly step?: WelcomeStep;
   readonly workspace?: string;
   readonly calendar?: ConnectResult;
+  /** `?another=1`: the workspace menu's Create workspace (spec 0031, AC-801), for someone who already has one. */
+  readonly another?: true;
 }
 
 /** The search as given, keeping only values first run knows: a step name, an address, a connect result. */
 export function welcomeSearch(search: Record<string, unknown>): WelcomeSearch {
-  const { step, workspace, calendar } = search;
+  const { step, workspace, calendar, another } = search;
   return {
     ...(typeof step === 'string' && (STEPS as readonly string[]).includes(step) ? { step: step as WelcomeStep } : {}),
     ...(typeof workspace === 'string' && SLUG_RULE.test(workspace) ? { workspace } : {}),
     ...(isConnectResult(calendar) ? { calendar } : {}),
+    ...(another === 1 || another === '1' || another === true ? { another: true as const } : {}),
   };
 }
 
@@ -63,8 +66,10 @@ export function welcomeSearch(search: Record<string, unknown>): WelcomeSearch {
  * only step after it), else the step asked for, never the calendar step
  * without a workspace; About you when none is asked for.
  */
-export function shownStep(asked: WelcomeStep | undefined, hasWorkspace: boolean): WelcomeStep {
+export function shownStep(asked: WelcomeStep | undefined, hasWorkspace: boolean, another = false): WelcomeStep {
   if (hasWorkspace) return 'calendar';
+  // Another workspace (spec 0031): the person is known already, so it starts at Your workspace.
+  if (another) return 'workspace';
   return asked === undefined || asked === 'calendar' ? 'about' : asked;
 }
 
@@ -76,15 +81,20 @@ export type WelcomeLanding<W> =
  * Where `/welcome` goes: the calendar step for `asked` only when it is one of
  * the person's own workspaces and calendar sync is on; else, for someone with
  * a workspace, that workspace (or their first); else the steps from the
- * start. A workspace that isn't theirs is passed over, never shown.
+ * start. A workspace that isn't theirs is passed over, never shown. `home`
+ * is the one to open (spec 0031: the last opened, else the oldest), and
+ * `another` keeps the steps open for someone making another workspace.
  */
 export function welcomeLanding<W extends { readonly slug: string }>(
   workspaces: readonly W[],
   asked: string | undefined,
   calendarSync: boolean,
+  home: W | undefined = workspaces[0],
+  another = false,
 ): WelcomeLanding<W> {
   const made = asked === undefined ? undefined : workspaces.find((each) => each.slug === asked);
   if (made !== undefined && calendarSync) return { kind: 'steps', workspace: made };
-  const home = made ?? workspaces[0];
-  return home === undefined ? { kind: 'steps', workspace: undefined } : { kind: 'open', slug: home.slug };
+  if (made === undefined && another) return { kind: 'steps', workspace: undefined };
+  const opened = made ?? home;
+  return opened === undefined ? { kind: 'steps', workspace: undefined } : { kind: 'open', slug: opened.slug };
 }

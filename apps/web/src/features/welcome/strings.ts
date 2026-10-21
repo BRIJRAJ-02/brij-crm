@@ -26,6 +26,9 @@ export const strings = {
 
   workspaceTitle: 'Your workspace',
   workspaceDescription: 'Your records live here. Name it for your team or company.',
+  anotherTitle: 'Create a workspace',
+  anotherDescription: 'A new workspace starts empty, with you as its owner.',
+  backTo: (name: string) => `Back to ${name}`,
   workspaceName: 'Workspace name',
   webAddress: 'Web address',
   /** Before the address in its field. */

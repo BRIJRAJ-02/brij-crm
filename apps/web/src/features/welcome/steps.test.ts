@@ -35,6 +35,11 @@ describe('first run’s steps', () => {
     expect(shownStep('calendar', false)).toBe('about');
     expect(shownStep('about', true)).toBe('calendar');
   });
+
+  it('start another workspace at Your workspace (spec 0031)', () => {
+    expect(shownStep(undefined, false, true)).toBe('workspace');
+    expect(shownStep('about', true, true)).toBe('calendar');
+  });
 });
 
 describe('first run’s search', () => {
@@ -80,5 +85,11 @@ describe('where /welcome goes', () => {
 
   it('opens the first workspace for someone who has one and asks for none', () => {
     expect(welcomeLanding([acme, beta], undefined, true)).toEqual({ kind: 'open', slug: 'acme' });
+  });
+
+  it('opens the last used workspace it is given, and keeps the steps open for another (spec 0031)', () => {
+    expect(welcomeLanding([acme, beta], undefined, true, beta)).toEqual({ kind: 'open', slug: 'beta' });
+    expect(welcomeLanding([acme, beta], undefined, true, beta, true)).toEqual({ kind: 'steps', workspace: undefined });
+    expect(welcomeLanding([acme, beta], 'beta', false, acme, true)).toEqual({ kind: 'open', slug: 'beta' });
   });
 });

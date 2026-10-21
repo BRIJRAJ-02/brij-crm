@@ -1,10 +1,11 @@
 // Brief
 // Purpose: first run (spec 0036): a new person says who they are, names their workspace and may connect a calendar,
+// or (spec 0031) someone with a workspace makes another, starting at Your workspace,
 // watching the workspace take shape beside each step.
 // Main task: About you, then Your workspace (Create workspace), then Connect your calendar or skip, into People.
 // Leaves out: inviting the team (after spec 0031 slice 2), a photo (file storage), templates and use case questions.
 import { isDataError, type DataLayer, type SignedInUser, type WorkspaceSummary } from '@crm/data';
-import { AuthLayout, Button, Steps, WorkspacePreview, type WorkspacePreviewFocus } from '@crm/ui';
+import { AuthLayout, Button, ButtonLink, Steps, WorkspacePreview, type WorkspacePreviewFocus } from '@crm/ui';
 import { useNavigate, useRouter } from '@tanstack/react-router';
 import { useEffect, useRef, useState } from 'react';
 import { sessionStore } from '../auth/pending.ts';
@@ -47,6 +48,11 @@ export interface WelcomeScreenProps {
   readonly workspace?: WorkspaceSummary | undefined;
   /** What a calendar connect came back with (`?calendar=`). */
   readonly calendarResult?: ConnectResult | undefined;
+  /**
+   * Making another workspace (spec 0031, AC-801): the workspace the footer
+   * goes back to, in place of Sign out, and the steps start at Your workspace.
+   */
+  readonly leaveTo?: { readonly slug: string; readonly name: string } | undefined;
 }
 
 /**
@@ -55,7 +61,15 @@ export interface WelcomeScreenProps {
  * title, and who is signed in with Sign out (which asks first) at its foot.
  * What is typed is kept in this tab (`draft.ts`) until the workspace is made.
  */
-export function WelcomeScreen({ data, user, step, calendarSync, workspace, calendarResult }: WelcomeScreenProps) {
+export function WelcomeScreen({
+  data,
+  user,
+  step,
+  calendarSync,
+  workspace,
+  calendarResult,
+  leaveTo,
+}: WelcomeScreenProps) {
   const navigate = useNavigate();
   const router = useRouter();
   const storage = sessionStore(window);
@@ -110,7 +124,7 @@ export function WelcomeScreen({ data, user, step, calendarSync, workspace, calen
   }, [step]);
 
   const steps = welcomeSteps(calendarSync);
-  const back = previousStep(step);
+  const back = leaveTo === undefined ? previousStep(step) : undefined;
   // The step this one was reached from by Continue: Back then goes back through the browser's history, so the
   // browser's own back button and ours agree.
   const cameFrom = useRef<WelcomeStep | undefined>(undefined);
@@ -183,7 +197,10 @@ export function WelcomeScreen({ data, user, step, calendarSync, workspace, calen
     );
   };
 
-  const { title, description } = COPY[step];
+  const { title, description } =
+    leaveTo !== undefined && step === 'workspace'
+      ? { title: strings.anotherTitle, description: strings.anotherDescription }
+      : COPY[step];
   return (
     <>
       <AuthLayout
@@ -213,15 +230,21 @@ export function WelcomeScreen({ data, user, step, calendarSync, workspace, calen
         }
         account={user.email}
         footer={
-          <Button
-            variant="ghost"
-            onPress={() => {
-              setSignOutFailure(undefined);
-              setSignOutOpen(true);
-            }}
-          >
-            {strings.signOut}
-          </Button>
+          leaveTo === undefined ? (
+            <Button
+              variant="ghost"
+              onPress={() => {
+                setSignOutFailure(undefined);
+                setSignOutOpen(true);
+              }}
+            >
+              {strings.signOut}
+            </Button>
+          ) : (
+            <ButtonLink variant="ghost" href={`/w/${leaveTo.slug}`}>
+              {strings.backTo(leaveTo.name)}
+            </ButtonLink>
+          )
         }
       >
         {step === 'about' && (
