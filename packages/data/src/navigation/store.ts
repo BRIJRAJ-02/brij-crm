@@ -5,7 +5,9 @@
 // once (AC-937). Changes go out one at a time, in the order made. A refused
 // one is dropped, the sidebar redraws without it, and the person is told with
 // Retry. A read is only taken when its `version` is at least the base's, so a
-// stale answer never undoes a newer change.
+// stale answer never undoes a newer change. A sidebar that couldn't be read is
+// said once (the screen draws the defaults meanwhile), read again the next
+// time a screen holds it, and as soon as a change of the member's lands.
 //
 // Live: a `nav` event naming this member reads the sidebar again (another tab
 // or device of theirs changed it); one naming another member does nothing. A
@@ -22,8 +24,19 @@ import { toDataError, type DataError } from '../errors.ts';
 import type { MutationLog } from '../live/mutations.ts';
 import type { LiveEventOf } from '../live/router.ts';
 
-/** The store's own words: the Retry on a refused change's toast. */
-export const NAV_WORDS = { retry: 'Retry' } as const;
+/** The store's own words: a refused change's toast, and the sidebar that couldn't be read. */
+export const NAV_WORDS = {
+  retry: 'Retry',
+  /** Before the refusal's reason: what was put back. */
+  notChanged: 'Your sidebar wasn’t changed.',
+  unavailable: 'Couldn’t load your sidebar, so it shows the default order.',
+} as const;
+
+/**
+ * Failures a screen already says in its own way, so the sidebar's notice stays quiet for them: the workspace isn't
+ * there or isn't the person's ("Workspace not found"), or the session ended (sign in again).
+ */
+const SAID_ELSEWHERE: readonly string[] = ['NOT_FOUND', 'FORBIDDEN', 'UNAUTHENTICATED'];
 
 /** The least time between two coarse rereads of one workspace's sidebar (a burst of favourite changes). */
 export const NAV_REREAD_MS = 1000;
@@ -58,6 +71,8 @@ export interface NavStoreDeps {
   readonly namesMe: (workspace: string, memberIds: readonly string[]) => Promise<boolean>;
   /** A refused change was put back: say why, with Retry. */
   readonly onRefused: (error: DataError, retry: () => void) => void;
+  /** The sidebar couldn't be read and nothing is held: say so once, with Retry, until a read succeeds. */
+  readonly onUnavailable: (error: DataError, retry: () => void) => void;
   /** Timers, for tests. */
   readonly setTimeout?: (run: () => void, ms: number) => unknown;
 }
@@ -81,6 +96,8 @@ interface Entry {
   release?: () => void;
   rereadDue: boolean;
   rereadAgain: boolean;
+  /** The person was told the sidebar couldn't be read; not again until a read succeeds. */
+  toldUnavailable: boolean;
 }
 
 /** The stored choices of a state, for the pure rule. */
@@ -118,6 +135,7 @@ export function createNavStore(deps: NavStoreDeps) {
       holders: 0,
       rereadDue: false,
       rereadAgain: false,
+      toldUnavailable: false,
     };
     entries.set(workspace, made);
     return made;
@@ -151,6 +169,7 @@ export function createNavStore(deps: NavStoreDeps) {
     const reading = deps.api.get(workspace).then(
       (state) => {
         entry.reading = undefined;
+        entry.toldUnavailable = false;
         settle(entry, state);
         publish(entry);
         return entry.confirmed ?? state;
@@ -161,6 +180,12 @@ export function createNavStore(deps: NavStoreDeps) {
         if (entry.confirmed === undefined) {
           entry.error = failure;
           publish(entry);
+          if (!entry.toldUnavailable && !SAID_ELSEWHERE.includes(failure.code)) {
+            entry.toldUnavailable = true;
+            deps.onUnavailable(failure, () => {
+              void read(workspace).catch(() => undefined);
+            });
+          }
         }
         throw failure;
       },
@@ -208,8 +233,9 @@ export function createNavStore(deps: NavStoreDeps) {
             : { ...entry.confirmed, version: Math.max(version, entry.confirmed.version) };
         }
         publish(entry);
-        // A new favourite's name and object come from the server, which resolves it through the door.
-        if (next.op.op === 'star') void read(workspace).catch(() => undefined);
+        // A new favourite's name and object come from the server, which resolves it through the door; and a sidebar
+        // that couldn't be read is read now that the server answers, so the change shows.
+        if (next.op.op === 'star' || entry.confirmed === undefined) void read(workspace).catch(() => undefined);
         sendNext(workspace, entry);
       },
       (error: unknown) => {
@@ -297,6 +323,14 @@ export function createNavStore(deps: NavStoreDeps) {
       const starred = nav.items.filter((item) => item.pinned === true && item.kind === kind);
       if (starred.length === 0) return;
       if (coarse || starred.some((item) => ids.includes(item.id))) reread(workspace);
+    },
+    /**
+     * An object was made, archived or restored (a `definitions` event): read again, coarsely, since a read leaves
+     * out what the member can't see today, so an object coming back takes the place they gave it, hidden if they
+     * hid it. Schema changes are rare, and a burst reads once a second at most.
+     */
+    objectsMayHaveChanged: (workspace: string): void => {
+      reread(workspace);
     },
     /** Everything held of the workspace is read again (a resync, the person's access changed). */
     resync: (workspace: string): void => {

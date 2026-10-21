@@ -72,7 +72,7 @@ import {
   type CaptureListView,
 } from './captures/list.ts';
 import type { NavOperation, NavUniverse } from '@crm/contracts/navigation';
-import { createNavStore, NAV_WORDS, type NavSource } from './navigation/store.ts';
+import type { NavSnapshot, NavSource, NavStore } from './navigation/store.ts';
 import { draftParam, isSameQuery, readDraft, type DraftQuery } from './views/draft.ts';
 import {
   createViewsStore,
@@ -235,22 +235,14 @@ export {
 export type { FetchLike } from './fetch.ts';
 export type { NavFavourite, NavState } from '@crm/contracts';
 export type { NavSnapshot, NavSource } from './navigation/store.ts';
-export {
-  EMPTY_NAV_UNIVERSE,
-  MAX_NAV_FAVOURITES,
-  moveIndexFor,
-  NAV_SCHEDULING_PAGES,
-  NAV_SECTIONS,
-  navKey,
-  sectionItems,
-  sectionOrder,
-  type NavEntry,
-  type NavItemKind,
-  type NavOperation,
-  type NavPage,
-  type NavPrefs,
-  type NavSectionKey,
-  type NavUniverse,
+export type {
+  NavEntry,
+  NavItemKind,
+  NavOperation,
+  NavPage,
+  NavPrefs,
+  NavSectionKey,
+  NavUniverse,
 } from '@crm/contracts/navigation';
 export type { JobsScope, JobsSnapshot, JobsView, TestJobSettings } from './jobs/store.ts';
 export { purgeLeftOf, type PurgeLeftEntry } from './jobs/left.ts';
@@ -728,7 +720,7 @@ export function createDataLayer({
     });
     jobs.clear();
     views.clear();
-    nav.clear();
+    navStore?.clear();
     void activity?.then((feeds) => {
       feeds.clear();
     });
@@ -1185,7 +1177,7 @@ export function createDataLayer({
   router.onResync((workspace) => {
     jobs.resync(workspace);
     views.resync(workspace);
-    nav.resync(workspace);
+    navStore?.resync(workspace);
     void trash?.then((held) => {
       held.reload(workspace);
     });
@@ -1397,42 +1389,110 @@ export function createDataLayer({
 
   // The member's own sidebar (spec 0034): one copy per workspace, changes shown at once and sent one at a time,
   // read again when another tab of theirs changes it (`nav`), and when a starred view or record may have changed.
-  const nav = createNavStore({
-    api: {
-      get: (workspace) => beforeRead(workspace).then(() => call((options) => api.nav.get({ workspace }, options))),
-      change: (workspace, op, mutationId) => call((options) => api.nav.change({ workspace, op, mutationId }, options)),
-    },
-    mintId,
-    mutations,
-    watch,
-    namesMe: (workspace, memberIds) => namesMe(workspace, memberIds),
-    onRefused: (error, retry) => {
-      notify({ tone: 'danger', message: error.message, action: { label: NAV_WORDS.retry, onAction: retry } });
-    },
-  });
+  // Loaded with a dynamic import on first use (the workspace route's loader asks for it beside the objects), so it
+  // stays out of the first load.
+  let navStore: NavStore | undefined;
+  let navLoading: Promise<NavStore> | undefined;
+  // The store's code didn't load (offline, or a deploy moved it): the sidebar reads as failed, so screens draw the
+  // defaults rather than loading for ever, and the next use loads it again.
+  let navUnloaded: NavSnapshot | undefined;
+  const navWaiting = new Set<() => void>();
+  const loadNav = (): Promise<NavStore> => {
+    navLoading ??= import('./navigation/store.ts').then(({ createNavStore, NAV_WORDS }) => {
+      navStore = createNavStore({
+        api: {
+          get: (workspace) => beforeRead(workspace).then(() => call((options) => api.nav.get({ workspace }, options))),
+          change: (workspace, op, mutationId) =>
+            call((options) => api.nav.change({ workspace, op, mutationId }, options)),
+        },
+        mintId,
+        mutations,
+        watch,
+        namesMe: (workspace, memberIds) => namesMe(workspace, memberIds),
+        // What was put back, then why ("Your sidebar wasn’t changed. You have 50 favourites. Remove one first.").
+        onRefused: (error, retry) => {
+          notify({
+            tone: 'danger',
+            message: `${NAV_WORDS.notChanged} ${error.message}`,
+            action: { label: NAV_WORDS.retry, onAction: retry },
+          });
+        },
+        onUnavailable: (_error, retry) => {
+          notify({
+            tone: 'danger',
+            message: NAV_WORDS.unavailable,
+            action: { label: NAV_WORDS.retry, onAction: retry },
+          });
+        },
+      });
+      navUnloaded = undefined;
+      // Screens that subscribed before the store arrived hear it now.
+      for (const listener of navWaiting) listener();
+      navWaiting.clear();
+      return navStore;
+    });
+    navLoading.catch((error: unknown) => {
+      navLoading = undefined;
+      navUnloaded = { status: 'error', error: toDataError(error) };
+      for (const listener of navWaiting) listener();
+    });
+    return navLoading;
+  };
   /** One workspace's sidebar as `useNav` holds it: the same object each time, so React keeps one subscription. */
   const navSources = new Map<string, NavSource>();
+  const loadingNav: NavSnapshot = { status: 'loading' };
   const navSource = (workspace: string): NavSource => {
     const found = navSources.get(workspace);
     if (found !== undefined) return found;
     const made: NavSource = {
-      retain: () => nav.retain(workspace),
-      subscribe: (listener) => nav.subscribe(workspace, listener),
-      getSnapshot: () => nav.snapshot(workspace),
+      retain: () => {
+        let release: (() => void) | undefined;
+        let isReleased = false;
+        loadNav().then(
+          (store) => {
+            if (!isReleased) release = store.retain(workspace);
+          },
+          () => undefined,
+        );
+        return () => {
+          isReleased = true;
+          release?.();
+        };
+      },
+      subscribe: (listener) => {
+        if (navStore !== undefined) return navStore.subscribe(workspace, listener);
+        let stop: (() => void) | undefined;
+        const arrived = () => {
+          listener();
+          stop = navStore?.subscribe(workspace, listener);
+        };
+        navWaiting.add(arrived);
+        return () => {
+          navWaiting.delete(arrived);
+          stop?.();
+        };
+      },
+      getSnapshot: () => navStore?.snapshot(workspace) ?? navUnloaded ?? loadingNav,
     };
     navSources.set(workspace, made);
     return made;
   };
+  // Live events reach the sidebar only once a screen loaded it: before that there is nothing held to change.
   router.on('nav', (workspace, event) => {
-    nav.navChanged(workspace, event);
+    navStore?.navChanged(workspace, event);
   });
   router.on('views', (workspace, event) => {
-    nav.favouritesMayHaveChanged(workspace, event.viewIds, 'view', event.coarse === true);
+    navStore?.favouritesMayHaveChanged(workspace, event.viewIds, 'view', event.coarse === true);
+  });
+  // An object made, archived or restored: the sidebar reads again (coarse, at most once a second), so one coming
+  // back takes the place the member gave it, and stays hidden if they hid it (AC-926, AC-939).
+  router.on('definitions', (workspace, event) => {
+    if (event.listId === undefined) navStore?.objectsMayHaveChanged(workspace);
   });
   router.on('records', (workspace, event) => {
-    // Only a record made unreadable or readable again moves a favourite: deleted, restored, or a coarse change.
-    const lifecycle = [...(event.deletedIds ?? []), ...(event.restoredIds ?? []), ...event.recordIds];
-    nav.favouritesMayHaveChanged(workspace, lifecycle, 'record', event.coarse === true);
+    // A favourite record's name, trash state or access may have moved: deleted, restored, named, or coarse.
+    const named = [...(event.deletedIds ?? []), ...(event.restoredIds ?? []), ...event.recordIds];
+    navStore?.favouritesMayHaveChanged(workspace, named, 'record', event.coarse === true);
   });
 
   /**
@@ -3279,12 +3339,18 @@ export function createDataLayer({
      * (rolled back with a toast and Retry on a refusal, AC-937).
      */
     nav: {
-      load: (workspace: string) => nav.load(workspace),
+      load: (workspace: string) => loadNav().then((store) => store.load(workspace)),
       source: (workspace: string): NavSource => navSource(workspace),
       change: (workspace: string, op: NavOperation, universe: NavUniverse): void => {
-        nav.change(workspace, op, universe);
+        loadNav().then(
+          (store) => {
+            store.change(workspace, op, universe);
+          },
+          // The store's code didn't load: nothing changed, the sidebar draws the defaults, and the next use loads it.
+          () => undefined,
+        );
       },
-      reload: (workspace: string) => nav.reload(workspace),
+      reload: (workspace: string) => loadNav().then((store) => store.reload(workspace)),
     },
     views: {
       /**

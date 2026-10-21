@@ -1,6 +1,7 @@
 import type { NavState } from '@crm/contracts';
 import { EMPTY_NAV_UNIVERSE, type NavOperation, type NavUniverse } from '@crm/contracts/navigation';
 import { describe, expect, it, vi } from 'vitest';
+import { dataError } from '../errors.ts';
 import { createMutationLog } from '../live/mutations.ts';
 import { createNavStore, type NavApi } from './store.ts';
 
@@ -46,6 +47,7 @@ function world(first: NavState = state()) {
       }),
   };
   const refused: string[] = [];
+  const unavailable: string[] = [];
   const retries: (() => void)[] = [];
   const store = createNavStore({
     api,
@@ -60,8 +62,12 @@ function world(first: NavState = state()) {
       refused.push(error.message);
       retries.push(retry);
     },
+    onUnavailable: (error, retry) => {
+      unavailable.push(error.message);
+      retries.push(retry);
+    },
   });
-  return { store, gets, changes, refused, retries, asked: () => getsAsked };
+  return { store, gets, changes, refused, unavailable, retries, asked: () => getsAsked };
 }
 
 const ready = (snapshot: ReturnType<ReturnType<typeof createNavStore>['snapshot']>) => {
@@ -134,5 +140,88 @@ describe('the sidebar store', () => {
     await Promise.resolve();
     await Promise.resolve();
     expect(ready(w.store.snapshot('acme'))).toMatchObject({ version: 4, rail: true });
+  });
+
+  it('says once that a sidebar couldn’t be read, tries again when held, and recovers once a change lands', async () => {
+    const answers: ((value: NavState | Error) => void)[] = [];
+    const settles: ((version: number) => void)[] = [];
+    const unavailable: string[] = [];
+    const retries: (() => void)[] = [];
+    const store = createNavStore({
+      api: {
+        get: () =>
+          new Promise((resolve, reject) => {
+            answers.push((value) => {
+              if (value instanceof Error) reject(value);
+              else resolve(value);
+            });
+          }),
+        change: () =>
+          new Promise((resolve) => {
+            settles.push((version) => {
+              resolve({ version });
+            });
+          }),
+      },
+      mintId: () => '01900000-0000-7000-8000-000000000099',
+      mutations: createMutationLog(),
+      watch: () => () => undefined,
+      namesMe: () => Promise.resolve(false),
+      onRefused: () => undefined,
+      onUnavailable: (error, retry) => {
+        unavailable.push(error.message);
+        retries.push(retry);
+      },
+    });
+    const loading = store.load('acme');
+    answers[0]?.(new Error('The server is down.'));
+    await expect(loading).rejects.toBeDefined();
+    expect(store.snapshot('acme').status).toBe('error');
+    expect(unavailable).toHaveLength(1);
+    // Held again (the next page): read again, and a second failure says nothing new.
+    store.retain('acme')();
+    expect(answers).toHaveLength(2);
+    answers[1]?.(new Error('Still down.'));
+    await vi.waitFor(() => {
+      expect(store.snapshot('acme').status).toBe('error');
+    });
+    expect(unavailable).toHaveLength(1);
+    // A change made meanwhile lands, so the server answers: the sidebar is read, and shows the change.
+    store.change('acme', { op: 'rail', on: true }, universe);
+    settles[0]?.(1);
+    await vi.waitFor(() => {
+      expect(answers).toHaveLength(3);
+    });
+    answers[2]?.(state({ rail: true, version: 1 }));
+    await vi.waitFor(() => {
+      expect(ready(store.snapshot('acme')).rail).toBe(true);
+    });
+    // With the sidebar held, a read that fails changes nothing and says nothing.
+    void store.reload('acme').catch(() => undefined);
+    answers[3]?.(new Error('Down once more.'));
+    await Promise.resolve();
+    expect(unavailable).toHaveLength(1);
+    expect(ready(store.snapshot('acme')).rail).toBe(true);
+  });
+
+  it('says nothing of a workspace that isn’t there or a session that ended: their screens say it', async () => {
+    const unavailable: string[] = [];
+    const store = createNavStore({
+      api: {
+        get: () => Promise.reject(dataError('NOT_FOUND', 'That workspace doesn’t exist.')),
+        change: () => Promise.resolve({ version: 1 }),
+      },
+      mintId: () => '01900000-0000-7000-8000-000000000098',
+      mutations: createMutationLog(),
+      watch: () => () => undefined,
+      namesMe: () => Promise.resolve(false),
+      onRefused: () => undefined,
+      onUnavailable: (error) => {
+        unavailable.push(error.message);
+      },
+    });
+    await expect(store.load('gone')).rejects.toBeDefined();
+    expect(store.snapshot('gone').status).toBe('error');
+    expect(unavailable).toEqual([]);
   });
 });
