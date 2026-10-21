@@ -372,6 +372,7 @@ export {
   type SortChipProps,
   type ToolbarProps,
   type TopBarProps,
+  type ViewAction,
   type ViewBarProps,
   type ViewChoice,
 } from './modules/Toolbar/Toolbar.tsx';

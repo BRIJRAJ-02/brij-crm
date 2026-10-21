@@ -62,8 +62,9 @@ export const strings = {
   createFailed: 'Couldn’t create this view. Try again in a moment.',
   created: (name: string) => `Created ${name}.`,
   privateSection: 'Private',
-  moreViewActions: 'More view actions',
   viewSettings: 'View settings',
+  /** Under View settings' columns: a new attribute is one more column. */
+  addAttribute: 'Add attribute',
   columns: 'Columns',
   rename: 'Rename',
   renameTitle: 'Rename view',
@@ -75,8 +76,6 @@ export const strings = {
   linkTooLong: 'This filter is too long for a link. Save it as a view to share it.',
   moveUp: 'Move up',
   moveDown: 'Move down',
-  alreadyFirst: 'This view is already first.',
-  alreadyLast: 'This view is already last.',
   shareWithEveryone: 'Share with everyone',
   makePrivate: 'Make private',
   shared: (name: string) => `${name} is shared with everyone.`,
@@ -86,14 +85,14 @@ export const strings = {
   locked: (name: string) => `${name} is locked.`,
   unlocked: (name: string) => `${name} is unlocked.`,
   setDefault: 'Set as default',
-  alreadyDefault: 'This is already the default view.',
   isDefaultNow: (name: string, plural: string) => `${name} is the default view for ${plural}.`,
   deleteView: 'Delete view',
   deleting: 'Deleting',
   deleteSharedTitle: (name: string) => `Delete ${name} for everyone?`,
   deletePrivateTitle: (name: string) => `Delete ${name}?`,
-  deleteSharedText: 'Everyone who sees this view loses it. Its records stay.',
-  deletePrivateText: 'This view goes for good. Its records stay.',
+  /** What a delete does, and that it can't be undone, in one sentence (the owner's rule for every confirm, 21 Oct). */
+  deleteSharedText: 'Everyone who sees this view loses it for good, and its records stay.',
+  deletePrivateText: 'This view goes for good, and its records stay.',
   deleted: (name: string) => `Deleted ${name}.`,
   /** Another member deleted the view this tab was on (AC-474). */
   deletedBy: (name: string, defaultName: string) =>
@@ -104,13 +103,10 @@ export const strings = {
   movedDown: (name: string) => `Moved ${name} down.`,
   renaming: 'Renaming',
   actionFailed: 'That didn’t work. Try again in a moment.',
-  nothingToDo: 'Nothing to change here.',
   /** The view menu's disabled reasons (spec 0020, the view menu table). */
   viewLocked: 'This view is locked.',
-  deleteDefault: (plural: string) => `This is the default view for ${plural}. Make another view the default first.`,
-  defaultShared: 'The default view is shared with everyone.',
-  defaultFirst: 'The default view is always first.',
-  seededShared: 'This view was made by the workspace, so it stays shared.',
+  /** Delete or Make private on the default view: what the person can do about it, short. */
+  defaultFirstFix: 'Make another view the default first.',
   creatorGone: 'This view’s creator has left the workspace.',
   onlyCreator: (name: string) => `Only ${name} can make this view private.`,
   unlockFirst: 'Unlock it first.',

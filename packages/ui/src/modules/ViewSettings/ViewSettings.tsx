@@ -1,7 +1,7 @@
 // What a view shows (spec 0003, the view bars): a table's columns or a board
 // card's fields, each shown or hidden by a switch and reordered by drag and
 // drop, by pointer or keyboard.
-import { useState } from 'react';
+import { useState, type ReactNode } from 'react';
 import { GridList, GridListItem, useDragAndDrop } from 'react-aria-components';
 import { DragHandle } from '../../atoms/DragHandle/DragHandle.tsx';
 import { Icon } from '../../atoms/Icon/Icon.tsx';
@@ -32,6 +32,12 @@ export interface ViewSettingsProps {
   readonly onChange: (next: readonly ViewField[]) => void;
   /** Shows what the view shows, with nothing to change: a view you can't edit. */
   readonly isReadOnly?: boolean;
+  /**
+   * Under the list, after a hairline: a table's "Add attribute", since a new
+   * attribute is one more column here (it was a button of its own in the view
+   * bar until the bar was simplified, 21 October 2026).
+   */
+  readonly footer?: ReactNode;
 }
 
 /** Past this many attributes, a search field narrows the list. */
@@ -42,7 +48,7 @@ const SEARCH_AFTER = 8;
  * shows or hides it, and its handle reorders it. A locked row (the record's
  * name) is always shown and stays first. Long lists get a search field.
  */
-export function ViewSettings({ label, fields, onChange, isReadOnly = false }: ViewSettingsProps) {
+export function ViewSettings({ label, fields, onChange, isReadOnly = false, footer }: ViewSettingsProps) {
   const { locale } = useFormatSettings();
   const [query, setQuery] = useState('');
   const needle = query.trim().toLocaleLowerCase(locale);
@@ -127,6 +133,7 @@ export function ViewSettings({ label, fields, onChange, isReadOnly = false }: Vi
           );
         }}
       </GridList>
+      {footer !== undefined && <div className={styles.foot}>{footer}</div>}
     </div>
   );
 }

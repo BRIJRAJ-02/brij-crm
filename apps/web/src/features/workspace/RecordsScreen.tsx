@@ -32,6 +32,7 @@ import {
   TopBar,
   useDelayedLoading,
   ViewBar,
+  type ViewAction,
   type ViewChoice,
 } from '@crm/ui';
 import { columnWidthFor, DataGrid, type GridColumn } from '@crm/ui/grid';
@@ -72,8 +73,17 @@ export interface RecordsScreenProps {
   readonly onViewChange?: (viewId: string) => void;
   /** The switcher's Create view. */
   readonly onCreateView?: () => void;
-  /** The view's own actions in the view bar (View settings, the view menu, the lock line), before Add attribute. */
+  /** The view bar's end before the Table and Board switch: the lock line and View settings. */
   readonly viewActions?: ReactNode;
+  /** The view's own actions, under "This view" in the switcher's menu, and what runs one (spec 0020). */
+  readonly viewMenu?: { readonly actions: readonly ViewAction[]; readonly onAction: (id: string) => void };
+  /**
+   * Add attribute asked from View settings (it moved there from the view bar, 21 October 2026): a new object
+   * each time opens the attribute dialog here, which owns it.
+   */
+  readonly addAttributeRequest?: object;
+  /** The dialog that request opened has closed: `isMade` when an attribute was made (its column takes focus). */
+  readonly onAddAttributeClosed?: (isMade: boolean) => void;
   /** The view's columns (spec 0020): their order, widths, which are hidden, and how many are pinned. */
   readonly layout: ShownLayout;
   /** A column moved, resized, pinned, hidden or shown in the grid. */
@@ -174,7 +184,11 @@ function createEditors(
   return { first: [...primary, ...required], more: editable.filter((attribute) => !isFirst(attribute)) };
 }
 
-/** One object's page: the TopBar with New <singular>, the ViewBar with Add attribute, and the table. */
+/**
+ * One object's page: the TopBar with New <singular>, the ViewBar (the switcher, with the view's own actions in
+ * its menu, then View settings and the Table and Board switch), and the table. Add attribute is the grid's "+"
+ * header and the foot of View settings.
+ */
 export function RecordsScreen({
   slug,
   object,
@@ -190,6 +204,9 @@ export function RecordsScreen({
   onViewChange,
   onCreateView,
   viewActions,
+  viewMenu,
+  addAttributeRequest,
+  onAddAttributeClosed,
   layout,
   onLayoutChange,
   onAttributeCreated,
@@ -336,6 +353,16 @@ export function RecordsScreen({
   };
   const [isCreating, setCreating] = useState(false);
   const [isAdding, setAdding] = useState(false);
+  // Add attribute asked from View settings: each new request opens the dialog once, and says when it closes.
+  const [handledRequest, setHandledRequest] = useState(addAttributeRequest);
+  const [isAddingByRequest, setAddingByRequest] = useState(false);
+  if (addAttributeRequest !== handledRequest) {
+    setHandledRequest(addAttributeRequest);
+    if (addAttributeRequest !== undefined) {
+      setAdding(true);
+      setAddingByRequest(true);
+    }
+  }
   // The column menu's schema items (spec 0012): the attribute whose dialog or archive confirm is open.
   // By id, read from the live attributes: an attribute changed or archived elsewhere shows as it is, or closes.
   const [editingId, setEditing] = useState<string | undefined>(undefined);
@@ -447,6 +474,7 @@ export function RecordsScreen({
             currentViewId={currentViewId}
             onViewChange={onViewChange ?? (() => undefined)}
             {...(onCreateView === undefined ? {} : { onCreateView })}
+            {...(viewMenu === undefined ? {} : { actions: viewMenu.actions, onAction: viewMenu.onAction })}
           >
             {isReordering && <Spinner label={strings.updating} />}
             {/* In the bar, so the table never moves when the connection drops and comes back. */}
@@ -456,11 +484,6 @@ export function RecordsScreen({
               </Callout>
             )}
             {viewActions}
-            {canChangeSchema && (
-              <Button variant="ghost" icon="plus" onPress={() => setAdding(true)}>
-                {strings.addAttribute}
-              </Button>
-            )}
             {viewBarEnd}
           </ViewBar>
         ),
@@ -666,10 +689,18 @@ export function RecordsScreen({
               onClose={() => {
                 setAdding(false);
                 setEditing(undefined);
+                if (isAddingByRequest) {
+                  setAddingByRequest(false);
+                  onAddAttributeClosed?.(false);
+                }
               }}
               onSaved={(attribute, isNew) => {
                 setAdding(false);
                 setEditing(undefined);
+                if (isAddingByRequest) {
+                  setAddingByRequest(false);
+                  onAddAttributeClosed?.(true);
+                }
                 toasts.toast({
                   tone: 'success',
                   message: isNew ? strings.attributeAdded(attribute.title) : attributeStrings.saved(attribute.title),

@@ -119,7 +119,8 @@ test.describe('saved views: many views and their layout', () => {
 
     // Ada locks Pipeline; Bea's column change stays in her tab, and she may only save a draft as a view of her own
     // (AC-475, AC-476).
-    await ada.getByRole('button', { name: 'More view actions' }).click();
+    // The view's own actions sit under "This view" in the switcher's menu (21 October 2026).
+    await openSwitcher(ada, 'Pipeline');
     await ada.getByRole('menuitem', { name: 'Lock', exact: true }).click();
     await expect(ada.getByText('Locked by Ada Lovelace.')).toBeVisible();
     if (!LIVE) await bea.reload();
@@ -130,7 +131,7 @@ test.describe('saved views: many views and their layout', () => {
     await expect(header(bea, 'Job title')).toBeVisible();
     await bea.reload();
     await expect(header(bea, 'Job title')).toBeHidden();
-    await bea.getByRole('button', { name: 'More view actions' }).click();
+    await openSwitcher(bea, 'Pipeline');
     await expect(bea.getByRole('menuitem', { name: /Rename/ })).toBeDisabled();
     await expect(bea.getByRole('menuitem', { name: /Rename/ })).toContainText('This view is locked.');
     await expect(bea.getByRole('menuitem', { name: 'Lock', exact: true })).toHaveCount(0);
@@ -163,9 +164,17 @@ test.describe('saved views: many views and their layout', () => {
 
     // Ada deletes Pipeline: Bea's tab goes to the default view (AC-474), or, reloaded, finds it gone (AC-463).
     await ada.goto(pipelineUrl);
-    await ada.getByRole('button', { name: 'More view actions' }).click();
+    // It asks first: Cancel changes nothing, and the view stays.
+    await openSwitcher(ada, 'Pipeline');
     await ada.getByRole('menuitem', { name: 'Delete view' }).click();
     const confirm = ada.getByRole('alertdialog', { name: 'Delete Pipeline for everyone?' });
+    await expect(confirm).toContainText('Everyone who sees this view loses it for good, and its records stay.');
+    await confirm.getByRole('button', { name: 'Cancel' }).click();
+    await expect(confirm).toBeHidden();
+    await expect(viewBarSwitcher(ada, 'Pipeline')).toBeVisible();
+    await expect(ada).toHaveURL(new RegExp(`${pipelineUrl}$`));
+    await openSwitcher(ada, 'Pipeline');
+    await ada.getByRole('menuitem', { name: 'Delete view' }).click();
     await confirm.getByRole('button', { name: 'Delete view' }).click();
     await expect(ada).toHaveURL(new RegExp(`${defaultUrl}$`));
     await expect(ada.getByText('Deleted Pipeline.')).toBeVisible();

@@ -39,7 +39,7 @@ A meter "Attributes, N of 250" for owners and admins (a skeleton until `usage.ge
 
 ## The attribute dialog (AttributeDialog)
 
-- **Purpose**: create or edit one attribute, from settings, the table's "+" header, its column menu or the view bar's Add attribute.
+- **Purpose**: create or edit one attribute, from settings, the table's "+" header, its column menu or Add attribute at the foot of View settings.
 - **Main task**: name it, pick one of the fifteen types, set the type's settings (a Number's display, a Currency's code) and options (a Select's or Multi select's, a Status's stages, starting from Not started, In progress and Done), Required, Unique and Allow multiple where the type takes them and a default, then Create attribute or Save.
 - **Leaves out**: changing a type (#14). Relationship, last in the type picker for owners and admins, hands over to the relationship dialog below with the name typed so far, and a side of a two way relationship opens that dialog in edit mode.
 
