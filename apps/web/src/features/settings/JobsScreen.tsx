@@ -16,7 +16,7 @@ import {
   type IconName,
   type TableColumn,
 } from '@crm/ui';
-import { useEffect, useRef, useState, type RefObject } from 'react';
+import { useEffect, useState } from 'react';
 import { useMatch } from '@tanstack/react-router';
 import { recordsWord, type ObjectNames } from '../workspace/undo.ts';
 import { useCan, useMyAccess } from '../workspace/WorkspacePage.tsx';
@@ -134,7 +134,8 @@ export function JobsScreen({ data, slug, view, isAll, members: loaded, canRunTes
   };
   const [isStarting, setStarting] = useState(false);
   const [members, setMembers] = useState(loaded);
-  const titleRef = useRef<HTMLHeadingElement>(null);
+  // The jobs table, by its name: where focus goes when the control in use went with its job.
+  const jobsTable = () => document.querySelector<HTMLElement>(`[aria-label=${JSON.stringify(strings.tableLabel)}]`);
   // A starter the member list doesn't hold may have joined since it loaded: read it again (the layer keeps it
   // fresh on members events) before calling them "A removed member". Once per set of unknown starters.
   const unknown = snapshot.jobs
@@ -240,7 +241,7 @@ export function JobsScreen({ data, slug, view, isAll, members: loaded, canRunTes
           slug={slug}
           ask={asking}
           live={asking === undefined ? undefined : snapshot.jobs.find((job) => job.id === asking.job.id)}
-          titleRef={titleRef}
+          focusTarget={jobsTable}
           onClose={() => {
             setAsking(undefined);
           }}
@@ -251,7 +252,6 @@ export function JobsScreen({ data, slug, view, isAll, members: loaded, canRunTes
   return (
     <SettingsPage
       title={strings.title}
-      titleRef={titleRef}
       {...(canRunTest
         ? {
             actions: (
@@ -325,7 +325,7 @@ function jobConfirmWords(ask: JobAsk): {
  * Confirm or Cancel on a job, asked first (the house rule in Modal's README). The commit waits for the server;
  * the jobs store shows the change at once and says a refusal itself (a toast, the row put back), so the dialog
  * closes either way. Its trigger goes with the change (Confirm leaves a queued row, Cancel a cancelled one), so
- * focus that would fall to the page goes to the title.
+ * focus that would fall to the page goes to the jobs table.
  */
 function JobConfirmDialog({
   ask,
@@ -336,7 +336,8 @@ function JobConfirmDialog({
   readonly ask: JobAsk | undefined;
   /** The job as the store holds it now: once it no longer waits on this question, the dialog closes. */
   readonly live: JobView | undefined;
-  readonly titleRef: RefObject<HTMLHeadingElement | null>;
+  /** Where focus goes when it would fall to the page: the jobs table (the bar's title is hidden under its trail). */
+  readonly focusTarget: () => HTMLElement | null;
   readonly onClose: () => void;
 }) {
   // The last question stays while the Modal plays its exit; each one mounts afresh.
@@ -355,7 +356,7 @@ function JobConfirm({
   ask,
   live,
   isOpen,
-  titleRef,
+  focusTarget,
   onClose,
 }: {
   readonly data: DataLayer;
@@ -363,7 +364,8 @@ function JobConfirm({
   readonly ask: JobAsk;
   readonly live: JobView | undefined;
   readonly isOpen: boolean;
-  readonly titleRef: RefObject<HTMLHeadingElement | null>;
+  /** Where focus goes when it would fall to the page: the jobs table (the bar's title is hidden under its trail). */
+  readonly focusTarget: () => HTMLElement | null;
   readonly onClose: () => void;
 }) {
   const [isBusy, setBusy] = useState(false);
@@ -380,7 +382,7 @@ function JobConfirm({
     const settle = () => {
       setBusy(false);
       onClose();
-      focusLater(() => (document.activeElement === document.body ? titleRef.current : undefined));
+      focusLater(() => (document.activeElement === document.body ? focusTarget() : undefined));
     };
     answer.then(settle, settle);
   };

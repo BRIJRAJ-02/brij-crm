@@ -104,8 +104,12 @@ export function useViewMenu({
     switch (reason) {
       case 'locked':
         return strings.viewLocked;
+      // Only someone who may choose the default can act on "make another view the default first"; and the
+      // workspace's own view (no creator) stays shared whatever the default is.
       case 'default':
-        return strings.defaultFirstFix;
+        return canManage && !(action === 'makePrivate' && view.creatorMemberId === undefined)
+          ? strings.defaultFirstFix
+          : null;
       case 'creatorGone':
         return strings.creatorGone;
       case 'notCreator':
