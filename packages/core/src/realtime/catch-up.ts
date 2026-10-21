@@ -51,6 +51,7 @@ type IdField =
   | 'noteIds'
   | 'taskIds'
   | 'meetingIds'
+  | 'scheduleIds'
   | 'memberIds'
   | 'jobIds';
 
@@ -66,6 +67,7 @@ const MERGED: Readonly<Record<Kind, readonly IdField[]>> = {
   notes: ['recordIds', 'noteIds'],
   tasks: ['recordIds', 'taskIds'],
   meetings: ['recordIds', 'meetingIds'],
+  schedules: ['scheduleIds'],
   members: ['memberIds'],
   access: ['memberIds'],
   jobs: ['jobIds'],
@@ -80,6 +82,7 @@ const CAPPED: Readonly<Record<Kind, readonly IdField[]>> = {
   notes: ['recordIds', 'noteIds'],
   tasks: ['recordIds', 'taskIds'],
   meetings: ['recordIds', 'meetingIds'],
+  schedules: ['scheduleIds'],
   members: [],
   access: [],
   jobs: ['jobIds'],

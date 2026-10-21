@@ -18,12 +18,11 @@ import {
   createBookingPage,
   deleteBookingPage,
   getBookingPage,
-  getMemberHours,
   listBookingPages,
   listBookings,
-  setMemberHours,
   updateBookingPage,
 } from './pages.ts';
+import { readDefaultHours as getMemberHours, saveDefaultHours as setMemberHours } from '../availability/schedules.ts';
 import {
   bookPublicSlot,
   getPublicBookingPage,
@@ -504,8 +503,8 @@ describe('a member’s own hours (Bookings › Availability)', () => {
     const w = await workspace();
     const bea = await w.addMember('bea', 'member');
     expect((await getMemberHours(w.owner, { timeZone: 'UTC' })).availability.weekly.mon).toEqual([['09:00', '17:00']]);
-    const { page, entry } = await livePage(w, { hoursMode: 'mine' });
-    expect(page.hoursMode).toBe('mine');
+    const { page, entry } = await livePage(w);
+    expect(page.scheduleId).toBeNull();
     expect((await mondaySlots(entry)).slots).toHaveLength(16);
     const mine = (await getMemberHours(w.owner, { timeZone: 'UTC' })).availability;
     await setMemberHours(w.owner, {

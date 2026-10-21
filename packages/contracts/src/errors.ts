@@ -74,6 +74,12 @@ export const ERROR_MAP = {
   INVITE_EMAIL_MISMATCH: { status: 403 },
   INVITES_LIMIT: CONFLICT,
   SEAT_LIMIT: CONFLICT,
+  // Availability schedules (spec 0035, AC-961, AC-962, AC-966): "You have 20 schedules", a stale editor, "Set
+  // another schedule as default first", and a page naming a schedule its owner doesn't hold.
+  SCHEDULE_LIMIT: CONFLICT,
+  STALE: CONFLICT,
+  DEFAULT_SCHEDULE: CONFLICT,
+  SCHEDULE_NOT_ALLOWED: UNPROCESSABLE,
   PAYLOAD_TOO_LARGE: { status: 413 },
   ATTRIBUTE_VALUE_INVALID: UNPROCESSABLE,
   VALUE_REQUIRED: UNPROCESSABLE,

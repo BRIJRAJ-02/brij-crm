@@ -6,17 +6,24 @@ import {
   moveBooking,
   readMoveSlots,
   createBookingPage,
+  createSchedule,
   createTimeBlock,
   deleteBookingPage,
+  deleteSchedule,
+  duplicateSchedule,
   getBookingPage,
-  getMemberHours,
+  getSchedule,
   listBookingPages,
   listBookings,
+  listSchedules,
   listWorkspaceBookings,
   readBookingsCalendar,
+  readDefaultHours,
   removeTimeBlock,
-  setMemberHours,
+  saveDefaultHours,
+  setDefaultSchedule,
   updateBookingPage,
+  updateSchedule,
 } from '@crm/core';
 import { withInputFields } from '../../errors.ts';
 import { commitWrite } from '../../hooks.ts';
@@ -68,13 +75,13 @@ export const bookingsRouter = member.bookings.router({
   calendar: member.bookings.calendar.handler(({ context, input }) =>
     readBookingsCalendar(context.scope, { from: input.from, to: input.to }),
   ),
-  // The member's own hours and days off (Bookings › Availability), which their pages may follow.
+  // The member's default schedule's hours (spec 0035; `schedules.*` is the full surface).
   hours: member.bookings.hours.handler(({ context, input }) =>
-    getMemberHours(context.scope, { timeZone: input.timeZone }),
+    readDefaultHours(context.scope, { timeZone: input.timeZone }),
   ),
   setHours: member.bookings.setHours.handler(({ context, input }) =>
-    commitWrite(context, { mutationId: input.mutationId }, () =>
-      setMemberHours(context.scope, { availability: input.availability }),
+    commitWrite(context, { mutationId: input.mutationId }, (hooks) =>
+      saveDefaultHours(context.scope, { availability: input.availability }, hooks),
     ),
   ),
   // Book someone in (spec 0027): a booking in the member's own time, its records live, its event after the commit.
@@ -151,4 +158,58 @@ export const bookingsRouter = member.bookings.router({
       commitWrite(context, { mutationId: input.mutationId }, () => removeTimeBlock(context.scope, { id: input.id })),
     ),
   },
+});
+
+// Availability schedules (spec 0035): a member's named hours, their own with `booking.manage`, anyone's with
+// `booking.admin`. Every write stores one `schedules` outbox row (ids only), so the member's other tabs read again.
+export const schedulesRouter = member.schedules.router({
+  list: member.schedules.list.handler(({ context, input }) =>
+    listSchedules(context.scope, { memberId: input.memberId, timeZone: input.timeZone }),
+  ),
+  get: member.schedules.get.handler(({ context, input }) => getSchedule(context.scope, { id: input.id })),
+  create: member.schedules.create.handler(async ({ context, input }) => {
+    try {
+      return await commitWrite(context, { mutationId: input.mutationId }, (hooks) =>
+        createSchedule(
+          context.scope,
+          {
+            id: input.id,
+            memberId: input.memberId,
+            name: input.name,
+            timeZone: input.timeZone,
+            availability: input.availability,
+            isDefault: input.isDefault,
+          },
+          hooks,
+        ),
+      );
+    } catch (error) {
+      throw withInputFields(error, { ID_TAKEN: 'id' });
+    }
+  }),
+  update: member.schedules.update.handler(({ context, input }) =>
+    commitWrite(context, { mutationId: input.mutationId }, (hooks) =>
+      updateSchedule(
+        context.scope,
+        { id: input.id, name: input.name, availability: input.availability, updatedAt: input.updatedAt },
+        hooks,
+      ),
+    ),
+  ),
+  setDefault: member.schedules.setDefault.handler(({ context, input }) =>
+    commitWrite(context, { mutationId: input.mutationId }, (hooks) =>
+      setDefaultSchedule(context.scope, { id: input.id }, hooks),
+    ),
+  ),
+  duplicate: member.schedules.duplicate.handler(({ context, input }) =>
+    commitWrite(context, { mutationId: input.mutationId }, (hooks) =>
+      duplicateSchedule(context.scope, { id: input.id, newId: input.newId }, hooks),
+    ),
+  ),
+  delete: member.schedules.delete.handler(async ({ context, input }) => {
+    const deleted = await commitWrite(context, { mutationId: input.mutationId }, (hooks) =>
+      deleteSchedule(context.scope, { id: input.id }, hooks),
+    );
+    return { id: deleted.id, repointed: { pages: deleted.repointed.pages } };
+  }),
 });

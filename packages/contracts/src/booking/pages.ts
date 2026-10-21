@@ -14,7 +14,8 @@ import {
   TimeBlockView,
 } from './blocks.ts';
 import { CANCEL_REASON_MAX, PublicSlots } from './public.ts';
-import { BookingLocation, BookingPageSettings } from './settings.ts';
+import { ScheduleHours } from './schedules.ts';
+import { BookingAvailability, BookingLocation, BookingPageSettings, TimeZoneName } from './settings.ts';
 import { Uuid, uuidV7 } from '../values/ids.ts';
 
 /** A page as a member sees it in Settings › Booking pages. */
@@ -23,6 +24,10 @@ export const BookingPageView = BookingPageSettings.extend({
   publicKey: z.string(),
   kind: z.enum(['personal', 'collective', 'round_robin']),
   ownerMemberId: Uuid,
+  /** The hours the page books by now: its schedule's, or the owner's default's (spec 0035), read only here. */
+  availability: BookingAvailability,
+  /** That schedule's name ("Working hours" while its owner has saved none), read only here. */
+  scheduleName: z.string(),
   /** Confirmed bookings starting this calendar month (UTC). */
   bookingsThisMonth: z.number().int().min(0),
   /** The reader may change it: their own page with `booking.manage`, anyone's with `booking.admin`. */
@@ -43,6 +48,20 @@ export const GetBookingPageInput = WorkspaceScoped.extend({ pageId: Uuid });
 /** One page. */
 export type GetBookingPageInput = z.infer<typeof GetBookingPageInput>;
 
+const RELOAD_MESSAGE = 'Reload the app: a page’s hours now come from its schedule.';
+
+/**
+ * A page's settings as a write sends them. For one release after spec 0035 a
+ * tab still running the old app may send `hoursMode` or `availability`: they
+ * are refused, so its change is never silently dropped (AC-975).
+ */
+export const BookingPageSettingsWrite = BookingPageSettings.partial().extend({
+  hoursMode: z.never({ error: RELOAD_MESSAGE }).optional(),
+  availability: z.never({ error: RELOAD_MESSAGE }).optional(),
+});
+/** A page's settings as a write sends them. */
+export type BookingPageSettingsWrite = z.infer<typeof BookingPageSettingsWrite>;
+
 /**
  * A new personal page for the caller. `id` is a UUID v7 the browser mints, and
  * the retry key. Settings left out take their defaults: 30 minutes on video,
@@ -52,8 +71,9 @@ export type GetBookingPageInput = z.infer<typeof GetBookingPageInput>;
 export const CreateBookingPageInput = WorkspaceScoped.extend({
   id: uuidV7('The page id must be a UUID v7.'),
   title: BookingPageSettings.shape.title,
-  timeZone: BookingPageSettings.shape.availability.shape.timeZone,
-  settings: BookingPageSettings.partial().optional(),
+  /** The creator's zone: the virtual default's, while the owner has saved no schedule (spec 0035, AC-963). */
+  timeZone: TimeZoneName,
+  settings: BookingPageSettingsWrite.optional(),
   mutationId: Uuid,
 });
 /** A new personal page. */
@@ -62,7 +82,7 @@ export type CreateBookingPageInput = z.infer<typeof CreateBookingPageInput>;
 /** A change to a page: only the settings given. */
 export const UpdateBookingPageInput = WorkspaceScoped.extend({
   pageId: Uuid,
-  settings: BookingPageSettings.partial(),
+  settings: BookingPageSettingsWrite,
   mutationId: Uuid,
 });
 /** A change to a page. */
@@ -113,21 +133,21 @@ export const bookingPagesContract = {
   delete: oc.input(DeleteBookingPageInput).output(z.object({ pageId: Uuid })),
 };
 
-/** A member's own hours and days off, which their pages may follow. */
-export const MemberHours = z.object({ availability: BookingPageSettings.shape.availability });
+/** A member's default schedule's hours and days off (spec 0035: `schedules.*` is the full surface). */
+export const MemberHours = z.object({ availability: BookingAvailability });
 /** A member's own hours. */
 export type MemberHours = z.infer<typeof MemberHours>;
 
 /** The caller's own hours; never set yet, weekdays 09:00 to 17:00 in `timeZone`. */
 export const GetMemberHoursInput = WorkspaceScoped.extend({
-  timeZone: BookingPageSettings.shape.availability.shape.timeZone,
+  timeZone: TimeZoneName,
 });
 /** The caller's own hours. */
 export type GetMemberHoursInput = z.infer<typeof GetMemberHoursInput>;
 
-/** Replaces the caller's own hours. */
+/** Replaces the caller's default schedule's hours, every time on a 15 minute step (spec 0035, AC-961). */
 export const UpdateMemberHoursInput = WorkspaceScoped.extend({
-  availability: BookingPageSettings.shape.availability,
+  availability: ScheduleHours,
   mutationId: Uuid,
 });
 /** Replaces the caller's own hours. */

@@ -79,6 +79,9 @@ const READS: ReadonlySet<string> = new Set([
   // Where a booking could move (its page's slots), and the guest page's address: both read only.
   'bookings.moveSlots',
   'bookings.guestLink',
+  // Availability schedules (spec 0035).
+  'schedules.list',
+  'schedules.get',
 ]);
 
 let db: Database;
@@ -204,6 +207,22 @@ async function linkPair(m: Member) {
     mutationId: newId(),
   });
   return { personId, companyId, team };
+}
+
+/**
+ * A schedule of the member's (spec 0035), not their default, and the ids its write's `schedules` row names: their
+ * first schedule stores their virtual default beside it.
+ */
+async function schedule(m: Member) {
+  const made = await m.client.schedules.create({
+    workspace: m.slug,
+    id: newId(),
+    name: 'Evenings',
+    timeZone: 'UTC',
+    mutationId: newId(),
+  });
+  const { schedules } = await m.client.schedules.list({ workspace: m.slug, timeZone: 'UTC' });
+  return { made, named: schedules.map((each) => each.id ?? '').sort() };
 }
 
 /**
@@ -976,10 +995,76 @@ const WRITES: Record<string, (m: Member, mutationId: string) => Promise<readonly
     await m.client.bookingPages.delete({ workspace: m.slug, pageId: page.id, mutationId });
     return [];
   },
+  // The default schedule's hours (spec 0035): the first save stores "Working hours", one `schedules` row.
   'bookings.setHours': async (m, mutationId) => {
     const { availability } = await m.client.bookings.hours({ workspace: m.slug, timeZone: 'UTC' });
     await m.client.bookings.setHours({ workspace: m.slug, availability, mutationId });
-    return [];
+    const { schedules } = await m.client.schedules.list({ workspace: m.slug, timeZone: 'UTC' });
+    return [{ kind: 'schedules', item_ids: [schedules[0]?.id ?? ''], mutation_id: mutationId }];
+  },
+  // Availability schedules (spec 0035): one `schedules` row per write, its schedule ids only. A member's first
+  // schedule stores their virtual default beside it, so its row names both.
+  'schedules.create': async (m, mutationId) => {
+    await m.client.schedules.create({
+      workspace: m.slug,
+      id: newId(),
+      name: 'Evenings',
+      timeZone: 'UTC',
+      mutationId,
+    });
+    const { schedules } = await m.client.schedules.list({ workspace: m.slug, timeZone: 'UTC' });
+    return [
+      {
+        kind: 'schedules',
+        item_ids: schedules.map((each) => each.id ?? '').sort(),
+        mutation_id: mutationId,
+      },
+    ];
+  },
+  'schedules.update': async (m, mutationId) => {
+    const { made, named } = await schedule(m);
+    await m.client.schedules.update({
+      workspace: m.slug,
+      id: made.id ?? '',
+      name: 'Late',
+      updatedAt: made.updatedAt ?? '',
+      mutationId,
+    });
+    return [
+      { kind: 'schedules', item_ids: named },
+      { kind: 'schedules', item_ids: [made.id ?? ''], mutation_id: mutationId },
+    ];
+  },
+  // The mark moves: its row names the new default and the old one.
+  'schedules.setDefault': async (m, mutationId) => {
+    const { made, named } = await schedule(m);
+    const old = named.find((id) => id !== made.id) ?? '';
+    await m.client.schedules.setDefault({ workspace: m.slug, id: made.id ?? '', mutationId });
+    return [
+      { kind: 'schedules', item_ids: named },
+      { kind: 'schedules', item_ids: [made.id ?? '', old].sort(), mutation_id: mutationId },
+    ];
+  },
+  'schedules.duplicate': async (m, mutationId) => {
+    const { made, named } = await schedule(m);
+    const copy = await m.client.schedules.duplicate({
+      workspace: m.slug,
+      id: made.id ?? '',
+      newId: newId(),
+      mutationId,
+    });
+    return [
+      { kind: 'schedules', item_ids: named },
+      { kind: 'schedules', item_ids: [copy.id ?? ''], mutation_id: mutationId },
+    ];
+  },
+  'schedules.delete': async (m, mutationId) => {
+    const { made, named } = await schedule(m);
+    await m.client.schedules.delete({ workspace: m.slug, id: made.id ?? '', mutationId });
+    return [
+      { kind: 'schedules', item_ids: named },
+      { kind: 'schedules', item_ids: [made.id ?? ''], mutation_id: mutationId },
+    ];
   },
   'bookings.bookAsHost': async (m, mutationId) => {
     const page = await m.client.bookingPages.create({
@@ -1270,6 +1355,11 @@ const WRITES_MADE: Readonly<Record<string, number>> = {
   'bookings.bookAsHost': 2,
   'bookings.cancel': 3,
   'bookings.move': 3,
+  // A schedule made first, then the write (spec 0035).
+  'schedules.update': 2,
+  'schedules.setDefault': 2,
+  'schedules.duplicate': 2,
+  'schedules.delete': 2,
   'attributes.restore': 2,
   'relationships.update': 2,
   'links.add': 3,

@@ -240,6 +240,7 @@ describe('the meetings outbox row (AC-610)', () => {
     tasks: [],
     notes: [],
     meetings,
+    schedules: [],
   });
   const id = (n: number) => `00000000-0000-7000-8000-${String(n).padStart(12, '0')}`;
 

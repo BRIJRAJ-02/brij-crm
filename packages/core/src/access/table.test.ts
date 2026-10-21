@@ -143,6 +143,9 @@ const NO_SCOPE: ReadonlySet<string> = new Set([
   'finishEmail',
   'emailLinkToken',
   'readEmailLinkToken',
+  // Availability schedules (spec 0035): the resolvers run inside a caller's transaction (the slot read), no scope.
+  'defaultSchedule',
+  'scheduleFor',
 ]);
 
 const exported = { ...core, ...system } as Record<string, unknown>;
@@ -302,8 +305,6 @@ describe('the walk: a principal without the access is refused', () => {
           'listWorkspaceBookings',
           'readBookingsCalendar',
           'createBookingPage',
-          'getMemberHours',
-          'setMemberHours',
           'createTimeBlock',
           'removeTimeBlock',
           'bookAsHost',
@@ -318,6 +319,32 @@ describe('the walk: a principal without the access is refused', () => {
       expect(await refusalOf(service(name)(scope, { pageId: page.id, settings: {}, when: 'upcoming' }))).toMatchObject({
         code: 'NOT_FOUND',
       });
+    },
+  );
+
+  it.each(entries.filter(([, entry]) => 'schedules' in entry).map(([name]) => name))(
+    '%s refuses a principal without booking.manage, and answers another member’s schedule as absent',
+    async (name) => {
+      const { scope, workspaceId, ownerId } = await memberOf('member');
+      const key = testScope({ db, workspaceId, actor: { type: 'api_key', id: core.newId() }, scopes: [] });
+      expect(await refusalOf(service(name)(key, { timeZone: 'UTC', id: core.newId(), name: 'X' }))).toEqual({
+        code: 'FORBIDDEN',
+        message: PERMISSIONS['booking.manage'].message,
+      });
+      if (['readDefaultHours', 'saveDefaultHours'].includes(name)) return;
+      const owner = testScope({ db, workspaceId, actor: { type: 'member', id: ownerId } });
+      const theirs = await core.createSchedule(owner, { id: core.newId(), name: 'Evenings', timeZone: 'UTC' });
+      if (['listSchedules', 'createSchedule'].includes(name)) {
+        expect(
+          await refusalOf(service(name)(scope, { memberId: ownerId, timeZone: 'UTC', id: core.newId(), name: 'Mine' })),
+        ).toMatchObject({ code: 'FORBIDDEN' });
+        return;
+      }
+      expect(
+        await refusalOf(
+          service(name)(scope, { id: theirs.id, newId: core.newId(), updatedAt: theirs.updatedAt, name: 'Y' }),
+        ),
+      ).toMatchObject({ code: 'NOT_FOUND' });
     },
   );
 

@@ -16,6 +16,8 @@ const minutesOf = (time: string): number => {
 /** What's wrong with a day's windows, or undefined. */
 export function rangesProblem(ranges: readonly (readonly [string, string])[]): string | undefined {
   if (ranges.some(([start, end]) => minutesOf(end) <= minutesOf(start))) return strings.endBeforeStart;
+  // A schedule's times sit on 15 minute steps (spec 0035, AC-961); the server refuses any other.
+  if (ranges.some((range) => range.some((time) => minutesOf(time) % 15 !== 0))) return strings.quarterHour;
   const sorted = [...ranges].sort((a, b) => minutesOf(a[0]) - minutesOf(b[0]));
   for (let index = 1; index < sorted.length; index += 1) {
     if (minutesOf(sorted[index]?.[0] ?? '00:00') < minutesOf(sorted[index - 1]?.[1] ?? '00:00')) return strings.overlap;
@@ -40,6 +42,22 @@ export function availabilityIsValid(availability: BookingAvailability): boolean 
   );
 }
 
+/**
+ * Whether two sets of hours are the same hours: the week day by day, the zone, and the date overrides whatever
+ * their order. A save hands back the same hours the editor sent, so this is what says nothing is unsaved.
+ */
+export function sameHours(a: BookingAvailability, b: BookingAvailability): boolean {
+  const canonical = (hours: BookingAvailability) =>
+    JSON.stringify([
+      hours.timeZone,
+      WEEKDAYS.map((day) => hours.weekly[day]),
+      [...hours.overrides]
+        .sort((x, y) => (x.date < y.date ? -1 : x.date > y.date ? 1 : 0))
+        .map((override) => [override.date, override.ranges, override.note ?? '']),
+    ]);
+  return canonical(a) === canonical(b);
+}
+
 /** The availability with one day's windows replaced. */
 export function withDay(
   availability: BookingAvailability,
@@ -50,16 +68,6 @@ export function withDay(
   return {
     ...availability,
     weekly: { ...availability.weekly, [day]: ranges.map((range): TimeRange => [range[0], range[1]]) },
-  };
-}
-
-/** Every day open all day: the new page's "Any time". */
-export function anyTime(timeZone: string): BookingAvailability {
-  const allDay: TimeRange[] = [['00:00', '24:00']];
-  return {
-    timeZone,
-    weekly: { mon: allDay, tue: allDay, wed: allDay, thu: allDay, fri: allDay, sat: allDay, sun: allDay },
-    overrides: [],
   };
 }
 

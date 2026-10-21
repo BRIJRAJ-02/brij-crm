@@ -18,6 +18,7 @@ const SAMPLES: Readonly<Record<ChangeEvent['kind'], ChangeEvent>> = {
   notes: { seq: 1, at: AT, kind: 'notes', recordIds: [ID], noteIds: [ID] },
   tasks: { seq: 1, at: AT, kind: 'tasks', recordIds: [ID], taskIds: [ID], coarse: true },
   meetings: { seq: 1, at: AT, kind: 'meetings', recordIds: [ID], meetingIds: [ID] },
+  schedules: { seq: 1, at: AT, kind: 'schedules', scheduleIds: [ID] },
   members: { seq: 1, at: AT, kind: 'members', memberIds: [ID] },
   access: { seq: 1, at: AT, kind: 'access', memberIds: [ID] },
   jobs: { seq: 1, at: AT, kind: 'jobs', jobIds: [ID] },

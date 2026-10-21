@@ -90,6 +90,14 @@ export function outboxEvent(row: OutboxRow): EventRow | undefined {
         meetingIds: copy(row.itemIds),
         ...coarse,
       };
+    case 'schedules':
+      return {
+        ...place,
+        kind: 'schedules',
+        scheduleIds: copy(row.itemIds),
+        ...coarse,
+        ...(row.actorMemberId === undefined ? {} : { actorMemberId: row.actorMemberId }),
+      };
     case 'members':
       return { ...place, kind: 'members', memberIds: copy(row.itemIds) };
     case 'access':
@@ -114,7 +122,7 @@ export function stubEvent(seq: number, at: string): ChangeEvent {
 }
 
 /**
- * An event as it leaves the server: never the job starter (`actorMemberId`
+ * An event as it leaves the server: never a job's starter or a schedules row's writer (`actorMemberId`
  * is read by the access filter only), and `coarse` only when true, the shape
  * spec 0005's browsers parse.
  */

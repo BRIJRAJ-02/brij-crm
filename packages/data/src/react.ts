@@ -16,6 +16,7 @@ import type {
 } from './email-preferences.ts';
 import type { JobView } from '@crm/contracts';
 import type { JobsSnapshot, JobsView } from './jobs/store.ts';
+import type { SchedulesState, SchedulesView } from './schedules/store.ts';
 import type { LiveStatus } from './live/live.ts';
 import type { PendingOptions } from './options.ts';
 import type { RecordsView, ViewReader, ViewState } from './records/layer.ts';
@@ -344,4 +345,24 @@ export function useEmailPreferences(store: EmailPreferencesStore): EmailPreferen
 /** A one click unsubscribe page's state (the emails lane): asking, saving, done or refused. */
 export function useEmailUnsubscribe(store: EmailUnsubscribeStore): EmailUnsubscribeState {
   return useSyncExternalStore(store.subscribe, store.getSnapshot, store.getSnapshot);
+}
+
+/** Stands in for no schedules view: never held, never read, always loading. */
+const NO_SCHEDULES: SchedulesView = {
+  subscribe: () => () => undefined,
+  getSnapshot: () => SCHEDULES_LOADING,
+  retain: () => () => undefined,
+  ready: () => Promise.resolve(),
+  reload: () => undefined,
+};
+const SCHEDULES_LOADING: SchedulesState = { status: 'loading' };
+
+/**
+ * A member's availability schedules (spec 0035), re-rendering when they
+ * change. Held while the screen is mounted, so a save in another tab shows.
+ * Pass undefined while nothing needs them (a closed dialog, a reader who may
+ * not read them): nothing is held or read, and the state stays loading.
+ */
+export function useSchedules(view: SchedulesView | undefined): SchedulesState {
+  return useRetained(view ?? NO_SCHEDULES);
 }

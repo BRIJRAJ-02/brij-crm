@@ -159,6 +159,8 @@ export interface Change {
   readonly notes: readonly NoteChange[];
   /** Meetings the write synced, changed or removed (spec 0024), each with every record shown on before or after. */
   readonly meetings: readonly MeetingChange[];
+  /** Availability schedules the write made, changed or deleted (spec 0035), by id. */
+  readonly schedules: readonly string[];
   /**
    * The background job whose batch made this write (spec 0022, milestone 3):
    * the outbox stores it in `outbox.job_id`, never published, and its
@@ -309,6 +311,7 @@ const LIST_KEYS = [
   'tasks',
   'notes',
   'meetings',
+  'schedules',
 ] as const satisfies readonly (keyof ChangeLists)[];
 
 /**
@@ -426,6 +429,7 @@ export async function runWrite<T>(
           tasks: [] as TaskChange[],
           notes: [] as NoteChange[],
           meetings: [] as MeetingChange[],
+          schedules: [] as string[],
         };
         const context: WriteContext = {
           tx,
@@ -456,6 +460,7 @@ export async function runWrite<T>(
             append(collected.tasks, part.tasks);
             append(collected.notes, part.notes);
             append(collected.meetings, part.meetings);
+            append(collected.schedules, part.schedules);
           },
           async perRecord(step) {
             const marks = LIST_KEYS.map((key) => collected[key].length);
@@ -500,6 +505,7 @@ export async function runWrite<T>(
           tasks: [...collected.tasks],
           notes: [...collected.notes],
           meetings: [...collected.meetings],
+          schedules: [...new Set(collected.schedules)],
           ...(options.jobId === undefined ? {} : { jobId: options.jobId }),
         };
         for (const hook of hooks) await hook(change, tx);

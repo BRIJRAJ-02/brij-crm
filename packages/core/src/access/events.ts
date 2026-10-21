@@ -15,11 +15,18 @@ export type { Replaced };
 /** An event as an audience receives it: every kind of `ChangeEvent` but the stub, which the relay makes. */
 export type AudienceEvent = Exclude<ChangeEvent, { kind: 'restricted' }>;
 
-/** One outbox row as the relay reads it, by kind: the published event, and for `jobs` the job's starter. */
+/**
+ * One outbox row as the relay reads it, by kind: the published event, for `jobs` the job's starter, and for
+ * `schedules` (spec 0035) the member who wrote them.
+ */
 export type EventRow =
-  | Exclude<AudienceEvent, { kind: 'jobs' }>
+  | Exclude<AudienceEvent, { kind: 'jobs' | 'schedules' }>
   | (Extract<AudienceEvent, { kind: 'jobs' }> & {
       /** The job's starter: read here, never published. */
+      readonly actorMemberId?: string;
+    })
+  | (Extract<AudienceEvent, { kind: 'schedules' }> & {
+      /** The member whose write it was: read here, never published. */
       readonly actorMemberId?: string;
     });
 
@@ -32,6 +39,7 @@ export const EVENT_KINDS = [
   'notes',
   'tasks',
   'meetings',
+  'schedules',
   'members',
   'access',
   'jobs',
@@ -331,6 +339,16 @@ export function filterEvent(audience: Audience, row: EventRow, facts: EventFacts
       const cut = !sameList(recordIds, row.recordIds);
       const removed = cut || !sameList(meetingIds, row.meetingIds);
       return settle({ ...row, meetingIds, recordIds, ...(cut ? { coarse: true } : {}) }, removed);
+    }
+    // Schedule ids (spec 0035, AC-971) only to an audience that may read those schedules: the member who wrote them
+    // (their own, or as an admin) and `booking.admin`. Everyone else hears that schedules changed, with no ids, and
+    // reads what they may through the door; hidden means absent.
+    case 'schedules': {
+      const { actorMemberId, ...event } = row;
+      const readsSchedules = (member: AudienceMember) =>
+        member.memberId === actorMemberId || member.permissions.includes('booking.admin');
+      if (audience.members.length > 0 && audience.members.every(readsSchedules)) return event;
+      return settle({ ...event, scheduleIds: [], coarse: true }, true);
     }
     case 'members':
     case 'access':
