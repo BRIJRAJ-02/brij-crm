@@ -34,13 +34,13 @@ export type ImportJobParams = z.infer<typeof ImportJobParams>;
 export const IMPORT_BATCH = 100;
 
 /** One staged row as the job reads it. */
-interface StagedRow {
+type StagedRow = {
   readonly id: string;
   readonly row_number: number;
   readonly values: unknown;
   readonly match_keys: string[];
   readonly outcome: string;
-}
+};
 
 /** What one batch knows of its import: settings, object, attributes, and each relation column's far objects. */
 interface ImportPlan {

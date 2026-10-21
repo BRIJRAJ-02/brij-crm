@@ -222,6 +222,14 @@ export const ACCESS_TABLE = {
   exportFile: { data: 'read' },
   exportPart: { data: 'read' },
   deleteSubmission: { permission: 'forms.manage' },
+  // Imports (spec 0040): write on the object to create, stage, start and undo (only the starter stages and starts;
+  // the starter or jobs.manage undoes); the starter or jobs.manage reads one back. The job writes as the member.
+  createImport: { data: 'write' },
+  stageImportRows: { data: 'write' },
+  startImport: { data: 'write' },
+  undoImport: { data: 'write' },
+  getImport: { data: 'read' },
+  listImportRefusals: { data: 'read' },
   getPublicForm: { publicForm: true },
   submitForm: { publicForm: true },
   postingRules: { publicForm: true },

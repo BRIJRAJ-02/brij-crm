@@ -1,11 +1,10 @@
-// Import and export (spec 0040). An import is a row in `imports` with its
-// settings; the browser stages its ready rows in `import_rows` (typed values,
-// never the file), and the `records.import` job writes each one through the
-// engine, storing its outcome, the record and what it replaced beside it, so
-// undo is exact. An export is a row in `exports`, and the `records.export` job
-// appends the CSV text to `export_chunks`, kept 7 days. All four force row
-// level security with the standard policy (hand written in the migration),
-// and every index leads with the workspace.
+// Imports (spec 0040). An import is a row in `imports` with its settings; the
+// browser stages its ready rows in `import_rows` (typed values, never the
+// file), and the `records.import` job writes each one through the engine,
+// storing its outcome, the record and what it replaced beside it, so undo is
+// exact. Exports share `exports` and `export_chunks` (`exports.ts`). Both
+// tables force row level security with the standard policy (hand written in
+// the migration), and every index leads with the workspace.
 import { sql } from 'drizzle-orm';
 import {
   check,
@@ -69,16 +68,19 @@ export const imports = pgTable(
       name: 'imports_object',
       columns: [t.workspaceId, t.objectId],
       foreignColumns: [objects.workspaceId, objects.id],
-    }),
+    }).onDelete('cascade'),
     foreignKey({
       name: 'imports_created_by',
       columns: [t.workspaceId, t.createdByMemberId],
       foreignColumns: [members.workspaceId, members.id],
-    }),
+    }).onDelete('cascade'),
     check('imports_counts', sql`${t.rowCount} >= 0 and ${t.errorRows} >= 0 and ${t.errorRows} <= ${t.rowCount}`),
     check('imports_file_name', sql`char_length(${t.fileName}) between 1 and 255`),
     // The unfinished count (the limit) and the cleanup: imports by status and age.
     index('imports_status').on(t.workspaceId, t.status, t.createdAt),
+    // The cascades from an object or a member.
+    index('imports_by_object').on(t.workspaceId, t.objectId),
+    index('imports_by_member').on(t.workspaceId, t.createdByMemberId),
   ],
 );
 
@@ -118,60 +120,5 @@ export const importRows = pgTable(
     check('import_rows_number', sql`${t.rowNumber} >= 2`),
     // The summary's refused rows, and undo's created and updated rows, in file order.
     index('import_rows_outcome').on(t.workspaceId, t.importId, t.outcome, t.rowNumber),
-  ],
-);
-
-/** One export of a view: what it read, its job, and how long its file is kept. */
-export const exports = pgTable(
-  'exports',
-  {
-    workspaceId: workspaceId(),
-    /** The browser's uuid v7: the idempotent start key. */
-    id: uuid('id').notNull(),
-    objectId: uuid('object_id').notNull(),
-    viewId: uuid('view_id'),
-    /** `{ filter, sorts, attributeIds, timeZone }`: the view as it stood when exported. */
-    query: jsonb('query').notNull(),
-    fileName: text('file_name').notNull(),
-    jobId: uuid('job_id'),
-    rowCount: integer('row_count'),
-    byteCount: integer('byte_count'),
-    expiresAt: timestamptz('expires_at').notNull(),
-    createdByMemberId: uuid('created_by_member_id').notNull(),
-    createdAt: timestamptz('created_at').notNull().defaultNow(),
-  },
-  (t) => [
-    primaryKey({ name: 'exports_pkey', columns: [t.workspaceId, t.id] }),
-    foreignKey({ name: 'exports_workspace', columns: [t.workspaceId], foreignColumns: [workspaces.id] }).onDelete(
-      'cascade',
-    ),
-    foreignKey({
-      name: 'exports_created_by',
-      columns: [t.workspaceId, t.createdByMemberId],
-      foreignColumns: [members.workspaceId, members.id],
-    }),
-    check('exports_file_name', sql`char_length(${t.fileName}) between 1 and 255`),
-    // The cleanup: exports by expiry.
-    index('exports_expires').on(t.workspaceId, t.expiresAt),
-  ],
-);
-
-/** One part of an export's file, in order: CSV text, about 1 MB at most. */
-export const exportChunks = pgTable(
-  'export_chunks',
-  {
-    workspaceId: workspaceId(),
-    exportId: uuid('export_id').notNull(),
-    part: integer('part').notNull(),
-    body: text('body').notNull(),
-  },
-  (t) => [
-    primaryKey({ name: 'export_chunks_pkey', columns: [t.workspaceId, t.exportId, t.part] }),
-    foreignKey({
-      name: 'export_chunks_export',
-      columns: [t.workspaceId, t.exportId],
-      foreignColumns: [exports.workspaceId, exports.id],
-    }).onDelete('cascade'),
-    check('export_chunks_part', sql`${t.part} >= 0`),
   ],
 );

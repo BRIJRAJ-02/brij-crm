@@ -8,6 +8,7 @@
 // same NOT_FOUND as one that doesn't exist.
 import { oc } from '@orpc/contract';
 import * as z from 'zod';
+import { EXPORT_ROWS_MAX, ExportIdInput } from './forms/forms.ts';
 import { FilterGroup } from './values/filters.ts';
 import { SortRules } from './values/sorts.ts';
 import { WorkspaceScoped } from './workspaces.ts';
@@ -29,7 +30,7 @@ export const TRANSFER_LIMITS = {
   stageRowBytes: 64 * 1024,
   unfinishedImports: 3,
   undoDays: 7,
-  exportRows: 100_000,
+  exportRows: EXPORT_ROWS_MAX,
   exportKeptDays: 7,
 } as const;
 
@@ -217,24 +218,23 @@ export const StartExportInput = WorkspaceScoped.extend({
 /** An export to start. */
 export type StartExportInput = z.infer<typeof StartExportInput>;
 
-/** One export, by id. */
-export const ExportInput = WorkspaceScoped.extend({ exportId: z.uuid() });
-/** One export, by id. */
-export type ExportInput = z.infer<typeof ExportInput>;
-
-/** One export as the browser sees it: its file's name, its job, its size once written, and when it goes. */
-export const ExportView = z.object({
+/**
+ * One records export as the browser sees it (the shape of the forms'
+ * `ExportView`, with its object): its file's name, its job (follow it through
+ * `jobs`), its rows once written, when the file goes, and where to download
+ * it once the job succeeded.
+ */
+export const RecordsExportView = z.object({
   id: z.uuid(),
   objectId: z.uuid(),
   fileName: z.string(),
-  jobId: z.uuid().optional(),
+  jobId: z.uuid(),
   rowCount: z.number().int().min(0).optional(),
-  byteCount: z.number().int().min(0).optional(),
   expiresAt: z.iso.datetime({ offset: true }),
-  createdAt: z.iso.datetime({ offset: true }),
+  downloadPath: z.string(),
 });
-/** One export. */
-export type ExportView = z.infer<typeof ExportView>;
+/** One records export. */
+export type RecordsExportView = z.infer<typeof RecordsExportView>;
 
 /**
  * Imports, on the member door. `create` needs write on the object; `stage`,
@@ -260,6 +260,6 @@ export const importsContract = {
  * The file itself is `GET /api/exports/<id>/download?workspace=<slug>`.
  */
 export const exportsContract = {
-  start: oc.input(StartExportInput).output(ExportView),
-  get: oc.input(ExportInput).output(ExportView),
+  start: oc.input(StartExportInput).output(RecordsExportView),
+  get: oc.input(ExportIdInput).output(RecordsExportView),
 };
