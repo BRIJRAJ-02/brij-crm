@@ -91,6 +91,11 @@ export interface RecordsScreenProps {
   readonly announce?: (count: WindowCount) => string | undefined;
   /** What the table says when the view's filter matches nothing; the object's own empty state otherwise. */
   readonly filteredEmpty?: ReactNode;
+  /**
+   * Whether any row is ticked, told as it changes: someone else's saved filter
+   * clears the ticks with the view's change, and its toast says so (AC-522).
+   */
+  readonly onTickedChange?: (isTicked: boolean) => void;
 }
 
 /** What a column's editor gets when it needs nothing beyond its value (not a relation cell). */
@@ -188,6 +193,7 @@ export function RecordsScreen({
   toolbar,
   announce,
   filteredEmpty,
+  onTickedChange,
 }: RecordsScreenProps) {
   const { data, toasts } = useRouteContext({ from: '__root__' });
   const navigate = useNavigate();
@@ -349,7 +355,15 @@ export function RecordsScreen({
     const last = Math.max(0, state.source.count - 1 - (leaving ? recordIds.length : 0));
     setFocusRow({ index: Math.max(0, Math.min(...rows, last)) });
   };
-  const tickedIds = ticked.selection.kind === 'some' ? [...ticked.selection.ids] : [];
+  // The ticked ids, copied once per selection, not on every render (a selection holds up to 10,000).
+  const tickedIds = useMemo(
+    () => (ticked.selection.kind === 'some' ? [...ticked.selection.ids] : []),
+    [ticked.selection],
+  );
+  const isTicked = ticked.selection.kind === 'all-matching' || ticked.selection.ids.size > 0;
+  useEffect(() => {
+    onTickedChange?.(isTicked);
+  }, [isTicked, onTickedChange]);
   // The bar while rows are ticked (spec 0022): Delete, its confirm, and Clear; focus comes back to the table.
   const bulk = useBulkActions({
     slug,

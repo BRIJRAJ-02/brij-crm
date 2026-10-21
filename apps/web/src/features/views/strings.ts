@@ -12,6 +12,8 @@ export const strings = {
   saved: (name: string) => `Filters saved on ${name}.`,
   /** Someone else saved the view's filters while this tab had no draft (AC-468). */
   changedBy: (name: string) => `${name} changed the filters on this view.`,
+  /** The same, while rows were ticked: the selection goes with the old filters (spec 0022, AC-522, owner decision 5). */
+  changedByCleared: (name: string) => `${name} changed the filters on this view, so your selection was cleared.`,
   removedMember: 'A removed member',
   /** A link whose draft couldn't be read (AC-467). */
   draftUnreadable: 'That link’s filter couldn’t be read, so the saved view is shown.',

@@ -21,7 +21,7 @@ import {
 import { useSavedView, useViewsList } from '@crm/data/react';
 import { Button, Callout, EmptyState, Popover, SegmentedControl, ViewSettings, type ViewChoice } from '@crm/ui';
 import { useNavigate, useRouteContext } from '@tanstack/react-router';
-import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { BoardScreen } from '../board/BoardScreen.tsx';
 import { planBoard } from '../board/plan.ts';
 import { strings as boardStrings } from '../board/strings.ts';
@@ -217,7 +217,13 @@ export function ViewScreen(props: ViewScreenProps) {
   const running = effective.status === 'ready' ? effective : lastReady;
   const query = useMemo(() => (running === undefined ? { sorts: [] } : toViewQuery(running)), [running]);
 
-  // Someone else saved this view's filters (AC-468): a tab with no draft follows, and says who.
+  // Whether the table holds ticked rows: a new query clears them, and the toast below says so (spec 0022, AC-522).
+  const isTicked = useRef(false);
+  const tickedChanged = useCallback((ticked: boolean) => {
+    isTicked.current = ticked;
+  }, []);
+  // Someone else saved this view's filters (AC-468): a tab with no draft follows, and says who, and that the
+  // rows it had ticked were cleared with the old filters (owner decision 5).
   const seenVersion = useRef(view?.queryVersion);
   useEffect(() => {
     if (view === undefined) return;
@@ -226,7 +232,10 @@ export function ViewScreen(props: ViewScreenProps) {
     if (before === undefined || view.queryVersion <= before || draft.isDraft) return;
     if (view.querySavedBy === undefined || view.querySavedBy === access?.memberId) return;
     const name = members.find((member) => member.id === view.querySavedBy)?.name ?? strings.removedMember;
-    toasts.toast({ tone: 'info', message: strings.changedBy(name) });
+    toasts.toast({
+      tone: 'info',
+      message: isTicked.current ? strings.changedByCleared(name) : strings.changedBy(name),
+    });
     // Only a new query version announces anything.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [view?.queryVersion]);
@@ -691,6 +700,7 @@ export function ViewScreen(props: ViewScreenProps) {
             : undefined
         }
         toolbar={toolbarFor}
+        onTickedChange={tickedChanged}
         {...(filtered
           ? {
               filteredEmpty: (
