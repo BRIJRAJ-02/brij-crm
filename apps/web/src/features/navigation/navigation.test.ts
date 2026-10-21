@@ -77,6 +77,25 @@ describe('focusPage', () => {
     expect(settings.focused).toEqual([]);
   });
 
+  it('leaves focus in a menu or confirm opened while the page loaded, which the frame keeps open', () => {
+    for (const role of ['[role="menu"]', '[role="dialog"]', '[role="alertdialog"]']) {
+      const open = fakeDocument(page);
+      const inOverlay = { closest: (selector: string) => (selector.split(', ').includes(role) ? {} : null) };
+      focusPage({ ...open.doc, activeElement: inOverlay } as unknown as Document, '/w/acme/trash');
+      expect(open.focused).toEqual([]);
+    }
+  });
+
+  it('puts focus on the title when the menu or dialog focus sits in is still closing (its exit)', () => {
+    const closing = fakeDocument(page);
+    const inExiting = {
+      closest: (selector: string) =>
+        selector === '[data-exiting]' || selector.includes('[role="dialog"]') ? {} : null,
+    };
+    focusPage({ ...closing.doc, activeElement: inExiting } as unknown as Document, '/w/acme/trash');
+    expect(closing.focused).toEqual(['main h1']);
+  });
+
   it('puts focus on the title everywhere else, and when a form page has no field yet', () => {
     const trash = fakeDocument(page);
     focusPage(trash.asDocument, '/w/acme/trash');
@@ -178,6 +197,8 @@ describe('isSamePage', () => {
     expect(isSamePage(`${page}/overview`, other)).toBe(false);
     expect(isSamePage('/w/acme/objects/people', '/w/acme/objects/companies')).toBe(false);
     expect(isSamePage(`${page}/overview`, '/w/acme/objects/people')).toBe(false);
+    // Another saved view is another page: it starts at its top.
+    expect(isSamePage('/w/acme/objects/people/views/v1', '/w/acme/objects/people/views/v2')).toBe(false);
   });
 });
 

@@ -1,6 +1,6 @@
 # Workspace
 
-Spec 0005, milestones 1 to 3; spec 0012 makes the object pages generic. Every page inside a workspace sits in `WorkspaceFrame` (AppShell and Sidebar), through `WorkspacePage`.
+Spec 0005, milestones 1 to 3; spec 0012 makes the object pages generic. Every page inside a workspace sits in `WorkspaceFrame` (AppShell and Sidebar), through `WorkspacePage`. The `/w/$slug` layout mounts the frame once (`WorkspaceLayout`), so moving between pages never remounts the sidebar or a menu or confirm open in it; each page portals its bars into the frame's `AppShellSlot`s and says which sidebar entry is current, and a new page starts at the top of the view. The layout's own loading and error pages, and a form's preview, draw outside it.
 
 ## The frame (`/w/$slug`, WorkspaceFrame)
 

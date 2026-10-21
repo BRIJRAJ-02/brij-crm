@@ -261,6 +261,7 @@ jobs:
           e2e/embed.flow.ts
           e2e/sidebar.flow.ts
           e2e/comments.flow.ts
+          e2e/frame.flow.ts
       - name: Keep the traces and the logs
         if: failure()
         uses: actions/upload-artifact@v7

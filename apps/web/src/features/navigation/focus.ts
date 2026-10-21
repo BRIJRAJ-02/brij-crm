@@ -40,13 +40,31 @@ function isInTabList(doc: Document): boolean {
 }
 
 /**
+ * True when focus sits in a menu or dialog the person opened (the workspace
+ * menu, a confirm): the frame stays mounted from page to page, so such an
+ * overlay outlives a navigation that finishes while it is open, and keeps
+ * its focus. Closing it returns focus to its trigger, as ever.
+ */
+function isInOverlay(doc: Document): boolean {
+  const active: unknown = doc.activeElement;
+  if (typeof active !== 'object' || active === null || !('closest' in active)) return false;
+  const element = active as Element;
+  // One still closing (its exit animation) is leaving: the page's title takes focus as ever.
+  return (
+    element.closest('[role="menu"], [role="dialog"], [role="alertdialog"]') !== null &&
+    element.closest('[data-exiting]') === null
+  );
+}
+
+/**
  * Moves focus to a form page's first field, else to the page's title,
  * if the page has one. Focus already in a tab list stays: the arrow keys there
  * choose a tab that is its own address (spec 0012), and the next press must
- * reach the next tab, not the title. So does focus in the settings sidebar.
+ * reach the next tab, not the title. So does focus in the settings sidebar,
+ * and in an open menu or dialog.
  */
 export function focusPage(doc: Document, pathname: string): void {
-  if (isInTabList(doc)) return;
+  if (isInTabList(doc) || isInOverlay(doc)) return;
   const field = FIRST_FIELD[pathname];
   const target = (field === undefined ? null : doc.querySelector<HTMLElement>(field)) ?? pageHeading(doc);
   target?.focus();
@@ -96,8 +114,8 @@ export function createFocusRecovery(doc: Document): { readonly recover: (pathnam
   };
 }
 
-/** A record page's address: its tab is the last segment (spec 0017). */
-const RECORD_PAGE = /^(\/w\/[^/]+\/objects\/[^/]+\/[^/]+)\/[^/]+\/?$/;
+/** A record page's address: its tab is the last segment (spec 0017). A saved view's (`views/<id>`) is not one. */
+const RECORD_PAGE = /^(\/w\/[^/]+\/objects\/[^/]+\/(?!views\/)[^/]+)\/[^/]+\/?$/;
 
 /**
  * Whether a route change is the same page showing another of its tabs (a

@@ -49,6 +49,11 @@
     outline: none;
   }
 
+  /* A place a page fills through a portal: no box of its own. */
+  .slot {
+    display: contents;
+  }
+
   .content {
     display: flex;
     flex: 1;
