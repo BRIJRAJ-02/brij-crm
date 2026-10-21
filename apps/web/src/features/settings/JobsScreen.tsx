@@ -1,11 +1,22 @@
 // Brief
 // Purpose: Settings, Background jobs: the workspace's long work, with its progress, live.
-// Main task: see how a job is doing, and cancel it (with a confirm); owners and admins see every job, members their own.
+// Main task: see how a job is doing, confirm a counted change or cancel a job (each asked first); owners and admins see every job, members their own.
 // Leaves out: retry controls, settings for the test job, and the daily cleanup's details (milestone 3).
 import type { DataLayer, JobsView, JobView, MemberSummary } from '@crm/data';
 import { useJobs } from '@crm/data/react';
-import { Badge, Button, EmptyState, Modal, ProgressBar, RelativeTime, Table, type TableColumn } from '@crm/ui';
-import { useEffect, useRef, useState } from 'react';
+import {
+  Badge,
+  Button,
+  EmptyState,
+  focusLater,
+  Modal,
+  ProgressBar,
+  RelativeTime,
+  Table,
+  type IconName,
+  type TableColumn,
+} from '@crm/ui';
+import { useEffect, useRef, useState, type RefObject } from 'react';
 import { useCan } from '../workspace/WorkspacePage.tsx';
 import { SettingsPage } from './SettingsPage.tsx';
 import { strings } from './jobs-strings.ts';
@@ -26,9 +37,6 @@ export interface JobsScreenProps {
 
 /** The test job "Run a test job" starts: 20,000 synthetic items, every 50th refused, so progress and the refusal summary show. */
 const TEST_JOB = { items: 20_000, batchSize: 500, batchMillis: 200, refuseEvery: 50 } as const;
-
-/** A little past the confirm's exit (the dialog's `duration-exit`, 120 ms), when its focus restore has run. */
-const CONFIRM_EXIT_MS = 200;
 
 const COLUMNS: readonly TableColumn[] = [
   { id: 'job', label: strings.columns.job, isRowHeader: true },
@@ -95,10 +103,16 @@ function Result({ job }: { readonly job: JobView }) {
   return <>{parts.join(', ')}</>;
 }
 
-/** Settings, Background jobs (AC-118): a live table of jobs, Cancel with a confirm, and "Show more". */
+/** What a job's confirm asks: to run a counted change waiting for its confirm, or to cancel a job. */
+interface JobAsk {
+  readonly kind: 'run' | 'cancel';
+  readonly job: JobView;
+}
+
+/** Settings, Background jobs (AC-118): a live table of jobs, Confirm and Cancel each with a confirm, and "Show more". */
 export function JobsScreen({ data, slug, view, isAll, members: loaded, canRunTest }: JobsScreenProps) {
   const snapshot = useJobs(view);
-  const [confirming, setConfirming] = useState<JobView | undefined>(undefined);
+  const [asking, setAsking] = useState<JobAsk | undefined>(undefined);
   const [isStarting, setStarting] = useState(false);
   const [members, setMembers] = useState(loaded);
   const titleRef = useRef<HTMLHeadingElement>(null);
@@ -136,23 +150,6 @@ export function JobsScreen({ data, slug, view, isAll, members: loaded, canRunTes
       () => setStarting(false),
     );
   };
-  // Confirmed at once on screen; the layer puts it back with a toast when refused.
-  const confirm = (job: JobView) => void data.jobs.confirm(slug, job.id);
-  const cancel = (job: JobView) => {
-    setConfirming(undefined);
-    void data.jobs.cancel(slug, job.id);
-    // A job not yet running is cancelled at once and its Cancel goes: focus moves to the page's title rather
-    // than being lost. A running one keeps a pending button in its row (below) to come back to.
-    if (job.status !== 'running') {
-      requestAnimationFrame(() => titleRef.current?.focus());
-      // The confirm restores focus to its trigger as its exit ends; that trigger went with the cancel, so focus
-      // could fall to the document: the title takes it again once the dialog is gone.
-      setTimeout(() => {
-        if (document.activeElement === document.body) titleRef.current?.focus();
-      }, CONFIRM_EXIT_MS);
-    }
-  };
-
   const renderCell = (job: JobView, column: string) => {
     switch (column) {
       case 'job':
@@ -180,12 +177,12 @@ export function JobsScreen({ data, slug, view, isAll, members: loaded, canRunTes
         return (
           <>
             {job.status === 'ready' && (
-              <Button variant="primary" onPress={() => confirm(job)}>
+              <Button variant="primary" onPress={() => setAsking({ kind: 'run', job })}>
                 {strings.confirm}
               </Button>
             )}
             {job.cancellable && (
-              <Button variant="ghost" onPress={() => setConfirming(job)}>
+              <Button variant="ghost" onPress={() => setAsking({ kind: 'cancel', job })}>
                 {strings.cancel}
               </Button>
             )}
@@ -219,29 +216,15 @@ export function JobsScreen({ data, slug, view, isAll, members: loaded, canRunTes
             {strings.showMore}
           </Button>
         )}
-        <Modal
-          title={strings.cancelTitle}
-          tone="danger"
-          isOpen={confirming !== undefined}
-          onOpenChange={(isOpen) => {
-            if (!isOpen) setConfirming(undefined);
+        <JobConfirmDialog
+          data={data}
+          slug={slug}
+          ask={asking}
+          titleRef={titleRef}
+          onClose={() => {
+            setAsking(undefined);
           }}
-          actions={
-            <>
-              <Button slot="close">{strings.dontCancel}</Button>
-              <Button
-                variant="danger-solid"
-                onPress={() => {
-                  if (confirming !== undefined) cancel(confirming);
-                }}
-              >
-                {strings.cancelJob}
-              </Button>
-            </>
-          }
-        >
-          {strings.cancelText(confirming?.label ?? '')}
-        </Modal>
+        />
       </>
     );
 
@@ -262,6 +245,143 @@ export function JobsScreen({ data, slug, view, isAll, members: loaded, canRunTes
     >
       {body}
     </SettingsPage>
+  );
+}
+
+/** "1 record", "12,345 records": a counted job's items, which are records for every bulk kind. */
+function recordsOf(total: number | undefined): string {
+  return total === 1 ? strings.oneRecord : strings.records(format(total ?? 0));
+}
+
+/** Each counted kind's commit icon, as the table's Review confirm draws it. */
+const RUN_ICONS = {
+  'records.bulk_delete': 'trash',
+  'records.purge': 'trash',
+  'records.bulk_edit': 'pencil',
+  'records.bulk_restore': 'archive-restore',
+} as const satisfies Record<keyof typeof strings.run, IconName>;
+
+/** The words a job's confirm asks with: what it does, to how many, whether it can be undone, and its commit. */
+function jobConfirmWords(ask: JobAsk): {
+  readonly title: string;
+  readonly text: string;
+  readonly action: string;
+  readonly icon: IconName;
+  readonly isDanger: boolean;
+} {
+  const { job } = ask;
+  if (ask.kind === 'cancel') {
+    return {
+      title: strings.cancelTitle(job.label),
+      text: strings.cancelText,
+      action: strings.cancelJob,
+      icon: 'circle-x',
+      isDanger: true,
+    };
+  }
+  if (!Object.hasOwn(strings.run, job.kind)) {
+    return {
+      title: strings.runOther.title,
+      text: strings.runOther.text(job.label, format(job.total ?? 0)),
+      action: strings.runOther.action,
+      icon: 'play',
+      isDanger: false,
+    };
+  }
+  const kind = job.kind as keyof typeof strings.run;
+  const known = strings.run[kind];
+  const records = recordsOf(job.total);
+  // A restore brings records back; every other counted change ends something.
+  return {
+    title: known.title(records),
+    text: known.text,
+    action: known.action(records),
+    icon: RUN_ICONS[kind],
+    isDanger: kind !== 'records.bulk_restore',
+  };
+}
+
+/**
+ * Confirm or Cancel on a job, asked first (the house rule in Modal's README). The commit waits for the server;
+ * the jobs store shows the change at once and says a refusal itself (a toast, the row put back), so the dialog
+ * closes either way. Its trigger goes with the change (Confirm leaves a queued row, Cancel a cancelled one), so
+ * focus that would fall to the page goes to the title.
+ */
+function JobConfirmDialog({
+  ask,
+  ...rest
+}: {
+  readonly data: DataLayer;
+  readonly slug: string;
+  readonly ask: JobAsk | undefined;
+  readonly titleRef: RefObject<HTMLHeadingElement | null>;
+  readonly onClose: () => void;
+}) {
+  // The last question stays while the Modal plays its exit; each one mounts afresh.
+  const [last, setLast] = useState(ask);
+  if (ask !== undefined && ask !== last) setLast(ask);
+  const shown = ask ?? last;
+  return shown === undefined ? null : (
+    <JobConfirm key={`${shown.kind}:${shown.job.id}`} ask={shown} isOpen={ask !== undefined} {...rest} />
+  );
+}
+
+/** The open confirm for one job. */
+function JobConfirm({
+  data,
+  slug,
+  ask,
+  isOpen,
+  titleRef,
+  onClose,
+}: {
+  readonly data: DataLayer;
+  readonly slug: string;
+  readonly ask: JobAsk;
+  readonly isOpen: boolean;
+  readonly titleRef: RefObject<HTMLHeadingElement | null>;
+  readonly onClose: () => void;
+}) {
+  const [isBusy, setBusy] = useState(false);
+  const words = jobConfirmWords(ask);
+  const commit = () => {
+    if (isBusy) return;
+    setBusy(true);
+    const answer = ask.kind === 'run' ? data.jobs.confirm(slug, ask.job.id) : data.jobs.cancel(slug, ask.job.id);
+    const settle = () => {
+      setBusy(false);
+      onClose();
+      focusLater(() => (document.activeElement === document.body ? titleRef.current : undefined));
+    };
+    answer.then(settle, settle);
+  };
+  return (
+    <Modal
+      title={words.title}
+      tone={words.isDanger ? 'danger' : 'default'}
+      isOpen={isOpen}
+      isBusy={isBusy}
+      onOpenChange={(open) => {
+        if (!open && !isBusy) onClose();
+      }}
+      actions={
+        <>
+          <Button slot="close" isDisabled={isBusy} kbd="ESC">
+            {ask.kind === 'run' ? strings.notNow : strings.keepJob}
+          </Button>
+          <Button
+            variant={words.isDanger ? 'danger-solid' : 'primary'}
+            icon={words.icon}
+            isPending={isBusy}
+            onPress={commit}
+          >
+            {isBusy ? (ask.kind === 'run' ? strings.starting : strings.cancellingNow) : words.action}
+          </Button>
+        </>
+      }
+    >
+      {words.text}
+    </Modal>
   );
 }
 
