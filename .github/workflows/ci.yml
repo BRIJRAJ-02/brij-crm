@@ -235,6 +235,7 @@ jobs:
           e2e/trash.flow.ts
           e2e/bulk.flow.ts
           e2e/tasks.flow.ts
+          e2e/notes.flow.ts
           e2e/google.flow.ts
           e2e/my-tasks.flow.ts
           e2e/notes.flow.ts
