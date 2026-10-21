@@ -26,7 +26,7 @@ import type { BookingMailKind } from './mail-queue.ts';
 import { loadPage } from './slots.ts';
 import { ensureManageToken, managePath, type ManageLinkKey } from './tokens.ts';
 
-const { bookingHosts, bookings, members, workspaces } = schema;
+const { bookingHosts, bookings, members, rotationAssignments, workspaces } = schema;
 
 /** One label and value row of an email. */
 export interface MailRow {
@@ -377,6 +377,79 @@ export async function prepareBookingMail(
               why: hostWhy,
             }));
         return { messages: [toVisitor, ...toGuests, ...toHost], invited: [] };
+      }
+      case 'reassigned': {
+        // Who left and who came, from the ledger's latest change (spec 0029, AC-746, AC-748, AC-749).
+        const rows = await tx
+          .select({
+            memberId: rotationAssignments.memberId,
+            createdAt: rotationAssignments.createdAt,
+            voidedAt: rotationAssignments.voidedAt,
+            name: members.name,
+            email: members.email,
+            status: members.status,
+          })
+          .from(rotationAssignments)
+          .innerJoin(
+            members,
+            and(eq(members.workspaceId, rotationAssignments.workspaceId), eq(members.id, rotationAssignments.memberId)),
+          )
+          .where(eq(rotationAssignments.bookingId, row.id));
+        const lastVoid = Math.max(0, ...rows.map((each) => each.voidedAt?.getTime() ?? 0));
+        const current = new Set(team.map((each) => each.id));
+        const left = rows.filter(
+          (each) => each.voidedAt?.getTime() === lastVoid && !current.has(each.memberId) && each.status === 'active',
+        );
+        const came = team.filter((each) =>
+          rows.some(
+            (ledger) =>
+              ledger.memberId === each.id && ledger.voidedAt === null && ledger.createdAt.getTime() >= lastVoid,
+          ),
+        );
+        if (lastVoid === 0 || came.length === 0) return { messages: [], invited: [], skipped: 'no change' };
+        const toVisitor: BookingMail = {
+          to: row.visitorEmail,
+          subject: `Your meeting is now with ${hostName}`,
+          preview: preview(row.visitorTimeZone),
+          heading: `Your meeting is now with ${hostName}`,
+          intro: `${page.title} has a new host. The time and place stay the same, and a new calendar invitation is on its way.`,
+          rows: [
+            { label: 'What', value: page.title },
+            when(row.visitorTimeZone),
+            { label: 'With', value: hostName },
+            { label: 'Where', value: where },
+          ],
+          button: { label: 'View your booking', url: manageUrl },
+          footnote: change,
+          why: visitorWhy,
+          ...ics('REQUEST', [visitor]),
+        };
+        const toCame: BookingMail[] = came.map((each) => ({
+          to: each.email,
+          subject: `New booking: ${page.title} with ${row.visitorName}`,
+          preview: preview(hostZone),
+          heading: 'A booking is now yours',
+          intro: `${page.title} with ${row.visitorName} came to you through its rotation.`,
+          rows: [
+            when(hostZone),
+            { label: 'Who', value: `${row.visitorName} (${row.visitorEmail})` },
+            { label: 'Where', value: where },
+            ...(note === undefined ? [] : [{ label: 'Note', value: note }]),
+          ],
+          button: { label: 'Open Bookings', url: bookingsUrl },
+          why: hostWhy,
+        }));
+        const toLeft: BookingMail[] = left.map((each) => ({
+          to: each.email,
+          subject: `Reassigned: ${page.title} with ${row.visitorName}`,
+          preview: preview(hostZone),
+          heading: 'A booking moved to someone else',
+          intro: `${page.title} with ${row.visitorName} is now with ${hostName}. It’s off your calendar.`,
+          rows: [when(hostZone), { label: 'Who', value: `${row.visitorName} (${row.visitorEmail})` }],
+          button: { label: 'Open Bookings', url: bookingsUrl },
+          why: `You got this email because you hosted ${page.title}.`,
+        }));
+        return { messages: [toVisitor, ...toCame, ...toLeft], invited: [] };
       }
       case 'reminder_24h':
       case 'reminder_1h': {

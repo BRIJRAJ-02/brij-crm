@@ -49,12 +49,20 @@ export interface HostChoice {
   readonly now: Date;
   /** The guest, for returning guests (AC-1328): their email, and the People object their person would be on. */
   readonly guest?: { readonly email: string; readonly peopleObjectId: string };
+  /**
+   * Seats kept when their host is free at the slot (a move with "same host when free", AC-746, AC-1324), by
+   * rotation id; every other seat picks again through its rotation.
+   */
+  readonly keep?: ReadonlyMap<string, string>;
+  /** A booking being moved or reseated: its own time never blocks its hosts, and its own ledger row isn't a cap. */
+  readonly except?: string;
 }
 
-/** The booking's hosts: the organiser (first fixed host, else the first rotation's pick), everyone, and the picks. */
+/** The booking's hosts: the organiser (first fixed host, else the first rotation's host), everyone, and the new picks. */
 export interface ChosenHosts {
   readonly organiser: string;
   readonly hosts: readonly string[];
+  /** The seats picked now; a kept seat has none. */
   readonly picks: readonly SeatPick[];
 }
 
@@ -75,7 +83,7 @@ export async function chooseHosts(
     choice.workspaceId,
     team.rotations.map((rotation) => rotation.rules.id),
   );
-  const locked = new Set([...team.fixed, ...choice.candidates.flat()]);
+  const locked = new Set([...team.fixed, ...choice.candidates.flat(), ...(choice.keep?.values() ?? [])]);
   await lockHosts(tx, choice.workspaceId, [...locked]);
   const reads = await readTeam(tx, page, team, choice.busy, {
     from: choice.from,
@@ -83,6 +91,7 @@ export async function chooseHosts(
     margin: BUSY_MARGIN_MS,
     now: choice.now,
     only: [...locked],
+    ...(choice.except === undefined ? {} : { except: choice.except }),
   });
   const range = { duration: choice.duration, from: choice.from, to: choice.to, now: choice.now };
   const freeAt = (memberId: string) =>
@@ -95,9 +104,17 @@ export async function chooseHosts(
     choice.guest !== undefined && team.rotations.some((rotation) => rotation.rules.returning === 'owner')
       ? await ownerOfEmail(tx, choice.guest.peopleObjectId, choice.guest.email)
       : undefined;
+  // A kept seat stays when its host is still a candidate there; its member is then nobody else's to pick.
+  const kept = new Map<string, string>();
+  for (const [index, rotation] of team.rotations.entries()) {
+    const held = choice.keep?.get(rotation.rules.id);
+    if (held !== undefined && (sets[index] ?? []).includes(held)) kept.set(rotation.rules.id, held);
+  }
+  const keptMembers = new Set(kept.values());
   const seats = [];
   for (const [index, rotation] of team.rotations.entries()) {
-    const free = new Set(sets[index] ?? []);
+    if (kept.has(rotation.rules.id)) continue;
+    const free = new Set((sets[index] ?? []).filter((memberId) => !keptMembers.has(memberId)));
     const lastHostId =
       choice.guest !== undefined && rotation.rules.returning === 'last_host'
         ? await lastHostOf(tx, rotation.rules.id, choice.guest.email, choice.now)
@@ -112,8 +129,14 @@ export async function chooseHosts(
     });
   }
   const picks = fillSeats(seats);
-  const first = picks?.[0];
-  if (picks === undefined || first === undefined) throw refuse('SLOT_TAKEN', SLOT_TAKEN_MESSAGE);
-  const hosts = [...team.fixed, ...picks.map((pick) => pick.memberId)];
-  return { organiser: team.fixed[0] ?? first.memberId, hosts, picks };
+  if (picks === undefined) throw refuse('SLOT_TAKEN', SLOT_TAKEN_MESSAGE);
+  const seated = team.rotations.map(
+    (rotation) => kept.get(rotation.rules.id) ?? picks.find((pick) => pick.rotationId === rotation.rules.id)?.memberId,
+  );
+  const first = seated[0];
+  if (first === undefined || seated.some((memberId) => memberId === undefined)) {
+    throw refuse('SLOT_TAKEN', SLOT_TAKEN_MESSAGE);
+  }
+  const hosts = [...team.fixed, ...seated.flatMap((memberId) => (memberId === undefined ? [] : [memberId]))];
+  return { organiser: team.fixed[0] ?? first, hosts, picks };
 }

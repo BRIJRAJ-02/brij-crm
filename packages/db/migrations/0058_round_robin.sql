@@ -242,6 +242,10 @@ begin
     return null;
   end if;
   if new.host_member_id is distinct from old.host_member_id then
+    -- A co-host made organiser already has a row: drop it first, so the rename can't collide (the reseat that changed
+    -- the organiser then writes every host's row again).
+    delete from public.booking_hosts
+    where workspace_id = new.workspace_id and booking_id = new.id and member_id = new.host_member_id;
     update public.booking_hosts set member_id = new.host_member_id, updated_at = pg_catalog.now()
     where workspace_id = new.workspace_id and booking_id = new.id and member_id = old.host_member_id;
   end if;
@@ -277,3 +281,51 @@ join booking_pages p on p.workspace_id = b.workspace_id and p.id = b.page_id and
 join booking_page_members m on m.workspace_id = b.workspace_id and m.page_id = b.page_id
 where m.member_id <> b.host_member_id
 on conflict do nothing;
+--> statement-breakpoint
+
+-- A round robin booking that gets new hosts (a move through its rotation, a reassign, a member who left) tells its
+-- guest and both hosts: `reassigned` joins the kinds crm_enqueue_booking_mail queues, run now like `moved`. The
+-- function is crm_queue's (0048): the migration's role holds crm_queue's rights just long enough to replace it (it
+-- stays crm_queue's, with its grants), then gives them back.
+grant crm_queue to current_user with inherit true, set false;
+--> statement-breakpoint
+create or replace function crm_enqueue_booking_mail(booking_id uuid, kind text)
+  returns boolean
+  language sql
+  volatile
+  security definer
+  set search_path = pg_catalog, pg_temp
+as $function$
+  with booking as (
+    select b.workspace_id, b.id,
+      case crm_enqueue_booking_mail.kind
+        when 'reminder_24h' then b.starts_at - interval '24 hours'
+        when 'reminder_1h' then b.starts_at - interval '1 hour'
+        else pg_catalog.now()
+      end as run_at
+    from public.bookings b
+    where b.id = crm_enqueue_booking_mail.booking_id
+      and b.workspace_id = nullif(pg_catalog.current_setting('app.workspace_id', true), '')::uuid
+      and crm_enqueue_booking_mail.kind in ('confirmed', 'cancelled', 'moved', 'guests', 'reassigned', 'reminder_24h', 'reminder_1h')
+      and (b.status = 'confirmed' or crm_enqueue_booking_mail.kind = 'cancelled')
+  ),
+  added as materialized (
+    select graphile_worker.add_job(
+      identifier => 'crm_booking_mail',
+      payload => pg_catalog.json_build_object(
+        'workspaceId', booking.workspace_id, 'bookingId', booking.id, 'kind', crm_enqueue_booking_mail.kind
+      ),
+      run_at => booking.run_at,
+      max_attempts => 5,
+      job_key => case when crm_enqueue_booking_mail.kind like 'reminder_%'
+        then 'crm-booking:' || booking.workspace_id::text || ':' || booking.id::text || ':' || crm_enqueue_booking_mail.kind
+      end,
+      job_key_mode => 'replace'
+    ) as queued
+    from booking
+    where crm_enqueue_booking_mail.kind not like 'reminder_%' or booking.run_at > pg_catalog.now()
+  )
+  select count(*) = 1 from added;
+$function$;
+--> statement-breakpoint
+revoke crm_queue from current_user;

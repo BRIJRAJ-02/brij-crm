@@ -12,7 +12,7 @@ import {
   type RotationSettings,
 } from '@crm/contracts';
 import { createDatabase, type Database } from '@crm/db';
-import { enterBookingPage } from '../access/door.ts';
+import { enterBookingPage, systemScope } from '../access/door.ts';
 import type { EngineScope } from '../access/mint.ts';
 import { newId } from '../engine/ids.ts';
 import { isRefusal } from '../engine/refusals.ts';
@@ -24,6 +24,7 @@ import { cancelBooking, hostTarget, moveBooking, readMoveSlots } from '../bookin
 import { saveDefaultHours } from '../availability/schedules.ts';
 import { createBookingPage, updateBookingPage } from '../booking/pages.ts';
 import { bookPublicSlot, getPublicBookingPage, readPublicSlots } from '../booking/public.ts';
+import { prepareBookingMail } from '../booking/mail.ts';
 import { loadPage } from '../booking/slots.ts';
 import { chooseHosts } from './assign.ts';
 import { bookingAssignments } from './assignments.ts';
@@ -583,21 +584,68 @@ describe('a round robin page (AC-732 to AC-734, AC-738, AC-742 to AC-745, AC-754
     expect(overlaps.rows).toEqual([]);
   });
 
-  it('moves a booking only to times its own host is free, in their own hours (AC-746, same host)', async () => {
+  it('moves keeping the host when free, else through the rotation, and tells everyone (AC-746, AC-1324)', async () => {
     const w = await workspace();
     const early = await w.addMember('Early Bird', { from: '08:00', to: '10:00' });
     const late = await w.addMember('Late Owl', { from: '15:00', to: '17:00' });
     const { entry } = await roundRobin(w, [early.id, late.id]);
     const booked = await bookPublicSlot(entry, deps(), bookInput(at('08:00')));
-    expect((await hostsOf(w, [booked.bookingId])).get(booked.bookingId)).toBe(early.id);
     const target = hostTarget(w.owner, booked.bookingId);
     const offered = await readMoveSlots(target, deps(), {
       from: new Date(`${MONDAY}T00:00:00.000Z`),
       to: new Date('2026-11-03T00:00:00.000Z'),
     });
-    expect(offered.slots.map((slot) => slot.start.slice(11, 16))).toEqual(['08:00', '08:30', '09:00', '09:30']);
-    expect((await refusalOf(moveBooking(target, deps(), { start: new Date(at('15:00')) }))).code).toBe('SLOT_TAKEN');
+    // Every time someone can take it: the booking's own 08:00 is free for it, and Late Owl's afternoon too.
+    expect(offered.slots.map((slot) => slot.start.slice(11, 16))).toContain('15:00');
+    expect(offered.slots.map((slot) => slot.start.slice(11, 16))).toContain('09:30');
+    // Same host when free: 09:00 keeps Early Bird and the ledger row.
+    const [before] = await bookingAssignments(w.owner, { bookingId: booked.bookingId });
     expect(await moveBooking(target, deps(), { start: new Date(at('09:00')) })).toEqual({ moved: true });
+    expect((await hostsOf(w, [booked.bookingId])).get(booked.bookingId)).toBe(early.id);
+    const kept = await bookingAssignments(w.owner, { bookingId: booked.bookingId });
+    expect(kept.map((row) => row.id)).toEqual([before?.id]);
+    // 15:00: Early Bird isn't free, so the rotation picks Late Owl; the old row stops counting.
+    expect(await moveBooking(target, deps(), { start: new Date(at('15:00')) })).toEqual({ moved: true });
+    expect((await hostsOf(w, [booked.bookingId])).get(booked.bookingId)).toBe(late.id);
+    const after = await bookingAssignments(w.owner, { bookingId: booked.bookingId });
+    expect(after.map((row) => [row.memberId, row.voidedAt === undefined])).toEqual([
+      [late.id, true],
+      [early.id, false],
+    ]);
+    const hosts = await db.withWorkspace(w.workspaceId, (tx) =>
+      tx.execute<{ member: string }>(
+        sql`select member_id::text as member from booking_hosts where booking_id = ${booked.bookingId}::uuid`,
+      ),
+    );
+    expect(hosts.rows).toEqual([{ member: late.id }]);
+    const mail = await prepareBookingMail(
+      systemScope(db, w.workspaceId),
+      { appOrigin: 'https://app.example', linkKey: LINK_KEY, organizerEmail: 'bookings@app.example', now: () => NOW },
+      { bookingId: booked.bookingId, kind: 'reassigned' },
+    );
+    expect(mail.messages[0]?.subject).toBe('Your meeting is now with Late Owl');
+    expect(mail.messages[1]?.subject).toMatch(/^New booking: Demo with /u);
+    expect(mail.messages[2]?.subject).toMatch(/^Reassigned: Demo with /u);
+    expect(mail.messages[1]?.to).toContain('late.owl');
+    expect(mail.messages[2]?.to).toContain('early.bird');
+  });
+
+  it('picks again through the rotation when the page says so, even when the host is free (AC-746)', async () => {
+    const w = await workspace();
+    const sam = await w.addMember('Sam Lee');
+    const kim = await w.addMember('Kim Park');
+    const { page, entry } = await roundRobin(w, [sam.id, kim.id]);
+    await updateBookingPage(w.owner, { pageId: page.id, settings: { rescheduleHost: 'rotation' } }, NOW);
+    const first = await bookPublicSlot(entry, deps(), bookInput(at('09:00')));
+    const firstHost = (await hostsOf(w, [first.bookingId])).get(first.bookingId);
+    // A second booking for the other member at another time, so the counts are even before the move.
+    await bookPublicSlot(entry, deps(), bookInput(at('13:00')));
+    await moveBooking(hostTarget(w.owner, first.bookingId), deps(), { start: new Date(at('11:00')) });
+    const rows = await bookingAssignments(w.owner, { bookingId: first.bookingId });
+    // Picked again: one live row, whoever the fair pick is now, and the first one kept or voided accordingly.
+    const live = rows.filter((row) => row.voidedAt === undefined);
+    expect(live).toHaveLength(1);
+    expect([sam.id, kim.id]).toContain(firstHost);
   });
 
   it('shows a host only their own assignment rows, never another member’s counts (AC-752)', async () => {

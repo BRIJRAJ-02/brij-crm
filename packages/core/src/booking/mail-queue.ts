@@ -11,7 +11,15 @@ import type { WrittenEvent } from './calendar.ts';
 const { bookings } = schema;
 
 /** The kinds of booking email. */
-export const BOOKING_MAIL_KINDS = ['confirmed', 'cancelled', 'moved', 'guests', 'reminder_24h', 'reminder_1h'] as const;
+export const BOOKING_MAIL_KINDS = [
+  'confirmed',
+  'cancelled',
+  'moved',
+  'guests',
+  'reassigned',
+  'reminder_24h',
+  'reminder_1h',
+] as const;
 
 /** One kind of booking email. */
 export type BookingMailKind = (typeof BOOKING_MAIL_KINDS)[number];

@@ -27,7 +27,9 @@ import { can } from '../access/policy.ts';
 import { inWorkspace } from '../access/run.ts';
 import { postgresError, refuse, refuseOn } from '../engine/refusals.ts';
 import type { BookingCalendar, BusyReader, EventRef } from './calendar.ts';
-import { memberHours } from '../rotation/team.ts';
+import { chooseHosts, lockRotations } from '../rotation/assign.ts';
+import { changedSeats, liveSeats, recordSeats, remakeEvent, syncHosts } from '../rotation/reseat.ts';
+import { loadTeam, memberBusy, readTeam, teamMemberIds, teamSlots, type Team } from '../rotation/team.ts';
 import { hostLockKey, lockKey } from './locks.ts';
 import { enqueueBookingMail } from './mail-queue.ts';
 import {
@@ -43,7 +45,7 @@ import {
 } from './slots.ts';
 import { ensureManageToken, managePath, type ManageLinkKey } from './tokens.ts';
 
-const { bookingHosts, bookings } = schema;
+const { bookings } = schema;
 
 /** The most times a booking may be moved (AC-639). */
 export const MAX_RESCHEDULES = 5;
@@ -53,9 +55,10 @@ export const MAX_GUESTS = 10;
 
 /** What a change needs: the calendar calls, the clock, and where failures are logged. */
 export interface ChangeDeps {
-  readonly calendar: Pick<BookingCalendar, 'existing'> & {
-    readonly busy: BusyReader & { readonly fresh?: BusyReader };
-  };
+  readonly calendar: Pick<BookingCalendar, 'existing'> &
+    Partial<Pick<BookingCalendar, 'events'>> & {
+      readonly busy: BusyReader & { readonly fresh?: BusyReader };
+    };
   readonly now?: () => Date;
   readonly log?: { warn(message: string, fields: Readonly<Record<string, unknown>>): void };
 }
@@ -177,16 +180,15 @@ function withoutOwn(busy: MembersBusy, row: BookingRow): MembersBusy {
   };
 }
 
-/** The slots the booking could move to in [from, to): the page's, its own time not counted against it. */
+/** The page's slots of the booking's own length in a range, its own time free (a personal or collective page). */
 async function slotsFor(
   tx: WorkspaceTx,
   page: PageRecord,
   row: BookingRow,
   memberIds: readonly string[],
-  busy: HostsBusy,
+  busy: MembersBusy,
   range: { readonly from: Date; readonly to: Date; readonly now: Date },
 ) {
-  if (busy.each !== undefined) return hostSlots(tx, page, row, memberIds, busy.each, range);
   const held = await bookedSpans(tx, memberIds, page.id, range.from, range.to, row.id);
   const closed = await membersClosed(
     tx,
@@ -200,99 +202,61 @@ async function slotsFor(
     from: range.from,
     to: range.to,
     now: range.now,
-    busy: withoutOwn(busy.all, row),
+    busy: withoutOwn(busy, row),
     bookings: held,
     closed,
   });
 }
 
-/**
- * A round robin booking's times (spec 0029, AC-746, "same host"): the times
- * every one of its own hosts is free, each in their own hours, calendar,
- * blocks and bookings. Moving "through the rotation again" picks anew in
- * milestone 2; until then both rules keep the host.
- */
-async function hostSlots(
-  tx: WorkspaceTx,
-  page: PageRecord,
-  row: BookingRow,
-  memberIds: readonly string[],
-  each: ReadonlyMap<string, MembersBusy>,
-  range: { readonly from: Date; readonly to: Date; readonly now: Date },
-) {
-  const hours = await memberHours(tx, page, memberIds);
-  const lists = [];
-  for (const memberId of memberIds) {
-    const held = await bookedSpans(tx, [memberId], page.id, range.from, range.to, row.id);
-    const closed = await membersClosed(
-      tx,
-      [memberId],
-      page,
-      new Date(range.from.getTime() - BUSY_MARGIN_MS),
-      new Date(range.to.getTime() + BUSY_MARGIN_MS),
-    );
-    lists.push(
-      pageSlots(
-        { ...page, availability: hours.hours.get(memberId) ?? page.availability },
-        {
-          duration: minutesOf(row),
-          from: range.from,
-          to: range.to,
-          now: range.now,
-          busy: withoutOwn(each.get(memberId) ?? NO_BUSY, row),
-          bookings: held,
-          closed,
-        },
-      ),
-    );
-  }
-  const [first = [], ...rest] = lists;
-  const starts = rest.map((list) => new Set(list.map((slot) => slot.start.getTime())));
-  return first.filter((slot) => starts.every((set) => set.has(slot.start.getTime())));
-}
-
-/** A member with no calendar: nothing busy. */
-const NO_BUSY: MembersBusy = { busy: [], blocked: false, noCalendar: true };
-
-/** The hosts' calendars: together, and for a round robin booking each host's own, since each keeps their own hours. */
-interface HostsBusy {
-  readonly all: MembersBusy;
-  readonly each?: ReadonlyMap<string, MembersBusy>;
-}
-
-/** Reads the hosts' calendars once each, outside any transaction. */
-async function hostsBusy(
+/** Each team member's calendar, the booking's own time left free. */
+async function teamBusy(
   read: BusyReader,
   workspaceId: string,
-  page: PageRecord,
+  row: BookingRow,
   memberIds: readonly string[],
   from: Date,
   to: Date,
-): Promise<HostsBusy> {
-  if (page.kind !== 'round_robin') return { all: await membersBusy(read, workspaceId, memberIds, from, to) };
-  const answers = await Promise.all(
-    memberIds.map(async (memberId) => [memberId, await membersBusy(read, workspaceId, [memberId], from, to)] as const),
-  );
-  const each = new Map(answers);
-  const list = [...each.values()];
-  return {
-    all: {
-      busy: list.flatMap((answer) => answer.busy),
-      blocked: list.some((answer) => answer.blocked),
-      noCalendar: list.every((answer) => answer.noCalendar),
-    },
-    each,
-  };
+): Promise<ReadonlyMap<string, MembersBusy>> {
+  const each = await memberBusy(read, workspaceId, memberIds, from, to);
+  return new Map([...each].map(([memberId, busy]) => [memberId, withoutOwn(busy, row)]));
 }
 
-/** Who a move must find free: a round robin booking's own hosts (`booking_hosts`), else the page's members. */
-async function moveHosts(tx: WorkspaceTx, page: PageRecord, row: BookingRow): Promise<readonly string[]> {
-  if (page.kind !== 'round_robin') return membersOf(tx, page);
-  const held = await tx
-    .select({ memberId: bookingHosts.memberId })
-    .from(bookingHosts)
-    .where(eq(bookingHosts.bookingId, row.id));
-  return [...new Set([row.hostMemberId, ...held.map((each) => each.memberId)])];
+/**
+ * A round robin booking's move times (spec 0029, AC-746; spec 0037, AC-1324): every time its fixed hosts are free
+ * and each rotation can seat someone, the booking itself left out of every count. Whether the current hosts stay is
+ * decided when it moves (`moveTeamBooking`).
+ */
+async function teamMoveSlots(
+  scope: EngineScope,
+  read: BusyReader,
+  found: { readonly row: BookingRow; readonly page: PageRecord; readonly team: Extract<Team, { kind: 'round_robin' }> },
+  range: { readonly from: Date; readonly to: Date; readonly now: Date },
+) {
+  const { row, page, team } = found;
+  const busy = await teamBusy(
+    read,
+    scope.workspaceId,
+    row,
+    teamMemberIds(team),
+    new Date(range.from.getTime() - BUSY_MARGIN_MS),
+    new Date(range.to.getTime() + BUSY_MARGIN_MS),
+  );
+  return inWorkspace(scope, async (tx) =>
+    teamSlots(page, team, await readTeam(tx, page, team, busy, { ...range, margin: BUSY_MARGIN_MS, except: row.id }), {
+      duration: minutesOf(row),
+      ...range,
+    }),
+  );
+}
+
+/** A round robin page's team, for a booking on one; undefined for any other page. */
+async function roundRobinTeam(
+  tx: WorkspaceTx,
+  page: PageRecord,
+): Promise<Extract<Team, { kind: 'round_robin' }> | undefined> {
+  if (page.kind !== 'round_robin') return undefined;
+  const team = await loadTeam(tx, page);
+  return team?.kind === 'round_robin' ? team : undefined;
 }
 
 /**
@@ -306,15 +270,23 @@ export async function readMoveSlots(
   range: { readonly from: Date; readonly to: Date },
 ): Promise<PublicSlots> {
   const now = deps.now?.() ?? new Date();
-  const { row, page, memberIds } = await inWorkspace(target.scope, async (tx) => {
-    const found = await readTarget(tx, target, false);
-    checkMovable(found.row, found.page, now);
-    return { ...found, memberIds: await moveHosts(tx, found.page, found.row) };
+  const found = await inWorkspace(target.scope, async (tx) => {
+    const read = await readTarget(tx, target, false);
+    checkMovable(read.row, read.page, now);
+    const team = await roundRobinTeam(tx, read.page);
+    return { ...read, team, memberIds: team === undefined ? await membersOf(tx, read.page) : [] };
   });
-  const busy = await hostsBusy(
+  const { row, page, team, memberIds } = found;
+  if (team !== undefined) {
+    const offered = await teamMoveSlots(target.scope, deps.calendar.busy, { row, page, team }, { ...range, now });
+    return {
+      slots: offered.slots.map((slot) => ({ start: slot.start.toISOString(), end: slot.end.toISOString() })),
+      calendar: offered.blocked ? 'unreachable' : 'ok',
+    };
+  }
+  const busy = await membersBusy(
     deps.calendar.busy,
     target.scope.workspaceId,
-    page,
     memberIds,
     new Date(range.from.getTime() - BUSY_MARGIN_MS),
     new Date(range.to.getTime() + BUSY_MARGIN_MS),
@@ -322,7 +294,7 @@ export async function readMoveSlots(
   const slots = await inWorkspace(target.scope, (tx) => slotsFor(tx, page, row, memberIds, busy, { ...range, now }));
   return {
     slots: slots.map((slot) => ({ start: slot.start.toISOString(), end: slot.end.toISOString() })),
-    calendar: busy.all.blocked ? 'unreachable' : 'ok',
+    calendar: busy.blocked ? 'unreachable' : 'ok',
   };
 }
 
@@ -389,23 +361,24 @@ export async function moveBooking(
     const found = await readTarget(tx, target, false);
     if (found.row.startsAt.getTime() === start.getTime() && found.row.status === 'confirmed') return undefined;
     checkMovable(found.row, found.page, now);
-    return { ...found, memberIds: await moveHosts(tx, found.page, found.row) };
+    const team = await roundRobinTeam(tx, found.page);
+    return { ...found, team, memberIds: team === undefined ? await membersOf(tx, found.page) : [] };
   });
   if (first === undefined) return { moved: false };
+  if (first.team !== undefined) return moveTeamBooking(target, deps, { ...first, team: first.team }, start, now);
   const { memberIds } = first;
 
   // The calendars, outside any lock: the day around the new time, read fresh.
   const dayFrom = new Date(start.getTime() - 86_400_000);
   const dayTo = new Date(start.getTime() + 86_400_000);
-  const busy = await hostsBusy(
+  const busy = await membersBusy(
     deps.calendar.busy.fresh ?? deps.calendar.busy,
     target.scope.workspaceId,
-    first.page,
     memberIds,
     new Date(dayFrom.getTime() - BUSY_MARGIN_MS),
     new Date(dayTo.getTime() + BUSY_MARGIN_MS),
   );
-  if (busy.all.blocked) throw refuse('BOOKING_CLOSED', 'This booking can’t move right now. Try again later.');
+  if (busy.blocked) throw refuse('BOOKING_CLOSED', 'This booking can’t move right now. Try again later.');
 
   const moved = await inWorkspace(target.scope, async (tx) => {
     for (const memberId of [...memberIds].sort()) await lockKey(tx, hostLockKey(target.scope.workspaceId, memberId));
@@ -453,6 +426,130 @@ export async function moveBooking(
     existing === undefined
       ? undefined
       : (ref) => existing.move(ref, { start: moved.startsAt.toISOString(), end: moved.endsAt.toISOString() }),
+  );
+  return { moved: true };
+}
+
+/**
+ * Moves a round robin booking (spec 0029, AC-746; spec 0037, AC-1324): under the rotations' locks, then every
+ * candidate's host lock, the booking keeps each host who is free at the new time when the page says "same host
+ * when free"; every other seat, and every seat when it says "through the rotation", picks again. A seat that changed
+ * voids its ledger row and writes a new one; a new organiser gets the event on their calendar and the old one's is
+ * cancelled; the guest and both hosts are told (`reassigned`) beside the usual `moved`.
+ */
+async function moveTeamBooking(
+  target: ChangeTarget,
+  deps: ChangeDeps,
+  first: {
+    readonly row: BookingRow;
+    readonly page: PageRecord;
+    readonly team: Extract<Team, { kind: 'round_robin' }>;
+  },
+  start: Date,
+  now: Date,
+): Promise<{ readonly moved: boolean }> {
+  const { scope } = target;
+  const dayFrom = new Date(start.getTime() - 86_400_000);
+  const dayTo = new Date(start.getTime() + 86_400_000);
+  const read = deps.calendar.busy.fresh ?? deps.calendar.busy;
+  const busy = await teamBusy(
+    read,
+    scope.workspaceId,
+    first.row,
+    teamMemberIds(first.team),
+    new Date(dayFrom.getTime() - BUSY_MARGIN_MS),
+    new Date(dayTo.getTime() + BUSY_MARGIN_MS),
+  );
+  const range = { from: dayFrom, to: dayTo, now };
+  const offered = await inWorkspace(scope, async (tx) =>
+    teamSlots(
+      first.page,
+      first.team,
+      await readTeam(tx, first.page, first.team, busy, { ...range, margin: BUSY_MARGIN_MS, except: first.row.id }),
+      { duration: minutesOf(first.row), ...range },
+    ),
+  );
+  if (offered.blocked) throw refuse('BOOKING_CLOSED', 'This booking can’t move right now. Try again later.');
+  const slot = offered.slots.find((each) => each.start.getTime() === start.getTime());
+  if (slot === undefined) throw refuseOn('SLOT_TAKEN', 'That time has just gone. Pick another.', 'start');
+
+  const result = await inWorkspace(scope, async (tx) => {
+    await lockRotations(
+      tx,
+      scope.workspaceId,
+      first.team.rotations.map((rotation) => rotation.rules.id),
+    );
+    const seats = await liveSeats(tx, first.row.id);
+    const keep =
+      first.page.rescheduleHost === 'same'
+        ? new Map([...seats].map(([rotationId, seat]) => [rotationId, seat.memberId]))
+        : undefined;
+    const chosen = await chooseHosts(tx, first.page, first.team, {
+      workspaceId: scope.workspaceId,
+      start,
+      duration: minutesOf(first.row),
+      candidates: slot.candidates,
+      busy,
+      ...range,
+      ...(keep === undefined ? {} : { keep }),
+      except: first.row.id,
+    });
+    const { row, page } = await readTarget(tx, target, true);
+    if (row.startsAt.getTime() === start.getTime() && row.status === 'confirmed') return undefined;
+    checkMovable(row, page, now);
+    const end = new Date(start.getTime() + minutesOf(row) * 60_000);
+    const blockStart = new Date(start.getTime() - page.bufferBefore * 60_000);
+    const blockEnd = new Date(end.getTime() + page.bufferAfter * 60_000);
+    const changes = changedSeats(first.team, seats, chosen.picks);
+    try {
+      const [updated] = await tx
+        .update(bookings)
+        .set({
+          startsAt: start,
+          endsAt: end,
+          during: sql`tstzrange(${blockStart.toISOString()}::timestamptz, ${blockEnd.toISOString()}::timestamptz, '[)')`,
+          reschedules: row.reschedules + 1,
+          previousStartsAt: row.startsAt,
+          hostMemberId: chosen.organiser,
+          ...updatedBy(actorOf(target, page)),
+        })
+        .where(and(eq(bookings.id, row.id), eq(bookings.status, 'confirmed')))
+        .returning();
+      if (updated === undefined) throw new Error('The booking was not moved.');
+      await syncHosts(tx, updated.id, chosen.hosts);
+      await recordSeats(tx, scope, updated.id, changes);
+      await enqueueBookingMail(tx, updated.id, [
+        'moved',
+        ...(changes.length === 0 ? [] : (['reassigned'] as const)),
+        'reminder_24h',
+        'reminder_1h',
+      ]);
+      return { updated, organiserChanged: chosen.organiser !== row.hostMemberId, old: eventOf(scope.workspaceId, row) };
+    } catch (error) {
+      if (postgresError(error)?.code === '23P01') {
+        throw refuseOn('SLOT_TAKEN', 'That time has just gone. Pick another.', 'start');
+      }
+      throw error;
+    }
+  });
+  if (result === undefined) return { moved: false };
+  const { updated, organiserChanged, old } = result;
+  if (organiserChanged && deps.calendar.events !== undefined) {
+    const calendar = {
+      events: deps.calendar.events,
+      ...(deps.calendar.existing === undefined ? {} : { existing: deps.calendar.existing }),
+    };
+    await remakeEvent(scope, calendar, updated.id, old, deps.log);
+    return { moved: true };
+  }
+  const existing = deps.calendar.existing;
+  await afterCommit(
+    target,
+    deps,
+    updated,
+    existing === undefined
+      ? undefined
+      : (ref) => existing.move(ref, { start: updated.startsAt.toISOString(), end: updated.endsAt.toISOString() }),
   );
   return { moved: true };
 }
