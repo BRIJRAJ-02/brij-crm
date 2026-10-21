@@ -55,8 +55,16 @@ export function VerifyScreen({ data, pending, redirect }: VerifyScreenProps) {
       (outcome) => {
         clearPending(sessionStore(window));
         // Two factor is on (spec 0033): no session yet, the second step comes first.
-        if (outcome === 'second-step') {
-          void navigate({ to: '/two-factor', search: redirect === undefined ? {} : { redirect }, replace: true });
+        if (outcome !== 'signed-in') {
+          void navigate({
+            to: '/two-factor',
+            search: {
+              ...(redirect === undefined ? {} : { redirect }),
+              // Only passkeys for a second factor (AC-888): the step is the passkey alone.
+              ...(outcome === 'second-step-passkey' ? { only: 'passkey' as const } : {}),
+            },
+            replace: true,
+          });
           return;
         }
         void navigate({ href: safeRedirect(redirect), replace: true });

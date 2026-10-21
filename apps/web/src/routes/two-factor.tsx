@@ -1,7 +1,7 @@
 import { LoadingNow } from '@crm/ui';
 import { createFileRoute, redirect } from '@tanstack/react-router';
 import { AuthError, AuthPending } from '../features/auth/AuthStates.tsx';
-import { redirectSearch, safeRedirect } from '../features/auth/redirect.ts';
+import { redirectSearch, safeRedirect, type SignInSearch } from '../features/auth/redirect.ts';
 import { strings } from '../features/auth/two-factor-strings.ts';
 import { TwoFactorScreen } from '../features/auth/TwoFactorScreen.tsx';
 
@@ -9,7 +9,11 @@ import { TwoFactorScreen } from '../features/auth/TwoFactorScreen.tsx';
 // on. The pending sign in lives in an HttpOnly cookie the browser can't read, so a stale one is said by the server.
 // Someone already signed in goes straight on.
 export const Route = createFileRoute('/two-factor')({
-  validateSearch: redirectSearch,
+  // `only=passkey`: the account's one second factor is a passkey (AC-888), so the step offers nothing else.
+  validateSearch: (search: Record<string, unknown>): SignInSearch & { readonly only?: 'passkey' } => ({
+    ...redirectSearch(search),
+    ...(search.only === 'passkey' ? { only: 'passkey' as const } : {}),
+  }),
   loaderDeps: ({ search }) => ({ redirect: search.redirect }),
   loader: async ({ context, deps }) => {
     const me = await context.data.me.get();
@@ -25,7 +29,7 @@ export const Route = createFileRoute('/two-factor')({
 });
 
 function TwoFactorRoute() {
-  const { redirect: target } = Route.useSearch();
+  const { redirect: target, only } = Route.useSearch();
   const { data } = Route.useRouteContext();
-  return <TwoFactorScreen data={data} redirect={target} />;
+  return <TwoFactorScreen data={data} redirect={target} passkeyOnly={only === 'passkey'} />;
 }

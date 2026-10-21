@@ -11,6 +11,7 @@ import {
   errorStatus,
   PasskeyAssertion,
   PasskeyName,
+  requiresTwoFactorMessage,
   type SignInMethod,
   type SignInProviders,
 } from '@crm/contracts';
@@ -184,6 +185,14 @@ export interface AuthSession {
   readonly sessionId: string;
   readonly user: SessionUser;
   readonly setCookies: readonly string[];
+  /**
+   * When this session last proved who it is (its sign in, or a step up since),
+   * for a workspace's session length and "Sign out everyone" (spec 0033,
+   * milestone 4). A session older than the field reads as its creation.
+   */
+  readonly verifiedAt: Date;
+  /** Whether the person has the authenticator app on: a passkey is the other second factor, read on demand. */
+  readonly twoFactorEnabled: boolean;
 }
 
 /** Sign in, as the rest of the API sees it. */
@@ -226,6 +235,12 @@ export interface AuthDeps {
    * `SIGNUP_ALLOWLIST`. Absent, only the list decides.
    */
   readonly invited?: (email: string) => Promise<boolean>;
+  /**
+   * The names of the workspaces this person is in that require two factor
+   * (spec 0033, AC-885): while any does, the authenticator app can't be turned
+   * off unless a passkey stays. Always named, so no sign in is built without it.
+   */
+  readonly requiredBy: (userId: string) => Promise<readonly string[]>;
 }
 
 /**
@@ -403,13 +418,19 @@ const RegisterOptionsQuery = z.strictObject({
   authenticatorAttachment: z.enum(['platform', 'cross-platform']).optional(),
 });
 
+/** A session's `verifiedAt` as the adapter hands it (a Date, or its text), else when the session was made. */
+function verifiedAtOf(value: unknown, createdAt: Date): Date {
+  const at = value instanceof Date ? value : typeof value === 'string' ? new Date(value) : undefined;
+  return at === undefined || Number.isNaN(at.getTime()) ? new Date(createdAt) : at;
+}
+
 /** Whether a session's user has two factor on (the plugin's field on Better Auth's loose user). */
 function isTwoFactorUser(user: unknown): boolean {
   return typeof user === 'object' && user !== null && 'twoFactorEnabled' in user && user.twoFactorEnabled === true;
 }
 
 /** Builds sign in for this environment. */
-export function createAuth({ env, identity, mailer, analytics = NO_ANALYTICS, invited }: AuthDeps): Auth {
+export function createAuth({ env, identity, mailer, analytics = NO_ANALYTICS, invited, requiredBy }: AuthDeps): Auth {
   const local = env.APP_ENV === 'local';
   const allowlist = createAllowlist(env.APP_ENV, env.SIGNUP_ALLOWLIST);
   /** Whether a new account may be made for `email`: on the list, or holding an open email invitation (AC-807). */
@@ -714,8 +735,9 @@ export function createAuth({ env, identity, mailer, analytics = NO_ANALYTICS, in
             ) {
               throw inputInvalid();
             }
-            const state = await identity.twoFactorState(userId);
-            await requireFreshSession(userId, current.session.id, { secondFactor: state.enabled });
+            // A passkey is a second factor too (AC-888): with one or the app, only a second factor adds another.
+            const strong = (await identity.twoFactorState(userId)).enabled || (await identity.hasPasskey(userId));
+            await requireFreshSession(userId, current.session.id, { secondFactor: strong });
             // Checked at both steps, so options asked for in parallel can't add past the cap.
             if ((await identity.listPasskeys(userId)).length >= PASSKEYS_MAX) {
               throw new APIError('BAD_REQUEST', {
@@ -757,7 +779,8 @@ export function createAuth({ env, identity, mailer, analytics = NO_ANALYTICS, in
             const { userId, sessionId } = signedIn();
             // Only the app: the email second factor is off, and the issuer is ours.
             if (!EnableBody.safeParse(ctx.body ?? {}).success) throw inputInvalid();
-            await requireFreshSession(userId, sessionId);
+            // With a passkey already, the app is added by a second factor's check, never an email code alone.
+            await requireFreshSession(userId, sessionId, { secondFactor: await identity.hasPasskey(userId) });
           } else if (ctx.path === '/two-factor/generate-backup-codes') {
             const { userId, sessionId } = signedIn();
             // New codes replace the old ones, so only a second factor may make them: an email code alone (on a
@@ -766,6 +789,16 @@ export function createAuth({ env, identity, mailer, analytics = NO_ANALYTICS, in
           } else if (ctx.path === '/two-factor/disable') {
             const { userId, sessionId } = signedIn();
             await requireFreshSession(userId, sessionId, { secondFactor: true });
+            // A workspace that requires two factor keeps it on, unless a passkey stays as the second factor (AC-885).
+            if (!(await identity.hasPasskey(userId))) {
+              const names = await requiredBy(userId);
+              if (names.length > 0) {
+                throw new APIError('CONFLICT', {
+                  code: 'WORKSPACE_REQUIRES_TWO_FACTOR',
+                  message: requiresTwoFactorMessage(names),
+                });
+              }
+            }
           } else if (ctx.path === '/two-factor/verify-backup-code') {
             // A step up uses a backup code through `account.stepUp.verify`, never here; and a sign in's code always
             // makes its session (no `disableSession`), so a code is never used up unseen.
@@ -906,8 +939,13 @@ export function createAuth({ env, identity, mailer, analytics = NO_ANALYTICS, in
                 context.path === SIGN_IN_CODE_PATH || context.path === CALLBACK_ROUTE,
               handler: createAuthMiddleware(async (ctx) => {
                 const made = ctx.context.newSession;
-                if (made === null || !isTwoFactorUser(made.user)) return;
+                if (made === null) return;
                 const userId = made.user.id;
+                // A passkey is a second factor too (AC-888): an account with only passkeys is held back the same
+                // way, and its second step is the passkey alone.
+                const withApp = isTwoFactorUser(made.user);
+                const withPasskey = await identity.hasPasskey(userId);
+                if (!withApp && !withPasskey) return;
                 // A remembered device (AC-884) passes, and its cookie is renewed, as the plugin's own hold does.
                 const trust = ctx.context.createAuthCookie(TRUST_DEVICE_COOKIE, { maxAge: TRUST_DEVICE_SECONDS });
                 const trusted = await ctx.getSignedCookie(trust.name, ctx.context.secret);
@@ -959,8 +997,13 @@ export function createAuth({ env, identity, mailer, analytics = NO_ANALYTICS, in
                   });
                 });
                 // Google's callback lands in the browser: send it to the second step.
-                if (ctx.path === CALLBACK_ROUTE) throw ctx.redirect(new URL(SECOND_STEP_PATH, appOrigin).toString());
-                return ctx.json({ twoFactorRedirect: true, twoFactorMethods: ['totp'] });
+                const methods = [...(withApp ? ['totp'] : []), ...(withPasskey ? ['passkey'] : [])];
+                if (ctx.path === CALLBACK_ROUTE) {
+                  const second = new URL(SECOND_STEP_PATH, appOrigin);
+                  if (!withApp) second.searchParams.set('only', 'passkey');
+                  throw ctx.redirect(second.toString());
+                }
+                return ctx.json({ twoFactorRedirect: true, twoFactorMethods: methods });
               }),
             },
           ],
@@ -990,10 +1033,13 @@ export function createAuth({ env, identity, mailer, analytics = NO_ANALYTICS, in
       });
       if (response === null) return undefined;
       const { id, name, email, emailVerified } = response.user;
+      const verified: unknown = response.session.verifiedAt;
       return {
         sessionId: response.session.id,
         user: { id, name, email, emailVerified },
         setCookies: answered.getSetCookie(),
+        verifiedAt: verifiedAtOf(verified, response.session.createdAt),
+        twoFactorEnabled: isTwoFactorUser(response.user),
       };
     },
 

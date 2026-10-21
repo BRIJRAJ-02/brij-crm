@@ -44,6 +44,8 @@ export function useStepUp(data: DataLayer, security: AccountSecurityState, need:
   const twoFactorOn = security.status === 'ready' && security.twoFactor.on;
   const isNeeded = needsStepUp(data, security, need);
   const hasPasskey = security.status === 'ready' && security.passkeys.length > 0;
+  // A passkey is a second factor (AC-888): with one and no app, only a passkey proves it, never an email code.
+  const passkeyOnly = !twoFactorOn && hasPasskey;
   // A passkey just proved it: the dialog's commit goes on though this render still says a check is needed.
   const passed = useRef(false);
   const [passkeyError, setPasskeyError] = useState<string | undefined>(undefined);
@@ -100,6 +102,11 @@ export function useStepUp(data: DataLayer, security: AccountSecurityState, need:
 
   const prove = async (): Promise<boolean> => {
     if (!isNeeded || passed.current) return true;
+    if (passkeyOnly) {
+      // The browser's prompt; once it checks out, the dialog's commit runs again and passes.
+      void askPasskey();
+      return false;
+    }
     if (!twoFactorOn && !sent) {
       // The commit with no code sent yet sends one: the next step is the code.
       await send();
@@ -178,7 +185,7 @@ export function useStepUp(data: DataLayer, security: AccountSecurityState, need:
         {passkeyNote}
       </>
     );
-  } else if (isNeeded && need.secondFactor === true) {
+  } else if (isNeeded && (need.secondFactor === true || passkeyOnly)) {
     fields = (
       <>
         <Callout title={strings.stepUp.title}>
@@ -216,5 +223,5 @@ export function useStepUp(data: DataLayer, security: AccountSecurityState, need:
       </>
     );
   }
-  return { isNeeded, willSend: isNeeded && !twoFactorOn && !sent, fields, prove, reset, isAsking };
+  return { isNeeded, willSend: isNeeded && !twoFactorOn && !passkeyOnly && !sent, fields, prove, reset, isAsking };
 }

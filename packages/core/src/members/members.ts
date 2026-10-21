@@ -98,11 +98,13 @@ const likeLiteral = (text: string): string => text.replace(/[\\%_]/g, (char) => 
  * each with their role, when they joined, their picture and time zone.
  * `search` keeps those whose name or email holds it, in any case; `cursor`
  * starts after the last page's end. Removed members are left out. Every
- * member may read it.
+ * member may read it. With `secondFactorUsers`, owners and admins also learn
+ * who has a second factor (spec 0033, AC-895); nobody else does.
  */
 export async function listMembers(
   scope: EngineScope,
   input: { readonly search?: string; readonly cursor?: string; readonly limit?: number } = {},
+  options: { readonly secondFactorUsers?: (userIds: readonly string[]) => Promise<ReadonlySet<string>> } = {},
 ): Promise<MembersPage> {
   const limit = Math.min(Math.max(Math.floor(input.limit ?? MEMBERS_PAGE), 1), MEMBERS_PAGE_MAX);
   const search = input.search?.trim() ?? '';
@@ -118,7 +120,7 @@ export async function listMembers(
   );
   const { rows, total } = await inWorkspace(scope, async (tx) => {
     const read = await tx
-      .select({ ...VIEW_COLUMNS, sortName })
+      .select({ ...VIEW_COLUMNS, userId: members.userId, sortName })
       .from(members)
       .where(
         and(
@@ -135,8 +137,16 @@ export async function listMembers(
   });
   const page = rows.slice(0, limit);
   const last = page.at(-1);
+  // A reader who manages members (owners and admins) also learns who has a second factor (spec 0033, AC-895).
+  const factors =
+    options.secondFactorUsers !== undefined && can(scope.access, 'members.manage')
+      ? await options.secondFactorUsers(page.flatMap((row) => (row.userId === null ? [] : [row.userId])))
+      : undefined;
   return {
-    members: page.map(toView),
+    members: page.map((row) => ({
+      ...toView(row),
+      ...(factors === undefined ? {} : { twoFactor: row.userId !== null && factors.has(row.userId) }),
+    })),
     total,
     ...(rows.length > limit && last !== undefined ? { nextCursor: encodeMemberCursor(last.sortName, last.id) } : {}),
   };

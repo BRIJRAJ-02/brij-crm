@@ -547,6 +547,13 @@
       "when": 1792617445721,
       "tag": "0077_booking_custom_durations",
       "breakpoints": true
+    },
+    {
+      "idx": 78,
+      "version": "7",
+      "when": 1792618107646,
+      "tag": "0078_workspace_security",
+      "breakpoints": true
     }
   ]
 }

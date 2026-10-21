@@ -11,7 +11,7 @@
 // "readOnly":["people.description"],"own":"people.owner"}.
 import { readFile } from 'node:fs/promises';
 import { serve } from '@hono/node-server';
-import type { AccessRules, RuleSource } from '@crm/core';
+import { twoFactorRequiredBy, type AccessRules, type RuleSource } from '@crm/core';
 import { createDatabase, createIdentityStore, schema } from '@crm/db';
 import * as z from 'zod';
 import { createApp } from '../src/app.ts';
@@ -85,7 +85,12 @@ const db = createDatabase({ url: env.DATABASE_URL, applicationName: 'crm-api-rul
 const identity = createIdentityStore({ url: env.IDENTITY_DATABASE_URL, applicationName: 'crm-api-rules-identity' });
 await db.assertAppRole();
 await identity.assertIdentityRole();
-const auth = createAuth({ env, identity, mailer: createMailer(env) });
+const auth = createAuth({
+  env,
+  identity,
+  mailer: createMailer(env),
+  requiredBy: (userId) => twoFactorRequiredBy({ db, identity }, userId),
+});
 serve(
   { fetch: createApp({ services: { db, identity, auth, wakeRelay: NO_WAKE, rules }, env }).fetch, port: env.PORT },
   (info) => log.info('Rules test server listening', { port: info.port, role: wanted.role }),

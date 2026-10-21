@@ -1,7 +1,7 @@
 // Test helpers for the api's own suites: an app wired to a test router, a
 // database that is never reached, and a way to read the log lines it writes.
 import { ENGINE_REFUSAL_CODES, type EngineRefusal } from '@crm/contracts';
-import { isInvitedEmail, NO_RULE_SOURCE, type JobRegistry, type RuleSource } from '@crm/core';
+import { isInvitedEmail, NO_RULE_SOURCE, twoFactorRequiredBy, type JobRegistry, type RuleSource } from '@crm/core';
 import { createDatabase, createIdentityStore, type Database, type IdentityStore } from '@crm/db';
 import { ORPCError, os } from '@orpc/server';
 import { vi } from 'vitest';
@@ -101,6 +101,7 @@ export function testServices(
       identity,
       mailer,
       invited: (email) => isInvitedEmail({ db }, email),
+      requiredBy: (userId) => twoFactorRequiredBy({ db, identity }, userId),
       ...(options.analytics === undefined ? {} : { analytics: options.analytics }),
     }),
     wakeRelay: options.wakeRelay ?? NO_WAKE,

@@ -50,6 +50,9 @@ const NO_SCOPE: ReadonlySet<string> = new Set([
   'deviceParts',
   // The step up (spec 0033, milestone 2): the session's own freshness, by its user and session ids.
   'accountSecurity',
+  'twoFactorRequiredBy',
+  // Account deletion's join requests (spec 0033): the person's own, found by their user id, changed as the system.
+  'closeJoinRequestsOf',
   'requireFresh',
   'sessionFreshness',
   'startStepUp',

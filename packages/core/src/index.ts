@@ -12,6 +12,7 @@ export {
   type DoorDeps,
   type DoorInput,
   type DoorLog,
+  type DoorSession,
   type RuleSource,
 } from './access/door.ts';
 export {
@@ -108,6 +109,18 @@ export {
   type CalendarGrant,
   type DeletingCaller,
 } from './account/deletion.ts';
+export {
+  getWorkspaceSecurity,
+  OWNER_NEEDS_TWO_FACTOR_MESSAGE,
+  setWorkspaceSecurity,
+  signOutEveryone,
+  twoFactorRequiredBy,
+  type RequiredByDeps,
+  type SecondFactorUsers,
+  type WorkspaceSecurityChange,
+  type WorkspaceSecurityDeps,
+} from './account/workspace-security.ts';
+export { closeJoinRequestsOf } from './account/join-requests.ts';
 export { milestoneHook, type ReachedMilestone } from './milestones/milestones.ts';
 export { type AuditSource } from './members/audit.ts';
 // Settings › Workspace › General, the owner's delete and restore, and Account › Profile (spec 0031, slice 7).

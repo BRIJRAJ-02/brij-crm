@@ -3,6 +3,7 @@
 // Lint allows this import only in tests and scripts.
 import { KEY_SCOPES, type Role } from '@crm/contracts';
 import type { Database } from '@crm/db';
+import type { DoorSession } from './access/door.ts';
 import { mintScope, type EngineScope } from './access/mint.ts';
 import { keyAccess, NO_RULES, roleAccess, SYSTEM_ACCESS, type Access, type AccessRules } from './access/policy.ts';
 import type { Limits } from './engine/limits.ts';
@@ -97,3 +98,11 @@ export async function startJobForTest(
 }
 
 export { createFakeCalendarProvider, type FakeCalendar } from './calendar/fake.ts';
+
+/**
+ * A session as the door sees one in tests (spec 0033): it proved who it is
+ * just now, and its person has no second factor unless `secondFactor` says so.
+ */
+export function signedInNow(secondFactor = false): DoorSession {
+  return { verifiedAt: new Date(), hasSecondFactor: () => Promise.resolve(secondFactor) };
+}

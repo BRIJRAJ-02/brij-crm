@@ -68,6 +68,8 @@ import type {
   MyAccess,
   ObjectSummary,
   RecordView,
+  SessionLengthDays,
+  WorkspaceSecurity,
   RelationshipView,
   Role,
   ScheduleMember,
@@ -322,6 +324,8 @@ export type {
   NotificationView,
   ObjectSummary,
   Permission,
+  SessionLengthDays,
+  WorkspaceSecurity,
   Role,
   RemovalPreview,
   RoleOption,
@@ -394,7 +398,7 @@ export {
 export type { PasskeyOutcome, PasskeySupport, SecondFactorKind, SignInOutcome, TwoFactorSetup } from './auth/auth.ts';
 export type { StepUpMethod } from '@crm/contracts';
 export type { AccountSession, DeletionBlocker } from '@crm/contracts';
-export { PASSKEY_NAME_MAX, STEP_UP_MINUTES } from '@crm/contracts/account-limits';
+export { PASSKEY_NAME_MAX, SESSION_LENGTH_DAYS, STEP_UP_MINUTES } from '@crm/contracts/account-limits';
 export type { AccountPasskey } from '@crm/contracts';
 export type { CalendarSettingsHeld, CalendarSettingsState, CalendarState, CalendarView } from './calendar/store.ts';
 export type {
@@ -3430,6 +3434,24 @@ export function createDataLayer({
         members.delete(workspace);
         access.delete(workspace);
       },
+    },
+    /**
+     * A workspace's sign in rules (spec 0033, milestone 4): settings, not CRM
+     * data, so no cache and no live event; the screen reads them when it
+     * opens and takes each answer as the new state. Owners only (`FORBIDDEN`
+     * otherwise). Refusals throw a DataError: `OWNER_NEEDS_TWO_FACTOR` when
+     * requiring two factor without it, `STEP_UP_REQUIRED` for signing
+     * everyone out on a session not verified lately.
+     */
+    workspaceSecurity: {
+      get: (workspace: string): Promise<WorkspaceSecurity> =>
+        call((options) => api.workspaceSecurity.get({ workspace }, options)),
+      set: (
+        workspace: string,
+        change: { readonly requireTwoFactor?: boolean; readonly sessionLengthDays?: SessionLengthDays | null },
+      ): Promise<WorkspaceSecurity> => call((options) => api.workspaceSecurity.set({ workspace, ...change }, options)),
+      signOutEveryone: (workspace: string): Promise<WorkspaceSecurity> =>
+        call((options) => api.workspaceSecurity.signOutEveryone({ workspace }, options)),
     },
     /**
      * Invitations (spec 0031): settings, not CRM data, so no live event. The

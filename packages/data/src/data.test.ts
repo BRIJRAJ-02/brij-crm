@@ -419,6 +419,11 @@ function fakeApi(overrides: Partial<Behaviour> = {}, auth: (path: string, body: 
       leave: os.members.leave.handler(notServed),
       transferOwnership: os.members.transferOwnership.handler(notServed),
     },
+    workspaceSecurity: {
+      get: os.workspaceSecurity.get.handler(notServed),
+      set: os.workspaceSecurity.set.handler(notServed),
+      signOutEveryone: os.workspaceSecurity.signOutEveryone.handler(notServed),
+    },
     invitations: {
       create: os.invitations.create.handler(notServed),
       list: os.invitations.list.handler(notServed),

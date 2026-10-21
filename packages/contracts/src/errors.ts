@@ -103,6 +103,12 @@ export const ERROR_MAP = {
   IMPORT_RUNNING: CONFLICT,
   IMPORT_UNDO_CLOSED: CONFLICT,
   EXPORT_TOO_LARGE: UNPROCESSABLE,
+  // A workspace's sign in rules (spec 0033, AC-893 to AC-894): set up two factor, or sign in again, to open it; an
+  // owner sets up their own two factor before requiring it; a workspace still requires the factor being turned off.
+  TWO_FACTOR_REQUIRED: { status: 403 },
+  SIGN_IN_AGAIN: { status: 403 },
+  OWNER_NEEDS_TWO_FACTOR: CONFLICT,
+  WORKSPACE_REQUIRES_TWO_FACTOR: CONFLICT,
   PAYLOAD_TOO_LARGE: { status: 413 },
   ATTRIBUTE_VALUE_INVALID: UNPROCESSABLE,
   VALUE_REQUIRED: UNPROCESSABLE,

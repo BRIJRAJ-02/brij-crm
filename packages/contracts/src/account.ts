@@ -224,6 +224,11 @@ export const AccountSecurity = z.object({
   /** The person's passkeys, oldest first (AC-887). */
   passkeys: z.array(AccountPasskey),
   session: SessionFreshness,
+  /**
+   * The workspaces the person is in that require two factor (AC-885), by
+   * name: while any does, their last second factor can't be turned off.
+   */
+  requiredBy: z.array(z.string()),
 });
 /** Account › Security's state. */
 export type AccountSecurity = z.infer<typeof AccountSecurity>;

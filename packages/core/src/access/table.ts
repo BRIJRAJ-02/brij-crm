@@ -98,6 +98,10 @@ export const ACCESS_TABLE = {
   listMembers: { anyMember: true },
   // Spec 0037, AC-1439: the roles every role picker offers.
   listRoles: { anyMember: true },
+  // A workspace's sign in rules (spec 0033, milestone 4): owners only.
+  getWorkspaceSecurity: { permission: 'security.manage' },
+  setWorkspaceSecurity: { permission: 'security.manage' },
+  signOutEveryone: { permission: 'security.manage' },
   // Invitations (spec 0031, slice 2).
   inviteMembers: { permission: 'members.invite' },
   listInvitations: { permission: 'members.invite' },

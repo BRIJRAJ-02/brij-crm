@@ -97,6 +97,13 @@ const MEMBER_COLUMNS: readonly TableColumn[] = [
   { id: 'actions', label: strings.columns.actions, isLabelHidden: true, align: 'end' },
 ];
 
+/** The same columns with Two factor after Role, for owners and admins, whom the server tells (spec 0033, AC-895). */
+const MEMBER_COLUMNS_WITH_FACTOR: readonly TableColumn[] = [
+  ...MEMBER_COLUMNS.slice(0, 3),
+  { id: 'twoFactor', label: strings.columns.twoFactor },
+  ...MEMBER_COLUMNS.slice(3),
+];
+
 const REQUEST_COLUMNS: readonly TableColumn[] = [
   { id: 'name', label: strings.columns.name, isRowHeader: true, isInline: true },
   { id: 'email', label: strings.columns.email },
@@ -135,6 +142,8 @@ export function MembersScreen({
   roles,
 }: MembersScreenProps) {
   const router = useRouter();
+  // Owners and admins see who has two factor sign in (spec 0033, AC-895): decided by access, so it never slides in.
+  const canManage = access.permissions.includes('members.manage');
   const [isInviting, setInviting] = useState(false);
   // The request being approved: its Approve spins and its Decline waits, so one press makes one decision.
   const [approving, setApproving] = useState<string | undefined>(undefined);
@@ -346,6 +355,8 @@ export function MembersScreen({
           />
         );
       }
+      case 'twoFactor':
+        return member.twoFactor === true ? strings.twoFactorOn : strings.twoFactorOff;
       case 'joined':
         return <RelativeTime value={member.joinedAt} />;
       default: {
@@ -506,7 +517,7 @@ export function MembersScreen({
     <>
       <Table
         label={strings.membersTab}
-        columns={MEMBER_COLUMNS}
+        columns={canManage ? MEMBER_COLUMNS_WITH_FACTOR : MEMBER_COLUMNS}
         rows={rows}
         getRowId={(member) => member.id}
         renderCell={memberCell}
@@ -677,6 +688,7 @@ export function MembersScreen({
 export function MembersPending() {
   // Tabs only for those who get tabs, so nothing moves when the page arrives.
   const canInvite = useCan('members.invite');
+  const canManage = useCan('members.manage');
   const searchField = (
     <Field
       label={strings.search}
@@ -690,7 +702,7 @@ export function MembersPending() {
   const table = (
     <Table
       label={strings.membersTab}
-      columns={MEMBER_COLUMNS}
+      columns={canManage ? MEMBER_COLUMNS_WITH_FACTOR : MEMBER_COLUMNS}
       rows={[]}
       getRowId={() => ''}
       renderCell={() => null}

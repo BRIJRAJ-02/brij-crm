@@ -8,6 +8,7 @@
 // answers ids only, as `crm_booking_by_token` does for a booking's manage link.
 import { sql } from 'drizzle-orm';
 import {
+  boolean,
   check,
   foreignKey,
   index,
@@ -254,11 +255,51 @@ export const joinRequests = pgTable(
     uniqueIndex('join_requests_open')
       .on(t.workspaceId, t.userId)
       .where(sql`${t.status} = 'open'`),
+    // A person's requests across workspaces, read only through crm_join_requests_of (account deletion).
+    index('join_requests_by_user').on(t.userId),
     // The Join requests tab: open ones, oldest first.
     index('join_requests_open_list')
       .on(t.workspaceId, t.createdAt, t.id)
       .where(sql`${t.status} = 'open'`),
     // A person's latest request in a workspace, for /join's state.
     index('join_requests_user').on(t.workspaceId, t.userId, t.createdAt.desc()),
+  ],
+);
+
+/**
+ * A workspace's sign in rules (spec 0033, AC-893): whether every member needs
+ * two factor, how long a sign in lasts here, and when everyone was last
+ * signed out of it. One row per workspace, made the first time an owner
+ * changes a rule; no row means none of them. The door reads it in its one
+ * query. Room for allowed sign in methods when SSO comes.
+ */
+export const workspaceSecurity = pgTable(
+  'workspace_security',
+  {
+    workspaceId: workspaceId(),
+    requireTwoFactor: boolean('require_two_factor').notNull().default(false),
+    /** Days a sign in lasts in this workspace, counted from when the session last proved who it is; null for no limit. */
+    sessionLengthDays: integer('session_length_days'),
+    /** A session that last proved who it is before this must sign in again here ("Sign out everyone"). */
+    sessionsValidAfter: timestamptz('sessions_valid_after'),
+    ...auditColumns(),
+  },
+  (t) => [
+    primaryKey({ name: 'workspace_security_pkey', columns: [t.workspaceId] }),
+    foreignKey({ name: 'workspace_security_workspace', columns: [t.workspaceId], foreignColumns: [workspaces.id] }),
+    ...actorConstraints('workspace_security', 'created_by', t.workspaceId, {
+      type: t.createdByType,
+      id: t.createdById,
+      memberId: t.createdByMemberId,
+    }),
+    ...actorConstraints('workspace_security', 'updated_by', t.workspaceId, {
+      type: t.updatedByType,
+      id: t.updatedById,
+      memberId: t.updatedByMemberId,
+    }),
+    check(
+      'workspace_security_session_length',
+      sql`${t.sessionLengthDays} is null or ${t.sessionLengthDays} in (1, 7, 14, 30)`,
+    ),
   ],
 );

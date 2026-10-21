@@ -40,8 +40,12 @@ export interface SessionUser {
   readonly email: string;
 }
 
-/** How a sign in by code went: signed in, or held back for its second step (two factor is on, spec 0033). */
-export type SignInOutcome = 'signed-in' | 'second-step';
+/**
+ * How a sign in by code went: signed in, or held back for its second step
+ * (two factor is on, spec 0033), which for an account whose only second
+ * factor is a passkey is the passkey alone (`second-step-passkey`, AC-888).
+ */
+export type SignInOutcome = 'signed-in' | 'second-step' | 'second-step-passkey';
 
 /** A second step's code: from the authenticator app, or one of the backup codes. */
 export type SecondFactorKind = 'totp' | 'backup';
@@ -186,7 +190,9 @@ export function createBetterAuthClient({ origin, fetch, report }: AuthClientOpti
         (fetchOptions) => client.signIn.emailOtp({ email, otp: code, fetchOptions }),
         step('auth.verify'),
       );
-      return isRecord(answer) && answer.twoFactorRedirect === true ? 'second-step' : 'signed-in';
+      if (!isRecord(answer) || answer.twoFactorRedirect !== true) return 'signed-in';
+      const methods = answer.twoFactorMethods;
+      return Array.isArray(methods) && !methods.includes('totp') ? 'second-step-passkey' : 'second-step';
     },
     async secondStep(kind, code, remember) {
       const path = kind === 'totp' ? '/two-factor/verify-totp' : '/two-factor/verify-backup-code';

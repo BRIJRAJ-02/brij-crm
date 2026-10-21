@@ -40,7 +40,7 @@ import { connectCalendar, isProviderError, isRefusal, signValue, takeCalendarNot
 import type { Database } from '@crm/db';
 import type { Context } from 'hono';
 import { deleteCookie, getCookie, setCookie } from 'hono/cookie';
-import type { Auth } from '../auth/auth.ts';
+import type { Auth, AuthSession } from '../auth/auth.ts';
 import { commitWrite } from '../hooks.ts';
 import { errorFields, log } from '../log.ts';
 import type { Analytics } from '../monitoring/posthog.ts';
@@ -90,7 +90,7 @@ export interface CalendarRouteDeps {
    * rules), as the RPC's `member` base uses it: a signed in person's scope in
    * the workspace at `slug`, or a refusal.
    */
-  readonly enter: (userId: string, slug: string) => Promise<DoorScope>;
+  readonly enter: (session: AuthSession, slug: string) => Promise<DoorScope>;
   readonly auth: Auth;
   readonly wakeRelay: WakeRelay;
   readonly analytics: Analytics;
@@ -144,7 +144,7 @@ async function memberIn(
   if (session === undefined) return undefined;
   for (const cookie of session.setCookies) c.header('set-cookie', cookie, { append: true });
   try {
-    const scope = await deps.enter(session.user.id, slug);
+    const scope = await deps.enter(session, slug);
     if (scope.access.principal.kind !== 'member') return undefined;
     return { scope, userId: session.user.id };
   } catch (error) {

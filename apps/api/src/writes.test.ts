@@ -40,6 +40,8 @@ const READS: ReadonlySet<string> = new Set([
   'account.passkeys.rename',
   'account.passkeys.remove',
   'account.deletion.check',
+  // A workspace's sign in rules (spec 0033, milestone 4): reading them.
+  'workspaceSecurity.get',
   'workspaces.slugAvailable',
   'objects.list',
   'attributes.list',
@@ -397,6 +399,15 @@ async function sharedViewOf(m: Member, name = 'Pipeline'): Promise<string> {
 }
 
 const WRITES: Record<string, (m: Member, mutationId: string) => Promise<readonly Partial<OutboxRow>[]>> = {
+  // A workspace's sign in rules (spec 0033): the door reads them on every request, so no screen needs an event.
+  'workspaceSecurity.set': async (m) => {
+    await m.client.workspaceSecurity.set({ workspace: m.slug, sessionLengthDays: 7 });
+    return [];
+  },
+  'workspaceSecurity.signOutEveryone': async (m) => {
+    await m.client.workspaceSecurity.signOutEveryone({ workspace: m.slug });
+    return [];
+  },
   // Invitations (spec 0031): nobody's screen shows another's invitations live, so no row; accepting adds a member.
   'invitations.create': async (m, mutationId) => {
     await m.client.invitations.create({ workspace: m.slug, emails: ['grace@example.com'], role: 'member', mutationId });

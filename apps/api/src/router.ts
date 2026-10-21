@@ -23,6 +23,7 @@ import { profileRouter } from './modules/profile/router.ts';
 import { deletedWorkspaceRouter } from './modules/workspace/deleted.ts';
 import { workspaceRouter } from './modules/workspace/router.ts';
 import { rolesRouter } from './modules/roles/router.ts';
+import { workspaceSecurityRouter } from './modules/security/router.ts';
 import { objectsRouter } from './modules/objects/router.ts';
 import { optionsRouter } from './modules/options/router.ts';
 import { preferencesRouter } from './modules/preferences/router.ts';
@@ -56,6 +57,7 @@ export const router = base.router({
   relationships: relationshipsRouter,
   links: linksRouter,
   members: membersRouter,
+  workspaceSecurity: workspaceSecurityRouter,
   invitations: invitationsRouter,
   join: joinRouter,
   joinRequests: joinRequestsRouter,

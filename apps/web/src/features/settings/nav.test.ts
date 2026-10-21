@@ -19,7 +19,7 @@ describe('settingsNav', () => {
     expect(groups.map((group) => group.entries.map((entry) => entry.label))).toEqual([
       ['Profile', 'Preferences', 'Security', 'Notifications'],
       ['Calendars', 'Rotations'],
-      ['General', 'Members', 'Objects', 'Background jobs'],
+      ['General', 'Members', 'Security', 'Objects', 'Background jobs'],
     ]);
   });
 
@@ -33,6 +33,7 @@ describe('settingsNav', () => {
       general: '/w/acme/settings/general',
       security: '/w/acme/settings/account/security',
       members: '/w/acme/settings/members',
+      'workspace-security': '/w/acme/settings/security',
       objects: '/w/acme/settings/objects',
       jobs: '/w/acme/settings/jobs',
       rotations: '/w/acme/settings/scheduling/rotations',
@@ -61,8 +62,15 @@ describe('visibleSettingsNav', () => {
     },
   ];
 
-  it('shows Rotations only to someone who makes booking pages; every other page needs nothing', () => {
-    expect(visibleSettingsNav(settingsNav('acme'), ['booking.manage'])).toEqual(settingsNav('acme'));
+  it('shows Rotations only to someone who makes booking pages, and Workspace › Security only to owners', () => {
+    expect(visibleSettingsNav(settingsNav('acme'), ['booking.manage'])).toEqual(
+      settingsNav('acme').map((group) => ({
+        ...group,
+        entries: group.entries.filter((entry) => entry.id !== 'workspace-security'),
+      })),
+    );
+    // Workspace › Security only for those who change sign in rules (spec 0033).
+    expect(visibleSettingsNav(settingsNav('acme'), ['booking.manage', 'security.manage'])).toEqual(settingsNav('acme'));
     // Without it, Scheduling keeps Calendars and loses only Rotations.
     expect(visibleSettingsNav(settingsNav('acme'), []).map((group) => group.entries.map((entry) => entry.id))).toEqual([
       ['profile', 'preferences', 'security', 'notifications'],

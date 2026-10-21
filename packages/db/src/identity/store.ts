@@ -10,7 +10,7 @@
 import { drizzleAdapter } from 'better-auth/adapters/drizzle';
 import { isIP } from 'node:net';
 import type { SecurityEventKind } from '@crm/contracts';
-import { and, asc, desc, eq, isNull, ne, sql } from 'drizzle-orm';
+import { and, asc, desc, eq, inArray, isNull, ne, sql } from 'drizzle-orm';
 import { drizzle } from 'drizzle-orm/node-postgres';
 import pg from 'pg';
 import type { DatabaseOptions } from '../client.ts';
@@ -230,6 +230,12 @@ export interface IdentityStore {
   listPasskeys(userId: string): Promise<readonly IdentityPasskey[]>;
   /** Whether the user has at least one passkey. */
   hasPasskey(userId: string): Promise<boolean>;
+  /**
+   * Which of these users have a second factor, an authenticator app (two
+   * factor on) or a passkey (spec 0033, AC-888, AC-895): a workspace's
+   * Members column and its count of members without one. Ids only.
+   */
+  secondFactorUsers(userIds: readonly string[]): Promise<ReadonlySet<string>>;
   /** Renames one of the user's passkeys. False when it isn't theirs or is gone. */
   renamePasskey(userId: string, passkeyId: string, name: string): Promise<boolean>;
   /** Removes one of the user's passkeys. False when it isn't theirs or is gone. */
@@ -552,6 +558,19 @@ export function createIdentityStore(options: DatabaseOptions): IdentityStore {
       if (!UUID.test(userId)) return false;
       const [row] = await db.select({ id: passkey.id }).from(passkey).where(eq(passkey.userId, userId)).limit(1);
       return row !== undefined;
+    },
+
+    async secondFactorUsers(userIds) {
+      const ids = [...new Set(userIds.filter((id) => UUID.test(id)))];
+      if (ids.length === 0) return new Set<string>();
+      const [withApp, withPasskey] = await Promise.all([
+        db
+          .select({ id: user.id })
+          .from(user)
+          .where(and(inArray(user.id, ids), eq(user.twoFactorEnabled, true))),
+        db.selectDistinct({ id: passkey.userId }).from(passkey).where(inArray(passkey.userId, ids)),
+      ]);
+      return new Set([...withApp, ...withPasskey].map((row) => row.id));
     },
 
     async renamePasskey(userId, passkeyId, name) {

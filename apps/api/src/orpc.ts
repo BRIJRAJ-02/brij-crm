@@ -15,6 +15,7 @@ import {
   type BookingCalendar,
   type CalendarEvents,
   type HomeMetricsCache,
+  type DoorSession,
   type JobRegistry,
   type ManageLinkKey,
   type RuleSource,
@@ -23,6 +24,7 @@ import type { Database, IdentityStore } from '@crm/db';
 import { implement, os } from '@orpc/server';
 import type { ResponseHeadersPluginContext } from '@orpc/server/plugins';
 import type { Auth, SessionUser } from './auth/auth.ts';
+import { doorSession } from './auth/door-session.ts';
 import type { CalendarServices } from './calendar/services.ts';
 import type { Mailer } from './mail/mailer.ts';
 import { apiError } from './errors.ts';
@@ -122,12 +124,28 @@ export interface RequestContext extends ResponseHeadersPluginContext {
    * out from another device (spec 0033): the worker closes them with 4501.
    */
   signedOut: SignedOutNotice;
+  /**
+   * Second factors and session proofs, by user and session id only (spec 0033,
+   * milestone 4): a workspace's security settings count members without a
+   * second factor, the Members page shows who has one to owners and admins,
+   * and "Sign out everyone" keeps its caller's own session. Kept for member
+   * handlers, unlike `identity`.
+   */
+  factors: Pick<IdentityStore, 'secondFactorUsers' | 'hasPasskey' | 'sessionVerification' | 'markSessionVerified'>;
+  /**
+   * The names of the workspaces a person is in that require two factor (spec
+   * 0033, AC-885): Account › Security says so, and keeps their last second
+   * factor on. A system read per workspace, in packages/core.
+   */
+  requiredBy: (userId: string) => Promise<readonly string[]>;
 }
 
 /** What `authed` adds: the signed in person, and which of their sessions this request carries (its id only). */
 export interface SessionContext {
   user: SessionUser;
   sessionId: string;
+  /** What the access door asks of this session: its last proof, and whether its person has a second factor. */
+  doorSession: DoorSession;
 }
 
 export const base = implement(contract).$context<RequestContext>();
@@ -151,7 +169,13 @@ export const requireSession = os.$context<RequestContext>().middleware(async ({ 
   for (const cookie of session.setCookies) context.resHeaders?.append('set-cookie', cookie);
   // Someone is using the app: the worker stays awake, or wakes (at most once a minute; it never slows the request).
   if (!NOT_USE.has(path.join('.'))) context.wakeOnUse();
-  return next({ context: { user: session.user, sessionId: session.sessionId } });
+  return next({
+    context: {
+      user: session.user,
+      sessionId: session.sessionId,
+      doorSession: doorSession(session, context.identity),
+    },
+  });
 });
 
 /**
@@ -194,6 +218,7 @@ export const requireMember = os
     const scope = await enterWorkspace(memberDoor(context), {
       userId: context.user.id,
       slug: scoped.data.workspace,
+      session: context.doorSession,
     });
     // An error report from here on names the workspace the door let them into.
     setRequestScope({ workspaceId: scope.workspaceId });

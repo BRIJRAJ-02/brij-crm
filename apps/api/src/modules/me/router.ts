@@ -6,6 +6,6 @@ import { authed, memberDoor } from '../../orpc.ts';
 export const meRouter = authed.me.router({
   get: authed.me.get.handler(({ context }) => getMe({ identity: context.identity }, context.user)),
   setLastWorkspace: authed.me.setLastWorkspace.handler(({ context, input }) =>
-    setLastWorkspace(memberDoor(context), context.user, input.workspace),
+    setLastWorkspace(memberDoor(context), context.user, input.workspace, context.doorSession),
   ),
 });

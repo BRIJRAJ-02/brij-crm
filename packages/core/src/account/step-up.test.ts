@@ -22,6 +22,7 @@ function setup(state: { enabled: boolean; verification?: SessionVerification }) 
         return Promise.resolve(true);
       },
       twoFactorState: () => Promise.resolve({ enabled: state.enabled, appVerified: state.enabled }),
+      hasPasskey: () => Promise.resolve(false),
       putStepUpCode: (session, hash) => {
         codes.set(session, hash);
         return Promise.resolve();
@@ -37,6 +38,7 @@ function setup(state: { enabled: boolean; verification?: SessionVerification }) 
     },
     mintCode: () => '654321',
     hashCode: (code) => `hash:${code}`,
+    requiredBy: () => Promise.resolve([]),
     now: () => NOW,
   };
   return { deps, sent };

@@ -11,10 +11,11 @@ import type {
   SessionFreshness,
   StepUpPasskeyInput,
 } from '@crm/contracts';
+import { requiresTwoFactorMessage } from '@crm/contracts';
 import type { IdentityStore } from '@crm/db';
 import { inputInvalid, refuse } from '../engine/refusals.ts';
 import type { SessionCaller } from './sessions.ts';
-import { requireFresh, sessionFreshness } from './step-up.ts';
+import { hasSecondFactor, requireFresh, sessionFreshness } from './step-up.ts';
 
 /** What the passkey procedures need. */
 export interface PasskeyDeps {
@@ -27,11 +28,14 @@ export interface PasskeyDeps {
     | 'sessionVerification'
     | 'markSessionVerified'
     | 'recordSecurityEvent'
+    | 'hasPasskey'
   >;
   /** A step up's challenge for this session and the person's passkeys, or undefined when they have none. */
   readonly passkeyOptions: (caller: SessionCaller) => Promise<PasskeyRequestOptions | undefined>;
   /** Checks a passkey's answer to this session's challenge (used up either way). Never throws for a wrong one. */
   readonly checkPasskey: (caller: SessionCaller, response: StepUpPasskeyInput['response']) => Promise<boolean>;
+  /** The names of the workspaces the person is in that require two factor (AC-885, AC-887). */
+  readonly requiredBy: (userId: string) => Promise<readonly string[]>;
   readonly now?: () => number;
 }
 
@@ -88,8 +92,9 @@ export async function renameMyPasskey(
 
 /**
  * Removes one of the caller's passkeys (AC-887): needs a fresh step up, by a
- * second factor while two factor is on, since a passkey is one. Kept in the
- * security history.
+ * second factor while two factor is on, since a passkey is one. Their last
+ * second factor stays while a workspace they are in requires two factor
+ * (409 WORKSPACE_REQUIRES_TWO_FACTOR). Kept in the security history.
  */
 export async function removeMyPasskey(
   deps: PasskeyDeps,
@@ -97,7 +102,14 @@ export async function removeMyPasskey(
   input: RemovePasskeyInput,
 ): Promise<{ readonly ok: true }> {
   const state = await deps.identity.twoFactorState(caller.userId);
-  await requireFresh(deps, caller, { secondFactor: state.enabled });
+  // A passkey is a second factor itself: removing one is proven by a second factor, never an email code alone.
+  await requireFresh(deps, caller, { secondFactor: await hasSecondFactor(deps.identity, caller.userId) });
+  if (!state.enabled) {
+    const passkeys = await deps.identity.listPasskeys(caller.userId);
+    const last = passkeys.length === 1 && passkeys[0]?.id === input.id;
+    const names = last ? await deps.requiredBy(caller.userId) : [];
+    if (names.length > 0) throw refuse('WORKSPACE_REQUIRES_TWO_FACTOR', requiresTwoFactorMessage(names));
+  }
   if (!(await deps.identity.removePasskey(caller.userId, input.id))) throw refuse('NOT_FOUND', UNKNOWN_PASSKEY);
   await deps.identity.recordSecurityEvent({
     userId: caller.userId,

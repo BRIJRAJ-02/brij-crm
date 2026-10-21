@@ -61,6 +61,9 @@ export const strings = {
     app: 'Authenticator app',
     appOff: 'Off',
     appOn: 'On',
+    /** On, and a workspace requires it with no passkey to stand in (AC-885). */
+    appRequired: (names: readonly string[]) =>
+      `On. ${names.length === 1 ? (names[0] ?? '') : `${names.slice(0, -1).join(', ')} and ${names.at(-1) ?? ''}`} ${names.length === 1 ? 'requires' : 'require'} two factor sign in, so it stays on. Add a passkey to turn the app off.`,
     setUp: 'Set up',
     turnOff: 'Turn off',
     backupCodes: 'Backup codes',

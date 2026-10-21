@@ -169,4 +169,47 @@ describe('deleting your own account (spec 0033)', () => {
     // The last email went to the old address.
     expect(sent.findLast((message) => message.to === person.email)?.subject).toBe('Your Timefix account was deleted');
   });
+
+  it('closes the person’s open join requests elsewhere and leaves no request naming them (AC-905)', async () => {
+    const elsewhere = await memberWithWorkspace(app);
+    const other = await memberWithWorkspace(app);
+    const person = await signIn(app);
+    const client = rpcClient(app, person.cookie);
+    const userId = (await client.me.get()).user.id;
+    const ask = (workspaceId: string, status: 'open' | 'declined') =>
+      testQuery(
+        ownerUrl,
+        `insert into join_requests (workspace_id, user_id, email, name, status, decided_at, decided_by_type,
+           created_by_type, updated_by_type)
+         values ($1, $2, $3, 'Bea', $4, case when $4 = 'open' then null else now() end,
+           case when $4 = 'open' then null else 'system'::actor_type end, 'system', 'system')`,
+        [workspaceId, userId, person.email, status],
+      );
+    await ask(elsewhere.workspace.id, 'open');
+    await ask(other.workspace.id, 'declined');
+    // Someone else's open request stays as it was.
+    const stranger = await signIn(app);
+    const strangerId = (await rpcClient(app, stranger.cookie).me.get()).user.id;
+    await testQuery(
+      ownerUrl,
+      `insert into join_requests (workspace_id, user_id, email, name, created_by_type, updated_by_type)
+       values ($1, $2, $3, 'Cy', 'system', 'system')`,
+      [elsewhere.workspace.id, strangerId, stranger.email],
+    );
+    expect(await client.account.deletion.confirm({ email: person.email })).toEqual({ deleted: true });
+    const rows = await testQuery<{ user_id: string; status: string; name: string; email: string; by: string | null }>(
+      ownerUrl,
+      `select user_id::text, status, name, email, decided_by_type::text as by from join_requests
+        where user_id in ($1, $2) order by status, name`,
+      [userId, strangerId],
+    );
+    expect(rows).toEqual([
+      expect.objectContaining({ user_id: userId, status: 'declined', name: 'Deleted user', by: 'system' }),
+      expect.objectContaining({ user_id: userId, status: 'declined', name: 'Deleted user', by: 'system' }),
+      { user_id: strangerId, status: 'open', name: 'Cy', email: stranger.email, by: null },
+    ]);
+    expect(rows.filter((row) => row.user_id === userId).every((row) => row.email.endsWith('@deleted.invalid'))).toBe(
+      true,
+    );
+  });
 });

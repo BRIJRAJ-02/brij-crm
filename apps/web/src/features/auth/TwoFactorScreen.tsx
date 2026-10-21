@@ -2,12 +2,13 @@
 // Purpose: the second step of a sign in with two factor on (spec 0033): prove it's you with the app or a backup code.
 // Main task: type the app's 6 digit code (checked when complete), or a backup code, or use a passkey (which signs
 // in on its own, AC-888), then go on into the app.
-// Leaves out: any way round the second factor (no email recovery, owner decision).
+// Leaves out: any way round the second factor (no email recovery, owner decision). An account whose only second
+// factor is a passkey (`passkeyOnly`) gets the passkey alone.
 import { isDataError, type DataLayer } from '@crm/data';
 import { AuthLayout, Button, Callout, Checkbox, CodeInput, Field, Form, Link } from '@crm/ui';
 import { useNavigate } from '@tanstack/react-router';
 import { useEffect, useRef, useState } from 'react';
-import { safeRedirect } from './redirect.ts';
+import { safeRedirect, signInHref } from './redirect.ts';
 import { strings as signIn } from './strings.ts';
 import { strings } from './two-factor-strings.ts';
 import { PRODUCT_LOGO } from '../../brand.ts';
@@ -17,10 +18,12 @@ export interface TwoFactorScreenProps {
   readonly data: DataLayer;
   /** The `?redirect=` the sign in started with. */
   readonly redirect: string | undefined;
+  /** The account's only second factor is a passkey (AC-888): no code field, the passkey alone. */
+  readonly passkeyOnly?: boolean;
 }
 
 /** The second step page: the app's code, or a backup code, and "Remember this device". */
-export function TwoFactorScreen({ data, redirect }: TwoFactorScreenProps) {
+export function TwoFactorScreen({ data, redirect, passkeyOnly = false }: TwoFactorScreenProps) {
   const navigate = useNavigate();
   const [kind, setKind] = useState<'totp' | 'backup'>('totp');
   const [code, setCode] = useState('');
@@ -60,6 +63,7 @@ export function TwoFactorScreen({ data, redirect }: TwoFactorScreenProps) {
 
   // A passkey signs in on its own (AC-888): offered here too, where the browser has passkeys.
   const [hasPasskeys, setHasPasskeys] = useState(false);
+  const [supportKnown, setSupportKnown] = useState(false);
   const [isAsking, setAsking] = useState(false);
   // A passkey's own failure: above the form, never on the code's field.
   const [passkeyError, setPasskeyError] = useState<string | undefined>(undefined);
@@ -70,7 +74,10 @@ export function TwoFactorScreen({ data, redirect }: TwoFactorScreenProps) {
       .then((support) => {
         if (live) setHasPasskeys(support.available);
       })
-      .catch(() => undefined);
+      .catch(() => undefined)
+      .finally(() => {
+        if (live) setSupportKnown(true);
+      });
     return () => {
       live = false;
     };
@@ -85,7 +92,7 @@ export function TwoFactorScreen({ data, redirect }: TwoFactorScreenProps) {
       },
       (failure: unknown) => {
         setAsking(false);
-        setPasskeyError(isDataError(failure) && failure.code !== 'INTERNAL' ? failure.message : strings.failed);
+        setPasskeyError(isDataError(failure) && failure.code !== 'INTERNAL' ? failure.message : strings.passkeyFailed);
       },
     );
   };
@@ -106,6 +113,36 @@ export function TwoFactorScreen({ data, redirect }: TwoFactorScreenProps) {
     );
   }
 
+  if (passkeyOnly) {
+    return (
+      <AuthLayout
+        productName={signIn.product}
+        logo={PRODUCT_LOGO}
+        title={strings.title}
+        description={strings.passkeyHint}
+        isBusy={isAsking}
+      >
+        {passkeyError !== undefined && (
+          <Callout tone="danger" isAnnounced>
+            {passkeyError}
+          </Callout>
+        )}
+        {supportKnown && !hasPasskeys ? (
+          <Callout
+            tone="warning"
+            actions={<Link href={signInHref(safeRedirect(redirect))}>{strings.signInAgain}</Link>}
+          >
+            {strings.passkeyUnavailable}
+          </Callout>
+        ) : (
+          <Button variant="primary" icon="key" isPending={isAsking || !supportKnown} onPress={usePasskeyInstead}>
+            {strings.passkeyContinue}
+          </Button>
+        )}
+      </AuthLayout>
+    );
+  }
+
   return (
     <AuthLayout
       productName={signIn.product}
@@ -114,7 +151,11 @@ export function TwoFactorScreen({ data, redirect }: TwoFactorScreenProps) {
       description={kind === 'totp' ? strings.appHint : strings.backupHint}
       isBusy={isChecking}
     >
-      {passkeyError !== undefined && <Callout tone="danger">{passkeyError}</Callout>}
+      {passkeyError !== undefined && (
+        <Callout tone="danger" isAnnounced>
+          {passkeyError}
+        </Callout>
+      )}
       <Form
         submitLabel={strings.continue}
         isDisabled={isAsking}

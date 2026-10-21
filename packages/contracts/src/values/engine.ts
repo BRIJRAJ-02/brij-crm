@@ -84,6 +84,14 @@ export const ENGINE_REFUSAL_CODES = [
   'IMPORT_RUNNING',
   'IMPORT_UNDO_CLOSED',
   'EXPORT_TOO_LARGE',
+  // A workspace's sign in rules (spec 0033, milestone 4): it requires two factor and this person has none (AC-894);
+  // this session signed in longer ago than the workspace allows, or before everyone was signed out of it; an owner
+  // without two factor can't require it (AC-893); a second factor can't be turned off while a workspace requires it
+  // (AC-885, AC-887).
+  'TWO_FACTOR_REQUIRED',
+  'SIGN_IN_AGAIN',
+  'OWNER_NEEDS_TWO_FACTOR',
+  'WORKSPACE_REQUIRES_TWO_FACTOR',
 ] as const;
 
 /** One of the engine's refusal codes. */

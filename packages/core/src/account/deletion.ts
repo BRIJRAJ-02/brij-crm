@@ -19,7 +19,7 @@ import {
 } from '@crm/contracts';
 import { schema, type Database, type IdentityStore } from '@crm/db';
 import { and, eq, sql } from 'drizzle-orm';
-import { enterWorkspace, type DoorDeps } from '../access/door.ts';
+import { enterWorkspace, LEAVING, type DoorDeps } from '../access/door.ts';
 import type { EngineScope } from '../access/mint.ts';
 import { inWorkspace } from '../access/run.ts';
 import type { CalendarTokens } from '../calendar/provider.ts';
@@ -29,7 +29,7 @@ import type { AfterWrite } from '../engine/write.ts';
 import { writeAudit } from '../members/audit.ts';
 import { listMembers, removeMember } from '../members/members.ts';
 import type { SessionCaller } from './sessions.ts';
-import { requireFresh } from './step-up.ts';
+import { hasSecondFactor, requireFresh } from './step-up.ts';
 
 const { members } = schema;
 
@@ -60,7 +60,7 @@ export interface AccountDeletionDeps {
   readonly db: Database;
   readonly identity: Pick<
     IdentityStore,
-    'findWorkspace' | 'workspacesOf' | 'sessionVerification' | 'twoFactorState' | 'deleteUser'
+    'findWorkspace' | 'workspacesOf' | 'sessionVerification' | 'twoFactorState' | 'hasPasskey' | 'deleteUser'
   >;
   readonly rules: DoorDeps['rules'];
   /** The hooks each workspace's removal runs in its transaction (the outbox), as a background write's. */
@@ -73,9 +73,8 @@ export interface AccountDeletionDeps {
     readonly revoke: (grant: CalendarGrant) => Promise<void>;
   };
   /**
-   * Closes the person's open workspace join requests, in every workspace, before their `auth` rows go. The join
-   * requests table arrives with the members lane (spec 0031 slice 6b); until then the api wires a step with
-   * nothing to close.
+   * Closes the person's open workspace join requests, and blanks their name and address on every request, in every
+   * workspace, before their `auth` rows go (`closeJoinRequestsOf`).
    */
   readonly closeJoinRequests: (userId: string) => Promise<void>;
   /** The last email, to the old address. Never throws. */
@@ -99,7 +98,8 @@ async function myWorkspaces(
       try {
         const scope = await enterWorkspace(
           { db: deps.db, identity: deps.identity, rules: deps.rules },
-          { userId, slug: workspace.slug },
+          // Leaving: a workspace's sign in rules (two factor, session length) never hold someone in it.
+          { userId, slug: workspace.slug, session: LEAVING },
         );
         return { scope, slug: workspace.slug, name: workspace.name };
       } catch (error) {
@@ -189,8 +189,7 @@ export async function deleteMyAccount(
   caller: DeletingCaller,
   input: DeleteAccountInput,
 ): Promise<{ readonly deleted: true }> {
-  const state = await deps.identity.twoFactorState(caller.userId);
-  await requireFresh(deps, caller, { secondFactor: state.enabled });
+  await requireFresh(deps, caller, { secondFactor: await hasSecondFactor(deps.identity, caller.userId) });
   if (input.email.trim().toLowerCase() !== caller.email.toLowerCase()) throw inputInvalid('email', EMAIL_MISMATCH);
 
   const standing = await standingIn(await myWorkspaces(deps, caller.userId));
