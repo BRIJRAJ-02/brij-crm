@@ -1,6 +1,7 @@
 // The confirms before a form ends something (the owner's rule, 21 October
 // 2026): pausing a live form asks first in a plain dialog, deleting a
-// submission or a form in a danger one. Cancel changes nothing and sends
+// submission or a form in a danger one, and adding many submissions to the
+// CRM in a plain one. Cancel (or Escape) changes nothing and sends
 // nothing; each press of the commit sends one call; a refusal says why inside
 // the dialog, which stays open to try again. Turning a form back on stays one
 // click, with no question.
@@ -37,6 +38,7 @@ interface FormView {
   readonly name: string;
   readonly publicKey: string;
   readonly revision: number;
+  readonly mainObjectId?: string;
 }
 
 test.describe('confirms on forms', () => {
@@ -56,22 +58,51 @@ test.describe('confirms on forms', () => {
       name: `Demo request ${tag}`,
       mutationId: randomUUID(),
     });
-    const live = await rpc<FormView>(page, 'forms/publish', {
+    // Published keeping its submissions only, so they wait outside the CRM until it files again.
+    const people = created.mainObjectId;
+    if (people === undefined) throw new Error('A new form files to People.');
+    const keepOnly = await rpc<FormView>(page, 'forms/setTarget', {
       workspace: slug,
       formId: created.id,
+      mainObjectId: null,
       expectedRevision: created.revision,
       mutationId: randomUUID(),
     });
+    const kept = await rpc<FormView>(page, 'forms/publish', {
+      workspace: slug,
+      formId: created.id,
+      expectedRevision: keepOnly.revision,
+      mutationId: randomUUID(),
+    });
 
-    // One submission through the hosted page, at a person's pace.
-    const visitor = await (await browser.newContext()).newPage();
-    await visitor.goto(`${new URL(page.url()).origin}/f/${live.publicKey}`);
-    await visitor.getByLabel(/Your name/).fill('Grace Hopper');
-    await visitor.getByLabel(/Work email/).fill(`grace-${tag}@example.com`);
-    await visitor.waitForTimeout(2_500);
-    await visitor.getByRole('button', { name: 'Send' }).click();
-    await expect(visitor.getByText(/Thank you/).first()).toBeVisible();
-    await visitor.close();
+    // Two submissions through the hosted page, at a person's pace.
+    for (const [name, email] of [
+      ['Grace Hopper', `grace-${tag}@example.com`],
+      ['Alan Turing', `alan-${tag}@example.com`],
+    ] as const) {
+      const visitor = await (await browser.newContext()).newPage();
+      await visitor.goto(`${new URL(page.url()).origin}/f/${kept.publicKey}`);
+      await visitor.getByLabel(/Your name/).fill(name);
+      await visitor.getByLabel(/Work email/).fill(email);
+      await visitor.waitForTimeout(2_500);
+      await visitor.getByRole('button', { name: 'Send' }).click();
+      await expect(visitor.getByText(/Thank you/).first()).toBeVisible();
+      await visitor.close();
+    }
+    // Then filing to People again, live, so Add to CRM takes both.
+    const filing = await rpc<FormView>(page, 'forms/setTarget', {
+      workspace: slug,
+      formId: created.id,
+      mainObjectId: people,
+      expectedRevision: kept.revision,
+      mutationId: randomUUID(),
+    });
+    const live = await rpc<FormView>(page, 'forms/publish', {
+      workspace: slug,
+      formId: created.id,
+      expectedRevision: filing.revision,
+      mutationId: randomUUID(),
+    });
 
     // Turning the form off from its card asks first; Cancel leaves it on and sends nothing.
     const setStatus = calls(page, 'forms/setStatus');
@@ -99,12 +130,36 @@ test.describe('confirms on forms', () => {
     await expect(page.getByRole('dialog')).toHaveCount(0);
     expect(setStatus()).toBe(2);
 
-    // Deleting a submission asks first and names who sent it; Cancel keeps it.
+    // Adding many to the CRM at once asks first and counts them; Escape is Cancel and sends nothing.
+    const addToCrm = calls(page, 'submissions/addToCrm');
+    await page.goto(`/w/${slug}/captures/forms/${live.id}?tab=submissions`);
+    for (const name of ['Grace Hopper', 'Alan Turing']) {
+      await page.getByRole('row').filter({ hasText: name }).getByRole('checkbox').click({ force: true });
+    }
+    await page.getByRole('button', { name: 'Add to CRM' }).click();
+    const adding = page.getByRole('dialog', { name: 'Add 2 submissions to the CRM?' });
+    await expect(adding).toBeVisible();
+    await page.keyboard.press('Escape');
+    await expect(adding).toBeHidden();
+    expect(addToCrm()).toBe(0);
+    // Add to CRM sends both, in one call, and the dialog closes.
+    await page.getByRole('button', { name: 'Add to CRM' }).click();
+    await adding.getByRole('button', { name: 'Add to CRM' }).click();
+    await expect(adding).toBeHidden();
+    expect(addToCrm()).toBe(1);
+
+    // Deleting a submission asks first and names who sent it; Escape is Cancel, the submission stays open; Cancel keeps it.
     const deleteSubmission = calls(page, 'submissions/delete');
     await page.goto(`/w/${slug}/captures/forms/${live.id}?tab=submissions`);
     await page.getByRole('row').filter({ hasText: 'Grace Hopper' }).first().click();
     await page.getByRole('button', { name: 'Delete', exact: true }).click();
     const confirm = page.getByRole('alertdialog', { name: 'Delete the submission from Grace Hopper?' });
+    await expect(confirm).toBeVisible();
+    await page.keyboard.press('Escape');
+    await expect(confirm).toBeHidden();
+    await expect(page.getByRole('button', { name: 'Delete', exact: true })).toBeVisible();
+    expect(deleteSubmission()).toBe(0);
+    await page.getByRole('button', { name: 'Delete', exact: true }).click();
     await expect(confirm).toBeVisible();
     await confirm.getByRole('button', { name: /^Cancel/ }).click();
     await expect(confirm).toBeHidden();
@@ -163,5 +218,7 @@ test.describe('confirms on forms', () => {
     await expect(remove).toBeHidden();
     await expect(card).toHaveCount(0);
     expect(deleteForm()).toBe(1);
+    // The card and its menu went with it: focus lands on the page's title, not on the page.
+    await expect(page.locator('main h1')).toBeFocused();
   });
 });

@@ -378,6 +378,12 @@ export const strings = {
       ? `Adding ${count(queued, 'submission', 'submissions')} to the CRM.`
       : `Adding ${count(queued, 'submission', 'submissions')} to the CRM. ${String(skipped)} skipped: already in it or held.`,
   nothingToAdd: 'Nothing to add: these are already in the CRM or held.',
+  /** Asks before many submissions go to the CRM at once: "Add 12 submissions to the CRM?". */
+  addManyTitle: (n: number) => `Add ${count(n, 'submission', 'submissions')} to the CRM?`,
+  addManyText: (n: number, max: number) =>
+    n > max
+      ? `Each is filed the way the form files now, making new records or updating the ones it matches. The first ${String(max)} go now; add the rest after.`
+      : 'Each is filed the way the form files now, making new records or updating the ones it matches.',
   addDone: (done: number, refused: number) =>
     refused === 0
       ? `${count(done, 'submission', 'submissions')} added to the CRM.`
