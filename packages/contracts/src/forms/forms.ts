@@ -10,6 +10,7 @@ import { RecordRefDisplay } from '../values/options.ts';
 import { WorkspaceScoped } from '../workspaces.ts';
 import { FormDocument } from './document.ts';
 import { PublicForm } from './public.ts';
+import { Uuid, uuidV7 } from '../values/ids.ts';
 
 /** Where a form is (spec 0023, state transitions): `live` is accepting enquiries, `paused` not. */
 export const FormStatus = z.enum(['draft', 'live', 'paused', 'archived']);
@@ -50,10 +51,10 @@ export const FormOrigin = z
 
 /** A form card in the list (spec 0023, The forms list). */
 export const FormSummary = z.object({
-  id: z.uuid(),
+  id: Uuid,
   name: z.string(),
   status: FormStatus,
-  mainObjectId: z.uuid(),
+  mainObjectId: Uuid,
   /** The public address, after `/f/`. */
   publicKey: z.string(),
   liveVersionNumber: z.number().int().min(1).optional(),
@@ -85,9 +86,9 @@ export const FormView = FormSummary.extend({
   live: FormDocument.optional(),
   /** Whether the draft differs from what is live (a publish would change something). */
   hasUnpublished: z.boolean(),
-  ownerMemberId: z.uuid().optional(),
+  ownerMemberId: Uuid.optional(),
   /** Who saved the draft last, when someone else may have (the "Bea changed this form" notice). */
-  draftSavedByMemberId: z.uuid().optional(),
+  draftSavedByMemberId: Uuid.optional(),
   allowedOrigins: z.array(z.string()),
   requireSignature: z.boolean(),
   /** The secret a site signs its posts with: only for `forms.manage`. */
@@ -100,88 +101,88 @@ export type FormView = z.infer<typeof FormView>;
 
 /** A new form (AC-649): "Untitled form" with Name, Email and Phone on People, unless named. */
 export const CreateFormInput = WorkspaceScoped.extend({
-  id: z.uuid({ version: 'v7', message: 'The form id must be a UUID v7.' }),
+  id: uuidV7('The form id must be a UUID v7.'),
   name: FormName.optional(),
-  mainObjectId: z.uuid().optional(),
-  mutationId: z.uuid(),
+  mainObjectId: Uuid.optional(),
+  mutationId: Uuid,
 });
 /** A new form. */
 export type CreateFormInput = z.infer<typeof CreateFormInput>;
 
 /** Saves the draft, quietly (a second after the last change). A stale `expectedRevision` is 409 `FORM_CHANGED`. */
 export const SaveFormDraftInput = WorkspaceScoped.extend({
-  formId: z.uuid(),
+  formId: Uuid,
   document: FormDocument,
   expectedRevision: z.number().int().min(1),
-  mutationId: z.uuid(),
+  mutationId: Uuid,
 });
 /** Saves the draft. */
 export type SaveFormDraftInput = z.infer<typeof SaveFormDraftInput>;
 
 /** Publishes the draft as the next live version (AC-548); the first publish names the form and its address. */
 export const PublishFormInput = WorkspaceScoped.extend({
-  formId: z.uuid(),
+  formId: Uuid,
   expectedRevision: z.number().int().min(1),
   name: FormName.optional(),
   slug: FormSlug.optional(),
-  mutationId: z.uuid(),
+  mutationId: Uuid,
 });
 /** Publishes the draft. */
 export type PublishFormInput = z.infer<typeof PublishFormInput>;
 
 /** The settings that apply at once: the name, the address, the owner, and the sites that may post. */
 export const UpdateFormSettingsInput = WorkspaceScoped.extend({
-  formId: z.uuid(),
+  formId: Uuid,
   name: FormName.optional(),
   slug: FormSlug.optional(),
   /** `null` is nobody. */
-  ownerMemberId: z.uuid().nullable().optional(),
+  ownerMemberId: Uuid.nullable().optional(),
   allowedOrigins: z.array(FormOrigin).max(20, { error: 'List at most 20 sites.' }).optional(),
   requireSignature: z.boolean().optional(),
-  mutationId: z.uuid(),
+  mutationId: Uuid,
 });
 /** The settings that apply at once. */
 export type UpdateFormSettingsInput = z.infer<typeof UpdateFormSettingsInput>;
 
 /** Moves a form between live and paused (Accepting), archived, and back (AC-549). */
 export const SetFormStatusInput = WorkspaceScoped.extend({
-  formId: z.uuid(),
+  formId: Uuid,
   status: FormStatus,
-  mutationId: z.uuid(),
+  mutationId: Uuid,
 });
 /** Moves a form between statuses. */
 export type SetFormStatusInput = z.infer<typeof SetFormStatusInput>;
 
 /** Points a never published form at another object, its questions' filing cleared where it no longer fits. */
 export const SetFormTargetInput = WorkspaceScoped.extend({
-  formId: z.uuid(),
-  mainObjectId: z.uuid(),
+  formId: Uuid,
+  mainObjectId: Uuid,
   expectedRevision: z.number().int().min(1),
-  mutationId: z.uuid(),
+  mutationId: Uuid,
 });
 /** Points a never published form at another object. */
 export type SetFormTargetInput = z.infer<typeof SetFormTargetInput>;
 
 /** One form by id. */
-export const FormIdInput = WorkspaceScoped.extend({ formId: z.uuid() });
+export const FormIdInput = WorkspaceScoped.extend({ formId: Uuid });
 /** One form by id. */
 export type FormIdInput = z.infer<typeof FormIdInput>;
 
 /** A change that names one form and nothing else (delete). */
-export const FormWriteInput = FormIdInput.extend({ mutationId: z.uuid() });
+export const FormWriteInput = FormIdInput.extend({ mutationId: Uuid });
 /** A change that names one form. */
 export type FormWriteInput = z.infer<typeof FormWriteInput>;
 
 /** A copy of a form's draft, as a new never published form with its own address. */
 export const DuplicateFormInput = FormIdInput.extend({
-  id: z.uuid({ version: 'v7', message: 'The form id must be a UUID v7.' }),
-  mutationId: z.uuid(),
+  id: uuidV7('The form id must be a UUID v7.'),
+  mutationId: Uuid,
 });
 /** A copy of a form's draft. */
 export type DuplicateFormInput = z.infer<typeof DuplicateFormInput>;
 
 /** Whether an address is free (the first publish checks as typed). */
-export const SlugInput = WorkspaceScoped.extend({ formId: z.uuid(), slug: z.string().max(60) });
+export const SlugInput = WorkspaceScoped.extend({ formId: Uuid, slug: z.string().max(60) });
 /** Whether an address is free. */
 export type SlugInput = z.infer<typeof SlugInput>;
 
@@ -201,7 +202,7 @@ export const FORMS_LIST_MAX = 200;
  * write each. The builder offers those whose type fits the answer type.
  */
 export const FormAttributeChoice = z.object({
-  attributeId: z.uuid(),
+  attributeId: Uuid,
   title: z.string(),
   type: AttributeType,
   isRequired: z.boolean(),
@@ -213,7 +214,7 @@ export type FormAttributeChoice = z.infer<typeof FormAttributeChoice>;
 
 /** The target object and the attributes a question may be filed on. */
 export const FormTargetChoices = z.object({
-  objectId: z.uuid(),
+  objectId: Uuid,
   objectName: z.string(),
   items: z.array(FormAttributeChoice),
 });
@@ -249,7 +250,7 @@ export const SubmissionAnswer = z.object({
   label: z.string(),
   answerType: z.enum(ANSWER_TYPES),
   /** The attribute it was filed on, when it was. */
-  attributeId: z.uuid().optional(),
+  attributeId: Uuid.optional(),
   /** Text, `true` or `false`, or a phone's `{ number, country }`. */
   value: z.unknown(),
 });
@@ -258,8 +259,8 @@ export type SubmissionAnswer = z.infer<typeof SubmissionAnswer>;
 
 /** A submission in its form's list: when, where it is, the person, the email, and its first two answers. */
 export const SubmissionSummary = z.object({
-  id: z.uuid(),
-  formId: z.uuid(),
+  id: Uuid,
+  formId: Uuid,
   state: SubmissionState,
   receivedAt: Timestamp,
   processedAt: Timestamp.optional(),
@@ -292,7 +293,7 @@ export const SubmissionView = SubmissionSummary.extend({
   records: z.array(SubmissionRecord),
   failure: z.string().optional(),
   refused: z.array(z.object({ questionId: z.string(), message: z.string() })),
-  assignment: z.object({ memberId: z.uuid().optional(), reason: z.string() }).optional(),
+  assignment: z.object({ memberId: Uuid.optional(), reason: z.string() }).optional(),
 });
 /** One submission in full. */
 export type SubmissionView = z.infer<typeof SubmissionView>;
@@ -302,7 +303,7 @@ export const SUBMISSIONS_PAGE = 50;
 
 /** A page of a form's submissions, newest first, optionally one state (AC-572). */
 export const ListSubmissionsInput = WorkspaceScoped.extend({
-  formId: z.uuid(),
+  formId: Uuid,
   state: SubmissionState.optional(),
   cursor: z.string().min(1).max(200).optional(),
   limit: z.number().int().min(1).max(SUBMISSIONS_PAGE).optional(),
@@ -319,12 +320,12 @@ export const SubmissionPage = z.object({
 export type SubmissionPage = z.infer<typeof SubmissionPage>;
 
 /** One submission by id. */
-export const SubmissionIdInput = WorkspaceScoped.extend({ submissionId: z.uuid() });
+export const SubmissionIdInput = WorkspaceScoped.extend({ submissionId: Uuid });
 /** One submission by id. */
 export type SubmissionIdInput = z.infer<typeof SubmissionIdInput>;
 
 /** A change to one submission (release, mark as spam, retry, delete). */
-export const SubmissionWriteInput = SubmissionIdInput.extend({ mutationId: z.uuid() });
+export const SubmissionWriteInput = SubmissionIdInput.extend({ mutationId: Uuid });
 /** A change to one submission. */
 export type SubmissionWriteInput = z.infer<typeof SubmissionWriteInput>;
 

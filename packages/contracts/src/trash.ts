@@ -7,6 +7,7 @@ import { BULK_INLINE_MAX, BULK_TOO_MANY_MESSAGE, RestoreResults } from './bulk.t
 import { ActorReferenceValue, Timestamp } from './values/attribute-values.ts';
 import { RecordRefDisplay } from './values/options.ts';
 import { WorkspaceScoped } from './workspaces.ts';
+import { Uuid } from './values/ids.ts';
 
 /** The most rows one `trash.query` answers. */
 export const MAX_TRASH_PAGE = 200;
@@ -17,8 +18,8 @@ export const MAX_TRASH_PAGE = 200;
  * whom it was deleted, and when the daily cleanup removes it for good.
  */
 export const TrashItem = z.object({
-  recordId: z.uuid(),
-  objectId: z.uuid(),
+  recordId: Uuid,
+  objectId: Uuid,
   display: RecordRefDisplay,
   deletedAt: Timestamp,
   /** Absent where a field rule hides Created by or Updated by on the record's object from the reader (spec 0017). */
@@ -30,7 +31,7 @@ export type TrashItem = z.infer<typeof TrashItem>;
 
 /** A page of the trash, of one object or all: after `cursor` (the last page's `nextCursor`), up to `limit` (100). */
 export const QueryTrashInput = WorkspaceScoped.extend({
-  objectId: z.uuid().optional(),
+  objectId: Uuid.optional(),
   cursor: z.string().min(1).max(512).optional(),
   limit: z
     .number()
@@ -52,7 +53,7 @@ export type TrashPage = z.infer<typeof TrashPage>;
 
 /** How many records the trash holds, of one object or all. */
 export const CountTrashInput = WorkspaceScoped.extend({
-  objectId: z.uuid().optional(),
+  objectId: Uuid.optional(),
 });
 /** A trash count to read. */
 export type CountTrashInput = z.infer<typeof CountTrashInput>;
@@ -68,10 +69,10 @@ export type TrashCount = z.infer<typeof TrashCount>;
 /** Up to 500 records to bring back from the trash, of any objects. */
 export const RestoreTrashInput = WorkspaceScoped.extend({
   recordIds: z
-    .array(z.uuid())
+    .array(Uuid)
     .min(1, 'Choose at least one record.')
     .max(BULK_INLINE_MAX * 2, BULK_TOO_MANY_MESSAGE),
-  mutationId: z.uuid(),
+  mutationId: Uuid,
 });
 /** Records to restore. */
 export type RestoreTrashInput = z.infer<typeof RestoreTrashInput>;

@@ -133,4 +133,37 @@ describe('rules at the API (AC-140 to AC-143)', () => {
     expect(all.records.map((record) => record.id).sort()).toEqual([mine.id, theirs.id].sort());
     expect(all.records.find((record) => record.id === theirs.id)?.values[owner.attribute('job_title')]).toBe('Founder');
   });
+
+  it('holds a record rule however the object id is spelled: upper case reads nothing more (spec 0009)', async () => {
+    const owner = await memberWithWorkspace(app);
+    const { client: member, memberId } = await joined(owner.workspace.id);
+    const workspace = owner.slug;
+    const person = (first: string, extra: Record<string, unknown>) =>
+      owner.client.records.create({
+        workspace,
+        objectId: owner.people.id,
+        id: newId(),
+        values: { [owner.attribute('name')]: { firstName: first, lastName: 'L' }, ...extra },
+        mutationId: newId(),
+      });
+    const mine = await person('Ada', { [owner.attribute('owner')]: { type: 'member', id: memberId } });
+    const theirs = await person('Bob', {});
+    rulesByWorkspace.set(owner.workspace.id, {
+      levels: [],
+      records: [
+        {
+          subject: { type: 'role', role: 'member' },
+          objectId: owner.people.id,
+          kind: 'own',
+          attributeId: owner.attribute('owner'),
+        },
+      ],
+    });
+    // The bypass tried: the object, and the hidden record, named in upper case.
+    const upper = owner.people.id.toUpperCase();
+    const page = await member.records.query({ workspace, objectId: upper });
+    expect(page.records.map((record) => record.id)).toEqual([mine.id]);
+    expect(await member.records.count({ workspace, objectId: upper })).toEqual({ count: 1, atLeast: false });
+    expect(await member.records.get({ workspace, ids: [theirs.id.toUpperCase()] })).toEqual([]);
+  });
 });

@@ -9,6 +9,7 @@ import { AttributeRelationship } from './relationship-block.ts';
 import { Hue } from './values/hues.ts';
 import { AttributeValidation, ValidationRuleInput } from './values/validation-rules.ts';
 import { WorkspaceScoped } from './workspaces.ts';
+import { Uuid, uuidV7 } from './values/ids.ts';
 
 /**
  * Why the caller can't change an attribute's values (spec 0009, AC-142): the
@@ -27,7 +28,7 @@ export type AttributeReadOnly = z.infer<typeof AttributeReadOnly>;
  * target time in stage (an ISO 8601 duration).
  */
 export const AttributeOption = z.object({
-  id: z.uuid(),
+  id: Uuid,
   label: z.string(),
   hue: Hue,
   position: z.number().int(),
@@ -52,8 +53,8 @@ export type AttributeOption = z.infer<typeof AttributeOption>;
  * attributes carry their options inline, archived ones included.
  */
 export const AttributeDefinition = z.object({
-  id: z.uuid(),
-  objectId: z.uuid(),
+  id: Uuid,
+  objectId: Uuid,
   apiSlug: z.string(),
   title: z.string(),
   description: z.string().optional(),
@@ -67,7 +68,7 @@ export const AttributeDefinition = z.object({
   defaultValue: AttributeDefault.optional(),
   position: z.number().int(),
   isArchived: z.boolean(),
-  archivedBy: z.object({ objectId: z.uuid() }).optional(),
+  archivedBy: z.object({ objectId: Uuid }).optional(),
   options: z.array(AttributeOption).optional(),
   readOnly: AttributeReadOnly.optional(),
   /**
@@ -84,7 +85,7 @@ export type AttributeDefinition = z.infer<typeof AttributeDefinition>;
 
 /** Which object's attributes to read. */
 export const ListAttributesInput = WorkspaceScoped.extend({
-  objectId: z.uuid(),
+  objectId: Uuid,
   /** Settings only: the archived attributes too (spec 0012, AC-227). */
   includeArchived: z.boolean().optional(),
 });
@@ -148,7 +149,7 @@ export const TargetDays = z
  * outcome and target time.
  */
 export const NewAttributeOption = z.object({
-  id: z.uuid({ version: 'v7', message: 'An option id must be a UUID v7.' }),
+  id: uuidV7('An option id must be a UUID v7.'),
   label: OptionLabel,
   hue: Hue,
   outcome: OptionOutcome.optional(),
@@ -168,8 +169,8 @@ export type NewAttributeOption = z.infer<typeof NewAttributeOption>;
  * `mutationId` is the write's own uuid, echoed in its event.
  */
 export const CreateAttributeInput = WorkspaceScoped.extend({
-  objectId: z.uuid(),
-  id: z.uuid({ version: 'v7', message: 'The attribute id must be a UUID v7.' }),
+  objectId: Uuid,
+  id: uuidV7('The attribute id must be a UUID v7.'),
   title: AttributeTitle,
   type: PickerAttributeType,
   apiSlug: z.string().max(100).optional(),
@@ -183,7 +184,7 @@ export const CreateAttributeInput = WorkspaceScoped.extend({
   options: z.array(NewAttributeOption).max(1000, 'An attribute holds at most 500 options.').optional(),
   /** Its rules, in order (spec 0013, AC-252); at most 20 (`LIMIT_REACHED`). */
   rules: AttributeRules.optional(),
-  mutationId: z.uuid(),
+  mutationId: Uuid,
 });
 /** A new attribute. */
 export type CreateAttributeInput = z.infer<typeof CreateAttributeInput>;
@@ -194,7 +195,7 @@ export type CreateAttributeInput = z.infer<typeof CreateAttributeInput>;
  * `description` and `defaultValue` take `null` to clear.
  */
 export const UpdateAttributeInput = WorkspaceScoped.extend({
-  attributeId: z.uuid(),
+  attributeId: Uuid,
   title: AttributeTitle.optional(),
   description: AttributeDescription.nullable().optional(),
   isRequired: z.boolean().optional(),
@@ -206,7 +207,7 @@ export const UpdateAttributeInput = WorkspaceScoped.extend({
    * attribute's own rules (one left out is deleted); at most 20.
    */
   rules: AttributeRules.optional(),
-  mutationId: z.uuid(),
+  mutationId: Uuid,
 });
 /** An attribute's settings, changed. */
 export type UpdateAttributeInput = z.infer<typeof UpdateAttributeInput>;
@@ -216,17 +217,17 @@ export type UpdateAttributeInput = z.infer<typeof UpdateAttributeInput>;
  * archived ones counted, system ones never (spec 0012, AC-232).
  */
 export const ReorderAttributeInput = WorkspaceScoped.extend({
-  attributeId: z.uuid(),
+  attributeId: Uuid,
   position: z.number().int().min(0),
-  mutationId: z.uuid(),
+  mutationId: Uuid,
 });
 /** An attribute moved in its object's order. */
 export type ReorderAttributeInput = z.infer<typeof ReorderAttributeInput>;
 
 /** One attribute to archive or restore (spec 0012, AC-233). */
 export const AttributeWriteInput = WorkspaceScoped.extend({
-  attributeId: z.uuid(),
-  mutationId: z.uuid(),
+  attributeId: Uuid,
+  mutationId: Uuid,
 });
 /** One attribute to archive or restore. */
 export type AttributeWriteInput = z.infer<typeof AttributeWriteInput>;

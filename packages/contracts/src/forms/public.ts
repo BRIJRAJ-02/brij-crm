@@ -5,6 +5,7 @@
 // the app), so its bundle carries no schema library.
 import * as z from 'zod';
 import { ANSWER_TYPES } from './answer-types.ts';
+import { Uuid } from '../values/ids.ts';
 
 /** The languages a hosted form speaks (spec 0023, value sourcing); English for anything missing. */
 export const FORM_LANGUAGES = ['en', 'es', 'fr', 'de', 'pt', 'it', 'nl', 'hi'] as const;
@@ -92,7 +93,7 @@ export type FillTicket = z.infer<typeof FillTicket>;
  * score. Answers are keyed by question key.
  */
 export const SubmitBody = z.object({
-  idempotencyKey: z.uuid(),
+  idempotencyKey: Uuid,
   versionNumber: z.number().int().min(1).optional(),
   answers: z.record(z.string().max(40), z.unknown()),
   hidden: SubmitHidden,

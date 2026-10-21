@@ -11,6 +11,7 @@ import { RecordRefDisplay } from './values/options.ts';
 import { SortRules } from './values/sorts.ts';
 import { BOARD_GROUPS_PER_CALL, BOARD_MAX_GROUP_LIMIT } from './board-model.ts';
 import { WorkspaceScoped } from './workspaces.ts';
+import { Uuid, uuidV7 } from './values/ids.ts';
 
 /** The most rows one `records.query` answers. */
 export const MAX_QUERY_LIMIT = 200;
@@ -31,7 +32,7 @@ export const MAX_READ_ATTRIBUTES = 250;
  * every attribute.
  */
 const ReadAttributeIds = z
-  .array(z.uuid())
+  .array(Uuid)
   .max(MAX_READ_ATTRIBUTES, `Read at most ${String(MAX_READ_ATTRIBUTES)} attributes at once.`);
 
 /**
@@ -83,8 +84,8 @@ export const MAX_BATCH_CELLS = 5_000;
  * lets a read with a lower revision than the one it holds replace it.
  */
 export const RecordView = z.object({
-  id: z.uuid(),
-  objectId: z.uuid(),
+  id: Uuid,
+  objectId: Uuid,
   /** Each of these four is absent when a field rule hides its system attribute from the reader (spec 0009). */
   createdAt: Timestamp.optional(),
   createdBy: ActorReferenceValue.optional(),
@@ -93,7 +94,7 @@ export const RecordView = z.object({
   display: RecordRefDisplay,
   revision: z.number().int().min(0),
   values: z.record(z.string(), z.unknown()),
-  versions: z.record(z.string(), z.uuid()),
+  versions: z.record(z.string(), Uuid),
   linkTotals: z.record(z.string(), z.number().int().min(0)),
 });
 /** A record as a screen holds it. */
@@ -109,7 +110,7 @@ export type RecordView = z.infer<typeof RecordView>;
  * refused 400 `INPUT_INVALID` on `cursor` (start again from the top).
  */
 export const QueryRecordsInput = WorkspaceScoped.extend({
-  objectId: z.uuid(),
+  objectId: Uuid,
   position: z.number().int().min(0).optional(),
   cursor: z.string().min(1).max(4_096).optional(),
   limit: z
@@ -139,7 +140,7 @@ export type RecordPage = z.infer<typeof RecordPage>;
 
 /** How many of an object's live records there are (or match `filter`). */
 export const CountRecordsInput = WorkspaceScoped.extend({
-  objectId: z.uuid(),
+  objectId: Uuid,
   filter: FilterGroup.optional(),
   ...QueryClock,
 });
@@ -166,10 +167,10 @@ export type RecordCount = z.infer<typeof RecordCount>;
  * that some live record still holds, so their columns show.
  */
 export const RecordGroupsInput = WorkspaceScoped.extend({
-  objectId: z.uuid(),
-  groupBy: z.uuid(),
+  objectId: Uuid,
+  groupBy: Uuid,
   groupIds: z
-    .array(z.uuid().nullable())
+    .array(Uuid.nullable())
     .min(1, 'Name at least one column.')
     .max(BOARD_GROUPS_PER_CALL, `Read at most ${String(BOARD_GROUPS_PER_CALL)} columns at once.`)
     .refine((ids) => new Set(ids).size === ids.length, { error: 'Name each column once.' }),
@@ -190,7 +191,7 @@ export type RecordGroupsInput = z.infer<typeof RecordGroupsInput>;
 
 /** One column's first cards, the cursor for its next page, and its count. */
 export const RecordGroup = z.object({
-  id: z.uuid().nullable(),
+  id: Uuid.nullable(),
   records: z.array(RecordView),
   nextCursor: z.string().optional(),
   count: z.number().int().min(0),
@@ -202,14 +203,14 @@ export type RecordGroup = z.infer<typeof RecordGroup>;
 /** A board's columns in the order asked, and (when probed) the archived options still held. */
 export const RecordGroups = z.object({
   groups: z.array(RecordGroup),
-  archivedHolding: z.array(z.uuid()).optional(),
+  archivedHolding: z.array(Uuid).optional(),
 });
 /** A board's columns. */
 export type RecordGroups = z.infer<typeof RecordGroups>;
 
 /** Records by id, up to 500, in the order asked. */
 export const GetRecordsInput = WorkspaceScoped.extend({
-  ids: z.array(z.uuid()).max(MAX_GET_IDS, `Read at most ${String(MAX_GET_IDS)} records at once.`),
+  ids: z.array(Uuid).max(MAX_GET_IDS, `Read at most ${String(MAX_GET_IDS)} records at once.`),
   attributeIds: ReadAttributeIds.optional(),
 });
 /** Records by id. */
@@ -227,11 +228,11 @@ const ValuesById = z.record(z.uuid(), z.unknown());
  * already made.
  */
 export const CreateRecordInput = WorkspaceScoped.extend({
-  objectId: z.uuid(),
-  id: z.uuid({ version: 'v7', message: 'The record id must be a UUID v7.' }),
+  objectId: Uuid,
+  id: uuidV7('The record id must be a UUID v7.'),
   values: ValuesById.optional(),
   timeZone: WriteTimeZone,
-  mutationId: z.uuid(),
+  mutationId: Uuid,
 });
 /** A new record. */
 export type CreateRecordInput = z.infer<typeof CreateRecordInput>;
@@ -253,18 +254,18 @@ export type CreateRecordInput = z.infer<typeof CreateRecordInput>;
  */
 export const ValueChangeInput = z.object({
   value: z.unknown(),
-  baseVersionId: z.uuid().nullable().optional(),
-  ifVersionId: z.uuid().optional(),
+  baseVersionId: Uuid.nullable().optional(),
+  ifVersionId: Uuid.optional(),
 });
 /** One attribute's new value. */
 export type ValueChangeInput = z.infer<typeof ValueChangeInput>;
 
 /** New values for one record, by attribute id, all or none, and the write's `mutationId`. */
 export const SetValuesInput = WorkspaceScoped.extend({
-  recordId: z.uuid(),
+  recordId: Uuid,
   values: z.record(z.uuid(), ValueChangeInput),
   timeZone: WriteTimeZone,
-  mutationId: z.uuid(),
+  mutationId: Uuid,
 });
 /** New values for one record. */
 export type SetValuesInput = z.infer<typeof SetValuesInput>;
@@ -283,14 +284,14 @@ export const WrittenRecord = RecordView.extend({
    * itself, never from the read back after it (someone may have written in
    * between), so it is what the tab can call its own (spec 0006).
    */
-  written: z.record(z.uuid(), z.uuid()),
+  written: z.record(z.uuid(), Uuid),
 });
 /** A record a write answers, with its echo count. */
 export type WrittenRecord = z.infer<typeof WrittenRecord>;
 
 /** One record's new values in a batch. */
 export const BatchItem = z.object({
-  recordId: z.uuid(),
+  recordId: Uuid,
   values: z.record(z.uuid(), ValueChangeInput),
 });
 /** One record's new values in a batch. */
@@ -305,7 +306,7 @@ export const SetValuesBatchInput = WorkspaceScoped.extend({
   // Twice the cap, so a batch a little over it still answers the engine's CONFIG_INVALID, and junk stops at parsing.
   items: z.array(BatchItem).max(MAX_BATCH_RECORDS * 2, `Change at most ${String(MAX_BATCH_RECORDS)} records at once.`),
   timeZone: WriteTimeZone,
-  mutationId: z.uuid(),
+  mutationId: Uuid,
 });
 /** New values for many records. */
 export type SetValuesBatchInput = z.infer<typeof SetValuesBatchInput>;
@@ -317,10 +318,10 @@ export type SetValuesBatchInput = z.infer<typeof SetValuesBatchInput>;
  * landed and was then trashed before the read back answers `RECORD_DELETED`.
  */
 export const BatchRecordResult = z.object({
-  recordId: z.uuid(),
+  recordId: Uuid,
   record: RecordView.optional(),
   /** With `record`: the version this write made for each attribute it changed (as `WrittenRecord.written`). */
-  written: z.record(z.uuid(), z.uuid()).optional(),
+  written: z.record(z.uuid(), Uuid).optional(),
   refusals: z.array(ApiRefusal).optional(),
 });
 /** One record's outcome in a batch. */
@@ -348,7 +349,7 @@ export const MAX_SEARCH_QUERY = 200;
  * holds one, who holds it now.
  */
 export const SearchRecordsInput = WorkspaceScoped.extend({
-  objectId: z.uuid(),
+  objectId: Uuid,
   query: z.string().max(MAX_SEARCH_QUERY, `Search with at most ${String(MAX_SEARCH_QUERY)} characters.`),
   limit: z
     .number()
@@ -356,8 +357,8 @@ export const SearchRecordsInput = WorkspaceScoped.extend({
     .min(1)
     .max(MAX_SEARCH_RESULTS, `Ask for at most ${String(MAX_SEARCH_RESULTS)} results.`)
     .optional(),
-  forAttributeId: z.uuid().optional(),
-  forRecordId: z.uuid().optional(),
+  forAttributeId: Uuid.optional(),
+  forRecordId: Uuid.optional(),
 });
 /** The record picker's search. */
 export type SearchRecordsInput = z.infer<typeof SearchRecordsInput>;
@@ -383,7 +384,7 @@ export type SearchResults = z.infer<typeof SearchResults>;
 
 /** A record in the trash, by id (spec 0017). */
 export const GetTrashedInput = WorkspaceScoped.extend({
-  recordId: z.uuid(),
+  recordId: Uuid,
 });
 /** A record in the trash, by id. */
 export type GetTrashedInput = z.infer<typeof GetTrashedInput>;

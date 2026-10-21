@@ -11,6 +11,7 @@ import { RichTextDoc, RichTextDocBody } from './values/rich-text.ts';
 import { NOTE_PAGE_MAX, NOTE_TITLE_MAX } from './note-limits.ts';
 import { TaskTotal } from './tasks.ts';
 import { WorkspaceScoped } from './workspaces.ts';
+import { Uuid, uuidV7 } from './values/ids.ts';
 
 export {
   NOTE_CONTENT_MAX_BYTES,
@@ -36,8 +37,8 @@ export const MAX_NOTE_CURSOR = 256;
  * edited it, when.
  */
 export const NoteSummary = z.object({
-  id: z.uuid(),
-  recordId: z.uuid(),
+  id: Uuid,
+  recordId: Uuid,
   title: z.string(),
   excerpt: z.string(),
   version: z.number().int().min(1),
@@ -64,8 +65,8 @@ export type Note = z.infer<typeof Note>;
  * this save started from (null for a new note).
  */
 export const SaveNoteInput = WorkspaceScoped.extend({
-  id: z.uuid({ version: 'v7', message: 'The note id must be a UUID v7.' }),
-  recordId: z.uuid(),
+  id: uuidV7('The note id must be a UUID v7.'),
+  recordId: Uuid,
   title: z
     .string()
     .max(NOTE_TITLE_MAX, `A note title holds at most ${String(NOTE_TITLE_MAX)} characters.`)
@@ -73,7 +74,7 @@ export const SaveNoteInput = WorkspaceScoped.extend({
     .optional(),
   content: RichTextDocBody.optional(),
   baseVersion: z.number().int().min(1).nullable().optional(),
-  mutationId: z.uuid(),
+  mutationId: Uuid,
 });
 /** One save of a note. */
 export type SaveNoteInput = z.infer<typeof SaveNoteInput>;
@@ -87,13 +88,13 @@ export const SaveNoteResult = z.object({
 export type SaveNoteResult = z.infer<typeof SaveNoteResult>;
 
 /** One note by id. */
-export const GetNoteInput = WorkspaceScoped.extend({ noteId: z.uuid() });
+export const GetNoteInput = WorkspaceScoped.extend({ noteId: Uuid });
 /** One note by id. */
 export type GetNoteInput = z.infer<typeof GetNoteInput>;
 
 /** One page of a record's notes, last edited first. */
 export const ListNotesInput = WorkspaceScoped.extend({
-  recordId: z.uuid(),
+  recordId: Uuid,
   cursor: z.string().min(1).max(MAX_NOTE_CURSOR).optional(),
   limit: z
     .number()
@@ -115,12 +116,12 @@ export const NotePage = z.object({
 export type NotePage = z.infer<typeof NotePage>;
 
 /** Where a page of notes ends, inside the opaque cursor: the last note's edit moment and id. Strict. */
-export const NoteCursor = z.strictObject({ updatedAt: z.string().max(40), id: z.uuid() });
+export const NoteCursor = z.strictObject({ updatedAt: z.string().max(40), id: Uuid });
 /** Where a page of notes ends. */
 export type NoteCursor = z.infer<typeof NoteCursor>;
 
 /** Deleting or restoring one note. */
-export const NoteLifecycleInput = WorkspaceScoped.extend({ noteId: z.uuid(), mutationId: z.uuid() });
+export const NoteLifecycleInput = WorkspaceScoped.extend({ noteId: Uuid, mutationId: Uuid });
 /** Deleting or restoring one note. */
 export type NoteLifecycleInput = z.infer<typeof NoteLifecycleInput>;
 

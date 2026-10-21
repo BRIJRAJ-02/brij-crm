@@ -7,6 +7,7 @@ import * as z from 'zod';
 import { AttributeOption, OptionLabel, OptionOutcome, TargetDays } from './attributes.ts';
 import { Hue } from './values/hues.ts';
 import { WorkspaceScoped } from './workspaces.ts';
+import { Uuid, uuidV7 } from './values/ids.ts';
 
 /**
  * A new option at the end of a select or status attribute's options. `id` is
@@ -15,42 +16,42 @@ import { WorkspaceScoped } from './workspaces.ts';
  * `targetTimeInStage` are for status stages only.
  */
 export const CreateOptionInput = WorkspaceScoped.extend({
-  attributeId: z.uuid(),
-  id: z.uuid({ version: 'v7', message: 'The option id must be a UUID v7.' }),
+  attributeId: Uuid,
+  id: uuidV7('The option id must be a UUID v7.'),
   label: OptionLabel,
   hue: Hue.optional(),
   outcome: OptionOutcome.optional(),
   targetTimeInStage: TargetDays.optional(),
-  mutationId: z.uuid(),
+  mutationId: Uuid,
 });
 /** A new option. */
 export type CreateOptionInput = z.infer<typeof CreateOptionInput>;
 
 /** An option's label, hue, or a stage's outcome or target time, changed; `null` clears the target time. */
 export const UpdateOptionInput = WorkspaceScoped.extend({
-  optionId: z.uuid(),
+  optionId: Uuid,
   label: OptionLabel.optional(),
   hue: Hue.optional(),
   outcome: OptionOutcome.optional(),
   targetTimeInStage: TargetDays.nullable().optional(),
-  mutationId: z.uuid(),
+  mutationId: Uuid,
 });
 /** An option, changed. */
 export type UpdateOptionInput = z.infer<typeof UpdateOptionInput>;
 
 /** An option moved to `position` in its attribute's order, archived options counted. */
 export const ReorderOptionInput = WorkspaceScoped.extend({
-  optionId: z.uuid(),
+  optionId: Uuid,
   position: z.number().int().min(0),
-  mutationId: z.uuid(),
+  mutationId: Uuid,
 });
 /** An option moved. */
 export type ReorderOptionInput = z.infer<typeof ReorderOptionInput>;
 
 /** One option to archive or restore. */
 export const OptionWriteInput = WorkspaceScoped.extend({
-  optionId: z.uuid(),
-  mutationId: z.uuid(),
+  optionId: Uuid,
+  mutationId: Uuid,
 });
 /** One option to archive or restore. */
 export type OptionWriteInput = z.infer<typeof OptionWriteInput>;

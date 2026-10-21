@@ -3,10 +3,11 @@
 import { oc } from '@orpc/contract';
 import * as z from 'zod';
 import { WorkspaceSummary } from './workspaces.ts';
+import { Uuid } from './values/ids.ts';
 
 /** The signed in person. `name` is empty until they give one (an email code sign up starts without). */
 export const SignedInUser = z.object({
-  id: z.uuid(),
+  id: Uuid,
   name: z.string(),
   email: z.email(),
 });

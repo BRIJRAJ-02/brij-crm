@@ -7,6 +7,7 @@
 import { oc } from '@orpc/contract';
 import * as z from 'zod';
 import { WorkspaceScoped } from './workspaces.ts';
+import { Uuid } from './values/ids.ts';
 
 /** The roles a member can hold, from most to least power. `#23` may add a fourth. */
 export const ROLES = ['owner', 'admin', 'member'] as const;
@@ -119,7 +120,7 @@ export const LAST_OWNER_MESSAGE = 'A workspace needs an owner. Make someone else
  * and change events name them by), their role, its label, and their permissions.
  */
 export const MyAccess = z.object({
-  memberId: z.uuid(),
+  memberId: Uuid,
   role: Role,
   roleLabel: z.string(),
   permissions: z.array(Permission),

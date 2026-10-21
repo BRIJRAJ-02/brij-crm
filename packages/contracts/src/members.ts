@@ -3,10 +3,11 @@
 import { oc } from '@orpc/contract';
 import * as z from 'zod';
 import { WorkspaceScoped } from './workspaces.ts';
+import { Uuid } from './values/ids.ts';
 
 /** One active member: the id actor values carry, their name in this workspace, and their email. */
 export const MemberSummary = z.object({
-  id: z.uuid(),
+  id: Uuid,
   name: z.string(),
   email: z.string(),
 });

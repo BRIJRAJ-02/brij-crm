@@ -207,8 +207,10 @@ async function prepare(
     if (object === undefined) throw refuse('NOT_FOUND', 'That object does not exist.');
     // A hidden object answers as an unknown one (spec 0009, AC-140).
     await checkObject(tx, access, object.id, 'read');
-    level = baseLevel({ objectId: query.objectId });
-    own = await loadAttributes(tx, query.objectId);
+    // The id as stored (lower case), never the caller's spelling: the record rule is looked up by it, and an upper
+    // case spelling would find none and read the object's hidden records.
+    level = baseLevel({ objectId: object.id });
+    own = await loadAttributes(tx, object.id);
     // Keyed by the id as stored (lower case), which the read back looks records' objects up by.
     objectAttributes = new Map([[object.id, own]]);
   }

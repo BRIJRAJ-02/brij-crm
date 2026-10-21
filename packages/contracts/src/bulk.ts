@@ -5,6 +5,7 @@ import { oc } from '@orpc/contract';
 import * as z from 'zod';
 import { ApiRefusal } from './errors.ts';
 import { WorkspaceScoped } from './workspaces.ts';
+import { Uuid, uuidV7 } from './values/ids.ts';
 
 /** The most records one inline bulk call changes; more is refused 422 `CONFIG_INVALID`. */
 export const BULK_INLINE_MAX = 500;
@@ -22,14 +23,14 @@ export const BULK_TOO_MANY_MESSAGE = 'Changes to more than 500 records arrive so
  * that batch (`records.restoreBatch`).
  */
 export const DeleteManyInput = WorkspaceScoped.extend({
-  objectId: z.uuid(),
+  objectId: Uuid,
   // Twice the cap, so a selection a little over it answers the engine's CONFIG_INVALID, and junk stops at parsing.
   recordIds: z
-    .array(z.uuid())
+    .array(Uuid)
     .min(1, 'Choose at least one record.')
     .max(BULK_INLINE_MAX * 2, BULK_TOO_MANY_MESSAGE),
-  batchId: z.uuid({ version: 'v7', message: 'The batch id must be a UUID v7.' }),
-  mutationId: z.uuid(),
+  batchId: uuidV7('The batch id must be a UUID v7.'),
+  mutationId: Uuid,
 });
 /** Records to move to the trash. */
 export type DeleteManyInput = z.infer<typeof DeleteManyInput>;
@@ -40,7 +41,7 @@ export type DeleteManyInput = z.infer<typeof DeleteManyInput>;
  * or `refused` (`NOT_FOUND`: unknown, of another object, or hidden).
  */
 export const DeleteOutcome = z.object({
-  recordId: z.uuid(),
+  recordId: Uuid,
   state: z.enum(['deleted', 'already-deleted', 'refused']),
   refusal: ApiRefusal.optional(),
 });
@@ -57,8 +58,8 @@ export type DeleteManyResults = z.infer<typeof DeleteManyResults>;
 
 /** Undoes a delete: restores the records still in the trash with its batch id. */
 export const RestoreBatchInput = WorkspaceScoped.extend({
-  batchId: z.uuid(),
-  mutationId: z.uuid(),
+  batchId: Uuid,
+  mutationId: Uuid,
 });
 /** A delete to undo. */
 export type RestoreBatchInput = z.infer<typeof RestoreBatchInput>;
@@ -70,10 +71,10 @@ export type RestoreBatchInput = z.infer<typeof RestoreBatchInput>;
  * `NOT_FOUND` past the 30 days or gone).
  */
 export const RestoreOutcome = z.object({
-  recordId: z.uuid(),
+  recordId: Uuid,
   state: z.enum(['restored', 'live', 'refused']),
   /** The record's object, on a record restored or live (one the member may see): its tables read again. */
-  objectId: z.uuid().optional(),
+  objectId: Uuid.optional(),
   refusal: ApiRefusal.optional(),
 });
 /** One record's outcome in a restore. */

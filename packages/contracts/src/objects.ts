@@ -6,6 +6,7 @@ import * as z from 'zod';
 import { Hue } from './values/hues.ts';
 import { ObjectIcon } from './values/object-icons.ts';
 import { WorkspaceScoped } from './workspaces.ts';
+import { Uuid, uuidV7 } from './values/ids.ts';
 
 /**
  * One object: its id, its address in URLs and the API (`apiSlug`,
@@ -15,14 +16,14 @@ import { WorkspaceScoped } from './workspaces.ts';
  * sidebar's), whether it is a standard object, and whether it is archived.
  */
 export const ObjectSummary = z.object({
-  id: z.uuid(),
+  id: Uuid,
   apiSlug: z.string(),
   singularName: z.string(),
   pluralName: z.string(),
   icon: ObjectIcon,
   hue: Hue,
   standardKey: z.string().optional(),
-  primaryAttributeId: z.uuid().optional(),
+  primaryAttributeId: Uuid.optional(),
   /** What the caller may do with its records (spec 0009, AC-140): an object they can't see isn't listed. */
   access: z.enum(['read', 'write']),
   /** The workspace's order, every member's sidebar (spec 0012, AC-225). */
@@ -53,42 +54,42 @@ const ObjectName = z.string().trim().min(1, 'Give a name.').max(100, 'Use at mos
  * `apiSlug`). `mutationId` is the write's own uuid, echoed in its event.
  */
 export const CreateObjectInput = WorkspaceScoped.extend({
-  id: z.uuid({ version: 'v7', message: 'The object id must be a UUID v7.' }),
+  id: uuidV7('The object id must be a UUID v7.'),
   singularName: ObjectName,
   pluralName: ObjectName,
   apiSlug: z.string().max(100).optional(),
   icon: ObjectIcon,
   hue: Hue,
-  mutationId: z.uuid(),
+  mutationId: Uuid,
 });
 /** A new object. */
 export type CreateObjectInput = z.infer<typeof CreateObjectInput>;
 
 /** An object's names and look, changed (AC-224). Its API name never changes. */
 export const UpdateObjectInput = WorkspaceScoped.extend({
-  objectId: z.uuid(),
+  objectId: Uuid,
   singularName: ObjectName.optional(),
   pluralName: ObjectName.optional(),
   icon: ObjectIcon.optional(),
   hue: Hue.optional(),
-  mutationId: z.uuid(),
+  mutationId: Uuid,
 });
 /** An object's names and look, changed. */
 export type UpdateObjectInput = z.infer<typeof UpdateObjectInput>;
 
 /** An object moved to `position` in the workspace's order (AC-225); the others close up around it. */
 export const ReorderObjectInput = WorkspaceScoped.extend({
-  objectId: z.uuid(),
+  objectId: Uuid,
   position: z.number().int().min(0),
-  mutationId: z.uuid(),
+  mutationId: Uuid,
 });
 /** An object moved in the workspace's order. */
 export type ReorderObjectInput = z.infer<typeof ReorderObjectInput>;
 
 /** One object to archive or restore (AC-226). */
 export const ObjectWriteInput = WorkspaceScoped.extend({
-  objectId: z.uuid(),
-  mutationId: z.uuid(),
+  objectId: Uuid,
+  mutationId: Uuid,
 });
 /** One object to archive or restore. */
 export type ObjectWriteInput = z.infer<typeof ObjectWriteInput>;

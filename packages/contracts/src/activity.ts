@@ -8,6 +8,7 @@ import { MeetingView } from './calendar.ts';
 import { ActorReferenceValue, Timestamp } from './values/attribute-values.ts';
 import { RecordRefDisplay } from './values/options.ts';
 import { WorkspaceScoped } from './workspaces.ts';
+import { Uuid } from './values/ids.ts';
 
 export {
   ACTIVITY_PAGE,
@@ -49,7 +50,7 @@ export const ActivityItem = z.object({
   /** Who did it; absent when a field rule hides it from the reader (the creation's Created by). */
   actor: ActorReferenceValue.optional(),
   kind: ActivityKind,
-  attributeId: z.uuid().optional(),
+  attributeId: Uuid.optional(),
   from: z.unknown().optional(),
   to: z.unknown().optional(),
   fromRefs: z.array(RecordRefDisplay).optional(),
@@ -58,13 +59,13 @@ export const ActivityItem = z.object({
   addedCount: z.number().int().min(0).optional(),
   removed: z.array(RecordRefDisplay).max(3).optional(),
   removedCount: z.number().int().min(0).optional(),
-  itemId: z.uuid().optional(),
+  itemId: Uuid.optional(),
   title: z.string().optional(),
   excerpt: z.string().optional(),
   isDone: z.boolean().optional(),
   meeting: MeetingView.optional(),
   /** A submission entry (spec 0023): the form, and what the submission did to this record. */
-  formId: z.uuid().optional(),
+  formId: Uuid.optional(),
   action: z.enum(['created', 'updated', 'matched', 'linked']).optional(),
 });
 /** One entry of a record's timeline. */
@@ -85,7 +86,7 @@ export type ActivityCursor = z.infer<typeof ActivityCursor>;
 
 /** A page of a record's timeline: after `cursor` (the last page's `nextCursor`), `limit` entries (1 to 50, 50 when not given). */
 export const RecordActivityInput = WorkspaceScoped.extend({
-  recordId: z.uuid(),
+  recordId: Uuid,
   cursor: z.string().min(1).max(MAX_ACTIVITY_CURSOR).optional(),
   limit: z
     .number()

@@ -405,6 +405,18 @@ describe('a record rule (AC-143)', () => {
     );
   });
 
+  it('holds for an object named in upper case, as the database answers it (spec 0009)', async () => {
+    // A rule is keyed by the id as stored. A page, a count or a jump naming the object in upper case meets the same
+    // rule, never the whole table: this spelling once read the rows the rule hides.
+    const upper = id('companies').toUpperCase();
+    const byName = [{ attributeId: id('companies.name'), direction: 'ascending' as const }];
+    const page = await queryPage(member, { objectId: upper, sorts: byName });
+    expect(page.records.map((each) => each.id)).toEqual([id('acme'), id('initech')]);
+    const jumped = await queryPage(member, { objectId: upper, sorts: byName, position: 0, limit: 5 });
+    expect(jumped.records.map((each) => each.id)).toEqual([id('acme'), id('initech')]);
+    expect(await countMatches(member, { objectId: upper })).toEqual({ count: 2, atLeast: false });
+  });
+
   it('drops far records outside it from reference values, filters through a relationship, and sorts', async () => {
     const [bob] = await getRecords(member, { ids: [id('bob')] });
     expect(bob?.values[id('people.company')]).toBeNull();

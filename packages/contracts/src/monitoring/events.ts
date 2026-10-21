@@ -9,6 +9,7 @@
 // browser never contacts PostHog (AC-167), so it stays out of the main index.
 import { createHash } from 'node:crypto';
 import * as z from 'zod';
+import { Uuid } from '../values/ids.ts';
 
 /** A milestone a workspace reaches once, stored in `workspace_milestones` (AC-177). */
 export const Milestone = z.enum(['workspace_created', 'first_record_created']);
@@ -26,7 +27,7 @@ export const SignUpMethod = z.enum(['email_code', 'google']);
 export type SignUpMethod = z.infer<typeof SignUpMethod>;
 
 // Who the event is about: the user's id (`auth.user.id`, a uuid), never an email (AC-165).
-const distinctId = z.uuid();
+const distinctId = Uuid;
 
 /** A new account, sent once after Better Auth wrote it (AC-174). */
 export const UserSignedUp = z.strictObject({
@@ -39,13 +40,13 @@ export type UserSignedUp = z.infer<typeof UserSignedUp>;
 
 // What every milestone event carries beyond its properties: the fixed id `milestoneEventId` derives (so PostHog
 // deduplicates a resend) and when the milestone row says it was reached (ISO 8601 UTC).
-const milestone = { distinctId, id: z.uuid(), at: z.iso.datetime() };
+const milestone = { distinctId, id: Uuid, at: z.iso.datetime() };
 
 /** A workspace made, sent once after its transaction commits (AC-175). */
 export const WorkspaceCreated = z.strictObject({
   event: z.literal('workspace_created'),
   ...milestone,
-  properties: z.strictObject({ workspace_id: z.uuid() }),
+  properties: z.strictObject({ workspace_id: Uuid }),
 });
 /** A workspace made. */
 export type WorkspaceCreated = z.infer<typeof WorkspaceCreated>;
@@ -54,7 +55,7 @@ export type WorkspaceCreated = z.infer<typeof WorkspaceCreated>;
 export const FirstRecordCreated = z.strictObject({
   event: z.literal('first_record_created'),
   ...milestone,
-  properties: z.strictObject({ workspace_id: z.uuid(), object_kind: ObjectKind }),
+  properties: z.strictObject({ workspace_id: Uuid, object_kind: ObjectKind }),
 });
 /** A workspace's first record made by a member. */
 export type FirstRecordCreated = z.infer<typeof FirstRecordCreated>;

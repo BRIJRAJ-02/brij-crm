@@ -9,6 +9,7 @@ import { ActorReferenceValue, DateValue, Timestamp } from './values/attribute-va
 import { RecordRefDisplay } from './values/options.ts';
 import { TASK_GET_MAX, TASK_PAGE_MAX, TASK_RECORDS_MAX, TASK_TITLE_MAX } from './task-limits.ts';
 import { WorkspaceScoped } from './workspaces.ts';
+import { Uuid, uuidV7 } from './values/ids.ts';
 
 export {
   TASK_COUNT_CAP,
@@ -43,7 +44,7 @@ export type TaskTitle = z.infer<typeof TaskTitle>;
 
 /** Record ids, each once, at most `TASK_RECORDS_MAX`. */
 const RecordIds = z
-  .array(z.uuid())
+  .array(Uuid)
   .max(TASK_RECORDS_MAX, `A task links at most ${String(TASK_RECORDS_MAX)} records.`)
   .refine((ids) => new Set(ids).size === ids.length, { error: 'Name each record once.' });
 
@@ -55,13 +56,13 @@ const RecordIds = z
  * who may write a linked record they can see; spec 0019, AC-447).
  */
 export const TaskView = z.object({
-  id: z.uuid(),
+  id: Uuid,
   title: z.string(),
   isDone: z.boolean(),
   doneAt: Timestamp.optional(),
   doneBy: ActorReferenceValue.optional(),
   dueOn: DateValue.optional(),
-  assigneeMemberId: z.uuid().optional(),
+  assigneeMemberId: Uuid.optional(),
   records: z.array(RecordRefDisplay),
   recordCount: z.number().int().min(0),
   canChange: z.boolean(),
@@ -79,12 +80,12 @@ export type TaskView = z.infer<typeof TaskView>;
  * creating it, the default). Linking a record needs `write` on its object.
  */
 export const CreateTaskInput = WorkspaceScoped.extend({
-  id: z.uuid({ version: 'v7', message: 'The task id must be a UUID v7.' }),
+  id: uuidV7('The task id must be a UUID v7.'),
   title: TaskTitle,
   dueOn: DateValue.optional(),
-  assigneeMemberId: z.uuid().optional(),
+  assigneeMemberId: Uuid.optional(),
   recordIds: RecordIds.optional(),
-  mutationId: z.uuid(),
+  mutationId: Uuid,
 });
 /** A new task. */
 export type CreateTaskInput = z.infer<typeof CreateTaskInput>;
@@ -95,14 +96,14 @@ export type CreateTaskInput = z.infer<typeof CreateTaskInput>;
  * whole list, so a link the writer can't see is never removed.
  */
 export const UpdateTaskInput = WorkspaceScoped.extend({
-  taskId: z.uuid(),
+  taskId: Uuid,
   title: TaskTitle.optional(),
   dueOn: DateValue.nullable().optional(),
-  assigneeMemberId: z.uuid().nullable().optional(),
+  assigneeMemberId: Uuid.nullable().optional(),
   isDone: z.boolean().optional(),
   addRecordIds: RecordIds.optional(),
   removeRecordIds: RecordIds.optional(),
-  mutationId: z.uuid(),
+  mutationId: Uuid,
 });
 /** A change to one task. */
 export type UpdateTaskInput = z.infer<typeof UpdateTaskInput>;
@@ -110,7 +111,7 @@ export type UpdateTaskInput = z.infer<typeof UpdateTaskInput>;
 /** Tasks by id: what a `tasks` event's ids are read back through. Missing, deleted and hidden ids are left out. */
 export const GetTasksInput = WorkspaceScoped.extend({
   ids: z
-    .array(z.uuid())
+    .array(Uuid)
     .min(1)
     .max(TASK_GET_MAX, `Read at most ${String(TASK_GET_MAX)} tasks at once.`),
 });
@@ -131,7 +132,7 @@ export const TaskMine = z.enum(['assigned', 'created', 'all']);
 export type TaskMine = z.infer<typeof TaskMine>;
 
 /** Which tasks a list reads: those linked to one record, or My tasks' (`{ mine }`). */
-export const TaskListScope = z.union([z.strictObject({ recordId: z.uuid() }), z.strictObject({ mine: TaskMine })]);
+export const TaskListScope = z.union([z.strictObject({ recordId: Uuid }), z.strictObject({ mine: TaskMine })]);
 /** Which tasks a list reads. */
 export type TaskListScope = z.infer<typeof TaskListScope>;
 
@@ -181,15 +182,15 @@ export const TaskCursor = z.union([
     status: z.literal('open'),
     dueOn: DateValue.nullable(),
     createdAt: z.string().max(40),
-    id: z.uuid(),
+    id: Uuid,
   }),
-  z.strictObject({ status: z.literal('done'), doneAt: z.string().max(40), id: z.uuid() }),
+  z.strictObject({ status: z.literal('done'), doneAt: z.string().max(40), id: Uuid }),
 ]);
 /** Where a page of tasks ends. */
 export type TaskCursor = z.infer<typeof TaskCursor>;
 
 /** Deleting or restoring one task (milestone 4): hidden at once, back exactly as it was within 30 days. */
-export const TaskLifecycleInput = WorkspaceScoped.extend({ taskId: z.uuid(), mutationId: z.uuid() });
+export const TaskLifecycleInput = WorkspaceScoped.extend({ taskId: Uuid, mutationId: Uuid });
 /** Deleting or restoring one task. */
 export type TaskLifecycleInput = z.infer<typeof TaskLifecycleInput>;
 

@@ -5,8 +5,9 @@
 // person sees. Every event carries its place in the workspace's stream
 // (`seq`, numbered with no gaps) and its commit time (`at`).
 import * as z from 'zod';
+import { Uuid } from './values/ids.ts';
 
-const ids = z.array(z.uuid());
+const ids = z.array(Uuid);
 
 /** `seq` and `at`, on every kind. */
 const place = {
@@ -16,7 +17,7 @@ const place = {
 };
 
 /** The browser's own id for the write, so the tab that made it can skip its echo. Absent on a filtered copy. */
-const mutationId = z.uuid().optional();
+const mutationId = Uuid.optional();
 
 /**
  * True: too many to list, so the ids are empty and a screen refetches
@@ -30,9 +31,9 @@ export const MAX_REPLACED_CELLS = 200;
 
 /** A cell a save replaced: the record, the attribute and the replaced version, ids only. */
 export const ReplacedCell = z.object({
-  recordId: z.uuid(),
-  attributeId: z.uuid(),
-  versionId: z.uuid(),
+  recordId: Uuid,
+  attributeId: Uuid,
+  versionId: Uuid,
 });
 /** A cell a save replaced. */
 export type ReplacedCell = z.infer<typeof ReplacedCell>;
@@ -47,7 +48,7 @@ export type ReplacedCell = z.infer<typeof ReplacedCell>;
 export const Replaced = z.object({
   by: z.object({
     type: z.enum(['member', 'api_key', 'automation', 'system', 'form', 'booking']),
-    id: z.uuid().nullable(),
+    id: Uuid.nullable(),
   }),
   cells: z.array(ReplacedCell).min(1).max(MAX_REPLACED_CELLS),
 });
@@ -73,7 +74,7 @@ const lifecycle = ids.max(MAX_LIFECYCLE_IDS).optional();
 export const RecordsEvent = z.object({
   ...place,
   kind: z.literal('records'),
-  objectId: z.uuid(),
+  objectId: Uuid,
   recordIds: ids,
   attributeIds: ids,
   /** Made by this write. */
@@ -91,8 +92,8 @@ export const RecordsEvent = z.object({
 export const EntriesEvent = z.object({
   ...place,
   kind: z.literal('entries'),
-  listId: z.uuid(),
-  objectId: z.uuid().optional(),
+  listId: Uuid,
+  objectId: Uuid.optional(),
   entryIds: ids,
   recordIds: ids,
   attributeIds: ids,
@@ -111,8 +112,8 @@ export const EntriesEvent = z.object({
 export const DefinitionsEvent = z.object({
   ...place,
   kind: z.literal('definitions'),
-  objectId: z.uuid().optional(),
-  listId: z.uuid().optional(),
+  objectId: Uuid.optional(),
+  listId: Uuid.optional(),
   attributeIds: ids.optional(),
   mutationId,
 });
@@ -121,8 +122,8 @@ export const DefinitionsEvent = z.object({
 export const ViewsEvent = z.object({
   ...place,
   kind: z.literal('views'),
-  objectId: z.uuid().optional(),
-  listId: z.uuid().optional(),
+  objectId: Uuid.optional(),
+  listId: Uuid.optional(),
   viewIds: ids,
   coarse,
   mutationId,
@@ -132,7 +133,7 @@ export const ViewsEvent = z.object({
 export const NotesEvent = z.object({
   ...place,
   kind: z.literal('notes'),
-  objectId: z.uuid().optional(),
+  objectId: Uuid.optional(),
   recordIds: ids,
   noteIds: ids,
   coarse,

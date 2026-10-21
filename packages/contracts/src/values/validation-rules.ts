@@ -12,6 +12,7 @@ import { isCountryCode } from './countries.ts';
 import { CURRENCY_CODES } from './currencies.ts';
 import { toCanonicalDecimal } from './decimal.ts';
 import { FilterGroup, type FilterCondition } from './filters.ts';
+import { Uuid, uuidV7 } from './ids.ts';
 
 /** One kind of rule: Required When, a length, a pattern, allowed email domains, phone countries, a range, whole numbers, currencies, a date range, or a count of values. */
 export const RuleKind = z.enum(RULE_KINDS);
@@ -119,7 +120,7 @@ const RuleMessage = z.string().max(2000);
  * `CONFIG_INVALID` on the rule's field (`rules.<index>.<setting>`).
  */
 export const ValidationRuleInput = z.object({
-  id: z.uuid({ version: 'v7', message: 'A rule id must be a UUID v7.' }),
+  id: uuidV7('A rule id must be a UUID v7.'),
   kind: ListedRuleKind,
   params: z.record(z.string().max(32), z.unknown()),
   condition: RuleCondition.optional(),
@@ -135,7 +136,7 @@ export type ValidationRuleInput = z.infer<typeof ValidationRuleInput>;
  */
 export const RuleBreaking = z.object({
   count: z.number().int().min(0),
-  sampleIds: z.array(z.uuid()),
+  sampleIds: z.array(Uuid),
   countedAt: z.iso.datetime().optional(),
   counting: z.boolean(),
 });
@@ -149,7 +150,7 @@ export type RuleBreaking = z.infer<typeof RuleBreaking>;
  * the reader is left out for them; the server still enforces it.
  */
 export const ValidationRuleView = z.object({
-  id: z.uuid(),
+  id: Uuid,
   kind: RuleKind,
   params: z.record(z.string(), z.unknown()),
   condition: RuleCondition.optional(),

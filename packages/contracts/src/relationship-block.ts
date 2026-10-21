@@ -4,6 +4,7 @@
 // block without the two importing each other.
 import * as z from 'zod';
 import { CARDINALITIES } from './values/cardinality.ts';
+import { Uuid } from './values/ids.ts';
 
 /**
  * How many records each side of a relationship may link to, read from the
@@ -23,11 +24,11 @@ export type Cardinality = z.infer<typeof Cardinality>;
  * here may already be linked elsewhere).
  */
 export const AttributeRelationship = z.object({
-  id: z.uuid(),
+  id: Uuid,
   cardinality: Cardinality,
   side: z.enum(['from', 'to']),
-  targetObjectIds: z.array(z.uuid()),
-  pairedAttributeId: z.uuid().optional(),
+  targetObjectIds: z.array(Uuid),
+  pairedAttributeId: Uuid.optional(),
   /** The other side's name, with `pairedAttributeId` (the relationship dialog shows both names). */
   pairedTitle: z.string().optional(),
   farHoldsOne: z.boolean(),

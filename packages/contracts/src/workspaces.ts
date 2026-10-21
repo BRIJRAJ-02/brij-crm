@@ -2,6 +2,7 @@
 // the summary the directory lists, and creating your own.
 import { oc } from '@orpc/contract';
 import * as z from 'zod';
+import { Uuid, uuidV7 } from './values/ids.ts';
 
 /**
  * A workspace's web address (`/w/<slug>`): lowercase letters and digits in
@@ -15,7 +16,7 @@ export type WorkspaceSlug = z.infer<typeof WorkspaceSlug>;
 
 /** A workspace as a member's list shows it: enough to open it, nothing from inside it. */
 export const WorkspaceSummary = z.object({
-  id: z.uuid(),
+  id: Uuid,
   slug: WorkspaceSlug,
   name: z.string(),
 });
@@ -39,7 +40,7 @@ export type WorkspaceScoped = z.infer<typeof WorkspaceScoped>;
  * if that is still empty.
  */
 export const CreateWorkspaceInput = z.object({
-  id: z.uuid({ version: 'v7', message: 'The workspace id must be a UUID v7.' }),
+  id: uuidV7('The workspace id must be a UUID v7.'),
   name: z.string().trim().min(1, 'Name the workspace.').max(80, 'Use at most 80 characters.'),
   slug: WorkspaceSlug,
   memberName: z.string().trim().min(1, 'Enter your name.').max(80, 'Use at most 80 characters.'),

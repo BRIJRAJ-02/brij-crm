@@ -7,6 +7,7 @@
 import * as z from 'zod';
 import { ANSWER_TYPES, CHOICE_TYPES, FORM_CHOICES_MAX, FORM_QUESTIONS_MAX, QUESTION_KEY } from './answer-types.ts';
 import { FORM_LANGUAGES } from './public.ts';
+import { Uuid } from '../values/ids.ts';
 
 /** A question's id inside its document: stable across versions, never shown. */
 export const QuestionId = z
@@ -17,7 +18,7 @@ export const QuestionId = z
 export const QuestionKey = z.string().regex(QUESTION_KEY, { error: 'Use lowercase letters, numbers and underscores.' });
 
 /** Where an answer is filed: an attribute of the form's main target (later milestones add person, company, deal). */
-export const FiledOn = z.strictObject({ objectRole: z.literal('main'), attributeId: z.uuid() });
+export const FiledOn = z.strictObject({ objectRole: z.literal('main'), attributeId: Uuid });
 /** Where an answer is filed. */
 export type FiledOn = z.infer<typeof FiledOn>;
 
@@ -70,7 +71,7 @@ export const FormAfter = z.discriminatedUnion('kind', [
   z.strictObject({
     kind: z.literal('message'),
     message: z.string().trim().max(2_000).default(''),
-    offerMeeting: z.strictObject({ bookingPageId: z.uuid() }).optional(),
+    offerMeeting: z.strictObject({ bookingPageId: Uuid }).optional(),
   }),
   z.strictObject({ kind: z.literal('redirect'), url: RedirectUrl }),
 ]);
@@ -98,7 +99,7 @@ export const FormDocument = z
       .array(FormQuestion)
       .max(FORM_QUESTIONS_MAX, { error: `A form holds at most ${String(FORM_QUESTIONS_MAX)} questions.` }),
     targets: z.strictObject({
-      main: z.strictObject({ objectId: z.uuid(), matchAttributeId: z.uuid().optional() }),
+      main: z.strictObject({ objectId: Uuid, matchAttributeId: Uuid.optional() }),
     }),
     look: FormLook.default({ colour: 'light', corners: 'rounded' }),
     headline: z.string().trim().max(120).default(DEFAULT_HEADLINE),

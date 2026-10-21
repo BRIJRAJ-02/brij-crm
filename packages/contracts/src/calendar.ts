@@ -11,6 +11,7 @@ import * as z from 'zod';
 import { Timestamp } from './values/attribute-values.ts';
 import { RecordRefDisplay } from './values/options.ts';
 import { WorkspaceScoped } from './workspaces.ts';
+import { Uuid } from './values/ids.ts';
 
 /** The most calendar accounts one member may connect (AC-599). */
 export const MAX_CALENDAR_CONNECTIONS = 3;
@@ -54,7 +55,7 @@ export type CalendarError = z.infer<typeof CalendarError>;
 
 /** One of the member's calendar connections, as Settings › Calendar shows it. */
 export const CalendarConnectionView = z.object({
-  id: z.uuid(),
+  id: Uuid,
   provider: CalendarProvider,
   accountEmail: z.string(),
   status: CalendarStatus,
@@ -94,10 +95,10 @@ export type ListCalendarConnectionsInput = z.infer<typeof ListCalendarConnection
  * stops being it). Only the fields given.
  */
 export const UpdateCalendarConnectionInput = WorkspaceScoped.extend({
-  connectionId: z.uuid(),
+  connectionId: Uuid,
   sharing: CalendarSharing.optional(),
   isDefault: z.literal(true).optional(),
-  mutationId: z.uuid(),
+  mutationId: Uuid,
 });
 /** A change to one of the member's own connections. */
 export type UpdateCalendarConnectionInput = z.infer<typeof UpdateCalendarConnectionInput>;
@@ -107,14 +108,14 @@ export type UpdateCalendarConnectionInput = z.infer<typeof UpdateCalendarConnect
  * once, its tokens are deleted, and the meetings no other connection holds go.
  */
 export const RemoveCalendarConnectionInput = WorkspaceScoped.extend({
-  connectionId: z.uuid(),
-  mutationId: z.uuid(),
+  connectionId: Uuid,
+  mutationId: Uuid,
 });
 /** Disconnecting one of the member's own connections. */
 export type RemoveCalendarConnectionInput = z.infer<typeof RemoveCalendarConnectionInput>;
 
 /** Sync now: brings one of the member's own connections' next sync forward. */
-export const SyncCalendarNowInput = WorkspaceScoped.extend({ connectionId: z.uuid(), mutationId: z.uuid() });
+export const SyncCalendarNowInput = WorkspaceScoped.extend({ connectionId: Uuid, mutationId: Uuid });
 /** Sync now. */
 export type SyncCalendarNowInput = z.infer<typeof SyncCalendarNowInput>;
 
@@ -125,7 +126,7 @@ export type SyncCalendarNowResult = z.infer<typeof SyncCalendarNowResult>;
 
 /** What a disconnect did: the meetings it removed, counted. */
 export const RemovedCalendarConnection = z.object({
-  connectionId: z.uuid(),
+  connectionId: Uuid,
   meetingsRemoved: z.number().int().min(0),
 });
 /** What a disconnect did. */
@@ -152,7 +153,7 @@ export const MeetingAttendeeView = z.object({
   response: AttendeeResponse,
   isOrganizer: z.boolean(),
   match: AttendeeMatch,
-  memberId: z.uuid().optional(),
+  memberId: Uuid.optional(),
   person: RecordRefDisplay.optional(),
 });
 /** One attendee, as the reader may see them. */
@@ -164,7 +165,7 @@ export type MeetingAttendeeView = z.infer<typeof MeetingAttendeeView>;
  * carries no attendees, location or video link, only its time.
  */
 export const MeetingView = z.object({
-  id: z.uuid(),
+  id: Uuid,
   title: z.string(),
   startsAt: Timestamp,
   endsAt: Timestamp,
@@ -185,7 +186,7 @@ export type MeetingView = z.infer<typeof MeetingView>;
  * server didn't make is refused 400 `INPUT_INVALID` naming `cursor`.
  */
 export const MeetingsForRecordInput = WorkspaceScoped.extend({
-  recordId: z.uuid(),
+  recordId: Uuid,
   cursor: z.string().min(1).max(MAX_MEETING_CURSOR).optional(),
   limit: z
     .number()
@@ -214,7 +215,7 @@ export const MeetingCursor = z.strictObject({
   now: z.iso.datetime({ precision: 6 }),
   phase: z.enum(['upcoming', 'past']),
   startsAt: z.iso.datetime({ precision: 6 }),
-  id: z.uuid(),
+  id: Uuid,
 });
 /** Where a page of meetings ends. */
 export type MeetingCursor = z.infer<typeof MeetingCursor>;
@@ -224,16 +225,16 @@ export type MeetingCursor = z.infer<typeof MeetingCursor>;
  * meeting on a record the reader sees, and the attendee by their email.
  */
 export const AddMeetingAttendeeInput = WorkspaceScoped.extend({
-  recordId: z.uuid(),
-  meetingId: z.uuid(),
+  recordId: Uuid,
+  meetingId: Uuid,
   email: z.string().trim().min(3).max(320),
-  mutationId: z.uuid(),
+  mutationId: Uuid,
 });
 /** Adding a meeting's attendee as a person. */
 export type AddMeetingAttendeeInput = z.infer<typeof AddMeetingAttendeeInput>;
 
 /** The person an Add as person made. */
-export const AddedMeetingAttendee = z.object({ recordId: z.uuid() });
+export const AddedMeetingAttendee = z.object({ recordId: Uuid });
 /** The person an Add as person made. */
 export type AddedMeetingAttendee = z.infer<typeof AddedMeetingAttendee>;
 
@@ -257,7 +258,7 @@ export type GetCalendarSettingsInput = z.infer<typeof GetCalendarSettingsInput>;
 /** A change to the workspace's calendar settings (owners and admins). */
 export const UpdateCalendarSettingsInput = WorkspaceScoped.extend({
   createUnknownPeople: z.boolean(),
-  mutationId: z.uuid(),
+  mutationId: Uuid,
 });
 /** A change to the workspace's calendar settings. */
 export type UpdateCalendarSettingsInput = z.infer<typeof UpdateCalendarSettingsInput>;

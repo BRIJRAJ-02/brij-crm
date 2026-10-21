@@ -61,6 +61,7 @@ export { canJump, canJumpOn, JUMP_TYPES, type JumpAttribute } from './jump.ts';
 export { ENGINE_REFUSAL_CODES, type EngineRefusal, type EngineRefusalCode } from './engine.ts';
 export { AttributeConfig, AttributeDefault, defaultKindsFor, type AttributeConfigOf } from './attribute-config.ts';
 export { HUES } from './hue-list.ts';
+export { Uuid, uuidV7 } from './ids.ts';
 export { Hue } from './hues.ts';
 export { OBJECT_ICONS, ObjectIcon } from './object-icons.ts';
 export {

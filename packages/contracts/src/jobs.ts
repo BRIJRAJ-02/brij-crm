@@ -7,6 +7,7 @@
 import { oc } from '@orpc/contract';
 import * as z from 'zod';
 import { WorkspaceScoped } from './workspaces.ts';
+import { Uuid, uuidV7 } from './values/ids.ts';
 
 /**
  * Each kind the screens may name, with its label, its lane and whether it can
@@ -85,7 +86,7 @@ export const REFUSAL_GROUP_IDS = 20;
 export const JobRefusalGroup = z.object({
   code: z.string(),
   count: z.number().int().min(1),
-  itemIds: z.array(z.uuid()).max(REFUSAL_GROUP_IDS),
+  itemIds: z.array(Uuid).max(REFUSAL_GROUP_IDS),
 });
 /** Refused items of one code. */
 export type JobRefusalGroup = z.infer<typeof JobRefusalGroup>;
@@ -102,7 +103,7 @@ export type JobResult = z.infer<typeof JobResult>;
 /** Who started a job: a member (by member id), or the system. */
 export const JobStarter = z.object({
   type: z.enum(['member', 'system']),
-  memberId: z.uuid().optional(),
+  memberId: Uuid.optional(),
 });
 /** Who started a job. */
 export type JobStarter = z.infer<typeof JobStarter>;
@@ -115,11 +116,11 @@ export type JobStarter = z.infer<typeof JobStarter>;
  * and whether the caller may cancel it now.
  */
 export const JobView = z.object({
-  id: z.uuid(),
+  id: Uuid,
   kind: z.string(),
   label: z.string(),
   status: JobStatus,
-  subject: z.object({ type: z.string(), id: z.uuid() }).optional(),
+  subject: z.object({ type: z.string(), id: Uuid }).optional(),
   total: z.number().int().min(0).optional(),
   done: z.number().int().min(0),
   refused: z.number().int().min(0),
@@ -162,12 +163,12 @@ export const JobList = z.object({
 export type JobList = z.infer<typeof JobList>;
 
 /** One job, by id. */
-export const JobInput = WorkspaceScoped.extend({ jobId: z.uuid() });
+export const JobInput = WorkspaceScoped.extend({ jobId: Uuid });
 /** One job, by id. */
 export type JobInput = z.infer<typeof JobInput>;
 
 /** A change to one job (cancel, confirm), with the browser's id for the write. */
-export const JobWriteInput = JobInput.extend({ mutationId: z.uuid() });
+export const JobWriteInput = JobInput.extend({ mutationId: Uuid });
 /** A change to one job. */
 export type JobWriteInput = z.infer<typeof JobWriteInput>;
 
@@ -186,7 +187,7 @@ export const MAX_TEST_JOB_ITEMS = 200_000;
  * `jobs.confirm`.
  */
 export const StartTestJobInput = WorkspaceScoped.extend({
-  id: z.uuid({ version: 'v7', message: 'The job id must be a UUID v7.' }),
+  id: uuidV7('The job id must be a UUID v7.'),
   items: z.number().int().min(1).max(MAX_TEST_JOB_ITEMS),
   batchSize: z.number().int().min(1).max(5_000).optional(),
   batchMillis: z.number().int().min(0).max(2_000).default(0),
@@ -194,7 +195,7 @@ export const StartTestJobInput = WorkspaceScoped.extend({
   refuseEvery: z.number().int().min(1).optional(),
   /** Snapshot the items in the background, then wait for `jobs.confirm` (AC-109). */
   confirm: z.boolean().optional(),
-  mutationId: z.uuid(),
+  mutationId: Uuid,
 });
 /** A test job to start. */
 export type StartTestJobInput = z.input<typeof StartTestJobInput>;
@@ -204,8 +205,8 @@ export type StartTestJobInput = z.input<typeof StartTestJobInput>;
  * nothing else (AC-115). Strict, so a row with anything more is refused.
  */
 export const QueuePayload = z.strictObject({
-  workspaceId: z.uuid(),
-  jobId: z.uuid(),
+  workspaceId: Uuid,
+  jobId: Uuid,
 });
 /** What a queue row carries. */
 export type QueuePayload = z.infer<typeof QueuePayload>;

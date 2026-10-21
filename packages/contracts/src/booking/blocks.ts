@@ -6,6 +6,7 @@ import * as z from 'zod';
 import { DateValue, Timestamp } from '../values/attribute-values.ts';
 import { WorkspaceScoped } from '../workspaces.ts';
 import { TimeZoneName } from './settings.ts';
+import { Uuid } from '../values/ids.ts';
 
 /** `block` closes the time on every page; `hold` on every page but a private one. */
 export const TimeBlockKind = z.enum(['block', 'hold']);
@@ -29,7 +30,7 @@ export const TIME_BLOCK_MINUTES = { min: 5, max: 1440 } as const;
  */
 export const CreateTimeBlockInput = WorkspaceScoped.extend({
   /** Minted by the client once per draw: a retry with the same id gives back the block the first made. */
-  id: z.uuid(),
+  id: Uuid,
   kind: TimeBlockKind,
   repeat: TimeBlockRepeat,
   date: DateValue,
@@ -38,8 +39,8 @@ export const CreateTimeBlockInput = WorkspaceScoped.extend({
   timeZone: TimeZoneName,
   label: TimeBlockLabel.optional(),
   /** A hold for one private page; absent holds for any private page. */
-  pageId: z.uuid().optional(),
-  mutationId: z.uuid(),
+  pageId: Uuid.optional(),
+  mutationId: Uuid,
 })
   .refine(({ startMinute, endMinute }) => endMinute - startMinute >= TIME_BLOCK_MINUTES.min, {
     error: 'The end time has to be after the start time.',
@@ -57,17 +58,17 @@ export const CreateTimeBlockInput = WorkspaceScoped.extend({
 export type CreateTimeBlockInput = z.infer<typeof CreateTimeBlockInput>;
 
 /** Reopens the time one of the caller's blocks closed: a weekly block stops every week. */
-export const RemoveTimeBlockInput = WorkspaceScoped.extend({ id: z.uuid(), mutationId: z.uuid() });
+export const RemoveTimeBlockInput = WorkspaceScoped.extend({ id: Uuid, mutationId: Uuid });
 /** Reopens a block's time. */
 export type RemoveTimeBlockInput = z.infer<typeof RemoveTimeBlockInput>;
 
 /** A block as its member sees it. */
 export const TimeBlockView = z.object({
-  id: z.uuid(),
+  id: Uuid,
   kind: TimeBlockKind,
   repeat: TimeBlockRepeat,
   label: z.string().optional(),
-  pageId: z.uuid().optional(),
+  pageId: Uuid.optional(),
   /** A `once` block's span. */
   startsAt: Timestamp.optional(),
   endsAt: Timestamp.optional(),
@@ -85,7 +86,7 @@ export type TimeBlockView = z.infer<typeof TimeBlockView>;
 export const TimeBlockOccurrence = z.object({
   /** The block's id plus, for a weekly block, its date: unique within a read. */
   key: z.string(),
-  blockId: z.uuid(),
+  blockId: Uuid,
   kind: TimeBlockKind,
   repeat: TimeBlockRepeat,
   label: z.string().optional(),
@@ -106,8 +107,8 @@ export const HOST_BOOKING_LIMITS = { min: 5, max: 480 } as const;
  */
 export const BookAsHostInput = WorkspaceScoped.extend({
   /** Minted once per dialog: a retry gives back the booking the first made. */
-  idempotencyKey: z.uuid(),
-  pageId: z.uuid(),
+  idempotencyKey: Uuid,
+  pageId: Uuid,
   start: Timestamp,
   minutes: z
     .number()
@@ -121,7 +122,7 @@ export const BookAsHostInput = WorkspaceScoped.extend({
     .array(z.email({ error: 'Give each guest’s email address.' }).trim().toLowerCase().max(254))
     .max(10, { error: 'Invite at most 10 more people.' }),
   message: z.string().trim().max(1000, { error: 'Keep the message to 1,000 characters.' }).optional(),
-  mutationId: z.uuid(),
+  mutationId: Uuid,
 });
 /** Book someone in. */
 export type BookAsHostInput = z.infer<typeof BookAsHostInput>;

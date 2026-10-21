@@ -9,6 +9,7 @@ import { RecordView } from './records.ts';
 import { Cardinality } from './relationship-block.ts';
 import { ActorReferenceValue } from './values/attribute-values.ts';
 import { WorkspaceScoped } from './workspaces.ts';
+import { Uuid, uuidV7 } from './values/ids.ts';
 
 export { AttributeRelationship, Cardinality } from './relationship-block.ts';
 
@@ -17,7 +18,7 @@ const SideTitle = z.string().trim().min(1, 'Name this side.').max(100, 'Use at m
 
 /** One side of a new relationship: the object it sits on and the name its attribute gets there. */
 export const NewRelationshipSide = z.object({
-  objectId: z.uuid(),
+  objectId: Uuid,
   title: SideTitle,
 });
 /** One side of a new relationship. */
@@ -32,11 +33,11 @@ export type NewRelationshipSide = z.infer<typeof NewRelationshipSide>;
  * One way references are not made here (AC-286).
  */
 export const CreateRelationshipInput = WorkspaceScoped.extend({
-  id: z.uuid({ version: 'v7', message: 'The relationship id must be a UUID v7.' }),
+  id: uuidV7('The relationship id must be a UUID v7.'),
   cardinality: Cardinality,
   from: NewRelationshipSide,
   to: NewRelationshipSide,
-  mutationId: z.uuid(),
+  mutationId: Uuid,
 });
 /** A new two way relationship. */
 export type CreateRelationshipInput = z.infer<typeof CreateRelationshipInput>;
@@ -49,17 +50,17 @@ const RenamedSide = z.object({ title: SideTitle });
  * Objects and cardinality never change here (#14 widens cardinality).
  */
 export const UpdateRelationshipInput = WorkspaceScoped.extend({
-  relationshipId: z.uuid(),
+  relationshipId: Uuid,
   from: RenamedSide.optional(),
   to: RenamedSide.optional(),
-  mutationId: z.uuid(),
+  mutationId: Uuid,
 });
 /** New names for a relationship's sides. */
 export type UpdateRelationshipInput = z.infer<typeof UpdateRelationshipInput>;
 
 /** A relationship as a write answers it: its id, cardinality and both sides' definitions. */
 export const RelationshipView = z.object({
-  relationshipId: z.uuid(),
+  relationshipId: Uuid,
   cardinality: Cardinality,
   from: AttributeDefinition,
   to: AttributeDefinition,
@@ -88,8 +89,8 @@ export const LINKS_PER_CALL = 100;
 
 /** A far record to link: its object and its id. */
 export const LinkTarget = z.object({
-  objectId: z.uuid(),
-  recordId: z.uuid(),
+  objectId: Uuid,
+  recordId: Uuid,
 });
 /** A far record to link. */
 export type LinkTarget = z.infer<typeof LinkTarget>;
@@ -104,29 +105,29 @@ export type LinkTarget = z.infer<typeof LinkTarget>;
  * the answer can say which save it replaced (AC-295).
  */
 export const AddLinksInput = WorkspaceScoped.extend({
-  recordId: z.uuid(),
-  attributeId: z.uuid(),
+  recordId: Uuid,
+  attributeId: Uuid,
   // Twice the cap, so a call a little over it answers the engine's own refusal, and junk stops at parsing.
   targets: z
     .array(LinkTarget)
     .min(1, 'Pick a record to link.')
     .max(LINKS_PER_CALL * 2, `Link at most ${String(LINKS_PER_CALL)} records at a time.`),
   move: z.boolean().optional(),
-  baseVersionId: z.uuid().nullable().optional(),
-  mutationId: z.uuid(),
+  baseVersionId: Uuid.nullable().optional(),
+  mutationId: Uuid,
 });
 /** Links to add on one side of one record. */
 export type AddLinksInput = z.infer<typeof AddLinksInput>;
 
 /** Links to remove from one side of one record, by far record id (1 to 100). */
 export const RemoveLinksInput = WorkspaceScoped.extend({
-  recordId: z.uuid(),
-  attributeId: z.uuid(),
+  recordId: Uuid,
+  attributeId: Uuid,
   targetRecordIds: z
-    .array(z.uuid())
+    .array(Uuid)
     .min(1, 'Pick a record to unlink.')
     .max(LINKS_PER_CALL * 2, `Unlink at most ${String(LINKS_PER_CALL)} records at a time.`),
-  mutationId: z.uuid(),
+  mutationId: Uuid,
 });
 /** Links to remove from one side of one record. */
 export type RemoveLinksInput = z.infer<typeof RemoveLinksInput>;
@@ -143,9 +144,9 @@ export type RemoveLinksInput = z.infer<typeof RemoveLinksInput>;
  */
 export const LinksWritten = z.object({
   record: RecordView,
-  written: z.record(z.uuid(), z.uuid()),
-  changedRecordIds: z.array(z.uuid()),
-  replaced: z.object({ versionId: z.uuid(), setBy: ActorReferenceValue }).optional(),
+  written: z.record(z.uuid(), Uuid),
+  changedRecordIds: z.array(Uuid),
+  replaced: z.object({ versionId: Uuid, setBy: ActorReferenceValue }).optional(),
   echoes: z.number().int().min(0),
 });
 /** What a link write answers. */

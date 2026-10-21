@@ -15,13 +15,14 @@ import {
 } from './blocks.ts';
 import { CANCEL_REASON_MAX, PublicSlots } from './public.ts';
 import { BookingLocation, BookingPageSettings } from './settings.ts';
+import { Uuid, uuidV7 } from '../values/ids.ts';
 
 /** A page as a member sees it in Settings › Booking pages. */
 export const BookingPageView = BookingPageSettings.extend({
-  id: z.uuid(),
+  id: Uuid,
   publicKey: z.string(),
   kind: z.enum(['personal', 'collective', 'round_robin']),
-  ownerMemberId: z.uuid(),
+  ownerMemberId: Uuid,
   /** Confirmed bookings starting this calendar month (UTC). */
   bookingsThisMonth: z.number().int().min(0),
   /** The reader may change it: their own page with `booking.manage`, anyone's with `booking.admin`. */
@@ -38,7 +39,7 @@ export const ListBookingPagesInput = WorkspaceScoped;
 export type ListBookingPagesInput = z.infer<typeof ListBookingPagesInput>;
 
 /** One page. */
-export const GetBookingPageInput = WorkspaceScoped.extend({ pageId: z.uuid() });
+export const GetBookingPageInput = WorkspaceScoped.extend({ pageId: Uuid });
 /** One page. */
 export type GetBookingPageInput = z.infer<typeof GetBookingPageInput>;
 
@@ -49,42 +50,42 @@ export type GetBookingPageInput = z.infer<typeof GetBookingPageInput>;
  * live, and a slug from the title.
  */
 export const CreateBookingPageInput = WorkspaceScoped.extend({
-  id: z.uuid({ version: 'v7', message: 'The page id must be a UUID v7.' }),
+  id: uuidV7('The page id must be a UUID v7.'),
   title: BookingPageSettings.shape.title,
   timeZone: BookingPageSettings.shape.availability.shape.timeZone,
   settings: BookingPageSettings.partial().optional(),
-  mutationId: z.uuid(),
+  mutationId: Uuid,
 });
 /** A new personal page. */
 export type CreateBookingPageInput = z.infer<typeof CreateBookingPageInput>;
 
 /** A change to a page: only the settings given. */
 export const UpdateBookingPageInput = WorkspaceScoped.extend({
-  pageId: z.uuid(),
+  pageId: Uuid,
   settings: BookingPageSettings.partial(),
-  mutationId: z.uuid(),
+  mutationId: Uuid,
 });
 /** A change to a page. */
 export type UpdateBookingPageInput = z.infer<typeof UpdateBookingPageInput>;
 
 /** Deleting a page: it is hidden, its bookings stay, and its link answers that it's no longer available (AC-648). */
-export const DeleteBookingPageInput = WorkspaceScoped.extend({ pageId: z.uuid(), mutationId: z.uuid() });
+export const DeleteBookingPageInput = WorkspaceScoped.extend({ pageId: Uuid, mutationId: Uuid });
 /** Deleting a page. */
 export type DeleteBookingPageInput = z.infer<typeof DeleteBookingPageInput>;
 
 /** A booking as the page's members see it. */
 export const BookingView = z.object({
-  id: z.uuid(),
-  pageId: z.uuid(),
-  hostMemberId: z.uuid(),
+  id: Uuid,
+  pageId: Uuid,
+  hostMemberId: Uuid,
   startsAt: Timestamp,
   endsAt: Timestamp,
   visitorName: z.string(),
   visitorEmail: z.string(),
   visitorTimeZone: z.string(),
   status: z.enum(['confirmed', 'cancelled']),
-  personRecordId: z.uuid().optional(),
-  companyRecordId: z.uuid().optional(),
+  personRecordId: Uuid.optional(),
+  companyRecordId: Uuid.optional(),
   /** The calendar event couldn't be made: the booking stands, and the host should add it by hand. */
   eventFailed: z.boolean(),
   createdAt: Timestamp,
@@ -97,7 +98,7 @@ export const BOOKINGS_PAGE_MAX = 100;
 
 /** One page's bookings: upcoming (soonest first) or past (latest first). */
 export const ListBookingsInput = WorkspaceScoped.extend({
-  pageId: z.uuid(),
+  pageId: Uuid,
   when: z.enum(['upcoming', 'past']),
 });
 /** One page's bookings. */
@@ -109,7 +110,7 @@ export const bookingPagesContract = {
   get: oc.input(GetBookingPageInput).output(BookingPageView),
   create: oc.input(CreateBookingPageInput).output(BookingPageView),
   update: oc.input(UpdateBookingPageInput).output(BookingPageView),
-  delete: oc.input(DeleteBookingPageInput).output(z.object({ pageId: z.uuid() })),
+  delete: oc.input(DeleteBookingPageInput).output(z.object({ pageId: Uuid })),
 };
 
 /** A member's own hours and days off, which their pages may follow. */
@@ -127,7 +128,7 @@ export type GetMemberHoursInput = z.infer<typeof GetMemberHoursInput>;
 /** Replaces the caller's own hours. */
 export const UpdateMemberHoursInput = WorkspaceScoped.extend({
   availability: BookingPageSettings.shape.availability,
-  mutationId: z.uuid(),
+  mutationId: Uuid,
 });
 /** Replaces the caller's own hours. */
 export type UpdateMemberHoursInput = z.infer<typeof UpdateMemberHoursInput>;
@@ -191,9 +192,9 @@ export type BookingCalendarInput = z.infer<typeof BookingCalendarInput>;
 
 /** One of the reader's own calendar events (not a booking): spec 0024's meeting, from one of their connections. */
 export const CalendarEventItem = z.object({
-  id: z.uuid(),
+  id: Uuid,
   /** Which of the reader's connections holds it (the per connection filter). */
-  connectionId: z.uuid(),
+  connectionId: Uuid,
   title: z.string(),
   startsAt: Timestamp,
   endsAt: Timestamp,
@@ -212,7 +213,7 @@ export type CalendarEventItem = z.infer<typeof CalendarEventItem>;
  */
 export const BusyTimeItem = z.object({
   /** Which of the reader's connections holds it (the per connection filter). */
-  connectionId: z.uuid(),
+  connectionId: Uuid,
   startsAt: Timestamp,
   endsAt: Timestamp,
 });
@@ -234,19 +235,19 @@ export type BookingsCalendarView = z.infer<typeof BookingsCalendarView>;
 
 /** Cancelling a booking from Bookings (AC-640): the guest is told, with the reason when one is given. */
 export const CancelBookingInput = WorkspaceScoped.extend({
-  bookingId: z.uuid(),
+  bookingId: Uuid,
   reason: z
     .string()
     .trim()
     .max(CANCEL_REASON_MAX, { error: `Keep the reason to ${String(CANCEL_REASON_MAX)} characters.` })
     .optional(),
-  mutationId: z.uuid(),
+  mutationId: Uuid,
 });
 /** Cancelling a booking. */
 export type CancelBookingInput = z.infer<typeof CancelBookingInput>;
 
 /** Moving a booking from Bookings (AC-640): to a time its page offers now. */
-export const MoveBookingInput = WorkspaceScoped.extend({ bookingId: z.uuid(), start: Timestamp, mutationId: z.uuid() });
+export const MoveBookingInput = WorkspaceScoped.extend({ bookingId: Uuid, start: Timestamp, mutationId: Uuid });
 /** Moving a booking. */
 export type MoveBookingInput = z.infer<typeof MoveBookingInput>;
 
@@ -255,7 +256,7 @@ export const MOVE_SLOTS_MAX_DAYS = 31;
 
 /** Where a booking could move in a range: its page's slots of its length, its own time free. */
 export const BookingMoveSlotsInput = WorkspaceScoped.extend({
-  bookingId: z.uuid(),
+  bookingId: Uuid,
   from: Timestamp,
   to: Timestamp,
 }).refine(
@@ -269,7 +270,7 @@ export const BookingMoveSlotsInput = WorkspaceScoped.extend({
 export type BookingMoveSlotsInput = z.infer<typeof BookingMoveSlotsInput>;
 
 /** The guest page's address for a booking (Copy guest link): read on demand, since it carries the guest's key. */
-export const BookingGuestLinkInput = WorkspaceScoped.extend({ bookingId: z.uuid() });
+export const BookingGuestLinkInput = WorkspaceScoped.extend({ bookingId: Uuid });
 /** A guest link read. */
 export type BookingGuestLinkInput = z.infer<typeof BookingGuestLinkInput>;
 
@@ -281,7 +282,7 @@ export const bookingsContract = {
   hours: oc.input(GetMemberHoursInput).output(MemberHours),
   setHours: oc.input(UpdateMemberHoursInput).output(MemberHours),
   /** Book someone in, in the caller's own time (spec 0027). */
-  bookAsHost: oc.input(BookAsHostInput).output(z.object({ bookingId: z.uuid() })),
+  bookAsHost: oc.input(BookAsHostInput).output(z.object({ bookingId: Uuid })),
   /** Cancel a booking: the guest is told (AC-640). */
   cancel: oc.input(CancelBookingInput).output(z.object({ cancelled: z.boolean() })),
   /** Move a booking to a time its page offers (AC-640). */
@@ -293,6 +294,6 @@ export const bookingsContract = {
   /** Time the caller closed on their own calendar (spec 0027). */
   blocks: {
     create: oc.input(CreateTimeBlockInput).output(TimeBlockView),
-    remove: oc.input(RemoveTimeBlockInput).output(z.object({ id: z.uuid() })),
+    remove: oc.input(RemoveTimeBlockInput).output(z.object({ id: Uuid })),
   },
 };

@@ -9,6 +9,7 @@ import { decodeDraftText, MAX_PINNED } from './view-model.ts';
 import { FilterGroup } from './values/filters.ts';
 import { SortRules } from './values/sorts.ts';
 import { WorkspaceScoped } from './workspaces.ts';
+import { Uuid } from './values/ids.ts';
 
 /** The most columns one view lists. */
 export const MAX_VIEW_COLUMNS = 250;
@@ -18,7 +19,7 @@ export const MAX_VIEW_CONFIG_BYTES = 65_536;
 
 /** One column of a view: the attribute, its width in pixels (the grid clamps it), and whether it is hidden. */
 export const ViewColumn = z.strictObject({
-  attributeId: z.uuid(),
+  attributeId: Uuid,
   width: z.number().int().min(1).max(2000).optional(),
   isHidden: z.boolean().optional(),
 });
@@ -27,8 +28,8 @@ export type ViewColumn = z.infer<typeof ViewColumn>;
 
 /** A board's settings (#21 fills them): the grouping attribute, the fields on each card, and empty columns. */
 export const BoardConfig = z.strictObject({
-  groupByAttributeId: z.uuid(),
-  cardFields: z.array(z.uuid()).max(6),
+  groupByAttributeId: Uuid,
+  cardFields: z.array(Uuid).max(6),
   showEmptyColumns: z.boolean(),
 });
 /** A board's settings. */
@@ -88,16 +89,16 @@ export type ViewVisibility = z.infer<typeof ViewVisibility>;
  * and its version (up by one on every change).
  */
 export const ViewSummary = z.object({
-  id: z.uuid(),
-  objectId: z.uuid(),
+  id: Uuid,
+  objectId: Uuid,
   name: z.string(),
   kind: ViewKind,
   visibility: ViewVisibility,
   position: z.number().int(),
   isDefault: z.boolean(),
   isLocked: z.boolean(),
-  lockedBy: z.uuid().optional(),
-  creatorMemberId: z.uuid().optional(),
+  lockedBy: Uuid.optional(),
+  creatorMemberId: Uuid.optional(),
   version: z.number().int(),
 });
 /** A view as the switcher lists it. */
@@ -110,14 +111,14 @@ export type ViewSummary = z.infer<typeof ViewSummary>;
 export const View = ViewSummary.extend({
   config: ViewConfig,
   queryVersion: z.number().int(),
-  querySavedBy: z.uuid().optional(),
+  querySavedBy: Uuid.optional(),
   querySavedAt: z.iso.datetime({ offset: true }).optional(),
 });
 /** One view whole. */
 export type View = z.infer<typeof View>;
 
 /** An object's views. */
-export const ListViewsInput = WorkspaceScoped.extend({ objectId: z.uuid() });
+export const ListViewsInput = WorkspaceScoped.extend({ objectId: Uuid });
 /** An object's views. */
 export type ListViewsInput = z.infer<typeof ListViewsInput>;
 
@@ -128,14 +129,14 @@ export type ListViewsInput = z.infer<typeof ListViewsInput>;
  */
 export const ViewsList = z.object({
   views: z.array(ViewSummary),
-  defaultViewId: z.uuid().optional(),
-  lastOpenedViewId: z.uuid().optional(),
+  defaultViewId: Uuid.optional(),
+  lastOpenedViewId: Uuid.optional(),
 });
 /** An object's views in switcher order. */
 export type ViewsList = z.infer<typeof ViewsList>;
 
 /** One view. */
-export const GetViewInput = WorkspaceScoped.extend({ viewId: z.uuid() });
+export const GetViewInput = WorkspaceScoped.extend({ viewId: Uuid });
 /** One view. */
 export type GetViewInput = z.infer<typeof GetViewInput>;
 
@@ -145,12 +146,12 @@ export type GetViewInput = z.infer<typeof GetViewInput>;
  * since answers 409 `VIEW_CHANGED`, unless `force` (Replace).
  */
 export const SaveViewQueryInput = WorkspaceScoped.extend({
-  viewId: z.uuid(),
+  viewId: Uuid,
   filter: FilterGroup.optional(),
   sorts: SortRules,
   baseQueryVersion: z.number().int().min(1),
   force: z.boolean().optional(),
-  mutationId: z.uuid(),
+  mutationId: Uuid,
 });
 /** A draft saved as the view's filter and sorts. */
 export type SaveViewQueryInput = z.infer<typeof SaveViewQueryInput>;
@@ -179,65 +180,65 @@ export const ViewName = z
  * view already made; the id held by anything else answers 409 `ID_TAKEN`.
  */
 export const CreateViewInput = WorkspaceScoped.extend({
-  id: z.uuid(),
-  objectId: z.uuid(),
+  id: Uuid,
+  objectId: Uuid,
   name: ViewName,
   kind: ViewKind,
   visibility: ViewVisibility,
   config: ViewConfig,
-  mutationId: z.uuid(),
+  mutationId: Uuid,
 });
 /** A new view. */
 export type CreateViewInput = z.infer<typeof CreateViewInput>;
 
 /** A rename, or a change of who sees the view (Share with everyone, Make private). */
 export const UpdateViewInput = WorkspaceScoped.extend({
-  viewId: z.uuid(),
+  viewId: Uuid,
   name: ViewName.optional(),
   visibility: ViewVisibility.optional(),
-  mutationId: z.uuid(),
+  mutationId: Uuid,
 });
 /** A rename, or a change of who sees the view. */
 export type UpdateViewInput = z.infer<typeof UpdateViewInput>;
 
 /** A column change saved at once, for everyone on the view (AC-470). */
 export const SetViewLayoutInput = WorkspaceScoped.extend({
-  viewId: z.uuid(),
+  viewId: Uuid,
   layout: ViewLayout,
-  mutationId: z.uuid(),
+  mutationId: Uuid,
 });
 /** A column change. */
 export type SetViewLayoutInput = z.infer<typeof SetViewLayoutInput>;
 
 /** Swaps a view with its neighbour in its group (the shared views, or the caller's private ones). */
 export const MoveViewInput = WorkspaceScoped.extend({
-  viewId: z.uuid(),
+  viewId: Uuid,
   direction: z.enum(['up', 'down']),
-  mutationId: z.uuid(),
+  mutationId: Uuid,
 });
 /** Swaps a view with its neighbour. */
 export type MoveViewInput = z.infer<typeof MoveViewInput>;
 
 /** Locks or unlocks a shared view (`views.manage`, AC-475). */
 export const SetViewLockedInput = WorkspaceScoped.extend({
-  viewId: z.uuid(),
+  viewId: Uuid,
   locked: z.boolean(),
-  mutationId: z.uuid(),
+  mutationId: Uuid,
 });
 /** Locks or unlocks a shared view. */
 export type SetViewLockedInput = z.infer<typeof SetViewLockedInput>;
 
 /** Makes a shared view the object's default (`views.manage`, AC-475). */
 export const SetDefaultViewInput = WorkspaceScoped.extend({
-  objectId: z.uuid(),
-  viewId: z.uuid(),
-  mutationId: z.uuid(),
+  objectId: Uuid,
+  viewId: Uuid,
+  mutationId: Uuid,
 });
 /** Makes a shared view the object's default. */
 export type SetDefaultViewInput = z.infer<typeof SetDefaultViewInput>;
 
 /** Deletes a view for good (AC-474): never the default. */
-export const DeleteViewInput = WorkspaceScoped.extend({ viewId: z.uuid(), mutationId: z.uuid() });
+export const DeleteViewInput = WorkspaceScoped.extend({ viewId: Uuid, mutationId: Uuid });
 /** Deletes a view. */
 export type DeleteViewInput = z.infer<typeof DeleteViewInput>;
 
@@ -247,7 +248,7 @@ export const ViewDeleted = z.object({ deleted: z.literal(true) });
 export type ViewDeleted = z.infer<typeof ViewDeleted>;
 
 /** The view the caller just opened, kept as their last one for its object (AC-478). */
-export const MarkViewOpenedInput = WorkspaceScoped.extend({ viewId: z.uuid() });
+export const MarkViewOpenedInput = WorkspaceScoped.extend({ viewId: Uuid });
 /** The view the caller just opened. */
 export type MarkViewOpenedInput = z.infer<typeof MarkViewOpenedInput>;
 

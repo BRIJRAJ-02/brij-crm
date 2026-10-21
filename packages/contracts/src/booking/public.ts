@@ -6,6 +6,7 @@
 import * as z from 'zod';
 import { Timestamp } from '../values/attribute-values.ts';
 import { BookingDuration, TimeZoneName } from './settings.ts';
+import { Uuid } from '../values/ids.ts';
 
 /** A page's public key: 16 URL safe characters. */
 export const PublicKey = z.string().regex(/^[A-Za-z0-9_-]{16}$/, { error: 'That booking link isn’t right.' });
@@ -135,7 +136,7 @@ export const VISITOR_NAME_MAX = 200;
  * (advisory, used only without a ticket).
  */
 export const PublicBookInput = z.object({
-  idempotencyKey: z.uuid(),
+  idempotencyKey: Uuid,
   start: Timestamp,
   duration: BookingDuration,
   name: z.string().trim().min(1, 'Give your name.').max(VISITOR_NAME_MAX, 'Keep your name to 200 characters.'),
