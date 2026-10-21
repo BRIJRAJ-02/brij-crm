@@ -55,6 +55,26 @@
       background-color var(--duration-hover) var(--ease-hover);
   }
 
+  /* `after`: the box, then controls beside it on its line. */
+  .line {
+    display: flex;
+    gap: var(--space-8);
+    align-items: center;
+    min-inline-size: 0;
+  }
+
+  .line > .box {
+    flex: 1;
+    min-inline-size: 0;
+  }
+
+  .after {
+    display: inline-flex;
+    flex: none;
+    gap: var(--space-4);
+    align-items: center;
+  }
+
   /* At rest the quiet field-border; under a pointer it steps up to control-border. */
   @media (hover: hover) and (pointer: fine) {
     .box:hover:not(:focus-within) {
@@ -102,6 +122,14 @@
 
   .input::placeholder {
     color: var(--text-tertiary);
+  }
+
+  /* A browser's autofill paints the input its own colour: clip that paint to the text, which is drawn over it in
+     the text colour, so a filled value never shows a second box inside any variant's box (the owner, 22 October
+     2026). */
+  .input:autofill {
+    background-clip: text;
+    -webkit-text-fill-color: var(--text);
   }
 
   .input::-webkit-search-cancel-button {

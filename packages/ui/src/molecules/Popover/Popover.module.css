@@ -36,6 +36,12 @@
     min-inline-size: max(var(--trigger-width), var(--size-menu));
   }
 
+  /* A list whose options wrap (a role with its line below): a menu wide, or the trigger's width when wider, and
+     no wider, so a long line wraps instead of stretching the list out of the dialog it opened in. */
+  .root[data-width='list'] {
+    inline-size: max(var(--trigger-width), var(--size-menu));
+  }
+
   /* A builder (filters, sorts): the wide dialog's width, never past the window. Content sized by a container
      query has no width of its own, so it needs one here. */
   .root[data-width='builder'] {
@@ -61,7 +67,7 @@
   .dialog {
     box-sizing: border-box;
     max-block-size: inherit;
-    padding: var(--space-8);
+    padding: var(--popover-panel-inset);
     overflow: auto;
     outline: none;
   }

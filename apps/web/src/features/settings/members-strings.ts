@@ -146,6 +146,8 @@ export const strings = {
   addAnother: 'Add another',
   badEmail: 'Enter a valid email address.',
   repeatedEmail: 'Already in the list.',
+  alreadyMember: 'Already a member.',
+  alreadyInvited: 'Already invited.',
   inviteCount: (count: number) =>
     count === 0 ? 'Invite' : count === 1 ? 'Invite 1 person' : `Invite ${String(count)} people`,
   sending: 'Inviting',

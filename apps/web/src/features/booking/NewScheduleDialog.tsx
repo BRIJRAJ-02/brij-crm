@@ -3,7 +3,7 @@
 // Main task: type a name and Create schedule; a name another schedule has is said on the field.
 // Leaves out: the hours (the new schedule's editor), and copying a schedule other than the default (Duplicate does that).
 import { isDataError, type DataLayer, type ScheduleView } from '@crm/data';
-import { Button, Callout, Field, Modal, SettingsStack } from '@crm/ui';
+import { Button, Callout, Field, Modal } from '@crm/ui';
 import { useState } from 'react';
 import { browserZone } from './zone.ts';
 import { SCHEDULE_NAME_MAX } from './scheduleDraft.ts';
@@ -93,26 +93,24 @@ export function NewScheduleDialog({
         </>
       }
     >
-      <SettingsStack>
-        {failure !== undefined && <Callout tone="danger">{failure}</Callout>}
-        <Field
-          label={scheduleStrings.name}
-          placeholder={scheduleStrings.namePlaceholder}
-          hint={scheduleStrings.nameHint}
-          value={name}
-          maxLength={SCHEDULE_NAME_MAX}
-          isRequired
-          // The dialog opens to name it: its one field is what the press asked for.
-          // eslint-disable-next-line jsx-a11y-x/no-autofocus
-          autoFocus
-          onChange={(value) => {
-            setName(value);
-            setNameError(undefined);
-          }}
-          onSubmit={create}
-          {...(nameError === undefined ? {} : { error: nameError })}
-        />
-      </SettingsStack>
+      {failure !== undefined && <Callout tone="danger">{failure}</Callout>}
+      <Field
+        label={scheduleStrings.name}
+        placeholder={scheduleStrings.namePlaceholder}
+        hint={scheduleStrings.nameHint}
+        value={name}
+        maxLength={SCHEDULE_NAME_MAX}
+        isRequired
+        // The dialog opens to name it: its one field is what the press asked for.
+        // eslint-disable-next-line jsx-a11y-x/no-autofocus
+        autoFocus
+        onChange={(value) => {
+          setName(value);
+          setNameError(undefined);
+        }}
+        onSubmit={create}
+        {...(nameError === undefined ? {} : { error: nameError })}
+      />
     </Modal>
   );
 }

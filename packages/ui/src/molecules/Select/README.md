@@ -37,6 +37,7 @@ Ported from the artifact's Select card (version 8). It is the editor for select 
 
 Placeholder, chosen, searching, offering Create, an option that can't be chosen (with its reason), focus and open (a 1px `accent-line` border and the faint halo; in a popover the border alone, as a Field's there), outlined in `control-border` at rest like a Field (3:1 on every surface), invalid, read only, disabled. The list opens from the keyboard at once and grows from the trigger for a pointer.
 
+- `optionDescription="below"` puts each option's `description` under its label, wrapping, in a list exactly a menu wide (Popover `width="list"`) that opens under the trigger's end: a role and what it can do. Why a variant: after the label, the longest line set the list's width, so a role list spilled out of the Invite dialog and covered its buttons (the owner, 22 October 2026).
 - `showsDescription` keeps the chosen option's `description` after its label in the closed field, muted: a time zone shows its offset ("Asia/Kolkata GMT+05:30") without opening the list.
 
 ## Keyboard

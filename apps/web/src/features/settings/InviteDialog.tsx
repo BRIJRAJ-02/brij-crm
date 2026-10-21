@@ -29,8 +29,15 @@ export interface InviteDialogProps {
    * on what it can do.
    */
   readonly roles: readonly RoleOption[];
-  /** The role new rows start with unless someone picks another (`roles.list`'s default). */
+  /** The role new rows start with unless someone picks another: Member's id, when the list has Member. */
   readonly defaultRole: string;
+  /**
+   * Addresses of members the page has read (lowercase): a row holding one is refused before anything is sent.
+   * Best effort, as the list is paged; the server still refuses anyone else who belongs, in the sent summary.
+   */
+  readonly memberEmails: ReadonlySet<string>;
+  /** Addresses with a live invitation waiting (lowercase; expired ones can be sent again): refused the same way. */
+  readonly invitedEmails: ReadonlySet<string>;
   /** The server sent some: the page reads the invitations again. */
   readonly onInvited: () => void;
 }
@@ -50,25 +57,49 @@ interface Sent {
   readonly unsent: readonly string[];
 }
 
-/** A row's problem, once it was left or Invite was pressed: not an address, or one an earlier row holds. */
-function problemOf(row: Row, rows: readonly Row[], isChecking: boolean): string | undefined {
+/** Who already belongs or is invited, so a row is refused before anything is sent. */
+interface Known {
+  readonly members: ReadonlySet<string>;
+  readonly invited: ReadonlySet<string>;
+}
+
+/**
+ * A row's problem, once it was left or Invite was pressed: not an address, one an earlier row holds, or one that
+ * already belongs or is already invited.
+ */
+function problemOf(row: Row, rows: readonly Row[], isChecking: boolean, known: Known): string | undefined {
   const email = row.email.trim().toLowerCase();
   if (!row.isTouched && !isChecking) return undefined;
   if (email === '') return undefined;
   if (!isEmail(email)) return strings.badEmail;
+  if (known.members.has(email)) return strings.alreadyMember;
+  if (known.invited.has(email)) return strings.alreadyInvited;
   const first = rows.find((each) => each.email.trim().toLowerCase() === email);
   return first !== undefined && first.id !== row.id ? strings.repeatedEmail : undefined;
 }
 
 /**
- * The Invite dialog: one row per person, an email Field whose end holds that
- * row's role (an inline Select) and a remove button. "Add another" and Enter
+ * The Invite dialog: one row per person, an email Field with that row's role
+ * (a compact Select whose options carry their line below) and a remove button
+ * beside it. An address that already belongs or is already invited is refused
+ * in its row before anything is sent. "Add another" and Enter
  * in the last row add a row and focus it; a pasted list fills rows. Invite
  * sends every valid row, one call per role; the dialog then says who was
  * invited, who already belongs, and whose email didn't go out.
  */
-export function InviteDialog({ data, slug, isOpen, onClose, roles, defaultRole, onInvited }: InviteDialogProps) {
+export function InviteDialog({
+  data,
+  slug,
+  isOpen,
+  onClose,
+  roles,
+  defaultRole,
+  memberEmails,
+  invitedEmails,
+  onInvited,
+}: InviteDialogProps) {
   const startRole = roles.some((each) => each.id === defaultRole) ? defaultRole : (roles.at(-1)?.id ?? defaultRole);
+  const known: Known = { members: memberEmails, invited: invitedEmails };
   const nextId = useRef(1);
   const fresh = (roleId: string, email = ''): Row => {
     nextId.current += 1;
@@ -89,7 +120,7 @@ export function InviteDialog({ data, slug, isOpen, onClose, roles, defaultRole, 
   });
 
   const valid = rows.filter(
-    (row) => row.email.trim() !== '' && problemOf({ ...row, isTouched: true }, rows, true) === undefined,
+    (row) => row.email.trim() !== '' && problemOf({ ...row, isTouched: true }, rows, true, known) === undefined,
   );
   const isFull = rows.length >= INVITE_BATCH_MAX;
 
@@ -149,7 +180,7 @@ export function InviteDialog({ data, slug, isOpen, onClose, roles, defaultRole, 
   const send = () => {
     setChecking(true);
     setFailure(undefined);
-    const firstProblem = rows.find((row) => problemOf(row, rows, true) !== undefined);
+    const firstProblem = rows.find((row) => problemOf(row, rows, true, known) !== undefined);
     if (firstProblem !== undefined) {
       // To the first row that needs fixing, so its message is the next thing read.
       fields.current.get(firstProblem.id)?.focus();
@@ -262,7 +293,7 @@ export function InviteDialog({ data, slug, isOpen, onClose, roles, defaultRole, 
     >
       {failure !== undefined && <Callout tone="danger">{failure}</Callout>}
       {rows.map((row, index) => {
-        const problem = problemOf(row, rows, isChecking);
+        const problem = problemOf(row, rows, isChecking, known);
         return (
           <Field
             key={row.id}
@@ -272,9 +303,11 @@ export function InviteDialog({ data, slug, isOpen, onClose, roles, defaultRole, 
             }}
             label={strings.emailFor(index + 1)}
             isLabelHidden={index > 0}
-            // Text, not email: an email input drops the line breaks of a pasted column, which then can't split.
+            // Text, not email: an email input drops the line breaks of a pasted column, which then can't split. Its
+            // own name and autocomplete off, so a browser never fills in the signed in person's address.
             type="text"
             inputMode="email"
+            name={`invite-${String(row.id)}`}
             autoComplete="off"
             placeholder={strings.emailPlaceholder}
             value={row.email}
@@ -293,12 +326,12 @@ export function InviteDialog({ data, slug, isOpen, onClose, roles, defaultRole, 
               else if (row.email.trim() === '') send();
               else add(row.id);
             }}
-            suffix={
+            after={
               <>
                 <Select
                   label={strings.roleFor(row.email.trim() === '' ? strings.rowName(index + 1) : row.email.trim())}
                   isLabelHidden
-                  variant="inline"
+                  optionDescription="below"
                   items={roleItems}
                   value={row.roleId}
                   isDisabled={isBusy}

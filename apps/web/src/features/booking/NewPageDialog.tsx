@@ -4,7 +4,7 @@
 // Leaves out: everything else a page has (its editor), and Make it private (pages are on or off until a public profile lists them).
 import { isDataError, type BookingPageView, type DataLayer } from '@crm/data';
 import { useSchedules } from '@crm/data/react';
-import { Button, Callout, ChoiceChips, Field, InfoTip, Modal, Select, SettingsStack } from '@crm/ui';
+import { Button, Callout, ChoiceChips, Field, InfoTip, Modal, Select } from '@crm/ui';
 import { useState } from 'react';
 import { browserZone } from './zone.ts';
 import { scheduleStrings } from './schedule-strings.ts';
@@ -125,51 +125,49 @@ export function NewPageDialog({ data, slug, isOpen, onClose, onCreated }: NewPag
         </>
       }
     >
-      <SettingsStack>
-        {failure !== undefined && <Callout tone="danger">{failure}</Callout>}
-        <Field
-          label={strings.title}
-          placeholder={strings.titlePlaceholder}
-          value={title}
-          onChange={setTitle}
-          onSubmit={create}
-          maxLength={120}
-          isRequired
-          {...(errors.title === undefined ? {} : { error: errors.title })}
-        />
-        <Field
-          label={strings.address}
-          hint={strings.addressHint}
-          value={shownAddress}
-          onChange={(value) => setAddress(value.toLowerCase())}
-          maxLength={60}
-          {...(errors.address === undefined ? {} : { error: errors.address })}
-        />
-        <ChoiceChips
-          label={strings.duration}
-          choices={DURATIONS.map((minutes) => ({ id: String(minutes), label: strings.minutesShort(minutes) }))}
-          selected={durations.map(String)}
-          onChange={(ids) => setDurations(DURATIONS.filter((minutes) => ids.includes(String(minutes))))}
-          {...(errors.durations === undefined ? {} : { error: errors.durations })}
-        />
-        <Select
-          label={scheduleStrings.schedule}
-          info={
-            <InfoTip label={scheduleStrings.schedule} example={strings.tips.schedule.example}>
-              {strings.tips.schedule.text}
-            </InfoTip>
-          }
-          items={[
-            { id: 'default', label: scheduleStrings.defaultSchedule(fallback?.name) },
-            ...choices.flatMap((each) => (each.id === null ? [] : [{ id: each.id, label: each.name }])),
-          ]}
-          value={hours}
-          hint={scheduleStrings.hoursFromSchedule}
-          onChange={(id) => {
-            if (id !== null) setHours(id);
-          }}
-        />
-      </SettingsStack>
+      {failure !== undefined && <Callout tone="danger">{failure}</Callout>}
+      <Field
+        label={strings.title}
+        placeholder={strings.titlePlaceholder}
+        value={title}
+        onChange={setTitle}
+        onSubmit={create}
+        maxLength={120}
+        isRequired
+        {...(errors.title === undefined ? {} : { error: errors.title })}
+      />
+      <Field
+        label={strings.address}
+        hint={strings.addressHint}
+        value={shownAddress}
+        onChange={(value) => setAddress(value.toLowerCase())}
+        maxLength={60}
+        {...(errors.address === undefined ? {} : { error: errors.address })}
+      />
+      <ChoiceChips
+        label={strings.duration}
+        choices={DURATIONS.map((minutes) => ({ id: String(minutes), label: strings.minutesShort(minutes) }))}
+        selected={durations.map(String)}
+        onChange={(ids) => setDurations(DURATIONS.filter((minutes) => ids.includes(String(minutes))))}
+        {...(errors.durations === undefined ? {} : { error: errors.durations })}
+      />
+      <Select
+        label={scheduleStrings.schedule}
+        info={
+          <InfoTip label={scheduleStrings.schedule} example={strings.tips.schedule.example}>
+            {strings.tips.schedule.text}
+          </InfoTip>
+        }
+        items={[
+          { id: 'default', label: scheduleStrings.defaultSchedule(fallback?.name) },
+          ...choices.flatMap((each) => (each.id === null ? [] : [{ id: each.id, label: each.name }])),
+        ]}
+        value={hours}
+        hint={scheduleStrings.hoursFromSchedule}
+        onChange={(id) => {
+          if (id !== null) setHours(id);
+        }}
+      />
     </Modal>
   );
 }

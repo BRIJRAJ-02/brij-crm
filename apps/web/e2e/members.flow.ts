@@ -87,10 +87,17 @@ test('invites two people: the wrong address is refused, the invited one joins, a
   await page.goto(`/w/${slug}/settings/members`);
   await expect(page.getByRole('heading', { level: 1, name: 'Members' })).toBeVisible();
   await expect(page.getByRole('rowheader', { name: /Ada Lovelace/ })).toBeVisible();
-  // A lone owner sees the hint under their row too; the bar's button is the page's one primary action.
+  // A lone owner sees the empty state under their row, with a secondary Invite people; the bar's is the primary.
   await expect(page.getByText('Just you so far')).toBeVisible();
+  // Your own role reads as text: nobody changes their own role here.
+  await expect(page.getByRole('button', { name: /Role for Ada Lovelace/ })).toHaveCount(0);
   await page.getByRole('button', { name: 'Invite people' }).first().click();
   const invite = page.getByRole('dialog', { name: 'Invite people' });
+  // Nothing is prefilled, and an address that already belongs is refused in its row before anything is sent.
+  await expect(invite.getByRole('textbox', { name: 'Email' })).toHaveValue('');
+  await invite.getByRole('textbox', { name: 'Email' }).fill(`ada-${tag}@example.com`);
+  await invite.getByRole('button', { name: /^Invite/ }).click();
+  await expect(invite.getByText('Already a member.')).toBeVisible();
   // One row per person: Enter in the last row adds the next, which takes focus.
   await invite.getByRole('textbox', { name: 'Email' }).fill(invitee);
   await invite.getByRole('textbox', { name: 'Email' }).press('Enter');

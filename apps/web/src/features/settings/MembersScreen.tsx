@@ -328,7 +328,8 @@ export function MembersScreen({
       case 'email':
         return member.email;
       case 'role': {
-        const options = optionsFor(grantableRoles(actor, member.role));
+        // Your own role is never yours to change here: it reads as text (an owner hands on through Transfer).
+        const options = isMe ? [] : optionsFor(grantableRoles(actor, member.role));
         if (options.length === 0) return labelOf(role);
         return (
           <Select
@@ -516,9 +517,18 @@ export function MembersScreen({
           {strings.showMore}
         </Button>
       )}
-      {/* A lone member who may invite: one quiet nudge under their row, rather than a page of empty space. */}
+      {/* A lone member who may invite: the empty state under their one row (the row layout is for a list with
+          more below it; nothing is below this one), with the way to fill it. */}
       {canInvite && search === '' && page.total === 1 && inviteRoles.length > 0 && (
-        <EmptyState layout="row" title={strings.aloneTitle}>
+        <EmptyState
+          icon="users"
+          title={strings.aloneTitle}
+          actions={
+            <Button icon="user-plus" onPress={() => setInviting(true)}>
+              {strings.invite}
+            </Button>
+          }
+        >
           {strings.aloneText}
         </EmptyState>
       )}
@@ -647,7 +657,11 @@ export function MembersScreen({
           slug={slug}
           isOpen={isInviting}
           roles={inviteRoles}
-          defaultRole={roles.defaultRole}
+          // New rows start as Member (the owner, 22 October 2026), whatever the workspace's default for joining.
+          defaultRole={inviteRoles.find((option) => option.builtIn === 'member')?.id ?? roles.defaultRole}
+          memberEmails={new Set(rows.map((member) => member.email.toLowerCase()))}
+          // An expired invitation can be sent again, so only live ones refuse a row.
+          invitedEmails={new Set(invitations.filter((each) => !each.isExpired).map((each) => each.email.toLowerCase()))}
           onClose={() => setInviting(false)}
           onInvited={invited}
         />
