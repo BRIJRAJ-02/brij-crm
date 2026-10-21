@@ -11,6 +11,8 @@ import {
   type DataLayer,
   type InvitationView,
   type InviteLinkView,
+  type JoinRequestView,
+  type WorkspaceDomainsView,
   type MembersPage,
   type MemberView,
   type MyAccess,
@@ -41,6 +43,7 @@ import { useRouter } from '@tanstack/react-router';
 import { useEffect, useState } from 'react';
 import { useCan } from '../workspace/WorkspacePage.tsx';
 import { InviteDialog } from './InviteDialog.tsx';
+import { EmailDomainCard } from './EmailDomainCard.tsx';
 import { InviteLinkCard } from './InviteLinkCard.tsx';
 import { MemberConfirm, type MemberQuestion } from './MemberConfirm.tsx';
 import { RemoveMemberDialog } from './RemoveMemberDialog.tsx';
@@ -65,6 +68,10 @@ export interface MembersScreenProps {
   readonly invitations: readonly InvitationView[] | undefined;
   /** The invite link, for holders of `members.invite` (with the invitations). */
   readonly link?: InviteLinkView | undefined;
+  /** Open requests to join, for holders of `members.invite`; the tab shows only while any wait. */
+  readonly requests?: readonly JoinRequestView[] | undefined;
+  /** The email domains, for holders of `workspace.manage`. */
+  readonly domains?: WorkspaceDomainsView | undefined;
   readonly access: MyAccess;
   /** The roles every role picker offers (`roles.list`, spec 0037, AC-1439), most power first. */
   readonly roles: RolesList;
@@ -75,6 +82,13 @@ const MEMBER_COLUMNS: readonly TableColumn[] = [
   { id: 'email', label: strings.columns.email },
   { id: 'role', label: strings.columns.role },
   { id: 'joined', label: strings.columns.joined },
+  { id: 'actions', label: strings.columns.actions, isLabelHidden: true, align: 'end' },
+];
+
+const REQUEST_COLUMNS: readonly TableColumn[] = [
+  { id: 'name', label: strings.columns.name, isRowHeader: true },
+  { id: 'email', label: strings.columns.email },
+  { id: 'requested', label: strings.requested },
   { id: 'actions', label: strings.columns.actions, isLabelHidden: true, align: 'end' },
 ];
 
@@ -103,6 +117,8 @@ export function MembersScreen({
   onSearch,
   invitations,
   link,
+  requests = [],
+  domains,
   access,
   roles,
 }: MembersScreenProps) {
@@ -351,6 +367,50 @@ export function MembersScreen({
     }
   };
 
+  // Approving brings them in at once; declining ends their request, so it asks first.
+  const approve = (request: JoinRequestView) => {
+    data.joinRequests.decide(slug, request.id, true).then(
+      async () => {
+        await reload();
+        toasts.toast({ tone: 'success', message: strings.approved(request.name) });
+      },
+      (error: unknown) => {
+        toasts.toast({ tone: 'danger', message: messageOf(error) });
+      },
+    );
+  };
+  const decline = (request: JoinRequestView) => {
+    setQuestion({
+      title: strings.declineTitle(request.name),
+      text: strings.declineText,
+      action: strings.declineAction,
+      run: () => data.joinRequests.decide(slug, request.id, false),
+      done: strings.declined(request.name),
+    });
+  };
+
+  const requestCell = (request: JoinRequestView, column: string) => {
+    switch (column) {
+      case 'name':
+        return request.name;
+      case 'email':
+        return request.email;
+      case 'requested':
+        return <RelativeTime value={request.requestedAt} />;
+      default:
+        return (
+          <>
+            <Button size="sm" onPress={() => approve(request)}>
+              {strings.approve}
+            </Button>
+            <Button size="sm" variant="ghost" onPress={() => decline(request)}>
+              {strings.decline}
+            </Button>
+          </>
+        );
+    }
+  };
+
   const invitationCell = (invitation: InvitationView, column: string) => {
     switch (column) {
       case 'email':
@@ -451,14 +511,27 @@ export function MembersScreen({
           tabs={[
             { id: 'members', label: strings.membersTab, count: page.total },
             { id: 'invitations', label: strings.invitationsTab, count: invitations.length },
+            // Only while any wait (AC-810), so a workspace with none never shows an empty tab.
+            ...(requests.length > 0 ? [{ id: 'requests', label: strings.requestsTab, count: requests.length }] : []),
           ]}
-          selectedKey={tab}
+          selectedKey={tab === 'requests' && requests.length === 0 ? 'members' : tab}
           onSelectionChange={setTab}
           {...(tab === 'members' ? { end: searchField } : {})}
         >
           <TabPanel id="members">{membersList}</TabPanel>
           <TabPanel id="invitations">
             <SettingsStack>
+              {domains !== undefined && (
+                <EmailDomainCard
+                  data={data}
+                  slug={slug}
+                  domains={domains}
+                  onChanged={reload}
+                  onFailed={(message) => {
+                    toasts.toast({ tone: 'danger', message });
+                  }}
+                />
+              )}
               {link !== undefined && (
                 <InviteLinkCard
                   data={data}
@@ -481,6 +554,18 @@ export function MembersScreen({
               />
             </SettingsStack>
           </TabPanel>
+          {requests.length > 0 && (
+            <TabPanel id="requests">
+              <Table
+                label={strings.requestsTab}
+                columns={REQUEST_COLUMNS}
+                rows={requests}
+                getRowId={(request) => request.id}
+                renderCell={requestCell}
+                emptyState={<EmptyState icon="user-plus" title={strings.noRequests} />}
+              />
+            </TabPanel>
+          )}
         </Tabs>
       ) : (
         <>

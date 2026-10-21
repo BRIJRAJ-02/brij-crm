@@ -26,7 +26,9 @@ export const Route = createFileRoute('/welcome')({
     if (home !== undefined && !deps.another) {
       throw redirect({ to: '/w/$slug', params: { slug: home.slug }, replace: true });
     }
-    return { user: me.user, back: home };
+    // Workspaces at the person's email domain they may ask to join (spec 0031, AC-819): a nudge, never a blocker.
+    const joinable = await context.data.join.list().catch(() => []);
+    return { user: me.user, back: home, joinable: joinable.length };
   },
   pendingComponent: () => (
     <LoadingNow>
@@ -38,7 +40,7 @@ export const Route = createFileRoute('/welcome')({
 });
 
 function WelcomeRoute() {
-  const { user, back } = Route.useLoaderData();
+  const { user, back, joinable } = Route.useLoaderData();
   const { data, toasts } = Route.useRouteContext();
-  return <WelcomeScreen data={data} toasts={toasts} user={user} back={back} />;
+  return <WelcomeScreen data={data} toasts={toasts} user={user} back={back} joinable={joinable} />;
 }

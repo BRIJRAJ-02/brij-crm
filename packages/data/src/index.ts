@@ -33,6 +33,8 @@ import type {
   InviteLinkView,
   InvitePeek,
   InviteResult,
+  Joinable,
+  JoinRequestView,
   JobView,
   Me,
   MemberView,
@@ -49,6 +51,7 @@ import type {
   View,
   ViewLayout,
   ViewVisibility,
+  WorkspaceDomainsView,
 } from '@crm/contracts';
 import type { InviteLinkDays } from '@crm/contracts/team-limits';
 import { createORPCClient } from '@orpc/client';
@@ -176,6 +179,8 @@ export type {
   InviteLinkView,
   InvitePeek,
   InviteResult,
+  Joinable,
+  JoinRequestView,
   JobView,
   Me,
   MemberSummary,
@@ -208,6 +213,7 @@ export type {
   TrashedRecord,
   Usage,
   UsageCount,
+  WorkspaceDomainsView,
   WorkspaceSummary,
 } from '@crm/contracts';
 export type {
@@ -2496,6 +2502,44 @@ export function createDataLayer({
         const accepted = await call((options) => api.invitations.accept({ token }, options));
         me = undefined;
         return accepted;
+      },
+    },
+    /**
+     * Domain join from the person's side (spec 0031, AC-819): the workspaces
+     * whose email domain is theirs, and asking to join one. Read fresh.
+     */
+    join: {
+      /** The workspaces the signed in person may ask to join, with whether they already asked. */
+      list: (): Promise<Joinable[]> => call((options) => api.join.list(undefined, options)),
+      /** Asks to join one: answers it as pending. Refusals: `NOT_FOUND`, `RATE_LIMITED`. */
+      request: (workspaceId: string): Promise<Joinable> =>
+        call((options) => api.join.request({ workspaceId }, options)),
+    },
+    /**
+     * Domain join inside a workspace (spec 0031, AC-819, AC-820): its email
+     * domains (`workspace.manage`) and its open requests (`members.invite`).
+     * Settings, not CRM data: read fresh, and every write waits for the server.
+     */
+    joinRequests: {
+      domains: (workspace: string): Promise<WorkspaceDomainsView> =>
+        call((options) => api.joinRequests.domains({ workspace }, options)),
+      /** Sets the domains. Refusals: `FORBIDDEN`, `DOMAIN_NOT_YOURS`, `DOMAIN_PUBLIC`. */
+      setDomains: (workspace: string, domains: readonly string[]): Promise<WorkspaceDomainsView> =>
+        call((options) =>
+          api.joinRequests.setDomains({ workspace, domains: [...domains], mutationId: mintId() }, options),
+        ),
+      list: (workspace: string): Promise<JoinRequestView[]> =>
+        call((options) => api.joinRequests.list({ workspace }, options)),
+      /**
+       * Approves (they join as a member) or declines a request. The member
+       * list is read again after an approval. Refusals: `FORBIDDEN`,
+       * `NOT_FOUND`, `SEAT_LIMIT`.
+       */
+      async decide(workspace: string, requestId: string, approve: boolean): Promise<void> {
+        await call((options) =>
+          api.joinRequests.decide({ workspace, requestId, approve, mutationId: mintId() }, options),
+        );
+        if (approve) members.delete(workspace);
       },
     },
     roles: {

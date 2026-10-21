@@ -416,6 +416,16 @@ function fakeApi(overrides: Partial<Behaviour> = {}, auth: (path: string, body: 
       link: os.invitations.link.handler(notServed),
       setLink: os.invitations.setLink.handler(notServed),
     },
+    join: {
+      list: os.join.list.handler(notServed),
+      request: os.join.request.handler(notServed),
+    },
+    joinRequests: {
+      domains: os.joinRequests.domains.handler(notServed),
+      setDomains: os.joinRequests.setDomains.handler(notServed),
+      list: os.joinRequests.list.handler(notServed),
+      decide: os.joinRequests.decide.handler(notServed),
+    },
     access: { mine: os.access.mine.handler(() => behaviour.access()) },
     roles: { list: os.roles.list.handler(notServed) },
     realtime: {

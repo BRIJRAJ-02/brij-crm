@@ -89,7 +89,7 @@ Built from library parts only: SettingsLayout (through `SettingsPage`), Settings
 
 - **Purpose**: Settings › Workspace › Members (spec 0031, AC-803, AC-810, AC-811, AC-818): who is in the workspace, what each can do, and who is invited.
 - **Main task**: find someone by name or email; owners and admins change roles with the row's Select (only the roles they may give), remove people from the row menu, invite people by email, resend or revoke open invitations, and share the invite link.
-- **Leaves out**: leaving (the workspace menu's), teams, guests and email domains (later slices of spec 0031).
+- **Leaves out**: leaving (the workspace menu's), teams and guests (later slices of spec 0031).
 
 The lean pass (the owner, 21 October 2026): the TopBar holds the trail, the page's h1 and its one primary action, Invite people (`SettingsLayout header="bar"`, as the recui lane set for every settings page), and no title block or description repeats them. Tabs (`inset="none"`, so the first tab's label lines up with the table's first column) hold Members and Invitations with counts; the search sits at the strip's end on the Members tab only. A lone member who may invite gets one quiet row under their own ("Just you so far. Invite your team to work together."), not a block. Empty searches and an empty Invitations tab say so in a title alone.
 
@@ -98,6 +98,10 @@ Built from library parts only: SettingsLayout (through `SettingsPage`), Tabs, Fi
 ### The invite dialog (InviteDialog.tsx)
 
 One row per person: an email Field (text, with the email keyboard, so a pasted column keeps its line breaks) whose suffix holds that row's role, an inline Select defaulting to the row before it (the roles list's default for the first), and, with more than one row, a ghost `x` that removes it (nothing is sent yet, so it asks nothing). Add another (full width, label at the start), or Enter in the last row, adds a row and focuses it; Enter on an empty last row sends. A pasted list ("a@x.com, b@y.com" or one per line) fills this row and new ones, up to 20. Each row says what's wrong under it once left (not an address, already in the list); Invite with a bad row focuses it. The button counts the valid rows ("Invite 3 people"); one call per role. Sent, the dialog says who was invited (announced), who already belongs, and whose email didn't go out, with Invite more and Done.
+
+### Domain join (EmailDomainCard.tsx, the Join requests tab)
+
+The Invitations tab opens with the Email domain card for holders of `workspace.manage` (spec 0031, AC-819): one SettingsRow whose switch lets people at the reader's own verified domain ask to join ("People at @acme.com can ask to join. You approve each one."); a public or unverified address says why it can't, with the switch disabled. Only the reader's own domain may go on (the server refuses any other, and every public mail domain). While requests wait, a Join requests tab joins Members and Invitations with its count (AC-810, AC-820): Name, Email, Asked (a RelativeTime), and Approve and Decline. Approve brings them in at once as a member and reloads the page; Decline ends their request, so it asks first in the page's confirm ("Decline Grace's request?"), and they are never told.
 
 ### The invite link (InviteLinkCard.tsx)
 

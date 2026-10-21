@@ -3,7 +3,7 @@
 // Main task: confirm your name and the workspace's name and address, then Create workspace.
 // Leaves out: inviting teammates (Settings › Members does that), picking a template and settings.
 import { isDataError, type DataLayer, type SignedInUser } from '@crm/data';
-import { AuthLayout, Button, ButtonLink, Field, Form, type Toasts } from '@crm/ui';
+import { AuthLayout, Button, ButtonLink, Callout, Field, Form, type Toasts } from '@crm/ui';
 import { useNavigate } from '@tanstack/react-router';
 import { useState } from 'react';
 import { addressAsTyped, SLUG_MAX, SLUG_RULE, slugFrom, suggestedWorkspaceName } from './names.ts';
@@ -51,10 +51,12 @@ export interface WelcomeScreenProps {
   readonly user: SignedInUser;
   /** Where Cancel goes when the person already has a workspace (creating another, spec 0031, AC-801). */
   readonly back?: { readonly slug: string; readonly name: string } | undefined;
+  /** How many workspaces at the person's email domain they may ask to join (spec 0031, AC-819). */
+  readonly joinable?: number;
 }
 
 /** The welcome page: AuthLayout and a Form that creates the workspace, then opens it. */
-export function WelcomeScreen({ data, toasts, user, back }: WelcomeScreenProps) {
+export function WelcomeScreen({ data, toasts, user, back, joinable = 0 }: WelcomeScreenProps) {
   const navigate = useNavigate();
   // One id per visit, sent again on every try, so a retry after a lost answer makes nothing twice.
   const [id, setId] = useState(() => data.workspaces.newId());
@@ -117,6 +119,17 @@ export function WelcomeScreen({ data, toasts, user, back }: WelcomeScreenProps) 
         )
       }
     >
+      {joinable > 0 && (
+        <Callout
+          actions={
+            <ButtonLink size="sm" href="/join">
+              {strings.seeTeam}
+            </ButtonLink>
+          }
+        >
+          {strings.teamHere}
+        </Callout>
+      )}
       <Form<WelcomeRefusal>
         submitLabel={strings.create}
         busyLabel={strings.creating}

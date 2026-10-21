@@ -15,6 +15,9 @@ export const strings = {
   create: 'Create workspace',
   creating: 'Creating workspace',
   signOut: 'Sign out',
+  // Domain join (spec 0031, AC-819): the person's team may already be here.
+  teamHere: 'Your team may already be on Timefix.',
+  seeTeam: 'See workspaces',
   signOutFailed: 'Couldn’t sign out. Check your connection, then try again.',
   nameMissing: 'Enter your name.',
   workspaceNameMissing: 'Name the workspace.',
