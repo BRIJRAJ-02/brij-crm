@@ -1238,6 +1238,11 @@ Object.assign(WRITES, {
     });
     return [];
   },
+  'forms.rotateSecret': async (m: Member, mutationId: string) => {
+    const form = await formOn(m);
+    await m.client.forms.rotateSecret({ workspace: m.slug, formId: form.id, mutationId });
+    return [];
+  },
   'forms.setTarget': async (m: Member, mutationId: string) => {
     const form = await formOn(m);
     await m.client.forms.setTarget({
@@ -1378,6 +1383,7 @@ const WRITES_MADE: Readonly<Record<string, number>> = {
   'forms.publish': 2,
   'forms.setStatus': 3,
   'forms.updateSettings': 2,
+  'forms.rotateSecret': 2,
   'forms.setTarget': 2,
   'forms.duplicate': 2,
   'forms.delete': 2,
