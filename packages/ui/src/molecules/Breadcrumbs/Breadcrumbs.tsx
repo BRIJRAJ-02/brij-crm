@@ -33,7 +33,7 @@ export function Breadcrumbs({ items }: BreadcrumbsProps) {
         const face = (
           <>
             {item.icon !== undefined && <Icon name={item.icon} size="sm" />}
-            {item.label}
+            <span className={styles.label}>{item.label}</span>
           </>
         );
         return (
