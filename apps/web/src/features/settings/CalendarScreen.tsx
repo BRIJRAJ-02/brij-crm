@@ -108,7 +108,7 @@ function ConnectionRow({
   return (
     <SettingsRow
       title={connection.accountEmail}
-      leading={<ProviderMark provider="google-calendar" />}
+      leading={<ProviderMark provider="google-calendar" isLabelled />}
       {...(connection.isDefault
         ? {
             meta: (
@@ -127,13 +127,18 @@ function ConnectionRow({
             strings.notSyncedYet
           ) : (
             <>
-              {strings.synced} <RelativeTime value={connection.lastSyncedAt} />
+              {/* A no break space: "Synced" never ends a line on its own. */}
+              {strings.synced}
+              {'\u00a0'}
+              <RelativeTime value={connection.lastSyncedAt} />
             </>
           )}
           {problem !== undefined && <> · {problem}</>}
         </>
       }
     >
+      {/* A calendar that stopped syncing shows its fix on the row, not behind the menu. */}
+      {canReconnect && <Button onPress={onReconnect}>{strings.reconnect}</Button>}
       <Select
         label={strings.sharingLabel}
         isLabelHidden
@@ -146,17 +151,11 @@ function ConnectionRow({
         <Menu
           label={actions}
           onAction={(key) => {
-            if (key === 'reconnect') onReconnect?.();
             if (key === 'default') onDefault();
             if (key === 'sync') onSyncNow?.();
             if (key === 'disconnect') onDisconnect();
           }}
         >
-          {canReconnect && (
-            <MenuItem id="reconnect" icon="refresh-cw">
-              {strings.reconnect}
-            </MenuItem>
-          )}
           {!connection.isDefault && (
             <MenuItem id="default" icon="star">
               {strings.makeDefault}
@@ -167,7 +166,7 @@ function ConnectionRow({
               {strings.syncNow}
             </MenuItem>
           )}
-          {(canReconnect || !connection.isDefault || onSyncNow !== undefined) && <MenuSeparator />}
+          {(!connection.isDefault || onSyncNow !== undefined) && <MenuSeparator />}
           <MenuItem id="disconnect" icon="unplug" isDanger>
             {strings.disconnect}
           </MenuItem>
@@ -194,7 +193,7 @@ export function CalendarScreen({ data, slug, view, result, onResultSeen }: Calen
     if (disconnecting === undefined || isDisconnectBusy) return;
     setDisconnectBusy(true);
     setDisconnectFailure(undefined);
-    data.calendar.remove(slug, disconnecting.id).then(
+    data.calendar.remove(slug, disconnecting.id, { asksFirst: true }).then(
       (isDone) => {
         setDisconnectBusy(false);
         // Refused (the connection came back): the confirm stays open and says so.
