@@ -222,6 +222,15 @@ export function createNotesStore(deps: NotesDeps) {
     deps.onUnsaved?.(has);
   };
 
+  // The object of each record whose notes were opened (its record page names it), so a coarse change to another
+  // object's records leaves its list and windows alone.
+  const recordObjects = new Map<string, string>();
+  /** Whether a coarse change to `objectId`'s records may touch this record: its object, or one unknown here. */
+  const mayBeOf = (workspace: string, recordId: string, objectId: string): boolean => {
+    const known = recordObjects.get(keyOf(workspace, recordId));
+    return known === undefined || known === objectId;
+  };
+
   /** Every loaded list of this record reads its pages again soon. */
   const dirtyRecord = (workspace: string, recordId: string) => {
     for (const list of listsOf(workspace)) if (list.recordId === recordId) list.dirty();
@@ -777,9 +786,14 @@ export function createNotesStore(deps: NotesDeps) {
   }
 
   return {
-    /** A record's notes, last edited first, the same list for every screen that asks. */
-    forRecord(workspace: string, recordId: string): NoteList {
+    /**
+     * A record's notes, last edited first, the same list for every screen that
+     * asks. `objectId` names the record's object, so a background job's changes
+     * to another object's records leave the list (and its windows) alone.
+     */
+    forRecord(workspace: string, recordId: string, objectId?: string): NoteList {
       const key = keyOf(workspace, recordId);
+      if (objectId !== undefined) recordObjects.set(key, objectId);
       const found = lists.get(key);
       if (found !== undefined) return found.api;
       const made = makeList(workspace, recordId);
@@ -868,14 +882,20 @@ export function createNotesStore(deps: NotesDeps) {
       for (const each of sessionsOf(workspace)) if (coarse || notes.has(each.noteId)) each.changedElsewhere();
       deps.timelines(workspace, coarse ? 'all' : event.recordIds);
     },
-    /** A live `records` event naming records trashed or restored: their notes go or come back (AC-446). */
+    /**
+     * A live `records` event naming records trashed or restored: their notes
+     * go or come back (AC-446). A coarse one (a background job's, paced)
+     * touches only the lists and windows of its object's records (or of a
+     * record whose object isn't known here).
+     */
     recordsChanged(workspace: string, event: Extract<ChangeEvent, { kind: 'records' }>) {
       const lifecycle = new Set([...(event.deletedIds ?? []), ...(event.restoredIds ?? [])]);
-      if (event.coarse !== true && lifecycle.size === 0) return;
-      for (const list of listsOf(workspace)) if (event.coarse === true || lifecycle.has(list.recordId)) list.dirty();
-      for (const each of sessionsOf(workspace)) {
-        if (event.coarse === true || lifecycle.has(each.recordId)) each.recordChanged();
-      }
+      const coarse = event.coarse === true;
+      if (!coarse && lifecycle.size === 0) return;
+      const touches = (recordId: string) =>
+        coarse ? mayBeOf(workspace, recordId, event.objectId) : lifecycle.has(recordId);
+      for (const list of listsOf(workspace)) if (touches(list.recordId)) list.dirty();
+      for (const each of sessionsOf(workspace)) if (touches(each.recordId)) each.recordChanged();
     },
     /** Everything held of the workspace is read again (a resync after a gap the outbox no longer covers). */
     resync(workspace: string) {
@@ -884,6 +904,7 @@ export function createNotesStore(deps: NotesDeps) {
     },
     /** Forgets everything: the session ended. */
     clear() {
+      recordObjects.clear();
       lists.clear();
       sessions.clear();
       sayUnsaved();

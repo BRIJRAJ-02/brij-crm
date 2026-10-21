@@ -86,8 +86,9 @@ export const Route = createFileRoute('/w/$slug/objects/$object_/$recordId/$tab')
       ),
       context.data.activity.forRecord(params.slug, params.recordId, object.id),
       context.data.activity.recent(params.slug, params.recordId, object.id),
-      context.data.tasks.forRecord(params.slug, params.recordId, 'open'),
-      context.data.notes.forRecord(params.slug, params.recordId),
+      // With the record's object, so a background job on another object's records leaves them alone (spec 0022).
+      context.data.tasks.forRecord(params.slug, params.recordId, 'open', object.id),
+      context.data.notes.forRecord(params.slug, params.recordId, object.id),
     ]);
     // The open tasks start loading now; the page draws them (and the tab's count) as they arrive.
     void open.ready();

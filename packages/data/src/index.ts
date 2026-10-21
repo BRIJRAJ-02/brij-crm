@@ -2784,10 +2784,16 @@ export function createDataLayer({
        * A record's open tasks (by due date) or done ones (newest done first),
        * the same list for every screen that asks (spec 0019): 50 at a time as
        * it scrolls, with the open count, live, and settling 1.5 seconds after
-       * the last change in it. Read it through `useTaskList`.
+       * the last change in it. Read it through `useTaskList`. Give the
+       * record's `objectId`, so a background job on another object's records
+       * leaves it alone (spec 0022).
        */
-      forRecord: async (workspace: string, recordId: string, status: 'open' | 'done'): Promise<TaskList> =>
-        (await tasksStore()).forRecord(workspace, recordId, status),
+      forRecord: async (
+        workspace: string,
+        recordId: string,
+        status: 'open' | 'done',
+        objectId?: string,
+      ): Promise<TaskList> => (await tasksStore()).forRecord(workspace, recordId, status, objectId),
       /**
        * My tasks (spec 0019, AC-436): the open or done tasks assigned to me
        * (`assigned`), created by me (`created`) or every task I may see
@@ -2828,9 +2834,11 @@ export function createDataLayer({
       /**
        * A record's notes, last edited first (spec 0019, AC-442): 20 at a time
        * as it scrolls, with the count, live. Read it through `useNoteList`.
+       * Give the record's `objectId`, so a background job on another object's
+       * records leaves it and its windows alone (spec 0022).
        */
-      forRecord: async (workspace: string, recordId: string): Promise<NoteList> =>
-        (await notesStore()).forRecord(workspace, recordId),
+      forRecord: async (workspace: string, recordId: string, objectId?: string): Promise<NoteList> =>
+        (await notesStore()).forRecord(workspace, recordId, objectId),
       /**
        * The note window's session (AC-439 to AC-443): an existing note, or a
        * new one with the id the window minted, which stores nothing until it

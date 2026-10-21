@@ -358,6 +358,43 @@ describe('the tasks store (spec 0019)', () => {
     expect(calls).toContain(`get ${one.id}`);
   });
 
+  it('reads only what links a record of a job’s object on its coarse change, and nothing for another (spec 0022)', async () => {
+    const one = task(1);
+    const two = task(2, { records: [ada] });
+    const server = new Map([one, two].map((each) => [each.id, each]));
+    const { store, calls, spreads, elapse } = setup(server);
+    const ofAcme = store.forRecord(WS, ACME, 'open', 'o1');
+    ofAcme.retain();
+    await ofAcme.ready();
+    const ofAda = store.forRecord(WS, ADA, 'open', 'o2');
+    ofAda.retain();
+    await ofAda.ready();
+    calls.splice(0);
+    const coarse = (objectId: string) => {
+      store.recordsChanged(WS, {
+        seq: 5,
+        at: '2026-10-12T10:00:00.000Z',
+        kind: 'records',
+        objectId,
+        recordIds: [],
+        attributeIds: [],
+        coarse: true,
+        fromJob: true,
+      });
+      for (const work of spreads.splice(0)) work();
+    };
+    coarse('o9');
+    await elapse(TASK_SETTLE_MS);
+    expect(calls).toEqual([]);
+    coarse('o2');
+    await flush();
+    await elapse(TASK_SETTLE_MS);
+    expect(calls).toContain(`get ${two.id}`);
+    expect(calls).not.toContain(`get ${one.id}`);
+    // Only Ada's list read its page again.
+    expect(calls.filter((call) => call.startsWith('list'))).toEqual(['list open']);
+  });
+
   it('reads tasks linking a record that went to the trash, and its own list becomes unavailable (AC-446)', async () => {
     const one = task(1, { records: [acme, ada], recordCount: 2 });
     const server = new Map([[one.id, one]]);

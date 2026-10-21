@@ -385,4 +385,41 @@ describe('a record’s notes list (spec 0019, AC-442, AC-445)', () => {
     expect(await t.store.restore(WS, ACME, id)).toBeUndefined();
     expect(list.getSnapshot().source.getItem(0)?.id).toBe(id);
   });
+
+  it('reads again for a job’s coarse change to its own object’s records only (spec 0022)', async () => {
+    const t = setup();
+    t.server.set('0199a6f2-0000-7000-8000-0000000000f5', {
+      title: 'One',
+      content: doc('x'),
+      version: 1,
+      updatedBy: ME,
+    });
+    const list = t.store.forRecord(WS, ACME, 'companies');
+    list.retain();
+    await list.ready();
+    t.server.set('0199a6f2-0000-7000-8000-0000000000f6', {
+      title: 'Two',
+      content: doc('y'),
+      version: 1,
+      updatedBy: BEA,
+    });
+    const coarse = (seq: number, objectId: string) => {
+      t.store.recordsChanged(WS, {
+        seq,
+        at: '',
+        kind: 'records',
+        objectId,
+        recordIds: [],
+        attributeIds: [],
+        coarse: true,
+        fromJob: true,
+      });
+    };
+    coarse(5, 'people');
+    await t.advance(500);
+    expect(list.getSnapshot().total?.count).toBe(1);
+    coarse(6, 'companies');
+    await t.advance(500);
+    expect(list.getSnapshot().total?.count).toBe(2);
+  });
 });

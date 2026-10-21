@@ -306,6 +306,14 @@ export function createTasksStore(deps: TasksDeps) {
   };
   const keyOf = (workspace: string, id: string) => `${workspace}\u0000${id}`;
   const listsOf = (workspace: string) => [...lists.values()].filter((list) => list.workspace === workspace);
+  // The object of each record a list was opened for (its record page names it), so a coarse change to another
+  // object's records leaves the list alone.
+  const recordObjects = new Map<string, string>();
+  /** A record's object: as its list was opened, or from a held task that links it; undefined when unknown. */
+  const objectOfRecord = (workspace: string, recordId: string): string | undefined =>
+    recordObjects.get(keyOf(workspace, recordId)) ??
+    [...basesOf(workspace).values()].flatMap((task) => task.records).find((record) => record.recordId === recordId)
+      ?.objectId;
   const onesOf = (workspace: string) => [...ones.values()].filter((one) => one.workspace === workspace);
   const isBusy = (workspace: string, id: string) =>
     (patches.get(keyOf(workspace, id))?.length ?? 0) > 0 || creatingIn(workspace).has(id);
@@ -1087,8 +1095,13 @@ export function createTasksStore(deps: TasksDeps) {
   };
 
   return {
-    /** A record's open or done tasks, the same list for every screen that asks. */
-    forRecord(workspace: string, recordId: string, status: TaskStatus): TaskList {
+    /**
+     * A record's open or done tasks, the same list for every screen that asks.
+     * `objectId` names the record's object, so a background job's changes to
+     * another object's records leave the list alone.
+     */
+    forRecord(workspace: string, recordId: string, status: TaskStatus, objectId?: string): TaskList {
+      if (objectId !== undefined) recordObjects.set(keyOf(workspace, recordId), objectId);
       return listFor(workspace, { recordId }, status);
     },
     /**
@@ -1170,13 +1183,27 @@ export function createTasksStore(deps: TasksDeps) {
      * read again (a rename shows in their chips; a record trashed or restored
      * changes which links they show, AC-446), and the lists of records it
      * names as deleted or restored settle (a trashed record's list becomes
-     * unavailable). A coarse one waits a random moment first, once.
+     * unavailable). A coarse one (a background job's, paced) waits a random
+     * moment first, once per object, and touches only what links a record of
+     * its object: the tasks held that link one, the lists holding those, and
+     * the lists of that object's records. A store holding nothing of the
+     * object reads nothing.
      */
     recordsChanged(workspace: string, event: Extract<ChangeEvent, { kind: 'records' }>) {
       if (event.coarse === true) {
-        deps.spread(`tasks records ${workspace}`, () => {
-          refetch(workspace, [...basesOf(workspace).keys()]);
-          for (const list of listsOf(workspace)) list.dirty(true);
+        const { objectId } = event;
+        deps.spread(`tasks records ${workspace} ${objectId}`, () => {
+          const linked = new Set(
+            [...basesOf(workspace).values()]
+              .filter((task) => task.records.some((record) => record.objectId === objectId))
+              .map((task) => task.id),
+          );
+          if (linked.size > 0) refetch(workspace, [...linked]);
+          for (const list of listsOf(workspace)) {
+            const ofRecord = list.recordId === undefined ? undefined : objectOfRecord(workspace, list.recordId);
+            const isObjects = list.recordId !== undefined && (ofRecord === undefined || ofRecord === objectId);
+            if (isObjects || list.holdsAny(linked)) list.dirty(true);
+          }
         });
         return;
       }
@@ -1212,6 +1239,7 @@ export function createTasksStore(deps: TasksDeps) {
     },
     /** Forgets everything: the session ended. */
     clear() {
+      recordObjects.clear();
       bases.clear();
       bodies.clear();
       patches.clear();

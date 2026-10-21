@@ -81,7 +81,7 @@ function Completed({
   useEffect(() => {
     if (!isOpen || done !== undefined) return;
     let isLive = true;
-    data.tasks.forRecord(slug, record.recordId, 'done').then(
+    data.tasks.forRecord(slug, record.recordId, 'done', record.objectId).then(
       (list) => {
         if (isLive) setDone(list);
       },
@@ -93,7 +93,7 @@ function Completed({
     return () => {
       isLive = false;
     };
-  }, [isOpen, done, data, slug, record.recordId]);
+  }, [isOpen, done, data, slug, record.recordId, record.objectId]);
   let body: ReactNode;
   if (done === 'failed') {
     body = (
