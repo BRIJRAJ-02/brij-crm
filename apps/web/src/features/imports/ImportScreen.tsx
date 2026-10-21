@@ -1,7 +1,7 @@
 // Brief
 // Purpose: bring a spreadsheet of records into one object, seeing what each row will do before anything changes.
 // Main task: choose a CSV, check where its columns go and how rows find records, read the preview, then start.
-// Leaves out: relation columns, creating options or attributes from the file (milestone 5), and other file types.
+// Leaves out: making far records of more than one object for a relation column, and file types other than CSV.
 import {
   isDataError,
   toActorDisplays,
@@ -20,6 +20,7 @@ import {
   Button,
   Callout,
   Card,
+  Checkbox,
   createPhoneParser,
   EmptyState,
   FileDrop,
@@ -46,7 +47,7 @@ import { useBlocker, useNavigate } from '@tanstack/react-router';
 import { useMemo, useRef, useState } from 'react';
 import { focusTitle } from '../navigation/focus-title.ts';
 import { objectHref } from '../workspace/objects.ts';
-import { WorkspacePage } from '../workspace/WorkspacePage.tsx';
+import { useCan, WorkspacePage } from '../workspace/WorkspacePage.tsx';
 import { saveCsv } from './download.ts';
 import {
   autoMatch,
@@ -57,6 +58,7 @@ import {
   matchAttributes,
   type ImportChoice,
 } from './matching.ts';
+import { columnNames, missingOptions, suggestType } from './missing.ts';
 import { importSummaryHref } from './paths.ts';
 import {
   cellText,
@@ -76,13 +78,29 @@ export interface ImportScreenProps {
   readonly object: ObjectSummary;
   readonly attributes: readonly AttributeDefinition[];
   readonly members: readonly MemberSummary[];
+  /** The workspace's objects, for a relation column's far object (its name, and whether the member may make its records). */
+  readonly objects: readonly ObjectSummary[];
 }
+
+/** What looking up a relation column's names found (decision 7), by column. */
+type LinkCheck =
+  | { readonly status: 'checking'; readonly attributeId: string }
+  | { readonly status: 'failed'; readonly attributeId: string }
+  | {
+      readonly status: 'done';
+      readonly attributeId: string;
+      readonly total: number;
+      readonly missing: readonly string[];
+      readonly ambiguous: readonly string[];
+    };
 
 type Step = 'upload' | 'columns' | 'records' | 'preview';
 type Filter = 'all' | 'ready' | 'errors';
 
 /** The Select id for "Don't import", and the match Select's "Always create new records". */
 const NONE = 'none';
+/** The Select item that makes a new attribute from the column (AC-1116). */
+const NEW = 'new-attribute';
 const SAMPLES_SHOWN = 3;
 const SAMPLE_READ = 50;
 const PAGE_SIZES = [25, 50, 100] as const;
@@ -139,8 +157,15 @@ interface PreviewRow {
 }
 
 /** The import page (AC-1111 to AC-1123): four steps, then the rows sent and the import started. */
-export function ImportScreen({ data, slug, object, attributes, members }: ImportScreenProps) {
+export function ImportScreen({ data, slug, object, attributes: given, members, objects }: ImportScreenProps) {
   const navigate = useNavigate();
+  const canManage = useCan('schema.manage');
+  // Read again after the page makes an attribute or options, so the columns and the preview use them.
+  const [attributes, setAttributes] = useState(given);
+  const [links, setLinks] = useState<ReadonlyMap<number, LinkCheck>>(new Map());
+  const [busyColumn, setBusyColumn] = useState<number | undefined>(undefined);
+  const [columnsError, setColumnsError] = useState<string | undefined>(undefined);
+  const linkRuns = useRef(new Map<number, number>());
   const [step, setStepNow] = useState<Step>('upload');
   const [loaded, setLoaded] = useState<Loaded | undefined>(undefined);
   const [isReading, setReading] = useState(false);
@@ -172,6 +197,7 @@ export function ImportScreen({ data, slug, object, attributes, members }: Import
     [attributes],
   );
   const actors = useMemo(() => toActorDisplays(members), [members]);
+  const byId = useMemo(() => new Map(attributes.map((attribute) => [attribute.id, attribute])), [attributes]);
   const locale = globalThis.navigator.languages[0] ?? 'en-US';
   const timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone;
   const contextFor =
@@ -225,11 +251,13 @@ export function ImportScreen({ data, slug, object, attributes, members }: Import
         choices,
         (choice, text) =>
           choice.target.part !== undefined ||
+          choice.attribute.type === 'record_reference' ||
           readCell(text, fields.get(choice.attribute.id) ?? toFieldAttribute(choice.attribute), reader).ok,
       );
       setPhone(parser);
       setLoaded({ name: file.name, table, samples: samples.map((each) => each.slice(0, SAMPLES_SHOWN)) });
       setTargets(proposed);
+      checkLinks(table.rows, proposed, new Map());
       setMatchId(defaultMatch(object, matchAttributes(attributes, proposed)) ?? NONE);
       setResult(undefined);
       setStep('columns');
@@ -237,6 +265,87 @@ export function ImportScreen({ data, slug, object, attributes, members }: Import
       setUploadError(strings.refusals.failed);
     } finally {
       setReading(false);
+    }
+  };
+
+  /**
+   * Looks up each relation column's names (decision 7), so the columns step
+   * says how many link to nothing before anything is sent. A column whose
+   * target changed meanwhile drops its answer.
+   */
+  const checkLinks = (
+    rows: readonly (readonly string[])[],
+    next: readonly (ImportTarget | undefined)[],
+    known: ReadonlyMap<number, LinkCheck>,
+  ) => {
+    const kept = new Map<number, LinkCheck>();
+    for (const [column, check] of known) {
+      if (next[column]?.attributeId === check.attributeId) kept.set(column, check);
+    }
+    setLinks(kept);
+    next.forEach((target, column) => {
+      const attribute = target === undefined ? undefined : byId.get(target.attributeId);
+      if (attribute?.type !== 'record_reference' || kept.has(column)) return;
+      const names = columnNames(rows, column, attribute.isMulti);
+      if (names.length === 0) return;
+      const run = (linkRuns.current.get(column) ?? 0) + 1;
+      linkRuns.current.set(column, run);
+      const settle = (check: LinkCheck) => {
+        if (linkRuns.current.get(column) === run) setLinks((current) => new Map(current).set(column, check));
+      };
+      settle({ status: 'checking', attributeId: attribute.id });
+      data.imports.links(slug, object.id, attribute.id, names).then(
+        (answer) => settle({ status: 'done', attributeId: attribute.id, total: names.length, ...answer }),
+        () => settle({ status: 'failed', attributeId: attribute.id }),
+      );
+    });
+  };
+
+  /** Reads the object's attributes again, after the page made one or added options. */
+  const reread = async () => {
+    const next = await data.attributes.list(slug, object.id);
+    setAttributes(next);
+    return next;
+  };
+
+  /** Makes an attribute from a column's header and values (AC-1116), and matches the column to it. */
+  const makeAttribute = async (column: number) => {
+    if (loaded === undefined || busyColumn !== undefined) return;
+    const header = (loaded.table.headers[column] ?? '').trim().slice(0, 100);
+    setBusyColumn(column);
+    setColumnsError(undefined);
+    try {
+      const made = await data.attributes.create(slug, {
+        id: data.attributes.newId(),
+        objectId: object.id,
+        title: header === '' ? strings.newAttributeTitle(column) : header,
+        type: suggestType(samplesOf(loaded.table, column, SAMPLE_READ)),
+      });
+      await reread();
+      setTargets((current) => current.map((each, index) => (index === column ? { attributeId: made.id } : each)));
+      setResult(undefined);
+    } catch (error) {
+      setColumnsError(isDataError(error) ? error.message : strings.somethingWrong);
+    } finally {
+      setBusyColumn(undefined);
+    }
+  };
+
+  /** Adds a select or status column's missing labels as options (AC-1122), then reads the column again. */
+  const makeOptions = async (column: number, attributeId: string, labels: readonly string[]) => {
+    if (busyColumn !== undefined) return;
+    setBusyColumn(column);
+    setColumnsError(undefined);
+    try {
+      for (const label of labels) {
+        await data.options.create(slug, object.id, attributeId, { id: data.attributes.newId(), label });
+      }
+    } catch (error) {
+      setColumnsError(isDataError(error) ? error.message : strings.somethingWrong);
+    } finally {
+      await reread().catch(() => undefined);
+      setResult(undefined);
+      setBusyColumn(undefined);
     }
   };
 
@@ -367,9 +476,30 @@ export function ImportScreen({ data, slug, object, attributes, members }: Import
           choices={choices}
           targets={targets}
           matched={matched}
+          attributes={byId}
+          objects={objects}
+          links={links}
+          canManage={canManage}
+          busyColumn={busyColumn}
+          error={columnsError}
           onTarget={(column, target) => {
-            setTargets((current) => current.map((each, index) => (index === column ? target : each)));
+            const next = targets.map((each, index) => (index === column ? target : each));
+            setTargets(next);
             setResult(undefined);
+            checkLinks(loaded.table.rows, next, links);
+          }}
+          onNewAttribute={(column) => void makeAttribute(column)}
+          onCreateOptions={(column, attributeId, labels) => void makeOptions(column, attributeId, labels)}
+          onCreateMissing={(column, isSelected) => {
+            setTargets((current) =>
+              current.map((each, index) =>
+                index !== column || each === undefined
+                  ? each
+                  : isSelected
+                    ? { ...each, createMissing: true }
+                    : { attributeId: each.attributeId },
+              ),
+            );
           }}
           onBack={() => {
             setLoaded(undefined);
@@ -598,7 +728,18 @@ interface ColumnsStepProps {
   readonly choices: readonly ImportChoice[];
   readonly targets: readonly (ImportTarget | undefined)[];
   readonly matched: number;
+  readonly attributes: ReadonlyMap<string, AttributeDefinition>;
+  readonly objects: readonly ObjectSummary[];
+  readonly links: ReadonlyMap<number, LinkCheck>;
+  /** May make attributes and options (`schema.manage`): New attribute and Create options show only then. */
+  readonly canManage: boolean;
+  /** The column whose attribute or options are being made, its Select and buttons waiting. */
+  readonly busyColumn: number | undefined;
+  readonly error: string | undefined;
   readonly onTarget: (column: number, target: ImportTarget | undefined) => void;
+  readonly onNewAttribute: (column: number) => void;
+  readonly onCreateOptions: (column: number, attributeId: string, labels: readonly string[]) => void;
+  readonly onCreateMissing: (column: number, isSelected: boolean) => void;
   readonly onBack: () => void;
   readonly onContinue: () => void;
 }
@@ -615,13 +756,46 @@ const choiceLabel = (choice: ImportChoice): string =>
     ? choice.attribute.title
     : strings.namePart(choice.attribute.title, choice.target.part);
 
-/** Match columns (AC-1115): every column, its first values, and where it goes. */
-function ColumnsStep({ loaded, choices, targets, matched, onTarget, onBack, onContinue }: ColumnsStepProps) {
+/** What a matched column lacks, said under the columns. */
+type ColumnNote =
+  | {
+      readonly kind: 'options';
+      readonly column: number;
+      readonly attribute: AttributeDefinition;
+      readonly labels: readonly string[];
+    }
+  | {
+      readonly kind: 'links';
+      readonly column: number;
+      readonly attribute: AttributeDefinition;
+      readonly check: LinkCheck;
+    };
+
+/** Match columns (AC-1115, AC-1116, AC-1122): every column, its first values, where it goes, and what it lacks. */
+function ColumnsStep({
+  loaded,
+  choices,
+  targets,
+  matched,
+  attributes,
+  objects,
+  links,
+  canManage,
+  busyColumn,
+  error,
+  onTarget,
+  onNewAttribute,
+  onCreateOptions,
+  onCreateMissing,
+  onBack,
+  onContinue,
+}: ColumnsStepProps) {
   const { headers } = loaded.table;
   // Row ids never clash with the column ids, which share React Aria's one collection.
   const rows = headers.map((header, column) => ({ id: `column-${String(column)}`, header, column }));
   const itemsFor = (column: number): readonly SelectItem[] => {
     const others = targets.map((target, index) => (index === column ? undefined : target));
+    const type = suggestType(samplesOf(loaded.table, column, SAMPLE_READ));
     return [
       { id: NONE, label: strings.dontImport },
       ...choices.map((choice) => {
@@ -633,8 +807,36 @@ function ColumnsStep({ loaded, choices, targets, matched, onTarget, onBack, onCo
           ...(holder >= 0 ? { description: strings.matchedTo(headers[holder] ?? '') } : {}),
         };
       }),
+      ...(canManage
+        ? [
+            {
+              id: NEW,
+              label: strings.newAttribute,
+              description: strings.newAttributeHint(strings.suggestedTypes[type] ?? strings.suggestedTypes.text ?? ''),
+            },
+          ]
+        : []),
     ];
   };
+  // What each matched column lacks: a select's labels that name no option, a relation's names that link nothing.
+  const notes = useMemo(
+    () =>
+      targets.flatMap((target, column): readonly ColumnNote[] => {
+        const attribute =
+          target === undefined || target.part !== undefined ? undefined : attributes.get(target.attributeId);
+        if (attribute === undefined) return [];
+        if (attribute.type === 'select' || attribute.type === 'status') {
+          const labels = missingOptions(loaded.table.rows, column, attribute);
+          return labels.length === 0 ? [] : [{ kind: 'options', column, attribute, labels }];
+        }
+        if (attribute.type === 'record_reference') {
+          const check = links.get(column);
+          return check === undefined ? [] : [{ kind: 'links', column, attribute, check }];
+        }
+        return [];
+      }),
+    [attributes, links, loaded.table.rows, targets],
+  );
   return (
     <Card
       title={strings.fileSummary(loaded.name, loaded.table.rows.length)}
@@ -642,13 +844,19 @@ function ColumnsStep({ loaded, choices, targets, matched, onTarget, onBack, onCo
       footer={
         <>
           <Button onPress={onBack}>{strings.chooseAnother}</Button>
-          <Button variant="primary" isDisabled={matched === 0} onPress={onContinue}>
+          <Button variant="primary" isDisabled={matched === 0 || busyColumn !== undefined} onPress={onContinue}>
             {strings.continue}
           </Button>
         </>
       }
     >
       {matched === 0 && <Callout tone="info">{strings.needOneColumn}</Callout>}
+      {error !== undefined && (
+        <Callout tone="danger" isAnnounced>
+          {error}
+        </Callout>
+      )}
+      {busyColumn !== undefined && <ProgressBar label={strings.saving(headers[busyColumn] ?? '')} isIndeterminate />}
       <Table
         label={strings.columnsLabel}
         columns={COLUMN_COLUMNS}
@@ -670,13 +878,108 @@ function ColumnsStep({ loaded, choices, targets, matched, onTarget, onBack, onCo
               value={target === undefined ? NONE : choiceId(target)}
               showsDescription
               isSearchable={choices.length > 10}
+              isDisabled={busyColumn !== undefined}
               onChange={(id) => {
+                if (id === NEW) {
+                  onNewAttribute(row.column);
+                  return;
+                }
                 onTarget(row.column, choices.find((choice) => choice.id === id)?.target);
               }}
             />
           );
         }}
       />
+      {notes.map((note) => {
+        const header = headers[note.column] ?? '';
+        if (note.kind === 'options') {
+          return (
+            <Callout
+              key={`options-${String(note.column)}`}
+              tone="warning"
+              title={strings.missingOptions(note.labels.length, note.attribute.title)}
+              {...(canManage
+                ? {
+                    actions: (
+                      <Button
+                        size="sm"
+                        isPending={busyColumn === note.column}
+                        isDisabled={busyColumn !== undefined && busyColumn !== note.column}
+                        onPress={() => onCreateOptions(note.column, note.attribute.id, note.labels)}
+                      >
+                        {strings.createOptions(note.labels.length)}
+                      </Button>
+                    ),
+                  }
+                : {})}
+            >
+              {`${strings.missingOptionsText(note.labels)}${canManage ? '' : ` ${strings.missingOptionsNoManage}`}`}
+            </Callout>
+          );
+        }
+        const { check } = note;
+        if (check.status === 'checking') {
+          return (
+            <ProgressBar
+              key={`links-${String(note.column)}`}
+              label={strings.checkingLinks(note.attribute.title)}
+              isIndeterminate
+            />
+          );
+        }
+        if (check.status === 'failed') {
+          return (
+            <Callout key={`links-${String(note.column)}`} tone="info">
+              {strings.linksFailed(note.attribute.title)}
+            </Callout>
+          );
+        }
+        const farIds = note.attribute.relationship?.targetObjectIds ?? [];
+        const far = farIds.length === 1 ? objects.find((each) => each.id === farIds[0]) : undefined;
+        const canMake = far !== undefined && far.access === 'write' && !far.isArchived;
+        if (check.missing.length === 0 && check.ambiguous.length === 0) {
+          return (
+            <Callout key={`links-${String(note.column)}`} tone="success">
+              {strings.linksAllFound(check.total, far?.singularName ?? note.attribute.title)}
+            </Callout>
+          );
+        }
+        const target = targets[note.column];
+        const making = canMake && target?.createMissing === true;
+        return (
+          <Callout
+            key={`links-${String(note.column)}`}
+            tone={making ? 'info' : 'warning'}
+            title={
+              check.missing.length > 0
+                ? strings.linksMissing(check.missing.length, check.total, header)
+                : strings.linksAmbiguous(check.ambiguous.length)
+            }
+            {...(canMake && check.missing.length > 0
+              ? {
+                  actions: (
+                    <Checkbox
+                      label={strings.createMissing(check.missing.length, far.pluralName)}
+                      description={strings.createMissingHint}
+                      isSelected={making}
+                      onChange={(isSelected) => onCreateMissing(note.column, isSelected)}
+                    />
+                  ),
+                }
+              : {})}
+          >
+            {[
+              check.missing.length === 0 ? '' : strings.linksMissingText(check.missing),
+              check.ambiguous.length === 0 || check.missing.length === 0
+                ? ''
+                : strings.linksAmbiguous(check.ambiguous.length),
+              making ? '' : strings.linksLeftOut,
+            ]
+              .filter((part) => part !== '')
+              .join(' ')}
+          </Callout>
+        );
+      })}
     </Card>
   );
 }

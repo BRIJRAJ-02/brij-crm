@@ -8,6 +8,7 @@
 import type {
   RecordsExportView,
   StartExportInput,
+  ImportLinks,
   ImportRows,
   ImportSettings,
   ImportView,
@@ -336,6 +337,7 @@ export type { BulkAction, BulkEdit, BulkTarget } from '@crm/contracts';
 export type {
   ImportColumn,
   ImportCounts,
+  ImportLinks,
   ImportOnMatch,
   ImportOnNoMatch,
   ImportRowRefusal,
@@ -3360,6 +3362,31 @@ export function createDataLayer({
         call((options) =>
           api.imports.rows({ workspace, importId, ...(cursor === undefined ? {} : { cursor }) }, options),
         ),
+      /**
+       * Which of a relation column's names link to no record the member can
+       * read, and which name several, before the import starts (spec 0040,
+       * decision 7). Asks 1,000 distinct names a call, in turn; a read, so a
+       * lost answer is asked again by the caller.
+       */
+      links: async (
+        workspace: string,
+        objectId: string,
+        attributeId: string,
+        names: readonly string[],
+      ): Promise<ImportLinks> => {
+        const distinct = [...new Set(names.map((name) => name.trim()).filter((name) => name !== ''))];
+        const missing: string[] = [];
+        const ambiguous: string[] = [];
+        for (let start = 0; start < distinct.length; start += 1_000) {
+          const part = distinct.slice(start, start + 1_000);
+          const answer = await call((options) =>
+            api.imports.links({ workspace, objectId, attributeId, names: part }, options),
+          );
+          missing.push(...answer.missing);
+          ambiguous.push(...answer.ambiguous);
+        }
+        return { missing, ambiguous };
+      },
       /** The import a job this tab started belongs to (its import or its undo job), for the finish toast. */
       forJob: (jobId: string): string | undefined => importJobs.get(jobId),
       /** A new import id (UUID v7): mint it once per file, and send the same on a retry. */

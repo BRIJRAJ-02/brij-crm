@@ -27,8 +27,8 @@ export const choiceId = (target: ImportTarget): string =>
 /**
  * The attributes a member may import into, in the object's order (AC-1115):
  * live, not system, not computed by the system, writable for them; a
- * personal name adds its First name and Last name parts. Relations come with
- * milestone 5.
+ * personal name adds its First name and Last name parts. A relationship
+ * takes names, which the job links to records (decision 7).
  */
 export function importChoices(attributes: readonly AttributeDefinition[]): readonly ImportChoice[] {
   return [...attributes]
@@ -37,7 +37,7 @@ export function importChoices(attributes: readonly AttributeDefinition[]): reado
         !attribute.isSystem &&
         !attribute.isArchived &&
         attribute.readOnly === undefined &&
-        attribute.type !== 'record_reference' &&
+        (attribute.type !== 'record_reference' || attribute.relationship !== undefined) &&
         !NOT_IMPORTED.includes(attribute.type),
     )
     .sort((a, b) => a.position - b.position)

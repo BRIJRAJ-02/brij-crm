@@ -24,7 +24,7 @@ export const Route = createFileRoute('/w/$slug/objects/$object_/import')({
       context.data.attributes.list(params.slug, object.id),
       context.data.members.list(params.slug),
     ]);
-    return { screen: { object, attributes, members } };
+    return { screen: { object, attributes, members, objects } };
   },
   pendingComponent: () => (
     <LoadingNow>

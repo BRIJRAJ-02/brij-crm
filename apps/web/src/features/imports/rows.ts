@@ -33,6 +33,18 @@ export const EMPTY_ROW = 'Every cell matched to an attribute is empty.';
 /** A cell as the reader takes it: a spreadsheet's leading apostrophe off a formula, then trimmed. */
 export const cellText = (text: string | undefined): string => unguardCell(text ?? '').trim();
 
+/** How many names one relation cell sends at most (the job reads no more). */
+export const NAMES_PER_CELL = 50;
+
+/** A relation cell's names: split on commas, semicolons and lines for a list of links, else the whole cell. */
+export function relationNames(text: string, isMulti: boolean): readonly string[] {
+  const names = isMulti ? text.split(/[,;\n]/) : [text];
+  return names
+    .map((name) => name.trim().slice(0, 500))
+    .filter((name) => name !== '')
+    .slice(0, NAMES_PER_CELL);
+}
+
 /** One cell through its type's `fromText`: the value, or why not. */
 export function readCell(
   text: string,
@@ -72,6 +84,11 @@ export function readRows(
       if (target.part !== undefined) {
         const name = names.get(target.attributeId) ?? {};
         names.set(target.attributeId, { ...name, [target.part === 'first' ? 'firstName' : 'lastName']: text });
+        return;
+      }
+      // A relation cell holds names (several for a list of links); the job links each to a record (decision 7).
+      if (attribute.type === 'record_reference') {
+        values[target.attributeId] = { names: relationNames(text, attribute.allowMultiple) };
         return;
       }
       const read = readCell(text, attribute, context);

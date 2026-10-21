@@ -10,6 +10,7 @@ import { oc } from '@orpc/contract';
 import * as z from 'zod';
 import { ExportIdInput } from './forms/forms.ts';
 import { TRANSFER_LIMITS } from './transfer-limits.ts';
+import { Uuid, uuidV7 } from './values/ids.ts';
 import { FilterGroup } from './values/filters.ts';
 import { SortRules } from './values/sorts.ts';
 import { WorkspaceScoped } from './workspaces.ts';
@@ -23,7 +24,7 @@ export { TRANSFER_LIMITS } from './transfer-limits.ts';
  * be able to write that object).
  */
 export const ImportTarget = z.strictObject({
-  attributeId: z.uuid(),
+  attributeId: Uuid,
   part: z.enum(['first', 'last']).optional(),
   createMissing: z.boolean().optional(),
 });
@@ -54,7 +55,7 @@ export type ImportOnNoMatch = z.infer<typeof ImportOnNoMatch>;
  */
 export const ImportSettings = z.strictObject({
   columns: z.array(ImportColumn).min(1).max(TRANSFER_LIMITS.importColumns),
-  matchAttributeId: z.uuid().optional(),
+  matchAttributeId: Uuid.optional(),
   onMatch: ImportOnMatch,
   onNoMatch: ImportOnNoMatch,
 });
@@ -67,13 +68,13 @@ export type ImportSettings = z.infer<typeof ImportSettings>;
  * file's data rows, `errorRows` the ones the browser could not read.
  */
 export const CreateImportInput = WorkspaceScoped.extend({
-  id: z.uuid({ version: 'v7', message: 'The import id must be a UUID v7.' }),
-  objectId: z.uuid(),
+  id: uuidV7('The import id must be a UUID v7.'),
+  objectId: Uuid,
   fileName: z.string().trim().min(1).max(255),
   rowCount: z.number().int().min(1).max(TRANSFER_LIMITS.importRows),
   errorRows: z.number().int().min(0).max(TRANSFER_LIMITS.importRows),
   settings: ImportSettings,
-  mutationId: z.uuid(),
+  mutationId: Uuid,
 });
 /** An import to start. */
 export type CreateImportInput = z.infer<typeof CreateImportInput>;
@@ -96,9 +97,9 @@ export type StagedRow = z.infer<typeof StagedRow>;
 
 /** A chunk of ready rows, in file order. Sending one again changes nothing. */
 export const StageImportInput = WorkspaceScoped.extend({
-  importId: z.uuid(),
+  importId: Uuid,
   rows: z.array(StagedRow).min(1).max(TRANSFER_LIMITS.stageRows),
-  mutationId: z.uuid(),
+  mutationId: Uuid,
 });
 /** A chunk of ready rows. */
 export type StageImportInput = z.infer<typeof StageImportInput>;
@@ -112,12 +113,12 @@ export const StageResult = z.object({
 export type StageResult = z.infer<typeof StageResult>;
 
 /** One import, by id. */
-export const ImportInput = WorkspaceScoped.extend({ importId: z.uuid() });
+export const ImportInput = WorkspaceScoped.extend({ importId: Uuid });
 /** One import, by id. */
 export type ImportInput = z.infer<typeof ImportInput>;
 
 /** A change to one import (start, undo), with the browser's id for the write. */
-export const ImportWriteInput = ImportInput.extend({ mutationId: z.uuid() });
+export const ImportWriteInput = ImportInput.extend({ mutationId: Uuid });
 /** A change to one import. */
 export type ImportWriteInput = z.infer<typeof ImportWriteInput>;
 
@@ -127,8 +128,8 @@ export type ImportWriteInput = z.infer<typeof ImportWriteInput>;
  * attribute, and at most 1,000 distinct names a call.
  */
 export const ImportLinksInput = WorkspaceScoped.extend({
-  objectId: z.uuid(),
-  attributeId: z.uuid(),
+  objectId: Uuid,
+  attributeId: Uuid,
   names: z.array(z.string().trim().min(1).max(500)).min(1).max(1_000),
 });
 /** Names a relation column holds. */
@@ -168,19 +169,19 @@ export type ImportCounts = z.infer<typeof ImportCounts>;
  * the caller may undo it now.
  */
 export const ImportView = z.object({
-  id: z.uuid(),
-  objectId: z.uuid(),
+  id: Uuid,
+  objectId: Uuid,
   fileName: z.string(),
   rowCount: z.number().int().min(0),
   errorRows: z.number().int().min(0),
   settings: ImportSettings,
   status: ImportStatus,
   counts: ImportCounts,
-  jobId: z.uuid().optional(),
-  undoJobId: z.uuid().optional(),
+  jobId: Uuid.optional(),
+  undoJobId: Uuid.optional(),
   undoUntil: z.iso.datetime({ offset: true }).optional(),
   canUndo: z.boolean(),
-  startedBy: z.uuid(),
+  startedBy: Uuid,
   createdAt: z.iso.datetime({ offset: true }),
 });
 /** One import. */
@@ -221,14 +222,14 @@ export type ImportRows = z.infer<typeof ImportRows>;
  * visible columns in order; `timeZone` for relative dates in the filter.
  */
 export const StartExportInput = WorkspaceScoped.extend({
-  id: z.uuid({ version: 'v7', message: 'The export id must be a UUID v7.' }),
-  objectId: z.uuid(),
-  viewId: z.uuid().optional(),
+  id: uuidV7('The export id must be a UUID v7.'),
+  objectId: Uuid,
+  viewId: Uuid.optional(),
   filter: FilterGroup.optional(),
   sorts: SortRules.optional(),
-  attributeIds: z.array(z.uuid()).min(1).max(TRANSFER_LIMITS.importColumns),
+  attributeIds: z.array(Uuid).min(1).max(TRANSFER_LIMITS.importColumns),
   timeZone: z.string().min(1).max(64),
-  mutationId: z.uuid(),
+  mutationId: Uuid,
 });
 /** An export to start. */
 export type StartExportInput = z.infer<typeof StartExportInput>;
@@ -240,10 +241,10 @@ export type StartExportInput = z.infer<typeof StartExportInput>;
  * it once the job succeeded.
  */
 export const RecordsExportView = z.object({
-  id: z.uuid(),
-  objectId: z.uuid(),
+  id: Uuid,
+  objectId: Uuid,
   fileName: z.string(),
-  jobId: z.uuid(),
+  jobId: Uuid,
   rowCount: z.number().int().min(0).optional(),
   expiresAt: z.iso.datetime({ offset: true }),
   downloadPath: z.string(),

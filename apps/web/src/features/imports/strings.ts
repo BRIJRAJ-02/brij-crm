@@ -48,6 +48,40 @@ export const strings = {
   targetLabel: (header: string) => `Where ${header} goes`,
   noSample: 'No values',
   needOneColumn: 'Match at least one column to continue.',
+  // Milestone 5: new attributes (AC-1116), missing options (AC-1122) and relation columns (decision 7)
+  newAttribute: 'New attribute',
+  newAttributeHint: (type: string) => `Made from this column as ${type}`,
+  /** The types a new attribute may take from its column (AC-1116), as a type picker names them. */
+  suggestedTypes: {
+    text: 'text',
+    email: 'an email',
+    url: 'a URL',
+    number: 'a number',
+    checkbox: 'a checkbox',
+    date: 'a date',
+  } as Readonly<Record<string, string>>,
+  newAttributeTitle: (column: number) => `Column ${n(column + 1)}`,
+  saving: (header: string) => `Saving changes for the column ${header}…`,
+  missingOptions: (count: number, attribute: string) =>
+    `${n(count)} ${count === 1 ? 'value isn’t an option' : 'values aren’t options'} of ${attribute}`,
+  missingOptionsText: (labels: readonly string[]) =>
+    `${labels.slice(0, 5).join(', ')}${labels.length > 5 ? ` and ${n(labels.length - 5)} more` : ''}. Rows holding them show as errors until they are options.`,
+  missingOptionsNoManage: 'Ask an admin to add them in Settings, or those rows show as errors.',
+  createOptions: (count: number) => `Create ${n(count)} ${count === 1 ? 'option' : 'options'}`,
+  checkingLinks: (attribute: string) => `Looking up the names in ${attribute}…`,
+  linksFailed: (attribute: string) =>
+    `Couldn’t look up the names in ${attribute}. They are still linked when the import runs.`,
+  linksAllFound: (count: number, far: string) =>
+    `Every name in this column links to ${count === 1 ? 'a' : 'one'} ${far.toLowerCase()}.`,
+  linksMissing: (missing: number, total: number, attribute: string) =>
+    `${n(missing)} of ${n(total)} ${total === 1 ? 'name' : 'names'} in ${attribute} match no record`,
+  linksMissingText: (names: readonly string[]) =>
+    `${names.slice(0, 5).join(', ')}${names.length > 5 ? ` and ${n(names.length - 5)} more` : ''}.`,
+  linksLeftOut: 'Those links are left out, and each row says so in the summary.',
+  linksAmbiguous: (count: number) =>
+    `${n(count)} ${count === 1 ? 'name matches' : 'names match'} several records, so ${count === 1 ? 'it is' : 'they are'} left out.`,
+  createMissing: (count: number, far: string) => `Create the ${n(count)} missing ${far.toLowerCase()}`,
+  createMissingHint: 'Each is made once, named as in the file, and goes to the trash if you undo the import.',
   // Match records (AC-1117, AC-1118)
   findBy: 'Find existing records by',
   findByInfo:

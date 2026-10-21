@@ -2,7 +2,8 @@ import type { AttributeDefinition } from '@crm/data';
 import type { FieldAttribute, TextContext } from '@crm/ui';
 import { describe, expect, it } from 'vitest';
 import { autoMatch, defaultMatch, importChoices, isFree, matchAttributes, samplesFit } from './matching.ts';
-import { EMPTY_ROW, errorRowsCsv, readRows } from './rows.ts';
+import { columnNames, missingOptions, suggestType } from './missing.ts';
+import { EMPTY_ROW, errorRowsCsv, readRows, relationNames } from './rows.ts';
 
 const id = (n: number) => `0192a000-0000-7000-8000-${String(n).padStart(12, '0')}`;
 const OBJECT = id(99);
@@ -171,5 +172,55 @@ describe('readRows', () => {
     const csv = errorRowsCsv(headers, errors, 'Error');
     expect(csv.startsWith('﻿First,Last,Age,Ignored,Error\r\n')).toBe(true);
     expect(csv).toContain("Ada,,old,'=x,Age: ");
+  });
+});
+
+describe('milestone 5: relations, missing options and new attributes', () => {
+  const linked = attribute(7, 'employer', 'Employer', 'record_reference', {
+    isMulti: true,
+    relationship: {
+      id: id(50),
+      cardinality: 'many_to_many',
+      side: 'from',
+      targetObjectIds: [id(51)],
+      farHoldsOne: false,
+    },
+  });
+  const stage = attribute(8, 'stage', 'Stage', 'status', {
+    options: [{ id: id(60), label: 'Lead', hue: 'blue', position: 0, isArchived: false }],
+  });
+
+  it('offers a relationship that has one, never one without', () => {
+    const offered = importChoices([...attributes, linked]).map((choice) => choice.id);
+    expect(offered).toContain(linked.id);
+    expect(offered).not.toContain(company.id);
+  });
+
+  it('reads a relation cell as names, split for a list of links', () => {
+    const many = new Map([[linked.id, field(linked)]]);
+    const read = readRows([['Acme, Globex; Initech']], ['Employer'], [{ attributeId: linked.id }], many, context);
+    expect(read.ready[0]?.values[linked.id]).toEqual({ names: ['Acme', 'Globex', 'Initech'] });
+    expect(relationNames('Acme, Inc.', false)).toEqual(['Acme, Inc.']);
+  });
+
+  it('lists the labels that name no option, each once, ignoring case', () => {
+    const rows = [['Lead'], ['Won'], ['won'], [''], ['Lost']];
+    expect(missingOptions(rows, 0, stage)).toEqual(['Won', 'Lost']);
+    expect(missingOptions(rows, 0, age)).toEqual([]);
+  });
+
+  it('suggests a new attribute’s type from its values, text when unsure', () => {
+    expect(suggestType(['ada@example.com', 'bob@example.com'])).toBe('email');
+    expect(suggestType(['acme.com', 'www.globex.io'])).toBe('url');
+    expect(suggestType(['https://acme.com/about'])).toBe('url');
+    expect(suggestType(['1,200', '-3.5', '40'])).toBe('number');
+    expect(suggestType(['yes', 'No'])).toBe('checkbox');
+    expect(suggestType(['2026-10-21', '21/10/2026'])).toBe('date');
+    expect(suggestType(['Acme', '12'])).toBe('text');
+    expect(suggestType([])).toBe('text');
+  });
+
+  it('collects a relation column’s distinct names across rows', () => {
+    expect(columnNames([['Acme'], ['acme'], ['Globex, Acme'], ['']], 0, true)).toEqual(['Acme', 'Globex']);
   });
 });
