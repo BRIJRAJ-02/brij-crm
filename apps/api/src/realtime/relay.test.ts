@@ -735,26 +735,24 @@ describe('the relay', () => {
       const old = await workspace();
       await pastRetention(old, 1, 2);
       const busy = await workspace();
-      // A row to publish at every poll, so no pass is quiet.
-      const writing = { on: true };
+      // A row to publish at every poll, stored just before the poll asks, so no pass is quiet however slow the
+      // machine: a writer on a timer of its own fell behind the 50 ms polls on a busy CI runner.
       let seq = 0;
-      const writer = (async () => {
-        while (writing.on) {
-          seq += 1;
-          await events(busy, [seq]);
-          await sleep(5);
-        }
-      })();
-      await expect.poll(() => seq, WAIT).toBeGreaterThan(3);
-      const { wrap, prunes, calls } = recorder();
+      const { wrap: timed, prunes, calls } = recorder();
+      const wrap = (reader: OutboxReader): OutboxReader => {
+        const inner = timed(reader);
+        return {
+          ...inner,
+          workspaces: async (max, after) => {
+            seq += 1;
+            await events(busy, [seq]);
+            return inner.workspaces(max, after);
+          },
+        };
+      };
       const startedAt = Date.now();
       relayTo(centrifugo.url, { pollScheduleMs: [50], pruneEveryMs: 300, wrap });
-      try {
-        await expect.poll(() => left(old), WAIT).toEqual([]);
-      } finally {
-        writing.on = false;
-        await writer;
-      }
+      await expect.poll(() => left(old), WAIT).toEqual([]);
       const [first] = prunes();
       if (first === undefined) throw new Error('A prune was seen.');
       // Due from the start, then another 300 ms with every pass busy.

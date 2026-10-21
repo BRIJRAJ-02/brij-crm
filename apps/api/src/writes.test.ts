@@ -26,6 +26,19 @@ const READS: ReadonlySet<string> = new Set([
   'me.get',
   // The caller's own preference in schema auth (spec 0031, AC-802): no tenant change, no outbox row.
   'me.setLastWorkspace',
+  // Your own account (spec 0033): sessions, step up and passkeys live in schema auth only, so no tenant change
+  // and no outbox row. Deleting the account is the one account write (below): it leaves each workspace.
+  'account.sessions.list',
+  'account.sessions.revoke',
+  'account.sessions.revokeOthers',
+  'account.security.get',
+  'account.stepUp.start',
+  'account.stepUp.verify',
+  'account.stepUp.passkeyOptions',
+  'account.stepUp.verifyPasskey',
+  'account.passkeys.rename',
+  'account.passkeys.remove',
+  'account.deletion.check',
   'workspaces.slugAvailable',
   'objects.list',
   'attributes.list',
@@ -352,6 +365,20 @@ const WRITES: Record<string, (m: Member, mutationId: string) => Promise<readonly
     });
     await rpcClient(app, invitee.cookie).invitations.accept({ token: invitationTokens.get(invitee.email) ?? '' });
     return [{ kind: 'members' }];
+  },
+  // Deleting your account (spec 0033) removes you from each workspace: one members row there.
+  'account.deletion.confirm': async (m) => {
+    const person = await signIn(app);
+    await m.client.invitations.create({
+      workspace: m.slug,
+      emails: [person.email],
+      role: 'member',
+      mutationId: newId(),
+    });
+    const client = rpcClient(app, person.cookie);
+    await client.invitations.accept({ token: invitationTokens.get(person.email) ?? '' });
+    await client.account.deletion.confirm({ email: person.email });
+    return [{ kind: 'members' }, { kind: 'members' }];
   },
   'workspaces.create': async (m) => {
     await m.client.workspaces.create({
@@ -1324,6 +1351,7 @@ const WRITES_MADE: Readonly<Record<string, number>> = {
   'invitations.resend': 2,
   'invitations.revoke': 2,
   'invitations.accept': 2,
+  'account.deletion.confirm': 3,
   'views.update': 2,
   'views.move': 3,
   'views.setLocked': 2,

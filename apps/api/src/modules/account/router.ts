@@ -18,7 +18,7 @@ import {
   type StepUpDeps,
 } from '@crm/core';
 import { renderAccountDeleted, renderSignInCode } from '@crm/emails';
-import { backgroundHooks } from '../../hooks.ts';
+import { backgroundHooks, commitWrite } from '../../hooks.ts';
 import { apiError } from '../../errors.ts';
 import { log } from '../../log.ts';
 import { authed, memberDoor, type RequestContext, type SessionContext } from '../../orpc.ts';
@@ -185,15 +185,11 @@ export const accountRouter = authed.account.router({
     check: authed.account.deletion.check.handler(({ context }) =>
       accountDeletionCheck(deletionDeps(context), callerOf(context)),
     ),
-    confirm: authed.account.deletion.confirm.handler(async ({ context, input }) => {
-      const deleted = await deleteMyAccount(
-        deletionDeps(context),
-        { ...callerOf(context), email: context.user.email },
-        input,
-      );
-      // Each workspace's removal stored its members event: the relay sends them.
-      context.wakeRelay();
-      return deleted;
-    }),
+    // Each workspace's removal stores its members event, so the write path pokes the relay once it commits.
+    confirm: authed.account.deletion.confirm.handler(({ context, input }) =>
+      commitWrite(context, undefined, () =>
+        deleteMyAccount(deletionDeps(context), { ...callerOf(context), email: context.user.email }, input),
+      ),
+    ),
   },
 });
