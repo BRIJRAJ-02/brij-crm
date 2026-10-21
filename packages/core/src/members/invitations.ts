@@ -105,7 +105,7 @@ function actingRole(scope: EngineScope): Role | undefined {
 }
 
 /** Refuses FORBIDDEN unless the scope holds `members.invite`, before anything is read. */
-function checkInvites(scope: EngineScope): void {
+export function checkInvites(scope: EngineScope): void {
   checkScope(scope);
   if (!can(scope.access, 'members.invite')) throw refuse('FORBIDDEN', PERMISSIONS['members.invite'].message);
 }
@@ -117,7 +117,7 @@ function checkInvites(scope: EngineScope): void {
  * invite, or can't touch an owner invitation (`role`). Answers the role it
  * acts with.
  */
-async function checkActingNow(tx: WorkspaceTx, scope: EngineScope, role: Role): Promise<Role | undefined> {
+export async function checkActingNow(tx: WorkspaceTx, scope: EngineScope, role: Role): Promise<Role | undefined> {
   const { principal } = scope.access;
   let acting = actingRole(scope);
   if (principal.kind === 'member') {
@@ -829,21 +829,7 @@ async function joinByLink(
     .limit(1);
   if (taken !== undefined) throw inviteInvalid();
   await checkSeats(tx, scope, 1);
-  const memberId = newId();
-  const name = user.name.trim() === '' ? (email.split('@')[0] ?? email) : user.name.trim();
-  await tx.insert(members).values({
-    workspaceId: scope.workspaceId,
-    id: memberId,
-    userId: user.id,
-    name: name.slice(0, 80),
-    email,
-    role: held.role,
-    createdByType: 'system',
-    updatedByType: 'system',
-  });
-  await tx.execute(
-    sql`insert into auth.workspace_membership (user_id, workspace_id, member_id) values (${user.id}, ${scope.workspaceId}, ${memberId}) on conflict do nothing`,
-  );
+  const memberId = await addJoiner(tx, scope.workspaceId, { id: user.id, name: user.name, email }, held.role);
   // The link stays open for the next person; its uses count up to its most.
   await tx
     .update(invitations)
@@ -1044,4 +1030,34 @@ export async function setInviteLink(
     hooks,
   );
   return result;
+}
+
+/**
+ * Adds a signed in person as an active member with `role` (a link join, an
+ * approved request): their name in the workspace (their account's, else the
+ * address's local part), and their directory row, in the caller's
+ * transaction. Answers the new member's id. The caller has checked the seat.
+ */
+export async function addJoiner(
+  tx: WorkspaceTx,
+  workspaceId: string,
+  user: { readonly id: string; readonly name: string; readonly email: string },
+  role: Role,
+): Promise<string> {
+  const memberId = newId();
+  const name = user.name.trim() === '' ? (user.email.split('@')[0] ?? user.email) : user.name.trim();
+  await tx.insert(members).values({
+    workspaceId,
+    id: memberId,
+    userId: user.id,
+    name: name.slice(0, 80),
+    email: user.email,
+    role,
+    createdByType: 'system',
+    updatedByType: 'system',
+  });
+  await tx.execute(
+    sql`insert into auth.workspace_membership (user_id, workspace_id, member_id) values (${user.id}, ${workspaceId}, ${memberId}) on conflict do nothing`,
+  );
+  return memberId;
 }

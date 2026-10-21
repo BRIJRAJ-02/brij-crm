@@ -72,6 +72,17 @@ export {
   type SentInvitation,
 } from './members/invitations.ts';
 export {
+  decideJoinRequest,
+  getWorkspaceDomains,
+  listJoinable,
+  listJoinRequests,
+  requestToJoin,
+  setWorkspaceDomains,
+  type JoinDecision,
+  type RequestNotice,
+  type SessionPerson,
+} from './members/domain-join.ts';
+export {
   archiveObject,
   createObject,
   editObject,

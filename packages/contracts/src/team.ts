@@ -41,6 +41,10 @@ export const AUDIT_ACTIONS = [
   'invitation.accepted',
   'invitation.link_set',
   'invitation.link_revoked',
+  'workspace.domains_set',
+  'join_request.created',
+  'join_request.approved',
+  'join_request.declined',
   'member.role_changed',
   'member.removed',
   'member.left',
@@ -173,6 +177,129 @@ export type SetInviteLinkInput = z.infer<typeof SetInviteLinkInput>;
 export const InviteAccepted = z.object({ slug: z.string() });
 /** The workspace an accepted invitation opened. */
 export type InviteAccepted = z.infer<typeof InviteAccepted>;
+
+/**
+ * Public mail domains (spec 0031, AC-819, value sourcing): anyone can have an
+ * address there, so no workspace may let everyone at one ask to join.
+ */
+export const PUBLIC_EMAIL_DOMAINS: readonly string[] = [
+  'gmail.com',
+  'googlemail.com',
+  'outlook.com',
+  'hotmail.com',
+  'hotmail.co.uk',
+  'live.com',
+  'msn.com',
+  'yahoo.com',
+  'yahoo.co.uk',
+  'yahoo.co.in',
+  'ymail.com',
+  'icloud.com',
+  'me.com',
+  'mac.com',
+  'aol.com',
+  'proton.me',
+  'protonmail.com',
+  'pm.me',
+  'gmx.com',
+  'gmx.de',
+  'web.de',
+  'mail.com',
+  'zoho.com',
+  'yandex.com',
+  'yandex.ru',
+  'mail.ru',
+  'qq.com',
+  '163.com',
+  'rediffmail.com',
+  'fastmail.com',
+  'hey.com',
+  'tutanota.com',
+];
+
+/** The domain of an address, lowercase; empty for something that isn't one. */
+export function domainOf(email: string): string {
+  const at = email.lastIndexOf('@');
+  return at <= 0
+    ? ''
+    : email
+        .slice(at + 1)
+        .trim()
+        .toLowerCase();
+}
+
+/**
+ * The workspace's email domains as Settings › Members shows them (AC-819),
+ * to holders of `workspace.manage`: the domains on, and the one the reader
+ * may turn on (their own verified email's), absent when it is a public mail
+ * domain (`isPublic`) or unverified.
+ */
+export const WorkspaceDomainsView = z.object({
+  domains: z.array(z.string()),
+  yourDomain: z.string().optional(),
+  /** The reader's own domain is a public mail domain, so no domain join for them to turn on. */
+  isPublic: z.boolean(),
+});
+/** The workspace's email domains. */
+export type WorkspaceDomainsView = z.infer<typeof WorkspaceDomainsView>;
+
+/** Sets the workspace's email domains (AC-819): only the caller's own verified email's, never a public one. */
+export const SetWorkspaceDomainsInput = WorkspaceScoped.extend({
+  domains: z.array(z.string().trim().toLowerCase().max(253)).max(10),
+  mutationId: Uuid,
+});
+/** Setting the workspace's email domains. */
+export type SetWorkspaceDomainsInput = z.infer<typeof SetWorkspaceDomainsInput>;
+
+/** One open request to join, as the Join requests tab lists it (AC-820). */
+export const JoinRequestView = z.object({
+  id: Uuid,
+  name: z.string(),
+  email: z.string(),
+  requestedAt: z.iso.datetime({ offset: true }),
+});
+/** One open request to join. */
+export type JoinRequestView = z.infer<typeof JoinRequestView>;
+
+/** Approves (they join as a member) or declines one open request (AC-820). */
+export const DecideJoinRequestInput = WorkspaceScoped.extend({
+  requestId: Uuid,
+  approve: z.boolean(),
+  mutationId: Uuid,
+});
+/** A decision on a request to join. */
+export type DecideJoinRequestInput = z.infer<typeof DecideJoinRequestInput>;
+
+/**
+ * A workspace the signed in person may ask to join (AC-819): its domain is
+ * their verified email's. `pending` once they asked (a decline reads the
+ * same for 30 days).
+ */
+export const Joinable = z.object({
+  workspaceId: Uuid,
+  name: z.string(),
+  state: z.enum(['none', 'pending']),
+});
+/** A workspace the person may ask to join. */
+export type Joinable = z.infer<typeof Joinable>;
+
+/** `/join` (bootstrap, AC-819): the workspaces to ask to join, and asking. */
+export const joinContract = {
+  list: oc.output(z.array(Joinable)),
+  request: oc.input(z.object({ workspaceId: Uuid })).output(Joinable),
+};
+
+/**
+ * Domain join, inside a workspace (AC-819, AC-820): its email domains
+ * (`workspace.manage`), and the open requests and their decisions
+ * (`members.invite`).
+ */
+export const joinRequestsContract = {
+  domains: oc.input(WorkspaceScoped).output(WorkspaceDomainsView),
+  setDomains: oc.input(SetWorkspaceDomainsInput).output(WorkspaceDomainsView),
+  list: oc.input(WorkspaceScoped).output(z.array(JoinRequestView)),
+  decide: oc.input(DecideJoinRequestInput).output(z.void()),
+};
 
 /**
  * Invitations (spec 0031, slice 2). `create`, `list`, `resend` and `revoke`

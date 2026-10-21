@@ -29,6 +29,10 @@ const BOOTSTRAP: ReadonlySet<string> = new Set([
   // Spec 0031: an invitation's token finds its workspace in packages/core, which mints the scope there.
   'invitations.peek',
   'invitations.accept',
+  // Spec 0031, slice 6: the signed in person's own workspaces to ask, found in packages/core by their email's
+  // domain, which mints a scope in each.
+  'join.list',
+  'join.request',
   'workspaces.create',
   'realtime.connectionToken',
 ]);
@@ -50,6 +54,7 @@ const RAW_DATABASE_FILES: ReadonlySet<string> = new Set([
   'workspaces/router.ts',
   'me/router.ts',
   'invitations/public.ts',
+  'join/router.ts',
 ]);
 
 /**

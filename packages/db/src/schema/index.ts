@@ -32,4 +32,4 @@ export {
 } from './calendar.ts';
 export { formSubmissionRecords, formSubmissions, formVersions, forms } from './forms.ts';
 export { bookingMemberHours, bookingPageMembers, bookingPages, bookings, bookingTimeBlocks } from './booking.ts';
-export { auditEvents, invitations } from './team.ts';
+export { auditEvents, invitations, joinRequests, workspaceDomains } from './team.ts';

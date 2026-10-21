@@ -13,7 +13,7 @@ import { realtimeContract } from './realtime.ts';
 import { recordsContract } from './records.ts';
 import { linksContract, relationshipsContract } from './relations.ts';
 import { systemContract } from './system.ts';
-import { invitationsContract } from './team.ts';
+import { invitationsContract, joinContract, joinRequestsContract } from './team.ts';
 import { trashContract } from './trash.ts';
 import { notesContract } from './notes.ts';
 import { tasksContract } from './tasks.ts';
@@ -72,6 +72,9 @@ export const contract = {
   links: linksContract,
   members: membersContract,
   invitations: invitationsContract,
+  // Domain join (spec 0031, slice 6): /join's bootstrap reads, and a workspace's domains and requests.
+  join: joinContract,
+  joinRequests: joinRequestsContract,
   access: accessContract,
   roles: rolesContract,
   realtime: realtimeContract,

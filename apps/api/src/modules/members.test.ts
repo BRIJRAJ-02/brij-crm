@@ -15,6 +15,8 @@ let identity: IdentityStore;
 let app: ReturnType<typeof signInApp>['app'];
 /** The invitation link each address was mailed last. */
 const tokens = new Map<string, string>();
+/** Every subject each address was mailed, in order. */
+const subjects = new Map<string, string[]>();
 const mailpit = createMailpitMailer({ url: MAILPIT_URL, from: 'Timefix <noreply@example.com>' });
 
 beforeAll(() => {
@@ -28,6 +30,7 @@ beforeAll(() => {
         send: (message: MailMessage) => {
           const token = /\/invite\/([A-Za-z0-9_-]{43})/.exec(message.text)?.[1];
           if (token !== undefined) tokens.set(message.to, token);
+          subjects.set(message.to, [...(subjects.get(message.to) ?? []), message.subject]);
           return mailpit.send(message);
         },
       },
@@ -156,6 +159,54 @@ describe('the invite link (AC-818)', () => {
       await refusal(() => client.invitations.setLink({ workspace: owner.slug, enabled: false, mutationId: newId() })),
     ).toMatchObject({ code: 'FORBIDDEN', status: 403 });
     expect((await owner.client.invitations.link({ workspace: owner.slug })).uses).toBe(1);
+  });
+});
+
+describe('domain join (AC-819, AC-820)', () => {
+  it('lets a person at the domain ask, mails the owner, and an approval joins and mails them', async () => {
+    const owner = await memberWithWorkspace(app);
+    const domains = await owner.client.joinRequests.setDomains({
+      workspace: owner.slug,
+      domains: ['example.com'],
+      mutationId: newId(),
+    });
+    expect(domains).toMatchObject({ domains: ['example.com'], yourDomain: 'example.com' });
+    const asker = await signIn(app);
+    const client = rpcClient(app, asker.cookie);
+    const joinable = await client.join.list();
+    const mine = joinable.find((each) => each.workspaceId === owner.workspace.id);
+    expect(mine).toMatchObject({ state: 'none' });
+    expect(await client.join.request({ workspaceId: owner.workspace.id })).toMatchObject({ state: 'pending' });
+    expect(subjects.get(owner.email)?.at(-1)).toMatch(/asked to join/);
+    // Asking is no way in: the workspace still answers not found.
+    expect(await refusal(() => client.members.list({ workspace: owner.slug }))).toMatchObject(NOT_FOUND);
+    const [request] = await owner.client.joinRequests.list({ workspace: owner.slug });
+    await owner.client.joinRequests.decide({
+      workspace: owner.slug,
+      requestId: request?.id ?? '',
+      approve: true,
+      mutationId: newId(),
+    });
+    expect(subjects.get(asker.email)?.at(-1)).toMatch(/You’ve joined/);
+    expect((await client.access.mine({ workspace: owner.slug })).role).toBe('member');
+  });
+
+  it('refuses a public domain, and a member managing domains or requests', async () => {
+    const owner = await memberWithWorkspace(app);
+    expect(
+      await refusal(() =>
+        owner.client.joinRequests.setDomains({ workspace: owner.slug, domains: ['gmail.com'], mutationId: newId() }),
+      ),
+    ).toMatchObject({ code: 'DOMAIN_PUBLIC', status: 422 });
+    const mate = await teammate(owner);
+    expect(await refusal(() => mate.client.joinRequests.list({ workspace: owner.slug }))).toMatchObject({
+      code: 'FORBIDDEN',
+      status: 403,
+    });
+    expect(await refusal(() => mate.client.joinRequests.domains({ workspace: owner.slug }))).toMatchObject({
+      code: 'FORBIDDEN',
+      status: 403,
+    });
   });
 });
 

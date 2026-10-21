@@ -54,6 +54,9 @@ export const ENGINE_REFUSAL_CODES = [
   'INVITE_EMAIL_MISMATCH',
   'INVITES_LIMIT',
   'SEAT_LIMIT',
+  // Domain join (spec 0031, AC-819): a domain the admin's own verified email isn't at, or a public mail domain.
+  'DOMAIN_NOT_YOURS',
+  'DOMAIN_PUBLIC',
 ] as const;
 
 /** One of the engine's refusal codes. */

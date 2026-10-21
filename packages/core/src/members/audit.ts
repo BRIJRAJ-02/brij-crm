@@ -18,7 +18,7 @@ export interface AuditSource {
 /** One audited change: what happened, to what, and only the fields it changed, before and after. */
 export interface AuditEntry {
   readonly action: AuditAction;
-  readonly targetType: 'member' | 'invitation' | 'workspace';
+  readonly targetType: 'member' | 'invitation' | 'workspace' | 'join_request';
   readonly targetId: string;
   /** Changed fields only, never a token, code or secret. */
   readonly before?: Readonly<Record<string, unknown>>;

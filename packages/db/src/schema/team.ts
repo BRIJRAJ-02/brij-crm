@@ -152,3 +152,113 @@ export const auditEvents = pgTable(
     index('audit_events_target').on(t.workspaceId, t.targetType, t.targetId, t.at.desc()),
   ],
 );
+
+/**
+ * An email domain whose people may ask to join (spec 0031, slice 6, AC-819):
+ * lowercase, never a public mail domain, added only by someone whose own
+ * verified email is at it. None by default. `/join` finds a person's
+ * workspaces before any scope exists through `crm_workspaces_by_domain`
+ * (migration 0057), a narrow definer that answers workspace ids only.
+ */
+export const workspaceDomains = pgTable(
+  'workspace_domains',
+  {
+    workspaceId: workspaceId(),
+    domain: text('domain').notNull(),
+    ...auditColumns(),
+  },
+  (t) => [
+    primaryKey({ name: 'workspace_domains_pkey', columns: [t.workspaceId, t.domain] }),
+    foreignKey({ name: 'workspace_domains_workspace', columns: [t.workspaceId], foreignColumns: [workspaces.id] }),
+    ...actorConstraints('workspace_domains', 'created_by', t.workspaceId, {
+      type: t.createdByType,
+      id: t.createdById,
+      memberId: t.createdByMemberId,
+    }),
+    ...actorConstraints('workspace_domains', 'updated_by', t.workspaceId, {
+      type: t.updatedByType,
+      id: t.updatedById,
+      memberId: t.updatedByMemberId,
+    }),
+    check(
+      'workspace_domains_domain',
+      sql`${t.domain} = lower(${t.domain}) and ${t.domain} ~ '^[a-z0-9]([a-z0-9-]*[a-z0-9])?(\\.[a-z0-9]([a-z0-9-]*[a-z0-9])?)+$' and char_length(${t.domain}) <= 253`,
+    ),
+    // The lookup by domain, before the workspace is known: global.
+    index('workspace_domains_domain_lookup').on(t.domain),
+  ],
+);
+
+const decidedBy = actorColumns('decided_by');
+
+/**
+ * A signed in person's request to join through the workspace's email domain
+ * (spec 0031, slice 6, AC-819, AC-820): `open` until an owner or admin
+ * approves (they join) or declines it. One open request per person per
+ * workspace. Written by the system on the requester's behalf.
+ */
+export const joinRequests = pgTable(
+  'join_requests',
+  {
+    workspaceId: workspaceId(),
+    id: id(),
+    userId: uuid('user_id').notNull(),
+    /** Their verified address, lowercase, as they asked. */
+    email: text('email').notNull(),
+    name: text('name').notNull(),
+    status: text('status').notNull().default('open'),
+    decidedByType: decidedBy.type,
+    decidedById: decidedBy.id,
+    decidedByMemberId: decidedBy.memberId,
+    decidedAt: timestamptz('decided_at'),
+    /** The member an approval made. */
+    memberId: uuid('member_id'),
+    ...auditColumns(),
+  },
+  (t) => [
+    primaryKey({ name: 'join_requests_pkey', columns: [t.workspaceId, t.id] }),
+    foreignKey({ name: 'join_requests_workspace', columns: [t.workspaceId], foreignColumns: [workspaces.id] }),
+    ...actorConstraints('join_requests', 'created_by', t.workspaceId, {
+      type: t.createdByType,
+      id: t.createdById,
+      memberId: t.createdByMemberId,
+    }),
+    ...actorConstraints('join_requests', 'updated_by', t.workspaceId, {
+      type: t.updatedByType,
+      id: t.updatedById,
+      memberId: t.updatedByMemberId,
+    }),
+    actorCheck('join_requests_decided_by_actor', {
+      type: t.decidedByType,
+      id: t.decidedById,
+      memberId: t.decidedByMemberId,
+    }),
+    foreignKey({
+      name: 'join_requests_decided_by',
+      columns: [t.workspaceId, t.decidedByMemberId],
+      foreignColumns: [members.workspaceId, members.id],
+    }),
+    foreignKey({
+      name: 'join_requests_member',
+      columns: [t.workspaceId, t.memberId],
+      foreignColumns: [members.workspaceId, members.id],
+    }),
+    check('join_requests_status', sql`${t.status} in ('open', 'approved', 'declined')`),
+    check('join_requests_email', sql`${t.email} = lower(${t.email})`),
+    check('join_requests_name', sql`char_length(${t.name}) between 1 and 80`),
+    check(
+      'join_requests_decided',
+      sql`(${t.status} = 'open' and ${t.decidedAt} is null) or (${t.status} <> 'open' and ${t.decidedAt} is not null)`,
+    ),
+    // One open request per person per workspace.
+    uniqueIndex('join_requests_open')
+      .on(t.workspaceId, t.userId)
+      .where(sql`${t.status} = 'open'`),
+    // The Join requests tab: open ones, oldest first.
+    index('join_requests_open_list')
+      .on(t.workspaceId, t.createdAt, t.id)
+      .where(sql`${t.status} = 'open'`),
+    // A person's latest request in a workspace, for /join's state.
+    index('join_requests_user').on(t.workspaceId, t.userId, t.createdAt.desc()),
+  ],
+);

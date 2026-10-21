@@ -94,6 +94,11 @@ export const ACCESS_TABLE = {
   revokeInvite: { permission: 'members.invite' },
   // Slice 6, AC-818: the invite link.
   getInviteLink: { permission: 'members.invite' },
+  // Slice 6, AC-819, AC-820: email domains (workspace settings) and requests to join (inviting).
+  getWorkspaceDomains: { permission: 'workspace.manage' },
+  setWorkspaceDomains: { permission: 'workspace.manage' },
+  listJoinRequests: { permission: 'members.invite' },
+  decideJoinRequest: { permission: 'members.invite' },
   setInviteLink: { permission: 'members.invite' },
   getMyAccess: { anyMember: true },
   // The limits' usage (spec 0012, AC-243): any member, filtered by their access inside.

@@ -39,3 +39,24 @@ export const MemberInviteEmail = z.strictObject({
 });
 /** An invitation to join a workspace. */
 export type MemberInviteEmail = z.infer<typeof MemberInviteEmail>;
+
+/**
+ * A request to join a workspace through its email domain (spec 0031,
+ * AC-819), to each of its owners and admins: who asked, and the button to
+ * the Members page's Join requests tab. Sent from the asking request.
+ */
+export const JoinRequestEmail = z.strictObject({
+  requesterName: Line,
+  requesterEmail: z.email().max(254),
+  /** The Members page, where the request waits. */
+  reviewPath: AppPath,
+});
+/** A request to join, to a workspace's owners and admins. */
+export type JoinRequestEmail = z.infer<typeof JoinRequestEmail>;
+
+/** An approved request to join (spec 0031, AC-820), to the person who asked: the button into the workspace. */
+export const JoinApprovedEmail = z.strictObject({
+  openPath: AppPath,
+});
+/** An approved request to join. */
+export type JoinApprovedEmail = z.infer<typeof JoinApprovedEmail>;

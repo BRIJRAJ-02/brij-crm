@@ -94,7 +94,10 @@ describe('every tenant table', () => {
             // An invitation's token finds it before the workspace is known, and sign up asks about an address
             // across workspaces (spec 0031): both read only through crm_invitation_lookup's two functions.
             row.index === 'invitations_token' ||
-            row.index === 'invitations_open_address'
+            row.index === 'invitations_open_address' ||
+            // /join finds a person's workspaces by their email's domain (spec 0031, AC-819), read only through
+            // crm_domain_lookup's one function.
+            row.index === 'workspace_domains_domain_lookup'
           ),
       )
       .map((row) => row.index);
@@ -131,7 +134,7 @@ describe('every tenant table', () => {
 });
 
 describe('the holes in row level security (crm_search_text, spec 0004 AC-24; the outbox relay, spec 0005; the daily cleanup, spec 0008)', () => {
-  it('has exactly twelve security definer functions, each owned by its own narrow role', async () => {
+  it('has exactly thirteen security definer functions, each owned by its own narrow role', async () => {
     const definers = await owner.query<{ name: string; owner: string }>(`
       select p.proname as name, pg_get_userbyid(p.proowner) as owner
       from pg_proc p join pg_namespace n on n.oid = p.pronamespace
@@ -152,6 +155,7 @@ describe('the holes in row level security (crm_search_text, spec 0004 AC-24; the
       { name: 'crm_outbox_workspaces', owner: 'crm_relay' },
       { name: 'crm_search_text', owner: 'crm_search' },
       { name: 'crm_workspace_ids', owner: 'crm_sweep' },
+      { name: 'crm_workspaces_by_domain', owner: 'crm_domain_lookup' },
     ]);
     // Each hardened: a fixed search path (the prune also waits at most a second for a lock), and a standard SQL body (begin atomic, bound when it was made), but
     // crm_enqueue_job's, which is quoted so a Graphile upgrade that recreates add_job never fails on it.
@@ -174,10 +178,11 @@ describe('the holes in row level security (crm_search_text, spec 0004 AC-24; the
       { name: 'crm_outbox_workspaces', config: ['search_path=pg_catalog, pg_temp'], atomic: true },
       { name: 'crm_search_text', config: ['search_path=pg_catalog, pg_temp'], atomic: true },
       { name: 'crm_workspace_ids', config: ['search_path=pg_catalog, pg_temp'], atomic: true },
+      { name: 'crm_workspaces_by_domain', config: ['search_path=pg_catalog, pg_temp'], atomic: true },
     ]);
   });
 
-  it('lets no role but crm_booking_lookup, crm_form_lookup, crm_invitation_lookup, crm_relay, crm_search, crm_sweep and the owner bypass it, outside the superusers', async () => {
+  it('lets no role but crm_booking_lookup, crm_domain_lookup, crm_form_lookup, crm_invitation_lookup, crm_relay, crm_search, crm_sweep and the owner bypass it, outside the superusers', async () => {
     const bypass = await owner.query<{ role: string }>(`
       select rolname as role from pg_roles
       where rolbypassrls and not rolsuper
@@ -186,6 +191,7 @@ describe('the holes in row level security (crm_search_text, spec 0004 AC-24; the
     `);
     expect(bypass.rows.map((row) => row.role)).toEqual([
       'crm_booking_lookup',
+      'crm_domain_lookup',
       'crm_form_lookup',
       'crm_invitation_lookup',
       'crm_relay',
@@ -225,6 +231,7 @@ describe('the holes in row level security (crm_search_text, spec 0004 AC-24; the
       ['crm_invitation_by_token(text)', 'crm_invitation_open_for(text)'],
       ['app', 'app'],
     ],
+    ['crm_domain_lookup', ['crm_workspaces_by_domain'], ['crm_workspaces_by_domain(text)'], ['app']],
     [
       'crm_booking_lookup',
       ['crm_booking_page_by_key', 'crm_booking_by_token'],

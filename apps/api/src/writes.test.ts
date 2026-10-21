@@ -36,6 +36,10 @@ const READS: ReadonlySet<string> = new Set([
   'invitations.link',
   // What a removal will do, for the remove dialog (slice 5, AC-816).
   'members.removalPreview',
+  // Domain join (slice 6): the workspaces to ask, a workspace's domains, and its open requests.
+  'join.list',
+  'joinRequests.domains',
+  'joinRequests.list',
   'access.mine',
   // The roles every role picker offers (spec 0037, AC-1439).
   'roles.list',
@@ -374,6 +378,26 @@ const WRITES: Record<string, (m: Member, mutationId: string) => Promise<readonly
       { kind: 'members', item_ids: [mate.memberId], mutation_id: mutationId },
       { kind: 'access', item_ids: [mate.memberId], mutation_id: mutationId },
     ];
+  },
+  // Domain join (slice 6, AC-819, AC-820): settings and requests nobody's screen follows live, so no row, until an
+  // approval brings someone in (one members row).
+  'joinRequests.setDomains': async (m, mutationId) => {
+    await m.client.joinRequests.setDomains({ workspace: m.slug, domains: ['example.com'], mutationId });
+    return [];
+  },
+  'join.request': async (m) => {
+    await m.client.joinRequests.setDomains({ workspace: m.slug, domains: ['example.com'], mutationId: newId() });
+    const asker = await signIn(app);
+    await rpcClient(app, asker.cookie).join.request({ workspaceId: m.workspace.id });
+    return [];
+  },
+  'joinRequests.decide': async (m, mutationId) => {
+    await m.client.joinRequests.setDomains({ workspace: m.slug, domains: ['example.com'], mutationId: newId() });
+    const asker = await signIn(app);
+    await rpcClient(app, asker.cookie).join.request({ workspaceId: m.workspace.id });
+    const [request] = await m.client.joinRequests.list({ workspace: m.slug });
+    await m.client.joinRequests.decide({ workspace: m.slug, requestId: request?.id ?? '', approve: true, mutationId });
+    return [{ kind: 'members', mutation_id: mutationId }];
   },
   'invitations.accept': async (m) => {
     const invitee = await signIn(app);
@@ -1268,6 +1292,9 @@ const WRITES_MADE: Readonly<Record<string, number>> = {
   'invitations.resend': 2,
   'invitations.revoke': 2,
   'invitations.accept': 2,
+  // Domain join: the domains set first, then the request (and the decision).
+  'join.request': 2,
+  'joinRequests.decide': 3,
   'views.update': 2,
   'views.move': 3,
   'views.setLocked': 2,

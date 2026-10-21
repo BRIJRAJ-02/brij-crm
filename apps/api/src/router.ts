@@ -6,6 +6,7 @@ import { bookingPagesRouter, bookingsRouter } from './modules/booking/router.ts'
 import { jobsRouter } from './modules/jobs/router.ts';
 import { linksRouter } from './modules/links/router.ts';
 import { invitationsRouter } from './modules/invitations/router.ts';
+import { joinRequestsRouter, joinRouter } from './modules/join/router.ts';
 import { meRouter } from './modules/me/router.ts';
 import { membersRouter } from './modules/members/router.ts';
 import { rolesRouter } from './modules/roles/router.ts';
@@ -37,6 +38,8 @@ export const router = base.router({
   links: linksRouter,
   members: membersRouter,
   invitations: invitationsRouter,
+  join: joinRouter,
+  joinRequests: joinRequestsRouter,
   access: accessRouter,
   roles: rolesRouter,
   realtime: realtimeRouter,

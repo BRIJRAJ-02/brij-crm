@@ -318,6 +318,27 @@ export async function isInvitedEmail(deps: { readonly db: Database }, email: str
   return found.rows[0]?.invited === true;
 }
 
+/**
+ * The workspaces whose people at `domain` may ask to join (spec 0031,
+ * AC-819), each with a system scope there: `/join` reads and asks through
+ * them before the person is a member. Ids only, through
+ * `crm_workspaces_by_domain`; the caller checks each is live and reads the
+ * person's standing inside it.
+ */
+export async function enterDomainWorkspaces(
+  deps: { readonly db: Database },
+  domain: string,
+): Promise<readonly { readonly workspaceId: string; readonly scope: EngineScope }[]> {
+  const wanted = domain.trim().toLowerCase();
+  if (wanted === '' || wanted.length > 253) return [];
+  const found = await deps.db.withWorkspace(NO_WORKSPACE, (tx) =>
+    tx.execute<{ workspace_id: string }>(
+      sql`select workspace_id::text as workspace_id from crm_workspaces_by_domain(${wanted})`,
+    ),
+  );
+  return found.rows.map((row) => ({ workspaceId: row.workspace_id, scope: systemScope(deps.db, row.workspace_id) }));
+}
+
 /** The ids crm_booking_page_by_key reads past row level security: a page's workspace and id, nothing else. */
 interface PageKeyRow extends Record<string, unknown> {
   readonly workspace_id: string;

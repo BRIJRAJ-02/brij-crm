@@ -94,6 +94,8 @@ export const KEPT_ON_REMOVAL: Readonly<Record<string, string>> = {
   booking_time_blocks_member: 'their holds: no page offers their time once they leave every pool',
   notes_deleted_by: 'history: who deleted a note',
   invitations_used_by: 'history: who an invitation made',
+  join_requests_decided_by: 'history: who answered a request to join',
+  join_requests_member: 'history: who an approved request made',
 };
 
 /** Runs every feature's part of a removal of `memberId`, in order, inside the removal's write. */
