@@ -5,7 +5,6 @@
 // store, a view per object, and optimistic creates and edits (loaded when a
 // screen first asks for records), patched in place by live change events
 // while a screen shows a workspace (the realtime client loads with the first).
-import { exportDownloadPath } from '@crm/contracts';
 import type {
   AddToCrmResult,
   ExportView,
@@ -3217,8 +3216,6 @@ export function createDataLayer({
       /** One export again: its row count once written, and where it downloads from. */
       getExport: (workspace: string, exportId: string): Promise<ExportView> =>
         call((options) => api.submissions.getExport({ workspace, exportId }, options)),
-      /** Where an export's file downloads from (the session's cookie; only its starter gets it). */
-      exportDownloadPath: (workspace: string, exportId: string): string => exportDownloadPath(workspace, exportId),
       /** A new id for an export or a sync's job. */
       newId: () => mintId(),
     },
