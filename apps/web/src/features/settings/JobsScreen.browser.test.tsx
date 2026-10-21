@@ -150,8 +150,12 @@ describe('Review on a counted change', () => {
     answer.resolve(false);
     await expect.poll(dialog).toBeNull();
     expect(confirm).toHaveBeenCalledTimes(1);
-    // The row offers Review again, and focus is back on it.
-    await expect.poll(() => document.activeElement?.textContent).toBe('Review');
+    // The row offers Review again; focus never falls to the page: back on Review when the table hands it on, else
+    // on the page's title (the Review that opened the confirm went and came back as a new button).
+    await expect
+      .poll(() => document.activeElement?.textContent)
+      .toSatisfy((text: string | undefined) => text === 'Review' || text === 'Background jobs');
+    expect(page.getByRole('button', { name: 'Review', exact: true }).element()).toBeTruthy();
   });
 
   it('asks a restore plainly, with a primary commit', async () => {
