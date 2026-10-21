@@ -1,6 +1,6 @@
 // Brief
 // Purpose: the workspace's landing page (spec 0041), timefix's dashboard in our design system: what needs me now.
-// Main task: see today's meetings, tick a task due, open a deal going quiet, or take the next setup step.
+// Main task: see today's meetings, tick a task due, or take the next setup step.
 // Leaves out: the assistant, Team today, the metrics band and the open hours line (no data yet), and any card with nothing in it.
 import type {
   BookingsCalendarState,
@@ -9,20 +9,15 @@ import type {
   MemberSummary,
   ObjectSummary,
   Permission,
-  RecordsView,
   TaskList as TaskListSource,
   TaskListState,
-  ViewState,
 } from '@crm/data';
-import { toFieldAttribute } from '@crm/data';
-import { useBookingsCalendar, useCalendar, useCaptureList, useTaskList, useView } from '@crm/data/react';
+import { useBookingsCalendar, useCalendar, useCaptureList, useTaskList } from '@crm/data/react';
 import {
-  AttributeDisplay,
   BookingList,
   Button,
   Card,
   EmptyState,
-  InfoTip,
   LinkList,
   PageColumn,
   Skeleton,
@@ -35,7 +30,7 @@ import {
   type TaskEntry,
 } from '@crm/ui';
 import { useNavigate, useRouteContext, useRouter } from '@tanstack/react-router';
-import { useEffect, useMemo, type ReactNode } from 'react';
+import { useMemo, type ReactNode } from 'react';
 import { providerOf } from '../bookings/provider.ts';
 import { useNow } from '../bookings/useNow.ts';
 import { recordLinks } from '../records/timeline.ts';
@@ -43,18 +38,11 @@ import { useToday } from '../tasks/day.ts';
 import { useTaskEntries } from '../tasks/useTaskEntries.ts';
 import { WorkspacePage } from '../workspace/WorkspacePage.tsx';
 import { agendaOf, dayRange, minutesOf, splitAgenda, type AgendaItem } from './agenda.ts';
-import { ATTENTION_SHOWN, type AttentionPlan } from './attention.ts';
 import { nextStep, setupSteps, type SetupFacts, type SetupStepId } from './setup.ts';
 import { strings } from './strings.ts';
 
 /** How many open tasks Tasks due draws, as timefix's card does. */
 export const TASKS_SHOWN = 5;
-
-/** Needs attention's deals, as the route opened them. */
-export interface HomeAttention {
-  readonly plan: AttentionPlan;
-  readonly view: RecordsView;
-}
 
 /** Props for Home, from the route's loader. */
 export interface HomeScreenProps {
@@ -65,8 +53,6 @@ export interface HomeScreenProps {
   readonly permissions: readonly Permission[];
   /** My open tasks assigned to me: the list My tasks holds; undefined when it couldn't be opened. */
   readonly tasks: TaskListSource | undefined;
-  /** Undefined when the workspace has no Deals to ask about. */
-  readonly attention: HomeAttention | undefined;
   /** Open invitations, read only for a member who may invite. */
   readonly invitations: readonly InvitationView[] | undefined;
 }
@@ -76,26 +62,6 @@ const browserZone = () => Intl.DateTimeFormat().resolvedOptions().timeZone;
 
 /** The browser's language, the one Bookings formats times in. */
 const locale = () => navigator.languages[0] ?? 'en-GB';
-
-/** Home: Finish setting up, then Today, Tasks due and Needs attention side by side. */
-export function HomeScreen(props: HomeScreenProps) {
-  // Needs attention's window is held only when there are Deals to ask about, so its hook sits in its own branch.
-  return props.attention === undefined ? (
-    <HomeBody {...props} attentionState={undefined} />
-  ) : (
-    <WithAttention {...props} attention={props.attention} />
-  );
-}
-
-function WithAttention(props: HomeScreenProps & { readonly attention: HomeAttention }) {
-  const state = useView(props.attention.view, [props.attention.plan.stage.id]);
-  const { onRangeChange } = state.source;
-  // The first rows only: Home shows a handful and counts the rest.
-  useEffect(() => {
-    onRangeChange({ start: 0, end: ATTENTION_SHOWN });
-  }, [onRangeChange]);
-  return <HomeBody {...props} attentionState={state} />;
-}
 
 /** A task list that never loads: the shape Tasks due holds when My tasks couldn't be opened. */
 const NO_TASKS: TaskListState = {
@@ -107,19 +73,9 @@ const NO_TASKS: TaskListState = {
   loaded: 0,
 };
 
-function HomeBody({
-  slug,
-  objects,
-  members,
-  meId,
-  permissions,
-  tasks,
-  attention,
-  invitations,
-  attentionState,
-}: HomeScreenProps & { readonly attentionState: ViewState | undefined }) {
+/** Home: Finish setting up, then Today and Tasks due side by side. */
+export function HomeScreen({ slug, objects, members, meId, permissions, tasks, invitations }: HomeScreenProps) {
   const { data } = useRouteContext({ from: '__root__' });
-  const router = useRouter();
   const timeZone = useMemo(() => browserZone(), []);
   const today = useToday(timeZone);
   const range = useMemo(() => dayRange(today), [today]);
@@ -129,11 +85,6 @@ function HomeBody({
   const taskState = useTasks(tasks);
   const setup = useSetupFacts(slug, meId, permissions, members, invitations);
 
-  // Needs attention asks about the day it was opened on; a tab left open overnight asks again.
-  useEffect(() => {
-    if (attention !== undefined && attention.plan.today !== today) void router.invalidate();
-  }, [attention, today, router]);
-
   const steps = setupSteps(setup.facts);
   const agenda = useMemo(() => (day.status === 'ready' ? agendaOf(day, meId) : []), [day, meId]);
   // What each section shows: decided once here, for the cards and for the page's quiet state alike.
@@ -141,11 +92,7 @@ function HomeBody({
   const showsToday = day.status !== 'ready' || agenda.length > 0;
   const showsTasks =
     taskState.status !== 'unavailable' && !(taskState.status === 'ready' && taskState.source.count === 0);
-  const showsAttention =
-    attentionState !== undefined &&
-    !(attentionState.status === 'ready' && attentionState.count.count === 0) &&
-    !(attentionState.status === 'error' && isAbsent(attentionState.error?.code));
-  const isQuiet = !setup.isLoading && !showsSetup && !showsToday && !showsTasks && !showsAttention;
+  const isQuiet = !setup.isLoading && !showsSetup && !showsToday && !showsTasks;
 
   return (
     <WorkspacePage
@@ -172,26 +119,12 @@ function HomeBody({
                   state={taskState}
                 />
               )}
-              {showsAttention && attention !== undefined && (
-                <AttentionCard
-                  slug={slug}
-                  objects={objects}
-                  plan={attention.plan}
-                  view={attention.view}
-                  state={attentionState}
-                />
-              )}
             </TileGrid>
           </PageColumn>
         ),
       }}
     />
   );
-}
-
-/** Refusals that mean there is nothing to ask (the filter no longer fits Deals, or Deals are out of reach): absent. */
-function isAbsent(code: string | undefined): boolean {
-  return code === 'FILTER_INVALID' || code === 'NOT_FOUND';
 }
 
 /** A task list that is never read, failed: what Tasks due holds when My tasks couldn't be opened. */
@@ -537,93 +470,5 @@ function TasksDueCard({
         }}
       />
     </Card>
-  );
-}
-
-/** Needs attention: open deals I own that nobody changed in 14 days, stalest first, the rest counted. */
-function AttentionCard({
-  slug,
-  objects,
-  plan,
-  view,
-  state,
-}: {
-  readonly slug: string;
-  readonly objects: readonly ObjectSummary[];
-  readonly plan: AttentionPlan;
-  readonly view: RecordsView;
-  readonly state: ViewState;
-}) {
-  const navigate = useNavigate();
-  const link = useMemo(() => recordLinks(slug, objects), [slug, objects]);
-  const stage = useMemo(() => toFieldAttribute(plan.stage), [plan.stage]);
-  const deals = objects.find((object) => object.id === plan.objectId);
-  const openDeals = () => {
-    if (deals !== undefined) void navigate({ to: '/w/$slug/objects/$object', params: { slug, object: deals.apiSlug } });
-  };
-  const frame = (body: ReactNode, isBusy: boolean, footer?: string) => (
-    <Card
-      title={strings.needsAttention}
-      isBusy={isBusy}
-      {...(footer === undefined ? {} : { footer })}
-      actions={
-        <>
-          <InfoTip label={strings.needsAttention} placement="bottom end">
-            {strings.attentionText}
-          </InfoTip>
-          {deals !== undefined && (
-            <Button variant="ghost" onPress={openDeals}>
-              {strings.openDeals}
-            </Button>
-          )}
-        </>
-      }
-    >
-      {body}
-    </Card>
-  );
-  if (state.status === 'loading') return frame(<Skeleton shape="block" />, true);
-  if (state.status === 'error') {
-    return frame(
-      <Failed
-        title={strings.attentionFailed}
-        {...(state.error === undefined ? {} : { message: state.error.message })}
-        onRetry={view.retry}
-      />,
-      false,
-    );
-  }
-  const date = new Intl.DateTimeFormat(locale(), { day: 'numeric', month: 'short', year: 'numeric' });
-  const rows: LinkRow[] = [];
-  for (let index = 0; index < Math.min(ATTENTION_SHOWN, state.source.count); index += 1) {
-    const record = state.source.getItem(index);
-    if (record === undefined) continue;
-    const href = link(record.objectId, record.id);
-    rows.push({
-      id: record.id,
-      title: record.display.name === '' ? strings.unnamedDeal : record.display.name,
-      address: '',
-      value: <AttributeDisplay attribute={stage} value={record.values[plan.stage.id] ?? null} surface="card" />,
-      chips: record.updatedAt === undefined ? [] : [strings.changed(date.format(new Date(record.updatedAt)))],
-      ...(href === undefined ? {} : { href }),
-    });
-  }
-  const hidden = Math.max(0, state.count.count - rows.length);
-  return frame(
-    <LinkList
-      density="compact"
-      placement="card"
-      isToolbarHidden
-      label={strings.needsAttention}
-      searchLabel={strings.needsAttention}
-      rows={rows}
-      status={rows.length === 0 ? 'loading' : 'ready'}
-      onOpen={(id) => {
-        const row = rows.find((each) => each.id === id);
-        if (row?.href !== undefined) void navigate({ to: row.href });
-      }}
-    />,
-    rows.length === 0,
-    hidden > 0 ? strings.more(hidden, state.count.atLeast) : undefined,
   );
 }

@@ -30,8 +30,8 @@ export const Default: Story = {
           <p>Send the proposal</p>
           <p>Book the venue</p>
         </Card>
-        <Card title="Needs attention">
-          <p>Northwind renewal</p>
+        <Card title="Team today">
+          <p>Ada Lovelace</p>
         </Card>
       </TileGrid>
     </Stage>
@@ -94,8 +94,8 @@ export const SomeEmpty: Story = {
           <p>Three meetings</p>
         </Card>
         {null}
-        <Card title="Needs attention">
-          <p>Northwind renewal</p>
+        <Card title="Team today">
+          <p>Ada Lovelace</p>
         </Card>
       </TileGrid>
     </Stage>

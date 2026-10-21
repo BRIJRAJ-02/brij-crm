@@ -1,7 +1,6 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
 import { expect, fn, userEvent, waitFor } from 'storybook/test';
 import { Button } from '../../atoms/Button/Button.tsx';
-import { StatusDot } from '../../atoms/StatusDot/StatusDot.tsx';
 import { Card } from '../../molecules/Card/Card.tsx';
 import { EmptyState } from '../../molecules/EmptyState/EmptyState.tsx';
 import { Stage } from '../../workbench/Stage/Stage.tsx';
@@ -509,39 +508,5 @@ export const CompactInCardNarrow: Story = {
   play: async ({ canvas }) => {
     await expect(canvas.getByText('Mon to Fri, 9:00 AM to 5:00 PM')).toBeVisible();
     await expect(canvas.getByText('Your hours')).toBeVisible();
-  },
-};
-
-/** Compact in a Card with a value (Home's Needs attention): each deal's Stage in its StatusDot, then the facts. */
-export const CompactValue: Story = {
-  args: { density: 'compact', placement: 'card', isToolbarHidden: true },
-  render: (args) => (
-    <Stage>
-      <Card title="Needs attention" description="Open deals you own, unchanged for 14 days or more.">
-        <LinkList
-          {...args}
-          rows={[
-            {
-              id: 'northwind',
-              title: 'Northwind renewal',
-              address: '',
-              value: <StatusDot hue="blue">Lead</StatusDot>,
-              chips: ['Changed 16 Sep'],
-            },
-            {
-              id: 'globex',
-              title: 'Globex expansion',
-              address: '',
-              value: <StatusDot hue="orange">In progress</StatusDot>,
-              chips: ['Changed 1 Oct'],
-            },
-          ]}
-        />
-      </Card>
-    </Stage>
-  ),
-  play: async ({ canvas }) => {
-    await expect(canvas.getByText('Lead')).toBeInTheDocument();
-    await expect(canvas.getByText('Changed 1 Oct')).toBeInTheDocument();
   },
 };

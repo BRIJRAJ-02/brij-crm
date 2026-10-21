@@ -1,9 +1,7 @@
-// Home's pure parts (spec 0041): the day's agenda, Needs attention's question
-// and the setup steps.
-import type { AttributeDefinition, BookingListItem, CalendarEventItem, ObjectSummary } from '@crm/data';
+// Home's pure parts (spec 0041): the day's agenda and the setup steps.
+import type { BookingListItem, CalendarEventItem } from '@crm/data';
 import { describe, expect, it } from 'vitest';
 import { agendaOf, dayRange, minutesOf, splitAgenda } from './agenda.ts';
-import { attentionPlan, QUIET_DAYS } from './attention.ts';
 import { nextStep, setupSteps } from './setup.ts';
 
 const ME = '00000000-0000-4000-8000-000000000001';
@@ -92,97 +90,6 @@ describe('the agenda', () => {
     const { from, to } = dayRange('2026-10-21');
     expect(new Date(from).getHours()).toBe(0);
     expect(Date.parse(to) - Date.parse(from)).toBeGreaterThanOrEqual(23 * 3_600_000);
-  });
-});
-
-const DEALS: ObjectSummary = { id: 'deals', apiSlug: 'deals', standardKey: 'deals' } as ObjectSummary;
-
-function attribute(apiSlug: string, type: string, extra: Partial<AttributeDefinition> = {}): AttributeDefinition {
-  return {
-    id: apiSlug,
-    objectId: 'deals',
-    apiSlug,
-    title: apiSlug,
-    type,
-    isMulti: false,
-    isRequired: false,
-    isUnique: false,
-    isSystem: false,
-    isPrimary: false,
-    config: {},
-    position: 0,
-    isArchived: false,
-    ...extra,
-  } as AttributeDefinition;
-}
-
-const option = (id: string, outcome?: 'open' | 'won' | 'lost', isArchived = false) => ({
-  id,
-  label: id,
-  hue: 'blue' as const,
-  position: 0,
-  isArchived,
-  ...(outcome === undefined ? {} : { outcome }),
-});
-
-const DEAL_ATTRIBUTES = [
-  attribute('owner', 'actor_reference'),
-  attribute('stage', 'status', {
-    options: [
-      option('lead'),
-      option('proposal', 'open'),
-      option('won', 'won'),
-      option('lost', 'lost'),
-      option('old', 'open', true),
-    ],
-  }),
-  attribute('updated_at', 'timestamp', { isSystem: true }),
-];
-
-describe('Needs attention', () => {
-  it('asks for open deals I own, unchanged since 14 days before today, stalest first', () => {
-    const plan = attentionPlan([DEALS], DEAL_ATTRIBUTES, '2026-10-21');
-    expect(plan?.objectId).toBe('deals');
-    expect(plan?.stage.id).toBe('stage');
-    expect(plan?.today).toBe('2026-10-21');
-    const cutoff = new Date(2026, 9, 21 - QUIET_DAYS).toISOString();
-    expect(plan?.query).toEqual({
-      filter: {
-        conjunction: 'and',
-        conditions: [
-          { attributeId: 'owner', operator: 'is_me' },
-          { attributeId: 'stage', operator: 'is_any_of', values: ['lead', 'proposal'] },
-          { attributeId: 'updated_at', operator: 'before', value: cutoff },
-        ],
-      },
-      sorts: [{ attributeId: 'updated_at', direction: 'ascending' }],
-    });
-  });
-
-  it('asks the same question all day', () => {
-    expect(attentionPlan([DEALS], DEAL_ATTRIBUTES, '2026-10-21')?.query).toEqual(
-      attentionPlan([DEALS], DEAL_ATTRIBUTES, '2026-10-21')?.query,
-    );
-  });
-
-  it('asks nothing without Deals, an Owner, a Stage or an open stage', () => {
-    expect(attentionPlan([], DEAL_ATTRIBUTES, '2026-10-21')).toBeUndefined();
-    expect(attentionPlan([DEALS], DEAL_ATTRIBUTES.slice(1), '2026-10-21')).toBeUndefined();
-    expect(
-      attentionPlan(
-        [DEALS],
-        [DEAL_ATTRIBUTES[0], DEAL_ATTRIBUTES[2]].flatMap((each) => each ?? []),
-        '2026-10-21',
-      ),
-    ).toBeUndefined();
-    const closedOnly = attribute('stage', 'status', { options: [option('won', 'won')] });
-    expect(
-      attentionPlan(
-        [DEALS],
-        [DEAL_ATTRIBUTES[0], closedOnly, DEAL_ATTRIBUTES[2]].flatMap((each) => each ?? []),
-        '2026-10-21',
-      ),
-    ).toBeUndefined();
   });
 });
 

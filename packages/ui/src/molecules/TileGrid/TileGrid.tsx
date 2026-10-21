@@ -14,7 +14,7 @@ export interface TileGridProps {
 }
 
 /**
- * Cards side by side that wrap (Home's Today, Tasks due and Needs attention): as many columns as fit at
+ * Cards side by side that wrap (Home's Today, Tasks due and Team today): as many columns as fit at
  * the panel's width or more, one column on a phone, each tile as tall as its own content.
  */
 export function TileGrid({ children, fill = 'fit' }: TileGridProps) {

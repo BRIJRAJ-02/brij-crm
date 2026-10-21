@@ -1,6 +1,6 @@
 # TileGrid
 
-Cards side by side that wrap: Home's Today, Tasks due and Needs attention (spec 0041).
+Cards side by side that wrap: Home's Today, Tasks due and Team today (spec 0041).
 
 ## Why it exists
 

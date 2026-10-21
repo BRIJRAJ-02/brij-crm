@@ -3,7 +3,6 @@ import { Card, LoadingNow, PageColumn, Skeleton, TileGrid, TopBar } from '@crm/u
 import { createFileRoute, useRouter, type ErrorComponentProps } from '@tanstack/react-router';
 import { dayKeyOf } from '../features/bookings/week.ts';
 import { dayRange } from '../features/home/agenda.ts';
-import { attentionPlan } from '../features/home/attention.ts';
 import { HomeScreen } from '../features/home/HomeScreen.tsx';
 import { strings } from '../features/home/strings.ts';
 import { failedPage, missingPage } from '../features/workspace/ObjectScreen.tsx';
@@ -12,9 +11,7 @@ import { WorkspacePage } from '../features/workspace/WorkspacePage.tsx';
 
 // Home (spec 0041): where a workspace opens, the sidebar's first row. The
 // loader starts every read Home shows through the data layer: My tasks' open
-// list, the day's bookings and events, and Needs attention's window on Deals
-// (when the workspace has Deals with an Owner and a Stage), then waits at most
-// OPEN_GRACE_MS for them, so a quick load arrives whole and a slow one draws
+// list and the day's bookings and events, then waits at most OPEN_GRACE_MS for them, so a quick load arrives whole and a slow one draws
 // its cards loading in place. The screen holds them, so they stay live.
 /** How long the route waits for the first reads before showing the cards loading in place. */
 const OPEN_GRACE_MS = 300;
@@ -34,26 +31,13 @@ export const Route = createFileRoute('/w/$slug/home')({
       const permissions = access?.permissions ?? [];
       const today = dayKeyOf(new Date());
       const day = dayRange(today);
-      const deals = objects.find((object) => object.standardKey === 'deals');
-      const [attention, invitations] = await Promise.all([
-        deals === undefined
-          ? undefined
-          : data.attributes
-              .list(slug, deals.id)
-              .then(async (attributes) => {
-                const plan = attentionPlan(objects, attributes, today);
-                if (plan === undefined) return undefined;
-                return { plan, view: await data.records.open(slug, plan.objectId, plan.query, [plan.stage.id]) };
-              })
-              // Deals that can't be read leave Needs attention out, as a hidden object is absent.
-              .catch(() => undefined),
-        permissions.includes('members.invite') ? data.invitations.list(slug).catch(() => undefined) : undefined,
-      ]);
+      const invitations = permissions.includes('members.invite')
+        ? await data.invitations.list(slug).catch(() => undefined)
+        : undefined;
       let timer: ReturnType<typeof setTimeout> | undefined;
       await Promise.race([
         Promise.all([
           tasks?.ready(),
-          attention?.view.ready(),
           data.bookings.calendar(slug, day.from, day.to).ready(),
           // Finish setting up's reads, so the card is there at first paint rather than pushing the others down.
           data.calendar.view(slug).ready(),
@@ -65,7 +49,7 @@ export const Route = createFileRoute('/w/$slug/home')({
         }),
       ]);
       clearTimeout(timer);
-      return { page: { objects, members, meId: access?.memberId, permissions, tasks, attention, invitations } };
+      return { page: { objects, members, meId: access?.memberId, permissions, tasks, invitations } };
     } catch (error) {
       // The frame above shows "workspace not found" for this one.
       if (isDataError(error) && error.code === 'NOT_FOUND') return { page: undefined };
