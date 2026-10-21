@@ -1,0 +1,120 @@
+/* NotificationList: rows of an unread dot (accent, size-check), the actor's
+   sm avatar, a first line of the sentence (body; body-strong while unread),
+   the record's chip and the time (label, text-secondary), and the excerpt
+   (text-secondary, one line), then a quiet menu button. Rows are space-8
+   padded with md corners, take surface-hover under a pointer and the inset
+   ring on focus. */
+@layer components {
+  .frame {
+    display: flex;
+    flex-direction: column;
+    inline-size: 100%;
+    block-size: 100%;
+    min-block-size: 0;
+  }
+
+  .root {
+    display: flex;
+    flex-direction: column;
+    inline-size: 100%;
+    block-size: 100%;
+    min-block-size: 0;
+    overflow: auto;
+    outline: none;
+  }
+
+  .row {
+    display: flex;
+    gap: var(--space-8);
+    align-items: flex-start;
+    box-sizing: border-box;
+    padding-block: var(--space-8);
+    padding-inline: var(--space-8);
+    border-radius: var(--radius-md);
+    color: var(--text);
+    font: var(--text-body);
+    letter-spacing: var(--tracking-body);
+    outline: none;
+  }
+
+  @media (hover: hover) and (pointer: fine) {
+    .row[data-hovered] {
+      background: var(--surface-hover);
+    }
+  }
+
+  .row[data-focus-visible] {
+    box-shadow: var(--shadow-focus-inset);
+  }
+
+  .dot {
+    flex: none;
+    inline-size: var(--space-6);
+    block-size: var(--space-6);
+    margin-block-start: var(--space-8);
+    border-radius: var(--radius-full);
+  }
+
+  .dot[data-unread] {
+    background: var(--accent-line);
+  }
+
+  .main {
+    display: flex;
+    flex: 1;
+    flex-direction: column;
+    gap: var(--space-2);
+    min-inline-size: 0;
+  }
+
+  .line {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-6);
+    align-items: center;
+    min-inline-size: 0;
+  }
+
+  .sentence {
+    min-inline-size: 0;
+  }
+
+  .row[data-unread] .sentence {
+    font: var(--text-body-strong);
+    letter-spacing: var(--tracking-body-strong);
+  }
+
+  .time {
+    color: var(--text-secondary);
+    font: var(--text-label);
+    letter-spacing: var(--tracking-label);
+    white-space: nowrap;
+  }
+
+  .excerpt {
+    display: block;
+    min-inline-size: 0;
+  }
+
+  .menu {
+    flex: none;
+  }
+
+  .skeleton {
+    display: flex;
+    flex: 1;
+    flex-direction: column;
+    gap: var(--space-6);
+  }
+
+  @media (forced-colors: active) {
+    .row[data-focus-visible] {
+      outline: var(--border-width-thick) solid Highlight;
+      outline-offset: calc(-1 * var(--border-width-thick));
+    }
+
+    .dot[data-unread] {
+      background: CanvasText;
+    }
+  }
+}

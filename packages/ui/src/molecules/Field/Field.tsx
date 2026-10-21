@@ -1,4 +1,4 @@
-import { useLayoutEffect, useRef, type ReactNode, type Ref } from 'react';
+import { useLayoutEffect, useRef, type KeyboardEvent as ReactKeyboardEvent, type ReactNode, type Ref, type SyntheticEvent } from 'react';
 import { FieldError, Input, Label, Text, TextArea, TextField } from 'react-aria-components';
 import { CopyButton } from '../../atoms/Button/CopyButton.tsx';
 import { Icon } from '../../atoms/Icon/Icon.tsx';
@@ -19,7 +19,20 @@ export type FieldSize = 'md' | 'sm';
  * `copy` a value to copy, never to change: a public link, an embed code; `title` a page's own title (a note's),
  * with no box at all.
  */
-export type FieldVariant = 'default' | 'search' | 'cell' | 'copy' | 'title';
+export type FieldVariant = 'default' | 'search' | 'cell' | 'copy' | 'title' | 'composer';
+
+/**
+ * A text field that names a list it suggests from (a combobox): the comment
+ * composer's `@` members. Focus stays in the field; the list's highlighted
+ * option is named by `activeId`, so a screen reader hears each one.
+ */
+export interface FieldCombobox {
+  /** The listbox's id. */
+  readonly listId: string;
+  readonly isExpanded: boolean;
+  /** The highlighted option's id, while the list is open. */
+  readonly activeId?: string;
+}
 
 /** Props for Field. */
 export interface FieldProps {
@@ -83,8 +96,20 @@ export interface FieldProps {
    * `title` is a page's own title, such as a note's: no box, border, fill or
    * ring, in the note title type, so it reads as the page's heading; the caret
    * marks focus, as in a document. Read only, it stays plain text (no lock).
+   * `composer` (with `isMultiline`) is a message being written: one line at
+   * rest, growing with its text to ten lines, then scrolling.
    */
   readonly variant?: FieldVariant;
+  /** The list this field suggests from, which makes it a combobox. */
+  readonly combobox?: FieldCombobox;
+  /**
+   * Every key pressed in the field, before the field's own handling: a
+   * composer's ⌘Enter, and the arrows, Enter, Tab and Esc while its list is
+   * open. Call `preventDefault()` on a key it took.
+   */
+  readonly onKeyDown?: (event: ReactKeyboardEvent<HTMLInputElement | HTMLTextAreaElement>) => void;
+  /** The caret moved or the selection changed: a composer looks for an `@` before it. */
+  readonly onSelect?: (event: SyntheticEvent<HTMLInputElement | HTMLTextAreaElement>) => void;
   /** The `copy` variant's button name ("Copy link"); "Copy" when left out. */
   readonly copyLabel?: string;
   /** Where the typed text sits: `end` for numbers, which a cell aligns to its end. */
@@ -138,6 +163,9 @@ export function Field({
   align = 'start',
   isErrorFloating = false,
   autoFocus = false,
+  combobox,
+  onKeyDown,
+  onSelect,
   ref,
 }: FieldProps) {
   const { locale } = useFormatSettings();
@@ -188,7 +216,20 @@ export function Field({
         }
       : {}),
     // A wrapping field starts one line tall; its CSS grows it with its text.
-    ...(isWrapping ? { rows: 1 } : {}),
+    ...(isWrapping || variant === 'composer' ? { rows: 1 } : {}),
+    ...(combobox === undefined
+      ? {}
+      : {
+          role: 'combobox',
+          'aria-autocomplete': 'list' as const,
+          'aria-expanded': combobox.isExpanded,
+          'aria-controls': combobox.listId,
+          ...(combobox.isExpanded && combobox.activeId !== undefined
+            ? { 'aria-activedescendant': combobox.activeId }
+            : {}),
+        }),
+    ...(onKeyDown === undefined ? {} : { onKeyDown }),
+    ...(onSelect === undefined ? {} : { onSelect }),
   };
   return (
     <TextField
