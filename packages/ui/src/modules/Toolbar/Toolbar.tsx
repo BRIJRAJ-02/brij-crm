@@ -12,6 +12,7 @@ import { VisuallyHidden } from '../../atoms/VisuallyHidden/VisuallyHidden.tsx';
 import type { Hue } from '../../hue.ts';
 import { Breadcrumbs, type Crumb } from '../../molecules/Breadcrumbs/Breadcrumbs.tsx';
 import { FilterChip } from '../../molecules/FilterChip/FilterChip.tsx';
+import { SegmentedControl, type Segment } from '../../molecules/SegmentedControl/SegmentedControl.tsx';
 import { Menu, MenuItem, MenuSection, MenuSeparator, MenuTrigger, type MenuKey } from '../../molecules/Menu/Menu.tsx';
 import { useDelayedLoading } from '../../provider/useDelayedLoading.ts';
 import styles from './Toolbar.module.css';
@@ -118,6 +119,29 @@ export interface ViewAction {
   readonly startsGroup?: boolean;
 }
 
+/** The view bar's View settings button: what opens the settings, and its anchor for the popover. */
+export interface ViewSettingsTrigger {
+  readonly onPress: () => void;
+  /** The button, for the popover the screen opens from it, and for focus to come back to. */
+  readonly ref?: Ref<HTMLButtonElement>;
+  /** The settings are open: the button reads as expanded. */
+  readonly isOpen?: boolean;
+  /** Nothing to show yet (the view still coming): the button stays in place, disabled. */
+  readonly isDisabled?: boolean;
+}
+
+/** The view bar's layout switch: Table or Board. */
+export interface ViewLayoutSwitch {
+  /** What it switches ("Layout"). Read by screen readers. */
+  readonly label: string;
+  /** Give each an icon: on a phone the icons stand alone. */
+  readonly segments: readonly Segment[];
+  readonly value: string;
+  readonly onChange: (value: string) => void;
+  /** The layout can't change now: the switch shows it, disabled. */
+  readonly isDisabled?: boolean;
+}
+
 /** Props for ViewBar. */
 export interface ViewBarProps {
   readonly views: readonly ViewChoice[];
@@ -134,11 +158,22 @@ export interface ViewBarProps {
   readonly onAction?: (id: string) => void;
   /** The views are still coming: the switcher is a skeleton until they arrive. */
   readonly isLoading?: boolean;
-  /** The end of the bar: View settings, Import / Export, the Table and Board switch. */
+  /**
+   * View settings, the one button at the end of the bar (Attio's): a
+   * secondary button the switcher's height, icon alone on a phone.
+   */
+  readonly settings?: ViewSettingsTrigger;
+  /** Table or Board, last in the bar: a compact SegmentedControl, icons alone on a phone. */
+  readonly layout?: ViewLayoutSwitch;
+  /** The end of the bar before View settings: notices such as the lock line, or a paused connection. */
   readonly children?: ReactNode;
 }
 
-/** The bar under the top bar: the view switcher at the start, and the view's own actions at the end. */
+/**
+ * The bar under the top bar: the view switcher at the start (with the view's
+ * own actions in its menu), and at the end any notices, View settings, then
+ * Table or Board, all on one size-control line.
+ */
 export function ViewBar({
   views,
   currentViewId,
@@ -147,6 +182,8 @@ export function ViewBar({
   actions = [],
   onAction: onViewAction,
   isLoading = false,
+  settings,
+  layout,
   children,
 }: ViewBarProps) {
   const showSkeleton = useDelayedLoading(isLoading);
@@ -215,7 +252,35 @@ export function ViewBar({
           </Menu>
         </MenuTrigger>
       )}
-      {children !== undefined && <div className={styles.end}>{children}</div>}
+      {(children !== undefined || settings !== undefined || layout !== undefined) && (
+        <div className={styles.end}>
+          {children}
+          {settings !== undefined && (
+            <Button
+              icon="settings"
+              label={strings.viewSettings}
+              isLabelCollapsible
+              onPress={settings.onPress}
+              {...(settings.ref === undefined ? {} : { ref: settings.ref })}
+              {...(settings.isOpen === undefined ? {} : { isExpanded: settings.isOpen })}
+              {...(settings.isDisabled === true ? { isDisabled: true } : {})}
+            >
+              {strings.viewSettings}
+            </Button>
+          )}
+          {layout !== undefined && (
+            <SegmentedControl
+              label={layout.label}
+              segments={layout.segments}
+              value={layout.value}
+              onChange={layout.onChange}
+              size="compact"
+              isLabelCollapsible
+              {...(layout.isDisabled === true ? { isDisabled: true } : {})}
+            />
+          )}
+        </div>
+      )}
     </div>
   );
 }

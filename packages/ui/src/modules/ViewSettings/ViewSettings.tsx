@@ -33,6 +33,12 @@ export interface ViewSettingsProps {
   /** Shows what the view shows, with nothing to change: a view you can't edit. */
   readonly isReadOnly?: boolean;
   /**
+   * The most rows that may be shown, the locked one aside: a board card's six
+   * fields. The head counts against it ("3 of 6 shown"), and at the limit the
+   * hidden rows' switches are disabled until one is hidden.
+   */
+  readonly maxShown?: number;
+  /**
    * Under the list, after a hairline: a table's "Add attribute", since a new
    * attribute is one more column here (it was a button of its own in the view
    * bar until the bar was simplified, 21 October 2026).
@@ -48,7 +54,7 @@ const SEARCH_AFTER = 8;
  * shows or hides it, and its handle reorders it. A locked row (the record's
  * name) is always shown and stays first. Long lists get a search field.
  */
-export function ViewSettings({ label, fields, onChange, isReadOnly = false, footer }: ViewSettingsProps) {
+export function ViewSettings({ label, fields, onChange, isReadOnly = false, maxShown, footer }: ViewSettingsProps) {
   const { locale } = useFormatSettings();
   const [query, setQuery] = useState('');
   const needle = query.trim().toLocaleLowerCase(locale);
@@ -79,11 +85,17 @@ export function ViewSettings({ label, fields, onChange, isReadOnly = false, foot
   const listed =
     needle === '' ? fields : fields.filter((field) => field.attribute.name.toLocaleLowerCase(locale).includes(needle));
   const shownCount = fields.filter((field) => field.isShown || field.isLocked === true).length;
+  const shownFree = fields.filter((field) => field.isShown && field.isLocked !== true).length;
+  const isFull = maxShown !== undefined && shownFree >= maxShown;
+  const countText =
+    maxShown === undefined
+      ? strings.shown(number(shownCount), number(fields.length))
+      : strings.shown(number(shownFree), number(maxShown));
   return (
     <div className={styles.root}>
       <div className={styles.head}>
         <span className={styles.label}>{label}</span>
-        <span className={styles.count}>{strings.shown(number(shownCount), number(fields.length))}</span>
+        <span className={styles.count}>{countText}</span>
       </div>
       {fields.length > SEARCH_AFTER && (
         <Field
@@ -124,6 +136,7 @@ export function ViewSettings({ label, fields, onChange, isReadOnly = false, foot
                   isLabelHidden
                   isSelected={field.isShown}
                   isReadOnly={isReadOnly}
+                  isDisabled={isFull && !field.isShown}
                   onChange={(isShown) => {
                     onChange(fields.map((each) => (each.attribute.id === attribute.id ? { ...each, isShown } : each)));
                   }}

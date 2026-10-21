@@ -6,6 +6,7 @@ export const strings = {
   /** The heading over the current view's own actions in the switcher's menu. */
   thisView: 'This view',
   loadingViews: 'Loading views',
+  viewSettings: 'View settings',
   locked: 'Locked',
   /** A sort chip's name: "Sort: Funding raised, descending, and 1 more". */
   sortName: (attribute: string, direction: 'ascending' | 'descending', more: number) =>

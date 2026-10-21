@@ -35,6 +35,12 @@ interface ButtonLook {
    * in page).
    */
   readonly isFullWidth?: boolean | 'center';
+  /**
+   * In a narrow bar (its container under 480px, a phone) the label hides and
+   * the icon stands alone. Needs an `icon`, and a `label` so the name stays
+   * when the words go: the view bar's View settings.
+   */
+  readonly isLabelCollapsible?: boolean;
   readonly isDisabled?: boolean;
   /** A slot a parent fills, such as `close` inside a toast or a dialog. */
   readonly slot?: string;
@@ -119,6 +125,7 @@ function lookAttributes(look: ButtonLook, face: ButtonFace) {
     'data-size': look.size ?? 'md',
     'data-icon-only': face.children === undefined || undefined,
     'data-full-width': look.isFullWidth === 'center' ? 'center' : look.isFullWidth === true ? 'start' : undefined,
+    'data-collapsible': look.isLabelCollapsible === true || undefined,
   };
 }
 

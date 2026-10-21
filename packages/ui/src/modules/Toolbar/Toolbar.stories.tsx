@@ -6,14 +6,30 @@ import { Button } from '../../atoms/Button/Button.tsx';
 import { SplitButton } from '../../atoms/Button/SplitButton.tsx';
 import { Tag } from '../../atoms/Tag/Tag.tsx';
 import { FilterChip } from '../../molecules/FilterChip/FilterChip.tsx';
+import { Callout } from '../../molecules/Callout/Callout.tsx';
 import { Menu, MenuItem } from '../../molecules/Menu/Menu.tsx';
-import { SortChip, Toolbar, TopBar, ViewBar, type ViewChoice } from './Toolbar.tsx';
+import { Stage } from '../../workbench/Stage/Stage.tsx';
+import { SortChip, Toolbar, TopBar, ViewBar, type ViewChoice, type ViewLayoutSwitch } from './Toolbar.tsx';
 
 const VIEWS: readonly ViewChoice[] = [
   { id: 'all', name: 'All companies' },
   { id: 'uk', name: 'UK and EU companies' },
   { id: 'board', name: 'By stage', icon: 'kanban' },
 ];
+
+/** Table or Board, as a view passes it: icons on both, so a phone shows the icons alone. */
+function useLayoutSwitch(initial = 'table'): ViewLayoutSwitch {
+  const [value, setValue] = useState(initial);
+  return {
+    label: 'Layout',
+    segments: [
+      { value: 'table', label: 'Table', icon: 'table' },
+      { value: 'board', label: 'Board', icon: 'kanban' },
+    ],
+    value,
+    onChange: setValue,
+  };
+}
 
 interface BarsProps {
   readonly isLoading?: boolean;
@@ -24,6 +40,7 @@ interface BarsProps {
 /** The three bars above a table, as a view draws them. */
 function Bars({ isLoading = false, isChanged = true, onViewChange }: BarsProps) {
   const [view, setView] = useState('all');
+  const layout = useLayoutSwitch();
   return (
     <div>
       <TopBar
@@ -48,12 +65,9 @@ function Bars({ isLoading = false, isChanged = true, onViewChange }: BarsProps) 
         }}
         onCreateView={() => undefined}
         isLoading={isLoading}
-      >
-        <Button icon="settings">View settings</Button>
-        <Button icon="download" iconRight="chevron-down">
-          Import / Export
-        </Button>
-      </ViewBar>
+        settings={{ onPress: () => undefined }}
+        layout={layout}
+      />
       <Toolbar
         label="View options"
         {...(isChanged
@@ -287,11 +301,8 @@ export const WithViewActions: Story = {
         },
       ]}
       onAction={fn()}
-    >
-      <Button variant="ghost" icon="settings">
-        View settings
-      </Button>
-    </ViewBar>
+      settings={{ onPress: fn() }}
+    />
   ),
   play: async ({ canvas, userEvent }) => {
     await userEvent.click(canvas.getByRole('button', { name: 'All companies' }));
@@ -363,5 +374,102 @@ export const SortChips: Story = {
     const readOnly = canvas.getByRole('group', { name: 'Sort: Updated by, descending' });
     await expect(within(readOnly).queryByRole('button', { name: /Remove/ })).toBeNull();
     await userEvent.click(canvas.getByRole('button', { name: '+2' }));
+  },
+};
+
+/** A view bar as a view draws it: the switcher, then View settings and Table or Board on one line, at their own state. */
+function ViewBarEnd({ layoutValue = 'table', isOpen = false, isLocked = false, isDisabled = false }) {
+  const layout = { ...useLayoutSwitch(layoutValue), isDisabled };
+  return (
+    <ViewBar
+      views={VIEWS}
+      currentViewId="all"
+      onViewChange={fn()}
+      onCreateView={fn()}
+      settings={{ onPress: fn(), isOpen, isDisabled }}
+      layout={layout}
+    >
+      {isLocked && <Callout placement="bar">Locked by Ada Lovelace</Callout>}
+    </ViewBar>
+  );
+}
+
+/**
+ * The end of the view bar (the owner, 22 October 2026): one secondary View settings button, then a compact Table
+ * and Board switch, both size-control tall on the switcher's line. Add attribute lives under View settings and in
+ * the table's "+" column; the view's actions live in the switcher's menu.
+ */
+export const ViewBarEndDefault: Story = {
+  name: 'View bar end',
+  render: () => <ViewBarEnd />,
+  play: async ({ canvas, userEvent }) => {
+    const settings = canvas.getByRole('button', { name: 'View settings' });
+    const layout = canvas.getByRole('radiogroup', { name: 'Layout' });
+    await expect(canvas.queryByRole('button', { name: /Add attribute/ })).toBeNull();
+    // One line: the button and the switch are the same height, centred on the same line.
+    const button = settings.getBoundingClientRect();
+    const segmented = layout.getBoundingClientRect();
+    await expect(Math.abs(button.height - segmented.height)).toBeLessThan(1);
+    await expect(Math.abs(button.top - segmented.top)).toBeLessThan(1);
+    await expect(settings).toHaveTextContent('View settings');
+    await userEvent.click(canvas.getByRole('radio', { name: 'Board' }));
+    await expect(canvas.getByRole('radio', { name: 'Board' })).toBeChecked();
+  },
+};
+
+/** Board chosen, with View settings open (expanded) and a locked view's line before it. */
+export const ViewBarEndBoardOpen: Story = {
+  name: 'View bar end, board, settings open, locked',
+  render: () => <ViewBarEnd layoutValue="board" isOpen isLocked />,
+  play: async ({ canvas }) => {
+    await expect(canvas.getByRole('button', { name: 'View settings' })).toHaveAttribute('aria-expanded', 'true');
+    await expect(canvas.getByRole('radio', { name: 'Board' })).toBeChecked();
+  },
+};
+
+/** Keyboard: Tab goes switcher, View settings, then the chosen layout; the arrows switch the layout. */
+export const ViewBarEndKeyboard: Story = {
+  name: 'View bar end, keyboard',
+  parameters: { crm: { screenshot: false } },
+  render: () => <ViewBarEnd />,
+  play: async ({ canvas, userEvent }) => {
+    await userEvent.tab();
+    await expect(canvas.getByRole('button', { name: 'All companies' })).toHaveFocus();
+    await userEvent.tab();
+    await expect(canvas.getByRole('button', { name: 'View settings' })).toHaveFocus();
+    await userEvent.tab();
+    await expect(canvas.getByRole('radio', { name: 'Table' })).toHaveFocus();
+    await userEvent.keyboard('{ArrowRight}');
+    await expect(canvas.getByRole('radio', { name: 'Board' })).toBeChecked();
+  },
+};
+
+/** On a phone (390 wide) View settings and Table or Board drop their words for their icons, and keep their names. */
+export const ViewBarEndPhone: Story = {
+  name: 'View bar end, phone',
+  render: () => (
+    <Stage width="phone">
+      <ViewBarEnd />
+    </Stage>
+  ),
+  play: async ({ canvas }) => {
+    const settings = canvas.getByRole('button', { name: 'View settings' });
+    await expect(settings.getBoundingClientRect().width).toBeLessThan(40);
+    await expect(canvas.getByRole('radio', { name: 'Table' })).toBeInTheDocument();
+    await expect(canvas.getByRole('radio', { name: 'Board' })).toBeInTheDocument();
+    const layout = canvas.getByRole('radiogroup', { name: 'Layout' });
+    await expect(
+      Math.abs(settings.getBoundingClientRect().height - layout.getBoundingClientRect().height),
+    ).toBeLessThan(1);
+  },
+};
+
+/** Disabled: View settings and Table or Board keep their places, and say they can't be used now. */
+export const ViewBarEndDisabled: Story = {
+  name: 'View bar end, disabled',
+  render: () => <ViewBarEnd isDisabled />,
+  play: async ({ canvas }) => {
+    await expect(canvas.getByRole('button', { name: 'View settings' })).toBeDisabled();
+    await expect(canvas.getByRole('radio', { name: 'Board' })).toBeDisabled();
   },
 };

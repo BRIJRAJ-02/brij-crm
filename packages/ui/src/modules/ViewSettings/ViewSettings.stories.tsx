@@ -27,10 +27,11 @@ interface SampleProps {
   readonly initial?: readonly ViewField[];
   readonly onChange?: (next: readonly ViewField[]) => void;
   readonly onAdd?: () => void;
+  readonly maxShown?: number;
 }
 
 /** The settings holding their own fields, as a view's settings popover would. */
-function SampleSettings({ initial = FIELDS, onChange, onAdd, isReadOnly = false }: SampleProps) {
+function SampleSettings({ initial = FIELDS, onChange, onAdd, isReadOnly = false, maxShown }: SampleProps) {
   const [fields, setFields] = useState(initial);
   return (
     <Stage width="narrow">
@@ -38,6 +39,7 @@ function SampleSettings({ initial = FIELDS, onChange, onAdd, isReadOnly = false 
         label="Columns"
         fields={fields}
         isReadOnly={isReadOnly}
+        {...(maxShown === undefined ? {} : { maxShown })}
         {...(onAdd === undefined
           ? {}
           : {
@@ -152,5 +154,20 @@ export const WithFooter: Story = {
   play: async ({ canvas, args, userEvent }) => {
     await userEvent.click(canvas.getByRole('button', { name: 'Add attribute' }));
     await expect(args.onAdd).toHaveBeenCalledTimes(1);
+  },
+};
+
+/**
+ * A board's card fields: at most `maxShown` besides the name. The head counts against the limit, and at it the
+ * hidden fields' switches are disabled until one is hidden.
+ */
+export const AtTheLimit: Story = {
+  args: { maxShown: 3 },
+  play: async ({ canvas, userEvent }) => {
+    await expect(canvas.getByText('3 of 3 shown')).toBeInTheDocument();
+    await expect(canvas.getByRole('switch', { name: 'Show ARR' })).toBeDisabled();
+    await userEvent.click(canvas.getByRole('switch', { name: 'Show Owner' }));
+    await expect(canvas.getByText('2 of 3 shown')).toBeInTheDocument();
+    await expect(canvas.getByRole('switch', { name: 'Show ARR' })).toBeEnabled();
   },
 };

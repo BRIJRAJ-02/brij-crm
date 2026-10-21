@@ -127,4 +127,35 @@ test.describe('saved views', () => {
     await expect(reader).not.toHaveURL(/draft=/);
     await readerContext.close();
   });
+
+  test('the view bar ends with View settings then Table or Board, and on a board View settings adds an attribute', async ({
+    page,
+  }) => {
+    test.setTimeout(120_000);
+    const tag = randomUUID().slice(0, 8);
+    const slug = `viewbar-${tag}`;
+    await newWorkspace(page, `viewbar-${tag}@example.com`, slug);
+    await page.goto(`/w/${slug}/objects/deals`);
+    await expect(page).toHaveURL(objectUrl(slug, 'deals'));
+    // One line (the owner, 22 October 2026): View settings is the bar's one button, the switch the same height.
+    const settings = page.getByRole('button', { name: 'View settings' });
+    const layout = page.getByRole('radiogroup', { name: 'Layout' });
+    const button = await settings.boundingBox();
+    const segmented = await layout.boundingBox();
+    expect(Math.abs((button?.height ?? 0) - (segmented?.height ?? 1))).toBeLessThan(1);
+    expect(Math.abs((button?.y ?? 0) - (segmented?.y ?? 1))).toBeLessThan(1);
+
+    // Board: View settings lists the card's fields, with Add attribute at its foot.
+    await layout.getByRole('radio', { name: 'Board' }).click({ force: true });
+    await expect(page.getByRole('radio', { name: 'Board' })).toBeChecked();
+    await settings.click();
+    const dialog = page.getByRole('dialog', { name: 'View settings' });
+    await expect(dialog.getByRole('grid', { name: 'Card fields' })).toBeVisible();
+    await dialog.getByRole('button', { name: 'Add attribute' }).click();
+    const addDialog = page.getByRole('dialog', { name: 'New attribute' });
+    await expect(addDialog).toBeVisible();
+    await page.keyboard.press('Escape');
+    await expect(addDialog).toBeHidden();
+    await expect(settings).toBeFocused();
+  });
 });

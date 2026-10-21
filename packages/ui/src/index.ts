@@ -153,6 +153,7 @@ export {
   type Segment,
   type SegmentedControlProps,
   type SegmentOrientation,
+  type SegmentSize,
   type ThemeSwitchProps,
 } from './molecules/SegmentedControl/SegmentedControl.tsx';
 export { Select, type SelectItem, type SelectOptionStyle, type SelectProps } from './molecules/Select/Select.tsx';
@@ -376,6 +377,8 @@ export {
   type ViewAction,
   type ViewBarProps,
   type ViewChoice,
+  type ViewLayoutSwitch,
+  type ViewSettingsTrigger,
 } from './modules/Toolbar/Toolbar.tsx';
 export {
   createToasts,

@@ -27,9 +27,11 @@
     container-type: inline-size;
   }
 
-  /* On a phone the switcher, View settings and the layout switch are wider
-     than the bar: the bar scrolls sideways on its own, never the page. */
+  /* The bar is its controls' container: under 480px (a phone) View settings
+     and Table or Board drop their words for their icons. Should it still be
+     too narrow, the bar scrolls sideways on its own, never the page. */
   .view {
+    container-type: inline-size;
     overflow-x: auto;
     overscroll-behavior-inline: contain;
     scrollbar-width: none;

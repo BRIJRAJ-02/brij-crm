@@ -1,7 +1,7 @@
 // Brief
 // Purpose: see one object's records as a pipeline, a column per option of a status or select field (spec 0021).
 // Main task: see where every record stands and drag a card to its next column, live for everyone.
-// Leaves out: the board's View settings and the stuck badge (milestone 3), and creating records from the board.
+// Leaves out: the stuck badge (milestone 3), and creating records from the board.
 import {
   toActorDisplays,
   toFieldAttribute,
@@ -30,6 +30,8 @@ import {
   type ListSource,
   type ViewAction,
   type ViewChoice,
+  type ViewLayoutSwitch,
+  type ViewSettingsTrigger,
 } from '@crm/ui';
 import { useNavigate, useRouteContext } from '@tanstack/react-router';
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
@@ -57,12 +59,21 @@ export interface BoardScreenProps {
   readonly onViewChange: (viewId: string) => void;
   /** The switcher's Create view. */
   readonly onCreateView?: () => void;
-  /** The view bar's end before the Table and Board switch: the lock line. */
+  /** The view bar's end before View settings: the lock line. */
   readonly viewActions?: ReactNode;
+  /** The view bar's View settings button, which opens the card's fields. */
+  readonly viewSettings?: ViewSettingsTrigger;
+  /**
+   * Add attribute asked from View settings: a new object each time opens the attribute dialog here, which owns
+   * it, so a board has a way to add one too.
+   */
+  readonly addAttributeRequest?: object;
+  /** The dialog that request opened has closed. */
+  readonly onAddAttributeClosed?: () => void;
   /** The view's own actions, under "This view" in the switcher's menu, and what runs one (spec 0020). */
   readonly viewMenu?: { readonly actions: readonly ViewAction[]; readonly onAction: (id: string) => void };
   /** The Table and Board switch, at the end of the view bar. */
-  readonly layoutSwitch: ReactNode;
+  readonly layoutSwitch: ViewLayoutSwitch;
   /** The view's Toolbar (sorts, filters, Save) and any notice under it, given what to say to screen readers. */
   readonly toolbar: (announced: string | undefined) => ReactNode;
   /** Show empty columns turned on or off: saved with the view's board settings (AC-497). */
@@ -84,12 +95,25 @@ export function BoardScreen(props: BoardScreenProps) {
     viewActions,
     viewMenu,
     layoutSwitch,
+    viewSettings,
+    addAttributeRequest,
+    onAddAttributeClosed,
     toolbar,
   } = props;
   const { data } = useRouteContext({ from: '__root__' });
   const live = useLiveStatus(data.live);
   const canChangeSchema = useCan('schema.manage');
   const [isAdding, setAdding] = useState(false);
+  // View settings' Add attribute: each new request opens the dialog once.
+  const [handledRequest, setHandledRequest] = useState(addAttributeRequest);
+  if (addAttributeRequest !== handledRequest) {
+    setHandledRequest(addAttributeRequest);
+    if (addAttributeRequest !== undefined) setAdding(true);
+  }
+  const closeAdding = () => {
+    setAdding(false);
+    onAddAttributeClosed?.();
+  };
   // What a move says to screen readers ("Moved Acme renewal to Won."), through the Toolbar's status.
   const [announced, setAnnounced] = useState<string | undefined>(undefined);
   return (
@@ -104,6 +128,8 @@ export function BoardScreen(props: BoardScreenProps) {
             onViewChange={onViewChange}
             {...(onCreateView === undefined ? {} : { onCreateView })}
             {...(viewMenu === undefined ? {} : { actions: viewMenu.actions, onAction: viewMenu.onAction })}
+            {...(viewSettings === undefined ? {} : { settings: viewSettings })}
+            layout={layoutSwitch}
           >
             {live === 'paused' && (
               <Callout placement="bar" isAnnounced>
@@ -111,7 +137,6 @@ export function BoardScreen(props: BoardScreenProps) {
               </Callout>
             )}
             {viewActions}
-            {layoutSwitch}
           </ViewBar>
         ),
         toolbar: toolbar(announced),
@@ -152,12 +177,10 @@ export function BoardScreen(props: BoardScreenProps) {
               members={members}
               canManage={canChangeSchema}
               objectAttributes={attributes}
-              onClose={() => {
-                setAdding(false);
-              }}
+              onClose={closeAdding}
               onSaved={() => {
                 // The route reads the attributes again: a status or select field makes the board.
-                setAdding(false);
+                closeAdding();
               }}
             />
           </>

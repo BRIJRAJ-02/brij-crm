@@ -3,6 +3,7 @@
 // Main task: filter and sort the table, lay out its columns, then save it, or keep it as a view of its own.
 // Leaves out: grouping inside the table, view search, charts, and sharing outside the workspace.
 import {
+  BOARD_MAX_CARD_FIELDS,
   boardDefaults,
   isDataError,
   isSortable,
@@ -26,9 +27,11 @@ import {
   focusLater,
   Modal,
   Popover,
-  SegmentedControl,
   ViewSettings,
   type ViewChoice,
+  type ViewField,
+  type ViewLayoutSwitch,
+  type ViewSettingsTrigger,
 } from '@crm/ui';
 import { useNavigate, useRouteContext } from '@tanstack/react-router';
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
@@ -411,21 +414,19 @@ export function ViewScreen(props: ViewScreenProps) {
   // (on a locked view the person may not change, for this tab only). The first switch to Board fills the
   // defaults; with nothing to group by it saves the kind alone. Back to Table keeps the board settings.
   const kind = view?.kind ?? 'table';
-  const layoutSwitch = (
-    <SegmentedControl
-      label={boardStrings.layout}
-      segments={[
-        { value: 'table', label: boardStrings.table },
-        { value: 'board', label: boardStrings.board },
-      ]}
-      value={kind}
-      onChange={(picked) => {
-        const patch =
-          view === undefined ? undefined : switchPatch(view, picked === 'board' ? 'board' : 'table', attributes);
-        if (patch !== undefined) changeBoardLayout(patch);
-      }}
-    />
-  );
+  const layoutSwitch: ViewLayoutSwitch = {
+    label: boardStrings.layout,
+    segments: [
+      { value: 'table', label: boardStrings.table, icon: 'table' },
+      { value: 'board', label: boardStrings.board, icon: 'kanban' },
+    ],
+    value: kind,
+    onChange: (picked) => {
+      const patch =
+        view === undefined ? undefined : switchPatch(view, picked === 'board' ? 'board' : 'table', attributes);
+      if (patch !== undefined) changeBoardLayout(patch);
+    },
+  };
   const storedBoard = view?.config.board;
   // A board has no new record dialog: the command menu's request is dropped, so the address doesn't keep it.
   const { isCreateRequested, onCreateRequestTaken } = props;
@@ -480,6 +481,31 @@ export function ViewScreen(props: ViewScreenProps) {
     if (boardOutcome?.kind !== 'board') return;
     changeBoardLayout({ board: { ...boardOutcome.settings, showEmptyColumns: show } });
   };
+  // A board's View settings (spec 0021): the card's fields, the name first and always shown, then the shown ones
+  // in the card's order, then the rest. A card holds at most six.
+  const boardPlan = boardOutcome?.kind === 'board' ? boardOutcome : undefined;
+  const cardFields = useMemo((): readonly ViewField[] => {
+    if (boardPlan === undefined) return [];
+    const shown = new Set(boardPlan.cardFields.map((field) => field.id));
+    const primary = attributes.filter((each) => each.isPrimary && !each.isArchived);
+    const rest = attributes.filter(
+      (each) => !each.isArchived && !each.isPrimary && each.id !== boardPlan.groupBy.id && !shown.has(each.id),
+    );
+    return [
+      ...primary.map((each) => ({ attribute: toFieldAttribute(each), isShown: true, isLocked: true })),
+      ...boardPlan.cardFields.map((each) => ({ attribute: toFieldAttribute(each), isShown: true })),
+      ...rest.map((each) => ({ attribute: toFieldAttribute(each), isShown: false })),
+    ];
+  }, [boardPlan, attributes]);
+  const changeCardFields = (next: readonly ViewField[]) => {
+    if (boardPlan === undefined) return;
+    const ids = next.flatMap((field) => (field.isShown && field.isLocked !== true ? [field.attribute.id] : []));
+    if (ids.length > BOARD_MAX_CARD_FIELDS) {
+      toasts.toast({ tone: 'info', message: strings.cardFieldsFull(BOARD_MAX_CARD_FIELDS) });
+      return;
+    }
+    changeBoardLayout({ board: { ...boardPlan.settings, cardFields: ids } });
+  };
   const switchView = (viewId: string) => {
     // The view already open: nothing changes, and its draft stays.
     if (viewId === view?.id) return;
@@ -521,33 +547,27 @@ export function ViewScreen(props: ViewScreenProps) {
   });
   // A table's "Add attribute" from View settings: asked of the table, which owns the attribute dialog.
   const [addRequest, setAddRequest] = useState<object | undefined>(undefined);
-  // The view bar's end before the Table and Board switch: the lock line, and on a table View settings, the one
-  // quiet entry left (the owner, 21 October 2026: the view menu and Add attribute moved into the switcher's menu
-  // and into View settings).
-  const viewActionsFor = (withSettings: boolean): ReactNode =>
-    view === undefined ? undefined : (
-      <>
-        {view.visibility === 'workspace' && view.isLocked && (
-          <Callout placement="bar" {...(isLockedForMe ? { isAnnounced: true } : {})}>
-            {isLockedForMe
-              ? strings.lockedUnsaved(memberName(members, view.lockedBy))
-              : strings.lockedBy(memberName(members, view.lockedBy))}
-          </Callout>
-        )}
-        {withSettings && (
-          <Button
-            ref={settingsAnchor}
-            variant="ghost"
-            icon="settings"
-            onPress={() => {
-              setSettingsOpen(true);
-            }}
-          >
-            {strings.viewSettings}
-          </Button>
-        )}
-      </>
-    );
+  // The view bar's end before View settings: the lock line. View settings is the bar's one button, then Table or
+  // Board (the owner, 21 and 22 October 2026: the view's actions live in the switcher's menu, as in Attio, and
+  // Add attribute under View settings).
+  const viewActions: ReactNode =
+    view !== undefined && view.visibility === 'workspace' && view.isLocked ? (
+      <Callout placement="bar" {...(isLockedForMe ? { isAnnounced: true } : {})}>
+        {isLockedForMe
+          ? strings.lockedUnsaved(memberName(members, view.lockedBy))
+          : strings.lockedBy(memberName(members, view.lockedBy))}
+      </Callout>
+    ) : undefined;
+  const viewSettings: ViewSettingsTrigger | undefined =
+    view === undefined
+      ? undefined
+      : {
+          ref: settingsAnchor,
+          isOpen: isSettingsOpen,
+          onPress: () => {
+            setSettingsOpen(true);
+          },
+        };
   const toolbarFor = (announced: string | undefined): ReactNode => (
     <>
       <ViewToolbar
@@ -668,9 +688,14 @@ export function ViewScreen(props: ViewScreenProps) {
         label={strings.viewSettings}
       >
         <ViewSettings
-          label={strings.columns}
-          fields={fields}
+          {...(boardPlan === undefined
+            ? { label: strings.columns, fields }
+            : { label: strings.cardFields, fields: cardFields, maxShown: BOARD_MAX_CARD_FIELDS })}
           onChange={(next) => {
+            if (boardPlan !== undefined) {
+              changeCardFields(next);
+              return;
+            }
             const widths = new Map(layout.columns.map((column) => [column.id, column.width]));
             changeLayout({
               columns: next.map((field) => {
@@ -684,7 +709,8 @@ export function ViewScreen(props: ViewScreenProps) {
               pinnedCount: layout.pinnedCount,
             });
           }}
-          // A new attribute is one more column: Add attribute sits under them, for whoever may change the schema.
+          // A new attribute is one more column, or card field: Add attribute sits under them, for whoever may change
+          // the schema.
           {...(canChangeSchema
             ? {
                 footer: (
@@ -720,7 +746,14 @@ export function ViewScreen(props: ViewScreenProps) {
           currentViewId={view?.id ?? ''}
           onViewChange={switchView}
           onCreateView={createView}
-          viewActions={viewActionsFor(false)}
+          viewActions={viewActions}
+          {...(boardPlan === undefined || viewSettings === undefined ? {} : { viewSettings })}
+          // View settings' Add attribute goes to the board, which owns its attribute dialog.
+          {...(addRequest === undefined ? {} : { addAttributeRequest: addRequest })}
+          onAddAttributeClosed={() => {
+            focusLater(() => settingsAnchor.current);
+            setAddRequest(undefined);
+          }}
           viewMenu={viewMenu}
           layoutSwitch={layoutSwitch}
           toolbar={toolbarFor}
@@ -771,7 +804,8 @@ export function ViewScreen(props: ViewScreenProps) {
             changeLayout(withColumn(layout, attributeId));
           }
         }}
-        viewActions={viewActionsFor(true)}
+        viewActions={viewActions}
+        {...(viewSettings === undefined ? {} : { viewSettings })}
         viewMenu={viewMenu}
         {...(addRequest === undefined ? {} : { addAttributeRequest: addRequest })}
         onAddAttributeClosed={(isMade) => {
@@ -782,7 +816,7 @@ export function ViewScreen(props: ViewScreenProps) {
         }}
         currentViewId={view?.id ?? ''}
         onViewChange={switchView}
-        viewBarEnd={layoutSwitch}
+        layoutSwitch={layoutSwitch}
         announce={(count) =>
           filtered
             ? strings.matching(
