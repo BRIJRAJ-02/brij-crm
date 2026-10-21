@@ -59,7 +59,10 @@ describe('the countdown to book (AC-1059)', () => {
     await expect.element(page.getByRole('heading', { name: 'Thank you. That is with us.' })).toHaveFocus();
     await expect.poll(said).toBe('Taking you to book a time in 2 seconds.');
     await expect.element(page.getByText('Thanks, we have it.')).toBeVisible();
-    await expect.poll(() => host.textContent).toMatch(/Taking you to book a time in\s*1…/);
+    // A second's tick, on a busy runner: wait past vitest's one second default for it.
+    await expect
+      .poll(() => host.textContent, { timeout: 3000, interval: 20 })
+      .toMatch(/Taking you to book a time in\s*1…/);
     // The sentence never changes as the number does.
     expect(said()).toBe('Taking you to book a time in 2 seconds.');
     await expect.poll(() => onRedirect.mock.calls.length, { timeout: 4000 }).toBe(1);
