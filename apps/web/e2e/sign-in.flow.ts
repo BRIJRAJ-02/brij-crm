@@ -107,6 +107,8 @@ async function newWorkspace(page: Page, email: string, name: string, slug: strin
   await expect(page).toHaveURL(new RegExp(`/w/${slug}/objects/people(/views/[0-9a-f-]+)?$`), {
     timeout: WORKSPACE_MADE_MS,
   });
+  // The page draws its own frame once loaded, so a menu or confirm opened over the skeleton would close with it.
+  await expect(page.getByRole('heading', { level: 1, name: 'People' })).toBeVisible();
 }
 
 /**

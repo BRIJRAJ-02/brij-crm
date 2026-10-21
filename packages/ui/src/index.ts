@@ -217,6 +217,13 @@ export {
   type BookingReceiptState,
 } from './modules/BookingReceipt/BookingReceipt.tsx';
 export {
+  BookingChat,
+  type BookingChatDay,
+  type BookingChatError,
+  type BookingChatLine,
+  type BookingChatProps,
+} from './modules/BookingChat/BookingChat.tsx';
+export {
   BookingChanges,
   type BookingChangesProps,
   type CancelOutcome,

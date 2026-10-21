@@ -40,7 +40,8 @@ test('a visitor books by chat and the host sees the conversation (spec 0041)', a
   const visitor = await browser.newContext({ timezoneId: 'UTC', locale: 'en-GB' });
   const chat = await visitor.newPage();
   await chat.goto(`/b/${made.publicKey}`);
-  await chat.getByRole('radio', { name: 'Book by chat' }).click();
+  // The radio is a hidden input under its segment's icon, so the press goes to the segment, as a visitor's does.
+  await chat.locator('label', { has: chat.getByRole('radio', { name: 'Book by chat' }) }).click();
   const log = chat.getByRole('log', { name: 'Conversation' });
   await expect(log).toContainText('I book Ada Lovelace’s Intro call (30 minutes).');
 
