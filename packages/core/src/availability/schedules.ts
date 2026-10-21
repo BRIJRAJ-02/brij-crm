@@ -14,6 +14,7 @@ import {
   SCHEDULES_MAX,
   type BookingAvailability,
   type ScheduleList,
+  type ScheduleMembers,
   type ScheduleUser,
   type ScheduleView,
 } from '@crm/contracts';
@@ -228,6 +229,26 @@ async function listOf(
     updatedAt: null,
   };
   return { memberId, schedules: hasDefault ? views : [virtualView, ...views] };
+}
+
+/**
+ * Whose schedules the reader may view (AC-971), by name: themselves, and with
+ * `booking.admin` every active member, the same check `targetMember` makes.
+ * The Viewing Select reads it, so spec 0037's reach changes it here alone.
+ */
+export async function listScheduleMembers(scope: EngineScope): Promise<ScheduleMembers> {
+  requirePermission(scope, 'booking.manage');
+  const caller = memberOf(scope);
+  if (caller === undefined) throw refuse('FORBIDDEN', PERMISSIONS['booking.manage'].message);
+  return inWorkspace(scope, async (tx) => {
+    const rows = await tx
+      .select({ id: members.id, name: members.name })
+      .from(members)
+      .where(and(eq(members.status, 'active'), can(scope.access, 'booking.admin') ? undefined : eq(members.id, caller)))
+      .orderBy(sql`lower(${members.name})`, asc(members.id))
+      .limit(1000);
+    return { members: rows };
+  });
 }
 
 /**

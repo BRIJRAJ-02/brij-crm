@@ -308,6 +308,13 @@ describe('the walk: a principal without the access is refused', () => {
         message: PERMISSIONS['booking.manage'].message,
       });
       if (['readDefaultHours', 'saveDefaultHours'].includes(name)) return;
+      // Whose schedules a plain member may view: their own alone, never a colleague's.
+      if (name === 'listScheduleMembers') {
+        const answer = (await service(name)(scope)) as { readonly members: readonly { readonly id: string }[] };
+        const me = scope.access.principal.kind === 'member' ? scope.access.principal.memberId : undefined;
+        expect(answer.members.map((each) => each.id)).toEqual([me]);
+        return;
+      }
       const owner = testScope({ db, workspaceId, actor: { type: 'member', id: ownerId } });
       const theirs = await core.createSchedule(owner, { id: core.newId(), name: 'Evenings', timeZone: 'UTC' });
       if (['listSchedules', 'createSchedule'].includes(name)) {

@@ -22,7 +22,11 @@ export const scheduleStrings = {
   noPagesUseIt: 'No booking pages use this schedule yet. A page picks its schedule in its editor.',
   goToPages: 'Go to booking pages',
   setDefault: 'Set as default',
-  setDefaultDone: (name: string) => `${name} is your default schedule now.`,
+  setDefaultDone: (name: string, owner?: string) =>
+    owner === undefined ? `${name} is your default schedule now.` : `${name} is ${owner}’s default schedule now.`,
+  viewing: 'Viewing',
+  viewingMine: 'My schedules',
+  viewingTheirs: (name: string) => `${name}’s schedules`,
   setDefaultFailed: (name: string) => `Couldn’t make ${name} the default.`,
   duplicate: 'Duplicate',
   duplicated: (name: string) => `Made “${name}”.`,
@@ -33,8 +37,8 @@ export const scheduleStrings = {
   deleting: 'Deleting…',
   deleteUnused: 'No booking pages use it, and this can’t be undone.',
   /** "Intro call and Demo, the 2 booking pages that use it, will book by Working hours, your default, and …" */
-  deleteUsed: (pages: string, count: number, fallback: string) =>
-    `${pages}, ${count === 1 ? 'the one booking page that uses it' : `the ${String(count)} booking pages that use it`}, will book by ${fallback}, your default, and this can’t be undone.`,
+  deleteUsed: (pages: string, count: number, fallback: string, isOwn = true) =>
+    `${pages}, ${count === 1 ? 'the one booking page that uses it' : `the ${String(count)} booking pages that use it`}, will book by ${fallback}, ${isOwn ? 'your' : 'their'} default, and this can’t be undone.`,
   deleted: (name: string) => `Deleted the ${name} schedule.`,
   cantDeleteDefault: 'Set another schedule as default first.',
   alreadyDefault: 'It’s your default.',

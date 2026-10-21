@@ -71,6 +71,7 @@ const READS: ReadonlySet<string> = new Set([
   'bookings.moveSlots',
   'bookings.guestLink',
   // Availability schedules (spec 0035).
+  'schedules.members',
   'schedules.list',
   'schedules.get',
 ]);

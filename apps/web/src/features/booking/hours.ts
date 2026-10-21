@@ -189,54 +189,5 @@ export function zoneMatches(item: { readonly label: string; readonly description
 /** The browser's zone. */
 export const browserZone = (): string => new Intl.DateTimeFormat().resolvedOptions().timeZone;
 
-/**
- * "9:00 AM" for a stored `HH:MM`, on the 12 hour clock in `locale`'s form, as the week editor reads it (the
- * owner's call, F12), with Midnight for the day's end, `24:00`.
- */
-export function clockLabel(time: string, locale: string): string {
-  if (time === '24:00') return strings.midnight;
-  const [hours = 0, minutes = 0] = time.split(':').map(Number);
-  return new Intl.DateTimeFormat(locale, {
-    hour: 'numeric',
-    minute: '2-digit',
-    hourCycle: 'h12',
-    timeZone: 'UTC',
-  }).format(new Date(Date.UTC(2000, 0, 1, hours, minutes)));
-}
-
-/**
- * A week in a line per set of days with the same hours, Monday first, as timefix prints a page's hours:
- * "Mon – Fri, 9:00 AM to 5:00 PM" over "Sat, 10:00 AM to 1:00 PM". Three or more days in a row read as a run.
- */
-export function weekSummary(availability: BookingAvailability, locale: string): readonly string[] {
-  const day = new Intl.DateTimeFormat(locale, { weekday: 'short', timeZone: 'UTC' });
-  // 5 January 2026 is a Monday.
-  const dayName = (index: number) => day.format(new Date(Date.UTC(2026, 0, 5 + index)));
-  const groups = new Map<string, number[]>();
-  WEEKDAYS.forEach((weekday, index) => {
-    const ranges = availability.weekly[weekday];
-    if (ranges.length === 0) return;
-    // "to", as the week editor reads a window, so a page's hours read the same here and in its editor.
-    const key = ranges
-      .map(([start, end]) => `${clockLabel(start, locale)} ${strings.to} ${clockLabel(end, locale)}`)
-      .join(', ');
-    groups.set(key, [...(groups.get(key) ?? []), index]);
-  });
-  if (groups.size === 0) return [strings.noDaysOpen];
-  return [...groups].map(([hours, days]) => `${daysLabel(days, dayName)}, ${hours}`);
-}
-
-/** Days as "Mon, Wed – Fri": runs of three or more in a row joined. */
-function daysLabel(days: readonly number[], dayName: (index: number) => string): string {
-  const runs: number[][] = [];
-  for (const index of days) {
-    const run = runs.at(-1);
-    if (run !== undefined && run.at(-1) === index - 1) run.push(index);
-    else runs.push([index]);
-  }
-  return runs
-    .flatMap((run) =>
-      run.length >= 3 ? [`${dayName(run[0] ?? 0)} – ${dayName(run.at(-1) ?? 0)}`] : run.map((index) => dayName(index)),
-    )
-    .join(', ');
-}
+// A week as words and a clock time as words: the one summary in `@crm/contracts/hours`, through the data layer.
+export { clockLabel, weekSummary } from '@crm/data';

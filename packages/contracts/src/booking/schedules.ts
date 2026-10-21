@@ -159,8 +159,23 @@ export const DeleteScheduleResult = z.object({
 /** What a delete moved. */
 export type DeleteScheduleResult = z.infer<typeof DeleteScheduleResult>;
 
+/** A member whose schedules the reader may view: the Viewing Select's choices (AC-971). */
+export const ScheduleMember = z.object({ id: Uuid, name: z.string() });
+/** A member whose schedules the reader may view. */
+export type ScheduleMember = z.infer<typeof ScheduleMember>;
+
+/**
+ * Whose schedules the reader may view, by name (AC-971): themselves, and with
+ * `booking.admin` every active member. One service, so spec 0037's reach
+ * replaces `booking.admin` here as in the writes.
+ */
+export const ScheduleMembers = z.object({ members: z.array(ScheduleMember) });
+/** Whose schedules the reader may view. */
+export type ScheduleMembers = z.infer<typeof ScheduleMembers>;
+
 /** Member procedures for availability schedules. */
 export const schedulesContract = {
+  members: oc.input(WorkspaceScoped).output(ScheduleMembers),
   list: oc.input(ListSchedulesInput).output(ScheduleList),
   get: oc.input(GetScheduleInput).output(ScheduleView),
   create: oc.input(CreateScheduleInput).output(ScheduleView),

@@ -24,6 +24,8 @@ Cards of Switch, Field, Checkbox, Select and DatePicker. The Hours card picks th
 
 Built from LinkList (its framed rows: the name with the zone after it, the week under it, "Used by N booking pages", the Default badge, the ··· menu), Modal (New schedule; the delete confirm) and Field. New schedule sits at the end of the Calendar · List · Availability strip, as each tab's tools do; at 20 schedules it waits and says why. The rows come from the data layer's held list (`data.schedules.view`), so a save in another tab shows within a second. Until the member saves any hours, the list holds the virtual default, "Working hours", weekdays 9 to 5 in the browser's zone (AC-963), which opens like any other and is stored by its first save.
 
+An admin (`booking.admin`) has a Viewing Select at the strip's end, before New schedule: their own schedules or a colleague's by name (`?member=`, AC-971), the choices from one service (`data.schedules.members`). A colleague's list, editor and confirms say whose they are ("Bea Lee's schedules", "their default"); a day off's note stays its member's alone, so an admin sees the days without the reasons, and the server keeps the reasons through an admin's save.
+
 Deleting asks first (the owner's confirm rule, 21 October 2026): "Delete the Evenings schedule?", one sentence naming the pages it moves to the default and that it can't be undone, Cancel (Esc) then Delete schedule. The dialog waits for the server and says a refusal inside itself; the schedule leaves the list once it's gone. The default can't be deleted: its menu item says to set another first.
 
 ## A schedule (`/w/$slug/bookings/availability/$scheduleId`, spec 0035)

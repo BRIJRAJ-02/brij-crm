@@ -494,6 +494,7 @@ function fakeApi(overrides: Partial<Behaviour> = {}, auth: (path: string, body: 
       },
     },
     schedules: {
+      members: os.schedules.members.handler(notServed),
       list: os.schedules.list.handler(notServed),
       get: os.schedules.get.handler(notServed),
       create: os.schedules.create.handler(notServed),

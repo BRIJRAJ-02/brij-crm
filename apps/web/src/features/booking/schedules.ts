@@ -16,9 +16,12 @@ export function listOfNames(names: readonly string[], shown = 3): string {
   return `${names.slice(0, -1).join(', ')} ${scheduleStrings.and} ${names.at(-1) ?? ''}`;
 }
 
-/** What deleting a schedule does to the pages using it, from what the server will do (AC-967). */
-export function deleteSentence(pages: readonly string[], fallback: string): string {
+/**
+ * What deleting a schedule does to the pages using it, from what the server will do (AC-967): they book by the
+ * member's default, "your" default, or "their" default when an admin deletes a colleague's.
+ */
+export function deleteSentence(pages: readonly string[], fallback: string, isOwn = true): string {
   return pages.length === 0
     ? scheduleStrings.deleteUnused
-    : scheduleStrings.deleteUsed(listOfNames(pages), pages.length, fallback);
+    : scheduleStrings.deleteUsed(listOfNames(pages), pages.length, fallback, isOwn);
 }
