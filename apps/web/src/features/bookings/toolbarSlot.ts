@@ -9,3 +9,12 @@ export const BookingsToolbarSlot = createContext<HTMLElement | null>(null);
 
 /** The element a Bookings tab draws its toolbar into, or null before the layout has one (the tab then keeps its own). */
 export const useBookingsToolbarSlot = () => useContext(BookingsToolbarSlot);
+
+/**
+ * The TopBar's end on a tab whose primary action is its own (Availability's New schedule, the owner, 22 October
+ * 2026: one primary per screen): the tab portals its button there, in place of New meeting.
+ */
+export const BookingsActionSlot = createContext<HTMLElement | null>(null);
+
+/** The TopBar's end for the tab's own primary action, or null where the TopBar keeps New meeting. */
+export const useBookingsActionSlot = () => useContext(BookingsActionSlot);

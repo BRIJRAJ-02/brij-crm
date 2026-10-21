@@ -240,7 +240,6 @@ export function WorkspaceFrame({
                     setConfirmingSignOut(true);
                   }
                   if (key === 'leave') setConfirmingLeave(true);
-                  if (key === 'shortcuts') openHelp();
                 }}
               >
                 {/* Every workspace the person is in, the open one checked, then Create workspace (spec 0031, AC-801). */}
@@ -264,13 +263,9 @@ export function WorkspaceFrame({
                     </MenuItem>
                   </MenuSection>
                 )}
+                {/* Settings, the trash and the shortcuts (Help, and ?) live in the sidebar's foot, not here (the owner,
+                    21 and 22 October 2026). */}
                 {workspaces !== undefined && <MenuSeparator />}
-                {/* The shortcut list, also on ?, so it can be found with the pointer too. Settings and the trash live in
-                    the sidebar's foot (Settings on ⌘ , too), not here (the owner, 21 and 22 October 2026). */}
-                <MenuItem id="shortcuts" icon="keyboard" kbd="?">
-                  {strings.keyboardShortcuts}
-                </MenuItem>
-                <MenuSeparator />
                 {/* Leaving comes last, where people look for it: this workspace (anyone in it, spec 0031, AC-812),
                     then Timefix on this device. */}
                 {roleLabel !== undefined && (

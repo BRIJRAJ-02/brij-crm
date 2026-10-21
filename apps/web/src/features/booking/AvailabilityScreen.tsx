@@ -8,7 +8,7 @@ import { Button, LinkList, SectionBar, Select, Tooltip, TopBar, type LinkRow } f
 import { useNavigate, useRouteContext } from '@tanstack/react-router';
 import { useState, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
-import { useBookingsToolbarSlot } from '../bookings/toolbarSlot.ts';
+import { useBookingsActionSlot, useBookingsToolbarSlot } from '../bookings/toolbarSlot.ts';
 import { useCan, WorkspacePage } from '../workspace/WorkspacePage.tsx';
 import { DeleteScheduleDialog } from './DeleteScheduleDialog.tsx';
 import { weekSummary, zoneLabel } from './hours.ts';
@@ -73,6 +73,7 @@ export function AvailabilityScreen({ data, slug, locale, member, members, me }: 
   const owner = member === undefined ? undefined : members.find((each) => each.id === member)?.name;
   const state = useSchedules(view);
   const slot = useBookingsToolbarSlot();
+  const actionSlot = useBookingsActionSlot();
   const [isCreating, setCreating] = useState(false);
   const [deleting, setDeleting] = useState<ScheduleView | undefined>(undefined);
   const schedules = state.status === 'ready' ? state.schedules : [];
@@ -117,11 +118,13 @@ export function AvailabilityScreen({ data, slug, locale, member, members, me }: 
       />,
     ),
   );
-  // At the end of the Calendar · List · Availability strip, as each tab's tools are; alone, at the column's top end.
+  // New schedule is the screen's one primary, at the TopBar's end in place of New meeting (the owner, 22 October
+  // 2026); with no TopBar slot it stays at the strip's end.
   const newButton = (
     <NewScheduleButton isDisabled={memberId === undefined || isFull} onPress={() => setCreating(true)} />
   );
-  // One row at the strip's end, as the Calendar tab's tools are.
+  const newAction = isFull ? <Tooltip content={scheduleStrings.limitReached}>{newButton}</Tooltip> : newButton;
+  // The strip's end: an admin's compact member filter (AC-971), as the Calendar tab's tools are.
   const tools = (
     <SectionBar
       end={
@@ -134,7 +137,7 @@ export function AvailabilityScreen({ data, slug, locale, member, members, me }: 
               onChange={(id) => void navigate({ href: availabilityHref(slug, id === me ? undefined : id) })}
             />
           )}
-          {isFull ? <Tooltip content={scheduleStrings.limitReached}>{newButton}</Tooltip> : newButton}
+          {actionSlot === null && newAction}
         </>
       }
     />
@@ -147,6 +150,7 @@ export function AvailabilityScreen({ data, slug, locale, member, members, me }: 
         body: (
           <>
             {slot !== null && createPortal(tools, slot)}
+            {actionSlot !== null && createPortal(newAction, actionSlot)}
             {slot === null && tools}
             <AvailabilityList
               label={owner === undefined ? scheduleStrings.schedules : scheduleStrings.viewingTheirs(owner)}
@@ -255,10 +259,10 @@ function Viewing({
   );
 }
 
-/** New schedule, the tab's one tool. */
+/** New schedule, the screen's one primary. */
 function NewScheduleButton({ isDisabled, onPress }: { readonly isDisabled: boolean; readonly onPress: () => void }) {
   return (
-    <Button icon="plus" isDisabled={isDisabled} onPress={onPress}>
+    <Button variant="primary" icon="plus" isDisabled={isDisabled} onPress={onPress}>
       {scheduleStrings.newSchedule}
     </Button>
   );
@@ -270,8 +274,11 @@ function NewScheduleButton({ isDisabled, onPress }: { readonly isDisabled: boole
  */
 export function AvailabilityPending() {
   const slot = useBookingsToolbarSlot();
-  // An admin's Viewing Select stands in the strip while it loads, so the strip doesn't move when it arrives.
+  const actionSlot = useBookingsActionSlot();
+  // An admin's Viewing Select stands in the strip while it loads, and New schedule waits in the TopBar, so
+  // neither moves when the list arrives.
   const isAdmin = useCan('booking.admin');
+  const waiting = <NewScheduleButton isDisabled onPress={() => undefined} />;
   const tools = (
     <SectionBar
       end={
@@ -279,7 +286,7 @@ export function AvailabilityPending() {
           {isAdmin && (
             <Viewing members={[{ id: 'me', name: '' }]} me="me" value="me" onChange={() => undefined} isDisabled />
           )}
-          <NewScheduleButton isDisabled onPress={() => undefined} />
+          {actionSlot === null && waiting}
         </>
       }
     />
@@ -292,6 +299,7 @@ export function AvailabilityPending() {
         body: (
           <>
             {slot !== null && createPortal(tools, slot)}
+            {actionSlot !== null && createPortal(waiting, actionSlot)}
             {slot === null && tools}
             <AvailabilityList
               label={scheduleStrings.schedules}

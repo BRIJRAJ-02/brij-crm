@@ -18,6 +18,11 @@ import { useFirstDay } from '../workspace/first-day.ts';
 /** Props for BookingsTopBar. */
 export interface BookingsTopBarProps {
   readonly slug: string;
+  /**
+   * On a tab with a primary action of its own (Availability's New schedule): where it goes, in place of New
+   * meeting, so the screen has one primary (the owner, 22 October 2026).
+   */
+  readonly actionSlot?: ((element: HTMLElement | null) => void) | undefined;
 }
 
 /**
@@ -25,7 +30,7 @@ export interface BookingsTopBarProps {
  * New on every tab, named New meeting, at one place and one width; it is off, with the reason, until a booking
  * page is on, since a meeting goes on one.
  */
-export function BookingsTopBar({ slug }: BookingsTopBarProps) {
+export function BookingsTopBar({ slug, actionSlot }: BookingsTopBarProps) {
   const { data, toasts } = useRouteContext({ from: '__root__' });
   // The week on screen: the Calendar's, else this week.
   const { week } = bookingsSearchOf(parseBookingsSearch(useSearch({ strict: false })), new Date(), useFirstDay());
@@ -60,7 +65,13 @@ export function BookingsTopBar({ slug }: BookingsTopBarProps) {
   );
   return (
     <TopBar title={strings.title} icon="calendar-days" hue={SCHEDULING_HUE}>
-      {hasNoPage ? <Tooltip content={strings.turnOnPageFirst}>{button}</Tooltip> : button}
+      {actionSlot !== undefined ? (
+        <div ref={actionSlot} />
+      ) : hasNoPage ? (
+        <Tooltip content={strings.turnOnPageFirst}>{button}</Tooltip>
+      ) : (
+        button
+      )}
       {meeting !== undefined && (
         <NewMeetingDialog
           span={meeting}

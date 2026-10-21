@@ -1,7 +1,7 @@
 // The workspace frame's sidebar in Chromium (spec 0026, AC-681, AC-685; spec 0034, milestone 1): the theme switch
 // left its footer for Settings, which sits there with ⌘, and opens on that shortcut (but not from a text field);
 // inside Settings the settings sidebar takes its place. The app's sidebar draws Home, then the member's sections in
-// their order and folds (Scheduling's two rows, Bookings and Captures), then Tasks, and the trash, Settings and Help
+// their order and folds (Bookings and Captures with no label, as round 6 had them), then Tasks, and the trash, Settings and Help
 // at the foot (AC-921, AC-928, AC-930; owner, 21 and 22 October 2026); a fold or the rail goes
 // through the data layer (AC-931, AC-935), and [ toggles the rail outside a text field; while the member's sidebar
 // loads nothing guesses at their order, and one that couldn't be read draws the defaults. Sign out asks first (the
@@ -284,7 +284,7 @@ describe('signing out from the workspace menu', () => {
     await page.getByRole('menuitem', { name: 'Sign out' }).click();
   }
 
-  it('holds the workspaces with the role under the open one, the shortcuts and Sign out, and no trash', async () => {
+  it('holds the workspaces with the role under the open one and Sign out, and no trash or shortcuts', async () => {
     await renderFrame(undefined, {
       roleLabel: 'Owner',
       workspaces: [
@@ -299,7 +299,8 @@ describe('signing out from the workspace menu', () => {
     const names = items.map((each) => each.textContent.trim());
     expect(names.some((name) => name.includes('Acme') && name.includes('Owner'))).toBe(true);
     expect(names.some((name) => name.includes('Globex') && name.includes('Owner'))).toBe(false);
-    expect(names.some((name) => name.startsWith('Keyboard shortcuts'))).toBe(true);
+    // The shortcuts live in the foot's Help (and on ?), not here.
+    expect(names.some((name) => name.startsWith('Keyboard shortcuts'))).toBe(false);
     expect(names).toContain('Sign out');
     // The trash lives in the sidebar's foot (the owner, 22 October 2026), and no section is headed by the role.
     expect(names.some((name) => name.startsWith('Trash'))).toBe(false);
@@ -368,7 +369,7 @@ const button = (name: string) =>
   [...document.querySelectorAll<HTMLButtonElement>('nav button')].find((each) => nameOf(each) === name);
 
 describe('the app’s sidebar (spec 0034)', () => {
-  it('draws Home, Records and Scheduling with Bookings and Captures, then Tasks, and the trash, Settings and Help at the foot', async () => {
+  it('draws Home, Records, Bookings and Captures with no label over them, then Tasks, and the trash, Settings and Help at the foot', async () => {
     await renderFrame(undefined, { objects: OBJECTS });
     const names = sidebarNames();
     const expected = [
@@ -376,7 +377,6 @@ describe('the app’s sidebar (spec 0034)', () => {
       'Records',
       'People',
       'Companies',
-      'Scheduling',
       'Bookings',
       'Captures',
       'Tasks',
@@ -387,6 +387,9 @@ describe('the app’s sidebar (spec 0034)', () => {
     expect(names.filter((name) => expected.includes(name))).toEqual(expected);
     // Availability, Booking pages and Forms are tabs inside Bookings and Captures, never rows (the owner, 22 October 2026).
     for (const tab of ['Availability', 'Booking pages', 'Forms']) expect(names).not.toContain(tab);
+    // No Scheduling label, fold or menu on screen; the group is named for screen readers.
+    expect(names).not.toContain('Scheduling');
+    expect(document.querySelector('nav [role="group"][aria-label="Scheduling"]')).not.toBeNull();
     const link = (name: string) =>
       [...document.querySelectorAll<HTMLAnchorElement>('nav a')].find((each) => each.textContent.trim() === name);
     expect(link('Home')?.getAttribute('href')).toBe('/w/acme/home');
@@ -409,25 +412,24 @@ describe('the app’s sidebar (spec 0034)', () => {
     };
     await renderFrame(undefined, { objects: OBJECTS });
     const names = sidebarNames();
-    expect(names.indexOf('Scheduling')).toBeLessThan(names.indexOf('Records'));
+    expect(names.indexOf('Bookings')).toBeLessThan(names.indexOf('Records'));
     expect(button('Records')?.getAttribute('aria-expanded')).toBe('false');
-    expect(button('Scheduling')?.getAttribute('aria-expanded')).toBe('true');
   });
 
   it('folds a section from its label through the data layer, and opens it again (AC-931)', async () => {
     await renderFrame(undefined, { objects: OBJECTS });
     await act(async () => {
-      button('Scheduling')?.click();
+      button('Records')?.click();
       await new Promise((resolve) => setTimeout(resolve, 20));
     });
-    expect(sent).toEqual([{ op: 'fold', section: 'scheduling', folded: true }]);
-    expect(button('Scheduling')?.getAttribute('aria-expanded')).toBe('false');
+    expect(sent).toEqual([{ op: 'fold', section: 'records', folded: true }]);
+    expect(button('Records')?.getAttribute('aria-expanded')).toBe('false');
     await act(async () => {
-      button('Scheduling')?.click();
+      button('Records')?.click();
       await new Promise((resolve) => setTimeout(resolve, 20));
     });
-    expect(sent.at(-1)).toEqual({ op: 'fold', section: 'scheduling', folded: false });
-    expect(button('Scheduling')?.getAttribute('aria-expanded')).toBe('true');
+    expect(sent.at(-1)).toEqual({ op: 'fold', section: 'records', folded: false });
+    expect(button('Records')?.getAttribute('aria-expanded')).toBe('true');
   });
 
   it('folds the whole sidebar to its rail with [ and back, never from a text field (AC-935)', async () => {
@@ -458,7 +460,7 @@ describe('the app’s sidebar (spec 0034)', () => {
     await renderFrame(undefined, { objects: OBJECTS });
     const names = sidebarNames();
     expect(names).toContain('Records');
-    expect(names).not.toContain('Scheduling');
+    expect(names).not.toContain('Bookings');
     expect(names).not.toContain('Tasks');
     expect(names).toContain('Home');
     // No collapse button while the member's choice is unknown, so a press never lands on a guess.
@@ -467,7 +469,7 @@ describe('the app’s sidebar (spec 0034)', () => {
     await act(async () => {
       await new Promise((resolve) => setTimeout(resolve, 20));
     });
-    expect(sidebarNames()).toContain('Scheduling');
+    expect(sidebarNames()).toContain('Bookings');
   });
 
   it('draws the rail this browser last saw while the member’s sidebar loads, so the page doesn’t jump', async () => {
@@ -481,7 +483,7 @@ describe('the app’s sidebar (spec 0034)', () => {
     snapshot = { status: 'error', error: { code: 'INTERNAL', message: 'Down.' } as never };
     await renderFrame(undefined, { objects: OBJECTS });
     const names = sidebarNames();
-    for (const name of ['Tasks', 'Records', 'Scheduling', 'Bookings', 'Captures', 'Trash']) {
+    for (const name of ['Tasks', 'Records', 'Bookings', 'Captures', 'Trash']) {
       expect(names).toContain(name);
     }
   });
@@ -519,9 +521,9 @@ describe('the app’s sidebar (spec 0034)', () => {
 
   it('moves a section from its menu, counting the sections it doesn’t draw (AC-932)', async () => {
     await renderFrame(undefined, { objects: OBJECTS });
-    await pick('Scheduling options', 'Move up');
-    // Drawn: Records, Scheduling; stored: Favourites, Records, Lists, Scheduling. Up lands before Records.
-    expect(sent).toEqual([{ op: 'moveSection', section: 'scheduling', toIndex: 1 }]);
+    await pick('Records options', 'Move down');
+    // Drawn: Records, Scheduling; stored: Favourites, Records, Lists, Scheduling. Down lands after Scheduling.
+    expect(sent).toEqual([{ op: 'moveSection', section: 'records', toIndex: 3 }]);
   });
 
   it('reorders an item from the keyboard on its grip, announcing the move (AC-932)', async () => {

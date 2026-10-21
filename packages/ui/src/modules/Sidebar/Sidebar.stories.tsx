@@ -47,9 +47,6 @@ function SampleSidebar({
               Brightline
             </MenuItem>
             <MenuItem id="northwind">Northwind</MenuItem>
-            <MenuItem id="shortcuts" icon="keyboard" kbd="?">
-              Keyboard shortcuts
-            </MenuItem>
             <MenuItem id="sign-out" icon="log-out">
               Sign out
             </MenuItem>
@@ -215,7 +212,7 @@ export const CollapsedWorkspaceTip: Story = {
   },
 };
 
-/** The workspace menu: the workspaces with the role under the open one, the shortcuts and Sign out; no trash. */
+/** The workspace menu: the workspaces with the role under the open one, and Sign out; the trash and shortcuts live in the foot. */
 export const WorkspaceMenu: Story = {
   play: async ({ canvas, userEvent }) => {
     await userEvent.click(canvas.getByRole('button', { name: 'Brightline, workspace menu' }));
@@ -227,6 +224,7 @@ export const WorkspaceMenu: Story = {
     await expect(menu).toHaveTextContent('Owner');
     await expect(menu.querySelector('header')).toBeNull();
     await expect(menu).not.toHaveTextContent('Trash');
+    await expect(menu).not.toHaveTextContent('Keyboard shortcuts');
   },
 };
 

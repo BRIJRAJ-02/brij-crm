@@ -134,8 +134,6 @@ export const strings = {
   nothingToUndo: 'Nothing to undo.',
   /** A toast's Undo pressed after newer changes: nothing is undone. */
   undoStale: 'Newer changes came after that one, so it wasn’t undone. Undo them first.',
-  /** The workspace menu's way to the shortcut list. */
-  keyboardShortcuts: 'Keyboard shortcuts',
   /** Someone else's later save replaced the person's value (AC-46), and who changed it, from replaced.ts. */
   ...replacedStrings,
   /** ShortcutHelp, opened with ? anywhere in the workspace. */
