@@ -3407,6 +3407,9 @@ export function createDataLayer({
         call((options) => api.exports.get({ workspace, exportId }, options)),
       /** The export a job this tab started wrote, for the finish toast's Download. */
       forJob: (jobId: string): RecordsExportView | undefined => exportJobs.get(jobId),
+      /** Where a finished export downloads from (the same route serves every export). */
+      downloadPath: (workspace: string, exportId: string): string =>
+        `/api/exports/${encodeURIComponent(exportId)}/download?workspace=${encodeURIComponent(workspace)}`,
       /** A new export id (UUID v7). */
       newId: () => mintId(),
     },

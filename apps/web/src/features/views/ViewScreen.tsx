@@ -339,7 +339,11 @@ export function ViewScreen(props: ViewScreenProps) {
   };
   // Export CSV (spec 0040, AC-1130, AC-1131): the view as it stands, its unsaved filter and sorts included, its visible
   // columns in order; the job's end toast offers Download.
+  const exporting = useRef(false);
   const exportView = () => {
+    // One export per press: a second press while the first is on its way starts nothing.
+    if (exporting.current) return;
+    exporting.current = true;
     data.exports
       .start(slug, {
         id: data.exports.newId(),
@@ -351,9 +355,11 @@ export function ViewScreen(props: ViewScreenProps) {
       })
       .then(
         () => {
+          exporting.current = false;
           toasts.toast({ tone: 'info', message: importStrings.exportStarted });
         },
         (error: unknown) => {
+          exporting.current = false;
           toasts.toast({ tone: 'danger', message: isDataError(error) ? error.message : strings.actionFailed });
         },
       );

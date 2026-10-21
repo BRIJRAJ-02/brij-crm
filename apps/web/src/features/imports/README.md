@@ -1,6 +1,6 @@
 # Imports
 
-Spec 0040, milestones 1 and 2. A CSV into any live object, through the browser's reader and the `records.import` job.
+Spec 0040, milestones 1 to 4. A CSV into any live object, through the browser's reader and the `records.import` job.
 
 ## The import page (`/w/$slug/objects/$object/import`, ImportScreen)
 
@@ -23,3 +23,8 @@ Spec 0040, milestones 1 and 2. A CSV into any live object, through the browser's
 - Start import confirms, then makes the import, sends its ready rows in chunks (`data.imports.stage`, a progress bar with Stop, which asks first), starts its job and opens the summary. Leaving before then asks first and drops the file.
 - The summary follows the job live (`useJob`): progress with Cancel (asks first), then the counts, the refused rows paged with Show more and Download refused rows, View records, and Undo import (a danger confirm) while undo is open: the `records.import_undo` job moves the created records to the trash (the import's id their batch) and puts changed values back, keeping any edited since ("1 value changed since, kept." on its row). The jobs' end toasts link here.
 - `e2e/import.flow.ts` runs the whole loop (5,000 rows at 1280 by default, 300 at phone width; CI runs 1,000 to stay in its time), with axe in light and dark at each step.
+- The lean pass: the title sits in the bar ("Import people", "Import of people.csv"), the Steps bar names each step, cards keep short copy, and an InfoTip explains the parts that confuse: how rows find records (Match records), what the Row numbers mean (Preview), and Not imported against Left out for errors, with what undo does (summary). Counts of none are left out.
+- Leaving with a file loaded, or while rows send, asks in a danger Modal (the router's blocker with its resolver); closing the tab asks the browser's way. Focus goes to the page title at each step, since the pressed button's Card goes.
+- Rows are read a slice of 2,000 at a time on the way to the preview (a progress bar on Match records), once per file and set of targets.
+- The Background jobs page links an import's job to its summary (View import) and a finished export to its file (Download), from the job's result (`importId`, `exportId`).
+- Export CSV (the view's More menu, every member who can read it) starts a `records.export` job with the view as it stands; its end toast offers Download.

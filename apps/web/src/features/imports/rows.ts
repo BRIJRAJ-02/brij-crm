@@ -55,11 +55,12 @@ export function readRows(
   targets: readonly (ImportTarget | undefined)[],
   attributes: ReadonlyMap<string, FieldAttribute>,
   context: (attribute: FieldAttribute) => TextContext,
+  offset = 0,
 ): ReadRows {
   const ready: StagedRow[] = [];
   const errors: ErrorRow[] = [];
   rows.forEach((cells, index) => {
-    const rowNumber = index + 2;
+    const rowNumber = offset + index + 2;
     const values: Record<string, unknown> = {};
     const names = new Map<string, { firstName?: string; lastName?: string }>();
     const problems: CellProblem[] = [];
@@ -83,6 +84,38 @@ export function readRows(
       errors.push({ rowNumber, cells, problems: [{ column: -1, header: '', reason: EMPTY_ROW }] });
     } else ready.push({ rowNumber, values });
   });
+  return { ready, errors };
+}
+
+/** Rows one slice reads before the page gets the main thread back. */
+export const SLICE_ROWS = 2_000;
+
+/**
+ * `readRows` a slice at a time, giving the main thread back between slices
+ * so the page stays responsive on a 100,000 row file; `onProgress` hears the
+ * rows read so far. Stops (answering undefined) once `isCancelled` says so.
+ */
+export async function readRowsInSlices(
+  rows: readonly (readonly string[])[],
+  headers: readonly string[],
+  targets: readonly (ImportTarget | undefined)[],
+  attributes: ReadonlyMap<string, FieldAttribute>,
+  context: (attribute: FieldAttribute) => TextContext,
+  onProgress: (read: number) => void = () => undefined,
+  isCancelled: () => boolean = () => false,
+): Promise<ReadRows | undefined> {
+  const ready: StagedRow[] = [];
+  const errors: ErrorRow[] = [];
+  for (let start = 0; start < rows.length; start += SLICE_ROWS) {
+    const part = readRows(rows.slice(start, start + SLICE_ROWS), headers, targets, attributes, context, start);
+    for (const row of part.ready) ready.push(row);
+    for (const row of part.errors) errors.push(row);
+    onProgress(Math.min(rows.length, start + SLICE_ROWS));
+    await new Promise<void>((resolve) => {
+      setTimeout(resolve, 0);
+    });
+    if (isCancelled()) return undefined;
+  }
   return { ready, errors };
 }
 

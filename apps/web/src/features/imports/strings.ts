@@ -1,15 +1,17 @@
-/** The import screens' copy (spec 0040). Plain words, no dashes. */
+/** The import screens' copy (spec 0040). Plain words, no dashes, short. */
 const count = new Intl.NumberFormat();
 /** A number as the page writes it: 4,812. */
 export const n = (value: number): string => count.format(value);
-const mb = (bytes: number) => `${String(Math.round(bytes / (1024 * 1024)))} MB`;
+/** A size as FileDrop writes its limit: decimal megabytes. */
+const mb = (bytes: number) => `${String(Math.round(bytes / 1_000_000))} MB`;
+/** "1 row", "2 rows". */
+const rowsWord = (value: number) => `${n(value)} ${value === 1 ? 'row' : 'rows'}`;
 
 export const strings = {
-  /** The view's More menu item (AC-1111). */
+  /** The view's More menu items (AC-1111, AC-1130), and the export's first toast. */
   menuItem: 'Import CSV',
-  /** The view's More menu item (AC-1130), and its toasts. */
   exportItem: 'Export CSV',
-  exportStarted: 'Exporting this view. Download it when it’s ready.',
+  exportStarted: 'Exporting this view. You can download it when it’s ready.',
   title: (pluralName: string) => `Import ${pluralName.toLowerCase()}`,
   stepsLabel: 'Import steps',
   steps: {
@@ -21,8 +23,7 @@ export const strings = {
   back: 'Back',
   continue: 'Continue',
   // Upload (AC-1112)
-  uploadTitle: 'Choose a CSV file',
-  uploadText: 'The first row holds the column names. Nothing is imported until you start the import.',
+  uploadText: 'The first row holds the column names. Nothing changes until you start the import.',
   dropLabel: 'Upload a CSV file',
   reading: 'Reading the file',
   refusals: {
@@ -35,12 +36,11 @@ export const strings = {
     quote: (row: number) => `A quote opened on row ${n(row)} never closes. Fix the file and choose it again.`,
     failed: 'The file could not be read. Choose it again.',
   },
-  fileSummary: (name: string, rows: number, columns: number) =>
-    `${name}: ${n(rows)} ${rows === 1 ? 'row' : 'rows'}, ${n(columns)} ${columns === 1 ? 'column' : 'columns'}`,
+  fileSummary: (name: string, rows: number) => `${name}, ${rowsWord(rows)}`,
   chooseAnother: 'Choose another file',
   // Match columns (AC-1114, AC-1115)
-  columnsTitle: 'Match columns to attributes',
   columnsCount: (matched: number, total: number) => `${n(matched)} of ${n(total)} columns will be imported`,
+  columnsLabel: 'Columns',
   columns: { header: 'Column', sample: 'Sample values', target: 'Imports into' },
   dontImport: "Don't import",
   namePart: (name: string, part: 'first' | 'last') => `${name}: ${part === 'first' ? 'First name' : 'Last name'}`,
@@ -49,58 +49,62 @@ export const strings = {
   noSample: 'No values',
   needOneColumn: 'Match at least one column to continue.',
   // Match records (AC-1117, AC-1118)
-  recordsTitle: 'Match records',
-  recordsText: 'Rows that match an existing record update it instead of making a new one.',
   findBy: 'Find existing records by',
+  findByInfo:
+    'A row whose value matches a record updates that record instead of adding a new one. An empty cell never clears a value.',
+  findByExample: 'With Email addresses, a row with ada@example.com updates Ada.',
   alwaysCreate: 'Always create new records',
-  noKeyHint: 'Match a column to a unique attribute, such as Email addresses, to find existing records.',
+  noKeyHint: 'Match a column to a unique attribute, such as Email addresses, to update records you have.',
   onMatch: 'When a row matches a record',
   onMatchChoices: {
     fill: 'Fill empty fields',
     overwrite: "Overwrite with the file's values",
     skip: 'Skip the row',
   },
-  onMatchHints: {
-    fill: 'Values your team already typed stay.',
-    overwrite: 'Empty cells never clear a value.',
-    skip: 'The record stays as it is.',
-  },
   onNoMatch: 'When a row matches no record',
   onNoMatchChoices: { create: 'Create a record', skip: 'Skip the row' },
   // Preview (AC-1120, AC-1121)
-  previewTitle: 'Preview',
+  checking: 'Checking rows',
   totals: (ready: number, errors: number) =>
     errors === 0 ? `${n(ready)} ready` : `${n(ready)} ready, ${n(errors)} with errors`,
   filterLabel: 'Show rows',
-  filters: { all: 'All', ready: 'Ready', errors: 'With errors' },
+  filters: {
+    all: 'All',
+    ready: (count: number) => `Ready ${n(count)}`,
+    errors: (count: number) => `With errors ${n(count)}`,
+  },
   rowsLabel: 'Rows to import',
   rowColumn: 'Row',
-  problemsColumn: 'Errors',
+  rowInfo: 'Row numbers match your file. The column names are row 1.',
+  reasonColumn: 'Reason',
   noRows: 'No rows here',
   noRowsText: 'Choose another filter to see the rest.',
   downloadErrors: 'Download rows with errors',
   errorHeader: 'Error',
   errorsFile: (fileName: string) => `${fileName.replace(/\.[^.]+$/u, '')} errors.csv`,
-  nothingReady: 'No row is ready to import. Download the rows with errors, fix them and choose the file again.',
+  nothingReady: 'No row is ready. Download the rows with errors, fix them and choose the file again.',
   start: 'Start import',
   // Running (AC-1123)
-  confirmTitle: (rows: number, pluralName: string) => `Import ${n(rows)} rows into ${pluralName}?`,
+  confirmTitle: (rows: number, pluralName: string) => `Import ${rowsWord(rows)} into ${pluralName}?`,
   confirmText: (errors: number) =>
     errors === 0
-      ? 'The import runs in the background. You can leave this page; you can undo the import for 7 days.'
-      : `${n(errors)} rows with errors are left out. The import runs in the background, and you can undo it for 7 days.`,
+      ? 'It runs in the background, and you can undo it for 7 days.'
+      : `${rowsWord(errors)} with errors stay out. It runs in the background, and you can undo it for 7 days.`,
   notYet: 'Not yet',
-  sending: 'Sending rows',
-  sent: (sent: number, total: number) => `${n(sent)} of ${n(total)} rows sent`,
+  sent: (sent: number, total: number) => `Sending rows: ${n(sent)} of ${n(total)}`,
   stopSending: 'Stop',
   stopTitle: 'Stop this import?',
   stopText: 'Nothing has been imported yet. The rows sent so far are dropped.',
   keepGoing: 'Keep going',
   stopped: 'The import was stopped before it started.',
-  leaveConfirm: 'Leave the import? The file and your choices are dropped.',
+  leaveTitle: 'Leave the import?',
+  leaveText: 'Your file and choices are dropped, and nothing is imported.',
+  leaveSendingText: 'The import stops, and nothing is imported.',
+  stay: 'Stay',
+  leave: 'Leave',
   somethingWrong: 'Something went wrong. Try again.',
   // Summary (AC-1125, AC-1127)
-  summaryTitle: (fileName: string) => fileName,
+  summaryTitle: (fileName: string) => `Import of ${fileName}`,
   progress: (done: number, total: number) => `${n(done)} of ${n(total)} rows`,
   running: 'Importing',
   queued: 'Waiting to start',
@@ -112,23 +116,23 @@ export const strings = {
     created: 'Created',
     updated: 'Updated',
     skipped: 'Skipped',
-    refused: 'Refused',
-    errorRows: 'Left out with errors',
-    undone: 'Taken back',
+    refused: 'Not imported',
+    errorRows: 'Left out for errors',
+    undone: 'Undone',
   },
-  undoneSplit: (undone: number) => `${n(undone)} ${undone === 1 ? 'row' : 'rows'} taken back`,
-  split: (created: number, updated: number) => `${n(created)} new, ${n(updated)} matched existing records`,
+  countsInfo:
+    'Rows with errors were left out in the preview. Rows not imported were turned down while importing, for example by a rule or a value another record holds.',
   finished: 'Import finished',
   failed: 'Import failed',
   cancelled: 'Import cancelled',
   undone: 'Import undone',
   undoing: 'Undoing the import',
-  refusedTitle: 'Rows that were not imported',
-  refusedLabel: 'Refused rows',
-  reasonColumn: 'Why',
+  notStarted: 'Import not started',
+  refusedTitle: 'Rows not imported',
+  refusedLabel: 'Rows not imported',
   showMore: 'Show more',
-  downloadRefused: 'Download refused rows',
-  refusedFile: (fileName: string) => `${fileName.replace(/\.[^.]+$/u, '')} refused.csv`,
+  downloadRefused: 'Download',
+  refusedFile: (fileName: string) => `${fileName.replace(/\.[^.]+$/u, '')} not imported.csv`,
   viewRecords: (pluralName: string) => `View ${pluralName.toLowerCase()}`,
   undo: 'Undo import',
   undoTitle: 'Undo this import?',
@@ -138,12 +142,13 @@ export const strings = {
         ? `${n(created)} created ${created === 1 ? singular.toLowerCase() : plural.toLowerCase()} move to the trash.`
         : '',
       updated > 0
-        ? `${n(updated)} changed ${updated === 1 ? 'record goes' : 'records go'} back to what ${updated === 1 ? 'it' : 'they'} held, unless edited since.`
+        ? `${n(updated)} changed ${updated === 1 ? 'record goes' : 'records go'} back, unless edited since.`
         : '',
     ]
       .filter((line) => line !== '')
       .join(' '),
-  undoUntil: 'Undo open until',
+  undoCloses: 'Undo closes',
+  undoInfo: 'Created records go to the trash. Changed records go back, unless someone edited them since.',
   keepImport: 'Keep it',
   missingTitle: 'Import not found',
   missingText: "That import doesn't exist, or you can't see it.",

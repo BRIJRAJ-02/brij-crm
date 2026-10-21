@@ -26,6 +26,10 @@ function peopleCsv(rows: number): string {
 test('a People CSV imports through the four steps, and its summary says what it did', async ({ page }) => {
   test.setTimeout(2 * IMPORT_MS + 120_000);
   const rows = test.info().project.name === '375' ? Math.min(ROWS, PHONE_ROWS) : ROWS;
+  // FLOW_PHONE_WIDTH draws the phone width at another size (the screenshots at 390).
+  if (test.info().project.name === '375' && process.env.FLOW_PHONE_WIDTH !== undefined) {
+    await page.setViewportSize({ width: Number(process.env.FLOW_PHONE_WIDTH), height: 844 });
+  }
   const stamp = Date.now().toString(36);
   const slug = `import-${stamp}`;
   await newWorkspace(page, `import-${stamp}@example.com`, slug);
@@ -65,7 +69,8 @@ test('a People CSV imports through the four steps, and its summary says what it 
   // The summary: the job's progress, then what it did.
   await expect(page).toHaveURL(new RegExp(`/w/${slug}/objects/people/imports/[0-9a-f-]+$`), { timeout: IMPORT_MS });
   await expect(page.getByRole('heading', { name: 'Import finished' })).toBeVisible({ timeout: IMPORT_MS });
-  await expect(page.getByText(`${readyRows} new, 0 matched existing records`)).toBeVisible();
+  const counts = page.getByRole('main').getByRole('definition');
+  await expect(counts.first()).toHaveText(readyRows);
   await expect(page.getByRole('button', { name: 'Undo import' })).toBeVisible();
   await checkScreen(page, 'import-summary');
   await page.getByRole('link', { name: 'People' }).first().click();
