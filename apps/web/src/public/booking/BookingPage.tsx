@@ -420,7 +420,7 @@ function Booking({
       .book(page.publicKey, {
         idempotencyKey: step.attempt,
         start: time,
-        duration: duration as 15 | 30 | 45 | 60 | 90,
+        duration,
         name: values.name,
         email: values.email,
         timeZone: zone,

@@ -150,10 +150,9 @@ export const PREVIEW_MESSAGE = 'crm:preview';
 const isRecord = (value: unknown): value is Readonly<Record<string, unknown>> =>
   typeof value === 'object' && value !== null;
 
-const PREVIEW_DURATIONS: readonly number[] = [15, 30, 45, 60, 90];
-
+/** A length the page can show: 5 to 480 minutes in steps of 5 (contracts' `BookingDuration`). */
 const isDuration = (value: unknown): value is PublicBookingPage['durations'][number] =>
-  typeof value === 'number' && PREVIEW_DURATIONS.includes(value);
+  typeof value === 'number' && Number.isInteger(value) && value >= 5 && value <= 480 && value % 5 === 0;
 
 /** A draft's location, when it is one the page can show. */
 function previewLocation(value: unknown): PublicBookingPage['location'] | undefined {

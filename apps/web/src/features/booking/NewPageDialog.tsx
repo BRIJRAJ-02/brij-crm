@@ -6,6 +6,7 @@ import { isDataError, type BookingPageView, type DataLayer } from '@crm/data';
 import { useSchedules } from '@crm/data/react';
 import { Button, Callout, Field, InfoTip, Modal, SegmentedControl, Select } from '@crm/ui';
 import { useState } from 'react';
+import { lengthOf } from './durations.ts';
 import { browserZone } from './zone.ts';
 import { scheduleStrings } from './schedule-strings.ts';
 import { scheduleChoices } from './schedules.ts';
@@ -14,15 +15,6 @@ import { strings } from './strings.ts';
 /** The lengths offered as segments; any other the server allows goes through Custom. */
 const SEGMENTS = [15, 30, 45, 60] as const;
 const CUSTOM = 'custom';
-/** Every length a page may offer (the server's `BOOKING_DURATIONS`, which refuses any other). */
-const LENGTHS = [15, 30, 45, 60, 90] as const;
-type Length = (typeof LENGTHS)[number];
-
-/** A typed minutes value as a length the server takes, or undefined. */
-function durationOf(minutes: string): Length | undefined {
-  const value = Number(minutes.trim());
-  return LENGTHS.find((each) => each === value);
-}
 
 /** Props for the dialog. */
 export interface NewPageDialogProps {
@@ -59,7 +51,7 @@ export function NewPageDialog({ data, slug, isOpen, onClose, onCreated }: NewPag
   };
   const create = () => {
     if (isBusy) return;
-    const minutes = length === CUSTOM ? durationOf(custom) : durationOf(length);
+    const minutes = length === CUSTOM ? lengthOf(custom) : lengthOf(length);
     const found = {
       ...(title.trim() === '' ? { title: strings.titleRequired } : {}),
       ...(minutes === undefined ? { custom: strings.customMinutesInvalid } : {}),

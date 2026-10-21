@@ -5,8 +5,16 @@ import * as z from 'zod';
 import { DateValue } from '../values/attribute-values.ts';
 import { Uuid } from '../values/ids.ts';
 
-/** The meeting lengths a page may offer, in minutes. */
+/** The meeting lengths offered as ready picks, in minutes; any other length in steps of 5 is a custom one. */
 export const BOOKING_DURATIONS = [15, 30, 45, 60, 90] as const;
+/** The shortest meeting length, in minutes. */
+export const BOOKING_DURATION_MIN = 5;
+/** The longest meeting length, in minutes: 8 hours. */
+export const BOOKING_DURATION_MAX = 480;
+/** Every meeting length is a whole multiple of this many minutes. */
+export const BOOKING_DURATION_STEP = 5;
+/** At most this many lengths on one page. */
+export const BOOKING_DURATIONS_MAX = 5;
 /** The slot steps a page may set, in minutes (none: the duration). */
 export const BOOKING_SLOT_STEPS = [15, 30, 60] as const;
 /** The weekdays as the availability keys them, Monday first. */
@@ -18,13 +26,13 @@ export const BOOKING_OVERRIDES_MAX = 120;
 /** The longest minimum notice: 14 days. */
 export const BOOKING_NOTICE_MAX = 14 * 24 * 60;
 
-/** One meeting length. */
-export const BookingDuration = z.union(
-  BOOKING_DURATIONS.map((minutes) => z.literal(minutes)),
-  {
-    error: 'Pick 15, 30, 45, 60 or 90 minutes.',
-  },
-);
+/** One meeting length: 5 to 480 minutes, in steps of 5 (the database's `booking_pages_durations` check). */
+export const BookingDuration = z
+  .number({ error: 'Give the length in minutes.' })
+  .int({ error: 'Give the length in whole minutes.' })
+  .min(BOOKING_DURATION_MIN, { error: 'A meeting is at least 5 minutes.' })
+  .max(BOOKING_DURATION_MAX, { error: 'A meeting is at most 480 minutes.' })
+  .multipleOf(BOOKING_DURATION_STEP, { error: 'Use a length in steps of 5 minutes.' });
 /** One meeting length. */
 export type BookingDuration = z.infer<typeof BookingDuration>;
 
@@ -172,7 +180,7 @@ export const BookingPageSettings = z.object({
   durations: z
     .array(BookingDuration)
     .min(1, 'Offer at least one meeting length.')
-    .max(BOOKING_DURATIONS.length)
+    .max(BOOKING_DURATIONS_MAX, { error: 'Offer at most 5 lengths.' })
     .refine((durations) => new Set(durations).size === durations.length, { error: 'Offer each length once.' }),
   location: BookingLocation,
   bufferBefore: z.number().int().min(0).max(60, 'Buffers are 0 to 60 minutes.'),

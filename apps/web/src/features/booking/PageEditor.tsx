@@ -13,6 +13,7 @@ import {
 } from '@crm/data';
 import { useCalendar, useSchedules } from '@crm/data/react';
 import {
+  Button,
   Callout,
   Card,
   ChoiceChips,
@@ -37,6 +38,7 @@ import { useBlocker } from '@tanstack/react-router';
 import { useEffect, useState } from 'react';
 import { pageHeading } from '../navigation/focus.ts';
 import { WorkspacePage } from '../workspace/WorkspacePage.tsx';
+import { lengthChoices, lengthOf, LENGTHS_MAX } from './durations.ts';
 import { CalendarNote, readDismissed, writeDismissed } from './CalendarNote.tsx';
 import { weekSummary, zoneLabel } from './hours.ts';
 import { linksHref, publicBookingUrl, scheduleHref } from './links.ts';
@@ -57,7 +59,6 @@ export interface PageEditorProps {
   readonly ownerMember?: string;
 }
 
-const DURATIONS = [15, 30, 45, 60, 90] as const;
 const LOCATIONS = ['video', 'address', 'phone', 'custom'] as const;
 
 /** The help beside a setting's label, from its `strings.tips` entry. */
@@ -144,12 +145,33 @@ export function PageEditor({ data, slug, page: loaded, locale, schedules, ownerM
     setJustSaved(false);
     setDraft((current) => ({ ...current, ...patch }));
   };
+  // The ready picks plus any custom length the page has saved or the draft holds, so turning one off keeps its chip.
+  const lengths = lengthChoices(page.durations, draft.durations);
+  const addLength = () => {
+    const minutes = lengthOf(lengthText);
+    if (minutes === undefined) {
+      setLengthError(strings.customMinutesInvalid);
+      return;
+    }
+    if (!draft.durations.includes(minutes)) {
+      if (draft.durations.length >= LENGTHS_MAX) {
+        setLengthError(strings.lengthsFull);
+        return;
+      }
+      change({ durations: [...draft.durations, minutes].sort((left, right) => left - right) });
+    }
+    setLengthText('');
+    setLengthError(undefined);
+  };
   const [device, setDevice] = useState<PreviewDevice>('phone');
   // The calendar note shows only to someone with no calendar connected yet (their own connections, spec 0024).
   const calendar = useCalendar(data.calendar.view(slug));
   // The route primes the list, so the note is in the first paint's layout and never pushes the cards down.
   const hasNoCalendar = calendar.status === 'ready' && calendar.connections.length === 0;
   const [isNoteDismissed, setNoteDismissed] = useState(() => readDismissed(slug));
+  // A custom length typed in minutes, added to the page's lengths on Add or Enter.
+  const [lengthText, setLengthText] = useState('');
+  const [lengthError, setLengthError] = useState<string | undefined>(undefined);
 
   // Leaving with unsaved changes asks first, in the app and when the tab closes.
   useBlocker({
@@ -341,12 +363,32 @@ export function PageEditor({ data, slug, page: loaded, locale, schedules, ownerM
               />
               <ChoiceChips
                 label={strings.durations}
-                choices={DURATIONS.map((minutes) => ({ id: String(minutes), label: strings.minutesShort(minutes) }))}
+                choices={lengths.map((minutes) => ({ id: String(minutes), label: strings.minutesShort(minutes) }))}
                 selected={draft.durations.map(String)}
                 isDisabled={isLocked}
-                onChange={(ids) => change({ durations: DURATIONS.filter((minutes) => ids.includes(String(minutes))) })}
+                onChange={(ids) => change({ durations: lengths.filter((minutes) => ids.includes(String(minutes))) })}
                 {...(draft.durations.length === 0 ? { error: strings.durationRequired } : {})}
               />
+              {!isLocked && (
+                <Field
+                  label={strings.addLength}
+                  inputMode="numeric"
+                  maxLength={3}
+                  hint={strings.customMinutesHint}
+                  value={lengthText}
+                  onChange={(value) => {
+                    setLengthText(value);
+                    setLengthError(undefined);
+                  }}
+                  onSubmit={addLength}
+                  suffix={
+                    <Button variant="ghost" onPress={addLength} isDisabled={lengthText.trim() === ''}>
+                      {strings.add}
+                    </Button>
+                  }
+                  {...(lengthError === undefined ? {} : { error: lengthError })}
+                />
+              )}
               <Select
                 label={strings.location}
                 items={LOCATIONS.map((type) => ({ id: type, label: strings.locations[type] }))}

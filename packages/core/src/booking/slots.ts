@@ -5,6 +5,7 @@
 // booking's recheck under the host lock.
 import { and, asc, eq, gt, inArray, lt, ne, sql } from 'drizzle-orm';
 import {
+  BookingDuration,
   BookingLocation,
   isTimeZone,
   minutesOf,
@@ -85,9 +86,8 @@ export function pageOf(
     title: row.title,
     description: row.description,
     slug: row.slug,
-    durations: row.durations.filter((minutes): minutes is 15 | 30 | 45 | 60 | 90 =>
-      [15, 30, 45, 60, 90].includes(minutes),
-    ),
+    // The database check holds lengths to 5 to 480 in steps of 5; the parse keeps a stray one off the page.
+    durations: row.durations.filter((minutes) => BookingDuration.safeParse(minutes).success),
     location: BookingLocation.parse(row.location),
     availability: schedule.availability,
     scheduleName: schedule.name,
