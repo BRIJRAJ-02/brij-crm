@@ -1,7 +1,7 @@
 // Brief
-// Purpose: one note, on `?note=<id>` (or `?note=new`) over the record page, saving itself as it is typed.
+// Purpose: one note, on `?note=<id>` (or `?note=new`) over the record page, written as a page (Notion's centre peek).
 // Main task: write what was learned (a title and the body), and trust that it's saved.
-// Leaves out: writing together in real time and versions (#27), comments on a passage (#29), moving a note.
+// Leaves out: writing together in real time and versions (#27), comments on a passage (#29), moving a note, a note page.
 import {
   NOTE_TITLE_MAX,
   type ActorDisplay,
@@ -16,23 +16,21 @@ import {
   Button,
   Callout,
   EmptyState,
-  Field,
   Menu,
   MenuItem,
   MenuTrigger,
   Modal,
   RecordChip,
+  RelativeTime,
   Skeleton,
   Tooltip,
 } from '@crm/ui';
 import { useRouteContext } from '@tanstack/react-router';
-import { lazy, Suspense, useEffect, useMemo, useState, type ReactNode } from 'react';
-import { deleteWithUndo } from '../tasks/undo-delete.ts';
+import { Suspense, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { offerUndo } from './delete.ts';
+import { NoteEditor } from './editor.ts';
 import { actorDisplay } from './entries.ts';
 import { strings } from './strings.ts';
-
-/** The editor, in its own chunk: loaded when a note first opens, never with the app (AC-451). */
-const NoteEditor = lazy(() => import('@crm/ui/editor').then((module) => ({ default: module.NoteEditor })));
 
 /** Props for the note window. */
 export interface NoteWindowProps {
@@ -75,9 +73,20 @@ const LOADING_SESSION: NoteSession = {
   dismissNotice: () => undefined,
 };
 
-/** The save state's words in the title bar. */
-function saveWords(state: NoteSessionState): string | undefined {
-  if (state.status !== 'ready' || state.isNew) return undefined;
+/** The delete's confirm: open, waiting on the server, or refused with the reason. */
+interface Confirming {
+  readonly isBusy: boolean;
+  readonly error?: string;
+}
+
+/**
+ * The bar's word on the note: its save state while it saves ("Saving…",
+ * "Saved", "Not saved. Retrying…", "Not saved."), else when it was last edited.
+ * The edit time ticks on quietly (aria-live off), so the bar's status announces
+ * only the save state's changes.
+ */
+function statusOf(state: NoteSessionState): ReactNode | undefined {
+  if (state.status !== 'ready') return undefined;
   switch (state.saveState) {
     case 'saving':
       return strings.saving;
@@ -88,16 +97,24 @@ function saveWords(state: NoteSessionState): string | undefined {
     case 'failed':
       return state.refusal === undefined ? strings.notSaved : undefined;
     case 'idle':
-      return undefined;
+      return state.isNew || state.updatedAt === undefined ? undefined : (
+        <span aria-live="off">
+          {`${strings.edited} `}
+          <RelativeTime value={state.updatedAt} />
+        </span>
+      );
   }
 }
 
 /**
- * The note window (AC-439 to AC-443, AC-445): one dialog from the moment it
- * opens, whatever state its note is in. A new note stores nothing until it
- * holds text, then saves itself as it is typed; a note that doesn't exist,
- * was deleted, or is hidden says so. Closing with a save pending closes at
- * once; the save finishes in the data layer.
+ * The note window (AC-439 to AC-443, AC-445): the Modal's peek from the
+ * moment it opens, whatever state its note is in, with the record as the
+ * bar's crumb and the note as a page under it, its title over its text with
+ * no box around either. A new note stores nothing until it holds text, then
+ * saves itself as it is typed; a note that doesn't exist, was deleted, or is
+ * hidden says so. Closing with a save pending closes at once; the save
+ * finishes in the data layer. Deleting asks first, since a note can't be
+ * brought back from the Trash.
  */
 export function NoteWindow(props: NoteWindowProps) {
   const { data, toasts } = useRouteContext({ from: '__root__' });
@@ -107,6 +124,16 @@ export function NoteWindow(props: NoteWindowProps) {
   const noteId = note === 'new' ? newId : note;
   const [opened, setOpened] = useState<NoteSession | 'failed' | undefined>(undefined);
   const [attempt, setAttempt] = useState(0);
+  const [confirming, setConfirming] = useState<Confirming | undefined>(undefined);
+  // One delete, and one close: a second press (a double click) does nothing, and a window that closed (stepping Back)
+  // never closes again, whatever a late click outside it says.
+  const isRemoving = useRef(false);
+  const hasClosed = useRef(false);
+  const close = () => {
+    if (hasClosed.current) return;
+    hasClosed.current = true;
+    onClose();
+  };
   useEffect(() => {
     let isLive = true;
     data.notes
@@ -165,23 +192,36 @@ export function NoteWindow(props: NoteWindowProps) {
       },
     );
   };
+  // The confirm's Delete note: busy until the server answers; a refusal stays in the confirm with its reason (the
+  // note shows again behind it), a delete that lands closes both and offers Undo for 10 seconds.
   const remove = () => {
-    onClose();
-    deleteWithUndo({
-      toasts,
-      remove: () => data.notes.remove(slug, record.recordId, noteId),
-      restore: () => data.notes.restore(slug, record.recordId, noteId),
-      words: {
-        deleted: strings.noteDeleted,
-        undo: strings.undo,
-        notDeleted: (reason) => `${strings.notDeleted} ${reason}`,
-        notRestored: (reason) => `${strings.notRestored} ${reason}`,
-      },
-      listLabel: strings.listLabel,
+    if (isRemoving.current) return;
+    isRemoving.current = true;
+    setConfirming({ isBusy: true });
+    void data.notes.remove(slug, record.recordId, noteId).then((failure) => {
+      if (failure !== undefined) {
+        isRemoving.current = false;
+        setConfirming({ isBusy: false, error: `${strings.notDeleted} ${failure.message}` });
+        return;
+      }
+      setConfirming(undefined);
+      close();
+      offerUndo({
+        toasts,
+        restore: () => data.notes.restore(slug, record.recordId, noteId),
+        words: {
+          deleted: strings.noteDeleted,
+          undo: strings.undo,
+          notRestored: (reason) => `${strings.notRestored} ${reason}`,
+        },
+        listLabel: strings.listLabel,
+      });
     });
   };
 
   const isReady = state.status === 'ready';
+  // While its delete is out the note shows as it was: the data layer takes it away at once, and puts it back if refused.
+  const isUnavailable = state.isUnavailable && confirming?.isBusy !== true;
   const isEditable = isReady && state.canChange && !state.isUnavailable;
   const title = !isReady
     ? strings.note
@@ -190,7 +230,7 @@ export function NoteWindow(props: NoteWindowProps) {
       : state.isNew
         ? strings.newNote
         : strings.untitled;
-  const words = saveWords(state);
+  const status = statusOf(state);
 
   let body: ReactNode;
   if (opened === 'failed') {
@@ -205,7 +245,7 @@ export function NoteWindow(props: NoteWindowProps) {
       />
     );
   } else if (state.status === 'missing') {
-    body = <EmptyState title={strings.unavailable} actions={<Button onPress={onClose}>{strings.close}</Button>} />;
+    body = <EmptyState title={strings.unavailable} actions={<Button onPress={close}>{strings.close}</Button>} />;
   } else if (state.status === 'error') {
     body = (
       <EmptyState tone="error" title={strings.loadFailed} onRetry={session.retry}>
@@ -217,7 +257,7 @@ export function NoteWindow(props: NoteWindowProps) {
   } else {
     body = (
       <>
-        {state.isUnavailable && (
+        {isUnavailable && (
           <Callout tone="danger" isAnnounced>
             {strings.unavailable}
           </Callout>
@@ -243,24 +283,17 @@ export function NoteWindow(props: NoteWindowProps) {
               : strings.savedOverTheirs(nameOf(state.notice.by))}
           </Callout>
         )}
-        <Field
-          label={strings.title}
-          isLabelHidden
-          placeholder={strings.titlePlaceholder}
-          value={state.title}
-          onChange={session.setTitle}
-          maxLength={NOTE_TITLE_MAX}
-          isReadOnly={!isEditable}
-          // A new note's window opens with focus in its title (spec 0019, keyboard and focus).
-          // eslint-disable-next-line jsx-a11y-x/no-autofocus
-          autoFocus={state.isNew}
-        />
         <Suspense fallback={<Skeleton lines={6} />}>
           <NoteEditor
             // Someone else's save replaced the body: the editor starts again from it, and the old one's last
             // text (handed over as it unmounts) is dropped by its key.
             key={state.docKey}
             label={strings.body}
+            title={state.title}
+            onTitleChange={session.setTitle}
+            titleLabel={strings.title}
+            titlePlaceholder={strings.titlePlaceholder}
+            titleMaxLength={NOTE_TITLE_MAX}
             defaultValue={(state.doc ?? null) as RichTextDoc | null}
             onChange={(doc) => {
               session.setDoc(doc, state.docKey);
@@ -268,6 +301,9 @@ export function NoteWindow(props: NoteWindowProps) {
             onSearchMentions={mentions}
             mentionName={mentionName}
             isReadOnly={!isEditable}
+            // Focus lands in the title of a new note and at the start of the text of one opened again (spec 0019,
+            // keyboard and focus), once: never again when someone else's version replaces the page.
+            {...(state.docKey === 0 ? { autoFocus: state.isNew ? ('title' as const) : ('text' as const) } : {})}
           />
         </Suspense>
       </>
@@ -275,52 +311,81 @@ export function NoteWindow(props: NoteWindowProps) {
   }
 
   return (
-    <Modal
-      variant="window"
-      icon="notebook"
-      title={title}
-      context={
-        <RecordChip display={record} isFlat {...(props.recordHref === undefined ? {} : { href: props.recordHref })} />
-      }
-      isOpen
-      onOpenChange={(open) => {
-        if (!open) onClose();
-      }}
-      {...(words === undefined ? {} : { status: words })}
-      headerActions={
-        <>
-          {isReady && state.saveState === 'failed' && state.refusal === undefined && (
-            <Button variant="ghost" size="sm" onPress={session.retry}>
-              {strings.retry}
-            </Button>
-          )}
-          {isReady && !state.isNew && (
-            <MenuTrigger>
-              <Tooltip content={strings.more}>
-                <Button variant="ghost" icon="ellipsis" label={strings.more} />
-              </Tooltip>
-              <Menu
-                label={strings.more}
-                onAction={(key) => {
-                  if (key === 'copy') copyLink();
-                  if (key === 'delete') remove();
-                }}
-              >
-                <MenuItem id="copy" icon="link">
-                  {strings.copyLink}
-                </MenuItem>
-                {state.canChange ? (
-                  <MenuItem id="delete" icon="trash" isDanger>
-                    {strings.deleteNote}
+    <>
+      <Modal
+        variant="peek"
+        title={title}
+        context={
+          <RecordChip display={record} isFlat {...(props.recordHref === undefined ? {} : { href: props.recordHref })} />
+        }
+        isOpen
+        onOpenChange={(open) => {
+          if (!open) close();
+        }}
+        {...(status === undefined ? {} : { status })}
+        headerActions={
+          <>
+            {isReady && state.saveState === 'failed' && state.refusal === undefined && (
+              <Button variant="ghost" size="sm" onPress={session.retry}>
+                {strings.retry}
+              </Button>
+            )}
+            {isReady && !state.isNew && (
+              <MenuTrigger>
+                <Tooltip content={strings.more}>
+                  <Button variant="ghost" icon="ellipsis" label={strings.more} />
+                </Tooltip>
+                <Menu
+                  label={strings.more}
+                  onAction={(key) => {
+                    if (key === 'copy') copyLink();
+                    if (key === 'delete') setConfirming({ isBusy: false });
+                  }}
+                >
+                  <MenuItem id="copy" icon="link">
+                    {strings.copyLink}
                   </MenuItem>
-                ) : null}
-              </Menu>
-            </MenuTrigger>
+                  {state.canChange ? (
+                    <MenuItem id="delete" icon="trash" isDanger>
+                      {strings.deleteNote}
+                    </MenuItem>
+                  ) : null}
+                </Menu>
+              </MenuTrigger>
+            )}
+          </>
+        }
+      >
+        {body}
+      </Modal>
+      {confirming !== undefined && (
+        <Modal
+          tone="danger"
+          title={strings.deleteQuestion(state.title)}
+          isOpen
+          isBusy={confirming.isBusy}
+          onOpenChange={(open) => {
+            if (!open && !confirming.isBusy) setConfirming(undefined);
+          }}
+          actions={
+            <>
+              <Button slot="close" kbd="ESC" isDisabled={confirming.isBusy}>
+                {strings.cancel}
+              </Button>
+              <Button variant="danger-solid" icon="trash" isPending={confirming.isBusy} onPress={remove}>
+                {strings.deleteNote}
+              </Button>
+            </>
+          }
+        >
+          {strings.deleteText}
+          {confirming.error !== undefined && (
+            <Callout tone="danger" isAnnounced>
+              {confirming.error}
+            </Callout>
           )}
-        </>
-      }
-    >
-      {body}
-    </Modal>
+        </Modal>
+      )}
+    </>
   );
 }
