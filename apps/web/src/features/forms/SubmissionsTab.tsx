@@ -151,6 +151,8 @@ export function SubmissionsTab({
   const rows = [...page.items, ...held.items];
   const [busy, setBusy] = useState<string | undefined>(undefined);
   const [isConfirmingDelete, setConfirmingDelete] = useState(false);
+  // A refused delete says why inside its confirm, which stays open (the owner's rule, 21 October 2026).
+  const [deleteFailure, setDeleteFailure] = useState<string | undefined>(undefined);
 
   const go = (submissionId?: string, nextState: SubmissionState | undefined = state) => {
     if (nextState !== state) setSelected(new Set());
@@ -179,7 +181,9 @@ export function SubmissionsTab({
   };
 
   const act = (kind: 'release' | 'spam' | 'retry' | 'delete', submissionId: string) => {
+    if (busy !== undefined) return;
     setBusy(kind);
+    if (kind === 'delete') setDeleteFailure(undefined);
     const done =
       kind === 'release'
         ? data.submissions.release(slug, submissionId)
@@ -204,7 +208,9 @@ export function SubmissionsTab({
       },
       (error: unknown) => {
         setBusy(undefined);
-        toasts.toast({ tone: 'danger', message: isDataError(error) ? error.message : strings.failedText });
+        const message = isDataError(error) ? error.message : strings.failedText;
+        if (kind === 'delete') setDeleteFailure(message);
+        else toasts.toast({ tone: 'danger', message });
       },
     );
   };
@@ -623,27 +629,36 @@ export function SubmissionsTab({
         }}
       />
       <Modal
-        title={strings.deleteSubmissionTitle}
+        title={strings.deleteSubmissionTitle(
+          open === undefined ? undefined : (open.mainRecord?.name ?? nameOf(open) ?? open.email),
+        )}
         tone="danger"
         isOpen={isConfirmingDelete}
-        onOpenChange={setConfirmingDelete}
+        isBusy={busy === 'delete'}
+        onOpenChange={(isOpen) => {
+          if (busy === 'delete') return;
+          setConfirmingDelete(isOpen);
+          if (!isOpen) setDeleteFailure(undefined);
+        }}
         actions={
           <>
-            <Button slot="close" isDisabled={busy === 'delete'}>
+            <Button slot="close" isDisabled={busy === 'delete'} kbd="ESC">
               {strings.cancel}
             </Button>
             <Button
               variant="danger-solid"
+              icon="trash"
               isPending={busy === 'delete'}
               onPress={() => {
                 if (open !== undefined) act('delete', open.id);
               }}
             >
-              {strings.deleteSubmission}
+              {strings.deleteSubmissionAction}
             </Button>
           </>
         }
       >
+        {deleteFailure !== undefined && <Callout tone="danger">{deleteFailure}</Callout>}
         <p>{strings.deleteSubmissionText}</p>
       </Modal>
     </>
