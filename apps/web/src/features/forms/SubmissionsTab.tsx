@@ -41,7 +41,6 @@ import { useState } from 'react';
 import { createPortal } from 'react-dom';
 import { recordLinks } from '../records/timeline.ts';
 import { formHref } from './paths.ts';
-import { submissionsBackendReady } from './followJobs.ts';
 import { strings } from './strings.ts';
 import { SyncDialog } from './SyncDialog.tsx';
 import { useFormToolbarSlot } from './toolbarSlot.ts';
@@ -392,7 +391,7 @@ export function SubmissionsTab({
               );
             }}
           />
-          {submissionsBackendReady() && canManage && moreActions}
+          {canManage && moreActions}
         </>
       }
     />
@@ -466,7 +465,7 @@ export function SubmissionsTab({
               {strings.notSpam}
             </Button>
           )}
-          {submissionsBackendReady() && addable.length > 0 && (
+          {addable.length > 0 && (
             <Button
               isPending={busy === 'add'}
               onPress={() => {
@@ -542,7 +541,7 @@ export function SubmissionsTab({
                         {strings.release}
                       </Button>
                     )}
-                    {submissionsBackendReady() && open.crm.state === 'not_in_crm' && open.crm.canAddToCrm && (
+                    {open.crm.state === 'not_in_crm' && open.crm.canAddToCrm && (
                       // Retry is the one primary on a failed enquiry; Add to CRM files it with today's settings.
                       <Button
                         {...(open.state === 'failed' ? {} : { variant: 'primary' as const })}

@@ -43,7 +43,7 @@ import { PublishDialog } from './PublishDialog.tsx';
 import { QuestionsSection } from './QuestionsSection.tsx';
 import { firstRefusal } from './refusals.ts';
 import { SettingsTab, useFormSettings } from './SettingsTab.tsx';
-import { submissionsBackendReady, useJobFollower } from './followJobs.ts';
+import { useJobFollower } from './followJobs.ts';
 import { strings } from './strings.ts';
 import { SyncDialog } from './SyncDialog.tsx';
 import { FormToolbarSlot } from './toolbarSlot.ts';
@@ -228,7 +228,7 @@ export function FormEditor(props: FormEditorProps) {
           apply(view);
           toasts.toast({ tone: 'success', message: strings.published(view.liveVersionNumber ?? 1) });
           // Where answers are filed changed: offer to file the enquiries that came before the same way.
-          if (submissionsBackendReady() && filingChanged && view.submissionCount > 0) setOfferingSync(true);
+          if (filingChanged && view.submissionCount > 0) setOfferingSync(true);
           else focusLater(() => moreRef.current);
         },
         (error: unknown) => {
