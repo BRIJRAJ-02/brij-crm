@@ -26,7 +26,6 @@ import {
   MenuItem,
   MenuSeparator,
   MenuTrigger,
-  Modal,
   PreviewLayout,
   Select,
   TabPanel,
@@ -36,6 +35,7 @@ import {
 import { useNavigate, useRouteContext, useRouter } from '@tanstack/react-router';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useCan, WorkspacePage } from '../workspace/WorkspacePage.tsx';
+import { DeleteFormDialog, PauseFormDialog } from './FormConfirms.tsx';
 import { fileByLabel, publishAttributesOf, sameDocument, statusOf } from './draft.ts';
 import { InstallTab } from './InstallTab.tsx';
 import { formHref, formPreviewHref, formsHref, FORM_TABS, type FormTab } from './paths.ts';
@@ -94,10 +94,11 @@ export function FormEditor(props: FormEditorProps) {
   const [conflict, setConflict] = useState(false);
   // A refused publish: the check's problem, or the server's (kept with the draft it refused).
   const [problem, setProblem] = useState<(PublishProblem & { readonly atDraft?: FormDocument }) | undefined>(undefined);
-  const [isDeletingNow, setDeletingNow] = useState(false);
   const [isPublishing, setPublishing] = useState(false);
   const [isFirstPublish, setFirstPublish] = useState(false);
+  // Delete and Pause ask first (the owner's rule, 21 October 2026); Resume stays one click.
   const [isDeleting, setDeleting] = useState(false);
+  const [isPausing, setPausing] = useState(false);
   // Publish leaves once there is nothing more to publish; focus then moves to the menu beside it.
   const moreRef = useRef<HTMLButtonElement>(null);
   // After a publish that changed where answers go: offer to file the submissions before it the same way.
@@ -340,7 +341,7 @@ export function FormEditor(props: FormEditorProps) {
             label={strings.moreActions}
             onAction={(key) => {
               if (key === 'copy') copyAddress();
-              if (key === 'pause') setStatus('paused');
+              if (key === 'pause') setPausing(true);
               if (key === 'resume') setStatus('live');
               if (key === 'duplicate') {
                 data.forms.duplicate(slug, form.id).then((copy) => {
@@ -586,41 +587,27 @@ export function FormEditor(props: FormEditorProps) {
           }}
         />
       )}
-      <Modal
-        title={strings.deleteTitle(form.name)}
-        tone="danger"
-        isOpen={isDeleting}
-        onOpenChange={setDeleting}
-        actions={
-          <>
-            <Button slot="close" isDisabled={isDeletingNow}>
-              {strings.cancel}
-            </Button>
-            <Button
-              variant="danger-solid"
-              isPending={isDeletingNow}
-              onPress={() => {
-                if (isDeletingNow) return;
-                setDeletingNow(true);
-                data.forms.delete(slug, form.id).then(
-                  () => {
-                    toasts.toast({ tone: 'success', message: strings.deleted(form.name) });
-                    void navigate({ href: formsHref(slug) });
-                  },
-                  (error: unknown) => {
-                    setDeletingNow(false);
-                    failed(error);
-                  },
-                );
-              }}
-            >
-              {strings.delete}
-            </Button>
-          </>
-        }
-      >
-        <p>{strings.deleteText(form.submissionCount)}</p>
-      </Modal>
+      <DeleteFormDialog
+        data={data}
+        slug={slug}
+        form={isDeleting ? form : undefined}
+        onClose={() => setDeleting(false)}
+        onDone={(deleted) => {
+          toasts.toast({ tone: 'success', message: strings.deleted(deleted.name) });
+          void navigate({ href: formsHref(slug) });
+        }}
+      />
+      <PauseFormDialog
+        data={data}
+        slug={slug}
+        form={isPausing ? form : undefined}
+        onClose={() => setPausing(false)}
+        onDone={(_paused, view) => {
+          setPausing(false);
+          apply(view);
+          toasts.toast({ tone: 'success', message: strings.paused(view.name) });
+        }}
+      />
     </>
   );
 

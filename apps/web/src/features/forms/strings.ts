@@ -26,10 +26,8 @@ export const strings = {
   openInNewTab: 'Open in a new tab',
   manageOnly: 'Only members who manage forms can change it',
   createFailed: 'Couldn’t make the form.',
-  turnOffFailed: (name: string) => `Couldn’t turn off ${name}. It’s back on.`,
   turnOnFailed: (name: string) => `Couldn’t turn on ${name}. It’s off again.`,
   duplicateFailed: (name: string) => `Couldn’t duplicate ${name}.`,
-  deleteFailed: (name: string) => `Couldn’t delete ${name}. It’s back in the list.`,
   submissionCount: (n: number) => count(n, 'submission', 'submissions'),
   noSubmissionsYet: 'No submissions yet',
   publishToShare: 'Publish it to start taking submissions',
@@ -50,11 +48,18 @@ export const strings = {
   duplicated: (name: string) => `Made “${name}”.`,
   delete: 'Delete',
   deleteForm: 'Delete this form',
-  deleteTitle: (name: string) => `Delete “${name}”?`,
+  /** A destructive confirm names the thing in its question (the owner's rule, 21 October 2026). */
+  deleteTitle: (name: string) => `Delete the ${name} form?`,
   deleteText: (submissions: number) =>
     submissions === 0
-      ? 'Its address stops working. Nothing was sent to it yet.'
-      : `Its address stops working, and its ${count(submissions, 'submission', 'submissions')} go with it. The people and records they made stay.`,
+      ? 'The form and its link are gone for good; nothing was sent to it yet.'
+      : `The form, its link and its ${count(submissions, 'submission', 'submissions')} are gone for good; the people and records they made stay.`,
+  /** The confirm's commit: the verb last, never OK. */
+  deleteFormAction: 'Delete form',
+  /** Pausing ends a live form's submissions until it is resumed, so it asks first (a plain dialog, not a danger one). */
+  pauseTitle: (name: string) => `Pause the ${name} form?`,
+  pauseText: 'Its link shows a closed notice and takes no submissions until you resume it; nothing is deleted.',
+  pauseAction: 'Pause form',
   deleted: (name: string) => `Deleted “${name}”.`,
   cancel: 'Cancel',
   paused: (name: string) => `${name} isn’t taking submissions now.`,
@@ -341,8 +346,11 @@ export const strings = {
   noSubmissionsText: 'Share the link and the first one shows here.',
   retry: 'Retry',
   deleteSubmission: 'Delete',
-  deleteSubmissionTitle: 'Delete this submission?',
-  deleteSubmissionText: 'The people and records it made stay.',
+  /** Names the submission by who sent it: "Delete the submission from Grace Hopper?". */
+  deleteSubmissionTitle: (who: string | undefined) =>
+    who === undefined ? 'Delete this submission?' : `Delete the submission from ${who}?`,
+  deleteSubmissionText: 'Its answers are gone for good; the people and records it made stay.',
+  deleteSubmissionAction: 'Delete submission',
   notFiledMark: 'Not filed',
   yes: 'Yes',
   no: 'No',
