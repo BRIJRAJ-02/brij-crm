@@ -51,6 +51,7 @@ describe('@crm/ui', () => {
       'CommentText',
       'CommentThread',
       'ConditionChip',
+      'ConditionRow',
       'ContextMenu',
       'CopyButton',
       'CountryPicker',

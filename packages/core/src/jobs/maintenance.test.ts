@@ -340,7 +340,7 @@ describe('maintenance.daily (AC-112, AC-121)', () => {
       { kind: 'view', id: deletedView, pinned: true },
       { kind: 'record', id: kept, pinned: true },
       { kind: 'record', id: trashed, pinned: true },
-      { kind: 'page', id: 'forms', hidden: true },
+      { kind: 'page', id: 'captures', hidden: true },
     ];
     // Another workspace's row, naming the same missing view, is another workspace's cleanup's.
     const elsewhere = await team([]);
@@ -368,7 +368,7 @@ describe('maintenance.daily (AC-112, AC-121)', () => {
     expect(row?.items).toEqual([
       { kind: 'record', id: kept, pinned: true },
       { kind: 'record', id: trashed, pinned: true },
-      { kind: 'page', id: 'forms', hidden: true },
+      { kind: 'page', id: 'captures', hidden: true },
     ]);
     expect(row?.version).toBe(2);
     const [other] = await testQuery<{ items: unknown }>(

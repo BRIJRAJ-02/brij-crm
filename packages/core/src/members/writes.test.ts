@@ -19,6 +19,12 @@ const BEFORE_ANYONE_LISTENS: ReadonlySet<string> = new Set([
   'scripts/bench-notes-tasks.ts',
 ]);
 
+/** Files whose write to `members` runs as a hook inside a write that already records that member. */
+const RECORDED_BY_THEIR_WRITE: ReadonlySet<string> = new Set([
+  // Deleting an account renames its member row in `removeMember`'s own transaction, which records the member.
+  'src/account/deletion.ts',
+]);
+
 const WRITES = /insert\s+into\s+members\b|update\s+members\b|\.insert\(members\)|\.update\(members\)/i;
 
 async function sources(directory: string): Promise<string[]> {
@@ -38,7 +44,9 @@ describe('writes to members', () => {
     }
     expect(writers).toContain('src/members/members.ts');
     const silent: string[] = [];
-    for (const file of writers.filter((name) => !BEFORE_ANYONE_LISTENS.has(name))) {
+    for (const file of writers.filter(
+      (name) => !BEFORE_ANYONE_LISTENS.has(name) && !RECORDED_BY_THEIR_WRITE.has(name),
+    )) {
       const text = await readFile(join(ROOT, file), 'utf8');
       if (!/record\(\{\s*members:/.test(text)) silent.push(file);
     }

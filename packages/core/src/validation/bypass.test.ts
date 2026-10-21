@@ -62,6 +62,7 @@ const NOT_WRITES = [
   'getHistory',
   'getRecordEntries',
   'getRecords',
+  'getStageSince',
   'getTimeInStages',
   'getValuesAsOf',
   'inputInvalid',

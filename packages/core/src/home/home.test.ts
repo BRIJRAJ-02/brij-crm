@@ -171,8 +171,8 @@ describe('Team today', () => {
     );
     await db.withWorkspace(w.workspaceId, (tx) =>
       tx.execute(sql`
-        insert into calendar_busy_times (workspace_id, connection_id, provider_event_id, starts_at, ends_at)
-        values (${w.workspaceId}, ${graceHidden}, 'focus', '2026-11-02T15:00:00Z', '2026-11-02T16:00:00Z')
+        insert into calendar_busy_times (workspace_id, connection_id, calendar_id, provider_event_id, starts_at, ends_at)
+        values (${w.workspaceId}, ${graceHidden}, 'primary', 'focus', '2026-11-02T15:00:00Z', '2026-11-02T16:00:00Z')
       `),
     );
     const view = await readTeamToday(w.owner, DAY, { now: NOW });

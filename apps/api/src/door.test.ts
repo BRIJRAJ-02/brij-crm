@@ -44,6 +44,8 @@ const BOOTSTRAP: ReadonlySet<string> = new Set([
   'account.sessions.revoke',
   'account.sessions.revokeOthers',
   'account.security.get',
+  // The signed in person's own sign in activity (spec 0033, AC-898): their security events, by their user id.
+  'account.activity.list',
   'account.stepUp.start',
   'account.stepUp.verify',
   'account.stepUp.passkeyOptions',
