@@ -17,7 +17,9 @@ import {
   type TableColumn,
 } from '@crm/ui';
 import { useEffect, useRef, useState, type RefObject } from 'react';
-import { useCan } from '../workspace/WorkspacePage.tsx';
+import { useMatch } from '@tanstack/react-router';
+import { recordsWord, type ObjectNames } from '../workspace/undo.ts';
+import { useCan, useMyAccess } from '../workspace/WorkspacePage.tsx';
 import { SettingsPage } from './SettingsPage.tsx';
 import { strings } from './jobs-strings.ts';
 
@@ -107,12 +109,29 @@ function Result({ job }: { readonly job: JobView }) {
 interface JobAsk {
   readonly kind: 'run' | 'cancel';
   readonly job: JobView;
+  /** The object its records belong to (its `subject`), when the workspace holds it: "12,345 people". */
+  readonly names?: ObjectNames;
+  /** Who started it, when that isn't the reader (an owner or admin sees every member's jobs). */
+  readonly startedBy?: string;
 }
 
 /** Settings, Background jobs (AC-118): a live table of jobs, Confirm and Cancel each with a confirm, and "Show more". */
 export function JobsScreen({ data, slug, view, isAll, members: loaded, canRunTest }: JobsScreenProps) {
   const snapshot = useJobs(view);
   const [asking, setAsking] = useState<JobAsk | undefined>(undefined);
+  // The workspace's objects, as the frame loaded them, for a counted job's records by name.
+  const objects = useMatch({ from: '/w/$slug', shouldThrow: false })?.loaderData?.objects;
+  const myId = useMyAccess()?.memberId;
+  const ask = (kind: JobAsk['kind'], job: JobView) => {
+    const object = job.subject?.type === 'object' ? objects?.find((each) => each.id === job.subject?.id) : undefined;
+    const isTheirs = job.startedBy.type === 'member' && job.startedBy.memberId !== myId;
+    setAsking({
+      kind,
+      job,
+      ...(object === undefined ? {} : { names: object }),
+      ...(isAll && isTheirs ? { startedBy: starterName(job, members) } : {}),
+    });
+  };
   const [isStarting, setStarting] = useState(false);
   const [members, setMembers] = useState(loaded);
   const titleRef = useRef<HTMLHeadingElement>(null);
@@ -177,12 +196,12 @@ export function JobsScreen({ data, slug, view, isAll, members: loaded, canRunTes
         return (
           <>
             {job.status === 'ready' && (
-              <Button variant="primary" onPress={() => setAsking({ kind: 'run', job })}>
-                {strings.confirm}
+              <Button variant="primary" onPress={() => ask('run', job)}>
+                {strings.review}
               </Button>
             )}
             {job.cancellable && (
-              <Button variant="ghost" onPress={() => setAsking({ kind: 'cancel', job })}>
+              <Button variant="ghost" onPress={() => ask('cancel', job)}>
                 {strings.cancel}
               </Button>
             )}
@@ -220,6 +239,7 @@ export function JobsScreen({ data, slug, view, isAll, members: loaded, canRunTes
           data={data}
           slug={slug}
           ask={asking}
+          live={asking === undefined ? undefined : snapshot.jobs.find((job) => job.id === asking.job.id)}
           titleRef={titleRef}
           onClose={() => {
             setAsking(undefined);
@@ -270,10 +290,11 @@ function jobConfirmWords(ask: JobAsk): {
   readonly isDanger: boolean;
 } {
   const { job } = ask;
+  const whose = ask.startedBy === undefined ? '' : ` ${strings.startedByText(ask.startedBy)}`;
   if (ask.kind === 'cancel') {
     return {
       title: strings.cancelTitle(job.label),
-      text: strings.cancelText,
+      text: `${strings.cancelText}${whose}`,
       action: strings.cancelJob,
       icon: 'circle-x',
       isDanger: true,
@@ -281,8 +302,8 @@ function jobConfirmWords(ask: JobAsk): {
   }
   if (!Object.hasOwn(strings.run, job.kind)) {
     return {
-      title: strings.runOther.title,
-      text: strings.runOther.text(job.label, format(job.total ?? 0)),
+      title: strings.runOther.title(job.label),
+      text: `${strings.runOther.text(format(job.total ?? 0))}${whose}`,
       action: strings.runOther.action,
       icon: 'play',
       isDanger: false,
@@ -290,11 +311,11 @@ function jobConfirmWords(ask: JobAsk): {
   }
   const kind = job.kind as keyof typeof strings.run;
   const known = strings.run[kind];
-  const records = recordsOf(job.total);
+  const records = ask.names === undefined ? recordsOf(job.total) : recordsWord(job.total ?? 0, ask.names);
   // A restore brings records back; every other counted change ends something.
   return {
     title: known.title(records),
-    text: known.text,
+    text: `${known.text}${whose}`,
     action: known.action(records),
     icon: RUN_ICONS[kind],
     isDanger: kind !== 'records.bulk_restore',
@@ -314,6 +335,8 @@ function JobConfirmDialog({
   readonly data: DataLayer;
   readonly slug: string;
   readonly ask: JobAsk | undefined;
+  /** The job as the store holds it now: once it no longer waits on this question, the dialog closes. */
+  readonly live: JobView | undefined;
   readonly titleRef: RefObject<HTMLHeadingElement | null>;
   readonly onClose: () => void;
 }) {
@@ -331,6 +354,7 @@ function JobConfirm({
   data,
   slug,
   ask,
+  live,
   isOpen,
   titleRef,
   onClose,
@@ -338,12 +362,18 @@ function JobConfirm({
   readonly data: DataLayer;
   readonly slug: string;
   readonly ask: JobAsk;
+  readonly live: JobView | undefined;
   readonly isOpen: boolean;
   readonly titleRef: RefObject<HTMLHeadingElement | null>;
   readonly onClose: () => void;
 }) {
   const [isBusy, setBusy] = useState(false);
   const words = jobConfirmWords(ask);
+  // Confirmed, cancelled or expired elsewhere while it was open: the question is gone, so the dialog goes too.
+  const isStale = live !== undefined && (ask.kind === 'run' ? live.status !== 'ready' : !live.cancellable);
+  useEffect(() => {
+    if (isOpen && isStale && !isBusy) onClose();
+  }, [isOpen, isStale, isBusy, onClose]);
   const commit = () => {
     if (isBusy) return;
     setBusy(true);
