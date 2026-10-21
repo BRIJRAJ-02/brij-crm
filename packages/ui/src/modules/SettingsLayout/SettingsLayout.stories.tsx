@@ -3,6 +3,7 @@ import { expect } from 'storybook/test';
 import { Badge } from '../../atoms/Badge/Badge.tsx';
 import { Button } from '../../atoms/Button/Button.tsx';
 import { Meter } from '../../atoms/Meter/Meter.tsx';
+import { Skeleton } from '../../atoms/Skeleton/Skeleton.tsx';
 import { ProviderMark } from '../../atoms/ProviderMark/ProviderMark.tsx';
 import { InfoTip } from '../../molecules/InfoTip/InfoTip.tsx';
 import { Callout } from '../../molecules/Callout/Callout.tsx';
@@ -264,7 +265,7 @@ export const RowsLoading: Story = {
   },
 };
 
-/** On a phone the section's title sits above its card, and the control drops under its title and description. */
+/** On a phone the control drops under the row's title and description. */
 export const RowsNarrow: Story = {
   render: () => (
     <Stage width="narrow">
@@ -414,7 +415,6 @@ export const Sections: Story = {
   },
 };
 
-/** The same sections in a narrow slot: each title above its cards, the fields one to a row, the cards stacked. */
 /**
  * Under the app's TopBar (`header="bar"`, 21 October 2026): the bar carries the trail, an object's tile and badge
  * and the page's one primary action at its end; the layout draws no title block, and the sections follow at once,
@@ -433,10 +433,17 @@ export const UnderTheBar: Story = {
         <Button provider="google-calendar">Connect Google calendar</Button>
       </TopBar>
       <SettingsLayout header="bar" title="Calendars">
-        <SettingsSection title="Connected calendars" description="One card for each connected calendar.">
-          <SettingsGrid>
-            <Card title="ada@acme.com" description="Google · Default" />
-          </SettingsGrid>
+        <SettingsSection title="Connected calendars">
+          <Card>
+            <SettingsRow
+              title="ada@acme.com"
+              leading={<ProviderMark provider="google-calendar" />}
+              meta={<Badge text="Default" />}
+              description={<Badge text="Connected" dot="green" />}
+            >
+              <Button variant="ghost" icon="ellipsis" label="Actions for ada@acme.com" />
+            </SettingsRow>
+          </Card>
         </SettingsSection>
       </SettingsLayout>
     </Stage>
@@ -448,6 +455,36 @@ export const UnderTheBar: Story = {
   },
 };
 
+/**
+ * Under the bar while the page loads: the TopBar keeps its trail, the body is marked busy with "Loading settings"
+ * for screen readers, and the page's own skeleton (a busy card in its first section) holds the place.
+ */
+export const UnderTheBarLoading: Story = {
+  render: () => (
+    <Stage width="fill" direction="column">
+      <TopBar
+        title="Calendars"
+        crumbs={[
+          { id: 'settings', label: 'Settings' },
+          { id: 'account', label: 'Account' },
+        ]}
+      />
+      <SettingsLayout header="bar" title="Calendars" isLoading>
+        <SettingsSection title="Connected calendars">
+          <Card isBusy>
+            <Skeleton width="long" />
+            <Skeleton width="medium" />
+          </Card>
+        </SettingsSection>
+      </SettingsLayout>
+    </Stage>
+  ),
+  play: async ({ canvasElement }) => {
+    await expect(canvasElement.querySelector('[aria-busy="true"]')).not.toBeNull();
+  },
+};
+
+/** The same sections in a narrow slot: each heading above its cards, the fields one to a row, the cards stacked. */
 export const SectionsNarrow: Story = {
   render: () => (
     <Stage width="narrow">
