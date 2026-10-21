@@ -76,6 +76,7 @@ describe('@crm/ui', () => {
       'HuePicker',
       'Icon',
       'IconPicker',
+      'InfoTip',
       'Kbd',
       'LOADING_TIMING',
       'Link',
