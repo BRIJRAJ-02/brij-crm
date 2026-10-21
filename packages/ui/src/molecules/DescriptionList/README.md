@@ -17,6 +17,7 @@ New. Developer settings (#34, #39) show an API key's scopes or a webhook's last 
 />
 ```
 
+- `id` keys a row when terms repeat, such as a booking's chat lines (Visitor, Assistant, Visitor); without it the term is the key.
 - `layout`: `columns` (terms beside values, the default) or `stacked` (terms above).
 - It is a real `<dl>`, so screen readers pair each term with its value.
 

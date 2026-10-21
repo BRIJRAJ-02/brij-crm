@@ -1,0 +1,130 @@
+/* Book by chat: the conversation scrolls in a fixed height pane, the visitor's
+   lines at the end edge on the accent's soft tint, the assistant's at the
+   start on the subtle surface; the last reply's times and suggestions sit
+   under it; the message field and Send are pinned at the foot. */
+@layer components {
+  .root {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-12);
+    min-inline-size: 0;
+  }
+
+  .thread {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-12);
+    block-size: var(--size-panel);
+    margin: 0;
+    padding: 0 var(--space-4) var(--space-4) 0;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    list-style: none;
+    container-type: inline-size;
+  }
+
+  .line {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: var(--space-8);
+    animation: line-in var(--duration-popover) var(--ease-out) both;
+  }
+
+  .line[data-role='visitor'] {
+    align-items: flex-end;
+  }
+
+  .bubble {
+    max-inline-size: 85%;
+    margin: 0;
+    padding: var(--space-8) var(--space-12);
+    border-radius: var(--radius-lg);
+    background: var(--surface-subtle);
+    color: var(--text);
+    font: var(--text-body);
+    letter-spacing: var(--tracking-body);
+    overflow-wrap: anywhere;
+    white-space: pre-wrap;
+  }
+
+  .line[data-role='visitor'] .bubble {
+    background: var(--accent-soft);
+  }
+
+  .group {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-6);
+    inline-size: 100%;
+  }
+
+  .day {
+    margin: 0;
+    color: var(--text-secondary);
+    font: var(--text-label-strong);
+    letter-spacing: var(--tracking-label-strong);
+  }
+
+  .times {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: var(--space-8);
+  }
+
+  @container (width >= 320px) {
+    .times {
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+    }
+  }
+
+  @container (width >= 480px) {
+    .times {
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+    }
+  }
+
+  .suggestions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-4);
+  }
+
+  .waiting {
+    display: inline-flex;
+    padding: var(--space-8) var(--space-12);
+    border-radius: var(--radius-lg);
+    background: var(--surface-subtle);
+    color: var(--text-secondary);
+  }
+
+  .composer {
+    display: flex;
+    align-items: flex-end;
+    gap: var(--space-8);
+  }
+
+  .field {
+    flex: 1;
+    min-inline-size: 0;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .line {
+      animation-name: line-fade;
+    }
+  }
+
+  @keyframes line-in {
+    from {
+      opacity: 0;
+      translate: 0 var(--space-4);
+    }
+  }
+
+  @keyframes line-fade {
+    from {
+      opacity: 0;
+    }
+  }
+}

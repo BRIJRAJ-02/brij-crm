@@ -55,6 +55,8 @@ import { readReturn, returnPath, tidiedAddress, type Chosen, type ConnectResult 
 const visitorModule = import('@crm/ui/public-booking/visitor');
 const detailsModule = import('@crm/ui/public-booking/details');
 const VisitorBar = lazy(() => visitorModule.then((module) => ({ default: module.VisitorBar })));
+// Book by chat (spec 0041) loads only when Chat is first chosen.
+const ChatPanel = lazy(() => import('./ChatPanel.tsx').then((module) => ({ default: module.ChatPanel })));
 const BookingDetails = lazy(() => detailsModule.then((module) => ({ default: module.BookingDetails })));
 
 /** Props for the page: its key, the visitor's language and zone, the clock, a prefill, and where success goes. */
@@ -666,16 +668,41 @@ function Booking({
       label={strings.view}
       value={view}
       onChange={(next) => {
-        const picked = next === 'list' ? 'list' : 'month';
+        const picked = next === 'list' || next === 'chat' ? next : 'month';
         setView(picked);
         saveView(picked);
       }}
       segments={[
         { value: 'month', label: strings.month, icon: 'calendar', isIconOnly: true },
         { value: 'list', label: strings.list, icon: 'list', isIconOnly: true },
+        { value: 'chat', label: strings.chat, icon: 'message-square', isIconOnly: true },
       ]}
     />
   );
+
+  if (view === 'chat') {
+    // Book by chat (spec 0041): the same card and rail, the conversation in the picker's place.
+    return (
+      <BookingFrame {...frame} heading={strings.chooseTime} toolbar={viewSwitch}>
+        {message ??
+          (isLoading ? null : (
+            <Suspense fallback={null}>
+              <ChatPanel
+                client={client}
+                page={page}
+                locale={locale}
+                zone={zone}
+                hour12={hour12}
+                duration={duration}
+                starts={starts}
+                onDuration={setDuration}
+                onBooked={onBooked}
+              />
+            </Suspense>
+          ))}
+      </BookingFrame>
+    );
+  }
 
   const bookBar = (
     <Button

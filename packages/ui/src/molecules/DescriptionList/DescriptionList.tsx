@@ -3,6 +3,8 @@ import styles from './DescriptionList.module.css';
 
 /** One term and its description. */
 export interface DescriptionItem {
+  /** Keys the row when terms repeat (a booking's chat lines, spec 0041); the term otherwise. */
+  readonly id?: string;
   readonly term: string;
   readonly description: ReactNode;
 }
@@ -19,7 +21,7 @@ export function DescriptionList({ items, layout = 'columns' }: DescriptionListPr
   return (
     <dl className={styles.root} data-layout={layout}>
       {items.map((item) => (
-        <div key={item.term} className={styles.row}>
+        <div key={item.id ?? item.term} className={styles.row}>
           <dt className={styles.term}>{item.term}</dt>
           <dd className={styles.description}>{item.description}</dd>
         </div>

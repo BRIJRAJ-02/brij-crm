@@ -1,13 +1,13 @@
 // The visitor's two remembered choices on this browser (spec 0025, AC-666,
-// AC-668): Month or List, and 12 or 24 hours. Storage can be missing or
+// AC-668): Month, List or Chat (spec 0041), and 12 or 24 hours. Storage can be missing or
 // throw (a private window, blocked site data), so every read and write is
 // guarded and the page works the same without it.
 
 const VIEW_KEY = 'crm.booking.view';
 const CLOCK_KEY = 'crm.booking.clock';
 
-/** Month or List. */
-export type SlotView = 'month' | 'list';
+/** Month, List, or Book by chat (spec 0041). */
+export type SlotView = 'month' | 'list' | 'chat';
 
 function read(key: string): string | undefined {
   try {
@@ -26,7 +26,10 @@ function write(key: string, value: string): void {
 }
 
 /** The remembered view, Month by default. */
-export const savedView = (): SlotView => (read(VIEW_KEY) === 'list' ? 'list' : 'month');
+export function savedView(): SlotView {
+  const view = read(VIEW_KEY);
+  return view === 'list' || view === 'chat' ? view : 'month';
+}
 /** Remembers the view. */
 export const saveView = (view: SlotView) => write(VIEW_KEY, view);
 /** The remembered clock, or undefined for the locale's. */

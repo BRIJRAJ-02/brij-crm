@@ -231,3 +231,28 @@ export function relativeLabel(instant: string, now: number, zone: string, locale
   }
   return relative.format(days, 'day').replace(/^./, (first) => first.toUpperCase());
 }
+
+/**
+ * What a chat time button sends (spec 0041): the day and the clock in English, in the form the booking chat's
+ * parser reads back to the same instant ("Tue 27 Oct at 3:00 PM", "Tue 27 Oct at 15:00").
+ */
+export function offerWords(instant: string, zone: string, hour12: boolean): string {
+  const date = new Date(instant);
+  const part = (parts: Intl.DateTimeFormatPart[], type: Intl.DateTimeFormatPartTypes) =>
+    parts.find((each) => each.type === type)?.value ?? '';
+  const day = new Intl.DateTimeFormat('en-GB', {
+    timeZone: zone,
+    weekday: 'short',
+    day: 'numeric',
+    month: 'short',
+  }).formatToParts(date);
+  const clock = new Intl.DateTimeFormat(hour12 ? 'en-US' : 'en-GB', {
+    timeZone: zone,
+    hour: hour12 ? 'numeric' : '2-digit',
+    minute: '2-digit',
+    hour12,
+  })
+    .format(date)
+    .replaceAll(/\s/g, ' ');
+  return `${part(day, 'weekday')} ${part(day, 'day')} ${part(day, 'month')} at ${clock}`;
+}

@@ -21,6 +21,7 @@ import {
   Button,
   Callout,
   DescriptionList,
+  Disclosure,
   EmptyState,
   Link,
   Menu,
@@ -241,11 +242,24 @@ function BookingCard({
               ),
           },
           ...(booking.note === undefined ? [] : [{ term: strings.note, description: strings.quoted(booking.note) }]),
+          ...(booking.chat === undefined ? [] : [{ term: strings.bookedVia, description: strings.bookedByChat }]),
           ...(booking.cancelReason === undefined
             ? []
             : [{ term: strings.cancelReason, description: booking.cancelReason }]),
         ]}
       />
+      {booking.chat !== undefined && (
+        <Disclosure title={strings.showChat} count={booking.chat.length}>
+          <DescriptionList
+            layout="stacked"
+            items={booking.chat.map((line, index) => ({
+              id: String(index),
+              term: line.role === 'visitor' ? strings.chatVisitor : strings.chatAssistant,
+              description: line.text,
+            }))}
+          />
+        </Disclosure>
+      )}
       {booking.status === 'confirmed' && booking.videoUrl !== undefined && (
         <Link href={booking.videoUrl}>{`${strings.joinCall}: ${providerOf(booking.videoUrl)}`}</Link>
       )}

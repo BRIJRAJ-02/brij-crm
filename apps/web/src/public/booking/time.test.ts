@@ -5,6 +5,7 @@ import {
   addDays,
   dayKey,
   monthCells,
+  offerWords,
   rangeLabel,
   relativeLabel,
   shiftMonth,
@@ -93,5 +94,13 @@ describe('the weekdays and the meeting’s span', () => {
 describe('old zone names', () => {
   it('says a renamed zone by its current name', () => {
     expect(zoneDisplay('Asia/Calcutta', Date.UTC(2026, 0, 15))).toBe('Kolkata time (GMT+5:30)');
+  });
+});
+
+describe('offerWords (spec 0041)', () => {
+  it('spells a time the way the booking chat reads it back', () => {
+    expect(offerWords('2026-10-27T15:00:00.000Z', 'Europe/London', true)).toBe('Tue 27 Oct at 3:00 PM');
+    expect(offerWords('2026-10-27T15:00:00.000Z', 'Europe/London', false)).toBe('Tue 27 Oct at 15:00');
+    expect(offerWords('2026-10-27T15:00:00.000Z', 'Asia/Tokyo', true)).toBe('Wed 28 Oct at 12:00 AM');
   });
 });
