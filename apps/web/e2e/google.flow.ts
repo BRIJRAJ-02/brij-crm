@@ -11,7 +11,7 @@
 import { Buffer } from 'node:buffer';
 import { randomUUID } from 'node:crypto';
 import { expect, test, type Page } from '@playwright/test';
-import { skipCalendarStep } from './people.ts';
+import { skipCalendarStep, skipDetailsStep } from './people.ts';
 
 /** Making a workspace writes its standard objects in one transaction; on a busy machine that takes a while. */
 const WORKSPACE_MADE_MS = 30_000;
@@ -86,6 +86,7 @@ test('signs a new person in with Google, makes their workspace, and Google opens
   // First run (spec 0036): About you starts from Google's name, and the workspace follows it.
   await expect(page.getByLabel('Your name')).toHaveValue(person.name);
   await page.getByRole('button', { name: 'Continue', exact: true }).click();
+  await skipDetailsStep(page);
   await expect(page.getByLabel('Workspace name')).toHaveValue(`Grace’s workspace`);
   await page.getByLabel('Web address').fill(slug);
   await page.getByRole('button', { name: 'Create workspace' }).click();
@@ -119,8 +120,9 @@ test('a deep link opened while signed out comes back after Google', async ({ pag
   await page.goto('/sign-in');
   await continueWithGoogle(page);
   await expect(page).toHaveURL(/\/welcome$/);
-  // Skip About you: Google's name stands.
+  // Skip Your name (Google's stands) and About you.
   await page.getByRole('button', { name: 'Skip', exact: true }).click();
+  await skipDetailsStep(page);
   await page.getByLabel('Web address').fill(slug);
   await page.getByRole('button', { name: 'Create workspace' }).click();
   await skipCalendarStep(page);

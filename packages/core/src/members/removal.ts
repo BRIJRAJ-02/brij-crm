@@ -113,6 +113,7 @@ export const KEPT_ON_REMOVAL: Readonly<Record<string, string>> = {
   comments_resolved_by: 'history: who resolved a thread',
   comments_deleted_by: 'history: who deleted a comment',
   notifications_actor: 'history: who a notification is about',
+  member_onboarding_member: 'their first run answers (spec 0036): nobody reads them, in the app or after',
 };
 
 /** Runs every feature's part of a removal of `memberId`, in order, inside the removal's write. */

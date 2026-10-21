@@ -24,10 +24,16 @@ const USER: SignedInUser = { id: '0199a6f2-0000-7000-8000-000000000001', name: '
 const WORKSPACE_ID = '0199a6f2-0000-7000-8000-00000000000a';
 
 /** A stand in data layer: what first run calls, counted. */
-function fakeData() {
-  const created: { readonly id: string; readonly name: string; readonly slug: string; readonly memberName: string }[] =
-    [];
+function fakeData(taken: readonly string[] = ['taken-one']) {
+  const created: {
+    readonly id: string;
+    readonly name: string;
+    readonly slug: string;
+    readonly memberName: string;
+    readonly onboarding?: unknown;
+  }[] = [];
   const checked: string[] = [];
+  const invites: { readonly workspace: string; readonly emails: readonly string[]; readonly role: string }[] = [];
   let signOuts = 0;
   let release: () => void = () => undefined;
   const data = {
@@ -35,7 +41,7 @@ function fakeData() {
       newId: () => WORKSPACE_ID,
       slugAvailable: (slug: string) => {
         checked.push(slug);
-        return Promise.resolve(slug !== 'taken-one');
+        return Promise.resolve(!taken.includes(slug));
       },
       create: (input: (typeof created)[number]) => {
         created.push(input);
@@ -51,6 +57,18 @@ function fakeData() {
         });
       },
     },
+    invitations: {
+      create: (workspace: string, emails: readonly string[], role: string) => {
+        invites.push({ workspace, emails, role });
+        return Promise.resolve({
+          invited: emails.filter((email) => email !== 'grace@acme.com').map((email) => ({ email })),
+          refused: emails
+            .filter((email) => email === 'grace@acme.com')
+            .map((email) => ({ email, code: 'ALREADY_MEMBER', message: 'Already a member.' })),
+          unsent: [],
+        });
+      },
+    },
     calendar: {
       connectUrl: (slug: string, then?: string) => `/api/calendar/google/start?workspace=${slug}&then=${String(then)}`,
     },
@@ -59,6 +77,7 @@ function fakeData() {
     data,
     created,
     checked,
+    invites,
     signOuts: () => signOuts,
     release: () => {
       release();
@@ -138,11 +157,11 @@ async function renderWelcome(data: DataLayer, start = '/welcome', calendarSync =
 }
 
 describe('first run’s steps', () => {
-  it('goes About you, then Your workspace, counting them, and Back keeps what was typed', async () => {
+  it('goes Your name, About you, then Your workspace, counting them, and Back keeps what was typed', async () => {
     const fake = fakeData();
     const router = await renderWelcome(fake.data);
-    await expect.element(page.getByRole('heading', { level: 1, name: 'About you' })).toBeVisible();
-    await expect.element(page.getByText('Step 1 of 3')).toBeVisible();
+    await expect.element(page.getByRole('heading', { level: 1, name: 'Your name' })).toBeVisible();
+    await expect.element(page.getByText('Step 1 of 5')).toBeVisible();
     // The first step has nothing to go back to.
     expect(page.getByRole('button', { name: 'Back' }).query()).toBeNull();
     // Continue needs a name.
@@ -153,31 +172,52 @@ describe('first run’s steps', () => {
     await page.getByRole('textbox', { name: 'Your name' }).fill('Ada Lovelace');
     await page.getByRole('button', { name: 'Continue' }).click();
 
+    // About you: a few chips, focus on the first.
+    await expect.element(page.getByRole('heading', { level: 1, name: 'About you' })).toBeVisible();
+    expect(router.state.location.search).toEqual({ step: 'details' });
+    await expect.element(page.getByText('Step 2 of 5')).toBeVisible();
+    await expect.element(page.getByRole('radio', { name: 'Founder' })).toHaveFocus();
+    await page.getByRole('radio', { name: 'Founder' }).click();
+    await page.getByRole('button', { name: 'All of it' }).click();
+    await expect
+      .element(page.getByRole('button', { name: 'Booking meetings' }))
+      .toHaveAttribute('aria-pressed', 'true');
+    await page.getByRole('button', { name: 'Continue' }).click();
+
     await expect.element(page.getByRole('heading', { level: 1, name: 'Your workspace' })).toBeVisible();
     expect(router.state.location.search).toEqual({ step: 'workspace' });
-    await expect.element(page.getByText('Step 2 of 3')).toBeVisible();
+    await expect.element(page.getByText('Step 3 of 5')).toBeVisible();
     // The workspace follows the name, and the address the workspace; focus is in the step's first field.
     await expect.element(page.getByRole('textbox', { name: 'Workspace name' })).toHaveValue('Ada’s workspace');
-    await expect.element(page.getByRole('textbox', { name: 'Web address' })).toHaveValue('adas-workspace');
+    await expect.element(page.getByRole('textbox', { name: 'Web address' })).toHaveValue('ada');
     await expect.element(page.getByRole('textbox', { name: 'Workspace name' })).toHaveFocus();
 
     await page.getByRole('button', { name: 'Back' }).click();
     await expect.element(page.getByRole('heading', { level: 1, name: 'About you' })).toBeVisible();
+    await expect.element(page.getByRole('radio', { name: 'Founder' })).toBeChecked();
+    await page.getByRole('button', { name: 'Back' }).click();
     await expect.element(page.getByRole('textbox', { name: 'Your name' })).toHaveValue('Ada Lovelace');
   });
 
-  it('skips About you, naming the workspace from the email, and leaves out the calendar where sync is off', async () => {
+  it('skips Your name and About you, naming the workspace from the email, and leaves out the calendar where sync is off', async () => {
     const fake = fakeData();
     const router = await renderWelcome(fake.data, '/welcome', false);
-    await expect.element(page.getByText('Step 1 of 2')).toBeVisible();
+    await expect.element(page.getByText('Step 1 of 4')).toBeVisible();
+    await page.getByRole('button', { name: 'Skip' }).click();
+    await expect.element(page.getByRole('heading', { level: 1, name: 'About you' })).toBeVisible();
+    await page.getByRole('radio', { name: 'Sales' }).click();
+    // Skip forgets the answers.
     await page.getByRole('button', { name: 'Skip' }).click();
     await expect.element(page.getByRole('textbox', { name: 'Workspace name' })).toHaveValue('Ada’s workspace');
-    await expect.element(page.getByText('That address is free.')).toBeVisible();
+    await expect.element(page.getByText('Available', { exact: true })).toBeVisible();
     await page.getByRole('button', { name: 'Create workspace' }).click();
-    // Sync off: straight into the workspace, the member named from the email.
-    await expect.poll(() => router.state.location.pathname).toBe('/w/adas-workspace');
+    // Sync off: Invite your team is the last step, then the workspace, the member named from the email.
+    await expect.element(page.getByRole('heading', { level: 1, name: 'Invite your team' })).toBeVisible();
+    await expect.element(page.getByText('Step 4 of 4')).toBeVisible();
+    await page.getByRole('button', { name: 'Skip for now' }).click();
+    await expect.poll(() => router.state.location.pathname).toBe('/w/ada');
     expect(fake.created).toEqual([
-      { id: WORKSPACE_ID, name: 'Ada’s workspace', slug: 'adas-workspace', memberName: 'Ada Lovelace' },
+      { id: WORKSPACE_ID, name: 'Ada’s workspace', slug: 'ada', memberName: 'Ada Lovelace' },
     ]);
   });
 
@@ -186,32 +226,74 @@ describe('first run’s steps', () => {
     await renderWelcome(fake.data, '/welcome?step=workspace');
     const address = page.getByRole('textbox', { name: 'Web address' });
     await address.fill('taken-one');
-    await expect.element(address).toHaveAccessibleDescription('That address is taken. Try another.');
+    await expect.element(address).toHaveAccessibleDescription('Taken');
     await expect.element(address).toHaveAttribute('aria-invalid', 'true');
     await page.getByRole('button', { name: 'Create workspace' }).click();
     // Refused before asking: focus goes back to the address, and nothing is made.
     await expect.element(address).toHaveFocus();
     expect(fake.created).toEqual([]);
     await address.fill('halcyon');
-    await expect.element(address).toHaveAccessibleDescription('That address is free.');
+    await expect.element(address).toHaveAccessibleDescription('Available');
     // Each address was asked about once typing stopped, never a stale one after it.
     expect(fake.checked.at(-1)).toBe('halcyon');
   });
 
-  it('goes on to the calendar step once the workspace is made, which Skip for now leaves', async () => {
+  it('moves a taken first choice to the next free address, and offers free ones to pick', async () => {
+    const fake = fakeData(['ada', 'taken-one']);
+    await renderWelcome(fake.data, '/welcome?step=workspace');
+    const address = page.getByRole('textbox', { name: 'Web address' });
+    // ada is taken, so the address is the company's, with two more free ones under it.
+    await expect.element(address).toHaveValue('acme');
+    const offered = page.getByRole('group', { name: 'Free addresses' });
+    await expect.element(offered.getByRole('button', { name: 'adas-workspace' })).toBeVisible();
+    await offered.getByRole('button', { name: 'ada-team' }).click();
+    await expect.element(address).toHaveValue('ada-team');
+    await expect.element(address).toHaveFocus();
+    await expect.element(address).toHaveAccessibleDescription('Available');
+    // A taken one typed offers free ones too.
+    await address.fill('taken-one');
+    await expect.element(address).toHaveAccessibleDescription('Taken');
+    await expect.element(offered.getByRole('button', { name: 'acme' })).toBeVisible();
+  });
+
+  it('sends the answers with the workspace, then invites the team and goes on to the calendar step', async () => {
+    sessionStorage.setItem(
+      'crm.welcome.draft',
+      JSON.stringify({ userId: USER.id, workspaceId: WORKSPACE_ID, answers: { role: 'sales', areas: ['booking'] } }),
+    );
     const fake = fakeData();
     const router = await renderWelcome(fake.data, '/welcome?step=workspace');
-    await expect.element(page.getByText('That address is free.')).toBeVisible();
+    await expect.element(page.getByText('Available', { exact: true })).toBeVisible();
     await page.getByRole('button', { name: 'Create workspace' }).click();
+    await expect.element(page.getByRole('heading', { level: 1, name: 'Invite your team' })).toBeVisible();
+    expect(fake.created[0]?.onboarding).toEqual({ role: 'sales', areas: ['booking'] });
+    expect(router.state.location.search).toEqual({ step: 'invite', workspace: 'ada' });
+    await expect.element(page.getByText('Step 4 of 5')).toBeVisible();
+    expect(page.getByRole('button', { name: 'Back' }).query()).toBeNull();
+    // Nothing typed: refused on the field.
+    await page.getByRole('button', { name: 'Send invites' }).click();
+    await expect
+      .element(page.getByRole('textbox', { name: 'Emails' }))
+      .toHaveAccessibleDescription('Add an email address, or skip this step.');
+    await page.getByRole('textbox', { name: 'Emails' }).fill('Ada <ADA@acme.com>, grace@acme.com bob@acme.com');
+    await page.getByRole('button', { name: 'Send invites' }).click();
+    await expect.element(page.getByText('2 invites sent.')).toBeVisible();
+    await expect.element(page.getByText(/Already in the workspace: grace@acme.com/)).toBeVisible();
+    expect(fake.invites).toEqual([
+      { workspace: 'ada', emails: ['ada@acme.com', 'grace@acme.com', 'bob@acme.com'], role: 'member' },
+    ]);
+    await expect.element(page.getByRole('button', { name: 'Continue' })).toHaveFocus();
+    await page.getByRole('button', { name: 'Continue' }).click();
+
     await expect.element(page.getByRole('heading', { level: 1, name: 'Connect your calendar' })).toBeVisible();
-    expect(router.state.location.search).toEqual({ step: 'calendar', workspace: 'adas-workspace' });
-    await expect.element(page.getByText('Step 3 of 3')).toBeVisible();
+    expect(router.state.location.search).toEqual({ step: 'calendar', workspace: 'ada' });
+    await expect.element(page.getByText('Step 5 of 5')).toBeVisible();
     // The workspace exists: no going back to it.
     expect(page.getByRole('button', { name: 'Back' }).query()).toBeNull();
     await expect.element(page.getByRole('button', { name: 'Connect Google Calendar' })).toHaveFocus();
     await expect.element(page.getByRole('button', { name: 'Connect Outlook' })).toBeDisabled();
     await page.getByRole('button', { name: 'Skip for now' }).click();
-    await expect.poll(() => router.state.location.pathname).toBe('/w/adas-workspace');
+    await expect.poll(() => router.state.location.pathname).toBe('/w/ada');
   });
 
   it('says a connected calendar came back, and Continue opens the workspace', async () => {

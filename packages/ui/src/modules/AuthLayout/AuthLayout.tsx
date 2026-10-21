@@ -24,7 +24,7 @@ export interface AuthLayoutProps {
   readonly description?: string;
   /** The page's task: a SignInForm, a VerifyEmail, a Form. */
   readonly children: ReactNode;
-  /** A footer under a hairline: a way back, or terms, or first run's Sign out. */
+  /** A footer under a hairline, at its end: a way back, or first run's Sign out (Buttons with `variant="link"`). */
   readonly footer?: ReactNode;
   /**
    * Who is signed in, said at the start of the footer ("Signed in as
@@ -93,10 +93,10 @@ export function AuthLayout({
           ? {}
           : {
               footer: (
-                <>
+                <div className={styles.footer}>
                   {account !== undefined && <span className={styles.account}>{strings.signedInAs(account)}</span>}
-                  {footer}
-                </>
+                  {footer !== undefined && <span className={styles.actions}>{footer}</span>}
+                </div>
               ),
             })}
         {...(eyebrow === undefined ? {} : { eyebrow })}

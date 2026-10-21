@@ -9,8 +9,8 @@ import { homeWorkspace } from '../features/workspace/home.ts';
 
 // First run (spec 0036), for a signed in person: signed out goes to /sign-in
 // (and comes back here). Before the workspace exists, someone who already has
-// one goes to it. After, `?workspace=` names the one just made, for the
-// calendar step, which shows only where calendar sync is set up; a workspace
+// one goes to it. After, `?workspace=` names the one just made, for Invite
+// your team and the calendar step (only where calendar sync is set up); a workspace
 // that isn't theirs is passed over. `?step=` picks the step and changes
 // without a new load; a new `?workspace=` loads again. `?another=1` (the
 // workspace menu's Create workspace, spec 0031) keeps the steps open for
@@ -27,7 +27,7 @@ export const Route = createFileRoute('/welcome')({
       () => false,
     );
     const home = homeWorkspace(me);
-    const landing = welcomeLanding(me.workspaces, deps.workspace, calendarSync, home, deps.another);
+    const landing = welcomeLanding(me.workspaces, deps.workspace, home, deps.another);
     if (landing.kind === 'open') throw redirect({ to: '/w/$slug', params: { slug: landing.slug }, replace: true });
     return { user: me.user, calendarSync, workspace: landing.workspace, leaveTo: deps.another ? home : undefined };
   },

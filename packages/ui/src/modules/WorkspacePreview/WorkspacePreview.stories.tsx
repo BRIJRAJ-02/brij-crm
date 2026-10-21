@@ -53,6 +53,11 @@ export const CalendarFocused: Story = {
   args: { focus: 'calendar' },
 };
 
+/** About you: the areas picked (Booking meetings, Forms) add their rows to the sketch's sidebar, ringed. */
+export const AreasFocused: Story = {
+  args: { workspaceName: '', focus: 'areas', areas: ['booking', 'forms'] },
+};
+
 /** A long workspace name is cut with an ellipsis rather than pushing the sketch wider. */
 export const LongName: Story = {
   args: { workspaceName: 'The Halcyon Laboratories for Applied Research and Development', focus: 'workspace' },

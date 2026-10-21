@@ -6,7 +6,10 @@ import type { Hue } from '../../hue.ts';
 import styles from './WorkspacePreview.module.css';
 
 /** The part of the sketch a first run step is about, ringed: the person, the workspace, or the calendar. */
-export type WorkspacePreviewFocus = 'person' | 'workspace' | 'calendar';
+export type WorkspacePreviewFocus = 'person' | 'workspace' | 'calendar' | 'areas';
+
+/** A part of the product the person picked on first run's About you, drawn as a row of its own in the sketch. */
+export type WorkspacePreviewArea = 'booking' | 'forms';
 
 /** Props for WorkspacePreview. */
 export interface WorkspacePreviewProps {
@@ -20,6 +23,8 @@ export interface WorkspacePreviewProps {
   readonly personId?: string;
   /** The part the step is about, ringed. */
   readonly focus?: WorkspacePreviewFocus;
+  /** The areas picked on About you: each adds its row (Bookings, Forms) under the calendar, ringed with `focus="areas"`. */
+  readonly areas?: readonly WorkspacePreviewArea[];
 }
 
 /** A row of the sketched navigation: its icon (or an object's tile) and a bar for its name. */
@@ -28,6 +33,7 @@ interface SketchRow {
   readonly tile?: Hue;
   readonly width: 'long' | 'medium' | 'short';
   readonly isCalendar?: boolean;
+  readonly area?: WorkspacePreviewArea;
 }
 
 const NAV: readonly SketchRow[] = [
@@ -35,6 +41,11 @@ const NAV: readonly SketchRow[] = [
   { icon: 'inbox', width: 'short' },
   { icon: 'square-check', width: 'medium' },
   { icon: 'calendar', width: 'long', isCalendar: true },
+];
+
+const AREA_ROWS: readonly SketchRow[] = [
+  { icon: 'calendar-clock', width: 'medium', area: 'booking' },
+  { icon: 'clipboard-list', width: 'short', area: 'forms' },
 ];
 
 const RECORDS: readonly SketchRow[] = [
@@ -54,14 +65,25 @@ const TABLE_ROWS = 9;
  * word in it is something the person just typed, which the form already
  * holds.
  */
-export function WorkspacePreview({ workspaceName, workspaceId, personName, personId, focus }: WorkspacePreviewProps) {
+export function WorkspacePreview({
+  workspaceName,
+  workspaceId,
+  personName,
+  personId,
+  focus,
+  areas = [],
+}: WorkspacePreviewProps) {
   const workspace = workspaceName.trim();
   const person = personName.trim();
   const row = (each: SketchRow) => (
     <li
       key={each.icon}
       className={styles.row}
-      data-focused={each.isCalendar === true && focus === 'calendar' ? '' : undefined}
+      data-focused={
+        (each.isCalendar === true && focus === 'calendar') || (each.area !== undefined && focus === 'areas')
+          ? ''
+          : undefined
+      }
     >
       {each.tile === undefined ? (
         <Icon name={each.icon} size="sm" tone="muted" />
@@ -99,7 +121,9 @@ export function WorkspacePreview({ workspaceName, workspaceId, personName, perso
             <Icon name="search" size="sm" tone="muted" />
             <Skeleton width="short" isStill />
           </span>
-          <ul className={styles.list}>{NAV.map(row)}</ul>
+          <ul className={styles.list}>
+            {[...NAV, ...AREA_ROWS.filter((each) => each.area !== undefined && areas.includes(each.area))].map(row)}
+          </ul>
           <span className={styles.label}>
             <Skeleton width="short" isStill />
           </span>

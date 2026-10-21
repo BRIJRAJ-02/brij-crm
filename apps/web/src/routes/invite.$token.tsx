@@ -21,7 +21,7 @@ export const Route = createFileRoute('/invite/$token')({
   },
   pendingComponent: () => (
     <LoadingNow>
-      <AuthPending title={strings.pendingTitle} />
+      <AuthPending title={strings.pendingTitle} isSplit />
     </LoadingNow>
   ),
   errorComponent: InviteError,
@@ -37,5 +37,5 @@ function InviteRoute() {
 
 /** The look up failed: the server's words when it gave any (too many lookups), with a retry. */
 function InviteError({ error }: ErrorComponentProps) {
-  return <AuthError title={strings.pendingTitle} text={isDataError(error) ? error.message : undefined} />;
+  return <AuthError title={strings.pendingTitle} text={isDataError(error) ? error.message : undefined} isSplit />;
 }

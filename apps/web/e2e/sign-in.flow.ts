@@ -12,7 +12,7 @@ import path from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { expect, test, type Page } from '@playwright/test';
 import { codeFor } from './mailpit.ts';
-import { skipCalendarStep } from './people.ts';
+import { skipCalendarStep, skipDetailsStep } from './people.ts';
 
 /** Making a workspace writes its standard objects in one transaction; on a busy machine that takes a while. */
 const WORKSPACE_MADE_MS = 30_000;
@@ -103,6 +103,7 @@ async function newWorkspace(page: Page, email: string, name: string, slug: strin
   await expect(page).toHaveURL(/\/welcome$/);
   await page.getByLabel('Your name').fill('Ada Lovelace');
   await page.getByRole('button', { name: 'Continue', exact: true }).click();
+  await skipDetailsStep(page);
   await page.getByLabel('Workspace name').fill(name);
   await page.getByLabel('Web address').fill(slug);
   await page.getByRole('button', { name: 'Create workspace' }).click();
@@ -172,13 +173,15 @@ test('signs in by code, names the workspace, lands on People, signs out, and com
   await expect(page).toHaveTitle('Sign in or sign up · Timefix');
   // A one field page puts focus in its field on the first load too.
   await expect(page.getByLabel('Email')).toBeFocused();
-  // One narrow card (spec 0036): at most 400 px, and 16 px from each edge on a phone.
+  // One narrow column for the form (spec 0036): at most 400 px, and 16 px from each edge on a phone. On a wide
+  // screen the split card puts the sketch beside it, so the field's column is measured, not the whole card.
   const card = page.getByRole('main');
   const signInBox = await card.boundingBox();
-  const viewport = page.viewportSize();
-  expect(signInBox !== null && viewport !== null).toBe(true);
-  if (signInBox !== null && viewport !== null) {
-    expect(signInBox.width).toBeLessThanOrEqual(400);
+  const fieldBox = await page.getByLabel('Email').boundingBox();
+  expect(signInBox !== null && fieldBox !== null).toBe(true);
+  if (signInBox !== null && fieldBox !== null) {
+    expect(fieldBox.width).toBeLessThanOrEqual(400);
+    expect(fieldBox.x).toBeGreaterThanOrEqual(16);
     expect(signInBox.x).toBeGreaterThanOrEqual(16);
   }
   await checkScreen(page, '1-sign-in');
@@ -208,30 +211,42 @@ test('signs in by code, names the workspace, lands on People, signs out, and com
   // The right code signs in, pasted as an email shows it ("481 593": the space is dropped, never a digit);
   // with no workspace yet, /welcome.
   await page.getByLabel('Code').fill(`${code.slice(0, 3)} ${code.slice(3)}`);
-  // First run (spec 0036): About you, with focus in its one field, counted as the first step.
+  // First run (spec 0036): Your name, with focus in its one field, counted as the first step.
   await expect(page).toHaveURL(/\/welcome$/);
   await expect(page.getByLabel('Your name')).toBeFocused();
-  await expect(page).toHaveTitle('About you · Timefix');
-  await expect(page.getByText(/^Step 1 of [23]$/)).toBeVisible();
+  await expect(page).toHaveTitle('Your name · Timefix');
+  await expect(page.getByText(/^Step 1 of [45]$/)).toBeVisible();
   await expect(page.getByText(`Signed in as ${email}`)).toBeVisible();
   await checkScreen(page, '4-welcome-about');
 
   // Your workspace: its name follows "Your name", and the address follows the workspace name.
   await page.getByLabel('Your name').fill('Ada Lovelace');
   await page.keyboard.press('Enter');
+  // About you: chips, the first focused; Continue keeps the answers.
+  await expect(page).toHaveURL(/\/welcome\?step=details$/);
+  await expect(page.getByRole('radio', { name: 'Founder' })).toBeFocused();
+  await page.getByRole('radio', { name: 'Founder' }).click();
+  await page.getByRole('button', { name: 'Booking meetings' }).click();
+  await checkScreen(page, '4a-welcome-details');
+  await page.getByRole('button', { name: 'Continue', exact: true }).click();
   await expect(page).toHaveURL(/\/welcome\?step=workspace$/);
   await expect(page).toHaveTitle('Your workspace · Timefix');
   await expect(page.getByLabel('Workspace name')).toBeFocused();
   await expect(page.getByLabel('Workspace name')).toHaveValue('Ada’s workspace');
-  await expect(page.getByLabel('Web address')).toHaveValue('adas-workspace');
+  // The first free address made from the name (or the email's company), never a numbered one while a cleaner one is free.
+  await expect(page.getByLabel('Web address')).toHaveValue(/^[a-z0-9-]{3,40}$/);
+  await expect(page.getByText('Available', { exact: true })).toBeVisible();
   // Typed, the address is lowercase with spaces as dashes, and checked once typing stops.
   await page.getByLabel('Web address').fill(`Flow ${tag}`);
   await expect(page.getByLabel('Web address')).toHaveValue(slug);
-  await expect(page.getByText('That address is free.')).toBeVisible();
+  await expect(page.getByText('Available', { exact: true })).toBeVisible();
   await checkScreen(page, '4b-welcome-workspace');
   // Back keeps what was typed, and so does the browser's own.
   await page.getByRole('button', { name: 'Back', exact: true }).click();
+  await expect(page.getByRole('radio', { name: 'Founder' })).toBeChecked();
+  await page.getByRole('button', { name: 'Back', exact: true }).click();
   await expect(page.getByLabel('Your name')).toHaveValue('Ada Lovelace');
+  await page.goForward();
   await page.goForward();
   await expect(page.getByLabel('Web address')).toHaveValue(slug);
 
@@ -326,12 +341,26 @@ test('says each refusal on its field and drops it as the field changes, so one p
   await page.getByLabel('Your name').pressSequentially(`Zoë ${tag}`);
   await expect(page.getByLabel('Your name')).not.toHaveAttribute('aria-invalid');
   await page.getByRole('button', { name: 'Continue', exact: true }).click();
+  await skipDetailsStep(page);
 
-  // Your workspace: the address someone holds is said to be taken as it is typed, on its field, and Create waits.
+  // Your workspace. A check that can't answer (offline) says nothing, and Create still has the last word: taken,
+  // on the field, in the server's words. This runs first: an answer the check once gave is kept for the visit, so
+  // an address already found taken never reaches the server.
   const address = page.getByLabel('Web address');
+  await page.route('**/api/rpc/workspaces/slugAvailable', (route) => route.abort('connectionrefused'));
+  await address.fill(taken);
+  await expect(page.getByText('Not checked. Create will check it.')).toBeVisible();
+  await expect(page.getByText('Available', { exact: true })).toBeHidden();
+  await page.getByRole('button', { name: 'Create workspace' }).click();
+  await expect(address).toHaveAttribute('aria-invalid', 'true');
+  await expect(page.getByText('That workspace address is taken. Pick another.')).toBeVisible();
+  await page.unroute('**/api/rpc/workspaces/slugAvailable');
+
+  // Back online, the address someone holds is said to be taken as it is typed, on its field, and Create waits.
+  await address.fill('');
   await address.fill(taken);
   await expect(address).toHaveAttribute('aria-invalid', 'true');
-  await expect(page.getByText('That address is taken. Try another.')).toBeVisible();
+  await expect(page.getByText('Taken', { exact: true })).toBeVisible();
   await checkScreen(page, '4d-welcome-address-taken');
   await page.getByRole('button', { name: 'Create workspace' }).click();
   await expect(page).toHaveURL(/\/welcome\?step=workspace$/);
@@ -340,21 +369,14 @@ test('says each refusal on its field and drops it as the field changes, so one p
   await address.press('End');
   await address.pressSequentially('-two');
   await expect(address).not.toHaveAttribute('aria-invalid');
-  await expect(page.getByText('That address is free.')).toBeVisible();
+  await expect(page.getByText('Available', { exact: true })).toBeVisible();
 
-  // A check that can't answer (offline) says nothing, and Create still has the last word: taken, on the field.
-  await page.route('**/api/rpc/workspaces/slugAvailable', (route) => route.abort('connectionrefused'));
+  // Taken again from the kept answer, then fixed again: one press of Create sends it.
   await address.fill(taken);
-  await expect(page.getByText('That address is free.')).toBeHidden();
-  await page.getByRole('button', { name: 'Create workspace' }).click();
   await expect(address).toHaveAttribute('aria-invalid', 'true');
-  await expect(page.getByText('That workspace address is taken. Pick another.')).toBeVisible();
-  await page.unroute('**/api/rpc/workspaces/slugAvailable');
-
-  // Fixed again: one press of Create sends it.
   await address.fill(`${taken}-two`);
   await expect(address).not.toHaveAttribute('aria-invalid');
-  await expect(page.getByText('That address is free.')).toBeVisible();
+  await expect(page.getByText('Available', { exact: true })).toBeVisible();
   await page.getByRole('button', { name: 'Create workspace' }).click();
   await skipCalendarStep(page);
   // The workspace opens on Home (owner, 21 October 2026).

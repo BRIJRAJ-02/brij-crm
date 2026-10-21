@@ -33,17 +33,53 @@ export const WorkspaceScoped = z.object({
 /** The input every workspace procedure carries. */
 export type WorkspaceScoped = z.infer<typeof WorkspaceScoped>;
 
+/** What someone does, from first run's About you (spec 0036). */
+export const OnboardingRole = z.enum(['founder', 'sales', 'marketing', 'operations', 'other']);
+/** What someone does. */
+export type OnboardingRole = z.infer<typeof OnboardingRole>;
+
+/** How many people they work with: just them, 2 to 10, 11 to 50, or more. */
+export const OnboardingTeamSize = z.enum(['solo', '2-10', '11-50', '51+']);
+/** How many people they work with. */
+export type OnboardingTeamSize = z.infer<typeof OnboardingTeamSize>;
+
+/** A part of the product someone means to use ("All of it" is all three). */
+export const OnboardingArea = z.enum(['crm', 'booking', 'forms']);
+/** A part of the product someone means to use. */
+export type OnboardingArea = z.infer<typeof OnboardingArea>;
+
+/**
+ * First run's About you answers (spec 0036), every one skippable. Kept per
+ * member and workspace, and never shown to other members: they only shape
+ * the person's own setup (which areas come first).
+ */
+export const OnboardingAnswers = z
+  .object({
+    role: OnboardingRole.optional(),
+    teamSize: OnboardingTeamSize.optional(),
+    areas: z
+      .array(OnboardingArea)
+      .max(3)
+      .refine((areas) => new Set(areas).size === areas.length, 'Name each area once.')
+      .optional(),
+  })
+  .strict();
+/** First run's About you answers. */
+export type OnboardingAnswers = z.infer<typeof OnboardingAnswers>;
+
 /**
  * Creating your own workspace (`/welcome`). `id` is a UUID v7 the browser
  * mints and the retry key: sending the same request again returns the same
  * workspace. `memberName` is your name in it, and becomes your account's name
- * if that is still empty.
+ * if that is still empty. `onboarding` holds first run's About you answers.
  */
 export const CreateWorkspaceInput = z.object({
   id: uuidV7('The workspace id must be a UUID v7.'),
   name: z.string().trim().min(1, 'Name the workspace.').max(80, 'Use at most 80 characters.'),
   slug: WorkspaceSlug,
   memberName: z.string().trim().min(1, 'Enter your name.').max(80, 'Use at most 80 characters.'),
+  /** About you, when anything was answered: stored with the first member, for them alone. */
+  onboarding: OnboardingAnswers.optional(),
 });
 /** Creating your own workspace. */
 export type CreateWorkspaceInput = z.infer<typeof CreateWorkspaceInput>;

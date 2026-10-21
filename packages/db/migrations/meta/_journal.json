@@ -484,6 +484,13 @@
       "when": 1792615098346,
       "tag": "0068_calendar_calendars",
       "breakpoints": true
+    },
+    {
+      "idx": 69,
+      "version": "7",
+      "when": 1792615970590,
+      "tag": "0069_member_onboarding",
+      "breakpoints": true
     }
   ]
 }

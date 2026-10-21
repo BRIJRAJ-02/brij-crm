@@ -18,6 +18,8 @@ export const strings = {
   invalidText: 'Ask whoever invited you to send a new one.',
   goHome: 'Go to your workspaces',
   somethingWrong: 'Something went wrong. Try again in a moment.',
+  /** The sign out confirm's line here: where signing in again leads. */
+  signOutText: 'You’ll sign in again, then come back to this invitation.',
   signOutFailed: 'Couldn’t sign out. Check your connection, then try again.',
 } as const;
 

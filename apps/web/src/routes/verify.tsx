@@ -22,10 +22,10 @@ export const Route = createFileRoute('/verify')({
   },
   pendingComponent: () => (
     <LoadingNow>
-      <AuthPending title={strings.verifyTitle} />
+      <AuthPending title={strings.verifyTitle} isSplit />
     </LoadingNow>
   ),
-  errorComponent: () => <AuthError title={strings.verifyTitle} />,
+  errorComponent: () => <AuthError title={strings.verifyTitle} isSplit />,
   component: VerifyRoute,
 });
 

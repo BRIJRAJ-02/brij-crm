@@ -9,6 +9,15 @@ import { strings } from './strings.ts';
 import { PRODUCT_LOGO } from '../../brand.ts';
 
 /**
+ * Sign in's split card, the frame first run continues in (spec 0036): the
+ * calm, empty sketch of the app beside the task, which first run then fills
+ * in. No step count here; the count starts at first run's Step 1 of 5.
+ */
+export function signInFrame() {
+  return { preview: <WorkspacePreview workspaceName="" personName="" /> } as const;
+}
+
+/**
  * The page's frame and title while it checks who is signed in; a Skeleton
  * stands in for its task. `isSplit` draws first run's split card, with an
  * empty sketch beside it, so the card is already the width it will be.
@@ -20,7 +29,7 @@ export function AuthPending({ title, isSplit = false }: { readonly title: string
       logo={PRODUCT_LOGO}
       title={title}
       isBusy
-      {...(isSplit ? { preview: <WorkspacePreview workspaceName="" personName="" /> } : {})}
+      {...(isSplit ? signInFrame() : {})}
     >
       <Skeleton lines={3} />
     </AuthLayout>

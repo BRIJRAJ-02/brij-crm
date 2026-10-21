@@ -2,7 +2,7 @@
 // its one h1 inside the main landmark (TopBar's in the app, the page card's
 // before it), which takes focus by script and stays out of the tab order.
 // The pages whose whole task is a form (the email on /sign-in, the code on
-// /verify, your name on /welcome) put focus in its first field instead, so a
+// /verify, each step's first control on /welcome) put focus in its first field instead, so a
 // phone's keyboard and its code suggestion come up at once; the field's label
 // and the page's heading are read with it.
 
@@ -10,8 +10,10 @@
 const FIRST_FIELD: Readonly<Record<string, string>> = {
   '/sign-in': 'main input[name="email"]',
   '/verify': 'main input[autocomplete="one-time-code"]',
-  // First run (spec 0036): About you's name, or Your workspace's name after a reload on that step.
-  '/welcome': 'main input[name="memberName"], main input[name="name"]',
+  // First run (spec 0036): each step's first control: Your name, About you's first chip, Your workspace's name,
+  // or Invite your team's addresses.
+  '/welcome':
+    'main input[name="memberName"], main form [role="radio"], main input[name="name"], main textarea[name="emails"]',
 };
 
 /**

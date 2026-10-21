@@ -2,35 +2,23 @@
 // Purpose: first run's Your workspace (spec 0036): the workspace's name and web address, the address checked as typed.
 // Main task: name the workspace (it follows your name until edited), check its address, then Create workspace.
 // Leaves out: a logo, templates and settings; the workspace can't be skipped, since everything lives in one.
-import type { DataLayer } from '@crm/data';
 import { Field, Form, Icon, Spinner, VisuallyHidden } from '@crm/ui';
-import { useEffect, useState } from 'react';
-import { addressAsTyped, SLUG_MAX, SLUG_RULE } from './names.ts';
+import { useState } from 'react';
+import { addressAsTyped, SLUG_MAX } from '../address/address.ts';
 import type { WelcomeRefusal } from './refusals.ts';
 import { strings } from './strings.ts';
-
-/** How long after the last key the address is checked (spec 0036, AC-1207). */
-export const SLUG_CHECK_DELAY_MS = 300;
+import type { Address } from '../address/useAddress.ts';
 
 const FIELDS = { name: 'name', slug: 'slug' } as const;
 
-/** What the server last said about an address: free, taken, or no answer (offline, too many checks). */
-interface Checked {
-  readonly slug: string;
-  readonly answer: 'free' | 'taken' | 'unknown';
-}
-
-/** Where the address stands: breaking the rule, being checked, or the check's answer. */
-export type AddressState = 'invalid' | 'checking' | Checked['answer'];
-
 /** Props for Your workspace. */
 export interface WorkspaceStepProps {
-  readonly data: DataLayer;
   /** The workspace's name: typed, or following your name. */
   readonly name: string;
   readonly onName: (name: string) => void;
-  /** Its address: typed, or following the name. */
-  readonly slug: string;
+  /** Its address (typed, picked, or the first free one made from the name), where it stands, and free ones to offer. */
+  readonly address: Address;
+  /** The address typed or picked. */
   readonly onSlug: (slug: string) => void;
   /** The workspace is being made. */
   readonly isCreating: boolean;
@@ -41,43 +29,14 @@ export interface WorkspaceStepProps {
 }
 
 /**
- * Your workspace: "Workspace name", "Web address" after "/w/" with its check
- * (a spinner while it asks, a tick and "That address is free.", or "That
- * address is taken. Try another." on the field, announced), and Create
- * workspace (Enter).
+ * Your workspace: "Workspace name", "Web address" after a quiet "/w/" with
+ * its check (a spinner while it asks, a tick and "Available", or "Taken" on
+ * the field, announced), free suggestions under it to pick from when the
+ * typed one is taken or the first choice was, and Create workspace (Enter).
  */
-export function WorkspaceStep({
-  data,
-  name,
-  onName,
-  slug,
-  onSlug,
-  isCreating,
-  refusals,
-  onCreate,
-}: WorkspaceStepProps) {
-  const [checked, setChecked] = useState<Checked | undefined>(undefined);
+export function WorkspaceStep({ name, onName, address, onSlug, isCreating, refusals, onCreate }: WorkspaceStepProps) {
   const [problems, setProblems] = useState<readonly WelcomeRefusal[]>([]);
-  // The address is asked about once typing stops; an answer for an older address is dropped.
-  useEffect(() => {
-    if (!SLUG_RULE.test(slug)) return;
-    let isCurrent = true;
-    const timer = setTimeout(() => {
-      data.workspaces.slugAvailable(slug).then(
-        (available) => {
-          if (isCurrent) setChecked({ slug, answer: available ? 'free' : 'taken' });
-        },
-        () => {
-          if (isCurrent) setChecked({ slug, answer: 'unknown' });
-        },
-      );
-    }, SLUG_CHECK_DELAY_MS);
-    return () => {
-      isCurrent = false;
-      clearTimeout(timer);
-    };
-  }, [slug, data]);
-  const state: AddressState = !SLUG_RULE.test(slug) ? 'invalid' : checked?.slug === slug ? checked.answer : 'checking';
+  const { slug, state, suggestions } = address;
   const hint =
     state === 'invalid'
       ? strings.addressRule
@@ -85,13 +44,17 @@ export function WorkspaceStep({
         ? strings.addressChecking
         : state === 'free'
           ? strings.addressFree
-          : undefined;
+          : state === 'unknown'
+            ? strings.addressUnknown
+            : undefined;
   const create = () => {
     // A known taken address is refused here too, so the Form moves focus to it and says it again; Create waits.
     const found: WelcomeRefusal[] = [
       ...(name.trim() === '' ? [{ code: 'MISSING', message: strings.workspaceNameMissing, field: FIELDS.name }] : []),
       ...(state === 'invalid' ? [{ code: 'INVALID', message: strings.slugInvalid, field: FIELDS.slug }] : []),
-      ...(state === 'taken' ? [{ code: 'SLUG_TAKEN', message: strings.addressTaken, field: FIELDS.slug }] : []),
+      ...(state === 'taken'
+        ? [{ code: 'SLUG_TAKEN', message: strings.addressTakenSaid(slug), field: FIELDS.slug }]
+        : []),
     ];
     setProblems(found);
     if (found.length > 0) return;
@@ -129,6 +92,9 @@ export function WorkspaceStep({
           }}
           {...(hint === undefined ? {} : { hint })}
           {...(state === 'taken' ? { error: strings.addressTaken } : {})}
+          {...(suggestions.length === 0
+            ? {}
+            : { suggestions: { label: strings.addressSuggestions, items: suggestions, onPick: onSlug } })}
           {...(state === 'checking'
             ? { suffix: <Spinner size="sm" label={strings.addressChecking} /> }
             : state === 'free'
@@ -139,7 +105,17 @@ export function WorkspaceStep({
       {/* The answer is said once it settles; the hint under the field carries it on screen. */}
       <VisuallyHidden>
         <span role="status">
-          {state === 'free' ? strings.addressFreeSaid(slug) : state === 'taken' ? strings.addressTakenSaid(slug) : ''}
+          {state === 'free'
+            ? [
+                strings.addressFreeSaid(slug),
+                ...(suggestions.length > 0 ? [strings.addressOthers(suggestions)] : []),
+              ].join(' ')
+            : state === 'taken'
+              ? [
+                  strings.addressTakenSaid(slug),
+                  ...(suggestions.length > 0 ? [strings.addressOthers(suggestions)] : []),
+                ].join(' ')
+              : ''}
         </span>
       </VisuallyHidden>
     </>

@@ -183,6 +183,12 @@
     letter-spacing: var(--tracking-label);
   }
 
+  .suggestions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-4);
+  }
+
   .counter {
     margin-inline-start: auto;
     color: var(--text-secondary);

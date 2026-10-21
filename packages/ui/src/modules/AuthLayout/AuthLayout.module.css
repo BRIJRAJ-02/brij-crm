@@ -46,17 +46,33 @@
     letter-spacing: var(--tracking-body-strong);
   }
 
-  /* Who is signed in, at the start of the footer: quiet, cut with an ellipsis before it crowds the footer's actions. */
-  .account {
+  /* The footer: one quiet line, who is signed in at its start and the actions at its end. When both don't fit
+     (a phone, a long email) the actions wrap under it, still at the end. */
+  .footer {
+    display: flex;
     flex: 1;
-    align-self: center;
+    flex-wrap: wrap;
+    gap: var(--space-4) var(--space-8);
+    align-items: center;
+    justify-content: space-between;
     min-inline-size: 0;
-    overflow: hidden;
+  }
+
+  /* Who is signed in: small and muted, whole (a long email breaks rather than being cut). */
+  .account {
+    flex: 1 1 auto;
+    min-inline-size: 0;
     color: var(--text-secondary);
     font: var(--text-label);
     letter-spacing: var(--tracking-label);
-    text-overflow: ellipsis;
-    white-space: nowrap;
+    overflow-wrap: anywhere;
+  }
+
+  .actions {
+    display: inline-flex;
+    gap: var(--space-4);
+    align-items: center;
+    margin-inline-start: auto;
   }
 
   /* The wordmark: one image per theme, at control height, its width from its

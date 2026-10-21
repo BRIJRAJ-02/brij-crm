@@ -9,6 +9,7 @@ import { useEffect, useState } from 'react';
 import { googleRefusal, isAboutAddress, sendRefusal } from './messages.ts';
 import { savePending, sessionStore } from './pending.ts';
 import type { SignedOut } from './redirect.ts';
+import { signInFrame } from './AuthStates.tsx';
 import { strings } from './strings.ts';
 import { PRODUCT_LOGO } from '../../brand.ts';
 
@@ -96,7 +97,7 @@ export function SignInScreen({ data, google, redirect, returnTo, googleError, si
   };
 
   return (
-    <AuthLayout productName={strings.product} logo={PRODUCT_LOGO} title={strings.signInTitle}>
+    <AuthLayout productName={strings.product} logo={PRODUCT_LOGO} title={strings.signInTitle} {...signInFrame()}>
       <SignInForm
         status={status}
         onContinue={sendCode}

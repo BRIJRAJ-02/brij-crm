@@ -25,10 +25,10 @@ export const Route = createFileRoute('/sign-in')({
   },
   pendingComponent: () => (
     <LoadingNow>
-      <AuthPending title={strings.signInTitle} />
+      <AuthPending title={strings.signInTitle} isSplit />
     </LoadingNow>
   ),
-  errorComponent: () => <AuthError title={strings.signInTitle} />,
+  errorComponent: () => <AuthError title={strings.signInTitle} isSplit />,
   component: SignInRoute,
 });
 

@@ -6,6 +6,7 @@ import {
   check,
   foreignKey,
   integer,
+  jsonb,
   pgEnum,
   pgTable,
   primaryKey,
@@ -137,6 +138,30 @@ export const members = pgTable(
     // An active member never carries a leaving time; a removal sets one (rows removed before it take their last update's).
     check('members_left', sql`${t.status} = 'removed' or ${t.leftAt} is null`),
     check('members_time_zone', sql`char_length(${t.timeZone}) between 1 and 64`),
+  ],
+);
+
+/**
+ * A member's first run answers (spec 0036, About you): their role, team size
+ * and the areas they mean to use, as `OnboardingAnswers` in
+ * `@crm/contracts`. One row per member, written once with the workspace they
+ * start; read only for that member, never shown to others.
+ */
+export const memberOnboarding = pgTable(
+  'member_onboarding',
+  {
+    workspaceId: workspaceId(),
+    memberId: uuid('member_id').notNull(),
+    answers: jsonb('answers').notNull(),
+    createdAt: timestamptz('created_at').notNull().defaultNow(),
+  },
+  (t) => [
+    primaryKey({ name: 'member_onboarding_pkey', columns: [t.workspaceId, t.memberId] }),
+    foreignKey({
+      name: 'member_onboarding_member',
+      columns: [t.workspaceId, t.memberId],
+      foreignColumns: [members.workspaceId, members.id],
+    }),
   ],
 );
 
