@@ -102,8 +102,21 @@ export interface NavChangeOptions {
   readonly isSaidHere?: boolean;
 }
 
+/** A favourite that dropped out of a read (trashed, access lost), remembered so its return is noticed. */
+interface Departed {
+  readonly kind: 'view' | 'record';
+  readonly id: string;
+  readonly objectId: string;
+}
+
 interface Entry {
   confirmed?: NavState;
+  /**
+   * Favourites this tab saw that a later read left out (the trash, lost access), by `kind:id`: the read no longer
+   * names them, so without this a restore's event would name nothing the sidebar holds, and it wouldn't come back
+   * until the next read. Only ids this tab was already shown, so nothing new reaches the browser.
+   */
+  readonly departed: Map<string, Departed>;
   error?: DataError;
   reading?: Promise<NavState>;
   /** Something asked for a fresh read while one was out: one more read once it settles. */
@@ -154,6 +167,7 @@ export function createNavStore(deps: NavStoreDeps) {
     if (found !== undefined) return found;
     const made: Entry = {
       pending: [],
+      departed: new Map(),
       sending: false,
       snapshot: { status: 'loading' },
       listeners: new Set(),
@@ -193,6 +207,16 @@ export function createNavStore(deps: NavStoreDeps) {
       entry.confirmed === undefined ||
       entry.error !== undefined ||
       JSON.stringify(entry.confirmed) !== JSON.stringify(state);
+    if (entry.confirmed !== undefined) {
+      const now = new Set(state.favourites.map(navKey));
+      for (const favourite of entry.confirmed.favourites) {
+        const key = navKey(favourite);
+        if (!now.has(key)) {
+          entry.departed.set(key, { kind: favourite.kind, id: favourite.id, objectId: favourite.objectId });
+        }
+      }
+      for (const key of now) entry.departed.delete(key);
+    }
     entry.confirmed = state;
     entry.error = undefined;
     return changed;
@@ -287,6 +311,8 @@ export function createNavStore(deps: NavStoreDeps) {
         entry.sending = false;
         // Another tab's change landed between the base and this one: the base misses it, so read it.
         const missed = entry.confirmed !== undefined && version > entry.confirmed.version + 1;
+        // An unstarred favourite isn't waited for any more.
+        if (next.op.op === 'unstar') entry.departed.delete(navKey(next.op));
         if (entry.confirmed !== undefined) {
           const applied = applyNavOp(prefsOfState(entry.confirmed), next.op, next.universe);
           entry.confirmed = applied.ok
@@ -425,14 +451,15 @@ export function createNavStore(deps: NavStoreDeps) {
         readonly coarse: boolean;
       },
     ): boolean => {
-      const nav = entries.get(workspace)?.confirmed;
-      if (nav === undefined) return false;
-      return nav.favourites.some(
-        (favourite) =>
-          favourite.kind === change.kind &&
-          (change.ids.includes(favourite.id) ||
-            (change.coarse && (change.objectId === undefined || change.objectId === favourite.objectId))),
-      );
+      const entry = entries.get(workspace);
+      const nav = entry?.confirmed;
+      if (entry === undefined || nav === undefined) return false;
+      const touches = (favourite: { readonly kind: string; readonly id: string; readonly objectId: string }) =>
+        favourite.kind === change.kind &&
+        (change.ids.includes(favourite.id) ||
+          (change.coarse && (change.objectId === undefined || change.objectId === favourite.objectId)));
+      // One that dropped out (the trash, lost access) counts too, so its restore brings it back.
+      return nav.favourites.some(touches) || [...entry.departed.values()].some(touches);
     },
     /**
      * Reads again, coarsely (at most once a second): a favourite may have been renamed, deleted, trashed or

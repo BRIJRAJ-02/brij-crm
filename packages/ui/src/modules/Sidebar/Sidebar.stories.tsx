@@ -165,6 +165,41 @@ export const Collapsed: Story = {
   },
 };
 
+/**
+ * The rail keeps favourites as their objects' tiles (spec 0034, AC-935): a
+ * view's tooltip names it with its object, a record's with its name.
+ */
+export const RailFavourites: Story = {
+  render: () => (
+    <Stage height="page">
+      <Sidebar workspace="Brightline" isCollapsed onCollapsedChange={() => undefined}>
+        <NavSection title="Favourites">
+          <NavItem icon="building" hue="blue" href="/companies/views/uk" meta="Companies">
+            UK and EU companies
+          </NavItem>
+          <NavItem icon="user" hue="green" href="/people/ada">
+            Ada Lovelace
+          </NavItem>
+        </NavSection>
+        <NavSection title="Records">
+          <NavItem icon="building" hue="blue" href="/companies">
+            Companies
+          </NavItem>
+        </NavSection>
+      </Sidebar>
+    </Stage>
+  ),
+  play: async ({ canvas, userEvent }) => {
+    const favourites = canvas.getByRole('group', { name: 'Favourites' });
+    await expect(favourites.querySelectorAll('a')).toHaveLength(2);
+    const view = canvas.getByRole('link', { name: 'UK and EU companies · Companies' });
+    await hoverFresh(userEvent, view);
+    await expect(await shownTooltip()).toHaveTextContent('UK and EU companies · Companies');
+    await userEvent.unhover(view);
+    await waitFor(() => expect(document.querySelector('[role="tooltip"]')).toBeNull());
+  },
+};
+
 /** Records and lists still loading: skeleton rows under their labels, and the workspace's place too, so no stand in name flashes. */
 export const Loading: Story = {
   args: { isLoading: true, isWorkspaceLoading: true },

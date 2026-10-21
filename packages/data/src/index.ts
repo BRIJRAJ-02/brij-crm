@@ -1891,7 +1891,10 @@ export function createDataLayer({
             landed(
               input.workspace,
               call((options) => api.trash.restore({ ...input, recordIds: [...input.recordIds] }, options)),
-            ),
+            ).then((answer) => {
+              favouritesMoved(input.workspace);
+              return answer;
+            }),
           deleteForever: (input) =>
             landed(
               input.workspace,
@@ -1907,11 +1910,22 @@ export function createDataLayer({
     return trash;
   };
 
+  /**
+   * This tab deleted or restored records: its own echoes never come back, so the sidebar reads again (coarsely)
+   * while it holds a record favourite, or one that dropped out, so a favourite trashed or restored here follows
+   * (AC-939).
+   */
+  const favouritesMoved = (workspace: string): void => {
+    const change = { kind: 'record' as const, ids: [], objectId: undefined, coarse: true };
+    if (navStore?.touchesFavourites(workspace, change) === true) refreshNav(workspace);
+  };
+
   /** This tab deleted or restored records: its own echoes never come back, so an open trash settles now. */
   const trashMoved = (workspace: string): void => {
     void trash?.then((held) => {
       held.reload(workspace);
     });
+    favouritesMoved(workspace);
   };
 
   const tasksStore = (): Promise<TasksStore> => {

@@ -25,6 +25,7 @@ import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } fro
 import { BoardScreen } from '../board/BoardScreen.tsx';
 import { planBoard } from '../board/plan.ts';
 import { strings as boardStrings } from '../board/strings.ts';
+import { FavouriteButton } from '../workspace/FavouriteButton.tsx';
 import { RecordsScreen } from '../workspace/RecordsScreen.tsx';
 import { objectPendingPage } from '../workspace/ObjectScreen.tsx';
 import { useCan, useMyAccess, WorkspacePage } from '../workspace/WorkspacePage.tsx';
@@ -484,6 +485,7 @@ export function ViewScreen(props: ViewScreenProps) {
             {strings.viewSettings}
           </Button>
         )}
+        <FavouriteButton data={data} slug={slug} kind="view" id={view.id} />
         <ViewMenu
           slug={slug}
           object={object}

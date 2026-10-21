@@ -142,6 +142,47 @@ describe('the sidebar store', () => {
     });
   });
 
+  it('still notices a favourite that dropped out of a read, so its restore brings it back (AC-939)', async () => {
+    const ADA = '01900000-0000-7000-8000-0000000000b1';
+    const favourite = {
+      kind: 'record' as const,
+      id: ADA,
+      label: 'Ada Byron',
+      objectId: PEOPLE,
+      objectSlug: 'people',
+      objectName: 'People',
+      objectSingularName: 'Person',
+      icon: 'user' as const,
+      hue: 'green' as const,
+    };
+    const starred = { kind: 'record' as const, id: ADA, pinned: true };
+    const w = world(state({ version: 2, items: [starred], favourites: [favourite] }));
+    await w.store.load('acme');
+    const restored = { kind: 'record' as const, ids: [ADA], objectId: PEOPLE, coarse: false };
+    expect(w.store.touchesFavourites('acme', restored)).toBe(true);
+    // Trashed: the next read leaves it out, by name and id.
+    void w.store.reload('acme');
+    w.gets[0]?.(state({ version: 2 }));
+    await vi.waitFor(() => {
+      expect(ready(w.store.snapshot('acme')).favourites).toEqual([]);
+    });
+    // Its restore still names something the sidebar waits for; another record's change doesn't.
+    expect(w.store.touchesFavourites('acme', restored)).toBe(true);
+    expect(w.store.touchesFavourites('acme', { ...restored, ids: [DEALS] })).toBe(false);
+    // Back in a read, then unstarred: nothing is waited for any more.
+    void w.store.reload('acme');
+    w.gets[1]?.(state({ version: 2, items: [starred], favourites: [favourite] }));
+    await vi.waitFor(() => {
+      expect(ready(w.store.snapshot('acme')).favourites).toHaveLength(1);
+    });
+    void w.store.change('acme', { op: 'unstar', kind: 'record', id: ADA }, universe);
+    w.changes[0]?.settle(3);
+    await vi.waitFor(() => {
+      expect(ready(w.store.snapshot('acme')).favourites).toEqual([]);
+    });
+    expect(w.store.touchesFavourites('acme', restored)).toBe(false);
+  });
+
   it('never lets an older read replace a newer copy', async () => {
     const w = world(state({ version: 4, rail: true }));
     await w.store.load('acme');

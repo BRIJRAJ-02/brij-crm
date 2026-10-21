@@ -38,6 +38,8 @@ export const strings = {
   /** Item and section menus (spec 0034, AC-932, AC-933). */
   hideFromSidebar: 'Hide from sidebar',
   removeFavourite: 'Remove from favourites',
+  /** The star on a record's or a view's header (AC-934). */
+  addFavourite: 'Add to favourites',
   moveUp: 'Move up',
   moveDown: 'Move down',
   customiseSidebar: 'Customise sidebar',
