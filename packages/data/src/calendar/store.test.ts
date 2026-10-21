@@ -161,6 +161,22 @@ describe('the calendar store (spec 0024)', () => {
     expect(view.getSnapshot()).toMatchObject({ connections: [{ id: A }] });
   });
 
+  it('from a confirm, keeps the row until the server answers and throws a refusal with no toast', async () => {
+    const t = setup([listed([connection(A), connection(B)]), listed([connection(A)])]);
+    const view = t.store.view(WS);
+    view.retain();
+    await flush();
+    t.refuse(true);
+    const refused = t.store.remove(WS, B, { asksFirst: true });
+    expect(view.getSnapshot()).toMatchObject({ connections: [{ id: A }, { id: B }] });
+    await expect(refused).rejects.toMatchObject({ message: expect.any(String) as unknown });
+    expect(t.notices).toEqual([]);
+    t.refuse(false);
+    expect(await t.store.remove(WS, B, { asksFirst: true })).toBe(true);
+    await flush();
+    expect(view.getSnapshot()).toMatchObject({ connections: [{ id: A }] });
+  });
+
   it('reads a syncing connection again while held, until it is done or the limit passes', async () => {
     const syncing = listed([connection(A, { status: 'syncing' })]);
     const t = setup([syncing, syncing, listed([connection(A)])]);

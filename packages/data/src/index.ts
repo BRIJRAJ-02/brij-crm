@@ -3222,8 +3222,12 @@ export function createDataLayer({
       /** Makes a connection the member's default: shown at once, put back with a toast if refused. */
       makeDefault: (workspace: string, connectionId: string): Promise<boolean> =>
         calendar.makeDefault(workspace, connectionId),
-      /** Disconnects a connection: gone at once, back with a toast if refused. Answers whether it landed. */
-      remove: (workspace: string, connectionId: string): Promise<boolean> => calendar.remove(workspace, connectionId),
+      /**
+       * Disconnects a connection: gone at once, back with a toast if refused. Answers whether it landed. From a
+       * confirm (`asksFirst`), the row stays until the server answers and a refusal throws its DataError instead.
+       */
+      remove: (workspace: string, connectionId: string, options?: { readonly asksFirst?: boolean }): Promise<boolean> =>
+        calendar.remove(workspace, connectionId, options),
       /**
        * Where the browser goes to connect a Google calendar (the API sends it on to Google's consent), and where it
        * comes back to: Settings › Calendar, or first run's calendar step (`welcome`, spec 0036).
