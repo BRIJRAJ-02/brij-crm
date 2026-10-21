@@ -4,6 +4,7 @@
 import { oc } from '@orpc/contract';
 import * as z from 'zod';
 import { BULK_INLINE_MAX, BULK_TOO_MANY_MESSAGE, RestoreResults } from './bulk.ts';
+import { ApiRefusal } from './errors.ts';
 import { ActorReferenceValue, Timestamp } from './values/attribute-values.ts';
 import { RecordRefDisplay } from './values/options.ts';
 import { WorkspaceScoped } from './workspaces.ts';
@@ -82,13 +83,30 @@ export const DeleteForeverInput = RestoreTrashInput;
 /** Records to delete forever. */
 export type DeleteForeverInput = z.infer<typeof DeleteForeverInput>;
 
-/** One record's outcome in Delete forever: removed for good, or not in the trash (live, gone, or hidden). */
+/**
+ * One record's outcome in Delete forever: removed for good; not in the trash
+ * (live, gone, or hidden); or refused, kept in the trash with its reason, when
+ * the person may only read its object (fail closed, spec 0022 AC-538 as
+ * amended 21 October 2026): "You can view People but not change them."
+ */
 export const PurgeOutcome = z.object({
   recordId: Uuid,
-  state: z.enum(['purged', 'not-in-trash']),
+  state: z.enum(['purged', 'not-in-trash', 'refused']),
+  refusal: ApiRefusal.optional(),
 });
 /** One record's outcome in Delete forever. */
 export type PurgeOutcome = z.infer<typeof PurgeOutcome>;
+
+/**
+ * What Empty trash or a Delete forever job leaves behind (spec 0022, AC-538
+ * as amended): for each object the starter may only read, how many of its
+ * records stay in the trash. The job's `result` carries it as `left`, and its
+ * finish toast says it: "12 People records stay in the trash because you can
+ * view People but not change them."
+ */
+export const PurgeLeft = z.array(z.object({ objectId: Uuid, count: z.number().int().min(1) }));
+/** What a purge job leaves behind. */
+export type PurgeLeft = z.infer<typeof PurgeLeft>;
 
 /** Delete forever's outcomes, one per record asked, and how many change events carry its `mutationId`. */
 export const DeleteForeverResults = z.object({
