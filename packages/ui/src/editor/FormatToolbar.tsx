@@ -11,6 +11,8 @@ import { BubbleMenu } from '@tiptap/react/menus';
 import { useState, type KeyboardEvent } from 'react';
 import { Toolbar } from 'react-aria-components';
 import { Button, ToggleButton } from '../atoms/Button/Button.tsx';
+import { editorIcons } from '../atoms/Icon/editor-icons.ts';
+import { IconScope } from '../atoms/Icon/Icon.tsx';
 import type { IconName } from '../atoms/Icon/icons.ts';
 import { spaceToken } from '../lib/token-values.ts';
 import { Field } from '../molecules/Field/Field.tsx';
@@ -135,48 +137,51 @@ export function FormatToolbar({ editor }: FormatToolbarProps) {
     setEditingLink(false);
     editor.commands.focus();
   };
+  // The toolbar's own icons come in the editor's chunk (editor-icons.ts), not the registry every page loads.
   return (
-    <BubbleMenu
-      editor={editor}
-      className={styles.bubble}
-      options={{ placement: 'top', offset: spaceToken('space-8') }}
-      onKeyDown={onKeyDown}
-    >
-      {isEditingLink ? (
-        <LinkForm
-          editor={editor}
-          initial={active.href}
-          hasLink={active.link}
-          onDone={() => {
-            setEditingLink(false);
-          }}
-        />
-      ) : (
-        <Toolbar aria-label={strings.formatting} className={styles.toolbar}>
-          {TOGGLES.map((toggle, index) => (
-            <ToggleButton
-              key={toggle.key}
-              variant="ghost"
-              icon={toggle.icon}
-              label={toggle.label}
-              isSelected={active.toggles[index] ?? false}
-              onChange={() => {
-                toggle.run(editor);
-              }}
-            />
-          ))}
-          <ToggleButton
-            variant="ghost"
-            icon="link"
-            label={strings.link}
-            isSelected={active.link}
-            onChange={() => {
-              setEditingLink(true);
+    <IconScope icons={editorIcons}>
+      <BubbleMenu
+        editor={editor}
+        className={styles.bubble}
+        options={{ placement: 'top', offset: spaceToken('space-8') }}
+        onKeyDown={onKeyDown}
+      >
+        {isEditingLink ? (
+          <LinkForm
+            editor={editor}
+            initial={active.href}
+            hasLink={active.link}
+            onDone={() => {
+              setEditingLink(false);
             }}
           />
-        </Toolbar>
-      )}
-    </BubbleMenu>
+        ) : (
+          <Toolbar aria-label={strings.formatting} className={styles.toolbar}>
+            {TOGGLES.map((toggle, index) => (
+              <ToggleButton
+                key={toggle.key}
+                variant="ghost"
+                icon={toggle.icon}
+                label={toggle.label}
+                isSelected={active.toggles[index] ?? false}
+                onChange={() => {
+                  toggle.run(editor);
+                }}
+              />
+            ))}
+            <ToggleButton
+              variant="ghost"
+              icon="link"
+              label={strings.link}
+              isSelected={active.link}
+              onChange={() => {
+                setEditingLink(true);
+              }}
+            />
+          </Toolbar>
+        )}
+      </BubbleMenu>
+    </IconScope>
   );
 }
 

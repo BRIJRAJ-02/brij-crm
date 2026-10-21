@@ -1,0 +1,44 @@
+[
+  {
+    "name": "First load JavaScript (gzipped)",
+    "passed": true,
+    "size": 217193,
+    "sizeLimit": 250000,
+    "loading": 4.24205078125
+  },
+  {
+    "name": "First load CSS (gzipped)",
+    "passed": true,
+    "size": 5453,
+    "sizeLimit": 40000,
+    "loading": 0.10650390625
+  },
+  {
+    "name": "Hosted form JavaScript (gzipped)",
+    "passed": true,
+    "size": 206376,
+    "sizeLimit": 220000,
+    "loading": 4.03078125
+  },
+  {
+    "name": "Hosted form CSS (gzipped)",
+    "passed": true,
+    "size": 12612,
+    "sizeLimit": 16000,
+    "loading": 0.246328125
+  },
+  {
+    "name": "Booking page JavaScript (gzipped)",
+    "passed": true,
+    "size": 229934,
+    "sizeLimit": 230000,
+    "loading": 4.4908984375
+  },
+  {
+    "name": "Booking page CSS (gzipped)",
+    "passed": true,
+    "size": 16986,
+    "sizeLimit": 18000,
+    "loading": 0.3317578125
+  }
+]

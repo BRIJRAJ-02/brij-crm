@@ -1,6 +1,28 @@
+import { createContext, useContext, type ReactNode } from 'react';
 import type { Hue } from '../../hue.ts';
 import styles from './Icon.module.css';
 import { icons, type IconName } from './icons.ts';
+
+/** One glyph, as the registry holds it. */
+type IconGlyph = (typeof icons)[keyof typeof icons];
+
+/** The glyphs a scoped set adds for the Icons under it (none outside every IconScope). */
+const ScopedIcons = createContext<Readonly<Partial<Record<IconName, IconGlyph>>>>({});
+
+/** Props for IconScope. */
+export interface IconScopeProps {
+  /** A scoped set, such as `editorIcons`: icons that load with the part of the library that draws them. */
+  readonly icons: Readonly<Partial<Record<IconName, IconGlyph>>>;
+  readonly children: ReactNode;
+}
+
+/**
+ * Lets the Icons inside draw a scoped set's icons as well as the registry's. A lazy part of the library (the
+ * note editor) wraps itself in one, so its icons ship in its own chunk instead of the registry every page loads.
+ */
+export function IconScope({ icons: scoped, children }: IconScopeProps) {
+  return <ScopedIcons.Provider value={scoped}>{children}</ScopedIcons.Provider>;
+}
 
 /** Icon sizes, from the `size-icon` tokens: `md` 16 (nav, menus, rows), `sm` 14 (buttons, chips), `xs` 12 (card footers). */
 export type IconSize = 'md' | 'sm' | 'xs';
@@ -41,11 +63,15 @@ function accessibleName(label: string | undefined) {
 }
 
 /**
- * The one way the app draws an icon. Lucide only, through the registry, sized
- * and stroked from tokens. Decorative unless `label` is given.
+ * The one way the app draws an icon. Lucide only, through the registry (or a
+ * scoped set inside its IconScope), sized and stroked from tokens. Decorative
+ * unless `label` is given.
  */
 export function Icon(props: IconProps) {
-  const Glyph = icons[props.name];
+  const scoped = useContext(ScopedIcons);
+  const Glyph = (icons as Readonly<Partial<Record<IconName, IconGlyph>>>)[props.name] ?? scoped[props.name];
+  // A scoped icon outside its IconScope: nothing to draw (icons.test.ts keeps scoped names inside their scope).
+  if (Glyph === undefined) return null;
 
   if (props.tile !== undefined) {
     return (

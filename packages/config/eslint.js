@@ -102,7 +102,7 @@ const vendorSdks = {
         // packages/db/src/migrations.ts (its schema migrations).
         'graphile-worker',
         'graphile-worker/*',
-        // Icons: only packages/ui's Icon registry (src/atoms/Icon/icons.ts).
+        // Icons: only packages/ui's Icon registry (src/atoms/Icon/icons.ts) and its scoped sets (editor-icons.ts).
         'lucide-react',
         'lucide-react/*',
       ],

@@ -21,7 +21,19 @@ Each attribute type has one icon, used everywhere that type appears: `globe` dom
 
 ## Adding an icon
 
-Add one import and one line to `icons.ts`, under its lucide.dev name. It is the only file allowed to import `lucide-react` (ESLint enforces it), so every icon the app ships is listed there, and nothing else ships.
+Add one import and one line to `icons.ts`, under its lucide.dev name. With the scoped sets beside it, it is the only file allowed to import `lucide-react` (ESLint enforces it), so every icon the app ships is listed there, and nothing else ships.
+
+## Scoped sets
+
+Every page loads the registry, so an icon that only a lazy part of the library draws goes in that part's scoped set instead, and loads with its chunk. `editor-icons.ts` holds the note editor's toolbar icons (bold, italic, strikethrough, highlighter, both headings, the ordered list and the quote). The part wraps itself in `IconScope`, and the Icons inside draw from the registry and the set:
+
+```tsx
+<IconScope icons={editorIcons}>
+  <ToggleButton icon="bold" label="Bold" … />
+</IconScope>
+```
+
+Outside its scope a scoped name draws nothing, so `icons.test.ts` fails if one is used outside `src/editor`. A scoped name never repeats a registry name.
 
 ## Picking an icon for an object
 

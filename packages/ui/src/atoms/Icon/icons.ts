@@ -1,7 +1,10 @@
-// The one place the app imports lucide-react. Every icon the app uses is listed
-// here under its lucide.dev name, so only these ship and an unknown name is a
-// type error. Add an icon with one import and one line. The curated object
-// icons (OBJECT_ICONS in contracts) are all here too; a test checks it.
+// The registry: with editor-icons.ts, the only place the app imports
+// lucide-react. Every icon the app uses is listed here under its lucide.dev
+// name, so only these ship and an unknown name is a type error. Add an icon
+// with one import and one line. The curated object icons (OBJECT_ICONS in
+// contracts) are all here too; a test checks it. Every page carries this map,
+// so an icon only a lazy part of the library draws goes in that part's scoped
+// set instead (editor-icons.ts for the note editor).
 import {
   Activity,
   Apple,
@@ -26,7 +29,6 @@ import {
   Bike,
   Bird,
   Blocks,
-  Bold,
   BookOpen,
   Bookmark,
   Bot,
@@ -107,13 +109,10 @@ import {
   GraduationCap,
   GripVertical,
   Hammer,
-  Highlighter,
   Handshake,
   Hash,
   Headphones,
   Headset,
-  Heading1,
-  Heading2,
   Heart,
   HeartHandshake,
   Hospital,
@@ -123,7 +122,6 @@ import {
   Image,
   Inbox,
   Info,
-  Italic,
   Kanban,
   Key,
   Landmark,
@@ -138,7 +136,6 @@ import {
   List,
   ListChecks,
   ListFilter,
-  ListOrdered,
   ListPlus,
   ListTodo,
   LoaderCircle,
@@ -203,7 +200,6 @@ import {
   SquareCheck,
   SquareFunction,
   Star,
-  Strikethrough,
   Stethoscope,
   Store,
   Sun,
@@ -211,7 +207,6 @@ import {
   Target,
   Tent,
   Terminal,
-  TextQuote,
   Ticket,
   Timer,
   TrainFront,
@@ -243,6 +238,7 @@ import {
   X,
   Zap,
 } from 'lucide-react';
+import type { EditorIconName } from './editor-icons.ts';
 
 /** Lucide 1.49 icons by their lucide.dev name: the controls' own, one per attribute type, AI and help, and the curated object icons. */
 export const icons = {
@@ -269,7 +265,6 @@ export const icons = {
   bike: Bike,
   bird: Bird,
   blocks: Blocks,
-  bold: Bold,
   'book-open': BookOpen,
   bookmark: Bookmark,
   bot: Bot,
@@ -350,13 +345,10 @@ export const icons = {
   'graduation-cap': GraduationCap,
   'grip-vertical': GripVertical,
   hammer: Hammer,
-  highlighter: Highlighter,
   handshake: Handshake,
   hash: Hash,
   headphones: Headphones,
   headset: Headset,
-  'heading-1': Heading1,
-  'heading-2': Heading2,
   heart: Heart,
   'heart-handshake': HeartHandshake,
   hospital: Hospital,
@@ -366,7 +358,6 @@ export const icons = {
   image: Image,
   inbox: Inbox,
   info: Info,
-  italic: Italic,
   kanban: Kanban,
   key: Key,
   landmark: Landmark,
@@ -381,7 +372,6 @@ export const icons = {
   list: List,
   'list-checks': ListChecks,
   'list-filter': ListFilter,
-  'list-ordered': ListOrdered,
   'list-plus': ListPlus,
   'list-todo': ListTodo,
   'loader-circle': LoaderCircle,
@@ -446,7 +436,6 @@ export const icons = {
   'square-check': SquareCheck,
   'square-function': SquareFunction,
   star: Star,
-  strikethrough: Strikethrough,
   stethoscope: Stethoscope,
   store: Store,
   sun: Sun,
@@ -454,7 +443,6 @@ export const icons = {
   target: Target,
   tent: Tent,
   terminal: Terminal,
-  'text-quote': TextQuote,
   ticket: Ticket,
   timer: Timer,
   'train-front': TrainFront,
@@ -487,5 +475,8 @@ export const icons = {
   zap: Zap,
 } as const;
 
-/** An icon in the registry, named exactly as lucide.dev lists it. */
-export type IconName = keyof typeof icons;
+/**
+ * An icon Icon can draw, named exactly as lucide.dev lists it: one in the registry, or one a scoped set brings
+ * with its own chunk (`editor-icons.ts`), which draws only inside that set's IconScope.
+ */
+export type IconName = keyof typeof icons | EditorIconName;

@@ -2,7 +2,8 @@ import type { Meta, StoryObj } from '@storybook/react-vite';
 import { expect } from 'storybook/test';
 import { HUES } from '../../hue.ts';
 import { Stage } from '../../workbench/Stage/Stage.tsx';
-import { Icon } from './Icon.tsx';
+import { editorIcons } from './editor-icons.ts';
+import { Icon, IconScope } from './Icon.tsx';
 import { icons, type IconName } from './icons.ts';
 
 const meta = {
@@ -35,6 +36,24 @@ export const Registry: Story = {
       ))}
     </Stage>
   ),
+};
+
+/** The note editor's scoped set: drawn inside its IconScope, and nothing outside one. */
+export const EditorSet: Story = {
+  parameters: { crm: { screenshot: false } },
+  render: () => (
+    <Stage>
+      <IconScope icons={editorIcons}>
+        {(Object.keys(editorIcons) as IconName[]).map((name) => (
+          <Icon key={name} name={name} />
+        ))}
+      </IconScope>
+      <Icon name="bold" />
+    </Stage>
+  ),
+  play: async ({ canvasElement }) => {
+    await expect(canvasElement.querySelectorAll('svg')).toHaveLength(Object.keys(editorIcons).length);
+  },
 };
 
 /** `md` (16) for nav, menus and rows; `sm` (14) in buttons and chips; `xs` (12) in card footers. */
