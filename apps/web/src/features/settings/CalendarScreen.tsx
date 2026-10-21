@@ -24,6 +24,18 @@ import { useState } from 'react';
 import { strings, type ConnectResult } from './calendar-strings.ts';
 import { SettingsPage } from './SettingsPage.tsx';
 
+/** The connections' section while they load: its title, and a busy card where the calendars will list. */
+export function CalendarsLoading() {
+  return (
+    <SettingsSection title={strings.connectionsSection} description={strings.connectionsSectionText}>
+      <Card isBusy>
+        <Skeleton width="long" />
+        <Skeleton width="medium" />
+      </Card>
+    </SettingsSection>
+  );
+}
+
 /** Props for the Calendar screen: what its route loaded through the data layer. */
 export interface CalendarScreenProps {
   readonly data: DataLayer;
@@ -120,12 +132,8 @@ export function CalendarScreen({ data, slug, view, result, onResultSeen }: Calen
 
   let body;
   if (state.status === 'loading') {
-    body = (
-      <Card isBusy>
-        <Skeleton width="long" />
-        <Skeleton width="medium" />
-      </Card>
-    );
+    // The connections' section, busy, so the cards arrive in its column.
+    body = <CalendarsLoading />;
   } else if (state.status === 'error') {
     body = (
       <EmptyState tone="error" title={strings.failedTitle} onRetry={() => view.reload()}>
