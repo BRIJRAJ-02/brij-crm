@@ -44,7 +44,7 @@ const TEST_JOB = { items: 20_000, batchSize: 500, batchMillis: 200, refuseEvery:
 const COLUMNS: readonly TableColumn[] = [
   { id: 'job', label: strings.columns.job, isRowHeader: true },
   { id: 'startedBy', label: strings.columns.startedBy },
-  { id: 'status', label: strings.columns.status },
+  { id: 'status', label: strings.columns.status, isInline: true },
   { id: 'progress', label: strings.columns.progress },
   { id: 'started', label: strings.columns.started },
   { id: 'finished', label: strings.columns.finished },
@@ -181,7 +181,7 @@ export function JobsScreen({ data, slug, view, isAll, members: loaded, canRunTes
         if (job.status === 'preparing' || job.status === 'ready') {
           return (
             <>
-              <Badge text={strings.status[job.status]} />{' '}
+              <Badge text={strings.status[job.status]} />
               <InfoTip
                 label={strings.status[job.status]}
                 {...(job.status === 'ready' ? { example: strings.readyExample } : {})}

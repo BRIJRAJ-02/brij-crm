@@ -20,7 +20,7 @@ export const strings = {
   backToForms: 'Back to forms',
 
   // The list (Captures › Forms draws the same rows as Links)
-  copying: 'Copying…',
+  copying: 'Copying',
   moreFor: (name: string) => `More for ${name}`,
   /** Open's tooltip on a form's card. */
   openInNewTab: 'Open in a new tab',

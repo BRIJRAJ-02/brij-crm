@@ -153,9 +153,9 @@ export function NewPageDialog({ data, slug, isOpen, onClose, onCreated }: NewPag
           {...(errors.durations === undefined ? {} : { error: errors.durations })}
         />
         <Select
-          label={strings.hours}
+          label={scheduleStrings.schedule}
           info={
-            <InfoTip label={strings.hours} example={strings.tips.schedule.example}>
+            <InfoTip label={scheduleStrings.schedule} example={strings.tips.schedule.example}>
               {strings.tips.schedule.text}
             </InfoTip>
           }

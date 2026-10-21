@@ -253,11 +253,13 @@ export const Title: Story = {
   },
 };
 
-/** With `info`: an InfoTip beside the label, for a field whose label alone isn't clear. The label row keeps its height. */
+/** With `info`, read only: an InfoTip beside the label, for a field whose label alone isn't clear. The label row keeps its height. */
 export const WithInfo: Story = {
   args: {
-    label: 'Short name',
-    info: <InfoTip label="Short name">The end of the page’s link, after the workspace’s address.</InfoTip>,
+    label: 'API name',
+    value: 'people',
+    isReadOnly: true,
+    info: <InfoTip label="API name">Developers use it to point at this object from the API.</InfoTip>,
   },
   render: (args) => (
     <Stage width="narrow">
@@ -265,7 +267,7 @@ export const WithInfo: Story = {
     </Stage>
   ),
   play: async ({ canvas }) => {
-    await expect(canvas.getByRole('textbox', { name: 'Short name' })).toBeVisible();
-    await expect(canvas.getByRole('button', { name: 'About Short name' })).toBeVisible();
+    await expect(canvas.getByRole('textbox', { name: 'API name' })).toBeVisible();
+    await expect(canvas.getByRole('button', { name: 'About API name' })).toBeVisible();
   },
 };

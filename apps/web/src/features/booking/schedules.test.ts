@@ -18,13 +18,13 @@ describe('deleteSentence', () => {
   it('says what happens to the pages a delete moves, and that it can’t be undone, in one sentence', () => {
     expect(deleteSentence([], 'Working hours')).toBe('No booking pages use it, and this can’t be undone.');
     expect(deleteSentence(['Intro call'], 'Working hours')).toBe(
-      'Intro call will book by Working hours, your default. This can’t be undone.',
+      'Intro call will use Working hours, your default. This can’t be undone.',
     );
     expect(deleteSentence(['Intro call'], 'Working hours', false)).toBe(
-      'Intro call will book by Working hours, their default. This can’t be undone.',
+      'Intro call will use Working hours, their default. This can’t be undone.',
     );
     expect(deleteSentence(['Intro call', 'Demo'], 'Working hours')).toBe(
-      'Intro call and Demo will book by Working hours, your default. This can’t be undone.',
+      'Intro call and Demo will use Working hours, your default. This can’t be undone.',
     );
   });
 });

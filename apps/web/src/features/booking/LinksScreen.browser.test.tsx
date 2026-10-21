@@ -134,7 +134,7 @@ describe('deleting a booking page', () => {
     await chooseDelete('Quick chat');
     await userEvent.click(page.getByRole('button', { name: 'Delete page' }));
     // The card left at once; the confirm waits, busy, and a second press sends nothing.
-    await expect.poll(() => alert()?.textContent).toContain('Deleting…');
+    await expect.poll(() => alert()?.textContent).toContain('Deleting');
     await userEvent.click(page.getByRole('button', { name: /Deleting/ }), { force: true });
     expect(held.remove).toHaveBeenCalledTimes(1);
     expect(held.remove).toHaveBeenCalledWith('acme', 'p1');

@@ -1,4 +1,4 @@
-import type { ReactNode } from 'react';
+import type { KeyboardEvent, ReactNode } from 'react';
 import { FieldError, Label, RadioButton, RadioField, RadioGroup as AriaRadioGroup, Text } from 'react-aria-components';
 import styles from './Radio.module.css';
 
@@ -57,6 +57,13 @@ export interface RadioGroupProps {
   readonly name?: string;
 }
 
+const ARROWS = new Set(['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight']);
+
+/** Stops an arrow key pressed on the question's InfoTip from reaching the group, which would pick a choice. */
+function keepArrows(event: KeyboardEvent) {
+  if (ARROWS.has(event.key)) event.stopPropagation();
+}
+
 /** One of a few choices, all shown at once: a role, a plan, an export format. Arrow keys move between them. */
 export function RadioGroup({
   label,
@@ -92,7 +99,10 @@ export function RadioGroup({
         ) : (
           <span className={styles.legendRow}>
             <Label className={styles.legend}>{label}</Label>
-            <span className={styles.info}>{info}</span>
+            {/* The group moves and picks a choice on any arrow key inside it; on the tip (or in its help) they do nothing. */}
+            <span className={styles.info} role="presentation" onKeyDown={keepArrows}>
+              {info}
+            </span>
           </span>
         ))}
       <span className={styles.choices} data-orientation={orientation}>

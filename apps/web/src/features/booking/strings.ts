@@ -98,7 +98,7 @@ export const strings = {
   /** InfoTips on the editor's settings that a new member wouldn't read from the label alone. */
   tips: {
     schedule: {
-      text: 'Which weekly hours this page offers times in. Default schedule follows whichever schedule is marked default in Availability, even if that changes later.',
+      text: 'Default schedule follows whichever schedule is your default in Availability, even when you change which one that is.',
       example: 'Pick Evenings and the page offers only your evening hours.',
     },
     bufferBefore: {
@@ -110,19 +110,19 @@ export const strings = {
       example: 'With 10 minutes, nothing can start before 11:10 AM after a meeting that ends at 11:00.',
     },
     notice: {
-      text: 'How far ahead someone has to book. Times closer than this are hidden.',
+      text: 'How much warning you need before a meeting. Times sooner than this are hidden.',
       example: 'With 4 hours, a 2:00 PM slot can’t be booked after 10:00 AM that day.',
     },
     window: {
       text: 'How many days ahead people can book. The window moves forward each day.',
-      example: 'With 30 days, on 1 March people can book up to 31 March.',
+      example: 'With 30 days, on 1 March people can book up to about 31 March.',
     },
     dailyLimit: {
-      text: 'The most bookings this page takes in one day. Once a day is full, it shows no times. Meetings from your other pages don’t count.',
-      example: 'With 3, the fourth person that day sees it as full.',
+      text: 'The most bookings this page takes in one day. Once a day is full, it shows no times. Meetings from your other pages don’t count toward it.',
+      example: 'With 3, once three people book Tuesday, Tuesday shows no times.',
     },
     step: {
-      text: 'How often a start time is offered. Meeting length puts each start one meeting after the last.',
+      text: 'How often a start time is offered. Meeting length starts one right after another.',
       example: 'With 15 minutes, a 30 minute meeting offers 9:00, 9:15, 9:30 and so on.',
     },
   },

@@ -102,7 +102,12 @@ export const WithInfo: Story = {
   ),
   play: async ({ canvas, userEvent }) => {
     await userEvent.tab();
-    await expect(canvas.getByRole('button', { name: 'About Who can see it' })).toHaveFocus();
+    const tip = canvas.getByRole('button', { name: 'About Who can see it' });
+    await expect(tip).toHaveFocus();
+    // An arrow on the tip picks nothing.
+    await userEvent.keyboard('{ArrowDown}');
+    await expect(tip).toHaveFocus();
+    await expect(canvas.getByRole('radio', { name: 'Only me' })).toBeChecked();
     await userEvent.tab();
     await expect(canvas.getByRole('radio', { name: 'Only me' })).toHaveFocus();
   },

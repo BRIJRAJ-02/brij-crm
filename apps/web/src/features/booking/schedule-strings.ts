@@ -13,7 +13,7 @@ export const scheduleStrings = {
   defaultBadge: 'Default',
   /** The Default badge's InfoTip on a schedule's page. */
   defaultHelp:
-    'Booking pages set to Default schedule book inside these hours. Make another schedule the default from its menu, and those pages follow it.',
+    'Booking pages set to Default schedule book inside these hours. Set as default on another schedule, and they follow that one.',
   /** The page's Hours choice that follows whichever schedule is the owner's default (AC-965). */
   defaultSchedule: (name: string | undefined) =>
     name === undefined ? 'Default schedule' : `Default schedule (${name})`,
@@ -39,9 +39,9 @@ export const scheduleStrings = {
   deleteCommit: 'Delete schedule',
   deleting: 'Deleting',
   deleteUnused: 'No booking pages use it, and this can’t be undone.',
-  /** "Intro call and Demo will book by Working hours, your default. This can’t be undone." */
+  /** "Intro call and Demo will use Working hours, your default. This can’t be undone." */
   deleteUsed: (pages: string, fallback: string, isOwn = true) =>
-    `${pages} will book by ${fallback}, ${isOwn ? 'your' : 'their'} default. This can’t be undone.`,
+    `${pages} will use ${fallback}, ${isOwn ? 'your' : 'their'} default. This can’t be undone.`,
   deleted: (name: string) => `Deleted the ${name} schedule.`,
   cantDeleteDefault: 'Set another schedule as default first.',
   alreadyDefault: 'It’s your default.',
