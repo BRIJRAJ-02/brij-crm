@@ -1,11 +1,11 @@
 /* WorkspacePreview: a sketch of the app in a window that starts space-32 in
    from the top and the start of its slot and runs off the end and the foot,
-   which cut it. The window is the app's own size: a size-sidebar sidebar on
-   surface-sidebar beside the page on surface, with the app's head height
-   (size-bar) and row heights (size-nav-item, size-row). Words are what the
-   person typed; everything else is still Skeleton bars. The part a step is
-   about takes the focus ring (accent-line and the faint halo), easing to it
-   as the step changes. */
+   which cut it. The window is twice size-panel wide: a third of it the
+   sidebar on surface-sidebar (about the app's own sidebar), the rest the page
+   on surface, with the app's head height (size-bar) and row heights
+   (size-nav-item, size-row). Words are what the person typed; everything else
+   is still Skeleton bars. The part a step is about takes the focus ring
+   (accent-line and the faint halo), easing to it as the step changes. */
 @layer components {
   .root {
     position: relative;
@@ -20,8 +20,8 @@
     inset-block: var(--space-32) calc(-1 * var(--space-32));
     inset-inline-start: var(--space-32);
     display: grid;
-    grid-template-columns: var(--size-sidebar) minmax(0, 1fr);
-    inline-size: calc(var(--size-sidebar) + var(--size-panel));
+    grid-template-columns: minmax(0, 1fr) minmax(0, 2fr);
+    inline-size: calc(2 * var(--size-panel));
     overflow: hidden;
     border: var(--border-width-hairline) solid var(--border-subtle);
     border-radius: var(--radius-lg);
