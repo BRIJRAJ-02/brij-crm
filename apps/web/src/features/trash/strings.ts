@@ -28,6 +28,8 @@ export const strings = {
   restore: 'Restore',
   /** No selected record's object is one the person may change (AC-534). */
   cannotRestore: 'You can view these records but not restore them.',
+  /** The same for an owner or admin, whose Delete forever fails closed too (AC-538 as amended). */
+  cannotChange: 'You can view these records but not restore or delete them.',
   tooMany: 'Change at most 500 records in one request; more run as a background change.',
   oneRecord: '1 record',
   records: (count: string) => `${count} records`,
@@ -38,6 +40,12 @@ export const strings = {
       ? '1 couldn’t be restored; its row says why.'
       : `${new Intl.NumberFormat().format(refused)} couldn’t be restored; each row says why.`,
   noneRestored: (records: string) => `${records} couldn’t be restored. Each row says why.`,
+  /** Delete forever refused for some (an object the person may only read), in restore's words. */
+  someNotDeleted: (refused: number) =>
+    refused === 1
+      ? '1 couldn’t be deleted; its row says why.'
+      : `${new Intl.NumberFormat().format(refused)} couldn’t be deleted; each row says why.`,
+  noneDeleted: (records: string) => `${records} couldn’t be deleted. Each row says why.`,
   somethingWrong: 'Something went wrong. Try again in a moment.',
   /** Delete forever and Empty trash (spec 0022, milestone 4): owners and admins only. */
   deleteForever: 'Delete forever',
@@ -47,7 +55,9 @@ export const strings = {
   confirmEmptyTitle: 'Empty the trash?',
   /** Empty trash narrowed to one object by the filter: it says so (the button and the confirm). */
   emptyObjectTrash: (pluralName: string) => `Empty deleted ${pluralName.toLowerCase()}`,
-  confirmEmptyObjectTitle: (pluralName: string) => `Delete every ${pluralName.toLowerCase()} in the trash forever?`,
+  confirmEmptyObjectTitle: (pluralName: string) => `Delete all ${pluralName.toLowerCase()} in the trash forever?`,
+  /** Why Empty trash is off while a change runs (said to screen readers; the bar shows the change). */
+  waitForChange: 'Wait for the change under way to finish.',
   restoreRecords: (records: string) => `Restore ${records}`,
   deleteRecordsForever: (records: string) => `Delete ${records} forever`,
   confirmEmptyText: (records: string) => `${records} will be deleted forever. This can’t be undone.`,

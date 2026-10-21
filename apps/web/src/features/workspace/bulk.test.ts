@@ -1,10 +1,22 @@
 // The bulk bar's rules and words (spec 0022, AC-524 to AC-526, AC-541).
 import { dataError } from '@crm/data';
 import { describe, expect, it } from 'vitest';
-import { deleteOffer, deleteToast, lifecycleUndoToast, needsConfirm, recordsWord } from './bulk.ts';
+import type { JobView } from '@crm/data';
+import {
+  bulkEditToast,
+  bulkJobToast,
+  deleteOffer,
+  deleteToast,
+  jobProgress,
+  lifecycleUndoToast,
+  needsConfirm,
+  recordsWord,
+} from './bulk.ts';
+import { breaksUnique } from './BulkEditDialog.tsx';
 import { undoToast } from './undo.ts';
 
 const PEOPLE = { singularName: 'Person', pluralName: 'People' };
+const RECORDS = { singularName: 'Record', pluralName: 'Records' };
 const OBJECT = '0199a6f2-0000-7000-8000-000000000003';
 
 describe('the bulk bar', () => {
@@ -85,5 +97,123 @@ describe('the bulk bar', () => {
       tone: 'success',
       message: 'Undid the create of Ada Lovelace.',
     });
+  });
+});
+
+/** A bulk job as the finish toast and the bar read it. */
+const bulkJob = (status: JobView['status'], extra: Partial<JobView> = {}): JobView => ({
+  id: '0199a6f2-0000-7000-8000-0000000000aa',
+  kind: 'records.bulk_delete',
+  label: 'Bulk delete',
+  status,
+  total: 12_345,
+  done: 0,
+  refused: 0,
+  skipped: 0,
+  startedBy: { type: 'member' },
+  createdAt: '2026-10-21T09:00:00.000Z',
+  cancellable: true,
+  ...extra,
+});
+
+describe('a background change in the bar (spec 0022, AC-528)', () => {
+  it('counts, waits for Review with the count, runs, and stops after its batch', () => {
+    expect(jobProgress(bulkJob('preparing'), PEOPLE)).toEqual({ label: 'Counting…' });
+    expect(jobProgress(bulkJob('ready'), PEOPLE)).toEqual({ label: '12,345 people counted', value: 100 });
+    expect(jobProgress(bulkJob('running', { done: 4500 }), PEOPLE)).toEqual({
+      label: 'Deleting 4,500 of 12,345',
+      value: 36,
+    });
+    expect(jobProgress(bulkJob('cancelling', { done: 4500 }), PEOPLE)).toEqual({
+      label: 'Stopping after this batch…',
+      value: 36,
+    });
+    expect(jobProgress(bulkJob('running', { kind: 'records.purge', done: 4500 }), PEOPLE)?.label).toBe(
+      'Deleting 4,500 of 12,345 forever',
+    );
+    expect(jobProgress(bulkJob('succeeded'), PEOPLE)).toBeUndefined();
+  });
+});
+
+describe('a background change’s finish toast (spec 0022, AC-528, AC-531)', () => {
+  const onView = () => undefined;
+  it('says nothing for a change that ended before it touched anything', () => {
+    // A declined confirm, or Cancel while counting.
+    expect(bulkJobToast(bulkJob('cancelled'), PEOPLE, { onView })).toBeUndefined();
+    // A failure while counting is said in the bar that started it (AC-539).
+    const tooLarge = bulkJob('failed', { error: { code: 'JOB_TOO_LARGE', message: 'Narrow the filter.' } });
+    expect(bulkJobToast(tooLarge, PEOPLE, { onView })).toBeUndefined();
+  });
+
+  it('says how far a stopped change got, in the others’ words, with its reason when it failed', () => {
+    const undone: string[] = [];
+    const stopped = bulkJobToast(bulkJob('cancelled', { done: 4500 }), PEOPLE, {
+      onView,
+      onUndo: () => undone.push('undo'),
+    });
+    expect(stopped).toMatchObject({
+      tone: 'success',
+      message: 'Stopped deleting after 4,500 of 12,345 people. They’re in the trash.',
+      action: { label: 'Undo' },
+    });
+    const failed = bulkJobToast(
+      bulkJob('failed', { kind: 'records.bulk_edit', done: 20, error: { code: 'JOB_FAILED', message: 'It broke.' } }),
+      PEOPLE,
+      { onView },
+    );
+    expect(failed).toMatchObject({
+      tone: 'danger',
+      message: 'Stopped updating after 20 of 12,345 people. It broke. What it finished is kept.',
+      action: { label: 'View details' },
+    });
+  });
+
+  it('says where refusals are, and what a purge left in the trash', () => {
+    expect(
+      bulkJobToast(bulkJob('succeeded', { kind: 'records.bulk_edit', done: 9998, refused: 2 }), PEOPLE, { onView })
+        ?.message,
+    ).toBe('Updated 9,998 people. 2 were refused; the details say why.');
+    const purge = bulkJobToast(bulkJob('succeeded', { kind: 'records.purge', done: 1200 }), RECORDS, { onView }, [
+      { names: PEOPLE, count: 12 },
+    ]);
+    expect(purge).toMatchObject({
+      tone: 'danger',
+      message:
+        'Deleted 1,200 records forever. 12 People records stay in the trash because you can view People but not change them.',
+    });
+  });
+});
+
+describe('the bulk edit dialog’s rules (AC-529)', () => {
+  it('refuses Set, Add and Replace on a unique field for several records, never Remove or Clear', () => {
+    const unique = { isUnique: true };
+    expect(breaksUnique(unique, 'set', 2)).toBe(true);
+    expect(breaksUnique(unique, 'add', 2)).toBe(true);
+    expect(breaksUnique(unique, 'replace', 2)).toBe(true);
+    expect(breaksUnique(unique, 'remove', 2)).toBe(false);
+    expect(breaksUnique(unique, 'clear', 2)).toBe(false);
+    expect(breaksUnique(unique, 'set', 1)).toBe(false);
+    expect(breaksUnique({ isUnique: false }, 'set', 2)).toBe(false);
+  });
+
+  it('says where a partly refused edit’s reasons are, and undoes it in its object’s words', () => {
+    expect(
+      bulkEditToast({ kind: 'done', updated: 46, unchanged: 0, refused: 2 }, PEOPLE, () => undefined)?.message,
+    ).toBe('Updated 46 people. 2 were refused; each cell says why.');
+    const undone = undoToast(
+      {
+        kind: 'undone',
+        action: 'bulk',
+        objectId: OBJECT,
+        cells: 2,
+        undone: 2,
+        kept: 0,
+        failed: 0,
+        first: { recordId: 'r1', attributeId: 'a1', recordName: 'Ada' },
+        attributeTitle: 'Stage',
+      },
+      PEOPLE,
+    );
+    expect(undone?.message).toBe('Undid the edit of 2 people.');
   });
 });

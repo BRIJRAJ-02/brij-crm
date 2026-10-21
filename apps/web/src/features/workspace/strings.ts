@@ -87,8 +87,8 @@ export const strings = {
   undidCells: (cells: string) => `Undid ${cells} changes.`,
   undidPaste: (cells: string) => `Undid the paste into ${cells} cells.`,
   undidClear: (cells: string) => `Undid the clear of ${cells} cells.`,
-  /** A bulk edit undone (spec 0022, AC-530). */
-  undidBulk: (cells: string) => `Undid the edit of ${cells} records.`,
+  /** A bulk edit undone (spec 0022, AC-530), in its object's words ("Undid the edit of 2 people."), as its toast said it. */
+  undidBulk: (records: string) => `Undid the edit of ${records}.`,
   /** Cells an undo kept because they changed since; never says who (it may be the person, in another tab). */
   keptSince: (cells: number, shown: string) =>
     cells === 1 ? '1 cell was changed since, so it was kept.' : `${shown} cells were changed since, so they were kept.`,

@@ -128,13 +128,19 @@ export function deletedByOf(members: readonly MemberSummary[]): (row: TrashRow) 
  * Whether Restore may run for the selected rows (AC-534): at least one of
  * their objects is one the person may change, or a row scrolled out of the
  * loaded ones (its object unknown here). The server refuses the rest, each
- * with its reason on its row.
+ * with its reason on its row. It stops at the first such row, so a large
+ * selection costs little.
  */
 export function canRestore(
-  rows: readonly (TrashRow | undefined)[],
+  ids: Iterable<string>,
+  rowOf: (recordId: string) => TrashRow | undefined,
   objects: ReadonlyMap<string, ObjectSummary>,
 ): boolean {
-  return rows.some((row) => row === undefined || objects.get(row.item.objectId)?.access === 'write');
+  for (const id of ids) {
+    const row = rowOf(id);
+    if (row === undefined || objects.get(row.item.objectId)?.access === 'write') return true;
+  }
+  return false;
 }
 
 /** "1 record", "46 records". */
@@ -177,7 +183,11 @@ export function canRestoreAll(objectId: string | undefined, objects: readonly Ob
   return objects.some((object) => (objectId === undefined || object.id === objectId) && object.access === 'write');
 }
 
-/** The toast after Delete forever (AC-535): "Deleted 48 records forever.", and how many were no longer there. */
+/**
+ * The toast after Delete forever (AC-535): "Deleted 48 records forever.", how
+ * many were no longer there, and how many were refused (an object the person
+ * may only read, AC-538 as amended), in restore's words: each row says why.
+ */
 export function purgeToast(summary: PurgeSummary, onRetry?: () => void): ToastContent | undefined {
   if (summary.kind === 'too-many') return { tone: 'danger', message: strings.tooMany };
   if (summary.kind === 'failed') {
@@ -186,9 +196,18 @@ export function purgeToast(summary: PurgeSummary, onRetry?: () => void): ToastCo
       ? { tone: 'danger', message, action: { label: strings.retry, onAction: onRetry } }
       : { tone: 'danger', message };
   }
-  if (summary.purged === 0 && summary.skipped === 0) return undefined;
+  if (summary.purged === 0 && summary.skipped === 0 && summary.refused === 0) return undefined;
+  if (summary.purged === 0 && summary.refused > 0) {
+    return { tone: 'danger', message: strings.noneDeleted(records(summary.refused)) };
+  }
   const purged = summary.purged === 1 ? strings.purgedOne : strings.purged(records(summary.purged));
-  return summary.skipped === 0
-    ? { tone: 'success', message: purged }
-    : { tone: 'success', message: `${purged} ${strings.purgedSkipped(summary.skipped)}` };
+  const message = [
+    purged,
+    summary.skipped === 0 ? '' : strings.purgedSkipped(summary.skipped),
+    summary.refused === 0 ? '' : strings.someNotDeleted(summary.refused),
+  ]
+    .filter((sentence) => sentence !== '')
+    .join(' ');
+  // Rows left behind need the person's eye, as a restore that left some does.
+  return { tone: summary.refused === 0 ? 'success' : 'danger', message };
 }

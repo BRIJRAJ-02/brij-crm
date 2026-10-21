@@ -73,13 +73,19 @@ export const bulkStrings = {
   noFields: (pluralName: string) => `${pluralName} have no fields you can change in bulk.`,
   needsField: 'Choose a field to change.',
   needsValue: 'Give a value, or choose Clear.',
+  /** A field Clear isn't offered for (a required one): only the value can be asked for. */
+  needsValueOnly: 'Give a value.',
   needsChoice: 'Choose Checked or Unchecked.',
   close: 'Close',
-  apply: (records: string) => `Apply to ${records}`,
+  /** The title already names the records ("Edit 48 people"), so the footer has room for its keycaps on a phone. */
+  apply: 'Apply',
   applying: 'Applying…',
   updated: (records: string) => `Updated ${records}.`,
+  /** Some refused: their cells say why, as a delete's rows do (AC-530). */
   updatedSome: (records: string, refused: number) =>
-    `Updated ${records}. ${count(refused)} ${refused === 1 ? 'was' : 'were'} refused.`,
+    refused === 1
+      ? `Updated ${records}. 1 was refused; its cell says why.`
+      : `Updated ${records}. ${count(refused)} were refused; each cell says why.`,
   noneUpdated: (refused: number) =>
     refused === 1
       ? '1 record was refused. Its cell says why.'
@@ -87,39 +93,69 @@ export const bulkStrings = {
   nothingChanged: 'Nothing changed: every record already held that value.',
   /** Background changes (spec 0022, milestone 3): the bar, the confirm, the finish toast. */
   counting: 'Counting…',
+  /** Counted and waiting for its confirm: the bar's full progress, beside Review. */
+  counted: (records: string) => `${records} counted`,
+  /** Cancel pressed while it runs: it stops once its current batch is done. */
+  stopping: 'Stopping after this batch…',
   nothingToChange: 'Nothing left to change.',
   progress: {
     delete: (done: string, total: string) => `Deleting ${done} of ${total}`,
     edit: (done: string, total: string) => `Updating ${done} of ${total}`,
     restore: (done: string, total: string) => `Restoring ${done} of ${total}`,
-    purge: (done: string, total: string) => `Deleting forever ${done} of ${total}`,
+    purge: (done: string, total: string) => `Deleting ${done} of ${total} forever`,
   },
   starting: 'Starting…',
   confirmEditTitle: (records: string) => `Update ${records}?`,
   confirmEditText: 'This can’t be undone.',
-  /** What a counted edit job will do, restated in its confirm: "Sets Stage on each of them." */
-  describeChange: (title: string, op: BulkOp) =>
+  /**
+   * What a counted edit job will do, restated in its confirm around the value
+   * it writes, drawn by its field's display: "Sets Stage to [Won] on each of
+   * them." A Clear, or a checkbox, needs no value drawn.
+   */
+  describeChange: (
+    title: string,
+    op: BulkOp,
+  ): { readonly before: string; readonly after: string } | { readonly whole: string } =>
     op === 'clear'
-      ? `Clears ${title} on each of them.`
+      ? { whole: `Clears ${title} on each of them.` }
       : op === 'add'
-        ? `Adds to ${title} on each of them.`
+        ? { before: 'Adds', after: `to ${title} on each of them.` }
         : op === 'remove'
-          ? `Removes from ${title} on each of them.`
+          ? { before: 'Removes', after: `from ${title} on each of them.` }
           : op === 'replace'
-            ? `Replaces ${title} on each of them.`
-            : `Sets ${title} on each of them.`,
+            ? { before: `Replaces ${title} with`, after: 'on each of them.' }
+            : { before: `Sets ${title} to`, after: 'on each of them.' },
+  /** A checkbox's change, in words: no box drawn. */
+  describeCheck: (title: string, isChecked: boolean) =>
+    isChecked ? `Checks ${title} on each of them.` : `Unchecks ${title} on each of them.`,
   /** A capped "all matching" (AC-523): the exact number comes with the count. */
   allMatchingRecords: (value: number, names: ObjectNames) =>
     `all ${count(value)}+ matching ${names.pluralName.toLowerCase()}`,
   confirmEditAction: (records: string) => `Update ${records}`,
   tooManyIds: 'Select at most 10,000 records one by one, or select all matching.',
   tooManyExcept: 'You can leave out at most 1,000 records from all matching. Clear and select them one by one instead.',
-  stoppedDeleting: (done: string, total: string, plural: string) =>
-    `Stopped deleting after ${done} of ${total} ${plural}. They’re in the trash.`,
-  stoppedAfter: (label: string, done: string, total: string) => `${label} stopped after ${done} of ${total}.`,
-  jobFailed: (label: string) => `${label} stopped before it finished. What it finished is kept.`,
+  /** A background change that stopped part way (cancelled, or failed): how far it got, in the others' words. */
+  stopped: {
+    delete: (done: string, total: string, plural: string) => `Stopped deleting after ${done} of ${total} ${plural}.`,
+    edit: (done: string, total: string, plural: string) => `Stopped updating after ${done} of ${total} ${plural}.`,
+    restore: (done: string, total: string, plural: string) => `Stopped restoring after ${done} of ${total} ${plural}.`,
+    purge: (done: string, total: string, plural: string) =>
+      `Stopped deleting forever after ${done} of ${total} ${plural}.`,
+  },
+  /** What a stopped delete moved: still in the trash, and Undo brings it back. */
+  inTheTrash: 'They’re in the trash.',
+  /** What a failed change finished stays finished. */
+  keptDone: 'What it finished is kept.',
+  deletedForever: (records: string) => `Deleted ${records} forever.`,
   viewDetails: 'View details',
-  refusedCount: (refused: number) => `${count(refused)} ${refused === 1 ? 'was' : 'were'} refused.`,
+  /** A job's refusals are listed on the Background jobs page (View details). */
+  refusedSeeDetails: (refused: number) =>
+    refused === 1 ? '1 was refused; the details say why.' : `${count(refused)} were refused; the details say why.`,
+  /** What a purge left in the trash (spec 0022, AC-538 as amended), per object it may only read. */
+  leftInTrash: (left: number, names: ObjectNames) =>
+    left === 1
+      ? `1 ${names.singularName} record stays in the trash because you can view ${names.pluralName} but not change them.`
+      : `${count(left)} ${names.pluralName} records stay in the trash because you can view ${names.pluralName} but not change them.`,
 } as const;
 
 /** Whether the bar offers Delete for a selection of `selected` records, or says it is too many. */
@@ -248,48 +284,73 @@ export function bulkPath(selection: { readonly kind: 'some' | 'all-matching' }, 
   return selection.kind === 'all-matching' || selected > BULK_INLINE_MAX ? 'job' : 'inline';
 }
 
-/** The bar's progress while a bulk job counts or runs (AC-528), or undefined when it waits or has ended. */
+/**
+ * The bar's progress while a bulk job counts, waits for its confirm or runs
+ * (AC-528): "Counting…"; a full bar labelled with the count ("12,345 people
+ * counted") while it waits; "Deleting 4,500 of 12,345"; "Stopping after this
+ * batch…" once cancelled while it runs. Undefined once it has ended.
+ */
 export function jobProgress(
   job: Pick<JobView, 'kind' | 'status' | 'done' | 'refused' | 'skipped' | 'total'>,
+  names: ObjectNames,
 ): { readonly label: string; readonly value?: number } | undefined {
   if (job.status === 'preparing') return { label: bulkStrings.counting };
   const action = bulkActionOf(job.kind);
   if (action === undefined) return undefined;
+  const total = job.total ?? 0;
+  if (job.status === 'ready') return { label: bulkStrings.counted(recordsWord(total, names)), value: 100 };
   if (job.status !== 'queued' && job.status !== 'running' && job.status !== 'cancelling') return undefined;
   const done = job.done + job.refused + job.skipped;
-  const total = job.total ?? 0;
+  const value = total === 0 ? undefined : Math.min(100, Math.round((done / total) * 100));
   return {
-    label: bulkStrings.progress[action](count(done), count(total)),
-    ...(total === 0 ? {} : { value: Math.min(100, Math.round((done / total) * 100)) }),
+    label: job.status === 'cancelling' ? bulkStrings.stopping : bulkStrings.progress[action](count(done), count(total)),
+    ...(value === undefined ? {} : { value }),
   };
+}
+
+/** What a purge left in the trash for one object, with that object's names (spec 0022, AC-538 as amended). */
+export interface LeftInTrash {
+  readonly names: ObjectNames;
+  readonly count: number;
 }
 
 /**
  * The toast a bulk job raises when it ends (AC-528, AC-531): "Deleted 12,345
- * people." with Undo; "Updated 9,998 people. 2 were refused." with View
- * details; "Restored …"; "Cancelled after 4,500 of 12,345."; a failure says so.
+ * people." with Undo; "Updated 9,998 people. 2 were refused; the details say
+ * why." with View details; "Restored …"; "Deleted 1,200 records forever.",
+ * with what a purge left in the trash per object; "Stopped deleting after
+ * 4,500 of 12,345 people. They're in the trash." with Undo. Nothing for a job
+ * that ended before it touched anything: a declined confirm or Cancel while
+ * counting says nothing, and a failure or a count of zero is said in the bar
+ * that started it (AC-539).
  */
 export function bulkJobToast(
-  job: Pick<JobView, 'kind' | 'label' | 'status' | 'done' | 'refused' | 'skipped' | 'total'>,
+  job: Pick<JobView, 'kind' | 'label' | 'status' | 'done' | 'refused' | 'skipped' | 'total' | 'error'>,
   names: ObjectNames,
   actions: { readonly onUndo?: () => void; readonly onView: () => void },
+  left: readonly LeftInTrash[] = [],
 ): ToastContent | undefined {
   const action = bulkActionOf(job.kind);
   if (action === undefined) return undefined;
   const view = { label: bulkStrings.viewDetails, onAction: actions.onView };
-  if (job.status === 'failed') return { tone: 'danger', message: bulkStrings.jobFailed(job.label), action: view };
-  if (job.status === 'cancelled') {
-    const done = count(job.done + job.refused + job.skipped);
-    const total = count(job.total ?? 0);
-    // A delete stopped part way: what it moved is in the trash, and Undo brings it back as a finished one does.
-    if (action === 'delete' && job.done > 0 && actions.onUndo !== undefined) {
-      return {
-        tone: 'success',
-        message: bulkStrings.stoppedDeleting(done, total, names.pluralName.toLowerCase()),
-        action: { label: bulkStrings.undo, onAction: actions.onUndo },
-      };
-    }
-    return { tone: 'success', message: bulkStrings.stoppedAfter(job.label, done, total), action: view };
+  // What it touched, whichever way: changed, refused or skipped.
+  const handled = job.done + job.refused + job.skipped;
+  // A delete that moved any records to the trash brings them back from the toast, however it ended.
+  const undo =
+    action === 'delete' && job.done > 0 && actions.onUndo !== undefined
+      ? { label: bulkStrings.undo, onAction: actions.onUndo }
+      : undefined;
+  const stayed = left.map((each) => bulkStrings.leftInTrash(each.count, each.names));
+  const said = (...sentences: readonly string[]) => [...sentences, ...stayed].filter((each) => each !== '').join(' ');
+  if (job.status === 'failed' || job.status === 'cancelled') {
+    if (handled === 0) return undefined;
+    const stopped = bulkStrings.stopped[action](count(handled), count(job.total ?? 0), names.pluralName.toLowerCase());
+    const kept = action === 'delete' ? bulkStrings.inTheTrash : job.status === 'failed' ? bulkStrings.keptDone : '';
+    return {
+      tone: job.status === 'failed' ? 'danger' : 'success',
+      message: said(stopped, job.status === 'failed' ? (job.error?.message ?? '') : '', kept),
+      action: undo ?? view,
+    };
   }
   if (job.status !== 'succeeded') return undefined;
   // A count of zero: the bar that started it says "Nothing left to change." (no second announcement).
@@ -302,16 +363,10 @@ export function bulkJobToast(
         ? bulkStrings.updated(records)
         : action === 'restore'
           ? bulkStrings.restored(records)
-          : `Deleted ${records} forever.`;
-  if (job.refused > 0) {
-    return { tone: 'danger', message: `${what} ${bulkStrings.refusedCount(job.refused)}`, action: view };
-  }
-  return {
-    tone: 'success',
-    message: what,
-    action:
-      action === 'delete' && actions.onUndo !== undefined && job.done > 0
-        ? { label: bulkStrings.undo, onAction: actions.onUndo }
-        : view,
-  };
+          : bulkStrings.deletedForever(records);
+  if (job.refused > 0)
+    return { tone: 'danger', message: said(what, bulkStrings.refusedSeeDetails(job.refused)), action: view };
+  // Records left in the trash need the person's eye, as rows left behind do.
+  if (stayed.length > 0) return { tone: 'danger', message: said(what), action: view };
+  return { tone: 'success', message: what, action: undo ?? view };
 }

@@ -12,7 +12,18 @@ import {
   type TrashView,
 } from '@crm/data';
 import { useTrash } from '@crm/data/react';
-import { Badge, BulkActionBar, Button, Callout, EmptyState, Modal, Select, Toolbar, TopBar } from '@crm/ui';
+import {
+  Badge,
+  BulkActionBar,
+  Button,
+  Callout,
+  EmptyState,
+  Modal,
+  Select,
+  Toolbar,
+  TopBar,
+  VisuallyHidden,
+} from '@crm/ui';
 import {
   allMatching,
   columnWidthFor,
@@ -23,10 +34,10 @@ import {
   type GridSelection,
 } from '@crm/ui/grid';
 import { useNavigate, useRouteContext } from '@tanstack/react-router';
-import { useMemo, useState } from 'react';
+import { useId, useMemo, useState } from 'react';
 import { useCan, WorkspacePage } from '../workspace/WorkspacePage.tsx';
 import { BULK_EXCEPT_MAX, BULK_IDS_MAX, bulkPath, bulkStrings, recordsWord } from '../workspace/bulk.ts';
-import { useBulkJob } from '../workspace/useBulkJob.ts';
+import { isFocusLost, useBulkJob, type NotesIn } from '../workspace/useBulkJob.ts';
 import { strings } from './strings.ts';
 import {
   canRestore,
@@ -51,9 +62,6 @@ export interface TrashScreenProps {
   /** The object the list is narrowed to (`?object=`), or undefined for all. */
   readonly objectId: string | undefined;
 }
-
-/** What a confirm asks about: Delete forever of picked records, or a counted job (a restore, a purge, Empty trash). */
-type Asking = { readonly kind: 'purge'; readonly ids: readonly string[] } | { readonly kind: 'job' };
 
 /** The trash's records, named for a count ("48 records"). */
 const RECORDS = { singularName: 'Record', pluralName: 'Records' } as const;
@@ -88,17 +96,59 @@ export function TrashScreen({ slug, objects, members, view, objectId }: TrashScr
   const asOf = held.view === view ? held.asOf : undefined;
   // Owners and admins delete forever (records.purge, AC-535); the server refuses anyone else anyway.
   const canPurge = useCan('records.purge');
-  const bulkJob = useBulkJob(slug);
-  const [asking, setAsking] = useState<Asking | undefined>(undefined);
-  const [lastAsked, setLastAsked] = useState<Asking | undefined>(undefined);
-  // Empty trash asks in its own words once its job is counted.
-  const [isEmptying, setEmptying] = useState(false);
-  const open: Asking | undefined = asking ?? (bulkJob.awaiting === undefined ? undefined : { kind: 'job' });
-  if (open !== undefined && open !== lastAsked && open.kind !== lastAsked?.kind) setLastAsked(open);
+  const filtered = objectId === undefined ? undefined : byId.get(objectId);
+  // The records counted in the filtered object's words when the filter names one ("12 deals"), else "records".
+  const names = filtered ?? RECORDS;
   const [focusRow, setFocusRow] = useState<{ readonly index: number } | undefined>(undefined);
   const count = selectedCount(selection, state.count.count);
-  const ids = selection.kind === 'some' ? [...selection.ids] : [];
+  // The ticked ids, copied once per selection, not on every render (a selection holds up to 10,000).
+  const ids = useMemo(() => (selection.kind === 'some' ? [...selection.ids] : []), [selection]);
   const path = bulkPath(selection, count);
+  /** The grid takes focus back at the first of these rows (or the first row), as the bar that held it goes. */
+  const focusBackAt = (recordIds: readonly string[], leaving: boolean) => {
+    const rows = recordIds.flatMap((id) => {
+      const at = view.indexOf(id);
+      return at === undefined ? [] : [at];
+    });
+    const last = Math.max(0, state.source.count - 1 - (leaving ? recordIds.length : 0));
+    setFocusRow({ index: Math.max(0, Math.min(...rows, last)) });
+  };
+  /** Clears the ticks, focus back to the grid where the first of them was. */
+  const untick = () => {
+    focusBackAt(ids, false);
+    setHeld({ view, selection: noRows() });
+  };
+  // A change this bar (or Empty trash) started, followed until it ends. A count of zero clears the ticks it was
+  // for; focus that went with the bar's Cancel comes back to the grid, and stays anywhere else.
+  const bulkJob = useBulkJob(slug, names, () => {
+    if (isFocusLost()) untick();
+    else setHeld({ view, selection: noRows() });
+  });
+  const clear = () => {
+    bulkJob.forget();
+    untick();
+  };
+  /** Keeps these rows ticked (refused ones, back with their reasons), so "2 selected" shows where they are. */
+  const keepTicked = (recordIds: readonly string[]) => {
+    if (recordIds.length === 0) return;
+    setHeld((before) => {
+      if (before.view !== view || before.selection.kind === 'all-matching') return before;
+      return { view, selection: { kind: 'some', ids: new Set([...before.selection.ids, ...recordIds]) } };
+    });
+  };
+  // Delete forever of picked records waiting for its confirm, and the last one asked, so it closes with its words.
+  const [asking, setAsking] = useState<readonly string[] | undefined>(undefined);
+  const [lastAsked, setLastAsked] = useState<readonly string[]>([]);
+  if (asking !== undefined && asking !== lastAsked) setLastAsked(asking);
+  // A counted change's confirm, opened by Review: never by itself.
+  const [isReviewing, setReviewing] = useState(false);
+  if (isReviewing && !bulkJob.isCounted) setReviewing(false);
+  // Empty trash asks in its own words once its job is counted.
+  const [isEmptying, setEmptying] = useState(false);
+  // Asks the bar to take focus: Empty trash started a change it shows, with Cancel.
+  const [barFocus, setBarFocus] = useState<object | undefined>(undefined);
+  const waitId = useId();
+
   /** Sets the rows ticked, within the limits (AC-523); "all matching" counts from when it was first chosen. */
   const select = (next: GridSelection) => {
     if (next.kind === 'some' && next.ids.size > BULK_IDS_MAX) {
@@ -127,35 +177,23 @@ export function TrashScreen({ slug, objects, members, view, objectId }: TrashScr
           asOf: asOf ?? new Date().toISOString(),
         }
       : { kind: 'ids', recordIds: ids };
-  /** Starts a job; a refusal to start says why in the bar. */
-  const startJob = (action: BulkAction, on: BulkTarget) => {
-    void bulkJob.start(action, on).then((failure) => {
-      if (failure !== undefined) bulkJob.say(refusalSummary(failure), 'danger');
+  /** Starts a job; a refusal to start says why where it was asked: in the bar, or (Empty trash) in a toast. */
+  const startJob = (action: BulkAction, on: BulkTarget, notesIn: NotesIn = 'bar'): Promise<boolean> =>
+    bulkJob.start(action, on, undefined, notesIn).then((failure) => {
+      if (failure === undefined) return true;
+      if (notesIn === 'toast') toasts.toast({ tone: 'danger', message: refusalSummary(failure) });
+      else bulkJob.say(refusalSummary(failure), 'danger');
+      return false;
     });
-  };
-  const filtered = objectId === undefined ? undefined : byId.get(objectId);
+  const filteredLabel = filtered === undefined ? undefined : filtered.pluralName;
   // Names and days are worked out once per member list and zone, not per cell.
   const deleters = useMemo(() => deletedByOf(members), [members]);
   const dayOf = useMemo(() => dayFormatter(timeZone), [timeZone]);
-  /** The grid takes focus back at the first of these rows (or the first row), as the bar that held it goes. */
-  const focusBackAt = (recordIds: readonly string[], leaving: boolean) => {
-    const rows = recordIds.flatMap((id) => {
-      const at = view.indexOf(id);
-      return at === undefined ? [] : [at];
-    });
-    const last = Math.max(0, state.source.count - 1 - (leaving ? recordIds.length : 0));
-    setFocusRow({ index: Math.max(0, Math.min(...rows, last)) });
-  };
-  const clear = () => {
-    bulkJob.forget();
-    focusBackAt(ids, false);
-    setHeld({ view, selection: noRows() });
-  };
 
   const restore = () => {
     if (path === 'job') {
       setEmptying(false);
-      startJob('restore', target());
+      void startJob('restore', target());
       return;
     }
     const [only] = ids.length === 1 ? ids : [];
@@ -170,6 +208,8 @@ export function TrashScreen({ slug, objects, members, view, objectId }: TrashScr
   const restoreIds = (recordIds: readonly string[], onlyName: string | undefined) => {
     data.trash.restore(slug, recordIds).then(
       (summary) => {
+        // The ones kept in the trash stay ticked, each with its reason on its Name cell.
+        if (summary.kind === 'done') keepTicked(summary.refusedIds);
         const toast = restoreToast(summary, onlyName, () => {
           restoreIds(recordIds, onlyName);
         });
@@ -181,12 +221,13 @@ export function TrashScreen({ slug, objects, members, view, objectId }: TrashScr
     );
   };
 
-  /** Deletes these records forever; the toast says how many went. */
+  /** Deletes these records forever; the toast says how many went, and the refused ones stay ticked with why. */
   const purgeIds = (recordIds: readonly string[]) => {
     focusBackAt(recordIds, true);
     setHeld({ view, selection: noRows() });
     data.trash.deleteForever(slug, recordIds).then(
       (summary) => {
+        if (summary.kind === 'done') keepTicked(summary.refusedIds);
         const toast = purgeToast(summary, () => {
           purgeIds(recordIds);
         });
@@ -201,49 +242,133 @@ export function TrashScreen({ slug, objects, members, view, objectId }: TrashScr
   const deleteForever = () => {
     if (path === 'job') {
       setEmptying(false);
-      startJob('purge', target());
+      void startJob('purge', target());
       return;
     }
-    setAsking({ kind: 'purge', ids });
+    setAsking(ids);
   };
 
   const emptyTrash = () => {
+    if (bulkJob.isRunning) return;
     setEmptying(true);
-    startJob('purge', {
-      kind: 'trash',
-      ...(objectId === undefined ? {} : { objectId }),
-      except: [],
-      asOf: new Date().toISOString(),
+    void startJob(
+      'purge',
+      { kind: 'trash', ...(objectId === undefined ? {} : { objectId }), except: [], asOf: new Date().toISOString() },
+      // Its own ending (nothing to delete, a failure) is said in a toast: its button isn't in the bar.
+      'toast',
+    ).then((isStarted) => {
+      if (!isStarted) {
+        setEmptying(false);
+        return;
+      }
+      // Focus goes on to the bar, which shows the change and its Cancel, before Empty trash waits for it.
+      setBarFocus({});
     });
   };
 
-  const isAllowed =
-    selection.kind === 'all-matching'
-      ? canRestoreAll(objectId, objects)
-      : canRestore(
-          ids.map((id) => view.row(id)),
-          byId,
-        );
+  // Restore (and Delete forever, which fails closed alike) may act when a ticked row's object may be changed; for
+  // all matching, when an object in the list's scope may be (AC-534). Worked out once per selection and rows.
+  const canRestoreHere = useMemo(() => canRestoreAll(objectId, objects), [objectId, objects]);
+  const isAllowed = useMemo(
+    () => (selection.kind === 'all-matching' ? canRestoreHere : canRestore(ids, (id) => view.row(id), byId)),
+    // The rows loaded (the source) decide what a ticked id's object is.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [selection.kind, canRestoreHere, ids, view, byId, state.source],
+  );
   const { job, note, progress, isRunning } = bulkJob;
-  const shownAsk = open ?? lastAsked;
-  const askedCount =
-    shownAsk === undefined ? 0 : shownAsk.kind === 'purge' ? shownAsk.ids.length : (bulkJob.awaiting?.total ?? 0);
-  const words = recordsWord(askedCount, RECORDS);
-  const isRestoreJob = shownAsk?.kind === 'job' && bulkJob.action === 'restore';
-  const title =
-    shownAsk?.kind === 'job' && isEmptying
-      ? filtered === undefined
-        ? strings.confirmEmptyTitle
-        : strings.confirmEmptyObjectTitle(filtered.pluralName)
-      : isRestoreJob
-        ? strings.confirmRestoreTitle(words)
-        : strings.confirmPurgeTitle(words);
-  const text =
-    shownAsk?.kind === 'job' && isEmptying
-      ? strings.confirmEmptyText(words)
-      : isRestoreJob
-        ? strings.confirmRestoreText
-        : strings.confirmPurgeText;
+  // Up while rows are ticked, a change runs or a note shows; then it plays its exit before the grid gives back its room.
+  const isWanted = count > 0 || isRunning || note !== undefined;
+  const [isBarShown, setBarShown] = useState(isWanted);
+  if (isWanted && !isBarShown) setBarShown(true);
+  // Empty trash's own start keeps it in place, pending, until the bar takes focus; any other change turns it off.
+  const isEmptyStarting = bulkJob.isStarting && isEmptying;
+  const isEmptyOff = isRunning && !isEmptyStarting;
+
+  const actions =
+    note?.tone === 'info' ? (
+      // A count of zero: said for a moment in the actions' place, while the ticks it was for clear.
+      <Callout placement="bar" isAnnounced>
+        {note.text}
+      </Callout>
+    ) : (
+      <>
+        {/* A refused start or a failed change says why before the actions, which stay to try again. */}
+        {note !== undefined && (
+          <Callout placement="bar" tone="danger">
+            {note.text}
+          </Callout>
+        )}
+        <Button variant="primary" icon="archive-restore" isDisabled={!isAllowed} onPress={restore}>
+          {strings.restore}
+        </Button>
+        {canPurge && (
+          <Button variant="danger" icon="trash" isDisabled={!isAllowed} onPress={deleteForever}>
+            {strings.deleteForever}
+          </Button>
+        )}
+        {/* Said when it appears: the ticked rows are all of objects the person may only read. */}
+        {!isAllowed && (
+          <Callout placement="bar" isAnnounced>
+            {canPurge ? strings.cannotChange : strings.cannotRestore}
+          </Callout>
+        )}
+      </>
+    );
+  const bar = isBarShown ? (
+    <BulkActionBar
+      placement="floating"
+      isOpen={isWanted}
+      onLeft={() => {
+        setBarShown(false);
+      }}
+      count={count}
+      total={state.count.count}
+      isTotalAtLeast={state.count.atLeast}
+      isAllMatching={selection.kind === 'all-matching'}
+      // No action could follow when nothing in the list's scope may be restored, so the offer stays away.
+      {...(isRunning || !canRestoreHere
+        ? {}
+        : {
+            onSelectAllMatching: () => {
+              setHeld({ view, selection: allMatching(), asOf: new Date().toISOString() });
+            },
+          })}
+      onClear={clear}
+      {...(progress === undefined ? {} : { progress })}
+      {...(bulkJob.canCancel ? { onCancel: bulkJob.cancel } : {})}
+      {...(bulkJob.isCancelling ? { isCancelling: true } : {})}
+      {...(bulkJob.isCounted
+        ? {
+            onReview: () => {
+              setReviewing(true);
+            },
+          }
+        : {})}
+      {...(barFocus === undefined ? {} : { focusRequest: barFocus })}
+    >
+      {actions}
+    </BulkActionBar>
+  ) : undefined;
+
+  // The counted change's words, kept while its confirm closes; in the filtered object's names when there is one.
+  const counted = job?.total ?? 0;
+  const [lastCounted, setLastCounted] = useState(counted);
+  if (bulkJob.isCounted && counted !== lastCounted) setLastCounted(counted);
+  const jobWords = recordsWord(lastCounted, names);
+  const isRestoreJob = bulkJob.action === 'restore';
+  const jobTitle = isEmptying
+    ? filteredLabel === undefined
+      ? strings.confirmEmptyTitle
+      : strings.confirmEmptyObjectTitle(filteredLabel)
+    : isRestoreJob
+      ? strings.confirmRestoreTitle(jobWords)
+      : strings.confirmPurgeTitle(jobWords);
+  const jobText = isEmptying
+    ? strings.confirmEmptyText(jobWords)
+    : isRestoreJob
+      ? strings.confirmRestoreText
+      : strings.confirmPurgeText;
+  const purgeWords = recordsWord(lastAsked.length, names);
   return (
     <WorkspacePage
       currentPage="trash"
@@ -265,11 +390,22 @@ export function TrashScreen({ slug, objects, members, view, objectId }: TrashScr
                 }
               : {})}
           >
-            {/* Owners and admins only (AC-535); always a job, counted and confirmed first. */}
+            {/* Owners and admins only (AC-535); always a job, counted and reviewed first. Quiet: the danger is its confirm's. */}
             {canPurge && state.status === 'ready' && state.count.count > 0 && (
-              <Button variant="danger" icon="trash" isDisabled={isRunning} onPress={emptyTrash}>
-                {filtered === undefined ? strings.emptyTrash : strings.emptyObjectTrash(filtered.pluralName)}
-              </Button>
+              <>
+                <Button
+                  variant="ghost"
+                  icon="trash"
+                  isPending={isEmptyStarting}
+                  isDisabled={isEmptyOff}
+                  {...(isEmptyOff ? { 'aria-describedby': waitId } : {})}
+                  onPress={emptyTrash}
+                >
+                  {filteredLabel === undefined ? strings.emptyTrash : strings.emptyObjectTrash(filteredLabel)}
+                </Button>
+                {/* Why it is off, to screen readers: the bar shows the change it waits for. */}
+                {isEmptyOff && <VisuallyHidden id={waitId}>{strings.waitForChange}</VisuallyHidden>}
+              </>
             )}
           </TopBar>
         ),
@@ -346,60 +482,49 @@ export function TrashScreen({ slug, objects, members, view, objectId }: TrashScr
                 )
               }
               {...(focusRow === undefined ? {} : { focusRow })}
-              floatingBar={
-                (count > 0 || isRunning || note !== undefined) && (
-                  <BulkActionBar
-                    placement="floating"
-                    count={count === 0 ? (job?.total ?? 0) : count}
-                    total={state.count.count}
-                    isTotalAtLeast={state.count.atLeast}
-                    isAllMatching={selection.kind === 'all-matching'}
-                    {...(isRunning
-                      ? {}
-                      : {
-                          onSelectAllMatching: () => {
-                            setHeld({ view, selection: allMatching(), asOf: new Date().toISOString() });
-                          },
-                        })}
-                    onClear={clear}
-                    {...(progress === undefined ? {} : { progress })}
-                    {...(job?.cancellable === true ? { onCancel: bulkJob.cancel } : {})}
-                  >
-                    {note !== undefined ? (
-                      <Callout placement="bar" tone={note.tone} isAnnounced>
-                        {note.text}
-                      </Callout>
-                    ) : (
-                      <>
-                        <Button variant="primary" icon="archive-restore" isDisabled={!isAllowed} onPress={restore}>
-                          {strings.restore}
-                        </Button>
-                        {canPurge && (
-                          <Button variant="danger" icon="trash" onPress={deleteForever}>
-                            {strings.deleteForever}
-                          </Button>
-                        )}
-                        {/* Said when it appears: the ticked rows are all of objects the person may only read. */}
-                        {!isAllowed && (
-                          <Callout placement="bar" isAnnounced>
-                            {strings.cannotRestore}
-                          </Callout>
-                        )}
-                      </>
-                    )}
-                  </BulkActionBar>
-                )
-              }
+              {...(bar === undefined ? {} : { floatingBar: bar })}
             />
+            {/* Delete forever of up to 500 picked records asks first (AC-535). */}
             <Modal
-              title={title}
+              title={strings.confirmPurgeTitle(purgeWords)}
+              tone="danger"
+              isOpen={asking !== undefined}
+              onOpenChange={(isOpen) => {
+                if (!isOpen) setAsking(undefined);
+              }}
+              actions={
+                <>
+                  <Button slot="close" kbd="ESC">
+                    {strings.cancel}
+                  </Button>
+                  <Button
+                    variant="danger-solid"
+                    icon="trash"
+                    onPress={() => {
+                      const confirmed = asking;
+                      setAsking(undefined);
+                      if (confirmed !== undefined) purgeIds(confirmed);
+                    }}
+                  >
+                    {strings.deleteRecordsForever(purgeWords)}
+                  </Button>
+                </>
+              }
+            >
+              {strings.confirmPurgeText}
+            </Modal>
+            {/*
+              A counted change (a restore or Delete forever past 500, all matching, or Empty trash), opened by Review:
+              the exact number. Declining cancels it; either way focus goes on to the bar, which keeps it.
+            */}
+            <Modal
+              title={jobTitle}
               tone={isRestoreJob ? 'default' : 'danger'}
-              isOpen={open !== undefined}
+              isOpen={isReviewing && bulkJob.isCounted}
               onOpenChange={(isOpen) => {
                 if (isOpen) return;
-                // Closing a counted job's confirm without confirming cancels it: nothing was changed.
-                if (open?.kind === 'job') bulkJob.cancel();
-                setAsking(undefined);
+                if (bulkJob.isCounted) bulkJob.cancel();
+                setReviewing(false);
               }}
               actions={
                 <>
@@ -410,21 +535,17 @@ export function TrashScreen({ slug, objects, members, view, objectId }: TrashScr
                     variant={isRestoreJob ? 'primary' : 'danger-solid'}
                     icon={isRestoreJob ? 'archive-restore' : 'trash'}
                     onPress={() => {
-                      const confirmed = open;
-                      setAsking(undefined);
-                      if (confirmed?.kind === 'purge') purgeIds(confirmed.ids);
-                      if (confirmed?.kind === 'job') {
-                        setHeld({ view, selection: noRows() });
-                        bulkJob.confirm();
-                      }
+                      setReviewing(false);
+                      setHeld({ view, selection: noRows() });
+                      bulkJob.confirm();
                     }}
                   >
-                    {isRestoreJob ? strings.restoreRecords(words) : strings.deleteRecordsForever(words)}
+                    {isRestoreJob ? strings.restoreRecords(jobWords) : strings.deleteRecordsForever(jobWords)}
                   </Button>
                 </>
               }
             >
-              {text}
+              {jobText}
             </Modal>
           </>
         ),

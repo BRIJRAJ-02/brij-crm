@@ -15,8 +15,13 @@ import { belongsElsewhere, isHelpKey, isSettingsKey, isUndoKey, undoToast, type 
  */
 export function runUndo(data: DataLayer, toasts: Toasts, slug: string, only?: string): void {
   data.undo.run(slug, only).then(
-    (result) => {
-      const toast = undoToast(result);
+    async (result) => {
+      // A bulk edit undone is said in its object's words, as its own toast said it ("Undid the edit of 2 people.").
+      const names =
+        result.kind === 'undone' && result.action === 'bulk'
+          ? (await data.objects.list(slug).catch(() => [])).find((object) => object.id === result.objectId)
+          : undefined;
+      const toast = undoToast(result, names);
       if (toast !== undefined) toasts.toast(toast);
     },
     // A refused write already raised its own toast in the data layer; this is the layer failing to load.

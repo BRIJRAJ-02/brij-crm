@@ -76,22 +76,27 @@ export const UNDO_KEYS: readonly string[] = ['⌘', 'Z'];
 /** A count in the browser's language ("1,500"), as the grid writes its own. */
 const count = (value: number): string => new Intl.NumberFormat().format(value);
 
-/** What an action undid, in words: the cell, or the paste or clear and how many cells. */
-function undidWords(result: Extract<UndoResult, { kind: 'undone' }>): string {
+/** What an action undid, in words: the cell, or the paste or clear and how many cells, or the bulk edit's records. */
+function undidWords(result: Extract<UndoResult, { kind: 'undone' }>, names: ObjectNames): string {
   if (result.action === 'paste') return strings.undidPaste(count(result.cells));
   if (result.action === 'clear') return strings.undidClear(count(result.cells));
-  if (result.action === 'bulk') return strings.undidBulk(count(result.cells));
+  // A bulk edit changes one cell per record: its records, named as its toast named them.
+  if (result.action === 'bulk') return strings.undidBulk(recordsWord(result.cells, names));
   if (result.cells > 1) return strings.undidCells(count(result.cells));
   return strings.undidCell(result.attributeTitle, result.first.recordName);
 }
+
+/** Any object's records, when the undone action's object isn't known here. */
+const ANY_RECORDS: ObjectNames = { singularName: 'record', pluralName: 'records' };
 
 /**
  * The toast after an undo (AC-48, AC-49): what it undid, and how many cells
  * it kept because they changed since; "Nothing to undo." when the stack is
  * empty. Nothing when every cell was refused for another reason: those
- * already raised their own toast.
+ * already raised their own toast. `names` are the undone action's object's,
+ * for a bulk edit ("Undid the edit of 2 people.").
  */
-export function undoToast(result: UndoResult): ToastContent | undefined {
+export function undoToast(result: UndoResult, names: ObjectNames = ANY_RECORDS): ToastContent | undefined {
   if (result.kind === 'nothing') return { tone: 'success', message: strings.nothingToUndo };
   // A delete or a create undone (spec 0022, AC-526, AC-541).
   if (result.kind === 'restored' || result.kind === 'restoring' || result.kind === 'uncreated') {
@@ -101,7 +106,7 @@ export function undoToast(result: UndoResult): ToastContent | undefined {
   if (result.kind === 'stale') return { tone: 'danger', message: strings.undoStale };
   const kept = result.kept > 0 ? strings.keptSince(result.kept, count(result.kept)) : undefined;
   if (result.undone === 0) return kept === undefined ? undefined : { tone: 'success', message: kept };
-  const undid = undidWords(result);
+  const undid = undidWords(result, names);
   return { tone: 'success', message: kept === undefined ? undid : `${undid} ${kept}` };
 }
 

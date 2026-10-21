@@ -8,6 +8,7 @@ import {
   dayIn,
   deletedBy,
   objectLabel,
+  purgeToast,
   restoreToast,
   TRASH_COLUMNS,
 } from './trash.ts';
@@ -53,10 +54,38 @@ describe('the trash', () => {
   });
 
   it('allows Restore when any selected record’s object may be changed (AC-534)', () => {
-    expect(canRestore([rowOf('deals'), rowOf('people')], OBJECTS)).toBe(true);
-    expect(canRestore([rowOf('deals')], OBJECTS)).toBe(false);
+    const rows = new Map([rowOf('deals'), rowOf('people')].map((row) => [row.id, row]));
+    const rowFor = (id: string) => rows.get(id);
+    expect(canRestore(['record-deals', 'record-people'], rowFor, OBJECTS)).toBe(true);
+    expect(canRestore(['record-deals'], rowFor, OBJECTS)).toBe(false);
     // A row scrolled out of the loaded ones may be writable: the server decides.
-    expect(canRestore([undefined], OBJECTS)).toBe(true);
+    expect(canRestore(['record-gone'], rowFor, OBJECTS)).toBe(true);
+    // It stops at the first row it may restore.
+    const asked: string[] = [];
+    canRestore(
+      ['record-people', 'record-deals'],
+      (id) => {
+        asked.push(id);
+        return rowFor(id);
+      },
+      OBJECTS,
+    );
+    expect(asked).toEqual(['record-people']);
+  });
+
+  it('says what Delete forever did, in restore’s words when some were refused (AC-538)', () => {
+    expect(purgeToast({ kind: 'done', purged: 46, skipped: 0, refused: 2, refusedIds: ['a', 'b'] })).toEqual({
+      tone: 'danger',
+      message: 'Deleted 46 records forever. 2 couldn’t be deleted; each row says why.',
+    });
+    expect(purgeToast({ kind: 'done', purged: 0, skipped: 0, refused: 1, refusedIds: ['a'] })).toEqual({
+      tone: 'danger',
+      message: '1 record couldn’t be deleted. Each row says why.',
+    });
+    expect(purgeToast({ kind: 'done', purged: 1, skipped: 0, refused: 0, refusedIds: [] })).toEqual({
+      tone: 'success',
+      message: 'Deleted 1 record forever.',
+    });
   });
 
   it('says what a restore did', () => {
