@@ -137,7 +137,9 @@ export function InboxScreen({ slug, search, list, objects, members, meId }: Inbo
   };
 
   const isFiltered = kind !== undefined || search.unread === 1;
-  const kindLabel = KINDS.find((each) => each.value === (search.kind ?? 'all'))?.label ?? strings.all;
+  const kindLabel = search.kind === undefined ? undefined : KINDS.find((each) => each.value === search.kind)?.label;
+  // Mark all as read marks the tab and kind shown: on while something there is unread, as far as it has loaded.
+  const hasUnread = unread > 0 && (state.hasMore || state.items.some((each) => each.readAt === undefined));
   const tabLabel = status === 'done' ? strings.done : strings.inbox;
   let emptyTitle: string | undefined;
   if (isFiltered) emptyTitle = strings.emptyFiltered;
@@ -150,7 +152,7 @@ export function InboxScreen({ slug, search, list, objects, members, meId }: Inbo
           <TopBar title={strings.inbox} icon="inbox">
             <Button
               icon="check"
-              isDisabled={unread === 0}
+              isDisabled={!hasUnread}
               onPress={() => {
                 void data.inbox.markAllRead(slug, status, kind);
               }}

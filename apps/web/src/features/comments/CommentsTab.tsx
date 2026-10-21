@@ -13,6 +13,7 @@ import {
   EmptyState,
   Modal,
   Skeleton,
+  VisuallyHidden,
   type CommentThreadItem,
 } from '@crm/ui';
 import { useRouteContext } from '@tanstack/react-router';
@@ -53,6 +54,7 @@ function useThreadItems(members: readonly MemberSummary[]) {
 export function LoadingThreads() {
   return (
     <>
+      <VisuallyHidden>{strings.loadingThreads}</VisuallyHidden>
       <Skeleton lines={2} />
       <Skeleton lines={3} />
       <Skeleton lines={2} />

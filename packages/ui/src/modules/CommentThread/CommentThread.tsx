@@ -16,6 +16,7 @@ import { RelativeTime } from '../../atoms/RelativeTime/RelativeTime.tsx';
 import { Skeleton } from '../../atoms/Skeleton/Skeleton.tsx';
 import { Tooltip } from '../../atoms/Tooltip/Tooltip.tsx';
 import { VisuallyHidden } from '../../atoms/VisuallyHidden/VisuallyHidden.tsx';
+import { focusLater } from '../../lib/focus-later.ts';
 import { safeHref } from '../../lib/safe-href.ts';
 import { CommentComposer } from '../../molecules/CommentComposer/CommentComposer.tsx';
 import { Menu, MenuItem, MenuTrigger } from '../../molecules/Menu/Menu.tsx';
@@ -104,13 +105,20 @@ export function CommentText({
 }: {
   readonly body: string;
   readonly nameOf: (memberId: string) => string;
-  /** In the secondary colour: an excerpt under a heading (the inbox). */
+  /**
+   * An excerpt under a heading (the inbox): in the secondary colour, one line,
+   * and its URLs as plain text, since the row it sits in is the action.
+   */
   readonly isQuiet?: boolean;
 }) {
   const parts: ReactNode[] = [];
   bodySegments(body).forEach((segment, index) => {
     if (segment.kind === 'mention') {
       parts.push(<Mention key={`m${String(index)}`}>{`@${nameOf(segment.memberId)}`}</Mention>);
+      return;
+    }
+    if (isQuiet) {
+      parts.push(segment.text);
       return;
     }
     let at = 0;
@@ -206,6 +214,12 @@ function CommentRow({
   readonly onStopEdit: () => void;
 }) {
   const { isReadOnly = false } = props;
+  const more = useRef<HTMLButtonElement>(null);
+  // Leaving an edit unmounts its field: focus goes back to the comment's menu, where Edit was chosen.
+  const stopEdit = () => {
+    onStopEdit();
+    focusLater(() => more.current);
+  };
   if (comment.isDeleted) {
     return (
       <li className={styles.comment} data-deleted="">
@@ -266,7 +280,7 @@ function CommentRow({
               </MenuTrigger>
               {menuItems.length > 0 && (
                 <MenuTrigger>
-                  <Button variant="ghost" icon="ellipsis" label={strings.moreActions} />
+                  <Button ref={more} variant="ghost" icon="ellipsis" label={strings.moreActions} />
                   <Menu
                     label={strings.moreActions}
                     onAction={(key) => {
@@ -294,10 +308,10 @@ function CommentRow({
             formerMember={props.formerMember}
             // eslint-disable-next-line jsx-a11y-x/no-autofocus -- Edit was pressed on purpose; the text to change takes focus
             autoFocus
-            onCancel={onStopEdit}
+            onCancel={stopEdit}
             onSubmit={async (body) => {
               const reason = await props.onEdit(comment.id, body);
-              if (reason === undefined) onStopEdit();
+              if (reason === undefined) stopEdit();
               return reason;
             }}
           />
@@ -339,6 +353,7 @@ export function CommentThread(props: CommentThreadProps) {
   const [isReplying, setIsReplying] = useState(false);
   const [editing, setEditing] = useState<string | undefined>(undefined);
   const root = useRef<HTMLElement>(null);
+  const replyButton = useRef<HTMLButtonElement>(null);
   // A thread opened from a link comes into view as it lights up (AC-1161); with reduced motion it jumps there.
   useEffect(() => {
     if (!isHighlighted) return;
@@ -405,6 +420,8 @@ export function CommentThread(props: CommentThreadProps) {
               autoFocus
               onCancel={() => {
                 setIsReplying(false);
+                // The reply field unmounts: focus goes back to Reply, which takes its place.
+                focusLater(() => replyButton.current);
               }}
               {...(lastMine === undefined
                 ? {}
@@ -420,6 +437,7 @@ export function CommentThread(props: CommentThreadProps) {
         ) : (
           <div className={styles.replyBar}>
             <Button
+              ref={replyButton}
               variant="ghost"
               icon="message-square"
               onPress={() => {

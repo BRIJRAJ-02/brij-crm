@@ -20,7 +20,7 @@ New (spec 0038, the inventory's CommentComposer). No library piece writes a mess
 
 ## States
 
-Empty (Comment disabled), typing, the `@` list open (with nobody matching), a reply or an edit with Cancel, saving an edit, refused with Retry, and disabled (a record in the trash).
+Empty (Comment disabled), typing, the `@` list open (with nobody matching), a reply or an edit with Cancel, saving an edit, an edit emptied of its text (refused with "A comment can’t be empty. Delete it instead.", no Retry), refused with Retry, and disabled (a record in the trash).
 
 ## Keyboard
 

@@ -55,7 +55,14 @@ interface SampleProps {
 }
 
 /** The inbox in a fixed height slot, marking rows as the screen would. */
-function SampleInbox({ status, isEmpty = false, onAction = () => undefined, onMark, onRetry, isFiltered = false }: SampleProps) {
+function SampleInbox({
+  status,
+  isEmpty = false,
+  onAction = () => undefined,
+  onMark,
+  onRetry,
+  isFiltered = false,
+}: SampleProps) {
   const [items, setItems] = useState(isEmpty ? [] : sampleItems());
   const source = arraySource(items, (item) => item.id);
   return (
@@ -71,7 +78,11 @@ function SampleInbox({ status, isEmpty = false, onAction = () => undefined, onMa
           setItems((held) =>
             held.map((item) =>
               item.id === id
-                ? { ...item, ...(mark.read === undefined ? {} : { isRead: mark.read }), ...(mark.done === undefined ? {} : { isDone: mark.done }) }
+                ? {
+                    ...item,
+                    ...(mark.read === undefined ? {} : { isRead: mark.read }),
+                    ...(mark.done === undefined ? {} : { isDone: mark.done }),
+                  }
                 : item,
             ),
           );
@@ -79,7 +90,11 @@ function SampleInbox({ status, isEmpty = false, onAction = () => undefined, onMa
         {...(status === undefined ? {} : { status })}
         {...(onRetry === undefined ? {} : { onRetry })}
         {...(isFiltered
-          ? { emptyTitle: 'No notifications match.', emptyIcon: 'list-filter' as const, emptyActions: <Button>Clear filters</Button> }
+          ? {
+              emptyTitle: 'No notifications match.',
+              emptyIcon: 'list-filter' as const,
+              emptyActions: <Button>Clear filters</Button>,
+            }
           : {})}
       />
     </Stage>
@@ -164,5 +179,13 @@ export const Failed: Story = {
   play: async ({ args, canvas, userEvent }) => {
     await userEvent.click(canvas.getByRole('button', { name: 'Try again' }));
     await expect(args.onRetry).toHaveBeenCalled();
+  },
+};
+
+/** No access: the list says so, locked. */
+export const NoAccess: Story = {
+  args: { status: 'no-access' },
+  play: async ({ canvas }) => {
+    await expect(canvas.getByText('You can’t see these notifications')).toBeInTheDocument();
   },
 };

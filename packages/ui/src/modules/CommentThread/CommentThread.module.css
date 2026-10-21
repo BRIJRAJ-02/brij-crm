@@ -115,8 +115,14 @@
     white-space: pre-wrap;
   }
 
+  /* An excerpt under a heading (the inbox): secondary, one line, the rest cut. */
   .text[data-quiet] {
+    display: -webkit-box;
+    overflow: hidden;
     color: var(--text-secondary);
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 1;
+    line-clamp: 1;
   }
 
   .muted {

@@ -112,7 +112,9 @@ export function NotificationList({
   const nameOf = (memberId: string) => names.get(memberId) ?? formerMember;
 
   if (status === 'error') {
-    return <EmptyState tone="error" icon="inbox" title={strings.failed} {...(onRetry === undefined ? {} : { onRetry })} />;
+    return (
+      <EmptyState tone="error" icon="inbox" title={strings.failed} {...(onRetry === undefined ? {} : { onRetry })} />
+    );
   }
   if (status === 'no-access') return <EmptyState tone="locked" title={strings.noAccess} />;
   if (status === 'loading') {
@@ -130,7 +132,11 @@ export function NotificationList({
   }
   if (rows.length === 0) {
     return (
-      <EmptyState icon={emptyIcon} title={emptyTitle ?? strings.empty} {...(emptyActions === undefined ? {} : { actions: emptyActions })} />
+      <EmptyState
+        icon={emptyIcon}
+        title={emptyTitle ?? strings.empty}
+        {...(emptyActions === undefined ? {} : { actions: emptyActions })}
+      />
     );
   }
 
@@ -207,7 +213,7 @@ export function NotificationList({
                 else onMark(item.id, { done: !item.isDone });
               }}
             >
-              <MenuItem id="read" kbd="U" icon="mail">
+              <MenuItem id="read" kbd="U" icon={item.isRead ? 'mail' : 'mail-open'}>
                 {item.isRead ? strings.markUnread : strings.markRead}
               </MenuItem>
               <MenuItem id="done" kbd="E" icon={item.isDone ? 'inbox' : 'check'}>
@@ -228,6 +234,8 @@ export function NotificationList({
         <GridList
           className={styles.root}
           aria-label={label}
+          // U and E act on the focused row; typing a letter must not move focus to a row first.
+          disallowTypeAhead
           items={rows}
           dependencies={[items, fontsSettled, names]}
           onAction={(key) => {

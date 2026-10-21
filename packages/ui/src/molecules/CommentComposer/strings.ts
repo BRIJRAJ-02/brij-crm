@@ -14,6 +14,8 @@ export const strings = {
   notSent: 'Your comment wasn’t sent.',
   notSaved: 'Your edit wasn’t saved.',
   retry: 'Retry',
+  /** Saving an edit with no text left (AC-1155). */
+  emptyEdit: 'A comment can’t be empty. Delete it instead.',
   /** Announced while the list of members shows. */
   members: 'People to mention',
 } as const;

@@ -68,7 +68,9 @@ export function CommentComposer({
   const [caret, setCaret] = useState(draft.text.length);
   const [active, setActive] = useState(0);
   const [dismissedAt, setDismissedAt] = useState<number | undefined>(undefined);
-  const [refusal, setRefusal] = useState<{ readonly reason: string; readonly draft: Draft } | undefined>(undefined);
+  const [refusal, setRefusal] = useState<
+    { readonly reason: string; readonly draft: Draft; readonly canRetry: boolean } | undefined
+  >(undefined);
   const [isSaving, setIsSaving] = useState(false);
 
   const query = queryAt(draft, caret);
@@ -108,7 +110,12 @@ export function CommentComposer({
 
   const send = async (from: Draft = draft) => {
     const body = bodyOf(from).trim();
-    if (body === '' || isSaving) return;
+    if (isSaving) return;
+    if (body === '') {
+      // An edit emptied of its text is refused here, with the way out (AC-1155); a new one just waits for text.
+      if (mode === 'edit') setRefusal({ reason: strings.emptyEdit, draft: from, canRetry: false });
+      return;
+    }
     setRefusal(undefined);
     if (mode === 'edit') setIsSaving(true);
     else {
@@ -120,7 +127,7 @@ export function CommentComposer({
     setIsSaving(false);
     if (reason === undefined) return;
     setDraft(from);
-    setRefusal({ reason, draft: from });
+    setRefusal({ reason, draft: from, canRetry: true });
   };
 
   const keyDown = (event: KeyboardEvent<HTMLInputElement | HTMLTextAreaElement>) => {
@@ -208,16 +215,20 @@ export function CommentComposer({
         <Callout
           tone="danger"
           title={mode === 'edit' ? strings.notSaved : strings.notSent}
-          actions={
-            <Button
-              size="md"
-              onPress={() => {
-                void send(refusal.draft);
-              }}
-            >
-              {strings.retry}
-            </Button>
-          }
+          {...(refusal.canRetry
+            ? {
+                actions: (
+                  <Button
+                    size="md"
+                    onPress={() => {
+                      void send(refusal.draft);
+                    }}
+                  >
+                    {strings.retry}
+                  </Button>
+                ),
+              }
+            : {})}
         >
           {refusal.reason}
         </Callout>
@@ -231,7 +242,8 @@ export function CommentComposer({
         <Button
           variant="primary"
           kbd="⌘↵"
-          isDisabled={isDisabled || isEmpty}
+          // An edit's Save stays on with the text gone, so it can say why it won't save.
+          isDisabled={isDisabled || (isEmpty && mode !== 'edit')}
           isPending={isSaving}
           onPress={() => {
             void send();

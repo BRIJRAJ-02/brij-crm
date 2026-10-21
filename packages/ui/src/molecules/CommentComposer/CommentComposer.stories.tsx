@@ -86,6 +86,18 @@ export const Edit: Story = {
   },
 };
 
+/** An edit emptied of its text says why it won't save, with no Retry (AC-1155). */
+export const EmptyEdit: Story = {
+  args: { mode: 'edit', initialBody: 'Gone soon', onCancel: fn() },
+  play: async ({ args, canvas, userEvent }) => {
+    await userEvent.clear(canvas.getByRole('textbox', { name: 'Edit comment' }));
+    await userEvent.click(canvas.getByRole('button', { name: /Save/ }));
+    await expect(canvas.getByText('A comment can’t be empty. Delete it instead.')).toBeInTheDocument();
+    await expect(canvas.queryByRole('button', { name: 'Retry' })).not.toBeInTheDocument();
+    await expect(args.onSubmit).not.toHaveBeenCalled();
+  },
+};
+
 /** Refused: the text comes back with the reason and Retry. */
 export const Refused: Story = {
   args: {
