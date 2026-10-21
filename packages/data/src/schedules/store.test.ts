@@ -113,16 +113,35 @@ describe('the schedules store', () => {
     await moving;
   });
 
-  it('drops a deleted schedule at once and brings it back on a refusal', async () => {
+  it('keeps a schedule while its delete is out, drops it once the server has, and keeps it on a refusal', async () => {
     const evenings = schedule('0190f0f0-0000-7000-8000-000000000001', 'Evenings');
-    const { store } = setup(() => ({ memberId: ME, schedules: [schedule(null, 'Working hours', true), evenings] }), {
-      remove: () => Promise.reject(new Error('No.')),
+    const late = schedule('0190f0f0-0000-7000-8000-000000000004', 'Late');
+    let served: ScheduleList = { memberId: ME, schedules: [schedule(null, 'Working hours', true), evenings, late] };
+    const { store } = setup(() => served, {
+      remove: vi
+        .fn()
+        .mockImplementationOnce(() => Promise.reject(new Error('No.')))
+        .mockImplementationOnce((input: { readonly id: string }) => {
+          served = { ...served, schedules: served.schedules.filter((each) => each.id !== input.id) };
+          return Promise.resolve({ id: input.id, repointed: { pages: 0 } });
+        }),
     });
     const view = store.view('acme', undefined, 'UTC');
     await view.ready();
-    const pending = store.remove('acme', evenings);
-    expect(names(view.getSnapshot)).toEqual([['Working hours', true]]);
-    await expect(pending).rejects.toBeDefined();
+    const refused = store.remove('acme', evenings);
+    // Its confirm shows the delete under way: the row stays until the server answers.
+    expect(names(view.getSnapshot)).toEqual([
+      ['Working hours', true],
+      ['Evenings', false],
+      ['Late', false],
+    ]);
+    await expect(refused).rejects.toBeDefined();
+    expect(names(view.getSnapshot)).toEqual([
+      ['Working hours', true],
+      ['Evenings', false],
+      ['Late', false],
+    ]);
+    await store.remove('acme', late);
     expect(names(view.getSnapshot)).toEqual([
       ['Working hours', true],
       ['Evenings', false],
