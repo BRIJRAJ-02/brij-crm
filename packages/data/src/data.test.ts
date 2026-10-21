@@ -475,6 +475,14 @@ function fakeApi(overrides: Partial<Behaviour> = {}, auth: (path: string, body: 
       export: os.submissions.export.handler(notServed),
       getExport: os.submissions.getExport.handler(notServed),
     },
+    imports: {
+      create: os.imports.create.handler(notServed),
+      stage: os.imports.stage.handler(notServed),
+      start: os.imports.start.handler(notServed),
+      get: os.imports.get.handler(notServed),
+      rows: os.imports.rows.handler(notServed),
+      undo: os.imports.undo.handler(notServed),
+    },
     bookingPages: {
       list: os.bookingPages.list.handler(notServed),
       get: os.bookingPages.get.handler(notServed),

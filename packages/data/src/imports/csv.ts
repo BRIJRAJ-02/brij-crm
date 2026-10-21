@@ -48,7 +48,14 @@ export type CsvRefusal =
 export type CsvResult = { readonly ok: true; readonly table: CsvTable } | ({ readonly ok: false } & CsvRefusal);
 
 /** The file types the upload takes (AC-1112). */
-export const CSV_TYPES: readonly string[] = ['text/csv', 'text/tab-separated-values', 'text/plain', '.csv', '.tsv', '.txt'];
+export const CSV_TYPES: readonly string[] = [
+  'text/csv',
+  'text/tab-separated-values',
+  'text/plain',
+  '.csv',
+  '.tsv',
+  '.txt',
+];
 
 /** True for a name the upload takes: `.csv`, `.tsv` or `.txt`, any case. */
 export function isCsvName(name: string): boolean {
@@ -96,7 +103,7 @@ export function detectSeparator(text: string): CsvSeparator {
   }
   if (lines < SAMPLE_LINES && line.size > 0) endLine();
   let best: CsvSeparator = ',';
-  let bestScore = [0, 0];
+  let bestScore: readonly [number, number] = [0, 0];
   for (const each of candidates) {
     const seen = (counts.get(each) ?? []).filter((n) => n > 0);
     if (seen.length === 0) continue;
@@ -105,8 +112,8 @@ export function detectSeparator(text: string): CsvSeparator {
     for (const n of seen) tally.set(n, (tally.get(n) ?? 0) + 1);
     const steady = Math.max(...tally.values());
     const total = seen.reduce((sum, n) => sum + n, 0);
-    const score = [steady, total];
-    if (score[0] > (bestScore[0] ?? 0) || (score[0] === bestScore[0] && score[1] > (bestScore[1] ?? 0))) {
+    const score: readonly [number, number] = [steady, total];
+    if (score[0] > bestScore[0] || (score[0] === bestScore[0] && score[1] > bestScore[1])) {
       best = each;
       bestScore = score;
     }
@@ -218,7 +225,9 @@ export function parseCsv(
     const name = (head[column] ?? '').trim();
     return name === '' ? `Column ${String(column + 1)}` : name;
   });
-  const rows = data.map((each) => (each.length === width ? each : [...each, ...Array<string>(width - each.length).fill('')]));
+  const rows = data.map((each) =>
+    each.length === width ? each : [...each, ...Array<string>(width - each.length).fill('')],
+  );
   return { ok: true, table: { headers, rows, separator, encoding } };
 }
 
