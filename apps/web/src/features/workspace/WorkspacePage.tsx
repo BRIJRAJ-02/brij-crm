@@ -269,7 +269,9 @@ function FrameWithData({
       slug={slug}
       {...(workspaceName === undefined ? {} : { workspaceName })}
       {...(me === undefined ? {} : { workspaces: me.workspaces })}
-      {...(workspace?.access === undefined ? {} : { roleLabel: workspace.access.roleLabel })}
+      {...(workspace?.access === undefined
+        ? {}
+        : { roleLabel: workspace.access.roleLabel, isOwner: workspace.access.role === 'owner' })}
       {...(workspace?.objects === undefined ? {} : { objects: workspace.objects })}
       // Loaded without objects (the door refused this workspace), or failed to load: no Records section.
       isMissing={workspace === undefined ? isFailed : workspace.objects === undefined}

@@ -4,7 +4,16 @@
 // Leaves out: the calendars' own switches (Settings › Calendars), and a month to jump dates (the week's arrows and Today do that).
 import type { CalendarAccountView, CalendarListState, CalendarsHeld } from '@crm/data';
 import { useCalendarList } from '@crm/data/react';
-import { AsideLayout, Button, Callout, CalendarList, Link, Skeleton, type CalendarListAccount } from '@crm/ui';
+import {
+  AsideLayout,
+  Button,
+  ButtonLink,
+  Callout,
+  CalendarList,
+  Link,
+  Skeleton,
+  type CalendarListAccount,
+} from '@crm/ui';
 import { useState, type ReactNode } from 'react';
 import { calendarSettingsHref } from '../settings/nav.ts';
 import type { BookingsSearch } from './search.ts';
@@ -13,32 +22,37 @@ import { strings } from './strings.ts';
 /** Where the open or folded panel is kept, per browser. */
 const PANEL_KEY = 'crm.bookings.calendarsPanel';
 
-/** Whether the panel was folded in this browser (storage may be blocked: then it shows). */
-function readFolded(): boolean {
+/** The member's own choice in this browser: folded, open, or none yet (storage may be blocked: none). */
+function readChoice(): 'folded' | 'open' | undefined {
   try {
-    return globalThis.localStorage.getItem(PANEL_KEY) === 'folded';
+    const kept = globalThis.localStorage.getItem(PANEL_KEY);
+    return kept === 'folded' || kept === 'open' ? kept : undefined;
   } catch {
-    return false;
+    return undefined;
   }
 }
 
-/** Keeps the panel folded or open in this browser, where storage allows. */
-function writeFolded(folded: boolean): void {
+/** Keeps the member's choice in this browser, where storage allows. */
+function writeChoice(choice: 'folded' | 'open'): void {
   try {
-    if (folded) globalThis.localStorage.setItem(PANEL_KEY, 'folded');
-    else globalThis.localStorage.removeItem(PANEL_KEY);
+    globalThis.localStorage.setItem(PANEL_KEY, choice);
   } catch {
     // Blocked storage: the choice lasts until the page reloads.
   }
 }
 
-/** The panel's open state: folded or open beside the view (kept), or, on a narrow page, its sheet. */
-export function useCalendarsPanel() {
-  const [isFolded, setFolded] = useState(readFolded);
+/**
+ * The panel's open state: folded or open beside the view, or, on a narrow page, its sheet. Until the member
+ * chooses, it opens only when a calendar is connected, since with none it would hold nothing but a prompt
+ * squeezing the week (the owner, 22 October 2026); their choice is kept after that.
+ */
+export function useCalendarsPanel(hasCalendar: boolean) {
+  const [choice, setChoice] = useState(readChoice);
   const [isNarrow, setNarrow] = useState(false);
   const [isSheetOpen, setSheetOpen] = useState(false);
+  const isBesideOpen = choice === undefined ? hasCalendar : choice === 'open';
   return {
-    isOpen: isNarrow ? isSheetOpen : !isFolded,
+    isOpen: isNarrow ? isSheetOpen : isBesideOpen,
     isNarrow,
     setNarrow,
     toggle: () => {
@@ -46,8 +60,9 @@ export function useCalendarsPanel() {
         setSheetOpen((was) => !was);
         return;
       }
-      writeFolded(!isFolded);
-      setFolded(!isFolded);
+      const next = isBesideOpen ? 'folded' : 'open';
+      writeChoice(next);
+      setChoice(next);
     },
     closeSheet: () => setSheetOpen(false),
   };
@@ -56,8 +71,32 @@ export function useCalendarsPanel() {
 /** The panel's state, as `useCalendarsPanel` answers it. */
 export type CalendarsPanel = ReturnType<typeof useCalendarsPanel>;
 
-/** The bar's Calendars button: folds or opens the panel beside the view, or opens it as a sheet on a phone. */
-export function CalendarsToggle({ panel }: { readonly panel: CalendarsPanel }) {
+/**
+ * The bar's Calendars button: folds or opens the panel beside the view, or opens it as a sheet on a phone. With no
+ * calendar connected it is one quiet Connect calendar link instead, since the panel would hold only that prompt.
+ */
+export function CalendarsToggle({
+  panel,
+  slug,
+  hasNoCalendar,
+}: {
+  readonly panel: CalendarsPanel;
+  readonly slug: string;
+  /** The calendars read and none is connected. */
+  readonly hasNoCalendar: boolean;
+}) {
+  if (hasNoCalendar)
+    return (
+      <ButtonLink
+        variant="ghost"
+        icon="calendar-plus"
+        label={strings.connectCalendar}
+        isLabelCollapsible
+        href={calendarSettingsHref(slug)}
+      >
+        {strings.connectCalendarShort}
+      </ButtonLink>
+    );
   // On a phone the label folds away (the icon stays, named Calendars), so the week's range and arrows wrap less, as
   // they sat before the panel came (round 6).
   return (
@@ -95,6 +134,8 @@ export interface CalendarsFrameProps {
   readonly onDismissNotice: () => void;
   /** No calendars panel: the view shows no calendar events (List › Bookings), so the boxes would change nothing. */
   readonly isHidden?: boolean;
+  /** Fills the view's height (the week grid). */
+  readonly isFill?: boolean;
   readonly children: ReactNode;
 }
 
@@ -108,6 +149,7 @@ export function CalendarsFrame({
   onMakeDefault,
   onDismissNotice,
   isHidden = false,
+  isFill = false,
   children,
 }: CalendarsFrameProps) {
   const state = useCalendarList(calendars);
@@ -176,6 +218,7 @@ export function CalendarsFrame({
       isAsideOpen={panel.isOpen && !isHidden}
       onAsideClose={panel.closeSheet}
       onNarrowChange={panel.setNarrow}
+      isFill={isFill}
     >
       {children}
     </AsideLayout>

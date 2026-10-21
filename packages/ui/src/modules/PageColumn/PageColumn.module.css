@@ -17,6 +17,12 @@
     min-block-size: 100%;
   }
 
+  /* Filling the view: its whole height, for a child that fills it and scrolls inside (the week grid). */
+  .root[data-align='fill'] {
+    block-size: 100%;
+    min-block-size: 0;
+  }
+
   /* With a side column: the main column and the side one share a row, the main taking what's left; when
      both can't keep their widths (the page card's and the panel's), the side one wraps under, full width. */
   .split {

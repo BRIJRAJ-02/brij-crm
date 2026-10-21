@@ -143,7 +143,7 @@ function MemberSections({
   const [openedAt] = useState(() => Date.now());
   const today = dayAt(openedAt, timeZone);
   const formats = useMemo(() => dateFormatChoices(today, locale), [today, locale]);
-  const weeks = useMemo(() => weekStartChoices(locale), [locale]);
+  const weeks = useMemo(() => weekStartChoices(), []);
   const landings = useMemo(() => landingChoices(objects), [objects]);
 
   const pick = (field: 'timeZone' | 'dateFormat' | 'weekStart' | 'landing', id: string | null) => {

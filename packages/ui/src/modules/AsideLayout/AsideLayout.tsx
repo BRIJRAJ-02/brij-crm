@@ -21,6 +21,8 @@ export interface AsideLayoutProps {
   readonly onAsideClose: () => void;
   /** Says when the layout turns narrow or wide, so the caller's toggle opens a sheet or folds the column. */
   readonly onNarrowChange?: (isNarrow: boolean) => void;
+  /** Fills the height its parent gives it, so a main column that fills (the week grid) reaches the view's foot. */
+  readonly isFill?: boolean;
   readonly children: ReactNode;
 }
 
@@ -35,6 +37,7 @@ export function AsideLayout({
   isAsideOpen,
   onAsideClose,
   onNarrowChange,
+  isFill = false,
   children,
 }: AsideLayoutProps) {
   const ref = useRef<HTMLDivElement>(null);
@@ -65,7 +68,7 @@ export function AsideLayout({
   }, []);
   const isBeside = !isNarrow && isAsideOpen;
   return (
-    <div ref={ref} className={styles.root} data-aside={isBeside || undefined}>
+    <div ref={ref} className={styles.root} data-aside={isBeside || undefined} data-fill={isFill || undefined}>
       {isBeside && (
         <aside className={styles.aside} aria-label={asideLabel}>
           {aside}

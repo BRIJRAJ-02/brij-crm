@@ -194,8 +194,8 @@ export const Meetings: Story = {
                 id: 'b1',
                 date: 'Thu, 8 Oct',
                 time: '9:00 – 9:30 AM',
-                title: 'Grace Hopper',
-                via: 'Booked via Intro call',
+                title: 'Intro call',
+                guestName: 'Grace Hopper',
               },
               {
                 id: 'e1',
@@ -213,7 +213,7 @@ export const Meetings: Story = {
     </Stage>
   ),
   play: async ({ canvas }) => {
-    await expect(canvas.getByText('Booked via Intro call')).toBeInTheDocument();
+    await expect(canvas.getByText('Grace Hopper')).toBeInTheDocument();
     await expect(canvas.getByText('cy@globex.com, di@globex.com and 3 more')).toBeInTheDocument();
     await expect(canvas.getByText('Team')).toBeInTheDocument();
   },

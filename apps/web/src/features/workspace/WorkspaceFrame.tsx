@@ -95,6 +95,8 @@ export interface WorkspaceFrameProps {
   readonly workspaceName?: string;
   /** The person's role here ("Owner", "Admin" or "Member"), under the open workspace's name in its menu once known. */
   readonly roleLabel?: string;
+  /** The person owns this workspace: Leave is hidden while they are its only owner (the server refuses it then). */
+  readonly isOwner?: boolean;
   /** Every workspace the person is in, oldest first: the workspace menu lists them to switch (spec 0031, AC-801). */
   readonly workspaces?: readonly WorkspaceSummary[];
   /** Its objects; undefined while they load, so the Records section shows skeleton rows. */
@@ -134,6 +136,7 @@ export function WorkspaceFrame({
   workspaceName,
   workspaces,
   roleLabel,
+  isOwner = false,
   objects,
   isMissing = false,
   currentObject,
@@ -152,6 +155,23 @@ export function WorkspaceFrame({
   const [isConfirmingSignOut, setConfirmingSignOut] = useState(false);
   // Leaving the workspace asks first too (spec 0031, AC-812).
   const [isConfirmingLeave, setConfirmingLeave] = useState(false);
+  // The only owner can't leave (a workspace needs an owner, spec 0031): the owners are counted from the members list
+  // the tables already read, so Leave shows only once someone else owns it too.
+  const [ownerCount, setOwnerCount] = useState<number | undefined>(undefined);
+  useEffect(() => {
+    if (!isOwner) return;
+    let isCurrent = true;
+    data.members.list(slug).then(
+      (members) => {
+        if (isCurrent) setOwnerCount(members.filter((member) => member.role === 'owner').length);
+      },
+      () => undefined,
+    );
+    return () => {
+      isCurrent = false;
+    };
+  }, [data, slug, isOwner]);
+  const canLeave = !isOwner || (ownerCount !== undefined && ownerCount > 1);
   const [signOutFailure, setSignOutFailure] = useState<string | undefined>(undefined);
   // Cmd+Z (Ctrl+Z elsewhere) undoes this tab's last change; ? lists the shortcuts (spec 0006, AC-48).
   const [isHelpOpen, setHelpOpen] = useState(false);
@@ -262,7 +282,7 @@ export function WorkspaceFrame({
               {workspaces !== undefined && <MenuSeparator />}
               {/* Leaving comes last, where people look for it: this workspace (anyone in it, spec 0031, AC-812),
                   then Timefix on this device. */}
-              {roleLabel !== undefined && (
+              {roleLabel !== undefined && canLeave && (
                 <MenuItem id="leave" icon="door-open">
                   {strings.leaveWorkspace}
                 </MenuItem>
@@ -343,6 +363,7 @@ export function WorkspaceFrame({
       isSigningOut,
       workspaces,
       roleLabel,
+      canLeave,
       isRail,
       nav,
       setRail,

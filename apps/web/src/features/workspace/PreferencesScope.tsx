@@ -6,6 +6,7 @@ import type { DataLayer } from '@crm/data';
 import { usePreferences } from '@crm/data/react';
 import { FormatScope } from '@crm/ui';
 import type { ReactNode } from 'react';
+import { weekStartOf } from './first-day.ts';
 
 /** Props for PreferencesScope. */
 export interface PreferencesScopeProps {
@@ -22,7 +23,8 @@ export function PreferencesScope({ data, slug, children }: PreferencesScopeProps
     <FormatScope
       timeZone={preferences?.timeZone}
       dateFormat={preferences?.dateFormat}
-      weekStart={preferences?.weekStart}
+      // Automatic weeks start on Monday, as in round 6; a chosen day wins.
+      weekStart={weekStartOf(preferences?.weekStart)}
     >
       {children}
     </FormatScope>
