@@ -11,6 +11,7 @@ import {
   Card,
   DescriptionList,
   EmptyState,
+  focusLater,
   Modal,
   RelativeTime,
   SegmentedControl,
@@ -20,7 +21,8 @@ import {
   Skeleton,
   Switch,
 } from '@crm/ui';
-import { useState } from 'react';
+import { useRouteContext } from '@tanstack/react-router';
+import { useRef, useState } from 'react';
 import { strings, type ConnectResult } from './calendar-strings.ts';
 import { SettingsPage } from './SettingsPage.tsx';
 
@@ -119,8 +121,14 @@ function ConnectionCard({
 export function CalendarScreen({ data, slug, view, result, onResultSeen }: CalendarScreenProps) {
   const state = useCalendar(view);
   const settings = useCalendarSettings(data.calendar.settings(slug));
+  const { toasts } = useRouteContext({ from: '__root__' });
   const [disconnecting, setDisconnecting] = useState<CalendarConnectionView | undefined>(undefined);
   const [isDisconnectBusy, setDisconnectBusy] = useState(false);
+  // The last calendar the confirm was opened for: it stays named through the confirm's exit.
+  const [lastDisconnecting, setLastDisconnecting] = useState<CalendarConnectionView | undefined>(undefined);
+  if (disconnecting !== undefined && disconnecting !== lastDisconnecting) setLastDisconnecting(disconnecting);
+  // Connect Google calendar (in the bar, or the empty state's): where focus goes once a calendar is disconnected.
+  const connectRef = useRef<HTMLButtonElement>(null);
   const [disconnectFailure, setDisconnectFailure] = useState<string | undefined>(undefined);
   const disconnect = () => {
     if (disconnecting === undefined || isDisconnectBusy) return;
@@ -130,8 +138,14 @@ export function CalendarScreen({ data, slug, view, result, onResultSeen }: Calen
       (isDone) => {
         setDisconnectBusy(false);
         // Refused (the connection came back): the confirm stays open and says so.
-        if (isDone) setDisconnecting(undefined);
-        else setDisconnectFailure(strings.disconnectFailed);
+        if (!isDone) {
+          setDisconnectFailure(strings.disconnectFailed);
+          return;
+        }
+        toasts.toast({ tone: 'success', message: strings.disconnected(disconnecting.accountEmail) });
+        setDisconnecting(undefined);
+        // Its card went with it, and the Disconnect that opened the confirm: focus goes to Connect.
+        focusLater(() => connectRef.current);
       },
       (error: unknown) => {
         // The confirm stays open with what went wrong, so the person can try again or cancel.
@@ -173,7 +187,7 @@ export function CalendarScreen({ data, slug, view, result, onResultSeen }: Calen
         title={strings.emptyTitle}
         actions={
           canConnect ? (
-            <Button provider="google-calendar" onPress={connect}>
+            <Button ref={connectRef} provider="google-calendar" onPress={connect}>
               {strings.connectGoogle}
             </Button>
           ) : undefined
@@ -212,7 +226,7 @@ export function CalendarScreen({ data, slug, view, result, onResultSeen }: Calen
       {...(canConnect && hasList
         ? {
             actions: (
-              <Button provider="google-calendar" onPress={connect}>
+              <Button ref={connectRef} provider="google-calendar" onPress={connect}>
                 {strings.connectGoogle}
               </Button>
             ),
@@ -250,7 +264,7 @@ export function CalendarScreen({ data, slug, view, result, onResultSeen }: Calen
         </SettingsSection>
       )}
       <Modal
-        title={strings.disconnectTitle(disconnecting?.accountEmail ?? '')}
+        title={strings.disconnectTitle(lastDisconnecting?.accountEmail ?? '')}
         tone="danger"
         isOpen={disconnecting !== undefined}
         isBusy={isDisconnectBusy}
@@ -269,7 +283,7 @@ export function CalendarScreen({ data, slug, view, result, onResultSeen }: Calen
         }
       >
         {disconnectFailure !== undefined && <Callout tone="danger">{disconnectFailure}</Callout>}
-        {strings.disconnectText(disconnecting?.accountEmail ?? '')}
+        {strings.disconnectText}
       </Modal>
     </SettingsPage>
   );

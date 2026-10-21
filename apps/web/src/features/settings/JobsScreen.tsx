@@ -5,7 +5,7 @@
 import type { DataLayer, JobsView, JobView, MemberSummary } from '@crm/data';
 import { useJobs } from '@crm/data/react';
 import { Badge, Button, EmptyState, Modal, ProgressBar, RelativeTime, Table, type TableColumn } from '@crm/ui';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useCan } from '../workspace/WorkspacePage.tsx';
 import { SettingsPage } from './SettingsPage.tsx';
 import { strings } from './jobs-strings.ts';
@@ -101,7 +101,8 @@ export function JobsScreen({ data, slug, view, isAll, members: loaded, canRunTes
   const [confirming, setConfirming] = useState<JobView | undefined>(undefined);
   const [isStarting, setStarting] = useState(false);
   const [members, setMembers] = useState(loaded);
-  const titleRef = useRef<HTMLHeadingElement>(null);
+  // The jobs table, by its name: where focus goes when the control in use went with its job.
+  const jobsTable = () => document.querySelector<HTMLElement>(`[aria-label=${JSON.stringify(strings.tableLabel)}]`);
   // A starter the member list doesn't hold may have joined since it loaded: read it again (the layer keeps it
   // fresh on members events) before calling them "A removed member". Once per set of unknown starters.
   const unknown = snapshot.jobs
@@ -144,11 +145,12 @@ export function JobsScreen({ data, slug, view, isAll, members: loaded, canRunTes
     // A job not yet running is cancelled at once and its Cancel goes: focus moves to the page's title rather
     // than being lost. A running one keeps a pending button in its row (below) to come back to.
     if (job.status !== 'running') {
-      requestAnimationFrame(() => titleRef.current?.focus());
+      requestAnimationFrame(() => jobsTable()?.focus());
       // The confirm restores focus to its trigger as its exit ends; that trigger went with the cancel, so focus
-      // could fall to the document: the title takes it again once the dialog is gone.
+      // could fall to the document: the table takes it again once the dialog is gone. (The page's title is the
+      // bar's h1, hidden under its trail since 21 October 2026, so focus there would show nothing.)
       setTimeout(() => {
-        if (document.activeElement === document.body) titleRef.current?.focus();
+        if (document.activeElement === document.body) jobsTable()?.focus();
       }, CONFIRM_EXIT_MS);
     }
   };
@@ -248,7 +250,6 @@ export function JobsScreen({ data, slug, view, isAll, members: loaded, canRunTes
   return (
     <SettingsPage
       title={strings.title}
-      titleRef={titleRef}
       {...(canRunTest
         ? {
             actions: (

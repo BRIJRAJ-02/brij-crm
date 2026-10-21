@@ -48,8 +48,9 @@ export const strings = {
   disconnect: 'Disconnect',
   /** The confirm names the calendar it ends (the owner's rule for every confirm, 21 October 2026). */
   disconnectTitle: (account: string) => `Disconnect ${account}?`,
-  disconnectText: (account: string) =>
-    `Meetings from ${account} stop syncing and the ones no one else’s calendar holds leave your records, its busy times stop blocking your booking pages, and your calendar itself isn’t changed; you can connect it again later.`,
+  disconnectText:
+    'Its meetings stop syncing and leave your records, its busy times stop blocking your booking pages, and you can connect it again later.',
+  disconnected: (account: string) => `Disconnected ${account}.`,
   cancel: 'Cancel',
   disconnecting: 'Disconnecting',
   disconnectFailed: 'That didn’t disconnect. Try again in a moment.',

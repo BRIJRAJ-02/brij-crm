@@ -79,6 +79,8 @@ export function SettingsPage({
                 <TopBar
                   title={title}
                   crumbs={trail}
+                  // An object's page loads with its tile still unknown: the bar's skeleton holds the trail's place.
+                  isLoading={isLoading && hasTile}
                   {...(titleRef === undefined ? {} : { titleRef })}
                   {...(icon === undefined ? {} : { icon })}
                   {...(hue === undefined ? {} : { hue })}
