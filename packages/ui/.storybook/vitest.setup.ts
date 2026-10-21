@@ -42,6 +42,21 @@ function settleTransitions() {
   }
 }
 
+/**
+ * What axe measured for a contrast failure (the colours and the ratio), so a failure seen only on CI's Linux
+ * browsers says why without a local run.
+ */
+function measured(node: axe.NodeResult): string {
+  const data: unknown = node.any.find((check) => check.id === 'color-contrast')?.data;
+  if (typeof data !== 'object' || data === null) return '';
+  const { fgColor, bgColor, contrastRatio } = data as {
+    readonly fgColor?: unknown;
+    readonly bgColor?: unknown;
+    readonly contrastRatio?: unknown;
+  };
+  return ` ${String(fgColor)} on ${String(bgColor)}, ${String(contrastRatio)}:1`;
+}
+
 afterEach(async (context) => {
   expect(blocked, 'The story broke the production content security policy').toEqual([]);
 
@@ -57,7 +72,7 @@ afterEach(async (context) => {
     const results = await axe.run(root, { resultTypes: ['violations'] });
     const violations = results.violations.map(
       (violation) =>
-        `${violation.id}: ${violation.help} (${violation.nodes.map((node) => node.target.join(' ')).join(', ')})`,
+        `${violation.id}: ${violation.help} (${violation.nodes.map((node) => `${node.target.join(' ')}${measured(node)}`).join(', ')})`,
     );
     expect(violations, 'axe found violations in the dark theme').toEqual([]);
   } finally {

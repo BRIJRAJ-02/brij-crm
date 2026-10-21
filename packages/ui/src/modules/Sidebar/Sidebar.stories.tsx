@@ -1,6 +1,7 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
 import { useState } from 'react';
 import { expect, fn, waitFor } from 'storybook/test';
+import { Button } from '../../atoms/Button/Button.tsx';
 import { Menu, MenuItem } from '../../molecules/Menu/Menu.tsx';
 import { ProviderMark } from '../../atoms/ProviderMark/ProviderMark.tsx';
 import { ThemeSwitch } from '../../molecules/SegmentedControl/SegmentedControl.tsx';
@@ -279,7 +280,8 @@ export const SettingsKeyboard: Story = {
   render: () => (
     <>
       <SampleSettingsSidebar />
-      <button type="button">After</button>
+      {/* The library's Button: a bare button keeps the browser's light face in dark on Linux WebKit, failing contrast. */}
+      <Button>After</Button>
     </>
   ),
   parameters: { crm: { screenshot: false } },
