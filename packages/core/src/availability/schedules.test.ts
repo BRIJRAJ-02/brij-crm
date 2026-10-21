@@ -446,6 +446,7 @@ describe('schedules (AC-961 to AC-972)', () => {
       delete: () => deleteSchedule(scope, { id: beas.id ?? '' }),
       saveDefaultHours: () => saveDefaultHours(scope, { availability: hours }),
       readDefaultHours: () => readDefaultHours(scope, { timeZone: 'UTC' }),
+      members: () => listScheduleMembers(scope),
     });
     // A key without booking.manage: 403 on every one.
     const key = rescope(w.owner, { actor: { type: 'api_key', id: newId() }, scopes: ['data.read'] });
@@ -459,6 +460,12 @@ describe('schedules (AC-961 to AC-972)', () => {
     for (const name of ['get', 'update', 'setDefault', 'duplicate', 'delete'] as const) {
       expect(await refusalOf(asDee[name]()), name).toMatchObject({ code: 'NOT_FOUND' });
     }
+    // A removed member's schedule answers as absent even to an admin, by its id as by its member.
+    const cy = await w.addMember('cy', 'admin');
+    await testQuery(ownerUrl, `update members set status = 'removed' where id = $1`, [bea.id]);
+    expect(await refusalOf(getSchedule(cy.scope, { id: beas.id }))).toMatchObject({ code: 'NOT_FOUND' });
+    expect(await refusalOf(deleteSchedule(cy.scope, { id: beas.id }))).toMatchObject({ code: 'NOT_FOUND' });
+    await testQuery(ownerUrl, `update members set status = 'active' where id = $1`, [bea.id]);
     // Bea's default can't be deleted, even by an admin.
     expect(await refusalOf(deleteSchedule(w.owner, { id: working.id }))).toMatchObject({ code: 'DEFAULT_SCHEDULE' });
     expect(await listSchedules(bea.scope, { timeZone: 'UTC' })).toEqual(before);
