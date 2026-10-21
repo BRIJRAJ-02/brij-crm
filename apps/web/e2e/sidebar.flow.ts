@@ -1,6 +1,6 @@
 // The sidebar v2 (spec 0034, milestone 1): the order (Home, Records, Scheduling's two rows, Bookings and Captures,
 // then Tasks, and the trash, Settings and Help at the foot; AC-921, AC-928, AC-930, owner 21 and 22 October 2026);
-// the workspace opens on Home; the member folds Scheduling and turns the rail on with [
+// the workspace opens on Home; the member folds Records and turns the rail on with [
 // in one browser, and their second browser follows within a second (AC-931, AC-935, AC-937); a reload keeps both
 // (AC-936); and every address round 7 gave Availability, Booking pages and Forms lands back inside Bookings or
 // Captures with its query kept, replacing the history entry. Milestone 2: an object hidden from its menu and back from Customise
@@ -16,7 +16,13 @@ import { addPerson, newWorkspace, objectUrl, signInAgain } from './people.ts';
 const LIVE = process.env.FLOW_NO_LIVE === undefined;
 
 const nav = (page: Page) => page.getByRole('navigation', { name: 'Main navigation' });
-const scheduling = (page: Page) => nav(page).getByRole('button', { name: 'Scheduling', exact: true });
+const recordsLabel = (page: Page) => nav(page).getByRole('button', { name: 'Records', exact: true });
+/** The first of the Records label and the Bookings row: which comes first in the sidebar. */
+const firstOf = (page: Page) =>
+  nav(page)
+    .locator('a[href], button')
+    .filter({ hasText: /^(Records|Bookings)$/ })
+    .first();
 
 /** The names of the sidebar's links and buttons, top to bottom (a keycap, hidden from the name, left out). */
 async function order(page: Page): Promise<string[]> {
@@ -54,8 +60,7 @@ test.describe('sidebar', () => {
     for (const [before, after] of [
       ['Home', 'Records'],
       ['Records', 'People'],
-      ['Deals', 'Scheduling'],
-      ['Scheduling', 'Bookings'],
+      ['Deals', 'Bookings'],
       ['Bookings', 'Captures'],
       ['Captures', 'Tasks'],
       ['Tasks', 'Trash'],
@@ -66,6 +71,8 @@ test.describe('sidebar', () => {
       expect(at(before)).toBeGreaterThanOrEqual(0);
     }
     for (const tab of ['Availability', 'Booking pages', 'Forms']) expect(names).not.toContain(tab);
+    // Bookings and Captures sit under Records with no label, as round 6 had them (the owner, 22 October 2026).
+    expect(names).not.toContain('Scheduling');
     // Home is where the workspace opens; the trash is a row of the foot, and not in the workspace menu.
     await page.goto(`/w/${slug}`);
     await expect(page).toHaveURL(new RegExp(`/w/${slug}/home$`));
@@ -88,15 +95,15 @@ test.describe('sidebar', () => {
     });
     const second = await other.newPage();
     await signInAgain(second, email, `/w/${slug}/objects/people`, [code]);
-    await expect(scheduling(second)).toHaveAttribute('aria-expanded', 'true');
+    await expect(recordsLabel(second)).toHaveAttribute('aria-expanded', 'true');
 
-    // Fold Scheduling from its label, by keyboard (AC-931). The second browser follows (AC-937: within a second;
+    // Fold Records from its label, by keyboard (AC-931). The second browser follows (AC-937: within a second;
     // given room here for a busy machine, as live.flow.ts measures the timing itself). On the rail a section has no
     // label to fold, so the fold is seen to arrive before the rail goes on.
-    await scheduling(page).focus();
+    await recordsLabel(page).focus();
     await page.keyboard.press('Enter');
-    await expect(scheduling(page)).toHaveAttribute('aria-expanded', 'false');
-    if (LIVE) await expect(scheduling(second)).toHaveAttribute('aria-expanded', 'false', { timeout: 10_000 });
+    await expect(recordsLabel(page)).toHaveAttribute('aria-expanded', 'false');
+    if (LIVE) await expect(recordsLabel(second)).toHaveAttribute('aria-expanded', 'false', { timeout: 10_000 });
 
     // The rail with [ (AC-935), once focus is on the page, not in a field.
     await page.locator('main').click({ position: { x: 5, y: 5 } });
@@ -110,8 +117,8 @@ test.describe('sidebar', () => {
     await page.reload();
     await expect(nav(page).getByRole('button', { name: 'Expand the sidebar' })).toBeVisible();
     await nav(page).getByRole('button', { name: 'Expand the sidebar' }).click();
-    await expect(scheduling(page)).toHaveAttribute('aria-expanded', 'false');
-    await scheduling(page).click();
+    await expect(recordsLabel(page)).toHaveAttribute('aria-expanded', 'false');
+    await recordsLabel(page).click();
     await expect(nav(page).getByRole('link', { name: 'Captures', exact: true })).toBeVisible();
 
     // Captures opens on Links with its row current, Forms a tab inside it (AC-928, AC-942; owner, 22 October 2026).
@@ -191,11 +198,10 @@ test.describe('sidebar', () => {
     await expect(records(page).first()).toHaveText('Companies');
     if (LIVE) await expect(records(second).first()).toHaveText('Companies', { timeout: 10_000 });
 
-    // Scheduling above Records from its menu.
-    await nav(page).getByRole('button', { name: 'Scheduling options' }).click();
-    await page.getByRole('menuitem', { name: 'Move up' }).click();
-    const labels = nav(page).getByRole('button', { name: /^(Records|Scheduling)$/ });
-    await expect(labels.first()).toHaveText('Scheduling');
+    // Records below Bookings and Captures from its menu.
+    await nav(page).getByRole('button', { name: 'Records options' }).click();
+    await page.getByRole('menuitem', { name: 'Move down' }).click();
+    await expect(firstOf(page)).toHaveText('Bookings');
 
     // Customise sidebar brings Deals back.
     await nav(page).getByRole('button', { name: 'Records options' }).click();
@@ -209,21 +215,17 @@ test.describe('sidebar', () => {
     const confirm = page.getByRole('alertdialog', { name: 'Reset your sidebar?' });
     await confirm.getByRole('button', { name: /Cancel/ }).click();
     await expect(confirm).toHaveCount(0);
-    await expect(labels.first()).toHaveText('Scheduling');
+    await expect(firstOf(page)).toHaveText('Bookings');
     await dialog.getByRole('button', { name: 'Reset to default' }).click();
     await confirm.getByRole('button', { name: 'Reset sidebar' }).click();
     await expect(confirm).toHaveCount(0);
-    await expect(labels.first()).toHaveText('Records');
+    await expect(firstOf(page)).toHaveText('Records');
     await expect(records(page).first()).toHaveText('People');
     await dialog.getByRole('button', { name: 'Done' }).click();
 
     // A reload keeps the reset (AC-936).
     await page.reload();
-    await expect(
-      nav(page)
-        .getByRole('button', { name: /^(Records|Scheduling)$/ })
-        .first(),
-    ).toHaveText('Records');
+    await expect(firstOf(page)).toHaveText('Records');
     await other.close();
   });
 

@@ -13,7 +13,7 @@ import type {
   ObjectSummary,
 } from '@crm/data';
 import { moveIndexFor, navKey, sectionOrder } from '@crm/data/navigation';
-import { Menu, MenuItem, NavItem, NavSection } from '@crm/ui';
+import { Menu, MenuItem, NavGroup, NavItem, NavSection } from '@crm/ui';
 import { recordHref } from '../records/details.ts';
 import { objectHref, viewHref } from './objects.ts';
 import { drawnSections, PAGE_LINKS, prefsOf, sectionMoveIndex, type SidebarPage } from './sidebar.ts';
@@ -64,55 +64,63 @@ export function SidebarSections({
   };
   return (
     <>
-      {sections.map((section, index) => (
-        <NavSection
-          key={section.key}
-          title={section.title}
-          isLoading={section.key === 'records' && objects === undefined}
-          {...(section.key === 'records' ? { emptyLabel: strings.noObjects } : {})}
-          isFolded={section.isFolded}
-          onFoldChange={(isFolded) => {
-            change({ op: 'fold', section: section.key, folded: isFolded });
-          }}
-          position={{ index, count: sections.length }}
-          onMoveSection={(toIndex) => {
-            moveSection(section.key, toIndex);
-          }}
-          menu={
-            <Menu
-              label={strings.sectionOptions(section.title)}
-              disabledKeys={[...(index === 0 ? ['up'] : []), ...(index === sections.length - 1 ? ['down'] : [])]}
-              onAction={(key) => {
-                if (key === 'up') moveSection(section.key, index - 1);
-                if (key === 'down') moveSection(section.key, index + 1);
-                if (key === 'customise') onCustomise();
-              }}
-            >
-              <MenuItem id="up" icon="arrow-up">
-                {strings.moveUp}
-              </MenuItem>
-              <MenuItem id="down" icon="arrow-down">
-                {strings.moveDown}
-              </MenuItem>
-              <MenuItem id="customise" icon="sliders-horizontal">
-                {strings.customiseSidebar}
-              </MenuItem>
-            </Menu>
-          }
-          onReorder={(id, visibleIndex) => {
-            const entry = section.entries.find((each) => navKey(each) === id);
-            if (entry === undefined) return;
-            change({
-              op: 'move',
-              kind: entry.kind,
-              id: entry.id,
-              toIndex: moveIndexFor(section.entries, id, visibleIndex),
-            });
-          }}
-        >
-          {section.entries.filter((entry) => !entry.hidden).flatMap((entry) => itemOf(entry, context))}
-        </NavSection>
-      ))}
+      {sections.map((section, index) =>
+        // Bookings and Captures sit as round 6 had them, a group with no label, fold or menu on screen (the owner,
+        // 22 October 2026: "keep the sidebar like this"); the label names the group for screen readers.
+        section.key === 'scheduling' ? (
+          <NavGroup key={section.key} label={section.title}>
+            {section.entries.filter((entry) => !entry.hidden).flatMap((entry) => itemOf(entry, context))}
+          </NavGroup>
+        ) : (
+          <NavSection
+            key={section.key}
+            title={section.title}
+            isLoading={section.key === 'records' && objects === undefined}
+            {...(section.key === 'records' ? { emptyLabel: strings.noObjects } : {})}
+            isFolded={section.isFolded}
+            onFoldChange={(isFolded) => {
+              change({ op: 'fold', section: section.key, folded: isFolded });
+            }}
+            position={{ index, count: sections.length }}
+            onMoveSection={(toIndex) => {
+              moveSection(section.key, toIndex);
+            }}
+            menu={
+              <Menu
+                label={strings.sectionOptions(section.title)}
+                disabledKeys={[...(index === 0 ? ['up'] : []), ...(index === sections.length - 1 ? ['down'] : [])]}
+                onAction={(key) => {
+                  if (key === 'up') moveSection(section.key, index - 1);
+                  if (key === 'down') moveSection(section.key, index + 1);
+                  if (key === 'customise') onCustomise();
+                }}
+              >
+                <MenuItem id="up" icon="arrow-up">
+                  {strings.moveUp}
+                </MenuItem>
+                <MenuItem id="down" icon="arrow-down">
+                  {strings.moveDown}
+                </MenuItem>
+                <MenuItem id="customise" icon="sliders-horizontal">
+                  {strings.customiseSidebar}
+                </MenuItem>
+              </Menu>
+            }
+            onReorder={(id, visibleIndex) => {
+              const entry = section.entries.find((each) => navKey(each) === id);
+              if (entry === undefined) return;
+              change({
+                op: 'move',
+                kind: entry.kind,
+                id: entry.id,
+                toIndex: moveIndexFor(section.entries, id, visibleIndex),
+              });
+            }}
+          >
+            {section.entries.filter((entry) => !entry.hidden).flatMap((entry) => itemOf(entry, context))}
+          </NavSection>
+        ),
+      )}
     </>
   );
 }

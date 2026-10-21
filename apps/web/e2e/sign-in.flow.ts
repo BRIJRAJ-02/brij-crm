@@ -238,12 +238,12 @@ test('signs in by code, names the workspace, lands on People, signs out, and com
   const nav = page.getByRole('navigation', { name: 'Main navigation' });
   await expect(nav.getByRole('link', { name: 'People' })).toHaveAttribute('aria-current', 'page');
   await expect(nav.getByText('Ada’s workspace')).toBeAttached();
-  // The sidebar (spec 0034, AC-921; owner, 21 October 2026): Home, Records, then Scheduling with its four pages,
-  // Tasks, then the foot's Settings and Help and shortcuts, inside the sidebar at every width (on the rail, each a
-  // named icon in its group); the trash is in the workspace menu. The theme switch left the sidebar for Settings ›
+  // The sidebar (spec 0034, AC-921; owner, 21 and 22 October 2026): Home, Records, then Bookings and Captures in a
+  // group with no label, Tasks, then the foot's Trash, Settings and Help and shortcuts, inside the sidebar at every
+  // width (on the rail, each a named icon in its group). The theme switch left the sidebar for Settings ›
   // Preferences (spec 0026).
   await expect(nav.getByRole('group', { name: 'Scheduling' })).toBeVisible();
-  for (const name of ['Home', 'Tasks', 'Bookings', 'Availability', 'Booking pages', 'Forms']) {
+  for (const name of ['Home', 'Tasks', 'Bookings', 'Captures', 'Trash']) {
     await expect(nav.getByRole('link', { name, exact: true })).toBeVisible();
   }
   const settings = nav.getByRole('link', { name: 'Settings', exact: true });

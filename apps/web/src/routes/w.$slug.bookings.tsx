@@ -1,7 +1,9 @@
 import { createFileRoute, Outlet, useLocation } from '@tanstack/react-router';
+import { useState } from 'react';
 import { BookingsTabs } from '../features/bookings/BookingsTabs.tsx';
 import { BookingsTopBar } from '../features/bookings/BookingsTopBar.tsx';
 import { bookingsTabOf } from '../features/bookings/tabs.ts';
+import { BookingsActionSlot } from '../features/bookings/toolbarSlot.ts';
 import { WorkspacePage } from '../features/workspace/WorkspacePage.tsx';
 
 // Bookings, after Records in the sidebar, laid out as Captures is: the frame, the TopBar (the tile, the upcoming
@@ -17,17 +19,21 @@ export const Route = createFileRoute('/w/$slug/bookings')({
 function BookingsRoute() {
   const { slug } = Route.useParams();
   const tab = useLocation({ select: (location) => bookingsTabOf(location.pathname) });
+  // Availability's New schedule takes the TopBar's end in place of New meeting (one primary per screen).
+  const [actionSlot, setActionSlot] = useState<HTMLElement | null>(null);
   return (
-    <WorkspacePage
-      currentPage="bookings"
-      page={{
-        topBar: <BookingsTopBar slug={slug} />,
-        body: (
-          <BookingsTabs slug={slug} tab={tab}>
-            <Outlet />
-          </BookingsTabs>
-        ),
-      }}
-    />
+    <BookingsActionSlot value={tab === 'availability' ? actionSlot : null}>
+      <WorkspacePage
+        currentPage="bookings"
+        page={{
+          topBar: <BookingsTopBar slug={slug} actionSlot={tab === 'availability' ? setActionSlot : undefined} />,
+          body: (
+            <BookingsTabs slug={slug} tab={tab}>
+              <Outlet />
+            </BookingsTabs>
+          ),
+        }}
+      />
+    </BookingsActionSlot>
   );
 }
