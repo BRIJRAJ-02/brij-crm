@@ -1,17 +1,37 @@
 // The document's title (WCAG 2.4.2): the page's h1, then the product, so
 // every tab, history entry and bookmark says which page it is. It follows
 // the h1 as it changes (a route change, a pending page resolving, a page
-// that loads lazily), checked at most once a frame.
+// that loads lazily), checked at most once a frame. Inside a workspace the
+// inbox's unread count leads it, "(3) People · Timefix" (spec 0038, AC-1174):
+// the workspace frame keeps the count on the root element's `data-unread`.
 import { pageHeading } from './focus.ts';
 
 /** The product's name, after the page's in every title. */
 export const PRODUCT = 'Timefix';
 
-/** "<page title> · Timefix", or "Timefix" alone while the page has no title, or its title is the product's name. */
-export function documentTitle(pageTitle: string | undefined): string {
+/** Past this many unread, the title says "99+", as the sidebar's badge does. */
+const UNREAD_SHOWN_MAX = 99;
+
+/**
+ * "<page title> · Timefix", or "Timefix" alone while the page has no title, or its title is the product's name;
+ * led by "(n) " while `unread` is above zero.
+ */
+export function documentTitle(pageTitle: string | undefined, unread = 0): string {
   const title = pageTitle?.replaceAll(/\s+/g, ' ').trim() ?? '';
-  return title === '' || title === PRODUCT ? PRODUCT : `${title} · ${PRODUCT}`;
+  const named = title === '' || title === PRODUCT ? PRODUCT : `${title} · ${PRODUCT}`;
+  if (unread <= 0) return named;
+  return `(${unread > UNREAD_SHOWN_MAX ? `${String(UNREAD_SHOWN_MAX)}+` : String(unread)}) ${named}`;
 }
+
+/** The unread count the workspace frame keeps on the root element; 0 outside a workspace. */
+export function unreadOf(doc: Document): number {
+  const count = Number(doc.documentElement.dataset.unread ?? '0');
+  return Number.isFinite(count) ? count : 0;
+}
+
+/** The title for the page shown now, its h1 and the unread count. */
+export const currentTitle = (doc: Document): string =>
+  documentTitle(pageHeading(doc)?.textContent ?? undefined, unreadOf(doc));
 
 /** What `followPageTitle` needs from the browser. */
 export interface TitleHost {
@@ -27,7 +47,7 @@ export function followPageTitle({ doc, observe, nextFrame }: TitleHost): () => v
   let isQueued = false;
   const update = () => {
     isQueued = false;
-    const next = documentTitle(pageHeading(doc)?.textContent ?? undefined);
+    const next = currentTitle(doc);
     if (doc.title !== next) doc.title = next;
   };
   update();

@@ -4,10 +4,12 @@ import { bookingPagesContract, bookingsContract } from './booking/pages.ts';
 import { schedulesContract } from './booking/schedules.ts';
 import { bulkRecordsContract } from './bulk.ts';
 import { calendarContract } from './calendar.ts';
+import { commentsContract } from './comments.ts';
 import { formsContract, submissionsContract } from './forms/forms.ts';
 import { jobsContract } from './jobs.ts';
 import { meContract } from './me.ts';
 import { navContract } from './navigation.ts';
+import { notificationsContract } from './notifications.ts';
 import { membersContract } from './members.ts';
 import { objectsContract } from './objects.ts';
 import { optionsContract } from './options.ts';
@@ -36,6 +38,7 @@ export * from './bulk.ts';
 export * from './bulk-ops.ts';
 export * from './calendar.ts';
 export * from './change-event.ts';
+export * from './comments.ts';
 export * from './errors.ts';
 export * from './forms/index.ts';
 export * from './jobs.ts';
@@ -44,6 +47,7 @@ export * from './me.ts';
 export * from './members.ts';
 export * from './nav-model.ts';
 export * from './navigation.ts';
+export * from './notifications.ts';
 export * from './objects.ts';
 export * from './options.ts';
 export * from './realtime.ts';
@@ -88,6 +92,9 @@ export const contract = {
   trash: trashContract,
   tasks: tasksContract,
   notes: notesContract,
+  // Comments and the inbox (spec 0038).
+  comments: commentsContract,
+  notifications: notificationsContract,
   calendar: calendarContract,
   forms: formsContract,
   submissions: submissionsContract,

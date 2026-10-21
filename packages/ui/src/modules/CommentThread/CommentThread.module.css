@@ -1,0 +1,190 @@
+/* CommentThread: a raised card (hairline, radius-lg) holding the comments
+   in order, each an sm avatar beside its name (body-strong), time and
+   "edited" (text-secondary labels), its text (body, line breaks kept) and its
+   reaction chips; the reaction and more buttons show under a pointer or with
+   focus inside the comment. A sending comment is faded; a deleted one is a
+   quiet line. Reply sits under the last comment. A highlighted thread (opened
+   from a link) takes the accent's soft fill for a moment. */
+@layer components {
+  .root {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-4);
+    box-sizing: border-box;
+    min-inline-size: 0;
+    padding: var(--space-12);
+    border: var(--border-width-hairline) solid var(--border-subtle);
+    border-radius: var(--radius-lg);
+    background: var(--surface-raised);
+    transition: background-color var(--duration-move) var(--ease-out);
+  }
+
+  .root[data-highlighted] {
+    background: var(--accent-soft);
+  }
+
+  .resolved {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-6);
+    align-items: center;
+    margin: 0;
+    color: var(--text-secondary);
+    font: var(--text-label);
+    letter-spacing: var(--tracking-label);
+  }
+
+  .comments {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-12);
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+
+  .comment {
+    display: flex;
+    gap: var(--space-8);
+    align-items: flex-start;
+    min-inline-size: 0;
+  }
+
+  .main {
+    display: flex;
+    flex: 1;
+    flex-direction: column;
+    gap: var(--space-4);
+    min-inline-size: 0;
+  }
+
+  .head {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-6);
+    align-items: center;
+    min-block-size: var(--size-control);
+  }
+
+  .author {
+    min-inline-size: 0;
+    overflow: hidden;
+    color: var(--text);
+    font: var(--text-body-strong);
+    letter-spacing: var(--tracking-body-strong);
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .meta {
+    color: var(--text-secondary);
+    font: var(--text-label);
+    letter-spacing: var(--tracking-label);
+    white-space: nowrap;
+  }
+
+  .tools {
+    display: flex;
+    gap: var(--space-2);
+    margin-inline-start: auto;
+  }
+
+  @media (hover: hover) and (pointer: fine) {
+    .tools {
+      opacity: 0;
+      transition: opacity var(--duration-hover) var(--ease-hover);
+    }
+
+    /* Its menu is open: the tools stay while the pointer is in the menu. */
+    .tools:has([aria-expanded='true']) {
+      opacity: 1;
+    }
+
+    .comment:hover .tools,
+    .comment:focus-within .tools {
+      opacity: 1;
+    }
+  }
+
+  .text {
+    min-inline-size: 0;
+    color: var(--text);
+    font: var(--text-body);
+    letter-spacing: var(--tracking-body);
+    overflow-wrap: anywhere;
+    white-space: pre-wrap;
+  }
+
+  /* An excerpt under a heading (the inbox): secondary, one line, the rest cut. */
+  .text[data-quiet] {
+    display: -webkit-box;
+    overflow: hidden;
+    color: var(--text-secondary);
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 1;
+    line-clamp: 1;
+  }
+
+  .muted {
+    margin: 0;
+    color: var(--text-secondary);
+    font: var(--text-body);
+    letter-spacing: var(--tracking-body);
+  }
+
+  .deletedMark {
+    flex: none;
+    inline-size: var(--size-icon);
+  }
+
+  .reactions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-4);
+  }
+
+  .earlier {
+    padding-inline-start: var(--space-32);
+  }
+
+  .reply {
+    padding-block-start: var(--space-8);
+  }
+
+  .replyBar {
+    display: flex;
+    padding-inline-start: var(--space-24);
+  }
+
+  .versions {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-8);
+    box-sizing: border-box;
+    max-block-size: calc(var(--size-nav-item) * 10);
+    padding: var(--space-8);
+    overflow: auto;
+    outline: none;
+  }
+
+  .versionList {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-12);
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+
+  .version {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-2);
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .root {
+      transition: none;
+    }
+  }
+}

@@ -6,8 +6,8 @@
 // both, since their rows differ only in what they hold: a member's Avatar,
 // name and email; a block's icon, name and markdown.
 import type { ReactNode, RefObject } from 'react';
-import { Kbd } from '../atoms/Kbd/Kbd.tsx';
-import { Popover } from '../molecules/Popover/Popover.tsx';
+import { Kbd } from '../../atoms/Kbd/Kbd.tsx';
+import { Popover } from '../Popover/Popover.tsx';
 import styles from './SuggestionList.module.css';
 
 /** One row of a suggestion list. */

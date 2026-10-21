@@ -328,6 +328,27 @@ export {
   type CustomiseSidebarProps,
   type CustomiseSidebarSection,
 } from './modules/CustomiseSidebar/CustomiseSidebar.tsx';
+export {
+  CommentComposer,
+  type CommentComposerMode,
+  type CommentComposerProps,
+} from './molecules/CommentComposer/CommentComposer.tsx';
+export {
+  CommentText,
+  CommentThread,
+  type CommentItem,
+  type CommentReactionItem,
+  type CommentThreadItem,
+  type CommentThreadProps,
+  type CommentVersionItem,
+} from './modules/CommentThread/CommentThread.tsx';
+export {
+  NotificationList,
+  type NotificationItem,
+  type NotificationItemKind,
+  type NotificationListProps,
+  type NotificationMark,
+} from './modules/NotificationList/NotificationList.tsx';
 export { RecordHeader, type RecordHeaderProps } from './modules/RecordHeader/RecordHeader.tsx';
 export { RecordLayout, type RecordLayoutProps } from './modules/RecordLayout/RecordLayout.tsx';
 export { RecordPanel, type RecordPanelProps, type RecordPanelTab } from './modules/RecordPanel/RecordPanel.tsx';

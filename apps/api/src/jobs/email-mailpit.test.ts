@@ -189,7 +189,7 @@ describe('every email, end to end through Mailpit', () => {
       expect(message.Subject, kind).toBe(drawn.subject);
       expect(message.HTML, kind).toContain('utm_campaign=powered_by');
       expect(message.Text, kind).toContain('You got this email because');
-      const optional = kind === 'form_submission' || kind === 'mention';
+      const optional = kind === 'form_submission';
       expect(message.Text.includes(`Email preferences: ${ORIGIN}/email-preferences#t=`), kind).toBe(optional);
       expect(headers['List-Unsubscribe-Post'], kind).toEqual(optional ? ['List-Unsubscribe=One-Click'] : undefined);
       if (kind === 'form_confirmation') expect(message.ReplyTo).toEqual([{ Address: addressOf('owner') }]);

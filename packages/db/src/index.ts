@@ -31,6 +31,7 @@ export {
   jobKey,
   openQueueConnection,
   STALE_LOCK_SECONDS,
+  type DigestMember,
   type QueueConnection,
   type SleepCheck,
 } from './queue.ts';

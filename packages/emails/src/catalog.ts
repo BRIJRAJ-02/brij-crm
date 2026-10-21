@@ -8,7 +8,7 @@ import type { Template } from './template.ts';
 import { bookingCalendarRemoved, calendarDisconnected, signInAlert } from './templates/account.ts';
 import { formConfirmation, formSubmission } from './templates/forms.ts';
 import { memberInvite } from './templates/invite.ts';
-import { importFinished, mention } from './templates/team.ts';
+import { importFinished } from './templates/team.ts';
 
 /** One queued kind of email. */
 export interface CatalogEntry<K extends EmailKind> {
@@ -118,17 +118,6 @@ export const CATALOG: Catalog = {
       skipped: 12,
       failed: 0,
       resultPath: '/w/acme/objects/people',
-    },
-  },
-  mention: {
-    template: mention,
-    medium: 'email_mention',
-    sample: {
-      authorName: 'Grace Hopper',
-      place: 'comment',
-      subjectName: 'Northwind Trading',
-      excerpt: '@Ada can you take the demo on Thursday? They asked for someone who knows the round robin setup.',
-      path: '/w/acme/objects/companies/0199f1d2-7c3a-7cc1-9a51-0d5f1e2a3b4c',
     },
   },
 };

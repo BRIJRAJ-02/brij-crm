@@ -16,6 +16,8 @@ export { notes } from './notes.ts';
 export { memberNavPrefs, NAV_ITEMS_MAX } from './navigation.ts';
 export { taskRecords, tasks } from './tasks.ts';
 export { memberRecents } from './search.ts';
+export { commentReactions, comments, commentVersions } from './comments.ts';
+export { notificationKind, notifications, notificationSettings } from './notifications.ts';
 export {
   attendeeMatch,
   attendeeResponse,

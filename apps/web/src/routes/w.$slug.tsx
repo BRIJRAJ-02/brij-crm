@@ -3,6 +3,7 @@ import { LoadingNow } from '@crm/ui';
 import { createFileRoute, Outlet, redirect, useRouter, type ErrorComponentProps } from '@tanstack/react-router';
 import { signInHref } from '../features/auth/redirect.ts';
 import { CommandMenuProvider } from '../features/command/CommandMenuProvider.tsx';
+import { UnreadTitle } from '../features/inbox/UnreadTitle.tsx';
 import { failedPage, missingPage, pendingPage } from '../features/workspace/ObjectScreen.tsx';
 import { strings } from '../features/workspace/strings.ts';
 import { useWorkspaceName, WorkspacePage } from '../features/workspace/WorkspacePage.tsx';
@@ -56,9 +57,10 @@ function WorkspaceRoute() {
     return <WorkspacePage page={missingPage(strings.workspaceMissingTitle, strings.workspaceMissingText)} />;
   }
   // The command menu (spec 0039): ⌘K and `/` on every page inside the workspace, and `useCommandMenu()` for the
-  // sidebar's Quick actions and search.
+  // sidebar's Quick actions and search. The unread count rides in the tab's title (spec 0038).
   return (
     <CommandMenuProvider slug={slug}>
+      <UnreadTitle slug={slug} />
       <Outlet />
     </CommandMenuProvider>
   );

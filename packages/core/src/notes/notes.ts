@@ -28,10 +28,11 @@ import {
 } from '@crm/contracts';
 import { RichTextDocBody, type RichTextDoc } from '@crm/contracts/values';
 import type { WorkspaceTx } from '@crm/db';
-import { canonicalId, checkId, isUuidV7 } from '../engine/ids.ts';
+import { canonicalId, checkId, isUuid, isUuidV7 } from '../engine/ids.ts';
 import { inputInvalid, refuse, refuseOn } from '../engine/refusals.ts';
 import type { Actor, EngineScope } from '../engine/scope.ts';
 import { runWrite, type AfterWrite } from '../engine/write.ts';
+import { notifyNoteMentions } from '../notifications/notify.ts';
 import { checkScope } from '../access/mint.ts';
 import { isOpen, objectLevel, type Access } from '../access/policy.ts';
 import { inWorkspace } from '../access/run.ts';
@@ -47,6 +48,19 @@ export const NOTE_RECORD_TRASHED = 'Restore the record first.';
 export const NOTE_CURSOR_MESSAGE = 'That note cursor is not valid here. Start again from the top.';
 /** The body of a note first saved with a title alone. */
 const EMPTY_DOC: RichTextDoc = { type: 'doc', content: [{ type: 'paragraph' }] };
+
+/** The members a note's body mentions (its `mention` nodes' ids), each once, in the order they appear. */
+export function mentionedIn(doc: unknown): readonly string[] {
+  const found = new Set<string>();
+  const walk = (node: unknown) => {
+    if (typeof node !== 'object' || node === null) return;
+    const { type, attrs, content } = node as { type?: unknown; attrs?: { id?: unknown }; content?: unknown };
+    if (type === 'mention' && isUuid(attrs?.id)) found.add(canonicalId(attrs.id));
+    if (Array.isArray(content)) for (const child of content) walk(child);
+  };
+  walk(doc);
+  return [...found];
+}
 
 /** A save of a note (`notes.save`): its first, or a later one with only the fields given. */
 export interface SaveNoteInput {
@@ -208,9 +222,10 @@ export async function saveNote(
           throw refuse('NOT_FOUND', UNKNOWN_NOTE);
         }
         if (!canWrite(scope.access, stored.object_id)) throw refuse('FORBIDDEN', NOTE_READ_ONLY);
-        const changes = await tx.execute<{ title_changed: boolean; content_changed: boolean }>(sql`
+        const changes = await tx.execute<{ title_changed: boolean; content_changed: boolean; content: unknown }>(sql`
           select ${title === undefined ? sql`false` : sql`title <> ${title}`} as title_changed,
-            ${content === undefined ? sql`false` : sql`content <> ${JSON.stringify(content)}::jsonb`} as content_changed
+            ${content === undefined ? sql`false` : sql`content <> ${JSON.stringify(content)}::jsonb`} as content_changed,
+            content
           from notes where id = ${id}::uuid
         `);
         const changed = changes.rows[0];
@@ -230,6 +245,15 @@ export async function saveNote(
           where id = ${id}::uuid
         `);
         context.record({ notes: [{ noteId: id, recordId, objectId: stored.object_id }] });
+        // Mentions the save added are notified, ones it removed taken back (spec 0038).
+        if (changed.content_changed && content !== undefined) {
+          await notifyNoteMentions(context, {
+            noteId: id,
+            recordId,
+            before: mentionedIn(changed.content),
+            after: mentionedIn(content),
+          });
+        }
         const saved = await noteRow(tx, id);
         if (saved === undefined) throw new Error('A note just written could not be read back.');
         // Whose save this one replaced: never the writer's own (a retry, or two of their tabs), only someone else's.
@@ -267,6 +291,7 @@ export async function saveNote(
           return saveExisting(raced);
         }
         context.record({ notes: [{ noteId: id, recordId, objectId: record.objectId }] });
+        await notifyNoteMentions(context, { noteId: id, recordId, before: [], after: mentionedIn(body) });
         const made = await noteRow(tx, id);
         if (made === undefined) throw new Error('A note just written could not be read back.');
         return { note: summaryOf(made, scope.access) };

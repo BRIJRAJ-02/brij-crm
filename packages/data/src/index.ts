@@ -111,6 +111,17 @@ import {
 import type { NewTask, TaskChange, TaskList, TasksStore, TaskSubscription } from './tasks/store.ts';
 import { createDueTasks, type DueTasksSource } from './tasks/due.ts';
 import type { NoteList, NoteSession, NotesStore } from './notes/store.ts';
+import type { CommentEmoji, CommentVersion, NotificationKind, NotificationStatus } from '@crm/contracts';
+import type { CommentsStore, NewComment, RecordComments } from './comments/store.ts';
+import type {
+  InboxFilter,
+  InboxList,
+  InboxMark,
+  InboxSettings,
+  InboxStore,
+  NotificationSettingsChange,
+} from './inbox/store.ts';
+import { createUnreadCounts, type UnreadSource } from './inbox/unread.ts';
 import type { createLive, Granted, Live, LiveStatus } from './live/live.ts';
 import { createMutationLog } from './live/mutations.ts';
 import { createLiveRouter } from './live/router.ts';
@@ -203,6 +214,10 @@ export type {
   MemberSummary,
   MemberView,
   MyAccess,
+  NotificationKind,
+  NotificationSettings,
+  NotificationStatus,
+  NotificationView,
   ObjectSummary,
   Permission,
   Role,
@@ -355,6 +370,27 @@ export type {
   NoteSession,
   NoteSessionState,
 } from './notes/store.ts';
+export type { CommentsState, NewComment, RecordComments, ShownComment, ShownThread } from './comments/store.ts';
+export {
+  bodySegments,
+  COMMENT_EMOJI,
+  COMMENT_MAX,
+  excerptOf,
+  mentionToken,
+  THREAD_COMMENTS_MAX,
+  type BodySegment,
+  type CommentEmoji,
+} from '@crm/contracts/mentions';
+export type {
+  InboxFilter,
+  InboxList,
+  InboxListState,
+  InboxMark,
+  InboxSettings,
+  InboxSettingsState,
+  NotificationSettingsChange,
+} from './inbox/store.ts';
+export { UNREAD_PAST_CAP, type UnreadSource } from './inbox/unread.ts';
 export { isEditableHere, toActorDisplays, toFieldAttribute, type FieldAttributeShape } from './fields.ts';
 export { createIdMinter, type IdSources } from './ids.ts';
 export type { LiveStatus } from './live/live.ts';
@@ -731,6 +767,10 @@ export function createDataLayer({
   let tasks: Promise<TasksStore> | undefined;
   // Notes (spec 0019), loaded with the first screen that shows one.
   let notes: Promise<NotesStore> | undefined;
+  // Comments (spec 0038), loaded with the first Comments tab.
+  let comments: Promise<CommentsStore> | undefined;
+  // The inbox's lists and settings (spec 0038), loaded with the inbox or the notification settings.
+  let inbox: Promise<InboxStore> | undefined;
   // Records looked up in the trash (spec 0017): a missing record's page.
   const trashedLookups = createTrashedLookups((workspace, recordId) =>
     call((options) => api.records.getTrashed({ workspace, recordId }, options)),
@@ -791,6 +831,13 @@ export function createDataLayer({
     void notes?.then((store) => {
       store.clear();
     });
+    void comments?.then((store) => {
+      store.clear();
+    });
+    void inbox?.then((store) => {
+      store.clear();
+    });
+    unreadCounts.clear();
     trashedLookups.clear();
     void trash?.then((held) => {
       held.clear();
@@ -1148,6 +1195,20 @@ export function createDataLayer({
     void notes?.then((store) => {
       store.recordsChanged(workspace, event);
     });
+    // A trashed record's comments and the notifications about them go with it, and come back with it (spec 0038,
+    // AC-1160, AC-1166): its held threads read again, and the inbox and its count.
+    const moved = [...(event.deletedIds ?? []), ...(event.restoredIds ?? [])];
+    if (moved.length > 0 || event.coarse === true) {
+      void comments?.then((store) => {
+        store.records(workspace, moved);
+      });
+      spread(`inbox ${workspace}`, () => {
+        unreadCounts.refresh(workspace);
+        void inbox?.then((store) => {
+          store.resync(workspace);
+        });
+      });
+    }
     // Open timelines (spec 0017) read their first page again for a change naming their record; a coarse one,
     // for every record of the object, waits a random moment first so a whole team doesn't read in step.
     if (activity === undefined) return;
@@ -1253,6 +1314,23 @@ export function createDataLayer({
       store.changed(workspace, event);
     });
   });
+  // Comments (spec 0038, AC-1159): the held records' named threads read again.
+  router.on('comments', (workspace, event) => {
+    void comments?.then((store) => {
+      store.changed(workspace, event);
+    });
+  });
+  // A member's notifications or settings changed (spec 0038, AC-1172, AC-1174, AC-1180): only the person's own
+  // count, lists and settings read again; every other member's tab drops the event.
+  router.on('notifications', (workspace, event) => {
+    void namesMe(workspace, event.memberIds).then((named) => {
+      if (!named) return;
+      unreadCounts.refresh(workspace);
+      void inbox?.then((store) => {
+        store.changed(workspace, event);
+      });
+    });
+  });
   // Meetings synced, moved, cancelled or made private (spec 0024, AC-610): the open timelines of the records they
   // showed on read their first page again; a coarse one (a whole calendar's sync) waits a random moment first, so a
   // whole team doesn't read in step, and then every open timeline of the workspace reads again.
@@ -1286,6 +1364,13 @@ export function createDataLayer({
     void notes?.then((store) => {
       store.resync(workspace);
     });
+    void comments?.then((store) => {
+      store.resync(workspace);
+    });
+    void inbox?.then((store) => {
+      store.resync(workspace);
+    });
+    unreadCounts.refresh(workspace);
     void records?.then((layer) => {
       layer.reload(workspace);
     });
@@ -1336,6 +1421,17 @@ export function createDataLayer({
       release?.();
     };
   };
+
+  // The inbox's unread count (spec 0038, AC-1174), in the first load: the person's access is read first, so the
+  // `notifications` events that don't name them are dropped without a read.
+  const unreadCounts = createUnreadCounts({
+    read: (workspace) =>
+      readAccess(workspace)
+        .catch(() => undefined)
+        .then(() => beforeRead(workspace))
+        .then(() => call((options) => api.notifications.count({ workspace }, options))),
+    watch,
+  });
 
   // Background jobs (spec 0008): one store for the app, its views per workspace and scope.
   const jobs = createJobsStore({
@@ -2181,6 +2277,50 @@ export function createDataLayer({
       }),
     );
     return notes;
+  };
+
+  const commentsStore = (): Promise<CommentsStore> => {
+    comments ??= import('./comments/store.ts').then(({ createCommentsStore }) =>
+      createCommentsStore({
+        api: {
+          list: (input) =>
+            beforeRead(input.workspace).then(() => call((options) => api.comments.list({ ...input }, options))),
+          get: (input) => call((options) => api.comments.get({ ...input, threadIds: [...input.threadIds] }, options)),
+          create: (input) => call((options) => api.comments.create({ ...input }, options)),
+          update: (input) => call((options) => api.comments.update({ ...input }, options)),
+          delete: (input) => call((options) => api.comments.delete({ ...input }, options)),
+          resolve: (input) => call((options) => api.comments.resolve({ ...input }, options)),
+          react: (input) => call((options) => api.comments.react({ ...input }, options)),
+          versions: (input) => call((options) => api.comments.versions({ ...input }, options)),
+        },
+        mintId,
+        mutations,
+        notify,
+        watch,
+      }),
+    );
+    return comments;
+  };
+
+  const inboxStore = (): Promise<InboxStore> => {
+    inbox ??= import('./inbox/store.ts').then(({ createInboxStore }) =>
+      createInboxStore({
+        api: {
+          list: (input) =>
+            beforeRead(input.workspace).then(() => call((options) => api.notifications.list({ ...input }, options))),
+          mark: (input) => call((options) => api.notifications.mark({ ...input, ids: [...input.ids] }, options)),
+          markAllRead: (input) => call((options) => api.notifications.markAllRead({ ...input }, options)),
+          settings: (input) => call((options) => api.notifications.settings({ ...input }, options)),
+          setSettings: (input) => call((options) => api.notifications.setSettings({ ...input }, options)),
+        },
+        mintId,
+        mutations,
+        notify,
+        watch,
+        unread: unreadCounts,
+      }),
+    );
+    return inbox;
   };
 
   const recordsLayer = (): Promise<RecordsLayer> => {
@@ -3336,6 +3476,74 @@ export function createDataLayer({
       /** Brings a deleted note back exactly as it was (the toast's Undo). */
       restore: async (workspace: string, recordId: string, noteId: string): Promise<DataError | undefined> =>
         (await notesStore()).restore(workspace, recordId, noteId),
+    },
+    comments: {
+      /**
+       * A record's threads (spec 0038, AC-1151): the open ones oldest first,
+       * the newest 20 at first and 20 more on asking, the resolved ones once
+       * the disclosure opens, with the counts for the tab's label; live, and
+       * the same for every screen that asks. Read it through `useComments`.
+       */
+      forRecord: async (workspace: string, recordId: string): Promise<RecordComments> =>
+        (await commentsStore()).forRecord(workspace, recordId),
+      /** Sends a comment or a reply, shown at once as sending; a refusal comes back for the composer. */
+      create: async (workspace: string, recordId: string, comment: NewComment): Promise<DataError | undefined> =>
+        (await commentsStore()).create(workspace, recordId, comment),
+      /** Edits the member's own comment at once; a refusal puts it back with a toast. */
+      edit: async (
+        workspace: string,
+        recordId: string,
+        commentId: string,
+        body: string,
+      ): Promise<DataError | undefined> => (await commentsStore()).edit(workspace, recordId, commentId, body),
+      /** Deletes a comment at once (a placeholder while its thread has other live comments). */
+      remove: async (workspace: string, recordId: string, commentId: string): Promise<DataError | undefined> =>
+        (await commentsStore()).remove(workspace, recordId, commentId),
+      /** Resolves or reopens a thread at once. */
+      resolve: async (
+        workspace: string,
+        recordId: string,
+        threadId: string,
+        resolved: boolean,
+      ): Promise<DataError | undefined> => (await commentsStore()).resolve(workspace, recordId, threadId, resolved),
+      /** Adds or takes back the member's reaction at once. */
+      react: async (
+        workspace: string,
+        recordId: string,
+        commentId: string,
+        emoji: CommentEmoji,
+        on: boolean,
+        memberId: string,
+      ): Promise<DataError | undefined> =>
+        (await commentsStore()).react(workspace, recordId, commentId, emoji, on, memberId),
+      /** A comment's earlier texts, newest first (the "edited" popover). */
+      versions: async (workspace: string, commentId: string): Promise<readonly CommentVersion[]> =>
+        (await commentsStore()).versions(workspace, commentId),
+    },
+    inbox: {
+      /**
+       * The member's unread count in the workspace (spec 0038, AC-1174), in the
+       * first load: what the sidebar's Inbox badge shows through
+       * `useInboxUnread`. Live while held, on every page.
+       */
+      unread: (workspace: string): UnreadSource => unreadCounts.unread(workspace),
+      /** One tab and filter of the member's inbox (AC-1169, AC-1170), 50 at a time, live. Read it through `useInboxList`. */
+      list: async (workspace: string, filter: InboxFilter): Promise<InboxList> =>
+        (await inboxStore()).list(workspace, filter),
+      /** Marks notifications read or unread, done or back in the inbox, at once (AC-1171). */
+      mark: async (workspace: string, ids: readonly string[], mark: InboxMark): Promise<DataError | undefined> =>
+        (await inboxStore()).mark(workspace, ids, mark),
+      /** Marks every unread notification of a tab (and kind) read. */
+      markAllRead: async (
+        workspace: string,
+        status: NotificationStatus,
+        kind?: NotificationKind,
+      ): Promise<DataError | undefined> => (await inboxStore()).markAllRead(workspace, status, kind),
+      /** The member's email settings for the workspace (AC-1179). Read it through `useNotificationSettings`. */
+      settings: async (workspace: string): Promise<InboxSettings> => (await inboxStore()).settings(workspace),
+      /** Saves some switches at once; a refusal puts them back with a toast. */
+      setSettings: async (workspace: string, change: NotificationSettingsChange): Promise<DataError | undefined> =>
+        (await inboxStore()).setSettings(workspace, change),
     },
     undo: {
       /**

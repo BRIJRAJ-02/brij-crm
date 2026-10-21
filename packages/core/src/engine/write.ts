@@ -105,6 +105,16 @@ export interface MeetingChange {
 }
 
 /**
+ * A comment a write made or changed (spec 0038): its thread, its record and
+ * the record's object, so the outbox stores one `comments` row per object.
+ */
+export interface CommentChange {
+  readonly threadId: string;
+  readonly recordId: string;
+  readonly objectId: string;
+}
+
+/**
  * Everything one write landed or made visible or invisible, as the hooks see
  * it. Records and entries that only appear or disappear (a record's entries
  * on its delete, the reference values pointing at it) are listed too, so a
@@ -169,6 +179,10 @@ export interface Change {
   readonly jobId?: string;
   /** Members whose own sidebar the write changed (spec 0034): one `nav` row names them. */
   readonly nav: readonly string[];
+  /** Comments the write made or changed (spec 0038), each with its thread, record and object. */
+  readonly comments: readonly CommentChange[];
+  /** Members whose notifications or notification settings the write changed (spec 0038): one `notifications` row. */
+  readonly notifications: readonly string[];
 }
 
 /**
@@ -315,6 +329,8 @@ const LIST_KEYS = [
   'meetings',
   'schedules',
   'nav',
+  'comments',
+  'notifications',
 ] as const satisfies readonly (keyof ChangeLists)[];
 
 /**
@@ -434,6 +450,8 @@ export async function runWrite<T>(
           meetings: [] as MeetingChange[],
           schedules: [] as string[],
           nav: [] as string[],
+          comments: [] as CommentChange[],
+          notifications: [] as string[],
         };
         const context: WriteContext = {
           tx,
@@ -466,6 +484,8 @@ export async function runWrite<T>(
             append(collected.meetings, part.meetings);
             append(collected.schedules, part.schedules);
             append(collected.nav, part.nav);
+            append(collected.comments, part.comments);
+            append(collected.notifications, part.notifications);
           },
           async perRecord(step) {
             const marks = LIST_KEYS.map((key) => collected[key].length);
@@ -513,6 +533,8 @@ export async function runWrite<T>(
           schedules: [...new Set(collected.schedules)],
           ...(options.jobId === undefined ? {} : { jobId: options.jobId }),
           nav: [...new Set(collected.nav)],
+          comments: [...collected.comments],
+          notifications: [...new Set(collected.notifications)],
         };
         for (const hook of hooks) await hook(change, tx);
         return { result, change };

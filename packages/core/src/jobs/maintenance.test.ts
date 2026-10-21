@@ -380,6 +380,34 @@ describe('maintenance.daily (AC-112, AC-121)', () => {
     });
   });
 
+  it('removes notifications done more than 90 days ago, and keeps newer done, read and unread ones (spec 0038)', async () => {
+    const t = await team([]);
+    // One notification a task: a member has one per task assignment.
+    const add = async (doneAt: string | null, readAt: string | null) => {
+      const task = (await createTask(t.owner, { id: newId(), title: 'Call back' })).id;
+      const id = newId();
+      await testQuery(
+        ownerUrl,
+        `insert into notifications (workspace_id, id, member_id, kind, actor_type, task_id, read_at, done_at, created_at)
+         values ($1, $2, $3, 'task_assigned', 'system', $4, ${readAt ?? 'null'}, ${doneAt ?? 'null'}, now() - interval '200 days')`,
+        [t.workspaceId, id, t.ownerId, task],
+      );
+      return id;
+    };
+    const old = await add("now() - interval '91 days'", "now() - interval '91 days'");
+    const recent = await add("now() - interval '89 days'", "now() - interval '89 days'");
+    const read = await add(null, "now() - interval '120 days'");
+    const unread = await add(null, null);
+    const { jobId, outcomes } = await cleanUp(t.workspaceId, '2026-10-15');
+    expect(outcomes.at(-1)).toBe('succeeded');
+    const left = await testQuery<{ id: string }>(ownerUrl, 'select id from notifications where id = any($1)', [
+      [old, recent, read, unread],
+    ]);
+    expect(left.map((row) => row.id).sort()).toEqual([recent, read, unread].sort());
+    const job = await getJob(systemScope(db, t.workspaceId), registry(), jobId);
+    expect(job.result).toMatchObject({ cleanup: { notifications: 1 } });
+  });
+
   it('keeps refused items, deletes the rest of a finished job’s, and deletes jobs finished more than 30 days ago', async () => {
     const t = await team([]);
     const finished = await jobRow(t.workspaceId, t.ownerId, {

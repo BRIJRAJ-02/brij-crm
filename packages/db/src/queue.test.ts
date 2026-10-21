@@ -451,6 +451,46 @@ describe('what only the worker may do for the daily cleanup (spec 0008, mileston
   });
 });
 
+describe('the daily digest’s members (spec 0038, AC-1178)', () => {
+  it('names members whose digest is on and whose day reached 08:00 without one, ids only, on the worker login', async () => {
+    const a = await workspaceWithMember('queue-digest-a');
+    const b = await workspaceWithMember('queue-digest-b');
+    const c = await workspaceWithMember('queue-digest-c');
+    // A zone where it is past 08:00 now, and one where it isn't: 14 hours apart at most, so one of two works.
+    const hour = new Date().getUTCHours();
+    const pastEight = hour >= 8 ? 'UTC' : 'Pacific/Kiritimati';
+    const beforeEight = hour < 8 ? 'UTC' : 'Pacific/Pago_Pago';
+    const add = (workspaceId: string, memberId: string, zone: string, sentToday: boolean) =>
+      db.withWorkspace(workspaceId, (tx) =>
+        tx.execute(sql`
+          insert into notification_settings (workspace_id, member_id, digest, time_zone, digest_sent_on)
+          values (${workspaceId}, ${memberId}, true, ${zone},
+            ${sentToday ? sql`(now() at time zone ${zone})::date` : sql`null`})
+        `),
+      );
+    await add(a.workspaceId, a.memberId, pastEight, false);
+    await add(b.workspaceId, b.memberId, pastEight, true);
+    await add(c.workspaceId, c.memberId, beforeEight, false);
+    const queue = openQueueConnection({ url: workerUrl, applicationName: 'crm-queue-tests', max: 1 });
+    try {
+      const due = await queue.digestsDue(undefined, 500);
+      const ids = due.map((row) => row.memberId);
+      const zoneHour = Number(
+        new Intl.DateTimeFormat('en-GB', { hour: 'numeric', hourCycle: 'h23', timeZone: beforeEight }).format(
+          new Date(),
+        ),
+      );
+      expect(ids).toContain(a.memberId);
+      expect(ids).not.toContain(b.memberId);
+      if (zoneHour < 8) expect(ids).not.toContain(c.memberId);
+      const after = await queue.digestsDue({ workspaceId: a.workspaceId, memberId: a.memberId }, 500);
+      expect(after.map((row) => row.memberId)).not.toContain(a.memberId);
+    } finally {
+      await queue.close();
+    }
+  });
+});
+
 describe('the check before the worker sleeps (spec 0008, milestone 3, AC-117)', () => {
   it('says whether a row is locked, when the next one is due, and whether an outbox row waits, on one clock', async () => {
     const { workspaceId, memberId } = await workspaceWithMember('queue-sleep');

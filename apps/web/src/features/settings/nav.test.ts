@@ -17,7 +17,7 @@ describe('settingsNav', () => {
     const groups = settingsNav('acme');
     expect(groups.map((group) => group.label)).toEqual(['Account', 'Workspace']);
     expect(groups.map((group) => group.entries.map((entry) => entry.label))).toEqual([
-      ['Preferences', 'Calendars'],
+      ['Preferences', 'Calendars', 'Notifications'],
       ['Members', 'Objects', 'Background jobs'],
     ]);
   });
@@ -27,6 +27,7 @@ describe('settingsNav', () => {
     expect(Object.fromEntries(entries.map((entry) => [entry.id, entry.href]))).toEqual({
       preferences: '/w/acme/settings/account/preferences',
       calendars: '/w/acme/settings/account/calendars',
+      notifications: '/w/acme/settings/account/notifications',
       members: '/w/acme/settings/members',
       objects: '/w/acme/settings/objects',
       jobs: '/w/acme/settings/jobs',

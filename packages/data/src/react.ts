@@ -29,6 +29,9 @@ import type { SavedViewSnapshot, SavedViewSource, ViewsListSnapshot, ViewsListSo
 import type { TrashState, TrashView } from './trash/store.ts';
 import type { TaskList, TaskListState, TaskSubscription, TaskSubscriptionState } from './tasks/store.ts';
 import type { NoteList, NoteListState, NoteSession, NoteSessionState } from './notes/store.ts';
+import type { CommentsState, RecordComments } from './comments/store.ts';
+import type { InboxList, InboxListState, InboxSettings, InboxSettingsState } from './inbox/store.ts';
+import type { UnreadSource } from './inbox/unread.ts';
 
 /**
  * A view's current state (its rows, count, status, cell refusals and row
@@ -384,4 +387,45 @@ export function useNav(source: NavSource): NavSnapshot {
  */
 export function useDueTasks(source: DueTasksSource): DueTasksSnapshot {
   return useRetained(source);
+}
+
+/**
+ * A record's threads (spec 0038): the Comments tab's open and resolved
+ * threads and counts, re-rendering when they change. Held while the screen
+ * is mounted, so it stays live.
+ */
+export function useComments(comments: RecordComments): CommentsState {
+  return useRetained(comments);
+}
+
+/**
+ * Only a record's open thread count (the Comments tab's label), re-rendering
+ * only when it moves. Holds the threads while mounted, so the count is live.
+ */
+export function useCommentCount(comments: RecordComments): number | undefined {
+  useEffect(() => comments.retain(), [comments]);
+  return useSyncExternalStore(comments.subscribe, () => {
+    const state = comments.getSnapshot();
+    return state.status === 'ready' ? state.openCount : undefined;
+  });
+}
+
+/**
+ * The member's unread notifications in a workspace (spec 0038, AC-1174),
+ * from `data.inbox.unread(workspace)`: undefined until the first answer, 100
+ * for more than 99 ("99+"), 0 for none. Held while mounted, so it is live on
+ * every page; the sidebar's Inbox badge reads it.
+ */
+export function useInboxUnread(source: UnreadSource): number | undefined {
+  return useRetained(source);
+}
+
+/** One tab and filter of the inbox (spec 0038), re-rendering when it changes. Held while mounted, so it stays live. */
+export function useInboxList(list: InboxList): InboxListState {
+  return useRetained(list);
+}
+
+/** The member's notification settings (spec 0038), re-rendering when they change. Held while mounted. */
+export function useNotificationSettings(settings: InboxSettings): InboxSettingsState {
+  return useRetained(settings);
 }

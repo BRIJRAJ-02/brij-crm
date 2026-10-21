@@ -13,6 +13,7 @@ import {
   renderBookingEmail,
   renderEmail,
   renderMemberInvite,
+  renderNotificationsEmail,
   renderSignInCode,
   topicOf,
   type BookingWords,
@@ -44,6 +45,7 @@ export const PREVIEW_KINDS: readonly string[] = [
   'booking_confirmation',
   'booking_reminder',
   ...Object.keys(CATALOG),
+  'notifications',
 ];
 
 /** One email drawn with its sample params, its links on `origin`. */
@@ -69,6 +71,28 @@ export function drawSample(kind: string, origin: string): Promise<RenderedEmail>
       );
     case 'member_invite':
       return renderMemberInvite(CATALOG.member_invite.sample, { appOrigin: origin, workspaceName: 'Acme' });
+    case 'notifications':
+      return renderNotificationsEmail(
+        {
+          items: [
+            {
+              sentence: 'Ada Lovelace mentioned you',
+              recordName: 'Acme Corp',
+              excerpt: 'Over to @Grace Hopper for the contract. Can you send it by Friday?',
+              path: '/w/acme/objects/companies/0199a6f2-0000-7000-8000-0000000000a1/comments?thread=0199a6f2-0000-7000-8000-0000000000b1',
+            },
+            {
+              sentence: 'Alan Turing assigned you a task',
+              excerpt: 'Send the renewal quote',
+              path: '/w/acme/inbox?task=0199a6f2-0000-7000-8000-0000000000c1',
+            },
+          ],
+          more: 0,
+          inboxPath: '/w/acme/inbox',
+          settingsPath: '/w/acme/settings/account/notifications',
+        },
+        { appOrigin: origin, workspaceName: 'Acme' },
+      );
     default: {
       if (!(kind in CATALOG)) return Promise.reject(new Error(`No email called ${kind}.`));
       const templated = kind as EmailKind;

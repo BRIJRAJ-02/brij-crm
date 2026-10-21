@@ -23,6 +23,7 @@ import { Route as WSlugBookingPagesRouteImport } from './routes/w.$slug.booking-
 import { Route as WSlugBookingsRouteImport } from './routes/w.$slug.bookings.tsx'
 import { Route as WSlugFormsRouteImport } from './routes/w.$slug.forms.tsx'
 import { Route as WSlugHomeRouteImport } from './routes/w.$slug.home.tsx'
+import { Route as WSlugInboxRouteImport } from './routes/w.$slug.inbox.tsx'
 import { Route as WSlugSettingsRouteImport } from './routes/w.$slug.settings.tsx'
 import { Route as WSlugTasksRouteImport } from './routes/w.$slug.tasks.tsx'
 import { Route as WSlugTrashRouteImport } from './routes/w.$slug.trash.tsx'
@@ -44,6 +45,7 @@ import { Route as WSlugSettingsMembersRouteImport } from './routes/w.$slug.setti
 import { Route as WSlugFormsFormIdPreviewRouteImport } from './routes/w.$slug.forms_.$formId_.preview.tsx'
 import { Route as WSlugSettingsAccountIndexRouteImport } from './routes/w.$slug.settings.account.index.tsx'
 import { Route as WSlugSettingsAccountCalendarsRouteImport } from './routes/w.$slug.settings.account.calendars.tsx'
+import { Route as WSlugSettingsAccountNotificationsRouteImport } from './routes/w.$slug.settings.account.notifications.tsx'
 import { Route as WSlugSettingsAccountPreferencesRouteImport } from './routes/w.$slug.settings.account.preferences.tsx'
 import { Route as WSlugSettingsBookingPagesIndexRouteImport } from './routes/w.$slug.settings.booking-pages.index.tsx'
 import { Route as WSlugSettingsBookingPagesPageIdRouteImport } from './routes/w.$slug.settings.booking-pages.$pageId.tsx'
@@ -124,6 +126,11 @@ const WSlugFormsRoute = WSlugFormsRouteImport.update({
 const WSlugHomeRoute = WSlugHomeRouteImport.update({
   id: '/home',
   path: '/home',
+  getParentRoute: () => WSlugRoute,
+} as any)
+const WSlugInboxRoute = WSlugInboxRouteImport.update({
+  id: '/inbox',
+  path: '/inbox',
   getParentRoute: () => WSlugRoute,
 } as any)
 const WSlugSettingsRoute = WSlugSettingsRouteImport.update({
@@ -235,6 +242,12 @@ const WSlugSettingsAccountCalendarsRoute =
     path: '/account/calendars',
     getParentRoute: () => WSlugSettingsRoute,
   } as any)
+const WSlugSettingsAccountNotificationsRoute =
+  WSlugSettingsAccountNotificationsRouteImport.update({
+    id: '/account/notifications',
+    path: '/account/notifications',
+    getParentRoute: () => WSlugSettingsRoute,
+  } as any)
 const WSlugSettingsAccountPreferencesRoute =
   WSlugSettingsAccountPreferencesRouteImport.update({
     id: '/account/preferences',
@@ -315,6 +328,7 @@ export interface FileRoutesByFullPath {
   '/w/$slug/bookings': typeof WSlugBookingsRouteWithChildren
   '/w/$slug/forms': typeof WSlugFormsRouteWithChildren
   '/w/$slug/home': typeof WSlugHomeRoute
+  '/w/$slug/inbox': typeof WSlugInboxRoute
   '/w/$slug/settings': typeof WSlugSettingsRouteWithChildren
   '/w/$slug/tasks': typeof WSlugTasksRoute
   '/w/$slug/trash': typeof WSlugTrashRoute
@@ -336,6 +350,7 @@ export interface FileRoutesByFullPath {
   '/w/$slug/settings/': typeof WSlugSettingsIndexRoute
   '/w/$slug/forms/$formId/preview': typeof WSlugFormsFormIdPreviewRoute
   '/w/$slug/settings/account/calendars': typeof WSlugSettingsAccountCalendarsRoute
+  '/w/$slug/settings/account/notifications': typeof WSlugSettingsAccountNotificationsRoute
   '/w/$slug/settings/account/preferences': typeof WSlugSettingsAccountPreferencesRoute
   '/w/$slug/settings/booking-pages/$pageId': typeof WSlugSettingsBookingPagesPageIdRoute
   '/w/$slug/settings/forms/$formId': typeof WSlugSettingsFormsFormIdRoute
@@ -359,6 +374,7 @@ export interface FileRoutesByTo {
   '/invite/$token': typeof InviteTokenRoute
   '/w/$slug/availability': typeof WSlugAvailabilityRoute
   '/w/$slug/home': typeof WSlugHomeRoute
+  '/w/$slug/inbox': typeof WSlugInboxRoute
   '/w/$slug/tasks': typeof WSlugTasksRoute
   '/w/$slug/trash': typeof WSlugTrashRoute
   '/w/$slug': typeof WSlugIndexRoute
@@ -379,6 +395,7 @@ export interface FileRoutesByTo {
   '/w/$slug/settings': typeof WSlugSettingsIndexRoute
   '/w/$slug/forms/$formId/preview': typeof WSlugFormsFormIdPreviewRoute
   '/w/$slug/settings/account/calendars': typeof WSlugSettingsAccountCalendarsRoute
+  '/w/$slug/settings/account/notifications': typeof WSlugSettingsAccountNotificationsRoute
   '/w/$slug/settings/account/preferences': typeof WSlugSettingsAccountPreferencesRoute
   '/w/$slug/settings/booking-pages/$pageId': typeof WSlugSettingsBookingPagesPageIdRoute
   '/w/$slug/settings/forms/$formId': typeof WSlugSettingsFormsFormIdRoute
@@ -407,6 +424,7 @@ export interface FileRoutesById {
   '/w/$slug/bookings': typeof WSlugBookingsRouteWithChildren
   '/w/$slug/forms': typeof WSlugFormsRouteWithChildren
   '/w/$slug/home': typeof WSlugHomeRoute
+  '/w/$slug/inbox': typeof WSlugInboxRoute
   '/w/$slug/settings': typeof WSlugSettingsRouteWithChildren
   '/w/$slug/tasks': typeof WSlugTasksRoute
   '/w/$slug/trash': typeof WSlugTrashRoute
@@ -428,6 +446,7 @@ export interface FileRoutesById {
   '/w/$slug/settings/': typeof WSlugSettingsIndexRoute
   '/w/$slug/forms_/$formId_/preview': typeof WSlugFormsFormIdPreviewRoute
   '/w/$slug/settings/account/calendars': typeof WSlugSettingsAccountCalendarsRoute
+  '/w/$slug/settings/account/notifications': typeof WSlugSettingsAccountNotificationsRoute
   '/w/$slug/settings/account/preferences': typeof WSlugSettingsAccountPreferencesRoute
   '/w/$slug/settings/booking-pages/$pageId': typeof WSlugSettingsBookingPagesPageIdRoute
   '/w/$slug/settings/forms/$formId': typeof WSlugSettingsFormsFormIdRoute
@@ -457,6 +476,7 @@ export interface FileRouteTypes {
     | '/w/$slug/bookings'
     | '/w/$slug/forms'
     | '/w/$slug/home'
+    | '/w/$slug/inbox'
     | '/w/$slug/settings'
     | '/w/$slug/tasks'
     | '/w/$slug/trash'
@@ -478,6 +498,7 @@ export interface FileRouteTypes {
     | '/w/$slug/settings/'
     | '/w/$slug/forms/$formId/preview'
     | '/w/$slug/settings/account/calendars'
+    | '/w/$slug/settings/account/notifications'
     | '/w/$slug/settings/account/preferences'
     | '/w/$slug/settings/booking-pages/$pageId'
     | '/w/$slug/settings/forms/$formId'
@@ -501,6 +522,7 @@ export interface FileRouteTypes {
     | '/invite/$token'
     | '/w/$slug/availability'
     | '/w/$slug/home'
+    | '/w/$slug/inbox'
     | '/w/$slug/tasks'
     | '/w/$slug/trash'
     | '/w/$slug'
@@ -521,6 +543,7 @@ export interface FileRouteTypes {
     | '/w/$slug/settings'
     | '/w/$slug/forms/$formId/preview'
     | '/w/$slug/settings/account/calendars'
+    | '/w/$slug/settings/account/notifications'
     | '/w/$slug/settings/account/preferences'
     | '/w/$slug/settings/booking-pages/$pageId'
     | '/w/$slug/settings/forms/$formId'
@@ -548,6 +571,7 @@ export interface FileRouteTypes {
     | '/w/$slug/bookings'
     | '/w/$slug/forms'
     | '/w/$slug/home'
+    | '/w/$slug/inbox'
     | '/w/$slug/settings'
     | '/w/$slug/tasks'
     | '/w/$slug/trash'
@@ -569,6 +593,7 @@ export interface FileRouteTypes {
     | '/w/$slug/settings/'
     | '/w/$slug/forms_/$formId_/preview'
     | '/w/$slug/settings/account/calendars'
+    | '/w/$slug/settings/account/notifications'
     | '/w/$slug/settings/account/preferences'
     | '/w/$slug/settings/booking-pages/$pageId'
     | '/w/$slug/settings/forms/$formId'
@@ -692,6 +717,13 @@ declare module '@tanstack/react-router' {
       path: '/home'
       fullPath: '/w/$slug/home'
       preLoaderRoute: typeof WSlugHomeRouteImport
+      parentRoute: typeof WSlugRoute
+    }
+    '/w/$slug/inbox': {
+      id: '/w/$slug/inbox'
+      path: '/inbox'
+      fullPath: '/w/$slug/inbox'
+      preLoaderRoute: typeof WSlugInboxRouteImport
       parentRoute: typeof WSlugRoute
     }
     '/w/$slug/settings': {
@@ -841,6 +873,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof WSlugSettingsAccountCalendarsRouteImport
       parentRoute: typeof WSlugSettingsRoute
     }
+    '/w/$slug/settings/account/notifications': {
+      id: '/w/$slug/settings/account/notifications'
+      path: '/account/notifications'
+      fullPath: '/w/$slug/settings/account/notifications'
+      preLoaderRoute: typeof WSlugSettingsAccountNotificationsRouteImport
+      parentRoute: typeof WSlugSettingsRoute
+    }
     '/w/$slug/settings/account/preferences': {
       id: '/w/$slug/settings/account/preferences'
       path: '/account/preferences'
@@ -966,6 +1005,7 @@ interface WSlugSettingsRouteChildren {
   WSlugSettingsMembersRoute: typeof WSlugSettingsMembersRoute
   WSlugSettingsIndexRoute: typeof WSlugSettingsIndexRoute
   WSlugSettingsAccountCalendarsRoute: typeof WSlugSettingsAccountCalendarsRoute
+  WSlugSettingsAccountNotificationsRoute: typeof WSlugSettingsAccountNotificationsRoute
   WSlugSettingsAccountPreferencesRoute: typeof WSlugSettingsAccountPreferencesRoute
   WSlugSettingsBookingPagesPageIdRoute: typeof WSlugSettingsBookingPagesPageIdRoute
   WSlugSettingsFormsFormIdRoute: typeof WSlugSettingsFormsFormIdRoute
@@ -983,6 +1023,8 @@ const WSlugSettingsRouteChildren: WSlugSettingsRouteChildren = {
   WSlugSettingsMembersRoute: WSlugSettingsMembersRoute,
   WSlugSettingsIndexRoute: WSlugSettingsIndexRoute,
   WSlugSettingsAccountCalendarsRoute: WSlugSettingsAccountCalendarsRoute,
+  WSlugSettingsAccountNotificationsRoute:
+    WSlugSettingsAccountNotificationsRoute,
   WSlugSettingsAccountPreferencesRoute: WSlugSettingsAccountPreferencesRoute,
   WSlugSettingsBookingPagesPageIdRoute: WSlugSettingsBookingPagesPageIdRoute,
   WSlugSettingsFormsFormIdRoute: WSlugSettingsFormsFormIdRoute,
@@ -1004,6 +1046,7 @@ interface WSlugRouteChildren {
   WSlugBookingsRoute: typeof WSlugBookingsRouteWithChildren
   WSlugFormsRoute: typeof WSlugFormsRouteWithChildren
   WSlugHomeRoute: typeof WSlugHomeRoute
+  WSlugInboxRoute: typeof WSlugInboxRoute
   WSlugSettingsRoute: typeof WSlugSettingsRouteWithChildren
   WSlugTasksRoute: typeof WSlugTasksRoute
   WSlugTrashRoute: typeof WSlugTrashRoute
@@ -1026,6 +1069,7 @@ const WSlugRouteChildren: WSlugRouteChildren = {
   WSlugBookingsRoute: WSlugBookingsRouteWithChildren,
   WSlugFormsRoute: WSlugFormsRouteWithChildren,
   WSlugHomeRoute: WSlugHomeRoute,
+  WSlugInboxRoute: WSlugInboxRoute,
   WSlugSettingsRoute: WSlugSettingsRouteWithChildren,
   WSlugTasksRoute: WSlugTasksRoute,
   WSlugTrashRoute: WSlugTrashRoute,

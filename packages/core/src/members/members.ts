@@ -27,6 +27,7 @@ import { deleteMemberViews } from '../views/manage.ts';
 import { deleteMemberRecents } from '../search/recents.ts';
 import { deleteMemberCalendars } from '../calendar/connections.ts';
 import { deleteMemberNav } from '../navigation/navigation.ts';
+import { deleteMemberNotifications } from '../notifications/inbox.ts';
 
 const { members } = schema;
 
@@ -274,6 +275,8 @@ export async function removeMember(
       await deleteMemberCalendars(context, target.id);
       // Their own sidebar goes too (spec 0034, AC-941).
       await deleteMemberNav(context, target.id);
+      // Their notifications and notification settings go too (spec 0038, AC-1168).
+      await deleteMemberNotifications(context, target.id);
       // The `access` row that disconnects them comes with spec 0009 milestone 3; the member list changes now.
       context.record({ members: [target.id] });
     },

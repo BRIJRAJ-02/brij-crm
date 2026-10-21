@@ -1,0 +1,21 @@
+/* CommentComposer: the field over a row of actions at its end (Cancel, then
+   the primary send), space-8 apart; a refusal's Callout sits between them. */
+@layer components {
+  .root {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-8);
+    min-inline-size: 0;
+  }
+
+  .field {
+    min-inline-size: 0;
+  }
+
+  .actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-8);
+    justify-content: flex-end;
+  }
+}

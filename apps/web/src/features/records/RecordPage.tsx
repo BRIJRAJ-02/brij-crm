@@ -1,20 +1,29 @@
 // Brief
 // Purpose: everything about one record in one place: its details, and what happened to it.
 // Main task: read and edit its details in place, and see who changed what and when, live.
-// Leaves out: deleting and restoring it (#22), presence (#26), related records (milestone 3), comments (#29).
+// Leaves out: deleting and restoring it (#22), presence (#26), related records (milestone 3).
 import type {
   ActivityFeed as ActivityFeedSource,
   AttributeDefinition,
   MemberSummary,
   NoteList as NoteListSource,
   ObjectSummary,
+  RecordComments,
   RecordState,
   RecordSubscription,
   RecordView,
   TaskList as TaskListSource,
   TrashedState,
 } from '@crm/data';
-import { useActivityStatus, useLiveStatus, useNoteTotal, useRecord, useTaskTotal, useTrashed } from '@crm/data/react';
+import {
+  useActivityStatus,
+  useCommentCount,
+  useLiveStatus,
+  useNoteTotal,
+  useRecord,
+  useTaskTotal,
+  useTrashed,
+} from '@crm/data/react';
 import {
   ActivityFeed,
   Button,
@@ -30,6 +39,8 @@ import {
 } from '@crm/ui';
 import { useNavigate, useParams, useRouteContext, useRouter } from '@tanstack/react-router';
 import { useCallback, useEffect, useMemo, useRef, type ReactNode } from 'react';
+import { CommentsTab, LoadingThreads } from '../comments/CommentsTab.tsx';
+import { strings as commentStrings } from '../comments/strings.ts';
 import { NotesTab } from '../notes/NotesTab.tsx';
 import { strings as noteStrings } from '../notes/strings.ts';
 import { NoteWindow } from '../notes/NoteWindow.tsx';
@@ -74,6 +85,10 @@ export interface RecordPageProps {
   readonly notes: NoteListSource | undefined;
   /** `?note=`: the note window's note, or `new`. */
   readonly note?: string;
+  /** The record's comment threads (spec 0038): the Comments tab and its count. */
+  readonly comments: RecordComments | undefined;
+  /** `?thread=`: the thread a link to a comment names (AC-1161). */
+  readonly thread?: string;
 }
 
 /** The page's tabs, in order. */
@@ -82,6 +97,7 @@ const TABS = [
   { id: 'activity', label: strings.activity, icon: 'activity' as const },
   { id: 'notes', label: noteStrings.notes, icon: 'notebook' as const },
   { id: 'tasks', label: taskStrings.tasks, icon: 'list-checks' as const },
+  { id: 'comments', label: commentStrings.comments, icon: 'message-square' as const },
 ];
 
 /** A task list with nothing in it yet, for the Tasks tab before the record arrives. */
@@ -153,6 +169,7 @@ function PendingTab({ tab }: { readonly tab: RecordTab }) {
   if (tab === 'activity') return <ActivityFeed label={strings.activity} entries={NO_ENTRIES} status="loading" />;
   const tasks = <TaskList label={taskStrings.openTasks} tasks={NO_TASKS} status="loading" onToggle={() => undefined} />;
   if (tab === 'tasks') return tasks;
+  if (tab === 'comments') return <LoadingThreads />;
   if (tab === 'notes') {
     return (
       <NoteList
@@ -224,11 +241,28 @@ function LoadingLayout({
 
 /** The record page, or its unavailable state for an address that names no record. */
 export function RecordPage(props: RecordPageProps) {
-  const { record, feed, recent, open, notes } = props;
-  if (record === undefined || feed === undefined || recent === undefined || open === undefined || notes === undefined) {
+  const { record, feed, recent, open, notes, comments } = props;
+  if (
+    record === undefined ||
+    feed === undefined ||
+    recent === undefined ||
+    open === undefined ||
+    notes === undefined ||
+    comments === undefined
+  ) {
     return <WorkspacePage currentObject={props.object.apiSlug} page={unavailablePage(props.slug, props.object)} />;
   }
-  return <SubscribedRecordPage {...props} record={record} feed={feed} recent={recent} open={open} notes={notes} />;
+  return (
+    <SubscribedRecordPage
+      {...props}
+      record={record}
+      feed={feed}
+      recent={recent}
+      open={open}
+      notes={notes}
+      comments={comments}
+    />
+  );
 }
 
 /** The trash lookup's state once the record's first read found it missing; undefined otherwise. */
@@ -254,6 +288,7 @@ function SubscribedRecordPage(
     readonly recent: ActivityFeedSource;
     readonly open: TaskListSource;
     readonly notes: NoteListSource;
+    readonly comments: RecordComments;
   },
 ) {
   const state = useRecord(props.record);
@@ -290,9 +325,11 @@ function RecordScreen({
   recent,
   open,
   notes,
+  comments,
   meId,
   task,
   note,
+  thread,
   state,
   timelineStatus,
   trashed,
@@ -302,6 +339,7 @@ function RecordScreen({
   readonly recent: ActivityFeedSource;
   readonly open: TaskListSource;
   readonly notes: NoteListSource;
+  readonly comments: RecordComments;
   readonly state: RecordState;
   readonly timelineStatus: ReturnType<typeof useActivityStatus>;
   readonly trashed?: TrashedState;
@@ -325,6 +363,7 @@ function RecordScreen({
   const router = useRouter();
   const openTotal = useTaskTotal(open);
   const notesTotal = useNoteTotal(notes);
+  const commentCount = useCommentCount(comments);
   // Whether the task dialog was opened from this page, so closing it steps Back rather than adding a step.
   const openedHere = useRef(false);
   // A `?task=` that arrived while the page was open (a timeline entry's link, or `openTask`) was pushed: closing
@@ -415,7 +454,9 @@ function RecordScreen({
       ? { ...each, ...tabCount(openTotal) }
       : each.id === 'notes'
         ? { ...each, ...tabCount(notesTotal) }
-        : each,
+        : each.id === 'comments'
+          ? { ...each, ...tabCount(commentCount === undefined ? undefined : { count: commentCount, atLeast: false }) }
+          : each,
   );
 
   const openTab = (next: string) => {
@@ -438,6 +479,18 @@ function RecordScreen({
   let tabContent: ReactNode;
   if (tab === 'activity') {
     tabContent = <ActivityTab feed={feed} link={link} taskHref={taskHref} onAddPerson={addPerson} />;
+  } else if (tab === 'comments') {
+    tabContent = (
+      <CommentsTab
+        slug={slug}
+        recordId={recordId}
+        comments={comments}
+        members={members}
+        meId={meId}
+        isReadOnly={trashed?.status === 'trashed' || (state.status === 'deleted' && state.isLost)}
+        {...(thread === undefined ? {} : { thread })}
+      />
+    );
   } else if (tab === 'notes') {
     tabContent = <NotesTab list={notes} members={members} canAdd={canAddTasks} onOpenNote={openNote} />;
   } else if (tab === 'tasks' && pageRecord !== undefined) {

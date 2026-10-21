@@ -21,7 +21,7 @@ import { MentionNames, mentionView } from './MentionView.tsx';
 import styles from './RichTextEditor.module.css';
 import { matchSlashCommands, SLASH_COMMANDS, type SlashCommand } from './slash-commands.ts';
 import { strings } from './strings.ts';
-import { SuggestionList, suggestionOptionId, type SuggestionRow } from './SuggestionList.tsx';
+import { SuggestionList, suggestionOptionId, type SuggestionRow } from '../molecules/SuggestionList/SuggestionList.tsx';
 
 /** Which tools the editor offers: `note` (headings, marks, lists, task lists, quote, code, links, mentions). */
 export type RichTextMode = 'note';
