@@ -1,61 +1,49 @@
-/* RichTextEditor: the document in a Field's box (the quiet field-border
-   hairline, control-border under a pointer, accent-line and the focus halo
-   while writing, danger when refused, surface-subtle when read only), at
-   least six rows tall and growing with its text. Blocks sit space-8 apart;
-   headings take the heading, title and body-strong type for levels 1 to 3.
-   Bold, italic, strike and underline keep the browser's own look. Inline code matches the Code atom, highlight the yellow tag, links the link
-   colour, quotes a thick border-strong edge in text-secondary, code blocks the
-   sunken surface. Task items carry the native checkbox in the accent colour,
-   their text struck through in text-tertiary once ticked. The placeholder is
-   text-tertiary. Tiptap's own stylesheet is off (`injectCSS: false`), so
+/* RichTextEditor: the document drawn as a page, as Notion's are (the owner's
+   call, 21 October 2026): no box, border, fill or focus ring around the
+   text, and the caret marks focus. An optional title sits over it, space-12
+   above the text. The text fills what its holder leaves (at least six rows,
+   so an empty note is easy to click into). Blocks sit space-8 apart; headings
+   take the heading, title and body-strong type for levels 1 to 3. Bold,
+   italic, strike and underline keep the browser's own look. Inline code
+   matches the Code atom, highlight the yellow tag, links the link colour,
+   quotes a thick border-strong edge in text-secondary, code blocks the sunken
+   surface. Task items carry the native checkbox in the accent colour, their
+   text struck through in text-tertiary once ticked. The placeholders are
+   text-tertiary: the note's while it is empty, then the one for an empty line
+   under the caret while the text has focus, and "Type to filter" after a
+   bare "/". Tiptap's own stylesheet is off (`injectCSS: false`), so
    ProseMirror's one requirement, pre-wrap white space, is here. */
 @layer components {
   .root {
     display: flex;
+    flex: 1;
     flex-direction: column;
     gap: var(--space-4);
     min-inline-size: 0;
   }
 
+  .title {
+    margin-block-end: var(--space-8);
+  }
+
   .frame {
     position: relative;
+    display: flex;
+    flex: 1;
+    flex-direction: column;
     min-inline-size: 0;
   }
 
   .content {
+    flex: 1;
     box-sizing: border-box;
     min-block-size: calc(var(--size-row) * 6);
-    padding-block: var(--space-8);
-    padding-inline: var(--space-12);
-    border: var(--border-width-hairline) solid var(--field-border);
-    border-radius: var(--radius-md);
-    background: var(--surface-raised);
     color: var(--text);
     font: var(--text-body);
     letter-spacing: var(--tracking-body);
     white-space: pre-wrap;
     overflow-wrap: break-word;
     outline: none;
-    transition: border-color var(--duration-hover) var(--ease-hover);
-  }
-
-  @media (hover: hover) and (pointer: fine) {
-    .content:hover:not(:focus) {
-      border-color: var(--control-border);
-    }
-  }
-
-  .content:focus {
-    border-color: var(--accent-line);
-    box-shadow: var(--shadow-focus);
-  }
-
-  .root[data-invalid] .content {
-    border-color: var(--danger);
-  }
-
-  .root[data-readonly] .content {
-    background: var(--surface-subtle);
   }
 
   .content > :last-child {
@@ -198,12 +186,21 @@
     text-decoration: underline;
   }
 
-  /* The placeholder, while the whole document is empty. */
-  .empty::before {
+  /* The placeholders: the note's while all of it is empty, and an empty line's
+     (or heading's) under the caret only while the text has focus. */
+  .empty::before,
+  .content:focus .emptyLine::before {
     float: inline-start;
     block-size: 0;
     color: var(--text-tertiary);
     content: attr(data-placeholder);
+    pointer-events: none;
+  }
+
+  /* After a bare "/": what to do next, as Notion's "Type to filter". */
+  .slashQueryEmpty::after {
+    color: var(--text-tertiary);
+    content: attr(data-decoration-content);
     pointer-events: none;
   }
 
@@ -226,10 +223,7 @@
   }
 
   @media (forced-colors: active) {
-    .content {
-      border-color: CanvasText;
-    }
-
+    /* In forced colours, focus also shows as the system's outline around the text. */
     .content:focus {
       outline: var(--border-width-thick) solid Highlight;
     }

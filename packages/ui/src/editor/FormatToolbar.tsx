@@ -1,9 +1,11 @@
 // The format toolbar (spec 0003's FormatToolbar): a bubble over the selection
-// in a note, holding the library's ToggleButtons in a React Aria Toolbar. It
-// follows the editor in the page, so Tab from the text reaches it (and
-// Alt+F10, the usual toolbar key, jumps to it); arrows move between its
-// buttons and Esc goes back to the text. Link swaps the buttons for an
-// address field.
+// in a note, holding the library's ToggleButtons in a React Aria Toolbar:
+// the marks only (bold, italic, strike, code, highlight) and Link, as
+// Notion's selection toolbar, since blocks come from the slash menu and the
+// markdown shortcuts (the owner's call, 21 October 2026). It follows the
+// editor in the page, so Tab from the text reaches it (and Alt+F10, the usual
+// toolbar key, jumps to it); arrows move between its buttons and Esc goes
+// back to the text. Link swaps the buttons for an address field.
 import { isSafeLink } from '@crm/contracts/values';
 import type { Editor } from '@tiptap/core';
 import { useEditorState } from '@tiptap/react';
@@ -69,48 +71,6 @@ const TOGGLES: readonly Toggle[] = [
     isActive: (editor) => editor.isActive('highlight'),
     run: (editor) => editor.chain().focus().toggleHighlight().run(),
   },
-  {
-    key: 'heading1',
-    icon: 'heading-1',
-    label: strings.heading1,
-    isActive: (editor) => editor.isActive('heading', { level: 1 }),
-    run: (editor) => editor.chain().focus().toggleHeading({ level: 1 }).run(),
-  },
-  {
-    key: 'heading2',
-    icon: 'heading-2',
-    label: strings.heading2,
-    isActive: (editor) => editor.isActive('heading', { level: 2 }),
-    run: (editor) => editor.chain().focus().toggleHeading({ level: 2 }).run(),
-  },
-  {
-    key: 'bulletList',
-    icon: 'list',
-    label: strings.bulletList,
-    isActive: (editor) => editor.isActive('bulletList'),
-    run: (editor) => editor.chain().focus().toggleBulletList().run(),
-  },
-  {
-    key: 'orderedList',
-    icon: 'list-ordered',
-    label: strings.orderedList,
-    isActive: (editor) => editor.isActive('orderedList'),
-    run: (editor) => editor.chain().focus().toggleOrderedList().run(),
-  },
-  {
-    key: 'taskList',
-    icon: 'list-todo',
-    label: strings.taskList,
-    isActive: (editor) => editor.isActive('taskList'),
-    run: (editor) => editor.chain().focus().toggleTaskList().run(),
-  },
-  {
-    key: 'blockquote',
-    icon: 'text-quote',
-    label: strings.quote,
-    isActive: (editor) => editor.isActive('blockquote'),
-    run: (editor) => editor.chain().focus().toggleBlockquote().run(),
-  },
 ];
 
 /** An address as typed, with `https://` added when it names a site without a protocol. */
@@ -120,7 +80,7 @@ export function linkAddress(typed: string): string {
   return `https://${value}`;
 }
 
-/** The bubble toolbar over a selection: marks, headings, lists, quote and link. */
+/** The bubble toolbar over a selection: the marks and Link. */
 export function FormatToolbar({ editor }: FormatToolbarProps) {
   const [isEditingLink, setEditingLink] = useState(false);
   const active = useEditorState({

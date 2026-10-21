@@ -1,11 +1,12 @@
-/* MentionList: a Menu's rows (size-nav-item tall, the popover's 4px inset,
-   body-strong names) for members to mention; the highlighted row takes
-   surface-hover, as a Menu's focused item does, and the email trails in
-   text-secondary. At most ten rows show before it scrolls. */
+/* SuggestionList: a Menu's rows (size-nav-item tall, the popover's 4px
+   inset, body-strong names) for members to mention and blocks to make; the
+   highlighted row takes surface-hover, as a Menu's focused item does. A
+   member's email trails in text-secondary; a block's markdown sits at the
+   row's end in text-tertiary. At most ten rows show before it scrolls. */
 @layer components {
   .root {
     box-sizing: border-box;
-    max-block-size: calc(var(--size-nav-item) * 10);
+    max-block-size: calc(var(--size-nav-item) * 10 + 2 * var(--space-4));
     padding: var(--space-4);
     overflow: auto;
     outline: none;
@@ -38,7 +39,7 @@
     white-space: nowrap;
   }
 
-  .email {
+  .detail {
     flex: 1;
     min-inline-size: 0;
     overflow: hidden;
@@ -47,6 +48,14 @@
     letter-spacing: var(--tracking-label);
     text-overflow: ellipsis;
     white-space: nowrap;
+  }
+
+  .hint {
+    flex: none;
+    margin-inline-start: auto;
+    color: var(--text-tertiary);
+    font: var(--text-code);
+    letter-spacing: var(--tracking-code);
   }
 
   .empty {
