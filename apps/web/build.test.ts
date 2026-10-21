@@ -129,6 +129,13 @@ describe('the first load', () => {
     for (const key of chunks) expect(manifest[key]?.isDynamicEntry ?? false).toBe(false);
   });
 
+  // Rolldown merges shared chunks into the entries that need them, unless any module in the build uses top level
+  // await: then every route's file becomes its own chunk, and the first load went from 30 files to 65, 42 kB
+  // more gzipped (21 October 2026). Keep top level await out of every entry (src/public/main.ts runs a function).
+  it('stays merged into a few dozen files, as it is with no top level await in the build', () => {
+    expect(firstLoad(manifest).js.length).toBeLessThanOrEqual(40);
+  });
+
   it('never loads the grid, editor, charts or schema map chunk up front', () => {
     const { chunks } = firstLoad(manifest);
     const heavy = chunks.filter((key) => HEAVY_ENTRY.test(manifest[key]?.src ?? key));

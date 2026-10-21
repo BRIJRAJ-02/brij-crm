@@ -9,8 +9,9 @@ import '@crm/ui/styles.css';
 import { createPublicFormClient, loadCaptcha } from '@crm/data/public-form';
 import { mountFormMessage, mountHostedForm, type HostedSubmitOutcome } from '@crm/ui/public-form';
 
-const root = document.querySelector<HTMLElement>('[data-app-root]');
-if (root === null) throw new Error('The page has no root.');
+const found = document.querySelector<HTMLElement>('[data-app-root]');
+if (found === null) throw new Error('The page has no root.');
+const root: HTMLElement = found;
 
 const params = new URLSearchParams(window.location.search);
 const embedded = params.get('embed') === '1' && window.parent !== window;
@@ -57,39 +58,48 @@ function postHeight(drawn: Element | null): void {
   send();
 }
 
-const loaded = await client.load(address);
-if (loaded.kind !== 'form') {
-  document.title = mountFormMessage(root, { mode, kind: loaded.kind }).title;
-} else {
-  const { form } = loaded;
-  document.title = form.headline;
-  document.documentElement.lang = form.language;
-  document.documentElement.dataset.theme = form.look.colour;
-  // On the root too, so the lists that open outside the form (in a popover) square their corners with it.
-  document.documentElement.dataset.corners = form.look.corners;
-  const captcha = form.recaptchaSiteKey === undefined ? undefined : loadCaptcha(form.recaptchaSiteKey);
-  const keys = new Map<number, string>();
-  mountHostedForm(root, form, {
-    mode,
-    countryGuess: guessCountry(),
-    onRedirect: (url) => {
-      if (embedded) window.open(url, '_top');
-      else window.location.assign(url);
-    },
-    onSubmit: async (submission): Promise<HostedSubmitOutcome> => {
-      const idempotencyKey = keys.get(submission.round) ?? crypto.randomUUID();
-      keys.set(submission.round, idempotencyKey);
-      const token = captcha === undefined ? undefined : await captcha();
-      return client.submit(address, {
-        idempotencyKey,
-        versionNumber: form.versionNumber,
-        answers: submission.answers,
-        hidden: hiddenFields(),
-        fillMs: Math.round(submission.fillMs),
-        ...(submission.trap === '' ? {} : { company_url: submission.trap }),
-        ...(token === undefined ? {} : { captcha: token }),
-      });
-    },
-  });
+/**
+ * Loads the live form and draws it, or the message that stands in for it. A function, not top level
+ * `await`: one top level await anywhere in the build turns off Rolldown's chunk merging for every entry,
+ * which split the app's first load into 65 files and cost it 42 kB gzipped (21 October 2026).
+ */
+async function start(): Promise<void> {
+  const loaded = await client.load(address);
+  if (loaded.kind !== 'form') {
+    document.title = mountFormMessage(root, { mode, kind: loaded.kind }).title;
+  } else {
+    const { form } = loaded;
+    document.title = form.headline;
+    document.documentElement.lang = form.language;
+    document.documentElement.dataset.theme = form.look.colour;
+    // On the root too, so the lists that open outside the form (in a popover) square their corners with it.
+    document.documentElement.dataset.corners = form.look.corners;
+    const captcha = form.recaptchaSiteKey === undefined ? undefined : loadCaptcha(form.recaptchaSiteKey);
+    const keys = new Map<number, string>();
+    mountHostedForm(root, form, {
+      mode,
+      countryGuess: guessCountry(),
+      onRedirect: (url) => {
+        if (embedded) window.open(url, '_top');
+        else window.location.assign(url);
+      },
+      onSubmit: async (submission): Promise<HostedSubmitOutcome> => {
+        const idempotencyKey = keys.get(submission.round) ?? crypto.randomUUID();
+        keys.set(submission.round, idempotencyKey);
+        const token = captcha === undefined ? undefined : await captcha();
+        return client.submit(address, {
+          idempotencyKey,
+          versionNumber: form.versionNumber,
+          answers: submission.answers,
+          hidden: hiddenFields(),
+          fillMs: Math.round(submission.fillMs),
+          ...(submission.trap === '' ? {} : { company_url: submission.trap }),
+          ...(token === undefined ? {} : { captcha: token }),
+        });
+      },
+    });
+  }
+  postHeight(root.lastElementChild);
 }
-postHeight(root.lastElementChild);
+
+void start();
