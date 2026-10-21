@@ -136,6 +136,11 @@ export const meetings = pgTable(
     organizerEmail: text('organizer_email'),
     /** True when any holding connection is private or the event itself is private (AC-611, AC-612). */
     isPrivate: boolean('is_private').notNull().default(false),
+    /**
+     * Synced from a member who has since been removed (spec 0031, AC-815): the
+     * meeting stays, and says its organiser left.
+     */
+    organizerRemoved: boolean('organizer_removed').notNull().default(false),
     /** Every attendee is a workspace member: it syncs, but shows on no record (AC-605). */
     isInternal: boolean('is_internal').notNull().default(false),
     /** Made by `createEvent` (milestone 3). */

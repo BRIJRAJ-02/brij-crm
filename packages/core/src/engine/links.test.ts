@@ -1208,6 +1208,7 @@ describe('deletion', () => {
       changedEntries: [],
       coarseObjects: [],
       members: [],
+      access: [],
       jobs: [],
       views: [],
       tasks: [],

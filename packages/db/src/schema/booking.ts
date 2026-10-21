@@ -64,6 +64,12 @@ export const bookingPages = pgTable(
     /** `{ mode: 'create' | 'move_open', stageOptionId }` (milestone 2). */
     deal: jsonb('deal'),
     status: text('status').notNull().default('live'),
+    /**
+     * Why the system paused it (spec 0031, AC-814): `host_removed` when nobody
+     * is left to host it. Null for a page its people paused, and cleared
+     * whenever someone sets the status again.
+     */
+    pausedReason: text('paused_reason'),
     /** `mine` follows the owner's hours (`booking_member_hours`); `own` uses `availability` above. */
     hoursMode: text('hours_mode').notNull().default('own'),
     /** A private page (spec 0027, AC-707, AC-708): it may book inside the host's holds, and waives its minimum notice. */
@@ -89,6 +95,7 @@ export const bookingPages = pgTable(
     check('booking_pages_slug_shape', sql`${t.slug} ~ '^[a-z0-9]+(-[a-z0-9]+)*$' and char_length(${t.slug}) <= 60`),
     check('booking_pages_kind', sql`${t.kind} in ('personal', 'collective', 'round_robin')`),
     check('booking_pages_status', sql`${t.status} in ('live', 'paused')`),
+    check('booking_pages_paused_reason', sql`${t.pausedReason} is null or ${t.pausedReason} = 'host_removed'`),
     check('booking_pages_hours_mode', sql`${t.hoursMode} in ('mine', 'own')`),
     check('booking_pages_title', sql`char_length(${t.title}) between 1 and 120`),
     check('booking_pages_description', sql`char_length(${t.description}) <= 2000`),

@@ -24,13 +24,15 @@ import { schema, type WorkspaceTx } from '@crm/db';
 import { touched } from '../engine/definitions.ts';
 import { checkId } from '../engine/ids.ts';
 import { inputInvalid, refuse } from '../engine/refusals.ts';
-import type { EngineScope } from '../engine/scope.ts';
+import { actorRow, type EngineScope } from '../engine/scope.ts';
 import { runWrite, type AfterWrite } from '../engine/write.ts';
 import { checkScope } from '../access/mint.ts';
 import { can, isRole } from '../access/policy.ts';
 import { inWorkspace } from '../access/run.ts';
-import { deleteMemberViews } from '../views/manage.ts';
-import { deleteMemberCalendars } from '../calendar/connections.ts';
+import { startJob } from '../jobs/service.ts';
+import type { JobRegistry } from '../jobs/registry.ts';
+import { REASSIGN_KIND } from './reassign.ts';
+import { runRemovalEffects } from './removal.ts';
 import { writeAudit, type AuditSource } from './audit.ts';
 
 const { members } = schema;
@@ -367,13 +369,16 @@ export async function setMemberRole(
  */
 export async function removeMember(
   scope: EngineScope,
-  input: { readonly memberId: string },
+  input: { readonly memberId: string; readonly reassignTo?: string },
   hooks: readonly AfterWrite[] = [],
-  options: MemberWriteOptions = {},
+  options: MemberWriteOptions & { readonly jobs?: JobRegistry } = {},
 ): Promise<RemovedMember> {
   checkScope(scope);
   const memberId = checkId(input.memberId, MEMBER_NOT_FOUND);
   checkManages(scope, actingRole(scope), memberId);
+  const reassignTo = input.reassignTo === undefined ? undefined : checkId(input.reassignTo, REASSIGNEE_NOT_FOUND);
+  if (reassignTo === memberId) throw refuse('NOT_FOUND', REASSIGNEE_NOT_FOUND);
+  if (reassignTo !== undefined && options.jobs === undefined) throw new Error('Reassigning needs the job kinds.');
   const { result } = await runWrite(
     scope,
     async (context) => {
@@ -383,9 +388,28 @@ export async function removeMember(
       const isLeaving = isSelf(scope, target.id);
       if (!isLeaving) checkOwnerRules(scope, acting, target);
       if (target.role === 'owner') await keepAnOwner(tx, scope, target.id);
+      // Whom their work goes to, when anyone: an active member other than them, read under lock.
+      if (reassignTo !== undefined) {
+        const [heir] = await tx
+          .select({ id: members.id })
+          .from(members)
+          .where(
+            and(eq(members.workspaceId, scope.workspaceId), eq(members.id, reassignTo), eq(members.status, 'active')),
+          )
+          .for('share');
+        if (heir === undefined) throw refuse('NOT_FOUND', REASSIGNEE_NOT_FOUND);
+      }
+      const by = actorRow(scope.actor);
       await tx
         .update(members)
-        .set({ status: 'removed', ...touched(scope) })
+        .set({
+          status: 'removed',
+          leftAt: sql`now()`,
+          removedByType: by.type,
+          removedById: by.id,
+          removedByMemberId: by.memberId,
+          ...touched(scope),
+        })
         .where(and(eq(members.workspaceId, scope.workspaceId), eq(members.id, target.id)));
       await writeAudit(
         tx,
@@ -400,13 +424,23 @@ export async function removeMember(
         },
         options.source,
       );
-      // Their private views and last opened views go with them (spec 0020, AC-490); their shared views stay.
-      await deleteMemberViews(context, target.id);
-      // Their calendar connections and the meetings only they held go too (spec 0024, AC-614).
-      await deleteMemberCalendars(context, target.id);
-      // The `access` row that disconnects them comes with slice 5 of spec 0031; the member list changes now.
-      context.record({ members: [target.id] });
-      return target.userId === null ? {} : { userId: target.userId, memberId: target.id };
+      // Every feature's part (spec 0031, AC-814; spec 0037, AC-1440): views, calendars, booking pages, in order.
+      await runRemovalEffects(context, target.id);
+      // Their work handed on, as the remover's job, once this commits (AC-816).
+      const job =
+        reassignTo === undefined || options.jobs === undefined
+          ? undefined
+          : await startJob(context, options.jobs, {
+              kind: REASSIGN_KIND,
+              params: { fromMemberId: target.id, toMemberId: reassignTo },
+            });
+      // Everyone's member list reads them again, and their own tabs are cut off (an `access` row, AC-817).
+      context.record({ members: [target.id], access: [target.id] });
+      return {
+        ...(target.userId === null ? {} : { userId: target.userId }),
+        memberId: target.id,
+        ...(job === undefined ? {} : { jobId: job.jobId }),
+      };
     },
     hooks,
   );
@@ -418,7 +452,11 @@ export interface RemovedMember {
   readonly userId?: string;
   /** The member row removed, so the directory drops only the row that named it. */
   readonly memberId?: string;
+  /** The job handing their work on, when the remover chose someone (AC-816). */
+  readonly jobId?: string;
 }
+
+const REASSIGNEE_NOT_FOUND = "The member to hand their work to isn't in this workspace.";
 
 /**
  * The caller leaves the workspace (spec 0031, AC-812): the removal on

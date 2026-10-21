@@ -51,7 +51,17 @@ export const LIFECYCLE_CAP = MAX_LIFECYCLE_IDS;
 
 /** One outbox row before it gets its number. */
 export interface OutboxEvent {
-  readonly kind: 'records' | 'entries' | 'definitions' | 'members' | 'jobs' | 'views' | 'tasks' | 'notes' | 'meetings';
+  readonly kind:
+    | 'records'
+    | 'entries'
+    | 'definitions'
+    | 'members'
+    | 'access'
+    | 'jobs'
+    | 'views'
+    | 'tasks'
+    | 'notes'
+    | 'meetings';
   /** The object: a `records` row's, an `entries` row's list's parent, a `definitions` row's when it names one. */
   readonly objectId?: string;
   /** The list: an `entries` row's, a `definitions` row's when it names one. */
@@ -305,6 +315,10 @@ function kindRows(change: CappedChange): OutboxEvent[] {
   const rows: OutboxEvent[] = [];
   if (change.members.length > 0) {
     rows.push({ kind: 'members', ...NO_IDS, itemIds: [...change.members].sort(byId), coarse: false });
+  }
+  // (spec 0031) one `access` row naming the members whose access changed: a removal, a team change.
+  if (change.access.length > 0) {
+    rows.push({ kind: 'access', ...NO_IDS, itemIds: [...change.access].sort(byId), coarse: false });
   }
   const byStarter = new Map<string | null, string[]>();
   for (const job of change.jobs) {

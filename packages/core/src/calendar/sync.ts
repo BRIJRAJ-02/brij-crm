@@ -98,7 +98,7 @@ export interface CalendarSyncInput {
 export type CalendarSyncOutcome =
   | { readonly kind: 'synced'; readonly full: boolean; readonly events: number; readonly nextInMs: number }
   | { readonly kind: 'retry'; readonly code: CalendarErrorCode; readonly nextInMs: number }
-  | { readonly kind: 'stopped'; readonly reason: 'gone' | 'not-syncing' | 'expired' | 'no-provider' };
+  | { readonly kind: 'stopped'; readonly reason: 'gone' | 'not-syncing' | 'expired' | 'no-provider' | 'revoked' };
 
 /** A connection as the sync reads it. */
 interface ConnectionRow extends Record<string, unknown> {
@@ -175,6 +175,34 @@ export async function liveTokens(
 }
 
 /**
+ * Ends a revoked connection (spec 0031, AC-815): the provider ends its grant,
+ * then the row goes with its sealed tokens; the meetings it held stay,
+ * flagged when the member was removed. A provider failure throws, so the
+ * task tries again later, and never blocked the removal, which committed
+ * long before. A provider the worker doesn't run, or a grant already gone,
+ * still lets the row go.
+ */
+async function revokeConnection(
+  deps: Pick<CalendarSyncDeps, 'tokenKey'>,
+  scope: EngineScope,
+  provider: CalendarProvider | undefined,
+  row: Pick<ConnectionRow, 'id' | 'tokens'>,
+  binding: TokenBinding,
+): Promise<CalendarSyncOutcome> {
+  if (provider !== undefined) {
+    try {
+      await provider.revoke(openTokens(deps.tokenKey, row.tokens, binding));
+    } catch (error) {
+      if (!isProviderError(error, 'CALENDAR_AUTH_REVOKED') && !isProviderError(error, 'CALENDAR_AUTH')) throw error;
+    }
+  }
+  await inWorkspace(scope, (tx) =>
+    tx.execute(sql`delete from calendar_connections where id = ${row.id}::uuid and status = 'revoked'`),
+  );
+  return { kind: 'stopped', reason: 'revoked' };
+}
+
+/**
  * Syncs one connection: its changes since the last sync, or its whole window.
  * Expected provider failures are recorded on the connection and answered as
  * `retry` (or `stopped` for a refused grant, which marks it `expired`);
@@ -193,15 +221,17 @@ export async function syncConnection(deps: CalendarSyncDeps, input: CalendarSync
   );
   const [row] = found.rows;
   if (row === undefined) return { kind: 'stopped', reason: 'gone' };
-  if (!(SYNCING_STATUSES as readonly string[]).includes(row.status)) return { kind: 'stopped', reason: 'not-syncing' };
   const provider = deps.providers[row.provider];
-  if (provider === undefined) return { kind: 'stopped', reason: 'no-provider' };
   const binding: TokenBinding = {
     workspaceId: input.workspaceId,
     memberId: row.member_id,
     provider: row.provider,
     accountEmail: row.account_email,
   };
+  // A removed member's connection (spec 0031, AC-815): its grant ends with the provider, then its stored tokens go.
+  if (row.status === 'revoked') return revokeConnection(deps, scope, provider, row, binding);
+  if (!(SYNCING_STATUSES as readonly string[]).includes(row.status)) return { kind: 'stopped', reason: 'not-syncing' };
+  if (provider === undefined) return { kind: 'stopped', reason: 'no-provider' };
   const window = syncWindow(now);
 
   let changes: { readonly events: readonly ProviderEvent[]; readonly nextSyncToken: string };

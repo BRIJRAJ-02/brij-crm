@@ -27,6 +27,7 @@ import { can } from '../access/policy.ts';
 import { inWorkspace } from '../access/run.ts';
 import { postgresError, refuse, refuseOn } from '../engine/refusals.ts';
 import { actorRow } from '../engine/scope.ts';
+import type { RemovalEffect } from '../members/removal-effect.ts';
 import { linksOf, seenLinks } from './links.ts';
 import { loadPage, pageOf, type PageRecord } from './slots.ts';
 
@@ -288,7 +289,8 @@ export async function updateBookingPage(
           ...(settings.windowDays === undefined ? {} : { windowDays: settings.windowDays }),
           ...(settings.dailyLimit === undefined ? {} : { dailyLimit: settings.dailyLimit }),
           ...(settings.slotStep === undefined ? {} : { slotStep: settings.slotStep }),
-          ...(settings.status === undefined ? {} : { status: settings.status }),
+          // A status set by a person clears the system's reason for a pause (spec 0031, AC-814).
+          ...(settings.status === undefined ? {} : { status: settings.status, pausedReason: null }),
           ...(settings.hoursMode === undefined ? {} : { hoursMode: settings.hoursMode }),
           ...(settings.isPrivate === undefined ? {} : { isPrivate: settings.isPrivate }),
           updatedAt: sql`now()`,
@@ -427,3 +429,55 @@ export async function setMemberHours(
     return { availability: input.availability };
   });
 }
+
+/** The live pages nobody would be left to host once `memberId` is gone: theirs alone, or pools they were the last of. */
+const hostlessPages = (memberId: string) => sql`
+  p.status = 'live' and p.deleted_at is null
+  and (
+    p.owner_member_id = ${memberId}::uuid
+    or exists (
+      select 1 from booking_page_members pool
+      where pool.workspace_id = p.workspace_id and pool.page_id = p.id and pool.member_id = ${memberId}::uuid
+    )
+  )
+  and not exists (
+    select 1 from booking_page_members m
+    join members h on h.workspace_id = m.workspace_id and h.id = m.member_id and h.status = 'active'
+    where m.workspace_id = p.workspace_id and m.page_id = p.id and m.member_id <> ${memberId}::uuid
+  )
+`;
+
+/**
+ * The booking pages' part of a removal (spec 0031, AC-814; spec 0037,
+ * AC-1440): they leave every page's host pool, and each live page left with
+ * nobody to host it (their own, or a pool they were the last of) pauses with
+ * `paused_reason = 'host_removed'`, which the public page answers as it does
+ * any paused page. Pages others still host stay live; their bookings stay,
+ * naming them as host for admins to hand on.
+ */
+export const bookingPagesRemoval: RemovalEffect = {
+  feature: 'booking pages',
+  // Pools and the pages they own; their bookings, hours and holds stay (see `KEPT_ON_REMOVAL`).
+  constraints: ['booking_page_members_member', 'booking_pages_owner'],
+  count: async (tx, workspaceId, memberId) => {
+    const found = await tx.execute<{ n: number }>(sql`
+      select count(*)::int as n from booking_pages p where p.workspace_id = ${workspaceId}::uuid and ${hostlessPages(memberId)}
+    `);
+    return { pausedPages: found.rows[0]?.n ?? 0 };
+  },
+  run: async (context, memberId) => {
+    const { tx, scope } = context;
+    const by = actorRow(scope.actor);
+    // Paused first, while the pools still say whom they held; then they leave every pool.
+    await tx.execute(sql`
+      update booking_pages p
+      set status = 'paused', paused_reason = 'host_removed', updated_at = now(),
+        updated_by_type = ${by.type}, updated_by_id = ${by.id}::uuid, updated_by_member_id = ${by.memberId}::uuid
+      where p.workspace_id = ${scope.workspaceId}::uuid and ${hostlessPages(memberId)}
+    `);
+    await tx.execute(sql`
+      delete from booking_page_members where workspace_id = ${scope.workspaceId}::uuid and member_id = ${memberId}::uuid
+    `);
+  },
+};
+

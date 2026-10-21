@@ -21,6 +21,7 @@ import { inWorkspace } from '../access/run.ts';
 import { checkId, uuidList } from '../engine/ids.ts';
 import { refuse } from '../engine/refusals.ts';
 import { runWrite, type AfterWrite, type MeetingChange, type WriteContext } from '../engine/write.ts';
+import type { RemovalEffect } from '../members/removal-effect.ts';
 import { recomputePrivacy } from './apply.ts';
 import { normaliseEmail, type ExchangedTokens } from './provider.ts';
 import { sealTokens, type TokenKey } from './tokens.ts';
@@ -310,15 +311,53 @@ export async function removeCalendarConnection(
 }
 
 /**
- * A removed member's connections and the meetings only they held (AC-614),
- * inside `removeMember`'s write: spec 0009's removal hook.
+ * A removed member's calendars (spec 0031, AC-814, AC-815; spec 0024,
+ * AC-614), inside the removal's write: the meetings their connections hold
+ * stay, flagged `organizer_removed`; a connection that may still sync is
+ * queued for the calendar task and marked `revoked` (the queue row lands
+ * with the commit, and the task ends the grant with the provider, then
+ * deletes the row and its tokens, retrying on failure without ever holding
+ * up the removal); one that can't (expired, failed) goes now with its
+ * tokens, its grant already dead or past saving.
  */
-export async function deleteMemberCalendars(context: WriteContext, memberId: string): Promise<void> {
-  const rows = await context.tx.execute<{ id: string }>(sql`
-    select id::text as id from calendar_connections where member_id = ${memberId}::uuid for update
+async function revokeMemberCalendars(context: WriteContext, memberId: string): Promise<void> {
+  const { tx } = context;
+  const held = await tx.execute<{ id: string; status: string }>(sql`
+    select id::text as id, status::text as status from calendar_connections
+    where member_id = ${memberId}::uuid order by id for update
   `);
-  await deleteConnections(
-    context,
-    rows.rows.map((row) => row.id),
-  );
+  if (held.rows.length === 0) return;
+  const ids = held.rows.map((row) => row.id);
+  await tx.execute(sql`
+    update meetings m set organizer_removed = true
+    where exists (
+      select 1 from meeting_sources s
+      where s.workspace_id = m.workspace_id and s.meeting_id = m.id and s.connection_id = any(${uuidList(ids)})
+    )
+  `);
+  const live = held.rows.filter((row) => row.status === 'syncing' || row.status === 'connected').map((row) => row.id);
+  // Queued while it may still sync (the queue function only takes such a connection), then marked revoked.
+  for (const id of live) await tx.execute(sql`select crm_enqueue_calendar_sync(${id}::uuid)`);
+  if (live.length > 0) {
+    await tx.execute(sql`
+      update calendar_connections set status = 'revoked', is_default = false, updated_at = now()
+      where id = any(${uuidList(live)})
+    `);
+  }
+  const dead = ids.filter((id) => !live.includes(id));
+  if (dead.length > 0) await tx.execute(sql`delete from calendar_connections where id = any(${uuidList(dead)})`);
 }
+
+/** The calendars' part of a removal (spec 0031, AC-814; spec 0037, AC-1440). */
+export const calendarsRemoval: RemovalEffect = {
+  feature: 'calendars',
+  // Their connections are revoked; their meeting attendance stays as history.
+  constraints: ['calendar_connections_member'],
+  count: async (tx, _workspaceId, memberId) => {
+    const found = await tx.execute<{ n: number }>(sql`
+      select count(*)::int as n from calendar_connections where member_id = ${memberId}::uuid and status <> 'revoked'
+    `);
+    return { calendars: found.rows[0]?.n ?? 0 };
+  },
+  run: revokeMemberCalendars,
+};

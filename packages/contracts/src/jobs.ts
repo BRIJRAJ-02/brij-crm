@@ -27,6 +27,8 @@ export const JOB_KINDS = {
   'records.bulk_delete': { label: 'Bulk delete', lane: 'heavy', cancellable: true },
   'records.bulk_restore': { label: 'Restore from trash', lane: 'heavy', cancellable: true },
   'records.purge': { label: 'Delete forever', lane: 'heavy', cancellable: true },
+  // A removed member's records and open tasks handed to another member (spec 0031, AC-816).
+  'members.reassign': { label: 'Hand on a removed member’s work', lane: 'heavy', cancellable: true },
 } as const satisfies Record<
   string,
   { readonly label: string; readonly lane: 'heavy' | 'light'; readonly cancellable: boolean }

@@ -5,6 +5,7 @@ import { devSimulate, type Sleep } from './dev-simulate.ts';
 import { maintenanceDaily, type QueueRows } from './maintenance-daily.ts';
 import { formsProcess } from '../../forms/process.ts';
 import { bulkKinds } from '../../bulk/kinds.ts';
+import { reassignKind } from '../../members/reassign.ts';
 
 /** What the kinds a process runs depend on: where it runs, and (for the test kind) how it waits. */
 export interface JobKindsOptions {
@@ -34,6 +35,7 @@ export function jobKinds(options: JobKindsOptions): JobRegistry {
     maintenanceDaily(options.queue),
     formsProcess(),
     ...(bulkKinds() as readonly AnyKind[]),
+    reassignKind() as AnyKind,
     ...tests,
     ...(options.extra ?? []),
   ]);

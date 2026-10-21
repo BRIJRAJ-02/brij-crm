@@ -149,6 +149,12 @@ export interface CalendarProvider {
     token: string,
   ) => Promise<CalendarChannel>;
   readonly stopWatch: (tokens: CalendarTokens, channel: CalendarChannel) => Promise<void>;
+  /**
+   * Ends the grant with the provider (spec 0031, AC-815): a removed member's
+   * tokens stop working everywhere, not just here. A grant already gone
+   * counts as done; any other failure throws, so the task tries again.
+   */
+  readonly revoke: (tokens: CalendarTokens) => Promise<void>;
 }
 
 /** Every code a provider fails with. */

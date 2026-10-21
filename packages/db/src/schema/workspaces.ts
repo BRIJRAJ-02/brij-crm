@@ -14,7 +14,9 @@ import {
   uuid,
   type AnyPgColumn,
 } from 'drizzle-orm/pg-core';
-import { actorCheck, auditColumns, id, timestamptz, workspaceId } from './common.ts';
+import { actorCheck, actorColumns, auditColumns, id, timestamptz, workspaceId } from './common.ts';
+
+const removedBy = actorColumns('removed_by');
 
 /** One workspace: the tenant. Its row level security compares `id` itself to the setting. */
 export const workspaces = pgTable(
@@ -87,6 +89,12 @@ export const members = pgTable(
     avatarUrl: text('avatar_url'),
     /** Their time zone in this workspace, an IANA name (spec 0031, slice 7); none means the browser's. */
     timeZone: text('time_zone'),
+    /** When they left or were removed (spec 0031, AC-814); never set while `status` is `active`. */
+    leftAt: timestamptz('left_at'),
+    /** Who removed them (themself when they left). */
+    removedByType: removedBy.type,
+    removedById: removedBy.id,
+    removedByMemberId: removedBy.memberId,
     ...auditColumns(),
   },
   (t) => [
@@ -112,6 +120,14 @@ export const members = pgTable(
     actorCheck('members_created_by_actor', { type: t.createdByType, id: t.createdById, memberId: t.createdByMemberId }),
     actorCheck('members_updated_by_actor', { type: t.updatedByType, id: t.updatedById, memberId: t.updatedByMemberId }),
     check('members_avatar_url', sql`char_length(${t.avatarUrl}) <= 2048`),
+    actorCheck('members_removed_by_actor', { type: t.removedByType, id: t.removedById, memberId: t.removedByMemberId }),
+    foreignKey({
+      name: 'members_removed_by',
+      columns: [t.workspaceId, t.removedByMemberId],
+      foreignColumns: [t.workspaceId, t.id],
+    }),
+    // An active member never carries a leaving time; a removal sets one (rows removed before it take their last update's).
+    check('members_left', sql`${t.status} = 'removed' or ${t.leftAt} is null`),
     check('members_time_zone', sql`char_length(${t.timeZone}) between 1 and 64`),
   ],
 );

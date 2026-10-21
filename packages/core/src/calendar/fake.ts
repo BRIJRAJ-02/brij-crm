@@ -211,6 +211,11 @@ export function createFakeCalendarProvider(options: { readonly now?: () => Date 
       enter('stopWatch');
       return Promise.resolve();
     },
+    revoke(tokens) {
+      enter('revoke');
+      revoked.add(accountOf(tokens));
+      return Promise.resolve();
+    },
   };
 
   /** A call that fails synchronously (a told failure, a bad token) still answers as a rejected promise. */
@@ -234,6 +239,7 @@ export function createFakeCalendarProvider(options: { readonly now?: () => Date 
     cancelEvent: settle(raw.cancelEvent),
     watch: settle(raw.watch),
     stopWatch: settle(raw.stopWatch),
+    revoke: settle(raw.revoke),
   };
 
   const fake: FakeCalendar = {
