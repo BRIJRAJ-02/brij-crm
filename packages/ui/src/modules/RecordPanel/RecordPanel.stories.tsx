@@ -23,11 +23,15 @@ interface SampleProps {
   readonly startOpen?: boolean;
   readonly onOpenPage?: () => void;
   readonly status?: LoadStatus;
+  /** The stat strip over the tabs (on by default), or its values still coming. */
+  readonly stats?: 'shown' | 'loading' | 'none';
 }
 
 /** A company opened from the table: details, activity and tasks, stepping through three companies. */
-function SamplePanel({ startOpen = true, onOpenPage, status = 'ready' }: SampleProps) {
+function SamplePanel({ startOpen = true, onOpenPage, status = 'ready', stats = 'shown' }: SampleProps) {
   const [isOpen, setOpen] = useState(startOpen);
+  const [tab, setTab] = useState('details');
+  const isLoadingStats = stats === 'loading';
   const [index, setIndex] = useState(0);
   const [values, setValues] = useState(SAMPLE_RECORD.values);
   const record = SAMPLE_COMPANIES[index] as RecordRefDisplay;
@@ -65,6 +69,35 @@ function SamplePanel({ startOpen = true, onOpenPage, status = 'ready' }: SampleP
           : {})}
         {...(onOpenPage === undefined ? {} : { onOpenPage })}
         actions={<Button variant="ghost" icon="ellipsis" label="Record actions" />}
+        selectedTab={tab}
+        onTabChange={setTab}
+        stats={
+          stats === 'none'
+            ? []
+            : [
+                {
+                  id: 'tasks',
+                  label: 'Open tasks',
+                  icon: 'list-checks',
+                  count: SAMPLE_TASKS.length,
+                  isLoading: isLoadingStats,
+                  onPress: () => {
+                    setTab('tasks');
+                  },
+                },
+                { id: 'notes', label: 'Notes', icon: 'notebook', count: 0, isLoading: isLoadingStats },
+                {
+                  id: 'activity',
+                  label: 'Last activity',
+                  icon: 'activity',
+                  isLoading: isLoadingStats,
+                  ...(SAMPLE_ACTIVITY[0] === undefined ? {} : { time: SAMPLE_ACTIVITY[0].at }),
+                  onPress: () => {
+                    setTab('activity');
+                  },
+                },
+              ]
+        }
         tabs={[
           {
             id: 'details',
@@ -113,7 +146,7 @@ const meta = {
 export default meta;
 type Story = StoryObj<typeof meta>;
 
-/** A company beside the table: its avatar and name, Previous and Next, Open full page, and its tabs. */
+/** A company beside the table: its avatar and name, Previous and Next, Open full page, its stat strip, and its tabs. */
 export const Default: Story = {
   args: { onOpenPage: fn() },
   parameters: { crm: { preview: true } },
@@ -138,6 +171,35 @@ export const StepThrough: Story = {
     await waitFor(() => expect(canvas.getByRole('button', { name: 'Previous record' })).toHaveFocus());
     await userEvent.click(canvas.getByRole('button', { name: 'Open full page' }));
     await expect(args.onOpenPage).toHaveBeenCalled();
+  },
+};
+
+/** A stat that goes somewhere opens its tab: Open tasks shows the Tasks tab. */
+export const StatOpensTab: Story = {
+  parameters: { crm: { screenshot: false } },
+  play: async ({ canvas, userEvent }) => {
+    await expect(canvas.getByRole('group', { name: 'About Northwind Traders' })).toBeInTheDocument();
+    await userEvent.click(canvas.getByRole('button', { name: 'Open tasks' }));
+    await expect(canvas.getByRole('tab', { name: /Tasks/ })).toHaveAttribute('aria-selected', 'true');
+  },
+};
+
+/** The stats still coming: a skeleton in place of each value. */
+export const StatsLoading: Story = {
+  args: { stats: 'loading' },
+  play: async ({ canvas }) => {
+    const strip = canvas.getByRole('group', { name: 'About Northwind Traders' });
+    const values = within(strip).getAllByRole('definition');
+    await expect(values.every((value) => value.getAttribute('aria-busy') === 'true')).toBe(true);
+  },
+};
+
+/** Without stats the tabs start right under the panel's bar. */
+export const NoStats: Story = {
+  args: { stats: 'none' },
+  parameters: { crm: { screenshot: false } },
+  play: async ({ canvas }) => {
+    await expect(canvas.queryByRole('group', { name: /About/ })).not.toBeInTheDocument();
   },
 };
 

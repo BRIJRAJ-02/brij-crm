@@ -17,6 +17,7 @@ import type {
 } from '@crm/data';
 import {
   useActivityStatus,
+  useLatestActivityAt,
   useCommentCount,
   useLiveStatus,
   useNoteTotal,
@@ -36,6 +37,7 @@ import {
   RecordLayout,
   TaskList,
   TopBar,
+  type RecordStat,
 } from '@crm/ui';
 import { useNavigate, useParams, useRouteContext, useRouter } from '@tanstack/react-router';
 import { useCallback, useEffect, useMemo, useRef, type ReactNode } from 'react';
@@ -364,6 +366,8 @@ function RecordScreen({
   const openTotal = useTaskTotal(open);
   const notesTotal = useNoteTotal(notes);
   const commentCount = useCommentCount(comments);
+  const latestAt = useLatestActivityAt(recent);
+  const recentStatus = useActivityStatus(recent);
   // Whether the task dialog was opened from this page, so closing it steps Back rather than adding a step.
   const openedHere = useRef(false);
   // A `?task=` that arrived while the page was open (a timeline entry's link, or `openTask`) was pushed: closing
@@ -468,6 +472,47 @@ function RecordScreen({
       replace: true,
     });
   };
+  // The stat strip under the header (13 Oct reference batch 4): counts the page already holds, each opening its tab.
+  const counted = (total: { readonly count: number; readonly atLeast: boolean } | undefined) =>
+    total === undefined ? { isLoading: true } : { count: total.count, isCountAtLeast: total.atLeast };
+  const stats: readonly RecordStat[] = [
+    {
+      id: 'tasks',
+      label: strings.openTasks,
+      icon: 'list-checks',
+      ...counted(openTotal),
+      onPress: () => {
+        openTab('tasks');
+      },
+    },
+    {
+      id: 'notes',
+      label: noteStrings.notes,
+      icon: 'notebook',
+      ...counted(notesTotal),
+      onPress: () => {
+        openTab('notes');
+      },
+    },
+    {
+      id: 'comments',
+      label: commentStrings.comments,
+      icon: 'message-square',
+      ...counted(commentCount === undefined ? undefined : { count: commentCount, atLeast: false }),
+      onPress: () => {
+        openTab('comments');
+      },
+    },
+    {
+      id: 'activity',
+      label: strings.lastActivity,
+      icon: 'activity',
+      ...(recentStatus === 'loading' ? { isLoading: true } : latestAt === undefined ? {} : { time: latestAt }),
+      onPress: () => {
+        openTab('activity');
+      },
+    },
+  ];
   // The page's own record as a task links it: its chip in the lists, and a new task's first link.
   const pageRecord = (() => {
     const shownRecord = state.status === 'ready' || state.status === 'deleted' ? state.record : undefined;
@@ -663,7 +708,7 @@ function RecordScreen({
           body: (
             <RecordLayout
               header={
-                <RecordHeader record={display} objectName={object.singularName}>
+                <RecordHeader record={display} objectName={object.singularName} stats={stats}>
                   <FavouriteButton data={data} slug={slug} kind="record" id={recordId} />
                   <Button variant="ghost" icon="link" onPress={copyLink}>
                     {strings.copyLink}

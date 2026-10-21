@@ -1,7 +1,27 @@
-/* RecordPanel: each tab's content fills the floating panel's height under the
+/* RecordPanel: the stat strip (when given) over the tabs; each tab's content fills the floating panel's height under the
    tabs, padded space-16 on the sides and space-12 above, and scrolls itself, so
    a feed or task list inside scrolls in its own slot. */
 @layer components {
+  /* The stat strip over the tabs, then the tabs filling what is left. */
+  .body {
+    display: flex;
+    flex-direction: column;
+    block-size: 100%;
+    min-block-size: 0;
+  }
+
+  .stats {
+    flex: none;
+    padding: var(--space-12) var(--space-16) 0;
+  }
+
+  .tabs {
+    display: flex;
+    flex: 1;
+    flex-direction: column;
+    min-block-size: 0;
+  }
+
   .content {
     display: flex;
     flex-direction: column;

@@ -7,6 +7,7 @@ import { Skeleton } from '../../atoms/Skeleton/Skeleton.tsx';
 import { VisuallyHidden } from '../../atoms/VisuallyHidden/VisuallyHidden.tsx';
 import { useDelayedLoading } from '../../provider/useDelayedLoading.ts';
 import styles from './RecordHeader.module.css';
+import { RecordStats, type RecordStat } from '../../molecules/RecordStats/RecordStats.tsx';
 import { strings } from './strings.ts';
 
 /** Props for RecordHeader. */
@@ -23,13 +24,16 @@ export interface RecordHeaderProps {
   readonly children?: ReactNode;
   /** The record is still coming: skeletons after the loading delay. */
   readonly isLoading?: boolean;
+  /** The stat strip under the header: counts (tasks, notes) and the last activity. */
+  readonly stats?: readonly RecordStat[];
 }
 
 /**
- * The head of a record's page: a large avatar (a circle for a person, a
+ * The head of a record's page: a large avatar (48px, a circle for a person, a
  * square for anything else), the name as the page's second level heading
  * under the top bar, the object and a line of detail, who else is viewing,
- * and the actions. In a narrow slot the actions wrap under the name.
+ * and the actions, then the stat strip. In a narrow slot the actions wrap
+ * under the name.
  */
 export function RecordHeader({
   record,
@@ -38,6 +42,7 @@ export function RecordHeader({
   viewers = [],
   children,
   isLoading = false,
+  stats = [],
 }: RecordHeaderProps) {
   const showSkeleton = useDelayedLoading(isLoading);
   if (isLoading || record === undefined) {
@@ -46,7 +51,7 @@ export function RecordHeader({
         {showSkeleton && (
           <>
             <span className={styles.avatarSlot}>
-              <Skeleton shape="circle" />
+              <Skeleton shape="block" />
             </span>
             <span className={styles.text}>
               <span className={styles.lineSlot} data-line="name">
@@ -67,7 +72,7 @@ export function RecordHeader({
       <Avatar
         name={record.name}
         id={record.recordId}
-        size="lg"
+        size="title"
         shape={record.kind === 'person' ? 'circle' : 'square'}
         isDecorative
         {...(record.imageSrc === undefined ? {} : { src: record.imageSrc })}
@@ -90,6 +95,11 @@ export function RecordHeader({
           )}
           {children}
         </span>
+      )}
+      {stats.length > 0 && (
+        <div className={styles.stats}>
+          <RecordStats label={strings.about(record.name)} stats={stats} />
+        </div>
       )}
     </header>
   );

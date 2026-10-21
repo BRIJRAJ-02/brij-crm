@@ -25,14 +25,16 @@ New. Every record page (#17) and the people and company pages (#26) open with th
 - `meta` follows the object name on the label line: a domain, a job title.
 - `viewers` are the others with the record open (presence, #26), read as "Also viewing Grace Hopper and Alan Turing".
 - `isLoading` shows skeletons after the loading delay. Below 480px wide the actions wrap under the name.
+- The avatar is 48px (`Avatar` size `title`), so the record reads at a glance (13 Oct reference batch 4).
+- `stats` draws the stat strip (`RecordStats`) on its own line under the header: counts and the last activity, each opening where it comes from (its tab).
 
 ## States
 
-Default, loading, with and without viewers, narrow.
+Default (with stats), loading, stats loading, without stats, with and without viewers, narrow (stats wrap).
 
 ## Keyboard
 
-Nothing of its own: Tab reaches the meta's link and the actions.
+Nothing of its own: Tab reaches the meta's link, the actions, then each stat that goes somewhere.
 
 ## Differences from the artifact
 

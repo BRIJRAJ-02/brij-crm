@@ -239,7 +239,7 @@ function Row({ item, onCommit, editorProps }: RowProps) {
   return (
     <div className={styles.row} data-editing={isEditing || undefined}>
       <dt id={nameId} className={styles.label}>
-        <Icon name={iconOf(attribute)} size="sm" tone="muted" />
+        <Icon name={iconOf(attribute)} tile="gray" />
         <span className={styles.name}>{attribute.name}</span>
         {/* Why it can't change sits with its name: a small lock, the reason in its tooltip. */}
         {!canEdit && reason !== undefined && <LockReason reason={reason} size="sm" />}

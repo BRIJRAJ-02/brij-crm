@@ -9,6 +9,7 @@ import { Skeleton } from '../../atoms/Skeleton/Skeleton.tsx';
 import type { LoadStatus } from '../../lib/load-status.ts';
 import { EmptyState } from '../../molecules/EmptyState/EmptyState.tsx';
 import { Panel, type PanelWidth } from '../../molecules/Panel/Panel.tsx';
+import { RecordStats, type RecordStat } from '../../molecules/RecordStats/RecordStats.tsx';
 import { TabPanel, Tabs, type TabItem } from '../../molecules/Tabs/Tabs.tsx';
 import styles from './RecordPanel.module.css';
 import { strings } from './strings.ts';
@@ -39,12 +40,14 @@ export interface RecordPanelProps {
   /** More of the header's actions, such as the record's menu. */
   readonly actions?: ReactNode;
   readonly width?: PanelWidth;
+  /** The stat strip over the tabs: counts (tasks, notes) and the last activity, as the record page shows them. */
+  readonly stats?: readonly RecordStat[];
 }
 
 /**
  * A record beside the table, in the floating panel: the record's avatar and
  * name as its title, Previous and Next to step through the view without
- * closing it, Open full page, then its tabs, each filling the panel's height
+ * closing it, Open full page, then its stat strip and its tabs, each filling the panel's height
  * so a feed or task list scrolls inside it. Focus moves in when it opens, and
  * Esc closes it.
  */
@@ -62,6 +65,7 @@ export function RecordPanel({
   width = 'md',
   status = 'ready',
   onRetry,
+  stats = [],
 }: RecordPanelProps) {
   const hasSteps = onPrevious !== undefined || onNext !== undefined;
   const previousRef = useRef<HTMLButtonElement>(null);
@@ -105,7 +109,7 @@ export function RecordPanel({
           <Avatar
             name={record.name}
             id={record.recordId}
-            size="sm"
+            size="md"
             shape={record.kind === 'person' ? 'circle' : 'square'}
             isDecorative
             {...(record.imageSrc === undefined ? {} : { src: record.imageSrc })}
@@ -143,18 +147,27 @@ export function RecordPanel({
       }
     >
       {content ?? (
-        <Tabs
-          label={record?.name ?? strings.loading}
-          tabs={tabs}
-          {...(selectedTab === undefined ? {} : { selectedKey: selectedTab })}
-          {...(onTabChange === undefined ? {} : { onSelectionChange: onTabChange })}
-        >
-          {tabs.map((tab) => (
-            <TabPanel key={tab.id} id={tab.id}>
-              <div className={styles.content}>{tab.content}</div>
-            </TabPanel>
-          ))}
-        </Tabs>
+        <div className={styles.body}>
+          {stats.length > 0 && record !== undefined && (
+            <div className={styles.stats}>
+              <RecordStats label={strings.about(record.name)} stats={stats} />
+            </div>
+          )}
+          <div className={styles.tabs}>
+            <Tabs
+              label={record?.name ?? strings.loading}
+              tabs={tabs}
+              {...(selectedTab === undefined ? {} : { selectedKey: selectedTab })}
+              {...(onTabChange === undefined ? {} : { onSelectionChange: onTabChange })}
+            >
+              {tabs.map((tab) => (
+                <TabPanel key={tab.id} id={tab.id}>
+                  <div className={styles.content}>{tab.content}</div>
+                </TabPanel>
+              ))}
+            </Tabs>
+          </div>
+        </div>
       )}
     </Panel>
   );

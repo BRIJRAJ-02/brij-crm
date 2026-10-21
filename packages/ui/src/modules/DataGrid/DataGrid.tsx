@@ -52,6 +52,9 @@ import {
 } from './GridHeaderCell.tsx';
 import { DragArea, type DragDrop } from '../../lib/drag/drag.tsx';
 import { fromTsv, planPaste, toTsv } from './grid-clipboard.ts';
+import { focusLater } from '../../lib/focus-later.ts';
+import { groupMap, type GridGroup } from './grid-groups.ts';
+import { GridGroupRow, groupCellKey } from './GridGroupRow.tsx';
 import {
   hideColumn,
   moveColumn,
@@ -204,6 +207,15 @@ export interface DataGridProps<Row> {
    * when absent.
    */
   readonly onCreateOption?: (rowId: string, columnId: string, label: string) => void;
+  /**
+   * The rows in runs (13 Oct reference batch 4): each group's header (its
+   * tinted title and count, and a chevron that folds it) draws on the line
+   * before its first row. The screen sorts `rows` by group and leaves a
+   * folded group's rows out; see `GridGroup`.
+   */
+  readonly groups?: readonly GridGroup[];
+  /** A group's header was pressed: fold it (true) or open it (false). */
+  readonly onGroupToggle?: (groupId: string, isCollapsed: boolean) => void;
 }
 
 const ROW = sizeToken('size-row');
@@ -273,6 +285,8 @@ function tipIn(cell: HTMLElement): { readonly anchor: HTMLElement; readonly text
 const cellAt = (key: string | undefined): CellPosition | undefined => {
   if (key === undefined) return undefined;
   const [row = 0, col = 0] = key.split(':').map(Number);
+  // A group's header line (`group:<id>`) is no cell.
+  if (Number.isNaN(row) || Number.isNaN(col)) return undefined;
   return { row, col };
 };
 
@@ -316,6 +330,8 @@ export function DataGrid<Row>({
   phone,
   editorProps,
   onCreateOption,
+  groups,
+  onGroupToggle,
   focusRow,
   isCellKnown,
   rowNotes,
@@ -351,6 +367,8 @@ export function DataGrid<Row>({
 
   // Rows: the records, then the footer row when there is one, which the keys reach too.
   const count = status === 'ready' ? rows.count : 0;
+  // The drawn lines: the rows, and each group's header before its first row.
+  const lines = useMemo(() => groupMap(status === 'ready' ? (groups ?? []) : [], count), [groups, count, status]);
   const hasFooter = footer !== undefined && count > 0;
   const hasFloatingBar = floatingBar !== undefined && floatingBar !== null && floatingBar !== false;
   const rowCount = count + (hasFooter ? 1 : 0);
@@ -411,12 +429,14 @@ export function DataGrid<Row>({
 
   // Only the rows on screen, plus the overscan, draw; and the focused and edited
   // rows, so focus and a draft survive a scroll that takes them off screen.
-  const kept = [focus.row, editingAt?.row].filter((row): row is number => row !== undefined && row >= 0 && row < count);
+  const kept = [focus.row, editingAt?.row]
+    .filter((row): row is number => row !== undefined && row >= 0 && row < count)
+    .map(lines.lineOf);
   // How many pixels of rows one pixel of scroll moves: 1, until the rows outgrow MAX_BODY (read by the scroll hooks).
   const scrollScale = useRef(1);
   // eslint-disable-next-line react-hooks/incompatible-library -- TanStack Virtual hands back new functions each render, so the grid stays outside the compiler's memoisation.
   const virtualizer = useVirtualizer({
-    count,
+    count: lines.size,
     getScrollElement: () => scrollRef.current,
     estimateSize: () => ROW,
     overscan: OVERSCAN,
@@ -468,8 +488,8 @@ export function DataGrid<Row>({
   const items = virtualizer.getVirtualItems();
   // The rows on screen plus the overscan, without the kept ones, are what the screen loads.
   const visible = virtualizer.range;
-  const firstRow = visible === null ? 0 : Math.max(0, visible.startIndex - OVERSCAN);
-  const endRow = visible === null ? 0 : Math.min(count, visible.endIndex + OVERSCAN + 1);
+  const firstRow = visible === null ? 0 : lines.rowsBefore(Math.max(0, visible.startIndex - OVERSCAN));
+  const endRow = visible === null ? 0 : lines.rowsBefore(Math.min(lines.size, visible.endIndex + OVERSCAN + 1));
   const onRangeChange = useRef(rows.onRangeChange);
   useLayoutEffect(() => {
     onRangeChange.current = rows.onRangeChange;
@@ -589,7 +609,8 @@ export function DataGrid<Row>({
   const bringIntoView = (position: CellPosition) => {
     const element = scroller();
     if (element === null) return;
-    if (position.row >= 0 && position.row < count) virtualizer.scrollToIndex(position.row, { align: 'auto' });
+    if (position.row >= 0 && position.row < count)
+      virtualizer.scrollToIndex(lines.lineOf(position.row), { align: 'auto' });
     // The "+" header sits after the last column: the far end.
     if (position.col >= colCount) {
       element.scrollLeft = element.scrollWidth;
@@ -614,6 +635,28 @@ export function DataGrid<Row>({
     }
     pendingFocus.current = true;
     bringIntoView(position);
+  };
+
+  /** Focuses a group's header line (its fold button), scrolling it in first: false when the line isn't a header. */
+  const focusLine = (line: number): boolean => {
+    if (line < 0 || line >= lines.size) return false;
+    const at = lines.at(line);
+    if (at.kind !== 'group') return false;
+    virtualizer.scrollToIndex(line, { align: 'auto' });
+    focusLater(() => scroller()?.querySelector<HTMLElement>(`[data-cell="${groupCellKey(at.group.id)}"]`));
+    return true;
+  };
+  /** Up or Down from a group's header line: the line before or after it, a row's cell in the focused column or another header. */
+  const stepFromGroup = (line: number, direction: -1 | 1) => {
+    const target = line + direction;
+    if (focusLine(target)) return;
+    if (target < 0) {
+      goTo({ row: -1, col: focus.col });
+      return;
+    }
+    if (target >= lines.size) return;
+    const at = lines.at(target);
+    if (at.kind === 'row') goTo({ row: at.row, col: focus.col });
   };
 
   // A row the screen asks for (one it just made): focus moves there once a
@@ -699,10 +742,13 @@ export function DataGrid<Row>({
     const rowId = key.slice(0, at);
     const columnId = key.slice(at + 1);
     const col = placed.findIndex((each) => each.column.id === columnId) + 1;
-    const row = items.find((item) => {
-      const data = rows.getItem(item.index);
-      return data !== undefined && rows.getKey(data) === rowId;
-    })?.index;
+    const row = items
+      .map((item) => lines.at(item.index))
+      .flatMap((line) => (line.kind === 'row' ? [line.row] : []))
+      .find((index) => {
+        const data = rows.getItem(index);
+        return data !== undefined && rows.getKey(data) === rowId;
+      });
     if (col < 1 || row === undefined) return;
     const cell = scrollRef.current?.querySelector<HTMLElement>(`[data-cell="${keyOf(row, col)}"]`);
     if (cell !== null && cell !== undefined) showTip(cell, 'hover');
@@ -921,7 +967,12 @@ export function DataGrid<Row>({
     const scrolled = virtualizer.scrollOffset ?? element.scrollTop;
     const top = scrolled + HEADER;
     const bottom = scrolled + element.clientHeight - (hasFooter ? ROW : 0) - (hasFloatingBar ? FLOATING_INSET : 0);
-    return items.filter((item) => item.start >= top && item.end <= bottom).flatMap((item) => rowIdAt(item.index) ?? []);
+    return items
+      .filter((item) => item.start >= top && item.end <= bottom)
+      .flatMap((item) => {
+        const line = lines.at(item.index);
+        return line.kind === 'row' ? (rowIdAt(line.row) ?? []) : [];
+      });
   };
   const selectRowRange = (from: number, to: number) => {
     const start = Math.min(from, to);
@@ -1016,6 +1067,18 @@ export function DataGrid<Row>({
     if (event.altKey && event.key === 'ArrowDown' && focus.row < 0 && column !== undefined) {
       event.preventDefault();
       setMenuFor(column.id);
+      return;
+    }
+    // Up or Down onto a group's header line: focus goes to its fold button, a stop of its own in the column of lines.
+    if (
+      (event.key === 'ArrowUp' || event.key === 'ArrowDown') &&
+      !mod &&
+      !event.shiftKey &&
+      focus.row >= 0 &&
+      focus.row < count &&
+      focusLine(lines.lineOf(focus.row) + (event.key === 'ArrowUp' ? -1 : 1))
+    ) {
+      event.preventDefault();
       return;
     }
     const next = moveFocus(focus, { key: event.key, mod }, bounds());
@@ -1424,15 +1487,32 @@ export function DataGrid<Row>({
   const ownKey = (row: number) =>
     row === editingAt?.row ? 'editing' : row === focus.row && row >= 0 && row < count ? 'focused' : undefined;
   let place = 0;
-  const rowKeys = items.map((item) => {
-    const own = ownKey(item.index);
+  const drawnLines = items.map((item) => ({ item, line: lines.at(item.index) }));
+  const rowKeys = drawnLines.map(({ line }) => {
+    if (line.kind === 'group') return `g:${line.group.id}`;
+    const own = ownKey(line.row);
     if (own !== undefined) return own;
     place += 1;
     return `p${String(place)}`;
   });
 
-  const bodyRows = items.map((item, drawnAt) => {
-    const row = item.index;
+  const bodyRows = drawnLines.map(({ item, line }, drawnAt) => {
+    if (line.kind === 'group') {
+      return (
+        <GridGroupRow
+          key={rowKeys[drawnAt]}
+          group={line.group}
+          rowIndex={item.index + 2}
+          colCount={headerColCount}
+          offset={item.start - HEADER - rowShift}
+          onStep={(direction) => {
+            stepFromGroup(item.index, direction);
+          }}
+          {...(onGroupToggle === undefined ? {} : { onToggle: onGroupToggle })}
+        />
+      );
+    }
+    const row = line.row;
     const rowData = rows.getItem(row);
     const id = rowData === undefined ? undefined : rows.getKey(rowData);
     const isSelected = id !== undefined && isRowSelected(currentSelection, id);
@@ -1444,7 +1524,7 @@ export function DataGrid<Row>({
       <div
         key={rowKeys[drawnAt]}
         role="row"
-        aria-rowindex={row + 2}
+        aria-rowindex={item.index + 2}
         aria-selected={isSelected}
         className={styles.row}
         data-selected={isSelected || undefined}
@@ -1557,7 +1637,7 @@ export function DataGrid<Row>({
   });
 
   const footerRow = !hasFooter ? null : (
-    <div role="row" aria-rowindex={count + 2} className={styles.footer}>
+    <div role="row" aria-rowindex={lines.size + 2} className={styles.footer}>
       <div
         role="gridcell"
         aria-colindex={1}
@@ -1594,9 +1674,10 @@ export function DataGrid<Row>({
     </div>
   );
 
-  const isCellFocusable = focus.row < 0 || focus.row >= count || items.some((item) => item.index === focus.row);
+  const isCellFocusable =
+    focus.row < 0 || focus.row >= count || items.some((item) => item.index === lines.lineOf(focus.row));
   const resizingColumn = resizing === undefined ? undefined : layout.columns.find((each) => each.id === resizing);
-  const isEmpty = status === 'ready' && count === 0;
+  const isEmpty = status === 'ready' && lines.size === 0;
   const spoken =
     resizingColumn !== undefined
       ? strings.resizing(resizingColumn.attribute.name, number(resizingColumn.width))
@@ -1631,7 +1712,7 @@ export function DataGrid<Row>({
           ref={scrollRef}
           role="grid"
           aria-label={label}
-          aria-rowcount={rowCount + 1}
+          aria-rowcount={rowCount + 1 + (lines.size - count)}
           aria-colcount={headerColCount}
           aria-multiselectable
           aria-busy={status === 'loading' || undefined}
@@ -1674,7 +1755,7 @@ export function DataGrid<Row>({
               ))}
             </div>
           ) : (
-            count > 0 && (
+            lines.size > 0 && (
               <div role="rowgroup" className={styles.body} style={{ '--body-height': `${String(bodyHeight)}px` }}>
                 {bodyRows}
               </div>

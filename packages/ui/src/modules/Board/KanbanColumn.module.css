@@ -132,4 +132,10 @@
       outline-offset: calc(-1 * var(--border-width-thick));
     }
   }
+  /* Lifted, in forced colours, where the shadow and surface are gone. */
+  @media (forced-colors: active) {
+    .overlay {
+      outline: var(--border-width-thick) solid Highlight;
+    }
+  }
 }

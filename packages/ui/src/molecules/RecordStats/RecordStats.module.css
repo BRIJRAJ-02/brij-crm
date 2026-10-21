@@ -1,0 +1,103 @@
+/* RecordStats: stats side by side in a hairline box with radius-lg, split by
+   hairlines; each a label in text-label and text-secondary (its icon muted)
+   over its value in text-heading, as many to a row as fit at 140px. */
+@layer components {
+  /* The box: the hairline and corners, clipping the stats' own outer edges. */
+  .frame {
+    min-inline-size: 0;
+    overflow: hidden;
+    border: var(--border-width-hairline) solid var(--border-subtle);
+    border-radius: var(--radius-lg);
+  }
+
+  /* Each stat draws hairlines on its start and top; pulled up and in by one, the box hides the outer ones. */
+  .root {
+    display: flex;
+    flex-wrap: wrap;
+    margin: 0;
+    margin-block-start: calc(-1 * var(--border-width-hairline));
+    margin-inline-start: calc(-1 * var(--border-width-hairline));
+  }
+
+  /* As many to a row as fit at 140px or more; a short last row stretches to the edge. */
+  .stat {
+    position: relative;
+    display: flex;
+    flex: 1 1 calc(7 * var(--size-chip));
+    flex-direction: column;
+    gap: var(--space-4);
+    min-inline-size: 0;
+    padding: var(--space-12) var(--space-16);
+    border-block-start: var(--border-width-hairline) solid var(--border-subtle);
+    border-inline-start: var(--border-width-hairline) solid var(--border-subtle);
+  }
+
+  .label {
+    display: flex;
+    gap: var(--space-6);
+    align-items: center;
+    min-inline-size: 0;
+    color: var(--text-secondary);
+    font: var(--text-label);
+    letter-spacing: var(--tracking-label);
+  }
+
+  /* The label's button; its ::after covers the whole tile, so the tile is the target (and well over 24px). */
+  .go {
+    display: inline-flex;
+    gap: var(--space-6);
+    align-items: center;
+    padding: 0;
+    border: none;
+    background: transparent;
+    color: inherit;
+    font: inherit;
+    letter-spacing: inherit;
+    outline: none;
+  }
+
+  .go::after {
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    content: '';
+  }
+
+  .stat[data-goes] {
+    transition: background var(--duration-hover) var(--ease-hover);
+  }
+
+  @media (hover: hover) and (pointer: fine) {
+    .stat[data-goes]:hover {
+      background: var(--surface-hover);
+    }
+  }
+
+  .stat:has(.go:focus-visible) {
+    box-shadow: var(--shadow-focus-inset);
+  }
+
+  .value {
+    display: flex;
+    align-items: center;
+    min-block-size: 1lh;
+    margin: 0;
+    overflow: hidden;
+    color: var(--text);
+    font: var(--text-heading);
+    letter-spacing: var(--tracking-heading);
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .none {
+    color: var(--text-tertiary);
+  }
+
+  @media (forced-colors: active) {
+    .stat:has(.go:focus-visible) {
+      outline: var(--border-width-thick) solid Highlight;
+      outline-offset: calc(-1 * var(--border-width-thick));
+    }
+  }
+}

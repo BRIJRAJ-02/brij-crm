@@ -167,4 +167,10 @@
       border-color: CanvasText;
     }
   }
+  /* Lifted, in forced colours, where the shadow and surface are gone. */
+  @media (forced-colors: active) {
+    .row[data-dragging] {
+      outline: var(--border-width-thick) solid Highlight;
+    }
+  }
 }

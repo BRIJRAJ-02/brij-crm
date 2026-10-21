@@ -10,12 +10,13 @@ import type { AttributeType } from '@crm/contracts/values';
 import type { FieldAttribute } from '../../fields/types.ts';
 import { attributeOf } from '../../workbench/attributes.ts';
 import { sampleColumn, sampleColumns, sampleRows, type SampleRow } from '../../workbench/grid-samples.ts';
-import { FIELD_SAMPLES, SAMPLE_COMPANIES, SAMPLE_MEMBERS } from '../../workbench/field-samples.ts';
+import { FIELD_SAMPLES, SAMPLE_COMPANIES, SAMPLE_MEMBERS, SAMPLE_STAGES } from '../../workbench/field-samples.ts';
 import { Stage } from '../../workbench/Stage/Stage.tsx';
 import { DataGrid, type GridStatus, type RowNote, type RowSource } from './DataGrid.tsx';
 import type { GridEditorProps } from './GridCell.tsx';
 import type { GridColumnAction } from './GridHeaderCell.tsx';
 import type { GridColumn } from './grid-columns.ts';
+import type { GridGroup } from './grid-groups.ts';
 import { noRows, withRows, type GridSelection } from './grid-selection.ts';
 
 interface SampleGridProps {
@@ -495,6 +496,101 @@ export const ReorderColumnByDrag: Story = {
     await waitFor(() => expect(to).toHaveAttribute('data-drop-target', 'after'));
     send(document, 'pointerup', end.right - 4);
     await waitFor(() => expect(cell(canvasElement, -1, 3)).toHaveTextContent(name));
+  },
+};
+
+/** Companies grouped by stage, each stage's rows under its tinted header, folding as the screen keeps them. */
+function GroupedGrid({ folded = [] }: { readonly folded?: readonly string[] }) {
+  const [collapsed, setCollapsed] = useState<ReadonlySet<string>>(() => new Set(folded));
+  const all = sampleRows(16);
+  const stages = SAMPLE_STAGES.filter((stage) => !stage.archived);
+  // As the data layer would send them: sorted by stage, with a folded stage's rows left out.
+  let start = 0;
+  const groups: GridGroup[] = [];
+  const shown: SampleRow[] = [];
+  for (const stage of stages) {
+    const inStage = all.filter((row) => row.values.stage === stage.id);
+    const isCollapsed = collapsed.has(stage.id);
+    groups.push({ id: stage.id, title: stage.label, hue: stage.hue, count: inStage.length, start, isCollapsed });
+    if (!isCollapsed) {
+      shown.push(...inStage);
+      start += inStage.length;
+    }
+  }
+  return (
+    <Stage height="grid">
+      <DataGrid<SampleRow>
+        label="Companies by stage"
+        columns={sampleColumns(6)}
+        pinnedCount={1}
+        rows={arraySource(shown, (row) => row.id)}
+        getValue={(row, id) => row.values[id] ?? null}
+        getDisplay={(row, id) => row.displays[id]}
+        rowHeader="name"
+        groups={groups}
+        onGroupToggle={(id, isCollapsed) => {
+          setCollapsed((was) => {
+            const next = new Set(was);
+            if (isCollapsed) next.add(id);
+            else next.delete(id);
+            return next;
+          });
+        }}
+      />
+    </Stage>
+  );
+}
+
+/** Grouped by a status (13 Oct reference batch 4): each stage under a header tinted in its hue, with its count. */
+export const Grouped: StoryObj<typeof GroupedGrid> = {
+  render: () => <GroupedGrid />,
+  play: async ({ canvas }) => {
+    const lead = await canvas.findByRole('button', { name: /Lead/ });
+    await expect(lead).toHaveAttribute('aria-expanded', 'true');
+    await expect(canvas.getByRole('button', { name: /Qualified/ })).toBeInTheDocument();
+  },
+};
+
+/**
+ * A header folds its stage: the rows go and the header stays, with its count. By keyboard the header is a stop in
+ * the grid's column of lines: Up from the stage's first row reaches it, Left folds, Right opens, Down goes back.
+ */
+export const GroupFolds: StoryObj<typeof GroupedGrid> = {
+  parameters: { crm: { screenshot: false } },
+  render: () => <GroupedGrid />,
+  play: async ({ canvas, canvasElement, userEvent }) => {
+    const grid = canvas.getByRole('grid', { name: 'Companies by stage' });
+    const before = Number(grid.getAttribute('aria-rowcount'));
+    await userEvent.click(canvas.getByRole('button', { name: /Lead/ }));
+    await waitFor(() => expect(canvas.getByRole('button', { name: /Lead/ })).toHaveAttribute('aria-expanded', 'false'));
+    await waitFor(() => expect(Number(grid.getAttribute('aria-rowcount'))).toBeLessThan(before));
+    await userEvent.click(canvas.getByRole('button', { name: /Lead/ }));
+    await waitFor(() => expect(canvas.getByRole('button', { name: /Lead/ })).toHaveAttribute('aria-expanded', 'true'));
+    // By keyboard, from the first row's name.
+    const first = cell(canvasElement, 0, 1);
+    await expect(first).not.toBeNull();
+    if (first === null) return;
+    await userEvent.click(first);
+    await userEvent.keyboard('{ArrowUp}');
+    const lead = canvas.getByRole('button', { name: /Lead/ });
+    await waitFor(() => expect(lead).toHaveFocus());
+    await userEvent.keyboard('{ArrowLeft}');
+    await waitFor(() => expect(canvas.getByRole('button', { name: /Lead/ })).toHaveAttribute('aria-expanded', 'false'));
+    await userEvent.keyboard('{ArrowRight}');
+    await waitFor(() => expect(canvas.getByRole('button', { name: /Lead/ })).toHaveAttribute('aria-expanded', 'true'));
+    await userEvent.keyboard('{ArrowDown}');
+    await waitFor(() => expect(cell(canvasElement, 0, 1)).toHaveFocus());
+  },
+};
+
+/** Every stage folded: the headers alone, with their counts, and no empty state. */
+export const GroupsAllFolded: StoryObj<typeof GroupedGrid> = {
+  render: () => <GroupedGrid folded={SAMPLE_STAGES.filter((stage) => !stage.archived).map((stage) => stage.id)} />,
+  play: async ({ canvas }) => {
+    for (const name of ['Lead', 'Qualified', 'Proposal', 'Won']) {
+      await expect(canvas.getByRole('button', { name: new RegExp(name) })).toHaveAttribute('aria-expanded', 'false');
+    }
+    await expect(canvas.queryByText('No records')).not.toBeInTheDocument();
   },
 };
 

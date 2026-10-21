@@ -15,7 +15,7 @@ Ported from the artifact's Avatar card. Record chips, the record header, presenc
 ```
 
 - People are circles, companies and other records squares (`shape`).
-- `size`: `xs` 16px, `sm` 20px (the default), `md` 24px, `lg` 32px.
+- `size`: `xs` 16px, `sm` 20px (the default), `md` 24px, `lg` 32px, `title` 48px (a record heading its page or panel, beside its name), `xl` 72px (a booking page's host).
 - `hue` comes from the display shape when it names one; otherwise a stable hash of `id` picks one of the nine, so a person keeps their colour.
 - `src` loads only from our origin, `data:image` or `blob:` (`safeImageSrc`, AC-14); anything else, or a broken picture, shows the initials.
 - `isDecorative` hides it from screen readers when the name is written beside it (chips do this). Otherwise it reads as an image named after the person.

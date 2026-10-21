@@ -1,7 +1,7 @@
-/* RecordHeader: a large avatar, then the name in text-heading over a label
+/* RecordHeader: a 48px avatar (size-toolbar), then the name in text-heading over a label
    line (the object, then any detail, space-8 apart in text-secondary), and at
    the end who else is viewing and the actions. Below 480px wide the end wraps
-   under the name. */
+   under the name. The stat strip, when there is one, takes the line below. */
 @layer components {
   .root {
     display: flex;
@@ -45,9 +45,18 @@
   .avatarSlot {
     display: grid;
     flex: none;
-    place-items: center;
-    inline-size: var(--space-32);
-    block-size: var(--space-32);
+    place-items: stretch;
+    inline-size: var(--size-toolbar);
+    block-size: var(--size-toolbar);
+    overflow: hidden;
+    border-radius: var(--radius-md);
+  }
+
+  /* The stat strip takes its own line under the name and actions. */
+  .stats {
+    flex-basis: 100%;
+    min-inline-size: 0;
+    margin-block-start: var(--space-4);
   }
 
   .lineSlot {

@@ -216,6 +216,15 @@ export function useActivityStatus(feed: ActivityFeed): ActivityState['status'] {
 }
 
 /**
+ * When a record's newest timeline entry happened (ISO 8601 in UTC), or
+ * `undefined` before its first page or with none: a record header's "Last
+ * activity". Re-renders only when that instant changes, not with every entry.
+ */
+export function useLatestActivityAt(feed: ActivityFeed): string | undefined {
+  return useSyncExternalStore(feed.subscribe, () => feed.getSnapshot().entries[0]?.at);
+}
+
+/**
  * The trash (spec 0022): its rows, count, status and refusals, re-rendering
  * when they change. While the screen is mounted it holds the view, so it
  * settles live as records are deleted, restored or purged anywhere.

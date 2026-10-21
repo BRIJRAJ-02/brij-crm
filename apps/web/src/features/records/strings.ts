@@ -22,6 +22,9 @@ export const strings = {
   activity: 'Activity',
   details: 'Details',
   recentActivity: 'Recent activity',
+  /** The stat strip under the header: the record's open tasks, and when it last changed. */
+  openTasks: 'Open tasks',
+  lastActivity: 'Last activity',
   viewAll: 'View all',
   copyLink: 'Copy link',
   linkCopied: 'Link copied',

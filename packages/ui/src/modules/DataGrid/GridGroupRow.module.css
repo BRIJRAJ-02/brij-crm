@@ -1,0 +1,110 @@
+/* GridGroupRow: a size-row line across the grid, tinted in its group's hue
+   (tag-<hue>-bg, its border under it), holding the fold button: a chevron,
+   the title as a StatusDot, and the count's Badge, kept at the grid's start
+   (sticky) as the columns scroll. Hover rings the button in the hue's edge;
+   focus takes the focus ring. */
+@layer components {
+  .root {
+    --row-offset: 0;
+    --group-bg: var(--tag-gray-bg);
+    --group-edge: var(--tag-gray-border);
+
+    position: absolute;
+    inset-block-start: 0;
+    inset-inline: 0;
+    display: flex;
+    align-items: center;
+    block-size: var(--size-row);
+    border-block: var(--border-width-hairline) solid var(--group-edge);
+    box-sizing: border-box;
+    background: var(--group-bg);
+    transform: translateY(var(--row-offset));
+    contain: strict;
+  }
+
+  .root[data-hue='red'] {
+    --group-bg: var(--tag-red-bg);
+    --group-edge: var(--tag-red-border);
+  }
+
+  .root[data-hue='orange'] {
+    --group-bg: var(--tag-orange-bg);
+    --group-edge: var(--tag-orange-border);
+  }
+
+  .root[data-hue='yellow'] {
+    --group-bg: var(--tag-yellow-bg);
+    --group-edge: var(--tag-yellow-border);
+  }
+
+  .root[data-hue='lime'] {
+    --group-bg: var(--tag-lime-bg);
+    --group-edge: var(--tag-lime-border);
+  }
+
+  .root[data-hue='green'] {
+    --group-bg: var(--tag-green-bg);
+    --group-edge: var(--tag-green-border);
+  }
+
+  .root[data-hue='sky'] {
+    --group-bg: var(--tag-sky-bg);
+    --group-edge: var(--tag-sky-border);
+  }
+
+  .root[data-hue='blue'] {
+    --group-bg: var(--tag-blue-bg);
+    --group-edge: var(--tag-blue-border);
+  }
+
+  .root[data-hue='purple'] {
+    --group-bg: var(--tag-purple-bg);
+    --group-edge: var(--tag-purple-border);
+  }
+
+  .cell {
+    position: sticky;
+    inset-inline-start: 0;
+    display: flex;
+    align-items: center;
+    padding-inline: var(--space-8);
+  }
+
+  .head {
+    display: inline-flex;
+    gap: var(--space-8);
+    align-items: center;
+    min-block-size: var(--size-control);
+    padding-inline: var(--space-6) var(--space-8);
+    border: none;
+    border-radius: var(--radius-sm);
+    background: transparent;
+    color: var(--text);
+    font: var(--text-body-strong);
+    letter-spacing: var(--tracking-body-strong);
+    outline: none;
+    transition: outline-color var(--duration-hover) var(--ease-hover);
+  }
+
+  @media (hover: hover) and (pointer: fine) {
+    /* The hue's own edge, so the tint stays the group's in both themes. */
+    .head[data-toggles]:hover {
+      outline: var(--border-width-hairline) solid var(--group-edge);
+    }
+  }
+
+  .head:focus-visible {
+    box-shadow: var(--shadow-focus);
+    outline: var(--border-width-hairline) solid var(--accent-line);
+  }
+
+  .title {
+    color: var(--text);
+  }
+
+  @media (forced-colors: active) {
+    .head:focus-visible {
+      outline: var(--border-width-thick) solid Highlight;
+    }
+  }
+}

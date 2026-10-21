@@ -1,10 +1,11 @@
 import type { RecordRefDisplay } from '@crm/contracts/values';
 import type { Meta, StoryObj } from '@storybook/react-vite';
-import { expect } from 'storybook/test';
+import { expect, within } from 'storybook/test';
 import { Button } from '../../atoms/Button/Button.tsx';
 import { LinkChip } from '../../atoms/LinkChip/LinkChip.tsx';
 import { SAMPLE_COMPANIES, SAMPLE_MEMBERS } from '../../workbench/field-samples.ts';
 import { Stage } from '../../workbench/Stage/Stage.tsx';
+import type { RecordStat } from '../../molecules/RecordStats/RecordStats.tsx';
 import { RecordHeader } from './RecordHeader.tsx';
 
 const NORTHWIND = SAMPLE_COMPANIES[0] as RecordRefDisplay;
@@ -25,10 +26,22 @@ interface SampleProps {
   readonly isPerson?: boolean;
   readonly isLoading?: boolean;
   readonly width?: 'auto' | 'narrow';
+  /** The stat strip under the header (on by default), or its values still coming. */
+  readonly stats?: 'shown' | 'loading' | 'none';
+}
+
+/** A company's stats: open tasks and notes (each opening its tab), comments, and the last activity. */
+function sampleStats(isLoading: boolean): readonly RecordStat[] {
+  return [
+    { id: 'tasks', label: 'Open tasks', icon: 'list-checks', count: 3, isLoading, onPress: () => undefined },
+    { id: 'notes', label: 'Notes', icon: 'notebook', count: 12, isLoading, onPress: () => undefined },
+    { id: 'comments', label: 'Comments', icon: 'message-square', count: 0, isLoading },
+    { id: 'activity', label: 'Last activity', icon: 'activity', time: '2026-10-08T11:30:00.000Z', isLoading },
+  ];
 }
 
 /** A record page's header, as the record page draws it under the top bar. */
-function SampleHeader({ isPerson = false, isLoading = false, width = 'auto' }: SampleProps) {
+function SampleHeader({ isPerson = false, isLoading = false, width = 'auto', stats = 'shown' }: SampleProps) {
   return (
     <Stage width={width}>
       <RecordHeader
@@ -43,6 +56,7 @@ function SampleHeader({ isPerson = false, isLoading = false, width = 'auto' }: S
         }
         viewers={VIEWERS}
         isLoading={isLoading}
+        stats={stats === 'none' ? [] : sampleStats(stats === 'loading')}
       >
         <Button icon="star" label="Add to favorites" variant="ghost" />
         <Button icon="ellipsis" label="Record actions" variant="ghost" />
@@ -84,4 +98,35 @@ export const Loading: Story = {
 /** In a narrow slot the actions wrap under the name. */
 export const Narrow: Story = {
   args: { width: 'narrow' },
+};
+
+/** The stats still coming: a skeleton in place of each value, labels already in place. */
+export const StatsLoading: Story = {
+  args: { stats: 'loading' },
+  play: async ({ canvas }) => {
+    await expect(canvas.getByText('Open tasks')).toBeInTheDocument();
+    const strip = canvas.getByRole('group', { name: 'About Northwind Traders' });
+    const values = within(strip).getAllByRole('definition');
+    await expect(values.every((value) => value.getAttribute('aria-busy') === 'true')).toBe(true);
+  },
+};
+
+/** No stats: the header alone, as before the strip. */
+export const WithoutStats: Story = {
+  args: { stats: 'none' },
+  parameters: { crm: { screenshot: false } },
+  play: async ({ canvas }) => {
+    await expect(canvas.queryByRole('group', { name: /About/ })).not.toBeInTheDocument();
+  },
+};
+
+/** The strip in a narrow slot: two stats to a row. A stat that goes somewhere is a button named by its label. */
+export const StatsNarrow: Story = {
+  args: { width: 'narrow' },
+  parameters: { crm: { screenshot: false } },
+  play: async ({ canvas }) => {
+    await expect(canvas.getByRole('group', { name: 'About Northwind Traders' })).toBeInTheDocument();
+    await expect(canvas.getByRole('button', { name: 'Open tasks' })).toBeInTheDocument();
+    await expect(canvas.queryByRole('button', { name: 'Comments' })).not.toBeInTheDocument();
+  },
 };
