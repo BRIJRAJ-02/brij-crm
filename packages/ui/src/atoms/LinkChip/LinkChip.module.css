@@ -1,5 +1,5 @@
 /* LinkChip: a 20px chip in the accent's soft tint with link-coloured text. A
-   refused link is a plain grey chip. */
+   refused link is a plain grey chip; a flat one is the link's text alone. */
 @layer components {
   .root {
     display: inline-flex;
@@ -27,6 +27,13 @@
     border-color: var(--border);
     background: var(--surface-hover);
     color: var(--text);
+  }
+
+  /* Flat: the link's text alone (a card, a line of the timeline), on the chip's line height. */
+  .root[data-flat] {
+    padding-inline: 0;
+    border-color: transparent;
+    background: transparent;
   }
 
   @media (hover: hover) and (pointer: fine) {

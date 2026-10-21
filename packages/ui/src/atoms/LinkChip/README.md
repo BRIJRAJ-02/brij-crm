@@ -15,10 +15,11 @@ Ported from the artifact's LinkChip card. It is the one display for the email, p
 
 - `href` passes `safeHref()`: `mailto:`, `tel:`, `http`, `https` and app paths only. Links out open in a new tab. Anything else renders as a plain grey chip with no link (AC-14).
 - A long value is cut with an ellipsis; the cell or panel shows the full text in a tooltip.
+- `isFlat` drops the edge and the fill: the link's text alone, on the chip's line. The field set uses it on a card (a board card, a line of the timeline). Why a variant: in the timeline a cleared phone drew as a big blue chip going to the empty mark, heavier than the words around it (the owner, 21 October 2026); RecordChip is already flat there.
 
 ## States
 
-Hover underlines it; focus shows the ring. A refused link is plain.
+Hover underlines it; focus shows the ring. A refused link is plain; a flat one is its text alone.
 
 ## Keyboard
 

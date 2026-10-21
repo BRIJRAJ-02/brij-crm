@@ -18,7 +18,7 @@ New. Settings pages (#39, #42), dashboard tiles (#52) and the template and onboa
 </Card>
 ```
 
-- `actions` sit at the end of the header; `footer` holds a form's Save.
+- `actions` sit at the end of the header, standing on the title's line: their box is one title line tall and centres what it holds, so a button taller than the line ("View all") sits level with the title, not below it (the owner, 21 October 2026), and the header keeps the title's height. `footer` holds a form's Save.
 - `tone="sunken"` for a quieter group inside a page.
 - `placement="page"` is the one frame for a page outside the app shell: the status page and the not found page now, and `AuthLayout` (sign in, sign up, verify email, accept invite) builds on it later rather than drawing a second centred frame. The card is then the page's `main` landmark, its title (required) an `h1` that takes focus by script after a route change (`tabIndex={-1}`, never in the tab order, no ring), centred, capped at `size-page-card` (520px), and kept 16 px (`--space-16`) from each edge on a phone. Inline cards keep `section` and `h3`.
 - `size` (page placement only): `md`, the default, is `size-page-card` (520px), for a page with a few lines to read (the status page, not found); `sm` is `size-panel` (400px), for a page before the app whose task is one short form (sign in, the code, spec 0036): being the page's one thing, it has `space-24` around its content and its title in heading type. Both keep 16px from each edge on a phone. Why a variant: one email field and two buttons read sparse across 520px and cramped at 16px in, and AuthLayout can't size or pad the card from outside it.

@@ -65,9 +65,17 @@
     letter-spacing: var(--tracking-body);
   }
 
+  /* The actions stand on the title's line: their box is one title line tall (1lh of text-title) and centres
+     what it holds, so a control taller than that line ("View all", "Add a task") sits level with the title
+     rather than hanging below it, and the header keeps the title's height. */
   .actions {
     display: inline-flex;
+    flex: none;
+    align-items: center;
     gap: var(--space-4);
+    block-size: 1lh;
+    font: var(--text-title);
+    letter-spacing: var(--tracking-title);
   }
 
   .body {

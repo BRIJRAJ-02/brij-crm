@@ -3,6 +3,8 @@ import { useState } from 'react';
 import { expect, fn, waitFor } from 'storybook/test';
 import { Button } from '../../atoms/Button/Button.tsx';
 import { arraySource, type ListSource } from '../../lib/list-source.ts';
+import { Card } from '../../molecules/Card/Card.tsx';
+import { attributeOf } from '../../workbench/attributes.ts';
 import { SAMPLE_STAGES } from '../../workbench/field-samples.ts';
 import {
   ADA,
@@ -336,6 +338,60 @@ export const LinksKeyboard: Story = {
     await expect(canvas.getByRole('link', { name: 'Jane Doe' })).toHaveFocus();
     await userEvent.tab();
     await expect(canvas.getAllByRole('link', { name: 'Ada Lovelace' })[0]).toHaveFocus();
+  },
+};
+
+const OPT_OUT = attributeOf('checkbox', 'Email opt out');
+const PHONES = attributeOf('phone', 'Phone numbers', { allowMultiple: true });
+const PHONE = [{ number: '+917710986909', country: 'IN' }];
+
+/** A person's day, as Overview shows it: a cleared phone, a task done, a box checked and unchecked, the record made. */
+const RECORD_DAY: readonly ActivityEntry[] = [
+  { id: 'd1', kind: 'change', at: '2026-10-08T14:20:00.000Z', actor: ADA, attribute: PHONES, from: PHONE, to: null },
+  {
+    id: 'd2',
+    kind: 'task',
+    at: '2026-10-08T14:10:00.000Z',
+    actor: ADA,
+    title: 'Send the proposal',
+    isDone: true,
+    href: '/tasks/1',
+  },
+  { id: 'd3', kind: 'change', at: '2026-10-08T14:00:00.000Z', actor: ADA, attribute: PHONES, from: null, to: PHONE },
+  { id: 'd4', kind: 'change', at: '2026-10-08T13:50:00.000Z', actor: GRACE, attribute: OPT_OUT, from: true, to: false },
+  { id: 'd5', kind: 'change', at: '2026-10-08T13:40:00.000Z', actor: GRACE, attribute: OPT_OUT, from: null, to: true },
+  { id: 'd6', kind: 'created', at: '2026-10-07T09:00:00.000Z', actor: ADA },
+];
+
+/**
+ * Overview's "Recent activity" card: its title and "View all" on one line; the first period close under the
+ * title; the rail unbroken down a period, stopping where the next one starts; a checkbox's change said in its
+ * verb ("checked Email opt out") with no boxes; a cleared phone as plain link text going to the empty mark.
+ */
+export const InACard: Story = {
+  render: () => (
+    <Stage width="narrow">
+      <Card
+        title="Recent activity"
+        actions={
+          <Button variant="ghost" onPress={fn()}>
+            View all
+          </Button>
+        }
+      >
+        <ActivityFeed label="Recent activity" layout="inline" entries={arraySource(RECORD_DAY, (entry) => entry.id)} />
+      </Card>
+    </Stage>
+  ),
+  play: async ({ canvas }) => {
+    await expect(canvas.getByRole('article', { name: / checked Email opt out/ })).toBeInTheDocument();
+    await expect(canvas.getByRole('article', { name: /unchecked Email opt out/ })).toBeInTheDocument();
+    // No checkbox marks under a checkbox's change.
+    await expect(canvas.queryAllByRole('checkbox')).toHaveLength(0);
+    // "View all" stands on the title's line.
+    const title = canvas.getByRole('heading', { name: 'Recent activity' }).getBoundingClientRect();
+    const button = canvas.getByRole('button', { name: 'View all' }).getBoundingClientRect();
+    await expect(Math.abs(title.top + title.height / 2 - (button.top + button.height / 2))).toBeLessThan(1);
   },
 };
 

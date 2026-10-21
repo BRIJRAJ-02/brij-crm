@@ -12,7 +12,14 @@ export function DomainDisplay({ attribute, value, surface, maxVisible }: Display
     <ChipRow
       label={attribute.name}
       {...(maxVisible === undefined ? {} : { maxVisible })}
-      chips={values.map((item) => ({ key: item, node: <LinkChip href={domainHref(item)}>{item}</LinkChip> }))}
+      chips={values.map((item) => ({
+        key: item,
+        node: (
+          <LinkChip href={domainHref(item)} isFlat={surface === 'card'}>
+            {item}
+          </LinkChip>
+        ),
+      }))}
     />
   );
 }

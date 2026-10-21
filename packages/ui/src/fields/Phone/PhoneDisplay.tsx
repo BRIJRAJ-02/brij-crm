@@ -21,7 +21,11 @@ export function PhoneDisplay({ attribute, value, surface, maxVisible }: DisplayP
       {...(maxVisible === undefined ? {} : { maxVisible })}
       chips={phones.map((phone) => ({
         key: phone.number,
-        node: <LinkChip href={`tel:${phone.number}`}>{formatPhone(phone, library)}</LinkChip>,
+        node: (
+          <LinkChip href={`tel:${phone.number}`} isFlat={surface === 'card'}>
+            {formatPhone(phone, library)}
+          </LinkChip>
+        ),
       }))}
     />
   );
