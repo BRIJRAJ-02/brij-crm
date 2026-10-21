@@ -12,7 +12,7 @@ export const strings = {
   somethingWrong: 'Something went wrong. Try again in a moment.',
   product: 'Timefix',
   /** The pending and failed pages' title, before the step is known. */
-  title: 'Setting up Timefix',
+  title: 'Getting started',
   steps: 'Setting up',
   back: 'Back',
   continue: 'Continue',
