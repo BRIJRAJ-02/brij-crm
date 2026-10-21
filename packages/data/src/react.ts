@@ -12,6 +12,7 @@ import type { MeetingsHeld, MeetingsState } from './bookings/meetings.ts';
 import type { CalendarSettingsHeld, CalendarSettingsState, CalendarState, CalendarView } from './calendar/store.ts';
 import type { CalendarListState, CalendarsHeld, PageDestinationState } from './calendar/calendars.ts';
 import type { CaptureListState, CaptureListView } from './captures/list.ts';
+import type { HomeHeld, HomeMetricsState, TeamTodayState } from './home/store.ts';
 import type {
   EmailPreferencesState,
   EmailPreferencesStore,
@@ -311,6 +312,16 @@ export function useBookingsCalendar(view: BookingsCalendarHeld): BookingsCalenda
 /** Bookings' list of every meeting, a page at a time, re-rendering as pages land. Held while the screen is mounted. */
 export function useMeetings(list: MeetingsHeld): MeetingsState {
   return useRetained(list);
+}
+
+/** Home's Team today (spec 0041), re-rendering when it is read again. Held while the screen is mounted. */
+export function useTeamToday(view: HomeHeld<TeamTodayState>): TeamTodayState {
+  return useRetained(view);
+}
+
+/** Home's metrics row (spec 0041), re-rendering when it is read again. Held while the screen is mounted. */
+export function useHomeMetrics(view: HomeHeld<HomeMetricsState>): HomeMetricsState {
+  return useRetained(view);
 }
 
 /**

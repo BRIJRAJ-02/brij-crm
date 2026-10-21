@@ -1,0 +1,45 @@
+/* Stats: figures side by side that wrap, each at least a column wide; the
+   value in heading type with tabular figures, the label and the comparison
+   in label type, quiet. */
+@layer components {
+  .root {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(var(--size-column-narrow), 1fr));
+    gap: var(--space-16);
+    margin: 0;
+  }
+
+  .stat {
+    display: flex;
+    overflow: hidden;
+    flex-direction: column;
+    gap: var(--space-4);
+    min-inline-size: 0;
+  }
+
+  .label {
+    font: var(--text-label);
+    letter-spacing: var(--tracking-label);
+    color: var(--text-secondary);
+  }
+
+  .value {
+    margin: 0;
+    font: var(--text-heading);
+    letter-spacing: var(--tracking-heading);
+    font-variant-numeric: tabular-nums;
+    color: var(--text);
+    white-space: nowrap;
+  }
+
+  .comparison {
+    display: flex;
+    align-items: center;
+    gap: var(--space-4);
+    margin: 0;
+    font: var(--text-label);
+    letter-spacing: var(--tracking-label);
+    font-variant-numeric: tabular-nums;
+    color: var(--text-tertiary);
+  }
+}

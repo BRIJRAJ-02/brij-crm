@@ -2,6 +2,7 @@ import { accessRouter } from './modules/access/router.ts';
 import { attributesRouter } from './modules/attributes/router.ts';
 import { calendarRouter } from './modules/calendar/router.ts';
 import { formsRouter } from './modules/forms/router.ts';
+import { homeRouter } from './modules/home/router.ts';
 import {
   bookingPagesRouter,
   bookingsRouter,
@@ -73,6 +74,7 @@ export const router = base.router({
   comments: commentsRouter,
   notifications: notificationsRouter,
   calendar: calendarRouter,
+  home: homeRouter,
   forms: formsRouter,
   submissions: submissionsRouter,
   bookingPages: bookingPagesRouter,

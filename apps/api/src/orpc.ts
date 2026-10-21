@@ -14,6 +14,7 @@ import {
   enterWorkspace,
   type BookingCalendar,
   type CalendarEvents,
+  type HomeMetricsCache,
   type JobRegistry,
   type ManageLinkKey,
   type RuleSource,
@@ -87,6 +88,8 @@ export interface RequestContext extends ResponseHeadersPluginContext {
   isFreeDomain: (domain: string) => boolean;
   /** Where a booking's event goes (the host's calendar, or nowhere without sync): Book someone in (spec 0027). */
   bookingCalendar: BookingCalendar;
+  /** Home's metrics (spec 0041): each workspace's figures, kept a minute per workspace and week in this process. */
+  homeMetrics: HomeMetricsCache;
   /** The key a booking's guest page token derives from (`booking-link.ts`): Book someone in, Copy guest link. */
   bookingLinkKey: ManageLinkKey;
   /** The one way to send email (spec 0005): invitations (spec 0031) go through it. */

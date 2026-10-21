@@ -3,6 +3,7 @@ import { Card, LoadingNow, PageColumn, Skeleton, TileGrid, TopBar } from '@crm/u
 import { createFileRoute, useRouter, type ErrorComponentProps } from '@tanstack/react-router';
 import { dayKeyOf } from '../features/bookings/week.ts';
 import { dayRange } from '../features/home/agenda.ts';
+import { weekStartOf } from '../features/home/metrics.ts';
 import { HomeScreen } from '../features/home/HomeScreen.tsx';
 import { strings } from '../features/home/strings.ts';
 import { failedPage, missingPage } from '../features/workspace/ObjectScreen.tsx';
@@ -11,7 +12,7 @@ import { WorkspacePage } from '../features/workspace/WorkspacePage.tsx';
 
 // Home (spec 0041): where a workspace opens, the sidebar's first row. The
 // loader starts every read Home shows through the data layer: My tasks' open
-// list and the day's bookings and events, then waits at most OPEN_GRACE_MS for them, so a quick load arrives whole and a slow one draws
+// list, the day's bookings and events, Team today and the metrics row, then waits at most OPEN_GRACE_MS for them, so a quick load arrives whole and a slow one draws
 // its cards loading in place. The screen holds them, so they stay live.
 /** How long the route waits for the first reads before showing the cards loading in place. */
 const OPEN_GRACE_MS = 300;
@@ -39,6 +40,11 @@ export const Route = createFileRoute('/w/$slug/home')({
         Promise.all([
           tasks?.ready(),
           data.bookings.calendar(slug, day.from, day.to).ready(),
+          // Team today and the metrics row, so a quick answer arrives with the first paint.
+          members.length > 1 && permissions.includes('booking.manage')
+            ? data.home.teamToday(slug, day.from, day.to).ready()
+            : undefined,
+          data.home.metrics(slug, weekStartOf(today)).ready(),
           // Finish setting up's reads, so the card is there at first paint rather than pushing the others down.
           data.calendar.view(slug).ready(),
           permissions.includes('booking.manage') ? data.bookingPages.view(slug).ready() : undefined,

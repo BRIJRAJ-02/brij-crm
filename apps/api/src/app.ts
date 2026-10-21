@@ -4,6 +4,7 @@ import {
   connectedCalendar,
   createCalendarEvents,
   createBusyCache,
+  createHomeMetricsCache,
   enterWorkspace,
   jobKinds,
   NO_CALENDAR,
@@ -218,6 +219,8 @@ export function createApp({
     services.calendar ?? (env.calendar === undefined ? undefined : createCalendarServices(env.calendar, env.APP_URL));
   // The free email domains, loaded once: calendar sync's own list when it is on.
   const isFreeDomain = calendar?.isFreeDomain ?? createFreeDomains();
+  // Home's metrics (spec 0041): each workspace's figures, kept a minute in this process.
+  const homeMetrics = createHomeMetricsCache();
   // Free and busy and the event writes (spec 0024): one service, so a member's change forgets its kept answers.
   const calendarEvents =
     calendar === undefined
@@ -352,6 +355,7 @@ export function createApp({
         calendarEvents,
         isFreeDomain,
         bookingCalendar: booking,
+        homeMetrics,
         bookingLinkKey: linkKey,
         rules,
         mailer,

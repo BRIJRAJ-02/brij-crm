@@ -168,6 +168,8 @@ One display and one editor per attribute type: text, long text, number, currency
 | FormBuilder, PublicForm | New | 48 | the field set | PublicForm also renders outside the app (its embedding is #48's) |
 | AssistantPanel | New | 54 | Panel, ChangePreview | messages, proposed changes, confirm, undo |
 | SpanCard | New | 0027 | Button, Popover | a span drawn on WeekCalendar: its time and day, then Book, Block or Hold, then the picked one's form |
+| Stats | New | 0041 | Icon, Skeleton | a row of figures that wraps, each against an earlier one with a colourless arrow: Home's metrics; Dashboard (#52) builds on it |
+| TeamList | New | 0041 | Avatar, StatusDot, TruncatedText | members as read only rows: picture, name, presence in words with a dot, a quiet next line: Home's Team today |
 
 **Visual** (`@crm/ui/charts`, `@crm/ui/schema-map`)
 

@@ -1,0 +1,52 @@
+/* TeamList: one row per member, the avatar beside two lines (the name, then
+   the presence and a quiet detail), rows on the list's row rhythm. */
+@layer components {
+  .root {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-4);
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+
+  .row {
+    display: flex;
+    align-items: center;
+    gap: var(--space-12);
+    min-block-size: var(--size-row);
+    padding-block: var(--space-4);
+    padding-inline: var(--space-8);
+  }
+
+  .text {
+    display: flex;
+    flex: 1;
+    flex-direction: column;
+    gap: var(--space-2);
+    min-inline-size: 0;
+  }
+
+  .name {
+    min-inline-size: 0;
+    font: var(--text-body-strong);
+    letter-spacing: var(--tracking-body-strong);
+    color: var(--text);
+  }
+
+  .line {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--space-2) var(--space-8);
+    min-inline-size: 0;
+    font: var(--text-label);
+    letter-spacing: var(--tracking-label);
+  }
+
+  .detail {
+    min-inline-size: 0;
+    color: var(--text-tertiary);
+    overflow-wrap: anywhere;
+  }
+}

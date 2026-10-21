@@ -203,6 +203,8 @@ const NO_SCOPE: ReadonlySet<string> = new Set([
   // Availability schedules (spec 0035): the resolvers run inside a caller's transaction (the slot read), no scope.
   'defaultSchedule',
   'scheduleFor',
+  // Home's metrics cache (spec 0041): a factory the api makes once, no scope.
+  'createHomeMetricsCache',
 ]);
 
 const exported = { ...core, ...system } as Record<string, unknown>;
@@ -390,6 +392,7 @@ describe('the walk: a principal without the access is refused', () => {
           'listWorkspaceBookings',
           'listMeetings',
           'readBookingsCalendar',
+          'readTeamToday',
           'createBookingPage',
           'createTimeBlock',
           'removeTimeBlock',

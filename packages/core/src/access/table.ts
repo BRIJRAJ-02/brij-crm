@@ -329,6 +329,9 @@ export const ACCESS_TABLE = {
   listWorkspaceBookings: { bookingPages: true },
   listMeetings: { bookingPages: true },
   readBookingsCalendar: { bookingPages: true },
+  // Home (spec 0041): Team today is scheduling (Bookings' gate), the metrics any member, each figure by its own rule.
+  readTeamToday: { bookingPages: true },
+  readHomeMetrics: { anyMember: true },
   readDefaultHours: { schedules: true },
   saveDefaultHours: { schedules: true },
   listScheduleMembers: { schedules: true },

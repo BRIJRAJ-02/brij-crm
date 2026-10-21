@@ -38,8 +38,38 @@ export const strings = {
   moreTasks: (count: number) => (count === 1 ? '1 more task' : `${count.toLocaleString('en')} more tasks`),
   moreInTasks: 'More in My tasks',
 
+  // Team today
+  teamToday: 'Team today',
+  teamFailed: 'Team today didn’t load',
+  you: (name: string) => `${name} (you)`,
+  inMeeting: 'In a meeting',
+  busy: 'Busy',
+  freeNow: 'Free now',
+  teamDescription: 'By their calendars, on your clock',
+  aTeammate: 'A teammate',
+  until: (time: string) => `Until ${time}`,
+  titleUntil: (title: string, time: string) => `${title} until ${time}`,
+  next: (title: string, time: string) => `Next: ${title}, ${time}`,
+  busyFrom: (time: string) => `Busy from ${time}`,
+  nothingElse: 'Nothing else today',
+  moreTeam: (count: number) => (count === 1 ? '1 more person' : `${count.toLocaleString('en')} more people`),
+
+  // The metrics row
+  thisWeek: 'This week',
+  againstLastWeek: 'Since Monday, compared with all of last week',
+  metricsFailed: 'This week’s figures didn’t load',
+  metricLabels: {
+    meetings: 'Meetings booked',
+    people: 'New people',
+    deals: 'New deals',
+    won: 'Deals won',
+    submissions: 'Form submissions',
+  },
+  lastWeek: (value: string) => `${value} last week`,
+  otherCurrencies: 'Deals won in other currencies aren’t counted.',
+
   // The page
   quietTitle: 'Nothing needs you right now',
-  quietText: 'Meetings today and tasks due show up here.',
+  quietText: 'Meetings today, tasks due and your team’s day show up here.',
   failedText: 'Check your connection and try again.',
 } as const;

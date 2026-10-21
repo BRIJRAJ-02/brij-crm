@@ -122,6 +122,8 @@ const READS: ReadonlySet<string> = new Set([
   'bookings.listAll',
   'bookings.meetings',
   'bookings.calendar',
+  'home.teamToday',
+  'home.metrics',
   'bookings.hours',
   // Where a booking could move (its page's slots), and the guest page's address: both read only.
   'bookings.moveSlots',
