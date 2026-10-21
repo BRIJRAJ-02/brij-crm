@@ -97,6 +97,14 @@ Built from library parts only: SettingsLayout (through `SettingsPage`, its one h
 
 Anything on the page that ends something asks first (the owner, 21 October 2026): today Revoke ("Revoke the invitation to grace@example.com?", then "Revoke invitation"); removing, leaving and handing over join it in later slices. A danger Modal (an alert dialog a click outside won't close) with the question naming the thing, one sentence on what happens and whether it can be undone, Cancel (ESC) first and the verb last on a danger solid Button, which spins while the server works; a refusal shows inside it in a danger Callout and it stays open. The page says what happened in a toast once the server agrees.
 
+## Settings › Account › Notifications (`/w/$slug/settings/account/notifications`, NotificationSettingsScreen)
+
+- **Purpose**: Settings › Account › Notifications (spec 0038, AC-1179): what reaches the member by email from this workspace.
+- **Main task**: turn email for Mentions, Replies and Task assignments, and the daily digest, on or off; each switch saves at once and is put back with a toast on a refusal.
+- **Leaves out**: the in app inbox (always on, and the page says so), other workspaces' settings, push notifications.
+
+Built from SettingsLayout (through `SettingsPage`), SettingsSection, Card, SettingsRow, Switch and Badge ("Always on"), with no new component. The settings come through `data.inbox.settings` (its store loads in its own chunk) and follow a change made in another tab live (AC-1180). Turning the digest on sends the browser's time zone with it, for 8 in the morning there.
+
 ## The finish toast (toast.ts)
 
 - **Purpose**: tell the person when a job they started in this browser ends while the app is open (AC-119).
