@@ -11,6 +11,45 @@ export const EDGE_HEADER = 'x-crm-edge';
 /** The header Vercel's middleware copies the browser's Origin into (its rewrite doesn't keep `origin` intact). */
 export const ORIGIN_HEADER = 'x-crm-origin';
 
+/** The edge's geo headers (Vercel's), which the middleware forwards set by the edge itself (spec 0033). */
+export const GEO_COUNTRY_HEADER = 'x-vercel-ip-country';
+/** The city, percent encoded as Vercel sends it. */
+export const GEO_CITY_HEADER = 'x-vercel-ip-city';
+
+/** Roughly where a request came from, as the edge saw it: shown beside a session, never trusted for access. */
+export interface Geo {
+  /** A two letter country code. */
+  readonly country?: string;
+  readonly city?: string;
+}
+
+/** The longest city name kept. */
+const MAX_CITY = 80;
+
+/** A geo header pair as kept: a two letter country, and a decoded, printable city; anything else is dropped. */
+export function readGeo(country: string | null, city: string | null): Geo | undefined {
+  const code = country?.trim().toUpperCase();
+  const place = decodeCity(city);
+  const geo: Geo = {
+    ...(code !== undefined && /^[A-Z]{2}$/.test(code) && code !== 'XX' ? { country: code } : {}),
+    ...(place === undefined ? {} : { city: place }),
+  };
+  return geo.country === undefined && geo.city === undefined ? undefined : geo;
+}
+
+function decodeCity(raw: string | null): string | undefined {
+  if (raw === null) return undefined;
+  let text: string;
+  try {
+    text = decodeURIComponent(raw);
+  } catch {
+    return undefined;
+  }
+  // Letters, marks, spaces and the punctuation place names use; nothing that could draw on a page or in a log.
+  const cleaned = text.replace(/[^\p{L}\p{M}\p{N} .,'’()-]/gu, '').replace(/\s+/g, ' ').trim();
+  return cleaned === '' ? undefined : cleaned.slice(0, MAX_CITY);
+}
+
 /** The health checks Railway calls straight, never through Vercel. Exact paths, so nothing else slips through. */
 export const EDGE_OPEN_PATHS: ReadonlySet<string> = new Set(['/api/health', '/api/health/ready']);
 
@@ -45,6 +84,12 @@ export interface EdgeGuard {
    * for has none. Locally, the request's own `origin` (Vite's proxy keeps it).
    */
   readonly origin: (request: Request) => string | undefined;
+  /**
+   * Where the request came from (spec 0033), from the edge's geo headers,
+   * only on a request the guard trusted (as `clientIp`); locally, whatever the
+   * request carries, since nothing sets them there but a test.
+   */
+  readonly geo: (request: Request) => Geo | undefined;
 }
 
 /** Whether the guard refuses requests without the secret: everywhere but local. */
@@ -88,6 +133,10 @@ export function createEdgeGuard(options: EdgeGuardOptions): EdgeGuard {
       if (!enforced) return request.headers.get('origin') ?? undefined;
       if (!trusted.has(request)) return undefined;
       return request.headers.get(ORIGIN_HEADER) ?? undefined;
+    },
+    geo(request) {
+      if (!trusted.has(request)) return undefined;
+      return readGeo(request.headers.get(GEO_COUNTRY_HEADER), request.headers.get(GEO_CITY_HEADER));
     },
     clientIp(request) {
       if (!trusted.has(request)) return undefined;

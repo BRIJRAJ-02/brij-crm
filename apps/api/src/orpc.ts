@@ -22,6 +22,7 @@ import { log } from './log.ts';
 import type { ReadGate } from './gate.ts';
 import type { Analytics } from './monitoring/posthog.ts';
 import { setRequestScope } from './monitoring/sentry.ts';
+import type { SignedOutNotice } from './realtime/signed-out.ts';
 import type { RealtimeTokens } from './realtime/tokens.ts';
 import type { WakeRelay } from './realtime/wake.ts';
 
@@ -94,11 +95,17 @@ export interface RequestContext extends ResponseHeadersPluginContext {
    * more senders of invitations.
    */
   mayStartWorkspace: (email: string) => boolean;
+  /**
+   * Cuts a person's live connections after one of their sessions was signed
+   * out from another device (spec 0033): the worker closes them with 4501.
+   */
+  signedOut: SignedOutNotice;
 }
 
-/** What `authed` adds: the signed in person. */
+/** What `authed` adds: the signed in person, and which of their sessions this request carries (its id only). */
 export interface SessionContext {
   user: SessionUser;
+  sessionId: string;
 }
 
 export const base = implement(contract).$context<RequestContext>();
@@ -122,7 +129,7 @@ export const requireSession = os.$context<RequestContext>().middleware(async ({ 
   for (const cookie of session.setCookies) context.resHeaders?.append('set-cookie', cookie);
   // Someone is using the app: the worker stays awake, or wakes (at most once a minute; it never slows the request).
   if (!NOT_USE.has(path.join('.'))) context.wakeOnUse();
-  return next({ context: { user: session.user } });
+  return next({ context: { user: session.user, sessionId: session.sessionId } });
 });
 
 /**

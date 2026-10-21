@@ -43,6 +43,9 @@ export {
   type IdentityUser,
   type RateLimitDecision,
   type RateLimitRule,
+  type SecurityEventInput,
+  type SessionKey,
+  type SessionListing,
 } from './identity/store.ts';
 export * as schema from './schema/index.ts';
 export { type PoolTiming, type PoolTimingSink } from './timing.ts';

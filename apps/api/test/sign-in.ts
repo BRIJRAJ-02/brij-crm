@@ -15,6 +15,7 @@ import type { ApiEnv } from '../src/env.ts';
 import { createMailpitMailer } from '../src/mail/mailpit.ts';
 import type { Mailer } from '../src/mail/mailer.ts';
 import type { Analytics } from '../src/monitoring/posthog.ts';
+import type { SignedOutNotice } from '../src/realtime/signed-out.ts';
 import type { WakeRelay } from '../src/realtime/wake.ts';
 import type { router } from '../src/router.ts';
 import { EDGE_HEADER, ORIGIN_HEADER } from '../src/edge.ts';
@@ -59,6 +60,7 @@ export function signInApp(
     analytics?: Analytics;
     jobs?: JobRegistry;
     calendar?: CalendarServices;
+    signedOut?: SignedOutNotice;
   } = {},
 ) {
   const env = testEnv(overrides);
@@ -73,6 +75,7 @@ export function signInApp(
     ...(options.analytics ? { analytics: options.analytics } : {}),
     ...(options.jobs ? { jobs: options.jobs } : {}),
     ...(options.calendar ? { calendar: options.calendar } : {}),
+    ...(options.signedOut ? { signedOut: options.signedOut } : {}),
   });
   return { app: createApp({ services, env, ...(options.router ? { router: options.router } : {}) }), services };
 }

@@ -32,6 +32,10 @@ const BOOTSTRAP: ReadonlySet<string> = new Set([
   'workspaces.create',
   'workspaces.slugAvailable',
   'realtime.connectionToken',
+  // The signed in person's own sessions (spec 0033): global identity, by their user id, before any workspace.
+  'account.sessions.list',
+  'account.sessions.revoke',
+  'account.sessions.revokeOthers',
 ]);
 
 function isBootstrap(path: string): boolean {
@@ -56,12 +60,14 @@ const RAW_DATABASE_FILES: ReadonlySet<string> = new Set([
 /**
  * The module files holding the bootstrap handlers that read global identity:
  * `me.get`, `workspaces.create` and `workspaces.slugAvailable`, and
- * `invitations.peek` (its per address limit, spec 0031). No other module file may.
+ * `invitations.peek` (its per address limit, spec 0031), and the account
+ * procedures (spec 0033). No other module file may.
  */
 const RAW_IDENTITY_FILES: ReadonlySet<string> = new Set([
   'me/router.ts',
   'workspaces/router.ts',
   'invitations/public.ts',
+  'account/router.ts',
 ]);
 
 /** Reaching the database around the door: the raw pool from the context, or a workspace transaction of its own. */

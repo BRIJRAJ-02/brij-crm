@@ -8,7 +8,9 @@
 // `crm_identity`), the only role that reads and writes schema `auth`. The app
 // login only inserts the two directory rows inside the workspace transaction.
 import { drizzleAdapter } from 'better-auth/adapters/drizzle';
-import { and, asc, eq, sql } from 'drizzle-orm';
+import { isIP } from 'node:net';
+import type { SecurityEventKind } from '@crm/contracts';
+import { and, asc, desc, eq, ne, sql } from 'drizzle-orm';
 import { drizzle } from 'drizzle-orm/node-postgres';
 import pg from 'pg';
 import type { DatabaseOptions } from '../client.ts';
@@ -16,6 +18,7 @@ import { timePool } from '../timing.ts';
 import {
   account,
   rateLimit,
+  securityEvent,
   session,
   user,
   userPrefs,
@@ -59,6 +62,36 @@ export interface RateLimitDecision {
   readonly retryAfterSeconds: number | undefined;
 }
 
+/** One live session as Account › Security lists it (spec 0033): never its token. */
+export interface SessionListing {
+  readonly id: string;
+  readonly deviceLabel: string | null;
+  readonly country: string | null;
+  readonly city: string | null;
+  /** Last used, ISO 8601 UTC with microseconds (the keyset cursor's moment). */
+  readonly updatedAt: string;
+  /** Signed in, ISO 8601 UTC. */
+  readonly createdAt: string;
+}
+
+/** Where a page of sessions starts after: the last row's `updatedAt` and id. */
+export interface SessionKey {
+  readonly updatedAt: string;
+  readonly id: string;
+}
+
+/** One security event to keep (spec 0033, AC-898). `detail` never holds a code, secret or token. */
+export interface SecurityEventInput {
+  readonly userId: string;
+  readonly kind: SecurityEventKind;
+  readonly sessionId?: string;
+  /** An IP the edge guard trusted, or nothing. */
+  readonly ip?: string;
+  readonly country?: string;
+  readonly deviceLabel?: string;
+  readonly detail?: Readonly<Record<string, string | number | boolean>>;
+}
+
 /** Global identity: the directory, users, and Better Auth's storage. Reads no tenant data. */
 export interface IdentityStore {
   /** The workspace at this address, or undefined. Lookup only: it grants nothing. */
@@ -82,6 +115,29 @@ export interface IdentityStore {
   dropMembership(userId: string, workspaceId: string): Promise<void>;
   /** The user with this id, or undefined. */
   getUser(id: string): Promise<IdentityUser | undefined>;
+  /**
+   * The user's live (unexpired) sessions, most recently used first, after
+   * `after` when given, at most `limit` (spec 0033, AC-890). Ids and labels
+   * only: a token never leaves this store.
+   */
+  listSessions(userId: string, options: { readonly after?: SessionKey; readonly limit: number }): Promise<readonly SessionListing[]>;
+  /**
+   * Deletes the session with this id only when it is the user's (AC-891):
+   * what it was on, or undefined when nothing of theirs had that id.
+   */
+  revokeSession(
+    userId: string,
+    sessionId: string,
+  ): Promise<{ readonly deviceLabel: string | null; readonly country: string | null } | undefined>;
+  /** Deletes every session of the user but `keepSessionId`; answers how many went (AC-892). */
+  revokeOtherSessions(userId: string, keepSessionId: string): Promise<number>;
+  /**
+   * When this session of the user last proved who it is (sign in, or a step
+   * up), ISO 8601 UTC; undefined for a session that isn't theirs or has none.
+   */
+  sessionVerifiedAt(userId: string, sessionId: string): Promise<string | undefined>;
+  /** Keeps one security event (AC-898). */
+  recordSecurityEvent(event: SecurityEventInput): Promise<void>;
   /** Saves the name only when the user has none yet (an email code sign up starts empty). True when it saved. */
   setUserNameIfEmpty(id: string, name: string): Promise<boolean>;
   /**
@@ -192,6 +248,76 @@ export function createIdentityStore(options: DatabaseOptions): IdentityStore {
         .where(eq(user.id, id))
         .limit(1);
       return row;
+    },
+
+    async listSessions(userId, { after, limit }) {
+      if (!UUID.test(userId)) return [];
+      if (after !== undefined && !UUID.test(after.id)) return [];
+      const moment = sql<string>`to_char(${session.updatedAt} at time zone 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.US"Z"')`;
+      const rows = await db
+        .select({
+          id: session.id,
+          deviceLabel: session.deviceLabel,
+          country: session.country,
+          city: session.city,
+          updatedAt: moment,
+          createdAt: sql<string>`to_char(${session.createdAt} at time zone 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.US"Z"')`,
+        })
+        .from(session)
+        .where(
+          and(
+            eq(session.userId, userId),
+            sql`${session.expiresAt} > now()`,
+            after === undefined
+              ? undefined
+              : sql`(${session.updatedAt}, ${session.id}) < (${after.updatedAt}::timestamptz, ${after.id}::uuid)`,
+          ),
+        )
+        .orderBy(desc(session.updatedAt), desc(session.id))
+        .limit(Math.max(1, Math.min(limit, 200)));
+      return rows;
+    },
+
+    async revokeSession(userId, sessionId) {
+      if (!UUID.test(userId) || !UUID.test(sessionId)) return undefined;
+      const [gone] = await db
+        .delete(session)
+        .where(and(eq(session.id, sessionId), eq(session.userId, userId)))
+        .returning({ deviceLabel: session.deviceLabel, country: session.country });
+      return gone;
+    },
+
+    async revokeOtherSessions(userId, keepSessionId) {
+      if (!UUID.test(userId) || !UUID.test(keepSessionId)) return 0;
+      const gone = await db
+        .delete(session)
+        .where(and(eq(session.userId, userId), ne(session.id, keepSessionId)))
+        .returning({ id: session.id });
+      return gone.length;
+    },
+
+    async sessionVerifiedAt(userId, sessionId) {
+      if (!UUID.test(userId) || !UUID.test(sessionId)) return undefined;
+      const [row] = await db
+        .select({ verifiedAt: session.verifiedAt })
+        .from(session)
+        .where(and(eq(session.id, sessionId), eq(session.userId, userId), sql`${session.expiresAt} > now()`))
+        .limit(1);
+      return row?.verifiedAt == null ? undefined : row.verifiedAt.toISOString();
+    },
+
+    async recordSecurityEvent(event) {
+      if (!UUID.test(event.userId)) return;
+      const sessionId = event.sessionId !== undefined && UUID.test(event.sessionId) ? event.sessionId : null;
+      await db.insert(securityEvent).values({
+        userId: event.userId,
+        kind: event.kind,
+        sessionId,
+        ip: event.ip !== undefined && isIP(event.ip) !== 0 ? event.ip : null,
+        country: event.country ?? null,
+        deviceLabel: event.deviceLabel ?? null,
+        detail: event.detail ?? {},
+      });
     },
 
     async setUserNameIfEmpty(id, name) {

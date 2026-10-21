@@ -80,6 +80,8 @@ export const ERROR_MAP = {
   STALE: CONFLICT,
   DEFAULT_SCHEDULE: CONFLICT,
   SCHEDULE_NOT_ALLOWED: UNPROCESSABLE,
+  // Account security (spec 0033, AC-896): verify again (a fresh step up) before this account change.
+  STEP_UP_REQUIRED: { status: 403 },
   PAYLOAD_TOO_LARGE: { status: 413 },
   ATTRIBUTE_VALUE_INVALID: UNPROCESSABLE,
   VALUE_REQUIRED: UNPROCESSABLE,

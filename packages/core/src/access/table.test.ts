@@ -33,6 +33,13 @@ const NO_SCOPE: ReadonlySet<string> = new Set([
   'peekInvite',
   'acceptInvite',
   'isInvitedEmail',
+  // The signed in person's own sessions (spec 0033): the identity store, by their user id, before any workspace.
+  'listMySessions',
+  'revokeMySession',
+  'revokeMyOtherSessions',
+  'isFresh',
+  'deviceLabel',
+  'deviceParts',
   'createWorkspace',
   'createUserWorkspace',
   // Pure access functions.

@@ -1326,6 +1326,7 @@ describe('the auth schema: global identity, outside row level security (spec 000
   const AUTH_TABLES = [
     'account',
     'rate_limit',
+    'security_event',
     'session',
     'user',
     'user_prefs',

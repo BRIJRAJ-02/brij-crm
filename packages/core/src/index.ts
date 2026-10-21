@@ -56,6 +56,19 @@ export {
   type StartedWorkspace,
   type StartWorkspaceDeps,
 } from './account/account.ts';
+// Account security (spec 0033): the signed in person's own sessions, and what device a session is on.
+export {
+  isFresh,
+  listMySessions,
+  revokeMyOtherSessions,
+  revokeMySession,
+  SESSION_CURSOR_MESSAGE,
+  STEP_UP_MESSAGE,
+  UNKNOWN_SESSION,
+  type SessionCaller,
+  type SessionsDeps,
+} from './account/sessions.ts';
+export { deviceLabel, deviceParts, type DeviceParts } from './account/device.ts';
 export { milestoneHook, type ReachedMilestone } from './milestones/milestones.ts';
 export { type AuditSource } from './members/audit.ts';
 export {

@@ -8,6 +8,7 @@
 // Better Auth's Drizzle adapter addresses a column by its property name, so the
 // properties carry Better Auth's own field names (`emailVerified`) while the
 // columns are snake case (`email_verified`).
+import { SECURITY_EVENT_KINDS } from '@crm/contracts';
 import { sql } from 'drizzle-orm';
 import {
   bigint,
@@ -15,7 +16,9 @@ import {
   check,
   foreignKey,
   index,
+  inet,
   integer,
+  jsonb,
   pgSchema,
   primaryKey,
   text,
@@ -68,11 +71,49 @@ export const session = auth.table(
     ipAddress: text('ip_address'),
     userAgent: text('user_agent'),
     userId: uuid('user_id').notNull(),
+    /** Two letter country code from the edge's geo header at sign in (spec 0033, AC-890); absent locally. */
+    country: text('country'),
+    /** City from the edge's geo header at sign in, as the edge spelled it. */
+    city: text('city'),
+    /** "Chrome on macOS": the user agent read once at sign in, for Account › Security › Devices. */
+    deviceLabel: text('device_label'),
+    /** When this session last proved who it is: at sign in, and on each step up (AC-896). */
+    verifiedAt: timestamptz('verified_at'),
   },
   (t) => [
     uniqueIndex('session_token').on(t.token),
     index('session_user').on(t.userId),
     foreignKey({ name: 'session_user_fk', columns: [t.userId], foreignColumns: [user.id] }).onDelete('cascade'),
+  ],
+);
+
+/**
+ * A person's security history (spec 0033, AC-898): sign ins, sign outs,
+ * sessions ended, and (later milestones) factor changes and alerts. Kept a
+ * year, then deleted by the daily cleanup. `detail` names a method or a
+ * count, never a code, secret or token. `session_id` names the session the
+ * event was about, which may since be gone, so it is no foreign key.
+ */
+export const securityEvent = auth.table(
+  'security_event',
+  {
+    id: authId(),
+    userId: uuid('user_id').notNull(),
+    at: timestamptz('at').notNull().defaultNow(),
+    kind: text('kind', { enum: SECURITY_EVENT_KINDS }).notNull(),
+    sessionId: uuid('session_id'),
+    ip: inet('ip'),
+    country: text('country'),
+    deviceLabel: text('device_label'),
+    detail: jsonb('detail').notNull().default(sql`'{}'::jsonb`),
+  },
+  (t) => [
+    index('security_event_user_at').on(t.userId, t.at.desc()),
+    foreignKey({ name: 'security_event_user_fk', columns: [t.userId], foreignColumns: [user.id] }).onDelete('cascade'),
+    check(
+      'security_event_kind',
+      sql.raw(`kind in (${SECURITY_EVENT_KINDS.map((kind) => `'${kind}'`).join(', ')})`),
+    ),
   ],
 );
 

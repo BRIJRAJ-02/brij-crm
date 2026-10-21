@@ -2,7 +2,7 @@
 // the API is told about the caller. Vercel reads the rewrite and the upstream
 // request headers from the response's x-middleware-* headers.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import middleware, { config, EDGE_HEADER, ORIGIN_HEADER, TRACE_HEADERS } from './middleware.ts';
+import middleware, { config, EDGE_HEADER, GEO_HEADERS, ORIGIN_HEADER, TRACE_HEADERS } from './middleware.ts';
 
 const API = 'https://api-production.up.railway.app';
 
@@ -45,6 +45,23 @@ describe('api proxy middleware', () => {
     vi.stubEnv('API_ORIGIN_INTERNAL', API);
     const response = call('/api/health', { 'x-forwarded-for': '6.6.6.6', 'x-real-ip': '203.0.113.7' });
     expect(upstreamHeader(response, 'x-forwarded-for')).toBe('203.0.113.7');
+  });
+
+  it('passes on the place the edge resolved, the city percent encoded (spec 0033)', () => {
+    vi.stubEnv('API_ORIGIN_INTERNAL', API);
+    const response = call('/api/auth/sign-in/email-otp', {
+      [GEO_HEADERS.country]: 'BR',
+      [GEO_HEADERS.city]: 'S%C3%A3o%20Paulo',
+    });
+    expect(upstreamHeader(response, GEO_HEADERS.country)).toBe('BR');
+    expect(upstreamHeader(response, GEO_HEADERS.city)).toBe('S%C3%A3o%20Paulo');
+  });
+
+  it('sends no place when the edge resolved none', () => {
+    vi.stubEnv('API_ORIGIN_INTERNAL', API);
+    const response = call('/api/health');
+    expect(upstreamHeader(response, GEO_HEADERS.country)).toBeNull();
+    expect(upstreamHeader(response, GEO_HEADERS.city)).toBeNull();
   });
 
   it('drops a caller’s trace headers, so no caller picks the API’s sampling or trace id', () => {

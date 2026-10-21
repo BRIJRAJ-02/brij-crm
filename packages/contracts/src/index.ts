@@ -1,4 +1,5 @@
 import { accessContract } from './access.ts';
+import { accountContract } from './account.ts';
 import { attributesContract } from './attributes.ts';
 import { bookingPagesContract, bookingsContract } from './booking/pages.ts';
 import { schedulesContract } from './booking/schedules.ts';
@@ -23,6 +24,7 @@ import { viewsContract } from './views.ts';
 import { workspacesContract } from './workspaces.ts';
 
 export * from './access.ts';
+export * from './account.ts';
 export * from './activity.ts';
 export * from './attributes.ts';
 export * from './board-model.ts';
@@ -65,6 +67,8 @@ export * from './workspaces.ts';
 export const contract = {
   system: systemContract,
   me: meContract,
+  // The signed in person's own sessions and devices (spec 0033): a session, no workspace.
+  account: accountContract,
   workspaces: workspacesContract,
   objects: objectsContract,
   attributes: attributesContract,

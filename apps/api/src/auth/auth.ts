@@ -4,15 +4,17 @@
 // instances. Nothing outside this folder imports Better Auth; the rest of the
 // API sees only `Auth`.
 import { isIP } from 'node:net';
-import { EmailValue, emailDomain, errorStatus, type SignInProviders } from '@crm/contracts';
+import { EmailValue, emailDomain, errorStatus, type SignInMethod, type SignInProviders } from '@crm/contracts';
 import { renderSignInCode, SIGN_IN_CODE_MINUTES } from '@crm/emails';
 import type { SignUpMethod } from '@crm/contracts/events';
-import type { IdentityStore } from '@crm/db';
+import type { IdentityStore, SecurityEventInput } from '@crm/db';
 import { betterAuth, type DBAdapter } from 'better-auth';
 import { APIError, createAuthMiddleware } from 'better-auth/api';
 import { emailOTP } from 'better-auth/plugins/email-otp';
 import * as z from 'zod';
+import { deviceLabel } from '@crm/core';
 import type { ApiEnv } from '../env.ts';
+import { GEO_CITY_HEADER, GEO_COUNTRY_HEADER, readGeo, type Geo } from '../edge.ts';
 import { log } from '../log.ts';
 import type { Mailer } from '../mail/mailer.ts';
 import { type Analytics, NO_ANALYTICS } from '../monitoring/posthog.ts';
@@ -118,6 +120,8 @@ export interface SessionUser {
 
 /** A live session's user, and any cookies to send back (a session extended on use renews its cookie). */
 export interface AuthSession {
+  /** The session's id, never its token: `account.sessions.*` mark "This device" by it (spec 0033). */
+  readonly sessionId: string;
   readonly user: SessionUser;
   readonly setCookies: readonly string[];
 }
@@ -129,10 +133,11 @@ export interface Auth {
   /**
    * Answers a request to `/api/auth/*`. `clientIp` is the IP the edge guard
    * trusted, or undefined; any `x-forwarded-for` the caller sent is replaced
-   * by it, or dropped, so rate limits never key on a forged address. Refusals
-   * leave as `{ code, message }`.
+   * by it, or dropped, so rate limits never key on a forged address. `geo` is
+   * where the edge guard trusted the request came from, the same way (spec
+   * 0033): a new session keeps it. Refusals leave as `{ code, message }`.
    */
-  handle(request: Request, clientIp: string | undefined, origin?: string): Promise<Response>;
+  handle(request: Request, clientIp: string | undefined, origin?: string, geo?: Geo): Promise<Response>;
   /** The session the request's cookie names, or undefined when there is none or it expired. */
   session(headers: Headers, clientIp: string | undefined): Promise<AuthSession | undefined>;
 }
@@ -174,10 +179,15 @@ export function signUpMethod(route: string | undefined): SignUpMethod | undefine
  * its one shared bucket, which `perTrustedIp` keeps shut only while the header
  * is absent.
  */
-export function forwardedHeaders(headers: Headers, clientIp: string | undefined, origin?: string): Headers {
+export function forwardedHeaders(headers: Headers, clientIp: string | undefined, origin?: string, geo?: Geo): Headers {
   const next = new Headers(headers);
   next.delete('x-forwarded-for');
   if (clientIp !== undefined && isIP(clientIp) !== 0) next.set('x-forwarded-for', clientIp);
+  // The geo headers likewise: only what the edge guard trusted (spec 0033), never a caller's own.
+  next.delete(GEO_COUNTRY_HEADER);
+  next.delete(GEO_CITY_HEADER);
+  if (geo?.country !== undefined) next.set(GEO_COUNTRY_HEADER, geo.country);
+  if (geo?.city !== undefined) next.set(GEO_CITY_HEADER, encodeURIComponent(geo.city));
   // Better Auth checks the request's own origin; give it the one the edge guard read, and no other.
   if (origin === undefined) next.delete('origin');
   else next.set('origin', origin);
@@ -293,6 +303,17 @@ function libraryDetail(message: unknown): string {
   return typeof message;
 }
 
+/** How a session was made, from the route that made it (spec 0033's sign in events): undefined for any other. */
+export function signInMethod(route: string | undefined): SignInMethod | undefined {
+  const method = signUpMethod(route);
+  return method === undefined ? undefined : method;
+}
+
+/** `{ [key]: value }` when `value` is a non empty string, else nothing: optional fields from Better Auth's loose rows. */
+function presentText<K extends string>(key: K, value: unknown): { [P in K]?: string } {
+  return typeof value === 'string' && value !== '' ? ({ [key]: value } as { [P in K]: string }) : {};
+}
+
 /** Builds sign in for this environment. */
 export function createAuth({ env, identity, mailer, analytics = NO_ANALYTICS, invited }: AuthDeps): Auth {
   const local = env.APP_ENV === 'local';
@@ -321,6 +342,16 @@ export function createAuth({ env, identity, mailer, analytics = NO_ANALYTICS, in
     }
   }
 
+  /** Keeps a security event; a failure is logged and reported, never thrown into a sign in or out. */
+  async function keepEvent(event: SecurityEventInput): Promise<void> {
+    try {
+      await identity.recordSecurityEvent(event);
+    } catch (error) {
+      log.error('Security event not kept', { kind: event.kind, error: error instanceof Error ? error.name : typeof error });
+      captureFault(error, { task: 'security event' });
+    }
+  }
+
   const auth = betterAuth({
     appName: 'Timefix',
     baseURL: env.BETTER_AUTH_URL,
@@ -335,6 +366,14 @@ export function createAuth({ env, identity, mailer, analytics = NO_ANALYTICS, in
       updateAge: DAY_SECONDS,
       // Read every session from the database, so signing out or revoking takes effect at once.
       cookieCache: { enabled: false },
+      // Where and on what it signed in, and when it last proved who it is (spec 0033). Set only by the hook below:
+      // a caller can't send them (`input: false`).
+      additionalFields: {
+        country: { type: 'string', required: false, input: false },
+        city: { type: 'string', required: false, input: false },
+        deviceLabel: { type: 'string', required: false, input: false },
+        verifiedAt: { type: 'date', required: false, input: false },
+      },
     },
     account: {
       // Google joins an existing account only when Google says the email is verified.
@@ -369,6 +408,56 @@ export function createAuth({ env, identity, mailer, analytics = NO_ANALYTICS, in
       log: logLibrary,
     },
     databaseHooks: {
+      session: {
+        create: {
+          // Every new session (an email code, Google): what it is on, roughly where, and that it just proved who it
+          // is (spec 0033). The headers are the ones `handle` rebuilt, so the geo pair is the edge guard's or none.
+          before: (session, context) => {
+            const headers = context?.headers;
+            const geo = headers === undefined ? undefined : readGeo(headers.get(GEO_COUNTRY_HEADER), headers.get(GEO_CITY_HEADER));
+            const agent = typeof session.userAgent === 'string' ? session.userAgent : undefined;
+            return Promise.resolve({
+              data: {
+                ...session,
+                deviceLabel: deviceLabel(agent),
+                country: geo?.country ?? null,
+                city: geo?.city ?? null,
+                verifiedAt: new Date(),
+              },
+            });
+          },
+          // Kept in the account's security history (AC-898): how, on what, and roughly where. Never fails a sign in.
+          after: async (session, context) => {
+            const method = signInMethod(context?.path);
+            await keepEvent({
+              userId: session.userId,
+              kind: 'sign_in',
+              sessionId: session.id,
+              ...presentText('ip', session.ipAddress),
+              ...presentText('country', session.country),
+              ...presentText('deviceLabel', session.deviceLabel),
+              detail: {
+                ...(method === undefined ? {} : { method }),
+                ...(typeof session.city === 'string' && session.city !== '' ? { city: session.city } : {}),
+              },
+            });
+          },
+        },
+        delete: {
+          // Signing out on the device itself; a revoke from Account › Security keeps its own event.
+          after: async (session, context) => {
+            if (context?.path !== '/sign-out') return;
+            await keepEvent({
+              userId: session.userId,
+              kind: 'sign_out',
+              sessionId: session.id,
+              ...presentText('ip', session.ipAddress),
+              ...presentText('country', session.country),
+              ...presentText('deviceLabel', session.deviceLabel),
+            });
+          },
+        },
+      },
       user: {
         create: {
           // Every way an account is made (a code, Google) passes here.
@@ -476,10 +565,10 @@ export function createAuth({ env, identity, mailer, analytics = NO_ANALYTICS, in
   return {
     providers: { google: google !== undefined },
 
-    async handle(request, clientIp, origin) {
+    async handle(request, clientIp, origin, geo) {
       const checked = await checkEmail(request);
       if (checked instanceof Response) return checked;
-      const forwarded = new Request(checked, { headers: forwardedHeaders(checked.headers, clientIp, origin) });
+      const forwarded = new Request(checked, { headers: forwardedHeaders(checked.headers, clientIp, origin, geo) });
       return authErrorResponse(
         await auth.handler(forwarded),
         new URL(checked.url).pathname.slice(AUTH_BASE_PATH.length),
@@ -493,7 +582,11 @@ export function createAuth({ env, identity, mailer, analytics = NO_ANALYTICS, in
       });
       if (response === null) return undefined;
       const { id, name, email, emailVerified } = response.user;
-      return { user: { id, name, email, emailVerified }, setCookies: answered.getSetCookie() };
+      return {
+        sessionId: response.session.id,
+        user: { id, name, email, emailVerified },
+        setCookies: answered.getSetCookie(),
+      };
     },
   };
 }
