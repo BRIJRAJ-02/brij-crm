@@ -228,7 +228,9 @@ export function PublishDialog(props: PublishDialogProps) {
       actions={
         step === 1 ? (
           <>
-            <Button slot="close">{strings.cancel}</Button>
+            <Button slot="close" kbd="ESC">
+              {strings.cancel}
+            </Button>
             <Button
               key="next"
               variant="primary"
@@ -259,7 +261,10 @@ export function PublishDialog(props: PublishDialogProps) {
             </Button>
           </>
         ) : (
-          <Button key="close" variant="primary" slot="close">
+          // The step's buttons replace the one just pressed, so focus would fall out of the dialog (and Esc with
+          // it): it lands on Close, inside the dialog, which is then said with its new name, Your form is live.
+          // eslint-disable-next-line jsx-a11y-x/no-autofocus
+          <Button key="close" variant="primary" slot="close" autoFocus>
             {strings.close}
           </Button>
         )
