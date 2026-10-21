@@ -1,0 +1,768 @@
+// Invitations into a workspace (spec 0031, slice 2): inviting by email, the
+// open list, resend and revoke, the peek `/invite/:token` shows, and
+// accepting. Holders of `members.invite` manage them; only owners invite
+// owners. A token is 32 random bytes handed back to the caller once, to email;
+// only its SHA-256 is stored. Every invite, resend, revoke and accept writes
+// its audit row in its own transaction.
+import { randomBytes } from 'node:crypto';
+import { and, asc, count, desc, eq, inArray, ne, sql } from 'drizzle-orm';
+import { alias } from 'drizzle-orm/pg-core';
+import {
+  INVITE_BATCH_MAX,
+  INVITES_LIMIT,
+  maskEmail,
+  OWNER_RULES_MESSAGE,
+  PERMISSIONS,
+  ROLE_PERMISSIONS,
+  SEAT_LIMIT_MESSAGE,
+  type InvitationView,
+  type InvitePeek,
+  type InviteRefused,
+  type Role,
+} from '@crm/contracts';
+import { schema, type Database, type WorkspaceTx } from '@crm/db';
+import { checkId, newId } from '../engine/ids.ts';
+import { limitsOf } from '../engine/limits.ts';
+import { refuse } from '../engine/refusals.ts';
+import type { EngineScope } from '../engine/scope.ts';
+import { runWrite, type AfterWrite } from '../engine/write.ts';
+import { enterInvitation, inviteInvalid, inviteTokenHash, type EnteredInvitation } from '../access/door.ts';
+import { checkScope } from '../access/mint.ts';
+import { can, isRole } from '../access/policy.ts';
+import { inWorkspace } from '../access/run.ts';
+import { touched } from '../engine/definitions.ts';
+import { writeAudit, type AuditSource } from './audit.ts';
+
+const { invitations, members, workspaces } = schema;
+
+/** How long an email invitation works after its last send, as SQL (`INVITE_DAYS`, 7). */
+const INVITE_WINDOW = sql`now() + interval '7 days'`;
+
+const INVITATION_NOT_FOUND = "That invitation doesn't exist.";
+
+/** A fresh token (32 random bytes, base64url) and the hash the database keeps. */
+function mintToken(): { readonly token: string; readonly hash: string } {
+  const token = randomBytes(32).toString('base64url');
+  return { token, hash: inviteTokenHash(token) };
+}
+
+/** An invitation just sent, with the token for its email: the caller mails it and never keeps it. */
+export interface SentInvitation {
+  readonly invitation: InvitationView;
+  readonly token: string;
+  /** How many times its email has gone out, this send included: the mail's idempotency key is the id plus this. */
+  readonly sendCount: number;
+}
+
+/** What the invitation email names: the workspace, and the sender by their name in it (empty for the system). */
+export interface InviteSender {
+  readonly workspaceName: string;
+  readonly inviterName: string;
+}
+
+/** What `inviteMembers` did: the invitations to mail, the addresses refused, and who the email says sent them. */
+export interface InviteOutcome extends InviteSender {
+  readonly sent: readonly SentInvitation[];
+  readonly refused: readonly InviteRefused[];
+}
+
+/** The workspace's name and the actor's, for the email, read in the write's transaction. */
+async function senderOf(tx: WorkspaceTx, scope: EngineScope): Promise<InviteSender> {
+  const [workspace] = await tx
+    .select({ name: workspaces.name })
+    .from(workspaces)
+    .where(eq(workspaces.id, scope.workspaceId));
+  const { principal } = scope.access;
+  if (principal.kind !== 'member') return { workspaceName: workspace?.name ?? '', inviterName: '' };
+  const [self] = await tx
+    .select({ name: members.name })
+    .from(members)
+    .where(and(eq(members.workspaceId, scope.workspaceId), eq(members.id, principal.memberId)));
+  return { workspaceName: workspace?.name ?? '', inviterName: self?.name ?? '' };
+}
+
+/** Options every invitation write takes: where the request came from, for the audit row, and the send limit. */
+export interface InviteWriteOptions {
+  readonly source?: AuditSource;
+  /**
+   * Counts `sends` emails against the caller's send limits (AC-808), or
+   * throws: called once the caller is known to be allowed to send them, so a
+   * refused caller spends nobody's limit, and before anything is written.
+   */
+  readonly limit?: (sends: number) => Promise<void>;
+}
+
+/** The actor's role as the invitation rules judge it: a member's own, the system as an owner. */
+function actingRole(scope: EngineScope): Role | undefined {
+  const { principal } = scope.access;
+  if (principal.kind === 'system') return 'owner';
+  return principal.kind === 'member' ? principal.role : undefined;
+}
+
+/** Refuses FORBIDDEN unless the scope holds `members.invite`, before anything is read. */
+function checkInvites(scope: EngineScope): void {
+  checkScope(scope);
+  if (!can(scope.access, 'members.invite')) throw refuse('FORBIDDEN', PERMISSIONS['members.invite'].message);
+}
+
+/**
+ * The acting member's role now, read under lock, so one demoted or removed
+ * since the request came in acts with what they hold now; the door's answer
+ * for one who is no longer a member. Refuses FORBIDDEN when that role can't
+ * invite, or can't touch an owner invitation (`role`). Answers the role it
+ * acts with.
+ */
+async function checkActingNow(tx: WorkspaceTx, scope: EngineScope, role: Role): Promise<Role | undefined> {
+  const { principal } = scope.access;
+  let acting = actingRole(scope);
+  if (principal.kind === 'member') {
+    const [self] = await tx
+      .select({ role: members.role })
+      .from(members)
+      .where(
+        and(
+          eq(members.workspaceId, scope.workspaceId),
+          eq(members.id, principal.memberId),
+          eq(members.status, 'active'),
+        ),
+      )
+      .for('share');
+    if (self === undefined || !isRole(self.role)) {
+      throw refuse('NOT_FOUND', "That workspace doesn't exist, or you're not a member of it.");
+    }
+    acting = self.role;
+    if (!(ROLE_PERMISSIONS[acting] as readonly string[]).includes('members.invite')) {
+      throw refuse('FORBIDDEN', PERMISSIONS['members.invite'].message);
+    }
+  }
+  if (role === 'owner' && acting !== 'owner') throw refuse('FORBIDDEN', OWNER_RULES_MESSAGE);
+  return acting;
+}
+
+/**
+ * Whether the member who last sent an invitation still vouches for it (spec
+ * 0031, key invariants): still active, and still holding what sending it
+ * took, an owner for an owner invitation and `members.invite` for any
+ * other. One sent by the system always stands. An invitation nobody vouches
+ * for any more opens nothing, so an owner or admin removed or demoted can't
+ * come back through an invitation they sent before.
+ */
+function isVouchedFor(sent: {
+  readonly role: Role;
+  readonly sentByType: string;
+  readonly senderStatus: string | null;
+  readonly senderRole: string | null;
+}): boolean {
+  if (sent.sentByType === 'system') return true;
+  if (sent.sentByType !== 'member' || sent.senderStatus !== 'active') return false;
+  const senderRole = sent.senderRole ?? '';
+  if (!isRole(senderRole)) return false;
+  if (sent.role === 'owner') return senderRole === 'owner';
+  return (ROLE_PERMISSIONS[senderRole] as readonly string[]).includes('members.invite');
+}
+
+/** Takes turns with every other invitation write in the workspace, so the counts below stay exact. */
+async function lockInvitations(tx: WorkspaceTx, workspaceId: string): Promise<void> {
+  await tx.execute(sql`select pg_advisory_xact_lock(hashtextextended(${`invitations:${workspaceId}`}, 0))`);
+}
+
+/**
+ * Seats in use (spec 0031, AC-809): active non guest members plus open non
+ * guest email invitations. Guests (slice 9) never count.
+ */
+export async function seatsUsed(tx: WorkspaceTx, workspaceId: string): Promise<number> {
+  const [active] = await tx
+    .select({ n: count() })
+    .from(members)
+    .where(
+      and(eq(members.workspaceId, workspaceId), eq(members.status, 'active'), sql`${members.role}::text <> 'guest'`),
+    );
+  const [invited] = await tx
+    .select({ n: count() })
+    .from(invitations)
+    .where(
+      and(
+        eq(invitations.workspaceId, workspaceId),
+        eq(invitations.status, 'open'),
+        eq(invitations.kind, 'email'),
+        sql`${invitations.role}::text <> 'guest'`,
+      ),
+    );
+  return (active?.n ?? 0) + (invited?.n ?? 0);
+}
+
+/** Refuses 409 `SEAT_LIMIT` when `adding` more seats would pass the plan's (unlimited until #38). */
+export async function checkSeats(tx: WorkspaceTx, scope: EngineScope, adding: number): Promise<void> {
+  if (adding <= 0) return;
+  const limit = limitsOf(scope).seats;
+  if (!Number.isFinite(limit)) return;
+  if ((await seatsUsed(tx, scope.workspaceId)) + adding > limit) throw refuse('SEAT_LIMIT', SEAT_LIMIT_MESSAGE);
+}
+
+/** The member who last sent an invitation (its creator, or whoever resent it since): who the email and page name. */
+const inviter = alias(members, 'inviter');
+
+/** The open invitations with these ids (or all open ones), as the Invitations tab shows them, newest first. */
+async function viewsOf(tx: WorkspaceTx, workspaceId: string, ids?: readonly string[]): Promise<InvitationView[]> {
+  const rows = await tx
+    .select({
+      id: invitations.id,
+      email: invitations.email,
+      role: invitations.role,
+      invitedBy: inviter.name,
+      invitedAt: invitations.createdAt,
+      expiresAt: invitations.expiresAt,
+      isExpired: sql<boolean>`${invitations.expiresAt} <= now()`,
+    })
+    .from(invitations)
+    .leftJoin(
+      inviter,
+      and(eq(inviter.workspaceId, invitations.workspaceId), eq(inviter.id, invitations.updatedByMemberId)),
+    )
+    .where(
+      and(
+        eq(invitations.workspaceId, workspaceId),
+        eq(invitations.status, 'open'),
+        eq(invitations.kind, 'email'),
+        ...(ids === undefined ? [] : [inArray(invitations.id, [...ids])]),
+      ),
+    )
+    .orderBy(desc(invitations.createdAt), asc(invitations.id))
+    // At most the cap of open invitations exists, so one page holds them all.
+    .limit(INVITES_LIMIT);
+  return rows.map((row) => ({
+    id: row.id,
+    kind: 'email' as const,
+    email: row.email ?? '',
+    role: isRole(row.role) ? row.role : 'member',
+    invitedBy: row.invitedBy ?? '',
+    invitedAt: new Date(row.invitedAt).toISOString(),
+    expiresAt: new Date(row.expiresAt ?? row.invitedAt).toISOString(),
+    isExpired: row.isExpired,
+  }));
+}
+
+/** Lowercased, trimmed and without repeats, in the order given. */
+function addresses(emails: readonly string[]): string[] {
+  return [...new Set(emails.map((email) => email.trim().toLowerCase()).filter((email) => email !== ''))];
+}
+
+/**
+ * Invites 1 to 20 addresses with one role (spec 0031, AC-803, AC-804,
+ * AC-808, AC-809): needs `members.invite`, and only an owner invites as
+ * owner. An address that is already an active member is refused on its own
+ * ("Already a member"); one with an open invitation has it resent (new
+ * token, a fresh 7 days, the old link dead); the rest get new invitations.
+ * Refuses 409 `INVITES_LIMIT` past 100 open invitations and 409
+ * `SEAT_LIMIT` when the plan has no seat for the new ones. One audit row per
+ * invitation. Answers each invitation with its token, for the caller to
+ * email; the token is never stored.
+ */
+export async function inviteMembers(
+  scope: EngineScope,
+  input: { readonly emails: readonly string[]; readonly role: Role },
+  hooks: readonly AfterWrite[] = [],
+  options: InviteWriteOptions = {},
+): Promise<InviteOutcome> {
+  checkInvites(scope);
+  if (!isRole(input.role)) throw refuse('CONFIG_INVALID', 'Pick owner, admin or member.');
+  const role = input.role;
+  if (role === 'owner' && actingRole(scope) !== 'owner') throw refuse('FORBIDDEN', OWNER_RULES_MESSAGE);
+  const wanted = addresses(input.emails);
+  if (wanted.length === 0 || wanted.length > INVITE_BATCH_MAX) {
+    throw refuse('CONFIG_INVALID', `Invite 1 to ${String(INVITE_BATCH_MAX)} email addresses at once.`);
+  }
+  await options.limit?.(wanted.length);
+  const { result } = await runWrite(
+    scope,
+    async ({ tx }) => {
+      const acting = await checkActingNow(tx, scope, role);
+      await lockInvitations(tx, scope.workspaceId);
+      const already = await tx
+        .select({ email: sql<string>`lower(${members.email})` })
+        .from(members)
+        .where(
+          and(
+            eq(members.workspaceId, scope.workspaceId),
+            eq(members.status, 'active'),
+            inArray(sql`lower(${members.email})`, wanted),
+          ),
+        );
+      const memberEmails = new Set(already.map((row) => row.email));
+      const refused: InviteRefused[] = wanted
+        .filter((email) => memberEmails.has(email))
+        .map((email) => ({ email, code: 'ALREADY_MEMBER' as const, message: 'Already a member' }));
+      const toInvite = wanted.filter((email) => !memberEmails.has(email));
+      const sender = await senderOf(tx, scope);
+      if (toInvite.length === 0) return { ...sender, sent: [], refused };
+      const open = await tx
+        .select({ id: invitations.id, email: invitations.email, role: invitations.role })
+        .from(invitations)
+        .where(
+          and(
+            eq(invitations.workspaceId, scope.workspaceId),
+            eq(invitations.status, 'open'),
+            eq(invitations.kind, 'email'),
+            inArray(invitations.email, toInvite),
+          ),
+        )
+        .for('update');
+      // Only an owner touches an owner's invitation, here as on Resend and Revoke: re-inviting the address would
+      // otherwise rewrite its role and kill its link.
+      if (acting !== 'owner' && open.some((row) => row.role === 'owner')) {
+        throw refuse('FORBIDDEN', OWNER_RULES_MESSAGE);
+      }
+      const openByEmail = new Map(open.map((row) => [row.email ?? '', row]));
+      const fresh = toInvite.filter((email) => !openByEmail.has(email));
+      const [openCount] = await tx
+        .select({ n: count() })
+        .from(invitations)
+        .where(and(eq(invitations.workspaceId, scope.workspaceId), eq(invitations.status, 'open')));
+      const cap = limitsOf(scope).openInvitations;
+      if ((openCount?.n ?? 0) + fresh.length > cap) {
+        throw refuse('INVITES_LIMIT', `A workspace holds at most ${String(cap)} open invitations. Revoke some first.`);
+      }
+      // A resent invitation already holds its seat; each new one takes one (a guest, from slice 9, none).
+      await checkSeats(tx, scope, fresh.length);
+      const sent: { id: string; token: string; sendCount: number; resent: boolean; was?: Role }[] = [];
+      const by = touched(scope);
+      for (const email of toInvite) {
+        const { token, hash } = mintToken();
+        const earlier = openByEmail.get(email);
+        if (earlier !== undefined) {
+          const [row] = await tx
+            .update(invitations)
+            .set({
+              tokenHash: hash,
+              role,
+              sendCount: sql`${invitations.sendCount} + 1`,
+              lastSentAt: sql`now()`,
+              expiresAt: INVITE_WINDOW,
+              ...by,
+            })
+            .where(and(eq(invitations.workspaceId, scope.workspaceId), eq(invitations.id, earlier.id)))
+            .returning({ sendCount: invitations.sendCount });
+          sent.push({
+            id: earlier.id,
+            token,
+            sendCount: row?.sendCount ?? 1,
+            resent: true,
+            ...(isRole(earlier.role) ? { was: earlier.role } : {}),
+          });
+        } else {
+          const id = newId();
+          await tx.insert(invitations).values({
+            workspaceId: scope.workspaceId,
+            id,
+            kind: 'email',
+            email,
+            role,
+            tokenHash: hash,
+            maxUses: 1,
+            sendCount: 1,
+            lastSentAt: sql`now()`,
+            expiresAt: INVITE_WINDOW,
+            createdByType: by.updatedByType,
+            createdById: by.updatedById,
+            createdByMemberId: by.updatedByMemberId,
+            updatedByType: by.updatedByType,
+            updatedById: by.updatedById,
+            updatedByMemberId: by.updatedByMemberId,
+          });
+          sent.push({ id, token, sendCount: 1, resent: false });
+        }
+      }
+      for (const each of sent) {
+        await writeAudit(
+          tx,
+          scope.workspaceId,
+          scope.actor,
+          each.resent
+            ? {
+                action: 'invitation.resent',
+                targetType: 'invitation',
+                targetId: each.id,
+                ...(each.was !== undefined && each.was !== role ? { before: { role: each.was }, after: { role } } : {}),
+              }
+            : {
+                action: 'invitation.created',
+                targetType: 'invitation',
+                targetId: each.id,
+                // The address stays in `invitations`: the log names the invitation, never personal data it can't drop.
+                after: { role },
+              },
+          options.source,
+        );
+      }
+      const views = new Map(
+        (
+          await viewsOf(
+            tx,
+            scope.workspaceId,
+            sent.map((each) => each.id),
+          )
+        ).map((view) => [view.id, view]),
+      );
+      return {
+        ...sender,
+        refused,
+        sent: sent.flatMap((each) => {
+          const invitation = views.get(each.id);
+          return invitation === undefined ? [] : [{ invitation, token: each.token, sendCount: each.sendCount }];
+        }),
+      };
+    },
+    hooks,
+  );
+  return result;
+}
+
+/** The workspace's open email invitations, newest first (spec 0031, AC-810): holders of `members.invite` only. */
+export async function listInvitations(scope: EngineScope): Promise<InvitationView[]> {
+  checkInvites(scope);
+  return inWorkspace(scope, (tx) => viewsOf(tx, scope.workspaceId));
+}
+
+/** One open email invitation of the workspace, locked when `lock`, or refuses NOT_FOUND. */
+async function findOpen(tx: WorkspaceTx, scope: EngineScope, invitationId: string, lock = true) {
+  const query = tx
+    .select({ id: invitations.id, email: invitations.email, role: invitations.role })
+    .from(invitations)
+    .where(
+      and(
+        eq(invitations.workspaceId, scope.workspaceId),
+        eq(invitations.id, invitationId),
+        eq(invitations.status, 'open'),
+        eq(invitations.kind, 'email'),
+      ),
+    );
+  const [row] = await (lock ? query.for('update') : query);
+  if (row === undefined || !isRole(row.role)) throw refuse('NOT_FOUND', INVITATION_NOT_FOUND);
+  return { id: row.id, email: row.email ?? '', role: row.role };
+}
+
+/**
+ * Sends an open invitation again (spec 0031, AC-804): a new token (the old
+ * link stops working), a fresh 7 days and one more send. Needs
+ * `members.invite`; an owner invitation needs an owner.
+ */
+export async function resendInvite(
+  scope: EngineScope,
+  input: { readonly invitationId: string },
+  hooks: readonly AfterWrite[] = [],
+  options: InviteWriteOptions = {},
+): Promise<SentInvitation & InviteSender> {
+  checkInvites(scope);
+  const invitationId = checkId(input.invitationId, INVITATION_NOT_FOUND);
+  if (options.limit !== undefined) {
+    // Which invitation, and whether this caller may resend it, are known before a send is counted (AC-808), so a
+    // refused resend spends nobody's limit. The write checks both again under lock.
+    const found = await inWorkspace(scope, (tx) => findOpen(tx, scope, invitationId, false));
+    if (found.role === 'owner' && actingRole(scope) !== 'owner') throw refuse('FORBIDDEN', OWNER_RULES_MESSAGE);
+    await options.limit(1);
+  }
+  const { result } = await runWrite(
+    scope,
+    async ({ tx }) => {
+      await lockInvitations(tx, scope.workspaceId);
+      const open = await findOpen(tx, scope, invitationId);
+      await checkActingNow(tx, scope, open.role);
+      const { token, hash } = mintToken();
+      const [row] = await tx
+        .update(invitations)
+        .set({
+          tokenHash: hash,
+          sendCount: sql`${invitations.sendCount} + 1`,
+          lastSentAt: sql`now()`,
+          expiresAt: INVITE_WINDOW,
+          ...touched(scope),
+        })
+        .where(and(eq(invitations.workspaceId, scope.workspaceId), eq(invitations.id, open.id)))
+        .returning({ sendCount: invitations.sendCount });
+      await writeAudit(
+        tx,
+        scope.workspaceId,
+        scope.actor,
+        { action: 'invitation.resent', targetType: 'invitation', targetId: open.id },
+        options.source,
+      );
+      const [invitation] = await viewsOf(tx, scope.workspaceId, [open.id]);
+      if (invitation === undefined) throw new Error('The invitation just resent was not read back.');
+      return { ...(await senderOf(tx, scope)), invitation, token, sendCount: row?.sendCount ?? 1 };
+    },
+    hooks,
+  );
+  return result;
+}
+
+/** Revokes an open invitation (spec 0031, AC-804): its link stops working at once. Needs `members.invite`. */
+export async function revokeInvite(
+  scope: EngineScope,
+  input: { readonly invitationId: string },
+  hooks: readonly AfterWrite[] = [],
+  options: InviteWriteOptions = {},
+): Promise<void> {
+  checkInvites(scope);
+  const invitationId = checkId(input.invitationId, INVITATION_NOT_FOUND);
+  await runWrite(
+    scope,
+    async ({ tx }) => {
+      await lockInvitations(tx, scope.workspaceId);
+      const open = await findOpen(tx, scope, invitationId);
+      await checkActingNow(tx, scope, open.role === 'owner' ? 'owner' : 'member');
+      await tx
+        .update(invitations)
+        .set({ status: 'revoked', ...touched(scope) })
+        .where(and(eq(invitations.workspaceId, scope.workspaceId), eq(invitations.id, open.id)));
+      await writeAudit(
+        tx,
+        scope.workspaceId,
+        scope.actor,
+        {
+          action: 'invitation.revoked',
+          targetType: 'invitation',
+          targetId: open.id,
+          before: { status: 'open' },
+          after: { status: 'revoked' },
+        },
+        options.source,
+      );
+    },
+    hooks,
+  );
+}
+
+/** An invitation as acceptance reads it, inside its workspace. */
+interface HeldInvitation {
+  readonly id: string;
+  readonly email: string;
+  readonly role: Role;
+  readonly status: string;
+  readonly live: boolean;
+  readonly usedBy: string | null;
+  readonly inviterName: string | null;
+  /** Whoever last sent it still vouches for it (`isVouchedFor`). */
+  readonly isVouched: boolean;
+  readonly workspaceName: string;
+  readonly slug: string;
+}
+
+/** Whether an open invitation opens anything now: open, unexpired, and still vouched for by its sender. */
+const opensNow = (held: HeldInvitation): boolean => held.status === 'open' && held.live && held.isVouched;
+
+/**
+ * The invitation `entered` names, with its workspace and the member who last
+ * sent it, in a live workspace; locked when `lock`. Read by id and by the
+ * token's hash, so a link a resend replaced a moment ago opens nothing.
+ */
+async function readInvitation(tx: WorkspaceTx, workspaceId: string, entered: EnteredInvitation, lock: boolean) {
+  const query = tx
+    .select({
+      id: invitations.id,
+      email: invitations.email,
+      role: invitations.role,
+      status: invitations.status,
+      kind: invitations.kind,
+      live: sql<boolean>`coalesce(${invitations.expiresAt} > now(), false)`,
+      usedBy: invitations.usedByMemberId,
+      sentByType: invitations.updatedByType,
+      inviterName: inviter.name,
+      senderStatus: inviter.status,
+      senderRole: inviter.role,
+      workspaceName: workspaces.name,
+      slug: workspaces.slug,
+      deletedAt: workspaces.deletedAt,
+    })
+    .from(invitations)
+    .innerJoin(workspaces, eq(workspaces.id, invitations.workspaceId))
+    .leftJoin(
+      inviter,
+      and(eq(inviter.workspaceId, invitations.workspaceId), eq(inviter.id, invitations.updatedByMemberId)),
+    )
+    .where(
+      and(
+        eq(invitations.workspaceId, workspaceId),
+        eq(invitations.id, entered.invitationId),
+        eq(invitations.tokenHash, entered.tokenHash),
+      ),
+    );
+  const [row] = await (lock ? query.for('update', { of: invitations }) : query);
+  if (row === undefined || row.kind !== 'email' || row.deletedAt !== null || !isRole(row.role)) return undefined;
+  const held: HeldInvitation = {
+    id: row.id,
+    email: row.email ?? '',
+    role: row.role,
+    status: row.status,
+    live: row.live,
+    usedBy: row.usedBy,
+    inviterName: row.inviterName,
+    isVouched: isVouchedFor({
+      role: row.role,
+      sentByType: row.sentByType,
+      senderStatus: row.senderStatus,
+      senderRole: row.senderRole,
+    }),
+    workspaceName: row.workspaceName,
+    slug: row.slug,
+  };
+  return held;
+}
+
+/**
+ * What `/invite/:token` shows (spec 0031, AC-805): the workspace, who
+ * invited, the role and the address masked. Every token that doesn't open an
+ * invitation now (malformed, unknown, expired, revoked or used) answers the
+ * same `INVITE_INVALID`. The caller limits it to 20 a minute per IP.
+ */
+export async function peekInvite(deps: { readonly db: Database }, token: string): Promise<InvitePeek> {
+  const { scope, ...entered } = await enterInvitation(deps, token);
+  const held = await inWorkspace(scope, (tx) => readInvitation(tx, scope.workspaceId, entered, false));
+  if (held === undefined || !opensNow(held)) throw inviteInvalid();
+  return {
+    workspaceName: held.workspaceName,
+    inviterName: held.inviterName ?? '',
+    role: held.role,
+    invitedEmailMasked: maskEmail(held.email),
+  };
+}
+
+/** The signed in person accepting, as the session knows them. */
+export interface AcceptingUser {
+  readonly id: string;
+  readonly name: string;
+  readonly email: string;
+  readonly emailVerified: boolean;
+}
+
+/** The workspace an accepted invitation opened, and the member it made (or found). */
+export interface AcceptedInvite {
+  readonly slug: string;
+  readonly workspaceId: string;
+  readonly memberId: string;
+}
+
+/** What a person whose verified email isn't the invited one is told (AC-805); they join nothing. */
+function mismatch(email: string) {
+  return refuse(
+    'INVITE_EMAIL_MISMATCH',
+    `This invitation is for ${maskEmail(email)}. Sign in with that address to accept.`,
+  );
+}
+
+/**
+ * Accepts an email invitation (spec 0031, AC-805, AC-806): the signed in
+ * person's verified email must be the invited one. In one transaction: an
+ * active member with the invitation's role (a returning removed person gets
+ * a new row), their directory membership, the invitation used, a `members`
+ * outbox row (through `hooks`) and an audit row. A person already in the
+ * workspace (two tabs accepting) is answered with the workspace again and
+ * joins once. Refuses `INVITE_INVALID`, `INVITE_EMAIL_MISMATCH` and
+ * `SEAT_LIMIT`.
+ */
+export async function acceptInvite(
+  deps: { readonly db: Database },
+  user: AcceptingUser,
+  token: string,
+  hooks: readonly AfterWrite[] = [],
+  options: InviteWriteOptions = {},
+): Promise<AcceptedInvite> {
+  const { scope, ...entered } = await enterInvitation(deps, token);
+  const email = user.email.trim().toLowerCase();
+  const { result } = await runWrite(
+    scope,
+    async (context) => {
+      const { tx } = context;
+      const held = await readInvitation(tx, scope.workspaceId, entered, true);
+      if (held === undefined) throw inviteInvalid();
+      const [mine] = await tx
+        .select({ id: members.id })
+        .from(members)
+        .where(
+          and(eq(members.workspaceId, scope.workspaceId), eq(members.userId, user.id), eq(members.status, 'active')),
+        )
+        .for('update');
+      const opened = { slug: held.slug, workspaceId: scope.workspaceId };
+      // Already in (the other tab got there first): the same answer, nothing joins twice.
+      if (held.status === 'used' && mine !== undefined && held.usedBy === mine.id)
+        return { ...opened, memberId: mine.id };
+      if (!opensNow(held)) throw inviteInvalid();
+      if (!user.emailVerified || held.email !== email) throw mismatch(held.email);
+      if (mine !== undefined) {
+        // In already by another way: the invitation is spent, and they stay as they are, with its row in the log.
+        await tx
+          .update(invitations)
+          .set({ status: 'used', uses: sql`${invitations.uses} + 1`, usedByMemberId: mine.id, ...touched(scope) })
+          .where(and(eq(invitations.workspaceId, scope.workspaceId), eq(invitations.id, held.id)));
+        await writeAudit(
+          tx,
+          scope.workspaceId,
+          { type: 'member', id: mine.id },
+          {
+            action: 'invitation.accepted',
+            targetType: 'invitation',
+            targetId: held.id,
+            before: { status: 'open' },
+            after: { status: 'used', alreadyMember: true },
+          },
+          options.source,
+        );
+        return { ...opened, memberId: mine.id };
+      }
+      const [taken] = await tx
+        .select({ id: members.id })
+        .from(members)
+        .where(
+          and(
+            eq(members.workspaceId, scope.workspaceId),
+            eq(members.status, 'active'),
+            sql`lower(${members.email}) = ${email}`,
+            ne(members.userId, user.id),
+          ),
+        )
+        .limit(1);
+      if (taken !== undefined) throw inviteInvalid();
+      // Its own seat is already counted while it is open; a plan lowered since it was sent is checked here.
+      const limit = limitsOf(scope).seats;
+      if (Number.isFinite(limit) && (await seatsUsed(tx, scope.workspaceId)) > limit) {
+        throw refuse('SEAT_LIMIT', SEAT_LIMIT_MESSAGE);
+      }
+      const memberId = newId();
+      const name = user.name.trim() === '' ? (email.split('@')[0] ?? email) : user.name.trim();
+      await tx.insert(members).values({
+        workspaceId: scope.workspaceId,
+        id: memberId,
+        userId: user.id,
+        name: name.slice(0, 80),
+        email,
+        role: held.role,
+        createdByType: 'system',
+        updatedByType: 'system',
+      });
+      // The directory's "my workspaces" row, in this transaction; one left behind by an earlier membership stays.
+      await tx.execute(
+        sql`insert into auth.workspace_membership (user_id, workspace_id, member_id) values (${user.id}, ${scope.workspaceId}, ${memberId}) on conflict do nothing`,
+      );
+      await tx
+        .update(invitations)
+        .set({ status: 'used', uses: sql`${invitations.uses} + 1`, usedByMemberId: memberId, ...touched(scope) })
+        .where(and(eq(invitations.workspaceId, scope.workspaceId), eq(invitations.id, held.id)));
+      await writeAudit(
+        tx,
+        scope.workspaceId,
+        { type: 'member', id: memberId },
+        {
+          action: 'invitation.accepted',
+          targetType: 'member',
+          targetId: memberId,
+          after: { role: held.role, invitationId: held.id },
+        },
+        options.source,
+      );
+      // Everyone's member list reads them in (spec 0007, AC-82).
+      context.record({ members: [memberId] });
+      return { ...opened, memberId };
+    },
+    hooks,
+  );
+  return result;
+}

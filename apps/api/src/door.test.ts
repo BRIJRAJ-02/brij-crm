@@ -26,6 +26,9 @@ const BOOTSTRAP: ReadonlySet<string> = new Set([
   'me.get',
   // Spec 0031: passes the door inside packages/core before it writes the caller's own preference.
   'me.setLastWorkspace',
+  // Spec 0031: an invitation's token finds its workspace in packages/core, which mints the scope there.
+  'invitations.peek',
+  'invitations.accept',
   'workspaces.create',
   'realtime.connectionToken',
 ]);
@@ -37,17 +40,28 @@ function isBootstrap(path: string): boolean {
 /**
  * The module files holding the bootstrap handlers that read the database
  * without a member scope: `system.status` (a health read) and
- * `workspaces.create` (the engine's bootstrap), and `me.setLastWorkspace`
- * (spec 0031), whose service passes the door in packages/core. No other
- * module file may.
+ * `workspaces.create` (the engine's bootstrap), `me.setLastWorkspace`
+ * (spec 0031), whose service passes the door in packages/core, and
+ * `invitations.peek` and `.accept` (spec 0031), whose services find the
+ * workspace by the token's hash. No other module file may.
  */
-const RAW_DATABASE_FILES: ReadonlySet<string> = new Set(['system/router.ts', 'workspaces/router.ts', 'me/router.ts']);
+const RAW_DATABASE_FILES: ReadonlySet<string> = new Set([
+  'system/router.ts',
+  'workspaces/router.ts',
+  'me/router.ts',
+  'invitations/public.ts',
+]);
 
 /**
  * The module files holding the bootstrap handlers that read global identity:
- * `me.get` and `workspaces.create`. No other module file may.
+ * `me.get` and `workspaces.create`, and `invitations.peek` (its per address
+ * limit, spec 0031). No other module file may.
  */
-const RAW_IDENTITY_FILES: ReadonlySet<string> = new Set(['me/router.ts', 'workspaces/router.ts']);
+const RAW_IDENTITY_FILES: ReadonlySet<string> = new Set([
+  'me/router.ts',
+  'workspaces/router.ts',
+  'invitations/public.ts',
+]);
 
 /** Reaching the database around the door: the raw pool from the context, or a workspace transaction of its own. */
 const AROUND_THE_DOOR =

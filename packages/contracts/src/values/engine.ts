@@ -48,6 +48,12 @@ export const ENGINE_REFUSAL_CODES = [
   'BOOKING_CLOSED',
   // Calendar sync (spec 0024, AC-618): the member has no connected calendar to write an event to.
   'CALENDAR_NOT_CONNECTED',
+  // Invitations (spec 0031): an expired, revoked, used or unknown invitation (all one answer); an invitation for
+  // another address; too many open invitations; no free seat on the plan.
+  'INVITE_INVALID',
+  'INVITE_EMAIL_MISMATCH',
+  'INVITES_LIMIT',
+  'SEAT_LIMIT',
 ] as const;
 
 /** One of the engine's refusal codes. */

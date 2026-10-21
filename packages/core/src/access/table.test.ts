@@ -27,6 +27,11 @@ const NO_SCOPE: ReadonlySet<string> = new Set([
   // Spec 0031: passes the door itself (`enterWorkspace`) before it writes the caller's own preference.
   'setLastWorkspace',
   'startWorkspace',
+  // Spec 0031: an invitation's token is its way in; they mint the workspace's scope through the door's
+  // enterInvitation, and isInvitedEmail answers sign up's yes or no.
+  'peekInvite',
+  'acceptInvite',
+  'isInvitedEmail',
   'createWorkspace',
   'createUserWorkspace',
   // Pure access functions.

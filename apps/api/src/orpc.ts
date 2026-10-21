@@ -16,6 +16,7 @@ import { implement, os } from '@orpc/server';
 import type { ResponseHeadersPluginContext } from '@orpc/server/plugins';
 import type { Auth, SessionUser } from './auth/auth.ts';
 import type { CalendarServices } from './calendar/services.ts';
+import type { Mailer } from './mail/mailer.ts';
 import { apiError } from './errors.ts';
 import { log } from './log.ts';
 import type { ReadGate } from './gate.ts';
@@ -75,6 +76,24 @@ export interface RequestContext extends ResponseHeadersPluginContext {
   bookingCalendar: BookingCalendar;
   /** The key a booking's guest page token derives from (`booking-link.ts`): Book someone in, Copy guest link. */
   bookingLinkKey: ManageLinkKey;
+  /** The one way to send email (spec 0005): invitations (spec 0031) go through it. */
+  mailer: Mailer;
+  /** The app's own address (`APP_URL`): an invitation's link is `<appUrl>/invite/<token>`. */
+  appUrl: string;
+  /**
+   * The cross instance limiter (`auth.rate_limit`, through the identity
+   * store), and only that piece of identity, so a member handler can limit
+   * invitation sends per workspace and per inviter (spec 0031, AC-808).
+   */
+  limiter: Pick<IdentityStore, 'consumeRateLimit'>;
+  /**
+   * Whether `email` may start a workspace of its own: an address on
+   * `SIGNUP_ALLOWLIST` (anyone while the list is open). An account an email
+   * invitation let past a closed list joins the workspace that invited it and
+   * starts none (spec 0031, owner decision 3), so an invitation can't make
+   * more senders of invitations.
+   */
+  mayStartWorkspace: (email: string) => boolean;
 }
 
 /** What `authed` adds: the signed in person. */

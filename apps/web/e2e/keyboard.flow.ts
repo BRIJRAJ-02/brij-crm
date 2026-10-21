@@ -159,10 +159,19 @@ test.describe('the core loop by keyboard', () => {
     await menu.focus();
     await focusedWithRing(page, menu, 'the workspace menu');
     await page.keyboard.press('Enter');
-    // Settings comes first (spec 0012); Down reaches Sign out.
-    await expect(page.getByRole('menuitem', { name: 'Settings' })).toBeFocused();
-    await page.keyboard.press('ArrowDown');
+    // The workspaces come first (spec 0031, AC-801), the open one checked; Sign out is last, so End reaches it.
+    await expect(page.getByRole('menuitem').first()).toBeFocused();
+    await page.keyboard.press('End');
     await expect(page.getByRole('menuitem', { name: 'Sign out' })).toBeFocused();
+    await page.keyboard.press('Enter');
+    // It asks first (the owner, 21 October 2026): Tab reaches its commit, last in the dialog, and Enter signs out.
+    const commit = page
+      .getByRole('dialog', { name: 'Sign out?' })
+      .getByRole('button', { name: 'Sign out', exact: true });
+    for (let tab = 0; tab < 4 && !(await commit.evaluate((button) => button === document.activeElement)); tab += 1) {
+      await page.keyboard.press('Tab');
+    }
+    await focusedWithRing(page, commit, 'the sign out confirm');
     await page.keyboard.press('Enter');
     await expect(page).toHaveURL(/\/sign-in$/);
     await expect(emailField).toBeFocused();

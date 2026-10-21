@@ -18,6 +18,9 @@ export const strings = {
   openSettings: 'Open settings',
   signingOut: 'Signing out',
   signOutFailed: 'Couldn’t sign out. Check your connection, then try again.',
+  /** The sign out confirm (the owner, 21 October 2026). */
+  signOutTitle: 'Sign out?',
+  signOutText: 'You’ll need to sign in again on this device.',
   records: 'Records',
   /** The sidebar's way to the trash, at the foot of Records (spec 0022). */
   trash: 'Trash',

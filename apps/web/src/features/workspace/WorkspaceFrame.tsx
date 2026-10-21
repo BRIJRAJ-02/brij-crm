@@ -35,6 +35,7 @@ import {
   trashHref,
   workspaceHref,
 } from './objects.ts';
+import { SignOutDialog } from './SignOutDialog.tsx';
 import { strings } from './strings.ts';
 import { SETTINGS_KEYS, UNDO_KEYS } from './undo.ts';
 import { useUndoShortcut } from './useUndoShortcut.ts';
@@ -109,6 +110,9 @@ export function WorkspaceFrame({
 }: WorkspaceFrameProps) {
   const navigate = useNavigate();
   const [isSigningOut, setSigningOut] = useState(false);
+  // Sign out asks first (the owner, 21 October 2026); a failure shows in the confirm, which stays open.
+  const [isConfirmingSignOut, setConfirmingSignOut] = useState(false);
+  const [signOutFailure, setSignOutFailure] = useState<string | undefined>(undefined);
   // Cmd+Z (Ctrl+Z elsewhere) undoes this tab's last change; ? lists the shortcuts (spec 0006, AC-48).
   const [isHelpOpen, setHelpOpen] = useState(false);
   const openHelp = useCallback(() => {
@@ -127,13 +131,14 @@ export function WorkspaceFrame({
   const signOut = () => {
     if (isSigningOut) return;
     setSigningOut(true);
+    setSignOutFailure(undefined);
     data.auth.signOut().then(
       () => {
         void navigate({ to: '/sign-in', replace: true });
       },
       () => {
         setSigningOut(false);
-        toasts.toast({ tone: 'danger', message: strings.signOutFailed });
+        setSignOutFailure(strings.signOutFailed);
       },
     );
   };
@@ -161,7 +166,10 @@ export function WorkspaceFrame({
               <Menu
                 label={strings.workspaceMenu}
                 onAction={(key) => {
-                  if (key === 'sign-out') signOut();
+                  if (key === 'sign-out') {
+                    setSignOutFailure(undefined);
+                    setConfirmingSignOut(true);
+                  }
                   if (key === 'shortcuts') openHelp();
                 }}
               >
@@ -185,25 +193,24 @@ export function WorkspaceFrame({
                   </MenuSection>
                 )}
                 {workspaces !== undefined && <MenuSeparator />}
+                {/* The shortcut list, also on ?, so it can be found with the pointer too. Settings lives in the
+                    sidebar's foot (and on ⌘,), not here (the owner, 21 October 2026). */}
                 {roleLabel === undefined ? (
-                  <>
-                    <MenuItem id="settings" icon="settings" href={settingsHomeHref(slug)} kbd="⌘,">
-                      {strings.settings}
-                    </MenuItem>
-                    <MenuItem id="sign-out">{strings.signOut}</MenuItem>
-                  </>
+                  <MenuItem id="shortcuts" icon="keyboard" kbd="?">
+                    {strings.keyboardShortcuts}
+                  </MenuItem>
                 ) : (
-                  // The person's role heads the menu (spec 0009, AC-136); Settings sits above Sign out (spec 0012).
+                  // The person's role heads their part of the menu (spec 0009, AC-136).
                   <MenuSection label={roleLabel}>
-                    <MenuItem id="settings" icon="settings" href={settingsHomeHref(slug)} kbd="⌘,">
-                      {strings.settings}
+                    <MenuItem id="shortcuts" icon="keyboard" kbd="?">
+                      {strings.keyboardShortcuts}
                     </MenuItem>
-                    <MenuItem id="sign-out">{strings.signOut}</MenuItem>
                   </MenuSection>
                 )}
-                {/* The shortcut list, also on ?, so it can be found with the pointer too. */}
-                <MenuItem id="shortcuts" kbd="?">
-                  {strings.keyboardShortcuts}
+                <MenuSeparator />
+                {/* Leaving comes last, where people look for it. */}
+                <MenuItem id="sign-out" icon="log-out">
+                  {strings.signOut}
                 </MenuItem>
               </Menu>
             }
@@ -256,6 +263,15 @@ export function WorkspaceFrame({
       }
     >
       {children}
+      <SignOutDialog
+        isOpen={isConfirmingSignOut}
+        isBusy={isSigningOut}
+        failure={signOutFailure}
+        onSignOut={signOut}
+        onClose={() => {
+          setConfirmingSignOut(false);
+        }}
+      />
       <ShortcutHelp
         isOpen={isHelpOpen}
         onOpenChange={setHelpOpen}

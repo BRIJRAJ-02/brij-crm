@@ -13,6 +13,7 @@ import { realtimeContract } from './realtime.ts';
 import { recordsContract } from './records.ts';
 import { linksContract, relationshipsContract } from './relations.ts';
 import { systemContract } from './system.ts';
+import { invitationsContract } from './team.ts';
 import { trashContract } from './trash.ts';
 import { notesContract } from './notes.ts';
 import { tasksContract } from './tasks.ts';
@@ -45,6 +46,7 @@ export * from './system.ts';
 export * from './trash.ts';
 export * from './notes.ts';
 export * from './tasks.ts';
+export * from './team.ts';
 export * from './usage.ts';
 export * from './view-model.ts';
 export * from './views.ts';
@@ -69,6 +71,7 @@ export const contract = {
   relationships: relationshipsContract,
   links: linksContract,
   members: membersContract,
+  invitations: invitationsContract,
   access: accessContract,
   realtime: realtimeContract,
   jobs: jobsContract,

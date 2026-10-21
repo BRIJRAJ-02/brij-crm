@@ -29,13 +29,17 @@ import type {
   FormStatus,
   FormSummary,
   FormView,
+  InvitationView,
+  InvitePeek,
+  InviteResult,
   JobView,
   Me,
-  MemberSummary,
+  MemberView,
   MyAccess,
   ObjectSummary,
   RecordView,
   RelationshipView,
+  Role,
   SubmissionState,
   Usage,
   ValidationRuleInput,
@@ -163,12 +167,17 @@ export type {
   AnswerType,
   InputIssue,
   JobStatus,
+  InvitationView,
+  InvitePeek,
+  InviteResult,
   JobView,
   Me,
   MemberSummary,
+  MemberView,
   MyAccess,
   ObjectSummary,
   Permission,
+  Role,
   RecordRefDisplay,
   RecordView,
   RelationshipView,
@@ -208,6 +217,7 @@ export type { Hue, ObjectIcon, RichTextDoc } from '@crm/contracts/values';
 // The API name rule and the new object's defaults (spec 0012): plain modules with no Zod, so the dialogs share
 // the server's own functions without loading the schema library.
 export { isReservedSlug, RESERVED_SLUGS, toApiSlug } from '@crm/contracts/slugs';
+export { ROLE_DESCRIPTIONS, ROLE_LABELS, ROLES } from '@crm/contracts/roles';
 export { freeHue, PICKER_TYPES, STARTER_STAGES, type PickerType } from '@crm/contracts/picker';
 export {
   MAX_PENDING_OPTIONS,
@@ -641,7 +651,7 @@ export function createDataLayer({
   // Every object, archived ones too (settings lists them; the sidebar filters them out), in the workspace's order.
   let objects = new Map<string, Promise<ObjectSummary[]>>();
   let usage = new Map<string, Promise<Usage>>();
-  let members = new Map<string, Promise<MemberSummary[]>>();
+  let members = new Map<string, Promise<MemberView[]>>();
   let access = new Map<string, Promise<MyAccess>>();
   let attributes = new Map<string, Promise<AttributeDefinition[]>>();
   // Each object's attributes with the archived ones too (settings, spec 0012), apart from the live lists the tables read.
@@ -2310,11 +2320,53 @@ export function createDataLayer({
       get: readUsage,
     },
     members: {
-      /** The workspace's active members, by name: the Owner column's names. Cached for the app load. */
-      list: (workspace: string): Promise<MemberSummary[]> =>
+      /**
+       * The workspace's active members, by name, with their roles and when
+       * they joined (spec 0031): the Owner column's names and the Members
+       * page. Cached for the app load; a live `members` event reads it again.
+       */
+      list: (workspace: string): Promise<MemberView[]> =>
         cached(members, workspace, () =>
           beforeRead(workspace).then(() => call((options) => api.members.list({ workspace }, options))),
         ),
+      /**
+       * Hears the workspace's changes while the Members page is open, so
+       * another admin's change reads the list again; the answer stops.
+       */
+      watch: (workspace: string): (() => void) => watch(workspace),
+    },
+    /**
+     * Invitations (spec 0031): settings, not CRM data, so no live event. The
+     * Members page reads the open list and every write waits for the server
+     * (an invite's answer names what was sent and refused), then the page
+     * reads the list again.
+     */
+    invitations: {
+      /** The open email invitations, newest first: holders of `members.invite` only (`FORBIDDEN` otherwise). */
+      list: (workspace: string): Promise<InvitationView[]> =>
+        call((options) => api.invitations.list({ workspace }, options)),
+      /** Invites 1 to 20 addresses with one role. Refusals: `FORBIDDEN`, `INVITES_LIMIT`, `SEAT_LIMIT`, `RATE_LIMITED`. */
+      create: (workspace: string, emails: readonly string[], role: Role): Promise<InviteResult> =>
+        call((options) =>
+          api.invitations.create({ workspace, emails: [...emails], role, mutationId: mintId() }, options),
+        ),
+      /** Sends an open invitation again: a new link, the old one dead. `sent` is false when its email failed. */
+      resend: (workspace: string, invitationId: string) =>
+        call((options) => api.invitations.resend({ workspace, invitationId, mutationId: mintId() }, options)),
+      /** Revokes an open invitation: its link stops working at once. */
+      revoke: (workspace: string, invitationId: string): Promise<void> =>
+        call((options) => api.invitations.revoke({ workspace, invitationId, mutationId: mintId() }, options)),
+      /** What an invitation link shows before accepting, with no session needed; `INVITE_INVALID` for any bad link. */
+      peek: (token: string): Promise<InvitePeek> => attempt((options) => api.invitations.peek({ token }, options)),
+      /**
+       * Accepts an invitation as the signed in person: answers the workspace's
+       * address. The person's workspaces are read again after.
+       */
+      async accept(token: string): Promise<{ slug: string }> {
+        const accepted = await call((options) => api.invitations.accept({ token }, options));
+        me = undefined;
+        return accepted;
+      },
     },
     access: {
       /**

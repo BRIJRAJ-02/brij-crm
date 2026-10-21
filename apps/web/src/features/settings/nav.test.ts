@@ -18,7 +18,7 @@ describe('settingsNav', () => {
     expect(groups.map((group) => group.label)).toEqual(['Account', 'Workspace']);
     expect(groups.map((group) => group.entries.map((entry) => entry.label))).toEqual([
       ['Preferences', 'Calendars'],
-      ['Objects', 'Background jobs'],
+      ['Members', 'Objects', 'Background jobs'],
     ]);
   });
 
@@ -27,6 +27,7 @@ describe('settingsNav', () => {
     expect(Object.fromEntries(entries.map((entry) => [entry.id, entry.href]))).toEqual({
       preferences: '/w/acme/settings/account/preferences',
       calendars: '/w/acme/settings/account/calendars',
+      members: '/w/acme/settings/members',
       objects: '/w/acme/settings/objects',
       jobs: '/w/acme/settings/jobs',
     });
@@ -79,6 +80,7 @@ describe('settingsPageOf', () => {
     expect(settingsPageOf('/w/acme/settings/objects')).toBe('objects');
     expect(settingsPageOf('/w/acme/settings/objects/people/attributes')).toBe('objects');
     expect(settingsPageOf('/w/acme/settings/jobs/')).toBe('jobs');
+    expect(settingsPageOf('/w/acme/settings/members')).toBe('members');
   });
 
   it('keeps the old Calendar address current on Calendars while it redirects', () => {

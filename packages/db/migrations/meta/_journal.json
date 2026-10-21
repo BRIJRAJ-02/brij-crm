@@ -372,6 +372,13 @@
       "when": 1792580228087,
       "tag": "0052_user_prefs",
       "breakpoints": true
+    },
+    {
+      "idx": 53,
+      "version": "7",
+      "when": 1792580313391,
+      "tag": "0053_invitations_audit",
+      "breakpoints": true
     }
   ]
 }

@@ -966,8 +966,10 @@ describe('members.list', () => {
        values ($1, 'Gone', 'gone@example.com', 'removed', 'system', 'system')`,
       [m.workspace.id],
     );
-    expect(await m.client.members.list({ workspace: m.slug })).toEqual([
-      { id: await memberIdOf(m), name: 'Ada', email: m.email },
+    const listed = await m.client.members.list({ workspace: m.slug });
+    expect(listed.map(({ id, name, email, role }) => ({ id, name, email, role }))).toEqual([
+      { id: await memberIdOf(m), name: 'Ada', email: m.email, role: 'owner' },
     ]);
+    expect(Number.isNaN(Date.parse(listed[0]?.joinedAt ?? ''))).toBe(false);
   });
 });

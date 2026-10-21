@@ -14,6 +14,7 @@ import { Route as SignInRouteImport } from './routes/sign-in.tsx'
 import { Route as StatusRouteImport } from './routes/status.tsx'
 import { Route as VerifyRouteImport } from './routes/verify.tsx'
 import { Route as WelcomeRouteImport } from './routes/welcome.tsx'
+import { Route as InviteTokenRouteImport } from './routes/invite.$token.tsx'
 import { Route as WSlugRouteImport } from './routes/w.$slug.tsx'
 import { Route as WSlugIndexRouteImport } from './routes/w.$slug.index.tsx'
 import { Route as WSlugBookingsRouteImport } from './routes/w.$slug.bookings.tsx'
@@ -30,6 +31,7 @@ import { Route as WSlugObjectsObjectRouteImport } from './routes/w.$slug.objects
 import { Route as WSlugSettingsIndexRouteImport } from './routes/w.$slug.settings.index.tsx'
 import { Route as WSlugSettingsCalendarRouteImport } from './routes/w.$slug.settings.calendar.tsx'
 import { Route as WSlugSettingsJobsRouteImport } from './routes/w.$slug.settings.jobs.tsx'
+import { Route as WSlugSettingsMembersRouteImport } from './routes/w.$slug.settings.members.tsx'
 import { Route as WSlugCapturesFormsIndexRouteImport } from './routes/w.$slug.captures.forms.index.tsx'
 import { Route as WSlugCapturesLinksIndexRouteImport } from './routes/w.$slug.captures.links.index.tsx'
 import { Route as WSlugCapturesFormsFormIdRouteImport } from './routes/w.$slug.captures_.forms.$formId.tsx'
@@ -72,6 +74,11 @@ const VerifyRoute = VerifyRouteImport.update({
 const WelcomeRoute = WelcomeRouteImport.update({
   id: '/welcome',
   path: '/welcome',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const InviteTokenRoute = InviteTokenRouteImport.update({
+  id: '/invite/$token',
+  path: '/invite/$token',
   getParentRoute: () => rootRouteImport,
 } as any)
 const WSlugRoute = WSlugRouteImport.update({
@@ -153,6 +160,11 @@ const WSlugSettingsCalendarRoute = WSlugSettingsCalendarRouteImport.update({
 const WSlugSettingsJobsRoute = WSlugSettingsJobsRouteImport.update({
   id: '/jobs',
   path: '/jobs',
+  getParentRoute: () => WSlugSettingsRoute,
+} as any)
+const WSlugSettingsMembersRoute = WSlugSettingsMembersRouteImport.update({
+  id: '/members',
+  path: '/members',
   getParentRoute: () => WSlugSettingsRoute,
 } as any)
 const WSlugCapturesFormsIndexRoute = WSlugCapturesFormsIndexRouteImport.update({
@@ -267,6 +279,7 @@ export interface FileRoutesByFullPath {
   '/status': typeof StatusRoute
   '/verify': typeof VerifyRoute
   '/welcome': typeof WelcomeRoute
+  '/invite/$token': typeof InviteTokenRoute
   '/w/$slug': typeof WSlugRouteWithChildren
   '/w/$slug/bookings': typeof WSlugBookingsRouteWithChildren
   '/w/$slug/captures': typeof WSlugCapturesRouteWithChildren
@@ -280,6 +293,7 @@ export interface FileRoutesByFullPath {
   '/w/$slug/objects/$object': typeof WSlugObjectsObjectRoute
   '/w/$slug/settings/calendar': typeof WSlugSettingsCalendarRoute
   '/w/$slug/settings/jobs': typeof WSlugSettingsJobsRoute
+  '/w/$slug/settings/members': typeof WSlugSettingsMembersRoute
   '/w/$slug/bookings/': typeof WSlugBookingsIndexRoute
   '/w/$slug/captures/': typeof WSlugCapturesIndexRoute
   '/w/$slug/settings/': typeof WSlugSettingsIndexRoute
@@ -308,6 +322,7 @@ export interface FileRoutesByTo {
   '/status': typeof StatusRoute
   '/verify': typeof VerifyRoute
   '/welcome': typeof WelcomeRoute
+  '/invite/$token': typeof InviteTokenRoute
   '/w/$slug/tasks': typeof WSlugTasksRoute
   '/w/$slug/trash': typeof WSlugTrashRoute
   '/w/$slug': typeof WSlugIndexRoute
@@ -317,6 +332,7 @@ export interface FileRoutesByTo {
   '/w/$slug/objects/$object': typeof WSlugObjectsObjectRoute
   '/w/$slug/settings/calendar': typeof WSlugSettingsCalendarRoute
   '/w/$slug/settings/jobs': typeof WSlugSettingsJobsRoute
+  '/w/$slug/settings/members': typeof WSlugSettingsMembersRoute
   '/w/$slug/bookings': typeof WSlugBookingsIndexRoute
   '/w/$slug/captures': typeof WSlugCapturesIndexRoute
   '/w/$slug/settings': typeof WSlugSettingsIndexRoute
@@ -346,6 +362,7 @@ export interface FileRoutesById {
   '/status': typeof StatusRoute
   '/verify': typeof VerifyRoute
   '/welcome': typeof WelcomeRoute
+  '/invite/$token': typeof InviteTokenRoute
   '/w/$slug': typeof WSlugRouteWithChildren
   '/w/$slug/bookings': typeof WSlugBookingsRouteWithChildren
   '/w/$slug/captures': typeof WSlugCapturesRouteWithChildren
@@ -359,6 +376,7 @@ export interface FileRoutesById {
   '/w/$slug/objects/$object': typeof WSlugObjectsObjectRoute
   '/w/$slug/settings/calendar': typeof WSlugSettingsCalendarRoute
   '/w/$slug/settings/jobs': typeof WSlugSettingsJobsRoute
+  '/w/$slug/settings/members': typeof WSlugSettingsMembersRoute
   '/w/$slug/bookings/': typeof WSlugBookingsIndexRoute
   '/w/$slug/captures/': typeof WSlugCapturesIndexRoute
   '/w/$slug/settings/': typeof WSlugSettingsIndexRoute
@@ -389,6 +407,7 @@ export interface FileRouteTypes {
     | '/status'
     | '/verify'
     | '/welcome'
+    | '/invite/$token'
     | '/w/$slug'
     | '/w/$slug/bookings'
     | '/w/$slug/captures'
@@ -402,6 +421,7 @@ export interface FileRouteTypes {
     | '/w/$slug/objects/$object'
     | '/w/$slug/settings/calendar'
     | '/w/$slug/settings/jobs'
+    | '/w/$slug/settings/members'
     | '/w/$slug/bookings/'
     | '/w/$slug/captures/'
     | '/w/$slug/settings/'
@@ -430,6 +450,7 @@ export interface FileRouteTypes {
     | '/status'
     | '/verify'
     | '/welcome'
+    | '/invite/$token'
     | '/w/$slug/tasks'
     | '/w/$slug/trash'
     | '/w/$slug'
@@ -439,6 +460,7 @@ export interface FileRouteTypes {
     | '/w/$slug/objects/$object'
     | '/w/$slug/settings/calendar'
     | '/w/$slug/settings/jobs'
+    | '/w/$slug/settings/members'
     | '/w/$slug/bookings'
     | '/w/$slug/captures'
     | '/w/$slug/settings'
@@ -467,6 +489,7 @@ export interface FileRouteTypes {
     | '/status'
     | '/verify'
     | '/welcome'
+    | '/invite/$token'
     | '/w/$slug'
     | '/w/$slug/bookings'
     | '/w/$slug/captures'
@@ -480,6 +503,7 @@ export interface FileRouteTypes {
     | '/w/$slug/objects/$object'
     | '/w/$slug/settings/calendar'
     | '/w/$slug/settings/jobs'
+    | '/w/$slug/settings/members'
     | '/w/$slug/bookings/'
     | '/w/$slug/captures/'
     | '/w/$slug/settings/'
@@ -509,6 +533,7 @@ export interface RootRouteChildren {
   StatusRoute: typeof StatusRoute
   VerifyRoute: typeof VerifyRoute
   WelcomeRoute: typeof WelcomeRoute
+  InviteTokenRoute: typeof InviteTokenRoute
   WSlugRoute: typeof WSlugRouteWithChildren
 }
 
@@ -547,6 +572,13 @@ declare module '@tanstack/react-router' {
       path: '/welcome'
       fullPath: '/welcome'
       preLoaderRoute: typeof WelcomeRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/invite/$token': {
+      id: '/invite/$token'
+      path: '/invite/$token'
+      fullPath: '/invite/$token'
+      preLoaderRoute: typeof InviteTokenRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/w/$slug': {
@@ -659,6 +691,13 @@ declare module '@tanstack/react-router' {
       path: '/jobs'
       fullPath: '/w/$slug/settings/jobs'
       preLoaderRoute: typeof WSlugSettingsJobsRouteImport
+      parentRoute: typeof WSlugSettingsRoute
+    }
+    '/w/$slug/settings/members': {
+      id: '/w/$slug/settings/members'
+      path: '/members'
+      fullPath: '/w/$slug/settings/members'
+      preLoaderRoute: typeof WSlugSettingsMembersRouteImport
       parentRoute: typeof WSlugSettingsRoute
     }
     '/w/$slug/captures/forms/': {
@@ -827,6 +866,7 @@ const WSlugCapturesRouteWithChildren = WSlugCapturesRoute._addFileChildren(
 interface WSlugSettingsRouteChildren {
   WSlugSettingsCalendarRoute: typeof WSlugSettingsCalendarRoute
   WSlugSettingsJobsRoute: typeof WSlugSettingsJobsRoute
+  WSlugSettingsMembersRoute: typeof WSlugSettingsMembersRoute
   WSlugSettingsIndexRoute: typeof WSlugSettingsIndexRoute
   WSlugSettingsAccountCalendarsRoute: typeof WSlugSettingsAccountCalendarsRoute
   WSlugSettingsAccountPreferencesRoute: typeof WSlugSettingsAccountPreferencesRoute
@@ -843,6 +883,7 @@ interface WSlugSettingsRouteChildren {
 const WSlugSettingsRouteChildren: WSlugSettingsRouteChildren = {
   WSlugSettingsCalendarRoute: WSlugSettingsCalendarRoute,
   WSlugSettingsJobsRoute: WSlugSettingsJobsRoute,
+  WSlugSettingsMembersRoute: WSlugSettingsMembersRoute,
   WSlugSettingsIndexRoute: WSlugSettingsIndexRoute,
   WSlugSettingsAccountCalendarsRoute: WSlugSettingsAccountCalendarsRoute,
   WSlugSettingsAccountPreferencesRoute: WSlugSettingsAccountPreferencesRoute,
@@ -900,6 +941,7 @@ const rootRouteChildren: RootRouteChildren = {
   StatusRoute: StatusRoute,
   VerifyRoute: VerifyRoute,
   WelcomeRoute: WelcomeRoute,
+  InviteTokenRoute: InviteTokenRoute,
   WSlugRoute: WSlugRouteWithChildren,
 }
 export const routeTree = rootRouteImport

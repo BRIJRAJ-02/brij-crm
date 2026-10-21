@@ -90,7 +90,11 @@ describe('every tenant table', () => {
             // A form's public key finds it before the workspace is known (spec 0023), so it is unique everywhere.
             row.index === 'forms_public_key' ||
             row.index === 'booking_pages_public_key' ||
-            row.index === 'bookings_manage_token'
+            row.index === 'bookings_manage_token' ||
+            // An invitation's token finds it before the workspace is known, and sign up asks about an address
+            // across workspaces (spec 0031): both read only through crm_invitation_lookup's two functions.
+            row.index === 'invitations_token' ||
+            row.index === 'invitations_open_address'
           ),
       )
       .map((row) => row.index);
@@ -127,7 +131,7 @@ describe('every tenant table', () => {
 });
 
 describe('the holes in row level security (crm_search_text, spec 0004 AC-24; the outbox relay, spec 0005; the daily cleanup, spec 0008)', () => {
-  it('has exactly ten security definer functions, each owned by its own narrow role', async () => {
+  it('has exactly twelve security definer functions, each owned by its own narrow role', async () => {
     const definers = await owner.query<{ name: string; owner: string }>(`
       select p.proname as name, pg_get_userbyid(p.proowner) as owner
       from pg_proc p join pg_namespace n on n.oid = p.pronamespace
@@ -142,6 +146,8 @@ describe('the holes in row level security (crm_search_text, spec 0004 AC-24; the
       { name: 'crm_enqueue_calendar_sync', owner: 'crm_queue' },
       { name: 'crm_enqueue_job', owner: 'crm_queue' },
       { name: 'crm_form_by_key', owner: 'crm_form_lookup' },
+      { name: 'crm_invitation_by_token', owner: 'crm_invitation_lookup' },
+      { name: 'crm_invitation_open_for', owner: 'crm_invitation_lookup' },
       { name: 'crm_outbox_prune', owner: 'crm_relay' },
       { name: 'crm_outbox_workspaces', owner: 'crm_relay' },
       { name: 'crm_search_text', owner: 'crm_search' },
@@ -162,6 +168,8 @@ describe('the holes in row level security (crm_search_text, spec 0004 AC-24; the
       { name: 'crm_enqueue_calendar_sync', config: ['search_path=pg_catalog, pg_temp'], atomic: false },
       { name: 'crm_enqueue_job', config: ['search_path=pg_catalog, pg_temp'], atomic: false },
       { name: 'crm_form_by_key', config: ['search_path=pg_catalog, pg_temp'], atomic: true },
+      { name: 'crm_invitation_by_token', config: ['search_path=pg_catalog, pg_temp'], atomic: true },
+      { name: 'crm_invitation_open_for', config: ['search_path=pg_catalog, pg_temp'], atomic: true },
       { name: 'crm_outbox_prune', config: ['search_path=pg_catalog, pg_temp', 'lock_timeout=1s'], atomic: true },
       { name: 'crm_outbox_workspaces', config: ['search_path=pg_catalog, pg_temp'], atomic: true },
       { name: 'crm_search_text', config: ['search_path=pg_catalog, pg_temp'], atomic: true },
@@ -169,7 +177,7 @@ describe('the holes in row level security (crm_search_text, spec 0004 AC-24; the
     ]);
   });
 
-  it('lets no role but crm_booking_lookup, crm_form_lookup, crm_relay, crm_search, crm_sweep and the owner bypass it, outside the superusers', async () => {
+  it('lets no role but crm_booking_lookup, crm_form_lookup, crm_invitation_lookup, crm_relay, crm_search, crm_sweep and the owner bypass it, outside the superusers', async () => {
     const bypass = await owner.query<{ role: string }>(`
       select rolname as role from pg_roles
       where rolbypassrls and not rolsuper
@@ -179,6 +187,7 @@ describe('the holes in row level security (crm_search_text, spec 0004 AC-24; the
     expect(bypass.rows.map((row) => row.role)).toEqual([
       'crm_booking_lookup',
       'crm_form_lookup',
+      'crm_invitation_lookup',
       'crm_relay',
       'crm_search',
       'crm_sweep',
@@ -210,6 +219,12 @@ describe('the holes in row level security (crm_search_text, spec 0004 AC-24; the
     ],
     ['crm_sweep', ['crm_workspace_ids'], ['crm_workspace_ids(uuid, integer)'], ['worker']],
     ['crm_form_lookup', ['crm_form_by_key'], ['crm_form_by_key(text)'], ['app']],
+    [
+      'crm_invitation_lookup',
+      ['crm_invitation_by_token', 'crm_invitation_open_for'],
+      ['crm_invitation_by_token(text)', 'crm_invitation_open_for(text)'],
+      ['app', 'app'],
+    ],
     [
       'crm_booking_lookup',
       ['crm_booking_page_by_key', 'crm_booking_by_token'],
@@ -1531,5 +1546,47 @@ describe('workspace milestones (spec 0010, AC-177)', () => {
       `select confdeltype as action from pg_constraint where conname = 'workspace_milestones_workspace'`,
     );
     expect(key.rows).toEqual([{ action: 'c' }]);
+  });
+});
+
+describe('the audit log (spec 0031, AC-830)', () => {
+  it('lets the app insert and select audit rows, and nothing more', async () => {
+    const grants = await owner.query<{ privilege: string }>(`
+      select p.privilege
+      from unnest(array['SELECT', 'INSERT', 'UPDATE', 'DELETE', 'TRUNCATE', 'REFERENCES', 'TRIGGER']) p(privilege)
+      where has_table_privilege('crm_app', 'public.audit_events', p.privilege)
+      order by 1
+    `);
+    expect(grants.rows.map((row) => row.privilege)).toEqual(['INSERT', 'SELECT']);
+  });
+
+  it('refuses an update, a delete and a truncate from anyone, the owner included', async () => {
+    const { workspaceId } = await workspaceWithMember('audit');
+    await db.withWorkspace(workspaceId, (tx) =>
+      tx.execute(
+        sql`insert into audit_events (workspace_id, actor_type, action, target_type, target_id) values (${workspaceId}, 'system', 'member.removed', 'member', 'x')`,
+      ),
+    );
+    await expect(
+      owner.query('update audit_events set action = $2 where workspace_id = $1', [workspaceId, 'member.left']),
+    ).rejects.toMatchObject({ code: 'CRM02' });
+    await expect(owner.query('delete from audit_events where workspace_id = $1', [workspaceId])).rejects.toMatchObject({
+      code: 'CRM02',
+    });
+    await expect(owner.query('truncate audit_events')).rejects.toMatchObject({ code: 'CRM02' });
+  });
+
+  it('gives crm_invitation_lookup select on seven columns of invitations and nothing else', async () => {
+    const columns = await owner.query<{ column: string; privilege: string }>(`
+      select att.attname as column, a.privilege_type as privilege
+      from pg_attribute att cross join lateral aclexplode(att.attacl) a
+      where a.grantee = 'crm_invitation_lookup'::regrole order by 1
+    `);
+    expect(columns.rows).toEqual(
+      ['email', 'expires_at', 'id', 'kind', 'status', 'token_hash', 'workspace_id'].map((column) => ({
+        column,
+        privilege: 'SELECT',
+      })),
+    );
   });
 });

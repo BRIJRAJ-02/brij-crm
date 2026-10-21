@@ -68,6 +68,7 @@ const ALL_SCREENS: readonly Screen[] = [
     target: (page) => page.getByRole('link', { name: 'Settings' }).first(),
   },
   { name: 'settings calendars', start: at('settings/account/preferences'), target: sidebar('Calendars') },
+  { name: 'settings members', start: at('settings/account/preferences'), target: sidebar('Members') },
   { name: 'settings objects', start: at('settings/account/preferences'), target: sidebar('Objects') },
   {
     name: 'settings object attributes',

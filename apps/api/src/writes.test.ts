@@ -12,7 +12,8 @@ import { newId } from '@crm/core';
 import type { Database, IdentityStore } from '@crm/db';
 import { testQuery } from '@crm/db/testing';
 import { afterAll, beforeAll, describe, expect, inject, it } from 'vitest';
-import { signInApp, testConnections } from '../test/sign-in.ts';
+import { createMailpitMailer } from './mail/mailpit.ts';
+import { MAILPIT_URL, rpcClient, signIn, signInApp, testConnections } from '../test/sign-in.ts';
 import { failure, memberWithWorkspace } from '../test/workspace.ts';
 
 const { ownerUrl } = inject('testDatabase');
@@ -28,6 +29,9 @@ const READS: ReadonlySet<string> = new Set([
   'objects.list',
   'attributes.list',
   'members.list',
+  // Invitations (spec 0031): the open list, and the invitation page's look (no session).
+  'invitations.list',
+  'invitations.peek',
   'access.mine',
   'records.query',
   'records.count',
@@ -78,10 +82,28 @@ let db: Database;
 let identity: IdentityStore;
 let app: ReturnType<typeof signInApp>['app'];
 let pokes = 0;
+/** The invitation tokens the app mailed, by address, read off the links (the mailer below stands in for Mailpit). */
+const invitationTokens = new Map<string, string>();
+/** Sign in codes still go to Mailpit, where signIn reads them. */
+const mailpit = createMailpitMailer({ url: MAILPIT_URL, from: 'Timefix <noreply@example.com>' });
 
 beforeAll(() => {
   ({ db, identity } = testConnections());
-  ({ app } = signInApp({ db, identity }, {}, { wakeRelay: () => (pokes += 1) }));
+  ({ app } = signInApp(
+    { db, identity },
+    {},
+    {
+      wakeRelay: () => (pokes += 1),
+      mailer: {
+        transport: 'mailpit',
+        send: (message) => {
+          const token = /\/invite\/([A-Za-z0-9_-]{43})/.exec(message.text)?.[1];
+          if (token !== undefined) invitationTokens.set(message.to, token);
+          return mailpit.send(message);
+        },
+      },
+    },
+  ));
 });
 afterAll(async () => {
   await identity.close();
@@ -272,6 +294,42 @@ async function sharedViewOf(m: Member, name = 'Pipeline'): Promise<string> {
 }
 
 const WRITES: Record<string, (m: Member, mutationId: string) => Promise<readonly Partial<OutboxRow>[]>> = {
+  // Invitations (spec 0031): nobody's screen shows another's invitations live, so no row; accepting adds a member.
+  'invitations.create': async (m, mutationId) => {
+    await m.client.invitations.create({ workspace: m.slug, emails: ['grace@example.com'], role: 'member', mutationId });
+    return [];
+  },
+  'invitations.resend': async (m, mutationId) => {
+    const made = await m.client.invitations.create({
+      workspace: m.slug,
+      emails: ['grace@example.com'],
+      role: 'member',
+      mutationId: newId(),
+    });
+    await m.client.invitations.resend({ workspace: m.slug, invitationId: made.invited[0]?.id ?? '', mutationId });
+    return [];
+  },
+  'invitations.revoke': async (m, mutationId) => {
+    const made = await m.client.invitations.create({
+      workspace: m.slug,
+      emails: ['grace@example.com'],
+      role: 'member',
+      mutationId: newId(),
+    });
+    await m.client.invitations.revoke({ workspace: m.slug, invitationId: made.invited[0]?.id ?? '', mutationId });
+    return [];
+  },
+  'invitations.accept': async (m) => {
+    const invitee = await signIn(app);
+    await m.client.invitations.create({
+      workspace: m.slug,
+      emails: [invitee.email],
+      role: 'member',
+      mutationId: newId(),
+    });
+    await rpcClient(app, invitee.cookie).invitations.accept({ token: invitationTokens.get(invitee.email) ?? '' });
+    return [{ kind: 'members' }];
+  },
   'workspaces.create': async (m) => {
     await m.client.workspaces.create({
       id: newId(),
@@ -1147,6 +1205,9 @@ Object.assign(WRITES, {
 
 /** How many writes (each one poke) a case in WRITES makes before and with its own. */
 const WRITES_MADE: Readonly<Record<string, number>> = {
+  'invitations.resend': 2,
+  'invitations.revoke': 2,
+  'invitations.accept': 2,
   'views.update': 2,
   'views.move': 3,
   'views.setLocked': 2,

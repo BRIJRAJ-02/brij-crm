@@ -85,6 +85,18 @@ Laid out in the settings page pattern (20 October 2026): a Connected calendars s
 
 Built from library parts only: SettingsLayout (through `SettingsPage`), SettingsSection, SettingsGrid, Card per connection (its account as the title, Google and Default as the line under it, Make default and Disconnect in its footer), DescriptionList (Status as a Badge with the last error, Last synced as a RelativeTime, the sharing control with a line saying what it means), Callout (how connecting went; the limit of 3 reached), Modal (the disconnect confirm) and EmptyState (no calendar yet, with Connect Google calendar; calendar sync not set up; error with Try again). Changes show at once through `data.calendar` and come back with a toast when refused; a connection still syncing is read again until it is done.
 
+## Members (MembersScreen.tsx, InviteDialog.tsx)
+
+- **Purpose**: Settings › Workspace › Members (spec 0031, AC-803, AC-810): who is in the workspace, and who is invited.
+- **Main task**: owners and admins invite people by email with one role, and resend or revoke an open invitation on the Invitations tab; everyone reads who is in and with which role.
+- **Leaves out**: changing roles, removing and leaving (slice 3), transfer (slice 4), teams, guests, the invite link and email domains (later slices of spec 0031).
+
+Built from library parts only: SettingsLayout (through `SettingsPage`, its one header action Invite people, no description line, the owner's settings pattern of 21 October 2026), Tabs (Members and Invitations with counts, the second only for holders of `members.invite`), Table (an Avatar and the name as the row header, a You badge on the reader's row, the role, Joined as a RelativeTime; on Invitations a row Menu with Resend and Revoke, whose button spins while a resend is on its way), Callout (for those who can't invite: who can), Modal (the Invite dialog's Form: a multiline Field that takes a pasted list, and a role Select whose options say what each role can do) and EmptyState (no open invitations). Every change waits for the server, then the route reads the list again. Another admin's change arrives as a live `members` event, which reloads the page. While it loads, `MembersPending` draws the same header, the tabs for those who get them, and skeleton rows.
+
+### The confirm (MemberConfirm.tsx)
+
+Anything on the page that ends something asks first (the owner, 21 October 2026): today Revoke ("Revoke the invitation to grace@example.com?", then "Revoke invitation"); removing, leaving and handing over join it in later slices. A danger Modal (an alert dialog a click outside won't close) with the question naming the thing, one sentence on what happens and whether it can be undone, Cancel (ESC) first and the verb last on a danger solid Button, which spins while the server works; a refusal shows inside it in a danger Callout and it stays open. The page says what happened in a toast once the server agrees.
+
 ## The finish toast (toast.ts)
 
 - **Purpose**: tell the person when a job they started in this browser ends while the app is open (AC-119).

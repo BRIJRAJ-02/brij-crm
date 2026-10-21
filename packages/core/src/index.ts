@@ -44,6 +44,7 @@ export {
   type Principal,
   type RecordRule,
 } from './access/policy.ts';
+export { isInvitedEmail } from './access/door.ts';
 export {
   getMe,
   setLastWorkspace,
@@ -54,6 +55,20 @@ export {
   type StartWorkspaceDeps,
 } from './account/account.ts';
 export { milestoneHook, type ReachedMilestone } from './milestones/milestones.ts';
+export { type AuditSource } from './members/audit.ts';
+export {
+  acceptInvite,
+  inviteMembers,
+  listInvitations,
+  peekInvite,
+  resendInvite,
+  revokeInvite,
+  type AcceptedInvite,
+  type AcceptingUser,
+  type InviteOutcome,
+  type InviteSender,
+  type SentInvitation,
+} from './members/invitations.ts';
 export {
   archiveObject,
   createObject,

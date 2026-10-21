@@ -1,4 +1,5 @@
 // The api entrypoint: every read and write the app makes.
+import { isInvitedEmail } from '@crm/core';
 import { createDatabase, createIdentityStore } from '@crm/db';
 import { serve } from '@hono/node-server';
 import { createApp } from './app.ts';
@@ -55,7 +56,8 @@ const analytics = createAnalytics({
   log,
 });
 log.info(`Product analytics ${analytics.enabled ? 'on' : 'off'}`, { analytics: analytics.enabled ? 'on' : 'off' });
-const auth = createAuth({ env, identity, mailer, analytics });
+// A new address off the allowlist may sign up while an open email invitation names it (spec 0031, AC-807).
+const auth = createAuth({ env, identity, mailer, analytics, invited: (email) => isInvitedEmail({ db }, email) });
 // What sign in offers and where codes go, never a key or an address.
 log.info('Sign in ready', {
   mail: mailer.transport,
@@ -88,6 +90,7 @@ const server = serve(
         auth,
         wakeRelay,
         analytics,
+        mailer,
         rules: APP_RULES,
         ...(timing === undefined ? {} : { timing }),
       },

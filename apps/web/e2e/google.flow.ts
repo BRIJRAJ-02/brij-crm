@@ -90,9 +90,10 @@ test('signs a new person in with Google, makes their workspace, and Google opens
   });
   await expect(page.getByRole('heading', { level: 1, name: 'People' })).toBeVisible();
 
-  // Sign out, from the workspace menu.
+  // Sign out, from the workspace menu, which asks first (the owner, 21 October 2026).
   await page.getByRole('button', { name: /workspace menu/ }).click();
   await page.getByRole('menuitem', { name: 'Sign out' }).click();
+  await page.getByRole('dialog', { name: 'Sign out?' }).getByRole('button', { name: 'Sign out', exact: true }).click();
   await expect(page).toHaveURL(/\/sign-in$/);
   await expect(google).toBeVisible();
 
