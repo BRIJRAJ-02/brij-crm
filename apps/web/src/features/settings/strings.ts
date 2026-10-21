@@ -10,7 +10,6 @@ export const strings = {
   preferences: 'Preferences',
   /** The settings navigation's entries. */
   objects: 'Objects',
-  objectsDescription: 'Shape the records your workspace keeps.',
   newObject: 'New object',
   creatingObject: 'Creating object',
   createObject: 'Create object',

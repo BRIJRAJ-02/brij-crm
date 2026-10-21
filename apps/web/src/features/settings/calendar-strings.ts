@@ -5,7 +5,6 @@ import type { CalendarStatus } from '@crm/data';
 export const strings = {
   /** The page's title, and its entry in the settings navigation. */
   title: 'Calendars',
-  description: 'Connect your calendar so your meetings show on the people and companies you meet.',
   connectGoogle: 'Connect Google calendar',
   /** The page's sections. */
   connectionsSection: 'Connected calendars',
@@ -47,10 +46,13 @@ export const strings = {
   /** Local development only: Google's notices can't reach a laptop, so sync waits for the 15 minute poll. */
   syncNow: 'Sync now',
   disconnect: 'Disconnect',
-  disconnectTitle: 'Disconnect this calendar?',
+  /** The confirm names the calendar it ends (the owner's rule for every confirm, 21 October 2026). */
+  disconnectTitle: (account: string) => `Disconnect ${account}?`,
   disconnectText: (account: string) =>
-    `Meetings from ${account} stop syncing, and the ones no one else’s calendar holds leave your records. Your calendar itself isn’t changed.`,
-  keep: 'Keep it',
+    `Meetings from ${account} stop syncing and the ones no one else’s calendar holds leave your records, its busy times stop blocking your booking pages, and your calendar itself isn’t changed; you can connect it again later.`,
+  cancel: 'Cancel',
+  disconnecting: 'Disconnecting',
+  disconnectFailed: 'That didn’t disconnect. Try again in a moment.',
   /** The workspace setting, for owners and admins (AC-609). */
   createPeople: 'Add people from meetings',
   createPeopleHelp:

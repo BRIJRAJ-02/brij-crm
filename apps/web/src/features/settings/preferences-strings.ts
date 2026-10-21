@@ -3,7 +3,6 @@
 /** Settings › Account › Preferences: the page's copy (spec 0026, AC-684). */
 export const strings = {
   title: 'Preferences',
-  description: 'How Timefix looks for you. Saved in this browser.',
   appearance: 'Appearance',
   appearanceDescription: 'How the app looks on this browser.',
   theme: 'Interface theme',

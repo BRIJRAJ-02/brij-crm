@@ -5,9 +5,6 @@ import type { JobStatus } from '@crm/data';
 export const strings = {
   /** The page's title, and its entry in the settings navigation. */
   title: 'Background jobs',
-  /** Under the title: every job for owners and admins, the person's own for everyone else. */
-  description: 'Follow long work in this workspace, such as bulk changes, as it runs.',
-  descriptionMine: 'Follow long work you started, such as bulk changes, as it runs.',
   tableLabel: 'Background jobs',
   columns: {
     job: 'Job',

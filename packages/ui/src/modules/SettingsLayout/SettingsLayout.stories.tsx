@@ -8,6 +8,7 @@ import { Card } from '../../molecules/Card/Card.tsx';
 import { EmptyState } from '../../molecules/EmptyState/EmptyState.tsx';
 import { TabPanel, Tabs } from '../../molecules/Tabs/Tabs.tsx';
 import { Stage } from '../../workbench/Stage/Stage.tsx';
+import { TopBar } from '../Toolbar/Toolbar.tsx';
 import { Select } from '../../molecules/Select/Select.tsx';
 import { Field } from '../../molecules/Field/Field.tsx';
 import { Form } from '../../molecules/Form/Form.tsx';
@@ -376,6 +377,39 @@ export const Sections: Story = {
 };
 
 /** The same sections in a narrow slot: each title above its cards, the fields one to a row, the cards stacked. */
+/**
+ * Under the app's TopBar (`header="bar"`, 21 October 2026): the bar carries the trail, an object's tile and badge
+ * and the page's one primary action at its end; the layout draws no title block, and the sections follow at once,
+ * their headings h2 under the bar's h1.
+ */
+export const UnderTheBar: Story = {
+  render: () => (
+    <Stage width="fill" direction="column">
+      <TopBar
+        title="Calendars"
+        crumbs={[
+          { id: 'settings', label: 'Settings' },
+          { id: 'account', label: 'Account' },
+        ]}
+      >
+        <Button provider="google-calendar">Connect Google calendar</Button>
+      </TopBar>
+      <SettingsLayout header="bar" title="Calendars">
+        <SettingsSection title="Connected calendars" description="One card for each connected calendar.">
+          <SettingsGrid>
+            <Card title="ada@acme.com" description="Google · Default" />
+          </SettingsGrid>
+        </SettingsSection>
+      </SettingsLayout>
+    </Stage>
+  ),
+  play: async ({ canvas }) => {
+    await expect(canvas.getByRole('heading', { level: 2, name: 'Connected calendars' })).toBeInTheDocument();
+    await expect(canvas.queryByRole('heading', { level: 2, name: 'Calendars' })).toBeNull();
+    await expect(canvas.getByRole('button', { name: 'Connect Google calendar' })).toBeInTheDocument();
+  },
+};
+
 export const SectionsNarrow: Story = {
   render: () => (
     <Stage width="narrow">

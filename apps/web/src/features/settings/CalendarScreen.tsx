@@ -2,7 +2,7 @@
 // Purpose: Settings › Account › Calendars: the member's own calendar connections, so their meetings reach the records they're with.
 // Main task: connect a Google calendar, see each one's state and last sync, choose who sees its meetings, disconnect.
 // Leaves out: other members' calendars and Outlook (milestone 4). Owners and admins also choose whether meetings add people.
-import type { CalendarConnectionView, CalendarView, DataLayer } from '@crm/data';
+import { isDataError, type CalendarConnectionView, type CalendarView, type DataLayer } from '@crm/data';
 import { useCalendar, useCalendarSettings } from '@crm/data/react';
 import {
   Badge,
@@ -120,6 +120,26 @@ export function CalendarScreen({ data, slug, view, result, onResultSeen }: Calen
   const state = useCalendar(view);
   const settings = useCalendarSettings(data.calendar.settings(slug));
   const [disconnecting, setDisconnecting] = useState<CalendarConnectionView | undefined>(undefined);
+  const [isDisconnectBusy, setDisconnectBusy] = useState(false);
+  const [disconnectFailure, setDisconnectFailure] = useState<string | undefined>(undefined);
+  const disconnect = () => {
+    if (disconnecting === undefined || isDisconnectBusy) return;
+    setDisconnectBusy(true);
+    setDisconnectFailure(undefined);
+    data.calendar.remove(slug, disconnecting.id).then(
+      (isDone) => {
+        setDisconnectBusy(false);
+        // Refused (the connection came back): the confirm stays open and says so.
+        if (isDone) setDisconnecting(undefined);
+        else setDisconnectFailure(strings.disconnectFailed);
+      },
+      (error: unknown) => {
+        // The confirm stays open with what went wrong, so the person can try again or cancel.
+        setDisconnectBusy(false);
+        setDisconnectFailure(isDataError(error) ? error.message : strings.disconnectFailed);
+      },
+    );
+  };
   const outcome = result === undefined ? undefined : strings.results[result];
   // Connecting is the browser going to the API, which sends it on to Google's consent screen and back here.
   const connect = () => {
@@ -173,7 +193,10 @@ export function CalendarScreen({ data, slug, view, result, onResultSeen }: Calen
               connection={connection}
               onSharing={(sharing) => void data.calendar.setSharing(slug, connection.id, sharing)}
               onDefault={() => void data.calendar.makeDefault(slug, connection.id)}
-              onDisconnect={() => setDisconnecting(connection)}
+              onDisconnect={() => {
+                setDisconnectFailure(undefined);
+                setDisconnecting(connection);
+              }}
               {...(import.meta.env.DEV ? { onSyncNow: () => void data.calendar.syncNow(slug, connection.id) } : {})}
             />
           ))}
@@ -185,7 +208,6 @@ export function CalendarScreen({ data, slug, view, result, onResultSeen }: Calen
   return (
     <SettingsPage
       title={strings.title}
-      description={strings.description}
       isLoading={state.status === 'loading'}
       {...(canConnect && hasList
         ? {
@@ -228,27 +250,25 @@ export function CalendarScreen({ data, slug, view, result, onResultSeen }: Calen
         </SettingsSection>
       )}
       <Modal
-        title={strings.disconnectTitle}
+        title={strings.disconnectTitle(disconnecting?.accountEmail ?? '')}
         tone="danger"
         isOpen={disconnecting !== undefined}
+        isBusy={isDisconnectBusy}
         onOpenChange={(isOpen) => {
-          if (!isOpen) setDisconnecting(undefined);
+          if (!isOpen && !isDisconnectBusy) setDisconnecting(undefined);
         }}
         actions={
           <>
-            <Button slot="close">{strings.keep}</Button>
-            <Button
-              variant="danger-solid"
-              onPress={() => {
-                if (disconnecting !== undefined) void data.calendar.remove(slug, disconnecting.id);
-                setDisconnecting(undefined);
-              }}
-            >
-              {strings.disconnect}
+            <Button slot="close" isDisabled={isDisconnectBusy} kbd="ESC">
+              {strings.cancel}
+            </Button>
+            <Button variant="danger-solid" isPending={isDisconnectBusy} onPress={disconnect}>
+              {isDisconnectBusy ? strings.disconnecting : strings.disconnect}
             </Button>
           </>
         }
       >
+        {disconnectFailure !== undefined && <Callout tone="danger">{disconnectFailure}</Callout>}
         {strings.disconnectText(disconnecting?.accountEmail ?? '')}
       </Modal>
     </SettingsPage>

@@ -29,7 +29,7 @@ export function PreferencesScreen({ theme }: PreferencesScreenProps) {
     () => theme.get(),
   );
   return (
-    <SettingsPage title={strings.title} description={strings.description}>
+    <SettingsPage title={strings.title}>
       <SettingsSection title={strings.appearance} description={strings.appearanceDescription}>
         <Card>
           <SettingsRow title={strings.theme} description={strings.themeDescription}>
