@@ -34,9 +34,12 @@ export function ModalTrigger({ children, isOpen, defaultOpen, onOpenChange }: Mo
  * `dialog` (the default) for a question or a short form; `window` for a larger
  * task with a header (import, merge, settings); `palette` for the command
  * palette: near the top, its title for screen readers only, its body flush,
- * and it never animates.
+ * and it never animates; `peek` for a page read and written in place (a
+ * note): a large panel nearly the window's height, a quiet bar with the
+ * context first as a crumb and no title drawn (the page shows its own), and
+ * the body a centred writing column.
  */
-export type ModalVariant = 'dialog' | 'window' | 'palette';
+export type ModalVariant = 'dialog' | 'window' | 'palette' | 'peek';
 
 /** Props for Modal. */
 export interface ModalProps {
@@ -46,9 +49,9 @@ export interface ModalProps {
   /** The footer's buttons, Cancel first and the primary last. A Button with `slot="close"` closes the modal. */
   readonly actions?: ReactNode;
   readonly variant?: ModalVariant;
-  /** A window's header icon. */
+  /** A window's header icon (a peek draws none). */
   readonly icon?: IconName;
-  /** A window's header detail after the title: the record or list it works on. */
+  /** A window's header detail after the title: the record or list it works on. A peek shows it first, as a crumb. */
   readonly context?: ReactNode;
   /**
    * Quiet icon buttons in the title bar, before Close, each with its Tooltip
@@ -103,6 +106,9 @@ export function Modal({
 }: ModalProps) {
   const { isFocusVisible } = useFocusVisible();
   const isAlert = tone === 'danger';
+  // The palette and a peek name themselves for screen readers only: the palette's field and the peek's page
+  // (a note's own title) say what they are on screen.
+  const isTitleHidden = variant === 'palette' || variant === 'peek';
   return (
     <ModalOverlay
       className={styles.scrim}
@@ -126,9 +132,9 @@ export function Modal({
                 <Icon name="triangle-alert" size="md" />
               </span>
             ) : (
-              icon !== undefined && <Icon name={icon} size="sm" tone="muted" />
+              icon !== undefined && variant !== 'peek' && <Icon name={icon} size="sm" tone="muted" />
             )}
-            {variant === 'palette' ? (
+            {isTitleHidden ? (
               <VisuallyHidden>
                 <Heading slot="title">{title}</Heading>
               </VisuallyHidden>

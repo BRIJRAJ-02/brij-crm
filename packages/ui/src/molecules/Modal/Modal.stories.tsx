@@ -275,3 +275,63 @@ export const Status: Story = {
     await expect(status).toHaveTextContent('Saved');
   },
 };
+
+/**
+ * The peek: a page read and written in place (a note), as Notion's centre peek. A large panel nearly the window's
+ * height, its quiet bar holding the record as a crumb, the status, More and Close, with no title drawn (the page
+ * shows its own) and no hairline; the body a centred writing column.
+ */
+export const Peek: Story = {
+  render: () => (
+    <Stage>
+      <Modal
+        variant="peek"
+        title="Kickoff call"
+        icon="notebook"
+        isOpen
+        context={
+          <RecordChip
+            display={{ objectId: 'people', recordId: 'p1', name: 'Brijraj', kind: 'person', hue: 'blue' }}
+            isFlat
+          />
+        }
+        status="Saved"
+        headerActions={
+          <Tooltip content="More actions">
+            <Button variant="ghost" icon="ellipsis" label="More actions" />
+          </Tooltip>
+        }
+      >
+        <Field label="Title" isLabelHidden variant="title" isWrapping defaultValue="Kickoff call" />
+        They want 40 seats by March, and an EU workspace before they sign.
+      </Modal>
+    </Stage>
+  ),
+  play: async () => {
+    const dialog = await openDialog();
+    await expect(dialog).toHaveAccessibleName('Kickoff call');
+    // Settled after its entrance, then measured: the column and three space-32 either side (or the window's width,
+    // less the scrim's space-16), a size bar from the window's top and bottom (filling it under bp-page-compact).
+    await new Promise((resolve) => setTimeout(resolve, 400));
+    const panel = dialog.getBoundingClientRect();
+    const token = (name: string) =>
+      Number.parseFloat(getComputedStyle(document.documentElement).getPropertyValue(`--${name}`));
+    const inset = token('space-16');
+    const wide = token('size-column-max') + 6 * token('space-32');
+    await expect(Math.round(panel.width)).toBe(Math.min(globalThis.innerWidth - 2 * inset, wide));
+    await expect(Math.round(panel.height)).toBe(
+      globalThis.innerWidth >= token('bp-page-compact')
+        ? globalThis.innerHeight - 2 * token('size-bar')
+        : globalThis.innerHeight - 2 * inset,
+    );
+    // The bar draws no title, no icon and no hairline.
+    const heading = dialog.querySelector('h2');
+    await expect(heading?.getBoundingClientRect().width ?? 0).toBeLessThanOrEqual(1);
+    const close = dialog.querySelector('button[aria-label="Close"]');
+    const bar = close?.parentElement?.parentElement;
+    if (bar === null || bar === undefined) throw new globalThis.Error('no bar');
+    await expect(bar.querySelector(':scope > svg')).toBeNull();
+    await expect(getComputedStyle(bar).borderBottomColor).toBe('rgba(0, 0, 0, 0)');
+    await expect(dialog.querySelector('[role="status"]')).toHaveTextContent('Saved');
+  },
+};

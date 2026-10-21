@@ -1,10 +1,10 @@
-/* Modal: a 480px dialog (a 780px window) on surface-raised with radius-xl
-   and shadow-lg, centred in the viewport both ways (the owner's call on 19
-   October 2026); the palette alone sits near the top, as command palettes do. A title
-   bar over a hairline holds the title and the close button. It grows from the
-   centre over duration-modal and leaves in duration-exit; opened from the
-   keyboard it appears at once. The footer sits on surface-subtle under a
-   hairline. */
+/* Modal: a 480px dialog (a 780px window, an 832px peek nearly the window's
+   height) on surface-raised with radius-xl and shadow-lg, centred in the
+   viewport both ways (the owner's call on 19 October 2026); the palette alone
+   sits near the top, as command palettes do. A title bar over a hairline
+   holds the title and the close button. It grows from the centre over
+   duration-modal and leaves in duration-exit; opened from the keyboard it
+   appears at once. The footer sits on surface-subtle under a hairline. */
 @layer components {
   .scrim {
     position: fixed;
@@ -135,6 +135,38 @@
 
   .root[data-variant='palette'] .body {
     padding: 0;
+  }
+
+  /* The peek (a note read and written in place, as Notion's centre peek): a
+     writing column of at most size-column-max with three space-32 either side,
+     a size-bar from the window's top and bottom (filling the height under
+     bp-page-compact). Its bar is quiet: no hairline, the context first as a
+     crumb, nothing but status, actions and Close at the end. The body is the
+     page: centred on the column, with room under the text to write into. */
+  .root[data-variant='peek'] {
+    inline-size: min(100%, calc(var(--size-column-max) + 6 * var(--space-32)));
+    block-size: calc(100dvh - 2 * var(--size-bar));
+  }
+
+  @media (width < 1024px) {
+    .root[data-variant='peek'] {
+      block-size: 100%;
+    }
+  }
+
+  .root[data-variant='peek'] .dialog {
+    block-size: 100%;
+  }
+
+  .root[data-variant='peek'] .head {
+    padding-inline: var(--space-12) var(--space-8);
+    border-block-end-color: transparent;
+  }
+
+  .root[data-variant='peek'] .body {
+    gap: var(--space-12);
+    padding-block: var(--space-24) calc(3 * var(--space-32));
+    padding-inline: max(var(--space-16), calc((100% - var(--size-column-max)) / 2));
   }
 
   /* Motion: the scrim fades, the dialog grows from the centre. */
