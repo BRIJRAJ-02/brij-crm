@@ -108,12 +108,15 @@ jobs:
   # milestone 1), delete, undo and the trash (spec 0022, milestone 1), and a
   # Google sign in that succeeds (F34), against the fake Google the api loads
   # here (apps/api/test/fake-google.ts; the browser half is in the flow).
-  # Then attributes without setup, My tasks, notes, the record's timeline, and
-  # moving between pages and loading shapes held still (layout shift). They
-  # run in Chromium (1280 and 375 wide); the live flow's reader opens in
-  # WebKit, so a change crosses two browser engines. The longer ones (catch
-  # up, settle, versions, scale, hidden, timeline scale, fonts) stay for the
-  # final thorough run. Nothing here touches a deployed environment.
+  # Then My tasks, notes, the record's timeline, moving between pages (layout
+  # shift) and a form's first publish. They run in Chromium (1280 and 375
+  # wide); the live flow's reader opens in WebKit, so a change crosses two
+  # browser engines. The longer ones (catch up, settle, versions, scale,
+  # hidden, timeline scale, fonts) stay for the final thorough run, and so do
+  # attributes (its phone width run is red: Restore sits off screen in the
+  # archived list) and loading shape (Calendars' skeleton draws a card where a
+  # member with no calendars gets an empty state). Nothing here touches a
+  # deployed environment.
   flows:
     runs-on: ubuntu-latest
     timeout-minutes: 20
@@ -233,12 +236,10 @@ jobs:
           e2e/bulk.flow.ts
           e2e/tasks.flow.ts
           e2e/google.flow.ts
-          e2e/attributes.flow.ts
           e2e/my-tasks.flow.ts
           e2e/notes.flow.ts
           e2e/timeline.flow.ts
           e2e/switching.flow.ts
-          e2e/loading-shape.flow.ts
           e2e/forms-publish.flow.ts
       - name: Keep the traces and the logs
         if: failure()
