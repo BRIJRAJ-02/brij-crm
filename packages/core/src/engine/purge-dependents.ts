@@ -35,9 +35,12 @@ const removing = (
  * good, their links going (spec 0019, AC-446); meetings too, leaving those
  * records' timelines, an attendee who was one of them unknown again (spec
  * 0024); a form submission keeps its answers, its note of the record going
- * (spec 0023).
+ * (spec 0023), and so does its main record, held with no foreign key; a
+ * booking keeps its time, its person, company and deal (also held with no
+ * foreign key) cleared (spec 0025). Frozen: a feature registers here, in the
+ * source, never at run time.
  */
-export const PURGE_DEPENDENTS: readonly PurgeDependent[] = [
+export const PURGE_DEPENDENTS: readonly PurgeDependent[] = Object.freeze([
   removing('task_records', (ids) => sql`delete from task_records where record_id = any(${ids})`),
   // The records' notes, deleted ones too, go with them (spec 0019, AC-446); notes' foreign key refuses a removal
   // that skipped this.
@@ -49,7 +52,21 @@ export const PURGE_DEPENDENTS: readonly PurgeDependent[] = [
       sql`update meeting_attendees set person_record_id = null, match = 'unknown' where person_record_id = any(${ids})`,
   ),
   removing('form_submission_records', (ids) => sql`delete from form_submission_records where record_id = any(${ids})`),
-];
+  // Held with no foreign key, so nothing refuses a purge that forgot them: cleared here, each through its index.
+  removing(
+    'form_submissions',
+    (ids) => sql`update form_submissions set main_record_id = null where main_record_id = any(${ids})`,
+  ),
+  removing(
+    'bookings_person',
+    (ids) => sql`update bookings set person_record_id = null where person_record_id = any(${ids})`,
+  ),
+  removing(
+    'bookings_company',
+    (ids) => sql`update bookings set company_record_id = null where company_record_id = any(${ids})`,
+  ),
+  removing('bookings_deal', (ids) => sql`update bookings set deal_record_id = null where deal_record_id = any(${ids})`),
+]);
 
 /**
  * Runs every dependent for the records, in order, and answers each one's

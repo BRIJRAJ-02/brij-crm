@@ -274,6 +274,33 @@ describe('the outbox hook', () => {
     expect(rows.map((row) => row.seq).sort()).toEqual([1, 2, 3]);
   });
 
+  it('writes every records row of a job’s batch coarse, a related object’s too, so each is paced (spec 0022, AC-532)', async () => {
+    const { scope, people, objects } = await workspace();
+    const other = Object.values(objects).find((objectId) => objectId !== people) ?? '';
+    const few = [newId(), newId()];
+    await runWrite(
+      scope,
+      (context) => {
+        context.record({
+          deletedRecords: few.map((recordId) => ({ recordId, objectId: people })),
+          references: [{ recordId: newId(), objectId: other, attributeId: newId() }],
+        });
+        return Promise.resolve();
+      },
+      [outboxHook()],
+      'write',
+      { jobId: newId() },
+    );
+    const rows = await rowsOf(scope);
+    expect(rows.map((row) => ({ object: row.object_id, ids: row.record_ids, coarse: row.coarse }))).toEqual(
+      expect.arrayContaining([
+        { object: people, ids: [], coarse: true },
+        { object: other, ids: [], coarse: true },
+      ]),
+    );
+    expect(rows).toHaveLength(2);
+  });
+
   it('notifies crm_outbox with the workspace on commit, and not for a refused write', async () => {
     const { scope, people, name } = await workspace();
     const reader = createOutboxReader(

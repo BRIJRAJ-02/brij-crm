@@ -242,6 +242,13 @@ export const bookings = pgTable(
     index('bookings_by_person')
       .on(t.workspaceId, t.personRecordId, t.createdAt)
       .where(sql`${t.personRecordId} is not null`),
+    // A company's and a deal's bookings: the purge clears them when the record goes for good (spec 0022's registry).
+    index('bookings_by_company')
+      .on(t.workspaceId, t.companyRecordId)
+      .where(sql`${t.companyRecordId} is not null`),
+    index('bookings_by_deal')
+      .on(t.workspaceId, t.dealRecordId)
+      .where(sql`${t.dealRecordId} is not null`),
     check('bookings_status', sql`${t.status} in ('confirmed', 'cancelled')`),
     check('bookings_times', sql`${t.endsAt} > ${t.startsAt}`),
     check(

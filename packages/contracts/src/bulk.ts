@@ -179,11 +179,13 @@ export const BulkTarget = z.discriminatedUnion('kind', [
   z.strictObject({
     kind: z.literal('ids'),
     objectId: Uuid.optional(),
+    // Twice the caps here and below, so a selection a little over one answers the engine's 422 CONFIG_INVALID
+    // (AC-539) with its words, and only junk stops at parsing.
     recordIds: z
       .array(Uuid)
       .min(1, 'Choose at least one record.')
       .max(
-        BULK_IDS_MAX,
+        BULK_IDS_MAX * 2,
         `Select at most ${BULK_IDS_MAX.toLocaleString('en')} records one by one, or select all matching.`,
       ),
   }),
@@ -194,7 +196,7 @@ export const BulkTarget = z.discriminatedUnion('kind', [
     except: z
       .array(Uuid)
       .max(
-        BULK_EXCEPT_MAX,
+        BULK_EXCEPT_MAX * 2,
         `You can leave out at most ${BULK_EXCEPT_MAX.toLocaleString('en')} records from all matching.`,
       ),
     asOf: z.iso.datetime({ offset: true }),
@@ -207,7 +209,7 @@ export const BulkTarget = z.discriminatedUnion('kind', [
     except: z
       .array(Uuid)
       .max(
-        BULK_EXCEPT_MAX,
+        BULK_EXCEPT_MAX * 2,
         `You can leave out at most ${BULK_EXCEPT_MAX.toLocaleString('en')} records from all matching.`,
       ),
     asOf: z.iso.datetime({ offset: true }),

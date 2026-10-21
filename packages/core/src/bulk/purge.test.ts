@@ -8,7 +8,13 @@
 import { sql } from 'drizzle-orm';
 import { createDatabase } from '@crm/db';
 import type { RuleSource } from '../access/door.ts';
+import { enterBookingPage } from '../access/door.ts';
 import { NO_RULES, type AccessRules } from '../access/policy.ts';
+import { NO_CALENDAR } from '../booking/calendar.ts';
+import { createBookingPage } from '../booking/pages.ts';
+import { bookPublicSlot } from '../booking/public.ts';
+import { saveNote } from '../notes/notes.ts';
+import { createTask } from '../tasks/tasks.ts';
 import { rescope } from '../testing.ts';
 import { testQuery } from '@crm/db/testing';
 import { afterAll, describe, expect, inject, it } from 'vitest';
@@ -264,6 +270,58 @@ describe('failing closed (AC-538 as amended 21 October 2026)', () => {
 });
 
 describe('the purge registry (AC-536, AC-537)', () => {
+  it('removes a record for good with its note and task link, and clears the ids its bookings hold (AC-536)', async () => {
+    const w = await world();
+    // A booking makes its visitor a person (and a company for a work address), and holds their ids.
+    const now = new Date('2026-11-01T00:00:00.000Z');
+    const page = await createBookingPage(
+      w.owner,
+      { id: newId(), title: 'Chat', timeZone: 'UTC', settings: { location: { type: 'address', value: '1 High St' } } },
+      now,
+    );
+    await bookPublicSlot(
+      await enterBookingPage({ db }, page.publicKey),
+      { calendar: NO_CALENDAR, now: () => now, linkKey: Buffer.alloc(32, 7) },
+      {
+        idempotencyKey: newId(),
+        start: '2026-11-03T10:00:00.000Z',
+        duration: 30,
+        name: 'Ada Lovelace',
+        email: 'ada@analytical.example',
+        timeZone: 'Europe/London',
+        note: '',
+        guests: [],
+      },
+    );
+    const bookingIds = () =>
+      testQuery<{ person: string | null; company: string | null }>(
+        ownerUrl,
+        'select person_record_id::text as person, company_record_id::text as company from bookings where workspace_id = $1',
+        [w.workspaceId],
+      );
+    const [held] = await bookingIds();
+    const person = held?.person ?? '';
+    const company = held?.company ?? undefined;
+    expect(person).not.toBe('');
+    await saveNote(w.owner, { id: newId(), recordId: person, title: 'Met at the fair' });
+    await createTask(w.owner, { id: newId(), title: 'Follow up', recordIds: [person] });
+    await deleteRecords(w.owner, { objectId: w.people, recordIds: [person], batchId: newId() });
+    if (company !== undefined) {
+      await deleteRecords(w.owner, { objectId: w.objects.companies ?? '', recordIds: [company], batchId: newId() });
+    }
+    await deleteForever(w.admin, { recordIds: company === undefined ? [person] : [person, company] });
+    expect(await exists(company === undefined ? [person] : [person, company])).toEqual([]);
+    const left = await testQuery<{ notes: number; links: number }>(
+      ownerUrl,
+      `select (select count(*)::int from notes where record_id = $1) as notes,
+              (select count(*)::int from task_records where record_id = $1) as links`,
+      [person],
+    );
+    expect(left).toEqual([{ notes: 0, links: 0 }]);
+    // The booking stays, its record ids cleared: nothing points at a record that is gone.
+    expect(await bookingIds()).toEqual([{ person: null, company: null }]);
+  });
+
   it('runs every dependent before the records, in the same transaction, and counts it', async () => {
     const w = await world();
     const ids = await w.trashed('Ada', 'Bob');

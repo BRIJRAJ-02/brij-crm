@@ -165,8 +165,12 @@ function recordRows(change: CappedChange): OutboxEvent[] {
   return [...records.keys()].sort(byId).map((objectId): OutboxEvent => {
     const object = touch(objectId);
     // Past the lifecycle cap the row goes coarse: screens reread their windows and counts (owner decision pending).
+    // A background job's batch is always coarse, for every object it names, the related ones too (spec 0022, AC-532):
+    // its views then refetch at most every 5 seconds however many batches run, never once per batch.
     const isCoarse =
-      coarse.has(objectId) || object.created.size + object.deleted.size + object.restored.size > LIFECYCLE_CAP;
+      change.jobId !== undefined ||
+      coarse.has(objectId) ||
+      object.created.size + object.deleted.size + object.restored.size > LIFECYCLE_CAP;
     const replaced = isCoarse || object.replaced.length > REPLACED_CAP ? [] : object.replaced;
     return {
       kind: 'records',

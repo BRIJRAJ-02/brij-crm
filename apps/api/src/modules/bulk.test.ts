@@ -100,3 +100,41 @@ describe('records.updateMany', () => {
     rulesByWorkspace.delete(m.workspace.id);
   });
 });
+
+describe('records.startBulk', () => {
+  it('answers a selection a little over the limits 422 CONFIG_INVALID with the engine’s words (AC-539)', async () => {
+    const m = await memberWithWorkspace(app);
+    const ids = Array.from({ length: 10_001 }, () => newId());
+    expect(
+      await refusal(() =>
+        m.client.records.startBulk({
+          workspace: m.slug,
+          id: newId(),
+          action: 'delete',
+          target: { kind: 'ids', objectId: m.people.id, recordIds: ids },
+          mutationId: newId(),
+        }),
+      ),
+    ).toMatchObject({
+      code: 'CONFIG_INVALID',
+      status: 422,
+      message: 'Select at most 10,000 records one by one, or select all matching.',
+    });
+    expect(
+      await refusal(() =>
+        m.client.records.startBulk({
+          workspace: m.slug,
+          id: newId(),
+          action: 'delete',
+          target: {
+            kind: 'matching',
+            objectId: m.people.id,
+            except: ids.slice(0, 1_001),
+            asOf: new Date().toISOString(),
+          },
+          mutationId: newId(),
+        }),
+      ),
+    ).toMatchObject({ code: 'CONFIG_INVALID', status: 422 });
+  });
+});

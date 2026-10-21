@@ -8,6 +8,8 @@ import { sql } from 'drizzle-orm';
 import type { FilterGroup } from '@crm/contracts/values';
 import { createDatabase } from '@crm/db';
 import { testQuery } from '@crm/db/testing';
+import type { RuleSource } from '../access/door.ts';
+import { NO_RULES, type AccessRules } from '../access/policy.ts';
 import { afterAll, describe, expect, inject, it } from 'vitest';
 import { newId } from '../engine/ids.ts';
 import { outboxHook } from '../engine/outbox.ts';
@@ -25,7 +27,14 @@ afterAll(async () => {
   await db.close();
 });
 
-const { team, runnerFor, drive, itemStates } = jobTestKit(db, ownerUrl);
+/** Each test workspace's rules, by workspace id, as #24 will store them: the kit's runner enters jobs with them. */
+const rulesByWorkspace = new Map<string, AccessRules>();
+const rules: RuleSource = async (tx) => {
+  const { rows } = await tx.execute<{ id: string | null }>(sql`select current_setting('app.workspace_id', true) as id`);
+  return rulesByWorkspace.get(rows[0]?.id ?? '') ?? NO_RULES;
+};
+
+const { team, runnerFor, drive, itemStates } = jobTestKit(db, ownerUrl, { rules });
 
 /**
  * Now by the database's clock, as an ISO time with microseconds: an `asOf` a
@@ -61,7 +70,15 @@ async function world() {
         },
       })
     ).recordId;
-  return { ...t, people, attribute, person };
+  /** A person whose Owner is `memberId`, so an own rule lets that member see them. */
+  const owned = async (firstName: string, memberId: string) =>
+    (
+      await createRecord(t.owner, {
+        objectId: people,
+        values: { [attribute('name')]: { firstName }, [attribute('owner')]: { type: 'member', id: memberId } },
+      })
+    ).recordId;
+  return { ...t, people, attribute, person, owned };
 }
 
 const live = async (w: Awaited<ReturnType<typeof world>>, ids: readonly string[]) =>
@@ -228,5 +245,118 @@ describe('bulk jobs (AC-528, AC-531)', () => {
         }),
       ),
     ).toMatchObject({ code: 'FORBIDDEN' });
+  });
+});
+
+describe('access in a bulk job (AC-538)', () => {
+  it('never counts a record the starter’s record rule hides: all matching, ids, the trash or a batch', async () => {
+    const w = await world();
+    const mine = await w.owned('Ada', w.memberId);
+    const theirs = await w.person('Bob');
+    const own: AccessRules = {
+      levels: [],
+      records: [
+        {
+          subject: { type: 'role', role: 'member' },
+          objectId: w.people,
+          kind: 'own',
+          attributeId: w.attribute('owner'),
+        },
+      ],
+    };
+    rulesByWorkspace.set(w.workspaceId, own);
+    const member = rescope(w.member, { rules: own });
+    const run = runnerFor(registry);
+    const counted = async (input: Omit<Parameters<typeof startBulk>[2], 'id'>) => {
+      const id = newId();
+      await startBulk(member, registry, { id, ...input });
+      expect((await drive(run, w.workspaceId, id)).at(-1)).toBe('ready');
+      return (await getJob(member, registry, id)).total;
+    };
+    expect(
+      await counted({
+        action: 'delete',
+        target: { kind: 'matching', objectId: w.people, except: [], asOf: await databaseNow() },
+      }),
+    ).toBe(1);
+    expect(
+      await counted({ action: 'delete', target: { kind: 'ids', objectId: w.people, recordIds: [mine, theirs] } }),
+    ).toBe(1);
+    // Both deleted by the owner in one batch: the trash and the batch show the member only theirs.
+    const batchId = newId();
+    await deleteRecords(w.owner, { objectId: w.people, recordIds: [mine, theirs], batchId });
+    expect(
+      await counted({
+        action: 'restore',
+        target: { kind: 'trash', objectId: w.people, except: [], asOf: await databaseNow() },
+      }),
+    ).toBe(1);
+    expect(await counted({ action: 'restore', target: { kind: 'batch', batchId } })).toBe(1);
+  });
+
+  it('undoes a delete whose first 501 records are hidden from the member, bringing back the ones they see', async () => {
+    const w = await world();
+    // Made first, so they come first in id order: the 501 a lock of the batch used to take, none of them hers.
+    const theirs: string[] = [];
+    for (let n = 0; n < 501; n += 1) theirs.push(await w.person(`Them ${String(n)}`));
+    const mine = [await w.owned('Ada', w.memberId), await w.owned('Bea', w.memberId)];
+    const jobId = newId();
+    await startBulk(w.owner, registry, {
+      id: jobId,
+      action: 'delete',
+      target: { kind: 'ids', objectId: w.people, recordIds: [...theirs, ...mine] },
+    });
+    const run = runnerFor(registry);
+    await drive(run, w.workspaceId, jobId);
+    await confirmJob(w.owner, registry, jobId);
+    expect((await drive(run, w.workspaceId, jobId)).at(-1)).toBe('succeeded');
+    const own: AccessRules = {
+      levels: [],
+      records: [
+        {
+          subject: { type: 'role', role: 'member' },
+          objectId: w.people,
+          kind: 'own',
+          attributeId: w.attribute('owner'),
+        },
+      ],
+    };
+    rulesByWorkspace.set(w.workspaceId, own);
+    const undone = await undoDelete(rescope(w.member, { rules: own }), registry, { batchId: jobId, jobId: newId() });
+    expect(undone.mode).toBe('inline');
+    const back = await testQuery<{ id: string }>(
+      ownerUrl,
+      'select id::text from records where id = any($1::uuid[]) and deleted_at is null order by id',
+      [[...theirs, ...mine]],
+    );
+    expect(back.map((row) => row.id)).toEqual([...mine].sort());
+  });
+
+  it('stops at its next slice when the starter loses write on the object, changing nothing more', async () => {
+    const w = await world();
+    const ids = [await w.person('Ada'), await w.person('Bob'), await w.person('Cy')];
+    const id = newId();
+    await startBulk(w.member, registry, {
+      id,
+      action: 'delete',
+      target: { kind: 'ids', objectId: w.people, recordIds: ids },
+    });
+    const run = runnerFor(registry);
+    expect((await drive(run, w.workspaceId, id)).at(-1)).toBe('ready');
+    await confirmJob(w.member, registry, id);
+    // Demoted to read only on People before the first batch runs: the slice enters them again as they are now.
+    rulesByWorkspace.set(w.workspaceId, {
+      levels: [
+        { subject: { type: 'role', role: 'member' }, target: { type: 'object', objectId: w.people }, level: 'read' },
+      ],
+      records: [],
+    });
+    expect((await drive(run, w.workspaceId, id)).at(-1)).toBe('failed');
+    expect(await getJob(w.owner, registry, id)).toMatchObject({
+      status: 'failed',
+      done: 0,
+      error: { code: 'FORBIDDEN' },
+    });
+    expect(await live(w, ids)).toEqual([...ids].sort());
   });
 });

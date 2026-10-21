@@ -40,6 +40,7 @@ import {
   checkObject,
   farVisibleSql,
   hidesActors,
+  recordVisibleSql,
   UNKNOWN_OBJECT,
   visibleRecords,
   writableObjects,
@@ -527,8 +528,11 @@ export async function restoreBatch(
     scope,
     async (context) => {
       const { tx } = context;
-      // Through `records_trash_batch`; one past the limit, to know the batch is too big.
-      const locked = await lockForRestore(tx, inBatch(batchId), MAX_INLINE_RECORDS + 1);
+      // Through `records_trash_batch`; one past the limit, to know the batch is too big. Only the rows the member
+      // sees are locked and counted, so a batch whose first 501 hold hidden ones never restores part of what they see.
+      const visible = recordVisibleSql(scope.access, 'records');
+      const where = visible === undefined ? inBatch(batchId) : sql`${inBatch(batchId)} and ${visible}`;
+      const locked = await lockForRestore(tx, where, MAX_INLINE_RECORDS + 1);
       const seen = await visibleRecords(
         tx,
         scope.access,

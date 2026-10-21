@@ -103,7 +103,8 @@ export const outbox = pgTable(
      * The background job whose batch stored the row (spec 0022, milestone 3),
      * or null. Never published: a `records` event carries only `fromJob`, so a
      * job's id never reaches a member who may not read the job (spec 0009's
-     * `jobs` rule). Kept for the audit log (#36).
+     * `jobs` rule). It lives as long as its row, which the outbox prunes after
+     * about a day (spec 0007); the audit log (#36) will keep its own record.
      */
     jobId: uuid('job_id'),
     /**

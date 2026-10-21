@@ -223,6 +223,10 @@ export const formSubmissions = pgTable(
     index('form_submissions_open')
       .on(t.workspaceId, t.state)
       .where(sql`${t.state} <> 'processed'`),
+    // A record's submissions as their main record: the purge clears it when the record goes for good (spec 0022).
+    index('form_submissions_by_main_record')
+      .on(t.workspaceId, t.mainRecordId)
+      .where(sql`${t.mainRecordId} is not null`),
     check(
       'form_submissions_state',
       sql`${t.state} in ('received', 'processing', 'processed', 'spam', 'held', 'needs_review', 'failed')`,

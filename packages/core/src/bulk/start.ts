@@ -16,7 +16,7 @@ import {
   type JobView,
 } from '@crm/contracts';
 import { can } from '../access/policy.ts';
-import { checkObject, UNKNOWN_OBJECT, visibleRecords, writableObjects } from '../access/visibility.ts';
+import { checkObject, recordVisibleSql, UNKNOWN_OBJECT, writableObjects } from '../access/visibility.ts';
 import { checkScope } from '../access/mint.ts';
 import { inWorkspace } from '../access/run.ts';
 import { checkBulkEdit } from '../engine/bulk-edit.ts';
@@ -204,16 +204,14 @@ export async function undoDelete(
   checkScope(scope);
   const batchId = checkId(input.batchId, 'Nothing from that delete is still in the trash.');
   const many = await inWorkspace(scope, async (tx) => {
-    // Counted over what the member sees, so the answer never hints at hidden records.
-    const rows = await tx.execute<{ id: string; object_id: string }>(
-      sql`select id::text, object_id::text from records where ${inBatch(batchId)} order by id limit ${MAX_INLINE_RECORDS * 4}`,
+    // Counted over what the member sees, so the answer never hints at hidden records, and by the same condition
+    // `restoreBatch` locks with, so the two agree on which records come back at once.
+    const visible = recordVisibleSql(scope.access, 'records');
+    const where = visible === undefined ? inBatch(batchId) : sql`${inBatch(batchId)} and ${visible}`;
+    const rows = await tx.execute<{ id: string }>(
+      sql`select id::text from records where ${where} order by id limit ${MAX_INLINE_RECORDS + 1}`,
     );
-    const seen = await visibleRecords(
-      tx,
-      scope.access,
-      rows.rows.map((row) => ({ objectId: row.object_id, recordId: row.id })),
-    );
-    return seen.size > MAX_INLINE_RECORDS;
+    return rows.rows.length > MAX_INLINE_RECORDS;
   });
   if (!many || input.jobId === undefined) {
     return { mode: 'inline', results: await restoreBatch(scope, { batchId }, hooks) };
