@@ -17,6 +17,13 @@ export const strings = {
   resize: 'Resize',
   /** Shown on the header while resizing, and announced as the width changes. */
   resizeHint: 'Left and Right change the width. Enter or Esc to finish.',
+  /** What a group header's count counts, read after the number. */
+  groupRows: 'records',
+  /** What a screen reader hears as a column moves by pointer. */
+  columnLifted: (name: string) => `${name} column picked up.`,
+  columnOver: (name: string, over: string) => `${name} column, over ${over}.`,
+  columnDropped: (name: string) => `${name} column moved.`,
+  columnPutBack: (name: string) => `${name} column, put back.`,
   resizing: (name: string, width: string) => `${name}, ${width} pixels wide.`,
   computedColumn: 'Worked out by the system',
   aiColumn: 'Filled by AI',

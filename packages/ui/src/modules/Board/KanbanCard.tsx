@@ -1,6 +1,7 @@
 // What a board card shows: the record's avatar and name, its handle (or a
 // lock that says why it can't move), then the view's card fields through
 // their one display on the card surface.
+import { memo } from 'react';
 import { Avatar } from '../../atoms/Avatar/Avatar.tsx';
 import { DragHandle } from '../../atoms/DragHandle/DragHandle.tsx';
 import { LockReason } from '../../atoms/Tooltip/LockReason.tsx';
@@ -8,6 +9,7 @@ import { VisuallyHidden } from '../../atoms/VisuallyHidden/VisuallyHidden.tsx';
 import { AttributeDisplay } from '../../fields/AttributeDisplay.tsx';
 import type { FieldAttribute } from '../../fields/types.ts';
 import { isEmptyValue } from '../../fields/values.ts';
+import type { DragGrip } from '../../lib/drag/drag.tsx';
 import styles from './KanbanCard.module.css';
 import { strings } from './strings.ts';
 import type { BoardCard } from './types.ts';
@@ -16,16 +18,17 @@ import type { BoardCard } from './types.ts';
 export interface KanbanCardProps {
   readonly card: BoardCard;
   readonly fields: readonly FieldAttribute[];
-  /** The board lets cards move: draw the handle, unless this card is locked. */
-  readonly canMove: boolean;
+  /** The grip that moves it, when the board lets cards move and this one isn't locked. */
+  readonly grip?: DragGrip | undefined;
 }
 
 /**
  * A read only card's content: the handle to move it, the record's avatar and
  * name, and each card field that has a value. A locked card has a lock whose
- * tooltip says why, reachable by keyboard, in place of its handle.
+ * tooltip says why, reachable by keyboard, in place of its handle. Memoised:
+ * a drag redraws the cards it passes over, not what they show.
  */
-export function KanbanCard({ card, fields, canMove }: KanbanCardProps) {
+export const KanbanCard = memo(function KanbanCard({ card, fields, grip }: KanbanCardProps) {
   const { record } = card;
   const shown = fields.filter((attribute) => !isEmptyValue(card.values[attribute.id]));
   return (
@@ -42,7 +45,7 @@ export function KanbanCard({ card, fields, canMove }: KanbanCardProps) {
         />
         <span className={styles.name}>{record.name}</span>
         {card.readOnlyReason !== undefined && <LockReason reason={card.readOnlyReason} />}
-        <DragHandle label={strings.move(record.name)} isDisabled={!canMove || card.readOnlyReason !== undefined} />
+        {grip !== undefined && <DragHandle label={strings.move(record.name)} drag={grip} />}
       </span>
       {shown.length > 0 && (
         <span className={styles.fields}>
@@ -64,4 +67,4 @@ export function KanbanCard({ card, fields, canMove }: KanbanCardProps) {
       )}
     </span>
   );
-}
+});

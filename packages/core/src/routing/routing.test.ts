@@ -404,4 +404,29 @@ describe('a team page’s routing', () => {
     );
     expect(report.code).toBe('FORBIDDEN');
   });
+
+  it('refuses a no show from a principal without booking.manage', async () => {
+    const w = await world();
+    // Every role holds booking.manage, so the principal without it is an API key whose scopes leave it out.
+    const key = rescope(w.owner, { actor: { type: 'api_key', id: newId() }, scopes: ['data.read'] });
+    const refused = await refusalOf(markNoShow(key, { bookingId: newId(), noShow: true }));
+    expect(refused.code).toBe('FORBIDDEN');
+  });
+
+  it('answers a form’s report as absent to a forms.manage member who can’t see the form’s object', async () => {
+    const w = await world();
+    const form = await routedForm(w, []);
+    const blind = rescope(w.owner, {
+      actor: { type: 'member', id: w.bea.id },
+      role: 'admin',
+      rules: {
+        levels: [
+          { subject: { type: 'role', role: 'admin' }, target: { type: 'object', objectId: w.people }, level: 'none' },
+        ],
+        records: [],
+      },
+    });
+    const refused = await refusalOf(routingReport(blind, { surface: { kind: 'form', formId: form.id }, days: 30 }));
+    expect(refused.code).toBe('NOT_FOUND');
+  });
 });

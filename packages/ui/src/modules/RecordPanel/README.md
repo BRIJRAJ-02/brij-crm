@@ -28,16 +28,17 @@ New. Clicking a record in a view (#17) opens it beside the table instead of leav
 - Leave out `onPrevious` or `onNext` at either end of the view; the button stays, disabled, so the header doesn't shift. Leave out both to hide them.
 - `selectedTab` with `onTabChange` keeps the tab when the person steps to another record.
 - `actions` go before the close button, such as the record's menu.
+- `stats` puts the record header's stat strip (`RecordStats`) over the tabs: open tasks, notes, the last activity, each opening its tab through `onPress` (pair it with `selectedTab` and `onTabChange`). The leading avatar is `md` (24px), a step up from the bar's icons (13 Oct reference batch 4).
 - `status`: `loading` (leave out `record`; skeletons show in place of the tabs), `error` (with Try again from `onRetry`), or `no-access`.
 - Stepping onto the first or last record disables the button you pressed; focus moves to the other one.
 
 ## States
 
-Open, closed (with the panel's exit animation), loading, failed, no access. Each tab's content brings its own loading, empty and error states.
+Open (with its stat strip, its stats loading, or none), closed (with the panel's exit animation), loading, failed, no access. Each tab's content brings its own loading, empty and error states.
 
 ## Keyboard
 
-Focus moves into the panel when it opens. Esc closes it, and focus returns to where it was; Esc inside an editor cancels the edit first. Tab moves through the header's buttons, the tabs (the arrows switch between them), then the tab's content.
+Focus moves into the panel when it opens. Esc closes it, and focus returns to where it was; Esc inside an editor cancels the edit first. Tab moves through the header's buttons, the stats that go somewhere, the tabs (the arrows switch between them), then the tab's content.
 
 ## Differences from the artifact
 

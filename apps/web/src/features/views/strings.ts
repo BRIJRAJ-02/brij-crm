@@ -72,6 +72,9 @@ export const strings = {
   /** Under View settings' columns: a new attribute is one more column. */
   addAttribute: 'Add attribute',
   columns: 'Columns',
+  /** A table's View settings: the rows in runs by a status or single select (13 Oct reference batch 4). */
+  groupBy: 'Group by',
+  noGrouping: 'None',
   /** A board's View settings: what its cards show. */
   cardFields: 'Card fields',
   cardFieldsFull: (max: number) => `A card shows up to ${String(max)} fields. Hide one to show another.`,

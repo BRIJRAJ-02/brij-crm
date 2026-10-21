@@ -6,6 +6,7 @@ import {
   editRecord,
   editRecords,
   getActivity,
+  getStageSince,
   queryGroups,
   queryRecords,
   readRecordsById,
@@ -112,6 +113,10 @@ export const recordsRouter = member.records.router({
       ? { entries: [...page.entries] }
       : { entries: [...page.entries], nextCursor: page.nextCursor };
   }),
+  // A record's stage age (13 Oct reference batch 4): when it entered the stage it is in now.
+  stageSince: member.records.stageSince.handler(({ context, input }) =>
+    getStageSince(context.scope, { recordId: input.recordId, attributeId: input.attributeId }),
+  ),
   getTrashed: member.records.getTrashed.handler(({ context, input }) =>
     readTrashedRecord(context.scope, input.recordId),
   ),

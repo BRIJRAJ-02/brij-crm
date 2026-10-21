@@ -5,14 +5,14 @@ import { Button } from '../../atoms/Button/Button.tsx';
 import { Skeleton } from '../../atoms/Skeleton/Skeleton.tsx';
 import { VisuallyHidden } from '../../atoms/VisuallyHidden/VisuallyHidden.tsx';
 import type { FieldAttribute } from '../../fields/types.ts';
-import { focusLater } from '../../lib/focus-later.ts';
+import { DragArea, type DragDrop, type DragWords } from '../../lib/drag/drag.tsx';
 import { memoIntl } from '../../lib/intl-memo.ts';
 import type { LoadStatus } from '../../lib/load-status.ts';
 import { EmptyState } from '../../molecules/EmptyState/EmptyState.tsx';
 import { useFormatSettings } from '../../provider/context.ts';
 import { useDelayedLoading } from '../../provider/useDelayedLoading.ts';
 import styles from './Board.module.css';
-import { KanbanColumn } from './KanbanColumn.tsx';
+import { KanbanCardOverlay, KanbanColumn, refusalOf } from './KanbanColumn.tsx';
 import { strings } from './strings.ts';
 import type { BoardCard, BoardColumn, BoardMove } from './types.ts';
 
@@ -41,14 +41,38 @@ export interface BoardProps {
   readonly onRetry?: () => void;
 }
 
+/** A loaded card and its column, by the card's key. */
+function findCard(columns: readonly BoardColumn[], id: string): { card: BoardCard; column: BoardColumn } | undefined {
+  for (const column of columns) {
+    for (let index = 0; index < column.cards.count; index += 1) {
+      const card = column.cards.getItem(index);
+      if (card !== undefined && column.cards.getKey(card) === id) return { card, column };
+    }
+  }
+  return undefined;
+}
+
+/** The key of the card after `id` in its column, if one is loaded. */
+function cardAfter(column: BoardColumn, id: string): string | undefined {
+  for (let index = 0; index < column.cards.count; index += 1) {
+    const card = column.cards.getItem(index);
+    if (card === undefined || column.cards.getKey(card) !== id) continue;
+    const next = column.cards.getItem(index + 1);
+    return next === undefined ? undefined : column.cards.getKey(next);
+  }
+  return undefined;
+}
+
 /**
  * A board: a column per option, each a list of cards. Cards move between
- * columns by pointer, or by keyboard and screen reader through React Aria's
- * drag and drop (Enter on a card's handle picks it up and lands on the first
- * column that takes it, Tab moves on, Enter drops it, and focus follows the
- * card). Archived columns show only while they hold cards and never take one.
- * Empty columns hide behind "N hidden columns", and come back as drop targets
- * while a card is moving.
+ * columns through the library's drag wrapper (dnd-kit): by pointer from
+ * anywhere on a card, the card lifting and following it, or by keyboard on a
+ * card's grip (Space or Enter picks it up, the arrows move it between columns
+ * and, on a reorderable board, between cards, Space or Enter drops it, Escape
+ * puts it back), each step said to screen readers, and focus comes back to
+ * the card where it landed. Archived columns show only while they hold cards and never
+ * take one. Empty columns hide behind "N hidden columns", and come back as
+ * drop targets while a card is moving.
  */
 export function Board({
   label,
@@ -67,7 +91,10 @@ export function Board({
   const { locale } = useFormatSettings();
   const showSkeleton = useDelayedLoading(status === 'loading');
   const [draggingFrom, setDraggingFrom] = useState<string | undefined>(undefined);
-  const rootRef = useRef<HTMLDivElement>(null);
+  // The column a moving card is over (itself or one of its cards): told once per change, not per frame.
+  const [overGroup, setOverGroup] = useState<string | undefined>(undefined);
+  // A press that ends a drag never opens the card it dropped.
+  const isMovingRef = useRef(false);
   if (status === 'error') {
     return (
       <EmptyState tone="error" icon="kanban" title={strings.failed} {...(onRetry === undefined ? {} : { onRetry })} />
@@ -110,59 +137,118 @@ export function Board({
   const hiddenEmpty = columns.filter((column) => column.count === 0 && column.isArchived !== true).length;
   const number = memoIntl(`plain:${locale}`, () => new Intl.NumberFormat(locale)).format(hiddenEmpty);
   const plural = memoIntl(`plural:${locale}`, () => new Intl.PluralRules(locale)).select(hiddenEmpty);
-  const move = (next: BoardMove) => {
-    onMove(next);
-    // Focus follows the card to where it landed (a keyboard drop), once the drag's overlays settle.
-    focusLater(() => {
-      const root = rootRef.current;
-      const active = document.activeElement;
-      if (root === null || (active !== null && active !== document.body && !root.contains(active))) return null;
-      return root.querySelector<HTMLElement>(`[role="row"][data-key="${CSS.escape(next.cardId)}"]`);
+  const titleOf = (id: string | undefined) => columns.find((column) => column.id === id)?.title ?? '';
+  const nameOf = (id: string) => findCard(columns, id)?.card.record.name ?? id;
+  const words: DragWords = {
+    lifted: (id) => strings.lifted(nameOf(id), titleOf(findCard(columns, id)?.column.id)),
+    // A column that takes no card is never a target, so it is never said to be one.
+    over: (id, drop) => (drop?.overGroup === undefined ? undefined : strings.over(nameOf(id), titleOf(drop.overGroup))),
+    dropped: (id, drop) => {
+      const column = columns.find((each) => each.id === drop?.overGroup);
+      return column === undefined || refusalOf(column) !== undefined
+        ? strings.putBack(nameOf(id))
+        : strings.dropped(nameOf(id), column.title);
+    },
+    cancelled: (id) => strings.putBack(nameOf(id)),
+    moving: (id) => strings.moving(nameOf(id)),
+  };
+  const drop = (dropped: DragDrop) => {
+    const { id, fromGroup, overGroup } = dropped;
+    const column = columns.find((each) => each.id === overGroup);
+    if (fromGroup === undefined || column === undefined || refusalOf(column) !== undefined) return;
+    const isSame = fromGroup === column.id;
+    // Between cards only where order means something; otherwise the column as a whole.
+    let beforeCardId: string | undefined;
+    if (isReorderable && !dropped.overIsZone && dropped.overId !== undefined && dropped.overId !== id) {
+      const keys = Array.from({ length: column.cards.count }, (_, index) => {
+        const card = column.cards.getItem(index);
+        return card === undefined ? undefined : column.cards.getKey(card);
+      });
+      // In its own column the card lands where the others made room: after the target when moving down.
+      const side = isSame ? (keys.indexOf(id) < keys.indexOf(dropped.overId) ? 'after' : 'before') : dropped.side;
+      beforeCardId = side === 'before' ? dropped.overId : cardAfter(column, dropped.overId);
+    }
+    if (isSame && (!isReorderable || dropped.overIsZone || dropped.overId === id)) return;
+    onMove({
+      cardId: id,
+      fromColumnId: fromGroup,
+      toColumnId: column.id,
+      ...(beforeCardId === undefined ? {} : { beforeCardId }),
     });
   };
   return (
-    <div ref={rootRef} className={styles.root} role="group" aria-label={label}>
-      {visible.map((column) => (
-        <KanbanColumn
-          key={column.id}
-          column={column}
-          fields={cardFields}
-          canMove={!isReadOnly}
-          isReorderable={isReorderable}
-          draggingFrom={draggingFrom}
-          onDragChange={(from) => {
-            setDraggingFrom(from);
-            onMovingChange?.(from !== undefined);
-          }}
-          onMove={move}
-          {...(onOpen === undefined ? {} : { onOpen })}
-        />
-      ))}
-      {onShowEmptyColumnsChange !== undefined && hiddenEmpty > 0 && !isMoving && (
-        <span className={styles.hidden}>
-          {showEmptyColumns ? (
-            <Button
-              variant="ghost"
-              icon="eye-off"
-              onPress={() => {
-                onShowEmptyColumnsChange(false);
-              }}
-            >
-              {strings.hideEmpty}
-            </Button>
-          ) : (
-            <Button
-              variant="dashed"
-              icon="eye"
-              onPress={() => {
-                onShowEmptyColumnsChange(true);
-              }}
-            >
-              {strings.hiddenColumns(number, plural)}
-            </Button>
-          )}
-        </span>
-      )}
-    </div>
+    <DragArea
+      words={words}
+      collision="items-first"
+      focusAfter="row"
+      onOver={(over) => {
+        setOverGroup(over?.overGroup);
+      }}
+      onDrop={drop}
+      onLift={(_, group) => {
+        isMovingRef.current = true;
+        setDraggingFrom(group);
+        onMovingChange?.(true);
+      }}
+      onEnd={() => {
+        setDraggingFrom(undefined);
+        setOverGroup(undefined);
+        onMovingChange?.(false);
+        // The press that ended the drag lands first; open again after it.
+        requestAnimationFrame(() => {
+          isMovingRef.current = false;
+        });
+      }}
+      overlay={(id) => {
+        const found = findCard(columns, id);
+        return found === undefined ? null : <KanbanCardOverlay card={found.card} fields={cardFields} />;
+      }}
+    >
+      <div className={styles.root} role="group" aria-label={label}>
+        {visible.map((column) => (
+          <KanbanColumn
+            key={column.id}
+            column={column}
+            fields={cardFields}
+            canMove={!isReadOnly}
+            isReorderable={isReorderable}
+            draggingFrom={draggingFrom}
+            isOver={overGroup === column.id}
+            {...(onOpen === undefined
+              ? {}
+              : {
+                  onOpen: (card: BoardCard) => {
+                    if (!isMovingRef.current) onOpen(card);
+                  },
+                })}
+          />
+        ))}
+        {onShowEmptyColumnsChange !== undefined && hiddenEmpty > 0 && !isMoving && (
+          <span className={styles.hidden}>
+            {showEmptyColumns ? (
+              <Button
+                variant="ghost"
+                icon="eye-off"
+                onPress={() => {
+                  onShowEmptyColumnsChange(false);
+                }}
+              >
+                {strings.hideEmpty}
+              </Button>
+            ) : (
+              <Button
+                variant="dashed"
+                icon="eye"
+                onPress={() => {
+                  onShowEmptyColumnsChange(true);
+                }}
+              >
+                {strings.hiddenColumns(number, plural)}
+              </Button>
+            )}
+          </span>
+        )}
+      </div>
+    </DragArea>
   );
 }

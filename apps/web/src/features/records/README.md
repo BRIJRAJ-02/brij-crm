@@ -8,6 +8,8 @@ Spec 0017, milestones 1 and 2: a record's own page, and its timeline. It sits in
 - **Main task**: read and edit its details in place, and see who changed what and when, live.
 - **Leaves out**: deleting and restoring it (#22), presence (#26), related records (milestone 3), notes (#19 milestone 3), comments (#29). Tasks (#19 milestone 1) have their own tab and Overview block, `features/tasks`.
 
+- **Stat strip** (13 Oct reference batch 4; owner's call 22 Oct: the tabs keep their counts, so the strip says only what they don't): the record's value (an attribute `value` of type currency, through its field display), `Entered <stage>` with how long ago (the first live status attribute; `records.stageSince`, read afresh when the stage changes), the next meeting (`calendar.meetings.forRecord`, the first one not yet over), and the last activity (`useLatestActivityAt`, opening Activity). `data.records.facts` holds the meeting and the stage age; `useRecordFacts` reads them.
+
 ## Details (RecordDetails)
 
 - **Purpose**: a record's details, in the page's sidebar (and, from milestone 4, the side panel's Details tab).

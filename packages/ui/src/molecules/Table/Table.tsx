@@ -1,19 +1,9 @@
 import { useContext, type ReactNode } from 'react';
-import {
-  Cell,
-  Column,
-  DropIndicator,
-  Row,
-  Table as AriaTable,
-  TableBody,
-  TableHeader,
-  useDragAndDrop,
-  type Key,
-} from 'react-aria-components';
+import { Cell, Column, Row, Table as AriaTable, TableBody, TableHeader, type Key } from 'react-aria-components';
 import { Checkbox } from '../../atoms/Checkbox/Checkbox.tsx';
-import { DragHandle } from '../../atoms/DragHandle/DragHandle.tsx';
 import { Skeleton } from '../../atoms/Skeleton/Skeleton.tsx';
 import { VisuallyHidden } from '../../atoms/VisuallyHidden/VisuallyHidden.tsx';
+import { SortableList, SortableRowGrip } from '../../lib/drag/drag.tsx';
 import { PageEdge } from '../../lib/page-edge.ts';
 import { useDelayedLoading } from '../../provider/useDelayedLoading.ts';
 import { strings } from './strings.ts';
@@ -122,17 +112,6 @@ export function Table<T>({
   const isSelectable = selected !== undefined && onSelectedChange !== undefined;
   const ids = rows.map(getRowId);
   const showSkeleton = useDelayedLoading(isLoading);
-  const { dragAndDropHooks } = useDragAndDrop({
-    isDisabled: onReorder === undefined,
-    getItems: (keys) => [...keys].map((key) => ({ 'text/plain': String(key) })),
-    onReorder: (event) => {
-      const [moved] = [...event.keys].map(String);
-      if (moved === undefined || onReorder === undefined) return;
-      onReorder(moved, String(event.target.key), event.target.dropPosition === 'after' ? 'after' : 'before');
-    },
-    // Where the row would land: an accent line between rows, for a pointer and for the keyboard alike.
-    renderDropIndicator: (target) => <DropIndicator target={target} className={styles.dropLine} />,
-  });
   // Directly in a settings page's body the rows run out into the page's gutter, the first column's text on the
   // content edge, and a row's handle sits in that gutter, inside its first cell, rather than in a column of its own.
   const atPageEdge = useContext(PageEdge);
@@ -146,6 +125,110 @@ export function Table<T>({
   const shown: readonly TableColumn[] = [...lead, ...columns];
   // The frame scrolls a table wider than its slot sideways on its own (a phone), never the page around it.
   // A sticky header sticks to the page's scroll, so its frame lets the table run on instead.
+  const table = (
+    <AriaTable
+      className={styles.root}
+      aria-label={label}
+      {...(onRowAction === undefined ? {} : { onRowAction: (key) => onRowAction(String(key)) })}
+      {...(isSelectable
+        ? {
+            selectionMode: 'multiple' as const,
+            selectionBehavior: 'toggle' as const,
+            selectedKeys: selected,
+            onSelectionChange: (keys: 'all' | Set<Key>) => {
+              onSelectedChange(keys === 'all' ? new Set(ids) : new Set([...keys].map(String)));
+            },
+          }
+        : {})}
+    >
+      <TableHeader className={styles.header} columns={shown}>
+        {(column) => (
+          <Column
+            id={column.id}
+            isRowHeader={column.isRowHeader ?? false}
+            className={styles.column}
+            // The header's name is its label alone, never its help's button too.
+            textValue={column.label}
+            {...(column.info === undefined ? {} : { 'aria-label': column.label })}
+            data-align={column.align ?? 'start'}
+            data-handle={column.id === HANDLE || column.id === SELECT || undefined}
+            data-sticky={isHeaderSticky || undefined}
+          >
+            {column.id === SELECT ? (
+              <Checkbox slot="selection" label={strings.selectAll} isLabelHidden />
+            ) : column.isLabelHidden === true ? (
+              <VisuallyHidden>{column.label}</VisuallyHidden>
+            ) : column.info === undefined ? (
+              column.label
+            ) : (
+              <span className={styles.columnLabel}>
+                {column.label}
+                {column.info}
+              </span>
+            )}
+          </Column>
+        )}
+      </TableHeader>
+      <TableBody
+        className={styles.body}
+        items={showSkeleton ? [] : rows.map((row) => ({ id: getRowId(row), row }))}
+        renderEmptyState={() =>
+          showSkeleton ? (
+            <span className={styles.loading}>
+              <VisuallyHidden>{strings.loading}</VisuallyHidden>
+              {Array.from({ length: SKELETON_ROWS }, (_, index) => (
+                <Skeleton key={index} width={index === SKELETON_ROWS - 1 ? 'medium' : 'full'} />
+              ))}
+            </span>
+          ) : (
+            emptyState
+          )
+        }
+      >
+        {(item) => (
+          <Row
+            id={item.id}
+            columns={shown}
+            className={styles.row}
+            data-pressable={onRowAction === undefined ? undefined : ''}
+          >
+            {(column) =>
+              column.id === HANDLE ? (
+                <Cell className={styles.cell} data-handle>
+                  <SortableRowGrip id={item.id} label={strings.move(getRowLabel?.(item.row) ?? item.id)} />
+                </Cell>
+              ) : column.id === SELECT ? (
+                <Cell className={styles.cell} data-handle>
+                  <Checkbox
+                    slot="selection"
+                    label={strings.select(getSelectLabel?.(item.row) ?? item.id)}
+                    isLabelHidden
+                  />
+                </Cell>
+              ) : (
+                <Cell
+                  className={styles.cell}
+                  data-align={column.align ?? 'start'}
+                  data-gutter-handle={(handleInGutter && column.id === firstColumnId) || undefined}
+                >
+                  {handleInGutter && column.id === firstColumnId && (
+                    <span className={styles.gutter}>
+                      <SortableRowGrip id={item.id} label={strings.move(getRowLabel(item.row))} />
+                    </span>
+                  )}
+                  {column.isInline === true ? (
+                    <span className={styles.inline}>{renderCell(item.row, column.id)}</span>
+                  ) : (
+                    renderCell(item.row, column.id)
+                  )}
+                </Cell>
+              )
+            }
+          </Row>
+        )}
+      </TableBody>
+    </AriaTable>
+  );
   return (
     <div
       className={styles.frame}
@@ -153,109 +236,22 @@ export function Table<T>({
       data-scrollable={(isScrollable && !isHeaderSticky) || undefined}
       data-edge={atPageEdge ? 'page' : undefined}
     >
-      <AriaTable
-        className={styles.root}
-        aria-label={label}
-        {...(onRowAction === undefined ? {} : { onRowAction: (key) => onRowAction(String(key)) })}
-        {...(onReorder === undefined ? {} : { dragAndDropHooks })}
-        {...(isSelectable
-          ? {
-              selectionMode: 'multiple' as const,
-              selectionBehavior: 'toggle' as const,
-              selectedKeys: selected,
-              onSelectionChange: (keys: 'all' | Set<Key>) => {
-                onSelectedChange(keys === 'all' ? new Set(ids) : new Set([...keys].map(String)));
-              },
-            }
-          : {})}
-      >
-        <TableHeader className={styles.header} columns={shown}>
-          {(column) => (
-            <Column
-              id={column.id}
-              isRowHeader={column.isRowHeader ?? false}
-              className={styles.column}
-              // The header's name is its label alone, never its help's button too.
-              textValue={column.label}
-              {...(column.info === undefined ? {} : { 'aria-label': column.label })}
-              data-align={column.align ?? 'start'}
-              data-handle={column.id === HANDLE || column.id === SELECT || undefined}
-              data-sticky={isHeaderSticky || undefined}
-            >
-              {column.id === SELECT ? (
-                <Checkbox slot="selection" label={strings.selectAll} isLabelHidden />
-              ) : column.isLabelHidden === true ? (
-                <VisuallyHidden>{column.label}</VisuallyHidden>
-              ) : column.info === undefined ? (
-                column.label
-              ) : (
-                <span className={styles.columnLabel}>
-                  {column.label}
-                  {column.info}
-                </span>
-              )}
-            </Column>
-          )}
-        </TableHeader>
-        <TableBody
-          className={styles.body}
-          items={showSkeleton ? [] : rows.map((row) => ({ id: getRowId(row), row }))}
-          renderEmptyState={() =>
-            showSkeleton ? (
-              <span className={styles.loading}>
-                <VisuallyHidden>{strings.loading}</VisuallyHidden>
-                {Array.from({ length: SKELETON_ROWS }, (_, index) => (
-                  <Skeleton key={index} width={index === SKELETON_ROWS - 1 ? 'medium' : 'full'} />
-                ))}
-              </span>
-            ) : (
-              emptyState
-            )
-          }
+      {onReorder === undefined ? (
+        table
+      ) : (
+        <SortableList
+          ids={ids}
+          nameOf={(id) => {
+            const row = rows.find((each) => getRowId(each) === id);
+            return row === undefined ? id : getRowLabel(row);
+          }}
+          onMove={(move) => {
+            onReorder(move.id, move.targetId, move.position);
+          }}
         >
-          {(item) => (
-            <Row
-              id={item.id}
-              columns={shown}
-              className={styles.row}
-              data-pressable={onRowAction === undefined ? undefined : ''}
-            >
-              {(column) =>
-                column.id === HANDLE ? (
-                  <Cell className={styles.cell} data-handle>
-                    <DragHandle label={strings.move(getRowLabel?.(item.row) ?? item.id)} />
-                  </Cell>
-                ) : column.id === SELECT ? (
-                  <Cell className={styles.cell} data-handle>
-                    <Checkbox
-                      slot="selection"
-                      label={strings.select(getSelectLabel?.(item.row) ?? item.id)}
-                      isLabelHidden
-                    />
-                  </Cell>
-                ) : (
-                  <Cell
-                    className={styles.cell}
-                    data-align={column.align ?? 'start'}
-                    data-gutter-handle={(handleInGutter && column.id === firstColumnId) || undefined}
-                  >
-                    {handleInGutter && column.id === firstColumnId && (
-                      <span className={styles.gutter}>
-                        <DragHandle label={strings.move(getRowLabel(item.row))} />
-                      </span>
-                    )}
-                    {column.isInline === true ? (
-                      <span className={styles.inline}>{renderCell(item.row, column.id)}</span>
-                    ) : (
-                      renderCell(item.row, column.id)
-                    )}
-                  </Cell>
-                )
-              }
-            </Row>
-          )}
-        </TableBody>
-      </AriaTable>
+          {table}
+        </SortableList>
+      )}
     </div>
   );
 }

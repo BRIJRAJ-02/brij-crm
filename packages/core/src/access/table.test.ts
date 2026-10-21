@@ -755,6 +755,9 @@ const DATA_CASES: Readonly<Record<string, DataCase>> = {
   getEntries: empty((scope, world) => core.getEntries(scope, { ids: [world.entryId] })),
   getRecordEntries: empty((scope, world) => core.getRecordEntries(scope, { recordId: world.recordId })),
   getActivity: refused('NOT_FOUND', (scope, world) => core.getActivity(scope, { recordId: world.recordId })),
+  getStageSince: refused('NOT_FOUND', (scope, world) =>
+    core.getStageSince(scope, { recordId: world.recordId, attributeId: world.stage }),
+  ),
   readTrashedRecord: refused('NOT_FOUND', (scope, world) => core.readTrashedRecord(scope, world.trashedId)),
   // The record picker's search (spec 0014): an object the reader can't see is absent.
   searchRecords: refused('NOT_FOUND', (scope, world) =>

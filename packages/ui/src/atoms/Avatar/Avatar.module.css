@@ -37,6 +37,14 @@
     font: var(--text-body-strong);
   }
 
+  /* A record's picture heading its page or panel, beside its name (13 Oct reference batch 4). */
+  .root[data-size='title'] {
+    inline-size: var(--size-toolbar);
+    block-size: var(--size-toolbar);
+    font: var(--text-heading);
+    letter-spacing: var(--tracking-heading);
+  }
+
   /* A person's picture heading their own page (a booking page's host). */
   .root[data-size='xl'] {
     inline-size: calc(var(--size-toolbar) + var(--space-24));
@@ -51,6 +59,10 @@
 
   .root[data-shape='square'][data-size='lg'] {
     border-radius: var(--radius-sm);
+  }
+
+  .root[data-shape='square'][data-size='title'] {
+    border-radius: var(--radius-md);
   }
 
   .root[data-hue='gray'] {

@@ -566,3 +566,30 @@ describe('a member who may not act on a view (the rules, denied)', () => {
     expect(saved.config.columns).toEqual([{ attributeId: name }]);
   });
 });
+
+describe('a table’s grouping on a layout (13 Oct reference batch 4)', () => {
+  it('saves a status or single select, clears it with null, and refuses anything else', async () => {
+    const w = await workspace();
+    const define = async (apiSlug: string, type: 'status' | 'select', isMulti = false) =>
+      (await defineAttribute(w.owner, { objectId: w.people, apiSlug, title: apiSlug, type, isMulti })).attributeId;
+    const stage = await define('stage', 'status');
+    const tags = await define('tags', 'select', true);
+    const layout = (groupBy: string | null) => ({ columns: [], pinnedCount: 1, groupBy });
+    for (const groupBy of [tags, w.attribute('job_title')]) {
+      expect(
+        await refusalOf(setViewLayout(w.owner, { viewId: w.peopleView, layout: layout(groupBy) }, hook())),
+      ).toMatchObject({ code: 'CONFIG_INVALID' });
+    }
+    const grouped = await setViewLayout(w.owner, { viewId: w.peopleView, layout: layout(stage.toUpperCase()) }, hook());
+    expect(grouped.config.groupBy).toBe(stage);
+    // A column change leaves the grouping as it is.
+    const moved = await setViewLayout(
+      w.owner,
+      { viewId: w.peopleView, layout: { columns: [], pinnedCount: 2 } },
+      hook(),
+    );
+    expect(moved.config.groupBy).toBe(stage);
+    const cleared = await setViewLayout(w.owner, { viewId: w.peopleView, layout: layout(null) }, hook());
+    expect(cleared.config.groupBy).toBeUndefined();
+  });
+});

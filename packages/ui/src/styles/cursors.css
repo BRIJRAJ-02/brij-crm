@@ -16,8 +16,9 @@
      can still say why.
    - progress: a control that is busy (a pending Button).
    - col-resize: a column resizer, and the whole page while a column resizes.
-   - grab, then grabbing: a row or card that drags but doesn't open, and the
-     dragged item (on the whole page while it drags, so it doesn't flicker).
+   - grab, then grabbing: a row, card or grid header that drags but doesn't
+     open (data-drags), and the dragged item (on the whole page while it
+     drags, so it doesn't flicker).
      A card that both opens and drags shows pointer until the drag starts.
 
    Everything is wrapped in :where(), so it has no specificity, and it sits in
@@ -30,10 +31,7 @@
   }
 
   /* Rows and cards that drag but don't open on press. */
-  :where(
-    [data-allows-dragging]:is([role='row'], [role='option'], [role='gridcell'], [role='treeitem']),
-    [draggable='true']
-  ) {
+  :where([data-drags], [draggable='true']) {
     cursor: grab;
   }
 

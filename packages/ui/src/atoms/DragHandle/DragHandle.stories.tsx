@@ -1,40 +1,42 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
 import { useState } from 'react';
 import { expect, waitFor } from 'storybook/test';
-import { GridList, GridListItem, useDragAndDrop } from 'react-aria-components';
-import { reorder } from '../../lib/reorder.ts';
+import { SortableList, useSortableItem } from '../../lib/drag/drag.tsx';
 import { Stage } from '../../workbench/Stage/Stage.tsx';
 import { DragHandle } from './DragHandle.tsx';
 
 const NAMES = ['Name', 'Stage', 'Owner'];
 
+/** One row: its grip (none for the locked first row) and its name. */
+function SampleRow({ id }: { readonly id: string }) {
+  const { bind, grip } = useSortableItem(id, { isDisabled: id === 'Name' });
+  return (
+    <li ref={bind}>
+      <DragHandle label={`Move ${id}`} drag={grip} />
+      {id}
+    </li>
+  );
+}
+
 /** Three rows that sort by their handles; the first can't move. */
 function SampleRows() {
   const [names, setNames] = useState<readonly string[]>(NAMES);
-  const { dragAndDropHooks } = useDragAndDrop({
-    getItems: (keys) => [...keys].map((key) => ({ 'text/plain': String(key) })),
-    onReorder: (event) => {
-      setNames(
-        reorder(
-          names,
-          (name) => name,
-          new Set([...event.keys].map(String)),
-          String(event.target.key),
-          event.target.dropPosition === 'after' ? 'after' : 'before',
-        ),
-      );
-    },
-  });
   return (
     <Stage width="narrow">
-      <GridList aria-label="Columns" items={names.map((id) => ({ id }))} dragAndDropHooks={dragAndDropHooks}>
-        {({ id }) => (
-          <GridListItem id={id} textValue={id}>
-            <DragHandle label={`Move ${id}`} isDisabled={id === 'Name'} />
-            {id}
-          </GridListItem>
-        )}
-      </GridList>
+      <SortableList
+        ids={names}
+        nameOf={(id) => id}
+        onMove={({ id, toIndex }) => {
+          const rest = names.filter((name) => name !== id);
+          setNames([...rest.slice(0, toIndex), id, ...rest.slice(toIndex)]);
+        }}
+      >
+        <ul aria-label="Columns">
+          {names.map((id) => (
+            <SampleRow key={id} id={id} />
+          ))}
+        </ul>
+      </SortableList>
     </Stage>
   );
 }
@@ -48,9 +50,9 @@ export default meta;
 type Story = StoryObj<typeof meta>;
 
 /**
- * A handle per row that can move; the locked row keeps a hidden one. Not an
- * artifact preview: a handle needs a React Aria drag list around it, which a
- * preview can't bundle. The SortBuilder and Board previews show it in use.
+ * A handle per row that can move; the locked row has none. Not an artifact
+ * preview: a handle needs the drag wrapper around it. The SortBuilder and
+ * Board previews show it in use.
  */
 export const Default: Story = {
   play: async ({ canvas }) => {
@@ -59,18 +61,33 @@ export const Default: Story = {
   },
 };
 
-/** By keyboard: the right arrow reaches the handle, Enter picks its row up, Esc puts it back. */
+/** By keyboard: Space lifts the row (focus waits on the move), Down moves it, Space drops it and focus comes back. */
 export const Keyboard: Story = {
   parameters: { crm: { screenshot: false } },
   play: async ({ canvas, userEvent }) => {
-    await userEvent.tab();
-    await userEvent.keyboard('{ArrowDown}');
-    await userEvent.keyboard('{ArrowRight}');
     const handle = canvas.getByRole('button', { name: 'Move Stage' });
-    await waitFor(() => expect(handle).toHaveFocus());
-    await userEvent.keyboard('{Enter}');
+    handle.focus();
+    await userEvent.keyboard(' ');
     await waitFor(() => expect(handle).not.toHaveFocus());
+    await userEvent.keyboard('{ArrowDown}');
+    await userEvent.keyboard(' ');
+    await waitFor(() =>
+      expect(canvas.getAllByRole('listitem').map((row) => row.textContent)).toEqual(['Name', 'Owner', 'Stage']),
+    );
+    await waitFor(() => expect(canvas.getByRole('button', { name: 'Move Stage' })).toHaveFocus());
+  },
+};
+
+/** Escape puts a lifted row back where it was. */
+export const PutBack: Story = {
+  parameters: { crm: { screenshot: false } },
+  play: async ({ canvas, userEvent }) => {
+    const handle = canvas.getByRole('button', { name: 'Move Stage' });
+    handle.focus();
+    await userEvent.keyboard(' ');
+    await waitFor(() => expect(handle).not.toHaveFocus());
+    await userEvent.keyboard('{ArrowDown}');
     await userEvent.keyboard('{Escape}');
-    await waitFor(() => expect(handle).toHaveFocus());
+    await waitFor(() => expect(canvas.getAllByRole('listitem').map((row) => row.textContent)).toEqual(NAMES));
   },
 };

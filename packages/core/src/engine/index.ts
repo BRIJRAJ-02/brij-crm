@@ -2,6 +2,7 @@
 // values with history, and the query engine. Services take an EngineScope;
 // the access door (#9) puts itself in front of them.
 export { getActivity, type ActivityPage, type ActivityQuery } from './activity.ts';
+export { getStageSince } from './history.ts';
 export {
   archiveAttribute,
   defineAttribute,

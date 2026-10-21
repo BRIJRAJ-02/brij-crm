@@ -4,7 +4,7 @@ What a view shows: a table's columns or a board card's fields, each shown or hid
 
 ## Why it exists
 
-New. The view bar's View settings (#20, #21) opens it. It is a React Aria `GridList` with drag and drop, with a `Switch` per row and the type's `Icon`; nothing else is new.
+New. The view bar's View settings (#20, #21) opens it. It is a React Aria `GridList` whose rows sort through the library's drag wrapper (dnd-kit), with a `Switch` per row and the type's `Icon`; nothing else is new.
 
 ## Use
 
@@ -21,13 +21,15 @@ New. The view bar's View settings (#20, #21) opens it. It is a React Aria `GridL
 - On a board the same list holds the card's fields (label "Card fields", `maxShown` 6): the name locked first, then the shown fields in the card's order.
 - `footer` sits under the list after a hairline: "Add attribute", on a table and on a board, since a new attribute is one more column or card field (it moved here from the view bar when the bar was simplified, the owner's call on 21 October 2026). Why a slot: what to add, and who may, is the screen's to say.
 
+- `header` sits above the list after a hairline: a table's Group by, a `Select` of None and the object's status and single select attributes (13 Oct reference batch 4).
+
 ## States
 
-Default, with a locked row, at the limit (`maxShown`), read only, searching, no matches, with a footer. Hover (pointer only), focus (the inset ring), a row being dragged (faded), the drop target (the inset ring).
+Default, with a locked row, at the limit (`maxShown`), read only, searching, no matches, with a footer. Hover (pointer only), focus (the inset ring), a row being dragged (lifted, the others sliding out of its way).
 
 ## Keyboard
 
-Tab enters the list; the up and down arrows move between rows, the left and right arrows between a row's handle and switch. Space flips a switch. On a handle, Enter picks the row up, the arrows choose where, Enter drops it and Esc cancels.
+Tab enters the list; the up and down arrows move between rows, the left and right arrows between a row's handle and switch. Space flips a switch. On a handle, Space or Enter lifts the row, the arrows move it while the others slide out of its way, Space or Enter drops it and Esc puts it back, each step announced.
 
 ## Differences from the artifact
 

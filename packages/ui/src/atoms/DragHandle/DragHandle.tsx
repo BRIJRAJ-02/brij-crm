@@ -1,13 +1,13 @@
 import type { KeyboardEvent, PointerEvent } from 'react';
-import { Button as AriaButton } from 'react-aria-components';
+import type { DragGrip } from '../../lib/drag/drag.tsx';
 import { Icon } from '../Icon/Icon.tsx';
-import { VisuallyHidden } from '../VisuallyHidden/VisuallyHidden.tsx';
 import styles from './DragHandle.module.css';
 
 /**
- * The handle driving the move itself, outside a React Aria GridList (the
- * sidebar's sections, spec 0034): the list keeps the order and the
- * announcements, and hands the handle its keys and pointer.
+ * The handle driving the move itself, outside the drag wrapper (the
+ * sidebar's sections, spec 0034, which move one at a time among siblings no
+ * single list holds): the section keeps the order and the announcements, and
+ * hands the handle its keys and pointer.
  */
 export interface DragHandleManual {
   /** Picked up: it shows grabbing until dropped or put back. */
@@ -26,51 +26,55 @@ export interface DragHandleManual {
 export interface DragHandleProps {
   /** What moving it does, named for screen readers: "Move Stage". */
   readonly label: string;
-  /**
-   * The row can't move. The handle stays in the row for React Aria (which asks
-   * every draggable row for one) but is hidden and out of the tab order.
-   */
-  readonly isDisabled?: boolean;
-  /** Outside a GridList: the list hands the handle its keys and pointer (see `DragHandleManual`). */
+  /** The grip of a sortable item (`useSortableItem(...).grip`): the drag wrapper lifts the item from it. */
+  readonly drag?: DragGrip;
+  /** Outside the drag wrapper: the list hands the handle its keys and pointer (see `DragHandleManual`). */
   readonly manual?: DragHandleManual;
 }
 
 /**
- * The grip a row or card is moved by. Inside a React Aria GridList with drag
- * and drop it fills the `drag` slot, so Enter on it picks the row up; rows
- * that sort (sorts, view fields, board cards) all use this one handle. With
- * `manual`, a list that isn't a grid (the sidebar) drives it itself.
+ * The grip a row or card is moved by: one plain button for every list that
+ * sorts (sorts, view fields, options, rules, questions, board cards, table
+ * rows, the sidebar). With `drag` it is the grip of the library's drag
+ * wrapper (dnd-kit); with `manual`, a list outside it drives it. A row that
+ * can't move draws no grip at all.
  */
-export function DragHandle({ label, isDisabled = false, manual }: DragHandleProps) {
-  if (manual !== undefined) {
+export function DragHandle({ label, drag, manual }: DragHandleProps) {
+  if (drag !== undefined) {
+    const { bind, id, isDisabled, isLifted, describedBy, onKeyDown, onPointerDown, onClick } = drag;
+    if (isDisabled) return null;
     return (
-      // A plain button: React Aria's press handling would swallow the pointer down the list needs to start a drag.
       <button
+        ref={bind}
         type="button"
         className={styles.root}
         aria-label={label}
-        aria-pressed={manual.isLifted}
-        {...(manual.describedBy === undefined ? {} : { 'aria-describedby': manual.describedBy })}
-        data-manual=""
-        data-lifted={manual.isLifted || undefined}
-        onKeyDown={manual.onKeyDown}
-        onPointerDown={manual.onPointerDown}
-        onBlur={manual.onBlur}
+        aria-pressed={isLifted}
+        {...(describedBy === undefined ? {} : { 'aria-describedby': describedBy })}
+        data-lifted={isLifted || undefined}
+        data-drag-grip={id}
+        onKeyDown={onKeyDown}
+        onPointerDown={onPointerDown}
+        onClick={onClick}
       >
         <Icon name="grip-vertical" size="sm" />
       </button>
     );
   }
-  if (isDisabled) {
-    return (
-      <VisuallyHidden>
-        <AriaButton slot="drag" isDisabled aria-hidden="true" />
-      </VisuallyHidden>
-    );
-  }
+  if (manual === undefined) return null;
   return (
-    <AriaButton slot="drag" className={styles.root} aria-label={label}>
+    <button
+      type="button"
+      className={styles.root}
+      aria-label={label}
+      aria-pressed={manual.isLifted}
+      {...(manual.describedBy === undefined ? {} : { 'aria-describedby': manual.describedBy })}
+      data-lifted={manual.isLifted || undefined}
+      onKeyDown={manual.onKeyDown}
+      onPointerDown={manual.onPointerDown}
+      onBlur={manual.onBlur}
+    >
       <Icon name="grip-vertical" size="sm" />
-    </AriaButton>
+    </button>
   );
 }

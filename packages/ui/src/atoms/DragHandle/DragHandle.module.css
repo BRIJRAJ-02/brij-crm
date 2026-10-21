@@ -1,6 +1,6 @@
 /* DragHandle: a grip icon in text-tertiary with space-2 of padding around it,
-   text-secondary under a pointer, the focus ring on keyboard focus, and the
-   grab cursor. */
+   text-secondary under a pointer, the focus ring on keyboard focus, the grab
+   cursor, and accent while lifted. */
 @layer components {
   .root {
     position: relative;
@@ -15,23 +15,24 @@
     color: var(--text-tertiary);
     cursor: grab;
     outline: none;
+    touch-action: none;
     transition: color var(--duration-hover) var(--ease-hover);
   }
 
   @media (hover: hover) and (pointer: fine) {
-    .root[data-hovered] {
+    .root:hover {
       color: var(--text-secondary);
     }
   }
 
-  .root[data-focus-visible] {
+  .root:focus-visible {
     color: var(--text-secondary);
     box-shadow: var(--shadow-focus);
     outline: var(--border-width-hairline) solid var(--accent-line);
     outline-offset: var(--border-width-hairline);
   }
 
-  .root[data-pressed] {
+  .root:active {
     cursor: grabbing;
   }
 
@@ -48,28 +49,13 @@
     }
   }
 
-  /* The manual handle (a plain button, the sidebar's): the same looks from the platform's own states. */
-  @media (hover: hover) and (pointer: fine) {
-    .root[data-manual]:hover {
-      color: var(--text-secondary);
-    }
-  }
-
-  .root[data-manual]:focus-visible {
-    color: var(--text-secondary);
-    box-shadow: var(--shadow-focus);
-    outline: var(--border-width-hairline) solid var(--accent-line);
-    outline-offset: var(--border-width-hairline);
-  }
-
   .root[data-lifted] {
     color: var(--accent);
     cursor: grabbing;
   }
 
   @media (forced-colors: active) {
-    .root[data-focus-visible],
-    .root[data-manual]:focus-visible {
+    .root:focus-visible {
       outline: var(--border-width-thick) solid Highlight;
     }
   }

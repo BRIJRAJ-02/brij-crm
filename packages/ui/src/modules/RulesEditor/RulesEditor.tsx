@@ -19,10 +19,10 @@ import {
   type FilterGroup,
 } from '@crm/contracts/values';
 import { useRef, useState, type KeyboardEvent, type ReactNode } from 'react';
-import { GridList, GridListItem, useDragAndDrop } from 'react-aria-components';
+import { GridList, GridListItem } from 'react-aria-components';
 import { Button } from '../../atoms/Button/Button.tsx';
 import { Checkbox } from '../../atoms/Checkbox/Checkbox.tsx';
-import { DragHandle } from '../../atoms/DragHandle/DragHandle.tsx';
+import { SortableList, SortableRowGrip } from '../../lib/drag/drag.tsx';
 import { Radio, RadioGroup } from '../../atoms/Radio/Radio.tsx';
 import { VisuallyHidden } from '../../atoms/VisuallyHidden/VisuallyHidden.tsx';
 import type { FieldAttribute } from '../../fields/types.ts';
@@ -329,15 +329,6 @@ export function RulesEditor({
     onChange(next);
     setSaid(strings.moved(next.findIndex((rule) => rule.id === id) + 1, next.length));
   };
-  const { dragAndDropHooks } = useDragAndDrop({
-    getItems: (keys) => [...keys].map((key) => ({ 'text/plain': String(key) })),
-    onReorder: (event) => {
-      const [moving] = [...event.keys].map(String);
-      if (moving === undefined) return;
-      moveTo(moving, String(event.target.key), event.target.dropPosition === 'after' ? 'after' : 'before');
-    },
-  });
-
   // Enter in a setting never submits the dialog the editor sits in.
   const keepEnter = (event: KeyboardEvent<HTMLDivElement>) => {
     if (event.key === 'Enter' && event.target instanceof HTMLInputElement) event.preventDefault();
@@ -364,161 +355,173 @@ export function RulesEditor({
       {hint !== undefined && !isReadOnly && <span className={styles.note}>{hint}</span>}
       {rules.length === 0 && <p className={styles.empty}>{kinds.length === 0 ? strings.noKinds : strings.noRules}</p>}
       {rules.length > 0 && (
-        <GridList
-          aria-label={label}
-          items={rules.map((rule, index) => ({ id: rule.id, rule, index }))}
-          className={styles.list}
-          keyboardNavigationBehavior="tab"
-          onAction={(key) => {
-            if (!isReadOnly) open(String(key));
+        <SortableList
+          ids={rules.map((rule) => rule.id)}
+          nameOf={(id) => {
+            const rule = rules.find((each) => each.id === id);
+            return rule === undefined ? id : strings.kinds[rule.kind];
           }}
-          {...(isReadOnly ? {} : { dragAndDropHooks })}
+          onMove={(move) => {
+            onChange(reorder(rules, (rule) => rule.id, new Set([move.id]), move.targetId, move.position));
+          }}
         >
-          {({ id, rule, index }) => {
-            const summary = summaryOf(rule);
-            const kindName = strings.kinds[rule.kind];
-            // A rule's own message hides its condition: a line under it says when it applies.
-            const when =
-              rule.message.trim() !== '' && rule.condition !== undefined && rule.condition.conditions.length > 0
-                ? strings.onlyWhenSummary(summarizeCondition(rule.condition, named))
-                : undefined;
-            const isOpen = openId === id && !isReadOnly;
-            const problems = errorsOf(index);
-            const errorOf = (name: string) => errors[`rules.${String(index)}.${name}`];
-            const kindError = errorOf('kind');
-            return (
-              <GridListItem
-                id={id}
-                textValue={summary}
-                className={styles.row}
-                data-open={isOpen || undefined}
-                data-pressable={isReadOnly || isOpen ? undefined : ''}
-              >
-                <div className={styles.line}>
-                  {!isReadOnly && <DragHandle label={strings.move(index + 1, kindName)} isDisabled={isOpen} />}
-                  <span className={styles.summary}>
-                    <span className={styles.kind}>{kindName}</span>
-                    <span className={styles.message}>{summary}</span>
-                    {when !== undefined && !isOpen && <span className={styles.note}>{when}</span>}
-                    {!isOpen && problems.length > 0 && (
-                      <span className={styles.error} role="alert">
-                        {problems[0]?.[1]}
-                      </span>
+          <GridList
+            aria-label={label}
+            items={rules.map((rule, index) => ({ id: rule.id, rule, index }))}
+            className={styles.list}
+            keyboardNavigationBehavior="tab"
+            onAction={(key) => {
+              if (!isReadOnly) open(String(key));
+            }}
+          >
+            {({ id, rule, index }) => {
+              const summary = summaryOf(rule);
+              const kindName = strings.kinds[rule.kind];
+              // A rule's own message hides its condition: a line under it says when it applies.
+              const when =
+                rule.message.trim() !== '' && rule.condition !== undefined && rule.condition.conditions.length > 0
+                  ? strings.onlyWhenSummary(summarizeCondition(rule.condition, named))
+                  : undefined;
+              const isOpen = openId === id && !isReadOnly;
+              const problems = errorsOf(index);
+              const errorOf = (name: string) => errors[`rules.${String(index)}.${name}`];
+              const kindError = errorOf('kind');
+              return (
+                <GridListItem
+                  id={id}
+                  textValue={summary}
+                  className={styles.row}
+                  data-open={isOpen || undefined}
+                  data-pressable={isReadOnly || isOpen ? undefined : ''}
+                >
+                  <div className={styles.line}>
+                    {!isReadOnly && (
+                      <SortableRowGrip id={id} label={strings.move(index + 1, kindName)} isDisabled={isOpen} />
                     )}
-                  </span>
-                  {!isReadOnly && (
-                    <MenuTrigger>
-                      <Button variant="ghost" icon="ellipsis" label={strings.actionsFor(index + 1, kindName)} />
-                      <Menu
-                        label={strings.actionsFor(index + 1, kindName)}
-                        onAction={(key) => {
-                          const before = rules[index - 1];
-                          const after = rules[index + 1];
-                          if (key === 'edit') {
-                            open(id);
-                            return;
-                          }
-                          if (key === 'up' && before !== undefined) moveTo(id, before.id, 'before');
-                          else if (key === 'down' && after !== undefined) moveTo(id, after.id, 'after');
-                          else if (key === 'delete') {
-                            onChange(rules.filter((each) => each.id !== id));
-                            setSaid(strings.deleted);
-                            const next = after ?? before;
-                            focusIn(
-                              next === undefined
-                                ? (root) => root.querySelector<HTMLElement>('[data-adder] button')
-                                : rowControl(next.id, 'button[aria-haspopup="menu"], button[aria-haspopup="true"]'),
-                            );
-                            return;
-                          }
-                          focusIn(rowControl(id, 'button[aria-haspopup]'));
-                        }}
-                      >
-                        <MenuItem id="edit" icon="pencil" isDisabled={isOpen}>
-                          {strings.editRule}
-                        </MenuItem>
-                        <MenuItem id="up" icon="chevron-up" isDisabled={index === 0}>
-                          {strings.moveUp}
-                        </MenuItem>
-                        <MenuItem id="down" icon="chevron-down" isDisabled={index === rules.length - 1}>
-                          {strings.moveDown}
-                        </MenuItem>
-                        <MenuSeparator />
-                        <MenuItem id="delete" icon="trash" isDanger>
-                          {strings.delete}
-                        </MenuItem>
-                      </Menu>
-                    </MenuTrigger>
-                  )}
-                </div>
-                {isOpen && (
-                  <div className={styles.form}>
-                    {kindError !== undefined && (
-                      <span className={styles.error} role="alert">
-                        {kindError}
-                      </span>
-                    )}
-                    <KindFields
-                      rule={rule}
-                      type={attribute.type}
-                      errorOf={errorOf}
-                      isReadOnly={isReadOnly}
-                      onField={(name, value) => {
-                        change(id, { fields: { ...rule.fields, [name]: value } });
-                      }}
-                    />
-                    <Field
-                      label={strings.message}
-                      size="sm"
-                      isMultiline
-                      maxLength={RULE_LIMITS.message}
-                      showCounter
-                      hint={strings.messageHint}
-                      value={rule.message}
-                      onChange={(message) => {
-                        change(id, { message });
-                      }}
-                      {...(errorOf('message') === undefined ? {} : { error: errorOf('message') })}
-                    />
-                    {conditionAttributes !== undefined && (
-                      <Disclosure
-                        title={strings.onlyWhen}
-                        variant="fields"
-                        defaultExpanded={rule.condition !== undefined && rule.condition.conditions.length > 0}
-                      >
-                        <p className={styles.note}>{strings.conditionHint}</p>
-                        <FilterBuilder
-                          attributes={conditionAttributes}
-                          value={rule.condition ?? EMPTY_CONDITION}
-                          onChange={(condition) => {
-                            change(id, { condition });
-                          }}
-                          {...(editorProps === undefined ? {} : { editorProps })}
-                        />
-                        {errorOf('condition') !== undefined && (
-                          <span className={styles.error} role="alert">
-                            {errorOf('condition')}
-                          </span>
-                        )}
-                      </Disclosure>
-                    )}
-                    <span className={styles.done}>
-                      <Button
-                        variant="secondary"
-                        onPress={() => {
-                          setOpenId(undefined);
-                          focusIn(rowControl(id, 'button[aria-haspopup]'));
-                        }}
-                      >
-                        {strings.done}
-                      </Button>
+                    <span className={styles.summary}>
+                      <span className={styles.kind}>{kindName}</span>
+                      <span className={styles.message}>{summary}</span>
+                      {when !== undefined && !isOpen && <span className={styles.note}>{when}</span>}
+                      {!isOpen && problems.length > 0 && (
+                        <span className={styles.error} role="alert">
+                          {problems[0]?.[1]}
+                        </span>
+                      )}
                     </span>
+                    {!isReadOnly && (
+                      <MenuTrigger>
+                        <Button variant="ghost" icon="ellipsis" label={strings.actionsFor(index + 1, kindName)} />
+                        <Menu
+                          label={strings.actionsFor(index + 1, kindName)}
+                          onAction={(key) => {
+                            const before = rules[index - 1];
+                            const after = rules[index + 1];
+                            if (key === 'edit') {
+                              open(id);
+                              return;
+                            }
+                            if (key === 'up' && before !== undefined) moveTo(id, before.id, 'before');
+                            else if (key === 'down' && after !== undefined) moveTo(id, after.id, 'after');
+                            else if (key === 'delete') {
+                              onChange(rules.filter((each) => each.id !== id));
+                              setSaid(strings.deleted);
+                              const next = after ?? before;
+                              focusIn(
+                                next === undefined
+                                  ? (root) => root.querySelector<HTMLElement>('[data-adder] button')
+                                  : rowControl(next.id, 'button[aria-haspopup="menu"], button[aria-haspopup="true"]'),
+                              );
+                              return;
+                            }
+                            focusIn(rowControl(id, 'button[aria-haspopup]'));
+                          }}
+                        >
+                          <MenuItem id="edit" icon="pencil" isDisabled={isOpen}>
+                            {strings.editRule}
+                          </MenuItem>
+                          <MenuItem id="up" icon="chevron-up" isDisabled={index === 0}>
+                            {strings.moveUp}
+                          </MenuItem>
+                          <MenuItem id="down" icon="chevron-down" isDisabled={index === rules.length - 1}>
+                            {strings.moveDown}
+                          </MenuItem>
+                          <MenuSeparator />
+                          <MenuItem id="delete" icon="trash" isDanger>
+                            {strings.delete}
+                          </MenuItem>
+                        </Menu>
+                      </MenuTrigger>
+                    )}
                   </div>
-                )}
-              </GridListItem>
-            );
-          }}
-        </GridList>
+                  {isOpen && (
+                    <div className={styles.form}>
+                      {kindError !== undefined && (
+                        <span className={styles.error} role="alert">
+                          {kindError}
+                        </span>
+                      )}
+                      <KindFields
+                        rule={rule}
+                        type={attribute.type}
+                        errorOf={errorOf}
+                        isReadOnly={isReadOnly}
+                        onField={(name, value) => {
+                          change(id, { fields: { ...rule.fields, [name]: value } });
+                        }}
+                      />
+                      <Field
+                        label={strings.message}
+                        size="sm"
+                        isMultiline
+                        maxLength={RULE_LIMITS.message}
+                        showCounter
+                        hint={strings.messageHint}
+                        value={rule.message}
+                        onChange={(message) => {
+                          change(id, { message });
+                        }}
+                        {...(errorOf('message') === undefined ? {} : { error: errorOf('message') })}
+                      />
+                      {conditionAttributes !== undefined && (
+                        <Disclosure
+                          title={strings.onlyWhen}
+                          variant="fields"
+                          defaultExpanded={rule.condition !== undefined && rule.condition.conditions.length > 0}
+                        >
+                          <p className={styles.note}>{strings.conditionHint}</p>
+                          <FilterBuilder
+                            attributes={conditionAttributes}
+                            value={rule.condition ?? EMPTY_CONDITION}
+                            onChange={(condition) => {
+                              change(id, { condition });
+                            }}
+                            {...(editorProps === undefined ? {} : { editorProps })}
+                          />
+                          {errorOf('condition') !== undefined && (
+                            <span className={styles.error} role="alert">
+                              {errorOf('condition')}
+                            </span>
+                          )}
+                        </Disclosure>
+                      )}
+                      <span className={styles.done}>
+                        <Button
+                          variant="secondary"
+                          onPress={() => {
+                            setOpenId(undefined);
+                            focusIn(rowControl(id, 'button[aria-haspopup]'));
+                          }}
+                        >
+                          {strings.done}
+                        </Button>
+                      </span>
+                    </div>
+                  )}
+                </GridListItem>
+              );
+            }}
+          </GridList>
+        </SortableList>
       )}
       {!isReadOnly && kinds.length > 0 && (
         <span className={styles.adder} data-adder="">

@@ -32,7 +32,7 @@ New (from the inventory, `0003-inventory.md`, pulled forward from spec 0003's mi
 - **Choices** (`kind="choice"`): plain words, a form question's Dropdown or Choice list (F27, 20 October 2026). No colour (each option's `hue` is ignored), a quiet remove button on each row in place of the menu (pass `onRemove`), no pending spinner (choices are saved with their form), and the words as text when read only. Its blank row says "Type a choice". With no menu, a choice moves by its handle alone (Enter on the handle, the arrows, Enter). `labelMaxLength` sets the longest label (a form's choices take 80, as their contract does; 100 when left out). Why a variant: the form builder drew its own list, a stack of fields touching each other under one "Choice 1" label; this list already reorders, adds by typing and refuses a repeat.
 - **Stages**: an outcome Select (Open, Won, Lost) and target days (1 to 365, empty for none; anything else is refused on the field), which a line under the group's label explains.
 - `onInvalidChange(isInvalid)` says when a row's own check refuses what was typed (a label taken, days out of range), so a dialog keeps its submit back meanwhile. A refused add whose row is gone (`errors.new` with no blank row open) shows its reason beside Add option.
-- **Order**: drag a row by its handle, or Enter on the handle, the arrows, Enter; or Move up and Move down in the row's menu, which says the new place to screen readers ("Gold moved to 1 of 3.").
+- **Order**: drag a row by its handle, or Space or Enter on the handle, the arrows, Space or Enter (the library's drag wrapper); or Move up and Move down in the row's menu, which says the new place to screen readers ("Gold moved to 1 of 3.").
 - **Archive and restore**: Archive in the row's menu; archived options sit muted in a closed "Archived" group with Restore. At the limit, Add and Restore are off and a note says why.
 - Enter in any of its fields commits that field and never submits the form it sits in.
 
@@ -42,7 +42,7 @@ Filled, empty ("No options yet", with Add option), adding (a blank row), refused
 
 ## Keyboard
 
-Tab enters the list on a row; the up and down arrows move between rows, and Tab moves through a row's controls (the arrows stay in the field being typed in). On a handle, Enter picks the option up, the arrows choose where, Enter drops it and Esc cancels.
+Tab enters the list on a row; the up and down arrows move between rows, and Tab moves through a row's controls (the arrows stay in the field being typed in). On a handle, Space or Enter lifts the option, the arrows move it while the others slide out of its way, Space or Enter drops it and Esc puts it back, each step announced.
 
 ## Differences from the artifact
 

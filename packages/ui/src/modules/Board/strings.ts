@@ -13,6 +13,12 @@ export const strings = {
   hideEmpty: 'Hide empty columns',
   /** The drag handle's name. */
   move: (name: string) => `Move ${name}`,
+  /** What a screen reader hears as a card moves. */
+  lifted: (name: string, column: string) => `${name} picked up, in ${column}.`,
+  over: (name: string, column: string) => `${name}, over ${column}.`,
+  dropped: (name: string, column: string) => `${name}, moved to ${column}.`,
+  putBack: (name: string) => `${name}, put back where it was.`,
+  moving: (name: string) => `Moving ${name}`,
   loading: 'Loading the board',
   noColumns: 'Nothing to group by yet',
   noColumnsBody: 'Add options to this attribute to make columns.',

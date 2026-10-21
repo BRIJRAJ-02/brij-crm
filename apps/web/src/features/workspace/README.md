@@ -14,6 +14,8 @@ Spec 0005, milestones 1 to 3; spec 0012 makes the object pages generic. Every pa
 - **Main task**: read and edit records in place, sort a column for the visit, add a record ("New <singular>"), and add a column, seeing others' changes live.
 - **Leaves out**: filters, saved views and sorts that last past the visit, and presence (#7, #20).
 
+- **Grouped** (13 Oct reference batch 4): a view saved with `groupBy` (View settings' Group by: None, or any live status or single select) runs the rows under a tinted header per option, with its count, folding by click or by keyboard. The rows come through the board's per group windows (`records.groups`: one aggregate gives every group its count and first page, then each open group pages on as it scrolls into view, `grouped.ts`); a folded group's rows are never asked for, and which groups are folded is this screen's own state. Groups with no rows are left out.
+
 ## Bulk actions (spec 0022, milestones 1 to 3: BulkActions.tsx, BulkEditDialog.tsx, useBulkJob.ts, bulk.ts, bulk-finished.ts, bulk-jobs.ts)
 
 - **Purpose**: act on the rows ticked in an object's table, a few or every one the view matches.

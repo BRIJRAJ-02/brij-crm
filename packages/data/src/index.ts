@@ -93,6 +93,7 @@ import type { ContractRouterClient } from '@orpc/contract';
 import type { ActivityFeed, ActivityFeeds } from './activity/feed.ts';
 import { createAuth, type PasskeyOutcome, type PasskeySupport } from './auth/auth.ts';
 import { createTrashedLookups, type TrashedSource } from './records/trashed.ts';
+import { createRecordFactsStore, type RecordFacts } from './records/facts.ts';
 import {
   type DataError,
   type DataFault,
@@ -557,6 +558,7 @@ export type { RecordAttributes, RecordState, RecordStatus, RecordSubscription } 
 export { SEARCH_DELAY_MS, type RecordSearch, type RecordSearchState } from './records/search.ts';
 export type { BoardColumnState, BoardQuery, BoardState, BoardStatus, BoardStore } from './records/board.ts';
 export type { TrashedSource, TrashedState } from './records/trashed.ts';
+export type { NextMeeting, RecordFacts, RecordFactsState } from './records/facts.ts';
 export type { RowNote } from './records/view.ts';
 export type { PurgeSummary, RestoreSummary, TrashRow, TrashState, TrashStatus, TrashView } from './trash/store.ts';
 export { TRASH_NAME_COLUMN } from './trash/columns.ts';
@@ -935,6 +937,16 @@ export function createDataLayer({
   const trashedLookups = createTrashedLookups((workspace, recordId) =>
     call((options) => api.records.getTrashed({ workspace, recordId }, options)),
   );
+  // A record's facts for its stat strip (13 Oct reference batch 4): its next meeting and its stage age.
+  const recordFacts = createRecordFactsStore({
+    api: {
+      meetings: (input) =>
+        beforeRead(input.workspace).then(() => call((options) => api.calendar.meetings.forRecord(input, options))),
+      stageSince: (input) =>
+        beforeRead(input.workspace).then(() => call((options) => api.records.stageSince(input, options))),
+    },
+    now: () => new Date().toISOString(),
+  });
   // Set by the first 401, so a burst of failed calls signs out once.
   let ended = false;
   // Whether `me.get` has answered a person since the last sign in or out: a 401 then always ends their session.
@@ -4088,6 +4100,15 @@ export function createDataLayer({
        * `useTrashed`.
        */
       trashed: (workspace: string, recordId: string): TrashedSource => trashedLookups.lookup(workspace, recordId),
+      /**
+       * A record's facts for the stat strip under its header (13 Oct
+       * reference batch 4): its next meeting, and with `stageAttributeId`
+       * (a status) when it entered its current stage. Read each time a
+       * screen holds it, and afresh for a new `stageKey` (the stage shown
+       * now, so a moved deal's age restarts); `useRecordFacts` reads it.
+       */
+      facts: (workspace: string, recordId: string, stageAttributeId?: string, stageKey?: string): RecordFacts =>
+        recordFacts.forRecord(workspace, recordId, stageAttributeId, stageKey),
     },
     activity: {
       /**

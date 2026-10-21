@@ -29,6 +29,8 @@ New. The record page and the record panel (#18) list a record's attributes. `Des
 - `isLoading` shows skeleton rows after the loading delay.
 - Below 320px wide the name sits above the value (a container query), so it fits a narrow panel.
 
+Each name sits after its type's icon on a small gray tile (`Icon` with `tile`, 13 Oct reference batch 4), so a long list reads by its shapes at a glance.
+
 ## States
 
 Default, empty values ("Set Stage…", or "Not set" when read only), editing, read only (a small lock after the name, with its reason), an error under a value, loading. Hover on a value (pointer only), focus on its pencil button.

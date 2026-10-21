@@ -208,23 +208,11 @@
     }
   }
 
-  /* Where a dragged item lands: a line in the accent between two items. */
-  .row[data-drop]::before {
-    position: absolute;
-    inset-inline: var(--space-8);
-    block-size: var(--border-width-thick);
-    border-radius: var(--radius-xs);
-    background: var(--accent);
-    content: '';
-    pointer-events: none;
-  }
-
-  .row[data-drop='before']::before {
-    inset-block-start: calc(-1 * var(--border-width-thick));
-  }
-
-  .row[data-drop='after']::before {
-    inset-block-end: calc(-1 * var(--border-width-thick));
+  /* The item being moved (the drag wrapper sets data-dragging): lifted above the others, which slide out of its way. */
+  .row[data-dragging] {
+    z-index: var(--z-raised);
+    background: var(--surface-raised);
+    box-shadow: var(--shadow-md);
   }
 
   /* Where a dragged section lands: the same line, above the section it goes before, or under the last. */
@@ -323,6 +311,12 @@
     .item[data-focus-visible] {
       outline: var(--border-width-thick) solid Highlight;
       outline-offset: calc(-1 * var(--border-width-thick));
+    }
+  }
+  /* Lifted, in forced colours, where the shadow and surface are gone. */
+  @media (forced-colors: active) {
+    .row[data-dragging] {
+      outline: var(--border-width-thick) solid Highlight;
     }
   }
 }

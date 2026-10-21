@@ -7,14 +7,14 @@
 // decides what a change does (a draft before create, a write after).
 import { nextHue } from '@crm/contracts/picker';
 import { useRef, useState, type KeyboardEvent } from 'react';
-import { GridList, GridListItem, useDragAndDrop } from 'react-aria-components';
+import { GridList, GridListItem } from 'react-aria-components';
 import { Button } from '../../atoms/Button/Button.tsx';
-import { DragHandle } from '../../atoms/DragHandle/DragHandle.tsx';
 import { Spinner } from '../../atoms/Spinner/Spinner.tsx';
 import { Tag } from '../../atoms/Tag/Tag.tsx';
 import { VisuallyHidden } from '../../atoms/VisuallyHidden/VisuallyHidden.tsx';
 import type { Hue } from '../../hue.ts';
 import { focusLater } from '../../lib/focus-later.ts';
+import { SortableList, SortableRowGrip } from '../../lib/drag/drag.tsx';
 import { reorder } from '../../lib/reorder.ts';
 import { Disclosure } from '../../molecules/Disclosure/Disclosure.tsx';
 import { Field } from '../../molecules/Field/Field.tsx';
@@ -286,15 +286,6 @@ export function OptionsEditor({
     setSaid(strings.moved(name, moved + 1, liveOrder.length));
   };
 
-  const { dragAndDropHooks } = useDragAndDrop({
-    getItems: (keys) => [...keys].map((key) => ({ 'text/plain': String(key) })),
-    onReorder: (event) => {
-      const [moving] = [...event.keys].map(String);
-      if (moving === undefined) return;
-      moveTo(moving, String(event.target.key), event.target.dropPosition === 'after' ? 'after' : 'before');
-    },
-  });
-
   // Enter in a row's field commits that field: it never submits the form the editor sits in.
   const keepEnter = (event: KeyboardEvent<HTMLDivElement>) => {
     if (event.key === 'Enter' && event.target instanceof HTMLInputElement) event.preventDefault();
@@ -341,227 +332,233 @@ export function OptionsEditor({
         <p className={styles.empty}>{isStatus ? strings.noStages : isChoice ? strings.noChoices : strings.noOptions}</p>
       )}
       {rows.length > 0 && (
-        <GridList
-          aria-label={label}
-          items={rows}
-          className={styles.list}
-          keyboardNavigationBehavior="tab"
-          {...(isReadOnly ? {} : { dragAndDropHooks })}
+        <SortableList
+          ids={rows.map((row) => row.id)}
+          nameOf={(id) => options.find((option) => option.id === id)?.label ?? newName}
+          onMove={(move) => {
+            // The blank row being added stays last.
+            if (move.targetId === DRAFT_ROW) return;
+            const next = reorder(options, (option) => option.id, new Set([move.id]), move.targetId, move.position);
+            const at = next.findIndex((option) => option.id === move.id);
+            if (at >= 0 && next !== options) onMove(move.id, at);
+          }}
         >
-          {({ id, option, index }) => {
-            if (option === undefined) {
-              // The row being added: its label alone; colour and outcome follow once it exists.
-              return (
-                <GridListItem id={id} textValue={newName} className={styles.row} data-draft="">
-                  <DragHandle label={strings.move(newName)} isDisabled />
-                  <span className={styles.label}>
-                    <Field
-                      label={newName}
-                      isLabelHidden
-                      {...(isChoice ? { placeholder: strings.typeChoice } : {})}
-                      size="sm"
-                      maxLength={labelMaxLength}
-                      autoComplete="off"
-                      // A row asked for takes focus as it appears, to type in.
+          <GridList aria-label={label} items={rows} className={styles.list} keyboardNavigationBehavior="tab">
+            {({ id, option, index }) => {
+              if (option === undefined) {
+                // The row being added: its label alone; colour and outcome follow once it exists.
+                return (
+                  <GridListItem id={id} textValue={newName} className={styles.row} data-draft="">
+                    <SortableRowGrip id={id} label={strings.move(newName)} isDisabled refusesDrop />
+                    <span className={styles.label}>
+                      <Field
+                        label={newName}
+                        isLabelHidden
+                        {...(isChoice ? { placeholder: strings.typeChoice } : {})}
+                        size="sm"
+                        maxLength={labelMaxLength}
+                        autoComplete="off"
+                        // A row asked for takes focus as it appears, to type in.
 
-                      autoFocus={draft?.isAsked === true}
-                      value={draft?.label ?? ''}
-                      onChange={(text) => {
-                        setDraft((before) => (before === undefined ? before : { ...before, label: text }));
-                        setOne('new', undefined);
+                        autoFocus={draft?.isAsked === true}
+                        value={draft?.label ?? ''}
+                        onChange={(text) => {
+                          setDraft((before) => (before === undefined ? before : { ...before, label: text }));
+                          setOne('new', undefined);
+                        }}
+                        onSubmit={() => {
+                          commitDraft(true);
+                        }}
+                        onEscape={() => {
+                          setDraft(undefined);
+                          setOne('new', undefined);
+                          focusIn((root) => root.querySelector<HTMLElement>('[data-adder] button'));
+                        }}
+                        onBlur={() => {
+                          commitDraft(false);
+                        }}
+                        isErrorFloating
+                        {...((local.new ?? errors.new) ? { error: local.new ?? errors.new } : {})}
+                      />
+                    </span>
+                  </GridListItem>
+                );
+              }
+              const name = option.label;
+              const isPending = pending.has(option.id);
+              const error = local[option.id] ?? errors[option.id];
+              const daysError = local[`${option.id}:days`];
+              return (
+                <GridListItem id={id} textValue={name} className={styles.row}>
+                  <SortableRowGrip id={id} label={strings.move(name)} isDisabled={isReadOnly} />
+                  {!isChoice && (
+                    <HuePicker
+                      label={strings.colourOf(name)}
+                      value={option.hue}
+                      isCompact
+                      isReadOnly={isReadOnly}
+                      onChange={(hue) => {
+                        if (hue !== option.hue) onChange(option.id, { hue });
                       }}
-                      onSubmit={() => {
-                        commitDraft(true);
-                      }}
-                      onEscape={() => {
-                        setDraft(undefined);
-                        setOne('new', undefined);
-                        focusIn((root) => root.querySelector<HTMLElement>('[data-adder] button'));
-                      }}
-                      onBlur={() => {
-                        commitDraft(false);
-                      }}
-                      isErrorFloating
-                      {...((local.new ?? errors.new) ? { error: local.new ?? errors.new } : {})}
-                    />
-                  </span>
-                </GridListItem>
-              );
-            }
-            const name = option.label;
-            const isPending = pending.has(option.id);
-            const error = local[option.id] ?? errors[option.id];
-            const daysError = local[`${option.id}:days`];
-            return (
-              <GridListItem id={id} textValue={name} className={styles.row}>
-                {!isReadOnly && <DragHandle label={strings.move(name)} />}
-                {!isChoice && (
-                  <HuePicker
-                    label={strings.colourOf(name)}
-                    value={option.hue}
-                    isCompact
-                    isReadOnly={isReadOnly}
-                    onChange={(hue) => {
-                      if (hue !== option.hue) onChange(option.id, { hue });
-                    }}
-                  />
-                )}
-                <span className={styles.label} data-static={isReadOnly || undefined}>
-                  {isReadOnly && isChoice ? (
-                    <span className={styles.text}>{name}</span>
-                  ) : isReadOnly ? (
-                    <Tag hue={option.hue}>{name}</Tag>
-                  ) : (
-                    <Field
-                      label={placeName(index)}
-                      isLabelHidden
-                      size="sm"
-                      maxLength={labelMaxLength}
-                      autoComplete="off"
-                      value={typedOf(option, 'label') ?? name}
-                      onChange={(text) => {
-                        type(option, 'label', text);
-                        setOne(option.id, undefined);
-                      }}
-                      onSubmit={() => {
-                        commitLabel(option);
-                      }}
-                      // Esc puts back a label being typed; with none, it reaches the dialog, which closes.
-                      {...(typedOf(option, 'label') === undefined
-                        ? {}
-                        : {
-                            onEscape: () => {
-                              type(option, 'label', undefined);
-                              setOne(option.id, undefined);
-                            },
-                          })}
-                      onBlur={() => {
-                        commitLabel(option);
-                      }}
-                      isErrorFloating
-                      {...(error === undefined ? {} : { error })}
                     />
                   )}
-                </span>
-                {isStatus &&
-                  (isReadOnly ? (
-                    <span className={styles.meta}>
-                      {OUTCOMES.find((each) => each.id === (option.outcome ?? 'open'))?.label}
-                      {option.targetDays === undefined ? '' : strings.targetShown(option.targetDays)}
-                    </span>
-                  ) : (
-                    <>
-                      <span className={styles.outcome}>
-                        <Select
-                          label={strings.outcomeOf(name)}
-                          isLabelHidden
-                          size="sm"
-                          items={OUTCOMES}
-                          value={option.outcome ?? 'open'}
-                          onChange={(next) => {
-                            const outcome = OUTCOMES.find((each) => each.id === next)?.id;
-                            if (outcome !== undefined && outcome !== option.outcome) onChange(option.id, { outcome });
-                          }}
-                        />
+                  <span className={styles.label} data-static={isReadOnly || undefined}>
+                    {isReadOnly && isChoice ? (
+                      <span className={styles.text}>{name}</span>
+                    ) : isReadOnly ? (
+                      <Tag hue={option.hue}>{name}</Tag>
+                    ) : (
+                      <Field
+                        label={placeName(index)}
+                        isLabelHidden
+                        size="sm"
+                        maxLength={labelMaxLength}
+                        autoComplete="off"
+                        value={typedOf(option, 'label') ?? name}
+                        onChange={(text) => {
+                          type(option, 'label', text);
+                          setOne(option.id, undefined);
+                        }}
+                        onSubmit={() => {
+                          commitLabel(option);
+                        }}
+                        // Esc puts back a label being typed; with none, it reaches the dialog, which closes.
+                        {...(typedOf(option, 'label') === undefined
+                          ? {}
+                          : {
+                              onEscape: () => {
+                                type(option, 'label', undefined);
+                                setOne(option.id, undefined);
+                              },
+                            })}
+                        onBlur={() => {
+                          commitLabel(option);
+                        }}
+                        isErrorFloating
+                        {...(error === undefined ? {} : { error })}
+                      />
+                    )}
+                  </span>
+                  {isStatus &&
+                    (isReadOnly ? (
+                      <span className={styles.meta}>
+                        {OUTCOMES.find((each) => each.id === (option.outcome ?? 'open'))?.label}
+                        {option.targetDays === undefined ? '' : strings.targetShown(option.targetDays)}
                       </span>
-                      <span className={styles.days}>
-                        <Field
-                          label={strings.daysOf(name)}
-                          isLabelHidden
-                          size="sm"
-                          inputMode="numeric"
-                          autoComplete="off"
-                          align="end"
-                          suffix={strings.daysUnit}
-                          value={typedOf(option, 'days') ?? baseOf(option, 'days')}
-                          onChange={(text) => {
-                            type(option, 'days', text);
-                            setOne(`${option.id}:days`, undefined);
-                          }}
-                          onSubmit={() => {
-                            commitDays(option);
-                          }}
-                          {...(typedOf(option, 'days') === undefined
-                            ? {}
-                            : {
-                                onEscape: () => {
-                                  type(option, 'days', undefined);
-                                  setOne(`${option.id}:days`, undefined);
-                                },
-                              })}
-                          onBlur={() => {
-                            commitDays(option);
-                          }}
-                          isErrorFloating
-                          {...(daysError === undefined ? {} : { error: daysError })}
-                        />
-                      </span>
-                    </>
-                  ))}
-                {/* Choices are saved with their form, so no row waits on the server. */}
-                {!isReadOnly && !isChoice && (
-                  <span className={styles.pending}>{isPending && <Spinner label={strings.saving} />}</span>
-                )}
-                {!isReadOnly && isChoice && onRemove !== undefined && (
-                  <Button
-                    variant="ghost"
-                    icon="x"
-                    label={strings.removeOf(name)}
-                    onPress={() => {
-                      removeRow(index, option.id);
-                    }}
-                  />
-                )}
-                {!isReadOnly && !isChoice && (
-                  <MenuTrigger>
-                    <Button variant="ghost" icon="ellipsis" label={strings.actionsFor(name)} />
-                    <Menu
-                      label={strings.actionsFor(name)}
-                      onAction={(key) => {
-                        const before = live[index - 1];
-                        const after = live[index + 1];
-                        if (key === 'up' && before !== undefined) moveTo(option.id, before.id, 'before');
-                        else if (key === 'down' && after !== undefined) moveTo(option.id, after.id, 'after');
-                        else if (key === 'remove') {
-                          removeRow(index, option.id);
-                          return;
-                        } else if (key === 'archive') {
-                          const next = after ?? before;
-                          onArchive?.(option.id);
-                          focusIn(
-                            next === undefined
-                              ? (root) => root.querySelector<HTMLElement>('[data-adder] button')
-                              : rowControl(next.id, 'input'),
-                          );
-                          return;
-                        }
-                        focusIn(rowControl(option.id, 'button[aria-haspopup]'));
+                    ) : (
+                      <>
+                        <span className={styles.outcome}>
+                          <Select
+                            label={strings.outcomeOf(name)}
+                            isLabelHidden
+                            size="sm"
+                            items={OUTCOMES}
+                            value={option.outcome ?? 'open'}
+                            onChange={(next) => {
+                              const outcome = OUTCOMES.find((each) => each.id === next)?.id;
+                              if (outcome !== undefined && outcome !== option.outcome) onChange(option.id, { outcome });
+                            }}
+                          />
+                        </span>
+                        <span className={styles.days}>
+                          <Field
+                            label={strings.daysOf(name)}
+                            isLabelHidden
+                            size="sm"
+                            inputMode="numeric"
+                            autoComplete="off"
+                            align="end"
+                            suffix={strings.daysUnit}
+                            value={typedOf(option, 'days') ?? baseOf(option, 'days')}
+                            onChange={(text) => {
+                              type(option, 'days', text);
+                              setOne(`${option.id}:days`, undefined);
+                            }}
+                            onSubmit={() => {
+                              commitDays(option);
+                            }}
+                            {...(typedOf(option, 'days') === undefined
+                              ? {}
+                              : {
+                                  onEscape: () => {
+                                    type(option, 'days', undefined);
+                                    setOne(`${option.id}:days`, undefined);
+                                  },
+                                })}
+                            onBlur={() => {
+                              commitDays(option);
+                            }}
+                            isErrorFloating
+                            {...(daysError === undefined ? {} : { error: daysError })}
+                          />
+                        </span>
+                      </>
+                    ))}
+                  {/* Choices are saved with their form, so no row waits on the server. */}
+                  {!isReadOnly && !isChoice && (
+                    <span className={styles.pending}>{isPending && <Spinner label={strings.saving} />}</span>
+                  )}
+                  {!isReadOnly && isChoice && onRemove !== undefined && (
+                    <Button
+                      variant="ghost"
+                      icon="x"
+                      label={strings.removeOf(name)}
+                      onPress={() => {
+                        removeRow(index, option.id);
                       }}
-                    >
-                      <MenuItem id="up" icon="chevron-up" isDisabled={index === 0}>
-                        {strings.moveUp}
-                      </MenuItem>
-                      <MenuItem id="down" icon="chevron-down" isDisabled={index === live.length - 1}>
-                        {strings.moveDown}
-                      </MenuItem>
-                      {(onArchive !== undefined || onRemove !== undefined) && <MenuSeparator />}
-                      {onArchive !== undefined && (
-                        <MenuItem id="archive" icon="archive" isDanger>
-                          {strings.archive}
+                    />
+                  )}
+                  {!isReadOnly && !isChoice && (
+                    <MenuTrigger>
+                      <Button variant="ghost" icon="ellipsis" label={strings.actionsFor(name)} />
+                      <Menu
+                        label={strings.actionsFor(name)}
+                        onAction={(key) => {
+                          const before = live[index - 1];
+                          const after = live[index + 1];
+                          if (key === 'up' && before !== undefined) moveTo(option.id, before.id, 'before');
+                          else if (key === 'down' && after !== undefined) moveTo(option.id, after.id, 'after');
+                          else if (key === 'remove') {
+                            removeRow(index, option.id);
+                            return;
+                          } else if (key === 'archive') {
+                            const next = after ?? before;
+                            onArchive?.(option.id);
+                            focusIn(
+                              next === undefined
+                                ? (root) => root.querySelector<HTMLElement>('[data-adder] button')
+                                : rowControl(next.id, 'input'),
+                            );
+                            return;
+                          }
+                          focusIn(rowControl(option.id, 'button[aria-haspopup]'));
+                        }}
+                      >
+                        <MenuItem id="up" icon="chevron-up" isDisabled={index === 0}>
+                          {strings.moveUp}
                         </MenuItem>
-                      )}
-                      {onRemove !== undefined && (
-                        <MenuItem id="remove" icon="trash" isDanger>
-                          {strings.remove}
+                        <MenuItem id="down" icon="chevron-down" isDisabled={index === live.length - 1}>
+                          {strings.moveDown}
                         </MenuItem>
-                      )}
-                    </Menu>
-                  </MenuTrigger>
-                )}
-              </GridListItem>
-            );
-          }}
-        </GridList>
+                        {(onArchive !== undefined || onRemove !== undefined) && <MenuSeparator />}
+                        {onArchive !== undefined && (
+                          <MenuItem id="archive" icon="archive" isDanger>
+                            {strings.archive}
+                          </MenuItem>
+                        )}
+                        {onRemove !== undefined && (
+                          <MenuItem id="remove" icon="trash" isDanger>
+                            {strings.remove}
+                          </MenuItem>
+                        )}
+                      </Menu>
+                    </MenuTrigger>
+                  )}
+                </GridListItem>
+              );
+            }}
+          </GridList>
+        </SortableList>
       )}
       {!isReadOnly && (
         <span className={styles.adder} data-adder="">

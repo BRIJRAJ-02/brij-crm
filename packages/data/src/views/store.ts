@@ -339,16 +339,20 @@ export function createViewsStore(deps: ViewsDeps) {
       return;
     }
     const { layout } = layer;
+    // A table's grouping: `null` sets it back to one list, absent keeps the one shown.
+    const { groupBy: shownGroupBy, ...ungrouped } = view.config;
+    const groupBy = layout.groupBy === undefined ? shownGroupBy : (layout.groupBy ?? undefined);
     body.set({
       status: 'ready',
       view: {
         ...view,
         ...(layout.kind === undefined ? {} : { kind: layout.kind }),
         config: {
-          ...view.config,
+          ...ungrouped,
           columns: layout.columns,
           pinnedCount: layout.pinnedCount,
           ...(layout.board === undefined ? {} : { board: layout.board }),
+          ...(groupBy === undefined ? {} : { groupBy }),
         },
       },
       ...(layer.isLocal ? { isLayoutLocal: true } : {}),

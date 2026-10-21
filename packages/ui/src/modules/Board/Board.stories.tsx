@@ -103,7 +103,7 @@ export const Default: Story = {
   },
 };
 
-/** By keyboard: Enter on the handle picks a card up and lands on the first column that takes it; Tab moves to the next; Enter drops it there. */
+/** By keyboard: Enter on the grip picks a card up, the right arrow moves it a column at a time, Enter drops it, and focus comes back to its grip. */
 export const MoveByKeyboard: Story = {
   args: { onMove: fn() },
   parameters: { crm: { screenshot: false } },
@@ -116,9 +116,12 @@ export const MoveByKeyboard: Story = {
     const handle = canvas.getByRole('button', { name: `Move ${name}` });
     await waitFor(() => expect(handle).toHaveFocus());
     await userEvent.keyboard('{Enter}');
-    // React Aria starts the drag on the next frame, moving focus to the first column that takes the card.
+    // Lifted: focus waits on the move itself, away from the grid's own arrow keys.
     await waitFor(() => expect(handle).not.toHaveFocus());
-    await userEvent.tab();
+    await userEvent.keyboard('{ArrowRight}');
+    await waitFor(() => expect(canvas.getByRole('region', { name: /Qualified/ })).toHaveAttribute('data-over'));
+    await userEvent.keyboard('{ArrowRight}');
+    await waitFor(() => expect(canvas.getByRole('region', { name: /Proposal/ })).toHaveAttribute('data-over'));
     await userEvent.keyboard('{Enter}');
     await waitFor(() =>
       expect(args.onMove).toHaveBeenCalledWith(
@@ -133,17 +136,13 @@ export const MoveByKeyboard: Story = {
   },
 };
 
-/** A locked card has a lock in place of its handle, says why, and a pointer can't pick it up. */
+/** A locked card has a lock in place of its grip, says why, and a pointer can't pick it up. */
 export const LockedCard: Story = {
   parameters: { crm: { screenshot: false } },
   play: async ({ canvas }) => {
     const name = String(sampleRowAt(4).values.name);
     await expect(canvas.queryByRole('button', { name: `Move ${name}` })).not.toBeInTheDocument();
     await expect(canvas.getByRole('button', { name: 'You can view this deal but not change it.' })).toBeInTheDocument();
-    const row = canvas.getAllByRole('row').find((each) => each.textContent.includes(name));
-    const drag = new DragEvent('dragstart', { bubbles: true, cancelable: true });
-    row?.dispatchEvent(drag);
-    await expect(drag.defaultPrevented).toBe(true);
     await expect(canvas.queryByText('Archived. Cards can’t move here.')).not.toBeInTheDocument();
   },
 };
@@ -186,7 +185,7 @@ export const ArchivedRefuses: Story = {
     const handle = canvas.getByRole('button', { name: `Move ${name}` });
     await waitFor(() => expect(handle).toHaveFocus());
     await userEvent.keyboard('{Enter}');
-    // React Aria starts the drag on the next frame, moving focus to the first column that takes the card.
+    // Lifted: focus waits on the move itself, away from the grid's own arrow keys.
     await waitFor(() => expect(handle).not.toHaveFocus());
     await waitFor(() => expect(canvas.getByText('Archived. Cards can’t move here.')).toBeInTheDocument());
     await userEvent.keyboard('{Escape}');
@@ -206,7 +205,7 @@ export const Reorder: Story = {
     const handle = canvas.getByRole('button', { name: `Move ${name}` });
     await waitFor(() => expect(handle).toHaveFocus());
     await userEvent.keyboard('{Enter}');
-    // React Aria starts the drag on the next frame, moving focus to the first column that takes the card.
+    // Lifted: focus waits on the move itself, away from the grid's own arrow keys.
     await waitFor(() => expect(handle).not.toHaveFocus());
     await userEvent.keyboard('{ArrowDown}');
     await userEvent.keyboard('{ArrowDown}');
@@ -367,7 +366,7 @@ export const DropOnHiddenColumn: Story = {
     const handle = canvas.getByRole('button', { name: `Move ${name}` });
     await waitFor(() => expect(handle).toHaveFocus());
     await userEvent.keyboard('{Enter}');
-    // React Aria starts the drag on the next frame, moving focus to the first column that takes the card.
+    // Lifted: focus waits on the move itself, away from the grid's own arrow keys.
     await waitFor(() => expect(handle).not.toHaveFocus());
     await waitFor(() => expect(canvas.getByRole('grid', { name: /Lost/ })).toBeInTheDocument());
     await userEvent.keyboard('{Escape}');

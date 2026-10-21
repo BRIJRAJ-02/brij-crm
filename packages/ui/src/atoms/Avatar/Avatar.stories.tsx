@@ -36,9 +36,11 @@ export const Sizes: Story = {
       <Avatar name="Jonas Berg" hue="sky" size="sm" />
       <Avatar name="Priya Rao" hue="orange" size="md" />
       <Avatar name="Leo Martins" hue="blue" size="lg" />
+      <Avatar name="Ada Lovelace" hue="lime" size="title" />
       <Avatar name="Northwind" hue="ink" shape="square" size="xs" />
       <Avatar name="Acme Logistics" hue="green" shape="square" size="md" />
       <Avatar name="Globex" hue="red" shape="square" size="lg" />
+      <Avatar name="Initech" hue="yellow" shape="square" size="title" />
     </Stage>
   ),
 };

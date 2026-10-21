@@ -187,7 +187,7 @@ export const MenuMoveAndDelete: Story = {
   },
 };
 
-/** By keyboard: Enter on a handle picks the rule up, the arrows choose where, Enter drops it. */
+/** By keyboard: Enter on a grip lifts the rule, the arrows move it, Enter drops it. */
 export const ReorderByKeyboard: Story = {
   args: { onChange: fn() },
   parameters: { crm: { screenshot: false } },

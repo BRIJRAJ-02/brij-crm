@@ -1,10 +1,10 @@
-import { Fragment, useId, useState, type KeyboardEvent, type ReactNode } from 'react';
-import { Button as AriaButton, DropIndicator, GridList, GridListItem, useDragAndDrop } from 'react-aria-components';
+import { Fragment, useId, type KeyboardEvent, type ReactNode } from 'react';
+import { Button as AriaButton, GridList, GridListItem } from 'react-aria-components';
 import { Badge } from '../../atoms/Badge/Badge.tsx';
-import { DragHandle } from '../../atoms/DragHandle/DragHandle.tsx';
 import { Icon } from '../../atoms/Icon/Icon.tsx';
 import type { IconName } from '../../atoms/Icon/icons.ts';
 import { VisuallyHidden } from '../../atoms/VisuallyHidden/VisuallyHidden.tsx';
+import { SortableList, SortableRowGrip } from '../../lib/drag/drag.tsx';
 import { reorder } from '../../lib/reorder.ts';
 import styles from './QuestionList.module.css';
 import { strings } from './strings.ts';
@@ -73,31 +73,7 @@ export function QuestionList({
   renderFooter,
   renderFooterStart,
 }: QuestionListProps) {
-  const [said, setSaid] = useState('');
   const headingId = useId();
-
-  const { dragAndDropHooks } = useDragAndDrop({
-    getItems: (keys) => [...keys].map((key) => ({ 'text/plain': String(key) })),
-    renderDropIndicator: (target) => <DropIndicator target={target} className={styles.indicator} />,
-    onReorder: (event) => {
-      const [moving] = [...event.keys].map(String);
-      if (moving === undefined || onMove === undefined) return;
-      const next = reorder(
-        items,
-        (item) => item.id,
-        new Set([moving]),
-        String(event.target.key),
-        event.target.dropPosition === 'after' ? 'after' : 'before',
-      );
-      const index = next.findIndex((item) => item.id === moving);
-      if (index < 0) return;
-      onMove(moving, index);
-      const item = items.find((each) => each.id === moving);
-      setSaid(
-        strings.moved(item === undefined || item.label === '' ? strings.untitled : item.label, index + 1, items.length),
-      );
-    },
-  });
 
   // Enter in an open card's single line field never submits a form the list sits in.
   const keepEnter = (event: KeyboardEvent<HTMLDivElement>) => {
@@ -113,91 +89,101 @@ export function QuestionList({
         <Badge count={items.length} label={label} />
         {actions !== undefined && <span className={styles.actions}>{actions}</span>}
       </header>
-      <GridList
-        aria-label={label}
-        items={items}
-        // Rows draw again when what they show beside their item changes: which are open, and their editors.
-        dependencies={[openIds, renderOpen, renderFooter, renderFooterStart]}
-        className={styles.list}
-        keyboardNavigationBehavior="tab"
-        {...(onMove === undefined ? {} : { dragAndDropHooks })}
-      >
-        {(item) => {
-          const name = item.label === '' ? strings.untitled : item.label;
-          const isOpen = openIds.has(item.id);
-          return (
-            <GridListItem
-              id={item.id}
-              textValue={name}
-              className={styles.row}
-              data-open={isOpen || undefined}
-              data-problem={item.hasProblem === true || undefined}
-            >
-              <div className={styles.head}>
-                {onMove !== undefined && (
-                  <span className={styles.handle}>
-                    <DragHandle label={strings.move(name)} />
-                  </span>
-                )}
-                <AriaButton
-                  className={styles.toggle}
-                  aria-expanded={isOpen}
-                  onPress={() => {
-                    onOpenChange(item.id, !isOpen);
-                  }}
-                >
-                  <span className={styles.tile}>
-                    <Icon name={item.typeIcon} tile="gray" />
-                  </span>
-                  <span className={styles.text}>
-                    <span className={styles.title}>
-                      <span className={styles.name} data-untitled={item.label === '' || undefined}>
-                        {name}
-                      </span>
-                      {item.isRequired && <span className={styles.required}>{strings.required}</span>}
-                      {item.hasProblem === true && (
-                        <span className={styles.problem}>
-                          <Icon name="circle-alert" size="sm" />
-                          {strings.hasProblem}
-                        </span>
-                      )}
-                    </span>
-                    <span className={styles.meta}>
-                      {/* Each part stays whole: a narrow column breaks the line between parts, never inside one. */}
-                      {[
-                        item.typeLabel,
-                        ...(item.choiceCount === undefined
-                          ? []
-                          : [item.choiceCount === 0 ? strings.noChoices : strings.choices(item.choiceCount)]),
-                        ...(item.filed === undefined ? [] : [item.filed]),
-                        ...(item.condition === undefined ? [] : [item.condition]),
-                      ].map((part, at) => (
-                        // The separator stays outside the part, so its spaces are where a line may break.
-                        <Fragment key={at}>
-                          {at === 0 ? null : strings.separator}
-                          <span className={styles.part}>{part}</span>
-                        </Fragment>
-                      ))}
-                    </span>
-                  </span>
-                  <span className={styles.chevron} aria-hidden="true">
-                    <Icon name={isOpen ? 'chevron-up' : 'chevron-down'} size="sm" />
-                  </span>
-                </AriaButton>
-              </div>
-              {isOpen && (
-                <div className={styles.body}>
-                  {renderOpen(item.id)}
-                  <Footer start={renderFooterStart?.(item.id)} end={renderFooter?.(item.id)} />
-                </div>
-              )}
-            </GridListItem>
-          );
+      <SortableList
+        ids={items.map((item) => item.id)}
+        nameOf={(id) => {
+          const item = items.find((each) => each.id === id);
+          return item === undefined || item.label === '' ? strings.untitled : item.label;
         }}
-      </GridList>
-      <VisuallyHidden>
-        <span role="status">{said}</span>
-      </VisuallyHidden>
+        onMove={(move) => {
+          if (onMove === undefined) return;
+          const next = reorder(items, (item) => item.id, new Set([move.id]), move.targetId, move.position);
+          const index = next.findIndex((item) => item.id === move.id);
+          if (index >= 0) onMove(move.id, index);
+        }}
+      >
+        <GridList
+          aria-label={label}
+          items={items}
+          // Rows draw again when what they show beside their item changes: which are open, and their editors.
+          dependencies={[openIds, renderOpen, renderFooter, renderFooterStart]}
+          className={styles.list}
+          keyboardNavigationBehavior="tab"
+        >
+          {(item) => {
+            const name = item.label === '' ? strings.untitled : item.label;
+            const isOpen = openIds.has(item.id);
+            return (
+              <GridListItem
+                id={item.id}
+                textValue={name}
+                className={styles.row}
+                data-open={isOpen || undefined}
+                data-problem={item.hasProblem === true || undefined}
+              >
+                <div className={styles.head}>
+                  {onMove !== undefined && (
+                    <span className={styles.handle}>
+                      <SortableRowGrip id={item.id} label={strings.move(name)} />
+                    </span>
+                  )}
+                  <AriaButton
+                    className={styles.toggle}
+                    aria-expanded={isOpen}
+                    onPress={() => {
+                      onOpenChange(item.id, !isOpen);
+                    }}
+                  >
+                    <span className={styles.tile}>
+                      <Icon name={item.typeIcon} tile="gray" />
+                    </span>
+                    <span className={styles.text}>
+                      <span className={styles.title}>
+                        <span className={styles.name} data-untitled={item.label === '' || undefined}>
+                          {name}
+                        </span>
+                        {item.isRequired && <span className={styles.required}>{strings.required}</span>}
+                        {item.hasProblem === true && (
+                          <span className={styles.problem}>
+                            <Icon name="circle-alert" size="sm" />
+                            {strings.hasProblem}
+                          </span>
+                        )}
+                      </span>
+                      <span className={styles.meta}>
+                        {/* Each part stays whole: a narrow column breaks the line between parts, never inside one. */}
+                        {[
+                          item.typeLabel,
+                          ...(item.choiceCount === undefined
+                            ? []
+                            : [item.choiceCount === 0 ? strings.noChoices : strings.choices(item.choiceCount)]),
+                          ...(item.filed === undefined ? [] : [item.filed]),
+                          ...(item.condition === undefined ? [] : [item.condition]),
+                        ].map((part, at) => (
+                          // The separator stays outside the part, so its spaces are where a line may break.
+                          <Fragment key={at}>
+                            {at === 0 ? null : strings.separator}
+                            <span className={styles.part}>{part}</span>
+                          </Fragment>
+                        ))}
+                      </span>
+                    </span>
+                    <span className={styles.chevron} aria-hidden="true">
+                      <Icon name={isOpen ? 'chevron-up' : 'chevron-down'} size="sm" />
+                    </span>
+                  </AriaButton>
+                </div>
+                {isOpen && (
+                  <div className={styles.body}>
+                    {renderOpen(item.id)}
+                    <Footer start={renderFooterStart?.(item.id)} end={renderFooter?.(item.id)} />
+                  </div>
+                )}
+              </GridListItem>
+            );
+          }}
+        </GridList>
+      </SortableList>
     </section>
   );
 }

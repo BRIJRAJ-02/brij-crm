@@ -46,7 +46,7 @@ interface PlainIcon extends IconBase {
 }
 
 interface TiledIcon extends IconBase {
-  /** Sets the icon on its hue tile, for objects in the sidebar and top bar. A tile always holds an `sm` icon in the hue's colour. */
+  /** Sets the icon on its hue tile, for objects in the sidebar and top bar, and attribute names in a record's details (gray). A tile always holds an `sm` icon in the hue's colour. */
   readonly tile: Hue;
   readonly size?: never;
   readonly tone?: never;

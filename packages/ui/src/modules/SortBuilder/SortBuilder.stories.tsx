@@ -63,7 +63,7 @@ export const Default: Story = {
   },
 };
 
-/** By keyboard: Enter on a handle picks the sort up, the arrows choose where, Enter drops it; it now decides first. */
+/** By keyboard: Enter on a grip lifts the sort, the arrows move it, Enter drops it; it now decides first. */
 export const ReorderByKeyboard: Story = {
   args: { onChange: fn() },
   parameters: { crm: { screenshot: false } },
@@ -74,7 +74,7 @@ export const ReorderByKeyboard: Story = {
     const handle = canvas.getByRole('button', { name: 'Move the sort by Name' });
     await waitFor(() => expect(handle).toHaveFocus());
     await userEvent.keyboard('{Enter}');
-    // React Aria starts the drag on the next frame, moving focus to the first place it can land.
+    // Lifted: focus waits on the move itself, away from the list's own arrow keys.
     await waitFor(() => expect(handle).not.toHaveFocus());
     await userEvent.keyboard('{ArrowUp}');
     await userEvent.keyboard('{ArrowUp}');

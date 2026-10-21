@@ -32,6 +32,7 @@ import { Spinner } from '../../atoms/Spinner/Spinner.tsx';
 import { Tooltip } from '../../atoms/Tooltip/Tooltip.tsx';
 import { VisuallyHidden } from '../../atoms/VisuallyHidden/VisuallyHidden.tsx';
 import type { Hue } from '../../hue.ts';
+import { SortableList, useSortableItem } from '../../lib/drag/drag.tsx';
 import { safeHref } from '../../lib/safe-href.ts';
 import { Disclosure } from '../../molecules/Disclosure/Disclosure.tsx';
 import { MenuTrigger } from '../../molecules/Menu/Menu.tsx';
@@ -464,16 +465,8 @@ export function NavItem(props: NavItemProps) {
   return <ItemRow id={props.id} name={children} item={item} menu={props.menu} />;
 }
 
-/** What a reordering section tells its items: their grip's keys and pointer, and where a pointer drop would land. */
-interface ReorderItems {
-  readonly handleFor: (id: string, name: string) => Parameters<typeof DragHandle>[0]['manual'];
-  /** The item a pointer drop would land before, or `end` for after the last. */
-  readonly dropBefore?: string;
-  readonly isEnd: (id: string) => boolean;
-  readonly describedBy: string;
-}
-
-const ReorderContext = createContext<ReorderItems | undefined>(undefined);
+/** Whether the section around an item reorders its items (through the library's drag wrapper). */
+const ReorderContext = createContext(false);
 
 /** An item with its grip (in a reordering section) and its menu after the link, or the bare link. */
 function ItemRow({
@@ -487,28 +480,48 @@ function ItemRow({
   readonly item: ReactElement;
   readonly menu: ReactElement | undefined;
 }) {
-  const reorder = useContext(ReorderContext);
-  const manual = reorder === undefined || id === undefined ? undefined : reorder.handleFor(id, name);
-  if (manual === undefined && menu === undefined) return item;
-  const drop =
-    reorder === undefined || id === undefined
-      ? undefined
-      : reorder.dropBefore === id
-        ? 'before'
-        : reorder.dropBefore === 'end' && reorder.isEnd(id)
-          ? 'after'
-          : undefined;
+  const reorders = useContext(ReorderContext);
+  if (reorders && id !== undefined) return <SortableItemRow id={id} name={name} item={item} menu={menu} />;
+  if (menu === undefined) return item;
   return (
-    <div className={styles.row} data-reorder-id={id} data-drop={drop}>
+    <div className={styles.row}>
       {item}
       <span className={styles.rowActions}>
-        {manual !== undefined && <DragHandle label={strings.moveItem(name)} manual={manual} />}
-        {menu !== undefined && (
-          <MenuTrigger>
-            <Button variant="ghost" size="sm" icon="ellipsis" label={strings.moreFor(name)} />
-            {menu}
-          </MenuTrigger>
-        )}
+        <ItemMenu name={name} menu={menu} />
+      </span>
+    </div>
+  );
+}
+
+/** An item's menu: a quiet button after its link. */
+function ItemMenu({ name, menu }: { readonly name: string; readonly menu: ReactElement }) {
+  return (
+    <MenuTrigger>
+      <Button variant="ghost" size="sm" icon="ellipsis" label={strings.moreFor(name)} />
+      {menu}
+    </MenuTrigger>
+  );
+}
+
+/** An item in a reordering section: it slides out of the moving item's way, and moves by its grip. */
+function SortableItemRow({
+  id,
+  name,
+  item,
+  menu,
+}: {
+  readonly id: string;
+  readonly name: string;
+  readonly item: ReactElement;
+  readonly menu: ReactElement | undefined;
+}) {
+  const { bind, grip } = useSortableItem(id);
+  return (
+    <div ref={bind} className={styles.row} data-reorder-id={id}>
+      {item}
+      <span className={styles.rowActions}>
+        <DragHandle label={strings.moveItem(name)} drag={grip} />
+        {menu !== undefined && <ItemMenu name={name} menu={menu} />}
       </span>
     </div>
   );
@@ -531,11 +544,12 @@ export interface NavSectionProps {
   /** The section's menu (Move up, Move down, Customise sidebar): a `Menu` opened by a quiet button after its label. */
   readonly menu?: ReactElement;
   /**
-   * Lets its items be reordered (each `NavItem` needs an `id`): by dragging
-   * the grip that shows on hover or focus (a drop line marks where it lands),
-   * or from the keyboard on the grip (Space lifts, the arrows move, Space
-   * drops, Esc puts it back, each step announced). Told the item and its new
-   * place among the items shown. Items never leave their section.
+   * Lets its items be reordered (each `NavItem` needs an `id`) through the
+   * library's drag wrapper: by dragging the grip that shows on hover or focus
+   * (the others slide out of the way), or from the keyboard on the grip
+   * (Space lifts, the arrows move, Space drops, Esc puts it back, each step
+   * announced). Told the item and its new place among the items shown. Items
+   * never leave their section.
    */
   readonly onReorder?: (id: string, toIndex: number) => void;
   /**
@@ -564,7 +578,8 @@ export function NavSection({
   const { isCollapsed } = useContext(SidebarContext);
   const showSkeleton = useDelayedLoading(isLoading);
   const hasItems = Children.toArray(children).length > 0;
-  const reorder = useReorder(children, onReorder);
+  const ids = idsOf(children);
+  const reorders = onReorder !== undefined && ids.length > 1;
   const sectionMove = useSectionMove(title, position, onMoveSection);
   if (isCollapsed) {
     // On the rail, loading draws tile marks where the icons will go, as the
@@ -599,7 +614,32 @@ export function NavSection({
   } else if (!hasItems && emptyLabel !== undefined) {
     body = <p className={styles.empty}>{emptyLabel}</p>;
   }
-  if (!isLoading && reorder !== undefined) body = reorder.ordered;
+  if (!isLoading && reorders) {
+    const names = new Map(
+      Children.toArray(children).flatMap((child) =>
+        isValidElement<{ readonly id?: string; readonly children?: unknown }>(child) &&
+        typeof child.props.id === 'string'
+          ? [
+              [
+                child.props.id,
+                typeof child.props.children === 'string' ? child.props.children : child.props.id,
+              ] as const,
+            ]
+          : [],
+      ),
+    );
+    body = (
+      <SortableList
+        ids={ids}
+        nameOf={(id) => names.get(id) ?? id}
+        onMove={(move) => {
+          onReorder(move.id, move.toIndex);
+        }}
+      >
+        <ReorderContext value>{children}</ReorderContext>
+      </SortableList>
+    );
+  }
   const actions =
     menu === undefined && sectionMove === undefined ? undefined : (
       <>
@@ -627,25 +667,21 @@ export function NavSection({
             })}
         {...(actions === undefined ? {} : { actions })}
       >
-        <ReorderContext value={reorder?.context}>
-          <div className={styles.items} aria-busy={isLoading || undefined}>
-            {body}
-          </div>
-        </ReorderContext>
+        <div className={styles.items} aria-busy={isLoading || undefined}>
+          {body}
+        </div>
       </Disclosure>
-      {(reorder !== undefined || sectionMove !== undefined) && (
+      {sectionMove !== undefined && (
         <>
           <VisuallyHidden>
-            <span id={reorder?.context.describedBy ?? sectionMove?.describedBy}>{strings.reorderHelp}</span>
+            <span id={sectionMove.describedBy}>{strings.reorderHelp}</span>
           </VisuallyHidden>
           <VisuallyHidden>
             <span role="status" aria-live="polite" aria-atomic="true">
-              {reorder?.announcement.isPolite === true ? reorder.announcement.text : ''}
-              {sectionMove?.announcement.isPolite === true ? sectionMove.announcement.text : ''}
+              {sectionMove.announcement.isPolite ? sectionMove.announcement.text : ''}
             </span>
             <span role="status" aria-live="assertive" aria-atomic="true">
-              {reorder?.announcement.isPolite === false ? reorder.announcement.text : ''}
-              {sectionMove?.announcement.isPolite === false ? sectionMove.announcement.text : ''}
+              {sectionMove.announcement.isPolite ? '' : sectionMove.announcement.text}
             </span>
           </VisuallyHidden>
         </>
@@ -684,13 +720,6 @@ function useAnnouncement() {
   return [announcement, say] as const;
 }
 
-/** A keyboard lift: the item, where it started, and where it is now. */
-interface Lift {
-  readonly id: string;
-  readonly from: number;
-  readonly to: number;
-}
-
 /** The ids of a section's items, in their order, from each `NavItem`'s `id`. */
 function idsOf(children: ReactNode): string[] {
   return Children.toArray(children).flatMap((child) =>
@@ -703,171 +732,6 @@ function dropIndexAt(rows: readonly { readonly id: string; readonly middle: numb
   const others = rows.filter((row) => row.id !== movingId);
   const at = others.findIndex((row) => y < row.middle);
   return at === -1 ? others.length : at;
-}
-
-/**
- * Reordering a section's items (AC-932): the keyboard lifts an item and
- * moves it through a live preview of the order, announcing each step; the
- * pointer drags it with a drop line. Only the drop is told to the screen.
- */
-function useReorder(children: ReactNode, onReorder: ((id: string, toIndex: number) => void) | undefined) {
-  const [lift, setLift] = useState<Lift | undefined>(undefined);
-  const [drag, setDrag] = useState<{ readonly id: string; readonly to: number } | undefined>(undefined);
-  const [announcement, say] = useAnnouncement();
-  const describedBy = useId();
-  const ids = idsOf(children);
-  // A pointer drag's listeners read the latest order and callback when it ends, and end with the section.
-  const latest = useRef({ ids, onReorder });
-  useLayoutEffect(() => {
-    latest.current = { ids, onReorder };
-  });
-  const dragEnd = useRef<((cancelled: boolean) => void) | undefined>(undefined);
-  useEffect(
-    () => () => {
-      dragEnd.current?.(true);
-    },
-    [],
-  );
-  if (onReorder === undefined || ids.length < 2) return undefined;
-  const count = ids.length;
-  const nameOf = new Map<string, string>();
-  for (const child of Children.toArray(children)) {
-    if (
-      isValidElement<{ readonly id?: string; readonly children?: unknown }>(child) &&
-      typeof child.props.id === 'string'
-    ) {
-      nameOf.set(child.props.id, typeof child.props.children === 'string' ? child.props.children : child.props.id);
-    }
-  }
-  // The keyboard's preview: the lifted item at its current place.
-  const order =
-    lift === undefined
-      ? ids
-      : (() => {
-          const rest = ids.filter((id) => id !== lift.id);
-          return [...rest.slice(0, lift.to), lift.id, ...rest.slice(lift.to)];
-        })();
-  const byId = new Map(
-    Children.toArray(children).flatMap((child) =>
-      isValidElement<{ readonly id?: string }>(child) && typeof child.props.id === 'string'
-        ? [[child.props.id, child] as const]
-        : [],
-    ),
-  );
-  const ordered = order.map((id) => byId.get(id));
-  const drop = (id: string, from: number, to: number) => {
-    const name = nameOf.get(id) ?? id;
-    if (to !== from) onReorder(id, to);
-    say(to === from ? strings.reorderStayed(name, to + 1, count) : strings.reorderMoved(name, to + 1, count));
-  };
-  const handleFor = (id: string, name: string) => ({
-    isLifted: lift?.id === id || drag?.id === id,
-    describedBy,
-    onKeyDown: (event: KeyboardEvent<HTMLButtonElement>) => {
-      const key = event.key;
-      if (lift === undefined || lift.id !== id) {
-        if (key !== ' ' && key !== 'Enter') return;
-        event.preventDefault();
-        const from = ids.indexOf(id);
-        setLift({ id, from, to: from });
-        say(strings.reorderLifted(name, from + 1, count));
-        return;
-      }
-      if (key === 'ArrowUp' || key === 'ArrowDown') {
-        event.preventDefault();
-        const to = Math.min(Math.max(lift.to + (key === 'ArrowUp' ? -1 : 1), 0), count - 1);
-        setLift({ ...lift, to });
-        say(strings.reorderPosition(name, to + 1, count), true);
-        return;
-      }
-      if (key === ' ' || key === 'Enter') {
-        event.preventDefault();
-        setLift(undefined);
-        drop(id, lift.from, lift.to);
-        return;
-      }
-      if (key === 'Escape') {
-        event.preventDefault();
-        event.stopPropagation();
-        setLift(undefined);
-        say(strings.reorderCancelled(name, lift.from + 1, count));
-      }
-    },
-    onBlur: () => {
-      // Focus moved on (Tab, a click elsewhere): the item goes back where it was.
-      if (lift?.id === id) setLift(undefined);
-    },
-    onPointerDown: (event: ReactPointerEvent<HTMLButtonElement>) => {
-      if (event.button !== 0 || lift !== undefined) return;
-      const handle = event.currentTarget;
-      const list = handle.closest('[data-reorder-list]');
-      if (list === null) return;
-      event.preventDefault();
-      const rows = [...list.querySelectorAll<HTMLElement>('[data-reorder-id]')].map((row) => {
-        const rect = row.getBoundingClientRect();
-        return { id: row.dataset.reorderId ?? '', middle: rect.top + rect.height / 2 };
-      });
-      const from = ids.indexOf(id);
-      const others = rows.map((row) => row.id).filter((each) => each !== id);
-      let to = from;
-      setDrag({ id, to });
-      const move = (moved: PointerEvent) => {
-        const next = dropIndexAt(rows, id, moved.clientY);
-        if (next === to) return;
-        to = next;
-        setDrag({ id, to });
-      };
-      const end = (cancelled: boolean) => {
-        dragEnd.current = undefined;
-        window.removeEventListener('pointermove', move);
-        window.removeEventListener('pointerup', up);
-        window.removeEventListener('pointercancel', cancel);
-        window.removeEventListener('keydown', escape, true);
-        setDrag(undefined);
-        if (cancelled) return;
-        // The order may have moved under the drag (a live change): land beside the item it was dropped next to,
-        // in the order as it is now.
-        const now = latest.current.ids.filter((each) => each !== id);
-        const before = others[to];
-        const at = before === undefined ? now.length : Math.max(now.indexOf(before), 0);
-        const was = latest.current.ids.indexOf(id);
-        const name = nameOf.get(id) ?? id;
-        if (at !== was) latest.current.onReorder?.(id, at);
-        say(at === was ? strings.reorderStayed(name, at + 1, count) : strings.reorderMoved(name, at + 1, count));
-      };
-      const up = () => {
-        end(false);
-      };
-      const cancel = () => {
-        end(true);
-      };
-      const escape = (pressed: globalThis.KeyboardEvent) => {
-        if (pressed.key !== 'Escape') return;
-        pressed.preventDefault();
-        pressed.stopPropagation();
-        end(true);
-      };
-      dragEnd.current = end;
-      window.addEventListener('pointermove', move);
-      window.addEventListener('pointerup', up);
-      window.addEventListener('pointercancel', cancel);
-      window.addEventListener('keydown', escape, true);
-    },
-  });
-  // Where the drop line goes: before the item now at the drop index among the others, or after the last.
-  const others = drag === undefined ? [] : ids.filter((id) => id !== drag.id);
-  const dropBefore = drag === undefined ? undefined : (others[drag.to] ?? 'end');
-  const last = others.at(-1);
-  return {
-    ordered: <div data-reorder-list="">{ordered}</div>,
-    announcement,
-    context: {
-      handleFor,
-      ...(dropBefore === undefined ? {} : { dropBefore }),
-      isEnd: (id: string) => id === last,
-      describedBy,
-    } satisfies ReorderItems,
-  };
 }
 
 /** Moving a whole section among the sections from the keyboard on its grip, or by dragging it (AC-932). */

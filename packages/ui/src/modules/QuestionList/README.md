@@ -36,9 +36,9 @@ Each question is a hairline card, space-8 apart (owner feedback F27, 20 October 
 ## Keyboard
 
 - The arrow keys move between questions (with a question itself focused); Tab moves within one: its handle, its head and, when open, its fields; Enter or Space on the header opens and closes it.
-- On the handle: Enter picks the question up, arrows choose the drop line, Enter drops it, Esc cancels. The move is announced.
+- On the handle: Space or Enter lifts the question, the arrows move it while the others slide out of its way, Space or Enter drops it, Esc puts it back. Each step is announced.
 - Keys typed in an open question's fields stay in the field: the list is in `tab` mode, so a row never takes arrows or type ahead from its children.
 
 ## Differs from the spec
 
-The spec names dnd-kit for drag (decided 13 October). This repo's lists still reorder with React Aria's drag and drop and `DragHandle`, so this one does too, and picks up with Enter rather than Space; it moves with the others when they change.
+Questions sort through the library's drag wrapper (dnd-kit, decided 13 October), as every other list does.

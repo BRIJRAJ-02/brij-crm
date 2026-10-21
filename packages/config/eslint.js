@@ -129,6 +129,7 @@ const uiLibraries = {
     '@internationalized/*',
     '@tanstack/react-virtual',
     '@tiptap/*',
+    '@dnd-kit/*',
     '@visx/*',
     '@xyflow/react',
     'elkjs',
@@ -148,6 +149,8 @@ const collaboration = {
 // House rule: the component library holds no data and makes no network calls.
 const libraryDataImports = [
   { group: ['@orpc/*', '@crm/data'], message: 'The library makes no network calls. Data comes in through props.' },
+  // Owner decision, 13 Oct 2026: every drag goes through one wrapper, so its sensors, words and motion match.
+  { group: ['@dnd-kit/*'], message: "Drag through the library's one wrapper, src/lib/drag/drag.tsx." },
 ];
 
 const NETWORK_GLOBALS = ['fetch', 'XMLHttpRequest', 'WebSocket', 'EventSource'];

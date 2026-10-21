@@ -41,7 +41,8 @@ const columnsOnce = (columns: readonly ViewColumn[]) =>
 /**
  * What one view stores: its columns (each attribute at most once), whether
  * attributes it doesn't list show at the end, how many columns are pinned,
- * its filter and sorts, and for a board its settings. Unknown keys are
+ * its filter and sorts, for a board its settings, and for a grouped table
+ * its grouping attribute. Unknown keys are
  * refused. The engine also checks every attribute it names belongs to the
  * view's object, and each sort `isSortable`.
  */
@@ -55,6 +56,11 @@ export const ViewConfig = z.strictObject({
   filter: FilterGroup.optional(),
   sorts: SortRules,
   board: BoardConfig.optional(),
+  /**
+   * A table's rows in runs under a status or single select (13 Oct reference
+   * batch 4), read through the board's per group windows; absent, one list.
+   */
+  groupBy: Uuid.optional(),
 });
 /** What one view stores. */
 export type ViewConfig = z.infer<typeof ViewConfig>;
@@ -68,6 +74,8 @@ export const ViewLayout = z.strictObject({
     .refine(columnsOnce, { message: 'Each attribute is a column once.' }),
   pinnedCount: z.number().int().min(1).max(MAX_PINNED),
   board: BoardConfig.optional(),
+  /** A table's grouping attribute; `null` sets it back to one list, absent leaves it as it is. */
+  groupBy: Uuid.nullable().optional(),
 });
 /** A view's layout. */
 export type ViewLayout = z.infer<typeof ViewLayout>;

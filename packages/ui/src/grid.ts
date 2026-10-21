@@ -9,6 +9,7 @@ export {
 } from './modules/DataGrid/DataGrid.tsx';
 export type { GridEditorProps } from './modules/DataGrid/GridCell.tsx';
 export type { GridColumn } from './modules/DataGrid/grid-columns.ts';
+export type { GridGroup } from './modules/DataGrid/grid-groups.ts';
 export type { GridColumnAction } from './modules/DataGrid/GridHeaderCell.tsx';
 export { columnWidthFor } from './fields/registry.ts';
 export {

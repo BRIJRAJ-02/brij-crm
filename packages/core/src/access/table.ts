@@ -147,6 +147,8 @@ export const ACCESS_TABLE = {
   getRecordEntries: { data: 'read' },
   // The record page (spec 0017): its timeline and a record in the trash.
   getActivity: { data: 'read' },
+  // 13 Oct reference batch 4: a record's stage age, read as its timeline is.
+  getStageSince: { data: 'read' },
   readTrashedRecord: { data: 'read' },
   // The record picker's search (spec 0014): only records the reader may see.
   searchRecords: { data: 'read' },

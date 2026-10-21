@@ -94,8 +94,12 @@
     border-color: var(--danger);
   }
 
+  /* The row being moved (the drag wrapper sets data-dragging): lifted above the rest, which slide out of its way. */
   .row[data-dragging] {
-    opacity: var(--opacity-busy);
+    position: relative;
+    z-index: var(--z-raised);
+    background: var(--surface-raised);
+    box-shadow: var(--shadow-md);
   }
 
   /* Two lines with room around them: at least size-row plus space-12 above and below. */
@@ -285,17 +289,6 @@
     border-block-start: var(--border-width-hairline) solid var(--border-subtle);
   }
 
-  /* Where it would land: a zero height line that turns accent while it is the target, as in Table. */
-  .indicator {
-    margin-block: calc(-1 * var(--space-4));
-    outline: none;
-  }
-
-  .indicator[data-drop-target] {
-    outline: var(--border-width-thick) solid var(--accent);
-    outline-offset: calc(-1 * var(--border-width-hairline));
-  }
-
   @media (forced-colors: active) {
     .row[data-focus-visible],
     .toggle[data-focus-visible] {
@@ -308,9 +301,11 @@
       opacity: 1;
       translate: none;
     }
-
-    .indicator[data-drop-target] {
-      outline-color: Highlight;
+  }
+  /* Lifted, in forced colours, where the shadow and surface are gone. */
+  @media (forced-colors: active) {
+    .row[data-dragging] {
+      outline: var(--border-width-thick) solid Highlight;
     }
   }
 }

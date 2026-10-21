@@ -4,6 +4,8 @@ export const strings = {
   next: 'Next record',
   openPage: 'Open full page',
   loading: 'Loading record',
+  /** The stat strip's name: "About Northwind Traders". */
+  about: (name: string) => `About ${name}`,
   failed: 'This record didn’t load',
   noAccess: 'You can’t see this record',
   noAccessBody: 'Ask a workspace admin for access.',

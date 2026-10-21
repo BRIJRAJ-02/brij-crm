@@ -47,6 +47,7 @@ import { strings as attributeStrings } from '../settings/attribute-strings.ts';
 import { useBulkActions, useTableSelection } from './BulkActions.tsx';
 import type { ShownColumn, ShownLayout } from '../views/layout.ts';
 import { avatarAttribute } from './columns.ts';
+import { groupPlan, useGroupedRows } from './grouped.ts';
 import { NewRecordDialog } from './NewRecordDialog.tsx';
 import { strings } from './strings.ts';
 import { editToast, isClear } from './undo.ts';
@@ -114,6 +115,11 @@ export interface RecordsScreenProps {
    * clears the ticks with the view's change, and its toast says so (AC-522).
    */
   readonly onTickedChange?: (isTicked: boolean) => void;
+  /**
+   * The view's grouping (13 Oct reference batch 4): a status or single select
+   * attribute's id, and the rows run under a header per option.
+   */
+  readonly groupBy?: string;
 }
 
 /** What a column's editor gets when it needs nothing beyond its value (not a relation cell). */
@@ -226,6 +232,7 @@ export function RecordsScreen({
   onTickedChange,
   isCreateRequested = false,
   onCreateRequestTaken,
+  groupBy,
 }: RecordsScreenProps) {
   const { data, toasts } = useRouteContext({ from: '__root__' });
   const navigate = useNavigate();
@@ -319,6 +326,10 @@ export function RecordsScreen({
   // Another order's first rows are on their way: the old ones stay, and the view bar says it is working.
   const isReordering = useDelayedLoading(shown.key !== wanted);
   const state = useView(view, visible);
+  // Grouped (13 Oct reference batch 4): the rows through the board's per group windows, folded groups unread.
+  const groupingPlan = useMemo(() => groupPlan(attributes, groupBy), [attributes, groupBy]);
+  const [folded, setFolded] = useState<ReadonlySet<string>>(() => new Set());
+  const grouped = useGroupedRows(slug, object.id, groupingPlan, query, visible, folded);
   // The count spoken after a new question's rows are in (spec 0020, AC-487), once per question.
   const [announced, setAnnounced] = useState<{ readonly key: string; readonly text: string | undefined }>({
     key: wanted,
@@ -508,7 +519,20 @@ export function RecordsScreen({
               label={object.pluralName}
               columns={gridColumns}
               pinnedCount={layout.pinnedCount}
-              rows={state.source}
+              rows={grouped?.source ?? state.source}
+              {...(grouped === undefined
+                ? {}
+                : {
+                    groups: grouped.groups,
+                    onGroupToggle: (groupId: string, isCollapsed: boolean) => {
+                      setFolded((was) => {
+                        const next = new Set(was);
+                        if (isCollapsed) next.add(groupId);
+                        else next.delete(groupId);
+                        return next;
+                      });
+                    },
+                  })}
               getValue={(row, columnId) => row.values[columnId] ?? null}
               isCellKnown={isCellKnown}
               rowNotes={state.rowNotes}
@@ -598,8 +622,8 @@ export function RecordsScreen({
               // The screen confirms a paste once its write lands, with Undo (spec 0006).
               confirmsPaste={false}
               cellErrors={state.cellErrors}
-              status={state.status}
-              onRetry={view.retry}
+              status={grouped === undefined || grouped.status === 'ready' ? state.status : grouped.status}
+              onRetry={grouped?.status === 'error' ? grouped.retry : view.retry}
               // What failed, in the data layer's words: "Can't reach the CRM" only when the network did.
               {...(state.error === undefined ? {} : { errorText: state.error.message })}
               members={memberDisplays}
