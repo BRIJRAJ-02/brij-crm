@@ -43,7 +43,11 @@ afterEach(() => {
   for (const dir of sandboxes.splice(0)) rmSync(dir, { recursive: true, force: true });
 });
 
-describe('tokens:build (AC-2)', () => {
+// Each test starts a fresh Node on the generator; on a CI runner busy with every other package's suite the first
+// cold start alone has passed vitest's 5 second default, so these get room that a real hang still exceeds.
+const SPAWN_TIMEOUT_MS = 30_000;
+
+describe('tokens:build (AC-2)', { timeout: SPAWN_TIMEOUT_MS }, () => {
   it('writes the same tokens.css that is committed', () => {
     const dir = sandbox();
     rmSync(path.join(dir, 'tokens.css'));
@@ -107,7 +111,7 @@ describe('tokens:build (AC-2)', () => {
   });
 });
 
-describe('tokens:check (AC-3)', () => {
+describe('tokens:check (AC-3)', { timeout: SPAWN_TIMEOUT_MS }, () => {
   it('passes on the committed files and writes nothing', () => {
     const dir = sandbox();
     const before = read(dir, 'tokens.css');

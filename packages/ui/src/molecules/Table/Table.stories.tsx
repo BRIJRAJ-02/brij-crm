@@ -1,5 +1,5 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
-import { expect, fn, waitFor } from 'storybook/test';
+import { expect, fn, screen, waitFor } from 'storybook/test';
 import { Badge } from '../../atoms/Badge/Badge.tsx';
 import { Button } from '../../atoms/Button/Button.tsx';
 import { RecordChip } from '../../atoms/RecordChip/RecordChip.tsx';
@@ -85,7 +85,8 @@ export const ColumnInfo: Story = {
   play: async ({ canvas, userEvent }) => {
     await expect(canvas.getByRole('columnheader', { name: 'Role' })).toBeInTheDocument();
     await userEvent.click(canvas.getByRole('button', { name: 'About Role' }));
-    await expect(await canvas.findByRole('dialog', { name: 'About Role' })).toBeInTheDocument();
+    // The help opens in a popover, outside the story's canvas.
+    await expect(await screen.findByRole('dialog', { name: 'About Role' })).toBeInTheDocument();
   },
 };
 

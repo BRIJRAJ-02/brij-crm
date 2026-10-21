@@ -151,6 +151,8 @@ export const strings = {
   sending: 'Inviting',
   cancel: 'Cancel',
   noEmails: 'Add at least one email address.',
+  partlySent: (count: number, reason: string) =>
+    `${count === 1 ? '1 address is' : `${count} addresses are`} done and off the list. The rest weren’t sent: ${reason} Invite again to retry them.`,
   pasteTooMany: (count: number) => `Added the first ${count}. Invite the rest in the next batch.`,
   sentTo: (list: string) => `Invited ${list}. They get an email with a link to join.`,
   alreadyMembers: (list: string) => `Already members: ${list}.`,

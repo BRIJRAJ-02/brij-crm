@@ -170,28 +170,39 @@ export function InviteDialog({ data, slug, isOpen, onClose, roles, defaultRole, 
         (group): group is { role: Role; emails: string[] } => group.role !== undefined && group.emails.length > 0,
       );
     setBusy(true);
+    // What went through so far, so a call failing part way never sends the earlier ones twice.
+    let done: Sent = { invited: [], refused: [], unsent: [] };
+    const handled = new Set<string>();
     groups
-      .reduce<Promise<Sent>>(
-        async (before, group) => {
-          const so = await before;
-          const result = await data.invitations.create(slug, group.emails, group.role);
-          return {
-            invited: [...so.invited, ...result.invited],
-            refused: [...so.refused, ...result.refused],
-            unsent: [...so.unsent, ...result.unsent],
-          };
-        },
-        Promise.resolve({ invited: [], refused: [], unsent: [] }),
-      )
+      .reduce<Promise<void>>(async (before, group) => {
+        await before;
+        const result = await data.invitations.create(slug, group.emails, group.role);
+        done = {
+          invited: [...done.invited, ...result.invited],
+          refused: [...done.refused, ...result.refused],
+          unsent: [...done.unsent, ...result.unsent],
+        };
+        for (const email of group.emails) handled.add(email);
+      }, Promise.resolve())
       .then(
-        (result) => {
+        () => {
           setBusy(false);
-          setSent(result);
-          if (result.invited.length > 0) onInvited();
+          setSent(done);
+          if (done.invited.length > 0) onInvited();
         },
         (error: unknown) => {
           setBusy(false);
-          setFailure(isDataError(error) ? error.message : strings.somethingWrong);
+          const reason = isDataError(error) ? error.message : strings.somethingWrong;
+          if (handled.size === 0) {
+            setFailure(reason);
+            return;
+          }
+          // Only the rows that didn't go stay, so Invite again retries just those.
+          const left = rows.filter((row) => !handled.has(row.email.trim().toLowerCase()));
+          setRows(left);
+          setFailure(strings.partlySent(handled.size, reason));
+          if (done.invited.length > 0) onInvited();
+          focusNext.current = left[0]?.id;
         },
       );
   };
