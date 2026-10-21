@@ -4,7 +4,7 @@ export const strings = {
 
   // Finish setting up
   setupTitle: 'Finish setting up',
-  setupLeft: (count: number) => `${String(count)} left`,
+  setupLeft: (count: number) => `${count.toLocaleString('en')} left`,
   done: 'Done',
   steps: {
     calendar: { title: 'Connect your calendar', action: 'Connect' },
@@ -14,14 +14,15 @@ export const strings = {
   },
   notConnected: 'Not connected',
   noneYet: 'None yet',
-  pages: (count: number) => (count === 1 ? '1 page' : `${String(count)} pages`),
-  forms: (count: number) => (count === 1 ? '1 form' : `${String(count)} forms`),
+  pages: (count: number) => (count === 1 ? '1 page' : `${count.toLocaleString('en')} pages`),
+  forms: (count: number) => (count === 1 ? '1 form' : `${count.toLocaleString('en')} forms`),
   justYou: 'Just you',
-  people: (count: number) => `${String(count)} people`,
+  people: (count: number) => `${count.toLocaleString('en')} people`,
+  invited: (count: number) => `${count.toLocaleString('en')} invited`,
 
   // Today
   today: 'Today',
-  allBookings: 'All bookings',
+  calendar: 'Calendar',
   earlier: 'Earlier',
   comingUp: 'Coming up',
   allDay: 'All day',
@@ -33,14 +34,19 @@ export const strings = {
   // Tasks due
   tasksDue: 'Tasks due',
   allTasks: 'All tasks',
+  noTasksDue: 'No tasks due',
+  moreTasks: (count: number) => (count === 1 ? '1 more task' : `${count.toLocaleString('en')} more tasks`),
+  moreInTasks: 'More in My tasks',
 
   // Needs attention
   needsAttention: 'Needs attention',
-  allDeals: 'All deals',
+  openDeals: 'Deals',
+  unnamedDeal: 'Unnamed deal',
   attentionText: 'Open deals you own, unchanged for 14 days or more.',
   attentionFailed: 'Deals didn’t load',
   changed: (when: string) => `Changed ${when}`,
-  more: (count: number) => (count === 1 ? '1 more deal' : `${count.toLocaleString('en')} more deals`),
+  more: (count: number, atLeast = false) =>
+    count === 1 ? '1 more deal' : `${count.toLocaleString('en')}${atLeast ? '+' : ''} more deals`,
 
   // The page
   quietTitle: 'Nothing needs you right now',

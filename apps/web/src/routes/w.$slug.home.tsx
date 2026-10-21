@@ -1,4 +1,4 @@
-import { isDataError } from '@crm/data';
+import { isDataError, type MemberView } from '@crm/data';
 import { Card, LoadingNow, PageColumn, Skeleton, TileGrid, TopBar } from '@crm/ui';
 import { createFileRoute, useRouter, type ErrorComponentProps } from '@tanstack/react-router';
 import { dayKeyOf } from '../features/bookings/week.ts';
@@ -26,9 +26,10 @@ export const Route = createFileRoute('/w/$slug/home')({
     try {
       const [objects, members, access, tasks] = await Promise.all([
         data.objects.list(slug),
-        data.members.list(slug),
+        // A failed list draws its own card's failure rather than Home's: Tasks due offers Try again.
+        data.members.list(slug).catch((): readonly MemberView[] => []),
         data.access.mine(slug).catch(() => undefined),
-        data.tasks.mine(slug, 'assigned', 'open'),
+        data.tasks.mine(slug, 'assigned', 'open').catch(() => undefined),
       ]);
       const permissions = access?.permissions ?? [];
       const today = dayKeyOf(new Date());
@@ -42,7 +43,7 @@ export const Route = createFileRoute('/w/$slug/home')({
               .then(async (attributes) => {
                 const plan = attentionPlan(objects, attributes, today);
                 if (plan === undefined) return undefined;
-                return { plan, view: await data.records.open(slug, plan.objectId, plan.query, [plan.stageId]) };
+                return { plan, view: await data.records.open(slug, plan.objectId, plan.query, [plan.stage.id]) };
               })
               // Deals that can't be read leave Needs attention out, as a hidden object is absent.
               .catch(() => undefined),
@@ -50,7 +51,15 @@ export const Route = createFileRoute('/w/$slug/home')({
       ]);
       let timer: ReturnType<typeof setTimeout> | undefined;
       await Promise.race([
-        Promise.all([tasks.ready(), attention?.view.ready(), data.bookings.calendar(slug, day.from, day.to).ready()]),
+        Promise.all([
+          tasks?.ready(),
+          attention?.view.ready(),
+          data.bookings.calendar(slug, day.from, day.to).ready(),
+          // Finish setting up's reads, so the card is there at first paint rather than pushing the others down.
+          data.calendar.view(slug).ready(),
+          permissions.includes('booking.manage') ? data.bookingPages.view(slug).ready() : undefined,
+          permissions.includes('forms.manage') ? data.forms.view(slug).ready() : undefined,
+        ]).catch(() => undefined),
         new Promise<void>((resolve) => {
           timer = setTimeout(resolve, OPEN_GRACE_MS);
         }),

@@ -14,6 +14,7 @@ import { VisuallyHidden } from '../../atoms/VisuallyHidden/VisuallyHidden.tsx';
 import type { Hue } from '../../hue.ts';
 import { Breadcrumbs, type Crumb } from '../../molecules/Breadcrumbs/Breadcrumbs.tsx';
 import { CardTitleLevel } from '../../molecules/Card/Card.tsx';
+import { TileGrid } from '../../molecules/TileGrid/TileGrid.tsx';
 import { useDelayedLoading } from '../../provider/useDelayedLoading.ts';
 import { NavItem } from '../Sidebar/Sidebar.tsx';
 import styles from './SettingsLayout.module.css';
@@ -277,7 +278,7 @@ export interface SettingsGridProps {
  * the panel's width (one on a phone), every card the same width.
  */
 export function SettingsGrid({ children }: SettingsGridProps) {
-  return <div className={styles.grid}>{children}</div>;
+  return <TileGrid fill="fill">{children}</TileGrid>;
 }
 
 /** Props for SettingsRow. */

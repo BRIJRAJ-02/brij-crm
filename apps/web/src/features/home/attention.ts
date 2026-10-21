@@ -16,10 +16,10 @@ export const ATTENTION_SHOWN = 6;
 export interface AttentionPlan {
   readonly objectId: string;
   readonly query: ViewQuery;
-  /** The stage attribute, read for each row. */
-  readonly stageId: string;
-  /** Each open stage's label by option id. */
-  readonly stages: ReadonlyMap<string, string>;
+  /** The stage attribute, read for each row and drawn in its one display. */
+  readonly stage: AttributeDefinition;
+  /** The member's day the question was asked on: a new day asks again. */
+  readonly today: string;
 }
 
 /**
@@ -48,8 +48,8 @@ export function attentionPlan(
   const cutoff = dayStart(addDays(today, -QUIET_DAYS)).toISOString();
   return {
     objectId: deals.id,
-    stageId: stage.id,
-    stages: new Map(open.map((option) => [option.id, option.label])),
+    stage,
+    today,
     query: {
       filter: {
         conjunction: 'and',

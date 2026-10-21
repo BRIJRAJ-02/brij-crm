@@ -730,6 +730,68 @@ describe('settle (spec 0006, AC-56)', () => {
     expect(queries).toHaveLength(2);
   });
 
+  it('settles a window on updated at before a past time only for its own rows or its other attributes (spec 0041)', async () => {
+    // Home's Needs attention: mine, unchanged since a past cut off, stalest first. A write sets updated at to now,
+    // so it can only take the record it names out: an edit out of sight moves nothing, however often it comes.
+    const quiet = {
+      filter: {
+        conjunction: 'and' as const,
+        conditions: [
+          { attributeId: OWNER, operator: 'is_me' as const },
+          { attributeId: UPDATED, operator: 'before' as const, value: '1960-01-01T00:00:00.000Z' },
+        ],
+      },
+      sorts: [{ attributeId: UPDATED, direction: 'ascending' as const }],
+    };
+    const context = setup();
+    const view = context.layer.view(WS, PEOPLE, quiet);
+    view.retain([CITY]);
+    await settle();
+    context.counts[0]?.answer(3);
+    await settle();
+    context.queries[0]?.answer({ records: block(0, 3) });
+    await settle();
+    await view.ready();
+    context.frame();
+    view.getSnapshot().source.onRangeChange({ start: 0, end: 3 });
+    const { layer, queries, tick, frame } = context;
+    layer.changed(WS, PEOPLE, [idAt(4000)], [CITY, UPDATED]);
+    frame();
+    tick(5000);
+    await settle();
+    expect(queries).toHaveLength(1);
+    // A row it shows was written: it may have left.
+    layer.changed(WS, PEOPLE, [idAt(0)], [CITY, UPDATED]);
+    frame();
+    tick(1500);
+    await settle();
+    expect(queries).toHaveLength(2);
+  });
+
+  it('still settles a window on updated at before a future time for every write', async () => {
+    const context = setup();
+    const view = context.layer.view(WS, PEOPLE, {
+      filter: {
+        conjunction: 'and' as const,
+        conditions: [{ attributeId: UPDATED, operator: 'before' as const, value: '9999-01-01T00:00:00.000Z' }],
+      },
+    });
+    view.retain([CITY]);
+    await settle();
+    context.counts[0]?.answer(3);
+    await settle();
+    context.queries[0]?.answer({ records: block(0, 3) });
+    await settle();
+    await view.ready();
+    context.frame();
+    view.getSnapshot().source.onRangeChange({ start: 0, end: 3 });
+    context.layer.changed(WS, PEOPLE, [idAt(4000)], [CITY]);
+    context.frame();
+    context.tick(1500);
+    await settle();
+    expect(context.queries).toHaveLength(2);
+  });
+
   it.each([{ deletedIds: [idAt(4001)] }, { restoredIds: [idAt(4001)] }])(
     'settles for a record out of sight the event names deleted or restored (%o)',
     async (lifecycle) => {

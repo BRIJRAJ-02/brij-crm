@@ -43,6 +43,11 @@ export interface LinkRow {
    * read apart from the states, which keep their Badge.
    */
   readonly chips: readonly string[];
+  /**
+   * One attribute value in its field set display (a deal's Stage as a StatusDot, Home's Needs attention), before
+   * the facts in `density="compact"`'s facts cell. A value keeps its one display; the facts stay text.
+   */
+  readonly value?: ReactNode;
   /** A grey badge before the switch, only when it isn't taking people ("Off", "Not published", "Copying…"). */
   readonly badge?: string;
   /** Off (not taking people): the title reads in the secondary colour, as the switch says. */
@@ -301,6 +306,7 @@ export function LinkList({
               </div>
               {isCompact && (
                 <div className={styles.facts}>
+                  {row.value}
                   {row.chips.length > 0 && <span className={styles.factText}>{row.chips.join(' · ')}</span>}
                 </div>
               )}

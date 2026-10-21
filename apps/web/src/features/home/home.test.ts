@@ -143,7 +143,8 @@ describe('Needs attention', () => {
   it('asks for open deals I own, unchanged since 14 days before today, stalest first', () => {
     const plan = attentionPlan([DEALS], DEAL_ATTRIBUTES, '2026-10-21');
     expect(plan?.objectId).toBe('deals');
-    expect([...(plan?.stages.keys() ?? [])]).toEqual(['lead', 'proposal']);
+    expect(plan?.stage.id).toBe('stage');
+    expect(plan?.today).toBe('2026-10-21');
     const cutoff = new Date(2026, 9, 21 - QUIET_DAYS).toISOString();
     expect(plan?.query).toEqual({
       filter: {

@@ -8,4 +8,9 @@
     gap: var(--space-16);
     min-inline-size: 0;
   }
+
+  /* Fill: empty tracks stay, so every tile keeps one width however many there are (SettingsGrid). */
+  .root[data-fill='fill'] {
+    grid-template-columns: repeat(auto-fill, minmax(min(var(--size-panel), 100%), 1fr));
+  }
 }
