@@ -35,6 +35,7 @@ import {
 import { lazy, Suspense, useCallback, useEffect, useMemo, useState } from 'react';
 import type { Prefill } from './prefill.ts';
 import { saveHour12, savedHour12, savedView, saveView, type SlotView } from './prefs.ts';
+import { needsRead } from './reads.ts';
 import { strings } from './strings.ts';
 import {
   addDays,
@@ -304,8 +305,8 @@ function Booking({
   }, [page.title, page.hostName]);
 
   useEffect(() => {
+    if (!needsRead(read, readKey, wanted)) return;
     const current = read.key === readKey ? read.loaded : new Map<number, readonly string[]>();
-    if (current.has(wanted)) return;
     const controller = new AbortController();
     const from = startOfDay(addDays(today, wanted * CHUNK_DAYS), zone);
     const to = startOfDay(addDays(today, (wanted + 1) * CHUNK_DAYS), zone);
