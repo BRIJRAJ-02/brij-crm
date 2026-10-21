@@ -1,7 +1,7 @@
-// A pointer drag on a sidebar section's grip (spec 0034, AC-932): it ends
-// with its section, lands against the order as it is at the drop, and redraws
-// only when its drop place moves.
-import { Profiler, type ReactNode } from 'react';
+// A drag on a sidebar item's grip (spec 0034, AC-932), through the library's
+// drag wrapper: it ends with its section, lands against the order as it is at
+// the drop, and moves by keyboard too.
+import type { ReactNode } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { flushSync } from 'react-dom';
 import { afterEach, describe, expect, it, vi } from 'vitest';
@@ -79,15 +79,27 @@ function middleOf(name: string): number {
 const pointer = (type: string, clientY: number) =>
   new PointerEvent(type, { bubbles: true, cancelable: true, button: 0, pointerId: 1, isPrimary: true, clientY });
 
+/** The drag wrapper follows the pointer on the document once a drag starts. */
+const move = (type: string, clientY: number) => {
+  document.dispatchEvent(pointer(type, clientY));
+};
+
+/** Picks up `name` by its grip and moves the pointer past the few pixels that start a drag. */
+async function lift(name: string) {
+  const y = middleOf(name);
+  grip(name).dispatchEvent(pointer('pointerdown', y));
+  move('pointermove', y - 8);
+  await frame();
+}
+
 describe('a sidebar drag', () => {
   it('sends nothing when its section unmounts before the pointer comes up', async () => {
     const onReorder = vi.fn();
     const { again } = await render(<Records order={['Companies', 'People', 'Deals']} onReorder={onReorder} />);
-    const y = middleOf('Deals');
-    grip('Deals').dispatchEvent(pointer('pointerdown', y));
-    window.dispatchEvent(pointer('pointermove', middleOf('Companies') - 4));
+    await lift('Deals');
+    move('pointermove', middleOf('Companies') - 4);
     again(null);
-    window.dispatchEvent(pointer('pointerup', 0));
+    move('pointerup', 0);
     await frame();
     expect(onReorder).not.toHaveBeenCalled();
   });
@@ -95,52 +107,54 @@ describe('a sidebar drag', () => {
   it('sends nothing when the pointer is cancelled', async () => {
     const onReorder = vi.fn();
     await render(<Records order={['Companies', 'People', 'Deals']} onReorder={onReorder} />);
-    grip('Deals').dispatchEvent(pointer('pointerdown', middleOf('Deals')));
-    window.dispatchEvent(pointer('pointermove', middleOf('Companies') - 4));
-    window.dispatchEvent(pointer('pointercancel', 0));
-    window.dispatchEvent(pointer('pointerup', 0));
+    await lift('Deals');
+    move('pointermove', middleOf('Companies') - 4);
+    await frame();
+    move('pointercancel', 0);
+    move('pointerup', 0);
     await frame();
     expect(onReorder).not.toHaveBeenCalled();
   });
 
-  it('lands beside the item it was dropped by, in the order as it is at the drop', async () => {
+  it('lands where it is held, in the order as it is at the drop, through the latest callback', async () => {
     const onReorder = vi.fn();
     const first = vi.fn();
     const { again } = await render(<Records order={['Companies', 'People', 'Deals']} onReorder={first} />);
-    // Deals is dragged above People (index 1 among the others: Companies, People).
-    grip('Deals').dispatchEvent(pointer('pointerdown', middleOf('Deals')));
-    window.dispatchEvent(pointer('pointermove', middleOf('People') - 4));
+    // Deals is held over People.
+    const people = middleOf('People');
+    await lift('Deals');
+    move('pointermove', people - 4);
+    await frame();
     // A live change puts a new item first, and the screen hands a new callback.
     again(<Records order={['Accounts', 'Companies', 'People', 'Deals']} onReorder={onReorder} />);
-    window.dispatchEvent(pointer('pointerup', 0));
+    await frame();
+    move('pointerup', people - 4);
     await frame();
     expect(first).not.toHaveBeenCalled();
-    // Just above People in the order as it is now: Accounts, Companies, Deals, People.
-    expect(onReorder).toHaveBeenCalledExactlyOnceWith('deals', 2);
+    // Where it is held now, in the order as it is now: Accounts pushed every row down one, so the pointer is
+    // over Companies, and Deals lands in its place (Accounts, Deals, Companies, People).
+    expect(onReorder).toHaveBeenCalledExactlyOnceWith('deals', 1);
   });
 
-  it('redraws only when its drop place moves', async () => {
-    const commits = { count: 0 };
+  it('moves by keyboard: Space lifts, an arrow moves, Space drops, and focus comes back to the grip', async () => {
     const onReorder = vi.fn();
-    await render(
-      <Profiler
-        id="sidebar"
-        onRender={() => {
-          commits.count += 1;
-        }}
-      >
-        <Records order={['Companies', 'People', 'Deals']} onReorder={onReorder} />
-      </Profiler>,
-    );
-    const y = middleOf('Deals');
-    grip('Deals').dispatchEvent(pointer('pointerdown', y));
+    await render(<Records order={['Companies', 'People', 'Deals']} onReorder={onReorder} />);
+    const deals = grip('Deals');
+    deals.focus();
+    deals.dispatchEvent(new KeyboardEvent('keydown', { key: ' ', code: 'Space', bubbles: true, cancelable: true }));
     await frame();
-    const lifted = commits.count;
-    for (let step = 0; step < 20; step += 1) window.dispatchEvent(pointer('pointermove', y + (step % 3)));
+    expect(deals).not.toHaveFocus();
+    const press = (key: string, code: string) => {
+      document.activeElement?.dispatchEvent(
+        new KeyboardEvent('keydown', { key, code, bubbles: true, cancelable: true }),
+      );
+    };
+    press('ArrowUp', 'ArrowUp');
     await frame();
-    expect(commits.count).toBe(lifted);
-    window.dispatchEvent(pointer('pointerup', y));
+    press(' ', 'Space');
     await frame();
-    expect(onReorder).not.toHaveBeenCalled();
+    expect(onReorder).toHaveBeenCalledExactlyOnceWith('deals', 1);
+    await frame();
+    expect(grip('Deals')).toHaveFocus();
   });
 });

@@ -41,6 +41,26 @@
     opacity: var(--opacity-busy);
   }
 
+  /* The lifted copy that follows the pointer while a column moves. */
+  .ghost {
+    display: flex;
+    gap: var(--space-6);
+    align-items: center;
+    box-sizing: border-box;
+    max-inline-size: calc(6 * var(--size-chip));
+    block-size: var(--size-table-header);
+    padding-inline: var(--space-8);
+    border: var(--border-width-hairline) solid var(--border);
+    border-radius: var(--radius-sm);
+    background: var(--surface-raised);
+    box-shadow: var(--shadow-lg);
+    color: var(--text-secondary);
+    font: var(--text-body-strong);
+    letter-spacing: var(--tracking-body-strong);
+    white-space: nowrap;
+    cursor: grabbing;
+  }
+
   /* Where a dragged column will land: a line on this header's start or end edge. */
   .root[data-drop-target]::before {
     position: absolute;

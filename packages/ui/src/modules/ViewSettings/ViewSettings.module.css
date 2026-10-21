@@ -67,12 +67,13 @@
   }
 
   .row[data-focus-visible],
-  .row[data-drop-target] {
-    box-shadow: var(--shadow-focus-inset);
-  }
 
+  /* The row being moved (the drag wrapper sets data-dragging): lifted above the rest, which slide out of its way. */
   .row[data-dragging] {
-    opacity: var(--opacity-busy);
+    position: relative;
+    z-index: var(--z-raised);
+    background: var(--surface-raised);
+    box-shadow: var(--shadow-md);
   }
 
   /* Where a locked row's handle would be (the handle's icon and padding), so names line up. */
@@ -94,8 +95,7 @@
 
   @media (forced-colors: active) {
     .list[data-focus-visible],
-    .row[data-focus-visible],
-    .row[data-drop-target] {
+    .row[data-focus-visible] {
       outline: var(--border-width-thick) solid Highlight;
       outline-offset: calc(-1 * var(--border-width-thick));
     }

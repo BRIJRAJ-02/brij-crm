@@ -210,7 +210,7 @@ export const Rename: Story = {
   },
 };
 
-/** By keyboard: Enter on a handle picks the option up, the arrows choose where, Enter drops it. */
+/** By keyboard: Enter on a grip lifts the option, the arrows move it, Enter drops it. */
 export const ReorderByKeyboard: Story = {
   args: { onMove: fn() },
   parameters: { crm: { screenshot: false } },
@@ -222,7 +222,7 @@ export const ReorderByKeyboard: Story = {
     const handle = canvas.getByRole('button', { name: 'Move Platinum' });
     await waitFor(() => expect(handle).toHaveFocus());
     await userEvent.keyboard('{Enter}');
-    // React Aria starts the drag on the next frame, moving focus to the first place it can land.
+    // Lifted: focus waits on the move itself, away from the list's own arrow keys.
     await waitFor(() => expect(handle).not.toHaveFocus());
     await userEvent.keyboard('{ArrowUp}');
     await userEvent.keyboard('{ArrowUp}');
@@ -240,7 +240,7 @@ export const MenuMoveAndArchive: Story = {
     await userEvent.click(canvas.getByRole('button', { name: 'Actions for Gold' }));
     await userEvent.click(await screen.findByRole('menuitem', { name: 'Move up' }));
     await expect(args.onMove).toHaveBeenCalledWith('gold', 0);
-    await expect(canvas.getByRole('status')).toHaveTextContent('Gold moved to 1 of 3.');
+    await expect(canvas.getByText('Gold moved to 1 of 3.')).toBeInTheDocument();
     await userEvent.click(canvas.getByRole('button', { name: 'Actions for Silver' }));
     await userEvent.click(await screen.findByRole('menuitem', { name: 'Archive' }));
     await expect(args.onArchive).toHaveBeenCalledWith('silver');

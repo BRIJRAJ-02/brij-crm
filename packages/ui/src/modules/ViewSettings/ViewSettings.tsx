@@ -2,8 +2,8 @@
 // card's fields, each shown or hidden by a switch and reordered by drag and
 // drop, by pointer or keyboard.
 import { useState, type ReactNode } from 'react';
-import { GridList, GridListItem, useDragAndDrop } from 'react-aria-components';
-import { DragHandle } from '../../atoms/DragHandle/DragHandle.tsx';
+import { GridList, GridListItem } from 'react-aria-components';
+import { SortableList, SortableRowGrip } from '../../lib/drag/drag.tsx';
 import { Icon } from '../../atoms/Icon/Icon.tsx';
 import { Switch } from '../../atoms/Switch/Switch.tsx';
 import { iconOf } from '../../fields/registry.ts';
@@ -58,29 +58,6 @@ export function ViewSettings({ label, fields, onChange, isReadOnly = false, maxS
   const { locale } = useFormatSettings();
   const [query, setQuery] = useState('');
   const needle = query.trim().toLocaleLowerCase(locale);
-  const { dragAndDropHooks } = useDragAndDrop({
-    // Reordering a filtered list would hide where things land, so it waits for the search to clear.
-    isDisabled: needle !== '' || isReadOnly,
-    getItems: (keys) => [...keys].map((key) => ({ 'text/plain': String(key) })),
-    // The locked row stays first: nothing drops above it.
-    getDropOperation: (target) =>
-      target.type === 'item' &&
-      target.dropPosition !== 'after' &&
-      fields.some((field) => field.isLocked === true && field.attribute.id === String(target.key))
-        ? 'cancel'
-        : 'move',
-    onReorder: (event) => {
-      onChange(
-        reorder(
-          fields,
-          (field) => field.attribute.id,
-          new Set([...event.keys].map(String)),
-          String(event.target.key),
-          event.target.dropPosition === 'after' ? 'after' : 'before',
-        ),
-      );
-    },
-  });
   const number = (value: number) => memoIntl(`plain:${locale}`, () => new Intl.NumberFormat(locale)).format(value);
   const listed =
     needle === '' ? fields : fields.filter((field) => field.attribute.name.toLocaleLowerCase(locale).includes(needle));
@@ -107,45 +84,59 @@ export function ViewSettings({ label, fields, onChange, isReadOnly = false, maxS
           onChange={setQuery}
         />
       )}
-      <GridList
-        aria-label={label}
-        items={listed.map((field) => ({ id: field.attribute.id, field }))}
-        className={styles.list}
-        renderEmptyState={() => <span className={styles.empty}>{strings.noMatches}</span>}
-        dragAndDropHooks={dragAndDropHooks}
-      >
-        {({ field }) => {
-          const { attribute } = field;
-          return (
-            <GridListItem id={attribute.id} textValue={attribute.name} className={styles.row}>
-              {field.isLocked === true || needle !== '' || isReadOnly ? (
-                <>
-                  <span className={styles.spacer} aria-hidden="true" />
-                  <DragHandle label={strings.move(attribute.name)} isDisabled />
-                </>
-              ) : (
-                <DragHandle label={strings.move(attribute.name)} />
-              )}
-              <Icon name={iconOf(attribute)} size="sm" tone="muted" />
-              <span className={styles.name}>{attribute.name}</span>
-              {field.isLocked === true ? (
-                <span className={styles.locked}>{strings.locked}</span>
-              ) : (
-                <Switch
-                  label={strings.show(attribute.name)}
-                  isLabelHidden
-                  isSelected={field.isShown}
-                  isReadOnly={isReadOnly}
-                  isDisabled={isFull && !field.isShown}
-                  onChange={(isShown) => {
-                    onChange(fields.map((each) => (each.attribute.id === attribute.id ? { ...each, isShown } : each)));
-                  }}
-                />
-              )}
-            </GridListItem>
-          );
+      <SortableList
+        ids={listed.map((field) => field.attribute.id)}
+        nameOf={(id) => fields.find((field) => field.attribute.id === id)?.attribute.name ?? id}
+        onMove={(move) => {
+          // The locked row stays first: nothing lands above it.
+          const target = fields.find((field) => field.attribute.id === move.targetId);
+          if (target?.isLocked === true && move.position === 'before') return;
+          onChange(reorder(fields, (field) => field.attribute.id, new Set([move.id]), move.targetId, move.position));
         }}
-      </GridList>
+      >
+        <GridList
+          aria-label={label}
+          items={listed.map((field) => ({ id: field.attribute.id, field }))}
+          className={styles.list}
+          renderEmptyState={() => <span className={styles.empty}>{strings.noMatches}</span>}
+        >
+          {({ field }) => {
+            const { attribute } = field;
+            return (
+              <GridListItem id={attribute.id} textValue={attribute.name} className={styles.row}>
+                {/* Reordering a filtered list would hide where things land, so it waits for the search to clear. */}
+                {(field.isLocked === true || needle !== '' || isReadOnly) && (
+                  <span className={styles.spacer} aria-hidden="true" />
+                )}
+                <SortableRowGrip
+                  id={attribute.id}
+                  label={strings.move(attribute.name)}
+                  isDisabled={field.isLocked === true || needle !== '' || isReadOnly}
+                  refusesDrop={field.isLocked === true}
+                />
+                <Icon name={iconOf(attribute)} size="sm" tone="muted" />
+                <span className={styles.name}>{attribute.name}</span>
+                {field.isLocked === true ? (
+                  <span className={styles.locked}>{strings.locked}</span>
+                ) : (
+                  <Switch
+                    label={strings.show(attribute.name)}
+                    isLabelHidden
+                    isSelected={field.isShown}
+                    isReadOnly={isReadOnly}
+                    isDisabled={isFull && !field.isShown}
+                    onChange={(isShown) => {
+                      onChange(
+                        fields.map((each) => (each.attribute.id === attribute.id ? { ...each, isShown } : each)),
+                      );
+                    }}
+                  />
+                )}
+              </GridListItem>
+            );
+          }}
+        </GridList>
+      </SortableList>
       {footer !== undefined && <div className={styles.foot}>{footer}</div>}
     </div>
   );

@@ -2,14 +2,14 @@
 // function or AI mark), the column menu (the keyboard route to moving,
 // pinning, hiding, sorting, filtering and resizing), an edge to drag for
 // width, and React Aria drag and drop to reorder.
-import { useRef, useState, type PointerEvent as ReactPointerEvent } from 'react';
-import { mergeProps, useDrag, useDrop } from 'react-aria';
+import type { PointerEvent as ReactPointerEvent } from 'react';
 import { Button } from '../../atoms/Button/Button.tsx';
 import { Icon } from '../../atoms/Icon/Icon.tsx';
 import type { IconName } from '../../atoms/Icon/icons.ts';
 import { Tooltip } from '../../atoms/Tooltip/Tooltip.tsx';
 import { TruncatedText } from '../../atoms/TruncatedText/TruncatedText.tsx';
 import { fieldTypeOf, iconOf, readOnlyReasonOf } from '../../fields/registry.ts';
+import { useDragTarget, type DragWords } from '../../lib/drag/drag.tsx';
 import { Menu, MenuItem, MenuSeparator, MenuTrigger } from '../../molecules/Menu/Menu.tsx';
 import type { CellPlace } from './GridCell.tsx';
 import type { GridColumn } from './grid-columns.ts';
@@ -60,9 +60,9 @@ export interface GridHeaderCellProps {
   readonly actions: ColumnActions;
   /** The rows are sorted by this column, this way: `aria-sort`, and the direction's arrow after the name. */
   readonly sorted?: 'ascending' | 'descending';
+  /** A dragged column is over this one and would land on this side of it. */
+  readonly dropSide?: 'before' | 'after' | undefined;
 }
-
-const COLUMN_TYPE = 'application/x-crm-grid-column';
 
 /** A column header with its menu, resize edge and drag to reorder. */
 export function GridHeaderCell({
@@ -78,47 +78,11 @@ export function GridHeaderCell({
   onMenuOpenChange,
   actions,
   sorted,
+  dropSide,
 }: GridHeaderCellProps) {
-  const ref = useRef<HTMLDivElement>(null);
-  const [dropSide, setDropSide] = useState<'before' | 'after'>('before');
   const { attribute } = column;
-  /** Which half of the header a drag is over, at `x` from its start. */
-  const sideAt = (x: number) => {
-    const element = ref.current;
-    if (element === null) return 'before';
-    const isFirstHalf = x < element.offsetWidth / 2;
-    return isFirstHalf === (getComputedStyle(element).direction !== 'rtl') ? 'before' : 'after';
-  };
-  const { dragProps, isDragging } = useDrag({
-    isDisabled: isRowHeader,
-    getItems: () => [{ [COLUMN_TYPE]: column.id, 'text/plain': attribute.name }],
-    getAllowedDropOperations: () => ['move'],
-  });
-  const { dropProps, isDropTarget } = useDrop({
-    ref,
-    getDropOperation: (types) => (types.has(COLUMN_TYPE) ? 'move' : 'cancel'),
-    onDropEnter: (event) => {
-      setDropSide(isRowHeader ? 'after' : sideAt(event.x));
-    },
-    onDropMove: (event) => {
-      setDropSide(isRowHeader ? 'after' : sideAt(event.x));
-    },
-    onDrop: (event) => {
-      // Nothing lands before the row header.
-      const side = isRowHeader ? 'after' : sideAt(event.x);
-      void (async () => {
-        for (const item of event.items) {
-          if (item.kind !== 'text' || !item.types.has(COLUMN_TYPE)) continue;
-          const dragged = await item.getText(COLUMN_TYPE);
-          if (dragged !== column.id) actions.onDrop(dragged, side);
-        }
-      })();
-    },
-  });
-  // Pointer drag only: the column menu is the keyboard route, so React Aria's
-  // keyboard drag (Enter) never takes the header's keys.
-  const { draggable, onDragStart, onDrag, onDragEnd } = dragProps;
-  const pointerDrag = { draggable, onDragStart, onDrag, onDragEnd };
+  // Pointer drag only: the column menu is the keyboard route, so the header's keys stay the grid's.
+  const { bind, isDragging, isOver, onPointerDown } = useDragTarget(column.id, { isDisabled: isRowHeader });
 
   const onAction = (key: string) => {
     const extra = actions.extra?.find((item) => `extra:${item.id}` === key);
@@ -161,7 +125,7 @@ export function GridHeaderCell({
 
   return (
     <div
-      ref={ref}
+      ref={bind}
       role="columnheader"
       aria-colindex={place.col + 1}
       aria-sort={sorted}
@@ -170,13 +134,14 @@ export function GridHeaderCell({
       data-focused={isFocused || undefined}
       data-sticky={place.stickyOffset === undefined ? undefined : ''}
       data-last-pinned={place.isLastPinned === true ? '' : undefined}
+      data-drags={isRowHeader ? undefined : ''}
       data-dragging={isDragging || undefined}
-      data-drop-target={isDropTarget ? dropSide : undefined}
+      data-drop-target={isOver ? dropSide : undefined}
       data-resizing={isResizing || undefined}
       data-align={fieldTypeOf(attribute.type).align}
       tabIndex={isFocused ? 0 : -1}
       style={{ '--col-width': `${String(place.width)}px`, '--col-offset': `${String(place.stickyOffset ?? 0)}px` }}
-      {...mergeProps(pointerDrag, dropProps)}
+      onPointerDown={onPointerDown}
     >
       <Icon name={iconOf(attribute)} size="sm" tone="muted" />
       <span className={styles.name}>
@@ -265,4 +230,33 @@ export function GridHeaderCell({
       <span className={styles.resize} aria-hidden="true" onPointerDown={startResize} />
     </div>
   );
+}
+
+/** The lifted copy of a header that follows the pointer while a column moves: its type's icon and name. */
+export function GridHeaderGhost({ attribute }: { readonly attribute: GridColumn['attribute'] }) {
+  return (
+    <div className={styles.ghost}>
+      <Icon name={iconOf(attribute)} size="sm" tone="muted" />
+      <span className={styles.name}>
+        <TruncatedText>{attribute.name}</TruncatedText>
+      </span>
+    </div>
+  );
+}
+
+/** What a screen reader hears while a column moves by pointer (the column menu is the keyboard route). */
+export function columnWords(nameOf: (id: string) => string): DragWords {
+  return {
+    lifted: (id) => strings.columnLifted(nameOf(id)),
+    over: (id, drop) =>
+      drop?.overId === undefined || drop.overId === id
+        ? undefined
+        : strings.columnOver(nameOf(id), nameOf(drop.overId)),
+    dropped: (id, drop) =>
+      drop?.overId === undefined || drop.overId === id
+        ? strings.columnPutBack(nameOf(id))
+        : strings.columnDropped(nameOf(id)),
+    cancelled: (id) => strings.columnPutBack(nameOf(id)),
+    moving: (id) => strings.columnLifted(nameOf(id)),
+  };
 }

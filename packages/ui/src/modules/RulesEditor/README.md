@@ -26,7 +26,7 @@ New, for AttributeSettings' Validation section (spec 0013, milestone 1). Nothing
 - Presentational: the rules come in, every change goes out as the whole list (`onChange`), and the dialog sends it with Save. `ruleOf(rule)` turns a row into the settings the API takes (bounds as numbers or decimals, lists split on commas, empty ones left out); `editorRuleOf(settings)` goes the other way.
 - Each row reads as the message its rule gives when broken: its own message when it has one, else the generated one from `@crm/contracts/validation` (`generatedMessage`, with " when <summary>" after a condition), so the person reads exactly what a refused save will say. A rule whose settings aren't finished reads "<Kind>: finish its settings". The kind's name sits above it.
 - A row opens in place (Enter on it, or Edit in its menu): the kind's settings (two bounds for a length, a count or a range; a format with its text or pattern and Ignore case; allow or block and the domains; countries; currencies; a date range's earliest and latest, each none, a date or days from today), the Message (up to 200 characters, with a counter; its hint says everyone who edits the attribute sees it), and "Only when…", a Disclosure holding FilterBuilder on `conditionAttributes` with no `relatedAttributes`, so no condition can follow a relationship. Done closes it. A new rule from Add rule opens with its first setting focused.
-- Rows move by drag, by keyboard on the handle (Enter picks up, the arrows choose, Enter drops), or Move up and Move down in the row's menu, which says where the rule went. Delete takes it out, and focus goes to the next rule's menu, or Add rule.
+- Rows move by drag, by keyboard on the handle (Space or Enter lifts, the arrows move, Space or Enter drops, through the library's drag wrapper), or Move up and Move down in the row's menu, which says where the rule went. Delete takes it out, and focus goes to the next rule's menu, or Add rule.
 - `errors` are keyed as the server names them, `rules.<index>.<setting>`: a refused setting shows on its field, and refusals arriving open their first rule. A closed row with a refusal shows it under its message.
 - `hint` sits under the group's label (AttributeSettings says rules save with Save, unlike its options, which save as they change).
 - Each row's handle and menu are named by its place and kind ("Actions for rule 2, Email domains"), since a message runs to 200 characters. A closed row with its own message and a condition says when it applies under it ("Only when Stage is Won", from `summarizeCondition`). A new Format rule picks no format, so it reads as unfinished and refuses nothing until one is chosen; Ignore case shows only where case can matter (Starts with, Ends with, a custom pattern).
@@ -41,7 +41,7 @@ Known follow up: the list's frame (the label and its count, the GridList with it
 
 ## Keyboard
 
-Tab moves into the list and through a row's controls; the arrow keys move between rows. Enter on a row opens it; Enter in a setting never submits the dialog around it. Enter on a handle picks the rule up, the arrows choose where it goes, Enter drops it, Esc cancels.
+Tab moves into the list and through a row's controls; the arrow keys move between rows. Enter on a row opens it; Enter in a setting never submits the dialog around it. Space or Enter on a handle lifts the rule, the arrows move it, Space or Enter drops it, Esc puts it back.
 
 ## Differences from the artifact
 

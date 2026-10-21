@@ -463,6 +463,41 @@ export const ColumnMenu: Story = {
   },
 };
 
+/** By pointer: a header dragged past the middle of the next one lands after it; a line marks that side meanwhile. */
+export const ReorderColumnByDrag: Story = {
+  parameters: { crm: { screenshot: false } },
+  play: async ({ canvasElement }) => {
+    const from = cell(canvasElement, -1, 2);
+    const to = cell(canvasElement, -1, 3);
+    await expect(from).not.toBeNull();
+    await expect(to).not.toBeNull();
+    if (from === null || to === null) return;
+    const name = from.textContent;
+    const start = from.getBoundingClientRect();
+    const end = to.getBoundingClientRect();
+    const y = start.top + start.height / 2;
+    const send = (target: EventTarget, type: string, x: number) =>
+      target.dispatchEvent(
+        new PointerEvent(type, {
+          bubbles: true,
+          cancelable: true,
+          button: 0,
+          pointerId: 1,
+          isPrimary: true,
+          clientX: x,
+          clientY: y,
+        }),
+      );
+    send(from, 'pointerdown', start.left + start.width / 2);
+    send(document, 'pointermove', start.left + start.width / 2 + 12);
+    await waitFor(() => expect(from).toHaveAttribute('data-dragging'));
+    send(document, 'pointermove', end.right - 4);
+    await waitFor(() => expect(to).toHaveAttribute('data-drop-target', 'after'));
+    send(document, 'pointerup', end.right - 4);
+    await waitFor(() => expect(cell(canvasElement, -1, 3)).toHaveTextContent(name));
+  },
+};
+
 const editAttribute = fn();
 const archiveAttribute = fn();
 

@@ -141,19 +141,12 @@
     min-inline-size: 0;
   }
 
-  /* A row being dragged fades where it was, as in the library's other reorderable lists. */
+  /* The row being moved: lifted above the rest, which slide out of its way. */
   .row[data-dragging] {
-    opacity: var(--opacity-busy);
-  }
-
-  /* Where it would land: a zero height row that becomes an accent line while it is the target. */
-  .dropLine {
-    outline: none;
-  }
-
-  .dropLine[data-drop-target] {
-    outline: var(--border-width-thick) solid var(--accent);
-    outline-offset: calc(-1 * var(--border-width-hairline));
+    position: relative;
+    z-index: var(--z-raised);
+    background: var(--surface-raised);
+    box-shadow: var(--shadow-md);
   }
 
   .loading {
@@ -172,10 +165,6 @@
     .column,
     .cell {
       border-color: CanvasText;
-    }
-
-    .dropLine[data-drop-target] {
-      outline-color: Highlight;
     }
   }
 }

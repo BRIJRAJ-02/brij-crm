@@ -14,7 +14,7 @@ New. Every view (#20) sorts by up to five attributes, and the SortChip in the to
 
 - The first row reads "Sort by", the rest "then by".
 - Each row picks its attribute (from those not sorted by yet) and its direction, and has Remove. A row is laid out as FilterBuilder's: the lead in FilterBuilder's lead width, then the attribute (a secondary Button with the type's icon, `10 × size-chip` wide) and the direction (a secondary Button with the arrow, `7 × size-chip` wide, opening a single choice Menu, as a filter's operator does), so the rows line up as columns whatever the names; both shrink together in a narrow slot. A long attribute name is cut, and shows whole in a tooltip on hover or focus (Button's `tooltipWhenCut`). Why: the owner's feedback on spec 0020's milestone 1 (rows that didn't line up, and sorts that looked unlike filters).
-- A row drags by its handle or anywhere on it, so the row shows the grab cursor, and grabbing once it is picked up. While the browser runs its own drag (React Aria's native drag and drop) the browser draws the cursor.
+- A row drags by its handle (the library's drag wrapper, dnd-kit): the handle shows the grab cursor, the lifted row rises above the others (`shadow-md`) and they slide out of its way.
 - Add sort offers the attributes not sorted by yet, until there are five.
 - `isReadOnly` shows each sort in the same columns, as FilterBuilder's read only rows do: the type's icon and the attribute, then the direction in secondary text.
 
@@ -24,7 +24,7 @@ Empty ("No sorts yet", with Add sort), filled, a long name cut (whole in a toolt
 
 ## Keyboard
 
-Tab enters the list; the up and down arrows move between rows and the left and right arrows between a row's controls. On a handle, Enter picks the sort up, the up and down arrows choose where it goes, Enter drops it and Esc cancels.
+Tab enters the list; the up and down arrows move between rows and the left and right arrows between a row's controls. On a handle, Space or Enter lifts the sort, the arrows move it while the others slide out of its way, Space or Enter drops it and Esc puts it back, each step announced.
 
 ## Differences from the artifact
 

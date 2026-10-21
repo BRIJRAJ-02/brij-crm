@@ -43,7 +43,14 @@ import { useDelayedLoading } from '../../provider/useDelayedLoading.ts';
 import type { ActorDisplay } from '@crm/contracts/values';
 import styles from './DataGrid.module.css';
 import { editModeOf, GridCell, type CellPlace, type GridEditorProps } from './GridCell.tsx';
-import { GridHeaderCell, type ColumnActions, type GridColumnAction } from './GridHeaderCell.tsx';
+import {
+  GridHeaderCell,
+  GridHeaderGhost,
+  columnWords,
+  type ColumnActions,
+  type GridColumnAction,
+} from './GridHeaderCell.tsx';
+import { DragArea, type DragDrop } from '../../lib/drag/drag.tsx';
 import { fromTsv, planPaste, toTsv } from './grid-clipboard.ts';
 import {
   hideColumn,
@@ -1796,64 +1803,96 @@ const GridHeader = memo(function GridHeader({
 }: GridHeaderProps) {
   const runOf = (id: string) => layout.columns.findIndex((each) => each.id === id) < layout.pinnedCount;
   const canMove = (id: string, direction: -1 | 1) => moveColumn(layout, id, direction) !== layout;
+  // Where a dragged column would land: the header it is over, and which side (nothing lands before the row header).
+  const [over, setOver] = useState<{ readonly id: string; readonly side: 'before' | 'after' } | undefined>(undefined);
+  const isRtl = () => document.dir === 'rtl' || document.documentElement.dir === 'rtl';
+  const sideOf = (drop: DragDrop): 'before' | 'after' => {
+    if (drop.overId === rowHeader) return 'after';
+    return isRtl() === (drop.side === 'before') ? 'after' : 'before';
+  };
+  const nameOf = (id: string) => drawn.find((each) => each.column.id === id)?.column.attribute.name ?? id;
   return (
-    <div role="row" aria-rowindex={1} className={styles.header} data-add={addColumn === undefined ? undefined : ''}>
-      {/* eslint-disable-next-line jsx-a11y-x/click-events-have-key-events -- the grid's one key handler toggles it with Space */}
-      <div
-        role="columnheader"
-        aria-colindex={1}
-        className={styles.check}
-        data-cell={keyOf(-1, 0)}
-        data-pressable={isEmpty ? undefined : ''}
-        data-focused={focusCol === 0 || undefined}
-        tabIndex={focusCol === 0 ? 0 : -1}
-        onClick={handlers.toggleScreen}
-      >
-        <CheckboxMark
-          label={strings.selectOnScreen}
-          isSelected={screen === 'all'}
-          isIndeterminate={screen === 'some'}
-          isReadOnly={isEmpty}
-        />
-      </div>
-      {drawn.flatMap((each, index) => {
-        const place = cellPlace(placed, each, lastPinnedId);
-        return [
-          index === leadIndex ? <Spacer key="lead" width={leadSpacer} /> : null,
-          <GridHeaderCell
-            key={each.column.id}
-            column={each.column}
-            place={place}
-            isRowHeader={each.column.id === rowHeader}
-            isPinned={runOf(each.column.id)}
-            canMoveLeft={canMove(each.column.id, -1)}
-            canMoveRight={canMove(each.column.id, 1)}
-            isFocused={focusCol === place.col}
-            isResizing={resizing === each.column.id}
-            isMenuOpen={menuFor === each.column.id}
-            {...(sortColumn === each.column.id && sortDirection !== undefined ? { sorted: sortDirection } : {})}
-            onMenuOpenChange={(isOpen) => {
-              handlers.setMenuFor(isOpen ? each.column.id : undefined);
-            }}
-            actions={handlers.actionsFor(each.column)}
-          />,
-        ];
-      })}
-      <Spacer width={trailSpacer} />
-      {addColumn !== undefined && (
+    <DragArea
+      axis="horizontal"
+      hasKeyboard={false}
+      words={columnWords(nameOf)}
+      onOver={(drop) => {
+        setOver(
+          drop?.overId === undefined || drop.overId === drop.id ? undefined : { id: drop.overId, side: sideOf(drop) },
+        );
+      }}
+      onEnd={() => {
+        setOver(undefined);
+      }}
+      onDrop={(drop) => {
+        const target = drawn.find((each) => each.column.id === drop.overId);
+        if (target === undefined || drop.overId === drop.id) return;
+        handlers.actionsFor(target.column).onDrop(drop.id, sideOf(drop));
+      }}
+      overlay={(id) => {
+        const dragged = drawn.find((each) => each.column.id === id);
+        return dragged === undefined ? null : <GridHeaderGhost attribute={dragged.column.attribute} />;
+      }}
+    >
+      <div role="row" aria-rowindex={1} className={styles.header} data-add={addColumn === undefined ? undefined : ''}>
+        {/* eslint-disable-next-line jsx-a11y-x/click-events-have-key-events -- the grid's one key handler toggles it with Space */}
         <div
           role="columnheader"
-          aria-colindex={addColumn.col + 1}
-          className={styles.addColumn}
-          data-cell={keyOf(-1, addColumn.col)}
-          data-focused={addColumn.isFocused || undefined}
-          tabIndex={addColumn.isFocused ? 0 : -1}
+          aria-colindex={1}
+          className={styles.check}
+          data-cell={keyOf(-1, 0)}
+          data-pressable={isEmpty ? undefined : ''}
+          data-focused={focusCol === 0 || undefined}
+          tabIndex={focusCol === 0 ? 0 : -1}
+          onClick={handlers.toggleScreen}
         >
-          <Tooltip content={addColumn.label}>
-            <Button variant="ghost" icon="plus" label={addColumn.label} onPress={addColumn.onPress} />
-          </Tooltip>
+          <CheckboxMark
+            label={strings.selectOnScreen}
+            isSelected={screen === 'all'}
+            isIndeterminate={screen === 'some'}
+            isReadOnly={isEmpty}
+          />
         </div>
-      )}
-    </div>
+        {drawn.flatMap((each, index) => {
+          const place = cellPlace(placed, each, lastPinnedId);
+          return [
+            index === leadIndex ? <Spacer key="lead" width={leadSpacer} /> : null,
+            <GridHeaderCell
+              key={each.column.id}
+              column={each.column}
+              place={place}
+              isRowHeader={each.column.id === rowHeader}
+              isPinned={runOf(each.column.id)}
+              canMoveLeft={canMove(each.column.id, -1)}
+              canMoveRight={canMove(each.column.id, 1)}
+              isFocused={focusCol === place.col}
+              isResizing={resizing === each.column.id}
+              isMenuOpen={menuFor === each.column.id}
+              {...(sortColumn === each.column.id && sortDirection !== undefined ? { sorted: sortDirection } : {})}
+              onMenuOpenChange={(isOpen) => {
+                handlers.setMenuFor(isOpen ? each.column.id : undefined);
+              }}
+              actions={handlers.actionsFor(each.column)}
+              dropSide={over?.id === each.column.id ? over.side : undefined}
+            />,
+          ];
+        })}
+        <Spacer width={trailSpacer} />
+        {addColumn !== undefined && (
+          <div
+            role="columnheader"
+            aria-colindex={addColumn.col + 1}
+            className={styles.addColumn}
+            data-cell={keyOf(-1, addColumn.col)}
+            data-focused={addColumn.isFocused || undefined}
+            tabIndex={addColumn.isFocused ? 0 : -1}
+          >
+            <Tooltip content={addColumn.label}>
+              <Button variant="ghost" icon="plus" label={addColumn.label} onPress={addColumn.onPress} />
+            </Tooltip>
+          </div>
+        )}
+      </div>
+    </DragArea>
   );
 });

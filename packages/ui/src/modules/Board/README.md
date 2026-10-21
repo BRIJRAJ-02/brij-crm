@@ -4,7 +4,7 @@ A board: a column per option of the grouping attribute, whose cards move between
 
 ## Why it exists
 
-New (spec 0003, the board). The board view (#21) and pipelines (#51) group records by a status or select. `Board` is a row of `KanbanColumn`s; each column is a React Aria `GridList` of `KanbanCard`s (each moved by the shared `DragHandle`), virtualised inside, with React Aria drag and drop, so cards move by pointer, keyboard and screen reader alike (AC-21). Cards reuse `Avatar`, `StatusDot` and the field set's displays on the `card` surface; KanbanColumn and KanbanCard are its parts, not components of their own.
+New (spec 0003, the board). The board view (#21) and pipelines (#51) group records by a status or select. `Board` is a row of `KanbanColumn`s; each column is a React Aria `GridList` of `KanbanCard`s, virtualised inside, and a drop zone of the library's drag wrapper (dnd-kit, owner decision 13 October), so cards move by pointer (from anywhere on the card, which lifts and follows it), keyboard (the shared `DragHandle`) and screen reader alike (AC-21). Cards reuse `Avatar`, `StatusDot` and the field set's displays on the `card` surface; KanbanColumn and KanbanCard are its parts, not components of their own.
 
 ## Use
 
@@ -43,7 +43,7 @@ Default, loading (skeleton columns after the loading delay), failed, no access, 
 
 ## Keyboard
 
-Tab enters the first column; the up and down arrows move between cards, and Tab moves to the next column. Right arrow reaches a card's handle; Enter picks the card up, and focus lands on the first column that takes it. Tab and Shift Tab move between columns (and on a reorderable board the arrows move between the gaps), Enter drops, and Esc puts it back. Enter on a card opens it.
+Tab enters the first column; the up and down arrows move between cards, and Tab moves to the next column. Right arrow reaches a card's grip; Space or Enter picks the card up, the left and right arrows move it between columns (and on a reorderable board up and down between cards), Space or Enter drops it, and Esc puts it back, each step announced; focus comes back to the card where it landed. Enter on a card opens it.
 
 ## Differences from the artifact
 

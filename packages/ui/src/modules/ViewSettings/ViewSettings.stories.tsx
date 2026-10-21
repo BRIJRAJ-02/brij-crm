@@ -87,7 +87,7 @@ export const ShowAndHide: Story = {
   },
 };
 
-/** By keyboard: Enter on a handle picks the column up, the arrows choose where, Enter drops it. */
+/** By keyboard: Enter on a grip lifts the column, the arrows move it, Enter drops it; nothing lands above the locked Name. */
 export const ReorderByKeyboard: Story = {
   args: { onChange: fn() },
   parameters: { crm: { screenshot: false } },
@@ -99,12 +99,23 @@ export const ReorderByKeyboard: Story = {
     const handle = canvas.getByRole('button', { name: 'Move Stage' });
     await waitFor(() => expect(handle).toHaveFocus());
     await userEvent.keyboard('{Enter}');
-    // React Aria starts the drag on the next frame, moving focus to the first place it can land.
+    // Lifted: focus waits on the move itself, away from the list's own arrow keys.
     await waitFor(() => expect(handle).not.toHaveFocus());
     await userEvent.keyboard('{ArrowUp}');
-    await userEvent.keyboard('{ArrowUp}');
     await userEvent.keyboard('{Enter}');
-    await waitFor(() => expect(args.onChange).toHaveBeenCalled());
+    const named = (name: string): unknown => {
+      const attribute: unknown = expect.objectContaining({ name });
+      return expect.objectContaining({ attribute });
+    };
+    await waitFor(() =>
+      expect(args.onChange).toHaveBeenLastCalledWith([
+        named('Name'),
+        named('Stage'),
+        named('Domain'),
+        named('ARR'),
+        named('Owner'),
+      ]),
+    );
   },
 };
 
@@ -138,7 +149,7 @@ export const NameStaysFirst: Story = {
     const handle = canvas.getByRole('button', { name: 'Move Domain' });
     await waitFor(() => expect(handle).toHaveFocus());
     await userEvent.keyboard('{Enter}');
-    // React Aria starts the drag on the next frame, moving focus to the first place it can land.
+    // Lifted: focus waits on the move itself, away from the list's own arrow keys.
     await waitFor(() => expect(handle).not.toHaveFocus());
     await userEvent.keyboard('{ArrowUp}');
     await userEvent.keyboard('{ArrowUp}');

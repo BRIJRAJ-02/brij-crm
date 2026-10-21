@@ -1,21 +1,13 @@
 // One column of the board: its option's dot, title and count, then its cards
-// as a virtualised React Aria GridList that takes and gives cards by drag and
-// drop, by pointer, keyboard or screen reader.
+// as a virtualised React Aria GridList. The column is a drop zone of the
+// library's drag wrapper, and each card a sortable item in it, moved by
+// pointer from anywhere on the card, or by keyboard from its grip.
 import { useId, useMemo } from 'react';
-import {
-  DropIndicator,
-  GridList,
-  GridListItem,
-  ListLayout,
-  useDragAndDrop,
-  Virtualizer,
-  type DropItem,
-  type DropTarget,
-  type Key,
-} from 'react-aria-components';
+import { GridList, GridListItem, ListLayout, Virtualizer, type Key } from 'react-aria-components';
 import { Skeleton } from '../../atoms/Skeleton/Skeleton.tsx';
 import { StatusDot } from '../../atoms/StatusDot/StatusDot.tsx';
 import type { FieldAttribute } from '../../fields/types.ts';
+import { SortableGroup, useDropZone, useSortableItem } from '../../lib/drag/drag.tsx';
 import { useFontsSettled } from '../../lib/fonts-settled.ts';
 import { memoIntl } from '../../lib/intl-memo.ts';
 import { itemOfKey, keyedRows, type KeyedRow } from '../../lib/keyed-rows.ts';
@@ -25,27 +17,11 @@ import { useFormatSettings } from '../../provider/context.ts';
 import styles from './KanbanColumn.module.css';
 import { KanbanCard } from './KanbanCard.tsx';
 import { strings } from './strings.ts';
-import type { BoardCard, BoardColumn, BoardMove } from './types.ts';
+import type { BoardCard, BoardColumn } from './types.ts';
 
-/** A card that can move, as dragged data. A locked card goes as `LOCKED_TYPE`, which no column takes. */
-export const CARD_TYPE = 'application/x-crm-board-card';
-const LOCKED_TYPE = 'application/x-crm-board-card-locked';
-
-interface DraggedCard {
-  readonly cardId: string;
-  readonly fromColumnId: string;
-}
-
-/** A dragged card's data back as its id and column, or `undefined` for anything else carrying the type. */
-function parseDragged(text: string): DraggedCard | undefined {
-  try {
-    const value: unknown = JSON.parse(text);
-    if (typeof value !== 'object' || value === null) return undefined;
-    const { cardId, fromColumnId } = value as Record<string, unknown>;
-    return typeof cardId === 'string' && typeof fromColumnId === 'string' ? { cardId, fromColumnId } : undefined;
-  } catch {
-    return undefined;
-  }
+/** Why a column takes no card while one moves: its own reason, or the archived option's. */
+export function refusalOf(column: BoardColumn): string | undefined {
+  return column.refusesDrop?.reason ?? (column.isArchived === true ? strings.archivedRefuses : undefined);
 }
 
 /** Props for KanbanColumn. */
@@ -56,27 +32,39 @@ export interface KanbanColumnProps {
   readonly isReorderable: boolean;
   /** The column a card is being dragged from, while one is. */
   readonly draggingFrom: string | undefined;
-  readonly onDragChange: (fromColumnId: string | undefined) => void;
-  readonly onMove: (move: BoardMove) => void;
+  /** A moving card is over this column or one of its cards. */
+  readonly isOver: boolean;
   readonly onOpen?: (card: BoardCard) => void;
 }
 
-/** Reads each dropped card (skipping anything else) and hands it on. */
-async function dropAll(items: readonly DropItem[], onCard: (dragged: DraggedCard) => void): Promise<void> {
-  for (const item of items) {
-    if (item.kind !== 'text' || !item.types.has(CARD_TYPE)) continue;
-    const dragged = parseDragged(await item.getText(CARD_TYPE));
-    if (dragged !== undefined) onCard(dragged);
-  }
-}
-
-/** The card a drop lands before: the target itself, or the one after it. */
-function beforeCardOf(column: BoardColumn, rows: readonly KeyedRow[], target: DropTarget): string | undefined {
-  if (target.type !== 'item') return undefined;
-  const row = rows.find((each) => each.id === String(target.key));
-  if (row === undefined) return undefined;
-  const card = column.cards.getItem(row.index + (target.dropPosition === 'after' ? 1 : 0));
-  return card === undefined ? undefined : column.cards.getKey(card);
+/** A card's row content: binds its row as a sortable item, and drags from anywhere on it. */
+function SortableCard({
+  id,
+  card,
+  fields,
+  columnId,
+  canMove,
+  refusesDrop,
+}: {
+  readonly id: string;
+  readonly card: BoardCard;
+  readonly fields: readonly FieldAttribute[];
+  readonly columnId: string;
+  readonly canMove: boolean;
+  readonly refusesDrop: boolean;
+}) {
+  const isLocked = card.readOnlyReason !== undefined;
+  const { bind, grip, onPointerDown } = useSortableItem(id, {
+    isDisabled: !canMove || isLocked,
+    refusesDrop,
+    group: columnId,
+    within: 'row',
+  });
+  return (
+    <span ref={bind} className={styles.content} onPointerDown={onPointerDown}>
+      <KanbanCard card={card} fields={fields} grip={canMove && !isLocked ? grip : undefined} />
+    </span>
+  );
 }
 
 /**
@@ -91,8 +79,7 @@ export function KanbanColumn({
   canMove,
   isReorderable,
   draggingFrom,
-  onDragChange,
-  onMove,
+  isOver,
   onOpen,
 }: KanbanColumnProps) {
   const { locale } = useFormatSettings();
@@ -102,80 +89,23 @@ export function KanbanColumn({
   const number = memoIntl(`plain:${locale}`, () => new Intl.NumberFormat(locale)).format(column.count);
   const plural = memoIntl(`plural:${locale}`, () => new Intl.PluralRules(locale)).select(column.count);
   const isArchived = column.isArchived === true;
-  // Why the column takes no card: its own reason, or the archived option's.
-  const refusal = column.refusesDrop?.reason ?? (isArchived ? strings.archivedRefuses : undefined);
-
+  const refusal = refusalOf(column);
+  const { bind: bindZone } = useDropZone(column.id, { isDisabled: refusal !== undefined });
+  // Only loaded cards sort; the rest are placeholders still on their way.
+  const ids = useMemo(
+    () => rows.flatMap((row) => (column.cards.getItem(row.index) === undefined ? [] : [row.id])),
+    [rows, column.cards],
+  );
   const cardAt = (key: Key) => itemOfKey(column.cards, rows, key);
-  const { dragAndDropHooks } = useDragAndDrop({
-    isDisabled: !canMove,
-    getItems: (keys) =>
-      [...keys].flatMap((key) => {
-        const card = cardAt(key);
-        if (card === undefined) return [];
-        const data = JSON.stringify({ cardId: column.cards.getKey(card), fromColumnId: column.id });
-        return [
-          { [card.readOnlyReason === undefined ? CARD_TYPE : LOCKED_TYPE]: data, 'text/plain': card.record.name },
-        ];
-      }),
-    acceptedDragTypes: [CARD_TYPE],
-    getDropOperation: (target) => {
-      if (refusal !== undefined) return 'cancel';
-      // Between cards only where order means something; otherwise the column as a whole.
-      if (target.type === 'item' && !isReorderable) return 'cancel';
-      if (draggingFrom === column.id && !isReorderable) return 'cancel';
-      return 'move';
-    },
-    onDragStart: () => {
-      onDragChange(column.id);
-    },
-    onDragEnd: () => {
-      onDragChange(undefined);
-    },
-    onRootDrop: (event) => {
-      void dropAll(event.items, (dragged) => {
-        onMove({ ...dragged, toColumnId: column.id });
-      });
-    },
-    onInsert: (event) => {
-      const beforeCardId = beforeCardOf(column, rows, event.target);
-      void dropAll(event.items, (dragged) => {
-        onMove({ ...dragged, toColumnId: column.id, ...(beforeCardId === undefined ? {} : { beforeCardId }) });
-      });
-    },
-    ...(isReorderable
-      ? {
-          onReorder: (event) => {
-            const beforeCardId = beforeCardOf(column, rows, event.target);
-            for (const key of event.keys) {
-              const card = cardAt(key);
-              if (card === undefined) continue;
-              onMove({
-                cardId: column.cards.getKey(card),
-                fromColumnId: column.id,
-                toColumnId: column.id,
-                ...(beforeCardId === undefined ? {} : { beforeCardId }),
-              });
-            }
-          },
-        }
-      : {}),
-    renderDropIndicator: (target) => <DropIndicator target={target} className={styles.indicator} />,
-  });
-
   const titleId = useId();
   return (
     <section
+      ref={bindZone}
       className={styles.root}
       aria-labelledby={titleId}
       data-archived={isArchived || undefined}
       data-refusing={(refusal !== undefined && draggingFrom !== undefined) || undefined}
-      // A locked card never starts a drag: its native drag is cancelled before React Aria sees it.
-      onDragStartCapture={(event) => {
-        if (event.target instanceof Element && event.target.closest('[data-locked]') !== null) {
-          event.preventDefault();
-          event.stopPropagation();
-        }
-      }}
+      data-over={(isOver && refusal === undefined) || undefined}
     >
       <h3 id={titleId} className={styles.head}>
         {column.hue === undefined ? (
@@ -193,54 +123,77 @@ export function KanbanColumn({
         </span>
       </h3>
       {refusal !== undefined && draggingFrom !== undefined && <p className={styles.refusal}>{refusal}</p>}
-      <Virtualizer
-        layout={ListLayout}
-        layoutOptions={{ estimatedRowHeight: 3 * sizeToken('size-row'), gap: spaceToken('space-8') }}
-      >
-        <GridList
-          className={styles.cards}
-          aria-labelledby={titleId}
-          items={rows}
-          // Fonts in: each card built, and so measured, again (a card measured in the fallback face is too short).
-          dependencies={[column.cards, fields, canMove, fontsSettled]}
-          dragAndDropHooks={dragAndDropHooks}
-          renderEmptyState={() => <span className={styles.empty}>{strings.noCards}</span>}
-          {...(onOpen === undefined
-            ? {}
-            : {
-                onAction: (key: Key) => {
-                  const card = cardAt(key);
-                  if (card !== undefined) onOpen(card);
-                },
-              })}
+      <SortableGroup ids={ids} isShifting={isReorderable && draggingFrom === column.id}>
+        <Virtualizer
+          layout={ListLayout}
+          layoutOptions={{ estimatedRowHeight: 3 * sizeToken('size-row'), gap: spaceToken('space-8') }}
         >
-          {(row: KeyedRow) => {
-            const card = column.cards.getItem(row.index);
-            if (card === undefined) {
+          <GridList
+            className={styles.cards}
+            aria-labelledby={titleId}
+            items={rows}
+            // Fonts in: each card built, and so measured, again (a card measured in the fallback face is too short).
+            dependencies={[column.cards, fields, canMove, fontsSettled, refusal]}
+            renderEmptyState={() => <span className={styles.empty}>{strings.noCards}</span>}
+            {...(onOpen === undefined
+              ? {}
+              : {
+                  onAction: (key: Key) => {
+                    const card = cardAt(key);
+                    if (card !== undefined) onOpen(card);
+                  },
+                })}
+          >
+            {(row: KeyedRow) => {
+              const card = column.cards.getItem(row.index);
+              if (card === undefined) {
+                return (
+                  <GridListItem className={styles.card} textValue="" isDisabled data-loading="">
+                    <RowShown index={row.index} onShown={onShown} />
+                    <span className={styles.skeleton}>
+                      <Skeleton width="medium" />
+                      <Skeleton width="short" />
+                    </span>
+                  </GridListItem>
+                );
+              }
               return (
-                <GridListItem className={styles.card} textValue="" isDisabled data-loading="">
+                <GridListItem
+                  className={styles.card}
+                  textValue={card.record.name}
+                  data-pressable={onOpen === undefined ? undefined : ''}
+                  data-locked={card.readOnlyReason === undefined ? undefined : ''}
+                >
                   <RowShown index={row.index} onShown={onShown} />
-                  <span className={styles.skeleton}>
-                    <Skeleton width="medium" />
-                    <Skeleton width="short" />
-                  </span>
+                  <SortableCard
+                    id={column.cards.getKey(card)}
+                    card={card}
+                    fields={fields}
+                    columnId={column.id}
+                    canMove={canMove}
+                    refusesDrop={refusal !== undefined}
+                  />
                 </GridListItem>
               );
-            }
-            return (
-              <GridListItem
-                className={styles.card}
-                textValue={card.record.name}
-                data-pressable={onOpen === undefined ? undefined : ''}
-                data-locked={card.readOnlyReason === undefined ? undefined : ''}
-              >
-                <RowShown index={row.index} onShown={onShown} />
-                <KanbanCard card={card} fields={fields} canMove={canMove} />
-              </GridListItem>
-            );
-          }}
-        </GridList>
-      </Virtualizer>
+            }}
+          </GridList>
+        </Virtualizer>
+      </SortableGroup>
     </section>
+  );
+}
+
+/** The lifted copy of a card that follows the pointer or the keys while it moves, above everything. */
+export function KanbanCardOverlay({
+  card,
+  fields,
+}: {
+  readonly card: BoardCard;
+  readonly fields: readonly FieldAttribute[];
+}) {
+  return (
+    <div className={styles.overlay}>
+      <KanbanCard card={card} fields={fields} />
+    </div>
   );
 }

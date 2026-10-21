@@ -61,12 +61,12 @@
     box-shadow: var(--shadow-focus-inset);
   }
 
+  /* The row being moved (the drag wrapper sets data-dragging): lifted above the rest, which slide out of its way. */
   .row[data-dragging] {
-    opacity: var(--opacity-busy);
-  }
-
-  .row[data-drop-target] {
-    box-shadow: var(--shadow-focus-inset);
+    position: relative;
+    z-index: var(--z-raised);
+    background: var(--surface-raised);
+    box-shadow: var(--shadow-md);
   }
 
   /* A grid, so the field inside stretches to the row's free width; a read only Tag keeps its own width. */
@@ -151,8 +151,7 @@
   }
 
   @media (forced-colors: active) {
-    .row[data-focus-visible],
-    .row[data-drop-target] {
+    .row[data-focus-visible] {
       outline: var(--border-width-thick) solid Highlight;
       outline-offset: calc(-1 * var(--border-width-thick));
     }

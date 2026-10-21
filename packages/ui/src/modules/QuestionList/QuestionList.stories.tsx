@@ -1,6 +1,6 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
 import { useState } from 'react';
-import { expect, userEvent, waitFor } from 'storybook/test';
+import { expect, userEvent, waitFor, within } from 'storybook/test';
 import { Button } from '../../atoms/Button/Button.tsx';
 import { Checkbox } from '../../atoms/Checkbox/Checkbox.tsx';
 import { Field } from '../../molecules/Field/Field.tsx';
@@ -203,9 +203,14 @@ export const KeyboardReorder: Story = {
     await expect(handle).toHaveFocus();
     await waitFor(() => expect(getComputedStyle(handle.parentElement ?? handle).opacity).toBe('1'));
     await userEvent.keyboard('{Enter}');
+    // Lifted: focus waits on the move itself, away from the list's own arrow keys.
+    await waitFor(() => expect(handle).not.toHaveFocus());
     await userEvent.keyboard('{ArrowDown}');
     await userEvent.keyboard('{Enter}');
-    await waitFor(() => expect(canvas.getByRole('status')).toHaveTextContent('Your name, moved to position 2 of 4'));
+    // The drag wrapper's live region sits at the end of the page, outside the story's canvas.
+    await waitFor(() =>
+      expect(within(document.body).getByText('Your name, moved to position 2 of 4.')).toBeInTheDocument(),
+    );
   },
 };
 
