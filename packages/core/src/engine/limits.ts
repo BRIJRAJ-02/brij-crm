@@ -29,7 +29,7 @@ export const LIMITS = {
   sharedViewsPerObject: 100,
   /** One member's private views on one object (spec 0020, AC-472). */
   privateViewsPerObject: 50,
-  /** Rows in one import (spec 0037, AC-1136, owner decision 5); the browser checks the same number first. */
+  /** Rows in one import (spec 0040, AC-1136, owner decision 5); the browser checks the same number first. */
   importRows: TRANSFER_LIMITS.importRows,
   /** Rows one staging call carries. */
   stageRows: TRANSFER_LIMITS.stageRows,

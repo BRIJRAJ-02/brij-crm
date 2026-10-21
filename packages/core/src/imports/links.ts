@@ -1,4 +1,4 @@
-// Relation columns in an import (spec 0037, owner decision 7): a column
+// Relation columns in an import (spec 0040, owner decision 7): a column
 // matched to a relationship attribute holds names, and each name links an
 // existing record of the far object, found by the far object's unique
 // attributes (a domain, an email) and then by its exact name, ignoring case.

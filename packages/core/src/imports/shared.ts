@@ -1,4 +1,4 @@
-// What the import services and its two jobs share (spec 0037): reading one
+// What the import services and its two jobs share (spec 0040): reading one
 // import as a caller may see it, its counts by outcome, the view the page
 // shows, and the checks on its settings against the object's attributes.
 import { and, eq, sql } from 'drizzle-orm';

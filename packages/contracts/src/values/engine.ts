@@ -48,7 +48,7 @@ export const ENGINE_REFUSAL_CODES = [
   'BOOKING_CLOSED',
   // Calendar sync (spec 0024, AC-618): the member has no connected calendar to write an event to.
   'CALENDAR_NOT_CONNECTED',
-  // Import and export (spec 0037): rows sent after the import started, an undo while it runs or past its window,
+  // Import and export (spec 0040): rows sent after the import started, an undo while it runs or past its window,
   // and a view with more rows than one export writes.
   'IMPORT_STARTED',
   'IMPORT_RUNNING',

@@ -1,4 +1,4 @@
-// Imports, as services (spec 0037): creating one with its settings, staging
+// Imports, as services (spec 0040): creating one with its settings, staging
 // the browser's ready rows in chunks (each row's match keys worked out here,
 // and how many match a record the member can read), starting its job, reading
 // it and its refused rows, and starting its undo. Every call is a member's,

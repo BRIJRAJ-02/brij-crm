@@ -1,4 +1,4 @@
-// Import and export (spec 0037): the shapes the import page, the API and the
+// Import and export (spec 0040): the shapes the import page, the API and the
 // jobs share. The browser reads a CSV, turns each cell into a typed value with
 // the field set's `fromText`, and stages the ready rows here in chunks; the
 // `records.import` job writes them through the engine as the member. An export

@@ -33,7 +33,7 @@ export const JOB_KINDS = {
   'records.bulk_delete': { label: 'Bulk delete', lane: 'heavy', cancellable: true },
   'records.bulk_restore': { label: 'Restore from trash', lane: 'heavy', cancellable: true },
   'records.purge': { label: 'Delete forever', lane: 'heavy', cancellable: true },
-  // Import and export (spec 0037): a CSV's rows written as the member, taking one back, and a view written out.
+  // Import and export (spec 0040): a CSV's rows written as the member, taking one back, and a view written out.
   'records.import': { label: 'Import', lane: 'heavy', cancellable: true },
   'records.import_undo': { label: 'Undo import', lane: 'heavy', cancellable: false },
   'records.export': { label: 'Export', lane: 'heavy', cancellable: true },

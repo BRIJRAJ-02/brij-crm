@@ -1,4 +1,4 @@
-// `records.import` (spec 0037, AC-1119, AC-1124 to AC-1126): an import's
+// `records.import` (spec 0040, AC-1119, AC-1124 to AC-1126): an import's
 // staged rows written through the engine as the member who started it. An
 // item kind on the heavy lane, cancellable, 100 rows a batch: each batch is
 // one engine transaction, and each row its own savepoint, in which the row

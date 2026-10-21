@@ -1,4 +1,4 @@
-// Import and export (spec 0037). An import is a row in `imports` with its
+// Import and export (spec 0040). An import is a row in `imports` with its
 // settings; the browser stages its ready rows in `import_rows` (typed values,
 // never the file), and the `records.import` job writes each one through the
 // engine, storing its outcome, the record and what it replaced beside it, so

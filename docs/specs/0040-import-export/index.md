@@ -1,10 +1,12 @@
-# 0037. Import and export: CSV into any object, and any view out
+# 0040. Import and export: CSV into any object, and any view out
 
 **Date**: 2026-10-20
-**Status**: Proposed
-**Numbering**: handed out by the coordinator on 20 October 2026 (roadmap, Release 1). This spec owns AC-1111 to AC-1150.
+**Status**: Accepted (21 October 2026)
+**Numbering**: handed out by the coordinator on 20 October 2026 (roadmap, Release 1) as 0037, renumbered 0040 on 21 October 2026 when 0037 went to team scheduling and access. This spec owns AC-1111 to AC-1150.
 
 ## Owner decisions needed
+
+The owner accepted every recommendation below on 21 October 2026; each is now a decision.
 
 Each has a recommendation and a runner up. The build follows the recommendations; changing one later is noted beside it.
 
