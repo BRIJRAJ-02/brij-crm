@@ -2,9 +2,10 @@
 // to end with two browsers: an owner ticks two people and sets their Job title
 // in the edit dialog, a second browser sees it live, and the toast's Undo puts
 // it back; "Select all 3 matching" deletes as a background change (counted,
-// confirmed with the exact number, then the finish toast with Undo); the
-// Trash deletes one forever and empties the rest (AC-529 to AC-531, AC-535,
-// AC-542, AC-544). Needs the worker running beside the api (the jobs).
+// reviewed and confirmed with the exact number, then the finish toast with
+// Undo); the Trash restores one (live in the second browser), deletes one
+// forever and empties the rest after its count (AC-529 to AC-531, AC-534,
+// AC-535, AC-542, AC-544). Needs the worker running beside the api (the jobs).
 import { randomUUID } from 'node:crypto';
 import { expect, test, type Page } from '@playwright/test';
 import { addPerson, checkScreen, newWorkspace, signInAgain } from './people.ts';
@@ -60,13 +61,13 @@ test.describe('bulk', () => {
     await page.getByRole('option', { name: 'Job title' }).click();
     await edit.getByRole('textbox', { name: 'Value' }).fill('Founder');
     await checkScreen(page, 'bulk-edit');
-    await edit.getByRole('button', { name: 'Apply to 2 people' }).click();
+    await edit.getByRole('button', { name: 'Apply' }).click();
     await expect(page.getByText('Updated 2 people.')).toBeVisible();
     await expect(edit).toHaveCount(0);
     if (LIVE) await expect(table(reader).getByRole('gridcell', { name: /Founder/ })).toHaveCount(2);
     // The toast's Undo puts back what each record held (AC-530).
     await page.getByRole('button', { name: 'Undo' }).click();
-    await expect(page.getByText(/Undid the edit of 2 records/)).toBeVisible();
+    await expect(page.getByText('Undid the edit of 2 people.')).toBeVisible();
 
     // All matching (AC-523, AC-528): a background change, counted, confirmed, then the finish toast with Undo.
     await page.keyboard.press('Escape');
@@ -75,8 +76,12 @@ test.describe('bulk', () => {
       .getByRole('button', { name: /Select all 3 matching/ })
       .click();
     await bar(page).getByRole('button', { name: 'Delete' }).click();
+    // Counted in the background, then reviewed: the confirm never opens by itself.
+    await expect(bar(page).getByRole('button', { name: 'Review' })).toBeVisible({ timeout: 60_000 });
+    await expect(bar(page).getByText('3 people counted').first()).toBeVisible();
+    await bar(page).getByRole('button', { name: 'Review' }).click();
     const confirm = dialog(page, 'Delete 3 people?');
-    await expect(confirm).toBeVisible({ timeout: 60_000 });
+    await expect(confirm).toBeVisible();
     await checkScreen(page, 'bulk-job-confirm');
     await confirm.getByRole('button', { name: 'Delete 3 people' }).click();
     await expect(page.getByText('Deleted 3 people.')).toBeVisible({ timeout: 60_000 });
@@ -87,15 +92,19 @@ test.describe('bulk', () => {
     await expect(page.getByText('Restored 3 people.')).toBeVisible();
     await expect(table(page).getByRole('rowheader', { name: /Ada Byron/ })).toBeVisible({ timeout: 15_000 });
 
-    // Delete forever and Empty trash (AC-535): owners only, each after a danger confirm.
-    await tick(page, 'Ada Byron').click();
-    await tick(page, 'Bea Stone').click();
+    // The Trash (AC-534, AC-535): restore one, delete one forever, and empty the rest, owners only for the last two.
+    for (const name of ['Ada Byron', 'Bea Stone', 'Cy Lane']) await tick(page, name).click();
     await bar(page).getByRole('button', { name: 'Delete' }).click();
-    await dialog(page, 'Delete 2 people?').getByRole('button', { name: 'Delete 2 people' }).click();
-    await expect(page.getByText('Deleted 2 people.')).toBeVisible();
+    await dialog(page, 'Delete 3 people?').getByRole('button', { name: 'Delete 3 people' }).click();
+    await expect(page.getByText('Deleted 3 people.')).toBeVisible();
     await page.getByRole('link', { name: 'Trash' }).click();
     const trash = page.getByRole('grid', { name: 'Trash' });
+    await expect(trash.getByRole('rowheader')).toHaveCount(3);
+    await tick(page, 'Cy Lane', 'Trash').click();
+    await bar(page).getByRole('button', { name: 'Restore' }).click();
+    await expect(page.getByText('Restored Cy Lane.')).toBeVisible();
     await expect(trash.getByRole('rowheader')).toHaveCount(2);
+    if (LIVE) await expect(table(reader).getByRole('rowheader', { name: /Cy Lane/ })).toBeVisible({ timeout: 15_000 });
     await tick(page, 'Ada Byron', 'Trash').click();
     await bar(page).getByRole('button', { name: 'Delete forever' }).click();
     const forever = dialog(page, 'Delete 1 record forever?');
@@ -104,10 +113,11 @@ test.describe('bulk', () => {
     await expect(page.getByText('Deleted 1 record forever.')).toBeVisible();
     await expect(trash.getByRole('rowheader')).toHaveText([/Bea Stone/]);
     await page.getByRole('button', { name: 'Empty trash' }).click();
+    await expect(bar(page).getByRole('button', { name: 'Review' })).toBeVisible({ timeout: 60_000 });
+    await expect(bar(page).getByText('1 record counted').first()).toBeVisible();
+    await bar(page).getByRole('button', { name: 'Review' }).click();
     const empty = dialog(page, 'Empty the trash?');
-    await expect(empty.getByText('1 record will be deleted forever. This can’t be undone.')).toBeVisible({
-      timeout: 60_000,
-    });
+    await expect(empty.getByText('1 record will be deleted forever. This can’t be undone.')).toBeVisible();
     await checkScreen(page, 'bulk-empty-trash');
     await empty.getByRole('button', { name: 'Delete 1 record forever' }).click();
     await expect(page.getByText('Deleted 1 record forever.').last()).toBeVisible({ timeout: 60_000 });
