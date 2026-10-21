@@ -565,6 +565,9 @@ export function MembersScreen({
                   domains={domains}
                   ask={setQuestion}
                   onChanged={reload}
+                  onTurnedOn={(message) => {
+                    toasts.toast({ tone: 'success', message });
+                  }}
                   onFailed={(message) => {
                     toasts.toast({ tone: 'danger', message });
                   }}

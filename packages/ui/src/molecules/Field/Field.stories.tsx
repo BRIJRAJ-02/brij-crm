@@ -227,3 +227,24 @@ export const Copy: Story = {
     await waitFor(() => expect([input.selectionStart, input.selectionEnd]).toEqual([0, input.value.length]));
   },
 };
+
+/** A long link to copy that wraps rather than cutting its end off, its Copy button at the top of the box's end. */
+export const CopyWrapping: Story = {
+  render: () => (
+    <Stage width="narrow">
+      <Field
+        label="Address"
+        variant="copy"
+        isWrapping
+        copyLabel="Copy address"
+        value="https://brij-crm-phi.vercel.app/w/northwind-traders-international-sales-team"
+      />
+    </Stage>
+  ),
+  play: async ({ canvas }) => {
+    const input = canvas.getByRole('textbox', { name: 'Address' });
+    await expect(input).toHaveAttribute('readonly');
+    await expect(input).toHaveValue('https://brij-crm-phi.vercel.app/w/northwind-traders-international-sales-team');
+    await expect(canvas.getByRole('button', { name: 'Copy address' })).toBeInTheDocument();
+  },
+};

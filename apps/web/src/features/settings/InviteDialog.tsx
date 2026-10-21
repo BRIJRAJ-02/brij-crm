@@ -140,6 +140,8 @@ export function InviteDialog({ data, slug, isOpen, onClose, roles, defaultRole, 
       .slice(0, room)
       .map((email, index) => (index === 0 ? { ...row, email, isTouched: true } : fresh(row.roleId, email)));
     setRows([...rows.slice(0, at), ...filled, ...rows.slice(at + 1)]);
+    // The rest never vanish without a word: they wait for the next batch.
+    setFailure(emails.length > room ? strings.pasteTooMany(filled.length) : undefined);
     const last = filled.at(-1);
     if (last !== undefined) focusNext.current = last.id;
   };

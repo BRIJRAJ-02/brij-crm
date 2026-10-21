@@ -1,24 +1,26 @@
 // Brief
 // Purpose: Settings › Workspace › General (spec 0031, AC-822, AC-823): the workspace's name, time zone and address.
 // Main task: rename it (Save shows once the name changed) or pick its time zone (saved at once); owners can delete it.
-// Leaves out: the logo (no row until upload arrives with #32), the address (fixed), and members (their own page).
+// Leaves out: the logo (no row until upload arrives with #32), renaming the address (waits for the shared
+// address check, spec 0036), and members (their own page).
 import { isDataError, type DataLayer, type WorkspaceSettings } from '@crm/data';
 import {
   Button,
   Card,
-  EmptyState,
   Field,
   InfoTip,
   Select,
   SettingsRow,
   SettingsSection,
   SettingsStack,
+  Skeleton,
   type Toasts,
 } from '@crm/ui';
 import { useBlocker } from '@tanstack/react-router';
 import { useMemo, useState } from 'react';
 import { zoneItems, zoneLabel, zoneMatches } from '../booking/hours.ts';
 import { DeleteWorkspaceDialog } from './DeleteWorkspaceDialog.tsx';
+import { useCan } from '../workspace/WorkspacePage.tsx';
 import { SettingsPage } from './SettingsPage.tsx';
 import { strings } from './workspace-strings.ts';
 
@@ -41,7 +43,7 @@ export interface GeneralScreenProps {
 }
 
 /**
- * One Card of rows (name, time zone, address), Save in the bar only
+ * A Card of rows (name, time zone), the address in a Card of its own, Save in the bar only
  * while the name differs, and for owners a Danger zone section with Delete
  * workspace, which opens the typed name confirm.
  */
@@ -171,15 +173,17 @@ export function GeneralScreen({
                 }}
               />
             </SettingsRow>
-            <SettingsRow title={strings.address}>
-              <Field
-                label={strings.address}
-                isLabelHidden
-                variant="copy"
-                copyLabel={strings.copyAddress}
-                value={`${origin}/w/${settings.slug}`}
-              />
-            </SettingsRow>
+          </Card>
+          {/* The whole link in a Card of its own, wrapping where it must: a row's end would cut it off. */}
+          <Card title={strings.address}>
+            <Field
+              label={strings.address}
+              isLabelHidden
+              variant="copy"
+              isWrapping
+              copyLabel={strings.copyAddress}
+              value={`${origin}/w/${settings.slug}`}
+            />
           </Card>
         </SettingsSection>
         {mayDelete && (
@@ -211,11 +215,38 @@ export function GeneralScreen({
   );
 }
 
-/** The page while its route loads: its title, and a loading body. */
+/** The page while its route loads: its rows as they will stand, each control's box a Skeleton. */
 export function GeneralPending() {
+  // The danger zone only for those who get it; held back while access still loads, it may then arrive late.
+  const mayDelete = useCan('workspace.delete');
   return (
     <SettingsPage title={strings.generalTitle} isLoading>
-      <EmptyState title={strings.generalTitle} isLoading />
+      <SettingsStack>
+        <SettingsSection title={strings.workspaceSection}>
+          <Card isBusy>
+            <SettingsRow title={strings.name}>
+              <Skeleton shape="field" />
+            </SettingsRow>
+            <SettingsRow title={strings.timeZone}>
+              <Skeleton shape="field" />
+            </SettingsRow>
+          </Card>
+          <Card title={strings.address} isBusy>
+            <Skeleton shape="field" width="full" />
+          </Card>
+        </SettingsSection>
+        {mayDelete && (
+          <SettingsSection title={strings.danger}>
+            <Card>
+              <SettingsRow title={strings.deleteRow} description={strings.deleteRowText}>
+                <Button variant="danger" isDisabled>
+                  {strings.deleteAction}
+                </Button>
+              </SettingsRow>
+            </Card>
+          </SettingsSection>
+        )}
+      </SettingsStack>
     </SettingsPage>
   );
 }

@@ -18,6 +18,8 @@ export interface EmailDomainCardProps {
   readonly ask: (question: MemberQuestion & { readonly done: string }) => void;
   /** A change landed: the page reads the domains again. */
   readonly onChanged: () => Promise<void>;
+  /** The domain was turned on: the page says so in a toast, as it does for turning it off. */
+  readonly onTurnedOn: (message: string) => void;
   /** A change was refused: the page says why in a toast. */
   readonly onFailed: (message: string) => void;
 }
@@ -25,18 +27,23 @@ export interface EmailDomainCardProps {
 /**
  * One SettingsRow: the reader's own domain and a switch. Its one quiet line
  * says what it does, or why it can't be turned on (a public or unverified
- * address). Waits for the server, the switch disabled meanwhile. Turning it
- * off asks first, since it closes the open requests from that domain.
+ * address). Waits for the server: meanwhile the switch stands where it is
+ * going, disabled, the line says so and the card is busy. Turning it off asks
+ * first (the confirm shows its own wait), since it closes the open requests
+ * from that domain.
  */
-export function EmailDomainCard({ data, slug, domains, ask, onChanged, onFailed }: EmailDomainCardProps) {
+export function EmailDomainCard({ data, slug, domains, ask, onChanged, onTurnedOn, onFailed }: EmailDomainCardProps) {
   const [isBusy, setBusy] = useState(false);
   const mine = domains.yourDomain;
   const isOn = mine !== undefined && domains.domains.includes(mine);
-  const set = (next: readonly string[]) => {
+  const turnOn = (domain: string) => {
     setBusy(true);
     data.joinRequests
-      .setDomains(slug, next)
+      .setDomains(slug, [...domains.domains, domain])
       .then(onChanged)
+      .then(() => {
+        onTurnedOn(strings.domainTurnedOn(domain));
+      })
       .catch((error: unknown) => {
         onFailed(isDataError(error) ? error.message : strings.somethingWrong);
       })
@@ -45,25 +52,27 @@ export function EmailDomainCard({ data, slug, domains, ask, onChanged, onFailed 
       });
   };
   const description =
-    mine === undefined
-      ? domains.isPublic
-        ? strings.domainPublic
-        : strings.domainUnverified
-      : isOn
-        ? strings.domainOn(mine)
-        : strings.domainOff(mine);
+    isBusy && mine !== undefined
+      ? strings.domainSaving(mine)
+      : mine === undefined
+        ? domains.isPublic
+          ? strings.domainPublic
+          : strings.domainUnverified
+        : isOn
+          ? strings.domainOn(mine)
+          : strings.domainOff(mine);
   return (
-    <Card>
+    <Card isBusy={isBusy}>
       <SettingsRow title={strings.domainTitle} description={description}>
         <Switch
           label={strings.domainTitle}
           isLabelHidden
-          isSelected={isOn}
+          isSelected={isOn || isBusy}
           isDisabled={isBusy || mine === undefined}
           onChange={(on) => {
             if (mine === undefined) return;
             if (on) {
-              set([...domains.domains, mine]);
+              turnOn(mine);
               return;
             }
             ask({

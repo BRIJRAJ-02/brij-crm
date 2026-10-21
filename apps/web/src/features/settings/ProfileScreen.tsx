@@ -3,7 +3,7 @@
 // Main task: change their name (Save shows once it changed) or their time zone (saved at once, with Undo).
 // Leaves out: the picture upload (#32: Google's picture or initials until then), the email (the account's), and account deletion (the account lane).
 import { isDataError, type DataLayer, type MyProfile } from '@crm/data';
-import { Avatar, Button, Card, EmptyState, Field, Select, SettingsRow, SettingsSection, type Toasts } from '@crm/ui';
+import { Avatar, Button, Card, Field, Select, SettingsRow, SettingsSection, Skeleton, type Toasts } from '@crm/ui';
 import { useBlocker } from '@tanstack/react-router';
 import { useMemo, useState } from 'react';
 import { zoneItems, zoneLabel, zoneMatches } from '../booking/hours.ts';
@@ -155,11 +155,26 @@ export function ProfileScreen({ data, toasts, slug, profile, onChanged }: Profil
   );
 }
 
-/** The page while its route loads. */
+/** The page while its route loads: its rows as they will stand, the picture and each control's box a Skeleton. */
 export function ProfilePending() {
   return (
     <SettingsPage title={strings.profileTitle} isLoading>
-      <EmptyState title={strings.profileTitle} isLoading />
+      <SettingsSection title={strings.profileSection}>
+        <Card isBusy>
+          <SettingsRow title={strings.picture} description={strings.pictureText}>
+            <Skeleton shape="circle" />
+          </SettingsRow>
+          <SettingsRow title={strings.yourName}>
+            <Skeleton shape="field" />
+          </SettingsRow>
+          <SettingsRow title={strings.email}>
+            <Skeleton shape="field" />
+          </SettingsRow>
+          <SettingsRow title={strings.yourZone}>
+            <Skeleton shape="field" />
+          </SettingsRow>
+        </Card>
+      </SettingsSection>
     </SettingsPage>
   );
 }
