@@ -35,6 +35,9 @@ import { LazyCustomiseSidebarDialog } from './LazyCustomiseSidebarDialog.tsx';
 import { Suspense, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
 import { settingsNav, visibleSettingsNav, type SettingsPageId } from '../settings/nav.ts';
 import { useToday } from '../tasks/day.ts';
+import { useCommandMenu } from '../command/CommandMenuProvider.tsx';
+import { COMMAND_MENU_KEYS, SEARCH_KEYS } from '../command/keys.ts';
+import { strings as commandStrings } from '../command/strings.ts';
 import { strings as settingsStrings } from '../settings/strings.ts';
 import { CalendarBanner } from './CalendarBanner.tsx';
 import { homeHref, newWorkspaceHref, settingsHomeHref, trashHref, workspaceHref } from './objects.ts';
@@ -175,6 +178,9 @@ export function WorkspaceFrame({
     },
     [data, slug, universe],
   );
+  // Quick actions (spec 0039 with spec 0034, AC-921): the sidebar's button opens the command menu, so a touch
+  // screen reaches it too; below the compact breakpoint the shell folds the sidebar to its rail, which keeps it.
+  const commandMenu = useCommandMenu();
   const [isCustomising, setCustomising] = useState(false);
   const [hasCustomised, setHasCustomised] = useState(false);
   const openCustomise = useCallback(() => {
@@ -213,6 +219,9 @@ export function WorkspaceFrame({
             mark={<ProviderMark provider="timefix" size="lg" />}
             // Not known yet: skeletons, never the product's name as a stand in that then changes.
             isWorkspaceLoading={workspaceName === undefined && !isMissing}
+            onQuickActions={() => {
+              commandMenu.open();
+            }}
             isWorkspaceBusy={isSigningOut}
             workspaceBusyLabel={strings.signingOut}
             workspaceMenu={
@@ -359,6 +368,8 @@ export function WorkspaceFrame({
           {
             title: strings.shortcutsEverywhere,
             shortcuts: [
+              { label: commandStrings.openMenu, keys: COMMAND_MENU_KEYS },
+              { label: commandStrings.openSearch, keys: SEARCH_KEYS },
               { label: strings.undoShortcut, keys: UNDO_KEYS },
               { label: strings.openSettings, keys: SETTINGS_KEYS },
               { label: strings.toggleRail, keys: RAIL_KEYS },
