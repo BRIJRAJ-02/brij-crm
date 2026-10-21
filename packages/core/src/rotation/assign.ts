@@ -58,6 +58,8 @@ export interface HostChoice {
   readonly except?: string;
   /** Who a seat picked now may go to (a reassign: members the actor may Manage, or the one they named, AC-1337). */
   readonly allow?: (rotationId: string, memberId: string) => boolean;
+  /** Who a seat goes to first when free (routing's hosts, spec 0043); when none is, the seat picks as usual. */
+  readonly prefer?: (rotationId: string, memberId: string) => boolean;
 }
 
 /** The booking's hosts: the organiser (first fixed host, else the first rotation's host), everyone, and the new picks. */
@@ -66,6 +68,8 @@ export interface ChosenHosts {
   readonly hosts: readonly string[];
   /** The seats picked now; a kept seat has none. */
   readonly picks: readonly SeatPick[];
+  /** The seats went to `prefer`'s hosts (false when there was no preference, or none of them was free). */
+  readonly narrowed: boolean;
 }
 
 /**
@@ -113,28 +117,39 @@ export async function chooseHosts(
     if (held !== undefined && (sets[index] ?? []).includes(held)) kept.set(rotation.rules.id, held);
   }
   const keptMembers = new Set(kept.values());
-  const seats = [];
+  // Each rotation's own reads once (returning guests' last host), then its seat with or without a preference.
+  const open: { index: number; rotation: (typeof team.rotations)[number]; lastHostId: string | undefined }[] = [];
   for (const [index, rotation] of team.rotations.entries()) {
     if (kept.has(rotation.rules.id)) continue;
-    const free = new Set(
-      (sets[index] ?? []).filter(
-        (memberId) => !keptMembers.has(memberId) && (choice.allow?.(rotation.rules.id, memberId) ?? true),
-      ),
-    );
     const lastHostId =
       choice.guest !== undefined && rotation.rules.returning === 'last_host'
         ? await lastHostOf(tx, rotation.rules.id, choice.guest.email, choice.now)
         : undefined;
-    seats.push({
-      rotationId: rotation.rules.id,
-      rules: rotation.rules,
-      candidates: candidatesOf(rotation, reads.standing.get(rotation.rules.id)).filter((each) =>
-        free.has(each.memberId),
-      ),
-      known: { ownerId, lastHostId },
-    });
+    open.push({ index, rotation, lastHostId });
   }
-  const picks = fillSeats(seats);
+  const seatsOf = (prefer?: (rotationId: string, memberId: string) => boolean) =>
+    open.map(({ index, rotation, lastHostId }) => {
+      const free = new Set(
+        (sets[index] ?? []).filter(
+          (memberId) =>
+            !keptMembers.has(memberId) &&
+            (choice.allow?.(rotation.rules.id, memberId) ?? true) &&
+            (prefer?.(rotation.rules.id, memberId) ?? true),
+        ),
+      );
+      return {
+        rotationId: rotation.rules.id,
+        rules: rotation.rules,
+        candidates: candidatesOf(rotation, reads.standing.get(rotation.rules.id)).filter((each) =>
+          free.has(each.memberId),
+        ),
+        known: { ownerId, lastHostId },
+      };
+    });
+  // A routed preference (spec 0043) picks among its hosts first; when none of them is free, the rotation picks.
+  const preferred = choice.prefer === undefined ? undefined : fillSeats(seatsOf(choice.prefer));
+  const narrowed = preferred !== undefined;
+  const picks = preferred ?? fillSeats(seatsOf());
   if (picks === undefined) throw refuse('SLOT_TAKEN', SLOT_TAKEN_MESSAGE);
   const seated = team.rotations.map(
     (rotation) => kept.get(rotation.rules.id) ?? picks.find((pick) => pick.rotationId === rotation.rules.id)?.memberId,
@@ -144,5 +159,5 @@ export async function chooseHosts(
     throw refuse('SLOT_TAKEN', SLOT_TAKEN_MESSAGE);
   }
   const hosts = [...team.fixed, ...seated.flatMap((memberId) => (memberId === undefined ? [] : [memberId]))];
-  return { organiser: team.fixed[0] ?? first, hosts, picks };
+  return { organiser: team.fixed[0] ?? first, hosts, picks, narrowed };
 }

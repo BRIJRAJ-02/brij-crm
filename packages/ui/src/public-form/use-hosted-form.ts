@@ -78,6 +78,8 @@ export interface HostedFormState {
   readonly summary: readonly PublicQuestion[];
   /** The questions that show for the answers so far (spec 0043, AC-1614): one whose Show when fails is hidden. */
   readonly shown: ReadonlySet<string>;
+  /** What a polite live line says after an answer shows or hides questions; empty otherwise. */
+  readonly shownNote: string;
   readonly alert: string;
   readonly isSending: boolean;
   readonly isClosed: boolean;
@@ -219,6 +221,13 @@ export function useHostedForm({
     form.questions.map((question) => [question.key, answerOf(question, answers[question.key])]),
   );
   const shown = visibleQuestions(form.questions, given);
+  // Questions that appear or go with an answer are said aloud once (spec 0043): the count is compared on render.
+  const [seenCount, setSeenCount] = useState(shown.size);
+  const [shownNote, setShownNote] = useState('');
+  if (shown.size !== seenCount) {
+    setSeenCount(shown.size);
+    setShownNote(shown.size > seenCount ? words.questionsShown : words.questionsHidden);
+  }
   const checkAll = (questions: readonly PublicQuestion[]) => {
     const visible = questions
       .filter((question) => shown.has(question.key))
@@ -374,6 +383,7 @@ export function useHostedForm({
     hints,
     summary,
     shown,
+    shownNote,
     alert,
     isSending,
     isClosed,

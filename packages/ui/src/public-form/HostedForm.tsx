@@ -1,3 +1,4 @@
+import { VisuallyHidden } from '../atoms/VisuallyHidden/VisuallyHidden.tsx';
 import type { PublicForm } from '@crm/contracts/forms';
 import { Button } from '../atoms/Button/Button.tsx';
 import type { ProductLogo } from '../modules/AuthLayout/AuthLayout.tsx';
@@ -87,6 +88,9 @@ export function HostedForm({
     body = (
       <>
         <FormHeader form={form} mode={mode} heading={refs.heading} />
+        <VisuallyHidden>
+          <span aria-live="polite">{state.shownNote}</span>
+        </VisuallyHidden>
         <form
           className={styles.form}
           noValidate

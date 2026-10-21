@@ -187,6 +187,7 @@ export function HostedFormSteps({
         )}
         <VisuallyHidden>
           <span aria-live="polite">{hasMoved ? place : ''}</span>
+          <span aria-live="polite">{state.shownNote}</span>
         </VisuallyHidden>
         {/* eslint-disable-next-line jsx-a11y-x/no-noninteractive-element-interactions -- the form hears Enter from its own radios, which stay the interactive elements */}
         <form
