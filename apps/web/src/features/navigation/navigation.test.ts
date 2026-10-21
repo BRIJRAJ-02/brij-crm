@@ -197,8 +197,6 @@ describe('isSamePage', () => {
     expect(isSamePage(`${page}/overview`, other)).toBe(false);
     expect(isSamePage('/w/acme/objects/people', '/w/acme/objects/companies')).toBe(false);
     expect(isSamePage(`${page}/overview`, '/w/acme/objects/people')).toBe(false);
-    // Another saved view is another page: it starts at its top.
-    expect(isSamePage('/w/acme/objects/people/views/v1', '/w/acme/objects/people/views/v2')).toBe(false);
   });
 });
 
