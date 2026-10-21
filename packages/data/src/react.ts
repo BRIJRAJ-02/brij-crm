@@ -8,6 +8,7 @@ import type { ActivityFeed, ActivityState } from './activity/feed.ts';
 import type { BookingsCalendarHeld, BookingsCalendarState, BookingsState, BookingsView } from './bookings/store.ts';
 import type { CalendarSettingsHeld, CalendarSettingsState, CalendarState, CalendarView } from './calendar/store.ts';
 import type { CaptureListState, CaptureListView } from './captures/list.ts';
+import type { HomeHeld, HomeMetricsState, TeamTodayState } from './home/store.ts';
 import type {
   EmailPreferencesState,
   EmailPreferencesStore,
@@ -301,6 +302,16 @@ export function useBookings(view: BookingsView): BookingsState {
  * so it is read again when the person comes back to the page.
  */
 export function useBookingsCalendar(view: BookingsCalendarHeld): BookingsCalendarState {
+  return useRetained(view);
+}
+
+/** Home's Team today (spec 0041), re-rendering when it is read again. Held while the screen is mounted. */
+export function useTeamToday(view: HomeHeld<TeamTodayState>): TeamTodayState {
+  return useRetained(view);
+}
+
+/** Home's metrics row (spec 0041), re-rendering when it is read again. Held while the screen is mounted. */
+export function useHomeMetrics(view: HomeHeld<HomeMetricsState>): HomeMetricsState {
   return useRetained(view);
 }
 

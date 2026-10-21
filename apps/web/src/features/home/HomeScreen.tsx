@@ -1,18 +1,27 @@
 // Brief
 // Purpose: the workspace's landing page (spec 0041), timefix's dashboard in our design system: what needs me now.
-// Main task: see today's meetings, tick a task due, or take the next setup step.
-// Leaves out: the assistant, Team today, the metrics band and the open hours line (no data yet), and any card with nothing in it.
+// Main task: see today's meetings, tick a task due, see who on the team is free, or take the next setup step.
+// Leaves out: the assistant and the open hours line (no data yet), and any card with nothing in it.
 import type {
   BookingsCalendarState,
   CaptureListView,
+  HomeMetricsState,
   InvitationView,
-  MemberSummary,
+  MemberView,
   ObjectSummary,
   Permission,
   TaskList as TaskListSource,
   TaskListState,
+  TeamTodayState,
 } from '@crm/data';
-import { useBookingsCalendar, useCalendar, useCaptureList, useTaskList } from '@crm/data/react';
+import {
+  useBookingsCalendar,
+  useCalendar,
+  useCaptureList,
+  useHomeMetrics,
+  useTaskList,
+  useTeamToday,
+} from '@crm/data/react';
 import {
   BookingList,
   Button,
@@ -21,13 +30,16 @@ import {
   LinkList,
   PageColumn,
   Skeleton,
+  Stats,
   TaskList,
+  TeamList,
   TileGrid,
   TopBar,
   type BookingListGroup,
   type LinkRow,
   type ListSource,
   type TaskEntry,
+  type TeamRow,
 } from '@crm/ui';
 import { useNavigate, useRouteContext, useRouter } from '@tanstack/react-router';
 import { useMemo, type ReactNode } from 'react';
@@ -38,8 +50,10 @@ import { useToday } from '../tasks/day.ts';
 import { useTaskEntries } from '../tasks/useTaskEntries.ts';
 import { WorkspacePage } from '../workspace/WorkspacePage.tsx';
 import { agendaOf, dayRange, minutesOf, splitAgenda, type AgendaItem } from './agenda.ts';
+import { metricFigures, weekStartOf } from './metrics.ts';
 import { nextStep, setupSteps, type SetupFacts, type SetupStepId } from './setup.ts';
 import { strings } from './strings.ts';
+import { standingOf, teamDaysOf, type TeamMemberDay } from './team.ts';
 
 /** How many open tasks Tasks due draws, as timefix's card does. */
 export const TASKS_SHOWN = 5;
@@ -48,7 +62,7 @@ export const TASKS_SHOWN = 5;
 export interface HomeScreenProps {
   readonly slug: string;
   readonly objects: readonly ObjectSummary[];
-  readonly members: readonly MemberSummary[];
+  readonly members: readonly MemberView[];
   readonly meId: string | undefined;
   readonly permissions: readonly Permission[];
   /** My open tasks assigned to me: the list My tasks holds; undefined when it couldn't be opened. */
@@ -83,6 +97,15 @@ export function HomeScreen({ slug, objects, members, meId, permissions, tasks, i
     useMemo(() => data.bookings.calendar(slug, range.from, range.to), [data, slug, range]),
   );
   const taskState = useTasks(tasks);
+  const teamView = useMemo(() => data.home.teamToday(slug, range.from, range.to), [data, slug, range]);
+  const team = useTeamToday(teamView);
+  const weekStart = useMemo(() => weekStartOf(today), [today]);
+  const metricsView = useMemo(() => data.home.metrics(slug, weekStart), [data, slug, weekStart]);
+  const metrics = useHomeMetrics(metricsView);
+  const teamDays = useMemo(
+    () => (team.status === 'ready' ? teamDaysOf(team.members, members, meId) : []),
+    [team, members, meId],
+  );
   const setup = useSetupFacts(slug, meId, permissions, members, invitations);
 
   const steps = setupSteps(setup.facts);
@@ -92,7 +115,10 @@ export function HomeScreen({ slug, objects, members, meId, permissions, tasks, i
   const showsToday = day.status !== 'ready' || agenda.length > 0;
   const showsTasks =
     taskState.status !== 'unavailable' && !(taskState.status === 'ready' && taskState.source.count === 0);
-  const isQuiet = !setup.isLoading && !showsSetup && !showsToday && !showsTasks;
+  // One member is not a team: their own day is Today's (timefix's rule).
+  const showsTeam = team.status !== 'ready' || teamDays.length > 1;
+  const showsMetrics = metrics.status !== 'ready' || metricFigures(metrics.metrics, locale()).length > 0;
+  const isQuiet = !setup.isLoading && !showsSetup && !showsToday && !showsTasks && !showsTeam && !showsMetrics;
 
   return (
     <WorkspacePage
@@ -119,7 +145,25 @@ export function HomeScreen({ slug, objects, members, meId, permissions, tasks, i
                   state={taskState}
                 />
               )}
+              {showsTeam && (
+                <TeamTodayCard
+                  state={team}
+                  days={teamDays}
+                  meId={meId}
+                  onRetry={() => {
+                    teamView.reload();
+                  }}
+                />
+              )}
             </TileGrid>
+            {showsMetrics && (
+              <MetricsCard
+                state={metrics}
+                onRetry={() => {
+                  metricsView.reload();
+                }}
+              />
+            )}
           </PageColumn>
         ),
       }}
@@ -167,7 +211,7 @@ function useSetupFacts(
   slug: string,
   meId: string | undefined,
   permissions: readonly Permission[],
-  members: readonly MemberSummary[],
+  members: readonly MemberView[],
   invitations: readonly InvitationView[] | undefined,
 ): SetupRead {
   const { data } = useRouteContext({ from: '__root__' });
@@ -416,7 +460,7 @@ function TasksDueCard({
 }: {
   readonly slug: string;
   readonly objects: readonly ObjectSummary[];
-  readonly members: readonly MemberSummary[];
+  readonly members: readonly MemberView[];
   readonly list?: TaskListSource;
   readonly state: TaskListState;
 }) {
@@ -468,6 +512,100 @@ function TasksDueCard({
         onAction={(task) => {
           void navigate({ to: '/w/$slug/tasks', params: { slug }, search: { task: task.id } });
         }}
+      />
+    </Card>
+  );
+}
+
+/** "In a meeting" or "Busy": what a member's current span says, its title only where the reader may see it. */
+function titleOf(item: { readonly title?: string }): string {
+  return item.title ?? strings.busy;
+}
+
+/** One member's row: where they stand at `now`, and when that changes. */
+function teamRowOf(day: TeamMemberDay, meId: string | undefined, now: Date): TeamRow {
+  const time = new Intl.DateTimeFormat(locale(), { hour: 'numeric', minute: '2-digit' });
+  const at = (iso: string) => time.format(new Date(iso));
+  const standing = standingOf(day.items, now);
+  const next =
+    standing.next === undefined ? undefined : strings.next(titleOf(standing.next), at(standing.next.startsAt));
+  const detail =
+    standing.presence === 'busy'
+      ? [strings.until(at(standing.until ?? now.toISOString())), next].filter((part) => part !== undefined).join(' · ')
+      : (next ?? strings.nothingElse);
+  return {
+    id: day.member.id,
+    name: day.member.id === meId ? strings.you(day.member.name) : day.member.name,
+    ...(day.member.avatarUrl === undefined ? {} : { avatarSrc: day.member.avatarUrl }),
+    presence: standing.presence,
+    status:
+      standing.presence === 'busy'
+        ? standing.current?.kind === 'busy' || standing.current?.title === undefined
+          ? strings.busy
+          : strings.inMeeting
+        : standing.presence === 'free'
+          ? strings.freeNow
+          : strings.free,
+    detail,
+  };
+}
+
+/** Team today: every member, where they stand now and what is next; a teammate's meeting by title only where allowed. */
+function TeamTodayCard({
+  state,
+  days,
+  meId,
+  onRetry,
+}: {
+  readonly state: TeamTodayState;
+  readonly days: readonly TeamMemberDay[];
+  readonly meId: string | undefined;
+  readonly onRetry: () => void;
+}) {
+  const now = useNow();
+  const rows = useMemo(() => days.map((day) => teamRowOf(day, meId, now)), [days, meId, now]);
+  if (state.status === 'error') {
+    return (
+      <Card title={strings.teamToday}>
+        <Failed title={strings.teamFailed} message={state.message} onRetry={onRetry} />
+      </Card>
+    );
+  }
+  return (
+    <Card title={strings.teamToday} isBusy={state.status === 'loading'}>
+      <TeamList label={strings.teamToday} rows={rows} isLoading={state.status === 'loading'} />
+    </Card>
+  );
+}
+
+/** The metrics row: this week so far against all of last week, only the figures the reader may see. */
+function MetricsCard({ state, onRetry }: { readonly state: HomeMetricsState; readonly onRetry: () => void }) {
+  if (state.status === 'error') {
+    return (
+      <Card title={strings.thisWeek}>
+        <Failed title={strings.metricsFailed} message={state.message} onRetry={onRetry} />
+      </Card>
+    );
+  }
+  const figures = state.status === 'ready' ? metricFigures(state.metrics, locale()) : [];
+  const others = state.status === 'ready' && state.metrics.won?.others === true;
+  return (
+    <Card
+      title={strings.thisWeek}
+      description={strings.againstLastWeek}
+      isBusy={state.status === 'loading'}
+      {...(others ? { footer: strings.otherCurrencies } : {})}
+    >
+      <Stats
+        label={strings.thisWeek}
+        isLoading={state.status === 'loading'}
+        items={figures.map((figure) => ({
+          id: figure.id,
+          label: strings.metricLabels[figure.id],
+          value: figure.value,
+          comparison: strings.lastWeek(figure.lastWeek),
+          trend: figure.trend,
+        }))}
       />
     </Card>
   );

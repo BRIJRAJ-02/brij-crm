@@ -313,6 +313,13 @@ export { defaultSchedule, scheduleFor, type ResolvedSchedule } from './availabil
 export { createTimeBlock, removeTimeBlock, type TimeBlockDraft } from './booking/blocks.ts';
 export { bookAsHost, HOST_BOOKING_MINUTES, type HostBookingDeps, type HostBookingInput } from './booking/host.ts';
 export { listWorkspaceBookings, readBookingsCalendar } from './booking/list.ts';
+export { readTeamToday } from './home/team-today.ts';
+export {
+  createHomeMetricsCache,
+  readHomeMetrics,
+  type HomeMetricsCache,
+  type WorkspaceFigures,
+} from './home/metrics.ts';
 // Changing a booking from Bookings (spec 0025, AC-640): its host moves or cancels it, or copies the guest's link.
 export {
   bookingGuestPath,

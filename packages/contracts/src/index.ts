@@ -5,6 +5,7 @@ import { schedulesContract } from './booking/schedules.ts';
 import { preferencesContract } from './preferences.ts';
 import { bulkRecordsContract } from './bulk.ts';
 import { calendarContract } from './calendar.ts';
+import { homeContract } from './home.ts';
 import { commentsContract } from './comments.ts';
 import { formsContract, submissionsContract } from './forms/forms.ts';
 import { jobsContract } from './jobs.ts';
@@ -40,6 +41,7 @@ export * from './booking/schedules.ts';
 export * from './bulk.ts';
 export * from './bulk-ops.ts';
 export * from './calendar.ts';
+export * from './home.ts';
 export * from './change-event.ts';
 export * from './comments.ts';
 export * from './errors.ts';
@@ -112,6 +114,7 @@ export const contract = {
   comments: commentsContract,
   notifications: notificationsContract,
   calendar: calendarContract,
+  home: homeContract,
   forms: formsContract,
   submissions: submissionsContract,
   bookingPages: bookingPagesContract,

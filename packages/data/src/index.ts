@@ -84,6 +84,7 @@ import type { FetchLike } from './fetch.ts';
 import { delivered } from './delivered.ts';
 import { createJobsStore, type JobsScope, type JobsView, type TestJobSettings } from './jobs/store.ts';
 import { createBookingsStore, type BookingsCalendarHeld, type BookingsView } from './bookings/store.ts';
+import { createHomeStore, type HomeHeld, type HomeMetricsState, type TeamTodayState } from './home/store.ts';
 import {
   createEmailPreferences,
   createEmailUnsubscribe,
@@ -203,6 +204,12 @@ export type {
   BookingLocation,
   BookingsCalendarView,
   BookingsTab,
+  HomeMetricsView,
+  TeamTodayItem,
+  TeamTodayMember,
+  TeamTodayView,
+  WeekCount,
+  WeekMoney,
   CalendarEventItem,
   BookingPageSettings,
   BookingPageView,
@@ -297,6 +304,7 @@ export type {
   MeetingAttendeeShape,
 } from './activity/feed.ts';
 export type { BookingsCalendarHeld, BookingsCalendarState, BookingsState, BookingsView } from './bookings/store.ts';
+export type { HomeHeld, HomeMetricsState, TeamTodayState } from './home/store.ts';
 export type {
   EmailPreference,
   EmailPreferencesState,
@@ -1579,6 +1587,15 @@ export function createDataLayer({
     },
   });
 
+  // Home (spec 0041): Team today and the metrics row, read again when the person comes back.
+  const homeReads = createHomeStore({
+    api: {
+      teamToday: (input) =>
+        beforeRead(input.workspace).then(() => call((options) => api.home.teamToday(input, options))),
+      metrics: (input) => beforeRead(input.workspace).then(() => call((options) => api.home.metrics(input, options))),
+    },
+  });
+
   // Availability schedules (spec 0035): a held list per workspace and member, patched by every write, read again on
   // a `schedules` event.
   const schedules = lazySchedules(() =>
@@ -2670,6 +2687,22 @@ export function createDataLayer({
             ),
           ...shownDrop(bookingPageLists.items(workspace), pageId),
         }),
+    },
+    home: {
+      /**
+       * Team today (spec 0041): every member's meetings in [from, to), the
+       * reader's day, titles only where the reader may see them; held while a
+       * screen shows it (`useTeamToday`) and read again when the person comes back.
+       */
+      teamToday: (workspace: string, from: string, to: string): HomeHeld<TeamTodayState> =>
+        homeReads.teamToday(workspace, from, to),
+      /**
+       * The metrics row (spec 0041): this week so far against last week, from
+       * `weekStart` (the reader's Monday's midnight, UTC); a tile the reader
+       * may not see is absent. `useHomeMetrics` reads it.
+       */
+      metrics: (workspace: string, weekStart: string): HomeHeld<HomeMetricsState> =>
+        homeReads.metrics(workspace, weekStart),
     },
     bookings: {
       /** A page's bookings: upcoming soonest first, or past latest first, at most 100. */

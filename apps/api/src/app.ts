@@ -3,6 +3,7 @@ import { type ErrorCode, errorStatus } from '@crm/contracts';
 import {
   connectedCalendar,
   createBusyCache,
+  createHomeMetricsCache,
   enterWorkspace,
   jobKinds,
   NO_CALENDAR,
@@ -200,6 +201,8 @@ export function createApp({
   // The free email domains, loaded once: calendar sync's own list when it is on.
   const isFreeDomain = calendar?.isFreeDomain ?? createFreeDomains();
   // Where a booking's event goes: the host's connected calendar, or nowhere without sync (public and member routes).
+  // Home's metrics (spec 0041): each workspace's figures, kept a minute in this process.
+  const homeMetrics = createHomeMetricsCache();
   const booking =
     services.bookingCalendar ??
     (calendar === undefined
@@ -317,6 +320,7 @@ export function createApp({
         calendar,
         isFreeDomain,
         bookingCalendar: booking,
+        homeMetrics,
         bookingLinkKey: linkKey,
         rules,
         mailer,

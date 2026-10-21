@@ -10,7 +10,14 @@
 // `context.db` nor `context.identity`, so the door is its only way to the data. The contract walking
 // test fails if a procedure outside the bootstrap list isn't built on `member`.
 import { type AppEnvironment, contract, WorkspaceScoped } from '@crm/contracts';
-import { enterWorkspace, type BookingCalendar, type JobRegistry, type ManageLinkKey, type RuleSource } from '@crm/core';
+import {
+  enterWorkspace,
+  type BookingCalendar,
+  type HomeMetricsCache,
+  type JobRegistry,
+  type ManageLinkKey,
+  type RuleSource,
+} from '@crm/core';
 import type { Database, IdentityStore } from '@crm/db';
 import { implement, os } from '@orpc/server';
 import type { ResponseHeadersPluginContext } from '@orpc/server/plugins';
@@ -74,6 +81,8 @@ export interface RequestContext extends ResponseHeadersPluginContext {
   isFreeDomain: (domain: string) => boolean;
   /** Where a booking's event goes (the host's calendar, or nowhere without sync): Book someone in (spec 0027). */
   bookingCalendar: BookingCalendar;
+  /** Home's metrics (spec 0041): each workspace's figures, kept a minute per workspace and week in this process. */
+  homeMetrics: HomeMetricsCache;
   /** The key a booking's guest page token derives from (`booking-link.ts`): Book someone in, Copy guest link. */
   bookingLinkKey: ManageLinkKey;
   /** The one way to send email (spec 0005): invitations (spec 0031) go through it. */

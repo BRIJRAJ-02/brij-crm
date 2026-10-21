@@ -242,6 +242,8 @@ export {
 export { SectionBar, type SectionBarProps, type SectionBarVariant } from './molecules/SectionBar/SectionBar.tsx';
 export { PageColumn, type PageColumnProps } from './modules/PageColumn/PageColumn.tsx';
 export { TileGrid, type TileGridProps } from './molecules/TileGrid/TileGrid.tsx';
+export { Stats, type StatItem, type StatsProps } from './molecules/Stats/Stats.tsx';
+export { TeamList, type TeamListProps, type TeamPresence, type TeamRow } from './modules/TeamList/TeamList.tsx';
 export {
   EditorStatus,
   PreviewDeviceSwitch,
