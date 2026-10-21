@@ -113,6 +113,20 @@ async function filled(
   }
 }
 
+/**
+ * The statement behind a snapshot page of ids or trashed records (spec 0022):
+ * the rows `where` keeps, after `after` in id order, `limit` of them, exported
+ * for the plan test (a batch through `records_trash_batch`, the whole trash
+ * through `records_trashed`, read in id order and never sorted whole).
+ */
+export function snapshotRowsQuery(where: SQL, after: string | undefined, limit: number): SQL {
+  const keyset = after === undefined ? sql`true` : sql`r.id > ${after}::uuid`;
+  return sql`
+    select r.id::text as id, r.object_id::text as object_id from records r
+    where ${where} and ${keyset} order by r.id limit ${limit}
+  `;
+}
+
 /** The next ids of the target after `after`, for the action, through the starter's door (`context.scope`). */
 export async function snapshotIds(
   context: WriteContext,
@@ -123,7 +137,6 @@ export async function snapshotIds(
 ): Promise<readonly string[]> {
   const { tx, scope } = context;
   const { target } = params;
-  const keyset = (from: string | undefined): SQL => (from === undefined ? sql`true` : sql`r.id > ${from}::uuid`);
   const visible = async (rows: readonly { id: string; objectId: string }[]) =>
     visibleRecords(
       tx,
@@ -131,12 +144,10 @@ export async function snapshotIds(
       rows.map((row) => ({ objectId: row.objectId, recordId: row.id })),
     );
   const rowsOf = async (where: SQL, from: string | undefined, size: number) =>
-    (
-      await tx.execute<{ id: string; object_id: string }>(sql`
-        select r.id::text as id, r.object_id::text as object_id from records r
-        where ${where} and ${keyset(from)} order by r.id limit ${size}
-      `)
-    ).rows.map((row) => ({ id: row.id, objectId: row.object_id }));
+    (await tx.execute<{ id: string; object_id: string }>(snapshotRowsQuery(where, from, size))).rows.map((row) => ({
+      id: row.id,
+      objectId: row.object_id,
+    }));
   switch (target.kind) {
     case 'matching':
       return matchingIdsIn(

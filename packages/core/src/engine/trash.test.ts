@@ -29,6 +29,7 @@ import {
 import type { AfterWrite, Change } from './write.ts';
 import { createWorkspace } from './workspaces.ts';
 import { rescope, testScope } from '../testing.ts';
+import { snapshotRowsQuery } from '../bulk/kinds.ts';
 
 const { appUrl, ownerUrl } = inject('testDatabase');
 let db: Database;
@@ -581,7 +582,9 @@ function nodesOf(plan: PlanNode | undefined): PlanNode[] {
 describe('the trash by index (spec 0022, the three partial indexes)', () => {
   it('reads a page, one object’s page, the count and a batch through the trash indexes, never a scan', async () => {
     const w = await world();
-    // 3,000 trashed people and 3,000 live ones, in bulk as the owner, half of the trash in one batch.
+    // 3,000 trashed people and 3,000 live ones, in bulk as the owner, half of the trash in one batch; and 9,000
+    // trashed companies, so one object's page has an index of its own to prefer, as a real trash of several objects
+    // does (with people alone, the planner took either index for it, and the test flaked).
     const batchId = newId();
     await owner.withWorkspace(w.workspaceId, (tx) =>
       tx.execute(sql`
@@ -592,6 +595,14 @@ describe('the trash by index (spec 0022, the three partial indexes)', () => {
           case when n <= 3000 then 'system'::actor_type end,
           case when n <= 1500 then ${batchId}::uuid end
         from generate_series(1, 6000) n
+      `),
+    );
+    await owner.withWorkspace(w.workspaceId, (tx) =>
+      tx.execute(sql`
+        insert into records (workspace_id, object_id, created_by_type, updated_by_type, deleted_at, deleted_by_type)
+        select ${w.workspaceId}::uuid, ${w.companies}::uuid, 'system', 'system',
+          now() - (n || ' seconds')::interval, 'system'::actor_type
+        from generate_series(1, 9000) n
       `),
     );
     await owner.vacuumAnalyze(['records']);
@@ -614,6 +625,17 @@ describe('the trash by index (spec 0022, the three partial indexes)', () => {
       ),
     ).toBe(true);
     expect(await indexes(restoreLockQuery(inBatch(batchId), 501))).toContain('records_trash_batch');
+    // A bulk job's snapshot pages (spec 0022, milestone 3, the state review): a batch through its own index in id
+    // order, and the whole trash or one object's through a trash index, never a scan of records. Which trash index
+    // the planner takes for those two depends on the whole table's statistics (other files' rows share it), so
+    // only the absence of a scan is pinned there.
+    expect(await indexes(snapshotRowsQuery(inBatch(batchId), undefined, 5000))).toContain('records_trash_batch');
+    const trashIndexes = ['records_trashed', 'records_trashed_at', 'records_trash_object'];
+    for (const scope of [openTrashScope(), openTrashScope(w.people)]) {
+      expect(
+        (await indexes(snapshotRowsQuery(scope, undefined, 5000))).some((name) => trashIndexes.includes(name)),
+      ).toBe(true);
+    }
   });
 });
 
