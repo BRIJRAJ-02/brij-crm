@@ -15,6 +15,8 @@
 // 5. `requeue`: an unfinished job that should be running but has no queue
 //    row (a lost row) is queued again, and only then (AC-112's rule).
 // 6. `exports`: export files past their 7 days (spec 0023), chunks and all.
+// 7. `imports` (spec 0040, AC-1145): an import's staged rows and outcomes once
+//    its undo window has closed, and imports never started after 24 hours.
 // The outbox is no phase: the fan out prunes it once for every workspace.
 // Its result holds the totals per phase; `done` counts every row it removed.
 import { sql } from 'drizzle-orm';
@@ -40,7 +42,7 @@ export const MaintenanceParams = z.strictObject({ day: z.iso.date() });
 export type MaintenanceParams = z.infer<typeof MaintenanceParams>;
 
 /** The phases, in the order they run. */
-const PHASES = ['purge', 'notes_tasks', 'expired', 'items', 'jobs', 'requeue', 'exports'] as const;
+const PHASES = ['purge', 'notes_tasks', 'expired', 'items', 'jobs', 'requeue', 'exports', 'imports'] as const;
 
 /** How many items one `items` or `jobs` batch deletes at most, and how many finished jobs one `items` batch visits. */
 const ITEM_BATCH = 5_000;
@@ -66,6 +68,8 @@ const Totals = z.object({
   requeued: Count,
   /** Export files past their 7 days (spec 0023's submissions export); a checkpoint from before them reads 0. */
   exports: Count.default(0),
+  /** Import rows past their undo window, and imports never started (spec 0040); 0 in an older checkpoint. */
+  imports: Count.default(0),
 });
 type Totals = z.infer<typeof Totals>;
 
@@ -81,6 +85,7 @@ const NO_TOTALS: Totals = {
   jobs: 0,
   requeued: 0,
   exports: 0,
+  imports: 0,
 };
 
 /**
@@ -134,6 +139,7 @@ const plus = (totals: Totals, more: Partial<Totals>): Totals => ({
   jobs: totals.jobs + (more.jobs ?? 0),
   requeued: totals.requeued + (more.requeued ?? 0),
   exports: totals.exports + (more.exports ?? 0),
+  imports: totals.imports + (more.imports ?? 0),
 });
 
 /** Phase 1: one purge batch; the phase ends with the first batch that comes back short. */
@@ -369,6 +375,42 @@ async function expiredExports(context: WriteContext, at: Checkpoint): Promise<St
   return outcome(removed === EXPORTS_BATCH ? { ...at, totals } : nextPhase(at, totals), at, totals, removed);
 }
 
+/** How long an import never started is kept (AC-1145). */
+const STAGING_KEPT = '24 hours';
+
+/**
+ * Phase 7 (spec 0040, AC-1145): an import's staged rows, `limit` at a time,
+ * once its undo window has closed and neither its job nor its undo runs, or
+ * once it has sat unstarted for 24 hours; when no rows are left, the
+ * unstarted imports themselves. A closed import keeps its row (its file name
+ * and counts' place) for the jobs page.
+ */
+async function oldImports(context: WriteContext, at: Checkpoint, limit: number): Promise<StepOutcome> {
+  const { tx } = context;
+  const gone = await tx.execute(sql`
+    delete from import_rows where id in (
+      select r.id from import_rows r
+      join imports i on i.workspace_id = r.workspace_id and i.id = r.import_id
+      where (
+          (i.undo_until < now() and not exists (
+            select 1 from jobs j
+            where j.workspace_id = i.workspace_id and j.id in (i.job_id, i.undo_job_id) and j.finished_at is null
+          ))
+          or (i.status = 'staging' and i.created_at < now() - ${STAGING_KEPT}::interval)
+        )
+      limit ${limit}
+    )`);
+  const removed = gone.rowCount ?? 0;
+  if (removed === limit) {
+    const totals = plus(at.totals, { imports: removed });
+    return outcome({ ...at, totals }, at, totals, removed);
+  }
+  const unstarted = await tx.execute(sql`
+    delete from imports where status = 'staging' and created_at < now() - ${STAGING_KEPT}::interval`);
+  const totals = plus(at.totals, { imports: removed + (unstarted.rowCount ?? 0) });
+  return outcome(nextPhase(at, totals), at, totals, removed + (unstarted.rowCount ?? 0));
+}
+
 /**
  * The daily cleanup's kind. `queue` is the worker's (which jobs have a
  * queue row); the api registers the kind without one, to show and refuse to
@@ -402,6 +444,8 @@ export function maintenanceDaily(queue?: QueueRows): KindDefinition<MaintenanceP
           return requeue(context, at, limit, queue);
         case 'exports':
           return expiredExports(context, at);
+        case 'imports':
+          return oldImports(context, at, limit);
       }
     },
   });
