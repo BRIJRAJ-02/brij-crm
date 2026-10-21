@@ -7,7 +7,7 @@ import { sql } from 'drizzle-orm';
 import type { Role } from '@crm/contracts';
 import type { Database } from '@crm/db';
 import { testQuery } from '@crm/db/testing';
-import { enterAsActor, systemScope } from '../src/access/door.ts';
+import { enterAsActor, NO_RULE_SOURCE, systemScope, type RuleSource } from '../src/access/door.ts';
 import { newId } from '../src/engine/ids.ts';
 import { outboxHook } from '../src/engine/outbox.ts';
 import { isRefusal } from '../src/engine/refusals.ts';
@@ -88,7 +88,9 @@ export async function ensureTestTables(ownerUrl: string): Promise<void> {
 }
 
 /** The kit over one test database: the app login's `db` and the owner's URL for reading across workspaces. */
-export function jobTestKit(db: Database, ownerUrl: string) {
+export function jobTestKit(db: Database, ownerUrl: string, options: { readonly rules?: RuleSource } = {}) {
+  // The rules a job's member is entered again with, as the worker passes the api's: none unless a test gives some.
+  const rules = options.rules ?? NO_RULE_SOURCE;
   let made = 0;
 
   /** A workspace with its owner, plus one member of each role given, and scopes for them. */
@@ -141,7 +143,7 @@ export function jobTestKit(db: Database, ownerUrl: string) {
     const runner = createRunner({
       db,
       registry,
-      enterAsActor: (input) => enterAsActor({ db }, input),
+      enterAsActor: (input) => enterAsActor({ db, rules }, input),
       systemScope: (workspaceId) => systemScope(db, workspaceId),
       hooks: () => [outboxHook()],
       onStored: () => (wakes += 1),

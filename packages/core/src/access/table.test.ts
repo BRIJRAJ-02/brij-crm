@@ -14,11 +14,13 @@ import { ACCESS_TABLE, type AccessEntry } from './table.ts';
 
 /** Exported functions that take no scope: the door, pure helpers, the bootstrap (which mints its own) and the runner. */
 const NO_SCOPE: ReadonlySet<string> = new Set([
-  // The door and its entries mint scopes; they don't take one.
+  // The door and its entries mint scopes; they don't take one. NO_RULE_SOURCE is what the door reads rules from
+  // until #24 stores them: the door's input, not a service.
   'enterWorkspace',
   'enterWithKey',
   'enterAsActor',
   'systemScope',
+  'NO_RULE_SOURCE',
   // Before any workspace: the status check, the signed in account, the bootstrap.
   'getSystemStatus',
   'getMe',

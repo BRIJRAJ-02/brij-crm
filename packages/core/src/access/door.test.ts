@@ -12,7 +12,15 @@ import { newId } from '../engine/ids.ts';
 import { isRefusal } from '../engine/refusals.ts';
 import { createUserWorkspace } from '../engine/workspaces.ts';
 import { SYSTEM_ACTOR } from '../engine/scope.ts';
-import { enterAsActor, enterWithKey, enterWorkspace, systemScope, type DoorLog, type RuleSource } from './door.ts';
+import {
+  enterAsActor,
+  enterWithKey,
+  enterWorkspace,
+  NO_RULE_SOURCE,
+  systemScope,
+  type DoorLog,
+  type RuleSource,
+} from './door.ts';
 import { mintScope } from './mint.ts';
 import { NO_RULES, roleAccess } from './policy.ts';
 
@@ -58,7 +66,10 @@ describe('the access door', () => {
   it("gives an active member a scope that reads their workspace, and nothing of anyone else's", async () => {
     const a = await userWithWorkspace();
     const b = await userWithWorkspace();
-    const scope = await enterWorkspace({ db, identity }, { userId: a.userId, slug: a.workspace.slug });
+    const scope = await enterWorkspace(
+      { db, identity, rules: NO_RULE_SOURCE },
+      { userId: a.userId, slug: a.workspace.slug },
+    );
     expect(scope).toMatchObject({ db, workspaceId: a.workspace.id, actor: { type: 'member', id: a.memberId } });
     // The workspace's creator is its owner, with the owner's permissions and the open policy (spec 0009).
     expect(scope.access.principal).toEqual({
@@ -115,7 +126,9 @@ describe('the access door', () => {
       { userId: 'not-a-uuid', slug: a.workspace.slug },
       { userId: randomUUID(), slug: a.workspace.slug },
     ];
-    const refusals = await Promise.all(attempts.map((input) => refusalOf(enterWorkspace({ db, identity }, input))));
+    const refusals = await Promise.all(
+      attempts.map((input) => refusalOf(enterWorkspace({ db, identity, rules: NO_RULE_SOURCE }, input))),
+    );
     const expected = [{ code: 'NOT_FOUND', message: "That workspace doesn't exist, or you're not a member of it." }];
     for (const refusal of refusals) expect(refusal).toEqual(expected);
   });
@@ -146,7 +159,10 @@ describe('roles at the door (spec 0009)', () => {
   it.each(['admin', 'member'] as const)('lets an %s in with exactly their role’s permissions', async (role) => {
     const a = await userWithWorkspace();
     const other = await addMember(a.workspace.id, role);
-    const scope = await enterWorkspace({ db, identity }, { userId: other.userId, slug: a.workspace.slug });
+    const scope = await enterWorkspace(
+      { db, identity, rules: NO_RULE_SOURCE },
+      { userId: other.userId, slug: a.workspace.slug },
+    );
     expect(scope.access.principal).toMatchObject({ kind: 'member', memberId: other.memberId, role });
     expect(scope.access.permissions).toEqual(ROLE_PERMISSIONS[role]);
   });
@@ -158,13 +174,20 @@ describe('roles at the door (spec 0009)', () => {
     const visitor = await addMember(a.workspace.id, 'visitor');
     const log = recordingLog();
     expect(
-      await refusalOf(enterWorkspace({ db, identity, log }, { userId: visitor.userId, slug: a.workspace.slug })),
+      await refusalOf(
+        enterWorkspace(
+          { db, identity, log, rules: NO_RULE_SOURCE },
+          { userId: visitor.userId, slug: a.workspace.slug },
+        ),
+      ),
     ).toEqual(NOT_FOUND);
     expect(log.warnings).toEqual([
       { message: 'Refused a member whose role the code does not know', fields: { memberId: visitor.memberId } },
     ]);
     const actor = { type: 'member', id: visitor.memberId } as const;
-    expect(await refusalOf(enterAsActor({ db, log }, { workspaceId: a.workspace.id, actor }))).toEqual(NOT_FOUND);
+    expect(
+      await refusalOf(enterAsActor({ db, log, rules: NO_RULE_SOURCE }, { workspaceId: a.workspace.id, actor })),
+    ).toEqual(NOT_FOUND);
   });
 });
 
@@ -173,13 +196,13 @@ describe('enterAsActor (AC-147)', () => {
     const a = await userWithWorkspace();
     const other = await addMember(a.workspace.id, 'admin');
     const actor = { type: 'member', id: other.memberId } as const;
-    const first = await enterAsActor({ db }, { workspaceId: a.workspace.id, actor });
+    const first = await enterAsActor({ db, rules: NO_RULE_SOURCE }, { workspaceId: a.workspace.id, actor });
     expect(first.access.principal).toMatchObject({ role: 'admin', memberId: other.memberId, userId: other.userId });
     expect(first.actor).toEqual(actor);
     await db.withWorkspace(a.workspace.id, (tx) =>
       tx.execute(sql`update members set role = 'member' where id = ${other.memberId}`),
     );
-    const demoted = await enterAsActor({ db }, { workspaceId: a.workspace.id, actor });
+    const demoted = await enterAsActor({ db, rules: NO_RULE_SOURCE }, { workspaceId: a.workspace.id, actor });
     expect(demoted.access.permissions).toEqual(ROLE_PERMISSIONS.member);
   });
 
@@ -200,7 +223,8 @@ describe('enterAsActor (AC-147)', () => {
       { workspaceId: a.workspace.id, actor: { type: 'api_key', id: newId() } },
       { workspaceId: 'not-a-uuid', actor: { type: 'member', id: a.memberId } },
     ] as const;
-    for (const input of attempts) expect(await refusalOf(enterAsActor({ db }, input))).toEqual(NOT_FOUND);
+    for (const input of attempts)
+      expect(await refusalOf(enterAsActor({ db, rules: NO_RULE_SOURCE }, input))).toEqual(NOT_FOUND);
   });
 });
 
@@ -232,8 +256,11 @@ describe('rules at the door (spec 0009, milestone 2)', () => {
       { workspaceId: a.workspace.id, actor: { type: 'member', id: a.memberId } },
     );
     expect(again.access.data.key).toBe(scope.access.data.key);
-    // With no source, nothing restricts: production's door until #24.
-    const open = await enterWorkspace({ db, identity }, { userId: a.userId, slug: a.workspace.slug });
+    // With NO_RULE_SOURCE, nothing restricts: production's door until #24.
+    const open = await enterWorkspace(
+      { db, identity, rules: NO_RULE_SOURCE },
+      { userId: a.userId, slug: a.workspace.slug },
+    );
     expect(open.access.data.key).toBe('open');
   });
 
@@ -282,7 +309,7 @@ describe('the door’s cost (AC-149)', () => {
     const whole: number[] = [];
     for (let run = 0; run < 50; run += 1) {
       const started = performance.now();
-      await enterWorkspace({ db, identity }, { userId: a.userId, slug: a.workspace.slug });
+      await enterWorkspace({ db, identity, rules: NO_RULE_SOURCE }, { userId: a.userId, slug: a.workspace.slug });
       whole.push(performance.now() - started);
     }
     console.warn(

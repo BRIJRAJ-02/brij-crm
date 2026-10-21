@@ -6,7 +6,7 @@ import { LAST_OWNER_MESSAGE, OWNER_RULES_MESSAGE, PERMISSIONS, type Role } from 
 import { afterAll, beforeAll, describe, expect, inject, it } from 'vitest';
 import { createDatabase, type Database } from '@crm/db';
 import { testQuery } from '@crm/db/testing';
-import { enterAsActor, systemScope } from '../access/door.ts';
+import { enterAsActor, NO_RULE_SOURCE, systemScope } from '../access/door.ts';
 import { newId } from '../engine/ids.ts';
 import { isRefusal } from '../engine/refusals.ts';
 import { createWorkspace } from '../engine/workspaces.ts';
@@ -97,7 +97,12 @@ describe('an owner', () => {
     await removeMember(t.as(t.owner, 'owner'), { memberId: member });
     expect(await t.roleOf(member)).toEqual({ role: 'member', status: 'removed' });
     expect(
-      await refusalOf(enterAsActor({ db }, { workspaceId: t.workspaceId, actor: { type: 'member', id: member } })),
+      await refusalOf(
+        enterAsActor(
+          { db, rules: NO_RULE_SOURCE },
+          { workspaceId: t.workspaceId, actor: { type: 'member', id: member } },
+        ),
+      ),
     ).toMatchObject({ code: 'NOT_FOUND' });
     expect((await listMembers(t.as(t.owner, 'owner'))).map((each) => each.id)).not.toContain(member);
     // Acting on them again: they are gone.

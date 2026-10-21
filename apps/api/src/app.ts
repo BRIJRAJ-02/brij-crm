@@ -105,11 +105,12 @@ export interface AppServices {
   /** The wake a read of an overdue job sends: `wakeRelay` at most every 10 seconds for this process unless given. */
   readonly wakeOverdue?: WakeRelay;
   /**
-   * Where the door reads object, field and record rules (spec 0009). The
-   * server passes none (no rules until #24); only tests and the local test
-   * server (`test/rules-server.ts`) inject some.
+   * Where the door reads object, field and record rules (spec 0009), always
+   * named: the server passes `APP_RULES` (rules.ts, none until #24), the same
+   * source its worker re-enters members with; tests and the local test server
+   * (`test/rules-server.ts`) inject theirs.
    */
-  readonly rules?: RuleSource;
+  readonly rules: RuleSource;
   /**
    * The load harness's request timing (spec 0011, AC-202), made by the server
    * only with `LOAD_TIMING=on` (local only) and handed to its pools too: each
@@ -196,8 +197,7 @@ export function createApp({
   const linkKey = bookingLinkKey(env);
   const calendarRoutes = createCalendarRoutes({
     // The same door the RPC's `member` base opens (orpc.ts), with the same rules.
-    enter: (userId, slug) =>
-      enterWorkspace({ db, identity, log, ...(rules === undefined ? {} : { rules }) }, { userId, slug }),
+    enter: (userId, slug) => enterWorkspace({ db, identity, log, rules }, { userId, slug }),
     auth,
     wakeRelay,
     analytics,
@@ -297,7 +297,7 @@ export function createApp({
         isFreeDomain,
         bookingCalendar: booking,
         bookingLinkKey: linkKey,
-        ...(rules === undefined ? {} : { rules }),
+        rules,
       },
     });
     return matched ? c.newResponse(response.body, response) : c.notFound();
@@ -378,8 +378,7 @@ export function createApp({
     visitor: {
       auth,
       workspacesOf: (userId) => identity.workspacesOf(userId),
-      enter: (userId, slug) =>
-        enterWorkspace({ db, identity, log, ...(rules === undefined ? {} : { rules }) }, { userId, slug }),
+      enter: (userId, slug) => enterWorkspace({ db, identity, log, rules }, { userId, slug }),
       memberBusy: bookingBusy,
       ...(calendar === undefined
         ? {}

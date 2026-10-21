@@ -1,7 +1,7 @@
 // Test helpers for the api's own suites: an app wired to a test router, a
 // database that is never reached, and a way to read the log lines it writes.
 import { ENGINE_REFUSAL_CODES, type EngineRefusal } from '@crm/contracts';
-import type { JobRegistry, RuleSource } from '@crm/core';
+import { NO_RULE_SOURCE, type JobRegistry, type RuleSource } from '@crm/core';
 import { createDatabase, createIdentityStore, type Database, type IdentityStore } from '@crm/db';
 import { ORPCError, os } from '@orpc/server';
 import { vi } from 'vitest';
@@ -100,7 +100,8 @@ export function testServices(
     wakeRelay: options.wakeRelay ?? NO_WAKE,
     wakeOnUse: options.wakeOnUse ?? NO_WAKE,
     wakeOverdue: options.wakeOverdue ?? NO_WAKE,
-    ...(options.rules === undefined ? {} : { rules: options.rules }),
+    // No rules unless a test injects some, named as production names its own (rules.ts).
+    rules: options.rules ?? NO_RULE_SOURCE,
     ...(options.analytics === undefined ? {} : { analytics: options.analytics }),
     ...(options.jobs === undefined ? {} : { jobs: options.jobs }),
     ...(options.calendar === undefined ? {} : { calendar: options.calendar }),

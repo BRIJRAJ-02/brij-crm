@@ -63,8 +63,8 @@ export interface RequestContext extends ResponseHeadersPluginContext {
   readGate: ReadGate;
   /** Signs Centrifugo's tokens (spec 0005), or undefined where live updates are off (no `CENTRIFUGO_TOKEN_SECRET`). */
   realtime: RealtimeTokens | undefined;
-  /** Where the door reads the workspace's rules: absent (none) outside tests until #24 (spec 0009). */
-  rules?: RuleSource;
+  /** Where the door reads the workspace's rules (spec 0009): `APP_RULES` (none until #24) outside tests. */
+  rules: RuleSource;
   /** The job kinds this API knows (spec 0008): the test kind only locally and in previews. */
   jobs: JobRegistry;
   /** Calendar sync (spec 0024): its provider and keys where `CALENDAR_SYNC=on`, else undefined. */
@@ -137,7 +137,7 @@ export const requireMember = os
         db: context.db,
         identity: context.identity,
         log,
-        ...(context.rules === undefined ? {} : { rules: context.rules }),
+        rules: context.rules,
       },
       { userId: context.user.id, slug: scoped.data.workspace },
     );

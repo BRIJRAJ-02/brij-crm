@@ -13,6 +13,7 @@ import * as z from 'zod';
 import { startJobRunners } from '../src/jobs/graphile.ts';
 import { createJobRunner } from '../src/jobs/runner.ts';
 import { log } from '../src/log.ts';
+import { APP_RULES } from '../src/rules.ts';
 import { onShutdown } from '../src/shutdown.ts';
 import { restartRegistry } from './jobs-kinds.ts';
 
@@ -37,6 +38,7 @@ const runners = await startJobRunners({
   runner: createJobRunner({
     db,
     registry: restartRegistry(),
+    rules: APP_RULES,
     log,
     timings: { sliceMs: env.JOBS_TEST_SLICE_MS, leaseMs: env.JOBS_TEST_LEASE_MS },
   }),

@@ -6,6 +6,7 @@ export {
   enterPublicForm,
   enterWithKey,
   enterWorkspace,
+  NO_RULE_SOURCE,
   type DoorDeps,
   type DoorInput,
   type DoorLog,

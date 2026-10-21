@@ -33,7 +33,8 @@ import {
  * Where the door reads a workspace's object, field and record rules, inside
  * its one tenant transaction (spec 0009, milestone 2): given the member it is
  * letting in. #24 stores rules and reads them here; until then production
- * passes nothing, so every member gets `NO_RULES`, and only tests (and the
+ * passes `NO_RULE_SOURCE` (the api's `APP_RULES`, to its requests and its
+ * worker alike), so every member gets `NO_RULES`, and only tests (and the
  * api's local test server) inject rules.
  */
 export type RuleSource = (
@@ -57,8 +58,12 @@ export interface DoorDeps {
   readonly identity: Pick<IdentityStore, 'findWorkspace'>;
   /** Where an unknown role is reported. Nothing is reported without one. */
   readonly log?: DoorLog;
-  /** Where the workspace's rules come from: none (`NO_RULE_SOURCE`) unless given. */
-  readonly rules?: RuleSource;
+  /**
+   * Where the workspace's rules come from, always named: `NO_RULE_SOURCE`
+   * until #24 stores rules. There is no default, so no door opens without
+   * them by leaving them out.
+   */
+  readonly rules: RuleSource;
 }
 
 /** Who is knocking (`auth.user.id`, from the session) and which workspace address they asked for. */
@@ -147,16 +152,21 @@ export async function enterWorkspace(deps: DoorDeps, input: DoorInput): Promise<
   if (!isUuid(input.userId)) throw notFound();
   const workspace = await deps.identity.findWorkspace(input.slug);
   if (workspace === undefined) throw notFound();
-  const found = await activeMember(deps.db, workspace.id, { userId: input.userId }, deps.rules ?? NO_RULE_SOURCE);
+  const found = await activeMember(deps.db, workspace.id, { userId: input.userId }, deps.rules);
   if (found === undefined) throw notFound();
   return memberScope(deps, workspace.id, found.member, found.rules);
 }
 
-/** What `enterAsActor` needs: the tenant database, where to report an unknown role, and where rules come from. */
+/**
+ * What `enterAsActor` needs: the tenant database, where to report an unknown
+ * role, and where rules come from, always named and the same source the
+ * member's requests use, so a job never runs with less than its member's
+ * rules (spec 0009, AC-147).
+ */
 export interface ActorDoorDeps {
   readonly db: Database;
   readonly log?: DoorLog;
-  readonly rules?: RuleSource;
+  readonly rules: RuleSource;
 }
 
 /**
@@ -173,7 +183,7 @@ export async function enterAsActor(
 ): Promise<EngineScope> {
   const { workspaceId, actor } = input;
   if (!isUuid(workspaceId) || actor.type !== 'member' || actor.id === null || !isUuid(actor.id)) throw notFound();
-  const found = await activeMember(deps.db, workspaceId, { memberId: actor.id }, deps.rules ?? NO_RULE_SOURCE);
+  const found = await activeMember(deps.db, workspaceId, { memberId: actor.id }, deps.rules);
   if (found === undefined) throw notFound();
   return memberScope(deps, workspaceId, found.member, found.rules);
 }

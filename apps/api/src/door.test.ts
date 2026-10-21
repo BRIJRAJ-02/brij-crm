@@ -224,10 +224,11 @@ describe('no scope is built in this app', () => {
     expect(offenders).toEqual([]);
   });
 
-  it('injects no rules into the door outside tests: production has none until #24 (spec 0009)', async () => {
+  it('injects no rules outside tests: production has none until #24 (spec 0009)', async () => {
     const root = fileURLToPath(new URL('.', import.meta.url));
-    // Only the app passes the services' source on, and the request context carries it to the door.
-    const plumbing = new Set(['app.ts', 'orpc.ts', 'testing.ts']);
+    // Only the app passes the services' source on, the request context carries it to the door, and the job runner
+    // hands its own to the worker's re-entry; rules.ts names the one source, and the server and the worker pass it.
+    const plumbing = new Set(['app.ts', 'orpc.ts', 'testing.ts', 'jobs/runner.ts', 'rules.ts']);
     const files = (await readdir(root, { recursive: true }))
       .filter((file) => file.endsWith('.ts') && !file.endsWith('.test.ts'))
       .map((file) => file.split(sep).join('/'))
@@ -239,9 +240,16 @@ describe('no scope is built in this app', () => {
       // door's. That one form, in that one file, is let through.
       const checked =
         file === 'modules/attributes/router.ts' ? source.replaceAll(/\brules: input\.rules\b/g, '') : source;
-      if (/\bRuleSource\b|\brules\s*[:,}]/.test(checked)) offenders.push(file);
+      // The server and the worker hand on rules.ts's source, the same one to both, and nothing else.
+      const passed =
+        file === 'server.ts' || file === 'worker.ts' ? checked.replaceAll(/\brules: APP_RULES\b/g, '') : checked;
+      if (/\bRuleSource\b|\brules\s*[:,}]/.test(passed)) offenders.push(file);
     }
     expect(offenders).toEqual([]);
+    // That one source names no rules until #24 stores them.
+    expect(await readFile(join(root, 'rules.ts'), 'utf8')).toMatch(
+      /export const APP_RULES: RuleSource = NO_RULE_SOURCE;/,
+    );
   });
 });
 

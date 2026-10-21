@@ -71,7 +71,8 @@ const mailer = {
   },
 };
 const auth = createAuth({ env: apiEnv, identity, mailer });
-const app = createApp({ services: { db, identity, auth, wakeRelay: NO_WAKE }, env: apiEnv });
+const { APP_RULES } = await import('../src/rules.ts');
+const app = createApp({ services: { db, identity, auth, wakeRelay: NO_WAKE, rules: APP_RULES }, env: apiEnv });
 
 /** The value the failing query is bound with: Postgres quotes it in its error, which must stay here. */
 const FAILING_VALUE = 'Ada Lovelace';

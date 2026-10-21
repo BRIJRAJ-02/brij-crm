@@ -10,6 +10,7 @@ import { createMailer } from './mail/mailer.ts';
 import { createAnalytics, POSTHOG_EU_HOST } from './monitoring/posthog.ts';
 import { captureFault, flush, MONITORING_FLUSH_MS } from './monitoring/sentry.ts';
 import { createRelayWake, NO_WAKE } from './realtime/wake.ts';
+import { APP_RULES } from './rules.ts';
 import { onShutdown } from './shutdown.ts';
 import { createRequestTiming } from './timing.ts';
 
@@ -81,7 +82,15 @@ if (timing !== undefined) log.info('Load timing on: every /api/rpc answer carrie
 const server = serve(
   {
     fetch: createApp({
-      services: { db, identity, auth, wakeRelay, analytics, ...(timing === undefined ? {} : { timing }) },
+      services: {
+        db,
+        identity,
+        auth,
+        wakeRelay,
+        analytics,
+        rules: APP_RULES,
+        ...(timing === undefined ? {} : { timing }),
+      },
       env,
     }).fetch,
     port: env.PORT,

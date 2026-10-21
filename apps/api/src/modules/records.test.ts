@@ -7,7 +7,7 @@ import { afterAll, beforeAll, describe, expect, inject, it } from 'vitest';
 import type { Database, IdentityStore } from '@crm/db';
 import { holdTableLock, testQuery } from '@crm/db/testing';
 import type { FilterGroup } from '@crm/contracts/values';
-import { deleteRecord, enterWorkspace, newId } from '@crm/core';
+import { deleteRecord, enterWorkspace, newId, NO_RULE_SOURCE } from '@crm/core';
 import { rpcClient, rpcPost, signInApp, testConnections } from '../../test/sign-in.ts';
 import { failure, memberWithWorkspace, NOT_A_MEMBER, refusal, refusalsOf } from '../../test/workspace.ts';
 
@@ -72,7 +72,10 @@ async function trash(m: Member, recordId: string): Promise<void> {
     [m.workspace.id],
   );
   if (row === undefined) throw new Error('No member row.');
-  await deleteRecord(await enterWorkspace({ db, identity }, { userId: row.user_id, slug: m.slug }), { recordId });
+  await deleteRecord(
+    await enterWorkspace({ db, identity, rules: NO_RULE_SOURCE }, { userId: row.user_id, slug: m.slug }),
+    { recordId },
+  );
 }
 
 describe('records.create', () => {

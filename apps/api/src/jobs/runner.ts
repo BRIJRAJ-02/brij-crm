@@ -1,9 +1,10 @@
 // The core job runner as the worker wires it (spec 0008): each slice on the
 // pooled app login, as the job's member (entered again at every slice through
-// `enterAsActor`) or the system (`systemScope`), with the write hooks every
-// background write stores its events through. The worker entry and the
-// restart tests' worker build it here, so both run the same wiring.
-import { createRunner, type JobRegistry, type Runner, type RunnerDeps } from '@crm/core';
+// `enterAsActor`, with the rules their requests get) or the system
+// (`systemScope`), with the write hooks every background write stores its
+// events through. The worker entry and the restart tests' worker build it
+// here, so both run the same wiring.
+import { createRunner, type JobRegistry, type RuleSource, type Runner, type RunnerDeps } from '@crm/core';
 import { enterAsActor, systemScope } from '@crm/core/system';
 import type { Database } from '@crm/db';
 import { backgroundHooks } from '../hooks.ts';
@@ -14,6 +15,11 @@ export interface JobRunnerOptions {
   readonly db: Database;
   readonly registry: JobRegistry;
   readonly log: typeof appLog;
+  /**
+   * Where a job's member's rules come from: the api's own (`APP_RULES`), so a
+   * job never runs with less than its member's rules (spec 0009, AC-147).
+   */
+  readonly rules: RuleSource;
   /** A batch stored a change event: the relay publishes it, even if it had gone dormant. */
   readonly onStored?: () => void;
   /** The slice budget and the lease, shortened by the restart tests only. */
@@ -22,11 +28,11 @@ export interface JobRunnerOptions {
 
 /** The core runner with the worker's wiring. */
 export function createJobRunner(options: JobRunnerOptions): Runner {
-  const { db, log } = options;
+  const { db, log, rules } = options;
   return createRunner({
     db,
     registry: options.registry,
-    enterAsActor: (input) => enterAsActor({ db, log }, input),
+    enterAsActor: (input) => enterAsActor({ db, log, rules }, input),
     systemScope: (workspaceId) => systemScope(db, workspaceId),
     hooks: backgroundHooks,
     log,

@@ -15,6 +15,7 @@ import {
   jobKinds,
   listCalendarConnections,
   newId,
+  NO_RULE_SOURCE,
   removeCalendarConnection,
   startTestJob,
   type Runner,
@@ -62,7 +63,7 @@ function coreRunner(sliceMs: number): Runner {
   return createRunner({
     db,
     registry,
-    enterAsActor: (input) => enterAsActor({ db }, input),
+    enterAsActor: (input) => enterAsActor({ db, rules: NO_RULE_SOURCE }, input),
     systemScope: (workspaceId) => systemScope(db, workspaceId),
     hooks: backgroundHooks,
     log: quiet,

@@ -36,6 +36,7 @@ import { GOOGLE_NOTIFY_PATH } from './calendar/services.ts';
 import { runnerTasks, startJobRunners } from './jobs/graphile.ts';
 import { createLifecycle, type AwakeWorker, type Lifecycle } from './jobs/lifecycle.ts';
 import { createJobRunner } from './jobs/runner.ts';
+import { APP_RULES } from './rules.ts';
 import { loadEnv, WorkerEnv } from './env.ts';
 import { errorFields, log } from './log.ts';
 import { captureFault, flush, heartbeat, metrics, MONITORING_FLUSH_MS, raiseIssue } from './monitoring/sentry.ts';
@@ -168,6 +169,8 @@ const registry = jobKinds({ environment: env.APP_ENV, ...(jobsOn ? { queue: queu
 const runner = createJobRunner({
   db,
   registry,
+  // A member's job runs under the same rules as their requests (rules.ts).
+  rules: APP_RULES,
   // A batch stored a change event: the relay publishes it, even if it had gone dormant.
   onStored: () => relay?.wake(),
   log,
