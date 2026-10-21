@@ -2,6 +2,7 @@ import { isDataError } from '@crm/data';
 import { LoadingNow } from '@crm/ui';
 import { createFileRoute, Outlet, redirect, useRouter, type ErrorComponentProps } from '@tanstack/react-router';
 import { signInHref } from '../features/auth/redirect.ts';
+import { UnreadTitle } from '../features/inbox/UnreadTitle.tsx';
 import { failedPage, missingPage, pendingPage } from '../features/workspace/ObjectScreen.tsx';
 import { strings } from '../features/workspace/strings.ts';
 import { useWorkspaceName, WorkspacePage } from '../features/workspace/WorkspacePage.tsx';
@@ -47,10 +48,16 @@ export const Route = createFileRoute('/w/$slug')({
 
 function WorkspaceRoute() {
   const { objects } = Route.useLoaderData();
+  const { slug } = Route.useParams();
   if (objects === undefined) {
     return <WorkspacePage page={missingPage(strings.workspaceMissingTitle, strings.workspaceMissingText)} />;
   }
-  return <Outlet />;
+  return (
+    <>
+      <UnreadTitle slug={slug} />
+      <Outlet />
+    </>
+  );
 }
 
 function WorkspaceError({ error }: ErrorComponentProps) {
