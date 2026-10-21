@@ -322,7 +322,7 @@ export function SubmissionsTab({
                       label: strings.download,
                       onAction: () => {
                         // A new tab, so an expired file's error never replaces the app.
-                        window.open(data.submissions.exportDownloadPath(slug, view.id), '_blank', 'noopener');
+                        window.open(view.downloadPath, '_blank', 'noopener');
                       },
                     },
                   }
