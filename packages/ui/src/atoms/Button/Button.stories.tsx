@@ -55,6 +55,7 @@ export const Variants: Story = {
         Filter
       </Button>
       <Button variant="ghost">Discard changes</Button>
+      <Button variant="link">Sign out</Button>
       <Button variant="ghost-danger" icon="trash" label="Delete" />
       <Button variant="danger" icon="trash">
         Delete record

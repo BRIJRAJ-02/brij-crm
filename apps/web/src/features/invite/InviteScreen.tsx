@@ -104,7 +104,7 @@ export function InviteScreen({ data, token, invitation, user }: InviteScreenProp
         ? {}
         : {
             footer: (
-              <Button variant="ghost" onPress={signInAgain} isDisabled={isBusy}>
+              <Button variant="link" onPress={signInAgain} isDisabled={isBusy}>
                 {strings.useAnother}
               </Button>
             ),

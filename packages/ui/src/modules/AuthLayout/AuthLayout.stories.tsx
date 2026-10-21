@@ -79,7 +79,7 @@ export const WithLogo: Story = {
 
 /** A footer under a hairline, for a way back. */
 export const WithFooter: Story = {
-  args: { footer: <Button variant="ghost">Sign out</Button> },
+  args: { footer: <Button variant="link">Sign out</Button> },
 };
 
 /** Narrower than a phone: the card keeps space-16 from each edge. */
@@ -118,7 +118,7 @@ export const Split: Story = {
     ),
     preview: <WorkspacePreview workspaceName="Halcyon Labs" personName="Maya Chen" focus="workspace" />,
     account: 'maya@halcyonlabs.io',
-    footer: <Button variant="ghost">Sign out</Button>,
+    footer: <Button variant="link">Sign out</Button>,
   },
   play: async ({ canvas }) => {
     await expect(canvas.getByRole('heading', { level: 1, name: 'Your workspace' })).toBeInTheDocument();

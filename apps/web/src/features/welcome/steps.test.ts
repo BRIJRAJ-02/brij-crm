@@ -15,6 +15,8 @@ describe('first run’s steps', () => {
   it('are About you, Your workspace and Connect your calendar, without the calendar where sync is off', () => {
     expect(welcomeSteps(true)).toEqual(['about', 'workspace', 'calendar']);
     expect(welcomeSteps(false)).toEqual(['about', 'workspace']);
+    // Another workspace counts its own steps.
+    expect(welcomeSteps(true, true)).toEqual(['workspace', 'calendar']);
   });
 
   it('go back from Your workspace only: the first step has nothing before it, and the workspace is made by then', () => {

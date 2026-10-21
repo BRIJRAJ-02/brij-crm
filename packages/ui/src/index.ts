@@ -112,7 +112,7 @@ export {
 } from './molecules/Disclosure/Disclosure.tsx';
 export { CountryPicker, type CountryPickerProps } from './molecules/CountryPicker/CountryPicker.tsx';
 export { EmptyState, type EmptyStateProps, type EmptyStateTone } from './molecules/EmptyState/EmptyState.tsx';
-export { Field, type FieldProps, type FieldSize } from './molecules/Field/Field.tsx';
+export { Field, type FieldProps, type FieldSize, type FieldSuggestions } from './molecules/Field/Field.tsx';
 export { FileDrop, type FileDropProps } from './molecules/FileDrop/FileDrop.tsx';
 export { FileItem, formatFileSize, type FileItemProps } from './molecules/FileItem/FileItem.tsx';
 export { FilterChip, type FilterChipProps } from './molecules/FilterChip/FilterChip.tsx';

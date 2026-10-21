@@ -251,3 +251,30 @@ export const Title: Story = {
     await expect(getComputedStyle(readOnlyBox).outlineStyle).toBe('solid');
   },
 };
+
+/** Free values offered under the field: pressing one fills it. */
+export const WithSuggestions: Story = {
+  render: function Render() {
+    const [value, setValue] = useState('stealth');
+    return (
+      <Stage width="narrow">
+        <Field
+          label="Web address"
+          prefix="/w/"
+          value={value}
+          onChange={setValue}
+          {...(value === 'stealth'
+            ? {
+                error: 'Taken',
+                suggestions: { label: 'Free addresses', items: ['stealth-design', 'stealth-team'], onPick: setValue },
+              }
+            : { hint: 'Available' })}
+        />
+      </Stage>
+    );
+  },
+  play: async ({ canvas, userEvent }) => {
+    await userEvent.click(canvas.getByRole('button', { name: 'stealth-design' }));
+    await expect(canvas.getByRole('textbox', { name: 'Web address' })).toHaveValue('stealth-design');
+  },
+};

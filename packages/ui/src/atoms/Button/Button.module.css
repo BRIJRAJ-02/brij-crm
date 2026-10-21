@@ -132,6 +132,18 @@
     color: var(--on-danger);
   }
 
+  /* A quiet text action at label size, for a card's footer (first run's Sign out and Back): no box at rest, the
+     control's height kept for its hit area. */
+  .root[data-variant='link'] {
+    padding-inline: var(--space-4);
+    border-color: transparent;
+    background: transparent;
+    box-shadow: none;
+    color: var(--text-secondary);
+    font: var(--text-label-strong);
+    letter-spacing: var(--tracking-label-strong);
+  }
+
   .root[data-variant='ghost'],
   .root[data-variant='ghost-danger'] {
     border-color: transparent;
@@ -183,6 +195,7 @@
     }
 
     .root[data-variant='ghost'][data-hovered],
+    .root[data-variant='link'][data-hovered],
     .root[data-variant='dashed'][data-hovered] {
       color: var(--text);
     }

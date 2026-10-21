@@ -3,6 +3,8 @@
 import { describe, expect, it } from 'vitest';
 import {
   addressAsTyped,
+  addressCandidates,
+  companyDomain,
   firstWord,
   memberNameFor,
   nameFromEmail,
@@ -90,5 +92,33 @@ describe('the name a member is made with', () => {
 
   it('keeps to 80 characters, as the server takes it', () => {
     expect(memberNameFor('a'.repeat(100), '', 'x@acme.com')).toHaveLength(80);
+  });
+});
+
+describe('the addresses offered (spec 0036)', () => {
+  it('start from the name, then a company email’s domain, with a number only last', () => {
+    expect(addressCandidates('Stealth', 'brij@stealth.design').slice(0, 3)).toEqual([
+      'stealth',
+      'stealth-design',
+      'stealth-team',
+    ]);
+    const offered = addressCandidates('Ada’s workspace', 'ada@acme.com');
+    expect(offered.slice(0, 3)).toEqual(['ada', 'acme', 'adas-workspace']);
+    expect(offered.at(-1)).toBe('ada-4');
+    expect(offered.every((each) => SLUG_RULE.test(each))).toBe(true);
+  });
+
+  it('leave a personal mailbox’s domain out', () => {
+    expect(companyDomain('ada@gmail.com')).toBeUndefined();
+    expect(companyDomain('ada@Stealth.Design')).toBe('stealth.design');
+    expect(addressCandidates('Grace’s workspace', 'grace@gmail.com').slice(0, 2)).toEqual([
+      'grace',
+      'graces-workspace',
+    ]);
+  });
+
+  it('come from the domain when there is no name', () => {
+    expect(addressCandidates('', 'ada@halcyon.io')[0]).toBe('halcyon');
+    expect(addressCandidates('', 'ada@gmail.com')).toEqual([]);
   });
 });

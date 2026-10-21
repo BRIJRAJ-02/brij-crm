@@ -7,7 +7,7 @@
 import { isDataError, type DataLayer, type SignedInUser, type WorkspaceSummary } from '@crm/data';
 import { AuthLayout, Button, ButtonLink, Steps, WorkspacePreview, type WorkspacePreviewFocus } from '@crm/ui';
 import { useNavigate, useRouter } from '@tanstack/react-router';
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { sessionStore } from '../auth/pending.ts';
 import { SignOutDialog } from '../auth/SignOutDialog.tsx';
 import { strings as authStrings } from '../auth/strings.ts';
@@ -16,10 +16,11 @@ import { PRODUCT_LOGO } from '../../brand.ts';
 import { AboutStep } from './AboutStep.tsx';
 import { CalendarStep } from './CalendarStep.tsx';
 import { clearDraft, readDraft, saveDraft } from './draft.ts';
-import { memberNameFor, slugFrom, suggestedWorkspaceName } from './names.ts';
+import { addressCandidates, memberNameFor, suggestedWorkspaceName } from './names.ts';
 import { refusalsOf, type WelcomeRefusal } from './refusals.ts';
 import { nextStep, previousStep, welcomeSteps, type ConnectResult, type WelcomeStep } from './steps.ts';
 import { strings } from './strings.ts';
+import { useAddress } from './useAddress.ts';
 import { WorkspaceStep } from './WorkspaceStep.tsx';
 
 /** Each step's title and the line under it. */
@@ -82,7 +83,11 @@ export function WelcomeScreen({
   const [typedSlug, setTypedSlug] = useState<string | undefined>(draft?.slug);
   const shownName = memberNameFor(memberName, '', user.email);
   const name = typedName ?? suggestedWorkspaceName(shownName, strings.possessive);
-  const slug = typedSlug ?? slugFrom(name);
+  // The address follows the name (the first free one made from it, or from a company email) until it is typed or picked.
+  const candidates = useMemo(() => addressCandidates(name, user.email), [name, user.email]);
+  const check = useCallback((candidate: string) => data.workspaces.slugAvailable(candidate), [data]);
+  const address = useAddress(check, candidates, typedSlug);
+  const slug = address.slug;
   const [isCreating, setCreating] = useState(false);
   const [refusals, setRefusals] = useState<readonly WelcomeRefusal[]>([]);
   const [isConnecting, setConnecting] = useState(false);
@@ -123,7 +128,8 @@ export function WelcomeScreen({
     if (step !== 'calendar') focusPage(document, '/welcome');
   }, [step]);
 
-  const steps = welcomeSteps(calendarSync);
+  // Another workspace skips what is known about the person, so its count is its own ("Step 1 of 2").
+  const steps = welcomeSteps(calendarSync, leaveTo !== undefined);
   const back = leaveTo === undefined ? previousStep(step) : undefined;
   // The step this one was reached from by Continue: Back then goes back through the browser's history, so the
   // browser's own back button and ours agree.
@@ -211,12 +217,14 @@ export function WelcomeScreen({
         eyebrow={
           <>
             {back !== undefined && <Button variant="ghost" icon="arrow-left" label={strings.back} onPress={goBack} />}
-            <Steps
-              variant="count"
-              label={strings.steps}
-              steps={steps.map((each) => ({ id: each, label: COPY[each].title }))}
-              current={step}
-            />
+            {steps.length > 1 && (
+              <Steps
+                variant="count"
+                label={strings.steps}
+                steps={steps.map((each) => ({ id: each, label: COPY[each].title }))}
+                current={step}
+              />
+            )}
           </>
         }
         preview={
@@ -232,7 +240,7 @@ export function WelcomeScreen({
         footer={
           leaveTo === undefined ? (
             <Button
-              variant="ghost"
+              variant="link"
               onPress={() => {
                 setSignOutFailure(undefined);
                 setSignOutOpen(true);
@@ -241,8 +249,8 @@ export function WelcomeScreen({
               {strings.signOut}
             </Button>
           ) : (
-            <ButtonLink variant="ghost" href={`/w/${leaveTo.slug}`}>
-              {strings.backTo(leaveTo.name)}
+            <ButtonLink variant="link" icon="arrow-left" href={`/w/${leaveTo.slug}`}>
+              {strings.back}
             </ButtonLink>
           )
         }
@@ -259,10 +267,9 @@ export function WelcomeScreen({
         )}
         {step === 'workspace' && (
           <WorkspaceStep
-            data={data}
             name={name}
             onName={setTypedName}
-            slug={slug}
+            address={address}
             onSlug={setTypedSlug}
             isCreating={isCreating}
             refusals={refusals}

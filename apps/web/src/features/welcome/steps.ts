@@ -19,9 +19,13 @@ export type WelcomeStep = 'about' | 'workspace' | 'calendar';
 
 const STEPS: readonly WelcomeStep[] = ['about', 'workspace', 'calendar'];
 
-/** The steps this deployment shows: Connect your calendar only where calendar sync is set up (AC-1204). */
-export function welcomeSteps(calendarSync: boolean): readonly WelcomeStep[] {
-  return calendarSync ? STEPS : STEPS.filter((step) => step !== 'calendar');
+/**
+ * The steps this deployment shows: Connect your calendar only where calendar
+ * sync is set up (AC-1204). Another workspace (spec 0031) starts at Your
+ * workspace, so the steps about the person are left out of its count.
+ */
+export function welcomeSteps(calendarSync: boolean, another = false): readonly WelcomeStep[] {
+  return STEPS.filter((step) => (calendarSync || step !== 'calendar') && (!another || step !== 'about'));
 }
 
 /**

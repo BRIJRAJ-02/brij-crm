@@ -16,7 +16,8 @@ import { Spinner } from '../Spinner/Spinner.tsx';
 import styles from './Button.module.css';
 
 /** `secondary` (the default) for view controls and Cancel, `primary` for the one action that commits, `danger` for a control that starts a destructive action (Delete in a bar, Archive in settings), `danger-solid` for the final commit that destroys (Delete in a confirm), `ghost` for quiet and undo style actions, `ghost-danger` for a quiet icon button that deletes at once with an Undo (red only under the pointer or focus), `dashed` for "add a condition". */
-export type ButtonVariant = 'secondary' | 'primary' | 'danger' | 'danger-solid' | 'ghost' | 'ghost-danger' | 'dashed';
+export type ButtonVariant =
+  'secondary' | 'primary' | 'danger' | 'danger-solid' | 'ghost' | 'ghost-danger' | 'dashed' | 'link';
 
 /** `md` is the 26px control height; `lg` matches a 30px input beside it; `sm` is a chip's 20px, for an icon only Remove beside a chip inside a field. */
 export type ButtonSize = 'sm' | 'md' | 'lg';

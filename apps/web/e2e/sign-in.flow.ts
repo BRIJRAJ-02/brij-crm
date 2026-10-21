@@ -204,11 +204,13 @@ test('signs in by code, names the workspace, lands on People, signs out, and com
   await expect(page).toHaveTitle('Your workspace · Timefix');
   await expect(page.getByLabel('Workspace name')).toBeFocused();
   await expect(page.getByLabel('Workspace name')).toHaveValue('Ada’s workspace');
-  await expect(page.getByLabel('Web address')).toHaveValue('adas-workspace');
+  // The first free address made from the name (or the email's company), never a numbered one while a cleaner one is free.
+  await expect(page.getByLabel('Web address')).toHaveValue(/^[a-z0-9-]{3,40}$/);
+  await expect(page.getByText('Available', { exact: true })).toBeVisible();
   // Typed, the address is lowercase with spaces as dashes, and checked once typing stops.
   await page.getByLabel('Web address').fill(`Flow ${tag}`);
   await expect(page.getByLabel('Web address')).toHaveValue(slug);
-  await expect(page.getByText('That address is free.')).toBeVisible();
+  await expect(page.getByText('Available', { exact: true })).toBeVisible();
   await checkScreen(page, '4b-welcome-workspace');
   // Back keeps what was typed, and so does the browser's own.
   await page.getByRole('button', { name: 'Back', exact: true }).click();
@@ -304,7 +306,7 @@ test('says each refusal on its field and drops it as the field changes, so one p
   const address = page.getByLabel('Web address');
   await address.fill(taken);
   await expect(address).toHaveAttribute('aria-invalid', 'true');
-  await expect(page.getByText('That address is taken. Try another.')).toBeVisible();
+  await expect(page.getByText('Taken', { exact: true })).toBeVisible();
   await checkScreen(page, '4d-welcome-address-taken');
   await page.getByRole('button', { name: 'Create workspace' }).click();
   await expect(page).toHaveURL(/\/welcome\?step=workspace$/);
@@ -313,12 +315,12 @@ test('says each refusal on its field and drops it as the field changes, so one p
   await address.press('End');
   await address.pressSequentially('-two');
   await expect(address).not.toHaveAttribute('aria-invalid');
-  await expect(page.getByText('That address is free.')).toBeVisible();
+  await expect(page.getByText('Available', { exact: true })).toBeVisible();
 
   // A check that can't answer (offline) says nothing, and Create still has the last word: taken, on the field.
   await page.route('**/api/rpc/workspaces/slugAvailable', (route) => route.abort('connectionrefused'));
   await address.fill(taken);
-  await expect(page.getByText('That address is free.')).toBeHidden();
+  await expect(page.getByText('Available', { exact: true })).toBeHidden();
   await page.getByRole('button', { name: 'Create workspace' }).click();
   await expect(address).toHaveAttribute('aria-invalid', 'true');
   await expect(page.getByText('That workspace address is taken. Pick another.')).toBeVisible();
@@ -327,7 +329,7 @@ test('says each refusal on its field and drops it as the field changes, so one p
   // Fixed again: one press of Create sends it.
   await address.fill(`${taken}-two`);
   await expect(address).not.toHaveAttribute('aria-invalid');
-  await expect(page.getByText('That address is free.')).toBeVisible();
+  await expect(page.getByText('Available', { exact: true })).toBeVisible();
   await page.getByRole('button', { name: 'Create workspace' }).click();
   await skipCalendarStep(page);
   await expect(page).toHaveURL(new RegExp(`/w/${taken}-two/objects/people(/views/[0-9a-f-]+)?$`), {

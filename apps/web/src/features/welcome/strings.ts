@@ -28,15 +28,16 @@ export const strings = {
   workspaceDescription: 'Your records live here. Name it for your team or company.',
   anotherTitle: 'Create a workspace',
   anotherDescription: 'A new workspace starts empty, with you as its owner.',
-  backTo: (name: string) => `Back to ${name}`,
   workspaceName: 'Workspace name',
   webAddress: 'Web address',
   /** Before the address in its field. */
   addressPrefix: '/w/',
   addressRule: 'Lowercase letters, digits and dashes.',
-  addressChecking: 'Checking the address…',
-  addressFree: 'That address is free.',
-  addressTaken: 'That address is taken. Try another.',
+  addressChecking: 'Checking…',
+  addressFree: 'Available',
+  addressTaken: 'Taken',
+  /** The free addresses offered under the field. */
+  addressSuggestions: 'Free addresses',
   /** Announced once a check settles, naming the address, so a screen reader hears which one it was. */
   addressFreeSaid: (slug: string) => `${slug} is free.`,
   addressTakenSaid: (slug: string) => `${slug} is taken.`,

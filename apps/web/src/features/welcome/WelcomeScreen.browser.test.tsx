@@ -24,7 +24,7 @@ const USER: SignedInUser = { id: '0199a6f2-0000-7000-8000-000000000001', name: '
 const WORKSPACE_ID = '0199a6f2-0000-7000-8000-00000000000a';
 
 /** A stand in data layer: what first run calls, counted. */
-function fakeData() {
+function fakeData(taken: readonly string[] = ['taken-one']) {
   const created: { readonly id: string; readonly name: string; readonly slug: string; readonly memberName: string }[] =
     [];
   const checked: string[] = [];
@@ -35,7 +35,7 @@ function fakeData() {
       newId: () => WORKSPACE_ID,
       slugAvailable: (slug: string) => {
         checked.push(slug);
-        return Promise.resolve(slug !== 'taken-one');
+        return Promise.resolve(!taken.includes(slug));
       },
       create: (input: (typeof created)[number]) => {
         created.push(input);
@@ -158,7 +158,7 @@ describe('first run’s steps', () => {
     await expect.element(page.getByText('Step 2 of 3')).toBeVisible();
     // The workspace follows the name, and the address the workspace; focus is in the step's first field.
     await expect.element(page.getByRole('textbox', { name: 'Workspace name' })).toHaveValue('Ada’s workspace');
-    await expect.element(page.getByRole('textbox', { name: 'Web address' })).toHaveValue('adas-workspace');
+    await expect.element(page.getByRole('textbox', { name: 'Web address' })).toHaveValue('ada');
     await expect.element(page.getByRole('textbox', { name: 'Workspace name' })).toHaveFocus();
 
     await page.getByRole('button', { name: 'Back' }).click();
@@ -172,12 +172,12 @@ describe('first run’s steps', () => {
     await expect.element(page.getByText('Step 1 of 2')).toBeVisible();
     await page.getByRole('button', { name: 'Skip' }).click();
     await expect.element(page.getByRole('textbox', { name: 'Workspace name' })).toHaveValue('Ada’s workspace');
-    await expect.element(page.getByText('That address is free.')).toBeVisible();
+    await expect.element(page.getByText('Available', { exact: true })).toBeVisible();
     await page.getByRole('button', { name: 'Create workspace' }).click();
     // Sync off: straight into the workspace, the member named from the email.
-    await expect.poll(() => router.state.location.pathname).toBe('/w/adas-workspace');
+    await expect.poll(() => router.state.location.pathname).toBe('/w/ada');
     expect(fake.created).toEqual([
-      { id: WORKSPACE_ID, name: 'Ada’s workspace', slug: 'adas-workspace', memberName: 'Ada Lovelace' },
+      { id: WORKSPACE_ID, name: 'Ada’s workspace', slug: 'ada', memberName: 'Ada Lovelace' },
     ]);
   });
 
@@ -186,32 +186,49 @@ describe('first run’s steps', () => {
     await renderWelcome(fake.data, '/welcome?step=workspace');
     const address = page.getByRole('textbox', { name: 'Web address' });
     await address.fill('taken-one');
-    await expect.element(address).toHaveAccessibleDescription('That address is taken. Try another.');
+    await expect.element(address).toHaveAccessibleDescription('Taken');
     await expect.element(address).toHaveAttribute('aria-invalid', 'true');
     await page.getByRole('button', { name: 'Create workspace' }).click();
     // Refused before asking: focus goes back to the address, and nothing is made.
     await expect.element(address).toHaveFocus();
     expect(fake.created).toEqual([]);
     await address.fill('halcyon');
-    await expect.element(address).toHaveAccessibleDescription('That address is free.');
+    await expect.element(address).toHaveAccessibleDescription('Available');
     // Each address was asked about once typing stopped, never a stale one after it.
     expect(fake.checked.at(-1)).toBe('halcyon');
+  });
+
+  it('moves a taken first choice to the next free address, and offers free ones to pick', async () => {
+    const fake = fakeData(['ada', 'taken-one']);
+    await renderWelcome(fake.data, '/welcome?step=workspace');
+    const address = page.getByRole('textbox', { name: 'Web address' });
+    // ada is taken, so the address is the company's, with two more free ones under it.
+    await expect.element(address).toHaveValue('acme');
+    const offered = page.getByRole('group', { name: 'Free addresses' });
+    await expect.element(offered.getByRole('button', { name: 'adas-workspace' })).toBeVisible();
+    await offered.getByRole('button', { name: 'ada-team' }).click();
+    await expect.element(address).toHaveValue('ada-team');
+    await expect.element(address).toHaveAccessibleDescription('Available');
+    // A taken one typed offers free ones too.
+    await address.fill('taken-one');
+    await expect.element(address).toHaveAccessibleDescription('Taken');
+    await expect.element(offered.getByRole('button', { name: 'acme' })).toBeVisible();
   });
 
   it('goes on to the calendar step once the workspace is made, which Skip for now leaves', async () => {
     const fake = fakeData();
     const router = await renderWelcome(fake.data, '/welcome?step=workspace');
-    await expect.element(page.getByText('That address is free.')).toBeVisible();
+    await expect.element(page.getByText('Available', { exact: true })).toBeVisible();
     await page.getByRole('button', { name: 'Create workspace' }).click();
     await expect.element(page.getByRole('heading', { level: 1, name: 'Connect your calendar' })).toBeVisible();
-    expect(router.state.location.search).toEqual({ step: 'calendar', workspace: 'adas-workspace' });
+    expect(router.state.location.search).toEqual({ step: 'calendar', workspace: 'ada' });
     await expect.element(page.getByText('Step 3 of 3')).toBeVisible();
     // The workspace exists: no going back to it.
     expect(page.getByRole('button', { name: 'Back' }).query()).toBeNull();
     await expect.element(page.getByRole('button', { name: 'Connect Google Calendar' })).toHaveFocus();
     await expect.element(page.getByRole('button', { name: 'Connect Outlook' })).toBeDisabled();
     await page.getByRole('button', { name: 'Skip for now' }).click();
-    await expect.poll(() => router.state.location.pathname).toBe('/w/adas-workspace');
+    await expect.poll(() => router.state.location.pathname).toBe('/w/ada');
   });
 
   it('says a connected calendar came back, and Continue opens the workspace', async () => {

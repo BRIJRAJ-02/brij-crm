@@ -1,5 +1,6 @@
 import { useLayoutEffect, useRef, type ReactNode, type Ref } from 'react';
 import { FieldError, Input, Label, Text, TextArea, TextField } from 'react-aria-components';
+import { Button } from '../../atoms/Button/Button.tsx';
 import { CopyButton } from '../../atoms/Button/CopyButton.tsx';
 import { Icon } from '../../atoms/Icon/Icon.tsx';
 import type { IconName } from '../../atoms/Icon/icons.ts';
@@ -94,6 +95,19 @@ export interface FieldProps {
   /** Takes focus as it mounts: a search field at the top of a list that just opened. */
   readonly autoFocus?: boolean;
   readonly ref?: Ref<HTMLInputElement & HTMLTextAreaElement>;
+  /**
+   * Values to offer under the field as small buttons (a workspace address
+   * that is free when the typed one is taken). `label` names the group;
+   * pressing one hands it to `onPick`.
+   */
+  readonly suggestions?: FieldSuggestions;
+}
+
+/** Values a Field offers under it, each a small button. */
+export interface FieldSuggestions {
+  readonly label: string;
+  readonly items: readonly string[];
+  readonly onPick: (item: string) => void;
 }
 
 /**
@@ -137,6 +151,7 @@ export function Field({
   copyLabel,
   align = 'start',
   isErrorFloating = false,
+  suggestions,
   autoFocus = false,
   ref,
 }: FieldProps) {
@@ -309,6 +324,21 @@ export function Field({
                 </>
               )}
             </FieldError>
+            {suggestions !== undefined && suggestions.items.length > 0 && (
+              <div role="group" aria-label={suggestions.label} className={styles.suggestions}>
+                {suggestions.items.map((item) => (
+                  <Button
+                    key={item}
+                    size="sm"
+                    onPress={() => {
+                      suggestions.onPick(item);
+                    }}
+                  >
+                    {item}
+                  </Button>
+                ))}
+              </div>
+            )}
           </>
         );
       }}
