@@ -137,6 +137,28 @@ describe('removing and leaving (AC-811, AC-812)', () => {
   });
 });
 
+describe('the invite link (AC-818)', () => {
+  it('lets anyone signed in join through it as a member, and refuses a member managing it', async () => {
+    const owner = await memberWithWorkspace(app);
+    expect(await owner.client.invitations.link({ workspace: owner.slug })).toEqual({
+      enabled: false,
+      uses: 0,
+      isSpent: false,
+    });
+    const on = await owner.client.invitations.setLink({ workspace: owner.slug, enabled: true, mutationId: newId() });
+    expect(on).toMatchObject({ enabled: true, role: 'member', uses: 0 });
+    const person = await signIn(app);
+    const client = rpcClient(app, person.cookie);
+    expect(await client.invitations.peek({ token: on.token ?? '' })).not.toHaveProperty('invitedEmailMasked');
+    expect(await client.invitations.accept({ token: on.token ?? '' })).toEqual({ slug: owner.slug });
+    expect((await client.access.mine({ workspace: owner.slug })).role).toBe('member');
+    expect(
+      await refusal(() => client.invitations.setLink({ workspace: owner.slug, enabled: false, mutationId: newId() })),
+    ).toMatchObject({ code: 'FORBIDDEN', status: 403 });
+    expect((await owner.client.invitations.link({ workspace: owner.slug })).uses).toBe(1);
+  });
+});
+
 describe('the remove dialog (AC-816)', () => {
   it('counts what a removal will do, and hands their work on as a job', async () => {
     const owner = await memberWithWorkspace(app);

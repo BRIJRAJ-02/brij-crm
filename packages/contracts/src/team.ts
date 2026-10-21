@@ -4,7 +4,7 @@
 import { oc } from '@orpc/contract';
 import * as z from 'zod';
 import { Role } from './access.ts';
-import { INVITE_BATCH_MAX } from './team-limits.ts';
+import { INVITE_BATCH_MAX, INVITE_LINK_DAYS, INVITE_LINK_USES_MAX } from './team-limits.ts';
 import { WorkspaceScoped } from './workspaces.ts';
 import { Uuid } from './values/ids.ts';
 
@@ -39,6 +39,8 @@ export const AUDIT_ACTIONS = [
   'invitation.resent',
   'invitation.revoked',
   'invitation.accepted',
+  'invitation.link_set',
+  'invitation.link_revoked',
   'member.role_changed',
   'member.removed',
   'member.left',
@@ -114,11 +116,58 @@ export const InvitePeek = z.object({
   workspaceName: z.string(),
   inviterName: z.string(),
   role: Role,
-  /** The invited address as `a***@example.com`. */
-  invitedEmailMasked: z.string(),
+  /** The invited address as `a***@example.com`; absent for the invite link, which names nobody. */
+  invitedEmailMasked: z.string().optional(),
 });
 /** What an invitation shows before accepting. */
 export type InvitePeek = z.infer<typeof InvitePeek>;
+
+export { INVITE_LINK_DAYS, INVITE_LINK_USES_MAX, type InviteLinkDays } from './team-limits.ts';
+
+/** The roles an invite link may give (AC-818): never owner or admin (guest joins with slice 9). */
+export const InviteLinkRole = Role.exclude(['owner', 'admin']);
+/** A role an invite link may give. */
+export type InviteLinkRole = z.infer<typeof InviteLinkRole>;
+
+/**
+ * The workspace's invite link as the Members page's card shows it (AC-818),
+ * to holders of `members.invite` only. When on, its token (the page builds
+ * `/invite/<token>` on its own origin), the role it gives, when it stops
+ * working and how many it may let in, and how many it has.
+ */
+export const InviteLinkView = z.object({
+  enabled: z.boolean(),
+  token: InviteToken.optional(),
+  role: InviteLinkRole.optional(),
+  expiresAt: z.iso.datetime({ offset: true }).optional(),
+  maxUses: z.number().int().min(1).optional(),
+  uses: z.number().int().min(0),
+  /** On, but past `expiresAt` or at `maxUses`: it lets nobody in until it is changed or reset. */
+  isSpent: z.boolean(),
+});
+/** The workspace's invite link. */
+export type InviteLinkView = z.infer<typeof InviteLinkView>;
+
+/**
+ * Turns the invite link on or off, or changes it (AC-818). Off revokes it.
+ * On creates it, or changes the open one in place: a field left out keeps
+ * its value; `expiresInDays: null` and `maxUses: null` take the limit away;
+ * an expiry counts from now. `reset` replaces its token, so the old link
+ * stops working.
+ */
+export const SetInviteLinkInput = WorkspaceScoped.extend({
+  enabled: z.boolean(),
+  role: InviteLinkRole.optional(),
+  expiresInDays: z
+    .union(INVITE_LINK_DAYS.map((days) => z.literal(days)))
+    .nullable()
+    .optional(),
+  maxUses: z.number().int().min(1).max(INVITE_LINK_USES_MAX).nullable().optional(),
+  reset: z.boolean().optional(),
+  mutationId: Uuid,
+});
+/** A change to the invite link. */
+export type SetInviteLinkInput = z.infer<typeof SetInviteLinkInput>;
 
 /** The workspace an accepted invitation opened (AC-806). */
 export const InviteAccepted = z.object({ slug: z.string() });
@@ -138,6 +187,9 @@ export const invitationsContract = {
   revoke: oc.input(InvitationInput).output(z.void()),
   peek: oc.input(z.object({ token: InviteToken })).output(InvitePeek),
   accept: oc.input(z.object({ token: InviteToken })).output(InviteAccepted),
+  /** The invite link (slice 6, AC-818): `members.invite`. */
+  link: oc.input(WorkspaceScoped).output(InviteLinkView),
+  setLink: oc.input(SetInviteLinkInput).output(InviteLinkView),
 };
 
 /** An address as an invitation shows it to someone who may not own it (AC-805): `a***@example.com`. */

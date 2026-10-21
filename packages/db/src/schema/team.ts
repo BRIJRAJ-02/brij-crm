@@ -39,8 +39,15 @@ export const invitations = pgTable(
     email: text('email'),
     role: memberRole('role').notNull(),
     status: text('status').notNull().default('open'),
-    /** The SHA-256 of the link's token, as 64 lowercase hex digits. The token itself is never stored. */
+    /** The SHA-256 of the link's token, as 64 lowercase hex digits. An email invitation's token is never stored. */
     tokenHash: text('token_hash').notNull(),
+    /**
+     * The invite link's own token (slice 6, AC-818), so an admin can copy the
+     * link again at any time, as Linear and Slack let them; null for an email
+     * invitation, whose token only its email ever holds. It always hashes to
+     * `token_hash`.
+     */
+    linkToken: text('link_token'),
     expiresAt: timestamptz('expires_at'),
     maxUses: integer('max_uses'),
     uses: integer('uses').notNull().default(0),
@@ -77,6 +84,12 @@ export const invitations = pgTable(
         or (${t.kind} = 'link' and ${t.email} is null and ${t.role}::text not in ('owner', 'admin'))`,
     ),
     check('invitations_token_hash', sql`${t.tokenHash} ~ '^[0-9a-f]{64}$'`),
+    check(
+      'invitations_link_token',
+      sql`(${t.kind} = 'email' and ${t.linkToken} is null)
+        or (${t.kind} = 'link' and ${t.linkToken} is not null
+          and encode(sha256(convert_to(${t.linkToken}, 'UTF8')), 'hex') = ${t.tokenHash})`,
+    ),
     check('invitations_uses', sql`${t.uses} >= 0 and (${t.maxUses} is null or ${t.maxUses} >= 1)`),
     // One open email invitation per address (a second invite resends it), and one open invite link.
     uniqueIndex('invitations_open_email')

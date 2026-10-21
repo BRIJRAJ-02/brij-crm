@@ -82,6 +82,36 @@ export const strings = {
   failedTitle: 'Couldn’t load the members',
   failedText: 'Check your connection, then try again.',
   somethingWrong: 'Something went wrong. Try again in a moment.',
+  // The invite link card (spec 0031, AC-818).
+  linkTitle: 'Invite link',
+  linkDescription: 'Anyone with the link can join as a member. They sign in first; it makes no new accounts.',
+  linkField: 'Link',
+  linkCopy: 'Copy link',
+  linkUses: (uses: number) =>
+    uses === 0
+      ? 'Nobody has joined with it yet.'
+      : uses === 1
+        ? '1 person joined with it.'
+        : `${String(uses)} people joined with it.`,
+  linkExpires: 'Expires',
+  linkExpiresHint: 'Counts from when you pick it.',
+  linkNever: 'Never',
+  linkDays: (days: number) => (days === 1 ? 'In 1 day' : `In ${String(days)} days`),
+  linkUntil: (when: string) => `On ${when}`,
+  linkMostUses: 'Most uses',
+  linkMostUsesHint: 'How many people may join with it.',
+  linkNoCap: 'No limit',
+  linkCap: (cap: number) => `${String(cap)} people`,
+  linkSpent: 'This link has expired or reached its limit, so nobody can join with it. Change it, or reset it.',
+  linkReset: 'Reset link',
+  linkResetTitle: 'Reset the invite link?',
+  linkResetText: 'The current link stops working at once, and a new one replaces it. Its settings stay.',
+  linkResetAction: 'Reset link',
+  linkWasReset: 'The invite link was reset.',
+  linkOffTitle: 'Turn off the invite link?',
+  linkOffText: 'The link stops working at once. Turning it on again makes a new one.',
+  linkOffAction: 'Turn off link',
+  linkTurnedOff: 'The invite link is off.',
   // The invite dialog.
   inviteTitle: 'Invite people',
   emails: 'Email addresses',

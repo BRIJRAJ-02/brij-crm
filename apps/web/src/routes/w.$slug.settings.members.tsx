@@ -29,10 +29,10 @@ export const Route = createFileRoute('/w/$slug/settings/members')({
         context.data.roles.list(params.slug),
         context.data.members.list(params.slug),
       ]);
-      const invitations = access.permissions.includes('members.invite')
-        ? await context.data.invitations.list(params.slug)
-        : undefined;
-      return { screen: { access, page, roles, invitations } };
+      const [invitations, link] = access.permissions.includes('members.invite')
+        ? await Promise.all([context.data.invitations.list(params.slug), context.data.invitations.link(params.slug)])
+        : [undefined, undefined];
+      return { screen: { access, page, roles, invitations, link } };
     } catch (error) {
       // The frame above shows "workspace not found" for this one.
       if (isDataError(error) && error.code === 'NOT_FOUND') return { screen: undefined };
@@ -72,6 +72,7 @@ function MembersRoute() {
       search={q}
       onSearch={onSearch}
       invitations={screen.invitations}
+      link={screen.link}
       access={screen.access}
       roles={screen.roles}
     />

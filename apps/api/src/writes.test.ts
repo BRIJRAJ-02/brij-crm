@@ -32,6 +32,10 @@ const READS: ReadonlySet<string> = new Set([
   // Invitations (spec 0031): the open list, and the invitation page's look (no session).
   'invitations.list',
   'invitations.peek',
+  // The invite link as its card shows it (slice 6, AC-818).
+  'invitations.link',
+  // What a removal will do, for the remove dialog (slice 5, AC-816).
+  'members.removalPreview',
   'access.mine',
   // The roles every role picker offers (spec 0037, AC-1439).
   'roles.list',
@@ -326,6 +330,11 @@ const WRITES: Record<string, (m: Member, mutationId: string) => Promise<readonly
     await m.client.invitations.resend({ workspace: m.slug, invitationId: made.invited[0]?.id ?? '', mutationId });
     return [];
   },
+  // The invite link (slice 6): a setting nobody's screen follows live, so no row.
+  'invitations.setLink': async (m, mutationId) => {
+    await m.client.invitations.setLink({ workspace: m.slug, enabled: true, mutationId });
+    return [];
+  },
   'invitations.revoke': async (m, mutationId) => {
     const made = await m.client.invitations.create({
       workspace: m.slug,
@@ -345,7 +354,12 @@ const WRITES: Record<string, (m: Member, mutationId: string) => Promise<readonly
   'members.remove': async (m, mutationId) => {
     const mate = await teammate(m);
     await m.client.members.remove({ workspace: m.slug, memberId: mate.memberId, mutationId });
-    return [{ kind: 'members' }, { kind: 'members', item_ids: [mate.memberId], mutation_id: mutationId }];
+    // A removal also names whose access changed, so their own tabs are cut off (AC-817).
+    return [
+      { kind: 'members' },
+      { kind: 'members', item_ids: [mate.memberId], mutation_id: mutationId },
+      { kind: 'access', item_ids: [mate.memberId], mutation_id: mutationId },
+    ];
   },
   'members.transferOwnership': async (m, mutationId) => {
     const mate = await teammate(m);
@@ -355,7 +369,11 @@ const WRITES: Record<string, (m: Member, mutationId: string) => Promise<readonly
   'members.leave': async (m, mutationId) => {
     const mate = await teammate(m);
     await mate.client.members.leave({ workspace: m.slug, mutationId });
-    return [{ kind: 'members' }, { kind: 'members', item_ids: [mate.memberId], mutation_id: mutationId }];
+    return [
+      { kind: 'members' },
+      { kind: 'members', item_ids: [mate.memberId], mutation_id: mutationId },
+      { kind: 'access', item_ids: [mate.memberId], mutation_id: mutationId },
+    ];
   },
   'invitations.accept': async (m) => {
     const invitee = await signIn(app);

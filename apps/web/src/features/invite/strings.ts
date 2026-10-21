@@ -6,7 +6,10 @@ export const strings = {
     inviter === ''
       ? `You’re invited to ${workspace} as ${article(role)} ${role}.`
       : `${inviter} invited you to ${workspace} as ${article(role)} ${role}.`,
-  forAddress: (masked: string) => `This invitation is for ${masked}.`,
+  forAddress: (masked: string | undefined) =>
+    masked === undefined ? 'Anyone with this link can join.' : `This invitation is for ${masked}.`,
+  // The invite link (spec 0031, AC-818) names nobody, and opens no sign up of its own (owner decision 3).
+  newHereLink: 'Sign in to join. New to Timefix? Signing in makes your account.',
   newHere: 'Sign in with that address to accept it. New to Timefix? Signing in makes your account.',
   accept: 'Accept invitation',
   signInToAccept: 'Sign in to accept',

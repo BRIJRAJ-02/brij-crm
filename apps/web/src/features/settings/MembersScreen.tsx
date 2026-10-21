@@ -10,6 +10,7 @@ import {
   ROLE_LABELS,
   type DataLayer,
   type InvitationView,
+  type InviteLinkView,
   type InviteResult,
   type MembersPage,
   type MemberView,
@@ -30,6 +31,7 @@ import {
   MenuTrigger,
   RelativeTime,
   Select,
+  SettingsStack,
   Table,
   TabPanel,
   Tabs,
@@ -40,6 +42,7 @@ import { useRouter } from '@tanstack/react-router';
 import { useEffect, useState } from 'react';
 import { useCan } from '../workspace/WorkspacePage.tsx';
 import { InviteDialog } from './InviteDialog.tsx';
+import { InviteLinkCard } from './InviteLinkCard.tsx';
 import { MemberConfirm, type MemberQuestion } from './MemberConfirm.tsx';
 import { RemoveMemberDialog } from './RemoveMemberDialog.tsx';
 import { canRemove, grantableRoles, invitableRoles } from './members.ts';
@@ -61,6 +64,8 @@ export interface MembersScreenProps {
   readonly onSearch: (search: string) => void;
   /** The open invitations; undefined for someone who can't invite (no tab at all). */
   readonly invitations: readonly InvitationView[] | undefined;
+  /** The invite link, for holders of `members.invite` (with the invitations). */
+  readonly link?: InviteLinkView | undefined;
   readonly access: MyAccess;
   /** The roles every role picker offers (`roles.list`, spec 0037, AC-1439), most power first. */
   readonly roles: RolesList;
@@ -98,6 +103,7 @@ export function MembersScreen({
   search,
   onSearch,
   invitations,
+  link,
   access,
   roles,
 }: MembersScreenProps) {
@@ -455,18 +461,32 @@ export function MembersScreen({
         >
           <TabPanel id="members">{membersList}</TabPanel>
           <TabPanel id="invitations">
-            <Table
-              label={strings.invitationsTab}
-              columns={INVITATION_COLUMNS}
-              rows={invitations}
-              getRowId={(invitation) => invitation.id}
-              renderCell={invitationCell}
-              emptyState={
-                <EmptyState icon="mail" title={strings.noInvitations}>
-                  {strings.noInvitationsText}
-                </EmptyState>
-              }
-            />
+            <SettingsStack>
+              {link !== undefined && (
+                <InviteLinkCard
+                  data={data}
+                  slug={slug}
+                  link={link}
+                  ask={setQuestion}
+                  onChanged={reload}
+                  onFailed={(message) => {
+                    toasts.toast({ tone: 'danger', message });
+                  }}
+                />
+              )}
+              <Table
+                label={strings.invitationsTab}
+                columns={INVITATION_COLUMNS}
+                rows={invitations}
+                getRowId={(invitation) => invitation.id}
+                renderCell={invitationCell}
+                emptyState={
+                  <EmptyState icon="mail" title={strings.noInvitations}>
+                    {strings.noInvitationsText}
+                  </EmptyState>
+                }
+              />
+            </SettingsStack>
           </TabPanel>
         </Tabs>
       ) : (

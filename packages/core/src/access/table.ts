@@ -92,6 +92,9 @@ export const ACCESS_TABLE = {
   listInvitations: { permission: 'members.invite' },
   resendInvite: { permission: 'members.invite' },
   revokeInvite: { permission: 'members.invite' },
+  // Slice 6, AC-818: the invite link.
+  getInviteLink: { permission: 'members.invite' },
+  setInviteLink: { permission: 'members.invite' },
   getMyAccess: { anyMember: true },
   // The limits' usage (spec 0012, AC-243): any member, filtered by their access inside.
   getUsage: { anyMember: true },

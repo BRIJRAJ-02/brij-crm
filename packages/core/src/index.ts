@@ -58,11 +58,13 @@ export { milestoneHook, type ReachedMilestone } from './milestones/milestones.ts
 export { type AuditSource } from './members/audit.ts';
 export {
   acceptInvite,
+  getInviteLink,
   inviteMembers,
   listInvitations,
   peekInvite,
   resendInvite,
   revokeInvite,
+  setInviteLink,
   type AcceptedInvite,
   type AcceptingUser,
   type InviteOutcome,

@@ -113,7 +113,7 @@ export function InviteScreen({ data, token, invitation, user }: InviteScreenProp
       {user === undefined ? (
         <>
           <p>{strings.forAddress(invitation.invitedEmailMasked)}</p>
-          <p>{strings.newHere}</p>
+          <p>{invitation.invitedEmailMasked === undefined ? strings.newHereLink : strings.newHere}</p>
           {message}
           <ButtonLink variant="primary" href={signInHref(here)}>
             {strings.signInToAccept}

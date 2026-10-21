@@ -13,3 +13,11 @@ export const MEMBERS_PAGE_MAX = 500;
 
 /** The longest search the Members page sends. */
 export const MEMBER_SEARCH_MAX = 100;
+
+/** How long an invite link may work (AC-818), in days from when it is set; no expiry is the default. */
+export const INVITE_LINK_DAYS = [1, 7, 30] as const;
+/** One of the invite link's expiries, in days. */
+export type InviteLinkDays = (typeof INVITE_LINK_DAYS)[number];
+
+/** The most people one invite link may let in, when it is capped (AC-818). */
+export const INVITE_LINK_USES_MAX = 1000;

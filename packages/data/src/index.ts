@@ -30,6 +30,7 @@ import type {
   FormSummary,
   FormView,
   InvitationView,
+  InviteLinkView,
   InvitePeek,
   InviteResult,
   JobView,
@@ -49,6 +50,7 @@ import type {
   ViewLayout,
   ViewVisibility,
 } from '@crm/contracts';
+import type { InviteLinkDays } from '@crm/contracts/team-limits';
 import { createORPCClient } from '@orpc/client';
 import { RPCLink } from '@orpc/client/fetch';
 import type { ContractRouterClient } from '@orpc/contract';
@@ -171,6 +173,7 @@ export type {
   InputIssue,
   JobStatus,
   InvitationView,
+  InviteLinkView,
   InvitePeek,
   InviteResult,
   JobView,
@@ -225,7 +228,14 @@ export type { Hue, ObjectIcon, RichTextDoc } from '@crm/contracts/values';
 // the server's own functions without loading the schema library.
 export { isReservedSlug, RESERVED_SLUGS, toApiSlug } from '@crm/contracts/slugs';
 export { ROLE_DESCRIPTIONS, ROLE_LABELS, ROLES } from '@crm/contracts/roles';
-export { INVITE_BATCH_MAX, MEMBER_SEARCH_MAX, MEMBERS_PAGE } from '@crm/contracts/team-limits';
+export {
+  INVITE_BATCH_MAX,
+  INVITE_LINK_DAYS,
+  INVITE_LINK_USES_MAX,
+  MEMBER_SEARCH_MAX,
+  MEMBERS_PAGE,
+  type InviteLinkDays,
+} from '@crm/contracts/team-limits';
 export { freeHue, PICKER_TYPES, STARTER_STAGES, type PickerType } from '@crm/contracts/picker';
 export {
   MAX_PENDING_OPTIONS,
@@ -2457,6 +2467,25 @@ export function createDataLayer({
       /** Revokes an open invitation: its link stops working at once. */
       revoke: (workspace: string, invitationId: string): Promise<void> =>
         call((options) => api.invitations.revoke({ workspace, invitationId, mutationId: mintId() }, options)),
+      /** The workspace's invite link (spec 0031, AC-818): holders of `members.invite` only. Read fresh each time. */
+      link: (workspace: string): Promise<InviteLinkView> =>
+        call((options) => api.invitations.link({ workspace }, options)),
+      /**
+       * Turns the invite link on or off, changes it, or resets it (a new
+       * token, the old link dead), waiting for the server. A field left out
+       * keeps its value; `null` takes a limit away. Answers the link as it now
+       * is. Refusals: `FORBIDDEN`, `INVITES_LIMIT`.
+       */
+      setLink: (
+        workspace: string,
+        change: {
+          readonly enabled: boolean;
+          readonly expiresInDays?: InviteLinkDays | null;
+          readonly maxUses?: number | null;
+          readonly reset?: boolean;
+        },
+      ): Promise<InviteLinkView> =>
+        call((options) => api.invitations.setLink({ workspace, ...change, mutationId: mintId() }, options)),
       /** What an invitation link shows before accepting, with no session needed; `INVITE_INVALID` for any bad link. */
       peek: (token: string): Promise<InvitePeek> => attempt((options) => api.invitations.peek({ token }, options)),
       /**

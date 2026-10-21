@@ -1,14 +1,17 @@
-// Invitations into a workspace (spec 0031, slice 2): inviting by email, the
-// open list, resend and revoke, the peek `/invite/:token` shows, and
-// accepting. Holders of `members.invite` manage them; only owners invite
-// owners. A token is 32 random bytes handed back to the caller once, to email;
-// only its SHA-256 is stored. Every invite, resend, revoke and accept writes
+// Invitations into a workspace (spec 0031, slices 2 and 6): inviting by
+// email, the open list, resend and revoke, the workspace's invite link, the
+// peek `/invite/:token` shows, and accepting. Holders of `members.invite` manage them; only owners invite
+// owners. A token is 32 random bytes; an email invitation's is handed back to
+// the caller once, to email, and only its SHA-256 is stored, while the invite
+// link keeps its own so an admin can copy it again. Every invite, resend, revoke and accept writes
 // its audit row in its own transaction.
 import { randomBytes } from 'node:crypto';
 import { and, asc, count, desc, eq, inArray, ne, sql } from 'drizzle-orm';
 import { alias } from 'drizzle-orm/pg-core';
 import {
   INVITE_BATCH_MAX,
+  INVITE_LINK_DAYS,
+  INVITE_LINK_USES_MAX,
   INVITES_LIMIT,
   maskEmail,
   OWNER_RULES_MESSAGE,
@@ -16,6 +19,8 @@ import {
   ROLE_PERMISSIONS,
   SEAT_LIMIT_MESSAGE,
   type InvitationView,
+  type InviteLinkRole,
+  type InviteLinkView,
   type InvitePeek,
   type InviteRefused,
   type Role,
@@ -25,7 +30,7 @@ import { checkId, newId } from '../engine/ids.ts';
 import { limitsOf } from '../engine/limits.ts';
 import { refuse } from '../engine/refusals.ts';
 import type { EngineScope } from '../engine/scope.ts';
-import { runWrite, type AfterWrite } from '../engine/write.ts';
+import { runWrite, type AfterWrite, type WriteContext } from '../engine/write.ts';
 import { enterInvitation, inviteInvalid, inviteTokenHash, type EnteredInvitation } from '../access/door.ts';
 import { checkScope } from '../access/mint.ts';
 import { can, isRole } from '../access/policy.ts';
@@ -535,6 +540,10 @@ export async function revokeInvite(
 /** An invitation as acceptance reads it, inside its workspace. */
 interface HeldInvitation {
   readonly id: string;
+  readonly kind: 'email' | 'link';
+  /** How many it may let in (one for an email invitation; none for an uncapped link) and has. */
+  readonly maxUses: number | null;
+  readonly uses: number;
   readonly email: string;
   readonly role: Role;
   readonly status: string;
@@ -547,8 +556,15 @@ interface HeldInvitation {
   readonly slug: string;
 }
 
-/** Whether an open invitation opens anything now: open, unexpired, and still vouched for by its sender. */
-const opensNow = (held: HeldInvitation): boolean => held.status === 'open' && held.live && held.isVouched;
+/**
+ * Whether an open invitation opens anything now: open, unexpired, still
+ * vouched for by its sender, and (a link) not yet at its most uses.
+ */
+const opensNow = (held: HeldInvitation): boolean =>
+  held.status === 'open' &&
+  held.live &&
+  held.isVouched &&
+  (held.kind === 'email' || held.maxUses === null || held.uses < held.maxUses);
 
 /**
  * The invitation `entered` names, with its workspace and the member who last
@@ -563,7 +579,10 @@ async function readInvitation(tx: WorkspaceTx, workspaceId: string, entered: Ent
       role: invitations.role,
       status: invitations.status,
       kind: invitations.kind,
-      live: sql<boolean>`coalesce(${invitations.expiresAt} > now(), false)`,
+      // An email invitation always has an expiry; a link without one never expires.
+      live: sql<boolean>`coalesce(${invitations.expiresAt} > now(), ${invitations.kind} = 'link')`,
+      maxUses: invitations.maxUses,
+      uses: invitations.uses,
       usedBy: invitations.usedByMemberId,
       sentByType: invitations.updatedByType,
       inviterName: inviter.name,
@@ -587,9 +606,13 @@ async function readInvitation(tx: WorkspaceTx, workspaceId: string, entered: Ent
       ),
     );
   const [row] = await (lock ? query.for('update', { of: invitations }) : query);
-  if (row === undefined || row.kind !== 'email' || row.deletedAt !== null || !isRole(row.role)) return undefined;
+  if (row === undefined || (row.kind !== 'email' && row.kind !== 'link') || row.deletedAt !== null) return undefined;
+  if (!isRole(row.role)) return undefined;
   const held: HeldInvitation = {
     id: row.id,
+    kind: row.kind,
+    maxUses: row.maxUses,
+    uses: row.uses,
     email: row.email ?? '',
     role: row.role,
     status: row.status,
@@ -622,7 +645,7 @@ export async function peekInvite(deps: { readonly db: Database }, token: string)
     workspaceName: held.workspaceName,
     inviterName: held.inviterName ?? '',
     role: held.role,
-    invitedEmailMasked: maskEmail(held.email),
+    ...(held.kind === 'email' ? { invitedEmailMasked: maskEmail(held.email) } : {}),
   };
 }
 
@@ -686,6 +709,7 @@ export async function acceptInvite(
       if (held.status === 'used' && mine !== undefined && held.usedBy === mine.id)
         return { ...opened, memberId: mine.id };
       if (!opensNow(held)) throw inviteInvalid();
+      if (held.kind === 'link') return joinByLink(context, held, user, email, mine?.id, options);
       if (!user.emailVerified || held.email !== email) throw mismatch(held.email);
       if (mine !== undefined) {
         // In already by another way: the invitation is spent, and they stay as they are, with its row in the log.
@@ -761,6 +785,261 @@ export async function acceptInvite(
       // Everyone's member list reads them in (spec 0007, AC-82).
       context.record({ members: [memberId] });
       return { ...opened, memberId };
+    },
+    hooks,
+  );
+  return result;
+}
+
+/** An expiry `days` from now, as SQL. */
+const LINK_EXPIRY = (days: number) => sql`now() + make_interval(days => ${days})`;
+
+/**
+ * Joins the signed in person through the invite link (AC-818): a verified
+ * email, a seat (the link holds none while open), an active member with the
+ * link's role, their directory row, one more use on the link, a `members`
+ * outbox row and an audit row. One already in is answered with the
+ * workspace, and the link spends nothing.
+ */
+async function joinByLink(
+  context: WriteContext,
+  held: HeldInvitation,
+  user: AcceptingUser,
+  email: string,
+  mineId: string | undefined,
+  options: InviteWriteOptions,
+): Promise<AcceptedInvite> {
+  const { tx, scope } = context;
+  const opened = { slug: held.slug, workspaceId: scope.workspaceId };
+  if (mineId !== undefined) return { ...opened, memberId: mineId };
+  if (!user.emailVerified) {
+    throw refuse('INVITE_EMAIL_MISMATCH', 'Verify your email address first, then open the link again.');
+  }
+  // Someone else in the workspace already holds this address: the link can't make a second member with it.
+  const [taken] = await tx
+    .select({ id: members.id })
+    .from(members)
+    .where(
+      and(
+        eq(members.workspaceId, scope.workspaceId),
+        eq(members.status, 'active'),
+        sql`lower(${members.email}) = ${email}`,
+      ),
+    )
+    .limit(1);
+  if (taken !== undefined) throw inviteInvalid();
+  await checkSeats(tx, scope, 1);
+  const memberId = newId();
+  const name = user.name.trim() === '' ? (email.split('@')[0] ?? email) : user.name.trim();
+  await tx.insert(members).values({
+    workspaceId: scope.workspaceId,
+    id: memberId,
+    userId: user.id,
+    name: name.slice(0, 80),
+    email,
+    role: held.role,
+    createdByType: 'system',
+    updatedByType: 'system',
+  });
+  await tx.execute(
+    sql`insert into auth.workspace_membership (user_id, workspace_id, member_id) values (${user.id}, ${scope.workspaceId}, ${memberId}) on conflict do nothing`,
+  );
+  // The link stays open for the next person; its uses count up to its most.
+  await tx
+    .update(invitations)
+    .set({ uses: sql`${invitations.uses} + 1`, updatedAt: sql`now()` })
+    .where(and(eq(invitations.workspaceId, scope.workspaceId), eq(invitations.id, held.id)));
+  await writeAudit(
+    tx,
+    scope.workspaceId,
+    { type: 'member', id: memberId },
+    {
+      action: 'invitation.accepted',
+      targetType: 'member',
+      targetId: memberId,
+      after: { role: held.role, invitationId: held.id, via: 'link' },
+    },
+    options.source,
+  );
+  context.record({ members: [memberId] });
+  return { ...opened, memberId };
+}
+
+/** The open invite link's row, locked when `lock`. */
+async function openLink(tx: WorkspaceTx, workspaceId: string, lock: boolean) {
+  const query = tx
+    .select({
+      id: invitations.id,
+      role: invitations.role,
+      linkToken: invitations.linkToken,
+      expiresAt: invitations.expiresAt,
+      maxUses: invitations.maxUses,
+      uses: invitations.uses,
+      isExpired: sql<boolean>`coalesce(${invitations.expiresAt} <= now(), false)`,
+    })
+    .from(invitations)
+    .where(and(eq(invitations.workspaceId, workspaceId), eq(invitations.status, 'open'), eq(invitations.kind, 'link')));
+  const [row] = await (lock ? query.for('update') : query);
+  return row;
+}
+
+/** The link as the card shows it, from its row (or off without one). */
+function linkView(row: Awaited<ReturnType<typeof openLink>>): InviteLinkView {
+  if (row === undefined || row.linkToken === null) return { enabled: false, uses: 0, isSpent: false };
+  return {
+    enabled: true,
+    token: row.linkToken,
+    role: row.role === 'member' ? row.role : 'member',
+    ...(row.expiresAt === null ? {} : { expiresAt: new Date(row.expiresAt).toISOString() }),
+    ...(row.maxUses === null ? {} : { maxUses: row.maxUses }),
+    uses: row.uses,
+    isSpent: row.isExpired || (row.maxUses !== null && row.uses >= row.maxUses),
+  };
+}
+
+/** The workspace's invite link (spec 0031, AC-818), for the Members page's card: holders of `members.invite` only. */
+export async function getInviteLink(scope: EngineScope): Promise<InviteLinkView> {
+  checkInvites(scope);
+  return inWorkspace(scope, async (tx) => linkView(await openLink(tx, scope.workspaceId, false)));
+}
+
+/**
+ * Turns the invite link on or off, or changes it (spec 0031, AC-818): needs
+ * `members.invite`. Off revokes the open link. On makes one (a member's link
+ * that never expires and has no cap, unless told otherwise) or changes the
+ * open one in place, keeping its token; `reset` revokes it and makes a new
+ * one with the same settings. An expiry counts from now. Making one counts
+ * against the open invitation cap (409 `INVITES_LIMIT`). One audit row,
+ * never the token.
+ */
+export async function setInviteLink(
+  scope: EngineScope,
+  input: {
+    readonly enabled: boolean;
+    readonly role?: InviteLinkRole;
+    readonly expiresInDays?: number | null;
+    readonly maxUses?: number | null;
+    readonly reset?: boolean;
+  },
+  hooks: readonly AfterWrite[] = [],
+  options: InviteWriteOptions = {},
+): Promise<InviteLinkView> {
+  checkInvites(scope);
+  const days = input.expiresInDays;
+  if (days !== undefined && days !== null && !(INVITE_LINK_DAYS as readonly number[]).includes(days)) {
+    throw refuse('CONFIG_INVALID', 'Pick 1, 7 or 30 days, or no expiry.');
+  }
+  const uses = input.maxUses;
+  if (uses !== undefined && uses !== null && (!Number.isInteger(uses) || uses < 1 || uses > INVITE_LINK_USES_MAX)) {
+    throw refuse('CONFIG_INVALID', `Allow 1 to ${String(INVITE_LINK_USES_MAX)} uses, or no limit.`);
+  }
+  const { result } = await runWrite(
+    scope,
+    async ({ tx }) => {
+      await checkActingNow(tx, scope, 'member');
+      await lockInvitations(tx, scope.workspaceId);
+      const open = await openLink(tx, scope.workspaceId, true);
+      const by = touched(scope);
+      const revoke = async (id: string) => {
+        await tx
+          .update(invitations)
+          .set({ status: 'revoked', ...by })
+          .where(and(eq(invitations.workspaceId, scope.workspaceId), eq(invitations.id, id)));
+      };
+      if (!input.enabled) {
+        if (open === undefined) return linkView(undefined);
+        await revoke(open.id);
+        await writeAudit(
+          tx,
+          scope.workspaceId,
+          scope.actor,
+          {
+            action: 'invitation.link_revoked',
+            targetType: 'invitation',
+            targetId: open.id,
+            before: { status: 'open' },
+            after: { status: 'revoked' },
+          },
+          options.source,
+        );
+        return linkView(undefined);
+      }
+      const expiresAt =
+        days === undefined
+          ? open === undefined
+            ? null
+            : open.expiresAt === null
+              ? null
+              : sql`${new Date(open.expiresAt).toISOString()}::timestamptz`
+          : days === null
+            ? null
+            : LINK_EXPIRY(days);
+      const maxUses = uses === undefined ? (open?.maxUses ?? null) : uses;
+      const role = input.role ?? 'member';
+      const changes = {
+        ...(input.role === undefined ? {} : { role }),
+        ...(days === undefined ? {} : { expiresInDays: days }),
+        ...(uses === undefined ? {} : { maxUses: uses }),
+      };
+      if (open !== undefined && input.reset !== true) {
+        await tx
+          .update(invitations)
+          .set({ role, expiresAt, maxUses, ...by })
+          .where(and(eq(invitations.workspaceId, scope.workspaceId), eq(invitations.id, open.id)));
+        await writeAudit(
+          tx,
+          scope.workspaceId,
+          scope.actor,
+          { action: 'invitation.link_set', targetType: 'invitation', targetId: open.id, after: changes },
+          options.source,
+        );
+        return linkView(await openLink(tx, scope.workspaceId, false));
+      }
+      if (open !== undefined) await revoke(open.id);
+      else {
+        const [openCount] = await tx
+          .select({ n: count() })
+          .from(invitations)
+          .where(and(eq(invitations.workspaceId, scope.workspaceId), eq(invitations.status, 'open')));
+        const cap = limitsOf(scope).openInvitations;
+        if ((openCount?.n ?? 0) + 1 > cap) {
+          throw refuse(
+            'INVITES_LIMIT',
+            `A workspace holds at most ${String(cap)} open invitations. Revoke some first.`,
+          );
+        }
+      }
+      const { token, hash } = mintToken();
+      const id = newId();
+      await tx.insert(invitations).values({
+        workspaceId: scope.workspaceId,
+        id,
+        kind: 'link',
+        role,
+        tokenHash: hash,
+        linkToken: token,
+        expiresAt,
+        maxUses,
+        createdByType: by.updatedByType,
+        createdById: by.updatedById,
+        createdByMemberId: by.updatedByMemberId,
+        updatedByType: by.updatedByType,
+        updatedById: by.updatedById,
+        updatedByMemberId: by.updatedByMemberId,
+      });
+      await writeAudit(
+        tx,
+        scope.workspaceId,
+        scope.actor,
+        {
+          action: 'invitation.link_set',
+          targetType: 'invitation',
+          targetId: id,
+          after: { ...changes, role, ...(open === undefined ? { created: true } : { reset: true, replaces: open.id }) },
+        },
+        options.source,
+      );
+      return linkView(await openLink(tx, scope.workspaceId, false));
     },
     hooks,
   );
