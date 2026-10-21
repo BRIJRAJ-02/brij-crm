@@ -3,6 +3,7 @@
 // the shared error shape on each.
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { AUTH_BODY_LIMIT_BYTES, redactedPath, routeOf, RPC_BODY_LIMIT_BYTES } from './app.ts';
+import { AUTH_ROUTES } from './auth/auth.ts';
 import { EDGE_HEADER, ORIGIN_HEADER } from './edge.ts';
 import { APP_URL, captureLogs, createTestApp } from './testing.ts';
 
@@ -230,6 +231,24 @@ describe('the body limit on /api/auth', () => {
 describe('the Better Auth routes the API serves', () => {
   const app = createTestApp();
 
+  it('serves exactly the reviewed list (spec 0033, AC-900)', () => {
+    expect([...AUTH_ROUTES].sort()).toEqual(
+      [
+        '/callback/google',
+        '/email-otp/send-verification-otp',
+        '/get-session',
+        '/sign-in/email-otp',
+        '/sign-in/social',
+        '/sign-out',
+        '/two-factor/disable',
+        '/two-factor/enable',
+        '/two-factor/generate-backup-codes',
+        '/two-factor/verify-backup-code',
+        '/two-factor/verify-totp',
+      ].sort(),
+    );
+  });
+
   it.each([
     ['POST', '/update-user'],
     ['GET', '/list-sessions'],
@@ -242,6 +261,11 @@ describe('the Better Auth routes the API serves', () => {
     ['POST', '/sign-up/email'],
     ['POST', '/sign-in/email'],
     ['POST', '/email-otp/check-verification-otp'],
+    // Two factor's routes that stay shut (spec 0033, AC-886, AC-900): the email second factor, and the secret again.
+    ['POST', '/two-factor/send-otp'],
+    ['POST', '/two-factor/verify-otp'],
+    ['POST', '/two-factor/get-totp-uri'],
+    ['POST', '/two-factor/view-backup-codes'],
     // A listed route, padded or encoded, is a different address.
     ['POST', '/sign-out/'],
     ['POST', '/sign%2Dout'],

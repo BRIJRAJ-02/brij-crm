@@ -19,6 +19,26 @@ const MESSAGES: Readonly<Record<string, string>> = {
   TOO_MANY_ATTEMPTS: 'Too many wrong tries for this code. Send a new one.',
 };
 
+/**
+ * The two factor plugin's codes, as ours (spec 0033, AC-882): a wrong app or
+ * backup code, a second step that ran out or had too many wrong codes, and
+ * the account locked for a while.
+ */
+const TWO_FACTOR_CODES: Readonly<Record<string, { readonly code: ErrorCode; readonly message: string }>> = {
+  INVALID_CODE: { code: 'CODE_INVALID', message: 'That code didn’t work. Try the newest code in your app.' },
+  INVALID_BACKUP_CODE: { code: 'CODE_INVALID', message: 'That backup code didn’t work. Each one works once.' },
+  TOO_MANY_ATTEMPTS_REQUEST_NEW_CODE: {
+    code: 'SIGN_IN_EXPIRED',
+    message: 'Too many wrong codes for this sign in. Sign in again.',
+  },
+  INVALID_TWO_FACTOR_COOKIE: { code: 'SIGN_IN_EXPIRED', message: 'This sign in has expired. Sign in again.' },
+  TOTP_ALREADY_ENABLED: { code: 'INPUT_INVALID', message: 'Two factor sign in is already on.' },
+  TWO_FACTOR_NOT_ENABLED: { code: 'INPUT_INVALID', message: 'Two factor sign in is off.' },
+};
+
+/** What a locked second step says (AC-882). */
+const LOCKED_MESSAGE = 'Too many wrong codes. Wait 15 minutes, then try again.';
+
 /** The code a refusal without one gets, by its status. */
 const BY_STATUS: Readonly<Record<number, ErrorCode>> = {
   400: 'INPUT_INVALID',
@@ -50,8 +70,9 @@ export async function authErrorResponse(response: Response, route = ''): Promise
     const headers = new Headers(response.headers);
     const wait = response.headers.get('retry-after') ?? response.headers.get('x-retry-after');
     headers.set('retry-after', wait ?? String(retryAfterSeconds('RATE_LIMITED')));
+    const locked = code === 'ACCOUNT_TEMPORARILY_LOCKED' ? LOCKED_MESSAGE : undefined;
     return json(
-      { code: 'RATE_LIMITED', message: message ?? 'Too many tries. Wait a moment, then try again.' },
+      { code: 'RATE_LIMITED', message: locked ?? message ?? 'Too many tries. Wait a moment, then try again.' },
       errorStatus('RATE_LIMITED'),
       headers,
     );
@@ -62,6 +83,8 @@ export async function authErrorResponse(response: Response, route = ''): Promise
     captureFault(new Error(`Sign in route answered ${String(response.status)}`), { route: `auth ${route}` });
     return json({ code: 'INTERNAL', message: 'Something went wrong. Try again.' }, 500, response.headers);
   }
+  const ours = code === undefined ? undefined : TWO_FACTOR_CODES[code];
+  if (ours !== undefined) return json(ours, errorStatus(ours.code), response.headers);
   const answered = code ?? BY_STATUS[response.status] ?? 'INPUT_INVALID';
   return json(
     { code: answered, message: MESSAGES[answered] ?? message ?? 'This request was refused.' },

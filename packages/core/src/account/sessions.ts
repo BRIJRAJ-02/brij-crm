@@ -16,12 +16,18 @@ import {
 } from '@crm/contracts';
 import type { IdentityStore, SessionListing } from '@crm/db';
 import { inputInvalid, refuse } from '../engine/refusals.ts';
+import { FRESH_MESSAGE, requireFresh } from './step-up.ts';
 
 /** What the session procedures need. */
 export interface SessionsDeps {
   readonly identity: Pick<
     IdentityStore,
-    'listSessions' | 'revokeSession' | 'revokeOtherSessions' | 'sessionVerifiedAt' | 'recordSecurityEvent'
+    | 'listSessions'
+    | 'revokeSession'
+    | 'revokeOtherSessions'
+    | 'sessionVerification'
+    | 'recordSecurityEvent'
+    | 'forgetTrustedDevices'
   >;
   /**
    * Cuts every live connection of the user with the signed out code (4501),
@@ -47,8 +53,8 @@ export const SESSION_CURSOR_MESSAGE = 'That list position is not valid here. Sta
 /** What a session id that isn't the caller's (or is gone) answers: the same either way. */
 export const UNKNOWN_SESSION = 'That device is already signed out.';
 
-/** What "Sign out of all other devices" answers on a session that hasn't proven itself lately (AC-896). */
-export const STEP_UP_MESSAGE = `Confirm it's you first: this needs a sign in in the last ${String(STEP_UP_MINUTES)} minutes.`;
+/** What a sign out of another device answers on a session that hasn't proven itself lately (AC-896). */
+export const STEP_UP_MESSAGE = FRESH_MESSAGE;
 
 const MOMENT = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{6}Z$/;
 
@@ -111,7 +117,8 @@ export async function listMySessions(
 }
 
 /**
- * Signs out one of the caller's sessions by id (AC-891). Another person's
+ * Signs out one of the caller's sessions by id (AC-891); another device
+ * needs a fresh verification (AC-896), 403 STEP_UP_REQUIRED. Another person's
  * session, a gone one and an unknown id all answer the same NOT_FOUND.
  */
 export async function revokeMySession(
@@ -119,6 +126,9 @@ export async function revokeMySession(
   caller: SessionCaller,
   input: RevokeSessionInput,
 ): Promise<{ readonly ok: true }> {
+  // Ending another device needs a recent check, so a stolen older session can't sign the owner out everywhere
+  // device by device; signing out this one never does.
+  if (input.sessionId !== caller.sessionId) await requireFresh(deps, caller);
   const ended = await deps.identity.revokeSession(caller.userId, input.sessionId);
   if (ended === undefined) throw refuse('NOT_FOUND', UNKNOWN_SESSION);
   // Cut the device off first (it never throws), so a failed event write can't leave it connected.
@@ -143,15 +153,15 @@ export function isFresh(verifiedAt: string | undefined, now: number): boolean {
 
 /**
  * Signs out every session of the caller but this one (AC-892). It needs a
- * fresh verification on this session (AC-896): until milestone 2's step up,
- * that is a sign in within the last 10 minutes; otherwise 403
- * STEP_UP_REQUIRED.
+ * fresh verification on this session (AC-896): a sign in or a step up within
+ * the last 10 minutes; otherwise 403 STEP_UP_REQUIRED. Remembered devices
+ * are forgotten too.
  */
 export async function revokeMyOtherSessions(deps: SessionsDeps, caller: SessionCaller): Promise<RevokedSessions> {
-  const now = (deps.now ?? Date.now)();
-  const verifiedAt = await deps.identity.sessionVerifiedAt(caller.userId, caller.sessionId);
-  if (!isFresh(verifiedAt, now)) throw refuse('STEP_UP_REQUIRED', STEP_UP_MESSAGE);
+  await requireFresh(deps, caller);
   const count = await deps.identity.revokeOtherSessions(caller.userId, caller.sessionId);
+  // Signing out everywhere forgets every remembered device too (AC-884, AC-892).
+  await deps.identity.forgetTrustedDevices(caller.userId);
   if (count > 0) {
     await deps.signedOut(caller.userId);
     await deps.identity.recordSecurityEvent({

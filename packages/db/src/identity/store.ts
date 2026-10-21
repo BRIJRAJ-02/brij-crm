@@ -18,6 +18,7 @@ import { timePool } from '../timing.ts';
 import {
   account,
   rateLimit,
+  twoFactor,
   securityEvent,
   session,
   user,
@@ -29,8 +30,21 @@ import {
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
+/** How a session last proved who it is: a second factor, or an email code or Google alone. */
+export type VerifiedWith = 'email' | 'second_factor';
+
+/** When and how a session last proved who it is. */
+export interface SessionVerification {
+  /** ISO 8601 UTC. */
+  readonly at: string;
+  readonly with: VerifiedWith;
+}
+
+/** Wrong tries a step up email code allows before it is used up. */
+export const STEP_UP_CODE_TRIES = 5;
+
 /** Better Auth's models, keyed by its model names, as its Drizzle adapter looks them up. */
-const AUTH_MODELS = { user, session, account, verification, rateLimit } as const;
+const AUTH_MODELS = { user, session, account, verification, rateLimit, twoFactor } as const;
 
 /** A workspace as the directory knows it: enough to find it and to list it, never to enter it. */
 export interface DirectoryWorkspace {
@@ -139,6 +153,36 @@ export interface IdentityStore {
    * up), ISO 8601 UTC; undefined for a session that isn't theirs or has none.
    */
   sessionVerifiedAt(userId: string, sessionId: string): Promise<string | undefined>;
+  /**
+   * How this session last proved who it is (spec 0033, AC-885, AC-896): when,
+   * and whether with a second factor or by email alone; undefined for a
+   * session that isn't the user's or is gone.
+   */
+  sessionVerification(userId: string, sessionId: string): Promise<SessionVerification | undefined>;
+  /** Marks this session of the user as having just proved who it is (a step up). True when it was theirs. */
+  markSessionVerified(userId: string, sessionId: string, verifiedWith: VerifiedWith): Promise<boolean>;
+  /**
+   * Forgets every remembered device of the user (AC-884): Better Auth keeps
+   * each as a `trust-device-*` verification row whose value is the user id.
+   */
+  forgetTrustedDevices(userId: string): Promise<void>;
+  /** Drops the sign in event of a session that was held back for its second step (it never came to be). */
+  forgetSignInEvent(userId: string, sessionId: string): Promise<void>;
+  /**
+   * The user's two factor state (AC-881): on or off, and whether an app was
+   * set up and checked; the encrypted secret and codes never leave here.
+   */
+  twoFactorState(userId: string): Promise<{ readonly enabled: boolean; readonly appVerified: boolean }>;
+  /**
+   * Keeps a step up email code for one session (AC-896), hashed, for
+   * `STEP_UP_CODE_MINUTES`, replacing any earlier one.
+   */
+  putStepUpCode(sessionId: string, codeHash: string, expiresAt: Date): Promise<void>;
+  /**
+   * Checks a step up email code: `ok` once (the code is used up), `wrong`
+   * (a try is counted; the fifth wrong try ends the code), or `missing`.
+   */
+  checkStepUpCode(sessionId: string, codeHash: string): Promise<'ok' | 'wrong' | 'missing'>;
   /** Keeps one security event (AC-898). */
   recordSecurityEvent(event: SecurityEventInput): Promise<void>;
   /** Saves the name only when the user has none yet (an email code sign up starts empty). True when it saved. */
@@ -307,6 +351,94 @@ export function createIdentityStore(options: DatabaseOptions): IdentityStore {
         .where(and(eq(session.id, sessionId), eq(session.userId, userId), sql`${session.expiresAt} > now()`))
         .limit(1);
       return row?.verifiedAt ? row.verifiedAt.toISOString() : undefined;
+    },
+
+    async sessionVerification(userId, sessionId) {
+      if (!UUID.test(userId) || !UUID.test(sessionId)) return undefined;
+      const [row] = await db
+        .select({ at: session.verifiedAt, with: session.verifiedWith })
+        .from(session)
+        .where(and(eq(session.id, sessionId), eq(session.userId, userId), sql`${session.expiresAt} > now()`))
+        .limit(1);
+      if (row?.at === undefined || row.at === null) return undefined;
+      return { at: row.at.toISOString(), with: row.with ?? 'email' };
+    },
+
+    async markSessionVerified(userId, sessionId, verifiedWith) {
+      if (!UUID.test(userId) || !UUID.test(sessionId)) return false;
+      const marked = await db
+        .update(session)
+        .set({ verifiedAt: sql`now()`, verifiedWith })
+        .where(and(eq(session.id, sessionId), eq(session.userId, userId), sql`${session.expiresAt} > now()`))
+        .returning({ id: session.id });
+      return marked.length > 0;
+    },
+
+    async forgetTrustedDevices(userId) {
+      if (!UUID.test(userId)) return;
+      await db
+        .delete(verification)
+        .where(and(eq(verification.value, userId), sql`${verification.identifier} like 'trust-device-%'`));
+    },
+
+    async forgetSignInEvent(userId, sessionId) {
+      if (!UUID.test(userId) || !UUID.test(sessionId)) return;
+      await db
+        .delete(securityEvent)
+        .where(
+          and(
+            eq(securityEvent.userId, userId),
+            eq(securityEvent.sessionId, sessionId),
+            eq(securityEvent.kind, 'sign_in'),
+          ),
+        );
+    },
+
+    async twoFactorState(userId) {
+      if (!UUID.test(userId)) return { enabled: false, appVerified: false };
+      const [row] = await db
+        .select({ enabled: user.twoFactorEnabled, verified: twoFactor.verified })
+        .from(user)
+        .leftJoin(twoFactor, eq(twoFactor.userId, user.id))
+        .where(eq(user.id, userId))
+        .limit(1);
+      return { enabled: row?.enabled ?? false, appVerified: row?.verified ?? false };
+    },
+
+    async putStepUpCode(sessionId, codeHash, expiresAt) {
+      if (!UUID.test(sessionId)) return;
+      const identifier = `step-up-${sessionId}`;
+      await db.transaction(async (tx) => {
+        await tx.delete(verification).where(eq(verification.identifier, identifier));
+        await tx.insert(verification).values({ identifier, value: `${codeHash}:0`, expiresAt });
+      });
+    },
+
+    async checkStepUpCode(sessionId, codeHash) {
+      if (!UUID.test(sessionId)) return 'missing';
+      const identifier = `step-up-${sessionId}`;
+      return db.transaction(async (tx) => {
+        const [row] = await tx
+          .select({ id: verification.id, value: verification.value })
+          .from(verification)
+          .where(and(eq(verification.identifier, identifier), sql`${verification.expiresAt} > now()`))
+          .for('update')
+          .limit(1);
+        if (row === undefined) return 'missing' as const;
+        const [hash = '', triesText = '0'] = row.value.split(':');
+        if (hash === codeHash) {
+          await tx.delete(verification).where(eq(verification.id, row.id));
+          return 'ok' as const;
+        }
+        const tries = Number(triesText) + 1;
+        if (tries >= STEP_UP_CODE_TRIES) await tx.delete(verification).where(eq(verification.id, row.id));
+        else
+          await tx
+            .update(verification)
+            .set({ value: `${hash}:${String(tries)}` })
+            .where(eq(verification.id, row.id));
+        return 'wrong' as const;
+      });
     },
 
     async recordSecurityEvent(event) {

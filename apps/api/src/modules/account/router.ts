@@ -1,5 +1,25 @@
-import { listMySessions, revokeMyOtherSessions, revokeMySession, type SessionCaller } from '@crm/core';
+import { createHash, randomInt } from 'node:crypto';
+import {
+  accountSecurity,
+  listMySessions,
+  revokeMyOtherSessions,
+  revokeMySession,
+  startStepUp,
+  verifyStepUp,
+  type SessionCaller,
+  type StepUpDeps,
+} from '@crm/core';
+import { renderSignInCode } from '@crm/emails';
+import { apiError } from '../../errors.ts';
+import { log } from '../../log.ts';
 import { authed, type RequestContext, type SessionContext } from '../../orpc.ts';
+
+/** Step up checks per person (AC-882's limits, for a step up too): 5 in 5 minutes, 15 in an hour. */
+export const STEP_UP_CHECKS = { window: 5 * 60, max: 5 } as const;
+/** Step up checks per person in an hour. */
+export const STEP_UP_CHECKS_HOUR = { window: 60 * 60, max: 15 } as const;
+/** Step up emails per person: 3 in 10 minutes. */
+export const STEP_UP_SENDS = { window: 10 * 60, max: 3 } as const;
 
 // Bootstrap: a session, no workspace (spec 0033). Each procedure reaches only the caller's own sessions, by id.
 
@@ -10,6 +30,36 @@ function callerOf(context: RequestContext & SessionContext): SessionCaller {
     sessionId: context.sessionId,
     ...(context.clientIp === undefined ? {} : { ip: context.clientIp }),
   };
+}
+
+/** What a step up needs, from the request: the identity store, the second factor check, and the mailer. */
+function stepUpDeps(context: RequestContext): StepUpDeps {
+  return {
+    identity: context.identity,
+    checkSecondFactor: (userId, method, code) => context.auth.checkSecondFactor(userId, method, code),
+    backupCodesLeft: (userId) => context.auth.backupCodesLeft(userId),
+    sendCode: async (email, code) => {
+      // The code goes only to the account's own address; the log names neither.
+      const message = await renderSignInCode(code, { appOrigin: new URL(context.appUrl).origin });
+      await context.mailer.send({ to: email, ...message });
+      log.info('Step up code sent', { mail: context.mailer.transport });
+    },
+    mintCode: () => String(randomInt(0, 1_000_000)).padStart(6, '0'),
+    hashCode: (code) => createHash('sha256').update(code).digest('hex'),
+  };
+}
+
+/** Counts one use of a per person limit; refuses RATE_LIMITED when any window is spent. */
+async function limit(
+  context: RequestContext,
+  key: string,
+  windows: readonly { readonly window: number; readonly max: number }[],
+  message: string,
+): Promise<void> {
+  const decisions = await Promise.all(
+    windows.map((each, index) => context.identity.consumeRateLimit(`${key}|${String(index)}`, each)),
+  );
+  if (decisions.some((decision) => !decision.allowed)) throw apiError('RATE_LIMITED', message);
 }
 
 export const accountRouter = authed.account.router({
@@ -23,5 +73,29 @@ export const accountRouter = authed.account.router({
     revokeOthers: authed.account.sessions.revokeOthers.handler(({ context }) =>
       revokeMyOtherSessions({ identity: context.identity, signedOut: context.signedOut }, callerOf(context)),
     ),
+  },
+  security: {
+    get: authed.account.security.get.handler(({ context }) => accountSecurity(stepUpDeps(context), callerOf(context))),
+  },
+  stepUp: {
+    start: authed.account.stepUp.start.handler(async ({ context }) => {
+      await limit(
+        context,
+        `step-up-send:${context.user.id}`,
+        [STEP_UP_SENDS],
+        'Too many codes sent. Wait a few minutes.',
+      );
+      return startStepUp(stepUpDeps(context), { ...callerOf(context), email: context.user.email });
+    }),
+    verify: authed.account.stepUp.verify.handler(async ({ context, input }) => {
+      // Counted per person whatever the method, so neither an app code nor a backup code can be guessed at.
+      await limit(
+        context,
+        `step-up:${context.user.id}`,
+        [STEP_UP_CHECKS, STEP_UP_CHECKS_HOUR],
+        'Too many tries. Wait 15 minutes, then try again.',
+      );
+      return verifyStepUp(stepUpDeps(context), callerOf(context), input);
+    }),
   },
 });

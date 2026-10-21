@@ -1328,6 +1328,7 @@ describe('the auth schema: global identity, outside row level security (spec 000
     'rate_limit',
     'security_event',
     'session',
+    'two_factor',
     'user',
     'user_prefs',
     'verification',

@@ -7,3 +7,6 @@
  * as fresh for a sensitive change on that session (AC-896): 10 minutes.
  */
 export const STEP_UP_MINUTES = 10;
+
+/** How long a step up email code lasts (AC-896): 10 minutes. */
+export const STEP_UP_CODE_MINUTES = 10;

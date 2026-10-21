@@ -20,6 +20,7 @@ import type { WakeRelay } from '../src/realtime/wake.ts';
 import type { router } from '../src/router.ts';
 import { EDGE_HEADER, ORIGIN_HEADER } from '../src/edge.ts';
 import { APP_URL, TEST_EDGE_SECRET, testEnv, testServices } from '../src/testing.ts';
+import { totpCode } from '../src/auth/two-factor.ts';
 
 /** What Vercel's middleware adds to every request it proxies (outside local; ignored locally). */
 const THROUGH_THE_EDGE = { [EDGE_HEADER]: TEST_EDGE_SECRET, [ORIGIN_HEADER]: APP_URL };
@@ -186,4 +187,46 @@ export function rpcClient(app: App, cookie?: string): RouterClient<typeof router
       fetch: async (request) => app.fetch(request),
     }),
   );
+}
+
+/** The secret an otpauth URI carries (base32), as the plugin keys its codes: the text it encoded. */
+export function secretOf(uri: string): string {
+  const encoded = new URL(uri).searchParams.get('secret') ?? '';
+  const alphabet = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ234567';
+  let bits = '';
+  for (const char of encoded.toUpperCase()) bits += alphabet.indexOf(char).toString(2).padStart(5, '0');
+  const bytes: number[] = [];
+  for (let at = 0; at + 8 <= bits.length; at += 8) bytes.push(Number.parseInt(bits.slice(at, at + 8), 2));
+  return Buffer.from(bytes).toString('utf8');
+}
+
+/** Merges cookie headers, later ones winning (a renewed session replaces the old). */
+export function withCookies(...cookies: string[]): string {
+  const jar = new Map<string, string>();
+  for (const header of cookies) {
+    for (const pair of header.split('; ').filter((each) => each !== '')) {
+      const [name = ''] = pair.split('=');
+      jar.set(name, pair);
+    }
+  }
+  return [...jar.values()].join('; ');
+}
+
+/**
+ * Turns two factor on for the session `cookie` names (just signed in, so
+ * fresh): sets the app up and confirms it with a code (spec 0033). Answers
+ * the renewed cookie, the app's secret and the backup codes.
+ */
+export async function turnOnTwoFactor(
+  app: App,
+  cookie: string,
+): Promise<{ cookie: string; secret: string; backupCodes: string[] }> {
+  const enabled = await authPost(app, '/two-factor/enable', {}, { cookie });
+  if (enabled.status !== 200)
+    throw new Error(`Enabling two factor answered ${enabled.status}: ${await enabled.text()}`);
+  const setup = (await enabled.json()) as { totpURI: string; backupCodes: string[] };
+  const secret = secretOf(setup.totpURI);
+  const confirmed = await authPost(app, '/two-factor/verify-totp', { code: totpCode(secret) }, { cookie });
+  if (confirmed.status !== 200) throw new Error(`Confirming the app answered ${confirmed.status}`);
+  return { cookie: withCookies(cookie, cookieFrom(confirmed)), secret, backupCodes: setup.backupCodes };
 }

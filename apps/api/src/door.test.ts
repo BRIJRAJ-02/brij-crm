@@ -36,6 +36,9 @@ const BOOTSTRAP: ReadonlySet<string> = new Set([
   'account.sessions.list',
   'account.sessions.revoke',
   'account.sessions.revokeOthers',
+  'account.security.get',
+  'account.stepUp.start',
+  'account.stepUp.verify',
 ]);
 
 function isBootstrap(path: string): boolean {

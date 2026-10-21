@@ -6,7 +6,7 @@ import { oc } from '@orpc/contract';
 import * as z from 'zod';
 import { Uuid } from './values/ids.ts';
 
-export { STEP_UP_MINUTES } from './account-limits.ts';
+export { STEP_UP_CODE_MINUTES, STEP_UP_MINUTES } from './account-limits.ts';
 
 /** The most sessions one page of `account.sessions.list` answers. */
 export const SESSION_PAGE_MAX = 50;
@@ -89,17 +89,77 @@ export const RevokedSessions = z.object({ count: z.number().int().min(0) });
 /** How many other sessions were ended. */
 export type RevokedSessions = z.infer<typeof RevokedSessions>;
 
+/** How a step up proves who it is (AC-896): an app code or a backup code when two factor is on, else an email code. */
+export const StepUpMethod = z.enum(['email', 'totp', 'backup']);
+/** How a step up proves who it is. */
+export type StepUpMethod = z.infer<typeof StepUpMethod>;
+
+/** Asking for a step up email code (the only method that sends anything). */
+export const StepUpStartInput = z.object({ method: z.literal('email') });
+/** Asking for a step up email code. */
+export type StepUpStartInput = z.infer<typeof StepUpStartInput>;
+
+/** A step up's code: 6 digits from the app or the email, or a backup code ("abcde-12345"). */
+export const StepUpVerifyInput = z.object({
+  method: StepUpMethod,
+  code: z
+    .string()
+    .trim()
+    .min(6)
+    .max(20)
+    .regex(/^[A-Za-z0-9-]+$/),
+});
+/** A step up's code. */
+export type StepUpVerifyInput = z.infer<typeof StepUpVerifyInput>;
+
+/** How this session stands for sensitive changes: fresh until when, and whether a second factor proved it. */
+export const SessionFreshness = z.object({
+  /** ISO 8601 UTC; absent when the session isn't fresh. */
+  freshUntil: z.iso.datetime().optional(),
+  /** True when the last verification used a second factor (turning two factor off needs it, AC-885). */
+  withSecondFactor: z.boolean(),
+});
+/** How this session stands for sensitive changes. */
+export type SessionFreshness = z.infer<typeof SessionFreshness>;
+
+/**
+ * Account › Security's state (AC-881, AC-883): two factor on or off, how many
+ * backup codes are left, and this session's freshness. Never a secret or a code.
+ */
+export const AccountSecurity = z.object({
+  twoFactor: z.object({
+    on: z.boolean(),
+    /** Unused backup codes left, while two factor is on. */
+    backupCodesLeft: z.number().int().min(0).optional(),
+  }),
+  session: SessionFreshness,
+});
+/** Account › Security's state. */
+export type AccountSecurity = z.infer<typeof AccountSecurity>;
+
 /**
  * The account procedures (spec 0033). Each needs a session and no workspace
  * (the bootstrap list); each reaches only the caller's own sessions.
  * `revoke` answers NOT_FOUND for a session that isn't the caller's (or is
- * gone); `revokeOthers` answers 403 STEP_UP_REQUIRED unless this session was
- * verified within `STEP_UP_MINUTES`.
+ * gone); `revoke` (another device) and `revokeOthers` answer 403 STEP_UP_REQUIRED
+ * unless this session was verified within `STEP_UP_MINUTES`.
  */
 export const accountContract = {
   sessions: {
     list: oc.input(ListSessionsInput).output(SessionPage),
     revoke: oc.input(RevokeSessionInput).output(z.object({ ok: z.literal(true) })),
     revokeOthers: oc.output(RevokedSessions),
+  },
+  /** Two factor on or off, backup codes left, and this session's freshness (AC-881). */
+  security: { get: oc.output(AccountSecurity) },
+  /**
+   * A step up (AC-896): `start` emails a code (only while two factor is off);
+   * `verify` checks an email code, an app code or a backup code and makes
+   * this session fresh for `STEP_UP_MINUTES`. 422 CODE_INVALID, 429 after
+   * too many tries.
+   */
+  stepUp: {
+    start: oc.input(StepUpStartInput).output(z.object({ sent: z.literal(true) })),
+    verify: oc.input(StepUpVerifyInput).output(SessionFreshness),
   },
 };

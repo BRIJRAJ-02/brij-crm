@@ -62,6 +62,9 @@ export const ENGINE_REFUSAL_CODES = [
   'SCHEDULE_NOT_ALLOWED',
   // Account security (spec 0033, AC-896): a sensitive account change on a session not verified in the last 10 minutes.
   'STEP_UP_REQUIRED',
+  'SECOND_FACTOR_REQUIRED',
+  'CODE_INVALID',
+  'SIGN_IN_EXPIRED',
 ] as const;
 
 /** One of the engine's refusal codes. */

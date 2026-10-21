@@ -49,6 +49,8 @@ export const user = auth.table(
     email: text('email').notNull(),
     emailVerified: boolean('email_verified').notNull().default(false),
     image: text('image'),
+    /** Two factor sign in is on (spec 0033, Better Auth's `twoFactorEnabled`): set only once a first app code checks out. */
+    twoFactorEnabled: boolean('two_factor_enabled').notNull().default(false),
     createdAt: createdAt(),
     updatedAt: updatedAt(),
   },
@@ -79,9 +81,16 @@ export const session = auth.table(
     deviceLabel: text('device_label'),
     /** When this session last proved who it is: at sign in, and on each step up (AC-896). */
     verifiedAt: timestamptz('verified_at'),
+    /**
+     * How `verified_at` was proven: `second_factor` (an app code, a backup
+     * code, later a passkey) or `email` (an email code or Google alone).
+     * Turning two factor off takes a second factor (AC-885).
+     */
+    verifiedWith: text('verified_with', { enum: ['email', 'second_factor'] }),
   },
   (t) => [
     uniqueIndex('session_token').on(t.token),
+    check('session_verified_with', sql`${t.verifiedWith} in ('email', 'second_factor')`),
     index('session_user').on(t.userId),
     foreignKey({ name: 'session_user_fk', columns: [t.userId], foreignColumns: [user.id] }).onDelete('cascade'),
   ],
@@ -113,6 +122,30 @@ export const securityEvent = auth.table(
     index('security_event_user_at').on(t.userId, t.at.desc()),
     foreignKey({ name: 'security_event_user_fk', columns: [t.userId], foreignColumns: [user.id] }).onDelete('cascade'),
     check('security_event_kind', sql.raw(`kind in (${SECURITY_EVENT_KINDS.map((kind) => `'${kind}'`).join(', ')})`)),
+  ],
+);
+
+/**
+ * A person's authenticator app and backup codes (spec 0033, Better Auth's
+ * `twoFactor` plugin): the secret and the codes are encrypted with
+ * `BETTER_AUTH_SECRET` and never leave the server after setup (AC-886).
+ * `verified` stays false until the first code from the app checks out. The
+ * plugin counts failed codes and locks the account's second step a while.
+ */
+export const twoFactor = auth.table(
+  'two_factor',
+  {
+    id: authId(),
+    userId: uuid('user_id').notNull(),
+    secret: text('secret').notNull(),
+    backupCodes: text('backup_codes').notNull(),
+    verified: boolean('verified').notNull().default(true),
+    failedVerificationCount: integer('failed_verification_count').notNull().default(0),
+    lockedUntil: timestamptz('locked_until'),
+  },
+  (t) => [
+    uniqueIndex('two_factor_user').on(t.userId),
+    foreignKey({ name: 'two_factor_user_fk', columns: [t.userId], foreignColumns: [user.id] }).onDelete('cascade'),
   ],
 );
 

@@ -40,6 +40,12 @@ const NO_SCOPE: ReadonlySet<string> = new Set([
   'isFresh',
   'deviceLabel',
   'deviceParts',
+  // The step up (spec 0033, milestone 2): the session's own freshness, by its user and session ids.
+  'accountSecurity',
+  'requireFresh',
+  'sessionFreshness',
+  'startStepUp',
+  'verifyStepUp',
   'createWorkspace',
   'createUserWorkspace',
   // Pure access functions.

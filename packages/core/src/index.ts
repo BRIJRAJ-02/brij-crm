@@ -69,6 +69,21 @@ export {
   type SessionsDeps,
 } from './account/sessions.ts';
 export { deviceLabel, deviceParts, type DeviceParts } from './account/device.ts';
+export {
+  accountSecurity,
+  CODE_INVALID_MESSAGE,
+  EMAIL_CODE_INVALID_MESSAGE,
+  FRESH_MESSAGE,
+  NO_SECOND_FACTOR,
+  requireFresh,
+  SECOND_FACTOR_MESSAGE,
+  sessionFreshness,
+  startStepUp,
+  USE_SECOND_FACTOR,
+  verifyStepUp,
+  type FreshnessDeps,
+  type StepUpDeps,
+} from './account/step-up.ts';
 export { milestoneHook, type ReachedMilestone } from './milestones/milestones.ts';
 export { type AuditSource } from './members/audit.ts';
 export {

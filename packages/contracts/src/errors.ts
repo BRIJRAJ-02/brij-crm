@@ -82,6 +82,12 @@ export const ERROR_MAP = {
   SCHEDULE_NOT_ALLOWED: UNPROCESSABLE,
   // Account security (spec 0033, AC-896): verify again (a fresh step up) before this account change.
   STEP_UP_REQUIRED: { status: 403 },
+  // Turning two factor off proves it with the second factor itself, never an email code alone (AC-885).
+  SECOND_FACTOR_REQUIRED: { status: 403 },
+  // A code from the app, a backup code or a step up email code that didn't check out (AC-882, AC-896).
+  CODE_INVALID: UNPROCESSABLE,
+  // The second step of a sign in ran out (5 minutes) or had too many wrong codes: sign in again (AC-882).
+  SIGN_IN_EXPIRED: { status: 401 },
   PAYLOAD_TOO_LARGE: { status: 413 },
   ATTRIBUTE_VALUE_INVALID: UNPROCESSABLE,
   VALUE_REQUIRED: UNPROCESSABLE,
