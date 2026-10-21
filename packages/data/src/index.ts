@@ -6,6 +6,14 @@
 // screen first asks for records), patched in place by live change events
 // while a screen shows a workspace (the realtime client loads with the first).
 import type {
+  RecordsExportView,
+  StartExportInput,
+  ImportLinks,
+  ImportRows,
+  ImportSettings,
+  ImportView,
+  StagedRow,
+  StageResult,
   AddToCrmResult,
   CalendarProvider,
   ExportView,
@@ -95,6 +103,7 @@ import {
 } from './errors.ts';
 import type { FetchLike } from './fetch.ts';
 import { delivered } from './delivered.ts';
+import { stageChunks } from './imports/stage.ts';
 import { createJobsStore, type JobsScope, type JobsView, type TestJobSettings } from './jobs/store.ts';
 import { createBookingsStore, type BookingsCalendarHeld, type BookingsView } from './bookings/store.ts';
 import {
@@ -544,6 +553,22 @@ export type { RowNote } from './records/view.ts';
 export type { PurgeSummary, RestoreSummary, TrashRow, TrashState, TrashStatus, TrashView } from './trash/store.ts';
 export { TRASH_NAME_COLUMN } from './trash/columns.ts';
 export type { BulkAction, BulkEdit, BulkTarget } from '@crm/contracts';
+export type {
+  ImportColumn,
+  ImportCounts,
+  ImportLinks,
+  ImportOnMatch,
+  ImportOnNoMatch,
+  ImportRowRefusal,
+  ImportRows,
+  ImportSettings,
+  ImportStatus,
+  ImportTarget,
+  ImportView,
+  StagedRow,
+  StageResult,
+  RecordsExportView,
+} from '@crm/contracts';
 export {
   applyOp,
   bulkExclusion,
@@ -2144,6 +2169,37 @@ export function createDataLayer({
       mutations.forget(mutationId);
       throw error;
     }
+  }
+
+  /** Which import each import job this tab started belongs to (spec 0040), for the finish toast's link. */
+  const importJobs = new Map<string, string>();
+
+  /** One import write: a write whose answer was lost goes again with the same ids, and the server answers the same. */
+  async function sendImport<T>(make: (mutationId: string) => (options: CallOptions) => Promise<T>): Promise<T> {
+    const write = make(mintId());
+    try {
+      return await delivered(() => call(write), resendAfter);
+    } catch (error) {
+      throw toDataError(error);
+    }
+  }
+
+  /** Which records export each export job this tab started belongs to (spec 0040), for the finish toast's Download. */
+  const exportJobs = new Map<string, RecordsExportView>();
+
+  /** Follows an import's job (its run, or its undo) like any job this tab started. */
+  async function followImportJob(workspace: string, importId: string, jobId: string | undefined): Promise<void> {
+    if (jobId === undefined) return;
+    importJobs.set(jobId, importId);
+    await followJob(workspace, jobId);
+  }
+
+  /** Follows a job like any this tab started: live until it ends, then `onJobFinished`. */
+  async function followJob(workspace: string, jobId: string): Promise<void> {
+    // One held already is live: following it again would only read it twice.
+    if (jobs.get(workspace, jobId) !== undefined) return;
+    const job = await call((options) => api.jobs.get({ workspace, jobId }, options)).catch(() => undefined);
+    if (job !== undefined) jobs.track(workspace, job);
   }
 
   /**
@@ -4622,6 +4678,167 @@ export function createDataLayer({
       getExport: (workspace: string, exportId: string): Promise<ExportView> =>
         call((options) => api.submissions.getExport({ workspace, exportId }, options)),
       /** A new id for an export or a sync's job. */
+      newId: () => mintId(),
+    },
+    imports: {
+      /**
+       * Makes an import (spec 0040, AC-1120): `id` is minted once per file
+       * (`newId`), so a retry answers the same import. Rejects with a
+       * `DataError` (`LIMIT_REACHED` past three unfinished, access, settings).
+       */
+      create: (
+        workspace: string,
+        input: {
+          readonly id: string;
+          readonly objectId: string;
+          readonly fileName: string;
+          readonly rowCount: number;
+          readonly errorRows: number;
+          readonly settings: ImportSettings;
+        },
+      ): Promise<ImportView> =>
+        sendImport((mutationId) => (options) => api.imports.create({ workspace, ...input, mutationId }, options)),
+      /**
+       * Sends an import's ready rows in file order, in chunks of at most
+       * 1,000 rows and `TRANSFER_LIMITS.stageBytes` of JSON; a chunk whose
+       * answer was lost goes again (sending one twice changes nothing).
+       * `onChunk` hears the rows sent so far. Answers the totals.
+       */
+      stage: async (
+        workspace: string,
+        importId: string,
+        rows: readonly StagedRow[],
+        onChunk: (sent: number) => void = () => undefined,
+      ): Promise<StageResult> => {
+        let staged = 0;
+        let matched = 0;
+        let sent = 0;
+        for (const chunk of stageChunks(rows)) {
+          const answer = await sendImport(
+            (mutationId) => (options) =>
+              api.imports.stage({ workspace, importId, rows: [...chunk], mutationId }, options),
+          );
+          staged += answer.staged;
+          matched += answer.matched;
+          sent += chunk.length;
+          onChunk(sent);
+        }
+        return { staged, matched };
+      },
+      /**
+       * Starts the import's job once its rows are staged, and follows it
+       * (`jobs.get`, `jobs.follow`, `onJobFinished`); `forJob` names the
+       * import a finished job belongs to.
+       */
+      start: async (workspace: string, importId: string): Promise<ImportView> => {
+        const view = await sendImport(
+          (mutationId) => (options) => api.imports.start({ workspace, importId, mutationId }, options),
+        );
+        await followImportJob(workspace, importId, view.jobId);
+        return view;
+      },
+      /** Starts an import's undo (AC-1128) and follows its job; rejects with `IMPORT_RUNNING` or `IMPORT_UNDO_CLOSED`. */
+      undo: async (workspace: string, importId: string): Promise<ImportView> => {
+        const view = await sendImport(
+          (mutationId) => (options) => api.imports.undo({ workspace, importId, mutationId }, options),
+        );
+        await followImportJob(workspace, importId, view.undoJobId);
+        return view;
+      },
+      /**
+       * One import as its summary shows it: counts by outcome, its jobs, and
+       * whether undo is open. Its jobs are followed from here on, so the
+       * summary shows their progress live (`jobs.get`, `useJob`).
+       */
+      get: async (workspace: string, importId: string): Promise<ImportView> => {
+        const view = await call((options) => api.imports.get({ workspace, importId }, options));
+        await Promise.all([
+          followImportJob(workspace, importId, view.jobId),
+          followImportJob(workspace, importId, view.undoJobId),
+        ]);
+        return view;
+      },
+      /** A page of an import's refused and noted rows, after the row number `cursor`. */
+      rows: (workspace: string, importId: string, cursor?: number): Promise<ImportRows> =>
+        call((options) =>
+          api.imports.rows({ workspace, importId, ...(cursor === undefined ? {} : { cursor }) }, options),
+        ),
+      /**
+       * Which of a relation column's names link to no record the member can
+       * read, and which name several, before the import starts (spec 0040,
+       * decision 7). Asks 1,000 distinct names a call, in turn; a read, so a
+       * lost answer is asked again by the caller.
+       */
+      links: async (
+        workspace: string,
+        objectId: string,
+        attributeId: string,
+        names: readonly string[],
+      ): Promise<ImportLinks> => {
+        const distinct = [...new Set(names.map((name) => name.trim().slice(0, 500)).filter((name) => name !== ''))];
+        const missing: string[] = [];
+        const ambiguous: string[] = [];
+        for (let start = 0; start < distinct.length; start += 1_000) {
+          const part = distinct.slice(start, start + 1_000);
+          const answer = await call((options) =>
+            api.imports.links({ workspace, objectId, attributeId, names: part }, options),
+          );
+          missing.push(...answer.missing);
+          ambiguous.push(...answer.ambiguous);
+        }
+        return { missing, ambiguous };
+      },
+      /** The import a job this tab started belongs to (its import or its undo job), for the finish toast. */
+      forJob: (jobId: string): string | undefined => importJobs.get(jobId),
+      /** A new import id (UUID v7): mint it once per file, and send the same on a retry. */
+      newId: () => mintId(),
+    },
+    exports: {
+      /**
+       * Starts a CSV export of a view as it stands (spec 0040, AC-1130): its
+       * filter and sorts (saved or unsaved), its visible columns. `id` is
+       * minted once per press (`newId`), so a retry makes one export. The job
+       * is followed like any this tab started; `forJob` gives the export a
+       * finished job wrote, for the toast's Download. Rejects with a
+       * `DataError` (`EXPORT_TOO_LARGE` with the count, `LIMIT_REACHED`).
+       */
+      start: async (
+        workspace: string,
+        input: {
+          readonly id: string;
+          readonly objectId: string;
+          readonly viewId?: string;
+          readonly filter?: StartExportInput['filter'];
+          readonly sorts?: StartExportInput['sorts'];
+          readonly attributeIds: readonly string[];
+        },
+      ): Promise<RecordsExportView> => {
+        const view = await sendImport(
+          (mutationId) => (options) =>
+            api.exports.start(
+              {
+                workspace,
+                ...input,
+                attributeIds: [...input.attributeIds],
+                timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+                mutationId,
+              },
+              options,
+            ),
+        );
+        exportJobs.set(view.jobId, view);
+        await followJob(workspace, view.jobId);
+        return view;
+      },
+      /** One records export again: its row count once written, and where it downloads from. */
+      get: (workspace: string, exportId: string): Promise<RecordsExportView> =>
+        call((options) => api.exports.get({ workspace, exportId }, options)),
+      /** The export a job this tab started wrote, for the finish toast's Download. */
+      forJob: (jobId: string): RecordsExportView | undefined => exportJobs.get(jobId),
+      /** Where a finished export downloads from (the same route serves every export). */
+      downloadPath: (workspace: string, exportId: string): string =>
+        `/api/exports/${encodeURIComponent(exportId)}/download?workspace=${encodeURIComponent(workspace)}`,
+      /** A new export id (UUID v7). */
       newId: () => mintId(),
     },
     jobs: {

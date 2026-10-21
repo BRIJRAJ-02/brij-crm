@@ -10,6 +10,7 @@ import { calendarContract } from './calendar.ts';
 import { commentsContract } from './comments.ts';
 import { formsContract, submissionsContract } from './forms/forms.ts';
 import { routingContract } from './forms/routing.ts';
+import { exportsContract, importsContract } from './imports.ts';
 import { jobsContract } from './jobs.ts';
 import { meContract } from './me.ts';
 import { navContract } from './navigation.ts';
@@ -49,6 +50,7 @@ export * from './change-event.ts';
 export * from './comments.ts';
 export * from './errors.ts';
 export * from './forms/index.ts';
+export * from './imports.ts';
 export * from './jobs.ts';
 export * from './csv.ts';
 export * from './me.ts';
@@ -133,4 +135,6 @@ export const contract = {
   preferences: preferencesContract,
   // Lead routing (spec 0043): the per rule report.
   routing: routingContract,
+  imports: importsContract,
+  exports: exportsContract,
 };

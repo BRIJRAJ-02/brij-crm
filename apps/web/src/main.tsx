@@ -14,6 +14,8 @@ import { createFocusRecovery, focusFirstLoad, focusPage, isSamePage } from './fe
 import { PRELOAD_DELAY_MS, startIntentPreload } from './features/navigation/preload.ts';
 import { followPageTitle } from './features/navigation/title.ts';
 import { rememberPlace, safeSessionStorage } from './features/settings/back.ts';
+import { importSummaryHref } from './features/imports/paths.ts';
+import { exportToast, isHere } from './features/imports/toast.ts';
 import { jobFinishedToast } from './features/settings/toast.ts';
 import { bulkActionOf } from './features/workspace/bulk-jobs.ts';
 import { jobsHref } from './features/workspace/objects.ts';
@@ -96,6 +98,45 @@ const data = createDataLayer({
         ({ bulkFinished }) => bulkFinished({ data, toast, onView }, workspace, job),
         () => {
           toast(jobFinishedToast(job, onView));
+        },
+      );
+      return;
+    }
+    // A records export (spec 0040, AC-1131): its end offers the file.
+    const exportId = typeof job.result?.exportId === 'string' ? job.result.exportId : undefined;
+    const exported = data.exports.forJob(job.id);
+    if (job.kind === 'records.export' && job.status === 'succeeded' && exportId !== undefined) {
+      toasts.toast({
+        tone: 'success',
+        message: exportToast.ready(exported?.fileName ?? job.label),
+        action: {
+          label: exportToast.download,
+          onAction: () => {
+            window.location.assign(data.exports.downloadPath(workspace, exportId));
+          },
+        },
+      });
+      return;
+    }
+    // An import or its undo (spec 0040, AC-1125): View opens the import's summary, not the jobs page; on that
+    // summary already, the page says it all, so no toast.
+    const importId =
+      data.imports.forJob(job.id) ?? (typeof job.result?.importId === 'string' ? job.result.importId : undefined);
+    const objectId = job.subject?.id;
+    if (importId !== undefined && objectId !== undefined) {
+      data.objects.all(workspace).then(
+        (objects) => {
+          const object = objects.find((each) => each.id === objectId);
+          if (object === undefined) {
+            toasts.toast(jobFinishedToast(job, onView));
+            return;
+          }
+          const href = importSummaryHref(workspace, object, importId);
+          if (isHere(href)) return;
+          toasts.toast(jobFinishedToast(job, () => void router.navigate({ href })));
+        },
+        () => {
+          toasts.toast(jobFinishedToast(job, onView));
         },
       );
       return;

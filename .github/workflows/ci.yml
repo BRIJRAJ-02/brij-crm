@@ -229,6 +229,10 @@ jobs:
           done
       # One flow per line, so a lane adds its own flow without touching anyone else's line.
       - name: Run the flows
+        # The import flow runs 1,000 rows here, to keep the job inside its time; spec 0040's 5,000 row run and its
+        # timing are the scale check's (FLOW_IMPORT_ROWS unset).
+        env:
+          FLOW_IMPORT_ROWS: "1000"
         run: >-
           pnpm --filter @crm/web test:flow
           e2e/sign-in.flow.ts
@@ -265,6 +269,7 @@ jobs:
           e2e/preferences.flow.ts
           e2e/loading-shape.flow.ts
           e2e/booking-chat.flow.ts
+          e2e/import.flow.ts
       - name: Keep the traces and the logs
         if: failure()
         uses: actions/upload-artifact@v7

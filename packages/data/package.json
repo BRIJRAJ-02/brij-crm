@@ -9,6 +9,7 @@
     "./navigation": "./src/navigation/index.ts",
     "./public-form": "./src/public-form/client.ts",
     "./forms": "./src/forms/builder.ts",
+    "./imports": "./src/imports/index.ts",
     "./booking": "./src/booking/public.ts",
     "./booking/manage": "./src/booking/manage.ts"
   },

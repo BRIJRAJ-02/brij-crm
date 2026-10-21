@@ -574,3 +574,19 @@ export { decideRoute, recordFactKeys, type RouteDecision } from './routing/decid
 export { routingReport } from './routing/report.ts';
 export { searchWorkspace, type GlobalSearchInput } from './search/search.ts';
 export { listRecents, visitRecent, RECENTS_KEPT, type RecentVisit } from './search/recents.ts';
+export {
+  checkImportLinks,
+  createImport,
+  getImport,
+  listImportRefusals,
+  RECORDS_IMPORT,
+  RECORDS_IMPORT_UNDO,
+  stageImportRows,
+  startImport,
+  undoImport,
+} from './imports/service.ts';
+export { recordsImport } from './imports/kind.ts';
+/** The import's undo kind (spec 0040): created records to the trash, changed values back unless edited since. */
+export { recordsImportUndo } from './imports/undo.ts';
+/** Records exports (spec 0040): a view's records as CSV, on the submissions export's rows, chunks and download. */
+export { getRecordsExport, recordsExport, startRecordsExport, type RecordsExportRecord } from './exports/records.ts';

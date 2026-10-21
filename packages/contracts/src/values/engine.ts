@@ -78,6 +78,12 @@ export const ENGINE_REFUSAL_CODES = [
   'SECOND_FACTOR_REQUIRED',
   'CODE_INVALID',
   'SIGN_IN_EXPIRED',
+  // Import and export (spec 0040): rows sent after the import started, an undo while it runs or past its window,
+  // and a view with more rows than one export writes.
+  'IMPORT_STARTED',
+  'IMPORT_RUNNING',
+  'IMPORT_UNDO_CLOSED',
+  'EXPORT_TOO_LARGE',
 ] as const;
 
 /** One of the engine's refusal codes. */

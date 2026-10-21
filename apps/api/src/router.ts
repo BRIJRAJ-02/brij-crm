@@ -9,6 +9,8 @@ import {
   routingRouter,
   schedulesRouter,
 } from './modules/booking/router.ts';
+import { exportsRouter } from './modules/exports/router.ts';
+import { importsRouter } from './modules/imports/router.ts';
 import { jobsRouter } from './modules/jobs/router.ts';
 import { linksRouter } from './modules/links/router.ts';
 import { invitationsRouter } from './modules/invitations/router.ts';
@@ -82,4 +84,6 @@ export const router = base.router({
   recents: recentsRouter,
   nav: navRouter,
   preferences: preferencesRouter,
+  imports: importsRouter,
+  exports: exportsRouter,
 });

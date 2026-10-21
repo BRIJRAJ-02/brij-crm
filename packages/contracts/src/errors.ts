@@ -98,6 +98,11 @@ export const ERROR_MAP = {
   CODE_INVALID: UNPROCESSABLE,
   // The second step of a sign in ran out (5 minutes) or had too many wrong codes: sign in again (AC-882).
   SIGN_IN_EXPIRED: { status: 401 },
+  // Import and export (spec 0040, AC-1129, AC-1132).
+  IMPORT_STARTED: CONFLICT,
+  IMPORT_RUNNING: CONFLICT,
+  IMPORT_UNDO_CLOSED: CONFLICT,
+  EXPORT_TOO_LARGE: UNPROCESSABLE,
   PAYLOAD_TOO_LARGE: { status: 413 },
   ATTRIBUTE_VALUE_INVALID: UNPROCESSABLE,
   VALUE_REQUIRED: UNPROCESSABLE,

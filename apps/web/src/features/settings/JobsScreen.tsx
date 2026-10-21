@@ -18,7 +18,8 @@ import {
   type TableColumn,
 } from '@crm/ui';
 import { useEffect, useState } from 'react';
-import { useMatch } from '@tanstack/react-router';
+import { useMatch, useNavigate } from '@tanstack/react-router';
+import { importSummaryHref } from '../imports/paths.ts';
 import { recordsWord, type ObjectNames } from '../workspace/undo.ts';
 import { useCan, useMyAccess } from '../workspace/WorkspacePage.tsx';
 import { SettingsPage } from './SettingsPage.tsx';
@@ -171,6 +172,34 @@ export function JobsScreen({ data, slug, view, isAll, members: loaded, canRunTes
       () => setStarting(false),
     );
   };
+  // An import's or an export's own link (spec 0040): View opens the import's summary, kept for its undo window;
+  // Download fetches a finished export's file.
+  const navigate = useNavigate();
+  const linkOf = (job: JobView) => {
+    const result = job.result ?? {};
+    if (job.kind === 'records.export' && job.status === 'succeeded' && typeof result.exportId === 'string') {
+      const exportId = result.exportId;
+      return (
+        <Button
+          variant="ghost"
+          icon="download"
+          onPress={() => window.location.assign(data.exports.downloadPath(slug, exportId))}
+        >
+          {strings.download}
+        </Button>
+      );
+    }
+    const object = objects?.find((each) => each.id === job.subject?.id);
+    if (job.kind.startsWith('records.import') && typeof result.importId === 'string' && object !== undefined) {
+      const href = importSummaryHref(slug, object, result.importId);
+      return (
+        <Button variant="ghost" onPress={() => void navigate({ href })}>
+          {strings.viewImport}
+        </Button>
+      );
+    }
+    return null;
+  };
   const renderCell = (job: JobView, column: string) => {
     switch (column) {
       case 'job':
@@ -210,6 +239,7 @@ export function JobsScreen({ data, slug, view, isAll, members: loaded, canRunTes
         }
         return (
           <>
+            {linkOf(job)}
             {job.status === 'ready' && (
               <Button variant="primary" onPress={() => ask('run', job)}>
                 {strings.review}

@@ -526,6 +526,20 @@
       "when": 1792616545569,
       "tag": "0074_lead_routing",
       "breakpoints": true
+    },
+    {
+      "idx": 75,
+      "version": "7",
+      "when": 1792617243442,
+      "tag": "0075_import_export",
+      "breakpoints": true
+    },
+    {
+      "idx": 76,
+      "version": "7",
+      "when": 1792617303442,
+      "tag": "0076_import_made",
+      "breakpoints": true
     }
   ]
 }

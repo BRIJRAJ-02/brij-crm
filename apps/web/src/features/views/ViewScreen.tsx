@@ -56,6 +56,7 @@ import {
   type ShownLayout,
 } from './layout.ts';
 import { farAttributesFrom, relationTarget, runningQuery, savableQuery, savedQuery, toViewQuery } from './query.ts';
+import { strings as importStrings } from '../imports/strings.ts';
 import { strings } from './strings.ts';
 import { useViewDraft } from './useViewDraft.ts';
 import { ViewChangedDialog } from './ViewChangedDialog.tsx';
@@ -364,6 +365,33 @@ export function ViewScreen(props: ViewScreenProps) {
       params: { slug, object: object.apiSlug, viewId: next.id },
     });
   };
+  // Export CSV (spec 0040, AC-1130, AC-1131): the view as it stands, its unsaved filter and sorts included, its visible
+  // columns in order; the job's end toast offers Download.
+  const exporting = useRef(false);
+  const exportView = () => {
+    // One export per press: a second press while the first is on its way starts nothing.
+    if (exporting.current) return;
+    exporting.current = true;
+    data.exports
+      .start(slug, {
+        id: data.exports.newId(),
+        objectId: object.id,
+        ...(view === undefined ? {} : { viewId: view.id }),
+        ...(query.filter === undefined ? {} : { filter: query.filter }),
+        sorts: query.sorts,
+        attributeIds: layout.columns.filter((column) => !column.isHidden).map((column) => column.id),
+      })
+      .then(
+        () => {
+          exporting.current = false;
+          toasts.toast({ tone: 'info', message: importStrings.exportStarted });
+        },
+        (error: unknown) => {
+          exporting.current = false;
+          toasts.toast({ tone: 'danger', message: isDataError(error) ? error.message : strings.actionFailed });
+        },
+      );
+  };
   const [isDuplicating, setDuplicating] = useState(false);
   const duplicate = () => {
     // One copy per press: a second press while the first is on its way adds nothing.
@@ -533,6 +561,7 @@ export function ViewScreen(props: ViewScreenProps) {
     canManage,
     copyLinkReason: draft.isDraft && !draft.isLinkable ? strings.linkTooLong : undefined,
     onDuplicate: duplicate,
+    onExport: exportView,
     onDeleting: (isDeleting) => {
       // This tab's own delete: the view going away is no news here.
       leaving.current = isDeleting;

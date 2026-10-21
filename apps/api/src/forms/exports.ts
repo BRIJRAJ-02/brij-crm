@@ -1,4 +1,4 @@
-// An export's download (spec 0023's submissions export, in spec 0037's shape):
+// An export's download (spec 0023's submissions export, in spec 0040's shape):
 // `GET /api/exports/:exportId/download?workspace=<slug>`, a plain route the
 // browser navigates to with its session cookie. The member door decides who
 // is asking; only the member who started the export, while it is kept, gets

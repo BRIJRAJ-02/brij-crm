@@ -3,7 +3,7 @@
 // row lock, so two concurrent creates can't both pass the last free slot.
 // #38 later reads the numbers from the workspace's plan.
 import { and, count, eq, isNull, sql } from 'drizzle-orm';
-import { INVITES_LIMIT, SEAT_LIMIT } from '@crm/contracts';
+import { INVITES_LIMIT, SEAT_LIMIT, TRANSFER_LIMITS } from '@crm/contracts';
 import { schema, type WorkspaceTx } from '@crm/db';
 import { checkId } from './ids.ts';
 import { refuse, refuseAll } from './refusals.ts';
@@ -33,6 +33,16 @@ export const LIMITS = {
   seats: SEAT_LIMIT,
   /** Open invitations at once (spec 0031, AC-808). */
   openInvitations: INVITES_LIMIT,
+  /** Rows in one import (spec 0040, AC-1136, owner decision 5); the browser checks the same number first. */
+  importRows: TRANSFER_LIMITS.importRows,
+  /** Rows one staging call carries. */
+  stageRows: TRANSFER_LIMITS.stageRows,
+  /** One staged row's values as JSON, in bytes. */
+  stageRowBytes: TRANSFER_LIMITS.stageRowBytes,
+  /** Imports a workspace may have staged or running at once. */
+  unfinishedImports: TRANSFER_LIMITS.unfinishedImports,
+  /** Rows one export writes (owner decision 4, until files move to R2). */
+  exportRows: TRANSFER_LIMITS.exportRows,
 } as const;
 
 /** One set of limits. */

@@ -35,6 +35,10 @@ export const JOB_KINDS = {
   'records.purge': { label: 'Delete forever', lane: 'heavy', cancellable: true },
   // A removed member's records and open tasks handed to another member (spec 0031, AC-816).
   'members.reassign': { label: 'Hand on a removed member’s work', lane: 'heavy', cancellable: true },
+  // Import and export (spec 0040): a CSV's rows written as the member, taking one back, and a view written out.
+  'records.import': { label: 'Import', lane: 'heavy', cancellable: true },
+  'records.import_undo': { label: 'Undo import', lane: 'heavy', cancellable: false },
+  'records.export': { label: 'Export', lane: 'heavy', cancellable: true },
 } as const satisfies Record<
   string,
   { readonly label: string; readonly lane: 'heavy' | 'light'; readonly cancellable: boolean }

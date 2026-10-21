@@ -3,6 +3,9 @@ import type { JobStatus } from '@crm/data';
 
 /** Settings, Background jobs: the page's copy (spec 0008, AC-118, AC-119). */
 export const strings = {
+  /** An import's link to its summary, and a finished export's download (spec 0040). */
+  viewImport: 'View import',
+  download: 'Download',
   /** The page's title, and its entry in the settings navigation. */
   title: 'Background jobs',
   tableLabel: 'Background jobs',

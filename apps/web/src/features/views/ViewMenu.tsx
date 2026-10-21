@@ -15,7 +15,9 @@ import {
   type ViewsListSnapshot,
 } from '@crm/data';
 import { Button, Callout, Field, Form, Modal, type FormRefusal, type ViewAction as ViewMenuAction } from '@crm/ui';
-import { useRouteContext } from '@tanstack/react-router';
+import { useNavigate, useRouteContext } from '@tanstack/react-router';
+import { importHref } from '../imports/paths.ts';
+import { strings as importStrings } from '../imports/strings.ts';
 import { useId, useState, type ReactNode } from 'react';
 import { strings } from './strings.ts';
 
@@ -34,6 +36,8 @@ export interface ViewMenuProps {
   readonly copyLinkReason: string | undefined;
   /** Duplicate: the screen makes the copy and opens it. */
   readonly onDuplicate: () => void;
+  /** Export CSV (spec 0040, AC-1130): the view as it stands, for everyone who can read it. */
+  readonly onExport: () => void;
   /** A delete here starts (true) or was refused (false): the screen expects the view to go. */
   readonly onDeleting: (isDeleting: boolean) => void;
   /** The view was deleted here: the screen goes to the default view. */
@@ -76,10 +80,12 @@ export function useViewMenu({
   canManage,
   copyLinkReason,
   onDuplicate,
+  onExport,
   onDeleting,
   onDeleted,
 }: ViewMenuProps): ViewMenu {
   const { data, toasts } = useRouteContext({ from: '__root__' });
+  const navigate = useNavigate();
   const [isRenaming, setRenaming] = useState(false);
   const [isDeleting, setDeleting] = useState(false);
   const [isBusy, setBusy] = useState(false);
@@ -187,7 +193,21 @@ export function useViewMenu({
         );
       },
     }),
-    // Export CSV (wip/import) goes here, after Copy link and before the moves: the view's first group.
+    // Export CSV (spec 0040): this view's rows as a CSV, after Copy link in the view's first group.
+    { id: 'export', label: importStrings.exportItem, icon: 'download', run: onExport },
+    // Import CSV (spec 0040, AC-1111): for members who may write the object; its page loads on its own.
+    ...(object.access === 'write' && !object.isArchived
+      ? [
+          {
+            id: 'import',
+            label: importStrings.menuItem,
+            icon: 'upload' as const,
+            run: () => {
+              void navigate({ href: importHref(slug, object) });
+            },
+          },
+        ]
+      : []),
     ...(canMove('up')
       ? [
           {

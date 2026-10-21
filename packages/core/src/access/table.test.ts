@@ -114,6 +114,10 @@ const NO_SCOPE: ReadonlySet<string> = new Set([
   'defineKind',
   'kindContractProblems',
   'jobKinds',
+  // Imports (spec 0040): the import and undo kinds, run by the runner as their starter.
+  'recordsImport',
+  'recordsImportUndo',
+  'recordsExport',
   'createRunner',
   'retryDelayMs',
   // The daily cleanup's fan out (`@crm/core/system`): it takes the worker's deps and enters each workspace as the
@@ -641,6 +645,31 @@ const empty = (call: DataCase['call'], leaves: DataCase['leaves'] = none): DataC
 const refused = (code: 'NOT_FOUND' | 'FORBIDDEN', call: DataCase['call']): DataCase => ({ call, expect: code });
 const named = (world: DataWorld) => ({ [world.name]: { value: 'Renamed' } });
 
+/** An import of one People row the owner made and staged, for the cases that need one. */
+async function ownerImport(world: DataWorld): Promise<string> {
+  const id = core.newId();
+  await core.createImport(world.owner, {
+    id,
+    objectId: world.people,
+    fileName: 'people.csv',
+    rowCount: 1,
+    errorRows: 0,
+    settings: importSettings(world),
+  });
+  await core.stageImportRows(world.owner, {
+    importId: id,
+    rows: [{ rowNumber: 2, values: { [world.name]: { firstName: 'Ada' } } }],
+  });
+  return id;
+}
+
+/** One column, the name, and every row new. */
+const importSettings = (world: DataWorld) => ({
+  columns: [{ header: 'Name', target: { attributeId: world.name } }],
+  onMatch: 'fill' as const,
+  onNoMatch: 'create' as const,
+});
+
 /** An export of the world's form the owner started, written (its row count set), made once per world. */
 async function ownerExport(world: DataWorld): Promise<string> {
   const exportId = `${world.formId.slice(0, 24)}0000000000e1`;
@@ -820,6 +849,54 @@ const DATA_CASES: Readonly<Record<string, DataCase>> = {
     core.toggleReaction(scope, { commentId: world.commentId, emoji: '👍', on: true }),
   ),
   listNotes: refused('NOT_FOUND', (scope, world) => core.listNotes(scope, { recordId: world.recordId })),
+  // Imports (spec 0040): a member at read only can't start one; anyone else's import is absent.
+  createImport: refused('FORBIDDEN', (scope, world) =>
+    core.createImport(scope, {
+      id: core.newId(),
+      objectId: world.people,
+      fileName: 'people.csv',
+      rowCount: 1,
+      errorRows: 0,
+      settings: importSettings(world),
+    }),
+  ),
+  stageImportRows: refused('NOT_FOUND', async (scope, world) =>
+    core.stageImportRows(scope, {
+      importId: await ownerImport(world),
+      rows: [{ rowNumber: 3, values: { [world.name]: { firstName: 'Bob' } } }],
+    }),
+  ),
+  startImport: refused('NOT_FOUND', async (scope, world) =>
+    core.startImport(scope, core.jobKinds({ environment: 'local' }), await ownerImport(world)),
+  ),
+  undoImport: refused('NOT_FOUND', async (scope, world) =>
+    core.undoImport(scope, core.jobKinds({ environment: 'local' }), await ownerImport(world)),
+  ),
+  getImport: refused('NOT_FOUND', async (scope, world) => core.getImport(scope, await ownerImport(world))),
+  listImportRefusals: refused('NOT_FOUND', async (scope, world) =>
+    core.listImportRefusals(scope, { importId: await ownerImport(world) }),
+  ),
+  checkImportLinks: refused('FORBIDDEN', (scope, world) =>
+    core.checkImportLinks(scope, { objectId: world.people, attributeId: world.name, names: ['Acme'] }),
+  ),
+  // Records exports (spec 0040): a hidden object can't be exported, and anyone else's export is absent.
+  startRecordsExport: refused('NOT_FOUND', (scope, world) =>
+    core.startRecordsExport(scope, core.jobKinds({ environment: 'local' }), {
+      id: core.newId(),
+      objectId: world.people,
+      attributeIds: [world.name],
+      timeZone: 'UTC',
+    }),
+  ),
+  getRecordsExport: refused('NOT_FOUND', async (scope, world) => {
+    const started = await core.startRecordsExport(world.owner, core.jobKinds({ environment: 'local' }), {
+      id: core.newId(),
+      objectId: world.people,
+      attributeIds: [world.name],
+      timeZone: 'UTC',
+    });
+    return core.getRecordsExport(scope, { exportId: started.id });
+  }),
   // A submissions export (spec 0023 follow-up): a form on a hidden object is absent, and so is anyone's export.
   startSubmissionsExport: refused('NOT_FOUND', (scope, world) =>
     core.startSubmissionsExport(scope, core.jobKinds({ environment: 'local' }), {

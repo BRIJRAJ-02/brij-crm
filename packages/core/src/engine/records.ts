@@ -309,6 +309,20 @@ async function liveObject(tx: WorkspaceTx, objectIdAsGiven: string): Promise<str
   return objectId;
 }
 
+/**
+ * What a batch writer that makes many records of one object in one
+ * transaction already did (an import, spec 0040's scale check): it checked
+ * the object writable and live and loaded its attributes in this
+ * transaction, and it counts the records it makes against the limit itself,
+ * once a batch. Every per record check (rules, required, unique, field
+ * levels) still runs.
+ */
+export interface InsertKnown {
+  readonly attributes: ReadonlyMap<string, AttributeDef>;
+  /** The caller takes the batch's record slots itself, last, with `takeRecordSlots`. */
+  readonly countsSlots: true;
+}
+
 /** Creates a record with its first values, defaults filled in and required ones checked (AC-1, AC-2, AC-11, AC-13, AC-16). */
 export async function createRecord(scope: EngineScope, input: RecordInput, hooks: readonly AfterWrite[] = []) {
   if (input.id !== undefined && !isUuidV7(input.id)) {
@@ -373,13 +387,15 @@ export async function initialValues(
  * while it waits on another write's unique value. A full workspace refuses
  * there, and the refusal rolls the record and its values back.
  */
-export async function insertRecord(context: WriteContext, input: RecordInput) {
+export async function insertRecord(context: WriteContext, input: RecordInput, known?: InsertKnown) {
   const { tx, scope } = context;
   // A hidden object answers as an unknown one, before anything says it is archived; a read only one is 403.
   const objectId = checkId(input.objectId, 'That object does not exist.');
-  await checkObject(tx, scope.access, objectId, 'write');
-  await liveObject(tx, objectId);
-  const attributes = await loadAttributes(tx, objectId);
+  if (known === undefined) {
+    await checkObject(tx, scope.access, objectId, 'write');
+    await liveObject(tx, objectId);
+  }
+  const attributes = known?.attributes ?? (await loadAttributes(tx, objectId));
   const parsed = await initialValues(tx, scope, attributes, input.values ?? {}, input.timeZone ?? 'UTC');
   // Every rule of the object runs on a create (spec 0013, AC-255): its definitions are held still, then checked.
   const hold = holdDefinitions(
@@ -424,7 +440,7 @@ export async function insertRecord(context: WriteContext, input: RecordInput) {
   // (up to 10 minutes is let through) would sort after later writes' versions, so those creates mint as any write
   // does, and their first values show as entries of their own.
   const versions = await writeAll(context, 'record', recordId, parsed, stampable ? recordId : undefined, hold);
-  await takeRecordSlots(tx, scope, 1);
+  if (known === undefined) await takeRecordSlots(tx, scope, 1);
   // The object's attributes go back too, so a read back after the write doesn't load them again.
   return { recordId, versions, objectId, attributes };
 }

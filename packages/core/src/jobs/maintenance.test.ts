@@ -13,6 +13,7 @@ import { afterAll, beforeAll, describe, expect, inject, it } from 'vitest';
 import { systemScope } from '../access/door.ts';
 import { deleteRecord } from '../engine/deletion.ts';
 import { newId } from '../engine/ids.ts';
+import { createImport, stageImportRows } from '../imports/service.ts';
 import { deleteNote, saveNote } from '../notes/notes.ts';
 import { createTask, deleteTask } from '../tasks/tasks.ts';
 import { outboxHook } from '../engine/outbox.ts';
@@ -561,6 +562,60 @@ describe('maintenance.daily (AC-112, AC-121)', () => {
       theirReady,
     ]);
     expect(ready?.status).toBe('ready');
+  });
+
+  it('removes an import’s rows once its undo closes, and imports never started after 24 hours (spec 0040)', async () => {
+    const t = await team([]);
+    const [found] = await testQuery<{ people: string; name: string }>(
+      ownerUrl,
+      `select o.id::text as people, a.id::text as name from objects o
+       join attributes a on a.object_id = o.id and a.api_slug = 'name'
+       where o.workspace_id = $1 and o.api_slug = 'people'`,
+      [t.workspaceId],
+    );
+    const made = async () => {
+      const id = newId();
+      await createImport(t.owner, {
+        id,
+        objectId: found?.people ?? '',
+        fileName: 'people.csv',
+        rowCount: 2,
+        errorRows: 0,
+        settings: {
+          columns: [{ header: 'Name', target: { attributeId: found?.name ?? '' } }],
+          onMatch: 'fill',
+          onNoMatch: 'create',
+        },
+      });
+      await stageImportRows(t.owner, {
+        importId: id,
+        rows: [2, 3].map((rowNumber) => ({ rowNumber, values: { [found?.name ?? '']: { firstName: 'Ada' } } })),
+      });
+      return id;
+    };
+    const closed = await made();
+    const stale = await made();
+    const fresh = await made();
+    await testQuery(
+      ownerUrl,
+      `update imports set status = 'started', undo_until = now() - interval '1 minute' where id = $1`,
+      [closed],
+    );
+    await testQuery(ownerUrl, `update imports set created_at = now() - interval '25 hours' where id = $1`, [stale]);
+    const { outcomes } = await cleanUp(t.workspaceId, '2026-10-15');
+    expect(outcomes.at(-1)).toBe('succeeded');
+    const left = await testQuery<{ id: string; rows: number }>(
+      ownerUrl,
+      `select i.id::text, (select count(*)::int from import_rows r where r.import_id = i.id) as rows
+       from imports i where i.workspace_id = $1 order by i.id`,
+      [t.workspaceId],
+    );
+    expect(left).toEqual(
+      [
+        { id: closed, rows: 0 },
+        { id: fresh, rows: 2 },
+      ].sort((a, b) => (a.id < b.id ? -1 : 1)),
+    );
   });
 
   it('replays a committed batch to no new effect: each phase only removes what is still due', async () => {
