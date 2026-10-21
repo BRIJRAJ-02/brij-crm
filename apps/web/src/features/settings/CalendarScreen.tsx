@@ -143,6 +143,7 @@ function CalendarRow({ calendar, actions }: { readonly calendar: CalendarItem; r
         <Switch
           key={name}
           label={label[name]}
+          labelContext={strings.switchOn(calendar.name)}
           isSelected={calendar[name]}
           onChange={(isOn) => actions.onSwitch(calendar, name, isOn)}
         />
@@ -424,7 +425,20 @@ export function CalendarScreen({ data, slug, view, result, onResultSeen }: Calen
             connection={connection}
             calendars={calendarsOf(connection.id)}
             actions={actions}
-            onSharing={(sharing) => void data.calendar.setSharing(slug, connection.id, sharing)}
+            onSharing={(sharing) => {
+              const was = connection.sharing;
+              void data.calendar.setSharing(slug, connection.id, sharing).then((isDone) => {
+                if (!isDone) return;
+                toasts.toast({
+                  tone: 'success',
+                  message: strings.sharingSaved(connection.accountEmail),
+                  action: {
+                    label: strings.undo,
+                    onAction: () => void data.calendar.setSharing(slug, connection.id, was),
+                  },
+                });
+              });
+            }}
             // Reconnecting goes through the same consent and lands on the same account, so the limit doesn't stop it.
             {...(providers.includes(connection.provider) ? { onReconnect: () => connect(connection.provider) } : {})}
             onDisconnect={() => {
@@ -459,7 +473,7 @@ export function CalendarScreen({ data, slug, view, result, onResultSeen }: Calen
           {outcome.text}
         </Callout>
       )}
-      {fellBack !== undefined && destination !== undefined && (
+      {fellBack !== undefined && (
         <Callout
           tone="warning"
           title={strings.fellBackTitle}
@@ -469,7 +483,9 @@ export function CalendarScreen({ data, slug, view, result, onResultSeen }: Calen
             </Button>
           }
         >
-          {strings.fellBackText(destination.name, fellBack.removedName)}
+          {destination === undefined
+            ? strings.fellBackNone(fellBack.removedName)
+            : strings.fellBackText(destination.name, fellBack.removedName)}
         </Callout>
       )}
       {body}

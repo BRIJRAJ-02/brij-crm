@@ -295,17 +295,23 @@ export function Select({
   const grouped =
     groups.length === 0 ? undefined : (
       <ListBox
+        ref={listRef}
         className={styles.list}
         renderEmptyState={() => <span className={styles.empty}>{strings.noMatches}</span>}
       >
-        {options.filter((item) => item.group === undefined && item.id !== CLEAR && item.id !== CREATE).map(option)}
+        {options
+          .filter(
+            (item) => item.group === undefined && item.isApart !== true && item.id !== CLEAR && item.id !== CREATE,
+          )
+          .map(option)}
         {groups.map((group) => (
           <ListBoxSection key={group} id={`group:${group}`} className={styles.section}>
             <Header className={styles.groupHeading}>{group}</Header>
             {options.filter((item) => item.group === group).map(option)}
           </ListBoxSection>
         ))}
-        {/* Clear and Create last, as in an ungrouped list. */}
+        {/* A choice set apart, then Clear and Create, last, as in an ungrouped list. */}
+        {options.filter((item) => item.group === undefined && item.isApart === true).map(option)}
         {options.filter((item) => item.id === CLEAR || item.id === CREATE).map(option)}
       </ListBox>
     );

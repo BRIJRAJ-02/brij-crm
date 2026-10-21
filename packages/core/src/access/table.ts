@@ -258,6 +258,7 @@ export const ACCESS_TABLE = {
   deleteBookingPage: { bookingPages: true },
   listBookings: { bookingPages: true },
   listWorkspaceBookings: { bookingPages: true },
+  listMeetings: { bookingPages: true },
   readBookingsCalendar: { bookingPages: true },
   readDefaultHours: { schedules: true },
   saveDefaultHours: { schedules: true },

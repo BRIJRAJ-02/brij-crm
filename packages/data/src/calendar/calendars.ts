@@ -118,7 +118,7 @@ export function createCalendarsStore(deps: CalendarsDeps) {
       reload() {
         void read();
       },
-      /** Shows `edit` at once (a ready state only); answers how to put it back while nothing newer landed. */
+      /** Shows `edit` at once (a ready state only); answers how to put it back (a fresh read once something newer landed). */
       patch(edit: (shown: T) => T): () => void {
         if (state.status !== 'ready') return () => undefined;
         const before = state;
@@ -126,7 +126,9 @@ export function createCalendarsStore(deps: CalendarsDeps) {
         const patched: CalendarsHeldState<T> = { ...edit(before), status: 'ready' };
         set(patched);
         return () => {
+          // Something newer landed over it: the list reads again, so a refused change never stays shown.
           if (state === patched) set(before);
+          else void read();
         };
       },
     };

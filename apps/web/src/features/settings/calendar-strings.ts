@@ -33,8 +33,6 @@ export const strings = {
     'New bookings from your booking pages are added to your default calendar, whichever account it is in. A booking page can pick another calendar in its editor.',
   defaultHelpExample:
     'With Google and Outlook connected, bookings go on the one default. Every calendar with Check for conflicts on, in either account, keeps its busy times from being booked.',
-  /** One account's card. */
-  accountCard: (provider: string, account: string) => `${provider}, ${account}`,
   calendarsGroup: 'Calendars',
   calendarsLoading: 'Loading this account’s calendars',
   calendarsFailed: 'Couldn’t load this account’s calendars.',
@@ -46,7 +44,8 @@ export const strings = {
   checkConflicts: 'Check for conflicts',
   showInWeek: 'Show on my week',
   sync: 'Sync meetings',
-  switchFor: (what: string, name: string) => `${what} on ${name}`,
+  /** What screen readers hear after each switch's name, so the rows' switches tell apart. */
+  switchOn: (name: string) => `on ${name}`,
   /** The quiet toasts a switch raises once saved, each with Undo. */
   saved: {
     checkConflicts: (name: string, on: boolean) =>
@@ -61,6 +60,8 @@ export const strings = {
   /** New bookings moved off a calendar the provider removed (AC-1005). */
   fellBackTitle: 'Your default calendar changed',
   fellBackText: (now: string, was: string) => `New bookings now go to ${now}. ${was} stopped taking them.`,
+  fellBackNone: (was: string) =>
+    `${was} stopped taking bookings and no other calendar can take them. Make one of your calendars the default.`,
   /** A connection's "···" menu. */
   rowActions: (account: string) => `Actions for ${account}`,
   status: {

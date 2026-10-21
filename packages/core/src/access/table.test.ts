@@ -308,6 +308,7 @@ describe('the walk: a principal without the access is refused', () => {
         [
           'listBookingPages',
           'listWorkspaceBookings',
+          'listMeetings',
           'readBookingsCalendar',
           'createBookingPage',
           'createTimeBlock',
