@@ -95,7 +95,8 @@ function statusOf(state: NoteSessionState): ReactNode | undefined {
     case 'retrying':
       return strings.retrying;
     case 'failed':
-      return state.refusal === undefined ? strings.notSaved : undefined;
+      // Refused or not, the bar says so: the reason's Callout may be scrolled out of view in a long note.
+      return strings.notSaved;
     case 'idle':
       return state.isNew || state.updatedAt === undefined ? undefined : (
         <span aria-live="off">

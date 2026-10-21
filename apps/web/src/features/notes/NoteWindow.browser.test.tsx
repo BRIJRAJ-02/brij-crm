@@ -144,7 +144,9 @@ describe('deleting a note from its window', () => {
     const confirm = page.getByRole('alertdialog', { name: 'Delete Kickoff call?' });
     await expect
       .element(confirm)
-      .toMatchTextContent(/The note is deleted for everyone, and you can undo it for 10 seconds only\./);
+      .toMatchTextContent(
+        /The note is deleted for everyone and skips the Trash, so you can undo it for 10 seconds only\./,
+      );
     await userEvent.click(confirm.getByRole('button', { name: /Cancel/ }));
     await expect.element(confirm).not.toBeInTheDocument();
     await askToDelete();
