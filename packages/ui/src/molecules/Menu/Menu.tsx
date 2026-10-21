@@ -1,4 +1,4 @@
-import { useMemo, type ReactElement, type ReactNode, type RefObject } from 'react';
+import { createContext, useContext, useMemo, type ReactElement, type ReactNode, type RefObject } from 'react';
 import {
   Autocomplete,
   Header,
@@ -309,7 +309,7 @@ export function Menu<T extends object>(props: MenuProps<T>) {
       </div>
     );
 
-  const body =
+  const framed =
     header === undefined ? (
       content
     ) : (
@@ -318,6 +318,9 @@ export function Menu<T extends object>(props: MenuProps<T>) {
         {content}
       </div>
     );
+  const body = (
+    <HasChecks.Provider value={selectionMode === 'single' || selectionMode === 'multiple'}>{framed}</HasChecks.Provider>
+  );
   if (isInline) return body;
   return (
     <Popover
@@ -380,11 +383,18 @@ function itemProps({ id, children, isDanger = false, href, onAction, isDisabled 
   };
 }
 
+/**
+ * The menu chooses (`single` or `multiple`), so its items keep a check column: a plain action in it (a
+ * `selectionMode="none"` section) keeps the empty column too, and its icon lines up with the choices' icons.
+ */
+const HasChecks = createContext(false);
+
 function ItemFace({ look, state }: { readonly look: Omit<MenuItemProps, 'id'>; readonly state: ItemState }) {
   const { children, icon, leading, isLabelInLeading = false, description, meta, kbd, isChecked = false } = look;
+  const hasChecks = useContext(HasChecks);
   return (
     <>
-      {state.selectionMode !== 'none' && (
+      {(state.selectionMode !== 'none' || hasChecks) && (
         <span className={styles.check}>{state.isSelected && <Icon name="check" size="sm" />}</span>
       )}
       {leading ?? (icon !== undefined && <Icon name={icon} size="sm" />)}
