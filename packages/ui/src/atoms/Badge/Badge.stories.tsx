@@ -48,3 +48,18 @@ export const AtLeastAndLabel: Story = {
     await expect(canvas.getByText('Doesn’t match this view')).toBeInTheDocument();
   },
 };
+
+/** A system state: a dot in its hue before the label, from working to broken. */
+export const States: Story = {
+  render: () => (
+    <Stage>
+      <Badge text="Connected" dot="green" />
+      <Badge text="Syncing" dot="blue" />
+      <Badge text="Expired" dot="orange" />
+      <Badge text="Failed" dot="red" />
+    </Stage>
+  ),
+  play: async ({ canvas }) => {
+    await expect(canvas.getByText('Connected')).toBeVisible();
+  },
+};
