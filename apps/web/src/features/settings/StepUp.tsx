@@ -1,7 +1,8 @@
 // Brief
 // Purpose: the step up (spec 0033, AC-896), asked inline in a sensitive change's own dialog, then the change goes on.
-// Main task: enter the authenticator app's code (or a backup code) when two factor is on, else a code emailed now.
-// Leaves out: its own dialog (each change's dialog holds these fields) and passkeys (milestone 3).
+// Main task: enter the authenticator app's code (or a backup code) when two factor is on, else a code emailed now;
+// or, with a passkey on the account, use it (milestone 3: it counts as a second factor).
+// Leaves out: its own dialog (each change's dialog holds these fields).
 import type { AccountSecurityState, DataLayer } from '@crm/data';
 import { Button, Callout, CodeInput, Field } from '@crm/ui';
 import { useEffect, useRef, useState, type ReactNode } from 'react';
@@ -38,6 +39,11 @@ export function needsStepUp(data: DataLayer, security: AccountSecurityState, nee
 export function useStepUp(data: DataLayer, security: AccountSecurityState, need: StepUpNeed = {}): StepUp {
   const twoFactorOn = security.status === 'ready' && security.twoFactor.on;
   const isNeeded = needsStepUp(data, security, need);
+  const hasPasskey = security.status === 'ready' && security.passkeys.length > 0;
+  // A passkey just proved it: the dialog's commit goes on though this render still says a check is needed.
+  const passed = useRef(false);
+  const [passkeyError, setPasskeyError] = useState<string | undefined>(undefined);
+  const [isAsking, setAsking] = useState(false);
   const [kind, setKind] = useState<'totp' | 'backup'>('totp');
   const [code, setCode] = useState('');
   const [error, setError] = useState<string | undefined>(undefined);
@@ -52,6 +58,8 @@ export function useStepUp(data: DataLayer, security: AccountSecurityState, need:
   const refocus = () => setFocusAsked((count) => count + 1);
 
   const reset = () => {
+    passed.current = false;
+    setPasskeyError(undefined);
     setKind('totp');
     setCode('');
     setError(undefined);
@@ -71,8 +79,23 @@ export function useStepUp(data: DataLayer, security: AccountSecurityState, need:
     }
   };
 
+  /** Asks the browser for a passkey; once it checks out, the dialog's commit runs. */
+  const askPasskey = async () => {
+    setAsking(true);
+    setPasskeyError(undefined);
+    setError(undefined);
+    const answer = await data.account.stepUp.passkey();
+    setAsking(false);
+    if (answer.ok) {
+      passed.current = true;
+      need.onComplete?.();
+    } else if (answer.code !== 'CANCELLED') {
+      setPasskeyError(answer.message);
+    }
+  };
+
   const prove = async (): Promise<boolean> => {
-    if (!isNeeded) return true;
+    if (!isNeeded || passed.current) return true;
     if (!twoFactorOn && !sent) {
       // The commit with no code sent yet sends one: the next step is the code.
       await send();
@@ -96,6 +119,12 @@ export function useStepUp(data: DataLayer, security: AccountSecurityState, need:
   };
 
   const errorProps = error === undefined ? {} : { error };
+  const passkeyButton = hasPasskey ? (
+    <Button variant="ghost" icon="key" isPending={isAsking} onPress={() => void askPasskey()}>
+      {strings.stepUp.usePasskey}
+    </Button>
+  ) : null;
+  const passkeyNote = passkeyError === undefined ? null : <Callout tone="danger">{passkeyError}</Callout>;
   const complete = need.onComplete === undefined ? {} : { onComplete: () => need.onComplete?.() };
   let fields: ReactNode = null;
   if (isNeeded && twoFactorOn) {
@@ -135,10 +164,20 @@ export function useStepUp(data: DataLayer, security: AccountSecurityState, need:
         >
           {kind === 'totp' ? strings.stepUp.useBackup : strings.stepUp.useApp}
         </Button>
+        {passkeyButton}
+        {passkeyNote}
       </>
     );
   } else if (isNeeded && need.secondFactor === true) {
-    fields = <Callout title={strings.stepUp.title}>{strings.stepUp.secondFactorOnly}</Callout>;
+    fields = (
+      <>
+        <Callout title={strings.stepUp.title}>
+          {hasPasskey ? strings.stepUp.withPasskey : strings.stepUp.secondFactorOnly}
+        </Callout>
+        {passkeyButton}
+        {passkeyNote}
+      </>
+    );
   } else if (isNeeded) {
     fields = (
       <>
@@ -162,6 +201,8 @@ export function useStepUp(data: DataLayer, security: AccountSecurityState, need:
         ) : (
           error !== undefined && <Callout tone="danger">{error}</Callout>
         )}
+        {passkeyButton}
+        {passkeyNote}
       </>
     );
   }

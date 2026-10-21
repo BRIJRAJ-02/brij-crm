@@ -4,9 +4,9 @@ Spec 0005, milestone 1, redesigned by spec 0036. Both pages sit in `AuthLayout`'
 
 ## `/sign-in` (SignInScreen)
 
-- **Purpose**: one way in for everyone, new or returning: Google (where the API says it is on), or a code sent to an email. The server decides whether it signs in or signs up.
-- **Main task**: Continue with Google; or type an email and press Continue with email, and the code goes out and the page moves to `/verify`.
-- **Leaves out**: passwords, a separate sign up page, account settings. Spec 0033's "Sign in with a passkey" goes in SignInForm's `afterEmail` when it comes.
+- **Purpose**: one way in for everyone, new or returning: Google (where the API says it is on), a code sent to an email, or a passkey alone (spec 0033, AC-888). The server decides whether it signs in or signs up.
+- **Main task**: Continue with Google; or type an email and press Continue with email, and the code goes out and the page moves to `/verify`; or "Sign in with a passkey" (SignInForm's `afterEmail`, shown where the browser has passkeys), or pick a passkey from the email field's suggestions (`isPasskeyAutofill`: that prompt waits from the page's start and stops when the page goes). A passkey signs in at once and goes on to `?redirect=`; closing its prompt does nothing.
+- **Leaves out**: passwords, a separate sign up page, account settings.
 
 ## `/verify` (VerifyScreen)
 
@@ -29,7 +29,7 @@ Spec 0005, milestone 1, redesigned by spec 0036. Both pages sit in `AuthLayout`'
 ## Second step (`/two-factor`, TwoFactorScreen)
 
 - **Purpose**: a sign in held back because two factor is on (spec 0033, AC-882, AC-884): an email code or Google proved the email, not yet the person.
-- **Main task**: type the authenticator app's 6 digit code (it sends itself once complete) or, after "Use a backup code", one of the backup codes; "Remember this device for 30 days" sits above the code so it is never skipped. A wrong code says so under the field and focus returns to it; a run out or over tried sign in says the server's sentence with Sign in again.
-- **Leaves out**: passkeys (milestone 3) and any way round the second factor (no email recovery, owner decision).
+- **Main task**: type the authenticator app's 6 digit code (it sends itself once complete) or, after "Use a backup code", one of the backup codes, or "Use a passkey" (where the browser has passkeys: it signs in on its own); "Remember this device for 30 days" sits above the code so it is never skipped. A wrong code says so under the field and focus returns to it; a run out or over tried sign in says the server's sentence with Sign in again.
+- **Leaves out**: any way round the second factor (no email recovery, owner decision).
 
 The pending sign in lives in Better Auth's HttpOnly cookie, so the page can't tell a stale one: the server says so. VerifyScreen goes here when `auth.verify` answers `second-step`; Google's callback redirects here.

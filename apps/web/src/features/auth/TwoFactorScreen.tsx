@@ -1,7 +1,8 @@
 // Brief
 // Purpose: the second step of a sign in with two factor on (spec 0033): prove it's you with the app or a backup code.
-// Main task: type the app's 6 digit code (checked when complete), or a backup code, then go on into the app.
-// Leaves out: passkeys (milestone 3) and any way round the second factor (no email recovery, owner decision).
+// Main task: type the app's 6 digit code (checked when complete), or a backup code, or use a passkey (which signs
+// in on its own, AC-888), then go on into the app.
+// Leaves out: any way round the second factor (no email recovery, owner decision).
 import { isDataError, type DataLayer } from '@crm/data';
 import { AuthLayout, Button, Callout, Checkbox, CodeInput, Field, Form, Link } from '@crm/ui';
 import { useNavigate } from '@tanstack/react-router';
@@ -57,6 +58,36 @@ export function TwoFactorScreen({ data, redirect }: TwoFactorScreenProps) {
     );
   };
 
+  // A passkey signs in on its own (AC-888): offered here too, where the browser has passkeys.
+  const [hasPasskeys, setHasPasskeys] = useState(false);
+  const [isAsking, setAsking] = useState(false);
+  useEffect(() => {
+    let live = true;
+    void data.auth.passkeys
+      .support()
+      .then((support) => {
+        if (live) setHasPasskeys(support.available);
+      })
+      .catch(() => undefined);
+    return () => {
+      live = false;
+    };
+  }, [data]);
+  const usePasskeyInstead = () => {
+    setAsking(true);
+    setError(undefined);
+    data.auth.passkeys.signIn(false).then(
+      (outcome) => {
+        setAsking(false);
+        if (outcome === 'done') void navigate({ href: safeRedirect(redirect), replace: true });
+      },
+      (failure: unknown) => {
+        setAsking(false);
+        setError(isDataError(failure) && failure.code !== 'INTERNAL' ? failure.message : strings.failed);
+      },
+    );
+  };
+
   const switchTo = (next: 'totp' | 'backup') => {
     setKind(next);
     setError(undefined);
@@ -86,9 +117,22 @@ export function TwoFactorScreen({ data, redirect }: TwoFactorScreenProps) {
         busyLabel={strings.checking}
         isBusy={isChecking}
         actions={
-          <Button variant="ghost" onPress={() => switchTo(kind === 'totp' ? 'backup' : 'totp')}>
-            {kind === 'totp' ? strings.useBackup : strings.useApp}
-          </Button>
+          <>
+            <Button variant="ghost" onPress={() => switchTo(kind === 'totp' ? 'backup' : 'totp')}>
+              {kind === 'totp' ? strings.useBackup : strings.useApp}
+            </Button>
+            {hasPasskeys && (
+              <Button
+                variant="ghost"
+                icon="key"
+                isPending={isAsking}
+                isDisabled={isChecking}
+                onPress={usePasskeyInstead}
+              >
+                {strings.usePasskey}
+              </Button>
+            )}
+          </>
         }
         onSubmit={() => {
           if (kind === 'backup') {

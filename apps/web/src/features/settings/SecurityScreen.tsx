@@ -1,7 +1,7 @@
 // Brief
 // Purpose: Settings › Account › Security (spec 0033): the devices signed in to this account, and ending them.
 // Main task: see each device (browser and system, rough place, last use) and sign one out, or every other one, after a confirm.
-// Leaves out: two factor and passkeys (milestones 2 and 3), recent activity and alerts (milestone 4), signing this device out (the account menu does).
+// Leaves out: recent activity and alerts (milestone 4), and signing this device out (the account menu does).
 import { STEP_UP_MINUTES, type AccountSession, type DataLayer } from '@crm/data';
 import { useAccountSecurity, useAccountSessions } from '@crm/data/react';
 import { Badge, Button, EmptyState, InfoTip, Modal, RelativeTime, Table, type TableColumn, type Toasts } from '@crm/ui';
@@ -11,6 +11,7 @@ import { strings } from './security-strings.ts';
 import { SettingsPage } from './SettingsPage.tsx';
 import { DeleteAccountSection } from './DeleteAccountSection.tsx';
 import { useStepUp } from './StepUp.tsx';
+import { PasskeysSection } from './PasskeysSection.tsx';
 import { TwoFactorSection } from './TwoFactorSection.tsx';
 
 /** How long the confirm takes to leave (`duration-exit` and a frame), before focus is checked again. */
@@ -187,6 +188,7 @@ export function SecurityScreen({ data, toasts }: SecurityScreenProps) {
         : {})}
     >
       <TwoFactorSection data={data} security={security} toasts={toasts} onFocusLost={focusTitle} />
+      <PasskeysSection data={data} security={security} toasts={toasts} onFocusLost={focusTitle} />
       {body}
       <DeleteAccountSection data={data} security={security} />
       <Modal

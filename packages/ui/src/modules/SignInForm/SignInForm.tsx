@@ -47,6 +47,12 @@ export interface SignInFormProps {
    * a screen fills it.
    */
   readonly afterEmail?: ReactNode;
+  /**
+   * The browser may offer passkeys in the email field's suggestions (spec
+   * 0033, AC-888): its autocomplete gains `webauthn`. Set it only while the
+   * screen is waiting for one to be picked.
+   */
+  readonly isPasskeyAutofill?: boolean;
 }
 
 /** Every refusal the form shows is about the one field; the notice shows above everything, apart from the form. */
@@ -77,6 +83,7 @@ export function SignInForm({
   disabledReason,
   isSignUpClosed = false,
   afterEmail,
+  isPasskeyAutofill = false,
 }: SignInFormProps) {
   const [email, setEmail] = useState(defaultEmail);
   const [problem, setProblem] = useState<FormRefusal | undefined>(undefined);
@@ -141,7 +148,7 @@ export function SignInForm({
           name={EMAIL_FIELD}
           type="email"
           inputMode="email"
-          autoComplete="email"
+          autoComplete={isPasskeyAutofill ? 'email webauthn' : 'email'}
           placeholder={strings.emailPlaceholder}
           isRequired
           value={email}

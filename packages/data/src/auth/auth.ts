@@ -3,9 +3,25 @@
 // session, `me` and the caches are the layer's to reset around it.
 import { type DataFault, toDataError } from '../errors.ts';
 import type { FetchLike } from '../fetch.ts';
-import type { AuthClient, SecondFactorKind, SessionUser, SignInOutcome, TwoFactorSetup } from './client.ts';
+import type { PasskeyAssertion, PasskeyRequestOptions } from '@crm/contracts';
+import type {
+  AuthClient,
+  PasskeyOutcome,
+  PasskeySupport,
+  SecondFactorKind,
+  SessionUser,
+  SignInOutcome,
+  TwoFactorSetup,
+} from './client.ts';
 
-export type { SecondFactorKind, SessionUser, SignInOutcome, TwoFactorSetup } from './client.ts';
+export type {
+  PasskeyOutcome,
+  PasskeySupport,
+  SecondFactorKind,
+  SessionUser,
+  SignInOutcome,
+  TwoFactorSetup,
+} from './client.ts';
 
 /** What sign in needs: the origin, the layer's `fetch`, and what to reset when who is signed in changes. */
 export interface AuthOptions {
@@ -42,6 +58,18 @@ export interface Auth {
    * `?redirect=` set to `returnTo`, so a refused sign in keeps the deep link.
    */
   signInWithGoogle(returnTo: string): Promise<void>;
+  /** Passkeys (spec 0033, milestone 3): what the browser can do, adding one, and signing in with one alone. */
+  readonly passkeys: {
+    support(): Promise<PasskeySupport>;
+    /** Adds a passkey to the signed in account (after a step up). */
+    add(name: string | undefined): Promise<PasskeyOutcome>;
+    /** Signs in with a passkey alone; with `autofill`, waits for one picked from the email field's suggestions. */
+    signIn(autofill: boolean): Promise<PasskeyOutcome>;
+    /** Stops a waiting passkey prompt. */
+    cancel(): void;
+    /** Asks for a passkey to answer a step up's challenge. */
+    assertion(options: PasskeyRequestOptions): Promise<PasskeyAssertion | 'cancelled'>;
+  };
   /** Ends the session on this device and forgets what was cached for it. */
   signOut(): Promise<void>;
   /** The signed in person, or undefined when nobody is. */
@@ -96,6 +124,26 @@ export function createAuth({ origin, fetch, reset, report }: AuthOptions): Auth 
       const back = new URL('/sign-in', origin);
       if (returnTo !== '/') back.searchParams.set('redirect', returnTo);
       await (await load()).signInWithGoogle(new URL(returnTo, origin).href, back.href);
+    },
+    passkeys: {
+      async support() {
+        return (await load()).passkeySupport();
+      },
+      async add(name) {
+        return (await load()).addPasskey(name);
+      },
+      async signIn(autofill) {
+        const outcome = await (await load()).signInWithPasskey(autofill);
+        if (outcome === 'done') reset();
+        return outcome;
+      },
+      cancel() {
+        // Only a loaded client can have a prompt waiting.
+        void client?.then((loaded) => loaded.cancelPasskey()).catch(() => undefined);
+      },
+      async assertion(options) {
+        return (await load()).passkeyAssertion(options);
+      },
     },
     async signOut() {
       try {

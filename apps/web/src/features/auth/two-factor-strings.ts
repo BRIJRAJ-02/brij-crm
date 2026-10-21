@@ -9,6 +9,7 @@ export const strings = {
   backupHint: 'Each backup code works once.',
   useBackup: 'Use a backup code',
   useApp: 'Use your authenticator app',
+  usePasskey: 'Use a passkey',
   remember: 'Remember this device for 30 days',
   continue: 'Continue',
   checking: 'Checking…',

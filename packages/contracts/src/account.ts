@@ -4,9 +4,10 @@
 // to take over a session, and a person reaches only their own.
 import { oc } from '@orpc/contract';
 import * as z from 'zod';
+import { PASSKEY_NAME_MAX } from './account-limits.ts';
 import { Uuid } from './values/ids.ts';
 
-export { STEP_UP_CODE_MINUTES, STEP_UP_MINUTES } from './account-limits.ts';
+export { PASSKEY_NAME_MAX, STEP_UP_CODE_MINUTES, STEP_UP_MINUTES } from './account-limits.ts';
 
 /** The most sessions one page of `account.sessions.list` answers. */
 export const SESSION_PAGE_MAX = 50;
@@ -116,15 +117,17 @@ export const StepUpVerifyInput = z.object({
 /** A step up's code. */
 export type StepUpVerifyInput = z.infer<typeof StepUpVerifyInput>;
 
-/** The longest name a passkey may have (AC-887). */
-export const PASSKEY_NAME_MAX = 60;
-
 /** A base64url string, as WebAuthn's JSON forms carry bytes; capped so a body can't grow without end. */
 const Base64Url = (max: number) =>
   z
     .string()
     .max(max)
     .regex(/^[A-Za-z0-9_-]*$/);
+
+/** How a browser may reach a passkey (WebAuthn's transports). */
+export const PasskeyTransport = z.enum(['ble', 'cable', 'hybrid', 'internal', 'nfc', 'smart-card', 'usb']);
+/** How a browser may reach a passkey. */
+export type PasskeyTransport = z.infer<typeof PasskeyTransport>;
 
 /**
  * What the browser needs to ask for a passkey in a step up (WebAuthn's
@@ -141,7 +144,7 @@ export const PasskeyRequestOptions = z.object({
       z.object({
         id: Base64Url(1400),
         type: z.literal('public-key'),
-        transports: z.array(z.string().max(20)).max(10).optional(),
+        transports: z.array(PasskeyTransport).max(10).optional(),
       }),
     )
     .max(100)

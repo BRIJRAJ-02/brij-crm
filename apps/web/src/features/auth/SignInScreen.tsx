@@ -1,12 +1,14 @@
 // Brief
-// Purpose: one way in for everyone, new or returning (spec 0036): Google, where it is on, or a code sent to an email.
+// Purpose: one way in for everyone, new or returning (spec 0036): Google, where it is on, a code sent to an email, or
+// a passkey alone (spec 0033, AC-888), from its button or the email field's suggestions.
 // Main task: Continue with Google, or type an email and Continue with email, which sends the code and moves to /verify.
 // Leaves out: passwords, sign up as a separate page (the server decides which it is), and any account settings.
 import type { DataLayer } from '@crm/data';
-import { AuthLayout, SignInForm, type SignInStatus } from '@crm/ui';
+import { AuthLayout, Button, SignInForm, type SignInStatus } from '@crm/ui';
 import { useNavigate } from '@tanstack/react-router';
 import { useEffect, useState } from 'react';
 import { googleRefusal, isAboutAddress, sendRefusal } from './messages.ts';
+import { safeRedirect } from './redirect.ts';
 import { savePending, sessionStore } from './pending.ts';
 import type { SignedOut } from './redirect.ts';
 import { strings } from './strings.ts';
@@ -65,6 +67,59 @@ export function SignInScreen({ data, google, redirect, returnTo, googleError, si
     };
   }, []);
 
+  // Passkeys (spec 0033, AC-888): offered where the browser has them, and in the email field's suggestions where it
+  // can; the suggestions' prompt waits from the start and stops when the page goes.
+  const [passkeys, setPasskeys] = useState<{ readonly available: boolean; readonly autofill: boolean }>({
+    available: false,
+    autofill: false,
+  });
+  const [isPasskeyBusy, setPasskeyBusy] = useState(false);
+  const signedInWithPasskey = () => {
+    void navigate({ href: safeRedirect(redirect), replace: true });
+  };
+  useEffect(() => {
+    let live = true;
+    void data.auth.passkeys
+      .support()
+      .then((support) => {
+        if (!live) return;
+        setPasskeys(support);
+        if (!support.autofill) return;
+        data.auth.passkeys.signIn(true).then(
+          (outcome) => {
+            if (live && outcome === 'done') signedInWithPasskey();
+          },
+          (failure: unknown) => {
+            if (live) setNotice(sendRefusal(failure));
+          },
+        );
+      })
+      .catch(() => undefined);
+    return () => {
+      live = false;
+      data.auth.passkeys.cancel();
+    };
+    // Once per visit: the waiting prompt belongs to the page, not to a render.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [data]);
+
+  const signInWithPasskey = () => {
+    setNotice(undefined);
+    setError(undefined);
+    setPasskeyBusy(true);
+    // Starting this prompt stops the suggestions' one.
+    data.auth.passkeys.signIn(false).then(
+      (outcome) => {
+        setPasskeyBusy(false);
+        if (outcome === 'done') signedInWithPasskey();
+      },
+      (failure: unknown) => {
+        setPasskeyBusy(false);
+        setNotice(sendRefusal(failure));
+      },
+    );
+  };
+
   const sendCode = (address: string) => {
     setNotice(undefined);
     setError(undefined);
@@ -105,6 +160,23 @@ export function SignInScreen({ data, google, redirect, returnTo, googleError, si
         {...(error === undefined ? {} : { error })}
         {...(notice === undefined ? {} : { notice })}
         {...(google ? { onGoogle: signInWithGoogle } : {})}
+        isPasskeyAutofill={passkeys.autofill}
+        {...(passkeys.available
+          ? {
+              afterEmail: (
+                <Button
+                  variant="ghost"
+                  icon="key"
+                  isFullWidth="center"
+                  isPending={isPasskeyBusy}
+                  isDisabled={status !== 'idle'}
+                  onPress={signInWithPasskey}
+                >
+                  {strings.passkey}
+                </Button>
+              ),
+            }
+          : {})}
       />
     </AuthLayout>
   );

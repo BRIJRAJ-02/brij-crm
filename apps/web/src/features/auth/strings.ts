@@ -14,6 +14,8 @@ export const strings = {
   product: 'Timefix',
   /** One way in for both (spec 0036): the server decides whether it signs in or signs up. */
   signInTitle: 'Sign in or sign up',
+  /** Spec 0033's passkey sign in, under the email field where the browser has passkeys (AC-888). */
+  passkey: 'Sign in with a passkey',
   verifyTitle: 'Check your email',
   failedTitle: 'Can’t reach Timefix',
   failedText: 'Check your connection, then try again.',
