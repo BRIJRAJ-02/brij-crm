@@ -37,7 +37,8 @@ export function Steps({ label, steps, current, failed, variant = 'list' }: Steps
   const currentIndex = steps.findIndex((step) => step.id === current);
   if (variant === 'count') {
     // One line, read where it stands; the flow's title names the step. A step not in the list counts from the first.
-    return <p className={styles.count}>{strings.count(Math.max(currentIndex, 0) + 1, steps.length)}</p>;
+    // A span, so it can sit in a heading's line (Card's eyebrow).
+    return <span className={styles.count}>{strings.count(Math.max(currentIndex, 0) + 1, steps.length)}</span>;
   }
   const stateOf = (index: number, id: string): StepState => {
     if (id === failed) return 'failed';
