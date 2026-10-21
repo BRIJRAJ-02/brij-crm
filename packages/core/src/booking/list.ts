@@ -23,7 +23,7 @@ import { inWorkspace } from '../access/run.ts';
 import { blockOccurrences } from './blocks.ts';
 import { linksOf, seenLinks } from './links.ts';
 
-const { bookingPages, bookings } = schema;
+const { bookingPages, bookings, members } = schema;
 
 /** The guests and note a booking keeps among its answers. */
 function guestsAndNote(answers: unknown): { readonly guests: string[]; readonly note?: string } {
@@ -58,10 +58,12 @@ function itemOf(
     booking: row,
     pageTitle,
     location,
+    hostName,
   }: {
     readonly booking: typeof bookings.$inferSelect;
     readonly pageTitle: string;
     readonly location: unknown;
+    readonly hostName: string | null;
   },
   seen: ReadonlySet<string>,
 ): BookingListItem {
@@ -72,6 +74,8 @@ function itemOf(
     pageTitle,
     location: place.success ? place.data : { type: 'video' },
     hostMemberId: row.hostMemberId,
+    hostName: hostName ?? '',
+    needsHost: row.needsHostAt !== null,
     startsAt: row.startsAt.toISOString(),
     endsAt: row.endsAt.toISOString(),
     visitorName: row.visitorName,
@@ -106,9 +110,15 @@ export async function listWorkspaceBookings(
       : and(eq(bookings.status, 'confirmed'), upcoming ? gte(bookings.endsAt, now) : lt(bookings.endsAt, now));
   return inWorkspace(scope, async (tx) => {
     const rows = await tx
-      .select({ booking: bookings, pageTitle: bookingPages.title, location: bookingPages.location })
+      .select({
+        booking: bookings,
+        pageTitle: bookingPages.title,
+        location: bookingPages.location,
+        hostName: members.name,
+      })
       .from(bookings)
       .innerJoin(bookingPages, eq(bookingPages.id, bookings.pageId))
+      .leftJoin(members, and(eq(members.workspaceId, bookings.workspaceId), eq(members.id, bookings.hostMemberId)))
       .where(and(shown, visibleTo(reader)))
       .orderBy(upcoming ? asc(bookings.startsAt) : desc(bookings.startsAt), asc(bookings.id))
       .limit(BOOKINGS_LIST_MAX);
@@ -158,9 +168,15 @@ export async function readBookingsCalendar(
   const to = new Date(input.to);
   return inWorkspace(scope, async (tx) => {
     const rows = await tx
-      .select({ booking: bookings, pageTitle: bookingPages.title, location: bookingPages.location })
+      .select({
+        booking: bookings,
+        pageTitle: bookingPages.title,
+        location: bookingPages.location,
+        hostName: members.name,
+      })
       .from(bookings)
       .innerJoin(bookingPages, eq(bookingPages.id, bookings.pageId))
+      .leftJoin(members, and(eq(members.workspaceId, bookings.workspaceId), eq(members.id, bookings.hostMemberId)))
       .where(and(lt(bookings.startsAt, to), gt(bookings.endsAt, from), visibleTo(reader)))
       .orderBy(asc(bookings.startsAt), asc(bookings.id))
       .limit(BOOKINGS_LIST_MAX);

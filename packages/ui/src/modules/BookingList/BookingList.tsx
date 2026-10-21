@@ -21,6 +21,8 @@ export interface BookingListRow {
   readonly note?: string;
   /** The visitor's name, after "You and", linked to their person when `guestHref` is given. */
   readonly guestName: string;
+  /** Who hosts it, when that isn't the reader: "Sam Lee and <guest>" in place of "You and". */
+  readonly hostName?: string;
   readonly guestHref?: string;
   /** A state worth saying ("Cancelled"). */
   readonly badge?: string;
@@ -82,7 +84,7 @@ export function BookingList({ label, groups, onOpen, emptyState }: BookingListPr
                   </div>
                   {row.note !== undefined && <span className={styles.note}>{strings.quoted(row.note)}</span>}
                   <span className={styles.who}>
-                    {strings.youAnd}{' '}
+                    {row.hostName === undefined ? strings.youAnd : strings.hostAnd(row.hostName)}{' '}
                     {row.guestHref === undefined ? row.guestName : <Link href={row.guestHref}>{row.guestName}</Link>}
                   </span>
                 </div>

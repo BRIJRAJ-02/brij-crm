@@ -202,6 +202,8 @@ export const strings = {
   /** The detail's line for why a round robin booking went to its host (spec 0029, AC-742). */
   assignedTerm: 'Assigned',
   /** Reassigning a round robin seat (spec 0029, AC-748). */
+  needsHost: 'Needs a host',
+  needsHostText: 'Its host left the workspace and nobody else was free then. Reassign it, or cancel it.',
   reassignAction: 'Reassign',
   reassignTitle: (page: string, visitor: string) => `Reassign ${page} with ${visitor}`,
   seat: 'Rotation',

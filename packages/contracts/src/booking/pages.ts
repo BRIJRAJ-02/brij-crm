@@ -194,6 +194,10 @@ export const BookingListItem = BookingView.extend({
   cancelledBy: z.enum(['guest', 'host', 'calendar']).optional(),
   /** How many times it has moved (at most 5). */
   reschedules: z.number().int().min(0),
+  /** Its host's name as the workspace shows it, for "Sam Lee and Grace" on a booking someone else hosts. */
+  hostName: z.string(),
+  /** Its host left with nobody free to take it (spec 0029, AC-749): "Needs a host" until an admin reassigns it. */
+  needsHost: z.boolean(),
 });
 /** A booking in Bookings. */
 export type BookingListItem = z.infer<typeof BookingListItem>;

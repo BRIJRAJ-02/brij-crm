@@ -56,7 +56,7 @@ import { DrawCard } from './DrawCard.tsx';
 import { NewMeetingDialog, type NewMeeting } from './NewMeetingDialog.tsx';
 import { instantOf, spanNames, type DrawnSpan } from './span.ts';
 import { PAGE_SIZES, type BookingsSearch } from './search.ts';
-import { useCan } from '../workspace/WorkspacePage.tsx';
+import { useCan, useMyAccess } from '../workspace/WorkspacePage.tsx';
 import { assignedItems } from './assignment.ts';
 import { ReassignDialog } from './ReassignDialog.tsx';
 import { BookingActions, BookingDialog, type BookingAsk, type HostBookingActions } from './BookingActions.tsx';
@@ -242,6 +242,11 @@ function BookingCard({
     <>
       <Badge text={strings.status[booking.status]} tone={booking.status === 'confirmed' ? 'accent' : 'neutral'} />
       {booking.eventFailed && booking.status === 'confirmed' && <Callout tone="warning">{strings.eventFailed}</Callout>}
+      {booking.needsHost && booking.status === 'confirmed' && (
+        <Callout tone="warning" title={strings.needsHost}>
+          {strings.needsHostText}
+        </Callout>
+      )}
       <DescriptionList
         layout="stacked"
         items={[
@@ -1144,6 +1149,7 @@ function groupsOf(
   bookings: readonly BookingListItem[],
   personHref: (booking: BookingListItem) => string | undefined,
   locale: string,
+  me: string | undefined,
 ): readonly BookingListGroup[] {
   const now = new Date();
   const today = dayKeyOf(now);
@@ -1173,8 +1179,16 @@ function groupsOf(
       title: booking.pageTitle,
       ...(booking.note === undefined ? {} : { note: booking.note }),
       guestName: booking.visitorName,
+      // A colleague's booking (an admin's view, a team page) names its host rather than "You".
+      ...(me === undefined || booking.hostMemberId === me || booking.hostName === ''
+        ? {}
+        : { hostName: booking.hostName }),
       ...(href === undefined ? {} : { guestHref: href }),
-      ...(booking.status === 'cancelled' ? { badge: strings.cancelled } : {}),
+      ...(booking.status === 'cancelled'
+        ? { badge: strings.cancelled }
+        : booking.needsHost
+          ? { badge: strings.needsHost }
+          : {}),
     };
     const last = groups.at(-1);
     if (last?.id === id) last.rows.push(row);
@@ -1257,6 +1271,7 @@ export function BookingsListScreen({
 }: BookingsListScreenProps) {
   const personHref = usePersonHref(slug, objects);
   // The open booking by id, read from the list as it is now: a change (here or by the guest) shows in the panel.
+  const me = useMyAccess()?.memberId;
   const [openId, setOpenId] = useState<string | undefined>(undefined);
   const tab = search.tab;
   const view = lists[tab];
@@ -1319,7 +1334,7 @@ export function BookingsListScreen({
         <>
           <BookingList
             label={strings.listLabel[tab]}
-            groups={groupsOf(shown, personHref, locale)}
+            groups={groupsOf(shown, personHref, locale, me)}
             onOpen={(id) => {
               const booking = byId.get(id);
               if (booking !== undefined) setOpenId(booking.id);

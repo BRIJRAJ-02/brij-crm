@@ -82,3 +82,23 @@ export const Empty: Story = {
     await expect(canvas.getByText('No upcoming bookings')).toBeInTheDocument();
   },
 };
+
+/** A colleague's bookings (an admin's view of a team page): the host is named in place of "You", and one needs a host. */
+export const Colleagues: Story = {
+  parameters: { crm: { screenshot: false } },
+  render: (args) => (
+    <Stage width="fill">
+      <BookingList
+        {...args}
+        groups={groups().map((group) => ({
+          ...group,
+          rows: group.rows.map((row) => ({ ...row, hostName: 'Sam Lee', badge: 'Needs a host' })),
+        }))}
+      />
+    </Stage>
+  ),
+  play: async ({ canvas }) => {
+    await expect(canvas.getAllByText(/^Sam Lee and/u)).toHaveLength(2);
+    await expect(canvas.queryByText(/^You and/u)).not.toBeInTheDocument();
+  },
+};

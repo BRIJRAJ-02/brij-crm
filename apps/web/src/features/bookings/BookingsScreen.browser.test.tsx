@@ -62,6 +62,8 @@ function bookingOf(): BookingListItem {
     location: { type: 'video' },
     guests: [],
     reschedules: 0,
+    hostName: 'Ada Lovelace',
+    needsHost: false,
   } as unknown as BookingListItem;
 }
 
