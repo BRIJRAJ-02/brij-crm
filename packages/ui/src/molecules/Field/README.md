@@ -30,12 +30,13 @@ Ported from the artifact's Field card. Every text, number and link attribute is 
 - Typed numbers are parsed by the field set, never here (the input stays text, so nothing is lost to a JS number).
 - Stack fields with `space-16` between them in modals and panels.
 
-- `autoFocus` takes focus as it mounts, for the search field at the top of a list that just opened.
+- `autoFocus` takes focus as it mounts. A list's search inside a popover takes focus through the list's focus scope instead (Select does this), so a popover around it never reads the move as focus leaving.
+- Inside a `Popover` (a grid cell's editor, a list's search, a filter's value) the field draws its focus with the accent border alone, no halo: the popover's own edge already frames it, and a halo inside it read as a second ring around the field (the owner, 21 October 2026). Popover tells it through its `InPopover` context; a Modal opened from a popover sets it back.
 - Inside a `Form`, a refusal the form holds under the field's `name` shows here like `error`, until the person changes the field. A given `error` wins. The browser's own checks (`required`, `type="email"`) never show their messages: a required field is marked `aria-required`, and the screen or module says what is wrong in the library's words.
 
 ## States
 
-Empty (placeholder), filled, near its limit (the count shows), focus (a 1px `accent-line` border and the faint halo), invalid (danger border and message, in place of the hint), read only (filled, lock, reason), disabled (faded, reason), copy (read only, drawn live, with its Copy button, on one line or many). The `cell` variant has none of these looks of its own: its grid cell draws focus and the refusal, and the message floats under the cell on a raised surface.
+Empty (placeholder), filled, near its limit (the count shows), focus (a 1px `accent-line` border and the faint halo; inside a Popover the border alone, see below), invalid (danger border and message, in place of the hint), read only (filled, lock, reason), disabled (faded, reason), copy (read only, drawn live, with its Copy button, on one line or many). The `cell` variant has none of these looks of its own: its grid cell draws focus and the refusal, and the message floats under the cell on a raised surface.
 
 ## Keyboard
 

@@ -122,12 +122,15 @@
   }
 
   /* Joined to the start of a Field's box (a phone number's code): the Field draws the box, the focus ring and
-     the error edge; this draws only a hairline after itself. */
+     the error edge; this draws only a hairline after itself. The flag, the code and a small chevron sit close
+     together, the code at its own width: a width kept for the longest code ("+998") left a hole before the
+     chevron for every short one (the owner, 21 October 2026). */
   .root[data-variant='prefix'] {
     align-self: stretch;
   }
 
   .root[data-variant='prefix'] .trigger {
+    gap: var(--space-4);
     inline-size: auto;
     block-size: 100%;
     padding-inline: 0 var(--space-6);
@@ -136,16 +139,12 @@
     border-radius: 0;
     background: transparent;
     box-shadow: none;
-    font-variant-numeric: tabular-nums;
   }
 
   .short {
-    /* As wide as the longest code ("+998"), so a choice never moves the number. */
-    min-inline-size: var(--space-32);
     color: var(--text);
     font: var(--text-body);
     letter-spacing: var(--tracking-body);
-    font-variant-numeric: tabular-nums;
   }
 
   .value {
@@ -156,6 +155,11 @@
     min-inline-size: 0;
     overflow: hidden;
     white-space: nowrap;
+  }
+
+  /* The prefix's flag and code sit close together. */
+  .root[data-variant='prefix'] .value {
+    gap: var(--space-4);
   }
 
   .placeholder {
@@ -259,6 +263,11 @@
     display: inline-flex;
     margin-inline-start: auto;
     color: var(--accent);
+  }
+
+  /* In a popover the popover's own edge frames the trigger: focus is the accent edge alone, as a Field's there. */
+  .root[data-in-popover] .trigger:is([data-focus-visible], [data-pressed]) {
+    box-shadow: none;
   }
 
   @media (forced-colors: active) {

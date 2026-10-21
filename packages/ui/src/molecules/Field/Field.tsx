@@ -1,10 +1,11 @@
-import { useLayoutEffect, useRef, type ReactNode, type Ref } from 'react';
+import { use, useLayoutEffect, useRef, type ReactNode, type Ref } from 'react';
 import { FieldError, Input, Label, Text, TextArea, TextField } from 'react-aria-components';
 import { CopyButton } from '../../atoms/Button/CopyButton.tsx';
 import { Icon } from '../../atoms/Icon/Icon.tsx';
 import type { IconName } from '../../atoms/Icon/icons.ts';
 import { keepInside } from '../../lib/float-inside.ts';
 import { useFormatSettings } from '../../provider/context.ts';
+import { InPopover } from '../Popover/Popover.tsx';
 import styles from './Field.module.css';
 import { strings } from './strings.ts';
 
@@ -137,6 +138,8 @@ export function Field({
   ref,
 }: FieldProps) {
   const { locale } = useFormatSettings();
+  // In a popover the popover's edge frames the field, so its focus is the accent edge alone.
+  const isInPopover = use(InPopover);
   const isCopy = variant === 'copy';
   // A value to copy is never typed over.
   const isReadOnly = isReadOnlyGiven || isCopy;
@@ -193,6 +196,7 @@ export function Field({
       data-variant={variant}
       data-align={align === 'end' ? 'end' : undefined}
       data-error-floats={isErrorFloating || undefined}
+      data-in-popover={isInPopover || undefined}
       isReadOnly={isReadOnly}
       isDisabled={isDisabled}
       isRequired={isRequired}

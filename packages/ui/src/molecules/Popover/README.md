@@ -19,6 +19,7 @@ New. The artifact draws each menu's surface itself and animates it in only. One 
 - `width`: `content` (the default), `menu` (240px, or the trigger's width when wider), `trigger` (at least the trigger's width and wider when an option needs it, so an option never wraps: a select), `builder` (`size-dialog-wide`, never past the window, for a view's FilterBuilder or SortBuilder). Why `builder`: those size themselves by container query, so shrink to fit gave them no width at all and their fields collapsed (spec 0020's Toolbar).
 - `placement` follows React Aria (`bottom start` by default) and flips when there is no room.
 - `triggerRef` anchors it to an element that isn't a React Aria trigger (a context menu's row).
+- What it holds knows it is in a popover (`InPopover`, a context): a Field or a Select there draws its focus with its accent border alone, no halo, since the popover's edge already frames it (the owner, 21 October 2026: a halo inside a grid cell's editor read as a second ring). Modal sets it back to false for what it holds.
 
 ## States
 

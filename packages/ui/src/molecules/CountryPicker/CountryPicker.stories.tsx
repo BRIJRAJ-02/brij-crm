@@ -1,7 +1,10 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
+import { DialogTrigger } from 'react-aria-components';
 import { expect, fn, waitFor, within } from 'storybook/test';
+import { Button } from '../../atoms/Button/Button.tsx';
 import { Stage } from '../../workbench/Stage/Stage.tsx';
-import { CountryPicker } from './CountryPicker.tsx';
+import { Popover } from '../Popover/Popover.tsx';
+import { CountryPicker, type CountryPickerProps } from './CountryPicker.tsx';
 
 const meta = {
   title: 'Molecules/CountryPicker',
@@ -49,15 +52,113 @@ export const Searching: Story = {
   },
 };
 
-/** A search by dial code finds the country too, with the guessed country pinned first while the search is empty. */
+/**
+ * A search by dial code finds the country too, with the guessed country pinned first while the search is empty.
+ * A code several countries share lists its main country first, marked, so Enter chooses it: +44 is the United
+ * Kingdom, not Guernsey.
+ */
 export const ByDialCode: Story = {
   parameters: { crm: { screenshot: false } },
-  play: async ({ canvas, userEvent }) => {
+  play: async ({ canvas, args, userEvent }) => {
     await userEvent.click(canvas.getByRole('button', { name: /Country/ }));
     await search();
     await waitFor(() => expect(document.querySelector('[role="option"]')).toHaveTextContent('India'));
     await userEvent.keyboard('+44');
-    await waitFor(() => expect(document.querySelector('[role="option"]')).toHaveTextContent('Guernsey'));
+    await waitFor(() => expect(document.querySelector('[role="option"]')).toHaveTextContent('United Kingdom'));
+    await waitFor(() =>
+      expect(document.querySelector('[role="option"][data-focused]')).toHaveTextContent('United Kingdom'),
+    );
+    await userEvent.keyboard('{Enter}');
+    await expect(args.onChange).toHaveBeenCalledWith('GB');
+  },
+};
+
+/**
+ * Names that start with what is typed come first, and the first is the one marked: "ind" lists India before
+ * British Indian Ocean Territory, and "an" Andorra before Afghanistan, so Enter chooses what was meant.
+ */
+export const BestMatchFirst: Story = {
+  parameters: { crm: { screenshot: false } },
+  play: async ({ canvas, args, userEvent }) => {
+    await userEvent.click(canvas.getByRole('button', { name: /Country/ }));
+    await search();
+    await userEvent.keyboard('an');
+    await waitFor(() => expect(document.querySelector('[role="option"][data-focused]')).toHaveTextContent('Andorra'));
+    await userEvent.keyboard('{Backspace}{Backspace}ind');
+    await waitFor(() => expect(document.querySelector('[role="option"]')).toHaveTextContent('India'));
+    await waitFor(() => expect(document.querySelector('[role="option"][data-focused]')).toHaveTextContent('India'));
+    await userEvent.keyboard('{Enter}');
+    await expect(args.onChange).toHaveBeenCalledWith('IN');
+  },
+};
+
+/** Opened inside another popover (a grid cell's editor, a filter): the list opens over it and leaves it open. */
+function InAPopoverStage(args: CountryPickerProps) {
+  return (
+    <Stage width="narrow">
+      <DialogTrigger defaultOpen>
+        <Button icon="phone">Edit</Button>
+        <Popover label="Phone" width="menu">
+          <CountryPicker {...args} />
+        </Popover>
+      </DialogTrigger>
+    </Stage>
+  );
+}
+
+/** The popover around it, by its name. */
+function outer() {
+  return document.querySelector('[role="dialog"][aria-label="Phone"]');
+}
+
+/**
+ * Inside another popover: a click opens the list and both stay open (the search takes focus only once its own
+ * list is in place, so the popover around it never reads the move as focus leaving). Choosing closes the list
+ * alone and puts focus back on the trigger; Esc closes the list first, then the popover.
+ */
+export const InAPopover: Story = {
+  render: (args) => <InAPopoverStage {...args} />,
+  play: async ({ args, userEvent }) => {
+    await waitFor(() => expect(outer()).not.toBeNull());
+    const page = within(document.body);
+    const trigger = page.getByRole('button', { name: /Country/ });
+    await userEvent.click(trigger);
+    const field = await search();
+    await waitFor(() => expect(field).toHaveFocus());
+    await expect(outer()).not.toBeNull();
+    await userEvent.keyboard('ind');
+    await waitFor(() => expect(document.querySelector('[role="option"][data-focused]')).toHaveTextContent('India'));
+    await userEvent.keyboard('{Enter}');
+    await expect(args.onChange).toHaveBeenCalledWith('IN');
+    await waitFor(() => expect(document.querySelector('[role="listbox"]')).toBeNull());
+    await expect(outer()).not.toBeNull();
+    await waitFor(() => expect(trigger).toHaveFocus());
+    // Esc: the list first, then the popover around it.
+    await userEvent.keyboard('{Enter}');
+    await search();
+    await userEvent.keyboard('{Escape}');
+    await waitFor(() => expect(document.querySelector('[role="listbox"]')).toBeNull());
+    await expect(outer()).not.toBeNull();
+    await waitFor(() => expect(trigger).toHaveFocus());
+    await userEvent.keyboard('{Escape}');
+    await waitFor(() => expect(outer()).toBeNull());
+  },
+};
+
+/** The list open over the popover it was opened from, the search marking its best match. */
+export const InAPopoverOpen: Story = {
+  render: (args) => <InAPopoverStage {...args} />,
+  play: async ({ userEvent }) => {
+    await waitFor(() => expect(outer()).not.toBeNull());
+    await userEvent.click(within(document.body).getByRole('button', { name: /Country/ }));
+    const field = await search();
+    await userEvent.keyboard('ind');
+    await waitFor(() => expect(document.querySelector('[role="option"][data-focused]')).toHaveTextContent('India'));
+    await expect(outer()).not.toBeNull();
+    // The search names its marked option once React Aria has caught up with the typing.
+    await waitFor(() =>
+      expect(document.getElementById(field.getAttribute('aria-activedescendant') ?? '')).not.toBeNull(),
+    );
   },
 };
 

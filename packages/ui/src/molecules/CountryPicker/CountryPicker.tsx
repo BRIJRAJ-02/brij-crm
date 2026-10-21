@@ -1,5 +1,5 @@
 import { useMemo, type Ref } from 'react';
-import { allCountriesIn, countriesIn, flagOf, matchesCountry, type Country } from '../../lib/countries.ts';
+import { allCountriesIn, countriesIn, countryRank, flagOf, matchesCountry, type Country } from '../../lib/countries.ts';
 import { useFormatSettings } from '../../provider/context.ts';
 import { Select, type SelectItem } from '../Select/Select.tsx';
 import styles from './CountryPicker.module.css';
@@ -130,6 +130,10 @@ export function CountryPicker({
       filter={(item, query) => {
         const country = byCode.get(item.id);
         return country !== undefined && matchesCountry(country, query);
+      }}
+      rank={(item, query) => {
+        const country = byCode.get(item.id);
+        return country === undefined ? 1 : countryRank(country, query);
       }}
       isRequired={isRequired}
       isReadOnly={isReadOnly}

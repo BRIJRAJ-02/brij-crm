@@ -23,6 +23,8 @@ A ComboBox was the other candidate. It types into the trigger itself, which suit
 
 - `value` and `onChange` carry the ISO code ("IN"), or `null`.
 - `guess` is the visitor's own country (the hosted form guesses it from the browser's language); it is pinned first while the search is empty.
+- While searching, the best matches come first and the first is marked, so Enter chooses it: a name that starts with what is typed, or the ISO code typed ("ind" India, then Indonesia, then British Indian Ocean Territory); for a dial code, the main country of a shared code ("+44" the United Kingdom before Guernsey, "+1" the US, "+358" Finland), through Select's `rank`. A "+" alone keeps every country with a code.
+- It works inside another popover (a grid cell's editor, a filter): the list opens over it and leaves it open, choosing closes the list alone, and Esc closes the list first.
 - Each option is the flag (an emoji from the two letters), the name in the provider's language, and the dial code, muted.
 - `variant="prefix"` is for PhoneField; use PhoneField rather than building a phone field with it. The field set's Phone editor uses PhoneField too, so a record's number and a form's answer pick their code the same way (F38).
 - `list="all"` lists every country and territory (ISO 3166-1), without dial codes, for a place: the Location editor's country and a filter's "country is". `size="sm"` is a filter value's or a panel row's trigger, and `isClearable` adds "Clear".

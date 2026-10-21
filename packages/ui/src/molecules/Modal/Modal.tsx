@@ -5,6 +5,7 @@ import { Button } from '../../atoms/Button/Button.tsx';
 import { Icon } from '../../atoms/Icon/Icon.tsx';
 import { VisuallyHidden } from '../../atoms/VisuallyHidden/VisuallyHidden.tsx';
 import type { IconName } from '../../atoms/Icon/icons.ts';
+import { InPopover } from '../Popover/Popover.tsx';
 import styles from './Modal.module.css';
 import { strings } from './strings.ts';
 
@@ -151,7 +152,10 @@ export function Modal({
               </span>
             )}
           </div>
-          <div className={styles.body}>{children}</div>
+          {/* A dialog opened from inside a popover is a page of its own: its fields keep their halo. */}
+          <InPopover value={false}>
+            <div className={styles.body}>{children}</div>
+          </InPopover>
           {actions !== undefined && <div className={styles.foot}>{actions}</div>}
         </Dialog>
       </AriaModal>

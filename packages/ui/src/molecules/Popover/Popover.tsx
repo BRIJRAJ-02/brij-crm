@@ -1,7 +1,15 @@
-import type { ReactNode, RefObject } from 'react';
+import { createContext, type ReactNode, type RefObject } from 'react';
 import { useFocusVisible } from 'react-aria';
 import { Dialog, Popover as AriaPopover, type PopoverProps as AriaPopoverProps } from 'react-aria-components';
 import styles from './Popover.module.css';
+
+/**
+ * True inside a Popover. A field or a select there draws its focus with its
+ * accent edge alone, no halo: the popover's own edge already frames it, and a
+ * halo inside it read as a second ring (the owner, 21 October 2026). Modal
+ * sets it back to false for what it holds.
+ */
+export const InPopover = createContext(false);
 
 /** How wide a popover is: its content (the default), a menu (240px, or the trigger's width if wider), or its trigger's width, wider when an option needs it (a select). */
 export type PopoverWidth = 'content' | 'menu' | 'trigger' | 'builder';
@@ -54,13 +62,15 @@ export function Popover({
       {...(onOpenChange === undefined ? {} : { onOpenChange })}
       {...(isNonModal === undefined ? {} : { isNonModal })}
     >
-      {label === undefined ? (
-        children
-      ) : (
-        <Dialog className={styles.dialog} aria-label={label}>
-          {children}
-        </Dialog>
-      )}
+      <InPopover value>
+        {label === undefined ? (
+          children
+        ) : (
+          <Dialog className={styles.dialog} aria-label={label}>
+            {children}
+          </Dialog>
+        )}
+      </InPopover>
     </AriaPopover>
   );
 }
