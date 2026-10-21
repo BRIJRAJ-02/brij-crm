@@ -104,67 +104,70 @@ export function Table<T>({
   });
   const shown: readonly TableColumn[] =
     onReorder === undefined ? columns : [{ id: HANDLE, label: strings.reorder, isLabelHidden: true }, ...columns];
+  // The frame scrolls a table wider than its slot sideways on its own (a phone), never the page around it.
   return (
-    <AriaTable
-      className={styles.root}
-      aria-label={label}
-      {...(onRowAction === undefined ? {} : { onRowAction: (key) => onRowAction(String(key)) })}
-      {...(onReorder === undefined ? {} : { dragAndDropHooks })}
-    >
-      <TableHeader className={styles.header} columns={shown}>
-        {(column) => (
-          <Column
-            id={column.id}
-            isRowHeader={column.isRowHeader ?? false}
-            className={styles.column}
-            data-align={column.align ?? 'start'}
-            data-handle={column.id === HANDLE || undefined}
-          >
-            {column.isLabelHidden === true ? <VisuallyHidden>{column.label}</VisuallyHidden> : column.label}
-          </Column>
-        )}
-      </TableHeader>
-      <TableBody
-        className={styles.body}
-        items={showSkeleton ? [] : rows.map((row) => ({ id: getRowId(row), row }))}
-        renderEmptyState={() =>
-          showSkeleton ? (
-            <span className={styles.loading}>
-              <VisuallyHidden>{strings.loading}</VisuallyHidden>
-              {Array.from({ length: SKELETON_ROWS }, (_, index) => (
-                <Skeleton key={index} width={index === SKELETON_ROWS - 1 ? 'medium' : 'full'} />
-              ))}
-            </span>
-          ) : (
-            emptyState
-          )
-        }
+    <div className={styles.frame}>
+      <AriaTable
+        className={styles.root}
+        aria-label={label}
+        {...(onRowAction === undefined ? {} : { onRowAction: (key) => onRowAction(String(key)) })}
+        {...(onReorder === undefined ? {} : { dragAndDropHooks })}
       >
-        {(item) => (
-          <Row
-            id={item.id}
-            columns={shown}
-            className={styles.row}
-            data-pressable={onRowAction === undefined ? undefined : ''}
-          >
-            {(column) =>
-              column.id === HANDLE ? (
-                <Cell className={styles.cell} data-handle>
-                  <DragHandle label={strings.move(getRowLabel?.(item.row) ?? item.id)} />
-                </Cell>
-              ) : (
-                <Cell className={styles.cell} data-align={column.align ?? 'start'}>
-                  {column.isInline === true ? (
-                    <span className={styles.inline}>{renderCell(item.row, column.id)}</span>
-                  ) : (
-                    renderCell(item.row, column.id)
-                  )}
-                </Cell>
-              )
-            }
-          </Row>
-        )}
-      </TableBody>
-    </AriaTable>
+        <TableHeader className={styles.header} columns={shown}>
+          {(column) => (
+            <Column
+              id={column.id}
+              isRowHeader={column.isRowHeader ?? false}
+              className={styles.column}
+              data-align={column.align ?? 'start'}
+              data-handle={column.id === HANDLE || undefined}
+            >
+              {column.isLabelHidden === true ? <VisuallyHidden>{column.label}</VisuallyHidden> : column.label}
+            </Column>
+          )}
+        </TableHeader>
+        <TableBody
+          className={styles.body}
+          items={showSkeleton ? [] : rows.map((row) => ({ id: getRowId(row), row }))}
+          renderEmptyState={() =>
+            showSkeleton ? (
+              <span className={styles.loading}>
+                <VisuallyHidden>{strings.loading}</VisuallyHidden>
+                {Array.from({ length: SKELETON_ROWS }, (_, index) => (
+                  <Skeleton key={index} width={index === SKELETON_ROWS - 1 ? 'medium' : 'full'} />
+                ))}
+              </span>
+            ) : (
+              emptyState
+            )
+          }
+        >
+          {(item) => (
+            <Row
+              id={item.id}
+              columns={shown}
+              className={styles.row}
+              data-pressable={onRowAction === undefined ? undefined : ''}
+            >
+              {(column) =>
+                column.id === HANDLE ? (
+                  <Cell className={styles.cell} data-handle>
+                    <DragHandle label={strings.move(getRowLabel?.(item.row) ?? item.id)} />
+                  </Cell>
+                ) : (
+                  <Cell className={styles.cell} data-align={column.align ?? 'start'}>
+                    {column.isInline === true ? (
+                      <span className={styles.inline}>{renderCell(item.row, column.id)}</span>
+                    ) : (
+                      renderCell(item.row, column.id)
+                    )}
+                  </Cell>
+                )
+              }
+            </Row>
+          )}
+        </TableBody>
+      </AriaTable>
+    </div>
   );
 }

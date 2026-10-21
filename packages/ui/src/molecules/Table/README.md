@@ -24,6 +24,8 @@ New. Settings lists (#23, #25, #34, #35, #42) are short and need columns, a row 
 
 Loading (skeletons), empty, rows, hover (pointer only), focus (row and cell), reorderable (a handle per row; the held row fades, an accent line marks where it lands, `Highlight` in forced colours).
 
+A table wider than its slot (a phone) scrolls sideways in its own frame, never the page around it (21 October 2026). Focus rings are inset, so the frame never clips one.
+
 ## Keyboard
 
 Tab enters the table; the arrow keys move between rows and cells; Enter opens a row with `onRowAction`. With `onReorder`, Enter on a row's handle picks it up, the arrows choose where, Enter drops it and Esc puts it back.

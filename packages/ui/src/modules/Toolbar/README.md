@@ -32,6 +32,8 @@ Ported from the artifact's Toolbar card (ViewBar is new: the artifact drew it as
 
 Bars: with and without actions; the views loading; the page loading (TopBar). ViewBar: grouped (a Private section) and locked choices. Toolbar: with unsaved changes (Save shows) and without. SortChip: FilterChip's states (hover and focus per part), with more sorts, a long name, and read only (no remove part).
 
+On a phone (21 October 2026): TopBar is a size container, so its Breadcrumbs show only the current place under 480px; ViewBar scrolls sideways on its own when the switcher, View settings and the layout switch are wider than it, never the page.
+
 ## Keyboard
 
 Tab reaches the switcher and each action in the bars. Tab enters the toolbar once, and the left and right arrows move between its controls. The switcher's menu opens with Enter, Space or the down arrow.
