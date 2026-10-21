@@ -2,6 +2,8 @@ import type { Meta, StoryObj } from '@storybook/react-vite';
 import { useState } from 'react';
 import { expect, fn, waitFor } from 'storybook/test';
 import { Stage } from '../../workbench/Stage/Stage.tsx';
+import { Button } from '../../atoms/Button/Button.tsx';
+import { Select } from '../Select/Select.tsx';
 import { Field } from './Field.tsx';
 
 const meta = {
@@ -25,6 +27,36 @@ export const Default: Story = {
     await userEvent.click(input);
     await userEvent.keyboard('northwind.com');
     await expect(args.onChange).toHaveBeenLastCalledWith('northwind.com');
+  },
+};
+
+/** A row's picker and its remove button in the suffix: the Invite dialog's address with its role. */
+export const SuffixPicker: Story = {
+  args: { label: 'Email', placeholder: 'name@company.com', defaultValue: 'grace@example.com' },
+  render: (args) => (
+    <Stage width="narrow">
+      <Field
+        {...args}
+        suffix={
+          <>
+            <Select
+              label="Role for grace@example.com"
+              isLabelHidden
+              variant="inline"
+              items={[
+                { id: 'admin', label: 'Admin', description: 'Manages members and settings.' },
+                { id: 'member', label: 'Member', description: 'Works with records.' },
+              ]}
+              defaultValue="member"
+            />
+            <Button variant="ghost" icon="x" label="Remove grace@example.com" />
+          </>
+        }
+      />
+    </Stage>
+  ),
+  play: async ({ canvas }) => {
+    await expect(canvas.getByRole('button', { name: 'Remove grace@example.com' })).toBeInTheDocument();
   },
 };
 

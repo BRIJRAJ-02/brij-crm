@@ -212,7 +212,6 @@ export function ObjectsScreen({ slug, objects, usage }: ObjectsScreenProps) {
   return (
     <SettingsPage
       title={strings.objects}
-      description={strings.objectsDescription}
       {...(canManage
         ? {
             actions: (
@@ -296,7 +295,7 @@ export function ObjectsPending() {
   // The meter's place only for those who get a meter, so nothing moves when the page arrives.
   const canManage = useCan('schema.manage');
   return (
-    <SettingsPage title={strings.objects} description={strings.objectsDescription}>
+    <SettingsPage title={strings.objects}>
       {canManage && <Skeleton width="long" />}
       <Table
         label={strings.objects}

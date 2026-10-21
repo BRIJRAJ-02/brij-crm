@@ -185,7 +185,6 @@ export function CalendarScreen({ data, slug, view, result, onResultSeen }: Calen
   return (
     <SettingsPage
       title={strings.title}
-      description={strings.description}
       isLoading={state.status === 'loading'}
       {...(canConnect && hasList
         ? {

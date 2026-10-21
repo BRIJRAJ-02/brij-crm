@@ -1,6 +1,7 @@
 // Brief
 // Purpose: let an owner or admin share one link anyone can join the workspace through (spec 0031, AC-818).
 // Main task: turn the link on, copy it, and limit how long and how many; reset or turn it off (both ask first).
+// One card, no title of its own: its first row names it.
 // Leaves out: guests (slice 9), email domains (the card after it), and who joined (the Members tab).
 import { INVITE_LINK_DAYS, isDataError, type DataLayer, type InviteLinkDays, type InviteLinkView } from '@crm/data';
 import { Button, Callout, Card, Field, Select, SettingsRow, Switch } from '@crm/ui';
@@ -26,9 +27,9 @@ export interface InviteLinkCardProps {
 }
 
 /**
- * A Card of SettingsRows: the switch first, then, while on, the link to copy
+ * A Card of SettingsRows (its first row names it, so no card title): the switch first, then, while on, the link to copy
  * (Field's copy variant, whole on its own line), when it stops working and
- * how many it may let in. Every change waits for the server (a setting, not
+ * how many it may let in, and Reset in the footer. Every change waits for the server (a setting, not
  * CRM data), the changed control disabled meanwhile; turning it off and
  * Reset end the current link, so they ask first.
  */
@@ -71,10 +72,9 @@ export function InviteLinkCard({ data, slug, link, ask, onChanged, onFailed }: I
   ];
   return (
     <Card
-      title={strings.linkTitle}
       {...(link.enabled
         ? {
-            actions: (
+            footer: (
               <Button
                 icon="refresh-cw"
                 isDisabled={busy !== undefined}
@@ -94,7 +94,8 @@ export function InviteLinkCard({ data, slug, link, ask, onChanged, onFailed }: I
           }
         : {})}
     >
-      <SettingsRow title={strings.linkTitle} description={strings.linkDescription}>
+      {/* One quiet line: what the link does while it is off, then (on) how many joined with it, under the link. */}
+      <SettingsRow title={strings.linkTitle} {...(link.enabled ? {} : { description: strings.linkDescription })}>
         <Switch
           label={strings.linkTitle}
           isLabelHidden
@@ -125,7 +126,7 @@ export function InviteLinkCard({ data, slug, link, ask, onChanged, onFailed }: I
             copyLabel={strings.linkCopy}
             hint={strings.linkUses(link.uses)}
           />
-          <SettingsRow title={strings.linkExpires} description={strings.linkExpiresHint}>
+          <SettingsRow title={strings.linkExpires}>
             <Select
               label={strings.linkExpires}
               isLabelHidden
@@ -142,7 +143,7 @@ export function InviteLinkCard({ data, slug, link, ask, onChanged, onFailed }: I
               }}
             />
           </SettingsRow>
-          <SettingsRow title={strings.linkMostUses} description={strings.linkMostUsesHint}>
+          <SettingsRow title={strings.linkMostUses}>
             <Select
               label={strings.linkMostUses}
               isLabelHidden

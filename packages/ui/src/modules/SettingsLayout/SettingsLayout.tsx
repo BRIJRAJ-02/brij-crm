@@ -78,6 +78,14 @@ export interface SettingsLayoutProps {
    * cancelled job's Cancel): the TopBar's h1 is visually hidden under a trail.
    */
   readonly titleRef?: Ref<HTMLHeadingElement>;
+  /**
+   * `bar`: the TopBar above holds the page's trail, title (its h1), tile,
+   * badge and one primary action, so the layout draws no header of its own,
+   * and the body's sections take h2 headings right under that h1. The owner's
+   * call (21 October 2026): a big title with a line under it repeated the
+   * trail and the first section. `page` (the default) draws the header.
+   */
+  readonly header?: 'page' | 'bar';
   /** The page's body. */
   readonly children: ReactNode;
 }
@@ -104,9 +112,24 @@ export function SettingsLayout({
   isLoading = false,
   hasTile = false,
   titleRef,
+  header = 'page',
   children,
 }: SettingsLayoutProps) {
   const showSkeleton = useDelayedLoading(isLoading);
+  if (header === 'bar') {
+    return (
+      <div className={styles.root} data-has-nav={nav === undefined ? undefined : true}>
+        {nav !== undefined && <SettingsNav nav={nav} currentNavId={currentNavId} navLabel={navLabel} />}
+        <div className={styles.page} data-header="bar" aria-busy={isLoading || undefined}>
+          {isLoading && <VisuallyHidden>{strings.loading}</VisuallyHidden>}
+          {/* Under the bar's h1, the body's sections and Cards take h2 titles. */}
+          <div className={styles.body}>
+            <CardTitleLevel value={2}>{children}</CardTitleLevel>
+          </div>
+        </div>
+      </div>
+    );
+  }
   const Heading = titleLevel === 1 ? 'h1' : 'h2';
   const trailLine =
     trail !== undefined && trail.length > 0 ? (
@@ -116,19 +139,7 @@ export function SettingsLayout({
     ) : null;
   return (
     <div className={styles.root} data-has-nav={nav === undefined ? undefined : true}>
-      {nav !== undefined && (
-        <nav className={styles.nav} aria-label={navLabel}>
-          <ul className={styles.entries}>
-            {nav.map((entry) => (
-              <li key={entry.id}>
-                <NavItem icon={entry.icon} href={entry.href} isCurrent={entry.id === currentNavId}>
-                  {entry.label}
-                </NavItem>
-              </li>
-            ))}
-          </ul>
-        </nav>
-      )}
+      {nav !== undefined && <SettingsNav nav={nav} currentNavId={currentNavId} navLabel={navLabel} />}
       <div className={styles.page}>
         {isLoading ? (
           <div className={styles.header} aria-busy="true" data-has-tabs={hasTabs || undefined}>
@@ -177,6 +188,31 @@ export function SettingsLayout({
         </div>
       </div>
     </div>
+  );
+}
+
+/** The settings pages as a column beside the page, the one shown marked. */
+function SettingsNav({
+  nav,
+  currentNavId,
+  navLabel,
+}: {
+  readonly nav: readonly SettingsNavEntry[];
+  readonly currentNavId: string | undefined;
+  readonly navLabel: string;
+}) {
+  return (
+    <nav className={styles.nav} aria-label={navLabel}>
+      <ul className={styles.entries}>
+        {nav.map((entry) => (
+          <li key={entry.id}>
+            <NavItem icon={entry.icon} href={entry.href} isCurrent={entry.id === currentNavId}>
+              {entry.label}
+            </NavItem>
+          </li>
+        ))}
+      </ul>
+    </nav>
   );
 }
 

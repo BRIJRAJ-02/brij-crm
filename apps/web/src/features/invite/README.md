@@ -1,12 +1,14 @@
 # invite
 
+Lean (the owner, 21 October 2026): the title names the workspace ("Join Acme"), one line says who invited you and as what (and, signed out, the masked address it was sent to), then the one action; signed out, one quiet line says signing in makes an account.
+
 `/invite/$token` (spec 0031, AC-805 to AC-807): the page an invitation email links to, in the sign in frame, outside any workspace.
 
 ## InviteScreen
 
 - **Purpose:** show who invited you where and as what, and let the invited person join.
-- **Main task:** Accept invitation (signed in), or Sign in to accept (signed out), which comes back here after.
-- **Leaves out:** creating an account in place (sign in makes one; an invited address may sign up though the list is closed), and the invite link and domain joins (slice 6).
+- **Main task:** Join workspace (signed in), or Sign in to join (signed out), which comes back here after.
+- **Leaves out:** creating an account in place (sign in makes one; an invited address may sign up though the list is closed), and domain joins (slice 6). The invite link (AC-818) opens this same page, naming nobody.
 
 States: loading (the frame with a skeleton), invalid (any expired, revoked, used or unknown link reads the same, before or after Accept), signed out (the masked address, and that signing in with it makes an account for someone new), signed in, joining (Accept spins), refused for another address (the server's sentence with the masked address, and Sign in with another address as the one action), refused otherwise (a full plan, a failure: the server's sentence, with Accept to try again), and a failed lookup (the server's words when it gave any, such as too many lookups, with Try again). Built from AuthLayout, EmptyState, Callout, Button and ButtonLink only.
 

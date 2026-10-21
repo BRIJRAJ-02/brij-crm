@@ -1,4 +1,4 @@
-import { INVITE_BATCH_MAX, type RemovalPreview } from '@crm/data';
+import type { RemovalPreview } from '@crm/data';
 
 /** Settings › Workspace › Members' copy (spec 0031). */
 export const strings = {
@@ -20,8 +20,10 @@ export const strings = {
   search: 'Search members',
   searchPlaceholder: 'Name or email',
   noMatches: 'No members match',
-  noMatchesText: (search: string) => `Nobody’s name or email holds “${search}”.`,
   showMore: 'Show more members',
+  // A lone member: the one quiet nudge toward inviting.
+  aloneTitle: 'Just you so far.',
+  aloneText: 'Invite your team to work together.',
   roleFor: (name: string) => `Role for ${name}`,
   rowActions: (name: string) => `Actions for ${name}`,
   remove: 'Remove from workspace',
@@ -32,7 +34,6 @@ export const strings = {
   removed: (name: string) => `${name} was removed from the workspace.`,
   readOnlyNote: 'Only workspace owners and admins can invite people or change roles.',
   noInvitations: 'No open invitations',
-  noInvitationsText: 'People you invite show here until they join.',
   expired: 'Expired',
   resend: 'Resend',
   revoke: 'Revoke',
@@ -84,7 +85,7 @@ export const strings = {
   somethingWrong: 'Something went wrong. Try again in a moment.',
   // The invite link card (spec 0031, AC-818).
   linkTitle: 'Invite link',
-  linkDescription: 'Anyone with the link can join as a member. They sign in first; it makes no new accounts.',
+  linkDescription: 'Anyone with the link can join as a member.',
   linkField: 'Link',
   linkCopy: 'Copy link',
   linkUses: (uses: number) =>
@@ -94,12 +95,10 @@ export const strings = {
         ? '1 person joined with it.'
         : `${String(uses)} people joined with it.`,
   linkExpires: 'Expires',
-  linkExpiresHint: 'Counts from when you pick it.',
   linkNever: 'Never',
   linkDays: (days: number) => (days === 1 ? 'In 1 day' : `In ${String(days)} days`),
   linkUntil: (when: string) => `On ${when}`,
   linkMostUses: 'Most uses',
-  linkMostUsesHint: 'How many people may join with it.',
   linkNoCap: 'No limit',
   linkCap: (cap: number) => `${String(cap)} people`,
   linkSpent: 'This link has expired or reached its limit, so nobody can join with it. Change it, or reset it.',
@@ -114,17 +113,21 @@ export const strings = {
   linkTurnedOff: 'The invite link is off.',
   // The invite dialog.
   inviteTitle: 'Invite people',
-  emails: 'Email addresses',
-  emailsHint: `Separate addresses with commas, spaces or new lines. Up to ${String(INVITE_BATCH_MAX)} at once.`,
-  emailsPlaceholder: 'ada@example.com, grace@example.com',
-  role: 'Role',
-  send: 'Send invitations',
-  sending: 'Sending invitations',
+  emailFor: (row: number) => (row === 1 ? 'Email' : `Email ${String(row)}`),
+  emailPlaceholder: 'name@company.com',
+  rowName: (row: number) => `row ${String(row)}`,
+  removeRow: (what: string) => `Remove ${what}`,
+  addAnother: 'Add another',
+  badEmail: 'Enter a valid email address.',
+  repeatedEmail: 'Already in the list.',
+  inviteCount: (count: number) =>
+    count === 0 ? 'Invite' : count === 1 ? 'Invite 1 person' : `Invite ${String(count)} people`,
+  sending: 'Inviting',
   cancel: 'Cancel',
   noEmails: 'Add at least one email address.',
-  tooMany: `Invite at most ${String(INVITE_BATCH_MAX)} people at once.`,
-  badEmails: (list: string) => `These don’t look like email addresses: ${list}.`,
-  sentCount: (count: number) => (count === 1 ? 'Invitation sent.' : `${String(count)} invitations sent.`),
+  sentTo: (list: string) => `Invited ${list}. They get an email with a link to join.`,
   alreadyMembers: (list: string) => `Already members: ${list}.`,
+  inviteMore: 'Invite more',
+  done: 'Done',
   unsent: (list: string) => `Saved, but the email didn’t go out to ${list}. Use Resend on the Invitations tab.`,
 } as const;

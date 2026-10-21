@@ -62,7 +62,7 @@ function CalendarRoute() {
 function CalendarPending() {
   return (
     // The screen's own loading state: its header, and the connections' section, busy.
-    <SettingsPage title={strings.title} description={strings.description} isLoading>
+    <SettingsPage title={strings.title} isLoading>
       <CalendarsLoading />
     </SettingsPage>
   );

@@ -92,6 +92,42 @@ export const WithEnd: Story = {
   },
 };
 
+/** With no inset (a settings page): the first tab's label at the table's first column, the tools at its edge. */
+export const NoInset: Story = {
+  args: { inset: 'none' },
+  render: (args) => (
+    <Tabs {...args} end={<Field label="Search members" isLabelHidden variant="search" type="search" size="sm" />}>
+      <TabPanel id="activity">Field changes, notes and emails, newest first.</TabPanel>
+      <TabPanel id="notes">12 notes.</TabPanel>
+      <TabPanel id="tasks">3 open tasks.</TabPanel>
+      <TabPanel id="files">No files.</TabPanel>
+    </Tabs>
+  ),
+  play: async ({ canvas }) => {
+    await expect(canvas.getByRole('tablist', { name: 'Record' })).toBeInTheDocument();
+  },
+};
+
+/** No inset on a phone: a lone search wraps under the tabs, and every tab stays in sight. */
+export const NoInsetNarrow: Story = {
+  args: { inset: 'none' },
+  render: (args) => (
+    <Stage width="narrow">
+      <Tabs {...args} end={<Field label="Search members" isLabelHidden variant="search" type="search" size="sm" />}>
+        <TabPanel id="activity">Field changes, notes and emails, newest first.</TabPanel>
+        <TabPanel id="notes">12 notes.</TabPanel>
+        <TabPanel id="tasks">3 open tasks.</TabPanel>
+        <TabPanel id="files">No files.</TabPanel>
+      </Tabs>
+    </Stage>
+  ),
+  play: async ({ canvas }) => {
+    const list = canvas.getByRole('tablist', { name: 'Record' }).getBoundingClientRect();
+    const search = canvas.getByRole('searchbox', { name: 'Search members' }).getBoundingClientRect();
+    await expect(search.top).toBeGreaterThanOrEqual(list.bottom - 1);
+  },
+};
+
 /**
  * As a page's second bar (Captures, Bookings): the row People's ViewBar takes, size-bar tall on the surface,
  * the tab's tools at its end, the underline on its hairline.

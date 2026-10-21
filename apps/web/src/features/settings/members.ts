@@ -29,6 +29,9 @@ export function invitableRoles(actor: Role | undefined): readonly Role[] {
 /** A loose email shape: the server checks each address properly. */
 const EMAIL = /^[^\s@,;<>]+@[^\s@,;<>]+\.[^\s@,;<>]+$/;
 
+/** Whether `text` looks like one email address (the invite dialog's per row check; the server checks properly). */
+export const isEmail = (text: string): boolean => EMAIL.test(text.trim());
+
 /**
  * The addresses in pasted text (commas, semicolons, spaces or new lines
  * between them, `Name <address>` allowed), lowercased and without repeats,

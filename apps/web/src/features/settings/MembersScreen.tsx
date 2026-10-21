@@ -11,7 +11,6 @@ import {
   type DataLayer,
   type InvitationView,
   type InviteLinkView,
-  type InviteResult,
   type MembersPage,
   type MemberView,
   type MyAccess,
@@ -109,6 +108,8 @@ export function MembersScreen({
 }: MembersScreenProps) {
   const router = useRouter();
   const [isInviting, setInviting] = useState(false);
+  // The tab shown: the search belongs to the Members tab alone.
+  const [tab, setTab] = useState('members');
   // The invitations whose Resend is on its way: their row's menu waits for the answer.
   const [busy, setBusy] = useState<ReadonlySet<string>>(new Set());
   // The change the page is asking about, if any, and what to say once it is done.
@@ -224,17 +225,8 @@ export function MembersScreen({
     setRemoving(member);
   };
 
-  const invited = (result: InviteResult) => {
-    setInviting(false);
-    const parts = [
-      ...(result.invited.length > 0 ? [strings.sentCount(result.invited.length)] : []),
-      ...(result.refused.length > 0
-        ? [strings.alreadyMembers(result.refused.map((each) => each.email).join(', '))]
-        : []),
-    ];
-    if (parts.length > 0)
-      toasts.toast({ tone: result.invited.length > 0 ? 'success' : 'info', message: parts.join(' ') });
-    if (result.unsent.length > 0) toasts.toast({ tone: 'danger', message: strings.unsent(result.unsent.join(', ')) });
+  // The dialog says who was invited; the Invitations tab reads them in behind it.
+  const invited = () => {
     void reload();
   };
 
@@ -420,16 +412,18 @@ export function MembersScreen({
         rows={rows}
         getRowId={(member) => member.id}
         renderCell={memberCell}
-        emptyState={
-          <EmptyState icon="search" title={strings.noMatches}>
-            {strings.noMatchesText(search)}
-          </EmptyState>
-        }
+        emptyState={<EmptyState icon="search" title={strings.noMatches} />}
       />
       {held.cursor !== undefined && (
         <Button variant="ghost" onPress={showMore} isPending={isLoadingMore}>
           {strings.showMore}
         </Button>
+      )}
+      {/* A lone member who may invite: one quiet nudge under their row, rather than a page of empty space. */}
+      {canInvite && search === '' && page.total === 1 && inviteRoles.length > 0 && (
+        <EmptyState layout="row" title={strings.aloneTitle}>
+          {strings.aloneText}
+        </EmptyState>
       )}
     </>
   );
@@ -453,11 +447,14 @@ export function MembersScreen({
       {canInvite ? (
         <Tabs
           label={strings.tabsLabel}
+          inset="none"
           tabs={[
             { id: 'members', label: strings.membersTab, count: page.total },
             { id: 'invitations', label: strings.invitationsTab, count: invitations.length },
           ]}
-          end={searchField}
+          selectedKey={tab}
+          onSelectionChange={setTab}
+          {...(tab === 'members' ? { end: searchField } : {})}
         >
           <TabPanel id="members">{membersList}</TabPanel>
           <TabPanel id="invitations">
@@ -480,11 +477,7 @@ export function MembersScreen({
                 rows={invitations}
                 getRowId={(invitation) => invitation.id}
                 renderCell={invitationCell}
-                emptyState={
-                  <EmptyState icon="mail" title={strings.noInvitations}>
-                    {strings.noInvitationsText}
-                  </EmptyState>
-                }
+                emptyState={<EmptyState icon="mail" title={strings.noInvitations} />}
               />
             </SettingsStack>
           </TabPanel>
@@ -565,10 +558,24 @@ export function MembersPending() {
     />
   );
   return (
-    <SettingsPage title={strings.title} hasTabs={canInvite}>
+    <SettingsPage
+      title={strings.title}
+      hasTabs={canInvite}
+      // The bar's one action holds its place while the page loads.
+      {...(canInvite
+        ? {
+            actions: (
+              <Button variant="primary" icon="user-plus" isDisabled>
+                {strings.invite}
+              </Button>
+            ),
+          }
+        : {})}
+    >
       {canInvite ? (
         <Tabs
           label={strings.tabsLabel}
+          inset="none"
           tabs={[
             { id: 'members', label: strings.membersTab },
             { id: 'invitations', label: strings.invitationsTab },
