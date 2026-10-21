@@ -3,6 +3,7 @@
 // Main task: open the menu in commands or search mode, instantly, loading its code on idle so the first ⌘K finds it ready.
 // Leaves out: the menu itself (CommandMenu.tsx, its own chunk) and where the sidebar draws its buttons (spec 0034's).
 import { useKeyboardPlatform } from '@crm/ui';
+import { useRouteContext } from '@tanstack/react-router';
 import {
   createContext,
   lazy,
@@ -64,6 +65,7 @@ export interface CommandMenuProviderProps {
  */
 export function CommandMenuProvider({ slug, children }: CommandMenuProviderProps) {
   const platform = useKeyboardPlatform();
+  const { data } = useRouteContext({ from: '__root__' });
   const [state, setState] = useState<MenuState>({ isOpen: false, mode: 'commands', opening: 0 });
   const open = useCallback((mode: CommandMode = 'commands') => {
     setState((now) => ({ isOpen: true, mode, opening: now.isOpen ? now.opening : now.opening + 1 }));
@@ -100,8 +102,10 @@ export function CommandMenuProvider({ slug, children }: CommandMenuProviderProps
 
   // The menu's chunk on idle, after the frame paints (AC-1074).
   useEffect(() => {
+    // The menu's chunk and the search's own, so the first ⌘K waits on neither.
     const start = () => {
       void loadMenu().catch(() => undefined);
+      void data.search.preload().catch(() => undefined);
     };
     if (typeof window.requestIdleCallback === 'function') {
       const id = window.requestIdleCallback(start, { timeout: 5_000 });
@@ -113,7 +117,7 @@ export function CommandMenuProvider({ slug, children }: CommandMenuProviderProps
     return () => {
       window.clearTimeout(timer);
     };
-  }, []);
+  }, [data]);
 
   const control = useMemo<CommandMenuControl>(() => ({ open }), [open]);
   return (

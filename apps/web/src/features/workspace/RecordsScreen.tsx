@@ -401,9 +401,14 @@ export function RecordsScreen({
     setRequestSeen(isCreateRequested);
     if (isCreateRequested && object.access === 'write') setCreating(true);
   }
+  // The callback is read through a ref, so a new one each render never hands the request back twice.
+  const takeRequest = useRef(onCreateRequestTaken);
   useEffect(() => {
-    if (isCreateRequested) onCreateRequestTaken?.();
-  }, [isCreateRequested, onCreateRequestTaken]);
+    takeRequest.current = onCreateRequestTaken;
+  });
+  useEffect(() => {
+    if (isCreateRequested) takeRequest.current?.();
+  }, [isCreateRequested]);
 
   return (
     <WorkspacePage

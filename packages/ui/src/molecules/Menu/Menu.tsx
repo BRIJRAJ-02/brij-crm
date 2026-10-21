@@ -354,6 +354,12 @@ export interface MenuItemProps {
   readonly onAction?: () => void;
   readonly isDisabled?: boolean;
   /**
+   * A row that says where something stands ("Searching…"), not a control:
+   * never highlighted or chosen, drawn in the secondary text colour at full
+   * contrast, with the arrow cursor (not the disabled look).
+   */
+  readonly isPending?: boolean;
+  /**
    * What is in effect now, in a menu of actions (a column's current sort): a
    * check at the end, named for screen readers. A menu of choices uses
    * `selectionMode` instead.
@@ -367,7 +373,7 @@ interface ItemState {
   readonly hasSubmenu: boolean;
 }
 
-function itemProps({ id, children, isDanger = false, href, onAction, isDisabled }: MenuItemProps) {
+function itemProps({ id, children, isDanger = false, href, onAction, isDisabled, isPending = false }: MenuItemProps) {
   const safe = safeHref(href);
   return {
     id: id ?? children,
@@ -377,6 +383,7 @@ function itemProps({ id, children, isDanger = false, href, onAction, isDisabled 
     ...(safe === undefined ? {} : { href: safe }),
     ...(onAction === undefined ? {} : { onAction }),
     ...(isDisabled === undefined ? {} : { isDisabled }),
+    ...(isPending ? { isDisabled: true, 'data-loading': '', 'data-pending': '' } : {}),
   };
 }
 
