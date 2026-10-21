@@ -8,20 +8,20 @@ export const strings = {
   connectGoogle: 'Connect Google calendar',
   /** The page's sections. */
   connectionsSection: 'Connected calendars',
-  connectionsSectionText: 'Each one’s state, who sees its meetings, and which one new bookings go to.',
-  workspaceSection: 'For the workspace',
-  workspaceSectionText: 'Owners and admins choose this for every member.',
+  workspaceSection: 'Workspace',
   /** Calendar sync isn't set up on this deployment. */
   offTitle: 'Calendar sync isn’t set up for this workspace',
   offText: 'Ask whoever runs Timefix for you to switch it on.',
   emptyTitle: 'No calendar connected',
-  emptyText: 'Connect one and your meetings with contacts appear on their records.',
+  emptyText: 'Your meetings then show on the people and companies you meet.',
   failedTitle: 'Couldn’t load your calendars',
   failedText: 'Try again in a moment.',
   /** How many accounts may be connected, when the limit is reached. */
   limitReached: (max: string) => `You’ve connected ${max} calendars, the most you can. Disconnect one to add another.`,
-  google: 'Google',
   defaultBadge: 'Default',
+  defaultHelp: 'New bookings from your booking pages are added to this calendar.',
+  /** A connection's "···" menu. */
+  rowActions: (account: string) => `Actions for ${account}`,
   status: {
     syncing: 'Syncing',
     connected: 'Connected',
@@ -29,35 +29,33 @@ export const strings = {
     revoked: 'Revoked',
     failed: 'Failed',
   } satisfies Record<CalendarStatus, string>,
-  terms: {
-    status: 'Status',
-    lastSynced: 'Last synced',
-    sharing: 'Who sees its meetings',
-  },
-  notYet: 'Not yet',
+  synced: 'Synced',
+  notSyncedYet: 'Not synced yet',
   sharingLabel: 'Who sees this calendar’s meetings',
   shared: 'Shared',
   private: 'Private',
   sharingHelp: {
-    shared: 'Anyone who can see a meeting’s people sees its title, attendees and link.',
-    private: 'Others see “Private meeting” and its time only.',
+    shared: 'Others see the title, attendees and link',
+    private: 'Others see “Private meeting” and the time',
   },
   makeDefault: 'Make default',
+  reconnect: 'Reconnect',
   /** Local development only: Google's notices can't reach a laptop, so sync waits for the 15 minute poll. */
   syncNow: 'Sync now',
   disconnect: 'Disconnect',
   /** The confirm names the calendar it ends (the owner's rule for every confirm, 21 October 2026). */
   disconnectTitle: (account: string) => `Disconnect ${account}?`,
-  disconnectText:
-    'Its meetings stop syncing and leave your records, its busy times stop blocking your booking pages, and you can connect it again later.',
+  disconnectText: 'Its meetings leave your records and its busy times stop blocking your booking pages.',
   disconnected: (account: string) => `Disconnected ${account}.`,
   cancel: 'Cancel',
   disconnecting: 'Disconnecting',
   disconnectFailed: 'That didn’t disconnect. Try again in a moment.',
   /** The workspace setting, for owners and admins (AC-609). */
   createPeople: 'Add people from meetings',
-  createPeopleHelp:
-    'When someone outside the workspace is invited to a synced meeting and isn’t in Timefix yet, add them as a person, linked to their company.',
+  createPeopleHelp: 'For every member’s synced meetings.',
+  createPeopleInfo:
+    'A guest who isn’t in Timefix yet becomes a person, linked to the company with their email’s domain.',
+  createPeopleExample: 'A meeting with ana@acme.com adds Ana to People, linked to Acme if a company has acme.com.',
   /** Closes the note about how connecting went. */
   dismiss: 'Dismiss',
   /** What the browser came back from Google with (`?calendar=`). */

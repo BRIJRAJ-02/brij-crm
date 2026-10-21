@@ -2,20 +2,32 @@
 // Purpose: Settings › Account › Calendars: the member's own calendar connections, so their meetings reach the records they're with.
 // Main task: connect a Google calendar, see each one's state and last sync, choose who sees its meetings, disconnect.
 // Leaves out: other members' calendars and Outlook (milestone 4). Owners and admins also choose whether meetings add people.
-import { isDataError, type CalendarConnectionView, type CalendarView, type DataLayer } from '@crm/data';
+import {
+  isDataError,
+  needsReconnect,
+  type CalendarConnectionView,
+  type CalendarStatus,
+  type CalendarView,
+  type DataLayer,
+  type Hue,
+} from '@crm/data';
 import { useCalendar, useCalendarSettings } from '@crm/data/react';
 import {
   Badge,
   Button,
   Callout,
   Card,
-  DescriptionList,
   EmptyState,
   focusLater,
+  InfoTip,
+  Menu,
+  MenuItem,
+  MenuSeparator,
+  MenuTrigger,
   Modal,
+  ProviderMark,
   RelativeTime,
-  SegmentedControl,
-  SettingsGrid,
+  Select,
   SettingsRow,
   SettingsSection,
   Skeleton,
@@ -26,10 +38,10 @@ import { useRef, useState } from 'react';
 import { strings, type ConnectResult } from './calendar-strings.ts';
 import { SettingsPage } from './SettingsPage.tsx';
 
-/** The connections' section while they load: its title, and a busy card where the calendars will list. */
+/** The connections' section while they load: its heading, and a busy card where the calendars will list. */
 export function CalendarsLoading() {
   return (
-    <SettingsSection title={strings.connectionsSection} description={strings.connectionsSectionText}>
+    <SettingsSection title={strings.connectionsSection}>
       <Card isBusy>
         <Skeleton width="long" />
         <Skeleton width="medium" />
@@ -51,69 +63,117 @@ export interface CalendarScreenProps {
 
 const number = new Intl.NumberFormat();
 
-/** One connection: its account, state and last sync, who sees its meetings, and Make default and Disconnect. */
-function ConnectionCard({
+/** Each connection state's dot: green when it syncs, blue while it starts, orange when it needs a reconnect, red when it broke. */
+const STATUS_HUE = {
+  syncing: 'blue',
+  connected: 'green',
+  expired: 'orange',
+  revoked: 'red',
+  failed: 'red',
+} as const satisfies Record<CalendarStatus, Hue>;
+
+/** Who sees a calendar's meetings, each choice saying what others see. */
+const SHARING = [
+  { id: 'shared', label: strings.shared, icon: 'users', description: strings.sharingHelp.shared },
+  { id: 'private', label: strings.private, icon: 'lock', description: strings.sharingHelp.private },
+] as const;
+
+/**
+ * One connection as a row (the owner, 21 October 2026: a compact row per
+ * account, as Attio and Calendly list them): the provider's mark, the account,
+ * a Default badge, its state and last sync, who sees its meetings, and a
+ * "···" menu with Make default and Disconnect (which asks first).
+ */
+function ConnectionRow({
   connection,
   onSharing,
   onDefault,
   onDisconnect,
+  onReconnect,
   onSyncNow,
 }: {
   readonly connection: CalendarConnectionView;
+  /** Connects the account again, offered once it stopped syncing (expired, revoked or failed); absent when connecting is off. */
+  readonly onReconnect?: () => void;
   readonly onSharing: (sharing: 'shared' | 'private') => void;
   readonly onDefault: () => void;
   readonly onDisconnect: () => void;
   /** Local development only (no push notices reach a laptop). */
   readonly onSyncNow?: () => void;
 }) {
-  const status = (
-    <>
-      <Badge text={strings.status[connection.status]} />
-      {connection.lastError !== undefined && connection.status !== 'connected' && <> {connection.lastError.message}</>}
-    </>
-  );
+  const problem =
+    connection.lastError !== undefined && connection.status !== 'connected' ? connection.lastError.message : undefined;
+  const actions = strings.rowActions(connection.accountEmail);
+  const canReconnect = onReconnect !== undefined && needsReconnect(connection);
   return (
-    <Card
+    <SettingsRow
       title={connection.accountEmail}
-      description={connection.isDefault ? `${strings.google} · ${strings.defaultBadge}` : strings.google}
-      footer={
+      leading={<ProviderMark provider="google-calendar" />}
+      {...(connection.isDefault
+        ? {
+            meta: (
+              <>
+                <Badge text={strings.defaultBadge} />
+                <InfoTip label={strings.defaultBadge}>{strings.defaultHelp}</InfoTip>
+              </>
+            ),
+          }
+        : {})}
+      description={
         <>
-          {onSyncNow !== undefined && <Button onPress={onSyncNow}>{strings.syncNow}</Button>}
-          {!connection.isDefault && <Button onPress={onDefault}>{strings.makeDefault}</Button>}
-          <Button variant="danger" onPress={onDisconnect}>
-            {strings.disconnect}
-          </Button>
+          <Badge text={strings.status[connection.status]} dot={STATUS_HUE[connection.status]} />
+          {' · '}
+          {connection.lastSyncedAt === undefined ? (
+            strings.notSyncedYet
+          ) : (
+            <>
+              {strings.synced} <RelativeTime value={connection.lastSyncedAt} />
+            </>
+          )}
+          {problem !== undefined && <> · {problem}</>}
         </>
       }
     >
-      <DescriptionList
-        items={[
-          { term: strings.terms.status, description: status },
-          {
-            term: strings.terms.lastSynced,
-            description:
-              connection.lastSyncedAt === undefined ? strings.notYet : <RelativeTime value={connection.lastSyncedAt} />,
-          },
-          {
-            term: strings.terms.sharing,
-            description: (
-              <>
-                <SegmentedControl
-                  label={strings.sharingLabel}
-                  segments={[
-                    { value: 'shared', label: strings.shared },
-                    { value: 'private', label: strings.private },
-                  ]}
-                  value={connection.sharing}
-                  onChange={(value) => onSharing(value === 'private' ? 'private' : 'shared')}
-                />{' '}
-                {strings.sharingHelp[connection.sharing]}
-              </>
-            ),
-          },
-        ]}
+      <Select
+        label={strings.sharingLabel}
+        isLabelHidden
+        items={SHARING}
+        value={connection.sharing}
+        onChange={(value) => onSharing(value === 'private' ? 'private' : 'shared')}
       />
-    </Card>
+      <MenuTrigger>
+        <Button variant="ghost" icon="ellipsis" label={actions} />
+        <Menu
+          label={actions}
+          onAction={(key) => {
+            if (key === 'reconnect') onReconnect?.();
+            if (key === 'default') onDefault();
+            if (key === 'sync') onSyncNow?.();
+            if (key === 'disconnect') onDisconnect();
+          }}
+        >
+          {canReconnect && (
+            <MenuItem id="reconnect" icon="refresh-cw">
+              {strings.reconnect}
+            </MenuItem>
+          )}
+          {!connection.isDefault && (
+            <MenuItem id="default" icon="star">
+              {strings.makeDefault}
+            </MenuItem>
+          )}
+          {onSyncNow !== undefined && (
+            <MenuItem id="sync" icon="refresh-cw">
+              {strings.syncNow}
+            </MenuItem>
+          )}
+          {(canReconnect || !connection.isDefault || onSyncNow !== undefined) && <MenuSeparator />}
+          <MenuItem id="disconnect" icon="unplug" isDanger>
+            {strings.disconnect}
+          </MenuItem>
+        </Menu>
+      </MenuTrigger>
+    </SettingsRow>
   );
 }
 
@@ -160,6 +220,8 @@ export function CalendarScreen({ data, slug, view, result, onResultSeen }: Calen
     window.location.assign(data.calendar.connectUrl(slug));
   };
   const isFull = state.status === 'ready' && state.connections.length >= state.max;
+  // Reconnecting goes through the same consent and lands on the same connection, so the limit doesn't stop it.
+  const canReconnect = state.status === 'ready' && state.enabled && state.providers.includes('google');
   const canConnect = state.status === 'ready' && state.enabled && state.providers.includes('google') && !isFull;
   // The header's Connect sits beside a list; an empty page offers it in its own empty state.
   const hasList = state.status === 'ready' && state.connections.length > 0;
@@ -198,15 +260,16 @@ export function CalendarScreen({ data, slug, view, result, onResultSeen }: Calen
     );
   } else {
     body = (
-      <SettingsSection title={strings.connectionsSection} description={strings.connectionsSectionText}>
+      <SettingsSection title={strings.connectionsSection}>
         {isFull && <Callout tone="info">{strings.limitReached(number.format(state.max))}</Callout>}
-        <SettingsGrid>
+        <Card>
           {state.connections.map((connection) => (
-            <ConnectionCard
+            <ConnectionRow
               key={connection.id}
               connection={connection}
               onSharing={(sharing) => void data.calendar.setSharing(slug, connection.id, sharing)}
               onDefault={() => void data.calendar.makeDefault(slug, connection.id)}
+              {...(canReconnect ? { onReconnect: connect } : {})}
               onDisconnect={() => {
                 setDisconnectFailure(undefined);
                 setDisconnecting(connection);
@@ -214,7 +277,7 @@ export function CalendarScreen({ data, slug, view, result, onResultSeen }: Calen
               {...(import.meta.env.DEV ? { onSyncNow: () => void data.calendar.syncNow(slug, connection.id) } : {})}
             />
           ))}
-        </SettingsGrid>
+        </Card>
       </SettingsSection>
     );
   }
@@ -250,9 +313,17 @@ export function CalendarScreen({ data, slug, view, result, onResultSeen }: Calen
       {body}
       {/* Off while calendar sync isn't set up here, where it could do nothing. */}
       {settings.status === 'ready' && settings.canManage && state.status === 'ready' && state.enabled && (
-        <SettingsSection title={strings.workspaceSection} description={strings.workspaceSectionText}>
+        <SettingsSection title={strings.workspaceSection}>
           <Card>
-            <SettingsRow title={strings.createPeople} description={strings.createPeopleHelp}>
+            <SettingsRow
+              title={strings.createPeople}
+              description={strings.createPeopleHelp}
+              meta={
+                <InfoTip label={strings.createPeople} example={strings.createPeopleExample}>
+                  {strings.createPeopleInfo}
+                </InfoTip>
+              }
+            >
               <Switch
                 label={strings.createPeople}
                 isLabelHidden
