@@ -43,4 +43,4 @@ export { BOOKING_MAIL_KINDS, type BookingMailKind } from './booking/mail-queue.t
 export { finishEmail, loadEmail, type EmailOutcome, type EmailToSend, type LoadedEmail } from './emails/send.ts';
 export { emailLinkToken } from './emails/preferences.ts';
 export { prepareNotificationEmail, type PreparedNotificationEmail } from './notifications/email.ts';
-export { markEmailed, NOTIFICATION_EMAIL_MAX } from './notifications/inbox.ts';
+export { markEmailed, NOTIFICATION_EMAIL_MAX, releaseEmailed } from './notifications/inbox.ts';

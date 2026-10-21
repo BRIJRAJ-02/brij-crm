@@ -574,4 +574,21 @@ describe('the notifications email (AC-1176, AC-1177)', () => {
       'removed',
     );
   });
+
+  it('sends nothing the member can’t read now: a hidden record, a deleted comment', async () => {
+    const w = await workspace();
+    const acme = await w.company('Acme');
+    const thread = await createComment(
+      w.scope,
+      { id: newId(), recordId: acme, body: `Secret plan for ${mentionToken(w.bea)}` },
+      hooks(),
+    );
+    const input = { workspaceId: w.scope.workspaceId, memberId: w.bea };
+    // Companies hidden from members: nothing to send, and no text of it.
+    const hidden = await prepareNotificationEmail({ db, rules: () => Promise.resolve(w.none) }, input);
+    expect(hidden.skipped).toBe('nothing');
+    // The comment deleted: nothing either.
+    await deleteComment(w.scope, { commentId: thread.id }, hooks());
+    expect((await prepareNotificationEmail({ db, rules: NO_RULE_SOURCE }, input)).skipped).toBe('nothing');
+  });
 });

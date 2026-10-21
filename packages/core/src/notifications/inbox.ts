@@ -521,7 +521,11 @@ export async function unemailedNotifications(scope: EngineScope): Promise<Notifi
   });
 }
 
-/** Marks the caller's notifications emailed, once an email holding them went (never twice: AC-1176). */
+/**
+ * Marks the caller's notifications emailed, committed before the email goes
+ * out, so a task that sent and then failed never sends them again on its
+ * retry (AC-1176). A send that fails gives them back with `releaseEmailed`.
+ */
 export async function markEmailed(scope: EngineScope, ids: readonly string[]): Promise<void> {
   checkScope(scope);
   const me = callerOf(scope);
@@ -530,6 +534,19 @@ export async function markEmailed(scope: EngineScope, ids: readonly string[]): P
     await tx.execute(sql`
       update notifications set emailed_at = now()
       where member_id = ${me}::uuid and id = any(${uuidList(ids)}) and emailed_at is null
+    `);
+  });
+}
+
+/** Gives back notifications claimed for an email that failed to send, for the task's retry to carry. */
+export async function releaseEmailed(scope: EngineScope, ids: readonly string[]): Promise<void> {
+  checkScope(scope);
+  const me = callerOf(scope);
+  if (me === undefined || ids.length === 0) return;
+  await inWorkspace(scope, async (tx) => {
+    await tx.execute(sql`
+      update notifications set emailed_at = null
+      where member_id = ${me}::uuid and id = any(${uuidList(ids)})
     `);
   });
 }
