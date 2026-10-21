@@ -31,7 +31,7 @@ export const Route = createFileRoute('/welcome')({
       <AuthPending title={strings.title} isSplit />
     </LoadingNow>
   ),
-  errorComponent: () => <AuthError title={strings.title} />,
+  errorComponent: () => <AuthError title={strings.title} isSplit />,
   component: WelcomeRoute,
 });
 

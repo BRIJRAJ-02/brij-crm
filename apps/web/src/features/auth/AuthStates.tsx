@@ -29,12 +29,26 @@ export function AuthPending({ title, isSplit = false }: { readonly title: string
 
 /**
  * The page's frame and title when the check failed, with a retry that runs
- * the route again; `text` says why when the server said (a rate limit).
+ * the route again; `text` says why when the server said (a rate limit), and
+ * `isSplit` is as AuthPending's.
  */
-export function AuthError({ title, text }: { readonly title: string; readonly text?: string | undefined }) {
+export function AuthError({
+  title,
+  text,
+  isSplit = false,
+}: {
+  readonly title: string;
+  readonly text?: string | undefined;
+  readonly isSplit?: boolean;
+}) {
   const router = useRouter();
   return (
-    <AuthLayout productName={strings.product} logo={PRODUCT_LOGO} title={title}>
+    <AuthLayout
+      productName={strings.product}
+      logo={PRODUCT_LOGO}
+      title={title}
+      {...(isSplit ? { preview: <WorkspacePreview workspaceName="" personName="" /> } : {})}
+    >
       <EmptyState tone="error" title={strings.failedTitle} onRetry={() => void router.invalidate()}>
         {text ?? strings.failedText}
       </EmptyState>
