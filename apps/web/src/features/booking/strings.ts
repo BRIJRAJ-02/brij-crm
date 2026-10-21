@@ -50,7 +50,7 @@ export const strings = {
   availabilityFailed: 'Your hours didn’t load',
   failedText: 'Check your connection and try again.',
   deleteTitle: (title: string) => `Delete “${title}”?`,
-  deleteText: 'The link stops working. This can’t be undone. Bookings already made stay.',
+  deleteText: 'The link stops working, and this can’t be undone. Bookings already made stay.',
   deleteAction: 'Delete page',
   deleting: 'Deleting…',
   cancel: 'Cancel',

@@ -399,6 +399,11 @@ function CancelDialog({
         </>
       }
     >
+      {error !== '' && (
+        <Callout tone="danger" isAnnounced>
+          {error}
+        </Callout>
+      )}
       <p>{strings.cancelText(booking.visitorName)}</p>
       <Field
         label={strings.reason}
@@ -409,11 +414,6 @@ function CancelDialog({
         onChange={setReason}
         isDisabled={busy}
       />
-      {error !== '' && (
-        <Callout tone="danger" isAnnounced>
-          {error}
-        </Callout>
-      )}
     </Modal>
   );
 }
