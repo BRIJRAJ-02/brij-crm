@@ -32,6 +32,12 @@ export interface HostedFormProps {
   readonly mode: HostedFormMode;
   /** The country picked first for phone and country questions (ISO alpha 2), guessed by the page. */
   readonly countryGuess?: string;
+  /**
+   * Answers to start with, by question key, from the page's address (or the
+   * site's, through an embed): text questions take the words, a dropdown or
+   * choice takes one of its choices or its key. Anything else is ignored.
+   */
+  readonly prefill?: Readonly<Record<string, string>>;
   /** Sends the answers. Without it the answers are checked and the thank you shows, but nothing is sent. */
   readonly onSubmit?: (submission: HostedSubmission) => Promise<HostedSubmitOutcome>;
   /** Goes to the form's web address after a submission, when it sends visitors on. */
@@ -54,12 +60,13 @@ export function HostedForm({
   form,
   mode,
   countryGuess,
+  prefill,
   onSubmit,
   onRedirect,
   now = Date.now,
   logo = TIMEFIX_LOGO,
 }: HostedFormProps) {
-  const { state, refs } = useHostedForm({ form, mode, countryGuess, onSubmit, onRedirect, now });
+  const { state, refs } = useHostedForm({ form, mode, countryGuess, prefill, onSubmit, onRedirect, now });
   const { words, preview } = state;
   let body;
   if (state.isClosed) body = <FormClosed state={state} mode={mode} heading={refs.heading} />;

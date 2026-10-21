@@ -503,8 +503,8 @@ export function screens({ root, vendorWrappers = [] }) {
       files: PUBLIC_BUNDLE,
       rules: { 'no-restricted-syntax': ['error', syntax.defaultExport, ...syntax.classes, ...syntax.extensions] },
     },
-    // Files in public/ ship as is: plain browser scripts, outside any tsconfig.
-    { files: ['public/**/*.js'], languageOptions: { globals: globals.browser, sourceType: 'script' } },
+    // Files in public/ ship as is, and embed/ ships minified (the embed script): plain browser scripts, outside any tsconfig.
+    { files: ['public/**/*.js', 'embed/**/*.js'], languageOptions: { globals: globals.browser, sourceType: 'script' } },
     wrapperExceptions(vendorWrappers),
   );
 }
