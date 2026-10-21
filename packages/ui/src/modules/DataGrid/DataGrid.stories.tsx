@@ -48,6 +48,8 @@ interface SampleGridProps {
   readonly onCreateOption?: (rowId: string, columnId: string, label: string) => void;
   /** A bar floating over the grid's foot (spec 0022): the BulkActionBar while rows are ticked. */
   readonly floatingBar?: ReactNode;
+  /** The floating bar drawn from the grid's own selection, as a screen draws its BulkActionBar. */
+  readonly barFor?: (selection: GridSelection, clear: () => void) => ReactNode;
   /** `narrow` holds the grid to a phone's width less its gutters, or narrower. */
   readonly stageWidth?: 'auto' | 'narrow';
 }
@@ -73,6 +75,7 @@ function SampleGrid({
   columnActions,
   onCreateOption,
   floatingBar,
+  barFor,
   stageWidth = 'auto',
 }: SampleGridProps) {
   const [data, setData] = useState(() =>
@@ -152,6 +155,13 @@ function SampleGrid({
         {...(columnActions === undefined ? {} : { columnActions })}
         {...(onCreateOption === undefined ? {} : { onCreateOption })}
         {...(floatingBar === undefined ? {} : { floatingBar })}
+        {...(barFor === undefined
+          ? {}
+          : {
+              floatingBar: barFor(selection, () => {
+                setSelection(noRows());
+              }),
+            })}
         {...(unknown === undefined
           ? {}
           : {
@@ -746,6 +756,39 @@ export const FloatingBar: Story = {
         bar.getBoundingClientRect().top,
       );
     });
+  },
+};
+
+/**
+ * While the floating bar shows, it says the count and the grid doesn't, so a
+ * tick is said once: the first by the grid (the bar arrives with its count,
+ * quietly), the next by the bar.
+ */
+export const FloatingBarSpeaks: Story = {
+  parameters: { crm: { screenshot: false } },
+  args: {
+    count: 30,
+    barFor: (selection, clear) => {
+      const selected = selection.kind === 'some' ? selection.ids.size : 0;
+      return selected === 0 ? undefined : (
+        <BulkActionBar placement="floating" count={selected} total={30} onClear={clear}>
+          <Button variant="danger" icon="trash">
+            Delete
+          </Button>
+        </BulkActionBar>
+      );
+    },
+  },
+  play: async ({ canvas, userEvent }) => {
+    const press = presser((keys) => userEvent.keyboard(keys));
+    await userEvent.tab();
+    await press(['{Home}'], '0:0');
+    await press([' ']);
+    await waitFor(() => expect(canvas.getByText('1 row selected')).toBeInTheDocument());
+    await press(['{ArrowDown}'], '1:0');
+    await press([' ']);
+    await waitFor(() => expect(canvas.getByText('2 selected')).toBeInTheDocument());
+    await expect(canvas.queryByText('2 rows selected')).toBeNull();
   },
 };
 

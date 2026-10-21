@@ -123,7 +123,8 @@ export interface DataGridProps<Row> {
    * `placement="floating"` while rows are ticked), drawn in the grid's frame
    * so it centres on the grid: the rows end that much higher and a focused
    * row is scrolled clear of it, so the bar never hides the cell in use
-   * (WCAG 2.4.11). Nothing (undefined, null or false) when none shows.
+   * (WCAG 2.4.11). Nothing (undefined, null or false) when none shows. While
+   * one shows, it says the selection's count, not the grid.
    */
   readonly floatingBar?: ReactNode;
   readonly status?: GridStatus;
@@ -505,7 +506,10 @@ export function DataGrid<Row>({
     latestSelection.current = next;
     if (selection === undefined) setOwnSelection(next);
     onSelectionChange?.(next);
-    if (announce) setAnnouncement(strings.rowsSelected(number(selectedCount(next, count))));
+    const selected = selectedCount(next, count);
+    // A floating bar that stays (the BulkActionBar) says the new count itself, so each tick is said once. The grid
+    // speaks when none shows yet (the bar is born quiet with its first count) or when the selection empties.
+    if (announce && !(hasFloatingBar && selected > 0)) setAnnouncement(strings.rowsSelected(number(selected)));
   };
 
   const columnAt = (col: number): GridColumn | undefined => (col === 0 ? undefined : placed[col - 1]?.column);
