@@ -5,4 +5,7 @@ export const strings = {
   tabsLabel: 'Captures',
   linksTab: 'Links',
   formsTab: 'Forms',
+  /** What the TopBar's count counts, for screen readers: "3 booking pages", "2 forms". */
+  linksCount: 'booking pages',
+  formsCount: 'forms',
 } as const;

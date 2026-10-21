@@ -1,5 +1,5 @@
 // Brief
-// Purpose: the Links · Forms strip at the top of Captures, one tab per child route, with that tab's search and New at its end.
+// Purpose: the Links · Forms bar under Captures' TopBar, in the row People's ViewBar takes, one tab per child route, with that tab's search at its end.
 // Main task: switch between the booking links and the forms, each with its own address.
 // Leaves out: what each tab shows (its child route renders that into the chosen panel).
 import { TabPanel, Tabs } from '@crm/ui';
@@ -19,8 +19,8 @@ export interface CapturesTabsProps {
 }
 
 /**
- * Links · Forms. Choosing a tab moves to its address; the panel holds whatever that address renders, and the
- * strip's end holds that tab's search and New.
+ * Links · Forms, as the page's second bar. Choosing a tab moves to its address; the panel holds whatever that
+ * address renders, and the bar's end holds that tab's search (New is the TopBar's).
  */
 export function CapturesTabs({ slug, tab, children }: CapturesTabsProps) {
   const navigate = useNavigate();
@@ -28,6 +28,7 @@ export function CapturesTabs({ slug, tab, children }: CapturesTabsProps) {
   return (
     <CapturesToolbarSlot.Provider value={slot}>
       <Tabs
+        variant="bar"
         end={<div ref={setSlot} />}
         label={strings.tabsLabel}
         selectedKey={tab}

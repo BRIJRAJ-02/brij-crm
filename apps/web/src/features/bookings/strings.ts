@@ -115,6 +115,12 @@ export const strings = {
   timeBlocked: 'Time blocked.',
   bookSomeoneIn: 'Book someone in',
   newMeeting: 'New meeting',
+  /** The TopBar's New: it reads New, as Captures' does, and is named New meeting. */
+  newButton: 'New',
+  /** Why the TopBar's New is off: a meeting goes on a booking page that is on. */
+  turnOnPageFirst: 'Turn on a booking page to book someone in',
+  /** What the TopBar's count counts, for screen readers: "4 upcoming bookings". */
+  upcomingCount: 'upcoming bookings',
   with: 'With',
   theirName: 'Their name',
   email: 'Email',

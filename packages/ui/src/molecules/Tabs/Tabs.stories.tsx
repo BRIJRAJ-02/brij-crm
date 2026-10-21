@@ -92,6 +92,37 @@ export const WithEnd: Story = {
   },
 };
 
+/**
+ * As a page's second bar (Captures, Bookings): the row People's ViewBar takes, size-bar tall on the surface,
+ * the tab's tools at its end, the underline on its hairline.
+ */
+export const Bar: Story = {
+  render: (args) => (
+    <Tabs
+      {...args}
+      variant="bar"
+      end={<Field label="Search booking pages" isLabelHidden variant="search" type="search" size="sm" />}
+    >
+      <TabPanel id="activity">Field changes, notes and emails, newest first.</TabPanel>
+      <TabPanel id="notes">12 notes.</TabPanel>
+      <TabPanel id="tasks">3 open tasks.</TabPanel>
+      <TabPanel id="files">No files.</TabPanel>
+    </Tabs>
+  ),
+  play: async ({ canvas }) => {
+    const list = canvas.getByRole('tablist', { name: 'Record' });
+    const bar = list.parentElement;
+    const barHeight = getComputedStyle(document.documentElement).getPropertyValue('--size-bar').trim();
+    await expect(bar?.getBoundingClientRect().height).toBe(Number.parseFloat(barHeight));
+    // The chosen tab fills the bar down to its hairline, so its underline sits on it.
+    const tab = canvas.getByRole('tab', { name: /Activity/ });
+    await expect(Math.round(tab.getBoundingClientRect().bottom)).toBe(
+      Math.round((bar?.getBoundingClientRect().bottom ?? 0) - 1),
+    );
+    await expect(canvas.getByRole('searchbox', { name: 'Search booking pages' })).toBeInTheDocument();
+  },
+};
+
 /** On a phone: the tools take a row of their own under the tabs, and the search narrows to fit. */
 export const WithEndNarrow: Story = {
   render: (args) => (

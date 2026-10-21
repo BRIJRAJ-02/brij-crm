@@ -5,9 +5,10 @@
 import { isDataError, type FormSummary } from '@crm/data';
 import { useCaptureList } from '@crm/data/react';
 import { Button, Menu, MenuItem, MenuSeparator, MenuTrigger, Modal, Tooltip, type LinkGridCard } from '@crm/ui';
-import { useNavigate, useRouteContext } from '@tanstack/react-router';
+import { useRouteContext } from '@tanstack/react-router';
 import { useState } from 'react';
 import { CapturesList } from '../captures/CapturesList.tsx';
+import { useCapturesCreate } from '../captures/create.tsx';
 import { useCan } from '../workspace/WorkspacePage.tsx';
 import { formHref } from './paths.ts';
 import { strings } from './strings.ts';
@@ -30,36 +31,14 @@ function badgeOf(form: FormSummary): { readonly badge?: string } {
 /** Captures › Forms: New form, then one card per form, newest change first, read from the data layer's held list. */
 export function FormsScreen({ slug }: FormsScreenProps) {
   const { data, toasts } = useRouteContext({ from: '__root__' });
-  const navigate = useNavigate();
   const canManage = useCan('forms.manage');
   const list = useCaptureList(data.forms.view(slug));
-  const [creating, setCreating] = useState<string | undefined>(undefined);
+  const create = useCapturesCreate();
   const [deleting, setDeleting] = useState<FormSummary | undefined>(undefined);
 
   // A refusal says what was put back, then why.
   const failed = (what: string) => (error: unknown) => {
     toasts.toast({ tone: 'danger', message: `${what} ${isDataError(error) ? error.message : strings.failedText}` });
-  };
-
-  const open = (formId: string) => {
-    void navigate({ href: formHref(slug, formId) });
-  };
-
-  // New form makes "Untitled form" at once and opens it: no dialog first, the builder is the dialog.
-  const create = () => {
-    if (creating !== undefined) return;
-    const id = data.forms.newId();
-    setCreating(id);
-    data.forms.create(slug, { id }).then(
-      (form) => {
-        setCreating(undefined);
-        open(form.id);
-      },
-      (error: unknown) => {
-        setCreating(undefined);
-        failed(strings.createFailed)(error);
-      },
-    );
   };
 
   // Each change shows in the list at once; a refusal puts it back there, and the toast says why.
@@ -166,21 +145,16 @@ export function FormsScreen({ slug }: FormsScreenProps) {
       searchLabel={strings.searchForms}
       status={list.status}
       cards={cards}
-      {...(canManage
-        ? {
+      // An empty list offers New in its middle too: the same as the TopBar's.
+      {...(create?.create === undefined
+        ? {}
+        : {
             newAction: (
-              <Button
-                variant="primary"
-                icon="plus"
-                label={strings.newForm}
-                onPress={create}
-                isPending={creating !== undefined}
-              >
-                {strings.newButton}
+              <Button variant="primary" icon="plus" onPress={create.create} isPending={create.isPending}>
+                {strings.newForm}
               </Button>
             ),
-          }
-        : {})}
+          })}
       empty={{ title: strings.noForms, text: strings.noFormsText, icon: 'clipboard-list' }}
       errorTitle={strings.failedTitle}
       onRetry={() => {
@@ -238,22 +212,12 @@ function DeleteFormDialog({
 
 /** The list while its forms load, inside the Captures layout: skeleton cards in the cards' shape. */
 export function FormsPending() {
-  const canManage = useCan('forms.manage');
   return (
     <CapturesList
       label={strings.forms}
       searchLabel={strings.searchForms}
       status="loading"
       cards={[]}
-      {...(canManage
-        ? {
-            newAction: (
-              <Button variant="primary" icon="plus" isDisabled>
-                {strings.newForm}
-              </Button>
-            ),
-          }
-        : {})}
       empty={{ title: strings.noForms, text: strings.noFormsText, icon: 'clipboard-list' }}
       errorTitle={strings.failedTitle}
       onRetry={() => undefined}

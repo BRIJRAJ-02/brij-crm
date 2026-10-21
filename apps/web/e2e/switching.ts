@@ -433,3 +433,41 @@ export async function loadingAndLoaded(
   }
   return { ...(skeleton === undefined ? {} : { skeleton }), loaded };
 }
+
+/**
+ * A page's chrome, by box: its TopBar, the New at the TopBar's end, and the bar under it (People's ViewBar, or
+ * the tabs' bar on Captures and Bookings). Switching tabs and pages must leave these where they were.
+ */
+export async function chromeOf(page: Page): Promise<Record<string, Box>> {
+  return page.evaluate(() => {
+    const shown = (elements: Iterable<Element>) =>
+      [...elements].find((element) => {
+        const box = element.getBoundingClientRect();
+        return box.width > 0 && box.height > 0;
+      });
+    const place = (element: Element) => {
+      const box = element.getBoundingClientRect();
+      return {
+        x: Math.round(box.x),
+        y: Math.round(box.y),
+        width: Math.round(box.width),
+        height: Math.round(box.height),
+      };
+    };
+    const boxes: Record<string, { x: number; y: number; width: number; height: number }> = {};
+    const top = shown(document.querySelectorAll('main .ws-toolbar-top'));
+    if (top !== undefined) {
+      boxes.topBar = place(top);
+      const create = shown(
+        [...top.querySelectorAll('button')].filter((button) => /^New\b/.test(button.textContent.trim())),
+      );
+      if (create !== undefined) boxes.newButton = place(create);
+    }
+    const second =
+      shown(document.querySelectorAll('main .ws-toolbar-view')) ??
+      shown(document.querySelectorAll('main [role="tablist"]'))?.parentElement ??
+      undefined;
+    if (second !== undefined) boxes.secondBar = place(second);
+    return boxes;
+  });
+}

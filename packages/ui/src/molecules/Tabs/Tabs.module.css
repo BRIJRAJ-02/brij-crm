@@ -18,6 +18,17 @@
     border-block-end: var(--border-width-hairline) solid var(--border-subtle);
   }
 
+  /* A page's second bar (Captures, Bookings): the row People's ViewBar takes, size-bar tall on the surface with
+     the page's hairline, held at the top of the view while the page under it scrolls. */
+  .bar[data-variant='bar'] {
+    position: sticky;
+    inset-block-start: 0;
+    z-index: var(--z-sticky);
+    flex: none;
+    min-block-size: var(--size-bar);
+    background: var(--surface);
+  }
+
   .list {
     display: flex;
     flex: 1;
@@ -59,6 +70,15 @@
     white-space: nowrap;
     outline: none;
     transition: color var(--duration-hover) var(--ease-hover);
+  }
+
+  /* In the bar, a tab and the tools beside it fill its height, the underline on its hairline. */
+  .bar[data-variant='bar'] .tab {
+    block-size: calc(var(--size-bar) - var(--border-width-hairline));
+  }
+
+  .bar[data-variant='bar'] .end {
+    min-block-size: calc(var(--size-bar) - var(--border-width-hairline));
   }
 
   .tab[data-selected] {

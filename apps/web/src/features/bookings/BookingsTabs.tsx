@@ -1,5 +1,5 @@
 // Brief
-// Purpose: the Calendar · List · Availability strip at the top of Bookings, one tab per child route, with that tab's tools at its end, as Captures has.
+// Purpose: the Calendar · List · Availability bar under Bookings' TopBar, in the row People's ViewBar takes, one tab per child route, with that tab's tools at its end, as Captures has.
 // Main task: switch between the week calendar, the list and the member's own hours, each with its own address.
 // Leaves out: what each tab shows (its child route renders that into the chosen panel, and portals its tools into the strip's end).
 import { TabPanel, Tabs } from '@crm/ui';
@@ -28,6 +28,7 @@ export function BookingsTabs({ slug, tab, children }: BookingsTabsProps) {
   return (
     <BookingsToolbarSlot.Provider value={slot}>
       <Tabs
+        variant="bar"
         end={<div ref={setSlot} />}
         label={strings.pageTabsLabel}
         selectedKey={tab}

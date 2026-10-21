@@ -8,7 +8,7 @@ import { writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { expect, test, type Locator, type Page } from '@playwright/test';
 import { addPerson, newWorkspace } from './people.ts';
-import { installProbe, measureSwitch, switchingWorkspace, type Switch } from './switching.ts';
+import { chromeOf, installProbe, measureSwitch, switchingWorkspace, type Switch } from './switching.ts';
 
 const SHOTS = process.env.FLOW_SCREENSHOTS;
 
@@ -16,6 +16,8 @@ const SHOTS = process.env.FLOW_SCREENSHOTS;
 interface Step {
   readonly name: string;
   readonly isReturn: boolean;
+  /** Captures or Bookings: its chrome must stand as People's does, and stay put between its tabs. */
+  readonly section?: 'captures' | 'bookings';
   readonly target: (page: Page) => Locator;
   readonly ready: (page: Page) => Locator;
   readonly probe: { readonly css: string; readonly text?: string };
@@ -56,19 +58,25 @@ const PAGE_EDITOR: Pick<Step, 'ready' | 'probe'> = {
 };
 
 const STEPS: readonly Step[] = [
-  { name: 'sidebar to Links', isReturn: false, target: sidebar('Captures'), ...LINKS },
-  { name: 'tab to Forms', isReturn: false, target: tab('Forms'), ...FORMS },
+  { name: 'sidebar to Links', section: 'captures', isReturn: false, target: sidebar('Captures'), ...LINKS },
+  { name: 'tab to Forms', section: 'captures', isReturn: false, target: tab('Forms'), ...FORMS },
   { name: 'card to a form', isReturn: false, target: card('Untitled form'), ...FORM_EDITOR },
-  { name: 'sidebar to Calendar', isReturn: false, target: sidebar('Bookings'), ...CALENDAR },
-  { name: 'tab to List', isReturn: false, target: tab('List'), ...LIST },
-  { name: 'tab to Availability', isReturn: false, target: tab('Availability'), ...AVAILABILITY },
-  { name: 'sidebar back to Links', isReturn: true, target: sidebar('Captures'), ...LINKS },
+  { name: 'sidebar to Calendar', section: 'bookings', isReturn: false, target: sidebar('Bookings'), ...CALENDAR },
+  { name: 'tab to List', section: 'bookings', isReturn: false, target: tab('List'), ...LIST },
+  { name: 'tab to Availability', section: 'bookings', isReturn: false, target: tab('Availability'), ...AVAILABILITY },
+  { name: 'sidebar back to Links', section: 'captures', isReturn: true, target: sidebar('Captures'), ...LINKS },
   { name: 'card to a booking page', isReturn: false, target: card('Intro call'), ...PAGE_EDITOR },
-  { name: 'sidebar back to Calendar', isReturn: true, target: sidebar('Bookings'), ...CALENDAR },
-  { name: 'tab back to List', isReturn: true, target: tab('List'), ...LIST },
-  { name: 'tab back to Availability', isReturn: true, target: tab('Availability'), ...AVAILABILITY },
-  { name: 'sidebar back to Captures', isReturn: true, target: sidebar('Captures'), ...LINKS },
-  { name: 'tab back to Forms', isReturn: true, target: tab('Forms'), ...FORMS },
+  { name: 'sidebar back to Calendar', section: 'bookings', isReturn: true, target: sidebar('Bookings'), ...CALENDAR },
+  { name: 'tab back to List', section: 'bookings', isReturn: true, target: tab('List'), ...LIST },
+  {
+    name: 'tab back to Availability',
+    section: 'bookings',
+    isReturn: true,
+    target: tab('Availability'),
+    ...AVAILABILITY,
+  },
+  { name: 'sidebar back to Captures', section: 'captures', isReturn: true, target: sidebar('Captures'), ...LINKS },
+  { name: 'tab back to Forms', section: 'captures', isReturn: true, target: tab('Forms'), ...FORMS },
   { name: 'card back to the form', isReturn: true, target: card('Untitled form'), ...FORM_EDITOR },
 ];
 
@@ -93,7 +101,11 @@ test('moving through Captures and Bookings keeps the layout still and shows a vi
   // A fresh app, so the first visit to each page is a cold one.
   await page.goto(`/w/${slug}/objects/people`);
   await sidebar('Captures')(page).waitFor();
+  await page.getByRole('grid', { name: 'People' }).waitFor();
+  // People's chrome, which Captures and Bookings take: the TopBar, and the bar under it at the same height.
+  const people = await chromeOf(page);
   const results: Switch[] = [];
+  let previous: { readonly section: string; readonly chrome: Awaited<ReturnType<typeof chromeOf>> } | undefined;
   for (const step of STEPS) {
     const strips = SHOTS === undefined ? undefined : path.join(SHOTS, `${info.project.name}-switch`);
     const result = await measureSwitch(
@@ -109,6 +121,17 @@ test('moving through Captures and Bookings keeps the layout still and shows a vi
     expect.soft(result.shift, `${step.name}: layout shift (${result.shiftSources.join(', ')})`).toBeLessThan(0.01);
     expect.soft(result.blankFrames, `${step.name}: frames with an empty page`).toBe(0);
     if (step.isReturn) expect.soft(result.skeletonFrames, `${step.name}: skeleton on a return visit`).toBe(0);
+    if (step.section === undefined) {
+      previous = undefined;
+      continue;
+    }
+    const chrome = await chromeOf(page);
+    expect.soft(chrome.topBar, `${step.name}: the TopBar stands as People's`).toEqual(people.topBar);
+    expect.soft(chrome.secondBar, `${step.name}: the tabs' bar stands as People's ViewBar`).toEqual(people.secondBar);
+    if (previous?.section === step.section) {
+      expect.soft(chrome.newButton, `${step.name}: New stays where it was`).toEqual(previous.chrome.newButton);
+    }
+    previous = { section: step.section, chrome };
   }
   await info.attach('switches', { body: JSON.stringify(results, null, 2), contentType: 'application/json' });
   if (SHOTS !== undefined)

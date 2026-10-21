@@ -1,6 +1,6 @@
 // Brief
 // Purpose: the one shape both Captures tabs draw (Links' booking pages, Forms' forms), so they read as one kind of thing.
-// Main task: a grid of link cards across the whole view, each opening its editor, with Copy link, Open and the menu in its footer; the search and New at the end of the tabs strip; or, with none, the empty state centred in the view.
+// Main task: a grid of link cards across the whole view, each opening its editor, with Copy link, Open and the menu in its footer; the search at the end of the tabs bar; or, with none, the empty state centred in the view, with New.
 // Leaves out: what a card says and does (each tab builds its cards), and the tabs header (the Captures layout).
 import { EmptyState, LinkGrid, LinkListToolbar, PageColumn, type IconName, type LinkGridCard } from '@crm/ui';
 import { useState, type ReactNode } from 'react';
@@ -15,7 +15,7 @@ export interface CapturesListProps {
   readonly searchLabel: string;
   readonly status: 'loading' | 'error' | 'ready';
   readonly cards: readonly LinkGridCard[];
-  /** New booking page, New form; left out without the permission to make one. */
+  /** With no cards: the empty state's New booking page or New form; left out without the permission to make one. */
   readonly newAction?: ReactNode;
   /** With no cards: the empty state's words and icon. */
   readonly empty: { readonly title: string; readonly text: string; readonly icon: IconName };
@@ -27,8 +27,8 @@ export interface CapturesListProps {
 }
 
 /**
- * A Captures tab's list: LinkGrid's cards across the whole view under the strip (the grid carries the page's
- * gutter itself), its search and New at the strip's end; or the empty state centred in the view.
+ * A Captures tab's list: LinkGrid's cards across the whole view under the bar (the grid carries the page's
+ * gutter itself), its search at the bar's end (New is the TopBar's); or the empty state centred in the view.
  */
 export function CapturesList({
   label,
@@ -64,8 +64,6 @@ export function CapturesList({
             onQueryChange={setQuery}
             size="sm"
             isSearchDisabled={isBusy}
-            // New stays while the rows load, so the strip keeps its shape when they land.
-            {...(newAction === undefined ? {} : { actions: newAction })}
           />,
           slot,
         )}

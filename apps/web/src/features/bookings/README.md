@@ -4,7 +4,7 @@ A sidebar destination after Records, as Timefix's rail has it.
 
 ## Bookings (`/w/$slug/bookings`, the layout, as Captures)
 
-- The frame, the TopBar and the underline strip **Calendar · List · Availability** (`BookingsTabs`, `tabs.ts`), each tab its own route drawn in the chosen panel.
+- The frame, the TopBar (`BookingsTopBar`: the scheduling tile, the upcoming count, and New, named New meeting, which opens New meeting at the next free half hour of the week on screen inside the member's hours, `free.ts`; off with the reason until a booking page is on) and the bar **Calendar · List · Availability** (`BookingsTabs`, Tabs' `bar` variant in the row People's ViewBar takes, `tabs.ts`), each tab its own route drawn in the chosen panel. The layout owns New, so it keeps one place and one width on every tab.
 - The tab's tools sit at the strip's end (`toolbarSlot.ts`: the screen portals them there), as Captures' search and New do.
 - Bare `/bookings` goes to Calendar; an old `?view=list` link goes to List, keeping the rest of its address.
 - Availability is `bookings.availability`, unchanged: its own WorkspacePage draws only its body inside the layout's frame (`WorkspacePage` knows when it is nested).

@@ -8,8 +8,8 @@ import { Button, Menu, MenuItem, MenuSeparator, MenuTrigger, Modal, Tooltip, typ
 import { useNavigate, useRouteContext } from '@tanstack/react-router';
 import { useState } from 'react';
 import { CapturesList } from '../captures/CapturesList.tsx';
+import { useCapturesCreate } from '../captures/create.tsx';
 import { pageEditorHref, publicBookingUrl } from './links.ts';
-import { NewPageDialog } from './NewPageDialog.tsx';
 import { strings } from './strings.ts';
 
 /** Props for the list: the data layer, whose held list of pages the route loaded. */
@@ -33,7 +33,7 @@ export function LinksScreen({ data, slug }: LinksScreenProps) {
   const { toasts } = useRouteContext({ from: '__root__' });
   const navigate = useNavigate();
   const list = useCaptureList(data.bookingPages.view(slug));
-  const [isCreating, setCreating] = useState(false);
+  const create = useCapturesCreate();
   const [deleting, setDeleting] = useState<BookingPageView | undefined>(undefined);
   // A refusal says what was put back, then why.
   const failed = (what: string) => (error: unknown) => {
@@ -148,31 +148,22 @@ export function LinksScreen({ data, slug }: LinksScreenProps) {
       searchLabel={strings.searchPages}
       status={list.status}
       cards={cards}
-      newAction={
-        <Button variant="primary" icon="plus" label={strings.newPage} onPress={() => setCreating(true)}>
-          {strings.newButton}
-        </Button>
-      }
+      // An empty list offers New in its middle too: the same as the TopBar's.
+      {...(create?.create === undefined
+        ? {}
+        : {
+            newAction: (
+              <Button variant="primary" icon="plus" onPress={create.create}>
+                {strings.newPage}
+              </Button>
+            ),
+          })}
       empty={{ title: strings.emptyTitle, text: strings.emptyText, icon: 'calendar-clock' }}
       errorTitle={strings.failedTitle}
       onRetry={() => {
         data.bookingPages.view(slug).reload();
       }}
-      dialogs={
-        <>
-          <NewPageDialog
-            data={data}
-            slug={slug}
-            isOpen={isCreating}
-            onClose={() => setCreating(false)}
-            onCreated={(page) => {
-              setCreating(false);
-              open(page.id);
-            }}
-          />
-          <DeletePageDialog page={deleting} onClose={() => setDeleting(undefined)} onDelete={remove} />
-        </>
-      }
+      dialogs={<DeletePageDialog page={deleting} onClose={() => setDeleting(undefined)} onDelete={remove} />}
     />
   );
 }
@@ -222,7 +213,7 @@ function DeletePageDialog({
   );
 }
 
-/** The list while its pages load, inside the Captures layout: skeleton cards in the cards' shape, New in its place. */
+/** The list while its pages load, inside the Captures layout: skeleton cards in the cards' shape. */
 export function LinksPending() {
   return (
     <CapturesList
@@ -230,11 +221,6 @@ export function LinksPending() {
       searchLabel={strings.searchPages}
       status="loading"
       cards={[]}
-      newAction={
-        <Button variant="primary" icon="plus" isDisabled>
-          {strings.newPage}
-        </Button>
-      }
       empty={{ title: strings.emptyTitle, text: strings.emptyText, icon: 'calendar-clock' }}
       errorTitle={strings.failedTitle}
       onRetry={() => undefined}

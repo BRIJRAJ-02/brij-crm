@@ -68,8 +68,14 @@ export interface TabsProps {
   readonly selectedKey?: string;
   readonly defaultSelectedKey?: string;
   readonly onSelectionChange?: (id: string) => void;
-  /** At the strip's far end, on its hairline: the chosen tab's own tools (a search, New). */
+  /** At the strip's far end, on its hairline: the chosen tab's own tools (a search, the week's arrows). */
   readonly end?: ReactNode;
+  /**
+   * `strip` (the default): 40px tabs on a hairline, inside a page (a record's tabs). `bar`: the tabs as a page's
+   * second bar, the row People's ViewBar takes under the TopBar: size-bar tall on the surface, the same padding
+   * and hairline, kept in place while the page under it scrolls (Captures, Bookings).
+   */
+  readonly variant?: 'strip' | 'bar';
   /**
    * One TabPanel per tab, with the same ids. Leave it off for a strip whose
    * chosen tab is drawn by the page under it (a published form's Form,
@@ -84,7 +90,16 @@ export interface TabsProps {
  * The arrow keys move between tabs; Tab moves into the panel. `end` puts the
  * chosen tab's own tools (Captures' search and New) at the strip's far end.
  */
-export function Tabs({ label, tabs, selectedKey, defaultSelectedKey, onSelectionChange, end, children }: TabsProps) {
+export function Tabs({
+  label,
+  tabs,
+  selectedKey,
+  defaultSelectedKey,
+  onSelectionChange,
+  end,
+  variant = 'strip',
+  children,
+}: TabsProps) {
   const { isFocusVisible } = useFocusVisible();
   return (
     <AriaTabs
@@ -99,7 +114,7 @@ export function Tabs({ label, tabs, selectedKey, defaultSelectedKey, onSelection
             },
           })}
     >
-      <div className={styles.bar}>
+      <div className={styles.bar} data-variant={variant === 'bar' ? 'bar' : undefined}>
         <TabList className={styles.list} aria-label={label} items={tabs} data-instant={isFocusVisible || undefined}>
           {(tab) => (
             <Tab
