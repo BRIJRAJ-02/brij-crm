@@ -215,12 +215,13 @@ describe('access (AC-447)', () => {
     const reader = w.as(w.level('read'));
     expect((await getNote(reader, { noteId: note.id })).canChange).toBe(false);
     expect((await listNotes(reader, { recordId: acme })).items.map((item) => item.id)).toEqual([note.id]);
+    // Each call starts only when its turn comes, so none is refused before anything awaits it.
     for (const call of [
-      saveNote(reader, { id: newId(), recordId: acme, title: 'Mine' }),
-      saveNote(reader, { id: note.id, recordId: acme, title: 'Changed' }),
-      deleteNote(reader, { noteId: note.id }),
+      () => saveNote(reader, { id: newId(), recordId: acme, title: 'Mine' }),
+      () => saveNote(reader, { id: note.id, recordId: acme, title: 'Changed' }),
+      () => deleteNote(reader, { noteId: note.id }),
     ]) {
-      expect(await refusalOf(call)).toEqual({
+      expect(await refusalOf(call())).toEqual({
         code: 'FORBIDDEN',
         message: 'You can view this note but not change it.',
       });

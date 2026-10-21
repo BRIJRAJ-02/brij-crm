@@ -16,6 +16,7 @@ const BEFORE_ANYONE_LISTENS: ReadonlySet<string> = new Set([
   'src/engine/workspaces.ts',
   'scripts/seed-crm.ts',
   'scripts/seed-scale.ts',
+  'scripts/bench-notes-tasks.ts',
 ]);
 
 const WRITES = /insert\s+into\s+members\b|update\s+members\b|\.insert\(members\)|\.update\(members\)/i;

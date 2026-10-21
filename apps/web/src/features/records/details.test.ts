@@ -77,8 +77,10 @@ describe('recordName', () => {
 
 describe('addresses', () => {
   it('names the tabs and record ids it knows, and builds a record page address', () => {
-    expect(isRecordTab('overview') && isRecordTab('activity')).toBe(true);
-    expect(isRecordTab('notes')).toBe(false);
+    expect(isRecordTab('overview') && isRecordTab('activity') && isRecordTab('notes') && isRecordTab('tasks')).toBe(
+      true,
+    );
+    expect(isRecordTab('files')).toBe(false);
     expect(isRecordId('0199a6f2-0000-7000-8000-0000000000aa')).toBe(true);
     expect(isRecordId('not-an-id')).toBe(false);
     expect(recordHref('acme', 'people', 'r1', 'activity')).toBe('/w/acme/objects/people/r1/activity');

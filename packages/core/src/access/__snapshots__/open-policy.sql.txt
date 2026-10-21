@@ -1998,6 +1998,19 @@ select "id", "object_id", "list_id", "api_slug", "title", "type", "is_multi", "i
   ["{<id 19>}","<id 2>","<id 16>","<id 2>","{<id 19>}","<id 2>","<id 16>","<id 2>",52,"start","<id 2>","<id 16>","<id 2>","<id 20>",51,"{<id 19>}","<id 2>","<id 16>","{<id 19>}","<id 2>","<id 16>",52,"end","<id 2>","<id 16>","<id 20>",51]
 
 
+    select n.id::text as note_id, to_char(n.created_at at time zone 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.US"Z"') as at, n.created_by_type as actor_type,
+      n.created_by_id::text as actor_id, n.title, left(n.content_text, 600) as head
+    from notes n
+    where n.record_id = $1::uuid and n.deleted_at is null
+      and exists (select 1 from records r where r.workspace_id = n.workspace_id and r.id = n.record_id and r.deleted_at is null)
+      and true
+      and true
+    order by n.created_at desc, ('note:' || n.id::text) collate "C"
+    limit $2
+  
+  ["<id 2>",51]
+
+
     (
       select 'added' as part, l.task_id::text as task_id, to_char(l.created_at at time zone 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.US"Z"') as at,
         l.created_by_type as actor_type, l.created_by_id::text as actor_id, t.title, t.is_done
