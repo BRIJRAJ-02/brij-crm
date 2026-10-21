@@ -31,11 +31,12 @@ export interface AuthLayoutProps {
 
 /**
  * The frame for the pages before the app: sign in, verify, the welcome
- * screen. The product's mark and name (or its wordmark), then the page card (`Card` with
- * `placement="page"`, the page's `main`), centred across the window at a
- * fixed offset from the top, so it holds still between steps and as its
- * content grows, and kept `space-16` from each edge on a phone. `isBusy`
- * marks the card busy while a Skeleton stands in for its task.
+ * screen. The product's mark and name (or its wordmark), then the page card
+ * (`Card` with `placement="page"` and `size="sm"`, the page's `main`,
+ * `size-panel` wide), centred across the window at a fixed offset from the
+ * top, so it holds still between steps and as its content grows, and kept
+ * `space-16` from each edge on a phone. `isBusy` marks the card busy while a
+ * Skeleton stands in for its task.
  */
 export function AuthLayout({
   productName,
@@ -64,6 +65,7 @@ export function AuthLayout({
       </header>
       <Card
         placement="page"
+        size="sm"
         title={title}
         isBusy={isBusy}
         {...(description === undefined ? {} : { description })}

@@ -1,4 +1,6 @@
-/* Separator: a hairline in border-subtle, across or down. */
+/* Separator: a hairline in border-subtle, across or down. Labelled, a quiet
+   word in label type and text-tertiary between two hairlines, space-8 from
+   each. */
 @layer components {
   .root {
     flex: none;
@@ -15,8 +17,32 @@
     min-block-size: var(--size-icon);
   }
 
+  .labelled {
+    display: flex;
+    align-items: center;
+    align-self: stretch;
+    gap: var(--space-8);
+    color: var(--text-tertiary);
+    font: var(--text-label);
+    letter-spacing: var(--tracking-label);
+
+    &::before,
+    &::after {
+      flex: 1;
+      block-size: var(--border-width-hairline);
+      background: var(--border-subtle);
+      content: '';
+    }
+  }
+
+  .word {
+    flex: none;
+  }
+
   @media (forced-colors: active) {
-    .root {
+    .root,
+    .labelled::before,
+    .labelled::after {
       background: CanvasText;
     }
   }

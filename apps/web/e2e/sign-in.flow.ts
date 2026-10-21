@@ -80,9 +80,9 @@ async function checkScreen(page: Page, name: string): Promise<void> {
 
 /** Asks for a sign in code on /sign-in, and waits for /verify. */
 async function askForCode(page: Page, email: string): Promise<void> {
-  await expect(page.getByRole('heading', { level: 1, name: 'Sign in' })).toBeVisible();
+  await expect(page.getByRole('heading', { level: 1, name: 'Sign in or sign up' })).toBeVisible();
   await page.getByLabel('Email').fill(email);
-  await page.getByRole('button', { name: 'Continue', exact: true }).click();
+  await page.getByRole('button', { name: /^Continue( with email)?$/ }).click();
   await expect(page).toHaveURL(/\/verify/);
   await expect(page.getByRole('heading', { level: 1, name: 'Check your email' })).toBeVisible();
 }
@@ -131,21 +131,34 @@ test('signs in by code, names the workspace, lands on People, signs out, and com
   // Signed out, / goes to sign in, which is named in the tab.
   await page.goto('/');
   await expect(page).toHaveURL(/\/sign-in$/);
-  await expect(page.getByRole('button', { name: 'Continue', exact: true })).toBeVisible();
-  await expect(page).toHaveTitle('Sign in · Timefix');
+  await expect(page.getByRole('button', { name: /^Continue( with email)?$/ })).toBeVisible();
+  await expect(page).toHaveTitle('Sign in or sign up · Timefix');
   // A one field page puts focus in its field on the first load too.
   await expect(page.getByLabel('Email')).toBeFocused();
+  // One narrow card (spec 0036): at most 400 px, and 16 px from each edge on a phone.
+  const card = page.getByRole('main');
+  const signInBox = await card.boundingBox();
+  const viewport = page.viewportSize();
+  expect(signInBox !== null && viewport !== null).toBe(true);
+  if (signInBox !== null && viewport !== null) {
+    expect(signInBox.width).toBeLessThanOrEqual(400);
+    expect(signInBox.x).toBeGreaterThanOrEqual(16);
+  }
   await checkScreen(page, '1-sign-in');
 
-  // A code goes out, and /verify asks for it, with focus in the code boxes.
+  // A code goes out, and /verify asks for it on the same card, in the same place, with focus in the code boxes.
   await page.getByLabel('Email').fill(email);
-  await page.getByRole('button', { name: 'Continue', exact: true }).click();
+  await page.getByRole('button', { name: /^Continue( with email)?$/ }).click();
   await expect(page).toHaveURL(/\/verify$/);
   await expect(page.getByText(email)).toBeVisible();
   await expect(page.getByLabel('Code')).toBeFocused();
+  const verifyBox = await card.boundingBox();
+  expect(verifyBox && { x: verifyBox.x, y: verifyBox.y, width: verifyBox.width }).toEqual(
+    signInBox && { x: signInBox.x, y: signInBox.y, width: signInBox.width },
+  );
   await expect(page).toHaveTitle('Check your email · Timefix');
-  await expect(page.getByRole('button', { name: 'Send a new code' })).toBeDisabled();
-  await expect(page.getByText(/You can send another in/)).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Resend code' })).toBeDisabled();
+  await expect(page.getByText(/You can resend the code in/)).toBeVisible();
   await checkScreen(page, '2-verify');
 
   // A wrong code is refused on the code field, and signs nothing in. No new code can be sent yet, so none is offered.
@@ -155,8 +168,9 @@ test('signs in by code, names the workspace, lands on People, signs out, and com
   await expect(page.getByText('That code isn’t right. Try again.').first()).toBeVisible();
   await checkScreen(page, '3-verify-wrong-code');
 
-  // The right code signs in; with no workspace yet, /welcome.
-  await page.getByLabel('Code').fill(code);
+  // The right code signs in, pasted as an email shows it ("481 593": the space is dropped, never a digit);
+  // with no workspace yet, /welcome.
+  await page.getByLabel('Code').fill(`${code.slice(0, 3)} ${code.slice(3)}`);
   await expect(page).toHaveURL(/\/welcome$/);
   await expect(page.getByLabel('Your name')).toBeFocused();
   await expect(page).toHaveTitle('Name your workspace · Timefix');
@@ -298,18 +312,18 @@ test('a refused resend says why under its button and waits as long as the server
       }),
     }),
   );
-  const resend = page.getByRole('button', { name: 'Send a new code' });
+  const resend = page.getByRole('button', { name: 'Resend code' });
   await resend.click();
   // The Callout says what happened; the wait line under the button carries the time.
   await expect(page.getByRole('alert')).toHaveText('Too many codes sent to this email.');
-  await expect(page.getByText('You can send another in 10 minutes.')).toBeVisible();
+  await expect(page.getByText('You can resend the code in 10 minutes.')).toBeVisible();
   await expect(resend).toBeDisabled();
   await expect(page.getByRole('textbox', { name: 'Code' })).not.toHaveAttribute('aria-invalid');
   await expect(page.getByText('New code sent')).toHaveCount(0);
   await checkScreen(page, '3b-verify-resend-refused');
 
-  // "Use another email" goes back with the address filled in.
-  await page.getByRole('button', { name: 'Use another email' }).click();
+  // "Use a different email" goes back with the address filled in.
+  await page.getByRole('button', { name: 'Use a different email' }).click();
   await expect(page).toHaveURL(/\/sign-in$/);
   await expect(page.getByLabel('Email')).toHaveValue(email);
 });
@@ -356,7 +370,7 @@ test('a refused Google sign in says so above the form, keeps the deep link, and 
   await expect(page).toHaveURL(/\/sign-in\?redirect=%2Fw%2Facme%2Fobjects%2Fpeople$/);
   await checkScreen(page, '1b-sign-in-google-refused');
   await page.reload();
-  await expect(page.getByRole('button', { name: 'Continue', exact: true })).toBeVisible();
+  await expect(page.getByRole('button', { name: /^Continue( with email)?$/ })).toBeVisible();
   await expect(page.getByRole('alert')).toHaveCount(0);
 });
 
@@ -380,7 +394,7 @@ test('a spent code moves focus to why while the wait runs', async ({ page }) => 
   // The message under the boxes (focusable from script only), not the status line that announced it.
   const why = page.locator('main [tabindex="-1"]', { hasText: 'Too many wrong tries for this code. Send a new one.' });
   await expect(why).toBeFocused();
-  await expect(page.getByRole('button', { name: 'Send a new code' })).toBeDisabled();
+  await expect(page.getByRole('button', { name: 'Resend code' })).toBeDisabled();
   await checkScreen(page, '3c-verify-code-spent');
 });
 

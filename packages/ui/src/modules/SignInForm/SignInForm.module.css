@@ -1,5 +1,6 @@
-/* SignInForm: the form, then the closed sign up line in text-secondary,
-   space-16 below it. */
+/* SignInForm: a column space-16 apart: the notice, Continue with Google, the
+   "or" between hairlines, the form (the email field, then its submit), and
+   the closed sign up line in text-secondary. */
 @layer components {
   .root {
     display: flex;

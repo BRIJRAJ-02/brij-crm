@@ -8,7 +8,7 @@ const meta = {
   component: SignInForm,
   args: { onContinue: fn(), onGoogle: fn() },
   render: (args) => (
-    <AuthLayout productName="CRM" title="Sign in">
+    <AuthLayout productName="Timefix" title="Sign in or sign up">
       <SignInForm {...args} />
     </AuthLayout>
   ),
@@ -17,18 +17,31 @@ const meta = {
 export default meta;
 type Story = StoryObj<typeof meta>;
 
-/** The email field, Continue, and Continue with Google. Enter sends the code to the trimmed address. */
+/**
+ * Continue with Google first, "or", then the email field and Continue with email. Enter sends the code to the
+ * trimmed address; the buttons come in the page's order.
+ */
 export const Default: Story = {
   parameters: { crm: { preview: true } },
-  play: async ({ args, canvas, userEvent }) => {
-    await userEvent.type(canvas.getByRole('textbox', { name: 'Email' }), ' maya@halcyonlabs.io {Enter}');
+  play: async ({ args, canvas, canvasElement, userEvent }) => {
+    const google = canvas.getByRole('button', { name: 'Continue with Google' });
+    const email = canvas.getByRole('textbox', { name: 'Email' });
+    const submit = canvas.getByRole('button', { name: 'Continue with email' });
+    await expect(canvas.getByText('or')).toBeVisible();
+    await expect(email).toHaveAttribute('placeholder', 'name@company.com');
+    // Google, then the email, then its submit, in the page as on screen.
+    const order = [...canvasElement.querySelectorAll('button, input')].filter((node) =>
+      [google, email, submit].includes(node as HTMLElement),
+    );
+    await expect(order).toEqual([google, email, submit]);
+    await userEvent.type(email, ' maya@halcyonlabs.io {Enter}');
     await expect(args.onContinue).toHaveBeenCalledWith('maya@halcyonlabs.io');
-    await userEvent.click(canvas.getByRole('button', { name: 'Continue with Google' }));
+    await userEvent.click(google);
     await expect(args.onGoogle).toHaveBeenCalled();
   },
 };
 
-/** Sending the code: Continue spins as "Sending code", and Google waits. */
+/** Sending the code: Continue with email spins as "Sending code", and Google waits. */
 export const Sending: Story = {
   args: { status: 'sending', defaultEmail: 'maya@halcyonlabs.io' },
   play: async ({ args, canvas, userEvent }) => {
@@ -54,17 +67,33 @@ export const Refused: Story = {
 };
 
 /**
- * A refused Google sign in: the notice shows above the field as a danger
- * Callout and is announced. It is about the sign in, not the address, so the
- * email field stays valid.
+ * A refused Google sign in: the notice shows at the top, above Google, as a
+ * danger Callout, and is announced. It is about the sign in, not the address,
+ * so the email field stays valid.
  */
 export const GoogleRefused: Story = {
   args: { notice: 'Google sign in was cancelled. Try again, or use your email.' },
   play: async ({ canvas }) => {
-    await expect(canvas.getByRole('alert')).toHaveTextContent('Google sign in was cancelled.');
+    const alert = canvas.getByRole('alert');
+    await expect(alert).toHaveTextContent('Google sign in was cancelled.');
+    const google = canvas.getByRole('button', { name: 'Continue with Google' });
+    // Google comes after the notice in the page (and in neither one).
+    await expect(alert.compareDocumentPosition(google)).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
     const email = canvas.getByRole('textbox', { name: 'Email' });
     await expect(email).not.toHaveAttribute('aria-invalid');
     await expect(email).not.toHaveAccessibleDescription(/cancelled/);
+  },
+};
+
+/** Sign up isn't open to a new email: said at the top, kindly, never on the field. */
+export const SignUpRefused: Story = {
+  args: {
+    defaultEmail: 'maya@halcyonlabs.io',
+    notice: 'There’s no account for this email, and sign up isn’t open yet. Check the address.',
+  },
+  play: async ({ canvas }) => {
+    await expect(canvas.getByRole('alert')).toHaveTextContent(/sign up isn’t open yet/);
+    await expect(canvas.getByRole('textbox', { name: 'Email' })).not.toHaveAttribute('aria-invalid');
   },
 };
 
@@ -98,7 +127,7 @@ export const RefusalClears: Story = {
 export const Checked: Story = {
   play: async ({ args, canvas, userEvent }) => {
     const email = canvas.getByRole('textbox', { name: 'Email' });
-    await userEvent.click(canvas.getByRole('button', { name: 'Continue' }));
+    await userEvent.click(canvas.getByRole('button', { name: 'Continue with email' }));
     await waitFor(() => expect(email).toHaveFocus());
     await expect(email).toHaveAccessibleDescription('Enter your email address.');
     await userEvent.type(email, 'maya{Enter}');
@@ -107,25 +136,39 @@ export const Checked: Story = {
   },
 };
 
-/** Opening Google: its button spins, and Continue waits. */
+/** Opening Google: its button spins, and Continue with email waits. */
 export const OpeningGoogle: Story = {
   args: { status: 'google' },
   play: async ({ canvas }) => {
     await expect(canvas.getByRole('button', { name: /Opening Google/ })).toBeInTheDocument();
-    await expect(canvas.getByRole('button', { name: 'Continue' })).toBeDisabled();
+    await expect(canvas.getByRole('button', { name: 'Continue with email' })).toBeDisabled();
   },
 };
 
-/** Without Google: only the code. */
+/** Without Google: no Google button and no "or", and the submit reads Continue alone. */
 export const WithoutGoogle: Story = {
   args: { onGoogle: undefined },
   render: ({ onContinue }) => (
-    <AuthLayout productName="CRM" title="Sign in">
+    <AuthLayout productName="Timefix" title="Sign in or sign up">
       <SignInForm onContinue={onContinue} />
     </AuthLayout>
   ),
   play: async ({ canvas }) => {
     await expect(canvas.queryByRole('button', { name: 'Continue with Google' })).toBeNull();
+    await expect(canvas.queryByText('or')).toBeNull();
+    await expect(canvas.getByRole('button', { name: 'Continue' })).toBeInTheDocument();
+  },
+};
+
+/** The room under the email field (spec 0033's passkey sign in goes here), before the submit. */
+export const AfterEmail: Story = {
+  parameters: { crm: { screenshot: false } },
+  args: { afterEmail: <span>Sign in with a passkey</span> },
+  play: async ({ canvas, canvasElement }) => {
+    const slot = canvas.getByText('Sign in with a passkey');
+    const submit = canvas.getByRole('button', { name: 'Continue with email' });
+    await expect(canvasElement.querySelector('form')?.contains(slot)).toBe(true);
+    await expect(slot.compareDocumentPosition(submit)).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
   },
 };
 
@@ -143,7 +186,7 @@ export const Disabled: Story = {
   play: async ({ canvas }) => {
     const reason = 'Signing in is paused for a few minutes. Try again soon.';
     const email = canvas.getByRole('textbox', { name: 'Email' });
-    const submit = canvas.getByRole('button', { name: 'Continue' });
+    const submit = canvas.getByRole('button', { name: 'Continue with email' });
     const google = canvas.getByRole('button', { name: 'Continue with Google' });
     await expect(email).toBeDisabled();
     await expect(submit).toBeDisabled();

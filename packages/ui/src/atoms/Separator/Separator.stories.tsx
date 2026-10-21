@@ -29,3 +29,19 @@ export const Default: Story = {
     await expect(canvas.getAllByRole('separator')).toHaveLength(2);
   },
 };
+
+/** A word between two hairlines: "or" between two ways to go on, read in place as text. */
+export const Labelled: Story = {
+  args: { label: 'or' },
+  render: (args) => (
+    <Stage direction="column" width="narrow">
+      <span>Continue with Google</span>
+      <Separator {...args} />
+      <span>Email</span>
+    </Stage>
+  ),
+  play: async ({ canvas }) => {
+    await expect(canvas.getByText('or')).toBeVisible();
+    await expect(canvas.queryByRole('separator')).toBeNull();
+  },
+};

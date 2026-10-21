@@ -4,7 +4,7 @@ The frame for the pages before the app: the product's mark and name, then the pa
 
 ## Why it exists
 
-New (spec 0005, pulled forward from spec 0003's milestone 4). Sign in, verify and the welcome screen share one frame, and screens are built from library parts only. It is not a second centred frame: the card is `Card` with `placement="page"` (the page's `main`, its title the `h1`, capped at `size-page-card` and kept `space-16` from each edge on a phone), and the mark is `Avatar` with the `ink` hue, the workspace mark the sources describe. AuthLayout adds only the mark above the card and the column that centres both.
+New (spec 0005, pulled forward from spec 0003's milestone 4). Sign in, verify and the welcome screen share one frame, and screens are built from library parts only. It is not a second centred frame: the card is `Card` with `placement="page"` and `size="sm"` (the page's `main`, its title the `h1`, capped at `size-panel`, 400px, and kept `space-16` from each edge on a phone; spec 0036 narrowed it from `size-page-card`, since every page it frames is one short form), and the mark is `Avatar` with the `ink` hue, the workspace mark the sources describe. AuthLayout adds only the mark above the card and the column that centres both.
 
 ## Use
 

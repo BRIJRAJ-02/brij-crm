@@ -60,7 +60,7 @@ export async function checkScreen(page: Page, name: string): Promise<void> {
 export async function newWorkspace(page: Page, email: string, slug: string): Promise<string> {
   await page.goto('/sign-in');
   await page.getByLabel('Email').fill(email);
-  await page.getByRole('button', { name: 'Continue', exact: true }).click();
+  await page.getByRole('button', { name: /^Continue( with email)?$/ }).click();
   await expect(page).toHaveURL(/\/verify/);
   const code = await codeFor(page.request, email);
   await page.getByLabel('Code').fill(code);
@@ -77,7 +77,7 @@ export async function signInAgain(page: Page, email: string, path: string, seen:
   await page.goto(path);
   await expect(page).toHaveURL(/\/sign-in\?redirect=/);
   await page.getByLabel('Email').fill(email);
-  await page.getByRole('button', { name: 'Continue', exact: true }).click();
+  await page.getByRole('button', { name: /^Continue( with email)?$/ }).click();
   await expect(page).toHaveURL(/\/verify/);
   await page.getByLabel('Code').fill(await codeFor(page.request, email, seen));
   // An object's address opens its default view (spec 0020): the address grows its view.

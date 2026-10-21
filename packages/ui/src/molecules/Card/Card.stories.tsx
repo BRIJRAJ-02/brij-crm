@@ -65,6 +65,23 @@ export const Page: Story = {
   },
 };
 
+/** The small page card (`size="sm"`, `size-panel` wide): a page before the app whose task is one short form, like sign in. */
+export const PageSmall: Story = {
+  args: { placement: 'page', size: 'sm', title: 'Sign in or sign up' },
+  render: (args) => (
+    <Card {...args}>
+      <Button variant="primary" size="lg" isFullWidth="center">
+        Continue with email
+      </Button>
+    </Card>
+  ),
+  play: async ({ canvas }) => {
+    const main = canvas.getByRole('main');
+    await expect(main).toHaveAttribute('data-size', 'sm');
+    await expect(canvas.getByRole('heading', { level: 1, name: 'Sign in or sign up' })).toBeInTheDocument();
+  },
+};
+
 /**
  * A Select first: React Aria's hidden template before it doesn't count, so the air under the header is the
  * same as with any other first child.

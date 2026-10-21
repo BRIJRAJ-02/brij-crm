@@ -50,7 +50,7 @@ async function signIn(page: Page, path: string): Promise<void> {
   await page.goto(path);
   await expect(page).toHaveURL(/\/sign-in\?redirect=/);
   await page.getByLabel('Email').fill(EMAIL ?? '');
-  await page.getByRole('button', { name: 'Continue', exact: true }).click();
+  await page.getByRole('button', { name: /^Continue( with email)?$/ }).click();
   await expect(page).toHaveURL(/\/verify/);
   await page.getByLabel('Code').fill(await codeFor(page.request, EMAIL ?? ''));
   await expect(page).toHaveURL(new RegExp(`${path}$`));

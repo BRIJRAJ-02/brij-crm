@@ -1,5 +1,7 @@
-import { useId, useState } from 'react';
+import { useId, useState, type ReactNode } from 'react';
 import { Button } from '../../atoms/Button/Button.tsx';
+import { Separator } from '../../atoms/Separator/Separator.tsx';
+import { Callout } from '../../molecules/Callout/Callout.tsx';
 import { Field } from '../../molecules/Field/Field.tsx';
 import { Form, type FormRefusal } from '../../molecules/Form/Form.tsx';
 import styles from './SignInForm.module.css';
@@ -12,24 +14,26 @@ export type SignInStatus = 'idle' | 'sending' | 'google';
 export interface SignInFormProps {
   /** Sends the code to the address: called with the trimmed email once it looks like one. */
   readonly onContinue: (email: string) => void;
-  /** Signs in with Google. Without it, the Google button is hidden. */
+  /** Signs in with Google. Without it, the Google button and the "or" under it are hidden. */
   readonly onGoogle?: () => void;
   /**
-   * What is under way, `idle` by default. `sending` spins Continue as
-   * "Sending code" (Enter does nothing more) and turns Google off; `google`
-   * spins the Google button as "Opening Google" and turns Continue off.
+   * What is under way, `idle` by default. `sending` spins the email's submit
+   * as "Sending code" (Enter does nothing more) and turns Google off;
+   * `google` spins the Google button as "Opening Google" and turns the
+   * email's submit off.
    */
   readonly status?: SignInStatus;
   /** Why the address was refused, as a sentence that says what to do. Shown on the email field until it changes. */
   readonly error?: string;
   /**
-   * A refusal about the sign in as a whole, not the address (a refused Google
-   * sign in), as a sentence that says what to do. Shown above the field as a
-   * danger Callout, and announced; it never marks the email field invalid.
-   * Clear it when the next attempt starts.
+   * A refusal about the sign in as a whole, not the address (sign up closed,
+   * too many codes, a refused Google sign in, a session that ended), as a
+   * sentence that says what to do. Shown at the top as a danger Callout, and
+   * announced; it never marks the email field invalid. Clear it when the next
+   * attempt starts.
    */
   readonly notice?: string;
-  /** The address to start with: the one used last, coming back from "Use another email". */
+  /** The address to start with: the one used last, coming back from "Use a different email". */
   readonly defaultEmail?: string;
   /** Signing in is off for now: the field and buttons are off. */
   readonly isDisabled?: boolean;
@@ -37,12 +41,17 @@ export interface SignInFormProps {
   readonly disabledReason?: string;
   /** Sign up is closed: a quiet line under the buttons says so. */
   readonly isSignUpClosed?: boolean;
+  /**
+   * Under the email field, before its submit: another way in that belongs
+   * with the email, such as spec 0033's "Sign in with a passkey". Empty until
+   * a screen fills it.
+   */
+  readonly afterEmail?: ReactNode;
 }
 
-/** Every refusal here is about the one field, except the notice, which is about the whole form. */
+/** Every refusal the form shows is about the one field; the notice shows above everything, apart from the form. */
 const EMAIL_FIELD = 'email';
-const NOTICE = 'NOTICE';
-const fieldOf = (refusal: FormRefusal) => (refusal.code === NOTICE ? undefined : EMAIL_FIELD);
+const toEmailField = () => EMAIL_FIELD;
 
 /** What is wrong with a typed address before it is sent, or undefined when it looks like one. */
 function problemWith(email: string): FormRefusal | undefined {
@@ -51,10 +60,11 @@ function problemWith(email: string): FormRefusal | undefined {
 }
 
 /**
- * The sign in form: an email field and "Continue", which sends a one time
- * code, and "Continue with Google" when Google is on. Presentational: it says
- * what was typed and pressed, and shows the status and refusal it is given.
- * It checks only that the address looks like one before sending.
+ * The way in, for signing in and signing up alike: "Continue with Google"
+ * first when Google is on, a quiet "or", then the email field and "Continue
+ * with email", which sends a one time code. Presentational: it says what was
+ * typed and pressed, and shows the status and refusals it is given. It checks
+ * only that the address looks like one before sending.
  */
 export function SignInForm({
   onContinue,
@@ -66,6 +76,7 @@ export function SignInForm({
   isDisabled = false,
   disabledReason,
   isSignUpClosed = false,
+  afterEmail,
 }: SignInFormProps) {
   const [email, setEmail] = useState(defaultEmail);
   const [problem, setProblem] = useState<FormRefusal | undefined>(undefined);
@@ -89,17 +100,31 @@ export function SignInForm({
   const hasReason = isDisabled && disabledReason !== undefined;
   return (
     <div className={styles.root}>
+      {/* Danger is announced as an alert: about the sign in, not the address, so never on the field. */}
+      {shownNotice !== undefined && <Callout tone="danger">{shownNotice}</Callout>}
+      {onGoogle !== undefined && (
+        <>
+          <Button
+            size="lg"
+            isFullWidth="center"
+            provider="google"
+            onPress={onGoogle}
+            isPending={status === 'google'}
+            isDisabled={isDisabled || status === 'sending'}
+            {...(hasReason ? { 'aria-describedby': reasonId } : {})}
+          >
+            {status === 'google' ? strings.googlePending : strings.google}
+          </Button>
+          <Separator label={strings.or} />
+        </>
+      )}
       <Form
-        submitLabel={strings.continue}
+        submitLabel={onGoogle === undefined ? strings.continue : strings.continueWithEmail}
         busyLabel={strings.sending}
         isBusy={status === 'sending'}
         isDisabled={isDisabled || status === 'google'}
-        refusals={[
-          ...(shown === undefined ? [] : [shown]),
-          // Through the Form's banner: about the sign in, not the address.
-          ...(shownNotice === undefined ? [] : [{ code: NOTICE, message: shownNotice }]),
-        ]}
-        fieldFor={fieldOf}
+        refusals={shown === undefined ? [] : [shown]}
+        fieldFor={toEmailField}
         {...(hasReason ? { submitDescribedBy: reasonId } : {})}
         onSubmit={() => {
           const typed = email.trim();
@@ -110,23 +135,6 @@ export function SignInForm({
           setDismissed(undefined);
           onContinue(typed);
         }}
-        {...(onGoogle === undefined
-          ? {}
-          : {
-              actions: (
-                <Button
-                  size="lg"
-                  isFullWidth="center"
-                  provider="google"
-                  onPress={onGoogle}
-                  isPending={status === 'google'}
-                  isDisabled={isDisabled || status === 'sending'}
-                  {...(hasReason ? { 'aria-describedby': reasonId } : {})}
-                >
-                  {status === 'google' ? strings.googlePending : strings.google}
-                </Button>
-              ),
-            })}
       >
         <Field
           label={strings.email}
@@ -134,6 +142,7 @@ export function SignInForm({
           type="email"
           inputMode="email"
           autoComplete="email"
+          placeholder={strings.emailPlaceholder}
           isRequired
           value={email}
           onChange={(next) => {
@@ -145,6 +154,7 @@ export function SignInForm({
           {...(disabledReason === undefined ? {} : { disabledReason })}
           {...(hasReason ? { descriptionId: reasonId } : {})}
         />
+        {afterEmail}
       </Form>
       {isSignUpClosed && <p className={styles.note}>{strings.signUpClosed}</p>}
     </div>

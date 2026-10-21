@@ -49,7 +49,7 @@ async function playGoogle(page: Page, person: GooglePerson): Promise<URL[]> {
 
 /** Presses "Continue with Google" on /sign-in. */
 async function continueWithGoogle(page: Page): Promise<void> {
-  await expect(page.getByRole('heading', { level: 1, name: 'Sign in' })).toBeVisible();
+  await expect(page.getByRole('heading', { level: 1, name: 'Sign in or sign up' })).toBeVisible();
   const google = page.getByRole('button', { name: 'Continue with Google' });
   // The button waits for the app to learn Google is on; outside CI, a stack without Google skips.
   const shown = await google.waitFor({ timeout: 5_000 }).then(

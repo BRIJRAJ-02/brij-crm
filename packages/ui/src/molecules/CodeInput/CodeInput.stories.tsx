@@ -13,13 +13,24 @@ const meta = {
 export default meta;
 type Story = StoryObj<typeof meta>;
 
-function Controlled({ onComplete, error }: { readonly onComplete?: (code: string) => void; readonly error?: string }) {
-  const [code, setCode] = useState('48');
+function Controlled({
+  onComplete,
+  error,
+  size,
+  start = '48',
+}: {
+  readonly onComplete?: (code: string) => void;
+  readonly error?: string;
+  readonly size?: 'md' | 'lg';
+  readonly start?: string;
+}) {
+  const [code, setCode] = useState(start);
   return (
     <CodeInput
       label="Code from your authenticator app"
       value={code}
       onChange={setCode}
+      {...(size === undefined ? {} : { size })}
       {...(onComplete === undefined ? {} : { onComplete })}
       {...(error === undefined ? {} : { error })}
     />
@@ -73,4 +84,46 @@ export const Invalid: Story = {
       <Controlled error="That code has expired. Enter the new one from your app." />
     </Stage>
   ),
+};
+
+/** Large: the boxes share the row and stand taller, three and three, on a page whose task is the code. */
+export const Large: Story = {
+  render: (args) => (
+    <Stage width="narrow">
+      <Controlled size="lg" {...(args.onComplete === undefined ? {} : { onComplete: args.onComplete })} />
+    </Stage>
+  ),
+  play: async ({ canvas, canvasElement }) => {
+    await expect(canvas.getByRole('textbox', { name: 'Code from your authenticator app' })).toBeInTheDocument();
+    await expect(canvasElement.querySelectorAll('[data-half]')).toHaveLength(1);
+  },
+};
+
+/** A pasted code with a space in it fills all six boxes and completes it: the separator is dropped, never the digits after it. */
+export const PastedWithSpace: Story = {
+  parameters: { crm: { screenshot: false } },
+  render: (args) => (
+    <Stage width="narrow">
+      <Controlled size="lg" start="" {...(args.onComplete === undefined ? {} : { onComplete: args.onComplete })} />
+    </Stage>
+  ),
+  play: async ({ canvas, args, userEvent }) => {
+    await userEvent.click(canvas.getByRole('textbox', { name: 'Code from your authenticator app' }));
+    await userEvent.paste('481 593');
+    await expect(args.onComplete).toHaveBeenCalledWith('481593');
+  },
+};
+
+/** The label for screen readers only, when a sentence above the boxes says what they are for. */
+export const LabelHidden: Story = {
+  parameters: { crm: { screenshot: false } },
+  render: () => (
+    <Stage width="narrow">
+      <CodeInput label="Code" isLabelHidden size="lg" />
+    </Stage>
+  ),
+  play: async ({ canvas }) => {
+    await expect(canvas.getByRole('textbox', { name: 'Code' })).toBeInTheDocument();
+    await expect(canvas.queryByText('Code')).toBeNull();
+  },
 };

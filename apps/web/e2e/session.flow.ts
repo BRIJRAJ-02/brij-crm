@@ -47,14 +47,14 @@ test.describe('the session ending', () => {
     await expect(page.getByText(UNSAVED)).toHaveCount(1);
     await expect(page.getByLabel('Email')).toBeFocused();
     // Nothing of the workspace stays on screen behind sign in.
-    await expect(page.getByRole('heading', { level: 1, name: 'Sign in' })).toBeVisible();
+    await expect(page.getByRole('heading', { level: 1, name: 'Sign in or sign up' })).toBeVisible();
     await expect(page.getByRole('grid')).toHaveCount(0);
     expect(await page.evaluate(() => document.body.innerText)).not.toContain('Grace Hopper');
     await checkScreen(page, 'session-ended');
 
     // Signing in again lands on the same page, read fresh: the saved edit is there, the lost one isn't.
     await page.getByLabel('Email').fill(email);
-    await page.getByRole('button', { name: 'Continue', exact: true }).click();
+    await page.getByRole('button', { name: /^Continue( with email)?$/ }).click();
     await expect(page).toHaveURL(/\/verify/);
     await page.getByLabel('Code').fill(await codeFor(page.request, email, [firstCode]));
     await expect(page).toHaveURL(new RegExp(`${people}$`));

@@ -24,15 +24,28 @@ interface CardBase {
 }
 
 /**
+ * How wide a page card is: `md` (the default) `size-page-card`, for a page
+ * with a few lines to read (the status page); `sm` `size-panel`, for the
+ * pages before the app whose task is one short form (sign in, the code).
+ */
+export type CardPageSize = 'sm' | 'md';
+
+/**
  * Props for Card. `placement="page"` is a page of its own outside the app
- * shell (the status page, not found, and later AuthLayout): a narrow centred
+ * shell (the status page, not found, and AuthLayout): a narrow centred
  * card that is the page's `main`, so it always has a title, its `h1`.
  * `inline` (the default) fills its slot, with an `h3`.
  */
 export type CardProps = CardBase &
   (
-    | { readonly placement?: 'inline'; /** Its heading. */ readonly title?: string }
-    | { readonly placement: 'page'; /** Its heading, the page's `h1`. */ readonly title: string }
+    | { readonly placement?: 'inline'; /** Its heading. */ readonly title?: string; readonly size?: never }
+    | {
+        readonly placement: 'page';
+        /** Its heading, the page's `h1`. */
+        readonly title: string;
+        /** How wide the page card is: `md` (the default) or `sm`. */
+        readonly size?: CardPageSize;
+      }
   );
 
 /** A framed group with a header: a settings section, a dashboard tile, a template. Use it to group, not to decorate. */
@@ -44,13 +57,20 @@ export function Card({
   footer,
   tone = 'default',
   placement = 'inline',
+  size,
   isBusy = false,
 }: CardProps) {
   const level = useContext(CardTitleLevel);
   const Root = placement === 'page' ? 'main' : 'section';
   const Title = placement === 'page' ? 'h1' : level === 2 ? 'h2' : level === 4 ? 'h4' : 'h3';
   return (
-    <Root className={styles.root} data-tone={tone} data-placement={placement} aria-busy={isBusy || undefined}>
+    <Root
+      className={styles.root}
+      data-tone={tone}
+      data-placement={placement}
+      data-size={placement === 'page' ? (size ?? 'md') : undefined}
+      aria-busy={isBusy || undefined}
+    >
       {(title !== undefined || actions !== undefined) && (
         <header className={styles.head}>
           <span className={styles.heading}>

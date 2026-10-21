@@ -11,11 +11,14 @@ New. Menus, toolbars and panels divide groups the same way; one atom keeps the l
 ```tsx
 <Separator />
 <Separator orientation="vertical" />
+<Separator label="or" />
 ```
+
+- `label` puts a quiet word between two hairlines, across only: "or" between two ways to go on (Continue with Google, then the email, on sign in, spec 0036). The word is plain text read where it stands, so a screen reader hears "or" between the two; the lines are drawn by CSS and not announced (a `separator` role would hide the word, since a separator's content isn't read). Why a variant: the same hairline in the same colour, with one word; a second divider drawn on the screen would be a second line style.
 
 ## States
 
-None.
+Across, down, and labelled.
 
 ## Keyboard
 

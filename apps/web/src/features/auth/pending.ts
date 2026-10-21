@@ -57,7 +57,7 @@ export function clearPending(storage: Storage | undefined): void {
   }
 }
 
-/** Keeps the address for `/sign-in` to start with ("Use another email"), until a sign in succeeds. */
+/** Keeps the address for `/sign-in` to start with ("Use a different email"), until a sign in succeeds. */
 export function saveLastEmail(storage: Storage | undefined, email: string): void {
   try {
     storage?.setItem(EMAIL_KEY, email);

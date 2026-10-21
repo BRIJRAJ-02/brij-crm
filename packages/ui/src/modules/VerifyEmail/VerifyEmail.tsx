@@ -22,14 +22,14 @@ export interface VerifyEmailProps {
   /**
    * The code can't be used any more (tried too often, or expired): the boxes
    * are off until a new code is sent. While the resend wait runs, focus moves
-   * to `error`, which says why; when "Send a new code" is ready, focus moves
+   * to `error`, which says why; when "Resend code" is ready, focus moves
    * there.
    */
   readonly isCodeSpent?: boolean;
   /** Sends a new code. */
   readonly onResend: () => void;
   /**
-   * Seconds until a new code can be sent. Above zero, "Send a new code" is
+   * Seconds until a new code can be sent. Above zero, "Resend code" is
    * off and the wait shows under it ("42 seconds", "10 minutes"). The screen
    * counts it down.
    */
@@ -42,7 +42,7 @@ export interface VerifyEmailProps {
   readonly isResending?: boolean;
   /**
    * Why the new code wasn't sent (sent too often, offline), as a sentence that
-   * says what to do. Shown and announced under "Send a new code", never on
+   * says what to do. Shown and announced under "Resend code", never on
    * the boxes. Clear it when the next resend starts.
    */
   readonly resendError?: string;
@@ -77,12 +77,13 @@ function describedBy(...ids: readonly (string | undefined)[]): { readonly 'aria-
 }
 
 /**
- * The step after sign in: "Enter the code sent to …", the six digit code (checked
- * as soon as the sixth digit is in), "Send a new code" with its wait, and "Use
- * another email". Presentational: the screen owns the countdown and the
- * checks, and passes their state in. A refusal clears the boxes for the next
- * code and is announced; typing again hides it. Once a new code is sent, the
- * boxes clear, focus moves to them and "New code sent" is announced.
+ * The step after sign in: "Enter the code we sent to …", the six digit code
+ * in large boxes (checked as soon as the sixth digit is in), "Resend code"
+ * with its wait, and "Use a different email". Presentational: the screen owns
+ * the countdown and the checks, and passes their state in. A refusal clears
+ * the boxes for the next code and is announced; typing again hides it. Once a
+ * new code is sent, the boxes clear, focus moves to them and "New code sent"
+ * is announced.
  */
 export function VerifyEmail({
   email,
@@ -133,7 +134,7 @@ export function VerifyEmail({
       setErrorShown(true);
     }
   }
-  // Focus was on "Send a new code"; once the code is sent, the next thing to
+  // Focus was on "Resend code"; once the code is sent, the next thing to
   // do is type it. Each resend moves focus once, at most: the last one acted
   // on is kept, so turning the screen off and on again moves nothing, and a
   // resend that lands while it is off is passed over.
@@ -146,7 +147,7 @@ export function VerifyEmail({
 
   // A spent code turns the boxes off, and focus would be lost with them.
   // While the wait runs, it goes to the message that says why (or, without
-  // one, "Use another email"); once "Send a new code" is ready, there, the
+  // one, "Use a different email"); once "Resend code" is ready, there, the
   // next thing to do.
   const isResendReady = !isDisabled && !isResending && resendWait <= 0;
   useEffect(() => {
@@ -178,6 +179,8 @@ export function VerifyEmail({
       <CodeInput
         ref={codeRef}
         label={strings.code}
+        isLabelHidden
+        size="lg"
         length={CODE_LENGTH}
         value={code}
         isDisabled={isDisabled || isCodeSpent}

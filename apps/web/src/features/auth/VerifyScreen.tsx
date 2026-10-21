@@ -1,7 +1,7 @@
 // Brief
 // Purpose: the second step of signing in: prove the email is yours with the code sent to it.
 // Main task: type the 6 digit code (checked as soon as it is complete), then go on into the app.
-// Leaves out: changing the address here ("Use another email" goes back) and any other sign in method.
+// Leaves out: changing the address here ("Use a different email" goes back) and any other sign in method.
 import { isDataError, type DataLayer } from '@crm/data';
 import { AuthLayout, VerifyEmail } from '@crm/ui';
 import { useNavigate } from '@tanstack/react-router';
@@ -33,7 +33,7 @@ export function firstResendAt(sentAt: number, now: number): number {
 /** The verify page: AuthLayout and VerifyEmail, with the resend wait counted here. */
 export function VerifyScreen({ data, pending, redirect }: VerifyScreenProps) {
   const navigate = useNavigate();
-  // When "Send a new code" is ready again: a minute after each send, or the server's wait after a refused one.
+  // When "Resend code" is ready again: a minute after each send, or the server's wait after a refused one.
   const [resendAt, setResendAt] = useState(() => firstResendAt(pending.sentAt, Date.now()));
   const [isVerifying, setVerifying] = useState(false);
   const [isResending, setResending] = useState(false);

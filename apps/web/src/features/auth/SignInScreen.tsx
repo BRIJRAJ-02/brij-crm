@@ -1,7 +1,7 @@
 // Brief
-// Purpose: the way in: a sign in code sent to an email (or Google, where it is on).
-// Main task: type an email and press Continue, which sends the code and moves to /verify.
-// Leaves out: passwords, sign up as a separate step, and any account settings.
+// Purpose: one way in for everyone, new or returning (spec 0036): Google, where it is on, or a code sent to an email.
+// Main task: Continue with Google, or type an email and Continue with email, which sends the code and moves to /verify.
+// Leaves out: passwords, sign up as a separate page (the server decides which it is), and any account settings.
 import type { DataLayer } from '@crm/data';
 import { AuthLayout, SignInForm, type SignInStatus } from '@crm/ui';
 import { useNavigate } from '@tanstack/react-router';
@@ -25,11 +25,11 @@ export interface SignInScreenProps {
   readonly googleError?: string | undefined;
   /** The `?signedOut=` a session that ended under the person came with: said above the form. */
   readonly signedOut?: SignedOut | undefined;
-  /** The address to start with: the one used last, back from "Use another email". */
+  /** The address to start with: the one used last, back from "Use a different email". */
   readonly email?: string | undefined;
 }
 
-/** The sign in page: AuthLayout and SignInForm, sending the code through the data layer. */
+/** The sign in or sign up page: AuthLayout and SignInForm, sending the code through the data layer. */
 export function SignInScreen({ data, google, redirect, returnTo, googleError, signedOut, email }: SignInScreenProps) {
   const navigate = useNavigate();
   const [status, setStatus] = useState<SignInStatus>('idle');
@@ -96,12 +96,7 @@ export function SignInScreen({ data, google, redirect, returnTo, googleError, si
   };
 
   return (
-    <AuthLayout
-      productName={strings.product}
-      logo={PRODUCT_LOGO}
-      title={strings.signInTitle}
-      description={strings.signInDescription}
-    >
+    <AuthLayout productName={strings.product} logo={PRODUCT_LOGO} title={strings.signInTitle}>
       <SignInForm
         status={status}
         onContinue={sendCode}

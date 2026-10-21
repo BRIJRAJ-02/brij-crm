@@ -138,7 +138,7 @@ describe('redirectSearch', () => {
 });
 
 describe('the address kept for /sign-in', () => {
-  it('is kept by "Use another email" and forgotten once a sign in clears the pending one', () => {
+  it('is kept by "Use a different email" and forgotten once a sign in clears the pending one', () => {
     const storage = memoryStorage();
     expect(readLastEmail(storage)).toBeUndefined();
     saveLastEmail(storage, 'ada@exmaple.com');

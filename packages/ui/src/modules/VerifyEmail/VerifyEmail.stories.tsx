@@ -29,14 +29,14 @@ export const Default: Story = {
   parameters: { crm: { preview: true } },
   play: async ({ args, canvas, userEvent }) => {
     await expect(canvas.getByText('maya@halcyonlabs.io').parentElement).toHaveTextContent(
-      'Enter the code sent to maya@halcyonlabs.io.',
+      'Enter the code we sent to maya@halcyonlabs.io.',
     );
     await userEvent.click(canvas.getByRole('textbox', { name: 'Code' }));
     await userEvent.keyboard('481593');
     await expect(args.onVerify).toHaveBeenCalledWith('481593');
-    await userEvent.click(canvas.getByRole('button', { name: 'Send a new code' }));
+    await userEvent.click(canvas.getByRole('button', { name: 'Resend code' }));
     await expect(args.onResend).toHaveBeenCalled();
-    await userEvent.click(canvas.getByRole('button', { name: 'Use another email' }));
+    await userEvent.click(canvas.getByRole('button', { name: 'Use a different email' }));
     await expect(args.onUseAnotherEmail).toHaveBeenCalled();
   },
 };
@@ -109,10 +109,10 @@ export const RefusedThenRetyped: Story = {
 export const ResendWaiting: Story = {
   args: { resendWait: 42 },
   play: async ({ canvas }) => {
-    const resend = canvas.getByRole('button', { name: 'Send a new code' });
+    const resend = canvas.getByRole('button', { name: 'Resend code' });
     await expect(resend).toBeDisabled();
-    await expect(canvas.getByText('You can send another in 42 seconds.')).toBeInTheDocument();
-    await expect(resend).toHaveAccessibleDescription('You can send another in 42 seconds.');
+    await expect(canvas.getByText('You can resend the code in 42 seconds.')).toBeInTheDocument();
+    await expect(resend).toHaveAccessibleDescription('You can resend the code in 42 seconds.');
   },
 };
 
@@ -120,7 +120,7 @@ export const ResendWaiting: Story = {
 export const Resending: Story = {
   args: { isResending: true },
   play: async ({ canvas }) => {
-    await expect(canvas.getByRole('button', { name: /Sending a new code/ })).toBeInTheDocument();
+    await expect(canvas.getByRole('button', { name: /Resending code/ })).toBeInTheDocument();
   },
 };
 
@@ -154,7 +154,7 @@ export const Resent: Story = {
   play: async ({ args, canvas, userEvent }) => {
     const code = canvas.getByRole('textbox', { name: 'Code' });
     await expect(code).toHaveAttribute('aria-invalid', 'true');
-    await userEvent.click(canvas.getByRole('button', { name: 'Send a new code' }));
+    await userEvent.click(canvas.getByRole('button', { name: 'Resend code' }));
     await expect(args.onResend).toHaveBeenCalled();
     await waitFor(() => expect(code).toHaveFocus());
     await expect(code).not.toHaveAttribute('aria-invalid');
@@ -166,13 +166,13 @@ export const Resent: Story = {
 
 const LIMITED = 'Too many codes sent to this email.';
 
-/** The resend was refused: why shows under "Send a new code" and is announced; the boxes keep their own state, and the wait counts to the server's. */
+/** The resend was refused: why shows under "Resend code" and is announced; the boxes keep their own state, and the wait counts to the server's. */
 export const ResendRefused: Story = {
   args: { resendError: LIMITED, resendWait: 600 },
   play: async ({ canvas }) => {
     await expect(canvas.getByRole('alert')).toHaveTextContent(LIMITED);
     await expect(canvas.getByRole('textbox', { name: 'Code' })).not.toHaveAttribute('aria-invalid');
-    await expect(canvas.getByText('You can send another in 10 minutes.')).toBeInTheDocument();
+    await expect(canvas.getByText('You can resend the code in 10 minutes.')).toBeInTheDocument();
     await expect(canvas.getByRole('status')).not.toHaveTextContent('New code sent');
   },
 };
@@ -210,9 +210,9 @@ function ResendWith({ refusal, onResend }: { readonly refusal?: string; readonly
 export const ResentWaiting: Story = {
   render: (args) => <ResendWith onResend={args.onResend} />,
   play: async ({ canvas, userEvent }) => {
-    await userEvent.click(canvas.getByRole('button', { name: 'Send a new code' }));
+    await userEvent.click(canvas.getByRole('button', { name: 'Resend code' }));
     await waitFor(() => expect(canvas.getByRole('status')).toHaveTextContent('New code sent'));
-    await expect(canvas.getByText('New code sent. You can send another in 60 seconds.')).toBeInTheDocument();
+    await expect(canvas.getByText('New code sent. You can resend it in 60 seconds.')).toBeInTheDocument();
     await waitFor(() => expect(canvas.getByRole('textbox', { name: 'Code' })).toHaveFocus());
   },
 };
@@ -222,22 +222,22 @@ export const ResendRefusedAfterPress: Story = {
   parameters: { crm: { screenshot: false } },
   render: (args) => <ResendWith refusal={LIMITED} onResend={args.onResend} />,
   play: async ({ canvas, userEvent }) => {
-    await userEvent.click(canvas.getByRole('button', { name: 'Send a new code' }));
+    await userEvent.click(canvas.getByRole('button', { name: 'Resend code' }));
     await waitFor(() => expect(canvas.getByRole('alert')).toHaveTextContent(LIMITED));
     await expect(canvas.getByRole('status')).toBeEmptyDOMElement();
-    await expect(canvas.getByText('You can send another in 10 minutes.')).toBeInTheDocument();
+    await expect(canvas.getByText('You can resend the code in 10 minutes.')).toBeInTheDocument();
     await expect(canvas.getByRole('textbox', { name: 'Code' })).not.toHaveFocus();
   },
 };
 
-/** Too many wrong tries: the code can't be used, so the boxes are off and focus goes to "Send a new code". */
+/** Too many wrong tries: the code can't be used, so the boxes are off and focus goes to "Resend code". */
 export const CodeSpent: Story = {
   args: { isCodeSpent: true, error: 'Too many wrong tries for this code. Send a new one.' },
   play: async ({ canvas }) => {
     const code = canvas.getByRole('textbox', { name: 'Code' });
     await expect(code).toBeDisabled();
     await expect(code).toHaveAccessibleDescription(/Too many wrong tries for this code/);
-    await waitFor(() => expect(canvas.getByRole('button', { name: 'Send a new code' })).toHaveFocus());
+    await waitFor(() => expect(canvas.getByRole('button', { name: 'Resend code' })).toHaveFocus());
   },
 };
 
@@ -251,7 +251,7 @@ export const CodeSpentWaiting: Story = {
   args: { isCodeSpent: true, error: SPENT, resendWait: 42 },
   play: async ({ canvas }) => {
     await expect(canvas.getByRole('textbox', { name: 'Code' })).toBeDisabled();
-    await expect(canvas.getByRole('button', { name: 'Send a new code' })).toBeDisabled();
+    await expect(canvas.getByRole('button', { name: 'Resend code' })).toBeDisabled();
     // The message under the boxes, not the status line that announced it.
     const message = canvas.getByText(SPENT, { selector: '[tabindex="-1"]' });
     await waitFor(() => expect(message).toHaveFocus());
@@ -285,7 +285,7 @@ function SpentCountdown() {
   );
 }
 
-/** A spent code: focus waits on the message while the wait runs, then moves to "Send a new code" when it is ready. */
+/** A spent code: focus waits on the message while the wait runs, then moves to "Resend code" when it is ready. */
 export const CodeSpentThenReady: Story = {
   parameters: { crm: { screenshot: false } },
   render: () => <SpentCountdown />,
@@ -295,7 +295,7 @@ export const CodeSpentThenReady: Story = {
     await waitFor(() => expect(message).toHaveFocus());
     // Pressed from code, so focus stays on the message, as when the wait runs out by itself.
     canvas.getByRole('button', { name: 'End the wait' }).click();
-    await waitFor(() => expect(canvas.getByRole('button', { name: 'Send a new code' })).toHaveFocus());
+    await waitFor(() => expect(canvas.getByRole('button', { name: 'Resend code' })).toHaveFocus());
   },
 };
 
@@ -340,7 +340,7 @@ export const ResentThenPaused: Story = {
   play: async ({ args, canvas, userEvent }) => {
     const code = canvas.getByRole('textbox', { name: 'Code' });
     const pause = canvas.getByRole('button', { name: 'Pause verifying' });
-    await userEvent.click(canvas.getByRole('button', { name: 'Send a new code' }));
+    await userEvent.click(canvas.getByRole('button', { name: 'Resend code' }));
     await expect(args.onResend).toHaveBeenCalled();
     await waitFor(() => expect(code).toHaveFocus());
     await userEvent.click(pause);
@@ -359,8 +359,8 @@ export const Disabled: Story = {
   play: async ({ canvas }) => {
     const reason = 'Signing in is paused for a few minutes. Try again soon.';
     await expect(canvas.getByRole('textbox', { name: 'Code' })).toBeDisabled();
-    const resend = canvas.getByRole('button', { name: 'Send a new code' });
-    const back = canvas.getByRole('button', { name: 'Use another email' });
+    const resend = canvas.getByRole('button', { name: 'Resend code' });
+    const back = canvas.getByRole('button', { name: 'Use a different email' });
     await expect(resend).toBeDisabled();
     await expect(back).toBeDisabled();
     await expect(canvas.getByText(reason)).toBeVisible();

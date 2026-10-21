@@ -12,8 +12,8 @@ function duration(seconds: number): string {
 /** The sign in and verify screens' copy. */
 export const strings = {
   product: 'Timefix',
-  signInTitle: 'Sign in',
-  signInDescription: 'Enter your email to get a sign in code.',
+  /** One way in for both (spec 0036): the server decides whether it signs in or signs up. */
+  signInTitle: 'Sign in or sign up',
   verifyTitle: 'Check your email',
   failedTitle: 'Can’t reach Timefix',
   failedText: 'Check your connection, then try again.',
