@@ -395,9 +395,7 @@ export function createApp({
   );
 
   // It sees only the client IP the edge guard trusted.
-  app.on(['GET', 'POST'], '/auth/*', (c) =>
-    auth.handle(c.req.raw, c.get('clientIp'), c.get('origin'), c.get('geo')),
-  );
+  app.on(['GET', 'POST'], '/auth/*', (c) => auth.handle(c.req.raw, c.get('clientIp'), c.get('origin'), c.get('geo')));
 
   // Hosts' and signed in visitors' busy times, each kept for its minute.
   const bookingBusy = createBusyCache(booking.busy);

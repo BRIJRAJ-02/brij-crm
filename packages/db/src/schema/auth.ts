@@ -105,15 +105,14 @@ export const securityEvent = auth.table(
     ip: inet('ip'),
     country: text('country'),
     deviceLabel: text('device_label'),
-    detail: jsonb('detail').notNull().default(sql`'{}'::jsonb`),
+    detail: jsonb('detail')
+      .notNull()
+      .default(sql`'{}'::jsonb`),
   },
   (t) => [
     index('security_event_user_at').on(t.userId, t.at.desc()),
     foreignKey({ name: 'security_event_user_fk', columns: [t.userId], foreignColumns: [user.id] }).onDelete('cascade'),
-    check(
-      'security_event_kind',
-      sql.raw(`kind in (${SECURITY_EVENT_KINDS.map((kind) => `'${kind}'`).join(', ')})`),
-    ),
+    check('security_event_kind', sql.raw(`kind in (${SECURITY_EVENT_KINDS.map((kind) => `'${kind}'`).join(', ')})`)),
   ],
 );
 

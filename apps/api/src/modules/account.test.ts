@@ -212,7 +212,9 @@ describe('account.sessions', () => {
 
   it('refuses a cursor that isn’t one of ours, and answers 401 without a session', async () => {
     const cookie = await signInAs(newEmail(), {});
-    expect(await failure(() => rpcClient(app, cookie).account.sessions.list({ cursor: 'bm90IGEgY3Vyc29y' }))).toMatchObject({
+    expect(
+      await failure(() => rpcClient(app, cookie).account.sessions.list({ cursor: 'bm90IGEgY3Vyc29y' })),
+    ).toMatchObject({
       code: 'INPUT_INVALID',
     });
     expect(await failure(() => rpcClient(app).account.sessions.list())).toMatchObject({ code: 'UNAUTHENTICATED' });

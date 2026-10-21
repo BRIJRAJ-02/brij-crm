@@ -120,7 +120,10 @@ export interface IdentityStore {
    * `after` when given, at most `limit` (spec 0033, AC-890). Ids and labels
    * only: a token never leaves this store.
    */
-  listSessions(userId: string, options: { readonly after?: SessionKey; readonly limit: number }): Promise<readonly SessionListing[]>;
+  listSessions(
+    userId: string,
+    options: { readonly after?: SessionKey; readonly limit: number },
+  ): Promise<readonly SessionListing[]>;
   /**
    * Deletes the session with this id only when it is the user's (AC-891):
    * what it was on, or undefined when nothing of theirs had that id.
@@ -303,7 +306,7 @@ export function createIdentityStore(options: DatabaseOptions): IdentityStore {
         .from(session)
         .where(and(eq(session.id, sessionId), eq(session.userId, userId), sql`${session.expiresAt} > now()`))
         .limit(1);
-      return row?.verifiedAt == null ? undefined : row.verifiedAt.toISOString();
+      return row?.verifiedAt ? row.verifiedAt.toISOString() : undefined;
     },
 
     async recordSecurityEvent(event) {

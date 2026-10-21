@@ -46,7 +46,10 @@ function decodeCity(raw: string | null): string | undefined {
     return undefined;
   }
   // Letters, marks, spaces and the punctuation place names use; nothing that could draw on a page or in a log.
-  const cleaned = text.replace(/[^\p{L}\p{M}\p{N} .,'’()-]/gu, '').replace(/\s+/g, ' ').trim();
+  const cleaned = text
+    .replace(/[^\p{L}\p{M}\p{N} .,'’()-]/gu, '')
+    .replace(/\s+/g, ' ')
+    .trim();
   return cleaned === '' ? undefined : cleaned.slice(0, MAX_CITY);
 }
 

@@ -347,7 +347,10 @@ export function createAuth({ env, identity, mailer, analytics = NO_ANALYTICS, in
     try {
       await identity.recordSecurityEvent(event);
     } catch (error) {
-      log.error('Security event not kept', { kind: event.kind, error: error instanceof Error ? error.name : typeof error });
+      log.error('Security event not kept', {
+        kind: event.kind,
+        error: error instanceof Error ? error.name : typeof error,
+      });
       captureFault(error, { task: 'security event' });
     }
   }
@@ -414,7 +417,10 @@ export function createAuth({ env, identity, mailer, analytics = NO_ANALYTICS, in
           // is (spec 0033). The headers are the ones `handle` rebuilt, so the geo pair is the edge guard's or none.
           before: (session, context) => {
             const headers = context?.headers;
-            const geo = headers === undefined ? undefined : readGeo(headers.get(GEO_COUNTRY_HEADER), headers.get(GEO_CITY_HEADER));
+            const geo =
+              headers === undefined
+                ? undefined
+                : readGeo(headers.get(GEO_COUNTRY_HEADER), headers.get(GEO_CITY_HEADER));
             const agent = typeof session.userAgent === 'string' ? session.userAgent : undefined;
             return Promise.resolve({
               data: {
