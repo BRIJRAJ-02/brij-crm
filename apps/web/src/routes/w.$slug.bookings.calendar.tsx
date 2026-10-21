@@ -16,7 +16,7 @@ import { strings } from '../features/bookings/strings.ts';
 import { hostActions } from '../features/bookings/hostActions.ts';
 import { workingStartOf } from '../features/bookings/span.ts';
 import { addDays, weekRange } from '../features/bookings/week.ts';
-import { browserZone } from '../features/booking/hours.ts';
+import { browserZone } from '../features/booking/zone.ts';
 
 // Bookings › Calendar (spec 0025, AC-646): the week (`w`, its Monday; `d`, the day picked) with the reader's own
 // calendar events beside the bookings, filtered by `link` (one booking page) and `conn` (the calendars shown). The

@@ -43,7 +43,7 @@ import {
 } from '@crm/ui';
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
-import { browserZone } from '../booking/hours.ts';
+import { browserZone } from '../booking/zone.ts';
 import { availabilityHref } from '../booking/links.ts';
 import { linksHref } from '../captures/tabs.ts';
 import { recordLinks, type RecordLink } from '../records/timeline.ts';

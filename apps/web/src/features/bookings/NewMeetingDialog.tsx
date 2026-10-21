@@ -5,7 +5,8 @@
 import { isDataError, type BookingPageView } from '@crm/data';
 import { Button, Callout, Field, Form, Modal, Select, type FormRefusal } from '@crm/ui';
 import { useId, useState, useMemo } from 'react';
-import { browserZone, zoneItems, zoneMatches } from '../booking/hours.ts';
+import { zoneItems, zoneMatches } from '../booking/hours.ts';
+import { browserZone } from '../booking/zone.ts';
 import { instantOf, spanNames, type DrawnSpan } from './span.ts';
 import { SpanTimes } from './SpanTimes.tsx';
 import { strings } from './strings.ts';
