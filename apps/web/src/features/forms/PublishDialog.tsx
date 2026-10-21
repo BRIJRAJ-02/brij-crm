@@ -371,8 +371,14 @@ export function PublishDialog(props: PublishDialogProps) {
             copyLabel={strings.copyEmbed}
             value={embedSnippet(
               data.forms.embedUrl(),
-              live?.publicKey ?? address,
-              live?.draft.headline ?? draft.headline,
+              {
+                kind: 'form',
+                publicKey: live?.publicKey ?? address,
+                title: live?.draft.headline ?? draft.headline,
+                theme: (live?.draft ?? draft).look.colour,
+                buttonText: (live?.draft ?? draft).buttonText,
+              },
+              'inline',
             )}
           />
           <p>{strings.ownFormLater}</p>

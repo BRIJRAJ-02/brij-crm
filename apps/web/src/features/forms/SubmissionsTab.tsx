@@ -39,6 +39,7 @@ import { useNavigate, useRouter, useRouteContext } from '@tanstack/react-router'
 import { useState } from 'react';
 import { createPortal } from 'react-dom';
 import { recordLinks } from '../records/timeline.ts';
+import { cameFromOf } from './came-from.ts';
 import { formHref } from './paths.ts';
 import { strings } from './strings.ts';
 import { SyncDialog } from './SyncDialog.tsx';
@@ -675,7 +676,7 @@ function SubmissionDetail({
   readonly link: ReturnType<typeof recordLinks>;
   readonly isFiling: boolean;
 }) {
-  const source = Object.entries(submission.hidden).map(([term, description]) => ({ term, description }));
+  const source = cameFromOf(submission);
   return (
     <>
       {submission.failure !== undefined && (
@@ -700,7 +701,7 @@ function SubmissionDetail({
       {source.length > 0 && (
         <>
           <h3>{strings.cameFrom}</h3>
-          <DescriptionList items={source} />
+          <DescriptionList items={[...source]} />
         </>
       )}
       {submission.records.length > 0 && (

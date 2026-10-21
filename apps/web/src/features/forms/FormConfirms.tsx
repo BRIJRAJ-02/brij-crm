@@ -1,6 +1,6 @@
 // Brief
 // Purpose: the confirms before a form ends something (the owner's rule, 21 October 2026): Delete, which can't be
-// taken back, and Pause, which takes it offline until it is resumed.
+// taken back, Pause, which takes it offline until it is resumed, and Rotate secret, which stops the old one at once.
 // Main task: read the question and the one line on what happens, then Cancel, or the verb (Delete form, Pause form).
 // Leaves out: Resume and turning a form on, which end nothing and stay one click.
 import { isDataError, type DataLayer } from '@crm/data';
@@ -124,6 +124,39 @@ export function PauseFormDialog({ data, slug, form, onClose, onDone }: FormConfi
     >
       {failure !== undefined && <Callout tone="danger">{failure}</Callout>}
       <p>{strings.pauseText}</p>
+    </Modal>
+  );
+}
+
+/** What the server answers a new secret. */
+type Rotated = Awaited<ReturnType<DataLayer['forms']['rotateSecret']>>;
+
+/** "Rotate the signing secret?": a danger confirm (the old secret stops at once), Cancel (ESC) then Rotate secret. */
+export function RotateSecretDialog({ data, slug, form, onClose, onDone }: FormConfirmProps<Rotated>) {
+  const { shown, isBusy, failure, commit } = useCommit(form, (each) => data.forms.rotateSecret(slug, each.id), onDone);
+  if (shown === undefined) return null;
+  return (
+    <Modal
+      title={strings.secretRotateTitle}
+      tone="danger"
+      isOpen={form !== undefined}
+      isBusy={isBusy}
+      onOpenChange={(isOpen) => {
+        if (!isOpen && !isBusy) onClose();
+      }}
+      actions={
+        <>
+          <Button slot="close" isDisabled={isBusy} kbd="ESC">
+            {strings.cancel}
+          </Button>
+          <Button variant="danger-solid" icon="refresh-cw" isPending={isBusy} onPress={commit}>
+            {strings.secretRotateAction}
+          </Button>
+        </>
+      }
+    >
+      {failure !== undefined && <Callout tone="danger">{failure}</Callout>}
+      <p>{strings.secretRotateText}</p>
     </Modal>
   );
 }
