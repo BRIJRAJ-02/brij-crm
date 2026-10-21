@@ -32,6 +32,7 @@ import {
   objectHref,
   settingsHomeHref,
   tasksHref,
+  homeHref,
   trashHref,
   workspaceHref,
 } from './objects.ts';
@@ -41,7 +42,7 @@ import { SETTINGS_KEYS, UNDO_KEYS } from './undo.ts';
 import { useUndoShortcut } from './useUndoShortcut.ts';
 
 /** A page the sidebar lists that isn't an object's. */
-export type SidebarPage = 'tasks' | 'bookings' | 'captures' | 'trash';
+export type SidebarPage = 'home' | 'tasks' | 'bookings' | 'captures' | 'trash';
 
 /** Inside Settings (spec 0026): the settings sidebar's current page and the way back out. */
 export interface SettingsSidebar {
@@ -224,6 +225,9 @@ export function WorkspaceFrame({
             {/* My tasks above the Records section, for every member (spec 0019, AC-436). */}
             {!isMissing && (
               <NavGroup label={strings.personal}>
+                <NavItem icon="house" href={homeHref(slug)} isCurrent={currentPage === 'home'}>
+                  {strings.home}
+                </NavItem>
                 <NavItem icon="square-check" href={tasksHref(slug)} isCurrent={currentPage === 'tasks'}>
                   {strings.myTasks}
                 </NavItem>

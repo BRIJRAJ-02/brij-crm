@@ -32,6 +32,7 @@ export const strings = {
   destinations: 'Workspace pages',
   /** The sidebar group above Records holding My tasks (spec 0019). */
   personal: 'Your work',
+  home: 'Home',
   myTasks: 'My tasks',
   /** The workspace menu's way into settings (spec 0012), above Sign out. */
   settings: 'Settings',
