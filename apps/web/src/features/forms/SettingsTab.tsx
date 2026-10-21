@@ -1,10 +1,10 @@
 // Brief
 // Purpose: a form's Settings tab (spec 0023), for someone setting up a form in under a minute: what people see after
-// sending, whether and where submissions go in the CRM, the form's words, its name and address, and spam protection.
+// sending, whether and where submissions go in the CRM, the form's words, its details (name, link, owner) and spam.
 // Main task: scan the groups, change only what needs changing (the defaults already work), and save the name,
 // address and owner from the SaveBar; the rest goes live on Publish, which the header's state says once (not each card).
 // Leaves out: email notifications (no backend yet), each question's filing (set on the question, linked from here),
-// and the look (beside the preview).
+// and the look (on the Form tab, beside the preview, the only tab that has one).
 import type {
   BookingPageView,
   FormDocument,
@@ -15,13 +15,13 @@ import type {
 } from '@crm/data';
 import { useCaptureList } from '@crm/data/react';
 import {
+  ButtonLink,
   Card,
+  EmptyState,
   Field,
-  InfoTip,
   Link,
-  Radio,
-  RadioGroup,
   SaveBar,
+  SegmentedControl,
   Select,
   Switch,
   Table,
@@ -163,7 +163,7 @@ export interface SettingsTabProps {
   readonly showGaps: boolean;
 }
 
-/** The groups, as Cards with a one line summary each, set two abreast where there is room. */
+/** The groups, as short Cards in one full width column, with no subtitles. */
 export function SettingsTab({
   slug,
   form,
@@ -206,7 +206,28 @@ export function SettingsTab({
   const buttonError =
     !isReadOnly && (left.button || showGaps) && draft.buttonText.trim() === '' ? strings.buttonTextMissing : undefined;
 
+  // Booking is always a choice: with no live page to send visitors to, it shows the picker's empty state (create
+  // one) and the draft keeps its follow up until a page can be picked.
+  const [isBookingPending, setBookingPending] = useState(false);
+  const shownKind: AfterKind = isBookingPending ? 'booking' : draft.after.kind;
+  // A live page arriving while Booking waits (the list loading, a teammate turning one on) swaps the empty state
+  // for the picker; picking a page completes the choice.
+  const pickPending = (pageId: string) => {
+    setBookingPending(false);
+    onDraftChange((before) => ({
+      ...before,
+      after: {
+        kind: 'booking',
+        bookingPageId: pageId,
+        countdownSeconds: kept.countdownSeconds,
+        message: before.after.kind === 'redirect' ? kept.message : before.after.message,
+      },
+    }));
+  };
+
   const choose = (next: AfterKind) => {
+    if (next === shownKind) return;
+    setBookingPending(false);
     if (next === after.kind) return;
     setLeft((before) => ({ ...before, address: false }));
     // Keep what the other choice held, then bring back what this one held.
@@ -224,7 +245,10 @@ export function SettingsTab({
     );
     // On to book takes the page it last had while it can still be used, else the first that can.
     const pageId = usable.some((page) => page.id === kept.bookingPageId) ? kept.bookingPageId : usable[0]?.id;
-    if (next === 'booking' && pageId === undefined) return;
+    if (next === 'booking' && pageId === undefined) {
+      setBookingPending(true);
+      return;
+    }
     // The thank you and on to book share their words: the ones on screen carry over.
     const message = after.kind === 'redirect' ? kept.message : after.message;
     onDraftChange((before) => ({
@@ -263,32 +287,55 @@ export function SettingsTab({
 
   return (
     <>
-      <Card title={strings.afterTitle} actions={<InfoTip label={strings.afterTitle}>{strings.afterTip}</InfoTip>}>
-        <RadioGroup
+      <Card title={strings.afterTitle}>
+        <SegmentedControl
           label={strings.afterChoice}
-          isLabelHidden
-          orientation="horizontal"
-          value={after.kind}
+          size="compact"
+          segments={[
+            { value: 'message', label: strings.showMessage },
+            { value: 'redirect', label: strings.sendToAddress },
+            { value: 'booking', label: strings.bookMeeting },
+          ]}
+          value={shownKind}
           isReadOnly={isReadOnly}
           onChange={(value) => {
             if (value === 'message' || value === 'redirect' || value === 'booking') choose(value);
           }}
-        >
-          <Radio value="message">{strings.showMessage}</Radio>
-          <Radio value="redirect">{strings.sendToAddress}</Radio>
-          <Radio
-            value="booking"
-            // Without a live page of their own to send visitors to, the choice says why it can't be picked.
-            isDisabled={after.kind !== 'booking' && usable.length === 0}
-            {...(after.kind !== 'booking' && usable.length === 0
-              ? { description: pages.status === 'error' ? strings.bookingPagesFailed : strings.noBookingPages }
+        />
+        {isBookingPending && usable.length > 0 && (
+          <Select
+            label={strings.bookingPage}
+            placeholder={strings.pickBookingPage}
+            items={usable.map((page) => ({
+              id: page.id,
+              label: strings.pageItem(page.title, page.durations[0] ?? 30),
+            }))}
+            value={null}
+            isReadOnly={isReadOnly}
+            onChange={(id) => {
+              if (id !== null) pickPending(id);
+            }}
+          />
+        )}
+        {isBookingPending && usable.length === 0 && (
+          <EmptyState
+            layout="row"
+            {...(pages.status === 'error' ? { tone: 'error' as const } : { icon: 'link' as const })}
+            isLoading={pages.status === 'loading'}
+            title={pages.status === 'error' ? strings.bookingPagesFailed : strings.noBookingPages}
+            {...(pages.status === 'ready'
+              ? {
+                  actions: (
+                    <ButtonLink href={linksHref(slug)} variant="secondary">
+                      {strings.createBookingPage}
+                    </ButtonLink>
+                  ),
+                }
               : {})}
           >
-            {strings.bookMeeting}
-          </Radio>
-        </RadioGroup>
-        {after.kind !== 'booking' && usable.length === 0 && pages.status === 'ready' && !isReadOnly && (
-          <Link href={linksHref(slug)}>{strings.createBookingPage}</Link>
+            {/* Until a page can be picked, the form keeps doing what it did: said, so nobody leaves thinking otherwise. */}
+            {after.kind === 'redirect' ? strings.keepsWebPage : strings.keepsMessage}
+          </EmptyState>
         )}
         {after.kind === 'booking' && (
           <>
@@ -324,7 +371,6 @@ export function SettingsTab({
             />
             <Select
               label={strings.countdown}
-              hint={strings.bookingPreview(after.countdownSeconds)}
               items={COUNTDOWNS.map((seconds) => ({
                 id: String(seconds),
                 label: seconds === 0 ? strings.countdownAtOnce : strings.countdownAfter(seconds),
@@ -343,7 +389,7 @@ export function SettingsTab({
             />
           </>
         )}
-        {after.kind === 'redirect' ? (
+        {isBookingPending ? null : after.kind === 'redirect' ? (
           <Field
             label={strings.redirectUrl}
             {...(redirectError === undefined ? {} : { error: redirectError })}
@@ -363,7 +409,6 @@ export function SettingsTab({
           <Field
             label={strings.thankYou}
             placeholder={strings.thankYouDefault}
-            {...(after.kind === 'booking' ? { hint: strings.bookingThankYouHint(after.countdownSeconds) } : {})}
             isMultiline
             showCounter
             value={after.message}
@@ -457,7 +502,7 @@ export function SettingsTab({
           }}
         />
       </Card>
-      <Card title={isFiling ? strings.nameAndAddress : strings.nameAndLink}>
+      <Card title={strings.detailsTitle}>
         <Field
           label={strings.name}
           hint={strings.nameHint}
@@ -504,8 +549,15 @@ export function SettingsTab({
           />
         )}
       </Card>
-      <Card title={strings.spamTitle} description={strings.spamSummary}>
-        <Link href={`${formHref(slug, form.id, 'submissions')}&state=needs_review`}>{strings.spamReview}</Link>
+      <Card
+        title={strings.spamTitle}
+        actions={
+          <ButtonLink href={`${formHref(slug, form.id, 'submissions')}&state=needs_review`} variant="secondary">
+            {strings.spamReview}
+          </ButtonLink>
+        }
+      >
+        {strings.spamSummary}
       </Card>
     </>
   );
