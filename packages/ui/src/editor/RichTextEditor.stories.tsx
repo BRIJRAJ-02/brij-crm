@@ -1,6 +1,8 @@
 import { RichTextDocBody, type ActorDisplay, type RichTextDoc } from '@crm/contracts/values';
 import type { Meta, StoryObj } from '@storybook/react-vite';
+import { useEffect, useRef, useState } from 'react';
 import { expect, fn, waitFor } from 'storybook/test';
+import { Button } from '../atoms/Button/Button.tsx';
 import { SAMPLE_MEMBERS } from '../workbench/field-samples.ts';
 import { Stage } from '../workbench/Stage/Stage.tsx';
 import { NoteEditor, type NoteEditorProps } from './NoteEditor.tsx';
@@ -104,6 +106,31 @@ function selectText(element: Element) {
   selection?.addRange(range);
 }
 
+/** The editor in a stage that counts the Esc presses reaching what holds it, beside a button to move focus to. */
+function EscapeWatch(args: NoteEditorProps) {
+  const [escapes, setEscapes] = useState(0);
+  const holder = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const element = holder.current;
+    const count = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') setEscapes((before) => before + 1);
+    };
+    element?.addEventListener('keydown', count);
+    return () => {
+      element?.removeEventListener('keydown', count);
+    };
+  }, []);
+  return (
+    <Stage direction="column" width="fill">
+      <div ref={holder}>
+        <NoteEditor {...args} />
+      </div>
+      <Button>Elsewhere</Button>
+      <output data-testid="escapes">{escapes}</output>
+    </Stage>
+  );
+}
+
 /** The last document `onChange` heard. */
 function lastDoc(onChange: unknown): unknown {
   const calls = (onChange as { mock: { calls: unknown[][] } }).mock.calls;
@@ -131,8 +158,10 @@ export const Empty: Story = {
     await expect(text).toHaveAccessibleName('Note');
     await expect(text.querySelector('[data-placeholder]')).toHaveAttribute(
       'data-placeholder',
-      'Write a note. Type @ to mention someone.',
+      'Write something, press / for commands, or @ to mention someone',
     );
+    // A page, not a form: no box around the text.
+    await expect(getComputedStyle(text).borderStyle).toBe('none');
     await userEvent.click(text);
     await userEvent.keyboard('Call notes');
     await waitFor(() => expect(args.onChange).toHaveBeenCalled());
@@ -154,7 +183,7 @@ export const EveryPart: Story = {
   },
 };
 
-/** Selecting text raises the format toolbar; Bold makes the selection bold. */
+/** Selecting text raises the format toolbar, which holds the marks and Link only; Bold makes the selection bold. */
 export const FormatToolbar: Story = {
   args: {
     defaultValue: { type: 'doc', content: [{ type: 'paragraph', content: [{ type: 'text', text: 'Ship it' }] }] },
@@ -167,7 +196,10 @@ export const FormatToolbar: Story = {
     if (paragraph === null) throw new Error('No paragraph.');
     selectText(paragraph);
     const bold = await canvas.findByRole('button', { name: 'Bold' });
-    await waitFor(() => expect(canvas.getByRole('toolbar', { name: 'Formatting' })).toBeVisible());
+    const toolbar = canvas.getByRole('toolbar', { name: 'Formatting' });
+    await waitFor(() => expect(toolbar).toBeVisible());
+    const names = [...toolbar.querySelectorAll('button')].map((button) => button.getAttribute('aria-label'));
+    await expect(names).toEqual(['Bold', 'Italic', 'Strikethrough', 'Code', 'Highlight', 'Link']);
     await userEvent.click(bold);
     await waitFor(() => expect(text.querySelector('strong')).toHaveTextContent('Ship it'));
     await waitFor(() => expect(JSON.stringify(lastDoc(args.onChange))).toContain('"bold"'));
@@ -270,6 +302,159 @@ export const Paste: Story = {
     await expect(text.querySelectorAll('[href]')).toHaveLength(1);
     await waitFor(() => expect(RichTextDocBody.safeParse(lastDoc(args.onChange)).success).toBe(true));
     await expect(JSON.stringify(lastDoc(args.onChange))).not.toContain('javascript');
+  },
+};
+
+/** The open slash menu (spec 0019, 21 October 2026): every block, its markdown at the row's end, the first highlighted. */
+export const SlashMenuOpen: Story = {
+  play: async ({ userEvent }) => {
+    const text = editable();
+    await userEvent.click(text);
+    await userEvent.keyboard('/');
+    const list = await waitFor(() => {
+      const found = document.querySelector('[role="listbox"]');
+      if (found === null) throw new Error('No menu yet.');
+      return found;
+    });
+    await expect(list).toHaveAccessibleName('Blocks');
+    const rows = [...list.querySelectorAll('[role="option"]')];
+    await expect(rows.map((row) => row.textContent)).toEqual([
+      'Text',
+      'Heading 1#',
+      'Heading 2##',
+      'Heading 3###',
+      'Bulleted list-',
+      'Numbered list1.',
+      'To do list[]',
+      'Quote>',
+      'Divider---',
+      'Code block```',
+    ]);
+    await expect(rows[0]).toHaveAttribute('aria-selected', 'true');
+    await expect(text).toHaveAttribute('aria-controls', list.id);
+    await expect(text).toHaveAttribute('aria-activedescendant', rows[0]?.id);
+    // A bare "/" says what to do next.
+    await expect(text.querySelector('[data-decoration-content]')).toHaveAttribute(
+      'data-decoration-content',
+      'Type to filter',
+    );
+  },
+};
+
+/** Typing after "/" filters the blocks; the arrows move, Enter turns the line into the block and the menu closes. */
+export const SlashMenuPick: Story = {
+  parameters: { crm: { screenshot: false } },
+  play: async ({ args, userEvent }) => {
+    const text = editable();
+    await userEvent.click(text);
+    await userEvent.keyboard('Next steps /head');
+    const list = await waitFor(() => {
+      const found = document.querySelector('[role="listbox"]');
+      if (found === null) throw new Error('No menu yet.');
+      return found;
+    });
+    await waitFor(() => expect(list.querySelectorAll('[role="option"]')).toHaveLength(3));
+    await userEvent.keyboard('{ArrowDown}');
+    await waitFor(() =>
+      expect(document.querySelector('[role="option"][aria-selected="true"]')).toHaveTextContent('Heading 2'),
+    );
+    await userEvent.keyboard('{Enter}');
+    await waitFor(() => expect(document.querySelector('[role="listbox"]')).toBeNull());
+    await expect(text.querySelector('h2')).toHaveTextContent('Next steps');
+    await expect(text).not.toHaveTextContent('/head');
+    await expect(text).not.toHaveAttribute('aria-controls');
+    await waitFor(() => expect(JSON.stringify(lastDoc(args.onChange))).toContain('"level":2'));
+  },
+};
+
+/** Each block from the menu: a to do list, a divider and a code block; a query matching nothing says so. */
+export const SlashMenuBlocks: Story = {
+  parameters: { crm: { screenshot: false } },
+  play: async ({ userEvent }) => {
+    const text = editable();
+    await userEvent.click(text);
+    await userEvent.keyboard('/todo');
+    await waitFor(() => expect(document.querySelectorAll('[role="option"]')).toHaveLength(1));
+    await userEvent.keyboard('{Enter}');
+    await waitFor(() => expect(text.querySelector('ul[data-type="taskList"]')).not.toBeNull());
+    await userEvent.keyboard('Send the deck{Enter}{Enter}/divider{Enter}');
+    await waitFor(() => expect(text.querySelector('hr')).not.toBeNull());
+    await userEvent.keyboard('/code{Enter}');
+    await waitFor(() => expect(text.querySelector('pre')).not.toBeNull());
+    // In code "/" is a character: no menu.
+    await userEvent.keyboard('a /b');
+    await expect(document.querySelector('[role="listbox"]')).toBeNull();
+    await userEvent.keyboard('{Enter}{Enter}{Enter}/zzz');
+    // Nothing matching: no empty listbox, but a polite word on why.
+    await waitFor(() =>
+      expect(document.querySelector('[role="status"][aria-label="Blocks"]')).toHaveTextContent('No block matches'),
+    );
+    await expect(document.querySelector('[role="listbox"]')).toBeNull();
+  },
+};
+
+/** Esc closes the slash menu and leaves the "/" as typed; whatever holds the editor never hears that Esc. */
+export const SlashMenuEscape: Story = {
+  parameters: { crm: { screenshot: false } },
+  render: (args: NoteEditorProps) => <EscapeWatch {...args} />,
+  play: async ({ canvas, userEvent }) => {
+    const text = editable();
+    await userEvent.click(text);
+    await userEvent.keyboard('/');
+    await waitFor(() => expect(document.querySelector('[role="listbox"]')).not.toBeNull());
+    await userEvent.keyboard('{Escape}');
+    await waitFor(() => expect(document.querySelector('[role="listbox"]')).toBeNull());
+    await expect(text).toHaveTextContent('/');
+    await expect(canvas.getByTestId('escapes')).toHaveTextContent('0');
+    // Leaving the text closes an open menu too.
+    await userEvent.keyboard(' /');
+    await waitFor(() => expect(document.querySelector('[role="listbox"]')).not.toBeNull());
+    await userEvent.click(canvas.getByRole('button', { name: 'Elsewhere' }));
+    await waitFor(() => expect(document.querySelector('[role="listbox"]')).toBeNull());
+  },
+};
+
+/** Esc over a selection closes the format toolbar first, so the holder's Esc comes only with the next press. */
+export const EscapeSelection: Story = {
+  args: {
+    defaultValue: { type: 'doc', content: [{ type: 'paragraph', content: [{ type: 'text', text: 'Ship it' }] }] },
+  },
+  parameters: { crm: { screenshot: false } },
+  render: (args: NoteEditorProps) => <EscapeWatch {...args} />,
+  play: async ({ canvas, userEvent }) => {
+    const text = editable();
+    await userEvent.click(text);
+    const paragraph = text.querySelector('p');
+    if (paragraph === null) throw new Error('No paragraph.');
+    selectText(paragraph);
+    await waitFor(() => expect(canvas.getByRole('toolbar', { name: 'Formatting' })).toBeVisible());
+    await userEvent.keyboard('{Escape}');
+    await waitFor(() => expect(canvas.queryByRole('toolbar', { name: 'Formatting' })).toBeNull());
+    await expect(canvas.getByTestId('escapes')).toHaveTextContent('0');
+    await userEvent.keyboard('{Escape}');
+    await expect(canvas.getByTestId('escapes')).toHaveTextContent('1');
+  },
+};
+
+/** The markdown shortcuts make blocks as they are typed: a heading, a list, a numbered list, a to do, a quote and code. */
+export const MarkdownShortcuts: Story = {
+  parameters: { crm: { screenshot: false } },
+  play: async ({ userEvent }) => {
+    const text = editable();
+    await userEvent.click(text);
+    await userEvent.keyboard('# Plan{Enter}');
+    await userEvent.keyboard('- One{Enter}{Enter}');
+    await userEvent.keyboard('1. First{Enter}{Enter}');
+    // "[[" types one "[" (user-event reads a single one as a key's code).
+    await userEvent.keyboard('[[] Call back{Enter}{Enter}');
+    await userEvent.keyboard('> Said yes{Enter}{Enter}');
+    await userEvent.keyboard('``` ');
+    await waitFor(() => expect(text.querySelector('pre')).not.toBeNull());
+    await expect(text.querySelector('h1')).toHaveTextContent('Plan');
+    await expect(text.querySelector('ul:not([data-type])')).toHaveTextContent('One');
+    await expect(text.querySelector('ol')).toHaveTextContent('First');
+    await expect(text.querySelector('ul[data-type="taskList"]')).toHaveTextContent('Call back');
+    await expect(text.querySelector('blockquote')).toHaveTextContent('Said yes');
   },
 };
 

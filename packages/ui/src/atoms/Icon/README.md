@@ -25,7 +25,7 @@ Add one import and one line to `icons.ts`, under its lucide.dev name. With the s
 
 ## Scoped sets
 
-Every page loads the registry, so an icon that only a lazy part of the library draws goes in that part's scoped set instead, and loads with its chunk. `editor-icons.ts` holds the note editor's toolbar icons (bold, italic, strikethrough, highlighter, both headings, the ordered list and the quote). The part wraps itself in `IconScope`, and the Icons inside draw from the registry and the set:
+Every page loads the registry, so an icon that only a lazy part of the library draws goes in that part's scoped set instead, and loads with its chunk. `editor-icons.ts` holds the note editor's own icons: the format toolbar's (bold, italic, strikethrough, highlighter) and the slash menu's (the three headings, the ordered list, the quote and the code block). The part wraps itself in `IconScope`, and the Icons inside draw from the registry and the set:
 
 ```tsx
 <IconScope icons={editorIcons}>
