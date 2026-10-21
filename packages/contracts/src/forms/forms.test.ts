@@ -135,6 +135,19 @@ describe('FormDocument and publishProblem (AC-655)', () => {
     ).toBe(false);
   });
 
+  it('keeps submissions only with no target: no email needed to publish, and no answer may be filed', () => {
+    const kept = FormDocument.parse({ questions: defaultQuestions({}), targets: {} });
+    expect(kept.targets.main).toBeUndefined();
+    expect(check({ document: kept, attributes: new Map() })).toBeUndefined();
+    const withoutEmail = { ...kept, questions: kept.questions.filter((question) => question.key !== 'email') };
+    expect(check({ document: withoutEmail, attributes: new Map() })).toBeUndefined();
+    const filed = FormDocument.safeParse({ questions: defaultQuestions({ emailAttributeId: EMAIL }), targets: {} });
+    expect(filed.success).toBe(false);
+    expect(filed.error?.issues[0]?.message).toBe(
+      'A form that keeps submissions only files no answers. Add submissions to the CRM first.',
+    );
+  });
+
   it('passes a good draft, and names the first problem otherwise', () => {
     expect(check({})).toBeUndefined();
     expect(check({ name: ' ' })).toBe('Give the form a name.');

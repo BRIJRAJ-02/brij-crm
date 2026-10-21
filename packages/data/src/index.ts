@@ -597,7 +597,7 @@ function toFormSummary(form: FormView): FormSummary {
     id: form.id,
     name: form.name,
     status: form.status,
-    mainObjectId: form.mainObjectId,
+    ...(form.mainObjectId === undefined ? {} : { mainObjectId: form.mainObjectId }),
     publicKey: form.publicKey,
     ...(form.liveVersionNumber === undefined ? {} : { liveVersionNumber: form.liveVersionNumber }),
     submissionsThisMonth: form.submissionsThisMonth,
@@ -3046,7 +3046,8 @@ export function createDataLayer({
       /** Creates an untitled form at once (AC-649), waiting for the server (`forms.manage`). */
       create: (
         workspace: string,
-        form: { readonly id: string; readonly name?: string; readonly mainObjectId?: string },
+        // `mainObjectId: null` keeps its submissions only, adding nothing to the CRM.
+        form: { readonly id: string; readonly name?: string; readonly mainObjectId?: string | null },
       ) =>
         formLists.write(workspace, {
           send: () => call((options) => api.forms.create({ workspace, ...form, mutationId: mintId() }, options)),
@@ -3114,8 +3115,11 @@ export function createDataLayer({
           ...shownPatch(formLists.items(workspace), formId, (form) => ({ ...form, status })),
           land: landForm(formId),
         }),
-      /** Points a never published form at another object. */
-      setTarget: (workspace: string, formId: string, mainObjectId: string, expectedRevision: number) =>
+      /**
+       * Points a form's draft at another object, or at none (`null`: keep its submissions only); on a published
+       * form it goes live with the next publish.
+       */
+      setTarget: (workspace: string, formId: string, mainObjectId: string | null, expectedRevision: number) =>
         formLists.write(workspace, {
           send: () =>
             call((options) =>
@@ -3138,7 +3142,7 @@ export function createDataLayer({
                 id,
                 name: `${source.name} copy`.slice(0, 80),
                 status: 'draft',
-                mainObjectId: source.mainObjectId,
+                ...(source.mainObjectId === undefined ? {} : { mainObjectId: source.mainObjectId }),
                 publicKey: '',
                 submissionsThisMonth: 0,
                 spamCount: 0,

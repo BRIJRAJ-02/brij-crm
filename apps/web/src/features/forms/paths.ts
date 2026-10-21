@@ -17,3 +17,7 @@ export const formHref = (slug: string, formId: string, tab: FormTab = 'form', su
 
 /** A draft opened in a new tab to try, marked "Preview, not live". */
 export const formPreviewHref = (slug: string, formId: string) => `/w/${slug}/captures/forms/${formId}/preview`;
+
+/** One form's Form tab with one question open and in view: Settings' map of where answers go links each line here. */
+export const questionHref = (slug: string, formId: string, questionId: string) =>
+  `/w/${slug}/captures/forms/${formId}?question=${encodeURIComponent(questionId)}`;

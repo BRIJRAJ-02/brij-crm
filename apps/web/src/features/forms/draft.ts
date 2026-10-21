@@ -194,7 +194,7 @@ export function filedLine(
 
 /** Whether `question` is the email question the form matches people by: it can't be deleted. */
 export function isMatchQuestion(document: FormDocument, question: FormQuestion): boolean {
-  const match = document.targets.main.matchAttributeId;
+  const match = document.targets.main?.matchAttributeId;
   return match !== undefined && question.answerType === 'email' && question.filedOn?.attributeId === match;
 }
 
@@ -232,7 +232,7 @@ export function publishAttributesOf(target: FormTargetChoices): ReadonlyMap<stri
         id: item.attributeId,
         title: item.title,
         type: item.type,
-        objectName: target.objectName,
+        objectName: target.objectName ?? '',
         canWrite: item.canWrite,
       },
     ]),

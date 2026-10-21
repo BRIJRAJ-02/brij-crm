@@ -36,7 +36,7 @@ import {
 import { useNavigate, useRouteContext, useRouter } from '@tanstack/react-router';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useCan, WorkspacePage } from '../workspace/WorkspacePage.tsx';
-import { publishAttributesOf, sameDocument, statusOf } from './draft.ts';
+import { fileByLabel, publishAttributesOf, sameDocument, statusOf } from './draft.ts';
 import { InstallTab } from './InstallTab.tsx';
 import { formHref, formPreviewHref, formsHref, FORM_TABS, type FormTab } from './paths.ts';
 import { PublishDialog } from './PublishDialog.tsx';
@@ -60,6 +60,8 @@ export interface FormEditorProps {
   readonly submissions: SubmissionPage | undefined;
   readonly state: SubmissionState | undefined;
   readonly openSubmission: SubmissionView | undefined;
+  /** On the Form tab, the question to open and bring into view. */
+  readonly question?: string;
 }
 
 /** A document's mapping, as one comparable string: the target, its match, and where each question files. */
@@ -98,7 +100,9 @@ export function FormEditor(props: FormEditorProps) {
   const [isDeleting, setDeleting] = useState(false);
   // Publish leaves once there is nothing more to publish; focus then moves to the menu beside it.
   const moreRef = useRef<HTMLButtonElement>(null);
-  const [isOfferingSync, setOfferingSync] = useState(false);
+  // After a publish that changed where answers go: offer to file the submissions before it the same way.
+  const [syncOffer, setSyncOffer] = useState<'published' | 'connected' | undefined>(undefined);
+  const [isRetargeting, setRetargeting] = useState(false);
   const jobs = useJobFollower(data.jobs.view(slug, 'mine'));
   // The end of the tab strip, where a tab draws its own tools (Submissions' filter and search).
   const [toolbarSlot, setToolbarSlot] = useState<HTMLElement | null>(null);
@@ -225,11 +229,13 @@ export function FormEditor(props: FormEditorProps) {
         (view) => {
           setPublishing(false);
           const filingChanged = form.live !== undefined && filingOf(form.live) !== filingOf(view.live);
+          const wasKeptOnly = form.live?.targets.main === undefined;
           apply(view);
           toasts.toast({ tone: 'success', message: strings.published(view.liveVersionNumber ?? 1) });
-          // Where answers are filed changed: offer to file the enquiries that came before the same way.
-          if (filingChanged && view.submissionCount > 0) setOfferingSync(true);
-          else focusLater(() => moreRef.current);
+          // Where answers are filed changed, and the form files now: offer to file the earlier submissions the same way.
+          if (filingChanged && view.live?.targets.main !== undefined && view.submissionCount > 0) {
+            setSyncOffer(wasKeptOnly ? 'connected' : 'published');
+          } else focusLater(() => moreRef.current);
         },
         (error: unknown) => {
           setPublishing(false);
@@ -250,6 +256,32 @@ export function FormEditor(props: FormEditorProps) {
           });
         },
       );
+  };
+
+  // Settings' Add each submission to the CRM: the draft points at an object (its starting questions filed by the
+  // server, the rest by label) or at none. Saved first, so the change names the revision it starts from.
+  const retarget = (objectId: string | null) => {
+    if (isRetargeting) return;
+    setRetargeting(true);
+    flush()
+      .then((revision) => data.forms.setTarget(slug, form.id, objectId, revision))
+      .then(async (view) => {
+        const choices = await data.forms.attributes(slug, form.id);
+        apply(view);
+        const next = objectId === null ? view.draft : fileByLabel(view.draft, choices.items);
+        setDraft(next);
+        latest.current = next;
+        setTarget(choices);
+        setRetargeting(false);
+      })
+      .catch((error: unknown) => {
+        setRetargeting(false);
+        if (isDataError(error) && error.code === 'FORM_CHANGED') {
+          setConflict(true);
+          return;
+        }
+        toasts.toast({ tone: 'danger', message: `${strings.retargetFailed} ${firstRefusal(error).message}` });
+      });
   };
 
   const setStatus = (next: 'live' | 'paused') => {
@@ -384,10 +416,13 @@ export function FormEditor(props: FormEditorProps) {
             form={form}
             draft={draft}
             target={target}
+            objects={objects}
             members={members}
             isReadOnly={!canManage}
             settings={settings}
             onDraftChange={setDraft}
+            onRetarget={retarget}
+            isRetargeting={isRetargeting}
           />
         );
       case 'install':
@@ -405,6 +440,7 @@ export function FormEditor(props: FormEditorProps) {
             questions={(form.live ?? form.draft).questions}
             link={data.forms.hostedUrl(form.publicKey)}
             followJob={jobs.follow}
+            isFiling={form.live?.targets.main !== undefined}
           />
         );
       default:
@@ -422,6 +458,7 @@ export function FormEditor(props: FormEditorProps) {
               />
             )}
             <QuestionsSection
+              {...(props.question === undefined ? {} : { focusQuestionId: props.question })}
               draft={draft}
               onChange={setDraft}
               attributes={target.items}
@@ -498,14 +535,14 @@ export function FormEditor(props: FormEditorProps) {
       <SyncDialog
         slug={slug}
         formId={form.id}
-        reason="published"
-        isOpen={isOfferingSync}
+        reason={syncOffer ?? 'published'}
+        isOpen={syncOffer !== undefined}
         onClose={() => {
-          setOfferingSync(false);
+          setSyncOffer(undefined);
           focusLater(() => moreRef.current);
         }}
         onStarted={(jobId) => {
-          setOfferingSync(false);
+          setSyncOffer(undefined);
           focusLater(() => moreRef.current);
           toasts.toast({ tone: 'info', message: strings.syncStarted });
           jobs.follow(jobId, (job) => {

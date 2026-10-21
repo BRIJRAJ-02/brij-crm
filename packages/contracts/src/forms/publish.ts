@@ -48,7 +48,8 @@ const named = (question: { readonly label: string; readonly key: string }) =>
 /**
  * The first problem that stops a draft going live, or undefined when it can.
  * In order: the name, the address, an email question filed on the match
- * attribute (how an enquiry becomes a person), each question's label, choices
+ * attribute (how a submission becomes a person; not asked of a form that
+ * keeps its submissions only), each question's label, choices
  * and filing (gone, a type that doesn't fit, or an attribute the publisher
  * can't write), and file questions, which wait for file attachments (#32).
  */
@@ -58,22 +59,25 @@ export function publishProblem(input: PublishInput): PublishProblem | undefined 
     return { code: 'ADDRESS_INVALID', message: 'The address needs 2 to 40 lowercase letters, numbers or hyphens.' };
   }
   const { questions, targets } = input.document;
-  const match = targets.main.matchAttributeId;
-  const emailQuestion = questions.find(
-    (question) => question.answerType === 'email' && match !== undefined && question.filedOn?.attributeId === match,
-  );
-  if (emailQuestion === undefined) {
-    return {
-      code: 'EMAIL_MISSING',
-      message: 'Keep an email question. It is how a submission becomes a person in Timefix.',
-    };
-  }
-  if (!emailQuestion.required) {
-    return {
-      code: 'EMAIL_MISSING',
-      message: 'Make the email question one visitors must answer. It is how a submission becomes a person in Timefix.',
-      questionId: emailQuestion.id,
-    };
+  if (targets.main !== undefined) {
+    const match = targets.main.matchAttributeId;
+    const emailQuestion = questions.find(
+      (question) => question.answerType === 'email' && match !== undefined && question.filedOn?.attributeId === match,
+    );
+    if (emailQuestion === undefined) {
+      return {
+        code: 'EMAIL_MISSING',
+        message: 'Keep an email question. It is how a submission becomes a person in Timefix.',
+      };
+    }
+    if (!emailQuestion.required) {
+      return {
+        code: 'EMAIL_MISSING',
+        message:
+          'Make the email question one visitors must answer. It is how a submission becomes a person in Timefix.',
+        questionId: emailQuestion.id,
+      };
+    }
   }
   for (const question of questions) {
     if (question.label.trim() === '') {

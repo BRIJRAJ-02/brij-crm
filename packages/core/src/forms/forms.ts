@@ -4,8 +4,8 @@
 // untitled form with Name, Email and Phone, AC-649), save the draft quietly,
 // publish (the shared `publishProblem` check, AC-546, AC-655), the settings
 // that apply at once (name, address, owner, sites), pause and resume,
-// archive, point a never published form at another object, duplicate and
-// delete. The draft is the one version not yet published; publishing freezes
+// archive, point a form's draft at another object or at none (keep its
+// submissions only), duplicate and delete. The draft is the one version not yet published; publishing freezes
 // it as the next live version (AC-548). Draft saves and publishes move the
 // form's `revision`; a save that started from another one is refused
 // `FORM_CHANGED`, so nobody's draft is overwritten.
@@ -21,6 +21,7 @@ import {
   generatedSlug,
   publishProblem,
   type FormDocument,
+  type FormQuestion,
   type FormStatus,
   type FormSummary,
   type FormTargetChoices,
@@ -38,6 +39,7 @@ import { can, fieldLevel, objectLevel } from '../access/policy.ts';
 import { inWorkspace } from '../access/run.ts';
 import { checkObject, UNKNOWN_OBJECT } from '../access/visibility.ts';
 import {
+  canSeeForm,
   fileable,
   loadForm,
   loadVersions,
@@ -75,14 +77,23 @@ function matchOf(attributes: readonly AttributeDef[]): AttributeDef | undefined 
   );
 }
 
-/** A new form's first draft (AC-649): Name, Email and Phone, each filed where the object has a fitting attribute. */
+/**
+ * A new form's first draft (AC-649): Name, Email and Phone, each filed where the object has a fitting
+ * attribute; or, with no object (keep submissions only), the same questions filed nowhere.
+ */
 function firstDraft(
-  objectId: string,
-  attributes: ReadonlyMap<string, AttributeDef>,
-  primaryId: string | null,
+  target:
+    | {
+        readonly objectId: string;
+        readonly attributes: ReadonlyMap<string, AttributeDef>;
+        readonly primaryId: string | null;
+      }
+    | undefined,
 ): FormDocument {
+  const attributes = target?.attributes ?? new Map<string, AttributeDef>();
   const live = fileable(attributes);
   const match = matchOf(live);
+  const primaryId = target?.primaryId ?? null;
   const primary = primaryId === null ? undefined : attributes.get(primaryId);
   const name = primary !== undefined && fitsAttribute('short_text', primary.type) ? primary : undefined;
   const email = match?.type === 'email' ? match : undefined;
@@ -93,7 +104,10 @@ function firstDraft(
       ...(email === undefined ? {} : { emailAttributeId: email.id }),
       ...(phone === undefined ? {} : { phoneAttributeId: phone.id }),
     }),
-    targets: { main: { objectId, ...(match === undefined ? {} : { matchAttributeId: match.id }) } },
+    targets:
+      target === undefined
+        ? {}
+        : { main: { objectId: target.objectId, ...(match === undefined ? {} : { matchAttributeId: match.id }) } },
     look: { colour: 'light', corners: 'rounded' },
     headline: 'Fill this in and we will come back to you',
     buttonText: 'Send',
@@ -117,7 +131,7 @@ async function viewOf(tx: WorkspaceTx, scope: EngineScope, form: FormRow): Promi
     id: form.id,
     name: form.name,
     status: form.status,
-    mainObjectId: form.mainObjectId,
+    ...(form.mainObjectId === null ? {} : { mainObjectId: form.mainObjectId }),
     publicKey: form.publicKey,
     ...(live === undefined ? {} : { liveVersionNumber: live.number, live: live.document }),
     submissionsThisMonth: count?.month ?? 0,
@@ -167,11 +181,11 @@ async function countsOf(
   return new Map(rows.rows.map((row) => [row.form_id, row]));
 }
 
-/** A form the reader may see (its main object visible to them), or NOT_FOUND. */
+/** A form the reader may see (`canSeeForm`: its object visible to them, or none and forms.manage), or NOT_FOUND. */
 async function visibleForm(tx: WorkspaceTx, scope: EngineScope, formId: string, lock = false): Promise<FormRow> {
   const id = checkId(formId, UNKNOWN_FORM);
   const form = await loadForm(tx, id, lock);
-  if (form === undefined || objectLevel(scope.access, form.mainObjectId) === 'none') {
+  if (form === undefined || !canSeeForm(scope.access, form.mainObjectId)) {
     throw refuse('NOT_FOUND', UNKNOWN_FORM);
   }
   return form;
@@ -199,7 +213,7 @@ export async function listForms(
       .where(input.archived ? eq(forms.status, 'archived') : ne(forms.status, 'archived'))
       .orderBy(desc(forms.createdAt), desc(forms.id))
       .limit(FORMS_LIST_MAX);
-    const shown = rows.filter((row) => objectLevel(scope.access, row.mainObjectId) !== 'none');
+    const shown = rows.filter((row) => canSeeForm(scope.access, row.mainObjectId));
     const counts = await countsOf(
       tx,
       shown.map((row) => row.id),
@@ -210,7 +224,7 @@ export async function listForms(
         id: row.id,
         name: row.name,
         status: row.status,
-        mainObjectId: row.mainObjectId,
+        ...(row.mainObjectId === null ? {} : { mainObjectId: row.mainObjectId }),
         publicKey: row.publicKey,
         ...(row.liveNumber === null ? {} : { liveVersionNumber: row.liveNumber }),
         submissionsThisMonth: count?.month ?? 0,
@@ -240,17 +254,22 @@ export async function previewForm(scope: EngineScope, input: { readonly formId: 
   });
 }
 
-/** The target object and the attributes a question may be filed on, with whether the reader may write each (AC-658). */
+/**
+ * The target object and the attributes a question may be filed on, with whether the reader may write each
+ * (AC-658); no object and no attributes while the draft keeps its submissions only.
+ */
 export async function formAttributes(
   scope: EngineScope,
   input: { readonly formId: string },
 ): Promise<FormTargetChoices> {
   return inWorkspace(scope, async (tx) => {
     const form = await visibleForm(tx, scope, input.formId);
-    const attributes = fileable(await loadAttributes(tx, form.mainObjectId));
-    const writesObject = objectLevel(scope.access, form.mainObjectId) === 'write';
+    const objectId = form.mainObjectId;
+    if (objectId === null) return { items: [] };
+    const attributes = fileable(await loadAttributes(tx, objectId));
+    const writesObject = objectLevel(scope.access, objectId) === 'write';
     const items = attributes.flatMap((attribute) => {
-      const level = fieldLevel(scope.access, { id: attribute.id, objectId: form.mainObjectId });
+      const level = fieldLevel(scope.access, { id: attribute.id, objectId });
       if (level === 'hidden') return [];
       return [
         {
@@ -263,7 +282,7 @@ export async function formAttributes(
         },
       ];
     });
-    return { objectId: form.mainObjectId, objectName: await objectName(tx, form.mainObjectId), items };
+    return { objectId, objectName: await objectName(tx, objectId), items };
   });
 }
 
@@ -356,7 +375,12 @@ function audit(scope: EngineScope) {
 async function insertForm(
   tx: WorkspaceTx,
   scope: EngineScope,
-  input: { readonly id: string; readonly name: string; readonly objectId: string; readonly document: FormDocument },
+  input: {
+    readonly id: string;
+    readonly name: string;
+    readonly objectId: string | null;
+    readonly document: FormDocument;
+  },
 ): Promise<FormRow> {
   await tx.insert(forms).values({
     workspaceId: scope.workspaceId,
@@ -391,16 +415,17 @@ async function defaultObject(tx: WorkspaceTx): Promise<string> {
   return row.id;
 }
 
-/** What creating a form takes. */
+/** What creating a form takes: `mainObjectId` absent is People (or the first object), `null` keeps submissions only. */
 export interface CreateFormInput {
   readonly id: string;
   readonly name?: string;
-  readonly mainObjectId?: string;
+  readonly mainObjectId?: string | null;
 }
 
 /**
  * Creates a form at once (AC-649): "Untitled form" on People unless named,
- * with Name, Email and Phone, a generated address and the creator as owner.
+ * with Name, Email and Phone, a generated address and the creator as owner;
+ * or, with `mainObjectId: null`, a form that keeps its submissions only.
  * The id is the browser's UUID v7 and the retry key: the same call again
  * answers the same form; an id someone else used is 409 `ID_TAKEN`.
  */
@@ -419,20 +444,24 @@ export async function createForm(
         if (existing.createdById === scope.actor.id) return viewOf(tx, scope, existing);
         throw refuse('ID_TAKEN', 'A form with that id already exists.');
       }
+      if (input.mainObjectId === null) {
+        const kept = await insertForm(tx, scope, {
+          id: input.id,
+          name: input.name?.trim() ?? UNTITLED_FORM,
+          objectId: null,
+          document: firstDraft(undefined),
+        });
+        return viewOf(tx, scope, kept);
+      }
       const objectId =
         input.mainObjectId === undefined ? await defaultObject(tx) : checkId(input.mainObjectId, UNKNOWN_OBJECT);
-      await checkObject(tx, scope.access, objectId, 'write');
-      const [object] = await tx
-        .select({ archivedAt: objects.archivedAt, primaryAttributeId: objects.primaryAttributeId })
-        .from(objects)
-        .where(eq(objects.id, objectId));
-      if (object === undefined || object.archivedAt !== null) throw refuse('NOT_FOUND', UNKNOWN_OBJECT);
+      const object = await writableObject(tx, scope, objectId);
       const attributes = await loadAttributes(tx, objectId);
       const form = await insertForm(tx, scope, {
         id: input.id,
         name: input.name?.trim() ?? UNTITLED_FORM,
         objectId,
-        document: firstDraft(objectId, attributes, object.primaryAttributeId),
+        document: firstDraft({ objectId, attributes, primaryId: object.primaryAttributeId }),
       });
       return viewOf(tx, scope, form);
     },
@@ -441,10 +470,10 @@ export async function createForm(
   return result;
 }
 
-/** Refuses a document filed onto another object than the form's. */
+/** Refuses a document filed onto another object than the form's draft is set to (setFormTarget changes it). */
 function checkDraft(form: FormRow, document: FormDocument): void {
-  if (document.targets.main.objectId !== form.mainObjectId) {
-    throw refuse('CONFIG_INVALID', 'A form’s answers go to one object. Change it from the first publish.');
+  if ((document.targets.main?.objectId ?? null) !== form.mainObjectId) {
+    throw refuse('CONFIG_INVALID', 'A form’s answers go to one object. Change it in Settings, where answers go.');
   }
 }
 
@@ -679,15 +708,72 @@ export async function setFormStatus(
   return result;
 }
 
+/** An object a member may file a form's submissions onto: live, and one they may write. */
+async function writableObject(tx: WorkspaceTx, scope: EngineScope, objectId: string) {
+  await checkObject(tx, scope.access, objectId, 'write');
+  const [object] = await tx
+    .select({ archivedAt: objects.archivedAt, primaryAttributeId: objects.primaryAttributeId })
+    .from(objects)
+    .where(eq(objects.id, objectId));
+  if (object === undefined || object.archivedAt !== null) throw refuse('NOT_FOUND', UNKNOWN_OBJECT);
+  return object;
+}
+
 /**
- * Points a form never published at another object (the first publish's
- * "Where the answers go"): its questions keep their filing where the new
- * object has that attribute (a new object built from the form), the rest go
- * unfiled, and it matches on the object's own unique email (or first unique).
+ * Files the questions a new form starts with onto a newly chosen object, as a
+ * new form's first draft does (AC-649): the email question on the object's
+ * match (a unique email), the name question on its primary attribute, the
+ * phone on its first phone attribute. Only unfiled questions, onto attributes
+ * no other question holds, so a connected form can go live as it is.
+ */
+function fileDefaults(
+  questions: readonly FormQuestion[],
+  attributes: ReadonlyMap<string, AttributeDef>,
+  primaryId: string | null,
+): FormQuestion[] {
+  const live = fileable(attributes);
+  const match = matchOf(live);
+  const primary = primaryId === null ? undefined : attributes.get(primaryId);
+  const used = new Set(questions.flatMap((question) => question.filedOn?.attributeId ?? []));
+  const take = (attribute: AttributeDef | undefined) => {
+    if (attribute === undefined || used.has(attribute.id)) return undefined;
+    used.add(attribute.id);
+    return { objectRole: 'main' as const, attributeId: attribute.id };
+  };
+  const firstEmail = questions.find((question) => question.answerType === 'email' && question.filedOn === undefined);
+  return questions.map((question) => {
+    if (question.filedOn !== undefined) return question;
+    const filedOn =
+      question === firstEmail && match?.type === 'email'
+        ? take(match)
+        : question.key === 'name' && primary !== undefined && fitsAttribute(question.answerType, primary.type)
+          ? take(primary)
+          : question.answerType === 'phone'
+            ? take(live.find((attribute) => attribute.type === 'phone'))
+            : undefined;
+    return filedOn === undefined ? question : { ...question, filedOn };
+  });
+}
+
+/** A question filed nowhere: kept with the submission only. */
+function unfiled(question: FormQuestion): FormQuestion {
+  const { filedOn, ...rest } = question;
+  return filedOn === undefined ? question : rest;
+}
+
+/**
+ * Points a form's draft at another object, or at none (the first publish's
+ * "Where the answers go", and Settings' "Add each submission to the CRM"):
+ * its questions keep their filing where the new object has that attribute (a
+ * new object built from the form), the rest go unfiled, and it matches on the
+ * object's own unique email (or first unique). `null` keeps the submissions
+ * only, every filing cleared. On a published form the change is the draft's
+ * and goes live with the next publish; each version files its submissions
+ * with its own target, so nothing already sent moves.
  */
 export async function setFormTarget(
   scope: EngineScope,
-  input: { readonly formId: string; readonly mainObjectId: string; readonly expectedRevision: number },
+  input: { readonly formId: string; readonly mainObjectId: string | null; readonly expectedRevision: number },
   hooks: readonly AfterWrite[] = [],
 ): Promise<FormView> {
   requirePermission(scope, 'forms.manage');
@@ -695,23 +781,29 @@ export async function setFormTarget(
     scope,
     async ({ tx }) => {
       const form = await visibleForm(tx, scope, input.formId, true);
-      if (form.liveVersionId !== null) throw refuse('FORM_STATE', 'A published form keeps the object it files onto.');
+      if (form.status === 'archived') throw refuse('FORM_STATE', 'Restore this form before you change it.');
       checkRevision(form, input.expectedRevision);
-      const objectId = checkId(input.mainObjectId, UNKNOWN_OBJECT);
-      await checkObject(tx, scope.access, objectId, 'write');
+      const objectId = input.mainObjectId === null ? null : checkId(input.mainObjectId, UNKNOWN_OBJECT);
+      if (objectId === form.mainObjectId) return viewOf(tx, scope, form);
       if (form.draftVersionId === null) throw new Error('A form always has a draft version.');
       const draft = (await loadVersions(tx, [form.draftVersionId])).get(form.draftVersionId);
       if (draft === undefined) throw new Error('The draft version went away.');
-      const attributes = await loadAttributes(tx, objectId);
-      const live = fileable(attributes);
-      const match = matchOf(live);
-      const document: FormDocument = {
-        ...draft.document,
-        questions: draft.document.questions.map(({ filedOn, ...question }) =>
-          filedOn !== undefined && attributes.has(filedOn.attributeId) ? { ...question, filedOn } : question,
-        ),
-        targets: { main: { objectId, ...(match === undefined ? {} : { matchAttributeId: match.id }) } },
-      };
+      let document: FormDocument;
+      if (objectId === null) {
+        document = { ...draft.document, questions: draft.document.questions.map(unfiled), targets: {} };
+      } else {
+        const object = await writableObject(tx, scope, objectId);
+        const attributes = await loadAttributes(tx, objectId);
+        const match = matchOf(fileable(attributes));
+        const kept = draft.document.questions.map((question) =>
+          question.filedOn !== undefined && attributes.has(question.filedOn.attributeId) ? question : unfiled(question),
+        );
+        document = {
+          ...draft.document,
+          questions: fileDefaults(kept, attributes, object.primaryAttributeId),
+          targets: { main: { objectId, ...(match === undefined ? {} : { matchAttributeId: match.id }) } },
+        };
+      }
       await tx.update(forms).set({ mainObjectId: objectId }).where(eq(forms.id, form.id));
       await writeDraft(tx, scope, { ...form, mainObjectId: objectId }, document);
       const moved = await loadForm(tx, form.id);

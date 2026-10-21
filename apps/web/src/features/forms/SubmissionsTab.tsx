@@ -1,7 +1,7 @@
 // Brief
 // Purpose: a form's submissions (spec 0023): who sent what and when, newest first, with what needs a look on top.
-// Main task: scan the people and their first answers, open one in full, and settle many at once (spam or not).
-// Also: Add to CRM, Sync earlier enquiries and CSV export, shown once their service is served (submissionsBackendReady).
+// Main task: scan the people and their first answers, open one in full, settle many at once (spam or not), and get
+// any that aren't in the CRM there (Add to CRM, Sync earlier submissions); take them out as CSV.
 // Leaves out: counts per state, server search (search filters the rows loaded so far), and live arrival.
 import {
   isDataError,
@@ -25,7 +25,6 @@ import {
   MenuTrigger,
   Modal,
   Panel,
-  Badge,
   RecordChip,
   RelativeTime,
   LinkListToolbar,
@@ -54,12 +53,14 @@ export interface SubmissionsTabProps {
   readonly state: SubmissionState | undefined;
   readonly open: SubmissionView | undefined;
   readonly canManage: boolean;
-  /** The form's questions, for the answer columns (the first two) by their labels. */
-  readonly questions: readonly { readonly id: string; readonly label: string }[];
+  /** The form's questions, for the answer columns (the first two) by their labels; the `name` one names the person. */
+  readonly questions: readonly { readonly id: string; readonly key: string; readonly label: string }[];
   /** The form's public link, for the empty state's Copy link. */
   readonly link: string;
   /** Follows a job this tab started to its end; the editor holds it, so a tab change never loses the result. */
   readonly followJob: (jobId: string, onDone: (job: JobView) => void) => void;
+  /** The live form adds submissions to the CRM; one that keeps them only offers no Add to CRM or sync. */
+  readonly isFiling: boolean;
 }
 
 /** How many answers get a column of their own; the rest are in the open submission. */
@@ -72,6 +73,9 @@ const ADD_MAX = 500;
 const EXPORT_MAX = 1_000;
 
 const ALL = 'all';
+
+/** The email column's id: a question's id is lower case letters, digits, - and _, so none looks like it. */
+const EMAIL_COLUMN = ':email';
 const FILTERS: readonly SubmissionState[] = ['processed', 'needs_review', 'spam', 'failed'];
 
 /** Each state's dot: filed green, a look needed orange, failed red, the rest gray. */
@@ -84,6 +88,18 @@ const STATE_HUES = {
   needs_review: 'orange',
   failed: 'red',
 } as const satisfies Record<SubmissionState, 'gray' | 'green' | 'orange' | 'red'>;
+
+/** A submission's state in words: a processed one says whether it is in the CRM, or kept where nothing is filed. */
+function stateLabel(submission: SubmissionSummary, isFiling: boolean): string {
+  if (submission.state !== 'processed' || submission.crm.state === 'linked') return strings.states[submission.state];
+  return isFiling ? strings.stateNotInCrm : strings.stateKept;
+}
+
+/** Its dot: filed green, a look needed orange, failed red, kept by a form that files nothing green, the rest gray. */
+function stateHue(submission: SubmissionSummary, isFiling: boolean): 'gray' | 'green' | 'orange' | 'red' {
+  if (submission.state === 'processed' && submission.crm.state !== 'linked') return isFiling ? 'gray' : 'green';
+  return STATE_HUES[submission.state];
+}
 
 /** An answer as words: text, Yes or No, a phone's number. */
 function answerText(answer: SubmissionAnswer): string {
@@ -108,6 +124,7 @@ export function SubmissionsTab({
   questions,
   link: formLink,
   followJob,
+  isFiling,
 }: SubmissionsTabProps) {
   const slot = useFormToolbarSlot();
   const [query, setQuery] = useState('');
@@ -192,13 +209,23 @@ export function SubmissionsTab({
     );
   };
 
+  // The question that names the person (the starting Name question, key `name`): a row not in the CRM shows its
+  // answer as the person, and its email in a column of its own.
+  const nameQuestion = questions.find((question) => question.key === 'name');
+  const nameOf = (submission: SubmissionSummary): string | undefined => {
+    const answer = submission.firstAnswers.find((each) => each.questionId === nameQuestion?.id);
+    const text = answer === undefined ? '' : answerText(answer).trim();
+    return text === '' ? undefined : text;
+  };
   // Search narrows the rows loaded so far, by the person's name or email.
   const needle = query.trim().toLowerCase();
   const shown =
     needle === ''
       ? rows
       : rows.filter((submission) =>
-          [submission.mainRecord?.name, submission.email].some((text) => text?.toLowerCase().includes(needle) === true),
+          [submission.mainRecord?.name, nameOf(submission), submission.email].some(
+            (text) => text?.toLowerCase().includes(needle) === true,
+          ),
         );
   const waiting = rows.filter((submission) => submission.state === 'needs_review').length;
   // What a bulk action acts on: the picked rows still in view (a filter or a search may hide some).
@@ -206,19 +233,22 @@ export function SubmissionsTab({
   const canRelease = picked.some((submission) => submission.state === 'spam' || submission.state === 'needs_review');
   const canMarkSpam = picked.some((submission) => submission.state !== 'spam');
   const addable = picked.filter((submission) => submission.crm.state === 'not_in_crm' && submission.crm.canAddToCrm);
+  const hasEmailColumn = nameQuestion !== undefined && shown.some((submission) => submission.email !== undefined);
   const columns: readonly TableColumn[] = [
     { id: 'person', label: strings.person, isRowHeader: true, isInline: true },
+    ...(hasEmailColumn ? [{ id: EMAIL_COLUMN, label: strings.email }] : []),
     { id: 'when', label: strings.when },
     { id: 'state', label: strings.state },
-    // The questions the list carries answers for (the server sends each row's first answers), in the form's order.
-    // A question earns a column when some row has an answer to it that the Person column doesn't already say.
+    // The questions the list carries answers for (the server sends each row's first answers), in the form's order,
+    // but the one the Person column already says. A question earns a column when some row answered it.
     ...questions
-      .filter((question) =>
-        shown.some((submission) => {
-          const answer = submission.firstAnswers.find((each) => each.questionId === question.id);
-          const text = answer === undefined ? '' : answerText(answer).trim();
-          return text !== '' && text !== submission.mainRecord?.name;
-        }),
+      .filter(
+        (question) =>
+          question.id !== nameQuestion?.id &&
+          shown.some((submission) => {
+            const answer = submission.firstAnswers.find((each) => each.questionId === question.id);
+            return answer !== undefined && answerText(answer).trim() !== '';
+          }),
       )
       .slice(0, ANSWER_COLUMNS)
       .map((question) => ({ id: question.id, label: question.label })),
@@ -360,9 +390,11 @@ export function SubmissionsTab({
         >
           {strings.exportCsv}
         </MenuItem>
-        <MenuItem id="sync" icon="refresh-cw" description={strings.syncOldText}>
-          {strings.syncOld}
-        </MenuItem>
+        {isFiling && (
+          <MenuItem id="sync" icon="refresh-cw" description={strings.syncOldText}>
+            {strings.syncOld}
+          </MenuItem>
+        )}
       </Menu>
     </MenuTrigger>
   );
@@ -381,7 +413,10 @@ export function SubmissionsTab({
             size="sm"
             items={[
               { id: ALL, label: strings.allStates },
-              ...FILTERS.map((each) => ({ id: each, label: strings.states[each] })),
+              ...FILTERS.map((each) => ({
+                id: each,
+                label: each === 'processed' && !isFiling ? strings.stateKept : strings.states[each],
+              })),
             ]}
             value={state ?? ALL}
             onChange={(value) => {
@@ -402,23 +437,17 @@ export function SubmissionsTab({
       case 'when':
         return <RelativeTime value={submission.receivedAt} />;
       case 'person': {
-        // The CRM link: the record it filed into, filing while its job runs, or the email and Not in CRM.
+        // The record it filed into; else the name it gave, or its email (the State column says if it is in the CRM).
         const crm = submission.crm;
-        if (crm.state === 'filing' || crm.state === 'not_in_crm') {
-          // The note shows only where it helps: filing, or one Add to CRM can take.
-          const note = crm.state === 'filing' ? strings.crmFiling : crm.canAddToCrm ? strings.notInCrm : undefined;
-          return (
-            <>
-              <TruncatedText>{submission.email ?? ''}</TruncatedText>
-              {note !== undefined && <Badge text={note} />}
-            </>
-          );
-        }
+        if (crm.state !== 'linked')
+          return <TruncatedText>{nameOf(submission) ?? submission.email ?? ''}</TruncatedText>;
         const href = link(crm.record.objectId, crm.record.recordId);
         return <RecordChip display={crm.record} {...(href === undefined ? {} : { href })} isFlat />;
       }
+      case EMAIL_COLUMN:
+        return <TruncatedText>{submission.email ?? ''}</TruncatedText>;
       case 'state':
-        return <StatusDot hue={STATE_HUES[submission.state]}>{strings.states[submission.state]}</StatusDot>;
+        return <StatusDot hue={stateHue(submission, isFiling)}>{stateLabel(submission, isFiling)}</StatusDot>;
       default: {
         // An answer column: this question's answer, cut to the cell, the whole of it in a tooltip when cut.
         const answer = submission.firstAnswers.find((each) => each.questionId === column);
@@ -569,7 +598,7 @@ export function SubmissionsTab({
               }
             : {})}
         >
-          <SubmissionDetail submission={open} link={link} />
+          <SubmissionDetail submission={open} link={link} isFiling={isFiling} />
         </Panel>
       )}
       <SyncDialog
@@ -625,9 +654,11 @@ export function SubmissionsTab({
 function SubmissionDetail({
   submission,
   link,
+  isFiling,
 }: {
   readonly submission: SubmissionView;
   readonly link: ReturnType<typeof recordLinks>;
+  readonly isFiling: boolean;
 }) {
   const source = Object.entries(submission.hidden).map(([term, description]) => ({ term, description }));
   return (
@@ -639,7 +670,7 @@ function SubmissionDetail({
       )}
       <DescriptionList
         items={[
-          { term: strings.state, description: strings.states[submission.state] },
+          { term: strings.state, description: stateLabel(submission, isFiling) },
           { term: strings.when, description: <RelativeTime value={submission.receivedAt} /> },
         ]}
       />

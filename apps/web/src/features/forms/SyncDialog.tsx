@@ -14,13 +14,18 @@ import { strings } from './strings.ts';
 export interface SyncDialogProps {
   readonly slug: string;
   readonly formId: string;
-  /** Why it opened: a publish that changed where answers are filed, or the More menu. */
-  readonly reason: 'published' | 'menu';
+  /**
+   * Why it opened: a publish that changed where answers are filed, one that started adding submissions to the
+   * CRM (`connected`), or the More menu.
+   */
+  readonly reason: 'published' | 'connected' | 'menu';
   readonly isOpen: boolean;
   readonly onClose: () => void;
   /** The sync started: its job, to follow to its end. */
   readonly onStarted: (jobId: string, total: number) => void;
 }
+
+const number = new Intl.NumberFormat();
 
 /** The preview for one scope, read when the dialog opens or the scope changes. */
 type PreviewState =
@@ -100,7 +105,7 @@ export function SyncDialog({ slug, formId, reason, isOpen, onClose, onStarted }:
       actions={
         <>
           <Button slot="close" isDisabled={isStarting} kbd="ESC">
-            {reason === 'published' ? strings.notNow : strings.cancel}
+            {reason === 'menu' ? strings.cancel : strings.notNow}
           </Button>
           {preview?.total !== 0 && (
             <Button variant="primary" isPending={isStarting} isDisabled={preview === undefined} onPress={start}>
@@ -110,7 +115,13 @@ export function SyncDialog({ slug, formId, reason, isOpen, onClose, onStarted }:
         </>
       }
     >
-      <p>{reason === 'published' ? strings.syncTextPublished : strings.syncTextMenu}</p>
+      <p>
+        {reason === 'connected'
+          ? strings.syncTextConnected
+          : reason === 'published'
+            ? strings.syncTextPublished
+            : strings.syncTextMenu}
+      </p>
       <RadioGroup
         label={strings.syncScope}
         orientation="horizontal"
@@ -150,13 +161,16 @@ export function SyncDialog({ slug, formId, reason, isOpen, onClose, onStarted }:
       {preview !== undefined && preview.total > 0 && (
         <>
           <p>{strings.syncInScope(preview.total)}</p>
+          {/* Only what would happen: a count of none says nothing. */}
           <DescriptionList
             items={[
-              { term: strings.syncCreates, description: String(preview.creates) },
-              { term: strings.syncUpdates, description: String(preview.updates) },
-              { term: strings.syncUnchanged, description: String(preview.unchanged) },
-              { term: strings.syncFailures, description: String(preview.failures) },
-            ]}
+              { term: strings.syncCreates, count: preview.creates },
+              { term: strings.syncUpdates, count: preview.updates },
+              { term: strings.syncUnchanged, count: preview.unchanged },
+              { term: strings.syncFailures, count: preview.failures },
+            ]
+              .filter((each) => each.count > 0)
+              .map((each) => ({ term: each.term, description: number.format(each.count) }))}
           />
           {preview.failures > 0 && <p>{strings.syncFailuresText}</p>}
           {preview.capped && <p>{strings.syncCapped(preview.checked)}</p>}

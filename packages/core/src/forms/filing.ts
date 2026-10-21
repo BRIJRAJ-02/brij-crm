@@ -49,7 +49,7 @@ import {
   plan,
   settle,
 } from './process.ts';
-import { loadForm, loadVersions, type FormRow } from './shared.ts';
+import { canSeeForm, loadForm, loadVersions, type FormRow } from './shared.ts';
 
 /** The Add to CRM job's name. */
 export const FORMS_FILE = 'forms.file';
@@ -59,47 +59,53 @@ export const FORMS_SYNC = 'forms.sync';
 /** What a form with no published version answers to filing. */
 export const NOT_PUBLISHED = 'Publish the form first: filing uses its published questions.';
 
+/** What a form whose published version keeps its submissions only answers to filing. */
+export const NOT_MAPPED =
+  'This form keeps its submissions only. Turn on Add each submission to the CRM in its settings, and publish, first.';
+
 /** What a submission no longer in scope says on its job item. */
 const NOT_ELIGIBLE = 'This submission is no longer one to file (it was filed, marked as spam, or deleted).';
 
-/** A form the member manages, with its live document, or a refusal. */
-async function mappingOf(
-  tx: WorkspaceTx,
-  formId: string,
-): Promise<
-  | {
-      readonly form: FormRow;
-      readonly document: FormDocument;
-      readonly versionNumber: number;
-      readonly attributes: ReadonlyMap<string, AttributeDef>;
-      readonly options: Awaited<ReturnType<typeof optionsFor>>;
-    }
-  | undefined
-> {
+/** A form's live mapping: its published document, the object it files onto and that object's attributes. */
+interface Mapping {
+  readonly form: FormRow;
+  readonly document: FormDocument;
+  readonly versionNumber: number;
+  readonly objectId: string;
+  readonly attributes: ReadonlyMap<string, AttributeDef>;
+  readonly options: Awaited<ReturnType<typeof optionsFor>>;
+}
+
+/** A form's live mapping; `unpublished` with no live version, `unmapped` when that version keeps submissions only. */
+async function mappingOf(tx: WorkspaceTx, formId: string): Promise<Mapping | 'unpublished' | 'unmapped'> {
   const form = await loadForm(tx, formId);
-  if (form === undefined || form.liveVersionId === null) return undefined;
+  if (form === undefined || form.liveVersionId === null) return 'unpublished';
   const live = (await loadVersions(tx, [form.liveVersionId])).get(form.liveVersionId);
-  if (live === undefined) return undefined;
-  const attributes = await loadAttributes(tx, form.mainObjectId);
+  if (live === undefined) return 'unpublished';
+  const target = live.document.targets.main;
+  if (target === undefined) return 'unmapped';
+  const attributes = await loadAttributes(tx, target.objectId);
   return {
     form,
     document: live.document,
     versionNumber: live.number,
+    objectId: target.objectId,
     attributes,
     options: await optionsFor(tx, live.document, attributes),
   };
 }
 
-/** The form a member acts on: one they can see, or NOT_FOUND; published, or FORM_STATE. */
-async function managedForm(tx: WorkspaceTx, scope: EngineScope, formId: string) {
+/** The form a member acts on: one they can see, or NOT_FOUND; published and adding to the CRM, or FORM_STATE. */
+async function managedForm(tx: WorkspaceTx, scope: EngineScope, formId: string): Promise<Mapping> {
   const id = checkId(formId, UNKNOWN_FORM);
   const form = await loadForm(tx, id);
-  // A form on an object the member can't see is absent to them, as everywhere.
-  if (form === undefined || objectLevel(scope.access, form.mainObjectId) === 'none') {
-    throw refuse('NOT_FOUND', UNKNOWN_FORM);
-  }
+  // A form the member can't see is absent to them, as everywhere.
+  if (form === undefined || !canSeeForm(scope.access, form.mainObjectId)) throw refuse('NOT_FOUND', UNKNOWN_FORM);
   const mapping = await mappingOf(tx, id);
-  if (mapping === undefined) throw refuse('FORM_STATE', NOT_PUBLISHED);
+  if (mapping === 'unpublished') throw refuse('FORM_STATE', NOT_PUBLISHED);
+  if (mapping === 'unmapped') throw refuse('FORM_STATE', NOT_MAPPED);
+  // Filing writes the live target's records: the member must see that object too.
+  if (objectLevel(scope.access, mapping.objectId) === 'none') throw refuse('NOT_FOUND', UNKNOWN_FORM);
   return mapping;
 }
 
@@ -174,7 +180,17 @@ async function fileBatch(
     };
   }
   const mapping = await mappingOf(tx, input.formId);
-  if (mapping === undefined || objectLevel(context.scope.access, mapping.form.mainObjectId) === 'none') {
+  if (mapping === 'unmapped') {
+    return {
+      finished: true,
+      failed: { code: 'FORM_STATE', message: 'The form now keeps its submissions only, so nothing more was filed.' },
+    };
+  }
+  if (
+    mapping === 'unpublished' ||
+    !canSeeForm(context.scope.access, mapping.form.mainObjectId) ||
+    objectLevel(context.scope.access, mapping.objectId) === 'none'
+  ) {
     return {
       finished: true,
       failed: { code: 'FORM_STATE', message: 'The form is gone or no longer published, so nothing more was filed.' },
@@ -200,13 +216,13 @@ async function fileBatch(
       answers: answersOf(row.answers),
       form: mapping.form,
       document: mapping.document,
+      objectId: mapping.objectId,
       attributes: mapping.attributes,
       options: mapping.options,
       ...(row.live_record_id === null ? {} : { keepRecordId: row.live_record_id }),
       // The member writes, through their own access: the mapping's answers only, into records they can see.
       writer: () => context,
-      canUse: async (recordId) =>
-        (await seenBy(tx, context.scope, mapping.form.mainObjectId, [recordId])).has(recordId),
+      canUse: async (recordId) => (await seenBy(tx, context.scope, mapping.objectId, [recordId])).has(recordId),
     });
     if (filed.kind === 'failed') {
       totals.failures += 1;
@@ -322,7 +338,7 @@ export async function previewSync(
   requirePermission(scope, 'forms.manage');
   return inWorkspace(scope, async (tx) => {
     const mapping = await managedForm(tx, scope, input.formId);
-    const { form, document, attributes, options } = mapping;
+    const { form, document, attributes, options, objectId } = mapping;
     const total = await countInScope(tx, form.id, input.scope);
     const page = await tx.execute<ScopedRow>(sql`
       select s.id::text, s.state, s.answers, r.id::text as live_record_id
@@ -338,17 +354,17 @@ export async function previewSync(
     const keys = new Map<string, string>();
     for (const each of planned) {
       if (each.row.live_record_id !== null) continue;
-      const match = matchKey(each.planned, document.targets.main.matchAttributeId);
+      const match = matchKey(each.planned, document.targets.main?.matchAttributeId);
       if (match !== undefined) keys.set(each.row.id, match.key);
     }
-    const matchAttributeId = document.targets.main.matchAttributeId;
+    const matchAttributeId = document.targets.main?.matchAttributeId;
     const matched = new Map<string, string>();
     if (keys.size > 0 && matchAttributeId !== undefined) {
       const hits = await tx.execute<{ unique_key: string; record_id: string }>(sql`
         select distinct on (v.unique_key) v.unique_key, v.record_id::text
         from "values" v join records r on r.workspace_id = v.workspace_id and r.id = v.record_id
         where v.attribute_id = ${matchAttributeId} and v.unique_key = any(array(select jsonb_array_elements_text(${JSON.stringify([...new Set(keys.values())])}::jsonb)))
-          and v.active_until is null and r.object_id = ${form.mainObjectId} and r.deleted_at is null
+          and v.active_until is null and r.object_id = ${objectId} and r.deleted_at is null
         order by v.unique_key, r.created_at, r.id
       `);
       for (const hit of hits.rows) matched.set(hit.unique_key, hit.record_id);
@@ -364,7 +380,7 @@ export async function previewSync(
     };
     const candidates = [...new Set(planned.flatMap((each) => targetOf(each) ?? []))];
     // Only records the member can see: one they can't is a failure here, as it is when the job runs.
-    const seen = candidates.length === 0 ? new Set<string>() : await seenBy(tx, scope, form.mainObjectId, candidates);
+    const seen = candidates.length === 0 ? new Set<string>() : await seenBy(tx, scope, objectId, candidates);
     const mapped = [
       ...new Set([
         ...planned.flatMap((each) => each.planned.map((item) => item.attribute.id)),

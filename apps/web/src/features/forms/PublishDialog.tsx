@@ -55,6 +55,9 @@ const BUILT_TYPE: Readonly<Record<AnswerType, 'text' | 'email' | 'phone' | 'url'
 
 const BUILD = 'build';
 
+/** The object list's last choice: keep submissions only, adding nothing to the CRM. */
+const NO_CRM = 'none';
+
 /** Step 1, Set up your form; step 2, Where the answers go; then Your form is live. */
 export function PublishDialog(props: PublishDialogProps) {
   const { slug, form, draft, target, objects, canBuild, flush, onDraftChange, onTargetChange, onPublished, onClose } =
@@ -108,8 +111,9 @@ export function PublishDialog(props: PublishDialogProps) {
     setStep(2);
   };
 
-  const moveTo = (objectId: string) => {
-    if (objectId === draft.targets.main.objectId) return;
+  // An object, or none (keep submissions only): the server points the draft there and clears filing that no longer fits.
+  const moveTo = (objectId: string | null) => {
+    if (objectId === (draft.targets.main?.objectId ?? null)) return;
     setBusy('target');
     flush()
       .then((revision) => data.forms.setTarget(slug, form.id, objectId, revision))
@@ -126,6 +130,7 @@ export function PublishDialog(props: PublishDialogProps) {
   };
 
   const unfiled = draft.questions.filter((question) => question.filedOn === undefined);
+  const isKeptOnly = draft.targets.main === undefined;
 
   // Build one out of this form: an object named after it, one attribute per unfiled question (the email unique).
   const build = async () => {
@@ -298,43 +303,46 @@ export function PublishDialog(props: PublishDialogProps) {
         <>
           <Select
             label={strings.fileOnto}
-            hint={strings.fileOntoHint}
+            hint={isKeptOnly ? strings.keptOnlyHint : strings.fileOntoHint}
             // Step 2 opens on its first choice, so a second press of Next never lands on Publish.
             // eslint-disable-next-line jsx-a11y-x/no-autofocus
             autoFocus
             items={[
               ...objects
-                .filter((object) => !object.isArchived)
+                .filter((object) => !object.isArchived && object.access === 'write')
                 .map((object) => ({ id: object.id, label: object.pluralName, icon: object.icon })),
+              // Not adding to the CRM is a real choice, set apart from the objects (the owner, 21 October 2026).
+              { id: NO_CRM, label: strings.noCrm, icon: 'inbox' as const, isApart: true },
             ]}
-            value={draft.targets.main.objectId}
+            value={draft.targets.main?.objectId ?? NO_CRM}
             isDisabled={busy !== undefined}
             onChange={(id) => {
-              if (id !== null) moveTo(id);
+              if (id !== null) moveTo(id === NO_CRM ? null : id);
             }}
           />
-          {draft.questions.map((question) => (
-            <Select
-              key={question.id}
-              label={question.label === '' ? strings.untitledQuestion : question.label}
-              items={[
-                { id: 'none', label: strings.notFiled },
-                ...fittingAttributes(target.items, question.answerType).map((attribute) => ({
-                  id: attribute.attributeId,
-                  label: `${target.objectName} · ${attribute.title}`,
-                  ...(attribute.canWrite ? {} : { description: strings.cantWrite, isArchived: true }),
-                })),
-              ]}
-              value={question.filedOn?.attributeId ?? 'none'}
-              isDisabled={busy !== undefined}
-              onChange={(id) => {
-                onDraftChange(
-                  changeQuestion(draft, question.id, { filedOn: id === null || id === 'none' ? null : id }),
-                );
-              }}
-            />
-          ))}
-          {canBuild && unfiled.length > 0 && (
+          {!isKeptOnly &&
+            draft.questions.map((question) => (
+              <Select
+                key={question.id}
+                label={question.label === '' ? strings.untitledQuestion : question.label}
+                items={[
+                  { id: 'none', label: strings.notFiled },
+                  ...fittingAttributes(target.items, question.answerType).map((attribute) => ({
+                    id: attribute.attributeId,
+                    label: `${target.objectName} · ${attribute.title}`,
+                    ...(attribute.canWrite ? {} : { description: strings.cantWrite, isArchived: true }),
+                  })),
+                ]}
+                value={question.filedOn?.attributeId ?? 'none'}
+                isDisabled={busy !== undefined}
+                onChange={(id) => {
+                  onDraftChange(
+                    changeQuestion(draft, question.id, { filedOn: id === null || id === 'none' ? null : id }),
+                  );
+                }}
+              />
+            ))}
+          {canBuild && !isKeptOnly && unfiled.length > 0 && (
             <Button icon="plus" onPress={() => void build()} isPending={busy === BUILD} isDisabled={busy !== undefined}>
               {busy === BUILD
                 ? strings.building

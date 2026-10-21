@@ -67,11 +67,8 @@ export function InstallTab({ slug, form, isReadOnly, onFormChange }: InstallTabP
           </>
         }
       />
-      <Card
-        title={strings.websiteTitle}
-        description={strings.websiteText}
-        footer={<CopyButton value={embed} label={strings.copyEmbed} variant="primary" />}
-      >
+      {/* One way to copy: the code block's own Copy, as the owner asked (no second button under it). */}
+      <Card title={strings.websiteTitle} description={strings.websiteText}>
         <Field label={strings.embedSnippet} variant="copy" isMultiline copyLabel={strings.copyEmbed} value={embed} />
       </Card>
       <Disclosure title={strings.advancedTitle}>

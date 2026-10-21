@@ -4,8 +4,9 @@
 // read its main record; one with no main record yet (received, spam,
 // failed) only with `forms.manage`. Answers to attributes the reader can't
 // see are left out, the same rule as everywhere else (hidden means absent).
-import { and, desc, eq, lt, lte, or, sql } from 'drizzle-orm';
+import { and, desc, eq, inArray, lt, lte, or, sql } from 'drizzle-orm';
 import {
+  SUBMISSION_SUMMARY_QUESTIONS,
   SUBMISSIONS_PAGE,
   type FormDocument,
   type SubmissionAnswer,
@@ -26,16 +27,16 @@ import { inputInvalid, refuse } from '../engine/refusals.ts';
 import type { EngineScope } from '../engine/scope.ts';
 import { runWrite, type AfterWrite } from '../engine/write.ts';
 import { requirePermission } from '../access/check.ts';
-import { can, fieldLevel, objectLevel } from '../access/policy.ts';
+import { can, fieldLevel } from '../access/policy.ts';
 import { inWorkspace } from '../access/run.ts';
 import { visibleRecords } from '../access/visibility.ts';
 import type { JobRegistry } from '../jobs/registry.ts';
 import { startJob } from '../jobs/service.ts';
 import { UNKNOWN_FORM } from './forms.ts';
 import { FORMS_PROCESS } from './process.ts';
-import { loadForm, loadVersions, millis } from './shared.ts';
+import { canSeeForm, loadForm, loadVersions, millis } from './shared.ts';
 
-const { formSubmissionRecords, formSubmissions } = schema;
+const { formSubmissionRecords, formSubmissions, records } = schema;
 
 /** What a submission the reader can't see, or one that doesn't exist, answers. */
 export const UNKNOWN_SUBMISSION = 'That submission does not exist.';
@@ -99,19 +100,25 @@ const verdictOf = (spam: unknown): SubmissionSummary['verdict'] => {
   return verdict === 'spam' || verdict === 'unchecked' || verdict === 'review' ? verdict : 'passed';
 };
 
-/** The rows the reader may see: a visible main record, or none yet and `forms.manage`. */
-export async function visibleRows(
-  tx: WorkspaceTx,
-  scope: EngineScope,
-  objectId: string,
-  rows: readonly Row[],
-): Promise<readonly Row[]> {
+/**
+ * The rows the reader may see: a visible main record, or none yet and `forms.manage`. Each main record is
+ * checked on its own object, read from the record itself: a form's target can change between versions, and
+ * Add to CRM files with the live one, so the records of one form's submissions may sit on several objects.
+ */
+export async function visibleRows(tx: WorkspaceTx, scope: EngineScope, rows: readonly Row[]): Promise<readonly Row[]> {
   const manages = can(scope.access, 'forms.manage');
-  const withRecord = rows.flatMap((row) => (row.mainRecordId === null ? [] : [row.mainRecordId]));
+  const withRecord = [...new Set(rows.flatMap((row) => (row.mainRecordId === null ? [] : [row.mainRecordId])))];
+  const found =
+    withRecord.length === 0
+      ? []
+      : await tx
+          .select({ id: records.id, objectId: records.objectId })
+          .from(records)
+          .where(inArray(records.id, withRecord));
   const seen = await visibleRecords(
     tx,
     scope.access,
-    withRecord.map((recordId) => ({ objectId, recordId })),
+    found.map((each) => ({ objectId: each.objectId, recordId: each.id })),
   );
   return rows.filter((row) => (row.mainRecordId === null ? manages : seen.has(row.mainRecordId)));
 }
@@ -128,18 +135,24 @@ export async function displays(
   return new Map(views.map((view) => [view.id, view.display]));
 }
 
-/** The answers the reader may see, in the form's question order (AC-573: one filed on a field hidden from them is absent). */
-export function answersOf(
-  scope: EngineScope,
-  objectId: string,
-  document: FormDocument,
-  stored: unknown,
-): SubmissionAnswer[] {
+/**
+ * The answers the reader may see, in the form's question order (AC-573: one filed on a field hidden from them
+ * is absent). A filed question's attribute is on its version's target; a version that keeps submissions
+ * only files none.
+ */
+export function answersOf(scope: EngineScope, document: FormDocument, stored: unknown): SubmissionAnswer[] {
   const answers = record(stored);
+  const objectId = document.targets.main?.objectId;
   return document.questions.flatMap((question): SubmissionAnswer[] => {
     if (!Object.hasOwn(answers, question.key)) return [];
     const attributeId = question.filedOn?.attributeId;
-    if (attributeId !== undefined && fieldLevel(scope.access, { id: attributeId, objectId }) === 'hidden') return [];
+    if (
+      attributeId !== undefined &&
+      objectId !== undefined &&
+      fieldLevel(scope.access, { id: attributeId, objectId }) === 'hidden'
+    ) {
+      return [];
+    }
     return [
       {
         questionId: question.id,
@@ -157,27 +170,45 @@ export function answersOf(
  * A submission's link to the CRM, as the reader sees it: linked to its main
  * record when the reader can see it live; filing while a job may still file
  * it; otherwise not in the CRM, and whether Add to CRM takes it (failed, or
- * processed with no live record to show; the job checks again).
+ * processed with no live record to show, while the form's live version adds
+ * to the CRM; the job checks again).
  */
-export function crmOf(state: SubmissionState, main: RecordRefDisplay | undefined): SubmissionCrm {
+export function crmOf(state: SubmissionState, main: RecordRefDisplay | undefined, formFiles: boolean): SubmissionCrm {
   if (main !== undefined) return { state: 'linked', record: main };
-  if (state === 'received' || state === 'processing') return { state: 'filing' };
-  return { state: 'not_in_crm', canAddToCrm: state === 'failed' || state === 'processed' };
+  if (formFiles && (state === 'received' || state === 'processing')) return { state: 'filing' };
+  return { state: 'not_in_crm', canAddToCrm: formFiles && (state === 'failed' || state === 'processed') };
 }
 
-/** The email answer, and the first two answers beside it, for a list row. */
-function summaryOf(answers: readonly SubmissionAnswer[]): { email?: string; firstAnswers: SubmissionAnswer[] } {
+/** Whether a form's live version adds its submissions to the CRM (it has a target). */
+export async function formFiles(tx: WorkspaceTx, form: { readonly liveVersionId: string | null }): Promise<boolean> {
+  if (form.liveVersionId === null) return false;
+  const live = (await loadVersions(tx, [form.liveVersionId])).get(form.liveVersionId);
+  return live?.document.targets.main !== undefined;
+}
+
+/**
+ * The email answer, and the answers to the form's first questions beside it (the email aside), for a list row:
+ * by question, not by what was answered, so every row's answers fill the same columns.
+ */
+function summaryOf(
+  document: FormDocument | undefined,
+  answers: readonly SubmissionAnswer[],
+): { email?: string; firstAnswers: SubmissionAnswer[] } {
   const email = answers.find((answer) => answer.answerType === 'email' && typeof answer.value === 'string');
-  const firstAnswers = answers.filter((answer) => answer !== email).slice(0, 2);
+  const first = new Set(
+    (document?.questions ?? [])
+      .filter((question) => question.answerType !== 'email')
+      .slice(0, SUBMISSION_SUMMARY_QUESTIONS)
+      .map((question) => question.id),
+  );
+  const firstAnswers = answers.filter((answer) => answer !== email && first.has(answer.questionId));
   return { ...(typeof email?.value === 'string' ? { email: email.value } : {}), firstAnswers };
 }
 
-/** A form the reader may see, or NOT_FOUND. */
+/** A form the reader may see (`canSeeForm`), or NOT_FOUND. */
 export async function readableForm(tx: WorkspaceTx, scope: EngineScope, formId: string) {
   const form = await loadForm(tx, checkId(formId, UNKNOWN_FORM));
-  if (form === undefined || objectLevel(scope.access, form.mainObjectId) === 'none') {
-    throw refuse('NOT_FOUND', UNKNOWN_FORM);
-  }
+  if (form === undefined || !canSeeForm(scope.access, form.mainObjectId)) throw refuse('NOT_FOUND', UNKNOWN_FORM);
   return form;
 }
 
@@ -218,7 +249,8 @@ export async function listSubmissions(
       .limit(limit + 1);
     const page = rows.slice(0, limit);
     const last = page.at(-1);
-    const shown = await visibleRows(tx, scope, form.mainObjectId, page);
+    const shown = await visibleRows(tx, scope, page);
+    const files = await formFiles(tx, form);
     const names = await displays(
       tx,
       scope,
@@ -227,7 +259,7 @@ export async function listSubmissions(
     const versions = await loadVersions(tx, [...new Set(shown.map((row) => row.versionId))]);
     const items = shown.map((row): SubmissionSummary => {
       const version = versions.get(row.versionId);
-      const answers = version === undefined ? [] : answersOf(scope, form.mainObjectId, version.document, row.answers);
+      const answers = version === undefined ? [] : answersOf(scope, version.document, row.answers);
       const main = row.mainRecordId === null ? undefined : names.get(row.mainRecordId);
       return {
         id: row.id,
@@ -237,8 +269,8 @@ export async function listSubmissions(
         ...(row.processedAt === null ? {} : { processedAt: row.processedAt }),
         verdict: verdictOf(row.spam),
         ...(main === undefined ? {} : { mainRecord: main }),
-        ...summaryOf(answers),
-        crm: crmOf(row.state, main),
+        ...summaryOf(version?.document, answers),
+        crm: crmOf(row.state, main, files),
       };
     });
     return {
@@ -256,13 +288,13 @@ async function viewIn(tx: WorkspaceTx, scope: EngineScope, submissionId: string)
     .where(eq(formSubmissions.id, checkId(submissionId, UNKNOWN_SUBMISSION)));
   if (row === undefined) throw refuse('NOT_FOUND', UNKNOWN_SUBMISSION);
   const form = await loadForm(tx, row.formId);
-  if (form === undefined || objectLevel(scope.access, form.mainObjectId) === 'none') {
+  if (form === undefined || !canSeeForm(scope.access, form.mainObjectId)) {
     throw refuse('NOT_FOUND', UNKNOWN_SUBMISSION);
   }
-  const [visible] = await visibleRows(tx, scope, form.mainObjectId, [row]);
+  const [visible] = await visibleRows(tx, scope, [row]);
   if (visible === undefined) throw refuse('NOT_FOUND', UNKNOWN_SUBMISSION);
   const version = (await loadVersions(tx, [row.versionId])).get(row.versionId);
-  const answers = version === undefined ? [] : answersOf(scope, form.mainObjectId, version.document, row.answers);
+  const answers = version === undefined ? [] : answersOf(scope, version.document, row.answers);
   const touched = await tx
     .select({
       recordId: formSubmissionRecords.recordId,
@@ -308,8 +340,8 @@ async function viewIn(tx: WorkspaceTx, scope: EngineScope, submissionId: string)
     ...(row.processedAt === null ? {} : { processedAt: row.processedAt }),
     verdict: verdictOf(row.spam),
     ...(main === undefined ? {} : { mainRecord: main }),
-    ...summaryOf(answers),
-    crm: crmOf(row.state, main),
+    ...summaryOf(version?.document, answers),
+    crm: crmOf(row.state, main, await formFiles(tx, form)),
     versionNumber: version?.number ?? 1,
     answers,
     hidden,

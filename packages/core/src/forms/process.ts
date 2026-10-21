@@ -295,12 +295,14 @@ export type Filed =
       readonly assignment: Assignment;
     };
 
-/** What filing one submission reads: its answers, the form, the mapping to apply, and who writes. */
+/** What filing one submission reads: its answers, the form, the mapping to apply and its object, and who writes. */
 export interface FileInput {
   readonly submissionId: string;
   readonly answers: Readonly<Record<string, unknown>>;
   readonly form: FormRow;
   readonly document: FormDocument;
+  /** The object the mapping files onto: its document's target (the version sent, or the live one for a member's filing). */
+  readonly objectId: string;
   readonly attributes: ReadonlyMap<string, AttributeDef>;
   readonly options: ReadonlyMap<string, readonly { id: string; label: string }[]>;
   /** A live record the submission already filed into: updated in place rather than matched again. */
@@ -330,7 +332,7 @@ export const HIDDEN_TARGET =
  */
 export async function fileAnswers(context: WriteContext, input: FileInput): Promise<Filed> {
   const { tx } = context;
-  const { form, document, attributes } = input;
+  const { form, document, attributes, objectId } = input;
   const { planned, refused } = plan(document, attributes, input.options, input.answers);
 
   // Who owns a new record: chosen once, before anything is written (round robin's seam).
@@ -346,12 +348,12 @@ export async function fileAnswers(context: WriteContext, input: FileInput): Prom
   let matchedId: string | undefined = input.keepRecordId;
   if (matchedId === undefined) {
     // Two submissions for one new key take turns here, so the second finds the first's record (AC-562).
-    const match = matchKey(planned, document.targets.main.matchAttributeId);
+    const match = matchKey(planned, document.targets.main?.matchAttributeId);
     if (match !== undefined) {
       await tx.execute(
-        sql`select pg_advisory_xact_lock(hashtextextended(${`form-match:${form.mainObjectId}:${match.attribute.id}:${match.key}`}, 0))`,
+        sql`select pg_advisory_xact_lock(hashtextextended(${`form-match:${objectId}:${match.attribute.id}:${match.key}`}, 0))`,
       );
-      matchedId = await matchedRecord(tx, form.mainObjectId, match.attribute.id, match.key);
+      matchedId = await matchedRecord(tx, objectId, match.attribute.id, match.key);
     }
   }
 
@@ -370,7 +372,7 @@ export async function fileAnswers(context: WriteContext, input: FileInput): Prom
       gaveOwner = true;
     }
     const written = await writeSkipping(writer, values, (inner, given) =>
-      insertRecord(inner, { objectId: form.mainObjectId, values: given }),
+      insertRecord(inner, { objectId, values: given }),
     );
     if (!written.ok) return { kind: 'failed', failure: written.failure, refused, assignment };
     recordId = written.value.recordId;
@@ -412,7 +414,7 @@ export async function fileAnswers(context: WriteContext, input: FileInput): Prom
     .values({
       workspaceId: context.scope.workspaceId,
       submissionId: input.submissionId,
-      objectId: form.mainObjectId,
+      objectId,
       recordId,
       action,
       role: 'main',
@@ -510,12 +512,19 @@ export async function processSubmission(context: WriteContext, submissionId: str
   const version = (await loadVersions(tx, [submission.version_id])).get(submission.version_id);
   if (version === undefined) throw new Error('A submission names a version that is gone.');
   const { document } = version;
-  const attributes = await loadAttributes(tx, form.mainObjectId);
+  // A version that keeps its submissions only files nothing: the submission is done as it is.
+  const target = document.targets.main;
+  if (target === undefined) {
+    await keep(tx, submission.id);
+    return;
+  }
+  const attributes = await loadAttributes(tx, target.objectId);
   const filed = await fileAnswers(context, {
     submissionId: submission.id,
     answers: answersOf(submission.answers),
     form,
     document,
+    objectId: target.objectId,
     attributes,
     options: await optionsFor(tx, document, attributes),
     // The form acts with exactly its mapping: the answered attributes and, when it gives one, the owner.
@@ -525,11 +534,25 @@ export async function processSubmission(context: WriteContext, submissionId: str
         enterAsForm(
           context.scope,
           form.id,
-          formAccess(form.id, { objectId: form.mainObjectId, attributeIds: [...attributes.keys()], writable }),
+          formAccess(form.id, { objectId: target.objectId, attributeIds: [...attributes.keys()], writable }),
         ),
       ),
   });
   await settle(tx, submission.id, filed);
+}
+
+/** Ends a submission its form keeps only: `processed`, with no record, its outcome saying it was kept. */
+async function keep(tx: WorkspaceTx, submissionId: string): Promise<void> {
+  await tx
+    .update(formSubmissions)
+    .set({
+      state: 'processed',
+      processedAt: sql`now()`,
+      outcome: { kept: true },
+      failure: null,
+      updatedAt: sql`now()`,
+    })
+    .where(sql`${formSubmissions.id} = ${submissionId}`);
 }
 
 /** A stored answers column as a plain object. */

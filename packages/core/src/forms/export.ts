@@ -30,7 +30,7 @@ import { defineKind, MAX_ATTEMPTS, type KindDefinition, type StepOutcome } from 
 import type { JobRegistry } from '../jobs/registry.ts';
 import { startJob } from '../jobs/service.ts';
 import { loadVersions } from './shared.ts';
-import { answersOf, COLUMNS, crmOf, displays, readableForm, visibleRows, type Row } from './submissions.ts';
+import { answersOf, COLUMNS, crmOf, displays, formFiles, readableForm, visibleRows, type Row } from './submissions.ts';
 
 const { exportChunks, exports, formSubmissions, formVersions } = schema;
 
@@ -293,14 +293,9 @@ type Checkpoint = z.infer<typeof Checkpoint>;
 /**
  * The answer columns: every question of the form's published versions, by
  * key, the newest wording first, leaving out one filed on an attribute the
- * reader can't see.
+ * reader can't see (on that version's target object).
  */
-async function columnsOf(
-  tx: WorkspaceTx,
-  scope: EngineScope,
-  formId: string,
-  objectId: string,
-): Promise<z.infer<typeof Column>[]> {
+async function columnsOf(tx: WorkspaceTx, scope: EngineScope, formId: string): Promise<z.infer<typeof Column>[]> {
   const ids = await tx
     .select({ id: formVersions.id })
     .from(formVersions)
@@ -314,10 +309,15 @@ async function columnsOf(
   const hidden = new Set<string>();
   for (const { id } of ids) {
     const document: FormDocument | undefined = versions.get(id)?.document;
+    const objectId = document?.targets.main?.objectId;
     for (const question of document?.questions ?? []) {
       if (seen.has(question.key) || hidden.has(question.key)) continue;
       const attributeId = question.filedOn?.attributeId;
-      if (attributeId !== undefined && fieldLevel(scope.access, { id: attributeId, objectId }) === 'hidden') {
+      if (
+        attributeId !== undefined &&
+        objectId !== undefined &&
+        fieldLevel(scope.access, { id: attributeId, objectId }) === 'hidden'
+      ) {
         hidden.add(question.key);
         continue;
       }
@@ -377,7 +377,7 @@ async function exportStep(context: WriteContext, exportId: string, checkpoint: u
   let at: Checkpoint;
   if (stored.success) at = stored.data;
   else {
-    const columns = await columnsOf(tx, scope, form.id, form.mainObjectId);
+    const columns = await columnsOf(tx, scope, form.id);
     const header = CSV_BOM + headerOf(columns);
     await tx
       .insert(exportChunks)
@@ -413,7 +413,8 @@ async function exportStep(context: WriteContext, exportId: string, checkpoint: u
     )
     .orderBy(desc(formSubmissions.receivedAt), desc(formSubmissions.id))
     .limit(PAGE);
-  const shown = await visibleRows(tx, scope, form.mainObjectId, rows);
+  const shown = await visibleRows(tx, scope, rows);
+  const files = await formFiles(tx, form);
   const names = await displays(
     tx,
     scope,
@@ -423,12 +424,13 @@ async function exportStep(context: WriteContext, exportId: string, checkpoint: u
   const lines = shown.map((row) => {
     const version = versions.get(row.versionId);
     const answers = new Map(
-      (version === undefined ? [] : answersOf(scope, form.mainObjectId, version.document, row.answers)).map(
-        (answer) => [answer.key, answer.value],
-      ),
+      (version === undefined ? [] : answersOf(scope, version.document, row.answers)).map((answer) => [
+        answer.key,
+        answer.value,
+      ]),
     );
     const main = row.mainRecordId === null ? undefined : names.get(row.mainRecordId);
-    const crm = crmOf(row.state, main);
+    const crm = crmOf(row.state, main, files);
     const hidden = typeof row.hidden === 'object' && row.hidden !== null ? (row.hidden as Record<string, unknown>) : {};
     return csvLine([
       row.receivedMicros,

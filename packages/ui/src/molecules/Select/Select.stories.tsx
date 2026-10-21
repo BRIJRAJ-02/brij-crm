@@ -123,6 +123,38 @@ export const Open: Story = {
   },
 };
 
+/** A choice unlike the rest, set apart under a hairline: a form's "Don't add to the CRM" after the objects. */
+export const ApartItem: Story = {
+  args: {
+    label: 'Where submissions go',
+    optionStyle: 'plain',
+    defaultValue: 'people',
+    defaultOpen: true,
+    items: [
+      { id: 'people', label: 'People', icon: 'user' },
+      { id: 'companies', label: 'Companies', icon: 'building' },
+      { id: 'deals', label: 'Deals', icon: 'handshake' },
+      { id: 'none', label: 'Don’t add to the CRM', icon: 'inbox', isApart: true },
+    ],
+  },
+  render: (args) => (
+    <Stage width="narrow">
+      <Select {...args} />
+    </Stage>
+  ),
+  play: async ({ args, userEvent }) => {
+    const list = await listbox();
+    const apart = [...list.querySelectorAll('[role="option"]')].find((option) =>
+      option.textContent.includes('Don’t add to the CRM'),
+    );
+    await expect(apart).toHaveAttribute('data-apart', 'true');
+    await expect(list.querySelectorAll('[data-apart]')).toHaveLength(1);
+    if (!(apart instanceof HTMLElement)) throw new Error('no apart option');
+    await userEvent.click(apart);
+    await expect(args.onChange).toHaveBeenCalledWith('none');
+  },
+};
+
 /** Tags for a select attribute, people with avatars, and the read only, invalid and disabled states. */
 export const Styles: Story = {
   render: () => (
