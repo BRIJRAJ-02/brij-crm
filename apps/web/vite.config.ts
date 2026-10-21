@@ -6,6 +6,7 @@ import { tanstackRouter } from '@tanstack/router-plugin/vite';
 import react from '@vitejs/plugin-react';
 import { defineConfig, type Plugin } from 'vite';
 import { contentSecurityPolicy, directiveSources, sentryDsnProblem } from './csp.ts';
+import { embedScript } from './embed-script.ts';
 import { realtimeCspProblem } from './realtime-csp.ts';
 
 // The api the dev server and `vite preview` proxy /api to. API_DEV_ORIGIN moves it, so a second stack (another
@@ -186,6 +187,8 @@ export default defineConfig({
     deleteSourceMaps(),
     hostedForms(),
     publicBookingPage(),
+    // The one script a site adds for embeds and its own form, minified as /embed/v1.js.
+    embedScript(),
   ],
   server: {
     port: 5173,

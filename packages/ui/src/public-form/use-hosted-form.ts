@@ -44,6 +44,8 @@ export interface HostedFormSettings {
   readonly form: PublicForm;
   readonly mode: HostedFormMode;
   readonly countryGuess?: string | undefined;
+  /** Answers to start with, by question key (HostedFormProps' `prefill`). */
+  readonly prefill?: Readonly<Record<string, string>> | undefined;
   readonly onSubmit?: ((submission: HostedSubmission) => Promise<HostedSubmitOutcome>) | undefined;
   readonly onRedirect?: ((url: string) => void) | undefined;
   readonly now: () => number;
@@ -102,18 +104,37 @@ export interface HostedFormRefs {
   readonly heading: RefObject<HTMLHeadingElement | null>;
 }
 
-/** The answers a form starts with: the guessed country for a country question. */
+/** The types a prefill's words fill as they are. */
+const PREFILLED_AS_TEXT: ReadonlySet<string> = new Set(['short_text', 'long_text', 'email', 'website', 'number']);
+
+/** A question's start from a prefill: the words for text, a choice by its words or its key; undefined otherwise. */
+export function prefillAnswer(question: PublicQuestion, given: string | undefined): string | undefined {
+  if (given === undefined) return undefined;
+  const words = given.trim().slice(0, 500);
+  if (words === '') return undefined;
+  if (PREFILLED_AS_TEXT.has(question.answerType)) return words;
+  if (question.answerType !== 'dropdown' && question.answerType !== 'choice') return undefined;
+  const choices = question.choices ?? [];
+  if (choices.includes(words)) return words;
+  const at = (question.choiceKeys ?? []).indexOf(words);
+  return at === -1 ? undefined : choices[at];
+}
+
+/** The answers a form starts with: the guessed country for a country question, and the prefill's answers. */
 function firstAnswers(
   form: PublicForm,
   countryGuess: string | undefined,
   countryNames: ReadonlyMap<string, string>,
+  prefill: Readonly<Record<string, string>> | undefined,
 ): Answers {
   return Object.fromEntries(
-    form.questions.flatMap((question) =>
-      question.answerType === 'country' && countryGuess !== undefined && countryNames.has(countryGuess)
+    form.questions.flatMap((question) => {
+      const given = prefillAnswer(question, prefill?.[question.key]);
+      if (given !== undefined) return [[question.key, given]];
+      return question.answerType === 'country' && countryGuess !== undefined && countryNames.has(countryGuess)
         ? [[question.key, countryNames.get(countryGuess)]]
-        : [],
-    ),
+        : [];
+    }),
   );
 }
 
@@ -139,7 +160,16 @@ function intoItsPopover(next: EventTarget | null): boolean {
  * every layout checks, hints, sends and thanks the same way, with every word
  * from `formStrings` and every check from `checkAnswers`.
  */
-export function useHostedForm({ form, mode, countryGuess, onSubmit, onRedirect, now, onRefused }: HostedFormSettings): {
+export function useHostedForm({
+  form,
+  mode,
+  countryGuess,
+  prefill,
+  onSubmit,
+  onRedirect,
+  now,
+  onRefused,
+}: HostedFormSettings): {
   readonly state: HostedFormState;
   readonly refs: HostedFormRefs;
 } {
@@ -149,7 +179,7 @@ export function useHostedForm({ form, mode, countryGuess, onSubmit, onRedirect, 
     () => new Map(countriesIn(form.language).map((country) => [country.code, country.name])),
     [form.language],
   );
-  const [answers, setAnswers] = useState<Answers>(() => firstAnswers(form, countryGuess, countryNames));
+  const [answers, setAnswers] = useState<Answers>(() => firstAnswers(form, countryGuess, countryNames, prefill));
   const [errors, setErrors] = useState<Messages>({});
   const [hints, setHints] = useState<Messages>({});
   // Questions that have held an answer: a required one emptied again says so when it loses focus.
@@ -305,7 +335,7 @@ export function useHostedForm({ form, mode, countryGuess, onSubmit, onRedirect, 
 
   const sendAnother = () => {
     setRound((count) => count + 1);
-    setAnswers(firstAnswers(form, countryGuess, countryNames));
+    setAnswers(firstAnswers(form, countryGuess, countryNames, prefill));
     setErrors({});
     setHints({});
     setTouched(new Set());
