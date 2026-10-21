@@ -17,7 +17,7 @@ import { StatusDot } from '../../atoms/StatusDot/StatusDot.tsx';
 import { Tag } from '../../atoms/Tag/Tag.tsx';
 import type { Hue } from '../../hue.ts';
 import { Field } from '../Field/Field.tsx';
-import { InPopover, Popover } from '../Popover/Popover.tsx';
+import { InPopover, Popover, type PopoverPlacement } from '../Popover/Popover.tsx';
 import styles from './Select.module.css';
 import { strings } from './strings.ts';
 
@@ -101,6 +101,11 @@ export interface SelectProps {
    * spilled out of the dialog it opened in and covered its buttons (the owner, 22 October 2026).
    */
   readonly optionDescription?: 'after' | 'below';
+  /**
+   * Where the list opens (under the trigger by default; React Aria flips it when there's no room). `top end` keeps
+   * a short list above a dialog's footer when the trigger sits just over it (the Invite dialog's role per row).
+   */
+  readonly placement?: PopoverPlacement;
   /** A search field over the options, for long lists such as countries. */
   readonly isSearchable?: boolean;
   /**
@@ -193,6 +198,7 @@ export function Select({
   variant = 'default',
   showsDescription = false,
   optionDescription = 'after',
+  placement,
   autoFocus = false,
   defaultOpen,
   onOpenChange,
@@ -404,8 +410,11 @@ export function Select({
       </FieldError>
       <Popover
         {...(optionDescription === 'below'
-          ? { width: 'list' as const, placement: 'bottom end' as const }
-          : { width: variant === 'default' || variant === 'time' ? 'trigger' : 'menu' })}
+          ? { width: 'list' as const, placement: placement ?? ('bottom end' as const) }
+          : {
+              width: variant === 'default' || variant === 'time' ? 'trigger' : 'menu',
+              ...(placement === undefined ? {} : { placement }),
+            })}
       >
         {hasSearch ? (
           // The search takes focus through the list's own focus scope, once that scope is in place: an input's

@@ -12,7 +12,7 @@ import {
   type Role,
   type RoleOption,
 } from '@crm/data';
-import { Button, Callout, Field, Modal, Select } from '@crm/ui';
+import { Button, Callout, Field, InfoTip, Modal, Select } from '@crm/ui';
 import { useEffect, useRef, useState } from 'react';
 import { isEmail, parseEmails } from './members.ts';
 import { strings } from './members-strings.ts';
@@ -80,7 +80,8 @@ function problemOf(row: Row, rows: readonly Row[], isChecking: boolean, known: K
 
 /**
  * The Invite dialog: one row per person, an email Field with that row's role
- * (a compact Select whose options carry their line below) and a remove button
+ * (a compact Select of role names, opening above it; the title bar's tip says
+ * what each role can do) and a remove button
  * beside it. An address that already belongs or is already invited is refused
  * in its row before anything is sent. "Add another" and Enter
  * in the last row add a row and focus it; a pasted list fills rows. Invite
@@ -238,7 +239,11 @@ export function InviteDialog({
       );
   };
 
-  const roleItems = roles.map((each) => ({ id: each.id, label: each.label, description: each.description }));
+  // Names only, so the list is short enough to open above the footer; what each can do is in the title bar's tip.
+  const roleItems = roles.map((each) => ({ id: each.id, label: each.label }));
+  const aboutRoles = (
+    <InfoTip label={strings.aboutRoles}>{roles.map((each) => `${each.label}: ${each.description}`).join(' ')}</InfoTip>
+  );
 
   if (sent !== undefined) {
     return (
@@ -277,6 +282,7 @@ export function InviteDialog({
       onOpenChange={(open) => {
         if (!open) close();
       }}
+      headerActions={aboutRoles}
       // Typed addresses aren't thrown away by a stray click outside.
       isDismissable={rows.every((row) => row.email.trim() === '')}
       isBusy={isBusy}
@@ -331,7 +337,7 @@ export function InviteDialog({
                 <Select
                   label={strings.roleFor(row.email.trim() === '' ? strings.rowName(index + 1) : row.email.trim())}
                   isLabelHidden
-                  optionDescription="below"
+                  placement="top end"
                   items={roleItems}
                   value={row.roleId}
                   isDisabled={isBusy}
