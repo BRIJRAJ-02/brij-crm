@@ -55,7 +55,8 @@ test.describe('trash', () => {
     // Two ticked: the bar counts them, and Delete asks first (AC-522, AC-525).
     await tick(page, 'Ada Byron').click();
     await tick(page, 'Bea Stone').click();
-    await expect(bar(page).getByRole('status')).toHaveText('2 selected');
+    // The count, of the bar's two live regions (the other says the bulk steps as they run).
+    await expect(bar(page).getByRole('status').filter({ hasText: 'selected' })).toHaveText('2 selected');
     await checkScreen(page, 'trash-bar');
     await bar(page).getByRole('button', { name: 'Delete' }).click();
     const confirm = page
