@@ -209,6 +209,9 @@ function AccountCard({
       >
         {/* An account that stopped syncing shows its fix on the row, not behind the menu. */}
         {canReconnect && <Button onPress={onReconnect}>{strings.reconnect}</Button>}
+        {/* Read with the choice: "Teammates see Full details" (the Select's own name says it to screen readers). */}
+        <span aria-hidden="true">{strings.sharingLabel}</span>
+        <InfoTip label={strings.sharingLabel}>{strings.sharingInfo}</InfoTip>
         <Select
           label={strings.sharingLabel}
           isLabelHidden

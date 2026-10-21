@@ -55,7 +55,7 @@ export const strings = {
   },
   colourSaved: (name: string) => `${name}’s colour changed`,
   defaultSaved: (name: string) => `New bookings now go to ${name}`,
-  sharingSaved: (account: string) => `Who sees ${account}’s meetings changed`,
+  sharingSaved: (account: string) => `What teammates see of ${account}’s meetings changed`,
   undo: 'Undo',
   /** New bookings moved off a calendar the provider removed (AC-1005). */
   fellBackTitle: 'Your default calendar changed',
@@ -73,13 +73,16 @@ export const strings = {
   } satisfies Record<CalendarStatus, string>,
   synced: 'Synced',
   notSyncedYet: 'Not synced yet',
-  sharingLabel: 'Who sees this calendar’s meetings',
-  shared: 'Shared',
-  private: 'Private',
+  /** What teammates see of an account's meetings (the owner asked what Shared and Private meant, 22 Oct 2026). */
+  sharingLabel: 'Teammates see',
+  shared: 'Full details',
+  private: 'Busy only',
   sharingHelp: {
-    shared: 'Others see the title, attendees and link',
-    private: 'Others see “Private meeting” and the time',
+    shared: 'Title, attendees and link',
+    private: 'Shown as “Private meeting” with the time',
   },
+  sharingInfo:
+    'Controls what other members of this workspace see of meetings from this calendar account, on their calendar and in Bookings. You always see everything.',
   makeDefault: 'Make default',
   reconnect: 'Reconnect',
   /** Local development only: Google's notices can't reach a laptop, so sync waits for the 15 minute poll. */
