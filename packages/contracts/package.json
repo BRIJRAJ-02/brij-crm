@@ -15,6 +15,7 @@
     "./picker": "./src/values/picker.ts",
     "./activity-keys": "./src/activity-keys.ts",
     "./task-limits": "./src/task-limits.ts",
+    "./account-limits": "./src/account-limits.ts",
     "./note-limits": "./src/note-limits.ts",
     "./monitoring": "./src/monitoring/index.ts",
     "./events": "./src/monitoring/events.ts",

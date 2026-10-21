@@ -253,6 +253,7 @@ export type { ScheduleList, ScheduleMember, ScheduleUser, ScheduleView } from '@
 export type { SchedulesState, SchedulesView } from './schedules/store.ts';
 export type { AccountSessionsState, AccountSessionsView, SignOutOthersResult } from './account/sessions.ts';
 export type { AccountSession } from '@crm/contracts';
+export { STEP_UP_MINUTES } from '@crm/contracts/account-limits';
 export type { CalendarSettingsHeld, CalendarSettingsState, CalendarState, CalendarView } from './calendar/store.ts';
 export type { CaptureListState, CaptureListView } from './captures/list.ts';
 export { connectUrl, needsReconnect, type ConnectReturn } from './calendar/store.ts';

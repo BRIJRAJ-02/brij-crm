@@ -6,11 +6,7 @@ import { oc } from '@orpc/contract';
 import * as z from 'zod';
 import { Uuid } from './values/ids.ts';
 
-/**
- * How long a verification at sign in (or, from milestone 2, a step up) counts
- * as fresh for a sensitive change on that session (AC-896): 10 minutes.
- */
-export const STEP_UP_MINUTES = 10;
+export { STEP_UP_MINUTES } from './account-limits.ts';
 
 /** The most sessions one page of `account.sessions.list` answers. */
 export const SESSION_PAGE_MAX = 50;
