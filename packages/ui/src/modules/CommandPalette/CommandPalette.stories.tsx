@@ -168,14 +168,12 @@ function sectionsOf(query: string, status: 'ready' | 'searching' | 'failed'): re
 interface SectionsSampleProps {
   readonly onAction?: (item: PaletteItem) => void;
   readonly status?: 'ready' | 'searching' | 'failed';
-  /** What is typed at first, so the story starts on a search. */
-  readonly startWith?: string;
 }
 
 /** The command menu: Recent, Actions and Go to with nothing typed; Records, Pages and Actions as it searches. */
-function SectionsPalette({ onAction, status: first = 'ready', startWith = '' }: SectionsSampleProps) {
+function SectionsPalette({ onAction, status: first = 'ready' }: SectionsSampleProps) {
   const [isOpen, setOpen] = useState(true);
-  const [query, setQuery] = useState(startWith);
+  const [query, setQuery] = useState('');
   // Try again asks again: the sample's search goes back to searching.
   const [status, setStatus] = useState(first);
   return (
@@ -225,7 +223,7 @@ export const SectionsSearchAndChoose: Story = {
 
 /** The records search still out: its section says so in a row, while the pages already show. */
 export const SectionSearching: Story = {
-  render: () => <SectionsPalette status="searching" startWith="se" />,
+  render: () => <SectionsPalette status="searching" />,
   play: async ({ userEvent }) => {
     const found = await dialog();
     await userEvent.keyboard('se');

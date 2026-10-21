@@ -14,7 +14,7 @@ import type {
 import { Avatar, CommandPalette, type PaletteItem, type PaletteSection } from '@crm/ui';
 import type { ThemeChoice } from '@crm/ui/theme';
 import { useMatch, useNavigate, useRouteContext } from '@tanstack/react-router';
-import { useEffect, useMemo, useState, useSyncExternalStore } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
 import { recordHref } from '../records/details.ts';
 import {
   actionCommands,
@@ -46,12 +46,12 @@ export interface CommandMenuProps {
  */
 export function CommandMenu({ slug, mode, isOpen, onOpenChange }: CommandMenuProps) {
   const { data, theme, toasts } = useRouteContext({ from: '__root__' });
-  const loaded = useMatch({ from: '/w/$slug', shouldThrow: false })?.loaderData;
+  const loaded = useMatch({ from: '/w/$slug', shouldThrow: false, select: (match) => match.loaderData });
   const objects = useMemo(() => loaded?.objects ?? [], [loaded?.objects]);
   const permissions = loaded?.access?.permissions;
   const navigate = useNavigate();
-  const search = useMenuSearch(data, slug);
   const [query, setQuery] = useState('');
+  const { search, hasFailed, reopen } = useMenuSearch(data, slug, isOpen, query);
   const recents = useRecents(data, slug);
   const themeChoice = useSyncExternalStore(
     (listener) => theme.subscribe(listener),
@@ -79,13 +79,18 @@ export function CommandMenu({ slug, mode, isOpen, onOpenChange }: CommandMenuPro
           items: recents.slice(0, RECENT_SHOWN).map((item) => recentRow(item, byId)),
         },
         { id: 'actions', label: strings.actions, items: actions.map(row) },
-        { id: 'pages', label: strings.goTo, items: [...pages, ...settings].map(row) },
+        { id: 'pages', label: strings.goTo, items: pages.map(row) },
       ];
     }
     // The server's answer counts only for what is typed now; until it is in, the records row says so (AC-1083).
     const isCurrent = found !== undefined && found.query === text;
-    const status =
-      !isCurrent || found.status === 'loading' ? 'searching' : found.status === 'error' ? 'failed' : undefined;
+    const status = hasFailed
+      ? 'failed'
+      : !isCurrent || found.status === 'loading'
+        ? 'searching'
+        : found.status === 'error'
+          ? 'failed'
+          : undefined;
     return [
       {
         id: 'records',
@@ -98,7 +103,7 @@ export function CommandMenu({ slug, mode, isOpen, onOpenChange }: CommandMenuPro
       { id: 'settings', label: strings.settingsSection, items: matchCommands(settings, text).map(row) },
       { id: 'actions', label: strings.actions, items: matchCommands(actions, text).map(row) },
     ];
-  }, [text, found, recents, actions, pages, settings, byId, themeChoice]);
+  }, [text, found, hasFailed, recents, actions, pages, settings, byId, themeChoice]);
 
   const choose = (item: PaletteItem) => {
     const close = () => {
@@ -137,33 +142,61 @@ export function CommandMenu({ slug, mode, isOpen, onOpenChange }: CommandMenuPro
         search?.ask(next);
       }}
       onRetry={() => {
-        search?.retry();
+        if (search === undefined) reopen();
+        else search.retry();
       }}
       onAction={choose}
     />
   );
 }
 
-/** This opening's search, loaded with `import()` on first use and disposed when the menu goes. */
-function useMenuSearch(data: DataLayer, slug: string): GlobalSearch | undefined {
+/** This opening's search: its code loads with `import()` on first use, and it is disposed when the menu closes. */
+interface MenuSearch {
+  readonly search: GlobalSearch | undefined;
+  /** The search's code didn't load: Records says the search failed, and Try again loads it again. */
+  readonly hasFailed: boolean;
+  readonly reopen: () => void;
+}
+
+function useMenuSearch(data: DataLayer, slug: string, isOpen: boolean, query: string): MenuSearch {
   const [search, setSearch] = useState<GlobalSearch | undefined>(undefined);
+  const [hasFailed, setFailed] = useState(false);
+  const [attempt, setAttempt] = useState(0);
+  // What is typed while the code loads, asked as soon as the search arrives, so no key is lost.
+  const typed = useRef(query);
   useEffect(() => {
+    typed.current = query;
+  }, [query]);
+  useEffect(() => {
+    if (!isOpen) return;
     let held: GlobalSearch | undefined;
     let isGone = false;
-    void data.search.open(slug).then((made) => {
-      if (isGone) {
-        made.dispose();
-        return;
-      }
-      held = made;
-      setSearch(made);
-    });
+    data.search.open(slug).then(
+      (made) => {
+        if (isGone) {
+          made.dispose();
+          return;
+        }
+        held = made;
+        made.ask(typed.current);
+        setFailed(false);
+        setSearch(made);
+      },
+      () => {
+        if (!isGone) setFailed(true);
+      },
+    );
     return () => {
       isGone = true;
       held?.dispose();
+      setSearch(undefined);
     };
-  }, [data, slug]);
-  return search;
+  }, [data, slug, isOpen, attempt]);
+  const reopen = useCallback(() => {
+    setFailed(false);
+    setAttempt((count) => count + 1);
+  }, []);
+  return { search, hasFailed, reopen };
 }
 
 const noSubscribe = () => () => undefined;

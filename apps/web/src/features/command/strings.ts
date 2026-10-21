@@ -4,7 +4,7 @@ export const strings = {
   commandMenu: 'Command menu',
   search: 'Search',
   /** The field's name and hint. */
-  searchLabel: 'Search records, pages and actions',
+  searchLabel: 'Search records, views, pages and actions',
   searchOnlyLabel: 'Search records, views and pages',
   placeholder: 'Type a command or search…',
   searchPlaceholder: 'Search records, views and pages…',
@@ -39,6 +39,8 @@ export const strings = {
   addWord: 'add',
   useTheme: { light: 'Use light theme', dark: 'Use dark theme', system: 'Use system theme' },
   themeTerms: ['theme', 'appearance', 'mode'],
+  /** Create a <object> on an object with only boards, which have no new record dialog. */
+  openTableToCreate: (singular: string) => `Open a table view to add a ${singular.toLocaleLowerCase()}`,
   themeOn: { light: 'Light theme on', dark: 'Dark theme on', system: 'Theme follows your system' },
   /** Shortcut list entries (AC-1099). */
   openMenu: 'Open the command menu',

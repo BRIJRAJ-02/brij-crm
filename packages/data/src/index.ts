@@ -3497,6 +3497,8 @@ export function createDataLayer({
        * life). Its code loads on first use, never in the first load. Read it
        * through `useGlobalSearch`, and `dispose` it when the menu closes.
        */
+      /** Loads the search's code ahead of use (the menu's idle prefetch), so the first search waits on no chunk. */
+      preload: (): Promise<void> => import('./search/global.ts').then(() => undefined),
       open: async (workspace: string): Promise<GlobalSearch> =>
         (await import('./search/global.ts')).createGlobalSearch({
           run: (query, signal) =>

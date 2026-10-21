@@ -4,7 +4,7 @@
 // answers named at the foot. Rows come as one flat list (`items`, long and
 // async, virtualised) or in sections under headings (`sections`, the command
 // menu's Recent, Records, Views, Pages, Settings and Actions).
-import { useEffect, useState, type ReactNode } from 'react';
+import { useEffect, useState, type KeyboardEvent, type ReactNode } from 'react';
 import { Kbd } from '../../atoms/Kbd/Kbd.tsx';
 import type { IconName } from '../../atoms/Icon/icons.ts';
 import { VisuallyHidden } from '../../atoms/VisuallyHidden/VisuallyHidden.tsx';
@@ -82,7 +82,7 @@ export type CommandPaletteProps = PaletteLook &
   );
 
 /** The key of a section's status row: never an item's. */
-const STATUS_KEY = 'palette:status';
+const STATUS_KEY = 'palette:status:';
 
 /** How long a search runs before the live region says "Searching…", so typing quickly never chatters (AC-1098). */
 const SEARCHING_SAID_AFTER_MS = 500;
@@ -110,11 +110,12 @@ export function CommandPalette(props: CommandPaletteProps) {
 
   let list: ReactNode;
   let announcer: ReactNode = null;
+  let chooseFirst: ((event: KeyboardEvent<HTMLDivElement>) => void) | undefined;
   if (props.sections !== undefined) {
     const { sections, onRetry } = props;
     const shown = sections.filter((section) => section.items.length > 0 || section.status !== undefined);
     const choose = (key: string | number) => {
-      if (key === STATUS_KEY) {
+      if (String(key).startsWith(STATUS_KEY)) {
         onRetry?.();
         return;
       }
@@ -125,6 +126,16 @@ export function CommandPalette(props: CommandPaletteProps) {
           return;
         }
       }
+    };
+    // Enter with no row highlighted (the rows came in after the typing, past a "Searching…" row) chooses the first one.
+    const first = shown.flatMap((section) => section.items)[0];
+    chooseFirst = (event) => {
+      const target = event.target;
+      if (event.key !== 'Enter' || first === undefined || !(target instanceof HTMLInputElement)) return;
+      if ((target.getAttribute('aria-activedescendant') ?? '') !== '') return;
+      event.preventDefault();
+      event.stopPropagation();
+      close(first);
     };
     list = (
       <Menu
@@ -142,12 +153,12 @@ export function CommandPalette(props: CommandPaletteProps) {
               </MenuItem>
             ))}
             {section.status === 'searching' && (
-              <MenuItem key={STATUS_KEY} id={STATUS_KEY} isDisabled>
+              <MenuItem key={STATUS_KEY + section.id} id={STATUS_KEY + section.id} isPending>
                 {strings.searching}
               </MenuItem>
             )}
             {section.status === 'failed' && (
-              <MenuItem key={STATUS_KEY} id={STATUS_KEY} icon="refresh-cw">
+              <MenuItem key={STATUS_KEY + section.id} id={STATUS_KEY + section.id} icon="refresh-cw">
                 {strings.failed}
               </MenuItem>
             )}
@@ -159,6 +170,8 @@ export function CommandPalette(props: CommandPaletteProps) {
       <ResultCount
         count={shown.reduce((total, section) => total + section.items.length, 0)}
         isSearching={shown.some((section) => section.status === 'searching')}
+        isFailed={shown.some((section) => section.status === 'failed')}
+        query={query.trim()}
       />
     );
   } else {
@@ -205,7 +218,8 @@ export function CommandPalette(props: CommandPaletteProps) {
         </span>
       }
     >
-      <div className={styles.list}>
+      {/* Only the field's own Enter reaches here; the rows' keys stay with the menu. */}
+      <div className={styles.list} {...(chooseFirst === undefined ? {} : { onKeyDownCapture: chooseFirst })}>
         {list}
         {announcer}
       </div>
@@ -229,15 +243,22 @@ function rowLook(item: PaletteItem) {
  * The polite live region (AC-1098): how many results show once no section
  * is searching, and "Searching…" only once a search has run past half a second.
  */
-function ResultCount({ count, isSearching }: { readonly count: number; readonly isSearching: boolean }) {
+function ResultCount({ count, isSearching, isFailed, query }: ResultCountProps) {
   return (
     <VisuallyHidden>
       <span role="status" aria-live="polite">
-        {/* Mounted afresh for each search, so its wait starts with the search. */}
-        {isSearching ? <SaidWhenSlow /> : strings.results(count)}
+        {/* Keyed by what is typed, so each search's wait starts with it and typing on never says "Searching…". */}
+        {isSearching ? <SaidWhenSlow key={query} /> : isFailed ? strings.failed : strings.results(count)}
       </span>
     </VisuallyHidden>
   );
+}
+
+interface ResultCountProps {
+  readonly count: number;
+  readonly isSearching: boolean;
+  readonly isFailed: boolean;
+  readonly query: string;
 }
 
 /** "Searching…", once the search it was mounted for has run past half a second. */

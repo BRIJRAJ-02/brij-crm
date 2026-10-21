@@ -53,6 +53,11 @@
     opacity: var(--opacity-disabled);
   }
 
+  .item[data-pending] {
+    opacity: 1;
+    color: var(--text-secondary);
+  }
+
   .item[data-open] {
     background: var(--surface-hover);
   }

@@ -52,3 +52,21 @@ Every statement is inside the 150 ms budget there. The candidate budgets in `sea
 ## AC-1101: size
 
 Owed: CI's size job on this branch's next green run gives the first load against `main`'s, and the menu's chunk.
+
+## Reviews (21 October 2026)
+
+The design system, interaction and state reviews of milestone 2 found, and this branch fixed:
+
+- A query typed before the search's code arrived was lost, and a failed load left "Searching…" for good. The menu now asks what is typed as soon as the search arrives, a failed load shows the failed row whose Try again loads it again, and the provider preloads the search's code on idle beside the menu's.
+- Create a <object> on an object that lands on a board did nothing. It now opens the landing, default or first table view with the New dialog, and an object with only boards says "Open a table view to add a deal".
+- "Searching…" was a disabled row at half opacity. Menu gained a pending row (`isPending`): the secondary text colour at full contrast and the arrow cursor.
+- Typing and pressing Enter could open nothing once the records came in after a "Searching…" row. Enter with no row highlighted now opens the first row; the flow types and presses Enter with no arrow.
+- The live region said "Searching…" while the person kept typing, and a count on a failure. It now waits half a second per query, and says the search failed.
+- Empty Go to lists the pages only (Settings pages show when searched), the field's name includes views, the create request is handed back once, and the closed menu disposes its search and reads only its match's loader data.
+
+Proposed spec changes, for the owner:
+
+- **AC-1073 and AC-1097**: "Esc clears what is typed, then closes", as React Aria's search field does and the flow now checks.
+- **AC-1076 and AC-1080**: a record row shows the record's avatar (square initials for a company, round for a person), as RecordChip does everywhere else, rather than the object's tile.
+
+Owed elsewhere: a Quick actions button in the sidebar and the phone top bar (spec 0034's sidebar lane) calling `useCommandMenu().open()`, and the ⌘K and `/` lines in the shortcut list (`COMMAND_MENU_KEYS`, `SEARCH_KEYS`, `strings.openMenu`, `strings.openSearch`). Until the button lands, the menu can't be opened on a touch screen.

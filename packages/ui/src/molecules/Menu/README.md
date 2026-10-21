@@ -41,7 +41,7 @@ Ported from the artifact's Menu card. Every dropdown of actions or choices in th
 
 ## States
 
-Focused (keyboard or pointer, `surface-hover`; keyboard adds the inset ring), selected (a check), disabled, danger, submenu open, empty ("No matches"), loading rows (skeletons). It opens from the keyboard at once, grows from its trigger for a pointer, and fades out faster than it came.
+Focused (keyboard or pointer, `surface-hover`; keyboard adds the inset ring), selected (a check), disabled, pending (`isPending`: a status row such as "Searching…", in the secondary text colour at full contrast with the arrow cursor, never highlighted or chosen), danger, submenu open, empty ("No matches"), loading rows (skeletons). It opens from the keyboard at once, grows from its trigger for a pointer, and fades out faster than it came.
 
 ## Keyboard
 
