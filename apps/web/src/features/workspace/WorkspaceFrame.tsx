@@ -145,9 +145,10 @@ export function WorkspaceFrame({
   const nav = snapshot.status === 'ready' ? snapshot.nav : snapshot.status === 'error' ? DEFAULT_NAV : undefined;
   const universe = useMemo(() => universeOf(objects, nav ?? DEFAULT_NAV), [objects, nav]);
   const isRail = nav?.rail ?? readRailHint(slug);
+  const keptRail = snapshot.status === 'ready' ? snapshot.nav.rail : undefined;
   useEffect(() => {
-    if (snapshot.status === 'ready') keepRailHint(slug, snapshot.nav.rail);
-  }, [slug, snapshot]);
+    if (keptRail !== undefined) keepRailHint(slug, keptRail);
+  }, [slug, keptRail]);
   const setRail = useCallback(
     (on: boolean) => {
       data.nav.change(slug, { op: 'rail', on }, universe);

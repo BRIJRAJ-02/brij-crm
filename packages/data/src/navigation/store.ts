@@ -15,9 +15,10 @@
 // resync, reads it again too, coarsely and at most once a second, so a
 // favourite renamed, deleted, trashed or restored follows (AC-939).
 //
-// Plain TypeScript with no runtime imports beyond the contracts' plain model,
-// so it sits in the first load and the sidebar's first paint has the
-// member's order (AC-936).
+// Plain TypeScript with no runtime imports beyond the contracts' plain model.
+// The layer loads it on first use, out of the first load; the workspace
+// route's loader waits for its read, so the first paint has the member's
+// order (AC-936).
 import type { NavState } from '@crm/contracts';
 import { applyNavOp, navKey, type NavOperation, type NavPrefs, type NavUniverse } from '@crm/contracts/navigation';
 import { toDataError, type DataError } from '../errors.ts';
@@ -40,6 +41,12 @@ const SAID_ELSEWHERE: readonly string[] = ['NOT_FOUND', 'FORBIDDEN', 'UNAUTHENTI
 
 /** The least time between two coarse rereads of one workspace's sidebar (a burst of favourite changes). */
 export const NAV_REREAD_MS = 1000;
+
+/** How long the live watch outlives the last screen holding the sidebar: a page change drops no connection. */
+export const NAV_KEEP_MS = 30_000;
+
+/** Refusals that would only repeat: offered no Retry. */
+const LASTING: readonly string[] = ['NAV_LIMIT', 'NOT_FOUND', 'CONFIG_INVALID', 'FORBIDDEN', 'INPUT_INVALID'];
 
 /** The calls the store makes, each mapped to a DataError by the layer. */
 export interface NavApi {
@@ -69,8 +76,8 @@ export interface NavStoreDeps {
   readonly watch: (workspace: string) => () => void;
   /** Whether an event's member ids name the person (their member id in the workspace). */
   readonly namesMe: (workspace: string, memberIds: readonly string[]) => Promise<boolean>;
-  /** A refused change was put back: say why, with Retry. */
-  readonly onRefused: (error: DataError, retry: () => void) => void;
+  /** A refused change was put back: say why, with Retry when trying again could land (a passing failure). */
+  readonly onRefused: (error: DataError, retry?: () => void) => void;
   /** The sidebar couldn't be read and nothing is held: say so once, with Retry, until a read succeeds. */
   readonly onUnavailable: (error: DataError, retry: () => void) => void;
   /** Timers, for tests. */
@@ -87,6 +94,12 @@ interface Entry {
   confirmed?: NavState;
   error?: DataError;
   reading?: Promise<NavState>;
+  /** Something asked for a fresh read while one was out: one more read once it settles. */
+  readAgain: boolean;
+  /** Changes made so far: a Retry lands only if nothing was changed after its refusal. */
+  made: number;
+  /** Bumped by each hold and release, so a delayed release knows a screen came back. */
+  holdToken: number;
   /** Changes not yet answered, oldest first: the first is out, the rest wait their turn. */
   readonly pending: Pending[];
   sending: boolean;
@@ -136,6 +149,9 @@ export function createNavStore(deps: NavStoreDeps) {
       rereadDue: false,
       rereadAgain: false,
       toldUnavailable: false,
+      readAgain: false,
+      made: 0,
+      holdToken: 0,
     };
     entries.set(workspace, made);
     return made;
@@ -155,28 +171,55 @@ export function createNavStore(deps: NavStoreDeps) {
     for (const listener of entry.listeners) listener();
   };
 
-  /** Takes a read as the base unless the base is newer (a change landed after the read began). */
-  const settle = (entry: Entry, state: NavState) => {
-    if (entry.confirmed !== undefined && state.version < entry.confirmed.version) return;
+  /**
+   * Takes a read as the base unless the base is newer (a change landed after the read began). Answers whether
+   * anything changed, so screens redraw only then.
+   */
+  const settle = (entry: Entry, state: NavState): boolean => {
+    if (entry.confirmed !== undefined && state.version < entry.confirmed.version) return false;
+    const changed =
+      entry.confirmed === undefined ||
+      entry.error !== undefined ||
+      JSON.stringify(entry.confirmed) !== JSON.stringify(state);
     entry.confirmed = state;
     entry.error = undefined;
+    return changed;
   };
 
-  /** Reads the sidebar; one read at a time per workspace, a second ask joining it. */
-  const read = (workspace: string): Promise<NavState> => {
+  /** Whether `entry` is still the store's (a sign out drops every entry; their answers then change nothing). */
+  const isCurrent = (workspace: string, entry: Entry) => entries.get(workspace) === entry;
+
+  /** One more read once the read out settles, when something asked for a fresh one meanwhile. */
+  const followUp = (workspace: string, entry: Entry) => {
+    if (!entry.readAgain || !isCurrent(workspace, entry)) return;
+    entry.readAgain = false;
+    void read(workspace, false).catch(() => undefined);
+  };
+
+  /**
+   * Reads the sidebar, one read at a time per workspace. A second ask joins the read out; with `fresh` (a change
+   * the read out may have started before), it also gets one more read once that one settles.
+   */
+  const read = (workspace: string, fresh = false): Promise<NavState> => {
     const entry = entryOf(workspace);
-    if (entry.reading !== undefined) return entry.reading;
+    if (entry.reading !== undefined) {
+      if (fresh) entry.readAgain = true;
+      return entry.reading;
+    }
     const reading = deps.api.get(workspace).then(
       (state) => {
         entry.reading = undefined;
+        if (!isCurrent(workspace, entry)) return state;
         entry.toldUnavailable = false;
-        settle(entry, state);
-        publish(entry);
+        if (settle(entry, state)) publish(entry);
+        followUp(workspace, entry);
         return entry.confirmed ?? state;
       },
       (error: unknown) => {
         entry.reading = undefined;
         const failure = toDataError(error);
+        if (!isCurrent(workspace, entry)) throw failure;
+        followUp(workspace, entry);
         if (entry.confirmed === undefined) {
           entry.error = failure;
           publish(entry);
@@ -204,7 +247,7 @@ export function createNavStore(deps: NavStoreDeps) {
       return;
     }
     entry.rereadDue = true;
-    void read(workspace).catch(() => undefined);
+    void read(workspace, true).catch(() => undefined);
     schedule(() => {
       entry.rereadDue = false;
       if (!entry.rereadAgain) return;
@@ -224,8 +267,11 @@ export function createNavStore(deps: NavStoreDeps) {
       ({ version }) => {
         // Every change stores exactly one `nav` row.
         deps.mutations.answered(mutationId, 1);
+        if (!isCurrent(workspace, entry)) return;
         entry.pending.shift();
         entry.sending = false;
+        // Another tab's change landed between the base and this one: the base misses it, so read it.
+        const missed = entry.confirmed !== undefined && version > entry.confirmed.version + 1;
         if (entry.confirmed !== undefined) {
           const applied = applyNavOp(prefsOfState(entry.confirmed), next.op, next.universe);
           entry.confirmed = applied.ok
@@ -235,17 +281,28 @@ export function createNavStore(deps: NavStoreDeps) {
         publish(entry);
         // A new favourite's name and object come from the server, which resolves it through the door; and a sidebar
         // that couldn't be read is read now that the server answers, so the change shows.
-        if (next.op.op === 'star' || entry.confirmed === undefined) void read(workspace).catch(() => undefined);
+        if (next.op.op === 'star' || entry.confirmed === undefined || missed) {
+          void read(workspace, true).catch(() => undefined);
+        }
         sendNext(workspace, entry);
       },
       (error: unknown) => {
         deps.mutations.forget(mutationId);
+        if (!isCurrent(workspace, entry)) return;
         entry.pending.shift();
         entry.sending = false;
         publish(entry);
-        deps.onRefused(toDataError(error), () => {
-          change(workspace, next.op, next.universe);
-        });
+        const failure = toDataError(error);
+        // Retry sends the change again only while nothing newer was made, and only where trying again could land.
+        const madeAt = entry.made;
+        deps.onRefused(
+          failure,
+          LASTING.includes(failure.code)
+            ? undefined
+            : () => {
+                if (isCurrent(workspace, entry) && entry.made === madeAt) change(workspace, next.op, next.universe);
+              },
+        );
         sendNext(workspace, entry);
       },
     );
@@ -257,6 +314,7 @@ export function createNavStore(deps: NavStoreDeps) {
    */
   const change = (workspace: string, op: NavOperation, universe: NavUniverse): void => {
     const entry = entryOf(workspace);
+    entry.made += 1;
     entry.pending.push({ op, universe });
     publish(entry);
     sendNext(workspace, entry);
@@ -287,17 +345,23 @@ export function createNavStore(deps: NavStoreDeps) {
     retain: (workspace: string): (() => void) => {
       const entry = entryOf(workspace);
       entry.holders += 1;
-      if (entry.holders === 1) entry.release = deps.watch(workspace);
+      entry.holdToken += 1;
+      entry.release ??= deps.watch(workspace);
       if (entry.confirmed === undefined && entry.reading === undefined) void read(workspace).catch(() => undefined);
       let isReleased = false;
       return () => {
         if (isReleased) return;
         isReleased = true;
         entry.holders -= 1;
-        if (entry.holders === 0) {
+        if (entry.holders > 0) return;
+        // Each page draws its own frame, so the next page holds the sidebar a moment after this one let go: the
+        // watch waits, and only a sidebar nobody holds for a while lets the live connection go.
+        const token = (entry.holdToken += 1);
+        schedule(() => {
+          if (entry.holders > 0 || entry.holdToken !== token) return;
           entry.release?.();
           entry.release = undefined;
-        }
+        }, NAV_KEEP_MS);
       };
     },
     change,
@@ -307,34 +371,42 @@ export function createNavStore(deps: NavStoreDeps) {
     navChanged: (workspace: string, event: LiveEventOf<'nav'>): void => {
       if (!entries.has(workspace)) return;
       void deps.namesMe(workspace, event.memberIds).then((named) => {
-        if (named) void read(workspace).catch(() => undefined);
+        if (named) void read(workspace, true).catch(() => undefined);
       });
     },
-    /** A views or records event: read again when it may touch a favourite (AC-939). */
-    favouritesMayHaveChanged: (
+    /**
+     * Whether a views or records event may touch one of the member's favourites (AC-939): it names one, or it is
+     * coarse on the object a favourite of that kind is on. The layer then asks for `refresh`, spread over a moment.
+     */
+    touchesFavourites: (
       workspace: string,
-      ids: readonly string[],
-      kind: 'view' | 'record',
-      coarse: boolean,
-    ): void => {
-      const entry = entries.get(workspace);
-      const nav = entry?.confirmed;
-      if (nav === undefined) return;
-      const starred = nav.items.filter((item) => item.pinned === true && item.kind === kind);
-      if (starred.length === 0) return;
-      if (coarse || starred.some((item) => ids.includes(item.id))) reread(workspace);
+      change: {
+        readonly kind: 'view' | 'record';
+        readonly ids: readonly string[];
+        readonly objectId: string | undefined;
+        readonly coarse: boolean;
+      },
+    ): boolean => {
+      const nav = entries.get(workspace)?.confirmed;
+      if (nav === undefined) return false;
+      return nav.favourites.some(
+        (favourite) =>
+          favourite.kind === change.kind &&
+          (change.ids.includes(favourite.id) ||
+            (change.coarse && (change.objectId === undefined || change.objectId === favourite.objectId))),
+      );
     },
     /**
-     * An object was made, archived or restored (a `definitions` event): read again, coarsely, since a read leaves
-     * out what the member can't see today, so an object coming back takes the place they gave it, hidden if they
-     * hid it. Schema changes are rare, and a burst reads once a second at most.
+     * Reads again, coarsely (at most once a second): a favourite may have been renamed, deleted, trashed or
+     * restored, or an object made, archived or restored, which a read leaves out while the member can't see it, so
+     * one coming back takes the place they gave it, hidden if they hid it.
      */
-    objectsMayHaveChanged: (workspace: string): void => {
+    refresh: (workspace: string): void => {
       reread(workspace);
     },
     /** Everything held of the workspace is read again (a resync, the person's access changed). */
     resync: (workspace: string): void => {
-      if (entries.get(workspace)?.confirmed !== undefined) void read(workspace).catch(() => undefined);
+      if (entries.get(workspace)?.confirmed !== undefined) void read(workspace, true).catch(() => undefined);
     },
     /** Signed out: forget everything. */
     clear: (): void => {

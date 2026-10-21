@@ -1414,7 +1414,7 @@ export function createDataLayer({
           notify({
             tone: 'danger',
             message: `${NAV_WORDS.notChanged} ${error.message}`,
-            action: { label: NAV_WORDS.retry, onAction: retry },
+            ...(retry === undefined ? {} : { action: { label: NAV_WORDS.retry, onAction: retry } }),
           });
         },
         onUnavailable: (_error, retry) => {
@@ -1481,18 +1481,37 @@ export function createDataLayer({
   router.on('nav', (workspace, event) => {
     navStore?.navChanged(workspace, event);
   });
+  // What other people change reaches the sidebar spread over a moment, as members do, so a whole team doesn't read
+  // in step; the member's own changes (above) read at once.
+  const refreshNav = (workspace: string) => {
+    spread(`nav ${workspace}`, () => {
+      navStore?.refresh(workspace);
+    });
+  };
   router.on('views', (workspace, event) => {
-    navStore?.favouritesMayHaveChanged(workspace, event.viewIds, 'view', event.coarse === true);
+    const change = {
+      kind: 'view' as const,
+      ids: event.viewIds,
+      objectId: event.objectId,
+      coarse: event.coarse === true,
+    };
+    if (navStore?.touchesFavourites(workspace, change) === true) refreshNav(workspace);
   });
-  // An object made, archived or restored: the sidebar reads again (coarse, at most once a second), so one coming
-  // back takes the place the member gave it, and stays hidden if they hid it (AC-926, AC-939).
+  // An object made, archived or restored (not an attribute's change): the sidebar reads again, so one coming back
+  // takes the place the member gave it, and stays hidden if they hid it (AC-926, AC-939).
   router.on('definitions', (workspace, event) => {
-    if (event.listId === undefined) navStore?.objectsMayHaveChanged(workspace);
+    if (event.listId !== undefined || (event.attributeIds !== undefined && event.attributeIds.length > 0)) return;
+    if (navStore !== undefined) refreshNav(workspace);
   });
   router.on('records', (workspace, event) => {
-    // A favourite record's name, trash state or access may have moved: deleted, restored, named, or coarse.
-    const named = [...(event.deletedIds ?? []), ...(event.restoredIds ?? []), ...event.recordIds];
-    navStore?.favouritesMayHaveChanged(workspace, named, 'record', event.coarse === true);
+    // A favourite record's name, trash state or access may have moved: deleted, restored, edited, or coarse.
+    const change = {
+      kind: 'record' as const,
+      ids: [...(event.deletedIds ?? []), ...(event.restoredIds ?? []), ...event.recordIds],
+      objectId: event.objectId,
+      coarse: event.coarse === true,
+    };
+    if (navStore?.touchesFavourites(workspace, change) === true) refreshNav(workspace);
   });
 
   /**

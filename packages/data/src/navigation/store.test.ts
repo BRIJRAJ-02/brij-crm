@@ -49,6 +49,8 @@ function world(first: NavState = state()) {
   const refused: string[] = [];
   const unavailable: string[] = [];
   const retries: (() => void)[] = [];
+  const watching = { opened: 0, released: 0 };
+  const timers: (() => void)[] = [];
   const store = createNavStore({
     api,
     mintId: (() => {
@@ -56,18 +58,26 @@ function world(first: NavState = state()) {
       return () => `01900000-0000-7000-8000-${String((n += 1)).padStart(12, '0')}`;
     })(),
     mutations: createMutationLog(),
-    watch: () => () => undefined,
+    watch: () => {
+      watching.opened += 1;
+      return () => {
+        watching.released += 1;
+      };
+    },
     namesMe: (_workspace, ids) => Promise.resolve(ids.includes(ME)),
     onRefused: (error, retry) => {
       refused.push(error.message);
-      retries.push(retry);
+      if (retry !== undefined) retries.push(retry);
     },
     onUnavailable: (error, retry) => {
       unavailable.push(error.message);
       retries.push(retry);
     },
+    setTimeout: (run) => {
+      timers.push(run);
+    },
   });
-  return { store, gets, changes, refused, unavailable, retries, asked: () => getsAsked };
+  return { store, gets, changes, refused, unavailable, retries, watching, timers, asked: () => getsAsked };
 }
 
 const ready = (snapshot: ReturnType<ReturnType<typeof createNavStore>['snapshot']>) => {
@@ -223,5 +233,82 @@ describe('the sidebar store', () => {
     await expect(store.load('gone')).rejects.toBeDefined();
     expect(store.snapshot('gone').status).toBe('error');
     expect(unavailable).toEqual([]);
+  });
+
+  it('reads once more when the member’s change comes in while a read is out, so the newer one shows (AC-937)', async () => {
+    const w = world();
+    await w.store.load('acme');
+    const event = (seq: number) => ({ seq, at: '2026-10-20T09:00:00.000Z', kind: 'nav' as const, memberIds: [ME] });
+    w.store.navChanged('acme', event(1));
+    await vi.waitFor(() => {
+      expect(w.asked()).toBe(2);
+    });
+    w.store.navChanged('acme', event(2));
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(w.asked()).toBe(2);
+    w.gets[0]?.(state({ version: 2, sections: { order: ['records'], folded: ['records'] } }));
+    await vi.waitFor(() => {
+      expect(w.asked()).toBe(3);
+    });
+    w.gets[1]?.(state({ version: 3, rail: true }));
+    await vi.waitFor(() => {
+      expect(ready(w.store.snapshot('acme'))).toMatchObject({ version: 3, rail: true });
+    });
+  });
+
+  it('reads again when another tab’s change landed between its base and this answer', async () => {
+    const w = world(state({ version: 5 }));
+    await w.store.load('acme');
+    w.store.change('acme', { op: 'rail', on: true }, universe);
+    w.changes[0]?.settle(7);
+    await vi.waitFor(() => {
+      expect(w.asked()).toBe(2);
+    });
+    w.gets[0]?.(state({ version: 7, rail: true, sections: { order: ['records'], folded: ['records'] } }));
+    await vi.waitFor(() => {
+      expect(ready(w.store.snapshot('acme')).sections.folded).toEqual(['records']);
+    });
+  });
+
+  it('offers no Retry for a refusal that would only repeat, and a late Retry changes nothing after a newer choice', async () => {
+    const w = world();
+    await w.store.load('acme');
+    w.store.change('acme', { op: 'star', kind: 'record', id: DEALS }, universe);
+    // The fake's bare error reads as a passing failure: Retry is offered.
+    w.changes[0]?.refuse('Busy.');
+    await vi.waitFor(() => {
+      expect(w.retries).toHaveLength(1);
+    });
+    // A newer choice, then the old Retry: nothing more is sent.
+    w.store.change('acme', { op: 'rail', on: true }, universe);
+    w.retries[0]?.();
+    expect(w.changes).toHaveLength(2);
+  });
+
+  it('keeps watching through a page change, and lets the live connection go only once nobody holds it a while', () => {
+    const w = world();
+    const release = w.store.retain('acme');
+    release();
+    const again = w.store.retain('acme');
+    expect(w.watching).toEqual({ opened: 1, released: 0 });
+    // The first release's delayed let go finds a screen holding it again.
+    for (const run of w.timers.splice(0)) run();
+    expect(w.watching.released).toBe(0);
+    again();
+    for (const run of w.timers.splice(0)) run();
+    expect(w.watching).toEqual({ opened: 1, released: 1 });
+  });
+
+  it('changes nothing with an answer that comes after a sign out', async () => {
+    const w = world();
+    await w.store.load('acme');
+    w.store.change('acme', { op: 'rail', on: true }, universe);
+    w.store.clear();
+    w.changes[0]?.refuse('Signed out.');
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(w.refused).toEqual([]);
+    expect(w.store.snapshot('acme').status).toBe('loading');
   });
 });
