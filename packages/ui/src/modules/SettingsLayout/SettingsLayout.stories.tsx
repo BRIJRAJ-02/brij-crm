@@ -3,6 +3,8 @@ import { expect } from 'storybook/test';
 import { Badge } from '../../atoms/Badge/Badge.tsx';
 import { Button } from '../../atoms/Button/Button.tsx';
 import { Meter } from '../../atoms/Meter/Meter.tsx';
+import { ProviderMark } from '../../atoms/ProviderMark/ProviderMark.tsx';
+import { InfoTip } from '../../molecules/InfoTip/InfoTip.tsx';
 import { Callout } from '../../molecules/Callout/Callout.tsx';
 import { Card } from '../../molecules/Card/Card.tsx';
 import { EmptyState } from '../../molecules/EmptyState/EmptyState.tsx';
@@ -318,8 +320,44 @@ export const RowStates: Story = {
 };
 
 /**
- * The pattern every settings page follows (20 Oct 2026): sections across the
- * page's width, each with its title and description at the start; a form
+ * Rows that stand for things of one kind (a connected calendar each): the
+ * provider's mark before the text, a Default badge and an InfoTip beside the
+ * title, the state as the description, the controls at the end.
+ */
+export const ThingRows: Story = {
+  render: () => (
+    <Stage width="fill">
+      <SettingsLayout titleLevel={1} title="Calendars">
+        <Card>
+          <SettingsRow
+            title="grace@timefix.dev"
+            leading={<ProviderMark provider="google-calendar" />}
+            meta={<Badge text="Default" />}
+            description={<Badge text="Connected" dot="green" />}
+          >
+            <Button variant="ghost" icon="ellipsis" label="Actions for grace@timefix.dev" />
+          </SettingsRow>
+          <SettingsRow
+            title="grace@gmail.com"
+            leading={<ProviderMark provider="google-calendar" />}
+            meta={<InfoTip label="Expired">Google stopped letting us read it. Connect it again.</InfoTip>}
+            description={<Badge text="Expired" dot="orange" />}
+          >
+            <Button variant="ghost" icon="ellipsis" label="Actions for grace@gmail.com" />
+          </SettingsRow>
+        </Card>
+      </SettingsLayout>
+    </Stage>
+  ),
+  play: async ({ canvas }) => {
+    await expect(canvas.getByText('Default')).toBeVisible();
+    await expect(canvas.getByRole('button', { name: 'About Expired' })).toBeVisible();
+  },
+};
+
+/**
+ * The pattern every settings page follows (21 Oct 2026): sections across the
+ * page's width, each with its heading above its cards; a form
  * section whose fields sit two to a row (Form's `columns={2}`); cards of one
  * kind side by side in a SettingsGrid; and a danger section last.
  */
