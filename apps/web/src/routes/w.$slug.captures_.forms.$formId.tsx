@@ -1,6 +1,7 @@
 import { isDataError, type SubmissionState } from '@crm/data';
-import { EmptyState, LoadingNow, PreviewLayout, Skeleton, TopBar } from '@crm/ui';
+import { EmptyState, LoadingNow, TopBar } from '@crm/ui';
 import { createFileRoute, useRouter, type ErrorComponentProps } from '@tanstack/react-router';
+import { EditorPending } from '../features/captures/EditorPending.tsx';
 import { FormEditor } from '../features/forms/FormEditor.tsx';
 import { FORM_TABS, type FormTab } from '../features/forms/paths.ts';
 import { strings } from '../features/forms/strings.ts';
@@ -65,17 +66,7 @@ export const Route = createFileRoute('/w/$slug/captures_/forms/$formId')({
   // Shown only once the loading delay passed: its skeletons show at once.
   pendingComponent: () => (
     <LoadingNow>
-      <WorkspacePage
-        currentPage="captures"
-        page={{
-          topBar: <TopBar title={strings.forms} icon="clipboard-list" isLoading />,
-          body: (
-            <PreviewLayout>
-              <Skeleton lines={10} />
-            </PreviewLayout>
-          ),
-        }}
-      />
+      <EditorPending title={strings.forms} icon="clipboard-list" cards={[strings.name]} />
     </LoadingNow>
   ),
   errorComponent: FormError,

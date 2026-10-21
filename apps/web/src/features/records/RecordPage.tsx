@@ -15,7 +15,18 @@ import type {
   TrashedState,
 } from '@crm/data';
 import { useActivityStatus, useLiveStatus, useNoteTotal, useRecord, useTaskTotal, useTrashed } from '@crm/data/react';
-import { ActivityFeed, Button, Callout, EmptyState, Link, RecordHeader, RecordLayout, TaskList, TopBar } from '@crm/ui';
+import {
+  ActivityFeed,
+  Button,
+  Callout,
+  Card,
+  EmptyState,
+  Link,
+  RecordHeader,
+  RecordLayout,
+  TaskList,
+  TopBar,
+} from '@crm/ui';
 import { useNavigate, useParams, useRouteContext, useRouter } from '@tanstack/react-router';
 import { useCallback, useEffect, useMemo, useRef, type ReactNode } from 'react';
 import { NotesTab } from '../notes/NotesTab.tsx';
@@ -115,19 +126,53 @@ function unavailablePage(slug: string, object: ObjectSummary) {
 
 /** The record page while its route loads: the bars and the layout holding their places, on the tab asked for. */
 export function RecordPendingPage() {
-  const { tab = '' } = useParams({ strict: false });
+  const { tab = '', object } = useParams({ strict: false });
   const shown = isRecordTab(tab) ? tab : 'overview';
   return (
     <WorkspacePage
+      {...(object === undefined ? {} : { currentObject: object })}
       page={{
         topBar: <TopBar title={strings.loading} isLoading />,
         body: (
           <LoadingLayout tab={shown}>
-            <ActivityFeed label={strings.activity} entries={NO_ENTRIES} status="loading" />
+            <PendingTab tab={shown} />
           </LoadingLayout>
         ),
       }}
     />
+  );
+}
+
+/** A tab while the route loads, in that tab's own shape: Overview's two cards, the Activity feed, the task list. */
+function PendingTab({ tab }: { readonly tab: RecordTab }) {
+  if (tab === 'activity') return <ActivityFeed label={strings.activity} entries={NO_ENTRIES} status="loading" />;
+  const tasks = <TaskList label={taskStrings.openTasks} tasks={NO_TASKS} status="loading" onToggle={() => undefined} />;
+  if (tab === 'tasks') return tasks;
+  return (
+    <>
+      <Card
+        title={taskStrings.openTasks}
+        isBusy
+        actions={
+          <Button variant="ghost" isDisabled>
+            {taskStrings.viewAllTasks}
+          </Button>
+        }
+      >
+        {tasks}
+      </Card>
+      <Card
+        title={strings.recentActivity}
+        isBusy
+        actions={
+          <Button variant="ghost" isDisabled>
+            {strings.viewAll}
+          </Button>
+        }
+      >
+        <ActivityFeed label={strings.recentActivity} entries={NO_ENTRIES} status="loading" />
+      </Card>
+    </>
   );
 }
 

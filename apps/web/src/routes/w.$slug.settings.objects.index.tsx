@@ -1,4 +1,5 @@
 import { isDataError } from '@crm/data';
+import { LoadingNow } from '@crm/ui';
 import { createFileRoute, useRouter, type ErrorComponentProps } from '@tanstack/react-router';
 import { ObjectsPending, ObjectsScreen } from '../features/settings/ObjectsScreen.tsx';
 import { SettingsFailed } from '../features/settings/SettingsPage.tsx';
@@ -20,7 +21,11 @@ export const Route = createFileRoute('/w/$slug/settings/objects/')({
     });
     return { objects, usage };
   },
-  pendingComponent: ObjectsPending,
+  pendingComponent: () => (
+    <LoadingNow>
+      <ObjectsPending />
+    </LoadingNow>
+  ),
   errorComponent: ObjectsError,
   component: ObjectsRoute,
 });

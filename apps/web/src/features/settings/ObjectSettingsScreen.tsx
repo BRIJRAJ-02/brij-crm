@@ -7,6 +7,7 @@ import {
   Badge,
   Button,
   Callout,
+  Card,
   Skeleton,
   Spinner,
   TabPanel,
@@ -152,7 +153,7 @@ export function ObjectSettingsPending() {
   // The meter's place only for those who get a meter, so nothing moves when the page arrives.
   const canManage = useCan('schema.manage');
   return (
-    <SettingsPage title={strings.loading} crumbs={settingsCrumbs(slug)} hasTabs isLoading>
+    <SettingsPage title={strings.loading} crumbs={settingsCrumbs(slug)} hasTabs isLoading hasTile>
       <Tabs
         label={strings.loading}
         selectedKey={isObjectTab(tab) ? tab : 'attributes'}
@@ -172,6 +173,17 @@ export function ObjectSettingsPending() {
               renderCell={() => null}
               isLoading
             />
+            {/* The system attributes' card follows, as on the loaded tab. */}
+            <Card title={attributeStrings.system} tone="sunken">
+              <Table
+                label={attributeStrings.system}
+                columns={COLUMNS}
+                rows={[]}
+                getRowId={() => ''}
+                renderCell={() => null}
+                isLoading
+              />
+            </Card>
           </SettingsStack>
         </TabPanel>
         <TabPanel id="configuration">

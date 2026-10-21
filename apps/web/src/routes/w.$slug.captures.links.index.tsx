@@ -10,6 +10,11 @@ import { strings } from '../features/booking/strings.ts';
 // once and are read again behind them. The Captures layout draws the frame, the TopBar and the Links · Forms strip.
 export const Route = createFileRoute('/w/$slug/captures/links/')({
   loader: async ({ context, params }) => {
+    // The reader's calendars, read behind: a page's editor opened from here knows its calendar note at once.
+    context.data.calendar
+      .view(params.slug)
+      .ready()
+      .catch(() => undefined);
     try {
       await context.data.bookingPages.view(params.slug).ready();
     } catch (error) {

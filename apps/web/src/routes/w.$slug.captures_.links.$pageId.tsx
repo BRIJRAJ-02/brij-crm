@@ -1,8 +1,11 @@
 import { isDataError } from '@crm/data';
+import { useCalendar } from '@crm/data/react';
 import { EmptyState, Link, PageColumn, TopBar, LoadingNow } from '@crm/ui';
 import { createFileRoute, useParams, useRouter, type ErrorComponentProps } from '@tanstack/react-router';
 import { linksHref } from '../features/booking/links.ts';
-import { PageEditor, PageEditorPending } from '../features/booking/PageEditor.tsx';
+import { CalendarNote, readDismissed } from '../features/booking/CalendarNote.tsx';
+import { PageEditor } from '../features/booking/PageEditor.tsx';
+import { EditorPending } from '../features/captures/EditorPending.tsx';
 import { strings } from '../features/booking/strings.ts';
 import { WorkspacePage } from '../features/workspace/WorkspacePage.tsx';
 
@@ -42,6 +45,25 @@ export const Route = createFileRoute('/w/$slug/captures_/links/$pageId')({
   errorComponent: EditorError,
   component: EditorRoute,
 });
+
+/**
+ * The editor while its page loads: its cards and preview, and the calendar note when the data layer already knows
+ * it will show (the route primes the reader's calendars), so the cards stand where the editor's will.
+ */
+function PageEditorPending() {
+  const { slug } = Route.useParams();
+  const { data } = Route.useRouteContext();
+  const calendar = useCalendar(data.calendar.view(slug));
+  const hasNote = calendar.status === 'ready' && calendar.connections.length === 0 && !readDismissed(slug);
+  return (
+    <EditorPending
+      title={strings.listLabel}
+      icon="link"
+      cards={[strings.page, strings.meeting, strings.hours, strings.limits]}
+      {...(hasNote ? { notices: <CalendarNote slug={slug} canConnect={calendar.enabled} /> } : {})}
+    />
+  );
+}
 
 /** Not found or failed, inside the frame, with the way back to Links. */
 function Missing({

@@ -1,10 +1,11 @@
 import { isDataError } from '@crm/data';
+import { LoadingNow } from '@crm/ui';
 import { createFileRoute, useNavigate, useRouter, type ErrorComponentProps } from '@tanstack/react-router';
 import { runningQuery, savedQuery, toViewQuery } from '../features/views/query.ts';
 import { ViewScreen } from '../features/views/ViewScreen.tsx';
 import { ArchivedObjectScreen } from '../features/workspace/ArchivedObjectScreen.tsx';
 import { viewColumns, viewReadIds } from '../features/views/layout.ts';
-import { failedPage, missingPage, objectPendingPage, viewNotFoundPage } from '../features/workspace/ObjectScreen.tsx';
+import { failedPage, missingPage, ObjectPendingPage, viewNotFoundPage } from '../features/workspace/ObjectScreen.tsx';
 import { navObjects } from '../features/workspace/objects.ts';
 import { strings } from '../features/workspace/strings.ts';
 import { useWorkspaceName, WorkspacePage } from '../features/workspace/WorkspacePage.tsx';
@@ -101,7 +102,11 @@ export const Route = createFileRoute('/w/$slug/objects/$object_/views/$viewId')(
       },
     };
   },
-  pendingComponent: () => <WorkspacePage page={objectPendingPage()} />,
+  pendingComponent: () => (
+    <LoadingNow>
+      <ObjectPendingPage />
+    </LoadingNow>
+  ),
   errorComponent: ViewError,
   component: ViewRoute,
 });

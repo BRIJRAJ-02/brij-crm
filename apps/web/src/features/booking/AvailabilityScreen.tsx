@@ -3,7 +3,17 @@
 // Main task: set the week's windows (all days at once, per day, or copied across), the zone and the days off, then Save.
 // Leaves out: a page's own hours (its editor) and anyone else's hours.
 import { isDataError, type BookingAvailability, type BookingPageView, type DataLayer } from '@crm/data';
-import { Card, HoursEditor, PageColumn, SaveBar, Select, Skeleton, TopBar, type SaveBarStatus } from '@crm/ui';
+import {
+  Card,
+  HoursEditor,
+  LinkList,
+  PageColumn,
+  SaveBar,
+  Select,
+  Skeleton,
+  TopBar,
+  type SaveBarStatus,
+} from '@crm/ui';
 import { useBlocker, useNavigate } from '@tanstack/react-router';
 import { useState, useMemo } from 'react';
 import { bookingsHref } from '../workspace/objects.ts';
@@ -12,7 +22,7 @@ import { WorkspacePage } from '../workspace/WorkspacePage.tsx';
 import { DaysOff } from './DaysOff.tsx';
 import { pageEditorHref } from './links.ts';
 import { PagesHours } from './PagesHours.tsx';
-import { availabilityIsValid, weekRows, withDay, zoneItems, zoneMatches } from './hours.ts';
+import { availabilityIsValid, weekRows, WEEKDAYS, withDay, zoneItems, zoneMatches } from './hours.ts';
 import { strings } from './strings.ts';
 
 /** Props for the screen: the member's hours its route loaded. */
@@ -172,17 +182,34 @@ export function AvailabilityPending() {
             stack="aside-first"
             aside={
               <>
-                <Card title={strings.timeZone} isBusy>
+                <Card title={strings.timeZone} description={strings.timeZoneText} isBusy>
                   <Skeleton lines={1} />
                 </Card>
-                <Card title={strings.daysOff} isBusy>
+                <Card title={strings.daysOff} description={strings.daysOffText} isBusy>
                   <Skeleton lines={3} />
                 </Card>
               </>
             }
           >
-            <Card title={strings.weeklyHours} isBusy>
-              <Skeleton lines={8} />
+            <Card title={strings.weeklyHours} description={strings.availabilityText} isBusy>
+              <HoursEditor
+                label={strings.weeklyHours}
+                rows={WEEKDAYS.map((day) => ({ id: day, label: strings.weekday[day], ranges: [] }))}
+                onChange={() => undefined}
+                isLoading
+              />
+            </Card>
+            <Card title={strings.yourPages} description={strings.yourPagesText} isBusy>
+              <LinkList
+                density="compact"
+                placement="card"
+                label={strings.yourPages}
+                rows={[]}
+                onOpen={() => undefined}
+                searchLabel={strings.yourPages}
+                isToolbarHidden
+                status="loading"
+              />
             </Card>
           </PageColumn>
         ),

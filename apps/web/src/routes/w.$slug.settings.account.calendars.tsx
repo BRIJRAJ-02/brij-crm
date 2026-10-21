@@ -1,4 +1,5 @@
 import { isDataError } from '@crm/data';
+import { Card, LoadingNow, Skeleton } from '@crm/ui';
 import { createFileRoute, useNavigate, useRouter, type ErrorComponentProps } from '@tanstack/react-router';
 import { CalendarScreen } from '../features/settings/CalendarScreen.tsx';
 import { isConnectResult, strings, type ConnectResult } from '../features/settings/calendar-strings.ts';
@@ -29,7 +30,11 @@ export const Route = createFileRoute('/w/$slug/settings/account/calendars')({
       throw error;
     }
   },
-  pendingComponent: CalendarPending,
+  pendingComponent: () => (
+    <LoadingNow>
+      <CalendarPending />
+    </LoadingNow>
+  ),
   errorComponent: CalendarError,
   component: CalendarRoute,
 });
@@ -56,8 +61,12 @@ function CalendarRoute() {
 
 function CalendarPending() {
   return (
+    // The screen's own loading state: its header, and a busy card where the calendars will list.
     <SettingsPage title={strings.title} description={strings.description} isLoading>
-      {null}
+      <Card isBusy>
+        <Skeleton width="long" />
+        <Skeleton width="medium" />
+      </Card>
     </SettingsPage>
   );
 }

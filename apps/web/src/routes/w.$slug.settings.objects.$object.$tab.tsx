@@ -1,4 +1,5 @@
 import { isDataError } from '@crm/data';
+import { LoadingNow } from '@crm/ui';
 import { createFileRoute, useNavigate, useRouter, type ErrorComponentProps } from '@tanstack/react-router';
 import { useCallback } from 'react';
 import { isObjectTab } from '../features/settings/nav.ts';
@@ -45,7 +46,11 @@ export const Route = createFileRoute('/w/$slug/settings/objects/$object/$tab')({
         : undefined;
     return { page: { object, objects, tab: params.tab, attributesPage } };
   },
-  pendingComponent: ObjectSettingsPending,
+  pendingComponent: () => (
+    <LoadingNow>
+      <ObjectSettingsPending />
+    </LoadingNow>
+  ),
   errorComponent: ObjectError,
   component: ObjectSettingsRoute,
 });

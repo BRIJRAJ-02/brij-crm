@@ -1,4 +1,5 @@
 import { isDataError } from '@crm/data';
+import { LoadingNow } from '@crm/ui';
 import { createFileRoute, redirect, useRouter, type ErrorComponentProps } from '@tanstack/react-router';
 import { failedPage, noObjectsPage, pendingPage } from '../features/workspace/ObjectScreen.tsx';
 import { navObjects } from '../features/workspace/objects.ts';
@@ -27,7 +28,11 @@ export const Route = createFileRoute('/w/$slug/')({
     }
     throw redirect({ to: '/w/$slug/settings/objects', params: { slug: params.slug }, replace: true });
   },
-  pendingComponent: () => <WorkspacePage page={pendingPage()} />,
+  pendingComponent: () => (
+    <LoadingNow>
+      <WorkspacePage page={pendingPage()} />
+    </LoadingNow>
+  ),
   errorComponent: IndexError,
   component: NoObjects,
 });

@@ -1,4 +1,5 @@
 import { isDataError } from '@crm/data';
+import { LoadingNow } from '@crm/ui';
 import { createFileRoute, redirect, useRouter, type ErrorComponentProps } from '@tanstack/react-router';
 import { detailAttributes, isRecordId, isRecordTab } from '../features/records/details.ts';
 import { isNoteParam } from '../features/notes/entries.ts';
@@ -105,7 +106,11 @@ export const Route = createFileRoute('/w/$slug/objects/$object_/$recordId/$tab')
     clearTimeout(timer);
     return { page: { object, objects, attributes: shown, members, meId, record, feed, recent, open, notes } };
   },
-  pendingComponent: RecordPendingPage,
+  pendingComponent: () => (
+    <LoadingNow>
+      <RecordPendingPage />
+    </LoadingNow>
+  ),
   errorComponent: RecordError,
   component: RecordRoute,
 });

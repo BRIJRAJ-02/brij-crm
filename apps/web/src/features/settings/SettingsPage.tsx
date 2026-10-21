@@ -25,6 +25,8 @@ export interface SettingsPageProps {
   readonly description?: string;
   readonly actions?: ReactNode;
   readonly isLoading?: boolean;
+  /** While loading: a tile's place before the title, for a page that will have one (an object's). */
+  readonly hasTile?: boolean;
   /** The visible title, for a page that moves focus to it itself (a cancelled job's Cancel goes away). */
   readonly titleRef?: Ref<HTMLHeadingElement>;
   /** The body opens with Tabs: their underline divides the page in place of the header's hairline. */
@@ -47,6 +49,7 @@ export function SettingsPage({
   description,
   actions,
   isLoading = false,
+  hasTile = false,
   titleRef,
   hasTabs = false,
   children,
@@ -73,6 +76,7 @@ export function SettingsPage({
               hasTabs={hasTabs}
               title={title}
               isLoading={isLoading}
+              hasTile={hasTile}
               {...(titleRef === undefined ? {} : { titleRef })}
               {...(icon === undefined ? {} : { icon })}
               {...(hue === undefined ? {} : { hue })}

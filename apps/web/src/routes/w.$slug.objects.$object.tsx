@@ -1,8 +1,9 @@
 import { isDataError } from '@crm/data';
+import { LoadingNow } from '@crm/ui';
 import { createFileRoute, redirect, useRouter, type ErrorComponentProps } from '@tanstack/react-router';
 import { ArchivedObjectScreen } from '../features/workspace/ArchivedObjectScreen.tsx';
 import { NoViewsScreen } from '../features/views/NoViewsScreen.tsx';
-import { failedPage, missingPage, objectPendingPage } from '../features/workspace/ObjectScreen.tsx';
+import { failedPage, missingPage, ObjectPendingPage } from '../features/workspace/ObjectScreen.tsx';
 import { navObjects } from '../features/workspace/objects.ts';
 import { strings } from '../features/workspace/strings.ts';
 import { useWorkspaceName, WorkspacePage } from '../features/workspace/WorkspacePage.tsx';
@@ -46,7 +47,11 @@ export const Route = createFileRoute('/w/$slug/objects/$object')({
     const attributes = await context.data.attributes.list(params.slug, object.id);
     return { missing: false as const, archived: undefined, object, attributes };
   },
-  pendingComponent: () => <WorkspacePage page={objectPendingPage()} />,
+  pendingComponent: () => (
+    <LoadingNow>
+      <ObjectPendingPage />
+    </LoadingNow>
+  ),
   errorComponent: ObjectError,
   component: ObjectRoute,
 });

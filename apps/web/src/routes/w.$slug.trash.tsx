@@ -1,8 +1,9 @@
 import { isDataError } from '@crm/data';
+import { LoadingNow } from '@crm/ui';
 import { createFileRoute, useRouter, type ErrorComponentProps } from '@tanstack/react-router';
 import { strings } from '../features/trash/strings.ts';
 import { TrashScreen } from '../features/trash/TrashScreen.tsx';
-import { failedPage, missingPage, pendingPage } from '../features/workspace/ObjectScreen.tsx';
+import { failedPage, missingPage, trashPendingPage } from '../features/workspace/ObjectScreen.tsx';
 import { strings as workspace } from '../features/workspace/strings.ts';
 import { WorkspacePage } from '../features/workspace/WorkspacePage.tsx';
 
@@ -51,7 +52,11 @@ export const Route = createFileRoute('/w/$slug/trash')({
       throw error;
     }
   },
-  pendingComponent: () => <WorkspacePage currentPage="trash" page={pendingPage()} />,
+  pendingComponent: () => (
+    <LoadingNow>
+      <WorkspacePage currentPage="trash" page={trashPendingPage()} />
+    </LoadingNow>
+  ),
   errorComponent: TrashError,
   component: TrashRoute,
 });

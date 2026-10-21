@@ -1,4 +1,5 @@
 import { isDataError } from '@crm/data';
+import { LoadingNow } from '@crm/ui';
 import { createFileRoute, Outlet, redirect, useRouter, type ErrorComponentProps } from '@tanstack/react-router';
 import { signInHref } from '../features/auth/redirect.ts';
 import { failedPage, missingPage, pendingPage } from '../features/workspace/ObjectScreen.tsx';
@@ -33,7 +34,11 @@ export const Route = createFileRoute('/w/$slug')({
       throw error;
     }
   },
-  pendingComponent: () => <WorkspacePage page={pendingPage()} />,
+  pendingComponent: () => (
+    <LoadingNow>
+      <WorkspacePage page={pendingPage()} />
+    </LoadingNow>
+  ),
   errorComponent: WorkspaceError,
   component: WorkspaceRoute,
 });

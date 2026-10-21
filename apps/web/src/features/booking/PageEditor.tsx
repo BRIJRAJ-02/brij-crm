@@ -11,7 +11,6 @@ import {
   type DataLayer,
 } from '@crm/data';
 import {
-  Button,
   Callout,
   Card,
   ChoiceChips,
@@ -37,9 +36,9 @@ import {
 import { useCalendar } from '@crm/data/react';
 import { useBlocker } from '@tanstack/react-router';
 import { useEffect, useState, useMemo } from 'react';
-import { calendarSettingsHref } from '../settings/nav.ts';
 import { pageHeading } from '../navigation/focus.ts';
 import { WorkspacePage } from '../workspace/WorkspacePage.tsx';
+import { CalendarNote, readDismissed, writeDismissed } from './CalendarNote.tsx';
 import { DaysOff } from './DaysOff.tsx';
 import { availabilityIsValid, weekRows, weekSummary, withDay, zoneItems, zoneMatches } from './hours.ts';
 import { availabilityHref, linksHref, publicBookingUrl } from './links.ts';
@@ -118,27 +117,6 @@ function sendable(draft: BookingPageSettings): boolean {
     (draft.location.type === 'video' || draft.location.type === 'phone' || draft.location.value.trim() !== '') &&
     availabilityIsValid(draft.availability)
   );
-}
-
-/** Where the calendar note's "Not now" is kept, for this tab's session. */
-const dismissedKey = (slug: string) => `crm.booking.calendarNote.${slug}`;
-
-/** Whether the calendar note was put away in this tab's session (storage may be blocked: then it shows). */
-function readDismissed(slug: string): boolean {
-  try {
-    return globalThis.sessionStorage.getItem(dismissedKey(slug)) === '1';
-  } catch {
-    return false;
-  }
-}
-
-/** Puts the calendar note away for this tab's session, where storage allows. */
-function writeDismissed(slug: string): void {
-  try {
-    globalThis.sessionStorage.setItem(dismissedKey(slug), '1');
-  } catch {
-    // Blocked storage: the note stays away until the page reloads.
-  }
 }
 
 /** The editor. */
@@ -295,26 +273,14 @@ export function PageEditor({ data, slug, page: loaded, locale, myHours }: PageEd
                   </Callout>
                 )}
                 {hasNoCalendar && !isNoteDismissed && (
-                  <Callout
-                    tone="info"
-                    title={strings.noCalendarTitle}
-                    actions={
-                      <>
-                        {calendar.enabled && <Link href={calendarSettingsHref(slug)}>{strings.connectCalendar}</Link>}
-                        <Button
-                          variant="ghost"
-                          onPress={() => {
-                            setNoteDismissed(true);
-                            writeDismissed(slug);
-                          }}
-                        >
-                          {strings.notNow}
-                        </Button>
-                      </>
-                    }
-                  >
-                    {strings.noCalendar}
-                  </Callout>
+                  <CalendarNote
+                    slug={slug}
+                    canConnect={calendar.enabled}
+                    onDismiss={() => {
+                      setNoteDismissed(true);
+                      writeDismissed(slug);
+                    }}
+                  />
                 )}
               </>
             }

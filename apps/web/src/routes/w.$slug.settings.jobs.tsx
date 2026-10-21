@@ -1,4 +1,5 @@
 import { isDataError } from '@crm/data';
+import { LoadingNow } from '@crm/ui';
 import { createFileRoute, useRouter, type ErrorComponentProps } from '@tanstack/react-router';
 import { JobsPending, JobsScreen } from '../features/settings/JobsScreen.tsx';
 import { strings as jobs } from '../features/settings/jobs-strings.ts';
@@ -26,7 +27,11 @@ export const Route = createFileRoute('/w/$slug/settings/jobs')({
     }
   },
   // The page's own title and the settings frame while it loads, so nothing moves when it arrives.
-  pendingComponent: JobsPending,
+  pendingComponent: () => (
+    <LoadingNow>
+      <JobsPending />
+    </LoadingNow>
+  ),
   errorComponent: JobsError,
   component: JobsRoute,
 });

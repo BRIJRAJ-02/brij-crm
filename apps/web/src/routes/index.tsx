@@ -1,3 +1,4 @@
+import { LoadingNow } from '@crm/ui';
 import { createFileRoute, redirect } from '@tanstack/react-router';
 import { AuthError, AuthPending } from '../features/auth/AuthStates.tsx';
 import { strings } from '../features/auth/strings.ts';
@@ -13,7 +14,11 @@ export const Route = createFileRoute('/')({
     if (first === undefined) throw redirect({ to: '/welcome', replace: true });
     throw redirect({ to: '/w/$slug', params: { slug: first.slug }, replace: true });
   },
-  pendingComponent: () => <AuthPending title={strings.openingTitle} />,
+  pendingComponent: () => (
+    <LoadingNow>
+      <AuthPending title={strings.openingTitle} />
+    </LoadingNow>
+  ),
   errorComponent: () => <AuthError title={strings.openingTitle} />,
   component: () => null,
 });

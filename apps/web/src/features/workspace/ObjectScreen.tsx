@@ -3,9 +3,11 @@
 // Main task: say plainly what happened and offer the way on (Try again, or open your workspace).
 // Leaves out: the records themselves, which RecordsScreen shows.
 import { isDataError, type ObjectSummary } from '@crm/data';
-import { EmptyState, Link, TopBar, ViewBar } from '@crm/ui';
+import { EmptyState, Link, Skeleton, Toolbar, TopBar, ViewBar } from '@crm/ui';
+import { useParams } from '@tanstack/react-router';
 import { strings as viewStrings } from '../views/strings.ts';
 import { strings } from './strings.ts';
+import { WorkspacePage } from './WorkspacePage.tsx';
 
 /** A workspace with no objects to list: its name, and a plain empty state (no way out to loop through). */
 export function noObjectsPage(workspaceName: string) {
@@ -35,12 +37,36 @@ export function pendingPage() {
   };
 }
 
-/** An object's page while it loads: the page's bars and a view bar holding their places, so the table arrives without a jump. */
+/** A view's Toolbar while it loads: the bar itself, so the rows under it start where the view's will. */
+function pendingToolbar() {
+  return (
+    <Toolbar label={strings.loadingTitle}>
+      <Skeleton width="short" />
+    </Toolbar>
+  );
+}
+
+/**
+ * An object's page while it loads: the page's bars, the view bar and the view's Toolbar holding their places, so
+ * the table arrives without a jump.
+ */
 export function objectPendingPage() {
   return {
     ...pendingPage(),
     viewBar: <ViewBar views={[]} currentViewId="" onViewChange={() => undefined} isLoading />,
+    toolbar: pendingToolbar(),
   };
+}
+
+/** An object's page as the route's pending page: in the frame, with the object's place in the sidebar marked. */
+export function ObjectPendingPage() {
+  const { object } = useParams({ strict: false });
+  return <WorkspacePage {...(object === undefined ? {} : { currentObject: object })} page={objectPendingPage()} />;
+}
+
+/** The trash while it loads: its bar and its filter row (the Trash's Toolbar) holding their places. */
+export function trashPendingPage() {
+  return { ...pendingPage(), viewBar: pendingToolbar() };
 }
 
 /**

@@ -415,6 +415,21 @@ export function BookingsCalendarScreen(props: BookingsCalendarScreenProps) {
   );
 }
 
+/** The grid's day heads: each day's short and long names, and whether it is today or past. */
+function weekDayItems(days: readonly string[], today: string, locale: string) {
+  return days.map((key) => {
+    const date = new Date(`${key}T12:00:00`);
+    return {
+      key,
+      weekday: new Intl.DateTimeFormat(locale, { weekday: 'short' }).format(date),
+      dayNumber: String(date.getDate()),
+      label: new Intl.DateTimeFormat(locale, { weekday: 'long', day: 'numeric', month: 'long' }).format(date),
+      isToday: key === today,
+      isPast: key < today,
+    };
+  });
+}
+
 /** The week view's toolbar, grid and count. */
 function WeekView(props: BookingsCalendarScreenProps) {
   const { slug, objects, search, week, pages, connections, locale, onSearch, onRemoveBlock, onBlock } = props;
@@ -506,10 +521,23 @@ function WeekView(props: BookingsCalendarScreenProps) {
     />
   );
   if (state.status === 'loading') {
+    // The week itself, busy and empty, so it arrives in place.
     return (
       <>
         <Toolbar>{toolbar}</Toolbar>
-        <Skeleton shape="block" />
+        <WeekCalendar
+          label={strings.weekLabel(range)}
+          days={weekDayItems(days, today, locale)}
+          blocks={[]}
+          isLoading
+          selectedDay={days.includes(search.day) ? search.day : (days[0] ?? search.week)}
+          onSelectDay={(day) => onSearch({ day })}
+          hourLabel={(hour) => new Intl.DateTimeFormat(locale, { hour: 'numeric' }).format(new Date(2000, 0, 1, hour))}
+          now={{ dayKey: today, minute: now.getHours() * 60 + now.getMinutes() }}
+          scrollToMinute={scrollMinute(days, now, [])}
+          onOpen={() => undefined}
+          onClose={() => undefined}
+        />
       </>
     );
   }
@@ -628,17 +656,7 @@ function WeekView(props: BookingsCalendarScreenProps) {
       )}
       <WeekCalendar
         label={strings.weekLabel(range)}
-        days={days.map((key) => {
-          const date = new Date(`${key}T12:00:00`);
-          return {
-            key,
-            weekday: new Intl.DateTimeFormat(locale, { weekday: 'short' }).format(date),
-            dayNumber: String(date.getDate()),
-            label: new Intl.DateTimeFormat(locale, { weekday: 'long', day: 'numeric', month: 'long' }).format(date),
-            isToday: key === today,
-            isPast: key < today,
-          };
-        })}
+        days={weekDayItems(days, today, locale)}
         blocks={blocks}
         selectedDay={days.includes(search.day) ? search.day : (days[0] ?? search.week)}
         onSelectDay={(day) => onSearch({ day })}

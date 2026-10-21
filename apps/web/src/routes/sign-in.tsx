@@ -1,3 +1,4 @@
+import { LoadingNow } from '@crm/ui';
 import { createFileRoute, redirect } from '@tanstack/react-router';
 import { AuthError, AuthPending } from '../features/auth/AuthStates.tsx';
 import { readLastEmail, sessionStore } from '../features/auth/pending.ts';
@@ -22,7 +23,11 @@ export const Route = createFileRoute('/sign-in')({
     );
     return { google, email: readLastEmail(sessionStore(window)) };
   },
-  pendingComponent: () => <AuthPending title={strings.signInTitle} />,
+  pendingComponent: () => (
+    <LoadingNow>
+      <AuthPending title={strings.signInTitle} />
+    </LoadingNow>
+  ),
   errorComponent: () => <AuthError title={strings.signInTitle} />,
   component: SignInRoute,
 });

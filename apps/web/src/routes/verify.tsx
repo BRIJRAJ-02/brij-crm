@@ -1,3 +1,4 @@
+import { LoadingNow } from '@crm/ui';
 import { createFileRoute, redirect } from '@tanstack/react-router';
 import { AuthError, AuthPending } from '../features/auth/AuthStates.tsx';
 import { readPending, sessionStore } from '../features/auth/pending.ts';
@@ -19,7 +20,11 @@ export const Route = createFileRoute('/verify')({
     }
     return { pending };
   },
-  pendingComponent: () => <AuthPending title={strings.verifyTitle} />,
+  pendingComponent: () => (
+    <LoadingNow>
+      <AuthPending title={strings.verifyTitle} />
+    </LoadingNow>
+  ),
   errorComponent: () => <AuthError title={strings.verifyTitle} />,
   component: VerifyRoute,
 });
