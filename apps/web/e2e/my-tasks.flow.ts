@@ -58,7 +58,10 @@ test('My tasks: the four groups, the switches in the address, a tick, and midnig
   await make('Read the brief');
   await make('Nobody’s task', undefined, null);
 
-  await page.getByRole('link', { name: 'My tasks' }).click();
+  await page
+    .getByRole('navigation', { name: 'Main navigation' })
+    .getByRole('link', { name: 'Tasks', exact: true })
+    .click();
   await expect(page).toHaveURL(new RegExp(`/w/${slug}/tasks$`));
   await expect(page.getByRole('heading', { name: 'Tasks', level: 1 })).toBeVisible();
   const list = page.getByRole('grid', { name: /Assigned to me/ });
