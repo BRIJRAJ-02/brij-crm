@@ -58,7 +58,11 @@ test('My tasks: the four groups, the switches in the address, a tick, and midnig
   await make('Read the brief');
   await make('Nobody’s task', undefined, null);
 
-  await page.getByRole('link', { name: 'My tasks' }).click();
+  // Tasks in the sidebar opens My tasks (spec 0034, AC-924).
+  await page
+    .getByRole('navigation', { name: 'Main navigation' })
+    .getByRole('link', { name: 'Tasks', exact: true })
+    .click();
   await expect(page).toHaveURL(new RegExp(`/w/${slug}/tasks$`));
   await expect(page.getByRole('heading', { name: 'My tasks', level: 1 })).toBeVisible();
   const list = page.getByRole('grid', { name: /Assigned to me/ });

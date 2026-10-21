@@ -1,6 +1,6 @@
 # Booking pages (spec 0025)
 
-## Captures › Links (`/w/$slug/captures/links`; the old `/settings/booking-pages` redirects here)
+## Scheduling › Booking pages (`/w/$slug/booking-pages`, spec 0034; `/captures/links` and the old `/settings/booking-pages` redirect here)
 
 - Purpose: the member's booking pages (an admin sees everyone's) with their status and bookings this month (AC-645).
 - Main task: make a page and open its builder; copy a link, pause or take bookings again, delete one after a confirm.
@@ -8,7 +8,7 @@
 
 Built from Table, Badge, CopyButton, Button, Modal (new page, and the delete confirm with `tone="danger"`), Field, Callout and EmptyState. Pause shows at once and rolls back on a refusal.
 
-## The builder (`/w/$slug/captures/links/$pageId`; the old `/settings/booking-pages/$pageId` redirects here)
+## The builder (`/w/$slug/booking-pages/$pageId`; `/captures/links/$pageId` and the old `/settings/booking-pages/$pageId` redirect here)
 
 - Purpose: one page's details, meeting lengths, location, availability and limits (AC-623, AC-624).
 - Main task: change a setting and have it saved half a second after the last change; what failed is said where it happened (a taken web address on its field).

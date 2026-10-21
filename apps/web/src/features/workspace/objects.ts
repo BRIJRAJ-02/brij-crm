@@ -16,6 +16,10 @@ export function navObjects(objects: readonly ObjectSummary[]): readonly ObjectSu
 export const objectHref = (slug: string, object: Pick<ObjectSummary, 'apiSlug'>) =>
   `/w/${slug}/objects/${object.apiSlug}`;
 
+/** One saved view of an object (spec 0020): a favourite view's address in the sidebar (spec 0034). */
+export const viewHref = (slug: string, objectSlug: string, viewId: string) =>
+  `/w/${slug}/objects/${objectSlug}/views/${viewId}`;
+
 /** The workspace's trash (spec 0022). */
 export const trashHref = (slug: string) => `/w/${slug}/trash`;
 
@@ -25,8 +29,6 @@ export const tasksHref = (slug: string) => `/w/${slug}/tasks`;
 /** Bookings' address: its first tab, Calendar, named outright so the sidebar's link preloads that page itself. */
 export const bookingsHref = (slug: string) => `/w/${slug}/bookings/calendar`;
 
-/** The Captures page's address: its first tab, Links, named outright so the sidebar's link preloads that page itself. */
-export const capturesHref = (slug: string) => `/w/${slug}/captures/links`;
 /** Settings, Background jobs (spec 0008). */
 export const jobsHref = (slug: string) => `/w/${slug}/settings/jobs`;
 /** Settings, Objects (spec 0012): where a workspace with no live object opens. */

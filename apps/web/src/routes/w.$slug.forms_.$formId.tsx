@@ -10,8 +10,8 @@ import { WorkspacePage } from '../features/workspace/WorkspacePage.tsx';
 // One form's editor (spec 0023): `?tab=` form (by default), settings, install or submissions, with `&state=`
 // narrowing the submissions and `&submission=<id>` opening one beside them. The loader reads the form, its target's
 // attributes, the members and the objects, and on Submissions its first page and the open one, all through the data
-// layer. The screen is keyed by the form, so it keeps its draft across tab changes. It sits outside the Captures
-// layout (`captures_`): the editor needs the page's whole width and its own TopBar, so no Links · Forms strip.
+// layer. The screen is keyed by the form, so it keeps its draft across tab changes. The editor has the
+// page's whole width and its own TopBar, under Scheduling › Forms (spec 0034).
 interface FormSearch {
   readonly tab: FormTab;
   readonly state?: SubmissionState;
@@ -20,7 +20,7 @@ interface FormSearch {
 
 const STATES: readonly string[] = ['received', 'processing', 'processed', 'spam', 'held', 'needs_review', 'failed'];
 
-export const Route = createFileRoute('/w/$slug/captures_/forms/$formId')({
+export const Route = createFileRoute('/w/$slug/forms_/$formId')({
   validateSearch: (search: Record<string, unknown>): FormSearch => ({
     tab:
       typeof search.tab === 'string' && (FORM_TABS as readonly string[]).includes(search.tab)
@@ -66,7 +66,7 @@ export const Route = createFileRoute('/w/$slug/captures_/forms/$formId')({
   // Shown only once the loading delay passed: its skeletons show at once.
   pendingComponent: () => (
     <LoadingNow>
-      <EditorPending title={strings.forms} icon="clipboard-list" cards={[strings.name]} />
+      <EditorPending currentPage="forms" title={strings.forms} icon="clipboard-list" cards={[strings.name]} />
     </LoadingNow>
   ),
   errorComponent: FormError,
@@ -80,7 +80,7 @@ function FormRoute() {
   if (page === undefined) {
     return (
       <WorkspacePage
-        currentPage="captures"
+        currentPage="forms"
         page={{
           topBar: <TopBar title={strings.missingTitle} icon="clipboard-list" />,
           body: <EmptyState title={strings.missingTitle}>{strings.missingText}</EmptyState>,
@@ -108,7 +108,7 @@ function FormError({ error }: ErrorComponentProps) {
   const router = useRouter();
   return (
     <WorkspacePage
-      currentPage="captures"
+      currentPage="forms"
       page={{
         topBar: <TopBar title={strings.forms} icon="clipboard-list" />,
         body: (

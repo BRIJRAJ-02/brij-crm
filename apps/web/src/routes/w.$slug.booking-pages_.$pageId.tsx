@@ -10,10 +10,10 @@ import { strings } from '../features/booking/strings.ts';
 import { WorkspacePage } from '../features/workspace/WorkspacePage.tsx';
 
 // One booking page's editor (spec 0025, AC-623, AC-624): the page read through the data layer; one that was
-// deleted or isn't the reader's answers NOT_FOUND, said in the page with the way back. It sits outside the
-// Captures layout (`captures_`), as a form's editor does: it needs the whole width and its own TopBar. On the reader's own page
-// their hours load too, so "Follow my hours" shows the week it follows.
-export const Route = createFileRoute('/w/$slug/captures_/links/$pageId')({
+// deleted or isn't the reader's answers NOT_FOUND, said in the page with the way back. It sits outside the Booking
+// pages layout (`booking-pages_`), as a form's editor does: it needs the whole width and its own TopBar. On the
+// reader's own page their hours load too, so "Follow my hours" shows the week it follows.
+export const Route = createFileRoute('/w/$slug/booking-pages_/$pageId')({
   loader: async ({ context, params }) => {
     try {
       const [page, mine] = await Promise.all([
@@ -57,6 +57,7 @@ function PageEditorPending() {
   const hasNote = calendar.status === 'ready' && calendar.connections.length === 0 && !readDismissed(slug);
   return (
     <EditorPending
+      currentPage="booking_pages"
       title={strings.listLabel}
       icon="link"
       cards={[strings.page, strings.meeting, strings.hours, strings.limits]}
@@ -65,7 +66,7 @@ function PageEditorPending() {
   );
 }
 
-/** Not found or failed, inside the frame, with the way back to Links. */
+/** Not found or failed, inside the frame, with the way back to Booking pages. */
 function Missing({
   title,
   text,
@@ -78,11 +79,12 @@ function Missing({
   const { slug = '' } = useParams({ strict: false });
   return (
     <WorkspacePage
-      currentPage="captures"
+      currentPage="booking_pages"
       page={{
         topBar: (
+          // The trail names what went wrong after the way back: "Booking pages › This booking page isn’t here".
           <TopBar
-            title={strings.listLabel}
+            title={title}
             icon="link"
             crumbs={[{ id: 'links', label: strings.linksTitle, href: linksHref(slug) }]}
           />

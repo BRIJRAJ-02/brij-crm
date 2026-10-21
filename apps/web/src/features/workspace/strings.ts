@@ -17,17 +17,26 @@ export const strings = {
   signingOut: 'Signing out',
   signOutFailed: 'Couldn’t sign out. Check your connection, then try again.',
   records: 'Records',
-  /** The sidebar's way to the trash, at the foot of Records (spec 0022). */
+  /** The sidebar's way to the trash (spec 0022), at its foot (spec 0034, AC-930). */
   trash: 'Trash',
-  /** The sidebar's way to the upcoming bookings, after Records. */
+  /** The sidebar's way to the bookings, first under Scheduling (spec 0034, AC-928). */
   bookings: 'Bookings',
-  /** The sidebar's way to the booking links and the forms, after Bookings. */
-  captures: 'Captures',
-  /** The group holding Bookings, Captures and Trash after Records, for screen readers. */
-  destinations: 'Workspace pages',
-  /** The sidebar group above Records holding My tasks (spec 0019). */
-  personal: 'Your work',
-  myTasks: 'My tasks',
+  /** The Scheduling section's pages (spec 0034, AC-928). */
+  availability: 'Availability',
+  bookingPages: 'Booking pages',
+  forms: 'Forms',
+  /** My tasks (spec 0019), above the sections (spec 0034, AC-924). */
+  tasks: 'Tasks',
+  /** The group above the sections holding Tasks (and Inbox once it exists), for screen readers. */
+  yourWork: 'Your work',
+  /** The sidebar's sections (spec 0034). */
+  favourites: 'Favourites',
+  lists: 'Lists',
+  scheduling: 'Scheduling',
+  /** The foot's way to the shortcut list (AC-930: it opens the keyboard shortcuts until a help centre exists). */
+  help: 'Help and shortcuts',
+  /** A favourite record with no name (spec 0034, AC-925): "Unnamed person". */
+  unnamedRecord: (singular: string) => `Unnamed ${singular.toLowerCase()}`,
   /** The workspace menu's way into settings (spec 0012), above Sign out. */
   settings: 'Settings',
   noObjects: 'No objects yet',
@@ -105,4 +114,5 @@ export const strings = {
   emailAddress: 'Email address',
   undoShortcut: 'Undo your last change',
   showShortcuts: 'Show keyboard shortcuts',
+  toggleRail: 'Fold the sidebar to icons, or open it',
 } as const;

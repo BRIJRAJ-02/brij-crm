@@ -4,11 +4,13 @@ import { createFileRoute, useRouter, type ErrorComponentProps } from '@tanstack/
 import { AvailabilityPending, AvailabilityScreen } from '../features/booking/AvailabilityScreen.tsx';
 import { browserZone } from '../features/booking/hours.ts';
 import { strings } from '../features/booking/strings.ts';
+import { SCHEDULING_HUE } from '../features/scheduling.ts';
 import { WorkspacePage } from '../features/workspace/WorkspacePage.tsx';
 
-// Bookings › Availability (spec 0025 experience): the member's own weekly hours and days off, read through the
-// data layer (weekdays 09:00 to 17:00 in the browser's zone until set). The Bookings layout arrives with the shell lane.
-export const Route = createFileRoute('/w/$slug/bookings/availability')({
+// Scheduling › Availability (spec 0025 experience; a page of its own since spec 0034, AC-928, and
+// `/bookings/availability` redirects here): the member's own weekly hours and days off, read through the data layer
+// (weekdays 09:00 to 17:00 in the browser's zone until set).
+export const Route = createFileRoute('/w/$slug/availability')({
   loader: async ({ context, params }) => {
     const [{ availability }, listed, access] = await Promise.all([
       context.data.bookings.hours(params.slug, browserZone()),
@@ -60,9 +62,9 @@ function AvailabilityError({ error }: ErrorComponentProps) {
   const router = useRouter();
   return (
     <WorkspacePage
-      currentPage="bookings"
+      currentPage="availability"
       page={{
-        topBar: <TopBar title={strings.availability} icon="clock" />,
+        topBar: <TopBar title={strings.availability} icon="clock" hue={SCHEDULING_HUE} />,
         body: (
           <PageColumn>
             <EmptyState tone="error" title={strings.availabilityFailed} onRetry={() => void router.invalidate()}>

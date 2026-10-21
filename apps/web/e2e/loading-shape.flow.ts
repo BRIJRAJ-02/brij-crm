@@ -22,7 +22,7 @@ interface Screen {
 
 const sidebar = (name: string) => (page: Page) => page.getByRole('navigation').getByRole('link', { name, exact: true });
 const tab = (name: string) => (page: Page) => page.getByRole('tab', { name, exact: true });
-/** A Captures card, by its title: the title is the link to its editor. */
+/** A booking page's or a form's card, by its title: the title is the link to its editor. */
 const card = (name: string) => (page: Page) => page.getByRole('link', { name, exact: true }).first();
 const at =
   (where: string) =>
@@ -57,11 +57,11 @@ const ALL_SCREENS: readonly Screen[] = [
   },
   { name: 'bookings calendar', start: at('trash'), target: sidebar('Bookings') },
   { name: 'bookings list', start: at('bookings/calendar'), target: tab('List') },
-  { name: 'bookings availability', start: at('bookings/calendar'), target: tab('Availability') },
-  { name: 'captures links', start: at('trash'), target: sidebar('Captures') },
-  { name: 'captures forms', start: at('captures/links'), target: tab('Forms') },
-  { name: 'booking page editor', start: at('captures/links'), target: card('Intro call') },
-  { name: 'form editor', start: at('captures/forms'), target: card('Untitled form') },
+  { name: 'availability', start: at('bookings/calendar'), target: sidebar('Availability') },
+  { name: 'booking pages', start: at('trash'), target: sidebar('Booking pages') },
+  { name: 'forms', start: at('booking-pages'), target: sidebar('Forms') },
+  { name: 'booking page editor', start: at('booking-pages'), target: card('Intro call') },
+  { name: 'form editor', start: at('forms'), target: card('Untitled form') },
   {
     name: 'settings preferences',
     start: at('trash'),
@@ -80,7 +80,7 @@ const ALL_SCREENS: readonly Screen[] = [
     target: tab('Configuration'),
   },
   { name: 'settings jobs', start: at('settings/account/preferences'), target: sidebar('Background jobs') },
-  { name: 'trash', start: at('captures/links'), target: sidebar('Trash') },
+  { name: 'trash', start: at('booking-pages'), target: sidebar('Trash') },
 ];
 
 const ONLY = process.env.FLOW_SCREEN;

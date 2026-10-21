@@ -1,6 +1,6 @@
 # Forms
 
-Captures, Forms (spec 0023, `0023-experience.md`): forms that make a person from every enquiry. The routes are `/w/$slug/captures/forms` (the list) and `/w/$slug/captures/forms/$formId` (the editor); the Captures frame and its Links · Forms tabs come from the shell.
+Scheduling › Forms (spec 0023, `0023-experience.md`; a page of its own since spec 0034): forms that make a person from every enquiry. The routes are `/w/$slug/forms` (the list) and `/w/$slug/forms/$formId` (the editor, with its `preview`); the page's frame, TopBar and search bar come from the shared layout (`captures/CapturesLayout.tsx`), and every old `/captures/forms` address redirects here.
 
 ## Screens
 

@@ -215,7 +215,7 @@ export function PageEditor({ data, slug, page: loaded, locale, myHours }: PageEd
 
   return (
     <WorkspacePage
-      currentPage="captures"
+      currentPage="booking_pages"
       page={{
         topBar: (
           <TopBar
@@ -483,7 +483,7 @@ export function PageEditor({ data, slug, page: loaded, locale, myHours }: PageEd
 export function PageEditorPending() {
   return (
     <WorkspacePage
-      currentPage="captures"
+      currentPage="booking_pages"
       page={{
         topBar: <TopBar title={strings.listLabel} icon="link" isLoading />,
         body: (

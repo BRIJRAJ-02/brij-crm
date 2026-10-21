@@ -16,8 +16,8 @@ import {
 } from '@crm/ui';
 import { useBlocker, useNavigate } from '@tanstack/react-router';
 import { useState, useMemo } from 'react';
-import { bookingsHref } from '../workspace/objects.ts';
 import { pageHeading } from '../navigation/focus.ts';
+import { SCHEDULING_HUE } from '../scheduling.ts';
 import { WorkspacePage } from '../workspace/WorkspacePage.tsx';
 import { DaysOff } from './DaysOff.tsx';
 import { pageEditorHref } from './links.ts';
@@ -99,14 +99,11 @@ export function AvailabilityScreen({
   const zones = useMemo(() => zoneItems(draft.timeZone, new Date()), [draft.timeZone]);
   return (
     <WorkspacePage
-      currentPage="bookings"
+      currentPage="availability"
       page={{
         topBar: (
-          <TopBar
-            title={strings.availability}
-            icon="clock"
-            crumbs={[{ id: 'bookings', label: strings.bookings, href: bookingsHref(slug) }]}
-          />
+          // A page of its own under Scheduling (spec 0034), no longer a Bookings tab: the scheduling tile, no trail.
+          <TopBar title={strings.availability} icon="clock" hue={SCHEDULING_HUE} />
         ),
         body: (
           <PageColumn
@@ -173,9 +170,9 @@ export function AvailabilityScreen({
 export function AvailabilityPending() {
   return (
     <WorkspacePage
-      currentPage="bookings"
+      currentPage="availability"
       page={{
-        topBar: <TopBar title={strings.availability} icon="clock" isLoading />,
+        topBar: <TopBar title={strings.availability} icon="clock" hue={SCHEDULING_HUE} isLoading />,
         body: (
           // The cards the page will show, each holding its place, so the page lands where the skeleton was.
           <PageColumn

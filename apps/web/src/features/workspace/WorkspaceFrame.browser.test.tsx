@@ -1,8 +1,10 @@
-// The workspace frame's sidebar in Chromium (spec 0026, AC-681, AC-685): the
-// theme switch left its footer for Settings, which sits there with ⌘, and
-// opens on that shortcut (but not from a text field); inside Settings the
-// settings sidebar takes its place.
-import type { DataLayer } from '@crm/data';
+// The workspace frame's sidebar in Chromium (spec 0026, AC-681, AC-685; spec 0034, milestone 1): the theme switch
+// left its footer for Settings, which sits there with ⌘, and opens on that shortcut (but not from a text field);
+// inside Settings the settings sidebar takes its place. The app's sidebar draws Tasks, then the member's sections in
+// their order and folds, then Trash, Settings and Help at the foot (AC-921, AC-928, AC-930); a fold or the rail goes
+// through the data layer (AC-931, AC-935), and [ toggles the rail outside a text field; while the member's sidebar
+// loads nothing guesses at their order, and one that couldn't be read draws the defaults.
+import type { DataLayer, NavOperation, NavSnapshot, NavState } from '@crm/data';
 import { createToasts, UiProvider } from '@crm/ui';
 import {
   createMemoryHistory,
@@ -14,12 +16,13 @@ import {
 } from '@tanstack/react-router';
 import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
-import { afterEach, beforeAll, describe, expect, it } from 'vitest';
+import { afterEach, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { page } from 'vitest/browser';
-import { WorkspaceFrame, type SettingsSidebar } from './WorkspaceFrame.tsx';
+import { WorkspaceFrame, type SettingsSidebar, type WorkspaceFrameProps } from './WorkspaceFrame.tsx';
 
-// The frame reaches the data layer on undo and sign out, which these tests never press, and for the calendar banner,
-// which reads the member's calendars: here none, still loading, so no banner shows.
+// The frame reaches the data layer on undo and sign out, which these tests never press, for the calendar banner,
+// which reads the member's calendars (here none, still loading, so no banner shows), and for the member's sidebar,
+// held here by hand: each change the frame sends is kept, and folds and the rail apply at once, as the layer's do.
 const loading = { status: 'loading' as const };
 const calendarView = {
   subscribe: () => () => undefined,
@@ -28,7 +31,86 @@ const calendarView = {
   ready: () => Promise.resolve(),
   reload: () => undefined,
 };
-const data = { calendar: { view: () => calendarView } } as unknown as DataLayer;
+
+const PEOPLE = '01900000-0000-7000-8000-000000000001';
+const COMPANIES = '01900000-0000-7000-8000-000000000002';
+
+/** The member's sidebar with nothing stored: the defaults, as the server answers them. */
+const STORED: NavState = {
+  items: [],
+  sections: { order: ['favourites', 'records', 'lists', 'scheduling'], folded: [] },
+  rail: false,
+  version: 0,
+  favourites: [],
+  top: ['tasks'],
+  scheduling: ['bookings', 'availability', 'booking_pages', 'forms'],
+};
+
+let snapshot: NavSnapshot = { status: 'ready', nav: STORED };
+let sent: NavOperation[] = [];
+let held = 0;
+const listeners = new Set<() => void>();
+const show = (next: NavSnapshot) => {
+  snapshot = next;
+  for (const listener of listeners) listener();
+};
+const navSource = {
+  retain: () => {
+    held += 1;
+    return () => {
+      held -= 1;
+    };
+  },
+  subscribe: (listener: () => void) => {
+    listeners.add(listener);
+    return () => {
+      listeners.delete(listener);
+    };
+  },
+  getSnapshot: () => snapshot,
+};
+const data = {
+  calendar: { view: () => calendarView },
+  nav: {
+    source: () => navSource,
+    change: (_workspace: string, op: NavOperation) => {
+      sent = [...sent, op];
+      if (snapshot.status !== 'ready') return;
+      const { nav } = snapshot;
+      if (op.op === 'rail') show({ status: 'ready', nav: { ...nav, rail: op.on } });
+      if (op.op === 'fold') {
+        const folded = op.folded
+          ? [...nav.sections.folded, op.section]
+          : nav.sections.folded.filter((key) => key !== op.section);
+        show({ status: 'ready', nav: { ...nav, sections: { ...nav.sections, folded } } });
+      }
+    },
+  },
+} as unknown as DataLayer;
+
+const OBJECTS = [
+  {
+    id: COMPANIES,
+    apiSlug: 'companies',
+    pluralName: 'Companies',
+    position: 2,
+    isArchived: false,
+    icon: 'building',
+    hue: 'blue',
+  },
+  { id: PEOPLE, apiSlug: 'people', pluralName: 'People', position: 1, isArchived: false, icon: 'user', hue: 'green' },
+] as unknown as WorkspaceFrameProps['objects'];
+
+beforeEach(() => {
+  snapshot = { status: 'ready', nav: STORED };
+  sent = [];
+  held = 0;
+  try {
+    localStorage.clear();
+  } catch {
+    // Storage blocked: the rail hint reads as open, which these tests expect.
+  }
+});
 
 // Wider than bp-page-compact, so the sidebar is open and shows its words and keycaps.
 beforeAll(async () => {
@@ -48,7 +130,10 @@ afterEach(() => {
 });
 
 /** Renders the frame at `/w/acme/start` inside a memory router, with a settings page to go to. */
-async function renderFrame(settings?: SettingsSidebar): Promise<AnyRouter> {
+async function renderFrame(
+  settings?: SettingsSidebar,
+  more: Partial<Pick<WorkspaceFrameProps, 'objects' | 'currentPage' | 'isMissing'>> = {},
+): Promise<AnyRouter> {
   const toasts = createToasts();
   const rootRoute = createRootRoute();
   const frame = () => (
@@ -57,7 +142,9 @@ async function renderFrame(settings?: SettingsSidebar): Promise<AnyRouter> {
       toasts={toasts}
       slug="acme"
       workspaceName="Acme"
-      objects={[]}
+      objects={more.objects ?? []}
+      {...(more.currentPage === undefined ? {} : { currentPage: more.currentPage })}
+      {...(more.isMissing === undefined ? {} : { isMissing: more.isMissing })}
       {...(settings === undefined ? {} : { settings })}
     >
       <input aria-label="Draft" />
@@ -150,5 +237,161 @@ describe('the workspace frame’s sidebar', () => {
     // Nothing of the app's sidebar: no records, no Settings entry at the foot.
     expect(nav?.textContent).not.toContain('Records');
     expect(nav?.querySelector('kbd')).toBeNull();
+  });
+});
+
+/** An element's name as the sidebar shows it: its label, else its words (a keycap, hidden from the name, left out). */
+function nameOf(element: Element): string {
+  const label = element.getAttribute('aria-label');
+  if (label !== null) return label;
+  const copy = element.cloneNode(true) as Element;
+  for (const hidden of copy.querySelectorAll('[aria-hidden="true"]')) hidden.remove();
+  return copy.textContent.trim();
+}
+
+/** The sidebar's links and buttons, top to bottom, by name. */
+function sidebarNames(): string[] {
+  const nav = document.querySelector('nav[aria-label="Main navigation"]');
+  return [...(nav?.querySelectorAll('a[href], button') ?? [])].map(nameOf);
+}
+
+/** Presses a key on `target`, and lets React settle. */
+async function press(target: Element, key: string): Promise<void> {
+  await act(async () => {
+    target.dispatchEvent(new KeyboardEvent('keydown', { key, bubbles: true, cancelable: true }));
+    await new Promise((resolve) => setTimeout(resolve, 20));
+  });
+}
+
+const button = (name: string) =>
+  [...document.querySelectorAll<HTMLButtonElement>('nav button')].find((each) => nameOf(each) === name);
+
+describe('the app’s sidebar (spec 0034)', () => {
+  it('draws Tasks, Records and Scheduling with its four pages, then Trash, Settings and Help at the foot', async () => {
+    await renderFrame(undefined, { objects: OBJECTS });
+    const names = sidebarNames();
+    const expected = [
+      'Tasks',
+      'Records',
+      'People',
+      'Companies',
+      'Scheduling',
+      'Bookings',
+      'Availability',
+      'Booking pages',
+      'Forms',
+      'Trash',
+      'Settings',
+      'Help and shortcuts',
+    ];
+    expect(names.filter((name) => expected.includes(name))).toEqual(expected);
+    expect(names).not.toContain('Captures');
+    const link = (name: string) =>
+      [...document.querySelectorAll<HTMLAnchorElement>('nav a')].find((each) => each.textContent.trim() === name);
+    expect(link('Tasks')?.getAttribute('href')).toBe('/w/acme/tasks');
+    expect(link('Bookings')?.getAttribute('href')).toBe('/w/acme/bookings/calendar');
+    expect(link('Availability')?.getAttribute('href')).toBe('/w/acme/availability');
+    expect(link('Booking pages')?.getAttribute('href')).toBe('/w/acme/booking-pages');
+    expect(link('Forms')?.getAttribute('href')).toBe('/w/acme/forms');
+    expect(link('Trash')?.getAttribute('href')).toBe('/w/acme/trash');
+  });
+
+  it('marks the page that is open as current', async () => {
+    await renderFrame(undefined, { objects: OBJECTS, currentPage: 'booking_pages' });
+    const current = document.querySelectorAll('nav a[aria-current="page"]');
+    expect([...current].map((each) => each.textContent.trim())).toEqual(['Booking pages']);
+  });
+
+  it('draws the member’s section order and folds', async () => {
+    snapshot = {
+      status: 'ready',
+      nav: { ...STORED, sections: { order: ['scheduling', 'records'], folded: ['records'] } },
+    };
+    await renderFrame(undefined, { objects: OBJECTS });
+    const names = sidebarNames();
+    expect(names.indexOf('Scheduling')).toBeLessThan(names.indexOf('Records'));
+    expect(button('Records')?.getAttribute('aria-expanded')).toBe('false');
+    expect(button('Scheduling')?.getAttribute('aria-expanded')).toBe('true');
+  });
+
+  it('folds a section from its label through the data layer, and opens it again (AC-931)', async () => {
+    await renderFrame(undefined, { objects: OBJECTS });
+    await act(async () => {
+      button('Scheduling')?.click();
+      await new Promise((resolve) => setTimeout(resolve, 20));
+    });
+    expect(sent).toEqual([{ op: 'fold', section: 'scheduling', folded: true }]);
+    expect(button('Scheduling')?.getAttribute('aria-expanded')).toBe('false');
+    await act(async () => {
+      button('Scheduling')?.click();
+      await new Promise((resolve) => setTimeout(resolve, 20));
+    });
+    expect(sent.at(-1)).toEqual({ op: 'fold', section: 'scheduling', folded: false });
+    expect(button('Scheduling')?.getAttribute('aria-expanded')).toBe('true');
+  });
+
+  it('folds the whole sidebar to its rail with [ and back, never from a text field (AC-935)', async () => {
+    await renderFrame(undefined, { objects: OBJECTS });
+    const draft = document.querySelector('input[aria-label="Draft"]');
+    if (draft === null) throw new Error('No draft field.');
+    await press(draft, '[');
+    expect(sent).toEqual([]);
+    await press(document.body, '[');
+    expect(sent).toEqual([{ op: 'rail', on: true }]);
+    expect(document.querySelector('nav[aria-label="Main navigation"]')?.hasAttribute('data-collapsed')).toBe(true);
+    await press(document.body, '[');
+    expect(sent.at(-1)).toEqual({ op: 'rail', on: false });
+  });
+
+  it('lists [ among the shortcuts that Help and shortcuts opens', async () => {
+    await renderFrame(undefined, { objects: OBJECTS });
+    await act(async () => {
+      button('Help and shortcuts')?.click();
+      await new Promise((resolve) => setTimeout(resolve, 50));
+    });
+    const dialog = document.querySelector('[role="dialog"]');
+    expect(dialog?.textContent).toContain('Fold the sidebar to icons, or open it');
+  });
+
+  it('while the member’s sidebar loads, shows Records loading and guesses at nothing else (AC-936)', async () => {
+    snapshot = { status: 'loading' };
+    await renderFrame(undefined, { objects: OBJECTS });
+    const names = sidebarNames();
+    expect(names).toContain('Records');
+    expect(names).not.toContain('Scheduling');
+    expect(names).not.toContain('Tasks');
+    expect(names).toContain('Trash');
+    // No collapse button while the member's choice is unknown, so a press never lands on a guess.
+    expect(document.querySelector('nav button[aria-label="Collapse the sidebar"]')).toBeNull();
+    show({ status: 'ready', nav: STORED });
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 20));
+    });
+    expect(sidebarNames()).toContain('Scheduling');
+  });
+
+  it('draws the rail this browser last saw while the member’s sidebar loads, so the page doesn’t jump', async () => {
+    localStorage.setItem('crm.sidebar.rail.acme', '1');
+    snapshot = { status: 'loading' };
+    await renderFrame(undefined, { objects: OBJECTS });
+    expect(document.querySelector('nav[aria-label="Main navigation"]')?.hasAttribute('data-collapsed')).toBe(true);
+  });
+
+  it('draws the defaults when the member’s sidebar couldn’t be read', async () => {
+    snapshot = { status: 'error', error: { code: 'INTERNAL', message: 'Down.' } as never };
+    await renderFrame(undefined, { objects: OBJECTS });
+    const names = sidebarNames();
+    for (const name of ['Tasks', 'Records', 'Scheduling', 'Bookings', 'Availability', 'Booking pages', 'Forms']) {
+      expect(names).toContain(name);
+    }
+  });
+
+  it('on a workspace that isn’t there, holds no sidebar and offers only Settings and Help', async () => {
+    await renderFrame(undefined, { isMissing: true });
+    expect(held).toBe(0);
+    const names = sidebarNames();
+    expect(names).toContain('Settings');
+    expect(names).toContain('Help and shortcuts');
+    for (const name of ['Tasks', 'Records', 'Scheduling', 'Trash']) expect(names).not.toContain(name);
   });
 });

@@ -44,7 +44,7 @@ export interface WorkspacePageProps {
   readonly page: FramedPage;
   /** The `apiSlug` of the object whose page is open. */
   readonly currentObject?: string;
-  /** A page of the sidebar's that isn't an object's: Bookings, Captures or the trash (spec 0022). */
+  /** A page of the sidebar's that isn't an object's: Tasks, a Scheduling page or the trash (spec 0034). */
   readonly currentPage?: SidebarPage;
   /** Inside Settings: the settings sidebar in place of the app's (spec 0026). */
   readonly settings?: SettingsSidebar;

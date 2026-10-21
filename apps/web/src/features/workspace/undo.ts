@@ -70,6 +70,14 @@ export function belongsElsewhere(target: KeyTarget | null): boolean {
 /** Settings' keycaps for the shortcut list, with Mac symbols (Kbd shows Ctrl elsewhere). */
 export const SETTINGS_KEYS: readonly string[] = ['⌘', ','];
 
+/** Whether a key press folds the sidebar to its rail or back (spec 0034, AC-935): [ with no Cmd, Ctrl or Alt, once. */
+export function isRailKey(press: KeyPress): boolean {
+  return press.key === '[' && !press.metaKey && !press.ctrlKey && !press.altKey && press.repeat !== true;
+}
+
+/** The sidebar's rail on and off (spec 0034, AC-935), as ShortcutHelp lists it. */
+export const RAIL_KEYS: readonly string[] = ['['];
+
 /** Undo's keycaps for the shortcut list, with Mac symbols as ShortcutHelp takes them (Kbd shows Ctrl elsewhere). */
 export const UNDO_KEYS: readonly string[] = ['⌘', 'Z'];
 

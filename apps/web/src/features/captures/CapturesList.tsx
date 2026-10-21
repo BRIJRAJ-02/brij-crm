@@ -1,7 +1,7 @@
 // Brief
-// Purpose: the one shape both Captures tabs draw (Links' booking pages, Forms' forms), so they read as one kind of thing.
-// Main task: a grid of link cards across the whole view, each opening its editor, with Copy link, Open and the menu in its footer; the search at the end of the tabs bar; or, with none, the empty state centred in the view, with New.
-// Leaves out: what a card says and does (each tab builds its cards), and the tabs header (the Captures layout).
+// Purpose: the one shape Booking pages and Forms both draw, so they read as one kind of thing.
+// Main task: a grid of link cards across the whole view, each opening its editor, with Copy link, Open and the menu in its footer; the search at the end of the bar under the TopBar; or, with none, the empty state centred in the view, with New.
+// Leaves out: what a card says and does (each page builds its cards), and the TopBar and the bar (the page's layout).
 import { EmptyState, LinkGrid, LinkListToolbar, PageColumn, type IconName, type LinkGridCard } from '@crm/ui';
 import { useState, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
@@ -22,13 +22,13 @@ export interface CapturesListProps {
   /** A list that didn't load: its title, and Try again. */
   readonly errorTitle: string;
   readonly onRetry: () => void;
-  /** The tab's dialogs (New, Delete), drawn in every state. */
+  /** The page's dialogs (New, Delete), drawn in every state. */
   readonly dialogs?: ReactNode;
 }
 
 /**
- * A Captures tab's list: LinkGrid's cards across the whole view under the bar (the grid carries the page's
- * gutter itself), its search at the bar's end (New is the TopBar's); or the empty state centred in the view.
+ * A list page's list: LinkGrid's cards across the whole view under the bar (the grid carries the page's gutter
+ * itself), its search at the bar's end (New is the TopBar's); or the empty state centred in the view.
  */
 export function CapturesList({
   label,
@@ -43,9 +43,26 @@ export function CapturesList({
 }: CapturesListProps) {
   const slot = useCapturesToolbarSlot();
   const [query, setQuery] = useState('');
-  if (status === 'ready' && cards.length === 0) {
+  const isEmpty = status === 'ready' && cards.length === 0;
+  // The search stands in the bar in every state, so the bar never empties: waiting while the list loads or failed,
+  // and while there is nothing to search yet.
+  const search =
+    slot === null
+      ? null
+      : createPortal(
+          <LinkListToolbar
+            searchLabel={searchLabel}
+            query={query}
+            onQueryChange={setQuery}
+            size="sm"
+            isSearchDisabled={status !== 'ready' || isEmpty}
+          />,
+          slot,
+        );
+  if (isEmpty) {
     return (
       <PageColumn align="center">
+        {search}
         <EmptyState title={empty.title} icon={empty.icon} {...(newAction === undefined ? {} : { actions: newAction })}>
           {empty.text}
         </EmptyState>
@@ -53,20 +70,9 @@ export function CapturesList({
       </PageColumn>
     );
   }
-  const isBusy = status !== 'ready';
   return (
     <>
-      {slot !== null &&
-        createPortal(
-          <LinkListToolbar
-            searchLabel={searchLabel}
-            query={query}
-            onQueryChange={setQuery}
-            size="sm"
-            isSearchDisabled={isBusy}
-          />,
-          slot,
-        )}
+      {search}
       <LinkGrid
         label={label}
         cards={cards}
