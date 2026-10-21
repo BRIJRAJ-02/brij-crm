@@ -23,6 +23,7 @@ import {
   EmptyState,
   Link,
   RecordHeader,
+  NoteList,
   RecordLayout,
   TaskList,
   TopBar,
@@ -88,6 +89,9 @@ const NO_TASKS = { count: 0, getItem: () => undefined, getKey: (task: { readonly
 /** A feed with nothing in it yet, for the loading page before the record's timeline exists. */
 const NO_ENTRIES = { count: 0, getItem: () => undefined, getKey: () => '' };
 
+/** No notes yet, while the route loads. */
+const NO_NOTES = { count: 0, getItem: () => undefined, getKey: (note: { readonly id: string }) => note.id };
+
 /** The top bar: the object's tile, and the crumbs "<Plural> › <title>" with the title as the page's h1. */
 function recordTopBar(slug: string, object: ObjectSummary, title: string, end?: ReactNode, isLoading = false) {
   return (
@@ -143,11 +147,26 @@ export function RecordPendingPage() {
   );
 }
 
-/** A tab while the route loads, in that tab's own shape: Overview's two cards, the Activity feed, the task list. */
+/** A tab while the route loads, in that tab's own shape: Overview's two cards, the feed, the notes, the task list. */
 function PendingTab({ tab }: { readonly tab: RecordTab }) {
   if (tab === 'activity') return <ActivityFeed label={strings.activity} entries={NO_ENTRIES} status="loading" />;
   const tasks = <TaskList label={taskStrings.openTasks} tasks={NO_TASKS} status="loading" onToggle={() => undefined} />;
   if (tab === 'tasks') return tasks;
+  if (tab === 'notes') {
+    return (
+      <NoteList
+        label={noteStrings.listLabel}
+        notes={NO_NOTES}
+        status="loading"
+        onAction={() => undefined}
+        toolbar={
+          <Button variant="primary" isDisabled>
+            {noteStrings.newNote}
+          </Button>
+        }
+      />
+    );
+  }
   return (
     <>
       <Card
