@@ -73,7 +73,7 @@ export const strings = {
   /** A booking made by chat on the booking page (spec 0041). */
   bookedVia: 'Booked',
   bookedByChat: 'By chat on the booking page',
-  showChat: 'Show chat',
+  showChat: 'Chat',
   chatVisitor: 'Visitor',
   chatAssistant: 'Assistant',
   cancelReason: 'Why it was canceled',

@@ -196,8 +196,9 @@ export type PublicChatLine = z.infer<typeof PublicChatLine>;
  * `POST /api/public/booking/:publicKey/chat` (spec 0041): one turn of the
  * booking chat. `conversationId` is minted by the page once per chat and only
  * scopes a booking's idempotency key; `duration`, `timeZone` and `hour12` are
- * the rail's. The server replays the visitor's lines only (AC-1517); the
- * assistant's travel so a booking can keep the whole conversation (AC-1521).
+ * the rail's. The server replays the visitor's lines only (AC-1517) and keeps
+ * only those on a booking (AC-1521): an assistant line is ignored, since
+ * nothing vouches for what a client says the assistant said.
  */
 export const PublicChatInput = z
   .object({
@@ -206,6 +207,9 @@ export const PublicChatInput = z
     timeZone: TimeZoneName,
     hour12: z.boolean(),
     messages: z.array(PublicChatLine).min(1).max(CHAT_MESSAGES_MAX, { error: 'This chat is too long. Start again.' }),
+    /** The fill ticket the page fetched (spec 0023), and when the page loaded: the bot checks a booking passes. */
+    ticket: z.string().max(200).optional(),
+    startedAt: z.number().int().nonnegative().optional(),
   })
   .refine(({ messages }) => messages.at(-1)?.role === 'visitor', { error: 'The last line must be the visitor’s.' });
 /** One turn of the booking chat. */

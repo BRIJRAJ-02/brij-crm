@@ -1,4 +1,4 @@
-/* Book by chat: the conversation scrolls in a fixed height pane, the visitor's
+/* Book by chat: the conversation scrolls in a pane twelve rows tall, the visitor's
    lines at the end edge on the accent's soft tint, the assistant's at the
    start on the subtle surface; the last reply's times and suggestions sit
    under it; the message field and Send are pinned at the foot. */
@@ -14,13 +14,18 @@
     display: flex;
     flex-direction: column;
     gap: var(--space-12);
-    block-size: var(--size-panel);
+    /* Twelve rows tall: room for a reply with its times, on a phone too. */
+    block-size: calc(var(--size-row) * 12);
     margin: 0;
     padding: 0 var(--space-4) var(--space-4) 0;
+    border-radius: var(--radius-md);
     overflow-y: auto;
     overscroll-behavior: contain;
-    list-style: none;
-    container-type: inline-size;
+  }
+
+  .thread:focus-visible {
+    outline: var(--border-width-thick) solid var(--accent-line);
+    outline-offset: var(--border-width-hairline);
   }
 
   .line {
@@ -52,36 +57,8 @@
     background: var(--accent-soft);
   }
 
-  .group {
-    display: flex;
-    flex-direction: column;
-    gap: var(--space-6);
+  .offers {
     inline-size: 100%;
-  }
-
-  .day {
-    margin: 0;
-    color: var(--text-secondary);
-    font: var(--text-label-strong);
-    letter-spacing: var(--tracking-label-strong);
-  }
-
-  .times {
-    display: grid;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: var(--space-8);
-  }
-
-  @container (width >= 320px) {
-    .times {
-      grid-template-columns: repeat(3, minmax(0, 1fr));
-    }
-  }
-
-  @container (width >= 480px) {
-    .times {
-      grid-template-columns: repeat(4, minmax(0, 1fr));
-    }
   }
 
   .suggestions {

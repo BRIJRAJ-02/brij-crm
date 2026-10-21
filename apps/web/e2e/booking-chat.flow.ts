@@ -2,7 +2,7 @@
 // visitor in a fresh browser opens /b/<key>, chooses Chat, taps an offered
 // time, types a name and email, says yes to the read back and lands on the
 // guest page; the member's Bookings shows it as booked by chat, with the
-// conversation behind Show chat. Keyboard only from the field on.
+// conversation behind Chat. Keyboard only from the field on.
 import { randomBytes } from 'node:crypto';
 import { expect, test, type Page } from '@playwright/test';
 import { newWorkspace } from './people.ts';
@@ -42,10 +42,10 @@ test('a visitor books by chat and the host sees the conversation (spec 0041)', a
   await chat.goto(`/b/${made.publicKey}`);
   await chat.getByRole('radio', { name: 'Book by chat' }).click();
   const log = chat.getByRole('log', { name: 'Conversation' });
-  await expect(log).toContainText('Hi! I book Ada Lovelace’s Intro call (30 min).');
+  await expect(log).toContainText('I book Ada Lovelace’s Intro call (30 minutes).');
 
   // A tapped time goes as words the chat reads back to the same time.
-  const firstDay = log.getByRole('group').first();
+  const firstDay = log.getByRole('list').first();
   await firstDay.getByRole('button').first().click();
   await expect(log).toContainText('it is. What’s your name and email?');
 
@@ -62,6 +62,6 @@ test('a visitor books by chat and the host sees the conversation (spec 0041)', a
   await page.goto(`/w/${slug}/bookings`);
   await page.getByText('Grace Hopper').first().click();
   await expect(page.getByText('By chat on the booking page')).toBeVisible();
-  await page.getByRole('button', { name: /Show chat/ }).click();
+  await page.getByRole('button', { name: /^Chat/ }).click();
   await expect(page.getByText('I’m Grace Hopper, grace@navy.example')).toBeVisible();
 });

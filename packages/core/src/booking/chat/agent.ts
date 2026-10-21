@@ -318,27 +318,18 @@ export function timeLabel(iso: string, now: DateTime, hour12: boolean): string {
   return `${dayWord(at, now)} at ${at.toFormat(hour12 ? 'h:mm a' : 'HH:mm')}`;
 }
 
+/** How the read back and the confirmation say one time, with its date: "Tuesday 27 Oct at 3:00 PM". */
+export function fullTimeLabel(iso: string, now: DateTime, hour12: boolean): string {
+  return DateTime.fromMillis(ms(iso), { zone: now.zone })
+    .setLocale('en')
+    .toFormat(hour12 ? "cccc d LLL 'at' h:mm a" : "cccc d LLL 'at' HH:mm");
+}
+
 /** The words a time button sends: a date and a clock the parser reads back exactly ("Tue 28 Oct at 3:00 PM"). */
 export function offerWords(iso: string, zone: string, hour12: boolean): string {
   return DateTime.fromMillis(ms(iso), { zone })
     .setLocale('en')
     .toFormat(hour12 ? "ccc d LLL 'at' h:mm a" : "ccc d LLL 'at' HH:mm");
-}
-
-/** "Tuesday morning", "today and tomorrow", "the next few days": where a set of offers falls. */
-function offersPhrase(offers: readonly string[], now: DateTime): string {
-  const days = [...new Set(offers.map((each) => dayWord(DateTime.fromMillis(ms(each), { zone: now.zone }), now)))];
-  if (days.length > 2) return 'the next few days';
-  if (days.length === 2) return `${days[0] ?? ''} and ${days[1] ?? ''}`;
-  const parts = [
-    ...new Set(
-      offers.map((each) => {
-        const hour = DateTime.fromMillis(ms(each), { zone: now.zone }).hour;
-        return hour < 12 ? 'morning' : hour < 17 ? 'afternoon' : 'evening';
-      }),
-    ),
-  ];
-  return parts.length === 1 ? `${days[0] ?? ''} ${parts[0] ?? ''}` : (days[0] ?? 'soon');
 }
 
 /** A sentence's first letter in capitals. */
@@ -402,7 +393,7 @@ export function answer(
   if (state.readBack && !isQuestion && state.held !== undefined && held !== undefined) {
     const who = `${state.name ?? ''} (${state.email ?? ''}${state.phone === undefined ? '' : `, ${state.phone}`})`;
     return say(
-      `${capital(held)}, ${String(duration)} minutes, for ${who}. Shall I book it?`,
+      `${fullTimeLabel(state.held, now, hour12)}, ${String(duration)} minutes, for ${who}. Shall I book it?`,
       [],
       [SAY.confirm, SAY.somethingElse],
     );
@@ -420,31 +411,30 @@ export function answer(
     if (needsPhone && state.phone === undefined) return say(`${lead} And a number to call you on?`, [], []);
   }
 
-  const soon = offersPhrase(offers, now);
   const asideHeld = held === undefined ? '' : ` ${capital(held)} is still yours.`;
   switch (state.intent) {
     case 'offer':
-      return say(`${capital(named ?? soon)} works. Take your pick.`, offers);
+      return say(`Here’s what’s open ${named ?? 'next'}.`, offers);
     case 'single-offer':
-      return say(`There’s one opening ${named ?? soon}: ${held ?? ''}. Shall I hold it?`, offers);
+      return say(`Only one time is open ${named ?? 'then'}: ${held ?? ''}. Tap it to take it.`, offers);
     case 'exact':
     case 'select':
     case 'confirm':
       return say(`Great, ${held ?? 'that'} it is. What’s your name and email?`, [], []);
     case 'point-miss':
-      return say(`That time isn’t open. Closest I have is ${soon}.`, offers);
+      return say(`That time isn’t open. Here are the closest times.`, offers);
     case 'none-in-window':
-      return say(`Nothing ${named ?? 'then'}, I’m afraid. Closest I have is ${soon}.`, offers);
+      return say(`Nothing is open ${named ?? 'then'}. Here are the closest times.`, offers);
     case 'reject-offer':
-      return say(`No problem. How about ${soon}?`, offers);
+      return say(`No problem. Here’s what’s open after those.`, offers);
     case 'availability':
       return say(`Here’s what’s open next.`, offers);
     case 'select-ambiguous':
       return say(`Which one? Tap a time, or say “the first one”.`, offers);
     case 'confirm-nothing':
-      return say(`Happy to. When suits? “Tomorrow afternoon” is enough to go on.`, soonest(offers));
+      return say(`Happy to. When suits you? Type something like “tomorrow afternoon”.`, soonest(offers));
     case 'exhausted':
-      return say(`${page.hostName} has nothing open in the time this page books ahead, sorry.`, [], []);
+      return say(`${page.hostName} has nothing open for now. Check back soon.`, [], []);
     case 'duration':
       return say(`It’s ${String(duration)} minutes.${asideHeld}`, held === undefined ? offers : []);
     case 'location':
@@ -480,5 +470,5 @@ export function answer(
 
 /** The chat's opening line (AC-1502). */
 export function greeting(page: ChatPage, duration: number): string {
-  return `Hi! I book ${page.hostName}’s ${page.title} (${String(duration)} min). Tell me roughly when suits, “tomorrow afternoon” is enough, or tap a time.`;
+  return `I book ${page.hostName}’s ${page.title} (${String(duration)} minutes). When suits you? Type something like “tomorrow afternoon”, or pick a time below.`;
 }

@@ -28,11 +28,13 @@ import {
   MonthTiles,
   SegmentedControl,
   Select,
+  Skeleton,
   SlotList,
   type BookingFact,
   type SelectItem,
 } from '@crm/ui/public-booking';
 import { lazy, Suspense, useCallback, useEffect, useMemo, useState } from 'react';
+import type { ChatMemory } from './ChatPanel.tsx';
 import type { Prefill } from './prefill.ts';
 import { saveHour12, savedHour12, savedView, saveView, type SlotView } from './prefs.ts';
 import { strings } from './strings.ts';
@@ -263,6 +265,8 @@ function Booking({
   // "Not you?": no name, no email and no overlay for the rest of the visit.
   const [notYou, setNotYou] = useState(false);
   const [showAll, setShowAll] = useState(false);
+  // Book by chat's conversation (spec 0041), kept while the length, the zone or the view changes.
+  const [chatMemory, setChatMemory] = useState<ChatMemory | undefined>(undefined);
   useEffect(() => {
     if (isPreview) return;
     let isCurrent = true;
@@ -685,8 +689,10 @@ function Booking({
     return (
       <BookingFrame {...frame} heading={strings.chooseTime} toolbar={viewSwitch}>
         {message ??
-          (isLoading ? null : (
-            <Suspense fallback={null}>
+          (chatMemory === undefined && allStarts.length === 0 && !noTimes ? (
+            <Skeleton shape="block" lines={4} />
+          ) : (
+            <Suspense fallback={<Skeleton shape="block" lines={4} />}>
               <ChatPanel
                 client={client}
                 page={page}
@@ -694,7 +700,10 @@ function Booking({
                 zone={zone}
                 hour12={hour12}
                 duration={duration}
-                starts={starts}
+                starts={allStarts}
+                startedAt={startedAt}
+                memory={chatMemory}
+                onMemory={setChatMemory}
                 onDuration={setDuration}
                 onBooked={onBooked}
               />

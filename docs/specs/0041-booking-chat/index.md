@@ -31,7 +31,7 @@ Reasoning and options: see [rationale.md](rationale.md). Checks: [verify.md](ver
 
 *The panel*
 - **AC-1501**: The card's view switch on `/b/<publicKey>` offers Month, List and Chat. Chat replaces the picker inside the same card; the rail (host, meeting, length, time zone) stays. The choice is remembered like Month and List. Nothing else on the page changes.
-- **AC-1502**: The chat opens with one greeting that names the meeting and its length and offers the soonest times as buttons, grouped under their day, plus up to two suggestions as buttons ("Something later", "Next week"). The greeting needs no request: it is drawn from the slots the page already holds; the first request goes on the visitor's first message.
+- **AC-1502**: The chat opens with one greeting that names the meeting and its length ("I book Ada's Intro call (30 minutes). When suits you?") and offers the soonest times as buttons, drawn as the picker draws them (SlotList), grouped under their day, plus up to two suggestions as buttons ("Something later", "Next week"). The greeting needs no request: it is drawn from the slots the page already holds; the first request goes on the visitor's first message.
 - **AC-1503**: A visitor types in one labelled field ("Message", at most 500 characters) and sends with Enter or the Send button. A time button or a suggestion sends its own words as the visitor's message, so a tap and typing go through one parser.
 - **AC-1504**: The panel's code loads in its own chunk when Chat is first chosen, never in the page's first load (`pnpm size` holds).
 
@@ -47,17 +47,17 @@ Reasoning and options: see [rationale.md](rationale.md). Checks: [verify.md](ver
 
 *Booking*
 - **AC-1513**: Once a time is held, the chat asks for a name and an email (and a phone number when the page's location is a phone call). It reads "I'm Ada", "Ada Lovelace", any email address, and a number of 7 to 20 digits, in any order and in one message or several.
-- **AC-1514**: With a time, a name and an email, the chat reads them back and waits for a yes: "Tuesday 28 Oct at 3:00 PM for Ada Lovelace (ada@example.com). Shall I book it?" with Yes, book it and Something else. Only a yes to that question books. A booking emails two people, so nothing is written before the visitor has seen exactly what will be.
-- **AC-1515**: The booking goes through `bookPublicSlot` unchanged: the same live slot check, lock, race guard, person match and emails as the form. Its idempotency key is derived from the conversation, the time, the length and the email, so a retried turn answers the first booking.
+- **AC-1514**: With a time, a name and an email, the chat reads them back, with the date, and waits for a yes: "Tuesday 27 Oct at 3:00 PM, 30 minutes, for Ada Lovelace (ada@example.com). Shall I book it?" with Yes, book it and Something else. Only a yes to that question books. A booking emails two people, so nothing is written before the visitor has seen exactly what will be.
+- **AC-1515**: The booking goes through `bookPublicSlot` unchanged: the same live slot check, lock, race guard, person match and emails as the form. Its idempotency key is derived from the conversation alone, so a conversation books once and a retried yes answers the booking it made (the time it booked is no longer open, so the replay alone can't find it); a time lost to a race leaves no row, so the next yes books afresh. A booking turn passes the form's bot checks (the fill ticket or the page's load time).
 - **AC-1516**: On success the reply says "Done. You're booked for … The details are on their way to …" and the page opens the guest page, exactly as the form does, where the visitor can move or cancel. A time taken meanwhile answers "Someone just took that time. Closest I have now is …" with fresh offers.
 - **AC-1517**: Every turn re-derives the conversation by replaying the visitor's own messages against the times open right now. The server keeps no conversation state, and nothing the assistant said earlier is trusted.
 
 *Privacy, limits and the transcript*
 - **AC-1518**: The chat never reads People, Companies or any CRM record, and never recognises a visitor. A typed email that matches a contact gets exactly the reply a new email gets (a test proves byte equality). The only CRM effect is the one the form already has: the booking's person match.
 - **AC-1519**: Replies name only open start times, the page's own facts and what the visitor typed. They never mention another booking, a busy time, a member's email or why a time is unavailable.
-- **AC-1520**: `POST /api/public/booking/:publicKey/chat` is limited through the central module: 30 turns a minute per client address, 600 a minute per page; a turn that books also counts against the booking limits (5 a minute per address, 50 per page). A refusal is 429 with `Retry-After`, and the panel says "That was a lot at once. Give it a few seconds and try again." The body is at most 32 KB: at most 40 messages of at most 500 characters.
-- **AC-1521**: The transcript is kept only when the chat books, on that booking (`answers.chat`: the lines, who said each, at most 40 lines of at most 500 characters), and lives and is deleted with the booking. A conversation that never books is not stored anywhere, and no log line carries what anyone typed.
-- **AC-1522**: Members who can see a booking see "Booked by chat" on its card in Bookings, with the conversation behind a Show chat disclosure. The guest page never shows it.
+- **AC-1520**: `POST /api/public/booking/:publicKey/chat` is limited through the central module: 30 turns a minute per client address, 600 a minute per page, and each turn counts as a slots read too (it reads the host's calendar); a turn that books also counts against the booking limits (5 a minute per address, 50 per page). A refusal is 429 with `Retry-After`, and the panel says "That was a lot at once. Give it a few seconds and try again." The page sends only the visitor's own lines; the body is at most 128 KB: at most 40 lines of at most 500 characters.
+- **AC-1521**: The transcript is kept only when the chat books, on that booking (`answers.chat`: the visitor's own lines, at most 40 of at most 500 characters), and lives and is deleted with the booking. Assistant lines are never stored: they would come from the client, and nothing vouches for them. A conversation that never books is not stored anywhere, and no log line carries what anyone typed.
+- **AC-1522**: Members who can see a booking see "Booked: By chat on the booking page" on its card in Bookings, with what the visitor wrote behind a Chat disclosure. The guest page never shows it.
 
 *Access and layout*
 - **AC-1523**: The thread is a log region that announces each new reply politely; each reply's times are a labelled group of buttons ("Times on Tuesday 28 Oct"); focus stays in the message field after sending, and every control works from the keyboard. Contrast meets WCAG AA in light and dark.
@@ -110,6 +110,8 @@ The booking list's read passes `chat` from `answers`; the card shows "Booked by 
 - The page's view preference gains a third value; an old saved value still reads.
 
 ## Follow-up
+
+- The 12 or 24 hour switch lives in the picker's time list; Chat uses the remembered choice (or the language's) and has no switch of its own in v1.
 
 - Voice booking (timefix's `voice-booking.tsx`, the browser's speech recognition): left out of v1. It is cheap on top of this endpoint but needs a microphone permission prompt and copy for unsupported browsers; owner to decide.
 - The visitor's own calendar overlay (spec 0028) in the chat ("only when we're both free"): left out of v1 so the chat never recognises anyone.

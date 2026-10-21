@@ -3,6 +3,6 @@
 export {
   BookingChat,
   type BookingChatDay,
+  type BookingChatError,
   type BookingChatLine,
-  type BookingChatTime,
 } from '../modules/BookingChat/BookingChat.tsx';

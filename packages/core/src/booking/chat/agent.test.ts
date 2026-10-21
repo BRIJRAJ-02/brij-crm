@@ -45,14 +45,14 @@ describe('the booking chat agent (AC-1507 to AC-1517)', () => {
     expect(turn.state.intent).toBe('offer');
     expect(turn.offers).toHaveLength(6);
     expect(turn.offers[0]).toBe(at('2026-10-27T12:00'));
-    expect(turn.text).toBe('Tuesday afternoon works. Take your pick.');
+    expect(turn.text).toBe('Here’s what’s open Tuesday afternoon.');
     expect(turn.suggestions).toEqual(['Something later', 'Earliest you have']);
   });
 
   it('says when a window is empty and offers the nearest', () => {
     const turn = words(['saturday']);
     expect(turn.state.intent).toBe('none-in-window');
-    expect(turn.text).toMatch(/^Nothing Saturday, I’m afraid\. Closest I have is/);
+    expect(turn.text).toBe('Nothing is open Saturday. Here are the closest times.');
     expect(turn.offers).toHaveLength(6);
   });
 
@@ -99,7 +99,9 @@ describe('the booking chat agent (AC-1507 to AC-1517)', () => {
     const readBack = words(steps);
     expect(readBack.state.intent).toBe('details');
     expect(readBack.state.readBack).toBe(true);
-    expect(readBack.text).toBe('Tomorrow at 3:00 PM, 30 minutes, for Ada Lovelace (ada@example.com). Shall I book it?');
+    expect(readBack.text).toBe(
+      'Thursday 22 Oct at 3:00 PM, 30 minutes, for Ada Lovelace (ada@example.com). Shall I book it?',
+    );
     expect(readBack.suggestions).toEqual(['Yes, book it', 'Something else']);
     expect(words([...steps, 'Yes, book it']).state.intent).toBe('book');
     // A yes before the read back never books.

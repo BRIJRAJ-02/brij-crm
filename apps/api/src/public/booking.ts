@@ -95,8 +95,8 @@ import {
 
 /** The largest booking body read: a name, an email, a few short fields. */
 export const BOOKING_BODY_LIMIT_BYTES = 16 * 1024;
-/** The largest chat turn read: 40 lines of 500 characters, with room for JSON and multibyte text (AC-1520). */
-export const CHAT_BODY_LIMIT_BYTES = 32 * 1024;
+/** The largest chat turn read: 40 lines of 500 characters, each character at most 6 bytes as JSON (AC-1520). */
+export const CHAT_BODY_LIMIT_BYTES = 128 * 1024;
 
 /** What the public booking routes serve with. */
 export interface PublicBookingServices {
@@ -600,9 +600,12 @@ export function mountPublicBooking(app: Hono<{ Variables: Variables }>, services
   app.post('/public/booking/:publicKey/chat', async (c) => {
     const address = addressKey(c.get('clientIp'));
     const key = c.req.param('publicKey');
+    // A turn reads the host's calendar as a slots read does, so it counts as one too.
     const refused = limited([
       [`booking:chat:${address}`, BOOKING_LIMITS.chatPerAddress],
       [`booking:chat-page:${key}`, BOOKING_LIMITS.chatPerPage],
+      [`booking:read:${address}`, BOOKING_LIMITS.readsPerAddress],
+      [`booking:read-page:${key}`, BOOKING_LIMITS.readsPerPage],
     ]);
     if (refused !== undefined) return refused;
     const read = await jsonOf(c);
@@ -611,7 +614,7 @@ export function mountPublicBooking(app: Hono<{ Variables: Variables }>, services
     if (!input.success) return invalid(input.error.issues);
     try {
       const entry = await enterBookingPage({ db }, key);
-      // The booking limits are spent only by a turn about to book.
+      // The booking limits and the form's bot checks apply only to a turn about to book.
       let bookRefused: Response | undefined;
       const turn = await chatTurn(entry, deps, input.data, [outboxHook()], {
         mayBook: () => {
@@ -619,7 +622,13 @@ export function mountPublicBooking(app: Hono<{ Variables: Variables }>, services
             [`booking:book:${address}`, BOOKING_LIMITS.booksPerAddress],
             [`booking:book-page:${key}`, BOOKING_LIMITS.booksPerPage],
           ]);
-          return bookRefused === undefined;
+          if (bookRefused !== undefined) return false;
+          const ticket = services.tickets?.check(`booking:${key}`, input.data.ticket);
+          const elapsed = ticket?.kind === 'valid' ? ticket.elapsedMs : undefined;
+          const now = (services.now?.() ?? new Date()).getTime();
+          const isBot = looksLikeBot({ startedAt: input.data.startedAt ?? now }, now, elapsed);
+          if (isBot) log.warn('booking.chat.bot_refused', { requestId: c.get('requestId') });
+          return !isBot;
         },
       });
       if (bookRefused !== undefined) return bookRefused;

@@ -19,8 +19,8 @@ import {
   readPublicSlots,
   type PublicBookingDeps,
 } from '../public.ts';
-import { answer, OFFER_COUNT, replay, settledLength, timeLabel, type ChatPage } from './agent.ts';
-import { isYes, readEmail } from './parse.ts';
+import { answer, fullTimeLabel, OFFER_COUNT, replay, settledLength, type ChatPage } from './agent.ts';
+import { isYes } from './parse.ts';
 
 /** The furthest one turn looks ahead, in days: the slots read's own cap. */
 export const CHAT_HORIZON_DAYS = 62;
@@ -49,7 +49,7 @@ export async function chatTurn(
   deps: PublicBookingDeps,
   input: PublicChatInput,
   hooks: readonly AfterWrite[] = [],
-  /** `mayBook` is asked once, just before a booking: false (a spent limit) skips it, and the caller answers. */
+  /** `mayBook` is asked once, just before a booking: false (a spent limit, the bot checks) skips it. */
   options: { readonly mayBook?: () => boolean } = {},
 ): Promise<ChatTurn> {
   const page = await getPublicBookingPage(entry);
@@ -75,11 +75,14 @@ export async function chatTurn(
   const key = chatIdempotencyKey(input.conversationId);
   const done = (
     booking: { readonly booking: PublicBooking; readonly manageToken: string },
-    email: string,
+    /** The address just typed; left out for a retry, whose booking may have gone to an earlier one. */
+    email: string | undefined,
     isNew: boolean,
   ): ChatTurn => ({
     reply: {
-      text: `Done. You’re booked for ${timeLabel(booking.booking.start, now, input.hour12)}. The details are on their way to ${email}.`,
+      text: `Done. You’re booked for ${fullTimeLabel(booking.booking.start, now, input.hour12)}. ${
+        email === undefined ? 'The details are in your email.' : `The details are on their way to ${email}.`
+      }`,
       offers: [],
       suggestions: [],
       duration,
@@ -91,11 +94,7 @@ export async function chatTurn(
   const last = lines.at(-1) ?? '';
   if (isYes(last)) {
     const made = await findPublicBooking(entry, deps, key);
-    const email = input.messages
-      .flatMap((line) => (line.role === 'visitor' ? [readEmail(line.text)] : []))
-      .filter((each) => each !== undefined)
-      .at(-1);
-    if (made !== undefined) return done(made, email ?? 'you', false);
+    if (made !== undefined) return done(made, undefined, false);
   }
 
   const read = await readPublicSlots(entry, deps, {
@@ -124,7 +123,7 @@ export async function chatTurn(
   }
 
   const start = state.held;
-  if (options.mayBook?.() === false) return quiet('That was a lot at once. Give it a few seconds and try again.');
+  if (options.mayBook?.() === false) return quiet('I couldn’t book that just now. Say yes again in a moment.');
   try {
     const booked = await bookPublicSlot(
       entry,
@@ -139,7 +138,8 @@ export async function chatTurn(
         ...(state.phone === undefined ? {} : { phone: state.phone }),
       },
       hooks,
-      { chat: input.messages },
+      // Only the visitor's own lines: an assistant line came from the client, and nothing vouches for it.
+      { chat: input.messages.filter((line) => line.role === 'visitor') },
     );
     return done(booked, state.email, !booked.replayed);
   } catch (error) {

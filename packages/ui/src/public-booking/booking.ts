@@ -9,6 +9,7 @@ import { createToasts } from '../provider/toasts.tsx';
 
 export { Avatar } from '../atoms/Avatar/Avatar.tsx';
 export { Button, ButtonLink } from '../atoms/Button/Button.tsx';
+export { Skeleton } from '../atoms/Skeleton/Skeleton.tsx';
 export { Switch } from '../atoms/Switch/Switch.tsx';
 export { Callout } from '../molecules/Callout/Callout.tsx';
 export { SegmentedControl } from '../molecules/SegmentedControl/SegmentedControl.tsx';

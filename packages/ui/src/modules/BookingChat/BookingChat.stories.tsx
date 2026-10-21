@@ -16,7 +16,7 @@ function greeting(): BookingChatLine {
   return {
     id: 'greet',
     role: 'assistant',
-    text: 'Hi! I book Ada’s Intro call (30 min). Tell me roughly when suits, “tomorrow afternoon” is enough, or tap a time.',
+    text: 'I book Ada’s Intro call (30 minutes). When suits you? Type something like “tomorrow afternoon”, or pick a time below.',
     days: [
       times('Fri 9 Oct', ['9:00 AM', '9:30 AM', '10:00 AM']),
       times('Mon 12 Oct', ['9:00 AM', '9:30 AM', '10:00 AM']),
@@ -50,7 +50,7 @@ export const Greeting: Story = {
   play: async ({ canvas, args }) => {
     await expect(canvas.getByRole('log', { name: 'Conversation' })).toBeVisible();
     // Lines fade in as they arrive.
-    await waitFor(() => expect(canvas.getByRole('group', { name: 'Times on Fri 9 Oct' })).toBeVisible());
+    await waitFor(() => expect(canvas.getByRole('list', { name: 'Times on Fri 9 Oct' })).toBeVisible());
     await userEvent.click(canvas.getByRole('button', { name: '9:30 AM, Fri 9 Oct, 30 minutes' }));
     await expect(args.onPickTime).toHaveBeenCalledWith('Fri 9 Oct 9:30 AM');
     await userEvent.click(canvas.getByRole('button', { name: 'Next week' }));
@@ -61,6 +61,9 @@ export const Greeting: Story = {
     await expect(args.onSend).toHaveBeenCalledWith('tuesday afternoon');
     await expect(field).toHaveValue('');
     await expect(field).toHaveFocus();
+    // A pressed time sends, and focus goes to the field for the next answer.
+    await userEvent.click(canvas.getByRole('button', { name: '9:00 AM, Mon 12 Oct, 30 minutes' }));
+    await waitFor(() => expect(field).toHaveFocus());
   },
 };
 
@@ -87,7 +90,7 @@ export const ReadBack: Story = {
   },
   play: async ({ canvas, args }) => {
     // Only the last reply's buttons are live: the greeting's times are gone.
-    await expect(canvas.queryByRole('group', { name: 'Times on Fri 9 Oct' })).toBeNull();
+    await expect(canvas.queryByRole('list', { name: 'Times on Fri 9 Oct' })).toBeNull();
     await userEvent.click(canvas.getByRole('button', { name: 'Yes, book it' }));
     await expect(args.onSend).toHaveBeenCalledWith('Yes, book it');
   },
@@ -102,15 +105,16 @@ export const Waiting: Story = {
     </Stage>
   ),
   play: async ({ canvas }) => {
-    await waitFor(() => expect(canvas.getByRole('progressbar', { name: 'Finding times' })).toBeVisible());
-    await expect(canvas.queryByRole('group', { name: 'Times on Fri 9 Oct' })).toBeNull();
+    await waitFor(() => expect(canvas.getByRole('progressbar')).toBeVisible());
+    await expect(canvas.getByRole('log')).toHaveTextContent('One moment');
+    await expect(canvas.queryByRole('list', { name: 'Times on Fri 9 Oct' })).toBeNull();
     await expect(canvas.getByRole('button', { name: 'Send' })).toBeDisabled();
   },
 };
 
 /** A turn failed: the reason, with Try again. */
 export const Failed: Story = {
-  args: { error: 'You’re offline. Check your connection and try again.', onRetry: fn() },
+  args: { error: { message: 'You’re offline. Check your connection and try again.', onRetry: fn() } },
   render: (args) => (
     <Stage width="fill">
       <BookingChat {...args} lines={[greeting(), { id: 'v1', role: 'visitor', text: 'tomorrow' }]} />
@@ -118,13 +122,69 @@ export const Failed: Story = {
   ),
   play: async ({ canvas, args }) => {
     await userEvent.click(canvas.getByRole('button', { name: 'Try again' }));
-    await expect(args.onRetry).toHaveBeenCalledOnce();
+    await expect(args.error?.onRetry).toHaveBeenCalledOnce();
+  },
+};
+
+/** Too many at once: a pause, said as a warning, with Try again. */
+export const Paused: Story = {
+  args: {
+    error: { message: 'That was a lot at once. Give it a few seconds and try again.', onRetry: fn(), isPause: true },
+  },
+  parameters: { crm: { screenshot: false } },
+  render: (args) => (
+    <Stage width="fill">
+      <BookingChat {...args} lines={[greeting(), { id: 'v1', role: 'visitor', text: 'tomorrow' }]} />
+    </Stage>
+  ),
+  play: async ({ canvas }) => {
+    await expect(canvas.getByRole('button', { name: 'Try again' })).toBeVisible();
+  },
+};
+
+/** The chat can't go on (too long): Start over clears it. */
+export const StartOver: Story = {
+  args: { error: { message: 'This chat is too long to go on.', onRestart: fn() } },
+  parameters: { crm: { screenshot: false } },
+  render: (args) => (
+    <Stage width="fill">
+      <BookingChat {...args} lines={[greeting(), { id: 'v1', role: 'visitor', text: 'tomorrow' }]} />
+    </Stage>
+  ),
+  play: async ({ canvas, args }) => {
+    await userEvent.click(canvas.getByRole('button', { name: 'Start over' }));
+    await expect(args.error?.onRestart).toHaveBeenCalledOnce();
+  },
+};
+
+/** The page's times are loading: a skeleton, and Send waits. */
+export const Loading: Story = {
+  args: { isLoading: true },
+  play: async ({ canvas }) => {
+    await expect(canvas.getByRole('log')).toHaveTextContent('Loading times');
+    await expect(canvas.getByRole('button', { name: 'Send' })).toBeDisabled();
+  },
+};
+
+/** Nothing open: the greeting says so, with no times or suggestions. */
+export const NoTimes: Story = {
+  render: (args) => (
+    <Stage width="fill">
+      <BookingChat
+        {...args}
+        lines={[{ id: 'greet', role: 'assistant', text: 'Ada has nothing open right now. Check back soon.' }]}
+      />
+    </Stage>
+  ),
+  play: async ({ canvas }) => {
+    await expect(canvas.queryByRole('list')).toBeNull();
+    await expect(canvas.getByRole('textbox', { name: 'Message' })).toBeEnabled();
   },
 };
 
 /** Booked: the last reply stays, and the field and buttons are done. */
 export const Done: Story = {
-  args: { isDone: true },
+  args: { isDone: true, doneNote: 'Booked. Opening your booking.' },
   parameters: { crm: { screenshot: false } },
   render: (args) => (
     <Stage width="fill">
