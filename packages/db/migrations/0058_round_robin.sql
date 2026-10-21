@@ -284,7 +284,9 @@ on conflict do nothing;
 --> statement-breakpoint
 
 -- A round robin booking that gets new hosts (a move through its rotation, a reassign, a member who left) tells its
--- guest and both hosts: `reassigned` joins the kinds crm_enqueue_booking_mail queues, run now like `moved`. The
+-- guest and both hosts: `reassigned` joins the kinds crm_enqueue_booking_mail queues, run now like `moved`; and
+-- `needs_host`, a booking whose host left the workspace, which the worker reseats through its rotations or, when
+-- nobody is free, tells the admins about. The
 -- function is crm_queue's (0048): the migration's role holds crm_queue's rights just long enough to replace it (it
 -- stays crm_queue's, with its grants), then gives them back.
 grant crm_queue to current_user with inherit true, set false;
@@ -306,7 +308,7 @@ as $function$
     from public.bookings b
     where b.id = crm_enqueue_booking_mail.booking_id
       and b.workspace_id = nullif(pg_catalog.current_setting('app.workspace_id', true), '')::uuid
-      and crm_enqueue_booking_mail.kind in ('confirmed', 'cancelled', 'moved', 'guests', 'reassigned', 'reminder_24h', 'reminder_1h')
+      and crm_enqueue_booking_mail.kind in ('confirmed', 'cancelled', 'moved', 'guests', 'reassigned', 'needs_host', 'reminder_24h', 'reminder_1h')
       and (b.status = 'confirmed' or crm_enqueue_booking_mail.kind = 'cancelled')
   ),
   added as materialized (

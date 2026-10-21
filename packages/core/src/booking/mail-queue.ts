@@ -17,6 +17,7 @@ export const BOOKING_MAIL_KINDS = [
   'moved',
   'guests',
   'reassigned',
+  'needs_host',
   'reminder_24h',
   'reminder_1h',
 ] as const;

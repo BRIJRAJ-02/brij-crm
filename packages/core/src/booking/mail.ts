@@ -378,6 +378,27 @@ export async function prepareBookingMail(
             }));
         return { messages: [toVisitor, ...toGuests, ...toHost], invited: [] };
       }
+      case 'needs_host': {
+        // A booking whose host left with nobody free to take it (spec 0029, AC-749): the admins are told.
+        if (row.needsHostAt === null) return { messages: [], invited: [], skipped: 'has a host' };
+        const admins = await tx
+          .select({ email: members.email })
+          .from(members)
+          .where(and(eq(members.status, 'active'), sql`${members.role} in ('owner', 'admin')`));
+        return {
+          messages: admins.map((admin) => ({
+            to: admin.email,
+            subject: `Needs a host: ${page.title} with ${row.visitorName}`,
+            preview: preview(hostZone),
+            heading: 'A booking needs a host',
+            intro: `Its host left the workspace and nobody else was free to take ${page.title} with ${row.visitorName}. Reassign it or cancel it from Bookings.`,
+            rows: [when(hostZone), { label: 'Who', value: `${row.visitorName} (${row.visitorEmail})` }],
+            button: { label: 'Open Bookings', url: bookingsUrl },
+            why: 'You got this email because you manage scheduling in this workspace.',
+          })),
+          invited: [],
+        };
+      }
       case 'reassigned': {
         // Who left and who came, from the ledger's latest change (spec 0029, AC-746, AC-748, AC-749).
         const rows = await tx

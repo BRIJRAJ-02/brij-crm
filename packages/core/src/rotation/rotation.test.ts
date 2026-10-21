@@ -29,6 +29,7 @@ import { loadPage } from '../booking/slots.ts';
 import { chooseHosts } from './assign.ts';
 import { bookingAssignments } from './assignments.ts';
 import { reassignBooking } from './reassign.ts';
+import { handOnBooking, rotationsRemoval } from './removal.ts';
 import { createRotation, deleteRotation, listRotations, updateRotation } from './rotations.ts';
 import { loadTeam } from './team.ts';
 
@@ -696,6 +697,59 @@ describe('a round robin page (AC-732 to AC-734, AC-738, AC-742 to AC-745, AC-754
     const next = await reassignBooking(w.owner, deps(), { bookingId: booked.bookingId });
     expect(next).toEqual({ hostMemberId: first, changed: true });
     expect((await bookingAssignments(w.owner, { bookingId: booked.bookingId }))[0]?.reason).toBe('reassigned');
+  });
+
+  it('hands a leaving member’s bookings on through the rotation, and flags one nobody can take (AC-749)', async () => {
+    const w = await workspace();
+    const sam = await w.addMember('Sam Lee');
+    const kim = await w.addMember('Kim Park');
+    const mo = await w.addMember('Mo Ali');
+    const { entry } = await roundRobin(w, [sam.id, kim.id, mo.id]);
+    const nine = await bookPublicSlot(entry, deps(), bookInput(at('09:00')));
+    const leaving = (await hostsOf(w, [nine.bookingId])).get(nine.bookingId) ?? '';
+    // Everyone else busy at 11:00, so the 11:00 booking is theirs too, and nobody can take it after.
+    const others = [sam, kim, mo].filter((member) => member.id !== leaving);
+    for (const member of others) {
+      await bookAsHost(
+        member.scope,
+        { calendar: fakeCalendar().calendar, linkKey: LINK_KEY, now: () => NOW },
+        {
+          idempotencyKey: newId(),
+          pageId: (await createBookingPage(member.scope, { id: newId(), title: 'Own', timeZone: 'UTC' }, NOW)).id,
+          start: new Date(at('11:00')),
+          minutes: 30,
+          name: 'Busy Maker',
+          email: 'busy@maker.example',
+          timeZone: 'UTC',
+          guests: [],
+        },
+      );
+    }
+    const blocked = await bookPublicSlot(entry, deps(), bookInput(at('11:00')));
+    expect((await hostsOf(w, [blocked.bookingId])).get(blocked.bookingId)).toBe(leaving);
+    // The removal: the members lane marks them removed and runs each effect in its transaction.
+    await db.withWorkspace(w.workspaceId, async (tx) => {
+      await tx.execute(sql`update members set status = 'removed' where id = ${leaving}::uuid`);
+      await rotationsRemoval.run({ tx, scope: w.owner }, leaving);
+    });
+    const system = systemScope(db, w.workspaceId);
+    expect(await handOnBooking(system, deps(), nine.bookingId)).toEqual({ needsHost: false });
+    expect(others.map((member) => member.id)).toContain((await hostsOf(w, [nine.bookingId])).get(nine.bookingId));
+    const flags = await db.withWorkspace(w.workspaceId, (tx) =>
+      tx.execute<{ id: string; flagged: boolean }>(
+        sql`select id::text, needs_host_at is not null as flagged from bookings where page_id = ${entry.pageId}::uuid`,
+      ),
+    );
+    expect(new Map(flags.rows.map((row) => [row.id, row.flagged])).get(nine.bookingId)).toBe(false);
+    expect(await handOnBooking(system, deps(), blocked.bookingId)).toEqual({ needsHost: true });
+    const mail = await prepareBookingMail(
+      system,
+      { appOrigin: 'https://app.example', linkKey: LINK_KEY, organizerEmail: 'bookings@app.example', now: () => NOW },
+      { bookingId: blocked.bookingId, kind: 'needs_host' },
+    );
+    expect(mail.messages.map((message) => message.to)).toEqual(['ada@example.com']);
+    // They are in no rotation any more.
+    expect((await listRotations(w.owner, NOW))[0]?.members.map((member) => member.memberId)).not.toContain(leaving);
   });
 
   it('voids the ledger row of a cancelled booking, so it stops counting (AC-747)', async () => {
