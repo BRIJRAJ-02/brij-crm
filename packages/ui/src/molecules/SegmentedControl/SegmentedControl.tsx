@@ -28,6 +28,8 @@ export interface SegmentedControlProps {
   readonly defaultValue?: string;
   readonly onChange?: (value: string) => void;
   readonly isDisabled?: boolean;
+  /** Shows the choice at full contrast and keeps it focusable, but it can't be changed (a viewer of a saved choice). */
+  readonly isReadOnly?: boolean;
   /**
    * `horizontal` (the default) puts the segments in a row; `vertical` stacks
    * them, for a column too narrow for the row: icon only segments in the
@@ -65,6 +67,7 @@ export function SegmentedControl({
   defaultValue,
   onChange,
   isDisabled = false,
+  isReadOnly = false,
   orientation = 'horizontal',
   size = 'md',
   isLabelCollapsible = false,
@@ -79,6 +82,7 @@ export function SegmentedControl({
       data-size={size}
       data-collapsible={isLabelCollapsible || undefined}
       isDisabled={isDisabled}
+      isReadOnly={isReadOnly}
       data-instant={isFocusVisible || undefined}
       {...(value === undefined ? {} : { value })}
       {...(defaultValue === undefined ? {} : { defaultValue })}

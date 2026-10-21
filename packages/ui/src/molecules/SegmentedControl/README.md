@@ -14,7 +14,8 @@ Ported from the artifact's SegmentedControl card (version 8). Table or Board (#2
 <ThemeSwitch controller={context.theme} isCompact orientation="vertical" />
 ```
 
-- Use it only when the choice changes the current view. A setting that is saved is a RadioGroup.
+- Use it when the choice changes the current view. A setting that is saved is a RadioGroup, with one exception: a short exclusive choice of two to four one word options that reveals its own fields below it, such as a form's After sending (Message, Web page, Booking), may be a `size="compact"` SegmentedControl. Why: the owner, 22 October 2026, found the radios with their sentences too heavy for that card ("the buttons should be buttons"); the choice still reads as one control and is saved like a RadioGroup's.
+- `isReadOnly` keeps the chosen segment at full contrast and focusable, but no segment can be chosen: someone who may view a saved choice but not change it. Prefer it to `isDisabled` for a saved setting.
 - `isIconOnly` on a segment shows its icon alone; its label stays its name.
 - `size="compact"` makes the whole control, track and hairline included, exactly `size-control` (26px) tall, with `space-8` inside each segment. Why a variant: the default is a hairline and a track taller than a button, so beside View settings in the view bar the two sat on different lines (the owner, 22 October 2026).
 - `isLabelCollapsible` shows only the icon of each segment that has one when the control's container is under 480px (a phone); a visually hidden copy of the label stays its name. Why: the view bar's Table and Board must fit a phone.
@@ -24,7 +25,7 @@ Ported from the artifact's SegmentedControl card (version 8). Table or Board (#2
 
 ## States
 
-Chosen (raised thumb), compact, collapsed to icons on a phone, hover (pointer only), focus (the 1px `accent-line` ring inside the segment, or the thumb's edge turning `accent-line` on the chosen one), disabled; horizontal or vertical. The thumb slides with `ease-in-out` over `duration-move` for a pointer, and jumps for the keyboard and under reduced motion.
+Chosen (raised thumb), read only (the chosen segment at full contrast, nothing changes), compact, collapsed to icons on a phone, hover (pointer only), focus (the 1px `accent-line` ring inside the segment, or the thumb's edge turning `accent-line` on the chosen one), disabled; horizontal or vertical. The thumb slides with `ease-in-out` over `duration-move` for a pointer, and jumps for the keyboard and under reduced motion.
 
 ## Keyboard
 

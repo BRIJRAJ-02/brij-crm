@@ -124,6 +124,11 @@ export const Disabled: Story = {
   args: { isDisabled: true },
 };
 
+/** A saved choice a viewer can read but not change: the chosen segment stays at full contrast. */
+export const ReadOnly: Story = {
+  args: { isReadOnly: true },
+};
+
 /**
  * `size="compact"`: exactly a button's height, for a bar (the view bar's Table and Board). With
  * `isLabelCollapsible`, a phone shows the icons alone, each segment keeping its name.

@@ -508,11 +508,11 @@ export function FormEditor(props: FormEditorProps) {
   const layout = (
     <PreviewLayout
       notices={notices}
-      // Settings is a group of fields beside its preview; Install reads top to bottom, full width.
-      bodyLayout={current === 'settings' ? 'grid' : 'stack'}
+      // Every tab reads top to bottom, full width; only the Form tab keeps the preview (the owner, 22 October 2026).
+      bodyLayout="stack"
       // On every tab, so a name, link or owner left unsaved still says so after a tab change.
       footer={settings.footer}
-      {...(current === 'form' || current === 'settings'
+      {...(current === 'form'
         ? {
             preview: <HostedFormPreview form={preview} />,
             previewControls: (
