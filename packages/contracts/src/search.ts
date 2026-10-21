@@ -18,7 +18,10 @@ export const MAX_GLOBAL_RECORDS = 20;
  * items instead.
  */
 export const GlobalSearchInput = WorkspaceScoped.extend({
-  query: z.string().max(MAX_GLOBAL_QUERY, `Search with at most ${String(MAX_GLOBAL_QUERY)} characters.`),
+  query: z
+    .string()
+    .max(MAX_GLOBAL_QUERY, `Search with at most ${String(MAX_GLOBAL_QUERY)} characters.`)
+    .refine((query) => !query.includes('\u0000'), { error: 'This text holds a character that can’t be stored.' }),
   limit: z
     .number()
     .int()

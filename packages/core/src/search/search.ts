@@ -1,18 +1,22 @@
 // The command menu's search (spec 0039): every readable object's live
 // records by name, email and domain, and the views the caller sees, in one
-// read. Each step is one statement however many objects the workspace has:
-// one or two characters seek a bounded range of the stored name keys; three
-// or more ask `crm_search_text` about every searched attribute at once; four
-// or more, when few matched, ask `crm_search_similar` for close names (a
-// typo), inside a savepoint with its own short timeout, so a slow typo step
-// answers the exact matches instead of an error. The ids each step returns
-// are ranked in a statement that keeps only live records of readable objects
-// inside their record rules, so nothing hidden is ever ranked or shown.
+// read. The number of statements never grows with the number of objects, and
+// it is the same whatever the reader may not see, so neither the answer nor
+// its timing hints at a hidden record (AC-1089):
+// - one or two characters: one statement seeks a bounded range of each
+//   readable object's stored name keys, inside its record rule;
+// - three or more: one statement gathers candidates (every searched attribute
+//   through `crm_search_text`, plus the names starting with the text) and ranks
+//   them, keeping only live records of readable objects inside their rules;
+// - four or more, when fewer than the limit matched: close names (a typo)
+//   through `crm_search_similar`, gathered and ranked the same way in one
+//   statement, inside a savepoint with its own short timeout, so a slow typo
+//   step answers the exact matches instead of an error (AC-1094).
 // Hidden attributes are never searched (AC-1090). Text never reaches SQL as
 // text: it goes in as parameters, and contains and similarity go through the
 // search functions, which treat it as data.
-import { isNull, sql, type SQL } from 'drizzle-orm';
-import { schema, type WorkspaceTx } from '@crm/db';
+import { sql, type SQL } from 'drizzle-orm';
+import type { WorkspaceTx } from '@crm/db';
 import type { GlobalSearchResults, RecordHit, SearchMatch, ViewHit } from '@crm/contracts';
 import { MAX_GLOBAL_QUERY, MAX_GLOBAL_RECORDS } from '@crm/contracts';
 import { isUuid, uuidArray, uuidList } from '../engine/ids.ts';
@@ -20,20 +24,26 @@ import { searchedAttributes } from '../engine/record-search.ts';
 import { readRecords } from '../engine/records.ts';
 import { postgresError, refuse } from '../engine/refusals.ts';
 import type { EngineScope } from '../engine/scope.ts';
-import { isArchivedNow, loadAttributesOfObjects, type AttributeDef } from '../engine/values.ts';
+import { isArchivedNow, loadSearchAttributes, type AttributeDef } from '../engine/values.ts';
 import { isAborted, withCancel } from '../engine/query/cancel.ts';
-import { objectLevel } from '../access/policy.ts';
+import { objectLevel, recordRule } from '../access/policy.ts';
 import { attributeVisible, farVisibleSql } from '../access/visibility.ts';
 import { memberOf } from '../views/views.ts';
 
-const { objects } = schema;
-
 /** The most views one search answers (AC-1081). */
 export const MAX_GLOBAL_VIEWS = 8;
-/** The most ids each searched attribute asks `crm_search_text` for. */
-const CONTAINS_CANDIDATES = 200;
+/**
+ * How many contains candidates one search gathers across every searched
+ * attribute (shared out, 20 to 200 each), so the ranking's work has a ceiling
+ * however many objects the workspace has.
+ */
+const CONTAINS_BUDGET = 1000;
+/** An attribute of an object with a record rule asks for this many times its share: most of its matches are cut. */
+const RULED_FACTOR = 4;
+/** The most stored name keys each object's prefix range walks before the rule and liveness checks. */
+const PREFIX_BUDGET = 500;
 /** The most ids the typo step asks `crm_search_similar` for. */
-const SIMILAR_CANDIDATES = 50;
+const SIMILAR_CANDIDATES = 100;
 /** How long a search's statements may run, and the typo step's own budget (AC-1094). */
 const SEARCH_TIMEOUT = '3s';
 const SIMILAR_TIMEOUT = '300ms';
@@ -51,30 +61,36 @@ export interface SearchedObject {
   readonly primary: AttributeDef | undefined;
   /** The name, then up to two email or domain attributes, all visible to the reader. */
   readonly searched: readonly AttributeDef[];
-  /** Every attribute of the object, so reading the hits' names loads nothing again. */
+  /** The attributes loaded for it (its name, emails and domains), so reading the hits' names loads nothing again. */
   readonly attributes: ReadonlyMap<string, AttributeDef>;
 }
 
 /**
- * The live objects the reader may read, each with the attributes a search
- * may look at (spec 0014's `searchedAttributes`): two statements, whatever
- * the number of objects.
+ * The live objects the reader may read, in sidebar order, each with the
+ * attributes a search may look at (spec 0014's `searchedAttributes`): two
+ * statements, whatever the number of objects. The first also sets the
+ * transaction's statement timeout, when one is given.
  */
-export async function searchedObjects(tx: WorkspaceTx, scope: EngineScope): Promise<readonly SearchedObject[]> {
-  const rows = await tx
-    .select({ id: objects.id, primaryAttributeId: objects.primaryAttributeId, position: objects.position })
-    .from(objects)
-    .where(isNull(objects.archivedAt));
-  const readable = rows
-    .filter((row) => objectLevel(scope.access, row.id) !== 'none')
-    .sort((a, b) => a.position - b.position);
-  const attributes = await loadAttributesOfObjects(
+export async function searchedObjects(
+  tx: WorkspaceTx,
+  scope: EngineScope,
+  timeout?: string,
+): Promise<readonly SearchedObject[]> {
+  const set = timeout === undefined ? sql`` : sql`, set_config('statement_timeout', ${timeout}, true) as timeout`;
+  const found = await tx.execute<{ id: string; primary_attribute_id: string | null }>(sql`
+    select o.id::text as id, o.primary_attribute_id::text as primary_attribute_id${set}
+    from objects o where o.archived_at is null
+    order by o.position, o.id
+  `);
+  const readable = found.rows.filter((row) => objectLevel(scope.access, row.id) !== 'none');
+  const attributes = await loadSearchAttributes(
     tx,
     readable.map((row) => row.id),
+    readable.flatMap((row) => (row.primary_attribute_id === null ? [] : [row.primary_attribute_id])),
   );
   return readable.map((row) => {
     const own = attributes.get(row.id) ?? new Map<string, AttributeDef>();
-    const named = row.primaryAttributeId === null ? undefined : own.get(row.primaryAttributeId);
+    const named = row.primary_attribute_id === null ? undefined : own.get(row.primary_attribute_id);
     const primary =
       named !== undefined && !isArchivedNow(named) && attributeVisible(scope.access, named) ? named : undefined;
     return { id: row.id, primary, searched: searchedAttributes(scope, primary, own), attributes: own };
@@ -112,7 +128,36 @@ function readableSql(scope: EngineScope, objectIds: readonly string[]): SQL {
     : sql`r.object_id = any(${uuidArray(objectIds)}) and ${rule}`;
 }
 
-/** The 1 or 2 character path: each object's names starting with the text, from the stored keys, in one statement. */
+/** The readable objects whose name the reader may see, with that name attribute. */
+function named(searched: readonly SearchedObject[]): readonly { id: string; primary: AttributeDef }[] {
+  return searched.flatMap((object) =>
+    object.primary === undefined ? [] : [{ id: object.id, primary: object.primary }],
+  );
+}
+
+/**
+ * One subselect per named object: its live records inside its rule whose
+ * stored name key starts with the text (a bounded range of `sort_keys_text`,
+ * walking at most `PREFIX_BUDGET` keys), at most `limit` of them, as `(id, key)`.
+ */
+function prefixArms(scope: EngineScope, searched: readonly SearchedObject[], text: string, limit: number): SQL[] {
+  return named(searched).map((object) => {
+    const rule = farVisibleSql(scope.access, [object.id], 'r');
+    return sql`(select k.record_id as id, k.text_key as key
+      from (select s.record_id, s.text_key, s.workspace_id from sort_keys s
+        where s.attribute_id = ${object.primary.id}::uuid and s.live and s.text_key is not null
+          and s.text_key >= (lower(${text}) collate "und-x-icu")
+          and s.text_key < ((lower(${text}) || U&'\\FFFF') collate "und-x-icu")
+        order by s.text_key, s.owner_id
+        limit ${PREFIX_BUDGET}) k
+      join records r on r.workspace_id = k.workspace_id and r.id = k.record_id
+        and r.object_id = ${object.id}::uuid and r.deleted_at is null${rule === undefined ? sql`` : sql` and ${rule}`}
+      order by k.text_key, k.record_id
+      limit ${limit})`;
+  });
+}
+
+/** The 1 or 2 character path: each object's names starting with the text, in one statement. */
 async function prefixIds(
   tx: WorkspaceTx,
   scope: EngineScope,
@@ -120,22 +165,8 @@ async function prefixIds(
   text: string,
   limit: number,
 ): Promise<readonly Ranked[]> {
-  const named = searched.flatMap((object) =>
-    object.primary === undefined ? [] : [{ id: object.id, primary: object.primary }],
-  );
-  if (named.length === 0) return [];
-  // One bounded range per object's name key (spec 0014's), each joined to its live records inside its rule.
-  const parts = named.map((object) => {
-    const rule = farVisibleSql(scope.access, [object.id], 'r');
-    return sql`(select k.record_id as id, k.text_key as key from sort_keys k
-      join records r on r.workspace_id = k.workspace_id and r.id = k.record_id
-        and r.object_id = ${object.id}::uuid and r.deleted_at is null${rule === undefined ? sql`` : sql` and ${rule}`}
-      where k.attribute_id = ${object.primary.id}::uuid and k.live and k.text_key is not null
-        and k.text_key >= (lower(${text}) collate "und-x-icu")
-        and k.text_key < ((lower(${text}) || U&'\\FFFF') collate "und-x-icu")
-      order by k.text_key, k.owner_id
-      limit ${limit})`;
-  });
+  const parts = prefixArms(scope, searched, text, limit);
+  if (parts.length === 0) return [];
   const rows = await tx.execute<{ id: string }>(sql`
     select x.id::text as id from (${sql.join(parts, sql` union all `)}) x
     order by x.key, x.id
@@ -144,47 +175,53 @@ async function prefixIds(
   return rows.rows.map((row) => ({ id: row.id, match: 'prefix' }));
 }
 
+/** The match a ranked row's rank number stands for (AC-1079). */
+const MATCHES: readonly SearchMatch[] = ['prefix', 'word', 'contains'];
+
 /**
- * Ranks candidate ids (AC-1079): live records of readable objects inside
- * their rules, names starting with the text first, then a word starting with
- * it, then the rest, each by name. `similar` ranks by closeness instead.
+ * Ranks the candidates a CTE named `c` (one column, `id`) gathers (AC-1079):
+ * live records of readable objects inside their rules, names starting with
+ * the text first, then a word starting with it, then the rest, each by name.
+ * `similar` ranks by closeness instead, after leaving out `skip`.
  */
-async function rankIds(
-  tx: WorkspaceTx,
+function rankSql(
   scope: EngineScope,
   searched: readonly SearchedObject[],
-  candidates: readonly string[],
+  candidates: SQL,
   text: string,
   limit: number,
-  similar: boolean,
-): Promise<readonly Ranked[]> {
-  if (candidates.length === 0 || limit <= 0) return [];
+  similar?: { readonly skip: readonly string[] },
+): SQL {
   const objectIds = searched.map((object) => object.id);
-  const primaryIds = searched.flatMap((object) => (object.primary === undefined ? [] : [object.primary.id]));
+  const primaryIds = named(searched).map((object) => object.primary.id);
   const lowered = sql`lower(${text})`;
+  const rank = sql`case when starts_with(k.text_key, ${lowered}) then 0
+    when strpos(k.text_key, ' ' || ${lowered}) > 0 then 1 else 2 end`;
+  const order =
+    similar === undefined
+      ? sql`${rank}, k.text_key nulls last, r.id`
+      : sql`public.word_similarity(${lowered}, coalesce(k.text_key, '')) desc, k.text_key nulls last, r.id`;
+  const skip =
+    similar === undefined || similar.skip.length === 0 ? sql`` : sql` and r.id <> all(${uuidList([...similar.skip])})`;
   // The name key: at most one per record, since each name attribute belongs to one object.
-  const order = similar
-    ? sql`public.word_similarity(${lowered}, coalesce(k.text_key, '')) desc, k.text_key nulls last, r.id`
-    : sql`case when starts_with(k.text_key, ${lowered}) then 0
-        when strpos(k.text_key, ' ' || ${lowered}) > 0 then 1 else 2 end, k.text_key nulls last, r.id`;
-  const rows = await tx.execute<{ id: string; rank: number }>(sql`
-    select r.id::text as id,
-      case when starts_with(k.text_key, ${lowered}) then 0
-        when strpos(k.text_key, ' ' || ${lowered}) > 0 then 1 else 2 end as rank
+  return sql`
+    with c as (${candidates})
+    select r.id::text as id, ${rank} as rank
     from records r
     left join sort_keys k on k.workspace_id = r.workspace_id and k.owner_id = r.id
       and k.attribute_id = any(${uuidArray(primaryIds)})
-    where r.id = any(${uuidList([...candidates])}) and r.deleted_at is null and ${readableSql(scope, objectIds)}
+    where r.id in (select c.id from c) and r.deleted_at is null and ${readableSql(scope, objectIds)}${skip}
     order by ${order}
     limit ${limit}
-  `);
-  return rows.rows.map((row) => ({
-    id: row.id,
-    match: similar ? 'similar' : row.rank === 0 ? 'prefix' : row.rank === 1 ? 'word' : 'contains',
-  }));
+  `;
 }
 
-/** The 3+ character path: every searched attribute through `crm_search_text` in one statement, then ranked. */
+/**
+ * The 3+ character path, in one statement: every searched attribute through
+ * `crm_search_text` (its share of `CONTAINS_BUDGET`; more for an object with
+ * a record rule, which cuts most of them) and the names starting with the
+ * text, ranked.
+ */
 async function containsIds(
   tx: WorkspaceTx,
   scope: EngineScope,
@@ -192,27 +229,32 @@ async function containsIds(
   text: string,
   limit: number,
 ): Promise<readonly Ranked[]> {
-  const attributeIds = searched.flatMap((object) => object.searched.map((attribute) => attribute.id));
-  if (attributeIds.length === 0) return [];
-  const found = await tx.execute<{ id: string }>(sql`
-    select distinct s.id::text as id
-    from unnest(${uuidArray(attributeIds)}) a(id), lateral crm_search_text(a.id, ${text}, ${CONTAINS_CANDIDATES}::int) s(id)
-  `);
-  return rankIds(
-    tx,
-    scope,
-    searched,
-    found.rows.map((row) => row.id),
-    text,
-    limit,
-    false,
+  const attributes = searched.flatMap((object) =>
+    object.searched.map((attribute) => ({
+      id: attribute.id,
+      ruled: recordRule(scope.access, object.id) !== undefined,
+    })),
   );
+  if (attributes.length === 0) return [];
+  const share = Math.min(Math.max(Math.ceil(CONTAINS_BUDGET / attributes.length), 20), 200);
+  // Whole numbers made here, never input.
+  const shares = attributes.map((attribute) => (attribute.ruled ? share * RULED_FACTOR : share));
+  const arms = prefixArms(scope, searched, text, limit);
+  const candidates = sql`select s.id from unnest(${uuidArray(attributes.map((attribute) => attribute.id))}, ${sql.raw(
+    `array[${shares.map((n) => String(Math.trunc(n))).join(',')}]::int[]`,
+  )}) a(id, n), lateral crm_search_text(a.id, ${text}, a.n) s(id)${
+    arms.length === 0 ? sql`` : sql` union select x.id from (${sql.join(arms, sql` union all `)}) x`
+  }`;
+  const rows = await tx.execute<{ id: string; rank: number }>(rankSql(scope, searched, candidates, text, limit));
+  return rows.rows.map((row) => ({ id: row.id, match: MATCHES[row.rank] ?? 'contains' }));
 }
 
 /**
  * The typo step (AC-1078, AC-1094): close names through `crm_search_similar`,
- * inside a savepoint with its own timeout. Past it, the savepoint rolls back
- * and the step answers nothing, so the search still answers its exact matches.
+ * ranked by closeness in the same statement, inside a savepoint with its own
+ * timeout. The step only reads, so the savepoint always rolls back, which
+ * also puts the search's own timeout back; past its time the step answers
+ * nothing, and the search still answers its exact matches.
  */
 async function similarIds(
   tx: WorkspaceTx,
@@ -220,28 +262,22 @@ async function similarIds(
   searched: readonly SearchedObject[],
   text: string,
   limit: number,
-  skip: ReadonlySet<string>,
+  skip: readonly string[],
 ): Promise<readonly Ranked[]> {
-  const primaryIds = searched.flatMap((object) => (object.primary === undefined ? [] : [object.primary.id]));
+  const primaryIds = named(searched).map((object) => object.primary.id);
   if (primaryIds.length === 0 || limit <= 0) return [];
   await tx.execute(sql`savepoint crm_search_similar`);
-  let ids: readonly string[];
   try {
     await tx.execute(sql`set local statement_timeout = ${sql.raw(`'${SIMILAR_TIMEOUT}'`)}`);
-    const found = await tx.execute<{ id: string }>(sql`
-      select distinct s.id::text as id
-      from crm_search_similar(${uuidArray(primaryIds)}, ${text}, ${SIMILAR_CANDIDATES}::int) s(id)
-    `);
-    ids = found.rows.map((row) => row.id).filter((id) => !skip.has(id));
-    await tx.execute(sql`set local statement_timeout = ${sql.raw(`'${SEARCH_TIMEOUT}'`)}`);
-    await tx.execute(sql`release savepoint crm_search_similar`);
+    const candidates = sql`select s.id from crm_search_similar(${uuidArray(primaryIds)}, ${text}, ${SIMILAR_CANDIDATES}::int) s(id)`;
+    const rows = await tx.execute<{ id: string }>(rankSql(scope, searched, candidates, text, limit, { skip }));
+    return rows.rows.map((row) => ({ id: row.id, match: 'similar' }));
   } catch (error) {
     if (postgresError(error)?.code !== '57014') throw error;
-    // Rolling back to the savepoint also restores the search's own timeout, which `set local` changed after it.
-    await tx.execute(sql`rollback to savepoint crm_search_similar`);
     return [];
+  } finally {
+    await tx.execute(sql`rollback to savepoint crm_search_similar`);
   }
-  return rankIds(tx, scope, searched, ids, text, limit, true);
 }
 
 /**
@@ -333,8 +369,7 @@ export async function searchWorkspace(
   const cancelled = () => refuse('QUERY_CANCELLED', 'That search took too long or was cancelled. Try again.');
   try {
     return await withCancel(scope, 'query', signal, cancelled, async (tx, checkpoint) => {
-      await tx.execute(sql`set local statement_timeout = ${sql.raw(`'${SEARCH_TIMEOUT}'`)}`);
-      const searched = await searchedObjects(tx, scope);
+      const searched = await searchedObjects(tx, scope, SEARCH_TIMEOUT);
       if (searched.length === 0) return { records: [], views: [] };
       const exact =
         mode === 'prefix'
@@ -343,7 +378,14 @@ export async function searchWorkspace(
       checkpoint();
       const close =
         mode === 'contains' && wantsSimilar(text, exact.length, limit)
-          ? await similarIds(tx, scope, searched, text, limit - exact.length, new Set(exact.map((hit) => hit.id)))
+          ? await similarIds(
+              tx,
+              scope,
+              searched,
+              text,
+              limit - exact.length,
+              exact.map((hit) => hit.id),
+            )
           : [];
       checkpoint();
       const ranked = [...exact, ...close];

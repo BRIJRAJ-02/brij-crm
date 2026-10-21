@@ -3244,6 +3244,8 @@ export function createDataLayer({
         const key = `${workspace}:${kind}:${id}`;
         const now = Date.now();
         if ((visited.get(key) ?? 0) > now - VISIT_EVERY_MS) return;
+        // Delete first, so the map's order is the order of last sends and the oldest goes past 200.
+        visited.delete(key);
         visited.set(key, now);
         if (visited.size > 200) visited.delete(visited.keys().next().value ?? key);
         void call((options) => api.recents.visit({ workspace, kind, id }, options)).catch(() => undefined);
