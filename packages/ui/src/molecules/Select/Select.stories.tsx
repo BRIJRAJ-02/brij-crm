@@ -1,5 +1,5 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
-import { expect, fn, waitFor } from 'storybook/test';
+import { expect, fn, waitFor, within } from 'storybook/test';
 import { Avatar } from '../../atoms/Avatar/Avatar.tsx';
 import { Stage } from '../../workbench/Stage/Stage.tsx';
 import { InfoTip } from '../InfoTip/InfoTip.tsx';
@@ -359,5 +359,29 @@ export const WithInfoReadOnly: Story = {
   args: { ...WithInfo.args, isReadOnly: true, readOnlyReason: 'Only its owner can change it.' },
   play: async ({ canvas }) => {
     await expect(canvas.getByRole('button', { name: 'About Minimum notice' })).toBeVisible();
+  },
+};
+
+/** An option's `badge`: a short Badge after its name, in the list and on the trigger (a schedule's "Default"). */
+export const OptionBadge: Story = {
+  args: {
+    label: 'Schedule',
+    items: [
+      { id: 'default', label: 'Working hours', badge: 'Default' },
+      { id: 'evenings', label: 'Evenings' },
+    ],
+    optionStyle: 'plain',
+    value: 'default',
+  },
+  render: (args) => (
+    <Stage width="narrow">
+      <Select {...args} />
+    </Stage>
+  ),
+  play: async ({ canvas, userEvent }) => {
+    await userEvent.click(canvas.getByRole('button', { name: /Working hours/ }));
+    const list = await listbox();
+    if (!(list instanceof HTMLElement)) throw new Error('the list is not an element');
+    await expect(within(list).getByRole('option', { name: /Working hours.*Default/ })).toBeVisible();
   },
 };

@@ -1,4 +1,4 @@
-import { useSyncExternalStore } from 'react';
+import { useId, useSyncExternalStore } from 'react';
 import { useFocusVisible } from 'react-aria';
 import { RadioButton, RadioField, RadioGroup, SelectionIndicator } from 'react-aria-components';
 import { Icon } from '../../atoms/Icon/Icon.tsx';
@@ -20,9 +20,9 @@ export interface Segment {
 
 /** Props for SegmentedControl. */
 export interface SegmentedControlProps {
-  /** What it switches ("View"). Read by screen readers. */
+  /** What it switches ("View"). Read by screen readers, and shown above the track with `isLabelVisible`. */
   readonly label: string;
-  /** Two to four segments. */
+  /** Two to five segments. */
   readonly segments: readonly Segment[];
   readonly value?: string;
   readonly defaultValue?: string;
@@ -45,6 +45,11 @@ export interface SegmentedControlProps {
    * have an icon show it alone; the label stays each one's name.
    */
   readonly isLabelCollapsible?: boolean;
+  /**
+   * Shows `label` above the track, as a Field's label, for a choice inside a
+   * short form (a new booking page's Duration).
+   */
+  readonly isLabelVisible?: boolean;
 }
 
 /** How tall the control is: `compact` matches a button. */
@@ -54,7 +59,7 @@ export type SegmentSize = 'md' | 'compact';
 export type SegmentOrientation = 'horizontal' | 'vertical';
 
 /**
- * Two to four equal segments that switch how you see something: Table or
+ * Two to five equal segments that switch how you see something: Table or
  * Board, Week or Month. A radio group underneath, so the arrow keys move. The
  * thumb slides for a pointer and jumps for the keyboard.
  */
@@ -68,12 +73,14 @@ export function SegmentedControl({
   orientation = 'horizontal',
   size = 'md',
   isLabelCollapsible = false,
+  isLabelVisible = false,
 }: SegmentedControlProps) {
   const { isFocusVisible } = useFocusVisible();
-  return (
+  const labelId = useId();
+  const group = (
     <RadioGroup
       className={styles.root}
-      aria-label={label}
+      {...(isLabelVisible ? { 'aria-labelledby': labelId } : { 'aria-label': label })}
       orientation={orientation}
       data-orientation={orientation}
       data-size={size}
@@ -118,6 +125,15 @@ export function SegmentedControl({
         </RadioField>
       ))}
     </RadioGroup>
+  );
+  if (!isLabelVisible) return group;
+  return (
+    <div className={styles.labelled} data-disabled={isDisabled || undefined}>
+      <span id={labelId} className={styles.title}>
+        {label}
+      </span>
+      {group}
+    </div>
   );
 }
 

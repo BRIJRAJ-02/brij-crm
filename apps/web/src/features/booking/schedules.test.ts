@@ -1,6 +1,6 @@
 // Schedules' words (spec 0035, AC-967): the pages a delete moves, named as a sentence says them.
 import { describe, expect, it } from 'vitest';
-import { deleteSentence, listOfNames } from './schedules.ts';
+import { deleteSentence, listOfNames, scheduleChoices } from './schedules.ts';
 
 describe('listOfNames', () => {
   it('joins one, two and three names as a sentence says them, and counts the rest', () => {
@@ -26,5 +26,33 @@ describe('deleteSentence', () => {
     expect(deleteSentence(['Intro call', 'Demo'], 'Working hours')).toBe(
       'Intro call and Demo will use Working hours, your default. This can’t be undone.',
     );
+  });
+});
+
+describe('scheduleChoices', () => {
+  const schedules = [
+    { id: null, name: 'Working hours', isDefault: true },
+    { id: 'evenings', name: 'Evenings', isDefault: false },
+  ];
+
+  it('names the default by its schedule, with a Default badge, then the others', () => {
+    expect(scheduleChoices(schedules, null)).toEqual([
+      { id: 'default', label: 'Working hours', badge: 'Default' },
+      { id: 'evenings', label: 'Evenings' },
+    ]);
+  });
+
+  it('lists a saved default again only for a page pinned to it', () => {
+    const saved = [
+      { id: 'work', name: 'Work', isDefault: true },
+      { id: 'evenings', name: 'Evenings', isDefault: false },
+    ];
+    expect(scheduleChoices(saved, null).map((each) => each.id)).toEqual(['default', 'evenings']);
+    expect(scheduleChoices(saved, 'work').map((each) => each.id)).toEqual(['default', 'work', 'evenings']);
+    expect(scheduleChoices(saved, 'work')[1]?.description).toBe('Stays on Work if your default changes');
+  });
+
+  it('says Default schedule before the schedules are read', () => {
+    expect(scheduleChoices([], null)).toEqual([{ id: 'default', label: 'Default schedule' }]);
   });
 });

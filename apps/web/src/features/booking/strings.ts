@@ -57,13 +57,16 @@ export const strings = {
   title: 'Title',
   titlePlaceholder: 'Quick chat',
   titleRequired: 'Give the page a title.',
-  address: 'Short name',
-  addressHint: 'Lowercase letters, numbers and hyphens.',
   whereRequired: 'Say where the meeting happens.',
   pausedPreview: 'This page is off, so visitors see it closed. Turn it on to preview booking.',
   duration: 'Duration',
   durationRequired: 'Pick at least one length.',
-  continue: 'Continue',
+  durationCustom: 'Custom',
+  customMinutes: 'Minutes',
+  customMinutesHint: 'Pages offer 90 minutes beyond the lengths above.',
+  customMinutesInvalid: 'Type 90, or pick a length above.',
+  minutesUnit: 'min',
+  createPage: 'Create page',
   creating: 'Creating',
   // The editor.
   live: 'Live',
@@ -97,7 +100,7 @@ export const strings = {
   /** InfoTips on the editor's settings that a new member wouldn't read from the label alone. */
   tips: {
     schedule: {
-      text: 'Default schedule follows whichever schedule is your default in Availability, even when you change which one that is.',
+      text: 'The one marked Default follows whichever schedule is your default in Availability, even after you change it.',
       example: 'Pick Evenings and the page offers only your evening hours.',
     },
     bufferBefore: {

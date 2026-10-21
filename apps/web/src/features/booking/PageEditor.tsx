@@ -41,6 +41,7 @@ import { CalendarNote, readDismissed, writeDismissed } from './CalendarNote.tsx'
 import { weekSummary, zoneLabel } from './hours.ts';
 import { linksHref, publicBookingUrl, scheduleHref } from './links.ts';
 import { scheduleStrings } from './schedule-strings.ts';
+import { scheduleChoices } from './schedules.ts';
 import { strings } from './strings.ts';
 
 /** Props for the editor: the page its route loaded. */
@@ -183,9 +184,8 @@ export function PageEditor({ data, slug, page: loaded, locale, schedules, ownerM
       },
     );
   };
-  const slugError = failure?.field === 'slug' ? failure.message : undefined;
   // The save bar speaks for the groups' changes; the Live switch saves on its own.
-  const barError = failure !== undefined && slugError === undefined ? failure.message : undefined;
+  const barError = failure?.message;
   const barStatus: SaveBarStatus = !isDirty
     ? justSaved
       ? 'saved'
@@ -320,16 +320,6 @@ export function PageEditor({ data, slug, page: loaded, locale, schedules, ownerM
                 showCounter
                 isReadOnly={isLocked}
                 onChange={(description) => change({ description })}
-              />
-              <Field
-                label={strings.address}
-                value={draft.slug}
-                hint={strings.addressHint}
-                maxLength={60}
-                isRequired
-                isReadOnly={isLocked}
-                onChange={(value) => change({ slug: value.toLowerCase() })}
-                {...(slugError === undefined ? {} : { error: slugError })}
               />
               <Switch
                 label={strings.private}
@@ -499,10 +489,7 @@ function useHours(
   // The virtual default books in each page's own zone, which the server read for a page that follows it.
   const isVirtualSaved = chosen?.id === null && page.scheduleId === null;
   return {
-    items: [
-      { id: 'default', label: scheduleStrings.defaultSchedule(fallback?.name) },
-      ...state.flatMap((each) => (each.id === null ? [] : [{ id: each.id, label: each.name }])),
-    ],
+    items: scheduleChoices(state, scheduleId),
     availability: isVirtualSaved ? page.availability : (chosen?.availability ?? page.availability),
     // The owner's schedule; an admin's view of a colleague's page opens it as theirs (`?member=`).
     editHref: chosen === undefined ? undefined : scheduleHref(slug, chosen.id ?? 'default', ownerMember),

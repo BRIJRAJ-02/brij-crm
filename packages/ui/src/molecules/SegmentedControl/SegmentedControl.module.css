@@ -16,6 +16,25 @@
     background: var(--surface-sunken);
   }
 
+  /* With a visible label: the label (as a Field's) over the track, which
+     keeps its own width at the start. */
+  .labelled {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: var(--space-4);
+  }
+
+  .title {
+    color: var(--text-secondary);
+    font: var(--text-label);
+    letter-spacing: var(--tracking-label);
+  }
+
+  .labelled[data-disabled] .title {
+    opacity: var(--opacity-disabled);
+  }
+
   .root[data-orientation='vertical'] {
     grid-auto-flow: row;
   }

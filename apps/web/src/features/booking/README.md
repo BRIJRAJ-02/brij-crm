@@ -11,10 +11,10 @@ Built from Table, Badge, CopyButton, Button, Modal (new page, and the delete con
 ## The builder (`/w/$slug/booking-pages/$pageId`; `/captures/links/$pageId` and the old `/settings/booking-pages/$pageId` redirect here)
 
 - Purpose: one page's details, meeting lengths, location, availability and limits (AC-623, AC-624).
-- Main task: change a setting and have it saved half a second after the last change; what failed is said where it happened (a taken web address on its field).
+- Main task: change a setting and have it saved half a second after the last change; what failed is said where it happened.
 - Leaves out: questions and the deal step (milestone 2), team members (milestone 3) and a live preview of the public page.
 
-Cards of Switch, Field, Checkbox, Select and DatePicker. The Hours card picks the schedule the page books by (spec 0035, AC-965): "Default schedule (<name>)", which follows whichever schedule is the owner's default at each slot read, or one of the owner's schedules by name, then says that schedule's week and zone; Edit hours opens that schedule's editor. The owner's schedules come from the data layer's held list (`data.schedules.view`), so a save elsewhere shows in the card. While the reader has no calendar connected (`data.calendar.view`, read through `useCalendar`), a Callout says the page offers their hours minus its bookings (AC-631), with a link to Settings, Calendar when sync is on here. The editor sits in PreviewLayout, the one Captures editor layout it shares with the form editor: notices above, the groups as Cards with a live summary each (Page, Meeting, Hours, Days off, Limits) beside the sticky preview (the page in a frame, Phone, Tablet or Desktop wide), and the save bar in its `footer`.
+Cards of Switch, Field, Checkbox, Select and DatePicker. The Hours card picks the schedule the page books by (spec 0035, AC-965): the default schedule by its name with a Default badge, which follows whichever schedule is the owner's default at each slot read, or one of the owner's schedules by name, then says that schedule's week and zone; Edit hours opens that schedule's editor. The owner's schedules come from the data layer's held list (`data.schedules.view`), so a save elsewhere shows in the card. While the reader has no calendar connected (`data.calendar.view`, read through `useCalendar`), a Callout says the page offers their hours minus its bookings (AC-631), with a link to Settings, Calendar when sync is on here. The editor sits in PreviewLayout, the one Captures editor layout it shares with the form editor: notices above, the groups as Cards with a live summary each (Page, Meeting, Hours, Days off, Limits) beside the sticky preview (the page in a frame, Phone, Tablet or Desktop wide), and the save bar in its `footer`.
 
 ## Availability (`/w/$slug/availability`, spec 0035; a page of its own since spec 0034)
 
@@ -36,8 +36,12 @@ Deleting asks first (the owner's confirm rule, 21 October 2026): "Delete the Eve
 
 Its own page outside the Bookings layout, with the trail Bookings › Availability. The name, the zone and the days off sit beside the week, as Availability had them; the name, the hours and the days off are one draft (`useScheduleDraft` in `scheduleDraft.ts`): undefined until something changes, so another tab's save shows while nothing is being edited (AC-977), and a save names the version the draft began from, so a schedule changed elsewhere meanwhile is refused `STALE` and said on the SaveBar, and the next Save replaces it knowingly. Used by lists the pages booking by it, each opening its editor. The virtual default's first save stores it and moves the address to its id without leaving the editor.
 
-The page editor's Hours card picks "Default schedule (<name>)" or one of the owner's schedules, says its week and zone, and links to it (Edit hours). The copy is in `schedule-strings.ts`, apart from `strings.ts`, so it never loads with the route loaders.
+The page editor's Hours card picks the default schedule (its name with a Default badge, `scheduleChoices` in `schedules.ts`) or one of the owner's schedules, says its week and zone, and links to it (Edit hours). The copy is in `schedule-strings.ts`, apart from `strings.ts`, so it never loads with the route loaders.
 
 ## The public page (`/b/<publicKey>`)
 
 See `src/public/booking/README.md`: its own small bundle with plain inputs and the tokens compiled in, per spec 0023's visitor rules.
+
+## New booking page (22 Oct 2026)
+
+`NewPageDialog`: Title, Duration (a compact SegmentedControl with a visible label: 15, 30, 45 or 60 minutes, or Custom, which shows a Minutes field the server's lengths bound, so only 90 more today) and Schedule (the same `scheduleChoices` as the editor, one sentence InfoTip), then Cancel and Create page. No web address field: the server makes a free slug from the title, and no visitor sees it since links use the page's key, so the editor drops its Short name field too. The page takes one length here; more are added in the editor.

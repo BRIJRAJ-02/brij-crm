@@ -13,7 +13,7 @@ Ported from the artifact's Select card (version 8). It is the editor for select 
 <Select label="Plan" items={plans} placeholder="Set Plan…" isClearable />
 ```
 
-- `items`: each has an `id` and a `label`, and optionally a `hue`, an `icon`, a `description` or any `leading` piece (an Avatar).
+- `items`: each has an `id` and a `label`, and optionally a `hue`, an `icon`, a `description`, any `leading` piece (an Avatar) or a `badge`, a short Badge after a plain option's name in the list and on the trigger (a schedule's "Default"; a variant, since the name alone can't say which one is the default).
 - `optionStyle`: `plain` (the default), `tag` (select attributes) or `dot` (statuses).
 - `variant="cell"` is the trigger a grid cell becomes while its list is open: it fills the cell and shows the value where the display had it, with no box or ring of its own (the cell draws the one ring), and the list opens at least a menu wide, so options never cut to the cell's width.
 - An archived option (`isArchived`) can't be chosen, but still shows, muted, when it is the current value.
