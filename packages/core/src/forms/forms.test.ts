@@ -33,12 +33,14 @@ import {
   isSlugAvailable,
   listForms,
   publishForm,
+  rotateFormSecret,
   saveFormDraft,
   setFormStatus,
   updateFormSettings,
 } from './forms.ts';
 import { processSubmission } from './process.ts';
 import { getPublicForm, postingRules, submitForm, visitorOf, type BookingHandoff } from './public.ts';
+import { workspacePublicKey } from './shared.ts';
 import type { CaptchaVerdict } from './spam.ts';
 import {
   deleteSubmission,
@@ -362,6 +364,86 @@ describe('the public form and submit (AC-553 to AC-556, AC-659)', () => {
       { state: 'spam', signals: ['captcha_low_score'] },
     ]);
     expect(await w.query(sql`select 1 from jobs where kind = 'forms.process'`)).toEqual([]);
+  });
+});
+
+describe('tagging: where a submission came from (spec 0023, the embeds)', () => {
+  it('stores the context the embed sent, checked field by field, and shows it on the submission', async () => {
+    const w = await workspace();
+    const live = await liveForm(w);
+    const view = await getForm(w.scope, { formId: live.id });
+    expect(view.workspaceKey).toBe(workspacePublicKey(w.scope.workspaceId));
+    expect(view.workspaceKey).toMatch(/^ws_[a-f0-9]{16}$/);
+    expect(view.workspaceKey).not.toContain(w.scope.workspaceId);
+    await submit(
+      live.publicKey,
+      body(
+        { name: 'Ada', email: 'ada@example.com' },
+        {
+          context: {
+            page_url: 'https://user:secret@acme.com/pricing?plan=pro',
+            page_title: 'Pricing',
+            landing_url: 'javascript:alert(1)',
+            referrer: 'https://news.example.com/',
+            utm_campaign: 'spring',
+            utm_source: 'x'.repeat(201),
+            params: { plan: 'pro' },
+            visitor_id: 'short',
+            workspace: view.workspaceKey,
+            mode: 'inline',
+            version: '1',
+          },
+        },
+      ),
+    );
+    const [row] = await w.query<{ context: unknown }>(sql`select context from form_submissions`);
+    // Credentials leave the address, a script address and an overlong tag and a malformed visitor id are dropped,
+    // and the workspace key is checked, never kept.
+    expect(row?.context).toEqual({
+      page_url: 'https://acme.com/pricing?plan=pro',
+      page_title: 'Pricing',
+      referrer: 'https://news.example.com/',
+      utm_campaign: 'spring',
+      params: { plan: 'pro' },
+      mode: 'inline',
+    });
+    const [stored] = await submissionIds(w, live.id);
+    const shown = await getSubmission(w.scope, { submissionId: stored?.id ?? '' });
+    expect(shown.context).toMatchObject({ page_url: 'https://acme.com/pricing?plan=pro', utm_campaign: 'spring' });
+  });
+
+  it('stores no context when none came, and refuses a snippet naming another workspace as not found', async () => {
+    const w = await workspace();
+    const live = await liveForm(w);
+    await submit(live.publicKey, body({ name: 'Ada', email: 'ada@example.com' }));
+    expect(await w.query(sql`select context from form_submissions`)).toEqual([{ context: null }]);
+    const elsewhere = await workspace();
+    expect(
+      await refusalOf(
+        submit(
+          live.publicKey,
+          body(
+            { name: 'Ada', email: 'ada@example.com' },
+            { context: { workspace: workspacePublicKey(elsewhere.scope.workspaceId) } },
+          ),
+        ),
+      ),
+    ).toMatchObject([{ code: 'NOT_FOUND' }]);
+    expect(await w.query(sql`select id from form_submissions`)).toHaveLength(1);
+  });
+
+  it('rotates the signing secret for forms.manage only, the old one gone at once', async () => {
+    const w = await workspace();
+    const live = await liveForm(w);
+    const before = await getForm(w.scope, { formId: live.id });
+    const rotated = await rotateFormSecret(w.scope, { formId: live.id });
+    expect(rotated.signingSecret).toMatch(/^[A-Za-z0-9_-]{43}$/);
+    expect(rotated.signingSecret).not.toBe(before.signingSecret);
+    const { scope } = await enterPublicForm({ db }, live.publicKey);
+    expect((await postingRules(scope, { formId: live.id })).signingSecret).toBe(rotated.signingSecret);
+    const member = rescope(w.scope, { role: 'member' });
+    expect(await refusalOf(rotateFormSecret(member, { formId: live.id }))).toMatchObject([{ code: 'FORBIDDEN' }]);
+    expect((await getForm(w.scope, { formId: live.id })).signingSecret).toBe(rotated.signingSecret);
   });
 });
 

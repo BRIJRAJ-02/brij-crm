@@ -5,7 +5,14 @@
 // the form as the actor and no data access, so they read only the form's own
 // rows and never a record. A submission is stored first, in one insert with
 // its job queued in the same transaction (AC-554); processing happens there.
-import { checkAnswers, SubmitBody, type FormDocument, type PublicForm, type SubmitNext } from '@crm/contracts';
+import {
+  checkAnswers,
+  storedContext,
+  SubmitBody,
+  type FormDocument,
+  type PublicForm,
+  type SubmitNext,
+} from '@crm/contracts';
 import { schema, type WorkspaceTx } from '@crm/db';
 import { createHmac } from 'node:crypto';
 import { and, eq, isNull, sql } from 'drizzle-orm';
@@ -16,7 +23,7 @@ import { inWorkspace } from '../access/run.ts';
 import { startJob } from '../jobs/service.ts';
 import type { JobRegistry } from '../jobs/registry.ts';
 import { FORMS_PROCESS } from './process.ts';
-import { loadForm, loadVersions, publicFormOf, type FormRow } from './shared.ts';
+import { loadForm, loadVersions, publicFormOf, workspacePublicKey, type FormRow } from './shared.ts';
 import {
   judgeSubmission,
   REPEAT_WINDOW_HOURS,
@@ -270,6 +277,12 @@ export async function submitForm(
 ): Promise<SubmitOutcome> {
   checkPublicScope(scope, input.formId);
   const body = SubmitBody.parse(input.body);
+  // A snippet names its workspace: one pasted onto another workspace's form address is refused as not found.
+  const named = body.context?.workspace;
+  if (named !== undefined && named !== workspacePublicKey(scope.workspaceId)) {
+    throw refuse('NOT_FOUND', 'That form does not exist.');
+  }
+  const cameFrom = body.context === undefined ? {} : storedContext(body.context);
   const { result } = await runWrite(
     scope,
     async (context) => {
@@ -343,6 +356,7 @@ export async function submitForm(
           state,
           answers,
           hidden: body.hidden,
+          context: Object.keys(cameFrom).length === 0 ? null : cameFrom,
           spam: {
             verdict: judged.verdict,
             signals: judged.signals,

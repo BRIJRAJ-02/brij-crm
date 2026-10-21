@@ -49,6 +49,7 @@ import {
   objectName,
   publicFormOf,
   publishAttributes,
+  workspacePublicKey,
   type FormRow,
 } from './shared.ts';
 
@@ -151,6 +152,7 @@ async function viewOf(tx: WorkspaceTx, scope: EngineScope, form: FormRow): Promi
     allowedOrigins: [...form.allowedOrigins],
     requireSignature: form.requireSignature,
     ...(canManage ? { signingSecret: form.signingSecret } : {}),
+    workspaceKey: workspacePublicKey(scope.workspaceId),
     canManage,
   };
 }
@@ -690,6 +692,31 @@ export async function updateFormSettings(
         ...(input.requireSignature === undefined ? {} : { requireSignature: input.requireSignature }),
       };
       if (Object.keys(set).length > 0) await touchForm(tx, scope, form.id, set, false);
+      const changed = await loadForm(tx, form.id);
+      if (changed === undefined) throw new Error('The form went away under its change.');
+      return viewOf(tx, scope, changed);
+    },
+    hooks,
+  );
+  return result;
+}
+
+/**
+ * Gives a form a new signing secret (`forms.manage`; Install, Your own HTML):
+ * the old one stops working at once, so a site's server signing with it is
+ * refused from the next post. Answers the form with the new secret.
+ */
+export async function rotateFormSecret(
+  scope: EngineScope,
+  input: { readonly formId: string },
+  hooks: readonly AfterWrite[] = [],
+): Promise<FormView> {
+  requirePermission(scope, 'forms.manage');
+  const { result } = await runWrite(
+    scope,
+    async ({ tx }) => {
+      const form = await visibleForm(tx, scope, input.formId, true);
+      await touchForm(tx, scope, form.id, { signingSecret: newSecret() }, false);
       const changed = await loadForm(tx, form.id);
       if (changed === undefined) throw new Error('The form went away under its change.');
       return viewOf(tx, scope, changed);

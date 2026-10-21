@@ -106,6 +106,8 @@ const NO_SCOPE: ReadonlySet<string> = new Set([
   'newPublicKey',
   // The visitor a form hands to a booking page, read from its answers: a pure helper, no scope.
   'visitorOf',
+  // A workspace's public key for a snippet's tagging: a one way digest of its id, no scope.
+  'workspacePublicKey',
   // Booking pages (spec 0025): the busy cache wraps the reader the api passes in; it takes no scope. The connected
   // calendar reads a host's connections as the system for the public page, which has no scope of its own.
   'createBusyCache',

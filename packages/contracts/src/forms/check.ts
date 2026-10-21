@@ -6,14 +6,15 @@
 // else is dropped. Each answer comes back in its canonical shape: text for
 // most types, `true` or `false` for the yes or no types, and a phone as its
 // number in E.164 with the country it was dialled from.
-import { LONG_ANSWER_MAX, SHORT_ANSWER_MAX, type AnswerType } from './answer-types.ts';
+import { choiceKeysOf, LONG_ANSWER_MAX, SHORT_ANSWER_MAX, type AnswerType } from './answer-types.ts';
+import { countryOfE164 } from './dial-codes.ts';
 import type { FormLanguage, PublicQuestion } from './public.ts';
 import { formStrings, type FormStrings } from './strings.ts';
 
 /** What the check needs from a form: its questions and its language. */
 export interface CheckedForm {
   readonly language: FormLanguage;
-  readonly questions: readonly Pick<PublicQuestion, 'key' | 'answerType' | 'required' | 'choices'>[];
+  readonly questions: readonly Pick<PublicQuestion, 'key' | 'answerType' | 'required' | 'choices' | 'choiceKeys'>[];
 }
 
 /** A phone answer: the number in E.164 and the country whose code was picked. */
@@ -69,6 +70,7 @@ function text(value: unknown, max: number, words: FormStrings): { value?: string
 function checkOne(
   answerType: AnswerType,
   choices: readonly string[] | undefined,
+  choiceKeys: readonly string[] | undefined,
   raw: unknown,
   words: FormStrings,
 ): { value?: string | boolean | PhoneAnswer; error?: string } {
@@ -102,12 +104,22 @@ function checkOne(
       const value = raw.trim();
       if (answerType === 'country')
         return value.length > 0 && value.length <= 100 ? { value } : { error: words.country };
-      return (choices ?? []).includes(value) ? { value } : { error: words.pickOption };
+      if ((choices ?? []).includes(value)) return { value };
+      // A site's own form posts the choice's key: the answer is still the choice's words.
+      const at = (choiceKeys ?? []).indexOf(value);
+      const label = at === -1 ? undefined : choices?.[at];
+      return label === undefined ? { error: words.pickOption } : { value: label };
     }
     case 'checkbox':
     case 'yes_no':
       return { value: raw === true || raw === 'yes' || raw === 'true' };
     case 'phone': {
+      // A site's own form posts the number as typed: taken when it is international (+ and the code).
+      if (typeof raw === 'string') {
+        const compact = raw.replace(/[\s().-]/g, '');
+        const country = E164.test(compact) ? countryOfE164(compact) : undefined;
+        return country === undefined ? { error: words.phone } : { value: { number: compact, country } };
+      }
       if (typeof raw !== 'object' || raw === null) return { error: words.phone };
       const { number, country } = raw as { readonly number?: unknown; readonly country?: unknown };
       if (typeof number !== 'string' || typeof country !== 'string' || !/^[A-Z]{2}$/.test(country)) {
@@ -144,7 +156,7 @@ export function checkAnswers(form: CheckedForm, answers: Readonly<Record<string,
       if (question.required) fields[question.key] = words.required;
       continue;
     }
-    const checked = checkOne(question.answerType, question.choices, raw, words);
+    const checked = checkOne(question.answerType, question.choices, choiceKeysOf(question), raw, words);
     if (checked.error !== undefined) fields[question.key] = checked.error;
     else if (checked.value !== undefined) values[question.key] = checked.value;
   }

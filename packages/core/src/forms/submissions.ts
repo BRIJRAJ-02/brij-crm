@@ -6,6 +6,7 @@
 // see are left out, the same rule as everywhere else (hidden means absent).
 import { and, desc, eq, inArray, lt, lte, or, sql } from 'drizzle-orm';
 import {
+  SubmissionContext,
   SUBMISSION_SUMMARY_QUESTIONS,
   SUBMISSIONS_PAGE,
   type FormDocument,
@@ -64,6 +65,7 @@ export interface Row {
   readonly state: SubmissionState;
   readonly answers: unknown;
   readonly hidden: unknown;
+  readonly context: unknown;
   readonly spam: unknown;
   readonly mainRecordId: string | null;
   readonly assignment: unknown;
@@ -82,6 +84,7 @@ export const COLUMNS = {
   state: sql<SubmissionState>`${formSubmissions.state}`,
   answers: formSubmissions.answers,
   hidden: formSubmissions.hidden,
+  context: formSubmissions.context,
   spam: formSubmissions.spam,
   mainRecordId: formSubmissions.mainRecordId,
   assignment: formSubmissions.assignment,
@@ -94,6 +97,13 @@ export const COLUMNS = {
 
 const record = (value: unknown): Readonly<Record<string, unknown>> =>
   typeof value === 'object' && value !== null && !Array.isArray(value) ? (value as Record<string, unknown>) : {};
+
+/** A stored context as members read it: read back through its schema, so a bad row shows nothing rather than failing. */
+function contextOf(stored: unknown): SubmissionContext | undefined {
+  if (stored === null || stored === undefined) return undefined;
+  const parsed = SubmissionContext.safeParse(stored);
+  return parsed.success && Object.keys(parsed.data).length > 0 ? parsed.data : undefined;
+}
 
 const verdictOf = (spam: unknown): SubmissionSummary['verdict'] => {
   const verdict = record(spam).verdict;
@@ -322,6 +332,7 @@ async function viewIn(tx: WorkspaceTx, scope: EngineScope, submissionId: string)
   const hidden = Object.fromEntries(
     Object.entries(record(row.hidden)).flatMap(([key, value]) => (typeof value === 'string' ? [[key, value]] : [])),
   );
+  const context = contextOf(row.context);
   const signals = record(row.spam).signals;
   const shownQuestions = new Set(answers.map((answer) => answer.questionId));
   const refusedList = record(row.outcome).refused;
@@ -345,6 +356,7 @@ async function viewIn(tx: WorkspaceTx, scope: EngineScope, submissionId: string)
     versionNumber: version?.number ?? 1,
     answers,
     hidden,
+    ...(context === undefined ? {} : { context }),
     signals: Array.isArray(signals) ? signals.filter((signal): signal is string => typeof signal === 'string') : [],
     records,
     ...(row.failure === null ? {} : { failure: row.failure }),

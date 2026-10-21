@@ -216,6 +216,7 @@ export const ACCESS_TABLE = {
   publishForm: { permission: 'forms.manage' },
   setFormStatus: { permission: 'forms.manage' },
   updateFormSettings: { permission: 'forms.manage' },
+  rotateFormSecret: { permission: 'forms.manage' },
   setFormTarget: { permission: 'forms.manage' },
   duplicateForm: { permission: 'forms.manage' },
   deleteForm: { permission: 'forms.manage' },

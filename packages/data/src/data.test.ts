@@ -498,6 +498,7 @@ function fakeApi(overrides: Partial<Behaviour> = {}, auth: (path: string, body: 
       setStatus: os.forms.setStatus.handler(notServed),
       slugAvailable: os.forms.slugAvailable.handler(notServed),
       updateSettings: os.forms.updateSettings.handler(notServed),
+      rotateSecret: os.forms.rotateSecret.handler(notServed),
       setTarget: os.forms.setTarget.handler(notServed),
       duplicate: os.forms.duplicate.handler(notServed),
       delete: os.forms.delete.handler(notServed),

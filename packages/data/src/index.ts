@@ -3344,6 +3344,12 @@ export function createDataLayer({
               }))),
           land: landForm(formId),
         }),
+      /** Gives the form a new signing secret (the old one stops working at once); answers the form with it. */
+      rotateSecret: (workspace: string, formId: string) =>
+        formLists.write(workspace, {
+          send: () => call((options) => api.forms.rotateSecret({ workspace, formId, mutationId: mintId() }, options)),
+          land: landForm(formId),
+        }),
       /** Pauses or resumes (Accepting), archives or restores a form (AC-549): in the list at once, put back on a refusal. */
       setStatus: (workspace: string, formId: string, status: FormStatus) =>
         formLists.write(workspace, {
@@ -3408,7 +3414,7 @@ export function createDataLayer({
       /** The hosted page's address for a form's address, on this origin. */
       hostedUrl: (publicKey: string): string => `${origin}/f/${encodeURIComponent(publicKey)}`,
       /** The embed script's address, on this origin. */
-      embedUrl: (): string => `${origin}/embed.js`,
+      embedUrl: (): string => `${origin}/embed/v1.js`,
       /** The public submit endpoint, for a site's own form or server. */
       submitUrl: (publicKey: string): string =>
         `${origin}/api/public/forms/${encodeURIComponent(publicKey)}/submissions`,
