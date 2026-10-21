@@ -70,6 +70,8 @@ const READS: ReadonlySet<string> = new Set([
   'records.groups',
   'records.get',
   'records.activity',
+  // How long a record has sat in its current stage (a status attribute's history): a read.
+  'records.stageSince',
   'records.getTrashed',
   'records.search',
   'realtime.connectionToken',

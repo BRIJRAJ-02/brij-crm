@@ -3,7 +3,6 @@ import { Button as AriaButton, GridList, GridListItem } from 'react-aria-compone
 import { Badge } from '../../atoms/Badge/Badge.tsx';
 import { Icon } from '../../atoms/Icon/Icon.tsx';
 import type { IconName } from '../../atoms/Icon/icons.ts';
-import { VisuallyHidden } from '../../atoms/VisuallyHidden/VisuallyHidden.tsx';
 import { SortableList, SortableRowGrip } from '../../lib/drag/drag.tsx';
 import { reorder } from '../../lib/reorder.ts';
 import styles from './QuestionList.module.css';

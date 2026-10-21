@@ -102,9 +102,7 @@ function WorkspaceRoute() {
   if (heldBack !== undefined) {
     return (
       <WorkspaceLayout>
-        <WorkspacePage
-          page={signInRulesPage({ data, toasts, workspaceName, reason: heldBack })}
-        />
+        <WorkspacePage page={signInRulesPage({ data, toasts, workspaceName, reason: heldBack })} />
       </WorkspaceLayout>
     );
   }
