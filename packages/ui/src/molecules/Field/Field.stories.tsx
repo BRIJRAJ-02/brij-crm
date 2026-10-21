@@ -191,8 +191,10 @@ export const Copy: Story = {
     await expect(canvas.queryByRole('img', { name: 'Read only' })).toBeNull();
     await expect(canvas.getByRole('button', { name: 'Copy link' })).toBeInTheDocument();
     await userEvent.click(input);
-    await waitFor(() => expect(input.selectionEnd).toBe(input.value.length));
-    await expect(input.selectionStart).toBe(0);
+    await waitFor(async () => {
+      await expect(input.selectionStart).toBe(0);
+      await expect(input.selectionEnd).toBe(input.value.length);
+    });
   },
 };
 

@@ -151,6 +151,8 @@ export function Field({
   // edge in its last column, no wider than a phone's grid, over the cell when
   // the rows below run out. Placed again as the error or the window changes.
   const errorRef = useRef<HTMLElement>(null);
+  // A copy field focused by a press keeps its whole value selected through that press's mouseup.
+  const pressFocused = useRef(false);
   useLayoutEffect(() => {
     const element = errorRef.current;
     const anchor = element?.parentElement;
@@ -183,7 +185,21 @@ export function Field({
           // After the press that focused it, whose mouseup would otherwise drop the selection.
           onFocus: (event: { readonly currentTarget: HTMLInputElement | HTMLTextAreaElement }) => {
             const input = event.currentTarget;
+            pressFocused.current = true;
             requestAnimationFrame(() => input.select());
+          },
+          // A slow press lets the frame pass before its mouseup (Firefox), so that mouseup selects it all again.
+          onMouseUp: (event: {
+            readonly currentTarget: HTMLInputElement | HTMLTextAreaElement;
+            readonly preventDefault: () => void;
+          }) => {
+            if (!pressFocused.current) return;
+            pressFocused.current = false;
+            event.preventDefault();
+            event.currentTarget.select();
+          },
+          onBlur: () => {
+            pressFocused.current = false;
           },
         }
       : {}),

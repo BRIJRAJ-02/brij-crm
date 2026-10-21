@@ -64,8 +64,10 @@ test('a visitor books by chat and the host sees the conversation (spec 0041)', a
   await expect(chat.getByRole('heading', { level: 1 })).toContainText(/booked/i);
   await visitor.close();
 
-  await page.goto(`/w/${slug}/bookings`);
-  await page.getByText('Grace Hopper').first().click();
+  // The list, not the week: the offered time may fall in a later week, and a 30 minute block hides its guest's name.
+  await page.goto(`/w/${slug}/bookings/list`);
+  const row = page.getByRole('listitem').filter({ hasText: 'Grace Hopper' });
+  await row.getByRole('button', { name: 'Intro call' }).click();
   await expect(page.getByText('By chat on the booking page')).toBeVisible();
   await page.getByRole('button', { name: /^Chat/ }).click();
   await expect(page.getByText('I’m Grace Hopper, grace@navy.example')).toBeVisible();
