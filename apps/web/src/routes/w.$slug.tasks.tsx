@@ -86,7 +86,7 @@ function MyTasksError({ error }: ErrorComponentProps) {
   return (
     <WorkspacePage
       currentPage="tasks"
-      page={failedPage(strings.myTasks, () => void router.invalidate(), error, strings.failedTitle)}
+      page={failedPage(strings.tasks, () => void router.invalidate(), error, strings.failedTitle)}
     />
   );
 }

@@ -12,7 +12,7 @@ export const strings = {
   noOpenTasks: 'No open tasks. Add one above.',
   /** Overview's block with nothing open. */
   noOpenTasksShort: 'No open tasks.',
-  noCompletedTasks: 'No completed tasks yet.',
+  noCompletedTasks: 'No completed tasks yet',
   /** A task linked to a removed member keeps them, by this name (owner decision 6). */
   formerMember: 'Former member',
   /** Why a task's checkbox and fields can't be changed (AC-447). */
@@ -55,7 +55,7 @@ export const strings = {
   system: 'System',
   // My tasks (milestone 2).
   myTasks: 'My tasks',
-  /** The two switches' names, for screen readers. */
+  /** The tabs' and the switch's names, for screen readers. */
   whoseTasks: 'Whose tasks',
   taskStatus: 'Task status',
   assignedToMe: 'Assigned to me',
@@ -68,9 +68,9 @@ export const strings = {
   today: 'Today',
   upcoming: 'Upcoming',
   noDate: 'No date',
-  emptyAssigned: 'Nothing assigned to you.',
-  emptyAssignedBody: 'Tasks assigned to you show here.',
-  emptyCreated: 'You haven’t created any open tasks.',
-  emptyAll: 'No open tasks in this workspace.',
-  failedTitle: 'My tasks didn’t load',
+  emptyAssigned: 'Nothing assigned to you',
+  emptyAssignedBody: 'Tasks someone gives you show here.',
+  emptyCreated: 'No open tasks you created',
+  emptyAll: 'No open tasks',
+  failedTitle: 'Tasks didn’t load',
 } as const;
