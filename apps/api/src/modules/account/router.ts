@@ -5,9 +5,14 @@ import {
   deleteMyAccount,
   type AccountDeletionDeps,
   listMySessions,
+  type PasskeyDeps,
+  passkeyStepUpOptions,
+  removeMyPasskey,
+  renameMyPasskey,
   revokeMyOtherSessions,
   revokeMySession,
   startStepUp,
+  verifyPasskeyStepUp,
   verifyStepUp,
   type SessionCaller,
   type StepUpDeps,
@@ -50,6 +55,15 @@ function stepUpDeps(context: RequestContext): StepUpDeps {
     },
     mintCode: () => String(randomInt(0, 1_000_000)).padStart(6, '0'),
     hashCode: (code) => context.auth.hashStepUpCode(code),
+  };
+}
+
+/** What the passkey procedures need: the identity store, and sign in's passkey step up. */
+function passkeyDeps(context: RequestContext): PasskeyDeps {
+  return {
+    identity: context.identity,
+    passkeyOptions: (caller) => context.auth.passkeyStepUp.options(caller.userId, caller.sessionId),
+    checkPasskey: (caller, response) => context.auth.passkeyStepUp.check(caller.userId, caller.sessionId, response),
   };
 }
 
@@ -137,6 +151,27 @@ export const accountRouter = authed.account.router({
       );
       return verifyStepUp(stepUpDeps(context), callerOf(context), input);
     }),
+    passkeyOptions: authed.account.stepUp.passkeyOptions.handler(({ context }) =>
+      passkeyStepUpOptions(passkeyDeps(context), callerOf(context)),
+    ),
+    verifyPasskey: authed.account.stepUp.verifyPasskey.handler(async ({ context, input }) => {
+      // The same per person count as a code: a step up is never guessed at by switching method.
+      await limit(
+        context,
+        `step-up:${context.user.id}`,
+        [STEP_UP_CHECKS, STEP_UP_CHECKS_HOUR],
+        'Too many tries. Wait 15 minutes, then try again.',
+      );
+      return verifyPasskeyStepUp(passkeyDeps(context), callerOf(context), input);
+    }),
+  },
+  passkeys: {
+    rename: authed.account.passkeys.rename.handler(({ context, input }) =>
+      renameMyPasskey(passkeyDeps(context), callerOf(context), input),
+    ),
+    remove: authed.account.passkeys.remove.handler(({ context, input }) =>
+      removeMyPasskey(passkeyDeps(context), callerOf(context), input),
+    ),
   },
   deletion: {
     check: authed.account.deletion.check.handler(({ context }) =>

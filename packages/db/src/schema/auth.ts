@@ -149,6 +149,37 @@ export const twoFactor = auth.table(
   ],
 );
 
+/**
+ * A person's passkeys (spec 0033, milestone 3, Better Auth's passkey plugin):
+ * the public key only, never a secret. `credential_id` is unique across every
+ * account, so one credential can't sign in two people. `name` is the person's
+ * label (60 characters at most); `last_used_at` is ours, set on each passkey
+ * sign in and step up (AC-887).
+ */
+export const passkey = auth.table(
+  'passkey',
+  {
+    id: authId(),
+    userId: uuid('user_id').notNull(),
+    name: text('name'),
+    publicKey: text('public_key').notNull(),
+    credentialID: text('credential_id').notNull(),
+    counter: bigint('counter', { mode: 'number' }).notNull().default(0),
+    deviceType: text('device_type').notNull(),
+    backedUp: boolean('backed_up').notNull(),
+    transports: text('transports'),
+    aaguid: text('aaguid'),
+    createdAt: createdAt(),
+    lastUsedAt: timestamptz('last_used_at'),
+  },
+  (t) => [
+    uniqueIndex('passkey_credential').on(t.credentialID),
+    index('passkey_user').on(t.userId, t.createdAt),
+    check('passkey_name', sql`${t.name} is null or char_length(${t.name}) between 1 and 60`),
+    foreignKey({ name: 'passkey_user_fk', columns: [t.userId], foreignColumns: [user.id] }).onDelete('cascade'),
+  ],
+);
+
 /** A way to sign in as a user: a social provider's account (Google). No passwords are stored. */
 export const account = auth.table(
   'account',

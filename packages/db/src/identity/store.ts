@@ -17,6 +17,7 @@ import type { DatabaseOptions } from '../client.ts';
 import { timePool } from '../timing.ts';
 import {
   account,
+  passkey,
   rateLimit,
   twoFactor,
   securityEvent,
@@ -47,13 +48,40 @@ const OTP_TYPES = ['sign-in', 'email-verification', 'forget-password', 'change-e
 export const STEP_UP_CODE_TRIES = 5;
 
 /** Better Auth's models, keyed by its model names, as its Drizzle adapter looks them up. */
-const AUTH_MODELS = { user, session, account, verification, rateLimit, twoFactor } as const;
+const AUTH_MODELS = { user, session, account, verification, rateLimit, twoFactor, passkey } as const;
 
 /** A workspace as the directory knows it: enough to find it and to list it, never to enter it. */
 export interface DirectoryWorkspace {
   readonly id: string;
   readonly slug: string;
   readonly name: string;
+}
+
+/** One passkey as Account › Security lists it (spec 0033, AC-887): never its key or credential id. */
+export interface IdentityPasskey {
+  readonly id: string;
+  /** The person's label; undefined until they name it. */
+  readonly name: string | undefined;
+  /** ISO 8601 UTC. */
+  readonly createdAt: string;
+  /** ISO 8601 UTC; undefined until it is first used. */
+  readonly lastUsedAt: string | undefined;
+}
+
+/** A passkey's credential, as a step up's challenge names it. */
+export interface PasskeyCredential {
+  readonly credentialId: string;
+  readonly transports: readonly string[];
+}
+
+/** A passkey as a step up checks it: whose it is, its public key (base64) and signature counter. */
+export interface StoredPasskey {
+  readonly id: string;
+  readonly userId: string;
+  readonly credentialId: string;
+  readonly publicKey: string;
+  readonly counter: number;
+  readonly transports: readonly string[];
 }
 
 /** A person who can sign in. `name` is empty until they give one. */
@@ -174,7 +202,7 @@ export interface IdentityStore {
    * the user row (its sessions, Google link, two factor, preferences,
    * directory rows and security history go with it, by their foreign keys),
    * then the rows no key reaches: remembered devices, held back sign ins,
-   * step up codes, sign in codes for the address, and the address's rate
+   * step up codes and passkey challenges, sign in codes for the address, and the address's rate
    * limit rows. One transaction. True when there was a user to delete.
    */
   deleteUser(userId: string): Promise<boolean>;
@@ -185,6 +213,26 @@ export interface IdentityStore {
    * set up and checked; the encrypted secret and codes never leave here.
    */
   twoFactorState(userId: string): Promise<{ readonly enabled: boolean; readonly appVerified: boolean }>;
+  /** The user's passkeys, oldest first (AC-887): name, made and last used. Never a key. */
+  listPasskeys(userId: string): Promise<readonly IdentityPasskey[]>;
+  /** Whether the user has at least one passkey. */
+  hasPasskey(userId: string): Promise<boolean>;
+  /** Renames one of the user's passkeys. False when it isn't theirs or is gone. */
+  renamePasskey(userId: string, passkeyId: string, name: string): Promise<boolean>;
+  /** Removes one of the user's passkeys. False when it isn't theirs or is gone. */
+  removePasskey(userId: string, passkeyId: string): Promise<boolean>;
+  /** The user's passkey credentials, for a step up's challenge: credential ids and transports only. */
+  passkeyCredentials(userId: string): Promise<readonly PasskeyCredential[]>;
+  /** One passkey by its credential id, with its public key and counter, to check a step up's answer. */
+  passkeyByCredential(credentialId: string): Promise<StoredPasskey | undefined>;
+  /** Saves a passkey's new signature counter after a step up, and notes it was just used. */
+  passkeyUsed(passkeyId: string, counter: number): Promise<void>;
+  /** Keeps a passkey step up's challenge for one session, replacing any earlier one. */
+  putPasskeyChallenge(sessionId: string, challenge: string, expiresAt: Date): Promise<void>;
+  /** Takes (and uses up) this session's live passkey challenge, or undefined. */
+  takePasskeyChallenge(sessionId: string): Promise<string | undefined>;
+  /** Notes that a passkey of the user just signed in or stepped up (AC-887). */
+  touchPasskey(userId: string, credentialId: string): Promise<void>;
   /**
    * Keeps a step up email code for one session (AC-896), hashed, for
    * `STEP_UP_CODE_MINUTES`, replacing any earlier one.
@@ -402,6 +450,7 @@ export function createIdentityStore(options: DatabaseOptions): IdentityStore {
         await tx.delete(verification).where(
           sql`${verification.value} = ${userId}
               or ${verification.identifier} in (select 'step-up-' || ${session.id}::text from ${session} where ${session.userId} = ${userId})
+              or ${verification.identifier} in (select 'step-up-passkey-' || ${session.id}::text from ${session} where ${session.userId} = ${userId})
               or ${verification.identifier} in (${sql.join(
                 OTP_TYPES.map((type) => sql`${`${type}-otp-${email}`}`),
                 sql`, `,
@@ -440,6 +489,116 @@ export function createIdentityStore(options: DatabaseOptions): IdentityStore {
         .where(eq(user.id, userId))
         .limit(1);
       return { enabled: row?.enabled ?? false, appVerified: row?.verified ?? false };
+    },
+
+    async listPasskeys(userId) {
+      if (!UUID.test(userId)) return [];
+      const rows = await db
+        .select({
+          id: passkey.id,
+          name: passkey.name,
+          createdAt: passkey.createdAt,
+          lastUsedAt: passkey.lastUsedAt,
+        })
+        .from(passkey)
+        .where(eq(passkey.userId, userId))
+        .orderBy(asc(passkey.createdAt), asc(passkey.id));
+      return rows.map((row) => ({
+        id: row.id,
+        name: row.name ?? undefined,
+        createdAt: row.createdAt.toISOString(),
+        lastUsedAt: row.lastUsedAt?.toISOString(),
+      }));
+    },
+
+    async hasPasskey(userId) {
+      if (!UUID.test(userId)) return false;
+      const [row] = await db.select({ id: passkey.id }).from(passkey).where(eq(passkey.userId, userId)).limit(1);
+      return row !== undefined;
+    },
+
+    async renamePasskey(userId, passkeyId, name) {
+      if (!UUID.test(userId) || !UUID.test(passkeyId)) return false;
+      const renamed = await db
+        .update(passkey)
+        .set({ name })
+        .where(and(eq(passkey.id, passkeyId), eq(passkey.userId, userId)))
+        .returning({ id: passkey.id });
+      return renamed.length > 0;
+    },
+
+    async removePasskey(userId, passkeyId) {
+      if (!UUID.test(userId) || !UUID.test(passkeyId)) return false;
+      const removed = await db
+        .delete(passkey)
+        .where(and(eq(passkey.id, passkeyId), eq(passkey.userId, userId)))
+        .returning({ id: passkey.id });
+      return removed.length > 0;
+    },
+
+    async passkeyCredentials(userId) {
+      if (!UUID.test(userId)) return [];
+      const rows = await db
+        .select({ credentialId: passkey.credentialID, transports: passkey.transports })
+        .from(passkey)
+        .where(eq(passkey.userId, userId))
+        .orderBy(asc(passkey.createdAt));
+      return rows.map((row) => ({
+        credentialId: row.credentialId,
+        transports: (row.transports ?? '').split(',').filter((each) => each !== ''),
+      }));
+    },
+
+    async passkeyByCredential(credentialId) {
+      const [row] = await db
+        .select({
+          id: passkey.id,
+          userId: passkey.userId,
+          credentialId: passkey.credentialID,
+          publicKey: passkey.publicKey,
+          counter: passkey.counter,
+          transports: passkey.transports,
+        })
+        .from(passkey)
+        .where(eq(passkey.credentialID, credentialId))
+        .limit(1);
+      if (row === undefined) return undefined;
+      return { ...row, transports: (row.transports ?? '').split(',').filter((each) => each !== '') };
+    },
+
+    async passkeyUsed(passkeyId, counter) {
+      if (!UUID.test(passkeyId)) return;
+      await db
+        .update(passkey)
+        .set({ counter, lastUsedAt: sql`now()` })
+        .where(eq(passkey.id, passkeyId));
+    },
+
+    async putPasskeyChallenge(sessionId, challenge, expiresAt) {
+      if (!UUID.test(sessionId)) return;
+      const identifier = `step-up-passkey-${sessionId}`;
+      await db.transaction(async (tx) => {
+        await tx.delete(verification).where(eq(verification.identifier, identifier));
+        await tx.insert(verification).values({ identifier, value: challenge, expiresAt });
+      });
+    },
+
+    async takePasskeyChallenge(sessionId) {
+      if (!UUID.test(sessionId)) return undefined;
+      const taken = await db
+        .delete(verification)
+        .where(eq(verification.identifier, `step-up-passkey-${sessionId}`))
+        .returning({ value: verification.value, expiresAt: verification.expiresAt });
+      const live = taken.find((row) => row.expiresAt > new Date());
+      return live?.value;
+    },
+
+    async touchPasskey(userId, credentialId) {
+      if (!UUID.test(userId)) return;
+      await db
+        .update(passkey)
+        .set({ lastUsedAt: sql`now()` })
+        .where(and(eq(passkey.credentialID, credentialId), eq(passkey.userId, userId)));
     },
 
     async putStepUpCode(sessionId, codeHash, expiresAt) {

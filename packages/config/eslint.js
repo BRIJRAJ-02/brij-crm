@@ -98,6 +98,9 @@ const vendorSdks = {
         'better-auth',
         'better-auth/*',
         '@better-auth/*',
+        // WebAuthn (spec 0033, passkeys): the server checks only in apps/api/src/auth/passkey.ts; the browser
+        // ceremony only in packages/data/src/auth/.
+        '@simplewebauthn/*',
         // The job queue (spec 0008): only apps/api/src/jobs/graphile.ts (the runners) and
         // packages/db/src/migrations.ts (its schema migrations).
         'graphile-worker',

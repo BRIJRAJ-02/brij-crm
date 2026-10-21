@@ -20,7 +20,12 @@ import type { SessionCaller } from './sessions.ts';
 export interface StepUpDeps {
   readonly identity: Pick<
     IdentityStore,
-    'sessionVerification' | 'markSessionVerified' | 'twoFactorState' | 'putStepUpCode' | 'checkStepUpCode'
+    | 'sessionVerification'
+    | 'markSessionVerified'
+    | 'twoFactorState'
+    | 'putStepUpCode'
+    | 'checkStepUpCode'
+    | 'listPasskeys'
   >;
   /** Checks an app code or a backup code (a backup code is used up). Never throws for a wrong code. */
   readonly checkSecondFactor: (userId: string, method: 'totp' | 'backup', code: string) => Promise<boolean>;
@@ -88,15 +93,22 @@ export async function requireFresh(
   }
 }
 
-/** Account › Security's state: two factor, backup codes left, and this session's freshness (AC-881, AC-883). */
+/** Account › Security's state: two factor, backup codes left, passkeys, and this session's freshness (AC-881, AC-887). */
 export async function accountSecurity(deps: StepUpDeps, caller: SessionCaller): Promise<AccountSecurity> {
-  const [state, session] = await Promise.all([
+  const [state, session, passkeys] = await Promise.all([
     deps.identity.twoFactorState(caller.userId),
     sessionFreshness(deps, caller),
+    deps.identity.listPasskeys(caller.userId),
   ]);
   const left = state.enabled ? await deps.backupCodesLeft(caller.userId) : undefined;
   return {
     twoFactor: { on: state.enabled, ...(left === undefined ? {} : { backupCodesLeft: left }) },
+    passkeys: passkeys.map((each) => ({
+      id: each.id,
+      createdAt: each.createdAt,
+      ...(each.name === undefined ? {} : { name: each.name }),
+      ...(each.lastUsedAt === undefined ? {} : { lastUsedAt: each.lastUsedAt }),
+    })),
     session,
   };
 }

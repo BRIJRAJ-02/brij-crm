@@ -231,12 +231,16 @@ describe('the body limit on /api/auth', () => {
 describe('the Better Auth routes the API serves', () => {
   const app = createTestApp();
 
-  it('serves exactly the reviewed list (spec 0033, AC-900)', () => {
+  it('serves exactly the reviewed list (spec 0033, AC-900, and milestone 3 passkeys)', () => {
     expect([...AUTH_ROUTES].sort()).toEqual(
       [
         '/callback/google',
         '/email-otp/send-verification-otp',
         '/get-session',
+        '/passkey/generate-authenticate-options',
+        '/passkey/generate-register-options',
+        '/passkey/verify-authentication',
+        '/passkey/verify-registration',
         '/sign-in/email-otp',
         '/sign-in/social',
         '/sign-out',

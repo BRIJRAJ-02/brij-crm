@@ -463,6 +463,12 @@ function fakeApi(overrides: Partial<Behaviour> = {}, auth: (path: string, body: 
       stepUp: {
         start: os.account.stepUp.start.handler(notServed),
         verify: os.account.stepUp.verify.handler(notServed),
+        passkeyOptions: os.account.stepUp.passkeyOptions.handler(notServed),
+        verifyPasskey: os.account.stepUp.verifyPasskey.handler(notServed),
+      },
+      passkeys: {
+        rename: os.account.passkeys.rename.handler(notServed),
+        remove: os.account.passkeys.remove.handler(notServed),
       },
       deletion: {
         check: os.account.deletion.check.handler(notServed),

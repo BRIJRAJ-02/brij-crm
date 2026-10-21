@@ -12,6 +12,7 @@
     "test": "vitest run"
   },
   "dependencies": {
+    "@better-auth/passkey": "catalog:",
     "@crm/contracts": "workspace:*",
     "@crm/core": "workspace:*",
     "@crm/db": "workspace:*",
@@ -19,6 +20,7 @@
     "@hono/node-server": "catalog:",
     "@orpc/server": "catalog:",
     "@sentry/node": "catalog:",
+    "@simplewebauthn/server": "catalog:",
     "better-auth": "catalog:",
     "free-email-domains": "catalog:",
     "graphile-worker": "catalog:",

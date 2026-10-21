@@ -5,7 +5,15 @@
 // API sees only `Auth`.
 import { createHmac } from 'node:crypto';
 import { isIP } from 'node:net';
-import { EmailValue, emailDomain, errorStatus, type SignInMethod, type SignInProviders } from '@crm/contracts';
+import {
+  EmailValue,
+  emailDomain,
+  errorStatus,
+  PasskeyAssertion,
+  PasskeyName,
+  type SignInMethod,
+  type SignInProviders,
+} from '@crm/contracts';
 import { renderSignInCode, SIGN_IN_CODE_MINUTES } from '@crm/emails';
 import type { SignUpMethod } from '@crm/contracts/events';
 import type { IdentityStore, SecurityEventInput } from '@crm/db';
@@ -15,6 +23,7 @@ import { deleteSessionCookie, expireCookie } from 'better-auth/cookies';
 import { generateRandomString, symmetricDecrypt, symmetricEncrypt } from 'better-auth/crypto';
 import { emailOTP } from 'better-auth/plugins/email-otp';
 import { twoFactor } from 'better-auth/plugins/two-factor';
+import { passkey } from '@better-auth/passkey';
 import * as z from 'zod';
 import { deviceLabel, FRESH_MESSAGE, SECOND_FACTOR_MESSAGE, sessionFreshness } from '@crm/core';
 import type { ApiEnv } from '../env.ts';
@@ -25,6 +34,7 @@ import { type Analytics, NO_ANALYTICS } from '../monitoring/posthog.ts';
 import { captureFault } from '../monitoring/sentry.ts';
 import { scrubText } from '@crm/contracts/monitoring';
 import { createAllowlist } from './allowlist.ts';
+import { createPasskeyStepUp, type PasskeyStepUp, userVerified } from './passkey.ts';
 import { authErrorResponse } from './errors.ts';
 import {
   BACKUP_CODE_COUNT,
@@ -97,11 +107,29 @@ function perTrustedIp(rule?: Rule) {
 
 const DAY_SECONDS = 24 * 60 * 60;
 
+/** Where a passkey signs in (spec 0033, AC-888): its session counts as two factor. */
+export const PASSKEY_SIGN_IN_PATH = '/passkey/verify-authentication';
+
+/** The most passkeys one account keeps. */
+export const PASSKEYS_MAX = 20;
+
+/**
+ * The passkey plugin's routes the API serves (spec 0033, milestone 3): adding
+ * one (options, then the browser's answer) and signing in with one. Listing,
+ * renaming and removing go through `account.passkeys.*` and `account.security.get`.
+ */
+const PASSKEY_ROUTES = [
+  '/passkey/generate-register-options',
+  '/passkey/verify-registration',
+  '/passkey/generate-authenticate-options',
+  PASSKEY_SIGN_IN_PATH,
+];
+
 /**
  * The only Better Auth routes the API serves (after `AUTH_BASE_PATH`): send a
  * code, sign in by code, Google's sign in and its callback, sign out, the
  * session read, and two factor's setup, turning off, new backup codes and the
- * second step (spec 0033, AC-900). Sign out deletes its own session, so the
+ * second step (spec 0033, AC-900), and adding or signing in with a passkey. Sign out deletes its own session, so the
  * revoke routes stay shut. Everything else Better Auth offers (changing the
  * user, listing or revoking sessions, linking accounts, the email second
  * factor) answers 404, so a route we never reviewed can't be reached.
@@ -114,6 +142,7 @@ export const AUTH_ROUTES: ReadonlySet<string> = new Set([
   '/sign-out',
   '/get-session',
   ...TWO_FACTOR_ROUTES,
+  ...PASSKEY_ROUTES,
 ]);
 
 /** The callback route as Better Auth's hooks name it (every provider's). */
@@ -135,6 +164,10 @@ const DISABLED_PATHS = [
   '/email-otp/request-email-change',
   '/email-otp/change-email',
   ...TWO_FACTOR_DISABLED_PATHS,
+  // Our own procedures list, rename and remove passkeys (a removal needs a step up).
+  '/passkey/list-user-passkeys',
+  '/passkey/delete-passkey',
+  '/passkey/update-passkey',
 ];
 
 /** The signed in person, as their session says. */
@@ -176,6 +209,8 @@ export interface Auth {
   backupCodesLeft(userId: string): Promise<number | undefined>;
   /** A step up email code as kept: keyed with the server's secret, so the table never yields a code. */
   hashStepUpCode(code: string): string;
+  /** A step up by passkey (AC-896): a challenge for one session, and its answer checked once. */
+  readonly passkeyStepUp: PasskeyStepUp;
 }
 
 /** What sign in needs: the environment, the identity store (its database), and a mailer for codes. */
@@ -341,6 +376,7 @@ function libraryDetail(message: unknown): string {
 
 /** How a session was made, from the route that made it (spec 0033's sign in events): undefined for any other. */
 export function signInMethod(route: string | undefined): SignInMethod | undefined {
+  if (route === PASSKEY_SIGN_IN_PATH) return 'passkey';
   const method = signUpMethod(route);
   return method === undefined ? undefined : method;
 }
@@ -355,6 +391,12 @@ const EnableBody = z.strictObject({ method: z.literal('totp').optional() });
 
 /** What a second step's backup code may send: the code, and whether to remember the device. */
 const SecondStepBody = z.strictObject({ code: z.string().max(40), trustDevice: z.boolean().optional() });
+
+/** What adding a passkey may send: the browser's answer, and the person's label for it. Never `createSession`. */
+const PasskeyRegistrationBody = z.strictObject({
+  response: z.record(z.string(), z.unknown()),
+  name: PasskeyName.optional(),
+});
 
 /** Whether a session's user has two factor on (the plugin's field on Better Auth's loose user). */
 function isTwoFactorUser(user: unknown): boolean {
@@ -419,6 +461,18 @@ export function createAuth({ env, identity, mailer, analytics = NO_ANALYTICS, in
     },
   });
 
+  // Passkeys (spec 0033, milestone 3): the relying party is the web app's host and origin (AC-889), so a preview's
+  // passkey never signs in to production. A passkey must verify the person (fingerprint, face or PIN): it is
+  // something they have plus something they are or know, so it signs in alone (owner decision 3).
+  const appUrl = new URL(env.APP_URL);
+  const passkeyPlugin = passkey({
+    rpID: appUrl.hostname,
+    rpName: 'Timefix',
+    origin: appOrigin,
+    authenticatorSelection: { residentKey: 'required', userVerification: 'required' },
+  });
+  const passkeyStepUp = createPasskeyStepUp({ identity, rpID: appUrl.hostname, origin: appOrigin });
+
   /** Refuses a two factor change unless this session proved who it is lately (AC-896), with a second factor when asked. */
   async function requireFreshSession(
     userId: string,
@@ -477,6 +531,9 @@ export function createAuth({ env, identity, mailer, analytics = NO_ANALYTICS, in
     disabledPaths: DISABLED_PATHS,
     session: {
       expiresIn: 30 * DAY_SECONDS,
+      // Our own step up (`verified_at`, 10 minutes) guards sensitive routes; Better Auth's day long "fresh"
+      // check would refuse adding a passkey on any session older than a day, even right after a step up.
+      freshAge: 0,
       updateAge: DAY_SECONDS,
       // Read every session from the database, so signing out or revoking takes effect at once.
       cookieCache: { enabled: false },
@@ -506,6 +563,7 @@ export function createAuth({ env, identity, mailer, analytics = NO_ANALYTICS, in
         [SEND_CODE_PATH]: perTrustedIp(CODE_SENDS_PER_IP),
         '/sign-in/*': perTrustedIp(SIGN_INS_PER_IP),
         '/two-factor/*': perTrustedIp(TWO_FACTOR_PER_IP),
+        '/passkey/*': perTrustedIp(TWO_FACTOR_PER_IP),
         '/**': perTrustedIp(),
       },
     },
@@ -546,7 +604,11 @@ export function createAuth({ env, identity, mailer, analytics = NO_ANALYTICS, in
                 city: geo?.city ?? null,
                 verifiedAt: new Date(),
                 // The second step of a sign in proves a second factor; an email code or Google alone, the email.
-                verifiedWith: context?.path.startsWith('/two-factor/verify-') === true ? 'second_factor' : 'email',
+                // A passkey verifies the person on the device, so its sign in counts as two factor (AC-888).
+                verifiedWith:
+                  context?.path.startsWith('/two-factor/verify-') === true || context?.path === PASSKEY_SIGN_IN_PATH
+                    ? 'second_factor'
+                    : 'email',
               },
             });
           },
@@ -626,6 +688,48 @@ export function createAuth({ env, identity, mailer, analytics = NO_ANALYTICS, in
             code: 'INPUT_INVALID',
             message: 'Sign in with Google from its own page.',
           });
+        }
+        // Passkeys (spec 0033, milestone 3): adding one needs a recent check (by a second factor while two factor is
+        // on, since a passkey signs in alone); signing in with one is for someone not signed in, and only a passkey
+        // that verified the person counts.
+        if (ctx.path.startsWith('/passkey/')) {
+          const current = await getSessionFromCtx(ctx);
+          if (ctx.path === '/passkey/generate-register-options' || ctx.path === '/passkey/verify-registration') {
+            if (current === null) {
+              throw new APIError('UNAUTHORIZED', { code: 'UNAUTHENTICATED', message: 'Sign in first.' });
+            }
+            const userId = current.user.id;
+            if (ctx.path === '/passkey/verify-registration' && !PasskeyRegistrationBody.safeParse(ctx.body).success) {
+              throw inputInvalid();
+            }
+            const state = await identity.twoFactorState(userId);
+            await requireFreshSession(userId, current.session.id, { secondFactor: state.enabled });
+            if (
+              ctx.path === '/passkey/generate-register-options' &&
+              (await identity.listPasskeys(userId)).length >= PASSKEYS_MAX
+            ) {
+              throw new APIError('BAD_REQUEST', {
+                code: 'INPUT_INVALID',
+                message: `You have ${String(PASSKEYS_MAX)} passkeys, the most an account keeps. Remove one first.`,
+              });
+            }
+            return;
+          }
+          if (current !== null) {
+            throw new APIError('BAD_REQUEST', { code: 'INPUT_INVALID', message: 'You’re already signed in.' });
+          }
+          if (ctx.path === PASSKEY_SIGN_IN_PATH) {
+            const body = z.strictObject({ response: PasskeyAssertion }).safeParse(ctx.body);
+            if (!body.success) throw inputInvalid();
+            if (!userVerified(body.data.response.response.authenticatorData)) {
+              throw new APIError('BAD_REQUEST', {
+                code: 'INPUT_INVALID',
+                message:
+                  'Your passkey needs your fingerprint, face or device PIN. Try again and confirm on your device.',
+              });
+            }
+          }
+          return;
         }
         // Two factor's routes from a browser (spec 0033): setup and new codes need a recent check, turning off a
         // second factor's (AC-885, AC-896); the second step's routes are only for a sign in held back for one. A call
@@ -729,8 +833,27 @@ export function createAuth({ env, identity, mailer, analytics = NO_ANALYTICS, in
       }),
       // Two factor changes and backup code sign ins, kept in the account's security history (AC-898). Never a code.
       after: createAuthMiddleware(async (ctx) => {
-        if (!ctx.path.startsWith('/two-factor/') || ctx.request === undefined) return;
-        if (ctx.context.returned instanceof Error) return;
+        if (ctx.request === undefined || ctx.context.returned instanceof Error) return;
+        if (ctx.path === '/passkey/verify-registration' && ctx.context.session !== null) {
+          await keepEvent({
+            userId: ctx.context.session.user.id,
+            kind: 'passkey_added',
+            sessionId: ctx.context.session.session.id,
+          });
+          return;
+        }
+        if (ctx.path === PASSKEY_SIGN_IN_PATH && ctx.context.newSession !== null) {
+          const body = z.object({ response: z.object({ id: z.string() }) }).safeParse(ctx.body);
+          if (body.success) {
+            await identity
+              .touchPasskey(ctx.context.newSession.user.id, body.data.response.id)
+              .catch((error: unknown) => {
+                log.error('Passkey use not noted', { error: error instanceof Error ? error.name : typeof error });
+              });
+          }
+          return;
+        }
+        if (!ctx.path.startsWith('/two-factor/')) return;
         const userId = ctx.context.newSession?.user.id ?? ctx.context.session?.user.id;
         if (userId === undefined) return;
         const sessionId = ctx.context.newSession?.session.id ?? ctx.context.session?.session.id;
@@ -755,6 +878,7 @@ export function createAuth({ env, identity, mailer, analytics = NO_ANALYTICS, in
         sendVerificationOTP: sendCode,
       }),
       twoFactorPlugin,
+      passkeyPlugin,
       {
         // The plugin holds a session back only on password sign ins; this app signs in by email code and Google, so
         // the same hold runs after those (spec 0033's milestone 2 spike, AC-882). A remembered device passes.
@@ -889,6 +1013,8 @@ export function createAuth({ env, identity, mailer, analytics = NO_ANALYTICS, in
     hashStepUpCode(code) {
       return createHmac('sha256', env.BETTER_AUTH_SECRET).update(`step-up:${code}`).digest('hex');
     },
+
+    passkeyStepUp,
 
     async backupCodesLeft(userId) {
       const row = await twoFactorRow(userId);

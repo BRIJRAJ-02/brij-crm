@@ -27,6 +27,7 @@ function setup(state: { enabled: boolean; verification?: SessionVerification }) 
         return Promise.resolve();
       },
       checkStepUpCode: (session, hash) => Promise.resolve(codes.get(session) === hash ? 'ok' : 'wrong'),
+      listPasskeys: () => Promise.resolve([]),
     },
     checkSecondFactor: (_user, _method, code) => Promise.resolve(code === '123456'),
     backupCodesLeft: () => Promise.resolve(10),
