@@ -2,9 +2,10 @@
 // Preferences): time zone, date format, week start and landing page. One
 // copy per workspace, read once and shared by every screen that formats a
 // date and by the workspace's opening redirect. A change shows at once, is
-// sent, and is put back with a toast if refused; an answer to an older change
-// never undoes a newer one. Only the member holds their preferences, so no
-// live event carries them: another device's change shows on its next read.
+// sent (one after another), and is put back with a toast if refused; a refusal
+// drops only its own change. Only the member holds their preferences, so no
+// live event carries them: another device's change shows when a screen next
+// holds them.
 import type { MemberPreferences, UpdatePreferencesInput } from '@crm/contracts';
 import { refusalSummary, toDataError } from '../errors.ts';
 import type { Notice } from '../notice.ts';
@@ -60,22 +61,33 @@ export function createPreferencesStore(deps: PreferencesDeps) {
   function make(workspace: string) {
     let state: PreferencesState = { status: 'loading' };
     let reading: Promise<MemberPreferences> | undefined;
-    // What the server last said, and the newest change sent: an older answer never undoes a newer change.
+    // What the server last said, and the changes still on their way, oldest first. The screen shows the changes
+    // over the server's copy; changes go out one after another, so the server applies them in the order made, and
+    // a refusal drops only its own change.
     let confirmed: MemberPreferences | undefined;
-    let sent = 0;
+    let inFlight: readonly { readonly id: number; readonly change: PreferencesChange }[] = [];
+    let queue: Promise<unknown> = Promise.resolve();
+    let made = 0;
     const listeners = new Set<() => void>();
     const set = (next: PreferencesState) => {
       state = next;
       for (const listener of listeners) listener();
+    };
+    const show = () => {
+      if (confirmed === undefined) return;
+      set({
+        status: 'ready',
+        preferences: inFlight.reduce((shown, each) => applyChange(shown, each.change), confirmed),
+      });
     };
     const read = (): Promise<MemberPreferences> => {
       reading ??= deps.api
         .get({ workspace })
         .then(
           (answer) => {
+            // A change on its way keeps what it shows: it is laid over the answer.
             confirmed = answer;
-            // A change on its way keeps what it shows until its own answer lands.
-            if (state.status !== 'ready' || sent === 0) set({ status: 'ready', preferences: answer });
+            show();
             return answer;
           },
           (error: unknown) => {
@@ -96,28 +108,34 @@ export function createPreferencesStore(deps: PreferencesDeps) {
       },
       getSnapshot: () => state,
       retain() {
-        if (state.status !== 'ready') void read().catch(() => undefined);
+        // Read again whenever a screen holds them, so another device's change shows on the next visit.
+        void read().catch(() => undefined);
         return () => undefined;
       },
       /** The preferences, read once: a route loader awaits it (and the opening redirect reads it). */
       load(): Promise<MemberPreferences> {
         return state.status === 'ready' ? Promise.resolve(state.preferences) : read();
       },
-      async change(change: PreferencesChange): Promise<boolean> {
-        if (state.status !== 'ready') return false;
-        sent += 1;
-        const mine = sent;
-        set({ status: 'ready', preferences: applyChange(state.preferences, change) });
-        try {
-          const answer = await deps.api.update({ workspace, ...change, mutationId: deps.mintId() });
-          confirmed = answer;
-          if (mine === sent) set({ status: 'ready', preferences: answer });
-          return true;
-        } catch (error) {
-          if (mine === sent && confirmed !== undefined) set({ status: 'ready', preferences: confirmed });
-          deps.notify({ tone: 'danger', message: refusalSummary(toDataError(error)) });
-          return false;
-        }
+      change(change: PreferencesChange): Promise<boolean> {
+        if (state.status !== 'ready') return Promise.resolve(false);
+        made += 1;
+        const id = made;
+        inFlight = [...inFlight, { id, change }];
+        show();
+        const sending = queue.then(async () => {
+          try {
+            confirmed = await deps.api.update({ workspace, ...change, mutationId: deps.mintId() });
+            return true;
+          } catch (error) {
+            deps.notify({ tone: 'danger', message: refusalSummary(toDataError(error)) });
+            return false;
+          } finally {
+            inFlight = inFlight.filter((each) => each.id !== id);
+            show();
+          }
+        });
+        queue = sending;
+        return sending;
       },
     };
   }

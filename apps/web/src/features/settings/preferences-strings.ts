@@ -13,7 +13,6 @@ export const strings = {
   dates: 'Dates and time',
   timeZone: 'Time zone',
   timeZoneDescription: 'Dates and times across the app show in this zone.',
-  browserZone: (zone: string) => `This browser’s (${zone})`,
   dateFormat: 'Date format',
   weekStart: 'Week starts on',
   automatic: (example: string) => `Automatic (${example})`,
@@ -22,13 +21,18 @@ export const strings = {
   saturday: 'Saturday',
   /** Where the workspace opens. */
   startPage: 'Start page',
-  landing: 'Open the workspace on',
-  landingDescription: 'Where you land after signing in.',
-  home: 'Home',
+  landing: 'Open on',
+  landingDescription: 'The page this workspace opens on.',
+  /** Becomes "Home" once the Home page lands (the home lane): the workspace opens on its first object until then. */
+  home: 'First object in the sidebar',
   tasks: 'Tasks',
   /** The save toast and its Undo. */
   saved: 'Preferences saved',
   undo: 'Undo',
+  undone: 'Change undone',
+  /** A failed read. */
+  failed: 'Your preferences didn’t load.',
+  tryAgain: 'Try again',
   /** The sidebar (spec 0034): what it shows, kept for the person on every device. */
   sidebar: 'Sidebar',
   sidebarDescription: 'Kept for you on every device.',

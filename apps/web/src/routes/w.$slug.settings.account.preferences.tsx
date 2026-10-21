@@ -25,6 +25,7 @@ function PreferencesRoute() {
       objects={objects ?? []}
       onChange={(change) => data.preferences.change(slug, change)}
       toasts={toasts}
+      onRetry={() => void data.preferences.load(slug).catch(() => undefined)}
       customiseSidebar={<CustomiseSidebarButton data={data} slug={slug} objects={objects ?? []} />}
     />
   );
