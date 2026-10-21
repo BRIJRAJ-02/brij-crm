@@ -153,6 +153,7 @@ describe('@crm/ui', () => {
       'TagList',
       'TaskList',
       'ThemeSwitch',
+      'TileGrid',
       'ToggleButton',
       'Toolbar',
       'Tooltip',

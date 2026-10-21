@@ -19,8 +19,11 @@ export interface BookingListRow {
   readonly title: string;
   /** The visitor's note, quoted and cut to one line. */
   readonly note?: string;
-  /** The visitor's name, after "You and", linked to their person when `guestHref` is given. */
-  readonly guestName: string;
+  /**
+   * The visitor's name, after "You and", linked to their person when `guestHref` is given. Left out for one
+   * of the member's own calendar events (Home's Today), which has no visitor: the row has no "You and" line.
+   */
+  readonly guestName?: string;
   readonly guestHref?: string;
   /** A state worth saying ("Cancelled"). */
   readonly badge?: string;
@@ -81,10 +84,12 @@ export function BookingList({ label, groups, onOpen, emptyState }: BookingListPr
                     {row.badge !== undefined && <Badge text={row.badge} />}
                   </div>
                   {row.note !== undefined && <span className={styles.note}>{strings.quoted(row.note)}</span>}
-                  <span className={styles.who}>
-                    {strings.youAnd}{' '}
-                    {row.guestHref === undefined ? row.guestName : <Link href={row.guestHref}>{row.guestName}</Link>}
-                  </span>
+                  {row.guestName !== undefined && (
+                    <span className={styles.who}>
+                      {strings.youAnd}{' '}
+                      {row.guestHref === undefined ? row.guestName : <Link href={row.guestHref}>{row.guestName}</Link>}
+                    </span>
+                  )}
                 </div>
                 {row.actions !== undefined && <div className={styles.actions}>{row.actions}</div>}
               </li>

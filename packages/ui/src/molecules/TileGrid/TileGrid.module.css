@@ -1,0 +1,11 @@
+/* TileGrid: an auto fit grid of tiles, each track at least the panel's width (never wider than the grid, so
+   a phone gets one column with no overflow), tiles keeping their own height. */
+@layer components {
+  .root {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(min(var(--size-panel), 100%), 1fr));
+    align-items: start;
+    gap: var(--space-16);
+    min-inline-size: 0;
+  }
+}

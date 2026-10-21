@@ -42,6 +42,8 @@ import {
   type WeekCalendarBlock,
 } from '@crm/ui';
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { providerOf } from './provider.ts';
+import { useNow } from './useNow.ts';
 import { createPortal } from 'react-dom';
 import { browserZone } from '../booking/zone.ts';
 import { availabilityHref } from '../booking/links.ts';
@@ -76,20 +78,6 @@ export const TABS: readonly BookingsTab[] = ['upcoming', 'past', 'cancelled'];
 
 /** Each connection's hue, in the order they were connected. */
 const CALENDAR_HUES: readonly Hue[] = ['blue', 'green', 'purple', 'orange', 'sky', 'yellow', 'red', 'lime'];
-
-/** Who provides a meeting link, from its host. */
-function providerOf(url: string): string {
-  let host: string;
-  try {
-    host = new URL(url).hostname;
-  } catch {
-    return strings.providers.other;
-  }
-  if (host === 'meet.google.com') return strings.providers.google;
-  if (host.endsWith('teams.microsoft.com') || host.endsWith('teams.live.com')) return strings.providers.microsoft;
-  if (host === 'zoom.us' || host.endsWith('.zoom.us')) return strings.providers.zoom;
-  return strings.providers.other;
-}
 
 /** Where a booking happens, as a line. */
 function whereOf(booking: BookingListItem): string {
@@ -347,28 +335,6 @@ function BlockCard({
 function Toolbar({ children }: { readonly children: ReactNode }) {
   const slot = useBookingsToolbarSlot();
   return slot === null ? <>{children}</> : createPortal(children, slot);
-}
-
-/** The minute now, kept up to date while the week shows: on the minute, and when the tab is shown again. */
-function useNow(): Date {
-  const [now, setNow] = useState(() => new Date());
-  useEffect(() => {
-    let timer: ReturnType<typeof setTimeout>;
-    const tick = () => {
-      setNow(new Date());
-      timer = setTimeout(tick, 60_000 - (Date.now() % 60_000));
-    };
-    timer = setTimeout(tick, 60_000 - (Date.now() % 60_000));
-    const onVisible = () => {
-      if (document.visibilityState === 'visible') setNow(new Date());
-    };
-    document.addEventListener('visibilitychange', onVisible);
-    return () => {
-      clearTimeout(timer);
-      document.removeEventListener('visibilitychange', onVisible);
-    };
-  }, []);
-  return now;
 }
 
 /** A drawn span to close, as the data layer takes it. */

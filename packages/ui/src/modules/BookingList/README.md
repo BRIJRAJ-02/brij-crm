@@ -20,6 +20,7 @@ New. The alignment asks for rows under grey day bands ("TODAY"), each with a dat
 - The title is a ghost Button; `onOpen` gets the row's id.
 - `guestHref` links the guest's name to their person; without it the name is text.
 - `badge` ("Cancelled") is a Badge after the title.
+- `guestName` left out (one of the member's own calendar events, Home's Today, spec 0041) leaves out the "You and" line. Why a variant: Today lists bookings and calendar events in one day's order, and an event has no visitor; a second list for the same rows would split one day in two.
 - `actions` sits at the row's end (Cancel, an Edit menu), passed in by the screen.
 - The band's label shows in small capitals (`font-variant-caps`), so it reads as "TODAY" while screen readers read the word.
 - The date column is half of `--size-measure` wide (140px); below 480px of its container it sits above the rest of the row.

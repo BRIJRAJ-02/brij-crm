@@ -82,3 +82,40 @@ export const Empty: Story = {
     await expect(canvas.getByText('No upcoming bookings')).toBeInTheDocument();
   },
 };
+
+/** Home's Today: one day's bookings and the member's own calendar events, the time in the date column; an event has no guest, so no "You and" line. */
+export const Agenda: Story = {
+  render: (args) => (
+    <Stage width="fill">
+      <BookingList
+        {...args}
+        label="Today"
+        groups={[
+          {
+            id: 'earlier',
+            label: 'Earlier',
+            rows: [{ id: 'standup', date: '9:00 AM', time: '15 min', title: 'Team standup' }],
+          },
+          {
+            id: 'next',
+            label: 'Next',
+            rows: [
+              {
+                id: 'grace',
+                date: '4:00 PM',
+                time: '30 min',
+                join: { href: 'https://meet.google.com/abc-defg-hij', provider: 'Google Meet' },
+                title: 'Quick chat',
+                guestName: 'Grace Hopper',
+              },
+            ],
+          },
+        ]}
+      />
+    </Stage>
+  ),
+  play: async ({ canvas }) => {
+    await expect(canvas.getAllByText('You and')).toHaveLength(1);
+    await expect(canvas.getByRole('button', { name: 'Team standup' })).toBeInTheDocument();
+  },
+};

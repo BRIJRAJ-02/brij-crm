@@ -233,6 +233,7 @@ export {
 } from './modules/VisitorBar/VisitorBar.tsx';
 export { SectionBar, type SectionBarProps, type SectionBarVariant } from './molecules/SectionBar/SectionBar.tsx';
 export { PageColumn, type PageColumnProps } from './modules/PageColumn/PageColumn.tsx';
+export { TileGrid, type TileGridProps } from './molecules/TileGrid/TileGrid.tsx';
 export {
   EditorStatus,
   PreviewDeviceSwitch,
