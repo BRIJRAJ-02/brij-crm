@@ -1185,8 +1185,10 @@ export const EditPhoneCodeInPopover: Story = {
     await expect(dialog.isConnected).toBe(true);
     const number = within(dialog).getByRole<HTMLInputElement>('textbox');
     await expect(number.value.replace(/\D/g, '')).toBe('20155');
-    // A phone number to a password manager, never a login (the owner, 21 October 2026).
-    await expect(number).toHaveAttribute('autocomplete', 'tel-national');
+    // A contact's number: no autofill, and password managers told to leave it alone (the owner, 21 October 2026).
+    await expect(number).toHaveAttribute('autocomplete', 'off');
+    await expect(number).toHaveAttribute('data-1p-ignore');
+    await expect(number).toHaveAttribute('data-lpignore', 'true');
   },
 };
 

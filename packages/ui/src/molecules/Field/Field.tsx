@@ -172,6 +172,10 @@ export function Field({
     className: styles.input,
     // A multiline value to copy is code: it takes the Code atom's face.
     ...(isCopy && isMultiline ? { 'data-code': true } : {}),
+    // Autofill off (a contact's phone, a search): password managers leave the field alone too, as browsers do.
+    ...(autoComplete === 'off'
+      ? { 'data-1p-ignore': true, 'data-lpignore': 'true', 'data-bwignore': true, 'data-form-type': 'other' }
+      : {}),
     ...(placeholder === undefined ? {} : { placeholder }),
     ...(ref === undefined ? {} : { ref }),
     // A list's search field takes focus as the list opens, the pattern React Aria expects.
