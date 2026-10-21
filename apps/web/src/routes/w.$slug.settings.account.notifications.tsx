@@ -24,7 +24,7 @@ export const Route = createFileRoute('/w/$slug/settings/account/notifications')(
   },
   pendingComponent: () => (
     <LoadingNow>
-      <SettingsPage title={strings.title} description={strings.description} isLoading>
+      <SettingsPage title={strings.title} isLoading>
         <NotificationSettingsLoading />
       </SettingsPage>
     </LoadingNow>

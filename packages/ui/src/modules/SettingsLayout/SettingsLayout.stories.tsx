@@ -11,6 +11,8 @@ import { Stage } from '../../workbench/Stage/Stage.tsx';
 import { Select } from '../../molecules/Select/Select.tsx';
 import { Field } from '../../molecules/Field/Field.tsx';
 import { Form } from '../../molecules/Form/Form.tsx';
+import { InfoTip } from '../../molecules/InfoTip/InfoTip.tsx';
+import { Switch } from '../../atoms/Switch/Switch.tsx';
 import {
   SettingsGrid,
   SettingsLayout,
@@ -405,5 +407,30 @@ export const SectionsNarrow: Story = {
     await expect(name.top).toBeGreaterThan(heading.bottom);
     await expect(name.width).toBeGreaterThan(100);
     await expect(slug.top).toBeGreaterThan(name.top);
+  },
+};
+
+/** A row whose title needs a word of help: its InfoTip after the title, in place of a description. */
+export const RowWithInfo: Story = {
+  parameters: { crm: { screenshot: false } },
+  render: () => (
+    <Stage>
+      <SettingsLayout titleLevel={1} title="Notifications">
+        <Card title="Email">
+          <SettingsRow
+            title="Daily digest"
+            info={
+              <InfoTip label="Daily digest">One email at 8 in the morning, your time, of what is still unread.</InfoTip>
+            }
+          >
+            <Switch label="Daily digest" isLabelHidden />
+          </SettingsRow>
+        </Card>
+      </SettingsLayout>
+    </Stage>
+  ),
+  play: async ({ canvas }) => {
+    await expect(canvas.getByRole('button', { name: 'About Daily digest' })).toBeInTheDocument();
+    await expect(canvas.getByRole('switch', { name: 'Daily digest' })).toBeInTheDocument();
   },
 };

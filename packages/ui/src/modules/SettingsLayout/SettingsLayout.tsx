@@ -250,6 +250,8 @@ export interface SettingsRowProps {
   readonly title: string;
   /** One muted line on what it changes. */
   readonly description?: string;
+  /** An InfoTip after the title, for a setting whose title alone isn't clear (in place of a description). */
+  readonly info?: ReactNode;
   /** The control, at the end of the row: a Select, a Switch, a Button. */
   readonly children: ReactNode;
 }
@@ -259,11 +261,18 @@ export interface SettingsRowProps {
  * description, and its control at the end. Rows stack inside a Card, a
  * hairline between them; on a narrow page the control drops under the text.
  */
-export function SettingsRow({ title, description, children }: SettingsRowProps) {
+export function SettingsRow({ title, description, info, children }: SettingsRowProps) {
   return (
     <div className={styles.row}>
       <span className={styles.rowText}>
-        <span className={styles.rowTitle}>{title}</span>
+        {info === undefined ? (
+          <span className={styles.rowTitle}>{title}</span>
+        ) : (
+          <span className={styles.rowHead}>
+            <span className={styles.rowTitle}>{title}</span>
+            {info}
+          </span>
+        )}
         {description !== undefined && <span className={styles.description}>{description}</span>}
       </span>
       <span className={styles.rowControl}>{children}</span>

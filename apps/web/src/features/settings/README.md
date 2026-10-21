@@ -101,9 +101,9 @@ Anything on the page that ends something asks first (the owner, 21 October 2026)
 
 - **Purpose**: Settings › Account › Notifications (spec 0038, AC-1179): what reaches the member by email from this workspace.
 - **Main task**: turn email for Mentions, Replies and Task assignments, and the daily digest, on or off; each switch saves at once and is put back with a toast on a refusal.
-- **Leaves out**: the in app inbox (always on, and the page says so), other workspaces' settings, push notifications.
+- **Leaves out**: the in app inbox (always on, said in the Email InfoTip), other workspaces' settings, push notifications.
 
-Built from SettingsLayout (through `SettingsPage`), SettingsSection, Card, SettingsRow, Switch and Badge ("Always on"), with no new component. The settings come through `data.inbox.settings` (its store loads in its own chunk) and follow a change made in another tab live (AC-1180). Turning the digest on sends the browser's time zone with it, for 8 in the morning there.
+Lean, as the owner's settings pages are: no page description, one Email card (its InfoTip says what an email holds and that the inbox always gets every notification) with short rows, Mentions, Replies, Task assignments, and Daily digest with its own InfoTip. Built from SettingsLayout (through `SettingsPage`), Card, SettingsRow (its `info` slot), Switch and InfoTip, with no new component. Each switch saves at once through `data.inbox.setSettings` and is put back with a toast on a refusal, as Calendars' switch is. The settings follow a change made in another tab live (AC-1180). Turning the digest on sends the browser's time zone with it, for 8 in the morning there. Once the bar header lands (wip/recui), the title sits in the top bar like every settings page.
 
 ## The finish toast (toast.ts)
 
