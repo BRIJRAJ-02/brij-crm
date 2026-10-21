@@ -233,8 +233,19 @@ export const SectionSearching: Story = {
   },
 };
 
-/** The records search failed: its row says so, and choosing it asks again without closing. */
+/** The records search failed: its row says so in place of the records. */
 export const SectionFailed: Story = {
+  render: () => <SectionsPalette status="failed" />,
+  play: async ({ userEvent }) => {
+    const found = await dialog();
+    await userEvent.keyboard('zz');
+    await waitFor(() => expect(found).toHaveTextContent('The search didn’t finish. Try again.'));
+  },
+};
+
+/** Choosing the failed row asks again without closing the menu. */
+export const SectionFailedTryAgain: Story = {
+  parameters: { crm: { screenshot: false } },
   render: () => <SectionsPalette status="failed" />,
   play: async ({ userEvent }) => {
     const found = await dialog();

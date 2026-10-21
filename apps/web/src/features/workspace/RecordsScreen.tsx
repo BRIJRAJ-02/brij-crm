@@ -395,11 +395,15 @@ export function RecordsScreen({
     setCreating(true);
   };
   // Asked for from the command menu: the same dialog as New, once; a member who may only read gets the table.
+  // The dialog opens while rendering (React's adjust state on a prop change), and the request is handed back after.
+  const [requestSeen, setRequestSeen] = useState(false);
+  if (isCreateRequested !== requestSeen) {
+    setRequestSeen(isCreateRequested);
+    if (isCreateRequested && object.access === 'write') setCreating(true);
+  }
   useEffect(() => {
-    if (!isCreateRequested) return;
-    if (object.access === 'write') setCreating(true);
-    onCreateRequestTaken?.();
-  }, [isCreateRequested, onCreateRequestTaken, object.access]);
+    if (isCreateRequested) onCreateRequestTaken?.();
+  }, [isCreateRequested, onCreateRequestTaken]);
 
   return (
     <WorkspacePage
