@@ -11,7 +11,7 @@ import {
 } from 'react';
 import { ProviderMark, type ProviderName } from '../../atoms/ProviderMark/ProviderMark.tsx';
 import { focusLater } from '../../lib/focus-later.ts';
-import { Popover } from '../../molecules/Popover/Popover.tsx';
+import { Popover, type PopoverPlacement } from '../../molecules/Popover/Popover.tsx';
 import type { Hue } from '../../hue.ts';
 import styles from './WeekCalendar.module.css';
 import { strings } from './strings.ts';
@@ -117,11 +117,23 @@ export interface WeekCalendarProps {
    */
   readonly isLoading?: boolean;
   /**
-   * A new object puts focus on that day's column, once any closing overlay has gone and only when focus fell to
-   * the page: how the screen hands focus on when a block went outside its card (removed through a confirm), as the
-   * week does itself when the screen closes a card whose block is gone.
+   * A new object puts focus on that block when it is still on the week, else on its day's column, once any closing
+   * overlay has gone and only when focus fell to the page: how the screen hands focus on after a change made
+   * through a dialog outside the block's card (a block removed, a booking cancelled), as the week does itself when
+   * the screen closes a card whose block went.
    */
-  readonly focusRequest?: { readonly dayKey: string };
+  readonly focusDay?: { readonly dayKey: string; readonly blockId?: string };
+}
+
+/**
+ * Where a block's card opens: beside it while the week shows seven days, under it once its container is narrower
+ * than `bp-container-md` and one day takes the width, where a card beside the block would leave the screen.
+ */
+function placementBeside(block: HTMLElement): PopoverPlacement {
+  const week = block.closest('section');
+  if (week === null) return 'end top';
+  const narrow = Number.parseFloat(getComputedStyle(week).getPropertyValue('--bp-container-md'));
+  return Number.isFinite(narrow) && week.clientWidth < narrow ? 'bottom start' : 'end top';
 }
 
 /** A block with its lane: overlapping blocks share their cluster's width, side by side. */
@@ -196,13 +208,15 @@ export function WeekCalendar({
   drawStartMinute,
   minuteLabel,
   isLoading = false,
-  focusRequest,
+  focusDay,
 }: WeekCalendarProps) {
   const scroller = useRef<HTMLDivElement>(null);
   const columns = useRef(new Map<string, HTMLDivElement>());
   const blockRefs = useRef(new Map<string, HTMLButtonElement>());
   // The open card's anchor: the block that was pressed.
   const [anchor, setAnchor] = useState<HTMLButtonElement | null>(null);
+  // Beside the block on a week of seven days; under it on one day, whose block takes the width.
+  const [cardPlacement, setCardPlacement] = useState<PopoverPlacement>('end top');
   const anchorRef = useMemo(() => ({ current: anchor }), [anchor]);
   // The span being dragged, before it is drawn; and the drawn span's ghost, the draft card's anchor.
   // The drag lives in a ref as well: pointer events can come faster than renders, and each must see the last.
@@ -247,14 +261,16 @@ export function WeekCalendar({
     shownCard.current = card;
     if (card === null && closed !== null) focusDayLater(closed.day, closed.from);
   });
-  // A day the screen asks focus for: after any closing overlay (its confirm), and never taking focus the person moved.
+  // A block or day the screen asks focus for: after any closing overlay (its dialog), never taking focus the person moved.
   useEffect(() => {
-    if (focusRequest === undefined) return;
+    if (focusDay === undefined) return;
     focusLater(() => {
       const active = document.activeElement;
-      return active === null || active === document.body ? columns.current.get(focusRequest.dayKey) : undefined;
+      if (active !== null && active !== document.body) return undefined;
+      const block = focusDay.blockId === undefined ? undefined : blockRefs.current.get(focusDay.blockId);
+      return block?.isConnected === true ? block : columns.current.get(focusDay.dayKey);
     });
-  }, [focusRequest]);
+  }, [focusDay]);
 
   /** The minute under the pointer in `column`, snapped and clamped to the day. */
   const minuteAt = (column: HTMLElement, clientY: number): number => {
@@ -481,6 +497,7 @@ export function WeekCalendar({
                           return;
                         }
                         setAnchor(event.currentTarget);
+                        setCardPlacement(placementBeside(event.currentTarget));
                         anchorDay.current = block.dayKey;
                         onOpen(block.id);
                       }}
@@ -529,7 +546,7 @@ export function WeekCalendar({
               focusDayLater(anchorDay.current, anchor);
             }
           }}
-          placement="end top"
+          placement={cardPlacement}
           label={strings.details}
         >
           {detail}
