@@ -23,7 +23,8 @@
     },
     "test": {
       "dependsOn": ["transit"],
-      "passThroughEnv": ["TEST_DATABASE_ADMIN_URL", "TEST_MAILPIT_URL"]
+      "env": ["CRM_STORY_BROWSERS"],
+      "passThroughEnv": ["TEST_DATABASE_ADMIN_URL", "TEST_MAILPIT_URL", "VITEST_MAX_WORKERS"]
     },
     "dev": {
       "cache": false,
