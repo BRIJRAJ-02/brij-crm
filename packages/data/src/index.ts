@@ -7,6 +7,7 @@
 // while a screen shows a workspace (the realtime client loads with the first).
 import type {
   AddToCrmResult,
+  CalendarProvider,
   ExportView,
   SubmissionSelection,
   SyncPreview,
@@ -159,6 +160,7 @@ export type {
   CalendarConnections,
   CalendarSharing,
   CalendarStatus,
+  CalendarProvider,
   CalendarAccountView,
   CalendarList,
   CalendarView as CalendarItem,
@@ -3290,10 +3292,12 @@ export function createDataLayer({
       remove: (workspace: string, connectionId: string, options?: { readonly asksFirst?: boolean }): Promise<boolean> =>
         calendar.remove(workspace, connectionId, options).finally(() => calendars.list(workspace).reload()),
       /**
-       * Where the browser goes to connect a calendar (the API sends it on to the provider's consent), and where it
-       * comes back to: Settings › Calendars, or first run's calendar step (`welcome`, spec 0036).
+       * Where the browser goes to connect a calendar, Google's or Outlook's (`microsoft`), as the API sends it on to
+       * the provider's consent, and where it comes back to: Settings › Calendars, or first run's calendar step
+       * (`welcome`, spec 0036).
        */
-      connectUrl: (workspace: string, then?: ConnectReturn): string => connectUrl(workspace, then),
+      connectUrl: (workspace: string, then?: ConnectReturn, provider?: CalendarProvider): string =>
+        connectUrl(workspace, then, provider),
       /** Sync now: brings a connection's next sync forward; the list reads again shortly after. */
       syncNow: (workspace: string, connectionId: string): Promise<boolean> => calendar.syncNow(workspace, connectionId),
       /** The workspace's calendar settings (spec 0024, AC-609), read when a screen first holds them. */

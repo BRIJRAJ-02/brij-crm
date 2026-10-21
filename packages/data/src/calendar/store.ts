@@ -17,6 +17,7 @@ import type {
   AddedMeetingAttendee,
   CalendarConnections,
   CalendarConnectionView,
+  CalendarProvider,
   CalendarSettingsView,
   CalendarSharing,
   RemovedCalendarConnection,
@@ -111,7 +112,7 @@ export const SYNC_POLL_MS = 5_000;
 export const SYNC_POLL_FOR_MS = 5 * 60_000;
 
 /**
- * Where a connect comes back to: Settings › Calendar (the default), or first
+ * Where a connect comes back to: Settings › Calendars (the default), or first
  * run's calendar step (`welcome`, spec 0036). The only values the API takes.
  */
 export type ConnectReturn = 'settings' | 'welcome';
@@ -120,9 +121,16 @@ const PEOPLE_ON = 'People from meetings will be added';
 const PEOPLE_OFF = 'People from meetings won’t be added';
 const UNDO = 'Undo';
 
-/** The address that starts connecting a Google calendar: the browser goes there, the API sends it on to Google. */
-export function connectUrl(workspace: string, then: ConnectReturn = 'settings'): string {
-  const address = `/api/calendar/google/start?workspace=${encodeURIComponent(workspace)}`;
+/**
+ * The address that starts connecting a calendar (Google by default, or Outlook through Microsoft): the browser goes
+ * there, and the API sends it on to the provider's consent.
+ */
+export function connectUrl(
+  workspace: string,
+  then: ConnectReturn = 'settings',
+  provider: CalendarProvider = 'google',
+): string {
+  const address = `/api/calendar/${provider}/start?workspace=${encodeURIComponent(workspace)}`;
   return then === 'settings' ? address : `${address}&then=${then}`;
 }
 

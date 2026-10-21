@@ -1,17 +1,22 @@
 // Brief
-// Purpose: Settings › Account › Calendars: the member's own calendar connections, so their meetings reach the records they're with.
-// Main task: connect a Google calendar, see each one's state and last sync, choose who sees its meetings, disconnect.
-// Leaves out: other members' calendars and Outlook (milestone 4). Owners and admins also choose whether meetings add people.
+// Purpose: Settings › Scheduling › Calendars: the member's own accounts (Google, Outlook) and every calendar in each, so their meetings reach the records they're with and their bookings land where they choose.
+// Main task: connect an account; per calendar, check it for conflicts, show it on the week, sync its meetings, pick its colour and make it the default; disconnect an account.
+// Leaves out: other members' calendars. Owners and admins also choose whether meetings add people.
 import {
   isDataError,
   needsReconnect,
+  type CalendarAccountView,
+  type CalendarChange,
   type CalendarConnectionView,
+  type CalendarItem,
+  type CalendarListState,
+  type CalendarProvider,
   type CalendarStatus,
   type CalendarView,
   type DataLayer,
   type Hue,
 } from '@crm/data';
-import { useCalendar, useCalendarSettings } from '@crm/data/react';
+import { useCalendar, useCalendarList, useCalendarSettings } from '@crm/data/react';
 import {
   Badge,
   Button,
@@ -19,6 +24,7 @@ import {
   Card,
   EmptyState,
   focusLater,
+  HuePicker,
   InfoTip,
   Menu,
   MenuItem,
@@ -29,25 +35,23 @@ import {
   RelativeTime,
   Select,
   SettingsRow,
+  SettingsRowGroup,
   SettingsSection,
   Skeleton,
   Switch,
+  type Toasts,
 } from '@crm/ui';
 import { useRouteContext } from '@tanstack/react-router';
-import { useRef, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
 import { strings, type ConnectResult } from './calendar-strings.ts';
 import { SettingsPage } from './SettingsPage.tsx';
 
-/** The connections' section while they load: its heading, and a busy card where the calendars will list. */
+/**
+ * The page while the accounts load. No calendar yet is the page most people first load, an empty state with no
+ * card, so the loading state stands in its place (the loading shape flow holds them together).
+ */
 export function CalendarsLoading() {
-  return (
-    <SettingsSection title={strings.connectionsSection}>
-      <Card isBusy>
-        <Skeleton width="long" />
-        <Skeleton width="medium" />
-      </Card>
-    </SettingsSection>
-  );
+  return <EmptyState icon="calendar" title={strings.loading} isLoading />;
 }
 
 /** Props for the Calendar screen: what its route loaded through the data layer. */
@@ -55,7 +59,7 @@ export interface CalendarScreenProps {
   readonly data: DataLayer;
   readonly slug: string;
   readonly view: CalendarView;
-  /** What the browser came back from Google with, once (`?calendar=`). */
+  /** What the browser came back from the provider with, once (`?calendar=`). */
   readonly result?: ConnectResult;
   /** Clears `?calendar=` once the person has read it. */
   readonly onResultSeen: () => void;
@@ -78,115 +82,254 @@ const SHARING = [
   { id: 'private', label: strings.private, icon: 'lock', description: strings.sharingHelp.private },
 ] as const;
 
+/** A provider's mark and name. */
+const PROVIDER = {
+  google: { mark: 'google-calendar', name: strings.google },
+  microsoft: { mark: 'outlook', name: strings.outlook },
+} as const satisfies Record<CalendarProvider, { readonly mark: 'google-calendar' | 'outlook'; readonly name: string }>;
+
+/** A calendar's three switches, in the order a row shows them. */
+const SWITCHES = ['checkConflicts', 'showInWeek', 'sync'] as const;
+type SwitchName = (typeof SWITCHES)[number];
+
+/** What a calendar's row can change, each saved at once (the owner's save rule, 21 October 2026). */
+interface CalendarActions {
+  readonly onSwitch: (calendar: CalendarItem, name: SwitchName, isOn: boolean) => void;
+  readonly onColour: (calendar: CalendarItem, hue: Hue) => void;
+  readonly onMakeDefault: (calendar: CalendarItem) => void;
+}
+
 /**
- * One connection as a row (the owner, 21 October 2026: a compact row per
- * account, as Attio and Calendly list them): the provider's mark, the account,
- * a Default badge, its state and last sync, who sees its meetings, and a
- * "···" menu with Make default and Disconnect (which asks first).
+ * One calendar of an account (spec 0024 milestone 5, AC-993): its colour (a swatch that opens the nine hues), its
+ * name, Default on the one new bookings go to (with the page's one InfoTip on how that works across accounts), Make
+ * default on another it can write, and its three switches with their names shown.
  */
-function ConnectionRow({
+function CalendarRow({ calendar, actions }: { readonly calendar: CalendarItem; readonly actions: CalendarActions }) {
+  const label = { checkConflicts: strings.checkConflicts, showInWeek: strings.showInWeek, sync: strings.sync };
+  const description =
+    calendar.warning?.message ??
+    (calendar.accessRole === 'owner' || calendar.accessRole === 'writer' ? undefined : strings.readOnly);
+  return (
+    <SettingsRow
+      title={calendar.name}
+      leading={
+        <HuePicker
+          label={strings.colour(calendar.name)}
+          value={calendar.hue}
+          isCompact
+          onChange={(hue) => actions.onColour(calendar, hue)}
+        />
+      }
+      {...(calendar.isDestination
+        ? {
+            meta: (
+              <>
+                <Badge text={strings.defaultBadge} />
+                <InfoTip label={strings.defaultHelpLabel} example={strings.defaultHelpExample}>
+                  {strings.defaultHelp}
+                </InfoTip>
+              </>
+            ),
+          }
+        : {})}
+      {...(description === undefined ? {} : { description })}
+    >
+      {!calendar.isDestination && calendar.canBeDestination && (
+        <Button variant="ghost" onPress={() => actions.onMakeDefault(calendar)}>
+          {strings.makeDefault}
+        </Button>
+      )}
+      {SWITCHES.map((name) => (
+        <Switch
+          key={name}
+          label={label[name]}
+          isSelected={calendar[name]}
+          onChange={(isOn) => actions.onSwitch(calendar, name, isOn)}
+        />
+      ))}
+    </SettingsRow>
+  );
+}
+
+/**
+ * One connected account as a card (the owner, 21 October 2026: a card per account with its calendars, as Calendly
+ * lists them): the account's row (the provider's mark, the address, its state and last sync, Reconnect once it
+ * stopped, who sees its meetings, and a "···" menu with Disconnect, which asks first), then its calendars.
+ */
+function AccountCard({
   connection,
+  calendars,
+  actions,
   onSharing,
-  onDefault,
   onDisconnect,
   onReconnect,
+  onRetryCalendars,
   onSyncNow,
 }: {
   readonly connection: CalendarConnectionView;
+  /** Its calendars once listed; `loading` or `error` while the list isn't there. */
+  readonly calendars: readonly CalendarItem[] | 'loading' | 'error';
+  readonly actions: CalendarActions;
+  readonly onSharing: (sharing: 'shared' | 'private') => void;
+  readonly onDisconnect: () => void;
   /** Connects the account again, offered once it stopped syncing (expired, revoked or failed); absent when connecting is off. */
   readonly onReconnect?: () => void;
-  readonly onSharing: (sharing: 'shared' | 'private') => void;
-  readonly onDefault: () => void;
-  readonly onDisconnect: () => void;
+  readonly onRetryCalendars: () => void;
   /** Local development only (no push notices reach a laptop). */
   readonly onSyncNow?: () => void;
 }) {
   const problem =
     connection.lastError !== undefined && connection.status !== 'connected' ? connection.lastError.message : undefined;
-  const actions = strings.rowActions(connection.accountEmail);
+  const menuLabel = strings.rowActions(connection.accountEmail);
   const canReconnect = onReconnect !== undefined && needsReconnect(connection);
+  const provider = PROVIDER[connection.provider];
   return (
-    <SettingsRow
-      title={connection.accountEmail}
-      leading={<ProviderMark provider="google-calendar" isLabelled />}
-      {...(connection.isDefault
-        ? {
-            meta: (
+    <Card>
+      <SettingsRow
+        title={connection.accountEmail}
+        leading={<ProviderMark provider={provider.mark} isLabelled />}
+        description={
+          <>
+            <Badge text={strings.status[connection.status]} dot={STATUS_HUE[connection.status]} />
+            {' · '}
+            {connection.lastSyncedAt === undefined ? (
+              strings.notSyncedYet
+            ) : (
               <>
-                <Badge text={strings.defaultBadge} />
-                <InfoTip label={strings.defaultBadge}>{strings.defaultHelp}</InfoTip>
+                {/* A no break space: "Synced" never ends a line on its own. */}
+                {strings.synced}
+                {' '}
+                <RelativeTime value={connection.lastSyncedAt} />
               </>
-            ),
-          }
-        : {})}
-      description={
-        <>
-          <Badge text={strings.status[connection.status]} dot={STATUS_HUE[connection.status]} />
-          {' · '}
-          {connection.lastSyncedAt === undefined ? (
-            strings.notSyncedYet
-          ) : (
-            <>
-              {/* A no break space: "Synced" never ends a line on its own. */}
-              {strings.synced}
-              {'\u00a0'}
-              <RelativeTime value={connection.lastSyncedAt} />
-            </>
-          )}
-          {problem !== undefined && <> · {problem}</>}
-        </>
-      }
-    >
-      {/* A calendar that stopped syncing shows its fix on the row, not behind the menu. */}
-      {canReconnect && <Button onPress={onReconnect}>{strings.reconnect}</Button>}
-      <Select
-        label={strings.sharingLabel}
-        isLabelHidden
-        items={SHARING}
-        value={connection.sharing}
-        onChange={(value) => onSharing(value === 'private' ? 'private' : 'shared')}
-      />
-      <MenuTrigger>
-        <Button variant="ghost" icon="ellipsis" label={actions} />
-        <Menu
-          label={actions}
-          onAction={(key) => {
-            if (key === 'default') onDefault();
-            if (key === 'sync') onSyncNow?.();
-            if (key === 'disconnect') onDisconnect();
-          }}
-        >
-          {!connection.isDefault && (
-            <MenuItem id="default" icon="star">
-              {strings.makeDefault}
+            )}
+            {problem !== undefined && <> · {problem}</>}
+          </>
+        }
+      >
+        {/* An account that stopped syncing shows its fix on the row, not behind the menu. */}
+        {canReconnect && <Button onPress={onReconnect}>{strings.reconnect}</Button>}
+        <Select
+          label={strings.sharingLabel}
+          isLabelHidden
+          items={SHARING}
+          value={connection.sharing}
+          onChange={(value) => onSharing(value === 'private' ? 'private' : 'shared')}
+        />
+        <MenuTrigger>
+          <Button variant="ghost" icon="ellipsis" label={menuLabel} />
+          <Menu
+            label={menuLabel}
+            onAction={(key) => {
+              if (key === 'sync') onSyncNow?.();
+              if (key === 'disconnect') onDisconnect();
+            }}
+          >
+            {onSyncNow !== undefined && (
+              <MenuItem id="sync" icon="refresh-cw">
+                {strings.syncNow}
+              </MenuItem>
+            )}
+            {onSyncNow !== undefined && <MenuSeparator />}
+            <MenuItem id="disconnect" icon="unplug" isDanger>
+              {strings.disconnect}
             </MenuItem>
-          )}
-          {onSyncNow !== undefined && (
-            <MenuItem id="sync" icon="refresh-cw">
-              {strings.syncNow}
-            </MenuItem>
-          )}
-          {(!connection.isDefault || onSyncNow !== undefined) && <MenuSeparator />}
-          <MenuItem id="disconnect" icon="unplug" isDanger>
-            {strings.disconnect}
-          </MenuItem>
-        </Menu>
-      </MenuTrigger>
-    </SettingsRow>
+          </Menu>
+        </MenuTrigger>
+      </SettingsRow>
+      <SettingsRowGroup title={strings.calendarsGroup}>
+        {calendars === 'loading' ? (
+          <span role="status" aria-label={strings.calendarsLoading}>
+            <Skeleton width="long" />
+          </span>
+        ) : calendars === 'error' ? (
+          <Callout
+            tone="danger"
+            actions={
+              <Button variant="ghost" onPress={onRetryCalendars}>
+                {strings.tryAgain}
+              </Button>
+            }
+          >
+            {strings.calendarsFailed}
+          </Callout>
+        ) : calendars.length === 0 ? (
+          <span>{strings.noCalendars}</span>
+        ) : (
+          calendars.map((calendar) => <CalendarRow key={calendar.id} calendar={calendar} actions={actions} />)
+        )}
+      </SettingsRowGroup>
+    </Card>
   );
 }
 
-/** Settings, Calendar (spec 0024): the member's connections, live while shown, and Connect Google calendar. */
+/**
+ * Each calendar change, saved at once and said in a quiet toast with Undo (the owner's save rule, 21 October 2026).
+ * A refusal is put back and said by the data layer; Undo is the same change the other way.
+ */
+function useCalendarActions(data: DataLayer, slug: string, toasts: Toasts, destination: CalendarItem | undefined) {
+  return useMemo<CalendarActions>(() => {
+    const change = (calendar: CalendarItem, next: CalendarChange, back: CalendarChange, message: string) => {
+      void data.calendar.updateCalendar(slug, calendar.id, next).then((isDone) => {
+        if (!isDone) return;
+        toasts.toast({
+          tone: 'success',
+          message,
+          action: { label: strings.undo, onAction: () => void data.calendar.updateCalendar(slug, calendar.id, back) },
+        });
+      });
+    };
+    return {
+      onSwitch: (calendar, name, isOn) =>
+        change(calendar, { [name]: isOn }, { [name]: !isOn }, strings.saved[name](calendar.name, isOn)),
+      onColour: (calendar, hue) =>
+        change(
+          calendar,
+          { colourOverride: hue },
+          { colourOverride: calendar.colourOverride ?? null },
+          strings.colourSaved(calendar.name),
+        ),
+      onMakeDefault: (calendar) => {
+        const was = destination;
+        void data.calendar.setDestination(slug, calendar.id).then((isDone) => {
+          if (!isDone) return;
+          toasts.toast({
+            tone: 'success',
+            message: strings.defaultSaved(calendar.name),
+            ...(was === undefined
+              ? {}
+              : { action: { label: strings.undo, onAction: () => void data.calendar.setDestination(slug, was.id) } }),
+          });
+        });
+      },
+    };
+  }, [data, slug, toasts, destination]);
+}
+
+/** Each account's calendars as the list holds them, by connection. */
+function calendarsByAccount(list: CalendarListState): ReadonlyMap<string, readonly CalendarItem[]> {
+  if (list.status !== 'ready') return new Map();
+  return new Map(list.accounts.map((account: CalendarAccountView) => [account.id, account.calendars]));
+}
+
+/**
+ * Settings › Scheduling › Calendars (spec 0024): a card per connected account with its calendars, the default
+ * marked, live while shown, and Connect (Google, Outlook, or a menu of both).
+ */
 export function CalendarScreen({ data, slug, view, result, onResultSeen }: CalendarScreenProps) {
   const state = useCalendar(view);
+  const list = useCalendarList(data.calendar.calendars(slug));
   const settings = useCalendarSettings(data.calendar.settings(slug));
   const { toasts } = useRouteContext({ from: '__root__' });
+  const byAccount = calendarsByAccount(list);
+  const allCalendars = [...byAccount.values()].flat();
+  const destination = allCalendars.find((calendar) => calendar.isDestination);
+  const actions = useCalendarActions(data, slug, toasts, destination);
   const [disconnecting, setDisconnecting] = useState<CalendarConnectionView | undefined>(undefined);
   const [isDisconnectBusy, setDisconnectBusy] = useState(false);
-  // The last calendar the confirm was opened for: it stays named through the confirm's exit.
+  // The last account the confirm was opened for: it stays named through the confirm's exit.
   const [lastDisconnecting, setLastDisconnecting] = useState<CalendarConnectionView | undefined>(undefined);
   if (disconnecting !== undefined && disconnecting !== lastDisconnecting) setLastDisconnecting(disconnecting);
-  // Connect Google calendar (in the bar, or the empty state's): where focus goes once a calendar is disconnected.
+  // Connect (in the bar, or the empty state's): where focus goes once an account is disconnected.
   const connectRef = useRef<HTMLButtonElement>(null);
   const [disconnectFailure, setDisconnectFailure] = useState<string | undefined>(undefined);
   const disconnect = () => {
@@ -214,16 +357,38 @@ export function CalendarScreen({ data, slug, view, result, onResultSeen }: Calen
     );
   };
   const outcome = result === undefined ? undefined : strings.results[result];
-  // Connecting is the browser going to the API, which sends it on to Google's consent screen and back here.
-  const connect = () => {
-    window.location.assign(data.calendar.connectUrl(slug));
+  // Connecting is the browser going to the API, which sends it on to the provider's consent screen and back here.
+  const connect = (provider: CalendarProvider) => {
+    window.location.assign(data.calendar.connectUrl(slug, 'settings', provider));
   };
+  const providers = state.status === 'ready' && state.enabled ? state.providers : [];
   const isFull = state.status === 'ready' && state.connections.length >= state.max;
-  // Reconnecting goes through the same consent and lands on the same connection, so the limit doesn't stop it.
-  const canReconnect = state.status === 'ready' && state.enabled && state.providers.includes('google');
-  const canConnect = state.status === 'ready' && state.enabled && state.providers.includes('google') && !isFull;
+  const canConnect = providers.length > 0 && !isFull;
   // The header's Connect sits beside a list; an empty page offers it in its own empty state.
   const hasList = state.status === 'ready' && state.connections.length > 0;
+  const fellBack = list.status === 'ready' ? list.fellBack : undefined;
+
+  // One provider on: its own button. Both: one Connect calendar that opens a menu of the two.
+  const [onlyProvider] = providers;
+  const connectButton =
+    !canConnect || onlyProvider === undefined ? undefined : providers.length === 1 ? (
+      <Button ref={connectRef} provider={PROVIDER[onlyProvider].mark} onPress={() => connect(onlyProvider)}>
+        {onlyProvider === 'google' ? strings.connectGoogle : strings.connectOutlook}
+      </Button>
+    ) : (
+      <MenuTrigger>
+        <Button ref={connectRef} icon="plus">
+          {strings.connect}
+        </Button>
+        <Menu label={strings.connectMenu} onAction={(key) => connect(key === 'microsoft' ? 'microsoft' : 'google')}>
+          {providers.map((provider) => (
+            <MenuItem key={provider} id={provider} leading={<ProviderMark provider={PROVIDER[provider].mark} />}>
+              {PROVIDER[provider].name}
+            </MenuItem>
+          ))}
+        </Menu>
+      </MenuTrigger>
+    );
 
   let body;
   if (state.status === 'loading') {
@@ -243,40 +408,33 @@ export function CalendarScreen({ data, slug, view, result, onResultSeen }: Calen
     );
   } else if (state.connections.length === 0) {
     body = (
-      <EmptyState
-        icon="calendar"
-        title={strings.emptyTitle}
-        actions={
-          canConnect ? (
-            <Button ref={connectRef} provider="google-calendar" onPress={connect}>
-              {strings.connectGoogle}
-            </Button>
-          ) : undefined
-        }
-      >
+      <EmptyState icon="calendar" title={strings.emptyTitle} actions={connectButton}>
         {strings.emptyText}
       </EmptyState>
     );
   } else {
+    const calendarsOf = (connectionId: string): readonly CalendarItem[] | 'loading' | 'error' =>
+      list.status === 'ready' ? (byAccount.get(connectionId) ?? []) : list.status;
     body = (
       <SettingsSection title={strings.connectionsSection}>
         {isFull && <Callout tone="info">{strings.limitReached(number.format(state.max))}</Callout>}
-        <Card>
-          {state.connections.map((connection) => (
-            <ConnectionRow
-              key={connection.id}
-              connection={connection}
-              onSharing={(sharing) => void data.calendar.setSharing(slug, connection.id, sharing)}
-              onDefault={() => void data.calendar.makeDefault(slug, connection.id)}
-              {...(canReconnect ? { onReconnect: connect } : {})}
-              onDisconnect={() => {
-                setDisconnectFailure(undefined);
-                setDisconnecting(connection);
-              }}
-              {...(import.meta.env.DEV ? { onSyncNow: () => void data.calendar.syncNow(slug, connection.id) } : {})}
-            />
-          ))}
-        </Card>
+        {state.connections.map((connection) => (
+          <AccountCard
+            key={connection.id}
+            connection={connection}
+            calendars={calendarsOf(connection.id)}
+            actions={actions}
+            onSharing={(sharing) => void data.calendar.setSharing(slug, connection.id, sharing)}
+            // Reconnecting goes through the same consent and lands on the same account, so the limit doesn't stop it.
+            {...(providers.includes(connection.provider) ? { onReconnect: () => connect(connection.provider) } : {})}
+            onDisconnect={() => {
+              setDisconnectFailure(undefined);
+              setDisconnecting(connection);
+            }}
+            onRetryCalendars={() => data.calendar.calendars(slug).reload()}
+            {...(import.meta.env.DEV ? { onSyncNow: () => void data.calendar.syncNow(slug, connection.id) } : {})}
+          />
+        ))}
       </SettingsSection>
     );
   }
@@ -285,15 +443,7 @@ export function CalendarScreen({ data, slug, view, result, onResultSeen }: Calen
     <SettingsPage
       title={strings.title}
       isLoading={state.status === 'loading'}
-      {...(canConnect && hasList
-        ? {
-            actions: (
-              <Button ref={connectRef} provider="google-calendar" onPress={connect}>
-                {strings.connectGoogle}
-              </Button>
-            ),
-          }
-        : {})}
+      {...(connectButton !== undefined && hasList ? { actions: connectButton } : {})}
     >
       {outcome !== undefined && (
         <Callout
@@ -307,6 +457,19 @@ export function CalendarScreen({ data, slug, view, result, onResultSeen }: Calen
           }
         >
           {outcome.text}
+        </Callout>
+      )}
+      {fellBack !== undefined && destination !== undefined && (
+        <Callout
+          tone="warning"
+          title={strings.fellBackTitle}
+          actions={
+            <Button variant="ghost" onPress={() => void data.calendar.dismissCalendarNotice(slug)}>
+              {strings.dismiss}
+            </Button>
+          }
+        >
+          {strings.fellBackText(destination.name, fellBack.removedName)}
         </Callout>
       )}
       {body}
