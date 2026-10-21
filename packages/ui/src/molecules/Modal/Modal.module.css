@@ -148,9 +148,17 @@
     block-size: calc(100dvh - 2 * var(--size-bar));
   }
 
+  /* Under bp-page-compact the peek is the whole window, edge to edge, as every page is full width. */
   @media (width < 1024px) {
+    .scrim:has(> .root[data-variant='peek']) {
+      padding: 0;
+    }
+
     .root[data-variant='peek'] {
+      inline-size: 100%;
       block-size: 100%;
+      max-block-size: none;
+      border-radius: 0;
     }
   }
 

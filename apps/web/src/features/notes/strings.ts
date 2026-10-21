@@ -22,7 +22,7 @@ export const strings = {
   deleteNote: 'Delete note',
   /** The delete's confirm (the owner's rule of 21 October 2026): its question names the note. */
   deleteQuestion: (title: string) => (title.trim() === '' ? 'Delete this note?' : `Delete ${title.trim()}?`),
-  deleteText: 'The note is deleted for everyone, and you can undo it for 10 seconds only.',
+  deleteText: 'The note is deleted for everyone and skips the Trash, so you can undo it for 10 seconds only.',
   cancel: 'Cancel',
   noteDeleted: 'Note deleted',
   undo: 'Undo',

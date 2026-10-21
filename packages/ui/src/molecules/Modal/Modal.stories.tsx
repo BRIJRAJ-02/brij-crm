@@ -310,19 +310,20 @@ export const Peek: Story = {
   play: async () => {
     const dialog = await openDialog();
     await expect(dialog).toHaveAccessibleName('Kickoff call');
-    // Settled after its entrance, then measured: the column and three space-32 either side (or the window's width,
-    // less the scrim's space-16), a size bar from the window's top and bottom (filling it under bp-page-compact).
+    // Settled after its entrance, then measured: the column and three space-32 either side, a size bar from the
+    // window's top and bottom; under bp-page-compact, the whole window.
     await new Promise((resolve) => setTimeout(resolve, 400));
     const panel = dialog.getBoundingClientRect();
     const token = (name: string) =>
       Number.parseFloat(getComputedStyle(document.documentElement).getPropertyValue(`--${name}`));
     const inset = token('space-16');
     const wide = token('size-column-max') + 6 * token('space-32');
-    await expect(Math.round(panel.width)).toBe(Math.min(globalThis.innerWidth - 2 * inset, wide));
+    const isWide = globalThis.innerWidth >= token('bp-page-compact');
+    await expect(Math.round(panel.width)).toBe(
+      isWide ? Math.min(globalThis.innerWidth - 2 * inset, wide) : globalThis.innerWidth,
+    );
     await expect(Math.round(panel.height)).toBe(
-      globalThis.innerWidth >= token('bp-page-compact')
-        ? globalThis.innerHeight - 2 * token('size-bar')
-        : globalThis.innerHeight - 2 * inset,
+      isWide ? globalThis.innerHeight - 2 * token('size-bar') : globalThis.innerHeight,
     );
     // The bar draws no title, no icon and no hairline.
     const heading = dialog.querySelector('h2');
