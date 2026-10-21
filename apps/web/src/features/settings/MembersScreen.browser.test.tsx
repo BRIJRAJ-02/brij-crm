@@ -14,7 +14,7 @@ import {
 import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeAll, describe, expect, it } from 'vitest';
-import { page } from 'vitest/browser';
+import { page, userEvent } from 'vitest/browser';
 import { MembersScreen } from './MembersScreen.tsx';
 
 const ADA: MemberView = {
@@ -89,9 +89,13 @@ function layerWith(answer: () => Promise<void>) {
     calendar: { view: () => calendarView },
     members: {
       watch: () => () => undefined,
-      remove: () => {
+      // The remove dialog reads what the removal does and who could take over (spec 0031, slice 5).
+      removalPreview: () => Promise.resolve({ pausedPages: 0, calendars: 0, openTasks: 1, records: 2 }),
+      list: () => Promise.resolve([ADA, LINUS]),
+      remove: async () => {
         calls.remove += 1;
-        return answer();
+        await answer();
+        return {};
       },
       transferOwnership: () => {
         calls.transfer += 1;
@@ -242,6 +246,14 @@ describe('removing a member asks first', () => {
     await pickRemove();
     const dialog = page.getByRole('alertdialog', { name: 'Remove Linus Torvalds from Acme?' });
     await expect.element(dialog).toBeVisible();
+    // What the removal does, read as it opens, and who could take their work (never Linus himself).
+    await expect
+      .element(dialog.getByText('1 open task is assigned to them. 2 records name them as owner.'))
+      .toBeVisible();
+    await dialog.getByRole('button', { name: /Hand their open tasks and records to/ }).click();
+    await expect.element(page.getByRole('option', { name: /Ada Lovelace/ })).toBeVisible();
+    await expect.element(page.getByRole('option', { name: /Linus Torvalds/ })).not.toBeInTheDocument();
+    await userEvent.keyboard('{Escape}');
     await dialog.getByRole('button', { name: 'Cancel' }).click();
     await expect.element(dialog).not.toBeInTheDocument();
     expect(counted.calls.remove).toBe(0);

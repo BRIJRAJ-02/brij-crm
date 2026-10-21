@@ -55,7 +55,7 @@ async function signInThrough(page: Page, link: string, email: string): Promise<v
   await page.getByRole('link', { name: 'Sign in to accept' }).click();
   await expect(page).toHaveURL(/\/sign-in\?redirect=/);
   await page.getByLabel('Email').fill(email);
-  await page.getByRole('button', { name: 'Continue', exact: true }).click();
+  await page.getByRole('button', { name: /^Continue( with email)?$/ }).click();
   await expect(page).toHaveURL(/\/verify/);
   await page.getByLabel('Code').fill(await codeFor(page.request, email));
   await expect(page).toHaveURL(new RegExp(`${link}$`));
