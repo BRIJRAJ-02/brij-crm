@@ -8,7 +8,7 @@ import { workspaceOf, type Template } from '../template.ts';
 export const joinRequest: Template<JoinRequestEmail> = (params, context) => {
   const workspace = workspaceOf(context);
   return {
-    subject: `${params.requesterName} asked to join ${workspace}`,
+    subject: `${params.requesterName} (${params.requesterEmail}) asked to join ${workspace}`,
     preheader: `${params.requesterEmail} would like to join ${workspace}. Approve or decline it in Members.`,
     eyebrow: workspace,
     heading: `${params.requesterName} asked to join`,

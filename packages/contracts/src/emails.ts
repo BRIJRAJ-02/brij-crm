@@ -22,6 +22,10 @@ export type AppPath = z.infer<typeof AppPath>;
 /** A short line an email shows as given: a name, a title, a file name. */
 const Line = z.string().trim().min(1).max(200);
 
+/** A name someone else typed (a requester's): one line, no control characters, so it can't forge a subject. */
+// eslint-disable-next-line no-control-regex
+const Name = Line.regex(/^[^\u0000-\u001f\u007f-\u009f\u2028\u2029]+$/, 'A name on one line.');
+
 /** A moment, as an ISO 8601 UTC string. */
 const Instant = z.iso.datetime();
 
@@ -46,7 +50,7 @@ export type MemberInviteEmail = z.infer<typeof MemberInviteEmail>;
  * the Members page's Join requests tab. Sent from the asking request.
  */
 export const JoinRequestEmail = z.strictObject({
-  requesterName: Line,
+  requesterName: Name,
   requesterEmail: z.email().max(254),
   /** The Members page, where the request waits. */
   reviewPath: AppPath,

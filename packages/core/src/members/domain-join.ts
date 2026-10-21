@@ -10,14 +10,14 @@ import { and, asc, desc, eq, inArray, notInArray, sql } from 'drizzle-orm';
 import {
   domainOf,
   PERMISSIONS,
-  PUBLIC_EMAIL_DOMAINS,
+  isPublicEmailDomain,
   ROLE_PERMISSIONS,
   type Joinable,
   type JoinRequestView,
   type WorkspaceDomainsView,
 } from '@crm/contracts';
 import { schema, type Database, type WorkspaceTx } from '@crm/db';
-import { enterDomainWorkspaces } from '../access/door.ts';
+import { enterDomainWorkspace, enterDomainWorkspaces } from '../access/door.ts';
 import { checkScope } from '../access/mint.ts';
 import { can } from '../access/policy.ts';
 import { inWorkspace } from '../access/run.ts';
@@ -48,8 +48,22 @@ export interface SessionPerson {
   readonly emailVerified: boolean;
 }
 
+/**
+ * The asker's name as admins read it in the tab and the email: control
+ * characters and line breaks become spaces, runs of space one, at most 80
+ * characters; the address's local part when nothing is left.
+ */
+export function plainName(raw: string, email: string): string {
+  const clean = raw
+    // eslint-disable-next-line no-control-regex
+    .replace(/[\u0000-\u001f\u007f-\u009f\u2028\u2029]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+  return (clean === '' ? (email.split('@')[0] ?? email) : clean).slice(0, 80);
+}
+
 /** Whether a domain is a public mail domain (gmail.com and the like). */
-const isPublic = (domain: string): boolean => PUBLIC_EMAIL_DOMAINS.includes(domain);
+const isPublic = (domain: string): boolean => isPublicEmailDomain(domain);
 
 /** The person's own domain when they may use it to join or to open a workspace to: verified, and not public. */
 function ownDomain(person: Pick<SessionPerson, 'email' | 'emailVerified'>): string | undefined {
@@ -116,6 +130,12 @@ export async function setWorkspaceDomains(
   const { result } = await runWrite(
     scope,
     async ({ tx }) => {
+      // One save at a time per workspace, so two admins adding the same domain never collide.
+      await tx
+        .select({ id: workspaces.id })
+        .from(workspaces)
+        .where(eq(workspaces.id, scope.workspaceId))
+        .for('no key update');
       const before = await domainsOf(tx, scope.workspaceId);
       const added = wanted.filter((domain) => !before.includes(domain));
       for (const domain of added) {
@@ -130,17 +150,39 @@ export async function setWorkspaceDomains(
         await tx
           .delete(workspaceDomains)
           .where(and(eq(workspaceDomains.workspaceId, scope.workspaceId), inArray(workspaceDomains.domain, removed)));
+        // Open requests that came through a domain now off close with it: nobody approves through a door shut.
+        const actor = actorRow(scope.actor);
+        await tx
+          .update(joinRequests)
+          .set({
+            status: 'declined',
+            decidedByType: actor.type,
+            decidedById: actor.id,
+            decidedByMemberId: actor.memberId,
+            decidedAt: sql`now()`,
+            ...touched(scope),
+          })
+          .where(
+            and(
+              eq(joinRequests.workspaceId, scope.workspaceId),
+              eq(joinRequests.status, 'open'),
+              inArray(sql`split_part(${joinRequests.email}, '@', 2)`, removed),
+            ),
+          );
       }
       const by = touched(scope);
       for (const domain of added) {
-        await tx.insert(workspaceDomains).values({
-          workspaceId: scope.workspaceId,
-          domain,
-          createdByType: by.updatedByType,
-          createdById: by.updatedById,
-          createdByMemberId: by.updatedByMemberId,
-          ...by,
-        });
+        await tx
+          .insert(workspaceDomains)
+          .values({
+            workspaceId: scope.workspaceId,
+            domain,
+            createdByType: by.updatedByType,
+            createdById: by.updatedById,
+            createdByMemberId: by.updatedByMemberId,
+            ...by,
+          })
+          .onConflictDoNothing();
       }
       if (added.length > 0 || removed.length > 0) {
         await writeAudit(
@@ -240,9 +282,8 @@ export async function requestToJoin(
   const id = checkId(workspaceId, WORKSPACE_NOT_FOUND);
   const domain = ownDomain(person);
   if (domain === undefined) throw refuse('NOT_FOUND', WORKSPACE_NOT_FOUND);
-  const entered = (await enterDomainWorkspaces(deps, domain)).find((each) => each.workspaceId === id);
-  if (entered === undefined) throw refuse('NOT_FOUND', WORKSPACE_NOT_FOUND);
-  const { scope } = entered;
+  const scope = await enterDomainWorkspace(deps, id, domain);
+  if (scope === undefined) throw refuse('NOT_FOUND', WORKSPACE_NOT_FOUND);
   const { result } = await runWrite(
     scope,
     async ({ tx }) => {
@@ -254,7 +295,7 @@ export async function requestToJoin(
       if (standing.pending) return { joinable };
       const requestId = newId();
       const email = person.email.trim().toLowerCase();
-      const name = (person.name.trim() === '' ? (email.split('@')[0] ?? email) : person.name.trim()).slice(0, 80);
+      const name = plainName(person.name, email);
       await tx.insert(joinRequests).values({
         workspaceId: id,
         id: requestId,

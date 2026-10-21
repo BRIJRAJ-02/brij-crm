@@ -93,9 +93,11 @@ describe('email domains (AC-819)', () => {
     expect(await refusalOf(setWorkspaceDomains(w.owner, { domains: ['globex.test'] }, ada))).toMatchObject({
       code: 'DOMAIN_NOT_YOURS',
     });
-    expect(await refusalOf(setWorkspaceDomains(w.owner, { domains: ['gmail.com'] }, ada))).toMatchObject({
-      code: 'DOMAIN_PUBLIC',
-    });
+    for (const free of ['gmail.com', 'hotmail.fr', 'yahoo.com.mx', 'gmx.net', 'mailinator.com']) {
+      expect(await refusalOf(setWorkspaceDomains(w.owner, { domains: [free] }, ada))).toMatchObject({
+        code: 'DOMAIN_PUBLIC',
+      });
+    }
     // Unverified, their own domain isn't theirs to add.
     expect(
       await refusalOf(setWorkspaceDomains(w.owner, { domains: [domain] }, { ...ada, emailVerified: false })),
@@ -207,5 +209,29 @@ describe('asking to join and answering (AC-819, AC-820)', () => {
     ).toMatchObject({ code: 'NOT_FOUND' });
     await setWorkspaceDomains(w.owner, { domains: [] }, w.ownerPerson);
     expect(await listJoinable({ db }, await person(domain))).toEqual([]);
+    // Its open request closed with the domain: nobody approves through a door shut.
+    expect(await listJoinRequests(w.owner)).toEqual([]);
+    expect(await refusalOf(decideJoinRequest(w.owner, { requestId: request?.id ?? '', approve: true }))).toMatchObject({
+      code: 'NOT_FOUND',
+    });
+  });
+
+  it('turns two saves of the same domain into one row, not an error', async () => {
+    const domain = `acme-${tag()}.test`;
+    const w = await workspace(domain);
+    const saves = await Promise.all([
+      setWorkspaceDomains(w.owner, { domains: [domain] }, w.ownerPerson),
+      setWorkspaceDomains(w.owner, { domains: [domain] }, w.ownerPerson),
+    ]);
+    expect(saves.map((save) => save.domains)).toEqual([[domain], [domain]]);
+  });
+
+  it('keeps a requester name on one line', async () => {
+    const domain = `acme-${tag()}.test`;
+    const w = await workspace(domain);
+    await setWorkspaceDomains(w.owner, { domains: [domain] }, w.ownerPerson);
+    const bea = await person(domain);
+    await requestToJoin({ db }, { ...bea, name: 'Bea\r\nBcc: x@evil.example' }, w.workspaceId);
+    expect((await listJoinRequests(w.owner))[0]?.name).toBe('Bea Bcc: x@evil.example');
   });
 });

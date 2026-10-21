@@ -96,7 +96,7 @@ describe('every tenant table', () => {
             row.index === 'invitations_token' ||
             row.index === 'invitations_open_address' ||
             // /join finds a person's workspaces by their email's domain (spec 0031, AC-819), read only through
-            // crm_domain_lookup's one function.
+            // crm_domain_lookup's two functions.
             row.index === 'workspace_domains_domain_lookup'
           ),
       )
@@ -154,6 +154,7 @@ describe('the holes in row level security (crm_search_text, spec 0004 AC-24; the
       { name: 'crm_outbox_prune', owner: 'crm_relay' },
       { name: 'crm_outbox_workspaces', owner: 'crm_relay' },
       { name: 'crm_search_text', owner: 'crm_search' },
+      { name: 'crm_workspace_has_domain', owner: 'crm_domain_lookup' },
       { name: 'crm_workspace_ids', owner: 'crm_sweep' },
       { name: 'crm_workspaces_by_domain', owner: 'crm_domain_lookup' },
     ]);
@@ -177,6 +178,7 @@ describe('the holes in row level security (crm_search_text, spec 0004 AC-24; the
       { name: 'crm_outbox_prune', config: ['search_path=pg_catalog, pg_temp', 'lock_timeout=1s'], atomic: true },
       { name: 'crm_outbox_workspaces', config: ['search_path=pg_catalog, pg_temp'], atomic: true },
       { name: 'crm_search_text', config: ['search_path=pg_catalog, pg_temp'], atomic: true },
+      { name: 'crm_workspace_has_domain', config: ['search_path=pg_catalog, pg_temp'], atomic: true },
       { name: 'crm_workspace_ids', config: ['search_path=pg_catalog, pg_temp'], atomic: true },
       { name: 'crm_workspaces_by_domain', config: ['search_path=pg_catalog, pg_temp'], atomic: true },
     ]);
@@ -231,7 +233,12 @@ describe('the holes in row level security (crm_search_text, spec 0004 AC-24; the
       ['crm_invitation_by_token(text)', 'crm_invitation_open_for(text)'],
       ['app', 'app'],
     ],
-    ['crm_domain_lookup', ['crm_workspaces_by_domain'], ['crm_workspaces_by_domain(text)'], ['app']],
+    [
+      'crm_domain_lookup',
+      ['crm_workspace_has_domain', 'crm_workspaces_by_domain'],
+      ['crm_workspace_has_domain(uuid, text)', 'crm_workspaces_by_domain(text)'],
+      ['app', 'app'],
+    ],
     [
       'crm_booking_lookup',
       ['crm_booking_page_by_key', 'crm_booking_by_token'],

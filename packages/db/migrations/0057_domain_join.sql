@@ -124,18 +124,42 @@ begin atomic
   select d.workspace_id
   from public.workspace_domains d
   where d.domain = pg_catalog.lower(crm_workspaces_by_domain.domain)
+  order by d.workspace_id
   limit 50;
+end;
+--> statement-breakpoint
+
+-- Whether one workspace lets people at this domain ask to join: the request path's check, so a workspace past the
+-- list's cap of 50 is still answered exactly.
+create function crm_workspace_has_domain(workspace_id uuid, domain text)
+  returns boolean
+  language sql
+  stable
+  security definer
+  set search_path = pg_catalog, pg_temp
+begin atomic
+  select exists (
+    select 1 from public.workspace_domains d
+    where d.workspace_id = crm_workspace_has_domain.workspace_id
+      and d.domain = pg_catalog.lower(crm_workspace_has_domain.domain)
+  );
 end;
 --> statement-breakpoint
 revoke all on function crm_workspaces_by_domain(text) from public;
 --> statement-breakpoint
+revoke all on function crm_workspace_has_domain(uuid, text) from public;
+--> statement-breakpoint
 grant execute on function crm_workspaces_by_domain(text) to crm_app;
+--> statement-breakpoint
+grant execute on function crm_workspace_has_domain(uuid, text) to crm_app;
 --> statement-breakpoint
 grant crm_domain_lookup to current_user with inherit false, set true;
 --> statement-breakpoint
 grant create on schema public to crm_domain_lookup;
 --> statement-breakpoint
 alter function crm_workspaces_by_domain(text) owner to crm_domain_lookup;
+--> statement-breakpoint
+alter function crm_workspace_has_domain(uuid, text) owner to crm_domain_lookup;
 --> statement-breakpoint
 revoke create on schema public from crm_domain_lookup;
 --> statement-breakpoint
@@ -147,14 +171,16 @@ do $$
 begin
   if exists (
     select 1 from pg_proc p
-    where p.oid = 'public.crm_workspaces_by_domain(text)'::regprocedure
+    where p.oid in ('public.crm_workspaces_by_domain(text)'::regprocedure, 'public.crm_workspace_has_domain(uuid, text)'::regprocedure)
       and pg_get_userbyid(p.proowner) <> 'crm_domain_lookup'
   ) or exists (
     select 1 from pg_proc p cross join lateral aclexplode(p.proacl) a
-    where p.oid = 'public.crm_workspaces_by_domain(text)'::regprocedure and a.privilege_type = 'EXECUTE'
+    where p.oid in ('public.crm_workspaces_by_domain(text)'::regprocedure, 'public.crm_workspace_has_domain(uuid, text)'::regprocedure)
+      and a.privilege_type = 'EXECUTE'
       and a.grantee not in ('crm_domain_lookup'::regrole, 'crm_app'::regrole)
-  ) or has_function_privilege('crm_identity', 'public.crm_workspaces_by_domain(text)', 'EXECUTE') then
-    raise exception 'the domain lookup must be owned by crm_domain_lookup and executable by crm_app alone';
+  ) or has_function_privilege('crm_identity', 'public.crm_workspaces_by_domain(text)', 'EXECUTE')
+    or has_function_privilege('crm_identity', 'public.crm_workspace_has_domain(uuid, text)', 'EXECUTE') then
+    raise exception 'the domain lookups must be owned by crm_domain_lookup and executable by crm_app alone';
   end if;
   if exists (
     select 1 from pg_auth_members m where m.member = 'crm_domain_lookup'::regrole

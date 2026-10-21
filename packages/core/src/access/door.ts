@@ -339,6 +339,24 @@ export async function enterDomainWorkspaces(
   return found.rows.map((row) => ({ workspaceId: row.workspace_id, scope: systemScope(deps.db, row.workspace_id) }));
 }
 
+/**
+ * One workspace's system scope when it lets people at `domain` ask to join
+ * (spec 0031, AC-819), through `crm_workspace_has_domain`, or undefined: the
+ * request path's exact check, never cut off by the list's cap.
+ */
+export async function enterDomainWorkspace(
+  deps: { readonly db: Database },
+  workspaceId: string,
+  domain: string,
+): Promise<EngineScope | undefined> {
+  const wanted = domain.trim().toLowerCase();
+  if (wanted === '' || wanted.length > 253) return undefined;
+  const found = await deps.db.withWorkspace(NO_WORKSPACE, (tx) =>
+    tx.execute<{ on: boolean }>(sql`select crm_workspace_has_domain(${workspaceId}::uuid, ${wanted}) as on`),
+  );
+  return found.rows[0]?.on === true ? systemScope(deps.db, workspaceId) : undefined;
+}
+
 /** The ids crm_booking_page_by_key reads past row level security: a page's workspace and id, nothing else. */
 interface PageKeyRow extends Record<string, unknown> {
   readonly workspace_id: string;

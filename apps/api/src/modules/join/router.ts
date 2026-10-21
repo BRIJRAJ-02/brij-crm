@@ -24,6 +24,9 @@ import { sourceOf } from '../../source.ts';
 /** Requests one person may make in an hour, across workspaces: enough for a team, too few to flood admins. */
 const REQUESTS_PER_HOUR = 10;
 
+/** Reads of `/join` (and the welcome page's nudge) one person may make in an hour. */
+const LISTS_PER_HOUR = 120;
+
 /** The person as the session knows them. */
 const personOf = (user: {
   readonly id: string;
@@ -89,7 +92,15 @@ async function mailApproved(
 
 /** `/join`: the workspaces the person may ask to join, and asking (bootstrap). */
 export const joinRouter = {
-  list: authed.join.list.handler(({ context }) => listJoinable({ db: context.db }, personOf(context.user))),
+  list: authed.join.list.handler(async ({ context }) => {
+    // Each call reads every workspace at the domain, so reloading in a loop is capped.
+    const limit = await context.limiter.consumeRateLimit(`join:list:${context.user.id}`, {
+      window: 3600,
+      max: LISTS_PER_HOUR,
+    });
+    if (!limit.allowed) throw apiError('RATE_LIMITED', 'Too many tries in the last hour. Try again later.');
+    return listJoinable({ db: context.db }, personOf(context.user));
+  }),
   request: authed.join.request.handler(async ({ context, input }) => {
     const limit = await context.limiter.consumeRateLimit(`join:request:${context.user.id}`, {
       window: 3600,

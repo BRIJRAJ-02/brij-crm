@@ -11,7 +11,7 @@ describe('the join emails', () => {
       { requesterName: 'Grace Hopper', requesterEmail: 'grace@acme.com', reviewPath: '/w/acme/settings/members' },
       { appOrigin: ORIGIN, workspaceName: 'Acme' },
     );
-    expect(email.subject).toBe('Grace Hopper asked to join Acme');
+    expect(email.subject).toBe('Grace Hopper (grace@acme.com) asked to join Acme');
     expect(email.html).toContain(`href="${ORIGIN}/w/acme/settings/members"`);
     expect(email.text).toContain('Grace Hopper (grace@acme.com) would like to join Acme.');
   });
@@ -20,6 +20,15 @@ describe('the join emails', () => {
     const email = await renderJoinApproved({ openPath: '/w/acme' }, { appOrigin: ORIGIN, workspaceName: 'Acme' });
     expect(email.subject).toBe('You’ve joined Acme on Timefix');
     expect(email.html).toContain(`href="${ORIGIN}/w/acme"`);
+  });
+
+  it('refuses a requester name that breaks the line', async () => {
+    await expect(
+      renderJoinRequest(
+        { requesterName: 'Grace\r\nBcc: x@evil.example', requesterEmail: 'grace@acme.com', reviewPath: '/w/acme' },
+        { appOrigin: ORIGIN, workspaceName: 'Acme' },
+      ),
+    ).rejects.toThrow();
   });
 
   it('refuses a link to another site', async () => {
