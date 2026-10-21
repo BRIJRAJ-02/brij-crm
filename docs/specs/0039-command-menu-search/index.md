@@ -1,10 +1,12 @@
-# 0036. Command menu (⌘K) and global search
+# 0039. Command menu (⌘K) and global search
 
 **Date**: 2026-10-20
 **Status**: Proposed
-**Numbering**: handed out by the coordinator on 20 October 2026 (roadmap, Release 1, "Command menu (⌘K) over records, views and pages"; scope feature #33). This spec owns AC-1071 to AC-1110.
+**Numbering**: handed out by the coordinator on 20 October 2026 as 0036, renumbered 0039 on 21 October 2026 (0036 went to sign in and first run) (roadmap, Release 1, "Command menu (⌘K) over records, views and pages"; scope feature #33). This spec owns AC-1071 to AC-1110.
 
 ## Owner decisions needed
+
+The owner accepted every recommendation below on 21 October 2026; each is now a decision.
 
 Each has a recommendation, which the build follows unless the owner says otherwise, and a runner up.
 
@@ -111,7 +113,7 @@ Build the recommendations: one CommandPalette based menu in its own chunk, opene
 - At most 20 rows per member: each visit deletes the member's rows past the 20th newest.
 - No audit columns beyond `visited_at`: like `member_view_state`, it is the member's own bookmark, not workspace data, and it has no outbox row.
 
-**`crm_search_similar(search_attributes uuid[], search_pattern text, search_limit integer)`**: `security definer`, owned by `crm_search`, `search_path = pg_catalog, pg_temp`, a standard SQL body (`begin atomic`). It returns `(owner_id uuid, score real)`: the owner ids in the session's workspace whose current text for one of the attributes passes `lower(pattern) <% lower(left(text_value, 2048))` (pg_trgm word similarity, threshold 0.5, set on the function), ordered by `word_similarity` descending, at most `least(greatest(limit, 1), 200)`. It matches nothing when no workspace is set. It is executable by `crm_app` only. It reads through the existing `values_text_trigram` index (`%>` is a GIN trigram operator).
+**`crm_search_similar(search_attributes uuid[], search_pattern text, search_limit integer)`**: `security definer`, owned by `crm_search`, `search_path = pg_catalog, pg_temp`, a standard SQL body (`begin atomic`). It returns owner ids (`setof uuid`, never text) in the session's workspace whose current text for one of the attributes passes `lower(pattern) <% lower(left(text_value, 2048))` (pg_trgm word similarity, threshold 0.5, set on the function), at most `least(greatest(limit, 1), 200)`, in no particular order: with no `ORDER BY` a common match stops at the limit instead of scoring every candidate, and the rank statement orders the few it gets by `word_similarity` (a build call, 21 October 2026). It matches nothing when no workspace is set. It is executable by `crm_app` only. It reads through the existing `values_text_trigram` index (`%>` is a GIN trigram operator).
 
 ### Services (`packages/core/src/search/`, new)
 

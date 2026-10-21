@@ -1,4 +1,4 @@
-# 0036. Command menu (⌘K) and global search: rationale
+# 0039. Command menu (⌘K) and global search: rationale
 
 ## Context
 
