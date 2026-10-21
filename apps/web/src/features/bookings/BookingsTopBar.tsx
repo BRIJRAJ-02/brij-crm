@@ -3,7 +3,7 @@
 // Main task: book someone in from any tab: New opens New meeting at the next free half hour of the week on screen.
 // Leaves out: drawing a span on the week (the calendar's own way into the same dialog) and the tabs (the layout's).
 import { useCalendar, useCaptureList } from '@crm/data/react';
-import { Button, TopBar } from '@crm/ui';
+import { Button, ButtonLink, TopBar } from '@crm/ui';
 import { useMatch, useNavigate, useRouteContext, useSearch } from '@tanstack/react-router';
 import { useState } from 'react';
 import { SCHEDULING_HUE } from '../scheduling.ts';
@@ -15,7 +15,7 @@ import { strings } from './strings.ts';
 import { weekRange } from './week.ts';
 import { useFirstDay } from '../workspace/first-day.ts';
 import { useCan } from '../workspace/WorkspacePage.tsx';
-import { pageEditorHref } from '../booking/links.ts';
+import { linksHref, pageEditorHref } from '../booking/links.ts';
 import { NewPageDialog } from '../booking/NewPageDialog.tsx';
 
 /** Props for BookingsTopBar. */
@@ -65,22 +65,35 @@ export function BookingsTopBar({ slug, actionSlot }: BookingsTopBarProps) {
     );
   };
 
-  const button = hasNoPage ? (
-    <Button
-      variant="primary"
-      icon="plus"
-      label={strings.newPageFirst}
-      onPress={() => {
-        setAddingPage(true);
-      }}
-    >
-      {strings.newButton}
-    </Button>
-  ) : (
-    <Button variant="primary" icon="plus" label={strings.newMeeting} isDisabled={bookable.length === 0} onPress={open}>
-      {strings.newButton}
-    </Button>
-  );
+  // Pages but none on: New goes to them to turn one on, rather than making another.
+  const hasPage = pages.status === 'ready' && pages.items.length > 0;
+  const button =
+    hasNoPage && hasPage ? (
+      <ButtonLink variant="primary" icon="plus" label={strings.turnOnPageFirst} href={linksHref(slug)}>
+        {strings.newButton}
+      </ButtonLink>
+    ) : hasNoPage ? (
+      <Button
+        variant="primary"
+        icon="plus"
+        label={strings.newPageFirst}
+        onPress={() => {
+          setAddingPage(true);
+        }}
+      >
+        {strings.newButton}
+      </Button>
+    ) : (
+      <Button
+        variant="primary"
+        icon="plus"
+        label={strings.newMeeting}
+        isDisabled={bookable.length === 0}
+        onPress={open}
+      >
+        {strings.newButton}
+      </Button>
+    );
   return (
     <TopBar title={strings.title} icon="calendar-days" hue={SCHEDULING_HUE}>
       {actionSlot !== undefined ? <div ref={actionSlot} /> : button}

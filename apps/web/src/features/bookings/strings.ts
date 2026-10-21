@@ -146,7 +146,9 @@ export const strings = {
   /** The TopBar's New: it reads New, as Captures' does, and is named New meeting. */
   newButton: 'New',
   /** Why the TopBar's New is off: a meeting goes on a booking page that is on. */
-  /** New's name with no booking page on yet: it makes one first. */
+  /** New's name when booking pages exist but none is on: it opens them. */
+  turnOnPageFirst: 'Turn on a booking page to book someone in',
+  /** New's name with no booking page yet: it makes one first. */
   newPageFirst: 'New booking page, to book someone in',
   /** What the TopBar's count counts, for screen readers: "4 upcoming bookings". */
   with: 'With',

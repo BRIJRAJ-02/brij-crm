@@ -693,7 +693,7 @@ function WeekView(props: BookingsCalendarScreenProps) {
   const isShownEvent = (item: { readonly calendarId: string }) =>
     calendarById.get(item.calendarId)?.showInWeek !== false &&
     (pickedCalendars === undefined || pickedCalendars.has(item.calendarId));
-  const panel = useCalendarsPanel(accounts.length > 0);
+  const panel = useCalendarsPanel(calendarList.status === 'ready' ? accounts.length > 0 : undefined);
   const hasNoCalendar = calendarList.status === 'ready' && accounts.length === 0;
   const framed = (content: ReactNode) => (
     <CalendarsFrame
@@ -1359,7 +1359,7 @@ export function BookingsListScreen({
     ),
   );
   const hasCalendar = calendarList.status === 'ready' && calendarList.accounts.length > 0;
-  const panel = useCalendarsPanel(hasCalendar);
+  const panel = useCalendarsPanel(calendarList.status === 'ready' ? hasCalendar : undefined);
   // The open meeting by row id, read from the list as it is now: a change shows in the panel.
   // A colleague's booking (an admin's view, a team page) names its host rather than "You".
   const me = useMyAccess()?.memberId;

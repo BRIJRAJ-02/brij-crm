@@ -23,6 +23,7 @@ New. PreviewLayout keeps its column at the end for a preview and folds it into a
 - Wide, the aside is a `size-measure` column `space-16` from the main column while `isAsideOpen`; the caller's toggle folds it (and remembers it, per browser).
 - Narrower than `bp-container-md` plus `size-measure` of its own width, the aside leaves the page; `isAsideOpen` then opens it as a sheet (Panel) titled `asideLabel`, closed by its close button or Escape (`onAsideClose`). `onNarrowChange` tells the caller, so one toggle does the right thing: fold the column, or open the sheet.
 - The aside is a landmark named `asideLabel`.
+- `isFill` takes the height its parent gives (PageColumn `align="fill"`) and passes it to the main column, so a child that fills (WeekCalendar `isFill`) reaches the view's foot; the aside keeps its own height. Why a variant: the layout sits between the page and the grid, and the height can't pass through it otherwise.
 
 ## States
 

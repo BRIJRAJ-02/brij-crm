@@ -39,6 +39,8 @@ New. Nothing in the library places things on a time axis. Board and DataGrid are
 - `focusDay` (a new `{ dayKey, blockId? }` each time) puts focus on that block while it is still on the week, else on that day's column, once any closing overlay has gone and only when focus fell to the page. Why a prop: the week owns its columns and blocks, and nothing outside could focus one without reaching into its DOM; a screen needs it after a change made through a dialog outside the block's card (a block removed, a booking cancelled). A card closed with Escape after the screen opened it again goes back to its block the same way.
 - Below 480px of its container, the header stays as seven day buttons and the grid shows the selected day alone.
 
+- `isFill` makes the grid take the height its parent gives, the hours scrolling inside, never fewer than six on screen. Without it the hours show twelve at a time. Why a variant: Bookings › Calendar is the page itself and should reach the view's foot (the owner, 22 October 2026); a grid among other content keeps its twelve hours.
+
 ## States
 
 Blocks (bookings, events, closed and busy time) of every length, a quarter hour one compact centred line, none (an empty grid: the caller says "Nothing booked this week" under it), an open block (ringed, its card open), focused day and block rings, and loading (`isLoading`: the grid itself, busy, with no blocks, so the week arrives in place; each day reads "loading" rather than "nothing on"). Failure belongs to the screen.

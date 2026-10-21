@@ -46,11 +46,13 @@ function writeChoice(choice: 'folded' | 'open'): void {
  * chooses, it opens only when a calendar is connected, since with none it would hold nothing but a prompt
  * squeezing the week (the owner, 22 October 2026); their choice is kept after that.
  */
-export function useCalendarsPanel(hasCalendar: boolean) {
+export function useCalendarsPanel(hasCalendar: boolean | undefined) {
   const [choice, setChoice] = useState(readChoice);
   const [isNarrow, setNarrow] = useState(false);
   const [isSheetOpen, setSheetOpen] = useState(false);
-  const isBesideOpen = choice === undefined ? hasCalendar : choice === 'open';
+  // With none connected it never opens beside the view (its toggle gives way to Connect calendar, which couldn't
+  // close it); while the calendars load, it opens only for a member who chose it open, so it rarely moves.
+  const isBesideOpen = hasCalendar === undefined ? choice === 'open' : hasCalendar && choice !== 'folded';
   return {
     isOpen: isNarrow ? isSheetOpen : isBesideOpen,
     isNarrow,
@@ -87,11 +89,11 @@ export function CalendarsToggle({
 }) {
   if (hasNoCalendar)
     return (
+      // Its label stays on a phone too: the icon alone, under New, would read as a new event.
       <ButtonLink
         variant="ghost"
         icon="calendar-plus"
         label={strings.connectCalendar}
-        isLabelCollapsible
         href={calendarSettingsHref(slug)}
       >
         {strings.connectCalendarShort}
