@@ -10,6 +10,8 @@ export const strings = {
     reply: (actor: string) => `${actor} replied in a thread`,
     task_assigned: (actor: string) => `${actor} assigned you a task`,
   },
+  /** A mention in a note: "Ada Lovelace mentioned you in a note". */
+  mentionInNote: (actor: string) => `${actor} mentioned you in a note`,
   /** Read before an unread row's sentence. */
   unread: 'Unread',
   moreActions: 'More actions',

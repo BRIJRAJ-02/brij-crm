@@ -51,6 +51,8 @@ export const NotificationView = z.object({
   threadId: z.uuid().optional(),
   commentId: z.uuid().optional(),
   taskId: z.uuid().optional(),
+  /** A mention in a note (with its record in `record`): the note window opens on it. */
+  noteId: z.uuid().optional(),
   excerpt: z.string(),
 });
 /** One notification as its recipient sees it. */

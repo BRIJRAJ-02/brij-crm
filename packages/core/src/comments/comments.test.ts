@@ -29,6 +29,7 @@ import {
   queueNextEmail,
   setNotificationSettings,
 } from '../notifications/inbox.ts';
+import { deleteNote, saveNote } from '../notes/notes.ts';
 import { prepareNotificationEmail } from '../notifications/email.ts';
 import { createTask, updateTask } from '../tasks/tasks.ts';
 import { rescope, testScope } from '../testing.ts';
@@ -638,5 +639,41 @@ describe('the notifications email (AC-1176, AC-1177)', () => {
     if (digest.skipped !== undefined) throw new Error(`Skipped: ${digest.skipped}`);
     expect(digest.params.items.map((item) => item.sentence)).toEqual(['Ada replied in a thread']);
     expect((await prepareNotificationEmail(door, input)).skipped).toBe('nothing');
+  });
+});
+
+describe('mentions in notes (spec 0038 with spec 0019)', () => {
+  const doc = (...members: readonly string[]) => ({
+    type: 'doc',
+    content: [
+      {
+        type: 'paragraph',
+        content: [
+          { type: 'text', text: 'Over to ' },
+          ...members.map((id) => ({ type: 'mention', attrs: { id, label: 'someone' } })),
+        ],
+      },
+    ],
+  });
+
+  it('notifies a member a note newly mentions, never the writer, takes it back when removed, and hides it in the trash', async () => {
+    const w = await workspace();
+    const acme = await w.company('Acme');
+    const noteId = newId();
+    await saveNote(w.scope, { id: noteId, recordId: acme, title: 'Renewal', content: doc(w.bea, w.ada) }, hooks());
+    const beaInbox = async () => (await listNotifications(w.as(w.bea), { status: 'inbox' })).items;
+    expect(await beaInbox()).toMatchObject([{ kind: 'mention', noteId, excerpt: 'Renewal' }]);
+    expect((await listNotifications(w.scope, { status: 'inbox' })).items).toEqual([]);
+    // A save that keeps Bea and adds Cal notifies Cal only, once.
+    await saveNote(w.scope, { id: noteId, recordId: acme, content: doc(w.bea, w.cal), baseVersion: 1 }, hooks());
+    expect(await beaInbox()).toHaveLength(1);
+    expect((await listNotifications(w.as(w.cal), { status: 'inbox' })).items).toMatchObject([{ noteId }]);
+    // Removing Bea takes hers back.
+    await saveNote(w.scope, { id: noteId, recordId: acme, content: doc(w.cal), baseVersion: 2 }, hooks());
+    expect(await beaInbox()).toEqual([]);
+    // In the trash, the note's notification is hidden.
+    await deleteNote(w.scope, { noteId }, hooks());
+    expect((await listNotifications(w.as(w.cal), { status: 'inbox' })).items).toEqual([]);
+    expect(await w.outbox('notifications')).not.toHaveLength(0);
   });
 });

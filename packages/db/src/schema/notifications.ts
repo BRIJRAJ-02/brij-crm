@@ -23,6 +23,7 @@ import {
 } from 'drizzle-orm/pg-core';
 import { actorColumns, timestamptz, workspaceId } from './common.ts';
 import { comments } from './comments.ts';
+import { notes } from './notes.ts';
 import { records } from './records.ts';
 import { tasks } from './tasks.ts';
 import { actorConstraints, members } from './workspaces.ts';
@@ -51,6 +52,8 @@ export const notifications = pgTable(
     threadId: uuid('thread_id'),
     commentId: uuid('comment_id'),
     taskId: uuid('task_id'),
+    /** A mention in a note (spec 0038 with spec 0019): the note, and its record in `recordId`. */
+    noteId: uuid('note_id'),
     createdAt: timestamptz('created_at').notNull().defaultNow(),
     readAt: timestamptz('read_at'),
     doneAt: timestamptz('done_at'),
@@ -80,12 +83,20 @@ export const notifications = pgTable(
       columns: [t.workspaceId, t.taskId],
       foreignColumns: [tasks.workspaceId, tasks.id],
     }).onDelete('cascade'),
-    // A comment notification names its comment, thread and record; a task one its task.
+    foreignKey({
+      name: 'notifications_note',
+      columns: [t.workspaceId, t.noteId],
+      foreignColumns: [notes.workspaceId, notes.id],
+    }).onDelete('cascade'),
+    // A comment notification names its comment, thread and record; a task one its task; a note mention its note
+    // and record.
     check(
       'notifications_subject',
-      sql`(${t.kind} = 'task_assigned' and ${t.taskId} is not null and ${t.commentId} is null)
+      sql`(${t.kind} = 'task_assigned' and ${t.taskId} is not null and ${t.commentId} is null and ${t.noteId} is null)
         or (${t.kind} <> 'task_assigned' and ${t.commentId} is not null and ${t.threadId} is not null
-          and ${t.recordId} is not null and ${t.taskId} is null)`,
+          and ${t.recordId} is not null and ${t.taskId} is null and ${t.noteId} is null)
+        or (${t.kind} = 'mention' and ${t.noteId} is not null and ${t.recordId} is not null
+          and ${t.commentId} is null and ${t.threadId} is null and ${t.taskId} is null)`,
     ),
     // One per recipient per comment, and per task assignment.
     uniqueIndex('notifications_one_per_comment')
@@ -94,6 +105,9 @@ export const notifications = pgTable(
     uniqueIndex('notifications_one_per_task')
       .on(t.workspaceId, t.memberId, t.taskId)
       .where(sql`${t.taskId} is not null`),
+    uniqueIndex('notifications_one_per_note')
+      .on(t.workspaceId, t.memberId, t.noteId)
+      .where(sql`${t.noteId} is not null`),
     // The inbox and Done tabs, newest first.
     index('notifications_inbox')
       .on(t.workspaceId, t.memberId, t.createdAt.desc(), t.id.desc())

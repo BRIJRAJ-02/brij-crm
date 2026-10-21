@@ -27,6 +27,8 @@ New (spec 0038, the inventory's NotificationInbox). No list in the library marks
 - Unread rows show the accent dot and a bolder sentence, and read "Unread" first to a screen reader.
 - The order is the screen's (newest first). A row still loading draws a skeleton and tells the source it is on screen, which loads the next 50.
 
+- `isNote` on a mention says it was in a note ("Ada mentioned you in a note"); its excerpt is the note's title.
+
 ## States
 
 Unread, read, done, loading (skeleton rows), empty (in the screen's words, with its actions), failed with Try again, and no access.

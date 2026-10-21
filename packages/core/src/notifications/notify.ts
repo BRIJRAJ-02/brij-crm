@@ -105,6 +105,53 @@ export async function notifyComment(context: WriteContext, notice: CommentNotice
 }
 
 /**
+ * Mentions in a note (spec 0038 with spec 0019, AC-1163's rule for notes):
+ * `mention` to each member newly mentioned by a save, never the writer, only
+ * active members, one per member per note; a member whose mention a save
+ * removed loses their notification for it. Their inboxes hear of it, and the
+ * email task is queued for those who get mention emails.
+ */
+export async function notifyNoteMentions(
+  context: WriteContext,
+  input: {
+    readonly noteId: string;
+    readonly recordId: string;
+    readonly before: readonly string[];
+    readonly after: readonly string[];
+  },
+): Promise<void> {
+  const me = actingMember(context);
+  const before = new Set(input.before);
+  const after = new Set(input.after);
+  const added = [...after].filter((id) => !before.has(id) && id !== me);
+  const removed = [...before].filter((id) => !after.has(id));
+  const changed: string[] = [];
+  if (removed.length > 0) {
+    const gone = await context.tx.execute<{ member_id: string }>(sql`
+      delete from notifications where note_id = ${input.noteId}::uuid and member_id = any(${uuidList(removed)})
+      returning member_id::text as member_id
+    `);
+    changed.push(...gone.rows.map((row) => row.member_id));
+  }
+  if (added.length > 0) {
+    const actor = actorValues(context);
+    const made = await context.tx.execute<{ member_id: string }>(sql`
+      insert into notifications (workspace_id, member_id, kind, actor_type, actor_id, actor_member_id, record_id,
+        note_id)
+      select ${context.scope.workspaceId}::uuid, m.id, 'mention', ${actor.type}, ${actor.id}::uuid,
+        ${actor.memberId}::uuid, ${input.recordId}::uuid, ${input.noteId}::uuid
+      from members m where m.id = any(${uuidList(added)}) and m.status = 'active'
+      on conflict (workspace_id, member_id, note_id) where note_id is not null do nothing
+      returning member_id::text as member_id
+    `);
+    const recipients = made.rows.map((row) => row.member_id);
+    changed.push(...recipients);
+    await queueEmail(context, recipients, 'mention');
+  }
+  if (changed.length > 0) context.record({ notifications: changed });
+}
+
+/**
  * Takes back a comment's notifications: every one when the comment is
  * deleted (AC-1156), or the `mention` ones of `memberIds` when an edit
  * removed their mention (AC-1163). Their inboxes hear of it.

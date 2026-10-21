@@ -41,6 +41,8 @@ export interface NotificationItem {
   readonly isDone: boolean;
   /** The record it is about, when there is one. */
   readonly record?: RecordRefDisplay;
+  /** A mention in a note, not a comment: the sentence says so. */
+  readonly isNote?: boolean;
   /** The comment's start (mention tokens kept), or the task's title. */
   readonly excerpt: string;
 }
@@ -168,7 +170,8 @@ export function NotificationList({
         </GridListItem>
       );
     }
-    const sentence = strings.sentence[item.kind](item.actor.name);
+    const sentence =
+      item.isNote === true ? strings.mentionInNote(item.actor.name) : strings.sentence[item.kind](item.actor.name);
     return (
       <GridListItem
         id={row.id}

@@ -1,5 +1,5 @@
 -- Comments, mentions and the inbox (spec 0038): `comments` with `comment_versions` and `comment_reactions`, and
--- `notifications` with `notification_settings`, plus the outbox kinds `comments` and `notifications`. The tables,
+-- `notifications` (a comment's, a task assignment's, or a mention in a note) with `notification_settings`, plus the outbox kinds `comments` and `notifications`. The tables,
 -- keys and indexes are drizzle-kit's; row level security and the email task's enqueue function are hand written at
 -- the end. A comment's and a notification's foreign keys to records have no `on delete` action: the purge deletes
 -- them first (spec 0022). The new outbox kinds are added in this transaction and first used by later ones.
@@ -117,14 +117,17 @@ CREATE TABLE "notifications" (
 	"thread_id" uuid,
 	"comment_id" uuid,
 	"task_id" uuid,
+	"note_id" uuid,
 	"created_at" timestamp (6) with time zone DEFAULT now() NOT NULL,
 	"read_at" timestamp (6) with time zone,
 	"done_at" timestamp (6) with time zone,
 	"emailed_at" timestamp (6) with time zone,
 	CONSTRAINT "notifications_pkey" PRIMARY KEY("workspace_id","id"),
-	CONSTRAINT "notifications_subject" CHECK (("notifications"."kind" = 'task_assigned' and "notifications"."task_id" is not null and "notifications"."comment_id" is null)
+	CONSTRAINT "notifications_subject" CHECK (("notifications"."kind" = 'task_assigned' and "notifications"."task_id" is not null and "notifications"."comment_id" is null and "notifications"."note_id" is null)
         or ("notifications"."kind" <> 'task_assigned' and "notifications"."comment_id" is not null and "notifications"."thread_id" is not null
-          and "notifications"."record_id" is not null and "notifications"."task_id" is null)),
+          and "notifications"."record_id" is not null and "notifications"."task_id" is null and "notifications"."note_id" is null)
+        or ("notifications"."kind" = 'mention' and "notifications"."note_id" is not null and "notifications"."record_id" is not null
+          and "notifications"."comment_id" is null and "notifications"."thread_id" is null and "notifications"."task_id" is null)),
 	CONSTRAINT "notifications_actor_actor" CHECK (("notifications"."actor_type" is null and "notifications"."actor_id" is null and "notifications"."actor_member_id" is null)
       or ("notifications"."actor_type" = 'system' and "notifications"."actor_id" is null and "notifications"."actor_member_id" is null)
       or ("notifications"."actor_type" = 'member' and "notifications"."actor_id" is not null and "notifications"."actor_member_id" = "notifications"."actor_id")
@@ -146,12 +149,14 @@ ALTER TABLE "notifications" ADD CONSTRAINT "notifications_member" FOREIGN KEY ("
 ALTER TABLE "notifications" ADD CONSTRAINT "notifications_record" FOREIGN KEY ("workspace_id","record_id") REFERENCES "public"."records"("workspace_id","id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "notifications" ADD CONSTRAINT "notifications_comment" FOREIGN KEY ("workspace_id","comment_id") REFERENCES "public"."comments"("workspace_id","id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "notifications" ADD CONSTRAINT "notifications_task" FOREIGN KEY ("workspace_id","task_id") REFERENCES "public"."tasks"("workspace_id","id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "notifications" ADD CONSTRAINT "notifications_note" FOREIGN KEY ("workspace_id","note_id") REFERENCES "public"."notes"("workspace_id","id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "notifications" ADD CONSTRAINT "notifications_actor" FOREIGN KEY ("workspace_id","actor_member_id") REFERENCES "public"."members"("workspace_id","id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
 CREATE INDEX "comments_by_record" ON "comments" USING btree ("workspace_id","record_id","created_at","id") WHERE "comments"."id" = "comments"."thread_id";--> statement-breakpoint
 CREATE INDEX "comments_by_thread" ON "comments" USING btree ("workspace_id","thread_id","created_at","id");--> statement-breakpoint
 CREATE INDEX "comments_record_all" ON "comments" USING btree ("workspace_id","record_id");--> statement-breakpoint
 CREATE UNIQUE INDEX "notifications_one_per_comment" ON "notifications" USING btree ("workspace_id","member_id","comment_id") WHERE "notifications"."comment_id" is not null;--> statement-breakpoint
 CREATE UNIQUE INDEX "notifications_one_per_task" ON "notifications" USING btree ("workspace_id","member_id","task_id") WHERE "notifications"."task_id" is not null;--> statement-breakpoint
+CREATE UNIQUE INDEX "notifications_one_per_note" ON "notifications" USING btree ("workspace_id","member_id","note_id") WHERE "notifications"."note_id" is not null;--> statement-breakpoint
 CREATE INDEX "notifications_inbox" ON "notifications" USING btree ("workspace_id","member_id","created_at" DESC NULLS LAST,"id" DESC NULLS LAST) WHERE "notifications"."done_at" is null;--> statement-breakpoint
 CREATE INDEX "notifications_done" ON "notifications" USING btree ("workspace_id","member_id","done_at" DESC NULLS LAST,"id" DESC NULLS LAST) WHERE "notifications"."done_at" is not null;--> statement-breakpoint
 CREATE INDEX "notifications_unread" ON "notifications" USING btree ("workspace_id","member_id","created_at" DESC NULLS LAST) WHERE "notifications"."read_at" is null and "notifications"."done_at" is null;--> statement-breakpoint

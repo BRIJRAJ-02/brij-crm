@@ -86,7 +86,10 @@ interface NotificationRow extends Record<string, unknown> {
   readonly thread_id: string | null;
   readonly comment_id: string | null;
   readonly task_id: string | null;
+  readonly note_id: string | null;
   readonly body: string | null;
+  /** A note mention's note title, while the note is live (null when it is in the trash or gone). */
+  readonly note_title: string | null;
   /** The sort moment for the cursor: made (inbox) or done (done), with microseconds. */
   readonly at: string;
 }
@@ -94,11 +97,12 @@ interface NotificationRow extends Record<string, unknown> {
 const NOTIFICATION_COLUMNS = sql`n.id::text as id, n.kind, n.actor_type, n.actor_id::text as actor_id,
   ${millis('n.created_at')} as created_at, ${millis('n.read_at')} as read_at, ${millis('n.done_at')} as done_at,
   n.record_id::text as record_id, n.thread_id::text as thread_id, n.comment_id::text as comment_id,
-  n.task_id::text as task_id, c.body`;
+  n.task_id::text as task_id, n.note_id::text as note_id, c.body, nt.title as note_title`;
 
 /** The comment a notification is about, joined when it is live (a deleted one's notifications are gone already). */
 const COMMENT_JOIN = sql`left join comments c on c.workspace_id = n.workspace_id and c.id = n.comment_id
-  and c.deleted_at is null`;
+  and c.deleted_at is null
+  left join notes nt on nt.workspace_id = n.workspace_id and nt.id = n.note_id and nt.deleted_at is null`;
 
 /**
  * The rows among `rows` the reader may see, as views, in order (AC-1166): a
@@ -132,6 +136,12 @@ async function visibleViews(
       if (task === undefined) return [];
       const [record] = task.records;
       return [{ ...base, taskId: row.task_id, excerpt: task.title, ...(record === undefined ? {} : { record }) }];
+    }
+    if (row.note_id !== null) {
+      // A mention in a note (spec 0019): shown while the note is live and its record reads for the reader.
+      const record = row.record_id === null ? undefined : records.get(row.record_id);
+      if (record === undefined || row.note_title === null) return [];
+      return [{ ...base, record, noteId: row.note_id, excerpt: excerptOf(row.note_title, NOTIFICATION_EXCERPT) }];
     }
     if (row.record_id === null || row.comment_id === null || row.thread_id === null || row.body === null) return [];
     const record = records.get(row.record_id);

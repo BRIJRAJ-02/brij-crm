@@ -36,6 +36,7 @@ export type PreparedNotificationEmail =
 
 /** The sentence an email gives a notification, as the inbox says it. */
 function sentenceOf(view: NotificationView, actor: string): string {
+  if (view.kind === 'mention' && view.noteId !== undefined) return `${actor} mentioned you in a note`;
   if (view.kind === 'mention') return `${actor} mentioned you`;
   if (view.kind === 'reply') return `${actor} replied in a thread`;
   return `${actor} assigned you a task`;
@@ -108,8 +109,11 @@ export async function prepareNotificationEmail(
     if (view.taskId !== undefined) path = `${base}/inbox?task=${view.taskId}`;
     else {
       const objectSlug = view.record === undefined ? undefined : slugs.get(view.record.objectId);
-      if (view.record === undefined || objectSlug === undefined || view.threadId === undefined) return [];
-      path = `${base}/objects/${objectSlug}/${view.record.recordId}/comments?thread=${view.threadId}`;
+      if (view.record === undefined || objectSlug === undefined) return [];
+      const page = `${base}/objects/${objectSlug}/${view.record.recordId}`;
+      if (view.noteId !== undefined) path = `${page}/notes?note=${view.noteId}`;
+      else if (view.threadId !== undefined) path = `${page}/comments?thread=${view.threadId}`;
+      else return [];
     }
     const excerpt = named(view.excerpt, nameOf).slice(0, 200);
     sent.push(view.id);

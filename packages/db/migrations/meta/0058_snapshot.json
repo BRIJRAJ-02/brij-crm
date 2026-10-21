@@ -1,5 +1,5 @@
 {
-  "id": "d4f9919d-696c-45eb-849a-dd47c1c5521f",
+  "id": "e9a9bba1-e0d3-4586-8348-455cf3f2100e",
   "prevId": "251f5e77-ff7e-4de8-aaff-144fdbe9089a",
   "version": "7",
   "dialect": "postgresql",
@@ -8512,6 +8512,12 @@
           "primaryKey": false,
           "notNull": false
         },
+        "note_id": {
+          "name": "note_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
         "created_at": {
           "name": "created_at",
           "type": "timestamp (6) with time zone",
@@ -8591,6 +8597,34 @@
           ],
           "isUnique": true,
           "where": "\"notifications\".\"task_id\" is not null",
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "notifications_one_per_note": {
+          "name": "notifications_one_per_note",
+          "columns": [
+            {
+              "expression": "workspace_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "member_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "note_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "where": "\"notifications\".\"note_id\" is not null",
           "concurrently": false,
           "method": "btree",
           "with": {}
@@ -8775,6 +8809,21 @@
           "onDelete": "cascade",
           "onUpdate": "no action"
         },
+        "notifications_note": {
+          "name": "notifications_note",
+          "tableFrom": "notifications",
+          "tableTo": "notes",
+          "columnsFrom": [
+            "workspace_id",
+            "note_id"
+          ],
+          "columnsTo": [
+            "workspace_id",
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
         "notifications_actor": {
           "name": "notifications_actor",
           "tableFrom": "notifications",
@@ -8805,7 +8854,7 @@
       "checkConstraints": {
         "notifications_subject": {
           "name": "notifications_subject",
-          "value": "(\"notifications\".\"kind\" = 'task_assigned' and \"notifications\".\"task_id\" is not null and \"notifications\".\"comment_id\" is null)\n        or (\"notifications\".\"kind\" <> 'task_assigned' and \"notifications\".\"comment_id\" is not null and \"notifications\".\"thread_id\" is not null\n          and \"notifications\".\"record_id\" is not null and \"notifications\".\"task_id\" is null)"
+          "value": "(\"notifications\".\"kind\" = 'task_assigned' and \"notifications\".\"task_id\" is not null and \"notifications\".\"comment_id\" is null and \"notifications\".\"note_id\" is null)\n        or (\"notifications\".\"kind\" <> 'task_assigned' and \"notifications\".\"comment_id\" is not null and \"notifications\".\"thread_id\" is not null\n          and \"notifications\".\"record_id\" is not null and \"notifications\".\"task_id\" is null and \"notifications\".\"note_id\" is null)\n        or (\"notifications\".\"kind\" = 'mention' and \"notifications\".\"note_id\" is not null and \"notifications\".\"record_id\" is not null\n          and \"notifications\".\"comment_id\" is null and \"notifications\".\"thread_id\" is null and \"notifications\".\"task_id\" is null)"
         },
         "notifications_actor_actor": {
           "name": "notifications_actor_actor",

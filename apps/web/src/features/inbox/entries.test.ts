@@ -42,6 +42,14 @@ describe('targetOf', () => {
     });
   });
 
+  it('opens a note mention in its note window on the record’s Notes tab', () => {
+    const { threadId: _thread, ...rest } = mention;
+    expect(targetOf('acme', { ...rest, noteId: THREAD }, slugs)).toEqual({
+      kind: 'href',
+      href: `/w/acme/objects/companies/${ID}/notes?note=${THREAD}`,
+    });
+  });
+
   it('opens an assignment’s task, and nothing for a record whose object is unknown', () => {
     expect(targetOf('acme', { ...mention, kind: 'task_assigned', taskId: ID }, slugs)).toEqual({
       kind: 'task',

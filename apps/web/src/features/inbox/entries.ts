@@ -52,11 +52,12 @@ export function toNotificationItem(view: NotificationView, members: readonly Mem
     isRead: view.readAt !== undefined,
     isDone: view.doneAt !== undefined,
     ...(view.record === undefined ? {} : { record: view.record }),
+    ...(view.noteId === undefined ? {} : { isNote: true }),
     excerpt: view.excerpt,
   };
 }
 
-/** Where pressing a notification goes: its comment's thread on the record's Comments tab, or its task's dialog. */
+/** Where pressing a notification goes: its comment's thread, its note's window, or its task's dialog. */
 export type NotificationTarget =
   { readonly kind: 'href'; readonly href: string } | { readonly kind: 'task'; readonly taskId: string } | undefined;
 
@@ -70,6 +71,9 @@ export function targetOf(
   if (view.record === undefined) return undefined;
   const objectSlug = objectSlugs.get(view.record.objectId);
   if (objectSlug === undefined) return undefined;
+  if (view.noteId !== undefined) {
+    return { kind: 'href', href: `${recordHref(slug, objectSlug, view.record.recordId, 'notes')}?note=${view.noteId}` };
+  }
   const page = recordHref(slug, objectSlug, view.record.recordId, 'comments');
   return { kind: 'href', href: view.threadId === undefined ? page : `${page}?thread=${view.threadId}` };
 }
