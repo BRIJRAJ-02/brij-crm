@@ -48,6 +48,17 @@ function bySlug(attributes: ReadonlyMap<string, AttributeDef>, apiSlug: string):
   return [...attributes.values()].find((attribute) => attribute.apiSlug === apiSlug && attribute.archivedAt === null);
 }
 
+/** The object's live `owner` attribute set to the member, when it has one that names members; nothing otherwise. */
+function ownerValue(
+  attributes: ReadonlyMap<string, AttributeDef>,
+  memberId: string | undefined,
+): Readonly<Record<string, unknown>> {
+  const owner = memberId === undefined ? undefined : bySlug(attributes, 'owner');
+  if (owner?.type !== 'actor_reference' || memberId === undefined) return {};
+  const value = { type: 'member', id: memberId };
+  return { [owner.id]: owner.isMulti ? [value] : value };
+}
+
 /** The live record holding `key` as a current unique value of `attribute`, if any. */
 async function holderOf(tx: WorkspaceTx, attributeId: string, key: string): Promise<string | undefined> {
   const found = await tx.execute<{ record_id: string }>(sql`
@@ -87,7 +98,13 @@ export interface MatchedVisitor {
 export async function matchVisitor(
   context: WriteContext,
   objects: { readonly people: string; readonly companies: string },
-  visitor: { readonly name: string; readonly email: string; readonly timeZone: string },
+  visitor: {
+    readonly name: string;
+    readonly email: string;
+    readonly timeZone: string;
+    /** The owner a person or company made now gets (a round robin booking's host, spec 0029 AC-744); none when absent. */
+    readonly ownerMemberId?: string;
+  },
 ): Promise<MatchedVisitor> {
   const { tx } = context;
   const people = await loadAttributes(tx, objects.people);
@@ -107,6 +124,7 @@ export async function matchVisitor(
           values: {
             [domains.id]: domains.isMulti ? [domain] : domain,
             ...(name?.type === 'text' ? { [name.id]: domain } : {}),
+            ...ownerValue(companies, visitor.ownerMemberId),
           },
           timeZone: visitor.timeZone,
         });
@@ -133,6 +151,7 @@ export async function matchVisitor(
       ...(name?.type === 'personal_name' ? { [name.id]: splitName(visitor.name) } : {}),
       ...(name?.type === 'text' ? { [name.id]: visitor.name } : {}),
       ...(company !== undefined && reference !== undefined ? { [company.id]: reference } : {}),
+      ...ownerValue(people, visitor.ownerMemberId),
     },
     timeZone: visitor.timeZone,
   });

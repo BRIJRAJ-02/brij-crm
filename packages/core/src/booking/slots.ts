@@ -3,7 +3,7 @@
 // read through the `BusyReader`, the host's confirmed bookings read from
 // Postgres, then the pure engine. Shared by the public slots read and the
 // booking's recheck under the host lock.
-import { and, asc, eq, gt, inArray, lt, ne, sql } from 'drizzle-orm';
+import { and, asc, eq, gt, inArray, lt, ne } from 'drizzle-orm';
 import {
   BookingLocation,
   isTimeZone,
@@ -19,7 +19,7 @@ import { blockedTime } from './blocks.ts';
 import type { BusyReader } from './calendar.ts';
 import { computeSlots, type BookedSpan, type DateOverride, type Span, type WeeklyRule } from './engine.ts';
 
-const { bookingPageMembers, bookingPages, bookings } = schema;
+const { bookingHosts, bookingPageMembers, bookingPages, bookings } = schema;
 
 /** A page as the services read it: its row, the settings parsed, and the hours it books by. */
 export interface PageRecord extends BookingPageSettings {
@@ -99,6 +99,7 @@ export function pageOf(
     dailyLimit: row.dailyLimit,
     slotStep: step !== null && SLOT_STEPS.has(step) ? (step as 15 | 30 | 60) : null,
     status: row.status === 'paused' ? 'paused' : 'live',
+    rescheduleHost: row.rescheduleHost === 'rotation' ? 'rotation' : 'same',
     isDeleted: row.deletedAt !== null,
     isPrivate: row.isPrivate,
     createdAt: row.createdAt,
@@ -177,7 +178,61 @@ export function pickHost(page: PageRecord, members: readonly string[]): string {
   return page.kind === 'collective' ? (members[0] ?? page.ownerMemberId) : page.ownerMemberId;
 }
 
-/** The members' confirmed bookings whose blocked range touches [from, to), as the engine reads them. */
+/**
+ * Each member's confirmed bookings on every page whose blocked range touches
+ * [from, to), from `booking_hosts` (spec 0029, AC-745): a collective or round
+ * robin booking blocks every member it occupies, wherever else they are
+ * booked. One query for everyone; a booking counts toward this page's daily
+ * limit only when it is on it.
+ */
+export async function memberBookings(
+  tx: WorkspaceTx,
+  memberIds: readonly string[],
+  pageId: string,
+  from: Date,
+  to: Date,
+  /** A booking being moved: its own time never blocks it. */
+  except?: string,
+): Promise<ReadonlyMap<string, readonly BookedSpan[]>> {
+  const found = new Map<string, BookedSpan[]>(memberIds.map((memberId) => [memberId, []]));
+  if (memberIds.length === 0) return found;
+  const rows = await tx
+    .select({
+      memberId: bookingHosts.memberId,
+      pageId: bookings.pageId,
+      startsAt: bookings.startsAt,
+      endsAt: bookings.endsAt,
+      blockStart: bookingHosts.startsAt,
+      blockEnd: bookingHosts.endsAt,
+    })
+    .from(bookingHosts)
+    .innerJoin(
+      bookings,
+      and(eq(bookings.workspaceId, bookingHosts.workspaceId), eq(bookings.id, bookingHosts.bookingId)),
+    )
+    .where(
+      and(
+        inArray(bookingHosts.memberId, [...memberIds]),
+        eq(bookingHosts.status, 'confirmed'),
+        ...(except === undefined ? [] : [ne(bookingHosts.bookingId, except)]),
+        // Plain comparisons on the stored ends reach `booking_hosts_by_member` under row level security.
+        lt(bookingHosts.startsAt, to),
+        gt(bookingHosts.endsAt, from),
+      ),
+    );
+  for (const row of rows) {
+    found.get(row.memberId)?.push({
+      start: row.startsAt,
+      end: row.endsAt,
+      blockStart: row.blockStart ?? row.startsAt,
+      blockEnd: row.blockEnd ?? row.endsAt,
+      countsToLimit: row.pageId === pageId,
+    });
+  }
+  return found;
+}
+
+/** The members' confirmed bookings whose blocked range touches [from, to), with a day either side, as the engine reads them. */
 export async function bookedSpans(
   tx: WorkspaceTx,
   memberIds: readonly string[],
@@ -187,31 +242,22 @@ export async function bookedSpans(
   /** A booking being moved: its own time never blocks it. */
   except?: string,
 ): Promise<readonly BookedSpan[]> {
-  const rows = await tx
-    .select({
-      pageId: bookings.pageId,
-      startsAt: bookings.startsAt,
-      endsAt: bookings.endsAt,
-      blockStart: sql<string>`lower(${bookings.during})`,
-      blockEnd: sql<string>`upper(${bookings.during})`,
-    })
-    .from(bookings)
-    .where(
-      and(
-        inArray(bookings.hostMemberId, [...memberIds]),
-        eq(bookings.status, 'confirmed'),
-        ...(except === undefined ? [] : [ne(bookings.id, except)]),
-        lt(bookings.startsAt, new Date(to.getTime() + 86_400_000)),
-        gt(bookings.endsAt, new Date(from.getTime() - 86_400_000)),
-      ),
-    );
-  return rows.map((row) => ({
-    start: row.startsAt,
-    end: row.endsAt,
-    blockStart: new Date(row.blockStart),
-    blockEnd: new Date(row.blockEnd),
-    countsToLimit: row.pageId === pageId,
-  }));
+  const byMember = await memberBookings(
+    tx,
+    memberIds,
+    pageId,
+    new Date(from.getTime() - 86_400_000),
+    new Date(to.getTime() + 86_400_000),
+    except,
+  );
+  // A booking that occupies two of the members (a collective one) blocks once.
+  const seen = new Set<string>();
+  return [...byMember.values()].flat().filter((span) => {
+    const key = `${String(span.blockStart?.getTime())}:${String(span.blockEnd?.getTime())}:${String(span.start.getTime())}`;
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
 }
 
 /** The time the members closed themselves (spec 0027): busy for this page, and the holds it may book inside. */

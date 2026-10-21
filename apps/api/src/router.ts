@@ -2,7 +2,7 @@ import { accessRouter } from './modules/access/router.ts';
 import { attributesRouter } from './modules/attributes/router.ts';
 import { calendarRouter } from './modules/calendar/router.ts';
 import { formsRouter } from './modules/forms/router.ts';
-import { bookingPagesRouter, bookingsRouter, schedulesRouter } from './modules/booking/router.ts';
+import { bookingPagesRouter, bookingsRouter, rotationsRouter, schedulesRouter } from './modules/booking/router.ts';
 import { jobsRouter } from './modules/jobs/router.ts';
 import { linksRouter } from './modules/links/router.ts';
 import { invitationsRouter } from './modules/invitations/router.ts';
@@ -50,4 +50,5 @@ export const router = base.router({
   bookingPages: bookingPagesRouter,
   bookings: bookingsRouter,
   schedules: schedulesRouter,
+  rotations: rotationsRouter,
 });

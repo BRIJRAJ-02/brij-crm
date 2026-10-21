@@ -421,3 +421,6 @@ export {
   type EmailLinkKey,
   type EmailLinkPurpose,
 } from './emails/preferences.ts';
+// Round robin (spec 0029): rotations, and why a booking went to its host.
+export { createRotation, deleteRotation, listRotations, updateRotation } from './rotation/rotations.ts';
+export { bookingAssignments } from './rotation/assignments.ts';

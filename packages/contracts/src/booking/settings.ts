@@ -194,6 +194,8 @@ export const BookingPageSettings = z.object({
    * default at each slot read. A schedule of anyone else is refused `SCHEDULE_NOT_ALLOWED` (AC-966).
    */
   scheduleId: Uuid.nullable(),
+  /** A round robin page's reschedule rule (spec 0029, AC-746): keep the host when free, or ask the rotation again. */
+  rescheduleHost: z.enum(['same', 'rotation']),
   /** A private page (spec 0027, AC-708): reached by its link, it books inside its host's holds and waives notice. */
   isPrivate: z.boolean(),
 });

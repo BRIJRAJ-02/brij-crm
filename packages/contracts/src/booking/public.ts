@@ -36,6 +36,17 @@ export const PublicBookingPage = z.object({
   hostTimeZone: z.string(),
   /** How many days ahead a slot may start. */
   windowDays: z.number().int(),
+  /**
+   * A team page's members as the rail stacks them (spec 0029, AC-733): up to
+   * 4 initials (a picture when one is served from our origin) and how many
+   * more. No names, no emails (AC-754); `hostName` is then the workspace's.
+   */
+  team: z
+    .object({
+      avatars: z.array(z.object({ initials: z.string(), image: z.string().optional() })),
+      more: z.number().int().min(0),
+    })
+    .optional(),
 });
 /** The page's facts. */
 export type PublicBookingPage = z.infer<typeof PublicBookingPage>;

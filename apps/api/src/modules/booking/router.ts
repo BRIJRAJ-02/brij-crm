@@ -1,5 +1,10 @@
 import {
   bookAsHost,
+  bookingAssignments,
+  createRotation,
+  deleteRotation,
+  listRotations,
+  updateRotation,
   bookingGuestPath,
   cancelBooking,
   hostTarget,
@@ -45,6 +50,8 @@ export const bookingPagesRouter = member.bookingPages.router({
           title: input.title,
           timeZone: input.timeZone,
           ...(input.settings === undefined ? {} : { settings: input.settings }),
+          ...(input.kind === undefined ? {} : { kind: input.kind }),
+          ...(input.hosts === undefined ? {} : { hosts: input.hosts }),
         }),
       );
     } catch (error) {
@@ -53,7 +60,11 @@ export const bookingPagesRouter = member.bookingPages.router({
   }),
   update: member.bookingPages.update.handler(({ context, input }) =>
     commitWrite(context, { mutationId: input.mutationId }, () =>
-      updateBookingPage(context.scope, { pageId: input.pageId, settings: input.settings }),
+      updateBookingPage(context.scope, {
+        pageId: input.pageId,
+        settings: input.settings,
+        ...(input.hosts === undefined ? {} : { hosts: input.hosts }),
+      }),
     ),
   ),
   delete: member.bookingPages.delete.handler(({ context, input }) =>
@@ -134,6 +145,10 @@ export const bookingsRouter = member.bookings.router({
       { from: new Date(input.from), to: new Date(input.to) },
     ),
   ),
+  // Why a round robin booking went to its host (spec 0029, AC-742): its host and admins only.
+  assignments: member.bookings.assignments.handler(async ({ context, input }) => [
+    ...(await bookingAssignments(context.scope, { bookingId: input.bookingId })),
+  ]),
   // The guest page's address, read only when the member asks: it carries the guest's key.
   guestLink: member.bookings.guestLink.handler(({ context, input }) =>
     bookingGuestPath(context.scope, { linkKey: context.bookingLinkKey }, { bookingId: input.bookingId }),
@@ -214,4 +229,34 @@ export const schedulesRouter = member.schedules.router({
     );
     return { id: deleted.id, repointed: { pages: deleted.repointed.pages } };
   }),
+});
+
+// Rotations (spec 0029): the pools round robin pages book from. Listing needs `booking.manage` (a member sees the
+// ones they're in, their own count only); making, changing and deleting need `booking.admin`. Settings, not CRM
+// data: no outbox row, but every write goes through `commitWrite`.
+export const rotationsRouter = member.rotations.router({
+  list: member.rotations.list.handler(async ({ context }) => [...(await listRotations(context.scope))]),
+  create: member.rotations.create.handler(async ({ context, input }) => {
+    try {
+      return await commitWrite(context, { mutationId: input.mutationId }, () =>
+        createRotation(context.scope, { id: input.id, settings: input.settings, members: input.members }),
+      );
+    } catch (error) {
+      throw withInputFields(error, { ID_TAKEN: 'id' });
+    }
+  }),
+  update: member.rotations.update.handler(({ context, input }) =>
+    commitWrite(context, { mutationId: input.mutationId }, () =>
+      updateRotation(context.scope, {
+        rotationId: input.rotationId,
+        settings: input.settings,
+        ...(input.members === undefined ? {} : { members: input.members }),
+      }),
+    ),
+  ),
+  delete: member.rotations.delete.handler(({ context, input }) =>
+    commitWrite(context, { mutationId: input.mutationId }, () =>
+      deleteRotation(context.scope, { rotationId: input.rotationId }),
+    ),
+  ),
 });

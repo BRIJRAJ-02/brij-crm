@@ -261,4 +261,11 @@ export const ACCESS_TABLE = {
   // Changing a booking from Bookings (spec 0025, milestone 2): booking.manage first, then the booking's row.
   hostTarget: { bookingPages: true },
   bookingGuestPath: { bookingPages: true },
+  // Round robin (spec 0029): anyone with booking.manage lists the rotations they're in (their own count only);
+  // making, changing and deleting them is booking.admin's (AC-751). A booking's assignments: its host or an admin.
+  listRotations: { bookingPages: true },
+  createRotation: { permission: 'booking.admin' },
+  updateRotation: { permission: 'booking.admin' },
+  deleteRotation: { permission: 'booking.admin' },
+  bookingAssignments: { bookingPages: true },
 } as const satisfies Record<string, AccessEntry>;

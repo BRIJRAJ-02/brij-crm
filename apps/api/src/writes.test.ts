@@ -7,7 +7,7 @@
 import { readdir, readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { contract } from '@crm/contracts';
+import { contract, defaultAvailability } from '@crm/contracts';
 import { newId } from '@crm/core';
 import type { Database, IdentityStore } from '@crm/db';
 import { testQuery } from '@crm/db/testing';
@@ -83,6 +83,9 @@ const READS: ReadonlySet<string> = new Set([
   'schedules.members',
   'schedules.list',
   'schedules.get',
+  // Round robin (spec 0029): the rotations a member may see, and why a booking went to its host.
+  'rotations.list',
+  'bookings.assignments',
 ]);
 
 let db: Database;
@@ -1319,6 +1322,68 @@ Object.assign(WRITES, {
   },
 });
 
+/** A rotation of the member and a second member, both with their own hours (spec 0029: a rotation needs 2). */
+async function rotationOn(m: Member, mutationId = newId()) {
+  // Hours seeded by hand (spec 0035's default schedules), so the only writes counted are the rotation's own.
+  const availability = defaultAvailability('UTC');
+  const [me] = await testQuery<{ id: string }>(
+    ownerUrl,
+    `select id::text from members where workspace_id = $1 and status = 'active' limit 1`,
+    [m.workspace.id],
+  );
+  const other = newId();
+  await testQuery(
+    ownerUrl,
+    `insert into members (workspace_id, id, name, email, role, created_by_type, updated_by_type)
+     values ($1, $2, 'Kim Park', 'kim@acme.dev', 'member', 'system', 'system')`,
+    [m.workspace.id, other],
+  );
+  await testQuery(
+    ownerUrl,
+    `insert into availability_schedules (workspace_id, member_id, name, is_default, availability, created_by_type, updated_by_type)
+     values ($1, $2, 'Working hours', true, $4, 'system', 'system'), ($1, $3, 'Working hours', true, $4, 'system', 'system')`,
+    [m.workspace.id, other, me?.id ?? '', JSON.stringify(availability)],
+  );
+  const pooled = (memberId: string) => ({
+    memberId,
+    weight: 100,
+    priority: 2,
+    dailyCap: null,
+    weeklyCap: null,
+    isOn: true,
+  });
+  return m.client.rotations.create({
+    workspace: m.slug,
+    id: newId(),
+    settings: { name: 'Sales', strategy: 'fair', windowDays: 30, evenGap: 3, returning: 'owner' },
+    members: [pooled(me?.id ?? ''), pooled(other)],
+    mutationId,
+  });
+}
+
+// Rotations (spec 0029): settings, not CRM data, so no outbox row; one poke per write.
+Object.assign(WRITES, {
+  'rotations.create': async (m: Member, mutationId: string) => {
+    await rotationOn(m, mutationId);
+    return [];
+  },
+  'rotations.update': async (m: Member, mutationId: string) => {
+    const rotation = await rotationOn(m);
+    await m.client.rotations.update({
+      workspace: m.slug,
+      rotationId: rotation.id,
+      settings: { name: 'AEs' },
+      mutationId,
+    });
+    return [];
+  },
+  'rotations.delete': async (m: Member, mutationId: string) => {
+    const rotation = await rotationOn(m);
+    await m.client.rotations.delete({ workspace: m.slug, rotationId: rotation.id, mutationId });
+    return [];
+  },
+});
+
 /** How many writes (each one poke) a case in WRITES makes before and with its own. */
 const WRITES_MADE: Readonly<Record<string, number>> = {
   'invitations.resend': 2,
@@ -1351,6 +1416,9 @@ const WRITES_MADE: Readonly<Record<string, number>> = {
   'calendar.connections.syncNow': 2,
   'calendar.meetings.addAttendee': 2,
   'bookingPages.update': 2,
+  'rotations.create': 1,
+  'rotations.update': 2,
+  'rotations.delete': 2,
   'bookingPages.delete': 2,
   'bookings.blocks.remove': 2,
   'bookings.bookAsHost': 2,

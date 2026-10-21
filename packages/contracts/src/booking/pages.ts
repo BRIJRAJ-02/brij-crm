@@ -15,8 +15,26 @@ import {
 } from './blocks.ts';
 import { CANCEL_REASON_MAX, PublicSlots } from './public.ts';
 import { ScheduleHours } from './schedules.ts';
+import { BookingAssignment, BookingAssignmentsInput } from './rotations.ts';
 import { BookingAvailability, BookingLocation, BookingPageSettings, TimeZoneName } from './settings.ts';
 import { Uuid, uuidV7 } from '../values/ids.ts';
+
+/** The most fixed hosts, rotations, and hosts in all, on one round robin page (spec 0037, AC-1319). */
+export const TEAM_HOSTS_MAX = { fixed: 7, rotations: 3, hosts: 8 } as const;
+
+/**
+ * A round robin page's hosts (spec 0037, AC-1319): 0 to 7 fixed hosts who attend every meeting, and 1 to 3
+ * rotations, one host from each; at most 8 people in all. The server checks the rest (HOSTS_INVALID).
+ */
+export const TeamHosts = z.object({
+  fixed: z.array(Uuid).max(TEAM_HOSTS_MAX.fixed, 'A page has at most 7 fixed hosts.'),
+  rotations: z
+    .array(Uuid)
+    .min(1, 'Pick a rotation.')
+    .max(TEAM_HOSTS_MAX.rotations, 'A page books from at most 3 rotations.'),
+});
+/** A round robin page's hosts. */
+export type TeamHosts = z.infer<typeof TeamHosts>;
 
 /** A page as a member sees it in Settings › Booking pages. */
 export const BookingPageView = BookingPageSettings.extend({
@@ -28,6 +46,8 @@ export const BookingPageView = BookingPageSettings.extend({
   availability: BookingAvailability,
   /** That schedule's name ("Working hours" while its owner has saved none), read only here. */
   scheduleName: z.string(),
+  /** A round robin page's hosts (spec 0037, AC-1319): its fixed hosts and the rotations it books one host from. */
+  hosts: TeamHosts.optional(),
   /** Confirmed bookings starting this calendar month (UTC). */
   bookingsThisMonth: z.number().int().min(0),
   /** The reader may change it: their own page with `booking.manage`, anyone's with `booking.admin`. */
@@ -74,15 +94,20 @@ export const CreateBookingPageInput = WorkspaceScoped.extend({
   /** The creator's zone: the virtual default's, while the owner has saved no schedule (spec 0035, AC-963). */
   timeZone: TimeZoneName,
   settings: BookingPageSettingsWrite.optional(),
+  /** `personal` (the default) or, with `booking.admin`, `round_robin` (spec 0029), which names its hosts. */
+  kind: z.enum(['personal', 'round_robin']).optional(),
+  hosts: TeamHosts.optional(),
   mutationId: Uuid,
 });
-/** A new personal page. */
+/** A new page. */
 export type CreateBookingPageInput = z.infer<typeof CreateBookingPageInput>;
 
 /** A change to a page: only the settings given. */
 export const UpdateBookingPageInput = WorkspaceScoped.extend({
   pageId: Uuid,
   settings: BookingPageSettingsWrite,
+  /** A round robin page's hosts, replacing them (`booking.admin`). */
+  hosts: TeamHosts.optional(),
   mutationId: Uuid,
 });
 /** A change to a page. */
@@ -311,6 +336,8 @@ export const bookingsContract = {
   moveSlots: oc.input(BookingMoveSlotsInput).output(PublicSlots),
   /** The guest page's path, `/b/<key>/manage?t=<token>`. */
   guestLink: oc.input(BookingGuestLinkInput).output(z.object({ path: z.string() })),
+  /** Why a round robin booking went to its host (spec 0029, AC-742): its ledger rows, newest first. */
+  assignments: oc.input(BookingAssignmentsInput).output(z.array(BookingAssignment)),
   /** Time the caller closed on their own calendar (spec 0027). */
   blocks: {
     create: oc.input(CreateTimeBlockInput).output(TimeBlockView),

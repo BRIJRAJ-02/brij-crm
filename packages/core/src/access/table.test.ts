@@ -311,6 +311,10 @@ describe('the walk: a principal without the access is refused', () => {
           // A member's change target and the guest link name a booking, not a page; the row decides (change.test.ts).
           'hostTarget',
           'bookingGuestPath',
+          // Rotations aren't pages: a member lists only the ones they're in (rotations.test.ts); a booking's
+          // assignments are its host's (assignments are checked on the row, rotations.test.ts).
+          'listRotations',
+          'bookingAssignments',
         ].includes(name)
       )
         return;

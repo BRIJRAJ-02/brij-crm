@@ -2,6 +2,7 @@ import { accessContract } from './access.ts';
 import { attributesContract } from './attributes.ts';
 import { bookingPagesContract, bookingsContract } from './booking/pages.ts';
 import { schedulesContract } from './booking/schedules.ts';
+import { rotationsContract } from './booking/rotations.ts';
 import { bulkRecordsContract } from './bulk.ts';
 import { calendarContract } from './calendar.ts';
 import { formsContract, submissionsContract } from './forms/forms.ts';
@@ -30,6 +31,7 @@ export * from './booking/index.ts';
 export * from './booking/blocks.ts';
 export * from './booking/pages.ts';
 export * from './booking/schedules.ts';
+export * from './booking/rotations.ts';
 export * from './bulk.ts';
 export * from './bulk-ops.ts';
 export * from './calendar.ts';
@@ -89,4 +91,5 @@ export const contract = {
   bookingPages: bookingPagesContract,
   bookings: bookingsContract,
   schedules: schedulesContract,
+  rotations: rotationsContract,
 };
