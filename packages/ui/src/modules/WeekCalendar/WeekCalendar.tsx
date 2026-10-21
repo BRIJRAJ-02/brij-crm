@@ -10,6 +10,7 @@ import {
   type Ref,
 } from 'react';
 import { ProviderMark, type ProviderName } from '../../atoms/ProviderMark/ProviderMark.tsx';
+import { focusLater } from '../../lib/focus-later.ts';
 import { Popover } from '../../molecules/Popover/Popover.tsx';
 import type { Hue } from '../../hue.ts';
 import styles from './WeekCalendar.module.css';
@@ -115,6 +116,12 @@ export interface WeekCalendarProps {
    * arrives in place with nothing moving; a day says it is loading rather than "nothing on".
    */
   readonly isLoading?: boolean;
+  /**
+   * A new object puts focus on that day's column, once any closing overlay has gone and only when focus fell to
+   * the page: how the screen hands focus on when a block went outside its card (removed through a confirm), as the
+   * week does itself when the screen closes a card whose block is gone.
+   */
+  readonly focusRequest?: { readonly dayKey: string };
 }
 
 /** A block with its lane: overlapping blocks share their cluster's width, side by side. */
@@ -189,6 +196,7 @@ export function WeekCalendar({
   drawStartMinute,
   minuteLabel,
   isLoading = false,
+  focusRequest,
 }: WeekCalendarProps) {
   const scroller = useRef<HTMLDivElement>(null);
   const columns = useRef(new Map<string, HTMLDivElement>());
@@ -214,12 +222,16 @@ export function WeekCalendar({
   const tap = useRef<{ readonly dayKey: string; readonly minute: number; readonly y: number } | null>(null);
   // The open block's day, so focus has somewhere to go when the block is gone (removed from its card).
   const anchorDay = useRef(selectedDay);
-  /** After a card closes, focus its day when what it was anchored to is gone (a drawn span, a removed block). */
+  /**
+   * After a card closes and its exit has played, when focus fell to the page: its block, as Escape's return does
+   * (a card the screen opened again has no trigger of its own to go back to), else its day when what it was
+   * anchored to is gone (a drawn span, a removed block).
+   */
   const focusDayLater = (dayKey: string, from: HTMLElement | null) => {
-    requestAnimationFrame(() => {
-      if (from?.isConnected === true) return;
-      if (document.activeElement !== null && document.activeElement !== document.body) return;
-      columns.current.get(dayKey)?.focus();
+    focusLater(() => {
+      const active = document.activeElement;
+      if (active !== null && active !== document.body) return undefined;
+      return from?.isConnected === true ? from : columns.current.get(dayKey);
     });
   };
   // A card closed by the screen (a removal, Done) rather than by Escape: focus the day when its anchor is gone.
@@ -235,6 +247,14 @@ export function WeekCalendar({
     shownCard.current = card;
     if (card === null && closed !== null) focusDayLater(closed.day, closed.from);
   });
+  // A day the screen asks focus for: after any closing overlay (its confirm), and never taking focus the person moved.
+  useEffect(() => {
+    if (focusRequest === undefined) return;
+    focusLater(() => {
+      const active = document.activeElement;
+      return active === null || active === document.body ? columns.current.get(focusRequest.dayKey) : undefined;
+    });
+  }, [focusRequest]);
 
   /** The minute under the pointer in `column`, snapped and clamped to the day. */
   const minuteAt = (column: HTMLElement, clientY: number): number => {

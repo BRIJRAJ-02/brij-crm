@@ -35,6 +35,7 @@ New. Nothing in the library places things on a time axis. Board and DataGrid are
 - `provider` draws that brand's small ProviderMark before the title: `timefix` on a booking, the calendar's brand (`google-calendar`, `outlook`, `apple-calendar`) on an event, so where a block came from reads at a glance. The mark is decoration; the title and the block's popover name it in words.
 - The now line shows in today's column only.
 - The open block's card is a Popover anchored to the block: it sits beside it and flips when there's no room. Escape, or pressing outside, closes it and puts focus back on the block.
+- A dialog asked for from a card (a confirm before removing a block or cancelling a booking) never opens over it: React Aria draws popovers above every modal, so the screen closes the card first, draws the dialog itself, and opens the card again when the dialog is dismissed. Once the dialog's change goes through and the block's card can't come back, `focusRequest` (a new `{ dayKey }`) puts focus on that day's column after the dialog has gone, but only when focus fell to the page, as the week does itself when the screen closes a card whose block went.
 - Below 480px of its container, the header stays as seven day buttons and the grid shows the selected day alone.
 
 ## States
