@@ -46,6 +46,12 @@ export const strings = {
   failedTitle: 'Couldn’t load this workspace',
   failedText: 'Something went wrong. Try again in a moment.',
   workspaceMissingTitle: 'Workspace not found',
+  // A deleted workspace, as its owner sees it within the window (spec 0031, AC-823).
+  deletedTitle: (name: string) => `${name} is deleted`,
+  deletedText: (day: string) => `It goes for good on ${day}. Until then, you can restore it.`,
+  restoreWorkspace: 'Restore workspace',
+  restored: (name: string) => `${name} is back.`,
+  restoreFailed: 'Couldn’t restore it. Try again in a moment.',
   workspaceMissingText: 'That workspace doesn’t exist, or you’re not a member of it.',
   pageMissingTitle: 'Page not found',
   pageMissingText: 'There’s nothing at this address.',

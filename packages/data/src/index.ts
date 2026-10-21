@@ -52,6 +52,9 @@ import type {
   ViewLayout,
   ViewVisibility,
   WorkspaceDomainsView,
+  DeletedWorkspace,
+  MyProfile,
+  WorkspaceSettings,
 } from '@crm/contracts';
 import type { InviteLinkDays } from '@crm/contracts/team-limits';
 import { createORPCClient } from '@orpc/client';
@@ -215,6 +218,9 @@ export type {
   UsageCount,
   WorkspaceDomainsView,
   WorkspaceSummary,
+  DeletedWorkspace,
+  MyProfile,
+  WorkspaceSettings,
 } from '@crm/contracts';
 export type {
   ActivityEntryShape,
@@ -240,6 +246,7 @@ export {
   INVITE_LINK_USES_MAX,
   MEMBER_SEARCH_MAX,
   MEMBERS_PAGE,
+  WORKSPACE_PURGE_DAYS,
   type InviteLinkDays,
 } from '@crm/contracts/team-limits';
 export { freeHue, PICKER_TYPES, STARTER_STAGES, type PickerType } from '@crm/contracts/picker';
@@ -2540,6 +2547,61 @@ export function createDataLayer({
           api.joinRequests.decide({ workspace, requestId, approve, mutationId: mintId() }, options),
         );
         if (approve) members.delete(workspace);
+      },
+    },
+    /**
+     * Settings › Workspace › General (spec 0031, slice 7): the workspace's
+     * name, time zone and address, and the owner's delete. Settings, not CRM
+     * data: read fresh, and every write waits for the server. A rename or a
+     * delete reads the person's workspaces again.
+     */
+    workspace: {
+      get: (workspace: string): Promise<WorkspaceSettings> =>
+        call((options) => api.workspace.get({ workspace }, options)),
+      /** Renames it or changes its time zone. Refusals: `FORBIDDEN`, `INPUT_INVALID`. */
+      async update(
+        workspace: string,
+        change: { readonly name?: string; readonly timeZone?: string },
+      ): Promise<WorkspaceSettings> {
+        const updated = await call((options) =>
+          api.workspace.update({ workspace, ...change, mutationId: mintId() }, options),
+        );
+        if (change.name !== undefined) me = undefined;
+        return updated;
+      },
+      /** Deletes it, softly, for 30 days. Refusals: `FORBIDDEN`, `CONFIRM_MISMATCH`. */
+      async delete(workspace: string, confirmName: string): Promise<DeletedWorkspace> {
+        const deleted = await call((options) =>
+          api.workspace.delete({ workspace, confirmName, mutationId: mintId() }, options),
+        );
+        me = undefined;
+        return deleted;
+      },
+      /** A deleted workspace as its owner sees it within the window; `NOT_FOUND` for anyone else. */
+      deleted: (workspace: string): Promise<DeletedWorkspace> =>
+        call((options) => api.deletedWorkspace.deleted({ workspace }, options)),
+      /** Restores a deleted workspace within its window (an owner). Refusals: `NOT_FOUND`. */
+      async restore(workspace: string): Promise<WorkspaceSettings> {
+        const restored = await call((options) =>
+          api.deletedWorkspace.restore({ workspace, mutationId: mintId() }, options),
+        );
+        me = undefined;
+        return restored;
+      },
+    },
+    /** Settings › Account › Profile (spec 0031, AC-821): the caller's own name and time zone in a workspace. */
+    profile: {
+      get: (workspace: string): Promise<MyProfile> => call((options) => api.profile.get({ workspace }, options)),
+      /** Changes their name or time zone (null follows the workspace's). The member list is read again. */
+      async update(
+        workspace: string,
+        change: { readonly name?: string; readonly timeZone?: string | null },
+      ): Promise<MyProfile> {
+        const updated = await call((options) =>
+          api.profile.update({ workspace, ...change, mutationId: mintId() }, options),
+        );
+        members.delete(workspace);
+        return updated;
       },
     },
     roles: {

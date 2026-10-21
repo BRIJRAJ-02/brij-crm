@@ -21,3 +21,6 @@ export type InviteLinkDays = (typeof INVITE_LINK_DAYS)[number];
 
 /** The most people one invite link may let in, when it is capped (AC-818). */
 export const INVITE_LINK_USES_MAX = 1000;
+
+/** How long a deleted workspace waits before its purge, while an owner can restore it (spec 0031, AC-823). */
+export const WORKSPACE_PURGE_DAYS = 30;

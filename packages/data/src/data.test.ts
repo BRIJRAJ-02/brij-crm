@@ -420,6 +420,19 @@ function fakeApi(overrides: Partial<Behaviour> = {}, auth: (path: string, body: 
       list: os.join.list.handler(notServed),
       request: os.join.request.handler(notServed),
     },
+    workspace: {
+      get: os.workspace.get.handler(notServed),
+      update: os.workspace.update.handler(notServed),
+      delete: os.workspace.delete.handler(notServed),
+    },
+    deletedWorkspace: {
+      deleted: os.deletedWorkspace.deleted.handler(notServed),
+      restore: os.deletedWorkspace.restore.handler(notServed),
+    },
+    profile: {
+      get: os.profile.get.handler(notServed),
+      update: os.profile.update.handler(notServed),
+    },
     joinRequests: {
       domains: os.joinRequests.domains.handler(notServed),
       setDomains: os.joinRequests.setDomains.handler(notServed),
