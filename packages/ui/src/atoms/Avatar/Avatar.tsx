@@ -68,14 +68,23 @@ export interface AvatarStackProps {
   /** How many show before "+N". */
   readonly max?: number;
   readonly size?: AvatarSize;
+  /** How many people the stack stands for when `people` holds only the first few (a public team page sends 4). Defaults to `people.length`. */
+  readonly total?: number;
+  /** The stack's accessible name ("Team of 6") when the names aren't for reading out. Defaults to everyone's names. */
+  readonly label?: string;
 }
 
 /** A few overlapping avatars and "+N" for the rest: who is viewing, who is assigned. */
-export function AvatarStack({ people, max = 3, size = 'sm' }: AvatarStackProps) {
+export function AvatarStack({ people, max = 3, size = 'sm', total = people.length, label }: AvatarStackProps) {
   const shown = people.slice(0, max);
-  const rest = people.length - shown.length;
+  const rest = Math.max(0, total - shown.length);
   return (
-    <span className={styles.stack} role="group" aria-label={strings.people(people.map((person) => person.name))}>
+    <span
+      className={styles.stack}
+      data-size={size}
+      role="group"
+      aria-label={label ?? strings.people(people.map((person) => person.name))}
+    >
       {shown.map((person) => (
         <Avatar
           key={person.id}

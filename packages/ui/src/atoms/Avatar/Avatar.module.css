@@ -141,6 +141,12 @@
     letter-spacing: var(--tracking-label-strong);
   }
 
+  /* Beside large faces (a team page's rail), "+N" reads at body size. */
+  .stack:is([data-size='lg'], [data-size='xl']) > .more {
+    font: var(--text-body-strong);
+    letter-spacing: var(--tracking-body-strong);
+  }
+
   @media (forced-colors: active) {
     .root {
       border-color: CanvasText;

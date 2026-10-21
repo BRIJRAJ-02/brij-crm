@@ -210,6 +210,7 @@ export {
   type BookingFrameProps,
   type BookingHost,
   type BookingMessageProps,
+  type BookingTeam,
 } from './modules/BookingFrame/BookingFrame.tsx';
 export {
   BookingReceipt,

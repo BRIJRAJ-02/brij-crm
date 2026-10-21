@@ -33,6 +33,7 @@ import {
   type SelectItem,
 } from '@crm/ui/public-booking';
 import { lazy, Suspense, useCallback, useEffect, useMemo, useState } from 'react';
+import { railHost, railTitle } from './host.ts';
 import type { Prefill } from './prefill.ts';
 import { saveHour12, savedHour12, savedView, saveView, type SlotView } from './prefs.ts';
 import { strings } from './strings.ts';
@@ -567,8 +568,8 @@ function Booking({
       </>
     ) : undefined;
   const frame = {
-    host: { name: page.hostName },
-    title: page.title,
+    host: railHost(page),
+    title: railTitle(page),
     description: page.description,
     facts,
     claimHref: CLAIM_URL,
