@@ -60,6 +60,15 @@ function mayChange(scope: EngineScope, reach: SchedulingReach, memberId: string)
   return memberId === memberOf(scope) ? mayEditOwnHours(scope) : canActFor(reach, memberId, 'manage');
 }
 
+/** Whether `memberId` is an active member of the workspace. */
+async function isActive(tx: WorkspaceTx, memberId: string): Promise<boolean> {
+  const [row] = await tx
+    .select({ id: members.id })
+    .from(members)
+    .where(and(eq(members.id, memberId), eq(members.status, 'active')));
+  return row !== undefined;
+}
+
 /** Refused when the reader may see a colleague's scheduling but not change it (spec 0037, AC-1258). */
 const seeOnly = () => refuse('FORBIDDEN', 'You can see this person’s scheduling but not change it.');
 
@@ -320,7 +329,10 @@ export async function getSchedule(scope: EngineScope, input: { readonly id: stri
     if (row === undefined) throw refuse('NOT_FOUND', NOT_FOUND_MESSAGE);
     const reader = memberOf(scope);
     const reach = await schedulingReach(tx, scope);
-    if (canActFor(reach, row.memberId, 'view')) return viewOf(row, await pagesOfMember(tx, row.memberId), reader);
+    const isOwn = row.memberId === reader;
+    if (isOwn || (canActFor(reach, row.memberId, 'view') && (await isActive(tx, row.memberId)))) {
+      return viewOf(row, await pagesOfMember(tx, row.memberId), reader);
+    }
     const through = reader === undefined ? [] : await pagesReaderBooksOn(tx, reader, row);
     if (through.length === 0) throw refuse('NOT_FOUND', NOT_FOUND_MESSAGE);
     return viewOf(row, through, reader);
@@ -339,6 +351,10 @@ async function scheduleToChange(tx: WorkspaceTx, scope: EngineScope, id: string)
     .where(eq(availabilitySchedules.id, id));
   const reach = await schedulingReach(tx, scope);
   if (peek === undefined || !canActFor(reach, peek.memberId, 'view')) throw refuse('NOT_FOUND', NOT_FOUND_MESSAGE);
+  // A colleague's only while they are an active member, as `targetMember` holds a list to.
+  if (peek.memberId !== memberOf(scope) && !(await isActive(tx, peek.memberId))) {
+    throw refuse('NOT_FOUND', NOT_FOUND_MESSAGE);
+  }
   if (!mayChange(scope, reach, peek.memberId)) throw seeOnly();
   await schedulesLock(tx, scope.workspaceId, peek.memberId);
   const [row] = await tx
