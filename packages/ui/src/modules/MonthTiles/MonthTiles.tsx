@@ -49,7 +49,7 @@ export function MonthTiles({
   canNext,
   focusesValue = false,
 }: MonthTilesProps) {
-  const { locale } = useFormatSettings();
+  const { locale, weekStart } = useFormatSettings();
   const grid = useRef<HTMLDivElement>(null);
   const [focused, setFocused] = useState<string | undefined>(undefined);
   // Which way the month moved, so the new grid slides in from that side (none on first paint).
@@ -58,7 +58,7 @@ export function MonthTiles({
     direction: 'none',
   });
   if (shown.month !== month) setShown({ month, direction: month > shown.month ? 'forward' : 'back' });
-  const cells = monthCells(month, locale);
+  const cells = monthCells(month, locale, weekStart);
   const open = cells.filter((key): key is string => key !== undefined && openDays.has(key));
   const tabbable =
     (focused !== undefined && open.includes(focused) ? focused : undefined) ??
@@ -111,7 +111,7 @@ export function MonthTiles({
         </div>
       </div>
       <div className={styles.weekdays} aria-hidden="true">
-        {weekdayNames(locale).map((weekday) => (
+        {weekdayNames(locale, weekStart).map((weekday) => (
           <span key={weekday.long} className={styles.weekday}>
             {weekday.short}
           </span>

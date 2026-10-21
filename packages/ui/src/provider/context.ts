@@ -3,15 +3,21 @@
 // toast region (and the Button it draws).
 import { createContext, useContext, useSyncExternalStore } from 'react';
 import type { KeyboardPlatform } from '../atoms/Kbd/shortcuts.ts';
+import type { DateFormat } from '../lib/format.ts';
+import type { WeekStart } from '../lib/month.ts';
 import type { Clock } from './clock.ts';
 import type { Toasts } from './toasts.tsx';
 
-/** The language and time zone every date, number and amount formats in. */
+/** The language, time zone, date format and week start every date, number and amount formats in. */
 export interface FormatSettings {
   /** A BCP 47 tag, such as `en-GB`. */
   readonly locale: string;
   /** An IANA zone, such as `Europe/London`. "Today" is today here. */
   readonly timeZone: string;
+  /** How a date is written (the member's preference); the language's own when absent. */
+  readonly dateFormat?: DateFormat;
+  /** The day a week starts on (the member's preference); the language's own when absent. */
+  readonly weekStart?: WeekStart;
 }
 
 export const FormatContext = createContext<FormatSettings | undefined>(undefined);

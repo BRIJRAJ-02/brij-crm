@@ -4,7 +4,7 @@
 // Leaves out: search and saved filters (#33, #20), other people's lists except through "All tasks", deleting (milestone 4).
 import type { MemberSummary, ObjectSummary, TaskList as TaskListSource, TaskMine } from '@crm/data';
 import { useTaskList } from '@crm/data/react';
-import { Button, SegmentedControl, TabPanel, Tabs, TaskList, TopBar } from '@crm/ui';
+import { Button, SegmentedControl, TabPanel, Tabs, TaskList, TopBar, useFormatSettings } from '@crm/ui';
 import { useNavigate, useRouteContext, useRouter } from '@tanstack/react-router';
 import { useCallback, useMemo, useRef } from 'react';
 import { recordLinks } from '../records/timeline.ts';
@@ -62,7 +62,8 @@ export function MyTasksScreen({ slug, filter, status, task, list, objects, membe
   const router = useRouter();
   const state = useTaskList(list);
   const entries = useTaskEntries(state.source, members);
-  const timeZone = useMemo(() => Intl.DateTimeFormat().resolvedOptions().timeZone, []);
+  // The member's own zone (Settings › Account › Preferences), else the browser's.
+  const { timeZone } = useFormatSettings();
   const today = useToday(timeZone);
   const sectionOf = useMemo(() => (status === 'open' ? daySections(today) : undefined), [status, today]);
   const link = useMemo(() => recordLinks(slug, objects), [slug, objects]);

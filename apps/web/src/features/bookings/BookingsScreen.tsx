@@ -70,6 +70,7 @@ import {
   weekDays,
   weekOf,
 } from './week.ts';
+import { useFirstDay } from '../workspace/first-day.ts';
 
 export type { BookingsTab };
 export type { BookingsSearch };
@@ -590,6 +591,7 @@ function WeekView(props: BookingsCalendarScreenProps) {
   const personHref = usePersonHref(slug, objects);
   const state = useBookingsCalendar(week);
   const now = useNow();
+  const firstDay = useFirstDay();
   const [openId, setOpenId] = useState<string | undefined>(undefined);
   // A dialog a card asked for, drawn here rather than over the card's popover (React Aria draws popovers above every
   // dialog): the card closes while it is open, opens again when it is dismissed, and once its change went through
@@ -643,7 +645,7 @@ function WeekView(props: BookingsCalendarScreenProps) {
   }, [platform]);
   const days = weekDays(search.week);
   const today = dayKeyOf(now);
-  const isThisWeek = weekOf(today) === search.week;
+  const isThisWeek = weekOf(today, firstDay) === search.week;
   const range = rangeLabel(search.week, locale);
   const shownConnections = new Set(search.conn ?? connections.map((connection) => connection.id));
   const hueOf = new Map(
@@ -667,7 +669,7 @@ function WeekView(props: BookingsCalendarScreenProps) {
           />
           <Button
             variant={isThisWeek ? 'primary' : 'secondary'}
-            onPress={() => onSearch({ week: weekOf(today), day: today })}
+            onPress={() => onSearch({ week: weekOf(today, firstDay), day: today })}
           >
             {isThisWeek
               ? strings.today

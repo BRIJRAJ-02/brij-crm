@@ -26,6 +26,7 @@ const toasts = createToasts(); // once, in main.tsx; also handed to the data lay
 - `toasts`: the queue from `createToasts()`. Raise one with `toasts.toast({ tone, message, action? })`.
 - `clock` (optional): the shared clock behind relative times (`useNow()`), ticking every 30 seconds and paused while the tab is hidden. Stories pass `createFixedClock()`.
 - `loadingTiming` (optional): when skeletons appear. Storybook turns the delay off.
+- `FormatScope`: changes the time zone, date format (`auto`, `dmy`, `mdy`, `ymd`) or week start (`auto`, `monday`, `sunday`, `saturday`) for everything inside it. The web app wraps each workspace in one with the member's preferences (Settings › Account › Preferences), so dates, calendars and "today" follow them. `useFormatSettings()` reads the result; `formatDate`, `formatDay` and `firstDayOfWeek` are the same helpers the library uses, for screens that write a date themselves.
 - `useKeyboardPlatform()`: `mac` or `other`, read once by the provider. Kbd and the grid's Mod keys use it, and a screen's own shortcuts (the workspace frame's undo) read it too, so every shortcut agrees on Cmd or Ctrl.
 
 ## Toasts

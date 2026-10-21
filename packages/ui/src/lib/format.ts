@@ -34,21 +34,54 @@ function parts(date: string): readonly [number, number, number] {
   return [year, month, day];
 }
 
-/** A calendar day (`2026-10-08`) as the language writes it: "Oct 8, 2026". It has no time zone, so none shifts it. */
-export function formatDate(date: string, locale: string): string {
-  const [year, month, day] = parts(date);
-  return memoIntl(
-    `date:${locale}`,
-    () => new Intl.DateTimeFormat(locale, { dateStyle: 'medium', timeZone: 'UTC' }),
-  ).format(Date.UTC(year, month - 1, day));
+/**
+ * How a date is written, as a member chose it (Settings › Account ›
+ * Preferences): the language's own (`auto`, "Oct 8, 2026" in en-US), day
+ * first (`dmy`, "8 Oct 2026"), month first (`mdy`, "Oct 8, 2026") or ISO
+ * (`ymd`, "2026-10-08"). Month names stay in the language.
+ */
+export type DateFormat = 'auto' | 'dmy' | 'mdy' | 'ymd';
+
+/** An instant's day written in `dateFormat`, read in `timeZone`. */
+function writeDay(at: number, locale: string, timeZone: string, dateFormat: DateFormat): string {
+  if (dateFormat === 'auto') {
+    return memoIntl(
+      `day:${locale}:${timeZone}`,
+      () => new Intl.DateTimeFormat(locale, { dateStyle: 'medium', timeZone }),
+    ).format(at);
+  }
+  const numeric = dateFormat === 'ymd';
+  const parts = memoIntl(
+    `parts:${locale}:${timeZone}:${numeric ? 'n' : 's'}`,
+    () =>
+      new Intl.DateTimeFormat(numeric ? 'en' : locale, {
+        year: 'numeric',
+        month: numeric ? '2-digit' : 'short',
+        day: numeric ? '2-digit' : 'numeric',
+        timeZone,
+      }),
+  ).formatToParts(at);
+  const part = (type: Intl.DateTimeFormatPartTypes) => parts.find((each) => each.type === type)?.value ?? '';
+  if (numeric) return `${part('year')}-${part('month')}-${part('day')}`;
+  return dateFormat === 'dmy'
+    ? `${part('day')} ${part('month')} ${part('year')}`
+    : `${part('month')} ${part('day')}, ${part('year')}`;
 }
 
-/** An instant's day in the time zone: "Oct 8, 2026". */
-export function formatDay(timestamp: string, locale: string, timeZone: string): string {
-  return memoIntl(
-    `day:${locale}:${timeZone}`,
-    () => new Intl.DateTimeFormat(locale, { dateStyle: 'medium', timeZone }),
-  ).format(new Date(timestamp));
+/** A calendar day (`2026-10-08`) in the date format: "Oct 8, 2026". It has no time zone, so none shifts it. */
+export function formatDate(date: string, locale: string, dateFormat: DateFormat = 'auto'): string {
+  const [year, month, day] = parts(date);
+  return writeDay(Date.UTC(year, month - 1, day), locale, 'UTC', dateFormat);
+}
+
+/** An instant's day in the time zone and date format: "Oct 8, 2026". */
+export function formatDay(
+  timestamp: string,
+  locale: string,
+  timeZone: string,
+  dateFormat: DateFormat = 'auto',
+): string {
+  return writeDay(new Date(timestamp).getTime(), locale, timeZone, dateFormat);
 }
 
 /** The exact time, for tooltips: "Oct 8, 2026, 3:30 PM BST", with the time zone's name. */
@@ -110,7 +143,13 @@ const DAY = 24 * HOUR;
  * "Yesterday" never reads "2 days ago" and one from two dates back never
  * reads "yesterday". Past 7 days it becomes the date in the time zone.
  */
-export function formatRelative(timestamp: string, now: number, locale: string, timeZone: string): string {
+export function formatRelative(
+  timestamp: string,
+  now: number,
+  locale: string,
+  timeZone: string,
+  dateFormat: DateFormat = 'auto',
+): string {
   const elapsed = new Date(timestamp).getTime() - now;
   const size = Math.abs(elapsed);
   const sign = Math.sign(elapsed);
@@ -124,5 +163,5 @@ export function formatRelative(timestamp: string, now: number, locale: string, t
     );
     return relative.format(-days, 'day');
   }
-  return formatDay(timestamp, locale, timeZone);
+  return formatDay(timestamp, locale, timeZone, dateFormat);
 }

@@ -4,6 +4,7 @@ import { createFileRoute, Outlet, redirect, useRouter, type ErrorComponentProps 
 import { signInHref } from '../features/auth/redirect.ts';
 import { CommandMenuProvider } from '../features/command/CommandMenuProvider.tsx';
 import { failedPage, missingPage, pendingPage } from '../features/workspace/ObjectScreen.tsx';
+import { PreferencesScope } from '../features/workspace/PreferencesScope.tsx';
 import { strings } from '../features/workspace/strings.ts';
 import { useWorkspaceName, WorkspacePage } from '../features/workspace/WorkspacePage.tsx';
 
@@ -25,9 +26,12 @@ export const Route = createFileRoute('/w/$slug')({
     const workspaceName = context.me.workspaces.find((workspace) => workspace.slug === params.slug)?.name;
     try {
       // The person's role and permissions come with the objects (spec 0009): screens hide what they can't use.
+      // The member's preferences (time zone, date format, week start) before the first page draws a date; a failed
+      // read keeps the browser's defaults.
       const [objects, access] = await Promise.all([
         context.data.objects.list(params.slug),
         context.data.access.mine(params.slug),
+        context.data.preferences.load(params.slug).catch(() => undefined),
       ]);
       return { workspaceName: workspaceName ?? params.slug, objects, access };
     } catch (error) {
@@ -49,15 +53,18 @@ export const Route = createFileRoute('/w/$slug')({
 function WorkspaceRoute() {
   const { objects } = Route.useLoaderData();
   const { slug } = Route.useParams();
+  const { data } = Route.useRouteContext();
   if (objects === undefined) {
     return <WorkspacePage page={missingPage(strings.workspaceMissingTitle, strings.workspaceMissingText)} />;
   }
   // The command menu (spec 0039): ⌘K and `/` on every page inside the workspace, and `useCommandMenu()` for the
   // sidebar's Quick actions and search.
   return (
-    <CommandMenuProvider slug={slug}>
-      <Outlet />
-    </CommandMenuProvider>
+    <PreferencesScope data={data} slug={slug}>
+      <CommandMenuProvider slug={slug}>
+        <Outlet />
+      </CommandMenuProvider>
+    </PreferencesScope>
   );
 }
 

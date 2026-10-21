@@ -14,6 +14,7 @@ import { bookingsSearchOf, parseBookingsSearch } from './search.ts';
 import type { DrawnSpan } from './span.ts';
 import { strings } from './strings.ts';
 import { weekRange } from './week.ts';
+import { useFirstDay } from '../workspace/first-day.ts';
 
 /** Props for BookingsTopBar. */
 export interface BookingsTopBarProps {
@@ -28,7 +29,7 @@ export interface BookingsTopBarProps {
 export function BookingsTopBar({ slug }: BookingsTopBarProps) {
   const { data, toasts } = useRouteContext({ from: '__root__' });
   // The week on screen: the Calendar's, else this week.
-  const { week } = bookingsSearchOf(parseBookingsSearch(useSearch({ strict: false })));
+  const { week } = bookingsSearchOf(parseBookingsSearch(useSearch({ strict: false })), new Date(), useFirstDay());
   // The member's hours, when the Calendar has read them; else nine to five on weekdays.
   const availability = useMatch({ from: '/w/$slug/bookings/calendar', shouldThrow: false })?.loaderData?.availability;
   const pages = useCaptureList(data.bookingPages.view(slug));

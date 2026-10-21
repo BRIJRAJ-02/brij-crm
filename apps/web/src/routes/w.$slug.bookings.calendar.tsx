@@ -17,6 +17,7 @@ import { hostActions } from '../features/bookings/hostActions.ts';
 import { workingStartOf } from '../features/bookings/span.ts';
 import { addDays, weekRange } from '../features/bookings/week.ts';
 import { browserZone } from '../features/booking/zone.ts';
+import { firstDayFor, useFirstDay } from '../features/workspace/first-day.ts';
 
 // Bookings › Calendar (spec 0025, AC-646): the week (`w`, its Monday; `d`, the day picked) with the reader's own
 // calendar events beside the bookings, filtered by `link` (one booking page) and `conn` (the calendars shown). The
@@ -29,7 +30,13 @@ export const Route = createFileRoute('/w/$slug/bookings/calendar')({
   loaderDeps: () => ({}),
   loader: async ({ context, params, location }) => {
     const { data } = context;
-    const shown = bookingsSearchOf(parseBookingsSearch(location.search)).week;
+    // The member's week start (read by the workspace frame already); a failed read starts on Monday's rule.
+    const preferences = await data.preferences.load(params.slug).catch(() => undefined);
+    const shown = bookingsSearchOf(
+      parseBookingsSearch(location.search),
+      new Date(),
+      firstDayFor(preferences?.weekStart),
+    ).week;
     const week = heldWeek(shown, data, params.slug);
     // The weeks either side, read behind, so Previous and Next show at once.
     for (const step of [-7, 7])
@@ -87,7 +94,7 @@ function CalendarPending() {
 
 function Calendar({ objects, pages, connections, availability }: CalendarLoaded) {
   const { slug } = Route.useParams();
-  const search = bookingsSearchOf(Route.useSearch());
+  const search = bookingsSearchOf(Route.useSearch(), new Date(), useFirstDay());
   const navigate = useNavigate();
   const { data, toasts } = Route.useRouteContext();
   // One set of calls per workspace: a dialog holding them never reads again because the route drew again.

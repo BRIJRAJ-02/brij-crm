@@ -88,6 +88,21 @@ import {
   type ConnectReturn,
 } from './calendar/store.ts';
 import { lazySchedules } from './schedules/lazy.ts';
+import {
+  createPreferencesStore,
+  type MemberPreferences,
+  type PreferencesChange,
+  type PreferencesHeld,
+} from './preferences/store.ts';
+export type {
+  DateFormat,
+  LandingPage,
+  MemberPreferences,
+  PreferencesChange,
+  PreferencesHeld,
+  PreferencesState,
+  WeekStart,
+} from './preferences/store.ts';
 import type { SchedulesView } from './schedules/store.ts';
 import {
   createCaptureList,
@@ -782,6 +797,7 @@ export function createDataLayer({
     bookingPageLists.clear();
     formLists.clear();
     schedules.clear();
+    preferences.clear();
   };
   const reset = () => {
     forget();
@@ -1414,6 +1430,16 @@ export function createDataLayer({
       schedules.changed(workspace);
       return answer;
     };
+
+  // Settings › Account › Preferences: the member's own, one copy per workspace.
+  const preferences = createPreferencesStore({
+    api: {
+      get: (input) => beforeRead(input.workspace).then(() => call((options) => api.preferences.get(input, options))),
+      update: (input) => call((options) => api.preferences.update(input, options)),
+    },
+    mintId,
+    notify,
+  });
 
   // Calendar sync (spec 0024): the member's connections, Settings › Calendar's one list per workspace.
   const calendar = createCalendarStore({
@@ -3207,6 +3233,16 @@ export function createDataLayer({
        */
       deleteForever: async (workspace: string, recordIds: readonly string[]): Promise<PurgeSummary> =>
         (await trashStore()).deleteForever(workspace, recordIds),
+    },
+    /**
+     * The member's own preferences in a workspace (Settings › Account › Preferences): time zone, date format, week
+     * start and landing page. `of` is held by screens (`usePreferences`), `load` by route loaders; `change` shows at
+     * once and is put back with a toast if refused, answering whether it landed.
+     */
+    preferences: {
+      of: (workspace: string): PreferencesHeld => preferences.of(workspace),
+      load: (workspace: string): Promise<MemberPreferences> => preferences.load(workspace),
+      change: (workspace: string, change: PreferencesChange): Promise<boolean> => preferences.change(workspace, change),
     },
     calendar: {
       /**

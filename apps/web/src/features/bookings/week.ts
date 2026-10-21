@@ -22,10 +22,10 @@ export function addDays(key: string, days: number): string {
   return dayKeyOf(date);
 }
 
-/** The Monday of the week holding `key`. */
-export function weekOf(key: string): string {
+/** The first day of the week holding `key`: Monday unless `firstDay` (0 Sunday to 6 Saturday, the member's week start) says. */
+export function weekOf(key: string, firstDay = 1): string {
   const date = dayStart(key);
-  return addDays(key, -((date.getDay() + 6) % 7));
+  return addDays(key, -((date.getDay() - firstDay + 7) % 7));
 }
 
 /** True for a `yyyy-MM-dd` key. */
