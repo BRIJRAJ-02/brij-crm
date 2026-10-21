@@ -8,31 +8,13 @@
 // same NOT_FOUND as one that doesn't exist.
 import { oc } from '@orpc/contract';
 import * as z from 'zod';
-import { EXPORT_ROWS_MAX, ExportIdInput } from './forms/forms.ts';
+import { ExportIdInput } from './forms/forms.ts';
+import { TRANSFER_LIMITS } from './transfer-limits.ts';
 import { FilterGroup } from './values/filters.ts';
 import { SortRules } from './values/sorts.ts';
 import { WorkspaceScoped } from './workspaces.ts';
 
-/**
- * The import and export limits (decisions 4 and 5): what one file may hold,
- * what one staging call carries, how many imports a workspace may have
- * unfinished, how long undo stays open and an export is kept, and how many
- * rows one export writes. The engine's limits module (`LIMITS` in
- * `@crm/core`) takes its numbers from here, so the browser checks the same
- * ones before it sends anything.
- */
-export const TRANSFER_LIMITS = {
-  importRows: 100_000,
-  importColumns: 250,
-  importBytes: 50 * 1024 * 1024,
-  stageRows: 1_000,
-  /** One staged row's values as JSON, at most. */
-  stageRowBytes: 64 * 1024,
-  unfinishedImports: 3,
-  undoDays: 7,
-  exportRows: EXPORT_ROWS_MAX,
-  exportKeptDays: 7,
-} as const;
+export { TRANSFER_LIMITS } from './transfer-limits.ts';
 
 /** Where a column goes: an attribute, or one part of a personal name. */
 export const ImportTarget = z.strictObject({

@@ -22,6 +22,7 @@
     "./bulk-ops": "./src/bulk-ops.ts",
     "./forms": "./src/forms/browser.ts",
     "./csv": "./src/csv.ts",
+    "./transfer-limits": "./src/transfer-limits.ts",
     "./booking": "./src/booking/index.ts",
     "./emails": "./src/emails.ts"
   },
