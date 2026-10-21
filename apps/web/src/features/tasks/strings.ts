@@ -11,7 +11,7 @@ export const strings = {
   /** The Tasks tab with nothing open. */
   noOpenTasks: 'No open tasks. Add one above.',
   /** Overview's block with nothing open. */
-  noOpenTasksShort: 'No open tasks.',
+  noOpenTasksShort: 'No open tasks',
   noCompletedTasks: 'No completed tasks yet',
   /** A task linked to a removed member keeps them, by this name (owner decision 6). */
   formerMember: 'Former member',
