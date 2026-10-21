@@ -1,6 +1,7 @@
 import { useRef, useState } from 'react';
 import { DialogTrigger } from 'react-aria-components';
 import { Button } from '../../atoms/Button/Button.tsx';
+import { Skeleton } from '../../atoms/Skeleton/Skeleton.tsx';
 import { Checkbox } from '../../atoms/Checkbox/Checkbox.tsx';
 import { Switch } from '../../atoms/Switch/Switch.tsx';
 import { Tooltip } from '../../atoms/Tooltip/Tooltip.tsx';
@@ -8,6 +9,7 @@ import { Popover } from '../../molecules/Popover/Popover.tsx';
 import { Select, type SelectItem } from '../../molecules/Select/Select.tsx';
 import { memoIntl } from '../../lib/intl-memo.ts';
 import { useFormatSettings } from '../../provider/context.ts';
+import { useDelayedLoading } from '../../provider/useDelayedLoading.ts';
 import styles from './HoursEditor.module.css';
 import { strings } from './strings.ts';
 
@@ -42,6 +44,11 @@ export interface HoursEditorProps {
    * the reader's own ("09:30" where the day runs to 24 hours).
    */
   readonly hourClock?: HoursClock;
+  /**
+   * The hours are still coming: All days and one row per day stand in their places, each with a skeleton where
+   * its times go, so the editor arrives without the page under it moving. Pass the days as `rows` (no ranges).
+   */
+  readonly isLoading?: boolean;
 }
 
 /** `HH:MM` for minutes from midnight. */
@@ -191,8 +198,28 @@ export function HoursEditor({
   hourClock = '12',
   isDisabled = false,
   isReadOnly = false,
+  isLoading = false,
 }: HoursEditorProps) {
   const { locale } = useFormatSettings();
+  const showSkeleton = useDelayedLoading(isLoading);
+  if (isLoading) {
+    return (
+      <div className={styles.root} aria-busy="true">
+        <div className={styles.all} aria-hidden="true">
+          <span className={styles.allLabel}>{strings.allDays}</span>
+          <span className={styles.slot}>{showSkeleton && <Skeleton />}</span>
+        </div>
+        <ul className={styles.rows} aria-label={label}>
+          {rows.map((row) => (
+            <li key={row.id} className={styles.row}>
+              <div className={styles.day}>{row.label}</div>
+              <span className={styles.slot}>{showSkeleton && <Skeleton />}</span>
+            </li>
+          ))}
+        </ul>
+      </div>
+    );
+  }
   if (isReadOnly) return <ReadOnlyWeek label={label} rows={rows} locale={locale} hourClock={hourClock} />;
   const step = stepMinutes > 0 ? stepMinutes : 30;
   const starts: SelectItem[] = [];

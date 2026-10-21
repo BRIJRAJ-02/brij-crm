@@ -144,6 +144,27 @@ export const Default: Story = {
   ),
 };
 
+/** The week while its blocks load: the grid in place, busy, each day saying it is loading. */
+export const Loading: Story = {
+  parameters: { crm: { screenshot: false } },
+  render: (args) => (
+    <Stage width="fill">
+      <WeekCalendar
+        {...args}
+        days={days()}
+        blocks={[]}
+        isLoading
+        now={{ dayKey: '2026-10-08', minute: 15 * 60 + 30 }}
+      />
+    </Stage>
+  ),
+  play: async ({ canvasElement }) => {
+    const week = within(canvasElement).getByRole('region');
+    await expect(week).toHaveAttribute('aria-busy', 'true');
+    await expect(within(week).getAllByRole('group', { name: /, loading$/ })).toHaveLength(7);
+  },
+};
+
 /** Pressing a block opens its card beside it; Escape closes it. */
 export const OpenCard: Story = {
   parameters: { crm: { screenshot: false } },

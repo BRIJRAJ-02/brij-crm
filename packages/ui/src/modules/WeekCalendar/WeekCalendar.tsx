@@ -110,6 +110,11 @@ export interface WeekCalendarProps {
   readonly drawStartMinute?: (dayKey: string) => number;
   /** A minute of the day as a time ("10:15 AM"), for the drawn span's corners. */
   readonly minuteLabel?: (minute: number) => string;
+  /**
+   * The week's blocks are still loading: the grid itself shows (the days, the hours, today), busy, so the week
+   * arrives in place with nothing moving; a day says it is loading rather than "nothing on".
+   */
+  readonly isLoading?: boolean;
 }
 
 /** A block with its lane: overlapping blocks share their cluster's width, side by side. */
@@ -183,6 +188,7 @@ export function WeekCalendar({
   drawMinutes = 30,
   drawStartMinute,
   minuteLabel,
+  isLoading = false,
 }: WeekCalendarProps) {
   const scroller = useRef<HTMLDivElement>(null);
   const columns = useRef(new Map<string, HTMLDivElement>());
@@ -293,7 +299,7 @@ export function WeekCalendar({
   };
 
   return (
-    <section className={styles.root} aria-label={label}>
+    <section className={styles.root} aria-label={label} aria-busy={isLoading || undefined}>
       <div className={styles.head}>
         <span className={styles.corner} aria-hidden="true" />
         {days.map((day) => (
@@ -337,7 +343,7 @@ export function WeekCalendar({
                   else columns.current.set(day.key, element);
                 }}
                 role="group"
-                aria-label={strings.dayBlocks(day.label, dayBlocks.length)}
+                aria-label={isLoading ? strings.dayLoading(day.label) : strings.dayBlocks(day.label, dayBlocks.length)}
                 {...(onDraw === undefined
                   ? {}
                   : { 'aria-description': strings.drawHint, 'aria-keyshortcuts': 'Enter' })}

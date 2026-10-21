@@ -65,6 +65,21 @@ export const Week: Story = {
   },
 };
 
+/** While the hours load: All days and each day's row in place, busy, with a skeleton where the times go. */
+export const Loading: Story = {
+  parameters: { crm: { screenshot: false } },
+  render: (args) => (
+    <Stage width="fill">
+      <HoursEditor {...args} rows={weekRows().map((row) => ({ ...row, ranges: [] }))} isLoading />
+    </Stage>
+  ),
+  play: async ({ canvas }) => {
+    await expect(canvas.getByRole('list', { name: 'Weekly hours' })).toBeInTheDocument();
+    await expect(canvas.getAllByRole('listitem')).toHaveLength(7);
+    await expect(canvas.queryByRole('switch')).not.toBeInTheDocument();
+  },
+};
+
 /** Copy times to: Friday's hours put on Monday and Tuesday. */
 export const CopyTimes: Story = {
   args: { rows: weekRows() },

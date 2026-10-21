@@ -30,6 +30,14 @@
     border-block-end: var(--border-width-hairline) solid var(--border-subtle);
   }
 
+  /* Loading: a row's times as one skeleton, as wide as from, to and until, as tall as the controls. */
+  .slot {
+    display: flex;
+    align-items: center;
+    inline-size: var(--size-column-narrow);
+    min-block-size: var(--size-control);
+  }
+
   .allLabel {
     display: flex;
     align-items: center;

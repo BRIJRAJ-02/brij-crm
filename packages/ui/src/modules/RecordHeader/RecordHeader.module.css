@@ -41,6 +41,26 @@
     letter-spacing: var(--tracking-label);
   }
 
+  /* Loading: the avatar's and each line's own height, so the page under the header lands where it will stay. */
+  .avatarSlot {
+    display: grid;
+    flex: none;
+    place-items: center;
+    inline-size: var(--space-32);
+    block-size: var(--space-32);
+  }
+
+  .lineSlot {
+    display: flex;
+    align-items: center;
+    block-size: 1lh;
+    font: var(--text-label);
+  }
+
+  .lineSlot[data-line='name'] {
+    font: var(--text-heading);
+  }
+
   .end {
     display: flex;
     flex: none;

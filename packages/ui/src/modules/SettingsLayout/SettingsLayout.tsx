@@ -68,6 +68,11 @@ export interface SettingsLayoutProps {
   /** The page's head is still coming: skeletons after the loading delay; the navigation stays usable. */
   readonly isLoading?: boolean;
   /**
+   * While loading, the page will have a tile before its title (an object's page) whose icon isn't known yet: its
+   * place shows as a skeleton tile, so the title and the tabs under it don't move when it arrives.
+   */
+  readonly hasTile?: boolean;
+  /**
    * The visible title, which takes focus by script (never a tab stop) when
    * the control in use went away with its change (an archived row, a
    * cancelled job's Cancel): the TopBar's h1 is visually hidden under a trail.
@@ -97,6 +102,7 @@ export function SettingsLayout({
   description,
   actions,
   isLoading = false,
+  hasTile = false,
   titleRef,
   children,
 }: SettingsLayoutProps) {
@@ -128,12 +134,17 @@ export function SettingsLayout({
           <div className={styles.header} aria-busy="true" data-has-tabs={hasTabs || undefined}>
             {/* The trail is known before the page loads, so it stays put and the header doesn't shift. */}
             {trailLine}
-            {showSkeleton && (
-              <span className={styles.text}>
-                <Skeleton width="medium" />
-                <Skeleton width="long" />
-              </span>
+            {/* Each part in the loaded header's own place: the tile, the title's line, the description known already. */}
+            {icon !== undefined ? (
+              <Icon name={icon} tile={hue ?? 'gray'} />
+            ) : (
+              hasTile && showSkeleton && <Skeleton shape="tile" />
             )}
+            <span className={styles.text}>
+              <span className={styles.titleSlot}>{showSkeleton && <Skeleton width="medium" />}</span>
+              {description !== undefined && <span className={styles.description}>{description}</span>}
+            </span>
+            {actions !== undefined && <span className={styles.actions}>{actions}</span>}
             {/* The h1 keeps the page's title for screen readers and the app's focus while it loads. */}
             {titleLevel === 1 ? (
               <VisuallyHidden>

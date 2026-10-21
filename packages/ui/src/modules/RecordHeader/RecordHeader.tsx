@@ -45,10 +45,16 @@ export function RecordHeader({
       <div className={styles.root} aria-busy="true">
         {showSkeleton && (
           <>
-            <Skeleton shape="circle" />
+            <span className={styles.avatarSlot}>
+              <Skeleton shape="circle" />
+            </span>
             <span className={styles.text}>
-              <Skeleton width="medium" />
-              <Skeleton width="short" />
+              <span className={styles.lineSlot} data-line="name">
+                <Skeleton width="medium" />
+              </span>
+              <span className={styles.lineSlot} data-line="meta">
+                <Skeleton width="short" />
+              </span>
             </span>
           </>
         )}

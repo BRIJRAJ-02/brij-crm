@@ -38,7 +38,7 @@ New. A booking page needs several windows a day (split shifts), a day turned off
 
 ## States
 
-On, off, several windows, Mixed, a row's error, disabled, read only; the controls' own hover, focus and pressed states.
+On, off, several windows, Mixed, a row's error, disabled, read only, loading (`isLoading`: All days and each day's row in place, a skeleton where the times go); the controls' own hover, focus and pressed states.
 
 ## Keyboard
 

@@ -39,7 +39,7 @@ New. Nothing in the library places things on a time axis. Board and DataGrid are
 
 ## States
 
-Blocks (bookings, events, closed and busy time), none (an empty grid: the caller says "Nothing booked this week" under it), an open block (ringed, its card open), focused day and block rings. Loading and failure belong to the screen.
+Blocks (bookings, events, closed and busy time), none (an empty grid: the caller says "Nothing booked this week" under it), an open block (ringed, its card open), focused day and block rings, and loading (`isLoading`: the grid itself, busy, with no blocks, so the week arrives in place; each day reads "loading" rather than "nothing on"). Failure belongs to the screen.
 
 ## Keyboard
 

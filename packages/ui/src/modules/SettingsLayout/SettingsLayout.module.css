@@ -94,6 +94,14 @@
     white-space: nowrap;
   }
 
+  /* Loading: the title's own line, so the description and the body under it stand where they will. */
+  .titleSlot {
+    display: flex;
+    align-items: center;
+    block-size: 1lh;
+    font: var(--text-heading);
+  }
+
   .description {
     color: var(--text-secondary);
     font: var(--text-body);
