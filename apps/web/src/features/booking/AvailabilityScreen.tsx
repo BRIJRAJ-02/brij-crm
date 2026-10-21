@@ -60,8 +60,9 @@ export function AvailabilityScreen({ data, slug, locale, member, members, me }: 
   const { toasts } = useRouteContext({ from: '__root__' });
   const navigate = useNavigate();
   const view = data.schedules.view(slug, member, browserZone());
-  // An admin sees whose schedules show, and may pick a colleague's (AC-971); the Select is the same one loading.
-  const isAdmin = useCan('booking.admin');
+  // A reader who reaches colleagues (the server's `canActFor`; today `booking.admin`, AC-971) picks whose show.
+  const reachesColleagues = useCan('booking.admin');
+  const isAdmin = members.length > 1 || reachesColleagues;
   // A colleague's, by name, for the words that say whose they are.
   const owner = member === undefined ? undefined : members.find((each) => each.id === member)?.name;
   const state = useSchedules(view);

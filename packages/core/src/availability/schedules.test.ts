@@ -403,7 +403,7 @@ describe('schedules (AC-961 to AC-972)', () => {
     const beas = await createSchedule(bea.scope, { id: newId(), name: 'Evenings', timeZone: 'UTC' });
     const other = await w.addMember('dee', 'member');
     expect(await refusalOf(listSchedules(other.scope, { memberId: bea.id, timeZone: 'UTC' }))).toMatchObject({
-      code: 'FORBIDDEN',
+      code: 'NOT_FOUND',
     });
     expect(
       await refusalOf(
@@ -452,10 +452,10 @@ describe('schedules (AC-961 to AC-972)', () => {
     for (const [name, call] of Object.entries(calls(key, bea.id))) {
       expect(await refusalOf(call()), name).toMatchObject({ code: 'FORBIDDEN' });
     }
-    // Dee, a member: naming Bea is 403; Bea's schedule answers as absent.
+    // Dee, a member: Bea is outside her reach (spec 0037), so Bea and her schedule answer as absent.
     const asDee = calls(dee.scope, bea.id);
-    expect(await refusalOf(asDee.list())).toMatchObject({ code: 'FORBIDDEN' });
-    expect(await refusalOf(asDee.create())).toMatchObject({ code: 'FORBIDDEN' });
+    expect(await refusalOf(asDee.list())).toMatchObject({ code: 'NOT_FOUND' });
+    expect(await refusalOf(asDee.create())).toMatchObject({ code: 'NOT_FOUND' });
     for (const name of ['get', 'update', 'setDefault', 'duplicate', 'delete'] as const) {
       expect(await refusalOf(asDee[name]()), name).toMatchObject({ code: 'NOT_FOUND' });
     }

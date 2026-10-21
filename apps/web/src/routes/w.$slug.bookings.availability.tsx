@@ -16,15 +16,17 @@ export const Route = createFileRoute('/w/$slug/bookings/availability')({
   validateSearch: memberSearch,
   loaderDeps: ({ search }) => ({ member: search.member }),
   loader: async ({ context, params, deps }) => {
-    const access = await context.data.access.mine(params.slug);
+    // Whose schedules the reader may view comes from the server's reach (`canActFor`, spec 0037): a colleague
+    // outside it opens the reader's own.
+    const [access, members] = await Promise.all([
+      context.data.access.mine(params.slug),
+      context.data.schedules.members(params.slug),
+    ]);
     const member =
-      deps.member !== undefined && deps.member !== access.memberId && access.permissions.includes('booking.admin')
+      deps.member !== undefined && deps.member !== access.memberId && members.some((each) => each.id === deps.member)
         ? deps.member
         : undefined;
-    const [members] = await Promise.all([
-      context.data.schedules.members(params.slug),
-      context.data.schedules.view(params.slug, member, browserZone()).ready(),
-    ]);
+    await context.data.schedules.view(params.slug, member, browserZone()).ready();
     return { member, members, me: access.memberId };
   },
   // Shown only once the loading delay passed: its skeletons show at once.
