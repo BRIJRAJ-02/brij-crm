@@ -6,7 +6,7 @@
 - Main task: make a page and open its builder; copy a link, pause or take bookings again, delete one after a confirm.
 - Leaves out: a page's settings (its builder), the bookings list (milestone 2) and team pages (milestone 3).
 
-Built from Table, Badge, CopyButton, Button, Modal (new page, and the delete confirm with `tone="danger"`), Field, Callout and EmptyState. Pause shows at once and rolls back on a refusal.
+Built from Table, Badge, CopyButton, Button, Modal (new page, and the delete confirm with `tone="danger"`: Delete page stays busy until the server answers while the card has already left, a refusal shows inside it with the card back, and once deleted focus goes to the page's title), Field, Callout and EmptyState. Pause shows at once and rolls back on a refusal.
 
 ## The builder (`/w/$slug/captures/links/$pageId`; the old `/settings/booking-pages/$pageId` redirects here)
 

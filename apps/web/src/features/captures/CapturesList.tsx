@@ -43,39 +43,45 @@ export function CapturesList({
 }: CapturesListProps) {
   const slot = useCapturesToolbarSlot();
   const [query, setQuery] = useState('');
-  if (status === 'ready' && cards.length === 0) {
-    return (
-      <PageColumn align="center">
-        <EmptyState title={empty.title} icon={empty.icon} {...(newAction === undefined ? {} : { actions: newAction })}>
-          {empty.text}
-        </EmptyState>
-        {dialogs}
-      </PageColumn>
-    );
-  }
   const isBusy = status !== 'ready';
   return (
     <>
-      {slot !== null &&
-        createPortal(
-          <LinkListToolbar
-            searchLabel={searchLabel}
+      {status === 'ready' && cards.length === 0 ? (
+        <PageColumn align="center">
+          <EmptyState
+            title={empty.title}
+            icon={empty.icon}
+            {...(newAction === undefined ? {} : { actions: newAction })}
+          >
+            {empty.text}
+          </EmptyState>
+        </PageColumn>
+      ) : (
+        <>
+          {slot !== null &&
+            createPortal(
+              <LinkListToolbar
+                searchLabel={searchLabel}
+                query={query}
+                onQueryChange={setQuery}
+                size="sm"
+                isSearchDisabled={isBusy}
+              />,
+              slot,
+            )}
+          <LinkGrid
+            label={label}
+            cards={cards}
             query={query}
             onQueryChange={setQuery}
-            size="sm"
-            isSearchDisabled={isBusy}
-          />,
-          slot,
-        )}
-      <LinkGrid
-        label={label}
-        cards={cards}
-        query={query}
-        onQueryChange={setQuery}
-        status={status}
-        errorTitle={errorTitle}
-        onRetry={onRetry}
-      />
+            status={status}
+            errorTitle={errorTitle}
+            onRetry={onRetry}
+          />
+        </>
+      )}
+      {/* In one place whichever way the list draws, so a confirm open over the last card (it leaves at once, and
+          comes back on a refusal) keeps its state. */}
       {dialogs}
     </>
   );
