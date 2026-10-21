@@ -7,7 +7,7 @@ export const strings = {
   tryAgain: 'Try again',
   /** Discard's confirm: what goes, and that it can't come back. */
   discardTitle: 'Discard your unsaved changes?',
-  discardText: 'Everything you changed since the last save goes back to how it was. You can’t undo this.',
+  discardText: 'The page goes back to its last save. This can’t be undone.',
   keepEditing: 'Keep editing',
   discardChanges: 'Discard changes',
 } as const;

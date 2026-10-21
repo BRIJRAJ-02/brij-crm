@@ -73,6 +73,8 @@ export function SaveBar({ status, error, onSave, onDiscard, blockedReason, onFoc
   const [shown, setShown] = useState<Exclude<SaveBarStatus, 'hidden'>>(status === 'hidden' ? 'unsaved' : status);
   if (status !== 'hidden' && status !== shown) setShown(status);
   const canSave = blockedReason === undefined && (status === 'unsaved' || status === 'error');
+  // Discard asks first: the changes it throws away can't come back.
+  const [isAsking, setAsking] = useState(false);
 
   // ⌘S (Ctrl+S elsewhere) saves from anywhere on the page; ⌘↵ too, unless a form takes it for its own submit.
   const save = useRef(onSave);
@@ -85,17 +87,25 @@ export function SaveBar({ status, error, onSave, onDiscard, blockedReason, onFoc
     const onKeyDown = (event: KeyboardEvent) => {
       const mod = platform === 'mac' ? event.metaKey : event.ctrlKey;
       if (!mod || event.isComposing || event.altKey || event.shiftKey || event.defaultPrevented) return;
-      // A dialog or popover over the page keeps its keys: ⌘S there must not save the page under it.
+      // A dialog or popover over the page keeps its keys: ⌘S there must not save the page under it. Discard's own
+      // confirm is the one exception: ⌘S there means keep the changes after all, so it closes and saves.
       const target = event.target instanceof Element ? event.target : null;
       const layer = target?.closest('[role="dialog"], [role="alertdialog"], [aria-modal="true"], [role="listbox"]');
-      if (layer !== null && layer !== undefined) return;
+      if (layer !== null && layer !== undefined) {
+        if (isAsking && event.key.toLowerCase() === 's') {
+          event.preventDefault();
+          setAsking(false);
+          if (canSave) save.current();
+        }
+        return;
+      }
       if (event.key.toLowerCase() !== 's' && event.key !== 'Enter') return;
       event.preventDefault();
       if (canSave) save.current();
     };
     document.addEventListener('keydown', onKeyDown);
     return () => document.removeEventListener('keydown', onKeyDown);
-  }, [isMounted, canSave, platform]);
+  }, [isMounted, canSave, platform, isAsking]);
 
   // Focus on Discard or Save when they go (a discard, a save that landed) is handed on, never dropped.
   const hadFocus = useRef(false);
@@ -104,8 +114,6 @@ export function SaveBar({ status, error, onSave, onDiscard, blockedReason, onFoc
     focusAway.current = onFocusAway;
   }, [onFocusAway]);
 
-  // Discard asks first: the changes it throws away can't come back.
-  const [isAsking, setAsking] = useState(false);
   const discard = () => {
     setAsking(false);
     onDiscard?.();
@@ -170,7 +178,7 @@ export function SaveBar({ status, error, onSave, onDiscard, blockedReason, onFoc
                     <Button slot="close" kbd="ESC">
                       {strings.keepEditing}
                     </Button>
-                    <Button variant="danger-solid" icon="undo-2" onPress={discard}>
+                    <Button variant="danger-solid" onPress={discard}>
                       {strings.discardChanges}
                     </Button>
                   </>
