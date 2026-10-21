@@ -48,9 +48,10 @@ const LIST: Pick<Step, 'ready' | 'probe'> = {
   ready: (page) => page.getByText('Nothing coming up'),
   probe: { css: '[role="tabpanel"] [role="status"]', text: 'Nothing coming up' },
 };
+// Availability lists the member's schedules (spec 0035): the virtual default, "Working hours", is always there.
 const AVAILABILITY: Pick<Step, 'ready' | 'probe'> = {
-  ready: (page) => page.getByRole('switch', { name: 'Monday' }),
-  probe: { css: '[role="switch"]' },
+  ready: (page) => page.getByRole('grid', { name: 'Schedules' }).getByRole('row').filter({ hasText: 'Working hours' }),
+  probe: { css: '[role="row"]', text: 'Working hours' },
 };
 const PAGE_EDITOR: Pick<Step, 'ready' | 'probe'> = {
   ready: (page) => page.locator('main h1', { hasText: 'Intro call' }),
