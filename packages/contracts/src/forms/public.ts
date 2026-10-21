@@ -5,6 +5,7 @@
 // the app), so its bundle carries no schema library.
 import * as z from 'zod';
 import { ANSWER_TYPES } from './answer-types.ts';
+import { CONDITION_OPS } from './show-when.ts';
 import { Uuid } from '../values/ids.ts';
 import { SubmitContext } from './context.ts';
 
@@ -22,6 +23,19 @@ export const PublicQuestion = z.object({
   choices: z.array(z.string()).optional(),
   /** Each choice's stable key, in the choices' order: the option value a site's own form posts. */
   choiceKeys: z.array(z.string()).optional(),
+  /** Shown only when earlier answers match (spec 0043, AC-1614): `visibleQuestions` decides, here and on the server. */
+  showWhen: z
+    .object({
+      join: z.enum(['all', 'any']),
+      rules: z.array(
+        z.object({
+          key: z.string(),
+          op: z.enum(CONDITION_OPS),
+          value: z.union([z.string(), z.array(z.string())]).optional(),
+        }),
+      ),
+    })
+    .optional(),
   placeholder: z.string().optional(),
   required: z.boolean(),
 });

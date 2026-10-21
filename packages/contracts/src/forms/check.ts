@@ -9,12 +9,16 @@
 import { choiceKeysOf, LONG_ANSWER_MAX, SHORT_ANSWER_MAX, type AnswerType } from './answer-types.ts';
 import { countryOfE164 } from './dial-codes.ts';
 import type { FormLanguage, PublicQuestion } from './public.ts';
+import { matchesShowWhen } from './show-when.ts';
 import { formStrings, type FormStrings } from './strings.ts';
 
 /** What the check needs from a form: its questions and its language. */
 export interface CheckedForm {
   readonly language: FormLanguage;
-  readonly questions: readonly Pick<PublicQuestion, 'key' | 'answerType' | 'required' | 'choices' | 'choiceKeys'>[];
+  readonly questions: readonly Pick<
+    PublicQuestion,
+    'key' | 'answerType' | 'required' | 'choices' | 'choiceKeys' | 'showWhen'
+  >[];
 }
 
 /** A phone answer: the number in E.164 and the country whose code was picked. */
@@ -137,13 +141,16 @@ function checkOne(
  * Checks a visitor's answers against a form (AC-553): each question's answer
  * made canonical, required ones present (a required checkbox must be ticked;
  * a yes or no is always an answer), choices among the question's own. Answers
- * to anything but a question of the form are dropped.
+ * to anything but a question of the form are dropped, and so are answers to a
+ * question its Show when hides (spec 0043, AC-1614).
  */
 export function checkAnswers(form: CheckedForm, answers: Readonly<Record<string, unknown>>): AnswerCheck {
   const words = formStrings(form.language);
   const values: Record<string, string | boolean | PhoneAnswer> = {};
   const fields: Record<string, string> = {};
   for (const question of form.questions) {
+    // A question whose Show when doesn't hold over the answers kept so far is skipped: never required, never kept.
+    if (!matchesShowWhen(question.showWhen, values)) continue;
     const raw = Object.hasOwn(answers, question.key) ? answers[question.key] : undefined;
     if (question.answerType === 'checkbox' || question.answerType === 'yes_no') {
       const ticked = raw === true || raw === 'yes' || raw === 'true';

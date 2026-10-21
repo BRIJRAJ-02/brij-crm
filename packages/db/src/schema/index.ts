@@ -48,3 +48,4 @@ export { exportChunks, exports } from './exports.ts';
 export { auditEvents, invitations } from './team.ts';
 export { emailPreferences, emails, emailStatus } from './emails.ts';
 export { bookingPageRotations, rotationAssignments, rotationMembers, rotations } from './rotation.ts';
+export { routingDecisions } from './routing.ts';

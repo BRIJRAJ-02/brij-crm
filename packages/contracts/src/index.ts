@@ -7,6 +7,7 @@ import { bulkRecordsContract } from './bulk.ts';
 import { calendarContract } from './calendar.ts';
 import { commentsContract } from './comments.ts';
 import { formsContract, submissionsContract } from './forms/forms.ts';
+import { routingContract } from './forms/routing.ts';
 import { jobsContract } from './jobs.ts';
 import { meContract } from './me.ts';
 import { navContract } from './navigation.ts';
@@ -108,4 +109,6 @@ export const contract = {
   recents: recentsContract,
   // The sidebar (spec 0034): each member's own order, folds, hidden items, favourites and rail.
   nav: navContract,
+  // Lead routing (spec 0043): the per rule report.
+  routing: routingContract,
 };

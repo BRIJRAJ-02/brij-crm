@@ -16,6 +16,7 @@ import {
   QUESTION_KEY,
 } from './answer-types.ts';
 import { FORM_LANGUAGES } from './public.ts';
+import { RoutingRules, ShowWhenSchema } from './routing.ts';
 import { Uuid, uuidWith } from '../values/ids.ts';
 
 /** A question's id inside its document: stable across versions, never shown. */
@@ -60,6 +61,8 @@ export const FormQuestion = z.strictObject({
   filedOn: FiledOn.optional(),
   /** `fill` writes only an empty value (the default, AC-558); `always` overwrites. */
   update: z.enum(['fill', 'always']).default('fill'),
+  /** Shown only when earlier answers match (spec 0043, AC-1614); absent, it always shows. */
+  showWhen: ShowWhenSchema.optional(),
 });
 /** One question. */
 export type FormQuestion = z.infer<typeof FormQuestion>;
@@ -149,6 +152,8 @@ export const FormDocument = z
     buttonText: z.string().trim().min(1, { error: 'Give the button some text.' }).max(40).default(DEFAULT_BUTTON_TEXT),
     language: z.enum(FORM_LANGUAGES).default('en'),
     after: FormAfter.default({ kind: 'message', message: '' }),
+    /** Routing rules (spec 0043, AC-1604): tried in order at submit; none matching means `after`. */
+    routing: RoutingRules.default({ rules: [] }),
     spam: FormSpam.default({ minFillMs: 2_000, scoreThreshold: 0.3 }),
   })
   .superRefine((document, context) => {

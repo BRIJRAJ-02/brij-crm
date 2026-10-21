@@ -61,6 +61,8 @@ export const bookingPages = pgTable(
     slotStep: smallint('slot_step'),
     /** The forms question shape (milestone 2). */
     questions: jsonb('questions').notNull().default([]),
+    /** A team page's routing rules (spec 0043, AC-1608): `RoutingRules`, tried at each booking. */
+    routing: jsonb('routing').notNull().default({ rules: [] }),
     /** `{ mode: 'create' | 'move_open', stageOptionId }` (milestone 2). */
     deal: jsonb('deal'),
     status: text('status').notNull().default('live'),
@@ -285,6 +287,9 @@ export const bookings = pgTable(
     submissionId: uuid('submission_id'),
     /** A round robin booking whose host left and nobody could take it (spec 0029, AC-749): Bookings flags it. */
     needsHostAt: timestamptz('needs_host_at'),
+    /** Marked by a host or a booking admin after the meeting when the guest didn't come (spec 0043, AC-1613). */
+    noShowAt: timestamptz('no_show_at'),
+    noShowByMemberId: uuid('no_show_by_member_id'),
     ...auditColumns(),
   },
   (t) => [
@@ -299,6 +304,12 @@ export const bookings = pgTable(
       columns: [t.workspaceId, t.hostMemberId],
       foreignColumns: [members.workspaceId, members.id],
     }),
+    foreignKey({
+      name: 'bookings_no_show_by',
+      columns: [t.workspaceId, t.noShowByMemberId],
+      foreignColumns: [members.workspaceId, members.id],
+    }),
+    check('bookings_no_show', sql`(${t.noShowAt} is null) = (${t.noShowByMemberId} is null)`),
     uniqueIndex('bookings_attempt').on(t.workspaceId, t.pageId, t.idempotencyKey),
     // The guest page finds its booking by the hashed token before the workspace is known, so it is unique everywhere.
     uniqueIndex('bookings_manage_token').on(t.manageTokenHash),

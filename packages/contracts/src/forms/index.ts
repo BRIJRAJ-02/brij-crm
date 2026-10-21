@@ -10,4 +10,6 @@ export * from './forms.ts';
 export * from './presets.ts';
 export * from './public.ts';
 export * from './publish.ts';
+export * from './routing.ts';
+export * from './show-when.ts';
 export * from './strings.ts';
