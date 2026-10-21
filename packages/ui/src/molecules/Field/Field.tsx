@@ -16,9 +16,10 @@ export type FieldSize = 'md' | 'sm';
 
 /**
  * `default` is the boxed field; `search` the rounded search field; `cell` the bare input a grid cell edits in;
- * `copy` a value to copy, never to change: a public link, an embed code.
+ * `copy` a value to copy, never to change: a public link, an embed code; `title` a page's own title (a note's),
+ * with no box at all.
  */
-export type FieldVariant = 'default' | 'search' | 'cell' | 'copy';
+export type FieldVariant = 'default' | 'search' | 'cell' | 'copy' | 'title';
 
 /** Props for Field. */
 export interface FieldProps {
@@ -79,6 +80,9 @@ export interface FieldProps {
    * `copy` shows a value to copy and never to change (a public link): read
    * only, but drawn as a live field with no lock, a Copy button at its end,
    * and the whole value selected when it takes focus.
+   * `title` is a page's own title, such as a note's: no box, border, fill or
+   * ring, in the note title type, so it reads as the page's heading; the caret
+   * marks focus, as in a document. Read only, it stays plain text (no lock).
    */
   readonly variant?: FieldVariant;
   /** The `copy` variant's button name ("Copy link"); "Copy" when left out. */
@@ -257,7 +261,7 @@ export function Field({
               {leading !== undefined && <Icon name={leading} size="sm" tone="muted" />}
               {prefix !== undefined && <span className={styles.prefix}>{prefix}</span>}
               {isTextArea ? <TextArea {...inputProps} /> : <Input {...inputProps} />}
-              {isReadOnly && !isCopy && (
+              {isReadOnly && !isCopy && variant !== 'title' && (
                 <span className={styles.lock}>
                   <Icon name="lock" size="xs" label={strings.readOnly} />
                 </span>

@@ -195,3 +195,37 @@ export const Copy: Story = {
     await expect(input.selectionStart).toBe(0);
   },
 };
+
+/**
+ * The title variant: a page's own title, such as a note's. Empty with its placeholder, filled and wrapping, and read
+ * only: no box, border, fill, ring or lock in any state, in the note title type.
+ */
+export const Title: Story = {
+  render: () => (
+    <Stage direction="column" width="fill">
+      <Field label="Title" isLabelHidden variant="title" isWrapping placeholder="Untitled" />
+      <Field
+        label="Long title"
+        isLabelHidden
+        variant="title"
+        isWrapping
+        defaultValue="Kickoff call with the Northwind buying committee about seats, the EU workspace and the security review"
+      />
+      <Field label="Read only title" isLabelHidden variant="title" isWrapping isReadOnly defaultValue="Kickoff call" />
+    </Stage>
+  ),
+  play: async ({ canvas, userEvent }) => {
+    const title = canvas.getByRole('textbox', { name: 'Title' });
+    const box = title.parentElement;
+    if (box === null) throw new Error('No box.');
+    await userEvent.click(title);
+    await userEvent.keyboard('Kickoff call');
+    await expect(title).toHaveValue('Kickoff call');
+    // Focused, it still draws no box or ring: the caret marks it.
+    await expect(getComputedStyle(box).borderStyle).toBe('none');
+    await expect(getComputedStyle(box).boxShadow).toBe('none');
+    await expect(getComputedStyle(title).fontSize).toBe('28px');
+    await expect(canvas.queryByRole('img', { name: 'Read only' })).toBeNull();
+    await expect(canvas.getByRole('textbox', { name: 'Read only title' })).toHaveAttribute('readonly');
+  },
+};

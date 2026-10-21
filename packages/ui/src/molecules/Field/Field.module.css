@@ -5,7 +5,8 @@
    lock; disabled fades it. The search variant is rounded with an icon; the
    copy variant is read only but drawn live, with a Copy button at its end. A
    wrapping field starts one line tall and grows as its text wraps; a counter
-   shows only near the limit. */
+   shows only near the limit. The title variant has no box at all, in the note
+   title type. */
 @layer components {
   .root {
     display: flex;
@@ -241,6 +242,26 @@
     border-radius: 0;
     background: transparent;
     box-shadow: none;
+  }
+
+  /* A page's own title (a note's): no box, border, fill or ring, in the note
+     title type, so it reads as the page's heading and not as a form. The caret
+     marks focus, as in a document. Read only it stays plain text (after the
+     read only box it undoes), and a refusal shows as the line under it. */
+  .root[data-variant='title'] .box {
+    block-size: auto;
+    min-block-size: 0;
+    padding: 0;
+    border: none;
+    border-radius: 0;
+    background: transparent;
+    box-shadow: none;
+    cursor: text;
+  }
+
+  .root[data-variant='title'] .input {
+    font: var(--text-note-title);
+    letter-spacing: var(--tracking-note-title);
   }
 
   .root[data-readonly] .box:focus-within {
