@@ -1,10 +1,10 @@
 // Brief
 // Purpose: days off (spec 0025 experience, AC-680): dates closed whatever the weekly hours say, in Availability and a page's own hours.
-// Main task: see the upcoming ones, open one again, or add one with a reason only the member sees.
+// Main task: see the upcoming ones, open one again, or add one (Add day off opens a small popover: the date and a note only the member sees).
 // Leaves out: dates with different hours (the data keeps them; this lists days off only) and every week on a weekday (turn the day off in the week).
 import type { BookingAvailability } from '@crm/data';
-import { Button, Card, DatePicker, Field, Form, Separator, Table, type TableColumn } from '@crm/ui';
-import { useId, useState } from 'react';
+import { Button, Card, DatePicker, Field, Form, Popover, Table, type TableColumn } from '@crm/ui';
+import { useId, useRef, useState } from 'react';
 import { dateLabel, openDay, todayIn, upcomingDaysOff, withDayOff } from './hours.ts';
 import { strings } from './strings.ts';
 
@@ -28,16 +28,20 @@ export function DaysOff({
   const [date, setDate] = useState<string | null>(null);
   const [why, setWhy] = useState('');
   const [dateError, setDateError] = useState<string | undefined>(undefined);
+  const [isAdding, setAdding] = useState(false);
   const formId = useId();
+  const addRef = useRef<HTMLButtonElement>(null);
   // Where focus goes when the control that had it is gone (an opened day's row) or a field needs fixing.
-  // The card's body, found through the add form, which sits in it beside the list.
-  const focusLater = (pick: (root: HTMLElement) => HTMLElement | null | undefined) => {
-    requestAnimationFrame(() => {
-      const root = document.getElementById(formId)?.parentElement;
-      if (root !== null && root !== undefined) pick(root)?.focus();
-    });
+  const focusLater = (pick: () => HTMLElement | null | undefined) => {
+    requestAnimationFrame(() => pick()?.focus());
   };
-  const dateField = (root: HTMLElement) => root.querySelector<HTMLElement>('[role="spinbutton"]');
+  const dateField = () => document.getElementById(formId)?.querySelector<HTMLElement>('[role="spinbutton"]');
+  const close = () => {
+    setAdding(false);
+    setDate(null);
+    setWhy('');
+    setDateError(undefined);
+  };
   const today = todayIn(availability.timeZone);
   const upcoming = upcomingDaysOff(availability, today);
   const add = () => {
@@ -48,13 +52,11 @@ export function DaysOff({
       return;
     }
     onChange(withDayOff(availability, date, why.trim()));
-    setDate(null);
-    setWhy('');
-    setDateError(undefined);
+    close();
   };
   const columns = isReadOnly ? COLUMNS.filter((column) => column.id !== 'actions') : COLUMNS;
   return (
-    <Card title={strings.daysOff} description={strings.daysOffText}>
+    <Card title={strings.daysOff}>
       {upcoming.length > 0 && (
         <Table
           label={strings.daysOff}
@@ -70,13 +72,9 @@ export function DaysOff({
               <Button
                 variant="ghost"
                 onPress={() => {
-                  const index = upcoming.findIndex((each) => each.date === day.date);
                   onChange(openDay(availability, day.date));
-                  // The row goes with its button: focus the next day's Open (or the last), else the date to add one.
-                  focusLater((root) => {
-                    const opens = [...root.querySelectorAll<HTMLElement>('table button')];
-                    return opens[Math.min(index, opens.length - 1)] ?? dateField(root);
-                  });
+                  // The row goes with its button: focus lands on Add day off, which always stays.
+                  focusLater(() => addRef.current);
                 }}
               >
                 {strings.openDay}
@@ -85,23 +83,43 @@ export function DaysOff({
           }
         />
       )}
-      {!isReadOnly && upcoming.length > 0 && <Separator />}
       {!isReadOnly && (
-        <Form id={formId} label={strings.addDayOff} onSubmit={add}>
-          <DatePicker
-            label={strings.dayOffDate}
-            value={date}
-            onChange={(next) => {
-              setDate(next);
-              setDateError(undefined);
-            }}
-            {...(dateError === undefined ? {} : { error: dateError })}
-          />
-          <Field label={strings.why} hint={strings.whyHint} name="why" value={why} onChange={setWhy} maxLength={120} />
-          <Button icon="plus" type="submit" form={formId}>
+        <>
+          <Button ref={addRef} icon="plus" size="sm" onPress={() => setAdding(true)}>
             {strings.addDayOff}
           </Button>
-        </Form>
+          <Popover
+            label={strings.addDayOff}
+            triggerRef={addRef}
+            isOpen={isAdding}
+            onOpenChange={(open) => {
+              if (!open) close();
+            }}
+          >
+            <Form id={formId} label={strings.addDayOff} onSubmit={add}>
+              <DatePicker
+                label={strings.dayOffDate}
+                value={date}
+                onChange={(next) => {
+                  setDate(next);
+                  setDateError(undefined);
+                }}
+                {...(dateError === undefined ? {} : { error: dateError })}
+              />
+              <Field
+                label={strings.why}
+                hint={strings.whyHint}
+                name="why"
+                value={why}
+                onChange={setWhy}
+                maxLength={120}
+              />
+              <Button variant="primary" type="submit" form={formId}>
+                {strings.addDayOffCommit}
+              </Button>
+            </Form>
+          </Popover>
+        </>
       )}
     </Card>
   );

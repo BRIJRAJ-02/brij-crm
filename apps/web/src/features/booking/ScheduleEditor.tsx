@@ -3,23 +3,11 @@
 // Main task: change the hours (add, remove or copy a day's ranges), the zone or the days off; each change saves on its own, with Undo.
 // Leaves out: which schedule is open and what to do with it (the switcher handed in), and which schedule a page uses (each page picks in its own editor).
 import type { BookingAvailability, DataLayer, ScheduleView } from '@crm/data';
-import {
-  Badge,
-  Card,
-  HoursEditor,
-  Link,
-  LinkList,
-  PageColumn,
-  SectionBar,
-  Select,
-  Skeleton,
-  type LinkRow,
-} from '@crm/ui';
-import { useNavigate } from '@tanstack/react-router';
+import { Badge, Card, HoursEditor, Link, PageColumn, SectionBar, Select, Skeleton } from '@crm/ui';
 import { useMemo, type ReactNode } from 'react';
 import { DaysOff } from './DaysOff.tsx';
 import { weekRows, WEEKDAYS, withDay, zoneItems, zoneMatches } from './hours.ts';
-import { linksHref, pageEditorHref } from './links.ts';
+import { pageEditorHref } from './links.ts';
 import { browserZone } from './zone.ts';
 import { useScheduleAutosave, type ScheduleSaveNotice } from './scheduleDraft.ts';
 import { scheduleStrings } from './schedule-strings.ts';
@@ -56,7 +44,6 @@ export function ScheduleEditor({
   onAdopt,
   onNotice,
 }: ScheduleEditorProps) {
-  const navigate = useNavigate();
   const autosave = useScheduleAutosave({
     data,
     slug,
@@ -87,7 +74,7 @@ export function ScheduleEditor({
         />
       }
       week={
-        <Card title={strings.weeklyHours} description={scheduleStrings.weeklyHoursText}>
+        <Card title={strings.weeklyHours}>
           <HoursEditor
             label={strings.weeklyHours}
             rows={weekRows(shown)}
@@ -100,11 +87,7 @@ export function ScheduleEditor({
       aside={
         <>
           <DaysOff availability={shown} onChange={change} />
-          <UsedBy
-            slug={slug}
-            schedule={schedule}
-            onOpen={(pageId) => void navigate({ href: pageEditorHref(slug, pageId) })}
-          />
+          <UsedBy slug={slug} schedule={schedule} />
         </>
       }
     />
@@ -158,44 +141,30 @@ function ZoneSelect({
   );
 }
 
-/** The booking pages that book by the schedule, each opening its editor; none says how a page picks one. */
-function UsedBy({
-  slug,
-  schedule,
-  onOpen,
-}: {
-  readonly slug: string;
-  readonly schedule: ScheduleView;
-  readonly onOpen: (pageId: string) => void;
-}) {
+/** A page's name in Used by: its title, numbered when another page here has the same one ("Intro call (2)"). */
+function usedByNames(pages: ScheduleView['pages']): readonly { readonly id: string; readonly name: string }[] {
+  const seen = new Map<string, number>();
+  return pages.map((page) => {
+    const count = (seen.get(page.title) ?? 0) + 1;
+    seen.set(page.title, count);
+    return { id: page.id, name: count === 1 ? page.title : `${page.title} (${String(count)})` };
+  });
+}
+
+/** The booking pages that book by the schedule, each a quiet link to its editor; none says so. */
+function UsedBy({ slug, schedule }: { readonly slug: string; readonly schedule: ScheduleView }) {
   if (schedule.pages.length === 0) {
-    return (
-      <Card title={scheduleStrings.usedByLabel} description={scheduleStrings.noPagesUseIt}>
-        <Link href={linksHref(slug)}>{scheduleStrings.goToPages}</Link>
-      </Card>
-    );
+    return <Card title={scheduleStrings.usedByLabel} description={scheduleStrings.usedByNone} />;
   }
-  const rows: readonly LinkRow[] = schedule.pages.map((page) => ({
-    id: page.id,
-    title: page.title,
-    address: '',
-    chips: [],
-    href: pageEditorHref(slug, page.id),
-  }));
   return (
-    <Card
-      title={scheduleStrings.usedByLabel}
-      description={schedule.isDefault ? scheduleStrings.usedByDefaultText : scheduleStrings.usedByText}
-    >
-      <LinkList
-        density="compact"
-        placement="card"
-        label={scheduleStrings.usedByLabel}
-        searchLabel={scheduleStrings.usedByLabel}
-        isToolbarHidden
-        rows={rows}
-        onOpen={onOpen}
-      />
+    <Card title={scheduleStrings.usedByLabel}>
+      <ul aria-label={scheduleStrings.usedByLabel}>
+        {usedByNames(schedule.pages).map((page) => (
+          <li key={page.id}>
+            <Link href={pageEditorHref(slug, page.id)}>{page.name}</Link>
+          </li>
+        ))}
+      </ul>
     </Card>
   );
 }
@@ -208,7 +177,7 @@ export function ScheduleEditorPending({ switcher }: { readonly switcher: ReactNo
         <SectionBar start={switcher} end={<ZoneSelect value={browserZone()} onChange={() => undefined} isDisabled />} />
       }
       week={
-        <Card title={strings.weeklyHours} description={scheduleStrings.weeklyHoursText} isBusy>
+        <Card title={strings.weeklyHours} isBusy>
           <HoursEditor
             label={strings.weeklyHours}
             rows={WEEKDAYS.map((day) => ({ id: day, label: strings.weekday[day], ranges: [] }))}
@@ -219,7 +188,7 @@ export function ScheduleEditorPending({ switcher }: { readonly switcher: ReactNo
       }
       aside={
         <>
-          <Card title={strings.daysOff} description={strings.daysOffText} isBusy>
+          <Card title={strings.daysOff} isBusy>
             <Skeleton lines={3} />
           </Card>
           <Card title={scheduleStrings.usedByLabel} isBusy>

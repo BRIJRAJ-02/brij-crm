@@ -31,6 +31,23 @@ async function pick(page: Page, label: string, option: string): Promise<void> {
     .click();
 }
 
+/** Every day that is on from `start` to `end`, through the week's quiet Set all days and its Popover. */
+async function setAllDays(page: Page, start: string, end: string): Promise<void> {
+  await page.getByRole('button', { name: 'Set all days' }).click();
+  const popover = page.getByRole('dialog', { name: 'Set all days' });
+  for (const [label, option] of [
+    ['All days start', start],
+    ['All days end', end],
+  ] as const) {
+    await popover.getByRole('button', { name: new RegExp(label) }).click();
+    await page
+      .getByRole('listbox', { name: label, exact: true })
+      .getByRole('option', { name: option, exact: true })
+      .click();
+  }
+  await popover.getByRole('button', { name: 'Apply' }).click();
+}
+
 /** The distinct local start times (New York) the page offers over the next week, as its public page reads them. */
 async function localStarts(request: APIRequestContext, key: string): Promise<readonly string[]> {
   const from = new Date(Date.now() + 2 * 86_400_000);
@@ -90,8 +107,7 @@ test.describe('availability schedules', () => {
     await expect(switcher('Evenings')).toBeVisible();
     const editorUrl = page.url();
     // Each change saves on its own, said in a toast with Undo: no Save to press.
-    await pick(page, 'All days start', '6:00 PM');
-    await pick(page, 'All days end', '8:00 PM');
+    await setAllDays(page, '6:00 PM', '8:00 PM');
     await expect(page.getByText('Saved Evenings.').first()).toBeVisible();
 
     // The page picks Evenings, and its public slots follow.
@@ -112,12 +128,12 @@ test.describe('availability schedules', () => {
     await signInAgain(reader, email, editorUrl, [code]).catch(async () => {
       await reader.goto(editorUrl);
     });
-    await expect(reader.getByRole('button', { name: /All days end/ }).first()).toContainText('8:00 PM');
+    await expect(reader.getByRole('button', { name: /Monday until/ }).first()).toContainText('8:00 PM');
     await page.goto(editorUrl);
-    await pick(page, 'All days end', '9:00 PM');
+    await setAllDays(page, '6:00 PM', '9:00 PM');
     await expect(page.getByText('Saved Evenings.').first()).toBeVisible();
     if (!LIVE) await reader.reload();
-    await expect(reader.getByRole('button', { name: /All days end/ }).first()).toContainText('9:00 PM', {
+    await expect(reader.getByRole('button', { name: /Monday until/ }).first()).toContainText('9:00 PM', {
       timeout: LIVE_MS,
     });
     await readerContext.close();
@@ -125,7 +141,7 @@ test.describe('availability schedules', () => {
 
     // Deleting from the switcher asks first, naming the page it moves; Cancel changes nothing.
     await page.goto(editorUrl);
-    await expect(page.getByRole('grid', { name: 'Used by' })).toContainText('Intro call');
+    await expect(page.getByRole('list', { name: 'Used by' })).toContainText('Intro call');
     const remove = async () => {
       await switcher('Evenings').click();
       await page.getByRole('menuitem', { name: 'Delete' }).click();
