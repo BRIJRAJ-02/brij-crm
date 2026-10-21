@@ -39,7 +39,7 @@ export const strings = {
     title: 'Confirm it’s you',
     withApp: 'Enter the 6 digit code from your authenticator app.',
     withBackup: 'Enter one of your backup codes. It works once.',
-    withEmail: 'We’ll email you a 6 digit code.',
+    withEmail: 'First we’ll email you a 6 digit code.',
     secondFactorOnly: 'This needs your authenticator app or a backup code.',
     appLabel: 'Code from your authenticator app',
     backupLabel: 'Backup code',
@@ -54,6 +54,7 @@ export const strings = {
   /** Two factor sign in (AC-881, AC-883, AC-885). */
   twoFactor: {
     section: 'Two factor sign in',
+    description: 'A code from an app after your email code.',
     info: 'After your email code or Google, you also enter a code from an authenticator app. Someone with your email alone can’t sign in.',
     app: 'Authenticator app',
     appOff: 'Off',
@@ -74,8 +75,8 @@ export const strings = {
     turningOn: 'Turning on…',
     codesTitle: 'Save your backup codes',
     codesText: 'Each code signs you in once if you lose your phone. They won’t be shown again.',
-    codesLabel: 'Backup codes',
-    copyCodes: 'Copy codes',
+    copyCodes: 'Copy the backup codes',
+    firstCodeMissing: 'Enter the 6 digit code from your app.',
     download: 'Download',
     saved: 'I’ve saved these',
     done: 'Done',
@@ -88,7 +89,7 @@ export const strings = {
     turnedOn: 'Two factor sign in is on.',
     newCodesTitle: 'Make new backup codes?',
     newCodesText: 'Your old codes stop working.',
-    making: 'Making…',
+    making: 'Making codes…',
     fileName: 'timefix-backup-codes.txt',
   },
 } as const;

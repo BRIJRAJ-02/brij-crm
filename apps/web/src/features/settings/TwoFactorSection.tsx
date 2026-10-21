@@ -10,9 +10,7 @@ import {
   Checkbox,
   Code,
   CodeInput,
-  CopyButton,
   EmptyState,
-  Field,
   InfoTip,
   Modal,
   QrCode,
@@ -21,13 +19,13 @@ import {
   Skeleton,
   type Toasts,
 } from '@crm/ui';
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { strings } from './security-strings.ts';
 import { useStepUp } from './StepUp.tsx';
 
 const copy = strings.twoFactor;
 
-/** The secret an `otpauth://` address carries, as people type it into an app that can't scan. */
+/** The secret an `otpauth://` address carries, in groups of 4, as people type it into an app that can't scan. */
 export function setupKey(uri: string): string {
   const secret = new URL(uri).searchParams.get('secret') ?? '';
   return secret.replace(/(.{4})/g, '$1 ').trim();
@@ -40,16 +38,20 @@ function download(codes: readonly string[]) {
   link.href = url;
   link.download = copy.fileName;
   link.click();
-  URL.revokeObjectURL(url);
+  // Some browsers cancel a download whose address goes at once.
+  setTimeout(() => {
+    URL.revokeObjectURL(url);
+  }, 1000);
 }
 
-/** The backup codes, shown once: read only, copied or downloaded, and ticked as saved before Done. */
+/** The backup codes, shown once in the code face (0 and O, I and l apart), copied or downloaded. */
 function BackupCodes({ codes }: { readonly codes: readonly string[] }) {
   return (
     <>
       {copy.codesText}
-      <Field label={copy.codesLabel} value={codes.join('\n')} isMultiline isReadOnly />
-      <CopyButton value={codes.join('\n')} label={copy.copyCodes} />
+      <Code isCopyable copyLabel={copy.copyCodes}>
+        {codes.join('  ')}
+      </Code>
       <Button icon="download" onPress={() => download(codes)}>
         {copy.download}
       </Button>
@@ -58,7 +60,6 @@ function BackupCodes({ codes }: { readonly codes: readonly string[] }) {
 }
 
 type Dialog =
-  | { readonly kind: 'none' }
   | { readonly kind: 'setup'; readonly step: 'check' | 'scan' | 'codes' }
   | { readonly kind: 'off' }
   | { readonly kind: 'codes'; readonly step: 'check' | 'codes' };
@@ -68,11 +69,13 @@ export interface TwoFactorSectionProps {
   readonly data: DataLayer;
   readonly security: AccountSecurityState;
   readonly toasts: Toasts;
+  /** Where focus goes when the button that opened a dialog went with its change (Set up and Turn off swap). */
+  readonly onFocusLost: () => void;
 }
 
 /** The two factor section and its three dialogs: set up, turn off, new backup codes. */
-export function TwoFactorSection({ data, security, toasts }: TwoFactorSectionProps) {
-  const [dialog, setDialog] = useState<Dialog>({ kind: 'none' });
+export function TwoFactorSection({ data, security, toasts, onFocusLost }: TwoFactorSectionProps) {
+  const [dialog, setDialog] = useState<Dialog>({ kind: 'off' });
   const [isOpen, setIsOpen] = useState(false);
   const [isBusy, setBusy] = useState(false);
   const [error, setError] = useState<string | undefined>(undefined);
@@ -80,34 +83,29 @@ export function TwoFactorSection({ data, security, toasts }: TwoFactorSectionPro
   const [codes, setCodes] = useState<readonly string[]>([]);
   const [firstCode, setFirstCode] = useState('');
   const [saved, setSaved] = useState(false);
-  const plain = useStepUp(data, security);
-  const strict = useStepUp(data, security, { secondFactor: true });
+  const firstCodeField = useRef<HTMLInputElement>(null);
+  const [focusFirstCode, setFocusFirstCode] = useState(0);
+  useEffect(() => {
+    if (focusFirstCode > 0) firstCodeField.current?.focus();
+  }, [focusFirstCode]);
 
-  const open = (next: Dialog) => {
-    setDialog(next);
-    setError(undefined);
-    setFirstCode('');
-    setSaved(false);
-    plain.reset();
-    strict.reset();
-    setIsOpen(true);
-  };
-  const close = () => {
-    if (!isBusy) setIsOpen(false);
-  };
   const failed = (failure: unknown) => {
     setError(failure instanceof Error ? failure.message : copy.failedTitle);
   };
 
-  /** Set up: the step up, then the app's address and codes from the server. */
+  const plainProve = useRef<() => Promise<boolean>>(() => Promise.resolve(true));
+  const strictProve = useRef<() => Promise<boolean>>(() => Promise.resolve(true));
+
+  /** Set up: the step up when needed, then the app's address and codes from the server. */
   const startSetup = async () => {
     setBusy(true);
     setError(undefined);
     try {
-      if (!(await plain.prove())) return;
+      if (!(await plainProve.current())) return;
       const answer = await data.account.twoFactor.start();
       setSetup({ totpUri: answer.totpUri, codes: answer.backupCodes });
       setDialog({ kind: 'setup', step: 'scan' });
+      setFocusFirstCode((count) => count + 1);
     } catch (failure) {
       failed(failure);
     } finally {
@@ -117,6 +115,11 @@ export function TwoFactorSection({ data, security, toasts }: TwoFactorSectionPro
 
   /** Set up: the app's first code turns it on; then the codes are shown. */
   const confirm = async (code: string) => {
+    if (code.length !== 6) {
+      setError(copy.firstCodeMissing);
+      setFocusFirstCode((count) => count + 1);
+      return;
+    }
     setBusy(true);
     setError(undefined);
     try {
@@ -126,6 +129,7 @@ export function TwoFactorSection({ data, security, toasts }: TwoFactorSectionPro
     } catch (failure) {
       failed(failure);
       setFirstCode('');
+      setFocusFirstCode((count) => count + 1);
     } finally {
       setBusy(false);
     }
@@ -135,9 +139,10 @@ export function TwoFactorSection({ data, security, toasts }: TwoFactorSectionPro
     setBusy(true);
     setError(undefined);
     try {
-      if (!(await strict.prove())) return;
+      if (!(await strictProve.current())) return;
       await data.account.twoFactor.turnOff();
       setIsOpen(false);
+      onFocusLost();
       toasts.toast({ tone: 'success', message: copy.turnedOff });
     } catch (failure) {
       failed(failure);
@@ -150,7 +155,7 @@ export function TwoFactorSection({ data, security, toasts }: TwoFactorSectionPro
     setBusy(true);
     setError(undefined);
     try {
-      if (!(await strict.prove())) return;
+      if (!(await strictProve.current())) return;
       setCodes(await data.account.twoFactor.newBackupCodes());
       setDialog({ kind: 'codes', step: 'codes' });
     } catch (failure) {
@@ -158,6 +163,35 @@ export function TwoFactorSection({ data, security, toasts }: TwoFactorSectionPro
     } finally {
       setBusy(false);
     }
+  };
+
+  const plain = useStepUp(data, security, { onComplete: () => void startSetup() });
+  const strict = useStepUp(data, security, {
+    secondFactor: true,
+    onComplete: () => void (dialog.kind === 'off' ? turnOff() : makeCodes()),
+  });
+  // The handlers above run after render, so they read the latest checks.
+  useEffect(() => {
+    plainProve.current = plain.prove;
+    strictProve.current = strict.prove;
+  });
+
+  const open = (next: Dialog) => {
+    setDialog(next);
+    setError(undefined);
+    setFirstCode('');
+    setSaved(false);
+    plain.reset();
+    strict.reset();
+    setIsOpen(true);
+    // Nothing to check first: straight to the QR code.
+    if (next.kind === 'setup' && !plain.isNeeded) void startSetup();
+  };
+  const close = () => {
+    if (isBusy) return;
+    setIsOpen(false);
+    // Closing on the codes step after setup: Set up became Turn off.
+    if (dialog.kind === 'setup' && dialog.step === 'codes') onFocusLost();
   };
 
   let card;
@@ -197,7 +231,17 @@ export function TwoFactorSection({ data, security, toasts }: TwoFactorSectionPro
     );
   }
 
-  const errorNote = error === undefined ? null : <Callout tone="danger">{error}</Callout>;
+  // A refusal shows first in the body, as a danger Callout (Modal's rule); a wrong first code shows on its boxes.
+  const errorNote =
+    error === undefined || (dialog.kind === 'setup' && dialog.step === 'scan') ? null : (
+      <Callout tone="danger">{error}</Callout>
+    );
+  const savedTick = <Checkbox label={copy.saved} isSelected={saved} onChange={setSaved} />;
+  const done = (
+    <Button variant="primary" isDisabled={!saved} onPress={close}>
+      {copy.done}
+    </Button>
+  );
   let modal;
   if (dialog.kind === 'setup') {
     const step = dialog.step;
@@ -206,16 +250,14 @@ export function TwoFactorSection({ data, security, toasts }: TwoFactorSectionPro
         title={step === 'codes' ? copy.codesTitle : copy.setupTitle}
         isOpen={isOpen}
         isBusy={isBusy}
-        // Once the codes show, only Done (after the tick) closes it: they won't be shown again.
+        // The codes won't be shown again: a click outside never closes them; the close button and Esc still do.
         isDismissable={step !== 'codes'}
         onOpenChange={(next) => {
-          if (!next && step !== 'codes') close();
+          if (!next) close();
         }}
         actions={
           step === 'codes' ? (
-            <Button variant="primary" isDisabled={!saved} onPress={() => setIsOpen(false)}>
-              {copy.done}
-            </Button>
+            done
           ) : (
             <>
               <Button slot="close" kbd="ESC" isDisabled={isBusy}>
@@ -232,7 +274,8 @@ export function TwoFactorSection({ data, security, toasts }: TwoFactorSectionPro
           )
         }
       >
-        {step === 'check' && (plain.fields ?? copy.scan)}
+        {errorNote}
+        {step === 'check' && plain.fields}
         {step === 'scan' && setup !== undefined && (
           <>
             {copy.scan}
@@ -242,21 +285,21 @@ export function TwoFactorSection({ data, security, toasts }: TwoFactorSectionPro
               {setupKey(setup.totpUri)}
             </Code>
             <CodeInput
+              ref={firstCodeField}
               label={copy.firstCode}
               value={firstCode}
               onChange={setFirstCode}
               onComplete={(code) => void confirm(code)}
-              isDisabled={isBusy}
+              {...(error === undefined ? {} : { error })}
             />
           </>
         )}
         {step === 'codes' && setup !== undefined && (
           <>
             <BackupCodes codes={setup.codes} />
-            <Checkbox label={copy.saved} isSelected={saved} onChange={setSaved} />
+            {savedTick}
           </>
         )}
-        {errorNote}
       </Modal>
     );
   } else if (dialog.kind === 'off') {
@@ -280,12 +323,12 @@ export function TwoFactorSection({ data, security, toasts }: TwoFactorSectionPro
           </>
         }
       >
+        {errorNote}
         {copy.turnOffText}
         {strict.fields}
-        {errorNote}
       </Modal>
     );
-  } else if (dialog.kind === 'codes') {
+  } else {
     const step = dialog.step;
     modal = (
       <Modal
@@ -294,13 +337,11 @@ export function TwoFactorSection({ data, security, toasts }: TwoFactorSectionPro
         isBusy={isBusy}
         isDismissable={step !== 'codes'}
         onOpenChange={(next) => {
-          if (!next && step !== 'codes') close();
+          if (!next) close();
         }}
         actions={
           step === 'codes' ? (
-            <Button variant="primary" isDisabled={!saved} onPress={() => setIsOpen(false)}>
-              {copy.done}
-            </Button>
+            done
           ) : (
             <>
               <Button slot="close" kbd="ESC" isDisabled={isBusy}>
@@ -313,6 +354,7 @@ export function TwoFactorSection({ data, security, toasts }: TwoFactorSectionPro
           )
         }
       >
+        {errorNote}
         {step === 'check' && (
           <>
             {copy.newCodesText}
@@ -322,16 +364,22 @@ export function TwoFactorSection({ data, security, toasts }: TwoFactorSectionPro
         {step === 'codes' && (
           <>
             <BackupCodes codes={codes} />
-            <Checkbox label={copy.saved} isSelected={saved} onChange={setSaved} />
+            {savedTick}
           </>
         )}
-        {errorNote}
       </Modal>
     );
   }
 
   return (
-    <SettingsSection title={copy.section} description={<InfoTip label={copy.section}>{copy.info}</InfoTip>}>
+    <SettingsSection
+      title={copy.section}
+      description={
+        <>
+          {copy.description} <InfoTip label={copy.section}>{copy.info}</InfoTip>
+        </>
+      }
+    >
       {card}
       {modal}
     </SettingsSection>

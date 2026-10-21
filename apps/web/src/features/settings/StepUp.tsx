@@ -4,21 +4,24 @@
 // Leaves out: its own dialog (each change's dialog holds these fields) and passkeys (milestone 3).
 import type { AccountSecurityState, DataLayer } from '@crm/data';
 import { Button, Callout, CodeInput, Field } from '@crm/ui';
-import { useState } from 'react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { strings } from './security-strings.ts';
 
 /** What a step up needs: a recent check, and for turning two factor off or new codes, a second factor's. */
 export interface StepUpNeed {
   readonly secondFactor?: boolean;
+  /** The dialog's commit, run when a code is complete (the boxes filled), as Enter would. */
+  readonly onComplete?: () => void;
 }
 
 /** A step up's state inside a dialog: whether it is needed, its fields, and `prove`, which checks what was typed. */
 export interface StepUp {
   readonly isNeeded: boolean;
-  readonly fields: React.ReactNode;
+  /** The sentence saying why, then the code's field and the way to switch: siblings in the dialog's body. */
+  readonly fields: ReactNode;
   /** Checks the typed code when a step up is needed; true when the change may go on. */
   readonly prove: () => Promise<boolean>;
-  /** Clears what was typed (the dialog closed). */
+  /** Clears what was typed (the dialog opened again). */
   readonly reset: () => void;
 }
 
@@ -38,6 +41,13 @@ export function useStepUp(data: DataLayer, security: AccountSecurityState, need:
   const [error, setError] = useState<string | undefined>(undefined);
   const [sent, setSent] = useState(false);
   const [isSending, setSending] = useState(false);
+  const field = useRef<HTMLInputElement & HTMLTextAreaElement>(null);
+  // A new field (a code just sent, the other kind chosen) or a refused code: the field takes focus again.
+  const [focusAsked, setFocusAsked] = useState(0);
+  useEffect(() => {
+    if (focusAsked > 0) field.current?.focus();
+  }, [focusAsked]);
+  const refocus = () => setFocusAsked((count) => count + 1);
 
   const reset = () => {
     setKind('totp');
@@ -46,11 +56,30 @@ export function useStepUp(data: DataLayer, security: AccountSecurityState, need:
     setSent(false);
   };
 
+  const send = async () => {
+    setSending(true);
+    setError(undefined);
+    const answer = await data.account.stepUp.sendCode();
+    setSending(false);
+    if (answer.ok) {
+      setSent(true);
+      refocus();
+    } else {
+      setError(answer.message);
+    }
+  };
+
   const prove = async (): Promise<boolean> => {
     if (!isNeeded) return true;
+    if (!twoFactorOn && !sent) {
+      // The commit with no code sent yet sends one: the next step is the code.
+      await send();
+      return false;
+    }
     const typed = code.trim();
-    if (typed === '') {
+    if (typed === '' || (kind === 'totp' && twoFactorOn && typed.length < 6)) {
       setError(strings.stepUp.missing);
+      refocus();
       return false;
     }
     const answer = await data.account.stepUp.verify(twoFactorOn ? kind : 'email', typed);
@@ -60,32 +89,36 @@ export function useStepUp(data: DataLayer, security: AccountSecurityState, need:
     }
     setError(answer.message);
     setCode('');
+    refocus();
     return false;
   };
 
-  const send = async () => {
-    setSending(true);
-    setError(undefined);
-    const answer = await data.account.stepUp.sendCode();
-    setSending(false);
-    if (answer.ok) setSent(true);
-    else setError(answer.message);
-  };
-
   const errorProps = error === undefined ? {} : { error };
-  let fields: React.ReactNode = null;
+  const complete = need.onComplete === undefined ? {} : { onComplete: () => need.onComplete?.() };
+  let fields: ReactNode = null;
   if (isNeeded && twoFactorOn) {
     fields = (
-      <Callout title={strings.stepUp.title}>
-        {kind === 'totp' ? strings.stepUp.withApp : strings.stepUp.withBackup}
+      <>
+        <Callout title={strings.stepUp.title}>
+          {kind === 'totp' ? strings.stepUp.withApp : strings.stepUp.withBackup}
+        </Callout>
         {kind === 'totp' ? (
-          <CodeInput label={strings.stepUp.appLabel} isLabelHidden value={code} onChange={setCode} {...errorProps} />
+          <CodeInput
+            ref={field}
+            label={strings.stepUp.appLabel}
+            value={code}
+            onChange={setCode}
+            {...complete}
+            {...errorProps}
+          />
         ) : (
           <Field
+            ref={field}
             label={strings.stepUp.backupLabel}
             value={code}
             onChange={setCode}
             autoComplete="off"
+            onSubmit={() => need.onComplete?.()}
             {...errorProps}
           />
         )}
@@ -95,27 +128,39 @@ export function useStepUp(data: DataLayer, security: AccountSecurityState, need:
             setKind(kind === 'totp' ? 'backup' : 'totp');
             setCode('');
             setError(undefined);
+            refocus();
           }}
         >
           {kind === 'totp' ? strings.stepUp.useBackup : strings.stepUp.useApp}
         </Button>
-      </Callout>
+      </>
     );
   } else if (isNeeded && need.secondFactor === true) {
-    // Two factor is off: nothing here needs a second factor then, but say so rather than show nothing.
     fields = <Callout title={strings.stepUp.title}>{strings.stepUp.secondFactorOnly}</Callout>;
   } else if (isNeeded) {
     fields = (
-      <Callout title={strings.stepUp.title}>
-        {sent ? strings.stepUp.sent : strings.stepUp.withEmail}
-        {sent && (
-          <CodeInput label={strings.stepUp.emailLabel} isLabelHidden value={code} onChange={setCode} {...errorProps} />
+      <>
+        <Callout title={strings.stepUp.title} isAnnounced>
+          {sent ? strings.stepUp.sent : strings.stepUp.withEmail}
+        </Callout>
+        {sent ? (
+          <>
+            <CodeInput
+              ref={field}
+              label={strings.stepUp.emailLabel}
+              value={code}
+              onChange={setCode}
+              {...complete}
+              {...errorProps}
+            />
+            <Button variant="ghost" isPending={isSending} onPress={() => void send()}>
+              {strings.stepUp.sendAgain}
+            </Button>
+          </>
+        ) : (
+          error !== undefined && <Callout tone="danger">{error}</Callout>
         )}
-        {!sent && error !== undefined && <Callout tone="danger">{error}</Callout>}
-        <Button variant={sent ? 'ghost' : 'secondary'} isPending={isSending} onPress={() => void send()}>
-          {sent ? strings.stepUp.sendAgain : strings.stepUp.send}
-        </Button>
-      </Callout>
+      </>
     );
   }
   return { isNeeded, fields, prove, reset };

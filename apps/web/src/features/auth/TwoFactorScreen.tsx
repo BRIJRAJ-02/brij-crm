@@ -5,7 +5,7 @@
 import { isDataError, type DataLayer } from '@crm/data';
 import { AuthLayout, Button, Callout, Checkbox, CodeInput, Field, Form, Link } from '@crm/ui';
 import { useNavigate } from '@tanstack/react-router';
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { safeRedirect } from './redirect.ts';
 import { strings as signIn } from './strings.ts';
 import { strings } from './two-factor-strings.ts';
@@ -27,7 +27,14 @@ export function TwoFactorScreen({ data, redirect }: TwoFactorScreenProps) {
   const [remember, setRemember] = useState(false);
   const [isChecking, setChecking] = useState(false);
   const [error, setError] = useState<string | undefined>(undefined);
-  const [isExpired, setExpired] = useState(false);
+  const [expired, setExpired] = useState<string | undefined>(undefined);
+  const field = useRef<HTMLInputElement & HTMLTextAreaElement>(null);
+  // A refused code or the other kind chosen: the field takes focus again (it was off while checking).
+  const [focusAsked, setFocusAsked] = useState(0);
+  useEffect(() => {
+    if (focusAsked > 0) field.current?.focus();
+  }, [focusAsked]);
+  const refocus = () => setFocusAsked((count) => count + 1);
 
   const check = (value: string) => {
     setChecking(true);
@@ -39,11 +46,13 @@ export function TwoFactorScreen({ data, redirect }: TwoFactorScreenProps) {
       (failure: unknown) => {
         setChecking(false);
         if (isDataError(failure) && failure.code === 'SIGN_IN_EXPIRED') {
-          setExpired(true);
+          // Run out, or too many wrong codes: the server's sentence says which.
+          setExpired(failure.message);
           return;
         }
         setError(isDataError(failure) && failure.code !== 'INTERNAL' ? failure.message : strings.failed);
         setCode('');
+        refocus();
       },
     );
   };
@@ -51,13 +60,14 @@ export function TwoFactorScreen({ data, redirect }: TwoFactorScreenProps) {
   const switchTo = (next: 'totp' | 'backup') => {
     setKind(next);
     setError(undefined);
+    refocus();
   };
 
-  if (isExpired) {
+  if (expired !== undefined) {
     return (
       <AuthLayout productName={signIn.product} logo={PRODUCT_LOGO} title={strings.title}>
         <Callout tone="warning" isAnnounced actions={<Link href="/sign-in">{strings.signInAgain}</Link>}>
-          {strings.expired}
+          {expired === '' ? strings.expired : expired}
         </Callout>
       </AuthLayout>
     );
@@ -86,11 +96,22 @@ export function TwoFactorScreen({ data, redirect }: TwoFactorScreenProps) {
             else check(backup.trim());
           } else if (code.length === 6) {
             check(code);
+          } else {
+            setError(strings.appMissing);
+            refocus();
           }
         }}
       >
+        <Checkbox
+          // Before the code, which sends itself once complete, so it is never skipped.
+          label={strings.remember}
+          isSelected={remember}
+          onChange={setRemember}
+          isDisabled={isChecking}
+        />
         {kind === 'totp' ? (
           <CodeInput
+            ref={field}
             label={strings.appLabel}
             isLabelHidden
             size="lg"
@@ -105,12 +126,13 @@ export function TwoFactorScreen({ data, redirect }: TwoFactorScreenProps) {
             label={strings.backupLabel}
             value={backup}
             onChange={setBackup}
+            ref={field}
+            name="backupCode"
             isDisabled={isChecking}
-            autoComplete="one-time-code"
+            autoComplete="off"
             {...(error === undefined ? {} : { error })}
           />
         )}
-        <Checkbox label={strings.remember} isSelected={remember} onChange={setRemember} isDisabled={isChecking} />
       </Form>
     </AuthLayout>
   );

@@ -25,3 +25,11 @@ Spec 0005, milestone 1, redesigned by spec 0036. Both pages sit in `AuthLayout`'
 - Back from Google with the browser's back button, "Opening Google" resets (`pageshow`).
 - `AuthStates.tsx` holds the loading and failed states the pages before the app share; `AuthPending` takes `isSplit` for first run's split card, with an empty sketch beside it.
 - `SignOutDialog.tsx` is the confirm the pages before the app ask with before signing out (the owner's rule of 21 October 2026): a plain Modal, "Sign out?", "You’ll need to sign in again on this device.", Cancel (ESC) first and a primary Sign out last that spins while it runs and runs once; a failure shows inside it. First run uses it; it matches the workspace menu's (spec 0031).
+
+## Second step (`/two-factor`, TwoFactorScreen)
+
+- **Purpose**: a sign in held back because two factor is on (spec 0033, AC-882, AC-884): an email code or Google proved the email, not yet the person.
+- **Main task**: type the authenticator app's 6 digit code (it sends itself once complete) or, after "Use a backup code", one of the backup codes; "Remember this device for 30 days" sits above the code so it is never skipped. A wrong code says so under the field and focus returns to it; a run out or over tried sign in says the server's sentence with Sign in again.
+- **Leaves out**: passkeys (milestone 3) and any way round the second factor (no email recovery, owner decision).
+
+The pending sign in lives in Better Auth's HttpOnly cookie, so the page can't tell a stale one: the server says so. VerifyScreen goes here when `auth.verify` answers `second-step`; Google's callback redirects here.

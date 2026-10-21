@@ -5,7 +5,7 @@
 import { STEP_UP_MINUTES, type AccountSession, type DataLayer } from '@crm/data';
 import { useAccountSecurity, useAccountSessions } from '@crm/data/react';
 import { Badge, Button, EmptyState, InfoTip, Modal, RelativeTime, Table, type TableColumn, type Toasts } from '@crm/ui';
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { currentFirst, deviceName, devicePlace } from './security-lines.ts';
 import { strings } from './security-strings.ts';
 import { SettingsPage } from './SettingsPage.tsx';
@@ -50,7 +50,9 @@ export function SecurityScreen({ data, toasts }: SecurityScreenProps) {
   const [isBusy, setIsBusy] = useState(false);
   // Signing a device out needs a recent check (AC-896): asked inline in the confirm when this session isn't fresh.
   const security = useAccountSecurity(data.account.security());
-  const stepUp = useStepUp(data, security);
+  // A complete code in the confirm runs it, as its button would.
+  const commit = useRef<() => void>(() => undefined);
+  const stepUp = useStepUp(data, security, { onComplete: () => commit.current() });
 
   const ask = (next: Confirm) => {
     setConfirm(next);
@@ -157,6 +159,14 @@ export function SecurityScreen({ data, toasts }: SecurityScreenProps) {
   }
 
   const one = confirm.kind === 'one' ? confirm.session : undefined;
+  // A complete code in the confirm, or its button, runs the sign out the confirm asks about.
+  useEffect(() => {
+    commit.current = () => {
+      if (isBusy) return;
+      if (one === undefined) void signOutOthers();
+      else void signOutOne(one);
+    };
+  });
   const onePlace = one === undefined ? undefined : devicePlace(one);
   return (
     <SettingsPage
@@ -175,7 +185,7 @@ export function SecurityScreen({ data, toasts }: SecurityScreenProps) {
           }
         : {})}
     >
-      <TwoFactorSection data={data} security={security} toasts={toasts} />
+      <TwoFactorSection data={data} security={security} toasts={toasts} onFocusLost={focusTitle} />
       {body}
       <Modal
         title={one === undefined ? strings.signOutOthersTitle : strings.signOutTitle(deviceName(one))}
@@ -190,14 +200,7 @@ export function SecurityScreen({ data, toasts }: SecurityScreenProps) {
             <Button slot="close" kbd="ESC" isDisabled={isBusy}>
               {strings.cancel}
             </Button>
-            <Button
-              variant="danger-solid"
-              isPending={isBusy}
-              onPress={() => {
-                if (one === undefined) void signOutOthers();
-                else void signOutOne(one);
-              }}
-            >
+            <Button variant="danger-solid" isPending={isBusy} onPress={() => commit.current()}>
               {isBusy ? strings.signingOut : one === undefined ? strings.signOutOthers : strings.signOut}
             </Button>
           </>

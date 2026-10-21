@@ -13,6 +13,7 @@ export const strings = {
   continue: 'Continue',
   checking: 'Checking…',
   backupMissing: 'Enter one of your backup codes.',
+  appMissing: 'Enter the 6 digit code from your app.',
   expired: 'This sign in has expired. Sign in again.',
   signInAgain: 'Sign in again',
   failed: 'Couldn’t check that code. Check your connection, then try again.',
