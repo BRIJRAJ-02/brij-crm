@@ -86,14 +86,12 @@ export const strings = {
   archivedObjectAttributes: (plural: string) => `${plural} is archived. Restore it to see its attributes here.`,
   /** The Configuration tab's first section: the form. */
   lookSection: 'Names and look',
-  lookSectionText: 'What it’s called, and its icon and colour across the app.',
   /** The danger zone. */
   dangerZone: 'Danger zone',
   /** The same section once the object is archived: bringing it back isn't dangerous. */
   restoreZone: 'Restore',
   /** The Configuration tab's IDs, apart from what Save changes. */
   idsSection: 'Identifiers',
-  idsSectionText: 'How integrations and the API refer to it. They never change.',
   dangerArchive: (plural: string) => `Archive ${plural}`,
   dangerArchiveText: 'It leaves the sidebar and every picker. Its records, values and history are kept.',
   dangerRestore: (plural: string) => `Restore ${plural}`,

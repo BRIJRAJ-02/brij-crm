@@ -114,7 +114,7 @@ export function ConfigurationTab({ slug, object }: ConfigurationTabProps) {
   return (
     <SettingsStack>
       {!canManage && <Callout>{strings.readOnlyNote}</Callout>}
-      <SettingsSection title={strings.lookSection} description={strings.lookSectionText}>
+      <SettingsSection title={strings.lookSection}>
         <Card
           {...(canManage
             ? {
@@ -168,7 +168,7 @@ export function ConfigurationTab({ slug, object }: ConfigurationTabProps) {
           </Form>
         </Card>
       </SettingsSection>
-      <SettingsSection title={strings.idsSection} description={strings.idsSectionText}>
+      <SettingsSection title={strings.idsSection}>
         <Card>
           <Field
             label={strings.apiName}
