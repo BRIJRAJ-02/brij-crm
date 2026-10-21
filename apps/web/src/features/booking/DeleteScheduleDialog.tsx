@@ -15,6 +15,8 @@ export interface DeleteScheduleDialogProps {
   readonly schedule: ScheduleView | undefined;
   /** The default's name: the schedule its pages book by once it's gone. */
   readonly fallbackName: string;
+  /** A colleague's schedule (an admin's view): their default, not yours. */
+  readonly isOwn?: boolean;
   readonly onClose: () => void;
   /** Deletes it: the dialog shows busy until this settles, and says a refusal inside itself. */
   readonly onDelete: (schedule: ScheduleView) => Promise<unknown>;
@@ -37,6 +39,7 @@ export function DeleteScheduleDialog({ schedule, ...rest }: DeleteScheduleDialog
 function DeleteConfirm({
   schedule,
   fallbackName,
+  isOwn = true,
   isOpen,
   onClose,
   onDelete,
@@ -83,6 +86,7 @@ function DeleteConfirm({
       {deleteSentence(
         schedule.pages.map((page) => page.title),
         fallbackName,
+        isOwn,
       )}
     </Modal>
   );

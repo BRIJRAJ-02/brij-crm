@@ -3,6 +3,7 @@ import { EmptyState, LoadingNow, PageColumn, TopBar } from '@crm/ui';
 import { createFileRoute, useRouter, type ErrorComponentProps } from '@tanstack/react-router';
 import { AvailabilityPending, AvailabilityScreen } from '../features/booking/AvailabilityScreen.tsx';
 import { browserZone } from '../features/booking/zone.ts';
+import { memberSearch } from '../features/booking/links.ts';
 import { scheduleStrings } from '../features/booking/schedule-strings.ts';
 import { strings } from '../features/booking/strings.ts';
 import { WorkspacePage } from '../features/workspace/WorkspacePage.tsx';
@@ -11,8 +12,20 @@ import { WorkspacePage } from '../features/workspace/WorkspacePage.tsx';
 // default, weekdays 09:00 to 17:00 in the browser's zone, until they save any), read again live, so another tab's
 // save shows here. Each opens in its editor (`bookings_.availability.$scheduleId`).
 export const Route = createFileRoute('/w/$slug/bookings/availability')({
-  loader: async ({ context, params }) => {
-    await context.data.schedules.view(params.slug, undefined, browserZone()).ready();
+  // `?member=`: an admin viewing a colleague's schedules (AC-971); anyone else sees their own.
+  validateSearch: memberSearch,
+  loaderDeps: ({ search }) => ({ member: search.member }),
+  loader: async ({ context, params, deps }) => {
+    const access = await context.data.access.mine(params.slug);
+    const member =
+      deps.member !== undefined && deps.member !== access.memberId && access.permissions.includes('booking.admin')
+        ? deps.member
+        : undefined;
+    const [members] = await Promise.all([
+      context.data.schedules.members(params.slug),
+      context.data.schedules.view(params.slug, member, browserZone()).ready(),
+    ]);
+    return { member, members, me: access.memberId };
   },
   // Shown only once the loading delay passed: its skeletons show at once.
   pendingComponent: () => (
@@ -25,9 +38,19 @@ export const Route = createFileRoute('/w/$slug/bookings/availability')({
 });
 
 function AvailabilityRoute() {
+  const { member, members, me } = Route.useLoaderData();
   const { slug } = Route.useParams();
   const { data } = Route.useRouteContext();
-  return <AvailabilityScreen data={data} slug={slug} locale={navigator.languages[0] ?? 'en-US'} />;
+  return (
+    <AvailabilityScreen
+      data={data}
+      slug={slug}
+      locale={navigator.languages[0] ?? 'en-US'}
+      member={member}
+      members={members}
+      me={me}
+    />
+  );
 }
 
 function AvailabilityError({ error }: ErrorComponentProps) {

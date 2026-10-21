@@ -26,6 +26,7 @@ import {
   deleteSchedule,
   duplicateSchedule,
   getSchedule,
+  listScheduleMembers,
   listSchedules,
   readDefaultHours,
   saveDefaultHours,
@@ -461,6 +462,17 @@ describe('schedules (AC-961 to AC-972)', () => {
     // Bea's default can't be deleted, even by an admin.
     expect(await refusalOf(deleteSchedule(w.owner, { id: working.id }))).toMatchObject({ code: 'DEFAULT_SCHEDULE' });
     expect(await listSchedules(bea.scope, { timeZone: 'UTC' })).toEqual(before);
+  });
+
+  it('answers whose schedules the reader may view: everyone active for booking.admin, themselves for a member', async () => {
+    const w = await workspace();
+    const bea = await w.addMember('bea', 'member');
+    const cy = await w.addMember('cy', 'admin');
+    const gone = await w.addMember('gone', 'member');
+    await testQuery(ownerUrl, `update members set status = 'removed' where id = $1`, [gone.id]);
+    const admins = await listScheduleMembers(cy.scope);
+    expect(admins.members.map((each) => each.name)).toEqual(['Ada Host', 'bea', 'cy']);
+    expect((await listScheduleMembers(bea.scope)).members).toEqual([{ id: bea.id, name: 'bea' }]);
   });
 
   it('lets a colleague read a schedule through a page they book on, showing only those pages (AC-971)', async () => {

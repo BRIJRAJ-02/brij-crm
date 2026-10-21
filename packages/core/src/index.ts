@@ -247,6 +247,7 @@ export {
   deleteSchedule,
   duplicateSchedule,
   getSchedule,
+  listScheduleMembers,
   listSchedules,
   readDefaultHours,
   saveDefaultHours,

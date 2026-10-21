@@ -2,6 +2,7 @@ import { isDataError } from '@crm/data';
 import { EmptyState, LoadingNow, PageColumn, TopBar } from '@crm/ui';
 import { createFileRoute, useRouter, type ErrorComponentProps } from '@tanstack/react-router';
 import { browserZone } from '../features/booking/zone.ts';
+import { memberSearch } from '../features/booking/links.ts';
 import { ScheduleEditor, ScheduleEditorPending } from '../features/booking/ScheduleEditor.tsx';
 import { scheduleStrings } from '../features/booking/schedule-strings.ts';
 import { strings } from '../features/booking/strings.ts';
@@ -12,8 +13,20 @@ import { WorkspacePage } from '../features/workspace/WorkspacePage.tsx';
 // schedule is the default, the virtual one included. The schedules come from the data layer's held list, so a save
 // in another tab shows here while nothing is being edited.
 export const Route = createFileRoute('/w/$slug/bookings_/availability/$scheduleId')({
-  loader: async ({ context, params }) => {
-    await context.data.schedules.view(params.slug, undefined, browserZone()).ready();
+  // `?member=`: an admin editing a colleague's schedule (AC-971); anyone else edits their own.
+  validateSearch: memberSearch,
+  loaderDeps: ({ search }) => ({ member: search.member }),
+  loader: async ({ context, params, deps }) => {
+    const access = await context.data.access.mine(params.slug);
+    const member =
+      deps.member !== undefined && deps.member !== access.memberId && access.permissions.includes('booking.admin')
+        ? deps.member
+        : undefined;
+    const [members] = await Promise.all([
+      member === undefined ? Promise.resolve([]) : context.data.schedules.members(params.slug),
+      context.data.schedules.view(params.slug, member, browserZone()).ready(),
+    ]);
+    return { member, memberName: members.find((each) => each.id === member)?.name };
   },
   // Shown only once the loading delay passed: its skeletons show at once.
   pendingComponent: () => (
@@ -26,9 +39,10 @@ export const Route = createFileRoute('/w/$slug/bookings_/availability/$scheduleI
 });
 
 function ScheduleRoute() {
+  const { member, memberName } = Route.useLoaderData();
   const { slug, scheduleId } = Route.useParams();
   const { data } = Route.useRouteContext();
-  return <ScheduleEditor data={data} slug={slug} scheduleId={scheduleId} />;
+  return <ScheduleEditor data={data} slug={slug} scheduleId={scheduleId} member={member} memberName={memberName} />;
 }
 
 function ScheduleError({ error }: ErrorComponentProps) {

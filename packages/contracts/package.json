@@ -24,6 +24,7 @@
     "./forms": "./src/forms/browser.ts",
     "./csv": "./src/csv.ts",
     "./booking": "./src/booking/index.ts",
+    "./hours": "./src/booking/summary.ts",
     "./emails": "./src/emails.ts"
   },
   "scripts": {

@@ -247,6 +247,7 @@ export const ACCESS_TABLE = {
   readBookingsCalendar: { bookingPages: true },
   readDefaultHours: { schedules: true },
   saveDefaultHours: { schedules: true },
+  listScheduleMembers: { schedules: true },
   listSchedules: { schedules: true },
   getSchedule: { schedules: true },
   createSchedule: { schedules: true },

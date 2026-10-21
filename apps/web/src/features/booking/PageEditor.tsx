@@ -193,7 +193,7 @@ export function PageEditor({ data, slug, page: loaded, locale, schedules, ownerM
   ]
     .filter((part) => part !== '')
     .join(' · ');
-  const hours = useHours(schedules, draft.scheduleId, page, slug, ownerMember === undefined);
+  const hours = useHours(schedules, draft.scheduleId, page, slug, ownerMember);
   const hoursSummary = [...weekSummary(hours.availability, locale), zoneLabel(hours.availability.timeZone)].join(' · ');
   // Page: who can book it.
   const pageSummary =
@@ -470,7 +470,7 @@ function useHours(
   scheduleId: string | null,
   page: BookingPageView,
   slug: string,
-  isOwn: boolean,
+  ownerMember: string | undefined,
 ) {
   const state = useSchedulesOrNone(view);
   if (state === undefined) {
@@ -487,7 +487,8 @@ function useHours(
       ...state.flatMap((each) => (each.id === null ? [] : [{ id: each.id, label: each.name }])),
     ],
     availability: isVirtualSaved ? page.availability : (chosen?.availability ?? page.availability),
-    editHref: isOwn && chosen !== undefined ? scheduleHref(slug, chosen.id ?? 'default') : undefined,
+    // The owner's schedule; an admin's view of a colleague's page opens it as theirs (`?member=`).
+    editHref: chosen === undefined ? undefined : scheduleHref(slug, chosen.id ?? 'default', ownerMember),
   };
 }
 

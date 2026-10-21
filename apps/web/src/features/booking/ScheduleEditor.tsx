@@ -41,14 +41,18 @@ export interface ScheduleEditorProps {
   readonly slug: string;
   /** The schedule's id, or `default` for whichever is the default, the virtual one included. */
   readonly scheduleId: string;
+  /** Whose, when they aren't the reader's: an admin editing a colleague's schedule (AC-971). */
+  readonly member: string | undefined;
+  /** That colleague's name, for the trail back to their schedules. */
+  readonly memberName: string | undefined;
 }
 
 /**
  * The schedule from the data layer's held list, so a save in another tab shows here while nothing is being edited
  * (AC-977); or Not found when it isn't there (deleted, or not the reader's).
  */
-export function ScheduleEditor({ data, slug, scheduleId }: ScheduleEditorProps) {
-  const view = data.schedules.view(slug, undefined, browserZone());
+export function ScheduleEditor({ data, slug, scheduleId, member, memberName }: ScheduleEditorProps) {
+  const view = data.schedules.view(slug, member, browserZone());
   const state = useSchedules(view);
   // The id the virtual default is being stored under: the same editor stays for it as it lands.
   const [adopted, setAdopted] = useState<string | undefined>(undefined);
@@ -60,11 +64,11 @@ export function ScheduleEditor({ data, slug, scheduleId }: ScheduleEditorProps) 
   );
   if (schedule === undefined) {
     return (
-      <Frame slug={slug} title={scheduleStrings.schedule}>
+      <Frame slug={slug} member={member} memberName={memberName} title={scheduleStrings.schedule}>
         <PageColumn align="center">
           <EmptyState
             title={scheduleStrings.notFoundTitle}
-            actions={<Link href={availabilityHref(slug)}>{scheduleStrings.allSchedules}</Link>}
+            actions={<Link href={availabilityHref(slug, member)}>{scheduleStrings.allSchedules}</Link>}
           >
             {scheduleStrings.notFoundText}
           </EmptyState>
@@ -79,6 +83,8 @@ export function ScheduleEditor({ data, slug, scheduleId }: ScheduleEditorProps) 
       key={schedule.id === null || schedule.id === adopted ? 'virtual' : schedule.id}
       data={data}
       slug={slug}
+      member={member}
+      memberName={memberName}
       schedule={schedule}
       schedules={state.schedules}
       onReload={() => view.reload()}
@@ -90,12 +96,16 @@ export function ScheduleEditor({ data, slug, scheduleId }: ScheduleEditorProps) 
 /** The frame every state of the editor shares: the TopBar with the way back to Availability. */
 function Frame({
   slug,
+  member,
+  memberName,
   title,
   meta,
   actions,
   children,
 }: {
   readonly slug: string;
+  readonly member: string | undefined;
+  readonly memberName: string | undefined;
   readonly title: string;
   readonly meta?: ReactNode;
   readonly actions?: ReactNode;
@@ -111,7 +121,11 @@ function Frame({
             icon="clock"
             crumbs={[
               { id: 'bookings', label: strings.bookings, href: bookingsHref(slug) },
-              { id: 'availability', label: strings.availability, href: availabilityHref(slug) },
+              {
+                id: 'availability',
+                label: memberName === undefined ? strings.availability : scheduleStrings.viewingTheirs(memberName),
+                href: availabilityHref(slug, member),
+              },
             ]}
             {...(meta === undefined ? {} : { meta })}
           >
@@ -127,6 +141,8 @@ function Frame({
 function Loaded({
   data,
   slug,
+  member,
+  memberName,
   schedule,
   schedules,
   onReload,
@@ -134,6 +150,8 @@ function Loaded({
 }: {
   readonly data: DataLayer;
   readonly slug: string;
+  readonly member: string | undefined;
+  readonly memberName: string | undefined;
   readonly schedule: ScheduleView;
   readonly schedules: readonly ScheduleView[];
   readonly onReload: () => void;
@@ -146,12 +164,12 @@ function Loaded({
     data,
     slug,
     schedule,
-    forMember: false,
+    forMember: member !== undefined,
     reload: onReload,
     onAdopt,
     onStored: (stored) => {
       // Saved the first time: its own address from now on, the editor kept.
-      if (stored.id !== null) void navigate({ href: scheduleHref(slug, stored.id), replace: true });
+      if (stored.id !== null) void navigate({ href: scheduleHref(slug, stored.id, member), replace: true });
     },
   });
   useBlocker({
@@ -177,7 +195,7 @@ function Loaded({
         data.schedules
           .setDefault(slug, schedule)
           .then(
-            () => toasts.toast({ tone: 'success', message: scheduleStrings.setDefaultDone(schedule.name) }),
+            () => toasts.toast({ tone: 'success', message: scheduleStrings.setDefaultDone(schedule.name, memberName) }),
             failed(scheduleStrings.setDefaultFailed(schedule.name)),
           );
       }}
@@ -185,7 +203,7 @@ function Loaded({
         data.schedules.duplicate(slug, schedule).then(
           (copy) => {
             toasts.toast({ tone: 'success', message: scheduleStrings.duplicated(copy.name) });
-            if (copy.id !== null) void navigate({ href: scheduleHref(slug, copy.id) });
+            if (copy.id !== null) void navigate({ href: scheduleHref(slug, copy.id, member) });
           },
           failed(scheduleStrings.duplicateFailed(schedule.name)),
         );
@@ -197,6 +215,8 @@ function Loaded({
   return (
     <Frame
       slug={slug}
+      member={member}
+      memberName={memberName}
       title={title}
       {...(schedule.isDefault ? { meta: <Badge text={scheduleStrings.defaultBadge} /> } : {})}
       {...(menu === undefined ? {} : { actions: menu })}
@@ -268,11 +288,12 @@ function Loaded({
       <DeleteScheduleDialog
         schedule={isDeleting ? schedule : undefined}
         fallbackName={fallback?.name ?? scheduleStrings.defaultBadge}
+        isOwn={member === undefined}
         onClose={() => setDeleting(false)}
         onDelete={(gone) => data.schedules.remove(slug, gone)}
         onDeleted={(gone) => {
           toasts.toast({ tone: 'success', message: scheduleStrings.deleted(gone.name) });
-          void navigate({ href: availabilityHref(slug) });
+          void navigate({ href: availabilityHref(slug, member) });
         }}
       />
     </Frame>

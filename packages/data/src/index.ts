@@ -46,6 +46,7 @@ import type {
   RecordView,
   RelationshipView,
   Role,
+  ScheduleMember,
   SubmissionState,
   Usage,
   ValidationRuleInput,
@@ -247,7 +248,7 @@ export type {
   EmailUnsubscribeState,
   EmailUnsubscribeStore,
 } from './email-preferences.ts';
-export type { ScheduleList, ScheduleUser, ScheduleView } from '@crm/contracts';
+export type { ScheduleList, ScheduleMember, ScheduleUser, ScheduleView } from '@crm/contracts';
 export type { SchedulesState, SchedulesView } from './schedules/store.ts';
 export type { CalendarSettingsHeld, CalendarSettingsState, CalendarState, CalendarView } from './calendar/store.ts';
 export type { CaptureListState, CaptureListView } from './captures/list.ts';
@@ -257,6 +258,8 @@ export type { Hue, ObjectIcon, RichTextDoc } from '@crm/contracts/values';
 // the server's own functions without loading the schema library.
 export { isReservedSlug, RESERVED_SLUGS, toApiSlug } from '@crm/contracts/slugs';
 export { ROLE_DESCRIPTIONS, ROLE_LABELS, ROLES } from '@crm/contracts/roles';
+// A schedule's week as words (spec 0035): plain, no Zod, the one summary the screens and the server's notices share.
+export { clockLabel, weekSummary } from '@crm/contracts/hours';
 export { freeHue, PICKER_TYPES, STARTER_STAGES, type PickerType } from '@crm/contracts/picker';
 export {
   MAX_PENDING_OPTIONS,
@@ -2099,6 +2102,14 @@ export function createDataLayer({
     schedules: {
       /** A new schedule's id: mint it once per save, and send the same one again on a retry. */
       newId: () => mintId(),
+      /**
+       * Whose schedules the reader may view (AC-971): themselves, and with `booking.admin` every active member, by
+       * name. The Viewing Select's choices, read when Availability opens.
+       */
+      members: (workspace: string): Promise<readonly ScheduleMember[]> =>
+        beforeRead(workspace)
+          .then(() => call((options) => api.schedules.members({ workspace }, options)))
+          .then((answer) => answer.members),
       /** The caller's own schedules (`memberId` undefined), or a colleague's with `booking.admin`. */
       view: (workspace: string, memberId: string | undefined, timeZone: string): SchedulesView =>
         schedules.view(workspace, memberId, timeZone),

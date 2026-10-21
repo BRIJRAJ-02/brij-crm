@@ -15,6 +15,7 @@ import {
   getSchedule,
   listBookingPages,
   listBookings,
+  listScheduleMembers,
   listSchedules,
   listWorkspaceBookings,
   readBookingsCalendar,
@@ -163,6 +164,7 @@ export const bookingsRouter = member.bookings.router({
 // Availability schedules (spec 0035): a member's named hours, their own with `booking.manage`, anyone's with
 // `booking.admin`. Every write stores one `schedules` outbox row (ids only), so the member's other tabs read again.
 export const schedulesRouter = member.schedules.router({
+  members: member.schedules.members.handler(({ context }) => listScheduleMembers(context.scope)),
   list: member.schedules.list.handler(({ context, input }) =>
     listSchedules(context.scope, { memberId: input.memberId, timeZone: input.timeZone }),
   ),
