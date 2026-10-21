@@ -19,7 +19,7 @@ import { addDays, weekRange } from '../features/bookings/week.ts';
 import { browserZone } from '../features/booking/zone.ts';
 
 // Bookings › Calendar (spec 0025, AC-646): the week (`w`, its Monday; `d`, the day picked) with the reader's own
-// calendar events beside the bookings, filtered by `link` (one booking page) and `conn` (the calendars shown). The
+// calendar events beside the bookings, filtered by `link` (one booking page) and `cal` (the calendars the panel shows). The
 // loader waits for the week's first read through the data layer; the screen holds it, so it is read again whenever
 // the person comes back to the page (bookings have no change event yet). The Bookings layout draws the frame, the
 // TopBar and the tabs. Paging weeks changes only the search, never the loader's deps: the screen stays and holds the
@@ -101,6 +101,9 @@ function Calendar({ objects, pages, connections, availability }: CalendarLoaded)
       objects={objects}
       pages={pages}
       connections={connections}
+      calendars={data.calendar.calendars(slug)}
+      onMakeDefault={(calendarId) => void data.calendar.setDestination(slug, calendarId)}
+      onDismissNotice={() => void data.calendar.dismissCalendarNotice(slug)}
       locale={navigator.languages[0] ?? 'en-GB'}
       onRemoveBlock={(blockId) => data.bookings.blocks.remove(slug, blockId)}
       onBlock={(draft, preview) => data.bookings.blocks.create(slug, draft, preview)}

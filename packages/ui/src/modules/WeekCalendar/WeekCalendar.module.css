@@ -1,7 +1,8 @@
 /* WeekCalendar: a header row of days over a scrolling body of 24 hours, an
    axis column then seven day columns. An hour is --size-toolbar tall; a
-   block's place comes from its minutes (--start, --length) and its lane
-   (--lane of --lanes). Bookings are accent, the member's own calendar events
+   block's place comes from its minutes (--start, --length) and its slot
+   (placeBlocks.ts): a region (--left, --width, fractions of the column),
+   pushed in --indent steps of --nest, then --lane of --lanes, --span wide. Bookings are accent, the member's own calendar events
    quieter in their calendar's hue, the time they closed hatched (a solid
    edge for a block, dashed for a hold), cancelled ones struck through; today's
    column is tinted and its date solid accent. Below
@@ -12,8 +13,13 @@
     --axis: var(--size-control);
     --start: 0;
     --length: 30;
+    --left: 0;
+    --width: 1;
+    --indent: 0;
     --lane: 0;
     --lanes: 1;
+    --span: 1;
+    --nest: var(--space-12);
 
     display: flex;
     flex-direction: column;
@@ -107,6 +113,9 @@
   }
 
   .column {
+    /* What the column draws on, for the ring that parts a nested block from the one under it. */
+    --column-surface: var(--surface-raised);
+
     position: relative;
     border-inline-start: var(--border-width-hairline) solid var(--border-subtle);
     background-image: repeating-linear-gradient(
@@ -119,6 +128,8 @@
   }
 
   .column[data-today] {
+    --column-surface: var(--surface-column);
+
     background-color: var(--surface-column);
   }
 
@@ -178,12 +189,15 @@
   .block {
     position: absolute;
     inset-block-start: calc(var(--start) / 60 * var(--hour));
-    inset-inline-start: calc(var(--lane) / var(--lanes) * 100% + var(--space-2));
+    --region-start: calc(var(--left) * 100% + var(--indent) * var(--nest));
+    --region-size: calc(var(--width) * 100% - var(--indent) * var(--nest));
+
+    inset-inline-start: calc(var(--region-start) + var(--lane) / var(--lanes) * var(--region-size) + var(--space-2));
     display: flex;
     flex-direction: column;
     align-items: flex-start;
     overflow: hidden;
-    inline-size: calc(100% / var(--lanes) - var(--space-4));
+    inline-size: calc(var(--span) / var(--lanes) * var(--region-size) - var(--space-4));
     block-size: calc(var(--length) / 60 * var(--hour) - var(--border-width-hairline));
     padding: var(--space-2) var(--space-6);
     border: none;
@@ -195,6 +209,13 @@
     letter-spacing: var(--tracking-label);
     text-align: start;
     transition: box-shadow var(--duration-hover) var(--ease-hover);
+  }
+
+  /* Seven days across: a block under half its day wide gives its brand mark's room to the title. */
+  @container (inline-size >= 480px) {
+    .block[data-narrow] .blockMark {
+      display: none;
+    }
   }
 
   .block[data-kind='event'] {
@@ -275,6 +296,21 @@
     color: var(--text-secondary);
   }
 
+  /* A block over an earlier one it overlaps: a ring in the column's surface keeps the two apart. */
+  .block[data-nested] {
+    box-shadow: 0 0 0 var(--border-width-hairline) var(--column-surface);
+  }
+
+  /* "+N": blocks folded where a lane would be too narrow. */
+  .block[data-kind='more'] {
+    align-items: center;
+    justify-content: center;
+    padding-inline: var(--space-2);
+    border: var(--border-width-hairline) solid var(--control-border);
+    background: var(--surface-subtle);
+    color: var(--text-secondary);
+  }
+
   .block[data-cancelled] {
     border-inline-start-color: var(--border-strong);
     background: var(--surface-subtle);
@@ -288,6 +324,12 @@
     box-shadow: var(--shadow-focus);
     outline: var(--border-width-hairline) solid var(--accent-line);
     outline-offset: var(--border-width-hairline);
+  }
+
+  /* The block's brand mark: it gives way to the title in a block too narrow for both. */
+  .blockMark {
+    display: inline-flex;
+    flex: none;
   }
 
   .blockHead {
@@ -335,11 +377,6 @@
     align-items: center;
     padding-block: 0;
     border-radius: var(--radius-xs);
-  }
-
-  .blockMark {
-    display: inline-flex;
-    flex: none;
   }
 
   .block[data-size='tiny'] .blockMark {

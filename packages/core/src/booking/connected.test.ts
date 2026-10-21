@@ -66,11 +66,11 @@ describe('connectedCalendar', () => {
     });
   });
 
-  it('fails open on an outage and closed on a refused grant', async () => {
+  it('closes when the only conflict calendar fails, whether an outage or a refused grant (AC-995)', async () => {
     const { fake, calendar, connect, ask } = await world();
     await connect();
     fake.failNext('freeBusy', 'CALENDAR_UNAVAILABLE');
-    expect(await calendar.busy(ask)).toEqual({ status: 'unavailable' });
+    expect(await calendar.busy(ask)).toEqual({ status: 'blocked' });
     fake.failNext('freeBusy', 'CALENDAR_AUTH_REVOKED');
     expect(await calendar.busy(ask)).toEqual({ status: 'blocked' });
   });
@@ -113,13 +113,13 @@ describe('connectedCalendar', () => {
     });
     // The fake keeps each account's calendar: the event is in the default one's.
     const window = { from: FROM, to: TO };
-    const inWork = await fake.provider.freeBusy(fake.tokensFor('ada@work.dev'), window.from, window.to);
-    const inFirst = await fake.provider.freeBusy(fake.tokensFor('ada@acme.dev'), window.from, window.to);
-    expect(inWork).toHaveLength(1);
-    expect(inFirst).toEqual([]);
+    const busyIn = async (account: string) =>
+      (await fake.provider.freeBusy(fake.tokensFor(account), ['primary'], window.from, window.to)).get('primary');
+    expect(await busyIn('ada@work.dev')).toMatchObject({ busy: [expect.anything()] });
+    expect(await busyIn('ada@acme.dev')).toEqual({ busy: [] });
   });
 
-  it('reads past one failing calendar and names it, and closes only when the default is refused or all fail', async () => {
+  it('reads past one failing calendar, and closes only when every one fails or the destination is refused (AC-995)', async () => {
     const { fake, calendar, connect, connectAs, ask } = await world();
     await connect();
     const work = await connectAs('ada@work.dev');
@@ -136,12 +136,12 @@ describe('connectedCalendar', () => {
     expect(await calendar.busy(ask)).toEqual({
       status: 'read',
       busy: [{ start: '2026-11-02T10:00:00.000Z', end: '2026-11-02T11:00:00.000Z' }],
-      skipped: [{ connectionId: work.id, reason: 'blocked' }],
+      skipped: [expect.objectContaining({ connectionId: work.id, code: 'CALENDAR_AUTH_REVOKED', reason: 'blocked' })],
     });
-    // A passing outage on both: unavailable (offered as if no calendar).
+    // A passing outage on both: every conflict calendar failed, so closed (AC-995).
     fake.failFreeBusy('ada@work.dev', 'CALENDAR_UNAVAILABLE');
     fake.failFreeBusy('ada@acme.dev', 'CALENDAR_UNAVAILABLE');
-    expect(await calendar.busy(ask)).toEqual({ status: 'unavailable' });
+    expect(await calendar.busy(ask)).toEqual({ status: 'blocked' });
     // The default (where events go) refused: closed, whatever the other says.
     fake.failFreeBusy('ada@work.dev', undefined);
     fake.failFreeBusy('ada@acme.dev', 'CALENDAR_AUTH_REVOKED');

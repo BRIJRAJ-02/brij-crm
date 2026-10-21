@@ -60,6 +60,8 @@ export const ENGINE_REFUSAL_CODES = [
   'STALE',
   'DEFAULT_SCHEDULE',
   'SCHEDULE_NOT_ALLOWED',
+  // Milestone 5 (AC-996, AC-1004): a destination the member can only read, or whose account stopped.
+  'CALENDAR_NOT_WRITABLE',
 ] as const;
 
 /** One of the engine's refusal codes. */

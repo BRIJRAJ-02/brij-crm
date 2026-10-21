@@ -26,7 +26,10 @@ export type BusyAnswer =
     }
   /** The host has no connected calendar (AC-631): availability and bookings only, and the builder warns. */
   | { readonly status: 'none' }
-  /** A grant refused until the host reconnects: nothing is offered for them. */
+  /**
+   * Closed (spec 0024, AC-995): every calendar that checks conflicts failed, or the host's destination calendar's
+   * grant is gone. Nothing is offered for them.
+   */
   | { readonly status: 'blocked' }
   /** A passing failure (5xx, network, rate limit): offered as if no calendar. */
   | { readonly status: 'unavailable' };
@@ -52,6 +55,8 @@ export interface BookingEvent {
   readonly hostMemberId: string;
   /** Spec 0024 links the meeting it writes back to this booking (`meetings.booking_id`). */
   readonly bookingId: string;
+  /** The page booked: its own "Add events to" wins when it names a calendar of the host (spec 0024, AC-997). */
+  readonly pageId?: string;
   readonly title: string;
   /** The visitor's answers, as plain text. */
   readonly description: string;
@@ -69,6 +74,8 @@ export interface BookingEvent {
 export interface WrittenEvent {
   readonly meetingId?: string;
   readonly videoUrl?: string;
+  /** Video was asked for and the host's account can't make a link (an Outlook personal account, AC-1011). */
+  readonly videoUnavailable?: boolean;
 }
 
 /** A booking's event, as a move or a cancel reaches it: spec 0024's meeting row its event wrote. */

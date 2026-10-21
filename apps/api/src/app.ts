@@ -2,6 +2,7 @@ import { createHmac, randomUUID } from 'node:crypto';
 import { type ErrorCode, errorStatus } from '@crm/contracts';
 import {
   connectedCalendar,
+  createCalendarEvents,
   createBusyCache,
   enterWorkspace,
   jobKinds,
@@ -18,7 +19,12 @@ import { createAllowlist } from './auth/allowlist.ts';
 import { AUTH_BASE_PATH, AUTH_ROUTES, type Auth } from './auth/auth.ts';
 import { createCalendarRoutes } from './calendar/routes.ts';
 import { createFreeDomains } from './calendar/free-domains.ts';
-import { createCalendarServices, GOOGLE_NOTIFY_PATH, type CalendarServices } from './calendar/services.ts';
+import {
+  createCalendarServices,
+  GOOGLE_NOTIFY_PATH,
+  MICROSOFT_NOTIFY_PATH,
+  type CalendarServices,
+} from './calendar/services.ts';
 import { backgroundHooks } from './hooks.ts';
 import { createEdgeGuard } from './edge.ts';
 import { mountExports } from './forms/exports.ts';
@@ -67,6 +73,9 @@ export function routedPath(path: string): string {
   }
   return decoded.replace(/\/{2,}/g, '/').replace(/(.)\/+$/, '$1');
 }
+
+/** The most a calendar provider's notice post may carry (Graph sends at most a few dozen small notices). */
+const NOTIFY_BODY_LIMIT_BYTES = 256 * 1024;
 
 /** The largest RPC request body the API reads. */
 export const RPC_BODY_LIMIT_BYTES = 1024 * 1024;
@@ -198,18 +207,30 @@ export function createApp({
     services.calendar ?? (env.calendar === undefined ? undefined : createCalendarServices(env.calendar, env.APP_URL));
   // The free email domains, loaded once: calendar sync's own list when it is on.
   const isFreeDomain = calendar?.isFreeDomain ?? createFreeDomains();
-  // Where a booking's event goes: the host's connected calendar, or nowhere without sync (public and member routes).
-  const booking =
-    services.bookingCalendar ??
-    (calendar === undefined
-      ? NO_CALENDAR
-      : connectedCalendar({
+  // Free and busy and the event writes (spec 0024): one service, so a member's change forgets its kept answers.
+  const calendarEvents =
+    calendar === undefined
+      ? undefined
+      : createCalendarEvents({
           db,
           providers: calendar.providers,
           tokenKey: calendar.tokenKey,
           // The booking's meeting row stores its `meetings` event like any background write; the relay polls it.
           hooks: backgroundHooks(),
           isFreeDomain: calendar.isFreeDomain,
+        });
+  // Where a booking's event goes: the host's connected calendar, or nowhere without sync (public and member routes).
+  const booking =
+    services.bookingCalendar ??
+    (calendar === undefined || calendarEvents === undefined
+      ? NO_CALENDAR
+      : connectedCalendar({
+          db,
+          providers: calendar.providers,
+          tokenKey: calendar.tokenKey,
+          hooks: backgroundHooks(),
+          isFreeDomain: calendar.isFreeDomain,
+          events: calendarEvents,
         }));
   // The key every booking's guest page token derives from, shared with the worker's emails.
   const linkKey = bookingLinkKey(env);
@@ -273,6 +294,8 @@ export function createApp({
     if (c.req.path === GOOGLE_NOTIFY_PATH && c.req.method === 'POST') return next();
     // A mail service's one click unsubscribe (RFC 8058) carries no Origin: the link's signed token is its only key.
     if (c.req.path === EMAIL_UNSUBSCRIBE_PATH && c.req.method === 'POST') return next();
+    // Graph's notices and its validation request likewise: the client state is their key (milestone 4, AC-1008).
+    if (c.req.path === MICROSOFT_NOTIFY_PATH && c.req.method === 'POST') return next();
     const origin = c.get('origin');
     if (!origin || !allowedOrigins.has(origin)) {
       return errorResponse('FORBIDDEN_ORIGIN', 'This request came from an origin the API does not accept.');
@@ -314,6 +337,7 @@ export function createApp({
         testFault,
         jobs,
         calendar,
+        calendarEvents,
         isFreeDomain,
         bookingCalendar: booking,
         bookingLinkKey: linkKey,
@@ -331,7 +355,14 @@ export function createApp({
   // Connecting a calendar (spec 0024): the browser navigates both, so they are plain routes beside the RPC.
   app.get('/calendar/google/start', (c) => calendarRoutes.start(c));
   app.get('/calendar/google/callback', (c) => calendarRoutes.callback(c));
+  // Notices are small: a post past 256 KB is refused before it is read.
+  for (const path of ['/calendar/google/notify', '/calendar/microsoft/notify'])
+    app.use(path, bodyLimit({ maxSize: NOTIFY_BODY_LIMIT_BYTES, onError: (c) => c.body(null, 413) }));
   app.post('/calendar/google/notify', (c) => calendarRoutes.notify(c));
+  // Outlook (milestone 4): the same connect leg, and Graph's notices.
+  app.get('/calendar/microsoft/start', (c) => calendarRoutes.start(c, 'microsoft'));
+  app.get('/calendar/microsoft/callback', (c) => calendarRoutes.callback(c, 'microsoft'));
+  app.post('/calendar/microsoft/notify', (c) => calendarRoutes.notifyMicrosoft(c));
 
   // The central limits module (`limits.ts`): one limiter per surface, so a flood on one never evicts another's
   // windows; ticket uses (a day long) count apart from everything. The fill tickets forms and booking share.

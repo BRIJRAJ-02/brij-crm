@@ -52,8 +52,10 @@ describe('which statuses blame the grant', () => {
   it('blames it for 401 and 403 only: a 429, a 5xx or a 404 is the minute, not the grant', () => {
     expect(codeForStatus(401)).toBe('CALENDAR_AUTH');
     expect(codeForStatus(403)).toBe('CALENDAR_AUTH');
-    for (const status of [400, 404, 429, 500, 502, 503])
+    for (const status of [400, 429, 500, 502, 503])
       expect(codeForStatus(status), String(status)).toBe('CALENDAR_UNAVAILABLE');
+    // A 404 names a calendar that is gone (milestone 5): the account's calendars are listed again.
+    expect(codeForStatus(404)).toBe('CALENDAR_GONE');
   });
 
   it('judges a grant by what it can do, not by the scope strings', () => {
@@ -64,6 +66,7 @@ describe('which statuses blame the grant', () => {
     );
     expect(missingCalendarCapabilities(parseGrantedScopes('openid email'))).toEqual([
       'see when you are busy',
+      'see your list of calendars',
       'see and add events',
     ]);
   });
@@ -262,14 +265,14 @@ describe('writing a booking’s event', () => {
 
   it('names the event by the request id, so a retry can’t invite anyone twice', async () => {
     const g = google([json(event)]);
-    await expect(g.provider.createEvent(TOKENS, input)).resolves.toMatchObject({ id: event.id });
+    await expect(g.provider.createEvent(TOKENS, 'primary', input)).resolves.toMatchObject({ id: event.id });
     const body = g.calls[0]?.init?.body;
     expect(JSON.parse(typeof body === 'string' ? body : '{}')).toMatchObject({ id: event.id });
   });
 
   it('reads a 409 as the first try having made it, and answers that event', async () => {
     const g = google([json({ error: { code: 409 } }, 409), json(event)]);
-    await expect(g.provider.createEvent(TOKENS, input)).resolves.toMatchObject({ id: event.id });
+    await expect(g.provider.createEvent(TOKENS, 'primary', input)).resolves.toMatchObject({ id: event.id });
     expect(g.calls[1]?.url).toContain(`/calendars/primary/events/${event.id}`);
     expect(g.calls[1]?.init?.method).toBeUndefined();
   });

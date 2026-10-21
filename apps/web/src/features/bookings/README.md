@@ -16,16 +16,18 @@ A sidebar destination after Records, as Timefix's rail has it.
 - **Leaves out**: team views and filing, and live arrival.
 - The strip's end: the range, previous week, Today ("Today · 19 Oct" off this week), next week, Filter.
 - The library's WeekCalendar: blocks by time, a booking's title and time with the guest on a third line, events quieter in their calendar's hue; today's column tinted with the now line in it; it opens an hour before now (8 AM outside the working day). Pressing a block opens its card beside it. "N bookings this week." under it. At phone width, the picked day under the seven day buttons.
-- The address: `w` the week's Monday, `d` the picked day, `link` one booking page, `conn` the calendars shown.
+- The address: `w` the week's Monday, `d` the picked day, `link` one booking page, `cal` the calendars the panel shows.
 
 ## List (`/w/$slug/bookings/list`, BookingsListScreen)
 
-- **Purpose**: every booking the member may see, Upcoming, Past or Canceled, paged.
-- **Main task**: page through them and open one for its details.
-- **Leaves out**: filters beyond the link, live arrival.
-- The strip's end: Upcoming · Past · Canceled (a SegmentedControl), the sort, Filter.
-- Each tab has its own empty state; Upcoming's links to Captures › Links and Availability. The library's BookingList draws the rows under day bands; Pagination (10, 25, 50 or 100) at the foot; a row's title opens its card in a Panel.
-- The address: `tab` (`past`, `cancelled`), `page`, `per`, `sort`, `link`.
+- **Purpose**: every meeting, Upcoming, Past or Canceled: the bookings the member may see and their own synced calendar events, as the week shows them (the owner's ask of 21 October 2026).
+- **Main task**: read what is coming up and open one for its details.
+- **Leaves out**: colleagues' calendar events (their time is Busy on the week only, spec 0037), live arrival.
+- The strip: Upcoming · Past · Canceled, then All · Bookings · Calendar, the Calendars toggle and Filter (one link). The calendars panel beside the list picks the calendars, as on the week.
+- Rows (the library's BookingList) under day bands (Today, Tomorrow, the date): a booking titled by its guest with "Booked via <page>" and its guests; a calendar event by its title, with its calendar's colour and name and its attendees as chips (six, then "+N"). A row opens its card in a Panel.
+- Pages of 50 by cursor (`bookings.meetings`, `data.bookings.meetings`, `useMeetings`); Show more reads the next. Each tab's empty state is one line; with no calendar connected it says so and links to Settings › Calendars.
+- The address: `tab` (`past`, `cancelled`), `src` (`bookings`, `calendar`), `link`, `cal`.
+- The TopBar has no count: the list pages every meeting, so there is no total to show.
 
 ## A booking's card (both tabs)
 
@@ -34,6 +36,8 @@ A sidebar destination after Records, as Timefix's rail has it.
 ## Notes
 
 - Laid out after the reference product's bookings page; the look is ours (tokens, `@crm/ui`), the spacing Captures' (`PageColumn`, full width like every page).
-- **Filter** shows only what applies: Link (all, or one booking page) with two or more; Calendars (each connection) with two or more, and says so when none is chosen.
+- **Calendars panel** (`CalendarsAside.tsx`, the library's AsideLayout and CalendarList): beside the week, as Google Calendar keeps it. Each account folds under its mark and address; each calendar the week shows is a checkbox in its colour, picking what this view shows (`cal` in the address, never the calendar's own switches, which stay in Settings › Calendars). Each row's options: Show only this, and Make default on a calendar that can take bookings (`calendar.destination.set`, at once, put back with a toast). Default marks where new bookings go. Show all heads the list while any is hidden. When the default moved off a stopped or removed calendar, a notice names both, with Dismiss. No calendar connected: one line linking to Settings › Calendars. The bar's Calendars button folds the panel (kept per browser); on a phone the panel is a sheet it opens.
+- **Filter** is one link's bookings, with two or more links; filtered it reads "Filter · 1", with a quiet clear beside it.
+- **Colours**: each event in its calendar's hue (the member's pick, else the provider's colour's nearest); before the list reads, its account's.
 - **Calendar events**: calendar sync stores meetings with someone else (titles, times, links), not events the member is alone in, which sync skips (spec 0024, AC-605). Only the member's own connections' events show. A booking's own event is left out: one marked as the booking's, or synced back with the booking's host, start and end and its video link or visitor.
 - **Data**: `data.bookings.view(workspace, tab)` and `data.bookings.calendar(workspace, from, to)` (`useBookings`, `useBookingsCalendar`), each read again whenever the window gets focus or the tab is shown again: bookings write no change event yet, and nothing polls.

@@ -24,6 +24,8 @@ export interface DisclosureProps {
   readonly defaultExpanded?: boolean;
   readonly onExpandedChange?: (isExpanded: boolean) => void;
   readonly isDisabled?: boolean;
+  /** Something before the title, inside the toggle: an account's provider mark in the calendars list. */
+  readonly leading?: ReactNode;
   /**
    * `label` draws the title as a sidebar section label: 11px, quiet, its
    * chevron after it. `fields` stacks the panel's content `space-16` apart, as
@@ -43,6 +45,7 @@ export function Disclosure({
   defaultExpanded,
   onExpandedChange,
   isDisabled,
+  leading,
   variant = 'default',
 }: DisclosureProps) {
   return (
@@ -60,6 +63,7 @@ export function Disclosure({
           <span className={styles.chevron}>
             <Icon name="chevron-right" size={variant === 'label' ? 'xs' : 'sm'} />
           </span>
+          {leading}
           <span className={styles.title}>{title}</span>
           {count !== undefined && <Badge count={count} />}
         </AriaButton>

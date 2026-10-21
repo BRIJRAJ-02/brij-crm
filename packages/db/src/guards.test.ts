@@ -1028,7 +1028,11 @@ describe('isolation', () => {
           sql`insert into calendar_settings (workspace_id, created_by_type, updated_by_type) values (${workspaceId}, 'system', 'system')`,
         );
         await tx.execute(
-          sql`insert into calendar_busy_times (workspace_id, connection_id, provider_event_id, starts_at, ends_at) values (${workspaceId}, ${connectionId}, 'solo-1', now(), now() + interval '1 hour')`,
+          sql`insert into calendar_busy_times (workspace_id, connection_id, calendar_id, provider_event_id, starts_at, ends_at) values (${workspaceId}, ${connectionId}, 'primary', 'solo-1', now(), now() + interval '1 hour')`,
+        );
+        await tx.execute(
+          sql`insert into calendar_calendars (workspace_id, connection_id, member_id, provider_calendar_id, name, access_role, is_primary, is_destination, created_by_type, updated_by_type)
+            values (${workspaceId}, ${connectionId}, ${memberId}, 'primary', 'Ada', 'owner', true, true, 'calendar', 'calendar')`,
         );
       });
       return { recordId, connectionId, meetingId };
@@ -1049,6 +1053,7 @@ describe('isolation', () => {
       'meeting_records',
       'calendar_settings',
       'calendar_busy_times',
+      'calendar_calendars',
     ]) {
       expect((await read(table)).rows, table).toEqual([{ workspace_id: a.workspaceId }]);
     }
@@ -1071,10 +1076,36 @@ describe('isolation', () => {
     await expect(
       db.withWorkspace(a.workspaceId, (tx) =>
         tx.execute(
-          sql`insert into calendar_busy_times (workspace_id, connection_id, provider_event_id, starts_at, ends_at) values (${a.workspaceId}, ${inB.connectionId}, 'solo-2', now(), now() + interval '1 hour')`,
+          sql`insert into calendar_busy_times (workspace_id, connection_id, calendar_id, provider_event_id, starts_at, ends_at) values (${a.workspaceId}, ${inB.connectionId}, 'primary', 'solo-2', now(), now() + interval '1 hour')`,
         ),
       ),
     ).rejects.toMatchObject({ cause: { code: '23503', constraint: 'calendar_busy_times_connection' } });
+    // A calendar in A under B's connection (milestone 5): the composite key finds no such connection in A.
+    await expect(
+      db.withWorkspace(a.workspaceId, (tx) =>
+        tx.execute(
+          sql`insert into calendar_calendars (workspace_id, connection_id, member_id, provider_calendar_id, name, access_role, created_by_type, updated_by_type)
+            values (${a.workspaceId}, ${inB.connectionId}, ${a.memberId}, 'team', 'Team', 'owner', 'calendar', 'calendar')`,
+        ),
+      ),
+    ).rejects.toMatchObject({ cause: { code: '23503', constraint: 'calendar_calendars_connection' } });
+    // A destination the member can only read, or a second destination: refused by the checks (AC-996, AC-1004).
+    await expect(
+      db.withWorkspace(a.workspaceId, (tx) =>
+        tx.execute(
+          sql`insert into calendar_calendars (workspace_id, connection_id, member_id, provider_calendar_id, name, access_role, is_destination, created_by_type, updated_by_type)
+            values (${a.workspaceId}, ${inA.connectionId}, ${a.memberId}, 'holidays', 'Holidays', 'reader', true, 'calendar', 'calendar')`,
+        ),
+      ),
+    ).rejects.toMatchObject({ cause: { code: '23514', constraint: 'calendar_calendars_destination_writable' } });
+    await expect(
+      db.withWorkspace(a.workspaceId, (tx) =>
+        tx.execute(
+          sql`insert into calendar_calendars (workspace_id, connection_id, member_id, provider_calendar_id, name, access_role, is_destination, created_by_type, updated_by_type)
+            values (${a.workspaceId}, ${inA.connectionId}, ${a.memberId}, 'work', 'Work', 'writer', true, 'calendar', 'calendar')`,
+        ),
+      ),
+    ).rejects.toMatchObject({ cause: { code: '23505', constraint: 'calendar_calendars_destination' } });
     // A record removed for good while a meeting still shows on it fails: the purge removes the links first.
     await expect(
       db.withWorkspace(a.workspaceId, (tx) => tx.execute(sql`delete from records where id = ${inA.recordId}`)),

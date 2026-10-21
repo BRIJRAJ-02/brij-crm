@@ -4,7 +4,10 @@
 // don't need ten megabytes of client. Adapted from an earlier scheduling
 // build's Google boundary, which only polled; this one adds incremental sync
 // (`syncToken`, a 410 Gone meaning "sync in full") and push channels (`watch`,
-// milestone 2), and answers in core's shapes.
+// milestone 2), and answers in core's shapes. Milestone 5: every call names its
+// calendar (`calendars/primary` became the calendar's id), `listCalendars`
+// reads the account's calendar list, and free and busy asks for every
+// conflict calendar in one `freebusy.query`, each answering on its own.
 //
 // Every failure is sorted the way that build learned to, so our mistake never
 // reads as the member's: Google refusing the grant on a refresh
@@ -17,6 +20,8 @@ import {
   normaliseEmail,
   providerError,
   type BusyInterval,
+  type CalendarAccessRole,
+  type CalendarBusy,
   type CalendarChannel,
   type CalendarErrorCode,
   type CalendarProvider,
@@ -24,6 +29,7 @@ import {
   type ExchangedTokens,
   type NewEvent,
   type ProviderAttendee,
+  type ProviderCalendar,
   type ProviderEvent,
   type ProviderResponse,
   type ProviderTime,
@@ -52,6 +58,20 @@ const MAX_PAGES = 20;
 const EVENT_FIELDS =
   'id,etag,status,iCalUID,summary,start,end,originalStartTime,location,hangoutLink,conferenceData(entryPoints(entryPointType,uri),conferenceSolution/key/type,createRequest/status),organizer(email,self),attendees(email,displayName,responseStatus,organizer,self),visibility,transparency';
 
+/** Calendars one list page asks for (Google's most is 250). */
+const CALENDAR_PAGE_SIZE = 250;
+
+/** Google's calendar list roles, as core's. */
+const ROLES: Readonly<Record<string, CalendarAccessRole>> = {
+  owner: 'owner',
+  writer: 'writer',
+  reader: 'reader',
+  freeBusyReader: 'free_busy',
+};
+
+/** A calendar's path segment. */
+const calendarPath = (calendarId: string) => `/calendars/${encodeURIComponent(calendarId)}`;
+
 /** How long a call may take before it counts as Google not answering. */
 const CALL_TIMEOUT_MS = 20_000;
 
@@ -69,7 +89,13 @@ export interface GoogleCalendarOptions {
  * not that the grant is bad.
  */
 export function codeForStatus(status: number): CalendarErrorCode {
+  if (status === 404) return 'CALENDAR_GONE';
   return status === 401 || status === 403 ? 'CALENDAR_AUTH' : 'CALENDAR_UNAVAILABLE';
+}
+
+/** A freebusy calendar's errors, as core's code: a calendar not found is gone, any other reason a passing failure. */
+function codeForBusyErrors(errors: readonly { readonly reason?: string }[]): CalendarErrorCode {
+  return errors.some((error) => error.reason === 'notFound') ? 'CALENDAR_GONE' : 'CALENDAR_UNAVAILABLE';
 }
 
 /** Google's event as the list returns it, the fields the sync reads. */
@@ -317,10 +343,9 @@ export function createGoogleCalendar(options: GoogleCalendarOptions): CalendarPr
           params.set('syncToken', syncToken);
         }
         if (pageToken !== undefined) params.set('pageToken', pageToken);
-        const response = await call(
-          `${CALENDAR_API}/calendars/${encodeURIComponent(calendarId)}/events?${params.toString()}`,
-          { headers: { Authorization: `Bearer ${tokens.accessToken}` } },
-        );
+        const response = await call(`${CALENDAR_API}${calendarPath(calendarId)}/events?${params.toString()}`, {
+          headers: { Authorization: `Bearer ${tokens.accessToken}` },
+        });
         if (response.status === 410) {
           throw providerError('CALENDAR_SYNC_TOKEN_GONE', 'Google asked for a full sync.');
         }
@@ -351,20 +376,80 @@ export function createGoogleCalendar(options: GoogleCalendarOptions): CalendarPr
       throw providerError('CALENDAR_UNAVAILABLE', 'The calendar has more changes than one sync reads.');
     },
 
-    async freeBusy(tokens, from, to) {
-      const body = await api<{
-        readonly calendars?: { readonly primary?: { readonly busy?: readonly BusyInterval[] } };
-      }>(tokens, '/freeBusy', {
-        method: 'POST',
-        body: JSON.stringify({ timeMin: from, timeMax: to, items: [{ id: 'primary' }] }),
-      });
-      return (body.calendars?.primary?.busy ?? []).map((busy) => ({
-        start: new Date(busy.start).toISOString(),
-        end: new Date(busy.end).toISOString(),
-      }));
+    async listCalendars(tokens) {
+      const calendars: ProviderCalendar[] = [];
+      let pageToken: string | undefined;
+      for (let page = 0; page < MAX_PAGES; page += 1) {
+        const params = new URLSearchParams({
+          maxResults: String(CALENDAR_PAGE_SIZE),
+          fields: 'items(id,summary,summaryOverride,backgroundColor,accessRole,primary,timeZone,deleted),nextPageToken',
+        });
+        if (pageToken !== undefined) params.set('pageToken', pageToken);
+        const body = await api<{
+          readonly items?: readonly {
+            readonly id?: string;
+            readonly summary?: string;
+            readonly summaryOverride?: string;
+            readonly backgroundColor?: string;
+            readonly accessRole?: string;
+            readonly primary?: boolean;
+            readonly timeZone?: string;
+            readonly deleted?: boolean;
+          }[];
+          readonly nextPageToken?: string;
+        }>(tokens, `/users/me/calendarList?${params.toString()}`);
+        for (const item of body.items ?? []) {
+          const role = ROLES[item.accessRole ?? ''];
+          if (item.id === undefined || role === undefined || item.deleted === true) continue;
+          const colour = item.backgroundColor?.toLowerCase();
+          calendars.push({
+            id: item.id,
+            name: item.summaryOverride ?? item.summary ?? item.id,
+            ...(colour !== undefined && /^#[0-9a-f]{6}$/.test(colour) ? { colour } : {}),
+            accessRole: role,
+            isPrimary: item.primary === true,
+            ...(item.timeZone === undefined ? {} : { timeZone: item.timeZone }),
+          });
+        }
+        if (body.nextPageToken === undefined) return calendars;
+        pageToken = body.nextPageToken;
+      }
+      return calendars;
     },
 
-    async createEvent(tokens, input: NewEvent) {
+    async freeBusy(tokens, calendarIds, from, to) {
+      const answers = new Map<string, CalendarBusy>();
+      if (calendarIds.length === 0) return answers;
+      const body = await api<{
+        readonly calendars?: Readonly<
+          Record<
+            string,
+            { readonly busy?: readonly BusyInterval[]; readonly errors?: readonly { readonly reason?: string }[] }
+          >
+        >;
+      }>(tokens, '/freeBusy', {
+        method: 'POST',
+        body: JSON.stringify({ timeMin: from, timeMax: to, items: calendarIds.map((id) => ({ id })) }),
+      });
+      for (const id of calendarIds) {
+        const found = body.calendars?.[id];
+        if (found === undefined) {
+          answers.set(id, { error: 'CALENDAR_UNAVAILABLE' });
+        } else if (found.errors !== undefined && found.errors.length > 0) {
+          answers.set(id, { error: codeForBusyErrors(found.errors) });
+        } else {
+          answers.set(id, {
+            busy: (found.busy ?? []).map((busy) => ({
+              start: new Date(busy.start).toISOString(),
+              end: new Date(busy.end).toISOString(),
+            })),
+          });
+        }
+      }
+      return answers;
+    },
+
+    async createEvent(tokens, calendarId, input: NewEvent) {
       // sendUpdates=all: Google invites the attendees, so the event reaches their calendars without their consent.
       const params = new URLSearchParams({ sendUpdates: 'all' });
       // Version 1 is the only one that reads conferenceData; without it the Meet request is silently ignored.
@@ -372,7 +457,7 @@ export function createGoogleCalendar(options: GoogleCalendarOptions): CalendarPr
       // The event's id comes from the request id (Google takes base32hex, which a uuid's hex digits are), so a
       // retry after a lost answer meets 409 and reads back the event the first try made: one invitation, never two.
       const eventId = input.requestId.toLowerCase().replace(/[^0-9a-v]/g, '');
-      const response = await call(`${CALENDAR_API}/calendars/primary/events?${params.toString()}`, {
+      const response = await call(`${CALENDAR_API}${calendarPath(calendarId)}/events?${params.toString()}`, {
         method: 'POST',
         headers: { Authorization: `Bearer ${tokens.accessToken}`, 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -404,18 +489,18 @@ export function createGoogleCalendar(options: GoogleCalendarOptions): CalendarPr
       }
       const made =
         response.status === 409
-          ? await api<GoogleEvent>(tokens, `/calendars/primary/events/${encodeURIComponent(eventId)}`)
+          ? await api<GoogleEvent>(tokens, `${calendarPath(calendarId)}/events/${encodeURIComponent(eventId)}`)
           : await json<GoogleEvent>(response);
       const event = eventOf(made);
       if (event === undefined) throw providerError('CALENDAR_UNAVAILABLE', 'Google made no event.');
       return event;
     },
 
-    async updateEvent(tokens, eventId, input) {
+    async updateEvent(tokens, calendarId, eventId, input) {
       // PATCH, not PUT: a full replace would drop what the member added since, and no conferenceData keeps the link.
       const changed = await api<GoogleEvent>(
         tokens,
-        `/calendars/primary/events/${encodeURIComponent(eventId)}?sendUpdates=all`,
+        `${calendarPath(calendarId)}/events/${encodeURIComponent(eventId)}?sendUpdates=all`,
         {
           method: 'PATCH',
           body: JSON.stringify({
@@ -430,9 +515,9 @@ export function createGoogleCalendar(options: GoogleCalendarOptions): CalendarPr
       return event;
     },
 
-    async cancelEvent(tokens, eventId) {
+    async cancelEvent(tokens, calendarId, eventId) {
       const response = await call(
-        `${CALENDAR_API}/calendars/primary/events/${encodeURIComponent(eventId)}?sendUpdates=all`,
+        `${CALENDAR_API}${calendarPath(calendarId)}/events/${encodeURIComponent(eventId)}?sendUpdates=all`,
         { method: 'DELETE', headers: { Authorization: `Bearer ${tokens.accessToken}` } },
       );
       // Already gone is what a cancel asks for.
@@ -444,7 +529,7 @@ export function createGoogleCalendar(options: GoogleCalendarOptions): CalendarPr
       const id = crypto.randomUUID();
       const made = await api<{ readonly id?: string; readonly resourceId?: string; readonly expiration?: string }>(
         tokens,
-        `/calendars/${encodeURIComponent(calendarId)}/events/watch`,
+        `${calendarPath(calendarId)}/events/watch`,
         { method: 'POST', body: JSON.stringify({ id, type: 'web_hook', address, token: channelToken }) },
       );
       const expires = Number(made.expiration);
@@ -564,8 +649,13 @@ export function createGoogleGuest(options: GoogleCalendarOptions, provider: Cale
       };
     },
 
-    freeBusy(accessToken, from, to) {
-      return provider.freeBusy({ accessToken, refreshToken: '', expiresAt: '' }, from, to);
+    async freeBusy(accessToken, from, to) {
+      const answers = await provider.freeBusy({ accessToken, refreshToken: '', expiresAt: '' }, ['primary'], from, to);
+      const answer = answers.get('primary');
+      if (answer === undefined || 'error' in answer) {
+        throw providerError(answer?.error ?? 'CALENDAR_UNAVAILABLE', 'Google didn’t say when you’re busy.');
+      }
+      return answer.busy;
     },
 
     async revoke(accessToken) {

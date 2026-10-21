@@ -318,3 +318,28 @@ export function SettingsRow({ title, description, leading, meta, children }: Set
     </div>
   );
 }
+
+/** Props for SettingsRowGroup. */
+export interface SettingsRowGroupProps {
+  /** What the rows have in common ("Buffers"): a quiet label over them. */
+  readonly title: string;
+  /** Its SettingsRows. */
+  readonly children: ReactNode;
+}
+
+/**
+ * A few SettingsRows under a quiet label, inside a Card that holds several groups (a booking page's Limits:
+ * Buffers, Booking window, Pace), a hairline before the next group. Why a component: a Card of six rows read as one
+ * long list; grouped, each pair reads as one idea.
+ */
+export function SettingsRowGroup({ title, children }: SettingsRowGroupProps) {
+  const headingId = useId();
+  return (
+    <div className={styles.rowGroup} role="group" aria-labelledby={headingId}>
+      <span className={styles.rowGroupTitle} id={headingId}>
+        {title}
+      </span>
+      {children}
+    </div>
+  );
+}

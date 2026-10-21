@@ -194,6 +194,13 @@ export {
   type WeekCalendarDay,
   type WeekCalendarProps,
 } from './modules/WeekCalendar/WeekCalendar.tsx';
+export { AsideLayout, type AsideLayoutProps } from './modules/AsideLayout/AsideLayout.tsx';
+export {
+  CalendarList,
+  type CalendarListAccount,
+  type CalendarListCalendar,
+  type CalendarListProps,
+} from './modules/CalendarList/CalendarList.tsx';
 export { Pagination, type PaginationProps } from './molecules/Pagination/Pagination.tsx';
 export { SpanCard, type SpanCardChoice, type SpanCardProps } from './modules/SpanCard/SpanCard.tsx';
 export {
@@ -340,11 +347,13 @@ export {
   SettingsGrid,
   SettingsLayout,
   SettingsRow,
+  SettingsRowGroup,
   SettingsSection,
   SettingsStack,
   type SettingsGridProps,
   type SettingsLayoutProps,
   type SettingsRowProps,
+  type SettingsRowGroupProps,
   type SettingsSectionProps,
   type SettingsStackProps,
   type SettingsNavEntry,

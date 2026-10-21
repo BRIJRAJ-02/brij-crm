@@ -219,7 +219,7 @@ describe('connecting (AC-597, AC-599, AC-600)', () => {
     expect(queued).toEqual([{ task: 'crm_calendar_sync', key: `crm-calendar:${w.workspaceId}:${view.id}` }]);
   });
 
-  it('reconnects the same account in place, keeps the default, and refuses a fourth account', async () => {
+  it('reconnects the same account in place, keeps the default, and refuses a seventh account (AC-1000)', async () => {
     const w = await world();
     const first = await w.connect(w.ownerId, 'ada@acme.dev');
     await updateCalendarConnection(w.owner, { connectionId: first.id, sharing: 'private' });
@@ -228,8 +228,15 @@ describe('connecting (AC-597, AC-599, AC-600)', () => {
     await w.connect(w.ownerId, 'ada@gmail.com');
     const third = await w.connect(w.ownerId, 'ada@work.dev');
     expect(third.isDefault).toBe(false);
-    expect(await refusalOf(w.connect(w.ownerId, 'ada@fourth.dev'))).toMatchObject({ code: 'LIMIT_REACHED' });
+    for (const account of ['ada@four.dev', 'ada@five.dev', 'ada@six.dev']) await w.connect(w.ownerId, account);
+    expect(await refusalOf(w.connect(w.ownerId, 'ada@seven.dev'))).toMatchObject({
+      code: 'LIMIT_REACHED',
+      message: 'Connect at most 6 calendar accounts.',
+    });
     expect((await listCalendarConnections(w.owner)).map((each) => each.accountEmail)).toEqual([
+      'ada@six.dev',
+      'ada@five.dev',
+      'ada@four.dev',
       'ada@work.dev',
       'ada@gmail.com',
       'ada@acme.dev',
@@ -285,7 +292,8 @@ describe('syncing (AC-601, AC-603 to AC-607, AC-610)', () => {
     expect(row?.record_ids.sort()).toEqual([bea, globex].sort());
     expect(row?.item_ids).toHaveLength(2);
     const [stored] = await w.query<{ status: string; synced: boolean; token: string }>(
-      sql`select status, last_synced_at is not null as synced, sync_state #>> '{primary,syncToken}' as token from calendar_connections`,
+      sql`select c.status, c.last_synced_at is not null as synced, k.sync_state ->> 'syncToken' as token
+        from calendar_connections c join calendar_calendars k on k.connection_id = c.id and k.is_primary`,
     );
     expect(stored).toMatchObject({ status: 'connected', synced: true });
     expect(stored?.token).toMatch(/^fake-sync:/);
@@ -419,7 +427,7 @@ describe('syncing (AC-601, AC-603 to AC-607, AC-610)', () => {
         provider: 'google',
         accountEmail: 'ada@acme.dev',
         reason: 'expired',
-        settingsPath: `/w/${w.slug}/settings/account/calendars`,
+        settingsPath: `/w/${w.slug}/settings/scheduling/calendars`,
       },
     });
     expect(alerts[0]?.key).toMatch(new RegExp(`^calendar_disconnected:${connection.id}:expired:\\d+$`));

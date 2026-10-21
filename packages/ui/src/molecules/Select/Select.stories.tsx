@@ -1,5 +1,5 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
-import { expect, fn, waitFor } from 'storybook/test';
+import { expect, fn, userEvent, waitFor, within } from 'storybook/test';
 import { Avatar } from '../../atoms/Avatar/Avatar.tsx';
 import { Stage } from '../../workbench/Stage/Stage.tsx';
 import { Select, type SelectItem } from './Select.tsx';
@@ -303,5 +303,37 @@ export const DescriptionInField: Story = {
   ),
   play: async ({ canvas }) => {
     await expect(canvas.getByRole('button', { name: /Time zone/ })).toHaveTextContent('GMT+05:30');
+  },
+};
+
+/** Options grouped under headings (`group`): a booking page's calendars by account, after the default. */
+export const Grouped: Story = {
+  parameters: { crm: { screenshot: false } },
+  args: {
+    label: 'Add events to',
+    optionStyle: 'dot',
+    value: 'default',
+    items: [
+      { id: 'default', label: 'Your default (Ada Lovelace)' },
+      { id: 'ada', label: 'Ada Lovelace', hue: 'blue', group: 'ada@acme.dev' },
+      { id: 'team', label: 'Team', hue: 'green', group: 'ada@acme.dev' },
+      { id: 'cal', label: 'Calendar', hue: 'purple', group: 'ada@lovelace.example' },
+    ],
+    isClearable: true,
+  },
+  render: (args) => (
+    <Stage>
+      <Select {...args} />
+    </Stage>
+  ),
+  play: async ({ canvas, canvasElement }) => {
+    await userEvent.click(canvas.getByRole('button', { name: /Add events to/ }));
+    const body = within(canvasElement.ownerDocument.body);
+    const group = await body.findByRole('group', { name: 'ada@acme.dev' });
+    await expect(within(group).getAllByRole('option')).toHaveLength(2);
+    await expect(body.getByRole('option', { name: /Your default/ })).toHaveAttribute('aria-selected', 'true');
+    // Clear comes last, after the groups.
+    const options = body.getAllByRole('option');
+    await expect(options[options.length - 1]).toHaveTextContent('Clear');
   },
 };

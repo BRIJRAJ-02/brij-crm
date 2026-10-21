@@ -131,6 +131,11 @@ interface MenuLook {
   /** Draws the menu in place, with no popover (inside a palette or a panel). */
   readonly isInline?: boolean;
   /**
+   * Focuses an item when the menu mounts: an inline menu that opens in a popover of its own (the week's "+N" list),
+   * which no MenuTrigger focuses. A MenuTrigger's menu needs nothing.
+   */
+  readonly autoFocus?: 'first' | 'last';
+  /**
    * A row above the search and the items, apart from them: a record search's
    * object ("Search in People", spec 0019). It sits outside the search, so
    * typing never filters it.
@@ -203,7 +208,7 @@ function sourceKey<T>(source: ListSource<T> | undefined, key: MenuKey): MenuKey 
 export function Menu<T extends object>(props: MenuProps<T>) {
   const { label, onAction, selectionMode, selectedKeys, defaultSelectedKeys, onSelectionChange, disabledKeys } = props;
   const { search, emptyLabel = strings.noResults, width = 'menu', placement, isInline = false } = props;
-  const { header, anchorRef } = props;
+  const { header, anchorRef, autoFocus } = props;
   const { contains } = useFilter({ sensitivity: 'base' });
   const onShown = useRangeReporter(props.source);
   const count = props.source?.count ?? 0;
@@ -224,6 +229,7 @@ export function Menu<T extends object>(props: MenuProps<T>) {
     ...(selectedKeys === undefined ? {} : { selectedKeys }),
     ...(defaultSelectedKeys === undefined ? {} : { defaultSelectedKeys }),
     ...(disabledKeys === undefined ? {} : { disabledKeys }),
+    ...(autoFocus === undefined ? {} : { autoFocus }),
     ...selectionHandler(onSelectionChange),
   };
 

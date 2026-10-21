@@ -34,7 +34,8 @@ import { createMailer, pacedMailer } from './mail/mailer.ts';
 import { parseSender } from './mail/mailpit.ts';
 import { createFreeDomains } from './calendar/free-domains.ts';
 import { createGoogleCalendar } from './calendar/google.ts';
-import { GOOGLE_NOTIFY_PATH } from './calendar/services.ts';
+import { createMicrosoftCalendar } from './calendar/microsoft.ts';
+import { GOOGLE_NOTIFY_PATH, MICROSOFT_NOTIFY_PATH } from './calendar/services.ts';
 import { runnerTasks, startJobRunners } from './jobs/graphile.ts';
 import { createLifecycle, type AwakeWorker, type Lifecycle } from './jobs/lifecycle.ts';
 import { createJobRunner } from './jobs/runner.ts';
@@ -188,6 +189,8 @@ const calendarSync =
         const deps = {
           providers: {
             google: createGoogleCalendar({ clientId: settings.clientId, clientSecret: settings.clientSecret }),
+            // Outlook (milestone 4), where CALENDAR_OUTLOOK=on.
+            ...(settings.microsoft === undefined ? {} : { microsoft: createMicrosoftCalendar(settings.microsoft) }),
           },
           tokenKey: settings.tokenKey,
           systemScope: (workspaceId: string) => systemScope(db, workspaceId),
@@ -196,7 +199,13 @@ const calendarSync =
           // Push (spec 0024, milestone 2): channels open only where Google can reach us; locally the poll alone runs.
           ...(settings.webhookOrigin === undefined
             ? {}
-            : { pushAddress: new URL(GOOGLE_NOTIFY_PATH, settings.webhookOrigin).toString() }),
+            : {
+                pushAddresses: {
+                  google: new URL(GOOGLE_NOTIFY_PATH, settings.webhookOrigin).toString(),
+                  microsoft: new URL(MICROSOFT_NOTIFY_PATH, settings.webhookOrigin).toString(),
+                },
+              }),
+          onStored: () => relay?.wake(),
         };
         return async (input: { readonly workspaceId: string; readonly connectionId: string }) => {
           const outcome = await syncConnection(deps, input);

@@ -195,6 +195,7 @@ export async function bookAsHost(
         workspaceId: scope.workspaceId,
         hostMemberId: host,
         bookingId: result.bookingId,
+        pageId: input.pageId,
         title: `${result.title} with ${input.name}`,
         description: [
           `Booked in by you through “${result.title}”.`,

@@ -131,14 +131,30 @@ async function linkEmail(tx: WorkspaceTx, email: string, personId: string): Prom
   `);
   const meetingIds = [...new Set(changed.rows.map((row) => row.meeting_id))];
   if (meetingIds.length === 0) return [];
+  // Only meetings a syncing calendar holds go on records (AC-1002): one a calendar only shows on its member's week
+  // keeps its attendee matched, and stays off every timeline.
+  // The same rule as apply.ts's `linkedMeetings` (which imports this file, so it is written out here).
+  const linked = await tx.execute<{ id: string }>(sql`
+    select m.id::text as id from meetings m
+    where m.id = any(${uuidList(meetingIds)}) and (
+      m.created_by_crm or exists (
+        select 1 from meeting_sources s
+        join calendar_calendars k on k.workspace_id = s.workspace_id and k.connection_id = s.connection_id
+          and k.provider_calendar_id = s.calendar_id
+        where s.workspace_id = m.workspace_id and s.meeting_id = m.id and (k.sync or s.created_by_crm)
+      )
+    )
+  `);
+  const linkable = linked.rows.map((row) => row.id);
+  if (linkable.length === 0) return [];
   await tx.execute(sql`
     insert into meeting_records (workspace_id, meeting_id, record_id, via, starts_at)
     select m.workspace_id, m.id, ${personId}::uuid, 'attendee', m.starts_at
-    from meetings m where m.id = any(${uuidList(meetingIds)}) and not m.is_internal
+    from meetings m where m.id = any(${uuidList(linkable)}) and not m.is_internal
     on conflict (workspace_id, meeting_id, record_id) do update set via = 'attendee'
   `);
-  const after = await recordsOf(tx, meetingIds);
-  return meetingIds.map((meetingId) => ({ meetingId, recordIds: after.get(meetingId) ?? [] }));
+  const after = await recordsOf(tx, linkable);
+  return linkable.map((meetingId) => ({ meetingId, recordIds: after.get(meetingId) ?? [] }));
 }
 
 /** Whether the workspace makes people for unknown attendees (AC-609): off until an admin turns it on. */

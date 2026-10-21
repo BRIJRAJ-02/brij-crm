@@ -1,17 +1,17 @@
 // Booking's calendar calls over spec 0024's connections (spec 0025, AC-630,
 // AC-633): the busy reader is spec 0024's `freeBusy` for the host (every
-// calendar they connected, unioned; a failing one is read past and named,
-// and only a refused default calendar, or every calendar failing, closes the
-// host's times), and the event writer its `createEvent` on the host's
-// default calendar (AC-711; their oldest live one while none is the
-// default), which also writes the meeting row at once,
+// calendar that checks conflicts, in all their accounts, unioned; a failing
+// one is read past, and only every one failing, or the destination's grant
+// gone, closes the host's times, AC-995), and the event writer its
+// `createEvent` on the host's destination calendar, or the page's own
+// (AC-996, AC-997), which also writes the meeting row at once,
 // linked to the booking. Both run as the system (the visitor has no scope of
 // their own in the workspace). A provider's failure becomes the answer
 // booking expects: a refused grant `blocked` (nothing offered), a passing
 // outage `unavailable` (offered as if no calendar).
 import type { Database } from '@crm/db';
 import { systemScope } from '../access/door.ts';
-import { createCalendarEvents } from '../calendar/events.ts';
+import { createCalendarEvents, type CalendarEvents } from '../calendar/events.ts';
 import type { CalendarProvider } from '../calendar/provider.ts';
 import type { TokenKey } from '../calendar/tokens.ts';
 import { isRefusal } from '../engine/refusals.ts';
@@ -29,18 +29,22 @@ export interface ConnectedCalendarDeps {
   /** Whether an email domain names no company (gmail.com); the booking's own list by default. */
   readonly isFreeDomain?: (domain: string) => boolean;
   readonly now?: () => Date;
+  /** The api's one events service, when it keeps one (its kept answers are forgotten on a member's change). */
+  readonly events?: CalendarEvents;
 }
 
 /** The busy times and the event writer over a workspace's connected calendars. */
 export function connectedCalendar(deps: ConnectedCalendarDeps): BookingCalendar {
-  const events = createCalendarEvents({
-    db: deps.db,
-    providers: deps.providers,
-    tokenKey: deps.tokenKey,
-    hooks: deps.hooks ?? [],
-    isFreeDomain: deps.isFreeDomain ?? ((domain) => FREE_EMAIL_DOMAINS.has(domain)),
-    ...(deps.now === undefined ? {} : { now: deps.now }),
-  });
+  const events =
+    deps.events ??
+    createCalendarEvents({
+      db: deps.db,
+      providers: deps.providers,
+      tokenKey: deps.tokenKey,
+      hooks: deps.hooks ?? [],
+      isFreeDomain: deps.isFreeDomain ?? ((domain) => FREE_EMAIL_DOMAINS.has(domain)),
+      ...(deps.now === undefined ? {} : { now: deps.now }),
+    });
   return {
     async busy({ workspaceId, memberId, from, to }): Promise<BusyAnswer> {
       // Booking keeps its own minute per page and day, and its recheck must read past any cache: always fresh here.
@@ -70,12 +74,14 @@ export function connectedCalendar(deps: ConnectedCalendarDeps): BookingCalendar 
           // The booking's id: a retry never makes a second event or video link.
           requestId: event.bookingId,
           bookingId: event.bookingId,
+          ...(event.pageId === undefined ? {} : { pageId: event.pageId }),
           ...(event.description === '' ? {} : { description: event.description }),
           ...(event.location === undefined ? {} : { location: event.location }),
         });
         return {
           ...(made.meetingId === undefined ? {} : { meetingId: made.meetingId }),
           ...(made.videoUrl === undefined ? {} : { videoUrl: made.videoUrl }),
+          ...(made.videoUnavailable === true ? { videoUnavailable: true } : {}),
         };
       } catch (error) {
         // A host with no live calendar: the booking stands without an event (AC-631).

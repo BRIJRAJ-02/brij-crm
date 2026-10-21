@@ -37,6 +37,7 @@ Ported from the artifact's Menu card. Every dropdown of actions or choices in th
 - `anchorRef` lines the popover up with another element than its trigger, and takes that element's width with `width="trigger"`: a picker's whole field box, whose button fills only the room its chips leave.
 - `width`: `menu` (240px, or the trigger's width) or `trigger` (exactly the trigger's width).
 - `isInline` draws the menu in place, with no popover (inside a palette).
+- `autoFocus` (`first` or `last`) focuses an item when the menu mounts. Why a prop: an inline menu opened in a Popover of its own (WeekCalendar's "+N" list) has no MenuTrigger to focus it, so from the keyboard focus would stop on the popover and the arrows would do nothing.
 - Inside a `MenuTrigger`, React Aria names the menu after its trigger; `label` is its name when inline.
 - **ContextMenu** (the right click variant): `<ContextMenu menu={<Menu …/>}><Button …/></ContextMenu>` opens the menu at the pointer on right click or a long press. Browsers turn Shift F10 and the menu key into the same event, so those open it too where the platform has them.
 

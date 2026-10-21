@@ -18,7 +18,9 @@ export { memberRecents } from './search.ts';
 export {
   attendeeMatch,
   attendeeResponse,
+  calendarAccessRole,
   calendarBusyTimes,
+  calendarCalendars,
   calendarConnections,
   calendarProvider,
   calendarSettings,

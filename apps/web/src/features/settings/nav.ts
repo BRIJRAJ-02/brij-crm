@@ -30,8 +30,11 @@ export const objectSettingsHref = (
 /** Settings › Account › Preferences (spec 0026): the interface theme. Where Settings opens. */
 export const preferencesHref = settingsHomeHref;
 
-/** Settings › Account › Calendars (specs 0024 and 0026): the member's own calendar connections. */
-export const calendarSettingsHref = (slug: string) => `/w/${slug}/settings/account/calendars`;
+/**
+ * Settings › Scheduling › Calendars (specs 0024 and 0026): the member's own calendar connections. Its older
+ * addresses (`account/calendars`, `calendar`) send here.
+ */
+export const calendarSettingsHref = (slug: string) => `/w/${slug}/settings/scheduling/calendars`;
 
 /** Settings › Workspace › Members (spec 0031): who is in the workspace, roles and invitations. */
 export const membersSettingsHref = (slug: string) => `/w/${slug}/settings/members`;
@@ -66,8 +69,9 @@ export interface SettingsNavGroup {
 }
 
 /**
- * The settings navigation (spec 0026, AC-682): Account (Preferences,
- * Calendars) and Workspace (Members, spec 0031; Objects, Background jobs).
+ * The settings navigation (spec 0026, AC-682): Account (Preferences),
+ * Scheduling (Calendars, 21 Oct 2026) and Workspace (Members, spec 0031;
+ * Objects, Background jobs).
  * Every entry is a page in Settings: the Booking pages and Forms links into
  * Captures went on 20 Oct 2026, as neither has workspace wide settings yet
  * (each page's and each form's own settings live in its editor). Every
@@ -81,8 +85,12 @@ export function settingsNav(slug: string): readonly SettingsNavGroup[] {
       label: strings.account,
       entries: [
         { id: 'preferences', label: strings.preferences, href: preferencesHref(slug), icon: 'sliders-horizontal' },
-        { id: 'calendars', label: calendar.title, href: calendarSettingsHref(slug), icon: 'calendar' },
       ],
+    },
+    {
+      id: 'scheduling',
+      label: strings.scheduling,
+      entries: [{ id: 'calendars', label: calendar.title, href: calendarSettingsHref(slug), icon: 'calendar' }],
     },
     {
       id: 'workspace',
@@ -121,7 +129,7 @@ export function settingsPageOf(pathname: string): SettingsPageId | undefined {
   const match = /^\/w\/[^/]+\/settings\/(.+?)\/*$/.exec(pathname);
   const rest = match?.[1] ?? '';
   if (rest === 'account/preferences') return 'preferences';
-  if (rest === 'account/calendars' || rest === 'calendar') return 'calendars';
+  if (rest === 'scheduling/calendars' || rest === 'account/calendars' || rest === 'calendar') return 'calendars';
   if (rest === 'objects' || rest.startsWith('objects/')) return 'objects';
   if (rest === 'jobs') return 'jobs';
   if (rest === 'members') return 'members';

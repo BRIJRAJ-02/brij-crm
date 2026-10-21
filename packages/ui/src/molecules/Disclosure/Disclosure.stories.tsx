@@ -1,5 +1,6 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
 import { expect } from 'storybook/test';
+import { ProviderMark } from '../../atoms/ProviderMark/ProviderMark.tsx';
 import { Stage } from '../../workbench/Stage/Stage.tsx';
 import { Field } from '../Field/Field.tsx';
 import { Disclosure, DisclosureGroup } from './Disclosure.tsx';
@@ -76,5 +77,25 @@ export const Fields: Story = {
   ),
   play: async ({ canvas }) => {
     await expect(canvas.getByRole('textbox', { name: 'Job title' })).toBeVisible();
+  },
+};
+
+/** `leading` before the title, inside the toggle: an account's provider mark in the calendars list. */
+export const Leading: Story = {
+  parameters: { crm: { screenshot: false } },
+  render: () => (
+    <Stage width="narrow">
+      <Disclosure
+        title="ada@acme.dev"
+        variant="label"
+        defaultExpanded
+        leading={<ProviderMark provider="google-calendar" size="sm" />}
+      >
+        <span>Team</span>
+      </Disclosure>
+    </Stage>
+  ),
+  play: async ({ canvas }) => {
+    await expect(canvas.getByRole('button', { name: /ada@acme\.dev/ })).toHaveAttribute('aria-expanded', 'true');
   },
 };

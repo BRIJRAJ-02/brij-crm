@@ -1,8 +1,10 @@
-// Settings › Account › Calendars: the page's copy (spec 0024), apart from the other settings pages' own.
+// Settings › Scheduling › Calendars: the page's copy (spec 0024), apart from the other settings pages' own.
 import type { CalendarStatus } from '@crm/data';
 
-/** Settings › Account › Calendars: the page's copy (spec 0024, AC-597, AC-599, AC-611, AC-621). */
+/** Settings › Scheduling › Calendars: the page's copy (spec 0024, AC-597, AC-599, AC-611, AC-621). */
 export const strings = {
+  /** The loading state's name, read by screen readers. */
+  loading: 'Loading your calendars',
   /** The page's title, and its entry in the settings navigation. */
   title: 'Calendars',
   connectGoogle: 'Connect Google calendar',

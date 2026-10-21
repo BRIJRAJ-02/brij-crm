@@ -145,7 +145,7 @@ describe('the workspace frame’s sidebar', () => {
       const labelledBy = group.getAttribute('aria-labelledby');
       return labelledBy === null ? group.getAttribute('aria-label') : document.getElementById(labelledBy)?.textContent;
     });
-    expect(groups).toEqual(['Account', 'Workspace']);
+    expect(groups).toEqual(['Account', 'Scheduling', 'Workspace']);
     // Every entry is a page in Settings: no link out to Captures.
     expect(nav?.textContent).not.toContain('In Captures');
     expect(nav?.querySelector('a[aria-current="page"]')?.textContent).toBe('Preferences');

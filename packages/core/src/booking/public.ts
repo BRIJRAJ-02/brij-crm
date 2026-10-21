@@ -401,6 +401,7 @@ export async function bookPublicSlot(
         workspaceId,
         hostMemberId: host,
         bookingId: result.bookingId,
+        pageId: entry.pageId,
         title: `${page.title} with ${input.name}`,
         description: eventDescription(page, input),
         start: start.toISOString(),

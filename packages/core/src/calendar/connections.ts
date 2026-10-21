@@ -22,6 +22,7 @@ import { checkId, uuidList } from '../engine/ids.ts';
 import { refuse } from '../engine/refusals.ts';
 import { runWrite, type AfterWrite, type MeetingChange, type WriteContext } from '../engine/write.ts';
 import { recomputePrivacy } from './apply.ts';
+import { addMainCalendar, fallBackDestination } from './calendars.ts';
 import { normaliseEmail, type ExchangedTokens } from './provider.ts';
 import { sealTokens, type TokenKey } from './tokens.ts';
 
@@ -31,7 +32,7 @@ export const UNKNOWN_CONNECTION = 'That calendar connection does not exist.';
 /** What a principal that isn't a member answers: connections are a member's own. */
 export const CONNECTIONS_ARE_MEMBERS = 'Calendar connections belong to members.';
 
-/** What a fourth account answers (AC-599). */
+/** What a seventh account answers (AC-1000). */
 export const CONNECTIONS_FULL = `Connect at most ${String(MAX_CALENDAR_CONNECTIONS)} calendar accounts.`;
 
 /** A newly consented account (`connectCalendar`): its provider, and the tokens and account the code exchanged for. */
@@ -159,12 +160,18 @@ export async function connectCalendar(
           'member', ${memberId}::uuid, ${memberId}::uuid, 'member', ${memberId}::uuid, ${memberId}::uuid)
         on conflict (workspace_id, member_id, provider, account_email) do update set
           tokens = excluded.tokens, status = 'syncing', sync_state = '{}'::jsonb, last_error = null,
-          failing_since = null, updated_at = now(), updated_by_type = 'member',
+          failing_since = null, calendars_listed_at = null, updated_at = now(), updated_by_type = 'member',
           updated_by_id = excluded.updated_by_id, updated_by_member_id = excluded.updated_by_member_id
         returning ${VIEW_COLUMNS}
       `);
       const [row] = rows.rows;
       if (row === undefined) throw new Error('A calendar connection just written could not be read back.');
+      // Milestone 5: its main calendar from the first minute (AC-992), and a reconnect syncs every calendar in full.
+      await addMainCalendar(tx, { workspaceId: scope.workspaceId, connectionId: row.id, memberId, name: accountEmail });
+      await tx.execute(sql`
+        update calendar_calendars set sync_state = '{}'::jsonb, last_error = null, failing_since = null
+        where connection_id = ${row.id}::uuid
+      `);
       // The first full sync, queued with the connection, so a rolled back connect queues nothing.
       await tx.execute(sql`select crm_enqueue_calendar_sync(${row.id}::uuid)`);
       return viewOf(row);
@@ -210,6 +217,19 @@ export async function updateCalendarConnection(
           where member_id = ${memberId}::uuid and is_default
         `);
         await tx.execute(sql`update calendar_connections set is_default = true, ${touch} where id = ${row.id}::uuid`);
+        // Milestone 5: new bookings go to its main calendar, when the member can write it (AC-996).
+        const main = await tx.execute<{ id: string }>(sql`
+          select id::text as id from calendar_calendars
+          where connection_id = ${row.id}::uuid and is_primary and access_role in ('owner', 'writer')
+        `);
+        const mainId = main.rows[0]?.id;
+        if (mainId !== undefined) {
+          await tx.execute(sql`
+            update calendar_calendars set is_destination = false, fell_back_from = null
+            where member_id = ${memberId}::uuid and is_destination and id <> ${mainId}::uuid
+          `);
+          await tx.execute(sql`update calendar_calendars set is_destination = true where id = ${mainId}::uuid`);
+        }
       }
       if (input.sharing !== undefined && input.sharing !== row.sharing) {
         await tx.execute(
@@ -294,6 +314,10 @@ export async function removeCalendarConnection(
     scope,
     async (context) => {
       const row = await ownConnection(context.tx, memberId, input.connectionId);
+      // Its destination, by name, so the member is told which calendar new bookings no longer go to (AC-1005).
+      const lost = await context.tx.execute<{ name: string }>(sql`
+        select name from calendar_calendars where connection_id = ${row.id}::uuid and is_destination
+      `);
       const meetingsRemoved = await deleteConnections(context, [row.id]);
       if (row.is_default) {
         await context.tx.execute(sql`
@@ -302,6 +326,8 @@ export async function removeCalendarConnection(
             order by created_at desc, id desc limit 1)
         `);
       }
+      // Its calendars went with it: a destination among them moves to the member's default connection (AC-1005).
+      await fallBackDestination(context.tx, memberId, lost.rows[0]?.name);
       return { connectionId: row.id, meetingsRemoved };
     },
     hooks,

@@ -1,7 +1,8 @@
 /* BookingList: day bands in small capitals on the subtle surface, each over
-   its rows; a row is the date column (half a measure wide: the day bold, the
-   time muted, Join), the title, note and who, then the actions. On a narrow
-   container the date column sits above the rest. */
+   its rows; a row is two lines: the date column (half a measure wide: the day
+   bold over the time), the title over one muted line of details cut to fit,
+   then the actions. On a narrow container the date and time share a line
+   above the rest. */
 @layer components {
   .root {
     overflow: hidden;
@@ -35,7 +36,7 @@
     display: flex;
     align-items: flex-start;
     gap: var(--space-16);
-    padding: var(--space-12) var(--space-16);
+    padding: var(--space-8) var(--space-16);
     border-block-end: var(--border-width-hairline) solid var(--border);
   }
 
@@ -47,7 +48,6 @@
     display: flex;
     flex: none;
     flex-direction: column;
-    gap: var(--space-2);
     inline-size: calc(var(--size-measure) / 2);
   }
 
@@ -63,20 +63,10 @@
     letter-spacing: var(--tracking-body);
   }
 
-  .join {
-    display: flex;
-    align-items: center;
-    gap: var(--space-4);
-    color: var(--link);
-    font: var(--text-label);
-    letter-spacing: var(--tracking-label);
-  }
-
   .main {
     display: flex;
     flex: 1;
     flex-direction: column;
-    gap: var(--space-2);
     min-inline-size: 0;
   }
 
@@ -84,22 +74,50 @@
     display: flex;
     align-items: center;
     gap: var(--space-6);
+    min-inline-size: 0;
     margin-inline-start: calc(-1 * var(--space-8));
   }
 
-  .note {
-    overflow: hidden;
-    color: var(--text-secondary);
-    font: var(--text-body);
-    letter-spacing: var(--tracking-body);
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  }
-
-  .who {
+  .details {
+    display: flex;
+    align-items: center;
+    gap: var(--space-8);
+    min-inline-size: 0;
+    overflow: clip;
+    overflow-clip-margin: var(--space-2);
     color: var(--text-secondary);
     font: var(--text-label);
     letter-spacing: var(--tracking-label);
+    white-space: nowrap;
+  }
+
+  .details > * {
+    flex: none;
+  }
+
+  .join {
+    display: flex;
+    align-items: center;
+    gap: var(--space-4);
+    color: var(--link);
+  }
+
+  /* Who it's with gives way last; the note first. The clip margin keeps a link's focus ring whole. */
+  .details > .text {
+    flex: 0 1 auto;
+    min-inline-size: 0;
+    overflow: clip;
+    overflow-clip-margin: var(--space-2);
+    text-overflow: ellipsis;
+  }
+
+  .details > .who {
+    flex-shrink: 0;
+    max-inline-size: 50%;
+  }
+
+  .details > .text:last-child {
+    flex-shrink: 100;
   }
 
   .actions {
@@ -112,10 +130,12 @@
   @container (inline-size < 480px) {
     .row {
       flex-direction: column;
-      gap: var(--space-6);
+      gap: var(--space-4);
     }
 
     .when {
+      flex-direction: row;
+      gap: var(--space-6);
       inline-size: auto;
     }
   }

@@ -244,6 +244,7 @@ jobs:
           e2e/schedules.flow.ts
           e2e/command.flow.ts
           e2e/attributes.flow.ts
+          e2e/loading-shape.flow.ts
       - name: Keep the traces and the logs
         if: failure()
         uses: actions/upload-artifact@v7

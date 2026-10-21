@@ -17,6 +17,7 @@ import {
   listBookings,
   listScheduleMembers,
   listSchedules,
+  listMeetings,
   listWorkspaceBookings,
   readBookingsCalendar,
   readDefaultHours,
@@ -72,6 +73,16 @@ export const bookingsRouter = member.bookings.router({
   listAll: member.bookings.listAll.handler(async ({ context, input }) => [
     ...(await listWorkspaceBookings(context.scope, { when: input.when })),
   ]),
+  // Bookings' list: every meeting, bookings and the reader's own calendar events, a page at a time.
+  meetings: member.bookings.meetings.handler(({ context, input }) =>
+    listMeetings(context.scope, {
+      when: input.when,
+      source: input.source,
+      ...(input.calendarIds === undefined ? {} : { calendarIds: input.calendarIds }),
+      ...(input.cursor === undefined ? {} : { cursor: input.cursor }),
+      limit: input.limit,
+    }),
+  ),
   // Bookings' week: the bookings in a range and the reader's own calendar events beside them.
   calendar: member.bookings.calendar.handler(({ context, input }) =>
     readBookingsCalendar(context.scope, { from: input.from, to: input.to }),

@@ -414,6 +414,13 @@
       "when": 1792606642245,
       "tag": "0058_member_recents",
       "breakpoints": true
+    },
+    {
+      "idx": 59,
+      "version": "7",
+      "when": 1792610538496,
+      "tag": "0059_calendar_calendars",
+      "breakpoints": true
     }
   ]
 }

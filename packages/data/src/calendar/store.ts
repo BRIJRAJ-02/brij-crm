@@ -115,6 +115,10 @@ export const SYNC_POLL_FOR_MS = 5 * 60_000;
  * run's calendar step (`welcome`, spec 0036). The only values the API takes.
  */
 export type ConnectReturn = 'settings' | 'welcome';
+/** The toasts a saved "Add people from meetings" raises, and their Undo. */
+const PEOPLE_ON = 'People from meetings will be added';
+const PEOPLE_OFF = 'People from meetings won’t be added';
+const UNDO = 'Undo';
 
 /** The address that starts connecting a Google calendar: the browser goes there, the API sends it on to Google. */
 export function connectUrl(workspace: string, then: ConnectReturn = 'settings'): string {
@@ -293,6 +297,55 @@ export function createCalendarStore(deps: CalendarDeps) {
     deps.notify({ tone: 'danger', message: refusalSummary(toDataError(error)) });
   };
 
+  /**
+   * Makes people for unknown attendees, or stops (owners and admins): at once, put back with a toast if refused.
+   * Saved, a quiet toast says so with Undo, which sets it back the same way (the save rule of 21 Oct 2026).
+   */
+  // Each workspace's latest save of the setting and its last value the server confirmed: an older answer or
+  // refusal arriving after a newer save never overwrites it.
+  const peopleSaves = new Map<string, { readonly seq: number; readonly confirmed?: boolean }>();
+  const setCreateUnknownPeople = async (workspace: string, createUnknownPeople: boolean): Promise<boolean> => {
+    const held = settingsOf(workspace);
+    const before = held.getSnapshot();
+    const last = peopleSaves.get(workspace);
+    const seq = (last?.seq ?? 0) + 1;
+    const confirmed = last?.confirmed ?? (before.status === 'ready' ? before.createUnknownPeople : undefined);
+    peopleSaves.set(workspace, { seq, ...(confirmed === undefined ? {} : { confirmed }) });
+    const isLatest = () => peopleSaves.get(workspace)?.seq === seq;
+    if (before.status === 'ready') held.set({ ...before, createUnknownPeople });
+    try {
+      const answer = await deps.api.updateSettings({ workspace, createUnknownPeople, mutationId: deps.mintId() });
+      if (isLatest()) {
+        peopleSaves.set(workspace, { seq, confirmed: answer.createUnknownPeople });
+        held.set({ status: 'ready', ...answer });
+      }
+      deps.notify({
+        tone: 'success',
+        message: createUnknownPeople ? PEOPLE_ON : PEOPLE_OFF,
+        action: {
+          label: UNDO,
+          // Only while the setting still says what this toast saved: an older toast's Undo does nothing.
+          onAction: () => {
+            const now = held.getSnapshot();
+            if (now.status === 'ready' && now.createUnknownPeople === createUnknownPeople) {
+              void setCreateUnknownPeople(workspace, !createUnknownPeople);
+            }
+          },
+        },
+      });
+      return true;
+    } catch (error) {
+      if (isLatest()) {
+        const now = held.getSnapshot();
+        const back = peopleSaves.get(workspace)?.confirmed;
+        if (now.status === 'ready' && back !== undefined) held.set({ ...now, createUnknownPeople: back });
+        else held.set(before);
+      }
+      refused(error);
+      return false;
+    }
+  };
+
   return {
     view: (workspace: string): CalendarView => viewOf(workspace),
     /** Brings a connection's next sync forward (Sync now); the list reads again shortly after. Answers whether it queued. */
@@ -308,21 +361,7 @@ export function createCalendarStore(deps: CalendarDeps) {
     },
     /** The workspace's calendar settings, read when a screen first holds them. */
     settings: (workspace: string): CalendarSettingsHeld => settingsOf(workspace),
-    /** Makes people for unknown attendees, or stops (owners and admins): at once, put back with a toast if refused. */
-    async setCreateUnknownPeople(workspace: string, createUnknownPeople: boolean): Promise<boolean> {
-      const held = settingsOf(workspace);
-      const before = held.getSnapshot();
-      if (before.status === 'ready') held.set({ ...before, createUnknownPeople });
-      try {
-        const answer = await deps.api.updateSettings({ workspace, createUnknownPeople, mutationId: deps.mintId() });
-        held.set({ status: 'ready', ...answer });
-        return true;
-      } catch (error) {
-        held.set(before);
-        refused(error);
-        return false;
-      }
-    },
+    setCreateUnknownPeople,
     /**
      * Adds a meeting's unknown attendee as a person (AC-609). It waits for the
      * server, which makes the record; the `meetings` event then brings every

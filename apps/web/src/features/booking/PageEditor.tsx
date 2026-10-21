@@ -23,8 +23,11 @@ import {
   PreviewDeviceSwitch,
   PreviewFrame,
   PreviewLayout,
+  InfoTip,
   SaveBar,
   Select,
+  SettingsRow,
+  SettingsRowGroup,
   Skeleton,
   Switch,
   TopBar,
@@ -36,7 +39,9 @@ import { useBlocker } from '@tanstack/react-router';
 import { useEffect, useState } from 'react';
 import { pageHeading } from '../navigation/focus.ts';
 import { WorkspacePage } from '../workspace/WorkspacePage.tsx';
+import { calendarSettingsHref } from '../settings/nav.ts';
 import { CalendarNote, readDismissed, writeDismissed } from './CalendarNote.tsx';
+import { PageDestination } from './PageDestination.tsx';
 import { weekSummary, zoneLabel } from './hours.ts';
 import { linksHref, publicBookingUrl, scheduleHref } from './links.ts';
 import { scheduleStrings } from './schedule-strings.ts';
@@ -206,8 +211,10 @@ export function PageEditor({ data, slug, page: loaded, locale, schedules, ownerM
       : '',
     strings.aheadSummary(draft.windowDays),
     draft.dailyLimit === null ? '' : strings.dailySummary(draft.dailyLimit),
+    draft.slotStep === null ? '' : strings.stepSummary(draft.slotStep),
   ].filter((part) => part !== '');
-  const limitsSummary = limitParts.join(' · ');
+  const joined = limitParts.join(' · ');
+  const limitsSummary = joined.charAt(0).toUpperCase() + joined.slice(1);
 
   return (
     <WorkspacePage
@@ -369,6 +376,13 @@ export function PageEditor({ data, slug, page: loaded, locale, schedules, ownerM
                   onChange={(value) => change({ location: { type: location.type, value } })}
                 />
               )}
+              <PageDestination
+                destination={data.calendar.pageDestination(slug, page.id)}
+                calendars={data.calendar.calendars(slug)}
+                isReadOnly={isLocked}
+                onChange={(calendarId) => void data.calendar.setPageDestination(slug, page.id, calendarId)}
+                settingsHref={calendarSettingsHref(slug)}
+              />
             </Card>
             <div id="hours">
               <Card
@@ -392,48 +406,116 @@ export function PageEditor({ data, slug, page: loaded, locale, schedules, ownerM
               </Card>
             </div>
             <Card title={strings.limits} description={limitsSummary}>
-              <Select
-                label={strings.bufferBefore}
-                items={BUFFERS}
-                isReadOnly={isLocked}
-                value={String(draft.bufferBefore)}
-                onChange={(id) => change({ bufferBefore: Number(id ?? 0) })}
-              />
-              <Select
-                label={strings.bufferAfter}
-                items={BUFFERS}
-                isReadOnly={isLocked}
-                value={String(draft.bufferAfter)}
-                onChange={(id) => change({ bufferAfter: Number(id ?? 0) })}
-              />
-              <Select
-                label={strings.notice}
-                items={NOTICE}
-                isReadOnly={isLocked}
-                value={String(draft.minNoticeMinutes)}
-                onChange={(id) => change({ minNoticeMinutes: Number(id ?? 0) })}
-              />
-              <Select
-                label={strings.window}
-                items={WINDOW}
-                isReadOnly={isLocked}
-                value={String(draft.windowDays)}
-                onChange={(id) => change({ windowDays: Number(id ?? 60) })}
-              />
-              <Select
-                label={strings.dailyLimit}
-                items={DAILY}
-                isReadOnly={isLocked}
-                value={draft.dailyLimit === null ? 'none' : String(draft.dailyLimit)}
-                onChange={(id) => change({ dailyLimit: id === null || id === 'none' ? null : Number(id) })}
-              />
-              <Select
-                label={strings.step}
-                items={STEPS}
-                isReadOnly={isLocked}
-                value={draft.slotStep === null ? 'duration' : String(draft.slotStep)}
-                onChange={(id) => change({ slotStep: id === '15' ? 15 : id === '30' ? 30 : id === '60' ? 60 : null })}
-              />
+              <SettingsRowGroup title={strings.limitGroups.buffers}>
+                <SettingsRow
+                  title={strings.bufferBefore}
+                  meta={
+                    <InfoTip label={strings.bufferBefore} example={strings.limitHelp.before.example}>
+                      {strings.limitHelp.before.text}
+                    </InfoTip>
+                  }
+                >
+                  <Select
+                    label={strings.bufferBefore}
+                    isLabelHidden
+                    items={BUFFERS}
+                    isReadOnly={isLocked}
+                    value={String(draft.bufferBefore)}
+                    onChange={(id) => change({ bufferBefore: Number(id ?? 0) })}
+                  />
+                </SettingsRow>
+                <SettingsRow
+                  title={strings.bufferAfter}
+                  meta={
+                    <InfoTip label={strings.bufferAfter} example={strings.limitHelp.after.example}>
+                      {strings.limitHelp.after.text}
+                    </InfoTip>
+                  }
+                >
+                  <Select
+                    label={strings.bufferAfter}
+                    isLabelHidden
+                    items={BUFFERS}
+                    isReadOnly={isLocked}
+                    value={String(draft.bufferAfter)}
+                    onChange={(id) => change({ bufferAfter: Number(id ?? 0) })}
+                  />
+                </SettingsRow>
+              </SettingsRowGroup>
+              <SettingsRowGroup title={strings.limitGroups.window}>
+                <SettingsRow
+                  title={strings.notice}
+                  meta={
+                    <InfoTip label={strings.notice} example={strings.limitHelp.notice.example}>
+                      {strings.limitHelp.notice.text}
+                    </InfoTip>
+                  }
+                >
+                  <Select
+                    label={strings.notice}
+                    isLabelHidden
+                    items={NOTICE}
+                    isReadOnly={isLocked}
+                    value={String(draft.minNoticeMinutes)}
+                    onChange={(id) => change({ minNoticeMinutes: Number(id ?? 0) })}
+                  />
+                </SettingsRow>
+                <SettingsRow
+                  title={strings.window}
+                  meta={
+                    <InfoTip label={strings.window} example={strings.limitHelp.ahead.example}>
+                      {strings.limitHelp.ahead.text}
+                    </InfoTip>
+                  }
+                >
+                  <Select
+                    label={strings.window}
+                    isLabelHidden
+                    items={WINDOW}
+                    isReadOnly={isLocked}
+                    value={String(draft.windowDays)}
+                    onChange={(id) => change({ windowDays: Number(id ?? 60) })}
+                  />
+                </SettingsRow>
+              </SettingsRowGroup>
+              <SettingsRowGroup title={strings.limitGroups.pace}>
+                <SettingsRow
+                  title={strings.dailyLimit}
+                  meta={
+                    <InfoTip label={strings.dailyLimit} example={strings.limitHelp.daily.example}>
+                      {strings.limitHelp.daily.text}
+                    </InfoTip>
+                  }
+                >
+                  <Select
+                    label={strings.dailyLimit}
+                    isLabelHidden
+                    items={DAILY}
+                    isReadOnly={isLocked}
+                    value={draft.dailyLimit === null ? 'none' : String(draft.dailyLimit)}
+                    onChange={(id) => change({ dailyLimit: id === null || id === 'none' ? null : Number(id) })}
+                  />
+                </SettingsRow>
+                <SettingsRow
+                  title={strings.step}
+                  meta={
+                    <InfoTip label={strings.step} example={strings.limitHelp.step.example}>
+                      {strings.limitHelp.step.text}
+                    </InfoTip>
+                  }
+                >
+                  <Select
+                    label={strings.step}
+                    isLabelHidden
+                    items={STEPS}
+                    isReadOnly={isLocked}
+                    value={draft.slotStep === null ? 'duration' : String(draft.slotStep)}
+                    onChange={(id) =>
+                      change({ slotStep: id === '15' ? 15 : id === '30' ? 30 : id === '60' ? 60 : null })
+                    }
+                  />
+                </SettingsRow>
+              </SettingsRowGroup>
             </Card>
           </PreviewLayout>
         ),

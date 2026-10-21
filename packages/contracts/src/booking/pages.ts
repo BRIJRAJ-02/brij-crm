@@ -213,8 +213,10 @@ export type BookingCalendarInput = z.infer<typeof BookingCalendarInput>;
 /** One of the reader's own calendar events (not a booking): spec 0024's meeting, from one of their connections. */
 export const CalendarEventItem = z.object({
   id: Uuid,
-  /** Which of the reader's connections holds it (the per connection filter). */
+  /** Which of the reader's connections holds it. */
   connectionId: Uuid,
+  /** Which of the reader's calendars holds it (spec 0024 milestone 5): its colour and the week's filter. */
+  calendarId: Uuid,
   title: z.string(),
   startsAt: Timestamp,
   endsAt: Timestamp,
@@ -232,8 +234,10 @@ export type CalendarEventItem = z.infer<typeof CalendarEventItem>;
  * title and everything else stay in the calendar.
  */
 export const BusyTimeItem = z.object({
-  /** Which of the reader's connections holds it (the per connection filter). */
+  /** Which of the reader's connections holds it. */
   connectionId: Uuid,
+  /** Which of the reader's calendars holds it (spec 0024 milestone 5): its tint and the week's filter. */
+  calendarId: Uuid,
   startsAt: Timestamp,
   endsAt: Timestamp,
 });
@@ -295,9 +299,56 @@ export const BookingGuestLinkInput = WorkspaceScoped.extend({ bookingId: Uuid })
 export type BookingGuestLinkInput = z.infer<typeof BookingGuestLinkInput>;
 
 /** Member procedures for bookings. */
+/** The most meetings one page of Bookings' list answers. */
+export const MEETINGS_PAGE_MAX = 100;
+
+/** Where a meeting in Bookings' list came from: a booking link, the member's synced calendars, or either. */
+export const MeetingSource = z.enum(['all', 'bookings', 'calendar']);
+/** Where a meeting came from. */
+export type MeetingSource = z.infer<typeof MeetingSource>;
+
+/**
+ * One page of Bookings' list (the owner's ask of 21 October 2026): every meeting on one tab, bookings and the
+ * reader's own calendar events together, by start (soonest first upcoming, latest first otherwise), narrowed to a
+ * source and to some of the reader's calendars. `cursor` is the last page's `nextCursor`.
+ */
+export const ListMeetingsInput = WorkspaceScoped.extend({
+  when: BookingsTab,
+  source: MeetingSource.default('all'),
+  /** Only these of the reader's calendars' events (the calendars panel's pick); absent is every one shown. */
+  calendarIds: z.array(Uuid).max(50).optional(),
+  cursor: z.string().max(200).optional(),
+  limit: z.number().int().min(1).max(MEETINGS_PAGE_MAX).default(50),
+});
+/** One page of Bookings' list. */
+export type ListMeetingsInput = z.input<typeof ListMeetingsInput>;
+
+/**
+ * A meeting in Bookings' list: a booking as the list shows it, or one of the reader's own calendar events with up
+ * to six attendees' addresses and how many there are. Never another member's calendar event.
+ */
+export const MeetingListItem = z.discriminatedUnion('kind', [
+  z.object({ kind: z.literal('booking'), booking: BookingListItem }),
+  z.object({
+    kind: z.literal('event'),
+    event: CalendarEventItem,
+    attendees: z.array(z.string()).max(6),
+    attendeeCount: z.number().int().nonnegative(),
+  }),
+]);
+/** A meeting in Bookings' list. */
+export type MeetingListItem = z.infer<typeof MeetingListItem>;
+
+/** One page of meetings, and where the next begins (absent on the last). */
+export const MeetingListPage = z.object({ items: z.array(MeetingListItem), nextCursor: z.string().optional() });
+/** One page of meetings. */
+export type MeetingListPage = z.infer<typeof MeetingListPage>;
+
 export const bookingsContract = {
   list: oc.input(ListBookingsInput).output(z.array(BookingView)),
   listAll: oc.input(ListWorkspaceBookingsInput).output(z.array(BookingListItem)),
+  /** Bookings' list: every meeting, bookings and the reader's calendar events, a page at a time. */
+  meetings: oc.input(ListMeetingsInput).output(MeetingListPage),
   calendar: oc.input(BookingCalendarInput).output(BookingsCalendarView),
   hours: oc.input(GetMemberHoursInput).output(MemberHours),
   setHours: oc.input(UpdateMemberHoursInput).output(MemberHours),

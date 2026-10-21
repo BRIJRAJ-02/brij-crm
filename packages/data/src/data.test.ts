@@ -477,7 +477,21 @@ function fakeApi(overrides: Partial<Behaviour> = {}, auth: (path: string, body: 
         update: os.calendar.connections.update.handler(notServed),
         remove: os.calendar.connections.remove.handler(notServed),
         syncNow: os.calendar.connections.syncNow.handler(notServed),
+        refresh: os.calendar.connections.refresh.handler(notServed),
       },
+      calendars: {
+        list: os.calendar.calendars.list.handler(notServed),
+        update: os.calendar.calendars.update.handler(notServed),
+      },
+      destination: {
+        set: os.calendar.destination.set.handler(notServed),
+        dismissNotice: os.calendar.destination.dismissNotice.handler(notServed),
+      },
+      pageDestination: {
+        get: os.calendar.pageDestination.get.handler(notServed),
+        set: os.calendar.pageDestination.set.handler(notServed),
+      },
+      health: os.calendar.health.handler(notServed),
       meetings: {
         forRecord: os.calendar.meetings.forRecord.handler(() => ({ items: [] })),
         addAttendee: os.calendar.meetings.addAttendee.handler(notServed),
@@ -526,6 +540,7 @@ function fakeApi(overrides: Partial<Behaviour> = {}, auth: (path: string, body: 
     bookings: {
       list: os.bookings.list.handler(notServed),
       listAll: os.bookings.listAll.handler(notServed),
+      meetings: os.bookings.meetings.handler(notServed),
       calendar: os.bookings.calendar.handler(notServed),
       hours: os.bookings.hours.handler(notServed),
       setHours: os.bookings.setHours.handler(notServed),

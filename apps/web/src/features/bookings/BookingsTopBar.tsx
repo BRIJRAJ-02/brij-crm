@@ -1,10 +1,9 @@
 // Brief
-// Purpose: the Bookings TopBar, drawn once by the layout: the scheduling tile, the title, the upcoming count and New, as People's TopBar has.
+// Purpose: the Bookings TopBar, drawn once by the layout: the scheduling tile, the title and New, as People's TopBar has.
 // Main task: book someone in from any tab: New opens New meeting at the next free half hour of the week on screen.
 // Leaves out: drawing a span on the week (the calendar's own way into the same dialog) and the tabs (the layout's).
-import type { BookingsView } from '@crm/data';
-import { useBookings, useCalendar, useCaptureList } from '@crm/data/react';
-import { Badge, Button, Tooltip, TopBar } from '@crm/ui';
+import { useCalendar, useCaptureList } from '@crm/data/react';
+import { Button, Tooltip, TopBar } from '@crm/ui';
 import { useMatch, useRouteContext, useSearch } from '@tanstack/react-router';
 import { useState } from 'react';
 import { SCHEDULING_HUE } from '../scheduling.ts';
@@ -21,7 +20,7 @@ export interface BookingsTopBarProps {
 }
 
 /**
- * Bookings' TopBar: the tile, Bookings, how many are coming up once the list is in, and New at the end. New reads
+ * Bookings' TopBar: the tile, Bookings, and New at the end (no count: the list pages every meeting, so it has no total). New reads
  * New on every tab, named New meeting, at one place and one width; it is off, with the reason, until a booking
  * page is on, since a meeting goes on one.
  */
@@ -59,12 +58,7 @@ export function BookingsTopBar({ slug }: BookingsTopBarProps) {
     </Button>
   );
   return (
-    <TopBar
-      title={strings.title}
-      icon="calendar-days"
-      hue={SCHEDULING_HUE}
-      meta={<UpcomingCount view={data.bookings.view(slug, 'upcoming')} />}
-    >
+    <TopBar title={strings.title} icon="calendar-days" hue={SCHEDULING_HUE}>
       {hasNoPage ? <Tooltip content={strings.turnOnPageFirst}>{button}</Tooltip> : button}
       {meeting !== undefined && (
         <NewMeetingDialog
@@ -88,11 +82,4 @@ export function BookingsTopBar({ slug }: BookingsTopBarProps) {
       )}
     </TopBar>
   );
-}
-
-/** How many bookings are coming up, beside the title, once the list is in: the same held list List shows. */
-function UpcomingCount({ view }: { readonly view: BookingsView }) {
-  const upcoming = useBookings(view);
-  if (upcoming.status !== 'ready') return null;
-  return <Badge count={upcoming.bookings.length} max={Infinity} label={strings.upcomingCount} />;
 }

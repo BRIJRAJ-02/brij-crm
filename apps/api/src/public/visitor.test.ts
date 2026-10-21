@@ -79,6 +79,7 @@ beforeAll(() => {
       clientSecret: 'test-secret',
       tokenKey: decodeTokenKey(Buffer.alloc(32, 7).toString('base64')),
       webhookOrigin: undefined,
+      microsoft: undefined,
     },
     APP_URL,
     fake.provider,
