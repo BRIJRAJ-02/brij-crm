@@ -4,11 +4,23 @@
 // Leaves out: editing a page (its editor), forms (their own tab) and the bookings list (Bookings).
 import { isDataError, type BookingPageView, type DataLayer } from '@crm/data';
 import { useCaptureList } from '@crm/data/react';
-import { Button, Menu, MenuItem, MenuSeparator, MenuTrigger, Modal, Tooltip, type LinkGridCard } from '@crm/ui';
+import {
+  Button,
+  Callout,
+  focusLater,
+  Menu,
+  MenuItem,
+  MenuSeparator,
+  MenuTrigger,
+  Modal,
+  Tooltip,
+  type LinkGridCard,
+} from '@crm/ui';
 import { useNavigate, useRouteContext } from '@tanstack/react-router';
 import { useState } from 'react';
 import { CapturesList } from '../captures/CapturesList.tsx';
 import { useCapturesCreate } from '../captures/create.tsx';
+import { pageHeading } from '../navigation/focus.ts';
 import { pageEditorHref, publicBookingUrl } from './links.ts';
 import { strings } from './strings.ts';
 
@@ -55,15 +67,14 @@ export function LinksScreen({ data, slug }: LinksScreenProps) {
       failed(strings.duplicateFailed(page.title)),
     );
   };
-  const remove = (page: BookingPageView) => {
-    setDeleting(undefined);
-    data.bookingPages.remove(slug, page.id).then(
-      () => {
-        toasts.toast({ tone: 'success', message: strings.deleted(page.title) });
-      },
-      failed(strings.deleteFailed(page.title)),
-    );
-  };
+  // The card leaves at once and comes back on a refusal; the confirm waits for the answer and says a refusal itself.
+  const remove = (page: BookingPageView) =>
+    data.bookingPages.remove(slug, page.id).then(() => {
+      setDeleting(undefined);
+      toasts.toast({ tone: 'success', message: strings.deleted(page.title) });
+      // The card's menu went with it: focus goes to the page's title rather than falling to the page.
+      focusLater(() => (document.activeElement === document.body ? pageHeading(document) : undefined));
+    });
   const pages = list.status === 'ready' ? list.items : [];
   const cards: readonly LinkGridCard[] = pages.map((page) => {
     const isPending = list.status === 'ready' && list.pendingIds.has(page.id);
@@ -168,46 +179,77 @@ export function LinksScreen({ data, slug }: LinksScreenProps) {
   );
 }
 
-/** Delete <title>?: its link stops working (AC-648); its bookings stay. The row leaves at once, back on a refusal. */
-function DeletePageDialog({
-  page,
-  onClose,
-  onDelete,
-}: {
+/** Props for the delete confirm. */
+interface DeletePageDialogProps {
+  /** The page to delete; undefined while the dialog is closed. */
   readonly page: BookingPageView | undefined;
   readonly onClose: () => void;
-  readonly onDelete: (page: BookingPageView) => void;
-}) {
-  // The last page stays while the Modal plays its exit.
+  /** Deletes it: settles once the server has it, rejects with why on a refusal (the card is back by then). */
+  readonly onDelete: (page: BookingPageView) => Promise<void>;
+}
+
+/**
+ * Delete <title>?: its link stops working (AC-648); its bookings stay. The card leaves at once, and the commit
+ * stays busy until the server answers; a refusal shows here, with the card back in the list.
+ */
+function DeletePageDialog({ page, ...rest }: DeletePageDialogProps) {
+  // The last page stays while the Modal plays its exit; each page mounts afresh.
   const [last, setLast] = useState(page);
   if (page !== undefined && page !== last) setLast(page);
   const shown = page ?? last;
-  if (shown === undefined) return null;
+  return shown === undefined ? null : (
+    <DeletePageConfirm key={shown.id} page={shown} isOpen={page !== undefined} {...rest} />
+  );
+}
+
+/** The open confirm for one page. */
+function DeletePageConfirm({
+  page,
+  isOpen,
+  onClose,
+  onDelete,
+}: Omit<DeletePageDialogProps, 'page'> & { readonly page: BookingPageView; readonly isOpen: boolean }) {
+  const [isBusy, setBusy] = useState(false);
+  const [failure, setFailure] = useState<string | undefined>(undefined);
+  const remove = () => {
+    if (isBusy) return;
+    setBusy(true);
+    setFailure(undefined);
+    onDelete(page).then(
+      () => {
+        setBusy(false);
+      },
+      (error: unknown) => {
+        setBusy(false);
+        setFailure(isDataError(error) && error.message !== '' ? error.message : strings.somethingWrong);
+      },
+    );
+  };
   return (
     <Modal
-      title={strings.deleteTitle(shown.title)}
+      title={strings.deleteTitle(page.title)}
       tone="danger"
-      isOpen={page !== undefined}
-      onOpenChange={(isOpen) => {
-        if (!isOpen) onClose();
+      isOpen={isOpen}
+      isBusy={isBusy}
+      onOpenChange={(open) => {
+        if (!open && !isBusy) onClose();
       }}
       actions={
         <>
-          <Button slot="close" kbd="ESC">
+          <Button slot="close" isDisabled={isBusy} kbd="ESC">
             {strings.cancel}
           </Button>
-          <Button
-            variant="danger-solid"
-            icon="trash"
-            onPress={() => {
-              onDelete(shown);
-            }}
-          >
-            {strings.deleteAction}
+          <Button variant="danger-solid" icon="trash" isPending={isBusy} onPress={remove}>
+            {isBusy ? strings.deleting : strings.deleteAction}
           </Button>
         </>
       }
     >
+      {failure !== undefined && (
+        <Callout tone="danger" isAnnounced>
+          {failure}
+        </Callout>
+      )}
       {strings.deleteText}
     </Modal>
   );
