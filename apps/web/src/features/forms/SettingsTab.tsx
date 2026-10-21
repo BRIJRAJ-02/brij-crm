@@ -23,11 +23,18 @@ import { useRouteContext } from '@tanstack/react-router';
 import { useState } from 'react';
 import { pageHeading } from '../navigation/focus.ts';
 import { sameDocument } from './draft.ts';
-import { formHref, questionHref } from './paths.ts';
+import { formHref } from './paths.ts';
 import { firstRefusal } from './refusals.ts';
 import { strings } from './strings.ts';
 
 const NOBODY = 'nobody';
+
+/**
+ * One form's Form tab with one question open and in view: the map of where answers go links each line here.
+ * Kept beside its one link rather than in paths.ts, which the routes load up front.
+ */
+const questionHref = (slug: string, formId: string, questionId: string) =>
+  `/w/${slug}/captures/forms/${formId}?question=${encodeURIComponent(questionId)}`;
 
 /** A web address without its scheme, for a summary ("acme.com/thanks"). */
 function shortUrl(url: string): string {
