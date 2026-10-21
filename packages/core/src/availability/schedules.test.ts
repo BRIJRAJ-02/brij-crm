@@ -112,10 +112,10 @@ const week = (ranges: [string, string][]): BookingAvailability['weekly'] => ({
 });
 
 describe('the migration (AC-973, AC-974)', () => {
-  /** The data move of migration 0052, as written: the statements that copy members' and pages' hours. */
+  /** The data move of migration 0057, as written: the statements that copy members' and pages' hours. */
   const dataMove = () => {
     const file = readFileSync(
-      fileURLToPath(new URL('../../../db/migrations/0052_availability_schedules.sql', import.meta.url)),
+      fileURLToPath(new URL('../../../db/migrations/0057_availability_schedules.sql', import.meta.url)),
       'utf8',
     );
     return file

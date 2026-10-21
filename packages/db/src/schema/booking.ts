@@ -71,7 +71,7 @@ export const bookingPages = pgTable(
     hoursMode: text('hours_mode').notNull().default('own'),
     /**
      * The schedule the page books by (spec 0035, AC-965): null follows the owner's default. Its foreign key
-     * (`booking_pages_schedule`, on delete set null on this column only) is hand written in migration 0052:
+     * (`booking_pages_schedule`, on delete set null on this column only) is hand written in migration 0057:
      * drizzle can't say `set null (schedule_id)`, and a plain set null would null `workspace_id` too.
      */
     scheduleId: uuid('schedule_id'),
