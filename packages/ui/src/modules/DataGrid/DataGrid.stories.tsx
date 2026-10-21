@@ -1160,6 +1160,71 @@ export const EditInPopover: Story = {
 };
 
 /**
+ * The phone's country code inside the cell's popover: a click opens its list over the popover and both stay open
+ * (nothing commits), typing marks the best match ("ind", India), and the field in the popover draws its focus
+ * with its accent edge alone, the cell keeping its ring.
+ */
+export const EditPhoneCodeInPopover: Story = {
+  render: () => <EveryTypeGrid />,
+  play: async ({ userEvent }) => {
+    await editColumn(userEvent, 'phone_many');
+    const dialog = await openDialog();
+    await waitFor(() => expect(document.activeElement).toHaveAttribute('type', 'tel'));
+    await userEvent.keyboard('20155');
+    await userEvent.click(within(dialog).getByRole('button', { name: /Country code/ }));
+    await waitFor(() => expect(document.activeElement).toHaveAttribute('aria-label', 'Search country or code'));
+    await userEvent.keyboard('ind');
+    await waitFor(() => expect(document.querySelector('[role="option"][data-focused]')).toHaveTextContent('India'));
+    // The search names its marked option once React Aria has caught up with the typing.
+    await waitFor(() =>
+      expect(
+        document.getElementById(document.activeElement?.getAttribute('aria-activedescendant') ?? ''),
+      ).not.toBeNull(),
+    );
+    // The cell's editor is still open, its typed number kept.
+    await expect(dialog.isConnected).toBe(true);
+    await expect(within(dialog).getByRole<HTMLInputElement>('textbox').value.replace(/\D/g, '')).toBe('20155');
+  },
+};
+
+/**
+ * Choosing a code in the cell's popover puts focus back in the number with the digits kept; Esc closes the
+ * list first, then the editor, and nothing was committed on the way.
+ */
+export const EditPhoneCodeKeys: Story = {
+  parameters: { crm: { screenshot: false } },
+  render: () => <EveryTypeGrid />,
+  play: async ({ canvasElement, userEvent }) => {
+    await editColumn(userEvent, 'phone_many');
+    const dialog = await openDialog();
+    await waitFor(() => expect(document.activeElement).toHaveAttribute('type', 'tel'));
+    // The cell's place in the row: after the checkbox column.
+    const at = everyTypeColumns().findIndex((each) => each.attribute.id === 'phone_many') + 1;
+    const before = cell(canvasElement, 0, at)?.textContent;
+    await userEvent.keyboard('20155');
+    // By the keyboard: back to the code, open its list, choose by typing.
+    await userEvent.keyboard('{Shift>}{Tab}{/Shift}');
+    await waitFor(() => expect(document.activeElement).toHaveAccessibleName(/Country code/));
+    await userEvent.keyboard('{ArrowDown}');
+    await waitFor(() => expect(document.activeElement).toHaveAttribute('aria-label', 'Search country or code'));
+    await userEvent.keyboard('ind{Enter}');
+    const number = within(dialog).getByRole<HTMLInputElement>('textbox');
+    await waitFor(() => expect(number).toHaveFocus());
+    await expect(within(dialog).getByRole('button', { name: /Country code/ })).toHaveTextContent('+91');
+    await expect(number.value.replace(/\D/g, '')).toBe('20155');
+    // Esc: the list first (the editor stays), then the editor.
+    await userEvent.click(within(dialog).getByRole('button', { name: /Country code/ }));
+    await waitFor(() => expect(document.querySelector('[role="listbox"]')).not.toBeNull());
+    await userEvent.keyboard('{Escape}');
+    await waitFor(() => expect(document.querySelector('[role="listbox"]')).toBeNull());
+    await expect(dialog.isConnected).toBe(true);
+    await userEvent.keyboard('{Escape}');
+    await waitFor(() => expect(document.querySelector('[role="dialog"]')).toBeNull());
+    await expect(cell(canvasElement, 0, at)?.textContent).toBe(before);
+  },
+};
+
+/**
  * A status (or a short select) is its list, open at once from the cell: the
  * cell is the trigger with no box of its own and keeps its ring, and the list
  * opens at least a menu wide, so no option is cut to the cell's width.
