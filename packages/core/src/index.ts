@@ -84,6 +84,17 @@ export {
   type FreshnessDeps,
   type StepUpDeps,
 } from './account/step-up.ts';
+// Deleting your own account (spec 0033, AC-902 to AC-907).
+export {
+  accountDeletionCheck,
+  deletedEmail,
+  deleteMyAccount,
+  DELETED_USER_NAME,
+  EMAIL_MISMATCH,
+  type AccountDeletionDeps,
+  type CalendarGrant,
+  type DeletingCaller,
+} from './account/deletion.ts';
 export { milestoneHook, type ReachedMilestone } from './milestones/milestones.ts';
 export { type AuditSource } from './members/audit.ts';
 export {

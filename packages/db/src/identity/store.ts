@@ -166,6 +166,15 @@ export interface IdentityStore {
    * each as a `trust-device-*` verification row whose value is the user id.
    */
   forgetTrustedDevices(userId: string): Promise<void>;
+  /**
+   * Deletes the user and everything of theirs in `auth` (spec 0033, AC-905):
+   * the user row (its sessions, Google link, two factor, preferences,
+   * directory rows and security history go with it, by their foreign keys),
+   * then the rows no key reaches: remembered devices, held back sign ins,
+   * step up codes, sign in codes for the address, and the address's rate
+   * limit rows. One transaction. True when there was a user to delete.
+   */
+  deleteUser(userId: string): Promise<boolean>;
   /** Drops the sign in event of a session that was held back for its second step (it never came to be). */
   forgetSignInEvent(userId: string, sessionId: string): Promise<void>;
   /**
@@ -379,6 +388,24 @@ export function createIdentityStore(options: DatabaseOptions): IdentityStore {
       await db
         .delete(verification)
         .where(and(eq(verification.value, userId), sql`${verification.identifier} like 'trust-device-%'`));
+    },
+
+    async deleteUser(userId) {
+      if (!UUID.test(userId)) return false;
+      return db.transaction(async (tx) => {
+        const [found] = await tx.select({ email: user.email }).from(user).where(eq(user.id, userId)).for('update');
+        if (found === undefined) return false;
+        const email = found.email;
+        await tx.delete(verification).where(
+          sql`${verification.value} = ${userId}
+              or ${verification.identifier} in (select 'step-up-' || ${session.id}::text from ${session} where ${session.userId} = ${userId})
+              or right(${verification.identifier}, length(${email}) + 5) = '-otp-' || ${email}`,
+        );
+        // Exact prefixes, never LIKE: an address may hold `_`, which LIKE reads as any character.
+        await tx.delete(rateLimit).where(sql`starts_with(${rateLimit.key}, 'email:' || ${email} || '|')`);
+        await tx.delete(user).where(eq(user.id, userId));
+        return true;
+      });
     },
 
     async forgetSignInEvent(userId, sessionId) {

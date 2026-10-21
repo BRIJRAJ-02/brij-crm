@@ -9,6 +9,7 @@ import { useEffect, useRef, useState } from 'react';
 import { currentFirst, deviceName, devicePlace } from './security-lines.ts';
 import { strings } from './security-strings.ts';
 import { SettingsPage } from './SettingsPage.tsx';
+import { DeleteAccountSection } from './DeleteAccountSection.tsx';
 import { useStepUp } from './StepUp.tsx';
 import { TwoFactorSection } from './TwoFactorSection.tsx';
 
@@ -187,6 +188,7 @@ export function SecurityScreen({ data, toasts }: SecurityScreenProps) {
     >
       <TwoFactorSection data={data} security={security} toasts={toasts} onFocusLost={focusTitle} />
       {body}
+      <DeleteAccountSection data={data} security={security} />
       <Modal
         title={one === undefined ? strings.signOutOthersTitle : strings.signOutTitle(deviceName(one))}
         tone="danger"

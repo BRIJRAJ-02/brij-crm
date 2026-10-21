@@ -1,6 +1,9 @@
 import { randomInt } from 'node:crypto';
 import {
+  accountDeletionCheck,
   accountSecurity,
+  deleteMyAccount,
+  type AccountDeletionDeps,
   listMySessions,
   revokeMyOtherSessions,
   revokeMySession,
@@ -9,10 +12,11 @@ import {
   type SessionCaller,
   type StepUpDeps,
 } from '@crm/core';
-import { renderSignInCode } from '@crm/emails';
+import { renderAccountDeleted, renderSignInCode } from '@crm/emails';
+import { backgroundHooks } from '../../hooks.ts';
 import { apiError } from '../../errors.ts';
 import { log } from '../../log.ts';
-import { authed, type RequestContext, type SessionContext } from '../../orpc.ts';
+import { authed, memberDoor, type RequestContext, type SessionContext } from '../../orpc.ts';
 
 /** Step up checks per person (AC-882's limits, for a step up too): 5 in 5 minutes, 15 in an hour. */
 export const STEP_UP_CHECKS = { window: 5 * 60, max: 5 } as const;
@@ -46,6 +50,37 @@ function stepUpDeps(context: RequestContext): StepUpDeps {
     },
     mintCode: () => String(randomInt(0, 1_000_000)).padStart(6, '0'),
     hashCode: (code) => context.auth.hashStepUpCode(code),
+  };
+}
+
+/** What deleting the account needs, from the request (spec 0033, AC-902 to AC-907). */
+function deletionDeps(context: RequestContext): AccountDeletionDeps {
+  const calendar = context.calendar;
+  return {
+    // Each workspace is entered through the door in packages/core, opened as the member base opens it.
+    ...memberDoor(context),
+    hooks: backgroundHooks,
+    signedOut: context.signedOut,
+    ...(calendar === undefined
+      ? {}
+      : {
+          calendar: {
+            tokenKey: calendar.tokenKey,
+            // Google's revoke endpoint (the same OAuth client) takes either token and ends the whole grant; the
+            // refresh token outlives the other. Best effort, never throws.
+            revoke: (grant) =>
+              grant.provider === 'google' ? calendar.guest.revoke(grant.tokens.refreshToken) : Promise.resolve(),
+          },
+        }),
+    sendFarewell: async (email) => {
+      try {
+        const message = await renderAccountDeleted(new Date(), { appOrigin: new URL(context.appUrl).origin });
+        await context.mailer.send({ to: email, ...message });
+      } catch (error) {
+        // The account is gone either way; the log names neither the address nor the person.
+        log.error('Account deleted email not sent', { error: error instanceof Error ? error.name : typeof error });
+      }
+    },
   };
 }
 
@@ -96,6 +131,21 @@ export const accountRouter = authed.account.router({
         'Too many tries. Wait 15 minutes, then try again.',
       );
       return verifyStepUp(stepUpDeps(context), callerOf(context), input);
+    }),
+  },
+  deletion: {
+    check: authed.account.deletion.check.handler(({ context }) =>
+      accountDeletionCheck(deletionDeps(context), callerOf(context)),
+    ),
+    confirm: authed.account.deletion.confirm.handler(async ({ context, input }) => {
+      const deleted = await deleteMyAccount(
+        deletionDeps(context),
+        { ...callerOf(context), email: context.user.email },
+        input,
+      );
+      // Each workspace's removal stored its members event: the relay sends them.
+      context.wakeRelay();
+      return deleted;
     }),
   },
 });

@@ -137,6 +137,21 @@ export const AccountSecurity = z.object({
 /** Account › Security's state. */
 export type AccountSecurity = z.infer<typeof AccountSecurity>;
 
+/** A workspace where the person is the last active owner: deleting the account waits until it has another (AC-902). */
+export const DeletionBlocker = z.object({ slug: z.string(), name: z.string() });
+/** A workspace blocking account deletion. */
+export type DeletionBlocker = z.infer<typeof DeletionBlocker>;
+
+/** What stands in the way of deleting the account: the workspaces it is the last owner of. */
+export const AccountDeletionCheck = z.object({ blockers: z.array(DeletionBlocker) });
+/** What stands in the way of deleting the account. */
+export type AccountDeletionCheck = z.infer<typeof AccountDeletionCheck>;
+
+/** Deleting the account: its email typed in full, to confirm (AC-903). */
+export const DeleteAccountInput = z.object({ email: z.string().trim().min(1).max(320) });
+/** Deleting the account. */
+export type DeleteAccountInput = z.infer<typeof DeleteAccountInput>;
+
 /**
  * The account procedures (spec 0033). Each needs a session and no workspace
  * (the bootstrap list); each reaches only the caller's own sessions.
@@ -161,5 +176,15 @@ export const accountContract = {
   stepUp: {
     start: oc.input(StepUpStartInput).output(z.object({ sent: z.literal(true) })),
     verify: oc.input(StepUpVerifyInput).output(SessionFreshness),
+  },
+  /**
+   * Deleting the account (AC-902 to AC-907): `check` names the workspaces it
+   * is the last owner of; `confirm` deletes it after a fresh step up and the
+   * email typed in full (403 STEP_UP_REQUIRED or SECOND_FACTOR_REQUIRED,
+   * 409 LAST_OWNER, 400 INPUT_INVALID on `email`).
+   */
+  deletion: {
+    check: oc.output(AccountDeletionCheck),
+    confirm: oc.input(DeleteAccountInput).output(z.object({ deleted: z.literal(true) })),
   },
 };

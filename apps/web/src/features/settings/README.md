@@ -18,6 +18,8 @@ Built from library parts only: SettingsLayout (through `SettingsPage`), Settings
 
 Two factor sign in sits above the devices (`TwoFactorSection.tsx`, milestone 2): the authenticator app's row (Set up, or Turn off in a danger Modal) and, while on, Backup codes (Make new codes). Set up opens on the QR code (the `QrCode` atom) and the key as text, takes the app's first code, then shows the 10 backup codes once in the code face with Copy and Download, Done only after "I've saved these". Each change, and each device sign out, asks for a step up inline in its own dialog when this session isn't fresh (`StepUp.tsx`: the app's code or a backup code when two factor is on, else an emailed code; turning off and new codes need the second factor itself).
 
+At the foot, the danger zone (`DeleteAccountSection.tsx`, AC-902 to AC-907): Delete account opens a danger Modal that first lists the workspaces you are the last owner of (each linking to its Members settings, and nothing can be deleted meanwhile); otherwise it says what happens, reminds you to export first, asks for a step up (the second factor itself when two factor is on) and your email typed in full, then deletes and goes to sign in.
+
 Built from library parts only: Table (Device with a Badge, Location, Last active through RelativeTime, a Sign out per row), Show more under it, InfoTip and a danger Button as the page's action, Modal, Callout and EmptyState. The device lines are plain functions in `security-lines.ts`; copy in `security-strings.ts`.
 
 ## Settings, Objects (`/w/$slug/settings/objects`, ObjectsScreen)

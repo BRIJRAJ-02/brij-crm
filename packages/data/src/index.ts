@@ -266,7 +266,7 @@ export {
 } from './account/security.ts';
 export type { SecondFactorKind, SignInOutcome, TwoFactorSetup } from './auth/auth.ts';
 export type { StepUpMethod } from '@crm/contracts';
-export type { AccountSession } from '@crm/contracts';
+export type { AccountSession, DeletionBlocker } from '@crm/contracts';
 export { STEP_UP_MINUTES } from '@crm/contracts/account-limits';
 export type { CalendarSettingsHeld, CalendarSettingsState, CalendarState, CalendarView } from './calendar/store.ts';
 export type { CaptureListState, CaptureListView } from './captures/list.ts';
@@ -3266,6 +3266,19 @@ export function createDataLayer({
        * first code (on), turn off, and new backup codes. The state and the
        * device list are read again after each. Refusals throw a DataError.
        */
+      /**
+       * Deleting the account (AC-902 to AC-907): `check` names the workspaces
+       * it is the last owner of; `confirm` deletes it (after a step up and the
+       * email typed in full), then forgets everything cached for the person.
+       * Refusals throw a DataError.
+       */
+      deletion: {
+        check: () => call((options) => api.account.deletion.check(undefined, options)),
+        confirm: async (email: string): Promise<void> => {
+          await call((options) => api.account.deletion.confirm({ email }, options));
+          reset();
+        },
+      },
       twoFactor: {
         start: () => auth.twoFactor.start(),
         confirm: async (code: string): Promise<void> => {

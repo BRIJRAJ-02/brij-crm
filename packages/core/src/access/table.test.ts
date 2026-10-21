@@ -46,6 +46,10 @@ const NO_SCOPE: ReadonlySet<string> = new Set([
   'sessionFreshness',
   'startStepUp',
   'verifyStepUp',
+  // Deleting your own account (spec 0033): the person's own workspaces, each entered through the door.
+  'accountDeletionCheck',
+  'deleteMyAccount',
+  'deletedEmail',
   'createWorkspace',
   'createUserWorkspace',
   // Pure access functions.

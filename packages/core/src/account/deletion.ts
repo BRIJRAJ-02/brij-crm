@@ -1,0 +1,191 @@
+// Deleting your own account (spec 0033, AC-902 to AC-907). Refused while the
+// person is the last active owner of any workspace. Otherwise, after a fresh
+// step up and the email typed in full: in each workspace, in its own
+// transaction, the member is removed (`removeMember`: their private views and
+// calendar connections go with it), their member row keeps its id but no
+// longer names them, and one `account.deleted` audit row is written; records
+// they made stay, credited to "Deleted user". Then calendar grants are revoked
+// with the provider (best effort), the `auth` rows go in one transaction, live
+// connections are cut, and a last email goes to the old address. Every step
+// can run again: a workspace already left is skipped.
+import type { AccountDeletionCheck, DeleteAccountInput, DeletionBlocker } from '@crm/contracts';
+import { schema, type Database, type IdentityStore } from '@crm/db';
+import { and, eq, sql } from 'drizzle-orm';
+import { enterWorkspace, type DoorDeps } from '../access/door.ts';
+import type { EngineScope } from '../access/mint.ts';
+import { inWorkspace } from '../access/run.ts';
+import type { CalendarTokens } from '../calendar/provider.ts';
+import { openTokens, type TokenKey } from '../calendar/tokens.ts';
+import { inputInvalid, refuse } from '../engine/refusals.ts';
+import type { AfterWrite } from '../engine/write.ts';
+import { writeAudit } from '../members/audit.ts';
+import { listMembers, removeMember } from '../members/members.ts';
+import type { SessionCaller } from './sessions.ts';
+import { requireFresh } from './step-up.ts';
+
+const { members } = schema;
+
+/** The name a deleted person's member row keeps, so their records still say who made them. */
+export const DELETED_USER_NAME = 'Deleted user';
+
+/** What a deleted person's member row holds in place of their address: a reserved domain that names no one. */
+export const deletedEmail = (memberId: string): string => `deleted-${memberId}@deleted.invalid`;
+
+/** What the email typed to confirm answers when it isn't the account's. */
+export const EMAIL_MISMATCH = 'Type your account’s email exactly to confirm.';
+
+/** What deleting answers while the person is the last owner somewhere. */
+export const lastOwnerMessage = (names: readonly string[]): string =>
+  `You’re the last owner of ${names.join(', ')}. Make someone else an owner, or delete the workspace, first.`;
+
+/** A calendar grant to hand back to its provider once the person has left. */
+export interface CalendarGrant {
+  readonly provider: string;
+  readonly tokens: CalendarTokens;
+}
+
+/** What deleting an account needs. */
+export interface AccountDeletionDeps {
+  readonly db: Database;
+  readonly identity: Pick<
+    IdentityStore,
+    'findWorkspace' | 'workspacesOf' | 'sessionVerification' | 'twoFactorState' | 'deleteUser'
+  >;
+  readonly rules: DoorDeps['rules'];
+  /** The hooks each workspace's removal runs in its transaction (the outbox), as a background write's. */
+  readonly hooks: () => readonly AfterWrite[];
+  /** Cuts every live connection of the user (4501). Never throws. */
+  readonly signedOut: (userId: string) => Promise<void>;
+  /** Hands calendar grants back to their providers, best effort: absent where calendar sync is off. */
+  readonly calendar?: {
+    readonly tokenKey: TokenKey;
+    readonly revoke: (grant: CalendarGrant) => Promise<void>;
+  };
+  /** The last email, to the old address. Never throws. */
+  readonly sendFarewell: (email: string) => Promise<void>;
+  readonly now?: () => number;
+}
+
+/** The person deleting their account: their session, and their address as the session says it. */
+export interface DeletingCaller extends SessionCaller {
+  readonly email: string;
+}
+
+/** The person's member scope in each workspace they are still in. */
+async function myWorkspaces(
+  deps: AccountDeletionDeps,
+  userId: string,
+): Promise<readonly { readonly scope: EngineScope; readonly slug: string; readonly name: string }[]> {
+  const listed = await deps.identity.workspacesOf(userId);
+  const entered = await Promise.all(
+    listed.map(async (workspace) => {
+      try {
+        const scope = await enterWorkspace(
+          { db: deps.db, identity: deps.identity, rules: deps.rules },
+          { userId, slug: workspace.slug },
+        );
+        return { scope, slug: workspace.slug, name: workspace.name };
+      } catch {
+        // Already left (a run that stopped part way), or the workspace is gone: nothing to do there.
+        return undefined;
+      }
+    }),
+  );
+  return entered.filter((each) => each !== undefined);
+}
+
+/** The workspaces where the person is the only active owner. */
+async function blockersOf(entered: Awaited<ReturnType<typeof myWorkspaces>>): Promise<readonly DeletionBlocker[]> {
+  const blockers: DeletionBlocker[] = [];
+  for (const { scope, slug, name } of entered) {
+    const people = await listMembers(scope);
+    const me = people.find((each) => each.id === scope.actor.id);
+    const owners = people.filter((each) => each.role === 'owner');
+    if (me?.role === 'owner' && owners.length === 1) blockers.push({ slug, name });
+  }
+  return blockers;
+}
+
+/** The workspaces the person is the last owner of (AC-902): deleting waits until each has another owner. */
+export async function accountDeletionCheck(
+  deps: AccountDeletionDeps,
+  caller: SessionCaller,
+): Promise<AccountDeletionCheck> {
+  return { blockers: [...(await blockersOf(await myWorkspaces(deps, caller.userId)))] };
+}
+
+/** The member's calendar grants, read before the removal deletes them, so they can be handed back after. */
+async function grantsOf(deps: AccountDeletionDeps, scope: EngineScope): Promise<readonly CalendarGrant[]> {
+  const calendar = deps.calendar;
+  if (calendar === undefined || scope.actor.type !== 'member' || scope.actor.id === null) return [];
+  const memberId = scope.actor.id;
+  const rows = await inWorkspace(scope, (tx) =>
+    tx.execute<{ provider: string; account_email: string; tokens: Uint8Array }>(sql`
+      select provider, account_email, tokens from calendar_connections where member_id = ${memberId}::uuid
+    `),
+  );
+  return rows.rows.flatMap((row) => {
+    try {
+      const tokens = openTokens(calendar.tokenKey, row.tokens, {
+        workspaceId: scope.workspaceId,
+        memberId,
+        provider: row.provider,
+        accountEmail: row.account_email,
+      });
+      return [{ provider: row.provider, tokens }];
+    } catch {
+      // Tokens this key can't open can't be handed back either; the connection still goes.
+      return [];
+    }
+  });
+}
+
+/**
+ * Deletes the caller's account (AC-903 to AC-907). Needs a fresh step up
+ * (with two factor on, by the second factor) and the account's email typed
+ * in full; refused 409 LAST_OWNER while the person is the last owner of any
+ * workspace.
+ */
+export async function deleteMyAccount(
+  deps: AccountDeletionDeps,
+  caller: DeletingCaller,
+  input: DeleteAccountInput,
+): Promise<{ readonly deleted: true }> {
+  const state = await deps.identity.twoFactorState(caller.userId);
+  await requireFresh(deps, caller, { secondFactor: state.enabled });
+  if (input.email.trim().toLowerCase() !== caller.email.toLowerCase()) throw inputInvalid('email', EMAIL_MISMATCH);
+
+  const entered = await myWorkspaces(deps, caller.userId);
+  const blockers = await blockersOf(entered);
+  if (blockers.length > 0) throw refuse('LAST_OWNER', lastOwnerMessage(blockers.map((each) => each.name)));
+
+  const grants: CalendarGrant[] = [];
+  for (const { scope } of entered) {
+    if (scope.actor.type !== 'member' || scope.actor.id === null) continue;
+    const memberId = scope.actor.id;
+    grants.push(...(await grantsOf(deps, scope)));
+    // In the removal's own transaction: the row stops naming them, and the audit log says why they left.
+    const forget: AfterWrite = async (_change, tx) => {
+      await tx
+        .update(members)
+        .set({ name: DELETED_USER_NAME, email: deletedEmail(memberId), userId: null })
+        .where(and(eq(members.workspaceId, scope.workspaceId), eq(members.id, memberId)));
+      await writeAudit(tx, scope.workspaceId, scope.actor, {
+        action: 'account.deleted',
+        targetType: 'member',
+        targetId: memberId,
+      });
+    };
+    await removeMember(scope, { memberId }, [forget, ...deps.hooks()]);
+  }
+
+  // Best effort: a provider that can't be reached keeps a grant to an account that no longer exists here.
+  if (deps.calendar !== undefined) {
+    const calendar = deps.calendar;
+    await Promise.all(grants.map((grant) => calendar.revoke(grant).catch(() => undefined)));
+  }
+  await deps.identity.deleteUser(caller.userId);
+  await deps.signedOut(caller.userId);
+  await deps.sendFarewell(caller.email);
+  return { deleted: true };
+}

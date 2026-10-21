@@ -39,6 +39,8 @@ export const AUDIT_ACTIONS = [
   'invitation.resent',
   'invitation.revoked',
   'invitation.accepted',
+  // Spec 0033 (AC-904): a person deleted their own account and left the workspace with it.
+  'account.deleted',
 ] as const;
 /** One action the audit log records. */
 export const AuditAction = z.enum(AUDIT_ACTIONS);

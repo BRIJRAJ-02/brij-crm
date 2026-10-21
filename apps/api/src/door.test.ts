@@ -39,6 +39,8 @@ const BOOTSTRAP: ReadonlySet<string> = new Set([
   'account.security.get',
   'account.stepUp.start',
   'account.stepUp.verify',
+  'account.deletion.check',
+  'account.deletion.confirm',
 ]);
 
 function isBootstrap(path: string): boolean {

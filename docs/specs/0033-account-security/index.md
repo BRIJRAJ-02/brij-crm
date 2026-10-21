@@ -195,6 +195,22 @@ No new secrets: `BETTER_AUTH_SECRET` encrypts TOTP secrets; `APP_URL` gives the 
 - Alerts: a new browser signs in and one email goes out; the same browser again sends none, verifies **AC-897**.
 - Routes: the served Better Auth route set equals the pinned list, verifies **AC-900**.
 
+## Account deletion (added 21 October 2026, the owner)
+
+A person can delete their own account from Account › Security. Lean on purpose: it reuses the step up and the members lane's removal.
+
+**Acceptance criteria**:
+- **AC-902**: A danger zone at the foot of Account › Security has "Delete account". It opens a danger Modal that first lists every workspace where the person is the last active owner, each linked to its Members settings to hand ownership on (or delete the workspace); while any is listed, nothing can be deleted (409 `LAST_OWNER`).
+- **AC-903**: Confirming needs a fresh step up (AC-896; with two factor on, the second factor itself) and the account's email typed in full. The dialog reminds the person to export what they need from each workspace first.
+- **AC-904**: Deleting, per workspace in that workspace's own transaction: the member is removed through `removeMember` (their private views and calendar connections go with them), their member row keeps its id but its name becomes "Deleted user" and its email a placeholder that names no one, and one `account.deleted` audit row is written. Records, notes and tasks they made stay, credited to "Deleted user".
+- **AC-905**: Then, outside any workspace: calendar grants are revoked with the provider (best effort), and the `auth.user` row is deleted, which takes their sessions, Google link, two factor, passkeys, preferences, directory rows and security history with it; remembered devices, step up codes, sign in codes and the per email rate limit rows go too. Their live connections are cut (4501).
+- **AC-906**: A final email goes to the old address, saying the account was deleted and when. It holds no link that changes anything.
+- **AC-907**: Every step can run again: a failure part way leaves the person signed in, and confirming again finishes what is left (a workspace already left is skipped). Tests show a stale session refused, the last owner refusal, and that no personal data of theirs remains in `auth` or in a member row.
+
+**Decision for the owner**: no grace window. Deletion is immediate once confirmed, because the step up and the typed email already make it deliberate, and a pending state would keep personal data and a half signed in account around. If the owner prefers a 7 day window (sign in again to cancel), it is a later change: a `deletion_requested_at` on the user and the daily cleanup finishing it.
+
+**API**: `account.deletion.check` answers the blocking workspaces (`{ blockers: [{ slug, name }] }`); `account.deletion.confirm({ email })` deletes (403 `STEP_UP_REQUIRED` or `SECOND_FACTOR_REQUIRED`, 409 `LAST_OWNER`, 400 when the email doesn't match). Both need a session and no workspace.
+
 ## Build plan
 
 Tracer Bullet: each milestone ends with something you can use in production.
@@ -217,6 +233,9 @@ Tracer Bullet: each milestone ends with something you can use in production.
 9. `security.manage` in the catalog (owner only, pinned table updated); migration `workspace_security`; the door check and `access.mine` flag; Workspace › Security; the required page; the Members column, satisfies **AC-893** to **AC-895**, **AC-899**
 10. `auth.known_device`, the alert job and email, satisfies **AC-897**
 11. Recent activity list; the daily cleanup deletes year old events; ASVS checklist in `verify.md`; `/check verify`, satisfies **AC-898**, all
+
+**Account deletion** (after milestone 2, it needs the step up)
+12. `account.deletion.check` and `.confirm`, the `account.deleted` audit action, the farewell email, the danger zone and its Modal, satisfies **AC-902** to **AC-907**
 
 ## Consequences
 
