@@ -2,13 +2,41 @@ import appleCalendar from '../../assets/apple-calendar.svg';
 import googleCalendar from '../../assets/google-calendar.svg';
 import googleG from '../../assets/google-g.svg';
 import outlook from '../../assets/outlook.svg';
+import angellistDark from '../../assets/social-angellist-dark.svg';
+import angellistLight from '../../assets/social-angellist-light.svg';
+import facebook from '../../assets/social-facebook.svg';
+import githubDark from '../../assets/social-github-dark.svg';
+import githubLight from '../../assets/social-github-light.svg';
+import instagram from '../../assets/social-instagram.svg';
+import linkedin from '../../assets/social-linkedin.svg';
+import threadsDark from '../../assets/social-threads-dark.svg';
+import threadsLight from '../../assets/social-threads-light.svg';
+import tiktokDark from '../../assets/social-tiktok-dark.svg';
+import tiktokLight from '../../assets/social-tiktok-light.svg';
+import xDark from '../../assets/social-x-dark.svg';
+import xLight from '../../assets/social-x-light.svg';
+import youtube from '../../assets/social-youtube.svg';
 import timefixDark from '../../assets/timefix-mark-dark.svg';
 import timefixLight from '../../assets/timefix-mark-light.svg';
 import styles from './ProviderMark.module.css';
 import { strings } from './strings.ts';
 
-/** The brands a mark is drawn for: Google sign in, the calendars, and Timefix itself. */
-export type ProviderName = 'google' | 'google-calendar' | 'outlook' | 'apple-calendar' | 'timefix';
+/** The brands a mark is drawn for: Google sign in, the calendars, Timefix itself, and the social networks a profile link goes to. */
+export type ProviderName =
+  | 'google'
+  | 'google-calendar'
+  | 'outlook'
+  | 'apple-calendar'
+  | 'timefix'
+  | 'linkedin'
+  | 'x'
+  | 'instagram'
+  | 'github'
+  | 'facebook'
+  | 'youtube'
+  | 'angellist'
+  | 'tiktok'
+  | 'threads';
 
 /**
  * `sm` (14px) beside a 26px button's label, `md` (16px, the default) beside a
@@ -29,19 +57,29 @@ export interface ProviderMarkProps {
   readonly isLabelled?: boolean;
 }
 
-/** One image per brand; Timefix's has a light and a dark one, shown by theme like the wordmark. */
+/** One image per brand; a black mark (Timefix, X, GitHub, AngelList, TikTok, Threads) has a light and a dark one, shown by theme like the wordmark. */
 const ART: Readonly<Record<ProviderName, string | { readonly light: string; readonly dark: string }>> = {
   google: googleG,
   'google-calendar': googleCalendar,
   outlook,
   'apple-calendar': appleCalendar,
   timefix: { light: timefixLight, dark: timefixDark },
+  linkedin,
+  x: { light: xLight, dark: xDark },
+  instagram,
+  github: { light: githubLight, dark: githubDark },
+  facebook,
+  youtube,
+  angellist: { light: angellistLight, dark: angellistDark },
+  tiktok: { light: tiktokLight, dark: tiktokDark },
+  threads: { light: threadsLight, dark: threadsDark },
 };
 
 /**
  * A brand's own mark, as its owner publishes it: Google's G on Continue with
  * Google, the Google Calendar, Outlook and Apple Calendar marks on calendar
- * actions and synced events, and the Timefix mark on what Timefix made. The
+ * actions and synced events, the Timefix mark on what Timefix made, and a
+ * social network's mark on a profile link (LinkedIn, X, GitHub). The
  * one exception to the Lucide only rule (owner approval, 20 October 2026):
  * the artwork is never recoloured or redrawn, so it is an image, not an Icon.
  */

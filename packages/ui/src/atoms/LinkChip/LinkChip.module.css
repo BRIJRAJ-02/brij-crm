@@ -4,6 +4,7 @@
   .root {
     display: inline-flex;
     align-items: center;
+    gap: var(--space-4);
     max-inline-size: 100%;
     block-size: var(--size-chip);
     padding-inline: var(--space-6);

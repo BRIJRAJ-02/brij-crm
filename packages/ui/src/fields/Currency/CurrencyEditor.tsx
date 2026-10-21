@@ -7,7 +7,7 @@ import { Menu, MenuItem, MenuTrigger } from '../../molecules/Menu/Menu.tsx';
 import { useFormatSettings } from '../../provider/context.ts';
 import { TextLikeEditor } from '../TextLikeEditor.tsx';
 import type { EditorProps } from '../types.ts';
-import { toCommittable } from '../values.ts';
+import { isCompactSurface, toCommittable } from '../values.ts';
 import { strings } from './strings.ts';
 
 /** Currency: the amount in a Field, with its currency code as a searchable picker in front. */
@@ -56,6 +56,8 @@ export function CurrencyEditor(props: EditorProps<'currency'>) {
       inputMode="decimal"
       align="end"
       prefix={picker}
+      placeholder={example}
+      {...(isCompactSurface(props.surface) ? {} : { hint: strings.hint(example) })}
       check={(draft) => {
         if (draft.trim() === '') return toCommittable<'currency'>(props.attribute, null);
         const canonical = parseLocaleDecimal(draft, locale);

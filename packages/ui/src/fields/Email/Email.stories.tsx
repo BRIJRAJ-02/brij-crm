@@ -73,3 +73,16 @@ export const Invalid: Story = {
     await expect(args.onCommit).not.toHaveBeenCalled();
   },
 };
+
+/** Empty, in a form: an example address as the placeholder, so the shape to type is plain. */
+export const Guidance: Story = {
+  parameters: { crm: { screenshot: false } },
+  render: (args) => (
+    <Stage width="narrow">
+      <AttributeEditor {...args} />
+    </Stage>
+  ),
+  play: async ({ canvas }) => {
+    await expect(canvas.getByRole('textbox', { name: 'Email' })).toHaveAttribute('placeholder', 'ada@example.com');
+  },
+};

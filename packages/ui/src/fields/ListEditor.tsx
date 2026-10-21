@@ -5,6 +5,7 @@ import type { AttributeType } from '@crm/contracts/values';
 import { useState, type ReactNode } from 'react';
 import { Button } from '../atoms/Button/Button.tsx';
 import { LinkChip } from '../atoms/LinkChip/LinkChip.tsx';
+import type { ProviderName } from '../atoms/ProviderMark/ProviderMark.tsx';
 import { Field, type FieldProps } from '../molecules/Field/Field.tsx';
 import { strings as fieldStrings } from '../molecules/Field/strings.ts';
 import styles from './ListEditor.module.css';
@@ -24,6 +25,12 @@ export interface ListEditorProps<T extends AttributeType, V> extends EditorProps
   readonly inputMode?: FieldProps['inputMode'];
   readonly type?: FieldProps['type'];
   readonly hint?: string;
+  /** What the add field shows while the list is empty: the type's example, else "Set <Attribute>…". */
+  readonly placeholder?: string;
+  /** A brand mark to lead a value's chip: a social profile's network. */
+  readonly markOf?: (value: V) => ProviderName | undefined;
+  /** The whole value as a chip's tooltip, when its label is shorter (a link shown as its domain). */
+  readonly titleOf?: (value: V) => string | undefined;
   readonly prefix?: ReactNode;
   /**
    * Draws the add field itself, from the props the Field would take: a type
@@ -62,6 +69,9 @@ export function ListEditor<T extends AttributeType, V>({
   inputMode,
   type,
   hint,
+  placeholder,
+  markOf,
+  titleOf,
   prefix,
   renderAdd,
   autoOpen = false,
@@ -90,13 +100,21 @@ export function ListEditor<T extends AttributeType, V>({
     if (commitList([...values, one.value])) setDraft('');
   };
   const isCompact = isCompactSurface(surface);
+  const chipExtras = (value: V) => {
+    const mark = markOf?.(value);
+    const title = titleOf?.(value);
+    return { ...(mark === undefined ? {} : { mark }), ...(title === undefined ? {} : { title }) };
+  };
+  const emptyPlaceholder = placeholder ?? fieldStrings.setAttribute(attribute.name);
   return (
     <div className={styles.root}>
       {values.length > 0 && (
         <ul className={styles.list} aria-label={attribute.name}>
           {values.map((value, index) => (
             <li key={`${String(index)}-${labelOf(value)}`} className={styles.item}>
-              <LinkChip href={hrefOf(value)}>{labelOf(value)}</LinkChip>
+              <LinkChip href={hrefOf(value)} {...chipExtras(value)}>
+                {labelOf(value)}
+              </LinkChip>
               <Button
                 variant="ghost"
                 icon="x"
@@ -115,7 +133,7 @@ export function ListEditor<T extends AttributeType, V>({
           isLabelHidden={isCompact}
           size={isCompact ? 'sm' : 'md'}
           // The copy style's empty value, then an invitation to add one more.
-          placeholder={values.length === 0 ? fieldStrings.setAttribute(attribute.name) : strings.addAnotherPlaceholder}
+          placeholder={values.length === 0 ? emptyPlaceholder : strings.addAnotherPlaceholder}
           value={draft}
           onChange={(next) => {
             setDraft(next);
@@ -140,7 +158,7 @@ export function ListEditor<T extends AttributeType, V>({
           label: attribute.name,
           isLabelHidden: isCompact,
           size: isCompact ? 'sm' : 'md',
-          placeholder: values.length === 0 ? fieldStrings.setAttribute(attribute.name) : strings.addAnotherPlaceholder,
+          placeholder: values.length === 0 ? emptyPlaceholder : strings.addAnotherPlaceholder,
           value: draft,
           onChange: (next) => {
             setDraft(next);

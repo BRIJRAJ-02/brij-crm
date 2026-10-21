@@ -17,9 +17,11 @@ Ported from the artifact's LinkChip card. It is the one display for the email, p
 - A long value is cut with an ellipsis; the cell or panel shows the full text in a tooltip.
 - `isFlat` drops the edge and the fill: the link's text alone, on the chip's line. The field set uses it on a card (a board card, a line of the timeline). Why a variant: in the timeline a cleared phone drew as a big blue chip going to the empty mark, heavier than the words around it (the owner, 21 October 2026); RecordChip is already flat there.
 
+- `mark` puts a brand's mark (ProviderMark, `sm`) before the words: the url field passes a social profile's network, so a LinkedIn link reads as the LinkedIn mark and the handle. Why a variant and not a new chip: it is the same link chip, colour, focus and size, with one more thing at its start; the mark is labelled, so the link's name says the network. `title` carries the whole link as a tooltip when the words are only its domain or handle.
+
 ## States
 
-Hover underlines it; focus shows the ring. A refused link is plain; a flat one is its text alone.
+Hover underlines it; focus shows the ring. A refused link is plain; a flat one is its text alone. With a mark, the mark leads in every state.
 
 ## Keyboard
 

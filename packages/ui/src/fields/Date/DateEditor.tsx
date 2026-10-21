@@ -2,6 +2,7 @@ import { useRef, useState } from 'react';
 import { DatePicker } from '../../molecules/DatePicker/DatePicker.tsx';
 import type { EditorProps } from '../types.ts';
 import { isCompactSurface, toCommittable } from '../values.ts';
+import { strings } from './strings.ts';
 
 /**
  * Date: the DatePicker, typed in the language's order or picked, with quick
@@ -39,6 +40,7 @@ export function DateEditor({ attribute, value, surface, onCommit, error }: Edito
       isLabelHidden={isCompact}
       size={isCompact ? 'sm' : 'md'}
       isRequired={attribute.isRequired}
+      {...(isCompact ? {} : { hint: strings.hint })}
       value={draft}
       {...(shown === undefined ? {} : { error: shown })}
       onChange={setDraft}

@@ -2,8 +2,9 @@ import { DomainValue } from '@crm/contracts/values';
 import { ListEditor } from '../ListEditor.tsx';
 import { TextLikeEditor } from '../TextLikeEditor.tsx';
 import type { EditorProps } from '../types.ts';
-import { asList, toCommittable } from '../values.ts';
+import { asList, isCompactSurface, toCommittable } from '../values.ts';
 import { domainHref } from './href.ts';
+import { strings } from './strings.ts';
 
 /** The name as the browser reads it (international names as `xn--`), or as typed when it isn't one. */
 function hostnameOf(name: string): string {
@@ -26,9 +27,7 @@ export function checkDomain(
       .replace(/^[a-z][a-z\d+.-]*:\/\//i, '')
       .split(/[/?#]/)[0] ?? '';
   const parsed = DomainValue.safeParse(hostnameOf(name));
-  return parsed.success
-    ? { ok: true, value: parsed.data }
-    : { ok: false, message: parsed.error.issues[0]?.message ?? 'Enter a domain, such as example.com.' };
+  return parsed.success ? { ok: true, value: parsed.data } : { ok: false, message: strings.invalid };
 }
 
 /** Domain: a Field checked on blur; several values are removable chips with a field to add one. */
@@ -43,6 +42,8 @@ export function DomainEditor(props: EditorProps<'domain'>) {
         hrefOf={domainHref}
         checkOne={checkDomain}
         type="text"
+        placeholder={strings.placeholder}
+        {...(isCompactSurface(props.surface) ? {} : { hint: strings.hint })}
       />
     );
   }
@@ -51,6 +52,8 @@ export function DomainEditor(props: EditorProps<'domain'>) {
       {...props}
       initial={values[0] ?? ''}
       type="text"
+      placeholder={strings.placeholder}
+      {...(isCompactSurface(props.surface) ? {} : { hint: strings.hint })}
       check={(draft) => {
         if (draft.trim() === '') return toCommittable<'domain'>(props.attribute, null);
         const one = checkDomain(draft);

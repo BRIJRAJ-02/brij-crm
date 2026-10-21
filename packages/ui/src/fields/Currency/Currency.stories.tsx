@@ -61,3 +61,17 @@ export const Invalid: Story = {
     await expect(args.onCommit).not.toHaveBeenCalled();
   },
 };
+
+/** Empty, in a form: an example amount as the placeholder, and a hint naming the currency picker. */
+export const Guidance: Story = {
+  parameters: { crm: { screenshot: false } },
+  render: (args) => (
+    <Stage width="narrow">
+      <AttributeEditor {...args} />
+    </Stage>
+  ),
+  play: async ({ canvas }) => {
+    await expect(canvas.getByRole('textbox', { name: 'Deal value' })).toHaveAttribute('placeholder', '1,234.5');
+    await expect(canvas.getByText('An amount like 1,234.5, in the currency picked before it.')).toBeInTheDocument();
+  },
+};
