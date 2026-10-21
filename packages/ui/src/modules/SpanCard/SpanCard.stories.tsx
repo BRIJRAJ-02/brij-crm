@@ -58,8 +58,11 @@ export const Form: Story = {
     </Stage>
   ),
   play: async ({ canvas, args }) => {
-    await userEvent.click(canvas.getByRole('button', { name: 'Back' }));
+    const back = canvas.getByRole('button', { name: 'Back' });
+    await userEvent.click(back);
     await expect(args.onBack).toHaveBeenCalled();
+    // The pointer stays on Back until its hover shows, so every shot has it (one CI run caught it without).
+    await hoverUntilHovered(userEvent, back);
   },
 };
 
