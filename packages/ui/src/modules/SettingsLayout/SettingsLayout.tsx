@@ -291,7 +291,12 @@ export interface SettingsGridProps {
  * the panel's width (one on a phone), every card the same width.
  */
 export function SettingsGrid({ children }: SettingsGridProps) {
-  return <TileGrid fill="fill">{children}</TileGrid>;
+  // Columns frame their own content: a Table in one keeps to its column, never the page's edges.
+  return (
+    <TileGrid fill="fill">
+      <PageEdge value={false}>{children}</PageEdge>
+    </TileGrid>
+  );
 }
 
 /** Props for SettingsRow. */
