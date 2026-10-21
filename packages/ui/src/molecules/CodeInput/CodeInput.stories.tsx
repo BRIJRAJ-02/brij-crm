@@ -127,3 +127,53 @@ export const LabelHidden: Story = {
     await expect(canvas.queryByText('Code')).toBeNull();
   },
 };
+
+/** A key pressed in full boxes changes nothing and sends nothing again: a code is sent once. */
+export const KeyInFullBoxes: Story = {
+  parameters: { crm: { screenshot: false } },
+  render: (args) => (
+    <Stage width="narrow">
+      <Controlled size="lg" start="48159" {...(args.onComplete === undefined ? {} : { onComplete: args.onComplete })} />
+    </Stage>
+  ),
+  play: async ({ canvas, args, userEvent }) => {
+    await userEvent.click(canvas.getByRole('textbox', { name: 'Code from your authenticator app' }));
+    await userEvent.keyboard('{End}3');
+    await expect(args.onComplete).toHaveBeenCalledTimes(1);
+    await userEvent.keyboard('7 ');
+    await expect(args.onComplete).toHaveBeenCalledTimes(1);
+  },
+};
+
+/** A pasted sentence with the code in it gives the code alone, and sends it; a paste replaces what the boxes held. */
+export const PastedSentence: Story = {
+  parameters: { crm: { screenshot: false } },
+  render: (args) => (
+    <Stage width="narrow">
+      <Controlled size="lg" start="12" {...(args.onComplete === undefined ? {} : { onComplete: args.onComplete })} />
+    </Stage>
+  ),
+  play: async ({ canvas, args, userEvent }) => {
+    const input = canvas.getByRole('textbox', { name: 'Code from your authenticator app' });
+    await userEvent.click(input);
+    await userEvent.paste('Enter this code to sign in. It works for 10 minutes. 481593');
+    await expect(args.onComplete).toHaveBeenCalledTimes(1);
+    await expect(args.onComplete).toHaveBeenCalledWith('481593');
+    await expect(input).toHaveValue('481593');
+  },
+};
+
+/** Stray digits around a code (two codes in one paste) fill the boxes for the person to see, and send nothing. */
+export const PastedNoise: Story = {
+  parameters: { crm: { screenshot: false } },
+  render: (args) => (
+    <Stage width="narrow">
+      <Controlled size="lg" start="" {...(args.onComplete === undefined ? {} : { onComplete: args.onComplete })} />
+    </Stage>
+  ),
+  play: async ({ canvas, args, userEvent }) => {
+    await userEvent.click(canvas.getByRole('textbox', { name: 'Code from your authenticator app' }));
+    await userEvent.paste('Codes 111111 and 222222');
+    await expect(args.onComplete).not.toHaveBeenCalled();
+  },
+};

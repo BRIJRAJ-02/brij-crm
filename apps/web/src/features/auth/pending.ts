@@ -1,7 +1,7 @@
 // The sign in waiting for its code (spec 0005, Value sourcing): the address
 // the code went to and when, in sessionStorage, so `/verify` survives a
-// reload in this tab and nowhere else. Cleared on verify or "Use another
-// email", which keeps the address alone, so `/sign-in` starts with it.
+// reload in this tab and nowhere else. Cleared on verify or "Use a
+// different email", which keeps the address alone, so `/sign-in` starts with it.
 // Storage can be missing or throw (a private window, blocked site data), so
 // every read and write is guarded; without it, `/verify` sends the person
 // back to `/sign-in`, and `/sign-in` starts empty.

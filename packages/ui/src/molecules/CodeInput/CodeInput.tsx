@@ -37,6 +37,22 @@ export interface CodeInputProps {
   readonly errorRef?: Ref<HTMLSpanElement>;
 }
 
+/** What a code is often written with between its digits: spaces (a no break one too) and dashes. */
+const SEPARATORS = /[\s\u2010-\u2015-]/g;
+
+/**
+ * The code in a pasted text: the text itself when it is digits with only
+ * spaces or dashes between them ("481 593"), cut to `length`; or else its one
+ * run of exactly `length` digits ("Your sign in code is 481593."); or
+ * undefined when it holds no such run, or more than one.
+ */
+function codeFromPaste(text: string, length: number): string | undefined {
+  const cleaned = text.replaceAll(SEPARATORS, '');
+  if (/^\d+$/.test(cleaned)) return cleaned.slice(0, length);
+  const runs = text.match(new RegExp(`(?<!\\d)\\d{${String(length)}}(?!\\d)`, 'g')) ?? [];
+  return runs.length === 1 ? runs[0] : undefined;
+}
+
 /**
  * A one time code as separate boxes: two factor setup and sign in (#25). It is
  * one field underneath (`autocomplete="one-time-code"`), so pasting or the
@@ -73,9 +89,13 @@ export function CodeInput({
       isDisabled={isDisabled}
       isInvalid={error !== undefined}
       onChange={(next) => {
-        const digits = next.replaceAll(/\D/g, '').slice(0, length);
+        const cleaned = next.replaceAll(SEPARATORS, '');
+        const digits = cleaned.replaceAll(/\D/g, '').slice(0, length);
         onChange?.(digits);
-        if (digits.length === length) onComplete?.(digits);
+        // Sent once, and only when the change is the code itself (typed, or filled in with its spaces or dashes):
+        // a key pressed in full boxes, or stray digits around a code, fill nothing new and send nothing, so a
+        // guess never uses up one of the code's tries.
+        if (digits.length === length && digits !== value && cleaned === digits) onComplete?.(digits);
       }}
     >
       {!isLabelHidden && <Label className={styles.label}>{label}</Label>}
@@ -83,6 +103,15 @@ export function CodeInput({
         <Input
           ref={ref}
           className={styles.input}
+          // A paste is a whole code, so it replaces what the boxes hold rather than joining it; a sentence with the
+          // code in it gives the code alone. Anything else pastes as usual and sends nothing.
+          onPaste={(event) => {
+            const code = codeFromPaste(event.clipboardData.getData('text'), length);
+            if (code === undefined) return;
+            event.preventDefault();
+            onChange?.(code);
+            if (code.length === length && code !== value) onComplete?.(code);
+          }}
           onFocus={() => {
             setFocused(true);
           }}
