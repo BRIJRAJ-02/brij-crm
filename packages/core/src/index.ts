@@ -3,9 +3,11 @@
 export { getSystemStatus, type SystemDeps } from './system/status.ts';
 export * from './engine/index.ts';
 export {
+  enterDeletedWorkspace,
   enterPublicForm,
   enterWithKey,
   enterWorkspace,
+  type DeletedEntry,
   NO_RULE_SOURCE,
   type DoorDeps,
   type DoorInput,
@@ -56,6 +58,16 @@ export {
 } from './account/account.ts';
 export { milestoneHook, type ReachedMilestone } from './milestones/milestones.ts';
 export { type AuditSource } from './members/audit.ts';
+// Settings › Workspace › General, the owner's delete and restore, and Account › Profile (spec 0031, slice 7).
+export {
+  deleteWorkspace,
+  getWorkspaceSettings,
+  restoreWorkspace,
+  updateWorkspace,
+  type UpdatedWorkspace,
+  type WorkspaceDeletion,
+} from './workspace/settings.ts';
+export { getMyProfile, updateMyMemberProfile, type ProfileExtras } from './members/profile.ts';
 export {
   acceptInvite,
   getInviteLink,

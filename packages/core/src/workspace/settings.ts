@@ -1,0 +1,252 @@
+// Settings › Workspace › General (spec 0031, slice 7, AC-822, AC-823): the
+// open workspace's name, default time zone and fixed address, and the
+// owner's delete and restore. Every change writes its audit row in its own
+// transaction. The directory's copy of the name and its deleted mark live in
+// schema auth, which the app may not update (migration 0018), so the caller
+// writes them through the identity store once the change commits; the access
+// door reads the tenant row, so a deleted workspace is shut either way.
+import {
+  WORKSPACE_PURGE_DAYS,
+  type DeletedWorkspace,
+  type UpdateWorkspaceInput,
+  type WorkspaceSettings,
+} from '@crm/contracts';
+import { schema, type WorkspaceTx } from '@crm/db';
+import { and, eq, gt, isNotNull, isNull, sql } from 'drizzle-orm';
+import { requirePermission } from '../access/check.ts';
+import { checkScope } from '../access/mint.ts';
+import type { EngineScope } from '../engine/scope.ts';
+import { inWorkspace } from '../access/run.ts';
+import { touched } from '../engine/definitions.ts';
+import { refuse, refuseOn } from '../engine/refusals.ts';
+import { runWrite, type AfterWrite } from '../engine/write.ts';
+import { writeAudit, type AuditSource } from '../members/audit.ts';
+
+const { members, workspaces } = schema;
+
+const NOT_A_MEMBER = "That workspace doesn't exist, or you're not a member of it.";
+
+/** The settings columns, as the contract answers them. */
+const SETTINGS = {
+  id: workspaces.id,
+  name: workspaces.name,
+  slug: workspaces.slug,
+  timeZone: workspaces.timeZone,
+  logoUrl: workspaces.logoUrl,
+} as const;
+
+function toSettings(row: {
+  readonly id: string;
+  readonly name: string;
+  readonly slug: string;
+  readonly timeZone: string;
+  readonly logoUrl: string | null;
+}): WorkspaceSettings {
+  return {
+    id: row.id,
+    name: row.name,
+    slug: row.slug,
+    timeZone: row.timeZone,
+    ...(row.logoUrl === null ? {} : { logoUrl: row.logoUrl }),
+  };
+}
+
+/** The live workspace's settings row, locked for a change when `lock`; NOT_FOUND once it is deleted. */
+async function liveRow(tx: WorkspaceTx, scope: EngineScope, lock: boolean) {
+  const query = tx
+    .select(SETTINGS)
+    .from(workspaces)
+    .where(and(eq(workspaces.id, scope.workspaceId), isNull(workspaces.deletedAt)));
+  const [row] = lock ? await query.for('update') : await query;
+  if (row === undefined) throw refuse('NOT_FOUND', NOT_A_MEMBER);
+  return row;
+}
+
+/** The open workspace's settings (any member: every member sees its name, address and time zone). */
+export async function getWorkspaceSettings(scope: EngineScope): Promise<WorkspaceSettings> {
+  checkScope(scope);
+  return inWorkspace(scope, async (tx) => toSettings(await liveRow(tx, scope, false)));
+}
+
+/** What a settings change did: the settings now, and whether the name changed (the directory's copy follows). */
+export interface UpdatedWorkspace {
+  readonly settings: WorkspaceSettings;
+  readonly renamed: boolean;
+}
+
+/**
+ * Renames the workspace (1 to 64 characters) and changes its default time
+ * zone (`workspace.manage`, AC-822). A change that changes nothing writes
+ * nothing; otherwise one audit row with the changed fields only.
+ */
+export async function updateWorkspace(
+  scope: EngineScope,
+  input: Pick<UpdateWorkspaceInput, 'name' | 'timeZone'>,
+  hooks: readonly AfterWrite[] = [],
+  source: AuditSource = {},
+): Promise<UpdatedWorkspace> {
+  requirePermission(scope, 'workspace.manage');
+  const name = input.name?.trim();
+  if (name !== undefined && (name.length < 1 || name.length > 64)) {
+    throw refuseOn('CONFIG_INVALID', 'Use 1 to 64 characters for the name.', 'name');
+  }
+  const { result } = await runWrite(
+    scope,
+    async ({ tx }) => {
+      const now = await liveRow(tx, scope, true);
+      const before: Record<string, unknown> = {};
+      const after: Record<string, unknown> = {};
+      if (name !== undefined && name !== now.name) {
+        before.name = now.name;
+        after.name = name;
+      }
+      if (input.timeZone !== undefined && input.timeZone !== now.timeZone) {
+        before.timeZone = now.timeZone;
+        after.timeZone = input.timeZone;
+      }
+      if (Object.keys(after).length === 0) return { settings: toSettings(now), renamed: false };
+      const [row] = await tx
+        .update(workspaces)
+        .set({
+          ...(name === undefined || after.name === undefined ? {} : { name }),
+          ...(after.timeZone === undefined || input.timeZone === undefined ? {} : { timeZone: input.timeZone }),
+          ...touched(scope),
+        })
+        .where(eq(workspaces.id, scope.workspaceId))
+        .returning(SETTINGS);
+      if (row === undefined) throw refuse('NOT_FOUND', NOT_A_MEMBER);
+      await writeAudit(
+        tx,
+        scope.workspaceId,
+        scope.actor,
+        { action: 'workspace.updated', targetType: 'workspace', targetId: scope.workspaceId, before, after },
+        source,
+      );
+      return { settings: toSettings(row), renamed: after.name !== undefined };
+    },
+    hooks,
+  );
+  return result;
+}
+
+/** What a delete did: the workspace as its owners see it in the window, and who to tell. */
+export interface WorkspaceDeletion {
+  readonly deleted: DeletedWorkspace;
+  /** The active members' addresses and names, for the email each gets (AC-823). */
+  readonly notify: readonly { readonly email: string; readonly name: string; readonly isOwner: boolean }[];
+  /** The deleting owner's name in this workspace, for the email. */
+  readonly deletedBy: string;
+}
+
+/**
+ * Deletes the workspace, softly (`workspace.delete`, owners only, AC-823):
+ * the owner types its name to confirm (422 `CONFIRM_MISMATCH` on the
+ * `confirmName` field otherwise). `deleted_at` and `purge_after` (30 days on)
+ * are set in one transaction with the audit row, and from the next request
+ * the door refuses every member as for an unknown address. Answers who to
+ * email; the caller sends it once this commits.
+ */
+export async function deleteWorkspace(
+  scope: EngineScope,
+  input: { readonly confirmName: string },
+  hooks: readonly AfterWrite[] = [],
+  source: AuditSource = {},
+): Promise<WorkspaceDeletion> {
+  requirePermission(scope, 'workspace.delete');
+  const { result } = await runWrite(
+    scope,
+    async ({ tx }) => {
+      const now = await liveRow(tx, scope, true);
+      if (input.confirmName.trim() !== now.name) {
+        throw refuseOn('CONFIRM_MISMATCH', `Type ${now.name} to confirm.`, 'confirmName');
+      }
+      const [row] = await tx
+        .update(workspaces)
+        .set({
+          deletedAt: sql`now()`,
+          purgeAfter: sql`now() + make_interval(days => ${WORKSPACE_PURGE_DAYS})`,
+          ...touched(scope),
+        })
+        .where(eq(workspaces.id, scope.workspaceId))
+        .returning({ deletedAt: workspaces.deletedAt, purgeAfter: workspaces.purgeAfter });
+      if (row === undefined || row.purgeAfter === null || row.deletedAt === null)
+        throw refuse('NOT_FOUND', NOT_A_MEMBER);
+      await writeAudit(
+        tx,
+        scope.workspaceId,
+        scope.actor,
+        {
+          action: 'workspace.deleted',
+          targetType: 'workspace',
+          targetId: scope.workspaceId,
+          before: { deletedAt: null },
+          after: { deletedAt: row.deletedAt, purgeAfter: row.purgeAfter },
+        },
+        source,
+      );
+      const people = await tx
+        .select({ id: members.id, email: members.email, name: members.name, role: members.role })
+        .from(members)
+        .where(and(eq(members.workspaceId, scope.workspaceId), eq(members.status, 'active')));
+      const actor = scope.actor.type === 'member' ? scope.actor.id : undefined;
+      return {
+        deleted: { name: now.name, slug: now.slug, purgeAfter: new Date(row.purgeAfter).toISOString() },
+        notify: people.map((person) => ({ email: person.email, name: person.name, isOwner: person.role === 'owner' })),
+        deletedBy: people.find((person) => person.id === actor)?.name ?? 'An owner',
+      };
+    },
+    hooks,
+  );
+  return result;
+}
+
+/**
+ * Restores a deleted workspace within its window (AC-823): the scope must be
+ * an owner's, made by `enterDeletedWorkspace` (the door refuses a deleted
+ * workspace otherwise). Clears `deleted_at` and `purge_after` with the audit
+ * row; NOT_FOUND once the window has passed or it was restored already.
+ */
+export async function restoreWorkspace(
+  scope: EngineScope,
+  hooks: readonly AfterWrite[] = [],
+  source: AuditSource = {},
+): Promise<WorkspaceSettings> {
+  requirePermission(scope, 'workspace.delete');
+  const { result } = await runWrite(
+    scope,
+    async ({ tx }) => {
+      const [row] = await tx
+        .update(workspaces)
+        .set({ deletedAt: null, purgeAfter: null, ...touched(scope) })
+        .where(
+          and(
+            eq(workspaces.id, scope.workspaceId),
+            isNotNull(workspaces.deletedAt),
+            gt(workspaces.purgeAfter, sql`now()`),
+          ),
+        )
+        .returning(SETTINGS);
+      if (row === undefined) throw refuse('NOT_FOUND', NOT_A_MEMBER);
+      // Calendar sync stopped while it was deleted: each connection that syncs starts again.
+      await tx.execute(sql`
+        select crm_enqueue_calendar_sync(c.id) from calendar_connections c
+        where c.workspace_id = ${scope.workspaceId}::uuid and c.status in ('syncing', 'connected', 'failed')
+      `);
+      await writeAudit(
+        tx,
+        scope.workspaceId,
+        scope.actor,
+        {
+          action: 'workspace.restored',
+          targetType: 'workspace',
+          targetId: scope.workspaceId,
+          after: { deletedAt: null },
+        },
+        source,
+      );
+      return toSettings(row);
+    },
+    hooks,
+  );
+  return result;
+}

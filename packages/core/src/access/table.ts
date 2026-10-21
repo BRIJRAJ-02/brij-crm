@@ -96,6 +96,14 @@ export const ACCESS_TABLE = {
   getInviteLink: { permission: 'members.invite' },
   // Slice 6, AC-819, AC-820: email domains (workspace settings) and requests to join (inviting).
   getWorkspaceDomains: { permission: 'workspace.manage' },
+  // A member's own profile (spec 0031, slice 7): themself only, so any member.
+  getMyProfile: { anyMember: true },
+  updateMyMemberProfile: { anyMember: true },
+  // Workspace › General (spec 0031, slice 7): every member reads it; changing it and deleting it are permissions.
+  getWorkspaceSettings: { anyMember: true },
+  updateWorkspace: { permission: 'workspace.manage' },
+  deleteWorkspace: { permission: 'workspace.delete' },
+  restoreWorkspace: { permission: 'workspace.delete' },
   setWorkspaceDomains: { permission: 'workspace.manage' },
   listJoinRequests: { permission: 'members.invite' },
   decideJoinRequest: { permission: 'members.invite' },

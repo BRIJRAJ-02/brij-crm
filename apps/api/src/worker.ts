@@ -12,6 +12,7 @@ import { jobKinds, type QueueRows } from '@crm/core';
 import {
   audiences,
   meetingFacts,
+  purgeWorkspace,
   removedUserIds,
   runDailyCleanup,
   syncConnection,
@@ -274,6 +275,8 @@ async function openWorker(hooks: {
             systemScope: (workspaceId) => systemScope(db, workspaceId),
             hooks: backgroundHooks,
             sweep: opened,
+            // Deleted workspaces past their window go for good (spec 0031, AC-823).
+            purge: (workspaceId, deadline) => purgeWorkspace({ db, log }, workspaceId, deadline),
             log,
             onStored: () => relay?.wake(),
           },

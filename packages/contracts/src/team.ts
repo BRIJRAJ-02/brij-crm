@@ -49,6 +49,10 @@ export const AUDIT_ACTIONS = [
   'member.removed',
   'member.left',
   'workspace.ownership_transferred',
+  'workspace.updated',
+  'workspace.deleted',
+  'workspace.restored',
+  'member.profile_updated',
 ] as const;
 /** One action the audit log records. */
 export const AuditAction = z.enum(AUDIT_ACTIONS);

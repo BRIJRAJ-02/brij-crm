@@ -1,7 +1,9 @@
 // Members through the real app (spec 0031, slice 3): removing someone and
 // leaving drop the person's switcher entry and answer their next call as
 // not found; a member id from another workspace is not found; a member
-// changes no role, not even their own; the page pages and searches.
+// changes no role, not even their own; the page pages and searches. Slice 7:
+// an owner deletes the workspace by its name, everyone is shut out and
+// mailed, and only the owner finds it to restore.
 import { newId } from '@crm/core';
 import type { Database, IdentityStore } from '@crm/db';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
@@ -259,5 +261,43 @@ describe('the Members page’s list (AC-810)', () => {
     expect(await refusal(() => owner.client.members.list({ workspace: owner.slug, cursor: 'nonsense' }))).toMatchObject(
       { code: 'INPUT_INVALID' },
     );
+  });
+});
+
+describe('deleting and restoring a workspace (AC-823)', () => {
+  it('shuts everyone out, mails each member, and lets only the owner restore it', async () => {
+    const owner = await memberWithWorkspace(app);
+    const mate = await teammate(owner);
+    const { name } = await owner.client.workspace.get({ workspace: owner.slug });
+    expect(
+      await refusal(() =>
+        owner.client.workspace.delete({ workspace: owner.slug, confirmName: `${name}x`, mutationId: newId() }),
+      ),
+    ).toMatchObject({ code: 'CONFIRM_MISMATCH' });
+    expect(
+      await refusal(() =>
+        mate.client.workspace.delete({ workspace: owner.slug, confirmName: name, mutationId: newId() }),
+      ),
+    ).toMatchObject({ code: 'FORBIDDEN' });
+    const deleted = await owner.client.workspace.delete({
+      workspace: owner.slug,
+      confirmName: name,
+      mutationId: newId(),
+    });
+    expect(deleted).toMatchObject({ name, slug: owner.slug });
+    for (const client of [owner.client, mate.client]) {
+      expect(await refusal(() => client.members.list({ workspace: owner.slug }))).toMatchObject(NOT_FOUND);
+    }
+    // The switcher leaves it out; the member can't find it to restore, the owner can.
+    expect((await owner.client.me.get()).workspaces.map((w) => w.slug)).not.toContain(owner.slug);
+    expect(await refusal(() => mate.client.deletedWorkspace.deleted({ workspace: owner.slug }))).toMatchObject(
+      NOT_FOUND,
+    );
+    expect(await owner.client.deletedWorkspace.deleted({ workspace: owner.slug })).toMatchObject({ name });
+    await expect.poll(() => subjects.get(owner.email)?.at(-1)).toBe(`${name} was deleted`);
+    const restored = await owner.client.deletedWorkspace.restore({ workspace: owner.slug, mutationId: newId() });
+    expect(restored.slug).toBe(owner.slug);
+    expect((await mate.client.members.list({ workspace: owner.slug })).total).toBe(2);
+    expect((await owner.client.me.get()).workspaces.map((w) => w.slug)).toContain(owner.slug);
   });
 });

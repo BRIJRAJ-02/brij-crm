@@ -40,6 +40,10 @@ const READS: ReadonlySet<string> = new Set([
   'join.list',
   'joinRequests.domains',
   'joinRequests.list',
+  // Slice 7: Workspace › General, Account › Profile, and a deleted workspace as its owner sees it.
+  'workspace.get',
+  'profile.get',
+  'deletedWorkspace.deleted',
   'access.mine',
   // The roles every role picker offers (spec 0037, AC-1439).
   'roles.list',
@@ -398,6 +402,27 @@ const WRITES: Record<string, (m: Member, mutationId: string) => Promise<readonly
     const [request] = await m.client.joinRequests.list({ workspace: m.slug });
     await m.client.joinRequests.decide({ workspace: m.slug, requestId: request?.id ?? '', approve: true, mutationId });
     return [{ kind: 'members', mutation_id: mutationId }];
+  },
+  // Slice 7: the workspace's own settings and delete, and its restore, which nobody's screen follows live; a
+  // profile change reaches every member's list (one members row).
+  'workspace.update': async (m, mutationId) => {
+    await m.client.workspace.update({ workspace: m.slug, name: 'Renamed', mutationId });
+    return [];
+  },
+  'workspace.delete': async (m, mutationId) => {
+    const { name } = await m.client.workspace.get({ workspace: m.slug });
+    await m.client.workspace.delete({ workspace: m.slug, confirmName: name, mutationId });
+    return [];
+  },
+  'deletedWorkspace.restore': async (m, mutationId) => {
+    const { name } = await m.client.workspace.get({ workspace: m.slug });
+    await m.client.workspace.delete({ workspace: m.slug, confirmName: name, mutationId: newId() });
+    await m.client.deletedWorkspace.restore({ workspace: m.slug, mutationId });
+    return [];
+  },
+  'profile.update': async (m, mutationId) => {
+    const me = await m.client.profile.update({ workspace: m.slug, name: 'Renamed', mutationId });
+    return [{ kind: 'members', item_ids: [me.memberId], mutation_id: mutationId }];
   },
   'invitations.accept': async (m) => {
     const invitee = await signIn(app);
@@ -1295,6 +1320,7 @@ const WRITES_MADE: Readonly<Record<string, number>> = {
   // Domain join: the domains set first, then the request (and the decision).
   'join.request': 2,
   'joinRequests.decide': 3,
+  'deletedWorkspace.restore': 2,
   'views.update': 2,
   'views.move': 3,
   'views.setLocked': 2,

@@ -26,9 +26,17 @@ export const workspaces = pgTable(
     name: text('name').notNull(),
     slug: text('slug').notNull(),
     deletedAt: timestamptz('deleted_at'),
+    /** A logo on our origin; none until #32, so screens show initials (spec 0031, AC-822). */
+    logoUrl: text('logo_url'),
+    /** The default time zone for the workspace's people and pages (spec 0031, AC-822). */
+    timeZone: text('time_zone').notNull().default('UTC'),
+    /** When a deleted workspace's purge may take it; set with `deleted_at`, cleared on restore (AC-823). */
+    purgeAfter: timestamptz('purge_after'),
     ...auditColumns(),
   },
   (t) => [
+    check('workspaces_purge_after', sql`${t.purgeAfter} is null or ${t.deletedAt} is not null`),
+    check('workspaces_time_zone', sql`char_length(${t.timeZone}) between 1 and 64`),
     uniqueIndex('workspaces_slug')
       .on(t.slug)
       .where(sql`${t.deletedAt} is null`),

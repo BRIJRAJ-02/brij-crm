@@ -237,6 +237,22 @@ No new environment variables (`APP_URL`, `RESEND_API_KEY`, `MAIL_FROM` exist). C
 - **Account › Profile**: name, time zone, picture (read only until #32).
 - **`/invite/:token`** and **`/join`**: outside the workspace frame, in the sign in page's layout.
 
+### Deleting a workspace, in detail (owner, 21 October 2026)
+
+AC-823 stands, with these settled where it left them open. Each open point takes the safest default.
+
+- **Confirm.** The owner types the workspace's name, not its slug (owner, 21 October). It must match exactly after trimming, else 422 `CONFIRM_MISMATCH`. The Modal says what happens in one sentence. Its InfoTip covers the 30 day restore window, says other members lose access at once, and suggests exporting what they want to keep first.
+- **Where.** A danger section at the bottom of Settings › Workspace › General, for owners only. Others don't see it.
+- **In the window.** The door refuses the workspace with `NOT_FOUND` for everyone. Booking pages and forms answer not found, since their lookups already skip deleted workspaces. A calendar sync for a deleted workspace stops without touching the provider. Restore clears both columns, audits it, and queues each connection's sync again. Every active member gets one email after the delete commits.
+- **The purge.** The daily cleanup lists workspaces past `purge_after` through `crm_workspaces_to_purge`, owned by `crm_sweep`. For each one, the worker does three things in order:
+  1. It marks the calendar connections `revoked` and queues their syncs, so each grant ends with the provider. It waits up to a day for that, then goes on.
+  2. It deletes every tenant table's rows in foreign key order, children first, in batches of 5,000 inside `withWorkspace`.
+  3. It calls `crm_purge_workspace_finish`, owned by a new `crm_purge` role and executable by the worker alone. That function removes what the worker can't: the audit rows (the append only trigger lets `crm_purge` alone through), the outbox, the milestones, the directory, the memberships and last workspace pointers, and finally the workspace row. It acts only on a workspace past `purge_after`.
+
+  Counts per table go to the worker log, as ids and numbers only. An unfinished purge resumes in the next call.
+- **Audit.** `workspace.updated` (name and time zone, before and after), `workspace.deleted`, `workspace.restored`, and `member.profile_updated`. The purge writes no audit row, because the audit goes with the workspace.
+- **Not here.** Account (user) deletion belongs to the account lane. CSV export isn't on this base yet, so the dialog suggests it in words only.
+
 ### Critical test scenarios
 
 - Switcher: two workspaces; switch on one device, sign in on another, `/` lands on the last one; leave it, `/` falls back, verifies **AC-801**, **AC-802**, **AC-812**.

@@ -57,6 +57,8 @@ export const ENGINE_REFUSAL_CODES = [
   // Domain join (spec 0031, AC-819): a domain the admin's own verified email isn't at, or a public mail domain.
   'DOMAIN_NOT_YOURS',
   'DOMAIN_PUBLIC',
+  // Deleting a workspace (spec 0031, AC-823): the typed name isn't the workspace's.
+  'CONFIRM_MISMATCH',
 ] as const;
 
 /** One of the engine's refusal codes. */

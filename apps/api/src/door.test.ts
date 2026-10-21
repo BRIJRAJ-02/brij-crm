@@ -33,6 +33,9 @@ const BOOTSTRAP: ReadonlySet<string> = new Set([
   // domain, which mints a scope in each.
   'join.list',
   'join.request',
+  // Spec 0031, slice 7: a deleted workspace's owners, whose scope `enterDeletedWorkspace` mints in packages/core.
+  'deletedWorkspace.deleted',
+  'deletedWorkspace.restore',
   'workspaces.create',
   'realtime.connectionToken',
 ]);
@@ -85,7 +88,12 @@ const DIRECTORY_FROM_CONTEXT =
   /\bcontext\s*\.\s*directory\b|\bdirectory\b[^}]*\}\s*=\s*context\b|\bcontext\s*:\s*\{[^}]*\bdirectory\b|\bcontext\s*\[\s*['"]directory/;
 
 /** The module files allowed the directory's write. */
-const DIRECTORY_FILES: ReadonlySet<string> = new Set(['members/router.ts']);
+const DIRECTORY_FILES: ReadonlySet<string> = new Set([
+  'members/router.ts',
+  // Slice 7: a workspace's renamed label and deleted mark, after the tenant change commits.
+  'workspace/router.ts',
+  'workspace/deleted.ts',
+]);
 
 /** Importing system power or hand made scopes (spec 0009): no module file may, not even a bootstrap one. */
 const CORE_ENTRIES = /from\s+['"]@crm\/core\/(system|testing)['"]/;

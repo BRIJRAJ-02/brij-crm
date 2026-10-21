@@ -153,10 +153,13 @@ describe('the holes in row level security (crm_search_text, spec 0004 AC-24; the
       { name: 'crm_invitation_open_for', owner: 'crm_invitation_lookup' },
       { name: 'crm_outbox_prune', owner: 'crm_relay' },
       { name: 'crm_outbox_workspaces', owner: 'crm_relay' },
+      { name: 'crm_purge_workspace_begin', owner: 'crm_purge' },
+      { name: 'crm_purge_workspace_end', owner: 'crm_purge' },
       { name: 'crm_search_text', owner: 'crm_search' },
       { name: 'crm_workspace_has_domain', owner: 'crm_domain_lookup' },
       { name: 'crm_workspace_ids', owner: 'crm_sweep' },
       { name: 'crm_workspaces_by_domain', owner: 'crm_domain_lookup' },
+      { name: 'crm_workspaces_to_purge', owner: 'crm_purge' },
     ]);
     // Each hardened: a fixed search path (the prune also waits at most a second for a lock), and a standard SQL body (begin atomic, bound when it was made), but
     // crm_enqueue_job's, which is quoted so a Graphile upgrade that recreates add_job never fails on it.
@@ -177,14 +180,17 @@ describe('the holes in row level security (crm_search_text, spec 0004 AC-24; the
       { name: 'crm_invitation_open_for', config: ['search_path=pg_catalog, pg_temp'], atomic: true },
       { name: 'crm_outbox_prune', config: ['search_path=pg_catalog, pg_temp', 'lock_timeout=1s'], atomic: true },
       { name: 'crm_outbox_workspaces', config: ['search_path=pg_catalog, pg_temp'], atomic: true },
+      { name: 'crm_purge_workspace_begin', config: ['search_path=pg_catalog, pg_temp'], atomic: true },
+      { name: 'crm_purge_workspace_end', config: ['search_path=pg_catalog, pg_temp'], atomic: true },
       { name: 'crm_search_text', config: ['search_path=pg_catalog, pg_temp'], atomic: true },
       { name: 'crm_workspace_has_domain', config: ['search_path=pg_catalog, pg_temp'], atomic: true },
       { name: 'crm_workspace_ids', config: ['search_path=pg_catalog, pg_temp'], atomic: true },
       { name: 'crm_workspaces_by_domain', config: ['search_path=pg_catalog, pg_temp'], atomic: true },
+      { name: 'crm_workspaces_to_purge', config: ['search_path=pg_catalog, pg_temp'], atomic: true },
     ]);
   });
 
-  it('lets no role but crm_booking_lookup, crm_domain_lookup, crm_form_lookup, crm_invitation_lookup, crm_relay, crm_search, crm_sweep and the owner bypass it, outside the superusers', async () => {
+  it('lets no role but crm_booking_lookup, crm_domain_lookup, crm_form_lookup, crm_invitation_lookup, crm_purge, crm_relay, crm_search, crm_sweep and the owner bypass it, outside the superusers', async () => {
     const bypass = await owner.query<{ role: string }>(`
       select rolname as role from pg_roles
       where rolbypassrls and not rolsuper
@@ -196,6 +202,7 @@ describe('the holes in row level security (crm_search_text, spec 0004 AC-24; the
       'crm_domain_lookup',
       'crm_form_lookup',
       'crm_invitation_lookup',
+      'crm_purge',
       'crm_relay',
       'crm_search',
       'crm_sweep',
@@ -226,6 +233,12 @@ describe('the holes in row level security (crm_search_text, spec 0004 AC-24; the
       ['app', 'app', 'app'],
     ],
     ['crm_sweep', ['crm_workspace_ids'], ['crm_workspace_ids(uuid, integer)'], ['worker']],
+    [
+      'crm_purge',
+      ['crm_workspaces_to_purge', 'crm_purge_workspace_begin', 'crm_purge_workspace_end'],
+      ['crm_workspaces_to_purge(integer)', 'crm_purge_workspace_begin(uuid)', 'crm_purge_workspace_end(uuid)'],
+      ['worker', 'worker', 'worker'],
+    ],
     ['crm_form_lookup', ['crm_form_by_key'], ['crm_form_by_key(text)'], ['app']],
     [
       'crm_invitation_lookup',
@@ -1409,15 +1422,30 @@ describe('the auth schema: global identity, outside row level security (spec 000
         'crm_app'::regrole, 'crm_identity'::regrole, (select nspowner from pg_namespace where nspname = 'auth')
       )
     `);
-    expect(schema.rows).toEqual([]);
-    const tables = await owner.query<{ grantee: string }>(`
-      select distinct grantee from information_schema.role_table_grants
+    // But the purge (spec 0031, AC-823), which removes a purged workspace's directory rows through its functions.
+    expect(schema.rows).toEqual([{ grantee: 'crm_purge' }]);
+    const tables = await owner.query<{ grant: string }>(`
+      select table_name || ' ' || privilege_type as grant from information_schema.role_table_grants
       where table_schema = 'auth'
         and grantee not in (
           'crm_app', 'crm_identity', (select pg_get_userbyid(nspowner) from pg_namespace where nspname = 'auth')
         )
+      order by 1
     `);
-    expect(tables.rows).toEqual([]);
+    expect(tables.rows.map((row) => row.grant)).toEqual(['workspace_directory DELETE', 'workspace_membership DELETE']);
+    const columns = await owner.query<{ grant: string }>(`
+      select att.attrelid::regclass || '.' || att.attname || ' ' || a.privilege_type as grant
+      from pg_attribute att cross join lateral aclexplode(att.attacl) a
+      join pg_class c on c.oid = att.attrelid join pg_namespace n on n.oid = c.relnamespace
+      where n.nspname = 'auth' and a.grantee = 'crm_purge'::regrole
+      order by 1
+    `);
+    expect(columns.rows.map((row) => row.grant)).toEqual([
+      'auth.user_prefs.last_workspace_id SELECT',
+      'auth.user_prefs.last_workspace_id UPDATE',
+      'auth.workspace_directory.workspace_id SELECT',
+      'auth.workspace_membership.workspace_id SELECT',
+    ]);
     const search = await owner.query<{ usage: boolean }>(
       `select has_schema_privilege('crm_search', 'auth', 'USAGE') as usage`,
     );
@@ -1468,19 +1496,29 @@ describe('workspace milestones (spec 0010, AC-177)', () => {
       where att.attrelid = 'public.workspace_milestones'::regclass and att.attnum > 0 and not att.attisdropped
       order by att.attname, a.privilege_type
     `);
-    expect(columns.rows.map((row) => row.grant)).toEqual(['crm_app INSERT milestone', 'crm_app INSERT workspace_id']);
-    const others = await owner.query<{ grantee: string }>(`
-      select coalesce(pg_get_userbyid(nullif(a.grantee, 0)), 'PUBLIC') as grantee
+    // And the purge (spec 0031, AC-823), which removes a purged workspace's milestones through its functions.
+    expect(columns.rows.map((row) => row.grant)).toEqual([
+      'crm_app INSERT milestone',
+      'crm_app INSERT workspace_id',
+      'crm_purge SELECT workspace_id',
+    ]);
+    const others = await owner.query<{ grant: string }>(`
+      select coalesce(pg_get_userbyid(nullif(a.grantee, 0)), 'PUBLIC') || ' ' || a.privilege_type as grant
       from pg_class c, aclexplode(c.relacl) a
       where c.oid = 'public.workspace_milestones'::regclass and a.grantee not in (c.relowner, 'crm_app'::regrole)
     `);
-    expect(others.rows).toEqual([]);
+    expect(others.rows.map((row) => row.grant)).toEqual(['crm_purge DELETE']);
   });
 
   it("fails the migration's closing check on a stray table or column grant", async () => {
     const migration = await readFile(new URL('../migrations/0027_workspace_milestones.sql', import.meta.url), 'utf8');
     const check = /do \$\$[\s\S]*?\$\$;/.exec(migration.slice(migration.indexOf('Refuse to finish')))?.[0];
     expect(check).toBeDefined();
+    // As 0027 left the table: the purge's grants (0058) came later, with their own check.
+    const before0058 = [
+      'revoke delete on workspace_milestones from crm_purge',
+      'revoke select (workspace_id) on workspace_milestones from crm_purge',
+    ];
     for (const stray of [
       'grant update (reached_at) on workspace_milestones to crm_app',
       'grant insert (reached_at) on workspace_milestones to crm_app',
@@ -1490,6 +1528,7 @@ describe('workspace milestones (spec 0010, AC-177)', () => {
     ]) {
       await owner.query('begin');
       try {
+        for (const revoke of before0058) await owner.query(revoke);
         await owner.query(stray);
         await expect(owner.query(check ?? ''), stray).rejects.toThrow(/workspace_milestones must reach the owner/);
       } finally {
@@ -1497,7 +1536,13 @@ describe('workspace milestones (spec 0010, AC-177)', () => {
       }
     }
     // As the migration left it, the check passes.
-    await owner.query(check ?? '');
+    await owner.query('begin');
+    try {
+      for (const revoke of before0058) await owner.query(revoke);
+      await owner.query(check ?? '');
+    } finally {
+      await owner.query('rollback');
+    }
   });
 
   it('never lets the app choose when a milestone was reached', async () => {

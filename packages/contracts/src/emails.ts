@@ -64,3 +64,18 @@ export const JoinApprovedEmail = z.strictObject({
 });
 /** An approved request to join. */
 export type JoinApprovedEmail = z.infer<typeof JoinApprovedEmail>;
+
+/**
+ * A deleted workspace (spec 0031, AC-823), to each of its active members:
+ * who deleted it and the day it goes for good. An owner's carries the way
+ * back to restore it; nobody else's has a button.
+ */
+export const WorkspaceDeletedEmail = z.strictObject({
+  deletedBy: Name,
+  /** The day the purge may take it, as the email writes it ("19 November 2026"). */
+  until: Line,
+  /** The workspace's address, where an owner restores it; absent for anyone else. */
+  restorePath: AppPath.optional(),
+});
+/** A deleted workspace's notice. */
+export type WorkspaceDeletedEmail = z.infer<typeof WorkspaceDeletedEmail>;

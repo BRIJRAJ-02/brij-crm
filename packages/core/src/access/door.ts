@@ -157,6 +157,54 @@ export async function enterWorkspace(deps: DoorDeps, input: DoorInput): Promise<
   return memberScope(deps, workspace.id, found.member, found.rules);
 }
 
+/** A deleted workspace an owner may still restore, and the scope to restore it with. */
+export interface DeletedEntry {
+  readonly scope: EngineScope;
+  readonly name: string;
+  readonly slug: string;
+  /** When the purge may take it, ISO 8601. */
+  readonly purgeAfter: string;
+}
+
+/**
+ * The way into a deleted workspace (spec 0031, AC-823), for its active
+ * owners only and only within its window: the scope `restoreWorkspace` acts
+ * with, and what the restore page shows. Anyone else, a live workspace, and
+ * one past its window are all NOT_FOUND, the same as an unknown address, so
+ * nothing says a deleted workspace exists to anyone who couldn't restore it.
+ */
+export async function enterDeletedWorkspace(deps: DoorDeps, input: DoorInput): Promise<DeletedEntry> {
+  if (!isUuid(input.userId)) throw notFound();
+  const workspace = await deps.identity.findWorkspace(input.slug);
+  if (workspace === undefined) throw notFound();
+  const found = await deps.db.withWorkspace(workspace.id, async (tx) => {
+    const [row] = await tx
+      .select({
+        id: members.id,
+        userId: members.userId,
+        role: members.role,
+        name: workspaces.name,
+        slug: workspaces.slug,
+        purgeAfter: workspaces.purgeAfter,
+      })
+      .from(members)
+      .innerJoin(workspaces, eq(workspaces.id, members.workspaceId))
+      .where(
+        and(
+          eq(members.userId, input.userId),
+          eq(members.status, 'active'),
+          eq(members.role, 'owner'),
+          sql`${workspaces.deletedAt} is not null and ${workspaces.purgeAfter} > now()`,
+        ),
+      )
+      .limit(1);
+    return row;
+  });
+  if (found === undefined || found.purgeAfter === null) throw notFound();
+  const scope = memberScope(deps, workspace.id, found, NO_RULES);
+  return { scope, name: found.name, slug: found.slug, purgeAfter: new Date(found.purgeAfter).toISOString() };
+}
+
 /**
  * What `enterAsActor` needs: the tenant database, where to report an unknown
  * role, and where rules come from, always named and the same source the

@@ -43,6 +43,8 @@ export interface QueueConnection {
   deleteDead(): Promise<number>;
   /** The ids of workspaces not deleted, after `after`, in id order, at most `max` (1 to 500): `crm_workspace_ids`. */
   workspaceIds(after: string | undefined, max: number): Promise<readonly string[]>;
+  /** Deleted workspaces past their window, oldest first, at most `max` (1 to 50): `crm_workspaces_to_purge` (spec 0031). */
+  workspacesToPurge(max: number): Promise<readonly string[]>;
   /** One outbox prune batch (`pruneOutbox`, spec 0007) on this connection: only crm_worker may run it. */
   pruneOutbox(): Promise<number>;
   /**
@@ -171,6 +173,12 @@ export function openQueueConnection(options: {
     async workspaceIds(after, max) {
       const result = await pool.query<{ id: string }>('select id from public.crm_workspace_ids($1, $2) as w(id)', [
         after ?? null,
+        max,
+      ]);
+      return result.rows.map((row) => row.id);
+    },
+    async workspacesToPurge(max) {
+      const result = await pool.query<{ id: string }>('select id from public.crm_workspaces_to_purge($1) as w(id)', [
         max,
       ]);
       return result.rows.map((row) => row.id);

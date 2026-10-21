@@ -138,6 +138,8 @@ export const workspaceDirectory = auth.table(
     workspaceId: uuid('workspace_id').notNull().primaryKey(),
     slug: text('slug').notNull(),
     name: text('name').notNull(),
+    /** Set while the workspace is deleted (spec 0031, AC-823), so "my workspaces" leaves it out. Grants nothing. */
+    deletedAt: timestamptz('deleted_at'),
     createdAt: createdAt(),
   },
   (t) => [

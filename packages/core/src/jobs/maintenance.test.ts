@@ -54,6 +54,7 @@ function sweepOf(workspaceIds: readonly string[], pruned: readonly number[] = [0
       calls.pages += 1;
       return Promise.resolve(sorted.filter((id) => after === undefined || id > after).slice(0, max));
     },
+    workspacesToPurge: () => Promise.resolve([]),
   };
   return { sweep, calls };
 }

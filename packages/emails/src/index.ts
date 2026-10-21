@@ -3,12 +3,13 @@
 // layout draws the words as HTML and plain text, and nothing here sends: the
 // api's mailer does, from the request (a sign in code, an invitation) or the
 // worker (a booking's emails).
-import { JoinApprovedEmail, JoinRequestEmail, MemberInviteEmail } from '@crm/contracts/emails';
+import { JoinApprovedEmail, JoinRequestEmail, MemberInviteEmail, WorkspaceDeletedEmail } from '@crm/contracts/emails';
 import { appUrl, type EmailMedium } from './links.ts';
 import { renderDocument, type RenderedEmail } from './render.ts';
 import { bookingDocument, type BookingWords } from './templates/booking.ts';
 import { memberInvite } from './templates/invite.ts';
 import { joinApproved, joinRequest } from './templates/join.ts';
+import { workspaceDeleted } from './templates/workspace.ts';
 import { SIGN_IN_CODE_MINUTES, signInCode } from './templates/sign-in-code.ts';
 
 export type { DocumentRow, EmailBlock, EmailDocument } from './document.ts';
@@ -27,7 +28,12 @@ export { emailStylesheet, paint, ROLE_NAMES, type Role } from './theme.ts';
 export type { Template, TemplateContext } from './template.ts';
 export { SIGN_IN_CODE_MINUTES, SIGN_IN_CODE_SUBJECT } from './templates/sign-in-code.ts';
 export type { BookingWords } from './templates/booking.ts';
-export type { JoinApprovedEmail, JoinRequestEmail, MemberInviteEmail } from '@crm/contracts/emails';
+export type {
+  JoinApprovedEmail,
+  JoinRequestEmail,
+  MemberInviteEmail,
+  WorkspaceDeletedEmail,
+} from '@crm/contracts/emails';
 
 /** The sign in code email (spec 0005), sent in its request: the code, how long it works, and the shared footer. */
 export async function renderSignInCode(code: string, context: { readonly appOrigin: string }): Promise<RenderedEmail> {
@@ -97,6 +103,18 @@ export async function renderJoinApproved(
   const parsed = JoinApprovedEmail.parse(params);
   return renderDocument(
     joinApproved(parsed, { workspaceName: context.workspaceName, link: (path) => appUrl(context.appOrigin, path) }),
+    { appOrigin: context.appOrigin, medium: 'email_invite' },
+  );
+}
+
+/** A deleted workspace (spec 0031, AC-823), to one of its active members, tagged `email_invite`. */
+export async function renderWorkspaceDeleted(
+  params: WorkspaceDeletedEmail,
+  context: { readonly appOrigin: string; readonly workspaceName: string },
+): Promise<RenderedEmail> {
+  const parsed = WorkspaceDeletedEmail.parse(params);
+  return renderDocument(
+    workspaceDeleted(parsed, { workspaceName: context.workspaceName, link: (path) => appUrl(context.appOrigin, path) }),
     { appOrigin: context.appOrigin, medium: 'email_invite' },
   );
 }

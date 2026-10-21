@@ -319,6 +319,8 @@ export function createApp({
         // Only the directory's one write, so a member handler holds nothing else of global identity at run time.
         directory: {
           dropMembership: (userId, workspaceId, memberId) => identity.dropMembership(userId, workspaceId, memberId),
+          renameWorkspace: (workspaceId, name) => identity.renameWorkspace(workspaceId, name),
+          setWorkspaceDeleted: (workspaceId, deleted) => identity.setWorkspaceDeleted(workspaceId, deleted),
         },
       },
     });

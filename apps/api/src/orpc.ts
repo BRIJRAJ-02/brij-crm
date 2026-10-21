@@ -95,11 +95,12 @@ export interface RequestContext extends ResponseHeadersPluginContext {
    */
   mayStartWorkspace: (email: string) => boolean;
   /**
-   * The directory's one write a member handler needs (spec 0031): forgetting
-   * that a removed person is in this workspace once their removal commits,
-   * so their switcher stops listing it. Access never reads the directory.
+   * The directory's writes a member handler needs (spec 0031), each after
+   * its tenant change commits: forgetting that a removed person is in this
+   * workspace, so their switcher stops listing it, and a workspace's renamed
+   * label and deleted mark (slice 7). Access never reads the directory.
    */
-  directory: Pick<IdentityStore, 'dropMembership'>;
+  directory: Pick<IdentityStore, 'dropMembership' | 'renameWorkspace' | 'setWorkspaceDeleted'>;
 }
 
 /** What `authed` adds: the signed in person. */

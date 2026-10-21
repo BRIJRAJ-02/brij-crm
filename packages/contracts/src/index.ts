@@ -20,6 +20,8 @@ import { tasksContract } from './tasks.ts';
 import { usageContract } from './usage.ts';
 import { viewsContract } from './views.ts';
 import { workspacesContract } from './workspaces.ts';
+import { deletedWorkspaceContract, workspaceContract } from './workspace-settings.ts';
+import { profileContract } from './profile.ts';
 
 export * from './access.ts';
 export * from './activity.ts';
@@ -52,17 +54,25 @@ export * from './view-model.ts';
 export * from './views.ts';
 export * from './values/index.ts';
 export * from './workspaces.ts';
+export * from './workspace-settings.ts';
+export * from './profile.ts';
 
 /**
  * The one contract the web app, the API and the worker share. Each feature
  * adds its own namespace here. Every procedure outside the bootstrap list
- * (`system.*`, `me.get`, `workspaces.create`, `realtime.connectionToken`)
+ * (`system.*`, `me.get`, `workspaces.create`, `realtime.connectionToken`, `join.*`,
+ * `deletedWorkspace.*`)
  * takes `WorkspaceScoped` input and is served behind the API's member door.
  */
 export const contract = {
   system: systemContract,
   me: meContract,
   workspaces: workspacesContract,
+  // Settings › Workspace › General and the owner's delete (spec 0031, slice 7); a deleted one's restore (bootstrap).
+  workspace: workspaceContract,
+  deletedWorkspace: deletedWorkspaceContract,
+  // Settings › Account › Profile (spec 0031, slice 7).
+  profile: profileContract,
   objects: objectsContract,
   attributes: attributesContract,
   options: optionsContract,

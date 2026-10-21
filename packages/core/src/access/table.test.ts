@@ -36,6 +36,10 @@ const NO_SCOPE: ReadonlySet<string> = new Set([
   // lookup and a system scope in each.
   'listJoinable',
   'requestToJoin',
+  // A deleted workspace's owner only (spec 0031, AC-823): it reads the owner row itself and mints their scope.
+  'enterDeletedWorkspace',
+  // The worker's purge of a deleted workspace past its window (AC-823): the database's purge functions guard it.
+  'purgeWorkspace',
   'createWorkspace',
   'createUserWorkspace',
   // Pure access functions.
