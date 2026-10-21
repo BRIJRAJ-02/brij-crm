@@ -36,12 +36,12 @@ import { useNavigate, useRouteContext, useRouter } from '@tanstack/react-router'
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useCan, WorkspacePage } from '../workspace/WorkspacePage.tsx';
 import { DeleteFormDialog, PauseFormDialog } from './FormConfirms.tsx';
-import { fileByLabel, publishAttributesOf, sameDocument, statusOf } from './draft.ts';
+import { draftGap, fileByLabel, publishAttributesOf, sameDocument, savableDraft, statusOf } from './draft.ts';
 import { InstallTab } from './InstallTab.tsx';
 import { formHref, formPreviewHref, formsHref, FORM_TABS, type FormTab } from './paths.ts';
 import { PublishDialog } from './PublishDialog.tsx';
 import { QuestionsSection } from './QuestionsSection.tsx';
-import { firstRefusal } from './refusals.ts';
+import { firstRefusal, saveFailureMessage } from './refusals.ts';
 import { SettingsTab, useFormSettings } from './SettingsTab.tsx';
 import { useJobFollower } from './followJobs.ts';
 import { strings } from './strings.ts';
@@ -104,6 +104,8 @@ export function FormEditor(props: FormEditorProps) {
   // After a publish that changed where answers go: offer to file the submissions before it the same way.
   const [syncOffer, setSyncOffer] = useState<'published' | 'connected' | 'menu' | undefined>(undefined);
   const [isRetargeting, setRetargeting] = useState(false);
+  // A blocked Publish shows every incomplete Settings field's message at once, wherever it was pressed from.
+  const [showGaps, setShowGaps] = useState(false);
   const jobs = useJobFollower(data.jobs.view(slug, 'mine'));
   // The end of the tab strip, where a tab draws its own tools (Submissions' filter and search).
   const [toolbarSlot, setToolbarSlot] = useState<HTMLElement | null>(null);
@@ -123,16 +125,18 @@ export function FormEditor(props: FormEditorProps) {
   });
   const latest = useRef(draft);
   const inFlight = useRef<Promise<number> | undefined>(undefined);
-  const failedOnce = useRef(false);
+  // The last failed save's toast, so a run of failures for one reason says it once.
+  const lastFailure = useRef<string | undefined>(undefined);
 
   /** Saves the draft when it differs from the server's; answers the revision to go on from. */
   const flush = async (): Promise<number> => {
     if (inFlight.current !== undefined) await inFlight.current.catch(() => undefined);
-    const document = latest.current;
+    // A field still being typed (a partial web address) keeps the server's value, so the rest still saves.
+    const document = savableDraft(latest.current, saved.current.document);
     if (sameDocument(document, saved.current.document)) return saved.current.revision;
     const sending = data.forms.saveDraft(slug, form.id, document, saved.current.revision).then((view) => {
       saved.current = { document, revision: view.revision };
-      failedOnce.current = false;
+      lastFailure.current = undefined;
       setForm(view);
       return view.revision;
     });
@@ -154,8 +158,9 @@ export function FormEditor(props: FormEditorProps) {
           setConflict(true);
           return;
         }
-        if (!failedOnce.current) toasts.toast({ tone: 'danger', message: strings.saveFailed });
-        failedOnce.current = true;
+        const message = saveFailureMessage(error);
+        if (lastFailure.current !== message) toasts.toast({ tone: 'danger', message });
+        lastFailure.current = message;
       });
     }, SAVE_AFTER_MS);
     return () => {
@@ -206,6 +211,20 @@ export function FormEditor(props: FormEditorProps) {
 
   const publish = () => {
     setProblem(undefined);
+    // A Settings field still being typed never goes live half done: Settings shows what it needs beside the field.
+    const gap = draftGap(draft);
+    if (gap !== undefined) {
+      toasts.toast({
+        tone: 'danger',
+        message:
+          gap === 'redirect'
+            ? strings.publishGap(strings.redirectIncomplete)
+            : strings.publishGapButton(strings.buttonTextMissing),
+      });
+      setShowGaps(true);
+      if (tab !== 'settings') void navigate({ href: formHref(slug, form.id, 'settings') });
+      return;
+    }
     const attributes = publishAttributesOf(target);
     // The first publish names the form and its address in its dialog; the questions are checked first.
     const found = publishProblem({
@@ -431,6 +450,7 @@ export function FormEditor(props: FormEditorProps) {
             onDraftChange={setDraft}
             onRetarget={retarget}
             isRetargeting={isRetargeting}
+            showGaps={showGaps}
           />
         );
       case 'install':

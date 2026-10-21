@@ -88,6 +88,12 @@ export const strings = {
   someoneChanged: 'Someone else changed this form.',
   loadTheirs: 'Load their version',
   saveFailed: 'Your last change didn’t save. Check your connection; it saves again as you go on.',
+  saveRefused: (why: string) => `Your last change didn’t save. ${why}`,
+  redirectIncomplete: 'Give a full address, like https://example.com.',
+  buttonTextMissing: 'Give the button some text.',
+  /** Publish refused while a Settings field is incomplete: which card, then what it needs. */
+  publishGap: (what: string) => `After sending needs a web address. ${what}`,
+  publishGapButton: (what: string) => `Text needs the button’s words. ${what}`,
   colour: 'Colour',
   light: 'Light form',
   dark: 'Dark form',
@@ -167,7 +173,6 @@ export const strings = {
   // Settings tab
   nameAndAddress: 'Name, link and owner',
   nameAndLink: 'Name and link',
-  savedWithSave: 'Changes here apply when you save',
   nameHint: 'Only your team sees it.',
   nameRequired: 'Give the form a name.',
   addressChanged: 'Address changed. The old link no longer works.',
@@ -177,14 +182,10 @@ export const strings = {
   subheadingOptional: 'Subheading (optional)',
   addressChangeWarning: 'Once saved, the old link stops working.',
   buttonText: 'Button text',
-  buttonDefault: 'Send',
-  wordsTitle: 'The words on the form',
-  waitsForPublish: 'Changed, goes live when you publish',
+  wordsTitle: 'Text',
   afterTitle: 'After sending',
   afterTip:
-    'What a visitor sees once they press Send: your thank you message, another web page, or one of your booking pages to book a meeting, with their name and email already filled in.',
-  afterTipExample:
-    'Book a meeting with “After 5 seconds” shows the thank you message and a countdown with Book now and Stay here, then opens the booking page.',
+    'What a visitor sees once they press Send. Book a meeting opens one of your booking pages with their name and email filled in.',
   afterChoice: 'What they see next',
   showMessage: 'A thank you message',
   sendToAddress: 'Another web page',
@@ -204,28 +205,27 @@ export const strings = {
   countdownAtOnce: 'At once',
   countdownAfter: (seconds: number) => `After ${String(seconds)} seconds`,
   bookingPreview: (seconds: number) =>
-    seconds === 0
-      ? 'Visitors go straight on to book once they send.'
-      : `Visitors see “Taking you to book a time in ${String(seconds)}…” with Book now and Stay here.`,
-  bookingThankYouHint: 'Shown above the countdown, and on its own if the booking page is off when they send.',
+    seconds === 0 ? 'They go straight on to book.' : 'They see Book now and Stay here during the countdown.',
+  bookingThankYouHint: (seconds: number) =>
+    seconds === 0 ? 'Shown if the booking page is off when they send.' : 'Shown above the countdown.',
+  crmTitle: 'Saving to CRM',
   addToCrmSwitch: 'Add each submission to the CRM',
   addToCrmOn: (object: string, match: string | undefined) =>
     match === undefined
       ? `Each submission makes a ${object}.`
       : `Each submission makes a ${object}, or updates the one with the same ${match}.`,
-  addToCrmOff: 'Submissions stay in the Submissions tab. Nothing is added to the CRM.',
-  whichObject: 'Where submissions go',
+  whichObject: 'Save to',
+  mappingLabel: 'Where each answer is saved',
+  mappingQuestion: 'Question',
+  mappingSavedAs: 'Saved as',
   retargetFailed: 'That didn’t change where submissions go.',
-  eachSend: 'Each submission',
-  createsOrUpdates: (object: string, match: string | undefined) =>
-    match === undefined ? `Creates a ${object}` : `Creates a ${object}, or updates the one with the same ${match}`,
   filedOn: (object: string, attribute: string) => `${object} › ${attribute}`,
   keptOnly: 'Kept with the submission only',
   owner: 'Owner',
-  ownerHint: 'New records get this owner; a record that already has one keeps it.',
+  ownerHint: 'For new records only.',
   nobody: 'Nobody',
   spamTitle: 'Spam protection',
-  spamSummary: 'On. Bots and junk are caught for you, and doubtful sends wait for your review.',
+  spamSummary: 'On. Doubtful sends wait for your review.',
   spamReview: 'Review submissions that need a look',
   settingsFailed: 'That didn’t save.',
 
@@ -247,10 +247,9 @@ export const strings = {
   embedInline: 'In the page',
   embedPopup: 'Popup',
   embedFloating: 'Corner button',
-  embedInlineHint: 'Fills the width of the space you put it in and grows with the form, so it never scrolls inside.',
-  embedPopupHint:
-    'Your own button opens the form in a dialog; on a phone it fills the screen. Style the button as you like.',
-  embedFloatingHint: 'A button in the corner of every page that opens the form. Change its words in data-timefix-text.',
+  embedInlineHint: 'Fills its space and grows with the form.',
+  embedPopupHint: 'Your own button opens it in a dialog.',
+  embedFloatingHint: 'A corner button on every page opens it. Change its words in data-timefix-text.',
   /** The words on the popup's and the corner's button, until the site changes them. */
   embedButtonText: 'Contact us',
   embedSnippet: 'Embed snippet',

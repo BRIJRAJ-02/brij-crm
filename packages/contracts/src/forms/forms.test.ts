@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { fitsAttribute, freeKey, keyFromLabel, slugFromName, FORM_SLUG } from './answer-types.ts';
 import { checkAnswers, websiteOf, type CheckedForm } from './check.ts';
 import { DIAL_CODES, toE164 } from './dial-codes.ts';
-import { defaultQuestions, FormDocument } from './document.ts';
+import { defaultQuestions, FormDocument, RedirectUrl } from './document.ts';
 import { publishProblem, type PublishAttribute } from './publish.ts';
 import { COUNTRY_CODES } from '../values/countries.ts';
 
@@ -186,5 +186,20 @@ describe('FormDocument and publishProblem (AC-655)', () => {
     expect(check({ document: { ...document, questions: [...document.questions, gone] } })).toBe(
       '“Budget” is filed on an attribute that no longer exists. Choose another in Where it goes, or Not filed.',
     );
+  });
+});
+
+describe('RedirectUrl (the after sending web address)', () => {
+  it('refuses a partial address with its sentence, never by throwing (it was a 500 shown as "check your connection")', () => {
+    for (const partial of ['https://', 'nope', '']) {
+      const parsed = RedirectUrl.safeParse(partial);
+      expect(parsed.success).toBe(false);
+      expect(parsed.error?.issues[0]?.message).toBe('Give a full address that starts with https://.');
+    }
+  });
+
+  it('takes a full https address', () => {
+    expect(RedirectUrl.safeParse('https://example.com/thanks').success).toBe(true);
+    expect(RedirectUrl.safeParse('http://example.com').success).toBe(false);
   });
 });

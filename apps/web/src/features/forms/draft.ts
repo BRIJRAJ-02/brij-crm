@@ -267,3 +267,41 @@ export function sameDocument(a: FormDocument | undefined, b: FormDocument | unde
   };
   return JSON.stringify(sorted(a)) === JSON.stringify(sorted(b));
 }
+
+/**
+ * Whether a web address is complete enough for "Another web page": https (http only for localhost, for local
+ * testing), a host with a dot in it, at most 2,048 characters. As strict as the server's check or stricter, so the
+ * draft never sends one the server refuses.
+ */
+export function isRedirectAddress(value: string): boolean {
+  if (value.length > 2_048) return false;
+  let url: URL;
+  try {
+    url = new URL(value);
+  } catch {
+    return false;
+  }
+  if (url.hostname === 'localhost') return url.protocol === 'https:' || url.protocol === 'http:';
+  return url.protocol === 'https:' && /^[^.]+(\.[^.]+)+$/.test(url.hostname);
+}
+
+/** What a Settings field still needs before the draft can hold it: the web address, or the button's words. */
+export type DraftGap = 'redirect' | 'button';
+
+/** The first field typed into but not yet complete, which neither saves nor publishes until it is. */
+export function draftGap(document: FormDocument): DraftGap | undefined {
+  if (document.after.kind === 'redirect' && !isRedirectAddress(document.after.url)) return 'redirect';
+  if (document.buttonText.trim() === '') return 'button';
+  return undefined;
+}
+
+/**
+ * The draft as it can be saved: a field still being typed (a partial web address, empty button words) keeps what
+ * the server holds, so every other change still saves, and the half typed field never comes back as a failed save.
+ */
+export function savableDraft(document: FormDocument, saved: FormDocument): FormDocument {
+  const after =
+    document.after.kind === 'redirect' && !isRedirectAddress(document.after.url) ? saved.after : document.after;
+  const buttonText = document.buttonText.trim() === '' ? saved.buttonText : document.buttonText;
+  return after === document.after && buttonText === document.buttonText ? document : { ...document, after, buttonText };
+}

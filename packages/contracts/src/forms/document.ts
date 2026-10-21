@@ -78,6 +78,9 @@ export const RedirectUrl = z
   .max(2_048)
   .refine(
     (value) => {
+      // Zod 4 runs this even after `.url()` has refused the value, so a partial address ("https://") must not
+      // throw here: a throw turned a field's refusal into a 500, which the builder showed as a lost connection.
+      if (!URL.canParse(value)) return false;
       const url = new URL(value);
       return url.protocol === 'https:' || (url.protocol === 'http:' && url.hostname === 'localhost');
     },

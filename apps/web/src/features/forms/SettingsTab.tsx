@@ -1,9 +1,8 @@
 // Brief
 // Purpose: a form's Settings tab (spec 0023), for someone setting up a form in under a minute: what people see after
 // sending, whether and where submissions go in the CRM, the form's words, its name and address, and spam protection.
-// Main task: read each group's one line summary, change only what needs changing (the defaults already work), and
-// save the name, address and owner from the SaveBar; the words, what follows a send and where submissions go go live
-// on Publish.
+// Main task: scan the groups, change only what needs changing (the defaults already work), and save the name,
+// address and owner from the SaveBar; the rest goes live on Publish, which the header's state says once (not each card).
 // Leaves out: email notifications (no backend yet), each question's filing (set on the question, linked from here),
 // and the look (beside the preview).
 import type {
@@ -17,7 +16,6 @@ import type {
 import { useCaptureList } from '@crm/data/react';
 import {
   Card,
-  DescriptionList,
   Field,
   InfoTip,
   Link,
@@ -26,13 +24,14 @@ import {
   SaveBar,
   Select,
   Switch,
+  Table,
   type SaveBarStatus,
 } from '@crm/ui';
 import { useRouteContext } from '@tanstack/react-router';
 import { useState } from 'react';
 import { linksHref } from '../booking/links.ts';
 import { pageHeading } from '../navigation/focus.ts';
-import { sameDocument } from './draft.ts';
+import { isRedirectAddress } from './draft.ts';
 import { formHref } from './paths.ts';
 import { firstRefusal } from './refusals.ts';
 import { strings } from './strings.ts';
@@ -160,6 +159,8 @@ export interface SettingsTabProps {
   readonly onRetarget: (objectId: string | null) => void;
   /** A change of where submissions go is on its way. */
   readonly isRetargeting: boolean;
+  /** Publish was refused for an incomplete field: show its message whether or not it was left yet. */
+  readonly showGaps: boolean;
 }
 
 /** The groups, as Cards with a one line summary each, set two abreast where there is room. */
@@ -175,6 +176,7 @@ export function SettingsTab({
   onDraftChange,
   onRetarget,
   isRetargeting,
+  showGaps,
 }: SettingsTabProps) {
   const { data } = useRouteContext({ from: '__root__' });
   // What each follow up last held, so switching back and forth keeps what was typed.
@@ -190,17 +192,23 @@ export function SettingsTab({
   const usable = pageList.filter((page) => page.canChange && page.status === 'live');
 
   const after = draft.after;
-  const live = form.live;
-  const seenChanged =
-    live !== undefined &&
-    (draft.headline !== live.headline ||
-      (draft.subheading ?? '') !== (live.subheading ?? '') ||
-      draft.buttonText !== live.buttonText);
-  const afterChanged = live !== undefined && !sameDocument({ ...draft, after }, { ...draft, after: live.after });
-  const targetChanged = live !== undefined && live.targets.main?.objectId !== draft.targets.main?.objectId;
+  // An incomplete field (a partial web address, no button words) says what it needs once it is left, never mid
+  // typing, or when a Publish was refused for it; until then the draft keeps the value before, and Publish waits.
+  // Coming back to the tab with one still incomplete shows it at once.
+  const [left, setLeft] = useState(() => ({
+    address: after.kind === 'redirect' && !isRedirectAddress(after.url),
+    button: draft.buttonText.trim() === '',
+  }));
+  const redirectError =
+    !isReadOnly && after.kind === 'redirect' && (left.address || showGaps) && !isRedirectAddress(after.url)
+      ? strings.redirectIncomplete
+      : undefined;
+  const buttonError =
+    !isReadOnly && (left.button || showGaps) && draft.buttonText.trim() === '' ? strings.buttonTextMissing : undefined;
 
   const choose = (next: AfterKind) => {
     if (next === after.kind) return;
+    setLeft((before) => ({ ...before, address: false }));
     // Keep what the other choice held, then bring back what this one held.
     setKept((before) =>
       after.kind === 'redirect'
@@ -240,16 +248,13 @@ export function SettingsTab({
   const matchId = draft.targets.main?.matchAttributeId;
   const matchQuestion = draft.questions.find((question) => question.filedOn?.attributeId === matchId);
   const matchTitle = matchQuestion?.label ?? attributeTitle(matchId);
-  // Each line links to its question on the Form tab, where its filing is set.
+  // Each row links to its question on the Form tab, where its filing is set.
   const filing = draft.questions.map((question) => {
     const title = attributeTitle(question.filedOn?.attributeId);
     return {
-      term: question.label.trim() === '' ? strings.untitledQuestion : question.label,
-      description: (
-        <Link href={questionHref(slug, form.id, question.id)}>
-          {title === undefined ? strings.keptOnly : strings.filedOn(objectName, title)}
-        </Link>
-      ),
+      id: question.id,
+      question: question.label.trim() === '' ? strings.untitledQuestion : question.label,
+      savedAs: title === undefined ? strings.keptOnly : strings.filedOn(objectName, title),
     };
   });
   // The object a submission goes to when the switch is turned on: People, else the first live object.
@@ -258,15 +263,7 @@ export function SettingsTab({
 
   return (
     <>
-      <Card
-        title={strings.afterTitle}
-        {...(afterChanged ? { description: strings.waitsForPublish } : {})}
-        actions={
-          <InfoTip label={strings.afterTitle} example={strings.afterTipExample}>
-            {strings.afterTip}
-          </InfoTip>
-        }
-      >
+      <Card title={strings.afterTitle} actions={<InfoTip label={strings.afterTitle}>{strings.afterTip}</InfoTip>}>
         <RadioGroup
           label={strings.afterChoice}
           isLabelHidden
@@ -349,9 +346,13 @@ export function SettingsTab({
         {after.kind === 'redirect' ? (
           <Field
             label={strings.redirectUrl}
-            hint={strings.redirectHint}
+            {...(redirectError === undefined ? {} : { error: redirectError })}
             type="url"
             value={after.url}
+            hint={strings.redirectHint}
+            onBlur={() => {
+              setLeft((before) => ({ ...before, address: true }));
+            }}
             isRequired
             isReadOnly={isReadOnly}
             onChange={(url) => {
@@ -362,7 +363,7 @@ export function SettingsTab({
           <Field
             label={strings.thankYou}
             placeholder={strings.thankYouDefault}
-            {...(after.kind === 'booking' ? { hint: strings.bookingThankYouHint } : {})}
+            {...(after.kind === 'booking' ? { hint: strings.bookingThankYouHint(after.countdownSeconds) } : {})}
             isMultiline
             showCounter
             value={after.message}
@@ -377,14 +378,11 @@ export function SettingsTab({
           />
         )}
       </Card>
-      <Card
-        title={strings.answersTitle}
-        {...(targetChanged ? { description: strings.waitsForPublish } : {})}
-        isBusy={isRetargeting}
-      >
+      <Card title={strings.crmTitle} isBusy={isRetargeting}>
         <Switch
           label={strings.addToCrmSwitch}
-          description={isFiling ? strings.addToCrmOn(objectName, matchTitle) : strings.addToCrmOff}
+          // Whether a submission makes a record or updates one matters, so it stays in view while the form files.
+          {...(isFiling && matchTitle !== undefined ? { description: strings.addToCrmOn(objectName, matchTitle) } : {})}
           isSelected={draft.targets.main !== undefined}
           isReadOnly={isReadOnly}
           isDisabled={isRetargeting || (draft.targets.main === undefined && firstObject === undefined)}
@@ -404,11 +402,28 @@ export function SettingsTab({
                 if (objectId !== null) onRetarget(objectId);
               }}
             />
-            <DescriptionList items={filing} />
+            {filing.length > 0 && (
+              <Table
+                label={strings.mappingLabel}
+                columns={[
+                  { id: 'question', label: strings.mappingQuestion, isRowHeader: true },
+                  { id: 'savedAs', label: strings.mappingSavedAs },
+                ]}
+                rows={filing}
+                getRowId={(row) => row.id}
+                renderCell={(row, column) =>
+                  column === 'question' ? (
+                    row.question
+                  ) : (
+                    <Link href={questionHref(slug, form.id, row.id)}>{row.savedAs}</Link>
+                  )
+                }
+              />
+            )}
           </>
         )}
       </Card>
-      <Card title={strings.wordsTitle} {...(seenChanged ? { description: strings.waitsForPublish } : {})}>
+      <Card title={strings.wordsTitle}>
         <Field
           label={strings.headline}
           placeholder={strings.headlineDefault}
@@ -430,8 +445,11 @@ export function SettingsTab({
         />
         <Field
           label={strings.buttonText}
-          placeholder={strings.buttonDefault}
           value={draft.buttonText}
+          {...(buttonError === undefined ? {} : { error: buttonError })}
+          onBlur={() => {
+            setLeft((before) => ({ ...before, button: true }));
+          }}
           maxLength={40}
           isReadOnly={isReadOnly}
           onChange={(buttonText) => {
@@ -439,7 +457,7 @@ export function SettingsTab({
           }}
         />
       </Card>
-      <Card title={isFiling ? strings.nameAndAddress : strings.nameAndLink} description={strings.savedWithSave}>
+      <Card title={isFiling ? strings.nameAndAddress : strings.nameAndLink}>
         <Field
           label={strings.name}
           hint={strings.nameHint}

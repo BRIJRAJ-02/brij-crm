@@ -3,14 +3,17 @@ import type { FormAttributeChoice, FormDocument } from '@crm/data';
 import {
   addQuestion,
   changeQuestion,
+  draftGap,
   duplicateQuestion,
   fileByLabel,
   filedLine,
   isMatchQuestion,
+  isRedirectAddress,
   moveQuestion,
   removeQuestion,
   restoreQuestion,
   sameDocument,
+  savableDraft,
   statusOf,
 } from './draft.ts';
 
@@ -141,5 +144,38 @@ describe('the builder’s draft changes', () => {
     const reordered = { ...base, look: { corners: 'rounded' as const, colour: 'light' as const } };
     expect(sameDocument(base, reordered)).toBe(true);
     expect(sameDocument(base, { ...base, headline: 'Hello' })).toBe(false);
+  });
+});
+
+describe('a Settings field still being typed (the save that failed as "check your connection")', () => {
+  const saved: FormDocument = { ...base, after: { kind: 'message', message: 'Thanks' } };
+
+  it('knows a complete web address from a partial one', () => {
+    expect(isRedirectAddress('https://example.com/thanks')).toBe(true);
+    expect(isRedirectAddress('http://localhost:5173/x')).toBe(true);
+    for (const partial of ['https://', '', 'https://exam', 'example.com', 'http://example.com', 'ftp://example.com']) {
+      expect(isRedirectAddress(partial)).toBe(false);
+    }
+  });
+
+  it('keeps the saved follow up while the address is partial, so the rest of the draft still saves', () => {
+    // Choosing Another web page leaves https:// in the field, which the server refuses as a whole draft.
+    const typing: FormDocument = { ...saved, headline: 'New headline', after: { kind: 'redirect', url: 'https://' } };
+    const sent = savableDraft(typing, saved);
+    expect(sent.after).toEqual(saved.after);
+    expect(sent.headline).toBe('New headline');
+    expect(draftGap(typing)).toBe('redirect');
+  });
+
+  it('sends the address once it is complete', () => {
+    const done: FormDocument = { ...saved, after: { kind: 'redirect', url: 'https://example.com' } };
+    expect(savableDraft(done, saved)).toBe(done);
+    expect(draftGap(done)).toBeUndefined();
+  });
+
+  it('keeps the saved button words while the field is empty', () => {
+    const empty: FormDocument = { ...saved, buttonText: '  ' };
+    expect(savableDraft(empty, saved).buttonText).toBe(saved.buttonText);
+    expect(draftGap(empty)).toBe('button');
   });
 });
