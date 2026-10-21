@@ -51,7 +51,12 @@ interface LabelledFace {
    * Google Calendar), drawn by ProviderMark as the brand publishes it.
    */
   readonly provider?: ProviderName;
-  readonly label?: never;
+  /**
+   * A fuller accessible name, when the visible label is a short word its place
+   * explains (Captures' "New", named "New form"). It must start with the
+   * visible label, so speech input can still say what it sees (WCAG 2.5.3).
+   */
+  readonly label?: string;
 }
 
 interface IconOnlyFace {
@@ -64,11 +69,15 @@ interface IconOnlyFace {
 
 type ButtonFace = LabelledFace | IconOnlyFace;
 
-/** Props for Button: a label (with an optional icon), or an icon with a `label` for its name. */
+/** Props for Button: a label (with an optional icon and a fuller `label` name), or an icon with a `label` for its name. */
 export type ButtonProps = ButtonLook &
   ButtonFace & {
     readonly onPress?: (event: PressEvent) => void;
-    /** Shows a spinner in place of the icon and ignores presses, while staying focusable. Change the label to the ongoing verb ("Saving"). */
+    /**
+     * Shows a spinner in place of the icon and ignores presses, while staying focusable. Change the label to the
+     * ongoing verb ("Saving"), unless the button must hold its width: then keep it and give a `label`, which React
+     * Aria extends with the spinner's "In progress".
+     */
     readonly isPending?: boolean;
     readonly type?: 'button' | 'submit' | 'reset';
     /** The `id` of the form it submits when it sits outside it, such as a Modal's footer submitting a Form in its body. */

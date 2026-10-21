@@ -6,8 +6,9 @@ const count = (n: number, one: string, many: string) => `${new Intl.NumberFormat
 export const strings = {
   forms: 'Forms',
   formsDescription: 'A form makes a person in Timefix from every enquiry, from a link, your site or your own form.',
+  /** The create button's name; it reads `newButton`, the same word as Links', so switching tabs moves nothing. */
   newForm: 'New form',
-  creating: 'Making the form…',
+  newButton: 'New',
   noForms: 'No forms yet',
   noFormsText: 'A form collects enquiries from a link or your site and files each one as a person.',
   failedTitle: 'Forms didn’t load',

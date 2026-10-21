@@ -149,8 +149,8 @@ export function LinksScreen({ data, slug }: LinksScreenProps) {
       status={list.status}
       cards={cards}
       newAction={
-        <Button variant="primary" icon="plus" onPress={() => setCreating(true)}>
-          {strings.newPage}
+        <Button variant="primary" icon="plus" label={strings.newPage} onPress={() => setCreating(true)}>
+          {strings.newButton}
         </Button>
       }
       empty={{ title: strings.emptyTitle, text: strings.emptyText, icon: 'calendar-clock' }}

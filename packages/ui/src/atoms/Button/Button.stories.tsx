@@ -218,6 +218,40 @@ export const DisabledWithReason: Story = {
   },
 };
 
+/** A short label with a fuller name: it reads "New" and is named "New form" (label in name holds). */
+export const ShortLabel: Story = {
+  parameters: { crm: { screenshot: false } },
+  args: { children: 'New', icon: 'plus', variant: 'primary', label: 'New form' },
+  play: async ({ canvas }) => {
+    const button = canvas.getByRole('button', { name: 'New form' });
+    await expect(button).toHaveTextContent('New');
+    await expect(button).toHaveAccessibleName('New form');
+  },
+};
+
+/** Pending keeps the width: the spinner takes the icon's place and the label stays, so nothing beside it moves. */
+export const PendingKeepsWidth: Story = {
+  parameters: { crm: { screenshot: false } },
+  render: () => (
+    <Stage>
+      <Button variant="primary" icon="plus" label="New form">
+        New
+      </Button>
+      <Button variant="primary" icon="plus" label="New form" isPending>
+        New
+      </Button>
+    </Stage>
+  ),
+  play: async ({ canvas }) => {
+    // Pending, React Aria adds the spinner's "In progress" to the name, so the change is heard.
+    const [idle, pending] = canvas.getAllByRole('button', { name: /^New form/ });
+    await expect(idle).toHaveAccessibleName('New form');
+    await expect(pending).toHaveAccessibleName('New form In progress');
+    await expect(pending).toHaveAttribute('aria-disabled', 'true');
+    await expect(idle?.getBoundingClientRect().width).toBe(pending?.getBoundingClientRect().width);
+  },
+};
+
 /** Pending: a spinner in place of the icon, presses ignored, still focusable. The label says what is happening. */
 export const Pending: Story = {
   parameters: { crm: { preview: true } },

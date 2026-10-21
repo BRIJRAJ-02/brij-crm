@@ -169,8 +169,14 @@ export function FormsScreen({ slug }: FormsScreenProps) {
       {...(canManage
         ? {
             newAction: (
-              <Button variant="primary" icon="plus" onPress={create} isPending={creating !== undefined}>
-                {creating === undefined ? strings.newForm : strings.creating}
+              <Button
+                variant="primary"
+                icon="plus"
+                label={strings.newForm}
+                onPress={create}
+                isPending={creating !== undefined}
+              >
+                {strings.newButton}
               </Button>
             ),
           }

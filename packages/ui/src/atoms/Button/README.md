@@ -14,6 +14,7 @@ Ported from the design system artifact's Button card. Every pressable control in
 <Button variant="primary" kbd="⌘↵" onPress={save}>Add to list</Button>
 <Button variant="primary" isPending>Saving</Button>
 <Button icon="ellipsis" label="More actions" onPress={openMenu} />
+<Button variant="primary" icon="plus" label="New form" onPress={create}>New</Button>
 <ToggleButton isSelected={showArchived} onChange={setShowArchived}>Show archived</ToggleButton>
 <SplitButton onPress={save} menu={<Menu label="Save options">…</Menu>}>Save</SplitButton>
 <CopyButton value={apiKey} label="Copy the key" />
@@ -31,10 +32,11 @@ Ported from the design system artifact's Button card. Every pressable control in
 - Labels are verbs in sentence case: "Add to list", never "ADD" or "Submit".
 - `CopyButton` takes `isDisabled` when there is nothing to copy yet (a form never published, a row still on its way), so a row of actions keeps its shape.
 
-Props: `children` (the label, a string) or `icon` with `label` (icon only); `icon`, `iconRight`; `provider` (a brand's mark in the icon's place); `variant`; `size` (`md` 26px, `lg` 30px to sit beside an input and pressed at 32px through an invisible `::after` a pixel past its border all round, so a card footer's controls can't be missed (the owner, 20 October 2026), `sm` a chip's 20px for an icon only Remove beside a chip inside a field's box, such as a picker's chosen member; why: a 26px button in a 30px box crowded the chip it removes); `kbd` (one keycap or several); `onPress`; `isDisabled`; `isPending`; `type`; `form`; `aria-describedby`; `isFullWidth`; `tooltipWhenCut`; `slot`; `ref`.
+Props: `children` (the label, a string) or `icon` with `label` (icon only), or `children` with `label` (a short label with a fuller name); `icon`, `iconRight`; `provider` (a brand's mark in the icon's place); `variant`; `size` (`md` 26px, `lg` 30px to sit beside an input and pressed at 32px through an invisible `::after` a pixel past its border all round, so a card footer's controls can't be missed (the owner, 20 October 2026), `sm` a chip's 20px for an icon only Remove beside a chip inside a field's box, such as a picker's chosen member; why: a 26px button in a 30px box crowded the chip it removes); `kbd` (one keycap or several); `onPress`; `isDisabled`; `isPending`; `type`; `form`; `aria-describedby`; `isFullWidth`; `tooltipWhenCut`; `slot`; `ref`.
 
 - `isFullWidth` fills the row, with the label at the start and the keycaps at the end, for the sidebar's Quick actions. `isFullWidth="center"` fills the row with the label in the middle: a Form's submit on a sign in page, and the other ways to go on under it (Continue with Google). A container never stretches a button itself; it asks for this.
 - `form` is the `id` of the form a `type="submit"` button sends when it sits outside it: a Modal's footer submitting the Form in its body (see Form's README).
+- `label` beside `children` (on Button, ToggleButton and ButtonLink alike) names the button more fully than its visible word: Captures' create button reads "New" on both tabs, so switching tabs moves nothing (the owner, 21 October 2026), and is named "New booking page" or "New form". The name must start with the visible label, so speech input users can say what they see (WCAG 2.5.3, label in name). Why not a longer label: the tabs' buttons would differ in width.
 - `aria-describedby` points at text that says more about the button, most often the line under a disabled one that says when it turns on ("You can send another in 42 seconds."), so a screen reader reads the two together.
 
 ## States
@@ -43,7 +45,7 @@ Props: `children` (the label, a string) or `icon` with `label` (icon only); `ico
 - **Pressed**: no shrink (the owner, 20 October 2026); a press reads through the hover and active colours. `scale-press` is 1, so nothing in the library scales on press.
 - **Focus**: from the keyboard only, a 1px `accent-line` border (3:1 on every surface) plus the faint `shadow-focus` halo. Primary and danger keep their edge (blue, red), so their 1px `accent-line` ring sits just outside, past a 1px gap. In forced colours, a 2px `Highlight` outline.
 - **Disabled**: at `opacity-disabled`, skipped by Tab, never pressed. When a line beside it says why or until when, `aria-describedby` ties that line to it.
-- **Pending** (`isPending`): a spinner in place of the icon, presses ignored, still focusable, at `opacity-busy`. Screen readers hear the change. Change the label to the ongoing verb ("Saving").
+- **Pending** (`isPending`): a spinner in place of the icon, presses ignored, still focusable, at `opacity-busy`. Screen readers hear the change. Change the label to the ongoing verb ("Saving"), unless the button must hold its width (Captures' New): then keep the label and give the button a `label`, and React Aria adds the spinner's "In progress" to its name ("New form In progress"). Without a `label`, whether "In progress" joins the name depends on the browser, so a kept label alone wouldn't reliably say anything changed.
 - **Selected** (`ToggleButton`): `accent-soft` with an `accent` edge, which holds 3:1 against the surface (the artifact marks a pressed day with the accent too). It keeps that look while hovered. `aria-pressed` tells screen readers.
 - **Shortcut** (`kbd`): the keycaps are for sight. The button states the shortcut through `aria-keyshortcuts` (`⌘↵` is `Meta+Enter`), so screen readers hear "Add to list", not "Add to list command return". On a touch only device (no hover, a coarse pointer) the keycaps are hidden: there are no keys to press.
 
@@ -60,7 +62,7 @@ Props: `children` (the label, a string) or `icon` with `label` (icon only); `ico
 - `onPress` replaces `onClick`, and `isDisabled` and `isPending` replace `disabled` and `loading` (React Aria's names, so props pass straight through). Pending keeps the button focusable, where the artifact disabled it.
 - `icon` and `iconRight` take registry names (`IconName`), so a typo is a type error.
 - `provider` puts a brand's own mark (ProviderMark) where the icon goes, for an action named after that brand: `<Button provider="google">Continue with Google</Button>`, Add to Google Calendar. It is decorative there, since the label names the brand. Why a prop and not an `icon`: the marks are the brands' own artwork, not Lucide glyphs, so they never join the icon registry.
-- The label is `children: string`. An icon only button takes `label` instead, and TypeScript refuses one without it.
+- The label is `children: string`. An icon only button takes `label` instead, and TypeScript refuses one without it; beside `children`, `label` gives a fuller name.
 - No `className`, `style` or other HTML attributes pass through: one look, set here.
 - `ButtonLink` is new (spec 0025, the guest's booking page): the same looks and sizes on a real link, so a new tab, a copied address and a download work as the browser's own. `href` passes `safeHref`; one that fails draws disabled.
 - `ToggleButton` is new (the artifact had no pressed state), for format toolbars and view toggles.
