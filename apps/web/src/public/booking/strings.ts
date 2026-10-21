@@ -18,6 +18,7 @@ export const strings = {
   chooseTime: 'Choose a time',
   view: 'Choose how to view times',
   month: 'Month',
+  chat: 'Book by chat',
   list: 'List',
   previousMonth: 'Previous month',
   nextMonth: 'Next month',
@@ -55,6 +56,14 @@ export const strings = {
   guestInvalid: 'Give each guest’s email address.',
   phoneRequired: 'Give a number to call you on.',
   trap: 'Leave this empty',
+  // Book by chat (spec 0042).
+  chatGreeting: (host: string, title: string, minutes: number) =>
+    `I book ${host}’s ${title} (${String(minutes)} minutes). When suits you? Type something like “tomorrow afternoon”, or pick a time below.`,
+  chatNoTimes: (host: string) => `${host} has nothing open right now. Check back soon.`,
+  chatSuggestions: ['Something later', 'Next week'] as readonly string[],
+  chatTooMany: 'That was a lot at once. Give it a few seconds and try again.',
+  chatTooLong: 'This chat is too long to go on. Start over to book.',
+  chatBooked: 'Booked. Opening your booking.',
   errors: {
     taken: 'Someone just took that time. Pick another.',
     gone: 'That time is no longer available. Pick another.',

@@ -8,6 +8,8 @@ import type {
   PublicBooked,
   PublicBookInput,
   PublicBookingPage,
+  PublicChatInput,
+  PublicChatReply,
   PublicManagedBooking,
   PublicPrefill,
   PublicSlots,
@@ -24,6 +26,9 @@ export type {
   PublicBooking,
   PublicManagedBooking,
   PublicBookingPage,
+  PublicChatInput,
+  PublicChatLine,
+  PublicChatReply,
   PublicLocation,
   PublicPrefill,
   PublicSlot,
@@ -51,6 +56,8 @@ export interface BookingClient {
   ): Promise<PublicSlots>;
   /** Books; the answer carries the guest page's token. */
   book(publicKey: string, input: PublicBookInput): Promise<PublicBooked>;
+  /** One turn of the booking chat (spec 0042); a turn that booked carries the guest page's token. */
+  chat(publicKey: string, input: PublicChatInput, signal?: AbortSignal): Promise<PublicChatReply>;
   /** The guest page's booking. */
   managed(token: string): Promise<PublicManagedBooking>;
   /** Where the booking's calendar file downloads from (a plain link: Add to calendar, Apple and .ics). */
@@ -137,6 +144,13 @@ export function createBookingClient(options: PublicClientOptions): BookingClient
         method: 'POST',
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify(input),
+      }),
+    chat: (publicKey, input, signal) =>
+      call<PublicChatReply>(`${encodeURIComponent(publicKey)}/chat`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify(input),
+        ...(signal === undefined ? {} : { signal }),
       }),
     managed: (token) => call<PublicManagedBooking>(`manage/${encodeURIComponent(token)}`),
     icsUrl: (token) => `${base}/manage/${encodeURIComponent(token)}/ics`,

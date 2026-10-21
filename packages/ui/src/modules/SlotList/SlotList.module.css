@@ -26,6 +26,18 @@
     letter-spacing: var(--tracking-title);
   }
 
+  /* The offers variant's day: a label over its times (the booking chat). */
+  .day {
+    margin: 0;
+    color: var(--text-secondary);
+    font: var(--text-label-strong);
+    letter-spacing: var(--tracking-label-strong);
+  }
+
+  .root[data-variant='offers'] {
+    gap: var(--space-6);
+  }
+
   .list {
     display: grid;
     grid-template-columns: minmax(0, 1fr);

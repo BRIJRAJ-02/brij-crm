@@ -11,6 +11,7 @@ export { Avatar } from '../atoms/Avatar/Avatar.tsx';
 /** The tagged timefix.ai link under every public page's footer, shared with the hosted form. */
 export { poweredByHref, type PoweredByPage } from '../lib/powered-by.ts';
 export { Button, ButtonLink } from '../atoms/Button/Button.tsx';
+export { Skeleton } from '../atoms/Skeleton/Skeleton.tsx';
 export { Switch } from '../atoms/Switch/Switch.tsx';
 export { Callout } from '../molecules/Callout/Callout.tsx';
 export { SegmentedControl } from '../molecules/SegmentedControl/SegmentedControl.tsx';

@@ -65,6 +65,32 @@ describe('createBookingClient', () => {
     expect(calls[0]?.init).toMatchObject({ credentials: 'omit' });
   });
 
+  it('sends a chat turn as JSON with no cookies, and a refusal as a DataError with its wait (spec 0042)', async () => {
+    const { client, calls } = fake((url) =>
+      url.endsWith('/chat')
+        ? Response.json({ text: 'Hi', offers: [], suggestions: [], duration: 30 })
+        : Response.json({}),
+    );
+    const input = {
+      conversationId: '0192f5a0-0000-7000-8000-000000000000',
+      duration: 30 as const,
+      timeZone: 'UTC',
+      hour12: true,
+      messages: [{ role: 'visitor' as const, text: 'tomorrow' }],
+    };
+    expect(await client.chat(KEY, input)).toEqual({ text: 'Hi', offers: [], suggestions: [], duration: 30 });
+    expect(calls[0]).toMatchObject({
+      url: `https://app.test/api/public/booking/${KEY}/chat`,
+      init: { method: 'POST', credentials: 'omit' },
+    });
+    const limited = fake(() =>
+      Response.json({ code: 'RATE_LIMITED', message: 'Too many.' }, { status: 429, headers: { 'retry-after': '7' } }),
+    );
+    const error = await limited.client.chat(KEY, input).catch((caught: unknown) => caught);
+    expect(isDataError(error) && error.code).toBe('RATE_LIMITED');
+    expect(isDataError(error) && error.retryAfterSeconds).toBe(7);
+  });
+
   it('sends cookies only to the viewer, the slots and forgetting, and builds the connect address', async () => {
     const { client, calls } = fake(() => Response.json({}));
     await client.slots(KEY, { from: 'a', to: 'b', duration: 30, tz: 'UTC' });

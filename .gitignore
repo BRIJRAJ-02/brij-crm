@@ -21,3 +21,6 @@ test-results/
 playwright-report/
 # The load harness (spec 0011): manifest, minted session cookies and results
 .load/
+
+# Swift build caches some tools leave behind.
+.build/

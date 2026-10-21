@@ -264,6 +264,7 @@ jobs:
           e2e/frame.flow.ts
           e2e/preferences.flow.ts
           e2e/loading-shape.flow.ts
+          e2e/booking-chat.flow.ts
       - name: Keep the traces and the logs
         if: failure()
         uses: actions/upload-artifact@v7

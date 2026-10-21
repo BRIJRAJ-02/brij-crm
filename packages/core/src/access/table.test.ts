@@ -158,6 +158,19 @@ const NO_SCOPE: ReadonlySet<string> = new Set([
   // the system in its workspace.
   'handOnBooking',
   'remakeEvent',
+  // Lead routing (spec 0043): a no show is marked through the booking's target (hostTarget, booking.manage), as a
+  // cancel is; the report checks its surface (the form's or page's own access) itself; the route and the record
+  // facts it reads are pure.
+  'markNoShow',
+  'routingReport',
+  'decideRoute',
+  'recordFactKeys',
+  // The notifications email (spec 0038): the worker's task parts, run as the member the door entered for it, on
+  // that member's own rows only.
+  'prepareNotificationEmail',
+  'markEmailed',
+  'releaseEmailed',
+  'queueNextEmail',
   // Calendar sync milestones 2 and 3 (spec 0024): a push notice comes from outside any workspace and reads as the
   // system in the one its channel token names; the events factory takes no scope (its services run as the system).
   'takeCalendarNotice',
@@ -244,6 +257,14 @@ async function refusalOf(call: Promise<unknown>) {
 }
 
 const entries = Object.entries(ACCESS_TABLE) as [string, AccessEntry][];
+
+/** The input an any member service needs to run at all (the inbox's own reads and changes, spec 0038). */
+const ANY_MEMBER_INPUT: Readonly<Record<string, unknown>> = {
+  listNotifications: { status: 'inbox' },
+  markNotifications: { ids: [] },
+  markAllRead: { status: 'inbox' },
+  setNotificationSettings: { digest: false },
+};
 
 describe('the walk: a principal without the access is refused', () => {
   const byPermission = entries.filter(
@@ -428,7 +449,7 @@ describe('the walk: a principal without the access is refused', () => {
     '%s answers any member',
     async (name) => {
       const { scope } = await memberOf('member');
-      await expect(Promise.resolve(service(name)(scope))).resolves.toBeDefined();
+      await expect(Promise.resolve(service(name)(scope, ANY_MEMBER_INPUT[name]))).resolves.toBeDefined();
     },
   );
 
@@ -506,6 +527,10 @@ async function dataWorld() {
       content: { type: 'doc', content: [{ type: 'paragraph', content: [{ type: 'text', text: 'Hello' }] }] },
     })
   ).note.id;
+  // A thread on that person (spec 0038).
+  const thread = await core.createComment(owner, { id: core.newId(), recordId, body: 'First thoughts' });
+  const threadId = thread.id;
+  const commentId = thread.comments[0]?.id ?? '';
   const member = memberScope.actor;
   const objectRule = (objectId: string, level: string) => ({
     subject: { type: 'role' as const, role: 'member' },
@@ -566,6 +591,8 @@ async function dataWorld() {
     peopleView,
     taskId,
     noteId,
+    threadId,
+    commentId,
   };
 }
 type DataWorld = Awaited<ReturnType<typeof dataWorld>>;
@@ -775,6 +802,23 @@ const DATA_CASES: Readonly<Record<string, DataCase>> = {
   ),
   // Notes (spec 0019): a hidden record's notes are absent, its list NOT_FOUND as the record is.
   getNote: refused('NOT_FOUND', (scope, world) => core.getNote(scope, { noteId: world.noteId })),
+  // Comments (spec 0038): a hidden record's threads are absent, to read and to write.
+  listThreads: refused('NOT_FOUND', (scope, world) => core.listThreads(scope, { recordId: world.recordId })),
+  getThreads: empty((scope, world) => core.getThreads(scope, { threadIds: [world.threadId] })),
+  commentVersions: refused('NOT_FOUND', (scope, world) => core.commentVersions(scope, { commentId: world.commentId })),
+  createComment: refused('NOT_FOUND', (scope, world) =>
+    core.createComment(scope, { id: core.newId(), recordId: world.recordId, body: 'Mine' }),
+  ),
+  updateComment: refused('NOT_FOUND', (scope, world) =>
+    core.updateComment(scope, { commentId: world.commentId, body: 'Changed' }),
+  ),
+  deleteComment: refused('NOT_FOUND', (scope, world) => core.deleteComment(scope, { commentId: world.commentId })),
+  setThreadResolved: refused('NOT_FOUND', (scope, world) =>
+    core.setThreadResolved(scope, { threadId: world.threadId, resolved: true }),
+  ),
+  toggleReaction: refused('NOT_FOUND', (scope, world) =>
+    core.toggleReaction(scope, { commentId: world.commentId, emoji: '👍', on: true }),
+  ),
   listNotes: refused('NOT_FOUND', (scope, world) => core.listNotes(scope, { recordId: world.recordId })),
   // A submissions export (spec 0023 follow-up): a form on a hidden object is absent, and so is anyone's export.
   startSubmissionsExport: refused('NOT_FOUND', (scope, world) =>

@@ -225,6 +225,22 @@ export const ACCESS_TABLE = {
   saveNote: { data: 'write' },
   deleteNote: { data: 'write' },
   restoreNote: { data: 'write' },
+  // Comments (spec 0038): a thread follows its record; reading the record is enough to read and to comment (AC-1152).
+  listThreads: { data: 'read' },
+  getThreads: { data: 'read' },
+  commentVersions: { data: 'read' },
+  createComment: { data: 'read' },
+  updateComment: { data: 'read' },
+  deleteComment: { data: 'read' },
+  setThreadResolved: { data: 'read' },
+  toggleReaction: { data: 'read' },
+  // The inbox (spec 0038): each member's own notifications and email settings, read and changed by any member.
+  listNotifications: { anyMember: true },
+  countUnread: { anyMember: true },
+  markNotifications: { anyMember: true },
+  markAllRead: { anyMember: true },
+  getNotificationSettings: { anyMember: true },
+  setNotificationSettings: { anyMember: true },
   // Calendar sync (spec 0024): a member's own connections only; a record's meetings through the record's door.
   listCalendarConnections: { anyMember: true },
   connectCalendar: { ownConnection: true },

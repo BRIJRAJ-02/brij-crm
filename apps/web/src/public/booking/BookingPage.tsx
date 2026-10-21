@@ -28,12 +28,14 @@ import {
   MonthTiles,
   SegmentedControl,
   Select,
+  Skeleton,
   SlotList,
   type BookingFact,
   type SelectItem,
 } from '@crm/ui/public-booking';
 import { lazy, Suspense, useCallback, useEffect, useMemo, useState } from 'react';
 import { railHost, railTitle } from './host.ts';
+import type { ChatMemory } from './ChatPanel.tsx';
 import type { Prefill } from './prefill.ts';
 import { saveHour12, savedHour12, savedView, saveView, type SlotView } from './prefs.ts';
 import { needsRead } from './reads.ts';
@@ -57,6 +59,8 @@ import { readReturn, returnPath, tidiedAddress, type Chosen, type ConnectResult 
 const visitorModule = import('@crm/ui/public-booking/visitor');
 const detailsModule = import('@crm/ui/public-booking/details');
 const VisitorBar = lazy(() => visitorModule.then((module) => ({ default: module.VisitorBar })));
+// Book by chat (spec 0042) loads only when Chat is first chosen.
+const ChatPanel = lazy(() => import('./ChatPanel.tsx').then((module) => ({ default: module.ChatPanel })));
 const BookingDetails = lazy(() => detailsModule.then((module) => ({ default: module.BookingDetails })));
 
 /** Props for the page: its key, the visitor's language and zone, the clock, a prefill, and where success goes. */
@@ -284,6 +288,8 @@ function Booking({
   // "Not you?": no name, no email and no overlay for the rest of the visit.
   const [notYou, setNotYou] = useState(false);
   const [showAll, setShowAll] = useState(false);
+  // Book by chat's conversation (spec 0042), kept while the length, the zone or the view changes.
+  const [chatMemory, setChatMemory] = useState<ChatMemory | undefined>(undefined);
   useEffect(() => {
     if (isPreview) return;
     let isCurrent = true;
@@ -697,16 +703,46 @@ function Booking({
       label={strings.view}
       value={view}
       onChange={(next) => {
-        const picked = next === 'list' ? 'list' : 'month';
+        const picked = next === 'list' || next === 'chat' ? next : 'month';
         setView(picked);
         saveView(picked);
       }}
       segments={[
         { value: 'month', label: strings.month, icon: 'calendar', isIconOnly: true },
         { value: 'list', label: strings.list, icon: 'list', isIconOnly: true },
+        { value: 'chat', label: strings.chat, icon: 'message-square', isIconOnly: true },
       ]}
     />
   );
+
+  if (view === 'chat') {
+    // Book by chat (spec 0042): the same card and rail, the conversation in the picker's place.
+    return (
+      <BookingFrame {...frame} heading={strings.chooseTime} toolbar={viewSwitch}>
+        {message ??
+          (chatMemory === undefined && allStarts.length === 0 && !noTimes ? (
+            <Skeleton shape="block" lines={4} />
+          ) : (
+            <Suspense fallback={<Skeleton shape="block" lines={4} />}>
+              <ChatPanel
+                client={client}
+                page={page}
+                locale={locale}
+                zone={zone}
+                hour12={hour12}
+                duration={duration}
+                starts={allStarts}
+                startedAt={startedAt}
+                memory={chatMemory}
+                onMemory={setChatMemory}
+                onDuration={setDuration}
+                onBooked={onBooked}
+              />
+            </Suspense>
+          ))}
+      </BookingFrame>
+    );
+  }
 
   const bookBar = (
     <Button

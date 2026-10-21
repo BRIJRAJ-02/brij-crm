@@ -196,6 +196,8 @@ export const BookingListItem = BookingView.extend({
   videoUrl: z.string().optional(),
   guests: z.array(z.string()),
   note: z.string().optional(),
+  /** The conversation, for a booking made by chat (spec 0042, AC-1522): who said each line and what. */
+  chat: z.array(z.object({ role: z.enum(['visitor', 'assistant']), text: z.string() })).optional(),
   cancelReason: z.string().optional(),
   /** Who cancelled it: the guest from their page, the host, or the host's calendar. */
   cancelledBy: z.enum(['guest', 'host', 'calendar']).optional(),

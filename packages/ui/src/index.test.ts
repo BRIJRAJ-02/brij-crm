@@ -26,6 +26,7 @@ describe('@crm/ui', () => {
       'Badge',
       'Board',
       'BookingChanges',
+      'BookingChat',
       'BookingDetails',
       'BookingFoot',
       'BookingFrame',

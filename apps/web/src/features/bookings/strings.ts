@@ -73,6 +73,12 @@ export const strings = {
   where: 'Where',
   note: 'Note',
   quoted: (note: string) => `“${note}”`,
+  /** A booking made by chat on the booking page (spec 0042). */
+  bookedHow: 'Booked',
+  bookedByChat: 'By chat on the booking page',
+  showChat: 'Chat',
+  chatVisitor: 'Visitor',
+  chatAssistant: 'Assistant',
   cancelReason: 'Why it was canceled',
   openPerson: 'Open their page',
   joinCall: 'Join call',
