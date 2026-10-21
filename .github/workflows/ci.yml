@@ -231,6 +231,7 @@ jobs:
           e2e/bulk.flow.ts
           e2e/tasks.flow.ts
           e2e/google.flow.ts
+          e2e/command.flow.ts
       - name: Keep the traces and the logs
         if: failure()
         uses: actions/upload-artifact@v7
