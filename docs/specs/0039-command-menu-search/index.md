@@ -20,7 +20,7 @@ Each has a recommendation, which the build follows unless the owner says otherwi
 
 ## Summary
 
-⌘K (Ctrl+K elsewhere) opens a command menu from anywhere in a workspace, instantly and with no animation. With nothing typed it lists the member's recent records and views, the actions (create a record of any object, switch the theme) and every page. Typing searches the records of every object the member can read (by name, email and domain, with typo tolerance), the views they can see, the pages and the Settings pages, all in one list grouped by kind. The keyboard does everything: the arrows move, Enter opens or runs, Esc closes. A screen reader hears the field, each highlighted row and how many results there are. Search runs in Postgres through the access door, so hidden records, objects, views and fields never reach the browser, and it holds its budget at a million records. The menu loads in its own chunk, outside the first load.
+⌘K (Ctrl+K elsewhere) opens a command menu from anywhere in a workspace, instantly and with no animation. With nothing typed it lists the member's recent records and views, the actions (create a record of any object, switch the theme) and every page. Typing searches the records of every object the member can read (by name, email and domain, with typo tolerance), the views they can see, the pages and the Settings pages, all in one list grouped by kind. The keyboard does everything: the arrows move, Enter opens or runs, Esc clears what is typed and then closes. A screen reader hears the field, each highlighted row and how many results there are. Search runs in Postgres through the access door, so hidden records, objects, views and fields never reach the browser, and it holds its budget at a million records. The menu loads in its own chunk, outside the first load.
 
 Reasoning and options: see [rationale.md](rationale.md).
 
@@ -50,18 +50,18 @@ Reasoning and options: see [rationale.md](rationale.md).
 *Opening*
 - **AC-1071**: ⌘K on a Mac keyboard (Ctrl+K elsewhere) opens the menu from any page inside a workspace, including Settings, whether focus is in a text field or not; pressed again while it is open, it closes the menu. `/` opens it in search mode, but only when focus isn't in a text field, an editor or a dialog.
 - **AC-1072**: Opened from the keyboard, the menu appears instantly (no scale, no fade). Opened by pointer from the sidebar, it grows in like any modal. Closing uses the exit fade. Under reduced motion only fades remain.
-- **AC-1073**: The menu opens with its search field focused and empty, and Esc closes it and returns focus to where it was. Opening it again starts empty.
+- **AC-1073**: The menu opens with its search field focused and empty, and Esc first clears what is typed (as the search field does), then closes it and returns focus to where it was (owner default, 21 October 2026). Opening it again starts empty.
 - **AC-1074**: The menu's code (the palette, its sections, the search client) is not in the first load. It loads on first use, or earlier while the browser is idle after the workspace frame paints, so the first ⌘K normally finds it ready. If it isn't ready, the key still opens it as soon as it loads, at most once per press.
 
 *With nothing typed*
 - **AC-1075**: The menu shows, in order: Recent (up to 6 of the member's most recently opened records and views, newest first), Actions (Create a <object> for each object the member may write, then the theme actions), and Go to (each object's page, Bookings, Captures, Trash and Settings).
-- **AC-1076**: A recent record shows its object's tile, its name and its object's singular name; a recent view shows the view's name and its object's plural name. Only records still live and readable, and views still visible to the member, are shown (the server resolves them).
+- **AC-1076**: A recent record shows the record's avatar (round for a person, square initials in the record's hue for any other record, as RecordChip draws it everywhere; owner default, 21 October 2026), its name and its object's singular name; a recent view shows the view's name and its object's plural name. Only records still live and readable, and views still visible to the member, are shown (the server resolves them).
 
 *Searching*
 - **AC-1077**: Typing searches after a pause of 150 ms from the last key, and a newer query aborts the request before it. Pages, Settings pages and actions filter in the browser at once on every key, while records and views come from the server.
 - **AC-1078**: Records match on each readable object's name, and on up to two email or domain attributes, but only attributes the member can see. With 1 or 2 characters the names that start with them match. With 3 or more, any of those attributes that contains the text matches. With 4 or more, if fewer than 20 records matched, names that are close (word similarity, a typo or a missing letter) are added after them.
 - **AC-1079**: Record results come in this order: names that start with the text, then names with a word that starts with it, then other contains matches, then close matches by similarity, each group by name. At most 20 records come back.
-- **AC-1080**: A record row shows its object's tile (or the person's avatar), its name, its first email or domain as a quiet second line when the object has one the member can see, and its object's singular name at the end.
+- **AC-1080**: A record row shows the record's avatar (as in AC-1076), its name, its first email or domain as a quiet second line when the object has one the member can see, and its object's singular name at the end.
 - **AC-1081**: Views match by name (contains, ignoring case) across every object the member can read, shared views and the member's own private ones only, at most 8, the default views of objects first, then by name.
 - **AC-1082**: Pages and Settings pages match on their name and a few synonyms ("Preferences" also on "theme", "appearance"; "Trash" on "deleted"; "Objects" on "attributes", "fields"). Only Settings pages the member may open are listed (`visibleSettingsNav`).
 - **AC-1083**: While the server search is out, the Records section shows one row reading "Searching…", and the result count waits. If the search fails, that row reads "The search didn't finish. Try again." and the browser side sections still show. If nothing matches anywhere, the menu says "Nothing matches “<text>”".
@@ -80,15 +80,15 @@ Reasoning and options: see [rationale.md](rationale.md).
 - **AC-1092**: Removing a member deletes their recent items (spec 0009's `removeMember`); deleting a view removes it from everyone's recents (cascade); a purged record drops out on read, and its row ages out under the 20 row cap.
 
 *Scale and speed*
-- **AC-1093**: On the million record seed (spec 0004, `pnpm db:seed:scale`), every search statement takes under 150 ms at p95 warm in the database call, including a common word, a rare word, a 2 character prefix and a typo of a rare word. One search makes at most 5 statements however many objects the workspace has.
+- **AC-1093**: On the million record seed (spec 0004, `pnpm db:seed:scale`), every search statement takes under 150 ms at p95 warm in the database call, including a common word, a rare word, a 2 character prefix and a typo of a rare word. One search makes a fixed number of statements however many objects the workspace has: at most 9 data statements, plus the workspace setting and the typo step's savepoint (counted in `verify.md`).
 - **AC-1094**: The typo step runs under a 300 ms statement timeout of its own inside a savepoint; when it runs out, the search answers the exact matches it has, never an error.
 - **AC-1095**: `search.query` shares the workspace read gate with `records.query` (6 at once per workspace per process) and is cancelled with its request.
 - **AC-1096**: `recents.list` reads one indexed range (`member_recents` by member and time) and resolves at most 20 ids; `recents.visit` is one upsert plus one prune by the same index.
 
 *Keyboard and screen readers*
-- **AC-1097**: The menu is a modal dialog named "Command menu" (search mode: "Search"). Its field is a combobox, and the rows are a menu with one group per section, each group named by its heading. Up and Down move the highlight across sections, Home and End jump, Enter chooses, Esc closes, and Tab does nothing that takes focus out of the dialog.
+- **AC-1097**: The menu is a modal dialog named "Command menu" (search mode: "Search"). Its field is a combobox, and the rows are a menu with one group per section, each group named by its heading. Up and Down move the highlight across sections, Home and End jump, Enter chooses (the top row when none is highlighted), Esc clears what is typed and then closes, and Tab does nothing that takes focus out of the dialog.
 - **AC-1098**: A polite live region says how many results show once the server answers ("12 results", "No results"), and says "Searching…" only when a search has taken longer than 500 ms, so typing quickly doesn't make it chatter.
-- **AC-1099**: The footer names the keys (↑↓ to move, ↵ to open, Esc to close), and actions show their own shortcut. Every row and the field meet WCAG AA contrast in both themes, and forced colours outline the highlighted row.
+- **AC-1099**: The footer names the keys (↑↓ to move, ↵ to choose, Esc to close), and actions show their own shortcut. Every row and the field meet WCAG AA contrast in both themes, and forced colours outline the highlighted row.
 
 *Quality*
 - **AC-1100**: The menu reads only through the data layer (`data.search`), and nothing about it goes into the record store.
@@ -173,7 +173,7 @@ No new component: sections are a variant of the existing module, because a secon
 | Record row name | the record's display name | `readRecords` (the primary attribute; "Unnamed <singular>" when empty) |
 | Record row second line | first email or domain | position 0 `values.text_value` of the first searched email or domain attribute the reader can see |
 | Record row kind | object singular name | `objects.singular_name` through `objects.list` (already in the frame) |
-| Record tile | hue and kind | `RecordRefDisplay` (`hue`, `kind`) |
+| Record avatar | name, hue and kind | `RecordRefDisplay` (`hue`, `kind`) |
 | View row | view name, object plural name | `views.name`; object from `objects.list` |
 | Recent order | newest first | `member_recents.visited_at` |
 | Pages and Settings | name, href, icon | `objects.ts` and `settingsNav` (one list each, shared with the sidebars) |

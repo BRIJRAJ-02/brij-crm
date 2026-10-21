@@ -4,6 +4,7 @@
 // door: something hidden is absent, never marked.
 import { oc } from '@orpc/contract';
 import * as z from 'zod';
+import { Uuid } from './values/ids.ts';
 import { RecordRefDisplay } from './values/options.ts';
 import { WorkspaceScoped } from './workspaces.ts';
 
@@ -51,8 +52,8 @@ export type RecordHit = z.infer<typeof RecordHit>;
 
 /** One view found or recently opened: its name, its object, its kind, and whether it is the object's default view. */
 export const ViewHit = z.object({
-  id: z.uuid(),
-  objectId: z.uuid(),
+  id: Uuid,
+  objectId: Uuid,
   name: z.string(),
   kind: z.enum(['table', 'board']),
   isDefault: z.boolean(),
@@ -84,7 +85,7 @@ export type RecentItems = z.infer<typeof RecentItems>;
 /** A record or a view the member just opened (AC-1088). */
 export const VisitRecentInput = WorkspaceScoped.extend({
   kind: z.enum(['record', 'view']),
-  id: z.uuid(),
+  id: Uuid,
 });
 /** A record or a view the member just opened. */
 export type VisitRecentInput = z.infer<typeof VisitRecentInput>;
