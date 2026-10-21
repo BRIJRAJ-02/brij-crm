@@ -60,7 +60,7 @@ test('My tasks: the four groups, the switches in the address, a tick, and midnig
 
   await page.getByRole('link', { name: 'My tasks' }).click();
   await expect(page).toHaveURL(new RegExp(`/w/${slug}/tasks$`));
-  await expect(page.getByRole('heading', { name: 'My tasks', level: 1 })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Tasks', level: 1 })).toBeVisible();
   const list = page.getByRole('grid', { name: /Assigned to me/ });
   const group = (name: string) =>
     list.locator('[role="row"]:has(> [role="rowheader"], > [role="columnheader"])', {
@@ -87,15 +87,15 @@ test('My tasks: the four groups, the switches in the address, a tick, and midnig
   expect(graceAt).toBeLessThan(upcomingAt);
   expect(calls).toEqual([]);
 
-  // The switches work by keyboard: arrows move the filter, and the address follows.
-  await page.getByRole('radio', { name: 'Assigned to me' }).focus();
+  // The tabs work by keyboard: arrows move the filter, and the address follows.
+  await page.getByRole('tab', { name: 'Assigned to me' }).focus();
   await page.keyboard.press('ArrowRight');
   await expect(page).toHaveURL(/\?filter=created$/);
   await page.keyboard.press('ArrowLeft');
   await expect(page).toHaveURL(new RegExp(`/w/${slug}/tasks$`));
 
   // All tasks: the address says so, and the unassigned one shows.
-  await page.getByRole('radiogroup', { name: 'Whose tasks' }).getByText('All tasks', { exact: true }).click();
+  await page.getByRole('tablist', { name: 'Whose tasks' }).getByRole('tab', { name: 'All tasks' }).click();
   await expect(page).toHaveURL(/\?filter=all$/);
   await expect(page.getByRole('grid', { name: /All tasks/ }).getByText('Nobody’s task', { exact: true })).toBeVisible();
 

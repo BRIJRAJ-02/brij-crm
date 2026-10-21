@@ -4,7 +4,7 @@
 // Leaves out: search and saved filters (#33, #20), other people's lists except through "All tasks", deleting (milestone 4).
 import type { MemberSummary, ObjectSummary, TaskList as TaskListSource, TaskMine } from '@crm/data';
 import { useTaskList } from '@crm/data/react';
-import { Button, SectionBar, SegmentedControl, TaskList, TopBar } from '@crm/ui';
+import { Button, SegmentedControl, TabPanel, Tabs, TaskList, TopBar } from '@crm/ui';
 import { useNavigate, useRouteContext, useRouter } from '@tanstack/react-router';
 import { useCallback, useMemo, useRef } from 'react';
 import { recordLinks } from '../records/timeline.ts';
@@ -106,7 +106,7 @@ export function MyTasksScreen({ slug, filter, status, task, list, objects, membe
       currentPage="tasks"
       page={{
         topBar: (
-          <TopBar title={strings.myTasks} icon="square-check">
+          <TopBar title={strings.tasks} icon="square-check">
             <Button
               variant="primary"
               onPress={() => {
@@ -117,53 +117,52 @@ export function MyTasksScreen({ slug, filter, status, task, list, objects, membe
             </Button>
           </TopBar>
         ),
-        toolbar: (
-          // A page bar rather than Toolbar: Toolbar's arrow keys would move focus off a segment instead of choosing.
-          <SectionBar
-            variant="bar"
-            start={
-              <SegmentedControl
-                label={strings.whoseTasks}
-                segments={FILTERS}
-                value={filter}
-                onChange={(value) => {
-                  const picked = FILTERS.find((each) => each.value === value);
-                  if (picked !== undefined) go({ filter: picked.value });
-                }}
-              />
-            }
-            end={
-              <SegmentedControl
-                label={strings.taskStatus}
-                segments={STATUSES}
-                value={status}
-                onChange={(value) => {
-                  const picked = STATUSES.find((each) => each.value === value);
-                  if (picked !== undefined) go({ status: picked.value });
-                }}
-              />
-            }
-          />
-        ),
         body: (
           <>
-            <TaskList
-              label={strings.listLabel(filterLabel, statusLabel)}
-              tasks={entries}
-              status={state.status === 'unavailable' ? 'no-access' : state.status}
-              onRetry={list.retry}
-              newIds={state.newIds}
-              {...(sectionOf === undefined ? {} : { sectionOf })}
-              emptyTitle={empty.title}
-              {...(empty.body === undefined ? {} : { emptyBody: empty.body })}
-              recordHref={recordHref}
-              onToggle={(entry, isDone) => {
-                void data.tasks.setDone(slug, entry.id, isDone);
+            {/* Whose tasks as the page's tabs, the row Bookings' Calendar, List and Availability take, with Open
+                and Completed at the strip's end, as Bookings keeps Upcoming, Past and Canceled (the owner, 21 Oct). */}
+            <Tabs
+              variant="bar"
+              label={strings.whoseTasks}
+              selectedKey={filter}
+              onSelectionChange={(next) => {
+                const picked = FILTERS.find((each) => each.value === next);
+                if (picked !== undefined && picked.value !== filter) go({ filter: picked.value });
               }}
-              onAction={(entry) => {
-                openTask(entry.id);
-              }}
-            />
+              tabs={FILTERS.map((each) => ({ id: each.value, label: each.label }))}
+              end={
+                <SegmentedControl
+                  label={strings.taskStatus}
+                  segments={STATUSES}
+                  value={status}
+                  onChange={(value) => {
+                    const picked = STATUSES.find((each) => each.value === value);
+                    if (picked !== undefined) go({ status: picked.value });
+                  }}
+                />
+              }
+            >
+              {/* One panel, always the chosen tab's, so the list stays mounted while the next one loads. */}
+              <TabPanel id={filter}>
+                <TaskList
+                  label={strings.listLabel(filterLabel, statusLabel)}
+                  tasks={entries}
+                  status={state.status === 'unavailable' ? 'no-access' : state.status}
+                  onRetry={list.retry}
+                  newIds={state.newIds}
+                  {...(sectionOf === undefined ? {} : { sectionOf })}
+                  emptyTitle={empty.title}
+                  {...(empty.body === undefined ? {} : { emptyBody: empty.body })}
+                  recordHref={recordHref}
+                  onToggle={(entry, isDone) => {
+                    void data.tasks.setDone(slug, entry.id, isDone);
+                  }}
+                  onAction={(entry) => {
+                    openTask(entry.id);
+                  }}
+                />
+              </TabPanel>
+            </Tabs>
             {task !== undefined && (
               <TaskDialog slug={slug} task={task} objects={objects} members={members} meId={meId} onClose={closeTask} />
             )}
