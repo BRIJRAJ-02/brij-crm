@@ -1,30 +1,32 @@
 // Brief
-// Purpose: Bookings › Availability (spec 0035, AC-969): the member's schedules as full width rows, each with its Default badge by its name, its week, its zone and how many booking pages use it.
-// Main task: open a schedule to edit it, make a new one, or set the default, duplicate or delete one from its menu.
-// Leaves out: editing hours (each schedule's own editor) and a calendar view of a schedule (a follow up).
+// Purpose: Bookings › Availability (spec 0035, AC-969, AC-970), the Calendly way (22 October 2026): the tab is the open schedule's editor, the default first, with a switcher to the member's other schedules.
+// Main task: change the open schedule's hours, zone and days off (each saves as it changes), or switch, make, rename, set as default, duplicate or delete a schedule from the switcher.
+// Leaves out: a list of schedules as rows (the switcher's menu lists them) and a calendar view of a schedule (a follow up).
 import { isDataError, type DataLayer, type ScheduleMember, type ScheduleView } from '@crm/data';
 import { useSchedules } from '@crm/data/react';
-import { Button, LinkList, SectionBar, Select, Tooltip, TopBar, type LinkRow } from '@crm/ui';
+import { Button, EmptyState, focusLater, PageColumn, SectionBar, Select, Tooltip, TopBar } from '@crm/ui';
 import { useNavigate, useRouteContext } from '@tanstack/react-router';
-import { useState, type ReactNode } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useBookingsActionSlot, useBookingsToolbarSlot } from '../bookings/toolbarSlot.ts';
 import { useCan, WorkspacePage } from '../workspace/WorkspacePage.tsx';
 import { DeleteScheduleDialog } from './DeleteScheduleDialog.tsx';
-import { weekSummary, zoneLabel } from './hours.ts';
 import { browserZone } from './zone.ts';
 import { availabilityHref, scheduleHref } from './links.ts';
 import { NewScheduleDialog } from './NewScheduleDialog.tsx';
-import { ScheduleMenu } from './ScheduleMenu.tsx';
+import { RenameScheduleDialog } from './RenameScheduleDialog.tsx';
+import { ScheduleEditor, ScheduleEditorPending } from './ScheduleEditor.tsx';
+import { ScheduleSwitcher } from './ScheduleSwitcher.tsx';
 import { SCHEDULES_MAX } from './schedules.ts';
 import { scheduleStrings } from './schedule-strings.ts';
 import { strings } from './strings.ts';
 
-/** Props for the list: the data layer, whose held schedules the route loaded. */
+/** Props for the tab: the data layer, whose held schedules the route loaded, and which one is open. */
 export interface AvailabilityScreenProps {
   readonly data: DataLayer;
   readonly slug: string;
-  readonly locale: string;
+  /** The open schedule (`?schedule=`); undefined opens the default. */
+  readonly scheduleId: string | undefined;
   /** Whose schedules show, when they aren't the reader's: an admin viewing a colleague's (AC-971). */
   readonly member: string | undefined;
   /** Whose schedules the reader may view (`schedules.members`): the Viewing Select's choices, for an admin. */
@@ -33,36 +35,8 @@ export interface AvailabilityScreenProps {
   readonly me: string;
 }
 
-/**
- * A schedule's row, one line (the owner, 22 October 2026): its name with Default right after it, its week, then
- * its zone and its use as plain muted facts, and its menu at the end (none on the virtual default).
- */
-function rowOf(
-  slug: string,
-  member: string | undefined,
-  schedule: ScheduleView,
-  locale: string,
-  menu: ReactNode,
-): LinkRow {
-  // A copy on its way has an id but no version yet: it can't be opened until the server made it.
-  const isPending = schedule.id !== null && schedule.updatedAt === null;
-  return {
-    id: schedule.id ?? 'default',
-    title: schedule.name,
-    address: weekSummary(schedule.availability, locale).join(' · '),
-    chips: [
-      zoneLabel(schedule.availability.timeZone),
-      schedule.pages.length === 0 ? scheduleStrings.usedByNone : scheduleStrings.usedBy(schedule.pages.length),
-    ],
-    ...(isPending ? { badge: scheduleStrings.copying, isPending } : {}),
-    ...(!isPending && schedule.isDefault ? { titleBadge: scheduleStrings.defaultBadge } : {}),
-    ...(schedule.id === null ? {} : { actions: menu }),
-    href: scheduleHref(slug, schedule.id ?? 'default', member),
-  };
-}
-
-/** The member's schedules as rows, New schedule at the end of the tab strip, and each row's menu. */
-export function AvailabilityScreen({ data, slug, locale, member, members, me }: AvailabilityScreenProps) {
+/** The tab: the open schedule's editor, its switcher, the admin's Viewing Select and New schedule. */
+export function AvailabilityScreen({ data, slug, scheduleId, member, members, me }: AvailabilityScreenProps) {
   const { toasts } = useRouteContext({ from: '__root__' });
   const navigate = useNavigate();
   const view = data.schedules.view(slug, member, browserZone());
@@ -76,48 +50,87 @@ export function AvailabilityScreen({ data, slug, locale, member, members, me }: 
   const actionSlot = useBookingsActionSlot();
   const [isCreating, setCreating] = useState(false);
   const [deleting, setDeleting] = useState<ScheduleView | undefined>(undefined);
+  const [renaming, setRenaming] = useState<ScheduleView | undefined>(undefined);
+  // The id the virtual default is being stored under: the same editor stays for it as it lands.
+  const [adopted, setAdopted] = useState<string | undefined>(undefined);
+  // One toast for the hours at a time: a new save's replaces the last one's.
+  const lastToast = useRef<string | undefined>(undefined);
   const schedules = state.status === 'ready' ? state.schedules : [];
   const memberId = state.status === 'ready' ? state.memberId : undefined;
   const fallback = schedules.find((each) => each.isDefault);
+  // The open one: the address's, else the default (a deleted or unknown id opens the default too).
+  const current = (scheduleId === undefined ? undefined : schedules.find((each) => each.id === scheduleId)) ?? fallback;
   const isFull = schedules.filter((each) => each.id !== null).length >= SCHEDULES_MAX;
-  const failed = (message: string) => (error: unknown) => {
-    toasts.toast({
-      tone: 'danger',
-      message: `${message} ${isDataError(error) ? error.message : strings.somethingWrong}`,
-    });
+  // The switcher's trigger: a switch remounts the editor and the menu's item is gone, so focus comes back here.
+  const switcherRef = useRef<HTMLButtonElement>(null);
+  const refocus = () => focusLater(() => switcherRef.current);
+  const open = (id: string | null, replace = false) => {
+    void navigate({ href: scheduleHref(slug, id === null || id === fallback?.id ? 'default' : id, member), replace });
+    refocus();
   };
-  const setDefault = (schedule: ScheduleView) => {
-    data.schedules
-      .setDefault(slug, schedule)
-      .then(
-        () => toasts.toast({ tone: 'success', message: scheduleStrings.setDefaultDone(schedule.name, owner) }),
-        failed(scheduleStrings.setDefaultFailed(schedule.name)),
-      );
+  // An address naming a schedule that isn't here (deleted, maybe in another tab) opens the default, at its own address.
+  const isUnknown =
+    state.status === 'ready' && scheduleId !== undefined && !schedules.some((each) => each.id === scheduleId);
+  useEffect(() => {
+    if (isUnknown) void navigate({ href: scheduleHref(slug, 'default', member), replace: true });
+  }, [isUnknown, navigate, slug, member]);
+  const toast = (notice: {
+    readonly tone: 'success' | 'danger';
+    readonly message: string;
+    readonly action?: { readonly label: string; readonly onAction: () => void };
+  }) => {
+    if (lastToast.current !== undefined) toasts.dismiss(lastToast.current);
+    lastToast.current = toasts.toast(notice);
+  };
+  const failed = (message: string) => (error: unknown) => {
+    toast({ tone: 'danger', message: `${message} ${isDataError(error) ? error.message : strings.somethingWrong}` });
+  };
+  // The address keeps naming the schedule, so it stays open whichever way the server answers.
+  const setDefault = (schedule: ScheduleView, isUndo = false) => {
+    const was = fallback;
+    data.schedules.setDefault(slug, schedule).then(
+      () =>
+        toast(
+          isUndo
+            ? { tone: 'success', message: scheduleStrings.setDefaultUndone(schedule.name) }
+            : {
+                tone: 'success',
+                message: scheduleStrings.setDefaultDone(schedule.name, owner),
+                ...(was === undefined || was.id === null
+                  ? {}
+                  : { action: { label: scheduleStrings.undo, onAction: () => setDefault(was, true) } }),
+              },
+        ),
+      failed(scheduleStrings.setDefaultFailed(schedule.name)),
+    );
   };
   const duplicate = (schedule: ScheduleView) => {
-    data.schedules
-      .duplicate(slug, schedule)
-      .then(
-        (copy) => toasts.toast({ tone: 'success', message: scheduleStrings.duplicated(copy.name) }),
-        failed(scheduleStrings.duplicateFailed(schedule.name)),
-      );
+    data.schedules.duplicate(slug, schedule).then(
+      (copy) => {
+        toast({ tone: 'success', message: scheduleStrings.duplicated(copy.name) });
+        if (copy.id !== null) open(copy.id);
+      },
+      failed(scheduleStrings.duplicateFailed(schedule.name)),
+    );
   };
-  const rows = schedules.map((schedule) =>
-    rowOf(
-      slug,
-      member,
-      schedule,
-      locale,
-      <ScheduleMenu
-        schedule={schedule}
+  const switcher =
+    current === undefined ? (
+      <SwitcherPending />
+    ) : (
+      <ScheduleSwitcher
+        schedules={schedules}
+        current={current}
         isFull={isFull}
-        isDisabled={schedule.updatedAt === null}
-        onSetDefault={() => setDefault(schedule)}
-        onDuplicate={() => duplicate(schedule)}
-        onDelete={() => setDeleting(schedule)}
-      />,
-    ),
-  );
+        isOwn={member === undefined}
+        triggerRef={switcherRef}
+        onOpen={(schedule) => open(schedule.id)}
+        onCreate={() => setCreating(true)}
+        onRename={() => setRenaming(current)}
+        onSetDefault={() => setDefault(current)}
+        onDuplicate={() => duplicate(current)}
+        onDelete={() => setDeleting(current)}
+      />
+    );
   // New schedule is the screen's one primary, at the TopBar's end in place of New meeting (the owner, 22 October
   // 2026); with no TopBar slot it stays at the strip's end.
   const newButton = (
@@ -152,13 +165,29 @@ export function AvailabilityScreen({ data, slug, locale, member, members, me }: 
             {slot !== null && createPortal(tools, slot)}
             {actionSlot !== null && createPortal(newAction, actionSlot)}
             {slot === null && tools}
-            <AvailabilityList
-              label={owner === undefined ? scheduleStrings.schedules : scheduleStrings.viewingTheirs(owner)}
-              rows={rows}
-              status={state.status === 'ready' ? 'ready' : state.status}
-              onOpen={(id) => void navigate({ href: scheduleHref(slug, id, member) })}
-              onRetry={() => view.reload()}
-            />
+            {state.status === 'error' ? (
+              <PageColumn align="center">
+                <EmptyState tone="error" title={scheduleStrings.schedulesFailed} onRetry={() => view.reload()}>
+                  {state.error.message}
+                </EmptyState>
+              </PageColumn>
+            ) : current === undefined ? (
+              <ScheduleEditorPending switcher={switcher} />
+            ) : (
+              <ScheduleEditor
+                // One editor per schedule, so unsaved hours never cross from one to another; the virtual default
+                // keeps its editor while its first save stores it under the adopted id.
+                key={current.id === null || current.id === adopted ? 'virtual' : current.id}
+                data={data}
+                slug={slug}
+                member={member}
+                schedule={current}
+                switcher={switcher}
+                onReload={() => view.reload()}
+                onAdopt={setAdopted}
+                onNotice={toast}
+              />
+            )}
             {memberId !== undefined && (
               <NewScheduleDialog
                 data={data}
@@ -169,19 +198,37 @@ export function AvailabilityScreen({ data, slug, locale, member, members, me }: 
                 onClose={() => setCreating(false)}
                 onCreated={(schedule) => {
                   setCreating(false);
-                  if (schedule.id !== null) void navigate({ href: scheduleHref(slug, schedule.id, member) });
+                  if (schedule.id !== null) open(schedule.id);
                 }}
               />
             )}
+            <RenameScheduleDialog
+              data={data}
+              slug={slug}
+              schedule={renaming}
+              onClose={() => {
+                setRenaming(undefined);
+                refocus();
+              }}
+              onRenamed={(schedule) => {
+                setRenaming(undefined);
+                refocus();
+                toast({ tone: 'success', message: scheduleStrings.renamed(schedule.name) });
+              }}
+            />
             <DeleteScheduleDialog
               schedule={deleting}
               fallbackName={fallback?.name ?? scheduleStrings.defaultBadge}
               isOwn={member === undefined}
-              onClose={() => setDeleting(undefined)}
+              onClose={() => {
+                setDeleting(undefined);
+                refocus();
+              }}
               onDelete={(schedule) => data.schedules.remove(slug, schedule)}
               onDeleted={(schedule) => {
                 setDeleting(undefined);
-                toasts.toast({ tone: 'success', message: scheduleStrings.deleted(schedule.name) });
+                toast({ tone: 'success', message: scheduleStrings.deleted(schedule.name) });
+                open(null, true);
               }}
             />
           </>
@@ -191,35 +238,12 @@ export function AvailabilityScreen({ data, slug, locale, member, members, me }: 
   );
 }
 
-/**
- * The rows, in every state, as Captures' lists draw theirs: one line each, edge to edge with the page's gutter
- * inside them; loading draws the rows' shape, a failed read says so with Try again.
- */
-function AvailabilityList({
-  label,
-  rows,
-  status,
-  onOpen,
-  onRetry,
-}: {
-  readonly label: string;
-  readonly rows: readonly LinkRow[];
-  readonly status: 'loading' | 'error' | 'ready';
-  readonly onOpen: (id: string) => void;
-  readonly onRetry: () => void;
-}) {
+/** The switcher's place while the schedules load: a disabled button the width of a name. */
+function SwitcherPending() {
   return (
-    <LinkList
-      label={label}
-      searchLabel={label}
-      density="compact"
-      isToolbarHidden
-      rows={rows}
-      onOpen={onOpen}
-      status={status}
-      onRetry={onRetry}
-      errorTitle={scheduleStrings.schedulesFailed}
-    />
+    <Button variant="ghost" iconRight="chevron-down" isDisabled>
+      {scheduleStrings.schedule}
+    </Button>
   );
 }
 
@@ -269,14 +293,14 @@ function NewScheduleButton({ isDisabled, onPress }: { readonly isDisabled: boole
 }
 
 /**
- * The list while it loads: the same column and rows, and New schedule waiting in the strip, so the strip and the
- * page land where the skeleton put them.
+ * The tab while it loads: the editor's shape, and New schedule waiting in the TopBar, so the strip and the page land
+ * where the skeleton put them.
  */
 export function AvailabilityPending() {
   const slot = useBookingsToolbarSlot();
   const actionSlot = useBookingsActionSlot();
   // An admin's Viewing Select stands in the strip while it loads, and New schedule waits in the TopBar, so
-  // neither moves when the list arrives.
+  // neither moves when the editor arrives.
   const isAdmin = useCan('booking.admin');
   const waiting = <NewScheduleButton isDisabled onPress={() => undefined} />;
   const tools = (
@@ -301,13 +325,7 @@ export function AvailabilityPending() {
             {slot !== null && createPortal(tools, slot)}
             {actionSlot !== null && createPortal(waiting, actionSlot)}
             {slot === null && tools}
-            <AvailabilityList
-              label={scheduleStrings.schedules}
-              rows={[]}
-              status="loading"
-              onOpen={() => undefined}
-              onRetry={() => undefined}
-            />
+            <ScheduleEditorPending switcher={<SwitcherPending />} />
           </>
         ),
       }}

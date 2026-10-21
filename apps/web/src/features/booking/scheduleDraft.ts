@@ -1,210 +1,212 @@
-// One schedule's unsaved name and hours (spec 0035, AC-970, AC-977), shared by the screens that edit a schedule. The
-// draft is undefined until the member changes something, so the screen shows the schedule as the data layer holds it
-// and a save in another tab shows at once while nothing is being edited. A draft remembers the version it began from,
-// and a save names it: a schedule changed elsewhere meanwhile is refused STALE rather than silently replaced, and the
-// next Save replaces it knowingly. The virtual default (AC-963) is stored the first time it is saved.
+// One schedule's hours, saved as they change (spec 0035, AC-970, AC-977; the owner's save rule, 21 October 2026:
+// selects and switches save at once, with a quiet toast and Undo). The Availability tab's editor reads the schedule as
+// the data layer holds it, so another tab's save shows at once; only hours not yet saved (a burst of changes, or a
+// range that doesn't read yet) are held here. Saves go one at a time, each naming the version the last one stored, so
+// a burst never refuses itself as stale; one beaten by another tab is said, and the stored hours show. The virtual
+// default (AC-963) is stored the first time its hours change.
 import { isDataError, type BookingAvailability, type DataLayer, type ScheduleView } from '@crm/data';
-import type { SaveBarStatus } from '@crm/ui';
-import { useState } from 'react';
-import { availabilityIsValid, sameHours } from './hours.ts';
+import { useEffect, useRef, useState } from 'react';
+import { availabilityIsValid } from './hours.ts';
 import { scheduleStrings } from './schedule-strings.ts';
 import { strings } from './strings.ts';
 
 /** The longest name a schedule takes (AC-961). */
 export const SCHEDULE_NAME_MAX = 60;
 
-/** The name and hours being edited, and the version they began from (undefined: whichever is current when saved). */
-interface Draft {
-  readonly hours: BookingAvailability;
-  /** As typed; undefined while the name isn't being changed. */
-  readonly name: string | undefined;
-  readonly base: string | null | undefined;
-  /** The id the virtual default is stored under: minted once, so a retry stores it once. */
-  readonly newId: string | undefined;
+/** How long the hours wait after a change before they save, so a run of picks saves once. */
+const SETTLE_MS = 500;
+
+/** What a save says once it lands or fails. */
+export interface ScheduleSaveNotice {
+  readonly tone: 'success' | 'danger';
+  readonly message: string;
+  /** Undo (the hours before this save) or Try again. */
+  readonly action?: { readonly label: string; readonly onAction: () => void };
 }
 
-/** What a screen editing a schedule needs. */
-export interface ScheduleDraft {
-  /** The hours to show: the draft's while there is one, else the schedule's own. */
+/** What the editor needs. */
+export interface ScheduleAutosave {
+  /** The hours to show: those not saved yet while there are any, else the schedule's own. */
   readonly shown: BookingAvailability;
-  /** The name to show, as typed. */
-  readonly name: string;
-  readonly isDirty: boolean;
-  /** For the SaveBar. */
-  readonly status: SaveBarStatus;
-  /** Why the last save failed, said on the SaveBar. */
-  readonly error: string | undefined;
-  /** What's wrong with the name, said on its field: empty, or another schedule's. */
-  readonly nameError: string | undefined;
-  /** Why Save waits (a range or the name is wrong), said on the SaveBar; undefined when it can go. */
-  readonly blockedReason: string | undefined;
-  /** Changes the hours from what the draft holds now, so several changes in one event all land (Copy to days). */
+  /** Where the hours stand: saving, the last save failed (Try again is on its toast), or neither. */
+  readonly status: 'idle' | 'saving' | 'failed';
+  /** Changes the hours from what is shown now, so several changes in one event all land (Copy to days). */
   readonly change: (next: (current: BookingAvailability) => BookingAvailability) => void;
-  /** Renames it in the draft, saved with the hours. */
-  readonly rename: (name: string) => void;
-  readonly save: () => void;
-  readonly discard: () => void;
 }
 
-/** Props for `useScheduleDraft`. */
-export interface ScheduleDraftInput {
+/** Props for `useScheduleAutosave`. */
+export interface ScheduleAutosaveInput {
   readonly data: DataLayer;
   readonly slug: string;
   readonly schedule: ScheduleView;
   /** Whether the schedule is a colleague's (an admin's view, AC-971): the first save then names its member. */
   readonly forMember: boolean;
-  /** Reads the member's schedules again: a first save another tab beat is said as stale, then read. */
+  /** Reads the member's schedules again: a save another tab beat shows theirs. */
   readonly reload: () => void;
   /**
    * The id the virtual default is about to be stored under, said before the save goes out: the data layer shows
-   * the stored schedule at once, and a screen keyed by the schedule's id keeps this editor (and its draft) for it.
+   * the stored schedule at once, and a screen keyed by the schedule's id keeps this editor for it.
    */
   readonly onAdopt?: (id: string) => void;
-  /** The virtual default, stored by its first save, now has an id. */
-  readonly onStored?: (schedule: ScheduleView) => void;
+  /** Said once a save lands or fails: the screen raises it as a toast. */
+  readonly onNotice: (notice: ScheduleSaveNotice) => void;
 }
 
-/** One schedule's draft, its save and its SaveBar status. */
-export function useScheduleDraft({
+/** One schedule's hours, saved as they change. */
+export function useScheduleAutosave({
   data,
   slug,
   schedule,
   forMember,
   reload,
   onAdopt,
-  onStored,
-}: ScheduleDraftInput): ScheduleDraft {
-  const [draft, setDraft] = useState<Draft | undefined>(undefined);
-  const [isSaving, setSaving] = useState(false);
-  const [failure, setFailure] = useState<string | undefined>(undefined);
-  const [nameRefusal, setNameRefusal] = useState<string | undefined>(undefined);
-  const [justSaved, setJustSaved] = useState(false);
-  const saved = schedule.availability;
-  const shown = draft?.hours ?? saved;
-  const name = draft?.name ?? schedule.name;
-  const renamed = name.trim() !== schedule.name;
-  const isDirty = draft !== undefined && (!sameHours(draft.hours, saved) || renamed);
-  const nameError = name.trim() === '' ? scheduleStrings.nameRequired : renamed ? nameRefusal : undefined;
-  const blockedReason = !availabilityIsValid(shown)
-    ? strings.fixHours
-    : name.trim() === ''
-      ? scheduleStrings.nameRequired
-      : undefined;
-  // Said as stale, and the next Save replaces whatever is stored by then.
-  const stale = () => {
-    setFailure(scheduleStrings.stale);
-    setDraft((current) => (current === undefined ? undefined : { ...current, base: undefined }));
-  };
-  /** The draft as it begins: the schedule as shown, and the version it is. */
-  const begun = (current: Draft | undefined): Draft =>
-    current ?? { hours: saved, name: undefined, base: schedule.updatedAt, newId: undefined };
+  onNotice,
+}: ScheduleAutosaveInput): ScheduleAutosave {
+  const [unsaved, setUnsaved] = useState<BookingAvailability | undefined>(undefined);
+  const [status, setStatus] = useState<'idle' | 'saving' | 'failed'>('idle');
+  // The save machinery's own bookkeeping, outside render: what is held, what is out, and the version it builds on.
+  const held = useRef<BookingAvailability | undefined>(undefined);
+  const before = useRef<BookingAvailability | undefined>(undefined);
+  const latest = useRef(schedule);
+  const isOut = useRef(false);
+  const newId = useRef<string | undefined>(undefined);
+  const timer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  // An Undo pressed while a save was out: the chained save is the undo.
+  const pendingUndo = useRef(false);
+  const notice = useRef(onNotice);
+  useEffect(() => {
+    notice.current = onNotice;
+  });
+  useEffect(() => {
+    // The held list moved (a save landed, another tab's arrived): the next save builds on it, unless one of ours is
+    // out, whose answer is newer.
+    if (!isOut.current) latest.current = schedule;
+  }, [schedule]);
 
-  const change = (next: (current: BookingAvailability) => BookingAvailability) => {
-    setJustSaved(false);
-    setDraft((current) => {
-      const from = begun(current);
-      return { ...from, hours: next(from.hours) };
-    });
+  const hold = (hours: BookingAvailability | undefined) => {
+    held.current = hours;
+    setUnsaved(hours);
   };
 
-  const rename = (next: string) => {
-    setJustSaved(false);
-    setNameRefusal(undefined);
-    setDraft((current) => ({ ...begun(current), name: next }));
-  };
-
-  const save = () => {
-    if (isSaving || draft === undefined || blockedReason !== undefined) return;
-    const sent = draft.hours;
-    const sentName = name.trim();
-    const base = draft.base === undefined ? schedule.updatedAt : draft.base;
-    // Begun on the virtual default, which another tab has stored since: its version is one this draft never saw.
-    if (schedule.id !== null && base === null) {
-      stale();
+  const send = (isUndo: boolean) => {
+    const hours = held.current;
+    if (hours === undefined || !availabilityIsValid(hours)) return;
+    if (isOut.current) {
+      if (isUndo) pendingUndo.current = true;
       return;
     }
-    setSaving(true);
-    setFailure(undefined);
+    const current = latest.current;
+    const was = before.current ?? current.availability;
+    isOut.current = true;
+    setStatus('saving');
     let saving: Promise<ScheduleView>;
-    if (schedule.id === null) {
-      const id = draft.newId ?? data.schedules.newId();
-      setDraft((current) => (current === undefined ? undefined : { ...current, newId: id }));
-      onAdopt?.(id);
-      saving = data.schedules.create(slug, schedule.memberId, {
-        id,
-        name: sentName,
-        timeZone: sent.timeZone,
-        availability: sent,
+    if (current.id === null) {
+      newId.current ??= data.schedules.newId();
+      onAdopt?.(newId.current);
+      saving = data.schedules.create(slug, current.memberId, {
+        id: newId.current,
+        name: current.name,
+        timeZone: hours.timeZone,
+        availability: hours,
         isDefault: true,
         forMember,
       });
     } else {
-      saving = data.schedules.update(
-        slug,
-        { ...schedule, updatedAt: base },
-        {
-          ...(sentName === schedule.name ? {} : { name: sentName }),
-          ...(sameHours(sent, saved) ? {} : { availability: sent }),
-        },
-      );
+      saving = data.schedules.update(slug, current, { availability: hours });
     }
-    const wasVirtual = schedule.id === null;
-    const wasRenamed = sentName !== schedule.name;
     saving.then(
       (stored) => {
-        setSaving(false);
-        setJustSaved(true);
-        // An edit made while it saved stays, still unsaved, on the version just stored.
-        setDraft((current) => {
-          if (current === undefined) return undefined;
-          const hoursLeft = !sameHours(current.hours, sent);
-          const nameLeft = current.name !== undefined && current.name.trim() !== sentName;
-          return hoursLeft || nameLeft
-            ? {
-                hours: current.hours,
-                name: nameLeft ? current.name : undefined,
-                base: stored.updatedAt,
-                newId: undefined,
-              }
-            : undefined;
-        });
-        if (wasVirtual) onStored?.(stored);
-      },
-      (error: unknown) => {
-        setSaving(false);
-        if (isDataError(error) && error.code === 'STALE') {
-          stale();
+        isOut.current = false;
+        latest.current = stored;
+        setStatus('idle');
+        if (held.current !== hours) {
+          // Changed while it saved: the newer hours go next, and its Undo still goes back to before the first.
+          const undo = isUndo || pendingUndo.current;
+          pendingUndo.current = false;
+          send(undo);
           return;
         }
-        if (isDataError(error) && error.code === 'NAME_TAKEN') {
-          // The virtual default's first save under its own name, beaten by another tab's: it is stored now.
-          if (wasVirtual && !wasRenamed) {
-            stale();
-            reload();
-            return;
-          }
-          setNameRefusal(error.message);
+        hold(undefined);
+        before.current = undefined;
+        notice.current(
+          isUndo
+            ? { tone: 'success', message: scheduleStrings.hoursPutBack(stored.name) }
+            : {
+                tone: 'success',
+                message: scheduleStrings.hoursSaved(stored.name),
+                action: { label: scheduleStrings.undo, onAction: () => putBack(was) },
+              },
+        );
+      },
+      (error: unknown) => {
+        isOut.current = false;
+        pendingUndo.current = false;
+        if (isDataError(error) && error.code === 'STALE') {
+          setStatus('idle');
+          // Another tab or person saved first: theirs shows, and saying so beats replacing it unseen.
+          hold(undefined);
+          before.current = undefined;
+          reload();
+          notice.current({ tone: 'danger', message: scheduleStrings.stale });
+          return;
         }
-        setFailure(isDataError(error) ? error.message : strings.somethingWrong);
+        // Kept on screen, unsaved, with Try again; a change made meanwhile still goes once it settles.
+        setStatus('failed');
+        if (held.current !== hours) settle(false);
+        notice.current({
+          tone: 'danger',
+          message: `${scheduleStrings.hoursFailed} ${isDataError(error) ? error.message : strings.somethingWrong}`,
+          action: { label: scheduleStrings.tryAgain, onAction: () => send(isUndo) },
+        });
       },
     );
   };
 
-  const discard = () => {
-    setDraft(undefined);
-    setFailure(undefined);
-    setNameRefusal(undefined);
-    setJustSaved(false);
+  const settle = (isUndo: boolean) => {
+    if (timer.current !== undefined) clearTimeout(timer.current);
+    timer.current = setTimeout(() => {
+      timer.current = undefined;
+      send(isUndo);
+    }, SETTLE_MS);
   };
 
-  const status: SaveBarStatus = isSaving
-    ? 'saving'
-    : isDirty
-      ? failure === undefined
-        ? 'unsaved'
-        : 'error'
-      : justSaved
-        ? 'saved'
-        : 'hidden';
-  return { shown, name, isDirty, status, error: failure, nameError, blockedReason, change, rename, save, discard };
+  const change = (next: (current: BookingAvailability) => BookingAvailability) => {
+    const from = held.current ?? latest.current.availability;
+    before.current ??= latest.current.availability;
+    hold(next(from));
+    settle(false);
+  };
+
+  const putBack = (hours: BookingAvailability) => {
+    before.current = undefined;
+    hold(hours);
+    send(true);
+  };
+
+  // Closing the tab while hours wait or save asks first.
+  const isHolding = unsaved !== undefined || status === 'saving';
+  useEffect(() => {
+    if (!isHolding) return undefined;
+    const ask = (event: BeforeUnloadEvent) => event.preventDefault();
+    globalThis.addEventListener('beforeunload', ask);
+    return () => globalThis.removeEventListener('beforeunload', ask);
+  }, [isHolding]);
+
+  // Leaving with hours still settling saves them now, rather than dropping them; hours that don't read yet say so.
+  useEffect(
+    () => () => {
+      if (timer.current !== undefined) {
+        clearTimeout(timer.current);
+        send(false);
+      }
+      if (held.current !== undefined && !availabilityIsValid(held.current)) {
+        notice.current({ tone: 'danger', message: scheduleStrings.invalidLeft });
+      }
+    },
+    // The save on leaving reads the refs as they are then; it is made once.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [],
+  );
+
+  return { shown: unsaved ?? schedule.availability, status, change };
 }

@@ -1,7 +1,8 @@
-// Availability schedules (spec 0035), end to end: a member makes a second schedule from Availability, gives it evening
-// hours, picks it for a booking page, and the page's public slots follow it; a save in one browser shows in another
-// browser's editor (AC-977); deleting it asks first, naming the page it moves, Cancel changes nothing, and once it is
-// gone the page books by the default again (AC-964, AC-965, AC-967, AC-969, AC-970).
+// Availability schedules (spec 0035), end to end: the Availability tab opens the default in its editor; a member makes
+// a second schedule from it, gives it evening hours (each change saves on its own, with Undo), picks it for a booking
+// page, and the page's public slots follow it; a save in one browser shows in another browser's editor (AC-977);
+// deleting it from the switcher asks first, naming the page it moves, Cancel changes nothing, and once it is gone the
+// tab opens the default and the page books by it again (AC-964, AC-965, AC-967, AC-969, AC-970).
 import { randomUUID } from 'node:crypto';
 import { expect, test, type APIRequestContext, type Page } from '@playwright/test';
 import { newWorkspace, signInAgain } from './people.ts';
@@ -74,20 +75,24 @@ test.describe('availability schedules', () => {
     expect(key).toBeDefined();
     expect(await localStarts(page.request, key ?? '')).toEqual(halfHours(9, 17));
 
-    // Availability lists the default; New schedule asks for a name and opens the new one.
+    // Availability opens the default in its editor; New schedule asks for a name and opens the new one there.
     await page.goto(`/w/${slug}/bookings/availability`);
-    const schedules = page.getByRole('grid', { name: 'Schedules' });
-    await expect(schedules.getByRole('row').filter({ hasText: 'Working hours' })).toContainText('Default');
+    // The switcher: the open schedule's name, then ", default" on the default, then what it does.
+    const switcher = (name: string) =>
+      page.getByRole('button', { name: new RegExp(`^${name}(, default)?, switch schedule$`) });
+    await expect(switcher('Working hours')).toBeVisible();
+    await expect(page.getByText('Default', { exact: true }).first()).toBeVisible();
     await page.getByRole('button', { name: 'New schedule' }).click();
     const dialog = page.getByRole('dialog', { name: 'New schedule' });
     await dialog.getByLabel('Name').fill('Evenings');
     await dialog.getByRole('button', { name: 'Create schedule' }).click();
-    await expect(page).toHaveURL(/availability\/[0-9a-f-]{36}$/);
+    await expect(page).toHaveURL(/availability\?schedule=[0-9a-f-]{36}$/);
+    await expect(switcher('Evenings')).toBeVisible();
     const editorUrl = page.url();
+    // Each change saves on its own, said in a toast with Undo: no Save to press.
     await pick(page, 'All days start', '6:00 PM');
     await pick(page, 'All days end', '8:00 PM');
-    await page.getByRole('button', { name: 'Save', exact: true }).click();
-    await expect(page.getByText('Saved', { exact: true })).toBeVisible();
+    await expect(page.getByText('Saved Evenings.').first()).toBeVisible();
 
     // The page picks Evenings, and its public slots follow.
     await page.goto(pageUrl);
@@ -110,8 +115,7 @@ test.describe('availability schedules', () => {
     await expect(reader.getByRole('button', { name: /All days end/ }).first()).toContainText('8:00 PM');
     await page.goto(editorUrl);
     await pick(page, 'All days end', '9:00 PM');
-    await page.getByRole('button', { name: 'Save', exact: true }).click();
-    await expect(page.getByText('Saved', { exact: true })).toBeVisible();
+    await expect(page.getByText('Saved Evenings.').first()).toBeVisible();
     if (!LIVE) await reader.reload();
     await expect(reader.getByRole('button', { name: /All days end/ }).first()).toContainText('9:00 PM', {
       timeout: LIVE_MS,
@@ -119,29 +123,30 @@ test.describe('availability schedules', () => {
     await readerContext.close();
     expect(await localStarts(page.request, key ?? '')).toEqual(halfHours(18, 21));
 
-    // Deleting asks first, naming the page it moves; Cancel changes nothing.
-    await page.goto(`/w/${slug}/bookings/availability`);
-    const evenings = schedules.getByRole('row').filter({ hasText: 'Evenings' });
-    await expect(evenings).toContainText('Used by 1 booking page');
+    // Deleting from the switcher asks first, naming the page it moves; Cancel changes nothing.
+    await page.goto(editorUrl);
+    await expect(page.getByRole('grid', { name: 'Used by' })).toContainText('Intro call');
     const remove = async () => {
-      await evenings.getByRole('button', { name: 'More for Evenings' }).click();
-      await page.getByRole('menu', { name: 'More for Evenings' }).getByRole('menuitem', { name: 'Delete' }).click();
+      await switcher('Evenings').click();
+      await page.getByRole('menuitem', { name: 'Delete' }).click();
       return page.getByRole('alertdialog', { name: 'Delete the Evenings schedule?' });
     };
     const confirm = await remove();
-    await expect(confirm).toContainText(
-      'Intro call, the one booking page that uses it, will book by Working hours, your default, and this can’t be undone.',
-    );
+    await expect(confirm).toContainText('Intro call will use Working hours, your default. This can’t be undone.');
     await confirm.getByRole('button', { name: 'Cancel' }).click();
     await expect(confirm).toBeHidden();
-    await expect(evenings).toBeVisible();
+    await expect(switcher('Evenings')).toBeVisible();
     expect(await localStarts(page.request, key ?? '')).toEqual(halfHours(18, 21));
 
-    // Delete schedule: gone, and the page books by the default again.
+    // Delete schedule: gone, the tab opens the default, and the page books by it again.
     const again = await remove();
     await again.getByRole('button', { name: 'Delete schedule' }).click();
     await expect(again).toBeHidden();
-    await expect(evenings).toHaveCount(0);
+    await expect(page).toHaveURL(new RegExp(`/w/${slug}/bookings/availability$`));
+    await expect(switcher('Working hours')).toBeVisible();
+    await switcher('Working hours').click();
+    await expect(page.getByRole('menuitemradio', { name: /Evenings/ })).toHaveCount(0);
+    await page.keyboard.press('Escape');
     expect(await localStarts(page.request, key ?? '')).toEqual(halfHours(9, 17));
   });
 });
