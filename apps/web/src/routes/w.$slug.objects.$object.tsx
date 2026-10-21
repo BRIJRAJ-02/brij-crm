@@ -17,7 +17,7 @@ import { landingView } from '../features/views/query.ts';
 // views come through the data layer; the screens load with this route's
 // component, outside the first load.
 export const Route = createFileRoute('/w/$slug/objects/$object')({
-  loader: async ({ context, params }) => {
+  loader: async ({ context, params, location }) => {
     const objects = await context.data.objects.all(params.slug).catch((error: unknown) => {
       // The frame above shows "workspace not found" for this one.
       if (isDataError(error) && error.code === 'NOT_FOUND') return [];
@@ -37,9 +37,12 @@ export const Route = createFileRoute('/w/$slug/objects/$object')({
     if (list.status === 'error') throw list.error ?? new Error('The views did not load.');
     const viewId = list.status === 'ready' ? landingView(list) : undefined;
     if (viewId !== undefined) {
+      // The command menu's Create a <object> (spec 0039, AC-1086) rides along as `new`, so the view opens its dialog.
+      const isNew = (location.search as { readonly new?: unknown }).new !== undefined;
       throw redirect({
         to: '/w/$slug/objects/$object/views/$viewId',
         params: { slug: params.slug, object: params.object, viewId },
+        search: isNew ? { new: true } : {},
         replace: true,
       });
     }

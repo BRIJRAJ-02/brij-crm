@@ -273,6 +273,7 @@ export {
   CommandPalette,
   type CommandPaletteProps,
   type PaletteItem,
+  type PaletteSection,
 } from './modules/CommandPalette/CommandPalette.tsx';
 export {
   ConditionChip,

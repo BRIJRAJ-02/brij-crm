@@ -72,6 +72,10 @@ export interface ViewScreenProps {
   /** The `draft` search param now, and how to write it. */
   readonly param: string | undefined;
   readonly writeParam: (param: string | undefined, replace: boolean) => void;
+  /** The command menu's Create a <object> (spec 0039, AC-1086): open the new record dialog once the table shows. */
+  readonly isCreateRequested?: boolean;
+  /** The request was taken (the dialog opened, or this view can't): drop it from the address. */
+  readonly onCreateRequestTaken?: () => void;
 }
 
 /** The attributes of the objects a through filter leads to, read through the data layer as they are asked for. */
@@ -137,7 +141,10 @@ export function ViewScreen(props: ViewScreenProps) {
   // The view is the person's last opened one for its object (AC-478), at most once per 10 seconds.
   const openedId = view?.id;
   useEffect(() => {
-    if (openedId !== undefined) data.views.markOpened(slug, openedId);
+    if (openedId === undefined) return;
+    data.views.markOpened(slug, openedId);
+    // And the person's recent items in the command menu (spec 0039, AC-1088): fire and forget, throttled there.
+    data.search.visit(slug, 'view', openedId);
   }, [data, slug, openedId]);
 
   const latestSaved = useMemo(() => (view === undefined ? { sorts: [] } : savedQuery(view)), [view]);
@@ -403,6 +410,11 @@ export function ViewScreen(props: ViewScreenProps) {
     />
   );
   const storedBoard = view?.config.board;
+  // A board has no new record dialog: the command menu's request is dropped, so the address doesn't keep it.
+  const { isCreateRequested, onCreateRequestTaken } = props;
+  useEffect(() => {
+    if (isCreateRequested === true && kind === 'board') onCreateRequestTaken?.();
+  }, [isCreateRequested, onCreateRequestTaken, kind]);
   const boardOutcome = useMemo(
     () => (kind === 'board' ? planBoard(attributes, storedBoard) : undefined),
     [kind, attributes, storedBoard],
@@ -657,6 +669,8 @@ export function ViewScreen(props: ViewScreenProps) {
     <>
       <RecordsScreen
         slug={slug}
+        {...(props.isCreateRequested === true ? { isCreateRequested: true } : {})}
+        {...(props.onCreateRequestTaken === undefined ? {} : { onCreateRequestTaken: props.onCreateRequestTaken })}
         object={object}
         attributes={attributes}
         members={members}

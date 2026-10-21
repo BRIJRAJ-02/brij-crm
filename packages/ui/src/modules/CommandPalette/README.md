@@ -24,10 +24,13 @@ Ported from the artifact's CommandPalette card. The core loop (#10), relations (
 - Choosing a row (Enter or a click) calls `onAction` and closes the palette.
 - Opened from the keyboard (⌘K) it appears at once; opened by pointer it grows in like any modal, and closing uses the exit animation.
 - `searchStatus` says what an empty list means: `searching` ("Searching…"), `failed`, or (the default) nothing matches.
+- **Sections** (spec 0039, the command menu): `sections` in place of `items`, each `{ id, label, items, status? }`, drawn as `MenuSection`s under their headings, in order. The arrows move across sections. A section with no rows is left out unless it has a `status`: `searching` adds a quiet "Searching…" row at its end, `failed` a "The search didn't finish. Try again." row that calls `onRetry` when chosen and keeps the palette open. With nothing in any section, the palette says "Nothing matches “<text>”". A polite live region says how many results show ("12 results", "No results"), and "Searching…" only once a search has run past half a second, so typing quickly never chatters. Why a variant and not a new component: the command menu is this palette with headings; a second palette would be a second look for the same element.
+- `placeholder` is the field's hint ("Type a command or search…"); `title` names the dialog ("Command menu", "Search").
+- A row's `isChecked` puts a check at its end, read as "Current" (the theme in use).
 
 ## States
 
-Open with results, loading rows (skeletons), searching, the search failed, nothing matches.
+Open with results, loading rows (skeletons), searching, the search failed, nothing matches. In sections: empty with recent items and actions (`Sections`), results in sections (`SectionsSearchAndChoose`), a section searching (`SectionSearching`), a section's search failed (`SectionFailed`), nothing matches (`SectionsNothingMatches`). Opened from the keyboard it appears at once (Modal's palette variant).
 
 ## Keyboard
 
@@ -36,4 +39,5 @@ It opens with its search field focused. Typing searches, the up and down arrows 
 ## Differences from the artifact
 
 - `items` is a `ListSource` with `onSearch`, rather than a static list; `sectionLabel` and `actionLabel` are gone (the foot names the keys instead of repeating the action).
-- Match highlighting is left for global search (#33), which knows how it matched.
+- Match highlighting waits until a Menu row can take a highlighted label (spec 0039's follow up).
+- Sections, the status row, the live count and checked rows are new (spec 0039).

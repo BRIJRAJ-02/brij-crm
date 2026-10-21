@@ -256,6 +256,13 @@ function SubscribedRecordPage(
   },
 ) {
   const state = useRecord(props.record);
+  // Shown: the person's recent items in the command menu keep it (spec 0039, AC-1088); fire and forget, throttled there.
+  const { data } = useRouteContext({ from: '__root__' });
+  const isShown = state.status === 'ready';
+  const { slug, recordId } = props;
+  useEffect(() => {
+    if (isShown) data.search.visit(slug, 'record', recordId);
+  }, [data, slug, recordId, isShown]);
   // Only where the timeline stands: its entries draw in their own tab, so the page doesn't render with each one.
   const timelineStatus = useActivityStatus(props.feed);
   if (state.status === 'deleted' && !state.isLost) {

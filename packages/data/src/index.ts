@@ -112,6 +112,8 @@ import type {
   ViewQuery,
 } from './records/layer.ts';
 
+export type { GlobalSearch, GlobalSearchState } from './search/global.ts';
+export type { RecentItem, RecordHit, SearchMatch, ViewHit } from '@crm/contracts';
 export type {
   CreateTimeBlockInput,
   TimeBlockKind,
