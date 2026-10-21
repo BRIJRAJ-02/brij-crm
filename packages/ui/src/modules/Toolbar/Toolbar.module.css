@@ -21,6 +21,12 @@
     block-size: var(--size-bar);
   }
 
+  /* The bar is the trail's container: on a narrow one, Breadcrumbs keeps only
+     the parent and the current place. */
+  .top {
+    container-type: inline-size;
+  }
+
   .toolbar {
     flex-wrap: wrap;
     min-block-size: var(--size-toolbar);

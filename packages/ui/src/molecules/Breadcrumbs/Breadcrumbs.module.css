@@ -1,10 +1,13 @@
 /* Breadcrumbs: links in text-secondary joined by 12px chevrons; the current
-   page in text. */
+   page in text. One line always: when the row is short (a phone, a bar full of
+   actions) each label ends in an ellipsis, the places above the current one
+   giving way first. */
 @layer components {
   .root {
     display: flex;
-    flex-wrap: wrap;
+    flex-wrap: nowrap;
     align-items: center;
+    min-inline-size: 0;
     gap: var(--space-4);
     margin: 0;
     padding: 0;
@@ -13,8 +16,14 @@
 
   .crumb {
     display: inline-flex;
+    flex: 0 4 auto;
     align-items: center;
     gap: var(--space-4);
+    min-inline-size: 0;
+  }
+
+  .crumb:last-child {
+    flex-shrink: 1;
   }
 
   /* The current page is where you are, not a refused link: React Aria marks it
@@ -27,6 +36,7 @@
     display: inline-flex;
     align-items: center;
     gap: var(--space-4);
+    min-inline-size: 0;
     border-radius: var(--radius-xs);
     color: var(--text-secondary);
     font: var(--text-body-strong);
@@ -55,12 +65,28 @@
     outline-offset: var(--border-width-hairline);
   }
 
+  .label {
+    min-inline-size: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
   .separator {
     display: inline-flex;
+    flex: none;
     color: var(--text-tertiary);
   }
 
   .crumb:last-child .separator {
     display: none;
+  }
+
+  /* In a narrow container (a phone's top bar) the trail is just the current
+     place, as the title; the sidebar is the way back up. */
+  @container (width < 480px) {
+    .crumb:not(:last-child) {
+      display: none;
+    }
   }
 }
