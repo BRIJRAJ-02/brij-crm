@@ -147,12 +147,22 @@
     border-style: dashed;
   }
 
+  /* A quarter hour is shorter than a label's line: its start on one line, centred in the span and clipped,
+     never running over its edge (Google Calendar draws a 15 minute event so). */
+  .ghost[data-size='tiny'] {
+    justify-content: center;
+    padding-block: 0;
+    overflow: hidden;
+    border-radius: var(--radius-xs);
+  }
+
   .ghostStart,
   .ghostEnd {
     color: var(--text);
     font: var(--text-label-strong);
     font-variant-numeric: tabular-nums;
     letter-spacing: var(--tracking-label-strong);
+    white-space: nowrap;
   }
 
   .ghostEnd {
@@ -305,18 +315,34 @@
     white-space: nowrap;
   }
 
-  .block[data-size='compact'] {
+  .block:is([data-size='tiny'], [data-size='compact']) {
     flex-direction: row;
     gap: var(--space-4);
   }
 
-  .block[data-size='compact'] .blockHead {
+  .block:is([data-size='tiny'], [data-size='compact']) .blockHead {
     flex: none;
     max-inline-size: 60%;
   }
 
-  .block[data-size='compact'] .blockDetail,
-  .block[data-size='short'] .blockDetail {
+  .block:is([data-size='tiny'], [data-size='compact'], [data-size='short']) .blockDetail {
+    display: none;
+  }
+
+  /* A quarter hour: one compact line, its title and time centred in the block and clipped at its edge, with
+     no mark (the title and the block's card name where it came from). */
+  .block[data-size='tiny'] {
+    align-items: center;
+    padding-block: 0;
+    border-radius: var(--radius-xs);
+  }
+
+  .blockMark {
+    display: inline-flex;
+    flex: none;
+  }
+
+  .block[data-size='tiny'] .blockMark {
     display: none;
   }
 
