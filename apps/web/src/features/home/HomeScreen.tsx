@@ -22,6 +22,7 @@ import {
   Button,
   Card,
   EmptyState,
+  InfoTip,
   LinkList,
   PageColumn,
   Skeleton,
@@ -563,15 +564,19 @@ function AttentionCard({
   const frame = (body: ReactNode, isBusy: boolean, footer?: string) => (
     <Card
       title={strings.needsAttention}
-      description={strings.attentionText}
       isBusy={isBusy}
       {...(footer === undefined ? {} : { footer })}
       actions={
-        deals === undefined ? undefined : (
-          <Button variant="ghost" onPress={openDeals}>
-            {strings.openDeals}
-          </Button>
-        )
+        <>
+          <InfoTip label={strings.needsAttention} placement="bottom end">
+            {strings.attentionText}
+          </InfoTip>
+          {deals !== undefined && (
+            <Button variant="ghost" onPress={openDeals}>
+              {strings.openDeals}
+            </Button>
+          )}
+        </>
       }
     >
       {body}

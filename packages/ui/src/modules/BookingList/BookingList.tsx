@@ -75,12 +75,7 @@ export function BookingList({ label, groups, onOpen, emptyState, placement = 'pa
                 <div className={styles.when}>
                   <span className={styles.date}>{row.date}</span>
                   {row.time !== '' && <span className={styles.time}>{row.time}</span>}
-                  {row.join !== undefined && (
-                    <span className={styles.join}>
-                      <Icon name="video" size="sm" />
-                      <Link href={row.join.href}>{strings.join(row.join.provider)}</Link>
-                    </span>
-                  )}
+                  {placement !== 'card' && <Join join={row.join} />}
                 </div>
                 <div className={styles.main}>
                   <div className={styles.titleLine}>
@@ -90,6 +85,7 @@ export function BookingList({ label, groups, onOpen, emptyState, placement = 'pa
                     {row.badge !== undefined && <Badge text={row.badge} />}
                   </div>
                   {row.note !== undefined && <span className={styles.note}>{strings.quoted(row.note)}</span>}
+                  {placement === 'card' && <Join join={row.join} />}
                   {row.guestName !== undefined && (
                     <span className={styles.who}>
                       {strings.youAnd}{' '}
@@ -104,5 +100,16 @@ export function BookingList({ label, groups, onOpen, emptyState, placement = 'pa
         </div>
       ))}
     </section>
+  );
+}
+
+/** A meeting's Join link with its provider: in the date column, or under the title in a card (no room beside a time). */
+function Join({ join }: { readonly join: BookingListRow['join'] }) {
+  if (join === undefined) return null;
+  return (
+    <span className={styles.join}>
+      <Icon name="video" size="sm" />
+      <Link href={join.href}>{strings.join(join.provider)}</Link>
+    </span>
   );
 }
