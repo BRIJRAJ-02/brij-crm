@@ -30,8 +30,14 @@ export function useJobFollower(view: JobsView) {
   return {
     follow: (jobId: string, onDone: (job: JobView) => void) => {
       const known = latest.current.find((each) => each.id === jobId);
-      if (known !== undefined && FINISHED.includes(known.status)) onDone(known);
-      else waiting.current.set(jobId, onDone);
+      if (known !== undefined && FINISHED.includes(known.status)) {
+        onDone(known);
+        return;
+      }
+      waiting.current.set(jobId, onDone);
+      // The view takes in a new job only once its first page is read: read it now (once), so this job joins it, as
+      // it is or as its live events tell. Retaining it alone never reads it.
+      void view.ready();
     },
     job: (jobId: string | undefined) =>
       jobId === undefined ? undefined : snapshot.jobs.find((each) => each.id === jobId),
