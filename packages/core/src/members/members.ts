@@ -24,6 +24,7 @@ import { checkScope } from '../access/mint.ts';
 import { can, isRole } from '../access/policy.ts';
 import { inWorkspace } from '../access/run.ts';
 import { deleteMemberViews } from '../views/manage.ts';
+import { deleteMemberRecents } from '../search/recents.ts';
 import { deleteMemberCalendars } from '../calendar/connections.ts';
 
 const { members } = schema;
@@ -266,6 +267,8 @@ export async function removeMember(
         .where(and(eq(members.workspaceId, scope.workspaceId), eq(members.id, target.id)));
       // Their private views and last opened views go with them (spec 0020, AC-490); their shared views stay.
       await deleteMemberViews(context, target.id);
+      // Their recent items too (spec 0039, AC-1092).
+      await deleteMemberRecents(context, target.id);
       // Their calendar connections and the meetings only they held go too (spec 0024, AC-614).
       await deleteMemberCalendars(context, target.id);
       // The `access` row that disconnects them comes with spec 0009 milestone 3; the member list changes now.

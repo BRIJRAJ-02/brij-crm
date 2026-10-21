@@ -151,6 +151,7 @@ describe('the holes in row level security (crm_search_text, spec 0004 AC-24; the
       { name: 'crm_invitation_open_for', owner: 'crm_invitation_lookup' },
       { name: 'crm_outbox_prune', owner: 'crm_relay' },
       { name: 'crm_outbox_workspaces', owner: 'crm_relay' },
+      { name: 'crm_search_similar', owner: 'crm_search' },
       { name: 'crm_search_text', owner: 'crm_search' },
       { name: 'crm_workspace_ids', owner: 'crm_sweep' },
     ]);
@@ -174,6 +175,11 @@ describe('the holes in row level security (crm_search_text, spec 0004 AC-24; the
       { name: 'crm_invitation_open_for', config: ['search_path=pg_catalog, pg_temp'], atomic: true },
       { name: 'crm_outbox_prune', config: ['search_path=pg_catalog, pg_temp', 'lock_timeout=1s'], atomic: true },
       { name: 'crm_outbox_workspaces', config: ['search_path=pg_catalog, pg_temp'], atomic: true },
+      {
+        name: 'crm_search_similar',
+        config: ['search_path=pg_catalog, pg_temp', 'pg_trgm.word_similarity_threshold=0.5'],
+        atomic: true,
+      },
       { name: 'crm_search_text', config: ['search_path=pg_catalog, pg_temp'], atomic: true },
       { name: 'crm_workspace_ids', config: ['search_path=pg_catalog, pg_temp'], atomic: true },
     ]);
@@ -202,7 +208,12 @@ describe('the holes in row level security (crm_search_text, spec 0004 AC-24; the
   // prune is the worker's alone from the start (spec 0007, milestone 3), and so is the daily cleanup's workspace
   // listing (spec 0008, milestone 3).
   it.each([
-    ['crm_search', ['crm_search_text'], ['crm_search_text(uuid, text, integer)'], ['app']],
+    [
+      'crm_search',
+      ['crm_search_text', 'crm_search_similar'],
+      ['crm_search_text(uuid, text, integer)', 'crm_search_similar(uuid[], text, integer)'],
+      ['app', 'app'],
+    ],
     [
       'crm_relay',
       ['crm_outbox_workspaces', 'crm_outbox_prune'],
@@ -863,6 +874,46 @@ describe('isolation', () => {
     await expect(bookmark(a.workspaceId, a.memberId, inB.objectId, inB.viewId)).rejects.toMatchObject({
       cause: { code: '23503', constraint: 'member_view_state_view' },
     });
+  });
+
+  it("reads none of another workspace's recent items, and refuses one for its member (spec 0039, AC-1103)", async () => {
+    const a = await workspaceWithMember('recents-a');
+    const b = await workspaceWithMember('recents-b');
+    const visit = (workspaceId: string, memberId: string) =>
+      db.withWorkspace(workspaceId, (tx) =>
+        tx.execute(
+          sql`insert into member_recents (workspace_id, member_id, kind, target_id) values (${workspaceId}, ${memberId}, 'record', ${randomUUID()})`,
+        ),
+      );
+    await visit(a.workspaceId, a.memberId);
+    await visit(b.workspaceId, b.memberId);
+    const fromA = await db.withWorkspace(a.workspaceId, (tx) =>
+      tx.execute<{ member_id: string }>(sql`select member_id from member_recents`),
+    );
+    expect(fromA.rows).toEqual([{ member_id: a.memberId }]);
+    // A row in A for B's member: the composite key finds no such member in A.
+    await expect(visit(a.workspaceId, b.memberId)).rejects.toMatchObject({
+      cause: { code: '23503', constraint: 'member_recents_member' },
+    });
+    // Only records and views.
+    await expect(
+      db.withWorkspace(a.workspaceId, (tx) =>
+        tx.execute(
+          sql`insert into member_recents (workspace_id, member_id, kind, target_id) values (${a.workspaceId}, ${a.memberId}, 'task', ${randomUUID()})`,
+        ),
+      ),
+    ).rejects.toMatchObject({ cause: { code: '23514', constraint: 'member_recents_kind' } });
+  });
+
+  it('finds nothing through crm_search_similar with no workspace set (spec 0039)', async () => {
+    const client = new pg.Client({ connectionString: appUrl });
+    await client.connect();
+    try {
+      const found = await client.query('select * from crm_search_similar(array[gen_random_uuid()], $1, 10)', ['acme']);
+      expect(found.rowCount).toBe(0);
+    } finally {
+      await client.end();
+    }
   });
 
   it("reads none of another workspace's tasks or task links, and refuses a link to its record (spec 0019)", async () => {

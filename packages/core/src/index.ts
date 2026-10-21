@@ -421,3 +421,5 @@ export {
   type EmailLinkKey,
   type EmailLinkPurpose,
 } from './emails/preferences.ts';
+export { searchWorkspace, type GlobalSearchInput } from './search/search.ts';
+export { listRecents, visitRecent, RECENTS_KEPT, type RecentVisit } from './search/recents.ts';

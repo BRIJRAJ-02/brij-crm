@@ -120,6 +120,21 @@ export async function loadAttributes(tx: WorkspaceTx, objectId: string): Promise
   return new Map(rows.map((row) => [row.id, row]));
 }
 
+/** Every attribute of several objects, by object then id, in one statement (the command menu's search, spec 0039). */
+export async function loadAttributesOfObjects(
+  tx: WorkspaceTx,
+  objectIds: readonly string[],
+): Promise<ReadonlyMap<string, ReadonlyMap<string, AttributeDef>>> {
+  if (objectIds.length === 0) return new Map();
+  const rows = await tx
+    .select(DEF_COLUMNS)
+    .from(attributes)
+    .where(inArray(attributes.objectId, [...objectIds]));
+  const byObject = new Map<string, Map<string, AttributeDef>>(objectIds.map((id) => [id, new Map()]));
+  for (const row of rows) if (row.objectId !== null) byObject.get(row.objectId)?.set(row.id, row);
+  return byObject;
+}
+
 /** Some attributes by id, wherever they sit (a filter through a relationship names the far object's). */
 export async function loadAttributesById(
   tx: WorkspaceTx,

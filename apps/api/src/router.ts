@@ -13,6 +13,7 @@ import { optionsRouter } from './modules/options/router.ts';
 import { realtimeRouter } from './modules/realtime/router.ts';
 import { recordsRouter } from './modules/records/router.ts';
 import { relationshipsRouter } from './modules/relationships/router.ts';
+import { recentsRouter, searchRouter } from './modules/search/router.ts';
 import { submissionsRouter } from './modules/submissions/router.ts';
 import { systemRouter } from './modules/system/router.ts';
 import { trashRouter } from './modules/trash/router.ts';
@@ -50,4 +51,6 @@ export const router = base.router({
   bookingPages: bookingPagesRouter,
   bookings: bookingsRouter,
   schedules: schedulesRouter,
+  search: searchRouter,
+  recents: recentsRouter,
 });
