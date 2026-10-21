@@ -26,6 +26,7 @@
 // updates are paused, and Centrifugo's client reconnects with its own backoff.
 import type { ChangeEvent, ChangeEventKind } from '@crm/contracts';
 import type { MutationLog } from './mutations.ts';
+import { COARSE_JOB_MS } from './pace.ts';
 import type { LiveRouter } from './router.ts';
 
 /** Whether changes arrive: `live`, `paused` (the connection or a subscription is down), or `off` (not configured). */
@@ -116,13 +117,7 @@ export interface LiveOptions {
 /** The longest spread before a refetch or catch up that many browsers make at once. */
 export const REFETCH_JITTER_MS = 2000;
 
-/**
- * How often a background job's coarse records events refetch an object's
- * open views (spec 0022, AC-532): at most once every 5 seconds per object,
- * plus once 5 to 7 seconds after the last, so a long job never multiplies the
- * read load.
- */
-export const COARSE_JOB_MS = 5000;
+export { COARSE_JOB_MS };
 
 /** How long a tab may stay hidden before it catches up on coming back: 5 minutes (Centrifugo's history). */
 export const HIDDEN_CATCH_UP_MS = 5 * 60_000;

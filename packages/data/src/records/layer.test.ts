@@ -22,6 +22,7 @@ import {
 } from '@crm/contracts';
 import { describe, expect, it } from 'vitest';
 import { dataError, type DataError } from '../errors.ts';
+import { COARSE_JOB_MS } from '../live/pace.ts';
 import type { Notice } from '../notice.ts';
 import type { GroupsAnswer, GroupsRequest } from './board.ts';
 import { UNDO_DEPTH } from './history.ts';
@@ -2258,14 +2259,55 @@ describe('deleting records, the state review (spec 0022)', () => {
   });
 
   it('reads ticked rows again on request and notes the ones gone (a coarse delete elsewhere)', async () => {
-    const { view, gets, frame } = await readyView();
+    const { view, gets, frame, tick } = await readyView();
     view.confirm([idAt(0), idAt(1)]);
+    tick(0);
     await settle();
     expect(gets[0]?.input).toEqual([idAt(0), idAt(1)]);
     gets[0]?.answer([rowOf(idAt(0), { [NAME]: 'P0' })]);
     await settle();
     frame();
     expect([...view.getSnapshot().gone]).toEqual([idAt(1)]);
+  });
+
+  it('merges those reads: one pass at a time, its calls one after another, at most once per 5 seconds', async () => {
+    const { view, gets, tick } = await readyView();
+    const ticked = Array.from({ length: 600 }, (_, at) => idAt(100 + at));
+    view.confirm(ticked);
+    view.confirm(ticked);
+    tick(0);
+    await settle();
+    // One pass for both asks, 500 at a time, the second call only once the first answered.
+    expect(gets.map((get) => get.input.length)).toEqual([500]);
+    // Asked again while the pass reads: it waits for the next pass.
+    view.confirm([idAt(9)]);
+    gets[0]?.answer([]);
+    await settle();
+    expect(gets.map((get) => get.input.length)).toEqual([500, 100]);
+    gets[1]?.answer([]);
+    await settle();
+    tick(0);
+    await settle();
+    expect(gets).toHaveLength(2);
+    tick(COARSE_JOB_MS);
+    await settle();
+    expect(gets[2]?.input).toEqual([idAt(9)]);
+  });
+
+  it('leaves out the ticked rows a settle just read on screen, reading only the others after it', async () => {
+    const { layer, view, gets, queries, counts, tick } = await readyView();
+    // A reload for changes too many to name (a job's coarse event): the rows on screen are read again first.
+    layer.reload(WS, PEOPLE);
+    view.confirm([idAt(0), idAt(9)]);
+    tick(0);
+    await settle();
+    expect(gets).toHaveLength(0);
+    counts.at(-1)?.answer(3);
+    queries.at(-1)?.answer(block(0, 3));
+    await settle();
+    tick(0);
+    await settle();
+    expect(gets.map((get) => get.input)).toEqual([[idAt(9)]]);
   });
 });
 

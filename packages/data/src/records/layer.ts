@@ -36,6 +36,7 @@ import type { FilterGroup, Hue, RecordRefDisplay, SortRules } from '@crm/contrac
 import type { PatternCompiler, RuleFailure } from '@crm/contracts/validation';
 import { delivered as sendDelivered } from '../delivered.ts';
 import { dataError, refusalFor, refusalSummary, toDataError, type DataError } from '../errors.ts';
+import { COARSE_JOB_MS } from '../live/pace.ts';
 import type { Notice } from '../notice.ts';
 import {
   createOwnVersions,
@@ -513,7 +514,10 @@ export interface RecordsView {
   /**
    * Reads these records again (500 a call, names only) and notes the ones the
    * server no longer answers as `gone`, so a selection drops them (spec 0022,
-   * AC-522, after a coarse delete elsewhere).
+   * AC-522, after a coarse delete elsewhere). Calls merge into one pass at a
+   * time, at most once per `COARSE_JOB_MS`, its reads one after another and
+   * after any settle under way; rows that settle just read on screen are left
+   * out, since it found them.
    */
   readonly confirm: (recordIds: readonly string[]) => void;
 }
@@ -1400,6 +1404,8 @@ export function createRecordsLayer({
 
     // When the first change still waiting to settle came: a settle never waits longer than SETTLE_MAX_MS after it.
     let dirtySince: number | undefined;
+    // When the last settle read the rows on screen again: a ticked row it found there needs no read of its own.
+    let settledAt = Number.NEGATIVE_INFINITY;
     /**
      * Times the settle: 1.5 s after the last change, never more than 5 s after
      * the first, then a random 0 to 2 s more, so the many tabs one change
@@ -1449,10 +1455,14 @@ export function createRecordsLayer({
         for (const pin of held) edited.add(pin.id);
         if (!isMarked()) dirtySince = now();
         dirt.isDirty = true;
+        scheduleConfirm();
         return;
       }
       settleController = undefined;
       isSettling = false;
+      settledAt = now();
+      // Ticked rows waiting to be read again go now: the ones the settle just found on screen are left out.
+      scheduleConfirm();
       if (!isOpen()) return;
       const noteOf = (id: string, fallback?: RowNote): RowNote | undefined =>
         isFiltered() && !windows.has(id) ? 'no-longer-matches' : fallback;
@@ -1464,6 +1474,57 @@ export function createRecordsLayer({
       inner.setPins(next);
       // Changed again while it settled (an event or an edit set the mark meanwhile): settle once more.
       if (isMarked()) scheduleSettle();
+    }
+
+    // Ticked rows a screen asked to read again (spec 0022, AC-522: a coarse delete names none of the ids it took),
+    // merged per view: one pass at a time, at most once per COARSE_JOB_MS (a job's paced reloads ask on every
+    // one), its reads one after another, after a settle under way, and leaving out the rows that settle found.
+    const toConfirm = new Set<string>();
+    let isConfirming = false;
+    let confirmTimer: (() => void) | undefined;
+    let lastConfirm = Number.NEGATIVE_INFINITY;
+    let confirmAskedAt = Number.NEGATIVE_INFINITY;
+    function scheduleConfirm() {
+      if (isConfirming || confirmTimer !== undefined || toConfirm.size === 0) return;
+      confirmTimer = later(
+        () => {
+          confirmTimer = undefined;
+          void confirmPass();
+        },
+        Math.max(0, lastConfirm + COARSE_JOB_MS - now()),
+      );
+    }
+    async function confirmPass(): Promise<void> {
+      // A settle reading the rows on screen goes first; its end starts the pass again.
+      if (isSettling) return;
+      if (!isOpen()) {
+        toConfirm.clear();
+        return;
+      }
+      isConfirming = true;
+      lastConfirm = now();
+      // Rows a settle read on screen since they were asked about are there: no second read for them.
+      const justRead = settledAt >= confirmAskedAt;
+      const ids = [...toConfirm].filter((id) => !(justRead && windows.has(id)));
+      toConfirm.clear();
+      try {
+        for (const part of chunks(ids, GET_LIMIT)) {
+          if (!isOpen()) break;
+          try {
+            const rows = await whenFree(() => api.get({ workspace, ids: part, attributeIds: [] }));
+            const found = new Set(rows.map((row) => row.id));
+            dropRecords(
+              workspace,
+              part.filter((id) => !found.has(id)),
+            );
+          } catch {
+            // Left ticked: the server refuses whatever is gone when the action is sent.
+          }
+        }
+      } finally {
+        isConfirming = false;
+      }
+      scheduleConfirm();
     }
 
     const referenceDisplays = (refs: readonly RecordRef[]) => names.displaysOf(workspace, refs);
@@ -1573,19 +1634,9 @@ export function createRecordsLayer({
         };
       },
       confirm: (recordIds) => {
-        for (const part of chunks([...new Set(recordIds)], GET_LIMIT)) {
-          whenFree(() => api.get({ workspace, ids: part, attributeIds: [] })).then(
-            (rows) => {
-              const found = new Set(rows.map((row) => row.id));
-              dropRecords(
-                workspace,
-                part.filter((id) => !found.has(id)),
-              );
-            },
-            // Left ticked: the server refuses whatever is gone when the action is sent.
-            () => undefined,
-          );
-        }
+        for (const id of recordIds) toConfirm.add(id);
+        confirmAskedAt = now();
+        scheduleConfirm();
       },
       holdSettle: (isHeld) => {
         editors = Math.max(0, editors + (isHeld ? 1 : -1));
@@ -1637,6 +1688,8 @@ export function createRecordsLayer({
       countController.abort();
       blockRetry?.abort();
       settleTimer?.();
+      confirmTimer?.();
+      toConfirm.clear();
       settleController?.abort();
       inner.dispose();
       unwatch();
