@@ -43,12 +43,3 @@ export function progressOf(job: JobView | undefined): number | undefined {
   if (job?.total === undefined || job.total === 0) return undefined;
   return Math.round(((job.done + job.refused + job.skipped) / job.total) * 100);
 }
-
-/**
- * Whether the submissions backend (Add to CRM, Sync earlier enquiries, CSV
- * export) is served. Its contracts are in; its service is the submissions
- * lane's (wip/spam), and until it lands the API answers those calls 501. Off,
- * the screens leave the actions out rather than offer what can't work. Turn it
- * on with the service.
- */
-export const submissionsBackendReady = (): boolean => false;
