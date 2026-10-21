@@ -1,9 +1,15 @@
-// Bulk actions on a table (spec 0022, milestone 1): the words of the bar, the
-// delete confirm and their toasts, and the rules the screen applies before
-// anything is sent. Pure, so the node tests cover them; BulkDeleteBar does
-// the showing.
-import type { BulkEditResult, BulkOp, DeleteResult, JobView, UndoResult } from '@crm/data';
+// Bulk actions on a table (spec 0022): the words of the bar, the dialogs and
+// their toasts, and the rules the screen applies before anything is sent. Pure,
+// so the node tests cover them; BulkActions, BulkEditDialog, useBulkJob and the
+// Trash do the showing. Only the screens that use it load it; the undo of a
+// delete is in undo.ts, which the frame loads, and the job kinds in bulk-jobs.ts.
+import type { BulkEditResult, BulkOp, DeleteResult, JobView } from '@crm/data';
 import type { ToastContent } from '@crm/ui';
+import { bulkActionOf } from './bulk-jobs.ts';
+import { lifecycleStrings, recordsWord, type ObjectNames } from './undo.ts';
+
+export { BULK_JOB_ACTIONS, bulkActionOf } from './bulk-jobs.ts';
+export { lifecycleUndoToast, recordsWord, type ObjectNames } from './undo.ts';
 
 /** The most records one request changes; past it, background jobs (milestone 3) take over. */
 export const BULK_INLINE_MAX = 500;
@@ -19,19 +25,9 @@ export function isPassing(code: string): boolean {
 /** A count in the browser's language ("1,500"), as the grid writes its own. */
 const count = (value: number): string => new Intl.NumberFormat().format(value);
 
-/** An object's names, as a toast counts its records ("1 person", "48 people"). */
-export interface ObjectNames {
-  readonly singularName: string;
-  readonly pluralName: string;
-}
-
-/** "1 person", "48 people": a count with the object's name, in lower case. */
-export function recordsWord(value: number, names: ObjectNames): string {
-  return `${count(value)} ${(value === 1 ? names.singularName : names.pluralName).toLowerCase()}`;
-}
-
-/** The bar's, the confirm's and the toasts' copy. */
+/** The bar's, the confirm's and the toasts' copy, with the undo's words from undo.ts. */
 export const bulkStrings = {
+  ...lifecycleStrings,
   delete: 'Delete',
   retry: 'Retry',
   deleting: 'Deleting',
@@ -55,20 +51,6 @@ export const bulkStrings = {
   /** None went: one reason, or the count. */
   noneDeleted: (records: string) => `${records} weren’t deleted. Each row says why.`,
   somethingWrong: 'Something went wrong. Try again in a moment.',
-  /** After an undo of a delete (AC-526). */
-  restoredOne: (name: string) => `Restored ${name}.`,
-  restored: (records: string) => `Restored ${records}.`,
-  stillInTrash: (kept: number, reason: string) =>
-    kept === 1 ? `1 is still in the trash ${reason}.` : `${count(kept)} are still in the trash ${reason}.`,
-  becauseUnique: 'because a unique value is now used by another record',
-  becauseLimit: 'because the workspace holds as many records as it can',
-  becauseGone: 'because it was removed from the trash',
-  becauseGoneMany: 'because they were removed from the trash',
-  becauseOther: 'because it couldn’t come back',
-  becauseOtherMany: 'because they couldn’t come back',
-  nothingLeft: 'Nothing from that delete is still in the trash.',
-  /** After an undo of a create (AC-541). */
-  undidCreate: (name: string) => `Undid the create of ${name}.`,
   /** The bulk edit (AC-529, AC-530). */
   edit: 'Edit',
   editTitle: (records: string) => `Edit ${records}`,
@@ -103,7 +85,6 @@ export const bulkStrings = {
       ? '1 record was refused. Its cell says why.'
       : `${count(refused)} records were refused. Each cell says why.`,
   nothingChanged: 'Nothing changed: every record already held that value.',
-  undidBulk: (cells: string) => `Undid the edit of ${cells} records.`,
   /** Background changes (spec 0022, milestone 3): the bar, the confirm, the finish toast. */
   counting: 'Counting…',
   nothingToChange: 'Nothing left to change.',
@@ -139,7 +120,6 @@ export const bulkStrings = {
   jobFailed: (label: string) => `${label} stopped before it finished. What it finished is kept.`,
   viewDetails: 'View details',
   refusedCount: (refused: number) => `${count(refused)} ${refused === 1 ? 'was' : 'were'} refused.`,
-  couldNotUndoCreate: (name: string) => `Couldn’t undo the create of ${name}.`,
 } as const;
 
 /** Whether the bar offers Delete for a selection of `selected` records, or says it is too many. */
@@ -203,51 +183,6 @@ export function deleteToast(
   };
 }
 
-/** Why records stayed in the trash, in words, for one or several. */
-function reasonWords(reason: Extract<UndoResult, { kind: 'restored' }>['reason'], kept: number): string {
-  if (reason === 'unique') return bulkStrings.becauseUnique;
-  if (reason === 'limit') return bulkStrings.becauseLimit;
-  if (reason === 'gone') return kept === 1 ? bulkStrings.becauseGone : bulkStrings.becauseGoneMany;
-  return kept === 1 ? bulkStrings.becauseOther : bulkStrings.becauseOtherMany;
-}
-
-/**
- * The toast after an undo of a delete or a create (AC-526, AC-541): "Restored
- * 46 people. 2 are still in the trash because a unique value is now used by
- * another record."; "Undid the create of Ada Lovelace.". Undefined for any
- * other undo (the edit toasts cover those).
- */
-export function lifecycleUndoToast(result: UndoResult): ToastContent | undefined {
-  if (result.kind === 'uncreated') {
-    return result.deleted
-      ? { tone: 'success', message: bulkStrings.undidCreate(result.recordName) }
-      : { tone: 'danger', message: bulkStrings.couldNotUndoCreate(result.recordName) };
-  }
-  // A delete past 500 comes back as a job: its own toast says when it is done.
-  if (result.kind === 'restoring') {
-    return { tone: 'success', message: `Restoring ${result.pluralName.toLowerCase()} in the background.` };
-  }
-  if (result.kind !== 'restored') return undefined;
-  if (result.restored === 0) {
-    return {
-      tone: 'danger',
-      message:
-        result.reason === 'gone'
-          ? bulkStrings.nothingLeft
-          : bulkStrings.stillInTrash(result.kept, reasonWords(result.reason, result.kept)),
-    };
-  }
-  const restored =
-    result.restored === 1 && result.kept === 0 && result.recordName !== undefined && result.recordName !== ''
-      ? bulkStrings.restoredOne(result.recordName)
-      : bulkStrings.restored(recordsWord(result.restored, result));
-  const message =
-    result.kept === 0
-      ? restored
-      : `${restored} ${bulkStrings.stillInTrash(result.kept, reasonWords(result.reason, result.kept))}`;
-  return { tone: result.kept === 0 ? 'success' : 'danger', message };
-}
-
 /**
  * The toast after a bulk edit lands (AC-530): "Updated 48 people." with Undo;
  * "Updated 46 people. 2 were refused." with Retry, which sends the edit
@@ -304,19 +239,6 @@ export const BULK_IDS_MAX = 10_000;
 
 /** The most records "all matching" may leave out (AC-523). */
 export const BULK_EXCEPT_MAX = 1_000;
-
-/** The bulk job kinds by what they do (spec 0022, milestone 3). */
-export const BULK_JOB_ACTIONS = {
-  'records.bulk_edit': 'edit',
-  'records.bulk_delete': 'delete',
-  'records.bulk_restore': 'restore',
-  'records.purge': 'purge',
-} as const;
-
-/** What a bulk job does, or undefined for any other kind. */
-export function bulkActionOf(kind: string): (typeof BULK_JOB_ACTIONS)[keyof typeof BULK_JOB_ACTIONS] | undefined {
-  return Object.hasOwn(BULK_JOB_ACTIONS, kind) ? BULK_JOB_ACTIONS[kind as keyof typeof BULK_JOB_ACTIONS] : undefined;
-}
 
 /**
  * Which path a selection takes (spec 0022, "Choosing the path"): up to 500

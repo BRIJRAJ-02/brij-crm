@@ -1,10 +1,11 @@
-// Undo and the replaced notice on screen (spec 0006, milestone 1): which
-// keys undo on this platform, which key presses belong to a text field or a
-// dialog instead, and the words of each toast. Pure, so the node tests cover
-// them; the frame and main.tsx do the listening and the raising.
-import type { EditOutcome, ReplacedValue, UndoKind, UndoResult } from '@crm/data';
+// Undo on screen (spec 0006, milestone 1): which keys undo on this platform,
+// which key presses belong to a text field or a dialog instead, and the words
+// of each toast, an undone delete or create among them (spec 0022). Pure, so
+// the node tests cover them; the frame does the listening and the raising. It
+// loads with the workspace frame, never in the first load; the replaced notice
+// main.tsx raises is in replaced.ts.
+import type { EditOutcome, UndoKind, UndoResult } from '@crm/data';
 import type { KeyboardPlatform, ToastContent } from '@crm/ui';
-import { bulkStrings, lifecycleUndoToast } from './bulk.ts';
 import { strings } from './strings.ts';
 
 /** A key press as the shortcut reads it. */
@@ -79,7 +80,7 @@ const count = (value: number): string => new Intl.NumberFormat().format(value);
 function undidWords(result: Extract<UndoResult, { kind: 'undone' }>): string {
   if (result.action === 'paste') return strings.undidPaste(count(result.cells));
   if (result.action === 'clear') return strings.undidClear(count(result.cells));
-  if (result.action === 'bulk') return bulkStrings.undidBulk(count(result.cells));
+  if (result.action === 'bulk') return strings.undidBulk(count(result.cells));
   if (result.cells > 1) return strings.undidCells(count(result.cells));
   return strings.undidCell(result.attributeTitle, result.first.recordName);
 }
@@ -137,26 +138,76 @@ export function isClear(values: readonly unknown[]): boolean {
   return values.every((value) => value === null || (Array.isArray(value) && value.length === 0));
 }
 
+// The undo of a delete or a create (spec 0022, AC-526, AC-541), which bulk.ts's toasts share.
+
+/** An object's names, as a toast counts its records ("1 person", "48 people"). */
+export interface ObjectNames {
+  readonly singularName: string;
+  readonly pluralName: string;
+}
+
+/** "1 person", "48 people": a count with the object's name, in lower case. */
+export function recordsWord(value: number, names: ObjectNames): string {
+  return `${count(value)} ${(value === 1 ? names.singularName : names.pluralName).toLowerCase()}`;
+}
+
+/** The words after an undo of a delete or a create (AC-526, AC-541). */
+export const lifecycleStrings = {
+  restoredOne: (name: string) => `Restored ${name}.`,
+  restored: (records: string) => `Restored ${records}.`,
+  stillInTrash: (kept: number, reason: string) =>
+    kept === 1 ? `1 is still in the trash ${reason}.` : `${count(kept)} are still in the trash ${reason}.`,
+  becauseUnique: 'because a unique value is now used by another record',
+  becauseLimit: 'because the workspace holds as many records as it can',
+  becauseGone: 'because it was removed from the trash',
+  becauseGoneMany: 'because they were removed from the trash',
+  becauseOther: 'because it couldn’t come back',
+  becauseOtherMany: 'because they couldn’t come back',
+  nothingLeft: 'Nothing from that delete is still in the trash.',
+  /** A delete past 500 comes back as a restore job, whose own toast says when it is done. */
+  restoring: (pluralName: string) => `Restoring ${pluralName.toLowerCase()} in the background.`,
+  undidCreate: (name: string) => `Undid the create of ${name}.`,
+  couldNotUndoCreate: (name: string) => `Couldn’t undo the create of ${name}.`,
+} as const;
+
+/** Why records stayed in the trash, in words, for one or several. */
+function reasonWords(reason: Extract<UndoResult, { kind: 'restored' }>['reason'], kept: number): string {
+  if (reason === 'unique') return lifecycleStrings.becauseUnique;
+  if (reason === 'limit') return lifecycleStrings.becauseLimit;
+  if (reason === 'gone') return kept === 1 ? lifecycleStrings.becauseGone : lifecycleStrings.becauseGoneMany;
+  return kept === 1 ? lifecycleStrings.becauseOther : lifecycleStrings.becauseOtherMany;
+}
+
 /**
- * The "your value was replaced" toast (AC-46): who changed what on which
- * record just after the person, with Use mine. It stays until dismissed.
+ * The toast after an undo of a delete or a create (AC-526, AC-541): "Restored
+ * 46 people. 2 are still in the trash because a unique value is now used by
+ * another record."; "Undid the create of Ada Lovelace.". Undefined for any
+ * other undo (the edit toasts cover those).
  */
-export function replacedToast(replaced: ReplacedValue): ToastContent {
-  const who =
-    replaced.by.kind === 'api_key'
-      ? strings.anApiKey
-      : replaced.by.kind === 'automation'
-        ? strings.anAutomation
-        : replaced.by.kind === 'form'
-          ? strings.aForm
-          : replaced.by.kind === 'booking'
-            ? strings.aBookingPage
-            : replaced.by.name === undefined || replaced.by.name === ''
-              ? strings.someone
-              : replaced.by.name;
-  return {
-    tone: 'danger',
-    message: strings.replaced(who, replaced.attributeTitle, replaced.others, replaced.recordName),
-    action: { label: strings.useMine, onAction: replaced.useMine },
-  };
+export function lifecycleUndoToast(result: UndoResult): ToastContent | undefined {
+  if (result.kind === 'uncreated') {
+    return result.deleted
+      ? { tone: 'success', message: lifecycleStrings.undidCreate(result.recordName) }
+      : { tone: 'danger', message: lifecycleStrings.couldNotUndoCreate(result.recordName) };
+  }
+  if (result.kind === 'restoring') return { tone: 'success', message: lifecycleStrings.restoring(result.pluralName) };
+  if (result.kind !== 'restored') return undefined;
+  if (result.restored === 0) {
+    return {
+      tone: 'danger',
+      message:
+        result.reason === 'gone'
+          ? lifecycleStrings.nothingLeft
+          : lifecycleStrings.stillInTrash(result.kept, reasonWords(result.reason, result.kept)),
+    };
+  }
+  const restored =
+    result.restored === 1 && result.kept === 0 && result.recordName !== undefined && result.recordName !== ''
+      ? lifecycleStrings.restoredOne(result.recordName)
+      : lifecycleStrings.restored(recordsWord(result.restored, result));
+  const message =
+    result.kept === 0
+      ? restored
+      : `${restored} ${lifecycleStrings.stillInTrash(result.kept, reasonWords(result.reason, result.kept))}`;
+  return { tone: result.kept === 0 ? 'success' : 'danger', message };
 }

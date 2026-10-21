@@ -11,11 +11,11 @@ import {
   isSettingsKey,
   isUndoKey,
   SETTINGS_KEYS,
-  replacedToast,
   UNDO_KEYS,
   undoToast,
   type KeyTarget,
 } from './undo.ts';
+import { replacedToast } from './replaced.ts';
 
 const press = (
   key: string,

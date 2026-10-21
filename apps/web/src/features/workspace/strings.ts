@@ -1,3 +1,5 @@
+import { replacedStrings } from './replaced.ts';
+
 /** The workspace frame's and the object page's copy. */
 export const strings = {
   product: 'Timefix',
@@ -85,6 +87,8 @@ export const strings = {
   undidCells: (cells: string) => `Undid ${cells} changes.`,
   undidPaste: (cells: string) => `Undid the paste into ${cells} cells.`,
   undidClear: (cells: string) => `Undid the clear of ${cells} cells.`,
+  /** A bulk edit undone (spec 0022, AC-530). */
+  undidBulk: (cells: string) => `Undid the edit of ${cells} records.`,
   /** Cells an undo kept because they changed since; never says who (it may be the person, in another tab). */
   keptSince: (cells: number, shown: string) =>
     cells === 1 ? '1 cell was changed since, so it was kept.' : `${shown} cells were changed since, so they were kept.`,
@@ -93,17 +97,8 @@ export const strings = {
   undoStale: 'Newer changes came after that one, so it wasn’t undone. Undo them first.',
   /** The workspace menu's way to the shortcut list. */
   keyboardShortcuts: 'Keyboard shortcuts',
-  /** Someone else's later save replaced the person's value (AC-46). */
-  replaced: (who: string, attribute: string, others: number, record: string) =>
-    others === 0
-      ? `${who} changed ${attribute} on ${record} just after you, so your value was replaced.`
-      : `${who} changed ${attribute} and ${String(others)} more on ${record} just after you, so your values were replaced.`,
-  useMine: 'Use mine',
-  someone: 'Someone',
-  anApiKey: 'An API key',
-  anAutomation: 'An automation',
-  aForm: 'A form submission',
-  aBookingPage: 'A booking page',
+  /** Someone else's later save replaced the person's value (AC-46), and who changed it, from replaced.ts. */
+  ...replacedStrings,
   /** ShortcutHelp, opened with ? anywhere in the workspace. */
   shortcutsEverywhere: 'Everywhere',
   /** The new record dialog's one email field: one address here, more in the table. */

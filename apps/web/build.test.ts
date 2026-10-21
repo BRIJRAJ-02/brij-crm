@@ -141,4 +141,23 @@ describe('the first load', () => {
     const heavy = chunks.filter((key) => HEAVY_ENTRY.test(manifest[key]?.src ?? key));
     expect(heavy).toEqual([]);
   });
+
+  // Bulk changes and the Trash (spec 0022) load with the screens that use them. Rolldown merges modules into
+  // chunks, so this looks for their words: the bar's and the job toasts' (bulk.ts), the edit dialog's and the
+  // Trash's. Each must ship somewhere, so a reworded string can't pass this unseen.
+  it('never loads the bulk bar, the edit dialog, the job toasts or the Trash up front', () => {
+    const markers = [
+      'You can leave out at most 1,000 records from all matching',
+      'Choose a field to change.',
+      'Nothing left to change.',
+      'Deleted records stay here for 30 days',
+    ];
+    const read = (file: string) => readFileSync(path.join(outDir, file), 'utf8');
+    const upFront = firstLoad(manifest).js.map(read);
+    const everything = assets.filter((file) => file.endsWith('.js')).map((file) => read(path.join('assets', file)));
+    for (const marker of markers) {
+      expect(everything.some((text) => text.includes(marker))).toBe(true);
+      expect(upFront.filter((text) => text.includes(marker))).toEqual([]);
+    }
+  });
 });
