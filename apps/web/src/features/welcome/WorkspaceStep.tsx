@@ -87,13 +87,14 @@ export function WorkspaceStep({
           ? strings.addressFree
           : undefined;
   const create = () => {
+    // A known taken address is refused here too, so the Form moves focus to it and says it again; Create waits.
     const found: WelcomeRefusal[] = [
       ...(name.trim() === '' ? [{ code: 'MISSING', message: strings.workspaceNameMissing, field: FIELDS.name }] : []),
       ...(state === 'invalid' ? [{ code: 'INVALID', message: strings.slugInvalid, field: FIELDS.slug }] : []),
+      ...(state === 'taken' ? [{ code: 'SLUG_TAKEN', message: strings.addressTaken, field: FIELDS.slug }] : []),
     ];
     setProblems(found);
-    // A known taken address is said on its field already; Create waits for another.
-    if (found.length > 0 || state === 'taken') return;
+    if (found.length > 0) return;
     onCreate();
   };
   return (

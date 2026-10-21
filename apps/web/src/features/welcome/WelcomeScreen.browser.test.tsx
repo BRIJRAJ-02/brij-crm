@@ -189,6 +189,8 @@ describe('first run’s steps', () => {
     await expect.element(address).toHaveAccessibleDescription('That address is taken. Try another.');
     await expect.element(address).toHaveAttribute('aria-invalid', 'true');
     await page.getByRole('button', { name: 'Create workspace' }).click();
+    // Refused before asking: focus goes back to the address, and nothing is made.
+    await expect.element(address).toHaveFocus();
     expect(fake.created).toEqual([]);
     await address.fill('halcyon');
     await expect.element(address).toHaveAccessibleDescription('That address is free.');
