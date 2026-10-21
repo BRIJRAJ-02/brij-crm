@@ -9,13 +9,14 @@
 import { and, eq, sql } from 'drizzle-orm';
 import type { RecentItem, ViewHit } from '@crm/contracts';
 import { schema, type WorkspaceTx } from '@crm/db';
-import { checkId } from '../engine/ids.ts';
+import { canonicalId, isUuid } from '../engine/ids.ts';
 import { readRecords } from '../engine/records.ts';
 import { isRefusal } from '../engine/refusals.ts';
 import type { EngineScope } from '../engine/scope.ts';
 import type { WriteContext } from '../engine/write.ts';
 import { objectLevel } from '../access/policy.ts';
 import { inWorkspace } from '../access/run.ts';
+import { recordVisibleSql } from '../access/visibility.ts';
 import { memberOf, readView } from '../views/views.ts';
 import { findViews, searchedObjects } from './search.ts';
 
@@ -50,10 +51,17 @@ export async function listRecents(scope: EngineScope, limit = RECENTS_LISTED): P
     const recordIds = rows.filter((row) => row.kind === 'record').map((row) => row.targetId);
     const viewIds = rows.filter((row) => row.kind === 'view').map((row) => row.targetId);
     // Through the door: live records the caller may see (readRecords checks objects and rules), and views
-    // they see on readable live objects (findViews).
-    const records = await readRecords(tx, scope.access, recordIds, { attributeIds: [] });
+    // they see on readable live objects (findViews). One read of the readable objects serves both.
+    const searched = await searchedObjects(tx, scope);
+    const readable = searched.map((object) => object.id);
+    const records =
+      recordIds.length === 0
+        ? []
+        : await readRecords(tx, scope.access, recordIds, {
+            attributeIds: [],
+            attributes: new Map(searched.map((object) => [object.id, object.attributes])),
+          });
     const recordRefs = new Map(records.map((record) => [record.id, record.display]));
-    const readable = await readableObjectIds(tx, scope);
     const views = viewIds.length === 0 ? [] : await findViews(tx, scope, readable, { ids: viewIds }, RECENTS_KEPT);
     const viewHits = new Map<string, ViewHit>(views.map((view) => [view.id, view]));
     const items = rows.flatMap((row): RecentItem[] => {
@@ -69,20 +77,10 @@ export async function listRecents(scope: EngineScope, limit = RECENTS_LISTED): P
   });
 }
 
-/** The live objects the caller may read. */
-async function readableObjectIds(tx: WorkspaceTx, scope: EngineScope): Promise<readonly string[]> {
-  return (await searchedObjects(tx, scope)).map((object) => object.id);
-}
-
-/** Whether the caller may see what they say they opened, as a read of it would decide. */
-async function canSee(tx: WorkspaceTx, scope: EngineScope, visit: RecentVisit): Promise<boolean> {
-  if (visit.kind === 'record') {
-    const found = await readRecords(tx, scope.access, [visit.id], { attributeIds: [] });
-    return found.length === 1;
-  }
+/** Whether the caller may see a view they say they opened: theirs to see, on an object they may read. */
+async function seesViewNow(tx: WorkspaceTx, scope: EngineScope, viewId: string): Promise<boolean> {
   try {
-    // A view is seen when it is the caller's to see and its object is readable (a view on a hidden object is absent).
-    const view = await readView(tx, scope, visit.id, false);
+    const view = await readView(tx, scope, viewId, false);
     return objectLevel(scope.access, view.objectId) !== 'none';
   } catch (error) {
     if (isRefusal(error) && error.refusal.code === 'NOT_FOUND') return false;
@@ -98,17 +96,28 @@ async function canSee(tx: WorkspaceTx, scope: EngineScope, visit: RecentVisit): 
  */
 export async function visitRecent(scope: EngineScope, visit: RecentVisit): Promise<void> {
   const caller = memberOf(scope);
-  if (caller === undefined) return;
-  const id = checkId(visit.id, 'That item does not exist.');
+  if (caller === undefined || !isUuid(visit.id)) return;
+  const id = canonicalId(visit.id);
   await inWorkspace(scope, async (tx) => {
-    if (!(await canSee(tx, scope, { kind: visit.kind, id }))) return;
-    await tx
-      .insert(memberRecents)
-      .values({ workspaceId: scope.workspaceId, memberId: caller, kind: visit.kind, targetId: id })
-      .onConflictDoUpdate({
-        target: [memberRecents.workspaceId, memberRecents.memberId, memberRecents.kind, memberRecents.targetId],
-        set: { visitedAt: sql`now()` },
-      });
+    const upsert = sql`on conflict (workspace_id, member_id, kind, target_id) do update set visited_at = now()`;
+    if (visit.kind === 'record') {
+      // One statement whatever the record is: kept only when it is live and the caller may see it, so neither
+      // the answer nor its timing tells a hidden record from a missing one.
+      const visible = recordVisibleSql(scope.access, 'r');
+      await tx.execute(sql`
+        insert into member_recents (workspace_id, member_id, kind, target_id)
+        select r.workspace_id, ${caller}::uuid, 'record', r.id from records r
+        where r.id = ${id}::uuid and r.deleted_at is null${visible === undefined ? sql`` : sql` and ${visible}`}
+        ${upsert}
+      `);
+    } else {
+      if (!(await seesViewNow(tx, scope, id))) return;
+      await tx.execute(sql`
+        insert into member_recents (workspace_id, member_id, kind, target_id)
+        values (${scope.workspaceId}::uuid, ${caller}::uuid, 'view', ${id}::uuid)
+        ${upsert}
+      `);
+    }
     // Past the newest `RECENTS_KEPT`, by the member's time index.
     await tx.execute(sql`
       delete from member_recents m

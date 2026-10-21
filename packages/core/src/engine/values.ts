@@ -1,7 +1,7 @@
 // Writing and reading one attribute's value (spec 0004, the write protocol):
 // the owner row is locked first, an unchanged value writes nothing, and a new
 // version's time never runs before the one it replaces.
-import { and, eq, inArray, isNull, sql } from 'drizzle-orm';
+import { and, eq, inArray, isNull, or, sql } from 'drizzle-orm';
 import { schema, type WorkspaceTx } from '@crm/db';
 import { parseAttributeValue, SYSTEM_ONLY_TYPES, type AttributeType } from '@crm/contracts/values';
 import { encodeValue, sameItems, type ItemColumns, type StoredItem } from './columns.ts';
@@ -120,16 +120,28 @@ export async function loadAttributes(tx: WorkspaceTx, objectId: string): Promise
   return new Map(rows.map((row) => [row.id, row]));
 }
 
-/** Every attribute of several objects, by object then id, in one statement (the command menu's search, spec 0039). */
-export async function loadAttributesOfObjects(
+/**
+ * The attributes a search of several objects may read, by object then id, in
+ * one statement (the command menu's search, spec 0039): each object's name
+ * attribute (`primaryIds`) and its email and domain attributes, never the rest.
+ */
+export async function loadSearchAttributes(
   tx: WorkspaceTx,
   objectIds: readonly string[],
+  primaryIds: readonly string[],
 ): Promise<ReadonlyMap<string, ReadonlyMap<string, AttributeDef>>> {
   if (objectIds.length === 0) return new Map();
   const rows = await tx
     .select(DEF_COLUMNS)
     .from(attributes)
-    .where(inArray(attributes.objectId, [...objectIds]));
+    .where(
+      and(
+        inArray(attributes.objectId, [...objectIds]),
+        primaryIds.length === 0
+          ? inArray(attributes.type, ['email', 'domain'])
+          : or(inArray(attributes.type, ['email', 'domain']), inArray(attributes.id, [...primaryIds])),
+      ),
+    );
   const byObject = new Map<string, Map<string, AttributeDef>>(objectIds.map((id) => [id, new Map()]));
   for (const row of rows) if (row.objectId !== null) byObject.get(row.objectId)?.set(row.id, row);
   return byObject;

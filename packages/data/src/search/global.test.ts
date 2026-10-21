@@ -126,3 +126,60 @@ describe('the command menu’s search', () => {
     expect(heard).toBe(1);
   });
 });
+
+describe('when the server is busy or time has passed', () => {
+  it('asks again after the wait a 429 names, twice at most, staying loading', async () => {
+    const waits: number[] = [];
+    const timers: (() => void)[] = [];
+    let calls = 0;
+    const search = createGlobalSearch({
+      run: () => {
+        calls += 1;
+        return Promise.reject(Object.assign(new Error('busy'), { code: 'TOO_MANY_REQUESTS', retryAfterSeconds: 2 }));
+      },
+      later: (run, ms) => {
+        waits.push(ms);
+        timers.push(run);
+        return () => undefined;
+      },
+      random: () => 0,
+    });
+    search.ask('acme');
+    for (let n = 0; n < 3; n += 1) {
+      timers.shift()?.();
+      await settle();
+    }
+    expect(calls).toBe(3);
+    expect(waits.slice(1)).toEqual([2000, 2000]);
+    expect(search.getSnapshot().status).toBe('error');
+  });
+
+  it('asks again for a kept answer older than 30 seconds', async () => {
+    let clock = 0;
+    const timers: (() => void)[] = [];
+    let calls = 0;
+    const search = createGlobalSearch({
+      run: () => {
+        calls += 1;
+        return Promise.resolve(found('Acme'));
+      },
+      later: (run) => {
+        timers.push(run);
+        return () => undefined;
+      },
+      now: () => clock,
+    });
+    search.ask('acme');
+    timers.shift()?.();
+    await settle();
+    search.ask('beta');
+    clock = 31_000;
+    search.ask('acme');
+    expect(search.getSnapshot().status).toBe('loading');
+    timers.splice(0).forEach((run) => {
+      run();
+    });
+    await settle();
+    expect(calls).toBeGreaterThanOrEqual(2);
+  });
+});

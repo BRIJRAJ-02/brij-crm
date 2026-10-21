@@ -237,6 +237,53 @@ describe('hidden means absent (AC-1089, AC-1090)', () => {
     expect(seen).not.toContain(theirs);
   });
 
+  it('never searches a hidden name: no prefix, contains or typo match on it, and the domain still finds it unnamed', async () => {
+    const w = await world();
+    const bea = w.as(w.bea, {
+      levels: [
+        {
+          subject: { type: 'role', role: 'member' },
+          target: { type: 'attribute', objectId: w.companies, attributeId: w.attribute('companies.name') },
+          level: 'hidden',
+        },
+      ],
+      records: [],
+    });
+    // The domain (acmecorp.io) still contains “acme”, so these reach the name alone.
+    for (const query of ['ac', 'acmee', 'Acme Inc']) {
+      expect(recordIds(await searchWorkspace(bea, { query })), query).not.toContain(w.acme);
+    }
+    const byDomain = await searchWorkspace(bea, { query: 'acmecorp' });
+    expect(recordIds(byDomain)).toEqual([w.acme]);
+    expect(byDomain.records[0]?.ref.name).toBe('Unnamed company');
+  });
+
+  it('keeps a member’s own match when many records outside their rule match too', async () => {
+    const w = await world();
+    for (let n = 0; n < 30; n += 1) await w.company(`Acme ${String(n)}`);
+    const bea = w.as(w.bea, {
+      levels: [],
+      records: [
+        {
+          subject: { type: 'role', role: 'member' },
+          objectId: w.companies,
+          kind: 'own',
+          attributeId: w.attribute('companies.owner'),
+        },
+      ],
+    });
+    const hers = (
+      await createRecord(bea, {
+        objectId: w.companies,
+        values: {
+          [w.attribute('companies.name')]: 'Acme Bea',
+          [w.attribute('companies.owner')]: { type: 'member', id: w.bea },
+        },
+      })
+    ).recordId;
+    expect(recordIds(await searchWorkspace(bea, { query: 'acme' }))).toEqual([hers, w.ada]);
+  });
+
   it('never finds another workspace’s records or views, with the same names', async () => {
     const one = await world();
     const two = await world();
@@ -244,6 +291,11 @@ describe('hidden means absent (AC-1089, AC-1090)', () => {
     expect(recordIds(found)).toEqual([one.acme, one.ada]);
     expect(found.views.map((view) => view.id)).toEqual([one.acmeDeals]);
     expect(recordIds(await searchWorkspace(two.owner, { query: 'acmee' }))).toEqual([two.acme]);
+    // The typo function itself, in one workspace, answers nothing for the other's name attribute.
+    const across = await db.withWorkspace(one.workspaceId, (tx) =>
+      tx.execute(sql`select * from crm_search_similar(array[${two.attribute('companies.name')}::uuid], 'acmee', 10)`),
+    );
+    expect(across.rows).toEqual([]);
   });
 });
 
@@ -294,6 +346,7 @@ describe('recent items (AC-1076, AC-1088, AC-1091, AC-1092)', () => {
     await expect(visitRecent(bea, { kind: 'record', id: w.acme })).resolves.toBeUndefined();
     await expect(visitRecent(bea, { kind: 'view', id: w.acmeDeals })).resolves.toBeUndefined();
     await expect(visitRecent(bea, { kind: 'record', id: newId() })).resolves.toBeUndefined();
+    await expect(visitRecent(bea, { kind: 'record', id: 'not an id' })).resolves.toBeUndefined();
     const theirs = await w.view('Owner only', w.people, 'private');
     await expect(visitRecent(bea, { kind: 'view', id: theirs })).resolves.toBeUndefined();
     expect(await listRecents(w.as(w.bea))).toEqual([]);
