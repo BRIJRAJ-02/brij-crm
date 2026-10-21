@@ -11,7 +11,7 @@ The field set gives every attribute type exactly one display and one editor (spe
 Screens never import it; they render values through `AttributeDisplay` and `AttributeEditor` with a `FieldAttribute` of this type.
 
 - **Display**: "Oct 8, 2026" in the language, never shifted by a time zone.
-- **Editor**: the DatePicker: typed in the language's order or picked from the calendar, with Today, Tomorrow, Next week and End of month resolved in the provider's time zone. The grid edits it in a popover.
+- **Editor**: the DatePicker: typed in the language's order or picked from the calendar, with Today, Tomorrow, Next week and End of month resolved in the provider's time zone. The grid edits it in a popover. Outside a cell a hint says the date can be typed or picked from the calendar.
 - **Text out / in** (copy, paste, CSV, the import preview): `2026-10-08` / ISO, or the language's numeric order (`08.10.2026` in German).
 - **Filter operators**: is, before, after, within, then is empty and is not empty.
 

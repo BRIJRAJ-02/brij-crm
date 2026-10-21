@@ -69,7 +69,21 @@ export const Invalid: Story = {
     await userEvent.click(canvas.getByRole('textbox', { name: 'Domain' }));
     await userEvent.keyboard('north wind.com');
     await userEvent.tab();
-    await expect(canvas.getByText(/no spaces, path or protocol/)).toBeInTheDocument();
+    await expect(canvas.getByText('Enter a domain, such as example.com, with no spaces.')).toBeInTheDocument();
     await expect(args.onCommit).not.toHaveBeenCalled();
+  },
+};
+
+/** Empty, in a form: an example domain as the placeholder, and a hint that a pasted link is cut down to its domain. */
+export const Guidance: Story = {
+  parameters: { crm: { screenshot: false } },
+  render: (args) => (
+    <Stage width="narrow">
+      <AttributeEditor {...args} />
+    </Stage>
+  ),
+  play: async ({ canvas }) => {
+    await expect(canvas.getByRole('textbox', { name: 'Domain' })).toHaveAttribute('placeholder', 'example.com');
+    await expect(canvas.getByText('Just the domain. A pasted link is cut down to it.')).toBeInTheDocument();
   },
 };

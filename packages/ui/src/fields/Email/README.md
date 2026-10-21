@@ -11,7 +11,7 @@ The field set gives every attribute type exactly one display and one editor (spe
 Screens never import it; they render values through `AttributeDisplay` and `AttributeEditor` with a `FieldAttribute` of this type.
 
 - **Display**: a LinkChip to `mailto:`; several values are a row of chips with "+N" (cells measure, cards show 3). On a card (a board card, a line of the timeline) the chip is flat, the link's text alone: a blue chip there read heavier than the words around it (the owner, 21 October 2026).
-- **Editor**: a Field checked on blur: trimmed and lowercased; "ada@example" is refused with "Enter an email address with a name and a domain, such as ada@example.com." Several values are removable chips and a field to add one.
+- **Editor**: a Field checked on blur: trimmed and lowercased; "ada@example" is refused with "Enter an email address with a name and a domain, such as ada@example.com." Several values are removable chips and a field to add one. The placeholder is an example address ("ada@example.com").
 - **Text out / in** (copy, paste, CSV, the import preview): the address / parsed and lowercased.
 - **Filter operators**: is, contains, is empty, is not empty.
 

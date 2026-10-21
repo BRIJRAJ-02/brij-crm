@@ -72,3 +72,17 @@ export const ValueFromOutside: Story = {
     await waitFor(() => expect(canvas.getAllByRole('spinbutton', { name: /month/i })[0]).toHaveTextContent('12'));
   },
 };
+
+/** In a form: a hint that the date can be typed or picked. */
+export const Guidance: Story = {
+  parameters: { crm: { screenshot: false } },
+  args: { value: null },
+  render: (args) => (
+    <Stage width="narrow">
+      <AttributeEditor {...args} />
+    </Stage>
+  ),
+  play: async ({ canvas }) => {
+    await expect(canvas.getByText('Type the date, or pick it from the calendar.')).toBeInTheDocument();
+  },
+};

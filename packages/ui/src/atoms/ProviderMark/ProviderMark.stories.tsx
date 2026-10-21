@@ -15,6 +15,18 @@ type Story = StoryObj<typeof meta>;
 
 const ALL: readonly ProviderName[] = ['google', 'google-calendar', 'outlook', 'apple-calendar', 'timefix'];
 
+const SOCIAL: readonly ProviderName[] = [
+  'linkedin',
+  'x',
+  'instagram',
+  'github',
+  'facebook',
+  'youtube',
+  'angellist',
+  'tiktok',
+  'threads',
+];
+
 /** Every brand's mark, labelled, at both sizes. Each is the brand's own artwork; only Timefix's swaps by theme. */
 export const Default: Story = {
   parameters: { crm: { preview: true } },
@@ -78,5 +90,24 @@ export const Large: Story = {
     const mark = canvas.getByRole('img', { name: 'Timefix' });
     const shown = [...mark.querySelectorAll('img')].find((image) => image.getBoundingClientRect().width > 0);
     await expect(shown?.getBoundingClientRect().width).toBe(20);
+  },
+};
+
+/** The social networks' marks, labelled, at both sizes: a profile link's mark (the url field). The black ones swap by theme. */
+export const Social: Story = {
+  render: () => (
+    <Stage>
+      {SOCIAL.map((provider) => (
+        <ProviderMark key={provider} provider={provider} isLabelled />
+      ))}
+      {SOCIAL.map((provider) => (
+        <ProviderMark key={`${provider}-sm`} provider={provider} size="sm" isLabelled />
+      ))}
+    </Stage>
+  ),
+  play: async ({ canvas }) => {
+    await expect(canvas.getAllByRole('img', { name: 'LinkedIn' })).toHaveLength(2);
+    await expect(canvas.getAllByRole('img', { name: 'X' })).toHaveLength(2);
+    await expect(canvas.getAllByRole('img', { name: 'GitHub' })).toHaveLength(2);
   },
 };

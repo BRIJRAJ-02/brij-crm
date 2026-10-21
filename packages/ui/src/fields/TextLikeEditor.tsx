@@ -19,6 +19,8 @@ export interface TextLikeEditorProps<T extends AttributeType> extends EditorProp
   readonly inputMode?: FieldProps['inputMode'];
   readonly type?: FieldProps['type'];
   readonly hint?: string;
+  /** What the empty field shows: the type's example ("ada@example.com"), else "Set <Attribute>…". */
+  readonly placeholder?: string;
   readonly prefix?: ReactNode;
   /** A unit after the text: a percent number's sign. */
   readonly suffix?: ReactNode;
@@ -40,6 +42,7 @@ export function TextLikeEditor<T extends AttributeType>({
   inputMode,
   type,
   hint,
+  placeholder,
   prefix,
   suffix,
   isMultiline = false,
@@ -64,7 +67,7 @@ export function TextLikeEditor<T extends AttributeType>({
       // In a grid cell the cell becomes the input; elsewhere it is the boxed field.
       variant={surface === 'cell' && !isMultiline ? 'cell' : 'default'}
       align={surface === 'cell' ? align : 'start'}
-      placeholder={fieldStrings.setAttribute(attribute.name)}
+      placeholder={placeholder ?? fieldStrings.setAttribute(attribute.name)}
       isRequired={attribute.isRequired}
       isMultiline={isMultiline}
       showCounter={isMultiline && maxLength !== undefined}
