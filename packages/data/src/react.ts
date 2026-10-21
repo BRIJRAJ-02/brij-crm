@@ -5,6 +5,7 @@ import { useCallback, useEffect, useMemo, useRef, useSyncExternalStore } from 'r
 import type { BoardStatus, BoardStore } from './records/board.ts';
 import type { DataError } from './errors.ts';
 import type { ActivityFeed, ActivityState } from './activity/feed.ts';
+import type { AccountSessionsState, AccountSessionsView } from './account/sessions.ts';
 import type { BookingsCalendarHeld, BookingsCalendarState, BookingsState, BookingsView } from './bookings/store.ts';
 import type { CalendarSettingsHeld, CalendarSettingsState, CalendarState, CalendarView } from './calendar/store.ts';
 import type { CaptureListState, CaptureListView } from './captures/list.ts';
@@ -304,6 +305,11 @@ export function useBookingsCalendar(view: BookingsCalendarHeld): BookingsCalenda
  * connection still syncing its first window is read again until it is done.
  */
 export function useCalendar(view: CalendarView): CalendarState {
+  return useRetained(view);
+}
+
+/** The signed in person's own sessions (spec 0033), read from the top when the screen first holds them. */
+export function useAccountSessions(view: AccountSessionsView): AccountSessionsState {
   return useRetained(view);
 }
 

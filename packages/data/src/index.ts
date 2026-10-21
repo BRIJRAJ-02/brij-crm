@@ -72,6 +72,7 @@ import type { FetchLike } from './fetch.ts';
 import { delivered } from './delivered.ts';
 import { createJobsStore, type JobsScope, type JobsView, type TestJobSettings } from './jobs/store.ts';
 import { createBookingsStore, type BookingsCalendarHeld, type BookingsView } from './bookings/store.ts';
+import { createAccountSessionsStore, type AccountSessionsView, type SignOutOthersResult } from './account/sessions.ts';
 import {
   createEmailPreferences,
   createEmailUnsubscribe,
@@ -250,6 +251,8 @@ export type {
 } from './email-preferences.ts';
 export type { ScheduleList, ScheduleMember, ScheduleUser, ScheduleView } from '@crm/contracts';
 export type { SchedulesState, SchedulesView } from './schedules/store.ts';
+export type { AccountSessionsState, AccountSessionsView, SignOutOthersResult } from './account/sessions.ts';
+export type { AccountSession } from '@crm/contracts';
 export type { CalendarSettingsHeld, CalendarSettingsState, CalendarState, CalendarView } from './calendar/store.ts';
 export type { CaptureListState, CaptureListView } from './captures/list.ts';
 export { connectUrl, needsReconnect, type ConnectReturn } from './calendar/store.ts';
@@ -1405,6 +1408,15 @@ export function createDataLayer({
       schedules.changed(workspace);
       return answer;
     };
+  // Account security (spec 0033): the person's own sessions, one list for the app load.
+  const accountSessions = createAccountSessionsStore({
+    api: {
+      list: (input) => call((options) => api.account.sessions.list(input, options)),
+      revoke: (input) => call((options) => api.account.sessions.revoke(input, options)),
+      revokeOthers: () => call((options) => api.account.sessions.revokeOthers(undefined, options)),
+    },
+    notify,
+  });
 
   // Calendar sync (spec 0024): the member's connections, Settings › Calendar's one list per workspace.
   const calendar = createCalendarStore({
@@ -3198,6 +3210,20 @@ export function createDataLayer({
        */
       deleteForever: async (workspace: string, recordIds: readonly string[]): Promise<PurgeSummary> =>
         (await trashStore()).deleteForever(workspace, recordIds),
+    },
+    account: {
+      /**
+       * The signed in person's own sessions (spec 0033), newest activity
+       * first, a page at a time: device, rough place and last use, by id only.
+       */
+      sessions: (): AccountSessionsView => accountSessions.view(),
+      /** Signs one of the person's devices out: gone at once, back with a toast if refused. Answers whether it landed. */
+      signOut: (sessionId: string): Promise<boolean> => accountSessions.signOut(sessionId),
+      /**
+       * Signs out every other device: only this one shows at once. Answers
+       * STEP_UP_REQUIRED (no toast) when the server wants a recent sign in first.
+       */
+      signOutOthers: (): Promise<SignOutOthersResult> => accountSessions.signOutOthers(),
     },
     calendar: {
       /**

@@ -452,6 +452,14 @@ function fakeApi(overrides: Partial<Behaviour> = {}, auth: (path: string, body: 
       delete: os.notes.delete.handler(notServed),
       restore: os.notes.restore.handler(notServed),
     },
+    // Account sessions (spec 0033) are driven against their own fake in `account/sessions.test.ts`.
+    account: {
+      sessions: {
+        list: os.account.sessions.list.handler(notServed),
+        revoke: os.account.sessions.revoke.handler(notServed),
+        revokeOthers: os.account.sessions.revokeOthers.handler(notServed),
+      },
+    },
     calendar: {
       connections: {
         list: os.calendar.connections.list.handler(() => ({

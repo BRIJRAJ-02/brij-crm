@@ -5,6 +5,7 @@
 // (the `workspace` namespace forces it), so what this hands live.ts is only
 // what happened: a publication, subscribed (recovered or not), or down.
 import { Centrifuge, UnauthorizedError } from 'centrifuge';
+import { SIGNED_OUT_DISCONNECT_CODE } from '@crm/contracts/codes';
 import type { LiveChannel, LiveTransport, OpenTransport, TokenSource } from './live.ts';
 
 /** A token callback for the client: no token (signed out, or no longer a member) stops trying. */
@@ -18,6 +19,15 @@ const tokenFor = (source: TokenSource) => async (): Promise<string> => {
 export const openCentrifuge: OpenTransport = (url, connectionToken) => {
   const client = new Centrifuge(url, { getToken: tokenFor(connectionToken) });
   let isOpen = false;
+  // One of the person's sessions was signed out elsewhere (spec 0033). The code is
+  // terminal, so the client stays down: forget the connection token and connect
+  // again, which asks for a fresh one. A dead session answers 401, the layer goes
+  // to sign in and the token callback stops; a live one simply reconnects.
+  client.on('disconnected', (context) => {
+    if (context.code !== SIGNED_OUT_DISCONNECT_CODE) return;
+    client.setToken('');
+    client.connect();
+  });
   const transport: LiveTransport = {
     listen: (channel: LiveChannel) => {
       const subscription = client.newSubscription(channel.name, {
