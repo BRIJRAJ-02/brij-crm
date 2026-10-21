@@ -5,6 +5,7 @@ import { Button } from '../../atoms/Button/Button.tsx';
 import { Radio, RadioGroup } from '../../atoms/Radio/Radio.tsx';
 import { Callout } from '../../molecules/Callout/Callout.tsx';
 import { Field } from '../../molecules/Field/Field.tsx';
+import { hoverUntilHovered } from '../../workbench/pointer.ts';
 import { Stage } from '../../workbench/Stage/Stage.tsx';
 import { SpanCard } from './SpanCard.tsx';
 
@@ -33,8 +34,11 @@ export const Choices: Story = {
     </Stage>
   ),
   play: async ({ canvas, args }) => {
-    await userEvent.click(canvas.getByRole('button', { name: 'Block this time' }));
+    const block = canvas.getByRole('button', { name: 'Block this time' });
+    await userEvent.click(block);
     await expect(args.choices?.[1]?.onPress).toHaveBeenCalled();
+    // The pointer stays on the choice until its hover shows, so every shot has it (one CI run caught it without).
+    await hoverUntilHovered(userEvent, block);
   },
 };
 

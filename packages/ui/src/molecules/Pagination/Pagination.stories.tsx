@@ -1,5 +1,6 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
 import { expect, fn, userEvent } from 'storybook/test';
+import { hoverUntilHovered } from '../../workbench/pointer.ts';
 import { Stage } from '../../workbench/Stage/Stage.tsx';
 import { Pagination } from './Pagination.tsx';
 
@@ -31,8 +32,11 @@ export const Default: Story = {
   play: async ({ canvas, args }) => {
     await expect(canvas.getByText('1–10 of 42')).toBeInTheDocument();
     await expect(canvas.getByRole('button', { name: 'Previous page' })).toBeDisabled();
-    await userEvent.click(canvas.getByRole('button', { name: 'Next page' }));
+    const next = canvas.getByRole('button', { name: 'Next page' });
+    await userEvent.click(next);
     await expect(args.onPage).toHaveBeenCalledWith(2);
+    // The pointer stays on Next until its hover shows, so every shot has it (one CI run caught it without).
+    await hoverUntilHovered(userEvent, next);
   },
 };
 
