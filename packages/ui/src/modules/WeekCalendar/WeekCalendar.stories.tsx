@@ -1,6 +1,7 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
 import { useState } from 'react';
 import { expect, fn, userEvent, waitFor, within } from 'storybook/test';
+import { Button } from '../../atoms/Button/Button.tsx';
 import { Stage } from '../../workbench/Stage/Stage.tsx';
 import { SpanCard } from '../SpanCard/SpanCard.tsx';
 import { WeekCalendar, type WeekCalendarBlock, type WeekCalendarDay, type WeekCalendarSpan } from './WeekCalendar.tsx';
@@ -201,30 +202,31 @@ export const OpenCard: Story = {
  * A block removed outside its card (the screen's confirm): its card closed, the block went, and the screen asks for
  * its day, which takes focus once nothing else has it.
  */
-export const FocusRequest: Story = {
+export const FocusDay: Story = {
   parameters: { crm: { screenshot: false } },
   render: function Render(args) {
     const [shown, setShown] = useState(blocks);
-    const [request, setRequest] = useState<{ readonly dayKey: string } | undefined>(undefined);
+    const [request, setRequest] = useState<{ readonly dayKey: string; readonly blockId?: string } | undefined>(
+      undefined,
+    );
     return (
       <Stage width="fill">
         {/* The confirm's commit, gone with the block it removed, as a confirm's is: focus falls to the page. */}
         {request === undefined && (
-          <button
-            type="button"
-            onClick={() => {
+          <Button
+            onPress={() => {
               setShown((before) => before.filter((block) => block.id !== 'dentist'));
-              setRequest({ dayKey: '2026-10-07' });
+              setRequest({ dayKey: '2026-10-07', blockId: 'dentist' });
             }}
           >
             Remove the block
-          </button>
+          </Button>
         )}
         <WeekCalendar
           {...args}
           days={days()}
           blocks={shown}
-          {...(request === undefined ? {} : { focusRequest: request })}
+          {...(request === undefined ? {} : { focusDay: request })}
         />
       </Stage>
     );
