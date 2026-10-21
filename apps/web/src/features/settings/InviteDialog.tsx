@@ -2,7 +2,14 @@
 // Purpose: invite people to the workspace by email, with one role (spec 0031, AC-803).
 // Main task: paste or type addresses, pick a role, Send invitations; refusals show in place, per address.
 // Leaves out: the invite link and email domains (slice 6), and a seat line (until #38 sets plan limits).
-import { isDataError, ROLE_DESCRIPTIONS, ROLE_LABELS, type DataLayer, type InviteResult, type Role } from '@crm/data';
+import {
+  INVITE_BATCH_MAX,
+  isDataError,
+  type DataLayer,
+  type InviteResult,
+  type Role,
+  type RoleOption,
+} from '@crm/data';
 import { Button, Field, Form, Modal, Select } from '@crm/ui';
 import { useState } from 'react';
 import { parseEmails } from './members.ts';
@@ -14,8 +21,14 @@ export interface InviteDialogProps {
   readonly slug: string;
   readonly isOpen: boolean;
   readonly onClose: () => void;
-  /** The roles this person may invite as, most powerful first; the first that isn't owner is the default. */
-  readonly roles: readonly Role[];
+  /**
+   * The roles this person may invite as, from the workspace's roles list
+   * (`roles.list`, spec 0037, AC-1439), most power first, each with its line
+   * on what it can do.
+   */
+  readonly roles: readonly RoleOption[];
+  /** The role new people get unless someone picks another (`roles.list`'s default). */
+  readonly defaultRole: string;
   /** The server sent them: the page says what happened and reads the invitations again. */
   readonly onInvited: (result: InviteResult) => void;
 }
@@ -28,9 +41,12 @@ interface InviteRefusal {
 }
 
 /** The Invite dialog: a Modal holding a Form with the addresses and the role. */
-export function InviteDialog({ data, slug, isOpen, onClose, roles, onInvited }: InviteDialogProps) {
+export function InviteDialog({ data, slug, isOpen, onClose, roles, defaultRole, onInvited }: InviteDialogProps) {
   const [text, setText] = useState('');
-  const [role, setRole] = useState<Role>(roles.includes('member') ? 'member' : (roles[0] ?? 'member'));
+  const [roleId, setRoleId] = useState(
+    roles.some((each) => each.id === defaultRole) ? defaultRole : (roles.at(-1)?.id ?? defaultRole),
+  );
+  const chosen = roles.find((each) => each.id === roleId);
   const [isBusy, setBusy] = useState(false);
   const [refusals, setRefusals] = useState<readonly InviteRefusal[]>([]);
 
@@ -50,10 +66,12 @@ export function InviteDialog({ data, slug, isOpen, onClose, roles, onInvited }: 
       ...(invalid.length > 0
         ? [{ code: 'INVALID', message: strings.badEmails(invalid.join(', ')), field: 'emails' }]
         : []),
-      ...(emails.length > 20 ? [{ code: 'TOO_MANY', message: strings.tooMany, field: 'emails' }] : []),
+      ...(emails.length > INVITE_BATCH_MAX ? [{ code: 'TOO_MANY', message: strings.tooMany, field: 'emails' }] : []),
     ];
     setRefusals(problems);
-    if (problems.length > 0) return;
+    // Only built in roles exist until custom roles arrive (spec 0037); an invite names one of them.
+    const role: Role | undefined = chosen?.builtIn;
+    if (problems.length > 0 || role === undefined) return;
     setBusy(true);
     data.invitations.create(slug, emails, role).then(
       (result) => {
@@ -111,13 +129,13 @@ export function InviteDialog({ data, slug, isOpen, onClose, roles, onInvited }: 
         />
         <Select
           label={strings.role}
-          items={roles.map((each) => ({ id: each, label: ROLE_LABELS[each], description: ROLE_DESCRIPTIONS[each] }))}
-          value={role}
+          items={roles.map((each) => ({ id: each.id, label: each.label, description: each.description }))}
+          value={roleId}
           onChange={(next) => {
-            const chosen = roles.find((each) => each === next);
-            if (chosen !== undefined) setRole(chosen);
+            const picked = roles.find((each) => each.id === next);
+            if (picked !== undefined) setRoleId(picked.id);
           }}
-          hint={ROLE_DESCRIPTIONS[role]}
+          {...(chosen === undefined ? {} : { hint: chosen.description })}
         />
       </Form>
     </Modal>

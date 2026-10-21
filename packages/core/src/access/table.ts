@@ -78,7 +78,11 @@ export const ACCESS_TABLE = {
   // Members.
   setMemberRole: { ownerRules: true },
   removeMember: { ownerRules: true },
+  // Spec 0031: leaving is the removal on oneself, open to any member; the only owner is refused LAST_OWNER.
+  leaveWorkspace: { anyMember: true },
   listMembers: { anyMember: true },
+  // Spec 0037, AC-1439: the roles every role picker offers.
+  listRoles: { anyMember: true },
   // Invitations (spec 0031, slice 2).
   inviteMembers: { permission: 'members.invite' },
   listInvitations: { permission: 'members.invite' },

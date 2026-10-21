@@ -967,9 +967,11 @@ describe('members.list', () => {
       [m.workspace.id],
     );
     const listed = await m.client.members.list({ workspace: m.slug });
-    expect(listed.map(({ id, name, email, role }) => ({ id, name, email, role }))).toEqual([
+    expect(listed.members.map(({ id, name, email, role }) => ({ id, name, email, role }))).toEqual([
       { id: await memberIdOf(m), name: 'Ada', email: m.email, role: 'owner' },
     ]);
-    expect(Number.isNaN(Date.parse(listed[0]?.joinedAt ?? ''))).toBe(false);
+    expect(listed.total).toBe(1);
+    expect(listed.nextCursor).toBeUndefined();
+    expect(Number.isNaN(Date.parse(listed.members[0]?.joinedAt ?? ''))).toBe(false);
   });
 });

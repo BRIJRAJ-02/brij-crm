@@ -3,6 +3,7 @@
 import { sql } from 'drizzle-orm';
 import {
   bigint,
+  check,
   foreignKey,
   integer,
   pgEnum,
@@ -82,6 +83,10 @@ export const members = pgTable(
     email: text('email').notNull(),
     status: memberStatus('status').notNull().default('active'),
     role: memberRole('role').notNull().default('member'),
+    /** Their picture, once file storage (#32) arrives; until then none, and screens show initials (spec 0031). */
+    avatarUrl: text('avatar_url'),
+    /** Their time zone in this workspace, an IANA name (spec 0031, slice 7); none means the browser's. */
+    timeZone: text('time_zone'),
     ...auditColumns(),
   },
   (t) => [
@@ -106,6 +111,8 @@ export const members = pgTable(
       .where(sql`${t.status} = 'active'`),
     actorCheck('members_created_by_actor', { type: t.createdByType, id: t.createdById, memberId: t.createdByMemberId }),
     actorCheck('members_updated_by_actor', { type: t.updatedByType, id: t.updatedById, memberId: t.updatedByMemberId }),
+    check('members_avatar_url', sql`char_length(${t.avatarUrl}) <= 2048`),
+    check('members_time_zone', sql`char_length(${t.timeZone}) between 1 and 64`),
   ],
 );
 

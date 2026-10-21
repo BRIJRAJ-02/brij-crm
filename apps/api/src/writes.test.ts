@@ -33,6 +33,8 @@ const READS: ReadonlySet<string> = new Set([
   'invitations.list',
   'invitations.peek',
   'access.mine',
+  // The roles every role picker offers (spec 0037, AC-1439).
+  'roles.list',
   'records.query',
   'records.count',
   'records.groups',
@@ -165,6 +167,21 @@ async function personFor(m: Member): Promise<string> {
     mutationId: newId(),
   });
   return id;
+}
+
+/** A second person in the member's workspace: invited and accepted through the app, with their own client. */
+async function teammate(m: Member) {
+  const invitee = await signIn(app);
+  await m.client.invitations.create({
+    workspace: m.slug,
+    emails: [invitee.email],
+    role: 'member',
+    mutationId: newId(),
+  });
+  const client = rpcClient(app, invitee.cookie);
+  await client.invitations.accept({ token: invitationTokens.get(invitee.email) ?? '' });
+  const memberId = (await client.access.mine({ workspace: m.slug })).memberId;
+  return { client, memberId };
 }
 
 /** One write's rows, one per object in object id order (the outbox hook's), each naming its one record. */
@@ -318,6 +335,22 @@ const WRITES: Record<string, (m: Member, mutationId: string) => Promise<readonly
     });
     await m.client.invitations.revoke({ workspace: m.slug, invitationId: made.invited[0]?.id ?? '', mutationId });
     return [];
+  },
+  // Members (spec 0031): each case brings a teammate in first (an invite and its accept, one members row).
+  'members.setRole': async (m, mutationId) => {
+    const mate = await teammate(m);
+    await m.client.members.setRole({ workspace: m.slug, memberId: mate.memberId, role: 'admin', mutationId });
+    return [{ kind: 'members' }, { kind: 'members', item_ids: [mate.memberId], mutation_id: mutationId }];
+  },
+  'members.remove': async (m, mutationId) => {
+    const mate = await teammate(m);
+    await m.client.members.remove({ workspace: m.slug, memberId: mate.memberId, mutationId });
+    return [{ kind: 'members' }, { kind: 'members', item_ids: [mate.memberId], mutation_id: mutationId }];
+  },
+  'members.leave': async (m, mutationId) => {
+    const mate = await teammate(m);
+    await mate.client.members.leave({ workspace: m.slug, mutationId });
+    return [{ kind: 'members' }, { kind: 'members', item_ids: [mate.memberId], mutation_id: mutationId }];
   },
   'invitations.accept': async (m) => {
     const invitee = await signIn(app);
@@ -1205,6 +1238,9 @@ Object.assign(WRITES, {
 
 /** How many writes (each one poke) a case in WRITES makes before and with its own. */
 const WRITES_MADE: Readonly<Record<string, number>> = {
+  'members.setRole': 3,
+  'members.remove': 3,
+  'members.leave': 3,
   'invitations.resend': 2,
   'invitations.revoke': 2,
   'invitations.accept': 2,

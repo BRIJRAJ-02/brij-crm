@@ -21,6 +21,11 @@ export const strings = {
   /** The sign out confirm (the owner, 21 October 2026). */
   signOutTitle: 'Sign out?',
   signOutText: 'You’ll need to sign in again on this device.',
+  /** Leaving the workspace (spec 0031, AC-812), from the workspace menu: it asks first. */
+  leaveWorkspace: 'Leave workspace',
+  leaveTitle: (workspace: string) => `Leave ${workspace}?`,
+  leaveText: 'You lose access at once. To come back, someone has to invite you again.',
+  leaving: 'Leaving',
   records: 'Records',
   /** The sidebar's way to the trash, at the foot of Records (spec 0022). */
   trash: 'Trash',

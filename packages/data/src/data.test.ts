@@ -396,7 +396,13 @@ function fakeApi(overrides: Partial<Behaviour> = {}, auth: (path: string, body: 
       deleteForever: os.trash.deleteForever.handler(() => notServed()),
     },
     members: {
-      list: os.members.list.handler(() => behaviour.members()),
+      list: os.members.list.handler(() => {
+        const listed = behaviour.members();
+        return { members: listed, total: listed.length };
+      }),
+      setRole: os.members.setRole.handler(notServed),
+      remove: os.members.remove.handler(notServed),
+      leave: os.members.leave.handler(notServed),
     },
     invitations: {
       create: os.invitations.create.handler(notServed),
@@ -407,6 +413,7 @@ function fakeApi(overrides: Partial<Behaviour> = {}, auth: (path: string, body: 
       accept: os.invitations.accept.handler(notServed),
     },
     access: { mine: os.access.mine.handler(() => behaviour.access()) },
+    roles: { list: os.roles.list.handler(notServed) },
     realtime: {
       connectionToken: os.realtime.connectionToken.handler(() => ({ token: 'connection-token' })),
       subscriptionToken: os.realtime.subscriptionToken.handler(({ input }) => ({

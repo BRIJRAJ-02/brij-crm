@@ -1,4 +1,4 @@
-import { accessContract } from './access.ts';
+import { accessContract, rolesContract } from './access.ts';
 import { attributesContract } from './attributes.ts';
 import { bookingPagesContract, bookingsContract } from './booking/pages.ts';
 import { bulkRecordsContract } from './bulk.ts';
@@ -73,6 +73,7 @@ export const contract = {
   members: membersContract,
   invitations: invitationsContract,
   access: accessContract,
+  roles: rolesContract,
   realtime: realtimeContract,
   jobs: jobsContract,
   usage: usageContract,

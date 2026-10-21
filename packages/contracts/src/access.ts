@@ -125,3 +125,36 @@ export type MyAccess = z.infer<typeof MyAccess>;
 export const accessContract = {
   mine: oc.input(WorkspaceScoped).output(MyAccess),
 };
+
+/**
+ * One role a person may hold, as every role picker offers it (spec 0037,
+ * AC-1439): its id, its name and one line on what it can do. Built in roles
+ * are named by their role; custom roles (spec 0037) will join with ids of
+ * their own.
+ */
+export const RoleOption = z.object({
+  id: z.string().min(1).max(64),
+  label: z.string(),
+  description: z.string(),
+  /** The built in role this is; absent for a custom role. */
+  builtIn: Role.optional(),
+});
+/** One role a person may hold. */
+export type RoleOption = z.infer<typeof RoleOption>;
+
+/** The workspace's roles, most power first, and the one new people get unless someone picks another. */
+export const RolesList = z.object({
+  roles: z.array(RoleOption),
+  defaultRole: z.string(),
+});
+/** The workspace's roles. */
+export type RolesList = z.infer<typeof RolesList>;
+
+/**
+ * The roles every role picker offers (spec 0037, AC-1439): the Invite
+ * dialog, the Members page, and later the invite link and join approvals,
+ * so custom roles join them without a client change. Any member may read it.
+ */
+export const rolesContract = {
+  list: oc.input(WorkspaceScoped).output(RolesList),
+};

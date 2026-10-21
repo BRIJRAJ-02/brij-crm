@@ -77,9 +77,11 @@ export interface IdentityStore {
    * Drops the directory's note that this user is in this workspace, once the
    * tenant transaction that removed their member row has committed (spec
    * 0031, AC-812, AC-814), so their switcher stops listing it. Access never
-   * read it: the door already refuses them.
+   * read it: the door already refuses them. With `memberId`, only the row
+   * naming that member goes, so a membership made again since (a new
+   * invitation accepted in between) stays.
    */
-  dropMembership(userId: string, workspaceId: string): Promise<void>;
+  dropMembership(userId: string, workspaceId: string, memberId?: string): Promise<void>;
   /** The user with this id, or undefined. */
   getUser(id: string): Promise<IdentityUser | undefined>;
   /** Saves the name only when the user has none yet (an email code sign up starts empty). True when it saved. */
@@ -177,11 +179,18 @@ export function createIdentityStore(options: DatabaseOptions): IdentityStore {
         });
     },
 
-    async dropMembership(userId, workspaceId) {
+    async dropMembership(userId, workspaceId, memberId) {
       if (!UUID.test(userId) || !UUID.test(workspaceId)) return;
+      if (memberId !== undefined && !UUID.test(memberId)) return;
       await db
         .delete(workspaceMembership)
-        .where(and(eq(workspaceMembership.userId, userId), eq(workspaceMembership.workspaceId, workspaceId)));
+        .where(
+          and(
+            eq(workspaceMembership.userId, userId),
+            eq(workspaceMembership.workspaceId, workspaceId),
+            ...(memberId === undefined ? [] : [eq(workspaceMembership.memberId, memberId)]),
+          ),
+        );
     },
 
     async getUser(id) {

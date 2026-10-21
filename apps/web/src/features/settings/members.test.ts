@@ -1,5 +1,23 @@
 import { describe, expect, it } from 'vitest';
-import { invitableRoles, parseEmails } from './members.ts';
+import { canRemove, grantableRoles, invitableRoles, parseEmails } from './members.ts';
+
+describe('grantableRoles (spec 0031, AC-811)', () => {
+  it('lets an owner give any role, an admin move people below owner, and a member nothing', () => {
+    expect(grantableRoles('owner', 'owner')).toEqual(['owner', 'admin', 'member']);
+    expect(grantableRoles('admin', 'member')).toEqual(['admin', 'member']);
+    expect(grantableRoles('admin', 'owner')).toEqual([]);
+    expect(grantableRoles('member', 'member')).toEqual([]);
+    expect(grantableRoles(undefined, 'member')).toEqual([]);
+  });
+
+  it('lets the same people remove, never themselves (leaving is the workspace menu’s)', () => {
+    expect(canRemove('owner', 'owner', false)).toBe(true);
+    expect(canRemove('admin', 'member', false)).toBe(true);
+    expect(canRemove('admin', 'owner', false)).toBe(false);
+    expect(canRemove('member', 'member', false)).toBe(false);
+    expect(canRemove('owner', 'owner', true)).toBe(false);
+  });
+});
 
 describe('invitableRoles (spec 0031, AC-803)', () => {
   it('lets only an owner invite an owner, and a member nobody', () => {

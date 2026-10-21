@@ -40,6 +40,7 @@ import type {
   RecordView,
   RelationshipView,
   Role,
+  RolesList,
   SubmissionState,
   Usage,
   ValidationRuleInput,
@@ -91,6 +92,7 @@ import { createLiveRouter } from './live/router.ts';
 import type { Notice } from './notice.ts';
 import { createPendingOptions } from './options.ts';
 import { nextHue } from '@crm/contracts/picker';
+import { MEMBERS_PAGE_MAX } from '@crm/contracts/team-limits';
 import type { UndoKind } from './records/history.ts';
 import type { RecordAttributes, RecordSubscription } from './records/one.ts';
 import { createRecordSearch, type RecordSearch } from './records/search.ts';
@@ -173,11 +175,14 @@ export type {
   JobView,
   Me,
   MemberSummary,
+  MembersPage,
   MemberView,
   MyAccess,
   ObjectSummary,
   Permission,
   Role,
+  RoleOption,
+  RolesList,
   RecordRefDisplay,
   RecordView,
   RelationshipView,
@@ -218,6 +223,7 @@ export type { Hue, ObjectIcon, RichTextDoc } from '@crm/contracts/values';
 // the server's own functions without loading the schema library.
 export { isReservedSlug, RESERVED_SLUGS, toApiSlug } from '@crm/contracts/slugs';
 export { ROLE_DESCRIPTIONS, ROLE_LABELS, ROLES } from '@crm/contracts/roles';
+export { INVITE_BATCH_MAX, MEMBER_SEARCH_MAX, MEMBERS_PAGE } from '@crm/contracts/team-limits';
 export { freeHue, PICKER_TYPES, STARTER_STAGES, type PickerType } from '@crm/contracts/picker';
 export {
   MAX_PENDING_OPTIONS,
@@ -653,6 +659,8 @@ export function createDataLayer({
   let usage = new Map<string, Promise<Usage>>();
   let members = new Map<string, Promise<MemberView[]>>();
   let access = new Map<string, Promise<MyAccess>>();
+  // The roles every role picker offers (spec 0037, AC-1439), per workspace, for the app load.
+  let roles = new Map<string, Promise<RolesList>>();
   let attributes = new Map<string, Promise<AttributeDefinition[]>>();
   // Each object's attributes with the archived ones too (settings, spec 0012), apart from the live lists the tables read.
   let allAttributes = new Map<string, Promise<AttributeDefinition[]>>();
@@ -700,6 +708,7 @@ export function createDataLayer({
     usage = new Map();
     members = new Map();
     access = new Map();
+    roles = new Map();
     attributes = new Map();
     allAttributes = new Map();
     heads = new Map();
@@ -1031,8 +1040,24 @@ export function createDataLayer({
       Math.round(random() * SPREAD_MS),
     );
   };
-  const readMembers = (workspace: string) =>
-    cached(members, workspace, () => call((options) => api.members.list({ workspace }, options)));
+  /**
+   * Every active member of a workspace, by name, read a full page at a time
+   * (spec 0031: `members.list` answers pages): the pickers', the Owner
+   * column's and the timeline's one list.
+   */
+  const allMembers = async (workspace: string): Promise<MemberView[]> => {
+    const all: MemberView[] = [];
+    let cursor: string | undefined;
+    do {
+      const page = await call((options) =>
+        api.members.list({ workspace, limit: MEMBERS_PAGE_MAX, ...(cursor === undefined ? {} : { cursor }) }, options),
+      );
+      all.push(...page.members);
+      cursor = page.nextCursor;
+    } while (cursor !== undefined);
+    return all;
+  };
+  const readMembers = (workspace: string) => cached(members, workspace, () => allMembers(workspace));
   const readAccess = (workspace: string) =>
     cached(access, workspace, () => call((options) => api.access.mine({ workspace }, options)));
   /** Whether `memberIds` names the person, by the access this tab holds (unknown counts as named). */
@@ -1479,8 +1504,7 @@ export function createDataLayer({
    * (someone who joined after it was read) reads the list once more.
    */
   const memberName = async (workspace: string, memberId: string | null): Promise<string | undefined> => {
-    const read = () =>
-      cached(members, workspace, () => call((options) => api.members.list({ workspace }, options))).catch(() => []);
+    const read = () => cached(members, workspace, () => allMembers(workspace)).catch(() => []);
     const found = (await read()).find((member) => member.id === memberId);
     if (found !== undefined || memberId === null) return found?.name;
     members.delete(workspace);
@@ -2326,14 +2350,59 @@ export function createDataLayer({
        * page. Cached for the app load; a live `members` event reads it again.
        */
       list: (workspace: string): Promise<MemberView[]> =>
-        cached(members, workspace, () =>
-          beforeRead(workspace).then(() => call((options) => api.members.list({ workspace }, options))),
+        cached(members, workspace, () => beforeRead(workspace).then(() => allMembers(workspace))),
+      /**
+       * One page of the workspace's active members for the Members page
+       * (spec 0031, AC-810): by name, after `cursor`, only those whose name
+       * or email holds `search`. Read fresh each time: the page reloads on a
+       * live `members` event.
+       */
+      page: (workspace: string, query: { readonly search?: string; readonly cursor?: string } = {}) =>
+        beforeRead(workspace).then(() =>
+          call((options) =>
+            api.members.list(
+              {
+                workspace,
+                ...(query.search === undefined || query.search.trim() === '' ? {} : { search: query.search.trim() }),
+                ...(query.cursor === undefined ? {} : { cursor: query.cursor }),
+              },
+              options,
+            ),
+          ),
         ),
       /**
        * Hears the workspace's changes while the Members page is open, so
        * another admin's change reads the list again; the answer stops.
        */
       watch: (workspace: string): (() => void) => watch(workspace),
+      /**
+       * Changes a member's role (spec 0031, AC-811), waiting for the server:
+       * the owner rules live there. Refusals: `FORBIDDEN`, `LAST_OWNER`,
+       * `NOT_FOUND`. The list, and the person's own access, are read again after.
+       */
+      async setRole(workspace: string, memberId: string, role: Role): Promise<MemberView> {
+        const changed = await call((options) =>
+          api.members.setRole({ workspace, memberId, role, mutationId: mintId() }, options),
+        );
+        members.delete(workspace);
+        access.delete(workspace);
+        return changed;
+      },
+      /** Removes a member (spec 0031, AC-811). Refusals: `FORBIDDEN`, `LAST_OWNER`, `NOT_FOUND`. */
+      async remove(workspace: string, memberId: string): Promise<void> {
+        await call((options) => api.members.remove({ workspace, memberId, mutationId: mintId() }, options));
+        members.delete(workspace);
+      },
+      /**
+       * The person leaves the workspace (spec 0031, AC-812). Refuses
+       * `LAST_OWNER` for its only owner. Their workspaces are read again after.
+       */
+      async leave(workspace: string): Promise<void> {
+        await call((options) => api.members.leave({ workspace, mutationId: mintId() }, options));
+        members.delete(workspace);
+        access.delete(workspace);
+        me = undefined;
+      },
     },
     /**
      * Invitations (spec 0031): settings, not CRM data, so no live event. The
@@ -2367,6 +2436,17 @@ export function createDataLayer({
         me = undefined;
         return accepted;
       },
+    },
+    roles: {
+      /**
+       * The roles every role picker offers (spec 0037, AC-1439): the built in
+       * ones now, custom ones once they exist, and the default for new
+       * people. Cached for the app load.
+       */
+      list: (workspace: string): Promise<RolesList> =>
+        cached(roles, workspace, () =>
+          beforeRead(workspace).then(() => call((options) => api.roles.list({ workspace }, options))),
+        ),
     },
     access: {
       /**

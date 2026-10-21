@@ -4,6 +4,7 @@
 import { oc } from '@orpc/contract';
 import * as z from 'zod';
 import { Role } from './access.ts';
+import { INVITE_BATCH_MAX } from './team-limits.ts';
 import { WorkspaceScoped } from './workspaces.ts';
 import { Uuid } from './values/ids.ts';
 
@@ -11,8 +12,7 @@ import { Uuid } from './values/ids.ts';
 export const INVITE_DAYS = 7;
 /** Open invitations one workspace may hold at once (AC-808): one more answers 409 `INVITES_LIMIT`. */
 export const INVITES_LIMIT = 100;
-/** Addresses one invite may name (AC-803). */
-export const INVITE_BATCH_MAX = 20;
+export { INVITE_BATCH_MAX } from './team-limits.ts';
 /** Invitation emails a workspace may send in an hour (AC-808), sends and resends alike. */
 export const INVITE_SENDS_PER_WORKSPACE_HOUR = 50;
 /** Invitation emails one inviter may send in an hour (AC-808). */
@@ -39,6 +39,9 @@ export const AUDIT_ACTIONS = [
   'invitation.resent',
   'invitation.revoked',
   'invitation.accepted',
+  'member.role_changed',
+  'member.removed',
+  'member.left',
 ] as const;
 /** One action the audit log records. */
 export const AuditAction = z.enum(AUDIT_ACTIONS);

@@ -3,8 +3,9 @@
 // as themself, opens the first person's link and is refused with the address masked, joining nothing; the first
 // signs in through their link, accepts and lands in the workspace, and the owner's Members page shows them; the used
 // link then reads as no longer valid, like any other bad link; Revoke asks first, Cancel keeps the invitation, and
-// Revoke invitation ends it. axe in light and dark on the invitation page and the Members page (AC-803 to AC-806,
-// AC-810, AC-833).
+// Revoke invitation ends it. Then the owner finds the newcomer by search, makes them an admin at once and removes them
+// behind a confirm, after which they are in no workspace. axe in light and dark on the invitation page and the Members
+// page (AC-803 to AC-806, AC-810, AC-811, AC-833).
 import { randomUUID } from 'node:crypto';
 import { expect, test, type APIRequestContext, type Page } from '@playwright/test';
 import { codeFor, MAILPIT_URL } from './mailpit.ts';
@@ -144,6 +145,29 @@ test('invites two people: the wrong address is refused, the invited one joins, a
   await confirm.getByRole('button', { name: 'Revoke invitation' }).click();
   await expect(page.getByText(`Invitation to ${other} revoked.`)).toBeVisible();
   await expect(page.getByRole('rowheader', { name: other })).toHaveCount(0);
+
+  // Slice 3: the owner finds the newcomer by search, makes them an admin at once, then removes them, which asks first.
+  await page.getByRole('tab', { name: /Members/ }).click();
+  await page.getByRole('textbox', { name: 'Search members' }).fill('grace');
+  await expect(page).toHaveURL(/[?&]q=grace/);
+  await expect(page.getByRole('rowheader', { name: /Ada Lovelace/ })).toHaveCount(0);
+  const grace = page.getByRole('rowheader', { name: /grace/ });
+  await expect(grace).toBeVisible();
+  await page.getByRole('button', { name: /Role for grace/ }).click();
+  await page.getByRole('option', { name: 'Admin' }).click();
+  await expect(page.getByText(/is now an Admin\./)).toBeVisible();
+  await page.getByRole('button', { name: /^Actions for grace/ }).click();
+  await page.getByRole('menuitem', { name: 'Remove from workspace' }).click();
+  const remove = page.getByRole('alertdialog', { name: /^Remove grace.* from / });
+  await remove.getByRole('button', { name: 'Cancel' }).click();
+  await expect(grace).toBeVisible();
+  await page.getByRole('button', { name: /^Actions for grace/ }).click();
+  await page.getByRole('menuitem', { name: 'Remove from workspace' }).click();
+  await remove.getByRole('button', { name: 'Remove member' }).click();
+  await expect(page.getByText(/was removed from the workspace\./)).toBeVisible();
+  await expect(grace).toHaveCount(0);
+  // Removed, they are in no workspace, and the workspace answers them as not found.
+  expect(await workspacesOf(joiner)).toEqual([]);
 
   await otherContext.close();
   await inviteeContext.close();

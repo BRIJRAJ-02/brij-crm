@@ -13,7 +13,8 @@ import { commitWrite } from '../../hooks.ts';
 import { errorFields, log } from '../../log.ts';
 import { captureFault } from '../../monitoring/sentry.ts';
 import { member, type RequestContext } from '../../orpc.ts';
-import { invitationsPublic, sourceOf } from './public.ts';
+import { sourceOf } from '../../source.ts';
+import { invitationsPublic } from './public.ts';
 
 // Invitations (spec 0031, slice 2). Inside a workspace for those who invite (the door, then `members.invite` in
 // core). `peek` and `accept` are bootstrap, in public.ts: core finds the workspace by the token's hash and mints its

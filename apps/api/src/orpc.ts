@@ -94,6 +94,12 @@ export interface RequestContext extends ResponseHeadersPluginContext {
    * more senders of invitations.
    */
   mayStartWorkspace: (email: string) => boolean;
+  /**
+   * The directory's one write a member handler needs (spec 0031): forgetting
+   * that a removed person is in this workspace once their removal commits,
+   * so their switcher stops listing it. Access never reads the directory.
+   */
+  directory: Pick<IdentityStore, 'dropMembership'>;
 }
 
 /** What `authed` adds: the signed in person. */
