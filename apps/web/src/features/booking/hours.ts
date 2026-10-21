@@ -178,9 +178,6 @@ export function zoneMatches(item: { readonly label: string; readonly description
     .every((word) => text.includes(word) || text.includes(offsetWord(word)));
 }
 
-/** The browser's zone. */
-export const browserZone = (): string => new Intl.DateTimeFormat().resolvedOptions().timeZone;
-
 /**
  * "9:00 AM" for a stored `HH:MM`, on the 12 hour clock in `locale`'s form, as the week editor reads it (the
  * owner's call, F12), with Midnight for the day's end, `24:00`.

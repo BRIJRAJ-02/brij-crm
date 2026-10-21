@@ -2,7 +2,7 @@ import { isDataError } from '@crm/data';
 import { EmptyState, PageColumn, TopBar, LoadingNow } from '@crm/ui';
 import { createFileRoute, useRouter, type ErrorComponentProps } from '@tanstack/react-router';
 import { AvailabilityPending, AvailabilityScreen } from '../features/booking/AvailabilityScreen.tsx';
-import { browserZone } from '../features/booking/hours.ts';
+import { browserZone } from '../features/booking/zone.ts';
 import { strings } from '../features/booking/strings.ts';
 import { WorkspacePage } from '../features/workspace/WorkspacePage.tsx';
 

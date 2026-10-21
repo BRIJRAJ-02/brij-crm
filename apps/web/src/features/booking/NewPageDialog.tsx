@@ -5,7 +5,8 @@
 import { isDataError, type BookingPageView, type DataLayer } from '@crm/data';
 import { Button, Callout, ChoiceChips, Field, Modal, Radio, RadioGroup, SettingsStack } from '@crm/ui';
 import { useState } from 'react';
-import { anyTime, browserZone } from './hours.ts';
+import { anyTime } from './hours.ts';
+import { browserZone } from './zone.ts';
 import { strings } from './strings.ts';
 
 const DURATIONS = [15, 30, 45, 60, 90] as const;
