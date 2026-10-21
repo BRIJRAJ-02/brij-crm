@@ -3374,7 +3374,7 @@ export function createDataLayer({
         attributeId: string,
         names: readonly string[],
       ): Promise<ImportLinks> => {
-        const distinct = [...new Set(names.map((name) => name.trim()).filter((name) => name !== ''))];
+        const distinct = [...new Set(names.map((name) => name.trim().slice(0, 500)).filter((name) => name !== ''))];
         const missing: string[] = [];
         const ambiguous: string[] = [];
         for (let start = 0; start < distinct.length; start += 1_000) {

@@ -168,9 +168,13 @@ export function recordsImportUndo(): KindDefinition<ImportUndoParams> {
           for (const link of each.made)
             byObject.set(link.objectId, [...(byObject.get(link.objectId) ?? []), link.recordId]);
         }
+        const gone = new Set<string>();
         try {
           for (const [objectId, recordIds] of byObject) {
-            await deleteIn(context, { objectId, recordIds, batchId: row.id });
+            const deleted = await deleteIn(context, { objectId, recordIds, batchId: row.id });
+            for (const outcome of deleted) {
+              if (outcome.state === 'deleted' || outcome.state === 'already-deleted') gone.add(outcome.recordId);
+            }
           }
           context.record({ coarseObjects: [...byObject.keys()] });
         } catch (error) {
@@ -178,7 +182,20 @@ export function recordsImportUndo(): KindDefinition<ImportUndoParams> {
           return { finished: false, failed: { code: error.refusal.code, message: error.refusal.message } };
         }
         // A row that only made far records (its own record skipped) is taken back by this alone.
+        // A made record the member can no longer delete (a record rule changed) keeps its row, said as refused.
         for (const each of madeRows) {
+          const kept = each.made.some((link) => !gone.has(link.recordId));
+          if (kept) {
+            if (each.staged.outcome !== 'created' && each.staged.outcome !== 'updated') {
+              outcomes.set(each.item.itemId, {
+                position: each.item.position,
+                state: 'refused',
+                code: 'UNDO_REFUSED',
+                message: 'A record this row made could not be moved to the trash.',
+              });
+            }
+            continue;
+          }
           if (each.staged.outcome === 'created' || each.staged.outcome === 'updated') continue;
           outcomes.set(each.item.itemId, { position: each.item.position, state: 'done' });
           undone.push(each.staged.id);

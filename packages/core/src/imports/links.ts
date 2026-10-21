@@ -130,7 +130,13 @@ export async function resolveNames(
       }
     }
   }
-  const keyed = new Set(byKey.map((each) => each.name));
+  // Only a key held by a readable record settles a name; one held by a record the member can't read falls to the name.
+  const keySeen = await visibleRecords(
+    tx,
+    scope.access,
+    byKey.map((each) => ({ objectId: each.objectId, recordId: each.recordId })),
+  );
+  const keyed = new Set(byKey.filter((each) => keySeen.has(each.recordId)).map((each) => each.name));
   const byName: Candidate[] = [];
   const unkeyed = wanted.filter((name) => !keyed.has(name));
   if (nameIds.length > 0 && unkeyed.length > 0) {
@@ -144,19 +150,19 @@ export async function resolveNames(
         where v.workspace_id = ${scope.workspaceId}
           and v.attribute_id = any(${textArray(nameIds)}::uuid[])
           and (lower(left(v.text_value, 256)) collate "und-x-icu") = (lower(left(n.name, 256)) collate "und-x-icu")
-          and v.active_until is null and v.text_value is not null and r.deleted_at is null
+          and v.active_until is null and not v.is_cleared and v.text_value is not null and r.deleted_at is null
           and r.object_id = any(${textArray(objectIds)}::uuid[])
         limit 5
       ) c
     `);
     for (const row of found.rows) byName.push({ name: row.name, objectId: row.object_id, recordId: row.record_id });
   }
-  const candidates = [...byKey, ...byName];
-  const seen = await visibleRecords(
+  const nameSeen = await visibleRecords(
     tx,
     scope.access,
-    candidates.map((each) => ({ objectId: each.objectId, recordId: each.recordId })),
+    byName.map((each) => ({ objectId: each.objectId, recordId: each.recordId })),
   );
+  const seen = new Set([...keySeen, ...nameSeen]);
   for (const name of wanted) {
     const readable = (list: readonly Candidate[]) => [
       ...new Map(

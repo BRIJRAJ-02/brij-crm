@@ -50,10 +50,10 @@ export const strings = {
   needOneColumn: 'Match at least one column to continue.',
   // Milestone 5: new attributes (AC-1116), missing options (AC-1122) and relation columns (decision 7)
   newAttribute: 'New attribute',
-  newAttributeHint: (type: string) => `Made from this column as ${type}`,
+  newAttributeHint: (type: string) => `Creates ${type} attribute from this column`,
   /** The types a new attribute may take from its column (AC-1116), as a type picker names them. */
   suggestedTypes: {
-    text: 'text',
+    text: 'a text',
     email: 'an email',
     url: 'a URL',
     number: 'a number',
@@ -68,11 +68,13 @@ export const strings = {
     `${labels.slice(0, 5).join(', ')}${labels.length > 5 ? ` and ${n(labels.length - 5)} more` : ''}. Rows holding them show as errors until they are options.`,
   missingOptionsNoManage: 'Ask an admin to add them in Settings, or those rows show as errors.',
   createOptions: (count: number) => `Create ${n(count)} ${count === 1 ? 'option' : 'options'}`,
-  checkingLinks: (attribute: string) => `Looking up the names in ${attribute}…`,
-  linksFailed: (attribute: string) =>
-    `Couldn’t look up the names in ${attribute}. They are still linked when the import runs.`,
-  linksAllFound: (count: number, far: string) =>
-    `Every name in this column links to ${count === 1 ? 'a' : 'one'} ${far.toLowerCase()}.`,
+  checkingLinks: (header: string) => `Looking up the names in ${header}…`,
+  linksFailed: (header: string) =>
+    `Couldn’t look up the names in ${header}. They are still linked when the import runs.`,
+  linksAllFound: (header: string, far: string) => `Every name in ${header} matches a ${far.toLowerCase()}.`,
+  linksCantMake: (far: string) => `You can’t add ${far.toLowerCase()}, so these links are left out.`,
+  tooManyOptions: (attribute: string) =>
+    `${attribute} holds at most 500 options, so these can’t all be added here. Fix the file, or match the column elsewhere.`,
   linksMissing: (missing: number, total: number, attribute: string) =>
     `${n(missing)} of ${n(total)} ${total === 1 ? 'name' : 'names'} in ${attribute} match no record`,
   linksMissingText: (names: readonly string[]) =>

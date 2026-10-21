@@ -318,7 +318,25 @@ async function importRow(
       made: nothing,
     };
   }
-  const { values, notes, made } = await linkRow(context, plan, batch, stagedValues(plan, row.values));
+  const staged = stagedValues(plan, row.values);
+  const rule = settings.onMatch === 'overwrite' ? 'overwrite' : 'fill';
+  // A matched record is read first, so a relation it keeps (one link held under Fill, or a list cut short on read)
+  // never makes a far record nothing would point to.
+  const [current] =
+    matchId === undefined
+      ? []
+      : await readRecords(tx, scope.access, [matchId], {
+          attributeIds: [...staged.values.keys(), ...staged.names.keys()],
+        });
+  const names = new Map(
+    [...staged.names].filter(([attributeId]) => {
+      if (matchId === undefined) return true;
+      const attribute = plan.attributes.get(attributeId);
+      if (attribute === undefined || current?.linkTotals[attributeId] !== undefined) return false;
+      return attribute.isMulti || rule === 'overwrite' || isEmpty(current?.values[attributeId] ?? null);
+    }),
+  );
+  const { values, notes, made } = await linkRow(context, plan, batch, { values: staged.values, names });
   const note = notes.length === 0 ? undefined : notes.slice(0, 3).join(' ');
   const noted = note === undefined ? {} : { error_code: 'LINK_NOT_FOUND', error_message: note };
   const madeList = [...made.values()];
@@ -348,9 +366,6 @@ async function importRow(
     stored: { ...base, outcome: 'skipped' as const, record_id: matchId },
     made,
   };
-  const rule = settings.onMatch === 'overwrite' ? 'overwrite' : 'fill';
-  const ids = [...values.keys()];
-  const [current] = await readRecords(tx, scope.access, [matchId], { attributeIds: ids });
   const next: Record<string, { value: unknown }> = {};
   const before: Record<string, { value: unknown; versionId?: string }> = {};
   for (const [attributeId, value] of values) {

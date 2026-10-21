@@ -99,6 +99,8 @@ type Filter = 'all' | 'ready' | 'errors';
 
 /** The Select id for "Don't import", and the match Select's "Always create new records". */
 const NONE = 'none';
+/** The options a select or status attribute holds at most (the engine's limit, spec 0012). */
+const OPTION_LIMIT = 500;
 /** The Select item that makes a new attribute from the column (AC-1116). */
 const NEW = 'new-attribute';
 const SAMPLES_SHOWN = 3;
@@ -278,6 +280,10 @@ export function ImportScreen({ data, slug, object, attributes: given, members, o
     next: readonly (ImportTarget | undefined)[],
     known: ReadonlyMap<number, LinkCheck>,
   ) => {
+    // Answers still on their way for checks dropped here (another file, another target) are ignored when they land.
+    for (const [column, run] of linkRuns.current) {
+      if (known.get(column)?.attributeId !== next[column]?.attributeId) linkRuns.current.set(column, run + 1);
+    }
     const kept = new Map<number, LinkCheck>();
     for (const [column, check] of known) {
       if (next[column]?.attributeId === check.attributeId) kept.set(column, check);
@@ -315,12 +321,23 @@ export function ImportScreen({ data, slug, object, attributes: given, members, o
     setBusyColumn(column);
     setColumnsError(undefined);
     try {
-      const made = await data.attributes.create(slug, {
-        id: data.attributes.newId(),
-        objectId: object.id,
-        title: header === '' ? strings.newAttributeTitle(column) : header,
-        type: suggestType(samplesOf(loaded.table, column, SAMPLE_READ)),
-      });
+      const base = header === '' ? strings.newAttributeTitle(column) : header;
+      const type = suggestType(samplesOf(loaded.table, column, SAMPLE_READ));
+      // A header an attribute already holds ("Email") takes "Email 2", then "Email 3", as its name.
+      const create = async (attempt: number): Promise<AttributeDefinition> => {
+        try {
+          return await data.attributes.create(slug, {
+            id: data.attributes.newId(),
+            objectId: object.id,
+            title: attempt === 1 ? base : `${base.slice(0, 95)} ${String(attempt)}`,
+            type,
+          });
+        } catch (error) {
+          if (attempt < 5 && isDataError(error) && error.code === 'SLUG_TAKEN') return create(attempt + 1);
+          throw error;
+        }
+      };
+      const made = await create(1);
       await reread();
       setTargets((current) => current.map((each, index) => (index === column ? { attributeId: made.id } : each)));
       setResult(undefined);
@@ -818,25 +835,28 @@ function ColumnsStep({
         : []),
     ];
   };
-  // What each matched column lacks: a select's labels that name no option, a relation's names that link nothing.
-  const notes = useMemo(
+  // What each matched column lacks: a select's labels that name no option (a scan of every row, kept apart from
+  // the link answers so those never scan again), and a relation's names that link nothing.
+  const optionNotes = useMemo(
     () =>
       targets.flatMap((target, column): readonly ColumnNote[] => {
         const attribute =
           target === undefined || target.part !== undefined ? undefined : attributes.get(target.attributeId);
-        if (attribute === undefined) return [];
-        if (attribute.type === 'select' || attribute.type === 'status') {
-          const labels = missingOptions(loaded.table.rows, column, attribute);
-          return labels.length === 0 ? [] : [{ kind: 'options', column, attribute, labels }];
-        }
-        if (attribute.type === 'record_reference') {
-          const check = links.get(column);
-          return check === undefined ? [] : [{ kind: 'links', column, attribute, check }];
-        }
-        return [];
+        if (attribute?.type !== 'select' && attribute?.type !== 'status') return [];
+        const labels = missingOptions(loaded.table.rows, column, attribute);
+        return labels.length === 0 ? [] : [{ kind: 'options', column, attribute, labels }];
       }),
-    [attributes, links, loaded.table.rows, targets],
+    [attributes, loaded.table.rows, targets],
   );
+  const notes = [
+    ...optionNotes,
+    ...targets.flatMap((target, column): readonly ColumnNote[] => {
+      const attribute = target === undefined ? undefined : attributes.get(target.attributeId);
+      const check = links.get(column);
+      if (attribute?.type !== 'record_reference' || check?.attributeId !== attribute.id) return [];
+      return [{ kind: 'links', column, attribute, check }];
+    }),
+  ];
   return (
     <Card
       title={strings.fileSummary(loaded.name, loaded.table.rows.length)}
@@ -878,7 +898,7 @@ function ColumnsStep({
               value={target === undefined ? NONE : choiceId(target)}
               showsDescription
               isSearchable={choices.length > 10}
-              isDisabled={busyColumn !== undefined}
+              isDisabled={busyColumn !== undefined && busyColumn !== row.column}
               onChange={(id) => {
                 if (id === NEW) {
                   onNewAttribute(row.column);
@@ -893,12 +913,14 @@ function ColumnsStep({
       {notes.map((note) => {
         const header = headers[note.column] ?? '';
         if (note.kind === 'options') {
+          const held = (note.attribute.options ?? []).filter((option) => !option.isArchived).length;
+          const fits = held + note.labels.length <= OPTION_LIMIT;
           return (
             <Callout
               key={`options-${String(note.column)}`}
               tone="warning"
               title={strings.missingOptions(note.labels.length, note.attribute.title)}
-              {...(canManage
+              {...(canManage && fits
                 ? {
                     actions: (
                       <Button
@@ -913,24 +935,22 @@ function ColumnsStep({
                   }
                 : {})}
             >
-              {`${strings.missingOptionsText(note.labels)}${canManage ? '' : ` ${strings.missingOptionsNoManage}`}`}
+              {`${strings.missingOptionsText(note.labels)} ${
+                !canManage ? strings.missingOptionsNoManage : fits ? '' : strings.tooManyOptions(note.attribute.title)
+              }`.trim()}
             </Callout>
           );
         }
         const { check } = note;
         if (check.status === 'checking') {
           return (
-            <ProgressBar
-              key={`links-${String(note.column)}`}
-              label={strings.checkingLinks(note.attribute.title)}
-              isIndeterminate
-            />
+            <ProgressBar key={`links-${String(note.column)}`} label={strings.checkingLinks(header)} isIndeterminate />
           );
         }
         if (check.status === 'failed') {
           return (
-            <Callout key={`links-${String(note.column)}`} tone="info">
-              {strings.linksFailed(note.attribute.title)}
+            <Callout key={`links-${String(note.column)}`} tone="info" isAnnounced>
+              {strings.linksFailed(header)}
             </Callout>
           );
         }
@@ -939,8 +959,8 @@ function ColumnsStep({
         const canMake = far !== undefined && far.access === 'write' && !far.isArchived;
         if (check.missing.length === 0 && check.ambiguous.length === 0) {
           return (
-            <Callout key={`links-${String(note.column)}`} tone="success">
-              {strings.linksAllFound(check.total, far?.singularName ?? note.attribute.title)}
+            <Callout key={`links-${String(note.column)}`} tone="success" isAnnounced>
+              {strings.linksAllFound(header, far?.singularName ?? note.attribute.title)}
             </Callout>
           );
         }
@@ -949,7 +969,8 @@ function ColumnsStep({
         return (
           <Callout
             key={`links-${String(note.column)}`}
-            tone={making ? 'info' : 'warning'}
+            tone={making && check.ambiguous.length === 0 ? 'info' : 'warning'}
+            isAnnounced
             title={
               check.missing.length > 0
                 ? strings.linksMissing(check.missing.length, check.total, header)
@@ -974,6 +995,7 @@ function ColumnsStep({
                 ? ''
                 : strings.linksAmbiguous(check.ambiguous.length),
               making ? '' : strings.linksLeftOut,
+              canMake || check.missing.length === 0 || far === undefined ? '' : strings.linksCantMake(far.pluralName),
             ]
               .filter((part) => part !== '')
               .join(' ')}

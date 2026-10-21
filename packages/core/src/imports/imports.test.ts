@@ -572,6 +572,44 @@ describe('relation columns (decision 7, milestone 5)', () => {
     expect((await getImport(w.owner, id)).counts.made).toBe(0);
   });
 
+  it('refuses Create missing to a member who can only read the far object', async () => {
+    const w = await world();
+    const c = await companies(w);
+    const reader = rescope(w.admin, {
+      rules: {
+        levels: [
+          { subject: { type: 'role', role: 'admin' }, target: { type: 'object', objectId: c.objectId }, level: 'read' },
+        ],
+        records: [],
+      },
+    });
+    const refusal = await refusalOf(
+      createImport(reader, {
+        id: newId(),
+        objectId: w.people,
+        fileName: 'p.csv',
+        rowCount: 1,
+        errorRows: 0,
+        settings: linkSettings(w, true),
+      }),
+    );
+    expect(refusal).toMatchObject({ code: 'CONFIG_INVALID' });
+    expect(await c.live()).toEqual([]);
+  });
+
+  it('makes nothing for a matched person whose company Fill keeps', async () => {
+    const w = await world();
+    const c = await companies(w);
+    const acme = await c.company('Acme', 'acme.com');
+    await runImport(w, w.owner, linkSettings(w), [linkRow(w, 2, 'ada@example.com', ['acme.com'])]);
+    const { view } = await runImport(w, w.owner, linkSettings(w, true), [
+      linkRow(w, 2, 'ada@example.com', ['Initech']),
+    ]);
+    expect(view.counts).toMatchObject({ made: 0 });
+    expect(await c.live()).toEqual(['Acme']);
+    expect((await links(w))['ada@example.com']).toBe(acme);
+  });
+
   it('refuses Create missing on a column that is not a relationship', async () => {
     const w = await world();
     const settings: ImportSettings = {
