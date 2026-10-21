@@ -3,8 +3,9 @@
 // as themself, opens the first person's link and is refused with the address masked, joining nothing; the first
 // signs in through their link, accepts and lands in the workspace, and the owner's Members page shows them; the used
 // link then reads as no longer valid, like any other bad link; Revoke asks first, Cancel keeps the invitation, and
-// Revoke invitation ends it. axe in light and dark on the invitation page and the Members page (AC-803 to AC-806,
-// AC-810, AC-833).
+// Revoke invitation ends it. Then the owner finds the newcomer by search, makes them an admin at once and removes them
+// behind a confirm, after which they are in no workspace. axe in light and dark on the invitation page and the Members
+// page (AC-803 to AC-806, AC-810, AC-811, AC-833).
 import { randomUUID } from 'node:crypto';
 import { expect, test, type APIRequestContext, type Page } from '@playwright/test';
 import { codeFor, MAILPIT_URL } from './mailpit.ts';
@@ -50,15 +51,15 @@ async function inviteLinkFor(request: APIRequestContext, email: string): Promise
 /** Opens an invitation signed out, takes Sign in to accept, and signs `email` in; lands back on the invitation. */
 async function signInThrough(page: Page, link: string, email: string): Promise<void> {
   await page.goto(link);
-  await expect(page.getByRole('heading', { level: 1, name: 'Join a workspace' })).toBeVisible();
-  await page.getByRole('link', { name: 'Sign in to accept' }).click();
+  await expect(page.getByRole('heading', { level: 1, name: /^Join / })).toBeVisible();
+  await page.getByRole('link', { name: 'Sign in to join' }).click();
   await expect(page).toHaveURL(/\/sign-in\?redirect=/);
   await page.getByLabel('Email').fill(email);
   await page.getByRole('button', { name: /^Continue( with email)?$/ }).click();
   await expect(page).toHaveURL(/\/verify/);
   await page.getByLabel('Code').fill(await codeFor(page.request, email));
   await expect(page).toHaveURL(new RegExp(`${link}$`));
-  await expect(page.getByText(`Signed in as ${email}.`)).toBeVisible();
+  await expect(page.getByText(`Signed in as ${email}`)).toBeVisible();
 }
 
 /** The workspaces the page's signed in person is in, by address, through the API as their browser calls it. */
@@ -86,11 +87,18 @@ test('invites two people: the wrong address is refused, the invited one joins, a
   await page.goto(`/w/${slug}/settings/members`);
   await expect(page.getByRole('heading', { level: 1, name: 'Members' })).toBeVisible();
   await expect(page.getByRole('rowheader', { name: /Ada Lovelace/ })).toBeVisible();
-  await page.getByRole('button', { name: 'Invite people' }).click();
+  // A lone owner sees the hint under their row too; the bar's button is the page's one primary action.
+  await expect(page.getByText('Just you so far')).toBeVisible();
+  await page.getByRole('button', { name: 'Invite people' }).first().click();
   const invite = page.getByRole('dialog', { name: 'Invite people' });
-  await invite.getByLabel('Email addresses').fill(`${invitee}, ${other}`);
-  await invite.getByRole('button', { name: 'Send invitations' }).click();
-  await expect(page.getByText('2 invitations sent.')).toBeVisible();
+  // One row per person: Enter in the last row adds the next, which takes focus.
+  await invite.getByRole('textbox', { name: 'Email' }).fill(invitee);
+  await invite.getByRole('textbox', { name: 'Email' }).press('Enter');
+  await expect(invite.getByRole('textbox', { name: 'Email 2' })).toBeFocused();
+  await page.keyboard.type(other);
+  await invite.getByRole('button', { name: 'Invite 2 people' }).click();
+  await expect(invite.getByText(`Invited ${invitee}, ${other}.`, { exact: false })).toBeVisible();
+  await invite.getByRole('button', { name: 'Done' }).click();
   await page.getByRole('tab', { name: /Invitations/ }).click();
   await expect(page.getByRole('rowheader', { name: invitee })).toBeVisible();
   await checkScreen(page, 'members-invitations');
@@ -100,21 +108,21 @@ test('invites two people: the wrong address is refused, the invited one joins, a
   const otherContext = await browser.newContext();
   const stranger = await otherContext.newPage();
   await stranger.goto(link);
-  await expect(stranger.getByText(/This invitation is for g\*\*\*@example\.com\./)).toBeVisible();
+  await expect(stranger.getByText(/Sent to g\*\*\*@example\.com\./)).toBeVisible();
   await checkScreen(stranger, 'invite-signed-out');
   await signInThrough(stranger, link, other);
-  await stranger.getByRole('button', { name: 'Accept invitation' }).click();
+  await stranger.getByRole('button', { name: 'Join workspace' }).click();
   await expect(
     stranger.getByText('This invitation is for g***@example.com. Sign in with that address to accept.'),
   ).toBeVisible();
-  await expect(stranger.getByRole('button', { name: 'Sign in with another address' })).toBeVisible();
+  await expect(stranger.getByRole('button', { name: 'Use another address' })).toBeVisible();
   expect(await workspacesOf(stranger)).toEqual([]);
 
   // The invited person signs in through their link, accepts, and lands in the workspace.
   const inviteeContext = await browser.newContext();
   const joiner = await inviteeContext.newPage();
   await signInThrough(joiner, link, invitee);
-  await joiner.getByRole('button', { name: 'Accept invitation' }).click();
+  await joiner.getByRole('button', { name: 'Join workspace' }).click();
   await expect(joiner).toHaveURL(new RegExp(`/w/${slug}/`), { timeout: 20_000 });
   expect(await workspacesOf(joiner)).toEqual([slug]);
 
@@ -144,6 +152,32 @@ test('invites two people: the wrong address is refused, the invited one joins, a
   await confirm.getByRole('button', { name: 'Revoke invitation' }).click();
   await expect(page.getByText(`Invitation to ${other} revoked.`)).toBeVisible();
   await expect(page.getByRole('rowheader', { name: other })).toHaveCount(0);
+
+  // Slice 3: the owner finds the newcomer by search, makes them an admin at once, then removes them, which asks first.
+  await page.getByRole('tab', { name: /Members/ }).click();
+  await page.getByRole('textbox', { name: 'Search members' }).fill('grace');
+  await expect(page).toHaveURL(/[?&]q=grace/);
+  await expect(page.getByRole('rowheader', { name: /Ada Lovelace/ })).toHaveCount(0);
+  const grace = page.getByRole('rowheader', { name: /grace/ });
+  await expect(grace).toBeVisible();
+  await page.getByRole('button', { name: /Role for grace/ }).click();
+  await page.getByRole('option', { name: 'Admin' }).click();
+  await expect(page.getByText(/is now an Admin\./)).toBeVisible();
+  await page.getByRole('button', { name: /^Actions for grace/ }).click();
+  await page.getByRole('menuitem', { name: 'Remove from workspace' }).click();
+  const remove = page.getByRole('alertdialog', { name: /^Remove grace.* from / });
+  await remove.getByRole('button', { name: 'Cancel' }).click();
+  await expect(grace).toBeVisible();
+  await page.getByRole('button', { name: /^Actions for grace/ }).click();
+  await page.getByRole('menuitem', { name: 'Remove from workspace' }).click();
+  // Slice 5: it reads what the removal does first; nothing names them, so there is nobody to hand work to.
+  await expect(remove.getByRole('button', { name: 'Remove member' })).toBeEnabled();
+  await expect(remove.getByRole('button', { name: /Hand their open tasks/ })).toHaveCount(0);
+  await remove.getByRole('button', { name: 'Remove member' }).click();
+  await expect(page.getByText(/was removed from the workspace\./)).toBeVisible();
+  await expect(grace).toHaveCount(0);
+  // Removed, they are in no workspace, and the workspace answers them as not found.
+  expect(await workspacesOf(joiner)).toEqual([]);
 
   await otherContext.close();
   await inviteeContext.close();

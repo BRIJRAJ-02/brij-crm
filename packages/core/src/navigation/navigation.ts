@@ -38,6 +38,7 @@ import { runWrite, type AfterWrite, type WriteContext } from '../engine/write.ts
 import { objectLevel } from '../access/policy.ts';
 import { inWorkspace } from '../access/run.ts';
 import { memberOf, seesView } from '../views/views.ts';
+import type { RemovalEffect } from '../members/removal-effect.ts';
 
 const { memberNavPrefs, members, objects, records, views } = schema;
 
@@ -493,3 +494,10 @@ export async function deleteMemberNav(context: WriteContext, memberId: string): 
     .delete(memberNavPrefs)
     .where(and(eq(memberNavPrefs.workspaceId, scope.workspaceId), eq(memberNavPrefs.memberId, memberId)));
 }
+
+/** A removal (spec 0031, AC-814): their own sidebar goes (spec 0034, AC-941). */
+export const navRemoval: RemovalEffect = {
+  feature: 'sidebar',
+  constraints: ['member_nav_prefs_member'],
+  run: deleteMemberNav,
+};

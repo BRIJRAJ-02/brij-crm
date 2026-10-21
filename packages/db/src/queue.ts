@@ -55,6 +55,8 @@ export interface QueueConnection {
    * `crm_notification_digests_due`.
    */
   digestsDue(after: DigestMember | undefined, max: number): Promise<readonly DigestMember[]>;
+  /** Deleted workspaces past their window, oldest first, at most `max` (1 to 50): `crm_workspaces_to_purge` (spec 0031). */
+  workspacesToPurge(max: number): Promise<readonly string[]>;
   /** One outbox prune batch (`pruneOutbox`, spec 0007) on this connection: only crm_worker may run it. */
   pruneOutbox(): Promise<number>;
   /**
@@ -193,6 +195,12 @@ export function openQueueConnection(options: {
         [after?.workspaceId ?? null, after?.memberId ?? null, max],
       );
       return result.rows.map((row) => ({ workspaceId: row.workspace_id, memberId: row.member_id }));
+    },
+    async workspacesToPurge(max) {
+      const result = await pool.query<{ id: string }>('select id from public.crm_workspaces_to_purge($1) as w(id)', [
+        max,
+      ]);
+      return result.rows.map((row) => row.id);
     },
     pruneOutbox: () => pruneOutbox(pool),
     async sleepCheck({ outbox, stuck = [], tasks }) {

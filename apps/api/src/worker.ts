@@ -7,10 +7,13 @@
 // milestone 3, `jobs/lifecycle.ts`): awake while there is work, asleep with no
 // connection at all once idle for `WORKER_IDLE_SLEEP_SECONDS`, so Neon's
 // compute can suspend; the poke and a timer for scheduled work wake it.
+import { workspaceChannel } from '@crm/contracts';
 import { jobKinds, type QueueRows } from '@crm/core';
 import {
   audiences,
   meetingFacts,
+  purgeWorkspace,
+  removedUserIds,
   runDailyCleanup,
   syncConnection,
   systemScope,
@@ -117,8 +120,10 @@ const lagSample = createLagSample();
 const jobsOn = jobsOff === undefined;
 let lifecycle: Lifecycle | undefined;
 
+// Centrifugo's server API: the relay publishes through it and cuts removed people off (spec 0031, AC-817).
+const centrifugo = env.centrifugo === undefined ? undefined : createCentrifugoPublisher(env.centrifugo);
 const relay =
-  env.centrifugo === undefined
+  centrifugo === undefined
     ? undefined
     : createRelay({
         connect: async () => createOutboxReader(await openDirect(false)),
@@ -137,7 +142,12 @@ const relay =
             ...(meetingIds.length === 0 ? {} : { meetings: await meetingFacts(scope, meetingIds) }),
           };
         },
-        publishBatch: createCentrifugoPublisher(env.centrifugo).publishBatch,
+        publishBatch: centrifugo.publishBatch,
+        // Spec 0031, AC-817: a removed person's open tabs stop hearing the workspace once the `access` row went out.
+        cutOff: async (workspaceId, memberIds) => {
+          const userIds = await removedUserIds(systemScope(db, workspaceId), memberIds);
+          await centrifugo.unsubscribe(workspaceChannel(workspaceId), userIds);
+        },
         log: reportingLog,
         // Only crm_worker may run crm_outbox_prune (spec 0007, milestone 3): on another login (where the jobs, and
         // so the daily cleanup, are off too) the outbox keeps every row until the login moves to crm_worker_user.
@@ -313,6 +323,8 @@ async function openWorker(hooks: {
             systemScope: (workspaceId) => systemScope(db, workspaceId),
             hooks: backgroundHooks,
             sweep: opened,
+            // Deleted workspaces past their window go for good (spec 0031, AC-823).
+            purge: (workspaceId, deadline) => purgeWorkspace({ db, log }, workspaceId, deadline),
             log,
             onStored: () => relay?.wake(),
           },

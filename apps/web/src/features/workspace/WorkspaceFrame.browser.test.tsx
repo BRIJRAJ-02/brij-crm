@@ -145,6 +145,7 @@ async function renderFrame(
   settings?: SettingsSidebar,
   more: Partial<Pick<WorkspaceFrameProps, 'objects' | 'currentPage' | 'isMissing'>> & {
     readonly layer?: DataLayer;
+    readonly roleLabel?: string;
   } = {},
 ): Promise<AnyRouter> {
   const layer = more.layer ?? data;
@@ -159,6 +160,7 @@ async function renderFrame(
       objects={more.objects ?? []}
       {...(more.currentPage === undefined ? {} : { currentPage: more.currentPage })}
       {...(more.isMissing === undefined ? {} : { isMissing: more.isMissing })}
+      {...(more.roleLabel === undefined ? {} : { roleLabel: more.roleLabel })}
       {...(settings === undefined ? {} : { settings })}
     >
       <input aria-label="Draft" />
@@ -171,8 +173,9 @@ async function renderFrame(
     component: () => <p>Preferences page</p>,
   });
   const signIn = createRoute({ getParentRoute: () => rootRoute, path: '/sign-in', component: () => <p>Sign in</p> });
+  const home = createRoute({ getParentRoute: () => rootRoute, path: '/', component: () => <p>Home</p> });
   const router = createRouter({
-    routeTree: rootRoute.addChildren([start, preferences, signIn]),
+    routeTree: rootRoute.addChildren([start, preferences, signIn, home]),
     history: createMemoryHistory({ initialEntries: ['/w/acme/start'] }),
   });
   const host = document.createElement('div');
@@ -534,5 +537,77 @@ describe('the app’s sidebar (spec 0034)', () => {
       (each) => each.getAttribute('href') === '/w/acme/tasks',
     );
     expect(tasks?.textContent).toContain('4');
+  });
+});
+
+describe('leaving the workspace from its menu', () => {
+  /** A data layer whose leave is counted, answering with `answer`. */
+  function leaveLayer(answer: () => Promise<void>) {
+    let calls = 0;
+    const layer = {
+      ...data,
+      members: {
+        leave: () => {
+          calls += 1;
+          return answer();
+        },
+      },
+    } as unknown as DataLayer;
+    return { layer, calls: () => calls };
+  }
+
+  /** Opens the workspace menu and picks Leave workspace. */
+  async function pickLeave(): Promise<void> {
+    await page.getByRole('button', { name: /workspace menu/ }).click();
+    await page.getByRole('menuitem', { name: 'Leave workspace' }).click();
+  }
+
+  it('asks first, naming the workspace; Cancel leaves nothing', async () => {
+    const counted = leaveLayer(() => Promise.resolve());
+    await renderFrame(undefined, { layer: counted.layer, roleLabel: 'Member' });
+    await pickLeave();
+    const dialog = page.getByRole('alertdialog', { name: 'Leave Acme?' });
+    await expect.element(dialog).toBeVisible();
+    await dialog.getByRole('button', { name: 'Cancel' }).click();
+    await expect.element(dialog).not.toBeInTheDocument();
+    expect(counted.calls()).toBe(0);
+  });
+
+  it('leaves once, then opens the next workspace from /', async () => {
+    const counted = leaveLayer(() => Promise.resolve());
+    const router = await renderFrame(undefined, { layer: counted.layer, roleLabel: 'Member' });
+    await pickLeave();
+    const dialog = page.getByRole('alertdialog', { name: 'Leave Acme?' });
+    await dialog.getByRole('button', { name: 'Leave workspace' }).click();
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 50));
+    });
+    expect(counted.calls()).toBe(1);
+    expect(router.state.location.pathname).toBe('/');
+  });
+
+  it('shows the only owner LAST_OWNER’s sentence inside the dialog, which stays open', async () => {
+    const counted = leaveLayer(() =>
+      Promise.reject(
+        Object.assign(new Error('A workspace needs an owner. Make someone else an owner first.'), {
+          name: 'DataError',
+          code: 'LAST_OWNER',
+        }),
+      ),
+    );
+    await renderFrame(undefined, { layer: counted.layer, roleLabel: 'Owner' });
+    await pickLeave();
+    const dialog = page.getByRole('alertdialog', { name: 'Leave Acme?' });
+    await dialog.getByRole('button', { name: 'Leave workspace' }).click();
+    await expect.element(dialog.getByRole('alert')).toBeVisible();
+    expect(dialog.element().textContent).toContain('A workspace needs an owner.');
+    expect(counted.calls()).toBe(1);
+  });
+
+  it('isn’t offered before the person’s role is known', async () => {
+    await renderFrame();
+    await page.getByRole('button', { name: /workspace menu/ }).click();
+    await expect.element(page.getByRole('menuitem', { name: 'Sign out' })).toBeVisible();
+    expect(page.getByRole('menuitem', { name: 'Leave workspace' }).elements()).toHaveLength(0);
   });
 });

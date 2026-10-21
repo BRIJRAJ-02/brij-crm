@@ -16,7 +16,10 @@ New. Lists in the app either load as you scroll (DataGrid, the trash) or show ev
   total={42}
   pageSizes={[10, 25, 50, 100]}
   onPage={setPage}
-  onPageSize={(size) => { setSize(size); setPage(1); }}
+  onPageSize={(size) => {
+    setSize(size);
+    setPage(1);
+  }}
 />
 ```
 

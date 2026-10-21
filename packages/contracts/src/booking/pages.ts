@@ -28,6 +28,8 @@ export const BookingPageView = BookingPageSettings.extend({
   availability: BookingAvailability,
   /** That schedule's name ("Working hours" while its owner has saved none), read only here. */
   scheduleName: z.string(),
+  /** Why a paused page is paused when the system paused it: its last host was removed (spec 0031, AC-814). */
+  pausedReason: z.literal('host_removed').optional(),
   /** Confirmed bookings starting this calendar month (UTC). */
   bookingsThisMonth: z.number().int().min(0),
   /** The reader may change it: their own page with `booking.manage`, anyone's with `booking.admin`. */
@@ -169,6 +171,8 @@ export const BookingListItem = BookingView.extend({
   cancelledBy: z.enum(['guest', 'host', 'calendar']).optional(),
   /** How many times it has moved (at most 5). */
   reschedules: z.number().int().min(0),
+  /** Its host was removed from the workspace (spec 0031, AC-815): it stays for an admin to hand on. */
+  hostRemoved: z.boolean().optional(),
 });
 /** A booking in Bookings. */
 export type BookingListItem = z.infer<typeof BookingListItem>;

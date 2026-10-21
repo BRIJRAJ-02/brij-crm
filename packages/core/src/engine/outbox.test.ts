@@ -536,6 +536,8 @@ describe('every kind of change (spec 0007, milestone 2)', () => {
     expect((await detailsOf(scope)).map((row) => [row.kind, row.object_id, row.item_ids, row.record_ids])).toEqual([
       ['members', null, [memberId], []],
       ['members', null, [memberId], []],
+      // A removal also names whose access changed, so their own tabs are cut off (spec 0031, AC-817).
+      ['access', null, [memberId], []],
     ]);
   });
 

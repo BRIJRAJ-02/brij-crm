@@ -19,6 +19,7 @@ import { inWorkspace } from '../access/run.ts';
 import { recordVisibleSql } from '../access/visibility.ts';
 import { memberOf, readView } from '../views/views.ts';
 import { findViews, searchedObjects } from './search.ts';
+import type { RemovalEffect } from '../members/removal-effect.ts';
 
 const { memberRecents } = schema;
 
@@ -153,3 +154,10 @@ export async function deleteViewRecents(tx: WorkspaceTx, scope: EngineScope, vie
       ),
     );
 }
+
+/** A removal (spec 0031, AC-814): their recent items go (spec 0039, AC-1092). */
+export const recentsRemoval: RemovalEffect = {
+  feature: 'recents',
+  constraints: ['member_recents_member'],
+  run: deleteMemberRecents,
+};

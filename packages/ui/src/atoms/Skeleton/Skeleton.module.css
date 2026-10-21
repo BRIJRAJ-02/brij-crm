@@ -37,6 +37,17 @@
     block-size: var(--size-tile);
   }
 
+  /* A field's box at a settings row's end, which sizes to its content: a set width, never past its slot. */
+  .root[data-shape='field'] {
+    block-size: var(--size-input);
+    border-radius: var(--radius-md);
+  }
+
+  .root[data-shape='field']:not([data-width]) {
+    inline-size: var(--size-menu);
+    max-inline-size: 100%;
+  }
+
   .root[data-shape='block'] {
     block-size: var(--size-toolbar);
     border-radius: var(--radius-md);

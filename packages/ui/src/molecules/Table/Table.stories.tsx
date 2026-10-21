@@ -1,11 +1,12 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
 import { useState } from 'react';
-import { expect, fn, waitFor } from 'storybook/test';
+import { expect, fn, screen, waitFor } from 'storybook/test';
 import { Badge } from '../../atoms/Badge/Badge.tsx';
 import { Button } from '../../atoms/Button/Button.tsx';
 import { RecordChip } from '../../atoms/RecordChip/RecordChip.tsx';
 import { RelativeTime } from '../../atoms/RelativeTime/RelativeTime.tsx';
 import { EmptyState } from '../EmptyState/EmptyState.tsx';
+import { InfoTip } from '../InfoTip/InfoTip.tsx';
 import { Table, type TableColumn } from './Table.tsx';
 
 interface Member {
@@ -70,6 +71,23 @@ export const Default: Story = {
     await userEvent.tab();
     await userEvent.keyboard('{Enter}');
     await expect(args.onRowAction).toHaveBeenCalledWith('m1');
+  },
+};
+
+/** A header with help beside it: an InfoTip that opens by press or keyboard. */
+export const ColumnInfo: Story = {
+  args: {
+    columns: COLUMNS.map((column) =>
+      column.id === 'role'
+        ? { ...column, info: <InfoTip label="Role">What each person may do in the workspace.</InfoTip> }
+        : column,
+    ),
+  },
+  play: async ({ canvas, userEvent }) => {
+    await expect(canvas.getByRole('columnheader', { name: 'Role' })).toBeInTheDocument();
+    await userEvent.click(canvas.getByRole('button', { name: 'About Role' }));
+    // The help opens in a popover, outside the story's canvas.
+    await expect(await screen.findByRole('dialog', { name: 'About Role' })).toBeInTheDocument();
   },
 };
 

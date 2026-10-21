@@ -7,7 +7,7 @@ import { strings } from '../features/invite/strings.ts';
 
 // An invitation link (spec 0031, AC-805): outside any workspace, in the sign in frame. The invitation as the link
 // shows it (nothing for a link that opens nothing, all alike) and who is signed in, if anyone; the screen offers
-// Accept or Sign in to accept, and sign in comes back here.
+// Join or Sign in to join, and sign in comes back here.
 export const Route = createFileRoute('/invite/$token')({
   loader: async ({ context, params }) => {
     const [invitation, me] = await Promise.all([
@@ -21,7 +21,7 @@ export const Route = createFileRoute('/invite/$token')({
   },
   pendingComponent: () => (
     <LoadingNow>
-      <AuthPending title={strings.title} />
+      <AuthPending title={strings.pendingTitle} />
     </LoadingNow>
   ),
   errorComponent: InviteError,
@@ -37,5 +37,5 @@ function InviteRoute() {
 
 /** The look up failed: the server's words when it gave any (too many lookups), with a retry. */
 function InviteError({ error }: ErrorComponentProps) {
-  return <AuthError title={strings.title} text={isDataError(error) ? error.message : undefined} />;
+  return <AuthError title={strings.pendingTitle} text={isDataError(error) ? error.message : undefined} />;
 }

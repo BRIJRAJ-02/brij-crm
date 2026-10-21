@@ -40,6 +40,8 @@ export interface PageRecord extends BookingPageSettings {
   readonly isDeleted: boolean;
   /** A private page books inside its host's holds and waives its minimum notice (spec 0027, AC-707). */
   readonly isPrivate: boolean;
+  /** Paused by the system because its last host was removed (spec 0031, AC-814); absent otherwise. */
+  readonly pausedReason?: 'host_removed';
   readonly createdAt: Date;
   readonly updatedAt: Date;
 }
@@ -102,6 +104,7 @@ export function pageOf(
     status: row.status === 'paused' ? 'paused' : 'live',
     isDeleted: row.deletedAt !== null,
     isPrivate: row.isPrivate,
+    ...(row.pausedReason === 'host_removed' ? { pausedReason: 'host_removed' as const } : {}),
     createdAt: row.createdAt,
     updatedAt: row.updatedAt,
   };

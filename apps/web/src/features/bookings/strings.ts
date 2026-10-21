@@ -73,6 +73,8 @@ export const strings = {
   cancelReason: 'Why it was canceled',
   openPerson: 'Open their page',
   joinCall: 'Join call',
+  // A removed host's booking stays for an admin to hand on (spec 0031, AC-815).
+  hostRemoved: 'Host removed',
   eventFailed: 'This booking isn’t on your calendar: the event couldn’t be made. Add it by hand.',
   video: 'Video call',
   phone: 'Phone call to their number',

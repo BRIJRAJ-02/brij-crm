@@ -9,6 +9,11 @@ import { invitationsRouter } from './modules/invitations/router.ts';
 import { meRouter } from './modules/me/router.ts';
 import { membersRouter } from './modules/members/router.ts';
 import { navRouter } from './modules/nav/router.ts';
+import { joinRequestsRouter, joinRouter } from './modules/join/router.ts';
+import { profileRouter } from './modules/profile/router.ts';
+import { deletedWorkspaceRouter } from './modules/workspace/deleted.ts';
+import { workspaceRouter } from './modules/workspace/router.ts';
+import { rolesRouter } from './modules/roles/router.ts';
 import { objectsRouter } from './modules/objects/router.ts';
 import { optionsRouter } from './modules/options/router.ts';
 import { preferencesRouter } from './modules/preferences/router.ts';
@@ -41,7 +46,13 @@ export const router = base.router({
   links: linksRouter,
   members: membersRouter,
   invitations: invitationsRouter,
+  join: joinRouter,
+  joinRequests: joinRequestsRouter,
+  workspace: workspaceRouter,
+  deletedWorkspace: deletedWorkspaceRouter,
+  profile: profileRouter,
   access: accessRouter,
+  roles: rolesRouter,
   realtime: realtimeRouter,
   jobs: jobsRouter,
   usage: usageRouter,

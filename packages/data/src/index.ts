@@ -38,6 +38,9 @@ import type {
   InvitationView,
   InvitePeek,
   InviteResult,
+  InviteLinkView,
+  Joinable,
+  JoinRequestView,
   JobView,
   Me,
   MemberView,
@@ -47,6 +50,8 @@ import type {
   RelationshipView,
   Role,
   ScheduleMember,
+  RemovalPreview,
+  RolesList,
   SubmissionState,
   Usage,
   ValidationRuleInput,
@@ -54,8 +59,13 @@ import type {
   ViewLayout,
   ViewVisibility,
   RecentItem,
+  WorkspaceDomainsView,
+  DeletedWorkspace,
+  MyProfile,
+  WorkspaceSettings,
 } from '@crm/contracts';
 import type { GlobalSearch } from './search/global.ts';
+import type { InviteLinkDays } from '@crm/contracts/team-limits';
 import { createORPCClient } from '@orpc/client';
 import { RPCLink } from '@orpc/client/fetch';
 import type { ContractRouterClient } from '@orpc/contract';
@@ -143,6 +153,7 @@ import { createLiveRouter } from './live/router.ts';
 import type { Notice } from './notice.ts';
 import { createPendingOptions } from './options.ts';
 import { nextHue } from '@crm/contracts/picker';
+import { MEMBERS_PAGE_MAX } from '@crm/contracts/team-limits';
 import type { UndoKind } from './records/history.ts';
 import type { RecordAttributes, RecordSubscription } from './records/one.ts';
 import { createRecordSearch, type RecordSearch } from './records/search.ts';
@@ -227,6 +238,10 @@ export type {
   JobView,
   Me,
   MemberSummary,
+  InviteLinkView,
+  Joinable,
+  JoinRequestView,
+  MembersPage,
   MemberView,
   MyAccess,
   NotificationKind,
@@ -236,6 +251,9 @@ export type {
   ObjectSummary,
   Permission,
   Role,
+  RemovalPreview,
+  RoleOption,
+  RolesList,
   RecordRefDisplay,
   RecordView,
   RelationshipView,
@@ -263,7 +281,11 @@ export type {
   TrashedRecord,
   Usage,
   UsageCount,
+  WorkspaceDomainsView,
   WorkspaceSummary,
+  DeletedWorkspace,
+  MyProfile,
+  WorkspaceSettings,
 } from '@crm/contracts';
 export type {
   ActivityEntryShape,
@@ -297,6 +319,16 @@ export { isReservedSlug, RESERVED_SLUGS, toApiSlug } from '@crm/contracts/slugs'
 export { ROLE_DESCRIPTIONS, ROLE_LABELS, ROLES } from '@crm/contracts/roles';
 // A schedule's week as words (spec 0035): plain, no Zod, the one summary the screens and the server's notices share.
 export { clockLabel, weekSummary } from '@crm/contracts/hours';
+export {
+  INVITE_BATCH_MAX,
+  INVITE_LINK_DAYS,
+  INVITE_LINK_USES_MAX,
+  MEMBER_SEARCH_MAX,
+  MEMBERS_PAGE,
+  namesMatch,
+  WORKSPACE_PURGE_DAYS,
+  type InviteLinkDays,
+} from '@crm/contracts/team-limits';
 export { freeHue, PICKER_TYPES, STARTER_STAGES, type PickerType } from '@crm/contracts/picker';
 export {
   MAX_PENDING_OPTIONS,
@@ -768,6 +800,8 @@ export function createDataLayer({
   let usage = new Map<string, Promise<Usage>>();
   let members = new Map<string, Promise<MemberView[]>>();
   let access = new Map<string, Promise<MyAccess>>();
+  // The roles every role picker offers (spec 0037, AC-1439), per workspace, for the app load.
+  let roles = new Map<string, Promise<RolesList>>();
   let attributes = new Map<string, Promise<AttributeDefinition[]>>();
   // Each object's attributes with the archived ones too (settings, spec 0012), apart from the live lists the tables read.
   let allAttributes = new Map<string, Promise<AttributeDefinition[]>>();
@@ -819,6 +853,7 @@ export function createDataLayer({
     usage = new Map();
     members = new Map();
     access = new Map();
+    roles = new Map();
     attributes = new Map();
     allAttributes = new Map();
     heads = new Map();
@@ -1178,8 +1213,24 @@ export function createDataLayer({
       dueTasks.changed(workspace);
       return value;
     });
-  const readMembers = (workspace: string) =>
-    cached(members, workspace, () => call((options) => api.members.list({ workspace }, options)));
+  /**
+   * Every active member of a workspace, by name, read a full page at a time
+   * (spec 0031: `members.list` answers pages): the pickers', the Owner
+   * column's and the timeline's one list.
+   */
+  const allMembers = async (workspace: string): Promise<MemberView[]> => {
+    const all: MemberView[] = [];
+    let cursor: string | undefined;
+    do {
+      const page = await call((options) =>
+        api.members.list({ workspace, limit: MEMBERS_PAGE_MAX, ...(cursor === undefined ? {} : { cursor }) }, options),
+      );
+      all.push(...page.members);
+      cursor = page.nextCursor;
+    } while (cursor !== undefined);
+    return all;
+  };
+  const readMembers = (workspace: string) => cached(members, workspace, () => allMembers(workspace));
   const readAccess = (workspace: string) =>
     cached(access, workspace, () => call((options) => api.access.mine({ workspace }, options)));
   /** Whether `memberIds` names the person, by the access this tab holds (unknown counts as named). */
@@ -1865,8 +1916,7 @@ export function createDataLayer({
    * (someone who joined after it was read) reads the list once more.
    */
   const memberName = async (workspace: string, memberId: string | null): Promise<string | undefined> => {
-    const read = () =>
-      cached(members, workspace, () => call((options) => api.members.list({ workspace }, options))).catch(() => []);
+    const read = () => cached(members, workspace, () => allMembers(workspace)).catch(() => []);
     const found = (await read()).find((member) => member.id === memberId);
     if (found !== undefined || memberId === null) return found?.name;
     members.delete(workspace);
@@ -2853,14 +2903,89 @@ export function createDataLayer({
        * page. Cached for the app load; a live `members` event reads it again.
        */
       list: (workspace: string): Promise<MemberView[]> =>
-        cached(members, workspace, () =>
-          beforeRead(workspace).then(() => call((options) => api.members.list({ workspace }, options))),
+        cached(members, workspace, () => beforeRead(workspace).then(() => allMembers(workspace))),
+      /**
+       * One page of the workspace's active members for the Members page
+       * (spec 0031, AC-810): by name, after `cursor`, only those whose name
+       * or email holds `search`. Read fresh each time: the page reloads on a
+       * live `members` event.
+       */
+      page: (workspace: string, query: { readonly search?: string; readonly cursor?: string } = {}) =>
+        beforeRead(workspace).then(() =>
+          call((options) =>
+            api.members.list(
+              {
+                workspace,
+                ...(query.search === undefined || query.search.trim() === '' ? {} : { search: query.search.trim() }),
+                ...(query.cursor === undefined ? {} : { cursor: query.cursor }),
+              },
+              options,
+            ),
+          ),
         ),
       /**
        * Hears the workspace's changes while the Members page is open, so
        * another admin's change reads the list again; the answer stops.
        */
       watch: (workspace: string): (() => void) => watch(workspace),
+      /**
+       * Changes a member's role (spec 0031, AC-811), waiting for the server:
+       * the owner rules live there. Refusals: `FORBIDDEN`, `LAST_OWNER`,
+       * `NOT_FOUND`. The list, and the person's own access, are read again after.
+       */
+      async setRole(workspace: string, memberId: string, role: Role): Promise<MemberView> {
+        const changed = await call((options) =>
+          api.members.setRole({ workspace, memberId, role, mutationId: mintId() }, options),
+        );
+        members.delete(workspace);
+        access.delete(workspace);
+        return changed;
+      },
+      /**
+       * What removing a member will do (spec 0031, AC-816), for the remove
+       * dialog: pages that pause, calendars disconnected, open tasks and
+       * records naming them. Read fresh each time. Refusals: `FORBIDDEN`,
+       * `NOT_FOUND`.
+       */
+      removalPreview: (workspace: string, memberId: string): Promise<RemovalPreview> =>
+        beforeRead(workspace).then(() =>
+          call((options) => api.members.removalPreview({ workspace, memberId }, options)),
+        ),
+      /**
+       * Removes a member (spec 0031, AC-811, AC-816), handing their records
+       * and open tasks to `reassignTo` as a background job when one is given
+       * (its id answers). Refusals: `FORBIDDEN`, `LAST_OWNER`, `NOT_FOUND`.
+       */
+      async remove(workspace: string, memberId: string, reassignTo?: string): Promise<{ readonly jobId?: string }> {
+        const removed = await call((options) =>
+          api.members.remove(
+            { workspace, memberId, ...(reassignTo === undefined ? {} : { reassignTo }), mutationId: mintId() },
+            options,
+          ),
+        );
+        members.delete(workspace);
+        return removed;
+      },
+      /**
+       * The person leaves the workspace (spec 0031, AC-812). Refuses
+       * `LAST_OWNER` for its only owner. Their workspaces are read again after.
+       */
+      async leave(workspace: string): Promise<void> {
+        await call((options) => api.members.leave({ workspace, mutationId: mintId() }, options));
+        members.delete(workspace);
+        access.delete(workspace);
+        me = undefined;
+      },
+      /**
+       * Hands the workspace to another member (spec 0031, AC-813): they become
+       * an owner, the person an admin. The list and the person's own access
+       * are read again after.
+       */
+      async transferOwnership(workspace: string, memberId: string): Promise<void> {
+        await call((options) => api.members.transferOwnership({ workspace, memberId, mutationId: mintId() }, options));
+        members.delete(workspace);
+        access.delete(workspace);
+      },
     },
     /**
      * Invitations (spec 0031): settings, not CRM data, so no live event. The
@@ -2883,6 +3008,25 @@ export function createDataLayer({
       /** Revokes an open invitation: its link stops working at once. */
       revoke: (workspace: string, invitationId: string): Promise<void> =>
         call((options) => api.invitations.revoke({ workspace, invitationId, mutationId: mintId() }, options)),
+      /** The workspace's invite link (spec 0031, AC-818): holders of `members.invite` only. Read fresh each time. */
+      link: (workspace: string): Promise<InviteLinkView> =>
+        call((options) => api.invitations.link({ workspace }, options)),
+      /**
+       * Turns the invite link on or off, changes it, or resets it (a new
+       * token, the old link dead), waiting for the server. A field left out
+       * keeps its value; `null` takes a limit away. Answers the link as it now
+       * is. Refusals: `FORBIDDEN`, `INVITES_LIMIT`.
+       */
+      setLink: (
+        workspace: string,
+        change: {
+          readonly enabled: boolean;
+          readonly expiresInDays?: InviteLinkDays | null;
+          readonly maxUses?: number | null;
+          readonly reset?: boolean;
+        },
+      ): Promise<InviteLinkView> =>
+        call((options) => api.invitations.setLink({ workspace, ...change, mutationId: mintId() }, options)),
       /** What an invitation link shows before accepting, with no session needed; `INVITE_INVALID` for any bad link. */
       peek: (token: string): Promise<InvitePeek> => attempt((options) => api.invitations.peek({ token }, options)),
       /**
@@ -2894,6 +3038,114 @@ export function createDataLayer({
         me = undefined;
         return accepted;
       },
+    },
+    /**
+     * Domain join from the person's side (spec 0031, AC-819): the workspaces
+     * whose email domain is theirs, and asking to join one. Read fresh.
+     */
+    join: {
+      /** The workspaces the signed in person may ask to join, with whether they already asked. */
+      list: (): Promise<Joinable[]> => call((options) => api.join.list(undefined, options)),
+      /** Asks to join one: answers it as pending. Refusals: `NOT_FOUND`, `RATE_LIMITED`. */
+      request: (workspaceId: string): Promise<Joinable> =>
+        call((options) => api.join.request({ workspaceId }, options)),
+    },
+    /**
+     * Domain join inside a workspace (spec 0031, AC-819, AC-820): its email
+     * domains (`workspace.manage`) and its open requests (`members.invite`).
+     * Settings, not CRM data: read fresh, and every write waits for the server.
+     */
+    joinRequests: {
+      domains: (workspace: string): Promise<WorkspaceDomainsView> =>
+        call((options) => api.joinRequests.domains({ workspace }, options)),
+      /** Sets the domains. Refusals: `FORBIDDEN`, `DOMAIN_NOT_YOURS`, `DOMAIN_PUBLIC`. */
+      setDomains: (workspace: string, domains: readonly string[]): Promise<WorkspaceDomainsView> =>
+        call((options) =>
+          api.joinRequests.setDomains({ workspace, domains: [...domains], mutationId: mintId() }, options),
+        ),
+      list: (workspace: string): Promise<JoinRequestView[]> =>
+        call((options) => api.joinRequests.list({ workspace }, options)),
+      /**
+       * Approves (they join as a member) or declines a request. The member
+       * list is read again after an approval. Refusals: `FORBIDDEN`,
+       * `NOT_FOUND`, `SEAT_LIMIT`.
+       */
+      async decide(workspace: string, requestId: string, approve: boolean): Promise<void> {
+        await call((options) =>
+          api.joinRequests.decide({ workspace, requestId, approve, mutationId: mintId() }, options),
+        );
+        if (approve) members.delete(workspace);
+      },
+    },
+    /**
+     * Settings › Workspace › General (spec 0031, slice 7): the workspace's
+     * name, time zone and address, and the owner's delete. Settings, not CRM
+     * data: read fresh, and every write waits for the server. A rename or a
+     * delete reads the person's workspaces again.
+     */
+    workspace: {
+      get: (workspace: string): Promise<WorkspaceSettings> =>
+        call((options) => api.workspace.get({ workspace }, options)),
+      /** Renames it or changes its time zone. Refusals: `FORBIDDEN`, `INPUT_INVALID`. */
+      async update(
+        workspace: string,
+        change: { readonly name?: string; readonly timeZone?: string },
+      ): Promise<WorkspaceSettings> {
+        const updated = await call((options) =>
+          api.workspace.update({ workspace, ...change, mutationId: mintId() }, options),
+        );
+        if (change.name !== undefined) me = undefined;
+        return updated;
+      },
+      /** Deletes it, softly, for 30 days. Refusals: `FORBIDDEN`, `CONFIRM_MISMATCH`. */
+      async delete(workspace: string, confirmName: string): Promise<DeletedWorkspace> {
+        const deleted = await call((options) =>
+          api.workspace.delete({ workspace, confirmName, mutationId: mintId() }, options),
+        );
+        // Nothing of it stays cached: its address now answers the restore page, or not found.
+        objects.delete(workspace);
+        access.delete(workspace);
+        members.delete(workspace);
+        me = undefined;
+        return deleted;
+      },
+      /** A deleted workspace as its owner sees it within the window; `NOT_FOUND` for anyone else. */
+      deleted: (workspace: string): Promise<DeletedWorkspace> =>
+        call((options) => api.deletedWorkspace.deleted({ workspace }, options)),
+      /** Restores a deleted workspace within its window (an owner). Refusals: `NOT_FOUND`. */
+      async restore(workspace: string): Promise<WorkspaceSettings> {
+        const restored = await call((options) =>
+          api.deletedWorkspace.restore({ workspace, mutationId: mintId() }, options),
+        );
+        me = undefined;
+        return restored;
+      },
+    },
+    /** Settings › Account › Profile (spec 0031, AC-821): the caller's own name and time zone in a workspace. */
+    profile: {
+      get: (workspace: string): Promise<MyProfile> => call((options) => api.profile.get({ workspace }, options)),
+      /** Changes their name or time zone (null follows the workspace's). The member list is read again. */
+      async update(
+        workspace: string,
+        change: { readonly name?: string; readonly timeZone?: string | null },
+      ): Promise<MyProfile> {
+        const updated = await call((options) =>
+          api.profile.update({ workspace, ...change, mutationId: mintId() }, options),
+        );
+        members.delete(workspace);
+        return updated;
+      },
+    },
+    roles: {
+      /**
+       * The roles every role picker offers (spec 0037, AC-1439): the built in
+       * ones now, custom ones once they exist, and the default for new
+       * people. Cached for the app load.
+       */
+      list: (workspace: string): Promise<RolesList> =>
+        cached(roles, workspace, () =>
+          beforeRead(workspace).then(() => call((options) => api.roles.list({ workspace }, options))),
+        ),
     },
     access: {
       /**

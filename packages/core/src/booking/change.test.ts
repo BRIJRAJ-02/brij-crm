@@ -158,6 +158,19 @@ describe('a booking queues its emails, and its token derives from its id', () =>
   });
 });
 
+describe('a deleted workspace (spec 0031, AC-823)', () => {
+  it('opens no booking by its manage link', async () => {
+    const s = await setup(recordingCalendar().calendar);
+    const booked = await s.book();
+    await asOwner(`update workspaces set deleted_at = now(), purge_after = now() + interval '30 days' where id = $1`, [
+      s.workspaceId,
+    ]);
+    await expect(enterBookingByToken({ db }, booked.manageToken)).rejects.toMatchObject({
+      refusal: { code: 'NOT_FOUND' },
+    });
+  });
+});
+
 describe('the guest moves their booking (AC-639, AC-675)', () => {
   it('offers the page’s times with its own time free, then moves the same booking and its event', async () => {
     const recorder = recordingCalendar();

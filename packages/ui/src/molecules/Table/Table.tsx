@@ -34,6 +34,8 @@ export interface TableColumn {
    * or a type icon before a name, several badges side by side.
    */
   readonly isInline?: boolean;
+  /** Help beside the label, an InfoTip, where the header alone isn't clear (what each role may do). */
+  readonly info?: ReactNode;
 }
 
 /** Rows that can be moved, and each one's name for its handle; or neither. */
@@ -161,6 +163,9 @@ export function Table<T>({
               id={column.id}
               isRowHeader={column.isRowHeader ?? false}
               className={styles.column}
+              // The header's name is its label alone, never its help's button too.
+              textValue={column.label}
+              {...(column.info === undefined ? {} : { 'aria-label': column.label })}
               data-align={column.align ?? 'start'}
               data-handle={column.id === HANDLE || column.id === SELECT || undefined}
               data-sticky={isHeaderSticky || undefined}
@@ -169,8 +174,13 @@ export function Table<T>({
                 <Checkbox slot="selection" label={strings.selectAll} isLabelHidden />
               ) : column.isLabelHidden === true ? (
                 <VisuallyHidden>{column.label}</VisuallyHidden>
-              ) : (
+              ) : column.info === undefined ? (
                 column.label
+              ) : (
+                <span className={styles.columnLabel}>
+                  {column.label}
+                  {column.info}
+                </span>
               )}
             </Column>
           )}

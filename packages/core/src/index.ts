@@ -3,9 +3,11 @@
 export { getSystemStatus, type SystemDeps } from './system/status.ts';
 export * from './engine/index.ts';
 export {
+  enterDeletedWorkspace,
   enterPublicForm,
   enterWithKey,
   enterWorkspace,
+  type DeletedEntry,
   NO_RULE_SOURCE,
   type DoorDeps,
   type DoorInput,
@@ -58,19 +60,42 @@ export {
 } from './account/account.ts';
 export { milestoneHook, type ReachedMilestone } from './milestones/milestones.ts';
 export { type AuditSource } from './members/audit.ts';
+// Settings › Workspace › General, the owner's delete and restore, and Account › Profile (spec 0031, slice 7).
+export {
+  deleteWorkspace,
+  getWorkspaceSettings,
+  restoreWorkspace,
+  updateWorkspace,
+  type UpdatedWorkspace,
+  type WorkspaceDeletion,
+} from './workspace/settings.ts';
+export { getMyProfile, updateMyMemberProfile, type ProfileExtras } from './members/profile.ts';
 export {
   acceptInvite,
+  getInviteLink,
   inviteMembers,
   listInvitations,
   peekInvite,
   resendInvite,
   revokeInvite,
+  setInviteLink,
   type AcceptedInvite,
   type AcceptingUser,
   type InviteOutcome,
   type InviteSender,
   type SentInvitation,
 } from './members/invitations.ts';
+export {
+  decideJoinRequest,
+  getWorkspaceDomains,
+  listJoinable,
+  listJoinRequests,
+  requestToJoin,
+  setWorkspaceDomains,
+  type JoinDecision,
+  type RequestNotice,
+  type SessionPerson,
+} from './members/domain-join.ts';
 export {
   archiveObject,
   createObject,
@@ -316,7 +341,19 @@ export {
 } from './booking/calendar.ts';
 export { connectedCalendar, type ConnectedCalendarDeps } from './booking/connected.ts';
 export { BEST_CLEAR_MS, BEST_MAX, overlay, type Overlay, type OverlaySlot } from './booking/overlay.ts';
-export { getMyAccess, listMembers, removeMember, setMemberRole, type MemberWithRole } from './members/members.ts';
+export {
+  getMyAccess,
+  leaveWorkspace,
+  listMembers,
+  listRoles,
+  previewRemoval,
+  removeMember,
+  setMemberRole,
+  transferOwnership,
+  type MemberWithRole,
+  type MemberWriteOptions,
+  type RemovedMember,
+} from './members/members.ts';
 export { PREFERENCES_MEMBERS_ONLY, readMyPreferences, updateMyPreferences } from './members/preferences.ts';
 export { outboxEvent, stubEvent, wireEvent } from './realtime/events.ts';
 export {

@@ -208,6 +208,26 @@ export function taskChangeable(
   });
 }
 
+/**
+ * Of `ids`, the tasks `scope` may change by the change rule (AC-447): for a
+ * write outside this module that moves tasks on a member's behalf (spec
+ * 0031's reassignment job), so it can't change a task its actor couldn't.
+ */
+export async function changeableTaskIds(
+  tx: WorkspaceTx,
+  scope: Pick<EngineScope, 'access' | 'actor'>,
+  ids: readonly string[],
+): Promise<ReadonlySet<string>> {
+  if (ids.length === 0) return new Set();
+  const rows = await taskRows(tx, ids);
+  const seen = await linkedDisplays(
+    tx,
+    scope.access,
+    rows.flatMap((row) => row.record_ids),
+  );
+  return new Set(rows.filter((row) => taskChangeable(row, scope, seen)).map((row) => row.id));
+}
+
 /** A stored actor as the view carries it. */
 const actorOf = (type: Actor['type'], id: string | null): Actor => ({ type, id });
 

@@ -70,3 +70,20 @@ export const Still: Story = {
     }
   },
 };
+
+/** A field's box, for a settings row while its page loads: as tall as a field, a menu wide, or across its slot. */
+export const FieldShape: Story = {
+  render: () => (
+    <Stage direction="column" width="narrow">
+      <Skeleton shape="field" />
+      <Skeleton shape="field" width="full" />
+    </Stage>
+  ),
+  play: async ({ canvasElement }) => {
+    const [menuWide, full] = [...canvasElement.querySelectorAll('[data-shape="field"]')].map(
+      (field) => field.getBoundingClientRect().width,
+    );
+    await expect(menuWide).toBeGreaterThan(0);
+    await expect(full).toBeGreaterThanOrEqual(menuWide ?? 0);
+  },
+};

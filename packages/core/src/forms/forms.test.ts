@@ -305,6 +305,13 @@ describe('building and publishing (AC-545, AC-546, AC-548, AC-549, AC-552, AC-64
     await expect(enterPublicForm({ db }, live.publicKey)).rejects.toMatchObject({ refusal: { code: 'NOT_FOUND' } });
     await expect(enterPublicForm({ db }, 'talk-to-us')).resolves.toMatchObject({ formId: live.id });
   });
+
+  it('names nothing in a deleted workspace (spec 0031, AC-823)', async () => {
+    const w = await workspace();
+    const live = await liveForm(w);
+    await w.query(sql`update workspaces set deleted_at = now(), purge_after = now() + interval '30 days'`);
+    await expect(enterPublicForm({ db }, live.publicKey)).rejects.toMatchObject({ refusal: { code: 'NOT_FOUND' } });
+  });
 });
 
 describe('the public form and submit (AC-553 to AC-556, AC-659)', () => {

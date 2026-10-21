@@ -33,7 +33,21 @@ const READS: ReadonlySet<string> = new Set([
   // Invitations (spec 0031): the open list, and the invitation page's look (no session).
   'invitations.list',
   'invitations.peek',
+  // The invite link as its card shows it (slice 6, AC-818).
+  'invitations.link',
+  // What a removal will do, for the remove dialog (slice 5, AC-816).
+  'members.removalPreview',
+  // Domain join (slice 6): the workspaces to ask, a workspace's domains, and its open requests.
+  'join.list',
+  'joinRequests.domains',
+  'joinRequests.list',
+  // Slice 7: Workspace › General, Account › Profile, and a deleted workspace as its owner sees it.
+  'workspace.get',
+  'profile.get',
+  'deletedWorkspace.deleted',
   'access.mine',
+  // The roles every role picker offers (spec 0037, AC-1439).
+  'roles.list',
   'records.query',
   'records.count',
   'records.groups',
@@ -189,6 +203,21 @@ async function personFor(m: Member): Promise<string> {
     mutationId: newId(),
   });
   return id;
+}
+
+/** A second person in the member's workspace: invited and accepted through the app, with their own client. */
+async function teammate(m: Member) {
+  const invitee = await signIn(app);
+  await m.client.invitations.create({
+    workspace: m.slug,
+    emails: [invitee.email],
+    role: 'member',
+    mutationId: newId(),
+  });
+  const client = rpcClient(app, invitee.cookie);
+  await client.invitations.accept({ token: invitationTokens.get(invitee.email) ?? '' });
+  const memberId = (await client.access.mine({ workspace: m.slug })).memberId;
+  return { client, memberId };
 }
 
 /** One write's rows, one per object in object id order (the outbox hook's), each naming its one record. */
@@ -349,6 +378,11 @@ const WRITES: Record<string, (m: Member, mutationId: string) => Promise<readonly
     await m.client.invitations.resend({ workspace: m.slug, invitationId: made.invited[0]?.id ?? '', mutationId });
     return [];
   },
+  // The invite link (slice 6): a setting nobody's screen follows live, so no row.
+  'invitations.setLink': async (m, mutationId) => {
+    await m.client.invitations.setLink({ workspace: m.slug, enabled: true, mutationId });
+    return [];
+  },
   'invitations.revoke': async (m, mutationId) => {
     const made = await m.client.invitations.create({
       workspace: m.slug,
@@ -358,6 +392,77 @@ const WRITES: Record<string, (m: Member, mutationId: string) => Promise<readonly
     });
     await m.client.invitations.revoke({ workspace: m.slug, invitationId: made.invited[0]?.id ?? '', mutationId });
     return [];
+  },
+  // Members (spec 0031): each case brings a teammate in first (an invite and its accept, one members row).
+  'members.setRole': async (m, mutationId) => {
+    const mate = await teammate(m);
+    await m.client.members.setRole({ workspace: m.slug, memberId: mate.memberId, role: 'admin', mutationId });
+    return [{ kind: 'members' }, { kind: 'members', item_ids: [mate.memberId], mutation_id: mutationId }];
+  },
+  'members.remove': async (m, mutationId) => {
+    const mate = await teammate(m);
+    await m.client.members.remove({ workspace: m.slug, memberId: mate.memberId, mutationId });
+    // A removal also names whose access changed, so their own tabs are cut off (AC-817).
+    return [
+      { kind: 'members' },
+      { kind: 'members', item_ids: [mate.memberId], mutation_id: mutationId },
+      { kind: 'access', item_ids: [mate.memberId], mutation_id: mutationId },
+    ];
+  },
+  'members.transferOwnership': async (m, mutationId) => {
+    const mate = await teammate(m);
+    await m.client.members.transferOwnership({ workspace: m.slug, memberId: mate.memberId, mutationId });
+    return [{ kind: 'members' }, { kind: 'members', mutation_id: mutationId }];
+  },
+  'members.leave': async (m, mutationId) => {
+    const mate = await teammate(m);
+    await mate.client.members.leave({ workspace: m.slug, mutationId });
+    return [
+      { kind: 'members' },
+      { kind: 'members', item_ids: [mate.memberId], mutation_id: mutationId },
+      { kind: 'access', item_ids: [mate.memberId], mutation_id: mutationId },
+    ];
+  },
+  // Domain join (slice 6, AC-819, AC-820): settings and requests nobody's screen follows live, so no row, until an
+  // approval brings someone in (one members row).
+  'joinRequests.setDomains': async (m, mutationId) => {
+    await m.client.joinRequests.setDomains({ workspace: m.slug, domains: ['example.com'], mutationId });
+    return [];
+  },
+  'join.request': async (m) => {
+    await m.client.joinRequests.setDomains({ workspace: m.slug, domains: ['example.com'], mutationId: newId() });
+    const asker = await signIn(app);
+    await rpcClient(app, asker.cookie).join.request({ workspaceId: m.workspace.id });
+    return [];
+  },
+  'joinRequests.decide': async (m, mutationId) => {
+    await m.client.joinRequests.setDomains({ workspace: m.slug, domains: ['example.com'], mutationId: newId() });
+    const asker = await signIn(app);
+    await rpcClient(app, asker.cookie).join.request({ workspaceId: m.workspace.id });
+    const [request] = await m.client.joinRequests.list({ workspace: m.slug });
+    await m.client.joinRequests.decide({ workspace: m.slug, requestId: request?.id ?? '', approve: true, mutationId });
+    return [{ kind: 'members', mutation_id: mutationId }];
+  },
+  // Slice 7: the workspace's own settings and delete, and its restore, which nobody's screen follows live; a
+  // profile change reaches every member's list (one members row).
+  'workspace.update': async (m, mutationId) => {
+    await m.client.workspace.update({ workspace: m.slug, name: 'Renamed', mutationId });
+    return [];
+  },
+  'workspace.delete': async (m, mutationId) => {
+    const { name } = await m.client.workspace.get({ workspace: m.slug });
+    await m.client.workspace.delete({ workspace: m.slug, confirmName: name, mutationId });
+    return [];
+  },
+  'deletedWorkspace.restore': async (m, mutationId) => {
+    const { name } = await m.client.workspace.get({ workspace: m.slug });
+    await m.client.workspace.delete({ workspace: m.slug, confirmName: name, mutationId: newId() });
+    await m.client.deletedWorkspace.restore({ workspace: m.slug, mutationId });
+    return [];
+  },
+  'profile.update': async (m, mutationId) => {
+    const me = await m.client.profile.update({ workspace: m.slug, name: 'Renamed', mutationId });
+    return [{ kind: 'members', item_ids: [me.memberId], mutation_id: mutationId }];
   },
   'invitations.accept': async (m) => {
     const invitee = await signIn(app);
@@ -1481,9 +1586,17 @@ Object.assign(WRITES, {
 
 /** How many writes (each one poke) a case in WRITES makes before and with its own. */
 const WRITES_MADE: Readonly<Record<string, number>> = {
+  'members.setRole': 3,
+  'members.remove': 3,
+  'members.leave': 3,
+  'members.transferOwnership': 3,
   'invitations.resend': 2,
   'invitations.revoke': 2,
   'invitations.accept': 2,
+  // Domain join: the domains set first, then the request (and the decision).
+  'join.request': 2,
+  'joinRequests.decide': 3,
+  'deletedWorkspace.restore': 2,
   'views.update': 2,
   'views.move': 3,
   'views.setLocked': 2,

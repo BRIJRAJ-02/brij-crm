@@ -1,19 +1,15 @@
 import { isIP } from 'node:net';
 import { INVITE_PEEKS_PER_IP_MINUTE } from '@crm/contracts';
-import { acceptInvite, newId, peekInvite, type AuditSource } from '@crm/core';
+import { acceptInvite, newId, peekInvite } from '@crm/core';
 import { apiError } from '../../errors.ts';
 import { commitWrite } from '../../hooks.ts';
-import { authed, pub, type RequestContext } from '../../orpc.ts';
+import { authed, pub } from '../../orpc.ts';
+import { sourceOf } from '../../source.ts';
 
 // The two invitation handlers that run before any workspace scope exists (spec 0031, AC-805, AC-806): `peek` (no
 // session, 20 a minute per address) and `accept` (a session). Core finds the workspace by the token's hash and mints
 // its scope there, so nothing here builds one. The only module file of invitations that reaches the database or
 // global identity from the context (door.test.ts).
-
-/** Where the request came from, for the audit row: its id, and the IP only when the edge vouched for it. */
-export function sourceOf(context: Pick<RequestContext, 'requestId' | 'clientIp'>): AuditSource {
-  return { requestId: context.requestId, ...(context.clientIp === undefined ? {} : { ip: context.clientIp }) };
-}
 
 /**
  * The peek limiter's key for a caller's address (AC-808): an IPv4 address

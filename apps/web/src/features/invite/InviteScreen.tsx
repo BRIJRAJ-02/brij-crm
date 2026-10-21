@@ -1,9 +1,9 @@
 // Brief
 // Purpose: the page an invitation email links to (spec 0031, AC-805): who invited you to which workspace, as what.
-// Main task: Accept invitation when signed in, or Sign in to accept, which brings you back here.
+// Main task: Join workspace when signed in, or Sign in to join, which brings you back here.
 // Leaves out: the invite link and domain joins (slice 6), and making an account here (sign in does that).
 import { isDataError, ROLE_LABELS, type DataLayer, type InvitePeek, type SignedInUser } from '@crm/data';
-import { AuthLayout, Button, ButtonLink, Callout, EmptyState } from '@crm/ui';
+import { AuthLayout, Button, ButtonLink, Callout } from '@crm/ui';
 import { useNavigate } from '@tanstack/react-router';
 import { useState } from 'react';
 import { PRODUCT_LOGO } from '../../brand.ts';
@@ -40,14 +40,13 @@ export function InviteScreen({ data, token, invitation, user }: InviteScreenProp
   // Expired, revoked, used and unknown links all read the same (AC-805), before or after a try.
   if (invitation === undefined || standing.kind === 'invalid') {
     return (
-      <AuthLayout productName={strings.product} logo={PRODUCT_LOGO} title={strings.invalidTitle}>
-        <EmptyState
-          icon="mail"
-          title={strings.invalidTitle}
-          actions={<ButtonLink href="/">{strings.goHome}</ButtonLink>}
-        >
-          {strings.invalidText}
-        </EmptyState>
+      <AuthLayout
+        productName={strings.product}
+        logo={PRODUCT_LOGO}
+        title={strings.invalidTitle}
+        description={strings.invalidText}
+      >
+        <ButtonLink href="/">{strings.goHome}</ButtonLink>
       </AuthLayout>
     );
   }
@@ -94,12 +93,20 @@ export function InviteScreen({ data, token, invitation, user }: InviteScreenProp
     standing.kind === 'mismatch' || standing.kind === 'refused' ? (
       <Callout tone="danger">{standing.message}</Callout>
     ) : null;
+  // One line on who and as what, and whom it is for: the title already names the workspace.
+  // Signed in, "Signed in as" says whose this is (the wrong address answers with its own message).
+  const about = [
+    strings.invited(invitation.inviterName, role),
+    user === undefined ? strings.forAddress(invitation.invitedEmailMasked) : '',
+  ]
+    .filter((line) => line !== '')
+    .join(' ');
   return (
     <AuthLayout
       productName={strings.product}
       logo={PRODUCT_LOGO}
-      title={strings.title}
-      description={strings.invited(invitation.inviterName, invitation.workspaceName, role)}
+      title={strings.title(invitation.workspaceName)}
+      description={about}
       {...(user === undefined || standing.kind === 'mismatch'
         ? {}
         : {
@@ -110,33 +117,27 @@ export function InviteScreen({ data, token, invitation, user }: InviteScreenProp
             ),
           })}
     >
+      {message}
       {user === undefined ? (
         <>
-          <p>{strings.forAddress(invitation.invitedEmailMasked)}</p>
-          <p>{strings.newHere}</p>
-          {message}
           <ButtonLink variant="primary" href={signInHref(here)}>
             {strings.signInToAccept}
           </ButtonLink>
+          <p>{strings.newHere}</p>
+        </>
+      ) : standing.kind === 'mismatch' ? (
+        <>
+          <p>{strings.signedInAs(user.email)}</p>
+          <Button variant="primary" onPress={signInAgain}>
+            {strings.useAnother}
+          </Button>
         </>
       ) : (
         <>
-          {/* Refused for another address, the refusal names the invited one, so it isn't said twice. */}
-          <p>
-            {standing.kind === 'mismatch'
-              ? strings.signedInAs(user.email)
-              : `${strings.forAddress(invitation.invitedEmailMasked)} ${strings.signedInAs(user.email)}`}
-          </p>
-          {message}
-          {standing.kind === 'mismatch' ? (
-            <Button variant="primary" onPress={signInAgain}>
-              {strings.useAnother}
-            </Button>
-          ) : (
-            <Button variant="primary" onPress={accept} isPending={isBusy}>
-              {strings.accept}
-            </Button>
-          )}
+          <p>{strings.signedInAs(user.email)}</p>
+          <Button variant="primary" onPress={accept} isPending={isBusy}>
+            {strings.accept}
+          </Button>
         </>
       )}
     </AuthLayout>

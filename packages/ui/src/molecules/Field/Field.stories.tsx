@@ -3,6 +3,8 @@ import { useState } from 'react';
 import { expect, fn, waitFor } from 'storybook/test';
 import { Stage } from '../../workbench/Stage/Stage.tsx';
 import { InfoTip } from '../InfoTip/InfoTip.tsx';
+import { Button } from '../../atoms/Button/Button.tsx';
+import { Select } from '../Select/Select.tsx';
 import { Field } from './Field.tsx';
 
 const meta = {
@@ -26,6 +28,36 @@ export const Default: Story = {
     await userEvent.click(input);
     await userEvent.keyboard('northwind.com');
     await expect(args.onChange).toHaveBeenLastCalledWith('northwind.com');
+  },
+};
+
+/** A row's picker and its remove button in the suffix: the Invite dialog's address with its role. */
+export const SuffixPicker: Story = {
+  args: { label: 'Email', placeholder: 'name@company.com', defaultValue: 'grace@example.com' },
+  render: (args) => (
+    <Stage width="narrow">
+      <Field
+        {...args}
+        suffix={
+          <>
+            <Select
+              label="Role for grace@example.com"
+              isLabelHidden
+              variant="inline"
+              items={[
+                { id: 'admin', label: 'Admin', description: 'Manages members and settings.' },
+                { id: 'member', label: 'Member', description: 'Works with records.' },
+              ]}
+              defaultValue="member"
+            />
+            <Button variant="ghost" icon="x" label="Remove grace@example.com" />
+          </>
+        }
+      />
+    </Stage>
+  ),
+  play: async ({ canvas }) => {
+    await expect(canvas.getByRole('button', { name: 'Remove grace@example.com' })).toBeInTheDocument();
   },
 };
 
@@ -192,8 +224,29 @@ export const Copy: Story = {
     await expect(canvas.queryByRole('img', { name: 'Read only' })).toBeNull();
     await expect(canvas.getByRole('button', { name: 'Copy link' })).toBeInTheDocument();
     await userEvent.click(input);
-    await waitFor(() => expect(input.selectionEnd).toBe(input.value.length));
-    await expect(input.selectionStart).toBe(0);
+    // A click leaves the caret at the end first, so wait for the whole value, start and end, selected on the next frame.
+    await waitFor(() => expect([input.selectionStart, input.selectionEnd]).toEqual([0, input.value.length]));
+  },
+};
+
+/** A long link to copy that wraps rather than cutting its end off, its Copy button at the top of the box's end. */
+export const CopyWrapping: Story = {
+  render: () => (
+    <Stage width="narrow">
+      <Field
+        label="Address"
+        variant="copy"
+        isWrapping
+        copyLabel="Copy address"
+        value="https://brij-crm-phi.vercel.app/w/northwind-traders-international-sales-team"
+      />
+    </Stage>
+  ),
+  play: async ({ canvas }) => {
+    const input = canvas.getByRole('textbox', { name: 'Address' });
+    await expect(input).toHaveAttribute('readonly');
+    await expect(input).toHaveValue('https://brij-crm-phi.vercel.app/w/northwind-traders-international-sales-team');
+    await expect(canvas.getByRole('button', { name: 'Copy address' })).toBeInTheDocument();
   },
 };
 

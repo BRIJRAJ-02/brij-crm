@@ -89,6 +89,9 @@ export const strings = {
   aheadSummary: (days: number) => `Up to ${days === 1 ? '1 day' : `${String(days)} days`} ahead`,
   dailySummary: (count: number) => (count === 1 ? '1 a day' : `${String(count)} a day`),
   private: 'Private',
+  // A page the system paused when its last host was removed (spec 0031, AC-814).
+  hostRemoved: 'Host removed',
+  hostRemovedSummary: 'Off, its host was removed from the workspace',
   privateSummary: 'Private, only people with the link book it',
   publicSummary: 'Anyone can book it',
   pausedSummary: 'Off, nobody can book it',

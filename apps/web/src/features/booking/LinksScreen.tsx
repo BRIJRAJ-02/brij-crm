@@ -92,7 +92,13 @@ export function LinksScreen({ data, slug }: LinksScreenProps) {
       // The link Copy link copies, as a path.
       address: new URL(publicBookingUrl(page.publicKey)).pathname,
       // Off shows in the muted title and the switch; the badge is for what they can't say.
-      ...(isPending ? { badge: strings.copying } : page.isPrivate ? { badge: strings.private } : {}),
+      ...(isPending
+        ? { badge: strings.copying }
+        : page.pausedReason === 'host_removed'
+          ? { badge: strings.hostRemoved }
+          : page.isPrivate
+            ? { badge: strings.private }
+            : {}),
       isOff,
       isPending,
       toggle: {

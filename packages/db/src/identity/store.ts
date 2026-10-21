@@ -8,7 +8,7 @@
 // `crm_identity`), the only role that reads and writes schema `auth`. The app
 // login only inserts the two directory rows inside the workspace transaction.
 import { drizzleAdapter } from 'better-auth/adapters/drizzle';
-import { and, asc, eq, sql } from 'drizzle-orm';
+import { and, asc, eq, isNull, sql } from 'drizzle-orm';
 import { drizzle } from 'drizzle-orm/node-postgres';
 import pg from 'pg';
 import type { DatabaseOptions } from '../client.ts';
@@ -63,7 +63,7 @@ export interface RateLimitDecision {
 export interface IdentityStore {
   /** The workspace at this address, or undefined. Lookup only: it grants nothing. */
   findWorkspace(slug: string): Promise<DirectoryWorkspace | undefined>;
-  /** The workspaces this user was added to, oldest first (by when the directory row was made). */
+  /** The workspaces this user was added to, oldest first (by when the directory row was made); deleted ones left out. */
   workspacesOf(userId: string): Promise<readonly DirectoryWorkspace[]>;
   /** The workspace this user last opened (spec 0031, AC-802), or undefined. Where to go, never access. */
   lastWorkspaceOf(userId: string): Promise<string | undefined>;
@@ -77,9 +77,22 @@ export interface IdentityStore {
    * Drops the directory's note that this user is in this workspace, once the
    * tenant transaction that removed their member row has committed (spec
    * 0031, AC-812, AC-814), so their switcher stops listing it. Access never
-   * read it: the door already refuses them.
+   * read it: the door already refuses them. With `memberId`, only the row
+   * naming that member goes, so a membership made again since (a new
+   * invitation accepted in between) stays.
    */
-  dropMembership(userId: string, workspaceId: string): Promise<void>;
+  dropMembership(userId: string, workspaceId: string, memberId?: string): Promise<void>;
+  /**
+   * The directory's copy of a workspace's name, after a rename committed in
+   * the tenant row (spec 0031, AC-822). Display only: it grants nothing.
+   */
+  renameWorkspace(workspaceId: string, name: string): Promise<void>;
+  /**
+   * Marks a workspace deleted in the directory, or clears the mark on
+   * restore, after the tenant change committed (spec 0031, AC-823), so "my
+   * workspaces" leaves it out. The door reads the tenant row, not this.
+   */
+  setWorkspaceDeleted(workspaceId: string, deleted: boolean): Promise<void>;
   /** The user with this id, or undefined. */
   getUser(id: string): Promise<IdentityUser | undefined>;
   /** Saves the name only when the user has none yet (an email code sign up starts empty). True when it saved. */
@@ -151,7 +164,7 @@ export function createIdentityStore(options: DatabaseOptions): IdentityStore {
         .select(directoryColumns)
         .from(workspaceMembership)
         .innerJoin(workspaceDirectory, eq(workspaceDirectory.workspaceId, workspaceMembership.workspaceId))
-        .where(eq(workspaceMembership.userId, userId))
+        .where(and(eq(workspaceMembership.userId, userId), isNull(workspaceDirectory.deletedAt)))
         .orderBy(asc(workspaceDirectory.createdAt), asc(workspaceDirectory.workspaceId));
     },
 
@@ -177,11 +190,31 @@ export function createIdentityStore(options: DatabaseOptions): IdentityStore {
         });
     },
 
-    async dropMembership(userId, workspaceId) {
+    async dropMembership(userId, workspaceId, memberId) {
       if (!UUID.test(userId) || !UUID.test(workspaceId)) return;
+      if (memberId !== undefined && !UUID.test(memberId)) return;
       await db
         .delete(workspaceMembership)
-        .where(and(eq(workspaceMembership.userId, userId), eq(workspaceMembership.workspaceId, workspaceId)));
+        .where(
+          and(
+            eq(workspaceMembership.userId, userId),
+            eq(workspaceMembership.workspaceId, workspaceId),
+            ...(memberId === undefined ? [] : [eq(workspaceMembership.memberId, memberId)]),
+          ),
+        );
+    },
+
+    async renameWorkspace(workspaceId, name) {
+      if (!UUID.test(workspaceId)) return;
+      await db.update(workspaceDirectory).set({ name }).where(eq(workspaceDirectory.workspaceId, workspaceId));
+    },
+
+    async setWorkspaceDeleted(workspaceId, deleted) {
+      if (!UUID.test(workspaceId)) return;
+      await db
+        .update(workspaceDirectory)
+        .set({ deletedAt: deleted ? sql`now()` : null })
+        .where(eq(workspaceDirectory.workspaceId, workspaceId));
     },
 
     async getUser(id) {

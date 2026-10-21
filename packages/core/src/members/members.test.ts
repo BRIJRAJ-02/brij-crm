@@ -8,10 +8,10 @@ import { createDatabase, type Database } from '@crm/db';
 import { testQuery } from '@crm/db/testing';
 import { enterAsActor, NO_RULE_SOURCE, systemScope } from '../access/door.ts';
 import { newId } from '../engine/ids.ts';
-import { isRefusal } from '../engine/refusals.ts';
+import { isInputError, isRefusal } from '../engine/refusals.ts';
 import { createWorkspace } from '../engine/workspaces.ts';
 import { testScope } from '../testing.ts';
-import { getMyAccess, listMembers, removeMember, setMemberRole } from './members.ts';
+import { getMyAccess, leaveWorkspace, listMembers, removeMember, setMemberRole, transferOwnership } from './members.ts';
 
 const { appUrl, ownerUrl } = inject('testDatabase');
 let db: Database;
@@ -104,7 +104,7 @@ describe('an owner', () => {
         ),
       ),
     ).toMatchObject({ code: 'NOT_FOUND' });
-    expect((await listMembers(t.as(t.owner, 'owner'))).map((each) => each.id)).not.toContain(member);
+    expect((await listMembers(t.as(t.owner, 'owner'))).members.map((each) => each.id)).not.toContain(member);
     // Acting on them again: they are gone.
     expect(await refusalOf(removeMember(t.as(t.owner, 'owner'), { memberId: member }))).toMatchObject({
       code: 'NOT_FOUND',
@@ -229,5 +229,119 @@ describe('the rules hold under a race and for the system', () => {
     expect(await refusalOf(setMemberRole(owner, { memberId: t.owner, role: 'guest' as Role }))).toMatchObject({
       code: 'CONFIG_INVALID',
     });
+  });
+});
+
+/** The workspace's audit rows, oldest first. */
+const auditOf = (workspaceId: string) =>
+  testQuery<{ action: string; target_id: string; actor_member_id: string | null; before: unknown; after: unknown }>(
+    ownerUrl,
+    'select action, target_id, actor_member_id::text, before, after from audit_events where workspace_id = $1 order by at, id',
+    [workspaceId],
+  );
+
+describe('the Members page’s list (spec 0031, AC-810)', () => {
+  it('pages by name with a cursor, each member with their role, when they joined and the count', async () => {
+    const t = await team(['admin', 'member', 'member']);
+    const owner = t.as(t.owner, 'owner');
+    const first = await listMembers(owner, { limit: 2 });
+    expect(first.total).toBe(4);
+    expect(first.members.map((each) => each.name)).toEqual(['Ada', 'M0']);
+    expect(first.members[0]).toMatchObject({ role: 'owner' });
+    expect(first.members.every((each) => !Number.isNaN(Date.parse(each.joinedAt)))).toBe(true);
+    const second = await listMembers(owner, { limit: 2, cursor: first.nextCursor ?? '' });
+    expect(second.members.map((each) => each.name)).toEqual(['M1', 'M2']);
+    expect(second.nextCursor).toBeUndefined();
+    // Every member may read it.
+    const [, member = ''] = t.ids;
+    expect((await listMembers(t.as(member, 'member'))).members).toHaveLength(4);
+  });
+
+  it('searches names and emails in any case, taking % and _ literally, and refuses a cursor it didn’t make', async () => {
+    const t = await team(['member', 'member']);
+    const [first = '', second = ''] = t.ids;
+    await testQuery(ownerUrl, `update members set name = 'Grace Hopper' where id = $1`, [first]);
+    await testQuery(ownerUrl, `update members set name = '100% Linus', email = 'linus_t@example.com' where id = $1`, [
+      second,
+    ]);
+    const owner = t.as(t.owner, 'owner');
+    expect((await listMembers(owner, { search: 'GRACE' })).members.map((each) => each.id)).toEqual([first]);
+    expect((await listMembers(owner, { search: first.slice(-8) })).members.map((each) => each.id)).toEqual([first]);
+    expect((await listMembers(owner, { search: '100%' })).members.map((each) => each.id)).toEqual([second]);
+    expect((await listMembers(owner, { search: 's_t@' })).members.map((each) => each.id)).toEqual([second]);
+    expect(await listMembers(owner, { search: '%' })).toMatchObject({ total: 1 });
+    expect(await listMembers(owner, { search: 'nobody here' })).toEqual({ members: [], total: 0 });
+    await expect(listMembers(owner, { cursor: 'not-a-cursor' })).rejects.toSatisfy(isInputError);
+  });
+});
+
+describe('the audit log for members (spec 0031, AC-830)', () => {
+  it('writes one row for a role change, with only the role before and after', async () => {
+    const t = await team(['member']);
+    const [member = ''] = t.ids;
+    const changed = await setMemberRole(t.as(t.owner, 'owner'), { memberId: member, role: 'admin' });
+    expect(changed).toMatchObject({ id: member, role: 'admin' });
+    expect(await auditOf(t.workspaceId)).toEqual([
+      {
+        action: 'member.role_changed',
+        target_id: member,
+        actor_member_id: t.owner,
+        before: { role: 'member' },
+        after: { role: 'admin' },
+      },
+    ]);
+    // A change to the role they already hold writes nothing.
+    await setMemberRole(t.as(t.owner, 'owner'), { memberId: member, role: 'admin' });
+    expect(await auditOf(t.workspaceId)).toHaveLength(1);
+  });
+
+  it('writes member.removed for a removal and member.left for leaving, and answers who to forget', async () => {
+    const t = await team(['member', 'member']);
+    const [gone = '', leaving = ''] = t.ids;
+    expect(await removeMember(t.as(t.owner, 'owner'), { memberId: gone })).toEqual({ memberId: gone });
+    expect(await leaveWorkspace(t.as(leaving, 'member'))).toEqual({ memberId: leaving });
+    expect((await auditOf(t.workspaceId)).map(({ action, target_id }) => ({ action, target_id }))).toEqual([
+      { action: 'member.removed', target_id: gone },
+      { action: 'member.left', target_id: leaving },
+    ]);
+    expect(await t.roleOf(leaving)).toEqual({ role: 'member', status: 'removed' });
+  });
+
+  it('refuses the only owner leaving, and anyone but a member', async () => {
+    const t = await team(['member']);
+    expect(await refusalOf(leaveWorkspace(t.as(t.owner, 'owner')))).toEqual(LAST_OWNER);
+    expect(await refusalOf(leaveWorkspace(systemScope(db, t.workspaceId)))).toMatchObject({ code: 'FORBIDDEN' });
+    expect(await auditOf(t.workspaceId)).toEqual([]);
+  });
+});
+
+describe('transferring ownership (spec 0031, AC-813)', () => {
+  it('makes them an owner and the caller an admin in one step, with one audit row', async () => {
+    const t = await team(['admin', 'member']);
+    const [admin = '', member = ''] = t.ids;
+    await transferOwnership(t.as(t.owner, 'owner'), { memberId: member });
+    expect(await t.roleOf(member)).toEqual({ role: 'owner', status: 'active' });
+    expect(await t.roleOf(t.owner)).toEqual({ role: 'admin', status: 'active' });
+    expect((await auditOf(t.workspaceId)).map(({ action, target_id }) => ({ action, target_id }))).toEqual([
+      { action: 'workspace.ownership_transferred', target_id: member },
+    ]);
+    // Only an owner hands it on, never to themself, and the old owner acts as the admin they are now.
+    expect(await refusalOf(transferOwnership(t.as(admin, 'admin'), { memberId: admin }))).toEqual(FORBIDDEN_OWNER);
+    expect(await refusalOf(transferOwnership(t.as(member, 'owner'), { memberId: member }))).toMatchObject({
+      code: 'NOT_FOUND',
+    });
+    expect(await refusalOf(transferOwnership(t.as(t.owner, 'owner'), { memberId: admin }))).toEqual(FORBIDDEN_OWNER);
+    expect(await auditOf(t.workspaceId)).toHaveLength(1);
+  });
+
+  it('refuses a removed member as the target, and a member as the caller', async () => {
+    const t = await team(['member', 'member']);
+    const [gone = '', member = ''] = t.ids;
+    await removeMember(t.as(t.owner, 'owner'), { memberId: gone });
+    expect(await refusalOf(transferOwnership(t.as(t.owner, 'owner'), { memberId: gone }))).toMatchObject({
+      code: 'NOT_FOUND',
+    });
+    expect(await refusalOf(transferOwnership(t.as(member, 'member'), { memberId: t.owner }))).toEqual(FORBIDDEN_OWNER);
+    expect(await t.roleOf(t.owner)).toEqual({ role: 'owner', status: 'active' });
   });
 });

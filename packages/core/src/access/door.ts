@@ -159,6 +159,54 @@ export async function enterWorkspace(deps: DoorDeps, input: DoorInput): Promise<
   return memberScope(deps, workspace.id, found.member, found.rules);
 }
 
+/** A deleted workspace an owner may still restore, and the scope to restore it with. */
+export interface DeletedEntry {
+  readonly scope: EngineScope;
+  readonly name: string;
+  readonly slug: string;
+  /** When the purge may take it, ISO 8601. */
+  readonly purgeAfter: string;
+}
+
+/**
+ * The way into a deleted workspace (spec 0031, AC-823), for its active
+ * owners only and only within its window: the scope `restoreWorkspace` acts
+ * with, and what the restore page shows. Anyone else, a live workspace, and
+ * one past its window are all NOT_FOUND, the same as an unknown address, so
+ * nothing says a deleted workspace exists to anyone who couldn't restore it.
+ */
+export async function enterDeletedWorkspace(deps: DoorDeps, input: DoorInput): Promise<DeletedEntry> {
+  if (!isUuid(input.userId)) throw notFound();
+  const workspace = await deps.identity.findWorkspace(input.slug);
+  if (workspace === undefined) throw notFound();
+  const found = await deps.db.withWorkspace(workspace.id, async (tx) => {
+    const [row] = await tx
+      .select({
+        id: members.id,
+        userId: members.userId,
+        role: members.role,
+        name: workspaces.name,
+        slug: workspaces.slug,
+        purgeAfter: workspaces.purgeAfter,
+      })
+      .from(members)
+      .innerJoin(workspaces, eq(workspaces.id, members.workspaceId))
+      .where(
+        and(
+          eq(members.userId, input.userId),
+          eq(members.status, 'active'),
+          eq(members.role, 'owner'),
+          sql`${workspaces.deletedAt} is not null and ${workspaces.purgeAfter} > now()`,
+        ),
+      )
+      .limit(1);
+    return row;
+  });
+  if (found === undefined || found.purgeAfter === null) throw notFound();
+  const scope = memberScope(deps, workspace.id, found, NO_RULES);
+  return { scope, name: found.name, slug: found.slug, purgeAfter: new Date(found.purgeAfter).toISOString() };
+}
+
 /**
  * What `enterAsActor` needs: the tenant database, where to report an unknown
  * role, and where rules come from, always named and the same source the
@@ -212,11 +260,23 @@ function noForm(): RefusalError {
 /** A form address's shape (spec 0023, AC-552): anything else names no form and never reaches the database. */
 const PUBLIC_KEY = FORM_SLUG;
 
+/** Whether a workspace is live (not deleted, spec 0031, AC-823): a public way in to a deleted one is not found. */
+async function isLive(db: Database, workspaceId: string): Promise<boolean> {
+  return db.withWorkspace(workspaceId, async (tx) => {
+    const [workspace] = await tx
+      .select({ id: workspaces.id })
+      .from(workspaces)
+      .where(and(eq(workspaces.id, workspaceId), isNull(workspaces.deletedAt)));
+    return workspace !== undefined;
+  });
+}
+
 /**
  * The scope a public form endpoint acts in (spec 0023): the workspace and
  * form a public key names, found through `crm_form_by_key` (ids only), the
  * form as the actor, and no data access at all. NOT_FOUND for a malformed
- * or unknown key. Whether the form is live is the caller's next read.
+ * or unknown key, and for a deleted workspace. Whether the form is live is
+ * the caller's next read.
  */
 export async function enterPublicForm(
   deps: { readonly db: Database },
@@ -229,7 +289,7 @@ export async function enterPublicForm(
     ),
   );
   const [row] = found.rows;
-  if (row === undefined) throw noForm();
+  if (row === undefined || !(await isLive(deps.db, row.workspace_id))) throw noForm();
   const scope = mintScope({
     db: deps.db,
     workspaceId: row.workspace_id,
@@ -320,6 +380,45 @@ export async function isInvitedEmail(deps: { readonly db: Database }, email: str
   return found.rows[0]?.invited === true;
 }
 
+/**
+ * The workspaces whose people at `domain` may ask to join (spec 0031,
+ * AC-819), each with a system scope there: `/join` reads and asks through
+ * them before the person is a member. Ids only, through
+ * `crm_workspaces_by_domain`; the caller checks each is live and reads the
+ * person's standing inside it.
+ */
+export async function enterDomainWorkspaces(
+  deps: { readonly db: Database },
+  domain: string,
+): Promise<readonly { readonly workspaceId: string; readonly scope: EngineScope }[]> {
+  const wanted = domain.trim().toLowerCase();
+  if (wanted === '' || wanted.length > 253) return [];
+  const found = await deps.db.withWorkspace(NO_WORKSPACE, (tx) =>
+    tx.execute<{ workspace_id: string }>(
+      sql`select workspace_id::text as workspace_id from crm_workspaces_by_domain(${wanted})`,
+    ),
+  );
+  return found.rows.map((row) => ({ workspaceId: row.workspace_id, scope: systemScope(deps.db, row.workspace_id) }));
+}
+
+/**
+ * One workspace's system scope when it lets people at `domain` ask to join
+ * (spec 0031, AC-819), through `crm_workspace_has_domain`, or undefined: the
+ * request path's exact check, never cut off by the list's cap.
+ */
+export async function enterDomainWorkspace(
+  deps: { readonly db: Database },
+  workspaceId: string,
+  domain: string,
+): Promise<EngineScope | undefined> {
+  const wanted = domain.trim().toLowerCase();
+  if (wanted === '' || wanted.length > 253) return undefined;
+  const found = await deps.db.withWorkspace(NO_WORKSPACE, (tx) =>
+    tx.execute<{ on: boolean }>(sql`select crm_workspace_has_domain(${workspaceId}::uuid, ${wanted}) as on`),
+  );
+  return found.rows[0]?.on === true ? systemScope(deps.db, workspaceId) : undefined;
+}
+
 /** The ids crm_booking_page_by_key reads past row level security: a page's workspace and id, nothing else. */
 interface PageKeyRow extends Record<string, unknown> {
   readonly workspace_id: string;
@@ -385,8 +484,8 @@ interface TokenRow extends Record<string, unknown> {
 /**
  * The guest page's entry (spec 0025, AC-674): the booking a manage token
  * names, found by the token's SHA-256 (`crm_booking_by_token`, ids only), as
- * its page's `booking` actor. The token is the only key; an unknown one is
- * NOT_FOUND. Exported only from `@crm/core/public`.
+ * its page's `booking` actor. The token is the only key; an unknown one, and
+ * one in a deleted workspace, is NOT_FOUND. Exported only from `@crm/core/public`.
  */
 export async function enterBookingByToken(
   deps: { readonly db: Database },
@@ -401,7 +500,7 @@ export async function enterBookingByToken(
     ),
   );
   const [row] = found.rows;
-  if (row === undefined) throw missing();
+  if (row === undefined || !(await isLive(deps.db, row.workspace_id))) throw missing();
   const scope = mintScope({
     db: deps.db,
     workspaceId: row.workspace_id,

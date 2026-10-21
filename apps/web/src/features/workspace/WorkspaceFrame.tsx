@@ -44,6 +44,7 @@ import { homeHref, newWorkspaceHref, settingsHomeHref, trashHref, workspaceHref 
 import { keepRailHint, readRailHint } from './rail.ts';
 import { PAGE_LINKS, topEntries, universeOf, type SidebarPage } from './sidebar.ts';
 import { itemMenu, SidebarSections } from './SidebarSections.tsx';
+import { LeaveDialog } from './LeaveDialog.tsx';
 import { SignOutDialog } from './SignOutDialog.tsx';
 import { strings } from './strings.ts';
 import { belongsElsewhere, isRailKey, RAIL_KEYS, SETTINGS_KEYS, UNDO_KEYS, type KeyTarget } from './undo.ts';
@@ -149,6 +150,8 @@ export function WorkspaceFrame({
   const [isSigningOut, setSigningOut] = useState(false);
   // Sign out asks first (the owner, 21 October 2026); a failure shows in the confirm, which stays open.
   const [isConfirmingSignOut, setConfirmingSignOut] = useState(false);
+  // Leaving the workspace asks first too (spec 0031, AC-812).
+  const [isConfirmingLeave, setConfirmingLeave] = useState(false);
   const [signOutFailure, setSignOutFailure] = useState<string | undefined>(undefined);
   // Cmd+Z (Ctrl+Z elsewhere) undoes this tab's last change; ? lists the shortcuts (spec 0006, AC-48).
   const [isHelpOpen, setHelpOpen] = useState(false);
@@ -236,6 +239,7 @@ export function WorkspaceFrame({
                     setSignOutFailure(undefined);
                     setConfirmingSignOut(true);
                   }
+                  if (key === 'leave') setConfirmingLeave(true);
                   if (key === 'shortcuts') openHelp();
                 }}
               >
@@ -280,7 +284,13 @@ export function WorkspaceFrame({
                   </MenuSection>
                 )}
                 <MenuSeparator />
-                {/* Leaving comes last, where people look for it. */}
+                {/* Leaving comes last, where people look for it: this workspace (anyone in it, spec 0031, AC-812),
+                    then Timefix on this device. */}
+                {roleLabel !== undefined && (
+                  <MenuItem id="leave" icon="door-open">
+                    {strings.leaveWorkspace}
+                  </MenuItem>
+                )}
                 <MenuItem id="sign-out" icon="log-out">
                   {strings.signOut}
                 </MenuItem>
@@ -344,6 +354,17 @@ export function WorkspaceFrame({
       }
     >
       {children}
+      {workspaceName !== undefined && (
+        <LeaveDialog
+          data={data}
+          slug={slug}
+          workspaceName={workspaceName}
+          isOpen={isConfirmingLeave}
+          onClose={() => {
+            setConfirmingLeave(false);
+          }}
+        />
+      )}
       <SignOutDialog
         isOpen={isConfirmingSignOut}
         isBusy={isSigningOut}

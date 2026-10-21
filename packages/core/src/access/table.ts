@@ -89,7 +89,15 @@ export const ACCESS_TABLE = {
   // Members.
   setMemberRole: { ownerRules: true },
   removeMember: { ownerRules: true },
+  // Spec 0031, AC-816: the remove dialog's counts, for `members.manage` or about oneself.
+  previewRemoval: { ownerRules: true },
+  // Spec 0031: leaving is the removal on oneself, open to any member; the only owner is refused LAST_OWNER.
+  leaveWorkspace: { anyMember: true },
+  // Spec 0031, AC-813: an owner hands the workspace on; anyone else is refused.
+  transferOwnership: { ownerRules: true },
   listMembers: { anyMember: true },
+  // Spec 0037, AC-1439: the roles every role picker offers.
+  listRoles: { anyMember: true },
   // Invitations (spec 0031, slice 2).
   inviteMembers: { permission: 'members.invite' },
   listInvitations: { permission: 'members.invite' },
@@ -98,6 +106,22 @@ export const ACCESS_TABLE = {
   // The sidebar (spec 0034): the caller's own row only.
   readNav: { ownNav: true },
   changeNav: { ownNav: true },
+  // Slice 6, AC-818: the invite link.
+  getInviteLink: { permission: 'members.invite' },
+  // Slice 6, AC-819, AC-820: email domains (workspace settings) and requests to join (inviting).
+  getWorkspaceDomains: { permission: 'workspace.manage' },
+  // A member's own profile (spec 0031, slice 7): themself only, so any member.
+  getMyProfile: { anyMember: true },
+  updateMyMemberProfile: { anyMember: true },
+  // Workspace › General (spec 0031, slice 7): every member reads it; changing it and deleting it are permissions.
+  getWorkspaceSettings: { anyMember: true },
+  updateWorkspace: { permission: 'workspace.manage' },
+  deleteWorkspace: { permission: 'workspace.delete' },
+  restoreWorkspace: { permission: 'workspace.delete' },
+  setWorkspaceDomains: { permission: 'workspace.manage' },
+  listJoinRequests: { permission: 'members.invite' },
+  decideJoinRequest: { permission: 'members.invite' },
+  setInviteLink: { permission: 'members.invite' },
   getMyAccess: { anyMember: true },
   // The limits' usage (spec 0012, AC-243): any member, filtered by their access inside.
   getUsage: { anyMember: true },
@@ -209,6 +233,8 @@ export const ACCESS_TABLE = {
   syncCalendarNow: { ownConnection: true },
   listMeetingsForRecord: { data: 'read' },
   meetingFacts: { system: true },
+  // Spec 0031, AC-817: the relay's read of whom a removal cuts off.
+  removedUserIds: { system: true },
   // Milestone 2: Add as person creates a person through the door (write on People, the record's own read first);
   // the workspace's calendar settings are read by any member and changed by owners and admins.
   addMeetingAttendee: { data: 'write' },

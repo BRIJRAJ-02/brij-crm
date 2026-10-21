@@ -1,7 +1,9 @@
 import { INVITE_SENDS_PER_INVITER_HOUR, INVITE_SENDS_PER_WORKSPACE_HOUR } from '@crm/contracts';
 import {
+  getInviteLink,
   inviteMembers,
   listInvitations,
+  setInviteLink,
   resendInvite,
   revokeInvite,
   type InviteSender,
@@ -13,7 +15,8 @@ import { commitWrite } from '../../hooks.ts';
 import { errorFields, log } from '../../log.ts';
 import { captureFault } from '../../monitoring/sentry.ts';
 import { member, type RequestContext } from '../../orpc.ts';
-import { invitationsPublic, sourceOf } from './public.ts';
+import { sourceOf } from '../../source.ts';
+import { invitationsPublic } from './public.ts';
 
 // Invitations (spec 0031, slice 2). Inside a workspace for those who invite (the door, then `members.invite` in
 // core). `peek` and `accept` are bootstrap, in public.ts: core finds the workspace by the token's hash and mints its
@@ -158,5 +161,23 @@ export const invitationsRouter = {
       revokeInvite(context.scope, { invitationId: input.invitationId }, hooks, { source: sourceOf(context) }),
     );
   }),
+  // The invite link (slice 6, AC-818): the card reads it, and turns it on, off, changes or resets it.
+  link: member.invitations.link.handler(({ context }) => getInviteLink(context.scope)),
+  setLink: member.invitations.setLink.handler(({ context, input }) =>
+    commitWrite(context, { mutationId: input.mutationId }, (hooks) =>
+      setInviteLink(
+        context.scope,
+        {
+          enabled: input.enabled,
+          ...(input.role === undefined ? {} : { role: input.role }),
+          ...(input.expiresInDays === undefined ? {} : { expiresInDays: input.expiresInDays }),
+          ...(input.maxUses === undefined ? {} : { maxUses: input.maxUses }),
+          ...(input.reset === undefined ? {} : { reset: input.reset }),
+        },
+        hooks,
+        { source: sourceOf(context) },
+      ),
+    ),
+  ),
   ...invitationsPublic,
 };

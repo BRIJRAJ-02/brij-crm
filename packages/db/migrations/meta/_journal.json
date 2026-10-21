@@ -442,6 +442,41 @@
       "when": 1792613295467,
       "tag": "0062_member_preferences",
       "breakpoints": true
+    },
+    {
+      "idx": 63,
+      "version": "7",
+      "when": 1792614578716,
+      "tag": "0063_member_profile",
+      "breakpoints": true
+    },
+    {
+      "idx": 64,
+      "version": "7",
+      "when": 1792614638716,
+      "tag": "0064_removal_effects",
+      "breakpoints": true
+    },
+    {
+      "idx": 65,
+      "version": "7",
+      "when": 1792614698716,
+      "tag": "0065_invite_link",
+      "breakpoints": true
+    },
+    {
+      "idx": 66,
+      "version": "7",
+      "when": 1792614758716,
+      "tag": "0066_domain_join",
+      "breakpoints": true
+    },
+    {
+      "idx": 67,
+      "version": "7",
+      "when": 1792614818716,
+      "tag": "0067_workspace_settings",
+      "breakpoints": true
     }
   ]
 }

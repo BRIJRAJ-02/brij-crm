@@ -29,6 +29,13 @@ const BOOTSTRAP: ReadonlySet<string> = new Set([
   // Spec 0031: an invitation's token finds its workspace in packages/core, which mints the scope there.
   'invitations.peek',
   'invitations.accept',
+  // Spec 0031, slice 6: the signed in person's own workspaces to ask, found in packages/core by their email's
+  // domain, which mints a scope in each.
+  'join.list',
+  'join.request',
+  // Spec 0031, slice 7: a deleted workspace's owners, whose scope `enterDeletedWorkspace` mints in packages/core.
+  'deletedWorkspace.deleted',
+  'deletedWorkspace.restore',
   'workspaces.create',
   'workspaces.slugAvailable',
   'realtime.connectionToken',
@@ -51,6 +58,7 @@ const RAW_DATABASE_FILES: ReadonlySet<string> = new Set([
   'workspaces/router.ts',
   'me/router.ts',
   'invitations/public.ts',
+  'join/router.ts',
 ]);
 
 /**
@@ -72,6 +80,22 @@ const AROUND_THE_DOOR =
 const IDENTITY_FROM_CONTEXT =
   /\bcontext\s*\.\s*identity\b|\bcontext\s*:\s*\{[^}]*\bidentity\b|\{[^}]*\bidentity\b[^}]*\}\s*=\s*context\b/;
 
+/**
+ * The directory's one write a member handler holds (spec 0031): dropping a
+ * removed person's switcher entry. Only the members module may reach it, and
+ * only with ids its own removal answered.
+ */
+const DIRECTORY_FROM_CONTEXT =
+  /\bcontext\s*\.\s*directory\b|\bdirectory\b[^}]*\}\s*=\s*context\b|\bcontext\s*:\s*\{[^}]*\bdirectory\b|\bcontext\s*\[\s*['"]directory/;
+
+/** The module files allowed the directory's write. */
+const DIRECTORY_FILES: ReadonlySet<string> = new Set([
+  'members/router.ts',
+  // Slice 7: a workspace's renamed label and deleted mark, after the tenant change commits.
+  'workspace/router.ts',
+  'workspace/deleted.ts',
+]);
+
 /** Importing system power or hand made scopes (spec 0009): no module file may, not even a bootstrap one. */
 const CORE_ENTRIES = /from\s+['"]@crm\/core\/(system|testing)['"]/;
 
@@ -82,6 +106,7 @@ function aroundTheDoor(files: readonly { readonly path: string; readonly source:
       ({ path, source }) =>
         (!RAW_DATABASE_FILES.has(path) && AROUND_THE_DOOR.test(source)) ||
         (!RAW_IDENTITY_FILES.has(path) && IDENTITY_FROM_CONTEXT.test(source)) ||
+        (!DIRECTORY_FILES.has(path) && DIRECTORY_FROM_CONTEXT.test(source)) ||
         CORE_ENTRIES.test(source),
     )
     .map(({ path }) => path);
@@ -182,6 +207,8 @@ describe('the door is the only way in', () => {
         { path: 'records/router.ts', source: handler('({ context }) => context.db.withWorkspace(id, read)') },
         { path: 'lists/router.ts', source: handler('({ context: { db } }) => list(db)') },
         { path: 'notes/router.ts', source: handler('({ context }) => { const { db, identity } = context; }') },
+        { path: 'calls/router.ts', source: handler('({ context }) => context.directory.dropMembership(a, b)') },
+        { path: 'notes2/router.ts', source: handler('({ context: { directory } }) => directory.dropMembership(a, b)') },
         { path: 'tasks/router.ts', source: handler('({ context }) => withWorkspace(context.scope.workspaceId)') },
         { path: 'deals/router.ts', source: handler('({ context }) => readDeals(context.scope)') },
         { path: 'system/router.ts', source: handler('({ context }) => status({ db: context.db })') },
@@ -200,6 +227,8 @@ describe('the door is the only way in', () => {
       'records/router.ts',
       'lists/router.ts',
       'notes/router.ts',
+      'calls/router.ts',
+      'notes2/router.ts',
       'tasks/router.ts',
       'people/router.ts',
       'teams/router.ts',

@@ -21,6 +21,11 @@ export const strings = {
   /** The sign out confirm (the owner, 21 October 2026). */
   signOutTitle: 'Sign out?',
   signOutText: 'You’ll need to sign in again on this device.',
+  /** Leaving the workspace (spec 0031, AC-812), from the workspace menu: it asks first. */
+  leaveWorkspace: 'Leave workspace',
+  leaveTitle: (workspace: string) => `Leave ${workspace}?`,
+  leaveText: 'You lose access at once. To come back, someone has to invite you again.',
+  leaving: 'Leaving',
   records: 'Records',
   /** The sidebar's way to the trash (spec 0022), at its foot (spec 0034, AC-930). */
   trash: 'Trash',
@@ -65,6 +70,13 @@ export const strings = {
   failedTitle: 'Couldn’t load this workspace',
   failedText: 'Something went wrong. Try again in a moment.',
   workspaceMissingTitle: 'Workspace not found',
+  // A deleted workspace, as its owner sees it within the window (spec 0031, AC-823).
+  deletedTitle: (name: string) => `${name} is deleted`,
+  deletedText: (day: string) => `It goes for good on ${day}. Until then, you can restore it.`,
+  restoreWorkspace: 'Restore workspace',
+  restored: (name: string) => `${name} is back.`,
+  restoreFailed: 'Couldn’t restore it. Try again in a moment.',
+  backToWorkspaces: 'Back to your workspaces',
   workspaceMissingText: 'That workspace doesn’t exist, or you’re not a member of it.',
   pageMissingTitle: 'Page not found',
   pageMissingText: 'There’s nothing at this address.',

@@ -16,6 +16,7 @@ New. Settings lists (#23, #25, #34, #35, #42) are short and need columns, a row 
 - One column is the `isRowHeader` (it names the row for screen readers).
 - `align="end"` for numbers and actions; `isLabelHidden` keeps an actions column's label for screen readers only.
 - A column with `isInline` lays its cells out as one centred line of pieces `space-6` apart: a tile before a name, several Badges side by side.
+- `info` puts help beside a header's label, an `InfoTip` (what each role may do), only where the header alone isn't clear. Why a variant: a header is a string, and help beside it is the same InfoTip a settings row uses.
 - `isLoading` shows skeleton rows through `useDelayedLoading`; `emptyState` shows with no rows.
 - `onRowAction` opens a row on Enter or a click.
 - `selected` with `onSelectedChange` adds a leading column of Checkboxes for a bulk action (a form's submissions marked spam): the header's selects every row, indeterminate while some are picked; `getSelectLabel` names each ("Select Ada Lovelace"). Pair it with BulkActionBar. Why a variant: a short list needs a bulk action now and then, and DataGrid is for records only.

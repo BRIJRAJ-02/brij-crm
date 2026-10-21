@@ -324,6 +324,12 @@ export function createApp({
         // Only the limiter's one call, so a member handler holds nothing else of global identity at run time.
         limiter: { consumeRateLimit: (key, rule, cost) => identity.consumeRateLimit(key, rule, cost) },
         mayStartWorkspace: (email) => signupAllowlist.allows(email),
+        // Only the directory's one write, so a member handler holds nothing else of global identity at run time.
+        directory: {
+          dropMembership: (userId, workspaceId, memberId) => identity.dropMembership(userId, workspaceId, memberId),
+          renameWorkspace: (workspaceId, name) => identity.renameWorkspace(workspaceId, name),
+          setWorkspaceDeleted: (workspaceId, deleted) => identity.setWorkspaceDeleted(workspaceId, deleted),
+        },
       },
     });
     return matched ? c.newResponse(response.body, response) : c.notFound();

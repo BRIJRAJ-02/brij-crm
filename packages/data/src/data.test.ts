@@ -409,7 +409,15 @@ function fakeApi(overrides: Partial<Behaviour> = {}, auth: (path: string, body: 
       deleteForever: os.trash.deleteForever.handler(() => notServed()),
     },
     members: {
-      list: os.members.list.handler(() => behaviour.members()),
+      list: os.members.list.handler(() => {
+        const listed = behaviour.members();
+        return { members: listed, total: listed.length };
+      }),
+      setRole: os.members.setRole.handler(notServed),
+      removalPreview: os.members.removalPreview.handler(notServed),
+      remove: os.members.remove.handler(notServed),
+      leave: os.members.leave.handler(notServed),
+      transferOwnership: os.members.transferOwnership.handler(notServed),
     },
     invitations: {
       create: os.invitations.create.handler(notServed),
@@ -418,6 +426,31 @@ function fakeApi(overrides: Partial<Behaviour> = {}, auth: (path: string, body: 
       revoke: os.invitations.revoke.handler(notServed),
       peek: os.invitations.peek.handler(notServed),
       accept: os.invitations.accept.handler(notServed),
+      link: os.invitations.link.handler(notServed),
+      setLink: os.invitations.setLink.handler(notServed),
+    },
+    join: {
+      list: os.join.list.handler(notServed),
+      request: os.join.request.handler(notServed),
+    },
+    workspace: {
+      get: os.workspace.get.handler(notServed),
+      update: os.workspace.update.handler(notServed),
+      delete: os.workspace.delete.handler(notServed),
+    },
+    deletedWorkspace: {
+      deleted: os.deletedWorkspace.deleted.handler(notServed),
+      restore: os.deletedWorkspace.restore.handler(notServed),
+    },
+    profile: {
+      get: os.profile.get.handler(notServed),
+      update: os.profile.update.handler(notServed),
+    },
+    joinRequests: {
+      domains: os.joinRequests.domains.handler(notServed),
+      setDomains: os.joinRequests.setDomains.handler(notServed),
+      list: os.joinRequests.list.handler(notServed),
+      decide: os.joinRequests.decide.handler(notServed),
     },
     search: { query: os.search.query.handler(({ input }) => behaviour.globalSearch(input.query)) },
     recents: {
@@ -431,6 +464,7 @@ function fakeApi(overrides: Partial<Behaviour> = {}, auth: (path: string, body: 
       update: os.preferences.update.handler(notServed),
     },
     access: { mine: os.access.mine.handler(() => behaviour.access()) },
+    roles: { list: os.roles.list.handler(notServed) },
     realtime: {
       connectionToken: os.realtime.connectionToken.handler(() => ({ token: 'connection-token' })),
       subscriptionToken: os.realtime.subscriptionToken.handler(({ input }) => ({

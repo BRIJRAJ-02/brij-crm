@@ -7,6 +7,7 @@ import { formsExport } from '../../forms/export.ts';
 import { formsFile, formsSync } from '../../forms/filing.ts';
 import { formsProcess } from '../../forms/process.ts';
 import { bulkKinds } from '../../bulk/kinds.ts';
+import { reassignKind } from '../../members/reassign.ts';
 
 /** What the kinds a process runs depend on: where it runs, and (for the test kind) how it waits. */
 export interface JobKindsOptions {
@@ -39,6 +40,7 @@ export function jobKinds(options: JobKindsOptions): JobRegistry {
     formsSync(),
     formsExport(),
     ...(bulkKinds() as readonly AnyKind[]),
+    reassignKind(),
     ...tests,
     ...(options.extra ?? []),
   ]);

@@ -3,7 +3,15 @@
 // layout draws the words as HTML and plain text, and nothing here sends: the
 // api's mailer does, from the request (a sign in code, an invitation) or the
 // worker (a booking's emails, and the queued kinds through `crm_email`).
-import { EMAIL_PARAMS, MemberInviteEmail, NotificationsEmail, type EmailKind } from '@crm/contracts/emails';
+import {
+  EMAIL_PARAMS,
+  JoinApprovedEmail,
+  JoinRequestEmail,
+  MemberInviteEmail,
+  NotificationsEmail,
+  WorkspaceDeletedEmail,
+  type EmailKind,
+} from '@crm/contracts/emails';
 import { CATALOG, topicOf } from './catalog.ts';
 import { appUrl, type EmailMedium } from './links.ts';
 import { renderDocument, type RenderedEmail } from './render.ts';
@@ -11,6 +19,8 @@ import type { Template, TemplateContext } from './template.ts';
 import { bookingDocument, type BookingWords } from './templates/booking.ts';
 import { memberInvite } from './templates/invite.ts';
 import { notifications } from './templates/notifications.ts';
+import { joinApproved, joinRequest } from './templates/join.ts';
+import { workspaceDeleted } from './templates/workspace.ts';
 import { SIGN_IN_CODE_MINUTES, signInCode } from './templates/sign-in-code.ts';
 
 export { CATALOG, topicOf, type Catalog, type CatalogEntry } from './catalog.ts';
@@ -30,7 +40,13 @@ export { emailStylesheet, paint, ROLE_NAMES, type Role } from './theme.ts';
 export type { Template, TemplateContext } from './template.ts';
 export { SIGN_IN_CODE_MINUTES, SIGN_IN_CODE_SUBJECT } from './templates/sign-in-code.ts';
 export type { BookingWords } from './templates/booking.ts';
-export type { MemberInviteEmail, NotificationsEmail } from '@crm/contracts/emails';
+export type {
+  JoinApprovedEmail,
+  JoinRequestEmail,
+  MemberInviteEmail,
+  NotificationsEmail,
+  WorkspaceDeletedEmail,
+} from '@crm/contracts/emails';
 
 /** What drawing an email needs besides its params, filled in by its sender at send time. */
 export interface EmailContext {
@@ -133,4 +149,44 @@ export async function renderNotificationsEmail(
     medium: 'email_mention',
     preferencesUrl: link(parsed.settingsPath),
   });
+}
+
+/**
+ * A request to join through the workspace's email domain (spec 0031,
+ * AC-819), to one of its owners or admins: its params checked by
+ * `JoinRequestEmail`, drawn on the shared layout and tagged `email_invite`.
+ */
+export async function renderJoinRequest(
+  params: JoinRequestEmail,
+  context: { readonly appOrigin: string; readonly workspaceName: string },
+): Promise<RenderedEmail> {
+  const parsed = JoinRequestEmail.parse(params);
+  return renderDocument(
+    joinRequest(parsed, { workspaceName: context.workspaceName, link: (path) => appUrl(context.appOrigin, path) }),
+    { appOrigin: context.appOrigin, medium: 'email_invite' },
+  );
+}
+
+/** An approved request to join (spec 0031, AC-820), to the person who asked, tagged `email_invite`. */
+export async function renderJoinApproved(
+  params: JoinApprovedEmail,
+  context: { readonly appOrigin: string; readonly workspaceName: string },
+): Promise<RenderedEmail> {
+  const parsed = JoinApprovedEmail.parse(params);
+  return renderDocument(
+    joinApproved(parsed, { workspaceName: context.workspaceName, link: (path) => appUrl(context.appOrigin, path) }),
+    { appOrigin: context.appOrigin, medium: 'email_invite' },
+  );
+}
+
+/** A deleted workspace (spec 0031, AC-823), to one of its active members, tagged `email_invite`. */
+export async function renderWorkspaceDeleted(
+  params: WorkspaceDeletedEmail,
+  context: { readonly appOrigin: string; readonly workspaceName: string },
+): Promise<RenderedEmail> {
+  const parsed = WorkspaceDeletedEmail.parse(params);
+  return renderDocument(
+    workspaceDeleted(parsed, { workspaceName: context.workspaceName, link: (path) => appUrl(context.appOrigin, path) }),
+    { appOrigin: context.appOrigin, medium: 'email_invite' },
+  );
 }

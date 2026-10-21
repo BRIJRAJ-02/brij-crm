@@ -1,9 +1,13 @@
 import styles from './Skeleton.module.css';
 
-/** `line` for a row of text (the default), `circle` for an avatar, `tile` for an icon tile, `block` for a card or a chart. */
-export type SkeletonShape = 'line' | 'circle' | 'tile' | 'block';
+/**
+ * `line` for a row of text (the default), `circle` for an avatar, `tile` for
+ * an icon tile, `block` for a card or a chart, `field` for a field or a
+ * Select at a settings row's end.
+ */
+export type SkeletonShape = 'line' | 'circle' | 'tile' | 'block' | 'field';
 
-/** How much of its slot a line fills: `full`, `long` (80%), `medium` (60%) or `short` (40%). */
+/** How much of its slot a line fills: `full` (the default), `long` (80%), `medium` (60%) or `short` (40%). A field is a menu wide unless given one. */
 export type SkeletonWidth = 'full' | 'long' | 'medium' | 'short';
 
 /** Where a column of `lines` sits: `start` (the default) under left aligned text, `center` under centred text. */
@@ -29,13 +33,7 @@ export interface SkeletonProps {
  * hidden from screen readers: the region it sits in says it is busy. Show it
  * through `useDelayedLoading`, so it never flashes for a fast load.
  */
-export function Skeleton({
-  shape = 'line',
-  width = 'full',
-  lines = 1,
-  align = 'start',
-  isStill = false,
-}: SkeletonProps) {
+export function Skeleton({ shape = 'line', width, lines = 1, align = 'start', isStill = false }: SkeletonProps) {
   const still = isStill ? '' : undefined;
   if (shape === 'line' && lines > 1) {
     return (

@@ -56,6 +56,7 @@ export interface OutboxEvent {
     | 'entries'
     | 'definitions'
     | 'members'
+    | 'access'
     | 'jobs'
     | 'views'
     | 'tasks'
@@ -319,6 +320,10 @@ function kindRows(change: CappedChange): OutboxEvent[] {
   const rows: OutboxEvent[] = [];
   if (change.members.length > 0) {
     rows.push({ kind: 'members', ...NO_IDS, itemIds: [...change.members].sort(byId), coarse: false });
+  }
+  // (spec 0031) one `access` row naming the members whose access changed: a removal, a team change.
+  if (change.access.length > 0) {
+    rows.push({ kind: 'access', ...NO_IDS, itemIds: [...change.access].sort(byId), coarse: false });
   }
   const byStarter = new Map<string | null, string[]>();
   for (const job of change.jobs) {

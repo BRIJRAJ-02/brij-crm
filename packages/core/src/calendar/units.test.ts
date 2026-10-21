@@ -235,6 +235,7 @@ describe('the meetings outbox row (AC-610)', () => {
     coarseObjects: [],
     definitions: [],
     members: [],
+    access: [],
     jobs: [],
     views: [],
     tasks: [],

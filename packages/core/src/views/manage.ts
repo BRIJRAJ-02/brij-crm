@@ -29,6 +29,7 @@ import { postgresError, refuse, refuseOn } from '../engine/refusals.ts';
 import type { EngineScope } from '../engine/scope.ts';
 import { loadAttributes } from '../engine/values.ts';
 import { runWrite, type AfterWrite, type WriteContext } from '../engine/write.ts';
+import type { RemovalEffect } from '../members/removal-effect.ts';
 import { requirePermission } from '../access/check.ts';
 import { fieldLevel } from '../access/policy.ts';
 import { inWorkspace } from '../access/run.ts';
@@ -756,3 +757,14 @@ export async function deleteMemberViews(context: WriteContext, memberId: string)
   );
   if (onObjects.length > 0) context.record({ views: onObjects });
 }
+
+/**
+ * The views' part of a removal (spec 0031, AC-814; spec 0037, AC-1440): their
+ * private views and last opened rows go; their shared views stay, still
+ * naming them as creator, locker and saver (history).
+ */
+export const viewsRemoval: RemovalEffect = {
+  feature: 'views',
+  constraints: ['views_creator', 'member_view_state_member'],
+  run: deleteMemberViews,
+};

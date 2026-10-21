@@ -17,9 +17,13 @@ export {
   type DailyCleanupReport,
   type DailySweep,
 } from './jobs/daily.ts';
+// A deleted workspace's purge past its window (spec 0031, AC-823): the worker's daily cleanup runs it as crm_worker.
+export { purgeWorkspace, PURGE_BATCH, type PurgeDeps, type PurgeOutcome } from './workspace/purge.ts';
 export { viewFacts } from './views/facts.ts';
 export { taskFacts } from './tasks/facts.ts';
 export { meetingFacts } from './calendar/facts.ts';
+// Spec 0031, AC-817: whom an `access` row's removal cuts off the workspace's live channel.
+export { removedUserIds } from './members/facts.ts';
 export {
   POLL_INTERVAL_MS,
   syncConnection,

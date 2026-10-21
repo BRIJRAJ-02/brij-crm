@@ -99,7 +99,10 @@ export interface CalendarSyncInput {
 export type CalendarSyncOutcome =
   | { readonly kind: 'synced'; readonly full: boolean; readonly events: number; readonly nextInMs: number }
   | { readonly kind: 'retry'; readonly code: CalendarErrorCode; readonly nextInMs: number }
-  | { readonly kind: 'stopped'; readonly reason: 'gone' | 'not-syncing' | 'expired' | 'no-provider' };
+  | {
+      readonly kind: 'stopped';
+      readonly reason: 'gone' | 'not-syncing' | 'expired' | 'no-provider' | 'revoked' | 'workspace-deleted';
+    };
 
 /** A connection as the sync reads it. */
 interface ConnectionRow extends Record<string, unknown> {
@@ -112,6 +115,7 @@ interface ConnectionRow extends Record<string, unknown> {
   readonly sync_token: string | null;
   readonly failing_since: string | null;
   readonly channel: unknown;
+  readonly workspace_deleted: boolean;
 }
 
 /** The failure messages a connection shows in Settings: plain, and never the provider's own words. */
@@ -214,6 +218,34 @@ export async function liveTokens(
 }
 
 /**
+ * Ends a revoked connection (spec 0031, AC-815): the provider ends its grant,
+ * then the row goes with its sealed tokens; the meetings it held stay,
+ * flagged when the member was removed. A provider failure throws, so the
+ * task tries again later, and never blocked the removal, which committed
+ * long before. A grant already gone still lets the row go; a provider the
+ * worker doesn't run keeps the row for one that does.
+ */
+async function revokeConnection(
+  deps: Pick<CalendarSyncDeps, 'tokenKey'>,
+  scope: EngineScope,
+  provider: CalendarProvider | undefined,
+  row: Pick<ConnectionRow, 'id' | 'tokens'>,
+  binding: TokenBinding,
+): Promise<CalendarSyncOutcome> {
+  // A worker without this provider leaves the row for one that has it, so the grant is still ended.
+  if (provider === undefined) return { kind: 'stopped', reason: 'no-provider' };
+  try {
+    await provider.revoke(openTokens(deps.tokenKey, row.tokens, binding));
+  } catch (error) {
+    if (!isProviderError(error, 'CALENDAR_AUTH_REVOKED') && !isProviderError(error, 'CALENDAR_AUTH')) throw error;
+  }
+  await inWorkspace(scope, (tx) =>
+    tx.execute(sql`delete from calendar_connections where id = ${row.id}::uuid and status = 'revoked'`),
+  );
+  return { kind: 'stopped', reason: 'revoked' };
+}
+
+/**
  * Syncs one connection: its changes since the last sync, or its whole window.
  * Expected provider failures are recorded on the connection and answered as
  * `retry` (or `stopped` for a refused grant, which marks it `expired`);
@@ -226,21 +258,27 @@ export async function syncConnection(deps: CalendarSyncDeps, input: CalendarSync
     tx.execute<ConnectionRow>(sql`
       select id::text as id, member_id::text as member_id, provider, account_email, status, tokens,
         sync_state #>> ${`{${PRIMARY_CALENDAR},syncToken}`} as sync_token, failing_since::text as failing_since,
-        channel
+        channel,
+        exists (select 1 from workspaces w where w.id = calendar_connections.workspace_id and w.deleted_at is not null)
+          as workspace_deleted
       from calendar_connections where id = ${input.connectionId}::uuid
     `),
   );
   const [row] = found.rows;
   if (row === undefined) return { kind: 'stopped', reason: 'gone' };
-  if (!(SYNCING_STATUSES as readonly string[]).includes(row.status)) return { kind: 'stopped', reason: 'not-syncing' };
   const provider = deps.providers[row.provider];
-  if (provider === undefined) return { kind: 'stopped', reason: 'no-provider' };
   const binding: TokenBinding = {
     workspaceId: input.workspaceId,
     memberId: row.member_id,
     provider: row.provider,
     accountEmail: row.account_email,
   };
+  // A removed member's connection (spec 0031, AC-815): its grant ends with the provider, then its stored tokens go.
+  if (row.status === 'revoked') return revokeConnection(deps, scope, provider, row, binding);
+  // A deleted workspace (spec 0031, AC-823) syncs nothing in its window; a restore queues each connection again.
+  if (row.workspace_deleted) return { kind: 'stopped', reason: 'workspace-deleted' };
+  if (!(SYNCING_STATUSES as readonly string[]).includes(row.status)) return { kind: 'stopped', reason: 'not-syncing' };
+  if (provider === undefined) return { kind: 'stopped', reason: 'no-provider' };
   const window = syncWindow(now);
 
   let changes: { readonly events: readonly ProviderEvent[]; readonly nextSyncToken: string };

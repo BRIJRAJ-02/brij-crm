@@ -159,6 +159,13 @@ export interface Change {
   readonly definitions: readonly DefinitionChange[];
   /** Members a write outside the engine changed (spec 0007, AC-82): a role changed, or removed. */
   readonly members: readonly string[];
+  /**
+   * Members whose access a write changed outside a role (spec 0031, AC-814,
+   * AC-825): a removal, a team change. Each tab of theirs reads everything
+   * again under its new access, and a removed person's live connection to the
+   * workspace is cut.
+   */
+  readonly access: readonly string[];
   /** Background jobs the write started, moved on or ended (spec 0008), each with its starter. */
   readonly jobs: readonly JobChange[];
   /** Saved views the write made, changed or deleted (spec 0020), private ones included. */
@@ -322,6 +329,7 @@ const LIST_KEYS = [
   'coarseObjects',
   'definitions',
   'members',
+  'access',
   'jobs',
   'views',
   'tasks',
@@ -443,6 +451,7 @@ export async function runWrite<T>(
           coarseObjects: [] as string[],
           definitions: [] as DefinitionChange[],
           members: [] as string[],
+          access: [] as string[],
           jobs: [] as JobChange[],
           views: [] as ViewChange[],
           tasks: [] as TaskChange[],
@@ -477,6 +486,7 @@ export async function runWrite<T>(
             append(collected.coarseObjects, part.coarseObjects);
             append(collected.definitions, part.definitions);
             append(collected.members, part.members);
+            append(collected.access, part.access);
             append(collected.jobs, part.jobs);
             append(collected.views, part.views);
             append(collected.tasks, part.tasks);
@@ -523,6 +533,7 @@ export async function runWrite<T>(
           coarseObjects: [...new Set(collected.coarseObjects)],
           definitions: [...collected.definitions],
           members: [...new Set(collected.members)],
+          access: [...new Set(collected.access)],
           // One entry per job: a slice's batches name the same job again.
           jobs: [...new Map(collected.jobs.map((job) => [job.jobId, job])).values()],
           // One entry per view: a write that touches a view twice names it once.

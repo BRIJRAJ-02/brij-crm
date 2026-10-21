@@ -120,28 +120,41 @@ async function newWorkspace(page: Page, email: string, name: string, slug: strin
 
 /**
  * Answers the sign out confirm by keyboard (the owner, 21 October 2026: it asks first): Tab reaches its commit,
- * last in the dialog, and Enter signs out.
+ * last in the dialog, and Enter signs out. Short waits, so a dialog that closed under it fails fast for a retry.
  */
 async function confirmSignOut(page: Page): Promise<void> {
   const commit = page.getByRole('dialog', { name: 'Sign out?' }).getByRole('button', { name: 'Sign out', exact: true });
-  await expect(commit).toBeVisible();
-  for (let tab = 0; tab < 4 && !(await commit.evaluate((button) => button === document.activeElement)); tab += 1) {
+  await expect(commit).toBeVisible({ timeout: 5_000 });
+  for (
+    let tab = 0;
+    tab < 4 && !(await commit.evaluate((button) => button === document.activeElement, undefined, { timeout: 2_000 }));
+    tab += 1
+  ) {
     await page.keyboard.press('Tab');
   }
-  await expect(commit).toBeFocused();
+  await expect(commit).toBeFocused({ timeout: 2_000 });
   await page.keyboard.press('Enter');
 }
 
-/** Signs out from the workspace menu, by keyboard, and waits for /sign-in. */
+/**
+ * Signs out from the workspace menu, by keyboard, and waits for /sign-in. A page that had only just opened can
+ * still settle its route as the menu or the confirm opens (closing it), so the whole ask runs again until it lands.
+ */
 async function signOut(page: Page): Promise<void> {
   const button = page.getByRole('button', { name: /workspace menu/ });
-  await button.focus();
-  await page.keyboard.press('Enter');
-  // The workspaces come first (spec 0031, AC-801); Sign out is last, so End reaches it.
-  await page.keyboard.press('End');
-  await expect(page.getByRole('menuitem', { name: 'Sign out' })).toBeFocused();
-  await page.keyboard.press('Enter');
-  await confirmSignOut(page);
+  await expect(async () => {
+    if (!(await page.getByRole('dialog', { name: 'Sign out?' }).isVisible())) {
+      await button.focus();
+      await page.keyboard.press('Enter');
+      // The menu is whole once the person's role is known (Leave workspace joins it); then Sign out is last.
+      await expect(page.getByRole('menuitem', { name: 'Leave workspace' })).toBeVisible({ timeout: 5_000 });
+      // The workspaces come first (spec 0031, AC-801); Sign out is last, so End reaches it.
+      await page.keyboard.press('End');
+      await expect(page.getByRole('menuitem', { name: 'Sign out' })).toBeFocused({ timeout: 2_000 });
+      await page.keyboard.press('Enter');
+    }
+    await confirmSignOut(page);
+  }).toPass({ timeout: 30_000 });
   await expect(page).toHaveURL(/\/sign-in$/);
 }
 
@@ -271,7 +284,7 @@ test('signs in by code, names the workspace, lands on People, signs out, and com
   await expect(title).toBeVisible();
   await page.getByRole('button', { name: /workspace menu/ }).focus();
   await page.keyboard.press('Enter');
-  await expect(page.getByRole('menuitem', { name: 'Sign out' })).toBeVisible();
+  await expect(page.getByRole('menuitem', { name: 'Leave workspace' })).toBeVisible();
   await checkScreen(page, '7-workspace-menu');
   // The workspaces come first (spec 0031, AC-801); Sign out is last, so End reaches it.
   await page.keyboard.press('End');

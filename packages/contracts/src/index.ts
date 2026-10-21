@@ -1,4 +1,4 @@
-import { accessContract } from './access.ts';
+import { accessContract, rolesContract } from './access.ts';
 import { attributesContract } from './attributes.ts';
 import { bookingPagesContract, bookingsContract } from './booking/pages.ts';
 import { schedulesContract } from './booking/schedules.ts';
@@ -19,13 +19,15 @@ import { recordsContract } from './records.ts';
 import { linksContract, relationshipsContract } from './relations.ts';
 import { recentsContract, searchContract } from './search.ts';
 import { systemContract } from './system.ts';
-import { invitationsContract } from './team.ts';
+import { invitationsContract, joinContract, joinRequestsContract } from './team.ts';
 import { trashContract } from './trash.ts';
 import { notesContract } from './notes.ts';
 import { tasksContract } from './tasks.ts';
 import { usageContract } from './usage.ts';
 import { viewsContract } from './views.ts';
 import { workspacesContract } from './workspaces.ts';
+import { deletedWorkspaceContract, workspaceContract } from './workspace-settings.ts';
+import { profileContract } from './profile.ts';
 
 export * from './access.ts';
 export * from './activity.ts';
@@ -66,17 +68,25 @@ export * from './view-model.ts';
 export * from './views.ts';
 export * from './values/index.ts';
 export * from './workspaces.ts';
+export * from './workspace-settings.ts';
+export * from './profile.ts';
 
 /**
  * The one contract the web app, the API and the worker share. Each feature
  * adds its own namespace here. Every procedure outside the bootstrap list
- * (`system.*`, `me.get`, `workspaces.create`, `realtime.connectionToken`)
+ * (`system.*`, `me.get`, `workspaces.create`, `realtime.connectionToken`, `join.*`,
+ * `deletedWorkspace.*`)
  * takes `WorkspaceScoped` input and is served behind the API's member door.
  */
 export const contract = {
   system: systemContract,
   me: meContract,
   workspaces: workspacesContract,
+  // Settings › Workspace › General and the owner's delete (spec 0031, slice 7); a deleted one's restore (bootstrap).
+  workspace: workspaceContract,
+  deletedWorkspace: deletedWorkspaceContract,
+  // Settings › Account › Profile (spec 0031, slice 7).
+  profile: profileContract,
   objects: objectsContract,
   attributes: attributesContract,
   options: optionsContract,
@@ -86,7 +96,11 @@ export const contract = {
   links: linksContract,
   members: membersContract,
   invitations: invitationsContract,
+  // Domain join (spec 0031, slice 6): /join's bootstrap reads, and a workspace's domains and requests.
+  join: joinContract,
+  joinRequests: joinRequestsContract,
   access: accessContract,
+  roles: rolesContract,
   realtime: realtimeContract,
   jobs: jobsContract,
   usage: usageContract,

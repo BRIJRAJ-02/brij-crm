@@ -13,6 +13,7 @@ import { CommandMenuProvider } from '../features/command/CommandMenuProvider.tsx
 import { UnreadTitle } from '../features/inbox/UnreadTitle.tsx';
 import { failedPage, missingPage, pendingPage } from '../features/workspace/ObjectScreen.tsx';
 import { PreferencesScope } from '../features/workspace/PreferencesScope.tsx';
+import { deletedPage } from '../features/workspace/DeletedWorkspace.tsx';
 import { strings } from '../features/workspace/strings.ts';
 import { useWorkspaceName, WorkspaceLayout, WorkspacePage } from '../features/workspace/WorkspacePage.tsx';
 
@@ -43,10 +44,13 @@ export const Route = createFileRoute('/w/$slug')({
         context.data.nav.load(params.slug).catch(() => undefined),
         context.data.preferences.load(params.slug).catch(() => undefined),
       ]);
-      return { workspaceName: workspaceName ?? params.slug, objects, access };
+      return { workspaceName: workspaceName ?? params.slug, objects, access, deleted: undefined };
     } catch (error) {
       if (isDataError(error) && error.code === 'NOT_FOUND') {
-        return { workspaceName: undefined, objects: undefined, access: undefined };
+        // A deleted workspace's owner finds it here to restore within its window (spec 0031, AC-823); to anyone
+        // else it is the same not found as an unknown address.
+        const deleted = await context.data.workspace.deleted(params.slug).catch(() => undefined);
+        return { workspaceName: undefined, objects: undefined, access: undefined, deleted };
       }
       throw error;
     }
@@ -61,13 +65,28 @@ export const Route = createFileRoute('/w/$slug')({
 });
 
 function WorkspaceRoute() {
-  const { objects } = Route.useLoaderData();
+  const { objects, deleted } = Route.useLoaderData();
   const { slug } = Route.useParams();
   // A form's preview stands outside the app frame, as a visitor sees it (its own main landmark).
   const isPreview = useMatch({ from: '/w/$slug/forms_/$formId_/preview', shouldThrow: false }) !== undefined;
   // The frame is mounted here, once, so moving between the pages inside never remounts the sidebar or a menu or
   // confirm open in it; each page fills its bars (WorkspaceLayout).
-  const { data } = Route.useRouteContext();
+  const { data, toasts } = Route.useRouteContext();
+  const router = useRouter();
+  if (deleted !== undefined) {
+    return (
+      <WorkspaceLayout>
+        <WorkspacePage
+          page={deletedPage(deleted, () =>
+            data.workspace.restore(deleted.slug).then(async () => {
+              await router.invalidate();
+              toasts.toast({ tone: 'success', message: strings.restored(deleted.name) });
+            }),
+          )}
+        />
+      </WorkspaceLayout>
+    );
+  }
   if (objects === undefined) {
     return (
       <WorkspaceLayout>

@@ -17,17 +17,19 @@ describe('settingsNav', () => {
     const groups = settingsNav('acme');
     expect(groups.map((group) => group.label)).toEqual(['Account', 'Workspace']);
     expect(groups.map((group) => group.entries.map((entry) => entry.label))).toEqual([
-      ['Preferences', 'Calendars', 'Notifications'],
-      ['Members', 'Objects', 'Background jobs'],
+      ['Profile', 'Preferences', 'Calendars', 'Notifications'],
+      ['General', 'Members', 'Objects', 'Background jobs'],
     ]);
   });
 
   it('puts Calendars under Account, and every entry opens a page in Settings', () => {
     const entries = settingsNav('acme').flatMap((group) => group.entries);
     expect(Object.fromEntries(entries.map((entry) => [entry.id, entry.href]))).toEqual({
+      profile: '/w/acme/settings/account/profile',
       preferences: '/w/acme/settings/account/preferences',
       calendars: '/w/acme/settings/account/calendars',
       notifications: '/w/acme/settings/account/notifications',
+      general: '/w/acme/settings/general',
       members: '/w/acme/settings/members',
       objects: '/w/acme/settings/objects',
       jobs: '/w/acme/settings/jobs',
@@ -77,6 +79,8 @@ describe('visibleSettingsNav', () => {
 describe('settingsPageOf', () => {
   it('marks the page each address shows', () => {
     expect(settingsPageOf('/w/acme/settings/account/preferences')).toBe('preferences');
+    expect(settingsPageOf('/w/acme/settings/account/profile')).toBe('profile');
+    expect(settingsPageOf('/w/acme/settings/general')).toBe('general');
     expect(settingsPageOf('/w/acme/settings/account/calendars')).toBe('calendars');
     expect(settingsPageOf('/w/acme/settings/objects')).toBe('objects');
     expect(settingsPageOf('/w/acme/settings/objects/people/attributes')).toBe('objects');

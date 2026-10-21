@@ -466,6 +466,19 @@ export function createGoogleCalendar(options: GoogleCalendarOptions): CalendarPr
         `Google refused to stop the channel (${String(response.status)}).`,
       );
     },
+    async revoke(tokens) {
+      // The refresh token ends the whole grant; Google answers 400 for one already gone, which counts as done.
+      const response = await call(REVOKE_ENDPOINT, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: new URLSearchParams({ token: tokens.refreshToken }),
+      });
+      if (response.ok || response.status === 400) return;
+      throw providerError(
+        codeForStatus(response.status),
+        `Google refused to revoke the grant (${String(response.status)}).`,
+      );
+    },
   };
 }
 

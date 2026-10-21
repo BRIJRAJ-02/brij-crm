@@ -44,6 +44,10 @@ export type EmailAddress = z.infer<typeof EmailAddress>;
 
 const Address = EmailAddress;
 
+/** A name someone else typed (a requester's): one line, no control characters, so it can't forge a subject. */
+// eslint-disable-next-line no-control-regex
+const Name = Line.regex(/^[^\u0000-\u001f\u007f-\u009f\u2028\u2029]+$/, 'A name on one line.');
+
 /** A moment, as an ISO 8601 UTC string. */
 const Instant = z.iso.datetime();
 
@@ -163,6 +167,41 @@ export const MemberInviteEmail = z.strictObject({
 /** An invitation to join a workspace. */
 export type MemberInviteEmail = z.infer<typeof MemberInviteEmail>;
 
+/**
+ * A request to join a workspace through its email domain (spec 0031,
+ * AC-819), to each of its owners and admins: who asked, and the button to
+ * the Members page's Join requests tab. Sent from the asking request.
+ */
+export const JoinRequestEmail = z.strictObject({
+  requesterName: Name,
+  requesterEmail: z.email().max(254),
+  /** The Members page, where the request waits. */
+  reviewPath: AppPath,
+});
+/** A request to join, to a workspace's owners and admins. */
+export type JoinRequestEmail = z.infer<typeof JoinRequestEmail>;
+
+/** An approved request to join (spec 0031, AC-820), to the person who asked: the button into the workspace. */
+export const JoinApprovedEmail = z.strictObject({
+  openPath: AppPath,
+});
+/** An approved request to join. */
+export type JoinApprovedEmail = z.infer<typeof JoinApprovedEmail>;
+
+/**
+ * A deleted workspace (spec 0031, AC-823), to each of its active members:
+ * who deleted it and the day it goes for good. An owner's carries the way
+ * back to restore it; nobody else's has a button.
+ */
+export const WorkspaceDeletedEmail = z.strictObject({
+  deletedBy: Name,
+  /** The day the purge may take it, as the email writes it ("19 November 2026"). */
+  until: Line,
+  /** The workspace's address, where an owner restores it; absent for anyone else. */
+  restorePath: AppPath.optional(),
+});
+/** A deleted workspace's notice. */
+export type WorkspaceDeletedEmail = z.infer<typeof WorkspaceDeletedEmail>;
 /**
  * A sign in from a device not seen for the account in 90 days (spec 0033,
  * AC-897): when, the device, the approximate place, and a link to the

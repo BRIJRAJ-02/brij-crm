@@ -553,9 +553,39 @@ describe('disconnecting (AC-599) and removing a member (AC-614)', () => {
     // Its queued sync finds it gone.
     expect(await w.sync(ada.id)).toEqual({ kind: 'stopped', reason: 'gone' });
 
+    // Removing Bea (spec 0031, AC-614 as AC-815 changed it): her meetings stay, flagged; her connection is
+    // marked revoked and queued, and its sync ends the grant, then deletes the row and its tokens.
     await removeMember(w.owner, { memberId: w.bea }, [outboxHook()]);
-    expect(await meetingsOf(w)).toEqual([]);
+    expect(await w.query(sql`select ical_uid, organizer_removed from meetings order by ical_uid`)).toEqual([
+      { ical_uid: 'shared@google.com', organizer_removed: true },
+    ]);
+    expect(
+      await w.query(
+        sql`select status::text as status, is_default from calendar_connections where member_id = ${w.bea}::uuid`,
+      ),
+    ).toEqual([{ status: 'revoked', is_default: false }]);
+    expect(await w.sync(cal.id)).toEqual({ kind: 'stopped', reason: 'revoked' });
+    expect(w.fake.calls('revoke')).toBe(1);
     expect(await w.query(sql`select id from calendar_connections where member_id = ${w.bea}::uuid`)).toEqual([]);
+    expect(await meetingsOf(w)).toHaveLength(1);
+  });
+
+  it('removes an expired connection at once and revokes a failed one', async () => {
+    const w = await world();
+    const cal = await w.connect(w.bea, 'bea@acme.dev');
+    const failed = await w.connect(w.bea, 'bea@gmail.com');
+    await w.query(sql`update calendar_connections set status = 'expired' where id = ${cal.id}::uuid`);
+    await w.query(sql`update calendar_connections set status = 'failed' where id = ${failed.id}::uuid`);
+    await removeMember(w.owner, { memberId: w.bea }, [outboxHook()]);
+    // The expired one goes at once; the failed one's grant may live, so it is revoked through its sync.
+    expect(
+      await w.query(
+        sql`select id::text as id, status::text as status from calendar_connections where member_id = ${w.bea}::uuid`,
+      ),
+    ).toEqual([{ id: failed.id, status: 'revoked' }]);
+    expect(w.fake.calls('revoke')).toBe(0);
+    expect(await w.sync(failed.id)).toEqual({ kind: 'stopped', reason: 'revoked' });
+    expect(w.fake.calls('revoke')).toBe(1);
   });
 });
 

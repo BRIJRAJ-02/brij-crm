@@ -14,6 +14,7 @@ import type { EngineScope } from '../engine/scope.ts';
 import { runWrite, type AfterWrite } from '../engine/write.ts';
 import { MAINTENANCE_DAILY } from './kinds/maintenance-daily.ts';
 import type { JobRegistry } from './registry.ts';
+import type { PurgeOutcome } from '../workspace/purge.ts';
 import { startJob } from './service.ts';
 
 /** What only the worker's crm_worker connection may do for the cleanup. */
@@ -24,6 +25,8 @@ export interface DailySweep {
   deleteDead(): Promise<number>;
   /** Workspaces not deleted, after `after`, in id order, at most `max` (`crm_workspace_ids`). */
   workspaceIds(after: string | undefined, max: number): Promise<readonly string[]>;
+  /** Deleted workspaces past their window, oldest first, at most `max` (`crm_workspaces_to_purge`, spec 0031). */
+  workspacesToPurge(max: number): Promise<readonly string[]>;
 }
 
 /** Where the fan out logs: ids, counts and times only. */
@@ -40,6 +43,11 @@ export interface DailyCleanupDeps {
   /** The write hooks every start stores its `jobs` event through (the api's composer). */
   readonly hooks: () => readonly AfterWrite[];
   readonly sweep: DailySweep;
+  /**
+   * Purges one deleted workspace past its window until `deadline` (spec 0031,
+   * AC-823): `purgeWorkspace` with the worker's database. Without it, none is.
+   */
+  readonly purge?: (workspaceId: string, deadline: number) => Promise<PurgeOutcome>;
   readonly log: DailyLog;
   /** Told after a start stored its event (the worker wakes its relay). */
   readonly onStored?: () => void;
@@ -63,6 +71,8 @@ export interface DailyCleanupReport {
   readonly dead: number;
   readonly workspaces: number;
   readonly failed: number;
+  /** Deleted workspaces this call purged for good. */
+  readonly purged?: number;
   readonly next?: string;
 }
 
@@ -71,6 +81,9 @@ const NIL_ID = '00000000-0000-0000-0000-000000000000';
 
 /** How many workspaces one page names (`crm_workspace_ids` caps it at 500). */
 const PAGE = 500;
+
+/** Deleted workspaces one call looks at for the purge. */
+const PURGE_PAGE = 10;
 
 /** A call's default budget: half of the 30 seconds any task call must return within. */
 export const DAILY_BUDGET_MS = 15_000;
@@ -102,6 +115,32 @@ export async function runDailyCleanup(deps: DailyCleanupDeps, input: DailyCleanu
     }
     dead = await deps.sweep.deleteDead();
   }
+  // Deleted workspaces past their window (spec 0031, AC-823), with half of what is left: one not finished keeps the
+  // fan out going, so a continuation picks it up.
+  let purged = 0;
+  let purgeLeft = false;
+  if (deps.purge !== undefined) {
+    const deadline = now() + left() / 2;
+    for (const workspaceId of await deps.sweep.workspacesToPurge(PURGE_PAGE)) {
+      if (now() > deadline) {
+        purgeLeft = true;
+        break;
+      }
+      try {
+        const outcome = await deps.purge(workspaceId, deadline);
+        if (outcome === 'done') purged += 1;
+        if (outcome === 'more') purgeLeft = true;
+      } catch (error) {
+        // The error's class only, as below; tomorrow's run tries again.
+        deps.log.error('workspace.purge.failed', {
+          workspaceId,
+          error: error instanceof Error ? error.name : 'unknown',
+        });
+      }
+    }
+  }
+  // Said only where the worker purges at all.
+  const purgeCount = () => (deps.purge === undefined ? {} : { purged });
   let after = input.after;
   let workspaces = 0;
   let failed = 0;
@@ -111,7 +150,7 @@ export async function runDailyCleanup(deps: DailyCleanupDeps, input: DailyCleanu
       if (left() <= 0) {
         deps.log.info('daily.cleanup.continues', { day: input.day, workspaces, after });
         // Before every id when none was reached yet: the next call skips the outbox and dead rows either way.
-        return { pruned, dead, workspaces, failed, next: after ?? NIL_ID };
+        return { pruned, dead, workspaces, failed, ...purgeCount(), next: after ?? NIL_ID };
       }
       try {
         await runWrite(
@@ -138,6 +177,6 @@ export async function runDailyCleanup(deps: DailyCleanupDeps, input: DailyCleanu
     }
     if (page.length < PAGE) break;
   }
-  deps.log.info('daily.cleanup', { day: input.day, pruned, dead, workspaces, failed });
-  return { pruned, dead, workspaces, failed };
+  deps.log.info('daily.cleanup', { day: input.day, pruned, dead, workspaces, failed, purged });
+  return { pruned, dead, workspaces, failed, ...purgeCount(), ...(purgeLeft ? { next: after ?? NIL_ID } : {}) };
 }

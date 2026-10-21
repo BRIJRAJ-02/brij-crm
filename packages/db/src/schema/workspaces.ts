@@ -3,6 +3,7 @@
 import { sql } from 'drizzle-orm';
 import {
   bigint,
+  check,
   foreignKey,
   integer,
   pgEnum,
@@ -13,7 +14,9 @@ import {
   uuid,
   type AnyPgColumn,
 } from 'drizzle-orm/pg-core';
-import { actorCheck, auditColumns, id, timestamptz, workspaceId } from './common.ts';
+import { actorCheck, actorColumns, auditColumns, id, timestamptz, workspaceId } from './common.ts';
+
+const removedBy = actorColumns('removed_by');
 
 /** One workspace: the tenant. Its row level security compares `id` itself to the setting. */
 export const workspaces = pgTable(
@@ -23,9 +26,17 @@ export const workspaces = pgTable(
     name: text('name').notNull(),
     slug: text('slug').notNull(),
     deletedAt: timestamptz('deleted_at'),
+    /** A logo on our origin; none until #32, so screens show initials (spec 0031, AC-822). */
+    logoUrl: text('logo_url'),
+    /** The default time zone for the workspace's people and pages (spec 0031, AC-822). */
+    timeZone: text('time_zone').notNull().default('UTC'),
+    /** When a deleted workspace's purge may take it; set with `deleted_at`, cleared on restore (AC-823). */
+    purgeAfter: timestamptz('purge_after'),
     ...auditColumns(),
   },
   (t) => [
+    check('workspaces_purge_after', sql`${t.purgeAfter} is null or ${t.deletedAt} is not null`),
+    check('workspaces_time_zone', sql`char_length(${t.timeZone}) between 1 and 64`),
     uniqueIndex('workspaces_slug')
       .on(t.slug)
       .where(sql`${t.deletedAt} is null`),
@@ -82,6 +93,16 @@ export const members = pgTable(
     email: text('email').notNull(),
     status: memberStatus('status').notNull().default('active'),
     role: memberRole('role').notNull().default('member'),
+    /** Their picture, once file storage (#32) arrives; until then none, and screens show initials (spec 0031). */
+    avatarUrl: text('avatar_url'),
+    /** Their time zone in this workspace, an IANA name (spec 0031, slice 7); none means the browser's. */
+    timeZone: text('time_zone'),
+    /** When they left or were removed (spec 0031, AC-814); never set while `status` is `active`. */
+    leftAt: timestamptz('left_at'),
+    /** Who removed them (themself when they left). */
+    removedByType: removedBy.type,
+    removedById: removedBy.id,
+    removedByMemberId: removedBy.memberId,
     ...auditColumns(),
   },
   (t) => [
@@ -106,6 +127,16 @@ export const members = pgTable(
       .where(sql`${t.status} = 'active'`),
     actorCheck('members_created_by_actor', { type: t.createdByType, id: t.createdById, memberId: t.createdByMemberId }),
     actorCheck('members_updated_by_actor', { type: t.updatedByType, id: t.updatedById, memberId: t.updatedByMemberId }),
+    check('members_avatar_url', sql`char_length(${t.avatarUrl}) <= 2048`),
+    actorCheck('members_removed_by_actor', { type: t.removedByType, id: t.removedById, memberId: t.removedByMemberId }),
+    foreignKey({
+      name: 'members_removed_by',
+      columns: [t.workspaceId, t.removedByMemberId],
+      foreignColumns: [t.workspaceId, t.id],
+    }),
+    // An active member never carries a leaving time; a removal sets one (rows removed before it take their last update's).
+    check('members_left', sql`${t.status} = 'removed' or ${t.leftAt} is null`),
+    check('members_time_zone', sql`char_length(${t.timeZone}) between 1 and 64`),
   ],
 );
 

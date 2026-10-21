@@ -30,6 +30,14 @@ export const workspacesRouter = authed.workspaces.router({
         'Making a workspace isn’t open yet. To join your team, open the invitation they emailed you.',
       );
     }
+    // While sign up is closed, an account an invitation let in joins that workspace and starts none of its own
+    // (spec 0031, owner decision 3), so one invitation can't grow into more people sending invitations.
+    if (!context.mayStartWorkspace(context.user.email)) {
+      throw apiError(
+        'SIGNUP_CLOSED',
+        'Making a workspace isn’t open yet. To join your team, open the invitation they emailed you.',
+      );
+    }
     // No hooks and no events (see commitWrite): its poke only costs the relay one empty look.
     const started = await commitWrite(context, undefined, () =>
       startWorkspace({ db: context.db, identity: context.identity }, context.user, input),

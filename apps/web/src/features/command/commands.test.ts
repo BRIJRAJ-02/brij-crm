@@ -59,9 +59,11 @@ describe('what the menu lists (AC-1075, AC-1082, AC-1086)', () => {
 
   it('lists the Settings pages the member may open, by their place in Settings', () => {
     expect(settingsCommands('acme', []).map((command) => command.name)).toEqual([
+      'Settings › Profile',
       'Settings › Preferences',
       'Settings › Calendars',
       'Settings › Notifications',
+      'Settings › General',
       'Settings › Members',
       'Settings › Objects',
       'Settings › Background jobs',
@@ -84,9 +86,11 @@ describe('matching what is typed (AC-1077, AC-1082)', () => {
     expect(names('COMP')).toEqual(['Companies', 'Create a company']);
     expect(names('set')).toEqual([
       'Settings',
+      'Settings › Profile',
       'Settings › Preferences',
       'Settings › Calendars',
       'Settings › Notifications',
+      'Settings › General',
       'Settings › Members',
       'Settings › Objects',
       'Settings › Background jobs',

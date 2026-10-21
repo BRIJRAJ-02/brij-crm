@@ -31,6 +31,7 @@ import { inputInvalid, refuse } from '../engine/refusals.ts';
 import type { Actor, EngineScope } from '../engine/scope.ts';
 import { runWrite, type AfterWrite, type WriteContext } from '../engine/write.ts';
 import { linkedDisplays, readTaskViews } from '../tasks/tasks.ts';
+import type { RemovalEffect } from '../members/removal-effect.ts';
 
 /** What a notification id that isn't the caller's (or doesn't exist) answers. */
 export const UNKNOWN_NOTIFICATION = 'That notification does not exist.';
@@ -635,3 +636,10 @@ export async function claimDigest(scope: EngineScope): Promise<boolean> {
     return (claimed.rowCount ?? 0) > 0;
   });
 }
+
+/** A removal (spec 0031, AC-814): their notifications and notification settings go (spec 0038, AC-1168). */
+export const notificationsRemoval: RemovalEffect = {
+  feature: 'notifications',
+  constraints: ['notification_settings_member', 'notifications_member'],
+  run: deleteMemberNotifications,
+};
