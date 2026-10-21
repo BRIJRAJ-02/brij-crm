@@ -109,7 +109,8 @@ export type SubmitBody = z.input<typeof SubmitBody>;
  * What the visitor gets next (AC-570, AC-1057): the thank you, where to go,
  * or the booking page to go on to after `countdownSeconds` (0: at once). The
  * booking `url` is same origin (`/b/<page>?p=<token>`), its token signed by
- * the server and carrying the visitor's name, email and the submission.
+ * the server and holding the submission id and the page id only: nothing
+ * personal rides in the link (the page asks the API for the name and email).
  */
 export const SubmitNext = z.discriminatedUnion('kind', [
   z.object({ kind: z.literal('message'), text: z.string(), offersMeeting: z.boolean().optional() }),

@@ -12,7 +12,7 @@ import { createDatabase, type Database } from '@crm/db';
 import { enterPublicForm } from '../access/door.ts';
 import type { AccessRules } from '../access/policy.ts';
 import { createAttribute, editAttribute } from '../attributes/attributes.ts';
-import { createBookingPage, updateBookingPage } from '../booking/pages.ts';
+import { bookingTargetProblem, createBookingPage, updateBookingPage } from '../booking/pages.ts';
 import { getActivity } from '../engine/activity.ts';
 import { newId } from '../engine/ids.ts';
 import { isRefusal } from '../engine/refusals.ts';
@@ -21,6 +21,8 @@ import { SYSTEM_ACTOR } from '../engine/scope.ts';
 import { createWorkspace } from '../engine/workspaces.ts';
 import { runWrite } from '../engine/write.ts';
 import { jobKinds } from '../jobs/kinds/index.ts';
+import { inWorkspace } from '../access/run.ts';
+import type { EngineScope } from '../engine/scope.ts';
 import { rescope, testScope } from '../testing.ts';
 import {
   createForm,
@@ -719,6 +721,25 @@ describe('book a meeting after sending (AC-1055 to AC-1057)', () => {
     });
     expect(again.replayed).toBe(true);
     expect(signed[1]?.submissionId).toBe(stored?.id);
+    // The same key with other answers, or from another address, is someone else: the thank you, and no token
+    // for this visitor's name and email (the security review, 21 October 2026).
+    const other = await submitForm(scope, registry, {
+      formId: publicId,
+      body: { ...attempt, answers: { name: 'Mallory', email: 'mallory@example.com' } },
+      captcha: off,
+      answersKey: 'k',
+      signHandoff: sign,
+    });
+    expect(other).toMatchObject({ replayed: true, next: { kind: 'message', text: 'Thanks, Ada.' } });
+    const elsewhere = await submitForm(scope, registry, {
+      formId: publicId,
+      body: attempt,
+      captcha: off,
+      ipHash: 'another-address',
+      signHandoff: sign,
+    });
+    expect(elsewhere).toMatchObject({ replayed: true, next: { kind: 'message', text: 'Thanks, Ada.' } });
+    expect(signed).toHaveLength(2);
     // Paused at send time: the form's own thank you, never a dead page.
     await updateBookingPage(w.scope, { pageId: page.id, settings: { status: 'paused' } });
     const later = await submitForm(scope, registry, {
@@ -728,6 +749,62 @@ describe('book a meeting after sending (AC-1055 to AC-1057)', () => {
       signHandoff: sign,
     });
     expect(later.next).toEqual({ kind: 'message', text: 'Thanks, Ada.', offersMeeting: false });
+  });
+
+  it('lets only someone who may use a page choose it, and keeps a page chosen before (the access door, AC-1056)', async () => {
+    const w = await workspace();
+    // A member (booking.manage: their own pages only) and their page; the owner's page.
+    const memberId = newId();
+    await w.query(
+      sql`insert into members (workspace_id, id, name, email, role, created_by_type, updated_by_type)
+          values (${w.scope.workspaceId}, ${memberId}, 'Bea', ${`${memberId}@example.com`}, 'member', 'system', 'system')`,
+    );
+    const member = rescope(w.scope, { actor: { type: 'member', id: memberId }, role: 'member' });
+    const hers = await createBookingPage(member, { id: newId(), title: 'Bea’s call', timeZone: 'UTC' });
+    const owners = await createBookingPage(w.scope, { id: newId(), title: 'Intro call', timeZone: 'UTC' });
+    const seen = (scope: EngineScope, pageId: string) =>
+      inWorkspace(scope, (tx) => bookingTargetProblem(tx, scope, pageId, 'seen'));
+    expect(await seen(member, hers.id)).toBeUndefined();
+    expect(await seen(member, owners.id)).toBe('hidden');
+    // An owner (booking.admin) may use anyone's.
+    expect(await seen(w.scope, hers.id)).toBeUndefined();
+    // A key that manages forms but holds no booking right may choose no page at all.
+    const key = testScope({
+      db,
+      workspaceId: w.scope.workspaceId,
+      actor: { type: 'api_key', id: newId() },
+      scopes: ['forms.manage', 'data.write'],
+    });
+    expect(await seen(key, owners.id)).toBe('hidden');
+    // Saving as that key keeps the page chosen before, but switching to another is refused on `after`.
+    const { formId, saved } = await pointAt(w, owners.id);
+    const kept = await saveFormDraft(key, {
+      formId,
+      document: { ...saved.draft, headline: 'Still booking' },
+      expectedRevision: saved.revision,
+    });
+    expect(kept.draft.after).toMatchObject({ kind: 'booking', bookingPageId: owners.id });
+    expect(
+      await refusalOf(
+        saveFormDraft(key, {
+          formId,
+          document: {
+            ...kept.draft,
+            after: { kind: 'booking', bookingPageId: hers.id, countdownSeconds: 5, message: '' },
+          },
+          expectedRevision: kept.revision,
+        }),
+      ),
+    ).toMatchObject([{ code: 'CONFIG_INVALID', field: 'after' }]);
+  });
+
+  it('never takes a company’s or a team’s name for the visitor’s', () => {
+    const questions = [
+      question({ id: 'c', key: 'company', label: 'Company name', answerType: 'short_text' }),
+      question({ id: 'n', key: 'who', label: 'Your name', answerType: 'short_text' }),
+    ];
+    expect(visitorOf({ questions }, { company: 'Analytical', who: 'Ada' })).toEqual({ name: 'Ada' });
+    expect(visitorOf({ questions: questions.slice(0, 1) }, { company: 'Analytical' })).toEqual({});
   });
 
   it('reads the visitor’s name by key, else by label, and their email from the email question', () => {

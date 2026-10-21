@@ -304,13 +304,13 @@ describe('booking (AC-632, AC-633, AC-634)', () => {
     expect(stored.rows[0]?.manage_token_hash).toMatch(/^[0-9a-f]{64}$/);
   });
 
-  it('links the booking to the form submission a hand off names, only when it is this workspace’s (AC-1058)', async () => {
+  it('links the booking to the form submission a hand off names, only when its form sends visitors to this page (AC-1058)', async () => {
     const w = await workspace();
-    const { entry } = await livePage(w);
+    const { page, entry } = await livePage(w);
     const form = await createForm(w.owner, { id: newId(), name: 'Talk to us' });
     const saved = await saveFormDraft(w.owner, {
       formId: form.id,
-      document: form.draft,
+      document: { ...form.draft, after: { kind: 'booking', bookingPageId: page.id, countdownSeconds: 5, message: '' } },
       expectedRevision: form.revision,
     });
     const live = await publishForm(w.owner, { formId: form.id, expectedRevision: saved.revision });
@@ -360,9 +360,33 @@ describe('booking (AC-632, AC-633, AC-634)', () => {
       email: 'grace@navy.example',
     });
     expect(await readHandoffPrefill(entry, foreign?.id ?? '')).toEqual({});
+    // This workspace's submission to a form that thanks rather than sending its visitors here: not this page's to
+    // read or link, whatever a token says (the security review, 21 October 2026).
+    const thanks = await createForm(w.owner, { id: newId(), name: 'Just thanks' });
+    const thanksLive = await publishForm(w.owner, { formId: thanks.id, expectedRevision: thanks.revision });
+    const thanksDoor = await enterPublicForm({ db }, thanksLive.publicKey);
+    await submitForm(thanksDoor.scope, jobKinds({ environment: 'local' }), {
+      formId: thanksDoor.formId,
+      body: {
+        idempotencyKey: newId(),
+        answers: { name: 'Alan', email: 'alan@example.com' },
+        hidden: {},
+        fillMs: 9_000,
+      },
+      captcha: { kind: 'off' },
+    });
+    const [unrelated] = (
+      await db.withWorkspace(w.workspaceId, (tx) =>
+        tx.execute<{ id: string }>(sql`select id::text from form_submissions where form_id = ${thanks.id}`),
+      )
+    ).rows;
+    expect(await readHandoffPrefill(entry, unrelated?.id ?? '')).toEqual({});
     const linked = await bookPublicSlot(entry, deps(), bookInput(), [], { submissionId: submission?.id ?? '' });
     const stranger = await bookPublicSlot(entry, deps(), bookInput({ start: '2026-11-02T10:00:00.000Z' }), [], {
       submissionId: foreign?.id ?? '',
+    });
+    const elsewhere = await bookPublicSlot(entry, deps(), bookInput({ start: '2026-11-02T11:00:00.000Z' }), [], {
+      submissionId: unrelated?.id ?? '',
     });
     const rows = (
       await db.withWorkspace(w.workspaceId, (tx) =>
@@ -373,6 +397,7 @@ describe('booking (AC-632, AC-633, AC-634)', () => {
     ).rows;
     expect(rows.find((row) => row.id === linked.bookingId)?.submission).toBe(submission?.id);
     expect(rows.find((row) => row.id === stranger.bookingId)?.submission).toBeNull();
+    expect(rows.find((row) => row.id === elsewhere.bookingId)?.submission).toBeNull();
   });
 
   it('matches the same person again, makes no company for a free email domain, and never overwrites a person', async () => {
