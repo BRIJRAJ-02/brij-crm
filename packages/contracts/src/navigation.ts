@@ -8,6 +8,7 @@ import { oc } from '@orpc/contract';
 import * as z from 'zod';
 import { NAV_ITEM_KINDS, NAV_PAGES, NAV_SECTIONS, NAV_STARRABLE_KINDS } from './nav-model.ts';
 import { Hue } from './values/hues.ts';
+import { Uuid } from './values/ids.ts';
 import { ObjectIcon } from './values/object-icons.ts';
 import { WorkspaceScoped } from './workspaces.ts';
 
@@ -24,7 +25,7 @@ export type NavPageKey = z.infer<typeof NavPageKey>;
 /** What a stored item points at. */
 const itemKind = z.enum(NAV_ITEM_KINDS);
 
-const isUuid = (value: string) => z.uuid().safeParse(value).success;
+const isUuid = (value: string) => Uuid.safeParse(value).success;
 
 /** A page's key for `page`, else a uuid: the one check every item operation shares. */
 function checkRef(ref: { readonly kind: string; readonly id: string }, ctx: z.RefinementCtx): void {
@@ -38,7 +39,7 @@ const item = {
 };
 const starrable = {
   kind: z.enum(NAV_STARRABLE_KINDS),
-  id: z.uuid(),
+  id: Uuid,
 };
 
 const Index = z.number().int().min(0).max(1_000);
@@ -64,7 +65,9 @@ export const NavOp = z
   ])
   .superRefine((op, ctx) => {
     if ('kind' in op) checkRef(op, ctx);
-  });
+  })
+  // Ids leave in lower case, the spelling every policy and stored item is keyed by (spec 0009); a page keeps its key.
+  .transform((op) => ('kind' in op && op.kind !== 'page' ? { ...op, id: op.id.toLowerCase() } : op));
 /** One change to the member's sidebar. */
 export type NavOp = z.infer<typeof NavOp>;
 
@@ -83,10 +86,10 @@ export const NavItemPrefOut = z.object({
  */
 export const NavFavourite = z.object({
   kind: z.enum(['view', 'record']),
-  id: z.uuid(),
+  id: Uuid,
   /** The view's name, or the record's display name ("" when it has none: the screen says "Unnamed"). */
   label: z.string(),
-  objectId: z.uuid(),
+  objectId: Uuid,
   /** The object's API name, for the item's address. */
   objectSlug: z.string(),
   /** The object's plural name: a view's `meta` ("Companies"). */
@@ -129,7 +132,7 @@ export type GetNavInput = z.infer<typeof GetNavInput>;
 /** One change to the member's own sidebar; `mutationId` lets the tab that sent it skip its own `nav` event. */
 export const ChangeNavInput = WorkspaceScoped.extend({
   op: NavOp,
-  mutationId: z.uuid(),
+  mutationId: Uuid,
 });
 /** One change to the member's own sidebar. */
 export type ChangeNavInput = z.infer<typeof ChangeNavInput>;
