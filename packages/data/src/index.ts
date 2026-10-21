@@ -16,6 +16,8 @@ import type {
   BookAsHostInput,
   BookingAssignment,
   ReassignedBooking,
+  RotationAdjustment,
+  RotationDistribution,
   RotationMemberInput,
   RotationSettings,
   RotationView,
@@ -171,6 +173,8 @@ export type {
   BookingView,
   BookingAssignment,
   ReassignedBooking,
+  RotationAdjustment,
+  RotationDistribution,
   RotationMemberInput,
   RotationMemberView,
   RotationSettings,
@@ -2370,6 +2374,32 @@ export function createDataLayer({
                 }),
           })),
           land: (items, rotation) => patchItem<RotationView>(rotationId, () => rotation)(items),
+        }),
+      /** A rotation's Distribution tab (spec 0037, AC-1330): read when the tab opens and again after an adjustment. */
+      distribution: (workspace: string, rotationId: string): Promise<RotationDistribution> =>
+        call((options) => api.rotations.distribution({ workspace, rotationId }, options)),
+      /**
+       * Adjusts a member's count with a note (AC-1329), waiting for the server; the rotations read again, so every
+       * share shows the new count.
+       */
+      adjust: (
+        workspace: string,
+        rotationId: string,
+        change: { readonly memberId: string; readonly units: number; readonly note: string },
+      ): Promise<RotationAdjustment> =>
+        call((options) =>
+          api.rotations.adjust({ workspace, rotationId, ...change, mutationId: mintId() }, options),
+        ).then((made) => {
+          rotationLists.view(workspace).reload();
+          return made;
+        }),
+      /** Undoes an adjustment (AC-1329); the rotations read again. */
+      undoAdjustment: (workspace: string, rotationId: string, adjustmentId: string): Promise<RotationAdjustment> =>
+        call((options) =>
+          api.rotations.undoAdjustment({ workspace, rotationId, adjustmentId, mutationId: mintId() }, options),
+        ).then((undone) => {
+          rotationLists.view(workspace).reload();
+          return undone;
         }),
       /** Deletes a rotation no page books from, gone at once and back on a refusal (`IN_USE`, "Used by 2 pages"). */
       remove: (workspace: string, rotationId: string): Promise<{ rotationId: string }> =>

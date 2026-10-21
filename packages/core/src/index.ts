@@ -425,3 +425,4 @@ export {
 export { createRotation, deleteRotation, listRotations, updateRotation } from './rotation/rotations.ts';
 export { bookingAssignments } from './rotation/assignments.ts';
 export { reassignBooking, type Reseated } from './rotation/reassign.ts';
+export { adjustCount, rotationDistribution, undoAdjustment } from './rotation/distribution.ts';

@@ -103,6 +103,7 @@ export const strings = {
   moveDown: (name: string) => `Move ${name} down`,
   removeFixed: (name: string) => `Remove ${name} as a fixed host`,
   hostActions: 'Actions',
+  hostsSaved: 'Hosts saved.',
   removeFixedTitle: (name: string) => `Remove ${name} as a fixed host?`,
   removeFixedText: 'They stop joining new meetings from this page. Meetings already booked keep them.',
   removeFixedAction: 'Remove host',
@@ -130,4 +131,56 @@ export const strings = {
   bookRotation: 'A rotation (round robin)',
   noRotations: 'Make a rotation first, in Settings.',
   rotationRequired: 'Pick a rotation.',
+  /** The rotation card's two views (spec 0037, AC-1330). */
+  views: (rotation: string) => `${rotation} views`,
+  membersTab: 'Members',
+  distributionTab: 'Distribution',
+  distribution: {
+    intro: (days: number) =>
+      `Meetings in the last ${String(days)} days, against each member’s fair share by weight. A member sees only their own row.`,
+    failed: 'Couldn’t load the distribution',
+    count: 'Meetings',
+    fair: 'Fair share',
+    difference: 'Difference',
+    adjusted: 'Adjusted',
+    how: 'How',
+    off: 'Off',
+    howLine: (reasons: Readonly<Partial<Record<string, number>>>) => {
+      const words: Readonly<Record<string, string>> = {
+        fair: 'fair',
+        priority: 'by priority',
+        even: 'even',
+        owner: 'owner',
+        last_host: 'last host',
+        standin: 'stand in',
+        only_free: 'only one free',
+        routed: 'routed',
+        manual: 'picked by hand',
+        reassigned: 'reassigned',
+      };
+      const parts = Object.entries(reasons).flatMap(([reason, count]) =>
+        reason === 'adjustment' || count === undefined || count === 0
+          ? []
+          : [`${String(count)} ${words[reason] ?? reason}`],
+      );
+      return parts.join(', ');
+    },
+    shareLabel: (rotation: string) => `Share of meetings in ${rotation}`,
+    weeksLabel: (rotation: string) => `Meetings each week in ${rotation}, last 12 weeks`,
+    adjustmentsLabel: (rotation: string) => `Count adjustments in ${rotation}`,
+    change: 'Change',
+    note: 'Note',
+    by: 'By',
+    when: 'When',
+    undo: 'Undo',
+    undoneBadge: 'Undone',
+    undone: (name: string) => `Undone. ${name}’s count is back.`,
+    adjust: 'Adjust count',
+    adjustTitle: (rotation: string) => `Adjust a count in ${rotation}`,
+    by20: 'Adjust by',
+    by20Hint: 'A whole number from -20 to 20. Above zero counts as meetings they had; below as meetings they didn’t.',
+    unitsInvalid: 'Use a whole number from -20 to 20, not 0.',
+    noteRequired: 'Say why, in a few words.',
+    adjustedNotice: (name: string) => `${name}’s count adjusted.`,
+  },
 } as const;

@@ -28,6 +28,7 @@ import { prepareBookingMail } from '../booking/mail.ts';
 import { loadPage } from '../booking/slots.ts';
 import { chooseHosts } from './assign.ts';
 import { bookingAssignments } from './assignments.ts';
+import { adjustCount, rotationDistribution, undoAdjustment } from './distribution.ts';
 import { reassignBooking } from './reassign.ts';
 import { handOnBooking, rotationsRemoval } from './removal.ts';
 import { createRotation, deleteRotation, listRotations, updateRotation } from './rotations.ts';
@@ -750,6 +751,50 @@ describe('a round robin page (AC-732 to AC-734, AC-738, AC-742 to AC-745, AC-754
     expect(mail.messages.map((message) => message.to)).toEqual(['ada@example.com']);
     // They are in no rotation any more.
     expect((await listRotations(w.owner, NOW))[0]?.members.map((member) => member.memberId)).not.toContain(leaving);
+  });
+
+  it('adjusts counts with a note, steering the next pick, shown on Distribution and undone (AC-1329, AC-1330)', async () => {
+    const w = await workspace();
+    const sam = await w.addMember('Sam Lee');
+    const kim = await w.addMember('Kim Park');
+    const { rotation, entry } = await roundRobin(w, [sam.id, kim.id]);
+    // Only an admin adjusts.
+    expect(
+      (
+        await refusalOf(
+          adjustCount(sam.scope, { rotationId: rotation.id, memberId: kim.id, units: 3, note: 'Covered' }),
+        )
+      ).code,
+    ).toBe('FORBIDDEN');
+    const made = await adjustCount(w.owner, {
+      rotationId: rotation.id,
+      memberId: kim.id,
+      units: 3,
+      note: 'Covered for Sam last week',
+    });
+    expect(made).toMatchObject({ memberId: kim.id, units: 3, note: 'Covered for Sam last week', byName: 'Ada Admin' });
+    // Kim is 3 ahead, so the fair pick is Sam.
+    const booked = await bookPublicSlot(entry, deps(), bookInput(at('09:00')));
+    expect((await hostsOf(w, [booked.bookingId])).get(booked.bookingId)).toBe(sam.id);
+    const shown = await rotationDistribution(w.owner, { rotationId: rotation.id }, NOW);
+    expect(shown.rows.map((row) => [row.name, row.count, row.fairShare, row.difference, row.adjusted])).toEqual([
+      ['Sam Lee', 1, 2, -1, 0],
+      ['Kim Park', 3, 2, 1, 3],
+    ]);
+    expect(shown.rows[0]?.reasons).toEqual({ fair: 1 });
+    expect(shown.rows[0]?.weeks).toHaveLength(12);
+    expect(shown.adjustments.map((each) => each.id)).toEqual([made.id]);
+    expect(shown.canAdjust).toBe(true);
+    // A member sees their own row only, and no one else's adjustments.
+    const own = await rotationDistribution(sam.scope, { rotationId: rotation.id }, NOW);
+    expect(own.rows.map((row) => row.name)).toEqual(['Sam Lee']);
+    expect(own.adjustments).toEqual([]);
+    expect(own.canAdjust).toBe(false);
+    // Undone: it stops counting.
+    const undone = await undoAdjustment(w.owner, { rotationId: rotation.id, adjustmentId: made.id });
+    expect(undone.voidedAt).toBeDefined();
+    const after = await rotationDistribution(w.owner, { rotationId: rotation.id }, NOW);
+    expect(after.rows.map((row) => row.count)).toEqual([1, 0]);
   });
 
   it('voids the ledger row of a cancelled booking, so it stops counting (AC-747)', async () => {

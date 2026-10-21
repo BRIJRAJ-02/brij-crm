@@ -16,6 +16,7 @@ import {
   Table,
   type SelectItem,
   type TableColumn,
+  RecordChip,
 } from '@crm/ui';
 import { useState } from 'react';
 import { rotationsSettingsHref } from '../settings/nav.ts';
@@ -150,11 +151,14 @@ export function HostsCard({
         {fixed.length > 0 && (
           <Table
             label={strings.fixedHosts}
+            isScrollable
             columns={COLUMNS}
             rows={fixed.map((memberId) => ({ id: memberId }))}
             getRowId={(row) => row.id}
             renderCell={(row, column) => {
-              if (column === 'name') return nameOf(row.id);
+              if (column === 'name') {
+                return <RecordChip display={{ type: 'member', id: row.id, name: nameOf(row.id) }} isFlat />;
+              }
               if (isLocked) return null;
               const index = fixed.indexOf(row.id);
               return (

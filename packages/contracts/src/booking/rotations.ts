@@ -181,10 +181,99 @@ export const ReassignedBooking = z.object({ hostMemberId: Uuid, changed: z.boole
 /** What a reassign did. */
 export type ReassignedBooking = z.infer<typeof ReassignedBooking>;
 
+/** The most a count adjustment moves a member's count, either way (spec 0037, AC-1329). */
+export const ADJUSTMENT_MAX = 20;
+
+/**
+ * Adjusting a member's count in a rotation (spec 0037, AC-1329): a whole number from -20 to +20, never 0, with a
+ * note. A ledger row counted in the window like an assignment; undone by voiding it.
+ */
+export const AdjustCountInput = WorkspaceScoped.extend({
+  rotationId: Uuid,
+  memberId: Uuid,
+  units: z
+    .number()
+    .int('Adjust by a whole number.')
+    .min(-ADJUSTMENT_MAX, `Adjust by at most ${String(ADJUSTMENT_MAX)} either way.`)
+    .max(ADJUSTMENT_MAX, `Adjust by at most ${String(ADJUSTMENT_MAX)} either way.`)
+    .refine((units) => units !== 0, { error: 'Adjust by at least 1 either way.' }),
+  note: z.string().trim().min(1, 'Say why, in a few words.').max(200, 'Keep the note to 200 characters.'),
+  mutationId: Uuid,
+});
+/** Adjusting a member's count. */
+export type AdjustCountInput = z.infer<typeof AdjustCountInput>;
+
+/** Undoing a count adjustment (spec 0037, AC-1329). */
+export const UndoAdjustmentInput = WorkspaceScoped.extend({ rotationId: Uuid, adjustmentId: Uuid, mutationId: Uuid });
+/** Undoing a count adjustment. */
+export type UndoAdjustmentInput = z.infer<typeof UndoAdjustmentInput>;
+
+/** One count adjustment as the Distribution tab lists it. */
+export const RotationAdjustment = z.object({
+  id: Uuid,
+  memberId: Uuid,
+  memberName: z.string(),
+  units: z.number().int(),
+  note: z.string(),
+  byName: z.string(),
+  at: Timestamp,
+  /** Undone since: it no longer counts. */
+  voidedAt: Timestamp.optional(),
+});
+/** One count adjustment. */
+export type RotationAdjustment = z.infer<typeof RotationAdjustment>;
+
+/** One member's row on the Distribution tab (spec 0037, AC-1330), over the rotation's window. */
+export const DistributionRow = z.object({
+  memberId: Uuid,
+  name: z.string(),
+  weight: z.number().int(),
+  isOn: z.boolean(),
+  /** Live units in the window, calibration and adjustments included. */
+  count: z.number(),
+  /** Their share of the window's count by weight, among the members switched on. */
+  fairShare: z.number(),
+  /** `count` less `fairShare`: above zero, ahead of their share. */
+  difference: z.number(),
+  /** The window's adjustments, summed. */
+  adjusted: z.number().int(),
+  /** How they got their meetings in the window, by reason. */
+  reasons: z.partialRecord(AssignmentReason, z.number().int()),
+  /** Meetings each of the last 12 weeks (Monday to Sunday, UTC), oldest first. */
+  weeks: z.array(z.number().int()).length(12),
+});
+/** One member's Distribution row. */
+export type DistributionRow = z.infer<typeof DistributionRow>;
+
+/** A rotation's Distribution tab: the window, the rows the reader may see, and the adjustments. */
+export const RotationDistribution = z.object({
+  rotationId: Uuid,
+  windowDays: z.number().int(),
+  /** The first day of each of the 12 weeks, `YYYY-MM-DD`, oldest first. */
+  weekStarts: z.array(z.string()).length(12),
+  rows: z.array(DistributionRow),
+  adjustments: z.array(RotationAdjustment),
+  /** The reader may adjust counts (`booking.admin`, or the rotation's editors once spec 0037 adds them). */
+  canAdjust: z.boolean(),
+});
+/** A rotation's Distribution tab. */
+export type RotationDistribution = z.infer<typeof RotationDistribution>;
+
+/** Reading a rotation's distribution. */
+export const RotationDistributionInput = WorkspaceScoped.extend({ rotationId: Uuid });
+/** Reading a rotation's distribution. */
+export type RotationDistributionInput = z.infer<typeof RotationDistributionInput>;
+
 /** Member procedures for rotations. */
 export const rotationsContract = {
   list: oc.input(ListRotationsInput).output(z.array(RotationView)),
   create: oc.input(CreateRotationInput).output(RotationView),
   update: oc.input(UpdateRotationInput).output(RotationView),
+  /** The Distribution tab (spec 0037, AC-1330). */
+  distribution: oc.input(RotationDistributionInput).output(RotationDistribution),
+  /** Adjusts a member's count with a note (AC-1329). */
+  adjust: oc.input(AdjustCountInput).output(RotationAdjustment),
+  /** Undoes an adjustment (AC-1329). */
+  undoAdjustment: oc.input(UndoAdjustmentInput).output(RotationAdjustment),
   delete: oc.input(DeleteRotationInput).output(z.object({ rotationId: Uuid })),
 };

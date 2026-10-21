@@ -22,6 +22,7 @@ import {
   Table,
   type SelectItem,
   type TableColumn,
+  RecordChip,
 } from '@crm/ui';
 import { useState } from 'react';
 import { strings } from './rotation-strings.ts';
@@ -159,7 +160,7 @@ export function RotationDialog({ data, slug, people, rotation, isOpen, onClose, 
     switch (column) {
       case 'member':
         // A refusal about this member shows in the Callout above the table, which names them.
-        return who;
+        return <RecordChip display={{ type: 'member', id: member.memberId, name: who }} isFlat />;
       case 'weight':
         return (
           <Field
@@ -325,6 +326,7 @@ export function RotationDialog({ data, slug, people, rotation, isOpen, onClose, 
           {members.length > 0 && (
             <Table
               label={strings.members(name.trim() === '' ? strings.newRotation : name.trim())}
+              isScrollable
               columns={COLUMNS}
               rows={members}
               getRowId={(member) => member.memberId}

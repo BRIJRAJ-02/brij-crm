@@ -541,6 +541,9 @@ function fakeApi(overrides: Partial<Behaviour> = {}, auth: (path: string, body: 
       list: os.rotations.list.handler(notServed),
       create: os.rotations.create.handler(notServed),
       update: os.rotations.update.handler(notServed),
+      distribution: os.rotations.distribution.handler(notServed),
+      adjust: os.rotations.adjust.handler(notServed),
+      undoAdjustment: os.rotations.undoAdjustment.handler(notServed),
       delete: os.rotations.delete.handler(notServed),
     },
   });

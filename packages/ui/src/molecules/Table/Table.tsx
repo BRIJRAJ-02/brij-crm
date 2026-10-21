@@ -78,6 +78,12 @@ interface TableBase<T> {
   readonly getSelectLabel?: (row: T) => string;
   /** Keeps the header in view while the page scrolls under it (a long list on its own page). */
   readonly isHeaderSticky?: boolean;
+  /**
+   * Scrolls sideways inside its own box when its columns don't fit (a phone, a dialog), rather than cutting them
+   * off; the cells stay reachable by the arrow keys, which scroll each into view. Not with `isHeaderSticky`, whose
+   * header sticks to the page.
+   */
+  readonly isScrollable?: boolean;
 }
 
 /** The handle column's id, kept apart from any column the caller names. */
@@ -108,6 +114,7 @@ export function Table<T>({
   onSelectedChange,
   getSelectLabel,
   isHeaderSticky = false,
+  isScrollable = false,
 }: TableProps<T>) {
   const isSelectable = selected !== undefined && onSelectedChange !== undefined;
   const ids = rows.map(getRowId);
@@ -128,7 +135,7 @@ export function Table<T>({
     ...(isSelectable ? [{ id: SELECT, label: strings.selection, isLabelHidden: true }] : []),
   ];
   const shown: readonly TableColumn[] = [...lead, ...columns];
-  return (
+  const table = (
     <AriaTable
       className={styles.root}
       aria-label={label}
@@ -216,4 +223,5 @@ export function Table<T>({
       </TableBody>
     </AriaTable>
   );
+  return isScrollable && !isHeaderSticky ? <div className={styles.scroll}>{table}</div> : table;
 }

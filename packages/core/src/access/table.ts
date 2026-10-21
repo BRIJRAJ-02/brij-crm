@@ -270,4 +270,9 @@ export const ACCESS_TABLE = {
   bookingAssignments: { bookingPages: true },
   // Reassigning a seat (AC-748, AC-1337): booking.manage, then Manage over the current and the new host.
   reassignBooking: { bookingPages: true },
+  // The Distribution tab (spec 0037, AC-1330): a member of the rotation sees their own row, an admin every row.
+  rotationDistribution: { bookingPages: true },
+  // Count adjustments (AC-1329): booking.admin's until rotation editors arrive (J14).
+  adjustCount: { permission: 'booking.admin' },
+  undoAdjustment: { permission: 'booking.admin' },
 } as const satisfies Record<string, AccessEntry>;

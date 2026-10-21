@@ -86,6 +86,7 @@ const READS: ReadonlySet<string> = new Set([
   'schedules.get',
   // Round robin (spec 0029): the rotations a member may see, and why a booking went to its host.
   'rotations.list',
+  'rotations.distribution',
   'bookings.assignments',
 ]);
 
@@ -1400,6 +1401,39 @@ Object.assign(WRITES, {
     await m.client.bookings.reassign({ workspace: m.slug, bookingId, mutationId });
     return [];
   },
+  // A count adjustment, and one undone (spec 0037, AC-1329): settings like the rotation, so no outbox row.
+  'rotations.adjust': async (m: Member, mutationId: string) => {
+    const rotation = await rotationOn(m);
+    const [first] = rotation.members;
+    await m.client.rotations.adjust({
+      workspace: m.slug,
+      rotationId: rotation.id,
+      memberId: first?.memberId ?? '',
+      units: 2,
+      note: 'Covered for Kim last week',
+      mutationId,
+    });
+    return [];
+  },
+  'rotations.undoAdjustment': async (m: Member, mutationId: string) => {
+    const rotation = await rotationOn(m);
+    const [first] = rotation.members;
+    const made = await m.client.rotations.adjust({
+      workspace: m.slug,
+      rotationId: rotation.id,
+      memberId: first?.memberId ?? '',
+      units: -1,
+      note: 'Too many this week',
+      mutationId: newId(),
+    });
+    await m.client.rotations.undoAdjustment({
+      workspace: m.slug,
+      rotationId: rotation.id,
+      adjustmentId: made.id,
+      mutationId,
+    });
+    return [];
+  },
   'rotations.create': async (m: Member, mutationId: string) => {
     await rotationOn(m, mutationId);
     return [];
@@ -1455,6 +1489,8 @@ const WRITES_MADE: Readonly<Record<string, number>> = {
   'bookingPages.update': 2,
   'rotations.create': 1,
   'bookings.reassign': 3,
+  'rotations.adjust': 2,
+  'rotations.undoAdjustment': 3,
   'rotations.update': 2,
   'rotations.delete': 2,
   'bookingPages.delete': 2,

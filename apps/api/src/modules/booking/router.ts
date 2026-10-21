@@ -2,6 +2,9 @@ import {
   bookAsHost,
   bookingAssignments,
   reassignBooking,
+  rotationDistribution,
+  adjustCount,
+  undoAdjustment,
   createRotation,
   deleteRotation,
   listRotations,
@@ -267,6 +270,24 @@ export const rotationsRouter = member.rotations.router({
         settings: input.settings,
         ...(input.members === undefined ? {} : { members: input.members }),
       }),
+    ),
+  ),
+  distribution: member.rotations.distribution.handler(({ context, input }) =>
+    rotationDistribution(context.scope, { rotationId: input.rotationId }),
+  ),
+  adjust: member.rotations.adjust.handler(({ context, input }) =>
+    commitWrite(context, { mutationId: input.mutationId }, () =>
+      adjustCount(context.scope, {
+        rotationId: input.rotationId,
+        memberId: input.memberId,
+        units: input.units,
+        note: input.note,
+      }),
+    ),
+  ),
+  undoAdjustment: member.rotations.undoAdjustment.handler(({ context, input }) =>
+    commitWrite(context, { mutationId: input.mutationId }, () =>
+      undoAdjustment(context.scope, { rotationId: input.rotationId, adjustmentId: input.adjustmentId }),
     ),
   ),
   delete: member.rotations.delete.handler(({ context, input }) =>

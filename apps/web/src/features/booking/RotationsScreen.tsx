@@ -17,12 +17,16 @@ import {
   SettingsStack,
   Skeleton,
   Table,
+  TabPanel,
+  Tabs,
   Tooltip,
   type TableColumn,
+  RecordChip,
 } from '@crm/ui';
 import { useRouteContext } from '@tanstack/react-router';
 import { useState } from 'react';
 import { SettingsPage } from '../settings/SettingsPage.tsx';
+import { DistributionPanel } from './DistributionPanel.tsx';
 import { RotationDialog } from './RotationDialog.tsx';
 import { strings } from './rotation-strings.ts';
 
@@ -54,7 +58,7 @@ function cell(member: Member, column: string) {
     case 'member':
       return (
         <>
-          {member.name}
+          <RecordChip display={{ type: 'member', id: member.memberId, name: member.name }} isFlat />
           {!member.hasCalendar && (
             <Tooltip content={strings.noCalendarHint} isTextTrigger>
               <Badge text={strings.noCalendar} />
@@ -181,13 +185,32 @@ export function RotationsScreen({ data, slug, people, canManage }: RotationsScre
                   }
                 : {})}
             >
-              <Table
-                label={strings.members(rotation.name)}
-                columns={COLUMNS}
-                rows={rotation.members}
-                getRowId={(member) => member.memberId}
-                renderCell={cell}
-              />
+              <Tabs
+                label={strings.views(rotation.name)}
+                tabs={[
+                  { id: 'members', label: strings.membersTab },
+                  { id: 'distribution', label: strings.distributionTab },
+                ]}
+              >
+                <TabPanel id="members">
+                  <Table
+                    label={strings.members(rotation.name)}
+                    isScrollable
+                    columns={COLUMNS}
+                    rows={rotation.members}
+                    getRowId={(member) => member.memberId}
+                    renderCell={cell}
+                  />
+                </TabPanel>
+                <TabPanel id="distribution">
+                  <DistributionPanel
+                    data={data}
+                    slug={slug}
+                    rotation={rotation}
+                    onNotice={(message) => toasts.toast({ tone: 'success', message })}
+                  />
+                </TabPanel>
+              </Tabs>
             </Card>
           ))}
         </SettingsStack>

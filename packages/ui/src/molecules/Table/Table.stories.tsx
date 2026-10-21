@@ -5,6 +5,7 @@ import { Badge } from '../../atoms/Badge/Badge.tsx';
 import { Button } from '../../atoms/Button/Button.tsx';
 import { RecordChip } from '../../atoms/RecordChip/RecordChip.tsx';
 import { RelativeTime } from '../../atoms/RelativeTime/RelativeTime.tsx';
+import { Stage } from '../../workbench/Stage/Stage.tsx';
 import { EmptyState } from '../EmptyState/EmptyState.tsx';
 import { Table, type TableColumn } from './Table.tsx';
 
@@ -140,5 +141,21 @@ export const Selectable: Story = {
     await expect(canvas.getByRole('checkbox', { name: /Select all/i })).toBePartiallyChecked();
     await userEvent.click(canvas.getByRole('checkbox', { name: /Select all/i }));
     await expect(canvas.getByRole('checkbox', { name: 'Select Grace Hopper' })).toBeChecked();
+  },
+};
+
+/** A phone's width: the columns keep their width and the table scrolls sideways in its own box. */
+export const Scrollable: Story = {
+  args: { isScrollable: true },
+  render: (args) => (
+    <Stage width="phone">
+      <Table<Member> {...args} />
+    </Stage>
+  ),
+  play: async ({ canvas }) => {
+    const table = canvas.getByRole('grid', { name: 'Members' });
+    const box = table.parentElement;
+    await expect(box).not.toBeNull();
+    await expect(canvas.getByRole('columnheader', { name: 'Seats' })).toBeInTheDocument();
   },
 };

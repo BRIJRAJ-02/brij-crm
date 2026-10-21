@@ -59,6 +59,8 @@ export interface PageEditorProps {
   readonly ownerMember?: string;
   /** The workspace's active members, on a round robin page: its fixed host picker. */
   readonly people?: readonly MemberSummary[];
+  /** Says a change that saved at once went through (the Hosts card's). */
+  readonly onNotice?: (message: string) => void;
 }
 
 const DURATIONS = [15, 30, 45, 60, 90] as const;
@@ -125,7 +127,16 @@ function sendable(draft: BookingPageSettings): boolean {
 }
 
 /** The editor. */
-export function PageEditor({ data, slug, page: loaded, locale, schedules, ownerMember, people = [] }: PageEditorProps) {
+export function PageEditor({
+  data,
+  slug,
+  page: loaded,
+  locale,
+  schedules,
+  ownerMember,
+  people = [],
+  onNotice,
+}: PageEditorProps) {
   const [page, setPage] = useState(loaded);
   // A page the reader can't change shows as it is, every control read only, with no Save.
   const isLocked = !page.canChange;
@@ -393,7 +404,10 @@ export function PageEditor({ data, slug, page: loaded, locale, schedules, ownerM
                 isLocked={isLocked}
                 rescheduleHost={draft.rescheduleHost}
                 onRescheduleChange={(rescheduleHost) => change({ rescheduleHost })}
-                onSaved={setPage}
+                onSaved={(saved) => {
+                  setPage(saved);
+                  onNotice?.(rotationStrings.hostsSaved);
+                }}
               />
             )}
             <div id="hours">

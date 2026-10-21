@@ -127,7 +127,7 @@ function Missing({
 function EditorRoute() {
   const { page, mayRead, ownerMember, people } = Route.useLoaderData();
   const { slug } = Route.useParams();
-  const { data } = Route.useRouteContext();
+  const { data, toasts } = Route.useRouteContext();
   if (page === undefined) return <Missing title={strings.notFoundTitle} text={strings.notFoundText} />;
   // A page of its own per id, so its draft starts afresh.
   return (
@@ -140,6 +140,7 @@ function EditorRoute() {
       {...(mayRead ? { schedules: data.schedules.view(slug, ownerMember, browserZone()) } : {})}
       {...(ownerMember === undefined ? {} : { ownerMember })}
       {...(people === undefined ? {} : { people })}
+      onNotice={(message) => toasts.toast({ tone: 'success', message })}
     />
   );
 }

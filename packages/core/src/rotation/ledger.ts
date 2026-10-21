@@ -38,7 +38,8 @@ export async function windowCounts(
     .select({
       memberId: rotationAssignments.memberId,
       count: sql<number>`coalesce(sum(${rotationAssignments.units}), 0)::int`,
-      lastAssignedAt: sql<string>`max(${rotationAssignments.assignedAt})`,
+      // An adjustment moves the count, never who was assigned last.
+      lastAssignedAt: sql<string>`coalesce(max(${rotationAssignments.assignedAt}) filter (where ${rotationAssignments.source} <> 'adjustment'), 'epoch')`,
     })
     .from(rotationAssignments)
     .where(

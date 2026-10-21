@@ -64,9 +64,10 @@ async function viewsOf(
       weeklyCap: rotationMembers.weeklyCap,
       isOn: rotationMembers.isOn,
       calibration: rotationMembers.calibration,
+      // Qualified by hand: drizzle writes a column unqualified in a select, and `member_id` would be `c`'s own.
       hasCalendar: sql<boolean>`exists (
         select 1 from ${calendarConnections} c
-        where c.workspace_id = ${rotationMembers.workspaceId} and c.member_id = ${rotationMembers.memberId}
+        where c.workspace_id = "rotation_members"."workspace_id" and c.member_id = "rotation_members"."member_id"
           and c.status in ('syncing', 'connected')
       )`,
     })
@@ -144,8 +145,8 @@ export async function listRotations(scope: EngineScope, now: Date = new Date()):
           isNull(rotations.deletedAt),
           everyone
             ? undefined
-            : sql`exists (select 1 from ${rotationMembers} m where m.workspace_id = ${rotations.workspaceId}
-                and m.rotation_id = ${rotations.id} and m.member_id = ${me ?? null}::uuid)`,
+            : sql`exists (select 1 from ${rotationMembers} m where m.workspace_id = "rotations"."workspace_id"
+                and m.rotation_id = "rotations"."id" and m.member_id = ${me ?? null}::uuid)`,
         ),
       )
       .orderBy(asc(rotations.name), asc(rotations.id))

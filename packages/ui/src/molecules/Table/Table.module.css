@@ -10,6 +10,18 @@
     outline: none;
   }
 
+  /* A scrollable table's box: it scrolls sideways when its columns are wider, and only then. */
+  .scroll {
+    inline-size: 100%;
+    overflow-x: auto;
+    overscroll-behavior-inline: contain;
+  }
+
+  .scroll > .root {
+    inline-size: max-content;
+    min-inline-size: 100%;
+  }
+
   .column {
     block-size: var(--size-table-header);
     padding-inline: var(--space-8);
