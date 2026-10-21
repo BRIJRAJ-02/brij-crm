@@ -29,7 +29,15 @@ import { loadAttributes, type AttributeDef } from '../engine/values.ts';
 import { runWrite, type AfterWrite } from '../engine/write.ts';
 import type { JobRegistry } from '../jobs/registry.ts';
 import { startJob } from '../jobs/service.ts';
-import { checkSettings, IMPORT_NOT_FOUND, importView, memberOf, readImport, undoRefusal } from './shared.ts';
+import {
+  checkSettings,
+  IMPORT_NOT_FOUND,
+  importView,
+  memberOf,
+  readImport,
+  undoFailed,
+  undoRefusal,
+} from './shared.ts';
 
 const { importRows, imports, objects } = schema;
 
@@ -90,11 +98,13 @@ export async function createImport(
         .where(and(eq(imports.workspaceId, scope.workspaceId), eq(imports.id, id)));
       if (existing !== undefined) {
         if (existing.createdByMemberId !== starter) throw refuse('NOT_FOUND', IMPORT_NOT_FOUND);
-        return importView(tx, scope, existing);
+        return importView(tx, scope, await readImport(tx, scope, id, { starterOnly: true }));
       }
       const objectId = await liveObject(tx, scope, input.objectId);
       checkSettings(scope, settings, await loadAttributes(tx, objectId));
       const limit = limitsOf(scope).unfinishedImports;
+      // One create at a time per workspace, so two at once can't both pass the cap.
+      await tx.execute(sql`select pg_advisory_xact_lock(hashtextextended(${`imports:${scope.workspaceId}`}, 0))`);
       if ((await unfinishedImports(tx, scope.workspaceId, id)) >= limit) {
         throw refuse(
           'LIMIT_REACHED',
@@ -339,7 +349,13 @@ export async function undoImport(
     async (context) => {
       const { tx } = context;
       const row = await readImport(tx, scope, importId, { lock: 'update' });
-      if (row.undoJobId !== null) return importView(tx, scope, row);
+      // An undo under way answers itself; one that failed (access lost, the object archived) can start again, its
+      // rows already taken back skipped.
+      if (row.undoJobId !== null && !(await undoFailed(tx, scope.workspaceId, row.undoJobId))) {
+        return importView(tx, scope, row);
+      }
+      // Undo writes as the caller: write on a live object, whoever started the import.
+      await liveObject(tx, scope, row.objectId);
       const refusal = await undoRefusal(tx, scope, row);
       if (refusal !== undefined) throw refuse(refusal.code, refusal.message);
       const ids = await tx.execute<{ id: string }>(sql`

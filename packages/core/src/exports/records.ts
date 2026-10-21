@@ -31,7 +31,14 @@ import type { EngineScope } from '../engine/scope.ts';
 import { isArchivedNow, loadAttributes, type AttributeDef } from '../engine/values.ts';
 import { runWrite, type AfterWrite, type WriteContext } from '../engine/write.ts';
 import { inWorkspace } from '../access/run.ts';
-import { EXPORT_KEPT_DAYS, EXPORTS_KEPT_MAX, exportAccessKey, ownExport, TOO_MANY_EXPORTS } from '../forms/export.ts';
+import {
+  EXPORT_BYTES_MAX,
+  EXPORT_KEPT_DAYS,
+  EXPORTS_KEPT_MAX,
+  exportAccessKey,
+  ownExport,
+  TOO_MANY_EXPORTS,
+} from '../forms/export.ts';
 import { defineKind, MAX_ATTEMPTS, type KindDefinition, type StepOutcome } from '../jobs/registry.ts';
 import type { JobRegistry } from '../jobs/registry.ts';
 import { startJob } from '../jobs/service.ts';
@@ -405,12 +412,12 @@ async function exportStep(context: WriteContext, exportId: string, checkpoint: u
     )
     .join('');
   const rows = at.rows + page.records.length;
-  if (rows > TRANSFER_LIMITS.exportRows) {
+  if (rows > TRANSFER_LIMITS.exportRows || at.bytes + Buffer.byteLength(text) > EXPORT_BYTES_MAX) {
     return {
       finished: true,
       failed: {
         code: 'EXPORT_TOO_LARGE',
-        message: 'This view grew past 100,000 rows while it was written; narrow the filter and export again.',
+        message: 'This view grew past 100,000 rows or 100 MB while it was written; narrow the filter and export again.',
       },
     };
   }
@@ -430,7 +437,7 @@ async function exportStep(context: WriteContext, exportId: string, checkpoint: u
       .set({ rowCount: next.rows, byteCount: next.bytes, updatedAt: sql`now()` })
       .where(eq(exports.id, exportId));
   }
-  return { finished, checkpoint: next, counts: { done: page.records.length }, result: { rows: next.rows } };
+  return { finished, checkpoint: next, counts: { done: page.records.length }, result: { rows: next.rows, exportId } };
 }
 
 /** `records.export`: the member's, heavy lane, cancellable, 200 records a batch, read as the member. */

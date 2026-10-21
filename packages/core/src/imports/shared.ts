@@ -12,7 +12,7 @@ import {
   type ImportView,
 } from '@crm/contracts';
 import { schema, type WorkspaceTx } from '@crm/db';
-import { can } from '../access/policy.ts';
+import { can, objectLevel } from '../access/policy.ts';
 import { attributeLevel } from '../access/visibility.ts';
 import { checkId } from '../engine/ids.ts';
 import { refuse } from '../engine/refusals.ts';
@@ -60,6 +60,11 @@ export async function readImport(
     row !== undefined &&
     (options.starterOnly === true ? memberOf(scope) === row.createdByMemberId : maySee(scope, row));
   if (row === undefined || !allowed) throw refuse('NOT_FOUND', IMPORT_NOT_FOUND);
+  // Hidden means absent: an import of an object the caller can't read is NOT_FOUND, for jobs.manage and a starter
+  // who has lost access alike (its headers, counts and refusals quote the file).
+  if (objectLevel(scope.access, row.objectId) === 'none' && !isOpen(scope.access)) {
+    throw refuse('NOT_FOUND', IMPORT_NOT_FOUND);
+  }
   return row;
 }
 
@@ -92,6 +97,16 @@ export async function jobFinished(tx: WorkspaceTx, workspaceId: string, jobId: s
   return row === undefined || isFinishedJob(row.status);
 }
 
+/** Whether an undo job ended without finishing its work (failed or cancelled): its import can be undone again. */
+export async function undoFailed(tx: WorkspaceTx, workspaceId: string, jobId: string | null): Promise<boolean> {
+  if (jobId === null) return false;
+  const [row] = await tx
+    .select({ status: jobs.status })
+    .from(jobs)
+    .where(and(eq(jobs.workspaceId, workspaceId), eq(jobs.id, jobId)));
+  return row?.status === 'failed' || row?.status === 'cancelled';
+}
+
 /** Why undo can't run now, or undefined when it can (AC-1128, AC-1129). */
 export async function undoRefusal(
   tx: WorkspaceTx,
@@ -112,11 +127,10 @@ export async function undoRefusal(
 export async function importView(tx: WorkspaceTx, scope: EngineScope, row: ImportRow): Promise<ImportView> {
   const counts = await countRows(tx, scope.workspaceId, row.id);
   const settings = ImportSettings.safeParse(row.settings);
-  const canUndo =
-    row.status === 'started' &&
-    row.undoJobId === null &&
-    counts.created + counts.updated > 0 &&
-    (await undoRefusal(tx, scope, row)) === undefined;
+  const undoable =
+    (row.status === 'started' && row.undoJobId === null) ||
+    (row.status === 'undone' && (await undoFailed(tx, scope.workspaceId, row.undoJobId)));
+  const canUndo = undoable && counts.created + counts.updated > 0 && (await undoRefusal(tx, scope, row)) === undefined;
   return {
     id: row.id,
     objectId: row.objectId,
@@ -141,6 +155,8 @@ export function importable(scope: EngineScope, attribute: AttributeDef): boolean
   if (attribute.isSystem || isArchivedNow(attribute)) return false;
   if ((SYSTEM_ONLY_TYPES as readonly AttributeType[]).includes(attribute.type)) return false;
   if (attribute.type === 'file') return false;
+  // Relation columns arrive with milestone 5 (their names resolved for a whole batch at once); until then refused.
+  if (attribute.type === 'record_reference') return false;
   return isOpen(scope.access) || attributeLevel(scope.access, attribute) === 'write';
 }
 

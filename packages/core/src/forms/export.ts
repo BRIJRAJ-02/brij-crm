@@ -213,7 +213,11 @@ export async function startSubmissionsExport(
       const { tx } = context;
       const [held] = await tx.select({ id: exports.id }).from(exports).where(eq(exports.id, exportId));
       // The same id again: the same export, through every check a read makes (its starter, kept, the same access).
-      if (held !== undefined) return viewOf(await ownExport(tx, scope, exportId));
+      if (held !== undefined) {
+        const own = await ownExport(tx, scope, exportId);
+        if (own.source !== 'form_submissions') throw refuse('NOT_FOUND', UNKNOWN_EXPORT);
+        return viewOf(own);
+      }
       const form = await readableForm(tx, scope, input.formId);
       // One start at a time per member, so two at once can't both pass the cap.
       await tx.execute(sql`select pg_advisory_xact_lock(hashtextextended(${`exports:${me}`}, 0))`);
@@ -264,7 +268,12 @@ export async function startSubmissionsExport(
 
 /** One export the caller started (AC: only its starter sees it). */
 export async function getExport(scope: EngineScope, input: { readonly exportId: string }): Promise<ExportRecord> {
-  return inWorkspace(scope, async (tx) => viewOf(await ownExport(tx, scope, input.exportId)));
+  return inWorkspace(scope, async (tx) => {
+    const row = await ownExport(tx, scope, input.exportId);
+    // A records export (spec 0040) answers through its own service.
+    if (row.source !== 'form_submissions') throw refuse('NOT_FOUND', UNKNOWN_EXPORT);
+    return viewOf(row);
+  });
 }
 
 /**
@@ -479,7 +488,7 @@ async function exportStep(context: WriteContext, exportId: string, checkpoint: u
   if (at.rows + shown.length > EXPORT_ROWS_MAX || at.bytes + Buffer.byteLength(text) > EXPORT_BYTES_MAX) {
     return { finished: true, failed: { code: 'JOB_TOO_LARGE', message: EXPORT_GREW } };
   }
-  // Appended to the last chunk while it stays under about 1 MB, so a file is few chunks, not one per page.
+  // One chunk a page (exports/chunks.ts).
   const { part, tail } = await appendChunk(tx, scope.workspaceId, exportId, at, text);
   const bytes = at.bytes + Buffer.byteLength(text);
 

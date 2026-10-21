@@ -413,6 +413,28 @@ describe('undo (AC-1128, AC-1129)', () => {
   });
 });
 
+describe('who sees and undoes an import (security review)', () => {
+  it('hides an import of an object jobs.manage can’t read, and refuses an undo it can’t write', async () => {
+    const w = await world();
+    const { id } = await runImport(w, w.owner, w.settings(), [w.row(2, 'Ada', 'ada@example.com')]);
+    const level = (value: string): AccessRules => ({
+      levels: [
+        { subject: { type: 'role', role: 'admin' }, target: { type: 'object', objectId: w.people }, level: value },
+      ],
+      records: [],
+    });
+    const hidden = rescope(w.admin, { rules: level('none') });
+    expect(await refusalOf(getImport(hidden, id))).toMatchObject({ code: 'NOT_FOUND' });
+    expect(await refusalOf(listImportRefusals(hidden, { importId: id }))).toMatchObject({ code: 'NOT_FOUND' });
+    const reader = rescope(w.admin, { rules: level('read') });
+    expect((await getImport(reader, id)).canUndo).toBe(true);
+    expect(await refusalOf(undoImport(reader, registry, id))).toMatchObject({ code: 'FORBIDDEN' });
+    // The refusal changed nothing: the starter still undoes it.
+    const undoing = await undoImport(w.owner, registry, id);
+    expect(undoing.undoJobId).toBeDefined();
+  });
+});
+
 describe('mergeValue (decision 2)', () => {
   const single = { isMulti: false };
   const multi = { isMulti: true };

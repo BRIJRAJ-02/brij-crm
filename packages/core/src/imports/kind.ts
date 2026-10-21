@@ -25,6 +25,7 @@ import type { WriteContext } from '../engine/write.ts';
 import { defineKind, MAX_ATTEMPTS, type ItemOutcome, type KindDefinition } from '../jobs/registry.ts';
 import { farObjects, namesOf, resolveLinks, type FarObject } from './links.ts';
 import { RECORDS_IMPORT, readableMatches } from './service.ts';
+import { checkSettings } from './shared.ts';
 
 const { imports, objects, workspaceCounters } = schema;
 
@@ -326,6 +327,8 @@ export function recordsImport(): KindDefinition<ImportJobParams> {
       try {
         await checkObject(tx, scope.access, plan.objectId, 'write');
         await liveImportObject(tx, plan.objectId);
+        // The columns again, as the member stands now: a field gone hidden or read only ends the import.
+        checkSettings(scope, plan.settings, plan.attributes);
       } catch (error) {
         if (!isRefusal(error) || error.refusal.code === 'QUERY_CANCELLED') throw error;
         return { finished: false, failed: { code: error.refusal.code, message: error.refusal.message } };
@@ -367,7 +370,7 @@ export function recordsImport(): KindDefinition<ImportJobParams> {
       await storeOutcomes(tx, scope, plan.importId, batch.stored);
       // The batch's record slots, taken last as every write takes the counter row.
       if (batch.created > 0) await takeRecordSlots(tx, scope, batch.created);
-      return { finished: false, items: outcomes };
+      return { finished: false, items: outcomes, result: { importId: plan.importId } };
     },
   });
 }

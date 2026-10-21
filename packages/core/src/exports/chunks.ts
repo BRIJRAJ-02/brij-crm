@@ -1,17 +1,14 @@
 // What every CSV export shares (spec 0040, beside spec 0023's submissions
 // export): writing its text to `export_chunks` (the header as part 0, then
-// pages appended to the last chunk while it stays under about 1 MB), and the
+// one chunk a page), and the
 // check that a records export's object is still one its starter may read.
-import { and, eq, sql } from 'drizzle-orm';
+import { eq } from 'drizzle-orm';
 import { schema, type WorkspaceTx } from '@crm/db';
 import { checkObject } from '../access/visibility.ts';
 import { refuse } from '../engine/refusals.ts';
 import type { EngineScope } from '../engine/scope.ts';
 
 const { exportChunks, objects } = schema;
-
-/** The most text one chunk holds before a new one starts. */
-export const CHUNK_BYTES = 1_000_000;
 
 /** Where a file's chunks got to: the next part, and the bytes in the last data chunk (`part - 1`). */
 export interface ChunkCursor {
@@ -37,9 +34,10 @@ export async function writeHeader(
 }
 
 /**
- * Appends a page's text: to the last data chunk while it stays under
- * `CHUNK_BYTES`, else as a new chunk (written again on a retried batch), so
- * a file is few chunks, not one per page. Answers the cursor after it.
+ * Writes a page's text as the file's next chunk (written again on a retried
+ * batch). One chunk a page, never appended to: growing a stored text copies
+ * it whole each time, so a chunk built from many pages would cost its size
+ * many times over. The download reads the parts in order.
  */
 export async function appendChunk(
   tx: WorkspaceTx,
@@ -49,14 +47,6 @@ export async function appendChunk(
   text: string,
 ): Promise<ChunkCursor> {
   if (text === '') return at;
-  const size = Buffer.byteLength(text);
-  if (at.part > 1 && at.tail + size <= CHUNK_BYTES) {
-    await tx
-      .update(exportChunks)
-      .set({ body: sql`${exportChunks.body} || ${text}` })
-      .where(and(eq(exportChunks.exportId, exportId), eq(exportChunks.part, at.part - 1)));
-    return { part: at.part, tail: at.tail + size };
-  }
   await tx
     .insert(exportChunks)
     .values({ workspaceId, exportId, part: at.part, body: text })
@@ -64,7 +54,7 @@ export async function appendChunk(
       target: [exportChunks.workspaceId, exportChunks.exportId, exportChunks.part],
       set: { body: text },
     });
-  return { part: at.part + 1, tail: size };
+  return { part: at.part + 1, tail: Buffer.byteLength(text) };
 }
 
 /** What a records export's refusal says when its object is gone or out of sight: the same as a missing export. */

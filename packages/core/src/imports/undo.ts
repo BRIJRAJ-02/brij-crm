@@ -200,6 +200,7 @@ export function recordsImportUndo(): KindDefinition<ImportUndoParams> {
       return {
         finished: false,
         items: items.map((item) => outcomes.get(item.itemId) ?? { position: item.position, state: 'skipped' }),
+        result: { importId: row.id },
       };
     },
   });
