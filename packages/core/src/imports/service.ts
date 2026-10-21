@@ -9,6 +9,7 @@ import { and, eq, sql } from 'drizzle-orm';
 import {
   ImportSettings,
   type CreateImportInput,
+  type ImportLinks,
   type ImportRows,
   type ImportView,
   type StagedRow,
@@ -22,13 +23,14 @@ import { checkObject, visibleRecords } from '../access/visibility.ts';
 import { encodeValue } from '../engine/columns.ts';
 import { canonicalId, checkId } from '../engine/ids.ts';
 import { limitsOf } from '../engine/limits.ts';
-import { refuse } from '../engine/refusals.ts';
+import { isRefusal, refuse } from '../engine/refusals.ts';
 import type { EngineScope } from '../engine/scope.ts';
 import { uniqueKeyOf } from '../engine/unique.ts';
 import { loadAttributes, type AttributeDef } from '../engine/values.ts';
 import { runWrite, type AfterWrite } from '../engine/write.ts';
 import type { JobRegistry } from '../jobs/registry.ts';
 import { startJob } from '../jobs/service.ts';
+import { farObjects, foldName, resolveNames } from './links.ts';
 import {
   checkSettings,
   IMPORT_NOT_FOUND,
@@ -37,6 +39,7 @@ import {
   readImport,
   undoFailed,
   undoRefusal,
+  importable,
 } from './shared.ts';
 
 const { importRows, imports, objects } = schema;
@@ -58,6 +61,67 @@ async function liveObject(tx: WorkspaceTx, scope: EngineScope, objectId: string)
   const [row] = await tx.select({ archivedAt: objects.archivedAt }).from(objects).where(eq(objects.id, id));
   if (row === undefined || row.archivedAt !== null) throw refuse('NOT_FOUND', 'That object does not exist.');
   return id;
+}
+
+/**
+ * Checks each relation column that makes missing records (`createMissing`):
+ * its relationship ends at one object, live and writable by the member.
+ * Refuses CONFIG_INVALID with why, so the page only offers what lands.
+ */
+async function checkMakes(
+  tx: WorkspaceTx,
+  scope: EngineScope,
+  settings: ImportSettings,
+  attributes: ReadonlyMap<string, AttributeDef>,
+): Promise<void> {
+  for (const column of settings.columns) {
+    if (column.target?.createMissing !== true) continue;
+    const attribute = attributes.get(column.target.attributeId);
+    const ends = attribute === undefined ? [] : await farObjects(tx, attribute);
+    const [only] = ends;
+    const why = `The column “${column.header}” can’t make missing records. Turn that off, or match it elsewhere.`;
+    if (only === undefined || ends.length > 1) throw refuse('CONFIG_INVALID', why);
+    try {
+      await liveObject(tx, scope, only.objectId);
+    } catch (error) {
+      if (isRefusal(error)) throw refuse('CONFIG_INVALID', why);
+      throw error;
+    }
+  }
+}
+
+/**
+ * Says which of a relation column's names link to no record before the
+ * import starts (the preview's unmatched count): only records the member can
+ * read are found, so nothing is revealed that the import itself wouldn't.
+ * The column's attribute must be one the member may import into. Read only.
+ */
+export async function checkImportLinks(
+  scope: EngineScope,
+  input: { readonly objectId: string; readonly attributeId: string; readonly names: readonly string[] },
+): Promise<ImportLinks> {
+  checkScope(scope);
+  if (input.names.length > 1_000) throw refuse('CONFIG_INVALID', 'Ask about at most 1,000 names at a time.');
+  return inWorkspace(scope, async (tx) => {
+    const objectId = await liveObject(tx, scope, input.objectId);
+    const attributes = await loadAttributes(tx, objectId);
+    const attribute = attributes.get(canonicalId(input.attributeId));
+    if (attribute === undefined || !importable(scope, attribute)) {
+      throw refuse('NOT_FOUND', 'That attribute does not exist.');
+    }
+    if (attribute.type !== 'record_reference') throw refuse('CONFIG_INVALID', `${attribute.title} links no records.`);
+    const resolved = await resolveNames(tx, scope, await farObjects(tx, attribute), input.names);
+    const missing: string[] = [];
+    const ambiguous: string[] = [];
+    const asked = new Map(input.names.map((name) => [foldName(name), name.trim()]));
+    for (const [fold, each] of resolved) {
+      const name = asked.get(fold) ?? fold;
+      if (each.ok) continue;
+      if (each.missing) missing.push(name);
+      else ambiguous.push(name);
+    }
+    return { missing, ambiguous };
+  });
 }
 
 /** How many imports the workspace has unfinished: staged ones still kept, and started ones whose job runs. */
@@ -101,7 +165,9 @@ export async function createImport(
         return importView(tx, scope, await readImport(tx, scope, id, { starterOnly: true }));
       }
       const objectId = await liveObject(tx, scope, input.objectId);
-      checkSettings(scope, settings, await loadAttributes(tx, objectId));
+      const attributes = await loadAttributes(tx, objectId);
+      checkSettings(scope, settings, attributes);
+      await checkMakes(tx, scope, settings, attributes);
       const limit = limitsOf(scope).unfinishedImports;
       // One create at a time per workspace, so two at once can't both pass the cap.
       await tx.execute(sql`select pg_advisory_xact_lock(hashtextextended(${`imports:${scope.workspaceId}`}, 0))`);
@@ -270,7 +336,10 @@ export async function startImport(
       if (row.status !== 'staging') return importView(tx, scope, row);
       // The object may have been archived, or the member's access changed, since the import was made.
       await liveObject(tx, scope, row.objectId);
-      checkSettings(scope, ImportSettings.parse(row.settings), await loadAttributes(tx, row.objectId));
+      const settings = ImportSettings.parse(row.settings);
+      const attributes = await loadAttributes(tx, row.objectId);
+      checkSettings(scope, settings, attributes);
+      await checkMakes(tx, scope, settings, attributes);
       const ids = await tx.execute<{ id: string }>(sql`
         select id::text from import_rows where workspace_id = ${scope.workspaceId} and import_id = ${row.id}
         order by row_number
@@ -360,7 +429,7 @@ export async function undoImport(
       if (refusal !== undefined) throw refuse(refusal.code, refusal.message);
       const ids = await tx.execute<{ id: string }>(sql`
         select id::text from import_rows where workspace_id = ${scope.workspaceId} and import_id = ${row.id}
-          and outcome in ('created', 'updated')
+          and (outcome in ('created', 'updated') or made is not null)
         order by row_number
       `);
       if (ids.rows.length === 0)

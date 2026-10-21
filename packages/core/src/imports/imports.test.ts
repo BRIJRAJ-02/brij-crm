@@ -5,7 +5,7 @@
 // that share a key acting on one record, refused rows, the starter only
 // door, a key held by a record the member can't read, and the limits.
 import { sql } from 'drizzle-orm';
-import type { ImportSettings } from '@crm/contracts';
+import type { ImportSettings, StagedRow } from '@crm/contracts';
 import { createDatabase } from '@crm/db';
 import { testQuery } from '@crm/db/testing';
 import { afterAll, describe, expect, inject, it } from 'vitest';
@@ -18,7 +18,15 @@ import { jobKinds } from '../jobs/kinds/index.ts';
 import { rescope } from '../testing.ts';
 import { jobTestKit, refusalOf } from '../../test/jobs-kit.ts';
 import { mergeValue } from './kind.ts';
-import { createImport, getImport, listImportRefusals, stageImportRows, startImport, undoImport } from './service.ts';
+import {
+  checkImportLinks,
+  createImport,
+  getImport,
+  listImportRefusals,
+  stageImportRows,
+  startImport,
+  undoImport,
+} from './service.ts';
 
 const { appUrl, ownerUrl } = inject('testDatabase');
 const db = createDatabase({ url: appUrl, applicationName: 'crm-imports-tests' });
@@ -95,7 +103,7 @@ async function byEmail(w: World) {
 }
 
 /** Creates, stages, starts and drives an import to its end, answering its view. */
-async function runImport(w: World, scope: World['owner'], settings: ImportSettings, rows: ReturnType<World['row']>[]) {
+async function runImport(w: World, scope: World['owner'], settings: ImportSettings, rows: StagedRow[]) {
   const id = newId();
   await createImport(scope, {
     id,
@@ -448,5 +456,139 @@ describe('mergeValue (decision 2)', () => {
     expect(mergeValue(single, null, 'Old', 'overwrite')).toBeUndefined();
     expect(mergeValue(multi, ['b', 'c'], ['a', 'b'], 'fill')).toEqual(['a', 'b', 'c']);
     expect(mergeValue(multi, ['a'], ['a'], 'overwrite')).toBeUndefined();
+  });
+});
+
+describe('relation columns (decision 7, milestone 5)', () => {
+  /** The Companies object and its attributes, and People's Company relation. */
+  async function companies(w: World) {
+    const found = await db.withWorkspace(w.workspaceId, (tx) =>
+      tx.execute<{ id: string; api_slug: string; object_id: string }>(
+        sql`select a.id::text, a.api_slug, a.object_id::text from attributes a join objects o on o.id = a.object_id where o.api_slug = 'companies'`,
+      ),
+    );
+    const objectId = found.rows[0]?.object_id ?? '';
+    const of = (slug: string) => found.rows.find((row) => row.api_slug === slug)?.id ?? '';
+    const company = async (name: string, domain?: string) =>
+      (
+        await createRecord(w.owner, {
+          objectId,
+          values: { [of('name')]: name, ...(domain === undefined ? {} : { [of('domains')]: [domain] }) },
+        })
+      ).recordId;
+    /** Live companies by name, as the owner reads them. */
+    const live = async () =>
+      (
+        await testQuery<{ name: string }>(
+          ownerUrl,
+          `select v.text_value as name from records r join "values" v on v.record_id = r.id and v.attribute_id = $2
+           and v.active_until is null where r.workspace_id = $1 and r.object_id = $3 and r.deleted_at is null order by 1`,
+          [w.workspaceId, of('name'), objectId],
+        )
+      ).map((row) => row.name);
+    return { objectId, company, live };
+  }
+
+  const linkRow = (w: World, rowNumber: number, email: string, names: string[]) => ({
+    rowNumber,
+    values: {
+      [w.attribute('name')]: { firstName: email.split('@')[0] ?? '' },
+      [w.attribute('email_addresses')]: [email],
+      [w.attribute('company')]: { names },
+    },
+  });
+  const linkSettings = (w: World, createMissing?: boolean): ImportSettings =>
+    w.settings({
+      columns: [
+        { header: 'Name', target: { attributeId: w.attribute('name') } },
+        { header: 'Email', target: { attributeId: w.attribute('email_addresses') } },
+        {
+          header: 'Company',
+          target: { attributeId: w.attribute('company'), ...(createMissing === undefined ? {} : { createMissing }) },
+        },
+      ],
+    });
+  /** Each person's linked company record id, by email. */
+  const links = async (w: World) =>
+    Object.fromEntries(
+      (
+        await testQuery<{ email: string; target: string | null }>(
+          ownerUrl,
+          `select e.text_value as email, l.to_record_id::text as target from records r
+           join "values" e on e.record_id = r.id and e.attribute_id = $2 and e.active_until is null
+           left join record_links l on l.from_record_id = r.id and l.active_until is null
+           where r.workspace_id = $1 and r.deleted_at is null`,
+          [w.workspaceId, w.attribute('email_addresses')],
+        )
+      ).map((row) => [row.email, row.target]),
+    );
+
+  it('links by domain, then by name ignoring case, and says which names linked nothing', async () => {
+    const w = await world();
+    const c = await companies(w);
+    const acme = await c.company('Acme', 'acme.com');
+    const globex = await c.company('Globex');
+    const { id, view } = await runImport(w, w.owner, linkSettings(w), [
+      linkRow(w, 2, 'ada@example.com', ['https://www.acme.com/about']),
+      linkRow(w, 3, 'bob@example.com', ['GLOBEX']),
+      linkRow(w, 4, 'cy@example.com', ['Initech']),
+    ]);
+    expect(view.counts).toMatchObject({ created: 3, made: 0 });
+    const linked = await links(w);
+    expect(linked['ada@example.com']).toBe(acme);
+    expect(linked['bob@example.com']).toBe(globex);
+    expect(linked['cy@example.com'] ?? null).toBeNull();
+    const notes = await listImportRefusals(w.owner, { importId: id });
+    expect(notes.rows.map((row) => row.rowNumber)).toEqual([4]);
+    expect(notes.rows[0]?.message).toContain('Initech');
+    // The preview's check says the same before any import.
+    expect(
+      await checkImportLinks(w.owner, {
+        objectId: w.people,
+        attributeId: w.attribute('company'),
+        names: ['acme.com', 'globex', 'Initech'],
+      }),
+    ).toEqual({ missing: ['Initech'], ambiguous: [] });
+  });
+
+  it('makes each missing company once with Create missing, and undo takes them to the trash', async () => {
+    const w = await world();
+    const c = await companies(w);
+    await c.company('Acme', 'acme.com');
+    const { id, view } = await runImport(w, w.owner, linkSettings(w, true), [
+      linkRow(w, 2, 'ada@example.com', ['Initech']),
+      linkRow(w, 3, 'bob@example.com', ['initech']),
+      linkRow(w, 4, 'cy@example.com', ['hooli.com']),
+      linkRow(w, 5, 'dee@example.com', ['acme.com']),
+    ]);
+    expect(view.counts).toMatchObject({ created: 4, made: 2 });
+    expect((await c.live()).sort()).toEqual(['Acme', 'Initech', 'hooli.com']);
+    const linked = await links(w);
+    expect(linked['ada@example.com']).toBe(linked['bob@example.com']);
+    expect(linked['cy@example.com']).toBeTruthy();
+    const undoing = await undoImport(w.owner, registry, id);
+    expect(await drive(runnerFor(registry), w.workspaceId, undoing.undoJobId ?? '')).toContain('succeeded');
+    expect(await c.live()).toEqual(['Acme']);
+    expect((await getImport(w.owner, id)).counts.made).toBe(0);
+  });
+
+  it('refuses Create missing on a column that is not a relationship', async () => {
+    const w = await world();
+    const settings: ImportSettings = {
+      columns: [{ header: 'Title', target: { attributeId: w.attribute('job_title'), createMissing: true } }],
+      onMatch: 'fill',
+      onNoMatch: 'create',
+    };
+    const refusal = await refusalOf(
+      createImport(w.owner, {
+        id: newId(),
+        objectId: w.people,
+        fileName: 'p.csv',
+        rowCount: 1,
+        errorRows: 0,
+        settings,
+      }),
+    );
+    expect(refusal).toMatchObject({ code: 'CONFIG_INVALID' });
   });
 });

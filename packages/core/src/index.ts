@@ -367,6 +367,7 @@ export {
   type Assignment,
 } from './forms/process.ts';
 export {
+  checkImportLinks,
   createImport,
   getImport,
   listImportRefusals,

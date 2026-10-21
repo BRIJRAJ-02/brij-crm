@@ -23,7 +23,17 @@ import type { EngineScope } from '../engine/scope.ts';
 import { loadAttributes, type AttributeDef } from '../engine/values.ts';
 import type { WriteContext } from '../engine/write.ts';
 import { defineKind, MAX_ATTEMPTS, type ItemOutcome, type KindDefinition } from '../jobs/registry.ts';
-import { farObjects, namesOf, resolveLinks, type FarObject } from './links.ts';
+import {
+  farObjects,
+  foldName,
+  linkValue,
+  madeValues,
+  namesOf,
+  namesTaken,
+  resolveNames,
+  type FarObject,
+  type Resolved,
+} from './links.ts';
 import { RECORDS_IMPORT, readableMatches } from './service.ts';
 import { checkSettings } from './shared.ts';
 
@@ -53,6 +63,20 @@ interface ImportPlan {
   readonly settings: ImportSettings;
   readonly attributes: ReadonlyMap<string, AttributeDef>;
   readonly far: ReadonlyMap<string, readonly FarObject[]>;
+  /** Relation columns that make a far record for a name that links to none: the far object and its attributes. */
+  readonly makes: ReadonlyMap<string, MakeTarget>;
+}
+
+/** Where a relation column's missing names go when it makes them: its one far object, and that object's attributes. */
+interface MakeTarget {
+  readonly far: FarObject;
+  readonly attributes: ReadonlyMap<string, AttributeDef>;
+}
+
+/** A far record a row made for a name. */
+interface Made {
+  readonly objectId: string;
+  readonly recordId: string;
 }
 
 /** What one row did, as its savepoint answers it. */
@@ -66,8 +90,11 @@ function isEmpty(value: unknown): boolean {
   return value === null || value === undefined || (Array.isArray(value) && value.length === 0);
 }
 
-/** A value's identity for comparing one item with another. */
-const identity = (value: unknown): string => JSON.stringify(value);
+/** A value's identity for comparing one item with another: a link by its record, anything else whole. */
+const identity = (value: unknown): string =>
+  typeof value === 'object' && value !== null && 'recordId' in value && typeof value.recordId === 'string'
+    ? `record:${value.recordId}`
+    : JSON.stringify(value);
 
 /**
  * What to write for one attribute on a matched record (decision 2): a list
@@ -119,39 +146,106 @@ async function loadPlan(tx: WorkspaceTx, scope: EngineScope, importId: string): 
   const settings = ImportSettings.parse(row.settings);
   const attributes = await loadAttributes(tx, row.objectId);
   const far = new Map<string, readonly FarObject[]>();
+  const makes = new Map<string, MakeTarget>();
   for (const column of settings.columns) {
     const attribute = column.target === undefined ? undefined : attributes.get(column.target.attributeId);
     if (attribute?.type === 'record_reference' && !far.has(attribute.id)) {
-      far.set(attribute.id, await farObjects(tx, attribute));
+      const ends = await farObjects(tx, attribute);
+      far.set(attribute.id, ends);
+      const [only] = ends;
+      if (column.target?.createMissing === true && only !== undefined && ends.length === 1) {
+        makes.set(attribute.id, { far: only, attributes: await loadAttributes(tx, only.objectId) });
+      }
     }
   }
-  return { importId: row.id, objectId: row.objectId, settings, attributes, far };
+  return { importId: row.id, objectId: row.objectId, settings, attributes, far, makes };
 }
 
-/** The row's values with relation names turned into links, and a note for each name left out. */
-async function rowValues(
-  context: WriteContext,
+/** A row's staged values: plain ones by attribute, and each relation column's names. */
+function stagedValues(
   plan: ImportPlan,
   staged: unknown,
-): Promise<{ readonly values: Map<string, unknown>; readonly notes: readonly string[] }> {
+): { readonly values: Map<string, unknown>; readonly names: Map<string, readonly string[]> } {
   const given = typeof staged === 'object' && staged !== null ? (staged as Record<string, unknown>) : {};
   const values = new Map<string, unknown>();
-  const notes: string[] = [];
+  const names = new Map<string, readonly string[]>();
   for (const [id, value] of Object.entries(given)) {
     const attributeId = canonicalId(id);
     const attribute = plan.attributes.get(attributeId);
     if (attribute === undefined) continue;
     if (attribute.type === 'record_reference') {
-      const names = namesOf(value);
-      if (names === undefined || names.length === 0) continue;
-      const linked = await resolveLinks(context.tx, context.scope, attribute, plan.far.get(attributeId) ?? [], names);
-      notes.push(...linked.notes);
-      if (linked.value !== undefined) values.set(attributeId, linked.value);
+      const held = namesOf(value);
+      if (held !== undefined && held.length > 0) names.set(attributeId, namesTaken(attribute, held));
       continue;
     }
     if (!isEmpty(value)) values.set(attributeId, value);
   }
-  return { values, notes };
+  return { values, names };
+}
+
+/**
+ * Turns a row's relation names into links, from the names the batch
+ * resolved. A name that links to none, in a column that makes them, makes a
+ * far record first (inside the row's savepoint, so a refused row takes it
+ * back; refused, the row is refused with why). Answers the values, a note
+ * for each name left out, and the records made.
+ */
+async function linkRow(
+  context: WriteContext,
+  plan: ImportPlan,
+  batch: BatchState,
+  row: { readonly values: Map<string, unknown>; readonly names: Map<string, readonly string[]> },
+): Promise<{
+  readonly values: Map<string, unknown>;
+  readonly notes: readonly string[];
+  readonly made: Map<string, Made>;
+}> {
+  const values = new Map(row.values);
+  const notes: string[] = [];
+  const made = new Map<string, Made>();
+  for (const [attributeId, names] of row.names) {
+    const attribute = plan.attributes.get(attributeId);
+    if (attribute === undefined) continue;
+    const known = batch.resolved.get(attributeId) ?? new Map<string, Resolved>();
+    const make = batch.makes.get(attributeId);
+    const resolved = new Map(known);
+    for (const name of names) {
+      const fold = foldName(name);
+      const each = known.get(fold);
+      if (make === undefined || each === undefined || each.ok || !each.missing) continue;
+      const key = `${attributeId}:${fold}`;
+      const already = made.get(key);
+      if (already !== undefined) {
+        resolved.set(fold, { ok: true, ...already });
+        continue;
+      }
+      if (batch.room - made.size <= 0) {
+        throw refuse(
+          'LIMIT_REACHED',
+          `This workspace holds at most ${limitsOf(context.scope).liveRecords.toLocaleString('en')} records.`,
+        );
+      }
+      const start = madeValues(make.attributes, make.far.nameAttributeId, name);
+      if (start === undefined) continue;
+      try {
+        const created = await insertRecord(
+          context,
+          { objectId: make.far.objectId, values: start },
+          { attributes: make.attributes, countsSlots: true },
+        );
+        const link = { objectId: make.far.objectId, recordId: created.recordId };
+        made.set(key, link);
+        resolved.set(fold, { ok: true, ...link });
+      } catch (error) {
+        if (!isRefusal(error)) throw error;
+        throw refuse(error.refusal.code, `Couldn’t make a record for “${name}”. ${error.refusal.message}`);
+      }
+    }
+    const linked = linkValue(attribute, names, resolved);
+    notes.push(...linked.notes);
+    if (linked.value !== undefined) values.set(attributeId, linked.value);
+  }
+  return { values, notes, made };
 }
 
 /**
@@ -163,6 +257,10 @@ async function rowValues(
  */
 interface BatchState {
   readonly matches: Map<string, string>;
+  /** Each relation column's names, resolved once for the batch, then kept up to date as rows make far records. */
+  readonly resolved: Map<string, Map<string, Resolved>>;
+  /** The relation columns that may make far records this batch (their far object still writable and live). */
+  readonly makes: ReadonlyMap<string, MakeTarget>;
   room: number;
   created: number;
   readonly stored: StoredOutcome[];
@@ -177,6 +275,7 @@ interface StoredOutcome {
   readonly error_message?: string;
   readonly before?: unknown;
   readonly written?: unknown;
+  readonly made?: readonly Made[];
 }
 
 /** Takes every match key's lock of the batch in one order, so two imports of one new key meet in turn (two rows never both create). */
@@ -197,23 +296,37 @@ async function importRow(
   plan: ImportPlan,
   row: StagedRow,
   batch: BatchState,
-): Promise<{ readonly result: RowResult; readonly stored: StoredOutcome }> {
+): Promise<{ readonly result: RowResult; readonly stored: StoredOutcome; readonly made: ReadonlyMap<string, Made> }> {
   const { tx, scope } = context;
   const { settings } = plan;
-  const { values, notes } = await rowValues(context, plan, row.values);
-  const note = notes.length === 0 ? undefined : notes.slice(0, 3).join(' ');
-  const noted = note === undefined ? {} : { error_code: 'LINK_NOT_FOUND', error_message: note };
   const matchId =
     settings.matchAttributeId === undefined
       ? undefined
       : row.match_keys.map((key) => batch.matches.get(key)).find((id) => id !== undefined);
-  const base = { row_number: row.row_number, ...noted };
+  const nothing = new Map<string, Made>();
+  if (matchId === undefined && settings.onNoMatch === 'skip') {
+    return {
+      result: { outcome: 'skipped' },
+      stored: { row_number: row.row_number, outcome: 'skipped' },
+      made: nothing,
+    };
+  }
+  if (matchId !== undefined && settings.onMatch === 'skip') {
+    return {
+      result: { outcome: 'skipped' },
+      stored: { row_number: row.row_number, outcome: 'skipped', record_id: matchId },
+      made: nothing,
+    };
+  }
+  const { values, notes, made } = await linkRow(context, plan, batch, stagedValues(plan, row.values));
+  const note = notes.length === 0 ? undefined : notes.slice(0, 3).join(' ');
+  const noted = note === undefined ? {} : { error_code: 'LINK_NOT_FOUND', error_message: note };
+  const madeList = [...made.values()];
+  const base = { row_number: row.row_number, ...noted, ...(madeList.length === 0 ? {} : { made: madeList }) };
 
   if (matchId === undefined) {
-    if (settings.onNoMatch === 'skip')
-      return { result: { outcome: 'skipped' }, stored: { ...base, outcome: 'skipped' } };
     // The record limit, counted for the batch: a row past it is refused as a create would be.
-    if (batch.room <= 0)
+    if (batch.room - made.size <= 0)
       throw refuse(
         'LIMIT_REACHED',
         `This workspace holds at most ${limitsOf(scope).liveRecords.toLocaleString('en')} records.`,
@@ -226,14 +339,16 @@ async function importRow(
     return {
       result: { outcome: 'created', ...(note === undefined ? {} : { note }) },
       stored: { ...base, outcome: 'created', record_id: created.recordId },
+      made,
     };
   }
 
   const skipped = {
     result: { outcome: 'skipped' as const },
     stored: { ...base, outcome: 'skipped' as const, record_id: matchId },
+    made,
   };
-  if (settings.onMatch === 'skip') return skipped;
+  const rule = settings.onMatch === 'overwrite' ? 'overwrite' : 'fill';
   const ids = [...values.keys()];
   const [current] = await readRecords(tx, scope.access, [matchId], { attributeIds: ids });
   const next: Record<string, { value: unknown }> = {};
@@ -244,7 +359,7 @@ async function importRow(
     // A link list cut short on read isn't whole, so writing it back would drop links: it is left as it is.
     if (current?.linkTotals[attributeId] !== undefined) continue;
     const held = current?.values[attributeId] ?? null;
-    const merged = mergeValue(attribute, canonical(attribute, value), held, settings.onMatch);
+    const merged = mergeValue(attribute, canonical(attribute, value), held, rule);
     if (merged === undefined) continue;
     next[attributeId] = { value: merged };
     const versionId = current?.versions[attributeId];
@@ -260,6 +375,7 @@ async function importRow(
   return {
     result: { outcome: 'updated', ...(note === undefined ? {} : { note }) },
     stored: { ...base, outcome: 'updated', record_id: matchId, before: kept, written },
+    made,
   };
 }
 
@@ -273,12 +389,60 @@ async function storeOutcomes(tx: WorkspaceTx, scope: EngineScope, importId: stri
       error_code = v.error_code,
       error_message = v.error_message,
       before = coalesce(v.before, r.before),
-      written = coalesce(v.written, r.written)
+      written = coalesce(v.written, r.written),
+      made = coalesce(v.made, r.made)
     from jsonb_to_recordset(${JSON.stringify(stored)}::jsonb) as v(
-      row_number int, outcome text, record_id uuid, error_code text, error_message text, before jsonb, written jsonb
+      row_number int, outcome text, record_id uuid, error_code text, error_message text, before jsonb, written jsonb,
+      made jsonb
     )
     where r.workspace_id = ${scope.workspaceId} and r.import_id = ${importId} and r.row_number = v.row_number
   `);
+}
+
+/** Every relation column's names across the batch's rows, resolved at once (a few queries a batch, none a row). */
+async function resolveBatch(
+  tx: WorkspaceTx,
+  scope: EngineScope,
+  plan: ImportPlan,
+  rows: readonly StagedRow[],
+): Promise<Map<string, Map<string, Resolved>>> {
+  const wanted = new Map<string, Set<string>>();
+  for (const row of rows) {
+    for (const [attributeId, names] of stagedValues(plan, row.values).names) {
+      const set = wanted.get(attributeId) ?? new Set<string>();
+      for (const name of names) set.add(name);
+      wanted.set(attributeId, set);
+    }
+  }
+  const resolved = new Map<string, Map<string, Resolved>>();
+  for (const [attributeId, names] of wanted) {
+    const found = await resolveNames(tx, scope, plan.far.get(attributeId) ?? [], [...names]);
+    resolved.set(attributeId, new Map(found));
+  }
+  return resolved;
+}
+
+/**
+ * The relation columns that may make far records this batch: the far object
+ * still live and writable by the member. One that lost it makes nothing, and
+ * its missing names are left out and said, as without `createMissing`.
+ */
+async function writableMakes(
+  tx: WorkspaceTx,
+  scope: EngineScope,
+  plan: ImportPlan,
+): Promise<ReadonlyMap<string, MakeTarget>> {
+  const makes = new Map<string, MakeTarget>();
+  for (const [attributeId, make] of plan.makes) {
+    try {
+      await checkObject(tx, scope.access, make.far.objectId, 'write');
+      await liveImportObject(tx, make.far.objectId);
+      makes.set(attributeId, make);
+    } catch (error) {
+      if (!isRefusal(error) || error.refusal.code === 'QUERY_CANCELLED') throw error;
+    }
+  }
+  return makes;
 }
 
 /** The records the workspace may still make under its limit, read once a batch. */
@@ -339,7 +503,14 @@ export function recordsImport(): KindDefinition<ImportJobParams> {
         plan.settings.matchAttributeId === undefined
           ? new Map<string, string>()
           : new Map(await readableMatches(tx, scope, plan.objectId, plan.settings.matchAttributeId, keys));
-      const batch: BatchState = { matches, room: await recordRoom(tx, scope), created: 0, stored: [] };
+      const batch: BatchState = {
+        matches,
+        resolved: await resolveBatch(tx, scope, plan, pending),
+        makes: await writableMakes(tx, scope, plan),
+        room: await recordRoom(tx, scope),
+        created: 0,
+        stored: [],
+      };
       const outcomes: ItemOutcome[] = [];
       for (const item of items) {
         const row = byId.get(item.itemId);
@@ -351,6 +522,16 @@ export function recordsImport(): KindDefinition<ImportJobParams> {
         const result = await context.perRecord((inner) => importRow(inner, plan, row, batch));
         if (result.ok) {
           batch.stored.push(result.value.stored);
+          // Far records this row made: later rows link them, and they count against the record limit.
+          for (const [key, link] of result.value.made) {
+            const split = key.indexOf(':');
+            const attributeId = key.slice(0, split);
+            const names = batch.resolved.get(attributeId) ?? new Map<string, Resolved>();
+            names.set(key.slice(split + 1), { ok: true, ...link });
+            batch.resolved.set(attributeId, names);
+            batch.room -= 1;
+            batch.created += 1;
+          }
           if (result.value.result.outcome === 'created' && result.value.stored.record_id !== undefined) {
             // Later rows of this batch sharing a key act on the record this one made.
             for (const key of row.match_keys) batch.matches.set(key, result.value.stored.record_id);

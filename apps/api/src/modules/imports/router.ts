@@ -1,4 +1,12 @@
-import { createImport, getImport, listImportRefusals, stageImportRows, startImport, undoImport } from '@crm/core';
+import {
+  checkImportLinks,
+  createImport,
+  getImport,
+  listImportRefusals,
+  stageImportRows,
+  startImport,
+  undoImport,
+} from '@crm/core';
 import { commitWrite } from '../../hooks.ts';
 import { member } from '../../orpc.ts';
 
@@ -45,5 +53,12 @@ export const importsRouter = member.imports.router({
     commitWrite(context, { mutationId: input.mutationId }, (hooks) =>
       undoImport(context.scope, context.jobs, input.importId, hooks),
     ),
+  ),
+  links: member.imports.links.handler(({ context, input }) =>
+    checkImportLinks(context.scope, {
+      objectId: input.objectId,
+      attributeId: input.attributeId,
+      names: input.names,
+    }),
   ),
 });

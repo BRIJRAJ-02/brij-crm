@@ -482,6 +482,7 @@ function fakeApi(overrides: Partial<Behaviour> = {}, auth: (path: string, body: 
       get: os.imports.get.handler(notServed),
       rows: os.imports.rows.handler(notServed),
       undo: os.imports.undo.handler(notServed),
+      links: os.imports.links.handler(notServed),
     },
     exports: {
       start: os.exports.start.handler(notServed),

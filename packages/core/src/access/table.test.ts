@@ -677,6 +677,9 @@ const DATA_CASES: Readonly<Record<string, DataCase>> = {
   listImportRefusals: refused('NOT_FOUND', async (scope, world) =>
     core.listImportRefusals(scope, { importId: await ownerImport(world) }),
   ),
+  checkImportLinks: refused('FORBIDDEN', (scope, world) =>
+    core.checkImportLinks(scope, { objectId: world.people, attributeId: world.name, names: ['Acme'] }),
+  ),
   // Records exports (spec 0040): a hidden object can't be exported, and anyone else's export is absent.
   startRecordsExport: refused('NOT_FOUND', (scope, world) =>
     core.startRecordsExport(scope, core.jobKinds({ environment: 'local' }), {

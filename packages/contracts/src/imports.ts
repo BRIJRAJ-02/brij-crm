@@ -16,10 +16,16 @@ import { WorkspaceScoped } from './workspaces.ts';
 
 export { TRANSFER_LIMITS } from './transfer-limits.ts';
 
-/** Where a column goes: an attribute, or one part of a personal name. */
+/**
+ * Where a column goes: an attribute, or one part of a personal name. For a
+ * relationship attribute whose far end is one object, `createMissing` makes
+ * a record of that object for each name that links to none (the member must
+ * be able to write that object).
+ */
 export const ImportTarget = z.strictObject({
   attributeId: z.uuid(),
   part: z.enum(['first', 'last']).optional(),
+  createMissing: z.boolean().optional(),
 });
 /** Where a column goes. */
 export type ImportTarget = z.infer<typeof ImportTarget>;
@@ -115,6 +121,27 @@ export const ImportWriteInput = ImportInput.extend({ mutationId: z.uuid() });
 /** A change to one import. */
 export type ImportWriteInput = z.infer<typeof ImportWriteInput>;
 
+/**
+ * Names a relation column holds, to say before the import which link to no
+ * record (AC-1121's preview): the import's object and the relationship
+ * attribute, and at most 1,000 distinct names a call.
+ */
+export const ImportLinksInput = WorkspaceScoped.extend({
+  objectId: z.uuid(),
+  attributeId: z.uuid(),
+  names: z.array(z.string().trim().min(1).max(500)).min(1).max(1_000),
+});
+/** Names a relation column holds. */
+export type ImportLinksInput = z.infer<typeof ImportLinksInput>;
+
+/** Of the names asked about: those that link to no record the member can read, and those that name several. */
+export const ImportLinks = z.object({
+  missing: z.array(z.string()),
+  ambiguous: z.array(z.string()),
+});
+/** Names that link to no record, or to several. */
+export type ImportLinks = z.infer<typeof ImportLinks>;
+
 /** Where an import is: rows arriving, its job started, or taken back. */
 export const ImportStatus = z.enum(['staging', 'started', 'undone']);
 /** Where an import is. */
@@ -129,6 +156,8 @@ export const ImportCounts = z.object({
   skipped: z.number().int().min(0),
   refused: z.number().int().min(0),
   undone: z.number().int().min(0),
+  /** Records of a relation's far object the import made for names that linked to none (`createMissing`). */
+  made: z.number().int().min(0),
 });
 /** Staged rows by outcome. */
 export type ImportCounts = z.infer<typeof ImportCounts>;
@@ -238,6 +267,7 @@ export const importsContract = {
   get: oc.input(ImportInput).output(ImportView),
   rows: oc.input(ImportRowsInput).output(ImportRows),
   undo: oc.input(ImportWriteInput).output(ImportView),
+  links: oc.input(ImportLinksInput).output(ImportLinks),
 };
 
 /**

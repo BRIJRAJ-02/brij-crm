@@ -70,8 +70,10 @@ export async function readImport(
 
 /** An import's staged rows by outcome, in one grouped read (the outcome index). */
 export async function countRows(tx: WorkspaceTx, workspaceId: string, importId: string): Promise<ImportCounts> {
-  const result = await tx.execute<{ outcome: string; n: number }>(sql`
-    select outcome::text as outcome, count(*)::int as n from import_rows
+  const result = await tx.execute<{ outcome: string; n: number; made: number }>(sql`
+    select outcome::text as outcome, count(*)::int as n,
+      coalesce(sum(jsonb_array_length(coalesce(made, '[]'::jsonb))), 0)::int as made
+    from import_rows
     where workspace_id = ${workspaceId} and import_id = ${importId}
     group by outcome
   `);
@@ -84,7 +86,9 @@ export async function countRows(tx: WorkspaceTx, workspaceId: string, importId: 
     refused: of('refused'),
     undone: of('undone'),
   };
-  return { staged: Object.values(counts).reduce((sum, n) => sum + n, 0), ...counts };
+  // Far records made by rows still standing (an undone row's went to the trash with it).
+  const made = result.rows.filter((row) => row.outcome !== 'undone').reduce((sum, row) => sum + row.made, 0);
+  return { staged: Object.values(counts).reduce((sum, n) => sum + n, 0), ...counts, made };
 }
 
 /** Whether a job (by id) has finished: missing counts as finished, since nothing of it can run. */
@@ -130,7 +134,8 @@ export async function importView(tx: WorkspaceTx, scope: EngineScope, row: Impor
   const undoable =
     (row.status === 'started' && row.undoJobId === null) ||
     (row.status === 'undone' && (await undoFailed(tx, scope.workspaceId, row.undoJobId)));
-  const canUndo = undoable && counts.created + counts.updated > 0 && (await undoRefusal(tx, scope, row)) === undefined;
+  const canUndo =
+    undoable && counts.created + counts.updated + counts.made > 0 && (await undoRefusal(tx, scope, row)) === undefined;
   return {
     id: row.id,
     objectId: row.objectId,
@@ -155,8 +160,8 @@ export function importable(scope: EngineScope, attribute: AttributeDef): boolean
   if (attribute.isSystem || isArchivedNow(attribute)) return false;
   if ((SYSTEM_ONLY_TYPES as readonly AttributeType[]).includes(attribute.type)) return false;
   if (attribute.type === 'file') return false;
-  // Relation columns arrive with milestone 5 (their names resolved for a whole batch at once); until then refused.
-  if (attribute.type === 'record_reference') return false;
+  // A relation column links names to far records (decision 7); one with no relationship has nowhere to link.
+  if (attribute.type === 'record_reference' && attribute.relationshipId === null) return false;
   return isOpen(scope.access) || attributeLevel(scope.access, attribute) === 'write';
 }
 
@@ -182,6 +187,9 @@ export function checkSettings(
     }
     if (target.part !== undefined && attribute.type !== 'personal_name') {
       throw refuse('CONFIG_INVALID', `Only a name takes a first or last name column.`);
+    }
+    if (target.createMissing === true && attribute.type !== 'record_reference') {
+      throw refuse('CONFIG_INVALID', `Only a relationship column makes missing records.`);
     }
     const key = `${target.attributeId}:${target.part ?? 'whole'}`;
     const clash =

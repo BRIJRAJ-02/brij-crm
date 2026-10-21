@@ -230,6 +230,8 @@ export const ACCESS_TABLE = {
   undoImport: { data: 'write' },
   getImport: { data: 'read' },
   listImportRefusals: { data: 'read' },
+  // The preview's unmatched names: write on the object, as only an importer asks; finds only readable records.
+  checkImportLinks: { data: 'write' },
   // Records exports (spec 0040): read on the object (and the view) to start; only the starter reads one back.
   startRecordsExport: { data: 'read' },
   getRecordsExport: { data: 'read' },

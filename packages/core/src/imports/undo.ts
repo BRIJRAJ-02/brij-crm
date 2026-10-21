@@ -41,7 +41,11 @@ type UndoRow = {
   readonly record_id: string | null;
   readonly before: unknown;
   readonly written: unknown;
+  readonly made: unknown;
 };
+
+/** Far records a row made for its relation names (`createMissing`). */
+const Made = z.array(z.object({ objectId: z.uuid(), recordId: z.uuid() }));
 
 /** The words for values kept because they changed since the import. */
 export const keptMessage = (count: number): string =>
@@ -99,7 +103,7 @@ export function recordsImportUndo(): KindDefinition<ImportUndoParams> {
         return { finished: true, items: items.map((item) => ({ position: item.position, state: 'skipped' })) };
       }
       const found = await tx.execute<UndoRow>(sql`
-        select id::text, outcome::text, record_id::text, before, written from import_rows
+        select id::text, outcome::text, record_id::text, before, written, made from import_rows
         where workspace_id = ${scope.workspaceId} and import_id = ${row.id}
           and id = any(array(select jsonb_array_elements_text(${JSON.stringify(items.map((item) => item.itemId))}::jsonb))::uuid[])
       `);
@@ -148,6 +152,36 @@ export function recordsImportUndo(): KindDefinition<ImportUndoParams> {
           // The member lost write on the object: the undo ends with its words.
           if (!isRefusal(error) || error.refusal.code === 'QUERY_CANCELLED') throw error;
           return { finished: false, failed: { code: error.refusal.code, message: error.refusal.message } };
+        }
+      }
+
+      // Far records rows made for their relation names: to the trash with the import's id, each far object at once.
+      const madeRows = items.flatMap((item) => {
+        const staged = byId.get(item.itemId);
+        if (staged === undefined || staged.outcome === 'undone' || staged.outcome === 'refused') return [];
+        const made = Made.safeParse(staged.made);
+        return made.success && made.data.length > 0 ? [{ item, staged, made: made.data }] : [];
+      });
+      if (madeRows.length > 0) {
+        const byObject = new Map<string, string[]>();
+        for (const each of madeRows) {
+          for (const link of each.made)
+            byObject.set(link.objectId, [...(byObject.get(link.objectId) ?? []), link.recordId]);
+        }
+        try {
+          for (const [objectId, recordIds] of byObject) {
+            await deleteIn(context, { objectId, recordIds, batchId: row.id });
+          }
+          context.record({ coarseObjects: [...byObject.keys()] });
+        } catch (error) {
+          if (!isRefusal(error) || error.refusal.code === 'QUERY_CANCELLED') throw error;
+          return { finished: false, failed: { code: error.refusal.code, message: error.refusal.message } };
+        }
+        // A row that only made far records (its own record skipped) is taken back by this alone.
+        for (const each of madeRows) {
+          if (each.staged.outcome === 'created' || each.staged.outcome === 'updated') continue;
+          outcomes.set(each.item.itemId, { position: each.item.position, state: 'done' });
+          undone.push(each.staged.id);
         }
       }
 

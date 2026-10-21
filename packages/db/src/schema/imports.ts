@@ -111,6 +111,8 @@ export const importRows = pgTable(
     before: jsonb('before'),
     /** `{ [attributeId]: versionId }`: what the import wrote, so undo only puts back what nobody changed since. */
     written: jsonb('written'),
+    /** `[{ objectId, recordId }]`: far records this row's relation names made (`createMissing`), trashed by undo. */
+    made: jsonb('made'),
   },
   (t) => [
     primaryKey({ name: 'import_rows_pkey', columns: [t.workspaceId, t.importId, t.rowNumber] }),
