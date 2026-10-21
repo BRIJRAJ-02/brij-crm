@@ -13,9 +13,11 @@ import {
 } from '@crm/data/forms';
 import {
   Button,
+  Callout,
   Checkbox,
   Field,
   InfoTip,
+  focusLater,
   LockReason,
   Menu,
   MenuItem,
@@ -576,6 +578,9 @@ function ShowWhenEditor({ question, draft, isReadOnly, onChange }: ShowWhenEdito
     ),
   );
   const { showWhen } = question;
+  // Turning Show when on or off swaps what is drawn: focus follows to the first condition, or to Add a condition.
+  const addRef = useRef<HTMLButtonElement>(null);
+  const firstRef = useRef<HTMLButtonElement>(null);
   if (showWhen === undefined) {
     return (
       <SettingsRow
@@ -584,10 +589,14 @@ function ShowWhenEditor({ question, draft, isReadOnly, onChange }: ShowWhenEdito
       >
         {!isReadOnly && (
           <Button
+            ref={addRef}
             variant="dashed"
             icon="plus"
             isDisabled={earlier.length === 0}
-            onPress={() => onChange({ showWhen: storedShowWhen(firstConditions(earlier)) })}
+            onPress={() => {
+              onChange({ showWhen: storedShowWhen(firstConditions(earlier)) });
+              focusLater(() => firstRef.current);
+            }}
           >
             {routingStrings.addShowWhen}
           </Button>
@@ -595,17 +604,28 @@ function ShowWhenEditor({ question, draft, isReadOnly, onChange }: ShowWhenEdito
       </SettingsRow>
     );
   }
+  // A question moved above one its Show when reads: said here, as publish would refuse it.
+  const readsLater = showWhen.rules.some((condition) => !earlier.some((fact) => fact.key === condition.key));
   return (
     <SettingsSection title={routingStrings.showWhen} description={routingStrings.showWhenHint}>
+      {readsLater && <Callout tone="danger">{routingStrings.readsLater}</Callout>}
       <ConditionsEditor
         value={showWhen}
         facts={earlier}
         factLabel={routingStrings.question}
         isReadOnly={isReadOnly}
+        firstRef={firstRef}
         onChange={(next) => onChange({ showWhen: storedShowWhen(next) })}
       />
       {!isReadOnly && (
-        <Button variant="ghost" icon="x" onPress={() => onChange({ showWhen: null })}>
+        <Button
+          variant="ghost"
+          icon="x"
+          onPress={() => {
+            onChange({ showWhen: null });
+            focusLater(() => addRef.current);
+          }}
+        >
           {routingStrings.clearShowWhen}
         </Button>
       )}

@@ -37,6 +37,9 @@ export interface FormStrings {
   readonly previewNote: string;
   readonly recaptchaNotice: string;
   readonly honeypot: string;
+  /** Said to a screen reader when an answer shows more questions, or hides some (spec 0043). */
+  readonly questionsShown: string;
+  readonly questionsHidden: string;
   /** A question with no label yet, in the builder's preview. */
   readonly untitledQuestion: string;
   /** Under every form until branding removal arrives as a plan flag (AC-577). */
@@ -106,6 +109,8 @@ const EN: FormStrings = {
   previewNote: 'A preview of the form. It can’t be filled in here.',
   recaptchaNotice: 'This form is protected by reCAPTCHA. Google’s Privacy Policy and Terms of Service apply.',
   honeypot: 'Leave this empty',
+  questionsShown: 'Your answer added a question below.',
+  questionsHidden: 'Your answer removed a question that no longer applies.',
   untitledQuestion: 'Untitled question',
   madeWith: 'Made with Timefix',
   dialCodeOf: (country) => `Country code, ${country}`,

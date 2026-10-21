@@ -2,7 +2,8 @@
 // Purpose: the conditions of a Show when or a routing rule (spec 0043), one per row: what it reads, how it compares, and the value.
 // Main task: pick a question or field, a comparison and a value; add up to five, joined by all or any.
 // Leaves out: what follows a match (the rule's route, set beside it) and checking the rule against the form (publish does).
-import { Button, ConditionRow, Field, SegmentedControl, Select, SettingsStack } from '@crm/ui';
+import { Button, ConditionRow, Field, focusLater, SegmentedControl, Select, SettingsStack } from '@crm/ui';
+import { useRef, type Ref } from 'react';
 import { CONDITIONS_MAX, type Condition, type ConditionOp, type ShowWhen } from '@crm/data/forms';
 import { isValueless, opsFor, type Fact } from './facts.ts';
 import { strings } from './strings.ts';
@@ -16,6 +17,8 @@ export interface ConditionsEditorProps {
   readonly isReadOnly?: boolean;
   /** The label of the fact picker ("Question", "Question or field"). */
   readonly factLabel?: string;
+  /** The first condition's question picker, for a caller that moves focus to it. */
+  readonly firstRef?: Ref<HTMLButtonElement>;
 }
 
 /** A new condition on `fact`: its first comparison, with no value yet. */
@@ -31,7 +34,10 @@ export function ConditionsEditor({
   onChange,
   isReadOnly = false,
   factLabel = strings.fact,
+  firstRef,
 }: ConditionsEditorProps) {
+  // After a condition is removed, focus goes to Add a condition rather than being lost with its row.
+  const addRef = useRef<HTMLButtonElement>(null);
   const replace = (index: number, condition: Condition) =>
     onChange({ ...value, rules: value.rules.map((each, at) => (at === index ? condition : each)) });
   const factItems = facts.map((fact) => ({ id: fact.key, label: fact.label }));
@@ -63,7 +69,12 @@ export function ConditionsEditor({
             isDisabled={isReadOnly}
             {...(isReadOnly || value.rules.length === 1
               ? {}
-              : { onRemove: () => onChange({ ...value, rules: value.rules.filter((_, at) => at !== index) }) })}
+              : {
+                  onRemove: () => {
+                    onChange({ ...value, rules: value.rules.filter((_, at) => at !== index) });
+                    focusLater(() => addRef.current);
+                  },
+                })}
           >
             <Select
               label={factLabel}
@@ -72,6 +83,7 @@ export function ConditionsEditor({
               items={factItems}
               value={fact === undefined ? null : condition.key}
               isSearchable={factItems.length > 8}
+              {...(index === 0 && firstRef !== undefined ? { triggerRef: firstRef } : {})}
               isReadOnly={isReadOnly}
               onChange={(key) => {
                 if (key === null || key === condition.key) return;
@@ -121,6 +133,7 @@ export function ConditionsEditor({
       })}
       {!isReadOnly && value.rules.length < CONDITIONS_MAX && (
         <Button
+          ref={addRef}
           variant="dashed"
           icon="plus"
           onPress={() => onChange({ ...value, rules: [...value.rules, conditionOn(facts[0])] })}

@@ -33,7 +33,7 @@ import { schema, type WorkspaceTx } from '@crm/db';
 import type { BookingEntry } from '../access/door.ts';
 import { checkScope } from '../access/mint.ts';
 import { inWorkspace } from '../access/run.ts';
-import { isRefusal, postgresError, refuse, refuseOn } from '../engine/refusals.ts';
+import { postgresError, refuse, refuseOn } from '../engine/refusals.ts';
 import { runWrite, type AfterWrite } from '../engine/write.ts';
 import type { BookingCalendar, BusyReader } from './calendar.ts';
 import {
@@ -435,6 +435,20 @@ export async function bookPublicSlot(
     candidates = slot.candidates;
   }
 
+  // Routing (spec 0043): a hand off's hosts, else the page's rules over the guest's record fields, read here before
+  // any lock, so a busy team page's bookings never wait on them.
+  const routing: BookingRouting | undefined =
+    team?.kind === 'round_robin'
+      ? await inWorkspace(entry.scope, (tx) =>
+          routeBooking(tx, {
+            page,
+            objects: { people: entry.people, companies: entry.companies },
+            email: input.email,
+            ...(link === undefined ? {} : { submissionId: link.submissionId }),
+          }),
+        )
+      : undefined;
+
   // 3. Check and reserve, atomically, under the locks. The id is made here, so the token derives from it.
   const newId = randomUUID();
   const { token, hash: tokenHash } = manageTokenFor(deps.linkKey, newId);
@@ -445,7 +459,6 @@ export async function bookPublicSlot(
       let host: string;
       let hosts: readonly string[];
       let chosen: ChosenHosts | undefined;
-      let routing: BookingRouting | undefined;
       let narrowed = false;
       if (team?.kind === 'round_robin') {
         // The rotations' locks first, so a retry finds its booking before anything else waits.
@@ -467,24 +480,12 @@ export async function bookPublicSlot(
           now,
           guest: { email: input.email, peopleObjectId: entry.people },
         };
-        // Routing (spec 0043, AC-1609, AC-1610): a hand off's hosts, else the page's rules, narrow who may take it;
-        // when none of them is free here, the whole rotation picks, so a rule never refuses a booking.
-        routing = await routeBooking(tx, {
-          page,
-          objects: { people: entry.people, companies: entry.companies },
-          email: input.email,
-          ...(link === undefined ? {} : { submissionId: link.submissionId }),
+        // Routing (spec 0043, AC-1609, AC-1610), decided before the locks: its hosts are picked first when free.
+        chosen = await chooseHosts(tx, page, team, {
+          ...choice,
+          ...(routing?.hosts === undefined ? {} : { prefer: allowFor(team, routing.hosts) }),
         });
-        const routed = routing.hosts;
-        if (routed !== undefined && narrowTeam(team, routed).narrowed) {
-          try {
-            chosen = await chooseHosts(tx, page, team, { ...choice, allow: allowFor(team, routed) });
-            narrowed = true;
-          } catch (error) {
-            if (!isRefusal(error) || error.refusal.code !== 'SLOT_TAKEN') throw error;
-          }
-        }
-        chosen ??= await chooseHosts(tx, page, team, choice);
+        narrowed = chosen.narrowed;
         host = chosen.organiser;
         hosts = chosen.hosts;
       } else if (team?.kind === 'collective') {

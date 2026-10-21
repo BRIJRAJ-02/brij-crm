@@ -150,11 +150,13 @@ export function RulesCard({
           >
             {!isReadOnly && (
               <MenuTrigger>
-                <Button variant="ghost" icon="ellipsis" label={strings.ruleMore(index)} isDisabled={busy} />
+                <Button variant="ghost" icon="ellipsis" label={strings.ruleMore(index)} />
                 <Menu
                   label={strings.ruleMore(index)}
                   disabledKeys={[...(index === 0 ? ['up'] : []), ...(index === rules.length - 1 ? ['down'] : [])]}
                   onAction={(key) => {
+                    // A change still saving finishes first; the menu stays reachable so focus is never lost.
+                    if (busy) return;
                     if (key === 'edit') setEditing({ index, rule });
                     if (key === 'up') move(index, -1);
                     if (key === 'down') move(index, 1);

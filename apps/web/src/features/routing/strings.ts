@@ -43,6 +43,7 @@ export const strings = {
   addShowWhen: 'Add a condition',
   clearShowWhen: 'Always show it',
   noEarlier: 'Add a question before this one to show it by its answer.',
+  readsLater: 'A condition reads a question that is no longer before this one. Pick another, or remove it.',
   shownWhen: (line: string) => `Shows when ${line}`,
 
   // Rules

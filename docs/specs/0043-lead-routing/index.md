@@ -4,7 +4,7 @@
 **Status**: Proposed
 **Feature**: #58 Round robin assignment (rules first routing), #48 Forms (Show when and routing, the revision in [0023-types-and-logic.md](../0023-forms/0023-types-and-logic.md), AC-1036 to AC-1039 and AC-1049 to AC-1051), #59 team booking pages
 **Builds on**: [0029](../0029-round-robin-booking/index.md) (rotations), round 7's form hand off to a booking page (spec 0023, AC-1055 to AC-1058)
-**Relates to**: spec 0037's [0037-routing.md](../0037-team-scheduling-access/0037-routing.md) (not yet landed). This spec is its first, smaller slice: the same condition shape (`ShowWhen`, evaluated by `matchesShowWhen`), the visitor rule and host rule split, and rules per form and per team page in place of one workspace routing setup. Smart ranking, holdouts and learned lift stay in 0037.
+**Relates to**: spec 0037's [0037-routing.md](../0037-team-scheduling-access/0037-routing.md) (not yet landed). This spec is its first, smaller slice: the same condition shape (`ShowWhen`, evaluated by `matchesShowWhen`), the visitor rule and host rule split, and rules per form and per team page in place of one workspace routing setup. Smart ranking, holdouts and learned lift stay in 0037. Rules per surface are accepted for now (coordinator, 22 October 2026); a workspace wide routing setup holding the same rules can come later.
 
 ## Summary
 
@@ -71,4 +71,4 @@ db         routing_decisions    one row per decision (forced RLS); bookings.no_s
 
 ## Follow ups
 
-Workspace wide routing setup, smart ranking, skills, holdouts and learning (spec 0037); routing for leads that don't book (owner assignment, 0023 AC-1050); hidden field and UTM facts; a drawn chart in the report.
+Workspace wide routing setup (the same rules, held once for the workspace), reading record fields only for a visitor whose email is vouched for (a signed in guest, spec 0028), smart ranking, skills, holdouts and learning (spec 0037); routing for leads that don't book (owner assignment, 0023 AC-1050); hidden field and UTM facts; a drawn chart in the report.

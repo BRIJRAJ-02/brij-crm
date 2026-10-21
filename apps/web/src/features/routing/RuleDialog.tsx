@@ -211,6 +211,7 @@ function RuleDialogBody({
           <Field
             label={strings.url}
             type="url"
+            {...(shown === strings.urlInvalid ? { error: strings.urlInvalid } : {})}
             value={route.url}
             onChange={(url) => setRoute({ kind: 'redirect', url })}
           />
