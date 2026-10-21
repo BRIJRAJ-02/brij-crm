@@ -14,6 +14,7 @@
     "brand": "node scripts/brand.ts"
   },
   "dependencies": {
+    "@crm/contracts": "workspace:*",
     "@crm/tokens": "workspace:*",
     "react": "catalog:",
     "react-dom": "catalog:",

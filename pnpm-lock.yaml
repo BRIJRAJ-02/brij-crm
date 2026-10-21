@@ -642,6 +642,9 @@ importers:
 
   packages/emails:
     dependencies:
+      '@crm/contracts':
+        specifier: workspace:*
+        version: link:../contracts
       '@crm/tokens':
         specifier: workspace:*
         version: link:../tokens

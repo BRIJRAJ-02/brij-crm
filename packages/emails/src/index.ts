@@ -1,10 +1,13 @@
 // `@crm/emails`: every email the product sends, drawn from the design tokens
 // (spec 0001's `packages/emails`). Templates turn params into words, one
 // layout draws the words as HTML and plain text, and nothing here sends: the
-// api's mailer does.
+// api's mailer does, from the request (a sign in code, an invitation) or the
+// worker (a booking's emails).
+import { MemberInviteEmail } from '@crm/contracts/emails';
 import { appUrl, type EmailMedium } from './links.ts';
 import { renderDocument, type RenderedEmail } from './render.ts';
 import { bookingDocument, type BookingWords } from './templates/booking.ts';
+import { memberInvite } from './templates/invite.ts';
 import { SIGN_IN_CODE_MINUTES, signInCode } from './templates/sign-in-code.ts';
 
 export type { DocumentRow, EmailBlock, EmailDocument } from './document.ts';
@@ -23,6 +26,7 @@ export { emailStylesheet, paint, ROLE_NAMES, type Role } from './theme.ts';
 export type { Template, TemplateContext } from './template.ts';
 export { SIGN_IN_CODE_MINUTES, SIGN_IN_CODE_SUBJECT } from './templates/sign-in-code.ts';
 export type { BookingWords } from './templates/booking.ts';
+export type { MemberInviteEmail } from '@crm/contracts/emails';
 
 /** The sign in code email (spec 0005), sent in its request: the code, how long it works, and the shared footer. */
 export async function renderSignInCode(code: string, context: { readonly appOrigin: string }): Promise<RenderedEmail> {
@@ -46,4 +50,24 @@ export function renderBookingEmail(
     appOrigin: context.appOrigin,
     medium: context.medium,
   });
+}
+
+/**
+ * An invitation to join a workspace (spec 0031), sent from the inviting
+ * request: its params checked by `MemberInviteEmail` (the accept link an app
+ * path carrying the raw token, which is drawn here and never stored), drawn
+ * on the shared layout and tagged `email_invite`.
+ */
+export async function renderMemberInvite(
+  params: MemberInviteEmail,
+  context: { readonly appOrigin: string; readonly workspaceName: string },
+): Promise<RenderedEmail> {
+  const parsed = MemberInviteEmail.parse(params);
+  return renderDocument(
+    memberInvite(parsed, {
+      workspaceName: context.workspaceName,
+      link: (path) => appUrl(context.appOrigin, path),
+    }),
+    { appOrigin: context.appOrigin, medium: 'email_invite' },
+  );
 }

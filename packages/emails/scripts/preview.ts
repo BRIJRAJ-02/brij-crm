@@ -7,7 +7,13 @@
 import { readFile } from 'node:fs/promises';
 import { createServer, type ServerResponse } from 'node:http';
 import path from 'node:path';
-import { renderBookingEmail, renderSignInCode, type BookingWords, type RenderedEmail } from '../src/index.ts';
+import {
+  renderBookingEmail,
+  renderMemberInvite,
+  renderSignInCode,
+  type BookingWords,
+  type RenderedEmail,
+} from '../src/index.ts';
 
 const BRAND = path.resolve(import.meta.dirname, '../../../apps/web/public/brand');
 
@@ -29,7 +35,12 @@ const BOOKING_CONFIRMATION: BookingWords = {
 };
 
 /** Every email the preview shows. */
-export const PREVIEW_KINDS: readonly string[] = ['sign_in_code', 'booking_confirmation', 'booking_reminder'];
+export const PREVIEW_KINDS: readonly string[] = [
+  'sign_in_code',
+  'booking_confirmation',
+  'booking_reminder',
+  'member_invite',
+];
 
 /** One email drawn with its sample params, its links on `origin`. */
 export function drawSample(kind: string, origin: string): Promise<RenderedEmail> {
@@ -51,6 +62,16 @@ export function drawSample(kind: string, origin: string): Promise<RenderedEmail>
           footnote: `Need to change it? Your booking page: ${origin}/b/intro-call/manage?t=preview`,
         },
         { appOrigin: origin, medium: 'email_reminder' },
+      );
+    case 'member_invite':
+      return renderMemberInvite(
+        {
+          inviterName: 'Ada Lovelace',
+          role: 'member',
+          acceptPath: '/invite/sample-token-for-the-preview',
+          expiresAt: '2026-10-28T13:05:00.000Z',
+        },
+        { appOrigin: origin, workspaceName: 'Acme' },
       );
     default:
       return Promise.reject(new Error(`No email called ${kind}.`));
