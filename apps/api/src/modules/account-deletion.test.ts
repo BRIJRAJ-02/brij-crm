@@ -8,7 +8,8 @@ import { testQuery } from '@crm/db/testing';
 import { afterAll, beforeAll, describe, expect, inject, it } from 'vitest';
 import type { MailMessage } from '../mail/mailer.ts';
 import { createMailpitMailer } from '../mail/mailpit.ts';
-import { MAILPIT_URL, rpcClient, signIn, signInApp, testConnections } from '../../test/sign-in.ts';
+import { totpCode } from '../auth/two-factor.ts';
+import { MAILPIT_URL, rpcClient, signIn, signInApp, testConnections, turnOnTwoFactor } from '../../test/sign-in.ts';
 import { failure, memberWithWorkspace } from '../../test/workspace.ts';
 
 const { identityUrl, ownerUrl } = inject('testDatabase');
@@ -83,6 +84,23 @@ describe('deleting your own account (spec 0033)', () => {
       code: 'STEP_UP_REQUIRED',
     });
     await expect(person.client.me.get()).resolves.toBeDefined();
+  });
+
+  it('with two factor on, takes only a second factor’s step up', async () => {
+    const person = await signIn(app);
+    const { cookie, secret } = await turnOnTwoFactor(app, person.cookie);
+    const client = rpcClient(app, cookie);
+    expect(await failure(() => client.account.deletion.confirm({ email: person.email }))).toMatchObject({
+      code: 'SECOND_FACTOR_REQUIRED',
+    });
+    await client.account.stepUp.verify({ method: 'totp', code: totpCode(secret) });
+    expect(await client.account.deletion.confirm({ email: person.email })).toEqual({ deleted: true });
+    const rows = await testQuery(
+      identityUrl,
+      'select 1 from auth.two_factor t join auth."user" u on u.id = t.user_id where u.email = $1',
+      [person.email],
+    );
+    expect(rows).toHaveLength(0);
   });
 
   it('names the workspaces the person is the last owner of, and refuses until each has another owner', async () => {

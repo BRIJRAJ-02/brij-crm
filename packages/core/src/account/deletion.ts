@@ -16,7 +16,7 @@ import type { EngineScope } from '../access/mint.ts';
 import { inWorkspace } from '../access/run.ts';
 import type { CalendarTokens } from '../calendar/provider.ts';
 import { openTokens, type TokenKey } from '../calendar/tokens.ts';
-import { inputInvalid, refuse } from '../engine/refusals.ts';
+import { inputInvalid, isRefusal, refuse } from '../engine/refusals.ts';
 import type { AfterWrite } from '../engine/write.ts';
 import { writeAudit } from '../members/audit.ts';
 import { listMembers, removeMember } from '../members/members.ts';
@@ -24,6 +24,9 @@ import type { SessionCaller } from './sessions.ts';
 import { requireFresh } from './step-up.ts';
 
 const { members } = schema;
+
+/** How long a provider's revoke may take before deletion goes on without it. */
+const REVOKE_WAIT_MS = 5_000;
 
 /** The name a deleted person's member row keeps, so their records still say who made them. */
 export const DELETED_USER_NAME = 'Deleted user';
@@ -85,25 +88,34 @@ async function myWorkspaces(
           { userId, slug: workspace.slug },
         );
         return { scope, slug: workspace.slug, name: workspace.name };
-      } catch {
-        // Already left (a run that stopped part way), or the workspace is gone: nothing to do there.
-        return undefined;
+      } catch (error) {
+        // Already left (a run that stopped part way), or the workspace is gone: nothing to do there. Anything else
+        // (a database that didn't answer) fails the request, so a workspace is never skipped unseen.
+        if (isRefusal(error) && error.refusal.code === 'NOT_FOUND') return undefined;
+        throw error;
       }
     }),
   );
   return entered.filter((each) => each !== undefined);
 }
 
+/** Where the person stands in each workspace: an owner, and the only active one (a blocker). */
+async function standingIn(entered: Awaited<ReturnType<typeof myWorkspaces>>) {
+  const standing = [];
+  for (const entry of entered) {
+    const people = await listMembers(entry.scope);
+    const me = people.find((each) => each.id === entry.scope.actor.id);
+    const owners = people.filter((each) => each.role === 'owner');
+    standing.push({ entry, owner: me?.role === 'owner', last: me?.role === 'owner' && owners.length === 1 });
+  }
+  return standing;
+}
+
 /** The workspaces where the person is the only active owner. */
 async function blockersOf(entered: Awaited<ReturnType<typeof myWorkspaces>>): Promise<readonly DeletionBlocker[]> {
-  const blockers: DeletionBlocker[] = [];
-  for (const { scope, slug, name } of entered) {
-    const people = await listMembers(scope);
-    const me = people.find((each) => each.id === scope.actor.id);
-    const owners = people.filter((each) => each.role === 'owner');
-    if (me?.role === 'owner' && owners.length === 1) blockers.push({ slug, name });
-  }
-  return blockers;
+  return (await standingIn(entered))
+    .filter((each) => each.last)
+    .map(({ entry }) => ({ slug: entry.slug, name: entry.name }));
 }
 
 /** The workspaces the person is the last owner of (AC-902): deleting waits until each has another owner. */
@@ -155,12 +167,16 @@ export async function deleteMyAccount(
   await requireFresh(deps, caller, { secondFactor: state.enabled });
   if (input.email.trim().toLowerCase() !== caller.email.toLowerCase()) throw inputInvalid('email', EMAIL_MISMATCH);
 
-  const entered = await myWorkspaces(deps, caller.userId);
-  const blockers = await blockersOf(entered);
-  if (blockers.length > 0) throw refuse('LAST_OWNER', lastOwnerMessage(blockers.map((each) => each.name)));
+  const standing = await standingIn(await myWorkspaces(deps, caller.userId));
+  const blockers = standing.filter((each) => each.last).map(({ entry }) => entry.name);
+  if (blockers.length > 0) throw refuse('LAST_OWNER', lastOwnerMessage(blockers));
+  // Owned workspaces first: should an owner be demoted meanwhile, `removeMember`'s own last owner guard refuses
+  // before any other workspace is left.
+  const ordered = [...standing.filter((each) => each.owner), ...standing.filter((each) => !each.owner)];
 
   const grants: CalendarGrant[] = [];
-  for (const { scope } of entered) {
+  for (const { entry } of ordered) {
+    const scope = entry.scope;
     if (scope.actor.type !== 'member' || scope.actor.id === null) continue;
     const memberId = scope.actor.id;
     grants.push(...(await grantsOf(deps, scope)));
@@ -182,7 +198,13 @@ export async function deleteMyAccount(
   // Best effort: a provider that can't be reached keeps a grant to an account that no longer exists here.
   if (deps.calendar !== undefined) {
     const calendar = deps.calendar;
-    await Promise.all(grants.map((grant) => calendar.revoke(grant).catch(() => undefined)));
+    // Never long: a provider that hangs can't hold the person's deletion.
+    const capped = (grant: CalendarGrant) =>
+      Promise.race([
+        calendar.revoke(grant).catch(() => undefined),
+        new Promise<undefined>((resolve) => setTimeout(() => resolve(undefined), REVOKE_WAIT_MS)),
+      ]);
+    await Promise.all(grants.map(capped));
   }
   await deps.identity.deleteUser(caller.userId);
   await deps.signedOut(caller.userId);

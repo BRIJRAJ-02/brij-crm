@@ -95,21 +95,25 @@ export const strings = {
   /** Deleting the account (AC-902 to AC-907). */
   deletion: {
     section: 'Delete account',
-    description: 'Leave every workspace and delete your sign in.',
-    row: 'Delete my account',
-    rowText: 'Records you made stay, credited to Deleted user.',
+    description: 'Leave every workspace and close your account.',
+    row: 'Records you made stay',
+    rowText: 'They’re credited to Deleted user.',
     action: 'Delete account',
     title: 'Delete your account?',
+    blockedTitleOne: 'Can’t delete your account yet',
     checking: 'Checking your workspaces…',
-    blockedTitle: 'Hand over ownership first',
-    blockedText: 'You’re the last owner of these workspaces. Make someone else an owner, or delete the workspace.',
-    openMembers: (name: string) => `${name}: open Members`,
-    text: 'You’ll leave every workspace, and your sign in, devices and details are deleted. This can’t be undone.',
-    exportFirst: 'Export anything you need from each workspace first.',
-    emailLabel: 'Type your email to confirm',
+    blockedText: (names: readonly string[]) =>
+      names.length === 1
+        ? `You’re the last owner of ${names[0] ?? ''}. Make someone else an owner, or delete the workspace.`
+        : `You’re the last owner of ${names.join(', ')}. Make someone else an owner of each, or delete them.`,
+    openMembers: (name: string) => `Open ${name} members`,
+    text: 'You’ll leave every workspace, and your sign in, devices and details are deleted. This can’t be undone. Export anything you need from each workspace first.',
+    emailLabel: (email: string) => `Type ${email} to confirm`,
     deleting: 'Deleting…',
     close: 'Close',
     cancel: 'Cancel',
-    failed: 'Couldn’t check your workspaces. Try again.',
+    tryAgain: 'Try again',
+    failed: 'Couldn’t check your workspaces.',
+    deleteFailed: 'Couldn’t delete your account. Try again.',
   },
 } as const;

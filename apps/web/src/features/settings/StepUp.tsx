@@ -17,6 +17,8 @@ export interface StepUpNeed {
 /** A step up's state inside a dialog: whether it is needed, its fields, and `prove`, which checks what was typed. */
 export interface StepUp {
   readonly isNeeded: boolean;
+  /** The next commit sends an email code rather than checking one: its button should say so. */
+  readonly willSend: boolean;
   /** The sentence saying why, then the code's field and the way to switch: siblings in the dialog's body. */
   readonly fields: ReactNode;
   /** Checks the typed code when a step up is needed; true when the change may go on. */
@@ -163,5 +165,5 @@ export function useStepUp(data: DataLayer, security: AccountSecurityState, need:
       </>
     );
   }
-  return { isNeeded, fields, prove, reset };
+  return { isNeeded, willSend: isNeeded && !twoFactorOn && !sent, fields, prove, reset };
 }

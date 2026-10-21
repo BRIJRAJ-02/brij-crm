@@ -36,6 +36,8 @@ export const strings = {
   /** The session ended under the person (a 401 mid use), from `?signedOut=ended`. */
   signedOutEnded: 'You were signed out. Sign in again to carry on.',
   /** The same, with a change still on its way that was lost, from `?signedOut=unsaved`. */
+  /** The person deleted their account (spec 0033), from `?signedOut=deleted`. */
+  signedOutDeleted: 'Your account was deleted.',
   signedOutUnsaved: 'You were signed out, so your last change wasn’t saved. Sign in again to carry on.',
   googleUnverified: 'Google hasn’t verified that account’s email, so it can’t sign you in. Use your email instead.',
   googleFailed: 'Couldn’t sign in with Google. Try again, or use your email.',

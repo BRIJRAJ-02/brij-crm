@@ -46,8 +46,8 @@ export function safeRedirect(value: unknown): string {
   return `${url.pathname}${url.search}${url.hash}`;
 }
 
-/** Why the session ended under the person: `ended`, or `unsaved` when a change was lost with it. */
-export type SignedOut = 'ended' | 'unsaved';
+/** Why the session ended: `ended`, `unsaved` when a change was lost with it, or `deleted` (the account, spec 0033). */
+export type SignedOut = 'ended' | 'unsaved' | 'deleted';
 
 /**
  * The sign in page, coming back to `redirectTo` afterwards (left off when it
@@ -87,6 +87,6 @@ export function redirectSearch(search: Record<string, unknown>): SignInSearch {
   return {
     ...(typeof redirect === 'string' ? { redirect } : {}),
     ...(typeof error === 'string' && error !== '' && error.length <= ERROR_MAX ? { error } : {}),
-    ...(signedOut === 'ended' || signedOut === 'unsaved' ? { signedOut } : {}),
+    ...(signedOut === 'ended' || signedOut === 'unsaved' || signedOut === 'deleted' ? { signedOut } : {}),
   };
 }

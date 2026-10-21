@@ -261,3 +261,4 @@ Tracer Bullet: each milestone ends with something you can use in production.
 - [ ] Support assisted recovery flow with #39.
 - [ ] Owner view of who has two factor in the audit log screens (#36).
 - [ ] `/sync`: `apps/api/AGENTS.md` lists the pinned auth routes and the 4501 code.
+- [ ] Account deletion: member rows in workspaces the person left before deleting keep their name and address (the directory no longer leads there); scrubbing them needs a narrow privileged path across workspaces. Accepted invitations and queued emails keep the address too.

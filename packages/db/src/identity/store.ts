@@ -40,6 +40,9 @@ export interface SessionVerification {
   readonly with: VerifiedWith;
 }
 
+/** The email code kinds Better Auth names its codes by (`<type>-otp-<email>`), for deleting an address's codes. */
+const OTP_TYPES = ['sign-in', 'email-verification', 'forget-password', 'change-email'] as const;
+
 /** Wrong tries a step up email code allows before it is used up. */
 export const STEP_UP_CODE_TRIES = 5;
 
@@ -399,10 +402,17 @@ export function createIdentityStore(options: DatabaseOptions): IdentityStore {
         await tx.delete(verification).where(
           sql`${verification.value} = ${userId}
               or ${verification.identifier} in (select 'step-up-' || ${session.id}::text from ${session} where ${session.userId} = ${userId})
-              or right(${verification.identifier}, length(${email}) + 5) = '-otp-' || ${email}`,
+              or ${verification.identifier} in (${sql.join(
+                OTP_TYPES.map((type) => sql`${`${type}-otp-${email}`}`),
+                sql`, `,
+              )})`,
         );
         // Exact prefixes, never LIKE: an address may hold `_`, which LIKE reads as any character.
-        await tx.delete(rateLimit).where(sql`starts_with(${rateLimit.key}, 'email:' || ${email} || '|')`);
+        await tx.delete(rateLimit).where(
+          sql`starts_with(${rateLimit.key}, 'email:' || ${email} || '|')
+              or starts_with(${rateLimit.key}, 'step-up:' || ${userId} || '|')
+              or starts_with(${rateLimit.key}, 'step-up-send:' || ${userId} || '|')`,
+        );
         await tx.delete(user).where(eq(user.id, userId));
         return true;
       });

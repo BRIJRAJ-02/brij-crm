@@ -40,6 +40,7 @@ export function SignInScreen({ data, google, redirect, returnTo, googleError, si
   const [notice, setNotice] = useState<string | undefined>(() => {
     if (googleError !== undefined) return googleRefusal(googleError);
     if (signedOut === undefined) return undefined;
+    if (signedOut === 'deleted') return strings.signedOutDeleted;
     return signedOut === 'unsaved' ? strings.signedOutUnsaved : strings.signedOutEnded;
   });
 
