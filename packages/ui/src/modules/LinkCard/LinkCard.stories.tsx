@@ -118,7 +118,10 @@ export const Form: Story = {
   play: async ({ canvas }) => {
     await expect(canvas.getByText('12 submissions · 2 spam')).toBeInTheDocument();
     await userEvent.hover(canvas.getByRole('switch', { name: 'Accepting submissions on Contact us' }));
-    await expect(await within(document.body).findByRole('tooltip')).toHaveTextContent('Accepting submissions');
+    // The tooltip waits out its open delay; a busy runner needs more than findByRole's one second default.
+    await expect(await within(document.body).findByRole('tooltip', {}, { timeout: 4000 })).toHaveTextContent(
+      'Accepting submissions',
+    );
     await userEvent.unhover(canvas.getByRole('switch', { name: 'Accepting submissions on Contact us' }));
   },
 };
