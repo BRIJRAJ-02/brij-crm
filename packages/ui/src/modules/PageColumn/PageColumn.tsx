@@ -4,8 +4,11 @@ import styles from './PageColumn.module.css';
 /** Props for PageColumn. */
 export interface PageColumnProps {
   readonly children: ReactNode;
-  /** `center` fills the view's height and centres its children in it: a list's empty state, alone on the page. */
-  readonly align?: 'start' | 'center';
+  /**
+   * `center` fills the view's height and centres its children in it: a list's empty state, alone on the page.
+   * `fill` takes the view's whole height for a child that fills it (Bookings' week grid, scrolling inside).
+   */
+  readonly align?: 'start' | 'center' | 'fill';
   /** The column's own actions ("New booking page"), at its top end, when the page's TopBar belongs to a layout. */
   readonly actions?: ReactNode;
   /**

@@ -389,8 +389,8 @@ describe('cancelling from the list', () => {
       ),
       { data: {}, pattern: '/w/$slug/bookings/list', at: '/w/acme/bookings/list' },
     );
-    // A booking's row is titled by its visitor, "Booked via Quick chat" under it.
-    await userEvent.click(page.getByRole('button', { name: 'Ada Lovelace', exact: true }));
+    // A booking's row is titled by its page, "You and Ada Lovelace" under it.
+    await userEvent.click(page.getByRole('button', { name: 'Quick chat', exact: true }));
     await userEvent.click(page.getByRole('button', { name: 'Cancel booking' }));
     await expect.poll(alert).not.toBeNull();
     expect(alert()?.textContent).toContain('Cancel Quick chat with Ada Lovelace?');
@@ -407,6 +407,110 @@ describe('cancelling from the list', () => {
     expect(cancel).toHaveBeenCalledTimes(1);
     answer.resolve(undefined);
     await expect.poll(alert).toBeNull();
-    await expect.poll(() => document.activeElement?.textContent).toBe('Ada Lovelace');
+    await expect.poll(() => document.activeElement?.textContent).toBe('Quick chat');
+  });
+});
+
+describe('the list rows', () => {
+  it('title a booking by its page and link its guest to their person, as round 6 did', async () => {
+    const people = {
+      id: '0199f0a0-0000-7000-8000-0000000000f1',
+      apiSlug: 'people',
+      singularName: 'Person',
+      pluralName: 'People',
+      icon: 'user',
+      hue: 'blue',
+      standardKey: 'people',
+      primaryAttributeId: '0199f0a0-0000-7000-8000-0000000000f2',
+      position: 0,
+      isStandard: true,
+      isArchived: false,
+      access: 'write',
+    } as const;
+    const booking = { ...bookingOf(), personRecordId: '0199f0a0-0000-7000-8000-0000000000f3' } as BookingListItem;
+    const state: MeetingsState = { ...ready, items: [{ kind: 'booking', booking }] };
+    const upcoming: MeetingsHeld = {
+      subscribe: () => () => undefined,
+      getSnapshot: () => state,
+      retain: () => () => undefined,
+      ready: () => Promise.resolve(),
+      loadMore: () => undefined,
+      reload: () => undefined,
+    };
+    shown = await renderInApp(
+      () => (
+        <BookingsListScreen
+          slug="acme"
+          search={{ week, day: wednesday, tab: 'upcoming', source: 'all' }}
+          meetings={() => upcoming}
+          calendars={noCalendars}
+          onMakeDefault={() => undefined}
+          onDismissNotice={() => undefined}
+          objects={[people]}
+          pages={[]}
+          locale="en-GB"
+          actions={{
+            cancel: vi.fn(),
+            move: vi.fn(),
+            moveSlots: vi.fn(),
+            guestLink: vi.fn(),
+            notify: vi.fn(),
+            assignments: vi.fn(() => Promise.resolve([])),
+            reassign: vi.fn(),
+            rotations: vi.fn(() => Promise.resolve([])),
+            markNoShow: vi.fn(() => Promise.resolve()),
+          }}
+          onSearch={() => undefined}
+        />
+      ),
+      { data: {}, pattern: '/w/$slug/bookings/list', at: '/w/acme/bookings/list' },
+    );
+    await expect.element(page.getByRole('button', { name: 'Quick chat', exact: true })).toBeVisible();
+    await expect
+      .element(page.getByRole('link', { name: 'Ada Lovelace' }))
+      .toHaveAttribute('href', '/w/acme/objects/people/0199f0a0-0000-7000-8000-0000000000f3/overview');
+  });
+
+  it('with no calendar connected, starts without the calendars panel and offers Connect a calendar in the bar', async () => {
+    const none = { status: 'ready', accounts: [] } as unknown as CalendarListState;
+    const noneConnected: CalendarsHeld<CalendarListState> = {
+      subscribe: () => () => undefined,
+      getSnapshot: () => none,
+      retain: () => () => undefined,
+      reload: () => undefined,
+    };
+    const state: MeetingsState = { ...ready, items: [] };
+    const upcoming: MeetingsHeld = {
+      subscribe: () => () => undefined,
+      getSnapshot: () => state,
+      retain: () => () => undefined,
+      ready: () => Promise.resolve(),
+      loadMore: () => undefined,
+      reload: () => undefined,
+    };
+    try {
+      globalThis.localStorage.removeItem('crm.bookings.calendarsPanel');
+    } catch {
+      // Blocked storage reads as no choice yet.
+    }
+    shown = await renderInApp(
+      () => (
+        <BookingsListScreen
+          slug="acme"
+          search={{ week, day: wednesday, tab: 'upcoming', source: 'all' }}
+          meetings={() => upcoming}
+          calendars={noneConnected}
+          onMakeDefault={() => undefined}
+          onDismissNotice={() => undefined}
+          objects={[]}
+          pages={[]}
+          locale="en-GB"
+          onSearch={() => undefined}
+        />
+      ),
+      { data: {}, pattern: '/w/$slug/bookings/list', at: '/w/acme/bookings/list' },
+    );
+    await expect.element(page.getByRole('link', { name: 'Connect a calendar' }).first()).toBeVisible();
+    expect(document.querySelector('aside[aria-label="Calendars"]')).toBeNull();
   });
 });

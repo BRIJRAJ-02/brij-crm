@@ -24,7 +24,7 @@ A sidebar destination after Records, as Timefix's rail has it.
 - **Main task**: read what is coming up and open one for its details.
 - **Leaves out**: colleagues' calendar events (their time is Busy on the week only, spec 0037), live arrival.
 - The strip: Upcoming · Past · Canceled, then All · Bookings · Calendar, the Calendars toggle and Filter (one link). The calendars panel beside the list picks the calendars, as on the week.
-- Rows (the library's BookingList) under day bands (Today, Tomorrow, the date): a booking titled by its guest with "Booked via <page>" and its guests; a calendar event by its title, with its calendar's colour and name and its attendees as chips (six, then "+N"). A row opens its card in a Panel.
+- Rows (the library's BookingList) under day bands (Today, Tomorrow, the date): a booking titled by its page with "You and <guest>", the guest a link to their person as in round 6, and its other guests; a calendar event by its title, with its calendar's colour and name and its attendees as chips (six, then "+N"). A row opens its card in a Panel.
 - Pages of 50 by cursor (`bookings.meetings`, `data.bookings.meetings`, `useMeetings`); Show more reads the next. Each tab's empty state is one line; with no calendar connected it says so and links to Settings › Calendars.
 - The address: `tab` (`past`, `cancelled`), `src` (`bookings`, `calendar`), `link`, `cal`.
 - The TopBar has no count: the list pages every meeting, so there is no total to show.

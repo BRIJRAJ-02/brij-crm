@@ -8,7 +8,7 @@ import type {
   PreferencesChange,
   WeekStart,
 } from '@crm/data';
-import { firstDayOfWeek, formatDate } from '@crm/ui';
+import { formatDate } from '@crm/ui';
 import { navObjects } from '../workspace/objects.ts';
 import { strings } from './preferences-strings.ts';
 
@@ -30,12 +30,10 @@ export function dateFormatChoices(today: string, locale: string): readonly Choic
   ];
 }
 
-/** The week starts: Automatic (naming the language's own day), then Monday, Sunday and Saturday. */
-export function weekStartChoices(locale: string): readonly Choice[] {
-  const own = firstDayOfWeek(locale);
-  const name = own === 0 ? strings.sunday : own === 6 ? strings.saturday : strings.monday;
+/** The week starts: Automatic (Monday, as weeks started in round 6), then Monday, Sunday and Saturday. */
+export function weekStartChoices(): readonly Choice[] {
   return [
-    { id: 'auto', label: strings.automatic(name) },
+    { id: 'auto', label: strings.automatic(strings.monday) },
     { id: 'monday', label: strings.monday },
     { id: 'sunday', label: strings.sunday },
     { id: 'saturday', label: strings.saturday },

@@ -130,6 +130,11 @@ export interface WeekCalendarProps {
    */
   readonly isLoading?: boolean;
   /**
+   * Fills the height its parent gives it, the hours scrolling inside (Bookings › Calendar, the owner, 22 October
+   * 2026). Without it the hours show twelve at a time, for a grid that sits among other content.
+   */
+  readonly isFill?: boolean;
+  /**
    * A new object puts focus on that block when it is still on the week, else on its day's column, once any closing
    * overlay has gone and only when focus fell to the page: how the screen hands focus on after a change made
    * through a dialog outside the block's card (a block removed, a booking cancelled), as the week does itself when
@@ -190,6 +195,7 @@ export function WeekCalendar({
   drawStartMinute,
   minuteLabel,
   isLoading = false,
+  isFill = false,
   focusDay,
 }: WeekCalendarProps) {
   const scroller = useRef<HTMLDivElement>(null);
@@ -329,7 +335,12 @@ export function WeekCalendar({
   };
 
   return (
-    <section className={styles.root} aria-label={label} aria-busy={isLoading || undefined}>
+    <section
+      className={styles.root}
+      aria-label={label}
+      aria-busy={isLoading || undefined}
+      data-fill={isFill || undefined}
+    >
       <div className={styles.head}>
         <span className={styles.corner} aria-hidden="true" />
         {days.map((day) => (

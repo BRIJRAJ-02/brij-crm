@@ -166,3 +166,20 @@ export const EmptyFooter: Story = {
 function Nothing() {
   return null;
 }
+
+/** `align="fill"`: the view's whole height for a child that fills it (Bookings' week grid). */
+export const Fill: Story = {
+  args: { align: 'fill' },
+  parameters: { crm: { screenshot: false } },
+  render: (args) => (
+    <Stage width="fill" height="page">
+      <PageColumn {...args}>
+        <Card title="Week">The grid takes the rest of the view.</Card>
+      </PageColumn>
+    </Stage>
+  ),
+  play: async ({ canvasElement }) => {
+    const column = canvasElement.querySelector('[data-align="fill"]');
+    await expect(column?.getBoundingClientRect().height ?? 0).toBeGreaterThan(300);
+  },
+};

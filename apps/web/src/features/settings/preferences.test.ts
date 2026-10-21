@@ -22,8 +22,9 @@ describe('the choices', () => {
   });
 
   it('names the language’s own week start in Automatic', () => {
-    expect(weekStartChoices('en-US')[0]?.label).toMatch(/^Automatic \((Sunday|Monday)\)$/);
-    expect(weekStartChoices('en-GB').map((each) => each.id)).toEqual(['auto', 'monday', 'sunday', 'saturday']);
+    // Automatic is Monday whatever the language, as weeks started in round 6.
+    expect(weekStartChoices()[0]?.label).toBe('Automatic (Monday)');
+    expect(weekStartChoices().map((each) => each.id)).toEqual(['auto', 'monday', 'sunday', 'saturday']);
   });
 
   it('offers Home, Tasks, then the live objects in the sidebar’s order', () => {

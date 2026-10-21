@@ -35,8 +35,6 @@ export interface BookingListRow {
   readonly moreAttendees?: number;
   /** The calendar it is on, by its colour and name (a synced calendar event). */
   readonly calendar?: { readonly name: string; readonly hue: Hue };
-  /** Where it came from, as a small tag ("Booked via Intro call"). */
-  readonly via?: string;
   /** A state worth saying ("Cancelled"). */
   readonly badge?: string;
   /** `accent` for a state that asks for action ("Needs a host"); `neutral`, the default, for one that only says. */
@@ -73,7 +71,6 @@ export interface BookingListProps {
 const hasDetails = (row: BookingListRow) =>
   row.join !== undefined ||
   row.calendar !== undefined ||
-  row.via !== undefined ||
   row.guestName !== undefined ||
   (row.attendees !== undefined && row.attendees.length > 0) ||
   row.note !== undefined;
@@ -130,7 +127,6 @@ export function BookingList({ label, groups, onOpen, emptyState, placement = 'pa
                           <StatusDot hue={row.calendar.hue}>{row.calendar.name}</StatusDot>
                         </span>
                       )}
-                      {row.via !== undefined && <Badge text={row.via} />}
                       {row.attendees !== undefined && row.attendees.length > 0 && (
                         <span className={styles.text}>
                           {strings.attendeesLine(row.attendees, row.moreAttendees ?? 0)}

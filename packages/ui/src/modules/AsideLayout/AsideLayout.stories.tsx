@@ -4,6 +4,7 @@ import { expect, userEvent, waitFor, within } from 'storybook/test';
 import { Button } from '../../atoms/Button/Button.tsx';
 import { Stage } from '../../workbench/Stage/Stage.tsx';
 import { CalendarList } from '../CalendarList/CalendarList.tsx';
+import { PageColumn } from '../PageColumn/PageColumn.tsx';
 import { AsideLayout } from './AsideLayout.tsx';
 
 const noop = () => undefined;
@@ -92,5 +93,22 @@ export const Sheet: Story = {
     await userEvent.click(canvas.getByRole('button', { name: 'Calendars' }));
     const body = within(canvasElement.ownerDocument.body);
     await waitFor(() => expect(body.getByRole('checkbox', { name: 'Team' })).toBeInTheDocument());
+  },
+};
+
+/** `isFill`: the layout takes the height its parent gives and passes it to the main column. */
+export const Fill: Story = {
+  parameters: { crm: { screenshot: false } },
+  render: () => (
+    <Stage width="fill" height="page">
+      <PageColumn align="fill">
+        <AsideLayout aside={null} asideLabel="Calendars" isAsideOpen={false} onAsideClose={noop} isFill>
+          <Button>Main</Button>
+        </AsideLayout>
+      </PageColumn>
+    </Stage>
+  ),
+  play: async ({ canvas }) => {
+    await expect(canvas.getByRole('button', { name: 'Main' })).toBeInTheDocument();
   },
 };

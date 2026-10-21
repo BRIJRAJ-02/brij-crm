@@ -21,4 +21,22 @@
   .main {
     min-inline-size: 0;
   }
+
+  /* Filling its parent: one row the height it is given; the main column passes that height on, the aside stays its own. */
+  .root[data-fill] {
+    flex: 1;
+    grid-template-rows: minmax(0, 1fr);
+    align-items: stretch;
+    min-block-size: 0;
+  }
+
+  .root[data-fill] .aside {
+    align-self: start;
+  }
+
+  .root[data-fill] .main {
+    display: flex;
+    flex-direction: column;
+    min-block-size: 0;
+  }
 }

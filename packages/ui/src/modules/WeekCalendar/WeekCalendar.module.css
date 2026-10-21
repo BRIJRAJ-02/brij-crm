@@ -98,6 +98,18 @@
     block-size: calc(var(--hour) * 24);
   }
 
+  /* Filling its parent: the grid takes the height it is given and the hours scroll inside, never fewer than six. */
+  .root[data-fill] {
+    flex: 1;
+    min-block-size: 0;
+  }
+
+  .root[data-fill] .scroller {
+    flex: 1;
+    block-size: auto;
+    min-block-size: calc(var(--hour) * 6);
+  }
+
   .axis {
     display: grid;
     grid-template-rows: repeat(24, var(--hour));

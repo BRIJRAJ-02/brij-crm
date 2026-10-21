@@ -95,6 +95,8 @@ export interface WorkspaceFrameProps {
   readonly workspaceName?: string;
   /** The person's role here ("Owner", "Admin" or "Member"), under the open workspace's name in its menu once known. */
   readonly roleLabel?: string;
+  /** The person owns this workspace: Leave is hidden while they are its only owner (the server refuses it then). */
+  readonly isOwner?: boolean;
   /** Every workspace the person is in, oldest first: the workspace menu lists them to switch (spec 0031, AC-801). */
   readonly workspaces?: readonly WorkspaceSummary[];
   /** Its objects; undefined while they load, so the Records section shows skeleton rows. */
@@ -134,6 +136,7 @@ export function WorkspaceFrame({
   workspaceName,
   workspaces,
   roleLabel,
+  isOwner = false,
   objects,
   isMissing = false,
   currentObject,
@@ -152,6 +155,23 @@ export function WorkspaceFrame({
   const [isConfirmingSignOut, setConfirmingSignOut] = useState(false);
   // Leaving the workspace asks first too (spec 0031, AC-812).
   const [isConfirmingLeave, setConfirmingLeave] = useState(false);
+  // The only owner can't leave (a workspace needs an owner, spec 0031): the owners are counted from the members list
+  // the tables already read, so Leave shows only once someone else owns it too.
+  const [ownerCount, setOwnerCount] = useState<number | undefined>(undefined);
+  useEffect(() => {
+    if (!isOwner) return;
+    let isCurrent = true;
+    data.members.list(slug).then(
+      (members) => {
+        if (isCurrent) setOwnerCount(members.filter((member) => member.role === 'owner').length);
+      },
+      () => undefined,
+    );
+    return () => {
+      isCurrent = false;
+    };
+  }, [data, slug, isOwner]);
+  const canLeave = !isOwner || (ownerCount !== undefined && ownerCount > 1);
   const [signOutFailure, setSignOutFailure] = useState<string | undefined>(undefined);
   // Cmd+Z (Ctrl+Z elsewhere) undoes this tab's last change; ? lists the shortcuts (spec 0006, AC-48).
   const [isHelpOpen, setHelpOpen] = useState(false);
@@ -207,6 +227,155 @@ export function WorkspaceFrame({
       },
     );
   };
+  // The sidebar is drawn again only when what it shows changes: a page switch re-renders the frame several times
+  // (its bars, the router's steps), and redrawing every row, grip and menu each time made switching slower than round 6.
+  const sidebar = useMemo(
+    () =>
+      settings !== undefined ? (
+        <SettingsNavigation slug={slug} settings={settings} permissions={permissions} />
+      ) : (
+        <Sidebar
+          workspace={workspaceName ?? strings.product}
+          // Timefix's mark heads the sidebar, as in timefix (F29); the workspace's name stays the switcher's.
+          mark={<ProviderMark provider="timefix" size="lg" />}
+          // Not known yet: skeletons, never the product's name as a stand in that then changes.
+          isWorkspaceLoading={workspaceName === undefined && !isMissing}
+          onQuickActions={() => {
+            commandMenu.open();
+          }}
+          isWorkspaceBusy={isSigningOut}
+          workspaceBusyLabel={strings.signingOut}
+          workspaceMenu={
+            <Menu
+              label={strings.workspaceMenu}
+              onAction={(key) => {
+                if (key === 'sign-out') {
+                  setSignOutFailure(undefined);
+                  setConfirmingSignOut(true);
+                }
+                if (key === 'leave') setConfirmingLeave(true);
+              }}
+            >
+              {/* Every workspace the person is in, the open one checked, then Create workspace (spec 0031, AC-801). */}
+              {workspaces !== undefined && (
+                <MenuSection label={strings.workspaces}>
+                  {workspaces.map((each) => (
+                    <MenuItem
+                      key={each.id}
+                      id={`workspace:${each.id}`}
+                      leading={<Avatar name={each.name} hue="ink" shape="square" size="xs" isDecorative />}
+                      href={workspaceHref(each.slug)}
+                      isChecked={each.slug === slug}
+                      // The person's role here sits with the open workspace's name (spec 0009, AC-136).
+                      {...(each.slug === slug && roleLabel !== undefined ? { description: roleLabel } : {})}
+                    >
+                      {each.name}
+                    </MenuItem>
+                  ))}
+                  <MenuItem id="create-workspace" icon="plus" href={newWorkspaceHref}>
+                    {strings.createWorkspace}
+                  </MenuItem>
+                </MenuSection>
+              )}
+              {/* Settings, the trash and the shortcuts (Help, and ?) live in the sidebar's foot, not here (the owner,
+                  21 and 22 October 2026). */}
+              {workspaces !== undefined && <MenuSeparator />}
+              {/* Leaving comes last, where people look for it: this workspace (anyone in it, spec 0031, AC-812),
+                  then Timefix on this device. */}
+              {roleLabel !== undefined && canLeave && (
+                <MenuItem id="leave" icon="door-open">
+                  {strings.leaveWorkspace}
+                </MenuItem>
+              )}
+              <MenuItem id="sign-out" icon="log-out">
+                {strings.signOut}
+              </MenuItem>
+            </Menu>
+          }
+          // The member's rail (AC-935), kept for them; below the compact breakpoint the shell folds it anyway, and
+          // the buttons wait for their sidebar, so a press never lands on a guess.
+          isCollapsed={isRail}
+          {...(nav === undefined || isMissing ? {} : { onCollapsedChange: setRail })}
+          // The foot (AC-930): the trash (out of the main list and the workspace menu, the owner, 22 October 2026),
+          // Settings with ⌘, (spec 0026, AC-685), and Help, which opens the keyboard shortcuts until a help centre
+          // exists. Invite teammates joins with spec 0031's invite flow.
+          footer={
+            <>
+              {!isMissing && (
+                <NavItem icon="trash" href={trashHref(slug)} isCurrent={currentPage === 'trash'}>
+                  {strings.trash}
+                </NavItem>
+              )}
+              <NavItem icon="settings" href={settingsHomeHref(slug)} kbd="⌘,">
+                {strings.settings}
+              </NavItem>
+              <NavItem icon="circle-question-mark" onPress={openHelp} kbd="?">
+                {strings.help}
+              </NavItem>
+            </>
+          }
+        >
+          {/* Home first, as in timefix (owner, 21 October 2026): fixed, where the workspace opens. */}
+          {!isMissing && (
+            <NavItem icon="house" href={homeHref(slug)} isCurrent={currentPage === 'home'}>
+              {strings.home}
+            </NavItem>
+          )}
+          {!isMissing &&
+            (nav === undefined ? (
+              // The member's order isn't known yet: Records shows loading, and nothing guesses at the rest.
+              <NavSection title={strings.records} isLoading />
+            ) : (
+              <SidebarSections
+                data={data}
+                slug={slug}
+                nav={nav}
+                universe={universe}
+                objects={objects}
+                {...(currentObject === undefined ? {} : { currentObject })}
+                {...(currentPage === undefined ? {} : { currentPage })}
+                onCustomise={openCustomise}
+              />
+            ))}
+          {/* Tasks (and Inbox once it exists) after the sections, as timefix has Tasks below the CRM rows. */}
+          {!isMissing && nav !== undefined && (
+            <TopPages
+              data={data}
+              slug={slug}
+              nav={nav}
+              universe={universe}
+              currentPage={currentPage}
+              onHide={(page) => {
+                void data.nav.change(slug, { op: 'hide', kind: 'page', id: page }, universe);
+              }}
+            />
+          )}
+          {!isMissing && nav !== undefined && <RailShortcut isRail={isRail} onRail={setRail} />}
+        </Sidebar>
+      ),
+    [
+      settings,
+      slug,
+      permissions,
+      workspaceName,
+      isMissing,
+      commandMenu,
+      isSigningOut,
+      workspaces,
+      roleLabel,
+      canLeave,
+      isRail,
+      nav,
+      setRail,
+      currentPage,
+      currentObject,
+      openHelp,
+      data,
+      universe,
+      objects,
+      openCustomise,
+    ],
+  );
   return (
     <AppShell
       topBar={topBar}
@@ -216,130 +385,7 @@ export function WorkspaceFrame({
       // A calendar that stopped syncing says so on every page (spec 0024, AC-619).
       // Not on Settings › Calendars, where the stopped calendar's own row offers Reconnect (the owner, 21 Oct).
       banner={isMissing || settings?.current === 'calendars' ? undefined : <CalendarBanner data={data} slug={slug} />}
-      sidebar={
-        settings !== undefined ? (
-          <SettingsNavigation slug={slug} settings={settings} permissions={permissions} />
-        ) : (
-          <Sidebar
-            workspace={workspaceName ?? strings.product}
-            // Timefix's mark heads the sidebar, as in timefix (F29); the workspace's name stays the switcher's.
-            mark={<ProviderMark provider="timefix" size="lg" />}
-            // Not known yet: skeletons, never the product's name as a stand in that then changes.
-            isWorkspaceLoading={workspaceName === undefined && !isMissing}
-            onQuickActions={() => {
-              commandMenu.open();
-            }}
-            isWorkspaceBusy={isSigningOut}
-            workspaceBusyLabel={strings.signingOut}
-            workspaceMenu={
-              <Menu
-                label={strings.workspaceMenu}
-                onAction={(key) => {
-                  if (key === 'sign-out') {
-                    setSignOutFailure(undefined);
-                    setConfirmingSignOut(true);
-                  }
-                  if (key === 'leave') setConfirmingLeave(true);
-                }}
-              >
-                {/* Every workspace the person is in, the open one checked, then Create workspace (spec 0031, AC-801). */}
-                {workspaces !== undefined && (
-                  <MenuSection label={strings.workspaces}>
-                    {workspaces.map((each) => (
-                      <MenuItem
-                        key={each.id}
-                        id={`workspace:${each.id}`}
-                        leading={<Avatar name={each.name} hue="ink" shape="square" size="xs" isDecorative />}
-                        href={workspaceHref(each.slug)}
-                        isChecked={each.slug === slug}
-                        // The person's role here sits with the open workspace's name (spec 0009, AC-136).
-                        {...(each.slug === slug && roleLabel !== undefined ? { description: roleLabel } : {})}
-                      >
-                        {each.name}
-                      </MenuItem>
-                    ))}
-                    <MenuItem id="create-workspace" icon="plus" href={newWorkspaceHref}>
-                      {strings.createWorkspace}
-                    </MenuItem>
-                  </MenuSection>
-                )}
-                {/* Settings, the trash and the shortcuts (Help, and ?) live in the sidebar's foot, not here (the owner,
-                    21 and 22 October 2026). */}
-                {workspaces !== undefined && <MenuSeparator />}
-                {/* Leaving comes last, where people look for it: this workspace (anyone in it, spec 0031, AC-812),
-                    then Timefix on this device. */}
-                {roleLabel !== undefined && (
-                  <MenuItem id="leave" icon="door-open">
-                    {strings.leaveWorkspace}
-                  </MenuItem>
-                )}
-                <MenuItem id="sign-out" icon="log-out">
-                  {strings.signOut}
-                </MenuItem>
-              </Menu>
-            }
-            // The member's rail (AC-935), kept for them; below the compact breakpoint the shell folds it anyway, and
-            // the buttons wait for their sidebar, so a press never lands on a guess.
-            isCollapsed={isRail}
-            {...(nav === undefined || isMissing ? {} : { onCollapsedChange: setRail })}
-            // The foot (AC-930): the trash (out of the main list and the workspace menu, the owner, 22 October 2026),
-            // Settings with ⌘, (spec 0026, AC-685), and Help, which opens the keyboard shortcuts until a help centre
-            // exists. Invite teammates joins with spec 0031's invite flow.
-            footer={
-              <>
-                {!isMissing && (
-                  <NavItem icon="trash" href={trashHref(slug)} isCurrent={currentPage === 'trash'}>
-                    {strings.trash}
-                  </NavItem>
-                )}
-                <NavItem icon="settings" href={settingsHomeHref(slug)} kbd="⌘,">
-                  {strings.settings}
-                </NavItem>
-                <NavItem icon="circle-question-mark" onPress={openHelp} kbd="?">
-                  {strings.help}
-                </NavItem>
-              </>
-            }
-          >
-            {/* Home first, as in timefix (owner, 21 October 2026): fixed, where the workspace opens. */}
-            {!isMissing && (
-              <NavItem icon="house" href={homeHref(slug)} isCurrent={currentPage === 'home'}>
-                {strings.home}
-              </NavItem>
-            )}
-            {!isMissing &&
-              (nav === undefined ? (
-                // The member's order isn't known yet: Records shows loading, and nothing guesses at the rest.
-                <NavSection title={strings.records} isLoading />
-              ) : (
-                <SidebarSections
-                  data={data}
-                  slug={slug}
-                  nav={nav}
-                  universe={universe}
-                  objects={objects}
-                  {...(currentObject === undefined ? {} : { currentObject })}
-                  {...(currentPage === undefined ? {} : { currentPage })}
-                  onCustomise={openCustomise}
-                />
-              ))}
-            {/* Tasks (and Inbox once it exists) after the sections, as timefix has Tasks below the CRM rows. */}
-            {!isMissing && nav !== undefined && (
-              <TopPages
-                data={data}
-                slug={slug}
-                nav={nav}
-                universe={universe}
-                currentPage={currentPage}
-                onHide={(page) => {
-                  void data.nav.change(slug, { op: 'hide', kind: 'page', id: page }, universe);
-                }}
-              />
-            )}
-            {!isMissing && nav !== undefined && <RailShortcut isRail={isRail} onRail={setRail} />}
-          </Sidebar>
-        )
-      }
+      sidebar={sidebar}
     >
       {children}
       {workspaceName !== undefined && (

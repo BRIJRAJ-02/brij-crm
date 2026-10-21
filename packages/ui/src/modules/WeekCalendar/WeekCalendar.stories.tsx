@@ -3,6 +3,8 @@ import { useState } from 'react';
 import { expect, fn, userEvent, waitFor, within } from 'storybook/test';
 import { Button } from '../../atoms/Button/Button.tsx';
 import { Stage } from '../../workbench/Stage/Stage.tsx';
+import { AsideLayout } from '../AsideLayout/AsideLayout.tsx';
+import { PageColumn } from '../PageColumn/PageColumn.tsx';
 import { SpanCard } from '../SpanCard/SpanCard.tsx';
 import { WeekCalendar, type WeekCalendarBlock, type WeekCalendarDay, type WeekCalendarSpan } from './WeekCalendar.tsx';
 
@@ -561,5 +563,27 @@ export const Overlap: Story = {
     await waitFor(() => expect(body.getByRole('menuitem', { name: /Three/ })).toHaveFocus());
     await userEvent.keyboard('{Enter}');
     await waitFor(() => expect(body.getByRole('dialog', { name: 'Details' })).toHaveTextContent('three'));
+  },
+};
+
+/** Filling a page: PageColumn `align="fill"`, AsideLayout `isFill` and the grid's `isFill`, the hours scrolling inside. */
+export const Fill: Story = {
+  parameters: { crm: { screenshot: false } },
+  render: (args) => (
+    <Stage width="fill" height="page">
+      <PageColumn align="fill">
+        <AsideLayout aside={null} asideLabel="Calendars" isAsideOpen={false} onAsideClose={() => undefined} isFill>
+          <WeekCalendar {...args} days={days()} blocks={blocks()} isFill />
+        </AsideLayout>
+      </PageColumn>
+    </Stage>
+  ),
+  play: async ({ canvasElement }) => {
+    const grid = canvasElement.querySelector('section');
+    const page = canvasElement.querySelector('[data-align="fill"]');
+    // The grid reaches the column's foot rather than stopping at twelve hours.
+    await waitFor(() =>
+      expect(grid?.getBoundingClientRect().bottom).toBeGreaterThan((page?.getBoundingClientRect().bottom ?? 0) - 40),
+    );
   },
 };

@@ -36,6 +36,7 @@ import {
   MenuTrigger,
   Modal,
   PageColumn,
+  VisuallyHidden,
   Panel,
   SectionBar,
   SegmentedControl,
@@ -572,7 +573,8 @@ export interface BookingsCalendarScreenProps {
 /** Bookings › Calendar: the range, previous week, Today, next week and Filter, then the grid and the week's count. */
 export function BookingsCalendarScreen(props: BookingsCalendarScreenProps) {
   return (
-    <PageColumn>
+    // The week fills the view, its hours scrolling inside (the owner, 22 October 2026).
+    <PageColumn align="fill">
       <WeekView {...props} />
     </PageColumn>
   );
@@ -691,9 +693,11 @@ function WeekView(props: BookingsCalendarScreenProps) {
   const isShownEvent = (item: { readonly calendarId: string }) =>
     calendarById.get(item.calendarId)?.showInWeek !== false &&
     (pickedCalendars === undefined || pickedCalendars.has(item.calendarId));
-  const panel = useCalendarsPanel();
+  const panel = useCalendarsPanel(calendarList.status === 'ready' ? accounts.length > 0 : undefined);
+  const hasNoCalendar = calendarList.status === 'ready' && accounts.length === 0;
   const framed = (content: ReactNode) => (
     <CalendarsFrame
+      isFill
       slug={slug}
       search={search}
       calendars={props.calendars}
@@ -715,17 +719,15 @@ function WeekView(props: BookingsCalendarScreenProps) {
       title={range}
       end={
         <>
-          <CalendarsToggle panel={panel} />
+          <CalendarsToggle panel={panel} slug={slug} hasNoCalendar={hasNoCalendar} />
           <Button
             variant="ghost"
             icon="chevron-left"
             label={strings.previousWeek}
             onPress={() => onSearch({ week: addDays(search.week, -7), day: addDays(search.day, -7) })}
           />
-          <Button
-            variant={isThisWeek ? 'primary' : 'secondary'}
-            onPress={() => onSearch({ week: weekOf(today, firstDay), day: today })}
-          >
+          {/* Secondary: the page's one primary is New (the owner, 22 October 2026). */}
+          <Button variant="secondary" onPress={() => onSearch({ week: weekOf(today, firstDay), day: today })}>
             {isThisWeek
               ? strings.today
               : strings.todayOn(new Intl.DateTimeFormat(locale, { day: 'numeric', month: 'short' }).format(now))}
@@ -752,6 +754,7 @@ function WeekView(props: BookingsCalendarScreenProps) {
             days={weekDayItems(days, today, locale)}
             blocks={[]}
             isLoading
+            isFill
             selectedDay={days.includes(search.day) ? search.day : (days[0] ?? search.week)}
             onSelectDay={(day) => onSearch({ day })}
             hourLabel={(hour) =>
@@ -903,6 +906,7 @@ function WeekView(props: BookingsCalendarScreenProps) {
             label={strings.weekLabel(range)}
             days={weekDayItems(days, today, locale)}
             blocks={blocks}
+            isFill
             selectedDay={days.includes(search.day) ? search.day : (days[0] ?? search.week)}
             onSelectDay={(day) => onSearch({ day })}
             hourLabel={(hour) => hourFormat.format(new Date(2000, 0, 1, hour))}
@@ -1058,7 +1062,8 @@ function WeekView(props: BookingsCalendarScreenProps) {
               return new Intl.DateTimeFormat(locale, { hour: 'numeric', minute: '2-digit' }).format(at);
             }}
           />
-          <p>{strings.weekSummary(live)}</p>
+          {/* The week's count for screen readers; on screen the grid says it (the owner, 22 October 2026). */}
+          <VisuallyHidden>{strings.weekSummary(live)}</VisuallyHidden>
         </>,
       )}
       {/* The dialogs a card asked for, each mounted afresh per question and kept while it closes. */}
@@ -1141,11 +1146,13 @@ const rowIdOf = (item: MeetingListItem) => (item.kind === 'booking' ? `b:${item.
 
 /**
  * Meetings under their day bands (Today, Tomorrow, then the date), in the order given: a booking titled by its
- * guest with "Booked via <page>", an event by its title with its calendar's colour and name and its attendees.
+ * page with "You and <guest>", the guest linked to their person; an event by its title with its calendar's colour
+ * and name and its attendees.
  */
 function groupsOf(
   items: readonly MeetingListItem[],
   calendarOf: (calendarId: string) => { readonly name: string; readonly hue: Hue } | undefined,
+  personHref: (booking: BookingListItem) => string | undefined,
   locale: string,
   me: string | undefined,
 ): readonly BookingListGroup[] {
@@ -1179,25 +1186,30 @@ function groupsOf(
     };
     const row =
       item.kind === 'booking'
-        ? {
-            ...shared,
-            title: item.booking.visitorName,
-            via: strings.bookedVia(item.booking.pageTitle),
-            // A colleague's booking (an admin's view, a team page) says whose it is: "Sam Lee and Ada".
-            ...(me === undefined || item.booking.hostMemberId === me || item.booking.hostName === ''
-              ? {}
-              : { hostName: item.booking.hostName, guestName: item.booking.visitorName }),
-            // Round robin's state (spec 0029, AC-749) and a no show (spec 0043) say so, unless it was cancelled.
-            ...(item.booking.status === 'cancelled'
-              ? {}
-              : item.booking.needsHost
-                ? { badge: strings.needsHost, badgeTone: 'accent' as const }
-                : item.booking.noShow === true
-                  ? { badge: strings.noShow }
-                  : {}),
-            ...(item.booking.note === undefined ? {} : { note: item.booking.note }),
-            ...(item.booking.guests.length === 0 ? {} : { attendees: item.booking.guests }),
-          }
+        ? (() => {
+            // As in round 6: the page's title, then the guest, a link to their person.
+            const href = personHref(item.booking);
+            return {
+              ...shared,
+              title: item.booking.pageTitle,
+              guestName: item.booking.visitorName,
+              ...(href === undefined ? {} : { guestHref: href }),
+              // A colleague's booking (an admin's view, a team page) says whose it is: "Sam Lee and Ada".
+              ...(me === undefined || item.booking.hostMemberId === me || item.booking.hostName === ''
+                ? {}
+                : { hostName: item.booking.hostName }),
+              // Round robin's state (spec 0029, AC-749) and a no show (spec 0043) say so, unless it was cancelled.
+              ...(item.booking.status === 'cancelled'
+                ? {}
+                : item.booking.needsHost
+                  ? { badge: strings.needsHost, badgeTone: 'accent' as const }
+                  : item.booking.noShow === true
+                    ? { badge: strings.noShow }
+                    : {}),
+              ...(item.booking.note === undefined ? {} : { note: item.booking.note }),
+              ...(item.booking.guests.length === 0 ? {} : { attendees: item.booking.guests }),
+            };
+          })()
         : (() => {
             const calendar = calendarOf(item.event.calendarId);
             return {
@@ -1222,14 +1234,19 @@ function groupsOf(
 
 /** The list's bar: Upcoming · Past · Canceled, then All · Bookings · Calendar, the calendars and Filter. */
 function ListBar({
+  slug,
   search,
   pages,
   panel,
+  hasNoCalendar,
   onSearch,
 }: {
+  readonly slug: string;
   readonly search: BookingsSearch;
   readonly pages: readonly BookingPageView[];
   readonly panel: CalendarsPanel;
+  /** The calendars read and none is connected: Connect calendar in the toggle's place. */
+  readonly hasNoCalendar: boolean;
   readonly onSearch: (next: Partial<BookingsSearch>) => void;
 }) {
   return (
@@ -1256,7 +1273,9 @@ function ListBar({
             }}
             segments={SOURCES.map((id) => ({ value: id, label: strings.sources[id] }))}
           />
-          {search.source !== 'bookings' && search.link === undefined && <CalendarsToggle panel={panel} />}
+          {search.source !== 'bookings' && search.link === undefined && (
+            <CalendarsToggle panel={panel} slug={slug} hasNoCalendar={hasNoCalendar} />
+          )}
           <FilterMenu search={search} pages={pages} onSearch={onSearch} />
         </>
       }
@@ -1333,7 +1352,6 @@ export function BookingsListScreen({
   actions,
 }: BookingsListScreenProps) {
   const personHref = usePersonHref(slug, objects);
-  const panel = useCalendarsPanel();
   const calendarList = useCalendarList(calendars);
   const byCalendar = new Map(
     (calendarList.status === 'ready' ? calendarList.accounts : []).flatMap((account) =>
@@ -1341,6 +1359,7 @@ export function BookingsListScreen({
     ),
   );
   const hasCalendar = calendarList.status === 'ready' && calendarList.accounts.length > 0;
+  const panel = useCalendarsPanel(calendarList.status === 'ready' ? hasCalendar : undefined);
   // The open meeting by row id, read from the list as it is now: a change shows in the panel.
   // A colleague's booking (an admin's view, a team page) names its host rather than "You".
   const me = useMyAccess()?.memberId;
@@ -1381,7 +1400,16 @@ export function BookingsListScreen({
           },
     [actions],
   );
-  const bar = <ListBar search={search} pages={pages} panel={panel} onSearch={onSearch} />;
+  const bar = (
+    <ListBar
+      slug={slug}
+      search={search}
+      pages={pages}
+      panel={panel}
+      hasNoCalendar={calendarList.status === 'ready' && !hasCalendar}
+      onSearch={onSearch}
+    />
+  );
   const body =
     state.status === 'loading' ? (
       <Skeleton shape="block" />
@@ -1393,7 +1421,7 @@ export function BookingsListScreen({
       <>
         <BookingList
           label={strings.listLabel[tab]}
-          groups={groupsOf(items, (calendarId) => byCalendar.get(calendarId), locale, me)}
+          groups={groupsOf(items, (calendarId) => byCalendar.get(calendarId), personHref, locale, me)}
           onOpen={setOpenId}
           emptyState={
             search.link !== undefined || search.cal !== undefined ? (
