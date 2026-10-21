@@ -626,7 +626,12 @@ describe('the notifications email (AC-1176, AC-1177)', () => {
     // Bea writes in a thread, Ada replies: a reply, whose email is off by default, still goes in the digest.
     const thread = await createComment(w.as(w.bea), { id: newId(), recordId: acme, body: 'First' }, hooks());
     await createComment(w.scope, { id: newId(), recordId: acme, body: 'Thanks', threadId: thread.id }, hooks());
-    await setNotificationSettings(w.as(w.bea), { digest: true, timeZone: 'UTC' }, hooks());
+    // A zone whose day has reached 08:00 now: UTC from 08:00 UTC, else Kiritimati (UTC+14).
+    const zone = new Date().getUTCHours() >= 8 ? 'UTC' : 'Pacific/Kiritimati';
+    expect(await refusalOf(setNotificationSettings(w.as(w.bea), { digest: true, timeZone: '+05:30' }))).toMatchObject({
+      code: 'INPUT_INVALID',
+    });
+    await setNotificationSettings(w.as(w.bea), { digest: true, timeZone: zone }, hooks());
     const door = { db, rules: NO_RULE_SOURCE };
     const input = { workspaceId: w.scope.workspaceId, memberId: w.bea, digest: true };
     const digest = await prepareNotificationEmail(door, input);

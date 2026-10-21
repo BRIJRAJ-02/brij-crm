@@ -79,7 +79,8 @@ export async function runNotificationEmail(deps: NotificationEmailTaskDeps, payl
     deps.log.warn('notification.email.failed', { workspaceId, memberId, error: failure });
     throw new Error('A notifications email failed to send; the worker log has its member id.');
   }
-  // At most 20 a time: the rest go in the next email, queued now (one waiting email per member, keyed).
+  // At most 20 a time: the rest go in the next email, queued now (one waiting email per member, keyed). After a
+  // digest that is the ordinary email, so kinds whose email is off wait for tomorrow's digest (never lost).
   if (prepared.hasMore) await queueNextEmail(prepared.scope);
   deps.log.info('notification.email.sent', { workspaceId, memberId, digest, notifications: prepared.ids.length });
 }

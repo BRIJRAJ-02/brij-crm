@@ -39,6 +39,9 @@ export const NOTIFICATION_CURSOR_MESSAGE = 'That inbox cursor is not valid here.
 /** What turning the digest on without a time zone answers, on `timeZone`. */
 export const DIGEST_ZONE_MESSAGE = 'The daily digest needs your time zone.';
 
+/** A time zone the database doesn't know, so the digest's hour can't be read in it. */
+export const UNKNOWN_ZONE_MESSAGE = 'That time zone is not known. Pick a city name, such as Europe/London.';
+
 /** How many times a page reads further to fill itself past notifications the reader may not see. */
 const READ_AHEAD = 3;
 
@@ -442,6 +445,11 @@ export async function setNotificationSettings(
         timeZone: input.timeZone ?? before.timeZone,
       };
       if (next.digest && next.timeZone === undefined) throw inputInvalid('timeZone', DIGEST_ZONE_MESSAGE);
+      if (input.timeZone !== undefined) {
+        // The digest's hour is read in Postgres, whose zone list differs from the browser's: only one it knows.
+        const known = await tx.execute(sql`select 1 from pg_timezone_names where name = ${input.timeZone}`);
+        if (known.rows.length === 0) throw inputInvalid('timeZone', UNKNOWN_ZONE_MESSAGE);
+      }
       const same =
         next.emailMentions === before.emailMentions &&
         next.emailReplies === before.emailReplies &&
@@ -586,8 +594,9 @@ export async function queueNextEmail(scope: EngineScope): Promise<void> {
 }
 
 /**
- * Claims today's daily digest for the caller (AC-1178): their digest is on and
- * their own day (in the time zone they turned it on in) has none yet, so the
+ * Claims today's daily digest for the caller (AC-1178): their digest is on,
+ * their own day (in the time zone they turned it on in) has reached 08:00 and
+ * has none yet (a retry past midnight never sends the next day's early), so the
  * day is marked now, before the email goes, and a second run that day gets
  * false. Answers whether this run may send it.
  */
@@ -599,6 +608,8 @@ export async function claimDigest(scope: EngineScope): Promise<boolean> {
     const claimed = await tx.execute(sql`
       update notification_settings set digest_sent_on = (now() at time zone time_zone)::date
       where member_id = ${me}::uuid and digest and time_zone is not null
+        and time_zone in (select name from pg_timezone_names)
+        and extract(hour from now() at time zone time_zone) >= 8
         and (digest_sent_on is null or digest_sent_on < (now() at time zone time_zone)::date)
     `);
     return (claimed.rowCount ?? 0) > 0;

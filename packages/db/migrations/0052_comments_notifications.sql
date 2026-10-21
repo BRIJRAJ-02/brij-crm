@@ -276,6 +276,8 @@ begin atomic
   join public.workspaces w on w.id = s.workspace_id
   where s.digest
     and s.time_zone is not null
+    -- A zone Postgres doesn't know (Node's list differs) leaves its member out rather than failing every digest.
+    and s.time_zone in (select z.name from pg_catalog.pg_timezone_names z)
     and m.status = 'active'
     and w.deleted_at is null
     and pg_catalog.date_part('hour', pg_catalog.timezone(s.time_zone, pg_catalog.now())) >= 8
