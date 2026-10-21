@@ -77,6 +77,13 @@ export interface TabsProps {
    */
   readonly variant?: 'strip' | 'bar';
   /**
+   * `none` drops the strip's 16px inset at both ends, so the first tab's label
+   * lines up with a full width Table's first column under it and the tools
+   * end at the table's edge (a settings page's Members, Invitations). The
+   * default keeps the inset a record panel's tabs need from the panel's edge.
+   */
+  readonly inset?: 'default' | 'none';
+  /**
    * One TabPanel per tab, with the same ids. Leave it off for a strip whose
    * chosen tab is drawn by the page under it (a published form's Form,
    * Settings, Install and Submissions, each its own address).
@@ -98,6 +105,7 @@ export function Tabs({
   onSelectionChange,
   end,
   variant = 'strip',
+  inset = 'default',
   children,
 }: TabsProps) {
   const { isFocusVisible } = useFocusVisible();
@@ -114,7 +122,11 @@ export function Tabs({
             },
           })}
     >
-      <div className={styles.bar} data-variant={variant === 'bar' ? 'bar' : undefined}>
+      <div
+        className={styles.bar}
+        data-variant={variant === 'bar' ? 'bar' : undefined}
+        data-inset={inset === 'none' ? 'none' : undefined}
+      >
         <TabList className={styles.list} aria-label={label} items={tabs} data-instant={isFocusVisible || undefined}>
           {(tab) => (
             <Tab
