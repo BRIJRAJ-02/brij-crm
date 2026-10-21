@@ -4,9 +4,8 @@
 export const strings = {
   title: 'Preferences',
   appearance: 'Appearance',
-  appearanceDescription: 'How the app looks on this browser.',
-  theme: 'Interface theme',
-  themeDescription: 'Choose a look, or follow your device’s setting.',
+  theme: 'Theme',
+  themeDescription: 'Saved on this browser.',
   system: 'System preference',
   light: 'Light',
   dark: 'Dark',
