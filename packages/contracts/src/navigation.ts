@@ -113,7 +113,7 @@ export const NavState = z.object({
   rail: z.boolean(),
   version: z.number().int().min(0),
   favourites: z.array(NavFavourite),
-  /** Inbox and Tasks, once those features exist (AC-924); none today. */
+  /** The pages above the sections (AC-924): Tasks for every member; Inbox joins once notifications (#28) exist. */
   top: z.array(NavPageKey),
   /** The Scheduling pages the member's role may open (AC-928): all four, none for a guest. */
   scheduling: z.array(NavPageKey),

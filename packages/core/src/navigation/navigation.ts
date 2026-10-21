@@ -191,9 +191,20 @@ function favouriteOf(kind: 'view' | 'record', id: string, label: string, object:
   };
 }
 
+/** The pages above the sections that exist today: Tasks (My tasks, spec 0019). Inbox joins with #28. */
+const TOP_PAGES_BUILT: readonly NavPage[] = ['tasks'];
+
+/**
+ * The pages above the sections the caller has (AC-924): Tasks for every
+ * member. An API key has no sidebar, so none.
+ */
+function topFor(scope: EngineScope): readonly NavPage[] {
+  return scope.actor.type === 'member' ? TOP_PAGES_BUILT : [];
+}
+
 /**
  * The Scheduling pages the caller's role may open (AC-928): every role but a
- * guest (spec 0031), and nothing for an API key.
+ * guest (spec 0031; no guest role exists yet), and nothing for an API key.
  */
 function schedulingFor(scope: EngineScope): readonly NavPage[] {
   return scope.actor.type === 'member' ? NAV_SCHEDULING_PAGES : [];
@@ -210,8 +221,7 @@ async function universeOf(
   const favourites = await resolveFavourites(tx, scope, prefs.items, objectsById);
   return {
     universe: {
-      // Inbox (#28) and Tasks (My tasks, spec 0019) join once those pages exist (AC-924).
-      top: [],
+      top: topFor(scope),
       records: readable.map((object) => object.id),
       // Lists (#51) join once they exist (AC-927).
       lists: [],

@@ -101,7 +101,8 @@ describe('the sidebar', { timeout: 120_000 }, () => {
       rail: false,
       version: 0,
       favourites: [],
-      top: [],
+      // Tasks (My tasks, spec 0019) for every member; Inbox waits for notifications (#28).
+      top: ['tasks'],
       scheduling: ['bookings', 'availability', 'booking_pages', 'forms'],
     });
     const changed = await changeNav(w.bea, { op: 'fold', section: 'scheduling', folded: true });
@@ -251,6 +252,15 @@ describe('the sidebar', { timeout: 120_000 }, () => {
     );
     expect(rows.rows).toEqual([]);
     expect(await refusal(changeNav(w.bea, { op: 'rail', on: false }))).toMatchObject({ code: 'FORBIDDEN' });
+  });
+
+  it('gives an API key, which has no sidebar, the defaults with no pages, and refuses its change', async () => {
+    const w = await workspace();
+    const key = testScope({ db, workspaceId: w.workspaceId, actor: { type: 'api_key', id: newId() } });
+    expect(await readNav(key)).toMatchObject({ items: [], rail: false, version: 0, top: [], scheduling: [] });
+    expect(await refusal(changeNav(key, { op: 'rail', on: true }))).toMatchObject({ code: 'FORBIDDEN' });
+    const rows = await db.withWorkspace(w.workspaceId, (tx) => tx.execute(sql`select 1 from member_nav_prefs`));
+    expect(rows.rows).toEqual([]);
   });
 
   it('finds nothing of another workspace’s rows, even with the filter left out', async () => {

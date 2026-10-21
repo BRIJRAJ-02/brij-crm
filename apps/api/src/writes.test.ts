@@ -713,11 +713,13 @@ const WRITES: Record<string, (m: Member, mutationId: string) => Promise<readonly
       { kind: 'views', object_id: m.people.id, item_ids: [viewId], mutation_id: mutationId },
     ];
   },
-  // Tasks (spec 0019, AC-448): one tasks row per write, naming the task and every record linked before or after.
+  // The sidebar (spec 0034, AC-937): one nav row naming the member, and nothing of what changed.
   'nav.change': async (m, mutationId) => {
+    const { memberId } = await m.client.access.mine({ workspace: m.slug });
     await m.client.nav.change({ workspace: m.slug, op: { op: 'rail', on: true }, mutationId });
-    return [{ kind: 'nav', mutation_id: mutationId }];
+    return [{ kind: 'nav', item_ids: [memberId], mutation_id: mutationId }];
   },
+  // Tasks (spec 0019, AC-448): one tasks row per write, naming the task and every record linked before or after.
   'tasks.create': async (m, mutationId) => {
     const record = await m.client.records.create({
       workspace: m.slug,
