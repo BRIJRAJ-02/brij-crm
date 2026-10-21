@@ -1211,6 +1211,7 @@ describe('live updates', () => {
       kind: 'done',
       restored: 1,
       refused: 0,
+      refusedIds: [],
       objectIds: [PEOPLE.id],
     });
     expect(count(api.calls, '/api/rpc/trash/restore')).toBe(1);

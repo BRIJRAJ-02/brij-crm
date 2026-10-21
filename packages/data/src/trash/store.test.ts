@@ -174,7 +174,13 @@ describe('restoring (AC-534)', () => {
         refusal: { code: 'UNIQUE_CONFLICT', message: 'Another record now has Email ada@acme.com.' },
       },
     ]);
-    expect(await restoring).toEqual({ kind: 'done', restored: 1, refused: 1, objectIds: [PEOPLE] });
+    expect(await restoring).toEqual({
+      kind: 'done',
+      restored: 1,
+      refused: 1,
+      refusedIds: [idAt(1)],
+      objectIds: [PEOPLE],
+    });
     frame();
     expect(names(view)).toContain('P1');
     expect(view.getSnapshot().cellErrors.get(`${idAt(1)}:name`)).toBe('Another record now has Email ada@acme.com.');
@@ -228,7 +234,27 @@ describe('deleting forever (AC-535)', () => {
       { recordId: idAt(0), state: 'purged' },
       { recordId: idAt(1), state: 'not-in-trash' },
     ]);
-    expect(await purging).toEqual({ kind: 'done', purged: 1, skipped: 1 });
+    expect(await purging).toEqual({ kind: 'done', purged: 1, skipped: 1, refused: 0, refusedIds: [] });
+  });
+
+  it('keeps a record it was refused, with its reason on its name cell (AC-538, failing closed)', async () => {
+    const { trash, view, purges, frame } = await readyTrash();
+    const purging = trash.deleteForever(WS, [idAt(0), idAt(1)]);
+    frame();
+    expect(names(view)).toEqual(['P2']);
+    await settle();
+    purges[0]?.answer([
+      { recordId: idAt(0), state: 'purged' },
+      {
+        recordId: idAt(1),
+        state: 'refused',
+        refusal: { code: 'FORBIDDEN', message: 'You can view People but not change them.' },
+      },
+    ]);
+    expect(await purging).toEqual({ kind: 'done', purged: 1, skipped: 0, refused: 1, refusedIds: [idAt(1)] });
+    frame();
+    expect(names(view)).toContain('P1');
+    expect(view.getSnapshot().cellErrors.get(`${idAt(1)}:name`)).toBe('You can view People but not change them.');
   });
 
   it('brings every row back when a member without records.purge is refused', async () => {

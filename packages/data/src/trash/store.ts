@@ -84,6 +84,8 @@ export type RestoreSummary =
       readonly kind: 'done';
       readonly restored: number;
       readonly refused: number;
+      /** The records kept in the trash, each with its reason on its name cell: a screen keeps them ticked. */
+      readonly refusedIds: readonly string[];
       /** The objects of the records restored, so their tables read again. */
       readonly objectIds: readonly string[];
     };
@@ -115,7 +117,19 @@ export interface TrashApi {
 export type PurgeSummary =
   | { readonly kind: 'too-many'; readonly limit: number }
   | { readonly kind: 'failed'; readonly error: DataError }
-  | { readonly kind: 'done'; readonly purged: number; readonly skipped: number };
+  | {
+      readonly kind: 'done';
+      readonly purged: number;
+      /** No longer in the trash (restored or removed elsewhere meanwhile). */
+      readonly skipped: number;
+      /**
+       * Kept in the trash, each with its reason on its name cell (spec 0022,
+       * AC-538 as amended: an object the person may only read, "You can view
+       * People but not change them."): a screen keeps them ticked.
+       */
+      readonly refused: number;
+      readonly refusedIds: readonly string[];
+    };
 
 /** What the trash needs from createDataLayer. */
 export interface TrashOptions {
@@ -425,7 +439,7 @@ export function createTrash({
     restore: async (workspace: string, recordIds: readonly string[]): Promise<RestoreSummary> => {
       const ids = [...new Set(recordIds)];
       if (ids.length > MAX_RESTORE_RECORDS) return { kind: 'too-many', limit: MAX_RESTORE_RECORDS };
-      if (ids.length === 0) return { kind: 'done', restored: 0, refused: 0, objectIds: [] };
+      if (ids.length === 0) return { kind: 'done', restored: 0, refused: 0, refusedIds: [], objectIds: [] };
       const nameCell = (id: string) => `${id}:${TRASH_NAME_COLUMN}`;
       setCellErrors(ids.map(nameCell));
       leaving = new Set([...leaving, ...ids]);
@@ -469,20 +483,30 @@ export function createTrash({
           ),
         ),
       ];
-      return { kind: 'done', restored: back.size, refused: refused.length, objectIds };
+      return {
+        kind: 'done',
+        restored: back.size,
+        refused: refused.length,
+        refusedIds: refused.map((result) => result.recordId),
+        objectIds,
+      };
     },
 
     /**
      * Deletes up to 500 trashed records forever (spec 0022, AC-535): their
      * rows leave at once; what the server removed is gone for good, and a
      * record no longer in the trash (restored elsewhere) comes back with the
-     * next settle. A refusal of the whole call (a member without
-     * `records.purge`, the network) brings every row back.
+     * next settle. A record refused (an object the person may only read, AC-538
+     * as amended) stays, with its reason on its name cell, as a refused restore
+     * does. A refusal of the whole call (a member without `records.purge`, the
+     * network) brings every row back.
      */
     deleteForever: async (workspace: string, recordIds: readonly string[]): Promise<PurgeSummary> => {
       const ids = [...new Set(recordIds)];
       if (ids.length > MAX_RESTORE_RECORDS) return { kind: 'too-many', limit: MAX_RESTORE_RECORDS };
-      if (ids.length === 0) return { kind: 'done', purged: 0, skipped: 0 };
+      if (ids.length === 0) return { kind: 'done', purged: 0, skipped: 0, refused: 0, refusedIds: [] };
+      const nameCell = (id: string) => `${id}:${TRASH_NAME_COLUMN}`;
+      setCellErrors(ids.map(nameCell));
       leaving = new Set([...leaving, ...ids]);
       invalidateAll();
       const mutationId = mintId();
@@ -503,14 +527,28 @@ export function createTrash({
         return { kind: 'failed', error: toDataError(error) };
       }
       const gone = new Set(results.filter((result) => result.state === 'purged').map((result) => result.recordId));
+      const refused = results.filter((result) => result.state === 'refused');
       for (const entry of of(workspace)) {
         entry.drop(gone);
         entry.markDirty();
       }
       store.remove([...gone]);
       stop();
+      // Refused rows come back with their reason on the name cell (setCellErrors tells every view).
+      setCellErrors(
+        [],
+        refused.flatMap((result) =>
+          result.refusal === undefined ? [] : [[nameCell(result.recordId), result.refusal.message] as const],
+        ),
+      );
       invalidateAll();
-      return { kind: 'done', purged: gone.size, skipped: results.length - gone.size };
+      return {
+        kind: 'done',
+        purged: gone.size,
+        skipped: results.length - gone.size - refused.length,
+        refused: refused.length,
+        refusedIds: refused.map((result) => result.recordId),
+      };
     },
 
     /**

@@ -60,16 +60,19 @@ describe('the trash', () => {
   });
 
   it('says what a restore did', () => {
-    expect(restoreToast({ kind: 'done', restored: 1, refused: 0, objectIds: ['people'] }, 'Ada')).toEqual({
+    expect(
+      restoreToast({ kind: 'done', restored: 1, refused: 0, refusedIds: [], objectIds: ['people'] }, 'Ada'),
+    ).toEqual({
       tone: 'success',
       message: 'Restored Ada.',
     });
-    expect(restoreToast({ kind: 'done', restored: 46, refused: 2, objectIds: ['people'] }, undefined)?.message).toBe(
-      'Restored 46 records. 2 couldn’t be restored; each row says why.',
-    );
-    expect(restoreToast({ kind: 'done', restored: 0, refused: 1, objectIds: [] }, undefined)?.message).toBe(
-      '1 record couldn’t be restored. Each row says why.',
-    );
+    expect(
+      restoreToast({ kind: 'done', restored: 46, refused: 2, refusedIds: ['a', 'b'], objectIds: ['people'] }, undefined)
+        ?.message,
+    ).toBe('Restored 46 records. 2 couldn’t be restored; each row says why.');
+    expect(
+      restoreToast({ kind: 'done', restored: 0, refused: 1, refusedIds: ['a'], objectIds: [] }, undefined)?.message,
+    ).toBe('1 record couldn’t be restored. Each row says why.');
     expect(
       restoreToast({ kind: 'failed', error: dataError('API_UNAVAILABLE', 'Can’t reach the CRM.') }, undefined),
     ).toEqual({ tone: 'danger', message: 'Can’t reach the CRM.' });
