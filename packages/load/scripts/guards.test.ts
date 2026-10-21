@@ -21,7 +21,10 @@ function command(script: string, args: readonly string[], env: Readonly<Record<s
   return { status: result.status, output: `${result.stdout}${result.stderr}` };
 }
 
-describe('load:run', () => {
+// Each test starts Node children (up to 30 s each), past Vitest's 5 s default on a busy runner.
+const CHILD_TIMEOUT = 70_000;
+
+describe('load:run', { timeout: CHILD_TIMEOUT }, () => {
   it.each([
     ['LOAD_API_URL', 'http://api.example.com:3100'],
     ['LOAD_DATABASE_URL_OWNER', 'postgres://crm_owner:x@db.example.com:5434/crm'],
@@ -43,7 +46,7 @@ describe('load:run', () => {
   });
 });
 
-describe('load:reset', () => {
+describe('load:reset', { timeout: CHILD_TIMEOUT }, () => {
   it('refuses a remote owner database with exit 3', () => {
     const { status, output } = command(RESET, [], {
       LOAD_DATABASE_URL_OWNER: 'postgres://crm_owner:x@db.example.com:5434/crm',
