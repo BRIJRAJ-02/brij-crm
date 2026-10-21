@@ -66,13 +66,20 @@ Ported from the artifact's Sidebar card. Every screen inside the app shell (#10 
 - `keyboard="arrows"` makes the body one tab stop (a roving tab index): the item focused while focus is inside, else the current page's, else the first. Up and Down move between items, Home and End jump to the ends, and Tab leaves the list in one press. The nav carries `data-keyboard="arrows"`, so the app can leave focus in it after a route change. Why: the settings list is a navigation the person moves through often, and AC-687 asks for arrow keys inside it and Tab past it. The app's own sidebar keeps `tab`.
 - Why a variant and not a second navigation: the settings navigation is the same rows, groups, rail and states as the app's sidebar; only the head and the groups' labels differ.
 
+## Customising (spec 0034)
+
+- `menu` on a `NavSection` puts a quiet "<Title> options" button after its label (Move up, Move down, Customise sidebar); `menu` on a `NavItem` a "More for <Name>" button after the name (Hide from sidebar, Remove from favourites). Both show on hover or focus (always to the keyboard, and on touch); neither shows on the rail. Disclosure's `actions` holds the section's.
+- `onReorder` makes a section's items reorder (each `NavItem` needs an `id`): a grip (`DragHandle`'s `manual` variant) after the name drags the item with an accent drop line, and from the keyboard Space lifts it, the arrows move it through a live preview, Space drops it and Esc (or Tab away) puts it back, each step announced in the section's live region ("Deals, moved to position 2 of 5"). Items never leave their section. The screen is told the item and its place among the items shown.
+- `onMoveSection` with `position` (`{ index, count }`) gives the section a grip after its label that moves it among the sections the same way: dragged, a drop line marks where it lands and Esc puts it back; from the keyboard, as items move.
+- Why no drag library: the spec names dnd-kit (13 October), which isn't installed, and the repo's other lists still reorder with React Aria's drag and drop until they all move (QuestionList's README says the same); React Aria's needs a grid, and these are links in a navigation landmark. A grip with its own keys and a pointer drag is all a short list needs, and it moves with the others when they change.
+
 ## States
 
-The current item takes `surface-selected`; hover (pointer only) `surface-hover`; focus the inset ring. Sections: open, folded, loading (skeleton rows, or tile marks on the rail) and empty. Collapsed. Workspace busy (a spinner on the workspace button, in place of the mark on the rail). In forced colours, the current item is outlined in `Highlight`.
+The current item takes `surface-selected`; hover (pointer only) `surface-hover`; focus the inset ring. Sections: open, folded, loading (skeleton rows, or tile marks on the rail) and empty. Reordering: an item or section lifted (its grip in the accent, the order previewed), and the drop line while dragging. Menus: shown on hover, focus or while open. Collapsed. Workspace busy (a spinner on the workspace button, in place of the mark on the rail). In forced colours, the current item is outlined in `Highlight`.
 
 ## Keyboard
 
-Tab moves through the workspace switcher, the collapse button, Quick actions, each item and each section label. Enter follows a link or presses a button; Enter or Space folds a section (with `onFoldChange`, the screen is told and keeps it). With `keyboard="arrows"`, the items are one tab stop and the arrow keys, Home and End move between them.
+Tab moves through the workspace switcher, the collapse button, Quick actions, each item (then its grip and its menu, where a section reorders) and each section label (then its grip and menu). On a grip: Space or Enter lifts, the up and down arrows move, Space or Enter drops, Esc puts it back. Enter follows a link or presses a button; Enter or Space folds a section (with `onFoldChange`, the screen is told and keeps it). With `keyboard="arrows"`, the items are one tab stop and the arrow keys, Home and End move between them.
 
 ## Differences from the artifact
 

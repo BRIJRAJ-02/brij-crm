@@ -24,7 +24,7 @@ export { SplitButton, type SplitButtonProps } from './atoms/Button/SplitButton.t
 export { Checkbox, type CheckboxProps } from './atoms/Checkbox/Checkbox.tsx';
 export { Code, type CodeProps } from './atoms/Code/Code.tsx';
 export { Currency, type CurrencyProps } from './atoms/Currency/Currency.tsx';
-export { DragHandle, type DragHandleProps } from './atoms/DragHandle/DragHandle.tsx';
+export { DragHandle, type DragHandleManual, type DragHandleProps } from './atoms/DragHandle/DragHandle.tsx';
 export { FileIcon, fileIconName, type FileIconProps } from './atoms/FileIcon/FileIcon.tsx';
 export { Icon, type IconProps, type IconSize, type IconTone } from './atoms/Icon/Icon.tsx';
 export type { IconName } from './atoms/Icon/icons.ts';
@@ -320,6 +320,12 @@ export {
   type SidebarState,
 } from './modules/Sidebar/Sidebar.tsx';
 export { NoteList, type NoteListItem, type NoteListProps } from './modules/NoteList/NoteList.tsx';
+export {
+  CustomiseSidebar,
+  type CustomiseSidebarItem,
+  type CustomiseSidebarProps,
+  type CustomiseSidebarSection,
+} from './modules/CustomiseSidebar/CustomiseSidebar.tsx';
 export { RecordHeader, type RecordHeaderProps } from './modules/RecordHeader/RecordHeader.tsx';
 export { RecordLayout, type RecordLayoutProps } from './modules/RecordLayout/RecordLayout.tsx';
 export { RecordPanel, type RecordPanelProps, type RecordPanelTab } from './modules/RecordPanel/RecordPanel.tsx';

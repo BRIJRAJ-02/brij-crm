@@ -149,6 +149,81 @@
     box-shadow: var(--shadow-focus-inset);
   }
 
+  /* An item with its grip and menu after the link (spec 0034): they wait for the pointer or focus. */
+  .row {
+    position: relative;
+    display: flex;
+    align-items: center;
+  }
+
+  .row > .item {
+    padding-inline-end: calc(var(--space-8) + var(--size-chip) * 2);
+  }
+
+  .rowActions {
+    position: absolute;
+    inset-block: 0;
+    inset-inline-end: var(--space-4);
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-2);
+  }
+
+  @media (hover: hover) and (pointer: fine) {
+    .rowActions {
+      opacity: 0;
+      transition: opacity var(--duration-hover) var(--ease-hover);
+    }
+
+    .rowActions:has([aria-expanded='true'], [data-lifted]),
+    .row:hover > .rowActions,
+    .row:focus-within > .rowActions {
+      opacity: 1;
+    }
+  }
+
+  /* Where a dragged item lands: a line in the accent between two items. */
+  .row[data-drop]::before {
+    position: absolute;
+    inset-inline: var(--space-8);
+    block-size: var(--border-width-thick);
+    border-radius: var(--radius-xs);
+    background: var(--accent);
+    content: '';
+    pointer-events: none;
+  }
+
+  .row[data-drop='before']::before {
+    inset-block-start: calc(-1 * var(--border-width-thick));
+  }
+
+  .row[data-drop='after']::before {
+    inset-block-end: calc(-1 * var(--border-width-thick));
+  }
+
+  /* Where a dragged section lands: the same line, above the section it goes before, or under the last. */
+  .section {
+    position: relative;
+  }
+
+  .section[data-drop]::before {
+    position: absolute;
+    inset-inline: var(--space-8);
+    block-size: var(--border-width-thick);
+    border-radius: var(--radius-xs);
+    background: var(--accent);
+    content: '';
+    pointer-events: none;
+  }
+
+  .section[data-drop='before']::before {
+    inset-block-start: calc(-1 * var(--space-6));
+  }
+
+  .section[data-drop='after']::before {
+    inset-block-end: calc(-1 * var(--space-6));
+  }
+
   .meta {
     flex: none;
     color: var(--text-secondary);

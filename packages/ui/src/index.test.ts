@@ -48,6 +48,7 @@ describe('@crm/ui', () => {
       'CopyButton',
       'CountryPicker',
       'Currency',
+      'CustomiseSidebar',
       'DatePicker',
       'DateRangePicker',
       'DayStrip',

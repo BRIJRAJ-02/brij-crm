@@ -396,3 +396,160 @@ export const KeptFold: Story = {
     await expect(label).toHaveAttribute('aria-expanded', 'false');
   },
 };
+
+/** Records that reorder, with item menus, a section menu, a stored fold and a section grip (spec 0034). */
+function CustomisableSidebar({
+  onReorder,
+  onHide,
+}: {
+  readonly onReorder: (id: string, to: number) => void;
+  readonly onHide: (id: string) => void;
+}) {
+  const [objects, setObjects] = useState(['Companies', 'People', 'Deals']);
+  const [isFolded, setFolded] = useState(false);
+  return (
+    <Stage height="page">
+      <Sidebar workspace="Brightline">
+        <NavSection
+          title="Records"
+          isFolded={isFolded}
+          onFoldChange={setFolded}
+          position={{ index: 0, count: 2 }}
+          onMoveSection={() => undefined}
+          menu={
+            <Menu label="Records options">
+              <MenuItem id="down">Move down</MenuItem>
+              <MenuItem id="customise">Customise sidebar</MenuItem>
+            </Menu>
+          }
+          onReorder={(id, to) => {
+            onReorder(id, to);
+            setObjects((current) => {
+              const rest = current.filter((name) => name !== id);
+              return [...rest.slice(0, to), id, ...rest.slice(to)];
+            });
+          }}
+        >
+          {objects.map((name) => (
+            <NavItem
+              key={name}
+              id={name}
+              icon="building"
+              hue="blue"
+              href={`/${name.toLowerCase()}`}
+              menu={
+                <Menu label={`${name} options`} onAction={() => onHide(name)}>
+                  <MenuItem id="hide">Hide from sidebar</MenuItem>
+                </Menu>
+              }
+            >
+              {name}
+            </NavItem>
+          ))}
+        </NavSection>
+        <NavSection title="Scheduling" position={{ index: 1, count: 2 }} onMoveSection={() => undefined}>
+          <NavItem icon="calendar-days" href="/bookings">
+            Bookings
+          </NavItem>
+        </NavSection>
+      </Sidebar>
+    </Stage>
+  );
+}
+
+/**
+ * Reorder from the keyboard (AC-932): Space on an item's grip lifts it, the
+ * arrows move it, Space drops it; each step is announced. Esc puts it back.
+ */
+export const Reorder: Story = {
+  render: () => <CustomisableSidebar onReorder={fn()} onHide={fn()} />,
+  play: async ({ canvas, userEvent }) => {
+    const grip = canvas.getByRole('button', { name: 'Move Deals' });
+    grip.focus();
+    await userEvent.keyboard(' ');
+    await expect(grip).toHaveAttribute('aria-pressed', 'true');
+    await userEvent.keyboard('{ArrowUp}{ArrowUp}');
+    await expect(canvas.getAllByRole('status')[0]).toHaveTextContent('Deals, position 1 of 3.');
+    await userEvent.keyboard(' ');
+    await expect(canvas.getAllByRole('status')[0]).toHaveTextContent('Deals, moved to position 1 of 3.');
+    const links = canvas.getAllByRole('link').map((link) => link.textContent);
+    await expect(links.slice(0, 3)).toEqual(['Deals', 'Companies', 'People']);
+    // Esc puts a lifted item back.
+    const people = canvas.getByRole('button', { name: 'Move People' });
+    people.focus();
+    await userEvent.keyboard(' {ArrowUp}{Escape}');
+    await expect(canvas.getAllByRole('status')[0]).toHaveTextContent('People, put back at position 3 of 3.');
+  },
+};
+
+/** An item's menu: More opens Hide from sidebar. */
+export const ItemMenu: Story = {
+  render: () => <CustomisableSidebar onReorder={fn()} onHide={fn()} />,
+  play: async ({ canvas, userEvent }) => {
+    await userEvent.click(canvas.getByRole('button', { name: 'More for People' }));
+    const menu = await waitFor(() => {
+      const found = document.querySelector('[role="menu"]');
+      if (found === null) throw new Error('No menu.');
+      return found;
+    });
+    await expect(menu).toHaveTextContent('Hide from sidebar');
+  },
+};
+
+/** A section's menu and grip after its label; the fold is the screen's (stored per member). */
+export const SectionMenuAndFold: Story = {
+  render: () => <CustomisableSidebar onReorder={fn()} onHide={fn()} />,
+  play: async ({ canvas, userEvent }) => {
+    await expect(canvas.getByRole('button', { name: 'Records options' })).toBeInTheDocument();
+    await expect(canvas.getByRole('button', { name: 'Move the Records section' })).toBeInTheDocument();
+    await userEvent.click(canvas.getByRole('button', { name: 'Records' }));
+    await expect(canvas.getByRole('button', { name: 'Records' })).toHaveAttribute('aria-expanded', 'false');
+  },
+};
+
+/** A section moves among the sections from the keyboard on its grip, announced; Esc puts it back. */
+export const MoveSection: Story = {
+  render: () => <MovableSections />,
+  play: async ({ canvas, userEvent }) => {
+    const grip = canvas.getByRole('button', { name: 'Move the Scheduling section' });
+    grip.focus();
+    await userEvent.keyboard(' {ArrowUp} ');
+    await expect(
+      canvas
+        .getAllByRole('status')
+        .some((status) => status.textContent.includes('Scheduling, moved to position 1 of 2.')),
+    ).toBe(true);
+    const labels = canvas
+      .getAllByRole('button', { name: /^(Records|Scheduling)$/ })
+      .map((button) => button.textContent);
+    await expect(labels).toEqual(['Scheduling', 'Records']);
+  },
+};
+
+/** Two sections the screen keeps in order, each with a grip after its label. */
+function MovableSections() {
+  const [order, setOrder] = useState(['Records', 'Scheduling']);
+  return (
+    <Stage height="page">
+      <Sidebar workspace="Brightline">
+        {order.map((title, index) => (
+          <NavSection
+            key={title}
+            title={title}
+            position={{ index, count: order.length }}
+            onMoveSection={(to) => {
+              setOrder((current) => {
+                const rest = current.filter((each) => each !== title);
+                return [...rest.slice(0, to), title, ...rest.slice(to)];
+              });
+            }}
+          >
+            <NavItem icon="calendar-days" href={`/${title.toLowerCase()}`}>
+              {`${title} home`}
+            </NavItem>
+          </NavSection>
+        ))}
+      </Sidebar>
+    </Stage>
+  );
+}

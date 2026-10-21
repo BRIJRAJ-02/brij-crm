@@ -15,6 +15,39 @@
     margin: 0;
   }
 
+  /* The title row with quiet actions after it (a sidebar section's grip and menu). */
+  .headingRow {
+    display: flex;
+    align-items: center;
+    gap: var(--space-4);
+  }
+
+  .headingRow > .heading {
+    flex: 1;
+    min-inline-size: 0;
+  }
+
+  .actions {
+    display: inline-flex;
+    flex: none;
+    align-items: center;
+    gap: var(--space-2);
+  }
+
+  /* In the label variant they wait for the pointer or focus, so the column stays quiet. */
+  @media (hover: hover) and (pointer: fine) {
+    .actions[data-quiet] {
+      opacity: 0;
+      transition: opacity var(--duration-hover) var(--ease-hover);
+    }
+
+    .actions[data-quiet]:has([aria-expanded='true'], [data-lifted]),
+    .headingRow:hover > .actions[data-quiet],
+    .headingRow:focus-within > .actions[data-quiet] {
+      opacity: 1;
+    }
+  }
+
   .trigger {
     display: flex;
     align-items: center;

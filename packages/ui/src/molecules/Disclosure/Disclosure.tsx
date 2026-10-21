@@ -31,6 +31,12 @@ export interface DisclosureProps {
    * fields" in a create dialog).
    */
   readonly variant?: 'default' | 'label' | 'fields';
+  /**
+   * Quiet controls after the title, outside its toggle (a sidebar section's
+   * grip and its menu, spec 0034). In the `label` variant they show while the
+   * row is hovered or holds focus, and always to the keyboard.
+   */
+  readonly actions?: ReactNode;
 }
 
 /** A section that opens and closes under its title: attribute groups, advanced settings, sidebar sections. */
@@ -44,7 +50,19 @@ export function Disclosure({
   onExpandedChange,
   isDisabled,
   variant = 'default',
+  actions,
 }: DisclosureProps) {
+  const heading = (
+    <Heading className={styles.heading}>
+      <AriaButton slot="trigger" className={styles.trigger}>
+        <span className={styles.chevron}>
+          <Icon name="chevron-right" size={variant === 'label' ? 'xs' : 'sm'} />
+        </span>
+        <span className={styles.title}>{title}</span>
+        {count !== undefined && <Badge count={count} />}
+      </AriaButton>
+    </Heading>
+  );
   return (
     <AriaDisclosure
       className={styles.root}
@@ -55,15 +73,16 @@ export function Disclosure({
       {...(onExpandedChange === undefined ? {} : { onExpandedChange })}
       {...(isDisabled === undefined ? {} : { isDisabled })}
     >
-      <Heading className={styles.heading}>
-        <AriaButton slot="trigger" className={styles.trigger}>
-          <span className={styles.chevron}>
-            <Icon name="chevron-right" size={variant === 'label' ? 'xs' : 'sm'} />
+      {actions === undefined ? (
+        heading
+      ) : (
+        <div className={styles.headingRow}>
+          {heading}
+          <span className={styles.actions} data-quiet={variant === 'label' || undefined}>
+            {actions}
           </span>
-          <span className={styles.title}>{title}</span>
-          {count !== undefined && <Badge count={count} />}
-        </AriaButton>
-      </Heading>
+        </div>
+      )}
       <DisclosurePanel className={styles.panel}>
         <PanelContent>{children}</PanelContent>
       </DisclosurePanel>
