@@ -236,6 +236,7 @@ export function ManagePage({ token, isWelcome, locale, now }: ManagePageProps) {
         ? {
             changes: (
               <BookingChanges
+                title={booking.title}
                 hostName={booking.hostName}
                 guests={booking.guests}
                 canMove={booking.canMove}

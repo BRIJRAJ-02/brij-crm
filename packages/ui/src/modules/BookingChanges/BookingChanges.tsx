@@ -1,8 +1,10 @@
 import { useEffect, useId, useRef, useState, type ReactNode } from 'react';
 import { Avatar } from '../../atoms/Avatar/Avatar.tsx';
-import { Button, ButtonGroup } from '../../atoms/Button/Button.tsx';
+import { Button } from '../../atoms/Button/Button.tsx';
+import { focusLater } from '../../lib/focus-later.ts';
 import { Callout } from '../../molecules/Callout/Callout.tsx';
 import { Field } from '../../molecules/Field/Field.tsx';
+import { Modal } from '../../molecules/Modal/Modal.tsx';
 import styles from './BookingChanges.module.css';
 import { strings } from './strings.ts';
 
@@ -16,11 +18,13 @@ export type GuestsOutcome =
 /** What removing a guest or cancelling answered: done, or a line to show. */
 export type CancelOutcome = { readonly kind: 'done' } | { readonly kind: 'failed'; readonly message: string };
 
-/** Which change is open. */
-type Mode = 'idle' | 'move' | 'guests' | 'cancel';
+/** Which change is open under the row (Cancel asks in a dialog instead). */
+type Mode = 'idle' | 'move' | 'guests';
 
 /** Props for BookingChanges. */
 export interface BookingChangesProps {
+  /** The booking's name ("Intro call"): the cancel confirm asks about it by name. */
+  readonly title: string;
   readonly hostName: string;
   /** Everyone invited besides the guest themselves. */
   readonly guests: readonly string[];
@@ -53,9 +57,11 @@ const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
  * one. Each opens its panel (a named region) under the row, and focus moves
  * into it. Guests is one list (each
  * guest with Remove) over one email field whose Add, or Enter, invites them.
- * Cancel always asks first, with an optional reason.
+ * Removing a guest and cancelling each ask first in a confirm dialog (the
+ * house's ask first pattern), the cancel with an optional reason.
  */
 export function BookingChanges({
+  title,
   hostName,
   guests,
   canMove,
@@ -67,7 +73,9 @@ export function BookingChanges({
   onRemove,
   onCancel,
 }: BookingChangesProps) {
-  const [mode, setMode] = useState<Mode>(startsWith === 'move' && !canMove ? 'idle' : (startsWith ?? 'idle'));
+  const [mode, setMode] = useState<Mode>(startsWith === 'move' && canMove ? 'move' : 'idle');
+  // Arriving from the email's Cancel link opens the confirm straight away.
+  const [isCancelOpen, setCancelOpen] = useState(startsWith === 'cancel');
   const headingId = useId();
   const panelId = useId();
   const panelTitleId = useId();
@@ -75,13 +83,8 @@ export function BookingChanges({
   const cancelButton = useRef<HTMLButtonElement>(null);
   const opened = useRef(false);
   // An opened panel takes focus, so a keyboard or a screen reader lands in it (not on arrival from an email link).
-  // Keep it hands focus back to Cancel booking once the confirm is gone.
-  const backToCancel = useRef(false);
   useEffect(() => {
-    if (backToCancel.current) {
-      backToCancel.current = false;
-      cancelButton.current?.focus();
-    } else if (opened.current) panel.current?.focus();
+    if (opened.current) panel.current?.focus();
   }, [mode]);
   const toggle = (next: Mode) => () => {
     opened.current = true;
@@ -104,14 +107,7 @@ export function BookingChanges({
             {guests.length > 0 ? strings.guestsCount(guests.length) : strings.addGuests}
           </Button>
           <span className={styles.end}>
-            <Button
-              ref={cancelButton}
-              variant="danger"
-              icon="circle-x"
-              isExpanded={mode === 'cancel'}
-              controls={panelId}
-              onPress={toggle('cancel')}
-            >
+            <Button ref={cancelButton} variant="danger" icon="circle-x" onPress={() => setCancelOpen(true)}>
               {strings.cancelBooking}
             </Button>
           </span>
@@ -144,19 +140,19 @@ export function BookingChanges({
               onRemove={onRemove}
             />
           )}
-          {mode === 'cancel' && (
-            <CancelPanel
-              titleId={panelTitleId}
-              hostName={hostName}
-              onCancel={onCancel}
-              onKeep={() => {
-                backToCancel.current = true;
-                setMode('idle');
-              }}
-            />
-          )}
         </div>
       )}
+      <CancelDialog
+        title={title}
+        hostName={hostName}
+        isOpen={isCancelOpen}
+        onCancel={onCancel}
+        onKeep={() => {
+          setCancelOpen(false);
+          // Back on Cancel booking, also when the dialog opened on arrival with nothing focused before it.
+          focusLater(() => cancelButton.current);
+        }}
+      />
     </section>
   );
 }
@@ -180,7 +176,8 @@ function GuestsPanel({
   const [failure, setFailure] = useState('');
   const [status, setStatus] = useState('');
   const [isAdding, setAdding] = useState(false);
-  const [removing, setRemoving] = useState<string | undefined>(undefined);
+  // The guest whose Remove is asking first.
+  const [confirming, setConfirming] = useState<string | undefined>(undefined);
   const field = useRef<HTMLInputElement & HTMLTextAreaElement>(null);
   const title = useRef<HTMLHeadingElement>(null);
   // After an add or a remove: the field when it is there, else (the list full) the panel's title.
@@ -207,17 +204,11 @@ function GuestsPanel({
     } else if (outcome.kind === 'invalid') setError(outcome.message);
     else setFailure(outcome.message);
   };
-  const remove = async (guest: string) => {
-    setRemoving(guest);
-    setStatus('');
-    setError('');
-    setFailure('');
-    const outcome = await onRemove(guest);
-    setRemoving(undefined);
-    if (outcome.kind === 'done') {
-      setStatus(strings.removed(guest));
-      refocus();
-    } else setFailure(outcome.message);
+  const removed = (guest: string) => {
+    setConfirming(undefined);
+    setStatus(strings.removed(guest));
+    // The row and its Remove are gone: the field, else the panel's title, once the dialog has closed.
+    focusLater(() => field.current ?? title.current);
   };
 
   return (
@@ -238,8 +229,12 @@ function GuestsPanel({
                 variant="ghost"
                 icon="x"
                 label={strings.remove(guest)}
-                isDisabled={removing !== undefined}
-                onPress={() => void remove(guest)}
+                onPress={() => {
+                  setStatus('');
+                  setError('');
+                  setFailure('');
+                  setConfirming(guest);
+                }}
               />
             </li>
           ))}
@@ -282,45 +277,130 @@ function GuestsPanel({
         {status}
       </p>
       <p className={styles.note}>{strings.guestsNote}</p>
+      {confirming !== undefined && (
+        <RemoveDialog
+          guest={confirming}
+          onRemove={onRemove}
+          onDone={() => removed(confirming)}
+          onDismiss={() => setConfirming(undefined)}
+        />
+      )}
     </>
   );
 }
 
-/** "Cancel this booking?", an optional reason, then Yes, cancel it or Keep it. */
-function CancelPanel({
-  titleId,
+/** "Remove ann@…?": asks first, stays busy until the server answers, and shows a refusal inside. */
+function RemoveDialog({
+  guest,
+  onRemove,
+  onDone,
+  onDismiss,
+}: {
+  readonly guest: string;
+  readonly onRemove: (email: string) => Promise<CancelOutcome>;
+  readonly onDone: () => void;
+  readonly onDismiss: () => void;
+}) {
+  const [error, setError] = useState('');
+  const [isBusy, setBusy] = useState(false);
+  const remove = () => {
+    if (isBusy) return;
+    setBusy(true);
+    setError('');
+    void onRemove(guest).then((outcome) => {
+      setBusy(false);
+      if (outcome.kind === 'done') onDone();
+      else setError(outcome.message);
+    });
+  };
+  return (
+    <Modal
+      title={strings.removeTitle(guest)}
+      tone="danger"
+      isOpen
+      isBusy={isBusy}
+      onOpenChange={(open) => {
+        if (!open && !isBusy) onDismiss();
+      }}
+      actions={
+        <>
+          <Button slot="close" isDisabled={isBusy} kbd="ESC">
+            {strings.dismiss}
+          </Button>
+          <Button variant="danger-solid" icon="x" isPending={isBusy} onPress={remove}>
+            {isBusy ? strings.removing : strings.confirmRemove}
+          </Button>
+        </>
+      }
+    >
+      {error !== '' && (
+        <Callout tone="danger" isAnnounced>
+          {error}
+        </Callout>
+      )}
+      <p>{strings.removeText}</p>
+    </Modal>
+  );
+}
+
+/**
+ * "Cancel Intro call with Ada Lovelace?": one sentence, an optional reason the host sees, Keep booking (Esc) and
+ * Cancel booking. Busy until the server answers; a done cancel redraws the receipt, a refusal shows here.
+ */
+function CancelDialog({
+  title,
   hostName,
+  isOpen,
   onCancel,
   onKeep,
 }: {
-  readonly titleId: string;
+  readonly title: string;
   readonly hostName: string;
+  readonly isOpen: boolean;
   readonly onCancel: (reason: string) => Promise<CancelOutcome>;
   readonly onKeep: () => void;
 }) {
   const [reason, setReason] = useState('');
   const [error, setError] = useState('');
   const [isBusy, setBusy] = useState(false);
+  const cancel = () => {
+    if (isBusy) return;
+    setBusy(true);
+    setError('');
+    void onCancel(reason.trim()).then((outcome) => {
+      // A done cancel replaces the changes with the cancelled booking; only a failure stays.
+      if (outcome.kind === 'failed') {
+        setBusy(false);
+        setError(outcome.message);
+      }
+    });
+  };
   return (
-    <form
-      className={styles.form}
-      onSubmit={(event) => {
-        event.preventDefault();
-        setBusy(true);
-        setError('');
-        void onCancel(reason.trim()).then((outcome) => {
-          // A done cancel replaces this panel with the cancelled booking; only a failure stays.
-          if (outcome.kind === 'failed') {
-            setBusy(false);
-            setError(outcome.message);
-          }
-        });
+    <Modal
+      title={strings.cancelTitle(title, hostName)}
+      tone="danger"
+      isOpen={isOpen}
+      isBusy={isBusy}
+      onOpenChange={(open) => {
+        if (!open && !isBusy) onKeep();
       }}
+      actions={
+        <>
+          <Button slot="close" isDisabled={isBusy} kbd="ESC">
+            {strings.keep}
+          </Button>
+          <Button variant="danger-solid" icon="circle-x" isPending={isBusy} onPress={cancel}>
+            {isBusy ? strings.cancelling : strings.confirmCancel}
+          </Button>
+        </>
+      }
     >
-      <h3 id={titleId} className={styles.title}>
-        {strings.cancelTitle}
-      </h3>
-      <p className={styles.text}>{strings.cancelText(hostName)}</p>
+      {error !== '' && (
+        <Callout tone="danger" isAnnounced>
+          {error}
+        </Callout>
+      )}
+      <p>{strings.cancelText(hostName)}</p>
       <Field
         label={strings.reason}
         hint={strings.reasonHint(hostName)}
@@ -330,19 +410,6 @@ function CancelPanel({
         onChange={setReason}
         isDisabled={isBusy}
       />
-      {error !== '' && (
-        <Callout tone="danger" isAnnounced>
-          {error}
-        </Callout>
-      )}
-      <ButtonGroup label={strings.cancelTitle} layout="row">
-        <Button isDisabled={isBusy} onPress={onKeep}>
-          {strings.keep}
-        </Button>
-        <Button type="submit" variant="danger-solid" isPending={isBusy}>
-          {isBusy ? strings.cancelling : strings.confirmCancel}
-        </Button>
-      </ButtonGroup>
-    </form>
+    </Modal>
   );
 }
