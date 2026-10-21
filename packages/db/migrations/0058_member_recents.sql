@@ -44,6 +44,14 @@ create policy member_recents_tenant on member_recents
 -- A standard SQL body (begin atomic) is parsed once, here, and binds its table, functions and operator by OID, so no
 -- session setting can change what it reads. The operator is named with its schema, and parameters with the
 -- function's name, so no column can shadow one.
+--
+-- Its SET of pg_trgm's threshold needs pg_trgm loaded in this session first: until the library defines that setting
+-- it is an unknown placeholder, and only a superuser may attach one of those to a function ("permission denied to set
+-- parameter"). A fresh database has it loaded by 0002's trigram index, but a database migrating from 0057 opens a new
+-- session, as the owner (never a superuser locally or on Neon). Calling any pg_trgm function loads it; the setting is
+-- then pg_trgm's own, which anyone may set.
+select public.similarity('', '');
+--> statement-breakpoint
 create function crm_search_similar(search_attributes uuid[], search_pattern text, search_limit integer)
   returns setof uuid
   language sql
