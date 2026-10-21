@@ -15,6 +15,12 @@ export interface FloatingBarProps {
   readonly isLeaving?: boolean;
   /** Called once the exit has played, so the owner can unmount it. */
   readonly onLeft?: () => void;
+  /**
+   * Comes and goes at once, with no rise, sink or fade: a bar opened or
+   * closed from the keyboard (the house motion rule). `onLeft` follows in
+   * the next frame.
+   */
+  readonly isInstant?: boolean;
   /** Handlers for the whole bar, such as a key handler (the bulk bar's Esc). */
   readonly frameProps?: HTMLAttributes<HTMLDivElement>;
 }
@@ -26,13 +32,15 @@ const EXIT_FALLBACK_MS = 400;
  * The floating bar's shell, shared by the bulk bar and the save bar: a
  * toolbar tall bar on the raised surface with the popover shadow and large
  * corners, which rises in as it mounts and sinks out when `isLeaving`.
- * Reduced motion fades it. On a narrow view it spans the width.
+ * Reduced motion fades it; `isInstant` (opened from the keyboard) skips the
+ * motion. On a narrow view it spans the width.
  */
 export function FloatingBar({
   children,
   placement = 'inline',
   isLeaving = false,
   onLeft,
+  isInstant = false,
   frameProps,
 }: FloatingBarProps) {
   const surface = useRef<HTMLDivElement>(null);
@@ -49,6 +57,13 @@ export function FloatingBar({
       isDone = true;
       left.current?.();
     };
+    // No exit plays at once: gone in the next frame, rather than after the fallback's wait.
+    if (isInstant) {
+      const frame = requestAnimationFrame(done);
+      return () => {
+        cancelAnimationFrame(frame);
+      };
+    }
     const onEnd = (event: TransitionEvent) => {
       if (event.target === element && event.propertyName === 'opacity') done();
     };
@@ -58,10 +73,16 @@ export function FloatingBar({
       element?.removeEventListener('transitionend', onEnd);
       clearTimeout(timer);
     };
-  }, [isLeaving]);
+  }, [isLeaving, isInstant]);
   return (
     <div {...frameProps} className={styles.frame} data-placement={placement}>
-      <div ref={surface} className={styles.surface} data-leaving={isLeaving || undefined} inert={isLeaving}>
+      <div
+        ref={surface}
+        className={styles.surface}
+        data-leaving={isLeaving || undefined}
+        data-instant={isInstant || undefined}
+        inert={isLeaving}
+      >
         {children}
       </div>
     </div>

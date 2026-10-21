@@ -1,6 +1,7 @@
 /* BulkActionBar: in the FloatingBar's shell, the count in body-strong, then
    the offer, the actions space-8 apart after a hairline, and Clear at the
-   end. A running action's progress takes the actions' place. */
+   end. A running action's progress takes the actions' place and the room
+   they had, giving it back on a narrow bar, so Cancel never pokes out. */
 @layer components {
   .root {
     display: flex;
@@ -23,11 +24,20 @@
     display: inline-flex;
     gap: var(--space-8);
     align-items: center;
+    min-inline-size: 0;
     padding-inline-start: var(--space-8);
     border-inline-start: var(--border-width-hairline) solid var(--border-subtle);
   }
 
+  /* Nothing before it (no count while an action runs, or none selected): no hairline to set it apart. */
+  .actions[data-alone] {
+    flex: 1 1 auto;
+    padding-inline-start: 0;
+    border-inline-start: none;
+  }
+
   .progress {
-    inline-size: var(--size-measure);
+    flex: 1 1 var(--size-measure);
+    min-inline-size: 0;
   }
 }

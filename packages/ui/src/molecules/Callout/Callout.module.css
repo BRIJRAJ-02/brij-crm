@@ -45,6 +45,27 @@
     text-overflow: ellipsis;
   }
 
+  /* A phone: a bar's line wraps rather than cutting its words short (a reason no one could read whole), its icon
+     beside the first line. */
+  @container (inline-size < 480px) {
+    .root[data-placement='bar'] {
+      align-items: flex-start;
+      block-size: auto;
+      min-block-size: var(--size-control);
+      padding-block: var(--space-4);
+      white-space: normal;
+    }
+
+    .root[data-placement='bar'] .icon {
+      padding-block-start: var(--space-2);
+    }
+
+    .root[data-placement='bar'] .text {
+      overflow: visible;
+      text-overflow: clip;
+    }
+  }
+
   .root[data-tone='info'] {
     border-color: var(--tag-blue-border);
     background: var(--tag-blue-bg);

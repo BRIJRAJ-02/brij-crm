@@ -60,3 +60,16 @@ export const Leaving: Story = {
     await waitFor(() => expect(args.onLeft).toHaveBeenCalledTimes(1));
   },
 };
+
+/** Opened and closed from the keyboard: no motion either way, and it says it has gone in the next frame. */
+export const LeavingAtOnce: Story = {
+  parameters: { crm: { screenshot: false } },
+  args: { isLeaving: true, isInstant: true, onLeft: fn() },
+  play: async ({ args, canvasElement }) => {
+    const surface = canvasElement.querySelector<HTMLElement>('[data-instant]');
+    await expect(surface).not.toBeNull();
+    await expect(getComputedStyle(surface ?? canvasElement).transitionProperty).toBe('none');
+    // Well before the exit's fallback wait (400 ms) would have run out.
+    await waitFor(() => expect(args.onLeft).toHaveBeenCalledTimes(1), { timeout: 200 });
+  },
+};

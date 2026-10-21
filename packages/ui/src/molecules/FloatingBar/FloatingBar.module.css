@@ -2,7 +2,8 @@
    tall bar on surface-raised with a hairline, shadow-md and radius-lg, its
    content in one row (a second when it can't fit). It rises space-8 as it
    mounts (duration-popover, ease-out) and sinks out in duration-exit;
-   reduced motion keeps the fade. In a page's footer it is centred there;
+   reduced motion keeps the fade, and a bar opened from the keyboard comes
+   and goes at once. In a page's footer it is centred there;
    floating, it sits centred space-16 above the bottom of its nearest
    positioned container. Centred, only the bar takes the pointer. On a narrow
    view it spans the width. */
@@ -57,6 +58,11 @@
     opacity: 0;
     translate: 0 var(--space-8);
     transition-duration: var(--duration-exit);
+  }
+
+  /* Opened or closed from the keyboard: it comes and goes at once (the house motion rule). */
+  .surface[data-instant] {
+    transition: none;
   }
 
   /* A phone: the bar spans the view, inside its gutter. */

@@ -52,6 +52,28 @@ export const InABar: Story = {
   },
 };
 
+/** In a bar on a phone: a long line wraps under its first words rather than being cut short. */
+export const InABarNarrow: Story = {
+  render: () => (
+    <Stage width="phone">
+      <Callout placement="bar" tone="danger">
+        Your workspace is already running 20 background changes. Wait for one to finish.
+      </Callout>
+    </Stage>
+  ),
+  play: async ({ canvas }) => {
+    const note = canvas.getByRole('alert');
+    await expect(note).toHaveTextContent('Wait for one to finish.');
+    const text = note.querySelector<HTMLElement>('[class*="text"]');
+    await expect(text).not.toBeNull();
+    if (text === null) return;
+    // Every word shows: nothing cut, and it takes a second line.
+    await expect(text.scrollWidth).toBeLessThanOrEqual(text.clientWidth + 1);
+    const line = Number.parseFloat(getComputedStyle(text).lineHeight);
+    await expect(text.getBoundingClientRect().height).toBeGreaterThan(line * 1.5);
+  },
+};
+
 /**
  * Full width under a view's bars, for a state of the whole view: square, a
  * hairline below, and announced politely as it appears.

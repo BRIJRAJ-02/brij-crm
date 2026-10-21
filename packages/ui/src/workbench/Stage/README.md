@@ -19,6 +19,8 @@ It is not exported from `@crm/ui`. Screens lay out with real modules (app shell,
 ```
 
 - `direction`: `row` (the default) wraps pieces side by side, centred on one line; `column` stacks them, aligned to the start.
+- `width`: `auto` (the default); `narrow` holds the pieces to the sidebar's width; `fill` stretches one piece across; `narrow-fill` does both; `phone` is a phone's width (the side panel's, `size-panel`) and a size container itself, so a piece's container queries see a phone as they do in the app's view (a floating bar spanning the width, a bar note wrapping).
+- `height`: `grid` gives a table a header and twelve rows to scroll in; `page` is an app window's height, with no padding.
 
 ## Differences from the artifact
 

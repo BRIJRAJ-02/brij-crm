@@ -25,6 +25,14 @@
     max-inline-size: var(--size-sidebar);
   }
 
+  /* A phone's width, and a size container, so container queries inside see a phone as they do in the app's view. */
+  .root[data-width='phone'] {
+    box-sizing: border-box;
+    container-type: inline-size;
+    inline-size: var(--size-panel);
+    max-inline-size: 100%;
+  }
+
   .root[data-height='grid'] {
     box-sizing: content-box;
     flex-wrap: nowrap;
