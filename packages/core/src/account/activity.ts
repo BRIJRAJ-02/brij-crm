@@ -141,6 +141,12 @@ export async function alertNewDevice(
     await deps.identity.noteDevice(signedIn.userId, key);
     return 'first';
   }
+  // No device kept yet (every account when devices started being kept): this one is noted quietly, so a deploy
+  // never emails every account about the laptop it always uses.
+  if (!facts.hasKnownDevice) {
+    await deps.identity.noteDevice(signedIn.userId, key);
+    return 'known';
+  }
   const seen = await deps.identity.deviceLastSeen(signedIn.userId, key);
   if (seen !== undefined && seen.getTime() >= now - ALERT_AFTER_DAYS * DAY) {
     await deps.identity.noteDevice(signedIn.userId, key);

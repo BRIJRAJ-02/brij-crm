@@ -160,6 +160,8 @@ export interface SessionFacts {
   readonly userCreatedAt: Date;
   /** Whether the account kept a sign in before this session's. */
   readonly signedInBefore: boolean;
+  /** Whether the account has any known device yet (none before devices were kept, 0079). */
+  readonly hasKnownDevice: boolean;
 }
 
 /** Global identity: the directory, users, and Better Auth's storage. Reads no tenant data. */
@@ -811,6 +813,7 @@ export function createIdentityStore(options: DatabaseOptions): IdentityStore {
           createdAt: session.createdAt,
           userCreatedAt: user.createdAt,
           signedInBefore: sql<boolean>`exists (select 1 from ${securityEvent} e where e.user_id = ${session.userId} and e.kind = 'sign_in' and e.session_id is distinct from ${session.id})`,
+          hasKnownDevice: sql<boolean>`exists (select 1 from ${knownDevice} d where d.user_id = ${session.userId})`,
         })
         .from(session)
         .innerJoin(user, eq(user.id, session.userId))
