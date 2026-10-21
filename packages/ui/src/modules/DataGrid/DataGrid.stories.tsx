@@ -1211,8 +1211,8 @@ export const EditPhoneCodePickInList: Story = {
     await userEvent.keyboard('india');
     await waitFor(() => expect(document.querySelector('[role="option"][data-focused]')).toHaveTextContent('India'));
     const india = document.querySelector<HTMLElement>('[role="option"][data-focused]');
-    if (india === null) throw new Error('no marked option');
-    await userEvent.click(india);
+    await expect(india).not.toBeNull();
+    if (india !== null) await userEvent.click(india);
     await waitFor(() => expect(document.querySelector('[role="listbox"]')).toBeNull());
     await expect(dialog.isConnected).toBe(true);
     await waitFor(() => expect(number).toHaveFocus());
