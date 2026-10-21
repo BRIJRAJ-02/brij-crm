@@ -7,7 +7,7 @@ import { FormDocument, type PublicForm, type PublishAttribute } from '@crm/contr
 import { Hue } from '@crm/contracts/values';
 import { schema, type WorkspaceTx } from '@crm/db';
 import { isArchivedNow, loadAttributes, type AttributeDef } from '../engine/values.ts';
-import { fieldLevel, objectLevel, type Access } from '../access/policy.ts';
+import { can, fieldLevel, objectLevel, type Access } from '../access/policy.ts';
 
 const { attributeOptions, forms, formVersions, objects } = schema;
 
@@ -17,7 +17,8 @@ export interface FormRow {
   readonly kind: string;
   readonly status: 'draft' | 'live' | 'paused' | 'archived';
   readonly name: string;
-  readonly mainObjectId: string;
+  /** The draft's target object; null while the form keeps its submissions only. */
+  readonly mainObjectId: string | null;
   readonly publicKey: string;
   readonly draftVersionId: string | null;
   readonly liveVersionId: string | null;
@@ -68,6 +69,15 @@ export interface VersionRow {
   readonly document: FormDocument;
   readonly published: boolean;
   readonly updatedByMemberId: string | null;
+}
+
+/**
+ * Whether a member may see a form (spec 0023: forms on objects they can see). A form that keeps its
+ * submissions only is on no object, so no object rule reaches it: it is for members who manage forms, as
+ * the submissions it holds are (a submission with no record reads only with `forms.manage`). Fail closed.
+ */
+export function canSeeForm(access: Access, mainObjectId: string | null): boolean {
+  return mainObjectId === null ? can(access, 'forms.manage') : objectLevel(access, mainObjectId) !== 'none';
 }
 
 /** Parses a stored document. One that no longer parses is a programming error (documents are checked on save). */
@@ -128,12 +138,16 @@ export async function objectName(tx: WorkspaceTx, objectId: string): Promise<str
   return row?.name ?? 'Record';
 }
 
-/** The target's attributes as the publish check sees them: live ones, the reader's write access on each (AC-546). */
+/**
+ * The target's attributes as the publish check sees them: live ones, the reader's write access on each
+ * (AC-546). None for a form that keeps its submissions only.
+ */
 export async function publishAttributes(
   tx: WorkspaceTx,
   access: Access,
-  objectId: string,
+  objectId: string | null,
 ): Promise<ReadonlyMap<string, PublishAttribute>> {
+  if (objectId === null) return new Map();
   const attributes = fileable(await loadAttributes(tx, objectId));
   const name = await objectName(tx, objectId);
   const writesObject = objectLevel(access, objectId) === 'write';

@@ -242,10 +242,15 @@
     opacity: var(--opacity-disabled);
   }
 
-  .option[data-clear] {
+  /* Clear and Create, and an option set apart (isApart), sit under a hairline, apart from the options above. */
+  .option[data-clear],
+  .option[data-apart] {
     margin-block-start: var(--space-4);
     border-block-start: var(--border-width-hairline) solid var(--border-subtle);
     border-radius: 0;
+  }
+
+  .option[data-clear] {
     color: var(--text-secondary);
   }
 

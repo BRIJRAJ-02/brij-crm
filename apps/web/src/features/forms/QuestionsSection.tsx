@@ -68,13 +68,16 @@ export interface QuestionsSectionProps {
   readonly onChange: (next: FormDocument | ((before: FormDocument) => FormDocument)) => void;
   /** The target object's attributes, the choices for Where it goes. */
   readonly attributes: readonly FormAttributeChoice[];
-  readonly objectName: string;
+  /** The target object's name; absent while the form keeps its submissions only, when no answer is filed. */
+  readonly objectName?: string;
   /** Questions in the live version: their keys stay as they are. */
   readonly liveIds: ReadonlySet<string>;
   readonly newId: () => string;
   readonly toasts: Toasts;
   /** The question a publish refused, and why: kept open, with the error inline. */
   readonly problem?: { readonly questionId: string; readonly message: string };
+  /** A question to open and bring into view as the screen shows (a link from Settings' map of where answers go). */
+  readonly focusQuestionId?: string;
   readonly isReadOnly: boolean;
 }
 
@@ -114,6 +117,18 @@ export function QuestionsSection(props: QuestionsSectionProps) {
     setJustAdded(id);
   };
 
+  // A link to one question opens it and brings it into view, once per question it names: only a new link opens
+  // one, so edits to the draft never reopen it.
+  const { focusQuestionId } = props;
+  const [focused, setFocused] = useState<string | undefined>(undefined);
+  if (focusQuestionId !== focused) {
+    setFocused(focusQuestionId);
+    if (focusQuestionId !== undefined && draft.questions.some((question) => question.id === focusQuestionId)) {
+      setOpen((before) => new Set([...before, focusQuestionId]));
+      setJustAdded(focusQuestionId);
+    }
+  }
+
   const add = () => {
     if (isFull) return;
     const id = newId();
@@ -125,7 +140,10 @@ export function QuestionsSection(props: QuestionsSectionProps) {
     onChange((before) => removeQuestion(before, question.id).document);
     const index = draft.questions.findIndex((each) => each.id === question.id);
     const name = question.label === '' ? strings.untitledQuestion : question.label;
-    const filed = question.filedOn === undefined ? undefined : filedLine(question, objectName, attributes);
+    const filed =
+      question.filedOn === undefined || objectName === undefined
+        ? undefined
+        : filedLine(question, objectName, attributes);
     toasts.toast({
       tone: 'info',
       message: filed === undefined ? strings.questionDeleted(name) : strings.questionDeletedFiled(name, filed),
@@ -148,7 +166,12 @@ export function QuestionsSection(props: QuestionsSectionProps) {
       ? { choiceCount: (question.choices ?? []).filter((choice) => choice.trim() !== '').length }
       : {}),
     // The card's line is a list split by " · ": unfiled says so in two words, the full sentence lives in Where it goes.
-    filed: question.filedOn === undefined ? strings.notFiledShort : filedLine(question, objectName, attributes),
+    // A form that keeps its submissions only files nothing, so its cards say nothing about it.
+    ...(objectName === undefined
+      ? {}
+      : {
+          filed: question.filedOn === undefined ? strings.notFiledShort : filedLine(question, objectName, attributes),
+        }),
     hasProblem: problem?.questionId === question.id || refused.has(question.id),
   }));
 
@@ -221,6 +244,7 @@ export function QuestionsSection(props: QuestionsSectionProps) {
             question={question}
             draft={draft}
             attributes={attributes}
+            isFiling={objectName !== undefined}
             isReadOnly={isReadOnly}
             // A question just added, or one a publish refused, takes focus and comes into view.
             isJustAdded={justAdded === id || problem?.questionId === id}
@@ -300,6 +324,8 @@ interface QuestionEditorProps {
   readonly question: FormQuestion;
   readonly draft: FormDocument;
   readonly attributes: readonly FormAttributeChoice[];
+  /** The form adds submissions to the CRM, so Where it goes shows; a form that keeps them only files nothing. */
+  readonly isFiling: boolean;
   readonly isReadOnly: boolean;
   /** Just added: its Question field takes focus, and the card scrolls into view. */
   readonly isJustAdded: boolean;
@@ -314,6 +340,7 @@ function QuestionEditor({
   question,
   draft,
   attributes,
+  isFiling,
   isReadOnly,
   isJustAdded,
   problem,
@@ -387,26 +414,28 @@ function QuestionEditor({
           }}
         />
       )}
-      <Select
-        label={strings.whereItGoes}
-        items={[
-          { id: 'none', label: strings.notFiled },
-          ...fitting.map((attribute) => {
-            const holder = usedBy.get(attribute.attributeId);
-            return {
-              id: attribute.attributeId,
-              label: attribute.title,
-              ...(holder === undefined ? {} : { description: strings.takenBy(holder) }),
-              ...(attribute.canWrite ? {} : { description: strings.cantWrite, isArchived: true }),
-            };
-          }),
-        ]}
-        value={question.filedOn?.attributeId ?? 'none'}
-        isReadOnly={isReadOnly || isLocked}
-        onChange={(id) => {
-          onChange({ filedOn: id === null || id === 'none' ? null : id });
-        }}
-      />
+      {isFiling && (
+        <Select
+          label={strings.whereItGoes}
+          items={[
+            { id: 'none', label: strings.notFiled },
+            ...fitting.map((attribute) => {
+              const holder = usedBy.get(attribute.attributeId);
+              return {
+                id: attribute.attributeId,
+                label: attribute.title,
+                ...(holder === undefined ? {} : { description: strings.takenBy(holder) }),
+                ...(attribute.canWrite ? {} : { description: strings.cantWrite, isArchived: true }),
+              };
+            }),
+          ]}
+          value={question.filedOn?.attributeId ?? 'none'}
+          isReadOnly={isReadOnly || isLocked}
+          onChange={(id) => {
+            onChange({ filedOn: id === null || id === 'none' ? null : id });
+          }}
+        />
+      )}
     </>
   );
 }

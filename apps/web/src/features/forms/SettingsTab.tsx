@@ -1,14 +1,13 @@
 // Brief
 // Purpose: a form's Settings tab (spec 0023), for someone setting up a form in under a minute: what people see after
-// sending, where the answers go in the CRM, the form's words, its name and address, and its spam protection.
+// sending, whether and where submissions go in the CRM, the form's words, its name and address, and spam protection.
 // Main task: read each group's one line summary, change only what needs changing (the defaults already work), and
-// save the name, address and owner from the SaveBar; the words and what follows a send go live on Publish.
-// Leaves out: email notifications (no backend yet), filing on a Company or Deal (one object per form today), each
-// question's filing (set on the question, linked from here), and the look (beside the preview).
-import type { BookingPageView, FormDocument, FormTargetChoices, FormView, MemberSummary } from '@crm/data';
-import { useCaptureList } from '@crm/data/react';
+// save the name, address and owner from the SaveBar; the words, what follows a send and where submissions go go live
+// on Publish.
+// Leaves out: email notifications (no backend yet), booking a meeting after sending (arrives with the visitor's
+// countdown), each question's filing (set on the question, linked from here), and the look (beside the preview).
+import type { FormDocument, FormTargetChoices, FormView, MemberSummary, ObjectSummary } from '@crm/data';
 import {
-  Callout,
   Card,
   DescriptionList,
   Field,
@@ -17,21 +16,18 @@ import {
   RadioGroup,
   SaveBar,
   Select,
+  Switch,
   type SaveBarStatus,
 } from '@crm/ui';
 import { useRouteContext } from '@tanstack/react-router';
-import { useState, type ReactNode } from 'react';
-import { linksHref } from '../booking/links.ts';
+import { useState } from 'react';
 import { pageHeading } from '../navigation/focus.ts';
 import { sameDocument } from './draft.ts';
-import { formHref } from './paths.ts';
+import { formHref, questionHref } from './paths.ts';
 import { firstRefusal } from './refusals.ts';
 import { strings } from './strings.ts';
 
 const NOBODY = 'nobody';
-
-/** The delays a meeting step may wait before it moves on, in seconds (0 is at once). */
-const DELAYS = [0, 3, 5, 10, 15, 30] as const;
 
 /** A web address without its scheme, for a summary ("acme.com/thanks"). */
 function shortUrl(url: string): string {
@@ -137,14 +133,16 @@ export interface SettingsTabProps {
   readonly form: FormView;
   readonly draft: FormDocument;
   readonly target: FormTargetChoices;
+  readonly objects: readonly ObjectSummary[];
   readonly members: readonly MemberSummary[];
   readonly isReadOnly: boolean;
   readonly settings: FormSettings;
   readonly onDraftChange: (next: FormDocument | ((before: FormDocument) => FormDocument)) => void;
+  /** Points the draft at an object, or at none (keep submissions only); the editor saves first and takes the answer. */
+  readonly onRetarget: (objectId: string | null) => void;
+  /** A change of where submissions go is on its way. */
+  readonly isRetargeting: boolean;
 }
-
-/** Which of the three follow ups a draft holds: a meeting is the message's offer of a booking page. */
-type AfterChoice = 'message' | 'redirect' | 'meeting';
 
 /** The groups, as Cards with a one line summary each, set two abreast where there is room. */
 export function SettingsTab({
@@ -152,28 +150,22 @@ export function SettingsTab({
   form,
   draft,
   target,
+  objects,
   members,
   isReadOnly,
   settings,
   onDraftChange,
+  onRetarget,
+  isRetargeting,
 }: SettingsTabProps) {
   const { data } = useRouteContext({ from: '__root__' });
-  const pages = useCaptureList(data.bookingPages.view(slug));
-  const bookingPages: readonly BookingPageView[] = pages.status === 'ready' ? pages.items : [];
   // What each follow up last held, so switching back and forth keeps what was typed.
   const [kept, setKept] = useState({
     message: draft.after.kind === 'message' ? draft.after.message : '',
     url: draft.after.kind === 'redirect' ? draft.after.url : 'https://',
   });
-  // Not in the form's document yet (wip/formdesign's contract): how long the meeting step waits.
-  const delay = 5;
 
   const after = draft.after;
-  const fromDraft: AfterChoice =
-    after.kind === 'redirect' ? 'redirect' : after.offerMeeting === undefined ? 'message' : 'meeting';
-  // The picked follow up is held here too, so Book a meeting stays picked while no booking page is set yet.
-  const [picked, setPicked] = useState<AfterChoice>(fromDraft);
-  const choice: AfterChoice = picked === 'meeting' && after.kind === 'message' ? 'meeting' : fromDraft;
   const live = form.live;
   const seenChanged =
     live !== undefined &&
@@ -181,69 +173,60 @@ export function SettingsTab({
       (draft.subheading ?? '') !== (live.subheading ?? '') ||
       draft.buttonText !== live.buttonText);
   const afterChanged = live !== undefined && !sameDocument({ ...draft, after }, { ...draft, after: live.after });
-  const meetingPage =
-    after.kind === 'message' ? bookingPages.find((page) => page.id === after.offerMeeting?.bookingPageId) : undefined;
+  const targetChanged = live !== undefined && live.targets.main?.objectId !== draft.targets.main?.objectId;
 
-  const choose = (next: AfterChoice) => {
-    if (next === choice) return;
-    setPicked(next);
+  const choose = (next: 'message' | 'redirect') => {
+    if (next === after.kind) return;
+    // Keep what the other choice held, then bring back what this one held.
     setKept((before) =>
-      after.kind === 'message' ? { ...before, message: after.message } : { ...before, url: after.url },
+      after.kind === 'redirect' ? { ...before, url: after.url } : { ...before, message: after.message },
     );
     onDraftChange((before) => ({
       ...before,
-      after:
-        next === 'redirect'
-          ? { kind: 'redirect', url: kept.url }
-          : next === 'meeting'
-            ? {
-                kind: 'message',
-                message: kept.message,
-                ...(bookingPages[0] === undefined ? {} : { offerMeeting: { bookingPageId: bookingPages[0].id } }),
-              }
-            : { kind: 'message', message: kept.message },
+      after: next === 'redirect' ? { kind: 'redirect', url: kept.url } : { kind: 'message', message: kept.message },
     }));
   };
 
   const afterSummary =
-    choice === 'redirect'
-      ? after.kind === 'redirect' && shortUrl(after.url) !== ''
-        ? strings.sendsTo(shortUrl(after.url))
-        : strings.noAddressYet
-      : choice === 'meeting'
-        ? meetingPage === undefined
-          ? strings.meetingNoPage
-          : strings.meetingSummary(meetingPage.title)
-        : strings.showsMessage;
-
-  // What a visitor sees once they send, drawn small beside the choice.
-  const afterPreview: ReactNode =
-    choice === 'redirect'
-      ? strings.previewRedirect(after.kind === 'redirect' ? shortUrl(after.url) : '')
-      : choice === 'meeting'
-        ? strings.previewMeeting(delay)
-        : after.kind === 'message' && after.message.trim() !== ''
-          ? after.message
-          : strings.thankYouDefault;
+    after.kind === 'redirect'
+      ? shortUrl(after.url) === ''
+        ? strings.noAddressYet
+        : strings.sendsTo(shortUrl(after.url))
+      : strings.showsMessage;
 
   // Where each question's answer goes: the target's attribute, or kept with the submission only.
+  const isFiling = draft.targets.main !== undefined && target.objectName !== undefined;
+  const objectName = target.objectName ?? '';
   const attributeTitle = (attributeId: string | undefined) =>
     target.items.find((item) => item.attributeId === attributeId)?.title;
   // The match, said by the question that carries it ("Work email"), or the attribute when no question does.
-  const matchQuestion = draft.questions.find(
-    (question) => question.filedOn?.attributeId === draft.targets.main.matchAttributeId,
-  );
-  const matchTitle = matchQuestion?.label ?? attributeTitle(draft.targets.main.matchAttributeId);
+  const matchId = draft.targets.main?.matchAttributeId;
+  const matchQuestion = draft.questions.find((question) => question.filedOn?.attributeId === matchId);
+  const matchTitle = matchQuestion?.label ?? attributeTitle(matchId);
+  // Each line links to its question on the Form tab, where its filing is set.
   const filing = draft.questions.map((question) => {
     const title = attributeTitle(question.filedOn?.attributeId);
     return {
       term: question.label.trim() === '' ? strings.untitledQuestion : question.label,
-      description: title === undefined ? strings.keptOnly : strings.filedOn(target.objectName, title),
+      description: (
+        <Link href={questionHref(slug, form.id, question.id)}>
+          {title === undefined ? strings.keptOnly : strings.filedOn(objectName, title)}
+        </Link>
+      ),
     };
   });
   const filedCount = draft.questions.filter(
     (question) => attributeTitle(question.filedOn?.attributeId) !== undefined,
   ).length;
+  // The object a submission goes to when the switch is turned on: People, else the first live object.
+  const liveObjects = objects.filter((object) => !object.isArchived && object.access === 'write');
+  const firstObject = liveObjects.find((object) => object.standardKey === 'people') ?? liveObjects[0];
+  const answersSummary = [
+    isFiling ? strings.answersSummary(objectName, filedCount) : strings.keptOnlySummary,
+    targetChanged ? strings.waitsForPublish : '',
+  ]
+    .filter((part) => part !== '')
+    .join(' · ');
 
   return (
     <>
@@ -257,17 +240,16 @@ export function SettingsTab({
           label={strings.afterChoice}
           isLabelHidden
           orientation="horizontal"
-          value={choice}
+          value={after.kind}
           isReadOnly={isReadOnly}
           onChange={(value) => {
-            if (value === 'message' || value === 'redirect' || value === 'meeting') choose(value);
+            if (value === 'message' || value === 'redirect') choose(value);
           }}
         >
           <Radio value="message">{strings.showMessage}</Radio>
           <Radio value="redirect">{strings.sendToAddress}</Radio>
-          <Radio value="meeting">{strings.bookMeeting}</Radio>
         </RadioGroup>
-        {choice === 'redirect' && after.kind === 'redirect' && (
+        {after.kind === 'redirect' ? (
           <Field
             label={strings.redirectUrl}
             hint={strings.redirectHint}
@@ -279,8 +261,7 @@ export function SettingsTab({
               onDraftChange((before) => ({ ...before, after: { kind: 'redirect', url } }));
             }}
           />
-        )}
-        {choice === 'message' && after.kind === 'message' && (
+        ) : (
           <Field
             label={strings.thankYou}
             placeholder={strings.thankYouDefault}
@@ -294,62 +275,33 @@ export function SettingsTab({
             }}
           />
         )}
-        {choice === 'meeting' &&
-          after.kind === 'message' &&
-          (pages.status === 'ready' && bookingPages.length === 0 ? (
-            <Callout tone="info" actions={<Link href={linksHref(slug)}>{strings.createBookingPage}</Link>}>
-              {strings.noBookingPagesYet}
-            </Callout>
-          ) : (
-            <>
-              <Select
-                label={strings.whichBookingPage}
-                isDisabled={pages.status !== 'ready'}
-                items={bookingPages.map((page) => ({
-                  id: page.id,
-                  label:
-                    page.durations[0] === undefined
-                      ? page.title
-                      : strings.bookingPageItem(page.title, page.durations[0]),
-                }))}
-                value={after.offerMeeting?.bookingPageId ?? null}
-                isReadOnly={isReadOnly}
-                onChange={(bookingPageId) => {
-                  if (bookingPageId === null) return;
-                  onDraftChange((before) => ({
-                    ...before,
-                    after: {
-                      kind: 'message',
-                      message: before.after.kind === 'message' ? before.after.message : '',
-                      offerMeeting: { bookingPageId },
-                    },
-                  }));
-                }}
-              />
-              <Select
-                label={strings.meetingDelay}
-                items={DELAYS.map((seconds) => ({ id: String(seconds), label: strings.delayLabel(seconds) }))}
-                value={String(delay)}
-                // Not in the form's document yet (wip/formdesign's contract): shown, fixed, with why.
-                isDisabled
-                hint={strings.delayComing}
-              />
-            </>
-          ))}
-        {choice !== 'message' && (
-          <Callout tone="info" title={strings.whatTheySee}>
-            {afterPreview}
-          </Callout>
-        )}
       </Card>
-      <Card title={strings.answersTitle} description={strings.answersSummary(target.objectName, filedCount)}>
-        <DescriptionList
-          items={[
-            { term: strings.eachSend, description: strings.createsOrUpdates(target.objectName, matchTitle) },
-            ...filing,
-          ]}
+      <Card title={strings.answersTitle} description={answersSummary} isBusy={isRetargeting}>
+        <Switch
+          label={strings.addToCrmSwitch}
+          description={isFiling ? strings.addToCrmOn(objectName, matchTitle) : strings.addToCrmOff}
+          isSelected={draft.targets.main !== undefined}
+          isReadOnly={isReadOnly}
+          isDisabled={isRetargeting || (draft.targets.main === undefined && firstObject === undefined)}
+          onChange={(isOn) => {
+            onRetarget(isOn ? (firstObject?.id ?? null) : null);
+          }}
         />
-        <Link href={formHref(slug, form.id)}>{strings.changeFiling}</Link>
+        {isFiling && (
+          <>
+            <Select
+              label={strings.whichObject}
+              items={liveObjects.map((object) => ({ id: object.id, label: object.pluralName, icon: object.icon }))}
+              value={draft.targets.main?.objectId ?? null}
+              isReadOnly={isReadOnly}
+              isDisabled={isRetargeting}
+              onChange={(objectId) => {
+                if (objectId !== null) onRetarget(objectId);
+              }}
+            />
+            <DescriptionList items={filing} />
+          </>
+        )}
       </Card>
       <Card title={strings.wordsTitle} {...(seenChanged ? { description: strings.waitsForPublish } : {})}>
         <Field
@@ -382,7 +334,7 @@ export function SettingsTab({
           }}
         />
       </Card>
-      <Card title={strings.nameAndAddress} description={strings.savedWithSave}>
+      <Card title={isFiling ? strings.nameAndAddress : strings.nameAndLink} description={strings.savedWithSave}>
         <Field
           label={strings.name}
           hint={strings.nameHint}
@@ -412,19 +364,22 @@ export function SettingsTab({
           }}
           {...(settings.fieldError('slug') === undefined ? {} : { error: settings.fieldError('slug') ?? '' })}
         />
-        <Select
-          label={strings.owner}
-          hint={strings.ownerHint}
-          items={[
-            { id: NOBODY, label: strings.nobody },
-            ...members.map((member) => ({ id: member.id, label: member.name })),
-          ]}
-          value={settings.values.owner}
-          isReadOnly={isReadOnly}
-          onChange={(id) => {
-            settings.set({ owner: id ?? NOBODY });
-          }}
-        />
+        {/* Only a form that adds submissions to the CRM makes records for someone to own. */}
+        {isFiling && (
+          <Select
+            label={strings.owner}
+            hint={strings.ownerHint}
+            items={[
+              { id: NOBODY, label: strings.nobody },
+              ...members.map((member) => ({ id: member.id, label: member.name })),
+            ]}
+            value={settings.values.owner}
+            isReadOnly={isReadOnly}
+            onChange={(id) => {
+              settings.set({ owner: id ?? NOBODY });
+            }}
+          />
+        )}
       </Card>
       <Card title={strings.spamTitle} description={strings.spamSummary}>
         <Link href={`${formHref(slug, form.id, 'submissions')}&state=needs_review`}>{strings.spamReview}</Link>

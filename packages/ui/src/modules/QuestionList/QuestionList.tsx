@@ -21,8 +21,11 @@ export interface QuestionListItem {
   readonly isRequired: boolean;
   /** For a choice question: how many choices it has. */
   readonly choiceCount?: number;
-  /** Where its answers go, after the type on the second line: "Person › Budget band", or "Not filed, kept with the enquiry". */
-  readonly filed: string;
+  /**
+   * Where its answers go, after the type on the second line: "Person › Budget band", or "Not filed". Left out
+   * on a form that keeps its submissions only, where no answer is filed.
+   */
+  readonly filed?: string;
   /** The question a publish refused: marked, and the caller keeps it open until it is fixed. */
   readonly hasProblem?: boolean;
 }
@@ -164,7 +167,7 @@ export function QuestionList({
                         ...(item.choiceCount === undefined
                           ? []
                           : [item.choiceCount === 0 ? strings.noChoices : strings.choices(item.choiceCount)]),
-                        item.filed,
+                        ...(item.filed === undefined ? [] : [item.filed]),
                       ].map((part, at) => (
                         // The separator stays outside the part, so its spaces are where a line may break.
                         <Fragment key={at}>

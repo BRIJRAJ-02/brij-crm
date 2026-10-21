@@ -147,8 +147,10 @@ export const strings = {
   next: 'Next',
   back: 'Back',
   close: 'Close',
-  fileOnto: 'The object it files onto',
-  fileOntoHint: 'Each submission becomes one of these, matched by email.',
+  fileOnto: 'Where submissions go',
+  fileOntoHint: 'Each submission adds or updates one of these, matched by email.',
+  noCrm: 'Don’t add to the CRM',
+  keptOnlyHint: 'Submissions stay in the form’s Submissions tab. You can add them to the CRM later, from Settings.',
   buildObject: 'Build one out of this form',
   buildObjectButton: (name: string, attributes: number) =>
     `Create ${name} with ${count(attributes, 'attribute', 'attributes')}`,
@@ -159,8 +161,8 @@ export const strings = {
 
   // Settings tab
   nameAndAddress: 'Name, link and owner',
+  nameAndLink: 'Name and link',
   savedWithSave: 'Changes here apply when you save',
-  changeFiling: 'Change where answers go, on the Form tab',
   nameHint: 'Only your team sees it.',
   nameRequired: 'Give the form a name.',
   addressChanged: 'Address changed. The old link no longer works.',
@@ -178,29 +180,25 @@ export const strings = {
   showMessage: 'A thank you message',
   showsMessage: 'Shows a thank you message',
   sendToAddress: 'Another web page',
-  bookMeeting: 'Book a meeting',
   noAddressYet: 'Sends them to a page, no address yet',
   sendsTo: (address: string) => `Sends them to ${address}`,
-  meetingSummary: (page: string) => `Takes them to book a time on ${page}`,
-  meetingNoPage: 'Takes them to book a time, no booking page picked yet',
   thankYou: 'Thank you message',
   thankYouDefault: 'Thank you. We will come back to you at the address you gave.',
   redirectUrl: 'Web address',
   redirectHint: 'Starts with https://',
-  whichBookingPage: 'Booking page',
-  bookingPageItem: (title: string, minutes: number) => `${title} · ${String(minutes)} min`,
-  meetingDelay: 'Send them there',
-  delayLabel: (seconds: number) => (seconds === 0 ? 'At once' : `After ${String(seconds)} seconds`),
-  noBookingPagesYet: 'You have no booking pages yet. Make one, then pick it here.',
-  createBookingPage: 'Create a booking page',
-  whatTheySee: 'What they see',
-  previewRedirect: (address: string) => (address === '' ? 'They go to your page.' : `They go to ${address}.`),
-  previewMeeting: (seconds: number) => `Thank you. Taking you to book a time in ${String(seconds)} seconds…`,
-  delayComing: 'Five seconds for now: choosing the wait comes with booking from a form.',
+  addToCrmSwitch: 'Add each submission to the CRM',
+  addToCrmOn: (object: string, match: string | undefined) =>
+    match === undefined
+      ? `Each submission makes a ${object}.`
+      : `Each submission makes a ${object}, or updates the one with the same ${match}.`,
+  addToCrmOff: 'Submissions stay in the Submissions tab. Nothing is added to the CRM.',
+  keptOnlySummary: 'Kept in Submissions only',
+  whichObject: 'Where submissions go',
+  retargetFailed: 'That didn’t change where submissions go.',
   answersSummary: (object: string, filed: number) =>
     filed === 0
-      ? `Each submission adds or updates a ${object}`
-      : `Each submission adds or updates a ${object}, with ${count(filed, 'answer', 'answers')} on it`,
+      ? `Adds or updates a ${object}`
+      : `Adds or updates a ${object} · ${count(filed, 'answer', 'answers')} filed`,
   eachSend: 'Each submission',
   createsOrUpdates: (object: string, match: string | undefined) =>
     match === undefined ? `Creates a ${object}` : `Creates a ${object}, or updates the one with the same ${match}`,
@@ -261,10 +259,11 @@ export const strings = {
   },
   when: 'When',
   person: 'Person',
+  email: 'Email',
   state: 'State',
   answers: 'Answers',
   states: {
-    received: 'Received',
+    received: 'Processing',
     processing: 'Processing',
     processed: 'Added',
     spam: 'Spam',
@@ -272,6 +271,9 @@ export const strings = {
     needs_review: 'Needs review',
     failed: 'Failed',
   } satisfies Record<SubmissionState, string>,
+  /** A processed submission that has no record: one Add to CRM can file, or one a form that files nothing kept. */
+  stateNotInCrm: 'Not in CRM',
+  stateKept: 'Received',
   submission: 'Submission',
   cameFrom: 'Where it came from',
   records: 'Records',
@@ -308,6 +310,7 @@ export const strings = {
   syncTitle: 'Sync earlier submissions?',
   syncTextPublished: 'The form now files its answers differently. Earlier submissions can be filed the same way.',
   syncTextMenu: 'File earlier submissions the way the form files its answers now.',
+  syncTextConnected: 'The form now adds each submission to the CRM. Earlier submissions can be added the same way.',
   syncInScope: (total: number) => `${count(total, 'earlier submission', 'earlier submissions')} in scope.`,
   syncNothing: 'Every earlier submission here already follows the form.',
   syncFailuresText: 'Some can’t be filed, such as when the CRM needs a field the form doesn’t ask.',
@@ -326,8 +329,6 @@ export const strings = {
   syncStarting: 'Starting…',
   notNow: 'Not now',
   tryAgain: 'Try again',
-  crmFiling: 'Filing…',
-  notInCrm: 'Not in CRM',
   settledSome: (done: number, of: number) => `Changed ${String(done)} of ${String(of)}; the rest are still picked.`,
   markingSpam: 'Marking as spam…',
   markingNotSpam: 'Marking as not spam…',

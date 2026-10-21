@@ -2,8 +2,10 @@
 // versioned JSON document per form version. A form is a short list of
 // questions, each with a plain answer type, filed onto an attribute of the
 // form's target only where the member says so; then how the page looks, its
-// words, and what follows a submit. The form's name, address, owner and the
-// sites that may post to it live on the form itself and apply at once.
+// words, and what follows a submit. A form with no target keeps its
+// submissions only and files nothing (the owner's "what if I don't need to
+// map", 21 October 2026). The form's name, address, owner and the sites that
+// may post to it live on the form itself and apply at once.
 import * as z from 'zod';
 import { ANSWER_TYPES, CHOICE_TYPES, FORM_CHOICES_MAX, FORM_QUESTIONS_MAX, QUESTION_KEY } from './answer-types.ts';
 import { FORM_LANGUAGES } from './public.ts';
@@ -98,8 +100,9 @@ export const FormDocument = z
     questions: z
       .array(FormQuestion)
       .max(FORM_QUESTIONS_MAX, { error: `A form holds at most ${String(FORM_QUESTIONS_MAX)} questions.` }),
+    /** Where submissions go in the CRM: `main` is the object each one adds or updates. Absent, they stay in Submissions only. */
     targets: z.strictObject({
-      main: z.strictObject({ objectId: Uuid, matchAttributeId: Uuid.optional() }),
+      main: z.strictObject({ objectId: Uuid, matchAttributeId: Uuid.optional() }).optional(),
     }),
     look: FormLook.default({ colour: 'light', corners: 'rounded' }),
     headline: z.string().trim().max(120).default(DEFAULT_HEADLINE),
@@ -124,6 +127,13 @@ export const FormDocument = z
         });
       }
       const attributeId = question.filedOn?.attributeId;
+      if (attributeId !== undefined && document.targets.main === undefined) {
+        context.addIssue({
+          code: 'custom',
+          path: [...at, 'filedOn'],
+          message: 'A form that keeps submissions only files no answers. Add submissions to the CRM first.',
+        });
+      }
       if (attributeId !== undefined && seen.attributes.has(attributeId)) {
         context.addIssue({
           code: 'custom',

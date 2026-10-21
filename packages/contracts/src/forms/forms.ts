@@ -54,7 +54,8 @@ export const FormSummary = z.object({
   id: Uuid,
   name: z.string(),
   status: FormStatus,
-  mainObjectId: Uuid,
+  /** The object each submission adds or updates (the draft's). Absent: the form keeps its submissions only. */
+  mainObjectId: Uuid.optional(),
   /** The public address, after `/f/`. */
   publicKey: z.string(),
   liveVersionNumber: z.number().int().min(1).optional(),
@@ -72,6 +73,9 @@ export type FormSummary = z.infer<typeof FormSummary>;
 
 /** The most submissions a count reads before it stops. */
 export const FORM_COUNT_CAP = 10_000;
+
+/** How many of a form's first questions (the email aside) a submission's list row carries answers for. */
+export const SUBMISSION_SUMMARY_QUESTIONS = 3;
 
 /**
  * One form with its draft and live documents, its settings that apply at
@@ -99,11 +103,15 @@ export const FormView = FormSummary.extend({
 /** One form. */
 export type FormView = z.infer<typeof FormView>;
 
-/** A new form (AC-649): "Untitled form" with Name, Email and Phone on People, unless named. */
+/**
+ * A new form (AC-649): "Untitled form" with Name, Email and Phone on People,
+ * unless named. `mainObjectId` picks another object, and `null` keeps its
+ * submissions only, adding nothing to the CRM.
+ */
 export const CreateFormInput = WorkspaceScoped.extend({
   id: uuidV7('The form id must be a UUID v7.'),
   name: FormName.optional(),
-  mainObjectId: Uuid.optional(),
+  mainObjectId: Uuid.nullable().optional(),
   mutationId: Uuid,
 });
 /** A new form. */
@@ -153,14 +161,18 @@ export const SetFormStatusInput = WorkspaceScoped.extend({
 /** Moves a form between statuses. */
 export type SetFormStatusInput = z.infer<typeof SetFormStatusInput>;
 
-/** Points a never published form at another object, its questions' filing cleared where it no longer fits. */
+/**
+ * Points a form's draft at another object, its questions' filing cleared
+ * where it no longer fits, or at none (`null`: keep submissions only, every
+ * filing cleared). On a published form it goes live with the next publish.
+ */
 export const SetFormTargetInput = WorkspaceScoped.extend({
   formId: Uuid,
-  mainObjectId: Uuid,
+  mainObjectId: Uuid.nullable(),
   expectedRevision: z.number().int().min(1),
   mutationId: Uuid,
 });
-/** Points a never published form at another object. */
+/** Points a form's draft at another object, or at none. */
 export type SetFormTargetInput = z.infer<typeof SetFormTargetInput>;
 
 /** One form by id. */
@@ -212,10 +224,10 @@ export const FormAttributeChoice = z.object({
 /** An attribute a question may be filed on. */
 export type FormAttributeChoice = z.infer<typeof FormAttributeChoice>;
 
-/** The target object and the attributes a question may be filed on. */
+/** The target object and the attributes a question may be filed on; no object and no items while the draft keeps submissions only. */
 export const FormTargetChoices = z.object({
-  objectId: Uuid,
-  objectName: z.string(),
+  objectId: Uuid.optional(),
+  objectName: z.string().optional(),
   items: z.array(FormAttributeChoice),
 });
 /** The target object and its attributes. */
@@ -287,8 +299,11 @@ export const SubmissionSummary = z.object({
   mainRecord: RecordRefDisplay.optional(),
   /** The email answer, shown until the person exists. */
   email: z.string().optional(),
-  /** The first two answers the reader may see, other than the email. */
-  firstAnswers: z.array(SubmissionAnswer).max(2),
+  /**
+   * The answers to the form's first three questions other than the email (those the reader may see and the
+   * visitor answered), so a list's columns line up: the name, then two more.
+   */
+  firstAnswers: z.array(SubmissionAnswer).max(SUBMISSION_SUMMARY_QUESTIONS),
   /** Its link to the CRM: "Not in CRM", filing, or the record it filed into. */
   crm: SubmissionCrm,
 });

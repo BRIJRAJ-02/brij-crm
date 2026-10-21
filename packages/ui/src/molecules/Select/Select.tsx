@@ -40,6 +40,8 @@ export interface SelectItem {
   readonly leading?: ReactNode;
   /** What the `prefix` trigger shows instead of the label, beside `leading`: a country's "+91". */
   readonly short?: string;
+  /** Set apart under a hairline: a choice unlike the rest, last in the list ("Don't add to the CRM" after the objects). */
+  readonly isApart?: boolean;
 }
 
 /** Props for Select. */
@@ -238,6 +240,7 @@ export function Select({
           textValue={item.label}
           className={styles.option}
           data-clear={item.id === CLEAR || item.id === CREATE || undefined}
+          data-apart={item.isApart === true || undefined}
         >
           {({ isSelected }) => (
             <>

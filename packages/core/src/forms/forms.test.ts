@@ -173,7 +173,7 @@ describe('building and publishing (AC-545, AC-546, AC-548, AC-549, AC-552, AC-64
       ['email', 'email', w.attribute('people.email_addresses')],
       ['phone', 'phone', w.attribute('people.phone_numbers')],
     ]);
-    expect(created.draft.targets.main.matchAttributeId).toBe(w.attribute('people.email_addresses'));
+    expect(created.draft.targets.main?.matchAttributeId).toBe(w.attribute('people.email_addresses'));
     const published = await publishForm(w.scope, {
       formId: created.id,
       expectedRevision: created.revision,

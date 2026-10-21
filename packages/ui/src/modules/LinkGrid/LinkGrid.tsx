@@ -39,7 +39,9 @@ const SKELETON_CARDS = 6;
 function matches(card: LinkGridCard, query: string): boolean {
   const needle = query.trim().toLocaleLowerCase();
   if (needle === '') return true;
-  return card.title.toLocaleLowerCase().includes(needle) || card.address.toLocaleLowerCase().includes(needle);
+  return (
+    card.title.toLocaleLowerCase().includes(needle) || (card.address?.toLocaleLowerCase().includes(needle) ?? false)
+  );
 }
 
 /**

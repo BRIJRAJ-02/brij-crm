@@ -10,13 +10,19 @@ import { WorkspacePage } from '../features/workspace/WorkspacePage.tsx';
 // One form's editor (spec 0023): `?tab=` form (by default), settings, install or submissions, with `&state=`
 // narrowing the submissions and `&submission=<id>` opening one beside them. The loader reads the form, its target's
 // attributes, the members and the objects, and on Submissions its first page and the open one, all through the data
-// layer. The screen is keyed by the form, so it keeps its draft across tab changes. It sits outside the Captures
+// layer, and `&question=<id>` (the Form tab) opens one question. The screen is keyed by the form, so it keeps its
+// draft across tab changes. It sits outside the Captures
 // layout (`captures_`): the editor needs the page's whole width and its own TopBar, so no Links · Forms strip.
 interface FormSearch {
   readonly tab: FormTab;
   readonly state?: SubmissionState;
   readonly submission?: string;
+  /** On the Form tab, the question to open and bring into view (Settings links each filing line to its question). */
+  readonly question?: string;
 }
+
+/** A question's id, as the form document allows it. */
+const QUESTION_ID = /^[a-z0-9][a-z0-9_-]{0,39}$/;
 
 const STATES: readonly string[] = ['received', 'processing', 'processed', 'spam', 'held', 'needs_review', 'failed'];
 
@@ -30,6 +36,7 @@ export const Route = createFileRoute('/w/$slug/captures_/forms/$formId')({
       ? { state: search.state as SubmissionState }
       : {}),
     ...(typeof search.submission === 'string' && search.submission !== '' ? { submission: search.submission } : {}),
+    ...(typeof search.question === 'string' && QUESTION_ID.test(search.question) ? { question: search.question } : {}),
   }),
   // Only Submissions reads anything of its own, so Form, Settings and Install share one match: moving between them
   // runs no loader and never shows the pending page; the editor stays as it is.
@@ -100,6 +107,7 @@ function FormRoute() {
       submissions={page.submissions}
       state={search.state}
       openSubmission={page.openSubmission}
+      {...(search.question === undefined ? {} : { question: search.question })}
     />
   );
 }

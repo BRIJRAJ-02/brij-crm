@@ -6,7 +6,7 @@
 // file, the formula guard, only its starter reads it).
 import { sql } from 'drizzle-orm';
 import { afterAll, beforeAll, describe, expect, inject, it } from 'vitest';
-import type { FormDocument, FormQuestion, SubmitBody } from '@crm/contracts';
+import { FormDocument, type FormQuestion, type SubmitBody } from '@crm/contracts';
 import { createDatabase, type Database } from '@crm/db';
 import { enterPublicForm } from '../access/door.ts';
 import { editAttribute } from '../attributes/attributes.ts';
@@ -21,8 +21,8 @@ import { jobKinds } from '../jobs/kinds/index.ts';
 import { rescope, startJobForTest, testScope } from '../testing.ts';
 import { jobTestKit } from '../../test/jobs-kit.ts';
 import { exportFile, exportPart, getExport, startSubmissionsExport } from './export.ts';
-import { addToCrm, previewSync, startSync } from './filing.ts';
-import { createForm, publishForm, saveFormDraft } from './forms.ts';
+import { addToCrm, NOT_MAPPED, previewSync, startSync } from './filing.ts';
+import { createForm, getForm, listForms, publishForm, saveFormDraft, setFormTarget } from './forms.ts';
 import { processSubmission } from './process.ts';
 import { submitForm } from './public.ts';
 import { getSubmission, listSubmissions } from './submissions.ts';
@@ -366,5 +366,129 @@ describe('the CSV export', () => {
         startSubmissionsExport(w.scope, registry, { id: newId(), formId: live.id, select: { kind: 'filter' } }),
       ),
     ).toMatchObject([{ code: 'LIMIT_REACHED' }]);
+  });
+});
+
+describe('A form that keeps its submissions only, connected to the CRM later (the owner, 21 October 2026)', () => {
+  it('files nothing while kept, is for members who manage forms, then files the earlier ones exactly once', async () => {
+    const w = await workspace();
+    const peopleCount = async () =>
+      (
+        await w.query<{ n: number }>(
+          sql`select count(*)::int as n from records where object_id = ${w.people} and deleted_at is null`,
+        )
+      )[0]?.n ?? 0;
+    const before = await peopleCount();
+
+    const created = await createForm(w.scope, { id: newId(), name: 'Event sign up', mainObjectId: null });
+    expect(created.mainObjectId).toBeUndefined();
+    expect(created.draft.targets.main).toBeUndefined();
+    expect(created.draft.questions.every((each) => each.filedOn === undefined)).toBe(true);
+    // On no object, so no object rule reaches it: absent to a member without forms.manage.
+    expect(await refusalOf(getForm(w.other, { formId: created.id }))).toMatchObject([{ code: 'NOT_FOUND' }]);
+    expect((await listForms(w.other, { archived: false })).items.map((form) => form.id)).not.toContain(created.id);
+    expect((await listForms(w.scope, { archived: false })).items.map((form) => form.id)).toContain(created.id);
+    // Filing an answer while it keeps submissions only is refused at the contract.
+    expect(
+      FormDocument.safeParse({
+        ...created.draft,
+        questions: created.draft.questions.map((each) =>
+          each.key === 'email'
+            ? { ...each, filedOn: { objectRole: 'main', attributeId: w.attribute('people.email_addresses') } }
+            : each,
+        ),
+      }).success,
+    ).toBe(false);
+
+    // No email question filed is needed to go live.
+    const live = await publishForm(w.scope, { formId: created.id, expectedRevision: created.revision });
+    expect(live.liveVersionNumber).toBe(1);
+    await submit(live.publicKey, body({ name: 'Ada Lovelace', email: 'ada@example.com' }));
+    await submit(live.publicKey, body({ name: 'Grace Hopper', email: 'grace@example.com' }));
+    for (const each of await submissionIds(w, live.id)) await processNow(w, each.id);
+    expect(await peopleCount()).toBe(before);
+    const kept = await listSubmissions(w.scope, { formId: live.id });
+    expect(kept.items.map((item) => [item.state, item.crm])).toEqual([
+      ['processed', { state: 'not_in_crm', canAddToCrm: false }],
+      ['processed', { state: 'not_in_crm', canAddToCrm: false }],
+    ]);
+    const ids = kept.items.map((item) => item.id);
+    expect(await refusalOf(addToCrm(w.scope, registry, { formId: live.id, submissionIds: ids }))).toMatchObject([
+      { code: 'FORM_STATE', message: NOT_MAPPED },
+    ]);
+    expect(await refusalOf(previewSync(w.scope, { formId: live.id, scope: 'unfiled' }))).toMatchObject([
+      { code: 'FORM_STATE' },
+    ]);
+
+    // Connect later: People, refused to a member without forms.manage, then the questions filed and published.
+    expect(
+      await refusalOf(
+        setFormTarget(w.other, { formId: live.id, mainObjectId: w.people, expectedRevision: live.revision }),
+      ),
+    ).toMatchObject([{ code: 'FORBIDDEN' }]);
+    const pointed = await setFormTarget(w.scope, {
+      formId: live.id,
+      mainObjectId: w.people,
+      expectedRevision: live.revision,
+    });
+    expect(pointed.mainObjectId).toBe(w.people);
+    expect(pointed.draft.targets.main?.matchAttributeId).toBe(w.attribute('people.email_addresses'));
+    // Its starting questions are filed as a new form's are, so it can go live as it is.
+    expect(pointed.draft.questions.map((each) => [each.key, each.filedOn?.attributeId])).toEqual([
+      ['name', w.attribute('people.name')],
+      ['email', w.attribute('people.email_addresses')],
+      ['phone', w.attribute('people.phone_numbers')],
+    ]);
+    // The draft changed; the live version still keeps submissions only until it is published.
+    expect(pointed.live?.targets.main).toBeUndefined();
+    const connected = await publishForm(w.scope, { formId: live.id, expectedRevision: pointed.revision });
+    expect(connected.live?.targets.main?.objectId).toBe(w.people);
+    expect((await listSubmissions(w.scope, { formId: live.id })).items.map((item) => item.crm)).toEqual([
+      { state: 'not_in_crm', canAddToCrm: true },
+      { state: 'not_in_crm', canAddToCrm: true },
+    ]);
+
+    // Sync old records: a preview, the job, then a second run that makes nothing more.
+    expect(await previewSync(w.scope, { formId: live.id, scope: 'unfiled' })).toMatchObject({ total: 2, creates: 2 });
+    const first = await startSync(w.scope, registry, { formId: live.id, scope: 'unfiled', jobId: newId() });
+    expect(await runJob(w, first.jobId)).toBe('succeeded');
+    expect(await peopleCount()).toBe(before + 2);
+    const linked = await listSubmissions(w.scope, { formId: live.id });
+    expect(linked.items.map((item) => (item.crm.state === 'linked' ? item.crm.record.name : item.crm.state))).toEqual([
+      'Grace Hopper',
+      'Ada Lovelace',
+    ]);
+    expect(await previewSync(w.scope, { formId: live.id, scope: 'all' })).toMatchObject({ creates: 0, unchanged: 2 });
+    const second = await startSync(w.scope, registry, { formId: live.id, scope: 'all', jobId: newId() });
+    expect(await runJob(w, second.jobId)).toBe('succeeded');
+    expect(await peopleCount()).toBe(before + 2);
+
+    // A new submission is filed with the version it was sent to.
+    await submit(live.publicKey, body({ name: 'Alan Turing', email: 'alan@example.com' }));
+    const newest = (await submissionIds(w, live.id)).at(-1);
+    if (newest === undefined) throw new Error('A third submission expected.');
+    await processNow(w, newest.id);
+    expect((await getSubmission(w.scope, { submissionId: newest.id })).crm).toMatchObject({
+      state: 'linked',
+      record: { name: 'Alan Turing' },
+    });
+
+    // Turned off again: the earlier ones keep their records; a later one is kept only.
+    const off = await setFormTarget(w.scope, {
+      formId: live.id,
+      mainObjectId: null,
+      expectedRevision: connected.revision,
+    });
+    expect(off.draft.targets.main).toBeUndefined();
+    expect(off.draft.questions.every((each) => each.filedOn === undefined)).toBe(true);
+    await publishForm(w.scope, { formId: live.id, expectedRevision: off.revision });
+    await submit(live.publicKey, body({ name: 'Mary Major', email: 'mary@example.com' }));
+    const last = (await submissionIds(w, live.id)).at(-1);
+    if (last === undefined) throw new Error('A fourth submission expected.');
+    await processNow(w, last.id);
+    expect(await peopleCount()).toBe(before + 3);
+    const after = await listSubmissions(w.scope, { formId: live.id });
+    expect(after.items.map((item) => item.crm.state)).toEqual(['not_in_crm', 'linked', 'linked', 'linked']);
+    expect(after.items[0]?.crm).toEqual({ state: 'not_in_crm', canAddToCrm: false });
   });
 });

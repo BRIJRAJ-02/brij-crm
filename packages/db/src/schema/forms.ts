@@ -38,8 +38,12 @@ export const forms = pgTable(
     status: text('status').notNull().default('draft'),
     /** 1 to 200 characters, trimmed by the service. */
     name: text('name').notNull(),
-    /** The object a submission's main record is on (People by default). */
-    mainObjectId: uuid('main_object_id').notNull(),
+    /**
+     * The object each submission adds or updates, as the draft has it (People by default); null keeps the
+     * submissions only (the owner's "what if I don't need to map", 21 October 2026). Each published version
+     * carries its own target, which is what its submissions are filed with.
+     */
+    mainObjectId: uuid('main_object_id'),
     /**
      * The form's public address, after `/f/` (`form-a1b2c3`, or one the member
      * chose): unique across every workspace, in every link and embed; internal
