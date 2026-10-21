@@ -71,6 +71,7 @@ describe('the preferences store', () => {
     await loading;
     const changing = store.change('acme', { weekStart: 'monday' });
     expect(store.of('acme').getSnapshot()).toMatchObject({ preferences: { weekStart: 'monday' } });
+    await tick();
     expect(calls[1]?.input).toEqual({ workspace: 'acme', weekStart: 'monday', mutationId: 'm1' });
     calls[1]?.settle(true, { ...DEFAULTS, weekStart: 'monday' });
     expect(await changing).toBe(true);
@@ -82,6 +83,7 @@ describe('the preferences store', () => {
     calls[0]?.settle(true, DEFAULTS);
     await loading;
     const changing = store.change('acme', { landing: { kind: 'tasks' } });
+    await tick();
     calls[1]?.settle(false);
     expect(await changing).toBe(false);
     expect(store.of('acme').getSnapshot()).toEqual({ status: 'ready', preferences: DEFAULTS });
@@ -89,19 +91,27 @@ describe('the preferences store', () => {
     expect(notices[0]?.tone).toBe('danger');
   });
 
-  it('never lets an older answer undo a newer change', async () => {
+  it('sends changes one after another, and a refusal drops only its own', async () => {
     const { calls, store } = setup();
     const loading = store.load('acme');
     calls[0]?.settle(true, DEFAULTS);
     await loading;
-    void store.change('acme', { dateFormat: 'dmy' });
-    void store.change('acme', { dateFormat: 'ymd' });
-    calls[1]?.settle(true, { ...DEFAULTS, dateFormat: 'dmy' });
+    const first = store.change('acme', { weekStart: 'sunday' });
+    const second = store.change('acme', { dateFormat: 'ymd' });
+    expect(store.of('acme').getSnapshot()).toMatchObject({ preferences: { weekStart: 'sunday', dateFormat: 'ymd' } });
+    // The second waits for the first.
     await tick();
-    expect(store.of('acme').getSnapshot()).toMatchObject({ preferences: { dateFormat: 'ymd' } });
-    calls[2]?.settle(true, { ...DEFAULTS, dateFormat: 'ymd' });
+    expect(calls).toHaveLength(2);
+    calls[1]?.settle(true, { ...DEFAULTS, weekStart: 'sunday' });
+    expect(await first).toBe(true);
     await tick();
-    expect(store.of('acme').getSnapshot()).toMatchObject({ preferences: { dateFormat: 'ymd' } });
+    expect(calls[2]?.input).toMatchObject({ dateFormat: 'ymd' });
+    calls[2]?.settle(false);
+    expect(await second).toBe(false);
+    expect(store.of('acme').getSnapshot()).toEqual({
+      status: 'ready',
+      preferences: { ...DEFAULTS, weekStart: 'sunday' },
+    });
   });
 
   it('forgets every copy once signed out', async () => {

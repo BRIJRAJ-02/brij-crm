@@ -63,6 +63,13 @@ export function landingOf(id: string): LandingPage {
   return id === 'tasks' ? { kind: 'tasks' } : { kind: 'home' };
 }
 
+/** True while `preferences` still show every field `change` set: an Undo for an older change does nothing. */
+export function stillShows(preferences: MemberPreferences, change: PreferencesChange): boolean {
+  return (Object.keys(change) as (keyof PreferencesChange)[]).every(
+    (field) => JSON.stringify(preferences[field] ?? null) === JSON.stringify(change[field] ?? null),
+  );
+}
+
 /** What one choice changes, with what puts it back (the toast's Undo). */
 export interface PreferenceEdit {
   readonly change: PreferencesChange;

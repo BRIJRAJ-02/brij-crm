@@ -1,6 +1,7 @@
 // Brief
 // Purpose: Settings › Account › Preferences (spec 0026): how the app looks and reads for this person.
 // Main task: pick the theme, time zone, date format, week start and start page; each applies the moment it changes.
+// The theme is kept on this browser and shows at once, so it has no toast; the rest save with a toast and Undo.
 // Leaves out: the language (the browser's) and the clock's 12 or 24 hours (both later).
 import type { MemberPreferences, ObjectSummary, PreferencesChange, PreferencesState } from '@crm/data';
 import {
@@ -14,11 +15,19 @@ import {
   type Toasts,
 } from '@crm/ui';
 import { parseThemeChoice, type ThemeChoice, type ThemeController } from '@crm/ui/theme';
-import { useMemo, useState, useSyncExternalStore } from 'react';
-import { zoneItems, zoneLabel, zoneMatches } from '../booking/hours.ts';
+import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
+import { zoneItems, zoneLabel, zoneMatches, zoneOffset } from '../booking/hours.ts';
 import { browserZone } from '../booking/zone.ts';
 import { dayAt } from '../tasks/day.ts';
-import { BROWSER_ZONE, dateFormatChoices, editOf, landingChoices, landingId, weekStartChoices } from './preferences.ts';
+import {
+  BROWSER_ZONE,
+  dateFormatChoices,
+  editOf,
+  landingChoices,
+  landingId,
+  stillShows,
+  weekStartChoices,
+} from './preferences.ts';
 import { strings } from './preferences-strings.ts';
 import { SettingsPage } from './SettingsPage.tsx';
 
@@ -40,10 +49,12 @@ export interface PreferencesScreenProps {
   /** Sends a change (shown at once, put back with a toast if refused); answers whether it landed. */
   readonly onChange: (change: PreferencesChange) => Promise<boolean>;
   readonly toasts: Toasts;
+  /** Reads the preferences again after a failed read. */
+  readonly onRetry: () => void;
 }
 
 /** Settings › Account › Preferences: Appearance (the theme), Dates and time, and the Start page. */
-export function PreferencesScreen({ theme, preferences, objects, onChange, toasts }: PreferencesScreenProps) {
+export function PreferencesScreen({ theme, preferences, objects, onChange, toasts, onRetry }: PreferencesScreenProps) {
   // The controller is the one source: a change here, in another tab or on the status page shows at once.
   const choice = useSyncExternalStore(
     (listener) => theme.subscribe(listener),
@@ -72,7 +83,9 @@ export function PreferencesScreen({ theme, preferences, objects, onChange, toast
       ) : preferences.status === 'loading' ? (
         <Skeleton lines={3} />
       ) : (
-        <EmptyState tone="error" title={preferences.message} />
+        <EmptyState tone="error" title={strings.failed} onRetry={onRetry}>
+          {preferences.message}
+        </EmptyState>
       )}
     </SettingsPage>
   );
@@ -92,13 +105,20 @@ function MemberSections({
 }) {
   const { locale, timeZone } = useFormatSettings();
   const browser = useMemo(() => browserZone(), []);
-  const zones = useMemo(
-    () => [
-      { id: BROWSER_ZONE, label: strings.browserZone(zoneLabel(browser)) },
-      ...zoneItems(preferences.timeZone ?? browser, new Date()),
-    ],
-    [browser, preferences.timeZone],
-  );
+  // Automatic (the browser's zone, which follows the device) first; the browser's own place is pinned only once chosen.
+  const zones = useMemo(() => {
+    const at = new Date();
+    const pinned = preferences.timeZone;
+    return [
+      { id: BROWSER_ZONE, label: strings.automatic(zoneLabel(browser)), description: zoneOffset(browser, at) },
+      ...zoneItems(pinned ?? browser, at).filter((item) => pinned !== undefined || item.id !== browser),
+    ];
+  }, [browser, preferences.timeZone]);
+  // What the page shows now, for an Undo pressed later: an Undo for an older change does nothing.
+  const latest = useRef(preferences);
+  useEffect(() => {
+    latest.current = preferences;
+  }, [preferences]);
   // Today, for the date formats' examples: read once when the page opens.
   const [openedAt] = useState(() => Date.now());
   const today = dayAt(openedAt, timeZone);
@@ -115,7 +135,15 @@ function MemberSections({
       toasts.toast({
         tone: 'success',
         message: strings.saved,
-        action: { label: strings.undo, onAction: () => void onChange(edit.undo) },
+        action: {
+          label: strings.undo,
+          onAction: () => {
+            if (!stillShows(latest.current, edit.change)) return;
+            void onChange(edit.undo).then((undone) => {
+              if (undone) toasts.toast({ tone: 'success', message: strings.undone });
+            });
+          },
+        },
       });
     });
   };

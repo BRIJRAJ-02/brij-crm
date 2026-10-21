@@ -59,7 +59,8 @@ export function parseBookingsSearch(search: Record<string, unknown>): RawBooking
 export function bookingsSearchOf(raw: RawBookingsSearch, now: Date = new Date(), firstDay = 1): BookingsSearch {
   const day = raw.d ?? raw.w ?? dayKeyOf(now);
   return {
-    week: raw.w ?? weekOf(day, firstDay),
+    // A link's week starts on the member's week start too, so Today and the grid agree.
+    week: weekOf(raw.w ?? day, firstDay),
     day,
     tab: raw.tab ?? 'upcoming',
     page: raw.page ?? 1,

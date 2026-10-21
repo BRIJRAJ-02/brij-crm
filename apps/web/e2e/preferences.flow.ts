@@ -51,15 +51,17 @@ test('Preferences: the start page and its Undo, and the date format kept on the 
   await checkScreen(page, 'preferences');
 
   // The start page: Tasks, then opening the workspace lands there.
-  await choose(page, 'Open the workspace on', 'Tasks');
+  await choose(page, 'Open on', 'Tasks');
   await page.goto(`/w/${slug}`);
   await expect(page).toHaveURL(new RegExp(`/w/${slug}/tasks`));
 
   // Undo puts back what a change replaced.
   await page.goto(`/w/${slug}/settings/account/preferences`);
-  await choose(page, 'Open the workspace on', 'People');
+  await choose(page, 'Open on', 'People');
   await page.getByRole('button', { name: 'Undo' }).last().click();
-  await expect(page.getByRole('button', { name: /Open the workspace on/ })).toContainText('Tasks');
+  await expect(page.getByText('Change undone').last()).toBeVisible();
+  await page.reload();
+  await expect(page.getByRole('button', { name: /Open on/ })).toContainText('Tasks');
 
   // The date format: ISO, read back after a fresh load, and used by the task's due date.
   // Each format is shown as today reads in it; the browser (and so the page) is in UTC.
