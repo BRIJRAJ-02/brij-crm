@@ -4,6 +4,7 @@ import { describe, expect, it } from 'vitest';
 import {
   appOrigin,
   appUrl,
+  callUrl,
   EMAIL_MEDIUMS,
   onAppOrigin,
   poweredByUrl,
@@ -82,6 +83,13 @@ describe('app links', () => {
       '/relative',
     ]) {
       expect(() => onAppOrigin(link, origin), link).toThrow('An email link must be an address on the app origin.');
+    }
+  });
+
+  it('lets a call button leave the app over https only, with no user or password', () => {
+    expect(callUrl('https://meet.google.com/abc-defg-hij')).toBe('https://meet.google.com/abc-defg-hij');
+    for (const link of ['http://meet.example/x', 'https://u:p@meet.example/x', 'javascript:alert(1)', 'meet.example']) {
+      expect(() => callUrl(link), link).toThrow('A call link must be an https address.');
     }
   });
 

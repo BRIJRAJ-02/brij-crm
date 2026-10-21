@@ -89,6 +89,10 @@ describe('the confirmation (AC-636)', () => {
     expect(visitor?.ics?.content).toContain(`UID:${b.bookingId}@app.example`);
     expect(host).toMatchObject({ subject: 'New booking: Intro call with Grace Hopper' });
     expect(host?.rows).toContainEqual({ label: 'Note', value: 'About the compiler.' });
+    // Each reader's footer says why they got it.
+    expect(visitor?.why).toBe('You got this email because this address was used to book Intro call with Ada Host.');
+    expect(host?.why).toBe('You got this email because you host Intro call.');
+    expect(guest?.why).toBe('You got this email because Grace Hopper added this address to Intro call.');
     // A guest never gets the visitor's link.
     expect(JSON.stringify(guest)).not.toContain(b.manageToken);
     expect(prepared.invited).toEqual(['ann@navy.example']);

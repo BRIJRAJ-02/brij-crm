@@ -24,9 +24,6 @@
     "graphile-worker": "catalog:",
     "hono": "catalog:",
     "posthog-node": "catalog:",
-    "react": "catalog:",
-    "react-dom": "catalog:",
-    "react-email": "catalog:",
     "resend": "catalog:",
     "zod": "catalog:"
   },
@@ -34,8 +31,6 @@
     "@crm/config": "workspace:*",
     "@orpc/client": "catalog:",
     "@types/node": "catalog:",
-    "@types/react": "catalog:",
-    "@types/react-dom": "catalog:",
     "drizzle-orm": "catalog:",
     "eslint": "catalog:",
     "typescript": "catalog:",

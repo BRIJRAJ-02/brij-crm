@@ -7,7 +7,7 @@
 // since Outlook on Windows draws with Word and ignores most of CSS layout.
 import { createElement as h, Fragment, type CSSProperties, type ReactNode } from 'react';
 import type { DocumentRow, EmailBlock, EmailDocument } from './document.ts';
-import { onAppOrigin, poweredByUrl, wordmarkUrls, type EmailMedium } from './links.ts';
+import { callUrl, onAppOrigin, poweredByUrl, wordmarkUrls, type EmailMedium } from './links.ts';
 import {
   Button,
   Container,
@@ -217,8 +217,9 @@ function block(item: EmailBlock, origin: string): ReactNode {
         ),
       );
     }
-    case 'button': {
-      const href = onAppOrigin(item.url, origin);
+    case 'button':
+    case 'callButton': {
+      const href = item.type === 'button' ? onAppOrigin(item.url, origin) : callUrl(item.url);
       const button = role('button');
       return h(
         Button,
@@ -490,6 +491,9 @@ export function documentText(document: EmailDocument, options: RenderOptions): s
       case 'button':
         out.push(`${item.label}: ${onAppOrigin(item.url, options.appOrigin)}`, '');
         break;
+      case 'callButton':
+        out.push(`${item.label}: ${callUrl(item.url)}`, '');
+        break;
       case 'rows':
         for (const row of item.rows) {
           const value = row.url === undefined ? row.value : `${row.value} (${onAppOrigin(row.url, options.appOrigin)})`;
@@ -533,6 +537,7 @@ export async function renderDocument(document: EmailDocument, options: RenderOpt
   // Every link the email carries is checked here, so a template can't send one to another site.
   for (const item of document.blocks) {
     if (item.type === 'button') onAppOrigin(item.url, options.appOrigin);
+    if (item.type === 'callButton') callUrl(item.url);
     if (item.type === 'rows')
       for (const row of item.rows) if (row.url !== undefined) onAppOrigin(row.url, options.appOrigin);
   }

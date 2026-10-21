@@ -47,6 +47,8 @@ export interface BookingMail {
   readonly button?: { readonly label: string; readonly url: string };
   /** A quiet line under the button. */
   readonly footnote?: string;
+  /** Why the reader got it, for the shared footer: the visitor, a guest, or the host. */
+  readonly why: string;
   /** The calendar file, when the message carries one. */
   readonly ics?: { readonly filename: string; readonly content: string; readonly method: 'REQUEST' | 'CANCEL' };
 }
@@ -202,6 +204,12 @@ export async function prepareBookingMail(
       hasEvent ? {} : { ics: icsFile(method, attendees) };
     const visitor = { name: row.visitorName, email: row.visitorEmail };
     const change = 'Need to change it? Move it to another time or cancel it from your booking page.';
+    // Why each reader got their email, for the footer: the address that booked, a guest on it, or its host.
+    const visitorWhy = bookedByHost
+      ? `You got this email because ${hostName} booked a time with this address.`
+      : `You got this email because this address was used to book ${page.title} with ${hostName}.`;
+    const guestWhy = `You got this email because ${row.visitorName} added this address to ${page.title}.`;
+    const hostWhy = `You got this email because you host ${page.title}.`;
     const newGuests = guests.filter((guest) => !invited.includes(guest));
     const invitations = (always: boolean): BookingMail[] =>
       newGuests.map((guest) => ({
@@ -211,6 +219,7 @@ export async function prepareBookingMail(
         heading: 'You’re invited',
         intro: `${row.visitorName} invited you to ${page.title}, hosted by ${hostName}.`,
         rows: [{ label: 'What', value: page.title }, when(row.visitorTimeZone), { label: 'Where', value: where }],
+        why: guestWhy,
         ...(always
           ? { ics: icsFile('REQUEST', [{ name: guest, email: guest }]) }
           : ics('REQUEST', [{ name: guest, email: guest }])),
@@ -235,6 +244,7 @@ export async function prepareBookingMail(
           ],
           button: { label: 'View your booking', url: manageUrl },
           footnote: change,
+          why: visitorWhy,
           ...ics('REQUEST', [visitor]),
         };
         const toHost: BookingMail[] =
@@ -255,6 +265,7 @@ export async function prepareBookingMail(
                     ...(note === undefined ? [] : [{ label: 'Note', value: note }]),
                   ],
                   button: { label: 'Open Bookings', url: bookingsUrl },
+                  why: hostWhy,
                 },
               ];
         return { messages: [toVisitor, ...toHost, ...invitations(false)], invited: newGuests };
@@ -278,6 +289,7 @@ export async function prepareBookingMail(
           ],
           button: { label: 'View your booking', url: manageUrl },
           footnote: change,
+          why: visitorWhy,
           ...ics('REQUEST', [visitor]),
         };
         const toGuests: BookingMail[] = guests.map((guest) => ({
@@ -287,6 +299,7 @@ export async function prepareBookingMail(
           heading: 'A meeting you’re invited to moved',
           intro: `${page.title} has a new time.`,
           rows: [when(row.visitorTimeZone), ...was(row.visitorTimeZone), { label: 'Where', value: where }],
+          why: guestWhy,
           ...guestFile('REQUEST', guest),
         }));
         const toHost: BookingMail[] =
@@ -304,6 +317,7 @@ export async function prepareBookingMail(
                     { label: 'Who', value: `${row.visitorName} (${row.visitorEmail})` },
                   ],
                   button: { label: 'Open Bookings', url: bookingsUrl },
+                  why: hostWhy,
                 },
               ]
             : [];
@@ -322,6 +336,7 @@ export async function prepareBookingMail(
             : 'It comes off both calendars. Nothing else to do.',
           rows: [{ label: 'What', value: page.title }, when(row.visitorTimeZone), ...reasonRow],
           button: { label: byHost ? 'Book another time' : 'Book again', url: bookAgainUrl },
+          why: visitorWhy,
           ...ics('CANCEL', [visitor]),
         };
         const toGuests: BookingMail[] = guests.map((guest) => ({
@@ -331,6 +346,7 @@ export async function prepareBookingMail(
           heading: 'A meeting you’re invited to was cancelled',
           intro: `${page.title} won’t go ahead.`,
           rows: [when(row.visitorTimeZone)],
+          why: guestWhy,
           ...guestFile('CANCEL', guest),
         }));
         const toHost: BookingMail[] =
@@ -347,6 +363,7 @@ export async function prepareBookingMail(
                     { label: 'Who', value: `${row.visitorName} (${row.visitorEmail})` },
                     ...reasonRow,
                   ],
+                  why: hostWhy,
                 },
               ]
             : [];
@@ -370,6 +387,7 @@ export async function prepareBookingMail(
                   : { label: 'Join the call', url: row.videoUrl },
               // With Join the call as the button, the booking page's link is in the line under it.
               footnote: row.videoUrl === null ? change : `Need to change it? Your booking page: ${manageUrl}`,
+              why: visitorWhy,
             },
           ],
           invited: [],

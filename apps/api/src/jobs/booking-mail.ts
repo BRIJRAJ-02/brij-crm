@@ -59,10 +59,12 @@ export async function runBookingMail(deps: BookingMailTaskDeps, payload: unknown
     deps.log.info('booking.mail.skipped', { bookingId, kind, reason: prepared.skipped });
     return;
   }
+  // The footer's tag: a reminder's own, and one for every other booking email.
+  const medium = kind === 'reminder_24h' || kind === 'reminder_1h' ? 'email_reminder' : 'email_booking';
   let failed = 0;
   for (const mail of prepared.messages) {
     try {
-      await deps.mailer.send(await bookingEmail(mail));
+      await deps.mailer.send(await bookingEmail(mail, { appOrigin: deps.links.appOrigin, medium }));
     } catch (error) {
       failed += 1;
       // The error's class only: a message can quote the recipient.

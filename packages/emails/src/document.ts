@@ -22,8 +22,14 @@ export type EmailBlock =
   | { readonly type: 'rows'; readonly layout: 'compact' | 'stacked'; readonly rows: readonly DocumentRow[] }
   /** A code to type in, large and spaced, with what it is for read out first. */
   | { readonly type: 'code'; readonly code: string; readonly label: string }
-  /** The one action, as a button. */
+  /** The one action, as a button, on the app's own origin. */
   | { readonly type: 'button'; readonly label: string; readonly url: string }
+  /**
+   * The one button that may leave the app: a meeting's video call (a
+   * booking's reminder), https only. A block of its own, so every link to
+   * another site is one a reviewer can find.
+   */
+  | { readonly type: 'callButton'; readonly label: string; readonly url: string }
   /** Someone's words, set apart: a message, an excerpt. */
   | { readonly type: 'quote'; readonly text: string }
   /** A quieter line: what happens next, what to do if it wasn't you. */

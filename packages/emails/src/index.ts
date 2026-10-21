@@ -2,8 +2,9 @@
 // (spec 0001's `packages/emails`). Templates turn params into words, one
 // layout draws the words as HTML and plain text, and nothing here sends: the
 // api's mailer does.
-import { appUrl } from './links.ts';
+import { appUrl, type EmailMedium } from './links.ts';
 import { renderDocument, type RenderedEmail } from './render.ts';
+import { bookingDocument, type BookingWords } from './templates/booking.ts';
 import { SIGN_IN_CODE_MINUTES, signInCode } from './templates/sign-in-code.ts';
 
 export type { DocumentRow, EmailBlock, EmailDocument } from './document.ts';
@@ -21,6 +22,7 @@ export { documentText, headerText, renderDocument, type RenderedEmail, type Rend
 export { emailStylesheet, paint, ROLE_NAMES, type Role } from './theme.ts';
 export type { Template, TemplateContext } from './template.ts';
 export { SIGN_IN_CODE_MINUTES, SIGN_IN_CODE_SUBJECT } from './templates/sign-in-code.ts';
+export type { BookingWords } from './templates/booking.ts';
 
 /** The sign in code email (spec 0005), sent in its request: the code, how long it works, and the shared footer. */
 export async function renderSignInCode(code: string, context: { readonly appOrigin: string }): Promise<RenderedEmail> {
@@ -29,4 +31,19 @@ export async function renderSignInCode(code: string, context: { readonly appOrig
     signInCode({ code, minutes: SIGN_IN_CODE_MINUTES }, { link: (path) => appUrl(context.appOrigin, path) }),
     { appOrigin: context.appOrigin, medium: 'email_sign_in' },
   );
+}
+
+/**
+ * A booking's email (spec 0025), from the words core chose: the design
+ * system's layout and the shared footer, tagged `email_booking`, or
+ * `email_reminder` for a reminder.
+ */
+export function renderBookingEmail(
+  words: BookingWords,
+  context: { readonly appOrigin: string; readonly medium: Extract<EmailMedium, 'email_booking' | 'email_reminder'> },
+): Promise<RenderedEmail> {
+  return renderDocument(bookingDocument(words, context.appOrigin), {
+    appOrigin: context.appOrigin,
+    medium: context.medium,
+  });
 }

@@ -9,7 +9,7 @@ import { systemScope } from '@crm/core/system';
 import { testScope } from '@crm/core/testing';
 import { createDatabase, type Database } from '@crm/db';
 import { afterAll, beforeAll, describe, expect, inject, it } from 'vitest';
-import { bookingEmail, bookingEmailText } from '../mail/booking.ts';
+import { bookingEmail } from '../mail/booking.ts';
 import type { Mailer, MailMessage } from '../mail/mailer.ts';
 import { runBookingMail } from './booking-mail.ts';
 
@@ -129,22 +129,26 @@ describe('the booking email task', () => {
 });
 
 describe('the booking email', () => {
-  it('draws the rows, the button and the footnote, with a plain text twin', async () => {
-    const mail = {
-      to: 'grace@navy.example',
-      subject: 'Booked: Intro call with Ada Host',
-      preview: 'Monday',
-      heading: 'You’re booked',
-      intro: 'Ada Host has been told.',
-      rows: [{ label: 'When', value: 'Monday 2 November 2026, 9:00 AM to 9:30 AM (UTC)' }],
-      button: { label: 'View your booking', url: 'https://app.example/b/x/manage?t=y' },
-      footnote: 'Need to change it?',
-    };
-    const message = await bookingEmail(mail);
+  const mail = {
+    to: 'grace@navy.example',
+    subject: 'Booked: Intro call with Ada Host',
+    preview: 'Monday',
+    heading: 'You’re booked',
+    intro: 'Ada Host has been told.',
+    rows: [{ label: 'When', value: 'Monday 2 November 2026, 9:00 AM to 9:30 AM (UTC)' }],
+    button: { label: 'View your booking', url: 'https://app.example/b/x/manage?t=y' },
+    footnote: 'Need to change it?',
+    why: 'You got this email because this address was used to book Intro call with Ada Host.',
+  };
+
+  it('draws the rows, the button and the footnote on the shared layout, with a plain text twin', async () => {
+    const message = await bookingEmail(mail, { appOrigin: 'https://app.example', medium: 'email_booking' });
+    expect(message.subject).toBe('Booked: Intro call with Ada Host');
     expect(message.html).toContain('Monday 2 November 2026, 9:00 AM to 9:30 AM (UTC)');
     expect(message.html).toContain('href="https://app.example/b/x/manage?t=y"');
+    expect(message.html).toContain('prefers-color-scheme: dark');
     expect(message.attachments).toBeUndefined();
-    expect(bookingEmailText(mail)).toBe(
+    expect(message.text).toBe(
       [
         'You’re booked',
         '',
@@ -155,7 +159,39 @@ describe('the booking email', () => {
         'View your booking: https://app.example/b/x/manage?t=y',
         '',
         'Need to change it?',
+        '',
+        'Powered by Timefix: https://timefix.ai/?utm_source=timefix&utm_medium=email_booking&utm_campaign=powered_by&utm_content=footer_logo',
+        'You got this email because this address was used to book Intro call with Ada Host.',
       ].join('\n'),
     );
+  });
+
+  it('draws a reminder’s Join the call as the call button, tagged as a reminder, with the calendar file kept', async () => {
+    const message = await bookingEmail(
+      {
+        ...mail,
+        button: { label: 'Join the call', url: 'https://meet.google.com/abc-defg-hij' },
+        ics: { filename: 'invite.ics', content: 'BEGIN:VCALENDAR', method: 'REQUEST' },
+      },
+      { appOrigin: 'https://app.example', medium: 'email_reminder' },
+    );
+    expect(message.html).toContain('href="https://meet.google.com/abc-defg-hij"');
+    expect(message.text).toContain('utm_medium=email_reminder');
+    expect(message.attachments).toEqual([
+      {
+        filename: 'invite.ics',
+        content: 'BEGIN:VCALENDAR',
+        contentType: 'text/calendar; charset=utf-8; method=REQUEST',
+      },
+    ]);
+  });
+
+  it('refuses a button to another site that isn’t https', async () => {
+    await expect(
+      bookingEmail(
+        { ...mail, button: { label: 'Join the call', url: 'http://evil.example/x' } },
+        { appOrigin: 'https://app.example', medium: 'email_reminder' },
+      ),
+    ).rejects.toThrow('A call link must be an https address.');
   });
 });

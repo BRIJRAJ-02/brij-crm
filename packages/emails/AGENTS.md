@@ -8,11 +8,12 @@ Every email the product sends, drawn from the design tokens (spec 0001 names thi
 
 | File | Owns |
 |---|---|
-| `src/index.ts` | The public API: `renderSignInCode`, `renderDocument`, and the parts below |
+| `src/index.ts` | The public API: `renderSignInCode`, `renderBookingEmail`, `renderDocument`, and the parts below |
 | `src/tokens.ts` | The token reader: colours (opaque hex only, aliases followed), spaces, radii, sizes, breakpoints and type styles from `@crm/tokens/tokens.json`, by name; an unknown name throws |
 | `src/theme.ts` | Each part of an email (page, card, text, button, code, quote, rule) and the colour tokens it takes; light inline, dark as one stylesheet under `prefers-color-scheme: dark` and Outlook.com's `[data-ogsc]`/`[data-ogsb]`; the 600px width; Outlook's font stacks |
 | `src/render.ts` | The one layout and its plain text twin, the shared footer (Powered by Timefix, why the reader got it, the preferences link for an optional email), and `headerText` (subjects on one line) |
-| `src/document.ts` | `EmailDocument` and its blocks: paragraph, rows (compact or stacked), code, button, quote, note |
+| `src/document.ts` | `EmailDocument` and its blocks: paragraph, rows (compact or stacked), code, button (app origin), call button (a meeting's https video call, the one link to another site), quote, note |
+| `src/templates/booking.ts` | A booking's emails (spec 0025): core's `prepareBookingMail` words, kept word for word, drawn by `renderBookingEmail` and tagged `email_booking` or `email_reminder` |
 | `src/links.ts` | The only links an email may carry: `appUrl` (an app path joined to the app's origin, no `.` segments, never `//`), `onAppOrigin` (the check the layout runs on every button, row link and preferences link: same origin, written as parsed), `appOrigin` (https, or http on localhost only) and `poweredByUrl` (timefix.ai with fixed UTM words; `utm_medium` from the closed `EMAIL_MEDIUMS` list) |
 | `src/react-email.ts` | The one React Email import (lint's vendor rule) |
 | `src/templates/` | One file per family of emails, each a pure `Template` |

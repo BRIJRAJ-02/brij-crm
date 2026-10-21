@@ -101,6 +101,24 @@ export function onAppOrigin(link: string, origin: string): string {
   return url.href;
 }
 
+/**
+ * A video call's address for a `callButton`: https, with no user or password
+ * part, written as parsed. The one kind of link an email may have to another
+ * site.
+ */
+export function callUrl(link: string): string {
+  let url: URL;
+  try {
+    url = new URL(link);
+  } catch {
+    throw new Error('A call link must be an https address.');
+  }
+  if (url.protocol !== 'https:' || url.username !== '' || url.password !== '') {
+    throw new Error('A call link must be an https address.');
+  }
+  return url.href;
+}
+
 /** The footer logo's files on the app's origin: muted ink for the light theme, and for the dark one. */
 export function wordmarkUrls(origin: string): { readonly light: string; readonly dark: string } {
   return {

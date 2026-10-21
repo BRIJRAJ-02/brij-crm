@@ -7,17 +7,54 @@
 import { readFile } from 'node:fs/promises';
 import { createServer, type ServerResponse } from 'node:http';
 import path from 'node:path';
-import { renderSignInCode, type RenderedEmail } from '../src/index.ts';
+import { renderBookingEmail, renderSignInCode, type BookingWords, type RenderedEmail } from '../src/index.ts';
 
 const BRAND = path.resolve(import.meta.dirname, '../../../apps/web/public/brand');
 
+/** A booking confirmation's words, as core writes them for the visitor. */
+const BOOKING_CONFIRMATION: BookingWords = {
+  subject: 'Booked: Intro call with Ada Lovelace',
+  preview: 'Monday 2 November 2026, 9:00 AM to 9:30 AM (Europe/London)',
+  heading: 'You’re booked',
+  intro: 'Ada Lovelace has been told. Here are the details.',
+  rows: [
+    { label: 'What', value: 'Intro call' },
+    { label: 'When', value: 'Monday 2 November 2026, 9:00 AM to 9:30 AM (Europe/London)' },
+    { label: 'With', value: 'Ada Lovelace' },
+    { label: 'Where', value: 'https://meet.google.com/abc-defg-hij' },
+  ],
+  button: { label: 'View your booking', url: '/b/intro-call/manage?t=preview' },
+  footnote: 'Need to change it? Move it to another time or cancel it from your booking page.',
+  why: 'You got this email because this address was used to book Intro call with Ada Lovelace.',
+};
+
 /** Every email the preview shows. */
-export const PREVIEW_KINDS: readonly string[] = ['sign_in_code'];
+export const PREVIEW_KINDS: readonly string[] = ['sign_in_code', 'booking_confirmation', 'booking_reminder'];
 
 /** One email drawn with its sample params, its links on `origin`. */
 export function drawSample(kind: string, origin: string): Promise<RenderedEmail> {
-  if (kind === 'sign_in_code') return renderSignInCode('482913', { appOrigin: origin });
-  return Promise.reject(new Error(`No email called ${kind}.`));
+  const onOrigin = (words: BookingWords): BookingWords =>
+    words.button === undefined ? words : { ...words, button: { ...words.button, url: `${origin}${words.button.url}` } };
+  switch (kind) {
+    case 'sign_in_code':
+      return renderSignInCode('482913', { appOrigin: origin });
+    case 'booking_confirmation':
+      return renderBookingEmail(onOrigin(BOOKING_CONFIRMATION), { appOrigin: origin, medium: 'email_booking' });
+    case 'booking_reminder':
+      return renderBookingEmail(
+        {
+          ...BOOKING_CONFIRMATION,
+          subject: 'Tomorrow: Intro call with Ada Lovelace',
+          heading: 'Your booking is tomorrow',
+          intro: 'A reminder of your time with Ada Lovelace.',
+          button: { label: 'Join the call', url: 'https://meet.google.com/abc-defg-hij' },
+          footnote: `Need to change it? Your booking page: ${origin}/b/intro-call/manage?t=preview`,
+        },
+        { appOrigin: origin, medium: 'email_reminder' },
+      );
+    default:
+      return Promise.reject(new Error(`No email called ${kind}.`));
+  }
 }
 
 /** The email as a dark reader sees it: its dark rules applied whatever the browser's setting. */
