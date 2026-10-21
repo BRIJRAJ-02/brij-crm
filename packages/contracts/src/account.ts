@@ -224,6 +224,11 @@ export const AccountSecurity = z.object({
   /** The person's passkeys, oldest first (AC-887). */
   passkeys: z.array(AccountPasskey),
   session: SessionFreshness,
+  /**
+   * The workspaces the person is in that require two factor (AC-885), by
+   * name: while any does, their last second factor can't be turned off.
+   */
+  requiredBy: z.array(z.string()),
 });
 /** Account › Security's state. */
 export type AccountSecurity = z.infer<typeof AccountSecurity>;
@@ -243,6 +248,36 @@ export const DeleteAccountInput = z.object({ email: z.string().trim().min(1).max
 /** Deleting the account. */
 export type DeleteAccountInput = z.infer<typeof DeleteAccountInput>;
 
+/** How many days of security events Recent activity lists (AC-898); they are kept a year. */
+export const ACTIVITY_DAYS = 90;
+
+/**
+ * One security event as Account › Security › Recent activity lists it
+ * (AC-898): what happened, when, and for a sign in how, on what and roughly
+ * where. Never an IP, a code or a token.
+ */
+export const SecurityActivity = z.object({
+  id: Uuid,
+  at: z.iso.datetime({ offset: true }),
+  kind: SecurityEventKind,
+  method: SignInMethod.optional(),
+  deviceLabel: z.string().optional(),
+  country: z.string().optional(),
+  city: z.string().optional(),
+});
+/** One security event in Recent activity. */
+export type SecurityActivity = z.infer<typeof SecurityActivity>;
+
+/** A page of Recent activity, newest first, and the cursor for the next. */
+export const ActivityPage = z.object({ items: z.array(SecurityActivity), nextCursor: z.string().optional() });
+/** A page of Recent activity. */
+export type ActivityPage = z.infer<typeof ActivityPage>;
+
+/** Where the next page of Recent activity starts: an opaque cursor from the last page. */
+export const ListActivityInput = z.object({ cursor: z.string().max(200).optional() });
+/** Where the next page of Recent activity starts. */
+export type ListActivityInput = z.infer<typeof ListActivityInput>;
+
 /**
  * The account procedures (spec 0033). Each needs a session and no workspace
  * (the bootstrap list); each reaches only the caller's own sessions.
@@ -258,6 +293,8 @@ export const accountContract = {
   },
   /** Two factor on or off, backup codes left, and this session's freshness (AC-881). */
   security: { get: oc.output(AccountSecurity) },
+  /** The person's last 90 days of security events, newest first (AC-898). */
+  activity: { list: oc.input(ListActivityInput).output(ActivityPage) },
   /**
    * A step up (AC-896): `start` emails a code (only while two factor is off);
    * `verify` checks an email code, an app code or a backup code and makes

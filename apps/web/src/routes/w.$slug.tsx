@@ -14,6 +14,7 @@ import { UnreadTitle } from '../features/inbox/UnreadTitle.tsx';
 import { failedPage, missingPage, pendingPage } from '../features/workspace/ObjectScreen.tsx';
 import { PreferencesScope } from '../features/workspace/PreferencesScope.tsx';
 import { deletedPage } from '../features/workspace/DeletedWorkspace.tsx';
+import { signInRulesPage, type HeldBack } from '../features/workspace/SignInRulesPage.tsx';
 import { strings } from '../features/workspace/strings.ts';
 import { useWorkspaceName, WorkspaceLayout, WorkspacePage } from '../features/workspace/WorkspacePage.tsx';
 
@@ -44,13 +45,24 @@ export const Route = createFileRoute('/w/$slug')({
         context.data.nav.load(params.slug).catch(() => undefined),
         context.data.preferences.load(params.slug).catch(() => undefined),
       ]);
-      return { workspaceName: workspaceName ?? params.slug, objects, access, deleted: undefined };
+      return { workspaceName: workspaceName ?? params.slug, objects, access, deleted: undefined, heldBack: undefined };
     } catch (error) {
       if (isDataError(error) && error.code === 'NOT_FOUND') {
         // A deleted workspace's owner finds it here to restore within its window (spec 0031, AC-823); to anyone
         // else it is the same not found as an unknown address.
         const deleted = await context.data.workspace.deleted(params.slug).catch(() => undefined);
-        return { workspaceName: undefined, objects: undefined, access: undefined, deleted };
+        return { workspaceName: undefined, objects: undefined, access: undefined, deleted, heldBack: undefined };
+      }
+      // The workspace's sign in rules hold this session back (spec 0033, AC-894): its own page, never an error.
+      if (isDataError(error) && (error.code === 'TWO_FACTOR_REQUIRED' || error.code === 'SIGN_IN_AGAIN')) {
+        const heldBack: HeldBack = error.code;
+        return {
+          workspaceName: workspaceName ?? params.slug,
+          objects: undefined,
+          access: undefined,
+          deleted: undefined,
+          heldBack,
+        };
       }
       throw error;
     }
@@ -65,7 +77,7 @@ export const Route = createFileRoute('/w/$slug')({
 });
 
 function WorkspaceRoute() {
-  const { objects, deleted } = Route.useLoaderData();
+  const { objects, deleted, heldBack, workspaceName } = Route.useLoaderData();
   const { slug } = Route.useParams();
   // A form's preview stands outside the app frame, as a visitor sees it (its own main landmark).
   const isPreview = useMatch({ from: '/w/$slug/captures_/forms/$formId_/preview', shouldThrow: false }) !== undefined;
@@ -83,6 +95,15 @@ function WorkspaceRoute() {
               toasts.toast({ tone: 'success', message: strings.restored(deleted.name) });
             }),
           )}
+        />
+      </WorkspaceLayout>
+    );
+  }
+  if (heldBack !== undefined) {
+    return (
+      <WorkspaceLayout>
+        <WorkspacePage
+          page={signInRulesPage({ data, toasts, workspaceName, reason: heldBack })}
         />
       </WorkspaceLayout>
     );

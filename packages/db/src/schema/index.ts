@@ -48,7 +48,7 @@ export {
   bookingTimeBlocks,
 } from './booking.ts';
 export { exportChunks, exports } from './exports.ts';
-export { auditEvents, invitations, joinRequests, workspaceDomains } from './team.ts';
+export { auditEvents, invitations, joinRequests, workspaceDomains, workspaceSecurity } from './team.ts';
 export { emailPreferences, emails, emailStatus } from './emails.ts';
 export { bookingPageRotations, rotationAssignments, rotationMembers, rotations } from './rotation.ts';
 export { routingDecisions } from './routing.ts';

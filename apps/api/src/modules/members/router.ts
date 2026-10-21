@@ -36,12 +36,17 @@ async function forget(
 }
 
 export const membersRouter = member.members.router({
+  // Owners and admins also see who has a second factor (spec 0033, AC-895): ids only to the identity store.
   list: member.members.list.handler(({ context, input }) =>
-    listMembers(context.scope, {
-      ...(input.search === undefined ? {} : { search: input.search }),
-      ...(input.cursor === undefined ? {} : { cursor: input.cursor }),
-      ...(input.limit === undefined ? {} : { limit: input.limit }),
-    }),
+    listMembers(
+      context.scope,
+      {
+        ...(input.search === undefined ? {} : { search: input.search }),
+        ...(input.cursor === undefined ? {} : { cursor: input.cursor }),
+        ...(input.limit === undefined ? {} : { limit: input.limit }),
+      },
+      { secondFactorUsers: (userIds) => context.factors.secondFactorUsers(userIds) },
+    ),
   ),
   setRole: member.members.setRole.handler(({ context, input }) =>
     commitWrite(context, { mutationId: input.mutationId }, (hooks) =>

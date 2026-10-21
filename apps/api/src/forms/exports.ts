@@ -7,11 +7,11 @@
 // the route never says whether an export exists.
 import { exportFile, exportPart, isRefusal } from '@crm/core';
 import type { Context, Env, Hono } from 'hono';
-import type { Auth } from '../auth/auth.ts';
+import type { Auth, AuthSession } from '../auth/auth.ts';
 import { errorFields, log } from '../log.ts';
 
 /** The member door, as the RPC's `member` base opens it. */
-type Enter = (userId: string, slug: string) => Promise<Parameters<typeof exportFile>[0]>;
+type Enter = (session: AuthSession, slug: string) => Promise<Parameters<typeof exportFile>[0]>;
 
 /** What the download needs: sign in and the member door. */
 export interface ExportRouteDeps {
@@ -44,7 +44,7 @@ export function mountExports<E extends Env & { Variables: { clientIp: string | u
     if (session === undefined || slug === undefined) return c.json(NOT_FOUND, 404);
     for (const cookie of session.setCookies) c.header('set-cookie', cookie, { append: true });
     try {
-      const scope = await deps.enter(session.user.id, slug);
+      const scope = await deps.enter(session, slug);
       const file = await exportFile(scope, { exportId });
       let part = 0;
       const encoder = new TextEncoder();

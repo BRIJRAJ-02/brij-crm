@@ -47,6 +47,9 @@ export const PERMISSIONS = {
   'booking.admin': { message: 'Only workspace owners and admins can change other people’s booking pages.' },
   // Comments (spec 0038, decision 4): removing another member's comment. Nobody edits another's.
   'comments.manage': { message: 'Only workspace owners and admins can delete other people’s comments.' },
+  // Account security (spec 0033, AC-893): the workspace's sign in rules (require two factor, session length, sign out
+  // everyone). Owners only (owner decision 7).
+  'security.manage': { message: 'Only workspace owners can change how people sign in to this workspace.' },
 } as const satisfies Record<string, { readonly message: string }>;
 
 /** Every permission's name, in catalog order. */
@@ -59,8 +62,14 @@ export const Permission = z.enum(
 /** One workspace permission. */
 export type Permission = z.infer<typeof Permission>;
 
-/** The four permissions only an owner holds; the fifth owner only power, the owner role itself, follows the owner rules. */
-const OWNER_ONLY: readonly Permission[] = ['workspace.delete', 'workspace.export', 'billing.manage', 'support.grant'];
+/** The five permissions only an owner holds; the owner role itself, an owner only power too, follows the owner rules. */
+const OWNER_ONLY: readonly Permission[] = [
+  'workspace.delete',
+  'workspace.export',
+  'billing.manage',
+  'support.grant',
+  'security.manage',
+];
 
 /**
  * Each role's permissions: the whole table, pinned by a test, so a change is
@@ -86,6 +95,7 @@ export const KEY_FORBIDDEN_PERMISSIONS: readonly Permission[] = [
   'billing.manage',
   'workspace.delete',
   'support.grant',
+  'security.manage',
 ];
 
 /** The data level a key holds on every object, as a scope. A key with neither reads and writes no data. */

@@ -554,6 +554,20 @@
       "when": 1792619259893,
       "tag": "0078_purge_member_onboarding",
       "breakpoints": true
+    },
+    {
+      "idx": 79,
+      "version": "7",
+      "when": 1792621938154,
+      "tag": "0079_workspace_security",
+      "breakpoints": true
+    },
+    {
+      "idx": 80,
+      "version": "7",
+      "when": 1792621998154,
+      "tag": "0080_known_devices",
+      "breakpoints": true
     }
   ]
 }

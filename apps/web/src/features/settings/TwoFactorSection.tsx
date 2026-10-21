@@ -210,11 +210,16 @@ export function TwoFactorSection({ data, security, toasts, onFocusLost }: TwoFac
     );
   } else {
     const on = security.twoFactor.on;
+    // A workspace that requires two factor keeps the app on unless a passkey stands in (AC-885); the server says so too.
+    const kept = on && security.passkeys.length === 0 && security.requiredBy.length > 0;
     card = (
       <Card>
-        <SettingsRow title={copy.app} description={on ? copy.appOn : copy.appOff}>
+        <SettingsRow
+          title={copy.app}
+          description={kept ? copy.appRequired(security.requiredBy) : on ? copy.appOn : copy.appOff}
+        >
           {on ? (
-            <Button variant="danger" onPress={() => open({ kind: 'off' })}>
+            <Button variant="danger" isDisabled={kept} onPress={() => open({ kind: 'off' })}>
               {copy.turnOff}
             </Button>
           ) : (

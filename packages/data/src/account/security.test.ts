@@ -13,6 +13,7 @@ const stale: AccountSecurity = {
   twoFactor: { on: true, backupCodesLeft: 9 },
   passkeys: [PASSKEY],
   session: { withSecondFactor: false },
+  requiredBy: [],
 };
 const FRESH = { freshUntil: new Date(NOW + 600_000).toISOString(), withSecondFactor: true };
 const ASSERTION: PasskeyAssertion = {

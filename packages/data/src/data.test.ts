@@ -420,6 +420,11 @@ function fakeApi(overrides: Partial<Behaviour> = {}, auth: (path: string, body: 
       leave: os.members.leave.handler(notServed),
       transferOwnership: os.members.transferOwnership.handler(notServed),
     },
+    workspaceSecurity: {
+      get: os.workspaceSecurity.get.handler(notServed),
+      set: os.workspaceSecurity.set.handler(notServed),
+      signOutEveryone: os.workspaceSecurity.signOutEveryone.handler(notServed),
+    },
     invitations: {
       create: os.invitations.create.handler(notServed),
       list: os.invitations.list.handler(notServed),
@@ -532,6 +537,7 @@ function fakeApi(overrides: Partial<Behaviour> = {}, auth: (path: string, body: 
         revokeOthers: os.account.sessions.revokeOthers.handler(notServed),
       },
       security: { get: os.account.security.get.handler(notServed) },
+      activity: { list: os.account.activity.list.handler(notServed) },
       stepUp: {
         start: os.account.stepUp.start.handler(notServed),
         verify: os.account.stepUp.verify.handler(notServed),

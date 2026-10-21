@@ -42,6 +42,7 @@ const { sql } = await import('drizzle-orm');
 const { serve } = await import('@hono/node-server');
 const { createApp } = await import('../src/app.ts');
 const { createAuth } = await import('../src/auth/auth.ts');
+const { twoFactorRequiredBy } = await import('@crm/core');
 const { NO_WAKE } = await import('../src/realtime/wake.ts');
 
 const APP_URL = 'https://app.test';
@@ -70,7 +71,12 @@ const mailer = {
     return Promise.resolve();
   },
 };
-const auth = createAuth({ env: apiEnv, identity, mailer });
+const auth = createAuth({
+  env: apiEnv,
+  identity,
+  mailer,
+  requiredBy: (userId) => twoFactorRequiredBy({ db, identity }, userId),
+});
 const { APP_RULES } = await import('../src/rules.ts');
 const app = createApp({ services: { db, identity, auth, wakeRelay: NO_WAKE, rules: APP_RULES }, env: apiEnv });
 

@@ -13,3 +13,6 @@ export const STEP_UP_CODE_MINUTES = 10;
 
 /** The longest name a passkey may have (spec 0033, AC-887). */
 export const PASSKEY_NAME_MAX = 60;
+
+/** The session lengths a workspace may ask for, in days (spec 0033, milestone 4); no limit when none is set. */
+export const SESSION_LENGTH_DAYS = [1, 7, 14, 30] as const;

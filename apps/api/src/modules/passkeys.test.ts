@@ -296,7 +296,7 @@ describe('passkeys (spec 0033, milestone 3)', () => {
     });
     await testQuery(
       identityUrl,
-      `update auth.session set verified_at = now() where user_id = (select id from auth."user" where email = $1)`,
+      `update auth.session set verified_at = now(), verified_with = 'second_factor' where user_id = (select id from auth."user" where email = $1)`,
       [email],
     );
     expect(await client.account.passkeys.remove({ id: mine.id })).toEqual({ ok: true });

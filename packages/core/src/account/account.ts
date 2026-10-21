@@ -4,7 +4,7 @@
 // workspace bootstrap builds its own system scope.
 import type { CreateWorkspaceInput, CreatedWorkspace, Me, SlugAvailability } from '@crm/contracts';
 import type { Database, IdentityStore } from '@crm/db';
-import { enterWorkspace, type DoorLog, type RuleSource } from '../access/door.ts';
+import { enterWorkspace, type DoorLog, type DoorSession, type RuleSource } from '../access/door.ts';
 import { createUserWorkspace } from '../engine/workspaces.ts';
 import type { ReachedMilestone } from '../milestones/milestones.ts';
 
@@ -51,10 +51,15 @@ export interface LastWorkspaceDeps {
  * not an active member of is refused NOT_FOUND, as every member procedure
  * refuses it, and nothing is written. The store writes only on a change.
  */
-export async function setLastWorkspace(deps: LastWorkspaceDeps, user: AccountUser, slug: string): Promise<void> {
+export async function setLastWorkspace(
+  deps: LastWorkspaceDeps,
+  user: AccountUser,
+  slug: string,
+  session: DoorSession,
+): Promise<void> {
   const scope = await enterWorkspace(
     { db: deps.db, identity: deps.identity, rules: deps.rules, ...(deps.log === undefined ? {} : { log: deps.log }) },
-    { userId: user.id, slug },
+    { userId: user.id, slug, session },
   );
   await deps.identity.setLastWorkspace(user.id, scope.workspaceId);
 }

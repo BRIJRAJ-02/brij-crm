@@ -14,7 +14,7 @@ import {
 } from './access.ts';
 
 describe('the permission catalog', () => {
-  it('lists the eighteen permissions of spec 0009, jobs.manage among them, forms.manage of spec 0023, the booking two of spec 0025 and comments.manage of spec 0038', () => {
+  it('lists the eighteen permissions of spec 0009, jobs.manage among them, forms.manage of spec 0023, the booking two of spec 0025, comments.manage of spec 0038 and security.manage of spec 0033', () => {
     expect([...PERMISSION_NAMES]).toEqual([
       'workspace.manage',
       'workspace.delete',
@@ -38,6 +38,7 @@ describe('the permission catalog', () => {
       'booking.manage',
       'booking.admin',
       'comments.manage',
+      'security.manage',
     ]);
   });
 
@@ -80,6 +81,7 @@ describe('the role table', () => {
     'booking.manage': ['owner', 'admin', 'member'],
     'booking.admin': ['owner', 'admin'],
     'comments.manage': ['owner', 'admin'],
+    'security.manage': ['owner'],
   };
 
   it('holds exactly the table, row by row', () => {
@@ -90,9 +92,15 @@ describe('the role table', () => {
     }
   });
 
-  it('leaves admins only the four owner only permissions short of an owner', () => {
+  it('leaves admins only the five owner only permissions short of an owner', () => {
     const missing = PERMISSION_NAMES.filter((name) => !(ROLE_PERMISSIONS.admin as readonly string[]).includes(name));
-    expect(missing).toEqual(['workspace.delete', 'workspace.export', 'billing.manage', 'support.grant']);
+    expect(missing).toEqual([
+      'workspace.delete',
+      'workspace.export',
+      'billing.manage',
+      'support.grant',
+      'security.manage',
+    ]);
   });
 
   it('names the three roles as the screens show them', () => {
@@ -102,8 +110,9 @@ describe('the role table', () => {
 });
 
 describe('the key scope catalog', () => {
-  it('holds every permission but the seven that stay with people, plus the two data levels', () => {
+  it('holds every permission but the eight that stay with people, plus the two data levels', () => {
     for (const forbidden of [
+      'security.manage',
       'members.manage',
       'members.invite',
       'access.manage',
@@ -117,7 +126,7 @@ describe('the key scope catalog', () => {
     expect(KEY_SCOPES).toContain('schema.manage');
     expect(KEY_SCOPES).toContain('records.export');
     expect(KEY_SCOPES.slice(-2)).toEqual([...KEY_DATA_SCOPES]);
-    expect(KEY_SCOPES).toHaveLength(PERMISSION_NAMES.length - 7 + 2);
+    expect(KEY_SCOPES).toHaveLength(PERMISSION_NAMES.length - 8 + 2);
   });
 });
 

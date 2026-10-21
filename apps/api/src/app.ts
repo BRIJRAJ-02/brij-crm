@@ -8,6 +8,7 @@ import {
   enterWorkspace,
   jobKinds,
   NO_CALENDAR,
+  twoFactorRequiredBy,
   type BookingCalendar,
   type JobRegistry,
   type RuleSource,
@@ -18,6 +19,7 @@ import { Hono, type Context } from 'hono';
 import { bodyLimit } from 'hono/body-limit';
 import { createAllowlist } from './auth/allowlist.ts';
 import { AUTH_BASE_PATH, AUTH_ROUTES, type Auth } from './auth/auth.ts';
+import { doorSession } from './auth/door-session.ts';
 import { createCalendarRoutes } from './calendar/routes.ts';
 import { createFreeDomains } from './calendar/free-domains.ts';
 import {
@@ -250,7 +252,11 @@ export function createApp({
   const linkKey = bookingLinkKey(env);
   const calendarRoutes = createCalendarRoutes({
     // The same door the RPC's `member` base opens (orpc.ts), with the same rules.
-    enter: (userId, slug) => enterWorkspace({ db, identity, log, rules }, { userId, slug }),
+    enter: (session, slug) =>
+      enterWorkspace(
+        { db, identity, log, rules },
+        { userId: session.user.id, slug, session: doorSession(session, identity) },
+      ),
     auth,
     wakeRelay,
     analytics,
@@ -370,6 +376,15 @@ export function createApp({
           setWorkspaceDeleted: (workspaceId, deleted) => identity.setWorkspaceDeleted(workspaceId, deleted),
         },
         signedOut,
+        requiredBy: (userId) => twoFactorRequiredBy({ db, identity }, userId),
+        // Only these four calls, by ids, for the workspace security settings and the Members column (spec 0033).
+        factors: {
+          secondFactorUsers: (userIds) => identity.secondFactorUsers(userIds),
+          hasPasskey: (userId) => identity.hasPasskey(userId),
+          sessionVerification: (userId, sessionId) => identity.sessionVerification(userId, sessionId),
+          markSessionVerified: (userId, sessionId, verifiedWith) =>
+            identity.markSessionVerified(userId, sessionId, verifiedWith),
+        },
       },
     });
     return matched ? c.newResponse(response.body, response) : c.notFound();
@@ -401,7 +416,11 @@ export function createApp({
   // starter.
   mountExports(app, {
     auth,
-    enter: (userId, slug) => enterWorkspace({ db, identity, log, rules }, { userId, slug }),
+    enter: (session, slug) =>
+      enterWorkspace(
+        { db, identity, log, rules },
+        { userId: session.user.id, slug, session: doorSession(session, identity) },
+      ),
   });
   // The form to booking hand off (spec 0023 AC-1057): one key, signing on the form's side and reading on the page's.
   const formsHandoffKey = handoffKey(env.BETTER_AUTH_SECRET);
@@ -474,7 +493,11 @@ export function createApp({
     visitor: {
       auth,
       workspacesOf: (userId) => identity.workspacesOf(userId),
-      enter: (userId, slug) => enterWorkspace({ db, identity, log, rules }, { userId, slug }),
+      enter: (session, slug) =>
+        enterWorkspace(
+          { db, identity, log, rules },
+          { userId: session.user.id, slug, session: doorSession(session, identity) },
+        ),
       memberBusy: bookingBusy,
       ...(calendar === undefined
         ? {}

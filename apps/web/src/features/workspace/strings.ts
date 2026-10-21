@@ -80,6 +80,24 @@ export const strings = {
   pageMissingText: 'There’s nothing at this address.',
   checkAddress: 'Check the address for a typo, or open your workspace.',
   openWorkspace: 'Open your workspace',
+  // A workspace's sign in rules holding this session back (spec 0033, AC-894).
+  twoFactorRequiredTitle: (workspace: string) => `${workspace} requires two factor sign in`,
+  twoFactorRequiredText:
+    'Set up an authenticator app or a passkey to open it. Your other workspaces open as usual from the workspace menu.',
+  twoFactorChoose: 'Either one is enough: an authenticator app, or a passkey on this device.',
+  twoFactorDone: 'You’re set up. Two factor sign in now protects your account in every workspace.',
+  setUpNow: 'Set up now',
+  continueToWorkspace: 'Continue',
+  signInAgainTitle: (workspace: string) => `${workspace} asks you to sign in again`,
+  signInAgainText:
+    'Its owner set how long a sign in lasts, or signed everyone out. Confirm it’s you to open it again. Your other workspaces stay open.',
+  signInAgainFailed: 'Couldn’t sign you out. Check your connection, then try again.',
+  confirmItsYou: 'Confirm it’s you',
+  sendCode: 'Email me a code',
+  signOutInstead: 'Sign out instead',
+  signOutEverywhereText: 'You’ll need to sign in again on this device, for every workspace.',
+  stillHeld: 'The workspace still asks for two factor sign in. Try again in a moment.',
+  stillHeldSignIn: 'The workspace still asks you to sign in again. Sign out, then sign in.',
   emptyTitle: (pluralName: string) => `No ${pluralName.toLowerCase()} yet`,
   emptyText: (pluralName: string) => `${pluralName} you add show here.`,
   /** The TopBar's action and the new record dialog's title ("New person"). */

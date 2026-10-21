@@ -7,6 +7,7 @@ import { createDatabase, createIdentityStore, type Database, type IdentityStore 
 import { createTestUser } from '@crm/db/testing';
 import { NO_RULE_SOURCE } from '../access/door.ts';
 import { newId } from '../engine/ids.ts';
+import { signedInNow } from '../testing.ts';
 import { getMe, setLastWorkspace, startWorkspace } from './account.ts';
 
 const { appUrl, identityUrl } = inject('testDatabase');
@@ -77,9 +78,9 @@ describe('the last workspace (spec 0031, AC-802)', () => {
     const first = await make('First');
     const second = await make('Second');
     expect((await getMe({ identity }, user)).lastWorkspaceId).toBeUndefined();
-    await setLastWorkspace({ db, identity, rules: NO_RULE_SOURCE }, user, second.workspace.slug);
+    await setLastWorkspace({ db, identity, rules: NO_RULE_SOURCE }, user, second.workspace.slug, signedInNow());
     expect((await getMe({ identity }, user)).lastWorkspaceId).toBe(second.workspace.id);
-    await setLastWorkspace({ db, identity, rules: NO_RULE_SOURCE }, user, first.workspace.slug);
+    await setLastWorkspace({ db, identity, rules: NO_RULE_SOURCE }, user, first.workspace.slug, signedInNow());
     expect((await getMe({ identity }, user)).lastWorkspaceId).toBe(first.workspace.id);
     // Gone from the directory (they left): no longer answered, so `/` falls back to the oldest.
     await identity.dropMembership(user.id, first.workspace.id);
@@ -96,12 +97,12 @@ describe('the last workspace (spec 0031, AC-802)', () => {
       memberName: 'Owner',
     });
     await expect(
-      setLastWorkspace({ db, identity, rules: NO_RULE_SOURCE }, stranger, theirs.workspace.slug),
+      setLastWorkspace({ db, identity, rules: NO_RULE_SOURCE }, stranger, theirs.workspace.slug, signedInNow()),
     ).rejects.toMatchObject({
       refusal: { code: 'NOT_FOUND' },
     });
     await expect(
-      setLastWorkspace({ db, identity, rules: NO_RULE_SOURCE }, stranger, `missing-${tag()}`),
+      setLastWorkspace({ db, identity, rules: NO_RULE_SOURCE }, stranger, `missing-${tag()}`, signedInNow()),
     ).rejects.toMatchObject({
       refusal: { code: 'NOT_FOUND' },
     });

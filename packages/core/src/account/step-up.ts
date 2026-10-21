@@ -26,6 +26,7 @@ export interface StepUpDeps {
     | 'putStepUpCode'
     | 'checkStepUpCode'
     | 'listPasskeys'
+    | 'hasPasskey'
   >;
   /** Checks an app code or a backup code (a backup code is used up). Never throws for a wrong code. */
   readonly checkSecondFactor: (userId: string, method: 'totp' | 'backup', code: string) => Promise<boolean>;
@@ -37,6 +38,8 @@ export interface StepUpDeps {
   readonly mintCode: () => string;
   /** The code as kept: a one way hash, so the table never holds a usable code. */
   readonly hashCode: (code: string) => string;
+  /** The names of the workspaces the person is in that require two factor (AC-885). */
+  readonly requiredBy: (userId: string) => Promise<readonly string[]>;
   readonly now?: () => number;
 }
 
@@ -50,8 +53,20 @@ export interface FreshnessDeps {
 export const CODE_INVALID_MESSAGE = 'That code didn’t work. Try the newest code in your app.';
 /** What an email or backup code that didn't check out answers. */
 export const EMAIL_CODE_INVALID_MESSAGE = 'That code didn’t work. Check the newest email, or send a new code.';
-/** What a step up by email answers while two factor is on: the app proves it. */
-export const USE_SECOND_FACTOR = 'Two factor sign in is on: use a code from your app or a backup code.';
+/** What a step up by email answers while two factor is on: the app or a passkey proves it. */
+export const USE_SECOND_FACTOR = 'Two factor sign in is on: use your passkey, a code from your app or a backup code.';
+
+/**
+ * Whether the person has a second factor (spec 0033, AC-888): the
+ * authenticator app, or a passkey. With one, every sensitive change is proven
+ * by it, never by an email code.
+ */
+export async function hasSecondFactor(
+  identity: Pick<IdentityStore, 'twoFactorState' | 'hasPasskey'>,
+  userId: string,
+): Promise<boolean> {
+  return (await identity.twoFactorState(userId)).enabled || identity.hasPasskey(userId);
+}
 /** What an app or backup code answers while two factor is off. */
 export const NO_SECOND_FACTOR = 'Two factor sign in is off: confirm with a code sent to your email.';
 /** What turning two factor off answers after an email code alone (AC-885). */
@@ -95,10 +110,11 @@ export async function requireFresh(
 
 /** Account › Security's state: two factor, backup codes left, passkeys, and this session's freshness (AC-881, AC-887). */
 export async function accountSecurity(deps: StepUpDeps, caller: SessionCaller): Promise<AccountSecurity> {
-  const [state, session, passkeys] = await Promise.all([
+  const [state, session, passkeys, requiredBy] = await Promise.all([
     deps.identity.twoFactorState(caller.userId),
     sessionFreshness(deps, caller),
     deps.identity.listPasskeys(caller.userId),
+    deps.requiredBy(caller.userId),
   ]);
   const left = state.enabled ? await deps.backupCodesLeft(caller.userId) : undefined;
   return {
@@ -110,6 +126,7 @@ export async function accountSecurity(deps: StepUpDeps, caller: SessionCaller): 
       ...(each.lastUsedAt === undefined ? {} : { lastUsedAt: each.lastUsedAt }),
     })),
     session,
+    requiredBy: [...requiredBy],
   };
 }
 
@@ -118,8 +135,7 @@ export async function startStepUp(
   deps: StepUpDeps,
   caller: SessionCaller & { readonly email: string },
 ): Promise<{ readonly sent: true }> {
-  const state = await deps.identity.twoFactorState(caller.userId);
-  if (state.enabled) throw inputInvalid('method', USE_SECOND_FACTOR);
+  if (await hasSecondFactor(deps.identity, caller.userId)) throw inputInvalid('method', USE_SECOND_FACTOR);
   const code = deps.mintCode();
   const now = (deps.now ?? Date.now)();
   await deps.identity.putStepUpCode(
@@ -143,7 +159,10 @@ export async function verifyStepUp(
 ): Promise<SessionFreshness> {
   const state = await deps.identity.twoFactorState(caller.userId);
   if (input.method === 'email') {
-    if (state.enabled) throw inputInvalid('method', USE_SECOND_FACTOR);
+    // A passkey counts too (AC-888): an account with one never proves itself by email alone.
+    if (state.enabled || (await deps.identity.hasPasskey(caller.userId))) {
+      throw inputInvalid('method', USE_SECOND_FACTOR);
+    }
     if (!/^\d{6}$/.test(input.code)) throw refuse('CODE_INVALID', EMAIL_CODE_INVALID_MESSAGE);
     const checked = await deps.identity.checkStepUpCode(caller.sessionId, deps.hashCode(input.code));
     if (checked !== 'ok') throw refuse('CODE_INVALID', EMAIL_CODE_INVALID_MESSAGE);

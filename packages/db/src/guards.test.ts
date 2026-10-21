@@ -97,7 +97,10 @@ describe('every tenant table', () => {
             row.index === 'invitations_open_address' ||
             // /join finds a person's workspaces by their email's domain (spec 0031, AC-819), read only through
             // crm_domain_lookup's two functions.
-            row.index === 'workspace_domains_domain_lookup'
+            row.index === 'workspace_domains_domain_lookup' ||
+            // Deleting an account closes and blanks the person's join requests (spec 0033), found only through
+            // crm_domain_lookup's crm_join_requests_of.
+            row.index === 'join_requests_by_user'
           ),
       )
       .map((row) => row.index);
@@ -134,7 +137,7 @@ describe('every tenant table', () => {
 });
 
 describe('the holes in row level security (crm_search_text, spec 0004 AC-24; the outbox relay, spec 0005; the daily cleanup, spec 0008)', () => {
-  it('has exactly twenty one security definer functions, each owned by its own narrow role', async () => {
+  it('has exactly twenty two security definer functions, each owned by its own narrow role', async () => {
     const definers = await owner.query<{ name: string; owner: string }>(`
       select p.proname as name, pg_get_userbyid(p.proowner) as owner
       from pg_proc p join pg_namespace n on n.oid = p.pronamespace
@@ -153,6 +156,7 @@ describe('the holes in row level security (crm_search_text, spec 0004 AC-24; the
       { name: 'crm_form_by_key', owner: 'crm_form_lookup' },
       { name: 'crm_invitation_by_token', owner: 'crm_invitation_lookup' },
       { name: 'crm_invitation_open_for', owner: 'crm_invitation_lookup' },
+      { name: 'crm_join_requests_of', owner: 'crm_domain_lookup' },
       { name: 'crm_notification_digests_due', owner: 'crm_sweep' },
       { name: 'crm_outbox_prune', owner: 'crm_relay' },
       { name: 'crm_outbox_workspaces', owner: 'crm_relay' },
@@ -184,6 +188,7 @@ describe('the holes in row level security (crm_search_text, spec 0004 AC-24; the
       { name: 'crm_form_by_key', config: ['search_path=pg_catalog, pg_temp'], atomic: true },
       { name: 'crm_invitation_by_token', config: ['search_path=pg_catalog, pg_temp'], atomic: true },
       { name: 'crm_invitation_open_for', config: ['search_path=pg_catalog, pg_temp'], atomic: true },
+      { name: 'crm_join_requests_of', config: ['search_path=pg_catalog, pg_temp'], atomic: true },
       { name: 'crm_notification_digests_due', config: ['search_path=pg_catalog, pg_temp'], atomic: true },
       { name: 'crm_outbox_prune', config: ['search_path=pg_catalog, pg_temp', 'lock_timeout=1s'], atomic: true },
       { name: 'crm_outbox_workspaces', config: ['search_path=pg_catalog, pg_temp'], atomic: true },
@@ -278,9 +283,9 @@ describe('the holes in row level security (crm_search_text, spec 0004 AC-24; the
     ],
     [
       'crm_domain_lookup',
-      ['crm_workspace_has_domain', 'crm_workspaces_by_domain'],
-      ['crm_workspace_has_domain(uuid, text)', 'crm_workspaces_by_domain(text)'],
-      ['app', 'app'],
+      ['crm_workspace_has_domain', 'crm_workspaces_by_domain', 'crm_join_requests_of'],
+      ['crm_workspace_has_domain(uuid, text)', 'crm_workspaces_by_domain(text)', 'crm_join_requests_of(uuid)'],
+      ['app', 'app', 'app'],
     ],
     [
       'crm_booking_lookup',
@@ -1525,6 +1530,7 @@ describe('booking pages (spec 0025, milestone 1)', () => {
 describe('the auth schema: global identity, outside row level security (spec 0005)', () => {
   const AUTH_TABLES = [
     'account',
+    'known_device',
     'passkey',
     'rate_limit',
     'security_event',

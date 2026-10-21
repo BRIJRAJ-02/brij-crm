@@ -10,6 +10,7 @@ import { strings as rotations } from '../booking/rotation-strings.ts';
 import { strings as members } from './members-strings.ts';
 import { strings as notifications } from './notifications-strings.ts';
 import { strings as security } from './security-strings.ts';
+import { strings as workspaceSecurity } from './workspace-security-strings.ts';
 import { strings } from './strings.ts';
 import { strings as workspace } from './workspace-strings.ts';
 
@@ -67,9 +68,13 @@ export type SettingsPageId =
   | 'notifications'
   | 'general'
   | 'members'
+  | 'workspace-security'
   | 'objects'
   | 'jobs'
   | 'rotations';
+
+/** Settings › Workspace › Security (spec 0033, milestone 4): the workspace's sign in rules, owners only. */
+export const workspaceSecurityHref = (slug: string) => `/w/${slug}/settings/security`;
 
 /**
  * The settings navigation's groups, in order (spec 0026, AC-682). Scheduling
@@ -91,6 +96,7 @@ export interface SettingsNavEntry {
     | 'bell'
     | 'building'
     | 'users'
+    | 'lock'
     | 'box'
     | 'list-checks'
     | 'users-round';
@@ -153,6 +159,14 @@ export function settingsNav(slug: string): readonly SettingsNavGroup[] {
         // call.
         { id: 'general', label: workspace.generalTitle, href: generalSettingsHref(slug), icon: 'building' },
         { id: 'members', label: members.title, href: membersSettingsHref(slug), icon: 'users' },
+        // The workspace's sign in rules (spec 0033): owners only, so nobody else sees the entry at all.
+        {
+          id: 'workspace-security',
+          label: workspaceSecurity.navLabel,
+          href: workspaceSecurityHref(slug),
+          icon: 'lock',
+          requires: 'security.manage',
+        },
         { id: 'objects', label: strings.objects, href: objectsSettingsHref(slug), icon: 'box' },
         { id: 'jobs', label: jobs.title, href: jobsHref(slug), icon: 'list-checks' },
       ],
@@ -193,6 +207,7 @@ export function settingsPageOf(pathname: string): SettingsPageId | undefined {
   if (rest === 'jobs') return 'jobs';
   if (rest === 'members') return 'members';
   if (rest === 'scheduling/rotations') return 'rotations';
+  if (rest === 'security') return 'workspace-security';
   return undefined;
 }
 

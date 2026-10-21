@@ -27,7 +27,7 @@ import {
   type TokenKey,
 } from '@crm/core';
 import type { PublicViewer } from '@crm/contracts';
-import type { Auth } from '../auth/auth.ts';
+import type { Auth, AuthSession } from '../auth/auth.ts';
 import type { GuestCalendar, GuestGrant } from '../calendar/google.ts';
 
 /** The guest's sealed calendar access. */
@@ -130,8 +130,8 @@ export interface VisitorDeps {
   readonly auth: Auth;
   /** The workspaces a user was added to (the identity directory). */
   readonly workspacesOf: (userId: string) => Promise<readonly { readonly slug: string }[]>;
-  /** The member door, as the RPC's `member` base opens it. */
-  readonly enter: (userId: string, slug: string) => Promise<DoorScope>;
+  /** The member door, as the RPC's `member` base opens it, for this signed in session. */
+  readonly enter: (session: AuthSession, slug: string) => Promise<DoorScope>;
   /** Members' busy times over their connected calendars. */
   readonly memberBusy: BusyReader;
   /** The guest leg, where calendar sync is set up. */
@@ -159,13 +159,14 @@ export interface FoundVisitor {
 /** A signed in member's calendar to overlay: the healthiest connection, preferring their sign in email. */
 async function memberCalendar(
   deps: VisitorDeps,
-  user: { readonly id: string; readonly email: string },
+  session: AuthSession,
 ): Promise<Pick<Visitor, 'busy'> & { readonly calendar: PublicViewer['calendar'] }> {
+  const { user } = session;
   const workspaces = (await deps.workspacesOf(user.id)).slice(0, MAX_WORKSPACES);
   const found = await Promise.all(
     workspaces.map(async ({ slug }) => {
       try {
-        const scope = await deps.enter(user.id, slug);
+        const scope = await deps.enter(session, slug);
         const { principal } = scope.access;
         if (principal.kind !== 'member') return [];
         const { memberId } = principal;
@@ -209,7 +210,7 @@ export async function findVisitor(deps: VisitorDeps, request: VisitorRequest): P
   if (session !== undefined) {
     const { setCookies, user } = session;
     if (await request.isHost(user.id)) return { setCookies, isHost: true };
-    const calendar = await memberCalendar(deps, user);
+    const calendar = await memberCalendar(deps, session);
     return {
       setCookies,
       visitor: {

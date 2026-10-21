@@ -17,6 +17,7 @@ import { meContract } from './me.ts';
 import { navContract } from './navigation.ts';
 import { notificationsContract } from './notifications.ts';
 import { membersContract } from './members.ts';
+import { workspaceSecurityContract } from './workspace-security.ts';
 import { objectsContract } from './objects.ts';
 import { optionsContract } from './options.ts';
 import { realtimeContract } from './realtime.ts';
@@ -60,6 +61,7 @@ export * from './members.ts';
 export * from './nav-model.ts';
 export * from './navigation.ts';
 export * from './notifications.ts';
+export * from './workspace-security.ts';
 export * from './objects.ts';
 export * from './options.ts';
 export * from './realtime.ts';
@@ -98,6 +100,8 @@ export const contract = {
   deletedWorkspace: deletedWorkspaceContract,
   // Settings › Account › Profile (spec 0031, slice 7).
   profile: profileContract,
+  // A workspace's sign in rules (spec 0033, milestone 4): owners only.
+  workspaceSecurity: workspaceSecurityContract,
   objects: objectsContract,
   attributes: attributesContract,
   options: optionsContract,

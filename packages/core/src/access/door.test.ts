@@ -21,6 +21,7 @@ import {
   type DoorLog,
   type RuleSource,
 } from './door.ts';
+import { signedInNow } from '../testing.ts';
 import { mintScope } from './mint.ts';
 import { NO_RULES, roleAccess } from './policy.ts';
 
@@ -68,7 +69,7 @@ describe('the access door', () => {
     const b = await userWithWorkspace();
     const scope = await enterWorkspace(
       { db, identity, rules: NO_RULE_SOURCE },
-      { userId: a.userId, slug: a.workspace.slug },
+      { userId: a.userId, slug: a.workspace.slug, session: signedInNow() },
     );
     expect(scope).toMatchObject({ db, workspaceId: a.workspace.id, actor: { type: 'member', id: a.memberId } });
     // The workspace's creator is its owner, with the owner's permissions and the open policy (spec 0009).
@@ -116,15 +117,15 @@ describe('the access door', () => {
 
     const attempts = [
       // Workspace B's member asking for workspace A.
-      { userId: b.userId, slug: a.workspace.slug },
+      { userId: b.userId, slug: a.workspace.slug, session: signedInNow() },
       // A signed up user in no workspace at all.
-      { userId: nobody, slug: a.workspace.slug },
-      { userId: removed.userId, slug: removed.workspace.slug },
-      { userId: a.userId, slug: `missing-${tag()}` },
-      { userId: deleted.userId, slug: deleted.workspace.slug },
+      { userId: nobody, slug: a.workspace.slug, session: signedInNow() },
+      { userId: removed.userId, slug: removed.workspace.slug, session: signedInNow() },
+      { userId: a.userId, slug: `missing-${tag()}`, session: signedInNow() },
+      { userId: deleted.userId, slug: deleted.workspace.slug, session: signedInNow() },
       // Not a user id at all.
-      { userId: 'not-a-uuid', slug: a.workspace.slug },
-      { userId: randomUUID(), slug: a.workspace.slug },
+      { userId: 'not-a-uuid', slug: a.workspace.slug, session: signedInNow() },
+      { userId: randomUUID(), slug: a.workspace.slug, session: signedInNow() },
     ];
     const refusals = await Promise.all(
       attempts.map((input) => refusalOf(enterWorkspace({ db, identity, rules: NO_RULE_SOURCE }, input))),
@@ -161,7 +162,7 @@ describe('roles at the door (spec 0009)', () => {
     const other = await addMember(a.workspace.id, role);
     const scope = await enterWorkspace(
       { db, identity, rules: NO_RULE_SOURCE },
-      { userId: other.userId, slug: a.workspace.slug },
+      { userId: other.userId, slug: a.workspace.slug, session: signedInNow() },
     );
     expect(scope.access.principal).toMatchObject({ kind: 'member', memberId: other.memberId, role });
     expect(scope.access.permissions).toEqual(ROLE_PERMISSIONS[role]);
@@ -177,7 +178,7 @@ describe('roles at the door (spec 0009)', () => {
       await refusalOf(
         enterWorkspace(
           { db, identity, log, rules: NO_RULE_SOURCE },
-          { userId: visitor.userId, slug: a.workspace.slug },
+          { userId: visitor.userId, slug: a.workspace.slug, session: signedInNow() },
         ),
       ),
     ).toEqual(NOT_FOUND);
@@ -247,7 +248,10 @@ describe('rules at the door (spec 0009, milestone 2)', () => {
         records: [],
       };
     };
-    const scope = await enterWorkspace({ db, identity, rules }, { userId: a.userId, slug: a.workspace.slug });
+    const scope = await enterWorkspace(
+      { db, identity, rules },
+      { userId: a.userId, slug: a.workspace.slug, session: signedInNow() },
+    );
     expect(seen).toEqual([{ memberId: a.memberId, role: 'owner', workspace: a.workspace.id }]);
     expect(scope.access.data.objects).toEqual({ [deals]: 'read' });
     expect(scope.access.data.key).not.toBe('open');
@@ -259,7 +263,7 @@ describe('rules at the door (spec 0009, milestone 2)', () => {
     // With NO_RULE_SOURCE, nothing restricts: production's door until #24.
     const open = await enterWorkspace(
       { db, identity, rules: NO_RULE_SOURCE },
-      { userId: a.userId, slug: a.workspace.slug },
+      { userId: a.userId, slug: a.workspace.slug, session: signedInNow() },
     );
     expect(open.access.data.key).toBe('open');
   });
@@ -271,7 +275,9 @@ describe('rules at the door (spec 0009, milestone 2)', () => {
       asked += 1;
       return Promise.resolve(NO_RULES);
     };
-    await refusalOf(enterWorkspace({ db, identity, rules }, { userId: randomUUID(), slug: a.workspace.slug }));
+    await refusalOf(
+      enterWorkspace({ db, identity, rules }, { userId: randomUUID(), slug: a.workspace.slug, session: signedInNow() }),
+    );
     expect(asked).toBe(0);
   });
 });
@@ -309,7 +315,10 @@ describe('the door’s cost (AC-149)', () => {
     const whole: number[] = [];
     for (let run = 0; run < 50; run += 1) {
       const started = performance.now();
-      await enterWorkspace({ db, identity, rules: NO_RULE_SOURCE }, { userId: a.userId, slug: a.workspace.slug });
+      await enterWorkspace(
+        { db, identity, rules: NO_RULE_SOURCE },
+        { userId: a.userId, slug: a.workspace.slug, session: signedInNow() },
+      );
       whole.push(performance.now() - started);
     }
     console.warn(

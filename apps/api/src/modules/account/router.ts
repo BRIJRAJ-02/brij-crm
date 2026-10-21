@@ -7,6 +7,8 @@ import {
   listMySessions,
   type PasskeyDeps,
   passkeyStepUpOptions,
+  closeJoinRequestsOf,
+  listMyActivity,
   removeMyPasskey,
   renameMyPasskey,
   revokeMyOtherSessions,
@@ -57,6 +59,7 @@ function stepUpDeps(context: RequestContext): StepUpDeps {
     },
     mintCode: () => String(randomInt(0, 1_000_000)).padStart(6, '0'),
     hashCode: (code) => context.auth.hashStepUpCode(code),
+    requiredBy: (userId) => context.requiredBy(userId),
   };
 }
 
@@ -66,11 +69,9 @@ function passkeyDeps(context: RequestContext): PasskeyDeps {
     identity: context.identity,
     passkeyOptions: (caller) => context.auth.passkeyStepUp.options(caller.userId, caller.sessionId),
     checkPasskey: (caller, response) => context.auth.passkeyStepUp.check(caller.userId, caller.sessionId, response),
+    requiredBy: (userId) => context.requiredBy(userId),
   };
 }
-
-/** Account deletion's join request step until the members lane's table lands: there is nothing to close. */
-const closeNoJoinRequests = async (_userId: string): Promise<void> => {};
 
 /** What deleting the account needs, from the request (spec 0033, AC-902 to AC-907). */
 function deletionDeps(context: RequestContext): AccountDeletionDeps {
@@ -92,7 +93,10 @@ function deletionDeps(context: RequestContext): AccountDeletionDeps {
           },
         }),
     // No join requests table on this base yet: the members lane (spec 0031 slice 6b) wires its close here.
-    closeJoinRequests: closeNoJoinRequests,
+    // Their join requests in workspaces they never joined: open ones declined, and none naming them (AC-905).
+    closeJoinRequests: async (userId) => {
+      await closeJoinRequestsOf(memberDoor(context), userId);
+    },
     sendFarewell: async (email) => {
       try {
         const message = await renderAccountDeleted(new Date(), { appOrigin: new URL(context.appUrl).origin });
@@ -132,6 +136,12 @@ export const accountRouter = authed.account.router({
   },
   security: {
     get: authed.account.security.get.handler(({ context }) => accountSecurity(stepUpDeps(context), callerOf(context))),
+  },
+  // The person's last 90 days of security events (AC-898): by their user id, from schema auth.
+  activity: {
+    list: authed.account.activity.list.handler(({ context, input }) =>
+      listMyActivity({ identity: context.identity }, callerOf(context), input),
+    ),
   },
   stepUp: {
     start: authed.account.stepUp.start.handler(async ({ context }) => {

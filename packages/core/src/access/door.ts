@@ -16,7 +16,7 @@ import { schema, type Database, type IdentityStore, type WorkspaceTx } from '@cr
 import { isUuid } from '../engine/ids.ts';
 import { refuse, type RefusalError } from '../engine/refusals.ts';
 import { SYSTEM_ACTOR, type Actor } from '../engine/scope.ts';
-import { FORM_SLUG, INVITE_INVALID_MESSAGE } from '@crm/contracts';
+import { FORM_SLUG, INVITE_INVALID_MESSAGE, SIGN_IN_AGAIN_MESSAGE, TWO_FACTOR_REQUIRED_MESSAGE } from '@crm/contracts';
 import type { EmailLink } from '../emails/preferences.ts';
 import { mintScope, rescope, type EngineScope } from './mint.ts';
 import {
@@ -47,7 +47,7 @@ export type RuleSource = (
 /** No rules at all, with no query: production's source until #24. */
 export const NO_RULE_SOURCE: RuleSource = () => Promise.resolve(NO_RULES);
 
-const { members, objects, workspaces } = schema;
+const { members, objects, workspaces, workspaceSecurity } = schema;
 
 /** Where the door reports a member row it refused for a role the code doesn't know (the member id only). */
 export interface DoorLog {
@@ -68,10 +68,61 @@ export interface DoorDeps {
   readonly rules: RuleSource;
 }
 
-/** Who is knocking (`auth.user.id`, from the session) and which workspace address they asked for. */
+/**
+ * The session knocking, as far as a workspace's sign in rules ask (spec 0033,
+ * milestone 4): when it last proved who it is (its sign in, or a step up
+ * since), and whether its person has a second factor, an authenticator app or
+ * a passkey. The door asks the second only in a workspace that requires two
+ * factor, so it can cost a read.
+ */
+export interface DoorSession {
+  readonly verifiedAt: Date;
+  readonly hasSecondFactor: () => Promise<boolean>;
+}
+
+/**
+ * Account deletion's way through (spec 0033, AC-903): the person is leaving
+ * every workspace they are in, so a workspace's sign in rules don't hold them
+ * back from leaving it. Nothing else passes it.
+ */
+export const LEAVING = Symbol('leaving');
+
+/** Who is knocking (`auth.user.id`, from the session), with which session, and which workspace address they asked for. */
 export interface DoorInput {
   readonly userId: string;
   readonly slug: string;
+  readonly session: DoorSession | typeof LEAVING;
+}
+
+/** A workspace's sign in rules as the door reads them beside the member; all absent without a row. */
+interface SignInRules {
+  readonly requireTwoFactor: boolean | null;
+  readonly sessionLengthDays: number | null;
+  readonly sessionsValidAfter: Date | null;
+}
+
+const DAY_MS = 24 * 60 * 60 * 1000;
+
+/**
+ * Holds a session to the workspace's sign in rules (spec 0033, AC-894): one
+ * that proved who it is before everyone was signed out, or longer ago than
+ * the workspace's session length, signs in again (403 SIGN_IN_AGAIN); a
+ * person without a second factor where one is required sets one up (403
+ * TWO_FACTOR_REQUIRED). Only a member reaches this: anyone else was already
+ * refused NOT_FOUND, so neither answer says a workspace exists.
+ */
+async function checkSignInRules(rules: SignInRules, session: DoorSession | typeof LEAVING, now: Date): Promise<void> {
+  if (session === LEAVING) return;
+  const { verifiedAt } = session;
+  if (rules.sessionsValidAfter !== null && verifiedAt.getTime() < rules.sessionsValidAfter.getTime()) {
+    throw refuse('SIGN_IN_AGAIN', SIGN_IN_AGAIN_MESSAGE);
+  }
+  if (rules.sessionLengthDays !== null && now.getTime() - verifiedAt.getTime() > rules.sessionLengthDays * DAY_MS) {
+    throw refuse('SIGN_IN_AGAIN', SIGN_IN_AGAIN_MESSAGE);
+  }
+  if (rules.requireTwoFactor === true && !(await session.hasSecondFactor())) {
+    throw refuse('TWO_FACTOR_REQUIRED', TWO_FACTOR_REQUIRED_MESSAGE);
+  }
 }
 
 function notFound(): RefusalError {
@@ -87,20 +138,28 @@ interface MemberRow {
 
 /**
  * The workspace's active member matching `which`, in a live workspace, with
- * its role, and the rules that apply (read by `rules` in the same
- * transaction): one tenant round trip.
+ * its role, the workspace's sign in rules, and the access rules that apply
+ * (read by `rules` in the same transaction): one tenant round trip.
  */
 async function activeMember(
   db: Database,
   workspaceId: string,
   which: { readonly userId: string } | { readonly memberId: string },
   rules: RuleSource,
-): Promise<{ readonly member: MemberRow; readonly rules: AccessRules } | undefined> {
+): Promise<{ readonly member: MemberRow; readonly rules: AccessRules; readonly signIn: SignInRules } | undefined> {
   return db.withWorkspace(workspaceId, async (tx) => {
-    const [member] = await tx
-      .select({ id: members.id, userId: members.userId, role: members.role })
+    const [row] = await tx
+      .select({
+        id: members.id,
+        userId: members.userId,
+        role: members.role,
+        requireTwoFactor: workspaceSecurity.requireTwoFactor,
+        sessionLengthDays: workspaceSecurity.sessionLengthDays,
+        sessionsValidAfter: workspaceSecurity.sessionsValidAfter,
+      })
       .from(members)
       .innerJoin(workspaces, eq(workspaces.id, members.workspaceId))
+      .leftJoin(workspaceSecurity, eq(workspaceSecurity.workspaceId, members.workspaceId))
       .where(
         and(
           'userId' in which ? eq(members.userId, which.userId) : eq(members.id, which.memberId),
@@ -109,10 +168,16 @@ async function activeMember(
         ),
       )
       .limit(1);
-    if (member === undefined) return undefined;
+    if (row === undefined) return undefined;
+    const member: MemberRow = { id: row.id, userId: row.userId, role: row.role };
+    const signIn: SignInRules = {
+      requireTwoFactor: row.requireTwoFactor,
+      sessionLengthDays: row.sessionLengthDays,
+      sessionsValidAfter: row.sessionsValidAfter === null ? null : new Date(row.sessionsValidAfter),
+    };
     // An unknown role is refused before any rule is read, and its rules don't matter.
-    if (!isRole(member.role)) return { member, rules: NO_RULES };
-    return { member, rules: await rules(tx, { memberId: member.id, role: member.role }) };
+    if (!isRole(member.role)) return { member, rules: NO_RULES, signIn };
+    return { member, rules: await rules(tx, { memberId: member.id, role: member.role }), signIn };
   });
 }
 
@@ -148,7 +213,9 @@ function memberScope(
  * Turns a signed in user and a workspace slug into the engine's scope, or
  * refuses with NOT_FOUND. The actor is the user's active member row in that
  * workspace, and the access is their role's (AC-134: an unknown role is
- * refused like a non member).
+ * refused like a non member). A member whose session falls short of the
+ * workspace's sign in rules is refused SIGN_IN_AGAIN or TWO_FACTOR_REQUIRED
+ * (spec 0033, AC-894); their other workspaces are unaffected.
  */
 export async function enterWorkspace(deps: DoorDeps, input: DoorInput): Promise<EngineScope> {
   if (!isUuid(input.userId)) throw notFound();
@@ -156,7 +223,9 @@ export async function enterWorkspace(deps: DoorDeps, input: DoorInput): Promise<
   if (workspace === undefined) throw notFound();
   const found = await activeMember(deps.db, workspace.id, { userId: input.userId }, deps.rules);
   if (found === undefined) throw notFound();
-  return memberScope(deps, workspace.id, found.member, found.rules);
+  const scope = memberScope(deps, workspace.id, found.member, found.rules);
+  await checkSignInRules(found.signIn, input.session, new Date());
+  return scope;
 }
 
 /** A deleted workspace an owner may still restore, and the scope to restore it with. */
@@ -175,7 +244,10 @@ export interface DeletedEntry {
  * one past its window are all NOT_FOUND, the same as an unknown address, so
  * nothing says a deleted workspace exists to anyone who couldn't restore it.
  */
-export async function enterDeletedWorkspace(deps: DoorDeps, input: DoorInput): Promise<DeletedEntry> {
+export async function enterDeletedWorkspace(
+  deps: DoorDeps,
+  input: Pick<DoorInput, 'userId' | 'slug'>,
+): Promise<DeletedEntry> {
   if (!isUuid(input.userId)) throw notFound();
   const workspace = await deps.identity.findWorkspace(input.slug);
   if (workspace === undefined) throw notFound();

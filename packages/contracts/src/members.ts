@@ -33,6 +33,11 @@ export const MemberView = MemberSummary.extend({
     .optional(),
   /** Their time zone in this workspace (an IANA name); absent means the browser's. */
   timeZone: z.string().optional(),
+  /**
+   * Whether they have a second factor, an authenticator app or a passkey
+   * (spec 0033, AC-895). Only owners and admins are told; absent for others.
+   */
+  twoFactor: z.boolean().optional(),
 });
 /** One active member as the Members page lists them. */
 export type MemberView = z.infer<typeof MemberView>;

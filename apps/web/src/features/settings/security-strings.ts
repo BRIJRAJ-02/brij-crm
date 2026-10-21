@@ -5,6 +5,30 @@ export const strings = {
   /** The page's title, and its entry in the settings navigation. */
   title: 'Security',
   devices: 'Devices',
+  /** Recent activity (AC-898): the last 90 days of the account's security events. */
+  activity: {
+    section: 'Recent activity',
+    description: 'Sign ins and changes to how you sign in, from the last 90 days.',
+    columns: { what: 'Activity', device: 'Device', place: 'Location', when: 'When' },
+    kinds: {
+      sign_in: 'Signed in',
+      sign_out: 'Signed out',
+      session_revoked: 'Signed out a device',
+      sessions_revoked: 'Signed out of other devices',
+      two_factor_on: 'Turned on two factor sign in',
+      two_factor_off: 'Turned off two factor sign in',
+      backup_codes_made: 'Made new backup codes',
+      backup_code_used: 'Used a backup code',
+      passkey_added: 'Added a passkey',
+      passkey_removed: 'Removed a passkey',
+      alert_sent: 'Emailed you about a new device',
+    },
+    methods: { email_code: 'with an email code', google: 'with Google', passkey: 'with a passkey' },
+    empty: 'No activity in the last 90 days',
+    failedTitle: 'Couldn’t load your recent activity',
+    failedMore: 'Couldn’t load older activity',
+    showMore: 'Show more',
+  },
   columns: { device: 'Device', place: 'Location', lastActive: 'Last active', actions: 'Actions' },
   unknownDevice: 'Unknown device',
   unknownPlace: 'Unknown',
@@ -61,6 +85,9 @@ export const strings = {
     app: 'Authenticator app',
     appOff: 'Off',
     appOn: 'On',
+    /** On, and a workspace requires it with no passkey to stand in (AC-885). */
+    appRequired: (names: readonly string[]) =>
+      `On. ${names.length === 1 ? (names[0] ?? '') : `${names.slice(0, -1).join(', ')} and ${names.at(-1) ?? ''}`} ${names.length === 1 ? 'requires' : 'require'} two factor sign in, so it stays on. Add a passkey to turn the app off.`,
     setUp: 'Set up',
     turnOff: 'Turn off',
     backupCodes: 'Backup codes',
