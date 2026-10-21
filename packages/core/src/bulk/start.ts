@@ -16,7 +16,7 @@ import {
   type JobView,
 } from '@crm/contracts';
 import { can } from '../access/policy.ts';
-import { checkObject, UNKNOWN_OBJECT, visibleRecords } from '../access/visibility.ts';
+import { checkObject, UNKNOWN_OBJECT, visibleRecords, writableObjects } from '../access/visibility.ts';
 import { checkScope } from '../access/mint.ts';
 import { inWorkspace } from '../access/run.ts';
 import { checkBulkEdit } from '../engine/bulk-edit.ts';
@@ -40,6 +40,9 @@ export interface StartBulkInput {
   readonly edit?: BulkEdit | undefined;
   readonly timeZone?: string | undefined;
 }
+
+/** A restore or a purge across objects by someone who may change none of them. */
+const READ_ONLY_EVERYWHERE = 'You can view these records but not change them.';
 
 /** The words of a refused start (AC-539). */
 export const BULK_START_WORDS = {
@@ -72,15 +75,27 @@ function checkTarget(action: BulkAction, target: BulkTarget): void {
 /**
  * Checks the action through the door, inside the start's write (AC-538):
  * edit (object and field write, the edit's rules), delete (object write),
- * restore of one object (object write; a restore across objects is checked
- * per record by its batches), purge (`records.purge`, 403 `FORBIDDEN`). An
- * "all matching" filter is compiled as the starter would read it.
+ * restore and purge of one object (object write; across objects, its batches
+ * check each record, and the starter must be able to change at least one
+ * object), purge (`records.purge`, 403 `FORBIDDEN`, and write too: fail
+ * closed, AC-538 as amended 21 October 2026). An "all matching" filter is
+ * compiled as the starter would read it.
  */
 async function checkAction(context: WriteContext, input: StartBulkInput, objectId: string | undefined): Promise<void> {
   const { tx, scope } = context;
+  if (input.action === 'purge' && !can(scope.access, 'records.purge')) {
+    throw refuse('FORBIDDEN', PERMISSIONS['records.purge'].message);
+  }
+  if ((input.action === 'purge' || input.action === 'restore') && objectId === undefined) {
+    // Across objects, each batch checks its records; with no object to change at all, nothing could come of it.
+    const writable = await writableObjects(tx, scope.access);
+    if (writable?.length === 0) throw refuse('FORBIDDEN', READ_ONLY_EVERYWHERE);
+  }
   if (input.action === 'purge') {
-    if (!can(scope.access, 'records.purge')) throw refuse('FORBIDDEN', PERMISSIONS['records.purge'].message);
-    if (objectId !== undefined) await checkObject(tx, scope.access, objectId, 'read');
+    if (objectId !== undefined) {
+      await checkObject(tx, scope.access, objectId, 'read');
+      await checkObject(tx, scope.access, objectId, 'write');
+    }
     return;
   }
   if (input.action === 'edit' || input.action === 'delete') {
@@ -220,12 +235,14 @@ export async function undoDelete(
 
 /**
  * Deletes up to 500 records in the trash forever (spec 0022, AC-535):
- * `records.purge` only (403 `FORBIDDEN` "Only workspace owners and admins can
- * delete records forever.", nothing removed); each record `purged` or
- * `not-in-trash` (live, unknown or hidden). Every registered purge dependent
- * goes first, in the same transaction; one outbox row per object names them
- * purged. More than 500 is 422 `CONFIG_INVALID`: Empty trash and bigger
- * selections start a `records.purge` job.
+ * `records.purge` first (403 `FORBIDDEN` "Only workspace owners and admins can
+ * delete records forever.", nothing removed); each record `purged`,
+ * `not-in-trash` (live, unknown or hidden), or `refused` with its reason when
+ * the person may only read its object, which keeps it in the trash (fail
+ * closed, AC-538 as amended 21 October 2026). Every registered purge
+ * dependent goes first, in the same transaction; one outbox row per object
+ * names them purged. More than 500 is 422 `CONFIG_INVALID`: Empty trash and
+ * bigger selections start a `records.purge` job.
  */
 export async function deleteForever(
   scope: EngineScope,

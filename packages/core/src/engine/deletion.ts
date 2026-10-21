@@ -33,7 +33,13 @@ import {
 } from './write.ts';
 import { requirePermission } from '../access/check.ts';
 import type { Access } from '../access/policy.ts';
-import { checkObject, checkRecordVisible, UNKNOWN_RECORD, visibleRecords } from '../access/visibility.ts';
+import {
+  checkObject,
+  checkRecordVisible,
+  readOnlyReasons,
+  UNKNOWN_RECORD,
+  visibleRecords,
+} from '../access/visibility.ts';
 
 const { records } = schema;
 
@@ -540,10 +546,18 @@ export async function purgeBatch(context: WriteContext, input: PurgeInput = {}):
   };
 }
 
-/** One record's outcome in Delete forever: removed for good, or not in the trash (live, gone, or hidden). */
+/**
+ * One record's outcome in Delete forever: removed for good (`purged`); not in
+ * the trash (live, gone or hidden); `refused` with its reason when the
+ * principal may only read its object (it stays in the trash); or, for a purge
+ * job, `deleted-since`, deleted again after the job's count, so it keeps its
+ * 30 days. `objectId` is the record's object for a purged or refused one.
+ */
 export interface PurgeOutcome {
   readonly recordId: string;
-  readonly state: 'purged' | 'not-in-trash';
+  readonly state: 'purged' | 'not-in-trash' | 'refused' | 'deleted-since';
+  readonly objectId?: string;
+  readonly refusal?: { readonly code: 'FORBIDDEN'; readonly message: string };
 }
 
 /**
@@ -553,11 +567,20 @@ export interface PurgeOutcome {
  * entries are in and the records, each in id order (the purge's order), only
  * those still in the trash and visible to the principal; then
  * `removeRecords`, every registered dependent first. A live, unknown or
- * hidden record answers `not-in-trash` and is left alone.
+ * hidden record answers `not-in-trash` and is left alone. It fails closed
+ * (AC-538 as amended 21 October 2026): a record on an object the principal
+ * may only read stays in the trash, `refused` with "You can view People but
+ * not change them.", as a delete or a restore would refuse it. With
+ * `deletedBy` (a purge job's count), a record deleted again after it stays
+ * too (`deleted-since`), so it keeps its own 30 days.
  */
 export async function purgeRecords(
   context: WriteContext,
-  input: { readonly recordIds: readonly string[]; readonly dependents?: readonly PurgeDependent[] },
+  input: {
+    readonly recordIds: readonly string[];
+    readonly dependents?: readonly PurgeDependent[];
+    readonly deletedBy?: string;
+  },
 ): Promise<{ readonly outcomes: readonly PurgeOutcome[]; readonly counts: RemovedCounts }> {
   requirePermission(context.scope, 'records.purge');
   const { tx, scope } = context;
@@ -573,8 +596,14 @@ export async function purgeRecords(
       )
     order by id for no key update
   `);
-  const locked = await tx.execute<{ id: string; object_id: string }>(sql`
-    select id::text, object_id::text from records
+  const deletedBy =
+    input.deletedBy === undefined
+      ? undefined
+      : checkInstant(input.deletedBy, 'Give the count’s time as an ISO instant.');
+  const locked = await tx.execute<{ id: string; object_id: string; since: boolean }>(sql`
+    select id::text, object_id::text,
+      ${deletedBy === undefined ? sql`false` : sql`deleted_at > ${deletedBy}::timestamptz`} as since
+    from records
     where workspace_id = ${scope.workspaceId} and id = any(${ids}) and deleted_at is not null
     order by id for update
   `);
@@ -583,12 +612,34 @@ export async function purgeRecords(
     scope.access,
     locked.rows.map((row) => ({ objectId: row.object_id, recordId: row.id })),
   );
-  const doomed = locked.rows.filter((row) => seen.has(row.id)).map((row) => row.id);
+  const visible = locked.rows.filter((row) => seen.has(row.id));
+  const readOnly = await readOnlyReasons(
+    tx,
+    scope.access,
+    visible.map((row) => row.object_id),
+  );
+  const outcomes = new Map<string, PurgeOutcome>();
+  for (const row of visible) {
+    const reason = readOnly.get(row.object_id);
+    if (reason !== undefined) {
+      outcomes.set(row.id, {
+        recordId: row.id,
+        state: 'refused',
+        objectId: row.object_id,
+        refusal: { code: 'FORBIDDEN', message: reason },
+      });
+    } else if (row.since) {
+      outcomes.set(row.id, { recordId: row.id, state: 'deleted-since' });
+    }
+  }
+  const doomed = visible.filter((row) => !outcomes.has(row.id)).map((row) => row.id);
   const gone = await removeRecords(tx, doomed, input.dependents);
   context.record({ purgedRecords: gone.records, purgedEntries: gone.entries });
-  const removed = new Set(gone.records.map((record) => record.recordId));
+  for (const record of gone.records) {
+    outcomes.set(record.recordId, { recordId: record.recordId, state: 'purged', objectId: record.objectId });
+  }
   return {
-    outcomes: asked.map((recordId) => ({ recordId, state: removed.has(recordId) ? 'purged' : 'not-in-trash' })),
+    outcomes: asked.map((recordId) => outcomes.get(recordId) ?? { recordId, state: 'not-in-trash' }),
     counts: gone.counts,
   };
 }

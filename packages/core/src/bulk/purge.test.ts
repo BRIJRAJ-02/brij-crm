@@ -3,9 +3,13 @@
 // remove records for good, only records in the trash go, every registered
 // dependent runs first in the same transaction and is counted, the daily
 // purge's batch answers one probe when nothing is due, and Empty trash runs
-// as a counted, confirmed job.
+// as a counted, confirmed job. It fails closed (AC-538 as amended 21 October
+// 2026): records of an object the person may only read stay in the trash.
 import { sql } from 'drizzle-orm';
 import { createDatabase } from '@crm/db';
+import type { RuleSource } from '../access/door.ts';
+import { NO_RULES, type AccessRules } from '../access/policy.ts';
+import { rescope } from '../testing.ts';
 import { testQuery } from '@crm/db/testing';
 import { afterAll, describe, expect, inject, it } from 'vitest';
 import { purgeBatch, purgeRecords } from '../engine/deletion.ts';
@@ -13,7 +17,7 @@ import { newId, uuidArray } from '../engine/ids.ts';
 import { outboxHook } from '../engine/outbox.ts';
 import type { PurgeDependent } from '../engine/purge-dependents.ts';
 import { createRecord } from '../engine/records.ts';
-import { deleteRecords } from '../engine/trash.ts';
+import { deleteRecords, restoreRecords } from '../engine/trash.ts';
 import { runWrite } from '../engine/write.ts';
 import { jobKinds } from '../jobs/kinds/index.ts';
 import { confirmJob, getJob } from '../jobs/service.ts';
@@ -26,7 +30,14 @@ afterAll(async () => {
   await db.close();
 });
 
-const { team, runnerFor, drive } = jobTestKit(db, ownerUrl);
+/** Each test workspace's rules, by workspace id, as #24 will store them: the kit's runner enters jobs with them. */
+const rulesByWorkspace = new Map<string, AccessRules>();
+const rules: RuleSource = async (tx) => {
+  const { rows } = await tx.execute<{ id: string | null }>(sql`select current_setting('app.workspace_id', true) as id`);
+  return rulesByWorkspace.get(rows[0]?.id ?? '') ?? NO_RULES;
+};
+
+const { team, runnerFor, drive } = jobTestKit(db, ownerUrl, { rules });
 
 /**
  * Now by the database's clock, as an ISO time with microseconds: an `asOf` a
@@ -46,12 +57,14 @@ const registry = jobKinds({ environment: 'local' });
 async function world() {
   const t = await team();
   const rows = await db.withWorkspace(t.workspaceId, (tx) =>
-    tx.execute<{ id: string; object_id: string }>(
-      sql`select a.id::text, a.object_id::text from attributes a join objects o on o.id = a.object_id where o.api_slug = 'people' and a.api_slug = 'name'`,
+    tx.execute<{ id: string; object_id: string; slug: string }>(
+      sql`select a.id::text, a.object_id::text, o.api_slug as slug from attributes a join objects o on o.id = a.object_id where a.api_slug = 'name'`,
     ),
   );
-  const people = rows.rows[0]?.object_id ?? '';
-  const name = rows.rows[0]?.id ?? '';
+  const objects = Object.fromEntries(rows.rows.map((row) => [row.slug, row.object_id]));
+  const names = Object.fromEntries(rows.rows.map((row) => [row.slug, row.id]));
+  const people = objects.people ?? '';
+  const name = names.people ?? '';
   const person = async (firstName: string) =>
     (await createRecord(t.owner, { objectId: people, values: { [name]: { firstName } } })).recordId;
   const trashed = async (...names: string[]) => {
@@ -60,7 +73,34 @@ async function world() {
     await deleteRecords(t.owner, { objectId: people, recordIds: ids, batchId: newId() });
     return ids;
   };
-  return { ...t, people, person, trashed };
+  /** Companies (or another object with a plain name) made and deleted by the owner. */
+  const trashedIn = async (slug: string, ...titles: string[]) => {
+    const objectId = objects[slug] ?? '';
+    const ids: string[] = [];
+    for (const each of titles) {
+      ids.push((await createRecord(t.owner, { objectId, values: { [names[slug] ?? '']: each } })).recordId);
+    }
+    await deleteRecords(t.owner, { objectId, recordIds: ids, batchId: newId() });
+    return ids;
+  };
+  /** The admin, who may only read the objects named (every object for 'all'), in their scope and the runner's. */
+  const readOnlyAdmin = async (slugs: readonly string[] | 'all') => {
+    const all = await testQuery<{ id: string }>(ownerUrl, 'select id::text from objects where workspace_id = $1', [
+      t.workspaceId,
+    ]);
+    const ids = slugs === 'all' ? all.map((row) => row.id) : slugs.map((slug) => objects[slug] ?? '');
+    const readOnly: AccessRules = {
+      levels: ids.map((objectId) => ({
+        subject: { type: 'role', role: 'admin' },
+        target: { type: 'object', objectId },
+        level: 'read',
+      })),
+      records: [],
+    };
+    rulesByWorkspace.set(t.workspaceId, readOnly);
+    return rescope(t.admin, { rules: readOnly });
+  };
+  return { ...t, objects, people, person, trashed, trashedIn, readOnlyAdmin };
 }
 
 const exists = async (ids: readonly string[]) =>
@@ -96,8 +136,8 @@ describe('Delete forever (AC-535, AC-538)', () => {
     expect(await exists([ada])).toEqual([ada]);
     const outcomes = await deleteForever(w.admin, { recordIds: [ada, bob, cy] }, [outboxHook()]);
     expect(outcomes).toEqual([
-      { recordId: ada, state: 'purged' },
-      { recordId: bob, state: 'purged' },
+      { recordId: ada, state: 'purged', objectId: w.people },
+      { recordId: bob, state: 'purged', objectId: w.people },
       { recordId: cy, state: 'not-in-trash' },
     ]);
     expect(await exists([ada, bob, cy])).toEqual([cy]);
@@ -127,6 +167,99 @@ describe('Delete forever (AC-535, AC-538)', () => {
     await confirmJob(w.admin, registry, id);
     expect((await drive(run, w.workspaceId, id)).at(-1)).toBe('succeeded');
     expect(await exists(ids)).toEqual([]);
+  });
+});
+
+describe('failing closed (AC-538 as amended 21 October 2026)', () => {
+  it('keeps a record of an object the admin may only read in the trash, refused with its reason, and deletes the rest', async () => {
+    const w = await world();
+    const [person = ''] = await w.trashed('Ada');
+    const [company = ''] = await w.trashedIn('companies', 'Acme');
+    const admin = await w.readOnlyAdmin(['companies']);
+    expect(await deleteForever(admin, { recordIds: [person, company] })).toEqual([
+      { recordId: person, state: 'purged', objectId: w.people },
+      {
+        recordId: company,
+        state: 'refused',
+        objectId: w.objects.companies,
+        refusal: { code: 'FORBIDDEN', message: 'You can view Companies but not change them.' },
+      },
+    ]);
+    expect(await exists([person, company])).toEqual([company]);
+  });
+
+  it('refuses a purge job of an object the admin may only read', async () => {
+    const w = await world();
+    await w.trashedIn('companies', 'Acme');
+    const admin = await w.readOnlyAdmin(['companies']);
+    expect(
+      await refusalOf(
+        startBulk(admin, registry, {
+          id: newId(),
+          action: 'purge',
+          target: { kind: 'trash', objectId: w.objects.companies ?? '', except: [], asOf: await databaseNow() },
+        }),
+      ),
+    ).toEqual({ code: 'FORBIDDEN', message: 'You can view Companies but not change them.' });
+  });
+
+  it('empties the trash of what the admin may change, and says how many of each read only object stay', async () => {
+    const w = await world();
+    const people = await w.trashed('Ada', 'Bob');
+    const companies = await w.trashedIn('companies', 'Acme', 'Globex', 'Initech');
+    const admin = await w.readOnlyAdmin(['companies']);
+    const id = newId();
+    await startBulk(admin, registry, {
+      id,
+      action: 'purge',
+      target: { kind: 'trash', except: [], asOf: await databaseNow() },
+    });
+    const run = runnerFor(registry);
+    expect((await drive(run, w.workspaceId, id)).at(-1)).toBe('ready');
+    // The count is what will go: the read only object's records are left out of it.
+    expect((await getJob(admin, registry, id)).total).toBe(2);
+    await confirmJob(admin, registry, id);
+    expect((await drive(run, w.workspaceId, id)).at(-1)).toBe('succeeded');
+    expect((await exists([...people, ...companies])).sort()).toEqual([...companies].sort());
+    expect((await getJob(admin, registry, id)).result).toMatchObject({
+      left: [{ objectId: w.objects.companies, count: 3 }],
+    });
+  });
+
+  it('refuses a purge or a restore across objects to someone who may change none of them', async () => {
+    const w = await world();
+    await w.trashed('Ada');
+    const admin = await w.readOnlyAdmin('all');
+    for (const action of ['purge', 'restore'] as const) {
+      expect(
+        await refusalOf(
+          startBulk(admin, registry, {
+            id: newId(),
+            action,
+            target: { kind: 'trash', except: [], asOf: await databaseNow() },
+          }),
+        ),
+      ).toEqual({ code: 'FORBIDDEN', message: 'You can view these records but not change them.' });
+    }
+  });
+
+  it('keeps a record deleted again after Empty trash counted it, for its own 30 days', async () => {
+    const w = await world();
+    const [ada = '', bob = ''] = await w.trashed('Ada', 'Bob');
+    const id = newId();
+    await startBulk(w.admin, registry, {
+      id,
+      action: 'purge',
+      target: { kind: 'trash', except: [], asOf: await databaseNow() },
+    });
+    const run = runnerFor(registry);
+    expect((await drive(run, w.workspaceId, id)).at(-1)).toBe('ready');
+    await restoreRecords(w.owner, { recordIds: [ada] });
+    await deleteRecords(w.owner, { objectId: w.people, recordIds: [ada], batchId: newId() });
+    await confirmJob(w.admin, registry, id);
+    expect((await drive(run, w.workspaceId, id)).at(-1)).toBe('succeeded');
+    expect(await exists([ada, bob])).toEqual([ada]);
+    expect(await getJob(w.admin, registry, id)).toMatchObject({ done: 1, skipped: 1 });
   });
 });
 

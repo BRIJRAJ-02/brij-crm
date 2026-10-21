@@ -10,7 +10,7 @@
 // (AC-149, pinned by `open-sql.test.ts`).
 import { sql, type SQL } from 'drizzle-orm';
 import type { WorkspaceTx } from '@crm/db';
-import { isUuid, uuidList } from '../engine/ids.ts';
+import { isUuid, uuidArray, uuidList } from '../engine/ids.ts';
 import { refuse } from '../engine/refusals.ts';
 import type { AttributeDef } from '../engine/values.ts';
 import {
@@ -214,6 +214,33 @@ async function pluralName(tx: WorkspaceTx, objectId: string): Promise<string> {
     sql`select plural_name as name from objects where id = ${objectId}::uuid`,
   );
   return rows.rows[0]?.name ?? 'these records';
+}
+
+/**
+ * The objects among `objectIds` the principal may only read, each with the
+ * words a refused change gives (spec 0009): "You can view People but not
+ * change them.", by object id. Empty under the open policy.
+ */
+export async function readOnlyReasons(
+  tx: WorkspaceTx,
+  access: Access,
+  objectIds: readonly string[],
+): Promise<ReadonlyMap<string, string>> {
+  if (isOpen(access)) return new Map();
+  const readOnly = [...new Set(objectIds)].filter((id) => objectLevel(access, id) === 'read');
+  if (readOnly.length === 0) return new Map();
+  const rows = await tx.execute<{ id: string; name: string }>(
+    sql`select id::text, plural_name as name from objects where id = any(${uuidArray(readOnly)})`,
+  );
+  const names = new Map(rows.rows.map((row) => [row.id, row.name]));
+  return new Map(readOnly.map((id) => [id, `You can view ${names.get(id) ?? 'these records'} but not change them.`]));
+}
+
+/** The objects the principal may change, or undefined under the open policy, where they may change every one. */
+export async function writableObjects(tx: WorkspaceTx, access: Access): Promise<readonly string[] | undefined> {
+  if (isOpen(access)) return undefined;
+  const rows = await tx.execute<{ id: string }>(sql`select id::text from objects`);
+  return rows.rows.map((row) => row.id).filter((id) => objectLevel(access, id) === 'write');
 }
 
 /**

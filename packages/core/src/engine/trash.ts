@@ -36,7 +36,14 @@ import {
 } from './write.ts';
 import { inWorkspace } from '../access/run.ts';
 import { isOpen, objectLevel, type Access } from '../access/policy.ts';
-import { checkObject, farVisibleSql, hidesActors, UNKNOWN_OBJECT, visibleRecords } from '../access/visibility.ts';
+import {
+  checkObject,
+  farVisibleSql,
+  hidesActors,
+  UNKNOWN_OBJECT,
+  visibleRecords,
+  writableObjects,
+} from '../access/visibility.ts';
 
 /** The most records one inline delete or restore changes (spec 0022): more is refused `CONFIG_INVALID`. */
 export const MAX_INLINE_RECORDS = 500;
@@ -593,11 +600,22 @@ function decodeTrashCursor(cursor: string): { readonly at: string; readonly id: 
  * The condition that keeps the trashed records the principal may see (spec
  * 0009): never an object at `none`, and on an object with a record rule only
  * those inside it. Undefined under the open policy. One object when given.
+ * With `need` 'write', only objects the principal may change (a purge's
+ * count, which fails closed: spec 0022, AC-538 as amended 21 October 2026).
  */
-export async function trashScope(tx: WorkspaceTx, access: Access, named: string | undefined): Promise<SQL> {
+export async function trashScope(
+  tx: WorkspaceTx,
+  access: Access,
+  named: string | undefined,
+  need: 'read' | 'write' = 'read',
+): Promise<SQL> {
   // Canonical (lower case): the record rule is looked up by the id as stored, never the caller's spelling.
   const objectId = named === undefined ? undefined : checkId(named, UNKNOWN_OBJECT);
   const parts: SQL[] = [sql`r.deleted_at is not null`];
+  if (need === 'write') {
+    const writable = await writableObjects(tx, access);
+    if (writable !== undefined) parts.push(sql`r.object_id = any(${uuidArray(writable)})`);
+  }
   if (objectId !== undefined) {
     await checkObject(tx, access, objectId, 'read');
     parts.push(sql`r.object_id = ${objectId}::uuid`);

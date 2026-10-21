@@ -92,6 +92,43 @@ describe('records.deleteMany and records.restoreBatch', () => {
 });
 
 describe('the trash (AC-533, AC-534)', () => {
+  it('keeps a record in the trash, refused with its reason, when Delete forever meets a read only object (AC-538)', async () => {
+    const owner = await memberWithWorkspace(app);
+    const [ada] = await people(owner, ['Ada']);
+    await owner.client.records.deleteMany({
+      workspace: owner.slug,
+      objectId: owner.people.id,
+      recordIds: [ada ?? ''],
+      batchId: newId(),
+      mutationId: newId(),
+    });
+    // Fail closed (amended 21 October 2026): records.purge alone isn't enough without write on the object.
+    rulesByWorkspace.set(owner.workspace.id, {
+      levels: [
+        {
+          subject: { type: 'role', role: 'owner' },
+          target: { type: 'object', objectId: owner.people.id },
+          level: 'read',
+        },
+      ],
+      records: [],
+    });
+    const answer = await owner.client.trash.deleteForever({
+      workspace: owner.slug,
+      recordIds: [ada ?? ''],
+      mutationId: newId(),
+    });
+    expect(answer.results).toEqual([
+      {
+        recordId: ada,
+        state: 'refused',
+        refusal: { code: 'FORBIDDEN', message: 'You can view People but not change them.' },
+      },
+    ]);
+    expect(await owner.client.trash.count({ workspace: owner.slug })).toEqual({ count: 1, atLeast: false });
+    rulesByWorkspace.delete(owner.workspace.id);
+  });
+
   it('lists and counts the trash, and restores with a refusal per record on a read only object', async () => {
     const owner = await memberWithWorkspace(app);
     const [ada, bob] = await people(owner, ['Ada', 'Bob']);

@@ -34,6 +34,13 @@ export const trashRouter = member.trash.router({
     const { result, echoes } = await commitCounted(context, { mutationId: input.mutationId }, (hooks) =>
       deleteForever(context.scope, { recordIds: input.recordIds }, hooks),
     );
-    return { results: [...result], echoes };
+    // Each record's outcome as the contract names it: a refused one (an object the member may only read) keeps
+    // its reason; `deleted-since` only ever comes from a purge job's count, never from this call.
+    const results = result.map(({ recordId, state, refusal }) =>
+      state === 'refused'
+        ? { recordId, state, ...(refusal === undefined ? {} : { refusal }) }
+        : { recordId, state: state === 'purged' ? ('purged' as const) : ('not-in-trash' as const) },
+    );
+    return { results, echoes };
   }),
 });

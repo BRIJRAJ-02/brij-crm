@@ -18,6 +18,7 @@ import { isRefusal } from '../engine/refusals.ts';
 import { purgeRecords } from '../engine/deletion.ts';
 import { deleteIn, inBatch, restoreIn, trashScope } from '../engine/trash.ts';
 import type { WriteContext } from '../engine/write.ts';
+import { isOpen, objectLevel } from '../access/policy.ts';
 import { visibleRecords } from '../access/visibility.ts';
 import { defineKind, MAX_ATTEMPTS, type ItemOutcome, type KindDefinition, type StepOutcome } from '../jobs/registry.ts';
 
@@ -44,6 +45,44 @@ export const RECORD_LIVE = 'RECORD_LIVE';
 
 /** Its words. */
 const RECORD_LIVE_MESSAGE = 'That record isn’t in the trash.';
+
+/** The item code of a record a purge found deleted again after its count: it keeps its own 30 days in the trash. */
+export const RECORD_DELETED_SINCE = 'RECORD_DELETED_SINCE';
+
+/** Its words. */
+const RECORD_DELETED_SINCE_MESSAGE = 'That record was deleted again after the count, so it keeps its 30 days.';
+
+/** What a purge carries from batch to batch in its checkpoint: what it left in the trash so far, by object. */
+const PurgeCarry = z.object({
+  left: z.record(z.string(), z.number().int().min(0)).optional(),
+  counted: z.boolean().optional(),
+});
+
+/**
+ * How many records of each object the starter may only read stay in the
+ * trash after Empty trash (its count left them out): the trash's records of
+ * those objects that the starter sees, deleted by the count's `asOf`, less
+ * those left out of it. Nothing under the open policy or for any other target.
+ */
+async function readOnlyLeft(context: WriteContext, target: BulkTarget): Promise<Readonly<Record<string, number>>> {
+  if (target.kind !== 'trash') return {};
+  const { tx, scope } = context;
+  const { access } = scope;
+  if (isOpen(access)) return {};
+  const objects = (await tx.execute<{ id: string }>(sql`select id::text from objects`)).rows
+    .map((row) => row.id)
+    .filter((id) => objectLevel(access, id) === 'read' && (target.objectId === undefined || target.objectId === id));
+  if (objects.length === 0) return {};
+  const where = await trashScope(tx, access, undefined);
+  const except = target.except.length === 0 ? sql`true` : sql`not (r.id = any(${uuidArray(target.except)}))`;
+  const rows = await tx.execute<{ object_id: string; n: number }>(sql`
+    select r.object_id::text as object_id, count(*)::int as n from records r
+    where ${where} and r.object_id = any(${uuidArray(objects)}) and r.deleted_at <= ${target.asOf}::timestamptz
+      and ${except}
+    group by r.object_id
+  `);
+  return Object.fromEntries(rows.rows.map((row) => [row.object_id, row.n]));
+}
 
 /** A sample for the shared kind contract test: one id, of no object. */
 const SAMPLE: BulkJobParams = {
@@ -120,8 +159,9 @@ export async function snapshotIds(
       return filled((from, size) => rowsOf(where, from, size), visible, after, limit);
     }
     case 'trash': {
-      // The trash's own scope: objects the starter may read, inside their record rules.
-      const where = await trashScope(tx, scope.access, target.objectId);
+      // The trash's own scope: objects the starter may read, inside their record rules. A purge counts only objects
+      // they may change (fail closed, AC-538 as amended 21 October 2026); the rest stay, and the job says so.
+      const where = await trashScope(tx, scope.access, target.objectId, action === 'purge' ? 'write' : 'read');
       const except = target.except.length === 0 ? sql`true` : sql`not (r.id = any(${uuidArray(target.except)}))`;
       const rows = await rowsOf(
         sql`${where} and r.deleted_at <= ${target.asOf}::timestamptz and ${except}`,
@@ -290,23 +330,56 @@ export function bulkRestoreKind(): KindDefinition<BulkJobParams> {
 /**
  * `records.purge` (Delete forever and Empty trash, AC-535): `purgeRecords`
  * over each batch, every registered dependent first; a record restored since
- * the count is skipped `RECORD_LIVE`. The runner enters the starter again at
- * every slice, so one who lost `records.purge` stops with `FORBIDDEN`.
+ * the count is skipped `RECORD_LIVE`, and one deleted again since Empty
+ * trash's count `RECORD_DELETED_SINCE`, keeping its 30 days. The runner
+ * enters the starter again at every slice, so one who lost `records.purge`
+ * stops with `FORBIDDEN`. It fails closed (AC-538 as amended 21 October 2026):
+ * a record of an object the starter may only read stays in the trash, and
+ * the job's result says how many of each such object stay (`left`, with
+ * those Empty trash's count left out), for its finish toast.
  */
 export function bulkPurgeKind(): KindDefinition<BulkJobParams> {
-  return bulkKind('purge', (context, { items = [] }) =>
+  return bulkKind('purge', (context, { job, items = [] }) =>
     orFailed(async () => {
-      const { outcomes } = await purgeRecords(context, { recordIds: items.map((item) => item.itemId) });
+      const { target } = job.params;
+      const carried = PurgeCarry.safeParse(job.checkpoint);
+      const before = carried.success ? carried.data : {};
+      const left: Record<string, number> = { ...before.left };
+      if (before.counted !== true) {
+        for (const [objectId, count] of Object.entries(await readOnlyLeft(context, target))) {
+          left[objectId] = (left[objectId] ?? 0) + count;
+        }
+      }
+      const { outcomes } = await purgeRecords(context, {
+        recordIds: items.map((item) => item.itemId),
+        ...(target.kind === 'trash' ? { deletedBy: target.asOf } : {}),
+      });
+      const purged = new Set<string>();
+      for (const outcome of outcomes) {
+        if (outcome.objectId === undefined) continue;
+        if (outcome.state === 'purged') purged.add(outcome.objectId);
+        if (outcome.state === 'refused') left[outcome.objectId] = (left[outcome.objectId] ?? 0) + 1;
+      }
+      if (purged.size > 0) context.record({ coarseObjects: [...purged] });
+      const leftBehind = Object.entries(left)
+        .filter(([, count]) => count > 0)
+        .map(([objectId, count]) => ({ objectId, count }));
       return {
         finished: false,
+        checkpoint: { left, counted: true },
+        ...(leftBehind.length === 0 ? {} : { result: { left: leftBehind } }),
         items: statesOf(
           items,
           outcomes,
           (outcome) => outcome.recordId,
-          (outcome) =>
+          (outcome): Omit<ItemOutcome, 'position'> =>
             outcome.state === 'purged'
               ? { state: 'done' }
-              : { state: 'skipped', code: RECORD_LIVE, message: RECORD_LIVE_MESSAGE },
+              : outcome.state === 'refused'
+                ? { state: 'skipped', code: 'FORBIDDEN', message: outcome.refusal?.message ?? '' }
+                : outcome.state === 'deleted-since'
+                  ? { state: 'skipped', code: RECORD_DELETED_SINCE, message: RECORD_DELETED_SINCE_MESSAGE }
+                  : { state: 'skipped', code: RECORD_LIVE, message: RECORD_LIVE_MESSAGE },
         ),
       };
     }),
