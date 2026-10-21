@@ -52,10 +52,17 @@ export function visitorOf(
     return typeof value === 'string' && value.trim() !== '' ? value.trim().slice(0, 200) : undefined;
   };
   const email = text(document.questions.find((question) => question.answerType === 'email')?.key);
+  // By key first; else a short text labelled as a name, but never a company's or a team's ("Company name").
   const named =
     document.questions.find(
       (question) => question.answerType === 'short_text' && ['name', 'full_name', 'your_name'].includes(question.key),
-    ) ?? document.questions.find((question) => question.answerType === 'short_text' && /name/i.test(question.label));
+    ) ??
+    document.questions.find(
+      (question) =>
+        question.answerType === 'short_text' &&
+        /name/i.test(question.label) &&
+        !/company|business|organi[sz]ation|team|brand|product/i.test(question.label),
+    );
   const name = text(named?.key);
   return { ...(name === undefined ? {} : { name }), ...(email === undefined ? {} : { email }) };
 }
@@ -89,23 +96,47 @@ async function nextOf(
 }
 
 /**
- * The name and email a hand off's submission gave (AC-1058), read in the
- * booking page's own workspace (row level security keeps another
- * workspace's submission out); empty for one that isn't there.
+ * A hand off's submission, read in the booking page's own workspace (row
+ * level security keeps another workspace's out), and only when the version
+ * it was sent to sends its visitors on to this very page: the signature is
+ * not the only thing binding a submission to a page (security review, 21
+ * October 2026). Undefined otherwise.
+ */
+async function handedOff(tx: WorkspaceTx, submissionId: string, pageId: string) {
+  const [row] = await tx
+    .select({ id: formSubmissions.id, versionId: formSubmissions.versionId, answers: formSubmissions.answers })
+    .from(formSubmissions)
+    .where(eq(formSubmissions.id, submissionId));
+  if (row === undefined) return undefined;
+  const version = (await loadVersions(tx, [row.versionId])).get(row.versionId);
+  const { after } = version?.document ?? {};
+  if (version === undefined || after?.kind !== 'booking' || after.bookingPageId !== pageId) return undefined;
+  return { id: row.id, document: version.document, answers: row.answers };
+}
+
+/**
+ * The name and email a hand off's submission gave (AC-1058), for the booking
+ * page `pageId` its form sends visitors on to; empty for any other.
  */
 export async function handoffVisitor(
   tx: WorkspaceTx,
   submissionId: string,
+  pageId: string,
 ): Promise<{ readonly name?: string; readonly email?: string }> {
-  const [row] = await tx
-    .select({ versionId: formSubmissions.versionId, answers: formSubmissions.answers })
-    .from(formSubmissions)
-    .where(eq(formSubmissions.id, submissionId));
-  if (row === undefined) return {};
-  const version = (await loadVersions(tx, [row.versionId])).get(row.versionId);
+  const found = await handedOff(tx, submissionId, pageId);
+  if (found === undefined) return {};
   const answers =
-    typeof row.answers === 'object' && row.answers !== null ? (row.answers as Record<string, unknown>) : {};
-  return version === undefined ? {} : visitorOf(version.document, answers);
+    typeof found.answers === 'object' && found.answers !== null ? (found.answers as Record<string, unknown>) : {};
+  return visitorOf(found.document, answers);
+}
+
+/** The submission a booking on page `pageId` links to (AC-1058): one this page's form handed on, else undefined. */
+export async function handoffSubmission(
+  tx: WorkspaceTx,
+  submissionId: string,
+  pageId: string,
+): Promise<string | undefined> {
+  return (await handedOff(tx, submissionId, pageId))?.id;
 }
 
 /** What a form that isn't taking enquiries answers at its link (AC-549, AC-662). */
@@ -325,12 +356,16 @@ export async function submitForm(
         .returning({ id: formSubmissions.id });
       const [row] = inserted;
       if (row === undefined) {
-        // A retry: the same next step, handed off for the submission the first attempt stored.
+        // A retry: the same next step, handed off for the submission the first attempt stored, but only to the
+        // same answers from the same address. Anyone else repeating a key gets the thank you, never a token for
+        // someone else's name and email (security review, 21 October 2026).
         const [first] = await tx
-          .select({ id: formSubmissions.id })
+          .select({ id: formSubmissions.id, ipHash: formSubmissions.ipHash, answersHash: formSubmissions.answersHash })
           .from(formSubmissions)
           .where(and(eq(formSubmissions.formId, form.id), eq(formSubmissions.idempotencyKey, body.idempotencyKey)));
-        const again = await nextOf(tx, live.document, first?.id, input.signHandoff);
+        const same =
+          first !== undefined && first.ipHash === (input.ipHash ?? null) && first.answersHash === (hash ?? null);
+        const again = await nextOf(tx, live.document, same ? first.id : undefined, input.signHandoff);
         return { next: again, verdict: judged.verdict, replayed: true };
       }
       if (state === 'received') {

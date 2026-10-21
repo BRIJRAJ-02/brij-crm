@@ -548,7 +548,7 @@ function Booking({
     viewer?.canConnect === true && (person === undefined || person.source === 'google')
       ? client.connectUrl(
           page.publicKey,
-          returnPath(page.publicKey, { duration, zone, ...(day === undefined ? {} : { day }) }, handoff),
+          returnPath(page.publicKey, { duration, zone, ...(day === undefined ? {} : { day }) }),
         )
       : undefined;
   const barCalendar =

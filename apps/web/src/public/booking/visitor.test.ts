@@ -15,8 +15,6 @@ describe('the return address', () => {
       result: 'connected',
     });
     expect(returnPath(KEY, {})).toBe(`/b/${KEY}`);
-    // A form's hand off comes back with the visitor, so the prefill and the link survive a connect.
-    expect(returnPath(KEY, {}, 'fb1.abc.def')).toBe(`/b/${KEY}?p=fb1.abc.def`);
   });
 
   it('drops anything malformed, and an unknown result', () => {
@@ -24,8 +22,10 @@ describe('the return address', () => {
     expect(readReturn(back)).toEqual({ chosen: {} });
   });
 
-  it('tidies the address after, keeping anything else', () => {
-    expect(tidiedAddress(new URL(`https://app.test/b/${KEY}?d=30&calendar=denied&p=x`))).toBe(`/b/${KEY}?p=x`);
+  it('tidies the address after, keeping anything else, and never a hand off', () => {
+    expect(tidiedAddress(new URL(`https://app.test/b/${KEY}?d=30&calendar=denied&p=x&utm_source=news`))).toBe(
+      `/b/${KEY}?utm_source=news`,
+    );
     expect(tidiedAddress(new URL(`https://app.test/b/${KEY}`))).toBeUndefined();
   });
 });

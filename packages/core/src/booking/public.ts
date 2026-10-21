@@ -17,7 +17,7 @@
 //    their email, in a savepoint, so a record refusal never loses the booking.
 // 4. After the commit, the calendar event (three tries); a booking whose event
 //    failed stays confirmed and is marked for the host.
-import { handoffVisitor } from '../forms/public.ts';
+import { handoffSubmission, handoffVisitor } from '../forms/public.ts';
 import { randomUUID } from 'node:crypto';
 import { and, eq, inArray, sql } from 'drizzle-orm';
 import type {
@@ -54,7 +54,7 @@ import { MAX_RESCHEDULES } from './change.ts';
 import { enqueueBookingMail, recordEvent } from './mail-queue.ts';
 import { ensureManageToken, manageTokenFor, type ManageLinkKey } from './tokens.ts';
 
-const { bookings, formSubmissions, members, workspaces } = schema;
+const { bookings, members, workspaces } = schema;
 
 /** What the public services need: the calendar calls, the manage link key, and the clock. */
 export interface PublicBookingDeps {
@@ -324,16 +324,9 @@ export async function bookPublicSlot(
       const actor = { type: 'booking' as const, id: page.id, memberId: null };
       let bookingId: string;
       try {
-        // A hand off names a submission; it is linked only when it is this workspace's.
-        const submissionId =
-          link === undefined
-            ? undefined
-            : (
-                await tx
-                  .select({ id: formSubmissions.id })
-                  .from(formSubmissions)
-                  .where(eq(formSubmissions.id, link.submissionId))
-              )[0]?.id;
+        // A hand off names a submission; it is linked only when it is this workspace's and its form sends its
+        // visitors on to this very page.
+        const submissionId = link === undefined ? undefined : await handoffSubmission(tx, link.submissionId, page.id);
         const [row] = await tx
           .insert(bookings)
           .values({
@@ -461,7 +454,7 @@ export async function readHandoffPrefill(
   submissionId: string,
 ): Promise<{ readonly name?: string; readonly email?: string }> {
   checkEntry(entry);
-  return inWorkspace(entry.scope, (tx) => handoffVisitor(tx, submissionId));
+  return inWorkspace(entry.scope, (tx) => handoffVisitor(tx, submissionId, entry.pageId));
 }
 
 /**

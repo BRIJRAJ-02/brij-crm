@@ -509,7 +509,7 @@ export function mountPublicBooking(app: Hono<{ Variables: Variables }>, services
         ...(visitor.name === undefined ? {} : { name: visitor.name }),
         ...(visitor.email === undefined ? {} : { email: visitor.email }),
       };
-      return c.json(prefill, 200, { 'cache-control': 'no-store' });
+      return ok(prefill);
     } catch (error) {
       return refusalAnswer(error);
     }

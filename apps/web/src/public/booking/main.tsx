@@ -8,7 +8,7 @@ import { BookingMessage, BookingProvider } from '@crm/ui/public-booking';
 import { lazy, StrictMode, Suspense } from 'react';
 import { createRoot } from 'react-dom/client';
 import { BookingPage } from './BookingPage.tsx';
-import { readHandoff } from './prefill.ts';
+import { forgetHandoff, takeHandoff, type HandoffStorage } from './prefill.ts';
 import { strings } from './strings.ts';
 
 // The guest page loads on its own: a visitor booking never downloads its changes (move, guests, cancel).
@@ -24,7 +24,16 @@ const publicKey = decodeURIComponent(path?.[1] ?? '');
 const isManage = path?.[2] !== undefined;
 const locale = navigator.languages[0] ?? 'en-US';
 const now = () => Date.now();
-const handoff = readHandoff(address);
+// A form's hand off leaves the address at once, kept in the tab's session storage (prefill.ts).
+const storage = ((): HandoffStorage | undefined => {
+  try {
+    return globalThis.sessionStorage;
+  } catch {
+    return undefined;
+  }
+})();
+const { handoff, tidied } = isManage ? {} : takeHandoff(address, publicKey, storage);
+if (tidied !== undefined) globalThis.history.replaceState(globalThis.history.state, '', tidied);
 
 const timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone;
 
@@ -47,11 +56,12 @@ createRoot(root).render(
           timeZone={timeZone}
           now={now}
           {...(handoff === undefined ? {} : { handoff })}
-          onBooked={(token) =>
+          onBooked={(token) => {
+            forgetHandoff(publicKey, storage);
             globalThis.location.assign(
               `/b/${encodeURIComponent(publicKey)}/manage?${new URLSearchParams({ t: token, welcome: '1' }).toString()}`,
-            )
-          }
+            );
+          }}
         />
       )}
     </BookingProvider>
