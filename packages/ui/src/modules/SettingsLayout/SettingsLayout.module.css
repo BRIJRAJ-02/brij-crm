@@ -208,14 +208,6 @@
     min-inline-size: 0;
   }
 
-  /* Cards side by side: as many columns as keep each at least the panel's width, one on a phone. */
-  .grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(min(100%, var(--size-panel)), 1fr));
-    gap: var(--space-16);
-    align-items: start;
-  }
-
   /* Page layout: the media query, so the split is the same on every settings page at one window width. */
   @media (width >= 1024px) {
     .section {

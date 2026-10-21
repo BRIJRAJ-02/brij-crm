@@ -4,7 +4,7 @@ Cards side by side that wrap: Home's Today, Tasks due and Needs attention (spec 
 
 ## Why it exists
 
-New. Screens can't lay out cards themselves (no styles in `apps/web`). PageColumn stacks its children in one column, and its side column is one fixed panel beside a main column, not a run of equal tiles. LinkGrid draws its own link cards, not any Card. The Dashboard module in the inventory (#52, tiles in three sizes that move by drag) is a larger thing for reports; this is only the layout, and that module can build on it.
+New, and the one grid of cards: SettingsLayout's `SettingsGrid` drew the same grid with its own CSS and now renders TileGrid's `fill` variant. Screens can't lay out cards themselves (no styles in `apps/web`). PageColumn stacks its children in one column, and its side column is one fixed panel beside a main column, not a run of equal tiles. LinkGrid draws its own link cards, not any Card. The Dashboard module in the inventory (#52, tiles in three sizes that move by drag) is a larger thing for reports; this is only the layout, and that module can build on it.
 
 ## Use
 
@@ -20,6 +20,7 @@ New. Screens can't lay out cards themselves (no styles in `apps/web`). PageColum
 - As many columns as fit with each at least `size-panel` (400px) wide, sharing the width; under that, one column at the grid's full width, so a phone never scrolls sideways.
 - Tiles keep their own height (`align-items: start`), so a short card's frame ends at its last row.
 - A tile that renders nothing (`null`) takes no cell, so the rest close up.
+- `fill="fill"` keeps the empty tracks, so every tile has one width however many there are (SettingsGrid: one card per calendar). `fit`, the default, shares the width among the tiles there are.
 - The tiles keep their order: reading and Tab order follow the DOM, left to right, then down.
 
 ## States

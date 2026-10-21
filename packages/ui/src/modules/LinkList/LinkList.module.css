@@ -267,6 +267,8 @@
   /* The facts never take more than a wide column; past that they clip, so a long one can't squeeze the titles. */
   .facts {
     display: flex;
+    align-items: center;
+    gap: var(--space-8);
     min-inline-size: 0;
     max-inline-size: var(--size-column-wide);
     overflow: hidden;

@@ -16,7 +16,7 @@ Reasoning and options: see [rationale.md](rationale.md).
 |---|---|---|---|
 | Finish setting up | a step the member may do is still open | `calendar.view`, `bookingPages.view`, `forms.view`, `members.list`, `invitations.list`, `access.mine` | see Setup below |
 | Today | the member has a booking or a calendar event today | `bookings.calendar(today's midnight, tomorrow's)` | bookings the member hosts that aren't cancelled, and the member's own calendar events that aren't cancelled, by start; split into Earlier (started) and Next |
-| Tasks due | the member has open tasks assigned to them | `tasks.mine('assigned', 'open')`, the list My tasks holds | the first 5, earliest due first, no date last; ticking one is the same optimistic `tasks.setDone` |
+| Tasks due | the member has open tasks assigned to them | `tasks.mine('assigned', 'open')`, the list My tasks holds | the first 5, earliest due first, no date last, the rest counted; ticking one is the same optimistic `tasks.setDone` |
 | Needs attention | an open deal the member owns has gone quiet | `records.view(deals, filter, sort)`, a records window | see Needs attention below |
 
 A section with nothing in it is left out, not drawn empty (timefix, owner, 17 September 2026: "a panel that appears every day saying nothing is wrong is a panel people stop seeing"). When every section is left out, Home says so once, in one EmptyState.
@@ -44,7 +44,7 @@ Each step is shown only to a member who may do it. Done when:
 | Create a form | `forms.manage` | the workspace has a form |
 | Invite your team | `members.invite` | another member, or an invitation waiting |
 
-The first open step carries the primary button; every row opens the page where the step is done. The card goes once every step shown is done. "Not now" (hiding it while steps are open) needs a per member preference the server doesn't keep yet, so it is left out.
+The first open step carries the primary button; every row opens the page where the step is done. A step the member may not take is never read. The card goes once every step shown is done. "Not now" (hiding it while steps are open) needs a per member preference the server doesn't keep yet, so it is left out.
 
 ## Acceptance criteria
 

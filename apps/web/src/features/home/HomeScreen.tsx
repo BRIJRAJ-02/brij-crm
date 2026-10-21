@@ -4,6 +4,7 @@
 // Leaves out: the assistant, Team today, the metrics band and the open hours line (no data yet), and any card with nothing in it.
 import type {
   BookingsCalendarState,
+  CaptureListView,
   InvitationView,
   MemberSummary,
   ObjectSummary,
@@ -13,8 +14,10 @@ import type {
   TaskListState,
   ViewState,
 } from '@crm/data';
+import { toFieldAttribute } from '@crm/data';
 import { useBookingsCalendar, useCalendar, useCaptureList, useTaskList, useView } from '@crm/data/react';
 import {
+  AttributeDisplay,
   BookingList,
   Button,
   Card,
@@ -27,8 +30,10 @@ import {
   TopBar,
   type BookingListGroup,
   type LinkRow,
+  type ListSource,
+  type TaskEntry,
 } from '@crm/ui';
-import { useNavigate, useRouteContext } from '@tanstack/react-router';
+import { useNavigate, useRouteContext, useRouter } from '@tanstack/react-router';
 import { useEffect, useMemo, type ReactNode } from 'react';
 import { providerOf } from '../bookings/provider.ts';
 import { useNow } from '../bookings/useNow.ts';
@@ -57,8 +62,8 @@ export interface HomeScreenProps {
   readonly members: readonly MemberSummary[];
   readonly meId: string | undefined;
   readonly permissions: readonly Permission[];
-  /** My open tasks assigned to me: the list My tasks holds. */
-  readonly tasks: TaskListSource;
+  /** My open tasks assigned to me: the list My tasks holds; undefined when it couldn't be opened. */
+  readonly tasks: TaskListSource | undefined;
   /** Undefined when the workspace has no Deals to ask about. */
   readonly attention: HomeAttention | undefined;
   /** Open invitations, read only for a member who may invite. */
@@ -67,6 +72,9 @@ export interface HomeScreenProps {
 
 /** The browser's time zone, the one My tasks and Bookings draw days in. */
 const browserZone = () => Intl.DateTimeFormat().resolvedOptions().timeZone;
+
+/** The browser's language, the one Bookings formats times in. */
+const locale = () => navigator.languages[0] ?? 'en-GB';
 
 /** Home: Finish setting up, then Today, Tasks due and Needs attention side by side. */
 export function HomeScreen(props: HomeScreenProps) {
@@ -79,7 +87,7 @@ export function HomeScreen(props: HomeScreenProps) {
 }
 
 function WithAttention(props: HomeScreenProps & { readonly attention: HomeAttention }) {
-  const state = useView(props.attention.view, [props.attention.plan.stageId]);
+  const state = useView(props.attention.view, [props.attention.plan.stage.id]);
   const { onRangeChange } = state.source;
   // The first rows only: Home shows a handful and counts the rest.
   useEffect(() => {
@@ -87,6 +95,16 @@ function WithAttention(props: HomeScreenProps & { readonly attention: HomeAttent
   }, [onRangeChange]);
   return <HomeBody {...props} attentionState={state} />;
 }
+
+/** A task list that never loads: the shape Tasks due holds when My tasks couldn't be opened. */
+const NO_TASKS: TaskListState = {
+  status: 'error',
+  source: { count: 0, getItem: () => undefined, getKey: (task) => task.id, onRangeChange: () => undefined },
+  newIds: new Set(),
+  hasMore: false,
+  loadingMore: false,
+  loaded: 0,
+};
 
 function HomeBody({
   slug,
@@ -100,24 +118,33 @@ function HomeBody({
   attentionState,
 }: HomeScreenProps & { readonly attentionState: ViewState | undefined }) {
   const { data } = useRouteContext({ from: '__root__' });
+  const router = useRouter();
   const timeZone = useMemo(() => browserZone(), []);
   const today = useToday(timeZone);
   const range = useMemo(() => dayRange(today), [today]);
   const day = useBookingsCalendar(
     useMemo(() => data.bookings.calendar(slug, range.from, range.to), [data, slug, range]),
   );
-  const taskState = useTaskList(tasks);
+  const taskState = useTasks(tasks);
   const setup = useSetupFacts(slug, meId, permissions, members, invitations);
 
-  const steps = setupSteps(setup);
+  // Needs attention asks about the day it was opened on; a tab left open overnight asks again.
+  useEffect(() => {
+    if (attention !== undefined && attention.plan.today !== today) void router.invalidate();
+  }, [attention, today, router]);
+
+  const steps = setupSteps(setup.facts);
   const agenda = useMemo(() => (day.status === 'ready' ? agendaOf(day, meId) : []), [day, meId]);
-  const isQuiet =
-    steps.every((step) => step.done) &&
-    day.status === 'ready' &&
-    agenda.length === 0 &&
-    taskState.status === 'ready' &&
-    taskState.source.count === 0 &&
-    (attentionState === undefined || (attentionState.status === 'ready' && attentionState.count.count === 0));
+  // What each section shows: decided once here, for the cards and for the page's quiet state alike.
+  const showsSetup = !setup.isLoading && nextStep(steps) !== undefined;
+  const showsToday = day.status !== 'ready' || agenda.length > 0;
+  const showsTasks =
+    taskState.status !== 'unavailable' && !(taskState.status === 'ready' && taskState.source.count === 0);
+  const showsAttention =
+    attentionState !== undefined &&
+    !(attentionState.status === 'ready' && attentionState.count.count === 0) &&
+    !(attentionState.status === 'error' && isAbsent(attentionState.error?.code));
+  const isQuiet = !setup.isLoading && !showsSetup && !showsToday && !showsTasks && !showsAttention;
 
   return (
     <WorkspacePage
@@ -132,11 +159,19 @@ function HomeBody({
           </PageColumn>
         ) : (
           <PageColumn>
-            <SetupCard slug={slug} facts={setup} />
+            {showsSetup && <SetupCard slug={slug} facts={setup.facts} />}
             <TileGrid>
-              <TodayCard slug={slug} objects={objects} today={today} state={day} agenda={agenda} />
-              <TasksDueCard slug={slug} objects={objects} members={members} list={tasks} state={taskState} />
-              {attention !== undefined && attentionState !== undefined && (
+              {showsToday && <TodayCard slug={slug} objects={objects} today={today} state={day} agenda={agenda} />}
+              {showsTasks && (
+                <TasksDueCard
+                  slug={slug}
+                  objects={objects}
+                  members={members}
+                  {...(tasks === undefined ? {} : { list: tasks })}
+                  state={taskState}
+                />
+              )}
+              {showsAttention && attention !== undefined && (
                 <AttentionCard
                   slug={slug}
                   objects={objects}
@@ -153,6 +188,46 @@ function HomeBody({
   );
 }
 
+/** Refusals that mean there is nothing to ask (the filter no longer fits Deals, or Deals are out of reach): absent. */
+function isAbsent(code: string | undefined): boolean {
+  return code === 'FILTER_INVALID' || code === 'NOT_FOUND';
+}
+
+/** A task list that is never read, failed: what Tasks due holds when My tasks couldn't be opened. */
+const FAILED_TASKS: TaskListSource = {
+  subscribe: () => () => undefined,
+  getSnapshot: () => NO_TASKS,
+  retain: () => () => undefined,
+  ready: () => Promise.resolve(),
+  retry: () => undefined,
+  more: () => Promise.resolve(),
+};
+
+/** My open tasks' state, or a failed one when the list couldn't be opened (the card's Try again loads Home again). */
+function useTasks(tasks: TaskListSource | undefined): TaskListState {
+  return useTaskList(tasks ?? FAILED_TASKS);
+}
+
+/** The setup steps' facts, and whether any of them is still loading. */
+interface SetupRead {
+  readonly facts: SetupFacts;
+  readonly isLoading: boolean;
+}
+
+/** An empty list that is never read: a step the member may not take holds this, so nothing is fetched for it. */
+function idleList<Item>(): CaptureListView<Item> {
+  return {
+    subscribe: () => () => undefined,
+    getSnapshot: () => IDLE,
+    retain: () => () => undefined,
+    ready: () => Promise.resolve(),
+    reload: () => undefined,
+  };
+}
+
+/** The idle list's one snapshot (immutable), so React sees the same state every time it asks. */
+const IDLE = { status: 'ready', items: [], pendingIds: new Set<string>() } as const;
+
 /** What the setup steps are read from, each only for a member who may take that step. */
 function useSetupFacts(
   slug: string,
@@ -160,23 +235,31 @@ function useSetupFacts(
   permissions: readonly Permission[],
   members: readonly MemberSummary[],
   invitations: readonly InvitationView[] | undefined,
-): SetupFacts {
+): SetupRead {
   const { data } = useRouteContext({ from: '__root__' });
+  const mayPages = permissions.includes('booking.manage');
+  const mayForms = permissions.includes('forms.manage');
   const calendar = useCalendar(useMemo(() => data.calendar.view(slug), [data, slug]));
-  const pages = useCaptureList(useMemo(() => data.bookingPages.view(slug), [data, slug]));
-  const forms = useCaptureList(useMemo(() => data.forms.view(slug), [data, slug]));
-  const may = (permission: Permission) => permissions.includes(permission);
+  const pages = useCaptureList(
+    useMemo(() => (mayPages ? data.bookingPages.view(slug) : idleList<never>()), [data, slug, mayPages]),
+  );
+  const forms = useCaptureList(
+    useMemo(() => (mayForms ? data.forms.view(slug) : idleList<never>()), [data, slug, mayForms]),
+  );
   return {
-    ...(calendar.status === 'ready' && calendar.enabled
-      ? { calendars: calendar.connections.map((connection) => connection.accountEmail) }
-      : {}),
-    ...(may('booking.manage') && pages.status === 'ready'
-      ? { bookingPages: pages.items.filter((page) => page.ownerMemberId === meId).length }
-      : {}),
-    ...(may('forms.manage') && forms.status === 'ready' ? { forms: forms.items.length } : {}),
-    ...(may('members.invite') && invitations !== undefined
-      ? { team: { members: members.length, invited: invitations.filter((each) => !each.isExpired).length } }
-      : {}),
+    isLoading: calendar.status === 'loading' || pages.status === 'loading' || forms.status === 'loading',
+    facts: {
+      ...(calendar.status === 'ready' && calendar.enabled
+        ? { calendars: calendar.connections.map((connection) => connection.accountEmail) }
+        : {}),
+      ...(mayPages && pages.status === 'ready'
+        ? { bookingPages: pages.items.filter((page) => page.ownerMemberId === meId).length }
+        : {}),
+      ...(mayForms && forms.status === 'ready' ? { forms: forms.items.length } : {}),
+      ...(permissions.includes('members.invite') && invitations !== undefined
+        ? { team: { members: members.length, invited: invitations.filter((each) => !each.isExpired).length } }
+        : {}),
+    },
   };
 }
 
@@ -202,7 +285,6 @@ function SetupCard({ slug, facts }: { readonly slug: string; readonly facts: Set
   const navigate = useNavigate();
   const steps = setupSteps(facts);
   const next = nextStep(steps);
-  if (next === undefined) return null;
   const left = steps.filter((step) => !step.done).length;
   const open = (id: SetupStepId) => {
     switch (id) {
@@ -285,11 +367,11 @@ function valueOf(id: SetupStepId, facts: SetupFacts): string {
     case 'form':
       return facts.forms === undefined || facts.forms === 0 ? strings.noneYet : strings.forms(facts.forms);
     case 'invite':
-      return facts.team === undefined || facts.team.members <= 1 ? strings.justYou : strings.people(facts.team.members);
+      if (facts.team === undefined) return strings.justYou;
+      if (facts.team.members > 1) return strings.people(facts.team.members);
+      return facts.team.invited > 0 ? strings.invited(facts.team.invited) : strings.justYou;
   }
 }
-
-const locale = () => navigator.languages[0] ?? 'en-GB';
 
 /** Today: the member's bookings and calendar events, those that ended under Earlier, the rest under Coming up. */
 function TodayCard({
@@ -310,7 +392,6 @@ function TodayCard({
   const now = useNow();
   const link = useMemo(() => recordLinks(slug, objects), [slug, objects]);
   const people = objects.find((object) => object.standardKey === 'people');
-  if (state.status === 'ready' && agenda.length === 0) return null;
   const openDay = () => {
     void navigate({ to: '/w/$slug/bookings/calendar', params: { slug }, search: { d: today } });
   };
@@ -320,7 +401,7 @@ function TodayCard({
       isBusy={isBusy}
       actions={
         <Button variant="ghost" onPress={openDay}>
-          {strings.allBookings}
+          {strings.calendar}
         </Button>
       }
     >
@@ -360,12 +441,35 @@ function TodayCard({
     ...(earlier.length === 0 ? [] : [{ id: 'earlier', label: strings.earlier, rows: earlier.map(rowOf) }]),
     ...(next.length === 0 ? [] : [{ id: 'next', label: strings.comingUp, rows: next.map(rowOf) }]),
   ];
-  return frame(<BookingList label={strings.today} groups={groups} onOpen={openDay} />);
+  return frame(<BookingList label={strings.today} placement="card" groups={groups} onOpen={openDay} />);
 }
 
 /** "30 min", "1 hr", "1 hr 30 min". */
 function lengthOf(minutes: number): string {
   return minutes < 60 ? strings.minutes(minutes) : strings.hours(Math.floor(minutes / 60), minutes % 60);
+}
+
+/**
+ * The task entries without their assignee: every task here is the member's own, so the same face on every row
+ * says nothing. Each entry is copied once and kept while its task stays the same object.
+ */
+function useOwnEntries(source: ListSource<TaskEntry>): ListSource<TaskEntry> {
+  const cache = useMemo(() => ({ entries: new WeakMap<TaskEntry, TaskEntry>() }), []);
+  return useMemo(
+    () => ({
+      ...source,
+      getItem: (index: number) => {
+        const entry = source.getItem(index);
+        if (entry === undefined) return undefined;
+        const held = cache.entries.get(entry);
+        if (held !== undefined) return held;
+        const { assignee: _assignee, ...own } = entry;
+        cache.entries.set(entry, own);
+        return own;
+      },
+    }),
+    [source, cache],
+  );
 }
 
 /** Tasks due: the first five of My tasks' open list, earliest due first; a tick is the same one My tasks makes. */
@@ -379,18 +483,27 @@ function TasksDueCard({
   readonly slug: string;
   readonly objects: readonly ObjectSummary[];
   readonly members: readonly MemberSummary[];
-  readonly list: TaskListSource;
+  readonly list?: TaskListSource;
   readonly state: TaskListState;
 }) {
   const { data } = useRouteContext({ from: '__root__' });
+  const router = useRouter();
   const navigate = useNavigate();
-  const entries = useTaskEntries(state.source, members);
+  const entries = useOwnEntries(useTaskEntries(state.source, members));
   const link = useMemo(() => recordLinks(slug, objects), [slug, objects]);
-  if ((state.status === 'ready' && state.source.count === 0) || state.status === 'unavailable') return null;
+  const count = state.source.count;
+  const hidden = count - TASKS_SHOWN;
+  const footer =
+    state.status !== 'ready' || hidden <= 0
+      ? undefined
+      : state.hasMore
+        ? strings.moreInTasks
+        : strings.moreTasks(hidden);
   return (
     <Card
       title={strings.tasksDue}
       isBusy={state.status === 'loading'}
+      {...(footer === undefined ? {} : { footer })}
       actions={
         <Button
           variant="ghost"
@@ -407,10 +520,13 @@ function TasksDueCard({
         layout="inline"
         maxRows={TASKS_SHOWN}
         tasks={entries}
-        status={state.status}
-        onRetry={list.retry}
+        status={state.status === 'unavailable' ? 'no-access' : state.status}
+        onRetry={() => {
+          if (list === undefined) void router.invalidate();
+          else list.retry();
+        }}
         newIds={state.newIds}
-        emptyTitle={strings.tasksDue}
+        emptyTitle={strings.noTasksDue}
         recordHref={(record) => link(record.objectId, record.recordId)}
         onToggle={(task, isDone) => {
           void data.tasks.setDone(slug, task.id, isDone);
@@ -439,20 +555,12 @@ function AttentionCard({
 }) {
   const navigate = useNavigate();
   const link = useMemo(() => recordLinks(slug, objects), [slug, objects]);
+  const stage = useMemo(() => toFieldAttribute(plan.stage), [plan.stage]);
   const deals = objects.find((object) => object.id === plan.objectId);
-  // Refused (the filter no longer fits the object) or out of reach reads as nothing to say, not a failure.
-  if (state.status === 'ready' && state.count.count === 0) return null;
-  if (
-    state.status === 'error' &&
-    state.error?.code !== undefined &&
-    ['FILTER_INVALID', 'NOT_FOUND'].includes(state.error.code)
-  ) {
-    return null;
-  }
   const openDeals = () => {
     if (deals !== undefined) void navigate({ to: '/w/$slug/objects/$object', params: { slug, object: deals.apiSlug } });
   };
-  const frame = (body: ReactNode, isBusy = false, footer?: string) => (
+  const frame = (body: ReactNode, isBusy: boolean, footer?: string) => (
     <Card
       title={strings.needsAttention}
       description={strings.attentionText}
@@ -461,7 +569,7 @@ function AttentionCard({
       actions={
         deals === undefined ? undefined : (
           <Button variant="ghost" onPress={openDeals}>
-            {strings.allDeals}
+            {strings.openDeals}
           </Button>
         )
       }
@@ -477,19 +585,20 @@ function AttentionCard({
         {...(state.error === undefined ? {} : { message: state.error.message })}
         onRetry={view.retry}
       />,
+      false,
     );
   }
-  const date = new Intl.DateTimeFormat(locale(), { day: 'numeric', month: 'short' });
+  const date = new Intl.DateTimeFormat(locale(), { day: 'numeric', month: 'short', year: 'numeric' });
   const rows: LinkRow[] = [];
   for (let index = 0; index < Math.min(ATTENTION_SHOWN, state.source.count); index += 1) {
     const record = state.source.getItem(index);
     if (record === undefined) continue;
-    const stage = record.values[plan.stageId];
     const href = link(record.objectId, record.id);
     rows.push({
       id: record.id,
-      title: record.display.name,
-      address: typeof stage === 'string' ? (plan.stages.get(stage) ?? '') : '',
+      title: record.display.name === '' ? strings.unnamedDeal : record.display.name,
+      address: '',
+      value: <AttributeDisplay attribute={stage} value={record.values[plan.stage.id] ?? null} surface="card" />,
       chips: record.updatedAt === undefined ? [] : [strings.changed(date.format(new Date(record.updatedAt)))],
       ...(href === undefined ? {} : { href }),
     });
@@ -509,7 +618,7 @@ function AttentionCard({
         if (row?.href !== undefined) void navigate({ to: row.href });
       }}
     />,
-    false,
-    hidden > 0 ? strings.more(hidden) : undefined,
+    rows.length === 0,
+    hidden > 0 ? strings.more(hidden, state.count.atLeast) : undefined,
   );
 }

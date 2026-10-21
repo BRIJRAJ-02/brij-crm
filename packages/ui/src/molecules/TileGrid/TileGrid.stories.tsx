@@ -83,3 +83,44 @@ export const States: Story = {
     await expect(canvas.getByRole('button', { name: /try again/i })).toBeInTheDocument();
   },
 };
+
+/** A tile that renders nothing takes no cell: the two left share the row. */
+export const SomeEmpty: Story = {
+  parameters: { crm: { screenshot: false } },
+  render: () => (
+    <Stage width="fill">
+      <TileGrid>
+        <Card title="Today">
+          <p>Three meetings</p>
+        </Card>
+        {null}
+        <Card title="Needs attention">
+          <p>Northwind renewal</p>
+        </Card>
+      </TileGrid>
+    </Stage>
+  ),
+  play: async ({ canvasElement }) => {
+    const [first, second] = [...canvasElement.querySelectorAll('section')];
+    // Side by side on one row: no hole where the empty tile would be.
+    await expect(second?.getBoundingClientRect().top).toBe(first?.getBoundingClientRect().top);
+  },
+};
+
+/** Fill (SettingsGrid): empty tracks stay, so one card keeps a track's width rather than the whole row. */
+export const Fill: Story = {
+  render: () => (
+    <Stage width="fill">
+      <TileGrid fill="fill">
+        <Card title="Google Calendar">
+          <p>ada@example.com</p>
+        </Card>
+      </TileGrid>
+    </Stage>
+  ),
+  play: async ({ canvasElement }) => {
+    const card = canvasElement.querySelector('section');
+    const grid = card?.parentElement;
+    await expect(card?.getBoundingClientRect().width).toBeLessThan(grid?.getBoundingClientRect().width ?? 0);
+  },
+};
