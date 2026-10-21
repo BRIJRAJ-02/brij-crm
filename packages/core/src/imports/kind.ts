@@ -15,7 +15,10 @@ import { ImportSettings, type EngineRefusal } from '@crm/contracts';
 import { parseAttributeValue } from '@crm/contracts/values';
 import { schema, type WorkspaceTx } from '@crm/db';
 import { canonicalId } from '../engine/ids.ts';
+import { checkObject } from '../access/visibility.ts';
+import { limitsOf, takeRecordSlots } from '../engine/limits.ts';
 import { insertRecord, readRecords, updateRecord } from '../engine/records.ts';
+import { isRefusal, refuse } from '../engine/refusals.ts';
 import type { EngineScope } from '../engine/scope.ts';
 import { loadAttributes, type AttributeDef } from '../engine/values.ts';
 import type { WriteContext } from '../engine/write.ts';
@@ -23,7 +26,7 @@ import { defineKind, MAX_ATTEMPTS, type ItemOutcome, type KindDefinition } from 
 import { farObjects, namesOf, resolveLinks, type FarObject } from './links.ts';
 import { RECORDS_IMPORT, readableMatches } from './service.ts';
 
-const { importRows, imports } = schema;
+const { imports, objects, workspaceCounters } = schema;
 
 /** The kind's params: the import whose rows it writes. */
 export const ImportJobParams = z.strictObject({ importId: z.uuid() });
@@ -150,54 +153,86 @@ async function rowValues(
   return { values, notes };
 }
 
-/** Takes the match keys' locks in one order, so two imports of one new key meet in turn (two rows never both create). */
-async function lockKeys(tx: WorkspaceTx, plan: ImportPlan, keys: readonly string[]): Promise<void> {
-  const attributeId = plan.settings.matchAttributeId;
-  if (attributeId === undefined) return;
-  for (const key of [...keys].sort()) {
-    await tx.execute(
-      sql`select pg_advisory_xact_lock(hashtextextended(${`import-match:${plan.objectId}:${attributeId}:${key}`}, 0))`,
-    );
-  }
+/**
+ * What one batch holds for its rows (spec 0040's scale check): the records
+ * its match keys name (found once for the batch, then kept up to date as
+ * its rows create records), the room left under the record limit, and the
+ * outcomes to store, written in one statement when the batch ends, in the
+ * same transaction as the writes.
+ */
+interface BatchState {
+  readonly matches: Map<string, string>;
+  room: number;
+  created: number;
+  readonly stored: StoredOutcome[];
 }
 
-/** Writes one row inside its savepoint: matched, then created, updated or skipped by the rules, outcome stored. */
-async function importRow(context: WriteContext, plan: ImportPlan, row: StagedRow): Promise<RowResult> {
+/** One row's outcome as the batch stores it. */
+interface StoredOutcome {
+  readonly row_number: number;
+  readonly outcome: 'created' | 'updated' | 'skipped' | 'refused';
+  readonly record_id?: string;
+  readonly error_code?: string;
+  readonly error_message?: string;
+  readonly before?: unknown;
+  readonly written?: unknown;
+}
+
+/** Takes every match key's lock of the batch in one order, so two imports of one new key meet in turn (two rows never both create). */
+async function lockKeys(tx: WorkspaceTx, plan: ImportPlan, keys: readonly string[]): Promise<void> {
+  const attributeId = plan.settings.matchAttributeId;
+  if (attributeId === undefined || keys.length === 0) return;
+  const names = [...new Set(keys)].sort().map((key) => `import-match:${plan.objectId}:${attributeId}:${key}`);
+  await tx.execute(sql`
+    select pg_advisory_xact_lock(hashtextextended(name, 0))
+    from unnest(array(select jsonb_array_elements_text(${JSON.stringify(names)}::jsonb))) with ordinality as k(name, n)
+    order by n
+  `);
+}
+
+/** Writes one row inside its savepoint: matched, then created, updated or skipped by the rules; its outcome kept for the batch. */
+async function importRow(
+  context: WriteContext,
+  plan: ImportPlan,
+  row: StagedRow,
+  batch: BatchState,
+): Promise<{ readonly result: RowResult; readonly stored: StoredOutcome }> {
   const { tx, scope } = context;
   const { settings } = plan;
   const { values, notes } = await rowValues(context, plan, row.values);
   const note = notes.length === 0 ? undefined : notes.slice(0, 3).join(' ');
-  await lockKeys(tx, plan, row.match_keys);
+  const noted = note === undefined ? {} : { error_code: 'LINK_NOT_FOUND', error_message: note };
   const matchId =
-    settings.matchAttributeId === undefined || row.match_keys.length === 0
+    settings.matchAttributeId === undefined
       ? undefined
-      : [...(await readableMatches(tx, scope, plan.objectId, settings.matchAttributeId, row.match_keys)).values()][0];
-  const store = (set: Record<string, unknown>) =>
-    tx
-      .update(importRows)
-      .set({ ...set, errorCode: note === undefined ? null : 'LINK_NOT_FOUND', errorMessage: note ?? null })
-      .where(
-        and(
-          eq(importRows.workspaceId, scope.workspaceId),
-          eq(importRows.importId, plan.importId),
-          eq(importRows.rowNumber, row.row_number),
-        ),
-      );
+      : row.match_keys.map((key) => batch.matches.get(key)).find((id) => id !== undefined);
+  const base = { row_number: row.row_number, ...noted };
 
   if (matchId === undefined) {
-    if (settings.onNoMatch === 'skip') {
-      await store({ outcome: 'skipped' });
-      return { outcome: 'skipped' };
-    }
-    const created = await insertRecord(context, { objectId: plan.objectId, values: Object.fromEntries(values) });
-    await store({ outcome: 'created', recordId: created.recordId });
-    return { outcome: 'created', ...(note === undefined ? {} : { note }) };
+    if (settings.onNoMatch === 'skip')
+      return { result: { outcome: 'skipped' }, stored: { ...base, outcome: 'skipped' } };
+    // The record limit, counted for the batch: a row past it is refused as a create would be.
+    if (batch.room <= 0)
+      throw refuse(
+        'LIMIT_REACHED',
+        `This workspace holds at most ${limitsOf(scope).liveRecords.toLocaleString('en')} records.`,
+      );
+    const created = await insertRecord(
+      context,
+      { objectId: plan.objectId, values: Object.fromEntries(values) },
+      { attributes: plan.attributes, countsSlots: true },
+    );
+    return {
+      result: { outcome: 'created', ...(note === undefined ? {} : { note }) },
+      stored: { ...base, outcome: 'created', record_id: created.recordId },
+    };
   }
 
-  if (settings.onMatch === 'skip') {
-    await store({ outcome: 'skipped', recordId: matchId });
-    return { outcome: 'skipped' };
-  }
+  const skipped = {
+    result: { outcome: 'skipped' as const },
+    stored: { ...base, outcome: 'skipped' as const, record_id: matchId },
+  };
+  if (settings.onMatch === 'skip') return skipped;
   const ids = [...values.keys()];
   const [current] = await readRecords(tx, scope.access, [matchId], { attributeIds: ids });
   const next: Record<string, { value: unknown }> = {};
@@ -214,21 +249,51 @@ async function importRow(context: WriteContext, plan: ImportPlan, row: StagedRow
     const versionId = current?.versions[attributeId];
     before[attributeId] = versionId === undefined ? { value: held } : { value: held, versionId };
   }
-  if (Object.keys(next).length === 0) {
-    await store({ outcome: 'skipped', recordId: matchId });
-    return { outcome: 'skipped' };
-  }
+  if (Object.keys(next).length === 0) return skipped;
   const results = await updateRecord(context, { recordId: matchId, values: next });
   const written = Object.fromEntries(
     Object.entries(results).flatMap(([id, result]) => (result.versionId === undefined ? [] : [[id, result.versionId]])),
   );
-  if (Object.keys(written).length === 0) {
-    await store({ outcome: 'skipped', recordId: matchId });
-    return { outcome: 'skipped' };
-  }
+  if (Object.keys(written).length === 0) return skipped;
   const kept = Object.fromEntries(Object.entries(before).filter(([id]) => Object.hasOwn(written, id)));
-  await store({ outcome: 'updated', recordId: matchId, before: kept, written });
-  return { outcome: 'updated', ...(note === undefined ? {} : { note }) };
+  return {
+    result: { outcome: 'updated', ...(note === undefined ? {} : { note }) },
+    stored: { ...base, outcome: 'updated', record_id: matchId, before: kept, written },
+  };
+}
+
+/** Stores the batch's outcomes in one statement (each row by its number). */
+async function storeOutcomes(tx: WorkspaceTx, scope: EngineScope, importId: string, stored: readonly StoredOutcome[]) {
+  if (stored.length === 0) return;
+  await tx.execute(sql`
+    update import_rows as r set
+      outcome = v.outcome::import_row_outcome,
+      record_id = coalesce(v.record_id, r.record_id),
+      error_code = v.error_code,
+      error_message = v.error_message,
+      before = coalesce(v.before, r.before),
+      written = coalesce(v.written, r.written)
+    from jsonb_to_recordset(${JSON.stringify(stored)}::jsonb) as v(
+      row_number int, outcome text, record_id uuid, error_code text, error_message text, before jsonb, written jsonb
+    )
+    where r.workspace_id = ${scope.workspaceId} and r.import_id = ${importId} and r.row_number = v.row_number
+  `);
+}
+
+/** The records the workspace may still make under its limit, read once a batch. */
+async function recordRoom(tx: WorkspaceTx, scope: EngineScope): Promise<number> {
+  const [row] = await tx
+    .select({ liveRecords: workspaceCounters.liveRecords })
+    .from(workspaceCounters)
+    .where(eq(workspaceCounters.workspaceId, scope.workspaceId));
+  return limitsOf(scope).liveRecords - (row?.liveRecords ?? 0);
+}
+
+/** Refuses NOT_FOUND when the import's object is gone or archived. */
+async function liveImportObject(tx: WorkspaceTx, objectId: string): Promise<void> {
+  const [row] = await tx.select({ archivedAt: objects.archivedAt }).from(objects).where(eq(objects.id, objectId));
+  if (row === undefined) throw refuse('NOT_FOUND', 'That object does not exist.');
+  if (row.archivedAt !== null) throw refuse('NOT_FOUND', 'That object is archived. Restore it first.');
 }
 
 /** The import kind. */
@@ -255,6 +320,23 @@ export function recordsImport(): KindDefinition<ImportJobParams> {
           and id = any(array(select jsonb_array_elements_text(${JSON.stringify(items.map((item) => item.itemId))}::jsonb))::uuid[])
       `);
       const byId = new Map(found.rows.map((row) => [row.id, row]));
+      const pending = found.rows.filter((row) => row.outcome === 'pending');
+      // Once a batch, not once a row: the object still writable and live (a refusal ends the import with its
+      // words), every match key's lock, the records they name, and the room under the record limit.
+      try {
+        await checkObject(tx, scope.access, plan.objectId, 'write');
+        await liveImportObject(tx, plan.objectId);
+      } catch (error) {
+        if (!isRefusal(error) || error.refusal.code === 'QUERY_CANCELLED') throw error;
+        return { finished: false, failed: { code: error.refusal.code, message: error.refusal.message } };
+      }
+      const keys = pending.flatMap((row) => row.match_keys);
+      await lockKeys(tx, plan, keys);
+      const matches =
+        plan.settings.matchAttributeId === undefined
+          ? new Map<string, string>()
+          : new Map(await readableMatches(tx, scope, plan.objectId, plan.settings.matchAttributeId, keys));
+      const batch: BatchState = { matches, room: await recordRoom(tx, scope), created: 0, stored: [] };
       const outcomes: ItemOutcome[] = [];
       for (const item of items) {
         const row = byId.get(item.itemId);
@@ -263,24 +345,28 @@ export function recordsImport(): KindDefinition<ImportJobParams> {
           outcomes.push({ position: item.position, state: row?.outcome === 'refused' ? 'refused' : 'skipped' });
           continue;
         }
-        const result = await context.perRecord((inner) => importRow(inner, plan, row));
+        const result = await context.perRecord((inner) => importRow(inner, plan, row, batch));
         if (result.ok) {
-          outcomes.push({ position: item.position, state: result.value.outcome === 'skipped' ? 'skipped' : 'done' });
+          batch.stored.push(result.value.stored);
+          if (result.value.result.outcome === 'created' && result.value.stored.record_id !== undefined) {
+            // Later rows of this batch sharing a key act on the record this one made.
+            for (const key of row.match_keys) batch.matches.set(key, result.value.stored.record_id);
+            batch.room -= 1;
+            batch.created += 1;
+          }
+          outcomes.push({
+            position: item.position,
+            state: result.value.result.outcome === 'skipped' ? 'skipped' : 'done',
+          });
           continue;
         }
         const { code, message } = refusalText(result.refusals);
-        await tx
-          .update(importRows)
-          .set({ outcome: 'refused', errorCode: code, errorMessage: message })
-          .where(
-            and(
-              eq(importRows.workspaceId, scope.workspaceId),
-              eq(importRows.importId, plan.importId),
-              eq(importRows.rowNumber, row.row_number),
-            ),
-          );
+        batch.stored.push({ row_number: row.row_number, outcome: 'refused', error_code: code, error_message: message });
         outcomes.push({ position: item.position, state: 'refused', code, message });
       }
+      await storeOutcomes(tx, scope, plan.importId, batch.stored);
+      // The batch's record slots, taken last as every write takes the counter row.
+      if (batch.created > 0) await takeRecordSlots(tx, scope, batch.created);
       return { finished: false, items: outcomes };
     },
   });
