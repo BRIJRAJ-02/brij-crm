@@ -2311,6 +2311,33 @@ describe('deleting records, the state review (spec 0022)', () => {
   });
 });
 
+describe('a row held in place after a reload too big to name (spec 0022, AC-527)', () => {
+  it('reads a row this tab created again, and lets it go when the server no longer has it', async () => {
+    const { layer, view, creates, gets, queries, counts, tick, frame } = await readyView();
+    const made = layer.create(WS, PEOPLE, { [NAME]: 'Grace' });
+    await settle();
+    const id = creates[0]?.input.id ?? '';
+    creates[0]?.answer(rowOf(id, { [NAME]: 'Grace', created: at(30) }, { [NAME]: version(4) }, 30));
+    await made;
+    // A delete job took it elsewhere: its coarse event names nothing, and the rows on screen are read again first.
+    layer.reload(WS, PEOPLE);
+    tick(0);
+    await settle();
+    expect(gets).toHaveLength(0);
+    counts.at(-1)?.answer(3);
+    queries.at(-1)?.answer(block(0, 3));
+    await settle();
+    tick(0);
+    await settle();
+    expect(gets.map((get) => get.input)).toEqual([[id]]);
+    gets[0]?.answer([]);
+    await settle();
+    frame();
+    expect([...view.getSnapshot().gone]).toContain(id);
+    expect(view.getSnapshot().source.count).toBe(3);
+  });
+});
+
 describe('a delete job on the undo stack (spec 0022, AC-526)', () => {
   const JOB = '0199a6f2-0000-7000-8000-0000000009ab';
 

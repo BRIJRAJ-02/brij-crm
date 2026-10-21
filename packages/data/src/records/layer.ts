@@ -719,6 +719,12 @@ interface ViewEntry {
   /** A record made here was refused: it leaves. */
   readonly withdrawn: (id: string) => void;
   /**
+   * Lets go of the rows held in place (created here, or edited) whose records
+   * are gone on the server: they leave the screen, and the held rows below
+   * move up one each (spec 0022, AC-527: a coarse delete never names them).
+   */
+  readonly letGo: (ids: ReadonlySet<string>) => void;
+  /**
    * A board column (spec 0021): where a card is now, by its grouping value.
    * `here` true shows it in this column (in its place when the windows hold
    * it, else first, until the member leaves the board); false hides it here
@@ -1130,6 +1136,7 @@ export function createRecordsLayer({
    * the next settle reads it again (spec 0022).
    */
   const dropFrom = (entry: ViewEntry, gone: ReadonlySet<string>) => {
+    entry.letGo(gone);
     const held = [...gone].filter((id) => entry.windows.has(id)).length;
     entry.windows.drop(gone);
     const told = entry.windows.told();
@@ -1754,6 +1761,16 @@ export function createRecordsLayer({
         if (status !== 'ready') return;
         dirt.isDirty = true;
         void settle();
+        // Rows held in place here (one this tab created, marked new) stay through a settle even when its reread no
+        // longer finds them, and changes too many to name (a job's coarse delete) never say which went. Each is read
+        // again once the settle is done, unless the settle found it on screen, and one the server no longer answers
+        // leaves (spec 0022, AC-527).
+        const held = inner.pins().map((pin) => pin.id);
+        if (held.length > 0) {
+          for (const id of held) toConfirm.add(id);
+          confirmAskedAt = now();
+          scheduleConfirm();
+        }
       },
       markDirty,
       orderAttributes: () => orderAttributesOf(query, shape),
@@ -1797,6 +1814,18 @@ export function createRecordsLayer({
         if (!created.delete(id)) return;
         const rest = inner.pins().filter((pin) => pin.id !== id);
         inner.setPins(rest.map((pin) => ({ ...pin, index: pin.index - 1 })));
+      },
+      letGo: (ids) => {
+        const leaving = inner.pins().filter((pin) => ids.has(pin.id));
+        if (leaving.length === 0) return;
+        for (const pin of leaving) {
+          created.delete(pin.id);
+          movedIn.delete(pin.id);
+        }
+        const rest = inner.pins().filter((pin) => !ids.has(pin.id));
+        inner.setPins(
+          rest.map((pin) => ({ ...pin, index: pin.index - leaving.filter((gone) => gone.index < pin.index).length })),
+        );
       },
       isRetained: () => retains > 0,
       shows: (id) => windows.has(id) || inner.pins().some((pin) => pin.id === id),
