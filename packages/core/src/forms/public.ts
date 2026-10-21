@@ -6,11 +6,13 @@
 // rows and never a record. A submission is stored first, in one insert with
 // its job queued in the same transaction (AC-554); processing happens there.
 import {
+  BOOKING_COUNTDOWN,
   checkAnswers,
   storedContext,
   SubmitBody,
   type FormDocument,
   type PublicForm,
+  type Route,
   type SubmitNext,
 } from '@crm/contracts';
 import { schema, type WorkspaceTx } from '@crm/db';
@@ -23,6 +25,7 @@ import { inWorkspace } from '../access/run.ts';
 import { startJob } from '../jobs/service.ts';
 import type { JobRegistry } from '../jobs/registry.ts';
 import { FORMS_PROCESS } from './process.ts';
+import { routeSubmission, storedRoute, submissionDecision } from '../routing/forms.ts';
 import { loadForm, loadVersions, publicFormOf, workspacePublicKey, type FormRow } from './shared.ts';
 import {
   judgeSubmission,
@@ -75,31 +78,53 @@ export function visitorOf(
 }
 
 /**
- * The next step a stored submission gives (AC-570, AC-1057): the thank you,
- * the redirect, or the booking page with a signed hand off when that page is
- * live right now; a paused or deleted page falls back to the thank you.
+ * The next step a stored submission gives (AC-570, AC-1057; spec 0043,
+ * AC-1606): the routing rule's route when one matched, else the form's own
+ * After someone sends it: the thank you, the redirect, or the booking page
+ * with a signed hand off when that page is live right now; a paused or
+ * deleted page falls back to the thank you.
  */
 async function nextOf(
   tx: WorkspaceTx,
   document: FormDocument,
   submissionId: string | undefined,
   sign: SignHandoff | undefined,
+  route?: Route,
 ): Promise<SubmitNext> {
   const { after } = document;
+  if (route?.kind === 'message') return { kind: 'message', text: route.message, offersMeeting: false };
+  if (route?.kind === 'redirect') return { kind: 'redirect', url: route.url };
+  if (route?.kind === 'book' && submissionId !== undefined) {
+    const countdownSeconds = after.kind === 'booking' ? after.countdownSeconds : BOOKING_COUNTDOWN.default;
+    const routed = await bookingNext(tx, route.bookingPageId, submissionId, sign, countdownSeconds, route.message);
+    if (routed !== undefined) return routed;
+  }
   if (after.kind === 'redirect') return { kind: 'redirect', url: after.url };
   if (after.kind === 'message') return { kind: 'message', text: after.message, offersMeeting: false };
+  const booked =
+    submissionId === undefined
+      ? undefined
+      : await bookingNext(tx, after.bookingPageId, submissionId, sign, after.countdownSeconds, after.message);
+  return booked ?? { kind: 'message', text: after.message, offersMeeting: false };
+}
+
+/** On to a booking page with a signed hand off, when the page is live; undefined when it is paused or gone. */
+async function bookingNext(
+  tx: WorkspaceTx,
+  bookingPageId: string,
+  submissionId: string,
+  sign: SignHandoff | undefined,
+  countdownSeconds: number,
+  text: string,
+): Promise<SubmitNext | undefined> {
   const [page] = await tx
     .select({ publicKey: bookingPages.publicKey })
     .from(bookingPages)
-    .where(
-      and(eq(bookingPages.id, after.bookingPageId), eq(bookingPages.status, 'live'), isNull(bookingPages.deletedAt)),
-    );
-  if (page === undefined || submissionId === undefined) {
-    return { kind: 'message', text: after.message, offersMeeting: false };
-  }
-  const token = sign?.({ submissionId, bookingPageId: after.bookingPageId });
+    .where(and(eq(bookingPages.id, bookingPageId), eq(bookingPages.status, 'live'), isNull(bookingPages.deletedAt)));
+  if (page === undefined) return undefined;
+  const token = sign?.({ submissionId, bookingPageId });
   const url = `/b/${encodeURIComponent(page.publicKey)}${token === undefined ? '' : `?p=${encodeURIComponent(token)}`}`;
-  return { kind: 'booking', url, countdownSeconds: after.countdownSeconds, text: after.message };
+  return { kind: 'booking', url, countdownSeconds, text };
 }
 
 /**
@@ -116,8 +141,13 @@ async function handedOff(tx: WorkspaceTx, submissionId: string, pageId: string) 
     .where(eq(formSubmissions.id, submissionId));
   if (row === undefined) return undefined;
   const version = (await loadVersions(tx, [row.versionId])).get(row.versionId);
-  const { after } = version?.document ?? {};
-  if (version === undefined || after?.kind !== 'booking' || after.bookingPageId !== pageId) return undefined;
+  if (version === undefined) return undefined;
+  const { after } = version.document;
+  // The page the form's After sends to, or the one a routing rule sent this submission to (spec 0043).
+  const routedHere =
+    (after.kind === 'booking' && after.bookingPageId === pageId) ||
+    (await submissionDecision(tx, row.id))?.routedPageId === pageId;
+  if (!routedHere) return undefined;
   return { id: row.id, document: version.document, answers: row.answers };
 }
 
@@ -135,6 +165,16 @@ export async function handoffVisitor(
   const answers =
     typeof found.answers === 'object' && found.answers !== null ? (found.answers as Record<string, unknown>) : {};
   return visitorOf(found.document, answers);
+}
+
+/** The answers a hand off's submission gave, for page `pageId`'s routing rules (spec 0043, AC-1608); empty for any other. */
+export async function handoffAnswers(
+  tx: WorkspaceTx,
+  submissionId: string,
+  pageId: string,
+): Promise<Readonly<Record<string, unknown>>> {
+  const found = await handedOff(tx, submissionId, pageId);
+  return typeof found?.answers === 'object' && found.answers !== null ? (found.answers as Record<string, unknown>) : {};
 }
 
 /** The submission a booking on page `pageId` links to (AC-1058): one this page's form handed on, else undefined. */
@@ -379,13 +419,30 @@ export async function submitForm(
           .where(and(eq(formSubmissions.formId, form.id), eq(formSubmissions.idempotencyKey, body.idempotencyKey)));
         const same =
           first !== undefined && first.ipHash === (input.ipHash ?? null) && first.answersHash === (hash ?? null);
-        const again = await nextOf(tx, live.document, same ? first.id : undefined, input.signHandoff);
+        const again = await nextOf(
+          tx,
+          live.document,
+          same ? first.id : undefined,
+          input.signHandoff,
+          same ? await storedRoute(tx, live.document, first.id) : undefined,
+        );
         return { next: again, verdict: judged.verdict, replayed: true };
       }
       if (state === 'received') {
         await startJob(context, registry, { kind: FORMS_PROCESS, params: { submissionId: row.id } });
       }
-      const next = await nextOf(tx, live.document, row.id, input.signHandoff);
+      // Routing (spec 0043, AC-1606): only a submission taken as received is routed; spam and held ones get the fallback.
+      const route =
+        state === 'received'
+          ? await routeSubmission(tx, {
+              workspaceId: scope.workspaceId,
+              formId: form.id,
+              submissionId: row.id,
+              document: live.document,
+              answers,
+            })
+          : undefined;
+      const next = await nextOf(tx, live.document, row.id, input.signHandoff, route);
       return { next, verdict: judged.verdict, replayed: false };
     },
     hooks,

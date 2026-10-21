@@ -46,6 +46,7 @@ const base: FormDocument = {
   buttonText: 'Send',
   language: 'en',
   after: { kind: 'message', message: '' },
+  routing: { rules: [] },
   spam: { minFillMs: 2_000, scoreThreshold: 0.3 },
 };
 

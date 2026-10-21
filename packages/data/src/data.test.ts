@@ -556,6 +556,7 @@ function fakeApi(overrides: Partial<Behaviour> = {}, auth: (path: string, body: 
       guestLink: os.bookings.guestLink.handler(notServed),
       assignments: os.bookings.assignments.handler(notServed),
       reassign: os.bookings.reassign.handler(notServed),
+      markNoShow: os.bookings.markNoShow.handler(notServed),
       blocks: {
         create: os.bookings.blocks.create.handler(notServed),
         remove: os.bookings.blocks.remove.handler(notServed),
@@ -584,6 +585,9 @@ function fakeApi(overrides: Partial<Behaviour> = {}, auth: (path: string, body: 
     nav: {
       get: os.nav.get.handler(notServed),
       change: os.nav.change.handler(notServed),
+    },
+    routing: {
+      report: os.routing.report.handler(notServed),
     },
   });
   const handler = new RPCHandler(router);

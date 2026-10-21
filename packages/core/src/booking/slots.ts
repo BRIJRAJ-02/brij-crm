@@ -8,9 +8,11 @@ import {
   BookingLocation,
   isTimeZone,
   minutesOf,
+  RoutingRules,
   WEEKDAYS,
   type BookingAvailability,
   type BookingPageSettings,
+  type RoutingRule,
 } from '@crm/contracts';
 import { schema, type WorkspaceTx } from '@crm/db';
 import { resolveMany, virtualDefault, type ResolvedSchedule } from '../availability/resolve.ts';
@@ -39,6 +41,8 @@ export interface PageRecord extends BookingPageSettings {
   readonly isDeleted: boolean;
   /** A private page books inside its host's holds and waives its minimum notice (spec 0027, AC-707). */
   readonly isPrivate: boolean;
+  /** A round robin page's routing rules (spec 0043, AC-1608); a stored list that doesn't parse reads as none. */
+  readonly routingRules?: readonly RoutingRule[];
   readonly createdAt: Date;
   readonly updatedAt: Date;
 }
@@ -102,6 +106,7 @@ export function pageOf(
     rescheduleHost: row.rescheduleHost === 'rotation' ? 'rotation' : 'same',
     isDeleted: row.deletedAt !== null,
     isPrivate: row.isPrivate,
+    routingRules: RoutingRules.safeParse(row.routing).data?.rules ?? [],
     createdAt: row.createdAt,
     updatedAt: row.updatedAt,
   };

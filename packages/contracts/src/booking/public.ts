@@ -61,6 +61,8 @@ export const PublicSlotsQuery = z
     to: Timestamp,
     duration: z.coerce.number().pipe(BookingDuration),
     tz: TimeZoneName,
+    /** A form's signed hand off (spec 0043, AC-1609): the slots of the hosts its routing chose. */
+    p: z.string().max(2_000).optional(),
   })
   .refine(
     ({ from, to }) => {

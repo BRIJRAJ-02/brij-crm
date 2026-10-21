@@ -102,6 +102,8 @@ const READS: ReadonlySet<string> = new Set([
   'bookings.assignments',
   // The sidebar (spec 0034).
   'nav.get',
+  // Lead routing's report (spec 0043).
+  'routing.report',
 ]);
 
 let db: Database;
@@ -1120,6 +1122,18 @@ const WRITES: Record<string, (m: Member, mutationId: string) => Promise<readonly
     await m.client.bookings.cancel({ workspace: m.slug, bookingId, reason: 'Clash', mutationId });
     return [{ kind: 'records', object_id: m.people.id }];
   },
+  // A no show (spec 0043): on a booking moved into the past by hand; settings like a cancel's, but no record changes.
+  'bookings.markNoShow': async (m, mutationId) => {
+    const bookingId = await hostBooking(m);
+    await testQuery(
+      ownerUrl,
+      `update bookings set starts_at = now() - interval '2 hours', ends_at = now() - interval '90 minutes',
+         during = tstzrange(now() - interval '2 hours', now() - interval '90 minutes', '[)') where id = $1`,
+      [bookingId],
+    );
+    await m.client.bookings.markNoShow({ workspace: m.slug, bookingId, noShow: true, mutationId });
+    return [];
+  },
   'bookings.move': async (m, mutationId) => {
     const bookingId = await hostBooking(m);
     // To a time the page offers (a move refuses any other), read first: a read, so no poke.
@@ -1678,6 +1692,7 @@ const WRITES_MADE: Readonly<Record<string, number>> = {
   'bookings.blocks.remove': 2,
   'bookings.bookAsHost': 2,
   'bookings.cancel': 3,
+  'bookings.markNoShow': 3,
   'bookings.move': 3,
   // A schedule made first, then the write (spec 0035).
   'schedules.update': 2,

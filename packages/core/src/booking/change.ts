@@ -23,6 +23,7 @@ import { schema, type WorkspaceTx } from '@crm/db';
 import type { BookingEntry } from '../access/door.ts';
 import { requirePermission } from '../access/check.ts';
 import { checkScope, type EngineScope } from '../access/mint.ts';
+import { writeAudit } from '../members/audit.ts';
 import { can } from '../access/policy.ts';
 import { inWorkspace } from '../access/run.ts';
 import { postgresError, refuse, refuseOn } from '../engine/refusals.ts';
@@ -707,5 +708,48 @@ export async function bookingGuestPath(
   return inWorkspace(scope, async (tx) => {
     const { row, page } = await readTarget(tx, target, false);
     return { path: managePath(page.publicKey, await ensureManageToken(tx, deps.linkKey, row)) };
+  });
+}
+
+/**
+ * Marks a past booking as a no show, or takes the mark back (spec 0043,
+ * AC-1613): its host, the page's owner or `booking.admin`, as any change; a
+ * cancelled booking or one not yet started is BOOKING_CLOSED. Audited; the
+ * same mark again changes nothing. It feeds each routing rule's report.
+ */
+export async function markNoShow(
+  scope: EngineScope,
+  input: { readonly bookingId: string; readonly noShow: boolean },
+  now: Date = new Date(),
+): Promise<{ readonly noShow: boolean }> {
+  const target = hostTarget(scope, input.bookingId);
+  const { principal } = scope.access;
+  if (principal.kind !== 'member') throw refuse('FORBIDDEN', 'Only a member can mark a no show.');
+  return inWorkspace(scope, async (tx) => {
+    const { row } = await readTarget(tx, target, true);
+    if (row.status === 'cancelled')
+      throw refuse('BOOKING_CLOSED', 'This booking was cancelled, so nobody was expected.');
+    if (row.startsAt.getTime() > now.getTime()) {
+      throw refuse('BOOKING_CLOSED', 'That meeting hasn’t started yet. Mark a no show once it has.');
+    }
+    if ((row.noShowAt !== null) === input.noShow) return { noShow: input.noShow };
+    await tx
+      .update(bookings)
+      .set({
+        ...(input.noShow
+          ? { noShowAt: sql`now()`, noShowByMemberId: principal.memberId }
+          : { noShowAt: null, noShowByMemberId: null }),
+        updatedAt: sql`now()`,
+        updatedByType: 'member',
+        updatedById: principal.memberId,
+        updatedByMemberId: principal.memberId,
+      })
+      .where(eq(bookings.id, row.id));
+    await writeAudit(tx, scope.workspaceId, scope.actor, {
+      action: input.noShow ? 'booking.no_show' : 'booking.no_show_undone',
+      targetType: 'booking',
+      targetId: row.id,
+    });
+    return { noShow: input.noShow };
   });
 }

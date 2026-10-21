@@ -12,6 +12,8 @@ import {
   updateRotation,
   bookingGuestPath,
   cancelBooking,
+  markNoShow,
+  routingReport,
   hostTarget,
   moveBooking,
   readMoveSlots,
@@ -69,6 +71,7 @@ export const bookingPagesRouter = member.bookingPages.router({
         pageId: input.pageId,
         settings: input.settings,
         ...(input.hosts === undefined ? {} : { hosts: input.hosts }),
+        ...(input.routing === undefined ? {} : { routing: input.routing }),
       }),
     ),
   ),
@@ -132,6 +135,12 @@ export const bookingsRouter = member.bookings.router({
         { calendar: context.bookingCalendar, log },
         { reason: input.reason },
       ),
+    ),
+  ),
+  // A no show (spec 0043, AC-1613): its host, the page's owner or an admin; audited, and counted in routing's report.
+  markNoShow: member.bookings.markNoShow.handler(({ context, input }) =>
+    commitWrite(context, { mutationId: input.mutationId }, () =>
+      markNoShow(context.scope, { bookingId: input.bookingId, noShow: input.noShow }),
     ),
   ),
   move: member.bookings.move.handler(({ context, input }) =>
@@ -300,5 +309,12 @@ export const rotationsRouter = member.rotations.router({
     commitWrite(context, { mutationId: input.mutationId }, () =>
       deleteRotation(context.scope, { rotationId: input.rotationId }),
     ),
+  ),
+});
+
+// Lead routing (spec 0043, AC-1612): a form's or a team page's per rule report. Rules are saved with their surface.
+export const routingRouter = member.routing.router({
+  report: member.routing.report.handler(({ context, input }) =>
+    routingReport(context.scope, { surface: input.surface, days: input.days }),
   ),
 });

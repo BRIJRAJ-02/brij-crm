@@ -44,6 +44,10 @@ export const AUDIT_ACTIONS = [
   'rotation.adjustment_undone',
   // A round robin booking's seat given to someone else: a reassign, a hand on, a member who left (spec 0029).
   'booking.reassigned',
+  // Lead routing (spec 0043, AC-1616): a form's or a team page's rules changed, and a booking marked or unmarked no show.
+  'routing.changed',
+  'booking.no_show',
+  'booking.no_show_undone',
 ] as const;
 /** One action the audit log records. */
 export const AuditAction = z.enum(AUDIT_ACTIONS);

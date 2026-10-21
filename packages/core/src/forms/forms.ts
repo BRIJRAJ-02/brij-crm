@@ -36,6 +36,8 @@ import { actorRow, type EngineScope } from '../engine/scope.ts';
 import { runWrite, type AfterWrite } from '../engine/write.ts';
 import { requirePermission } from '../access/check.ts';
 import { bookingTargetProblem } from '../booking/pages.ts';
+import { writeAudit } from '../members/audit.ts';
+import { checkFormRoutes, rulesChanged } from '../routing/check.ts';
 import { can, fieldLevel, objectLevel } from '../access/policy.ts';
 import { inWorkspace } from '../access/run.ts';
 import { checkObject, UNKNOWN_OBJECT } from '../access/visibility.ts';
@@ -116,6 +118,7 @@ function firstDraft(
     buttonText: 'Send',
     language: 'en',
     after: { kind: 'message', message: '' },
+    routing: { rules: [] },
     spam: { minFillMs: 2_000, scoreThreshold: 0.3 },
   };
 }
@@ -570,6 +573,12 @@ export async function saveFormDraft(
         const before = (await loadVersions(tx, [form.draftVersionId])).get(form.draftVersionId);
         if (bookingPageOf(before?.document) !== chosen) await checkBookingTarget(tx, scope, input.document, 'seen');
       } else if (chosen !== undefined) await checkBookingTarget(tx, scope, input.document, 'seen');
+      // Routing's booking pages go through the door the same way: only pages newly named (spec 0043, AC-1605).
+      const earlier =
+        form.draftVersionId === null
+          ? undefined
+          : (await loadVersions(tx, [form.draftVersionId])).get(form.draftVersionId);
+      await checkFormRoutes(tx, scope, input.document.routing.rules, 'seen', earlier?.document.routing.rules ?? []);
       await writeDraft(tx, scope, form, input.document);
       const saved = await loadForm(tx, form.id);
       if (saved === undefined) throw new Error('The form went away under its save.');
@@ -616,6 +625,7 @@ export async function publishForm(
       if (draft === undefined) throw new Error('The draft version went away.');
       checkDraft(form, draft.document);
       await checkBookingTarget(tx, scope, draft.document, 'live');
+      await checkFormRoutes(tx, scope, draft.document.routing.rules, 'live');
       const problem = publishProblem({
         name: form.name,
         slug: form.publicKey,
@@ -627,8 +637,24 @@ export async function publishForm(
         throw refuseOn(
           code,
           problem.message,
-          problem.questionId ?? (problem.code === 'ADDRESS_INVALID' ? 'slug' : 'name'),
+          problem.questionId ??
+            (problem.ruleId !== undefined ? 'routing' : problem.code === 'ADDRESS_INVALID' ? 'slug' : 'name'),
         );
+      }
+      // A change to the rules is audited when it goes live (spec 0043, AC-1616).
+      const was =
+        form.liveVersionId === null
+          ? undefined
+          : (await loadVersions(tx, [form.liveVersionId])).get(form.liveVersionId);
+      const rulesBefore = was?.document.routing.rules ?? [];
+      if (rulesChanged(rulesBefore, draft.document.routing.rules)) {
+        await writeAudit(tx, scope.workspaceId, scope.actor, {
+          action: 'routing.changed',
+          targetType: 'form',
+          targetId: form.id,
+          before: { rules: rulesBefore.length },
+          after: { rules: draft.document.routing.rules.length, version: draft.number },
+        });
       }
       const by = actorRow(scope.actor);
       await tx

@@ -18,6 +18,7 @@ import { ScheduleHours } from './schedules.ts';
 import { BookingAssignment, BookingAssignmentsInput, ReassignBookingInput, ReassignedBooking } from './rotations.ts';
 import { BookingAvailability, BookingLocation, BookingPageSettings, TimeZoneName } from './settings.ts';
 import { Uuid, uuidV7 } from '../values/ids.ts';
+import { RoutingRules } from '../forms/routing.ts';
 
 /** The most fixed hosts, rotations, and hosts in all, on one round robin page (spec 0037, AC-1319). */
 export const TEAM_HOSTS_MAX = { fixed: 7, rotations: 3, hosts: 8 } as const;
@@ -48,6 +49,8 @@ export const BookingPageView = BookingPageSettings.extend({
   scheduleName: z.string(),
   /** A round robin page's hosts (spec 0037, AC-1319): its fixed hosts and the rotations it books one host from. */
   hosts: TeamHosts.optional(),
+  /** A round robin page's routing rules (spec 0043, AC-1608): each picks some of its hosts. */
+  routing: RoutingRules.optional(),
   /** Confirmed bookings starting this calendar month (UTC). */
   bookingsThisMonth: z.number().int().min(0),
   /** The reader may change it: their own page with `booking.manage`, anyone's with `booking.admin`. */
@@ -108,6 +111,8 @@ export const UpdateBookingPageInput = WorkspaceScoped.extend({
   settings: BookingPageSettingsWrite,
   /** A round robin page's hosts, replacing them (`booking.admin`). */
   hosts: TeamHosts.optional(),
+  /** A round robin page's routing rules, replacing them (spec 0043, AC-1608; `booking.admin`). */
+  routing: RoutingRules.optional(),
   mutationId: Uuid,
 });
 /** A change to a page. */
@@ -198,6 +203,8 @@ export const BookingListItem = BookingView.extend({
   hostName: z.string(),
   /** Its host left with nobody free to take it (spec 0029, AC-749): "Needs a host" until an admin reassigns it. */
   needsHost: z.boolean(),
+  /** Marked as a no show after it (spec 0043, AC-1613). */
+  noShow: z.boolean().optional(),
 });
 /** A booking in Bookings. */
 export type BookingListItem = z.infer<typeof BookingListItem>;
@@ -324,6 +331,11 @@ export const BookingGuestLinkInput = WorkspaceScoped.extend({ bookingId: Uuid })
 export type BookingGuestLinkInput = z.infer<typeof BookingGuestLinkInput>;
 
 /** Member procedures for bookings. */
+/** Marking a booking as a no show (`noShow: true`) or taking the mark back. */
+export const MarkNoShowInput = WorkspaceScoped.extend({ bookingId: Uuid, noShow: z.boolean(), mutationId: Uuid });
+/** Marking a booking as a no show. */
+export type MarkNoShowInput = z.infer<typeof MarkNoShowInput>;
+
 export const bookingsContract = {
   list: oc.input(ListBookingsInput).output(z.array(BookingView)),
   listAll: oc.input(ListWorkspaceBookingsInput).output(z.array(BookingListItem)),
@@ -344,6 +356,8 @@ export const bookingsContract = {
   assignments: oc.input(BookingAssignmentsInput).output(z.array(BookingAssignment)),
   /** Give one seat of a round robin booking to someone else (spec 0029, AC-748): Manage over both hosts. */
   reassign: oc.input(ReassignBookingInput).output(ReassignedBooking),
+  /** Mark a past booking as a no show, or undo it (spec 0043, AC-1613): its host or `booking.admin`. */
+  markNoShow: oc.input(MarkNoShowInput).output(z.object({ noShow: z.boolean() })),
   /** Time the caller closed on their own calendar (spec 0027). */
   blocks: {
     create: oc.input(CreateTimeBlockInput).output(TimeBlockView),

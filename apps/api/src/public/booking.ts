@@ -515,6 +515,12 @@ export function mountPublicBooking(app: Hono<{ Variables: Variables }>, services
     }
   });
 
+  // A form's hand off on a slots read (spec 0043, AC-1609): the hosts its routing chose; a bad token is just ignored.
+  const routedLink = (entry: BookingEntry, token: string | undefined) => {
+    const handoff = handoffFor(entry, token);
+    return handoff === undefined ? undefined : { submissionId: handoff.submissionId };
+  };
+
   app.get('/public/booking/:publicKey/slots', async (c) => {
     const address = addressKey(c.get('clientIp'));
     const key = c.req.param('publicKey');
@@ -551,7 +557,7 @@ export function mountPublicBooking(app: Hono<{ Variables: Variables }>, services
             ),
       );
       const [slots, { setCookies }, visitorBusy] = await Promise.all([
-        readPublicSlots(entry, deps, query.data),
+        readPublicSlots(entry, deps, query.data, routedLink(entry, query.data.p)),
         found,
         busy,
       ]);

@@ -28,6 +28,8 @@ import type { EngineScope } from '../access/mint.ts';
 import { can } from '../access/policy.ts';
 import { inWorkspace } from '../access/run.ts';
 import { postgresError, refuse, refuseOn } from '../engine/refusals.ts';
+import { writeAudit } from '../members/audit.ts';
+import { checkPageRoutes, rulesChanged } from '../routing/check.ts';
 import { actorRow } from '../engine/scope.ts';
 import { linksOf, seenLinks } from './links.ts';
 import { ROTATION_ROLES, TEAM_LIMITS } from '../rotation/team.ts';
@@ -179,6 +181,7 @@ function viewOf(scope: EngineScope, page: PageRecord, count: number, hosts?: Tea
     rescheduleHost: page.rescheduleHost,
     isPrivate: page.isPrivate,
     ...(hosts === undefined ? {} : { hosts }),
+    ...(page.kind === 'round_robin' ? { routing: { rules: [...(page.routingRules ?? [])] } } : {}),
     bookingsThisMonth: count,
     canChange: mayChange(scope, page),
     createdAt: page.createdAt.toISOString(),
@@ -425,7 +428,7 @@ export async function createBookingPage(
 /** A change to a page the reader may change (AC-623, AC-624): only the settings given. */
 export async function updateBookingPage(
   scope: EngineScope,
-  input: Pick<UpdateBookingPageInput, 'pageId' | 'settings' | 'hosts'>,
+  input: Pick<UpdateBookingPageInput, 'pageId' | 'settings' | 'hosts' | 'routing'>,
   now: Date = new Date(),
 ): Promise<BookingPageView> {
   requirePermission(scope, 'booking.manage');
@@ -441,6 +444,24 @@ export async function updateBookingPage(
         throw refuseOn('CONFIG_INVALID', 'Only a round robin page books from rotations.', 'hosts');
       }
       await setPageHosts(tx, scope.workspaceId, page.id, input.hosts);
+    }
+    // Routing rules (spec 0043, AC-1608): only a round robin page's, each naming members of its rotations; audited.
+    const routing = input.routing;
+    if (routing !== undefined) {
+      if (page.kind !== 'round_robin') {
+        throw refuseOn('CONFIG_INVALID', 'Only a team page has routing rules.', 'routing');
+      }
+      await checkPageRoutes(tx, page.id, routing.rules);
+      const before = page.routingRules ?? [];
+      if (rulesChanged(before, routing.rules)) {
+        await writeAudit(tx, scope.workspaceId, scope.actor, {
+          action: 'routing.changed',
+          targetType: 'booking_page',
+          targetId: page.id,
+          before: { rules: before.length },
+          after: { rules: routing.rules.length },
+        });
+      }
     }
     const by = actorRow(scope.actor);
     try {
@@ -464,6 +485,7 @@ export async function updateBookingPage(
             : { scheduleId: settings.scheduleId, hoursMode: settings.scheduleId === null ? 'mine' : 'own' }),
           ...(settings.rescheduleHost === undefined ? {} : { rescheduleHost: settings.rescheduleHost }),
           ...(settings.isPrivate === undefined ? {} : { isPrivate: settings.isPrivate }),
+          ...(routing === undefined ? {} : { routing }),
           updatedAt: sql`now()`,
           updatedByType: by.type,
           updatedById: by.id,

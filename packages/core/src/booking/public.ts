@@ -33,7 +33,7 @@ import { schema, type WorkspaceTx } from '@crm/db';
 import type { BookingEntry } from '../access/door.ts';
 import { checkScope } from '../access/mint.ts';
 import { inWorkspace } from '../access/run.ts';
-import { postgresError, refuse, refuseOn } from '../engine/refusals.ts';
+import { isRefusal, postgresError, refuse, refuseOn } from '../engine/refusals.ts';
 import { runWrite, type AfterWrite } from '../engine/write.ts';
 import type { BookingCalendar, BusyReader } from './calendar.ts';
 import {
@@ -55,6 +55,14 @@ import { loadTeam, memberBusy, readTeam, teamMemberIds, teamSlots, type Team } f
 import { buildBookingIcs } from './ics.ts';
 import { matchVisitor } from './visitor.ts';
 import { MAX_RESCHEDULES } from './change.ts';
+import {
+  allowFor,
+  handoffHosts,
+  narrowTeam,
+  recordBookingRouting,
+  routeBooking,
+  type BookingRouting,
+} from '../routing/booking.ts';
 import { enqueueBookingMail, recordEvent } from './mail-queue.ts';
 import { ensureManageToken, manageTokenFor, type ManageLinkKey } from './tokens.ts';
 
@@ -220,6 +228,8 @@ export async function readPublicSlots(
   entry: BookingEntry,
   deps: PublicBookingDeps,
   query: PublicSlotsQuery,
+  /** A verified form hand off (spec 0043, AC-1609): a team page then offers only the times of the hosts it chose. */
+  link?: { readonly submissionId: string },
 ): Promise<PublicSlots> {
   checkEntry(entry);
   const now = deps.now?.() ?? new Date();
@@ -228,7 +238,13 @@ export async function readPublicSlots(
   const { page, memberIds, team } = await inWorkspace(entry.scope, async (tx) => {
     const live = await livePage(tx, entry);
     checkDuration(live, query.duration);
-    const found = await loadTeam(tx, live);
+    const loaded = await loadTeam(tx, live);
+    const handed =
+      link === undefined || loaded?.kind !== 'round_robin'
+        ? undefined
+        : await handoffHosts(tx, link.submissionId, live.id);
+    const found =
+      loaded?.kind === 'round_robin' && handed?.hosts !== undefined ? narrowTeam(loaded, handed.hosts).team : loaded;
     return {
       page: live,
       team: found,
@@ -429,6 +445,8 @@ export async function bookPublicSlot(
       let host: string;
       let hosts: readonly string[];
       let chosen: ChosenHosts | undefined;
+      let routing: BookingRouting | undefined;
+      let narrowed = false;
       if (team?.kind === 'round_robin') {
         // The rotations' locks first, so a retry finds its booking before anything else waits.
         await lockRotations(
@@ -438,7 +456,7 @@ export async function bookPublicSlot(
         );
         const again = await replay(tx, page);
         if (again !== undefined) return again;
-        chosen = await chooseHosts(tx, page, team, {
+        const choice = {
           workspaceId,
           start,
           duration: input.duration,
@@ -448,7 +466,25 @@ export async function bookPublicSlot(
           to: dayTo,
           now,
           guest: { email: input.email, peopleObjectId: entry.people },
+        };
+        // Routing (spec 0043, AC-1609, AC-1610): a hand off's hosts, else the page's rules, narrow who may take it;
+        // when none of them is free here, the whole rotation picks, so a rule never refuses a booking.
+        routing = await routeBooking(tx, {
+          page,
+          objects: { people: entry.people, companies: entry.companies },
+          email: input.email,
+          ...(link === undefined ? {} : { submissionId: link.submissionId }),
         });
+        const routed = routing.hosts;
+        if (routed !== undefined && narrowTeam(team, routed).narrowed) {
+          try {
+            chosen = await chooseHosts(tx, page, team, { ...choice, allow: allowFor(team, routed) });
+            narrowed = true;
+          } catch (error) {
+            if (!isRefusal(error) || error.refusal.code !== 'SLOT_TAKEN') throw error;
+          }
+        }
+        chosen ??= await chooseHosts(tx, page, team, choice);
         host = chosen.organiser;
         hosts = chosen.hosts;
       } else if (team?.kind === 'collective') {
@@ -508,6 +544,9 @@ export async function bookPublicSlot(
           .returning({ id: bookings.id });
         if (row === undefined) throw new Error('The booking was not stored.');
         bookingId = row.id;
+        if (routing !== undefined) {
+          await recordBookingRouting(tx, { workspaceId, pageId: page.id, bookingId, routing, narrowed });
+        }
         // The organiser's own `booking_hosts` row comes with the booking (its trigger); every other host's here.
         const others = hosts.filter((memberId) => memberId !== host);
         if (others.length > 0) {

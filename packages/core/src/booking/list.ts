@@ -76,6 +76,7 @@ function itemOf(
     hostMemberId: row.hostMemberId,
     hostName: hostName ?? '',
     needsHost: row.needsHostAt !== null,
+    ...(row.noShowAt === null ? {} : { noShow: true }),
     startsAt: row.startsAt.toISOString(),
     endsAt: row.endsAt.toISOString(),
     visitorName: row.visitorName,
