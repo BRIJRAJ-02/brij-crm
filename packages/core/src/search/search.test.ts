@@ -6,6 +6,7 @@
 import { sql } from 'drizzle-orm';
 import { afterAll, beforeAll, describe, expect, inject, it } from 'vitest';
 import { createDatabase, type Database } from '@crm/db';
+import { testQuery } from '@crm/db/testing';
 import type { AccessRules } from '../access/policy.ts';
 import { newId } from '../engine/ids.ts';
 import { deleteRecord } from '../engine/deletion.ts';
@@ -17,7 +18,7 @@ import { createView, deleteView } from '../views/manage.ts';
 import { listRecents, RECENTS_KEPT, visitRecent } from './recents.ts';
 import { globalSearchMode, searchWorkspace, wantsSimilar } from './search.ts';
 
-const { appUrl } = inject('testDatabase');
+const { appUrl, adminUrl } = inject('testDatabase');
 let db: Database;
 beforeAll(() => {
   db = createDatabase({ url: appUrl, applicationName: 'crm-search-tests' });
@@ -168,6 +169,37 @@ describe('searching (AC-1078 to AC-1081, AC-1084)', () => {
     expect(found.records.find((hit) => hit.ref.recordId === w.acme)?.match).toBe('similar');
     // Three characters never look for close names.
     expect(recordIds(await searchWorkspace(w.owner, { query: 'acx' }))).toEqual([]);
+  });
+
+  it('answers the exact matches when the typo step runs out of time, never an error (AC-1094)', async () => {
+    const w = await world();
+    const labs = await w.company('Acmee Labs');
+    // The typo step's function made slow for this test only, then put back exactly as it was.
+    const signature = 'public.crm_search_similar(uuid[], text, integer)';
+    const slow = 'public.crm_search_similar(search_attributes uuid[], search_pattern text, search_limit integer)';
+    const saved = await testQuery<{ def: string }>(
+      adminUrl,
+      `select pg_get_functiondef('${signature}'::regprocedure) as def`,
+    );
+    const original = saved[0]?.def ?? '';
+    expect(original).toContain('crm_search_similar');
+    await testQuery(
+      adminUrl,
+      `create or replace function ${slow} returns setof uuid language sql stable security definer
+         set search_path = pg_catalog, pg_temp
+         as $$ select gen_random_uuid() from pg_sleep(2) where false $$`,
+    );
+    try {
+      const started = performance.now();
+      const found = await searchWorkspace(w.owner, { query: 'acmee' });
+      expect(recordIds(found)).toEqual([labs]);
+      expect(found.records.every((hit) => hit.match !== 'similar')).toBe(true);
+      expect(performance.now() - started).toBeLessThan(1500);
+    } finally {
+      await testQuery(adminUrl, original);
+    }
+    // Back as it was: the typo finds Acme Inc again.
+    expect(recordIds(await searchWorkspace(w.owner, { query: 'acmee' }))).toContain(w.acme);
   });
 
   it('keeps to the limit, and finds a record renamed a moment ago', async () => {

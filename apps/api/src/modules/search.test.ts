@@ -3,12 +3,14 @@
 // view by name, keeps what they open as recent, and a non member gets the
 // same NOT_FOUND as an unknown workspace. A real session against a real
 // Postgres.
-import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { afterAll, beforeAll, describe, expect, inject, it } from 'vitest';
 import { newId } from '@crm/core';
 import type { Database, IdentityStore } from '@crm/db';
+import { holdTableLock, testQuery } from '@crm/db/testing';
 import { signInApp, testConnections } from '../../test/sign-in.ts';
 import { memberWithWorkspace, NOT_A_MEMBER, refusal } from '../../test/workspace.ts';
 
+const { appUrl, ownerUrl } = inject('testDatabase');
 let db: Database;
 let identity: IdentityStore;
 let app: ReturnType<typeof signInApp>['app'];
@@ -84,5 +86,66 @@ describe('recents', () => {
     expect(await refusal(() => other.client.recents.visit({ workspace: m.slug, kind: 'record', id: grace }))).toEqual(
       NOT_A_MEMBER,
     );
+  });
+});
+
+/** The search and query statements running now, by the tag each read sets on its connection. */
+async function taggedStatements(): Promise<readonly string[]> {
+  const rows = await testQuery<{ name: string }>(
+    appUrl,
+    `select application_name as name from pg_stat_activity
+     where datname = current_database() and application_name like 'crm-query:%'`,
+  );
+  return rows.map((row) => row.name);
+}
+
+/** Polls `check` every 50 ms until it holds, failing after `ms`. */
+async function eventually(check: () => Promise<boolean>, ms = 3_000): Promise<void> {
+  const until = Date.now() + ms;
+  while (!(await check())) {
+    if (Date.now() > until) throw new Error(`Still not so after ${String(ms)} ms.`);
+    await new Promise((resolve) => setTimeout(resolve, 50));
+  }
+}
+
+describe('the read gate', () => {
+  it('holds searches to the workspace’s 6 places shared with records.query, answers 429 past them, and frees them on abort', async () => {
+    const m = await memberWithWorkspace(app);
+    await person(m, 'Grace', 'grace@example.com');
+    const lock = await holdTableLock(ownerUrl, 'records');
+    const controllers: AbortController[] = [];
+    const pending: Promise<unknown>[] = [];
+    try {
+      for (let index = 0; index < 6; index += 1) {
+        const controller = new AbortController();
+        controllers.push(controller);
+        pending.push(
+          m.client.search
+            .query({ workspace: m.slug, query: 'grace' }, { signal: controller.signal })
+            .catch((error: unknown) => error),
+        );
+      }
+      await eventually(async () => (await taggedStatements()).length === 6);
+      expect(await refusal(() => m.client.search.query({ workspace: m.slug, query: 'grace' }))).toMatchObject({
+        code: 'TOO_MANY_REQUESTS',
+        status: 429,
+      });
+      expect(await refusal(() => m.client.records.query({ workspace: m.slug, objectId: m.people.id }))).toMatchObject({
+        code: 'TOO_MANY_REQUESTS',
+      });
+      expect(await refusal(() => m.client.recents.list({ workspace: m.slug }))).toMatchObject({
+        code: 'TOO_MANY_REQUESTS',
+      });
+      for (const controller of controllers) controller.abort();
+      await Promise.all(pending);
+    } finally {
+      await lock.release();
+    }
+    await eventually(async () => {
+      const found = await Promise.allSettled(
+        Array.from({ length: 6 }, () => m.client.search.query({ workspace: m.slug, query: 'grace' })),
+      );
+      return found.every((read) => read.status === 'fulfilled');
+    });
   });
 });
