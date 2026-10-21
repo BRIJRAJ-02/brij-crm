@@ -25,10 +25,10 @@ New (spec 0038, the inventory's CommentThread). Nothing in the library shows a c
 
 - A comment's `body` holds mentions as `<@member-uuid>` tokens; each draws as the Mention atom with the member's current name, or `formerMember`. Links in the text are made clickable (through `safeHref`) and line breaks are kept.
 - A deleted comment (`isDeleted`) reads "This comment was deleted." with no author or text, while its thread still has other live comments.
-- `isSending` fades a comment and shows "Sending" in place of its time.
+- `isSending` shows "Sending" in place of its time (and `aria-busy` on the row); it isn't faded, so its text keeps its contrast.
 - Delete is only asked for: the screen confirms it in a danger Modal (a delete has no Undo).
 - `isReadOnly` (a record in the trash) hides Reply, the menus and the reaction buttons; the chips still show.
-- `isHighlighted` gives the thread the accent's soft fill, for a thread opened from a link.
+- `isHighlighted` gives the thread the accent's soft fill and scrolls it into view (a jump under reduced motion), for a thread opened from a link.
 
 ## States
 

@@ -6,7 +6,7 @@
 // screen sends every change and confirms a delete.
 import type { ActorDisplay } from '@crm/contracts/values';
 import { bodySegments, COMMENT_EMOJI, type CommentEmoji } from '@crm/contracts/mentions';
-import { Fragment, useState, type ReactNode } from 'react';
+import { Fragment, useEffect, useRef, useState, type ReactNode } from 'react';
 import { Dialog, DialogTrigger } from 'react-aria-components';
 import { Avatar } from '../../atoms/Avatar/Avatar.tsx';
 import { Button, ToggleButton } from '../../atoms/Button/Button.tsx';
@@ -338,6 +338,13 @@ export function CommentThread(props: CommentThreadProps) {
   const { thread, members, formerMember, isReadOnly = false, isHighlighted = false } = props;
   const [isReplying, setIsReplying] = useState(false);
   const [editing, setEditing] = useState<string | undefined>(undefined);
+  const root = useRef<HTMLElement>(null);
+  // A thread opened from a link comes into view as it lights up (AC-1161); with reduced motion it jumps there.
+  useEffect(() => {
+    if (!isHighlighted) return;
+    const reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    root.current?.scrollIntoView({ block: 'center', behavior: reduce ? 'auto' : 'smooth' });
+  }, [isHighlighted]);
   const names = new Map(members.map((member) => [member.id ?? '', member.name]));
   const nameOf = (memberId: string) => names.get(memberId) ?? formerMember;
   const [first, ...replies] = thread.comments;
@@ -363,6 +370,7 @@ export function CommentThread(props: CommentThreadProps) {
   );
   return (
     <article
+      ref={root}
       className={styles.root}
       aria-label={strings.thread(starter)}
       data-highlighted={isHighlighted || undefined}
