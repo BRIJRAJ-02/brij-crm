@@ -4,11 +4,12 @@
 // Leaves out: anything inside one form (its builder), and archived forms (a later pass).
 import { isDataError, type FormSummary } from '@crm/data';
 import { useCaptureList } from '@crm/data/react';
-import { Button, Menu, MenuItem, MenuSeparator, MenuTrigger, Tooltip, type LinkGridCard } from '@crm/ui';
+import { Button, focusLater, Menu, MenuItem, MenuSeparator, MenuTrigger, Tooltip, type LinkGridCard } from '@crm/ui';
 import { useRouteContext } from '@tanstack/react-router';
 import { useState } from 'react';
 import { CapturesList } from '../captures/CapturesList.tsx';
 import { useCapturesCreate } from '../captures/create.tsx';
+import { pageHeading } from '../navigation/focus.ts';
 import { useCan } from '../workspace/WorkspacePage.tsx';
 import { DeleteFormDialog, PauseFormDialog } from './FormConfirms.tsx';
 import { formHref } from './paths.ts';
@@ -176,6 +177,8 @@ export function FormsScreen({ slug }: FormsScreenProps) {
             onDone={(form) => {
               setDeleting(undefined);
               toasts.toast({ tone: 'success', message: strings.deleted(form.name) });
+              // The card and its menu went with the form: focus goes to the page's title rather than falling to the page.
+              focusLater(() => (document.activeElement === document.body ? pageHeading(document) : undefined));
             }}
           />
           <PauseFormDialog

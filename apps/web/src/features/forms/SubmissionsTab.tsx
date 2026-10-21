@@ -154,6 +154,11 @@ export function SubmissionsTab({
   const [isConfirmingDelete, setConfirmingDelete] = useState(false);
   // A refused delete says why inside its confirm, which stays open (the owner's rule, 21 October 2026).
   const [deleteFailure, setDeleteFailure] = useState<string | undefined>(undefined);
+  // Adding many at once asks first (the confirms rule, 21 October 2026); one from the panel stays one click.
+  // The picked ids stay while the dialog plays its exit, so its title keeps its count.
+  const [addingMany, setAddingMany] = useState<readonly string[]>([]);
+  const [isAddingMany, setIsAddingMany] = useState(false);
+  const [addFailure, setAddFailure] = useState<string | undefined>(undefined);
 
   const go = (submissionId?: string, nextState: SubmissionState | undefined = state) => {
     if (nextState !== state) setSelected(new Set());
@@ -305,9 +310,11 @@ export function SubmissionsTab({
     if (ids.length === 0 || busy !== undefined) return;
     setBusy('add');
     // At most the contract's ADD_TO_CRM_MAX in one call.
+    setAddFailure(undefined);
     data.submissions.addToCrm(slug, formId, ids.slice(0, ADD_MAX)).then(
       (result) => {
         setBusy(undefined);
+        setIsAddingMany(false);
         setSelected(new Set());
         toasts.toast(
           result.queued === 0
@@ -328,7 +335,10 @@ export function SubmissionsTab({
       },
       (error: unknown) => {
         setBusy(undefined);
-        toasts.toast({ tone: 'danger', message: isDataError(error) ? error.message : strings.failedText });
+        const reason = isDataError(error) ? error.message : strings.failedText;
+        // The many confirm stays open and says why; one from the panel says it in a toast.
+        if (ids.length > 1) setAddFailure(reason);
+        else toasts.toast({ tone: 'danger', message: reason });
       },
     );
   };
@@ -505,7 +515,13 @@ export function SubmissionsTab({
             <Button
               isPending={busy === 'add'}
               onPress={() => {
-                addToCrm(addable.map((submission) => submission.id));
+                const ids = addable.map((submission) => submission.id);
+                if (ids.length === 1) addToCrm(ids);
+                else {
+                  setAddFailure(undefined);
+                  setAddingMany(ids);
+                  setIsAddingMany(true);
+                }
               }}
             >
               {strings.addToCrm}
@@ -661,6 +677,36 @@ export function SubmissionsTab({
       >
         {deleteFailure !== undefined && <Callout tone="danger">{deleteFailure}</Callout>}
         <p>{strings.deleteSubmissionText}</p>
+      </Modal>
+      <Modal
+        title={strings.addManyTitle(addingMany.length)}
+        isOpen={isAddingMany}
+        isBusy={busy === 'add'}
+        onOpenChange={(isOpen) => {
+          if (busy === 'add' || isOpen) return;
+          setIsAddingMany(false);
+          setAddFailure(undefined);
+        }}
+        actions={
+          <>
+            <Button slot="close" isDisabled={busy === 'add'} kbd="ESC">
+              {strings.cancel}
+            </Button>
+            <Button
+              variant="primary"
+              icon="plus"
+              isPending={busy === 'add'}
+              onPress={() => {
+                addToCrm(addingMany);
+              }}
+            >
+              {strings.addToCrm}
+            </Button>
+          </>
+        }
+      >
+        {addFailure !== undefined && <Callout tone="danger">{addFailure}</Callout>}
+        <p>{strings.addManyText(addingMany.length, ADD_MAX)}</p>
       </Modal>
     </>
   );
