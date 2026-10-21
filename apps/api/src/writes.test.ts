@@ -55,6 +55,9 @@ const READS: ReadonlySet<string> = new Set([
   'search.query',
   'recents.list',
   'recents.visit',
+  // Settings › Account › Preferences: the member's own, no outbox row (like markOpened); the change writes an audit row.
+  'preferences.get',
+  'preferences.update',
   'trash.query',
   'trash.count',
   'tasks.get',

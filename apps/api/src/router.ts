@@ -10,6 +10,7 @@ import { meRouter } from './modules/me/router.ts';
 import { membersRouter } from './modules/members/router.ts';
 import { objectsRouter } from './modules/objects/router.ts';
 import { optionsRouter } from './modules/options/router.ts';
+import { preferencesRouter } from './modules/preferences/router.ts';
 import { realtimeRouter } from './modules/realtime/router.ts';
 import { recordsRouter } from './modules/records/router.ts';
 import { relationshipsRouter } from './modules/relationships/router.ts';
@@ -53,4 +54,5 @@ export const router = base.router({
   schedules: schedulesRouter,
   search: searchRouter,
   recents: recentsRouter,
+  preferences: preferencesRouter,
 });

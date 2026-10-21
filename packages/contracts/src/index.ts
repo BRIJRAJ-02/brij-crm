@@ -2,6 +2,7 @@ import { accessContract } from './access.ts';
 import { attributesContract } from './attributes.ts';
 import { bookingPagesContract, bookingsContract } from './booking/pages.ts';
 import { schedulesContract } from './booking/schedules.ts';
+import { preferencesContract } from './preferences.ts';
 import { bulkRecordsContract } from './bulk.ts';
 import { calendarContract } from './calendar.ts';
 import { formsContract, submissionsContract } from './forms/forms.ts';
@@ -51,6 +52,7 @@ export * from './system.ts';
 export * from './trash.ts';
 export * from './notes.ts';
 export * from './tasks.ts';
+export * from './preferences.ts';
 export * from './team.ts';
 export * from './usage.ts';
 export * from './view-model.ts';
@@ -93,4 +95,6 @@ export const contract = {
   schedules: schedulesContract,
   search: searchContract,
   recents: recentsContract,
+  // Settings › Account › Preferences: the caller's own time zone, date format, week start and landing page.
+  preferences: preferencesContract,
 };

@@ -15,6 +15,7 @@ export { memberViewState, viewKind, views, viewVisibility } from './views.ts';
 export { notes } from './notes.ts';
 export { taskRecords, tasks } from './tasks.ts';
 export { memberRecents } from './search.ts';
+export { memberPreferences } from './preferences.ts';
 export {
   attendeeMatch,
   attendeeResponse,
