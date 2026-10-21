@@ -397,7 +397,7 @@ function BlockCard({
           { term: strings.bookingPages, description: turn.kind === 'hold' ? strings.heldNote : strings.blockedNote },
         ]}
       />
-      <Button ref={remove} onPress={onRemove}>
+      <Button ref={remove} variant="danger" icon="trash" onPress={onRemove}>
         {turn.kind === 'hold'
           ? strings.releaseHold
           : turn.repeat === 'weekly'
@@ -601,7 +601,9 @@ function WeekView(props: BookingsCalendarScreenProps) {
   const [refocus, setRefocus] = useState<{ readonly pieceId: string; readonly button: CardAsk['kind'] } | undefined>(
     undefined,
   );
-  const [focusDay, setFocusDay] = useState<{ readonly dayKey: string } | undefined>(undefined);
+  const [focusDay, setFocusDay] = useState<{ readonly dayKey: string; readonly blockId?: string } | undefined>(
+    undefined,
+  );
   const openings = useRef(0);
   const [draft, setDraft] = useState<DrawnSpan | undefined>(undefined);
   // Each new drawing gets a fresh card; moving the span with From and To keeps the card as it is.
@@ -817,10 +819,11 @@ function WeekView(props: BookingsCalendarScreenProps) {
       setOpenId(asked.pieceId);
     } else setFocusDay({ dayKey: asked.dayKey });
   };
-  /** Gone through: the button that asked may be gone, so focus goes to the day it was on. */
+  /** Gone through: the button that asked may be gone, so focus goes to its block while it is still on the week
+   * (a booking drawn cancelled, or at its new time), else the day it was on. */
   const done = (asked: CardAsk) => {
     setAsking(undefined);
-    setFocusDay({ dayKey: asked.dayKey });
+    setFocusDay({ dayKey: asked.dayKey, ...(asked.kind === 'remove' ? {} : { blockId: asked.pieceId }) });
   };
   const openBooking = open?.kind === 'booking' ? byBooking.get(open.piece.sourceId) : undefined;
   const openEvent = open?.kind === 'event' ? byEvent.get(open.piece.sourceId) : undefined;
@@ -902,7 +905,7 @@ function WeekView(props: BookingsCalendarScreenProps) {
           setRefocus(undefined);
           setOpenId(undefined);
         }}
-        {...(focusDay === undefined ? {} : { focusRequest: focusDay })}
+        {...(focusDay === undefined ? {} : { focusDay })}
         onDraw={(span) => {
           setOpenId(undefined);
           setDrawCount((count) => count + 1);

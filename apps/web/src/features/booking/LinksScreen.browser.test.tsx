@@ -112,7 +112,9 @@ describe('deleting a booking page', () => {
     const held = await renderLinks([pageOf('p1', 'Quick chat'), pageOf('p2', 'Demo')]);
     await chooseDelete('Quick chat');
     expect(alert()?.textContent).toContain('Delete “Quick chat”?');
-    expect(alert()?.textContent).toContain('The link stops working. This can’t be undone. Bookings already made stay.');
+    expect(alert()?.textContent).toContain(
+      'The link stops working, and this can’t be undone. Bookings already made stay.',
+    );
     const labels = [...(alert()?.querySelectorAll('button') ?? [])].map((button) => button.textContent);
     expect(labels[0]).toMatch(/^Cancel/);
     expect(labels.at(-1)).toBe('Delete page');

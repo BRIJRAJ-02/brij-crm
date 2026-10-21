@@ -306,8 +306,8 @@ describe('cancelling a booking', () => {
     week.cancels[1]?.resolve(undefined);
     await expect.poll(alert).toBeNull();
     expect(week.notify).toHaveBeenCalledWith('success', 'Cancelled. Ada Lovelace is emailed.');
-    // Its Cancel booking went with the cancel: focus goes to the booking's day.
-    await expect.poll(() => document.activeElement?.getAttribute('aria-label')).toMatch(/^Wednesday .*, 1 item$/);
+    // Its Cancel booking went with the cancel: focus goes to the booking, still on the week, drawn cancelled.
+    await expect.poll(() => document.activeElement?.getAttribute('aria-label')).toMatch(/^Quick chat,/);
   });
 });
 
