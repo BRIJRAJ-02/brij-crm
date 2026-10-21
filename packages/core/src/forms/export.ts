@@ -1,4 +1,4 @@
-// Exporting a form's submissions as CSV (spec 0023 follow-up, in spec 0037's
+// Exporting a form's submissions as CSV (spec 0023 follow-up, in spec 0040's
 // export shape): a member starts an export of the submissions a filter
 // matches or the ones they named; a `forms.export` job (theirs, heavy lane,
 // cancellable) reads them page by page as that member, so only submissions

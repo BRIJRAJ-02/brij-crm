@@ -1,4 +1,4 @@
-// Export files (spec 0037's shape, used first by spec 0023's submissions
+// Export files (spec 0040's shape, used first by spec 0023's submissions
 // export): one row per export a member started, and its CSV text in chunks
 // beside it, kept until `expires_at` (7 days) and deleted by the daily
 // cleanup. Files live in Postgres until R2 (#32) arrives. Only the member who
