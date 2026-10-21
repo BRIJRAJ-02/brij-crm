@@ -1,17 +1,21 @@
 # Forms
 
-Captures, Forms (spec 0023, `0023-experience.md`): forms that make a person from every enquiry. The routes are `/w/$slug/captures/forms` (the list) and `/w/$slug/captures/forms/$formId` (the editor); the Captures frame and its Links · Forms tabs come from the shell.
+Captures, Forms (spec 0023, `0023-experience.md`): forms that collect submissions from a link or a site, and add each one to the CRM unless the form keeps them only. The routes are `/w/$slug/captures/forms` (the list) and `/w/$slug/captures/forms/$formId` (the editor: `?tab=` settings, install or submissions, `&state=` and `&submission=` on Submissions, `?question=<id>` to open one question); the Captures frame and its Links · Forms tabs come from the shell.
 
 ## Screens
 
-- **The list** (`FormsScreen.tsx`): one Card per form, with its enquiries this month, spam and last enquiry as Badges, the Accepting switch (pause and resume), and a menu (Open, Copy the address, Duplicate, Delete, which names the submissions that go with it). New form makes "Untitled form" at once and opens it.
+- **The list** (`FormsScreen.tsx`): one LinkCard per form, the same card as Links: a colour edge from the form's id, its submissions ("12 submissions · 2 spam", "No submissions yet") and its link, the Accepting switch, Copy link, Open and a menu (Duplicate, Delete, which names the submissions that go with it). A form never published shows "Publish it to start taking submissions", with no switch and no link yet. New form makes "Untitled form" at once and opens it.
 - **The editor** (`FormEditor.tsx`): the TopBar holds the name with its status beside it (EditorStatus), Preview (the draft in a new tab, marked Preview, not live), Publish (only while there is something to publish) and the menu. The name changes in Settings, as a record's name changes in its fields, not from the header. PreviewLayout, the one Captures editor layout it shares with the booking page editor, holds the tabs once published (Form · Settings · Install · Submissions), notices (a read only note, a refused publish, a teammate's change), and the live preview with Colour and Corners. The draft saves itself a second after the last change; a teammate's save first shows "Bea changed this form. Load their version".
-- **Questions** (`QuestionsSection.tsx`): QuestionList cards, closed until opened, with Add a question, presets, Close all, Duplicate, Delete with Undo, and reorder by handle or keyboard.
-- **The first publish** (`PublishDialog.tsx`): Step 1 of 2, name and address (checked as typed); step 2, the object and each question's Where it goes, prefilled by label, or Build one out of this form for `schema.manage`; then Your form is live.
-- **Settings, Install, Submissions** (`SettingsTab.tsx`, `InstallTab.tsx`, `SubmissionsTab.tsx`).
+- **Questions** (`QuestionsSection.tsx`): QuestionList cards, closed until opened, with Add a question, presets, Close all, Duplicate, Delete with Undo, and reorder by handle or keyboard. A form that keeps its submissions only shows no filing: no "Where it goes", and nothing about it on the cards.
+- **The first publish** (`PublishDialog.tsx`): Step 1 of 2, name and address (checked as typed); step 2, where submissions go (an object, or "Don't add to the CRM", set apart after the objects) and each question's Where it goes, prefilled by label, or Build one out of this form for `schema.manage`; then Your form is live.
+- **Settings** (`SettingsTab.tsx`): Cards with a one line summary each: what people see after sending (a thank you message or another web page); where the answers go (Add each submission to the CRM, the object, and a map whose lines open their questions); the words on the form; the name, link and owner (saved together from the SaveBar); spam protection.
+- **Install** (`InstallTab.tsx`): share the link (Copy link, Open), put it on a website (the snippet, with Copy on its code block), and Advanced, closed (your own HTML, the sites that may post, signed posts).
+- **Submissions** (`SubmissionsTab.tsx`): what needs a review on top, then a table (the person: their record, or the name they gave; their email; when; the state, saying Not in CRM or Received for one with no record; the form's next two questions), with search, a state filter, bulk Not spam, Add to CRM and Mark as spam, export as CSV and Sync earlier submissions. A row opens the submission in a Panel.
+- **Sync earlier submissions** (`SyncDialog.tsx`): what applying the form's filing to earlier submissions would do (only what would happen), Only unfiled or All, then a background job followed to its end (`followJobs.ts`).
 
 ## Rules
 
 - `draft.ts` holds every change to a draft as a plain function; `draft.test.ts` checks them.
 - The publish check is `publishProblem` from `@crm/data/forms`, the server's own.
+- "Submission" is the one word for what a form collects, in every string here.
 - The visitor's page is `src/public/main.ts`, drawn by `@crm/ui/public-form` with no React (about 12 kB gzipped).
