@@ -258,11 +258,23 @@ function noForm(): RefusalError {
 /** A form address's shape (spec 0023, AC-552): anything else names no form and never reaches the database. */
 const PUBLIC_KEY = FORM_SLUG;
 
+/** Whether a workspace is live (not deleted, spec 0031, AC-823): a public way in to a deleted one is not found. */
+async function isLive(db: Database, workspaceId: string): Promise<boolean> {
+  return db.withWorkspace(workspaceId, async (tx) => {
+    const [workspace] = await tx
+      .select({ id: workspaces.id })
+      .from(workspaces)
+      .where(and(eq(workspaces.id, workspaceId), isNull(workspaces.deletedAt)));
+    return workspace !== undefined;
+  });
+}
+
 /**
  * The scope a public form endpoint acts in (spec 0023): the workspace and
  * form a public key names, found through `crm_form_by_key` (ids only), the
  * form as the actor, and no data access at all. NOT_FOUND for a malformed
- * or unknown key. Whether the form is live is the caller's next read.
+ * or unknown key, and for a deleted workspace. Whether the form is live is
+ * the caller's next read.
  */
 export async function enterPublicForm(
   deps: { readonly db: Database },
@@ -275,7 +287,7 @@ export async function enterPublicForm(
     ),
   );
   const [row] = found.rows;
-  if (row === undefined) throw noForm();
+  if (row === undefined || !(await isLive(deps.db, row.workspace_id))) throw noForm();
   const scope = mintScope({
     db: deps.db,
     workspaceId: row.workspace_id,
@@ -470,8 +482,8 @@ interface TokenRow extends Record<string, unknown> {
 /**
  * The guest page's entry (spec 0025, AC-674): the booking a manage token
  * names, found by the token's SHA-256 (`crm_booking_by_token`, ids only), as
- * its page's `booking` actor. The token is the only key; an unknown one is
- * NOT_FOUND. Exported only from `@crm/core/public`.
+ * its page's `booking` actor. The token is the only key; an unknown one, and
+ * one in a deleted workspace, is NOT_FOUND. Exported only from `@crm/core/public`.
  */
 export async function enterBookingByToken(
   deps: { readonly db: Database },
@@ -486,7 +498,7 @@ export async function enterBookingByToken(
     ),
   );
   const [row] = found.rows;
-  if (row === undefined) throw missing();
+  if (row === undefined || !(await isLive(deps.db, row.workspace_id))) throw missing();
   const scope = mintScope({
     db: deps.db,
     workspaceId: row.workspace_id,

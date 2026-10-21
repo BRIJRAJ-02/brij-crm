@@ -233,7 +233,7 @@ describe('deleting and restoring (AC-823)', () => {
   it('finds nothing to restore once the window has passed', async () => {
     const t = await team();
     await deleteWorkspace(t.as(t.owner, 'owner'), { confirmName: 'Acme' });
-    await testQuery(ownerUrl, `update workspaces set purge_after = now() - interval '1 minute' where id = $1`, [
+    await testQuery(ownerUrl, `update workspaces set purge_after = now() - interval '2 hours' where id = $1`, [
       t.workspaceId,
     ]);
     expect(await refusalOf(enterDeletedWorkspace(t.doorDeps, { userId: t.ownerUser, slug: t.slug }))).toMatchObject({
@@ -292,7 +292,7 @@ describe('the purge (AC-823)', () => {
     const live = await team();
     await deleteWorkspace(gone.as(gone.owner, 'owner'), { confirmName: 'Acme' });
     await deleteWorkspace(waiting.as(waiting.owner, 'owner'), { confirmName: 'Acme' });
-    await testQuery(ownerUrl, `update workspaces set purge_after = now() - interval '1 minute' where id = $1`, [
+    await testQuery(ownerUrl, `update workspaces set purge_after = now() - interval '2 hours' where id = $1`, [
       gone.workspaceId,
     ]);
     const before = await left(gone.workspaceId);
@@ -325,7 +325,7 @@ describe('the purge (AC-823)', () => {
   it('stops where its time ran out and finishes on the next call', async () => {
     const t = await team();
     await deleteWorkspace(t.as(t.owner, 'owner'), { confirmName: 'Acme' });
-    await testQuery(ownerUrl, `update workspaces set purge_after = now() - interval '1 minute' where id = $1`, [
+    await testQuery(ownerUrl, `update workspaces set purge_after = now() - interval '2 hours' where id = $1`, [
       t.workspaceId,
     ]);
     expect(await purgeWorkspace({ db: worker, log }, t.workspaceId, Date.now() - 1)).toBe('more');

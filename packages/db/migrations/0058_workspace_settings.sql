@@ -6,9 +6,11 @@
 -- Then the purge, hand written: crm_purge, a role that can't log in, owns the three functions the worker's daily
 -- cleanup calls for a workspace past its window. crm_workspaces_to_purge names them (ids only); the worker deletes
 -- every tenant table's rows itself inside withWorkspace, children first; crm_purge_workspace_begin removes first
--- what the worker can't and what points at its members (the audit rows, the outbox, the milestones, the
--- directory's memberships and last workspace pointers), and crm_purge_workspace_end the directory row and the
--- workspace last. Each acts only on a workspace deleted and past purge_after, so no call can reach a live one.
+-- what the worker can't and what points at its members (the audit rows, whose actor is a member, the outbox, the
+-- milestones, the directory's memberships and last workspace pointers), and crm_purge_workspace_end the directory
+-- row and the workspace last. Each acts only on a workspace deleted and an hour past purge_after (a restore begun inside the window has
+-- long committed by then), so no call can reach a live one. No trigger may be added on a table crm_purge deletes
+-- from without review: it would run as crm_purge, past row level security.
 -- Any change to the role or the functions goes through security-access-reviewer.
 set local lock_timeout = '5s';
 --> statement-breakpoint
@@ -53,7 +55,7 @@ grant select (workspace_id) on auth.workspace_membership, auth.workspace_directo
 grant select (last_workspace_id), update (last_workspace_id) on auth.user_prefs to crm_purge;
 --> statement-breakpoint
 
--- The workspaces past their window, oldest first, ids only, at most `max` (clamped to 1 to 50).
+-- The workspaces an hour past their window, oldest first, ids only, at most `max` (clamped to 1 to 50).
 create function crm_workspaces_to_purge(max integer)
   returns setof uuid
   language sql
@@ -64,7 +66,7 @@ create function crm_workspaces_to_purge(max integer)
 begin atomic
   select w.id
   from public.workspaces w
-  where w.deleted_at is not null and w.purge_after <= pg_catalog.now()
+  where w.deleted_at is not null and w.purge_after <= pg_catalog.now() - interval '1 hour'
   order by w.purge_after, w.id
   limit least(greatest(crm_workspaces_to_purge.max, 1), 50);
 end;
@@ -80,25 +82,25 @@ begin atomic
   delete from public.audit_events a
   where a.workspace_id = crm_purge_workspace_begin.workspace_id
     and exists (select 1 from public.workspaces w where w.id = crm_purge_workspace_begin.workspace_id
-      and w.deleted_at is not null and w.purge_after <= pg_catalog.now());
+      and w.deleted_at is not null and w.purge_after <= pg_catalog.now() - interval '1 hour');
   delete from public.outbox o
   where o.workspace_id = crm_purge_workspace_begin.workspace_id
     and exists (select 1 from public.workspaces w where w.id = crm_purge_workspace_begin.workspace_id
-      and w.deleted_at is not null and w.purge_after <= pg_catalog.now());
+      and w.deleted_at is not null and w.purge_after <= pg_catalog.now() - interval '1 hour');
   delete from public.workspace_milestones m
   where m.workspace_id = crm_purge_workspace_begin.workspace_id
     and exists (select 1 from public.workspaces w where w.id = crm_purge_workspace_begin.workspace_id
-      and w.deleted_at is not null and w.purge_after <= pg_catalog.now());
+      and w.deleted_at is not null and w.purge_after <= pg_catalog.now() - interval '1 hour');
   delete from auth.workspace_membership m
   where m.workspace_id = crm_purge_workspace_begin.workspace_id
     and exists (select 1 from public.workspaces w where w.id = crm_purge_workspace_begin.workspace_id
-      and w.deleted_at is not null and w.purge_after <= pg_catalog.now());
+      and w.deleted_at is not null and w.purge_after <= pg_catalog.now() - interval '1 hour');
   update auth.user_prefs p set last_workspace_id = null
   where p.last_workspace_id = crm_purge_workspace_begin.workspace_id
     and exists (select 1 from public.workspaces w where w.id = crm_purge_workspace_begin.workspace_id
-      and w.deleted_at is not null and w.purge_after <= pg_catalog.now());
+      and w.deleted_at is not null and w.purge_after <= pg_catalog.now() - interval '1 hour');
   select exists (select 1 from public.workspaces w where w.id = crm_purge_workspace_begin.workspace_id
-    and w.deleted_at is not null and w.purge_after <= pg_catalog.now());
+    and w.deleted_at is not null and w.purge_after <= pg_catalog.now() - interval '1 hour');
 end;
 --> statement-breakpoint
 -- After the worker's deletes: the directory row and the workspace. A tenant row left behind fails its foreign key
@@ -112,10 +114,10 @@ begin atomic
   delete from auth.workspace_directory d
   where d.workspace_id = crm_purge_workspace_end.workspace_id
     and exists (select 1 from public.workspaces w where w.id = crm_purge_workspace_end.workspace_id
-      and w.deleted_at is not null and w.purge_after <= pg_catalog.now());
+      and w.deleted_at is not null and w.purge_after <= pg_catalog.now() - interval '1 hour');
   delete from public.workspaces w
   where w.id = crm_purge_workspace_end.workspace_id
-    and w.deleted_at is not null and w.purge_after <= pg_catalog.now();
+    and w.deleted_at is not null and w.purge_after <= pg_catalog.now() - interval '1 hour';
   select not exists (select 1 from public.workspaces w where w.id = crm_purge_workspace_end.workspace_id);
 end;
 --> statement-breakpoint

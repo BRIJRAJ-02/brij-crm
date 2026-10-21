@@ -20,6 +20,9 @@ export const PURGE_BATCH = 5000;
 /** How long the purge waits for calendar grants to end with their provider before it goes on anyway. */
 const CALENDAR_GRACE = '1 day';
 
+/** How long after `purge_after` the purge begins: a restore begun inside the window has committed by then. */
+const MARGIN = '1 hour';
+
 /** The tables the purge functions clear, and the workspace itself: never in the worker's own pass. */
 const OWN_STEPS: readonly string[] = ['workspaces', 'audit_events', 'outbox', 'workspace_milestones'];
 
@@ -55,18 +58,23 @@ interface TableEdge {
  * and a missing grant fails loudly at the end.
  */
 async function tenantTables(tx: WorkspaceTx): Promise<readonly TableEdge[]> {
-  const tables = await tx.execute<{ name: string }>(sql`
-    select c.oid::regclass::text as name
+  // Names qualified and quoted by the catalog (format %I), whatever the search path; the purge functions' own tables
+  // left out by their bare names.
+  const tables = await tx.execute<{ name: string; relname: string }>(sql`
+    select format('%I.%I', n.nspname, c.relname) as name, c.relname
     from pg_class c join pg_namespace n on n.oid = c.relnamespace
     where n.nspname = 'public' and c.relkind in ('r', 'p') and not c.relispartition
       and exists (select 1 from pg_attribute a where a.attrelid = c.oid and a.attname = 'workspace_id' and not a.attisdropped)
     order by 1
   `);
   const edges = await tx.execute<{ child: string; parent: string }>(sql`
-    select distinct conrelid::regclass::text as child, confrelid::regclass::text as parent
-    from pg_constraint where contype = 'f' and conrelid <> confrelid
+    select distinct format('%I.%I', cn.nspname, cc.relname) as child, format('%I.%I', pn.nspname, pc.relname) as parent
+    from pg_constraint k
+    join pg_class cc on cc.oid = k.conrelid join pg_namespace cn on cn.oid = cc.relnamespace
+    join pg_class pc on pc.oid = k.confrelid join pg_namespace pn on pn.oid = pc.relnamespace
+    where k.contype = 'f' and k.conrelid <> k.confrelid
   `);
-  const names = tables.rows.map((row) => row.name).filter((name) => !OWN_STEPS.includes(name));
+  const names = tables.rows.filter((row) => !OWN_STEPS.includes(row.relname)).map((row) => row.name);
   return names.map((name) => ({
     name,
     children: edges.rows.filter((edge) => edge.parent === name && names.includes(edge.child)).map((edge) => edge.child),
@@ -110,27 +118,41 @@ async function endCalendarGrants(db: Database, workspaceId: string): Promise<boo
       select exists (
         select 1 from calendar_connections
         where workspace_id = ${workspaceId}::uuid and updated_at > now() - ${CALENDAR_GRACE}::interval
+      )
+      -- However often a revoke retries, the wait ends a day after the purge could first begin.
+      and exists (
+        select 1 from workspaces where id = ${workspaceId}::uuid
+          and purge_after > now() - ${MARGIN}::interval - ${CALENDAR_GRACE}::interval
       ) as waiting
     `);
     return waiting.rows[0]?.waiting === true;
   });
 }
 
+/** Every delete checks again that the workspace is still deleted and past the margin, so a restore stops it. */
+const stillDeleted = (workspaceId: string) =>
+  sql`exists (select 1 from workspaces where id = ${workspaceId}::uuid and deleted_at is not null
+    and purge_after <= now() - ${MARGIN}::interval)`;
+
 /** One batch from one table: how many rows went. A self reference a batch can't respect goes in one statement. */
-async function deleteBatch(db: Database, workspaceId: string, name: string): Promise<number> {
+async function deleteBatch(db: Database, log: PurgeLog, workspaceId: string, name: string): Promise<number> {
   const table = sql.raw(name);
   try {
     return await db.withWorkspace(workspaceId, async (tx) => {
       const done = await tx.execute(sql`
-        delete from ${table} where workspace_id = ${workspaceId}::uuid
+        delete from ${table} where workspace_id = ${workspaceId}::uuid and ${stillDeleted(workspaceId)}
           and ctid = any (array(select ctid from ${table} where workspace_id = ${workspaceId}::uuid limit ${PURGE_BATCH}))
       `);
       return done.rowCount ?? 0;
     });
   } catch (error) {
     if (!isForeignKeyError(error)) throw error;
+    // A self reference a batch cut through: the table in one statement (logged, as it ignores the deadline).
+    log.info('workspace.purge.whole_table', { workspaceId, table: name });
     return db.withWorkspace(workspaceId, async (tx) => {
-      const done = await tx.execute(sql`delete from ${table} where workspace_id = ${workspaceId}::uuid`);
+      const done = await tx.execute(
+        sql`delete from ${table} where workspace_id = ${workspaceId}::uuid and ${stillDeleted(workspaceId)}`,
+      );
       return done.rowCount ?? 0;
     });
   }
@@ -140,7 +162,7 @@ async function deleteBatch(db: Database, workspaceId: string, name: string): Pro
 async function deleteTogether(db: Database, workspaceId: string, names: readonly string[]): Promise<number> {
   const parts = names.map(
     (name, index) =>
-      sql`${sql.raw(`d${String(index)}`)} as (delete from ${sql.raw(name)} where workspace_id = ${workspaceId}::uuid returning 1)`,
+      sql`${sql.raw(`d${String(index)}`)} as (delete from ${sql.raw(name)} where workspace_id = ${workspaceId}::uuid and ${stillDeleted(workspaceId)} returning 1)`,
   );
   const counts = names.map((_, index) => sql.raw(`(select count(*) from d${String(index)})`));
   return db.withWorkspace(workspaceId, async (tx) => {
@@ -172,7 +194,7 @@ export async function purgeWorkspace(deps: PurgeDeps, workspaceId: string, deadl
   const due = await db.withWorkspace(workspaceId, (tx) =>
     tx.execute<{ due: boolean }>(sql`
       select exists (select 1 from workspaces where id = ${workspaceId}::uuid and deleted_at is not null
-        and purge_after <= now()) as due
+        and purge_after <= now() - ${MARGIN}::interval) as due
     `),
   );
   if (due.rows[0]?.due !== true) return 'skipped';
@@ -195,7 +217,7 @@ export async function purgeWorkspace(deps: PurgeDeps, workspaceId: string, deadl
         deps.log.info('workspace.purge', { workspaceId, counts, done: false });
         return 'more';
       }
-      const gone = await deleteBatch(db, workspaceId, name);
+      const gone = await deleteBatch(db, deps.log, workspaceId, name);
       if (gone > 0) counts[name] = (counts[name] ?? 0) + gone;
       if (gone < PURGE_BATCH) break;
     }
