@@ -23,20 +23,27 @@ export interface FramedPage {
 /** The workspace's name: what the frame loaded, else what `me` already said (known before the frame loads). */
 export function useWorkspaceName(): string | undefined {
   const { slug = '' } = useParams({ strict: false });
-  const frame = useMatch({ from: '/w/$slug', shouldThrow: false });
-  // Absent while the frame's beforeLoad is still asking, whatever the route's type says.
-  const me: Me | undefined = frame?.context.me;
-  return frame?.loaderData?.workspaceName ?? me?.workspaces.find((workspace) => workspace.slug === slug)?.name;
+  // Selected, so a router state change (each step of a page switch) re-renders a reader only when the name changes.
+  return useMatch({
+    from: '/w/$slug',
+    shouldThrow: false,
+    select: (frame) => {
+      // Absent while the frame's beforeLoad is still asking, whatever the route's type says.
+      const me = frame.context.me as Me | undefined;
+      const loaded = frame.loaderData as { readonly workspaceName?: string } | undefined;
+      return loaded?.workspaceName ?? me?.workspaces.find((workspace) => workspace.slug === slug)?.name;
+    },
+  });
 }
 
 /** The open workspace's objects, as the frame loaded them; undefined while they load. */
 export function useWorkspaceObjects() {
-  return useMatch({ from: '/w/$slug', shouldThrow: false })?.loaderData?.objects;
+  return useMatch({ from: '/w/$slug', shouldThrow: false, select: (frame) => frame.loaderData?.objects });
 }
 
 /** The person's own access in the open workspace, as the frame loaded it; undefined while it loads. */
 export function useMyAccess(): MyAccess | undefined {
-  return useMatch({ from: '/w/$slug', shouldThrow: false })?.loaderData?.access;
+  return useMatch({ from: '/w/$slug', shouldThrow: false, select: (frame) => frame.loaderData?.access });
 }
 
 /**
@@ -176,13 +183,15 @@ export function WorkspaceLayout({ children }: WorkspaceLayoutProps) {
     },
   });
   const frame = useMemo(() => ({ topBar, viewBar, toolbar, setNav }), [topBar, viewBar, toolbar, setNav]);
-  const settings: SettingsSidebar | undefined =
-    nav.settingsBackHref === undefined
-      ? undefined
-      : {
-          backHref: nav.settingsBackHref,
-          ...(nav.settingsCurrent === undefined ? {} : { current: nav.settingsCurrent }),
-        };
+  const { settingsBackHref, settingsCurrent } = nav;
+  // Kept while the page stays, so the frame's sidebar isn't drawn again for a new but equal object.
+  const settings: SettingsSidebar | undefined = useMemo(
+    () =>
+      settingsBackHref === undefined
+        ? undefined
+        : { backHref: settingsBackHref, ...(settingsCurrent === undefined ? {} : { current: settingsCurrent }) },
+    [settingsBackHref, settingsCurrent],
+  );
   return (
     <Layout value={frame}>
       <FrameWithData
@@ -244,11 +253,15 @@ function FrameWithData({
 }: FrameWithDataProps) {
   const { data, toasts } = useRouteContext({ from: '__root__' });
   const { slug = '' } = useParams({ strict: false });
-  const frame = useMatch({ from: '/w/$slug', shouldThrow: false });
-  const workspace = frame?.loaderData;
+  // Each read selected, so the frame re-renders when what it shows changes, not at every step of a page switch.
+  const workspace = useMatch({ from: '/w/$slug', shouldThrow: false, select: (frame) => frame.loaderData });
   const workspaceName = useWorkspaceName();
   // Every workspace the person is in, for the workspace menu's switcher (spec 0031, AC-801).
-  const me: Me | undefined = frame?.context.me;
+  const me: Me | undefined = useMatch({
+    from: '/w/$slug',
+    shouldThrow: false,
+    select: (frame): Me | undefined => frame.context.me,
+  });
   return (
     <WorkspaceFrame
       data={data}

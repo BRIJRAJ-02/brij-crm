@@ -449,7 +449,17 @@ describe('the list rows', () => {
           objects={[people]}
           pages={[]}
           locale="en-GB"
-          actions={{ cancel: vi.fn(), move: vi.fn(), moveSlots: vi.fn(), guestLink: vi.fn(), notify: vi.fn() }}
+          actions={{
+            cancel: vi.fn(),
+            move: vi.fn(),
+            moveSlots: vi.fn(),
+            guestLink: vi.fn(),
+            notify: vi.fn(),
+            assignments: vi.fn(() => Promise.resolve([])),
+            reassign: vi.fn(),
+            rotations: vi.fn(() => Promise.resolve([])),
+            markNoShow: vi.fn(() => Promise.resolve()),
+          }}
           onSearch={() => undefined}
         />
       ),
