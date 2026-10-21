@@ -61,6 +61,16 @@ export const BesideALabel: Story = {
   ),
 };
 
+/** `md`, a control's height, for beside a control rather than a label. */
+export const Medium: Story = {
+  args: { size: 'md' },
+  render: (args) => (
+    <Stage>
+      <InfoTip {...args} />
+    </Stage>
+  ),
+};
+
 /** By keyboard: Enter opens it, focus moves into the help, and Esc closes it with focus back on the button. */
 export const Keyboard: Story = {
   parameters: { crm: { screenshot: false } },
