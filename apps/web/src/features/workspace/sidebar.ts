@@ -87,3 +87,23 @@ export function drawnSections(nav: NavState, universe: NavUniverse): DrawnSectio
 /** The pages above the sections (Tasks, and Inbox once it exists) in the member's order, hidden ones included. */
 export const topEntries = (nav: NavState, universe: NavUniverse): NavEntry[] =>
   sectionItems(prefsOf(nav), universe, 'top');
+
+/**
+ * The `toIndex` a section move takes when the member drops it at `visibleIndex` among the sections drawn: next to
+ * the drawn section it was dropped beside, the sections not drawn (empty Favourites, Lists) keeping their places.
+ */
+export function sectionMoveIndex(
+  order: readonly NavSectionKey[],
+  drawn: readonly NavSectionKey[],
+  key: NavSectionKey,
+  visibleIndex: number,
+): number {
+  const rest = drawn.filter((each) => each !== key);
+  const remaining = order.filter((each) => each !== key);
+  const at = Math.min(Math.max(visibleIndex, 0), rest.length);
+  const before = rest[at - 1];
+  const after = rest[at];
+  if (before !== undefined) return remaining.indexOf(before) + 1;
+  if (after !== undefined) return remaining.indexOf(after);
+  return 0;
+}

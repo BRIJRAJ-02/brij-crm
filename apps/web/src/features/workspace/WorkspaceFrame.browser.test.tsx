@@ -394,4 +394,62 @@ describe('the app’s sidebar (spec 0034)', () => {
     expect(names).toContain('Help and shortcuts');
     for (const name of ['Tasks', 'Records', 'Scheduling', 'Trash']) expect(names).not.toContain(name);
   });
+
+  /** Opens a menu by its button's name and picks one of its items, letting React settle. */
+  async function pick(menuButton: string, item: string) {
+    await act(async () => {
+      button(menuButton)?.click();
+      await new Promise((resolve) => setTimeout(resolve, 80));
+    });
+    const choice = [...document.querySelectorAll<HTMLElement>('[role="menuitem"]')].find(
+      (each) => each.textContent.trim() === item,
+    );
+    if (choice === undefined) throw new Error(`No ${item} in ${menuButton}.`);
+    await act(async () => {
+      choice.click();
+      await new Promise((resolve) => setTimeout(resolve, 80));
+    });
+  }
+
+  it('hides an object from its menu (AC-933)', async () => {
+    await renderFrame(undefined, { objects: OBJECTS });
+    await pick('More for Companies', 'Hide from sidebar');
+    expect(sent).toEqual([{ op: 'hide', kind: 'object', id: COMPANIES }]);
+  });
+
+  it('moves a section from its menu, counting the sections it doesn’t draw (AC-932)', async () => {
+    await renderFrame(undefined, { objects: OBJECTS });
+    await pick('Scheduling options', 'Move up');
+    // Drawn: Records, Scheduling; stored: Favourites, Records, Lists, Scheduling. Up lands before Records.
+    expect(sent).toEqual([{ op: 'moveSection', section: 'scheduling', toIndex: 1 }]);
+  });
+
+  it('reorders an item from the keyboard on its grip, announcing the move (AC-932)', async () => {
+    await renderFrame(undefined, { objects: OBJECTS });
+    const grip = button('Move Companies');
+    if (grip === undefined) throw new Error('No grip.');
+    await act(async () => {
+      grip.focus();
+      await new Promise((resolve) => setTimeout(resolve, 20));
+    });
+    await press(grip, ' ');
+    await press(grip, 'ArrowUp');
+    await press(grip, ' ');
+    expect(sent).toEqual([{ op: 'move', kind: 'object', id: COMPANIES, toIndex: 0 }]);
+    const said = [...document.querySelectorAll('[role="status"]')].map((each) => each.textContent).join(' ');
+    expect(said).toContain('Companies, moved to position 1 of 2.');
+  });
+
+  it('opens Customise sidebar from a section’s menu, listing Your work and each section’s items', async () => {
+    await renderFrame(undefined, { objects: OBJECTS });
+    await pick('Records options', 'Customise sidebar');
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 300));
+    });
+    const dialog = document.querySelector('[role="dialog"]');
+    expect(dialog?.textContent).toContain('Customise sidebar');
+    expect(dialog?.textContent).toContain('Your work');
+    // Tasks, People, Companies and the four Scheduling pages, each with its switch.
+    expect(dialog?.querySelectorAll('[role="switch"]')).toHaveLength(7);
+  });
 });

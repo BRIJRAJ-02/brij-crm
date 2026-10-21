@@ -7,7 +7,7 @@ import type { NavState, ObjectSummary } from '@crm/data';
 import { capturesPath, movedHref } from './moved.ts';
 import { settingsHomeHref, trashHref } from './objects.ts';
 import { keepRailHint, readRailHint } from './rail.ts';
-import { drawnSections, PAGE_LINKS, topEntries, universeOf } from './sidebar.ts';
+import { drawnSections, PAGE_LINKS, sectionMoveIndex, topEntries, universeOf } from './sidebar.ts';
 
 const tree = readFileSync(new URL('../../routeTree.gen.ts', import.meta.url), 'utf8');
 /** Every route's full path, as the generated tree states them. */
@@ -168,5 +168,15 @@ describe('the rail on the first paint (AC-935)', () => {
     });
     keepRailHint('acme', true);
     expect(readRailHint('acme')).toBe(false);
+  });
+});
+
+describe('a section dropped among the drawn sections (AC-932)', () => {
+  const order = ['favourites', 'records', 'lists', 'scheduling'] as const;
+  it('lands beside the drawn section it was dropped next to, the undrawn ones keeping their places', () => {
+    // Drawn: Records, Scheduling (no favourites, no lists).
+    expect(sectionMoveIndex(order, ['records', 'scheduling'], 'scheduling', 0)).toBe(1);
+    expect(sectionMoveIndex(order, ['records', 'scheduling'], 'records', 1)).toBe(3);
+    expect(sectionMoveIndex(order, ['records'], 'records', 0)).toBe(0);
   });
 });

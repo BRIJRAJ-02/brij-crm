@@ -1,7 +1,7 @@
 // Brief
 // Purpose: the frame every page inside a workspace sits in: the sidebar beside the page (inside Settings, the settings sidebar).
-// Main task: move between Tasks, the member's sections (Records, then Scheduling) in their own order, and the trash; fold a section or the whole sidebar, kept for the member on every device (spec 0034); open Settings (⌘,), the shortcuts (?) and sign out; undo (⌘Z).
-// Leaves out: the workspace menu's contents (spec 0031), Quick actions (the command menu), Inbox, Lists and Invite teammates (features still to come), reordering, hiding and favourites (spec 0034's later milestones), and the theme (Settings › Preferences).
+// Main task: move between Tasks, the member's sections (Records, then Scheduling) in their own order, and the trash; fold, reorder or hide, or fold the whole sidebar, kept for the member on every device (spec 0034); open Settings (⌘,), the shortcuts (?) and sign out; undo (⌘Z).
+// Leaves out: the workspace menu's contents (spec 0031), Quick actions (the command menu), Inbox, Lists and Invite teammates (features still to come), starring (spec 0034's milestone 3), and the theme (Settings › Preferences).
 import type { DataLayer, NavSnapshot, NavSource, NavState, NavUniverse, ObjectSummary, Permission } from '@crm/data';
 import { useNav } from '@crm/data/react';
 import {
@@ -20,19 +20,24 @@ import {
   type Toasts,
 } from '@crm/ui';
 import { useNavigate } from '@tanstack/react-router';
-import { useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
+import { lazy, Suspense, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
 import { settingsNav, visibleSettingsNav, type SettingsPageId } from '../settings/nav.ts';
 import { strings as settingsStrings } from '../settings/strings.ts';
 import { CalendarBanner } from './CalendarBanner.tsx';
 import { settingsHomeHref, trashHref } from './objects.ts';
 import { keepRailHint, readRailHint } from './rail.ts';
 import { PAGE_LINKS, topEntries, universeOf, type SidebarPage } from './sidebar.ts';
-import { SidebarSections } from './SidebarSections.tsx';
+import { itemMenu, SidebarSections } from './SidebarSections.tsx';
 import { strings } from './strings.ts';
 import { belongsElsewhere, isRailKey, RAIL_KEYS, SETTINGS_KEYS, UNDO_KEYS, type KeyTarget } from './undo.ts';
 import { useUndoShortcut } from './useUndoShortcut.ts';
 
 export type { SidebarPage } from './sidebar.ts';
+
+// Behind a section's menu, so it loads only when first opened.
+const CustomiseSidebarDialog = lazy(() =>
+  import('./CustomiseSidebarDialog.tsx').then((module) => ({ default: module.CustomiseSidebarDialog })),
+);
 
 /**
  * What the sidebar draws when the member's own couldn't be read (spec 0034): the defaults, with the pages every
@@ -151,10 +156,16 @@ export function WorkspaceFrame({
   }, [slug, keptRail]);
   const setRail = useCallback(
     (on: boolean) => {
-      data.nav.change(slug, { op: 'rail', on }, universe);
+      void data.nav.change(slug, { op: 'rail', on }, universe);
     },
     [data, slug, universe],
   );
+  const [isCustomising, setCustomising] = useState(false);
+  const [hasCustomised, setHasCustomised] = useState(false);
+  const openCustomise = useCallback(() => {
+    setHasCustomised(true);
+    setCustomising(true);
+  }, []);
   const signOut = () => {
     if (isSigningOut) return;
     setSigningOut(true);
@@ -240,7 +251,15 @@ export function WorkspaceFrame({
             }
           >
             {!isMissing && nav !== undefined && (
-              <TopPages slug={slug} nav={nav} universe={universe} currentPage={currentPage} />
+              <TopPages
+                slug={slug}
+                nav={nav}
+                universe={universe}
+                currentPage={currentPage}
+                onHide={(page) => {
+                  void data.nav.change(slug, { op: 'hide', kind: 'page', id: page }, universe);
+                }}
+              />
             )}
             {!isMissing &&
               (nav === undefined ? (
@@ -255,6 +274,7 @@ export function WorkspaceFrame({
                   objects={objects}
                   {...(currentObject === undefined ? {} : { currentObject })}
                   {...(currentPage === undefined ? {} : { currentPage })}
+                  onCustomise={openCustomise}
                 />
               ))}
             {!isMissing && nav !== undefined && <RailShortcut isRail={isRail} onRail={setRail} />}
@@ -263,6 +283,18 @@ export function WorkspaceFrame({
       }
     >
       {children}
+      {hasCustomised && nav !== undefined && (
+        <Suspense fallback={null}>
+          <CustomiseSidebarDialog
+            data={data}
+            slug={slug}
+            nav={nav}
+            objects={objects}
+            isOpen={isCustomising}
+            onOpenChange={setCustomising}
+          />
+        </Suspense>
+      )}
       <ShortcutHelp
         isOpen={isHelpOpen}
         onOpenChange={setHelpOpen}
@@ -283,17 +315,19 @@ export function WorkspaceFrame({
   );
 }
 
-/** The pages above the sections (AC-921, AC-924): Tasks today, Inbox once notifications exist; never one hidden. */
+/** The pages above the sections (AC-921, AC-924): Tasks today, Inbox once notifications exist; one hidden isn't drawn, and its menu hides it. */
 function TopPages({
   slug,
   nav,
   universe,
   currentPage,
+  onHide,
 }: {
   readonly slug: string;
   readonly nav: NavState;
   readonly universe: NavUniverse;
   readonly currentPage: SidebarPage | undefined;
+  readonly onHide: (page: string) => void;
 }) {
   const items = topEntries(nav, universe)
     .filter((entry) => !entry.hidden)
@@ -301,7 +335,15 @@ function TopPages({
       const page = PAGE_LINKS[entry.id as keyof typeof PAGE_LINKS];
       if (page === undefined) return [];
       return [
-        <NavItem key={entry.id} icon={page.icon} href={page.href(slug)} isCurrent={currentPage === entry.id}>
+        <NavItem
+          key={entry.id}
+          icon={page.icon}
+          href={page.href(slug)}
+          isCurrent={currentPage === entry.id}
+          menu={itemMenu(page.label, strings.hideFromSidebar, () => {
+            onHide(entry.id);
+          })}
+        >
           {page.label}
         </NavItem>,
       ];

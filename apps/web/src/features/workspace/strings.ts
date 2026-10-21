@@ -35,6 +35,15 @@ export const strings = {
   scheduling: 'Scheduling',
   /** The foot's way to the shortcut list (AC-930: it opens the keyboard shortcuts until a help centre exists). */
   help: 'Help and shortcuts',
+  /** Item and section menus (spec 0034, AC-932, AC-933). */
+  hideFromSidebar: 'Hide from sidebar',
+  removeFavourite: 'Remove from favourites',
+  moveUp: 'Move up',
+  moveDown: 'Move down',
+  customiseSidebar: 'Customise sidebar',
+  /** An item's and a section's menu, for screen readers: "Deals options". */
+  itemOptions: (name: string) => `${name} options`,
+  sectionOptions: (title: string) => `${title} options`,
   /** A favourite record with no name (spec 0034, AC-925): "Unnamed person". */
   unnamedRecord: (singular: string) => `Unnamed ${singular.toLowerCase()}`,
   /** The workspace menu's way into settings (spec 0012), above Sign out. */

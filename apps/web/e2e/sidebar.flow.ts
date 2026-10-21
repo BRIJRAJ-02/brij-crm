@@ -2,7 +2,9 @@
 // Settings and Help at the foot, AC-921, AC-928, AC-930); the member folds Scheduling and turns the rail on with [
 // in one browser, and their second browser follows within a second (AC-931, AC-935, AC-937); a reload keeps both
 // (AC-936); and every old Captures and Bookings › Availability address lands on its new page with its query kept,
-// replacing the history entry (AC-929).
+// replacing the history entry (AC-929). Milestone 2: an object hidden from its menu and back from Customise
+// sidebar, an item and a section reordered by keyboard, live in the second browser, and Reset to default behind its
+// confirm (AC-932, AC-933).
 import { randomUUID } from 'node:crypto';
 import { expect, test, type Page } from '@playwright/test';
 import { newWorkspace, signInAgain } from './people.ts';
@@ -111,6 +113,81 @@ test.describe('sidebar', () => {
     await expect(page.getByRole('heading', { level: 1, name: 'Availability' })).toBeVisible();
     await page.goBack();
     await expect(page).toHaveURL(new RegExp(`/w/${slug}/booking-pages$`));
+    await other.close();
+  });
+
+  test('hides, brings back and reorders, live in the second browser, and resets behind a confirm', async ({
+    browser,
+    page,
+  }, testInfo) => {
+    test.setTimeout(180_000);
+    const tag = randomUUID().slice(0, 8);
+    const email = `sidebar2-${tag}@example.com`;
+    const slug = `sidebar2-${tag}`;
+    const code = await newWorkspace(page, email, slug);
+    const deals = (on: Page) => nav(on).getByRole('link', { name: 'Deals', exact: true });
+    await expect(deals(page)).toBeVisible();
+    const other = await browser.newContext({
+      baseURL: testInfo.project.use.baseURL,
+      viewport: { width: 1280, height: 800 },
+    });
+    const second = await other.newPage();
+    await signInAgain(second, email, `/w/${slug}/objects/people`, [code]);
+    await expect(deals(second)).toBeVisible();
+
+    // Hide Deals from its menu (AC-933); the second browser follows (AC-937).
+    await deals(page).hover();
+    await nav(page).getByRole('button', { name: 'More for Deals' }).click();
+    await page.getByRole('menuitem', { name: 'Hide from sidebar' }).click();
+    await expect(deals(page)).toHaveCount(0);
+    if (LIVE) await expect(deals(second)).toHaveCount(0, { timeout: 10_000 });
+
+    // Companies first by keyboard on its grip (AC-932): Space lifts, the arrow moves, Space drops.
+    const grip = nav(page).getByRole('button', { name: 'Move Companies' });
+    await grip.focus();
+    await page.keyboard.press('Space');
+    await page.keyboard.press('ArrowUp');
+    await page.keyboard.press('Space');
+    const records = (on: Page) =>
+      nav(on)
+        .getByRole('link')
+        .filter({ hasText: /^(People|Companies)$/ });
+    await expect(records(page).first()).toHaveText('Companies');
+    if (LIVE) await expect(records(second).first()).toHaveText('Companies', { timeout: 10_000 });
+
+    // Scheduling above Records from its menu.
+    await nav(page).getByRole('button', { name: 'Scheduling options' }).click();
+    await page.getByRole('menuitem', { name: 'Move up' }).click();
+    const labels = nav(page).getByRole('button', { name: /^(Records|Scheduling)$/ });
+    await expect(labels.first()).toHaveText('Scheduling');
+
+    // Customise sidebar brings Deals back.
+    await nav(page).getByRole('button', { name: 'Records options' }).click();
+    await page.getByRole('menuitem', { name: 'Customise sidebar' }).click();
+    const dialog = page.getByRole('dialog', { name: 'Customise sidebar' });
+    await dialog.getByRole('switch', { name: 'Show Deals in the sidebar' }).press('Space');
+    await expect(deals(page)).toBeVisible();
+
+    // Reset to default asks first: Cancel changes nothing, Reset sidebar puts the default back once.
+    await dialog.getByRole('button', { name: 'Reset to default' }).click();
+    const confirm = page.getByRole('alertdialog', { name: 'Reset your sidebar?' });
+    await confirm.getByRole('button', { name: /Cancel/ }).click();
+    await expect(confirm).toHaveCount(0);
+    await expect(labels.first()).toHaveText('Scheduling');
+    await dialog.getByRole('button', { name: 'Reset to default' }).click();
+    await confirm.getByRole('button', { name: 'Reset sidebar' }).click();
+    await expect(confirm).toHaveCount(0);
+    await expect(labels.first()).toHaveText('Records');
+    await expect(records(page).first()).toHaveText('People');
+    await dialog.getByRole('button', { name: 'Done' }).click();
+
+    // A reload keeps the reset (AC-936).
+    await page.reload();
+    await expect(
+      nav(page)
+        .getByRole('button', { name: /^(Records|Scheduling)$/ })
+        .first(),
+    ).toHaveText('Records');
     await other.close();
   });
 });
