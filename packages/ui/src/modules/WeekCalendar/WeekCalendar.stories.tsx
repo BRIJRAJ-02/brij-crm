@@ -134,6 +134,87 @@ export const Busy: Story = {
   ),
 };
 
+/** Short blocks on one day: a booking of 15, 30, 45 and 60 minutes, a 15 minute event and a 15 minute hold. */
+function shortBlocks(): WeekCalendarBlock[] {
+  const day = '2026-10-06';
+  const block = (
+    id: string,
+    start: number,
+    minutes: number,
+    rest: Pick<WeekCalendarBlock, 'title' | 'time' | 'kind'> & Partial<WeekCalendarBlock>,
+  ): WeekCalendarBlock => ({ id, dayKey: day, startMinute: start, endMinute: start + minutes, ...rest });
+  return [
+    block('b15', 9 * 60, 15, { title: 'Grace Hopper', time: '9:00 AM', kind: 'booking', provider: 'timefix' }),
+    block('b30', 10 * 60, 30, {
+      title: 'Ada Lovelace',
+      time: '10:00 – 10:30 AM',
+      kind: 'booking',
+      provider: 'timefix',
+    }),
+    block('b45', 11 * 60, 45, { title: 'Alan Turing', time: '11:00 – 11:45 AM', kind: 'booking', detail: 'Intro' }),
+    block('b60', 12 * 60, 60, { title: 'Katherine Johnson', time: '12:00 – 1:00 PM', kind: 'booking', detail: 'Demo' }),
+    block('e15', 14 * 60, 15, {
+      title: 'Check in',
+      time: '2:00 PM',
+      kind: 'event',
+      hue: 'blue',
+      provider: 'google-calendar',
+    }),
+    block('h15', 15 * 60, 15, { title: 'Held', time: '3:00 PM', kind: 'held' }),
+  ];
+}
+
+/** Each piece's words and its box: whether the words sit inside it, centred for a quarter hour. */
+function wordsInside(piece: HTMLElement, words: HTMLElement): { readonly centred: boolean; readonly inside: boolean } {
+  const box = piece.getBoundingClientRect();
+  const text = words.getBoundingClientRect();
+  const middle = (rect: DOMRect) => rect.top + rect.height / 2;
+  return {
+    centred: Math.abs(middle(box) - middle(text)) <= 1,
+    inside: text.top >= box.top - 1 && text.top <= box.bottom,
+  };
+}
+
+/**
+ * Short blocks and a short span (the owner's 15 minute click, 21 October 2026): a quarter hour is shorter than
+ * a label's line, so its words are one compact line, centred in the block and clipped at its edge, never running
+ * over its border; half an hour puts the title and time on one line at the top; 45 minutes the title over the
+ * time. The drawn quarter hour on Thursday reads its start inside its box.
+ */
+export const ShortBlocks: Story = {
+  args: { selectedDay: '2026-10-06', scrollToMinute: 8 * 60 + 45 },
+  render: (args) => (
+    <Stage width="fill">
+      <WeekCalendar
+        {...args}
+        days={days()}
+        blocks={shortBlocks()}
+        draft={{ dayKey: '2026-10-08', startMinute: 16 * 60, endMinute: 16 * 60 + 15 }}
+        minuteLabel={(minute) =>
+          `${String(Math.floor(minute / 60) % 12 === 0 ? 12 : Math.floor(minute / 60) % 12)}:${String(minute % 60).padStart(2, '0')} ${minute < 720 ? 'AM' : 'PM'}`
+        }
+      />
+    </Stage>
+  ),
+  play: async ({ canvasElement }) => {
+    const pieces = [...canvasElement.querySelectorAll<HTMLElement>('button[data-size]')];
+    await expect(pieces).toHaveLength(6);
+    for (const piece of pieces) {
+      const title = piece.querySelector<HTMLElement>('[class*="block-title"]');
+      if (title === null) throw new Error('a block without its title');
+      const { centred, inside } = wordsInside(piece, title);
+      // A quarter hour centres its one line; longer ones start at their top, inside.
+      await expect(piece.dataset.size === 'tiny' ? centred : inside).toBe(true);
+    }
+    const ghost = canvasElement.querySelector<HTMLElement>('div[class*="ghost"][data-size="tiny"]');
+    if (ghost === null) throw new Error('no drawn span');
+    const start = ghost.querySelector<HTMLElement>('[class*="ghost-start"]');
+    if (start === null) throw new Error('a drawn span without its start');
+    await expect(start).toHaveTextContent('4:00 PM');
+    await expect(wordsInside(ghost, start).centred).toBe(true);
+  },
+};
+
 /** A week with a booking beside an overlapping calendar event, a cancelled one, and the now line. */
 export const Default: Story = {
   parameters: { crm: { preview: true } },
