@@ -5,6 +5,7 @@
 // API sees only `Auth`.
 import { isIP } from 'node:net';
 import { EmailValue, emailDomain, errorStatus, type SignInProviders } from '@crm/contracts';
+import { renderSignInCode, SIGN_IN_CODE_MINUTES } from '@crm/emails';
 import type { SignUpMethod } from '@crm/contracts/events';
 import type { IdentityStore } from '@crm/db';
 import { betterAuth, type DBAdapter } from 'better-auth';
@@ -17,7 +18,6 @@ import type { Mailer } from '../mail/mailer.ts';
 import { type Analytics, NO_ANALYTICS } from '../monitoring/posthog.ts';
 import { captureFault } from '../monitoring/sentry.ts';
 import { scrubText } from '@crm/contracts/monitoring';
-import { SIGN_IN_CODE_MINUTES, signInCodeEmail } from '../mail/sign-in-code.ts';
 import { createAllowlist } from './allowlist.ts';
 import { authErrorResponse } from './errors.ts';
 
@@ -300,7 +300,7 @@ export function createAuth({ env, identity, mailer, analytics = NO_ANALYTICS }: 
   async function sendCode({ email, otp }: { email: string; otp: string }): Promise<void> {
     // A failure answers the caller the same as success; the log never holds the address or the code.
     try {
-      const message = await signInCodeEmail(otp);
+      const message = await renderSignInCode(otp, { appOrigin });
       await mailer.send({ to: email, ...message });
       log.info('Sign in code sent', { mail: mailer.transport });
     } catch (error) {

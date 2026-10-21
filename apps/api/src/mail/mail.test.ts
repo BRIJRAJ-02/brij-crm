@@ -1,20 +1,7 @@
-// The code email and the Mailpit transport.
+// The Mailpit transport, and the mailer's choice of transport. The templates are packages/emails' own tests.
 import { describe, expect, it } from 'vitest';
 import { createMailer } from './mailer.ts';
 import { createMailpitMailer, parseSender } from './mailpit.ts';
-import { SIGN_IN_CODE_SUBJECT, signInCodeEmail } from './sign-in-code.ts';
-
-describe('the sign in code email', () => {
-  it('carries the code in both parts, and keeps it out of the subject', async () => {
-    const email = await signInCodeEmail('482913');
-    expect(email.subject).toBe(SIGN_IN_CODE_SUBJECT);
-    expect(email.subject).not.toContain('482913');
-    expect(email.html).toContain('482913');
-    expect(email.html).toMatch(/<html[^>]* lang="en"/);
-    expect(email.text).toContain('482913');
-    expect(email.text).toContain('10 minutes');
-  });
-});
 
 describe('the mail transport', () => {
   it('splits a sender into its name and address', () => {

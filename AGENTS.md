@@ -122,6 +122,7 @@ MCP servers: neon (connected), sentry (connected), playwright (connected), story
 - [packages/core/AGENTS.md](packages/core/AGENTS.md): domain services and (later) the access door, with no HTTP
 - [packages/data/AGENTS.md](packages/data/AGENTS.md): the one client data layer every screen goes through
 - [packages/db/AGENTS.md](packages/db/AGENTS.md): schema, migrations, roles, row level security and `withWorkspace()`
+- [packages/emails/AGENTS.md](packages/emails/AGENTS.md): every email's template and the one layout, drawn from the design tokens
 - [packages/config/AGENTS.md](packages/config/AGENTS.md): shared TypeScript, ESLint and Stylelint config, and the house rule checks
 - [packages/tokens/AGENTS.md](packages/tokens/AGENTS.md): the design tokens, synced from the design system artifact, and the generated CSS
 - [packages/ui/AGENTS.md](packages/ui/AGENTS.md): the component library: React Aria based components, the provider, Storybook, screenshots and the artifact build

@@ -44,7 +44,9 @@ describe('monitoring vendors in apps/api', () => {
     ['src/auth/auth.ts', 'resend'],
     ['src/auth/auth.ts', 'better-auth/client'],
     ['src/mail/resend.ts', 'better-auth'],
-    ['src/mail/sign-in-code.ts', 'resend'],
+    // Templates draw through packages/emails: the api imports React Email nowhere.
+    ['src/mail/mailer.ts', 'react-email'],
+    ['src/auth/auth.ts', 'react-email'],
   ])('refuses %s importing %s', async (file, entry) => {
     expect((await vendorProblems(file, importing(entry))).join()).toMatch(/one wrapper module/);
   });

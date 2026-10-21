@@ -15,6 +15,7 @@
     "@crm/contracts": "workspace:*",
     "@crm/core": "workspace:*",
     "@crm/db": "workspace:*",
+    "@crm/emails": "workspace:*",
     "@hono/node-server": "catalog:",
     "@orpc/server": "catalog:",
     "@sentry/node": "catalog:",
