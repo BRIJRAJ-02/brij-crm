@@ -1,4 +1,4 @@
-import type { ReactNode } from 'react';
+import { useId, type ReactNode } from 'react';
 import { useFocusVisible } from 'react-aria';
 import { Dialog, DialogTrigger, Heading, Modal as AriaModal, ModalOverlay } from 'react-aria-components';
 import { Button } from '../../atoms/Button/Button.tsx';
@@ -65,14 +65,17 @@ export interface ModalProps {
    * "Saving…" or "Saved".
    */
   readonly status?: ReactNode;
-  /** `danger` makes it an alert dialog that asks before something destructive; a click outside won't close it. */
+  /**
+   * `danger` makes it an alert dialog that asks before something destructive; a click outside won't close it, and
+   * its body is the dialog's description, so a screen reader says what happens with the question.
+   */
   readonly tone?: 'default' | 'danger';
   /**
    * `false` keeps a click outside from closing it: a form with typed input,
    * which only Cancel or Esc should throw away. An alert is never dismissable.
    */
   readonly isDismissable?: boolean;
-  /** While its form saves: the title bar's close button is disabled and a click outside does nothing. */
+  /** While it works (a form saving, a confirm's commit): the title bar's close button, a click outside and Esc wait. */
   readonly isBusy?: boolean;
   /** For a Modal opened without a ModalTrigger. */
   readonly isOpen?: boolean;
@@ -109,11 +112,13 @@ export function Modal({
   // The palette and a peek name themselves for screen readers only: the palette's field and the peek's page
   // (a note's own title) say what they are on screen.
   const isTitleHidden = variant === 'palette' || variant === 'peek';
+  const bodyId = useId();
   return (
     <ModalOverlay
       className={styles.scrim}
       data-variant={variant}
       isDismissable={!isAlert && isDismissable && !isBusy}
+      isKeyboardDismissDisabled={isBusy}
       data-opened-by={isFocusVisible ? 'keyboard' : 'pointer'}
       {...(isOpen === undefined ? {} : { isOpen })}
       {...(onOpenChange === undefined ? {} : { onOpenChange })}
@@ -123,7 +128,11 @@ export function Modal({
         data-variant={variant}
         data-opened-by={isFocusVisible ? 'keyboard' : 'pointer'}
       >
-        <Dialog className={styles.dialog} role={isAlert ? 'alertdialog' : 'dialog'}>
+        <Dialog
+          className={styles.dialog}
+          role={isAlert ? 'alertdialog' : 'dialog'}
+          {...(isAlert ? { 'aria-describedby': bodyId } : {})}
+        >
           {/* Plain boxes, not header and footer: inside a dialog those read as a second banner and
               contentinfo landmark beside the page's own. */}
           <div className={styles.head}>
@@ -157,7 +166,9 @@ export function Modal({
               </span>
             )}
           </div>
-          <div className={styles.body}>{children}</div>
+          <div className={styles.body} id={bodyId}>
+            {children}
+          </div>
           {actions !== undefined && <div className={styles.foot}>{actions}</div>}
         </Dialog>
       </AriaModal>
