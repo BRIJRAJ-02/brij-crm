@@ -10,7 +10,7 @@ import { SettingsPage } from '../features/settings/SettingsPage.tsx';
 export const Route = createFileRoute('/w/$slug/settings/account/security')({
   pendingComponent: () => (
     <LoadingNow>
-      <SettingsPage title={strings.title} isLoading>
+      <SettingsPage title={strings.title}>
         <SecurityLoading />
       </SettingsPage>
     </LoadingNow>

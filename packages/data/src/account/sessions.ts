@@ -1,10 +1,10 @@
 // The signed in person's own sessions (spec 0033, Settings › Account ›
 // Security): one held list, read while a screen retains it, a page at a time.
 // Signing a device out leaves the list at once and comes back with a toast
-// when refused. "Sign out of all other devices" leaves only this device at
-// once; when the server asks for a fresh sign in first (STEP_UP_REQUIRED) the
-// list comes back without a toast and the answer says so, for the screen to
-// explain. Sessions are named by id only; no token ever reaches the browser.
+// when refused. "Sign out of all other devices" waits for the server (its
+// confirm shows it working), then reads the list again; when the server asks
+// for a fresh sign in first (STEP_UP_REQUIRED) nothing changes, no toast is
+// raised and the answer says so, for the confirm to explain. Sessions are named by id only; no token ever reaches the browser.
 import type { AccountSession, RevokedSessions, SessionPage } from '@crm/contracts';
 import { refusalSummary, toDataError } from '../errors.ts';
 import type { Notice } from '../notice.ts';
@@ -163,19 +163,22 @@ export function createAccountSessionsStore(deps: AccountSessionsDeps) {
       }
     },
     /**
-     * Signs out every device but this one: only this one shows at once. When
-     * the server wants a recent sign in first, the list comes back and the
-     * answer carries STEP_UP_REQUIRED for the screen to explain, with no toast.
+     * Signs out every device but this one, waiting for the server (the
+     * confirm stays open meanwhile, so the list doesn't change behind it):
+     * then only this one is left, and the list is read again. When the server
+     * wants a recent sign in first, the answer carries STEP_UP_REQUIRED for
+     * the screen to explain, with no toast.
      */
     async signOutOthers(): Promise<SignOutOthersResult> {
-      const undo = patch((each) => each.current);
       try {
         const answer = await deps.api.revokeOthers();
-        // Pages past the first may have held more: read from the top again.
+        if (state.status === 'ready') {
+          const { nextCursor: _rest, ...kept } = state;
+          set({ ...kept, items: state.items.filter((each) => each.current) });
+        }
         void readTop();
         return { ok: true, count: answer.count };
       } catch (error) {
-        undo();
         const refusal = toDataError(error);
         if (refusal.code === 'STEP_UP_REQUIRED') {
           return { ok: false, code: 'STEP_UP_REQUIRED', message: refusal.message };

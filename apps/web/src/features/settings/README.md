@@ -12,11 +12,11 @@ Built from library parts only: SettingsLayout (through `SettingsPage`), Settings
 
 ## Settings › Account › Security (`/w/$slug/settings/account/security`, SecurityScreen)
 
-- **Purpose**: the browsers signed in to this account, and ending them (spec 0033, AC-890, AC-891, AC-896).
-- **Main task**: see each device (browser and system, rough place from the edge, last use; this one marked This device) and sign one out, or every other one. Each ending asks first in a danger Modal. A single sign out leaves the list at once (the data layer puts it back with a toast if refused); Sign out of all other devices waits in its confirm, and when the server wants a sign in from the last 10 minutes (STEP_UP_REQUIRED) the confirm says so in a Callout instead of a toast.
+- **Purpose**: the devices signed in to this account, and ending them (spec 0033, AC-890, AC-891, AC-896).
+- **Main task**: see each device in a table (browser and system, rough place from the edge, last use; this one first, marked This device) and sign one out from its row, or every other one from the page's one action, Sign out of all other devices, with an InfoTip on the 10 minute sign in it needs. Each ending asks first in a danger Modal. A single sign out leaves the table at once (the data layer puts it back with a toast if refused) and says so in a toast; Sign out of all other devices waits in its confirm, and when the server wants a recent sign in (STEP_UP_REQUIRED) the confirm says so in a Callout, its button now Close. Focus goes to the page's title when the button in use went with the change.
 - **Leaves out**: two factor and passkeys (milestones 2 and 3), recent activity and new device alerts (milestone 4), and signing this device out (the account menu does).
 
-Built from library parts only: SettingsSection ("Devices", with an InfoTip on what a device is and that places are rough) around a Card, a SettingsRow per device (a Badge for This device, a danger Button for the rest), Show more and Sign out of all other devices in the Card's footer, Modal, Callout, Skeleton and EmptyState. The device lines are plain functions in `security-lines.ts`; copy in `security-strings.ts`.
+Built from library parts only: Table (Device with a Badge, Location, Last active through RelativeTime, a Sign out per row), Show more under it, InfoTip and a danger Button as the page's action, Modal, Callout and EmptyState. The device lines are plain functions in `security-lines.ts`; copy in `security-strings.ts`.
 
 ## Settings, Objects (`/w/$slug/settings/objects`, ObjectsScreen)
 

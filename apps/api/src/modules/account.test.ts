@@ -157,6 +157,10 @@ describe('account.sessions', () => {
     const mine = await signInAs(newEmail(), { 'user-agent': MAC_CHROME });
     const theirs = await signInAs(newEmail(), { 'user-agent': MAC_CHROME });
     const [their] = (await rpcClient(app, theirs).account.sessions.list()).items;
+    // The list holds only the caller's own sessions.
+    const listed = (await rpcClient(app, mine).account.sessions.list()).items;
+    expect(listed).toHaveLength(1);
+    expect(listed.map((item) => item.id)).not.toContain(their?.id);
     cut.length = 0;
     expect(
       await failure(() => rpcClient(app, mine).account.sessions.revoke({ sessionId: their?.id ?? '' })),

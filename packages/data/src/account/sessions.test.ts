@@ -117,13 +117,15 @@ describe('account sessions store', () => {
     view.retain();
     await flush();
     const answer = store.signOutOthers();
-    expect(ids()).toEqual([ID(1)]);
+    // Nothing changes behind the confirm until the server answers.
+    expect(ids()).toEqual([ID(1), ID(2), ID(3)]);
     expect(await answer).toEqual({ ok: true, count: 2 });
+    expect(ids()).toEqual([ID(1)]);
     await flush();
     expect(ids()).toEqual([ID(1)]);
   });
 
-  it('brings the devices back without a toast when a recent sign in is needed', async () => {
+  it('leaves the devices as they were, without a toast, when a recent sign in is needed', async () => {
     const { store, view, ids, notices } = setup({
       revokeOthers: () => Promise.reject(dataError('STEP_UP_REQUIRED', 'Confirm it is you first.')),
     });

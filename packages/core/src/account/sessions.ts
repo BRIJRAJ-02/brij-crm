@@ -121,6 +121,8 @@ export async function revokeMySession(
 ): Promise<{ readonly ok: true }> {
   const ended = await deps.identity.revokeSession(caller.userId, input.sessionId);
   if (ended === undefined) throw refuse('NOT_FOUND', UNKNOWN_SESSION);
+  // Cut the device off first (it never throws), so a failed event write can't leave it connected.
+  await deps.signedOut(caller.userId);
   await deps.identity.recordSecurityEvent({
     userId: caller.userId,
     kind: 'session_revoked',
@@ -129,7 +131,6 @@ export async function revokeMySession(
     ...(ended.country === null ? {} : { country: ended.country }),
     ...(ended.deviceLabel === null ? {} : { deviceLabel: ended.deviceLabel }),
   });
-  await deps.signedOut(caller.userId);
   return { ok: true };
 }
 
@@ -152,6 +153,7 @@ export async function revokeMyOtherSessions(deps: SessionsDeps, caller: SessionC
   if (!isFresh(verifiedAt, now)) throw refuse('STEP_UP_REQUIRED', STEP_UP_MESSAGE);
   const count = await deps.identity.revokeOtherSessions(caller.userId, caller.sessionId);
   if (count > 0) {
+    await deps.signedOut(caller.userId);
     await deps.identity.recordSecurityEvent({
       userId: caller.userId,
       kind: 'sessions_revoked',
@@ -159,7 +161,6 @@ export async function revokeMyOtherSessions(deps: SessionsDeps, caller: SessionC
       ...(caller.ip === undefined ? {} : { ip: caller.ip }),
       detail: { count },
     });
-    await deps.signedOut(caller.userId);
   }
   return { count };
 }
