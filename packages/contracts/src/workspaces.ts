@@ -74,8 +74,8 @@ export type SlugAvailability = z.infer<typeof SlugAvailability>;
  * email, and refuses `SLUG_TAKEN` (on the `slug` field) and `ID_TAKEN`.
  * `slugAvailable` needs the same, answers from the directory alone (an
  * address once used is never free again), and refuses `RATE_LIMITED` past 60
- * checks a minute per person (spec 0036, AC-1215). `create` still has the
- * last word.
+ * checks a minute or 500 a day per person (spec 0036, AC-1215). `create`
+ * still has the last word.
  */
 export const workspacesContract = {
   create: oc.input(CreateWorkspaceInput).output(CreatedWorkspace),

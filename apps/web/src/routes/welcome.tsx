@@ -2,7 +2,7 @@ import { LoadingNow } from '@crm/ui';
 import { createFileRoute, redirect } from '@tanstack/react-router';
 import { AuthError, AuthPending } from '../features/auth/AuthStates.tsx';
 import { signInHref } from '../features/auth/redirect.ts';
-import { shownStep, welcomeSearch } from '../features/welcome/steps.ts';
+import { shownStep, welcomeLanding, welcomeSearch } from '../features/welcome/steps.ts';
 import { strings } from '../features/welcome/strings.ts';
 import { WelcomeScreen } from '../features/welcome/WelcomeScreen.tsx';
 
@@ -22,12 +22,9 @@ export const Route = createFileRoute('/welcome')({
       (status) => status.calendarSync,
       () => false,
     );
-    const made = me.workspaces.find((each) => each.slug === deps.workspace);
-    if (made !== undefined && calendarSync) return { user: me.user, calendarSync, workspace: made };
-    const [first] = me.workspaces;
-    const home = made ?? first;
-    if (home !== undefined) throw redirect({ to: '/w/$slug', params: { slug: home.slug }, replace: true });
-    return { user: me.user, calendarSync, workspace: undefined };
+    const landing = welcomeLanding(me.workspaces, deps.workspace, calendarSync);
+    if (landing.kind === 'open') throw redirect({ to: '/w/$slug', params: { slug: landing.slug }, replace: true });
+    return { user: me.user, calendarSync, workspace: landing.workspace };
   },
   pendingComponent: () => (
     <LoadingNow>

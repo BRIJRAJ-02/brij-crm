@@ -193,6 +193,18 @@ describe('workspaces.slugAvailable (spec 0036, AC-1215)', () => {
     expect(unverified).toMatchObject({ code: 'EMAIL_UNVERIFIED', status: 403 });
   });
 
+  it('answers 500 checks a day per person, whatever the minute', async () => {
+    const { client, email } = await signedIn();
+    const [user] = await testQuery<{ id: string }>(identityUrl, 'select id from auth."user" where email = $1', [email]);
+    // The day's window, as if 500 checks had already gone by in earlier minutes.
+    await testQuery(identityUrl, `insert into auth.rate_limit (key, count, last_request) values ($1, 500, $2)`, [
+      `workspace-slug:${user?.id ?? ''}:day`,
+      Date.now() + 60 * 60 * 1000,
+    ]);
+    const limited = await failure(() => client.workspaces.slugAvailable({ slug: `walk-${tag()}` }));
+    expect(limited).toMatchObject({ code: 'RATE_LIMITED', status: 429 });
+  });
+
   it('answers 60 checks a minute per person, then RATE_LIMITED with a wait, and counts each person apart', async () => {
     const { client } = await signedIn();
     for (let check = 0; check < 60; check += 1) {

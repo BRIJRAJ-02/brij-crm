@@ -99,7 +99,7 @@ Each one is the coordinator's recommendation, owner to confirm.
 - **AC-1214**: Finishing (Continue after connecting, or Skip for now; or Create workspace when the calendar step is left out) opens the workspace's People page with focus on its title.
 
 *Server*
-- **AC-1215**: `workspaces.slugAvailable({ slug })` answers `{ available }` to a signed in person with a verified email: false when any workspace has ever used the address (the directory, which never frees one), true otherwise; an address that breaks the rule is refused `INPUT_INVALID`. Each person gets 60 checks a minute, then `RATE_LIMITED` with `Retry-After`. It is on the bootstrap list and reads nothing but the directory.
+- **AC-1215**: `workspaces.slugAvailable({ slug })` answers `{ available }` to a signed in person with a verified email: false when any workspace has ever used the address (the directory, which never frees one), true otherwise; an address that breaks the rule is refused `INPUT_INVALID`. Each person gets 60 checks a minute and 500 a day, then `RATE_LIMITED` with `Retry-After`. It is on the bootstrap list and reads nothing but the directory.
 - **AC-1216**: `system.status` answers `calendarSync`: true where calendar sync is set up (`CALENDAR_SYNC=on`).
 - **AC-1217**: Connecting a calendar takes `then=welcome` (the only value it knows), carried inside the signed state; the callback then sends the member to `/welcome?step=calendar&workspace=<slug>&calendar=<result>`, and to Settings › Calendar as today otherwise. Nothing else in the round trip changes.
 

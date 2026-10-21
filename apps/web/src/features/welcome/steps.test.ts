@@ -1,7 +1,15 @@
 // First run's steps and its address (spec 0036, AC-1204, AC-1209): which
 // steps show, where Back goes, and what the search keeps.
 import { describe, expect, it } from 'vitest';
-import { isConnectResult, nextStep, previousStep, shownStep, welcomeSearch, welcomeSteps } from './steps.ts';
+import {
+  isConnectResult,
+  nextStep,
+  previousStep,
+  shownStep,
+  welcomeLanding,
+  welcomeSearch,
+  welcomeSteps,
+} from './steps.ts';
 
 describe('first run’s steps', () => {
   it('are About you, Your workspace and Connect your calendar, without the calendar where sync is off', () => {
@@ -49,5 +57,28 @@ describe('first run’s search', () => {
       expect(isConnectResult(result)).toBe(true);
     }
     expect(isConnectResult('toString')).toBe(false);
+  });
+});
+
+describe('where /welcome goes', () => {
+  const acme = { id: 'w1', slug: 'acme', name: 'Acme' };
+  const beta = { id: 'w2', slug: 'beta', name: 'Beta' };
+
+  it('starts the steps for someone with no workspace, whatever the address asks', () => {
+    expect(welcomeLanding([], undefined, true)).toEqual({ kind: 'steps', workspace: undefined });
+    expect(welcomeLanding([], 'acme', true)).toEqual({ kind: 'steps', workspace: undefined });
+  });
+
+  it('shows the calendar step for a workspace of their own, only where calendar sync is on', () => {
+    expect(welcomeLanding([acme, beta], 'beta', true)).toEqual({ kind: 'steps', workspace: beta });
+    expect(welcomeLanding([acme, beta], 'beta', false)).toEqual({ kind: 'open', slug: 'beta' });
+  });
+
+  it('passes over a workspace that isn’t theirs, opening their own', () => {
+    expect(welcomeLanding([acme], 'someone-elses', true)).toEqual({ kind: 'open', slug: 'acme' });
+  });
+
+  it('opens the first workspace for someone who has one and asks for none', () => {
+    expect(welcomeLanding([acme, beta], undefined, true)).toEqual({ kind: 'open', slug: 'acme' });
   });
 });

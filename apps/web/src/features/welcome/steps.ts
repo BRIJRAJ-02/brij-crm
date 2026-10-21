@@ -67,3 +67,24 @@ export function shownStep(asked: WelcomeStep | undefined, hasWorkspace: boolean)
   if (hasWorkspace) return 'calendar';
   return asked === undefined || asked === 'calendar' ? 'about' : asked;
 }
+
+/** Where `/welcome` goes for a signed in person: first run's steps (with the workspace just made), or a workspace. */
+export type WelcomeLanding<W> =
+  { readonly kind: 'steps'; readonly workspace: W | undefined } | { readonly kind: 'open'; readonly slug: string };
+
+/**
+ * Where `/welcome` goes: the calendar step for `asked` only when it is one of
+ * the person's own workspaces and calendar sync is on; else, for someone with
+ * a workspace, that workspace (or their first); else the steps from the
+ * start. A workspace that isn't theirs is passed over, never shown.
+ */
+export function welcomeLanding<W extends { readonly slug: string }>(
+  workspaces: readonly W[],
+  asked: string | undefined,
+  calendarSync: boolean,
+): WelcomeLanding<W> {
+  const made = asked === undefined ? undefined : workspaces.find((each) => each.slug === asked);
+  if (made !== undefined && calendarSync) return { kind: 'steps', workspace: made };
+  const home = made ?? workspaces[0];
+  return home === undefined ? { kind: 'steps', workspace: undefined } : { kind: 'open', slug: home.slug };
+}
