@@ -1183,7 +1183,40 @@ export const EditPhoneCodeInPopover: Story = {
     );
     // The cell's editor is still open, its typed number kept.
     await expect(dialog.isConnected).toBe(true);
-    await expect(within(dialog).getByRole<HTMLInputElement>('textbox').value.replace(/\D/g, '')).toBe('20155');
+    const number = within(dialog).getByRole<HTMLInputElement>('textbox');
+    await expect(number.value.replace(/\D/g, '')).toBe('20155');
+    // A phone number to a password manager, never a login (the owner, 21 October 2026).
+    await expect(number).toHaveAttribute('autocomplete', 'tel-national');
+  },
+};
+
+/**
+ * The owner's case (21 October 2026): a cell holding several numbers, the add row's country picker by pointer.
+ * The list opens over the editor, a click on a country closes the list alone, the editor stays with its numbers,
+ * and focus is back in the number.
+ */
+export const EditPhoneCodePickInList: Story = {
+  parameters: { crm: { screenshot: false } },
+  render: () => <EveryTypeGrid />,
+  play: async ({ userEvent }) => {
+    await editColumn(userEvent, 'phone_many');
+    const dialog = await openDialog();
+    const number = within(dialog).getByRole<HTMLInputElement>('textbox');
+    await waitFor(() => expect(number).toHaveFocus());
+    // The numbers already in the cell are listed above the add row.
+    await expect(within(dialog).getAllByRole('button', { name: /Remove/ }).length).toBeGreaterThanOrEqual(2);
+    await userEvent.click(within(dialog).getByRole('button', { name: /Country code/ }));
+    await waitFor(() => expect(document.querySelector('[role="listbox"]')).not.toBeNull());
+    await expect(dialog.isConnected).toBe(true);
+    await userEvent.keyboard('india');
+    await waitFor(() => expect(document.querySelector('[role="option"][data-focused]')).toHaveTextContent('India'));
+    const india = document.querySelector<HTMLElement>('[role="option"][data-focused]');
+    if (india === null) throw new Error('no marked option');
+    await userEvent.click(india);
+    await waitFor(() => expect(document.querySelector('[role="listbox"]')).toBeNull());
+    await expect(dialog.isConnected).toBe(true);
+    await waitFor(() => expect(number).toHaveFocus());
+    await expect(within(dialog).getByRole('button', { name: /Country code/ })).toHaveTextContent('+91');
   },
 };
 
