@@ -191,6 +191,29 @@ export const strings = {
   thankYouDefault: 'Thank you. We will come back to you at the address you gave.',
   redirectUrl: 'Web address',
   redirectHint: 'Starts with https://',
+  // Book a meeting after sending (AC-1055 to AC-1059)
+  bookMeeting: 'Book a meeting',
+  bookingPage: 'Booking page',
+  bookingPageHint: 'Visitors go on to book a time here, with their name and email filled in.',
+  pageItem: (title: string, minutes: number) => `${title} · ${String(minutes)} min`,
+  pageNotUsable: 'Paused, or not yours to use: pick another',
+  noBookingPages: 'Needs a booking page of yours that is on',
+  bookingPagesFailed: 'Your booking pages didn’t load',
+  createBookingPage: 'Create a booking page',
+  countdown: 'Send them there',
+  countdownAtOnce: 'At once',
+  countdownAfter: (seconds: number) => `After ${String(seconds)} seconds`,
+  bookingPreview: (seconds: number) =>
+    seconds === 0
+      ? 'Visitors go straight on to book once they send.'
+      : `Visitors see “Taking you to book a time in ${String(seconds)}…” with Book now and Stay here.`,
+  bookingThankYouHint: 'Shown above the countdown, and on its own if the booking page is off when they send.',
+  sendsToBook: (title: string | undefined, seconds: number) =>
+    title === undefined
+      ? 'Sends them on to book a time'
+      : seconds === 0
+        ? `Sends them on to book ${title} at once`
+        : `Sends them on to book ${title} after ${String(seconds)} seconds`,
   addToCrmSwitch: 'Add each submission to the CRM',
   addToCrmOn: (object: string, match: string | undefined) =>
     match === undefined
