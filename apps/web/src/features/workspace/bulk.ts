@@ -59,7 +59,7 @@ export const bulkStrings = {
   change: 'Change',
   /** Change's InfoTip, for a field that holds several values. */
   changeHelp:
-    'Add keeps what each record has and adds yours. Remove takes out only yours. Replace swaps everything for yours, and Clear empties the field.',
+    'Add keeps what each record has and adds yours. Remove takes out only yours. Replace swaps everything for yours.',
   changeExample: 'Add the tag VIP to 40 people and their other tags stay.',
   value: 'Value',
   ops: {

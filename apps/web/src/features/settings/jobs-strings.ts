@@ -30,7 +30,7 @@ export const strings = {
   statusHelp: {
     preparing: 'It’s gathering the records it will work on. Nothing has changed yet.',
     ready:
-      'It’s gathered its records and waits for you to press Review and confirm. If it expires first, nothing changes.',
+      'It’s gathered its records and waits for someone to press Review and confirm it. If it expires first, nothing changes.',
   },
   /** An example for Needs confirm's InfoTip. */
   readyExample: 'A bulk delete of 2,000 people waits here until you confirm it.',

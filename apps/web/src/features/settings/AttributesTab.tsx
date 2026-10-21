@@ -112,9 +112,7 @@ function AttributeRules({ attribute }: { readonly attribute: AttributeDefinition
       {attribute.isPrimary && (
         <>
           <Badge text={strings.primary} />
-          <InfoTip label={strings.primary} example={strings.primaryExample}>
-            {strings.primaryHelp}
-          </InfoTip>
+          <InfoTip label={strings.primary}>{strings.primaryHelp}</InfoTip>
         </>
       )}
       {attribute.isRequired && <Badge text={strings.required} />}

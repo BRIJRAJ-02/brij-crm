@@ -61,7 +61,7 @@ export const strings = {
   objectIdReason: 'Set by the system.',
   /** The Identifiers' InfoTip, on API name: what the API name and the Object ID are for. */
   idsHelp:
-    'Developers use these to point at this object from the API, a script or an integration. You only need them if someone asks.',
+    'Developers use it to point at this object from the API, a script or an integration. You only need it if someone asks.',
   idsExample: 'People has the API name people, so a script asks the API for people.',
   copyApiName: 'Copy API name',
   copyObjectId: 'Copy object ID',

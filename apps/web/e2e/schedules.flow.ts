@@ -19,8 +19,9 @@ const ZONE = 'America/New_York';
 
 /** Picks `option` in the Select labelled `label`, inside the listbox it opened. */
 async function pick(page: Page, label: string, option: string): Promise<void> {
+  // The Select's trigger, not the "About …" button of an InfoTip beside its label (the tips lane).
   await page
-    .getByRole('button', { name: new RegExp(label) })
+    .getByRole('button', { name: new RegExp(`^(?!About ).*${label}`) })
     .first()
     .click();
   await page

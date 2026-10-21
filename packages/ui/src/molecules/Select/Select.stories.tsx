@@ -348,5 +348,16 @@ export const WithInfo: Story = {
     await expect(document.querySelector('[role="listbox"]')).toBeNull();
     await userEvent.keyboard('{Escape}');
     await waitFor(() => expect(document.querySelector('[role="dialog"]')).toBeNull());
+    await userEvent.click(canvas.getByRole('button', { name: /4 hours/ }));
+    await listbox();
+  },
+};
+
+/** With `info`, read only: the tip still opens beside the locked value. */
+export const WithInfoReadOnly: Story = {
+  ...WithInfo,
+  args: { ...WithInfo.args, isReadOnly: true, readOnlyReason: 'Only its owner can change it.' },
+  play: async ({ canvas }) => {
+    await expect(canvas.getByRole('button', { name: 'About Minimum notice' })).toBeVisible();
   },
 };

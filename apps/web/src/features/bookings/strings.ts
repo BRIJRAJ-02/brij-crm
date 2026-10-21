@@ -145,8 +145,9 @@ export const strings = {
   theirTimeZone: 'Their time zone',
   about: 'Booking page',
   /** Booking page's InfoTip in New meeting. */
-  aboutHelp: 'The meeting takes this page’s title and where it happens, and counts toward the page’s daily limit.',
-  aboutExample: 'Pick Demo and the meeting is called Demo, at the place the Demo page names.',
+  aboutHelp:
+    'The meeting takes this page’s title and place, and counts toward its daily limit. The page’s hours, notice and buffers don’t apply.',
+  aboutExample: 'Pick Demo to book Ana in, and the meeting is called Demo with Ana.',
   length: 'Length',
   alsoInvite: 'Also invite',
   alsoInviteHint: 'Emails, separated by commas. Everyone gets the calendar invitation.',
