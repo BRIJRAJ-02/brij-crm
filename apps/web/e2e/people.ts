@@ -77,6 +77,8 @@ export async function newWorkspace(page: Page, email: string, slug: string): Pro
     .getByRole('link', { name: 'People', exact: true })
     .click();
   await expect(page).toHaveURL(objectUrl(slug, 'people'));
+  // The page takes focus to its title once it has loaded; wait for that, so a press after this lands where it's aimed.
+  await expect(page.getByRole('heading', { level: 1, name: 'People' })).toBeFocused();
   return code;
 }
 

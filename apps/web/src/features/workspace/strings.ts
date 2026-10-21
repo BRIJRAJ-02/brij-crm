@@ -27,7 +27,7 @@ export const strings = {
   forms: 'Forms',
   /** The sidebar's first row and the workspace's landing page (owner, 21 October 2026). */
   home: 'Home',
-  /** My tasks (spec 0019), after the sections, as timefix has it (owner, 21 October 2026). */
+  /** The tasks page's row (spec 0019), after the sections, as timefix has it; Tasks, as the page is named (owner, 21 October 2026). */
   tasks: 'Tasks',
   /** The group above the sections holding Tasks (and Inbox once it exists), for screen readers. */
   yourWork: 'Your work',

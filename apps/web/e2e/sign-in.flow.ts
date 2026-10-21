@@ -108,6 +108,8 @@ async function newWorkspace(page: Page, email: string, name: string, slug: strin
   await expect(page).toHaveURL(new RegExp(`/w/${slug}/home$`), { timeout: WORKSPACE_MADE_MS });
   await page.getByRole('navigation', { name: 'Main navigation' }).getByRole('link', { name: 'People' }).click();
   await expect(page).toHaveURL(new RegExp(`/w/${slug}/objects/people(/views/[0-9a-f-]+)?$`));
+  // People takes focus to its title once it has loaded; a menu opened before then would close as focus moves.
+  await expect(page.getByRole('heading', { level: 1, name: 'People' })).toBeFocused();
 }
 
 /** Signs out from the workspace menu, by keyboard, and waits for /sign-in. */
