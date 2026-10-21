@@ -22,6 +22,9 @@ import type {
   RotationMemberInput,
   RotationSettings,
   RotationView,
+  RoutingReport,
+  RoutingReportInput,
+  RoutingRules,
   TeamHosts,
   TaskMine,
   BulkAction,
@@ -199,6 +202,12 @@ export type {
   RotationMemberView,
   RotationSettings,
   RotationView,
+  Route,
+  RoutingReport,
+  RoutingReportRow,
+  RoutingRule,
+  RoutingRules,
+  ShowWhen,
   TeamHosts,
   DateOverride,
   TimeRange,
@@ -2541,7 +2550,7 @@ export function createDataLayer({
         workspace: string,
         pageId: string,
         settings: Partial<BookingPageSettings>,
-        extra: { hosts?: TeamHosts } = {},
+        extra: { hosts?: TeamHosts; routing?: RoutingRules } = {},
       ): Promise<BookingPageView> =>
         bookingPageLists.write(workspace, {
           send: () =>
@@ -2552,6 +2561,7 @@ export function createDataLayer({
                   pageId,
                   settings,
                   ...(extra.hosts === undefined ? {} : { hosts: extra.hosts }),
+                  ...(extra.routing === undefined ? {} : { routing: extra.routing }),
                   mutationId: mintId(),
                 },
                 options,
@@ -2561,6 +2571,7 @@ export function createDataLayer({
             ...page,
             ...settings,
             ...(extra.hosts === undefined ? {} : { hosts: extra.hosts }),
+            ...(extra.routing === undefined ? {} : { routing: extra.routing }),
           })),
           land: (items, page) => patchItem<BookingPageView>(pageId, () => page)(items),
         }),
@@ -2760,6 +2771,14 @@ export function createDataLayer({
           ...shownDrop(rotationLists.items(workspace), rotationId),
         }),
     },
+    routing: {
+      /**
+       * A form's or a team page's per rule report (spec 0043, AC-1612): read when its card opens and when the window
+       * changes. Counts, not records, so nothing here is held between reads.
+       */
+      report: (workspace: string, surface: RoutingReportInput['surface'], days: 30 | 90): Promise<RoutingReport> =>
+        call((options) => api.routing.report({ workspace, surface, days }, options)),
+    },
     bookings: {
       /** Why a round robin booking went to its host (spec 0029, AC-742): for its host and admins. */
       assignments: (workspace: string, bookingId: string): Promise<BookingAssignment[]> =>
@@ -2802,6 +2821,24 @@ export function createDataLayer({
         } catch (error) {
           restore();
           bookingsLists.reloadAll(workspace);
+          throw error;
+        }
+      },
+      /**
+       * Marks a past booking as a no show, or takes the mark back (spec 0043, AC-1613): in every list at once,
+       * put back with the refusal when the server says no.
+       */
+      markNoShow: async (workspace: string, bookingId: string, noShow: boolean): Promise<void> => {
+        const restore = bookingsLists.patchBooking(workspace, bookingId, (booking) => {
+          const { noShow: _was, ...rest } = booking;
+          return noShow ? { ...rest, noShow: true } : rest;
+        });
+        try {
+          await call((options) =>
+            api.bookings.markNoShow({ workspace, bookingId, noShow, mutationId: mintId() }, options),
+          );
+        } catch (error) {
+          restore();
           throw error;
         }
       },

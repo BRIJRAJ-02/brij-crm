@@ -90,7 +90,6 @@ export function HostedFormSteps({
   now = Date.now,
   logo = TIMEFIX_LOGO,
 }: HostedFormStepsProps) {
-  const groups = resolve(form.questions, layout, steps);
   const [index, setIndex] = useState(0);
   const [hasMoved, setMoved] = useState(false);
   // Continue and Back focus the new step's first question; a refusal that goes back focuses its problem instead.
@@ -114,6 +113,12 @@ export function HostedFormSteps({
     },
   });
   const { words, preview } = state;
+  // Only the questions that show (spec 0043, AC-1614): a step whose questions are all hidden is skipped and not counted.
+  const groups = resolve(
+    form.questions.filter((question) => state.shown.has(question.key)),
+    layout,
+    steps,
+  );
   // Send another starts again from the first step.
   if (state.round !== round) {
     setRound(state.round);

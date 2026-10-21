@@ -15,6 +15,7 @@ export function hostActions(data: DataLayer, toasts: Toasts, slug: string): Host
     assignments: (bookingId) => data.bookings.assignments(slug, bookingId),
     reassign: (bookingId, to) => data.bookings.reassign(slug, bookingId, to),
     rotations: () => data.rotations.held(slug),
+    markNoShow: (bookingId, noShow) => data.bookings.markNoShow(slug, bookingId, noShow),
     notify: (tone, message) => toasts.toast({ tone, message }),
   };
 }

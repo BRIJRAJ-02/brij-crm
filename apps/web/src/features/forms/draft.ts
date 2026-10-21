@@ -115,6 +115,8 @@ export interface QuestionChange {
   readonly placeholder?: string;
   readonly required?: boolean;
   readonly filedOn?: string | null;
+  /** Show when (spec 0043): new conditions, or null to always show it. */
+  readonly showWhen?: FormQuestion['showWhen'] | null;
 }
 
 /**
@@ -139,7 +141,8 @@ export function changeQuestion(
       }
       return question;
     }
-    const { filedOn, ...rest } = question;
+    const { filedOn, showWhen: shownWhen, ...rest } = question;
+    const showWhen = change.showWhen === null ? undefined : (change.showWhen ?? shownWhen);
     const label = change.label ?? question.label;
     const answerType = change.answerType ?? question.answerType;
     const key =
@@ -167,9 +170,30 @@ export function changeQuestion(
           : { placeholder: question.placeholder }),
       required: change.required ?? question.required,
       ...(filing === undefined ? {} : { filedOn: { objectRole: 'main' as const, attributeId: filing } }),
+      ...(showWhen === undefined ? {} : { showWhen }),
     };
   });
-  return { ...document, questions };
+  // A question whose key changed with its label: conditions that read it follow (spec 0043).
+  const before = document.questions.find((question) => question.id === id)?.key;
+  const after = questions.find((question) => question.id === id)?.key;
+  return before === undefined || after === undefined || before === after
+    ? { ...document, questions }
+    : renameKey({ ...document, questions }, before, after);
+}
+
+/** The document with every condition reading `from` reading `to` instead: Show when and routing rules alike. */
+export function renameKey(document: FormDocument, from: string, to: string): FormDocument {
+  const follow = <T extends { readonly rules: readonly { readonly key: string }[] }>(when: T): T => ({
+    ...when,
+    rules: when.rules.map((condition) => (condition.key === from ? { ...condition, key: to } : condition)),
+  });
+  return {
+    ...document,
+    questions: document.questions.map((question) =>
+      question.showWhen === undefined ? question : { ...question, showWhen: follow(question.showWhen) },
+    ),
+    routing: { rules: document.routing.rules.map((rule) => ({ ...rule, when: follow(rule.when) })) },
+  };
 }
 
 /** The attributes a question of `answerType` may be filed on, in their order. */

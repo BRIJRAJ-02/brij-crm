@@ -185,7 +185,8 @@ export function summarizeShowWhen(
   const parts = showWhen.rules.map((condition) => {
     const values =
       condition.value === undefined ? [] : typeof condition.value === 'string' ? [condition.value] : condition.value;
-    const value = values.length === 0 ? '' : ` ${values.map((each) => valueOf(condition.key, each)).join(' or ')}`;
+    const value =
+      values.length === 0 ? '' : ` ${values.map((each) => valueOf(condition.key, each.trim())).join(' or ')}`;
     return `${labelOf(condition.key)} ${opWords(condition.op)}${VALUELESS_OPS.includes(condition.op) ? '' : value}`;
   });
   return parts.join(showWhen.join === 'all' ? ' and ' : ' or ');

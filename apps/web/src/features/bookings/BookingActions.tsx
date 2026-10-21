@@ -15,6 +15,7 @@ import {
 import { Button, ButtonGroup, Callout, DayStrip, Field, focusLater, Modal, SlotList } from '@crm/ui';
 import { useEffect, useRef, useState } from 'react';
 import { strings } from './strings.ts';
+import { useNow } from './useNow.ts';
 
 /** What the card's changes call: the data layer's, bound to the workspace by the route. */
 export interface HostBookingActions {
@@ -31,6 +32,8 @@ export interface HostBookingActions {
   ) => Promise<ReassignedBooking>;
   /** The rotations the reader may see, for the reassign dialog's names. */
   readonly rotations: () => Promise<readonly RotationView[]>;
+  /** Marks a past booking as a no show, or takes the mark back (spec 0043, AC-1613). */
+  readonly markNoShow: (bookingId: string, noShow: boolean) => Promise<void>;
   /** Says how a change outside the card went (Copy guest link). */
   readonly notify: (tone: 'success' | 'danger', message: string) => void;
 }
@@ -121,6 +124,31 @@ export function BookingActions({
       setCopying(false);
     }
   };
+  // A no show (spec 0043, AC-1613): once the meeting has started, its host marks it, and can take it back.
+  const [marking, setMarking] = useState(false);
+  const now = useNow();
+  const hasStarted = Date.parse(booking.startsAt) <= now.getTime();
+  const markNoShow = async () => {
+    const noShow = booking.noShow !== true;
+    setMarking(true);
+    try {
+      await actions.markNoShow(booking.id, noShow);
+      actions.notify('success', noShow ? strings.markedNoShow : strings.unmarkedNoShow);
+    } catch (error) {
+      actions.notify('danger', messageOf(error));
+    } finally {
+      setMarking(false);
+    }
+  };
+  if (booking.status === 'confirmed' && hasStarted) {
+    return (
+      <ButtonGroup label={strings.changeBooking} layout="row">
+        <Button icon="user-x" isPending={marking} onPress={() => void markNoShow()}>
+          {booking.noShow === true ? strings.undoNoShow : strings.markNoShow}
+        </Button>
+      </ButtonGroup>
+    );
+  }
   return (
     <>
       {booking.status === 'confirmed' && (

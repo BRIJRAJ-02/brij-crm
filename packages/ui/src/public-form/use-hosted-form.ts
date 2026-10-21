@@ -13,6 +13,7 @@ import {
   type PublicForm,
   type PublicQuestion,
   type SubmitNext,
+  visibleQuestions,
 } from '@crm/contracts/forms';
 import { useEffect, useMemo, useRef, useState, type FocusEvent, type RefObject } from 'react';
 import { countriesIn } from '../lib/countries.ts';
@@ -75,6 +76,8 @@ export interface HostedFormState {
   readonly hints: Messages;
   /** The questions a submit found problems with, in order, while any remain: the error summary. */
   readonly summary: readonly PublicQuestion[];
+  /** The questions that show for the answers so far (spec 0043, AC-1614): one whose Show when fails is hidden. */
+  readonly shown: ReadonlySet<string>;
   readonly alert: string;
   readonly isSending: boolean;
   readonly isClosed: boolean;
@@ -211,11 +214,20 @@ export function useHostedForm({
     const first = among.find((question) => fields[question.key] !== undefined);
     if (first !== undefined) focus(first.key);
   };
-  const checkAll = (questions: readonly PublicQuestion[]) =>
-    checkAnswers(
-      { language: form.language, questions },
-      Object.fromEntries(questions.map((question) => [question.key, answerOf(question, answers[question.key])])),
+  // What shows is decided over the whole form, so a step's question can read an answer from an earlier step.
+  const given = Object.fromEntries(
+    form.questions.map((question) => [question.key, answerOf(question, answers[question.key])]),
+  );
+  const shown = visibleQuestions(form.questions, given);
+  const checkAll = (questions: readonly PublicQuestion[]) => {
+    const visible = questions
+      .filter((question) => shown.has(question.key))
+      .map(({ showWhen: _decided, ...question }) => question);
+    return checkAnswers(
+      { language: form.language, questions: visible },
+      Object.fromEntries(visible.map((question) => [question.key, given[question.key]])),
     );
+  };
 
   const change = (question: PublicQuestion, value: unknown) => {
     setAnswers((current) => ({ ...current, [question.key]: value }));
@@ -295,8 +307,11 @@ export function useHostedForm({
       thank(form.thanks ?? '');
       return;
     }
+    // A hidden question's answer stays behind: the server would drop it too.
     const sending = Object.fromEntries(
-      form.questions.map((question) => [question.key, answerOf(question, answers[question.key])]),
+      form.questions
+        .filter((question) => shown.has(question.key))
+        .map((question) => [question.key, given[question.key]]),
     );
     setSending(true);
     void onSubmit({ answers: sending, trap, fillMs: Math.max(0, now() - startedAt), round }).then((outcome) => {
@@ -346,7 +361,9 @@ export function useHostedForm({
     setFocusTarget('heading');
   };
 
-  const summary = isSubmitted ? form.questions.filter((question) => errors[question.key] !== undefined) : [];
+  const summary = isSubmitted
+    ? form.questions.filter((question) => shown.has(question.key) && errors[question.key] !== undefined)
+    : [];
 
   const state: HostedFormState = {
     words,
@@ -356,6 +373,7 @@ export function useHostedForm({
     errors,
     hints,
     summary,
+    shown,
     alert,
     isSending,
     isClosed,

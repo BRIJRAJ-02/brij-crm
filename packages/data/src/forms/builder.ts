@@ -22,6 +22,16 @@ export {
   type PublishAttribute,
   type PublishProblem,
   type QuestionPreset,
+  // Show when and routing conditions (spec 0043): the editor's comparisons, summaries and the preview's hiding.
+  CONDITION_OPS,
+  CONDITIONS_MAX,
+  matchesShowWhen,
+  summarizeShowWhen,
+  VALUELESS_OPS,
+  visibleQuestions,
+  type Condition,
+  type ConditionOp,
+  type ShowWhen,
 } from '@crm/contracts/forms';
 export type { FormAfter, FormLanguage, FormLook, PublicQuestion } from '@crm/contracts/forms';
 
@@ -54,6 +64,7 @@ export function previewOf(
         ? {}
         : { placeholder: question.placeholder }),
       required: question.required,
+      ...(question.showWhen === undefined ? {} : { showWhen: question.showWhen }),
     })),
     ...(document.after.kind === 'message' && document.after.message !== '' ? { thanks: document.after.message } : {}),
     offersMeeting: false,

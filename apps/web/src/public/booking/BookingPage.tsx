@@ -313,7 +313,14 @@ function Booking({
     client
       .slots(
         page.publicKey,
-        { from: new Date(Math.max(from, now())).toISOString(), to: new Date(to).toISOString(), duration, tz: zone },
+        {
+          from: new Date(Math.max(from, now())).toISOString(),
+          to: new Date(to).toISOString(),
+          duration,
+          tz: zone,
+          // A form's hand off: a team page then offers only the hosts its routing chose (spec 0043).
+          ...(handoff === undefined ? {} : { p: handoff }),
+        },
         controller.signal,
       )
       .then(
@@ -361,7 +368,7 @@ function Booking({
         },
       );
     return () => controller.abort();
-  }, [client, page.publicKey, zone, duration, wanted, readKey, read, today, chunks, now, notYou, showAll]);
+  }, [client, page.publicKey, zone, duration, wanted, readKey, read, today, chunks, now, notYou, showAll, handoff]);
 
   const loaded = read.key === readKey ? read.loaded : new Map<number, readonly string[]>();
   const allStarts = [...loaded.values()].flat().sort();

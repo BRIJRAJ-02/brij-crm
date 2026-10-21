@@ -203,6 +203,12 @@ export const strings = {
   assignedTerm: 'Assigned',
   /** Reassigning a round robin seat (spec 0029, AC-748). */
   needsHost: 'Needs a host',
+  // A no show (spec 0043, AC-1613).
+  noShow: 'No show',
+  markNoShow: 'Mark as no show',
+  undoNoShow: 'They came after all',
+  markedNoShow: 'Marked as a no show',
+  unmarkedNoShow: 'No show taken back',
   needsHostText: 'Its host left the workspace and nobody else was free then. Reassign it, or cancel it.',
   reassignAction: 'Reassign',
   reassignTitle: (page: string, visitor: string) => `Reassign ${page} with ${visitor}`,

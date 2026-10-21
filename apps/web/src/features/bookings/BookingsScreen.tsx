@@ -1154,7 +1154,9 @@ function groupsOf(
         ? { badge: strings.cancelled }
         : booking.needsHost
           ? { badge: strings.needsHost, badgeTone: 'accent' as const }
-          : {}),
+          : booking.noShow === true
+            ? { badge: strings.noShow }
+            : {}),
     };
     const last = groups.at(-1);
     if (last?.id === id) last.rows.push(row);

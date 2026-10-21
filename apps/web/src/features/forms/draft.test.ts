@@ -144,3 +144,38 @@ describe('the builder’s draft changes', () => {
     expect(sameDocument(base, { ...base, headline: 'Hello' })).toBe(false);
   });
 });
+
+describe('Show when and routing follow a question’s key (spec 0043)', () => {
+  it('a renamed draft question’s conditions read its new key, and Show when clears with null', () => {
+    const withBudget: FormDocument = {
+      ...base,
+      questions: [
+        ...base.questions,
+        { id: 'q-budget', key: 'budget', label: 'Budget', answerType: 'short_text', required: false, update: 'fill' },
+        {
+          id: 'q-size',
+          key: 'size',
+          label: 'Size',
+          answerType: 'number',
+          required: false,
+          update: 'fill',
+          showWhen: { join: 'all', rules: [{ key: 'budget', op: 'is', value: 'Large' }] },
+        },
+      ],
+      routing: {
+        rules: [
+          {
+            id: 'r1',
+            when: { join: 'all', rules: [{ key: 'budget', op: 'is_answered' }] },
+            then: { kind: 'message', message: '' },
+          },
+        ],
+      },
+    };
+    const renamed = changeQuestion(withBudget, 'q-budget', { label: 'Yearly budget' });
+    expect(renamed.questions[3]?.showWhen?.rules[0]?.key).toBe('yearly_budget');
+    expect(renamed.routing.rules[0]?.when.rules[0]?.key).toBe('yearly_budget');
+    const cleared = changeQuestion(renamed, 'q-size', { showWhen: null });
+    expect(cleared.questions[3]).not.toHaveProperty('showWhen');
+  });
+});

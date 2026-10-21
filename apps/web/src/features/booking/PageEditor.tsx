@@ -40,6 +40,10 @@ import { pageHeading } from '../navigation/focus.ts';
 import { WorkspacePage } from '../workspace/WorkspacePage.tsx';
 import { CalendarNote, readDismissed, writeDismissed } from './CalendarNote.tsx';
 import { HostsCard } from './HostsCard.tsx';
+import { recordFacts } from '../routing/facts.ts';
+import type { RecordFields } from '../routing/record-fields.ts';
+import { RulesCard } from '../routing/RulesCard.tsx';
+import { strings as routingStrings } from '../routing/strings.ts';
 import { weekSummary, zoneLabel } from './hours.ts';
 import { linksHref, publicBookingUrl, scheduleHref } from './links.ts';
 import { scheduleStrings } from './schedule-strings.ts';
@@ -61,6 +65,8 @@ export interface PageEditorProps {
   readonly people?: readonly MemberSummary[];
   /** Says a change that saved at once went through (the Hosts card's). */
   readonly onNotice?: (message: string) => void;
+  /** A round robin page's Routing card (spec 0043): the person's and company's fields its rules may read. */
+  readonly recordFields?: RecordFields;
 }
 
 const DURATIONS = [15, 30, 45, 60, 90] as const;
@@ -136,6 +142,7 @@ export function PageEditor({
   ownerMember,
   people = [],
   onNotice,
+  recordFields,
 }: PageEditorProps) {
   const [page, setPage] = useState(loaded);
   // A page the reader can't change shows as it is, every control read only, with no Save.
@@ -232,6 +239,12 @@ export function PageEditor({
   const limitsSummary = limitParts.join(' · ');
   const rotations = useCaptureList(data.rotations.view(slug));
   const rotationList = rotations.status === 'ready' ? rotations.items : [];
+  // The people a routing rule may pick: the members of the page's rotations, each once (spec 0043).
+  const teamRotations = new Set(page.hosts?.rotations ?? []);
+  const teamPool = rotationList
+    .filter((rotation) => teamRotations.has(rotation.id))
+    .flatMap((rotation) => rotation.members.map((member) => ({ id: member.memberId, name: member.name })))
+    .filter((member, at, all) => all.findIndex((each) => each.id === member.id) === at);
 
   return (
     <WorkspacePage
@@ -407,6 +420,25 @@ export function PageEditor({
                 onSaved={(saved) => {
                   setPage(saved);
                   onNotice?.(rotationStrings.hostsSaved);
+                }}
+              />
+            )}
+            {isTeam && !isLocked && (
+              <RulesCard
+                data={data}
+                slug={slug}
+                surface={{ kind: 'page', pool: teamPool }}
+                report={{ kind: 'booking_page', pageId: page.id }}
+                rules={page.routing?.rules ?? []}
+                facts={recordFields === undefined ? [] : recordFacts(recordFields.person, recordFields.company)}
+                factLabel={routingStrings.questionOrField}
+                description={routingStrings.pageRoutingLine(page.routing?.rules.length ?? 0)}
+                isReadOnly={isLocked}
+                nameOf={(memberId) => people.find((person) => person.id === memberId)?.name ?? ''}
+                onRulesChange={async (rules) => {
+                  const saved = await data.bookingPages.update(slug, page.id, {}, { routing: { rules: [...rules] } });
+                  setPage(saved);
+                  onNotice?.(routingStrings.saved);
                 }}
               />
             )}
