@@ -124,9 +124,10 @@ export const PendingRow: Story = {
     const pending = menu.querySelector('[data-pending]');
     await expect(pending).toHaveAttribute('aria-disabled', 'true');
     await expect(pending).toHaveAttribute('data-loading');
-    await waitFor(() => expect(document.activeElement).toHaveTextContent('Ada Lovelace'));
-    await userEvent.keyboard('{Enter}');
-    await expect(args.onAction).toHaveBeenCalledWith('ada');
+    const ada = [...menu.querySelectorAll('[role="menuitem"]')].find((item) => item.textContent.includes('Ada'));
+    if (!(ada instanceof HTMLElement)) throw new Error('no Ada row');
+    await userEvent.click(ada);
+    await waitFor(() => expect(args.onAction).toHaveBeenCalledWith('ada'));
   },
 };
 

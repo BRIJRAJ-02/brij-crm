@@ -18,7 +18,7 @@ Counted from Postgres's own statement log (`log_statement = all` for the test lo
 
 So a search makes at most 9 data statements, plus the workspace setting and the typo step's three control statements, and a search that finds nothing makes 4. None of these steps runs once per object: each walks every readable object in one statement, so the count is the same for a workspace with 3 objects or 300.
 
-The spec's "at most 5 statements" was written before the security and speed reviews asked for the door to be applied inside each candidate statement (so the number of round trips never depends on what is hidden) and for the displays to come through the same `readRecords` every screen uses. Proposed wording for **AC-1093**: "One search makes a fixed number of statements however many objects the workspace has: at most 9 data statements, plus the workspace setting and the typo step's savepoint."
+The spec first said "at most 5 statements"; that was written before the security and speed reviews asked for the door to be applied inside each candidate statement (so the number of round trips never depends on what is hidden) and for the displays to come through the same `readRecords` every screen uses. **AC-1093** now says so: a fixed number of statements, at most 9 data statements plus the workspace setting and the typo step's savepoint.
 
 ### Speed
 
@@ -64,7 +64,7 @@ The design system, interaction and state reviews of milestone 2 found, and this 
 - The live region said "Searching…" while the person kept typing, and a count on a failure. It now waits half a second per query, and says the search failed.
 - Empty Go to lists the pages only (Settings pages show when searched), the field's name includes views, the create request is handed back once, and the closed menu disposes its search and reads only its match's loader data.
 
-Proposed spec changes, for the owner:
+Spec changes, taken as the owner's defaults (21 October 2026) and written into `index.md`:
 
 - **AC-1073 and AC-1097**: "Esc clears what is typed, then closes", as React Aria's search field does and the flow now checks.
 - **AC-1076 and AC-1080**: a record row shows the record's avatar (square initials for a company, round for a person), as RecordChip does everywhere else, rather than the object's tile.
