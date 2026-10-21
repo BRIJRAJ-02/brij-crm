@@ -18,6 +18,7 @@ export { taskRecords, tasks } from './tasks.ts';
 export { memberRecents } from './search.ts';
 export { commentReactions, comments, commentVersions } from './comments.ts';
 export { notificationKind, notifications, notificationSettings } from './notifications.ts';
+export { memberPreferences } from './preferences.ts';
 export {
   attendeeMatch,
   attendeeResponse,

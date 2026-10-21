@@ -39,6 +39,8 @@ export const AUDIT_ACTIONS = [
   'invitation.resent',
   'invitation.revoked',
   'invitation.accepted',
+  // Settings › Account › Preferences: a member changed their own time zone, date format, week start or landing page.
+  'member.preferences_changed',
 ] as const;
 /** One action the audit log records. */
 export const AuditAction = z.enum(AUDIT_ACTIONS);

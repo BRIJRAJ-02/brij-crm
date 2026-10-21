@@ -317,6 +317,7 @@ export {
 export { connectedCalendar, type ConnectedCalendarDeps } from './booking/connected.ts';
 export { BEST_CLEAR_MS, BEST_MAX, overlay, type Overlay, type OverlaySlot } from './booking/overlay.ts';
 export { getMyAccess, listMembers, removeMember, setMemberRole, type MemberWithRole } from './members/members.ts';
+export { PREFERENCES_MEMBERS_ONLY, readMyPreferences, updateMyPreferences } from './members/preferences.ts';
 export { outboxEvent, stubEvent, wireEvent } from './realtime/events.ts';
 export {
   AUDIENCES_NEED_CHANNELS,

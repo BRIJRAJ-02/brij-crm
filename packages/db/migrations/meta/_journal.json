@@ -435,6 +435,13 @@
       "when": 1792611208707,
       "tag": "0061_comments_notifications",
       "breakpoints": true
+    },
+    {
+      "idx": 62,
+      "version": "7",
+      "when": 1792613295467,
+      "tag": "0062_member_preferences",
+      "breakpoints": true
     }
   ]
 }
