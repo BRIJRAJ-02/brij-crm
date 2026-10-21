@@ -244,7 +244,7 @@ async function readThreads(
         createdAt: row.created_at,
         ...(row.edited_at === null ? {} : { editedAt: row.edited_at }),
         version: row.version,
-        reactions: reactions.get(row.id) ?? [],
+        reactions: [...(reactions.get(row.id) ?? [])],
         canEdit: author && me !== undefined,
         canDelete: me !== undefined && (author || manages),
       };

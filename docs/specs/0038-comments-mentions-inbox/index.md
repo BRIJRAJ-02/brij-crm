@@ -7,6 +7,8 @@
 
 ## Owner decisions needed
 
+The owner accepted every recommendation below on 21 October 2026; each is now a decision.
+
 Each has a recommendation and a runner up. The build follows the recommendations unless the owner says otherwise.
 
 1. **What a comment holds.** Recommended: plain text with mentions, stored as text in which a mention is a token naming the member by id (`<@member-uuid>`), so a rename never rewrites a comment; line breaks kept, links made clickable on display. Comments move to the shared rich text editor (spec 0019's `@crm/ui/editor`, comment mode) once notes land, converting each token into a mention node. Runner up: rich text through the notes editor now, which waits for the notes lane to land and puts Tiptap on the record page.
@@ -40,7 +42,7 @@ Reasoning and options: see [rationale.md](rationale.md).
 | Spec 0022 trash | the purge removes a record's comments and notifications with it | landed |
 | Spec 0026 settings area | Settings › Account, its navigation | landed |
 | Spec 0031 members | the members list and invitations; the second member in flows comes from `member:add` until invites land | flows add the second member with `pnpm --filter @crm/core member:add` |
-| Spec 0034 sidebar v2 | Inbox at the top of the sidebar with its badge (AC-924) | this spec adds one Inbox line to today's sidebar and exposes `useInboxCount`; sidebar v2 places it |
+| Spec 0034 sidebar v2 | Inbox at the top of the sidebar with its badge (AC-924) | agreed with the sidebar lane on 21 October 2026: this spec owns the route (`/w/$slug/inbox`, the nav model's page key `inbox`), the screen and the data, and exposes `data.inbox.unread(workspace): UnreadSource`, read through `useInboxUnread(source): number \| undefined` in `@crm/data/react`, live through the `notifications` event; the sidebar lane adds the Inbox entry and shows that count as its badge, and this spec edits no sidebar file |
 
 ## Requirements
 
@@ -81,7 +83,7 @@ Reasoning and options: see [rationale.md](rationale.md).
 - **AC-1171**: Pressing a row (or Enter on it) marks it read and opens what it is about: a comment's thread on its record (AC-1161), or a task's dialog (`?task=<id>` on the inbox itself). Each row's menu, and keys on the focused row, act on it: Mark as read or unread (`U`), Mark done or Move to inbox (`E`). "Mark all as read" in the bar marks every unread notification in the current tab and filter. Each change shows at once and rolls back with a toast on refusal.
 - **AC-1172**: The inbox stays live: a new notification appears at the top within 1 second, and a change made in another tab or device (read, done) shows within 1 second.
 - **AC-1173**: States: loading (skeleton rows), empty Inbox ("You're all caught up." with an icon), empty Done ("Nothing done yet."), empty under a filter ("No notifications match." with Clear filters), and error with Retry.
-- **AC-1174**: The sidebar's Inbox item carries the unread count as a badge ("99+" past 99, none at zero), live within 1 second, read through one data layer hook (`useInboxCount`) that sidebar v2 reuses. The browser tab's title gains "(n)" while n is above zero.
+- **AC-1174**: The sidebar's Inbox item carries the unread count as a badge ("99+" past 99, none at zero), live within 1 second, read through one data layer source and hook (`data.inbox.unread(workspace)` and `useInboxUnread`) that sidebar v2 shows. The browser tab's title gains "(n)" while n is above zero.
 - **AC-1175**: Done notifications are removed 90 days after they were marked done by the daily cleanup; unread and read ones stay until done.
 
 *Email*
@@ -166,7 +168,7 @@ The outbox gains two kinds, `comments` (object id, record ids, thread ids in `it
 ### Client (`packages/data`)
 
 - `data.comments`, loaded lazily with the tab: a store per workspace and record holding the record's thread pages (`threads(workspace, recordId)`), optimistic create, reply, edit, delete, resolve and react (applied at once, rolled back with the reason), the live handler for `comments` (rereads the named threads through `comments.get`, a coarse event rereads every held record's first page, spread 0 to 2 s), and `useComments` in `@crm/data/react`.
-- `data.inbox`, lazy too except for its count: the count lives in a tiny first load store (`inbox.count(workspace)`, `useInboxCount`), read when the workspace frame mounts and again on each `notifications` event naming me (coalesced to one read per 250 ms) and on resync; the list store (`inbox.list(workspace, { status, kind, unreadOnly })`) pages by cursor and patches marks optimistically. The workspace frame watches its workspace while the count shows, so the count is live on every page.
+- `data.inbox`, lazy too except for its count: the count lives in a tiny first load store (`inbox.unread(workspace)`, an `UnreadSource`, read with `useInboxUnread(source)`, which answers `number | undefined`: undefined until the first read, 100 standing for "99+"), read when the workspace frame mounts and again on each `notifications` event naming me (coalesced to one read per 250 ms) and on resync; the list store (`inbox.list(workspace, { status, kind, unreadOnly })`) pages by cursor and patches marks optimistically. The workspace frame watches its workspace while the count shows, so the count is live on every page.
 - `data.notificationSettings` with optimistic switches.
 
 ### Realtime
@@ -226,7 +228,7 @@ None new: the worker gains the mailer the api already has (`RESEND_API_KEY` or `
 3. API procedures and the writes test. AC-1181.
 4. Data layer: comments store, inbox count and list stores, live handlers. AC-1159, AC-1172, AC-1174.
 5. Library: CommentComposer, CommentThread, NotificationList with stories. AC-1184.
-6. Screens: the Comments tab, the inbox page, the sidebar's Inbox line. AC-1151 to AC-1162, AC-1169 to AC-1174, AC-1185.
+6. Screens: the Comments tab and the inbox page (the sidebar lane adds the Inbox entry and its badge). AC-1151 to AC-1162, AC-1169 to AC-1174, AC-1185.
 
 **Milestone 2: tasks and the two browser flow**
 7. Task assignment notifications in `createTask` and `updateTask`. AC-1165.

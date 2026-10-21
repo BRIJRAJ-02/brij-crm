@@ -16,7 +16,9 @@ import { relationshipsRouter } from './modules/relationships/router.ts';
 import { submissionsRouter } from './modules/submissions/router.ts';
 import { systemRouter } from './modules/system/router.ts';
 import { trashRouter } from './modules/trash/router.ts';
+import { commentsRouter } from './modules/comments/router.ts';
 import { notesRouter } from './modules/notes/router.ts';
+import { notificationsRouter } from './modules/notifications/router.ts';
 import { tasksRouter } from './modules/tasks/router.ts';
 import { usageRouter } from './modules/usage/router.ts';
 import { viewsRouter } from './modules/views/router.ts';
@@ -44,6 +46,8 @@ export const router = base.router({
   trash: trashRouter,
   tasks: tasksRouter,
   notes: notesRouter,
+  comments: commentsRouter,
+  notifications: notificationsRouter,
   calendar: calendarRouter,
   forms: formsRouter,
   submissions: submissionsRouter,

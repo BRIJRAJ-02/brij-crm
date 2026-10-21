@@ -30,6 +30,7 @@ import { readRecords } from '../engine/records.ts';
 import { inputInvalid, refuse } from '../engine/refusals.ts';
 import type { Actor, EngineScope } from '../engine/scope.ts';
 import { runWrite, type AfterWrite, type WriteContext } from '../engine/write.ts';
+import { notifyTaskAssigned } from '../notifications/notify.ts';
 import { checkScope } from '../access/mint.ts';
 import { isOpen, objectLevel, type Access } from '../access/policy.ts';
 import { inWorkspace } from '../access/run.ts';
@@ -145,7 +146,7 @@ async function taskRows(tx: WorkspaceTx, ids: readonly string[], lock = false): 
 }
 
 /** The linked records the reader may see, live (not in the trash, not on an archived object), with their displays, by id. */
-async function linkedDisplays(
+export async function linkedDisplays(
   tx: WorkspaceTx,
   access: Access,
   recordIds: readonly string[],
@@ -242,7 +243,7 @@ function viewOf(
  * sight (an unlink of the only link they could see): they get its view once,
  * and its event then takes it off their screens.
  */
-async function readTaskViews(
+export async function readTaskViews(
   tx: WorkspaceTx,
   scope: Pick<EngineScope, 'access' | 'actor'>,
   ids: readonly string[],
@@ -390,6 +391,8 @@ export async function createTask(
           from unnest(${uuidList(recordIds)}) with ordinality as x(id, n)
         `);
       }
+      // Someone else assigned: they hear of it (spec 0038, AC-1165).
+      if (assignee !== undefined) await notifyTaskAssigned(context, { taskId: id, assignee, previous: null });
       context.record({ tasks: [{ taskId: id, recordIds }] });
       return readTaskViews(tx, scope, [id], true);
     },
@@ -445,7 +448,11 @@ export async function updateTask(
       if (dueOn !== undefined && dueOn !== row.due_on) sets.push(sql`due_on = ${dueOn}::date`);
       if (input.assigneeMemberId !== undefined) {
         const assignee = input.assigneeMemberId === null ? null : await checkAssignee(context, input.assigneeMemberId);
-        if (assignee !== row.assignee_member_id) sets.push(sql`assignee_member_id = ${assignee}::uuid`);
+        if (assignee !== row.assignee_member_id) {
+          sets.push(sql`assignee_member_id = ${assignee}::uuid`);
+          // The new assignee hears of it, and the earlier one's unread notice goes (spec 0038, AC-1165).
+          await notifyTaskAssigned(context, { taskId, assignee, previous: row.assignee_member_id });
+        }
       }
       const actor = scope.actor;
       const memberId = actor.type === 'member' ? actor.id : null;

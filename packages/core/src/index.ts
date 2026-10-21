@@ -170,6 +170,33 @@ export {
   type SaveNoteInput,
 } from './notes/notes.ts';
 export {
+  commentVersions,
+  createComment,
+  deleteComment,
+  getThreads,
+  listThreads,
+  NOT_YOUR_COMMENT,
+  setThreadResolved,
+  THREAD_FULL,
+  toggleReaction,
+  UNKNOWN_COMMENT,
+  updateComment,
+  type CreateCommentInput,
+} from './comments/comments.ts';
+export {
+  countUnread,
+  DEFAULT_NOTIFICATION_SETTINGS,
+  getNotificationSettings,
+  listNotifications,
+  markAllRead,
+  markNotifications,
+  setNotificationSettings,
+  UNKNOWN_NOTIFICATION,
+  type ListNotificationsInput,
+  type MarkNotificationsInput,
+  type SetNotificationSettingsInput,
+} from './notifications/inbox.ts';
+export {
   createTask,
   deleteTask,
   getTasks,

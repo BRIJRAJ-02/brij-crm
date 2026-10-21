@@ -74,16 +74,18 @@ const records: EventRow = {
 };
 
 describe('every kind has a rule', () => {
-  it('names the nine kinds of spec 0007, spec 0024’s meetings and spec 0035’s schedules, and asks for facts only for views, tasks and meetings', () => {
+  it('names the nine kinds of spec 0007, spec 0024’s meetings, spec 0035’s schedules and spec 0038’s comments and notifications, and asks for facts only for views, tasks and meetings', () => {
     expect([...EVENT_KINDS].sort()).toEqual(
       [
         'access',
+        'comments',
         'definitions',
         'entries',
         'jobs',
         'meetings',
         'members',
         'notes',
+        'notifications',
         'records',
         'schedules',
         'tasks',
@@ -91,6 +93,7 @@ describe('every kind has a rule', () => {
       ].sort(),
     );
     expect(eventFacts({ seq: 1, at, kind: 'schedules', scheduleIds: [] })).toEqual([]);
+    expect(eventFacts({ seq: 1, at, kind: 'comments', recordIds: [], threadIds: [] })).toEqual([]);
     expect(eventFacts({ seq: 1, at, kind: 'meetings', recordIds: [], meetingIds: [] })).toEqual(['meetings']);
     expect(eventFacts({ seq: 1, at, kind: 'views', viewIds: [], coarse: false })).toEqual(['views']);
     expect(eventFacts({ seq: 1, at, kind: 'tasks', recordIds: [], taskIds: [] })).toEqual(['tasks']);
@@ -269,6 +272,31 @@ describe('entries, definitions, views and notes', () => {
     expect(filterEvent(open, notes)).toEqual(notes);
     expect(filterEvent(hiddenObject, notes)).toBeUndefined();
     expect(filterEvent(ownRecords, notes)).toEqual({ ...notes, recordIds: [], noteIds: [], coarse: true });
+  });
+});
+
+describe('comments and notifications (spec 0038, AC-1183)', () => {
+  it('comments: follow their records, coarse with no ids under a record rule, never past a hidden object', () => {
+    const comments: EventRow = {
+      seq: 46,
+      at,
+      kind: 'comments',
+      objectId: OBJECT,
+      recordIds: ['r1'],
+      threadIds: ['t1'],
+      mutationId: 'm1',
+    };
+    expect(filterEvent(open, comments)).toEqual(comments);
+    expect(filterEvent(hiddenObject, comments)).toBeUndefined();
+    const { mutationId: _dropped, ...rest } = comments;
+    expect(filterEvent(ownRecords, comments)).toEqual({ ...rest, recordIds: [], threadIds: [], coarse: true });
+  });
+
+  it('notifications: member ids only, so every audience gets them as they are', () => {
+    const notifications: EventRow = { seq: 47, at, kind: 'notifications', memberIds: [ADA, BEA] };
+    expect(filterEvent(open, notifications)).toEqual(notifications);
+    expect(filterEvent(hiddenObject, notifications)).toEqual(notifications);
+    expect(filterEvent(ownRecords, notifications)).toEqual(notifications);
   });
 });
 

@@ -57,6 +57,13 @@ const READS: ReadonlySet<string> = new Set([
   'tasks.list',
   'notes.get',
   'notes.list',
+  // Comments and the inbox (spec 0038).
+  'comments.list',
+  'comments.get',
+  'comments.versions',
+  'notifications.list',
+  'notifications.count',
+  'notifications.settings',
   'calendar.connections.list',
   'calendar.meetings.forRecord',
   'calendar.settings.get',
@@ -1319,6 +1326,138 @@ Object.assign(WRITES, {
   },
 });
 
+/** A comment by the member on a new person of theirs, made in its own write: its record and thread. */
+async function commentOn(m: Member): Promise<{ readonly recordId: string; readonly threadId: string }> {
+  const recordId = await personFor(m);
+  const thread = await m.client.comments.create({
+    workspace: m.slug,
+    id: newId(),
+    recordId,
+    body: 'Hello',
+    mutationId: newId(),
+  });
+  return { recordId, threadId: thread.id };
+}
+
+/** A notification for the member, stored by hand (the owner role): a mention by the system on a comment of theirs. */
+async function notificationFor(m: Member): Promise<string> {
+  const { recordId, threadId } = await commentOn(m);
+  const [member] = await testQuery<{ id: string }>(
+    ownerUrl,
+    `select id::text from members where workspace_id = $1 and status = 'active' limit 1`,
+    [m.workspace.id],
+  );
+  const id = newId();
+  await testQuery(
+    ownerUrl,
+    `insert into notifications (workspace_id, id, member_id, kind, actor_type, record_id, thread_id, comment_id)
+     values ($1, $2, $3, 'mention', 'system', $4, $5, $5)`,
+    [m.workspace.id, id, member?.id ?? '', recordId, threadId],
+  );
+  return id;
+}
+
+// Comments and the inbox (spec 0038, AC-1167, AC-1183): one comments row per write naming the object, the record and
+// the thread, and a notifications row naming only the members whose inbox or settings changed.
+Object.assign(WRITES, {
+  'comments.create': async (m: Member, mutationId: string) => {
+    const recordId = await personFor(m);
+    const thread = await m.client.comments.create({ workspace: m.slug, id: newId(), recordId, body: 'Hi', mutationId });
+    return [
+      { kind: 'records', record_ids: [recordId] },
+      {
+        kind: 'comments',
+        object_id: m.people.id,
+        record_ids: [recordId],
+        item_ids: [thread.id],
+        mutation_id: mutationId,
+      },
+    ];
+  },
+  'comments.update': async (m: Member, mutationId: string) => {
+    const { recordId, threadId } = await commentOn(m);
+    await m.client.comments.update({ workspace: m.slug, commentId: threadId, body: 'Edited', mutationId });
+    return [
+      { kind: 'records', record_ids: [recordId] },
+      { kind: 'comments', item_ids: [threadId] },
+      {
+        kind: 'comments',
+        object_id: m.people.id,
+        record_ids: [recordId],
+        item_ids: [threadId],
+        mutation_id: mutationId,
+      },
+    ];
+  },
+  'comments.delete': async (m: Member, mutationId: string) => {
+    const { recordId, threadId } = await commentOn(m);
+    await m.client.comments.delete({ workspace: m.slug, commentId: threadId, mutationId });
+    return [
+      { kind: 'records', record_ids: [recordId] },
+      { kind: 'comments', item_ids: [threadId] },
+      {
+        kind: 'comments',
+        object_id: m.people.id,
+        record_ids: [recordId],
+        item_ids: [threadId],
+        mutation_id: mutationId,
+      },
+    ];
+  },
+  'comments.resolve': async (m: Member, mutationId: string) => {
+    const { recordId, threadId } = await commentOn(m);
+    await m.client.comments.resolve({ workspace: m.slug, threadId, resolved: true, mutationId });
+    return [
+      { kind: 'records', record_ids: [recordId] },
+      { kind: 'comments', item_ids: [threadId] },
+      {
+        kind: 'comments',
+        object_id: m.people.id,
+        record_ids: [recordId],
+        item_ids: [threadId],
+        mutation_id: mutationId,
+      },
+    ];
+  },
+  'comments.react': async (m: Member, mutationId: string) => {
+    const { recordId, threadId } = await commentOn(m);
+    await m.client.comments.react({ workspace: m.slug, commentId: threadId, emoji: '🎉', on: true, mutationId });
+    return [
+      { kind: 'records', record_ids: [recordId] },
+      { kind: 'comments', item_ids: [threadId] },
+      {
+        kind: 'comments',
+        object_id: m.people.id,
+        record_ids: [recordId],
+        item_ids: [threadId],
+        mutation_id: mutationId,
+      },
+    ];
+  },
+  'notifications.mark': async (m: Member, mutationId: string) => {
+    const id = await notificationFor(m);
+    await m.client.notifications.mark({ workspace: m.slug, ids: [id], read: true, mutationId });
+    return [
+      { kind: 'records' },
+      { kind: 'comments' },
+      { kind: 'notifications', record_ids: [], mutation_id: mutationId },
+    ];
+  },
+  'notifications.markAllRead': async (m: Member, mutationId: string) => {
+    await notificationFor(m);
+    await m.client.notifications.markAllRead({ workspace: m.slug, status: 'inbox', mutationId });
+    return [
+      { kind: 'records' },
+      { kind: 'comments' },
+      { kind: 'notifications', record_ids: [], mutation_id: mutationId },
+    ];
+  },
+  'notifications.setSettings': async (m: Member, mutationId: string) => {
+    await m.client.notifications.setSettings({ workspace: m.slug, emailReplies: true, mutationId });
+    return [{ kind: 'notifications', record_ids: [], mutation_id: mutationId }];
+  },
+});
+
 /** How many writes (each one poke) a case in WRITES makes before and with its own. */
 const WRITES_MADE: Readonly<Record<string, number>> = {
   'invitations.resend': 2,
@@ -1346,6 +1485,13 @@ const WRITES_MADE: Readonly<Record<string, number>> = {
   'notes.save': 2,
   'notes.delete': 3,
   'notes.restore': 4,
+  'comments.create': 2,
+  'comments.update': 3,
+  'comments.delete': 3,
+  'comments.resolve': 3,
+  'comments.react': 3,
+  'notifications.mark': 3,
+  'notifications.markAllRead': 3,
   'calendar.connections.update': 2,
   'calendar.connections.remove': 2,
   'calendar.connections.syncNow': 2,

@@ -131,7 +131,7 @@ describe('every tenant table', () => {
 });
 
 describe('the holes in row level security (crm_search_text, spec 0004 AC-24; the outbox relay, spec 0005; the daily cleanup, spec 0008)', () => {
-  it('has exactly twelve security definer functions, each owned by its own narrow role', async () => {
+  it('has exactly thirteen security definer functions, each owned by its own narrow role', async () => {
     const definers = await owner.query<{ name: string; owner: string }>(`
       select p.proname as name, pg_get_userbyid(p.proowner) as owner
       from pg_proc p join pg_namespace n on n.oid = p.pronamespace
@@ -146,6 +146,7 @@ describe('the holes in row level security (crm_search_text, spec 0004 AC-24; the
       { name: 'crm_enqueue_calendar_sync', owner: 'crm_queue' },
       { name: 'crm_enqueue_email', owner: 'crm_queue' },
       { name: 'crm_enqueue_job', owner: 'crm_queue' },
+      { name: 'crm_enqueue_notification_email', owner: 'crm_queue' },
       { name: 'crm_form_by_key', owner: 'crm_form_lookup' },
       { name: 'crm_invitation_by_token', owner: 'crm_invitation_lookup' },
       { name: 'crm_invitation_open_for', owner: 'crm_invitation_lookup' },
@@ -169,6 +170,7 @@ describe('the holes in row level security (crm_search_text, spec 0004 AC-24; the
       { name: 'crm_enqueue_calendar_sync', config: ['search_path=pg_catalog, pg_temp'], atomic: false },
       { name: 'crm_enqueue_email', config: ['search_path=pg_catalog, pg_temp'], atomic: false },
       { name: 'crm_enqueue_job', config: ['search_path=pg_catalog, pg_temp'], atomic: false },
+      { name: 'crm_enqueue_notification_email', config: ['search_path=pg_catalog, pg_temp'], atomic: false },
       { name: 'crm_form_by_key', config: ['search_path=pg_catalog, pg_temp'], atomic: true },
       { name: 'crm_invitation_by_token', config: ['search_path=pg_catalog, pg_temp'], atomic: true },
       { name: 'crm_invitation_open_for', config: ['search_path=pg_catalog, pg_temp'], atomic: true },
@@ -211,14 +213,21 @@ describe('the holes in row level security (crm_search_text, spec 0004 AC-24; the
     ],
     [
       'crm_queue',
-      ['crm_enqueue_job', 'crm_enqueue_calendar_sync', 'crm_enqueue_booking_mail', 'crm_enqueue_email'],
+      [
+        'crm_enqueue_job',
+        'crm_enqueue_calendar_sync',
+        'crm_enqueue_booking_mail',
+        'crm_enqueue_email',
+        'crm_enqueue_notification_email',
+      ],
       [
         'crm_enqueue_job(uuid, timestamp with time zone)',
         'crm_enqueue_calendar_sync(uuid, timestamp with time zone)',
         'crm_enqueue_booking_mail(uuid, text)',
         'crm_enqueue_email(uuid)',
+        'crm_enqueue_notification_email(uuid)',
       ],
-      ['app', 'app', 'app', 'app'],
+      ['app', 'app', 'app', 'app', 'app'],
     ],
     ['crm_sweep', ['crm_workspace_ids'], ['crm_workspace_ids(uuid, integer)'], ['worker']],
     ['crm_form_lookup', ['crm_form_by_key'], ['crm_form_by_key(text)'], ['app']],
@@ -943,6 +952,73 @@ describe('isolation', () => {
     await expect(
       db.withWorkspace(a.workspaceId, (tx) => tx.execute(sql`delete from records where id = ${inA.recordId}`)),
     ).rejects.toMatchObject({ cause: { code: '23503', constraint: 'notes_record' } });
+  });
+
+  it("reads none of another workspace's comments or notifications, and refuses either on its record (spec 0038, AC-1182)", async () => {
+    /** A comment on one record, a reaction, an earlier version and a notification for the member, made inside the workspace. */
+    const commented = async (workspaceId: string, memberId: string) => {
+      const objectId = await objectIn(workspaceId);
+      const recordId = randomUUID();
+      const commentId = randomUUID();
+      await db.withWorkspace(workspaceId, async (tx) => {
+        await tx.execute(
+          sql`insert into records (workspace_id, id, object_id, created_by_type, updated_by_type) values (${workspaceId}, ${recordId}, ${objectId}, 'system', 'system')`,
+        );
+        await tx.execute(
+          sql`insert into comments (workspace_id, id, record_id, thread_id, body, created_by_type, updated_by_type) values (${workspaceId}, ${commentId}, ${recordId}, ${commentId}, 'Hello', 'system', 'system')`,
+        );
+        await tx.execute(
+          sql`insert into comment_versions (workspace_id, comment_id, version, body, created_at, created_by_type) values (${workspaceId}, ${commentId}, 1, 'Hi', now(), 'system')`,
+        );
+        await tx.execute(
+          sql`insert into comment_reactions (workspace_id, comment_id, member_id, emoji) values (${workspaceId}, ${commentId}, ${memberId}, '👍')`,
+        );
+        await tx.execute(
+          sql`insert into notifications (workspace_id, member_id, kind, actor_type, record_id, thread_id, comment_id) values (${workspaceId}, ${memberId}, 'mention', 'system', ${recordId}, ${commentId}, ${commentId})`,
+        );
+        await tx.execute(
+          sql`insert into notification_settings (workspace_id, member_id, email_replies) values (${workspaceId}, ${memberId}, true)`,
+        );
+      });
+      return { recordId, commentId };
+    };
+    const a = await workspaceWithMember('comments-a');
+    const b = await workspaceWithMember('comments-b');
+    const inA = await commented(a.workspaceId, a.memberId);
+    const inB = await commented(b.workspaceId, b.memberId);
+    const fromA = await db.withWorkspace(a.workspaceId, async (tx) => ({
+      comments: (await tx.execute<{ id: string }>(sql`select id from comments`)).rows,
+      versions: (await tx.execute<{ id: string }>(sql`select comment_id as id from comment_versions`)).rows,
+      reactions: (await tx.execute<{ id: string }>(sql`select comment_id as id from comment_reactions`)).rows,
+      notifications: (await tx.execute<{ id: string }>(sql`select comment_id as id from notifications`)).rows,
+      settings: (await tx.execute<{ id: string }>(sql`select member_id as id from notification_settings`)).rows,
+    }));
+    expect(fromA).toEqual({
+      comments: [{ id: inA.commentId }],
+      versions: [{ id: inA.commentId }],
+      reactions: [{ id: inA.commentId }],
+      notifications: [{ id: inA.commentId }],
+      settings: [{ id: a.memberId }],
+    });
+    // A comment in A on B's record, or a notification in A for B's member: the composite keys find no such row in A.
+    await expect(
+      db.withWorkspace(a.workspaceId, (tx) =>
+        tx.execute(
+          sql`insert into comments (workspace_id, id, record_id, thread_id, body, created_by_type, updated_by_type) values (${a.workspaceId}, ${inB.commentId}, ${inB.recordId}, ${inB.commentId}, 'Hello', 'system', 'system')`,
+        ),
+      ),
+    ).rejects.toMatchObject({ cause: { code: '23503', constraint: 'comments_record' } });
+    await expect(
+      db.withWorkspace(a.workspaceId, (tx) =>
+        tx.execute(
+          sql`insert into notifications (workspace_id, member_id, kind, actor_type, record_id, thread_id, comment_id) values (${a.workspaceId}, ${b.memberId}, 'mention', 'system', ${inA.recordId}, ${inA.commentId}, ${inA.commentId})`,
+        ),
+      ),
+    ).rejects.toMatchObject({ cause: { code: '23503', constraint: 'notifications_member' } });
+    // A record removed for good while it still has a comment fails: the key has no cascade (AC-1160).
+    await expect(
+      db.withWorkspace(a.workspaceId, (tx) => tx.execute(sql`delete from records where id = ${inA.recordId}`)),
+    ).rejects.toMatchObject({ cause: { code: '23503' } });
   });
 
   it("reads none of another workspace's calendar rows, and refuses a link to its record (spec 0024)", async () => {

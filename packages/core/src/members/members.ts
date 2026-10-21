@@ -25,6 +25,7 @@ import { can, isRole } from '../access/policy.ts';
 import { inWorkspace } from '../access/run.ts';
 import { deleteMemberViews } from '../views/manage.ts';
 import { deleteMemberCalendars } from '../calendar/connections.ts';
+import { deleteMemberNotifications } from '../notifications/inbox.ts';
 
 const { members } = schema;
 
@@ -268,6 +269,8 @@ export async function removeMember(
       await deleteMemberViews(context, target.id);
       // Their calendar connections and the meetings only they held go too (spec 0024, AC-614).
       await deleteMemberCalendars(context, target.id);
+      // Their notifications and notification settings go too (spec 0038, AC-1168).
+      await deleteMemberNotifications(context, target.id);
       // The `access` row that disconnects them comes with spec 0009 milestone 3; the member list changes now.
       context.record({ members: [target.id] });
     },
