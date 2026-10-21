@@ -4,7 +4,7 @@
 // Leaves out: joining at once (an admin approves each request), other domains, and invitations (their own page).
 import { isDataError, type DataLayer, type Joinable } from '@crm/data';
 import { AuthLayout, Badge, Button, ButtonLink, Callout, DescriptionList } from '@crm/ui';
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { PRODUCT_LOGO } from '../../brand.ts';
 import { strings } from './strings.ts';
 
@@ -14,6 +14,8 @@ export interface JoinScreenProps {
   /** The signed in person's address, for its domain. */
   readonly email: string;
   readonly joinable: readonly Joinable[];
+  /** Whether they're in any workspace: the way out goes there, or to making one. */
+  readonly hasHome: boolean;
 }
 
 /** The domain of an address, for the copy. */
@@ -24,10 +26,16 @@ const domainOf = (email: string) => email.slice(email.lastIndexOf('@') + 1).toLo
  * to join or the request's Badge), a quiet line once any request is out, and
  * the way back to the person's workspaces.
  */
-export function JoinScreen({ data, email, joinable }: JoinScreenProps) {
+export function JoinScreen({ data, email, joinable, hasHome }: JoinScreenProps) {
   const [rows, setRows] = useState(joinable);
   const [busy, setBusy] = useState<string | undefined>(undefined);
   const [failure, setFailure] = useState<string | undefined>(undefined);
+  // The workspace just asked: the status line names it, and focus moves to the way out, since the button is gone.
+  const [asked, setAsked] = useState<string | undefined>(undefined);
+  const footer = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (asked !== undefined) footer.current?.querySelector('a')?.focus();
+  }, [asked]);
   const domain = domainOf(email);
 
   const ask = (workspace: Joinable) => {
@@ -38,6 +46,7 @@ export function JoinScreen({ data, email, joinable }: JoinScreenProps) {
       (answered) => {
         setBusy(undefined);
         setRows((current) => current.map((row) => (row.workspaceId === answered.workspaceId ? answered : row)));
+        setAsked(answered.name);
       },
       (error: unknown) => {
         setBusy(undefined);
@@ -53,9 +62,11 @@ export function JoinScreen({ data, email, joinable }: JoinScreenProps) {
       title={strings.title}
       description={rows.length === 0 ? strings.none(domain) : strings.atDomain(domain)}
       footer={
-        <ButtonLink variant="ghost" href="/">
-          {strings.goHome}
-        </ButtonLink>
+        <div ref={footer}>
+          <ButtonLink variant="ghost" href={hasHome ? '/' : '/welcome'}>
+            {hasHome ? strings.goHome : strings.createOne}
+          </ButtonLink>
+        </div>
       }
     >
       {failure !== undefined && <Callout tone="danger">{failure}</Callout>}
@@ -80,7 +91,11 @@ export function JoinScreen({ data, email, joinable }: JoinScreenProps) {
           }))}
         />
       )}
-      {rows.some((row) => row.state === 'pending') && <p>{strings.pendingNote}</p>}
+      {rows.some((row) => row.state === 'pending') && (
+        <Callout isAnnounced {...(asked === undefined ? {} : { title: strings.asked(asked) })}>
+          {strings.pendingNote}
+        </Callout>
+      )}
     </AuthLayout>
   );
 }

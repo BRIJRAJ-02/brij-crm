@@ -5,6 +5,7 @@ import { AuthError, AuthPending } from '../features/auth/AuthStates.tsx';
 import { signInHref } from '../features/auth/redirect.ts';
 import { JoinScreen } from '../features/join/JoinScreen.tsx';
 import { strings } from '../features/join/strings.ts';
+import { homeWorkspace } from '../features/workspace/home.ts';
 
 // Domain join (spec 0031, AC-819): outside any workspace, in the sign in frame. The workspaces whose email domain
 // is the signed in person's, each with Ask to join or that they already asked; signed out, sign in comes back here.
@@ -12,7 +13,7 @@ export const Route = createFileRoute('/join')({
   loader: async ({ context }) => {
     const me = await context.data.me.get();
     if (me === undefined) throw redirect({ href: signInHref('/join'), replace: true });
-    return { user: me.user, joinable: await context.data.join.list() };
+    return { user: me.user, hasHome: homeWorkspace(me) !== undefined, joinable: await context.data.join.list() };
   },
   pendingComponent: () => (
     <LoadingNow>
@@ -24,9 +25,9 @@ export const Route = createFileRoute('/join')({
 });
 
 function JoinRoute() {
-  const { user, joinable } = Route.useLoaderData();
+  const { user, hasHome, joinable } = Route.useLoaderData();
   const { data } = Route.useRouteContext();
-  return <JoinScreen data={data} email={user.email} joinable={joinable} />;
+  return <JoinScreen data={data} email={user.email} hasHome={hasHome} joinable={joinable} />;
 }
 
 /** The read failed: the server's words when it gave any, with a retry. */

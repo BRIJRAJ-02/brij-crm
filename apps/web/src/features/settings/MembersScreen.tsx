@@ -7,7 +7,9 @@
 // teams, guests, the invite link and email domains (later slices).
 import {
   isDataError,
+  ROLE_DESCRIPTIONS,
   ROLE_LABELS,
+  ROLES,
   type DataLayer,
   type InvitationView,
   type InviteLinkView,
@@ -23,9 +25,11 @@ import {
   Avatar,
   Badge,
   Button,
+  ButtonGroup,
   Callout,
   EmptyState,
   Field,
+  InfoTip,
   Menu,
   MenuItem,
   MenuSeparator,
@@ -40,7 +44,7 @@ import {
   type Toasts,
 } from '@crm/ui';
 import { useRouter } from '@tanstack/react-router';
-import { useEffect, useState } from 'react';
+import { Fragment, useEffect, useState } from 'react';
 import { useCan } from '../workspace/WorkspacePage.tsx';
 import { InviteDialog } from './InviteDialog.tsx';
 import { EmailDomainCard } from './EmailDomainCard.tsx';
@@ -80,13 +84,26 @@ export interface MembersScreenProps {
 const MEMBER_COLUMNS: readonly TableColumn[] = [
   { id: 'name', label: strings.columns.name, isRowHeader: true, isInline: true },
   { id: 'email', label: strings.columns.email },
-  { id: 'role', label: strings.columns.role },
+  {
+    id: 'role',
+    label: strings.columns.role,
+    info: (
+      <InfoTip label={strings.columns.role}>
+        {ROLES.map((role, index) => (
+          <Fragment key={role}>
+            {index > 0 && <br />}
+            {ROLE_LABELS[role]}: {ROLE_DESCRIPTIONS[role]}
+          </Fragment>
+        ))}
+      </InfoTip>
+    ),
+  },
   { id: 'joined', label: strings.columns.joined },
   { id: 'actions', label: strings.columns.actions, isLabelHidden: true, align: 'end' },
 ];
 
 const REQUEST_COLUMNS: readonly TableColumn[] = [
-  { id: 'name', label: strings.columns.name, isRowHeader: true },
+  { id: 'name', label: strings.columns.name, isRowHeader: true, isInline: true },
   { id: 'email', label: strings.columns.email },
   { id: 'requested', label: strings.requested },
   { id: 'actions', label: strings.columns.actions, isLabelHidden: true, align: 'end' },
@@ -124,6 +141,8 @@ export function MembersScreen({
 }: MembersScreenProps) {
   const router = useRouter();
   const [isInviting, setInviting] = useState(false);
+  // The request being approved: its Approve spins and its Decline waits, so one press makes one decision.
+  const [approving, setApproving] = useState<string | undefined>(undefined);
   // The tab shown: the search belongs to the Members tab alone.
   const [tab, setTab] = useState('members');
   // The invitations whose Resend is on its way: their row's menu waits for the answer.
@@ -369,15 +388,21 @@ export function MembersScreen({
 
   // Approving brings them in at once; declining ends their request, so it asks first.
   const approve = (request: JoinRequestView) => {
-    data.joinRequests.decide(slug, request.id, true).then(
-      async () => {
-        await reload();
-        toasts.toast({ tone: 'success', message: strings.approved(request.name) });
-      },
-      (error: unknown) => {
-        toasts.toast({ tone: 'danger', message: messageOf(error) });
-      },
-    );
+    setApproving(request.id);
+    data.joinRequests
+      .decide(slug, request.id, true)
+      .then(
+        async () => {
+          await reload();
+          toasts.toast({ tone: 'success', message: strings.approved(request.name) });
+        },
+        (error: unknown) => {
+          toasts.toast({ tone: 'danger', message: messageOf(error) });
+        },
+      )
+      .finally(() => {
+        setApproving(undefined);
+      });
   };
   const decline = (request: JoinRequestView) => {
     setQuestion({
@@ -392,21 +417,38 @@ export function MembersScreen({
   const requestCell = (request: JoinRequestView, column: string) => {
     switch (column) {
       case 'name':
-        return request.name;
+        return (
+          <>
+            <Avatar name={request.name} id={request.id} isDecorative />
+            {request.name}
+          </>
+        );
       case 'email':
         return request.email;
       case 'requested':
         return <RelativeTime value={request.requestedAt} />;
       default:
         return (
-          <>
-            <Button size="sm" onPress={() => approve(request)}>
+          <ButtonGroup label={strings.requestActions(request.name)} layout="row">
+            <Button
+              size="sm"
+              label={strings.approveFor(request.name)}
+              isPending={approving === request.id}
+              isDisabled={approving !== undefined && approving !== request.id}
+              onPress={() => approve(request)}
+            >
               {strings.approve}
             </Button>
-            <Button size="sm" variant="ghost" onPress={() => decline(request)}>
+            <Button
+              size="sm"
+              variant="ghost"
+              label={strings.declineFor(request.name)}
+              isDisabled={approving === request.id}
+              onPress={() => decline(request)}
+            >
               {strings.decline}
             </Button>
-          </>
+          </ButtonGroup>
         );
     }
   };
@@ -526,6 +568,7 @@ export function MembersScreen({
                   data={data}
                   slug={slug}
                   domains={domains}
+                  ask={setQuestion}
                   onChanged={reload}
                   onFailed={(message) => {
                     toasts.toast({ tone: 'danger', message });

@@ -4,7 +4,7 @@
 // One card, no title of its own: its first row names it.
 // Leaves out: guests (slice 9), email domains (the card after it), and who joined (the Members tab).
 import { INVITE_LINK_DAYS, isDataError, type DataLayer, type InviteLinkDays, type InviteLinkView } from '@crm/data';
-import { Button, Callout, Card, Field, Select, SettingsRow, Switch } from '@crm/ui';
+import { Button, Callout, Card, Field, InfoTip, Select, SettingsRow, Switch } from '@crm/ui';
 import { useState } from 'react';
 import type { MemberQuestion } from './MemberConfirm.tsx';
 import { strings } from './members-strings.ts';
@@ -143,7 +143,10 @@ export function InviteLinkCard({ data, slug, link, ask, onChanged, onFailed }: I
               }}
             />
           </SettingsRow>
-          <SettingsRow title={strings.linkMostUses}>
+          <SettingsRow
+            title={strings.linkMostUses}
+            info={<InfoTip label={strings.linkMostUses}>{strings.linkMostUsesInfo}</InfoTip>}
+          >
             <Select
               label={strings.linkMostUses}
               isLabelHidden

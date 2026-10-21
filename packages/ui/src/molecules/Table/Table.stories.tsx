@@ -5,6 +5,7 @@ import { Button } from '../../atoms/Button/Button.tsx';
 import { RecordChip } from '../../atoms/RecordChip/RecordChip.tsx';
 import { RelativeTime } from '../../atoms/RelativeTime/RelativeTime.tsx';
 import { EmptyState } from '../EmptyState/EmptyState.tsx';
+import { InfoTip } from '../InfoTip/InfoTip.tsx';
 import { Table, type TableColumn } from './Table.tsx';
 
 interface Member {
@@ -69,6 +70,21 @@ export const Default: Story = {
     await userEvent.tab();
     await userEvent.keyboard('{Enter}');
     await expect(args.onRowAction).toHaveBeenCalledWith('m1');
+  },
+};
+
+/** A header with help beside it: an InfoTip that opens by press or keyboard. */
+export const ColumnInfo: Story = {
+  args: {
+    columns: COLUMNS.map((column) =>
+      column.id === 'role'
+        ? { ...column, info: <InfoTip label="Role">What each person may do in the workspace.</InfoTip> }
+        : column,
+    ),
+  },
+  play: async ({ canvas, userEvent }) => {
+    await userEvent.click(canvas.getByRole('button', { name: 'About Role' }));
+    await expect(await canvas.findByRole('dialog', { name: 'About Role' })).toBeInTheDocument();
   },
 };
 

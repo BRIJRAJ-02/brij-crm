@@ -5,6 +5,7 @@
 import { isDataError, type DataLayer, type WorkspaceDomainsView } from '@crm/data';
 import { Card, SettingsRow, Switch } from '@crm/ui';
 import { useState } from 'react';
+import type { MemberQuestion } from './MemberConfirm.tsx';
 import { strings } from './members-strings.ts';
 
 /** Props for the email domain card. */
@@ -13,6 +14,8 @@ export interface EmailDomainCardProps {
   readonly slug: string;
   /** The domains as the route read them, with the one the reader may turn on. */
   readonly domains: WorkspaceDomainsView;
+  /** Asks first in the page's confirm: turning the domain off is an ending action. */
+  readonly ask: (question: MemberQuestion & { readonly done: string }) => void;
   /** A change landed: the page reads the domains again. */
   readonly onChanged: () => Promise<void>;
   /** A change was refused: the page says why in a toast. */
@@ -22,9 +25,10 @@ export interface EmailDomainCardProps {
 /**
  * One SettingsRow: the reader's own domain and a switch. Its one quiet line
  * says what it does, or why it can't be turned on (a public or unverified
- * address). Waits for the server, the switch disabled meanwhile.
+ * address). Waits for the server, the switch disabled meanwhile. Turning it
+ * off asks first, since it closes the open requests from that domain.
  */
-export function EmailDomainCard({ data, slug, domains, onChanged, onFailed }: EmailDomainCardProps) {
+export function EmailDomainCard({ data, slug, domains, ask, onChanged, onFailed }: EmailDomainCardProps) {
   const [isBusy, setBusy] = useState(false);
   const mine = domains.yourDomain;
   const isOn = mine !== undefined && domains.domains.includes(mine);
@@ -58,7 +62,23 @@ export function EmailDomainCard({ data, slug, domains, onChanged, onFailed }: Em
           isDisabled={isBusy || mine === undefined}
           onChange={(on) => {
             if (mine === undefined) return;
-            set(on ? [...domains.domains, mine] : domains.domains.filter((domain) => domain !== mine));
+            if (on) {
+              set([...domains.domains, mine]);
+              return;
+            }
+            ask({
+              title: strings.domainOffTitle,
+              text: strings.domainOffText(mine),
+              action: strings.domainOffAction,
+              run: () =>
+                data.joinRequests
+                  .setDomains(
+                    slug,
+                    domains.domains.filter((domain) => domain !== mine),
+                  )
+                  .then(() => undefined),
+              done: strings.domainTurnedOff,
+            });
           }}
         />
       </SettingsRow>

@@ -122,12 +122,12 @@ export function WelcomeScreen({ data, toasts, user, back, joinable = 0 }: Welcom
       {joinable > 0 && (
         <Callout
           actions={
-            <ButtonLink size="sm" href="/join">
+            <ButtonLink size="sm" variant="ghost" href="/join">
               {strings.seeTeam}
             </ButtonLink>
           }
         >
-          {strings.teamHere}
+          {strings.teamHere(joinable, user.email.slice(user.email.lastIndexOf('@') + 1).toLowerCase())}
         </Callout>
       )}
       <Form<WelcomeRefusal>

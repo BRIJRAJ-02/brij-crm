@@ -12,6 +12,7 @@ import { TopBar } from '../Toolbar/Toolbar.tsx';
 import { Select } from '../../molecules/Select/Select.tsx';
 import { Field } from '../../molecules/Field/Field.tsx';
 import { Form } from '../../molecules/Form/Form.tsx';
+import { InfoTip } from '../../molecules/InfoTip/InfoTip.tsx';
 import {
   SettingsGrid,
   SettingsLayout,
@@ -235,6 +236,26 @@ export const Rows: Story = {
     await expect(canvas.getByRole('region', { name: 'Appearance' })).toBeInTheDocument();
     await expect(canvas.queryByRole('link', { name: 'Account' })).toBeNull();
     await expect(canvas.getByRole('button', { name: /Interface theme/ })).toBeInTheDocument();
+  },
+};
+
+/** A row whose title needs a word of help: an InfoTip beside it. */
+export const RowInfo: Story = {
+  render: () => (
+    <Stage>
+      <Card>
+        <SettingsRow
+          title="Most uses"
+          info={<InfoTip label="Most uses">How many people can join with the link before it stops working.</InfoTip>}
+        >
+          <Select label="Most uses" isLabelHidden items={[{ id: 'none', label: 'No limit' }]} defaultValue="none" />
+        </SettingsRow>
+      </Card>
+    </Stage>
+  ),
+  play: async ({ canvas, userEvent }) => {
+    await userEvent.click(canvas.getByRole('button', { name: 'About Most uses' }));
+    await expect(await canvas.findByRole('dialog', { name: 'About Most uses' })).toBeInTheDocument();
   },
 };
 

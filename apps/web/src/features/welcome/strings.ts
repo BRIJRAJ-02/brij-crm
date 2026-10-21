@@ -16,7 +16,10 @@ export const strings = {
   creating: 'Creating workspace',
   signOut: 'Sign out',
   // Domain join (spec 0031, AC-819): the person's team may already be here.
-  teamHere: 'Your team may already be on Timefix.',
+  teamHere: (count: number, domain: string) =>
+    count === 1
+      ? `1 workspace at @${domain} lets you ask to join.`
+      : `${String(count)} workspaces at @${domain} let you ask to join.`,
   seeTeam: 'See workspaces',
   signOutFailed: 'Couldn’t sign out. Check your connection, then try again.',
   nameMissing: 'Enter your name.',
