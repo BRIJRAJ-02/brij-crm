@@ -26,6 +26,7 @@ import {
   markAllRead,
   markEmailed,
   markNotifications,
+  queueNextEmail,
   setNotificationSettings,
 } from '../notifications/inbox.ts';
 import { prepareNotificationEmail } from '../notifications/email.ts';
@@ -590,5 +591,32 @@ describe('the notifications email (AC-1176, AC-1177)', () => {
     // The comment deleted: nothing either.
     await deleteComment(w.scope, { commentId: thread.id }, hooks());
     expect((await prepareNotificationEmail({ db, rules: NO_RULE_SOURCE }, input)).skipped).toBe('nothing');
+  });
+
+  it('holds 20 at most, and the rest go in the next email, queued once', async () => {
+    const w = await workspace();
+    const acme = await w.company('Acme');
+    for (let index = 0; index < 22; index += 1) {
+      await createComment(
+        w.scope,
+        { id: newId(), recordId: acme, body: `Note ${String(index)} ${mentionToken(w.bea)}` },
+        hooks(),
+      );
+    }
+    const door = { db, rules: NO_RULE_SOURCE };
+    const input = { workspaceId: w.scope.workspaceId, memberId: w.bea };
+    const first = await prepareNotificationEmail(door, input);
+    if (first.skipped !== undefined) throw new Error(`Skipped: ${first.skipped}`);
+    expect(first.params.items).toHaveLength(20);
+    expect(first.params.more).toBe(2);
+    expect(first.hasMore).toBe(true);
+    await markEmailed(first.scope, first.ids);
+    await queueNextEmail(first.scope);
+    await queueNextEmail(first.scope);
+    const next = await prepareNotificationEmail(door, input);
+    if (next.skipped !== undefined) throw new Error(`Skipped: ${next.skipped}`);
+    expect(next.params.items).toHaveLength(2);
+    expect(next.hasMore).toBe(false);
+    expect(next.ids.some((id) => first.ids.includes(id))).toBe(false);
   });
 });

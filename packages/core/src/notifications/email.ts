@@ -26,8 +26,10 @@ export type PreparedNotificationEmail =
       readonly to: { readonly email: string; readonly name: string };
       readonly workspaceName: string;
       readonly params: NotificationsEmail;
-      /** The notifications it holds, for `markEmailed` once it went. */
+      /** The notifications it holds, claimed with `markEmailed` before it goes. */
       readonly ids: readonly string[];
+      /** More are due past these: the task queues the next email (`queueNextEmail`). */
+      readonly hasMore: boolean;
       readonly skipped?: undefined;
     }
   | { readonly skipped: 'removed' | 'nothing' };
@@ -131,5 +133,6 @@ export async function prepareNotificationEmail(
       settingsPath: `${base}/settings/account/notifications`,
     },
     ids: sent,
+    hasMore: batch.more > 0,
   };
 }

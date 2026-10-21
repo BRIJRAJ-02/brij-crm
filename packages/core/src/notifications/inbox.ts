@@ -550,3 +550,18 @@ export async function releaseEmailed(scope: EngineScope, ids: readonly string[])
     `);
   });
 }
+
+/**
+ * Queues the caller's next notifications email (AC-1176): the email that just
+ * went held at most `NOTIFICATION_EMAIL_MAX`, so the rest go in another, five
+ * minutes on. Keyed per member as every queueing is, so it is one waiting email
+ * however often it is asked for; what the last one held is claimed already.
+ */
+export async function queueNextEmail(scope: EngineScope): Promise<void> {
+  checkScope(scope);
+  const me = callerOf(scope);
+  if (me === undefined) return;
+  await inWorkspace(scope, async (tx) => {
+    await tx.execute(sql`select crm_enqueue_notification_email(${me}::uuid)`);
+  });
+}

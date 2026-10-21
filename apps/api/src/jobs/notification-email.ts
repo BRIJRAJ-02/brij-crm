@@ -4,10 +4,17 @@
 // workspace so a burst queues one. It enters as the member (one removed since
 // gets nothing), reads every notification still due and visible to them now,
 // claims them (marked emailed, committed), then draws one email and sends it;
-// a failed send gives them back for the retry, so none goes twice.
+// a failed send gives them back for the retry, so none goes twice. More than
+// 20 due: the rest go in a next email, queued five minutes on.
 // Without a mail transport it logs that it skipped and completes. A failed
 // send throws a plain error for Graphile to try again (5 tries).
-import { markEmailed, prepareNotificationEmail, releaseEmailed, type ActorDoorDeps } from '@crm/core/system';
+import {
+  markEmailed,
+  prepareNotificationEmail,
+  queueNextEmail,
+  releaseEmailed,
+  type ActorDoorDeps,
+} from '@crm/core/system';
 import { renderNotificationsEmail } from '@crm/emails';
 import * as z from 'zod';
 import type { Mailer } from '../mail/mailer.ts';
@@ -69,5 +76,7 @@ export async function runNotificationEmail(deps: NotificationEmailTaskDeps, payl
     deps.log.warn('notification.email.failed', { workspaceId, memberId, error: failure });
     throw new Error('A notifications email failed to send; the worker log has its member id.');
   }
+  // At most 20 a time: the rest go in the next email, queued now (one waiting email per member, keyed).
+  if (prepared.hasMore) await queueNextEmail(prepared.scope);
   deps.log.info('notification.email.sent', { workspaceId, memberId, notifications: prepared.ids.length });
 }
