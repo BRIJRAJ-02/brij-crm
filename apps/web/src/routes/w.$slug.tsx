@@ -2,6 +2,7 @@ import { isDataError } from '@crm/data';
 import { LoadingNow } from '@crm/ui';
 import { createFileRoute, Outlet, redirect, useRouter, type ErrorComponentProps } from '@tanstack/react-router';
 import { signInHref } from '../features/auth/redirect.ts';
+import { CommandMenuProvider } from '../features/command/CommandMenuProvider.tsx';
 import { failedPage, missingPage, pendingPage } from '../features/workspace/ObjectScreen.tsx';
 import { strings } from '../features/workspace/strings.ts';
 import { useWorkspaceName, WorkspacePage } from '../features/workspace/WorkspacePage.tsx';
@@ -47,10 +48,17 @@ export const Route = createFileRoute('/w/$slug')({
 
 function WorkspaceRoute() {
   const { objects } = Route.useLoaderData();
+  const { slug } = Route.useParams();
   if (objects === undefined) {
     return <WorkspacePage page={missingPage(strings.workspaceMissingTitle, strings.workspaceMissingText)} />;
   }
-  return <Outlet />;
+  // The command menu (spec 0039): ⌘K and `/` on every page inside the workspace, and `useCommandMenu()` for the
+  // sidebar's Quick actions and search.
+  return (
+    <CommandMenuProvider slug={slug}>
+      <Outlet />
+    </CommandMenuProvider>
+  );
 }
 
 function WorkspaceError({ error }: ErrorComponentProps) {

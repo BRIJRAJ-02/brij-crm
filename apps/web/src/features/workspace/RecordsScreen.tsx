@@ -89,6 +89,10 @@ export interface RecordsScreenProps {
    */
   readonly toolbar?: (announced: string | undefined) => ReactNode;
   readonly announce?: (count: WindowCount) => string | undefined;
+  /** The command menu's Create a <object> (spec 0039, AC-1086): open the new record dialog once, as New does. */
+  readonly isCreateRequested?: boolean;
+  /** The request was taken: the route drops it from the address. */
+  readonly onCreateRequestTaken?: () => void;
   /** What the table says when the view's filter matches nothing; the object's own empty state otherwise. */
   readonly filteredEmpty?: ReactNode;
   /**
@@ -194,6 +198,8 @@ export function RecordsScreen({
   announce,
   filteredEmpty,
   onTickedChange,
+  isCreateRequested = false,
+  onCreateRequestTaken,
 }: RecordsScreenProps) {
   const { data, toasts } = useRouteContext({ from: '__root__' });
   const navigate = useNavigate();
@@ -388,6 +394,12 @@ export function RecordsScreen({
   const openCreate = () => {
     setCreating(true);
   };
+  // Asked for from the command menu: the same dialog as New, once; a member who may only read gets the table.
+  useEffect(() => {
+    if (!isCreateRequested) return;
+    if (object.access === 'write') setCreating(true);
+    onCreateRequestTaken?.();
+  }, [isCreateRequested, onCreateRequestTaken, object.access]);
 
   return (
     <WorkspacePage

@@ -27,11 +27,15 @@ const OPEN_GRACE_MS = 300;
 /** The search the route takes: a draft, as text; checking it waits for the loader and the screen. */
 interface ViewSearch {
   readonly draft?: string;
+  /** Open the new record dialog once the table shows (the command menu's Create a <object>, spec 0039). */
+  readonly new?: true;
 }
 
 export const Route = createFileRoute('/w/$slug/objects/$object_/views/$viewId')({
-  validateSearch: (search: Record<string, unknown>): ViewSearch =>
-    typeof search.draft === 'string' && search.draft !== '' ? { draft: search.draft } : {},
+  validateSearch: (search: Record<string, unknown>): ViewSearch => ({
+    ...(typeof search.draft === 'string' && search.draft !== '' ? { draft: search.draft } : {}),
+    ...(search.new === true || search.new === 1 || search.new === '1' || search.new === 'true' ? { new: true } : {}),
+  }),
   loaderDeps: () => ({}),
   // Entering the view (again) reads it afresh: the records a cached match held are let go 30 seconds after
   // the screen leaves. A draft changing on the screen ('stay') never reloads it.
@@ -135,6 +139,15 @@ function ViewRoute() {
       slug={params.slug}
       {...loaded.screen}
       param={search.draft}
+      isCreateRequested={search.new === true}
+      onCreateRequestTaken={() => {
+        void navigate({
+          to: '/w/$slug/objects/$object/views/$viewId',
+          params: { slug: params.slug, object: params.object, viewId: params.viewId },
+          search: search.draft === undefined ? {} : { draft: search.draft },
+          replace: true,
+        });
+      }}
       writeParam={(draft, replace) => {
         void navigate({
           to: '/w/$slug/objects/$object/views/$viewId',
