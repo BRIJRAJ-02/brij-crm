@@ -12,6 +12,7 @@ import { optionsContract } from './options.ts';
 import { realtimeContract } from './realtime.ts';
 import { recordsContract } from './records.ts';
 import { linksContract, relationshipsContract } from './relations.ts';
+import { recentsContract, searchContract } from './search.ts';
 import { systemContract } from './system.ts';
 import { trashContract } from './trash.ts';
 import { notesContract } from './notes.ts';
@@ -41,6 +42,7 @@ export * from './options.ts';
 export * from './realtime.ts';
 export * from './records.ts';
 export * from './relations.ts';
+export * from './search.ts';
 export * from './system.ts';
 export * from './trash.ts';
 export * from './notes.ts';
@@ -82,4 +84,6 @@ export const contract = {
   submissions: submissionsContract,
   bookingPages: bookingPagesContract,
   bookings: bookingsContract,
+  search: searchContract,
+  recents: recentsContract,
 };

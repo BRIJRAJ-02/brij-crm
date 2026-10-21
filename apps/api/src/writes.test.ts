@@ -44,6 +44,10 @@ const READS: ReadonlySet<string> = new Set([
   'views.get',
   // The one view write with no outbox row (spec 0020, AC-488): the member's own last opened view.
   'views.markOpened',
+  // The command menu (spec 0039): its search, and the member's own recent items (no outbox row, like markOpened).
+  'search.query',
+  'recents.list',
+  'recents.visit',
   'trash.query',
   'trash.count',
   'tasks.get',

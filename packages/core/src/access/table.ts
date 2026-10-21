@@ -107,6 +107,10 @@ export const ACCESS_TABLE = {
   readTrashedRecord: { data: 'read' },
   // The record picker's search (spec 0014): only records the reader may see.
   searchRecords: { data: 'read' },
+  // The command menu (spec 0039): it searches, lists and keeps only what the reader may read; the rest is absent.
+  searchWorkspace: { data: 'read' },
+  listRecents: { data: 'read' },
+  visitRecent: { data: 'read' },
   // The trash (spec 0022): what it holds, by the principal's object levels and record rules.
   queryTrash: { data: 'read' },
   countTrash: { data: 'read' },

@@ -33,6 +33,7 @@ import { requirePermission } from '../access/check.ts';
 import { fieldLevel } from '../access/policy.ts';
 import { inWorkspace } from '../access/run.ts';
 import { checkObject } from '../access/visibility.ts';
+import { deleteViewRecents } from '../search/recents.ts';
 import {
   configOf,
   callerOf,
@@ -697,6 +698,8 @@ export async function deleteView(
       const row = await readView(tx, scope, viewId, true);
       check(scope, 'delete', row, object.pluralName);
       await tx.delete(views).where(and(eq(views.workspaceId, scope.workspaceId), eq(views.id, row.id)));
+      // It leaves everyone's recent items too (spec 0039, AC-1092).
+      await deleteViewRecents(tx, scope, row.id);
       context.record({ views: [{ viewId: row.id, objectId: row.objectId }] });
     },
     hooks,

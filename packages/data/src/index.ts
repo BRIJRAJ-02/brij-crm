@@ -42,7 +42,9 @@ import type {
   View,
   ViewLayout,
   ViewVisibility,
+  RecentItem,
 } from '@crm/contracts';
+import type { GlobalSearch } from './search/global.ts';
 import { createORPCClient } from '@orpc/client';
 import { RPCLink } from '@orpc/client/fetch';
 import type { ContractRouterClient } from '@orpc/contract';
@@ -395,6 +397,8 @@ const resendAfter = (ms: number): Promise<void> =>
 
 /** How long a read waits for the workspace's head before going ahead without it (spec 0007: the token call is usually beside `me.get`). */
 const HEAD_WAIT_MS = 5_000;
+/** How long one tab waits before it sends the same recent item again (spec 0039, AC-1088). */
+const VISIT_EVERY_MS = 10_000;
 /** The longest spread before a reread every tab of a workspace makes at once (a members or access event), in ms. */
 const SPREAD_MS = 2_000;
 
@@ -915,6 +919,9 @@ export function createDataLayer({
     heads.set(workspace, asking);
     return asking;
   };
+
+  // When each recent item was last sent (spec 0039), so opening the same record again sends nothing for 10 seconds.
+  const visited = new Map<string, number>();
 
   /**
    * Waits for the workspace's head before a read, at most 5 seconds; nothing
@@ -3208,6 +3215,39 @@ export function createDataLayer({
        * Answers whether it landed.
        */
       confirm: (workspace: string, jobId: string): Promise<boolean> => jobs.confirm(workspace, jobId),
+    },
+    search: {
+      /**
+       * The command menu's search (spec 0039): every readable object's
+       * records and the views the person sees, as they type (150 ms after the
+       * last key, the request before aborted, answers kept for the menu's
+       * life). Its code loads on first use, never in the first load. Read it
+       * through `useGlobalSearch`, and `dispose` it when the menu closes.
+       */
+      open: async (workspace: string): Promise<GlobalSearch> =>
+        (await import('./search/global.ts')).createGlobalSearch({
+          run: (query, signal) =>
+            beforeRead(workspace).then(() =>
+              call((options) => api.search.query({ workspace, query }, options), signal),
+            ),
+        }),
+      /** The person's recent records and views they may still see, newest first (read fresh each time the menu opens). */
+      recents: (workspace: string): Promise<readonly RecentItem[]> =>
+        beforeRead(workspace)
+          .then(() => call((options) => api.recents.list({ workspace }, options)))
+          .then((answer) => answer.items),
+      /**
+       * Keeps a record or view the person just opened as recent (AC-1088):
+       * fire and forget, once per item per 10 seconds per tab, silent on failure.
+       */
+      visit: (workspace: string, kind: 'record' | 'view', id: string): void => {
+        const key = `${workspace}:${kind}:${id}`;
+        const now = Date.now();
+        if ((visited.get(key) ?? 0) > now - VISIT_EVERY_MS) return;
+        visited.set(key, now);
+        if (visited.size > 200) visited.delete(visited.keys().next().value ?? key);
+        void call((options) => api.recents.visit({ workspace, kind, id }, options)).catch(() => undefined);
+      },
     },
     views: {
       /**

@@ -3,7 +3,7 @@
 // taking no scope; and every entry is refused to a principal without the
 // access, before anything is written.
 import { sql } from 'drizzle-orm';
-import { PERMISSIONS } from '@crm/contracts';
+import { PERMISSIONS, type GlobalSearchResults } from '@crm/contracts';
 import { afterAll, beforeAll, describe, expect, inject, it } from 'vitest';
 import { createDatabase, type Database } from '@crm/db';
 import * as core from '../index.ts';
@@ -559,6 +559,34 @@ const DATA_CASES: Readonly<Record<string, DataCase>> = {
   // The record picker's search (spec 0014): an object the reader can't see is absent.
   searchRecords: refused('NOT_FOUND', (scope, world) =>
     core.searchRecords(scope, { objectId: world.people, query: '' }),
+  ),
+  // The command menu (spec 0039): a record or view on an object the principal can't see is never found, listed as
+  // recent (even one they opened while they could), or kept by a visit.
+  searchWorkspace: empty(
+    (scope) => core.searchWorkspace(scope, { query: 'Pilot' }),
+    (value, world) => {
+      const found = value as GlobalSearchResults;
+      return (
+        found.records.every((hit) => hit.ref.recordId !== world.recordId) &&
+        found.views.every((view) => view.objectId !== world.people)
+      );
+    },
+  ),
+  listRecents: empty(
+    async (scope, world) => {
+      await core.visitRecent(world.readOnly, { kind: 'record', id: world.recordId });
+      await core.visitRecent(world.readOnly, { kind: 'view', id: world.peopleView });
+      return core.listRecents(scope);
+    },
+    (value) => Array.isArray(value) && value.length === 0,
+  ),
+  visitRecent: empty(
+    async (scope, world) => {
+      await core.visitRecent(scope, { kind: 'record', id: world.recordId });
+      await core.visitRecent(scope, { kind: 'view', id: world.peopleView });
+      return core.listRecents(world.readOnly);
+    },
+    (value) => Array.isArray(value) && value.length === 0,
   ),
   // Saved views (spec 0020): a view on an object the principal can't see is absent, and so can't be saved.
   listViews: refused('NOT_FOUND', (scope, world) => core.listViews(scope, world.people)),
