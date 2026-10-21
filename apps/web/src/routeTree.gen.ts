@@ -30,6 +30,7 @@ import { Route as WSlugObjectsObjectRouteImport } from './routes/w.$slug.objects
 import { Route as WSlugSettingsIndexRouteImport } from './routes/w.$slug.settings.index.tsx'
 import { Route as WSlugSettingsCalendarRouteImport } from './routes/w.$slug.settings.calendar.tsx'
 import { Route as WSlugSettingsJobsRouteImport } from './routes/w.$slug.settings.jobs.tsx'
+import { Route as WSlugBookingsAvailabilityScheduleIdRouteImport } from './routes/w.$slug.bookings_.availability.$scheduleId.tsx'
 import { Route as WSlugCapturesFormsIndexRouteImport } from './routes/w.$slug.captures.forms.index.tsx'
 import { Route as WSlugCapturesLinksIndexRouteImport } from './routes/w.$slug.captures.links.index.tsx'
 import { Route as WSlugCapturesFormsFormIdRouteImport } from './routes/w.$slug.captures_.forms.$formId.tsx'
@@ -155,6 +156,12 @@ const WSlugSettingsJobsRoute = WSlugSettingsJobsRouteImport.update({
   path: '/jobs',
   getParentRoute: () => WSlugSettingsRoute,
 } as any)
+const WSlugBookingsAvailabilityScheduleIdRoute =
+  WSlugBookingsAvailabilityScheduleIdRouteImport.update({
+    id: '/bookings_/availability/$scheduleId',
+    path: '/bookings/availability/$scheduleId',
+    getParentRoute: () => WSlugRoute,
+  } as any)
 const WSlugCapturesFormsIndexRoute = WSlugCapturesFormsIndexRouteImport.update({
   id: '/forms/',
   path: '/forms/',
@@ -283,6 +290,7 @@ export interface FileRoutesByFullPath {
   '/w/$slug/bookings/': typeof WSlugBookingsIndexRoute
   '/w/$slug/captures/': typeof WSlugCapturesIndexRoute
   '/w/$slug/settings/': typeof WSlugSettingsIndexRoute
+  '/w/$slug/bookings/availability/$scheduleId': typeof WSlugBookingsAvailabilityScheduleIdRoute
   '/w/$slug/captures/forms/$formId': typeof WSlugCapturesFormsFormIdRoute
   '/w/$slug/captures/links/$pageId': typeof WSlugCapturesLinksPageIdRoute
   '/w/$slug/settings/account/calendars': typeof WSlugSettingsAccountCalendarsRoute
@@ -320,6 +328,7 @@ export interface FileRoutesByTo {
   '/w/$slug/bookings': typeof WSlugBookingsIndexRoute
   '/w/$slug/captures': typeof WSlugCapturesIndexRoute
   '/w/$slug/settings': typeof WSlugSettingsIndexRoute
+  '/w/$slug/bookings/availability/$scheduleId': typeof WSlugBookingsAvailabilityScheduleIdRoute
   '/w/$slug/captures/forms/$formId': typeof WSlugCapturesFormsFormIdRoute
   '/w/$slug/captures/links/$pageId': typeof WSlugCapturesLinksPageIdRoute
   '/w/$slug/settings/account/calendars': typeof WSlugSettingsAccountCalendarsRoute
@@ -362,6 +371,7 @@ export interface FileRoutesById {
   '/w/$slug/bookings/': typeof WSlugBookingsIndexRoute
   '/w/$slug/captures/': typeof WSlugCapturesIndexRoute
   '/w/$slug/settings/': typeof WSlugSettingsIndexRoute
+  '/w/$slug/bookings_/availability/$scheduleId': typeof WSlugBookingsAvailabilityScheduleIdRoute
   '/w/$slug/captures_/forms/$formId': typeof WSlugCapturesFormsFormIdRoute
   '/w/$slug/captures_/links/$pageId': typeof WSlugCapturesLinksPageIdRoute
   '/w/$slug/settings/account/calendars': typeof WSlugSettingsAccountCalendarsRoute
@@ -405,6 +415,7 @@ export interface FileRouteTypes {
     | '/w/$slug/bookings/'
     | '/w/$slug/captures/'
     | '/w/$slug/settings/'
+    | '/w/$slug/bookings/availability/$scheduleId'
     | '/w/$slug/captures/forms/$formId'
     | '/w/$slug/captures/links/$pageId'
     | '/w/$slug/settings/account/calendars'
@@ -442,6 +453,7 @@ export interface FileRouteTypes {
     | '/w/$slug/bookings'
     | '/w/$slug/captures'
     | '/w/$slug/settings'
+    | '/w/$slug/bookings/availability/$scheduleId'
     | '/w/$slug/captures/forms/$formId'
     | '/w/$slug/captures/links/$pageId'
     | '/w/$slug/settings/account/calendars'
@@ -483,6 +495,7 @@ export interface FileRouteTypes {
     | '/w/$slug/bookings/'
     | '/w/$slug/captures/'
     | '/w/$slug/settings/'
+    | '/w/$slug/bookings_/availability/$scheduleId'
     | '/w/$slug/captures_/forms/$formId'
     | '/w/$slug/captures_/links/$pageId'
     | '/w/$slug/settings/account/calendars'
@@ -660,6 +673,13 @@ declare module '@tanstack/react-router' {
       fullPath: '/w/$slug/settings/jobs'
       preLoaderRoute: typeof WSlugSettingsJobsRouteImport
       parentRoute: typeof WSlugSettingsRoute
+    }
+    '/w/$slug/bookings_/availability/$scheduleId': {
+      id: '/w/$slug/bookings_/availability/$scheduleId'
+      path: '/bookings/availability/$scheduleId'
+      fullPath: '/w/$slug/bookings/availability/$scheduleId'
+      preLoaderRoute: typeof WSlugBookingsAvailabilityScheduleIdRouteImport
+      parentRoute: typeof WSlugRoute
     }
     '/w/$slug/captures/forms/': {
       id: '/w/$slug/captures/forms/'
@@ -868,6 +888,7 @@ interface WSlugRouteChildren {
   WSlugTrashRoute: typeof WSlugTrashRoute
   WSlugIndexRoute: typeof WSlugIndexRoute
   WSlugObjectsObjectRoute: typeof WSlugObjectsObjectRoute
+  WSlugBookingsAvailabilityScheduleIdRoute: typeof WSlugBookingsAvailabilityScheduleIdRoute
   WSlugCapturesFormsFormIdRoute: typeof WSlugCapturesFormsFormIdRoute
   WSlugCapturesLinksPageIdRoute: typeof WSlugCapturesLinksPageIdRoute
   WSlugCapturesFormsFormIdPreviewRoute: typeof WSlugCapturesFormsFormIdPreviewRoute
@@ -884,6 +905,8 @@ const WSlugRouteChildren: WSlugRouteChildren = {
   WSlugTrashRoute: WSlugTrashRoute,
   WSlugIndexRoute: WSlugIndexRoute,
   WSlugObjectsObjectRoute: WSlugObjectsObjectRoute,
+  WSlugBookingsAvailabilityScheduleIdRoute:
+    WSlugBookingsAvailabilityScheduleIdRoute,
   WSlugCapturesFormsFormIdRoute: WSlugCapturesFormsFormIdRoute,
   WSlugCapturesLinksPageIdRoute: WSlugCapturesLinksPageIdRoute,
   WSlugCapturesFormsFormIdPreviewRoute: WSlugCapturesFormsFormIdPreviewRoute,

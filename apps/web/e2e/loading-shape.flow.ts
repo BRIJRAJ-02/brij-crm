@@ -58,6 +58,11 @@ const ALL_SCREENS: readonly Screen[] = [
   { name: 'bookings calendar', start: at('trash'), target: sidebar('Bookings') },
   { name: 'bookings list', start: at('bookings/calendar'), target: tab('List') },
   { name: 'bookings availability', start: at('bookings/calendar'), target: tab('Availability') },
+  {
+    name: 'schedule editor',
+    start: at('bookings/availability'),
+    target: (page) => page.getByRole('row').filter({ hasText: 'Working hours' }).first(),
+  },
   { name: 'captures links', start: at('trash'), target: sidebar('Captures') },
   { name: 'captures forms', start: at('captures/links'), target: tab('Forms') },
   { name: 'booking page editor', start: at('captures/links'), target: card('Intro call') },

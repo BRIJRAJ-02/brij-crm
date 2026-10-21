@@ -1,202 +1,204 @@
 // Brief
-// Purpose: Bookings › Availability (spec 0025 experience, AC-680; spec 0035): the member's default schedule, its weekly hours, zone and days off, which every page following the default books by.
-// Main task: set the week's windows (all days at once, per day, or copied across), the zone and the days off, then Save.
-// Leaves out: the member's other schedules (their list and editor are milestone 2), a page's choice of schedule (its editor) and anyone else's hours.
-import type { BookingPageView, DataLayer, ScheduleView } from '@crm/data';
+// Purpose: Bookings › Availability (spec 0035, AC-969): the member's schedules, each with its Default badge, its week, its zone and how many booking pages use it.
+// Main task: open a schedule to edit it, make a new one, or set the default, duplicate or delete one from its menu.
+// Leaves out: editing hours (each schedule's own editor) and a calendar view of a schedule (a follow up).
+import { isDataError, type DataLayer, type ScheduleView } from '@crm/data';
 import { useSchedules } from '@crm/data/react';
-import { Card, HoursEditor, LinkList, PageColumn, SaveBar, Select, Skeleton, TopBar } from '@crm/ui';
-import { useBlocker, useNavigate } from '@tanstack/react-router';
-import { useMemo, useState } from 'react';
-import { bookingsHref } from '../workspace/objects.ts';
-import { pageHeading } from '../navigation/focus.ts';
+import { Button, LinkList, PageColumn, Tooltip, TopBar, type LinkRow } from '@crm/ui';
+import { useNavigate, useRouteContext } from '@tanstack/react-router';
+import { useState, type ReactNode } from 'react';
+import { createPortal } from 'react-dom';
+import { useBookingsToolbarSlot } from '../bookings/toolbarSlot.ts';
 import { WorkspacePage } from '../workspace/WorkspacePage.tsx';
-import { DaysOff } from './DaysOff.tsx';
-import { pageEditorHref } from './links.ts';
-import { PagesHours } from './PagesHours.tsx';
-import { browserZone, weekRows, WEEKDAYS, withDay, zoneItems, zoneMatches } from './hours.ts';
-import { useScheduleDraft } from './scheduleDraft.ts';
+import { DeleteScheduleDialog } from './DeleteScheduleDialog.tsx';
+import { browserZone, weekSummary, zoneLabel } from './hours.ts';
+import { scheduleHref } from './links.ts';
+import { NewScheduleDialog } from './NewScheduleDialog.tsx';
+import { ScheduleMenu } from './ScheduleMenu.tsx';
+import { SCHEDULES_MAX } from './schedules.ts';
 import { scheduleStrings } from './schedule-strings.ts';
 import { strings } from './strings.ts';
 
-/** Props for the screen: the member's pages its route loaded; the schedules come from the data layer. */
+/** Props for the list: the data layer, whose held schedules the route loaded. */
 export interface AvailabilityScreenProps {
   readonly data: DataLayer;
   readonly slug: string;
-  /** The member's own pages, listed under the week with the hours each books on. */
-  readonly pages: readonly BookingPageView[];
-  /** `error` when the pages didn't load: the list says so, with Try again. */
-  readonly pagesStatus: 'ready' | 'error';
-  readonly onRetryPages: () => void;
   readonly locale: string;
 }
 
-/**
- * The member's default schedule (spec 0035), read from the data layer's held list, so a save in another tab shows
- * here while nothing is being edited (AC-977). Until they save any hours it is the virtual default, weekdays 9 to 5
- * in the browser's zone, stored the first time they save (AC-963).
- */
-export function AvailabilityScreen(props: AvailabilityScreenProps) {
-  const { data, slug } = props;
-  const view = data.schedules.view(slug, undefined, browserZone());
-  const state = useSchedules(view);
-  // The id the virtual default is being stored under: the same editor stays for it as it lands.
-  const [adopted, setAdopted] = useState<string | undefined>(undefined);
-  const schedule = state.status === 'ready' ? state.schedules.find((each) => each.isDefault) : undefined;
-  if (state.status !== 'ready' || schedule === undefined) return <AvailabilityPending />;
-  // One editor per schedule, so a draft never crosses from one to another should the default move elsewhere.
-  return (
-    <Loaded
-      key={schedule.id === null || schedule.id === adopted ? 'virtual' : schedule.id}
-      {...props}
-      schedule={schedule}
-      schedules={state.schedules}
-      onReload={() => view.reload()}
-      onAdopt={setAdopted}
-    />
-  );
+/** A schedule's row: its name, zone, week, use, the Default badge and its menu (none on the virtual default). */
+function rowOf(slug: string, schedule: ScheduleView, locale: string, menu: ReactNode): LinkRow {
+  // A copy on its way has an id but no version yet: it can't be opened until the server made it.
+  const isPending = schedule.id !== null && schedule.updatedAt === null;
+  return {
+    id: schedule.id ?? 'default',
+    title: schedule.name,
+    address: zoneLabel(schedule.availability.timeZone),
+    description: weekSummary(schedule.availability, locale).join(' · '),
+    chips: [schedule.pages.length === 0 ? scheduleStrings.usedByNone : scheduleStrings.usedBy(schedule.pages.length)],
+    ...(isPending ? { badge: scheduleStrings.copying, isPending } : {}),
+    ...(!isPending && schedule.isDefault ? { badge: scheduleStrings.defaultBadge } : {}),
+    ...(schedule.id === null ? {} : { actions: menu }),
+    href: scheduleHref(slug, schedule.id ?? 'default'),
+  };
 }
 
-/** The week and the days off, saved together. */
-function Loaded({
-  data,
-  slug,
-  pages,
-  pagesStatus,
-  onRetryPages,
-  locale,
-  schedule,
-  schedules,
-  onReload,
-  onAdopt,
-}: AvailabilityScreenProps & {
-  readonly schedule: ScheduleView;
-  readonly schedules: readonly ScheduleView[];
-  readonly onReload: () => void;
-  readonly onAdopt: (id: string) => void;
-}) {
+/** The member's schedules as rows, New schedule at the end of the tab strip, and each row's menu. */
+export function AvailabilityScreen({ data, slug, locale }: AvailabilityScreenProps) {
+  const { toasts } = useRouteContext({ from: '__root__' });
   const navigate = useNavigate();
-  const draft = useScheduleDraft({ data, slug, schedule, forMember: false, reload: onReload, onAdopt });
-  useBlocker({
-    shouldBlockFn: () => draft.isDirty && !globalThis.confirm(strings.leaveConfirm),
-    enableBeforeUnload: () => draft.isDirty,
-  });
-  const shown = draft.shown;
-  const zones = useMemo(() => zoneItems(shown.timeZone, new Date()), [shown.timeZone]);
+  const view = data.schedules.view(slug, undefined, browserZone());
+  const state = useSchedules(view);
+  const slot = useBookingsToolbarSlot();
+  const [isCreating, setCreating] = useState(false);
+  const [deleting, setDeleting] = useState<ScheduleView | undefined>(undefined);
+  const schedules = state.status === 'ready' ? state.schedules : [];
+  const memberId = state.status === 'ready' ? state.memberId : undefined;
+  const fallback = schedules.find((each) => each.isDefault);
+  const isFull = schedules.filter((each) => each.id !== null).length >= SCHEDULES_MAX;
+  const failed = (message: string) => (error: unknown) => {
+    toasts.toast({
+      tone: 'danger',
+      message: `${message} ${isDataError(error) ? error.message : strings.somethingWrong}`,
+    });
+  };
+  const setDefault = (schedule: ScheduleView) => {
+    data.schedules
+      .setDefault(slug, schedule)
+      .then(
+        () => toasts.toast({ tone: 'success', message: scheduleStrings.setDefaultDone(schedule.name) }),
+        failed(scheduleStrings.setDefaultFailed(schedule.name)),
+      );
+  };
+  const duplicate = (schedule: ScheduleView) => {
+    data.schedules
+      .duplicate(slug, schedule)
+      .then(
+        (copy) => toasts.toast({ tone: 'success', message: scheduleStrings.duplicated(copy.name) }),
+        failed(scheduleStrings.duplicateFailed(schedule.name)),
+      );
+  };
+  const rows = schedules.map((schedule) =>
+    rowOf(
+      slug,
+      schedule,
+      locale,
+      <ScheduleMenu
+        schedule={schedule}
+        isFull={isFull}
+        isDisabled={schedule.updatedAt === null}
+        onSetDefault={() => setDefault(schedule)}
+        onDuplicate={() => duplicate(schedule)}
+        onDelete={() => setDeleting(schedule)}
+      />,
+    ),
+  );
+  // At the end of the Calendar · List · Availability strip, as each tab's tools are; alone, at the column's top end.
+  const newButton = (
+    <NewScheduleButton isDisabled={memberId === undefined || isFull} onPress={() => setCreating(true)} />
+  );
+  const tools = isFull ? <Tooltip content={scheduleStrings.limitReached}>{newButton}</Tooltip> : newButton;
   return (
     <WorkspacePage
       currentPage="bookings"
       page={{
-        topBar: (
-          <TopBar
-            title={strings.availability}
-            icon="clock"
-            crumbs={[{ id: 'bookings', label: strings.bookings, href: bookingsHref(slug) }]}
-          />
-        ),
+        topBar: <TopBar title={strings.availability} icon="clock" />,
         body: (
-          <PageColumn
-            // On a phone the time zone comes first: the week below reads in it.
-            stack="aside-first"
-            aside={
-              <>
-                <Card title={strings.timeZone} description={strings.timeZoneText}>
-                  <Select
-                    label={strings.timeZone}
-                    isLabelHidden
-                    showsDescription
-                    items={zones}
-                    filter={zoneMatches}
-                    isSearchable
-                    value={shown.timeZone}
-                    onChange={(zone) => {
-                      if (zone !== null) draft.change((current) => ({ ...current, timeZone: zone }));
-                    }}
-                  />
-                </Card>
-                <DaysOff availability={shown} onChange={(next) => draft.change(() => next)} />
-              </>
-            }
-            footer={
-              <SaveBar
-                status={draft.status}
-                {...(draft.error === undefined ? {} : { error: draft.error })}
-                {...(draft.isValid ? {} : { blockedReason: strings.fixHours })}
-                onSave={draft.save}
-                onDiscard={draft.discard}
-                // When Save or Discard goes with focus on it, the page's title takes it.
-                onFocusAway={() => pageHeading(document)?.focus()}
+          <>
+            {slot !== null && createPortal(tools, slot)}
+            <PageColumn {...(slot === null ? { actions: tools } : {})}>
+              <AvailabilityList
+                rows={rows}
+                status={state.status === 'ready' ? 'ready' : state.status}
+                onOpen={(id) => void navigate({ href: scheduleHref(slug, id) })}
+                onRetry={() => view.reload()}
               />
-            }
-          >
-            <Card title={strings.weeklyHours} description={scheduleStrings.defaultHoursText}>
-              <HoursEditor
-                label={strings.weeklyHours}
-                rows={weekRows(shown)}
-                onChange={(day, ranges) => {
-                  draft.change((current) => withDay(current, day, ranges));
+            </PageColumn>
+            {memberId !== undefined && (
+              <NewScheduleDialog
+                data={data}
+                slug={slug}
+                memberId={memberId}
+                forMember={false}
+                isOpen={isCreating}
+                onClose={() => setCreating(false)}
+                onCreated={(schedule) => {
+                  setCreating(false);
+                  if (schedule.id !== null) void navigate({ href: scheduleHref(slug, schedule.id) });
                 }}
               />
-            </Card>
-            <PagesHours
-              slug={slug}
-              pages={pages}
-              status={pagesStatus}
-              onRetry={onRetryPages}
-              mine={shown}
-              schedules={schedules}
-              locale={locale}
-              onOpen={(pageId) => void navigate({ href: pageEditorHref(slug, pageId) })}
+            )}
+            <DeleteScheduleDialog
+              schedule={deleting}
+              fallbackName={fallback?.name ?? scheduleStrings.defaultBadge}
+              onClose={() => setDeleting(undefined)}
+              onDelete={(schedule) => data.schedules.remove(slug, schedule)}
+              onDeleted={(schedule) => {
+                setDeleting(undefined);
+                toasts.toast({ tone: 'success', message: scheduleStrings.deleted(schedule.name) });
+              }}
             />
-          </PageColumn>
+          </>
         ),
       }}
     />
   );
 }
 
-/** The screen while the hours load. */
+/** The rows, in every state: loading draws the rows' shape, a failed read says so with Try again. */
+function AvailabilityList({
+  rows,
+  status,
+  onOpen,
+  onRetry,
+}: {
+  readonly rows: readonly LinkRow[];
+  readonly status: 'loading' | 'error' | 'ready';
+  readonly onOpen: (id: string) => void;
+  readonly onRetry: () => void;
+}) {
+  return (
+    <LinkList
+      label={scheduleStrings.schedules}
+      searchLabel={scheduleStrings.schedules}
+      isToolbarHidden
+      rows={rows}
+      onOpen={onOpen}
+      status={status}
+      onRetry={onRetry}
+      errorTitle={scheduleStrings.schedulesFailed}
+    />
+  );
+}
+
+/** New schedule, the tab's one tool. */
+function NewScheduleButton({ isDisabled, onPress }: { readonly isDisabled: boolean; readonly onPress: () => void }) {
+  return (
+    <Button icon="plus" isDisabled={isDisabled} onPress={onPress}>
+      {scheduleStrings.newSchedule}
+    </Button>
+  );
+}
+
+/**
+ * The list while it loads: the same column and rows, and New schedule waiting in the strip, so the strip and the
+ * page land where the skeleton put them.
+ */
 export function AvailabilityPending() {
+  const slot = useBookingsToolbarSlot();
+  const tools = <NewScheduleButton isDisabled onPress={() => undefined} />;
   return (
     <WorkspacePage
       currentPage="bookings"
       page={{
         topBar: <TopBar title={strings.availability} icon="clock" isLoading />,
         body: (
-          // The cards the page will show, each holding its place, so the page lands where the skeleton was.
-          <PageColumn
-            stack="aside-first"
-            aside={
-              <>
-                <Card title={strings.timeZone} description={strings.timeZoneText} isBusy>
-                  <Skeleton lines={1} />
-                </Card>
-                <Card title={strings.daysOff} description={strings.daysOffText} isBusy>
-                  <Skeleton lines={3} />
-                </Card>
-              </>
-            }
-          >
-            <Card title={strings.weeklyHours} description={scheduleStrings.defaultHoursText} isBusy>
-              <HoursEditor
-                label={strings.weeklyHours}
-                rows={WEEKDAYS.map((day) => ({ id: day, label: strings.weekday[day], ranges: [] }))}
-                onChange={() => undefined}
-                isLoading
-              />
-            </Card>
-            <Card title={strings.yourPages} description={strings.yourPagesText} isBusy>
-              <LinkList
-                density="compact"
-                placement="card"
-                label={strings.yourPages}
-                rows={[]}
-                onOpen={() => undefined}
-                searchLabel={strings.yourPages}
-                isToolbarHidden
-                status="loading"
-              />
-            </Card>
-          </PageColumn>
+          <>
+            {slot !== null && createPortal(tools, slot)}
+            <PageColumn {...(slot === null ? { actions: tools } : {})}>
+              <AvailabilityList rows={[]} status="loading" onOpen={() => undefined} onRetry={() => undefined} />
+            </PageColumn>
+          </>
         ),
       }}
     />

@@ -427,14 +427,17 @@ export function createSchedulesStore(deps: SchedulesDeps) {
         land: (schedules, answer) => replace(answer, newId)(schedules),
       });
     },
-    /** Deletes a schedule (AC-967): gone at once, back on a refusal; its pages follow the default. */
+    /**
+     * Deletes a schedule (AC-967) once the server has: it asks first, so its confirm shows the delete under way and
+     * says a refusal itself, and the schedule leaves when it is gone. Its pages follow the default.
+     */
     remove(workspace: string, schedule: ScheduleView): Promise<{ readonly pages: number }> {
       const id = schedule.id;
       if (id === null) return Promise.reject(new Error('The default can’t be deleted.'));
       return write(workspace, schedule.memberId, {
         send: () => deps.api.remove({ workspace, id }),
-        show: (schedules) => schedules.filter((each) => each.id !== id),
-        land: (schedules) => schedules,
+        show: (schedules) => schedules,
+        land: (schedules) => schedules.filter((each) => each.id !== id),
       }).then((answer) => {
         // The default's "Used by" gained the pages: read the lists again for the counts.
         for (const list of ofMember(workspace, schedule.memberId)) void list.read().catch(() => undefined);

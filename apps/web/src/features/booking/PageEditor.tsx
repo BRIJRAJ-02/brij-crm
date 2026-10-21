@@ -38,7 +38,7 @@ import { pageHeading } from '../navigation/focus.ts';
 import { WorkspacePage } from '../workspace/WorkspacePage.tsx';
 import { CalendarNote, readDismissed, writeDismissed } from './CalendarNote.tsx';
 import { weekSummary, zoneLabel } from './hours.ts';
-import { availabilityHref, linksHref, publicBookingUrl } from './links.ts';
+import { linksHref, publicBookingUrl, scheduleHref } from './links.ts';
 import { scheduleStrings } from './schedule-strings.ts';
 import { strings } from './strings.ts';
 
@@ -463,7 +463,7 @@ export function PageEditorPending() {
  * The Hours card's choices and what the chosen one holds (spec 0035, AC-965): "Default schedule (<name>)" first,
  * then each of the owner's stored schedules by name. A page naming a schedule that is gone books by the default, as
  * the server reads it. Until the owner's schedules load (or when they can't be read), the page's own answer stands
- * in: the hours it books by now. Edit hours opens the default schedule on the owner's Availability.
+ * in: the hours it books by now. Edit hours opens the chosen schedule's editor.
  */
 function useHours(
   view: SchedulesView | undefined,
@@ -487,7 +487,7 @@ function useHours(
       ...state.flatMap((each) => (each.id === null ? [] : [{ id: each.id, label: each.name }])),
     ],
     availability: isVirtualSaved ? page.availability : (chosen?.availability ?? page.availability),
-    editHref: isOwn && chosen?.isDefault === true ? availabilityHref(slug) : undefined,
+    editHref: isOwn && chosen !== undefined ? scheduleHref(slug, chosen.id ?? 'default') : undefined,
   };
 }
 
