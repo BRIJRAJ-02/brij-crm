@@ -2,17 +2,19 @@
 // job runner as the worker runs it: a submission's CRM link state, Add to CRM
 // (one that failed, filed with the current mapping as the member; spam left
 // out; a member without forms.manage refused), Sync old records (a preview,
-// the job, and a second run that changes nothing), and the CSV export (the
-// file, the formula guard, only its starter reads it).
+// the job, and a second run that changes nothing), the CSV export (the file,
+// the formula guard, only its starter reads it), and the filing and export
+// jobs under their member's own rules (spec 0009, AC-147).
 import { sql } from 'drizzle-orm';
 import { afterAll, beforeAll, describe, expect, inject, it } from 'vitest';
 import { FormDocument, type FormQuestion, type SubmitBody } from '@crm/contracts';
 import { createDatabase, type Database } from '@crm/db';
-import { enterPublicForm } from '../access/door.ts';
+import { enterPublicForm, NO_RULE_SOURCE, type RuleSource } from '../access/door.ts';
+import { NO_RULES, type AccessRules } from '../access/policy.ts';
 import { editAttribute } from '../attributes/attributes.ts';
 import { newId } from '../engine/ids.ts';
 import { isRefusal } from '../engine/refusals.ts';
-import { getRecords } from '../engine/records.ts';
+import { createRecord, getRecords } from '../engine/records.ts';
 import { SYSTEM_ACTOR } from '../engine/scope.ts';
 import { createWorkspace } from '../engine/workspaces.ts';
 import { runWrite } from '../engine/write.ts';
@@ -23,7 +25,7 @@ import { jobTestKit } from '../../test/jobs-kit.ts';
 import { exportFile, exportPart, getExport, startSubmissionsExport } from './export.ts';
 import { addToCrm, NOT_MAPPED, previewSync, startSync } from './filing.ts';
 import { createForm, getForm, listForms, publishForm, saveFormDraft, setFormTarget } from './forms.ts';
-import { processSubmission } from './process.ts';
+import { HIDDEN_TARGET, processSubmission } from './process.ts';
 import { submitForm } from './public.ts';
 import { getSubmission, listSubmissions } from './submissions.ts';
 
@@ -80,12 +82,19 @@ async function workspace() {
 }
 type Workspace = Awaited<ReturnType<typeof workspace>>;
 
-/** Runs a job to its end as the worker would. */
-async function runJob(w: Workspace, jobId: string) {
-  const run = jobTestKit(db, ownerUrl).runnerFor(registry);
-  const outcomes = await jobTestKit(db, ownerUrl).drive(run, w.workspaceId, jobId);
+/** Runs a job to its end as the worker would, entering its member again with `rules` (none unless given). */
+async function runJob(w: Workspace, jobId: string, rules: RuleSource = NO_RULE_SOURCE) {
+  const kit = jobTestKit(db, ownerUrl, { rules });
+  const outcomes = await kit.drive(kit.runnerFor(registry), w.workspaceId, jobId);
   return outcomes.at(-1);
 }
+
+/** Each test workspace's rules, by workspace id, as #24 will store them: the source a ruled job's runner reads. */
+const rulesByWorkspace = new Map<string, AccessRules>();
+const storedRules: RuleSource = async (tx) => {
+  const { rows } = await tx.execute<{ id: string | null }>(sql`select current_setting('app.workspace_id', true) as id`);
+  return rulesByWorkspace.get(rows[0]?.id ?? '') ?? NO_RULES;
+};
 
 async function refusalOf(call: Promise<unknown>) {
   try {
@@ -490,5 +499,98 @@ describe('A form that keeps its submissions only, connected to the CRM later (th
     const after = await listSubmissions(w.scope, { formId: live.id });
     expect(after.items.map((item) => item.crm.state)).toEqual(['not_in_crm', 'linked', 'linked', 'linked']);
     expect(after.items[0]?.crm).toEqual({ state: 'not_in_crm', canAddToCrm: false });
+  });
+});
+
+describe('a member’s filing and export jobs on the worker (spec 0009, AC-147)', () => {
+  it('run under the member’s own rules: a hidden field’s column is left out, a hidden record is never filed into', async () => {
+    const w = await workspace();
+    const live = await liveForm(w, true);
+    // An admin (forms.manage) whose rules hide People's job title and every person they don't own.
+    const adminId = newId();
+    await w.query(
+      sql`insert into members (workspace_id, id, name, email, role, created_by_type, updated_by_type)
+          values (${w.workspaceId}, ${adminId}, 'Hedy', ${`${adminId}@example.com`}, 'admin', 'system', 'system')`,
+    );
+    const rules: AccessRules = {
+      levels: [
+        {
+          subject: { type: 'role', role: 'admin' },
+          target: { type: 'attribute', objectId: w.people, attributeId: w.attribute('people.job_title') },
+          level: 'hidden',
+        },
+      ],
+      records: [
+        {
+          subject: { type: 'role', role: 'admin' },
+          objectId: w.people,
+          kind: 'own',
+          attributeId: w.attribute('people.owner'),
+        },
+      ],
+    };
+    rulesByWorkspace.set(w.workspaceId, rules);
+    const admin = rescope(w.scope, { actor: { type: 'member', id: adminId }, role: 'admin', rules });
+    // Grace is in the CRM already, owned by no one, so the admin can't open her.
+    const grace = (
+      await createRecord(w.scope, {
+        objectId: w.people,
+        values: {
+          [w.attribute('people.name')]: { firstName: 'Grace', lastName: 'Hopper' },
+          [w.attribute('people.email_addresses')]: ['grace@example.com'],
+        },
+      })
+    ).recordId;
+    await submit(live.publicKey, body({ name: 'Ada Lovelace', email: 'ada@example.com', title: 'Engineer' }));
+    await submit(live.publicKey, body({ name: 'Grace Hopper', email: 'grace@example.com', title: 'Admiral' }));
+    const [ada, graces] = await submissionIds(w, live.id);
+    if (ada === undefined || graces === undefined) throw new Error('Two submissions expected.');
+    await w.query(sql`update form_submissions set state = 'failed' where form_id = ${live.id}`);
+
+    // The export, written by the worker as the admin under their rules: no job title column, and no answer to it.
+    const exported = await startSubmissionsExport(admin, registry, {
+      id: newId(),
+      formId: live.id,
+      select: { kind: 'filter' },
+    });
+    expect(await runJob(w, exported.jobId, storedRules)).toBe('succeeded');
+    const file = await exportFile(admin, { exportId: exported.id });
+    const parts = await Promise.all(
+      Array.from({ length: file.parts }, (_, part) => exportPart(admin, { exportId: exported.id, part })),
+    );
+    const text = parts.join('');
+    expect(
+      text.startsWith('\uFEFFReceived at (UTC),Submission ID,State,Your name,Work email,Phone or WhatsApp,In CRM'),
+    ).toBe(true);
+    expect(text).toContain('ada@example.com');
+    expect(text).not.toContain('Engineer');
+    // Given no rules, the worker would enter the admin with more than the export was started under: it refuses.
+    const unruled = await startSubmissionsExport(admin, registry, {
+      id: newId(),
+      formId: live.id,
+      select: { kind: 'filter' },
+    });
+    expect(await runJob(w, unruled.jobId, NO_RULE_SOURCE)).toBe('failed');
+    expect((await getJob(admin, registry, unruled.jobId)).error).toMatchObject({ code: 'FORBIDDEN' });
+
+    // Add to CRM under the same rules: Ada gets a new record; Grace belongs with the one the admin can't open, so
+    // hers is refused, never filed into it nor named.
+    const started = await addToCrm(admin, registry, { formId: live.id, submissionIds: [ada.id, graces.id] });
+    expect(started).toMatchObject({ queued: 2, skipped: 0 });
+    await runJob(w, started.jobId ?? '', storedRules);
+    expect((await getSubmission(w.scope, { submissionId: ada.id })).crm).toMatchObject({
+      state: 'linked',
+      record: { name: 'Ada Lovelace' },
+    });
+    const refused = await getSubmission(w.scope, { submissionId: graces.id });
+    expect(refused).toMatchObject({ state: 'failed', crm: { state: 'not_in_crm', canAddToCrm: true } });
+    expect(refused.failure).toBe(HIDDEN_TARGET);
+    // The same filing given no rules would have written into Grace's record: why the worker needs the member's.
+    const again = await addToCrm(admin, registry, { formId: live.id, submissionIds: [graces.id] });
+    await runJob(w, again.jobId ?? '', NO_RULE_SOURCE);
+    expect((await getSubmission(w.scope, { submissionId: graces.id })).crm).toMatchObject({
+      state: 'linked',
+      record: { recordId: grace },
+    });
   });
 });

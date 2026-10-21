@@ -319,11 +319,11 @@ export function createApp({
     limiter: createMemoryLimiter(),
     addressOf: (c) => hashAddress(ipSalt, c.get('clientIp')) ?? 'unknown',
   });
-  // An export's download (spec 0023): the session and the same member door, only for its starter.
+  // An export's download (spec 0023): the session and the same member door, with the same rules, only for its
+  // starter.
   mountExports(app, {
     auth,
-    enter: (userId, slug) =>
-      enterWorkspace({ db, identity, log, ...(rules === undefined ? {} : { rules }) }, { userId, slug }),
+    enter: (userId, slug) => enterWorkspace({ db, identity, log, rules }, { userId, slug }),
   });
   mountPublicForms(app, {
     db,
