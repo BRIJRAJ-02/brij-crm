@@ -33,7 +33,14 @@ export function ActorReferenceDisplay({
       {...(maxVisible === undefined ? {} : { maxVisible })}
       chips={actors.map((actor) => ({
         key: `${actor.type}:${actor.id ?? ''}`,
-        node: <RecordChip display={actorDisplayOf(actor, displays)} isFlat={surface === 'card'} />,
+        // On a record's panel a member reads like the values around it: the avatar and the name as text.
+        node: (
+          <RecordChip
+            display={actorDisplayOf(actor, displays)}
+            isFlat={surface === 'card'}
+            isPlain={surface === 'panel'}
+          />
+        ),
       }))}
     />
   );

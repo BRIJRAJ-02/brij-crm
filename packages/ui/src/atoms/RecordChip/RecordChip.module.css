@@ -26,11 +26,14 @@
     background: var(--surface-hover);
   }
 
-  /* Plain: the avatar and the name as text, in a line (the timeline's actor). */
+  /* Plain: the avatar and the name as text, at the body's weight like the words around it (the timeline's
+     actor, a record panel's owner). */
   .root[data-plain] {
     padding-inline: 0;
     border-color: transparent;
     background: transparent;
+    font: var(--text-body);
+    letter-spacing: var(--tracking-body);
   }
 
   .label {
