@@ -21,7 +21,7 @@ export interface PreferencesScreenProps {
   readonly theme: ThemeController;
 }
 
-/** Settings › Account › Preferences: an Appearance section, its card holding the Interface theme row (AC-684). */
+/** Settings › Account › Preferences: an Appearance section, its card holding the Theme row (AC-684). */
 export function PreferencesScreen({ theme }: PreferencesScreenProps) {
   // The controller is the one source: a change here, in another tab or on the status page shows at once.
   const choice = useSyncExternalStore(
@@ -30,7 +30,7 @@ export function PreferencesScreen({ theme }: PreferencesScreenProps) {
   );
   return (
     <SettingsPage title={strings.title}>
-      <SettingsSection title={strings.appearance} description={strings.appearanceDescription}>
+      <SettingsSection title={strings.appearance}>
         <Card>
           <SettingsRow title={strings.theme} description={strings.themeDescription}>
             <Select
