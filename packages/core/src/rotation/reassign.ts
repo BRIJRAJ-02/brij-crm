@@ -4,7 +4,7 @@
 // other seats kept. Needs Manage over the seat's current host and the new one
 // (`canActFor`, today `booking.admin` over everyone and each member over
 // themself). The same core reseats a leaving member's bookings (`reseatFor`).
-import { and, eq } from 'drizzle-orm';
+import { and, eq, sql } from 'drizzle-orm';
 import { schema, type WorkspaceTx } from '@crm/db';
 import { requirePermission } from '../access/check.ts';
 import type { EngineScope } from '../access/mint.ts';
@@ -267,4 +267,55 @@ export async function reseatFor(
     nobody: 'Nobody else in its rotation is free then.',
     allow: (_rotationId, memberId) => memberId !== input.memberId,
   });
+}
+
+/**
+ * Hands every upcoming booking a rotation seats `memberId` on to the next free member in it (spec 0029, AC-750:
+ * "Reassign their N upcoming bookings", offered after they were removed or switched off), each one as a reassign of
+ * its own. `booking.admin`. Answers how many moved and how many nobody could take (they stay where they were).
+ */
+export async function reassignUpcoming(
+  scope: EngineScope,
+  deps: ReseatDeps,
+  input: { readonly rotationId: string; readonly memberId: string },
+): Promise<{ readonly reassigned: number; readonly stuck: number }> {
+  requirePermission(scope, 'booking.admin');
+  const now = deps.now?.() ?? new Date();
+  const { ids, name } = await inWorkspace(scope, async (tx) => {
+    const [rotation] = await tx
+      .select({ name: schema.rotations.name })
+      .from(schema.rotations)
+      .where(eq(schema.rotations.id, input.rotationId));
+    if (rotation === undefined) throw refuse('NOT_FOUND', 'That rotation doesn’t exist.');
+    const found = await tx.execute<{ id: string }>(sql`
+      select b.id::text as id
+      from rotation_assignments a
+      join bookings b on b.workspace_id = a.workspace_id and b.id = a.booking_id
+      where a.rotation_id = ${input.rotationId}::uuid and a.member_id = ${input.memberId}::uuid
+        and a.voided_at is null and a.source = 'booking'
+        and b.status = 'confirmed' and b.starts_at > ${now.toISOString()}::timestamptz
+      order by b.starts_at
+      limit 200
+    `);
+    return { ids: found.rows.map((row) => row.id), name: rotation.name };
+  });
+  let reassigned = 0;
+  let stuck = 0;
+  for (const bookingId of ids) {
+    try {
+      const done = await reseat(scope, deps, {
+        bookingId,
+        rotationIds: [input.rotationId],
+        reason: 'reassigned',
+        nobody: `Nobody else in ${name} is free then.`,
+        allow: (_rotationId, memberId) => memberId !== input.memberId,
+      });
+      if (done.changed) reassigned += 1;
+      else stuck += 1;
+    } catch (error) {
+      if (!isRefusal(error)) throw error;
+      stuck += 1;
+    }
+  }
+  return { reassigned, stuck };
 }

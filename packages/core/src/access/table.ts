@@ -272,6 +272,8 @@ export const ACCESS_TABLE = {
   reassignBooking: { bookingPages: true },
   // The Distribution tab (spec 0037, AC-1330): a member of the rotation sees their own row, an admin every row.
   rotationDistribution: { bookingPages: true },
+  // A member's upcoming bookings in a rotation handed on (AC-750): booking.admin's.
+  reassignUpcoming: { permission: 'booking.admin' },
   // Count adjustments (AC-1329): booking.admin's until rotation editors arrive (J14).
   adjustCount: { permission: 'booking.admin' },
   undoAdjustment: { permission: 'booking.admin' },

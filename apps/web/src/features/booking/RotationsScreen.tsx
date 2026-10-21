@@ -50,6 +50,20 @@ const COLUMNS: readonly TableColumn[] = [
   { id: 'on', label: strings.columns.on },
 ];
 
+/** An admin's columns: the members', and a last one for handing a switched off member's bookings on (AC-750). */
+const ADMIN_COLUMNS: readonly TableColumn[] = [
+  ...COLUMNS,
+  { id: 'actions', label: strings.hostActions, isLabelHidden: true, align: 'end' },
+];
+
+/** A member whose upcoming bookings an admin may hand on. */
+interface Handing {
+  readonly rotation: RotationView;
+  readonly memberId: string;
+  readonly name: string;
+  readonly count: number;
+}
+
 type Member = RotationView['members'][number];
 
 /** One member's cell. */
@@ -103,6 +117,41 @@ export function RotationsScreen({ data, slug, people, canManage }: RotationsScre
   const [deleteError, setDeleteError] = useState<string | undefined>(undefined);
   // A fresh dialog per opening, so its draft and its id start afresh.
   const [opened, setOpened] = useState(0);
+  const [handing, setHanding] = useState<Handing | undefined>(undefined);
+  const [isHandingBusy, setHandingBusy] = useState(false);
+  const handOn = () => {
+    if (handing === undefined || isHandingBusy) return;
+    setHandingBusy(true);
+    const target = handing;
+    data.rotations.reassignUpcoming(slug, target.rotation.id, target.memberId).then(
+      (done) => {
+        setHandingBusy(false);
+        setHanding(undefined);
+        toasts.toast({
+          tone: done.stuck === 0 ? 'success' : 'info',
+          message: strings.handedOn(done.reassigned, done.stuck),
+        });
+      },
+      () => {
+        setHandingBusy(false);
+        toasts.toast({ tone: 'danger', message: strings.somethingWrong });
+      },
+    );
+  };
+  const rowCell = (rotation: RotationView) => (member: Member, column: string) =>
+    column !== 'actions' ? (
+      cell(member, column)
+    ) : member.isOn || (member.upcoming ?? 0) === 0 ? null : (
+      <Button
+        variant="ghost"
+        size="sm"
+        onPress={() => {
+          setHanding({ rotation, memberId: member.memberId, name: member.name, count: member.upcoming ?? 0 });
+        }}
+      >
+        {strings.handOnAction(member.upcoming ?? 0)}
+      </Button>
+    );
 
   const open = (target: RotationView | 'new') => {
     setOpened((count) => count + 1);
@@ -196,10 +245,10 @@ export function RotationsScreen({ data, slug, people, canManage }: RotationsScre
                   <Table
                     label={strings.members(rotation.name)}
                     isScrollable
-                    columns={COLUMNS}
+                    columns={rotation.canChange ? ADMIN_COLUMNS : COLUMNS}
                     rows={rotation.members}
                     getRowId={(member) => member.memberId}
-                    renderCell={cell}
+                    renderCell={rowCell(rotation)}
                   />
                 </TabPanel>
                 <TabPanel id="distribution">
@@ -225,14 +274,45 @@ export function RotationsScreen({ data, slug, people, canManage }: RotationsScre
           isOpen
           onClose={() => setEditing(undefined)}
           onSaved={(saved) => {
+            const before = editing;
             setEditing(undefined);
             toasts.toast({
               tone: 'success',
-              message: editing === 'new' ? strings.made(saved.name) : strings.saved(saved.name),
+              message: before === 'new' ? strings.made(saved.name) : strings.saved(saved.name),
             });
+            // Someone removed who still has upcoming bookings here: offer to hand them on (AC-750).
+            if (before !== 'new') {
+              const left = before.members.find(
+                (member) =>
+                  (member.upcoming ?? 0) > 0 && !saved.members.some((each) => each.memberId === member.memberId),
+              );
+              if (left !== undefined) {
+                setHanding({ rotation: saved, memberId: left.memberId, name: left.name, count: left.upcoming ?? 0 });
+              }
+            }
           }}
         />
       )}
+      <Modal
+        title={strings.handOnTitle(handing?.name ?? '', handing?.count ?? 0)}
+        isOpen={handing !== undefined}
+        isBusy={isHandingBusy}
+        onOpenChange={(isOpen) => {
+          if (!isOpen && !isHandingBusy) setHanding(undefined);
+        }}
+        actions={
+          <>
+            <Button slot="close" isDisabled={isHandingBusy} kbd="ESC">
+              {strings.keepThem}
+            </Button>
+            <Button variant="primary" isPending={isHandingBusy} onPress={handOn}>
+              {strings.handOnConfirm(handing?.count ?? 0)}
+            </Button>
+          </>
+        }
+      >
+        {strings.handOnText(handing?.rotation.name ?? '')}
+      </Modal>
       <Modal
         title={strings.deleteTitle(deleting?.name ?? '')}
         tone="danger"

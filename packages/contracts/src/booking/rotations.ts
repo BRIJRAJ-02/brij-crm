@@ -70,8 +70,10 @@ export const RotationMembersInput = z
 /** One member of a rotation as Settings shows them. */
 export const RotationMemberView = RotationMemberInput.extend({
   name: z.string(),
-  /** Their count in the window, calibration included: everyone's for `booking.admin`, else only the reader's own. */
-  count: z.number().min(0).optional(),
+  /** Their count in the window, calibration and adjustments included (below 0 after a negative adjustment): everyone's for `booking.admin`, else only the reader's own. */
+  count: z.number().optional(),
+  /** Their upcoming bookings this rotation seats them on (AC-750), shown with `count`. */
+  upcoming: z.number().int().min(0).optional(),
   /** They have a calendar connected; without one they are booked from their hours and bookings only (warning). */
   hasCalendar: z.boolean(),
 });
@@ -264,6 +266,16 @@ export const RotationDistributionInput = WorkspaceScoped.extend({ rotationId: Uu
 /** Reading a rotation's distribution. */
 export type RotationDistributionInput = z.infer<typeof RotationDistributionInput>;
 
+/** Reassigning every upcoming booking a rotation seats a member on (spec 0029, AC-750). */
+export const ReassignUpcomingInput = WorkspaceScoped.extend({ rotationId: Uuid, memberId: Uuid, mutationId: Uuid });
+/** Reassigning a member's upcoming bookings in a rotation. */
+export type ReassignUpcomingInput = z.infer<typeof ReassignUpcomingInput>;
+
+/** What reassigning a member's upcoming bookings did: how many moved, and how many nobody could take. */
+export const ReassignedUpcoming = z.object({ reassigned: z.number().int(), stuck: z.number().int() });
+/** What reassigning a member's upcoming bookings did. */
+export type ReassignedUpcoming = z.infer<typeof ReassignedUpcoming>;
+
 /** Member procedures for rotations. */
 export const rotationsContract = {
   list: oc.input(ListRotationsInput).output(z.array(RotationView)),
@@ -273,6 +285,8 @@ export const rotationsContract = {
   distribution: oc.input(RotationDistributionInput).output(RotationDistribution),
   /** Adjusts a member's count with a note (AC-1329). */
   adjust: oc.input(AdjustCountInput).output(RotationAdjustment),
+  /** Hands a member's upcoming bookings in the rotation to the others (AC-750). */
+  reassignUpcoming: oc.input(ReassignUpcomingInput).output(ReassignedUpcoming),
   /** Undoes an adjustment (AC-1329). */
   undoAdjustment: oc.input(UndoAdjustmentInput).output(RotationAdjustment),
   delete: oc.input(DeleteRotationInput).output(z.object({ rotationId: Uuid })),

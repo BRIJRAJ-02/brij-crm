@@ -1364,7 +1364,7 @@ async function rotationOn(m: Member, mutationId = newId()) {
 }
 
 /** A guest's booking on a round robin page of the member's rotation, at 10:00 UTC on the next weekday but one. */
-async function teamBooking(m: Member): Promise<string> {
+async function teamBooking(m: Member): Promise<{ readonly bookingId: string; readonly rotationId: string }> {
   const rotation = await rotationOn(m);
   const page = await m.client.bookingPages.create({
     workspace: m.slug,
@@ -1390,18 +1390,29 @@ async function teamBooking(m: Member): Promise<string> {
       timeZone: 'UTC',
     },
   );
-  return booked.bookingId;
+  return { bookingId: booked.bookingId, rotationId: rotation.id };
 }
 
 // Rotations (spec 0029): settings, not CRM data, so no outbox row; one poke per write.
 Object.assign(WRITES, {
   // The seat to the other member of the rotation, the next in it (spec 0029, AC-748).
   'bookings.reassign': async (m: Member, mutationId: string) => {
-    const bookingId = await teamBooking(m);
+    const { bookingId } = await teamBooking(m);
     await m.client.bookings.reassign({ workspace: m.slug, bookingId, mutationId });
     return [];
   },
   // A count adjustment, and one undone (spec 0037, AC-1329): settings like the rotation, so no outbox row.
+  // A member's upcoming bookings in the rotation handed on (spec 0029, AC-750).
+  'rotations.reassignUpcoming': async (m: Member, mutationId: string) => {
+    const { bookingId, rotationId } = await teamBooking(m);
+    const [host] = await testQuery<{ id: string }>(
+      ownerUrl,
+      `select host_member_id::text as id from bookings where id = $1`,
+      [bookingId],
+    );
+    await m.client.rotations.reassignUpcoming({ workspace: m.slug, rotationId, memberId: host?.id ?? '', mutationId });
+    return [];
+  },
   'rotations.adjust': async (m: Member, mutationId: string) => {
     const rotation = await rotationOn(m);
     const [first] = rotation.members;
@@ -1490,6 +1501,7 @@ const WRITES_MADE: Readonly<Record<string, number>> = {
   'rotations.create': 1,
   'bookings.reassign': 3,
   'rotations.adjust': 2,
+  'rotations.reassignUpcoming': 3,
   'rotations.undoAdjustment': 3,
   'rotations.update': 2,
   'rotations.delete': 2,

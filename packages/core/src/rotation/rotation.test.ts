@@ -29,7 +29,7 @@ import { loadPage } from '../booking/slots.ts';
 import { chooseHosts } from './assign.ts';
 import { bookingAssignments } from './assignments.ts';
 import { adjustCount, rotationDistribution, undoAdjustment } from './distribution.ts';
-import { reassignBooking } from './reassign.ts';
+import { reassignBooking, reassignUpcoming } from './reassign.ts';
 import { handOnBooking, rotationsRemoval } from './removal.ts';
 import { createRotation, deleteRotation, listRotations, updateRotation } from './rotations.ts';
 import { loadTeam } from './team.ts';
@@ -795,6 +795,38 @@ describe('a round robin page (AC-732 to AC-734, AC-738, AC-742 to AC-745, AC-754
     expect(undone.voidedAt).toBeDefined();
     const after = await rotationDistribution(w.owner, { rotationId: rotation.id }, NOW);
     expect(after.rows.map((row) => row.count)).toEqual([1, 0]);
+  });
+
+  it('offers and hands on a switched off member’s upcoming bookings (AC-750)', async () => {
+    const w = await workspace();
+    const sam = await w.addMember('Sam Lee');
+    const kim = await w.addMember('Kim Park');
+    const { rotation, entry } = await roundRobin(w, [sam.id, kim.id]);
+    const booked = await bookPublicSlot(entry, deps(), bookInput(at('09:00')));
+    const host = (await hostsOf(w, [booked.bookingId])).get(booked.bookingId) ?? '';
+    const other = host === sam.id ? kim.id : sam.id;
+    const listed = (await listRotations(w.owner, NOW))[0]?.members.find((member) => member.memberId === host);
+    expect(listed?.upcoming).toBe(1);
+    // Switching them off keeps their bookings (the ledger and the host stay)...
+    await updateRotation(
+      w.owner,
+      {
+        rotationId: rotation.id,
+        settings: {},
+        members: [host, other].map((id) => pooled(id, { isOn: id !== host })),
+      },
+      NOW,
+    );
+    expect((await hostsOf(w, [booked.bookingId])).get(booked.bookingId)).toBe(host);
+    // ...until an admin hands them on.
+    expect(
+      (await refusalOf(reassignUpcoming(sam.scope, deps(), { rotationId: rotation.id, memberId: host }))).code,
+    ).toBe('FORBIDDEN');
+    expect(await reassignUpcoming(w.owner, deps(), { rotationId: rotation.id, memberId: host })).toEqual({
+      reassigned: 1,
+      stuck: 0,
+    });
+    expect((await hostsOf(w, [booked.bookingId])).get(booked.bookingId)).toBe(other);
   });
 
   it('voids the ledger row of a cancelled booking, so it stops counting (AC-747)', async () => {

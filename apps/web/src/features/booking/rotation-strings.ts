@@ -104,6 +104,18 @@ export const strings = {
   removeFixed: (name: string) => `Remove ${name} as a fixed host`,
   hostActions: 'Actions',
   hostsSaved: 'Hosts saved.',
+  /** Handing a member's upcoming bookings on (spec 0029, AC-750). */
+  handOnAction: (count: number) => (count === 1 ? 'Reassign 1 upcoming' : `Reassign ${String(count)} upcoming`),
+  handOnTitle: (name: string, count: number) =>
+    count === 1 ? `Reassign ${name}’s upcoming booking?` : `Reassign ${name}’s ${String(count)} upcoming bookings?`,
+  handOnText: (rotation: string) =>
+    `Each goes to the next free member of ${rotation}, who is emailed with the guest. Any nobody can take stays where it is.`,
+  handOnConfirm: (count: number) => (count === 1 ? 'Reassign it' : `Reassign ${String(count)}`),
+  keepThem: 'Keep them',
+  handedOn: (moved: number, kept: number) =>
+    kept === 0
+      ? `Reassigned ${String(moved)}.`
+      : `Reassigned ${String(moved)}. ${String(kept)} stayed: nobody else was free then.`,
   removeFixedTitle: (name: string) => `Remove ${name} as a fixed host?`,
   removeFixedText: 'They stop joining new meetings from this page. Meetings already booked keep them.',
   removeFixedAction: 'Remove host',

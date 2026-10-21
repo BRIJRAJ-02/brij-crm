@@ -17,6 +17,7 @@ import type {
   BookingAssignment,
   ReassignedBooking,
   RotationAdjustment,
+  ReassignedUpcoming,
   RotationDistribution,
   RotationMemberInput,
   RotationSettings,
@@ -174,6 +175,7 @@ export type {
   BookingAssignment,
   ReassignedBooking,
   RotationAdjustment,
+  ReassignedUpcoming,
   RotationDistribution,
   RotationMemberInput,
   RotationMemberView,
@@ -2392,6 +2394,18 @@ export function createDataLayer({
         ).then((made) => {
           rotationLists.view(workspace).reload();
           return made;
+        }),
+      /**
+       * Hands a member's upcoming bookings in the rotation to the others (AC-750), waiting for the server; Bookings and
+       * the rotations read again.
+       */
+      reassignUpcoming: (workspace: string, rotationId: string, memberId: string): Promise<ReassignedUpcoming> =>
+        call((options) =>
+          api.rotations.reassignUpcoming({ workspace, rotationId, memberId, mutationId: mintId() }, options),
+        ).then((done) => {
+          rotationLists.view(workspace).reload();
+          bookingsLists.reloadAll(workspace);
+          return done;
         }),
       /** Undoes an adjustment (AC-1329); the rotations read again. */
       undoAdjustment: (workspace: string, rotationId: string, adjustmentId: string): Promise<RotationAdjustment> =>
