@@ -1530,6 +1530,7 @@ describe('booking pages (spec 0025, milestone 1)', () => {
 describe('the auth schema: global identity, outside row level security (spec 0005)', () => {
   const AUTH_TABLES = [
     'account',
+    'known_device',
     'passkey',
     'rate_limit',
     'security_event',

@@ -554,6 +554,13 @@
       "when": 1792618107646,
       "tag": "0078_workspace_security",
       "breakpoints": true
+    },
+    {
+      "idx": 79,
+      "version": "7",
+      "when": 1792618295095,
+      "tag": "0079_known_devices",
+      "breakpoints": true
     }
   ]
 }

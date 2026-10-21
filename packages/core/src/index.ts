@@ -121,6 +121,15 @@ export {
   type WorkspaceSecurityDeps,
 } from './account/workspace-security.ts';
 export { closeJoinRequestsOf } from './account/join-requests.ts';
+export {
+  ACTIVITY_PAGE,
+  alertNewDevice,
+  deviceKey,
+  listMyActivity,
+  sweepAccountHistory,
+  type SignInAlert,
+  type SignInAlertDeps,
+} from './account/activity.ts';
 export { milestoneHook, type ReachedMilestone } from './milestones/milestones.ts';
 export { type AuditSource } from './members/audit.ts';
 // Settings › Workspace › General, the owner's delete and restore, and Account › Profile (spec 0031, slice 7).

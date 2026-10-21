@@ -120,6 +120,8 @@ export const securityEvent = auth.table(
   },
   (t) => [
     index('security_event_user_at').on(t.userId, t.at.desc()),
+    // The identity sweep deletes a year old events, oldest first (AC-898).
+    index('security_event_at').on(t.at),
     foreignKey({ name: 'security_event_user_fk', columns: [t.userId], foreignColumns: [user.id] }).onDelete('cascade'),
     check('security_event_kind', sql.raw(`kind in (${SECURITY_EVENT_KINDS.map((kind) => `'${kind}'`).join(', ')})`)),
   ],
@@ -305,5 +307,29 @@ export const userPrefs = auth.table(
       columns: [t.lastWorkspaceId],
       foreignColumns: [workspaceDirectory.workspaceId],
     }),
+  ],
+);
+
+/**
+ * The devices an account has signed in from (spec 0033, AC-897): a device is
+ * the SHA-256 of its browser family, system and country, never the user agent
+ * or address itself. A sign in from a device absent here, or not seen for 90
+ * days, emails the account. Rows not seen for a year are deleted by the
+ * identity sweep.
+ */
+export const knownDevice = auth.table(
+  'known_device',
+  {
+    userId: uuid('user_id').notNull(),
+    /** 64 lowercase hex digits. */
+    deviceKey: text('device_key').notNull(),
+    firstSeen: timestamptz('first_seen').notNull().defaultNow(),
+    lastSeen: timestamptz('last_seen').notNull().defaultNow(),
+  },
+  (t) => [
+    primaryKey({ name: 'known_device_pkey', columns: [t.userId, t.deviceKey] }),
+    foreignKey({ name: 'known_device_user_fk', columns: [t.userId], foreignColumns: [user.id] }).onDelete('cascade'),
+    check('known_device_key', sql`${t.deviceKey} ~ '^[0-9a-f]{64}$'`),
+    index('known_device_last_seen').on(t.lastSeen),
   ],
 );

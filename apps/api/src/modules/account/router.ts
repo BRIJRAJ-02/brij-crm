@@ -8,6 +8,7 @@ import {
   type PasskeyDeps,
   passkeyStepUpOptions,
   closeJoinRequestsOf,
+  listMyActivity,
   removeMyPasskey,
   renameMyPasskey,
   revokeMyOtherSessions,
@@ -135,6 +136,12 @@ export const accountRouter = authed.account.router({
   },
   security: {
     get: authed.account.security.get.handler(({ context }) => accountSecurity(stepUpDeps(context), callerOf(context))),
+  },
+  // The person's last 90 days of security events (AC-898): by their user id, from schema auth.
+  activity: {
+    list: authed.account.activity.list.handler(({ context, input }) =>
+      listMyActivity({ identity: context.identity }, callerOf(context), input),
+    ),
   },
   stepUp: {
     start: authed.account.stepUp.start.handler(async ({ context }) => {

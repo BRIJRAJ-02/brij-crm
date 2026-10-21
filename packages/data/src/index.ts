@@ -70,6 +70,7 @@ import type {
   RecordView,
   SessionLengthDays,
   WorkspaceSecurity,
+  ActivityPage,
   RelationshipView,
   Role,
   ScheduleMember,
@@ -326,6 +327,8 @@ export type {
   Permission,
   SessionLengthDays,
   WorkspaceSecurity,
+  ActivityPage,
+  SecurityActivity,
   Role,
   RemovalPreview,
   RoleOption,
@@ -4381,6 +4384,13 @@ export function createDataLayer({
       signOutOthers: (): Promise<SignOutOthersResult> => accountSessions.signOutOthers(),
       /** Two factor on or off, backup codes left, and whether this session is fresh (spec 0033). */
       security: (): AccountSecurityView => accountSecurity.view(),
+      /**
+       * Recent activity (AC-898): the person's last 90 days of security
+       * events, newest first, a page at a time. Read fresh each time: no
+       * cache, no live event. Refusals throw a DataError.
+       */
+      activity: (cursor?: string): Promise<ActivityPage> =>
+        call((options) => api.account.activity.list(cursor === undefined ? {} : { cursor }, options)),
       /** Whether a security state says this session may make a sensitive change now. */
       isFresh: isSessionFresh,
       /**

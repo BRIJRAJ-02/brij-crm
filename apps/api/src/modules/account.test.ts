@@ -150,7 +150,8 @@ describe('account.sessions', () => {
       await failure(() => rpcClient(app, laptop).account.sessions.revoke({ sessionId: target?.id ?? '' })),
     ).toMatchObject({ code: 'NOT_FOUND', status: 404 });
     const kinds = (await eventsOf(userId)).map((event) => event.kind);
-    expect(kinds).toEqual(['sign_in', 'sign_in', 'session_revoked']);
+    // The phone was a new device to the account, so its sign in was emailed about too (AC-897).
+    expect(kinds.filter((kind) => kind !== 'alert_sent')).toEqual(['sign_in', 'sign_in', 'session_revoked']);
   });
 
   it('answers NOT_FOUND for another person’s session, and leaves it signed in', async () => {

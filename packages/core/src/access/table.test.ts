@@ -53,6 +53,11 @@ const NO_SCOPE: ReadonlySet<string> = new Set([
   'twoFactorRequiredBy',
   // Account deletion's join requests (spec 0033): the person's own, found by their user id, changed as the system.
   'closeJoinRequestsOf',
+  // The person's own security history and the new device alert (spec 0033, AC-897, AC-898): by their user id.
+  'listMyActivity',
+  'alertNewDevice',
+  'deviceKey',
+  'sweepAccountHistory',
   'requireFresh',
   'sessionFreshness',
   'startStepUp',

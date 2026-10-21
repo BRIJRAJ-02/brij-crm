@@ -10,13 +10,14 @@
 import { drizzleAdapter } from 'better-auth/adapters/drizzle';
 import { isIP } from 'node:net';
 import type { SecurityEventKind } from '@crm/contracts';
-import { and, asc, desc, eq, inArray, isNull, ne, sql } from 'drizzle-orm';
+import { and, asc, desc, eq, gte, inArray, isNull, ne, sql } from 'drizzle-orm';
 import { drizzle } from 'drizzle-orm/node-postgres';
 import pg from 'pg';
 import type { DatabaseOptions } from '../client.ts';
 import { timePool } from '../timing.ts';
 import {
   account,
+  knownDevice,
   passkey,
   rateLimit,
   twoFactor,
@@ -135,6 +136,26 @@ export interface SecurityEventInput {
   readonly country?: string;
   readonly deviceLabel?: string;
   readonly detail?: Readonly<Record<string, string | number | boolean>>;
+}
+
+/** One kept security event as the person's Recent activity lists it: never the IP. */
+export interface StoredSecurityEvent {
+  readonly id: string;
+  /** ISO 8601 UTC. */
+  readonly at: string;
+  readonly kind: SecurityEventKind;
+  readonly country: string | null;
+  readonly deviceLabel: string | null;
+  readonly detail: Readonly<Record<string, unknown>>;
+}
+
+/** A live session's own facts, for its sign in alert: what it is on and roughly where. */
+export interface SessionFacts {
+  readonly userAgent: string | null;
+  readonly country: string | null;
+  readonly city: string | null;
+  readonly deviceLabel: string | null;
+  readonly createdAt: Date;
 }
 
 /** Global identity: the directory, users, and Better Auth's storage. Reads no tenant data. */
@@ -266,6 +287,35 @@ export interface IdentityStore {
   checkStepUpCode(sessionId: string, codeHash: string): Promise<'ok' | 'wrong' | 'missing'>;
   /** Keeps one security event (AC-898). */
   recordSecurityEvent(event: SecurityEventInput): Promise<void>;
+  /**
+   * The person's security events at or after `since`, newest first, after
+   * the (at, id) of `before` when given, at most `limit` (AC-898).
+   */
+  listSecurityEvents(
+    userId: string,
+    options: {
+      readonly since: Date;
+      readonly before?: { readonly at: string; readonly id: string };
+      readonly limit: number;
+    },
+  ): Promise<readonly StoredSecurityEvent[]>;
+  /** A live session of this user's facts, or undefined once it is gone (a sign in held back for its second step). */
+  sessionFacts(userId: string, sessionId: string): Promise<SessionFacts | undefined>;
+  /**
+   * Notes that this user signed in from `deviceKey` now (AC-897). Answers
+   * whether it was new to them (absent, or not seen since `freshSince`), and
+   * whether they had no device at all before (their first sign in).
+   */
+  noteDevice(
+    userId: string,
+    deviceKey: string,
+    freshSince: Date,
+  ): Promise<{ readonly isNew: boolean; readonly isFirst: boolean }>;
+  /**
+   * Deletes security events and known devices last seen before `before`, at
+   * most `limit` of each (AC-898's year). Answers how many went.
+   */
+  sweepAuthHistory(before: Date, limit: number): Promise<number>;
   /** Saves the name only when the user has none yet (an email code sign up starts empty). True when it saved. */
   setUserNameIfEmpty(id: string, name: string): Promise<boolean>;
   /**
@@ -716,6 +766,92 @@ export function createIdentityStore(options: DatabaseOptions): IdentityStore {
         deviceLabel: event.deviceLabel ?? null,
         detail: event.detail ?? {},
       });
+    },
+
+    async listSecurityEvents(userId, options) {
+      if (!UUID.test(userId)) return [];
+      const before = options.before;
+      const rows = await db
+        .select({
+          id: securityEvent.id,
+          at: securityEvent.at,
+          kind: securityEvent.kind,
+          country: securityEvent.country,
+          deviceLabel: securityEvent.deviceLabel,
+          detail: securityEvent.detail,
+        })
+        .from(securityEvent)
+        .where(
+          and(
+            eq(securityEvent.userId, userId),
+            gte(securityEvent.at, options.since),
+            ...(before === undefined || !UUID.test(before.id)
+              ? []
+              : [sql`(${securityEvent.at}, ${securityEvent.id}) < (${before.at}::timestamptz, ${before.id}::uuid)`]),
+          ),
+        )
+        .orderBy(desc(securityEvent.at), desc(securityEvent.id))
+        .limit(Math.max(1, Math.min(options.limit, 200)));
+      return rows.map((row) => ({
+        id: row.id,
+        at: new Date(row.at).toISOString(),
+        kind: row.kind,
+        country: row.country,
+        deviceLabel: row.deviceLabel,
+        detail: typeof row.detail === 'object' && row.detail !== null ? (row.detail as Record<string, unknown>) : {},
+      }));
+    },
+
+    async sessionFacts(userId, sessionId) {
+      if (!UUID.test(userId) || !UUID.test(sessionId)) return undefined;
+      const [row] = await db
+        .select({
+          userAgent: session.userAgent,
+          country: session.country,
+          city: session.city,
+          deviceLabel: session.deviceLabel,
+          createdAt: session.createdAt,
+        })
+        .from(session)
+        .where(and(eq(session.id, sessionId), eq(session.userId, userId), sql`${session.expiresAt} > now()`))
+        .limit(1);
+      return row === undefined ? undefined : { ...row, createdAt: new Date(row.createdAt) };
+    },
+
+    async noteDevice(userId, deviceKey, freshSince) {
+      if (!UUID.test(userId) || !/^[0-9a-f]{64}$/.test(deviceKey)) return { isNew: false, isFirst: false };
+      return db.transaction(async (tx) => {
+        const [any] = await tx
+          .select({ key: knownDevice.deviceKey })
+          .from(knownDevice)
+          .where(eq(knownDevice.userId, userId))
+          .limit(1);
+        const [was] = await tx
+          .select({ lastSeen: knownDevice.lastSeen })
+          .from(knownDevice)
+          .where(and(eq(knownDevice.userId, userId), eq(knownDevice.deviceKey, deviceKey)))
+          .for('update');
+        await tx
+          .insert(knownDevice)
+          .values({ userId, deviceKey })
+          .onConflictDoUpdate({
+            target: [knownDevice.userId, knownDevice.deviceKey],
+            set: { lastSeen: sql`now()` },
+          });
+        const isNew = was === undefined || new Date(was.lastSeen).getTime() < freshSince.getTime();
+        return { isNew, isFirst: any === undefined };
+      });
+    },
+
+    async sweepAuthHistory(before, limit) {
+      const cap = Math.max(1, Math.min(limit, 10_000));
+      const events = await db.execute<{ id: string }>(
+        sql`delete from ${securityEvent} where id in (select id from ${securityEvent} where ${securityEvent.at} < ${before.toISOString()}::timestamptz order by ${securityEvent.at} limit ${cap}) returning id`,
+      );
+      const devices = await db.execute<{ user_id: string }>(
+        sql`delete from ${knownDevice} where (user_id, device_key) in (select user_id, device_key from ${knownDevice} where ${knownDevice.lastSeen} < ${before.toISOString()}::timestamptz limit ${cap}) returning user_id`,
+      );
+      return events.rows.length + devices.rows.length;
     },
 
     async setUserNameIfEmpty(id, name) {

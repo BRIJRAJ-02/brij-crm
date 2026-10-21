@@ -33,6 +33,7 @@ const READS: ReadonlySet<string> = new Set([
   'account.sessions.revoke',
   'account.sessions.revokeOthers',
   'account.security.get',
+  'account.activity.list',
   'account.stepUp.start',
   'account.stepUp.verify',
   'account.stepUp.passkeyOptions',

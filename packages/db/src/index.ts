@@ -48,6 +48,8 @@ export {
   type RateLimitDecision,
   type RateLimitRule,
   type SecurityEventInput,
+  type SessionFacts,
+  type StoredSecurityEvent,
   type SessionKey,
   type SessionListing,
   type SessionVerification,

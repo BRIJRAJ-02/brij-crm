@@ -22,6 +22,7 @@ import { notifications } from './templates/notifications.ts';
 import { joinApproved, joinRequest } from './templates/join.ts';
 import { workspaceDeleted } from './templates/workspace.ts';
 import { accountDeleted } from './templates/account-deleted.ts';
+import { signInAlert } from './templates/sign-in-alert.ts';
 import { SIGN_IN_CODE_MINUTES, signInCode } from './templates/sign-in-code.ts';
 
 export { CATALOG, topicOf, type Catalog, type CatalogEntry } from './catalog.ts';
@@ -111,6 +112,25 @@ export async function renderAccountDeleted(
     appOrigin: context.appOrigin,
     medium: 'email_sign_in',
   });
+}
+
+/**
+ * A sign in alert (spec 0033, AC-897): a device the account hasn't used in 90
+ * days signed in. When it happened (UTC), on what, and roughly where; no link
+ * that changes anything.
+ */
+export async function renderSignInAlert(
+  alert: { readonly when: Date; readonly device: string; readonly place?: string },
+  context: { readonly appOrigin: string },
+): Promise<RenderedEmail> {
+  const worded = `${new Intl.DateTimeFormat('en-GB', { dateStyle: 'long', timeStyle: 'short', timeZone: 'UTC' }).format(alert.when)} UTC`;
+  return renderDocument(
+    signInAlert(
+      { when: worded, device: alert.device, ...(alert.place === undefined ? {} : { place: alert.place }) },
+      templateContext(context),
+    ),
+    { appOrigin: context.appOrigin, medium: 'email_sign_in' },
+  );
 }
 
 /**

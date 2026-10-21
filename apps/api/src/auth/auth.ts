@@ -3,6 +3,7 @@
 // identity store, the sign up allowlist, and rate limits that hold across
 // instances. Nothing outside this folder imports Better Auth; the rest of the
 // API sees only `Auth`.
+import { AsyncLocalStorage } from 'node:async_hooks';
 import { createHmac } from 'node:crypto';
 import { isIP } from 'node:net';
 import {
@@ -15,7 +16,7 @@ import {
   type SignInMethod,
   type SignInProviders,
 } from '@crm/contracts';
-import { renderSignInCode, SIGN_IN_CODE_MINUTES } from '@crm/emails';
+import { renderSignInAlert, renderSignInCode, SIGN_IN_CODE_MINUTES } from '@crm/emails';
 import type { SignUpMethod } from '@crm/contracts/events';
 import type { IdentityStore, SecurityEventInput } from '@crm/db';
 import { betterAuth, type DBAdapter } from 'better-auth';
@@ -26,7 +27,14 @@ import { emailOTP } from 'better-auth/plugins/email-otp';
 import { twoFactor } from 'better-auth/plugins/two-factor';
 import { passkey } from '@better-auth/passkey';
 import * as z from 'zod';
-import { deviceLabel, FRESH_MESSAGE, SECOND_FACTOR_MESSAGE, sessionFreshness } from '@crm/core';
+import {
+  alertNewDevice,
+  deviceLabel,
+  FRESH_MESSAGE,
+  SECOND_FACTOR_MESSAGE,
+  sessionFreshness,
+  sweepAccountHistory,
+} from '@crm/core';
 import type { ApiEnv } from '../env.ts';
 import { GEO_CITY_HEADER, GEO_COUNTRY_HEADER, readGeo, type Geo } from '../edge.ts';
 import { log } from '../log.ts';
@@ -199,6 +207,8 @@ export interface AuthSession {
 export interface Auth {
   /** The sign in methods offered beyond the email code. */
   readonly providers: SignInProviders;
+  /** Waits for the work a sign in starts after answering (the new device alert, the history sweep): for tests. */
+  settled(): Promise<void>;
   /**
    * Answers a request to `/api/auth/*`. `clientIp` is the IP the edge guard
    * trusted, or undefined; any `x-forwarded-for` the caller sent is replaced
@@ -457,6 +467,48 @@ export function createAuth({ env, identity, mailer, analytics = NO_ANALYTICS, in
     }
   }
 
+  // The sessions each request made (spec 0033, AC-897): checked for a new device after it answers, never in its way.
+  const signedInThisRequest = new AsyncLocalStorage<{ userId: string; sessionId: string }[]>();
+  const alertDeps = {
+    identity,
+    send: async (to: string, alert: { when: Date; device: string; place?: string }, sessionId: string) => {
+      const message = await renderSignInAlert(alert, { appOrigin });
+      // Once per session, however often this runs (the mailer passes the key on to Resend).
+      await mailer.send({ to, ...message, idempotencyKey: `sign-in-alert/${sessionId}` });
+      log.info('Sign in alert sent', { mail: mailer.transport });
+    },
+  };
+  /** Checks each new session for a new device; a failure is logged and reported, never thrown. */
+  async function alertAfter(made: readonly { userId: string; sessionId: string }[]): Promise<void> {
+    for (const each of made) {
+      try {
+        await alertNewDevice(alertDeps, each);
+      } catch (error) {
+        log.error('Sign in alert not sent', { error: error instanceof Error ? error.name : typeof error });
+        captureFault(error, { task: 'sign in alert' });
+      }
+    }
+  }
+  // The year old security history goes at most once a day per process, after a sign in (AC-898): no timer keeps
+  // the database awake.
+  let sweptAt = 0;
+  async function sweepAfterSignIn(): Promise<void> {
+    if (Date.now() - sweptAt < DAY_SECONDS * 1000) return;
+    sweptAt = Date.now();
+    try {
+      const gone = await sweepAccountHistory({ identity });
+      if (gone > 0) log.info('Old security history deleted', { rows: gone });
+    } catch (error) {
+      log.error('Security history not swept', { error: error instanceof Error ? error.name : typeof error });
+    }
+  }
+  /** Settles after-answer work for tests: the alerts and sweep started by the last requests. */
+  const pending = new Set<Promise<void>>();
+  const track = (work: Promise<void>) => {
+    pending.add(work);
+    void work.finally(() => pending.delete(work));
+  };
+
   /** Keeps a security event; a failure is logged and reported, never thrown into a sign in or out. */
   async function keepEvent(event: SecurityEventInput): Promise<void> {
     try {
@@ -642,6 +694,8 @@ export function createAuth({ env, identity, mailer, analytics = NO_ANALYTICS, in
           after: async (session, context) => {
             // A session renewed in place by a two factor change is no new sign in.
             if (context?.context.session !== null && context?.context.session !== undefined) return;
+            // Checked for a new device once the request has answered (AC-897), when a held back one is gone.
+            signedInThisRequest.getStore()?.push({ userId: session.userId, sessionId: session.id });
             const method = signInMethod(context?.path);
             const secondFactor =
               context?.path === '/two-factor/verify-totp'
@@ -1019,11 +1073,14 @@ export function createAuth({ env, identity, mailer, analytics = NO_ANALYTICS, in
       const checked = await checkEmail(request);
       if (checked instanceof Response) return checked;
       const forwarded = new Request(checked, { headers: forwardedHeaders(checked.headers, clientIp, origin, geo) });
+      const made: { userId: string; sessionId: string }[] = [];
+      const answered = await signedInThisRequest.run(made, () => auth.handler(forwarded));
+      if (made.length > 0) {
+        track(alertAfter(made));
+        track(sweepAfterSignIn());
+      }
       // No session token leaves in a body (AC-891): the cookie carries it.
-      return authErrorResponse(
-        await stripTokens(await auth.handler(forwarded)),
-        new URL(checked.url).pathname.slice(AUTH_BASE_PATH.length),
-      );
+      return authErrorResponse(await stripTokens(answered), new URL(checked.url).pathname.slice(AUTH_BASE_PATH.length));
     },
 
     async session(headers, clientIp) {
@@ -1077,6 +1134,10 @@ export function createAuth({ env, identity, mailer, analytics = NO_ANALYTICS, in
     },
 
     passkeyStepUp,
+
+    async settled() {
+      await Promise.all([...pending]);
+    },
 
     async backupCodesLeft(userId) {
       const row = await twoFactorRow(userId);
