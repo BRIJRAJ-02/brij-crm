@@ -531,7 +531,7 @@ export async function setViewLayout(
         layout.groupBy === undefined
           ? storedGroupBy
           : layout.groupBy === null
-            ? storedGroupBy !== undefined && !visible.live.has(storedGroupBy)
+            ? storedGroupBy !== undefined && !visible.any.has(storedGroupBy)
               ? storedGroupBy
               : undefined
             : layout.groupBy;

@@ -13,7 +13,7 @@ import type { FilterGroup } from '@crm/contracts/values';
 import { listObjectAttributes } from '../attributes/attributes.ts';
 import { defineAttribute, defineObject, listAttributes, updateAttribute } from '../engine/definitions.ts';
 import { deleteRecord, restoreRecord } from '../engine/deletion.ts';
-import { getHistory, getTimeInStages, getValuesAsOf } from '../engine/history.ts';
+import { getHistory, getStageSince, getTimeInStages, getValuesAsOf } from '../engine/history.ts';
 import { newId } from '../engine/ids.ts';
 import { addEntry, defineList, getEntries, getRecordEntries } from '../engine/lists.ts';
 import { listOptions } from '../engine/options.ts';
@@ -254,6 +254,9 @@ describe('a hidden field (AC-141)', () => {
     expect(
       words(await refusals(getTimeInStages(member, { recordId: id('ada'), attributeId: id('people.stage') }))),
     ).toEqual(words(await refusals(getTimeInStages(member, { recordId: id('ada'), attributeId: unknownId() }))));
+    expect(
+      words(await refusals(getStageSince(member, { recordId: id('ada'), attributeId: id('people.stage') }))),
+    ).toEqual(words(await refusals(getStageSince(member, { recordId: id('ada'), attributeId: unknownId() }))));
     expect(await listOptions(member, id('people.stage'))).toEqual([]);
   });
 
