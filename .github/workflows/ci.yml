@@ -211,7 +211,26 @@ jobs:
               sleep 1
             done
           done
-      - run: pnpm --filter @crm/web test:flow e2e/sign-in.flow.ts e2e/people.flow.ts e2e/session.flow.ts e2e/keyboard.flow.ts e2e/live.flow.ts e2e/record.flow.ts e2e/options.flow.ts e2e/rules.flow.ts e2e/relations.flow.ts e2e/links.flow.ts e2e/views.flow.ts e2e/views-manage.flow.ts e2e/trash.flow.ts e2e/bulk.flow.ts e2e/tasks.flow.ts e2e/google.flow.ts
+      # One flow per line, so a lane adds its own flow without touching anyone else's line.
+      - name: Run the flows
+        run: >-
+          pnpm --filter @crm/web test:flow
+          e2e/sign-in.flow.ts
+          e2e/people.flow.ts
+          e2e/session.flow.ts
+          e2e/keyboard.flow.ts
+          e2e/live.flow.ts
+          e2e/record.flow.ts
+          e2e/options.flow.ts
+          e2e/rules.flow.ts
+          e2e/relations.flow.ts
+          e2e/links.flow.ts
+          e2e/views.flow.ts
+          e2e/views-manage.flow.ts
+          e2e/trash.flow.ts
+          e2e/bulk.flow.ts
+          e2e/tasks.flow.ts
+          e2e/google.flow.ts
       - name: Keep the traces and the logs
         if: failure()
         uses: actions/upload-artifact@v7
@@ -278,11 +297,27 @@ jobs:
           node-version-file: .nvmrc
           cache: pnpm
       - run: pnpm install --frozen-lockfile
-      - run: pnpm test:visual
+      - id: visual
+        run: pnpm test:visual
       - name: Keep the screenshot diffs
         if: failure()
         uses: actions/upload-artifact@v7
         with:
           name: screenshot-diffs
           path: packages/ui/.vitest/attachments/
+          if-no-files-found: ignore
+      # When the screenshots differ, the new baselines are rendered here in the
+      # same image, so nobody runs the image on a laptop. Download this
+      # artifact, copy it over packages/ui/__screenshots__, and commit only the
+      # stories the change meant to move.
+      - name: Render the new baselines
+        if: failure() && steps.visual.outcome == 'failure'
+        run: pnpm test:visual --update
+      - name: Keep the new baselines
+        if: failure() && steps.visual.outcome == 'failure'
+        uses: actions/upload-artifact@v7
+        with:
+          name: screenshot-baselines
+          path: packages/ui/__screenshots__/
+          retention-days: 7
           if-no-files-found: ignore
