@@ -110,6 +110,11 @@ async function newWorkspace(page: Page, email: string, name: string, slug: strin
   await expect(page).toHaveURL(new RegExp(`/w/${slug}/objects/people(/views/[0-9a-f-]+)?$`), {
     timeout: WORKSPACE_MADE_MS,
   });
+  // People draws its own frame once loaded and then moves focus to its title; a menu or confirm opened over the
+  // skeleton, or before that focus move, would close with it (at 375 most often).
+  const title = page.getByRole('heading', { level: 1, name: 'People' });
+  await expect(title).toBeVisible();
+  await expect(title).toBeFocused();
 }
 
 /**
