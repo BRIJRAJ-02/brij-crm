@@ -2403,6 +2403,16 @@ export function createDataLayer({
         access.delete(workspace);
         me = undefined;
       },
+      /**
+       * Hands the workspace to another member (spec 0031, AC-813): they become
+       * an owner, the person an admin. The list and the person's own access
+       * are read again after.
+       */
+      async transferOwnership(workspace: string, memberId: string): Promise<void> {
+        await call((options) => api.members.transferOwnership({ workspace, memberId, mutationId: mintId() }, options));
+        members.delete(workspace);
+        access.delete(workspace);
+      },
     },
     /**
      * Invitations (spec 0031): settings, not CRM data, so no live event. The

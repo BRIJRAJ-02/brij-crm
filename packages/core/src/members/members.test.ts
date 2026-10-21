@@ -11,7 +11,7 @@ import { newId } from '../engine/ids.ts';
 import { isInputError, isRefusal } from '../engine/refusals.ts';
 import { createWorkspace } from '../engine/workspaces.ts';
 import { testScope } from '../testing.ts';
-import { getMyAccess, leaveWorkspace, listMembers, removeMember, setMemberRole } from './members.ts';
+import { getMyAccess, leaveWorkspace, listMembers, removeMember, setMemberRole, transferOwnership } from './members.ts';
 
 const { appUrl, ownerUrl } = inject('testDatabase');
 let db: Database;
@@ -312,5 +312,36 @@ describe('the audit log for members (spec 0031, AC-830)', () => {
     expect(await refusalOf(leaveWorkspace(t.as(t.owner, 'owner')))).toEqual(LAST_OWNER);
     expect(await refusalOf(leaveWorkspace(systemScope(db, t.workspaceId)))).toMatchObject({ code: 'FORBIDDEN' });
     expect(await auditOf(t.workspaceId)).toEqual([]);
+  });
+});
+
+describe('transferring ownership (spec 0031, AC-813)', () => {
+  it('makes them an owner and the caller an admin in one step, with one audit row', async () => {
+    const t = await team(['admin', 'member']);
+    const [admin = '', member = ''] = t.ids;
+    await transferOwnership(t.as(t.owner, 'owner'), { memberId: member });
+    expect(await t.roleOf(member)).toEqual({ role: 'owner', status: 'active' });
+    expect(await t.roleOf(t.owner)).toEqual({ role: 'admin', status: 'active' });
+    expect((await auditOf(t.workspaceId)).map(({ action, target_id }) => ({ action, target_id }))).toEqual([
+      { action: 'workspace.ownership_transferred', target_id: member },
+    ]);
+    // Only an owner hands it on, never to themself, and the old owner acts as the admin they are now.
+    expect(await refusalOf(transferOwnership(t.as(admin, 'admin'), { memberId: admin }))).toEqual(FORBIDDEN_OWNER);
+    expect(await refusalOf(transferOwnership(t.as(member, 'owner'), { memberId: member }))).toMatchObject({
+      code: 'NOT_FOUND',
+    });
+    expect(await refusalOf(transferOwnership(t.as(t.owner, 'owner'), { memberId: admin }))).toEqual(FORBIDDEN_OWNER);
+    expect(await auditOf(t.workspaceId)).toHaveLength(1);
+  });
+
+  it('refuses a removed member as the target, and a member as the caller', async () => {
+    const t = await team(['member', 'member']);
+    const [gone = '', member = ''] = t.ids;
+    await removeMember(t.as(t.owner, 'owner'), { memberId: gone });
+    expect(await refusalOf(transferOwnership(t.as(t.owner, 'owner'), { memberId: gone }))).toMatchObject({
+      code: 'NOT_FOUND',
+    });
+    expect(await refusalOf(transferOwnership(t.as(member, 'member'), { memberId: t.owner }))).toEqual(FORBIDDEN_OWNER);
+    expect(await t.roleOf(t.owner)).toEqual({ role: 'owner', status: 'active' });
   });
 });

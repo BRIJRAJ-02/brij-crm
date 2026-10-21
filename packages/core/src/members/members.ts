@@ -435,3 +435,56 @@ export async function leaveWorkspace(
   if (principal.kind !== 'member') throw refuse('FORBIDDEN', 'Only a member can leave a workspace.');
   return removeMember(scope, { memberId: principal.memberId }, hooks, options);
 }
+
+/**
+ * Hands the workspace to another member (spec 0031, AC-813): in one
+ * transaction they become an owner and the caller an admin, with one audit
+ * row. Only an owner may, to another active member; several owners stay
+ * allowed, so a target who is already an owner just leaves the caller an
+ * admin. Refuses 403 `FORBIDDEN` (not an owner, checked again under lock)
+ * and 404 `NOT_FOUND` (no such active member, or the caller themself).
+ */
+export async function transferOwnership(
+  scope: EngineScope,
+  input: { readonly memberId: string },
+  hooks: readonly AfterWrite[] = [],
+  options: MemberWriteOptions = {},
+): Promise<void> {
+  checkScope(scope);
+  const memberId = checkId(input.memberId, MEMBER_NOT_FOUND);
+  const { principal } = scope.access;
+  if (principal.kind !== 'member' || principal.role !== 'owner') throw refuse('FORBIDDEN', OWNER_RULES_MESSAGE);
+  if (principal.memberId === memberId) throw refuse('NOT_FOUND', MEMBER_NOT_FOUND);
+  await runWrite(
+    scope,
+    async (context) => {
+      const { tx } = context;
+      const { target, acting } = await lockTarget(tx, scope, memberId);
+      if (acting.role !== 'owner') throw refuse('FORBIDDEN', OWNER_RULES_MESSAGE);
+      await tx
+        .update(members)
+        .set({ role: 'owner', ...touched(scope) })
+        .where(and(eq(members.workspaceId, scope.workspaceId), eq(members.id, target.id)));
+      await tx
+        .update(members)
+        .set({ role: 'admin', ...touched(scope) })
+        .where(and(eq(members.workspaceId, scope.workspaceId), eq(members.id, principal.memberId)));
+      await writeAudit(
+        tx,
+        scope.workspaceId,
+        scope.actor,
+        {
+          action: 'workspace.ownership_transferred',
+          targetType: 'member',
+          targetId: target.id,
+          before: { toRole: target.role, fromRole: 'owner' },
+          after: { toRole: 'owner', fromRole: 'admin', from: principal.memberId },
+        },
+        options.source,
+      );
+      // Both lists read them again, and the caller's own access changes (spec 0007, AC-82).
+      context.record({ members: [target.id, principal.memberId] });
+    },
+    hooks,
+  );
+}

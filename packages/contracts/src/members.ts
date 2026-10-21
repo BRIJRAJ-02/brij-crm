@@ -83,4 +83,9 @@ export const membersContract = {
   setRole: oc.input(SetRoleInput).output(MemberView),
   remove: oc.input(MemberInput).output(z.void()),
   leave: oc.input(WorkspaceScoped.extend({ mutationId: Uuid })).output(z.void()),
+  /**
+   * Hands the workspace to another member (spec 0031, AC-813): an owner
+   * only; in one transaction they become an owner and the caller an admin.
+   */
+  transferOwnership: oc.input(MemberInput).output(z.void()),
 };

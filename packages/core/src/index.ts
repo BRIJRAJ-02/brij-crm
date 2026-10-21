@@ -278,6 +278,7 @@ export {
   listRoles,
   removeMember,
   setMemberRole,
+  transferOwnership,
   type MemberWithRole,
   type MemberWriteOptions,
   type RemovedMember,

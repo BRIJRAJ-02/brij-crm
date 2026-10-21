@@ -84,13 +84,17 @@ afterEach(() => {
 
 /** A data layer whose revoke, remove and role changes are counted, each answering with `answer`. */
 function layerWith(answer: () => Promise<void>) {
-  const calls = { revoke: 0, remove: 0, setRole: 0 };
+  const calls = { revoke: 0, remove: 0, setRole: 0, transfer: 0 };
   const layer = {
     calendar: { view: () => calendarView },
     members: {
       watch: () => () => undefined,
       remove: () => {
         calls.remove += 1;
+        return answer();
+      },
+      transferOwnership: () => {
+        calls.transfer += 1;
         return answer();
       },
       setRole: async (_workspace: string, memberId: string, role: string) => {
@@ -290,5 +294,27 @@ describe('changing roles', () => {
     await dialog.getByRole('button', { name: 'Cancel' }).click();
     await expect.element(dialog).not.toBeInTheDocument();
     expect(counted.calls.setRole).toBe(1);
+  });
+});
+
+describe('transferring ownership asks first (AC-813)', () => {
+  it('names them and the workspace; Cancel hands nothing over, and Transfer ownership runs once', async () => {
+    const counted = layerWith(() => Promise.resolve());
+    await renderMembers(counted.layer);
+    const pick = async () => {
+      await page.getByRole('button', { name: 'Actions for Linus Torvalds' }).click();
+      await page.getByRole('menuitem', { name: 'Transfer ownership' }).click();
+    };
+    await pick();
+    const dialog = page.getByRole('alertdialog', { name: 'Make Linus Torvalds the owner of Acme?' });
+    await expect.element(dialog).toBeVisible();
+    await dialog.getByRole('button', { name: 'Cancel' }).click();
+    await expect.element(dialog).not.toBeInTheDocument();
+    expect(counted.calls.transfer).toBe(0);
+    await pick();
+    await dialog.getByRole('button', { name: 'Transfer ownership' }).click();
+    await expect.element(dialog).not.toBeInTheDocument();
+    expect(counted.calls.transfer).toBe(1);
+    await expect.element(page.getByText('Linus Torvalds is now an owner. You’re an admin.')).toBeVisible();
   });
 });

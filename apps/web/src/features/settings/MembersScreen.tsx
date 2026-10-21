@@ -2,8 +2,8 @@
 // Purpose: Settings › Workspace › Members (spec 0031, AC-803, AC-810, AC-811): who is in the workspace, what each can
 // do, and who is invited.
 // Main task: find someone by name or email; owners and admins change roles, remove people and invite, resend or
-// revoke invitations; everyone reads who is in.
-// Leaves out: leaving (the workspace menu's), transfer (slice 4), the removal's effects and reassignment (slice 5),
+// revoke invitations; an owner hands the workspace on; everyone reads who is in.
+// Leaves out: leaving (the workspace menu's), the removal's effects and reassignment (slice 5),
 // teams, guests, the invite link and email domains (later slices).
 import {
   isDataError,
@@ -200,6 +200,17 @@ export function MembersScreen({
     });
   };
 
+  // Handing the workspace on can't be taken back in one click, so it asks first (AC-813).
+  const transfer = (member: MemberView) => {
+    setQuestion({
+      title: strings.transferTitle(member.name, workspaceName),
+      text: strings.transferText,
+      action: strings.transferAction,
+      run: () => data.members.transferOwnership(slug, member.id),
+      done: strings.transferred(member.name),
+    });
+  };
+
   const remove = (member: MemberView) => {
     setQuestion({
       title: strings.removeTitle(member.name, workspaceName),
@@ -311,24 +322,37 @@ export function MembersScreen({
       }
       case 'joined':
         return <RelativeTime value={member.joinedAt} />;
-      default:
+      default: {
+        // Only an owner hands the workspace on, to someone who isn't one yet (AC-813).
+        const mayTransfer = !isMe && actor === 'owner' && member.role !== 'owner';
+        const mayRemove = canRemove(actor, member.role, isMe);
         // No menu at all for a row the reader can't act on, rather than a locked one.
-        if (!canRemove(actor, member.role, isMe)) return null;
+        if (!mayTransfer && !mayRemove) return null;
         return (
           <MenuTrigger>
             <Button variant="ghost" icon="ellipsis" label={strings.rowActions(member.name)} />
             <Menu
               label={strings.rowActions(member.name)}
               onAction={(key) => {
+                if (key === 'transfer') transfer(member);
                 if (key === 'remove') remove(member);
               }}
             >
-              <MenuItem id="remove" icon="user-x" isDanger>
-                {strings.remove}
-              </MenuItem>
+              {mayTransfer && (
+                <MenuItem id="transfer" icon="crown">
+                  {strings.transfer}
+                </MenuItem>
+              )}
+              {mayTransfer && mayRemove && <MenuSeparator />}
+              {mayRemove && (
+                <MenuItem id="remove" icon="user-x" isDanger>
+                  {strings.remove}
+                </MenuItem>
+              )}
             </Menu>
           </MenuTrigger>
         );
+      }
     }
   };
 

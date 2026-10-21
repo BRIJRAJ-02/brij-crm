@@ -25,6 +25,8 @@ export const strings = {
   roleFor: (name: string) => `Role for ${name}`,
   rowActions: (name: string) => `Actions for ${name}`,
   remove: 'Remove from workspace',
+  transfer: 'Transfer ownership',
+  transferred: (name: string) => `${name} is now an owner. You’re an admin.`,
   roleChanged: (name: string, role: string) =>
     `${name} is now ${role === 'Admin' || role === 'Owner' ? 'an' : 'a'} ${role}.`,
   removed: (name: string) => `${name} was removed from the workspace.`,
@@ -47,6 +49,10 @@ export const strings = {
   removeText:
     'They lose access at once. Their records, notes and tasks stay, and their calendar connections here are disconnected.',
   removeAction: 'Remove member',
+  transferTitle: (name: string, workspace: string) => `Make ${name} the owner of ${workspace}?`,
+  transferText:
+    'They get every permission, including billing and deleting the workspace, and you become an admin. Only an owner can make you an owner again.',
+  transferAction: 'Transfer ownership',
   selfRoleTitle: (role: string) => `Change your own role to ${role}?`,
   selfRoleText: 'You may lose permissions you have now, and only an owner or admin can give them back.',
   selfRoleAction: 'Change my role',

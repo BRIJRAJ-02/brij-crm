@@ -347,6 +347,11 @@ const WRITES: Record<string, (m: Member, mutationId: string) => Promise<readonly
     await m.client.members.remove({ workspace: m.slug, memberId: mate.memberId, mutationId });
     return [{ kind: 'members' }, { kind: 'members', item_ids: [mate.memberId], mutation_id: mutationId }];
   },
+  'members.transferOwnership': async (m, mutationId) => {
+    const mate = await teammate(m);
+    await m.client.members.transferOwnership({ workspace: m.slug, memberId: mate.memberId, mutationId });
+    return [{ kind: 'members' }, { kind: 'members', mutation_id: mutationId }];
+  },
   'members.leave': async (m, mutationId) => {
     const mate = await teammate(m);
     await mate.client.members.leave({ workspace: m.slug, mutationId });
@@ -1241,6 +1246,7 @@ const WRITES_MADE: Readonly<Record<string, number>> = {
   'members.setRole': 3,
   'members.remove': 3,
   'members.leave': 3,
+  'members.transferOwnership': 3,
   'invitations.resend': 2,
   'invitations.revoke': 2,
   'invitations.accept': 2,

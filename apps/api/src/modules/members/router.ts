@@ -1,4 +1,11 @@
-import { leaveWorkspace, listMembers, removeMember, setMemberRole, type RemovedMember } from '@crm/core';
+import {
+  leaveWorkspace,
+  listMembers,
+  removeMember,
+  setMemberRole,
+  transferOwnership,
+  type RemovedMember,
+} from '@crm/core';
 import { commitWrite } from '../../hooks.ts';
 import { errorFields, log } from '../../log.ts';
 import { member, type RequestContext } from '../../orpc.ts';
@@ -53,5 +60,10 @@ export const membersRouter = member.members.router({
       leaveWorkspace(context.scope, hooks, { source: sourceOf(context) }),
     );
     await forget(context, context.scope.workspaceId, removed);
+  }),
+  transferOwnership: member.members.transferOwnership.handler(async ({ context, input }) => {
+    await commitWrite(context, { mutationId: input.mutationId }, (hooks) =>
+      transferOwnership(context.scope, { memberId: input.memberId }, hooks, { source: sourceOf(context) }),
+    );
   }),
 });

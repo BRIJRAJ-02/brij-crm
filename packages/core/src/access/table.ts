@@ -80,6 +80,8 @@ export const ACCESS_TABLE = {
   removeMember: { ownerRules: true },
   // Spec 0031: leaving is the removal on oneself, open to any member; the only owner is refused LAST_OWNER.
   leaveWorkspace: { anyMember: true },
+  // Spec 0031, AC-813: an owner hands the workspace on; anyone else is refused.
+  transferOwnership: { ownerRules: true },
   listMembers: { anyMember: true },
   // Spec 0037, AC-1439: the roles every role picker offers.
   listRoles: { anyMember: true },
