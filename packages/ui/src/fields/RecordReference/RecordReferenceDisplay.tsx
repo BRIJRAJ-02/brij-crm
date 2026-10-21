@@ -5,7 +5,7 @@ import { VisuallyHidden } from '../../atoms/VisuallyHidden/VisuallyHidden.tsx';
 import { ChipRow, EmptyValue } from '../parts.tsx';
 import { strings } from '../strings.ts';
 import type { DisplayProps } from '../types.ts';
-import { asList } from '../values.ts';
+import { asList, isFlatSurface } from '../values.ts';
 
 /** A linked record's chip, or a skeleton in its place while its name is on its way (an empty name). */
 function chipFor(display: RecordRefDisplay, isFlat: boolean) {
@@ -51,7 +51,7 @@ export function RecordReferenceDisplay({
       {...(maxVisible === undefined ? {} : { maxVisible })}
       chips={records.map((record) => ({
         key: `${record.objectId}:${record.recordId}`,
-        node: chipFor(recordDisplayOf(record, displays), surface === 'card'),
+        node: chipFor(recordDisplayOf(record, displays), isFlatSurface(surface)),
       }))}
     />
   );

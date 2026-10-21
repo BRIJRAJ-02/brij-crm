@@ -3,7 +3,7 @@
 // opens a searchable menu that adds or replaces one. Results come from the
 // screen through a ListSource, so long lists stay outside.
 import type { ActorDisplay, Hue, RecordRefDisplay } from '@crm/contracts/values';
-import { useEffect, useId, useRef, useState } from 'react';
+import { use, useEffect, useId, useRef, useState } from 'react';
 import { Button as AriaButton } from 'react-aria-components';
 import { Button } from '../atoms/Button/Button.tsx';
 import { Icon } from '../atoms/Icon/Icon.tsx';
@@ -11,6 +11,7 @@ import { RecordChip } from '../atoms/RecordChip/RecordChip.tsx';
 import { arraySource, type ListSource } from '../lib/list-source.ts';
 import type { IconName } from '../atoms/Icon/icons.ts';
 import { Menu, MenuTrigger } from '../molecules/Menu/Menu.tsx';
+import { InPopover } from '../molecules/Popover/Popover.tsx';
 import { Select } from '../molecules/Select/Select.tsx';
 import { focusLater } from '../lib/focus-later.ts';
 import styles from './ReferencePicker.module.css';
@@ -121,6 +122,7 @@ export function ReferencePicker<D extends Reference>({
   const rootRef = useRef<HTMLDivElement>(null);
   const [query, setQuery] = useState(startQuery ?? '');
   const [isOpen, setOpen] = useState(false);
+  const isInPopover = use(InPopover);
   useEffect(() => {
     if (!isOpenAtStart) return;
     // A frame later, once the popover the grid opened has placed its own focus.
@@ -303,6 +305,8 @@ export function ReferencePicker<D extends Reference>({
         data-size={isCompact ? 'sm' : 'md'}
         data-invalid={error === undefined ? undefined : ''}
         data-open={isOpen || undefined}
+        // In a popover (a grid cell's editor) its focus is the accent edge alone, as a Field's there.
+        data-in-popover={isInPopover || undefined}
         onClick={(event) => {
           if (event.target instanceof Element && event.target.closest('button, a') !== null) return;
           setOpen(true);

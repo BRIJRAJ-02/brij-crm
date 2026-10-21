@@ -72,17 +72,26 @@ export function matchesCountry(country: Country, query: string): boolean {
   return fold(country.name).includes(typed) || country.code.toLowerCase() === typed;
 }
 
+/** The countries each named by their own dial code (the United Kingdom for +44, not Guernsey): worked out once per list. */
+export function mainCountriesOf(countries: readonly Country[]): ReadonlySet<string> {
+  return new Set(
+    countries
+      .filter((country) => country.dial !== '' && countryOfNumber(`+${country.dial}`) === country.code)
+      .map((country) => country.code),
+  );
+}
+
 /**
  * Where a country goes in a search's list, lower first: 0 when its name
  * starts with what is typed or its ISO code is it, or, for a dial code, when
- * it is the country its own code names (the United Kingdom for +44, not
- * Guernsey; the US for +1), so "+44" lists the United Kingdom first; 1 for
- * the rest.
+ * it is the country its own code names (`mainCountriesOf`: the United Kingdom
+ * for +44, not Guernsey; the US for +1), so "+44" lists the United Kingdom
+ * first; 1 for the rest.
  */
-export function countryRank(country: Country, query: string): number {
+export function countryRank(country: Country, query: string, mains: ReadonlySet<string>): number {
   const typed = fold(query.trim());
   const digits = typed.replace(/^\+/, '');
-  if (/^\d+$/.test(digits)) return country.dial !== '' && countryOfNumber(`+${country.dial}`) === country.code ? 0 : 1;
+  if (/^\d+$/.test(digits)) return mains.has(country.code) ? 0 : 1;
   return fold(country.name).startsWith(typed) || country.code.toLowerCase() === typed ? 0 : 1;
 }
 

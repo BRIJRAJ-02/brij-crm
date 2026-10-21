@@ -66,6 +66,12 @@
     border-color: var(--danger);
   }
 
+  /* In a popover the popover's own edge frames the box: focus is the accent edge alone, as a Field's there; a
+     refused one keeps its halo. */
+  .box[data-in-popover]:not([data-invalid]):is(:has(.trigger[data-focus-visible]), [data-open]) {
+    box-shadow: none;
+  }
+
   /* The object switcher in the menu's header, level with its "Search in". */
   .scope {
     display: flex;

@@ -7,7 +7,7 @@ import {
   toCalendarDate,
   type CalendarDate,
 } from '@internationalized/date';
-import { useContext } from 'react';
+import { use, useContext } from 'react';
 import {
   Button as AriaButton,
   Calendar,
@@ -32,7 +32,7 @@ import {
 import { Button } from '../../atoms/Button/Button.tsx';
 import { Icon } from '../../atoms/Icon/Icon.tsx';
 import { useFormatSettings, useNow } from '../../provider/context.ts';
-import { Popover } from '../Popover/Popover.tsx';
+import { InPopover, Popover } from '../Popover/Popover.tsx';
 import styles from './DatePicker.module.css';
 import { strings } from './strings.ts';
 
@@ -188,10 +188,12 @@ function FieldParts({ look }: { readonly look: DateFieldLook }) {
   );
 }
 
-function lookProps(look: DateFieldLook) {
+function lookProps(look: DateFieldLook, isInPopover: boolean) {
   return {
     className: styles.root,
     'data-size': look.size ?? 'md',
+    // In a popover (a grid cell's editor, a filter's value) its focus is the accent edge alone, as a Field's there.
+    'data-in-popover': isInPopover || undefined,
     isRequired: look.isRequired ?? false,
     isReadOnly: look.isReadOnly ?? false,
     isDisabled: look.isDisabled ?? false,
@@ -209,12 +211,13 @@ function lookProps(look: DateFieldLook) {
  * today in the provider's time zone. It is the date attribute's editor.
  */
 export function DatePicker({ value, defaultValue, onChange, showQuickPicks = true, ...look }: DatePickerProps) {
+  const isInPopover = use(InPopover);
   const controlled = toDate(value);
   const initial = toDate(defaultValue);
   const today = useToday();
   return (
     <AriaDatePicker
-      {...lookProps(look)}
+      {...lookProps(look, isInPopover)}
       {...(controlled === undefined ? {} : { value: controlled })}
       {...(initial === undefined ? {} : { defaultValue: initial })}
       onChange={(next) => {
@@ -279,12 +282,13 @@ function toRange(value: DateRange | null | undefined) {
 
 /** DatePicker's range variant, for filters and dashboards: a start and an end day, picked on one calendar. */
 export function DateRangePicker({ value, defaultValue, onChange, ...look }: DateRangePickerProps) {
+  const isInPopover = use(InPopover);
   const controlled = toRange(value);
   const initial = toRange(defaultValue);
   const today = useToday();
   return (
     <AriaDateRangePicker
-      {...lookProps(look)}
+      {...lookProps(look, isInPopover)}
       {...(controlled === undefined ? {} : { value: controlled })}
       {...(initial === undefined ? {} : { defaultValue: initial })}
       onChange={(next) => {

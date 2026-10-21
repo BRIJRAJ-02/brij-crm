@@ -3,7 +3,7 @@ import { RecordChip } from '../../atoms/RecordChip/RecordChip.tsx';
 import { ChipRow, EmptyValue } from '../parts.tsx';
 import { strings } from '../strings.ts';
 import type { DisplayProps } from '../types.ts';
-import { asList } from '../values.ts';
+import { asList, isFlatSurface, isPlainActorSurface } from '../values.ts';
 
 /** The display shape for an actor: the data layer's, or a stand in with its type when none came. */
 export function actorDisplayOf(value: ActorReferenceValue, displays: readonly ActorDisplay[]): ActorDisplay {
@@ -37,8 +37,8 @@ export function ActorReferenceDisplay({
         node: (
           <RecordChip
             display={actorDisplayOf(actor, displays)}
-            isFlat={surface === 'card'}
-            isPlain={surface === 'panel'}
+            isFlat={isFlatSurface(surface)}
+            isPlain={isPlainActorSurface(surface)}
           />
         ),
       }))}

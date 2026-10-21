@@ -223,3 +223,28 @@ export const InAPopoverListOpen: Story = {
     );
   },
 };
+
+/**
+ * A refused number in a popover: its edge stays danger, so its halo stays as its sign of focus, and the code
+ * button reached by the keyboard draws its own mark.
+ */
+export const InAPopoverInvalid: Story = {
+  args: {
+    isLabelHidden: true,
+    size: 'sm',
+    guess: 'IN',
+    placeholder: undefined,
+    defaultValue: { country: 'IN', national: '98765' },
+    error: 'This number is too short for the country chosen.',
+  },
+  render: (args) => <InAPopoverStage {...args} />,
+  play: async ({ userEvent }) => {
+    await waitFor(() => expect(outer()).not.toBeNull());
+    const page = within(document.body);
+    await userEvent.click(page.getByRole('textbox', { name: 'Phone or WhatsApp' }));
+    await userEvent.keyboard('{Shift>}{Tab}{/Shift}');
+    const code = page.getByRole('button', { name: /Country code/ });
+    await waitFor(() => expect(code).toHaveFocus());
+    await expect(getComputedStyle(code).boxShadow).not.toBe('none');
+  },
+};

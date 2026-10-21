@@ -5,6 +5,7 @@ import {
   countriesIn,
   countryOfNumber,
   countryRank,
+  mainCountriesOf,
   flagOf,
   matchesCountry,
   searchCountries,
@@ -47,11 +48,13 @@ describe('the country list', () => {
   });
 
   it("ranks a name that starts with the search, its ISO code, and a shared code's main country first", () => {
+    const mains = mainCountriesOf(countries);
     const ranked = (query: string) =>
       countries
         .filter((country) => matchesCountry(country, query))
-        .sort((a, b) => countryRank(a, query) - countryRank(b, query))
+        .sort((a, b) => countryRank(a, query, mains) - countryRank(b, query, mains))
         .map((country) => country.code);
+    expect(mains.has('GB') && !mains.has('GG') && mains.has('FI') && !mains.has('AX')).toBe(true);
     expect(ranked('ind').slice(0, 3)).toEqual(['IN', 'ID', 'IO']);
     expect(ranked('an')[0]).toBe('AD');
     expect(ranked('IN')[0]).toBe('IN');

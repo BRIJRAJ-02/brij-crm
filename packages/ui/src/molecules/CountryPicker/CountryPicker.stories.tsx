@@ -117,6 +117,8 @@ function outer() {
  * alone and puts focus back on the trigger; Esc closes the list first, then the popover.
  */
 export const InAPopover: Story = {
+  // It ends with everything closed; InAPopoverOpen holds the picture.
+  parameters: { crm: { screenshot: false } },
   render: (args) => <InAPopoverStage {...args} />,
   play: async ({ args, userEvent }) => {
     await waitFor(() => expect(outer()).not.toBeNull());

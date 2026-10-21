@@ -66,7 +66,12 @@ export function Card({
               ))}
             {description !== undefined && <span className={styles.description}>{description}</span>}
           </span>
-          {actions !== undefined && <span className={styles.actions}>{actions}</span>}
+          {actions !== undefined && (
+            <span className={styles.actions}>
+              {/* The actions' own type: their box takes the title's line height only to stand on it. */}
+              <span className={styles.actionsType}>{actions}</span>
+            </span>
+          )}
         </header>
       )}
       {children !== undefined && <div className={styles.body}>{children}</div>}
