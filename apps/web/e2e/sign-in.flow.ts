@@ -280,9 +280,8 @@ test('drops each refusal as its field changes, so one press sends the fixed welc
   // The hint comes back in the refusal's place.
   await expect(page.getByText(`Opens at /w/${taken}-two`)).toBeVisible();
   await page.getByRole('button', { name: 'Create workspace' }).click();
-  await expect(page).toHaveURL(new RegExp(`/w/${taken}-two/objects/people(/views/[0-9a-f-]+)?$`), {
-    timeout: WORKSPACE_MADE_MS,
-  });
+  // The workspace opens on Home (owner, 21 October 2026).
+  await expect(page).toHaveURL(new RegExp(`/w/${taken}-two/home$`), { timeout: WORKSPACE_MADE_MS });
 });
 
 test('a refused resend says why under its button and waits as long as the server asks', async ({ page }) => {

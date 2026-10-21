@@ -173,6 +173,8 @@ export const ACCESS_TABLE = {
   // each linked record's object.
   getTasks: { data: 'read' },
   listTasks: { data: 'read' },
+  // The sidebar's Tasks badge (spec 0034): the caller's own assigned tasks only; an API key counts none.
+  countDueTasks: { data: 'read' },
   createTask: { data: 'write' },
   updateTask: { data: 'write' },
   deleteTask: { data: 'write' },

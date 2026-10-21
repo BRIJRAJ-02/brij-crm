@@ -625,6 +625,11 @@ const DATA_CASES: Readonly<Record<string, DataCase>> = {
   // Notes (spec 0019): a hidden record's notes are absent, its list NOT_FOUND as the record is.
   getNote: refused('NOT_FOUND', (scope, world) => core.getNote(scope, { noteId: world.noteId })),
   listNotes: refused('NOT_FOUND', (scope, world) => core.listNotes(scope, { recordId: world.recordId })),
+  // The sidebar's Tasks badge (spec 0034): a principal that can't read counts nothing.
+  countDueTasks: empty(
+    (scope) => core.countDueTasks(scope, { today: '2026-10-21' }),
+    (value) => typeof value === 'object' && value !== null && 'count' in value && value.count === 0,
+  ),
   listTasks: refused('NOT_FOUND', (scope, world) =>
     core.listTasks(scope, { scope: { recordId: world.recordId }, status: 'open' }),
   ),
