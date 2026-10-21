@@ -19,6 +19,7 @@ New (the owner, 21 October 2026: "add some info tag … where it can go confusin
 - `children` is one or two plain sentences on what the setting does. `example` adds a worked example under its own quiet label.
 - Use it only where the label alone isn't clear. Never on an obvious field (Name, Email), and never to repeat the label.
 - `size`: `sm` (the default, a chip's size) beside a label or a row's title; `md` (a control's height) beside a control.
+- Beside a Field's or a Select's label, pass it as the control's `info` rather than placing it next to the control. It clears React Aria's button context, so inside a Select it stays its own button and never becomes the Select's trigger.
 - `placement` follows Popover (`bottom start` by default) and flips when there is no room.
 
 ## States

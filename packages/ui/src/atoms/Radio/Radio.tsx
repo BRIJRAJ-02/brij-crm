@@ -41,6 +41,8 @@ export interface RadioGroupProps {
   readonly isLabelHidden?: boolean;
   /** A quiet word after the label, such as "(optional)" on a public form: muted, and part of the group's name. */
   readonly labelAside?: string;
+  /** An InfoTip beside the question, when the choices need a word of help ("Who can see it"). */
+  readonly info?: ReactNode;
   /** The Radio choices. */
   readonly children: ReactNode;
   readonly value?: string | null;
@@ -62,6 +64,7 @@ export function RadioGroup({
   label,
   isLabelHidden = false,
   labelAside,
+  info,
   children,
   value,
   defaultValue,
@@ -86,17 +89,31 @@ export function RadioGroup({
       {...(onChange === undefined ? {} : { onChange })}
       {...(name === undefined ? {} : { name })}
     >
-      {!isLabelHidden && (
-        <Label className={styles.legend}>
-          {label}
-          {labelAside !== undefined && (
-            <>
-              {' '}
-              <span className={styles.aside}>{labelAside}</span>
-            </>
-          )}
-        </Label>
-      )}
+      {!isLabelHidden &&
+        (info === undefined ? (
+          <Label className={styles.legend}>
+            {label}
+            {labelAside !== undefined && (
+              <>
+                {' '}
+                <span className={styles.aside}>{labelAside}</span>
+              </>
+            )}
+          </Label>
+        ) : (
+          <span className={styles.legendRow}>
+            <Label className={styles.legend}>
+              {label}
+              {labelAside !== undefined && (
+                <>
+                  {' '}
+                  <span className={styles.aside}>{labelAside}</span>
+                </>
+              )}
+            </Label>
+            <span className={styles.info}>{info}</span>
+          </span>
+        ))}
       <span className={styles.choices} data-orientation={orientation}>
         {children}
       </span>

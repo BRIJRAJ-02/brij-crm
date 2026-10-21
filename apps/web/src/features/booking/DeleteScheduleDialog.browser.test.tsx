@@ -81,7 +81,7 @@ describe('the delete schedule confirm', () => {
     const { dialog } = await open(() => Promise.resolve());
     expect(dialog.textContent).toContain('Delete the Evenings schedule?');
     expect(dialog.textContent).toContain(
-      'Intro call and Demo, the 2 booking pages that use it, will book by Working hours, your default, and this can’t be undone.',
+      'Intro call and Demo will book by Working hours, your default. This can’t be undone.',
     );
     const buttons = [...dialog.querySelectorAll('button')].map((each) => each.textContent.trim());
     expect(buttons.findIndex((text) => text.startsWith('Cancel'))).toBeLessThan(
@@ -111,7 +111,7 @@ describe('the delete schedule confirm', () => {
     await press(commit);
     await press(commit);
     expect(onDelete).toHaveBeenCalledTimes(1);
-    expect(dialog.textContent).toContain('Deleting…');
+    expect(dialog.textContent).toContain('Deleting');
     await act(async () => {
       answer?.();
       await new Promise((resolve) => setTimeout(resolve, 20));

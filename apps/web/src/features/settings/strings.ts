@@ -59,6 +59,10 @@ export const strings = {
   apiNameLocked: 'API names never change, so links and integrations keep working.',
   objectId: 'Object ID',
   objectIdReason: 'Set by the system.',
+  /** The Identifiers' InfoTip, on API name: what the API name and the Object ID are for. */
+  idsHelp:
+    'Developers use these to point at this object from the API, a script or an integration. You only need them if someone asks.',
+  idsExample: 'People has the API name people, so a script asks the API for people.',
   copyApiName: 'Copy API name',
   copyObjectId: 'Copy object ID',
   icon: 'Icon',

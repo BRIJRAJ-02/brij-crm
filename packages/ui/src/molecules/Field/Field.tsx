@@ -50,6 +50,8 @@ export interface FieldProps {
   readonly isLabelHidden?: boolean;
   /** A quiet word after the label, such as "(optional)" on a public form: muted, and part of the field's name. */
   readonly labelAside?: string;
+  /** An InfoTip beside the label, for a setting whose label alone isn't clear ("Minimum notice"). */
+  readonly info?: ReactNode;
   readonly value?: string;
   readonly defaultValue?: string;
   readonly onChange?: (value: string) => void;
@@ -143,6 +145,7 @@ export function Field({
   label,
   isLabelHidden = false,
   labelAside,
+  info,
   value,
   defaultValue,
   onChange,
@@ -326,17 +329,31 @@ export function Field({
         const description = reason ?? (isInvalid ? undefined : hint);
         return (
           <>
-            {!isLabelHidden && (
-              <Label className={styles.label}>
-                {label}
-                {labelAside !== undefined && (
-                  <>
-                    {' '}
-                    <span className={styles.aside}>{labelAside}</span>
-                  </>
-                )}
-              </Label>
-            )}
+            {!isLabelHidden &&
+              (info === undefined ? (
+                <Label className={styles.label}>
+                  {label}
+                  {labelAside !== undefined && (
+                    <>
+                      {' '}
+                      <span className={styles.aside}>{labelAside}</span>
+                    </>
+                  )}
+                </Label>
+              ) : (
+                <span className={styles.labelRow}>
+                  <Label className={styles.label}>
+                    {label}
+                    {labelAside !== undefined && (
+                      <>
+                        {' '}
+                        <span className={styles.aside}>{labelAside}</span>
+                      </>
+                    )}
+                  </Label>
+                  <span className={styles.info}>{info}</span>
+                </span>
+              ))}
             <span
               className={styles.box}
               data-multiline={isMultiline || undefined}

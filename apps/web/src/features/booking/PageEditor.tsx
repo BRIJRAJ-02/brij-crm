@@ -19,6 +19,7 @@ import {
   CopyButton,
   EditorStatus,
   Field,
+  InfoTip,
   Link,
   PreviewDeviceSwitch,
   PreviewFrame,
@@ -57,6 +58,15 @@ export interface PageEditorProps {
 
 const DURATIONS = [15, 30, 45, 60, 90] as const;
 const LOCATIONS = ['video', 'address', 'phone', 'custom'] as const;
+
+/** The help beside a setting's label, from its `strings.tips` entry. */
+function tipFor(label: string, tip: { readonly text: string; readonly example: string }) {
+  return (
+    <InfoTip label={label} example={tip.example}>
+      {tip.text}
+    </InfoTip>
+  );
+}
 
 const minutesItems = (values: readonly number[]): SelectItem[] =>
   values.map((value) => ({ id: String(value), label: value === 0 ? strings.none : strings.minutes(value) }));
@@ -380,6 +390,7 @@ export function PageEditor({ data, slug, page: loaded, locale, schedules, ownerM
               >
                 <Select
                   label={scheduleStrings.schedule}
+                  info={tipFor(scheduleStrings.schedule, strings.tips.schedule)}
                   items={hours.items}
                   value={draft.scheduleId ?? 'default'}
                   isReadOnly={isLocked || hours.items.length === 0}
@@ -394,6 +405,7 @@ export function PageEditor({ data, slug, page: loaded, locale, schedules, ownerM
             <Card title={strings.limits} description={limitsSummary}>
               <Select
                 label={strings.bufferBefore}
+                info={tipFor(strings.bufferBefore, strings.tips.bufferBefore)}
                 items={BUFFERS}
                 isReadOnly={isLocked}
                 value={String(draft.bufferBefore)}
@@ -401,6 +413,7 @@ export function PageEditor({ data, slug, page: loaded, locale, schedules, ownerM
               />
               <Select
                 label={strings.bufferAfter}
+                info={tipFor(strings.bufferAfter, strings.tips.bufferAfter)}
                 items={BUFFERS}
                 isReadOnly={isLocked}
                 value={String(draft.bufferAfter)}
@@ -408,6 +421,7 @@ export function PageEditor({ data, slug, page: loaded, locale, schedules, ownerM
               />
               <Select
                 label={strings.notice}
+                info={tipFor(strings.notice, strings.tips.notice)}
                 items={NOTICE}
                 isReadOnly={isLocked}
                 value={String(draft.minNoticeMinutes)}
@@ -415,6 +429,7 @@ export function PageEditor({ data, slug, page: loaded, locale, schedules, ownerM
               />
               <Select
                 label={strings.window}
+                info={tipFor(strings.window, strings.tips.window)}
                 items={WINDOW}
                 isReadOnly={isLocked}
                 value={String(draft.windowDays)}
@@ -422,6 +437,7 @@ export function PageEditor({ data, slug, page: loaded, locale, schedules, ownerM
               />
               <Select
                 label={strings.dailyLimit}
+                info={tipFor(strings.dailyLimit, strings.tips.dailyLimit)}
                 items={DAILY}
                 isReadOnly={isLocked}
                 value={draft.dailyLimit === null ? 'none' : String(draft.dailyLimit)}
@@ -429,6 +445,7 @@ export function PageEditor({ data, slug, page: loaded, locale, schedules, ownerM
               />
               <Select
                 label={strings.step}
+                info={tipFor(strings.step, strings.tips.step)}
                 items={STEPS}
                 isReadOnly={isLocked}
                 value={draft.slotStep === null ? 'duration' : String(draft.slotStep)}

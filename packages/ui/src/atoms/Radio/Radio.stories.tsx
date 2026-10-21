@@ -1,5 +1,6 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
 import { expect, fn } from 'storybook/test';
+import { InfoTip } from '../../molecules/InfoTip/InfoTip.tsx';
 import { Stage } from '../../workbench/Stage/Stage.tsx';
 import { Radio, RadioGroup } from './Radio.tsx';
 
@@ -93,5 +94,32 @@ export const OptionalMark: Story = {
   ),
   play: async ({ canvas }) => {
     await expect(canvas.getByRole('radiogroup', { name: 'Budget (optional)' })).toBeInTheDocument();
+  },
+};
+
+/** With `info`: an InfoTip beside the question. Tab reaches the tip first, then the chosen choice. */
+export const WithInfo: Story = {
+  args: {
+    label: 'Who can see it',
+    defaultValue: 'me',
+    info: (
+      <InfoTip label="Who can see it">
+        Only me keeps the view in your own list. Everyone puts it in every member’s list.
+      </InfoTip>
+    ),
+  },
+  render: (args) => (
+    <Stage>
+      <RadioGroup {...args}>
+        <Radio value="me">Only me</Radio>
+        <Radio value="everyone">Everyone</Radio>
+      </RadioGroup>
+    </Stage>
+  ),
+  play: async ({ canvas, userEvent }) => {
+    await userEvent.tab();
+    await expect(canvas.getByRole('button', { name: 'About Who can see it' })).toHaveFocus();
+    await userEvent.tab();
+    await expect(canvas.getByRole('radio', { name: 'Only me' })).toHaveFocus();
   },
 };

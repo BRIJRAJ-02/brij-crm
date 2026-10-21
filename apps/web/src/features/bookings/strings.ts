@@ -144,6 +144,9 @@ export const strings = {
   emailPlaceholder: 'them@example.com',
   theirTimeZone: 'Their time zone',
   about: 'Booking page',
+  /** Booking page's InfoTip in New meeting. */
+  aboutHelp: 'The meeting takes this page’s title and where it happens, and counts toward the page’s daily limit.',
+  aboutExample: 'Pick Demo and the meeting is called Demo, at the place the Demo page names.',
   length: 'Length',
   alsoInvite: 'Also invite',
   alsoInviteHint: 'Emails, separated by commas. Everyone gets the calendar invitation.',

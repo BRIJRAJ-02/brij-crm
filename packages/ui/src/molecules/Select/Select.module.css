@@ -22,6 +22,18 @@
     color: var(--text-tertiary);
   }
 
+  /* The label with an InfoTip beside it; the tip's chip sized button overhangs the label's line, so the row keeps the label's height. */
+  .labelRow {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+  }
+
+  .info {
+    display: inline-flex;
+    margin-block: calc(var(--space-2) * -1);
+  }
+
   .trigger {
     display: flex;
     align-items: center;

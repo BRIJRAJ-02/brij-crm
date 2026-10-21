@@ -5,12 +5,15 @@ export const scheduleStrings = {
   schedule: 'Schedule',
   newSchedule: 'New schedule',
   createSchedule: 'Create schedule',
-  creatingSchedule: 'Creating…',
+  creatingSchedule: 'Creating',
   name: 'Name',
   namePlaceholder: 'Evenings',
   nameHint: 'Your booking pages pick a schedule by its name.',
   nameRequired: 'Give the schedule a name.',
   defaultBadge: 'Default',
+  /** The Default badge's InfoTip on a schedule's page. */
+  defaultHelp:
+    'Booking pages set to Default schedule book inside these hours. Make another schedule the default from its menu, and those pages follow it.',
   /** The page's Hours choice that follows whichever schedule is the owner's default (AC-965). */
   defaultSchedule: (name: string | undefined) =>
     name === undefined ? 'Default schedule' : `Default schedule (${name})`,
@@ -34,16 +37,16 @@ export const scheduleStrings = {
   delete: 'Delete',
   deleteTitle: (name: string) => `Delete the ${name} schedule?`,
   deleteCommit: 'Delete schedule',
-  deleting: 'Deleting…',
+  deleting: 'Deleting',
   deleteUnused: 'No booking pages use it, and this can’t be undone.',
-  /** "Intro call and Demo, the 2 booking pages that use it, will book by Working hours, your default, and …" */
-  deleteUsed: (pages: string, count: number, fallback: string, isOwn = true) =>
-    `${pages}, ${count === 1 ? 'the one booking page that uses it' : `the ${String(count)} booking pages that use it`}, will book by ${fallback}, ${isOwn ? 'your' : 'their'} default, and this can’t be undone.`,
+  /** "Intro call and Demo will book by Working hours, your default. This can’t be undone." */
+  deleteUsed: (pages: string, fallback: string, isOwn = true) =>
+    `${pages} will book by ${fallback}, ${isOwn ? 'your' : 'their'} default. This can’t be undone.`,
   deleted: (name: string) => `Deleted the ${name} schedule.`,
   cantDeleteDefault: 'Set another schedule as default first.',
   alreadyDefault: 'It’s your default.',
   more: (name: string) => `More for ${name}`,
-  copying: 'Copying…',
+  copying: 'Copying',
   schedulesFailed: 'Schedules didn’t load',
   notFoundTitle: 'This schedule isn’t here',
   notFoundText: 'It was deleted, or it isn’t yours.',

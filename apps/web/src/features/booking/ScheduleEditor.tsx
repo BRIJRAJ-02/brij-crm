@@ -10,6 +10,7 @@ import {
   EmptyState,
   Field,
   HoursEditor,
+  InfoTip,
   Link,
   LinkList,
   PageColumn,
@@ -218,7 +219,16 @@ function Loaded({
       member={member}
       memberName={memberName}
       title={title}
-      {...(schedule.isDefault ? { meta: <Badge text={scheduleStrings.defaultBadge} /> } : {})}
+      {...(schedule.isDefault
+        ? {
+            meta: (
+              <>
+                <Badge text={scheduleStrings.defaultBadge} />
+                <InfoTip label={scheduleStrings.defaultBadge}>{scheduleStrings.defaultHelp}</InfoTip>
+              </>
+            ),
+          }
+        : {})}
       {...(menu === undefined ? {} : { actions: menu })}
     >
       <PageColumn

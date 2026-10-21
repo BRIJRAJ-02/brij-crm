@@ -23,5 +23,5 @@ export function listOfNames(names: readonly string[], shown = 3): string {
 export function deleteSentence(pages: readonly string[], fallback: string, isOwn = true): string {
   return pages.length === 0
     ? scheduleStrings.deleteUnused
-    : scheduleStrings.deleteUsed(listOfNames(pages), pages.length, fallback, isOwn);
+    : scheduleStrings.deleteUsed(listOfNames(pages), fallback, isOwn);
 }

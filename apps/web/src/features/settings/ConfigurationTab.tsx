@@ -9,6 +9,7 @@ import {
   Card,
   CopyButton,
   Field,
+  InfoTip,
   Form,
   type FormRefusal,
   SettingsSection,
@@ -172,6 +173,11 @@ export function ConfigurationTab({ slug, object }: ConfigurationTabProps) {
         <Card>
           <Field
             label={strings.apiName}
+            info={
+              <InfoTip label={strings.apiName} example={strings.idsExample}>
+                {strings.idsHelp}
+              </InfoTip>
+            }
             value={object.apiSlug}
             isReadOnly
             readOnlyReason={strings.apiNameLocked}

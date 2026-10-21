@@ -19,6 +19,7 @@ Ported from the artifact's Select card (version 8). It is the editor for select 
 - An archived option (`isArchived`) can't be chosen, but still shows, muted, when it is the current value.
 - A disabled option (`isDisabled`) shows muted and can't be chosen, with its `description` saying why: a field a rule rules out for this change (a unique field in a bulk edit of several records). Why a variant: leaving the field out of the list hid the reason with it.
 - `isApart` on an item sets it under a hairline, apart from the options above, as Clear is. Why a variant: a choice unlike the rest, such as a form's "Don't add to the CRM" after the objects it could file onto (the owner, 21 October 2026), belongs in the same list but must not read as one more object.
+- `info` puts an InfoTip beside the label, for a setting whose label alone isn't clear (a booking page's Minimum notice). Why a variant: the help belongs to the field's own label, and an InfoTip placed outside the field sat apart from it. The label row keeps the label's height, so a field with help lines up with its neighbours.
 - `isClearable` adds a "Clear" option while something is chosen; leave it off for a required attribute.
 - `isReadOnly` shows the value in a filled box with a lock, and `readOnlyReason` says why.
 - `onChange` gets the chosen id, or `null` when cleared.

@@ -4,7 +4,7 @@
 // Leaves out: everything else a page has (its editor), and Make it private (pages are on or off until a public profile lists them).
 import { isDataError, type BookingPageView, type DataLayer } from '@crm/data';
 import { useSchedules } from '@crm/data/react';
-import { Button, Callout, ChoiceChips, Field, Modal, Select, SettingsStack } from '@crm/ui';
+import { Button, Callout, ChoiceChips, Field, InfoTip, Modal, Select, SettingsStack } from '@crm/ui';
 import { useState } from 'react';
 import { browserZone } from './zone.ts';
 import { scheduleStrings } from './schedule-strings.ts';
@@ -154,6 +154,11 @@ export function NewPageDialog({ data, slug, isOpen, onClose, onCreated }: NewPag
         />
         <Select
           label={strings.hours}
+          info={
+            <InfoTip label={strings.hours} example={strings.tips.schedule.example}>
+              {strings.tips.schedule.text}
+            </InfoTip>
+          }
           items={[
             { id: 'default', label: scheduleStrings.defaultSchedule(fallback?.name) },
             ...choices.flatMap((each) => (each.id === null ? [] : [{ id: each.id, label: each.name }])),

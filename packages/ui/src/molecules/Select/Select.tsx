@@ -51,6 +51,8 @@ export interface SelectProps {
   readonly isLabelHidden?: boolean;
   /** A quiet word after the label, such as "(optional)" on a public form: muted, and part of the field's name. */
   readonly labelAside?: string;
+  /** An InfoTip beside the label, for a setting whose label alone isn't clear ("Minimum notice"). */
+  readonly info?: ReactNode;
   readonly items: readonly SelectItem[];
   readonly optionStyle?: SelectOptionStyle;
   readonly value?: string | null;
@@ -166,6 +168,7 @@ export function Select({
   label,
   isLabelHidden = false,
   labelAside,
+  info,
   items,
   optionStyle = 'plain',
   value,
@@ -226,7 +229,15 @@ export function Select({
   if (isReadOnly) {
     return (
       <span className={styles.root} data-size={size} data-readonly="">
-        {!isLabelHidden && <span className={styles.label}>{label}</span>}
+        {!isLabelHidden &&
+          (info === undefined ? (
+            <span className={styles.label}>{label}</span>
+          ) : (
+            <span className={styles.labelRow}>
+              <span className={styles.label}>{label}</span>
+              <span className={styles.info}>{info}</span>
+            </span>
+          ))}
         <span className={styles.trigger} role="group" aria-label={label}>
           <span className={styles.value}>
             {chosen === undefined ? (
@@ -324,17 +335,31 @@ export function Select({
         onChange?.(next === CLEAR || next === null ? null : String(next));
       }}
     >
-      {!isLabelHidden && (
-        <Label className={styles.label}>
-          {label}
-          {labelAside !== undefined && (
-            <>
-              {' '}
-              <span className={styles.aside}>{labelAside}</span>
-            </>
-          )}
-        </Label>
-      )}
+      {!isLabelHidden &&
+        (info === undefined ? (
+          <Label className={styles.label}>
+            {label}
+            {labelAside !== undefined && (
+              <>
+                {' '}
+                <span className={styles.aside}>{labelAside}</span>
+              </>
+            )}
+          </Label>
+        ) : (
+          <span className={styles.labelRow}>
+            <Label className={styles.label}>
+              {label}
+              {labelAside !== undefined && (
+                <>
+                  {' '}
+                  <span className={styles.aside}>{labelAside}</span>
+                </>
+              )}
+            </Label>
+            <span className={styles.info}>{info}</span>
+          </span>
+        ))}
       <AriaButton className={styles.trigger} {...(triggerRef === undefined ? {} : { ref: triggerRef })}>
         <SelectValue<SelectItem> className={styles.value}>
           {({ selectedItems, isPlaceholder, defaultChildren }) => {

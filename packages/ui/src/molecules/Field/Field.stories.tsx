@@ -2,6 +2,7 @@ import type { Meta, StoryObj } from '@storybook/react-vite';
 import { useState } from 'react';
 import { expect, fn, waitFor } from 'storybook/test';
 import { Stage } from '../../workbench/Stage/Stage.tsx';
+import { InfoTip } from '../InfoTip/InfoTip.tsx';
 import { Field } from './Field.tsx';
 
 const meta = {
@@ -262,5 +263,22 @@ export const OptionalMark: Story = {
   ),
   play: async ({ canvas }) => {
     await expect(canvas.getByRole('textbox', { name: 'Phone or WhatsApp (optional)' })).toBeInTheDocument();
+  },
+};
+
+/** With `info`: an InfoTip beside the label, for a field whose label alone isn't clear. The label row keeps its height. */
+export const WithInfo: Story = {
+  args: {
+    label: 'Short name',
+    info: <InfoTip label="Short name">The end of the page’s link, after the workspace’s address.</InfoTip>,
+  },
+  render: (args) => (
+    <Stage width="narrow">
+      <Field {...args} />
+    </Stage>
+  ),
+  play: async ({ canvas }) => {
+    await expect(canvas.getByRole('textbox', { name: 'Short name' })).toBeVisible();
+    await expect(canvas.getByRole('button', { name: 'About Short name' })).toBeVisible();
   },
 };

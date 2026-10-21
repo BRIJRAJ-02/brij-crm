@@ -19,6 +19,18 @@
     font-weight: normal;
   }
 
+  /* The question with an InfoTip beside it; the tip's button overhangs the line, so the row keeps the question's height. */
+  .legendRow {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+  }
+
+  .info {
+    display: inline-flex;
+    margin-block: calc(var(--space-2) * -1);
+  }
+
   .choices {
     display: flex;
     flex-direction: column;
