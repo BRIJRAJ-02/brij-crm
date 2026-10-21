@@ -49,8 +49,10 @@ export function backgroundHooks(): readonly AfterWrite[] {
 /**
  * Runs one write procedure's engine call with the write's hooks, then pokes
  * the relay once it resolves; a refused or failed write pokes nothing. `meta`
- * is undefined only for `workspaces.create`, which stores no events (nobody
- * can be subscribed to a workspace that didn't exist) and takes no hooks.
+ * is undefined for `workspaces.create`, which stores no events (nobody can
+ * be subscribed to a workspace that didn't exist), and for
+ * `account.deletion.confirm`, whose core stores each workspace's members event
+ * itself; neither takes hooks.
  */
 export async function commitWrite<T>(
   context: WriteRequest,

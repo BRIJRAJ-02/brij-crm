@@ -71,7 +71,7 @@ import { createORPCClient } from '@orpc/client';
 import { RPCLink } from '@orpc/client/fetch';
 import type { ContractRouterClient } from '@orpc/contract';
 import type { ActivityFeed, ActivityFeeds } from './activity/feed.ts';
-import { createAuth } from './auth/auth.ts';
+import { createAuth, type PasskeyOutcome, type PasskeySupport } from './auth/auth.ts';
 import { createTrashedLookups, type TrashedSource } from './records/trashed.ts';
 import {
   type DataError,
@@ -85,6 +85,14 @@ import type { FetchLike } from './fetch.ts';
 import { delivered } from './delivered.ts';
 import { createJobsStore, type JobsScope, type JobsView, type TestJobSettings } from './jobs/store.ts';
 import { createBookingsStore, type BookingsCalendarHeld, type BookingsView } from './bookings/store.ts';
+import {
+  createAccountSecurityStore,
+  isFresh as isSessionFresh,
+  type AccountSecurityView,
+  type PasskeyStepUpResult,
+  type StepUpResult,
+} from './account/security.ts';
+import { createAccountSessionsStore, type AccountSessionsView, type SignOutOthersResult } from './account/sessions.ts';
 import {
   createEmailPreferences,
   createEmailUnsubscribe,
@@ -330,6 +338,19 @@ export type {
 export type { ScheduleList, ScheduleMember, ScheduleUser, ScheduleView } from '@crm/contracts';
 export type { SchedulesState, SchedulesView } from './schedules/store.ts';
 export type { MeetingsHeld, MeetingsQuery, MeetingsState } from './bookings/meetings.ts';
+export type { AccountSessionsState, AccountSessionsView, SignOutOthersResult } from './account/sessions.ts';
+export {
+  isFresh as isSessionFresh,
+  type AccountSecurityState,
+  type AccountSecurityView,
+  type PasskeyStepUpResult,
+  type StepUpResult,
+} from './account/security.ts';
+export type { PasskeyOutcome, PasskeySupport, SecondFactorKind, SignInOutcome, TwoFactorSetup } from './auth/auth.ts';
+export type { StepUpMethod } from '@crm/contracts';
+export type { AccountSession, DeletionBlocker } from '@crm/contracts';
+export { PASSKEY_NAME_MAX, STEP_UP_MINUTES } from '@crm/contracts/account-limits';
+export type { AccountPasskey } from '@crm/contracts';
 export type { CalendarSettingsHeld, CalendarSettingsState, CalendarState, CalendarView } from './calendar/store.ts';
 export type {
   CalendarChange,
@@ -1660,6 +1681,28 @@ export function createDataLayer({
       update: (input) => call((options) => api.preferences.update(input, options)),
     },
     mintId,
+    notify,
+  });
+
+  // Account security (spec 0033): two factor's state and this session's freshness, one held value.
+  const accountSecurity = createAccountSecurityStore({
+    get: () => call((options) => api.account.security.get(undefined, options)),
+    startStepUp: () => call((options) => api.account.stepUp.start({ method: 'email' }, options)),
+    verifyStepUp: (input) => call((options) => api.account.stepUp.verify(input, options)),
+    passkeyOptions: () => call((options) => api.account.stepUp.passkeyOptions(undefined, options)),
+    passkeyAssertion: (options) => auth.passkeys.assertion(options),
+    verifyPasskey: (input) => call((options) => api.account.stepUp.verifyPasskey(input, options)),
+    renamePasskey: (input) => call((options) => api.account.passkeys.rename(input, options)),
+    removePasskey: (input) => call((options) => api.account.passkeys.remove(input, options)),
+  });
+
+  // Account security (spec 0033): the person's own sessions, one list for the app load.
+  const accountSessions = createAccountSessionsStore({
+    api: {
+      list: (input) => call((options) => api.account.sessions.list(input, options)),
+      revoke: (input) => call((options) => api.account.sessions.revoke(input, options)),
+      revokeOthers: () => call((options) => api.account.sessions.revokeOthers(undefined, options)),
+    },
     notify,
   });
 
@@ -3964,6 +4007,91 @@ export function createDataLayer({
       of: (workspace: string): PreferencesHeld => preferences.of(workspace),
       load: (workspace: string): Promise<MemberPreferences> => preferences.load(workspace),
       change: (workspace: string, change: PreferencesChange): Promise<boolean> => preferences.change(workspace, change),
+    },
+    account: {
+      /**
+       * The signed in person's own sessions (spec 0033), newest activity
+       * first, a page at a time: device, rough place and last use, by id only.
+       */
+      sessions: (): AccountSessionsView => accountSessions.view(),
+      /** Signs one of the person's devices out: gone at once, back with a toast if refused. Answers whether it landed. */
+      signOut: (sessionId: string): Promise<boolean> => accountSessions.signOut(sessionId),
+      /**
+       * Signs out every other device: only this one shows at once. Answers
+       * STEP_UP_REQUIRED (no toast) when the server wants a recent sign in first.
+       */
+      signOutOthers: (): Promise<SignOutOthersResult> => accountSessions.signOutOthers(),
+      /** Two factor on or off, backup codes left, and whether this session is fresh (spec 0033). */
+      security: (): AccountSecurityView => accountSecurity.view(),
+      /** Whether a security state says this session may make a sensitive change now. */
+      isFresh: isSessionFresh,
+      /**
+       * A step up (AC-896): `sendCode` emails a code while two factor is off;
+       * `verify` checks an email, app or backup code and makes this session
+       * fresh for 10 minutes. Each answers how it went, never throwing.
+       */
+      stepUp: {
+        sendCode: (): Promise<StepUpResult> => accountSecurity.sendCode(),
+        verify: (method: 'email' | 'totp' | 'backup', code: string): Promise<StepUpResult> =>
+          accountSecurity.verify(method, code),
+        /** A step up by passkey (milestone 3): `CANCELLED` when the person closed the browser's prompt. */
+        passkey: (): Promise<PasskeyStepUpResult> => accountSecurity.verifyPasskey(),
+      },
+      /**
+       * The person's passkeys (spec 0033, milestone 3, AC-887). `add` runs
+       * the browser's prompt (after a step up; refusals throw a DataError) and
+       * reads the list again; `rename` and `remove` show at once and are put
+       * back if refused, answering how it went.
+       */
+      passkeys: {
+        support: (): Promise<PasskeySupport> => auth.passkeys.support(),
+        add: async (name: string | undefined): Promise<PasskeyOutcome> => {
+          const outcome = await auth.passkeys.add(name);
+          if (outcome === 'done') await accountSecurity.view().reload();
+          return outcome;
+        },
+        rename: (id: string, name: string): Promise<StepUpResult> => accountSecurity.renamePasskey(id, name),
+        remove: (id: string): Promise<StepUpResult> => accountSecurity.removePasskey(id),
+      },
+      /**
+       * Two factor's setup and changes, each after a step up: start (the
+       * app's address and the backup codes, shown once), confirm with a
+       * first code (on), turn off, and new backup codes. The state and the
+       * device list are read again after each. Refusals throw a DataError.
+       */
+      /**
+       * Deleting the account (AC-902 to AC-907): `check` names the workspaces
+       * it is the last owner of; `confirm` deletes it (after a step up and the
+       * email typed in full), then forgets everything cached for the person.
+       * Refusals throw a DataError.
+       */
+      deletion: {
+        check: () => call((options) => api.account.deletion.check(undefined, options)),
+        confirm: async (email: string): Promise<void> => {
+          await call((options) => api.account.deletion.confirm({ email }, options));
+          reset();
+        },
+      },
+      twoFactor: {
+        start: () => auth.twoFactor.start(),
+        confirm: async (code: string): Promise<void> => {
+          await auth.twoFactor.confirm(code);
+          // The change renewed this session in place: the device list reads its new id.
+          accountSessions.view().reload();
+          await accountSecurity.view().reload();
+        },
+        turnOff: async (): Promise<void> => {
+          await auth.twoFactor.turnOff();
+          // The change renewed this session in place: the device list reads its new id.
+          accountSessions.view().reload();
+          await accountSecurity.view().reload();
+        },
+        newBackupCodes: async (): Promise<readonly string[]> => {
+          const codes = await auth.twoFactor.newBackupCodes();
+          await accountSecurity.view().reload();
+          return codes;
+        },
+      },
     },
     calendar: {
       /**

@@ -5,6 +5,8 @@ import { useCallback, useEffect, useMemo, useRef, useSyncExternalStore } from 'r
 import type { BoardStatus, BoardStore } from './records/board.ts';
 import type { DataError } from './errors.ts';
 import type { ActivityFeed, ActivityState } from './activity/feed.ts';
+import type { AccountSecurityState, AccountSecurityView } from './account/security.ts';
+import type { AccountSessionsState, AccountSessionsView } from './account/sessions.ts';
 import type { BookingsCalendarHeld, BookingsCalendarState, BookingsState, BookingsView } from './bookings/store.ts';
 import type { MeetingsHeld, MeetingsState } from './bookings/meetings.ts';
 import type { CalendarSettingsHeld, CalendarSettingsState, CalendarState, CalendarView } from './calendar/store.ts';
@@ -328,6 +330,16 @@ export function useCalendarList(held: CalendarsHeld<CalendarListState>): Calenda
 /** A booking page's own "Add events to" (spec 0024, AC-997), read when the screen first holds it. */
 export function usePageDestination(held: CalendarsHeld<PageDestinationState>): PageDestinationState {
   return useRetained(held);
+}
+
+/** The signed in person's own sessions (spec 0033), read from the top when the screen first holds them. */
+export function useAccountSessions(view: AccountSessionsView): AccountSessionsState {
+  return useRetained(view);
+}
+
+/** Two factor's state and this session's freshness (spec 0033), read when the screen first holds it. */
+export function useAccountSecurity(view: AccountSecurityView): AccountSecurityState {
+  return useRetained(view);
 }
 
 /** The workspace's calendar settings (spec 0024, AC-609), read when the screen first holds them. */

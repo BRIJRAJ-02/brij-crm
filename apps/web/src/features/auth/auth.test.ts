@@ -28,6 +28,7 @@ describe('safeRedirect', () => {
     ['a tab', '/w/\tacme'],
     ['a sign in page', '/sign-in?redirect=/w/acme'],
     ['the verify page', '/verify'],
+    ['the second step page', '/two-factor'],
     ['a sign in page in capitals', '/SIGN-IN'],
     ['an escaped sign in page', '/%73ign-in'],
     ['a sign in page reached through ..', '/w/../verify'],

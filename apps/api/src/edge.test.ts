@@ -1,6 +1,14 @@
 // The guard on its own: when it is on, and when the forwarded IP is believed.
 import { describe, expect, it } from 'vitest';
-import { createEdgeGuard, EDGE_HEADER, isEdgeGuardEnforced, ORIGIN_HEADER } from './edge.ts';
+import {
+  createEdgeGuard,
+  EDGE_HEADER,
+  GEO_CITY_HEADER,
+  GEO_COUNTRY_HEADER,
+  isEdgeGuardEnforced,
+  ORIGIN_HEADER,
+  readGeo,
+} from './edge.ts';
 import { ApiEnv } from './env.ts';
 
 const SECRET = 'an-edge-secret-of-at-least-32-characters';
@@ -104,6 +112,30 @@ describe('clientIp', () => {
     const local = request();
     expect(guard.admit(local)).toBe(true);
     expect(guard.clientIp(local)).toBeUndefined();
+  });
+});
+
+describe('geo (spec 0033)', () => {
+  const place = { [GEO_COUNTRY_HEADER]: 'DE', [GEO_CITY_HEADER]: 'Frankfurt%20am%20Main' };
+
+  it('believes the edge’s place only on a request that carried the secret', () => {
+    const guard = createEdgeGuard({ secret: SECRET, environment: 'production' });
+    const vouched = request({ [EDGE_HEADER]: SECRET, ...place });
+    expect(guard.admit(vouched)).toBe(true);
+    expect(guard.geo(vouched)).toEqual({ country: 'DE', city: 'Frankfurt am Main' });
+    const health = new Request('https://api.test/api/health', { headers: place });
+    expect(guard.admit(health)).toBe(true);
+    expect(guard.geo(health)).toBeUndefined();
+    expect(guard.geo(request(place))).toBeUndefined();
+  });
+
+  it('keeps a two letter country and a printable city, and drops anything else', () => {
+    expect(readGeo('br', 'S%C3%A3o%20Paulo')).toEqual({ country: 'BR', city: 'São Paulo' });
+    expect(readGeo('XX', null)).toBeUndefined();
+    expect(readGeo('Germany', '%E0%A4%A')).toBeUndefined();
+    expect(readGeo(null, '%3Cimg%20src%3Dx%20onerror%3Dalert(1)%3E')).toEqual({ city: 'img srcx onerroralert(1)' });
+    expect(readGeo('US', 'a'.repeat(200))?.city).toHaveLength(80);
+    expect(readGeo(null, null)).toBeUndefined();
   });
 });
 

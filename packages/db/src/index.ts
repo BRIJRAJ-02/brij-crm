@@ -40,10 +40,19 @@ export {
   createIdentityStore,
   type AuthDatabase,
   type DirectoryWorkspace,
+  type IdentityPasskey,
+  type PasskeyCredential,
+  type StoredPasskey,
   type IdentityStore,
   type IdentityUser,
   type RateLimitDecision,
   type RateLimitRule,
+  type SecurityEventInput,
+  type SessionKey,
+  type SessionListing,
+  type SessionVerification,
+  STEP_UP_CODE_TRIES,
+  type VerifiedWith,
 } from './identity/store.ts';
 export * as schema from './schema/index.ts';
 export { type PoolTiming, type PoolTimingSink } from './timing.ts';

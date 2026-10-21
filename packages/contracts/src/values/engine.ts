@@ -69,6 +69,11 @@ export const ENGINE_REFUSAL_CODES = [
   'CONFIRM_MISMATCH',
   // Milestone 5 (AC-996, AC-1004): a destination the member can only read, or whose account stopped.
   'CALENDAR_NOT_WRITABLE',
+  // Account security (spec 0033, AC-896): a sensitive account change on a session not verified in the last 10 minutes.
+  'STEP_UP_REQUIRED',
+  'SECOND_FACTOR_REQUIRED',
+  'CODE_INVALID',
+  'SIGN_IN_EXPIRED',
 ] as const;
 
 /** One of the engine's refusal codes. */

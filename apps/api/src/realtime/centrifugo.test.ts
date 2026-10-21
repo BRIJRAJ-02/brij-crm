@@ -5,7 +5,8 @@
 // so nothing between the test and Centrifugo could be the one refusing.
 import { createHmac, randomUUID } from 'node:crypto';
 import { afterEach, describe, expect, it } from 'vitest';
-import { createCentrifugoPublisher } from './centrifugo.ts';
+import { createCentrifugoDisconnect, createCentrifugoPublisher } from './centrifugo.ts';
+import { SIGNED_OUT } from './signed-out.ts';
 
 // The local stack's values (docker-compose.yml, .env.example), which CI's service uses too.
 const WS_URL = 'ws://localhost:8000/connection/websocket';
@@ -169,5 +170,29 @@ describe("Centrifugo's workspace namespace (compose and CI)", () => {
       { channel: `workspace:${randomUUID()}`, data: {}, idempotencyKey: randomUUID() },
     ]);
     expect(outcome).toMatchObject({ published: 0, error: { message: 'Centrifugo answered 401.' } });
+  });
+});
+
+describe("Centrifugo's disconnect by user (spec 0033, AC-891)", () => {
+  it('closes every connection of one user with 4501 "signed out", and nobody else’s', async () => {
+    const userId = randomUUID();
+    const first = await connected(userId);
+    const second = await connected(userId);
+    const someoneElse = await connected();
+    const { disconnectUser } = createCentrifugoDisconnect({ apiUrl: API_URL, apiKey: API_KEY });
+    expect(await disconnectUser(userId, SIGNED_OUT)).toBe(true);
+    expect(await first.closed).toEqual({ code: 4501, reason: 'signed out' });
+    expect(await second.closed).toEqual({ code: 4501, reason: 'signed out' });
+    // The other user is still connected: a command still gets its reply.
+    expect(await someoneElse.call({ presence_stats: { channel: `workspace:${randomUUID()}` } })).not.toHaveProperty(
+      'closed',
+    );
+  });
+
+  it('answers false, never throws, when Centrifugo refuses the key or can’t be reached', async () => {
+    const wrongKey = createCentrifugoDisconnect({ apiUrl: API_URL, apiKey: 'not-the-key' });
+    expect(await wrongKey.disconnectUser(randomUUID(), SIGNED_OUT)).toBe(false);
+    const nowhere = createCentrifugoDisconnect({ apiUrl: 'http://127.0.0.1:1', apiKey: API_KEY, timeoutMs: 500 });
+    expect(await nowhere.disconnectUser(randomUUID(), SIGNED_OUT)).toBe(false);
   });
 });

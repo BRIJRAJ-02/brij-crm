@@ -491,6 +491,27 @@
       "when": 1792615970590,
       "tag": "0069_member_onboarding",
       "breakpoints": true
+    },
+    {
+      "idx": 70,
+      "version": "7",
+      "when": 1792616189590,
+      "tag": "0070_account_sessions",
+      "breakpoints": true
+    },
+    {
+      "idx": 71,
+      "version": "7",
+      "when": 1792616249590,
+      "tag": "0071_two_factor",
+      "breakpoints": true
+    },
+    {
+      "idx": 72,
+      "version": "7",
+      "when": 1792616309590,
+      "tag": "0072_passkeys",
+      "breakpoints": true
     }
   ]
 }

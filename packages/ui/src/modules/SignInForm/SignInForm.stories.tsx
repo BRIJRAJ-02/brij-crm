@@ -1,5 +1,6 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
 import { expect, fn, waitFor } from 'storybook/test';
+import { Button } from '../../atoms/Button/Button.tsx';
 import { AuthLayout } from '../AuthLayout/AuthLayout.tsx';
 import { SignInForm } from './SignInForm.tsx';
 
@@ -169,6 +170,44 @@ export const AfterEmail: Story = {
     const submit = canvas.getByRole('button', { name: 'Continue with email' });
     await expect(canvasElement.querySelector('form')?.contains(slot)).toBe(true);
     await expect(slot.compareDocumentPosition(submit)).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
+  },
+};
+
+/**
+ * Spec 0033's passkey sign in, as the sign in screen fills the room: a ghost
+ * button with the key, and the email field offering saved passkeys in its
+ * suggestions (`webauthn` in its autocomplete).
+ */
+export const WithPasskey: Story = {
+  args: {
+    isPasskeyAutofill: true,
+    afterEmail: (
+      <Button variant="ghost" icon="key" isFullWidth="center" onPress={fn()}>
+        Sign in with a passkey
+      </Button>
+    ),
+  },
+  play: async ({ canvas }) => {
+    await expect(canvas.getByRole('textbox', { name: 'Email' })).toHaveAttribute('autocomplete', 'email webauthn');
+    await expect(canvas.getByRole('button', { name: 'Continue with email' })).toBeEnabled();
+    await expect(canvas.getByRole('button', { name: 'Sign in with a passkey' })).toBeEnabled();
+  },
+};
+
+/** The browser's passkey prompt is open: Google and the email's submit are off until it answers. */
+export const PasskeyPending: Story = {
+  args: {
+    status: 'passkey',
+    isPasskeyAutofill: true,
+    afterEmail: (
+      <Button variant="ghost" icon="key" isFullWidth="center" isPending onPress={fn()}>
+        Sign in with a passkey
+      </Button>
+    ),
+  },
+  play: async ({ canvas }) => {
+    await expect(canvas.getByRole('button', { name: 'Continue with email' })).toBeDisabled();
+    await expect(canvas.getByRole('button', { name: 'Continue with Google' })).toBeDisabled();
   },
 };
 

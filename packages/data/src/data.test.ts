@@ -523,6 +523,29 @@ function fakeApi(overrides: Partial<Behaviour> = {}, auth: (path: string, body: 
       settings: os.notifications.settings.handler(notServed),
       setSettings: os.notifications.setSettings.handler(notServed),
     },
+    // Account sessions (spec 0033) are driven against their own fake in `account/sessions.test.ts`.
+    account: {
+      sessions: {
+        list: os.account.sessions.list.handler(notServed),
+        revoke: os.account.sessions.revoke.handler(notServed),
+        revokeOthers: os.account.sessions.revokeOthers.handler(notServed),
+      },
+      security: { get: os.account.security.get.handler(notServed) },
+      stepUp: {
+        start: os.account.stepUp.start.handler(notServed),
+        verify: os.account.stepUp.verify.handler(notServed),
+        passkeyOptions: os.account.stepUp.passkeyOptions.handler(notServed),
+        verifyPasskey: os.account.stepUp.verifyPasskey.handler(notServed),
+      },
+      passkeys: {
+        rename: os.account.passkeys.rename.handler(notServed),
+        remove: os.account.passkeys.remove.handler(notServed),
+      },
+      deletion: {
+        check: os.account.deletion.check.handler(notServed),
+        confirm: os.account.deletion.confirm.handler(notServed),
+      },
+    },
     calendar: {
       connections: {
         list: os.calendar.connections.list.handler(() => ({

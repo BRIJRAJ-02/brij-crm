@@ -26,7 +26,7 @@ import {
   type CalendarServices,
 } from './calendar/services.ts';
 import { backgroundHooks } from './hooks.ts';
-import { createEdgeGuard } from './edge.ts';
+import { createEdgeGuard, type Geo } from './edge.ts';
 import { mountExports } from './forms/exports.ts';
 import { handoffKey } from './forms/handoff.ts';
 import { hashAddress, mountPublicForms } from './forms/public.ts';
@@ -44,6 +44,7 @@ import { EMAIL_UNSUBSCRIBE_PATH, mountEmailPreferences } from './public/email-pr
 import { emailLinkKey } from './email-link.ts';
 import { guestKeys } from './public/visitor.ts';
 import { createMemoryLimiter, type PublicLimiter } from './limits.ts';
+import { NO_SIGNED_OUT, type SignedOutNotice } from './realtime/signed-out.ts';
 import { createRealtimeTokens } from './realtime/tokens.ts';
 import { NO_WAKE, OVERDUE_WAKE_MS, throttleWake, type WakeRelay } from './realtime/wake.ts';
 import { router as appRouter } from './router.ts';
@@ -87,6 +88,8 @@ export const AUTH_BODY_LIMIT_BYTES = 64 * 1024;
 interface AppVariables {
   requestId: string;
   clientIp: string | undefined;
+  /** Where the edge saw the request come from, on a trusted request only (spec 0033). */
+  geo?: Geo;
   /** The browser's Origin, as the edge guard reads it (see `EdgeGuard.origin`). */
   origin: string | undefined;
 }
@@ -163,6 +166,12 @@ export interface AppServices {
   readonly now?: () => Date;
   /** Where invitation emails go (spec 0031): the server's mailer; absent, every send fails and is reported unsent. */
   readonly mailer?: Mailer;
+  /**
+   * Cuts a person's live connections when one of their sessions is signed
+   * out elsewhere (spec 0033): the worker's notice where `WORKER_INTERNAL_URL`
+   * is set, else nothing (tests pass their own to see it called).
+   */
+  readonly signedOut?: SignedOutNotice;
 }
 
 /** A mailer that sends nothing and says so: an app built without one reports every invitation unsent. */
@@ -185,6 +194,7 @@ export function createApp({
   const mailer = services.mailer ?? NO_MAILER;
   // Who may start a workspace of their own (spec 0031, owner decision 3): the addresses sign up lets in by the list.
   const signupAllowlist = createAllowlist(env.APP_ENV, env.SIGNUP_ALLOWLIST);
+  const signedOut = services.signedOut ?? NO_SIGNED_OUT;
   // The job kinds (spec 0008): the test kind only locally and in previews.
   const jobs = services.jobs ?? jobKinds({ environment: env.APP_ENV });
   const rpc = createRpcHandler(router);
@@ -266,6 +276,7 @@ export function createApp({
       return errorResponse('EDGE_REQUIRED', 'This API is reachable only through the app.');
     }
     c.set('clientIp', edge.clientIp(c.req.raw));
+    c.set('geo', edge.geo(c.req.raw));
     c.set('origin', edge.origin(c.req.raw));
     return next();
   });
@@ -354,6 +365,7 @@ export function createApp({
           renameWorkspace: (workspaceId, name) => identity.renameWorkspace(workspaceId, name),
           setWorkspaceDeleted: (workspaceId, deleted) => identity.setWorkspaceDeleted(workspaceId, deleted),
         },
+        signedOut,
       },
     });
     return matched ? c.newResponse(response.body, response) : c.notFound();
@@ -424,7 +436,7 @@ export function createApp({
   );
 
   // It sees only the client IP the edge guard trusted.
-  app.on(['GET', 'POST'], '/auth/*', (c) => auth.handle(c.req.raw, c.get('clientIp'), c.get('origin')));
+  app.on(['GET', 'POST'], '/auth/*', (c) => auth.handle(c.req.raw, c.get('clientIp'), c.get('origin'), c.get('geo')));
 
   // Hosts' and signed in visitors' busy times, each kept for its minute.
   const bookingBusy = createBusyCache(booking.busy);

@@ -1,4 +1,5 @@
 import { accessContract, rolesContract } from './access.ts';
+import { accountContract } from './account.ts';
 import { attributesContract } from './attributes.ts';
 import { bookingPagesContract, bookingsContract } from './booking/pages.ts';
 import { schedulesContract } from './booking/schedules.ts';
@@ -30,6 +31,7 @@ import { deletedWorkspaceContract, workspaceContract } from './workspace-setting
 import { profileContract } from './profile.ts';
 
 export * from './access.ts';
+export * from './account.ts';
 export * from './activity.ts';
 export * from './attributes.ts';
 export * from './board-model.ts';
@@ -81,6 +83,8 @@ export * from './profile.ts';
 export const contract = {
   system: systemContract,
   me: meContract,
+  // The signed in person's own sessions and devices (spec 0033): a session, no workspace.
+  account: accountContract,
   workspaces: workspacesContract,
   // Settings › Workspace › General and the owner's delete (spec 0031, slice 7); a deleted one's restore (bootstrap).
   workspace: workspaceContract,

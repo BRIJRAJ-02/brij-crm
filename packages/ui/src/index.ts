@@ -42,6 +42,7 @@ export {
   type ProviderMarkSize,
   type ProviderName,
 } from './atoms/ProviderMark/ProviderMark.tsx';
+export { QrCode, type QrCodeProps } from './atoms/QrCode/QrCode.tsx';
 export { Radio, RadioGroup, type RadioGroupProps, type RadioProps } from './atoms/Radio/Radio.tsx';
 export { Rating, type RatingProps } from './atoms/Rating/Rating.tsx';
 export { RecordChip, type RecordChipProps } from './atoms/RecordChip/RecordChip.tsx';

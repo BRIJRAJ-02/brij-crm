@@ -41,6 +41,28 @@ const NO_SCOPE: ReadonlySet<string> = new Set([
   'enterDeletedWorkspace',
   // The worker's purge of a deleted workspace past its window (AC-823): the database's purge functions guard it.
   'purgeWorkspace',
+  // The signed in person's own sessions (spec 0033): the identity store, by their user id, before any workspace.
+  'listMySessions',
+  'revokeMySession',
+  'revokeMyOtherSessions',
+  'isFresh',
+  'deviceLabel',
+  'deviceParts',
+  // The step up (spec 0033, milestone 2): the session's own freshness, by its user and session ids.
+  'accountSecurity',
+  'requireFresh',
+  'sessionFreshness',
+  'startStepUp',
+  'verifyStepUp',
+  // Deleting your own account (spec 0033): the person's own workspaces, each entered through the door.
+  'accountDeletionCheck',
+  'deleteMyAccount',
+  'deletedEmail',
+  // Passkeys (spec 0033, milestone 3): the person's own, by session.
+  'passkeyStepUpOptions',
+  'verifyPasskeyStepUp',
+  'renameMyPasskey',
+  'removeMyPasskey',
   'createWorkspace',
   'createUserWorkspace',
   // Pure access functions.

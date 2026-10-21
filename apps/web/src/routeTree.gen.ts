@@ -14,6 +14,7 @@ import { Route as EmailPreferencesRouteImport } from './routes/email-preferences
 import { Route as JoinRouteImport } from './routes/join.tsx'
 import { Route as SignInRouteImport } from './routes/sign-in.tsx'
 import { Route as StatusRouteImport } from './routes/status.tsx'
+import { Route as TwoFactorRouteImport } from './routes/two-factor.tsx'
 import { Route as VerifyRouteImport } from './routes/verify.tsx'
 import { Route as WelcomeRouteImport } from './routes/welcome.tsx'
 import { Route as InviteTokenRouteImport } from './routes/invite.$token.tsx'
@@ -50,6 +51,7 @@ import { Route as WSlugSettingsAccountCalendarsRouteImport } from './routes/w.$s
 import { Route as WSlugSettingsAccountNotificationsRouteImport } from './routes/w.$slug.settings.account.notifications.tsx'
 import { Route as WSlugSettingsAccountPreferencesRouteImport } from './routes/w.$slug.settings.account.preferences.tsx'
 import { Route as WSlugSettingsAccountProfileRouteImport } from './routes/w.$slug.settings.account.profile.tsx'
+import { Route as WSlugSettingsAccountSecurityRouteImport } from './routes/w.$slug.settings.account.security.tsx'
 import { Route as WSlugSettingsBookingPagesIndexRouteImport } from './routes/w.$slug.settings.booking-pages.index.tsx'
 import { Route as WSlugSettingsBookingPagesPageIdRouteImport } from './routes/w.$slug.settings.booking-pages.$pageId.tsx'
 import { Route as WSlugSettingsFormsIndexRouteImport } from './routes/w.$slug.settings.forms.index.tsx'
@@ -86,6 +88,11 @@ const SignInRoute = SignInRouteImport.update({
 const StatusRoute = StatusRouteImport.update({
   id: '/status',
   path: '/status',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const TwoFactorRoute = TwoFactorRouteImport.update({
+  id: '/two-factor',
+  path: '/two-factor',
   getParentRoute: () => rootRouteImport,
 } as any)
 const VerifyRoute = VerifyRouteImport.update({
@@ -277,6 +284,12 @@ const WSlugSettingsAccountProfileRoute =
     path: '/account/profile',
     getParentRoute: () => WSlugSettingsRoute,
   } as any)
+const WSlugSettingsAccountSecurityRoute =
+  WSlugSettingsAccountSecurityRouteImport.update({
+    id: '/account/security',
+    path: '/account/security',
+    getParentRoute: () => WSlugSettingsRoute,
+  } as any)
 const WSlugSettingsBookingPagesIndexRoute =
   WSlugSettingsBookingPagesIndexRouteImport.update({
     id: '/booking-pages/',
@@ -355,6 +368,7 @@ export interface FileRoutesByFullPath {
   '/join': typeof JoinRoute
   '/sign-in': typeof SignInRoute
   '/status': typeof StatusRoute
+  '/two-factor': typeof TwoFactorRoute
   '/verify': typeof VerifyRoute
   '/welcome': typeof WelcomeRoute
   '/invite/$token': typeof InviteTokenRoute
@@ -388,6 +402,7 @@ export interface FileRoutesByFullPath {
   '/w/$slug/settings/account/notifications': typeof WSlugSettingsAccountNotificationsRoute
   '/w/$slug/settings/account/preferences': typeof WSlugSettingsAccountPreferencesRoute
   '/w/$slug/settings/account/profile': typeof WSlugSettingsAccountProfileRoute
+  '/w/$slug/settings/account/security': typeof WSlugSettingsAccountSecurityRoute
   '/w/$slug/settings/booking-pages/$pageId': typeof WSlugSettingsBookingPagesPageIdRoute
   '/w/$slug/settings/forms/$formId': typeof WSlugSettingsFormsFormIdRoute
   '/w/$slug/settings/scheduling/calendars': typeof WSlugSettingsSchedulingCalendarsRoute
@@ -410,6 +425,7 @@ export interface FileRoutesByTo {
   '/join': typeof JoinRoute
   '/sign-in': typeof SignInRoute
   '/status': typeof StatusRoute
+  '/two-factor': typeof TwoFactorRoute
   '/verify': typeof VerifyRoute
   '/welcome': typeof WelcomeRoute
   '/invite/$token': typeof InviteTokenRoute
@@ -439,6 +455,7 @@ export interface FileRoutesByTo {
   '/w/$slug/settings/account/notifications': typeof WSlugSettingsAccountNotificationsRoute
   '/w/$slug/settings/account/preferences': typeof WSlugSettingsAccountPreferencesRoute
   '/w/$slug/settings/account/profile': typeof WSlugSettingsAccountProfileRoute
+  '/w/$slug/settings/account/security': typeof WSlugSettingsAccountSecurityRoute
   '/w/$slug/settings/booking-pages/$pageId': typeof WSlugSettingsBookingPagesPageIdRoute
   '/w/$slug/settings/forms/$formId': typeof WSlugSettingsFormsFormIdRoute
   '/w/$slug/settings/scheduling/calendars': typeof WSlugSettingsSchedulingCalendarsRoute
@@ -462,6 +479,7 @@ export interface FileRoutesById {
   '/join': typeof JoinRoute
   '/sign-in': typeof SignInRoute
   '/status': typeof StatusRoute
+  '/two-factor': typeof TwoFactorRoute
   '/verify': typeof VerifyRoute
   '/welcome': typeof WelcomeRoute
   '/invite/$token': typeof InviteTokenRoute
@@ -495,6 +513,7 @@ export interface FileRoutesById {
   '/w/$slug/settings/account/notifications': typeof WSlugSettingsAccountNotificationsRoute
   '/w/$slug/settings/account/preferences': typeof WSlugSettingsAccountPreferencesRoute
   '/w/$slug/settings/account/profile': typeof WSlugSettingsAccountProfileRoute
+  '/w/$slug/settings/account/security': typeof WSlugSettingsAccountSecurityRoute
   '/w/$slug/settings/booking-pages/$pageId': typeof WSlugSettingsBookingPagesPageIdRoute
   '/w/$slug/settings/forms/$formId': typeof WSlugSettingsFormsFormIdRoute
   '/w/$slug/settings/scheduling/calendars': typeof WSlugSettingsSchedulingCalendarsRoute
@@ -519,6 +538,7 @@ export interface FileRouteTypes {
     | '/join'
     | '/sign-in'
     | '/status'
+    | '/two-factor'
     | '/verify'
     | '/welcome'
     | '/invite/$token'
@@ -552,6 +572,7 @@ export interface FileRouteTypes {
     | '/w/$slug/settings/account/notifications'
     | '/w/$slug/settings/account/preferences'
     | '/w/$slug/settings/account/profile'
+    | '/w/$slug/settings/account/security'
     | '/w/$slug/settings/booking-pages/$pageId'
     | '/w/$slug/settings/forms/$formId'
     | '/w/$slug/settings/scheduling/calendars'
@@ -574,6 +595,7 @@ export interface FileRouteTypes {
     | '/join'
     | '/sign-in'
     | '/status'
+    | '/two-factor'
     | '/verify'
     | '/welcome'
     | '/invite/$token'
@@ -603,6 +625,7 @@ export interface FileRouteTypes {
     | '/w/$slug/settings/account/notifications'
     | '/w/$slug/settings/account/preferences'
     | '/w/$slug/settings/account/profile'
+    | '/w/$slug/settings/account/security'
     | '/w/$slug/settings/booking-pages/$pageId'
     | '/w/$slug/settings/forms/$formId'
     | '/w/$slug/settings/scheduling/calendars'
@@ -625,6 +648,7 @@ export interface FileRouteTypes {
     | '/join'
     | '/sign-in'
     | '/status'
+    | '/two-factor'
     | '/verify'
     | '/welcome'
     | '/invite/$token'
@@ -658,6 +682,7 @@ export interface FileRouteTypes {
     | '/w/$slug/settings/account/notifications'
     | '/w/$slug/settings/account/preferences'
     | '/w/$slug/settings/account/profile'
+    | '/w/$slug/settings/account/security'
     | '/w/$slug/settings/booking-pages/$pageId'
     | '/w/$slug/settings/forms/$formId'
     | '/w/$slug/settings/scheduling/calendars'
@@ -681,6 +706,7 @@ export interface RootRouteChildren {
   JoinRoute: typeof JoinRoute
   SignInRoute: typeof SignInRoute
   StatusRoute: typeof StatusRoute
+  TwoFactorRoute: typeof TwoFactorRoute
   VerifyRoute: typeof VerifyRoute
   WelcomeRoute: typeof WelcomeRoute
   InviteTokenRoute: typeof InviteTokenRoute
@@ -722,6 +748,13 @@ declare module '@tanstack/react-router' {
       path: '/status'
       fullPath: '/status'
       preLoaderRoute: typeof StatusRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/two-factor': {
+      id: '/two-factor'
+      path: '/two-factor'
+      fullPath: '/two-factor'
+      preLoaderRoute: typeof TwoFactorRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/verify': {
@@ -976,6 +1009,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof WSlugSettingsAccountProfileRouteImport
       parentRoute: typeof WSlugSettingsRoute
     }
+    '/w/$slug/settings/account/security': {
+      id: '/w/$slug/settings/account/security'
+      path: '/account/security'
+      fullPath: '/w/$slug/settings/account/security'
+      preLoaderRoute: typeof WSlugSettingsAccountSecurityRouteImport
+      parentRoute: typeof WSlugSettingsRoute
+    }
     '/w/$slug/settings/booking-pages/': {
       id: '/w/$slug/settings/booking-pages/'
       path: '/booking-pages'
@@ -1107,6 +1147,7 @@ interface WSlugSettingsRouteChildren {
   WSlugSettingsAccountNotificationsRoute: typeof WSlugSettingsAccountNotificationsRoute
   WSlugSettingsAccountPreferencesRoute: typeof WSlugSettingsAccountPreferencesRoute
   WSlugSettingsAccountProfileRoute: typeof WSlugSettingsAccountProfileRoute
+  WSlugSettingsAccountSecurityRoute: typeof WSlugSettingsAccountSecurityRoute
   WSlugSettingsBookingPagesPageIdRoute: typeof WSlugSettingsBookingPagesPageIdRoute
   WSlugSettingsFormsFormIdRoute: typeof WSlugSettingsFormsFormIdRoute
   WSlugSettingsSchedulingCalendarsRoute: typeof WSlugSettingsSchedulingCalendarsRoute
@@ -1129,6 +1170,7 @@ const WSlugSettingsRouteChildren: WSlugSettingsRouteChildren = {
     WSlugSettingsAccountNotificationsRoute,
   WSlugSettingsAccountPreferencesRoute: WSlugSettingsAccountPreferencesRoute,
   WSlugSettingsAccountProfileRoute: WSlugSettingsAccountProfileRoute,
+  WSlugSettingsAccountSecurityRoute: WSlugSettingsAccountSecurityRoute,
   WSlugSettingsBookingPagesPageIdRoute: WSlugSettingsBookingPagesPageIdRoute,
   WSlugSettingsFormsFormIdRoute: WSlugSettingsFormsFormIdRoute,
   WSlugSettingsSchedulingCalendarsRoute: WSlugSettingsSchedulingCalendarsRoute,
@@ -1197,6 +1239,7 @@ const rootRouteChildren: RootRouteChildren = {
   JoinRoute: JoinRoute,
   SignInRoute: SignInRoute,
   StatusRoute: StatusRoute,
+  TwoFactorRoute: TwoFactorRoute,
   VerifyRoute: VerifyRoute,
   WelcomeRoute: WelcomeRoute,
   InviteTokenRoute: InviteTokenRoute,

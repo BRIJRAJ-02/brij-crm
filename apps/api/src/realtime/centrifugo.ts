@@ -145,3 +145,44 @@ export function createCentrifugoPublisher(options: CentrifugoOptions): {
     },
   };
 }
+
+/** Why a user's connections are being closed: a code in Centrifugo's terminal range, and a short reason. */
+export interface DisconnectReason {
+  readonly code: number;
+  readonly reason: string;
+}
+
+/**
+ * Closes every live connection of one user (`POST {apiUrl}/api/disconnect`),
+ * with a terminal code so their clients don't reconnect on their own (spec
+ * 0033's 4501, "signed out"). Answers whether Centrifugo took it; never
+ * throws, since a missed disconnect only leaves that tab to find itself
+ * signed out at its next call.
+ */
+export type DisconnectUser = (userId: string, why: DisconnectReason) => Promise<boolean>;
+
+/** Centrifugo's server `disconnect`, by user. */
+export function createCentrifugoDisconnect(options: CentrifugoOptions): { readonly disconnectUser: DisconnectUser } {
+  const endpoint = `${options.apiUrl.replace(/\/+$/, '')}/api/disconnect`;
+  const timeoutMs = options.timeoutMs ?? 5_000;
+  return {
+    async disconnectUser(userId, why) {
+      try {
+        const response = await fetch(endpoint, {
+          method: 'POST',
+          headers: { 'content-type': 'application/json', 'x-api-key': options.apiKey },
+          body: JSON.stringify({ user: userId, disconnect: { code: why.code, reason: why.reason } }),
+          signal: AbortSignal.timeout(timeoutMs),
+        });
+        if (!response.ok) {
+          await response.body?.cancel();
+          return false;
+        }
+        const reply = BatchReply.safeParse(await response.json().catch(() => undefined));
+        return reply.success && reply.data.error === undefined;
+      } catch {
+        return false;
+      }
+    },
+  };
+}

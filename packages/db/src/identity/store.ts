@@ -8,14 +8,19 @@
 // `crm_identity`), the only role that reads and writes schema `auth`. The app
 // login only inserts the two directory rows inside the workspace transaction.
 import { drizzleAdapter } from 'better-auth/adapters/drizzle';
-import { and, asc, eq, isNull, sql } from 'drizzle-orm';
+import { isIP } from 'node:net';
+import type { SecurityEventKind } from '@crm/contracts';
+import { and, asc, desc, eq, isNull, ne, sql } from 'drizzle-orm';
 import { drizzle } from 'drizzle-orm/node-postgres';
 import pg from 'pg';
 import type { DatabaseOptions } from '../client.ts';
 import { timePool } from '../timing.ts';
 import {
   account,
+  passkey,
   rateLimit,
+  twoFactor,
+  securityEvent,
   session,
   user,
   userPrefs,
@@ -26,14 +31,57 @@ import {
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
+/** How a session last proved who it is: a second factor, or an email code or Google alone. */
+export type VerifiedWith = 'email' | 'second_factor';
+
+/** When and how a session last proved who it is. */
+export interface SessionVerification {
+  /** ISO 8601 UTC. */
+  readonly at: string;
+  readonly with: VerifiedWith;
+}
+
+/** The email code kinds Better Auth names its codes by (`<type>-otp-<email>`), for deleting an address's codes. */
+const OTP_TYPES = ['sign-in', 'email-verification', 'forget-password', 'change-email'] as const;
+
+/** Wrong tries a step up email code allows before it is used up. */
+export const STEP_UP_CODE_TRIES = 5;
+
 /** Better Auth's models, keyed by its model names, as its Drizzle adapter looks them up. */
-const AUTH_MODELS = { user, session, account, verification, rateLimit } as const;
+const AUTH_MODELS = { user, session, account, verification, rateLimit, twoFactor, passkey } as const;
 
 /** A workspace as the directory knows it: enough to find it and to list it, never to enter it. */
 export interface DirectoryWorkspace {
   readonly id: string;
   readonly slug: string;
   readonly name: string;
+}
+
+/** One passkey as Account › Security lists it (spec 0033, AC-887): never its key or credential id. */
+export interface IdentityPasskey {
+  readonly id: string;
+  /** The person's label; undefined until they name it. */
+  readonly name: string | undefined;
+  /** ISO 8601 UTC. */
+  readonly createdAt: string;
+  /** ISO 8601 UTC; undefined until it is first used. */
+  readonly lastUsedAt: string | undefined;
+}
+
+/** A passkey's credential, as a step up's challenge names it. */
+export interface PasskeyCredential {
+  readonly credentialId: string;
+  readonly transports: readonly string[];
+}
+
+/** A passkey as a step up checks it: whose it is, its public key (base64) and signature counter. */
+export interface StoredPasskey {
+  readonly id: string;
+  readonly userId: string;
+  readonly credentialId: string;
+  readonly publicKey: string;
+  readonly counter: number;
+  readonly transports: readonly string[];
 }
 
 /** A person who can sign in. `name` is empty until they give one. */
@@ -57,6 +105,36 @@ export interface RateLimitRule {
 export interface RateLimitDecision {
   readonly allowed: boolean;
   readonly retryAfterSeconds: number | undefined;
+}
+
+/** One live session as Account › Security lists it (spec 0033): never its token. */
+export interface SessionListing {
+  readonly id: string;
+  readonly deviceLabel: string | null;
+  readonly country: string | null;
+  readonly city: string | null;
+  /** Last used, ISO 8601 UTC with microseconds (the keyset cursor's moment). */
+  readonly updatedAt: string;
+  /** Signed in, ISO 8601 UTC. */
+  readonly createdAt: string;
+}
+
+/** Where a page of sessions starts after: the last row's `updatedAt` and id. */
+export interface SessionKey {
+  readonly updatedAt: string;
+  readonly id: string;
+}
+
+/** One security event to keep (spec 0033, AC-898). `detail` never holds a code, secret or token. */
+export interface SecurityEventInput {
+  readonly userId: string;
+  readonly kind: SecurityEventKind;
+  readonly sessionId?: string;
+  /** An IP the edge guard trusted, or nothing. */
+  readonly ip?: string;
+  readonly country?: string;
+  readonly deviceLabel?: string;
+  readonly detail?: Readonly<Record<string, string | number | boolean>>;
 }
 
 /** Global identity: the directory, users, and Better Auth's storage. Reads no tenant data. */
@@ -95,6 +173,93 @@ export interface IdentityStore {
   setWorkspaceDeleted(workspaceId: string, deleted: boolean): Promise<void>;
   /** The user with this id, or undefined. */
   getUser(id: string): Promise<IdentityUser | undefined>;
+  /**
+   * The user's live (unexpired) sessions, most recently used first, after
+   * `after` when given, at most `limit` (spec 0033, AC-890). Ids and labels
+   * only: a token never leaves this store.
+   */
+  listSessions(
+    userId: string,
+    options: { readonly after?: SessionKey; readonly limit: number },
+  ): Promise<readonly SessionListing[]>;
+  /**
+   * Deletes the session with this id only when it is the user's (AC-891):
+   * what it was on, or undefined when nothing of theirs had that id.
+   */
+  revokeSession(
+    userId: string,
+    sessionId: string,
+  ): Promise<{ readonly deviceLabel: string | null; readonly country: string | null } | undefined>;
+  /** Deletes every session of the user but `keepSessionId`; answers how many went (AC-892). */
+  revokeOtherSessions(userId: string, keepSessionId: string): Promise<number>;
+  /**
+   * When this session of the user last proved who it is (sign in, or a step
+   * up), ISO 8601 UTC; undefined for a session that isn't theirs or has none.
+   */
+  sessionVerifiedAt(userId: string, sessionId: string): Promise<string | undefined>;
+  /**
+   * How this session last proved who it is (spec 0033, AC-885, AC-896): when,
+   * and whether with a second factor or by email alone; undefined for a
+   * session that isn't the user's or is gone.
+   */
+  sessionVerification(userId: string, sessionId: string): Promise<SessionVerification | undefined>;
+  /** Marks this session of the user as having just proved who it is (a step up). True when it was theirs. */
+  markSessionVerified(userId: string, sessionId: string, verifiedWith: VerifiedWith): Promise<boolean>;
+  /**
+   * Forgets every remembered device of the user (AC-884): Better Auth keeps
+   * each as a `trust-device-*` verification row whose value is the user id.
+   */
+  forgetTrustedDevices(userId: string): Promise<void>;
+  /**
+   * Deletes the user and everything of theirs in `auth` (spec 0033, AC-905):
+   * the user row (its sessions, Google link, two factor, preferences,
+   * directory rows and security history go with it, by their foreign keys),
+   * then the rows no key reaches: remembered devices, held back sign ins,
+   * step up codes and passkey challenges (ours, and the plugin's, which name the user), sign in codes for the address, and the address's rate
+   * limit rows. One transaction. True when there was a user to delete.
+   */
+  deleteUser(userId: string): Promise<boolean>;
+  /** Drops the sign in event of a session that was held back for its second step (it never came to be). */
+  forgetSignInEvent(userId: string, sessionId: string): Promise<void>;
+  /**
+   * The user's two factor state (AC-881): on or off, and whether an app was
+   * set up and checked; the encrypted secret and codes never leave here.
+   */
+  twoFactorState(userId: string): Promise<{ readonly enabled: boolean; readonly appVerified: boolean }>;
+  /** The user's passkeys, oldest first (AC-887): name, made and last used. Never a key. */
+  listPasskeys(userId: string): Promise<readonly IdentityPasskey[]>;
+  /** Whether the user has at least one passkey. */
+  hasPasskey(userId: string): Promise<boolean>;
+  /** Renames one of the user's passkeys. False when it isn't theirs or is gone. */
+  renamePasskey(userId: string, passkeyId: string, name: string): Promise<boolean>;
+  /** Removes one of the user's passkeys. False when it isn't theirs or is gone. */
+  removePasskey(userId: string, passkeyId: string): Promise<boolean>;
+  /** The user's passkey credentials, for a step up's challenge: credential ids and transports only. */
+  passkeyCredentials(userId: string): Promise<readonly PasskeyCredential[]>;
+  /** One passkey by its credential id, with its public key and counter, to check a step up's answer. */
+  passkeyByCredential(credentialId: string): Promise<StoredPasskey | undefined>;
+  /** Saves a passkey's new signature counter after a step up, and notes it was just used. */
+  passkeyUsed(passkeyId: string, counter: number): Promise<void>;
+  /** Keeps a passkey step up's challenge for one session, replacing any earlier one. */
+  putPasskeyChallenge(sessionId: string, challenge: string, expiresAt: Date): Promise<void>;
+  /** Takes (and uses up) this session's live passkey challenge, or undefined. */
+  takePasskeyChallenge(sessionId: string): Promise<string | undefined>;
+  /** Names the user's unnamed passkeys after the device this session is on ("Chrome on macOS"), when it knows one. */
+  nameUnnamedPasskeys(userId: string, sessionId: string): Promise<void>;
+  /** Notes that a passkey of the user just signed in or stepped up (AC-887). */
+  touchPasskey(userId: string, credentialId: string): Promise<void>;
+  /**
+   * Keeps a step up email code for one session (AC-896), hashed, for
+   * `STEP_UP_CODE_MINUTES`, replacing any earlier one.
+   */
+  putStepUpCode(sessionId: string, codeHash: string, expiresAt: Date): Promise<void>;
+  /**
+   * Checks a step up email code: `ok` once (the code is used up), `wrong`
+   * (a try is counted; the fifth wrong try ends the code), or `missing`.
+   */
+  checkStepUpCode(sessionId: string, codeHash: string): Promise<'ok' | 'wrong' | 'missing'>;
+  /** Keeps one security event (AC-898). */
+  recordSecurityEvent(event: SecurityEventInput): Promise<void>;
   /** Saves the name only when the user has none yet (an email code sign up starts empty). True when it saved. */
   setUserNameIfEmpty(id: string, name: string): Promise<boolean>;
   /**
@@ -225,6 +390,313 @@ export function createIdentityStore(options: DatabaseOptions): IdentityStore {
         .where(eq(user.id, id))
         .limit(1);
       return row;
+    },
+
+    async listSessions(userId, { after, limit }) {
+      if (!UUID.test(userId)) return [];
+      if (after !== undefined && !UUID.test(after.id)) return [];
+      const moment = sql<string>`to_char(${session.updatedAt} at time zone 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.US"Z"')`;
+      const rows = await db
+        .select({
+          id: session.id,
+          deviceLabel: session.deviceLabel,
+          country: session.country,
+          city: session.city,
+          updatedAt: moment,
+          createdAt: sql<string>`to_char(${session.createdAt} at time zone 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.US"Z"')`,
+        })
+        .from(session)
+        .where(
+          and(
+            eq(session.userId, userId),
+            sql`${session.expiresAt} > now()`,
+            after === undefined
+              ? undefined
+              : sql`(${session.updatedAt}, ${session.id}) < (${after.updatedAt}::timestamptz, ${after.id}::uuid)`,
+          ),
+        )
+        .orderBy(desc(session.updatedAt), desc(session.id))
+        .limit(Math.max(1, Math.min(limit, 200)));
+      return rows;
+    },
+
+    async revokeSession(userId, sessionId) {
+      if (!UUID.test(userId) || !UUID.test(sessionId)) return undefined;
+      const [gone] = await db
+        .delete(session)
+        .where(and(eq(session.id, sessionId), eq(session.userId, userId)))
+        .returning({ deviceLabel: session.deviceLabel, country: session.country });
+      return gone;
+    },
+
+    async revokeOtherSessions(userId, keepSessionId) {
+      if (!UUID.test(userId) || !UUID.test(keepSessionId)) return 0;
+      const gone = await db
+        .delete(session)
+        .where(and(eq(session.userId, userId), ne(session.id, keepSessionId)))
+        .returning({ id: session.id });
+      return gone.length;
+    },
+
+    async sessionVerifiedAt(userId, sessionId) {
+      if (!UUID.test(userId) || !UUID.test(sessionId)) return undefined;
+      const [row] = await db
+        .select({ verifiedAt: session.verifiedAt })
+        .from(session)
+        .where(and(eq(session.id, sessionId), eq(session.userId, userId), sql`${session.expiresAt} > now()`))
+        .limit(1);
+      return row?.verifiedAt ? row.verifiedAt.toISOString() : undefined;
+    },
+
+    async sessionVerification(userId, sessionId) {
+      if (!UUID.test(userId) || !UUID.test(sessionId)) return undefined;
+      const [row] = await db
+        .select({ at: session.verifiedAt, with: session.verifiedWith })
+        .from(session)
+        .where(and(eq(session.id, sessionId), eq(session.userId, userId), sql`${session.expiresAt} > now()`))
+        .limit(1);
+      if (row?.at === undefined || row.at === null) return undefined;
+      return { at: row.at.toISOString(), with: row.with ?? 'email' };
+    },
+
+    async markSessionVerified(userId, sessionId, verifiedWith) {
+      if (!UUID.test(userId) || !UUID.test(sessionId)) return false;
+      const marked = await db
+        .update(session)
+        .set({ verifiedAt: sql`now()`, verifiedWith })
+        .where(and(eq(session.id, sessionId), eq(session.userId, userId), sql`${session.expiresAt} > now()`))
+        .returning({ id: session.id });
+      return marked.length > 0;
+    },
+
+    async forgetTrustedDevices(userId) {
+      if (!UUID.test(userId)) return;
+      await db
+        .delete(verification)
+        .where(and(eq(verification.value, userId), sql`${verification.identifier} like 'trust-device-%'`));
+    },
+
+    async deleteUser(userId) {
+      if (!UUID.test(userId)) return false;
+      return db.transaction(async (tx) => {
+        const [found] = await tx.select({ email: user.email }).from(user).where(eq(user.id, userId)).for('update');
+        if (found === undefined) return false;
+        const email = found.email;
+        await tx.delete(verification).where(
+          sql`${verification.value} = ${userId}
+              or ${verification.identifier} in (select 'step-up-' || ${session.id}::text from ${session} where ${session.userId} = ${userId})
+              or ${verification.identifier} in (select 'step-up-passkey-' || ${session.id}::text from ${session} where ${session.userId} = ${userId})
+              or strpos(${verification.value}, '"userData":{"id":"' || ${userId} || '"') > 0
+              or ${verification.identifier} in (${sql.join(
+                OTP_TYPES.map((type) => sql`${`${type}-otp-${email}`}`),
+                sql`, `,
+              )})`,
+        );
+        // Exact prefixes, never LIKE: an address may hold `_`, which LIKE reads as any character.
+        await tx.delete(rateLimit).where(
+          sql`starts_with(${rateLimit.key}, 'email:' || ${email} || '|')
+              or starts_with(${rateLimit.key}, 'step-up:' || ${userId} || '|')
+              or starts_with(${rateLimit.key}, 'step-up-send:' || ${userId} || '|')
+              or starts_with(${rateLimit.key}, 'step-up-passkey:' || ${userId} || '|')`,
+        );
+        await tx.delete(user).where(eq(user.id, userId));
+        return true;
+      });
+    },
+
+    async forgetSignInEvent(userId, sessionId) {
+      if (!UUID.test(userId) || !UUID.test(sessionId)) return;
+      await db
+        .delete(securityEvent)
+        .where(
+          and(
+            eq(securityEvent.userId, userId),
+            eq(securityEvent.sessionId, sessionId),
+            eq(securityEvent.kind, 'sign_in'),
+          ),
+        );
+    },
+
+    async twoFactorState(userId) {
+      if (!UUID.test(userId)) return { enabled: false, appVerified: false };
+      const [row] = await db
+        .select({ enabled: user.twoFactorEnabled, verified: twoFactor.verified })
+        .from(user)
+        .leftJoin(twoFactor, eq(twoFactor.userId, user.id))
+        .where(eq(user.id, userId))
+        .limit(1);
+      return { enabled: row?.enabled ?? false, appVerified: row?.verified ?? false };
+    },
+
+    async listPasskeys(userId) {
+      if (!UUID.test(userId)) return [];
+      const rows = await db
+        .select({
+          id: passkey.id,
+          name: passkey.name,
+          createdAt: passkey.createdAt,
+          lastUsedAt: passkey.lastUsedAt,
+        })
+        .from(passkey)
+        .where(eq(passkey.userId, userId))
+        .orderBy(asc(passkey.createdAt), asc(passkey.id));
+      return rows.map((row) => ({
+        id: row.id,
+        name: row.name ?? undefined,
+        createdAt: row.createdAt.toISOString(),
+        lastUsedAt: row.lastUsedAt?.toISOString(),
+      }));
+    },
+
+    async hasPasskey(userId) {
+      if (!UUID.test(userId)) return false;
+      const [row] = await db.select({ id: passkey.id }).from(passkey).where(eq(passkey.userId, userId)).limit(1);
+      return row !== undefined;
+    },
+
+    async renamePasskey(userId, passkeyId, name) {
+      if (!UUID.test(userId) || !UUID.test(passkeyId)) return false;
+      const renamed = await db
+        .update(passkey)
+        .set({ name })
+        .where(and(eq(passkey.id, passkeyId), eq(passkey.userId, userId)))
+        .returning({ id: passkey.id });
+      return renamed.length > 0;
+    },
+
+    async removePasskey(userId, passkeyId) {
+      if (!UUID.test(userId) || !UUID.test(passkeyId)) return false;
+      const removed = await db
+        .delete(passkey)
+        .where(and(eq(passkey.id, passkeyId), eq(passkey.userId, userId)))
+        .returning({ id: passkey.id });
+      return removed.length > 0;
+    },
+
+    async passkeyCredentials(userId) {
+      if (!UUID.test(userId)) return [];
+      const rows = await db
+        .select({ credentialId: passkey.credentialID, transports: passkey.transports })
+        .from(passkey)
+        .where(eq(passkey.userId, userId))
+        .orderBy(asc(passkey.createdAt));
+      return rows.map((row) => ({
+        credentialId: row.credentialId,
+        transports: (row.transports ?? '').split(',').filter((each) => each !== ''),
+      }));
+    },
+
+    async passkeyByCredential(credentialId) {
+      const [row] = await db
+        .select({
+          id: passkey.id,
+          userId: passkey.userId,
+          credentialId: passkey.credentialID,
+          publicKey: passkey.publicKey,
+          counter: passkey.counter,
+          transports: passkey.transports,
+        })
+        .from(passkey)
+        .where(eq(passkey.credentialID, credentialId))
+        .limit(1);
+      if (row === undefined) return undefined;
+      return { ...row, transports: (row.transports ?? '').split(',').filter((each) => each !== '') };
+    },
+
+    async passkeyUsed(passkeyId, counter) {
+      if (!UUID.test(passkeyId)) return;
+      // Never back: a sign in saving the counter at the same moment can't be undone by a slower write.
+      await db
+        .update(passkey)
+        .set({ counter: sql`greatest(${passkey.counter}, ${counter})`, lastUsedAt: sql`now()` })
+        .where(eq(passkey.id, passkeyId));
+    },
+
+    async putPasskeyChallenge(sessionId, challenge, expiresAt) {
+      if (!UUID.test(sessionId)) return;
+      const identifier = `step-up-passkey-${sessionId}`;
+      await db.transaction(async (tx) => {
+        await tx.delete(verification).where(eq(verification.identifier, identifier));
+        await tx.insert(verification).values({ identifier, value: challenge, expiresAt });
+      });
+    },
+
+    async takePasskeyChallenge(sessionId) {
+      if (!UUID.test(sessionId)) return undefined;
+      const taken = await db
+        .delete(verification)
+        .where(eq(verification.identifier, `step-up-passkey-${sessionId}`))
+        .returning({ value: verification.value, expiresAt: verification.expiresAt });
+      const live = taken.find((row) => row.expiresAt > new Date());
+      return live?.value;
+    },
+
+    async nameUnnamedPasskeys(userId, sessionId) {
+      if (!UUID.test(userId) || !UUID.test(sessionId)) return;
+      await db.execute(sql`
+        update ${passkey} set name = left(s.device_label, 60)
+          from ${session} s
+         where s.id = ${sessionId} and s.user_id = ${userId} and s.device_label is not null
+           and s.device_label <> '' and ${passkey.userId} = ${userId} and ${passkey.name} is null
+      `);
+    },
+
+    async touchPasskey(userId, credentialId) {
+      if (!UUID.test(userId)) return;
+      await db
+        .update(passkey)
+        .set({ lastUsedAt: sql`now()` })
+        .where(and(eq(passkey.credentialID, credentialId), eq(passkey.userId, userId)));
+    },
+
+    async putStepUpCode(sessionId, codeHash, expiresAt) {
+      if (!UUID.test(sessionId)) return;
+      const identifier = `step-up-${sessionId}`;
+      await db.transaction(async (tx) => {
+        await tx.delete(verification).where(eq(verification.identifier, identifier));
+        await tx.insert(verification).values({ identifier, value: `${codeHash}:0`, expiresAt });
+      });
+    },
+
+    async checkStepUpCode(sessionId, codeHash) {
+      if (!UUID.test(sessionId)) return 'missing';
+      const identifier = `step-up-${sessionId}`;
+      return db.transaction(async (tx) => {
+        const [row] = await tx
+          .select({ id: verification.id, value: verification.value })
+          .from(verification)
+          .where(and(eq(verification.identifier, identifier), sql`${verification.expiresAt} > now()`))
+          .for('update')
+          .limit(1);
+        if (row === undefined) return 'missing' as const;
+        const [hash = '', triesText = '0'] = row.value.split(':');
+        if (hash === codeHash) {
+          await tx.delete(verification).where(eq(verification.id, row.id));
+          return 'ok' as const;
+        }
+        const tries = Number(triesText) + 1;
+        if (tries >= STEP_UP_CODE_TRIES) await tx.delete(verification).where(eq(verification.id, row.id));
+        else
+          await tx
+            .update(verification)
+            .set({ value: `${hash}:${String(tries)}` })
+            .where(eq(verification.id, row.id));
+        return 'wrong' as const;
+      });
+    },
+
+    async recordSecurityEvent(event) {
+      if (!UUID.test(event.userId)) return;
+      const sessionId = event.sessionId !== undefined && UUID.test(event.sessionId) ? event.sessionId : null;
+      await db.insert(securityEvent).values({
+        userId: event.userId,
+        kind: event.kind,
+        sessionId,
+        ip: event.ip !== undefined && isIP(event.ip) !== 0 ? event.ip : null,
+        country: event.country ?? null,
+        deviceLabel: event.deviceLabel ?? null,
+        detail: event.detail ?? {},
+      });
     },
 
     async setUserNameIfEmpty(id, name) {

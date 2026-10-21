@@ -1,12 +1,14 @@
 // The worker's one HTTP port: Railway's health check (`GET /health`, with the
 // relay's delivery numbers from memory) and the
-// api's poke (`POST /internal/outbox-wake`, see `realtime/wake.ts`). Nothing
+// api's poke (`POST /internal/outbox-wake`, see `realtime/wake.ts`), and its
+// signed out notice (`POST /internal/signed-out/<user id>`, spec 0033). Nothing
 // here reads a request body or touches the database: a poke only wakes the
 // worker (spec 0008: its runners and relay, when it sleeps), and the relay
 // then drains whatever waits in the outbox. A request that comes
 // with a body is refused and its connection closed, and a slow one is cut off
 // after 5 seconds.
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from 'node:http';
+import { signedOutUser } from './realtime/signed-out.ts';
 import { createWakeCheck, WAKE_HEADER, WAKE_PATH } from './realtime/wake.ts';
 
 export interface WorkerHttpOptions {
@@ -14,6 +16,13 @@ export interface WorkerHttpOptions {
   readonly wakeSecret: string | undefined;
   /** Wakes the relay. Called only for a poke that carries the secret. */
   readonly onWake: () => void;
+  /**
+   * Cuts a user's live connections after one of their sessions was signed
+   * out (spec 0033, `realtime/signed-out.ts`). Called only for a notice that
+   * carries the secret; absent (the relay is off), the notice is taken and
+   * nothing is cut.
+   */
+  readonly onSignedOut?: (userId: string) => Promise<void>;
   /**
    * What `/health` reports beside `status`: the relay's mode and delivery
    * numbers (spec 0007, AC-77), from memory, so the check never queries.
@@ -58,7 +67,8 @@ export function createWorkerListener(
       answer(response, 200, { status: 'ok', ...options.health?.() });
       return;
     }
-    if (path !== WAKE_PATH) {
+    const signedOut = path === undefined ? undefined : signedOutUser(path);
+    if (path !== WAKE_PATH && signedOut === undefined) {
       answer(response, 404, { code: 'NOT_FOUND', message: 'There is nothing at this address.' });
       return;
     }
@@ -70,6 +80,13 @@ export function createWorkerListener(
     const presented = request.headers[WAKE_HEADER];
     if (!admits(typeof presented === 'string' ? presented : undefined)) {
       answer(response, 401, { code: 'UNAUTHENTICATED', message: 'This poke does not carry the wake secret.' });
+      return;
+    }
+    if (signedOut !== undefined) {
+      // Answered once Centrifugo was asked (the handler never throws), so the api's notice ends with the cut.
+      void (options.onSignedOut?.(signedOut) ?? Promise.resolve()).finally(() => {
+        answer(response, 204);
+      });
       return;
     }
     options.onWake();

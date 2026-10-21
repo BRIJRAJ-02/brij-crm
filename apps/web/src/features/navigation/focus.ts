@@ -10,6 +10,7 @@
 const FIRST_FIELD: Readonly<Record<string, string>> = {
   '/sign-in': 'main input[name="email"]',
   '/verify': 'main input[autocomplete="one-time-code"]',
+  '/two-factor': 'main input[autocomplete="one-time-code"]',
   // First run (spec 0036): each step's first control: Your name, About you's first chip, Your workspace's name,
   // or Invite your team's addresses.
   '/welcome':

@@ -10,6 +10,7 @@ import { errorFields, log } from './log.ts';
 import { createMailer } from './mail/mailer.ts';
 import { createAnalytics, POSTHOG_EU_HOST } from './monitoring/posthog.ts';
 import { captureFault, flush, MONITORING_FLUSH_MS } from './monitoring/sentry.ts';
+import { createSignedOutNotice, NO_SIGNED_OUT } from './realtime/signed-out.ts';
 import { createRelayWake, NO_WAKE } from './realtime/wake.ts';
 import { APP_RULES } from './rules.ts';
 import { onShutdown } from './shutdown.ts';
@@ -79,6 +80,11 @@ const wakeRelay =
     ? NO_WAKE
     : createRelayWake({ url: env.WORKER_INTERNAL_URL, secret: env.WORKER_WAKE_SECRET, log });
 log.info(`Relay wake ${wakeRelay === NO_WAKE ? 'off' : 'on'}`);
+// Signing a session out from another device cuts that person's live connections through the worker (spec 0033).
+const signedOut =
+  env.WORKER_INTERNAL_URL === undefined
+    ? NO_SIGNED_OUT
+    : createSignedOutNotice({ url: env.WORKER_INTERNAL_URL, secret: env.WORKER_WAKE_SECRET, log });
 if (timing !== undefined) log.info('Load timing on: every /api/rpc answer carries Server-Timing');
 
 const server = serve(
@@ -89,6 +95,7 @@ const server = serve(
         identity,
         auth,
         wakeRelay,
+        signedOut,
         analytics,
         mailer,
         rules: APP_RULES,

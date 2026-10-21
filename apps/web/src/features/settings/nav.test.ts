@@ -17,7 +17,7 @@ describe('settingsNav', () => {
     const groups = settingsNav('acme');
     expect(groups.map((group) => group.label)).toEqual(['Account', 'Scheduling', 'Workspace']);
     expect(groups.map((group) => group.entries.map((entry) => entry.label))).toEqual([
-      ['Profile', 'Preferences', 'Notifications'],
+      ['Profile', 'Preferences', 'Security', 'Notifications'],
       ['Calendars'],
       ['General', 'Members', 'Objects', 'Background jobs'],
     ]);
@@ -31,6 +31,7 @@ describe('settingsNav', () => {
       calendars: '/w/acme/settings/scheduling/calendars',
       notifications: '/w/acme/settings/account/notifications',
       general: '/w/acme/settings/general',
+      security: '/w/acme/settings/account/security',
       members: '/w/acme/settings/members',
       objects: '/w/acme/settings/objects',
       jobs: '/w/acme/settings/jobs',
@@ -84,6 +85,7 @@ describe('settingsPageOf', () => {
     expect(settingsPageOf('/w/acme/settings/general')).toBe('general');
     expect(settingsPageOf('/w/acme/settings/scheduling/calendars')).toBe('calendars');
     expect(settingsPageOf('/w/acme/settings/account/calendars')).toBe('calendars');
+    expect(settingsPageOf('/w/acme/settings/account/security')).toBe('security');
     expect(settingsPageOf('/w/acme/settings/objects')).toBe('objects');
     expect(settingsPageOf('/w/acme/settings/objects/people/attributes')).toBe('objects');
     expect(settingsPageOf('/w/acme/settings/jobs/')).toBe('jobs');

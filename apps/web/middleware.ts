@@ -1,7 +1,7 @@
 // Vercel Routing Middleware. It runs at the edge, before files and rewrites,
 // for /api only, and proxies the request to the Railway API. The app and the
 // API share one origin that way (host only cookies, no CORS).
-import { ipAddress, rewrite } from '@vercel/functions';
+import { geolocation, ipAddress, rewrite } from '@vercel/functions';
 
 export const config = { matcher: ['/api', '/api/:path*'] };
 
@@ -26,6 +26,14 @@ export const ORIGIN_HEADER = 'x-crm-origin';
  * any that arrive are dropped, never passed on.
  */
 export const TRACE_HEADERS: readonly string[] = ['sentry-trace', 'baggage', 'traceparent'];
+
+/**
+ * The edge's own geo headers, which the API keeps on a new session (spec
+ * 0033: "Chrome on macOS, Berlin, Germany"). Set here from what the edge
+ * resolved for this request, never passed on from the client. Equal to
+ * `GEO_COUNTRY_HEADER` and `GEO_CITY_HEADER` in apps/api/src/edge.ts.
+ */
+export const GEO_HEADERS = { country: 'x-vercel-ip-country', city: 'x-vercel-ip-city' } as const;
 
 /** What an edge secret must look like: 32 or more printable ASCII characters, no spaces. */
 const EDGE_SECRET_FORMAT = /^[\x21-\x7e]{32,}$/;
@@ -70,6 +78,12 @@ export default function middleware(request: Request): Response {
   const clientIp = ipAddress(request);
   if (clientIp === undefined) headers.delete('x-forwarded-for');
   else headers.set('x-forwarded-for', clientIp);
+  // Roughly where the request came from, as the edge resolved it; the city travels percent encoded, as Vercel sends it.
+  const { country, city } = geolocation(request);
+  headers.delete(GEO_HEADERS.country);
+  headers.delete(GEO_HEADERS.city);
+  if (country !== undefined && country !== '') headers.set(GEO_HEADERS.country, country);
+  if (city !== undefined && city !== '') headers.set(GEO_HEADERS.city, encodeURIComponent(city));
   // Only this middleware may vouch for a request: a client's own copy never
   // passes through, and none is sent while EDGE_SECRET is unset.
   if (vouching) headers.set(EDGE_HEADER, edgeSecret);

@@ -26,3 +26,12 @@ export const ERROR_CODES = [...ENGINE_REFUSAL_CODES, ...REQUEST_ERROR_CODES] as 
 
 /** One of the API's stable error codes. */
 export type ErrorCodeName = (typeof ERROR_CODES)[number];
+
+/**
+ * The code Centrifugo closes a browser's live connection with when one of the
+ * person's sessions was signed out from another device (spec 0033, AC-891).
+ * It sits in Centrifugo's terminal range, so the client never reconnects on
+ * its own: the app checks its session first, and goes to sign in when it has
+ * none (spec 0009's 4500, "access changed", is the other terminal code).
+ */
+export const SIGNED_OUT_DISCONNECT_CODE = 4501;

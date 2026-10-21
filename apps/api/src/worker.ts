@@ -48,7 +48,8 @@ import { loadEnv, WorkerEnv } from './env.ts';
 import { errorFields, log } from './log.ts';
 import { captureFault, flush, heartbeat, metrics, MONITORING_FLUSH_MS, raiseIssue } from './monitoring/sentry.ts';
 import { createLagSample, createStatsReporter, relaySource } from './monitoring/stats.ts';
-import { createCentrifugoPublisher } from './realtime/centrifugo.ts';
+import { createCentrifugoDisconnect, createCentrifugoPublisher } from './realtime/centrifugo.ts';
+import { SIGNED_OUT } from './realtime/signed-out.ts';
 import { createRelay } from './realtime/relay.ts';
 import { onShutdown } from './shutdown.ts';
 import { createWorkerServer } from './worker-http.ts';
@@ -378,6 +379,9 @@ if (jobsOn) {
   });
 }
 
+// Centrifugo's disconnect by user, on the relay's key (spec 0033's signed out notice).
+const disconnect = env.centrifugo === undefined ? undefined : createCentrifugoDisconnect(env.centrifugo);
+
 const health = createWorkerServer({
   wakeSecret: env.WORKER_WAKE_SECRET,
   // A wake call wakes the whole worker (runners and relay) when it sleeps, restarts its idle clock when awake, and
@@ -386,6 +390,17 @@ const health = createWorkerServer({
     lifecycle?.wake();
     relay?.wake();
   },
+  // A session signed out from another device (spec 0033): that user's live connections close with 4501, and each of
+  // their tabs checks its own session. Needs no database, so it never wakes the worker. Off with the relay.
+  ...(disconnect === undefined
+    ? {}
+    : {
+        onSignedOut: async (userId: string) => {
+          if (!(await disconnect.disconnectUser(userId, SIGNED_OUT))) {
+            log.warn('Centrifugo did not take a signed out disconnect; that tab finds out at its next call');
+          }
+        },
+      }),
   // From memory only, never a query: the lifecycle's state with the jobs on; with them off, as before.
   health: () => ({
     state: lifecycle?.state() ?? 'awake',

@@ -8,6 +8,7 @@
 // Better Auth's Drizzle adapter addresses a column by its property name, so the
 // properties carry Better Auth's own field names (`emailVerified`) while the
 // columns are snake case (`email_verified`).
+import { SECURITY_EVENT_KINDS } from '@crm/contracts';
 import { sql } from 'drizzle-orm';
 import {
   bigint,
@@ -15,7 +16,9 @@ import {
   check,
   foreignKey,
   index,
+  inet,
   integer,
+  jsonb,
   pgSchema,
   primaryKey,
   text,
@@ -46,6 +49,8 @@ export const user = auth.table(
     email: text('email').notNull(),
     emailVerified: boolean('email_verified').notNull().default(false),
     image: text('image'),
+    /** Two factor sign in is on (spec 0033, Better Auth's `twoFactorEnabled`): set only once a first app code checks out. */
+    twoFactorEnabled: boolean('two_factor_enabled').notNull().default(false),
     createdAt: createdAt(),
     updatedAt: updatedAt(),
   },
@@ -68,11 +73,110 @@ export const session = auth.table(
     ipAddress: text('ip_address'),
     userAgent: text('user_agent'),
     userId: uuid('user_id').notNull(),
+    /** Two letter country code from the edge's geo header at sign in (spec 0033, AC-890); absent locally. */
+    country: text('country'),
+    /** City from the edge's geo header at sign in, as the edge spelled it. */
+    city: text('city'),
+    /** "Chrome on macOS": the user agent read once at sign in, for Account › Security › Devices. */
+    deviceLabel: text('device_label'),
+    /** When this session last proved who it is: at sign in, and on each step up (AC-896). */
+    verifiedAt: timestamptz('verified_at'),
+    /**
+     * How `verified_at` was proven: `second_factor` (an app code, a backup
+     * code, later a passkey) or `email` (an email code or Google alone).
+     * Turning two factor off takes a second factor (AC-885).
+     */
+    verifiedWith: text('verified_with', { enum: ['email', 'second_factor'] }),
   },
   (t) => [
     uniqueIndex('session_token').on(t.token),
+    check('session_verified_with', sql`${t.verifiedWith} in ('email', 'second_factor')`),
     index('session_user').on(t.userId),
     foreignKey({ name: 'session_user_fk', columns: [t.userId], foreignColumns: [user.id] }).onDelete('cascade'),
+  ],
+);
+
+/**
+ * A person's security history (spec 0033, AC-898): sign ins, sign outs,
+ * sessions ended, and (later milestones) factor changes and alerts. Kept a
+ * year, then deleted by the daily cleanup. `detail` names a method or a
+ * count, never a code, secret or token. `session_id` names the session the
+ * event was about, which may since be gone, so it is no foreign key.
+ */
+export const securityEvent = auth.table(
+  'security_event',
+  {
+    id: authId(),
+    userId: uuid('user_id').notNull(),
+    at: timestamptz('at').notNull().defaultNow(),
+    kind: text('kind', { enum: SECURITY_EVENT_KINDS }).notNull(),
+    sessionId: uuid('session_id'),
+    ip: inet('ip'),
+    country: text('country'),
+    deviceLabel: text('device_label'),
+    detail: jsonb('detail')
+      .notNull()
+      .default(sql`'{}'::jsonb`),
+  },
+  (t) => [
+    index('security_event_user_at').on(t.userId, t.at.desc()),
+    foreignKey({ name: 'security_event_user_fk', columns: [t.userId], foreignColumns: [user.id] }).onDelete('cascade'),
+    check('security_event_kind', sql.raw(`kind in (${SECURITY_EVENT_KINDS.map((kind) => `'${kind}'`).join(', ')})`)),
+  ],
+);
+
+/**
+ * A person's authenticator app and backup codes (spec 0033, Better Auth's
+ * `twoFactor` plugin): the secret and the codes are encrypted with
+ * `BETTER_AUTH_SECRET` and never leave the server after setup (AC-886).
+ * `verified` stays false until the first code from the app checks out. The
+ * plugin counts failed codes and locks the account's second step a while.
+ */
+export const twoFactor = auth.table(
+  'two_factor',
+  {
+    id: authId(),
+    userId: uuid('user_id').notNull(),
+    secret: text('secret').notNull(),
+    backupCodes: text('backup_codes').notNull(),
+    verified: boolean('verified').notNull().default(true),
+    failedVerificationCount: integer('failed_verification_count').notNull().default(0),
+    lockedUntil: timestamptz('locked_until'),
+  },
+  (t) => [
+    uniqueIndex('two_factor_user').on(t.userId),
+    foreignKey({ name: 'two_factor_user_fk', columns: [t.userId], foreignColumns: [user.id] }).onDelete('cascade'),
+  ],
+);
+
+/**
+ * A person's passkeys (spec 0033, milestone 3, Better Auth's passkey plugin):
+ * the public key only, never a secret. `credential_id` is unique across every
+ * account, so one credential can't sign in two people. `name` is the person's
+ * label (60 characters at most); `last_used_at` is ours, set on each passkey
+ * sign in and step up (AC-887).
+ */
+export const passkey = auth.table(
+  'passkey',
+  {
+    id: authId(),
+    userId: uuid('user_id').notNull(),
+    name: text('name'),
+    publicKey: text('public_key').notNull(),
+    credentialID: text('credential_id').notNull(),
+    counter: bigint('counter', { mode: 'number' }).notNull().default(0),
+    deviceType: text('device_type').notNull(),
+    backedUp: boolean('backed_up').notNull(),
+    transports: text('transports'),
+    aaguid: text('aaguid'),
+    createdAt: createdAt(),
+    lastUsedAt: timestamptz('last_used_at'),
+  },
+  (t) => [
+    uniqueIndex('passkey_credential').on(t.credentialID),
+    index('passkey_user').on(t.userId, t.createdAt),
+    check('passkey_name', sql`${t.name} is null or char_length(${t.name}) between 1 and 60`),
+    foreignKey({ name: 'passkey_user_fk', columns: [t.userId], foreignColumns: [user.id] }).onDelete('cascade'),
   ],
 );
 

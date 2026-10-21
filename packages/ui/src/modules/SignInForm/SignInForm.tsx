@@ -7,8 +7,12 @@ import { Form, type FormRefusal } from '../../molecules/Form/Form.tsx';
 import styles from './SignInForm.module.css';
 import { strings } from './strings.ts';
 
-/** What is under way: `idle`, `sending` while the code goes out, `google` while the browser heads to Google. */
-export type SignInStatus = 'idle' | 'sending' | 'google';
+/**
+ * What is under way: `idle`, `sending` while the code goes out, `google`
+ * while the browser heads to Google, `passkey` while the browser's passkey
+ * prompt is open.
+ */
+export type SignInStatus = 'idle' | 'sending' | 'google' | 'passkey';
 
 /** Props for SignInForm. */
 export interface SignInFormProps {
@@ -20,7 +24,8 @@ export interface SignInFormProps {
    * What is under way, `idle` by default. `sending` spins the email's submit
    * as "Sending code" (Enter does nothing more) and turns Google off;
    * `google` spins the Google button as "Opening Google" and turns the
-   * email's submit off.
+   * email's submit off; `passkey` turns both off (the screen's own passkey
+   * button shows the wait).
    */
   readonly status?: SignInStatus;
   /** Why the address was refused, as a sentence that says what to do. Shown on the email field until it changes. */
@@ -47,6 +52,12 @@ export interface SignInFormProps {
    * a screen fills it.
    */
   readonly afterEmail?: ReactNode;
+  /**
+   * The browser may offer passkeys in the email field's suggestions (spec
+   * 0033, AC-888): its autocomplete gains `webauthn`. Set it only while the
+   * screen is waiting for one to be picked.
+   */
+  readonly isPasskeyAutofill?: boolean;
 }
 
 /** Every refusal the form shows is about the one field; the notice shows above everything, apart from the form. */
@@ -77,6 +88,7 @@ export function SignInForm({
   disabledReason,
   isSignUpClosed = false,
   afterEmail,
+  isPasskeyAutofill = false,
 }: SignInFormProps) {
   const [email, setEmail] = useState(defaultEmail);
   const [problem, setProblem] = useState<FormRefusal | undefined>(undefined);
@@ -110,7 +122,7 @@ export function SignInForm({
             provider="google"
             onPress={onGoogle}
             isPending={status === 'google'}
-            isDisabled={isDisabled || status === 'sending'}
+            isDisabled={isDisabled || status === 'sending' || status === 'passkey'}
             {...(hasReason ? { 'aria-describedby': reasonId } : {})}
           >
             {status === 'google' ? strings.googlePending : strings.google}
@@ -122,7 +134,7 @@ export function SignInForm({
         submitLabel={onGoogle === undefined ? strings.continue : strings.continueWithEmail}
         busyLabel={strings.sending}
         isBusy={status === 'sending'}
-        isDisabled={isDisabled || status === 'google'}
+        isDisabled={isDisabled || status === 'google' || status === 'passkey'}
         refusals={shown === undefined ? [] : [shown]}
         fieldFor={toEmailField}
         {...(hasReason ? { submitDescribedBy: reasonId } : {})}
@@ -141,7 +153,7 @@ export function SignInForm({
           name={EMAIL_FIELD}
           type="email"
           inputMode="email"
-          autoComplete="email"
+          autoComplete={isPasskeyAutofill ? 'email webauthn' : 'email'}
           placeholder={strings.emailPlaceholder}
           isRequired
           value={email}

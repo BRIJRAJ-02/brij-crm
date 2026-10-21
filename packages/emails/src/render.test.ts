@@ -2,7 +2,7 @@
 // shared footer, and the sign in code email drawn through it.
 import { describe, expect, it } from 'vitest';
 import type { EmailDocument } from './document.ts';
-import { renderSignInCode, SIGN_IN_CODE_SUBJECT } from './index.ts';
+import { renderAccountDeleted, renderSignInCode, SIGN_IN_CODE_SUBJECT } from './index.ts';
 import { documentText, headerText, renderDocument, type RenderOptions } from './render.ts';
 import { colorToken } from './tokens.ts';
 
@@ -210,5 +210,16 @@ describe('the sign in code email', () => {
     const refused = renderSignInCode('<b>1</b>', { appOrigin: ORIGIN });
     await expect(refused).rejects.toThrow('A sign in code is 4 to 12 letters and digits.');
     await expect(refused).rejects.not.toThrow(/<b>/);
+  });
+});
+
+describe('the account deleted email (spec 0033, AC-906)', () => {
+  it('says when, and holds no link into the app', async () => {
+    const email = await renderAccountDeleted(new Date('2026-10-21T18:42:00Z'), { appOrigin: ORIGIN });
+    expect(email.subject).toBe('Your Timefix account was deleted');
+    expect(email.text).toContain('21 October 2026');
+    expect(email.text).toContain('Deleted user');
+    expect(email.text).not.toContain(`${ORIGIN}/w/`);
+    expect(email.text).not.toContain('Email preferences');
   });
 });

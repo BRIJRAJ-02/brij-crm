@@ -1,12 +1,14 @@
 // Brief
-// Purpose: one way in for everyone, new or returning (spec 0036): Google, where it is on, or a code sent to an email.
+// Purpose: one way in for everyone, new or returning (spec 0036): Google, where it is on, a code sent to an email, or
+// a passkey alone (spec 0033, AC-888), from its button or the email field's suggestions.
 // Main task: Continue with Google, or type an email and Continue with email, which sends the code and moves to /verify.
 // Leaves out: passwords, sign up as a separate page (the server decides which it is), and any account settings.
 import type { DataLayer } from '@crm/data';
-import { AuthLayout, SignInForm, type SignInStatus } from '@crm/ui';
+import { AuthLayout, Button, SignInForm, type SignInStatus } from '@crm/ui';
 import { useNavigate } from '@tanstack/react-router';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { googleRefusal, isAboutAddress, sendRefusal } from './messages.ts';
+import { safeRedirect } from './redirect.ts';
 import { savePending, sessionStore } from './pending.ts';
 import type { SignedOut } from './redirect.ts';
 import { signInFrame } from './AuthStates.tsx';
@@ -41,6 +43,7 @@ export function SignInScreen({ data, google, redirect, returnTo, googleError, si
   const [notice, setNotice] = useState<string | undefined>(() => {
     if (googleError !== undefined) return googleRefusal(googleError);
     if (signedOut === undefined) return undefined;
+    if (signedOut === 'deleted') return strings.signedOutDeleted;
     return signedOut === 'unsaved' ? strings.signedOutUnsaved : strings.signedOutEnded;
   });
 
@@ -64,6 +67,67 @@ export function SignInScreen({ data, google, redirect, returnTo, googleError, si
       window.removeEventListener('pageshow', onPageShow);
     };
   }, []);
+
+  // Passkeys (spec 0033, AC-888): offered where the browser has them, and in the email field's suggestions where it
+  // can; the suggestions' prompt waits from the start and stops when the page goes.
+  const [passkeys, setPasskeys] = useState<{ readonly available: boolean; readonly autofill: boolean }>({
+    available: false,
+    autofill: false,
+  });
+  const signedInWithPasskey = () => {
+    void navigate({ href: safeRedirect(redirect), replace: true });
+  };
+  const live = useRef(true);
+  /** Waits for a passkey picked from the email field's suggestions, where the browser offers them. */
+  const startAutofill = () => {
+    data.auth.passkeys.signIn(true).then(
+      (outcome) => {
+        if (live.current && outcome === 'done') signedInWithPasskey();
+      },
+      (failure: unknown) => {
+        if (live.current) setNotice(sendRefusal(failure));
+      },
+    );
+  };
+  useEffect(() => {
+    live.current = true;
+    void data.auth.passkeys
+      .support()
+      .then((support) => {
+        if (!live.current) return;
+        setPasskeys(support);
+        if (support.autofill) startAutofill();
+      })
+      .catch(() => undefined);
+    return () => {
+      live.current = false;
+      data.auth.passkeys.cancel();
+    };
+    // Once per visit: the waiting prompt belongs to the page, not to a render.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [data]);
+
+  const signInWithPasskey = () => {
+    setNotice(undefined);
+    setError(undefined);
+    setStatus('passkey');
+    // Starting this prompt stops the suggestions' one; it waits again unless this one signed in.
+    data.auth.passkeys.signIn(false).then(
+      (outcome) => {
+        if (outcome === 'done') {
+          signedInWithPasskey();
+          return;
+        }
+        setStatus('idle');
+        if (passkeys.autofill) startAutofill();
+      },
+      (failure: unknown) => {
+        setStatus('idle');
+        setNotice(sendRefusal(failure));
+        if (passkeys.autofill) startAutofill();
+      },
+    );
+  };
 
   const sendCode = (address: string) => {
     setNotice(undefined);
@@ -105,6 +169,23 @@ export function SignInScreen({ data, google, redirect, returnTo, googleError, si
         {...(error === undefined ? {} : { error })}
         {...(notice === undefined ? {} : { notice })}
         {...(google ? { onGoogle: signInWithGoogle } : {})}
+        isPasskeyAutofill={passkeys.autofill}
+        {...(passkeys.available
+          ? {
+              afterEmail: (
+                <Button
+                  variant="ghost"
+                  icon="key"
+                  isFullWidth="center"
+                  isPending={status === 'passkey'}
+                  isDisabled={status === 'sending' || status === 'google'}
+                  onPress={signInWithPasskey}
+                >
+                  {strings.passkey}
+                </Button>
+              ),
+            }
+          : {})}
       />
     </AuthLayout>
   );

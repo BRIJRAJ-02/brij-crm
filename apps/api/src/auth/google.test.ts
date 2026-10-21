@@ -19,6 +19,7 @@ import {
   signIn,
   signInApp,
   testConnections,
+  turnOnTwoFactor,
 } from '../../test/sign-in.ts';
 
 const { identityUrl } = inject('testDatabase');
@@ -182,6 +183,17 @@ describe('Google sign in, against a fake Google (AC-28)', () => {
     const { users, accounts } = await stored(email);
     expect(users).toEqual([{ id: expect.any(String) as string, email_verified: true }]);
     expect(accounts).toHaveLength(1);
+  });
+
+  it('holds a Google sign in back for the second step when two factor is on (spec 0033, AC-882)', async () => {
+    const { app } = signInApp({ db, identity }, GOOGLE);
+    const { email, cookie } = await signIn(app);
+    await turnOnTwoFactor(app, cookie);
+    fakeGoogle({ sub: randomUUID(), email, emailVerified: true });
+    const held = await googleRoundTrip(app, newIp());
+    expect(held.location).toBe(`${APP_URL}/two-factor`);
+    // Only the pending cookie: no session until the app's code.
+    await expect(rpcClient(app, held.cookie).me.get()).rejects.toMatchObject({ code: 'UNAUTHENTICATED' });
   });
 
   it('lands a verified Google email that already has an account in that same account', async () => {

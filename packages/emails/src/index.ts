@@ -21,6 +21,7 @@ import { memberInvite } from './templates/invite.ts';
 import { notifications } from './templates/notifications.ts';
 import { joinApproved, joinRequest } from './templates/join.ts';
 import { workspaceDeleted } from './templates/workspace.ts';
+import { accountDeleted } from './templates/account-deleted.ts';
 import { SIGN_IN_CODE_MINUTES, signInCode } from './templates/sign-in-code.ts';
 
 export { CATALOG, topicOf, type Catalog, type CatalogEntry } from './catalog.ts';
@@ -92,6 +93,21 @@ export async function renderEmail(kind: EmailKind, params: unknown, context: Ema
 export async function renderSignInCode(code: string, context: { readonly appOrigin: string }): Promise<RenderedEmail> {
   if (!/^[0-9A-Za-z]{4,12}$/.test(code)) throw new Error('A sign in code is 4 to 12 letters and digits.');
   return renderDocument(signInCode({ code, minutes: SIGN_IN_CODE_MINUTES }, templateContext(context)), {
+    appOrigin: context.appOrigin,
+    medium: 'email_sign_in',
+  });
+}
+
+/**
+ * The last email to a deleted account's address (spec 0033, AC-906), sent in
+ * its request: when it happened, and no link that changes anything.
+ */
+export async function renderAccountDeleted(
+  when: Date,
+  context: { readonly appOrigin: string },
+): Promise<RenderedEmail> {
+  const worded = `${new Intl.DateTimeFormat('en-GB', { dateStyle: 'long', timeStyle: 'short', timeZone: 'UTC' }).format(when)} UTC`;
+  return renderDocument(accountDeleted({ when: worded }, templateContext(context)), {
     appOrigin: context.appOrigin,
     medium: 'email_sign_in',
   });

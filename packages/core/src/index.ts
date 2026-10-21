@@ -58,6 +58,56 @@ export {
   type StartedWorkspace,
   type StartWorkspaceDeps,
 } from './account/account.ts';
+// Account security (spec 0033): the signed in person's own sessions, and what device a session is on.
+export {
+  isFresh,
+  listMySessions,
+  revokeMyOtherSessions,
+  revokeMySession,
+  SESSION_CURSOR_MESSAGE,
+  STEP_UP_MESSAGE,
+  UNKNOWN_SESSION,
+  type SessionCaller,
+  type SessionsDeps,
+} from './account/sessions.ts';
+export { deviceLabel, deviceParts, type DeviceParts } from './account/device.ts';
+export {
+  accountSecurity,
+  CODE_INVALID_MESSAGE,
+  EMAIL_CODE_INVALID_MESSAGE,
+  FRESH_MESSAGE,
+  NO_SECOND_FACTOR,
+  requireFresh,
+  SECOND_FACTOR_MESSAGE,
+  sessionFreshness,
+  startStepUp,
+  USE_SECOND_FACTOR,
+  verifyStepUp,
+  type FreshnessDeps,
+  type StepUpDeps,
+} from './account/step-up.ts';
+// Passkeys (spec 0033, milestone 3, AC-887 to AC-889).
+export {
+  NO_PASSKEY,
+  PASSKEY_INVALID_MESSAGE,
+  passkeyStepUpOptions,
+  removeMyPasskey,
+  renameMyPasskey,
+  UNKNOWN_PASSKEY,
+  verifyPasskeyStepUp,
+  type PasskeyDeps,
+} from './account/passkeys.ts';
+// Deleting your own account (spec 0033, AC-902 to AC-907).
+export {
+  accountDeletionCheck,
+  deletedEmail,
+  deleteMyAccount,
+  DELETED_USER_NAME,
+  EMAIL_MISMATCH,
+  type AccountDeletionDeps,
+  type CalendarGrant,
+  type DeletingCaller,
+} from './account/deletion.ts';
 export { milestoneHook, type ReachedMilestone } from './milestones/milestones.ts';
 export { type AuditSource } from './members/audit.ts';
 // Settings › Workspace › General, the owner's delete and restore, and Account › Profile (spec 0031, slice 7).

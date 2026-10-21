@@ -8,6 +8,7 @@ import { strings as calendar } from './calendar-strings.ts';
 import { strings as jobs } from './jobs-strings.ts';
 import { strings as members } from './members-strings.ts';
 import { strings as notifications } from './notifications-strings.ts';
+import { strings as security } from './security-strings.ts';
 import { strings } from './strings.ts';
 import { strings as workspace } from './workspace-strings.ts';
 
@@ -50,9 +51,12 @@ export const membersSettingsHref = (slug: string) => `/w/${slug}/settings/member
 /** Settings › Account › Notifications (spec 0038): the member's email for this workspace. */
 export const notificationSettingsHref = (slug: string) => `/w/${slug}/settings/account/notifications`;
 
-/** The settings navigation's pages: Account's, then Workspace's. */
+/** Settings › Account › Security (spec 0033): the person's devices, two factor and passkeys. */
+export const securitySettingsHref = (slug: string) => `/w/${slug}/settings/account/security`;
+
+/** The settings navigation's pages: Account's, then Scheduling's and Workspace's. */
 export type SettingsPageId =
-  'profile' | 'preferences' | 'calendars' | 'notifications' | 'general' | 'members' | 'objects' | 'jobs';
+  'profile' | 'preferences' | 'security' | 'calendars' | 'notifications' | 'general' | 'members' | 'objects' | 'jobs';
 
 /**
  * The settings navigation's groups, in order (spec 0026, AC-682). Scheduling
@@ -67,7 +71,15 @@ export interface SettingsNavEntry {
   readonly label: string;
   readonly href: string;
   readonly icon:
-    'user-round' | 'sliders-horizontal' | 'calendar' | 'bell' | 'building' | 'users' | 'box' | 'list-checks';
+    | 'user-round'
+    | 'sliders-horizontal'
+    | 'shield-check'
+    | 'calendar'
+    | 'bell'
+    | 'building'
+    | 'users'
+    | 'box'
+    | 'list-checks';
   /** A quiet word after the name. Every entry opens a page in Settings, so none leaves it (20 Oct 2026). */
   readonly meta?: string;
   /** A permission the page needs before the member may open it at all; absent, every member may. */
@@ -100,6 +112,7 @@ export function settingsNav(slug: string): readonly SettingsNavGroup[] {
         // Profile first (spec 0031, AC-832): every member has one.
         { id: 'profile', label: workspace.profileTitle, href: profileHref(slug), icon: 'user-round' },
         { id: 'preferences', label: strings.preferences, href: preferencesHref(slug), icon: 'sliders-horizontal' },
+        { id: 'security', label: security.title, href: securitySettingsHref(slug), icon: 'shield-check' },
         { id: 'notifications', label: notifications.title, href: notificationSettingsHref(slug), icon: 'bell' },
       ],
     },
@@ -151,6 +164,7 @@ export function settingsPageOf(pathname: string): SettingsPageId | undefined {
   if (rest === 'general') return 'general';
   if (rest === 'scheduling/calendars' || rest === 'account/calendars' || rest === 'calendar') return 'calendars';
   if (rest === 'account/notifications') return 'notifications';
+  if (rest === 'account/security') return 'security';
   if (rest === 'objects' || rest.startsWith('objects/')) return 'objects';
   if (rest === 'jobs') return 'jobs';
   if (rest === 'members') return 'members';

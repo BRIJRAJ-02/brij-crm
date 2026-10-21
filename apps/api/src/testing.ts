@@ -12,6 +12,7 @@ import type { CalendarServices } from './calendar/services.ts';
 import type { ApiEnv } from './env.ts';
 import type { MailMessage, Mailer } from './mail/mailer.ts';
 import type { Analytics } from './monitoring/posthog.ts';
+import type { SignedOutNotice } from './realtime/signed-out.ts';
 import { NO_WAKE, type WakeRelay } from './realtime/wake.ts';
 import type { RequestContext } from './orpc.ts';
 
@@ -83,6 +84,8 @@ export function testServices(
     jobs?: JobRegistry;
     /** Calendar sync's services (spec 0024): none (off) unless given, the fake provider in tests. */
     calendar?: CalendarServices;
+    /** The signed out notice (spec 0033): none unless given. */
+    signedOut?: SignedOutNotice;
   } = {},
 ): AppServices {
   const db = options.db ?? unreachableDatabase();
@@ -108,6 +111,7 @@ export function testServices(
     ...(options.analytics === undefined ? {} : { analytics: options.analytics }),
     ...(options.jobs === undefined ? {} : { jobs: options.jobs }),
     ...(options.calendar === undefined ? {} : { calendar: options.calendar }),
+    ...(options.signedOut === undefined ? {} : { signedOut: options.signedOut }),
   };
 }
 
