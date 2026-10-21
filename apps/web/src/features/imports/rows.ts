@@ -1,0 +1,105 @@
+// Reading a file's rows into values (spec 0040, AC-1120, AC-1121): every cell
+// through the field set's `fromText` for its attribute's type (the one parser
+// for paste, copy and import), a name's parts joined, a spreadsheet's formula
+// guard taken off. Pure: the screen hands in how to build each type's context.
+import type { ImportTarget, StagedRow } from '@crm/data';
+import { CSV_BOM, csvLine, unguardCell } from '@crm/data/imports';
+import { fieldTypeOf, isRefusal, type FieldAttribute, type TextContext } from '@crm/ui';
+
+/** One cell that couldn't be read, and why. */
+export interface CellProblem {
+  readonly column: number;
+  readonly header: string;
+  readonly reason: string;
+}
+
+/** A row with a cell that couldn't be read: none of its cells are imported (AC-1120). */
+export interface ErrorRow {
+  /** Its line in the file: the first data row is 2. */
+  readonly rowNumber: number;
+  readonly cells: readonly string[];
+  readonly problems: readonly CellProblem[];
+}
+
+/** What reading the rows found: the ready rows to stage, and the rows with errors to show and download. */
+export interface ReadRows {
+  readonly ready: readonly StagedRow[];
+  readonly errors: readonly ErrorRow[];
+}
+
+/** What a row says when every cell matched to an attribute is empty. */
+export const EMPTY_ROW = 'Every cell matched to an attribute is empty.';
+
+/** A cell as the reader takes it: a spreadsheet's leading apostrophe off a formula, then trimmed. */
+export const cellText = (text: string | undefined): string => unguardCell(text ?? '').trim();
+
+/** One cell through its type's `fromText`: the value, or why not. */
+export function readCell(
+  text: string,
+  attribute: FieldAttribute,
+  context: (attribute: FieldAttribute) => TextContext,
+): { readonly ok: true; readonly value: unknown } | { readonly ok: false; readonly reason: string } {
+  const value: unknown = fieldTypeOf(attribute.type).fromText(text, context(attribute));
+  return isRefusal(value) ? { ok: false, reason: value.reason } : { ok: true, value };
+}
+
+/**
+ * Reads every data row (AC-1120): a ready row holds a value per matched
+ * attribute (empty cells left out, so they never clear anything); a row with
+ * any cell its type can't read is an error row, as is one with nothing to
+ * import.
+ */
+export function readRows(
+  rows: readonly (readonly string[])[],
+  headers: readonly string[],
+  targets: readonly (ImportTarget | undefined)[],
+  attributes: ReadonlyMap<string, FieldAttribute>,
+  context: (attribute: FieldAttribute) => TextContext,
+): ReadRows {
+  const ready: StagedRow[] = [];
+  const errors: ErrorRow[] = [];
+  rows.forEach((cells, index) => {
+    const rowNumber = index + 2;
+    const values: Record<string, unknown> = {};
+    const names = new Map<string, { firstName?: string; lastName?: string }>();
+    const problems: CellProblem[] = [];
+    targets.forEach((target, column) => {
+      const attribute = target === undefined ? undefined : attributes.get(target.attributeId);
+      if (target === undefined || attribute === undefined) return;
+      const text = cellText(cells[column]);
+      if (text === '') return;
+      if (target.part !== undefined) {
+        const name = names.get(target.attributeId) ?? {};
+        names.set(target.attributeId, { ...name, [target.part === 'first' ? 'firstName' : 'lastName']: text });
+        return;
+      }
+      const read = readCell(text, attribute, context);
+      if (read.ok) values[target.attributeId] = read.value;
+      else problems.push({ column, header: headers[column] ?? '', reason: read.reason });
+    });
+    for (const [attributeId, name] of names) values[attributeId] = name;
+    if (problems.length > 0) errors.push({ rowNumber, cells, problems });
+    else if (Object.keys(values).length === 0) {
+      errors.push({ rowNumber, cells, problems: [{ column: -1, header: '', reason: EMPTY_ROW }] });
+    } else ready.push({ rowNumber, values });
+  });
+  return { ready, errors };
+}
+
+/** One error row's reasons as one line: "Email: Type an email address, such as ada@example.com." */
+export const problemText = (row: Pick<ErrorRow, 'problems'>): string =>
+  row.problems
+    .map((problem) => (problem.header === '' ? problem.reason : `${problem.header}: ${problem.reason}`))
+    .join(' ');
+
+/**
+ * The rows with errors as a CSV to fix and import again (AC-1121): the
+ * file's headers and cells, then an Error column; a byte order mark first,
+ * so a spreadsheet reads it as UTF-8.
+ */
+export function errorRowsCsv(headers: readonly string[], errors: readonly ErrorRow[], errorHeader: string): string {
+  const lines = errors.map((row) =>
+    csvLine([...headers.map((_, column) => row.cells[column] ?? ''), problemText(row)]),
+  );
+  return `${CSV_BOM}${csvLine([...headers, errorHeader])}${lines.join('')}`;
+}

@@ -14,6 +14,7 @@ import { createFocusRecovery, focusFirstLoad, focusPage, isSamePage } from './fe
 import { PRELOAD_DELAY_MS, startIntentPreload } from './features/navigation/preload.ts';
 import { followPageTitle } from './features/navigation/title.ts';
 import { rememberPlace, safeSessionStorage } from './features/settings/back.ts';
+import { importSummaryHref } from './features/imports/paths.ts';
 import { jobFinishedToast } from './features/settings/toast.ts';
 import { bulkActionOf } from './features/workspace/bulk-jobs.ts';
 import { jobsHref } from './features/workspace/objects.ts';
@@ -96,6 +97,24 @@ const data = createDataLayer({
         ({ bulkFinished }) => bulkFinished({ data, toast, onView }, workspace, job),
         () => {
           toast(jobFinishedToast(job, onView));
+        },
+      );
+      return;
+    }
+    // An import or its undo (spec 0040, AC-1125): View opens the import's summary, not the jobs page.
+    const importId = data.imports.forJob(job.id);
+    const objectId = job.subject?.id;
+    if (importId !== undefined && objectId !== undefined) {
+      data.objects.all(workspace).then(
+        (objects) => {
+          const object = objects.find((each) => each.id === objectId);
+          const onImport = () => {
+            if (object !== undefined) void router.navigate({ href: importSummaryHref(workspace, object, importId) });
+          };
+          toasts.toast(jobFinishedToast(job, object === undefined ? onView : onImport));
+        },
+        () => {
+          toasts.toast(jobFinishedToast(job, onView));
         },
       );
       return;

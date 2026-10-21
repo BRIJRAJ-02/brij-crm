@@ -1615,6 +1615,8 @@ export function createDataLayer({
   async function followImportJob(workspace: string, importId: string, jobId: string | undefined): Promise<void> {
     if (jobId === undefined) return;
     importJobs.set(jobId, importId);
+    // One held already is live: following it again would only read it twice.
+    if (jobs.get(workspace, jobId) !== undefined) return;
     const job = await call((options) => api.jobs.get({ workspace, jobId }, options)).catch(() => undefined);
     if (job !== undefined) jobs.track(workspace, job);
   }
@@ -3329,9 +3331,19 @@ export function createDataLayer({
         await followImportJob(workspace, importId, view.undoJobId);
         return view;
       },
-      /** One import as its summary shows it: counts by outcome, its jobs, and whether undo is open. */
-      get: (workspace: string, importId: string): Promise<ImportView> =>
-        call((options) => api.imports.get({ workspace, importId }, options)),
+      /**
+       * One import as its summary shows it: counts by outcome, its jobs, and
+       * whether undo is open. Its jobs are followed from here on, so the
+       * summary shows their progress live (`jobs.get`, `useJob`).
+       */
+      get: async (workspace: string, importId: string): Promise<ImportView> => {
+        const view = await call((options) => api.imports.get({ workspace, importId }, options));
+        await Promise.all([
+          followImportJob(workspace, importId, view.jobId),
+          followImportJob(workspace, importId, view.undoJobId),
+        ]);
+        return view;
+      },
       /** A page of an import's refused and noted rows, after the row number `cursor`. */
       rows: (workspace: string, importId: string, cursor?: number): Promise<ImportRows> =>
         call((options) =>

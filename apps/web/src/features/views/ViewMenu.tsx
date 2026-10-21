@@ -13,7 +13,9 @@ import {
   type ViewsListSnapshot,
 } from '@crm/data';
 import { Button, Field, Form, Menu, MenuItem, MenuSeparator, MenuTrigger, Modal, type FormRefusal } from '@crm/ui';
-import { useRouteContext } from '@tanstack/react-router';
+import { useNavigate, useRouteContext } from '@tanstack/react-router';
+import { importHref } from '../imports/paths.ts';
+import { strings as importStrings } from '../imports/strings.ts';
 import { useId, useState } from 'react';
 import { strings } from './strings.ts';
 
@@ -58,6 +60,7 @@ export function ViewMenu({
   onDeleted,
 }: ViewMenuProps) {
   const { data, toasts } = useRouteContext({ from: '__root__' });
+  const navigate = useNavigate();
   const [isRenaming, setRenaming] = useState(false);
   const [isDeleting, setDeleting] = useState(false);
   const [isBusy, setBusy] = useState(false);
@@ -222,6 +225,20 @@ export function ViewMenu({
             reason: facts.isDefault ? strings.alreadyDefault : reasonFor('setDefault'),
             onAction: () => {
               run(data.views.setDefault(slug, object.id, view.id), strings.isDefaultNow(view.name, object.pluralName));
+            },
+          },
+        ]
+      : []),
+    // Import CSV (spec 0040, AC-1111): for members who may write the object; its page loads on its own.
+    ...(object.access === 'write' && !object.isArchived
+      ? [
+          'separator' as const,
+          {
+            id: 'import',
+            label: importStrings.menuItem,
+            icon: 'upload' as const,
+            onAction: () => {
+              void navigate({ href: importHref(slug, object) });
             },
           },
         ]
