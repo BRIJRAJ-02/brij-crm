@@ -44,12 +44,25 @@ const calendarView = {
   reload: () => undefined,
 };
 
+/** The frame's sidebar (spec 0034) and its Tasks badge: still loading, so the sidebar draws its loading row and no
+ * count. The frame calls them on every workspace page, so a screen's fake needn't. */
+const stillLoading = {
+  subscribe: () => () => undefined,
+  getSnapshot: () => loading,
+  retain: () => () => undefined,
+};
+
 /** Renders `screen` at `at` inside the app's providers, and waits for the router to settle. */
 export async function renderInApp(
   screen: () => ReactNode,
   { data, pattern, at, toasts = createToasts() }: InAppOptions,
 ): Promise<InApp> {
-  const layer = { calendar: { view: () => calendarView }, ...data } as unknown as DataLayer;
+  const layer = {
+    calendar: { view: () => calendarView },
+    nav: { source: () => stillLoading, change: () => undefined },
+    ...data,
+    tasks: { due: () => stillLoading, ...data.tasks },
+  } as unknown as DataLayer;
   const rootRoute = createRootRouteWithContext<{ data: DataLayer; toasts: Toasts }>()({ component: Outlet });
   const page = createRoute({ getParentRoute: () => rootRoute, path: pattern, component: screen });
   const router = createRouter({

@@ -434,11 +434,20 @@ describe("migration 0020's closing check: who can reach crm_relay", () => {
     check = sql.slice(sql.lastIndexOf('do $$'));
   });
 
+  /**
+   * Migration 0061 widened crm_sweep by the daily digest's columns (spec 0038; guards.test.ts holds it to exactly
+   * those). 0034's check ran before then, so each run first takes them back, as the database stood at 0034.
+   */
+  const AT_0034 = [
+    'revoke select (workspace_id, member_id, digest, time_zone, digest_sent_on) on notification_settings from crm_sweep',
+    'revoke select (workspace_id, id, status) on members from crm_sweep',
+  ];
+
   /** Runs the check after `setup`, in a transaction that is rolled back, so nothing outlives the test. */
   async function checkAfter(setup: readonly string[]): Promise<void> {
     await admin.query('begin');
     try {
-      for (const statement of setup) await admin.query(statement);
+      for (const statement of [...AT_0034, ...setup]) await admin.query(statement);
       await admin.query(check);
     } finally {
       await admin.query('rollback');
@@ -490,11 +499,20 @@ describe("migration 0034's closing check: crm_workspace_ids and crm_sweep (spec 
     check = sql.slice(sql.lastIndexOf('do $$'));
   });
 
+  /**
+   * Migration 0061 widened crm_sweep by the daily digest's columns (spec 0038; guards.test.ts holds it to exactly
+   * those). 0034's check ran before then, so each run first takes them back, as the database stood at 0034.
+   */
+  const AT_0034 = [
+    'revoke select (workspace_id, member_id, digest, time_zone, digest_sent_on) on notification_settings from crm_sweep',
+    'revoke select (workspace_id, id, status) on members from crm_sweep',
+  ];
+
   /** Runs the check after `setup`, in a transaction that is rolled back, so nothing outlives the test. */
   async function checkAfter(setup: readonly string[]): Promise<void> {
     await admin.query('begin');
     try {
-      for (const statement of setup) await admin.query(statement);
+      for (const statement of [...AT_0034, ...setup]) await admin.query(statement);
       await admin.query(check);
     } finally {
       await admin.query('rollback');

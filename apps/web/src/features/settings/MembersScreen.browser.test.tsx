@@ -66,11 +66,21 @@ afterEach(() => {
   mounted = undefined;
 });
 
+const LOADING = { status: 'loading' as const };
+const stillLoading = {
+  subscribe: () => () => undefined,
+  getSnapshot: () => LOADING,
+  retain: () => () => undefined,
+};
+
 /** A data layer whose revoke is counted, answering with `answer` (a refusal when it rejects). */
 function layerWith(answer: () => Promise<void>) {
   let revokes = 0;
   const layer = {
     calendar: { view: () => calendarView },
+    // The frame's sidebar and Tasks badge (spec 0034), still loading.
+    nav: { source: () => stillLoading, change: () => undefined },
+    tasks: { due: () => stillLoading },
     members: { watch: () => () => undefined },
     invitations: {
       revoke: () => {
