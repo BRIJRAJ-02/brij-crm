@@ -14,7 +14,7 @@ const day = (iso: string) =>
 /** The restore page's bar and body, for WorkspacePage. */
 export function deletedPage(deleted: DeletedWorkspace, onRestore: () => Promise<void>) {
   return {
-    topBar: <TopBar title={strings.deletedTitle(deleted.name)} />,
+    topBar: <TopBar title={deleted.name} />,
     body: <RestoreBody deleted={deleted} onRestore={onRestore} />,
   };
 }
@@ -46,7 +46,7 @@ function RestoreBody({
           <Button variant="primary" isPending={isBusy} onPress={restore}>
             {strings.restoreWorkspace}
           </Button>
-          <Link href="/">{strings.openWorkspace}</Link>
+          <Link href="/">{strings.backToWorkspaces}</Link>
         </>
       }
     >

@@ -8,7 +8,7 @@ import { TimeZoneName } from './booking/settings.ts';
 import { Uuid } from './values/ids.ts';
 import { WorkspaceScoped, WorkspaceSlug } from './workspaces.ts';
 
-export { WORKSPACE_PURGE_DAYS } from './team-limits.ts';
+export { namesMatch, WORKSPACE_PURGE_DAYS } from './team-limits.ts';
 
 /** A workspace's name: 1 to 64 characters, trimmed (AC-822). */
 export const WorkspaceName = z.string().trim().min(1, 'Name the workspace.').max(64, 'Use at most 64 characters.');

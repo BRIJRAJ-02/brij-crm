@@ -3,7 +3,8 @@
 // Main task: change their name (Save shows once it changed) or their time zone (saved at once, with Undo).
 // Leaves out: the picture upload (#32: Google's picture or initials until then), the email (the account's), and account deletion (the account lane).
 import { isDataError, type DataLayer, type MyProfile } from '@crm/data';
-import { Avatar, Button, Card, EmptyState, Field, Select, SettingsRow, SettingsStack, type Toasts } from '@crm/ui';
+import { Avatar, Button, Card, EmptyState, Field, Select, SettingsRow, SettingsSection, type Toasts } from '@crm/ui';
+import { useBlocker } from '@tanstack/react-router';
 import { useMemo, useState } from 'react';
 import { zoneItems, zoneLabel, zoneMatches } from '../booking/hours.ts';
 import { SettingsPage } from './SettingsPage.tsx';
@@ -37,6 +38,11 @@ export function ProfileScreen({ data, toasts, slug, profile, onChanged }: Profil
     [profile.timeZone, profile.workspaceTimeZone],
   );
   const isDirty = name.trim() !== profile.name;
+  // An unsaved name isn't lost by leaving the page without a word.
+  useBlocker({
+    shouldBlockFn: () => isDirty && !globalThis.confirm(strings.leaveConfirm),
+    enableBeforeUnload: () => isDirty,
+  });
 
   const save = () => {
     if (!isDirty || isSaving) return;
@@ -91,7 +97,7 @@ export function ProfileScreen({ data, toasts, slug, profile, onChanged }: Profil
         ) : undefined
       }
     >
-      <SettingsStack>
+      <SettingsSection title={strings.profileSection}>
         <Card>
           <SettingsRow title={strings.picture} description={strings.pictureText}>
             <Avatar
@@ -112,13 +118,21 @@ export function ProfileScreen({ data, toasts, slug, profile, onChanged }: Profil
                 setNameError(undefined);
               }}
               onSubmit={save}
+              onEscape={() => setName(profile.name)}
               maxLength={80}
               autoComplete="name"
               {...(nameError === undefined ? {} : { error: nameError })}
             />
           </SettingsRow>
           <SettingsRow title={strings.email}>
-            <Field label={strings.email} isLabelHidden value={profile.email} isReadOnly type="email" />
+            <Field
+              label={strings.email}
+              isLabelHidden
+              value={profile.email}
+              isReadOnly
+              readOnlyReason={strings.emailReadOnly}
+              type="email"
+            />
           </SettingsRow>
           <SettingsRow title={strings.yourZone}>
             <Select
@@ -136,7 +150,7 @@ export function ProfileScreen({ data, toasts, slug, profile, onChanged }: Profil
             />
           </SettingsRow>
         </Card>
-      </SettingsStack>
+      </SettingsSection>
     </SettingsPage>
   );
 }

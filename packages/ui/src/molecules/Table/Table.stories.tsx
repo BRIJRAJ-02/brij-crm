@@ -83,6 +83,7 @@ export const ColumnInfo: Story = {
     ),
   },
   play: async ({ canvas, userEvent }) => {
+    await expect(canvas.getByRole('columnheader', { name: 'Role' })).toBeInTheDocument();
     await userEvent.click(canvas.getByRole('button', { name: 'About Role' }));
     await expect(await canvas.findByRole('dialog', { name: 'About Role' })).toBeInTheDocument();
   },

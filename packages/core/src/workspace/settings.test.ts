@@ -189,6 +189,17 @@ describe('deleting and restoring (AC-823)', () => {
     expect(await getWorkspaceSettings(t.as(t.owner, 'owner'))).toMatchObject({ name: 'Acme' });
   });
 
+  it('takes the name as a keyboard types it: straight quotes and extra spaces', async () => {
+    const t = await team();
+    await testQuery(ownerUrl, `update workspaces set name = 'Ada’s  workspace' where id = $1`, [t.workspaceId]);
+    expect(await refusalOf(deleteWorkspace(t.as(t.owner, 'owner'), { confirmName: "ada's workspace" }))).toMatchObject({
+      code: 'CONFIRM_MISMATCH',
+    });
+    await expect(deleteWorkspace(t.as(t.owner, 'owner'), { confirmName: " Ada's workspace " })).resolves.toMatchObject({
+      deleted: { name: 'Ada’s  workspace' },
+    });
+  });
+
   it('shuts every member out, tells who to email, and lets only an owner restore it within the window', async () => {
     const t = await team(['member']);
     const memberId = t.ids[0] ?? '';

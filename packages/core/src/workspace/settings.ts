@@ -6,6 +6,7 @@
 // writes them through the identity store once the change commits; the access
 // door reads the tenant row, so a deleted workspace is shut either way.
 import {
+  namesMatch,
   WORKSPACE_PURGE_DAYS,
   type DeletedWorkspace,
   type UpdateWorkspaceInput,
@@ -157,7 +158,7 @@ export async function deleteWorkspace(
     scope,
     async ({ tx }) => {
       const now = await liveRow(tx, scope, true);
-      if (input.confirmName.trim() !== now.name) {
+      if (!namesMatch(input.confirmName, now.name)) {
         throw refuseOn('CONFIRM_MISMATCH', `Type ${now.name} to confirm.`, 'confirmName');
       }
       const [row] = await tx

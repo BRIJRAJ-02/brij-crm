@@ -58,8 +58,8 @@ function WorkspaceRoute() {
       <WorkspacePage
         page={deletedPage(deleted, () =>
           data.workspace.restore(deleted.slug).then(async () => {
-            toasts.toast({ tone: 'success', message: strings.restored(deleted.name) });
             await router.invalidate();
+            toasts.toast({ tone: 'success', message: strings.restored(deleted.name) });
           }),
         )}
       />

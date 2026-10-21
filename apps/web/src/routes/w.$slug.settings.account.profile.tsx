@@ -32,7 +32,7 @@ function ProfileRoute() {
   if (profile === undefined) return <SettingsMissing backTo="home" />;
   return (
     <ProfileScreen
-      key={`${profile.name}:${profile.timeZone ?? ''}`}
+      key={profile.memberId}
       data={data}
       toasts={toasts}
       slug={slug}

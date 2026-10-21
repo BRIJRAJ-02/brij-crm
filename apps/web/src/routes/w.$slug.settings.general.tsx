@@ -39,7 +39,7 @@ function GeneralRoute() {
   const { permissions } = screen.access;
   return (
     <GeneralScreen
-      key={`${screen.settings.name}:${screen.settings.timeZone}`}
+      key={screen.settings.id}
       data={data}
       toasts={toasts}
       slug={slug}
@@ -71,7 +71,9 @@ function GeneralRoute() {
             },
           },
         });
-        void navigate({ to: '/', replace: true });
+        // Its own address now shows the restore page, which stays after the toast goes.
+        // Every loader reads again: the frame's cached answer still had it live.
+        void navigate({ to: '/w/$slug', params: { slug }, replace: true }).then(() => router.invalidate());
       }}
     />
   );

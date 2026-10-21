@@ -3,7 +3,7 @@
 // Main task: Ask to join one; it then says the request was sent, and an email follows once an admin approves.
 // Leaves out: joining at once (an admin approves each request), other domains, and invitations (their own page).
 import { isDataError, type DataLayer, type Joinable } from '@crm/data';
-import { AuthLayout, Badge, Button, ButtonLink, Callout, DescriptionList } from '@crm/ui';
+import { AuthLayout, Badge, Button, ButtonLink, Callout, Card, SettingsRow } from '@crm/ui';
 import { useEffect, useRef, useState } from 'react';
 import { PRODUCT_LOGO } from '../../brand.ts';
 import { strings } from './strings.ts';
@@ -22,7 +22,7 @@ export interface JoinScreenProps {
 const domainOf = (email: string) => email.slice(email.lastIndexOf('@') + 1).toLowerCase();
 
 /**
- * AuthLayout with one row per workspace (DescriptionList: its name, then Ask
+ * AuthLayout with one row per workspace (a SettingsRow in a Card: its name, then Ask
  * to join or the request's Badge), a quiet line once any request is out, and
  * the way back to the person's workspaces.
  */
@@ -71,11 +71,10 @@ export function JoinScreen({ data, email, joinable, hasHome }: JoinScreenProps) 
     >
       {failure !== undefined && <Callout tone="danger">{failure}</Callout>}
       {rows.length > 0 && (
-        <DescriptionList
-          items={rows.map((row) => ({
-            term: row.name,
-            description:
-              row.state === 'pending' ? (
+        <Card>
+          {rows.map((row) => (
+            <SettingsRow key={row.workspaceId} title={row.name}>
+              {row.state === 'pending' ? (
                 <Badge text={strings.pending} />
               ) : (
                 <Button
@@ -87,9 +86,10 @@ export function JoinScreen({ data, email, joinable, hasHome }: JoinScreenProps) 
                 >
                   {strings.askShort}
                 </Button>
-              ),
-          }))}
-        />
+              )}
+            </SettingsRow>
+          ))}
+        </Card>
       )}
       {rows.some((row) => row.state === 'pending') && (
         <Callout isAnnounced {...(asked === undefined ? {} : { title: strings.asked(asked) })}>

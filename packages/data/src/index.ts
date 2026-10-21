@@ -246,6 +246,7 @@ export {
   INVITE_LINK_USES_MAX,
   MEMBER_SEARCH_MAX,
   MEMBERS_PAGE,
+  namesMatch,
   WORKSPACE_PURGE_DAYS,
   type InviteLinkDays,
 } from '@crm/contracts/team-limits';
@@ -2574,6 +2575,10 @@ export function createDataLayer({
         const deleted = await call((options) =>
           api.workspace.delete({ workspace, confirmName, mutationId: mintId() }, options),
         );
+        // Nothing of it stays cached: its address now answers the restore page, or not found.
+        objects.delete(workspace);
+        access.delete(workspace);
+        members.delete(workspace);
         me = undefined;
         return deleted;
       },

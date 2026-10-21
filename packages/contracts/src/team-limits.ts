@@ -24,3 +24,19 @@ export const INVITE_LINK_USES_MAX = 1000;
 
 /** How long a deleted workspace waits before its purge, while an owner can restore it (spec 0031, AC-823). */
 export const WORKSPACE_PURGE_DAYS = 30;
+
+/**
+ * Whether what an owner typed names the workspace (spec 0031, AC-823): curly
+ * quotes and apostrophes count as straight ones and runs of space as one, so
+ * "Ada's workspace" typed on a keyboard matches "Ada’s workspace". Case
+ * stays strict.
+ */
+export function namesMatch(typed: string, name: string): boolean {
+  const plain = (text: string) =>
+    text
+      .replace(/[‘’‛′]/g, "'")
+      .replace(/[“”‟″]/g, '"')
+      .replace(/\s+/g, ' ')
+      .trim();
+  return plain(typed) === plain(name);
+}

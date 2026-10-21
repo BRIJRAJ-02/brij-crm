@@ -44,7 +44,7 @@ import {
   type Toasts,
 } from '@crm/ui';
 import { useRouter } from '@tanstack/react-router';
-import { Fragment, useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useCan } from '../workspace/WorkspacePage.tsx';
 import { InviteDialog } from './InviteDialog.tsx';
 import { EmailDomainCard } from './EmailDomainCard.tsx';
@@ -89,12 +89,7 @@ const MEMBER_COLUMNS: readonly TableColumn[] = [
     label: strings.columns.role,
     info: (
       <InfoTip label={strings.columns.role}>
-        {ROLES.map((role, index) => (
-          <Fragment key={role}>
-            {index > 0 && <br />}
-            {ROLE_LABELS[role]}: {ROLE_DESCRIPTIONS[role]}
-          </Fragment>
-        ))}
+        {ROLES.map((role) => `${ROLE_LABELS[role]}: ${ROLE_DESCRIPTIONS[role]}`).join(' ')}
       </InfoTip>
     ),
   },

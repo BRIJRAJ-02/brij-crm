@@ -2,7 +2,7 @@
 // Purpose: the owner's last check before deleting the workspace (spec 0031, AC-823): what happens, in one sentence.
 // Main task: type the workspace's name, then Delete workspace; the server checks the name again.
 // Leaves out: restoring (the workspace's own address does that for 30 days) and exporting (suggested in the help).
-import { isDataError, type DataLayer, type DeletedWorkspace } from '@crm/data';
+import { isDataError, namesMatch, type DataLayer, type DeletedWorkspace } from '@crm/data';
 import { Button, Field, InfoTip, Modal } from '@crm/ui';
 import { useState } from 'react';
 import { strings } from './workspace-strings.ts';
@@ -28,7 +28,8 @@ export function DeleteWorkspaceDialog({ data, slug, name, isOpen, onClose, onDel
   const [typed, setTyped] = useState('');
   const [isBusy, setBusy] = useState(false);
   const [failure, setFailure] = useState<string | undefined>(undefined);
-  const matches = typed.trim() === name;
+  // Straight quotes and extra spaces count, as the server counts them.
+  const matches = namesMatch(typed, name);
   const commit = () => {
     if (!matches || isBusy) return;
     setBusy(true);

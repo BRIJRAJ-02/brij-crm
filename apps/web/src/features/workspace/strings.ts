@@ -52,6 +52,7 @@ export const strings = {
   restoreWorkspace: 'Restore workspace',
   restored: (name: string) => `${name} is back.`,
   restoreFailed: 'Couldn’t restore it. Try again in a moment.',
+  backToWorkspaces: 'Back to your workspaces',
   workspaceMissingText: 'That workspace doesn’t exist, or you’re not a member of it.',
   pageMissingTitle: 'Page not found',
   pageMissingText: 'There’s nothing at this address.',

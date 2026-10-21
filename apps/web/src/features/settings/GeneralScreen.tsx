@@ -1,10 +1,9 @@
 // Brief
 // Purpose: Settings › Workspace › General (spec 0031, AC-822, AC-823): the workspace's name, time zone and address.
 // Main task: rename it (Save shows once the name changed) or pick its time zone (saved at once); owners can delete it.
-// Leaves out: the logo upload (#32; initials until then), the address (fixed), and members (their own page).
+// Leaves out: the logo (no row until upload arrives with #32), the address (fixed), and members (their own page).
 import { isDataError, type DataLayer, type WorkspaceSettings } from '@crm/data';
 import {
-  Avatar,
   Button,
   Card,
   EmptyState,
@@ -16,6 +15,7 @@ import {
   SettingsStack,
   type Toasts,
 } from '@crm/ui';
+import { useBlocker } from '@tanstack/react-router';
 import { useMemo, useState } from 'react';
 import { zoneItems, zoneLabel, zoneMatches } from '../booking/hours.ts';
 import { DeleteWorkspaceDialog } from './DeleteWorkspaceDialog.tsx';
@@ -41,7 +41,7 @@ export interface GeneralScreenProps {
 }
 
 /**
- * One Card of rows (name, time zone, address, logo), Save in the bar only
+ * One Card of rows (name, time zone, address), Save in the bar only
  * while the name differs, and for owners a Danger zone section with Delete
  * workspace, which opens the typed name confirm.
  */
@@ -62,7 +62,12 @@ export function GeneralScreen({
   const [zoneBusy, setZoneBusy] = useState(false);
   const [isDeleting, setDeleting] = useState(false);
   const zones = useMemo(() => zoneItems(settings.timeZone, new Date()), [settings.timeZone]);
-  const isDirty = name.trim() !== settings.name;
+  const isDirty = mayManage && name.trim() !== settings.name;
+  // An unsaved name isn't lost by leaving the page without a word.
+  useBlocker({
+    shouldBlockFn: () => isDirty && !globalThis.confirm(strings.leaveConfirm),
+    enableBeforeUnload: () => isDirty,
+  });
   const fail = (error: unknown) => {
     toasts.toast({ tone: 'danger', message: isDataError(error) ? error.message : strings.somethingWrong });
   };
@@ -158,7 +163,9 @@ export function GeneralScreen({
                 filter={zoneMatches}
                 isSearchable
                 value={settings.timeZone}
-                isDisabled={!mayManage || zoneBusy}
+                isReadOnly={!mayManage}
+                {...(mayManage ? {} : { readOnlyReason: strings.readOnly })}
+                isDisabled={zoneBusy}
                 onChange={(zone) => {
                   if (zone !== null && zone !== settings.timeZone) setZone(zone, settings.timeZone, true);
                 }}
@@ -172,9 +179,6 @@ export function GeneralScreen({
                 copyLabel={strings.copyAddress}
                 value={`${origin}/w/${settings.slug}`}
               />
-            </SettingsRow>
-            <SettingsRow title={strings.logo}>
-              <Avatar name={settings.name} id={settings.id} shape="square" size="lg" isDecorative />
             </SettingsRow>
           </Card>
         </SettingsSection>
@@ -207,7 +211,7 @@ export function GeneralScreen({
   );
 }
 
-/** The page while its route loads: the same Card's rows as skeletons. */
+/** The page while its route loads: its title, and a loading body. */
 export function GeneralPending() {
   return (
     <SettingsPage title={strings.generalTitle} isLoading>

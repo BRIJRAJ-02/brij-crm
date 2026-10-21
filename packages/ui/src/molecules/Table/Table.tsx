@@ -119,6 +119,9 @@ export function Table<T>({
             id={column.id}
             isRowHeader={column.isRowHeader ?? false}
             className={styles.column}
+            // The header's name is its label alone, never its help's button too.
+            textValue={column.label}
+            {...(column.info === undefined ? {} : { 'aria-label': column.label })}
             data-align={column.align ?? 'start'}
             data-handle={column.id === HANDLE || undefined}
           >
