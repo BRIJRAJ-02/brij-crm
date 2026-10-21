@@ -1,6 +1,8 @@
-// The Mailpit transport, and the mailer's choice of transport. The templates are packages/emails' own tests.
+// The Mailpit transport, the mailer's choice of transport, a refusal's code
+// read back, and the worker's paced sends. The templates are packages/emails'
+// own tests.
 import { describe, expect, it } from 'vitest';
-import { createMailer } from './mailer.ts';
+import { createMailer, mailRefused, pacedMailer, refusalOf, type Mailer, type MailMessage } from './mailer.ts';
 import { createMailpitMailer, parseSender } from './mailpit.ts';
 
 describe('the mail transport', () => {
@@ -46,5 +48,44 @@ describe('the mail transport', () => {
       createMailer({ RESEND_API_KEY: undefined, MAIL_FROM: from, MAILPIT_URL: 'http://localhost:8025' }).transport,
     ).toBe('mailpit');
     expect(() => createMailer({ RESEND_API_KEY: undefined, MAIL_FROM: from, MAILPIT_URL: undefined })).toThrow();
+  });
+
+  it('reads back a refusal’s code and whether trying again can’t help, and nothing from any other error', () => {
+    const refused = mailRefused('Resend', { code: 'invalid_parameter', permanent: true });
+    expect(refused.message).toBe('Resend refused the message (invalid_parameter).');
+    expect(refusalOf(refused)).toEqual({ code: 'invalid_parameter', permanent: true });
+    expect(refusalOf(new Error('Unable to fetch data.'))).toBeUndefined();
+    expect(refusalOf('refused')).toBeUndefined();
+  });
+
+  it('paces sends one at a time, each starting the gap after the one before', async () => {
+    const events: string[] = [];
+    const waits: number[] = [];
+    let release: () => void = () => undefined;
+    const inner: Mailer = {
+      transport: 'mailpit',
+      send: (message: MailMessage) => {
+        events.push(`start ${message.subject}`);
+        return Promise.resolve();
+      },
+    };
+    const paced = pacedMailer(inner, 600, (ms) => {
+      waits.push(ms);
+      events.push('wait');
+      return new Promise<void>((resolve) => {
+        release = resolve;
+      });
+    });
+    const message = (subject: string) => ({ to: 'ada@example.com', subject, html: '', text: '' });
+    const first = paced.send(message('1'));
+    const second = paced.send(message('2'));
+    await first;
+    // The gap starts with the first send; the second waits for it.
+    expect(events).toEqual(['wait', 'start 1']);
+    release();
+    await second;
+    expect(events).toEqual(['wait', 'start 1', 'wait', 'start 2']);
+    expect(waits).toEqual([600, 600]);
+    expect(paced.transport).toBe('mailpit');
   });
 });

@@ -20,7 +20,9 @@
 // (the poll fallback), sooner after a failure, never for a connection that
 // stopped. A sleeping worker wakes for that row like any other due row.
 // The light runner also takes `crm_booking_mail` (spec 0025, milestone 2):
-// one queued booking email kind, its retries Graphile's (5 tries).
+// one queued booking email kind, its retries Graphile's (5 tries); and
+// `crm_email` (the emails lane): one queued email, 8 tries with Graphile's
+// backoff, the try told to the task so its last records the email failed.
 import { QueuePayload } from '@crm/contracts';
 import type { Runner } from '@crm/core';
 import type { CalendarSyncInput, CalendarSyncOutcome, DailyCleanupInput, DailyCleanupReport } from '@crm/core/system';
@@ -29,6 +31,7 @@ import { Logger, run, type Runner as GraphileRunner, type Task } from 'graphile-
 import * as z from 'zod';
 import { errorFields } from '../log.ts';
 import { BOOKING_MAIL_TASK } from './booking-mail.ts';
+import { EMAIL_TASK, EmailPayload, type EmailRun, type EmailTry } from './email.ts';
 
 /** The two lanes: their task and how many slices each runs at once (AC-108). */
 export const LANES = {
@@ -51,15 +54,21 @@ export const DAILY_TASK = 'crm_cron_daily';
 export const CALENDAR_TASK = 'crm_calendar_sync';
 
 /**
- * Every task the worker's runners run: only their queue rows keep a sleeping
- * worker's check awake. With calendar sync on, `CALENDAR_TASK` joins them
- * (`runnerTasks`); off, its rows wait and never wake a worker that won't run them.
+ * Every task the worker's runners always run: only their queue rows keep a
+ * sleeping worker's check awake. With calendar sync on, `CALENDAR_TASK` joins
+ * them, and `EMAIL_TASK` when queued email is on (`runnerTasks`); off, their
+ * rows wait and never wake a worker that won't run them.
  */
 export const RUNNER_TASKS: readonly string[] = [LANES.heavy.task, LANES.light.task, DAILY_TASK, BOOKING_MAIL_TASK];
 
-/** The tasks this worker runs: calendar sync's too when it is on. */
-export function runnerTasks(calendar: boolean): readonly string[] {
-  return calendar ? [...RUNNER_TASKS, CALENDAR_TASK] : RUNNER_TASKS;
+/**
+ * The tasks this worker runs: calendar sync's when it is on, and queued
+ * email's when the worker can send it. Only these rows keep a sleeping
+ * worker's check awake: a row of a task it doesn't run would keep it awake
+ * forever.
+ */
+export function runnerTasks(running: { readonly calendar: boolean; readonly email: boolean }): readonly string[] {
+  return [...RUNNER_TASKS, ...(running.calendar ? [CALENDAR_TASK] : []), ...(running.email ? [EMAIL_TASK] : [])];
 }
 
 /** A calendar sync's payload: the workspace and the connection, ids only (what `crm_enqueue_calendar_sync` writes). */
@@ -136,6 +145,12 @@ export interface JobRunnersOptions {
    * `crm_booking_mail`; it throws plainly for a retry.
    */
   readonly bookingMail?: (payload: unknown) => Promise<void>;
+  /**
+   * Queued email (the emails lane): one email's send (`runEmail` with the
+   * worker's deps), told which try this is. With it, the light runner takes
+   * `crm_email`, and throws plainly on `retry` for Graphile's backoff.
+   */
+  readonly email?: (payload: unknown, attempt: EmailTry) => Promise<EmailRun>;
   /**
    * Hears every task call start and end (the worker's idle clock starts
    * again, spec 0008's sleep): a slice, or the daily task.
@@ -275,6 +290,34 @@ function calendarTask(options: JobRunnersOptions, sync: NonNullable<JobRunnersOp
 }
 
 /**
+ * The email task: one queued email's send, told which try this is. A retry
+ * (the send logged it) and a failure it didn't expect (the database, a bug:
+ * logged here, its class only) are thrown on with a plain message, as the
+ * other tasks do: Graphile logs a thrown message and keeps it on the queue
+ * row, and a database error's text can quote the values it was given.
+ */
+function emailTask(options: JobRunnersOptions, email: NonNullable<JobRunnersOptions['email']>): Task {
+  return async (payload, helpers) => {
+    let run: EmailRun | undefined;
+    let failure: string | undefined;
+    try {
+      run = await email(payload, { attempt: helpers.job.attempts, maxAttempts: helpers.job.max_attempts });
+    } catch (error) {
+      failure = error instanceof Error ? error.name : 'unknown';
+    }
+    if (run === 'finished') return;
+    if (run === undefined) {
+      const parsed = EmailPayload.safeParse(payload);
+      options.log.error('email.task.failed', {
+        ...(parsed.success ? { emailId: parsed.data.emailId } : { queueJobId: helpers.job.id }),
+        error: failure,
+      });
+    }
+    throw new Error('An email failed to send; the worker log has its id.');
+  };
+}
+
+/**
  * Starts the two runners on the queue pool. Graphile's `run()` calls its
  * migrate step; its migrations ran before deploy (as the owner), so here that
  * step only reads Graphile's `migrations` table, the one right `crm_worker`
@@ -329,6 +372,7 @@ export async function startJobRunners(options: JobRunnersOptions): Promise<JobRu
       const daily = lane === LANES.light ? options.daily : undefined;
       const calendar = lane === LANES.light ? options.calendar : undefined;
       const bookingMail = lane === LANES.light ? options.bookingMail : undefined;
+      const email = lane === LANES.light ? options.email : undefined;
       runners.push(
         watch(
           await run({
@@ -348,6 +392,9 @@ export async function startJobRunners(options: JobRunnersOptions): Promise<JobRu
               ...(bookingMail === undefined
                 ? {}
                 : { [BOOKING_MAIL_TASK]: counted((payload) => bookingMail(payload), inFlight, options.onActivity) }),
+              ...(email === undefined
+                ? {}
+                : { [EMAIL_TASK]: counted(emailTask(options, email), inFlight, options.onActivity) }),
             },
             ...(daily === undefined ? {} : { crontab: DAILY_CRONTAB }),
             // Completions and failures go through Graphile's batcher (with no wait), which a stop flushes before

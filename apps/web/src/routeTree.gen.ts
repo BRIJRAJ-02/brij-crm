@@ -10,6 +10,7 @@
 
 import { Route as rootRouteImport } from './routes/__root.tsx'
 import { Route as IndexRouteImport } from './routes/index.tsx'
+import { Route as EmailPreferencesRouteImport } from './routes/email-preferences.tsx'
 import { Route as SignInRouteImport } from './routes/sign-in.tsx'
 import { Route as StatusRouteImport } from './routes/status.tsx'
 import { Route as VerifyRouteImport } from './routes/verify.tsx'
@@ -54,6 +55,11 @@ import { Route as WSlugSettingsObjectsObjectTabRouteImport } from './routes/w.$s
 const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const EmailPreferencesRoute = EmailPreferencesRouteImport.update({
+  id: '/email-preferences',
+  path: '/email-preferences',
   getParentRoute: () => rootRouteImport,
 } as any)
 const SignInRoute = SignInRouteImport.update({
@@ -275,6 +281,7 @@ const WSlugSettingsObjectsObjectTabRoute =
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/email-preferences': typeof EmailPreferencesRoute
   '/sign-in': typeof SignInRoute
   '/status': typeof StatusRoute
   '/verify': typeof VerifyRoute
@@ -318,6 +325,7 @@ export interface FileRoutesByFullPath {
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/email-preferences': typeof EmailPreferencesRoute
   '/sign-in': typeof SignInRoute
   '/status': typeof StatusRoute
   '/verify': typeof VerifyRoute
@@ -358,6 +366,7 @@ export interface FileRoutesByTo {
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
+  '/email-preferences': typeof EmailPreferencesRoute
   '/sign-in': typeof SignInRoute
   '/status': typeof StatusRoute
   '/verify': typeof VerifyRoute
@@ -403,6 +412,7 @@ export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
     | '/'
+    | '/email-preferences'
     | '/sign-in'
     | '/status'
     | '/verify'
@@ -446,6 +456,7 @@ export interface FileRouteTypes {
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
+    | '/email-preferences'
     | '/sign-in'
     | '/status'
     | '/verify'
@@ -485,6 +496,7 @@ export interface FileRouteTypes {
   id:
     | '__root__'
     | '/'
+    | '/email-preferences'
     | '/sign-in'
     | '/status'
     | '/verify'
@@ -529,6 +541,7 @@ export interface FileRouteTypes {
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
+  EmailPreferencesRoute: typeof EmailPreferencesRoute
   SignInRoute: typeof SignInRoute
   StatusRoute: typeof StatusRoute
   VerifyRoute: typeof VerifyRoute
@@ -544,6 +557,13 @@ declare module '@tanstack/react-router' {
       path: '/'
       fullPath: '/'
       preLoaderRoute: typeof IndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/email-preferences': {
+      id: '/email-preferences'
+      path: '/email-preferences'
+      fullPath: '/email-preferences'
+      preLoaderRoute: typeof EmailPreferencesRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/sign-in': {
@@ -937,6 +957,7 @@ const WSlugRouteWithChildren = WSlugRoute._addFileChildren(WSlugRouteChildren)
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
+  EmailPreferencesRoute: EmailPreferencesRoute,
   SignInRoute: SignInRoute,
   StatusRoute: StatusRoute,
   VerifyRoute: VerifyRoute,

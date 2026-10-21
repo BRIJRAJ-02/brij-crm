@@ -41,6 +41,9 @@ export default defineRailway(() => {
       SIGNUP_ALLOWLIST: preserve(),
       RESEND_API_KEY: preserve(),
       MAIL_FROM: preserve(),
+      // The key a booking's guest links and an email's preferences links are signed with; unset, both derive from
+      // WORKER_WAKE_SECRET. The worker takes the api's value.
+      BOOKING_LINK_SECRET: preserve(),
       GOOGLE_CLIENT_ID: preserve(),
       GOOGLE_CLIENT_SECRET: preserve(),
       // The relay's wake up call (spec 0005): the worker's private address and port, and the shared secret.
@@ -90,6 +93,12 @@ export default defineRailway(() => {
       // and the worker sleeps after this many idle seconds (180 when unset, 0 never).
       JOBS_RUNNER: preserve(),
       WORKER_IDLE_SLEEP_SECONDS: preserve(),
+      // Email from the jobs (spec 0025's booking emails, the emails lane's queued ones): the app's address for their
+      // links, the mail service and the sender, and the links' key, all the api's own.
+      APP_URL: api.env.APP_URL,
+      RESEND_API_KEY: api.env.RESEND_API_KEY,
+      MAIL_FROM: api.env.MAIL_FROM,
+      BOOKING_LINK_SECRET: api.env.BOOKING_LINK_SECRET,
       // Calendar sync (spec 0024): the worker refreshes tokens and syncs, with the api's values.
       CALENDAR_SYNC: api.env.CALENDAR_SYNC,
       GOOGLE_CALENDAR_CLIENT_ID: api.env.GOOGLE_CALENDAR_CLIENT_ID,

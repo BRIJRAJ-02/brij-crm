@@ -20,6 +20,7 @@
 import { sql } from 'drizzle-orm';
 import type { EngineScope } from '../access/mint.ts';
 import { inWorkspace } from '../access/run.ts';
+import { queueCalendarDisconnected } from '../emails/queue.ts';
 import { runWrite, type AfterWrite } from '../engine/write.ts';
 import { applyEvents, dropBusyTimes, dropSources } from './apply.ts';
 import { isBusyOnly } from './match.ts';
@@ -122,27 +123,65 @@ const FAILURE_MESSAGES: Readonly<Record<CalendarErrorCode, string>> = {
   CALENDAR_SCOPE_DECLINED: 'The calendar was connected without the access Timefix needs. Reconnect it.',
 };
 
+/** A failure as `recordFailure` stored it: when failures began, and the status before and after. */
+interface FailureRow extends Record<string, unknown> {
+  readonly failing_since: string;
+  readonly since: string;
+  readonly status: string;
+  readonly was: string;
+  readonly member_id: string;
+  readonly account_email: string;
+  readonly provider: 'google' | 'microsoft';
+}
+
 /**
  * Records a failure on the connection: its code and message, and since when.
  * A refused grant marks it `expired` (AC-619); any failure once failures
- * have lasted 6 hours marks it `failed` (AC-620).
+ * have lasted 6 hours marks it `failed` (AC-620). The moment it becomes one
+ * of those, its member is told by email (`calendar_disconnected`), queued in
+ * the same transaction, once per failing spell and reason.
  */
 async function recordFailure(scope: EngineScope, connectionId: string, code: CalendarErrorCode): Promise<string> {
-  const rows = await inWorkspace(scope, (tx) =>
-    tx.execute<{ failing_since: string }>(sql`
-      update calendar_connections set
+  const rows = await inWorkspace(scope, async (tx) => {
+    const stored = await tx.execute<FailureRow>(sql`
+      with before as (
+        select id, status from calendar_connections
+        where id = ${connectionId}::uuid and status in ('syncing', 'connected', 'failed')
+        for update
+      )
+      update calendar_connections c set
         last_error = ${JSON.stringify({ code, message: FAILURE_MESSAGES[code] })}::jsonb,
-        failing_since = coalesce(failing_since, now()),
+        failing_since = coalesce(c.failing_since, now()),
         status = case
           when ${code === 'CALENDAR_AUTH_REVOKED'} then 'expired'::calendar_status
-          when coalesce(failing_since, now()) <= now() - make_interval(secs => ${FAILED_AFTER_MS / 1000})
+          when coalesce(c.failing_since, now()) <= now() - make_interval(secs => ${FAILED_AFTER_MS / 1000})
             then 'failed'::calendar_status
-          else status end,
+          else c.status end,
         updated_at = now(), updated_by_type = 'calendar', updated_by_id = null, updated_by_member_id = null
-      where id = ${connectionId}::uuid and status in ('syncing', 'connected', 'failed')
-      returning failing_since::text as failing_since
-    `),
-  );
+      from before
+      where c.id = before.id
+      returning c.failing_since::text as failing_since, to_json(c.failing_since)#>>'{}' as since,
+        c.status::text as status, before.status::text as was, c.member_id::text as member_id, c.account_email,
+        c.provider::text as provider
+    `);
+    const [row] = stored.rows;
+    if (row !== undefined && (row.status === 'expired' || row.status === 'failed') && row.was !== row.status) {
+      const workspace = await tx.execute<{ slug: string }>(sql`select slug from workspaces`);
+      await queueCalendarDisconnected(tx, {
+        connectionId,
+        memberId: row.member_id,
+        reason: row.status,
+        since: new Date(row.since),
+        params: {
+          provider: row.provider,
+          accountEmail: row.account_email,
+          reason: row.status,
+          settingsPath: `/w/${encodeURIComponent(workspace.rows[0]?.slug ?? '')}/settings/account/calendars`,
+        },
+      });
+    }
+    return stored;
+  });
   return rows.rows[0]?.failing_since ?? new Date().toISOString();
 }
 

@@ -33,6 +33,8 @@ import type { Mailer } from './mail/mailer.ts';
 import { type Analytics, NO_ANALYTICS } from './monitoring/posthog.ts';
 import { captureFault, nameRequest, withRequestScope } from './monitoring/sentry.ts';
 import { mountPublicBooking } from './public/booking.ts';
+import { EMAIL_UNSUBSCRIBE_PATH, mountEmailPreferences } from './public/email-preferences.ts';
+import { emailLinkKey } from './email-link.ts';
 import { guestKeys } from './public/visitor.ts';
 import { createMemoryLimiter, type PublicLimiter } from './limits.ts';
 import { createRealtimeTokens } from './realtime/tokens.ts';
@@ -145,6 +147,8 @@ export interface AppServices {
   readonly bookingCalendar?: BookingCalendar;
   /** The public booking routes' limiter (spec 0025, AC-643): this process's memory unless a test passes its own. */
   readonly bookingLimiter?: PublicLimiter;
+  /** The email preferences routes' limiter (the emails lane): this process's memory unless a test passes its own. */
+  readonly emailPreferenceLimiter?: PublicLimiter;
   /** The clock the public booking routes read, for tests. */
   readonly now?: () => Date;
   /** Where invitation emails go (spec 0031): the server's mailer; absent, every send fails and is reported unsent. */
@@ -267,6 +271,8 @@ export function createApp({
     if (c.req.path.startsWith('/api/public/forms/')) return next();
     // Google's change notices carry no Origin: the channel's own token is their key (spec 0024, milestone 2).
     if (c.req.path === GOOGLE_NOTIFY_PATH && c.req.method === 'POST') return next();
+    // A mail service's one click unsubscribe (RFC 8058) carries no Origin: the link's signed token is its only key.
+    if (c.req.path === EMAIL_UNSUBSCRIBE_PATH && c.req.method === 'POST') return next();
     const origin = c.get('origin');
     if (!origin || !allowedOrigins.has(origin)) {
       return errorResponse('FORBIDDEN_ORIGIN', 'This request came from an origin the API does not accept.');
@@ -382,6 +388,13 @@ export function createApp({
   // Hosts' and signed in visitors' busy times, each kept for its minute.
   const bookingBusy = createBusyCache(booking.busy);
   // Booking pages' public routes (spec 0025): a page's public key, no session; writes passed the Origin check above.
+  // An email's preferences link (the emails lane): its signed token, no session; reads, changes, one click unsubscribe.
+  mountEmailPreferences(app, {
+    db,
+    linkKey: emailLinkKey(env),
+    limiter: services.emailPreferenceLimiter ?? createMemoryLimiter(),
+    ...(services.now === undefined ? {} : { now: services.now }),
+  });
   mountPublicBooking(app, {
     db,
     calendar: {

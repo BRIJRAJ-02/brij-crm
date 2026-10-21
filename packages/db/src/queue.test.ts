@@ -240,6 +240,82 @@ describe('crm_enqueue_calendar_sync (spec 0024)', () => {
   });
 });
 
+describe('crm_enqueue_email (the emails lane)', () => {
+  /** An email row in `status`, as core's queueEmail writes one. */
+  const emailIn = async (workspaceId: string, memberId: string, status: string) => {
+    const id = randomUUID();
+    await db.withWorkspace(workspaceId, (tx) =>
+      tx.execute(sql`
+        insert into emails (workspace_id, id, kind, key, to_member_id, params, status, sent_at, created_by_type)
+        values (${workspaceId}, ${id}, 'mention', ${`mention:${id}`}, ${memberId}, '{}'::jsonb, ${status}::email_status,
+          ${status === 'sent' ? sql`now()` : null}, 'system')
+      `),
+    );
+    return id;
+  };
+  const queueEmail = (workspaceId: string, emailId: string) =>
+    db.withWorkspace(workspaceId, async (tx) => {
+      const result = await tx.execute<{ queued: boolean }>(sql`select crm_enqueue_email(${emailId}::uuid) as queued`);
+      return result.rows[0]?.queued;
+    });
+  const emailRows = (emailId: string) =>
+    owner
+      .query<{ key: string; task: string; queue: string | null; payload: unknown; max_attempts: number }>(
+        `select v.key, task_identifier as task, queue_name as queue, j.payload, j.max_attempts
+         from ${QUEUE_SCHEMA}.jobs v join ${QUEUE_SCHEMA}._private_jobs j on j.id = v.id
+         where j.payload->>'emailId' = $1`,
+        [emailId],
+      )
+      .then((result) => result.rows);
+
+  it('queues a queued email of the caller’s workspace, ids only, one row per email', async () => {
+    const { workspaceId, memberId } = await workspaceWithMember('email-queue');
+    const emailId = await emailIn(workspaceId, memberId, 'queued');
+    expect(await queueEmail(workspaceId, emailId)).toBe(true);
+    expect(await queueEmail(workspaceId, emailId)).toBe(true);
+    expect(await emailRows(emailId)).toEqual([
+      {
+        key: `crm-email:${workspaceId}:${emailId}`,
+        task: 'crm_email',
+        queue: `email:${workspaceId}`,
+        payload: { workspaceId, emailId },
+        max_attempts: 11,
+      },
+    ]);
+  });
+
+  it('refuses another workspace’s email, a finished one, and one outside any workspace', async () => {
+    const a = await workspaceWithMember('email-queue-a');
+    const b = await workspaceWithMember('email-queue-b');
+    const theirs = await emailIn(b.workspaceId, b.memberId, 'queued');
+    expect(await queueEmail(a.workspaceId, theirs)).toBe(false);
+    for (const status of ['sent', 'skipped', 'failed']) {
+      const finished = await emailIn(a.workspaceId, a.memberId, status);
+      expect(await queueEmail(a.workspaceId, finished), status).toBe(false);
+      expect(await emailRows(finished), status).toEqual([]);
+    }
+    const app = new pg.Client({ connectionString: appUrl });
+    await app.connect();
+    try {
+      const outside = await app.query<{ queued: boolean }>('select crm_enqueue_email($1) as queued', [theirs]);
+      expect(outside.rows).toEqual([{ queued: false }]);
+    } finally {
+      await app.end();
+    }
+    expect(await emailRows(theirs)).toEqual([]);
+  });
+
+  it('lets crm_queue read three columns of an email and never its params or address', async () => {
+    const columns = await owner.query<{ column: string }>(`
+      select att.attname as column from pg_attribute att cross join lateral aclexplode(att.attacl) a
+      where a.grantee = 'crm_queue'::regrole and att.attrelid = 'public.emails'::regclass
+        and a.privilege_type = 'SELECT'
+      order by 1
+    `);
+    expect(columns.rows.map((row) => row.column)).toEqual(['id', 'status', 'workspace_id']);
+  });
+});
+
 describe('queue keys against Graphile 0.18.0 (spec 0008, Queue keys)', () => {
   /** A job's queue rows with what decides whether Graphile runs them. */
   const rows = (jobId: string) =>

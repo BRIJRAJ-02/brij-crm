@@ -86,6 +86,12 @@ export type Principal =
   | { readonly kind: 'form'; readonly formId: string }
   /** A visitor booking through a page (spec 0025): the page acts, on People and Companies only. */
   | { readonly kind: 'booking'; readonly pageId: string }
+  /**
+   * A member reached through an email's preferences link (the emails lane):
+   * not a member principal, so no member service takes it; only their own
+   * email preferences do.
+   */
+  | { readonly kind: 'email_link'; readonly memberId: string }
   | { readonly kind: 'system' };
 
 /** A member principal. */
@@ -332,6 +338,25 @@ export function bookingAccess(pageId: string, objectIds: readonly string[]): Acc
     data: sealPolicy({
       defaultObject: 'none',
       objects: frozenRecord(objectIds.map((objectId) => [objectId, 'write' as const])),
+      fields: frozenRecord([]),
+      records: frozenRecord([]),
+    }),
+  });
+}
+
+/**
+ * A member reached through an email's preferences link (the emails lane): an
+ * `email_link` principal with no role, no permission and no object, so every
+ * member service refuses it and only their own email preferences take it.
+ * Only the door's `enterEmailLink` builds one.
+ */
+export function emailLinkAccess(memberId: string): Access {
+  return Object.freeze({
+    principal: Object.freeze({ kind: 'email_link', memberId }),
+    permissions: Object.freeze([]),
+    data: sealPolicy({
+      defaultObject: 'none',
+      objects: frozenRecord([]),
       fields: frozenRecord([]),
       records: frozenRecord([]),
     }),

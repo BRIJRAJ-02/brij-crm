@@ -393,6 +393,13 @@
       "when": 1792589790431,
       "tag": "0055_invitations_audit",
       "breakpoints": true
+    },
+    {
+      "idx": 56,
+      "version": "7",
+      "when": 1792589842415,
+      "tag": "0056_email_queue",
+      "breakpoints": true
     }
   ]
 }

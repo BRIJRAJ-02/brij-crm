@@ -38,3 +38,7 @@ export {
   type PreparedMail,
 } from './booking/mail.ts';
 export { BOOKING_MAIL_KINDS, type BookingMailKind } from './booking/mail-queue.ts';
+// Sending a queued email (the emails lane): the worker's `crm_email` task reads one and records how sending went, and
+// signs the preferences link it draws into an optional email.
+export { finishEmail, loadEmail, type EmailOutcome, type EmailToSend, type LoadedEmail } from './emails/send.ts';
+export { emailLinkToken } from './emails/preferences.ts';

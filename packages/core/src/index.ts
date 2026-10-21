@@ -383,3 +383,26 @@ export {
   PROCESS_GAVE_UP,
   type Assignment,
 } from './forms/process.ts';
+// Queued email (the emails lane): one `emails` row and its queue row in the caller's transaction, ids only on the queue.
+export {
+  emailKey,
+  queueBookingCalendarRemoved,
+  queueCalendarDisconnected,
+  queueEmail,
+  queueEmails,
+  queueFormConfirmation,
+  queueFormSubmissionNotice,
+  queueImportFinished,
+  queueMention,
+  type EmailReader,
+  type QueuedEmail,
+  type QueueEmailInput,
+} from './emails/queue.ts';
+export {
+  EMAIL_LINK_DAYS,
+  emailLinkToken,
+  readEmailLinkToken,
+  type EmailLink,
+  type EmailLinkKey,
+  type EmailLinkPurpose,
+} from './emails/preferences.ts';

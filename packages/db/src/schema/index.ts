@@ -34,3 +34,4 @@ export { formSubmissionRecords, formSubmissions, formVersions, forms } from './f
 export { bookingMemberHours, bookingPageMembers, bookingPages, bookings, bookingTimeBlocks } from './booking.ts';
 export { exportChunks, exports } from './exports.ts';
 export { auditEvents, invitations } from './team.ts';
+export { emailPreferences, emails, emailStatus } from './emails.ts';

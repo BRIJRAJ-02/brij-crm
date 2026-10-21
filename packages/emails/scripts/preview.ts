@@ -7,10 +7,14 @@
 import { readFile } from 'node:fs/promises';
 import { createServer, type ServerResponse } from 'node:http';
 import path from 'node:path';
+import type { EmailKind } from '@crm/contracts/emails';
 import {
+  CATALOG,
   renderBookingEmail,
+  renderEmail,
   renderMemberInvite,
   renderSignInCode,
+  topicOf,
   type BookingWords,
   type RenderedEmail,
 } from '../src/index.ts';
@@ -34,12 +38,12 @@ const BOOKING_CONFIRMATION: BookingWords = {
   why: 'You got this email because this address was used to book Intro call with Ada Lovelace.',
 };
 
-/** Every email the preview shows. */
+/** Every email the preview shows: the sign in code, a booking's two looks, then each kind with a template. */
 export const PREVIEW_KINDS: readonly string[] = [
   'sign_in_code',
   'booking_confirmation',
   'booking_reminder',
-  'member_invite',
+  ...Object.keys(CATALOG),
 ];
 
 /** One email drawn with its sample params, its links on `origin`. */
@@ -64,17 +68,16 @@ export function drawSample(kind: string, origin: string): Promise<RenderedEmail>
         { appOrigin: origin, medium: 'email_reminder' },
       );
     case 'member_invite':
-      return renderMemberInvite(
-        {
-          inviterName: 'Ada Lovelace',
-          role: 'member',
-          acceptPath: '/invite/sample-token-for-the-preview',
-          expiresAt: '2026-10-28T13:05:00.000Z',
-        },
-        { appOrigin: origin, workspaceName: 'Acme' },
-      );
-    default:
-      return Promise.reject(new Error(`No email called ${kind}.`));
+      return renderMemberInvite(CATALOG.member_invite.sample, { appOrigin: origin, workspaceName: 'Acme' });
+    default: {
+      if (!(kind in CATALOG)) return Promise.reject(new Error(`No email called ${kind}.`));
+      const templated = kind as EmailKind;
+      return renderEmail(templated, CATALOG[templated].sample, {
+        appOrigin: origin,
+        workspaceName: 'Acme',
+        ...(topicOf(templated) === undefined ? {} : { preferencesUrl: `${origin}/email-preferences#t=preview` }),
+      });
+    }
   }
 }
 
@@ -90,7 +93,7 @@ function escape(text: string): string {
 
 /** Pulls the preview line out of the drawn HTML (React Email's hidden preheader). */
 function preheaderOf(html: string): string {
-  return /<div[^>]*data-skip-in-text="true"[^>]*>([^<]*)/.exec(html)?.[1] ?? '';
+  return /<div style="display:none;overflow:hidden;line-height:1px[^"]*">([^<]*)/.exec(html)?.[1] ?? '';
 }
 
 async function index(origin: string): Promise<string> {

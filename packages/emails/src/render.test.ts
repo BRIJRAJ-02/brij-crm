@@ -37,7 +37,7 @@ const EVERYTHING: EmailDocument = {
 function visibleText(html: string): string {
   return html
     .replace(/<head>[\s\S]*<\/head>/, '')
-    .replace(/<div[^>]*data-skip-in-text="true"[^>]*>[\s\S]*?<\/div>\s*<\/div>/, '')
+    .replace(/<div style="display:none;overflow:hidden;line-height:1px[^"]*">[\s\S]*?<\/div>\s*<\/div>/, '')
     .replace(/<[^>]+>/g, ' ')
     .replace(/&#x27;|&#39;/g, "'")
     .replace(/\s+/g, ' ');
@@ -104,11 +104,20 @@ describe('the email layout', () => {
     expect(html).toMatch(/class="tf-logo-dark"[^>]*style="[^"]*display:none[^"]*mso-hide:all/);
   });
 
+  it('leaves out the styles Mailpit’s HTML check found many clients can’t read, where there was a choice', async () => {
+    const { html } = await renderDocument(EVERYTHING, { appOrigin: ORIGIN, medium: 'email_sign_in' });
+    for (const property of ['opacity', 'outline', 'box-sizing']) expect(html, property).not.toContain(`${property}:`);
+    // The preview line is hidden by display and size, and filled with blanks so the inbox stops there.
+    expect(html).toMatch(
+      /<div style="display:none;overflow:hidden;line-height:1px;max-height:0;max-width:0;mso-hide:all">The line an inbox shows<div>/,
+    );
+  });
+
   it('writes a plain text twin with every word and link', async () => {
     const options: RenderOptions = {
       appOrigin: ORIGIN,
       medium: 'email_sign_in',
-      preferencesUrl: `${ORIGIN}/email-preferences?t=x`,
+      preferencesUrl: `${ORIGIN}/email-preferences#t=x`,
     };
     const email = await renderDocument(EVERYTHING, options);
     expect(email.text).toBe(documentText(EVERYTHING, options));
@@ -137,7 +146,7 @@ describe('the email layout', () => {
         '',
         'Powered by Timefix: https://timefix.ai/?utm_source=timefix&utm_medium=email_sign_in&utm_campaign=powered_by&utm_content=footer_logo',
         'You got this email because of a test.',
-        `Email preferences: ${ORIGIN}/email-preferences?t=x`,
+        `Email preferences: ${ORIGIN}/email-preferences#t=x`,
       ].join('\n'),
     );
     expect(email.html).toContain('Email preferences');
