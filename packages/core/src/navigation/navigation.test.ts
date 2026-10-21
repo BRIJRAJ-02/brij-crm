@@ -68,7 +68,7 @@ async function workspace() {
         : { [attribute('deals.name')]: 'Deal' };
     await createRecord(owner, { objectId, id, values });
   };
-  return { ...created, owner, bea, beaId, people, companies, deals, record };
+  return { ...created, owner, bea, beaId, people, companies, deals, record, attribute };
 }
 
 async function refusal(call: Promise<unknown>) {
@@ -194,6 +194,71 @@ describe('the sidebar', { timeout: 120_000 }, () => {
     const missing = await refusal(changeNav(hidden, { op: 'star', kind: 'record', id: newId() }));
     expect(unreadable).toEqual({ code: 'NOT_FOUND', message: NAV_ITEM_NOT_FOUND });
     expect(missing).toEqual(unreadable);
+  });
+
+  it('refuses a star of a view the member can’t see, the same as a missing one (AC-934)', async () => {
+    const w = await workspace();
+    // Ada's private view, and Deals' views under a rule that hides Deals from members.
+    const privateId = newId();
+    await createView(w.owner, {
+      id: privateId,
+      objectId: w.people,
+      name: 'Ada’s',
+      kind: 'table',
+      visibility: 'private',
+      config: { columns: [], showNewAttributes: false, pinnedCount: 1, sorts: [] },
+    });
+    const { defaultViewId: dealsView } = await listViews(w.bea, w.deals);
+    const rules: AccessRules = {
+      levels: [
+        { subject: { type: 'role', role: 'member' }, target: { type: 'object', objectId: w.deals }, level: 'none' },
+      ],
+      records: [],
+    };
+    const hidden = rescope(w.bea, { rules });
+    const missing = await refusal(changeNav(w.bea, { op: 'star', kind: 'view', id: newId() }));
+    expect(missing).toEqual({ code: 'NOT_FOUND', message: NAV_ITEM_NOT_FOUND });
+    expect(await refusal(changeNav(w.bea, { op: 'star', kind: 'view', id: privateId }))).toEqual(missing);
+    expect(await refusal(changeNav(hidden, { op: 'star', kind: 'view', id: dealsView ?? '' }))).toEqual(missing);
+    expect((await readNav(w.bea)).version).toBe(0);
+  });
+
+  it('drops a starred record a record rule hides, leaving no trace, and brings it back without it (AC-939)', async () => {
+    const w = await workspace();
+    const recordId = newId();
+    await w.record(recordId);
+    await changeNav(w.bea, { op: 'star', kind: 'record', id: recordId });
+    // Owner is empty, so a rule on the member's own records leaves this one out.
+    const ruled = rescope(w.bea, {
+      rules: {
+        levels: [],
+        records: [
+          {
+            subject: { type: 'role', role: 'member' },
+            objectId: w.people,
+            kind: 'own',
+            attributeId: w.attribute('people.owner'),
+          },
+        ],
+      },
+    });
+    const read = await readNav(ruled);
+    expect(read.favourites).toEqual([]);
+    expect(JSON.stringify(read)).not.toContain(recordId);
+    expect((await readNav(w.bea)).favourites.map((favourite) => favourite.id)).toEqual([recordId]);
+  });
+
+  it('either refuses a change racing the member’s removal, or the removal takes the row it made (AC-941)', async () => {
+    const w = await workspace();
+    const [changed] = await Promise.allSettled([
+      changeNav(w.bea, { op: 'rail', on: true }),
+      removeMember(w.owner, { memberId: w.beaId }),
+    ]);
+    if (changed.status === 'rejected') expect(isRefusal(changed.reason)).toBe(true);
+    const rows = await db.withWorkspace(w.workspaceId, (tx) =>
+      tx.execute(sql`select 1 from member_nav_prefs where member_id = ${w.beaId}`),
+    );
+    expect(rows.rows).toEqual([]);
   });
 
   it('refuses the 51st favourite with NAV_LIMIT and changes nothing', async () => {

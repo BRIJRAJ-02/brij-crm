@@ -97,7 +97,7 @@ describe('every kind has a rule', () => {
     expect(eventFacts({ seq: 1, at, kind: 'nav', memberIds: [] })).toEqual([]);
   });
 
-  it('passes a nav event to every audience unchanged: it names one member and nothing else (spec 0034)', () => {
+  it('passes a nav event, which names one member and nothing else, only to that member’s audience (spec 0034)', () => {
     const nav = {
       seq: 4,
       at,
@@ -107,6 +107,8 @@ describe('every kind has a rule', () => {
     };
     expect(filterEvent(open, nav)).toEqual(nav);
     expect(filterEvent(hiddenObject, nav)).toEqual(nav);
+    // Another member's audience gets the stub: no feed of when Ada folds her sidebar.
+    expect(filterEvent(audience([{ id: BEA, role: 'member' }]), nav)).toBeUndefined();
   });
 
   it("has a rule for every kind of spec 0007's ChangeEvent but the stub (AC-79)", () => {

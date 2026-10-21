@@ -5738,7 +5738,7 @@
       "checkConstraints": {
         "member_nav_prefs_items": {
           "name": "member_nav_prefs_items",
-          "value": "jsonb_typeof(\"member_nav_prefs\".\"items\") = 'array' and jsonb_array_length(\"member_nav_prefs\".\"items\") <= 400"
+          "value": "jsonb_typeof(\"member_nav_prefs\".\"items\") = 'array' and jsonb_array_length(\"member_nav_prefs\".\"items\") <= 400 and octet_length(\"member_nav_prefs\".\"items\"::text) <= 40960"
         },
         "member_nav_prefs_sections": {
           "name": "member_nav_prefs_sections",

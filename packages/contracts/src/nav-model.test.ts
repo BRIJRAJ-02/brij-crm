@@ -91,6 +91,15 @@ describe('the sidebar model', () => {
     expect(refused).toMatchObject({ ok: false, refusal: { code: 'CONFIG_INVALID' } });
   });
 
+  it('changes nothing hiding what the member can’t see, so the row never collects ids that point nowhere', () => {
+    const nowhere = '01900000-0000-7000-8000-00000000dead';
+    expect(apply(DEFAULT_NAV_PREFS, { op: 'hide', kind: 'object', id: nowhere })).toEqual(DEFAULT_NAV_PREFS);
+    expect(apply(DEFAULT_NAV_PREFS, { op: 'hide', kind: 'list', id: nowhere })).toEqual(DEFAULT_NAV_PREFS);
+    expect(apply(DEFAULT_NAV_PREFS, { op: 'move', kind: 'object', id: nowhere, toIndex: 0 })).toEqual(
+      DEFAULT_NAV_PREFS,
+    );
+  });
+
   it('stars views and records in the order starred, once each, and unstars them', () => {
     const starred = apply(
       DEFAULT_NAV_PREFS,

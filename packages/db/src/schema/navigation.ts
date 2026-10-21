@@ -41,7 +41,11 @@ export const memberNavPrefs = pgTable(
       columns: [t.workspaceId, t.memberId],
       foreignColumns: [members.workspaceId, members.id],
     }).onDelete('cascade'),
-    check('member_nav_prefs_items', sql`jsonb_typeof(${t.items}) = 'array' and jsonb_array_length(${t.items}) <= 400`),
+    // At most 400 entries, and no more bytes than 400 of them take, so no entry can carry a payload.
+    check(
+      'member_nav_prefs_items',
+      sql`jsonb_typeof(${t.items}) = 'array' and jsonb_array_length(${t.items}) <= 400 and octet_length(${t.items}::text) <= 40960`,
+    ),
     check(
       'member_nav_prefs_sections',
       sql`jsonb_typeof(${t.sections}) = 'object' and octet_length(${t.sections}::text) <= 1024`,

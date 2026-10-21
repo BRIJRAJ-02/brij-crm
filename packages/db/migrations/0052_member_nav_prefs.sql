@@ -26,7 +26,7 @@ CREATE TABLE "member_nav_prefs" (
 	"updated_by_id" uuid,
 	"updated_by_member_id" uuid,
 	CONSTRAINT "member_nav_prefs_pkey" PRIMARY KEY("workspace_id","member_id"),
-	CONSTRAINT "member_nav_prefs_items" CHECK (jsonb_typeof("member_nav_prefs"."items") = 'array' and jsonb_array_length("member_nav_prefs"."items") <= 400),
+	CONSTRAINT "member_nav_prefs_items" CHECK (jsonb_typeof("member_nav_prefs"."items") = 'array' and jsonb_array_length("member_nav_prefs"."items") <= 400 and octet_length("member_nav_prefs"."items"::text) <= 40960),
 	CONSTRAINT "member_nav_prefs_sections" CHECK (jsonb_typeof("member_nav_prefs"."sections") = 'object' and octet_length("member_nav_prefs"."sections"::text) <= 1024),
 	CONSTRAINT "member_nav_prefs_version" CHECK ("member_nav_prefs"."version" >= 1),
 	CONSTRAINT "member_nav_prefs_created_by_actor" CHECK (("member_nav_prefs"."created_by_type" is null and "member_nav_prefs"."created_by_id" is null and "member_nav_prefs"."created_by_member_id" is null)

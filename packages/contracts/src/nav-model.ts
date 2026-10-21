@@ -263,8 +263,9 @@ function moveWithin(prefs: NavPrefs, universe: NavUniverse, kind: NavItemKind, i
 
 /**
  * The row with `item`'s hidden flag set. An item never placed has its
- * section's order stored first, so hiding it moves nothing; one that doesn't
- * resolve is stored at its section's end.
+ * section's order stored first, so hiding it moves nothing; one the member
+ * can't see today (missing or unreadable alike) changes nothing, so the row
+ * never collects ids that point nowhere.
  */
 function setHidden(prefs: NavPrefs, universe: NavUniverse, kind: NavItemKind, id: string, hidden: boolean): NavPrefs {
   const found = prefs.items.find(matches(kind, id));
@@ -272,9 +273,7 @@ function setHidden(prefs: NavPrefs, universe: NavUniverse, kind: NavItemKind, id
     if (!hidden) return prefs;
     const section = sectionOf({ kind, id });
     const entries = sectionItems(prefs, universe, section);
-    if (!entries.some((entry) => entry.kind === kind && entry.id === id)) {
-      return { ...prefs, items: [...prefs.items, itemOf(kind, id, { hidden: true })] };
-    }
+    if (!entries.some((entry) => entry.kind === kind && entry.id === id)) return prefs;
     const ordered = entries.map((entry) =>
       entry.kind === kind && entry.id === id ? { ...entry, hidden: true } : entry,
     );

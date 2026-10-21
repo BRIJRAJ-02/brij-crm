@@ -189,8 +189,9 @@ export const AccessEvent = z.object({
 
 /**
  * A member's own sidebar changed (spec 0034, AC-937): the member, and nothing
- * else, so it carries no more than a `members` event. Every audience receives
- * it; a client acts only on its own member id and reads `nav.get` again.
+ * else, so it carries no more than a `members` event. Only the audience the
+ * member is in receives it (any other gets the stub); a client acts only on
+ * its own member id and reads `nav.get` again.
  */
 export const NavEvent = z.object({
   ...place,

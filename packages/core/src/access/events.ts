@@ -333,12 +333,14 @@ export function filterEvent(audience: Audience, row: EventRow, facts: EventFacts
       const removed = cut || !sameList(meetingIds, row.meetingIds);
       return settle({ ...row, meetingIds, recordIds, ...(cut ? { coarse: true } : {}) }, removed);
     }
-    // A member's own sidebar (spec 0034) names one member id and nothing else, the same exposure as a `members`
-    // event, so every audience receives it and only that member's clients act on it.
     case 'members':
     case 'access':
-    case 'nav':
       return row;
+    // A member's own sidebar (spec 0034) names one member id and nothing else. Only the audience that member is in
+    // receives it (their own clients act on it); any other gets the stub, so a sidebar click is no feed of when a
+    // colleague is about.
+    case 'nav':
+      return audience.members.some((member) => row.memberIds.includes(member.memberId)) ? row : undefined;
     case 'jobs': {
       const { actorMemberId, ...event } = row;
       const readsJob = (member: AudienceMember) =>

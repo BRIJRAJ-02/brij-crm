@@ -37,6 +37,7 @@ export type { SidebarPage } from './sidebar.ts';
 /**
  * What the sidebar draws when the member's own couldn't be read (spec 0034): the defaults, with the pages every
  * member has. The data layer says it couldn't, with Retry, and reads it again after the next change that lands.
+ * When guests arrive (spec 0031), who see no Scheduling pages, this takes the pages from the person's role.
  */
 const DEFAULT_NAV: NavState = {
   items: [],

@@ -14,6 +14,7 @@ import {
   applyNavOp,
   DEFAULT_NAV_PREFS,
   NAV_ITEM_KINDS,
+  NAV_PAGES,
   NAV_SCHEDULING_PAGES,
   NAV_SECTIONS,
   navKey,
@@ -44,13 +45,18 @@ export const NAV_ITEM_NOT_FOUND = 'That view or record doesn’t exist, or you c
 
 const isKind = (value: unknown): value is NavItemPref['kind'] =>
   typeof value === 'string' && (NAV_ITEM_KINDS as readonly string[]).includes(value);
+/** A stored id the reads can use: a page's key, or a uuid for anything else (the input schema allows no other). */
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const fitsKind = (kind: NavItemPref['kind'], id: string) =>
+  kind === 'page' ? (NAV_PAGES as readonly string[]).includes(id) : UUID.test(id);
 const isSection = (value: unknown): value is NavSectionKey =>
   typeof value === 'string' && (NAV_SECTIONS as readonly string[]).includes(value);
 
 /**
  * The stored row as `NavPrefs`, read defensively: an item of an unknown kind
- * or shape, or a section name the code doesn't know, is skipped rather than
- * failing the read (a downgrade, a bug), so a sidebar always draws.
+ * or shape, an id that is neither a page's key nor a uuid, or a section name
+ * the code doesn't know, is skipped rather than failing the read (a
+ * downgrade, a bug), so a sidebar always draws and the next write drops it.
  */
 export function prefsOf(stored: {
   readonly items: unknown;
@@ -61,7 +67,7 @@ export function prefsOf(stored: {
     ? stored.items.flatMap((value: unknown): NavItemPref[] => {
         if (typeof value !== 'object' || value === null) return [];
         const { kind, id, pinned, hidden } = value as Record<string, unknown>;
-        if (!isKind(kind) || typeof id !== 'string' || id.length === 0 || id.length > 64) return [];
+        if (!isKind(kind) || typeof id !== 'string' || !fitsKind(kind, id)) return [];
         return [
           { kind, id, ...(pinned === true ? { pinned: true } : {}), ...(hidden === true ? { hidden: true } : {}) },
         ];
@@ -341,7 +347,7 @@ async function existing(
   return found;
 }
 
-/** Drops stored views and records that point at nothing, and stored ids that aren't ids. */
+/** Drops stored views and records that point at nothing (a view deleted, a record purged). */
 async function pruned(tx: WorkspaceTx, scope: EngineScope, prefs: NavPrefs): Promise<NavPrefs> {
   const found = await existing(tx, scope, prefs.items);
   return pruneNavItems(prefs, (item) =>
