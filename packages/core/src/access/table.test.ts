@@ -138,7 +138,6 @@ const NO_SCOPE: ReadonlySet<string> = new Set([
   'queueCalendarDisconnected',
   'queueBookingCalendarRemoved',
   'queueImportFinished',
-  'queueMention',
   'loadEmail',
   'finishEmail',
   'emailLinkToken',

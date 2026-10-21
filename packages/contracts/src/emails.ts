@@ -202,20 +202,6 @@ export const ImportFinishedEmail = z.strictObject({
 /** An import has finished. */
 export type ImportFinishedEmail = z.infer<typeof ImportFinishedEmail>;
 
-/** Someone mentioned the member (#29): who, where, the words around it, and where it opens. */
-export const MentionEmail = z.strictObject({
-  authorName: Line,
-  /** A comment on a record, or a note. */
-  place: z.enum(['comment', 'note']),
-  /** The record's name or the note's title. */
-  subjectName: Line,
-  /** The text around the mention, as plain text. */
-  excerpt: z.string().trim().min(1).max(500),
-  path: AppPath,
-});
-/** Someone mentioned the member. */
-export type MentionEmail = z.infer<typeof MentionEmail>;
-
 /** Every email with a template, and its params' schema. The sign in code is drawn on its own (`renderSignInCode`). */
 export const EMAIL_PARAMS = {
   form_submission: FormSubmissionEmail,
@@ -225,7 +211,6 @@ export const EMAIL_PARAMS = {
   member_invite: MemberInviteEmail,
   sign_in_alert: SignInAlertEmail,
   import_finished: ImportFinishedEmail,
-  mention: MentionEmail,
 } as const;
 
 /** A kind of email with a template. */
@@ -249,7 +234,6 @@ export const QUEUED_EMAIL_KINDS = [
   'calendar_disconnected',
   'booking_calendar_removed',
   'import_finished',
-  'mention',
 ] as const satisfies readonly EmailKind[];
 /** A kind that goes through the workspace email queue. */
 export const QueuedEmailKind = z.enum(QUEUED_EMAIL_KINDS);
@@ -262,7 +246,9 @@ export type QueuedEmailKind = z.infer<typeof QueuedEmailKind>;
  * An email of a topic carries a link to the member's email preferences, and
  * is skipped once its topic is off. Everything else (sign in, security,
  * calendar alerts, bookings, invitations, an import's result) always goes:
- * the owner's default of 21 October 2026.
+ * the owner's default of 21 October 2026. `mentions` has no queued kind: a
+ * mention is emailed once, in the notifications email (spec 0038), which
+ * leaves mentions out while the topic is off.
  */
 export const EMAIL_TOPICS = ['form_submissions', 'mentions'] as const;
 /** A topic a member can turn off. */
@@ -273,7 +259,6 @@ export type EmailTopic = z.infer<typeof EmailTopic>;
 /** Which topic each optional kind belongs to; a kind not listed always goes. */
 export const EMAIL_KIND_TOPICS: { readonly [K in EmailKind]?: EmailTopic } = {
   form_submission: 'form_submissions',
-  mention: 'mentions',
 };
 
 /** One topic on the email preferences page: whether the member gets it. */

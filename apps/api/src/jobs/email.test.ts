@@ -10,7 +10,7 @@ import {
   createWorkspace,
   newId,
   queueFormConfirmation,
-  queueMention,
+  queueFormSubmissionNotice,
   readEmailLinkToken,
   type QueuedEmail,
 } from '@crm/core';
@@ -85,18 +85,18 @@ async function world() {
     firstMember: { name: 'Ada', email: 'ada@example.com' },
   });
   const system = systemScope(db, created.workspaceId);
-  const mention = async () => ({
+  const notice = async () => ({
     emailId: idOf(
       await db.withWorkspace(created.workspaceId, (tx) =>
-        queueMention(tx, {
-          mentionId: newId(),
+        queueFormSubmissionNotice(tx, {
+          submissionId: newId(),
           memberId: created.memberId,
           params: {
-            authorName: 'Grace',
-            place: 'comment',
-            subjectName: 'Northwind',
-            excerpt: '@Ada can you take the demo?',
-            path: '/w/acme/objects/companies/x',
+            formName: 'Contact us',
+            submitter: { name: 'Grace' },
+            answers: [{ label: 'Company', value: 'Northwind' }],
+            submittedAt: '2026-10-21T13:05:00.000Z',
+            submissionPath: '/w/acme/captures/forms/x',
           },
         }),
       ),
@@ -110,13 +110,13 @@ async function world() {
         ),
       )
     ).rows[0];
-  return { ...created, system, mention, status };
+  return { ...created, system, notice, status };
 }
 
 describe('the email task', () => {
   it('sends a queued email once, with its key, its preferences link and the one click headers', async () => {
     const w = await world();
-    const { emailId } = await w.mention();
+    const { emailId } = await w.notice();
     const mailer = fakeMailer();
     const log = keptLog();
     const payload = { workspaceId: w.workspaceId, emailId };
@@ -125,7 +125,7 @@ describe('the email task', () => {
     const [message] = mailer.sent;
     expect(message).toMatchObject({
       to: 'ada@example.com',
-      subject: 'Grace mentioned you in a comment on Northwind',
+      subject: 'Grace filled in Contact us',
       idempotencyKey: `email/${emailId}`,
       headers: { 'List-Unsubscribe-Post': 'List-Unsubscribe=One-Click' },
     });
@@ -136,7 +136,7 @@ describe('the email task', () => {
     // The page's token rides in the fragment, which no request carries; the one click's in its query.
     expect(preferences.search).toBe('');
     const page = new URLSearchParams(preferences.hash.slice(1)).get('t') ?? '';
-    const link = { workspaceId: w.workspaceId, memberId: w.memberId, topic: 'mentions' };
+    const link = { workspaceId: w.workspaceId, memberId: w.memberId, topic: 'form_submissions' };
     expect(readEmailLinkToken(LINK_KEY, page, new Date(), 'page')).toEqual(link);
     // The one click's token, which request logs keep, is signed for the one click only.
     const oneClick = new URL(unsubscribe).searchParams.get('t') ?? '';
@@ -148,7 +148,7 @@ describe('the email task', () => {
     expect(mailer.sent).toHaveLength(1);
     // The log names the email and its kind, never an address or what it says.
     expect(log.lines).toEqual([
-      { level: 'info', message: 'email.sent', fields: { emailId, kind: 'mention', transport: 'mailpit' } },
+      { level: 'info', message: 'email.sent', fields: { emailId, kind: 'form_submission', transport: 'mailpit' } },
     ]);
   });
 
@@ -173,7 +173,7 @@ describe('the email task', () => {
 
   it('answers retry for a failed send, and records the email failed on its last try', async () => {
     const w = await world();
-    const { emailId } = await w.mention();
+    const { emailId } = await w.notice();
     const log = keptLog();
     const payload = { workspaceId: w.workspaceId, emailId };
     expect(await runEmail(depsWith(fakeMailer(1), log), payload, FIRST)).toBe('retry');
@@ -191,20 +191,20 @@ describe('the email task', () => {
   it('fails at once a message the service will never take, and a key it saw with another message', async () => {
     const w = await world();
     const log = keptLog();
-    const refused = await w.mention();
+    const refused = await w.notice();
     const never = fakeMailer(1, mailRefused('Resend', { code: 'invalid_parameter', permanent: true }));
     expect(await runEmail(depsWith(never, log), { workspaceId: w.workspaceId, emailId: refused.emailId }, FIRST)).toBe(
       'finished',
     );
     expect(await w.status(refused.emailId)).toEqual({ status: 'failed', attempts: 1, error_code: 'send_refused' });
 
-    const conflict = await w.mention();
+    const conflict = await w.notice();
     const seen = fakeMailer(1, mailRefused('Resend', { code: 'invalid_idempotent_request', permanent: true }));
     await runEmail(depsWith(seen, log), { workspaceId: w.workspaceId, emailId: conflict.emailId }, FIRST);
     expect(await w.status(conflict.emailId)).toMatchObject({ status: 'failed', error_code: 'idempotent_conflict' });
 
     // A limit is tried again, its code logged.
-    const limited = await w.mention();
+    const limited = await w.notice();
     const busy = fakeMailer(1, mailRefused('Resend', { code: 'rate_limit_exceeded', permanent: false }));
     expect(await runEmail(depsWith(busy, log), { workspaceId: w.workspaceId, emailId: limited.emailId }, FIRST)).toBe(
       'retry',
@@ -218,13 +218,13 @@ describe('the email task', () => {
 
   it('records the email skipped when mail is off, failed for params it can’t draw, and ignores a payload not ours', async () => {
     const w = await world();
-    const off = await w.mention();
+    const off = await w.notice();
     await runEmail(depsWith(undefined), { workspaceId: w.workspaceId, emailId: off.emailId }, FIRST);
     expect(await w.status(off.emailId)).toEqual({ status: 'skipped', attempts: 0, error_code: 'mail_off' });
 
-    const broken = await w.mention();
+    const broken = await w.notice();
     await db.withWorkspace(w.workspaceId, (tx) =>
-      tx.execute(sql`update emails set params = '{"authorName": 1}'::jsonb where id = ${broken.emailId}::uuid`),
+      tx.execute(sql`update emails set params = '{"formName": 1}'::jsonb where id = ${broken.emailId}::uuid`),
     );
     const mailer = fakeMailer();
     await runEmail(depsWith(mailer), { workspaceId: w.workspaceId, emailId: broken.emailId }, FIRST);

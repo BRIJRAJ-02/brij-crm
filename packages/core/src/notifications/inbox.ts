@@ -511,7 +511,8 @@ export interface NotificationEmailBatch {
 /**
  * The caller's notifications an email may carry now (AC-1176, AC-1177): unread,
  * not done, not yet emailed, of a kind whose email the caller has on (every
- * kind for the daily digest, AC-1178), and that
+ * kind for the daily digest, AC-1178; never a mention while the `mentions`
+ * email topic is off), and that
  * they may see at this moment (the inbox's own rule, read as them). At most
  * `NOTIFICATION_EMAIL_MAX`, newest first; `more` counts the rest.
  */
@@ -524,14 +525,23 @@ export async function unemailedNotifications(
   if (me === undefined) return { items: [], more: 0 };
   return inWorkspace(scope, async (tx) => {
     const settings = settingsOf(await settingsRow(tx, me));
+    // Mentions turned off from an email's preferences link (the `mentions` topic): this is the one email a mention
+    // gets, so no email or digest holds them.
+    const offRows = await tx.execute<{ off: boolean }>(sql`
+      select true as off from email_preferences
+      where member_id = ${me}::uuid and topic = 'mentions' and not subscribed
+    `);
+    const mentionsOn = offRows.rows.length === 0;
     // The digest holds every kind still unread (AC-1178); an email after a notification, the kinds switched on.
-    const kinds: NotificationKind[] = options.digest
-      ? ['mention', 'reply', 'task_assigned']
-      : [
-          ...(settings.emailMentions ? (['mention'] as const) : []),
-          ...(settings.emailReplies ? (['reply'] as const) : []),
-          ...(settings.emailAssignments ? (['task_assigned'] as const) : []),
-        ];
+    const kinds: NotificationKind[] = (
+      options.digest
+        ? (['mention', 'reply', 'task_assigned'] as const)
+        : [
+            ...(settings.emailMentions ? (['mention'] as const) : []),
+            ...(settings.emailReplies ? (['reply'] as const) : []),
+            ...(settings.emailAssignments ? (['task_assigned'] as const) : []),
+          ]
+    ).filter((kind) => kind !== 'mention' || mentionsOn);
     if (kinds.length === 0) return { items: [], more: 0 };
     const rows = await tx.execute<NotificationRow>(sql`
       select ${NOTIFICATION_COLUMNS}, ${micros('n.created_at')} as at

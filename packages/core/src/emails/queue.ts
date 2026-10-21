@@ -17,7 +17,6 @@ import {
   type FormConfirmationEmail,
   type FormSubmissionEmail,
   type ImportFinishedEmail,
-  type MentionEmail,
   type QueuedEmailKind,
 } from '@crm/contracts/emails';
 import type { WorkspaceTx } from '@crm/db';
@@ -243,19 +242,6 @@ export function queueImportFinished(
   return queueEmail(tx, {
     kind: 'import_finished',
     ids: [input.importId],
-    to: { memberId: input.memberId },
-    params: input.params,
-  });
-}
-
-/** A mention's notice to the member mentioned (#29): once per mention and member. */
-export function queueMention(
-  tx: WorkspaceTx,
-  input: { readonly mentionId: string; readonly memberId: string; readonly params: MentionEmail },
-): Promise<QueuedEmail> {
-  return queueEmail(tx, {
-    kind: 'mention',
-    ids: [input.mentionId, input.memberId],
     to: { memberId: input.memberId },
     params: input.params,
   });

@@ -435,7 +435,6 @@ export {
   queueFormConfirmation,
   queueFormSubmissionNotice,
   queueImportFinished,
-  queueMention,
   type EmailReader,
   type QueuedEmail,
   type QueueEmailInput,
