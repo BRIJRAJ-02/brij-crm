@@ -1,7 +1,7 @@
 // `maintenance.daily` (spec 0008, The kinds in this spec; milestone 3,
 // AC-112, AC-121): the daily cleanup in one workspace. The worker's cron
 // starts one a day per workspace (`daily.ts`), the system's, on the heavy
-// lane, never cancelled. A cursor job whose checkpoint walks six phases, one
+// lane, never cancelled. A cursor job whose checkpoint walks these phases, one
 // batch a step, each its own transaction under row level security:
 // 1. `purge`: records and list entries trashed more than 30 days ago, through
 //    the engine's `purgeBatch` (lists locked before records), 500 a batch.
@@ -11,6 +11,8 @@
 //    ends `failed` (`queue_lost`), then emails made more than 30 days ago go,
 //    whatever became of them, 500 a batch. A sent one kept only its kind, key
 //    and outcome; one never sent goes too, with what it would have said.
+// 1d. `notifications` (spec 0038, AC-1175): notifications marked done more
+//    than 90 days ago, 500 a batch. Unread and read ones stay until done.
 // 2. `expired`: jobs left `ready` past their hour end `cancelled` with
 //    `JOB_EXPIRED` (the queue row at the expiry normally does it first).
 // 3. `items`: the items of jobs that finished since the last cleanup, all
@@ -44,7 +46,20 @@ export const MaintenanceParams = z.strictObject({ day: z.iso.date() });
 export type MaintenanceParams = z.infer<typeof MaintenanceParams>;
 
 /** The phases, in the order they run. */
-const PHASES = ['purge', 'notes_tasks', 'emails', 'expired', 'items', 'jobs', 'requeue', 'exports'] as const;
+const PHASES = [
+  'purge',
+  'notes_tasks',
+  'emails',
+  'notifications',
+  'expired',
+  'items',
+  'jobs',
+  'requeue',
+  'exports',
+] as const;
+
+/** How long a done notification is kept (spec 0038, AC-1175). */
+const DONE_NOTIFICATIONS_KEPT = '90 days';
 
 /** How many items one `items` or `jobs` batch deletes at most, and how many finished jobs one `items` batch visits. */
 const ITEM_BATCH = 5_000;
@@ -69,6 +84,8 @@ const Totals = z.object({
   tasks: Count.default(0),
   // Added by the emails lane: a checkpoint stored before it reads as none removed yet.
   emails: Count.default(0),
+  // Added by spec 0038.
+  notifications: Count.default(0),
   expired: Count,
   items: Count,
   jobs: Count,
@@ -86,6 +103,7 @@ const NO_TOTALS: Totals = {
   notes: 0,
   tasks: 0,
   emails: 0,
+  notifications: 0,
   expired: 0,
   items: 0,
   jobs: 0,
@@ -140,6 +158,7 @@ const plus = (totals: Totals, more: Partial<Totals>): Totals => ({
   notes: totals.notes + (more.notes ?? 0),
   tasks: totals.tasks + (more.tasks ?? 0),
   emails: totals.emails + (more.emails ?? 0),
+  notifications: totals.notifications + (more.notifications ?? 0),
   expired: totals.expired + (more.expired ?? 0),
   items: totals.items + (more.items ?? 0),
   jobs: totals.jobs + (more.jobs ?? 0),
@@ -208,6 +227,23 @@ async function oldEmails(context: WriteContext, at: Checkpoint, limit: number): 
   const totals = plus(at.totals, { emails: removed.rowCount ?? 0 });
   const full = (lost.rowCount ?? 0) >= limit || (removed.rowCount ?? 0) >= limit;
   return outcome(full ? { ...at, totals } : nextPhase(at, totals), at, totals, count);
+}
+
+/**
+ * Phase 1d (spec 0038, AC-1175): notifications marked done more than 90 days
+ * ago, `limit` a batch. Only their member ever saw them, in Done, where they
+ * simply stop showing; no event is stored.
+ */
+async function oldNotifications(context: WriteContext, at: Checkpoint, limit: number): Promise<StepOutcome> {
+  const removed = await context.tx.execute(sql`
+    delete from notifications where id in (
+      select id from notifications where done_at < now() - ${DONE_NOTIFICATIONS_KEPT}::interval
+      order by done_at limit ${limit}
+    )
+  `);
+  const count = removed.rowCount ?? 0;
+  const totals = plus(at.totals, { notifications: count });
+  return outcome(count >= limit ? { ...at, totals } : nextPhase(at, totals), at, totals, count);
 }
 
 /** Phase 2: ends jobs left `ready` past their hour, as the queue row at their expiry would, with their events. */
@@ -432,6 +468,8 @@ export function maintenanceDaily(queue?: QueueRows): KindDefinition<MaintenanceP
           return notesAndTasks(context, at, limit);
         case 'emails':
           return oldEmails(context, at, limit);
+        case 'notifications':
+          return oldNotifications(context, at, limit);
         case 'expired':
           return expired(context, at, limit);
         case 'items':
