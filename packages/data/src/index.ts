@@ -72,7 +72,7 @@ import {
   type CaptureListView,
 } from './captures/list.ts';
 import type { NavOperation, NavUniverse } from '@crm/contracts/navigation';
-import type { NavSnapshot, NavSource, NavStore } from './navigation/store.ts';
+import type { NavChangeOptions, NavSnapshot, NavSource, NavStore } from './navigation/store.ts';
 import { draftParam, isSameQuery, readDraft, type DraftQuery } from './views/draft.ts';
 import {
   createViewsStore,
@@ -234,7 +234,7 @@ export {
 } from './errors.ts';
 export type { FetchLike } from './fetch.ts';
 export type { NavFavourite, NavState } from '@crm/contracts';
-export type { NavSnapshot, NavSource } from './navigation/store.ts';
+export type { NavChangeOptions, NavSnapshot, NavSource } from './navigation/store.ts';
 export type {
   NavEntry,
   NavItemKind,
@@ -3360,14 +3360,20 @@ export function createDataLayer({
     nav: {
       load: (workspace: string) => loadNav().then((store) => store.load(workspace)),
       source: (workspace: string): NavSource => navSource(workspace),
-      change: (workspace: string, op: NavOperation, universe: NavUniverse): void => {
-        loadNav().then(
-          (store) => {
-            store.change(workspace, op, universe);
-          },
-          // The store's code didn't load: nothing changed, the sidebar draws the defaults, and the next use loads it.
-          () => undefined,
-        );
+      /**
+       * Answers a promise that settles when the change lands, or rejects with its refusal, already rolled back; a
+       * screen that waits on it may say the refusal itself (`isSaidHere`), and no toast is raised.
+       */
+      change: (
+        workspace: string,
+        op: NavOperation,
+        universe: NavUniverse,
+        options: NavChangeOptions = {},
+      ): Promise<void> => {
+        const made = loadNav().then((store) => store.change(workspace, op, universe, options));
+        // Most screens don't wait on a change: its refusal is said by the toast, never left unhandled.
+        made.catch(() => undefined);
+        return made;
       },
       reload: (workspace: string) => loadNav().then((store) => store.reload(workspace)),
     },

@@ -88,6 +88,16 @@ interface Pending {
   readonly op: NavOperation;
   /** What the sidebar could show when the change was made: the same index the server reads. */
   readonly universe: NavUniverse;
+  /** The screen says a refusal itself (a confirm that stays open with it), so no toast. */
+  readonly isSaidHere: boolean;
+  /** Settles when the change has landed, or rejects with its refusal. */
+  readonly settle: { readonly landed: () => void; readonly refused: (error: DataError) => void };
+}
+
+/** How a screen makes a change. */
+export interface NavChangeOptions {
+  /** The screen shows a refusal itself, so the layer raises no toast for it. */
+  readonly isSaidHere?: boolean;
 }
 
 interface Entry {
@@ -284,6 +294,7 @@ export function createNavStore(deps: NavStoreDeps) {
         if (next.op.op === 'star' || entry.confirmed === undefined || missed) {
           void read(workspace, true).catch(() => undefined);
         }
+        next.settle.landed();
         sendNext(workspace, entry);
       },
       (error: unknown) => {
@@ -293,6 +304,11 @@ export function createNavStore(deps: NavStoreDeps) {
         entry.sending = false;
         publish(entry);
         const failure = toDataError(error);
+        next.settle.refused(failure);
+        if (next.isSaidHere) {
+          sendNext(workspace, entry);
+          return;
+        }
         // Retry sends the change again only while nothing newer was made, and only where trying again could land.
         const madeAt = entry.made;
         deps.onRefused(
@@ -300,7 +316,9 @@ export function createNavStore(deps: NavStoreDeps) {
           LASTING.includes(failure.code)
             ? undefined
             : () => {
-                if (isCurrent(workspace, entry) && entry.made === madeAt) change(workspace, next.op, next.universe);
+                if (isCurrent(workspace, entry) && entry.made === madeAt) {
+                  void change(workspace, next.op, next.universe).catch(() => undefined);
+                }
               },
         );
         sendNext(workspace, entry);
@@ -311,13 +329,25 @@ export function createNavStore(deps: NavStoreDeps) {
   /**
    * Applies one change at once and sends it (AC-937). `universe` is what the
    * sidebar could show as the person made it, which a move indexes into.
+   * Answers a promise that settles when it lands, or rejects with its
+   * refusal (already rolled back), for a screen that waits on it.
    */
-  const change = (workspace: string, op: NavOperation, universe: NavUniverse): void => {
-    const entry = entryOf(workspace);
-    entry.made += 1;
-    entry.pending.push({ op, universe });
-    publish(entry);
-    sendNext(workspace, entry);
+  const change = (
+    workspace: string,
+    op: NavOperation,
+    universe: NavUniverse,
+    options: NavChangeOptions = {},
+  ): Promise<void> => {
+    const made = new Promise<void>((landed, refused) => {
+      const entry = entryOf(workspace);
+      entry.made += 1;
+      entry.pending.push({ op, universe, isSaidHere: options.isSaidHere === true, settle: { landed, refused } });
+      publish(entry);
+      sendNext(workspace, entry);
+    });
+    // Most screens don't wait on a change: its refusal is said by the toast, never left unhandled.
+    made.catch(() => undefined);
+    return made;
   };
 
   return {

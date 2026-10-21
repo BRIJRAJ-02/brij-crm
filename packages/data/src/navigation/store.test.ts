@@ -89,8 +89,8 @@ describe('the sidebar store', () => {
   it('shows a change at once, sends changes one at a time in order, and keeps them when they land (AC-937)', async () => {
     const w = world();
     await w.store.load('acme');
-    w.store.change('acme', { op: 'fold', section: 'records', folded: true }, universe);
-    w.store.change('acme', { op: 'rail', on: true }, universe);
+    void w.store.change('acme', { op: 'fold', section: 'records', folded: true }, universe);
+    void w.store.change('acme', { op: 'rail', on: true }, universe);
     const shown = ready(w.store.snapshot('acme'));
     expect(shown.sections.folded).toEqual(['records']);
     expect(shown.rail).toBe(true);
@@ -109,7 +109,7 @@ describe('the sidebar store', () => {
   it('rolls a refused change back and offers Retry, which sends it again', async () => {
     const w = world();
     await w.store.load('acme');
-    w.store.change('acme', { op: 'hide', kind: 'object', id: DEALS }, universe);
+    void w.store.change('acme', { op: 'hide', kind: 'object', id: DEALS }, universe);
     expect(ready(w.store.snapshot('acme')).items).toEqual([
       { kind: 'object', id: PEOPLE },
       { kind: 'object', id: DEALS, hidden: true },
@@ -197,7 +197,7 @@ describe('the sidebar store', () => {
     });
     expect(unavailable).toHaveLength(1);
     // A change made meanwhile lands, so the server answers: the sidebar is read, and shows the change.
-    store.change('acme', { op: 'rail', on: true }, universe);
+    void store.change('acme', { op: 'rail', on: true }, universe);
     settles[0]?.(1);
     await vi.waitFor(() => {
       expect(answers).toHaveLength(3);
@@ -260,7 +260,7 @@ describe('the sidebar store', () => {
   it('reads again when another tab’s change landed between its base and this answer', async () => {
     const w = world(state({ version: 5 }));
     await w.store.load('acme');
-    w.store.change('acme', { op: 'rail', on: true }, universe);
+    void w.store.change('acme', { op: 'rail', on: true }, universe);
     w.changes[0]?.settle(7);
     await vi.waitFor(() => {
       expect(w.asked()).toBe(2);
@@ -274,14 +274,14 @@ describe('the sidebar store', () => {
   it('offers no Retry for a refusal that would only repeat, and a late Retry changes nothing after a newer choice', async () => {
     const w = world();
     await w.store.load('acme');
-    w.store.change('acme', { op: 'star', kind: 'record', id: DEALS }, universe);
+    void w.store.change('acme', { op: 'star', kind: 'record', id: DEALS }, universe);
     // The fake's bare error reads as a passing failure: Retry is offered.
     w.changes[0]?.refuse('Busy.');
     await vi.waitFor(() => {
       expect(w.retries).toHaveLength(1);
     });
     // A newer choice, then the old Retry: nothing more is sent.
-    w.store.change('acme', { op: 'rail', on: true }, universe);
+    void w.store.change('acme', { op: 'rail', on: true }, universe);
     w.retries[0]?.();
     expect(w.changes).toHaveLength(2);
   });
@@ -303,12 +303,27 @@ describe('the sidebar store', () => {
   it('changes nothing with an answer that comes after a sign out', async () => {
     const w = world();
     await w.store.load('acme');
-    w.store.change('acme', { op: 'rail', on: true }, universe);
+    void w.store.change('acme', { op: 'rail', on: true }, universe);
     w.store.clear();
     w.changes[0]?.refuse('Signed out.');
     await Promise.resolve();
     await Promise.resolve();
     expect(w.refused).toEqual([]);
     expect(w.store.snapshot('acme').status).toBe('loading');
+  });
+
+  it('answers a change that lands, and one refused and said by its screen, with no toast for that one', async () => {
+    const w = world();
+    await w.store.load('acme');
+    const landed = w.store.change('acme', { op: 'rail', on: true }, universe);
+    w.changes[0]?.settle(1);
+    await expect(landed).resolves.toBeUndefined();
+    const refused = w.store.change('acme', { op: 'reset' }, universe, { isSaidHere: true });
+    await vi.waitFor(() => {
+      expect(w.changes).toHaveLength(2);
+    });
+    w.changes[1]?.refuse('Busy.');
+    await expect(refused).rejects.toBeInstanceOf(Error);
+    expect(w.refused).toEqual([]);
   });
 });
