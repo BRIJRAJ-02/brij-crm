@@ -344,6 +344,27 @@
       "when": 1792525891494,
       "tag": "0048_booking_changes",
       "breakpoints": true
+    },
+    {
+      "idx": 49,
+      "version": "7",
+      "when": 1792576519856,
+      "tag": "0049_outbox_job_id",
+      "breakpoints": true
+    },
+    {
+      "idx": 50,
+      "version": "7",
+      "when": 1792576520856,
+      "tag": "0050_records_trash_batch_id",
+      "breakpoints": true
+    },
+    {
+      "idx": 51,
+      "version": "7",
+      "when": 1792576521856,
+      "tag": "0051_record_ids_the_purge_clears",
+      "breakpoints": true
     }
   ]
 }
