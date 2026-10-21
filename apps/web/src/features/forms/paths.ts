@@ -1,5 +1,7 @@
 // Where the forms screens are (spec 0023): under Captures, beside Links. Plain
-// functions with no React, so the routes' loaders can use them.
+// functions with no React, so the routes' loaders can use them. The routes load
+// this file up front, so a path only one screen links to lives with that screen
+// (a question's, in SettingsTab.tsx).
 
 /** Captures, Forms: the list, under the Captures tabs. */
 export { formsHref } from '../captures/tabs.ts';
@@ -17,7 +19,3 @@ export const formHref = (slug: string, formId: string, tab: FormTab = 'form', su
 
 /** A draft opened in a new tab to try, marked "Preview, not live". */
 export const formPreviewHref = (slug: string, formId: string) => `/w/${slug}/captures/forms/${formId}/preview`;
-
-/** One form's Form tab with one question open and in view: Settings' map of where answers go links each line here. */
-export const questionHref = (slug: string, formId: string, questionId: string) =>
-  `/w/${slug}/captures/forms/${formId}?question=${encodeURIComponent(questionId)}`;
