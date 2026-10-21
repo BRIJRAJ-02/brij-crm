@@ -7,6 +7,8 @@
 //    the engine's `purgeBatch` (lists locked before records), 500 a batch.
 // 1b. `notes_tasks` (spec 0019, AC-445): notes, then tasks, deleted more
 //    than 30 days ago, removed for good, 500 a batch (a task takes its links).
+// 1c. `nav` (spec 0034, AC-940): each member's stored sidebar loses the views
+//    and records that point at nothing any more, 500 rows a batch.
 // 2. `expired`: jobs left `ready` past their hour end `cancelled` with
 //    `JOB_EXPIRED` (the queue row at the expiry normally does it first).
 // 3. `items`: the items of jobs that finished since the last cleanup, all
@@ -19,6 +21,7 @@
 import { sql } from 'drizzle-orm';
 import * as z from 'zod';
 import { purgeBatch, type RemovedCounts } from '../../engine/deletion.ts';
+import { pruneNavRows } from '../../navigation/navigation.ts';
 import { RESTORE_WINDOW } from '../../engine/limits.ts';
 import type { WriteContext } from '../../engine/write.ts';
 import { defineKind, MAX_ATTEMPTS, type KindDefinition, type StepOutcome } from '../registry.ts';
@@ -39,7 +42,7 @@ export const MaintenanceParams = z.strictObject({ day: z.iso.date() });
 export type MaintenanceParams = z.infer<typeof MaintenanceParams>;
 
 /** The phases, in the order they run. */
-const PHASES = ['purge', 'notes_tasks', 'expired', 'items', 'jobs', 'requeue'] as const;
+const PHASES = ['purge', 'notes_tasks', 'nav', 'expired', 'items', 'jobs', 'requeue'] as const;
 
 /** How many items one `items` or `jobs` batch deletes at most, and how many finished jobs one `items` batch visits. */
 const ITEM_BATCH = 5_000;
@@ -59,6 +62,8 @@ const Totals = z.object({
   // Added by spec 0019: a checkpoint stored before them reads as none removed yet.
   notes: Count.default(0),
   tasks: Count.default(0),
+  // Added by spec 0034: the sidebars that lost an item pointing at nothing.
+  sidebars: Count.default(0),
   expired: Count,
   items: Count,
   jobs: Count,
@@ -73,6 +78,7 @@ const NO_TOTALS: Totals = {
   links: 0,
   notes: 0,
   tasks: 0,
+  sidebars: 0,
   expired: 0,
   items: 0,
   jobs: 0,
@@ -125,6 +131,7 @@ const plus = (totals: Totals, more: Partial<Totals>): Totals => ({
   links: totals.links + (more.links ?? 0),
   notes: totals.notes + (more.notes ?? 0),
   tasks: totals.tasks + (more.tasks ?? 0),
+  sidebars: totals.sidebars + (more.sidebars ?? 0),
   expired: totals.expired + (more.expired ?? 0),
   items: totals.items + (more.items ?? 0),
   jobs: totals.jobs + (more.jobs ?? 0),
@@ -165,6 +172,18 @@ async function notesAndTasks(context: WriteContext, at: Checkpoint, limit: numbe
   const totals = plus(at.totals, { notes: noteCount, tasks: taskCount });
   const full = noteCount + taskCount >= limit;
   return outcome(full ? { ...at, totals } : nextPhase(at, totals), at, totals, noteCount + taskCount);
+}
+
+/**
+ * Phase 1c (spec 0034, AC-940): the members' stored sidebars, `limit` rows a batch by member id, each losing the
+ * views and records that point at nothing any more (a view deleted, a record purged, today's purge included). Their
+ * items were already left out of every read, so no event is stored.
+ */
+async function navRows(context: WriteContext, at: Checkpoint, limit: number): Promise<StepOutcome> {
+  const { seen, changed, last } = await pruneNavRows(context, at.after, limit);
+  const totals = plus(at.totals, { sidebars: changed });
+  const next = seen === limit && last !== undefined ? { ...at, totals, after: last } : nextPhase(at, totals);
+  return outcome(next, at, totals, changed);
 }
 
 /** Phase 2: ends jobs left `ready` past their hour, as the queue row at their expiry would, with their events. */
@@ -373,6 +392,8 @@ export function maintenanceDaily(queue?: QueueRows): KindDefinition<MaintenanceP
           return purge(context, at, limit);
         case 'notes_tasks':
           return notesAndTasks(context, at, limit);
+        case 'nav':
+          return navRows(context, at, limit);
         case 'expired':
           return expired(context, at, limit);
         case 'items':

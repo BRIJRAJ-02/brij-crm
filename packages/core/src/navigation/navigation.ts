@@ -420,6 +420,54 @@ export async function changeNav(
   return result;
 }
 
+/**
+ * The daily cleanup's sidebar phase (AC-940): up to `limit` stored rows after member `after`, by member id, each
+ * losing its views and records that point at nothing any more; a row that changes gets a new version. Answers how
+ * many rows it looked at, how many changed, and the last member id, where the next batch starts.
+ */
+export async function pruneNavRows(
+  context: WriteContext,
+  after: string | undefined,
+  limit: number,
+): Promise<{ readonly seen: number; readonly changed: number; readonly last: string | undefined }> {
+  const { tx, scope } = context;
+  const rows = await tx
+    .select({
+      memberId: memberNavPrefs.memberId,
+      items: memberNavPrefs.items,
+      sections: memberNavPrefs.sections,
+      rail: memberNavPrefs.rail,
+    })
+    .from(memberNavPrefs)
+    .where(
+      and(
+        eq(memberNavPrefs.workspaceId, scope.workspaceId),
+        after === undefined ? undefined : sql`${memberNavPrefs.memberId} > ${after}::uuid`,
+      ),
+    )
+    .orderBy(asc(memberNavPrefs.memberId))
+    .limit(limit)
+    .for('update', { skipLocked: true });
+  let changed = 0;
+  for (const row of rows) {
+    const read = prefsOf(row);
+    const kept = await pruned(tx, scope, read);
+    // Junk that `prefsOf` skipped goes too, so compare with what is stored.
+    const stored = Array.isArray(row.items) ? row.items.length : 0;
+    if (kept.items.length === stored) continue;
+    await tx
+      .update(memberNavPrefs)
+      .set({
+        items: kept.items.map((item) => ({ ...item })),
+        version: sql`${memberNavPrefs.version} + 1`,
+        ...touched(scope),
+      })
+      .where(and(eq(memberNavPrefs.workspaceId, scope.workspaceId), eq(memberNavPrefs.memberId, row.memberId)));
+    changed += 1;
+  }
+  return { seen: rows.length, changed, last: rows.at(-1)?.memberId };
+}
+
 /** Inside a member's removal (spec 0009's `removeMember`, AC-941): deletes their stored sidebar. */
 export async function deleteMemberNav(context: WriteContext, memberId: string): Promise<void> {
   const { tx, scope } = context;
