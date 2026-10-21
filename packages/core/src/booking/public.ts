@@ -76,7 +76,11 @@ function checkEntry(entry: BookingEntry): void {
 
 /** The page, live and taking bookings: deleted is "no longer available", paused is closed. */
 async function livePage(tx: WorkspaceTx, entry: BookingEntry): Promise<PageRecord> {
-  const page = await loadPage(tx, entry.pageId);
+  return liveOf(await loadPage(tx, entry.pageId));
+}
+
+/** `livePage` for a page already read, so a caller never reads it twice. */
+function liveOf(page: PageRecord | undefined): PageRecord {
   if (page === undefined || page.isDeleted) throw refuse('NOT_FOUND', 'This page is no longer available.');
   if (page.status !== 'live') throw refuse('BOOKING_CLOSED', 'This page isn’t taking bookings right now.');
   return page;
@@ -262,7 +266,7 @@ export async function bookPublicSlot(
     const page = await loadPage(tx, entry.pageId);
     const again = page === undefined ? undefined : await replay(tx, page);
     if (again !== undefined) return { again };
-    const live = await livePage(tx, entry);
+    const live = liveOf(page);
     checkDuration(live, input.duration);
     if (live.location.type === 'phone' && (input.phone ?? '').trim() === '') {
       throw refuseOn('VALUE_REQUIRED', 'Give a number to call you on.', 'phone');

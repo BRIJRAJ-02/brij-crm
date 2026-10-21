@@ -732,12 +732,18 @@ describe('slots by schedule: zones, daylight saving and date overrides (AC-961, 
 
 describe('one write path (spec 0037, AC-1444)', () => {
   it('writes availability_schedules only from the schedules module, so audit and notices attach in one place', () => {
-    const root = fileURLToPath(new URL('../', import.meta.url));
-    const writers = readdirSync(root, { recursive: true, encoding: 'utf8' })
-      .filter((file) => file.endsWith('.ts') && !file.endsWith('.test.ts'))
-      .filter((file) =>
-        /\.(insert|update|delete)\(availabilitySchedules\)/.test(readFileSync(`${root}${file}`, 'utf8')),
-      );
-    expect(writers).toEqual(['availability/schedules.ts']);
+    // Every server source: core services, plus the api and worker entrypoints, through Drizzle or raw SQL.
+    const roots = [new URL('../', import.meta.url), new URL('../../../../apps/api/src/', import.meta.url)].map((url) =>
+      fileURLToPath(url),
+    );
+    const write =
+      /\.(insert|update|delete)\(availabilitySchedules\)|(insert\s+into|update|delete\s+from)\s+availability_schedules\b/i;
+    const writers = roots.flatMap((root) =>
+      readdirSync(root, { recursive: true, encoding: 'utf8' })
+        .filter((file) => file.endsWith('.ts') && !file.endsWith('.test.ts'))
+        .filter((file) => write.test(readFileSync(`${root}${file}`, 'utf8')))
+        .map((file) => `${root}${file}`),
+    );
+    expect(writers).toEqual([fileURLToPath(new URL('./schedules.ts', import.meta.url))]);
   });
 });
