@@ -1,6 +1,7 @@
 // Brief
 // Purpose: the confirms before a form ends something (the owner's rule, 21 October 2026): Delete, which can't be
-// taken back, Pause, which takes it offline until it is resumed, and Rotate secret, which stops the old one at once.
+// taken back, Pause, which takes it offline until it is resumed, Rotate secret, which stops the old one at once, and
+// Remove site, which stops that site's own HTML posting.
 // Main task: read the question and the one line on what happens, then Cancel, or the verb (Delete form, Pause form).
 // Leaves out: Resume and turning a form on, which end nothing and stay one click.
 import { isDataError, type DataLayer } from '@crm/data';
@@ -157,6 +158,68 @@ export function RotateSecretDialog({ data, slug, form, onClose, onDone }: FormCo
     >
       {failure !== undefined && <Callout tone="danger">{failure}</Callout>}
       <p>{strings.secretRotateText}</p>
+    </Modal>
+  );
+}
+
+/** Props for the Remove site confirm. */
+interface RemoveSiteDialogProps {
+  /** The site asked about; undefined while the dialog is closed. */
+  readonly site: string | undefined;
+  /** Saves the list without it; a refusal rejects, and the dialog says it. */
+  readonly onRemove: (site: string) => Promise<unknown>;
+  readonly onClose: () => void;
+}
+
+/** "Remove acme.com?": a danger confirm (its own HTML stops posting at once), Cancel (ESC) then Remove site. */
+export function RemoveSiteDialog({ site, onRemove, onClose }: RemoveSiteDialogProps) {
+  const [isBusy, setBusy] = useState(false);
+  const [failure, setFailure] = useState<string | undefined>(undefined);
+  // The last site stays while the Modal plays its exit.
+  const [last, setLast] = useState(site);
+  if (site !== undefined && site !== last) {
+    setLast(site);
+    setFailure(undefined);
+  }
+  const shown = site ?? last;
+  if (shown === undefined) return null;
+  const commit = () => {
+    if (isBusy || site === undefined) return;
+    setBusy(true);
+    setFailure(undefined);
+    onRemove(site).then(
+      () => {
+        setBusy(false);
+        onClose();
+      },
+      (error: unknown) => {
+        setBusy(false);
+        setFailure(isDataError(error) ? error.message : strings.failedText);
+      },
+    );
+  };
+  return (
+    <Modal
+      title={strings.siteRemoveTitle(shown)}
+      tone="danger"
+      isOpen={site !== undefined}
+      isBusy={isBusy}
+      onOpenChange={(isOpen) => {
+        if (!isOpen && !isBusy) onClose();
+      }}
+      actions={
+        <>
+          <Button slot="close" isDisabled={isBusy} kbd="ESC">
+            {strings.cancel}
+          </Button>
+          <Button variant="danger-solid" icon="x" isPending={isBusy} onPress={commit}>
+            {strings.siteRemoveAction}
+          </Button>
+        </>
+      }
+    >
+      {failure !== undefined && <Callout tone="danger">{failure}</Callout>}
+      <p>{strings.siteRemoveText}</p>
     </Modal>
   );
 }

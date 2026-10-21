@@ -15,7 +15,8 @@ export interface CameFromItem {
 export function pageName(address: string): string {
   if (!URL.canParse(address)) return address;
   const url = new URL(address);
-  return `${url.pathname}${url.search} on ${url.host}`;
+  const path = url.pathname === '/' && url.search === '' ? strings.cameFromHome : `${url.pathname}${url.search}`;
+  return `${path} on ${url.host}`;
 }
 
 /** The UTM tags, with how each reads. */
@@ -38,14 +39,16 @@ export function cameFromOf(submission: Pick<SubmissionView, 'context' | 'hidden'
   if (context?.landing_url !== undefined && context.landing_url !== page) {
     items.push({ term: strings.cameFromLanding, description: pageName(context.landing_url) });
   }
-  if (referrer !== undefined) items.push({ term: strings.cameFromReferrer, description: pageName(referrer) });
+  if (referrer !== undefined) {
+    items.push({ term: strings.cameFromReferrer, description: pageName(referrer) });
+  }
   for (const [key, term] of UTM) {
     const value = (context as Readonly<Record<string, unknown>> | undefined)?.[key] ?? hidden[key];
     if (typeof value === 'string') items.push({ term, description: value });
   }
   for (const [key, value] of Object.entries(context?.params ?? {})) items.push({ term: key, description: value });
-  if (context?.mode !== undefined)
-    items.push({ term: strings.cameFromHow, description: strings.cameFromMode[context.mode] });
-  if (context?.visitor_id !== undefined) items.push({ term: strings.cameFromVisitor, description: context.visitor_id });
+  // A mode this version doesn't name is left out rather than shown blank.
+  const how = context?.mode === undefined ? undefined : (strings.cameFromMode[context.mode] as string | undefined);
+  if (how !== undefined) items.push({ term: strings.cameFromHow, description: how });
   return items;
 }

@@ -177,8 +177,9 @@ export function FormsScreen({ slug }: FormsScreenProps) {
             onDone={(form) => {
               setDeleting(undefined);
               toasts.toast({ tone: 'success', message: strings.deleted(form.name) });
-              // The card and its menu went with the form: focus goes to the page's title rather than falling to the page.
-              focusLater(() => (document.activeElement === document.body ? pageHeading(document) : undefined));
+              // The card and its menu went with the form: focus goes to the page's title rather than to a card
+              // that is about to leave, or to the page.
+              focusLater(() => pageHeading(document));
             }}
           />
           <PauseFormDialog

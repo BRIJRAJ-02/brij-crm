@@ -198,6 +198,28 @@ test.describe('confirms on forms', () => {
     await expect(page.getByRole('dialog')).toHaveCount(0);
     expect(setStatus()).toBe(2);
 
+    // Removing a site from the Install tab asks first; Escape keeps it; Remove site saves the list without it.
+    const settings = calls(page, 'forms/updateSettings');
+    await page.goto(`/w/${slug}/captures/forms/${live.id}?tab=install`);
+    await page.getByRole('button', { name: 'Advanced: for a developer' }).click();
+    await page.getByLabel('Site address').fill('https://acme.com');
+    await page.getByRole('button', { name: 'Add site' }).click();
+    const removeSite = page.getByRole('button', { name: 'Remove https://acme.com' });
+    await expect(removeSite).toBeVisible();
+    expect(settings()).toBe(1);
+    await removeSite.click();
+    const leave = page.getByRole('alertdialog', { name: 'Remove https://acme.com?' });
+    await expect(leave).toBeVisible();
+    await page.keyboard.press('Escape');
+    await expect(leave).toBeHidden();
+    await expect(removeSite).toBeVisible();
+    expect(settings()).toBe(1);
+    await removeSite.click();
+    await leave.getByRole('button', { name: 'Remove site' }).click();
+    await expect(leave).toBeHidden();
+    await expect(removeSite).toHaveCount(0);
+    expect(settings()).toBe(2);
+
     // Deleting the form from its card asks first; Cancel keeps it; Delete form removes it, once.
     const deleteForm = calls(page, 'forms/delete');
     await page.goto(`/w/${slug}/captures/forms`);
