@@ -1,16 +1,18 @@
 // The emails the product sends (spec 0001: Resend and React Email, Mailpit on
-// a laptop): the params each email's template takes. Plain Zod, no oRPC.
-// `@crm/emails` parses them again before it draws an email, so a template
-// never meets a shape it doesn't know. Params hold what the email says, never
-// a link to another site: every link is an app path joined to the app's own
-// origin.
+// a laptop): each queued kind's name and the params its template takes, the
+// topics a member can turn off, and the shapes of the email preferences page.
+// Plain Zod, no oRPC. Core checks a kind's params against these schemas when
+// it queues an email, and the worker parses them again before `@crm/emails`
+// draws it, so a template never meets a shape it doesn't know. Params hold
+// what the email says, never a link to another site: every link is an app
+// path the worker joins to the app's own origin.
 import * as z from 'zod';
 
 /**
  * A path inside the app (`/w/acme/bookings/list`): one leading slash, never
  * `//` or a backslash, so joined to the app's origin it can only ever open
- * the app. Emails take paths, never whole addresses, so no email can carry a
- * link to another site.
+ * the app. Emails take paths, never whole addresses, so no queued email can
+ * carry a link to another site.
  */
 export const AppPath = z
   .string()
@@ -22,8 +24,129 @@ export type AppPath = z.infer<typeof AppPath>;
 /** A short line an email shows as given: a name, a title, a file name. */
 const Line = z.string().trim().min(1).max(200);
 
+/** A longer text an email shows as given: a message, an excerpt. */
+const Paragraph = z.string().trim().min(1).max(2000);
+
+/**
+ * An email address an email names or goes to (the visitor's, a guest's, a
+ * calendar account's): one `@` with something on each side and no spaces or
+ * brackets. Looser than a form's own check on purpose: an address a calendar
+ * or a booking already holds (`john_doe#EXT#@contoso.onmicrosoft.com`) must
+ * never fail the change that tells someone about it.
+ */
+export const EmailAddress = z
+  .string()
+  .trim()
+  .max(320)
+  .regex(/^[^\s@<>()[\],;:"]+@[^\s@<>()[\],;:"]+$/, 'An email address.');
+/** An email address an email names or goes to. */
+export type EmailAddress = z.infer<typeof EmailAddress>;
+
+const Address = EmailAddress;
+
 /** A moment, as an ISO 8601 UTC string. */
 const Instant = z.iso.datetime();
+
+/** An IANA time zone the runtime knows (`Europe/London`), for the times an email states. */
+export const EmailTimeZone = z
+  .string()
+  .min(1)
+  .max(64)
+  .refine((zone) => {
+    try {
+      new Intl.DateTimeFormat('en-GB', { timeZone: zone });
+      return true;
+    } catch {
+      return false;
+    }
+  }, 'An IANA time zone, such as Europe/London.');
+/** An IANA time zone. */
+export type EmailTimeZone = z.infer<typeof EmailTimeZone>;
+
+/** One label and value row: a form answer, a booking's time or place. A row with `href` links its value. */
+export const EmailRow = z.strictObject({
+  label: Line,
+  value: z.string().trim().min(1).max(4000),
+  /** An app path the value links to. */
+  href: AppPath.optional(),
+});
+/** One label and value row. */
+export type EmailRow = z.infer<typeof EmailRow>;
+
+/** A form's answers as an email lists them: the questions the reader may see, in question order. */
+const Answers = z.array(EmailRow).max(60);
+
+/**
+ * A new submission to a form (spec 0023, AC-1047), one email per member told
+ * about it: who sent it, the answers that member may see (AC-573: hidden
+ * means absent), and where it opens.
+ */
+export const FormSubmissionEmail = z.strictObject({
+  formName: Line,
+  /** The sender as they gave themselves: a name, an email, or both. */
+  submitter: z.strictObject({ name: Line.optional(), email: Address.optional() }),
+  answers: Answers,
+  submittedAt: Instant,
+  /** The zone the time is stated in; UTC when unset. */
+  timeZone: EmailTimeZone.optional(),
+  /** Where the submission opens in the app. */
+  submissionPath: AppPath,
+});
+/** A new submission to a form. */
+export type FormSubmissionEmail = z.infer<typeof FormSubmissionEmail>;
+
+/**
+ * The visitor's copy of what they sent (spec 0023, AC-1048), when the form
+ * turns it on: the form's subject and message, or the defaults, and the
+ * answers the form shows in confirmations (never hidden questions).
+ */
+export const FormConfirmationEmail = z.strictObject({
+  formName: Line,
+  /** The form's own subject line; "We got your message" when unset. */
+  subject: Line.optional(),
+  /** The form's own message, or its thank you text. */
+  message: Paragraph.optional(),
+  answers: Answers,
+  submittedAt: Instant,
+  timeZone: EmailTimeZone.optional(),
+});
+/** The visitor's copy of what they sent. */
+export type FormConfirmationEmail = z.infer<typeof FormConfirmationEmail>;
+
+/**
+ * A member's calendar stopped syncing (spec 0024, AC-619 and AC-620):
+ * `expired` when the provider withdrew access, `failed` when syncing kept
+ * failing for 6 hours. Sent to the member who connected it.
+ */
+export const CalendarDisconnectedEmail = z.strictObject({
+  provider: z.enum(['google', 'microsoft']),
+  /** The calendar account, the member's own. */
+  accountEmail: Address,
+  reason: z.enum(['expired', 'failed']),
+  /** Where the member reconnects it. */
+  settingsPath: AppPath,
+});
+/** A member's calendar stopped syncing. */
+export type CalendarDisconnectedEmail = z.infer<typeof CalendarDisconnectedEmail>;
+
+/**
+ * A booking cancelled because its host deleted its calendar event (spec 0025,
+ * AC-641's note of 20 October 2026). Only the host is told: the guest gets
+ * no email from Timefix.
+ */
+export const BookingCalendarRemovedEmail = z.strictObject({
+  /** The booking page's title ("Intro call"). */
+  title: Line,
+  guestName: Line,
+  guestEmail: Address,
+  startsAt: Instant,
+  endsAt: Instant,
+  /** The host's zone, the booking page's. */
+  timeZone: EmailTimeZone,
+  bookingsPath: AppPath,
+});
+/** A booking cancelled because its host deleted its calendar event. */
+export type BookingCalendarRemovedEmail = z.infer<typeof BookingCalendarRemovedEmail>;
 
 /**
  * An invitation to join a workspace (spec 0031, AC-803 to AC-808). Sent from
@@ -39,3 +162,154 @@ export const MemberInviteEmail = z.strictObject({
 });
 /** An invitation to join a workspace. */
 export type MemberInviteEmail = z.infer<typeof MemberInviteEmail>;
+
+/**
+ * A sign in from a device not seen for the account in 90 days (spec 0033,
+ * AC-897): when, the device, the approximate place, and a link to the
+ * account's security page, never a link that changes anything. Its template
+ * only: an account isn't a workspace, so it can't use the workspace email
+ * queue.
+ * TODO(account lane, spec 0033 milestone 4): decide how it is queued (AC-897
+ * says a job keyed by the session id), then draw it with `renderEmail`.
+ */
+export const SignInAlertEmail = z.strictObject({
+  signedInAt: Instant,
+  timeZone: EmailTimeZone.optional(),
+  /** The browser and system, such as "Chrome on macOS". */
+  device: Line,
+  /** An approximate place, such as "London, United Kingdom", when known. */
+  place: Line.optional(),
+  method: z.enum(['code', 'google', 'passkey']),
+  securityPath: AppPath,
+});
+/** A sign in from a new device. */
+export type SignInAlertEmail = z.infer<typeof SignInAlertEmail>;
+
+const Count = z.number().int().min(0);
+
+/** An import a member started has finished (#30): what it did, and where to see the result. */
+export const ImportFinishedEmail = z.strictObject({
+  /** The object imported into, as its plural name ("People"). */
+  objectName: Line,
+  fileName: Line.optional(),
+  outcome: z.enum(['done', 'failed', 'cancelled']),
+  created: Count,
+  updated: Count,
+  skipped: Count,
+  failed: Count,
+  resultPath: AppPath,
+});
+/** An import has finished. */
+export type ImportFinishedEmail = z.infer<typeof ImportFinishedEmail>;
+
+/** Someone mentioned the member (#29): who, where, the words around it, and where it opens. */
+export const MentionEmail = z.strictObject({
+  authorName: Line,
+  /** A comment on a record, or a note. */
+  place: z.enum(['comment', 'note']),
+  /** The record's name or the note's title. */
+  subjectName: Line,
+  /** The text around the mention, as plain text. */
+  excerpt: z.string().trim().min(1).max(500),
+  path: AppPath,
+});
+/** Someone mentioned the member. */
+export type MentionEmail = z.infer<typeof MentionEmail>;
+
+/** Every email with a template, and its params' schema. The sign in code is drawn on its own (`renderSignInCode`). */
+export const EMAIL_PARAMS = {
+  form_submission: FormSubmissionEmail,
+  form_confirmation: FormConfirmationEmail,
+  calendar_disconnected: CalendarDisconnectedEmail,
+  booking_calendar_removed: BookingCalendarRemovedEmail,
+  member_invite: MemberInviteEmail,
+  sign_in_alert: SignInAlertEmail,
+  import_finished: ImportFinishedEmail,
+  mention: MentionEmail,
+} as const;
+
+/** A kind of email with a template. */
+export const EmailKind = z.enum(
+  Object.keys(EMAIL_PARAMS) as [keyof typeof EMAIL_PARAMS, ...(keyof typeof EMAIL_PARAMS)[]],
+);
+/** A kind of email with a template. */
+export type EmailKind = z.infer<typeof EmailKind>;
+
+/** A kind's params, by kind. */
+export type EmailParams = { readonly [K in EmailKind]: z.infer<(typeof EMAIL_PARAMS)[K]> };
+
+/**
+ * The kinds that go through the workspace email queue (`queueEmail`, the
+ * worker's `crm_email` task). The others are sent from their request (an
+ * invitation, as a sign in code is) or not sent yet (a sign in alert).
+ */
+export const QUEUED_EMAIL_KINDS = [
+  'form_submission',
+  'form_confirmation',
+  'calendar_disconnected',
+  'booking_calendar_removed',
+  'import_finished',
+  'mention',
+] as const satisfies readonly EmailKind[];
+/** A kind that goes through the workspace email queue. */
+export const QueuedEmailKind = z.enum(QUEUED_EMAIL_KINDS);
+/** A kind that goes through the workspace email queue. */
+export type QueuedEmailKind = z.infer<typeof QueuedEmailKind>;
+
+/**
+ * The topics a member can turn off: optional emails only, and the one list
+ * of them (with `EMAIL_KIND_TOPICS` below), so a change of mind is one edit.
+ * An email of a topic carries a link to the member's email preferences, and
+ * is skipped once its topic is off. Everything else (sign in, security,
+ * calendar alerts, bookings, invitations, an import's result) always goes:
+ * the owner's default of 21 October 2026.
+ */
+export const EMAIL_TOPICS = ['form_submissions', 'mentions'] as const;
+/** A topic a member can turn off. */
+export const EmailTopic = z.enum(EMAIL_TOPICS);
+/** A topic a member can turn off. */
+export type EmailTopic = z.infer<typeof EmailTopic>;
+
+/** Which topic each optional kind belongs to; a kind not listed always goes. */
+export const EMAIL_KIND_TOPICS: { readonly [K in EmailKind]?: EmailTopic } = {
+  form_submission: 'form_submissions',
+  mention: 'mentions',
+};
+
+/** One topic on the email preferences page: whether the member gets it. */
+export const EmailPreference = z.strictObject({ topic: EmailTopic, subscribed: z.boolean() });
+/** One topic on the email preferences page. */
+export type EmailPreference = z.infer<typeof EmailPreference>;
+
+/**
+ * The email preferences page (opened from an email's link, no sign in): the
+ * workspace the emails come from, the topic the link came from, and every
+ * topic with its state. Never the member's address or any other member.
+ */
+export const EmailPreferencesView = z.strictObject({
+  workspaceName: z.string(),
+  /** The topic of the email the link was in, shown first. */
+  topic: EmailTopic,
+  preferences: z.array(EmailPreference),
+});
+/** The email preferences page. */
+export type EmailPreferencesView = z.infer<typeof EmailPreferencesView>;
+
+/** A change on the email preferences page: one topic on or off. */
+export const EmailPreferenceChange = z.strictObject({ topic: EmailTopic, subscribed: z.boolean() });
+/** A change on the email preferences page. */
+export type EmailPreferenceChange = z.infer<typeof EmailPreferenceChange>;
+
+/**
+ * A one click unsubscribe's answer (an optional email's `List-Unsubscribe`,
+ * from the reader's mail service or the page it opens in a browser): its
+ * topic is off. The workspace's name and the topic only; never the member's
+ * other choices, which the one click's token can't read.
+ */
+export const EmailUnsubscribed = z.strictObject({
+  unsubscribed: z.literal(true),
+  workspaceName: z.string(),
+  topic: EmailTopic,
+});
+/** A one click unsubscribe's answer. */
+export type EmailUnsubscribed = z.infer<typeof EmailUnsubscribed>;

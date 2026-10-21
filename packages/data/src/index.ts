@@ -61,6 +61,12 @@ import type { FetchLike } from './fetch.ts';
 import { delivered } from './delivered.ts';
 import { createJobsStore, type JobsScope, type JobsView, type TestJobSettings } from './jobs/store.ts';
 import { createBookingsStore, type BookingsCalendarHeld, type BookingsView } from './bookings/store.ts';
+import {
+  createEmailPreferences,
+  createEmailUnsubscribe,
+  type EmailPreferencesStore,
+  type EmailUnsubscribeStore,
+} from './email-preferences.ts';
 import { connectUrl, createCalendarStore, type CalendarSettingsHeld, type CalendarView } from './calendar/store.ts';
 import {
   createCaptureList,
@@ -201,6 +207,16 @@ export type {
   MeetingAttendeeShape,
 } from './activity/feed.ts';
 export type { BookingsCalendarHeld, BookingsCalendarState, BookingsState, BookingsView } from './bookings/store.ts';
+export type {
+  EmailPreference,
+  EmailPreferencesState,
+  EmailPreferencesStore,
+  EmailPreferencesView,
+  EmailTopic,
+  EmailUnsubscribed,
+  EmailUnsubscribeState,
+  EmailUnsubscribeStore,
+} from './email-preferences.ts';
 export type { CalendarSettingsHeld, CalendarSettingsState, CalendarState, CalendarView } from './calendar/store.ts';
 export type { CaptureListState, CaptureListView } from './captures/list.ts';
 export { connectUrl, needsReconnect } from './calendar/store.ts';
@@ -800,6 +816,9 @@ export function createDataLayer({
   }
 
   const auth = createAuth({ origin, fetch, reset, report: reportSafely });
+  // Email preferences pages (the emails lane), one store per link's token for the app load, and the one click's.
+  const emailPreferenceStores = new Map<string, EmailPreferencesStore>();
+  const emailUnsubscribeStores = new Map<string, EmailUnsubscribeStore>();
 
   /** Reads a per workspace list once, dropping it from the cache when it fails, so the next call asks again. */
   function cached<T>(cache: Map<string, Promise<T>>, key: string, load: () => Promise<T>): Promise<T> {
@@ -3304,6 +3323,29 @@ export function createDataLayer({
       status: () => call((options) => api.system.status(undefined, options)),
     },
     auth,
+    /**
+     * A member's email preferences, opened by an email's link with no session
+     * (the emails lane): one store per link's token, the page's one copy, its
+     * changes shown at once and put back on a refusal.
+     */
+    emailPreferences: (token: string): EmailPreferencesStore => {
+      const held = emailPreferenceStores.get(token);
+      if (held !== undefined) return held;
+      const made = createEmailPreferences({ origin, fetch }, token);
+      emailPreferenceStores.set(token, made);
+      return made;
+    },
+    /**
+     * An optional email's one click unsubscribe opened in a browser (the
+     * emails lane): one store per link's token, which asks before it posts.
+     */
+    emailUnsubscribe: (token: string): EmailUnsubscribeStore => {
+      const held = emailUnsubscribeStores.get(token);
+      if (held !== undefined) return held;
+      const made = createEmailUnsubscribe({ origin, fetch }, token);
+      emailUnsubscribeStores.set(token, made);
+      return made;
+    },
   };
 }
 

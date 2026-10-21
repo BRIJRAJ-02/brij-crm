@@ -3,7 +3,8 @@
 // a day, whatever runs it again; the job purges what has been in the trash
 // past 30 days and keeps the rest, ends jobs left waiting for a confirm, drops
 // the items of finished jobs but the refused ones, deletes jobs finished more
-// than 30 days ago, and queues again only a job that lost its queue row.
+// than 30 days ago, ends an email still queued after a day and deletes emails
+// older than 30 days, and queues again only a job that lost its queue row.
 import { randomUUID } from 'node:crypto';
 import { sql } from 'drizzle-orm';
 import { PRUNE_BATCH, createDatabase, openQueueConnection, type QueueConnection } from '@crm/db';
@@ -291,6 +292,36 @@ describe('maintenance.daily (AC-112, AC-121)', () => {
     expect(links).toEqual([]);
     const job = await getJob(systemScope(db, t.workspaceId), registry(), jobId);
     expect(job.result).toMatchObject({ cleanup: { notes: 1, tasks: 1 } });
+  });
+
+  it('ends an email still queued after a day failed and blanked, and removes emails made more than 30 days ago', async () => {
+    const t = await team([]);
+    const email = async (key: string, age: string, sent = false) => {
+      const [row] = await testQuery<{ id: string }>(
+        ownerUrl,
+        `insert into emails (workspace_id, kind, key, to_member_id, params, status, sent_at, created_by_type, created_at)
+         values ($1, 'mention', $2, $3, '{"excerpt":"hi"}', $4::email_status, $5::timestamptz, 'system', now() - $6::interval)
+         returning id::text as id`,
+        [t.workspaceId, key, t.ownerId, sent ? 'sent' : 'queued', sent ? new Date().toISOString() : null, age],
+      );
+      return row?.id ?? '';
+    };
+    const lost = await email('mention:1:1', '2 days');
+    const waiting = await email('mention:2:2', '1 hour');
+    await email('mention:3:3', '31 days', true);
+    const { jobId, outcomes } = await cleanUp(t.workspaceId, '2026-10-16');
+    expect(outcomes.at(-1)).toBe('succeeded');
+    const left = await testQuery<{ id: string; status: string; error_code: string | null; params: unknown }>(
+      ownerUrl,
+      'select id::text as id, status::text, error_code, params from emails where workspace_id = $1 order by created_at',
+      [t.workspaceId],
+    );
+    expect(left).toEqual([
+      { id: lost, status: 'failed', error_code: 'queue_lost', params: {} },
+      { id: waiting, status: 'queued', error_code: null, params: { excerpt: 'hi' } },
+    ]);
+    const job = await getJob(systemScope(db, t.workspaceId), registry(), jobId);
+    expect(job.result).toMatchObject({ cleanup: { emails: 1 } });
   });
 
   it('keeps refused items, deletes the rest of a finished job’s, and deletes jobs finished more than 30 days ago', async () => {

@@ -8,19 +8,7 @@
 import { createElement as h, Fragment, type CSSProperties, type ReactNode } from 'react';
 import type { DocumentRow, EmailBlock, EmailDocument } from './document.ts';
 import { callUrl, onAppOrigin, poweredByUrl, wordmarkUrls, type EmailMedium } from './links.ts';
-import {
-  Button,
-  Container,
-  Head,
-  Heading,
-  Html,
-  Img,
-  Link,
-  Preview,
-  Section,
-  Text,
-  renderHtml,
-} from './react-email.ts';
+import { Button, Container, Head, Heading, Html, Link, Section, Text, renderHtml } from './react-email.ts';
 import {
   EMAIL_WIDTH,
   emailStylesheet,
@@ -233,8 +221,6 @@ function block(item: EmailBlock, origin: string): ReactNode {
             borderWidth: HAIRLINE,
             borderRadius: RADIUS.control,
             padding: `${SPACE[12]} ${SPACE[20]}`,
-            // The padding stays inside the button's width, so a long label never spills past a phone's edge.
-            boxSizing: 'border-box',
           },
         },
         item.label,
@@ -267,12 +253,43 @@ function block(item: EmailBlock, origin: string): ReactNode {
   }
 }
 
+/** Characters that show nothing, after the preheader, so an inbox's preview line stops there and never runs on. */
+const PREVIEW_FILL = '\u00a0\u200c\u200b\u200d\u200e\u200f\ufeff';
+
+/** The longest preview line an inbox shows. */
+const PREVIEW_MAX = 200;
+
+/**
+ * The inbox preview line: hidden in the email itself by display, size and
+ * Outlook's `mso-hide`, never by `opacity`, which over a third of clients
+ * can't read (Mailpit's HTML check), then filled with blanks to its end.
+ */
+function preheader(text: string): ReactNode {
+  const line = text.slice(0, PREVIEW_MAX);
+  return h(
+    'div',
+    {
+      style: {
+        display: 'none',
+        overflow: 'hidden',
+        lineHeight: '1px',
+        maxHeight: '0',
+        maxWidth: '0',
+        msoHide: 'all',
+      } satisfies EmailStyle,
+    },
+    line,
+    line.length >= PREVIEW_MAX ? null : h('div', null, PREVIEW_FILL.repeat(PREVIEW_MAX - line.length)),
+  );
+}
+
 /** The shared footer: the logo (one image per theme), why the reader got this, and their preferences when optional. */
 function footer(document: EmailDocument, options: RenderOptions): ReactNode {
   const tertiary = role('tertiary');
   const logos = wordmarkUrls(options.appOrigin);
+  // A plain image: React Email's Img adds `outline`, which a fifth of clients can't read (Mailpit's HTML check).
   const logo = (scheme: 'light' | 'dark') =>
-    h(Img, {
+    h('img', {
       src: logos[scheme],
       // Inside the link, the image names where it goes with the words beside it: "Powered by Timefix".
       alt: 'Timefix',
@@ -368,7 +385,7 @@ function EmailLayout({ document, options }: { readonly document: EmailDocument; 
     h(
       'body',
       { className: page.className, style: { ...page.style, margin: '0', padding: '0' } },
-      h(Preview, { useTitleTag: false, children: document.preheader }),
+      preheader(document.preheader),
       // The ground is a full width table as well as the body: Yahoo and AOL drop the body's styles, and the dark
       // stylesheet repaints both by their class (React Email's Body copies the colour to a cell it can't name).
       h(

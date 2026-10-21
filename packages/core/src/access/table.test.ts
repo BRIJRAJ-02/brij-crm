@@ -119,6 +119,22 @@ const NO_SCOPE: ReadonlySet<string> = new Set([
   'overlay',
   'sealTokens',
   'openTokens',
+  // Queued email (the emails lane): the queue functions run inside the caller's own transaction, after its own
+  // check (they take its `tx`, never a scope), and the key is pure. The worker's half (load, finish) runs as the
+  // system in the email's workspace, and a preferences link's token is signed and read with the key passed in.
+  'emailKey',
+  'queueEmail',
+  'queueEmails',
+  'queueFormSubmissionNotice',
+  'queueFormConfirmation',
+  'queueCalendarDisconnected',
+  'queueBookingCalendarRemoved',
+  'queueImportFinished',
+  'queueMention',
+  'loadEmail',
+  'finishEmail',
+  'emailLinkToken',
+  'readEmailLinkToken',
 ]);
 
 const exported = { ...core, ...system } as Record<string, unknown>;

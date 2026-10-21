@@ -8,7 +8,9 @@
 // lands in the change with every record it showed on before or after, so the
 // outbox stores one `meetings` row for the batch (AC-610).
 import { sql } from 'drizzle-orm';
+import { EmailTimeZone } from '@crm/contracts/emails';
 import type { WorkspaceTx } from '@crm/db';
+import { queueEmails } from '../emails/queue.ts';
 import { uuidList } from '../engine/ids.ts';
 import type { MeetingChange, WriteContext } from '../engine/write.ts';
 import {
@@ -203,12 +205,14 @@ export const REMOVED_FROM_CALENDAR = 'Removed from the host calendar';
  * that already began stays as it was. The slot frees with the status (the
  * exclusion constraint holds confirmed bookings only). It runs in the
  * sync's own transaction, recorded as the system: the bookings table admits
- * no `calendar` actor. No email is sent from here: Google already offered to
- * tell the attendees when the host deleted the event.
+ * no `calendar` actor. The host is told by email, queued in the same
+ * transaction (`booking_calendar_removed`); the guest gets nothing from
+ * Timefix: Google already offered to tell the attendees when the host deleted
+ * the event.
  */
 async function cancelRemovedBookings(tx: WorkspaceTx, connectionId: string, meetingIds: readonly string[]) {
   // The bookings these meetings are for, each found by an index: the booking's meeting, or the meeting's booking.
-  await tx.execute(sql`
+  const cancelled = await tx.execute<{ id: string }>(sql`
     update bookings b set status = 'cancelled', cancel_reason = ${REMOVED_FROM_CALENDAR},
       updated_at = now(), updated_by_type = 'system', updated_by_id = null, updated_by_member_id = null
     from meetings m
@@ -224,7 +228,68 @@ async function cancelRemovedBookings(tx: WorkspaceTx, connectionId: string, meet
         b.host_member_id = (select c.member_id from calendar_connections c where c.id = ${connectionId}::uuid)
         or not exists (select 1 from meeting_sources s where s.workspace_id = m.workspace_id and s.meeting_id = m.id)
       )
+    returning b.id::text as id
   `);
+  await tellHostsOfRemoved(
+    tx,
+    cancelled.rows.map((row) => row.id),
+  );
+}
+
+/** A cancelled booking as its host's notice states it. */
+interface RemovedBooking extends Record<string, unknown> {
+  readonly id: string;
+  readonly host_member_id: string;
+  readonly title: string;
+  readonly visitor_name: string;
+  readonly visitor_email: string;
+  readonly starts_at: string;
+  readonly ends_at: string;
+  readonly time_zone: string | null;
+  readonly slug: string;
+}
+
+/**
+ * Queues each host's notice that a booking left with its calendar event
+ * (`booking_calendar_removed`, once per booking), in the sync's transaction.
+ * The time is stated in the page's zone: its owner's hours when it follows
+ * them, else its own.
+ */
+async function tellHostsOfRemoved(tx: WorkspaceTx, bookingIds: readonly string[]): Promise<void> {
+  if (bookingIds.length === 0) return;
+  const found = await tx.execute<RemovedBooking>(sql`
+    select b.id::text as id, b.host_member_id::text as host_member_id, p.title, b.visitor_name, b.visitor_email,
+      to_json(b.starts_at)#>>'{}' as starts_at, to_json(b.ends_at)#>>'{}' as ends_at,
+      coalesce(case when p.hours_mode = 'mine' then h.availability->>'timeZone' end, p.availability->>'timeZone') as time_zone,
+      w.slug
+    from bookings b
+    join booking_pages p on p.workspace_id = b.workspace_id and p.id = b.page_id
+    join workspaces w on w.id = b.workspace_id
+    left join booking_member_hours h on h.workspace_id = p.workspace_id and h.member_id = p.owner_member_id
+    where b.id = any(${uuidList(bookingIds)})
+  `);
+  // One insert and one queue call however many bookings left; a notice its schema refuses is left out, never
+  // undoing the sync's write.
+  await queueEmails(
+    tx,
+    found.rows.map((row) => {
+      const zone = EmailTimeZone.safeParse(row.time_zone);
+      return {
+        kind: 'booking_calendar_removed' as const,
+        ids: [row.id],
+        to: { memberId: row.host_member_id },
+        params: {
+          title: row.title,
+          guestName: row.visitor_name,
+          guestEmail: row.visitor_email,
+          startsAt: new Date(row.starts_at).toISOString(),
+          endsAt: new Date(row.ends_at).toISOString(),
+          timeZone: zone.success ? zone.data : 'UTC',
+          bookingsPath: `/w/${encodeURIComponent(row.slug)}/bookings/list`,
+        },
+      };
+    }),
+  );
 }
 
 /** Plans the upserts for the events that sync, the last copy of a key winning within the batch. */

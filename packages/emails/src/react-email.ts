@@ -3,7 +3,7 @@
 // no build step, and type stripping has no JSX, so callers make elements with
 // React's createElement.
 /** The React Email components the layout draws with. */
-export { Button, Container, Head, Heading, Html, Img, Link, Preview, Section, Text } from 'react-email';
+export { Button, Container, Head, Heading, Html, Link, Section, Text } from 'react-email';
 import { render } from 'react-email';
 import type { ReactElement } from 'react';
 

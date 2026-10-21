@@ -34,6 +34,8 @@ export function createMailpitMailer(options: MailpitOptions): Mailer {
           Subject: message.subject,
           HTML: message.html,
           Text: message.text,
+          ...(message.replyTo === undefined ? {} : { ReplyTo: [{ Email: message.replyTo }] }),
+          ...(message.headers === undefined ? {} : { Headers: message.headers }),
           ...(message.attachments === undefined || message.attachments.length === 0
             ? {}
             : {

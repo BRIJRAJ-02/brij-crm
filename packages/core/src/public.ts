@@ -15,3 +15,6 @@ export {
 } from './booking/public.ts';
 // The guest page's changes (milestone 2): move, add guests, cancel, and where it could move.
 export { addGuests, cancelBooking, guestTarget, moveBooking, readMoveSlots, removeGuest } from './booking/change.ts';
+// An email's preferences link (the emails lane): its token read, the member's narrow scope, and their choices.
+export { enterEmailLink } from './access/door.ts';
+export { readEmailLinkToken, readEmailPreferences, setEmailPreference } from './emails/preferences.ts';

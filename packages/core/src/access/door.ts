@@ -17,9 +17,11 @@ import { isUuid } from '../engine/ids.ts';
 import { refuse, type RefusalError } from '../engine/refusals.ts';
 import { SYSTEM_ACTOR, type Actor } from '../engine/scope.ts';
 import { FORM_SLUG } from '@crm/contracts';
+import type { EmailLink } from '../emails/preferences.ts';
 import { mintScope, rescope, type EngineScope } from './mint.ts';
 import {
   bookingAccess,
+  emailLinkAccess,
   formAccess,
   isRole,
   NO_RULES,
@@ -350,4 +352,25 @@ export async function enterBookingByToken(
     access: bookingAccess(row.page_id, []),
   });
   return { scope, pageId: row.page_id, people: '', companies: '', bookingId: row.booking_id };
+}
+
+/**
+ * Turns an email's preferences link (its token already checked by
+ * `readEmailLinkToken`) into its member's narrow scope: an `email_link`
+ * principal with no permission and no object (`emailLinkAccess`), so it
+ * reads and sets their own email preferences and nothing else. A member no
+ * longer active, or a workspace deleted, answers NOT_FOUND, the same as a
+ * link that never was.
+ */
+export async function enterEmailLink(deps: { readonly db: Database }, link: EmailLink): Promise<EngineScope> {
+  const found = await activeMember(deps.db, link.workspaceId, { memberId: link.memberId }, NO_RULE_SOURCE);
+  if (found === undefined || !isRole(found.member.role)) {
+    throw refuse('NOT_FOUND', 'This link doesn’t open email preferences any more.');
+  }
+  return mintScope({
+    db: deps.db,
+    workspaceId: link.workspaceId,
+    actor: { type: 'member', id: found.member.id },
+    access: emailLinkAccess(found.member.id),
+  });
 }

@@ -8,6 +8,12 @@ import type { ActivityFeed, ActivityState } from './activity/feed.ts';
 import type { BookingsCalendarHeld, BookingsCalendarState, BookingsState, BookingsView } from './bookings/store.ts';
 import type { CalendarSettingsHeld, CalendarSettingsState, CalendarState, CalendarView } from './calendar/store.ts';
 import type { CaptureListState, CaptureListView } from './captures/list.ts';
+import type {
+  EmailPreferencesState,
+  EmailPreferencesStore,
+  EmailUnsubscribeState,
+  EmailUnsubscribeStore,
+} from './email-preferences.ts';
 import type { JobView } from '@crm/contracts';
 import type { JobsSnapshot, JobsView } from './jobs/store.ts';
 import type { LiveStatus } from './live/live.ts';
@@ -328,4 +334,14 @@ export function useNoteTotal(list: NoteList): NoteListState['total'] {
 /** An open note (the note window), re-rendering as it saves. Held while the window is mounted. */
 export function useNoteSession(session: NoteSession): NoteSessionState {
   return useRetained(session);
+}
+
+/** An email preferences page's state (the emails lane): its choices as they now stand, re-rendering when they change. */
+export function useEmailPreferences(store: EmailPreferencesStore): EmailPreferencesState {
+  return useSyncExternalStore(store.subscribe, store.getSnapshot, store.getSnapshot);
+}
+
+/** A one click unsubscribe page's state (the emails lane): asking, saving, done or refused. */
+export function useEmailUnsubscribe(store: EmailUnsubscribeStore): EmailUnsubscribeState {
+  return useSyncExternalStore(store.subscribe, store.getSnapshot, store.getSnapshot);
 }

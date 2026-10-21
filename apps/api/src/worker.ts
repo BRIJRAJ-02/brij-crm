@@ -28,7 +28,9 @@ import {
 import { bookingLinkKey } from './booking-link.ts';
 import { backgroundHooks } from './hooks.ts';
 import { runBookingMail } from './jobs/booking-mail.ts';
-import { createMailer } from './mail/mailer.ts';
+import { runEmail, type EmailTry } from './jobs/email.ts';
+import { emailLinkKey } from './email-link.ts';
+import { createMailer, pacedMailer } from './mail/mailer.ts';
 import { parseSender } from './mail/mailpit.ts';
 import { createFreeDomains } from './calendar/free-domains.ts';
 import { createGoogleCalendar } from './calendar/google.ts';
@@ -204,14 +206,22 @@ const calendarSync =
       })();
 if (env.calendar === undefined) log.info('calendar.off', { reason: 'CALENDAR_SYNC is not on' });
 
-// Booking emails (spec 0025, milestone 2): sent through the api's own transport (Resend, or Mailpit locally) with links
-// to the app, each guest page link derived with the key the api mints tokens with. Without APP_URL or a transport,
-// each queued email is logged and dropped.
-const bookingMailer =
+/** The gap between the worker's sends: under Resend's 2 requests a second, with room for the api's. */
+const MAIL_GAP_MS = 600;
+
+// The worker's mail transport (Resend, or Mailpit locally), the api's own, for a booking's emails and queued email.
+// Booking emails (spec 0025, milestone 2) carry links to the app, each guest page link derived with the key the api
+// mints tokens with. Without APP_URL or a transport, each queued booking email is logged and dropped.
+// Its sends are paced (one at a time, 600ms apart): the runners take several jobs at once, and Resend takes 2
+// requests a second for the whole team, the api's sign in codes included.
+const mailer =
   env.APP_URL === undefined || (env.RESEND_API_KEY === undefined && env.MAILPIT_URL === undefined)
     ? undefined
-    : createMailer({ RESEND_API_KEY: env.RESEND_API_KEY, MAIL_FROM: env.MAIL_FROM, MAILPIT_URL: env.MAILPIT_URL });
-if (bookingMailer === undefined) log.info('booking.mail.off', { reason: 'APP_URL or a mail transport is not set' });
+    : pacedMailer(
+        createMailer({ RESEND_API_KEY: env.RESEND_API_KEY, MAIL_FROM: env.MAIL_FROM, MAILPIT_URL: env.MAILPIT_URL }),
+        MAIL_GAP_MS,
+      );
+if (mailer === undefined) log.info('booking.mail.off', { reason: 'APP_URL or a mail transport is not set' });
 const bookingLinks =
   env.APP_URL === undefined
     ? undefined
@@ -224,12 +234,34 @@ const bookingMail = (payload: unknown) =>
   runBookingMail(
     {
       systemScope: (workspaceId) => systemScope(db, workspaceId),
-      mailer: bookingMailer,
+      mailer,
       links: bookingLinks,
       log,
     },
     payload,
   );
+
+// Queued email (the emails lane): each `crm_email` row drawn with @crm/emails and sent through the same transport as
+// a booking's emails, its links on the app, an optional email's preferences link signed with the key the api checks
+// it with. Without APP_URL the task isn't run (its rows wait); without a transport each is recorded skipped.
+const emailDeps =
+  env.APP_URL === undefined
+    ? undefined
+    : {
+        systemScope: (workspaceId: string) => systemScope(db, workspaceId),
+        mailer,
+        appOrigin: new URL(env.APP_URL).origin,
+        linkKey: emailLinkKey(env),
+        log,
+      };
+if (emailDeps === undefined || mailer === undefined) {
+  const reason = emailDeps === undefined ? 'APP_URL is not set' : 'no mail transport (RESEND_API_KEY)';
+  // A deployed worker that runs jobs but can't send loses every queued email: said at error level, to be seen.
+  if (env.APP_ENV !== 'local' && env.JOBS_RUNNER === 'on') log.error('email.off', { reason });
+  else log.info('email.off', { reason });
+}
+const email =
+  emailDeps === undefined ? undefined : (payload: unknown, attempt: EmailTry) => runEmail(emailDeps, payload, attempt);
 
 /** Opens the queue pool and starts the runners: what waking means. The NOTIFY check proves the direct host first. */
 async function openWorker(hooks: {
@@ -257,6 +289,7 @@ async function openWorker(hooks: {
       onFailed: hooks.onFailed,
       ...(calendarSync === undefined ? {} : { calendar: calendarSync }),
       bookingMail,
+      ...(email === undefined ? {} : { email }),
       // The daily cleanup (milestone 3): the outbox, the dead queue rows, then one maintenance job a workspace.
       daily: (input) =>
         runDailyCleanup(
@@ -280,7 +313,7 @@ async function openWorker(hooks: {
         opened.sleepCheck({
           outbox: relay !== undefined,
           stuck: relay?.stuckWorkspaces() ?? [],
-          tasks: runnerTasks(calendarSync !== undefined),
+          tasks: runnerTasks({ calendar: calendarSync !== undefined, email: email !== undefined }),
         }),
       close: async () => {
         // The slices in hand finish their batch and hand their jobs back first.

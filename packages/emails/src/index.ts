@@ -2,14 +2,17 @@
 // (spec 0001's `packages/emails`). Templates turn params into words, one
 // layout draws the words as HTML and plain text, and nothing here sends: the
 // api's mailer does, from the request (a sign in code, an invitation) or the
-// worker (a booking's emails).
-import { MemberInviteEmail } from '@crm/contracts/emails';
+// worker (a booking's emails, and the queued kinds through `crm_email`).
+import { EMAIL_PARAMS, MemberInviteEmail, type EmailKind } from '@crm/contracts/emails';
+import { CATALOG, topicOf } from './catalog.ts';
 import { appUrl, type EmailMedium } from './links.ts';
 import { renderDocument, type RenderedEmail } from './render.ts';
+import type { Template, TemplateContext } from './template.ts';
 import { bookingDocument, type BookingWords } from './templates/booking.ts';
 import { memberInvite } from './templates/invite.ts';
 import { SIGN_IN_CODE_MINUTES, signInCode } from './templates/sign-in-code.ts';
 
+export { CATALOG, topicOf, type Catalog, type CatalogEntry } from './catalog.ts';
 export type { DocumentRow, EmailBlock, EmailDocument } from './document.ts';
 export {
   appOrigin,
@@ -28,13 +31,53 @@ export { SIGN_IN_CODE_MINUTES, SIGN_IN_CODE_SUBJECT } from './templates/sign-in-
 export type { BookingWords } from './templates/booking.ts';
 export type { MemberInviteEmail } from '@crm/contracts/emails';
 
+/** What drawing an email needs besides its params, filled in by its sender at send time. */
+export interface EmailContext {
+  /** The app's origin: every link in the email, and the logo, point here. */
+  readonly appOrigin: string;
+  /** The workspace the email is about, by name. */
+  readonly workspaceName?: string;
+  /** The reader's email preferences page: required for an optional kind (one with a topic), ignored otherwise. */
+  readonly preferencesUrl?: string;
+}
+
+/** A template's context from an email's: the workspace, and app paths joined to the app's origin. */
+function templateContext(context: EmailContext): TemplateContext {
+  return {
+    ...(context.workspaceName === undefined ? {} : { workspaceName: context.workspaceName }),
+    link: (path) => appUrl(context.appOrigin, path),
+  };
+}
+
+/**
+ * Draws one email of a kind with a template: its params parsed again by the
+ * kind's schema (a shape the template doesn't know throws), then its words
+ * drawn as HTML and plain text. An optional kind must have the reader's
+ * preferences link, so its footer can always offer it.
+ */
+export async function renderEmail(kind: EmailKind, params: unknown, context: EmailContext): Promise<RenderedEmail> {
+  const entry = CATALOG[kind];
+  // Parsed by this kind's own schema, so the params are exactly what its template takes.
+  const parsed: unknown = EMAIL_PARAMS[kind].parse(params);
+  const optional = topicOf(kind) !== undefined;
+  if (optional && context.preferencesUrl === undefined) {
+    throw new Error(`A ${kind} email is optional, so it needs the reader's preferences link.`);
+  }
+  const template = entry.template as Template<unknown>;
+  return renderDocument(template(parsed, templateContext(context)), {
+    appOrigin: context.appOrigin,
+    medium: entry.medium,
+    ...(optional && context.preferencesUrl !== undefined ? { preferencesUrl: context.preferencesUrl } : {}),
+  });
+}
+
 /** The sign in code email (spec 0005), sent in its request: the code, how long it works, and the shared footer. */
 export async function renderSignInCode(code: string, context: { readonly appOrigin: string }): Promise<RenderedEmail> {
   if (!/^[0-9A-Za-z]{4,12}$/.test(code)) throw new Error('A sign in code is 4 to 12 letters and digits.');
-  return renderDocument(
-    signInCode({ code, minutes: SIGN_IN_CODE_MINUTES }, { link: (path) => appUrl(context.appOrigin, path) }),
-    { appOrigin: context.appOrigin, medium: 'email_sign_in' },
-  );
+  return renderDocument(signInCode({ code, minutes: SIGN_IN_CODE_MINUTES }, templateContext(context)), {
+    appOrigin: context.appOrigin,
+    medium: 'email_sign_in',
+  });
 }
 
 /**

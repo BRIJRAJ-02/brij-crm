@@ -52,9 +52,10 @@ const plus = (iso: string, minutes: number) => new Date(Date.parse(iso) + minute
 let count = 0;
 async function world(options: { readonly push?: boolean } = {}) {
   count += 1;
+  const slug = `calendar-two-${String(count)}-${String(Date.now())}`;
   const created = await createWorkspace(db, {
     name: 'Calendar two',
-    slug: `calendar-two-${String(count)}-${String(Date.now())}`,
+    slug,
     firstMember: { name: 'Ada', email: 'ada@acme.dev' },
   });
   const owner = testScope({ db, workspaceId: created.workspaceId, actor: { type: 'member', id: created.memberId } });
@@ -104,6 +105,7 @@ async function world(options: { readonly push?: boolean } = {}) {
   });
   return {
     ...created,
+    slug,
     owner,
     ownerId: created.memberId,
     bea,
@@ -582,6 +584,27 @@ describe('a booking whose event the host removes (owner report, 20 October 2026)
       cancel_reason: 'Removed from the host calendar',
       meeting_id: null,
     });
+    // The host is told in the same write; the guest gets nothing from Timefix.
+    const notices = await w.query<{
+      to_member_id: string | null;
+      to_address: string | null;
+      key: string;
+      params: { title?: unknown; guestEmail?: unknown; bookingsPath?: unknown };
+    }>(sql`select to_member_id::text, to_address, key, params from emails where kind = 'booking_calendar_removed'`);
+    expect(notices).toHaveLength(1);
+    const [notice] = notices;
+    expect(notice).toMatchObject({
+      to_member_id: w.ownerId,
+      to_address: null,
+      key: `booking_calendar_removed:${bookingId}`,
+    });
+    expect(typeof notice?.params.title).toBe('string');
+    expect(typeof notice?.params.guestEmail).toBe('string');
+    expect(notice?.params.bookingsPath).toBe(`/w/${w.slug}/bookings/list`);
+    const others = await w.query<{ n: number }>(
+      sql`select count(*)::int as n from emails where kind <> 'booking_calendar_removed'`,
+    );
+    expect(others[0]?.n).toBe(0);
     // The meeting's change event went with it, so open timelines read again.
     const events = await w.query<{ n: number }>(sql`select count(*)::int as n from outbox where kind = 'meetings'`);
     expect(events[0]?.n).toBeGreaterThan(0);
