@@ -25,13 +25,33 @@ import { linksOf, seenLinks } from './links.ts';
 
 const { bookingPages, bookings } = schema;
 
-/** The guests and note a booking keeps among its answers. */
-function guestsAndNote(answers: unknown): { readonly guests: string[]; readonly note?: string } {
+/** One line of a booking's chat (spec 0041). */
+type ChatLine = { role: 'visitor' | 'assistant'; text: string };
+
+/** A stored chat line, or undefined for anything else. */
+function chatLine(line: unknown): ChatLine | undefined {
+  if (typeof line !== 'object' || line === null) return undefined;
+  const { role, text } = line as { readonly role?: unknown; readonly text?: unknown };
+  return (role === 'visitor' || role === 'assistant') && typeof text === 'string' ? { role, text } : undefined;
+}
+
+/** The guests, note and chat (spec 0041, AC-1522) a booking keeps among its answers. */
+function guestsAndNote(answers: unknown): {
+  readonly guests: string[];
+  readonly note?: string;
+  readonly chat?: ChatLine[];
+} {
   if (typeof answers !== 'object' || answers === null) return { guests: [] };
-  const { guests, note } = answers as { readonly guests?: unknown; readonly note?: unknown };
+  const { guests, note, chat } = answers as {
+    readonly guests?: unknown;
+    readonly note?: unknown;
+    readonly chat?: unknown;
+  };
+  const lines = Array.isArray(chat) ? chat.map(chatLine).filter((line) => line !== undefined) : [];
   return {
     guests: Array.isArray(guests) ? guests.filter((guest): guest is string => typeof guest === 'string') : [],
     ...(typeof note === 'string' && note !== '' ? { note } : {}),
+    ...(lines.length === 0 ? {} : { chat: lines }),
   };
 }
 

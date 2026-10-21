@@ -28,6 +28,7 @@ import {
   errorStatus,
   PublicBookInput,
   PublicCancelInput,
+  PublicChatInput,
   PublicGuestsInput,
   PublicMoveInput,
   PublicMoveSlotsQuery,
@@ -53,6 +54,7 @@ import {
   addGuests,
   bookPublicSlot,
   cancelBooking,
+  chatTurn,
   enterBookingByToken,
   guestTarget,
   moveBooking,
@@ -93,6 +95,8 @@ import {
 
 /** The largest booking body read: a name, an email, a few short fields. */
 export const BOOKING_BODY_LIMIT_BYTES = 16 * 1024;
+/** The largest chat turn read: 40 lines of 500 characters, with room for JSON and multibyte text (AC-1520). */
+export const CHAT_BODY_LIMIT_BYTES = 32 * 1024;
 
 /** What the public booking routes serve with. */
 export interface PublicBookingServices {
@@ -581,6 +585,52 @@ export function mountPublicBooking(app: Hono<{ Variables: Variables }>, services
       maxAge: GUEST_STATE_SECONDS,
     });
     return c.redirect(guest.calendar.authorizeUrl(state, guestRedirectUri(appUrl)));
+  });
+
+  app.use(
+    '/public/booking/:publicKey/chat',
+    bodyLimit({
+      maxSize: CHAT_BODY_LIMIT_BYTES,
+      onError: () => answer('PAYLOAD_TOO_LARGE', 'This chat is too long. Start again.'),
+    }),
+  );
+
+  // One chat turn (spec 0041): limited per address and page; a turn that books counts as a booking too. What the
+  // visitor typed is never logged (AC-1521).
+  app.post('/public/booking/:publicKey/chat', async (c) => {
+    const address = addressKey(c.get('clientIp'));
+    const key = c.req.param('publicKey');
+    const refused = limited([
+      [`booking:chat:${address}`, BOOKING_LIMITS.chatPerAddress],
+      [`booking:chat-page:${key}`, BOOKING_LIMITS.chatPerPage],
+    ]);
+    if (refused !== undefined) return refused;
+    const read = await jsonOf(c);
+    if (read === undefined) return answer('INPUT_INVALID', 'The request could not be read.');
+    const input = PublicChatInput.safeParse(read.body);
+    if (!input.success) return invalid(input.error.issues);
+    try {
+      const entry = await enterBookingPage({ db }, key);
+      // The booking limits are spent only by a turn about to book.
+      let bookRefused: Response | undefined;
+      const turn = await chatTurn(entry, deps, input.data, [outboxHook()], {
+        mayBook: () => {
+          bookRefused = limited([
+            [`booking:book:${address}`, BOOKING_LIMITS.booksPerAddress],
+            [`booking:book-page:${key}`, BOOKING_LIMITS.booksPerPage],
+          ]);
+          return bookRefused === undefined;
+        },
+      });
+      if (bookRefused !== undefined) return bookRefused;
+      if (turn.bookedNew) wakeRelay();
+      return ok(turn.reply);
+    } catch (error) {
+      if (!toApiError(error).expected) {
+        log.error('booking.chat.failed', { requestId: c.get('requestId'), ...errorFields(error) });
+      }
+      return refusalAnswer(error);
+    }
   });
 
   app.use(

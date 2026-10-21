@@ -17,6 +17,9 @@ export const BOOKING_LIMITS = {
   /** A guest's changes (move, guests, cancel): 8 a minute per booking, keyed by its id, never the token. */
   managePerBooking: { max: 8, windowMs: 60_000 },
   booksPerPage: { max: 50, windowMs: 60_000 },
+  /** The booking chat (spec 0041, AC-1520): 30 turns a minute per address, 600 per page; a turn that books also counts as a booking. */
+  chatPerAddress: { max: 30, windowMs: 60_000 },
+  chatPerPage: { max: 600, windowMs: 60_000 },
 } as const satisfies Record<string, LimitRule>;
 
 /** The least time a person takes from opening the page to booking. */

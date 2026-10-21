@@ -175,6 +175,57 @@ export const PublicBooked = z.object({ booking: PublicBooking, manageToken: z.st
 /** The book answer. */
 export type PublicBooked = z.infer<typeof PublicBooked>;
 
+/** The most characters one chat message carries (spec 0041, AC-1503). */
+export const CHAT_MESSAGE_MAX = 500;
+/** The most lines one chat turn sends (AC-1520): older lines drop off the front. */
+export const CHAT_MESSAGES_MAX = 40;
+
+/** One line of a booking chat: who said it and what. */
+export const PublicChatLine = z.object({
+  role: z.enum(['visitor', 'assistant']),
+  text: z
+    .string()
+    .trim()
+    .min(1, 'Type a message.')
+    .max(CHAT_MESSAGE_MAX, { error: `Keep a message to ${String(CHAT_MESSAGE_MAX)} characters.` }),
+});
+/** One line of a booking chat. */
+export type PublicChatLine = z.infer<typeof PublicChatLine>;
+
+/**
+ * `POST /api/public/booking/:publicKey/chat` (spec 0041): one turn of the
+ * booking chat. `conversationId` is minted by the page once per chat and only
+ * scopes a booking's idempotency key; `duration`, `timeZone` and `hour12` are
+ * the rail's. The server replays the visitor's lines only (AC-1517); the
+ * assistant's travel so a booking can keep the whole conversation (AC-1521).
+ */
+export const PublicChatInput = z
+  .object({
+    conversationId: Uuid,
+    duration: BookingDuration,
+    timeZone: TimeZoneName,
+    hour12: z.boolean(),
+    messages: z.array(PublicChatLine).min(1).max(CHAT_MESSAGES_MAX, { error: 'This chat is too long. Start again.' }),
+  })
+  .refine(({ messages }) => messages.at(-1)?.role === 'visitor', { error: 'The last line must be the visitor’s.' });
+/** One turn of the booking chat. */
+export type PublicChatInput = z.infer<typeof PublicChatInput>;
+
+/**
+ * A chat turn's answer: the sentence, the times it offers (ISO, chronological),
+ * what the visitor could say next, the meeting length the chat settled on, and,
+ * when this turn booked, the booking and its guest page token.
+ */
+export const PublicChatReply = z.object({
+  text: z.string(),
+  offers: z.array(Timestamp),
+  suggestions: z.array(z.string()),
+  duration: BookingDuration,
+  booked: PublicBooked.optional(),
+});
+/** A chat turn's answer. */
+export type PublicChatReply = z.infer<typeof PublicChatReply>;
+
 /** A manage token: 32 URL safe characters. */
 export const ManageToken = z.string().regex(/^[A-Za-z0-9_-]{32}$/, { error: 'That link isn’t right.' });
 /** A manage token. */

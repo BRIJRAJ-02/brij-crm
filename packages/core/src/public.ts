@@ -13,6 +13,8 @@ export {
   type IcsOrigin,
   type PublicBookingDeps,
 } from './booking/public.ts';
+// The booking chat (spec 0041): one turn, through the slots and booking services above.
+export { chatTurn, type ChatTurn } from './booking/chat/turn.ts';
 // The guest page's changes (milestone 2): move, add guests, cancel, and where it could move.
 export { addGuests, cancelBooking, guestTarget, moveBooking, readMoveSlots, removeGuest } from './booking/change.ts';
 // An email's preferences link (the emails lane): its token read, the member's narrow scope, and their choices.

@@ -22,6 +22,7 @@ import { and, eq, inArray, sql } from 'drizzle-orm';
 import type {
   PublicBookInput,
   PublicBooking,
+  PublicChatLine,
   PublicManagedBooking,
   PublicBookingPage,
   PublicLocation,
@@ -172,10 +173,14 @@ export async function readPublicSlots(
   };
 }
 
-/** What a booking keeps of the visitor's answers: their number, note and guests (milestone 2 adds the questions). */
-function answersOf(input: PublicBookInput): Readonly<Record<string, unknown>> {
+/**
+ * What a booking keeps of the visitor's answers: their number, note and guests (milestone 2 adds the questions),
+ * and, for a booking made by chat, the conversation (spec 0041, AC-1521).
+ */
+function answersOf(input: PublicBookInput, chat?: readonly PublicChatLine[]): Readonly<Record<string, unknown>> {
   const guests = [...new Set((input.guests ?? []).filter((guest) => guest !== input.email))];
   return {
+    ...(chat === undefined || chat.length === 0 ? {} : { chat: chat.map(({ role, text }) => ({ role, text })) }),
     ...(input.phone === undefined || input.phone === '' ? {} : { phone: input.phone }),
     ...(input.note === undefined || input.note === '' ? {} : { note: input.note }),
     ...(guests.length === 0 ? {} : { guests }),
@@ -215,6 +220,49 @@ interface Booked {
   readonly manageToken: string;
 }
 
+/** The booking this page made under `idempotencyKey`, as its visitor sees it, or undefined. */
+async function bookedByKey(
+  tx: WorkspaceTx,
+  linkKey: ManageLinkKey,
+  page: PageRecord,
+  idempotencyKey: string,
+): Promise<Booked | undefined> {
+  const [row] = await tx
+    .select()
+    .from(bookings)
+    .where(and(eq(bookings.pageId, page.id), eq(bookings.idempotencyKey, idempotencyKey)));
+  if (row === undefined) return undefined;
+  return {
+    bookingId: row.id,
+    replayed: true,
+    manageToken: await ensureManageToken(tx, linkKey, row),
+    booking: {
+      start: row.startsAt.toISOString(),
+      end: row.endsAt.toISOString(),
+      title: page.title,
+      hostName: await hostName(tx, row.hostMemberId),
+      location: publicLocation(page),
+      timeZone: row.visitorTimeZone,
+    },
+  };
+}
+
+/**
+ * The booking a retried chat turn already made (spec 0041, AC-1515): the
+ * page's booking under the conversation's key, or undefined. Its time is no
+ * longer open, so the replay alone can't find it again.
+ */
+export async function findPublicBooking(
+  entry: BookingEntry,
+  deps: PublicBookingDeps,
+  idempotencyKey: string,
+): Promise<Booked | undefined> {
+  checkEntry(entry);
+  return inWorkspace(entry.scope, async (tx) =>
+    bookedByKey(tx, deps.linkKey, await livePage(tx, entry), idempotencyKey),
+  );
+}
+
 /**
  * A visitor's booking (AC-632 to AC-634): see the header for the steps.
  * `hooks` are the write's (the outbox hook, so the records it makes reach
@@ -226,6 +274,8 @@ export async function bookPublicSlot(
   deps: PublicBookingDeps,
   input: PublicBookInput,
   hooks: readonly AfterWrite[] = [],
+  /** A booking made by chat keeps the conversation (spec 0041). */
+  options: { readonly chat?: readonly PublicChatLine[] } = {},
 ): Promise<Booked> {
   checkEntry(entry);
   const now = deps.now?.() ?? new Date();
@@ -233,26 +283,8 @@ export async function bookPublicSlot(
   const end = new Date(start.getTime() + input.duration * 60_000);
   const workspaceId = entry.scope.workspaceId;
 
-  const replay = async (tx: WorkspaceTx, page: PageRecord): Promise<Booked | undefined> => {
-    const [row] = await tx
-      .select()
-      .from(bookings)
-      .where(and(eq(bookings.pageId, page.id), eq(bookings.idempotencyKey, input.idempotencyKey)));
-    if (row === undefined) return undefined;
-    return {
-      bookingId: row.id,
-      replayed: true,
-      manageToken: await ensureManageToken(tx, deps.linkKey, row),
-      booking: {
-        start: row.startsAt.toISOString(),
-        end: row.endsAt.toISOString(),
-        title: page.title,
-        hostName: await hostName(tx, row.hostMemberId),
-        location: publicLocation(page),
-        timeZone: row.visitorTimeZone,
-      },
-    };
-  };
+  const replay = (tx: WorkspaceTx, page: PageRecord): Promise<Booked | undefined> =>
+    bookedByKey(tx, deps.linkKey, page, input.idempotencyKey);
 
   // 1. The page, the length, a retry.
   type First =
@@ -334,7 +366,7 @@ export async function bookPublicSlot(
             visitorName: input.name,
             visitorEmail: input.email,
             visitorTimeZone: input.timeZone,
-            answers: answersOf(input),
+            answers: answersOf(input, options.chat),
             manageTokenHash: tokenHash,
             manageTokenDerived: true,
             idempotencyKey: input.idempotencyKey,
