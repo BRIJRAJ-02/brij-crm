@@ -33,6 +33,8 @@ export interface ViewMenuProps {
   readonly copyLinkReason: string | undefined;
   /** Duplicate: the screen makes the copy and opens it. */
   readonly onDuplicate: () => void;
+  /** Export CSV (spec 0040, AC-1130): the view as it stands, for everyone who can read it. */
+  readonly onExport: () => void;
   /** A delete here starts (true) or was refused (false): the screen expects the view to go. */
   readonly onDeleting: (isDeleting: boolean) => void;
   /** The view was deleted here: the screen goes to the default view. */
@@ -56,6 +58,7 @@ export function ViewMenu({
   canManage,
   copyLinkReason,
   onDuplicate,
+  onExport,
   onDeleting,
   onDeleted,
 }: ViewMenuProps) {
@@ -229,10 +232,11 @@ export function ViewMenu({
           },
         ]
       : []),
+    'separator',
+    { id: 'export', label: importStrings.exportItem, icon: 'download', onAction: onExport },
     // Import CSV (spec 0040, AC-1111): for members who may write the object; its page loads on its own.
     ...(object.access === 'write' && !object.isArchived
       ? [
-          'separator' as const,
           {
             id: 'import',
             label: importStrings.menuItem,

@@ -101,6 +101,21 @@ const data = createDataLayer({
       );
       return;
     }
+    // A records export (spec 0040, AC-1131): its end offers the file.
+    const exported = data.exports.forJob(job.id);
+    if (exported !== undefined && job.status === 'succeeded') {
+      toasts.toast({
+        tone: 'success',
+        message: `${exported.fileName} is ready`,
+        action: {
+          label: 'Download',
+          onAction: () => {
+            window.location.assign(exported.downloadPath);
+          },
+        },
+      });
+      return;
+    }
     // An import or its undo (spec 0040, AC-1125): View opens the import's summary, not the jobs page.
     const importId = data.imports.forJob(job.id);
     const objectId = job.subject?.id;

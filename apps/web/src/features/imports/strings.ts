@@ -7,6 +7,9 @@ const mb = (bytes: number) => `${String(Math.round(bytes / (1024 * 1024)))} MB`;
 export const strings = {
   /** The view's More menu item (AC-1111). */
   menuItem: 'Import CSV',
+  /** The view's More menu item (AC-1130), and its toasts. */
+  exportItem: 'Export CSV',
+  exportStarted: 'Exporting this view. Download it when it’s ready.',
   title: (pluralName: string) => `Import ${pluralName.toLowerCase()}`,
   stepsLabel: 'Import steps',
   steps: {

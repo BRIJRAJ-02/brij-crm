@@ -230,6 +230,9 @@ export const ACCESS_TABLE = {
   undoImport: { data: 'write' },
   getImport: { data: 'read' },
   listImportRefusals: { data: 'read' },
+  // Records exports (spec 0040): read on the object (and the view) to start; only the starter reads one back.
+  startRecordsExport: { data: 'read' },
+  getRecordsExport: { data: 'read' },
   getPublicForm: { publicForm: true },
   submitForm: { publicForm: true },
   postingRules: { publicForm: true },

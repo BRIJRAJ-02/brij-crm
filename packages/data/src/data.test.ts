@@ -483,6 +483,10 @@ function fakeApi(overrides: Partial<Behaviour> = {}, auth: (path: string, body: 
       rows: os.imports.rows.handler(notServed),
       undo: os.imports.undo.handler(notServed),
     },
+    exports: {
+      start: os.exports.start.handler(notServed),
+      get: os.exports.get.handler(notServed),
+    },
     bookingPages: {
       list: os.bookingPages.list.handler(notServed),
       get: os.bookingPages.get.handler(notServed),

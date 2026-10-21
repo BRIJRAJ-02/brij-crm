@@ -4,7 +4,7 @@ import { bookingPagesContract, bookingsContract } from './booking/pages.ts';
 import { bulkRecordsContract } from './bulk.ts';
 import { calendarContract } from './calendar.ts';
 import { formsContract, submissionsContract } from './forms/forms.ts';
-import { importsContract } from './imports.ts';
+import { exportsContract, importsContract } from './imports.ts';
 import { jobsContract } from './jobs.ts';
 import { meContract } from './me.ts';
 import { membersContract } from './members.ts';
@@ -86,4 +86,5 @@ export const contract = {
   bookingPages: bookingPagesContract,
   bookings: bookingsContract,
   imports: importsContract,
+  exports: exportsContract,
 };

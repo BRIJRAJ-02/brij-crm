@@ -379,3 +379,5 @@ export {
 export { recordsImport } from './imports/kind.ts';
 /** The import's undo kind (spec 0040): created records to the trash, changed values back unless edited since. */
 export { recordsImportUndo } from './imports/undo.ts';
+/** Records exports (spec 0040): a view's records as CSV, on the submissions export's rows, chunks and download. */
+export { getRecordsExport, recordsExport, startRecordsExport, type RecordsExportRecord } from './exports/records.ts';

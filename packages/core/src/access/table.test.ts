@@ -76,6 +76,7 @@ const NO_SCOPE: ReadonlySet<string> = new Set([
   // Imports (spec 0040): the import and undo kinds, run by the runner as their starter.
   'recordsImport',
   'recordsImportUndo',
+  'recordsExport',
   'createRunner',
   'retryDelayMs',
   // The daily cleanup's fan out (`@crm/core/system`): it takes the worker's deps and enters each workspace as the
@@ -676,6 +677,24 @@ const DATA_CASES: Readonly<Record<string, DataCase>> = {
   listImportRefusals: refused('NOT_FOUND', async (scope, world) =>
     core.listImportRefusals(scope, { importId: await ownerImport(world) }),
   ),
+  // Records exports (spec 0040): a hidden object can't be exported, and anyone else's export is absent.
+  startRecordsExport: refused('NOT_FOUND', (scope, world) =>
+    core.startRecordsExport(scope, core.jobKinds({ environment: 'local' }), {
+      id: core.newId(),
+      objectId: world.people,
+      attributeIds: [world.name],
+      timeZone: 'UTC',
+    }),
+  ),
+  getRecordsExport: refused('NOT_FOUND', async (scope, world) => {
+    const started = await core.startRecordsExport(world.owner, core.jobKinds({ environment: 'local' }), {
+      id: core.newId(),
+      objectId: world.people,
+      attributeIds: [world.name],
+      timeZone: 'UTC',
+    });
+    return core.getRecordsExport(scope, { exportId: started.id });
+  }),
   // A submissions export (spec 0023 follow-up): a form on a hidden object is absent, and so is anyone's export.
   startSubmissionsExport: refused('NOT_FOUND', (scope, world) =>
     core.startSubmissionsExport(scope, core.jobKinds({ environment: 'local' }), {

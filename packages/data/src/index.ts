@@ -6,6 +6,8 @@
 // screen first asks for records), patched in place by live change events
 // while a screen shows a workspace (the realtime client loads with the first).
 import type {
+  RecordsExportView,
+  StartExportInput,
   ImportRows,
   ImportSettings,
   ImportView,
@@ -344,6 +346,7 @@ export type {
   ImportView,
   StagedRow,
   StageResult,
+  RecordsExportView,
 } from '@crm/contracts';
 export {
   applyOp,
@@ -1611,10 +1614,18 @@ export function createDataLayer({
     }
   }
 
+  /** Which records export each export job this tab started belongs to (spec 0040), for the finish toast's Download. */
+  const exportJobs = new Map<string, RecordsExportView>();
+
   /** Follows an import's job (its run, or its undo) like any job this tab started. */
   async function followImportJob(workspace: string, importId: string, jobId: string | undefined): Promise<void> {
     if (jobId === undefined) return;
     importJobs.set(jobId, importId);
+    await followJob(workspace, jobId);
+  }
+
+  /** Follows a job like any this tab started: live until it ends, then `onJobFinished`. */
+  async function followJob(workspace: string, jobId: string): Promise<void> {
     // One held already is live: following it again would only read it twice.
     if (jobs.get(workspace, jobId) !== undefined) return;
     const job = await call((options) => api.jobs.get({ workspace, jobId }, options)).catch(() => undefined);
@@ -3352,6 +3363,51 @@ export function createDataLayer({
       /** The import a job this tab started belongs to (its import or its undo job), for the finish toast. */
       forJob: (jobId: string): string | undefined => importJobs.get(jobId),
       /** A new import id (UUID v7): mint it once per file, and send the same on a retry. */
+      newId: () => mintId(),
+    },
+    exports: {
+      /**
+       * Starts a CSV export of a view as it stands (spec 0040, AC-1130): its
+       * filter and sorts (saved or unsaved), its visible columns. `id` is
+       * minted once per press (`newId`), so a retry makes one export. The job
+       * is followed like any this tab started; `forJob` gives the export a
+       * finished job wrote, for the toast's Download. Rejects with a
+       * `DataError` (`EXPORT_TOO_LARGE` with the count, `LIMIT_REACHED`).
+       */
+      start: async (
+        workspace: string,
+        input: {
+          readonly id: string;
+          readonly objectId: string;
+          readonly viewId?: string;
+          readonly filter?: StartExportInput['filter'];
+          readonly sorts?: StartExportInput['sorts'];
+          readonly attributeIds: readonly string[];
+        },
+      ): Promise<RecordsExportView> => {
+        const view = await sendImport(
+          (mutationId) => (options) =>
+            api.exports.start(
+              {
+                workspace,
+                ...input,
+                attributeIds: [...input.attributeIds],
+                timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+                mutationId,
+              },
+              options,
+            ),
+        );
+        exportJobs.set(view.jobId, view);
+        await followJob(workspace, view.jobId);
+        return view;
+      },
+      /** One records export again: its row count once written, and where it downloads from. */
+      get: (workspace: string, exportId: string): Promise<RecordsExportView> =>
+        call((options) => api.exports.get({ workspace, exportId }, options)),
+      /** The export a job this tab started wrote, for the finish toast's Download. */
+      forJob: (jobId: string): RecordsExportView | undefined => exportJobs.get(jobId),
+      /** A new export id (UUID v7). */
       newId: () => mintId(),
     },
     jobs: {
