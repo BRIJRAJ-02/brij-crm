@@ -3,17 +3,18 @@ import { EmptyState, LoadingNow, PageColumn, TopBar } from '@crm/ui';
 import { createFileRoute, useRouter, type ErrorComponentProps } from '@tanstack/react-router';
 import { AvailabilityPending, AvailabilityScreen } from '../features/booking/AvailabilityScreen.tsx';
 import { browserZone } from '../features/booking/zone.ts';
-import { memberSearch } from '../features/booking/links.ts';
+import { availabilitySearch } from '../features/booking/links.ts';
 import { scheduleStrings } from '../features/booking/schedule-strings.ts';
 import { strings } from '../features/booking/strings.ts';
 import { WorkspacePage } from '../features/workspace/WorkspacePage.tsx';
 
-// Bookings › Availability (spec 0035, AC-969): the member's schedules, from the data layer's held list (the virtual
-// default, weekdays 09:00 to 17:00 in the browser's zone, until they save any), read again live, so another tab's
-// save shows here. Each opens in its editor (`bookings_.availability.$scheduleId`).
+// Bookings › Availability (spec 0035, AC-969, AC-970): the tab is the open schedule's editor, the Calendly way (22
+// October 2026): the default opens first, `?schedule=` names another. The schedules come from the data layer's held
+// list (the virtual default, weekdays 09:00 to 17:00 in the browser's zone, until they save any), read again live,
+// so another tab's save shows here.
 export const Route = createFileRoute('/w/$slug/bookings/availability')({
-  // `?member=`: an admin viewing a colleague's schedules (AC-971); anyone else sees their own.
-  validateSearch: memberSearch,
+  // `?member=`: an admin viewing a colleague's schedules (AC-971); anyone else sees their own. `?schedule=`: which.
+  validateSearch: availabilitySearch,
   loaderDeps: ({ search }) => ({ member: search.member }),
   loader: async ({ context, params, deps }) => {
     // Whose schedules the reader may view comes from the server's reach (`canActFor`, spec 0037): a colleague
@@ -41,18 +42,10 @@ export const Route = createFileRoute('/w/$slug/bookings/availability')({
 
 function AvailabilityRoute() {
   const { member, members, me } = Route.useLoaderData();
+  const { schedule } = Route.useSearch();
   const { slug } = Route.useParams();
   const { data } = Route.useRouteContext();
-  return (
-    <AvailabilityScreen
-      data={data}
-      slug={slug}
-      locale={navigator.languages[0] ?? 'en-US'}
-      member={member}
-      members={members}
-      me={me}
-    />
-  );
+  return <AvailabilityScreen data={data} slug={slug} scheduleId={schedule} member={member} members={members} me={me} />;
 }
 
 function AvailabilityError({ error }: ErrorComponentProps) {

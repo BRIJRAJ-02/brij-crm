@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react';
+import { useRef, useState, type ReactNode } from 'react';
 import { DialogTrigger } from 'react-aria-components';
 import { Button } from '../../atoms/Button/Button.tsx';
 import { Skeleton } from '../../atoms/Skeleton/Skeleton.tsx';
@@ -45,7 +45,7 @@ export interface HoursEditorProps {
    */
   readonly hourClock?: HoursClock;
   /**
-   * The hours are still coming: All days and one row per day stand in their places, each with a skeleton where
+   * The hours are still coming: one row per day and Set all days stand in their places, each with a skeleton where
    * its times go, so the editor arrives without the page under it moving. Pass the days as `rows` (no ranges).
    */
   readonly isLoading?: boolean;
@@ -183,12 +183,84 @@ function CopyTo({
 }
 
 /**
- * Weekly hours (spec 0025 experience, AC-624, AC-680): an All days row at the
- * top ("Mixed" while days differ), then one row per day in the same columns: a
+ * Set all days: a quiet action under the week, opening a Popover with one start and one end for every day that is
+ * on (its first window's start and its last window's end), and Apply. The days' shared times fill it, else 9 to 5.
+ */
+function SetAll({
+  start,
+  end,
+  isDisabled,
+  time,
+  starts,
+  ends,
+  to,
+  onApply,
+}: {
+  readonly start: string;
+  readonly end: string;
+  readonly isDisabled: boolean;
+  readonly time: (
+    name: string,
+    items: readonly SelectItem[],
+    value: string | null,
+    onPick: (id: string) => void,
+  ) => ReactNode;
+  readonly starts: readonly SelectItem[];
+  readonly ends: readonly SelectItem[];
+  readonly to: ReactNode;
+  readonly onApply: (start: string, end: string) => void;
+}) {
+  const [isOpen, setOpen] = useState(false);
+  const [from, setFrom] = useState(start);
+  const [until, setUntil] = useState(end);
+  const trigger = useRef<HTMLButtonElement>(null);
+  const isValid = minutesOf(until) > minutesOf(from);
+  return (
+    <DialogTrigger
+      isOpen={isOpen}
+      onOpenChange={(open) => {
+        setOpen(open);
+        // Each opening starts from the week as it is.
+        if (open) {
+          setFrom(start);
+          setUntil(end);
+        }
+      }}
+    >
+      <Button ref={trigger} variant="ghost" size="sm" icon="clock" isDisabled={isDisabled}>
+        {strings.setAll}
+      </Button>
+      <Popover label={strings.setAll} triggerRef={trigger} placement="bottom start">
+        <div className={styles.copyList}>
+          <p className={styles.copyTitle}>{strings.setAllTitle}</p>
+          <div className={styles.range}>
+            {time(strings.allStart, starts, from, setFrom)}
+            {to}
+            {time(strings.allEnd, ends, until, setUntil)}
+          </div>
+          <Button
+            variant="primary"
+            isDisabled={!isValid}
+            onPress={() => {
+              onApply(from, until);
+              setOpen(false);
+            }}
+          >
+            {strings.apply}
+          </Button>
+        </div>
+      </Popover>
+    </DialogTrigger>
+  );
+}
+
+/**
+ * Weekly hours (spec 0025 experience, AC-624, AC-680): one row per day: a
  * switch turns it on (09:00 to 17:00) or off, each window is a pair of fixed
  * width time Selects on a 30 minute step ("Midnight" the last end on a 12 hour
  * clock) with + to add another and − to remove one, and Copy times to puts
- * this day's windows on others.
+ * this day's windows on others. Set all days, under the week, sets every on
+ * day's start and end at once.
  */
 export function HoursEditor({
   label,
@@ -205,10 +277,6 @@ export function HoursEditor({
   if (isLoading) {
     return (
       <div className={styles.root} aria-busy="true">
-        <div className={styles.all} aria-hidden="true">
-          <span className={styles.allLabel}>{strings.allDays}</span>
-          <span className={styles.slot}>{showSkeleton && <Skeleton />}</span>
-        </div>
         <ul className={styles.rows} aria-label={label}>
           {rows.map((row) => (
             <li key={row.id} className={styles.row}>
@@ -217,6 +285,11 @@ export function HoursEditor({
             </li>
           ))}
         </ul>
+        <div className={styles.setAll}>
+          <Button variant="ghost" size="sm" icon="clock" isDisabled>
+            {strings.setAll}
+          </Button>
+        </div>
       </div>
     );
   }
@@ -231,14 +304,15 @@ export function HoursEditor({
   const on = rows.filter((row) => row.ranges.length > 0);
   const allStart = shared(on.map((row) => row.ranges[0]?.[0] ?? ''));
   const allEnd = shared(on.map((row) => row.ranges.at(-1)?.[1] ?? ''));
-  const setAll = (edge: 'start' | 'end', time: string) => {
+  // Sets every on day's first start and last end at once, each window kept the right way round.
+  const setAll = (start: string, end: string) => {
     for (const row of on) {
+      const last = row.ranges.length - 1;
       const ranges = row.ranges.map((range, index): HoursRange => {
-        if (edge === 'start' && index === 0)
-          return [time, minutesOf(range[1]) > minutesOf(time) ? range[1] : nextEnd(time)];
-        if (edge === 'end' && index === row.ranges.length - 1)
-          return [minutesOf(range[0]) < minutesOf(time) ? range[0] : prevStart(time), time];
-        return range;
+        const from = index === 0 ? start : range[0];
+        const until = index === last ? end : range[1];
+        if (minutesOf(until) > minutesOf(from)) return [from, until];
+        return index === last ? [prevStart(until), until] : [from, nextEnd(from)];
       });
       onChange(row.id, ranges);
     }
@@ -272,17 +346,6 @@ export function HoursEditor({
   );
   return (
     <div className={styles.root}>
-      {/* All days: the same columns as the days under it, a rule between, so it reads as acting on them. */}
-      <div className={styles.all} role="group" aria-label={strings.allDays}>
-        <span className={styles.allLabel} aria-hidden="true">
-          {strings.allDays}
-        </span>
-        <div className={styles.range}>
-          {time(strings.allStart, starts, allStart ?? null, (id) => setAll('start', id), on.length === 0)}
-          {to}
-          {time(strings.allEnd, ends, allEnd ?? null, (id) => setAll('end', id), on.length === 0)}
-        </div>
-      </div>
       <ul className={styles.rows} aria-label={label}>
         {rows.map((row) => {
           const isOn = row.ranges.length > 0;
@@ -369,6 +432,18 @@ export function HoursEditor({
           );
         })}
       </ul>
+      <div className={styles.setAll}>
+        <SetAll
+          start={allStart ?? '09:00'}
+          end={allEnd ?? '17:00'}
+          isDisabled={isDisabled || on.length === 0}
+          time={time}
+          starts={starts}
+          ends={ends}
+          to={to}
+          onApply={setAll}
+        />
+      </div>
     </div>
   );
 }

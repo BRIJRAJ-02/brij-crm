@@ -29,7 +29,7 @@ const meta = {
 export default meta;
 type Story = StoryObj<typeof meta>;
 
-/** A week with a split Monday and the weekend off; All days end reads Mixed while the days differ. */
+/** A week with a split Monday and the weekend off, and Set all days under it. */
 export const Week: Story = {
   parameters: { crm: { preview: true } },
   render: (args) => {
@@ -54,8 +54,8 @@ export const Week: Story = {
   },
   play: async ({ canvas, args }) => {
     await expect(canvas.getAllByText('Unavailable')).toHaveLength(2);
-    await expect(canvas.getByText('Mixed')).toBeInTheDocument();
-    // Every "to", All days' included, at one place: the times are one width, whatever they say.
+    await expect(canvas.getByRole('button', { name: 'Set all days' })).toBeEnabled();
+    // Every "to" at one place: the times are one width, whatever they say.
     const lefts = new Set(canvas.getAllByText('to').map((to) => Math.round(to.getBoundingClientRect().left)));
     await expect(lefts.size).toBe(1);
     await userEvent.click(canvas.getByRole('switch', { name: 'Saturday' }));
@@ -65,7 +65,7 @@ export const Week: Story = {
   },
 };
 
-/** While the hours load: All days and each day's row in place, busy, with a skeleton where the times go. */
+/** While the hours load: each day's row and Set all days in place, busy, with a skeleton where the times go. */
 export const Loading: Story = {
   parameters: { crm: { screenshot: false } },
   render: (args) => (
@@ -77,6 +77,23 @@ export const Loading: Story = {
     await expect(canvas.getByRole('list', { name: 'Weekly hours' })).toBeInTheDocument();
     await expect(canvas.getAllByRole('listitem')).toHaveLength(7);
     await expect(canvas.queryByRole('switch')).not.toBeInTheDocument();
+  },
+};
+
+/** Set all days: one start and one end for every day that is on, from a quiet button under the week. */
+export const SetAllDays: Story = {
+  parameters: { crm: { screenshot: false } },
+  render: (args) => (
+    <Stage width="fill">
+      <HoursEditor {...args} rows={weekRows()} />
+    </Stage>
+  ),
+  play: async ({ canvas, args }) => {
+    await userEvent.click(canvas.getByRole('button', { name: 'Set all days' }));
+    const body = within(document.body);
+    await expect(await body.findByRole('dialog', { name: 'Set all days' })).toBeInTheDocument();
+    await userEvent.click(body.getByRole('button', { name: 'Apply' }));
+    await expect(args.onChange).toHaveBeenCalledWith('tue', [['09:00', '17:00']]);
   },
 };
 
