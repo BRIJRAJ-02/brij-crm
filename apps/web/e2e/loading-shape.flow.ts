@@ -18,6 +18,8 @@ interface Screen {
   readonly start: (workspace: SwitchingWorkspace) => string;
   /** What the person clicks: a link, a tab or a row. */
   readonly target: (page: Page) => Locator;
+  /** What opens first to show the target (a menu), if anything. */
+  readonly reveal?: (page: Page) => Promise<void>;
 }
 
 const sidebar = (name: string) => (page: Page) => page.getByRole('navigation').getByRole('link', { name, exact: true });
@@ -80,7 +82,13 @@ const ALL_SCREENS: readonly Screen[] = [
     target: tab('Configuration'),
   },
   { name: 'settings jobs', start: at('settings/account/preferences'), target: sidebar('Background jobs') },
-  { name: 'trash', start: at('booking-pages'), target: sidebar('Trash') },
+  // The trash is a row of the workspace menu (owner, 21 October 2026).
+  {
+    name: 'trash',
+    start: at('booking-pages'),
+    reveal: (page) => page.getByRole('button', { name: /workspace menu/ }).click(),
+    target: (page) => page.getByRole('menuitem', { name: 'Trash' }),
+  },
 ];
 
 const ONLY = process.env.FLOW_SCREEN;
@@ -127,6 +135,7 @@ test('every screen’s loading state stands where its loaded page will', async (
     // A fresh app each time, on the page the move starts from, so the screen's own data isn't held yet.
     await page.goto(screen.start(workspace));
     // The page the move starts from has drawn what is clicked, before any call is held.
+    await screen.reveal?.(page);
     const target = screen.target(page);
     await target.waitFor({ timeout: 60_000 });
     await page.waitForTimeout(800);

@@ -8,7 +8,7 @@
 // AC-535, AC-542, AC-544). Needs the worker running beside the api (the jobs).
 import { randomUUID } from 'node:crypto';
 import { expect, test, type Page } from '@playwright/test';
-import { addPerson, checkScreen, newWorkspace, signInAgain } from './people.ts';
+import { addPerson, checkScreen, newWorkspace, openTrash, signInAgain } from './people.ts';
 
 /** People's table. */
 const table = (page: Page) => page.getByRole('grid', { name: 'People' });
@@ -97,7 +97,7 @@ test.describe('bulk', () => {
     await bar(page).getByRole('button', { name: 'Delete' }).click();
     await dialog(page, 'Delete 3 people?').getByRole('button', { name: 'Delete 3 people' }).click();
     await expect(page.getByText('Deleted 3 people.')).toBeVisible();
-    await page.getByRole('link', { name: 'Trash' }).click();
+    await openTrash(page);
     const trash = page.getByRole('grid', { name: 'Trash' });
     await expect(trash.getByRole('rowheader')).toHaveCount(3);
     await tick(page, 'Cy Lane', 'Trash').click();

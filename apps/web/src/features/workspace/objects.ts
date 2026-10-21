@@ -26,6 +26,9 @@ export const trashHref = (slug: string) => `/w/${slug}/trash`;
 /** My tasks' address (spec 0019). */
 export const tasksHref = (slug: string) => `/w/${slug}/tasks`;
 
+/** Home's address: where a workspace opens (owner, 21 October 2026). */
+export const homeHref = (slug: string) => `/w/${slug}/home`;
+
 /** Bookings' address: its first tab, Calendar, named outright so the sidebar's link preloads that page itself. */
 export const bookingsHref = (slug: string) => `/w/${slug}/bookings/calendar`;
 

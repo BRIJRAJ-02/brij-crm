@@ -25,7 +25,9 @@ export const strings = {
   availability: 'Availability',
   bookingPages: 'Booking pages',
   forms: 'Forms',
-  /** My tasks (spec 0019), above the sections (spec 0034, AC-924). */
+  /** The sidebar's first row and the workspace's landing page (owner, 21 October 2026). */
+  home: 'Home',
+  /** My tasks (spec 0019), after the sections, as timefix has it (owner, 21 October 2026). */
   tasks: 'Tasks',
   /** The group above the sections holding Tasks (and Inbox once it exists), for screen readers. */
   yourWork: 'Your work',

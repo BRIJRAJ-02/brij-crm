@@ -104,9 +104,10 @@ async function newWorkspace(page: Page, email: string, name: string, slug: strin
   await page.getByLabel('Workspace name').fill(name);
   await page.getByLabel('Web address').fill(slug);
   await page.getByRole('button', { name: 'Create workspace' }).click();
-  await expect(page).toHaveURL(new RegExp(`/w/${slug}/objects/people(/views/[0-9a-f-]+)?$`), {
-    timeout: WORKSPACE_MADE_MS,
-  });
+  // The workspace opens on Home (owner, 21 October 2026); People is a row away.
+  await expect(page).toHaveURL(new RegExp(`/w/${slug}/home$`), { timeout: WORKSPACE_MADE_MS });
+  await page.getByRole('navigation', { name: 'Main navigation' }).getByRole('link', { name: 'People' }).click();
+  await expect(page).toHaveURL(new RegExp(`/w/${slug}/objects/people(/views/[0-9a-f-]+)?$`));
 }
 
 /** Signs out from the workspace menu, by keyboard, and waits for /sign-in. */
@@ -170,11 +171,13 @@ test('signs in by code, names the workspace, lands on People, signs out, and com
   await expect(page.getByLabel('Web address')).toHaveValue(slug);
   await checkScreen(page, '4-welcome');
 
-  // Create workspace lands on the empty People page, with focus on its title.
+  // Create workspace lands on Home (owner, 21 October 2026), with focus on its title; People is a row away, and
+  // opens empty with focus on its title.
   await page.getByRole('button', { name: 'Create workspace' }).click();
-  await expect(page).toHaveURL(new RegExp(`/w/${slug}/objects/people(/views/[0-9a-f-]+)?$`), {
-    timeout: WORKSPACE_MADE_MS,
-  });
+  await expect(page).toHaveURL(new RegExp(`/w/${slug}/home$`), { timeout: WORKSPACE_MADE_MS });
+  await expect(page.getByRole('heading', { level: 1, name: 'Home' })).toBeFocused();
+  await page.getByRole('navigation', { name: 'Main navigation' }).getByRole('link', { name: 'People' }).click();
+  await expect(page).toHaveURL(new RegExp(`/w/${slug}/objects/people(/views/[0-9a-f-]+)?$`));
   const title = page.getByRole('heading', { level: 1, name: 'People' });
   await expect(title).toBeVisible();
   await expect(title).toBeFocused();
@@ -183,11 +186,12 @@ test('signs in by code, names the workspace, lands on People, signs out, and com
   const nav = page.getByRole('navigation', { name: 'Main navigation' });
   await expect(nav.getByRole('link', { name: 'People' })).toHaveAttribute('aria-current', 'page');
   await expect(nav.getByText('Ada’s workspace')).toBeAttached();
-  // The sidebar (spec 0034, AC-921): Tasks, Records, then Scheduling with its four pages, then the foot's Trash,
-  // Settings and Help and shortcuts, inside the sidebar at every width (on the rail, each a named icon in its
-  // group). The theme switch left the sidebar for Settings › Preferences (spec 0026).
+  // The sidebar (spec 0034, AC-921; owner, 21 October 2026): Home, Records, then Scheduling with its four pages,
+  // Tasks, then the foot's Settings and Help and shortcuts, inside the sidebar at every width (on the rail, each a
+  // named icon in its group); the trash is in the workspace menu. The theme switch left the sidebar for Settings ›
+  // Preferences (spec 0026).
   await expect(nav.getByRole('group', { name: 'Scheduling' })).toBeVisible();
-  for (const name of ['Tasks', 'Bookings', 'Availability', 'Booking pages', 'Forms', 'Trash']) {
+  for (const name of ['Home', 'Tasks', 'Bookings', 'Availability', 'Booking pages', 'Forms']) {
     await expect(nav.getByRole('link', { name, exact: true })).toBeVisible();
   }
   const settings = nav.getByRole('link', { name: 'Settings', exact: true });
@@ -232,9 +236,9 @@ test('signs in by code, names the workspace, lands on People, signs out, and com
   await expect(page).toHaveURL(new RegExp(`/w/${slug}/objects/people(/views/[0-9a-f-]+)?$`));
   await expect(page.getByText('No people yet')).toBeVisible();
 
-  // Signed in, / opens the workspace.
+  // Signed in, / opens the workspace, on Home.
   await page.goto('/');
-  await expect(page).toHaveURL(new RegExp(`/w/${slug}/objects/people(/views/[0-9a-f-]+)?$`));
+  await expect(page).toHaveURL(new RegExp(`/w/${slug}/home$`));
 });
 
 test('drops each refusal as its field changes, so one press sends the fixed welcome form', async ({ page }) => {

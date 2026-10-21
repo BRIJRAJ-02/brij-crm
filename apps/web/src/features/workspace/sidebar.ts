@@ -11,7 +11,8 @@ import { bookingsHref, navObjects, tasksHref } from './objects.ts';
 import { strings } from './strings.ts';
 
 /** A page the sidebar marks current that isn't an object's: Tasks, the Scheduling pages and the trash. */
-export type SidebarPage = 'tasks' | 'bookings' | 'availability' | 'booking_pages' | 'forms' | 'trash';
+export type SidebarPage =
+  'home' | 'inbox' | 'tasks' | 'bookings' | 'availability' | 'booking_pages' | 'forms' | 'trash';
 
 /** One page the sidebar links to: its name, its icon and its address. */
 export interface SidebarPageLink {

@@ -20,6 +20,7 @@ import { Route as WSlugAvailabilityRouteImport } from './routes/w.$slug.availabi
 import { Route as WSlugBookingPagesRouteImport } from './routes/w.$slug.booking-pages.tsx'
 import { Route as WSlugBookingsRouteImport } from './routes/w.$slug.bookings.tsx'
 import { Route as WSlugFormsRouteImport } from './routes/w.$slug.forms.tsx'
+import { Route as WSlugHomeRouteImport } from './routes/w.$slug.home.tsx'
 import { Route as WSlugSettingsRouteImport } from './routes/w.$slug.settings.tsx'
 import { Route as WSlugTasksRouteImport } from './routes/w.$slug.tasks.tsx'
 import { Route as WSlugTrashRouteImport } from './routes/w.$slug.trash.tsx'
@@ -104,6 +105,11 @@ const WSlugBookingsRoute = WSlugBookingsRouteImport.update({
 const WSlugFormsRoute = WSlugFormsRouteImport.update({
   id: '/forms',
   path: '/forms',
+  getParentRoute: () => WSlugRoute,
+} as any)
+const WSlugHomeRoute = WSlugHomeRouteImport.update({
+  id: '/home',
+  path: '/home',
   getParentRoute: () => WSlugRoute,
 } as any)
 const WSlugSettingsRoute = WSlugSettingsRouteImport.update({
@@ -281,6 +287,7 @@ export interface FileRoutesByFullPath {
   '/w/$slug/booking-pages': typeof WSlugBookingPagesRouteWithChildren
   '/w/$slug/bookings': typeof WSlugBookingsRouteWithChildren
   '/w/$slug/forms': typeof WSlugFormsRouteWithChildren
+  '/w/$slug/home': typeof WSlugHomeRoute
   '/w/$slug/settings': typeof WSlugSettingsRouteWithChildren
   '/w/$slug/tasks': typeof WSlugTasksRoute
   '/w/$slug/trash': typeof WSlugTrashRoute
@@ -320,6 +327,7 @@ export interface FileRoutesByTo {
   '/verify': typeof VerifyRoute
   '/welcome': typeof WelcomeRoute
   '/w/$slug/availability': typeof WSlugAvailabilityRoute
+  '/w/$slug/home': typeof WSlugHomeRoute
   '/w/$slug/tasks': typeof WSlugTasksRoute
   '/w/$slug/trash': typeof WSlugTrashRoute
   '/w/$slug': typeof WSlugIndexRoute
@@ -363,6 +371,7 @@ export interface FileRoutesById {
   '/w/$slug/booking-pages': typeof WSlugBookingPagesRouteWithChildren
   '/w/$slug/bookings': typeof WSlugBookingsRouteWithChildren
   '/w/$slug/forms': typeof WSlugFormsRouteWithChildren
+  '/w/$slug/home': typeof WSlugHomeRoute
   '/w/$slug/settings': typeof WSlugSettingsRouteWithChildren
   '/w/$slug/tasks': typeof WSlugTasksRoute
   '/w/$slug/trash': typeof WSlugTrashRoute
@@ -408,6 +417,7 @@ export interface FileRouteTypes {
     | '/w/$slug/booking-pages'
     | '/w/$slug/bookings'
     | '/w/$slug/forms'
+    | '/w/$slug/home'
     | '/w/$slug/settings'
     | '/w/$slug/tasks'
     | '/w/$slug/trash'
@@ -447,6 +457,7 @@ export interface FileRouteTypes {
     | '/verify'
     | '/welcome'
     | '/w/$slug/availability'
+    | '/w/$slug/home'
     | '/w/$slug/tasks'
     | '/w/$slug/trash'
     | '/w/$slug'
@@ -489,6 +500,7 @@ export interface FileRouteTypes {
     | '/w/$slug/booking-pages'
     | '/w/$slug/bookings'
     | '/w/$slug/forms'
+    | '/w/$slug/home'
     | '/w/$slug/settings'
     | '/w/$slug/tasks'
     | '/w/$slug/trash'
@@ -608,6 +620,13 @@ declare module '@tanstack/react-router' {
       path: '/forms'
       fullPath: '/w/$slug/forms'
       preLoaderRoute: typeof WSlugFormsRouteImport
+      parentRoute: typeof WSlugRoute
+    }
+    '/w/$slug/home': {
+      id: '/w/$slug/home'
+      path: '/home'
+      fullPath: '/w/$slug/home'
+      preLoaderRoute: typeof WSlugHomeRouteImport
       parentRoute: typeof WSlugRoute
     }
     '/w/$slug/settings': {
@@ -903,6 +922,7 @@ interface WSlugRouteChildren {
   WSlugBookingPagesRoute: typeof WSlugBookingPagesRouteWithChildren
   WSlugBookingsRoute: typeof WSlugBookingsRouteWithChildren
   WSlugFormsRoute: typeof WSlugFormsRouteWithChildren
+  WSlugHomeRoute: typeof WSlugHomeRoute
   WSlugSettingsRoute: typeof WSlugSettingsRouteWithChildren
   WSlugTasksRoute: typeof WSlugTasksRoute
   WSlugTrashRoute: typeof WSlugTrashRoute
@@ -923,6 +943,7 @@ const WSlugRouteChildren: WSlugRouteChildren = {
   WSlugBookingPagesRoute: WSlugBookingPagesRouteWithChildren,
   WSlugBookingsRoute: WSlugBookingsRouteWithChildren,
   WSlugFormsRoute: WSlugFormsRouteWithChildren,
+  WSlugHomeRoute: WSlugHomeRoute,
   WSlugSettingsRoute: WSlugSettingsRouteWithChildren,
   WSlugTasksRoute: WSlugTasksRoute,
   WSlugTrashRoute: WSlugTrashRoute,

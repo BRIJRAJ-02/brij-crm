@@ -89,9 +89,11 @@ test.describe('the core loop by keyboard', () => {
     // A primary's edge is already blue, so its ring is the 1px outline just outside it, not the faint halo alone.
     expect(await create.evaluate((element) => getComputedStyle(element).outlineStyle)).toBe('solid');
     await page.keyboard.press('Enter');
-    await expect(page).toHaveURL(new RegExp(`/w/${slug}/objects/people/views/[0-9a-f-]{36}$`), {
-      timeout: WORKSPACE_MADE_MS,
-    });
+    // The workspace opens on Home (owner, 21 October 2026), its title focused; People is a row away.
+    await expect(page).toHaveURL(new RegExp(`/w/${slug}/home$`), { timeout: WORKSPACE_MADE_MS });
+    await expect(page.getByRole('heading', { level: 1, name: 'Home' })).toBeFocused();
+    await page.getByRole('navigation', { name: 'Main navigation' }).getByRole('link', { name: 'People' }).click();
+    await expect(page).toHaveURL(new RegExp(`/w/${slug}/objects/people/views/[0-9a-f-]{36}$`));
 
     // People: the title has focus; Tab goes on to New person in the top bar.
     await expect(page.getByRole('heading', { level: 1, name: 'People' })).toBeFocused();

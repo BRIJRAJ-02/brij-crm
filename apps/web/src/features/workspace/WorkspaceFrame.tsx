@@ -1,6 +1,6 @@
 // Brief
 // Purpose: the frame every page inside a workspace sits in: the sidebar beside the page (inside Settings, the settings sidebar).
-// Main task: move between Tasks, the member's sections (Records, then Scheduling) in their own order, and the trash; fold, reorder or hide, or fold the whole sidebar, kept for the member on every device (spec 0034); open Settings (⌘,), the shortcuts (?) and sign out; undo (⌘Z).
+// Main task: move between Home, the member's sections (Records, then Scheduling) in their own order, and Tasks; fold, reorder or hide, or fold the whole sidebar, kept for the member on every device (spec 0034); open Settings (⌘,), the shortcuts (?) and sign out; undo (⌘Z).
 // Leaves out: the workspace menu's contents (spec 0031), Quick actions (the command menu), Inbox, Lists and Invite teammates (features still to come), starring (spec 0034's milestone 3), and the theme (Settings › Preferences).
 import type { DataLayer, NavSnapshot, NavSource, NavState, NavUniverse, ObjectSummary, Permission } from '@crm/data';
 import { useDueTasks, useNav } from '@crm/data/react';
@@ -26,7 +26,7 @@ import { settingsNav, visibleSettingsNav, type SettingsPageId } from '../setting
 import { useToday } from '../tasks/day.ts';
 import { strings as settingsStrings } from '../settings/strings.ts';
 import { CalendarBanner } from './CalendarBanner.tsx';
-import { settingsHomeHref, trashHref } from './objects.ts';
+import { homeHref, settingsHomeHref, trashHref } from './objects.ts';
 import { keepRailHint, readRailHint } from './rail.ts';
 import { PAGE_LINKS, topEntries, universeOf, type SidebarPage } from './sidebar.ts';
 import { itemMenu, SidebarSections } from './SidebarSections.tsx';
@@ -101,10 +101,10 @@ export interface WorkspaceFrameProps {
 }
 
 /**
- * AppShell and the Sidebar (spec 0034): the workspace's name with Sign out in
- * its menu (the button spins while it signs out), Tasks, the member's
- * sections in their order and folds, and Trash, Settings and Help at the
- * foot; the rail as they left it. Inside Settings, the settings sidebar
+ * AppShell and the Sidebar (spec 0034): the workspace's name with the trash
+ * and Sign out in its menu (the button spins while it signs out), Home, the
+ * member's sections in their order and folds, then Tasks, and Settings and
+ * Help at the foot; the rail as they left it. Inside Settings, the settings sidebar
  * instead: the way back, then the settings pages in their groups.
  */
 export function WorkspaceFrame({
@@ -219,6 +219,12 @@ export function WorkspaceFrame({
                     <MenuItem id="sign-out">{strings.signOut}</MenuItem>
                   </MenuSection>
                 )}
+                {/* The trash, out of the sidebar's list (owner, 21 October 2026); deleted records' toasts link to it too. */}
+                {!isMissing && (
+                  <MenuItem id="trash" icon="trash" href={trashHref(slug)}>
+                    {strings.trash}
+                  </MenuItem>
+                )}
                 {/* The shortcut list, also on ?, so it can be found with the pointer too. */}
                 <MenuItem id="shortcuts" kbd="?">
                   {strings.keyboardShortcuts}
@@ -229,15 +235,10 @@ export function WorkspaceFrame({
             // the buttons wait for their sidebar, so a press never lands on a guess.
             isCollapsed={isRail}
             {...(nav === undefined || isMissing ? {} : { onCollapsedChange: setRail })}
-            // The foot (AC-930): Trash for every member, Settings with ⌘, (spec 0026, AC-685), and Help, which opens
-            // the keyboard shortcuts until a help centre exists. Invite teammates joins with spec 0031's invite flow.
+            // The foot (AC-930): Settings with ⌘, (spec 0026, AC-685), and Help, which opens the keyboard shortcuts
+            // until a help centre exists; the trash moved to the workspace menu (owner, 21 October 2026). Invite teammates joins with spec 0031's invite flow.
             footer={
               <>
-                {!isMissing && (
-                  <NavItem icon="trash" href={trashHref(slug)} isCurrent={currentPage === 'trash'}>
-                    {strings.trash}
-                  </NavItem>
-                )}
                 <NavItem icon="settings" href={settingsHomeHref(slug)} kbd="⌘,">
                   {strings.settings}
                 </NavItem>
@@ -247,17 +248,11 @@ export function WorkspaceFrame({
               </>
             }
           >
-            {!isMissing && nav !== undefined && (
-              <TopPages
-                data={data}
-                slug={slug}
-                nav={nav}
-                universe={universe}
-                currentPage={currentPage}
-                onHide={(page) => {
-                  void data.nav.change(slug, { op: 'hide', kind: 'page', id: page }, universe);
-                }}
-              />
+            {/* Home first, as in timefix (owner, 21 October 2026): fixed, where the workspace opens. */}
+            {!isMissing && (
+              <NavItem icon="house" href={homeHref(slug)} isCurrent={currentPage === 'home'}>
+                {strings.home}
+              </NavItem>
             )}
             {!isMissing &&
               (nav === undefined ? (
@@ -275,6 +270,19 @@ export function WorkspaceFrame({
                   onCustomise={openCustomise}
                 />
               ))}
+            {/* Tasks (and Inbox once it exists) after the sections, as timefix has Tasks below the CRM rows. */}
+            {!isMissing && nav !== undefined && (
+              <TopPages
+                data={data}
+                slug={slug}
+                nav={nav}
+                universe={universe}
+                currentPage={currentPage}
+                onHide={(page) => {
+                  void data.nav.change(slug, { op: 'hide', kind: 'page', id: page }, universe);
+                }}
+              />
+            )}
             {!isMissing && nav !== undefined && <RailShortcut isRail={isRail} onRail={setRail} />}
           </Sidebar>
         )
@@ -313,7 +321,7 @@ export function WorkspaceFrame({
   );
 }
 
-/** The pages above the sections (AC-921, AC-924): Tasks today, Inbox once notifications exist; one hidden isn't drawn, and its menu hides it. */
+/** The member's own pages, after the sections (owner, 21 October 2026): Tasks, Inbox once notifications exist; one hidden isn't drawn, and its menu hides it. */
 function TopPages({
   data,
   slug,

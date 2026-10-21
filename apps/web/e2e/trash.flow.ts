@@ -8,7 +8,7 @@
 // AC-527, AC-533, AC-534, AC-541, AC-542).
 import { randomUUID } from 'node:crypto';
 import { expect, test, type Page } from '@playwright/test';
-import { addPerson, checkScreen, newWorkspace, signInAgain } from './people.ts';
+import { addPerson, checkScreen, newWorkspace, openTrash, signInAgain } from './people.ts';
 
 /** People's table. */
 const table = (page: Page) => page.getByRole('grid', { name: 'People' });
@@ -105,7 +105,7 @@ test.describe('trash', () => {
     await addPerson(page, 'Ada', 'Again', `ada-${tag}@acme.com`);
 
     // The Trash lists them, newest first (AC-533).
-    await page.getByRole('link', { name: 'Trash' }).click();
+    await openTrash(page);
     await expect(page).toHaveURL(new RegExp(`/w/${slug}/trash$`));
     const trash = page.getByRole('grid', { name: 'Trash' });
     await expect(trash.getByRole('rowheader')).toHaveText([/Ada Byron/, /Cy Lane/]);

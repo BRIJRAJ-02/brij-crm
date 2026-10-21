@@ -1,5 +1,6 @@
-// The sidebar v2 (spec 0034, milestone 1): the new order (Tasks, Records, Scheduling's four pages, then Trash,
-// Settings and Help at the foot, AC-921, AC-928, AC-930); the member folds Scheduling and turns the rail on with [
+// The sidebar v2 (spec 0034, milestone 1): the order (Home, Records, Scheduling's four pages, then Tasks, and
+// Settings and Help at the foot, the trash in the workspace menu; AC-921, AC-928, AC-930, owner 21 October 2026);
+// the workspace opens on Home; the member folds Scheduling and turns the rail on with [
 // in one browser, and their second browser follows within a second (AC-931, AC-935, AC-937); a reload keeps both
 // (AC-936); and every old Captures and Bookings › Availability address lands on its new page with its query kept,
 // replacing the history entry (AC-929). Milestone 2: an object hidden from its menu and back from Customise
@@ -9,7 +10,7 @@
 // AC-934, AC-939).
 import { randomUUID } from 'node:crypto';
 import { expect, test, type Page } from '@playwright/test';
-import { addPerson, newWorkspace, signInAgain } from './people.ts';
+import { addPerson, newWorkspace, objectUrl, signInAgain } from './people.ts';
 
 /** Whether the second browser's live checks run: Centrifugo must allow the app's origin. */
 const LIVE = process.env.FLOW_NO_LIVE === undefined;
@@ -46,25 +47,37 @@ test.describe('sidebar', () => {
     const code = await newWorkspace(page, email, slug);
     await expect(nav(page).getByRole('link', { name: 'Deals', exact: true })).toBeVisible();
 
-    // The order (AC-921): the workspace menu, Tasks, Records, Scheduling and its pages, then the foot.
+    // The order (AC-921, owner 21 October 2026): the workspace menu, Home, Records, Scheduling and its pages, Tasks,
+    // then the foot; the trash is in the workspace menu, not the list.
     const names = await order(page);
     const at = (name: string) => names.indexOf(name);
     for (const [before, after] of [
-      ['Tasks', 'Records'],
+      ['Home', 'Records'],
       ['Records', 'People'],
       ['Deals', 'Scheduling'],
       ['Scheduling', 'Bookings'],
       ['Bookings', 'Availability'],
       ['Availability', 'Booking pages'],
       ['Booking pages', 'Forms'],
-      ['Forms', 'Trash'],
-      ['Trash', 'Settings'],
+      ['Forms', 'Tasks'],
+      ['Tasks', 'Settings'],
       ['Settings', 'Help and shortcuts'],
     ] as const) {
       expect(at(before), `${before} before ${after} in ${names.join(', ')}`).toBeLessThan(at(after));
       expect(at(before)).toBeGreaterThanOrEqual(0);
     }
-    expect(names.some((name) => name === 'Captures')).toBe(false);
+    expect(names.some((name) => name === 'Captures' || name === 'Trash')).toBe(false);
+    // Home is where the workspace opens; the trash is a row of the workspace menu.
+    await page.goto(`/w/${slug}`);
+    await expect(page).toHaveURL(new RegExp(`/w/${slug}/home$`));
+    await expect(page.getByRole('heading', { level: 1, name: 'Home' })).toBeVisible();
+    await nav(page)
+      .getByRole('button', { name: /workspace menu/ })
+      .click();
+    await page.getByRole('menuitem', { name: 'Trash' }).click();
+    await expect(page).toHaveURL(new RegExp(`/w/${slug}/trash$`));
+    await page.goto(`/w/${slug}/objects/people`);
+    await expect(page).toHaveURL(objectUrl(slug, 'people'));
 
     const other = await browser.newContext({
       baseURL: testInfo.project.use.baseURL,

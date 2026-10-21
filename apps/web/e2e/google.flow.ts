@@ -85,10 +85,9 @@ test('signs a new person in with Google, makes their workspace, and Google opens
   await expect(page.getByLabel('Your name')).toHaveValue(person.name);
   await page.getByLabel('Web address').fill(slug);
   await page.getByRole('button', { name: 'Create workspace' }).click();
-  await expect(page).toHaveURL(new RegExp(`/w/${slug}/objects/people(/views/[0-9a-f-]+)?$`), {
-    timeout: WORKSPACE_MADE_MS,
-  });
-  await expect(page.getByRole('heading', { level: 1, name: 'People' })).toBeVisible();
+  // The workspace opens on Home (owner, 21 October 2026).
+  await expect(page).toHaveURL(new RegExp(`/w/${slug}/home$`), { timeout: WORKSPACE_MADE_MS });
+  await expect(page.getByRole('heading', { level: 1, name: 'Home' })).toBeVisible();
 
   // Sign out, from the workspace menu.
   await page.getByRole('button', { name: /workspace menu/ }).click();
@@ -98,10 +97,9 @@ test('signs a new person in with Google, makes their workspace, and Google opens
 
   // Google again, the same person: straight into their workspace.
   await continueWithGoogle(page);
-  await expect(page).toHaveURL(new RegExp(`/w/${slug}/objects/people(/views/[0-9a-f-]+)?$`), {
-    timeout: WORKSPACE_MADE_MS,
-  });
-  await expect(page.getByRole('heading', { level: 1, name: 'People' })).toBeVisible();
+  // The workspace opens on Home (owner, 21 October 2026).
+  await expect(page).toHaveURL(new RegExp(`/w/${slug}/home$`), { timeout: WORKSPACE_MADE_MS });
+  await expect(page.getByRole('heading', { level: 1, name: 'Home' })).toBeVisible();
   expect(seen).toHaveLength(2);
 });
 
@@ -117,9 +115,7 @@ test('a deep link opened while signed out comes back after Google', async ({ pag
   await expect(page).toHaveURL(/\/welcome$/);
   await page.getByLabel('Web address').fill(slug);
   await page.getByRole('button', { name: 'Create workspace' }).click();
-  await expect(page).toHaveURL(new RegExp(`/w/${slug}/objects/people(/views/[0-9a-f-]+)?$`), {
-    timeout: WORKSPACE_MADE_MS,
-  });
+  await expect(page).toHaveURL(new RegExp(`/w/${slug}/home$`), { timeout: WORKSPACE_MADE_MS });
   await page.context().clearCookies();
 
   // Signed out, a deep link goes to sign in, and Google brings the person back to it.

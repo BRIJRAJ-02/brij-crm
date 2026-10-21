@@ -56,7 +56,10 @@ export async function checkScreen(page: Page, name: string): Promise<void> {
   await page.emulateMedia({ colorScheme: 'light' });
 }
 
-/** Signs a new person in through Mailpit and makes their workspace, landing on its People page; answers the code used. */
+/**
+ * Signs a new person in through Mailpit and makes their workspace, which opens on Home (owner, 21 October 2026),
+ * then opens its People page from the sidebar; answers the code used.
+ */
 export async function newWorkspace(page: Page, email: string, slug: string): Promise<string> {
   await page.goto('/sign-in');
   await page.getByLabel('Email').fill(email);
@@ -68,7 +71,12 @@ export async function newWorkspace(page: Page, email: string, slug: string): Pro
   await page.getByLabel('Your name').fill('Ada Lovelace');
   await page.getByLabel('Web address').fill(slug);
   await page.getByRole('button', { name: 'Create workspace' }).click();
-  await expect(page).toHaveURL(objectUrl(slug, 'people'), { timeout: WORKSPACE_MADE_MS });
+  await expect(page).toHaveURL(homeUrl(slug), { timeout: WORKSPACE_MADE_MS });
+  await page
+    .getByRole('navigation', { name: 'Main navigation' })
+    .getByRole('link', { name: 'People', exact: true })
+    .click();
+  await expect(page).toHaveURL(objectUrl(slug, 'people'));
   return code;
 }
 
@@ -82,6 +90,11 @@ export async function signInAgain(page: Page, email: string, path: string, seen:
   await page.getByLabel('Code').fill(await codeFor(page.request, email, seen));
   // An object's address opens its default view (spec 0020): the address grows its view.
   await expect(page).toHaveURL(new RegExp(`${path}(/views/[0-9a-f-]{36})?$`));
+}
+
+/** Home's address: where a workspace opens (owner, 21 October 2026). */
+export function homeUrl(slug: string): RegExp {
+  return new RegExp(`/w/${slug}/home$`);
 }
 
 /** An object's page: its address, or the view it opened (spec 0020, AC-462). */
@@ -130,4 +143,11 @@ export async function addPerson(page: Page, first: string, last: string, email: 
   await dialog.getByLabel('Email address', { exact: true }).fill(email);
   await dialog.getByRole('button', { name: 'Create' }).click();
   await expect(dialog).toBeHidden();
+}
+
+/** Opens the trash from the workspace menu, where it lives (owner, 21 October 2026). */
+export async function openTrash(page: Page): Promise<void> {
+  await page.getByRole('button', { name: /workspace menu/ }).click();
+  await page.getByRole('menuitem', { name: 'Trash' }).click();
+  await expect(page.getByRole('grid', { name: 'Trash' })).toBeVisible();
 }
