@@ -266,8 +266,11 @@ function BoardBody({
   );
   const store = useBoardStore(slug, object.id, plan, query, attributeIds);
   const fields = useMemo(
-    () => plan.cardFields.map((field) => toFieldAttribute(field, workspaceStrings.referenceReadOnly)),
-    [plan.cardFields],
+    () =>
+      plan.cardFields.map((field) =>
+        toFieldAttribute(field, workspaceStrings.referenceReadOnly, object.standardKey ?? object.apiSlug),
+      ),
+    [plan.cardFields, object.standardKey, object.apiSlug],
   );
   // Show empty columns (AC-497): the view's setting, changed through the view's layout save.
   const showEmpty = plan.settings.showEmptyColumns;

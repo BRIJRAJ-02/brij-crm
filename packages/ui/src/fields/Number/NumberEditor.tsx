@@ -3,7 +3,7 @@ import { formatDecimal } from '../../lib/format.ts';
 import { useFormatSettings } from '../../provider/context.ts';
 import { TextLikeEditor } from '../TextLikeEditor.tsx';
 import type { EditorProps } from '../types.ts';
-import { toCommittable } from '../values.ts';
+import { isCompactSurface, toCommittable } from '../values.ts';
 import { strings } from './strings.ts';
 
 /** Number: a Field read in the language's format (1.234,5 in German), never through a lossy JS number. */
@@ -19,7 +19,7 @@ export function NumberEditor(props: EditorProps<'number'>) {
       align="end"
       {...(props.attribute.isPercent === true ? { suffix: strings.percentSign } : {})}
       placeholder={example}
-      hint={props.surface === 'cell' ? undefined : strings.hint(example)}
+      {...(isCompactSurface(props.surface) ? {} : { hint: strings.hint(example) })}
       check={(draft) => {
         if (draft.trim() === '') return toCommittable<'number'>(props.attribute, null);
         const canonical = parseLocaleDecimal(draft, locale);

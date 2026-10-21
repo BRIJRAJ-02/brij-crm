@@ -19,7 +19,11 @@ export interface TextLikeEditorProps<T extends AttributeType> extends EditorProp
   readonly inputMode?: FieldProps['inputMode'];
   readonly type?: FieldProps['type'];
   readonly hint?: string;
-  /** What the empty field shows: the type's example ("ada@example.com"), else "Set <Attribute>…". */
+  /**
+   * The type's example ("ada@example.com"), shown in the empty field of a
+   * form or a preview. A cell, a panel row or a filter hides the label, so it
+   * keeps "Set <Attribute>…" there, and the refusal names the example.
+   */
   readonly placeholder?: string;
   readonly prefix?: ReactNode;
   /** A unit after the text: a percent number's sign. */
@@ -67,7 +71,7 @@ export function TextLikeEditor<T extends AttributeType>({
       // In a grid cell the cell becomes the input; elsewhere it is the boxed field.
       variant={surface === 'cell' && !isMultiline ? 'cell' : 'default'}
       align={surface === 'cell' ? align : 'start'}
-      placeholder={placeholder ?? fieldStrings.setAttribute(attribute.name)}
+      placeholder={isCompact || placeholder === undefined ? fieldStrings.setAttribute(attribute.name) : placeholder}
       isRequired={attribute.isRequired}
       isMultiline={isMultiline}
       showCounter={isMultiline && maxLength !== undefined}

@@ -62,7 +62,7 @@ export const Editor: Story = {
   },
 };
 
-/** A plain link reads as its domain, with the whole link as the tooltip; it opens in a new tab. */
+/** A plain link reads as its domain and path, without the protocol or www; it opens in a new tab. */
 export const DisplayDomain: Story = {
   parameters: { crm: { screenshot: false } },
   render: () => (
@@ -71,10 +71,9 @@ export const DisplayDomain: Story = {
     </Stage>
   ),
   play: async ({ canvas }) => {
-    const link = canvas.getByRole('link', { name: 'northwind.com' });
+    const link = canvas.getByRole('link', { name: 'northwind.com/pricing' });
     await expect(link).toHaveAttribute('href', 'https://www.northwind.com/pricing');
     await expect(link).toHaveAttribute('target', '_blank');
-    await expect(link).toHaveAttribute('title', 'https://www.northwind.com/pricing');
   },
 };
 
@@ -100,7 +99,7 @@ export const Networks: Story = {
     await expect(canvas.getByRole('link', { name: 'X @adalovelace' })).toBeInTheDocument();
     await expect(canvas.getByRole('link', { name: 'GitHub adalovelace' })).toBeInTheDocument();
     await expect(canvas.getByRole('link', { name: 'YouTube @adalovelace' })).toBeInTheDocument();
-    await expect(canvas.getByRole('link', { name: 'northwind.com' })).toBeInTheDocument();
+    await expect(canvas.getByRole('link', { name: 'northwind.com/pricing' })).toBeInTheDocument();
   },
 };
 
@@ -115,7 +114,7 @@ export const SocialEditor: Story = {
   play: async ({ canvas, args, userEvent }) => {
     const field = canvas.getByRole('textbox', { name: 'Twitter' });
     await expect(field).toHaveAttribute('placeholder', '@adalovelace');
-    await expect(canvas.getByText('A handle on X, or a link to the profile.')).toBeInTheDocument();
+    await expect(canvas.getByText('A handle on Twitter, or a link to the profile.')).toBeInTheDocument();
     await userEvent.click(field);
     await userEvent.keyboard('@AdaLovelace');
     await userEvent.tab();
@@ -140,6 +139,39 @@ export const SocialEditorLink: Story = {
   },
 };
 
+/** On a company, a bare LinkedIn handle is the company's page, and the example is a company's. */
+export const CompanyHandle: Story = {
+  parameters: { crm: { screenshot: false } },
+  args: { attribute: attributeOf('url', 'LinkedIn', { apiSlug: 'linkedin', objectKey: 'companies' }) },
+  render: (args) => (
+    <Stage width="narrow">
+      <AttributeEditor {...args} />
+    </Stage>
+  ),
+  play: async ({ canvas, args, userEvent }) => {
+    const field = canvas.getByRole('textbox', { name: 'LinkedIn' });
+    await expect(field).toHaveAttribute('placeholder', 'northwind');
+    await userEvent.click(field);
+    await userEvent.keyboard('northwind');
+    await userEvent.tab();
+    await expect(args.onCommit).toHaveBeenCalledWith('https://linkedin.com/company/northwind');
+  },
+};
+
+/** In a grid cell the label is hidden, so the field keeps "Set <Attribute>…" and the refusal names the example. */
+export const InCell: Story = {
+  parameters: { crm: { screenshot: false } },
+  args: { attribute: twitter, surface: 'cell' },
+  render: (args) => (
+    <Stage width="narrow">
+      <AttributeEditor {...args} />
+    </Stage>
+  ),
+  play: async ({ canvas }) => {
+    await expect(canvas.getByRole('textbox', { name: 'Twitter' })).toHaveAttribute('placeholder', 'Set Twitter…');
+  },
+};
+
 /** A handle the network would not take: the field says what to type, in plain words, and commits nothing. */
 export const SocialInvalid: Story = {
   args: { attribute: twitter },
@@ -153,7 +185,7 @@ export const SocialInvalid: Story = {
     await userEvent.keyboard('ada lovelace');
     await userEvent.tab();
     await expect(
-      canvas.getByText('Enter a handle on X, such as @adalovelace, or a link to the profile.'),
+      canvas.getByText('Enter a handle on Twitter, such as @adalovelace, or a link to the profile.'),
     ).toBeInTheDocument();
     await expect(args.onCommit).not.toHaveBeenCalled();
   },

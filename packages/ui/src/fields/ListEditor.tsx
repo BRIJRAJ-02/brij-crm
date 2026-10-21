@@ -25,12 +25,10 @@ export interface ListEditorProps<T extends AttributeType, V> extends EditorProps
   readonly inputMode?: FieldProps['inputMode'];
   readonly type?: FieldProps['type'];
   readonly hint?: string;
-  /** What the add field shows while the list is empty: the type's example, else "Set <Attribute>…". */
+  /** The type's example for the add field while the list is empty, on a form or a preview (as TextLikeEditor's). */
   readonly placeholder?: string;
   /** A brand mark to lead a value's chip: a social profile's network. */
   readonly markOf?: (value: V) => ProviderName | undefined;
-  /** The whole value as a chip's tooltip, when its label is shorter (a link shown as its domain). */
-  readonly titleOf?: (value: V) => string | undefined;
   readonly prefix?: ReactNode;
   /**
    * Draws the add field itself, from the props the Field would take: a type
@@ -71,7 +69,6 @@ export function ListEditor<T extends AttributeType, V>({
   hint,
   placeholder,
   markOf,
-  titleOf,
   prefix,
   renderAdd,
   autoOpen = false,
@@ -102,10 +99,10 @@ export function ListEditor<T extends AttributeType, V>({
   const isCompact = isCompactSurface(surface);
   const chipExtras = (value: V) => {
     const mark = markOf?.(value);
-    const title = titleOf?.(value);
-    return { ...(mark === undefined ? {} : { mark }), ...(title === undefined ? {} : { title }) };
+    return mark === undefined ? {} : { mark };
   };
-  const emptyPlaceholder = placeholder ?? fieldStrings.setAttribute(attribute.name);
+  const emptyPlaceholder =
+    isCompact || placeholder === undefined ? fieldStrings.setAttribute(attribute.name) : placeholder;
   return (
     <div className={styles.root}>
       {values.length > 0 && (

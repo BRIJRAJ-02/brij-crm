@@ -1,7 +1,7 @@
 /* ProviderMark: a brand's own artwork at icon size (size-icon, or
    size-icon-sm), never recoloured: the same image in light and dark, except
-   Timefix's, whose light and dark files swap by theme the way the wordmark
-   does (a saved choice on the root, else the OS). */
+   the black marks (Timefix, X, GitHub, AngelList, TikTok, Threads), whose
+   light and dark files swap by theme the way the wordmark does (a saved choice on the root, else the OS). */
 @layer components {
   .mark {
     display: inline-block;

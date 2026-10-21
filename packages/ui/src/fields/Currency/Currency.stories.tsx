@@ -72,6 +72,6 @@ export const Guidance: Story = {
   ),
   play: async ({ canvas }) => {
     await expect(canvas.getByRole('textbox', { name: 'Deal value' })).toHaveAttribute('placeholder', '1,234.5');
-    await expect(canvas.getByText('An amount like 1,234.5, in the currency picked before it.')).toBeInTheDocument();
+    await expect(canvas.getByText('Pick the currency, then type the amount.')).toBeInTheDocument();
   },
 };
