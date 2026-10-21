@@ -788,6 +788,13 @@ describe('a round robin page (AC-732 to AC-734, AC-738, AC-742 to AC-745, AC-754
     // A member sees their own row only, and no one else's adjustments.
     const own = await rotationDistribution(sam.scope, { rotationId: rotation.id }, NOW);
     expect(own.rows.map((row) => row.name)).toEqual(['Sam Lee']);
+    // No fair share or difference: both come from everyone's total.
+    expect(own.rows[0]?.fairShare).toBeUndefined();
+    expect(own.rows[0]?.difference).toBeUndefined();
+    const outsider = await w.addMember('Out Sider');
+    expect((await refusalOf(rotationDistribution(outsider.scope, { rotationId: rotation.id }, NOW))).code).toBe(
+      'NOT_FOUND',
+    );
     expect(own.adjustments).toEqual([]);
     expect(own.canAdjust).toBe(false);
     // Undone: it stops counting.
@@ -818,14 +825,12 @@ describe('a round robin page (AC-732 to AC-734, AC-738, AC-742 to AC-745, AC-754
       NOW,
     );
     expect((await hostsOf(w, [booked.bookingId])).get(booked.bookingId)).toBe(host);
-    // ...until an admin hands them on.
-    expect(
-      (await refusalOf(reassignUpcoming(sam.scope, deps(), { rotationId: rotation.id, memberId: host }))).code,
-    ).toBe('FORBIDDEN');
-    expect(await reassignUpcoming(w.owner, deps(), { rotationId: rotation.id, memberId: host })).toEqual({
-      reassigned: 1,
-      stuck: 0,
-    });
+    // ...until an admin hands them on: each booking is flagged and queued, and the worker's step reseats it.
+    expect((await refusalOf(reassignUpcoming(sam.scope, { rotationId: rotation.id, memberId: host }, NOW))).code).toBe(
+      'FORBIDDEN',
+    );
+    expect(await reassignUpcoming(w.owner, { rotationId: rotation.id, memberId: host }, NOW)).toEqual({ queued: 1 });
+    expect(await handOnBooking(systemScope(db, w.workspaceId), deps(), booked.bookingId)).toEqual({ needsHost: false });
     expect((await hostsOf(w, [booked.bookingId])).get(booked.bookingId)).toBe(other);
   });
 

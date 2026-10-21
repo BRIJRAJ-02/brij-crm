@@ -12,6 +12,7 @@
 import {
   BOOKING_MAIL_KINDS,
   handOnBooking,
+  remakeEvent,
   markInvited,
   prepareBookingMail,
   type BookingMailDeps,
@@ -55,6 +56,19 @@ export async function runBookingMail(deps: BookingMailTaskDeps, payload: unknown
     return;
   }
   const { workspaceId, bookingId, kind } = parsed.data;
+  if (kind === 'host_changed') {
+    // Not an email: the booking's new organiser's calendar gets its event, the old one's is cancelled.
+    const { calendar } = deps.reseat ?? {};
+    if (calendar?.events !== undefined) {
+      await remakeEvent(
+        deps.systemScope(workspaceId),
+        { events: calendar.events, ...(calendar.existing === undefined ? {} : { existing: calendar.existing }) },
+        bookingId,
+        deps.log,
+      );
+    }
+    return;
+  }
   if (kind === 'needs_host' && deps.reseat !== undefined) {
     // Not an email first: the booking's host left. Reseated through its rotations, it's done (`reassigned` tells
     // everyone); otherwise the admins are told below.

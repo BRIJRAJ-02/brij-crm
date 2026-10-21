@@ -117,7 +117,15 @@ export function RotationsScreen({ data, slug, people, canManage }: RotationsScre
   const [deleteError, setDeleteError] = useState<string | undefined>(undefined);
   // A fresh dialog per opening, so its draft and its id start afresh.
   const [opened, setOpened] = useState(0);
-  const [handing, setHanding] = useState<Handing | undefined>(undefined);
+  // Members whose upcoming bookings an admin may hand on, one prompt at a time (every member a save removed).
+  const [queue, setQueue] = useState<readonly Handing[]>([]);
+  const handing = queue[0];
+  const setHanding = (next: Handing | undefined) => {
+    setQueue(next === undefined ? [] : [next]);
+  };
+  const nextHanding = () => {
+    setQueue((current) => current.slice(1));
+  };
   const [isHandingBusy, setHandingBusy] = useState(false);
   const handOn = () => {
     if (handing === undefined || isHandingBusy) return;
@@ -126,11 +134,8 @@ export function RotationsScreen({ data, slug, people, canManage }: RotationsScre
     data.rotations.reassignUpcoming(slug, target.rotation.id, target.memberId).then(
       (done) => {
         setHandingBusy(false);
-        setHanding(undefined);
-        toasts.toast({
-          tone: done.stuck === 0 ? 'success' : 'info',
-          message: strings.handedOn(done.reassigned, done.stuck),
-        });
+        nextHanding();
+        toasts.toast({ tone: 'success', message: strings.handedOn(done.queued) });
       },
       () => {
         setHandingBusy(false);
@@ -280,15 +285,21 @@ export function RotationsScreen({ data, slug, people, canManage }: RotationsScre
               tone: 'success',
               message: before === 'new' ? strings.made(saved.name) : strings.saved(saved.name),
             });
-            // Someone removed who still has upcoming bookings here: offer to hand them on (AC-750).
+            // Everyone removed who still has upcoming bookings here: offer to hand each on (AC-750).
             if (before !== 'new') {
-              const left = before.members.find(
-                (member) =>
-                  (member.upcoming ?? 0) > 0 && !saved.members.some((each) => each.memberId === member.memberId),
+              setQueue(
+                before.members
+                  .filter(
+                    (member) =>
+                      (member.upcoming ?? 0) > 0 && !saved.members.some((each) => each.memberId === member.memberId),
+                  )
+                  .map((member) => ({
+                    rotation: saved,
+                    memberId: member.memberId,
+                    name: member.name,
+                    count: member.upcoming ?? 0,
+                  })),
               );
-              if (left !== undefined) {
-                setHanding({ rotation: saved, memberId: left.memberId, name: left.name, count: left.upcoming ?? 0 });
-              }
             }
           }}
         />
@@ -298,7 +309,10 @@ export function RotationsScreen({ data, slug, people, canManage }: RotationsScre
         isOpen={handing !== undefined}
         isBusy={isHandingBusy}
         onOpenChange={(isOpen) => {
-          if (!isOpen && !isHandingBusy) setHanding(undefined);
+          if (!isOpen && !isHandingBusy) {
+            nextHanding();
+            toasts.toast({ tone: 'info', message: strings.keptNote });
+          }
         }}
         actions={
           <>

@@ -112,9 +112,10 @@ export function DistributionPanel({ data, slug, rotation, onNotice }: Distributi
       case 'count':
         return numberText(row.count);
       case 'fair':
-        return row.isOn ? numberText(row.fairShare) : <Badge text={strings.distribution.off} />;
+        if (!row.isOn) return strings.distribution.off;
+        return row.fairShare === undefined ? '' : numberText(row.fairShare);
       case 'difference':
-        return row.isOn ? numberText(row.difference, true) : '';
+        return row.isOn && row.difference !== undefined ? numberText(row.difference, true) : '';
       case 'adjusted':
         return row.adjusted === 0 ? '' : numberText(row.adjusted, true);
       default:

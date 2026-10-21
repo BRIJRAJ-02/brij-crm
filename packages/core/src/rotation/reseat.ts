@@ -147,17 +147,22 @@ function eventLocation(page: PageRecord, phone: string | undefined): string | un
 }
 
 /**
- * After a commit that gave the booking a new organiser: the old organiser's event is cancelled (its attendees are
- * told by the provider) and the new organiser's calendar gets the booking's event, inviting the guest, its guests
- * and the other hosts. Three tries each; a failure marks the booking for the host, as booking does.
+ * The worker's `host_changed` step, after a commit that gave the booking a new organiser: the event the booking
+ * holds (the old organiser's) is cancelled, its attendees told by the provider, and the new organiser's calendar
+ * gets the booking's event, inviting the guest, its guests and the other hosts. Three tries each; a failure marks
+ * the booking for the host, as booking does.
  */
 export async function remakeEvent(
   scope: EngineScope,
   calendar: Pick<BookingCalendar, 'events' | 'existing'>,
   bookingId: string,
-  old: EventRef | undefined,
   log?: { readonly warn: (message: string, fields: Readonly<Record<string, unknown>>) => void },
 ): Promise<void> {
+  const held = await inWorkspace(scope, async (tx) => {
+    const [row] = await tx.select({ meetingId: bookings.meetingId }).from(bookings).where(eq(bookings.id, bookingId));
+    return row?.meetingId ?? null;
+  });
+  const old: EventRef | undefined = held === null ? undefined : { workspaceId: scope.workspaceId, meetingId: held };
   if (old !== undefined && calendar.existing !== undefined) {
     const { cancel } = calendar.existing;
     await retry(() => cancel(old), 'booking.event_cancel_failed', bookingId, log);

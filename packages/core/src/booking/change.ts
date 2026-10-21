@@ -28,7 +28,7 @@ import { inWorkspace } from '../access/run.ts';
 import { postgresError, refuse, refuseOn } from '../engine/refusals.ts';
 import type { BookingCalendar, BusyReader, EventRef } from './calendar.ts';
 import { chooseHosts, lockRotations } from '../rotation/assign.ts';
-import { changedSeats, liveSeats, recordSeats, remakeEvent, syncHosts } from '../rotation/reseat.ts';
+import { changedSeats, liveSeats, recordSeats, syncHosts } from '../rotation/reseat.ts';
 import { loadTeam, memberBusy, readTeam, teamMemberIds, teamSlots, type Team } from '../rotation/team.ts';
 import { hostLockKey, lockKey } from './locks.ts';
 import { enqueueBookingMail } from './mail-queue.ts';
@@ -479,12 +479,14 @@ async function moveTeamBooking(
       scope.workspaceId,
       first.team.rotations.map((rotation) => rotation.rules.id),
     );
+    // The team as it stands under the locks (a member removed or switched off meanwhile is gone from it).
+    const team = (await roundRobinTeam(tx, first.page)) ?? first.team;
     const seats = await liveSeats(tx, first.row.id);
     const keep =
       first.page.rescheduleHost === 'same'
         ? new Map([...seats].map(([rotationId, seat]) => [rotationId, seat.memberId]))
         : undefined;
-    const chosen = await chooseHosts(tx, first.page, first.team, {
+    const chosen = await chooseHosts(tx, first.page, team, {
       workspaceId: scope.workspaceId,
       start,
       duration: minutesOf(first.row),
@@ -500,7 +502,7 @@ async function moveTeamBooking(
     const end = new Date(start.getTime() + minutesOf(row) * 60_000);
     const blockStart = new Date(start.getTime() - page.bufferBefore * 60_000);
     const blockEnd = new Date(end.getTime() + page.bufferAfter * 60_000);
-    const changes = changedSeats(first.team, seats, chosen.picks);
+    const changes = changedSeats(team, seats, chosen.picks);
     try {
       const [updated] = await tx
         .update(bookings)
@@ -518,13 +520,16 @@ async function moveTeamBooking(
       if (updated === undefined) throw new Error('The booking was not moved.');
       await syncHosts(tx, updated.id, chosen.hosts);
       await recordSeats(tx, scope, updated.id, changes);
+      const organiserChanged = chosen.organiser !== row.hostMemberId;
       await enqueueBookingMail(tx, updated.id, [
         'moved',
         ...(changes.length === 0 ? [] : (['reassigned'] as const)),
+        // A new organiser's calendar gets the event in the worker, never inside this request.
+        ...(organiserChanged ? (['host_changed'] as const) : []),
         'reminder_24h',
         'reminder_1h',
       ]);
-      return { updated, organiserChanged: chosen.organiser !== row.hostMemberId, old: eventOf(scope.workspaceId, row) };
+      return { updated, organiserChanged };
     } catch (error) {
       if (postgresError(error)?.code === '23P01') {
         throw refuseOn('SLOT_TAKEN', 'That time has just gone. Pick another.', 'start');
@@ -533,15 +538,8 @@ async function moveTeamBooking(
     }
   });
   if (result === undefined) return { moved: false };
-  const { updated, organiserChanged, old } = result;
-  if (organiserChanged && deps.calendar.events !== undefined) {
-    const calendar = {
-      events: deps.calendar.events,
-      ...(deps.calendar.existing === undefined ? {} : { existing: deps.calendar.existing }),
-    };
-    await remakeEvent(scope, calendar, updated.id, old, deps.log);
-    return { moved: true };
-  }
+  const { updated, organiserChanged } = result;
+  if (organiserChanged) return { moved: true };
   const existing = deps.calendar.existing;
   await afterCommit(
     target,

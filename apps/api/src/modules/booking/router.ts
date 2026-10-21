@@ -288,11 +288,7 @@ export const rotationsRouter = member.rotations.router({
   ),
   reassignUpcoming: member.rotations.reassignUpcoming.handler(({ context, input }) =>
     commitWrite(context, { mutationId: input.mutationId }, () =>
-      reassignUpcoming(
-        context.scope,
-        { calendar: context.bookingCalendar, log },
-        { rotationId: input.rotationId, memberId: input.memberId },
-      ),
+      reassignUpcoming(context.scope, { rotationId: input.rotationId, memberId: input.memberId }),
     ),
   ),
   undoAdjustment: member.rotations.undoAdjustment.handler(({ context, input }) =>

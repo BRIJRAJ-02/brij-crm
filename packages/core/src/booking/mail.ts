@@ -383,6 +383,9 @@ export async function prepareBookingMail(
             }));
         return { messages: [toVisitor, ...toGuests, ...toHost], invited: [] };
       }
+      case 'host_changed':
+        // Not an email: the worker writes the new organiser's calendar event (`remakeEvent`).
+        return { messages: [], invited: [], skipped: 'not an email' };
       case 'needs_host': {
         // A booking whose host left with nobody free to take it (spec 0029, AC-749): the admins are told.
         if (row.needsHostAt === null) return { messages: [], invited: [], skipped: 'has a host' };

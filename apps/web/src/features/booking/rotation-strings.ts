@@ -110,14 +110,15 @@ export const strings = {
     count === 1 ? `Reassign ${name}’s upcoming booking?` : `Reassign ${name}’s ${String(count)} upcoming bookings?`,
   handOnText: (rotation: string, count: number) =>
     count === 1
-      ? `It goes to the next free member of ${rotation}, who is emailed with the guest. If nobody is free then, it stays where it is.`
-      : `Each goes to the next free member of ${rotation}, who is emailed with the guest. Any nobody can take stays where it is.`,
+      ? `It goes to the next free member of ${rotation}, who is emailed with the guest. If nobody is free then, Bookings marks it Needs a host and the admins are emailed.`
+      : `Each goes to the next free member of ${rotation}, who is emailed with the guest. Any nobody can take shows Needs a host on Bookings, and the admins are emailed.`,
   handOnConfirm: (count: number) => (count === 1 ? 'Reassign it' : `Reassign ${String(count)}`),
   keepThem: 'Keep them',
-  handedOn: (moved: number, kept: number) =>
-    kept === 0
-      ? `Reassigned ${String(moved)}.`
-      : `Reassigned ${String(moved)}. ${String(kept)} stayed: nobody else was free then.`,
+  keptNote: 'Kept. Each booking can still be reassigned from Bookings.',
+  handedOn: (count: number) =>
+    count === 1
+      ? 'Handing it on. Bookings shows it as Needs a host until someone takes it.'
+      : `Handing ${String(count)} on. Bookings shows each as Needs a host until someone takes it.`,
   removeFixedTitle: (name: string) => `Remove ${name} as a fixed host?`,
   removeFixedText: 'They stop joining new meetings from this page. Meetings already booked keep them.',
   removeFixedAction: 'Remove host',

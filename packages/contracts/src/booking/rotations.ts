@@ -233,10 +233,10 @@ export const DistributionRow = z.object({
   isOn: z.boolean(),
   /** Live units in the window, calibration and adjustments included. */
   count: z.number(),
-  /** Their share of the window's count by weight, among the members switched on. */
-  fairShare: z.number(),
-  /** `count` less `fairShare`: above zero, ahead of their share. */
-  difference: z.number(),
+  /** Their share of the window's count by weight, among the members switched on: `booking.admin` only (AC-752). */
+  fairShare: z.number().optional(),
+  /** `count` less `fairShare`: above zero, ahead of their share. `booking.admin` only. */
+  difference: z.number().optional(),
   /** The window's adjustments, summed. */
   adjusted: z.number().int(),
   /** How they got their meetings in the window, by reason. */
@@ -271,8 +271,11 @@ export const ReassignUpcomingInput = WorkspaceScoped.extend({ rotationId: Uuid, 
 /** Reassigning a member's upcoming bookings in a rotation. */
 export type ReassignUpcomingInput = z.infer<typeof ReassignUpcomingInput>;
 
-/** What reassigning a member's upcoming bookings did: how many moved, and how many nobody could take. */
-export const ReassignedUpcoming = z.object({ reassigned: z.number().int(), stuck: z.number().int() });
+/**
+ * What reassigning a member's upcoming bookings did: how many it queued. Each is flagged "Needs a host" until the
+ * worker seats someone else; any nobody can take stays flagged, and the admins are emailed.
+ */
+export const ReassignedUpcoming = z.object({ queued: z.number().int() });
 /** What reassigning a member's upcoming bookings did. */
 export type ReassignedUpcoming = z.infer<typeof ReassignedUpcoming>;
 

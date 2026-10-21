@@ -227,8 +227,13 @@ export async function rotationDistribution(
           weight: member.weight,
           isOn: member.isOn,
           count,
-          fairShare: Math.round(fairShare * 10) / 10,
-          difference: Math.round((count - fairShare) * 10) / 10,
+          // From everyone's total, so only for those who may see everyone's counts (AC-752).
+          ...(everyone
+            ? {
+                fairShare: Math.round(fairShare * 10) / 10,
+                difference: Math.round((count - fairShare) * 10) / 10,
+              }
+            : {}),
           adjusted: mine.filter((row) => row.reason === 'adjustment').reduce((sum, row) => sum + row.units, 0),
           reasons,
           weeks: weekStarts.map(

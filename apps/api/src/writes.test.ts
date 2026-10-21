@@ -1410,6 +1410,11 @@ Object.assign(WRITES, {
       `select host_member_id::text as id from bookings where id = $1`,
       [bookingId],
     );
+    // Switched off first: a member still on would only be seated again.
+    await testQuery(ownerUrl, `update rotation_members set is_on = false where rotation_id = $1 and member_id = $2`, [
+      rotationId,
+      host?.id ?? '',
+    ]);
     await m.client.rotations.reassignUpcoming({ workspace: m.slug, rotationId, memberId: host?.id ?? '', mutationId });
     return [];
   },

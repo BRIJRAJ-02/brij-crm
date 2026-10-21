@@ -42,6 +42,8 @@ export const AUDIT_ACTIONS = [
   // Round robin (spec 0037, AC-1329): a member's count adjusted in a rotation, and an adjustment undone.
   'rotation.adjusted',
   'rotation.adjustment_undone',
+  // A round robin booking's seat given to someone else: a reassign, a hand on, a member who left (spec 0029).
+  'booking.reassigned',
 ] as const;
 /** One action the audit log records. */
 export const AuditAction = z.enum(AUDIT_ACTIONS);
