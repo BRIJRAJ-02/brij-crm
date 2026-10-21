@@ -23,6 +23,7 @@ New (spec 0012, pulled forward from spec 0003's milestone 4; in the inventory as
 ```
 
 - The app's settings pages (since 21 October 2026) sit under a `TopBar` that carries their trail and h1, like every other page, so they pass no `nav` and keep the default `titleLevel`; the bar's hairline lines up with the settings sidebar's head. Without a TopBar, a page can pass `titleLevel={1}` and its `trail`: the trail ("Account › Preferences"; a place without `href` is a group's name, plain text) sits over the title, which is then the page's h1 (no TopBar above), and the header ends in a hairline before the body. Cards in the body then take h2 titles (`CardTitleLevel`). While loading, the trail stays and the h1 stays (visually hidden), so the header doesn't shift and the app's focus and the tab's title have it.
+- `header="bar"` (the app's settings pages, the owner's call on 21 October 2026): the TopBar above holds the trail, an object's tile and badge, and the page's one primary action at its end (where People's "New person" sits), so the layout draws no title block and the sections follow at once, their headings h2 under the bar's h1. Why: a big title with a line of description under it repeated the trail and the first section. A page that needs context gets it from its first section's heading, not a title.
 - `hasTabs` says the body opens with Tabs (an object's page): the header drops its hairline, as the tabs' underline divides the page, so two rules never stack.
 - `SettingsRow` is one setting in a Card: its title over a muted description, its control at the end (a Select with `isLabelHidden` and the same label, a Switch, a Button), a hairline between rows, and the control dropping under the text when the row is narrow. Why a new part: no molecule drew a setting as title, description and a control on the right (Field puts its label above its box, DescriptionList is terms and values with no control, and Card is the group around the rows). It lives beside SettingsStack because the rhythm belongs to the settings page.
 - `nav` (optional) lists the settings pages as a column beside the page, in order; `currentNavId` marks the one shown (`aria-current="page"`). The navigation is a `nav` landmark named by `navLabel` ("Settings").
@@ -50,7 +51,13 @@ Every settings page builds its body from three pieces, so Profile, Security, Wor
 ```tsx
 <SettingsLayout titleLevel={1} trail={trail} title="General" description="Your workspace’s name and address.">
   <SettingsSection title="Workspace" description="What members see in the sidebar and in emails.">
-    <Card footer={<Button variant="primary" type="submit" form="workspace">Save</Button>}>
+    <Card
+      footer={
+        <Button variant="primary" type="submit" form="workspace">
+          Save
+        </Button>
+      }
+    >
       <Form id="workspace" columns={2} onSubmit={save}>
         <Field label="Name" name="name" />
         <Field label="Web address" name="slug" />

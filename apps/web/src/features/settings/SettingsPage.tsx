@@ -1,5 +1,5 @@
 // Brief
-// Purpose: puts one settings page beside the settings sidebar: its trail ("Account › Preferences"), h1, description and body.
+// Purpose: puts one settings page beside the settings sidebar: its trail ("Account › Preferences"), h1 and primary action in the bar, then its body.
 // Main task: hand SettingsLayout what the page's route loaded, so every settings page has the same header (AC-683).
 // Leaves out: loading anything itself (each settings route's loader read through the data layer), and the sidebar (the settings layout route draws it).
 import type { Hue, ObjectIcon } from '@crm/data';
@@ -22,7 +22,7 @@ export interface SettingsPageProps {
   readonly hue?: Hue;
   /** Beside the title: a Standard or Custom badge. */
   readonly meta?: ReactNode;
-  readonly description?: string;
+  /** The page's one primary action, at the bar's end ("New object", "Connect Google calendar"). */
   readonly actions?: ReactNode;
   readonly isLoading?: boolean;
   /** While loading: a tile's place before the title, for a page that will have one (an object's). */
@@ -37,8 +37,9 @@ export interface SettingsPageProps {
 /**
  * A settings page: a TopBar with the page's trail (Settings, its group, any
  * places between, then its title; the bar holds the page's h1) in the frame's
- * bar slot, as every page's TopBar sits, and SettingsLayout below it with the
- * title, description and body.
+ * bar slot, as every page's TopBar sits, with an object's tile and badge and
+ * the page's one primary action at its end, and SettingsLayout below it with
+ * the body alone: no title block repeats the trail (21 October 2026).
  */
 export function SettingsPage({
   title,
@@ -46,7 +47,6 @@ export function SettingsPage({
   icon,
   hue,
   meta,
-  description,
   actions,
   isLoading = false,
   hasTile = false,
@@ -71,19 +71,24 @@ export function SettingsPage({
         topBar: undefined,
         body: (
           <>
-            {slot !== null && createPortal(<TopBar title={title} crumbs={trail} />, slot)}
-            <SettingsLayout
-              hasTabs={hasTabs}
-              title={title}
-              isLoading={isLoading}
-              hasTile={hasTile}
-              {...(titleRef === undefined ? {} : { titleRef })}
-              {...(icon === undefined ? {} : { icon })}
-              {...(hue === undefined ? {} : { hue })}
-              {...(meta === undefined ? {} : { meta })}
-              {...(description === undefined ? {} : { description })}
-              {...(actions === undefined ? {} : { actions })}
-            >
+            {slot !== null &&
+              createPortal(
+                // The bar is the page's header (the owner, 21 October 2026): the trail on the left, with an
+                // object's tile and badge, and the page's one primary action on the right, where People's
+                // "New person" sits. No title block repeats them under it.
+                <TopBar
+                  title={title}
+                  crumbs={trail}
+                  {...(titleRef === undefined ? {} : { titleRef })}
+                  {...(icon === undefined ? {} : { icon })}
+                  {...(hue === undefined ? {} : { hue })}
+                  {...(meta === undefined ? {} : { meta })}
+                >
+                  {actions}
+                </TopBar>,
+                slot,
+              )}
+            <SettingsLayout header="bar" hasTabs={hasTabs} title={title} isLoading={isLoading} hasTile={hasTile}>
               {children}
             </SettingsLayout>
           </>

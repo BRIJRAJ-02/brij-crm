@@ -248,7 +248,6 @@ export function JobsScreen({ data, slug, view, isAll, members: loaded, canRunTes
   return (
     <SettingsPage
       title={strings.title}
-      description={isAll ? strings.description : strings.descriptionMine}
       titleRef={titleRef}
       {...(canRunTest
         ? {
@@ -270,7 +269,7 @@ export function JobsPending() {
   // The description the page arrives with, so the table doesn't move down when it does.
   const isAll = useCan('jobs.manage');
   return (
-    <SettingsPage title={strings.title} description={isAll ? strings.description : strings.descriptionMine}>
+    <SettingsPage title={strings.title}>
       <Table
         label={strings.tableLabel}
         columns={isAll ? COLUMNS : COLUMNS.filter((column) => column.id !== 'startedBy')}
