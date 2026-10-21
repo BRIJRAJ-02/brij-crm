@@ -309,8 +309,16 @@ export interface SettingsRowProps {
   readonly leading?: ReactNode;
   /** Beside the title: a Badge ("Default"), or an InfoTip when the title needs a word of help. */
   readonly meta?: ReactNode;
-  /** The control, at the end of the row: a Select, a Switch, a Button, a row's "···" menu. */
-  readonly children: ReactNode;
+  /** How the leading mark sits: on the title's line (`start`, a provider's mark), or centred on the text (`center`, a person's picture). */
+  readonly leadingAlign?: 'start' | 'center';
+  /**
+   * The control's width: `fit` its own (a Switch, a Button, a menu), or `field`, one column every input row
+   * shares (a Field, a Select, a plain value), so a page's inputs start and end on the same lines; on a narrow
+   * page it takes the row's full width under the text.
+   */
+  readonly control?: 'fit' | 'field';
+  /** The control, at the end of the row: a Select, a Switch, a Button, a row's "···" menu. None for a row that only shows. */
+  readonly children?: ReactNode;
 }
 
 /**
@@ -320,10 +328,18 @@ export interface SettingsRowProps {
  * A row can also stand for one thing of a kind (a connected calendar): a
  * mark before its text, a badge beside its title, its controls at the end.
  */
-export function SettingsRow({ title, description, leading, meta, children }: SettingsRowProps) {
+export function SettingsRow({
+  title,
+  description,
+  leading,
+  leadingAlign = 'start',
+  control = 'fit',
+  meta,
+  children,
+}: SettingsRowProps) {
   return (
     <div className={styles.row}>
-      <span className={styles.rowMain}>
+      <span className={styles.rowMain} data-align={leading === undefined ? undefined : leadingAlign}>
         {leading !== undefined && <span className={styles.rowLeading}>{leading}</span>}
         <span className={styles.rowText}>
           <span className={styles.rowHeading}>
@@ -333,7 +349,11 @@ export function SettingsRow({ title, description, leading, meta, children }: Set
           {description !== undefined && <span className={styles.description}>{description}</span>}
         </span>
       </span>
-      <span className={styles.rowControl}>{children}</span>
+      {children !== undefined && (
+        <span className={styles.rowControl} data-control={control}>
+          {children}
+        </span>
+      )}
     </div>
   );
 }

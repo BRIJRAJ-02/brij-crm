@@ -5,7 +5,7 @@ import { initialsOf, stableHue } from '../../lib/stable-hue.ts';
 import { strings } from './strings.ts';
 import styles from './Avatar.module.css';
 
-/** Avatar sizes: `xs` 16px (cells, chips), `sm` 20px, `md` 24px, `lg` 32px (record headers), `xl` 72px (a booking page's host). */
+/** Avatar sizes: `xs` 16px (cells, chips), `sm` 20px, `md` 24px, `lg` 32px (record headers), `xl` 72px (a booking page's host, the picture on Settings › Profile). */
 export type AvatarSize = 'xs' | 'sm' | 'md' | 'lg' | 'xl';
 
 /** Props for Avatar. */

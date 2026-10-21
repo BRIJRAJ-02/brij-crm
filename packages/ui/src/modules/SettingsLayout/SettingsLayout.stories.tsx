@@ -1,5 +1,6 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
 import { expect, screen } from 'storybook/test';
+import { Avatar } from '../../atoms/Avatar/Avatar.tsx';
 import { Badge } from '../../atoms/Badge/Badge.tsx';
 import { Button } from '../../atoms/Button/Button.tsx';
 import { Meter } from '../../atoms/Meter/Meter.tsx';
@@ -241,6 +242,49 @@ export const Rows: Story = {
     await expect(canvas.getByRole('region', { name: 'Appearance' })).toBeInTheDocument();
     await expect(canvas.queryByRole('link', { name: 'Account' })).toBeNull();
     await expect(canvas.getByRole('button', { name: /Interface theme/ })).toBeInTheDocument();
+  },
+};
+
+/**
+ * Input rows (`control="field"`): every Field, Select and plain value in one column at the row's end, so a
+ * page's inputs line up; a picture row (`leadingAlign="center"`) with no control; a Button keeps its own width.
+ */
+export const InputRows: Story = {
+  render: () => (
+    <Stage>
+      <SettingsLayout title="Profile">
+        <Card>
+          <SettingsRow
+            title="Ada Lovelace"
+            description="From Google"
+            leadingAlign="center"
+            leading={<Avatar name="Ada Lovelace" id="ada" size="xl" isDecorative />}
+          />
+          <SettingsRow title="Your name" control="field">
+            <Field label="Your name" isLabelHidden defaultValue="Ada Lovelace" />
+          </SettingsRow>
+          <SettingsRow title="Email" description="Used to sign in" control="field">
+            ada.lovelace+a.very.long.address.for.wrapping@analytical-engine.example.com
+          </SettingsRow>
+          <SettingsRow title="Week starts on" control="field">
+            <Select
+              label="Week starts on"
+              isLabelHidden
+              items={[{ id: 'monday', label: 'Monday' }]}
+              defaultValue="monday"
+            />
+          </SettingsRow>
+          <SettingsRow title="Items in your sidebar">
+            <Button>Customise sidebar</Button>
+          </SettingsRow>
+        </Card>
+      </SettingsLayout>
+    </Stage>
+  ),
+  play: async ({ canvas }) => {
+    await expect(canvas.getByRole('textbox', { name: 'Your name' })).toHaveValue('Ada Lovelace');
+    await expect(canvas.getByText(/analytical-engine\.example\.com/)).toBeVisible();
+    await expect(canvas.getByRole('button', { name: /Week starts on/ })).toBeInTheDocument();
   },
 };
 

@@ -36,17 +36,12 @@ export const strings = {
   restored: (name: string) => `${name} is back.`,
   // Account › Profile.
   profileTitle: 'Profile',
-  profileSection: 'About you',
-  picture: 'Picture',
-  pictureText: 'Your Google picture, or your initials.',
+  /** Under their name beside the picture, when the picture is the one their Google account gave. */
+  fromGoogle: 'From Google',
   yourName: 'Your name',
   email: 'Email',
-  emailReadOnly: 'Your sign in email.',
+  emailUse: 'Used to sign in',
   leaveConfirm: 'Leave without saving your change?',
-  yourZone: 'Your time zone',
-  /** The time zone lives in Preferences with the date format and week start (one home for both). */
-  zoneInPreferences: 'Time zone and dates are in Preferences.',
-  openPreferences: 'Open Preferences',
   sameAsWorkspace: (zone: string) => `Same as the workspace (${zone})`,
   zoneFollows: 'Your time zone now follows the workspace.',
 } as const;

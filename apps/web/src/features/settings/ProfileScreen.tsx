@@ -1,12 +1,11 @@
 // Brief
 // Purpose: Settings › Account › Profile (spec 0031, AC-821): how this member appears in this workspace.
-// Main task: change their name (Save shows once it changed); their time zone and dates live in Preferences.
-// Leaves out: the picture upload (#32: Google's picture or initials until then), the email (the account's), and account deletion (the account lane).
+// Main task: change their name (Save shows once it changed).
+// Leaves out: the picture upload (#32: Google's picture or initials until then, so no button), editing the email (the account's), the time zone (Preferences, right above in the nav), and account deletion (the account lane).
 import { isDataError, type DataLayer, type MyProfile } from '@crm/data';
-import { Avatar, Button, ButtonLink, Card, Field, SettingsRow, SettingsSection, Skeleton, type Toasts } from '@crm/ui';
+import { Avatar, Button, Card, Field, SettingsRow, Skeleton, type Toasts } from '@crm/ui';
 import { useBlocker } from '@tanstack/react-router';
 import { useState } from 'react';
-import { preferencesHref } from './nav.ts';
 import { SettingsPage } from './SettingsPage.tsx';
 import { strings } from './workspace-strings.ts';
 
@@ -21,8 +20,8 @@ export interface ProfileScreenProps {
 }
 
 /**
- * One Card: picture, name, email, and the way to their time zone, which lives in Settings › Account › Preferences
- * (the owner: one home for time zone and dates); Save in the bar only while the name differs.
+ * One Card: their picture with their name beside it, the name to change, and the sign in email as plain text.
+ * Save in the bar only while the name differs.
  */
 export function ProfileScreen({ data, toasts, slug, profile, onChanged }: ProfileScreenProps) {
   const [name, setName] = useState(profile.name);
@@ -68,72 +67,63 @@ export function ProfileScreen({ data, toasts, slug, profile, onChanged }: Profil
         ) : undefined
       }
     >
-      <SettingsSection title={strings.profileSection}>
-        <Card>
-          <SettingsRow title={strings.picture} description={strings.pictureText}>
+      <Card>
+        <SettingsRow
+          title={profile.name}
+          leadingAlign="center"
+          leading={
             <Avatar
               name={profile.name}
               id={profile.memberId}
-              size="lg"
+              size="xl"
               isDecorative
               {...(profile.image === undefined ? {} : { src: profile.image })}
             />
-          </SettingsRow>
-          <SettingsRow title={strings.yourName}>
-            <Field
-              label={strings.yourName}
-              isLabelHidden
-              value={name}
-              onChange={(next) => {
-                setName(next);
-                setNameError(undefined);
-              }}
-              onSubmit={save}
-              onEscape={() => setName(profile.name)}
-              maxLength={80}
-              autoComplete="name"
-              {...(nameError === undefined ? {} : { error: nameError })}
-            />
-          </SettingsRow>
-          <SettingsRow title={strings.email}>
-            <Field
-              label={strings.email}
-              isLabelHidden
-              value={profile.email}
-              isReadOnly
-              readOnlyReason={strings.emailReadOnly}
-              type="email"
-            />
-          </SettingsRow>
-          <SettingsRow title={strings.yourZone} description={strings.zoneInPreferences}>
-            <ButtonLink href={preferencesHref(slug)}>{strings.openPreferences}</ButtonLink>
-          </SettingsRow>
-        </Card>
-      </SettingsSection>
+          }
+          {...(profile.image === undefined ? {} : { description: strings.fromGoogle })}
+        />
+        <SettingsRow title={strings.yourName} control="field">
+          <Field
+            label={strings.yourName}
+            isLabelHidden
+            value={name}
+            onChange={(next) => {
+              setName(next);
+              setNameError(undefined);
+            }}
+            onSubmit={save}
+            onEscape={() => setName(profile.name)}
+            maxLength={80}
+            autoComplete="name"
+            {...(nameError === undefined ? {} : { error: nameError })}
+          />
+        </SettingsRow>
+        <SettingsRow title={strings.email} description={strings.emailUse} control="field">
+          {profile.email}
+        </SettingsRow>
+      </Card>
     </SettingsPage>
   );
 }
 
-/** The page while its route loads: its rows as they will stand, the picture and each control's box a Skeleton. */
+/** The page while its route loads: its rows as they will stand, the picture and the name's box a Skeleton. */
 export function ProfilePending() {
   return (
     <SettingsPage title={strings.profileTitle} isLoading>
-      <SettingsSection title={strings.profileSection}>
-        <Card isBusy>
-          <SettingsRow title={strings.picture} description={strings.pictureText}>
-            <Skeleton shape="circle" />
-          </SettingsRow>
-          <SettingsRow title={strings.yourName}>
-            <Skeleton shape="field" />
-          </SettingsRow>
-          <SettingsRow title={strings.email}>
-            <Skeleton shape="field" />
-          </SettingsRow>
-          <SettingsRow title={strings.yourZone}>
-            <Skeleton shape="field" />
-          </SettingsRow>
-        </Card>
-      </SettingsSection>
+      <Card isBusy>
+        <SettingsRow
+          title=""
+          description={<Skeleton width="short" />}
+          leadingAlign="center"
+          leading={<Skeleton shape="circle" />}
+        />
+        <SettingsRow title={strings.yourName} control="field">
+          <Skeleton shape="field" />
+        </SettingsRow>
+        <SettingsRow title={strings.email} description={strings.emailUse} control="field">
+          <Skeleton />
+        </SettingsRow>
+      </Card>
     </SettingsPage>
   );
 }
