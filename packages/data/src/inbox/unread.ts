@@ -131,7 +131,8 @@ export function createUnreadCounts(deps: UnreadDeps): UnreadCounts {
           entry.holders += 1;
           entry.cancelDrop?.();
           entry.cancelDrop = undefined;
-          if (entry.holders === 1) {
+          // One left over from a session that ended (cleared) never reads or listens again.
+          if (entry.holders === 1 && entries.get(workspace) === entry) {
             entry.stopWatch = deps.watch(workspace);
             read(workspace, entry);
           }
@@ -173,12 +174,13 @@ export function createUnreadCounts(deps: UnreadDeps): UnreadCounts {
       announce(entry);
     },
     clear() {
+      // Quietly: a screen still holding a count as the session ends (the title, on its way to sign in) must not
+      // draw again and ask for a new one, which would be refused for nobody signed in.
       for (const entry of entries.values()) {
         entry.cancelRead?.();
         entry.cancelDrop?.();
         entry.stopWatch?.();
-        entry.value = undefined;
-        announce(entry);
+        entry.stopWatch = undefined;
       }
       entries = new Map();
     },

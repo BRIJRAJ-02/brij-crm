@@ -4,7 +4,7 @@ A comment being written: a field one line tall at rest that grows to ten, the `@
 
 ## Why it exists
 
-New (spec 0038, the inventory's CommentComposer). No library piece writes a message with mentions: Field's multiline variant is a long text value (three lines at rest, no list), and the rich text editor (`@crm/ui/editor`) is Tiptap, which the record page doesn't load. This composes the existing parts: Field (its new `composer` variant and its list wiring), the editor's MentionList (the same `@` rows the note editor shows), Button and Callout.
+New (spec 0038, the inventory's CommentComposer). No library piece writes a message with mentions: Field's multiline variant is a long text value (three lines at rest, no list), and the rich text editor (`@crm/ui/editor`) is Tiptap, which the record page doesn't load. This composes the existing parts: Field (its new `composer` variant and its list wiring), the editor's SuggestionList (the same `@` rows the note editor shows), Button and Callout.
 
 ## Use
 

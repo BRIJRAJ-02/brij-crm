@@ -6,7 +6,9 @@ import type { ActorDisplay } from '@crm/contracts/values';
 import { COMMENT_MAX } from '@crm/contracts/mentions';
 import { useId, useMemo, useRef, useState, type KeyboardEvent, type RefObject } from 'react';
 import { Button } from '../../atoms/Button/Button.tsx';
-import { MentionList, mentionOptionId } from '../../editor/MentionList.tsx';
+import { strings as editorStrings } from '../../editor/strings.ts';
+import { SuggestionList, suggestionOptionId, type SuggestionRow } from '../../editor/SuggestionList.tsx';
+import { Avatar } from '../../atoms/Avatar/Avatar.tsx';
 import { Callout } from '../Callout/Callout.tsx';
 import { Field } from '../Field/Field.tsx';
 import styles from './CommentComposer.module.css';
@@ -84,6 +86,26 @@ export function CommentComposer({
     [members, typed],
   );
   const activeIndex = Math.min(active, Math.max(shown.length - 1, 0));
+  // The note editor's `@` rows: the member's Avatar, name and email.
+  const rows = useMemo(
+    (): readonly SuggestionRow[] =>
+      shown.map((member) => ({
+        key: member.id ?? member.name,
+        leading: (
+          <Avatar
+            name={member.name}
+            id={member.id ?? member.name}
+            size="xs"
+            isDecorative
+            {...(member.imageSrc === undefined ? {} : { src: member.imageSrc })}
+            {...(member.hue === undefined ? {} : { hue: member.hue })}
+          />
+        ),
+        label: member.name,
+        ...(member.email === undefined ? {} : { detail: member.email }),
+      })),
+    [shown],
+  );
 
   // A pick or a cut mention moves the caret where the text changed, once React has written the new text.
   const placeCaret = (at: number) => {
@@ -201,18 +223,23 @@ export function CommentComposer({
           autoFocus={autoFocus}
           combobox={{
             listId,
-            isExpanded: isOpen,
-            ...(shown.length > 0 ? { activeId: mentionOptionId(listId, activeIndex) } : {}),
+            // With nobody matching, the list is a status line, not a list to name.
+            isExpanded: isOpen && shown.length > 0,
+            ...(shown.length > 0 ? { activeId: suggestionOptionId(listId, activeIndex) } : {}),
           }}
         />
         {isOpen && (
-          <MentionList
+          <SuggestionList
             anchorRef={field}
             id={listId}
-            members={shown}
+            label={editorStrings.members}
+            rows={rows}
             activeIndex={activeIndex}
-            isLoading={false}
-            onPick={pick}
+            emptyText={editorStrings.noMembers}
+            onPick={(index) => {
+              const member = shown[index];
+              if (member !== undefined) pick(member);
+            }}
             onHighlight={setActive}
           />
         )}

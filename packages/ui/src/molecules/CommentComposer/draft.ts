@@ -61,10 +61,7 @@ export function edited(before: Draft, next: string): { readonly draft: Draft; re
   const shortest = Math.min(old.length, next.length);
   while (prefix < shortest && old[prefix] === next[prefix]) prefix += 1;
   let suffix = 0;
-  while (
-    suffix < shortest - prefix &&
-    old[old.length - 1 - suffix] === next[next.length - 1 - suffix]
-  ) {
+  while (suffix < shortest - prefix && old[old.length - 1 - suffix] === next[next.length - 1 - suffix]) {
     suffix += 1;
   }
   const changedEnd = old.length - suffix;
