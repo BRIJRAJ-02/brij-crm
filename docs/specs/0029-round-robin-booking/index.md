@@ -229,6 +229,10 @@ Rotations and team pages: `booking.admin`. Ledger: the host sees their own rows,
 - [ ] Forms hand off: when the visitor's email is known before slots, show only the owner's times (owner first, earlier).
 - [ ] Measure a 20 member page's slots on the load harness.
 
+## Open questions
+
+- **Which schedule a member books by on a team page** (assumed, 21 October 2026, after spec 0035's schedules landed): spec 0037 says a member page books by the member's default schedule (AC-1336) and counts weekly caps in that schedule's zone (AC-1326), but not which schedule a round robin or collective team page uses for each member. Assumed: each member's **default schedule** (the virtual weekdays 09:00 to 17:00 in the page's zone until they save one), so a team page names no schedule of its owner (`scheduleId` stays null; setting one is refused `CONFIG_INVALID`). A collective page keeps booking everyone by the page's own hours. Owner to confirm, or choose per member schedule picks on the page.
+
 ## Rationale
 
 See [rationale.md](rationale.md).

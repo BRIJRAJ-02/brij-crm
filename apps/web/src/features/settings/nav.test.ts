@@ -18,7 +18,7 @@ describe('settingsNav', () => {
     expect(groups.map((group) => group.label)).toEqual(['Account', 'Scheduling', 'Workspace']);
     expect(groups.map((group) => group.entries.map((entry) => entry.label))).toEqual([
       ['Profile', 'Preferences', 'Security', 'Notifications'],
-      ['Calendars'],
+      ['Calendars', 'Rotations'],
       ['General', 'Members', 'Objects', 'Background jobs'],
     ]);
   });
@@ -35,6 +35,7 @@ describe('settingsNav', () => {
       members: '/w/acme/settings/members',
       objects: '/w/acme/settings/objects',
       jobs: '/w/acme/settings/jobs',
+      rotations: '/w/acme/settings/scheduling/rotations',
     });
     expect(entries.every((entry) => entry.href.startsWith('/w/acme/settings/'))).toBe(true);
     expect(entries.filter((entry) => entry.meta !== undefined)).toEqual([]);
@@ -60,8 +61,14 @@ describe('visibleSettingsNav', () => {
     },
   ];
 
-  it('shows every page today: none needs a permission', () => {
-    expect(visibleSettingsNav(settingsNav('acme'), [])).toEqual(settingsNav('acme'));
+  it('shows Rotations only to someone who makes booking pages; every other page needs nothing', () => {
+    expect(visibleSettingsNav(settingsNav('acme'), ['booking.manage'])).toEqual(settingsNav('acme'));
+    // Without it, Scheduling keeps Calendars and loses only Rotations.
+    expect(visibleSettingsNav(settingsNav('acme'), []).map((group) => group.entries.map((entry) => entry.id))).toEqual([
+      ['profile', 'preferences', 'security', 'notifications'],
+      ['calendars'],
+      ['general', 'members', 'objects', 'jobs'],
+    ]);
   });
 
   it('leaves out a page the member may not open, keeping the rest of its group', () => {
@@ -90,6 +97,7 @@ describe('settingsPageOf', () => {
     expect(settingsPageOf('/w/acme/settings/objects/people/attributes')).toBe('objects');
     expect(settingsPageOf('/w/acme/settings/jobs/')).toBe('jobs');
     expect(settingsPageOf('/w/acme/settings/members')).toBe('members');
+    expect(settingsPageOf('/w/acme/settings/scheduling/rotations')).toBe('rotations');
   });
 
   it('keeps the old Calendar address current on Calendars while it redirects', () => {
@@ -108,6 +116,7 @@ describe('settingsPageOf', () => {
     expect(settingsGroupOf(groups, 'preferences')?.label).toBe('Account');
     expect(settingsGroupOf(groups, 'calendars')?.label).toBe('Scheduling');
     expect(settingsGroupOf(groups, 'jobs')?.label).toBe('Workspace');
+    expect(settingsGroupOf(groups, 'rotations')?.label).toBe('Scheduling');
     expect(settingsGroupOf(groups, undefined)).toBeUndefined();
   });
 });

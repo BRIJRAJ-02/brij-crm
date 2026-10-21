@@ -75,3 +75,17 @@ export const Stack: Story = {
     await expect(stack).toHaveTextContent('+2');
   },
 };
+
+/** A public team page's stack: 4 faces of 6, "+2", read as "Team of 6" rather than names. */
+export const Team: Story = {
+  parameters: { crm: { screenshot: false } },
+  render: () => (
+    <Stage>
+      <AvatarStack people={PEOPLE.slice(0, 4)} max={4} total={6} size="lg" label="Team of 6" />
+    </Stage>
+  ),
+  play: async ({ canvas }) => {
+    const stack = canvas.getByRole('group', { name: 'Team of 6' });
+    await expect(stack).toHaveTextContent('+2');
+  },
+};

@@ -6,12 +6,17 @@
 // skipped and completes, as the spec says. A send that fails is logged; only
 // when every message of the kind failed (the transport is down) does the task
 // throw a plain error for Graphile to try again (5 tries), so one refused
-// address never sends everyone else the same email again.
+// address never sends everyone else the same email again. Its `needs_host`
+// kind (spec 0029, AC-749) first reseats a booking whose host left, and
+// emails the admins only when nobody was free.
 import {
   BOOKING_MAIL_KINDS,
+  handOnBooking,
+  remakeEvent,
   markInvited,
   prepareBookingMail,
   type BookingMailDeps,
+  type ReseatDeps,
   type systemScope,
 } from '@crm/core/system';
 import * as z from 'zod';
@@ -34,6 +39,8 @@ export interface BookingMailTaskDeps {
   readonly systemScope: (workspaceId: string) => ReturnType<typeof systemScope>;
   readonly mailer: Mailer | undefined;
   readonly links: BookingMailDeps | undefined;
+  /** The calendars a booking whose host left is reseated with (`needs_host`, spec 0029, AC-749). */
+  readonly reseat?: ReseatDeps;
   readonly log: {
     info(message: string, fields?: Record<string, unknown>): void;
     warn(message: string, fields?: Record<string, unknown>): void;
@@ -49,6 +56,28 @@ export async function runBookingMail(deps: BookingMailTaskDeps, payload: unknown
     return;
   }
   const { workspaceId, bookingId, kind } = parsed.data;
+  if (kind === 'host_changed') {
+    // Not an email: the booking's new organiser's calendar gets its event, the old one's is cancelled.
+    const { calendar } = deps.reseat ?? {};
+    if (calendar?.events !== undefined) {
+      await remakeEvent(
+        deps.systemScope(workspaceId),
+        { events: calendar.events, ...(calendar.existing === undefined ? {} : { existing: calendar.existing }) },
+        bookingId,
+        deps.log,
+      );
+    }
+    return;
+  }
+  if (kind === 'needs_host' && deps.reseat !== undefined) {
+    // Not an email first: the booking's host left. Reseated through its rotations, it's done (`reassigned` tells
+    // everyone); otherwise the admins are told below.
+    const handed = await handOnBooking(deps.systemScope(workspaceId), deps.reseat, bookingId);
+    if (!handed.needsHost) {
+      deps.log.info('booking.handed_on', { bookingId });
+      return;
+    }
+  }
   if (deps.mailer === undefined || deps.links === undefined) {
     deps.log.info('booking.mail.skipped', { bookingId, kind, reason: 'mail is off' });
     return;

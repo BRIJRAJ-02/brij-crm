@@ -57,6 +57,15 @@ export const AUDIT_ACTIONS = [
   'member.profile_updated',
   // Spec 0033 (AC-904): a person deleted their own account and left the workspace with it.
   'account.deleted',
+  // Round robin (spec 0037, AC-1329): a member's count adjusted in a rotation, and an adjustment undone.
+  'rotation.adjusted',
+  'rotation.adjustment_undone',
+  // A round robin booking's seat given to someone else: a reassign, a hand on, a member who left (spec 0029).
+  'booking.reassigned',
+  // Lead routing (spec 0043, AC-1616): a form's or a team page's rules changed, and a booking marked or unmarked no show.
+  'routing.changed',
+  'booking.no_show',
+  'booking.no_show_undone',
 ] as const;
 /** One action the audit log records. */
 export const AuditAction = z.enum(AUDIT_ACTIONS);

@@ -6,6 +6,7 @@ import { browserZone } from '../features/booking/zone.ts';
 import { linksHref } from '../features/booking/links.ts';
 import { CalendarNote, readDismissed } from '../features/booking/CalendarNote.tsx';
 import { PageEditor } from '../features/booking/PageEditor.tsx';
+import { readRecordFields } from '../features/routing/record-fields.ts';
 import { EditorPending } from '../features/captures/EditorPending.tsx';
 import { strings } from '../features/booking/strings.ts';
 import { WorkspacePage } from '../features/workspace/WorkspacePage.tsx';
@@ -43,10 +44,20 @@ export const Route = createFileRoute('/w/$slug/captures_/links/$pageId')({
           .ready()
           .catch(() => undefined);
       }
-      return { page, mayRead, ownerMember };
+      // A round robin page's Hosts card: the members it can seat, and the rotations it can book from.
+      const people =
+        page.kind === 'round_robin'
+          ? (await Promise.all([context.data.members.list(params.slug), context.data.rotations.held(params.slug)]))[0]
+          : undefined;
+      // Its Routing card (spec 0043): the person's and company's fields rules may read; a failed read leaves none.
+      const fields =
+        page.kind === 'round_robin' && page.canChange
+          ? await readRecordFields(context.data, params.slug).catch(() => undefined)
+          : undefined;
+      return { page, mayRead, ownerMember, people, fields };
     } catch (error) {
       if (isDataError(error) && error.code === 'NOT_FOUND') {
-        return { page: undefined, mayRead: false, ownerMember: undefined };
+        return { page: undefined, mayRead: false, ownerMember: undefined, people: undefined, fields: undefined };
       }
       throw error;
     }
@@ -120,9 +131,9 @@ function Missing({
 }
 
 function EditorRoute() {
-  const { page, mayRead, ownerMember } = Route.useLoaderData();
+  const { page, mayRead, ownerMember, people, fields } = Route.useLoaderData();
   const { slug } = Route.useParams();
-  const { data } = Route.useRouteContext();
+  const { data, toasts } = Route.useRouteContext();
   if (page === undefined) return <Missing title={strings.notFoundTitle} text={strings.notFoundText} />;
   // A page of its own per id, so its draft starts afresh.
   return (
@@ -134,6 +145,9 @@ function EditorRoute() {
       locale={navigator.languages[0] ?? 'en-US'}
       {...(mayRead ? { schedules: data.schedules.view(slug, ownerMember, browserZone()) } : {})}
       {...(ownerMember === undefined ? {} : { ownerMember })}
+      {...(people === undefined ? {} : { people })}
+      {...(fields === undefined ? {} : { recordFields: fields })}
+      onNotice={(message) => toasts.toast({ tone: 'success', message })}
     />
   );
 }

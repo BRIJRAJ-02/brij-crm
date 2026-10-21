@@ -15,6 +15,18 @@ import type {
   SyncStarted,
   AttributeDefinition,
   BookAsHostInput,
+  BookingAssignment,
+  ReassignedBooking,
+  RotationAdjustment,
+  ReassignedUpcoming,
+  RotationDistribution,
+  RotationMemberInput,
+  RotationSettings,
+  RotationView,
+  RoutingReport,
+  RoutingReportInput,
+  RoutingRules,
+  TeamHosts,
   TaskMine,
   BulkAction,
   BulkEdit,
@@ -231,6 +243,22 @@ export type {
   BookingPageSettings,
   BookingPageView,
   BookingView,
+  BookingAssignment,
+  ReassignedBooking,
+  RotationAdjustment,
+  ReassignedUpcoming,
+  RotationDistribution,
+  RotationMemberInput,
+  RotationMemberView,
+  RotationSettings,
+  RotationView,
+  Route,
+  RoutingReport,
+  RoutingReportRow,
+  RoutingRule,
+  RoutingRules,
+  ShowWhen,
+  TeamHosts,
   DateOverride,
   TimeRange,
   Weekday,
@@ -1746,6 +1774,10 @@ export function createDataLayer({
   const bookingPageLists = createCaptureList<BookingPageView>({
     read: (workspace) => call((options) => api.bookingPages.list({ workspace }, options)),
   });
+  // Settings › Rotations (spec 0029): one held list per workspace, patched by every rotation write below.
+  const rotationLists = createCaptureList<RotationView>({
+    read: (workspace) => call((options) => api.rotations.list({ workspace }, options)),
+  });
   const formLists = createCaptureList<FormSummary>({
     read: (workspace) =>
       call((options) => api.forms.list({ workspace, archived: false }, options)).then((page) => page.items),
@@ -2673,7 +2705,15 @@ export function createDataLayer({
       /** A new page with defaults. Refusals: `ID_TAKEN`, `SLUG_TAKEN` (field `slug`). */
       create: (
         workspace: string,
-        input: { id: string; title: string; timeZone: string; settings?: Partial<BookingPageSettings> },
+        input: {
+          id: string;
+          title: string;
+          timeZone: string;
+          settings?: Partial<BookingPageSettings>;
+          /** `round_robin` (spec 0029) needs `booking.admin` and its hosts. */
+          kind?: 'personal' | 'round_robin';
+          hosts?: TeamHosts;
+        },
       ): Promise<BookingPageView> =>
         bookingPageLists.write(workspace, {
           send: () =>
@@ -2682,14 +2722,37 @@ export function createDataLayer({
             ),
           land: (items, page) => upsertFirst(page)(items),
         }),
-      /** Changes only the settings given, in the list at once. Refusals: `SLUG_TAKEN` (field `slug`), `INPUT_INVALID` (with issues). */
-      update: (workspace: string, pageId: string, settings: Partial<BookingPageSettings>): Promise<BookingPageView> =>
+      /**
+       * Changes only the settings given (and a round robin page's hosts, `booking.admin`), in the list at once.
+       * Refusals: `SLUG_TAKEN` (field `slug`), `HOSTS_INVALID` and `NOT_FOUND` (field `hosts`), `INPUT_INVALID` (with issues).
+       */
+      update: (
+        workspace: string,
+        pageId: string,
+        settings: Partial<BookingPageSettings>,
+        extra: { hosts?: TeamHosts; routing?: RoutingRules } = {},
+      ): Promise<BookingPageView> =>
         bookingPageLists.write(workspace, {
           send: () =>
             call((options) =>
-              api.bookingPages.update({ workspace, pageId, settings, mutationId: mintId() }, options),
+              api.bookingPages.update(
+                {
+                  workspace,
+                  pageId,
+                  settings,
+                  ...(extra.hosts === undefined ? {} : { hosts: extra.hosts }),
+                  ...(extra.routing === undefined ? {} : { routing: extra.routing }),
+                  mutationId: mintId(),
+                },
+                options,
+              ),
             ).then(settings.scheduleId === undefined ? (page: BookingPageView) => page : usedBy(workspace)),
-          ...shownPatch(bookingPageLists.items(workspace), pageId, (page) => ({ ...page, ...settings })),
+          ...shownPatch(bookingPageLists.items(workspace), pageId, (page) => ({
+            ...page,
+            ...settings,
+            ...(extra.hosts === undefined ? {} : { hosts: extra.hosts }),
+            ...(extra.routing === undefined ? {} : { routing: extra.routing }),
+          })),
           land: (items, page) => patchItem<BookingPageView>(pageId, () => page)(items),
         }),
       /**
@@ -2705,6 +2768,7 @@ export function createDataLayer({
           id: _id,
           publicKey: _key,
           kind: _kind,
+          hosts: _hosts,
           ownerMemberId: _owner,
           bookingsThisMonth: _count,
           canChange: _can,
@@ -2751,6 +2815,10 @@ export function createDataLayer({
                         title,
                         scheduleId: page.ownerMemberId === me ? page.scheduleId : null,
                       },
+                      // A round robin page’s copy books from the same hosts.
+                      ...(page.kind === 'round_robin' && page.hosts !== undefined
+                        ? { kind: 'round_robin' as const, hosts: page.hosts }
+                        : {}),
                       mutationId: mintId(),
                     },
                     options,
@@ -2774,7 +2842,186 @@ export function createDataLayer({
           ...shownDrop(bookingPageLists.items(workspace), pageId),
         }),
     },
+    /**
+     * Rotations (spec 0029): the pools round robin pages book from. Settings
+     * › Rotations reads the held list (`view`); `update` and `remove` show at
+     * once and put it back on a refusal, which they reject with for the
+     * caller to say; `create` waits for the server (its dialog checks the
+     * members), then the rotation is in the list.
+     */
+    rotations: {
+      /** A new rotation's id: mint it once per dialog, and send the same one again on a retry. */
+      newId: () => mintId(),
+      /** The rotations the reader may see as the held list Settings › Rotations shows; `useCaptureList` reads it. */
+      view: (workspace: string): CaptureListView<RotationView> => rotationLists.view(workspace),
+      /** The same list for a loader beside other work (the page builder's rotation picker). */
+      held: async (workspace: string): Promise<readonly RotationView[]> => {
+        await rotationLists.view(workspace).ready();
+        return rotationLists.items(workspace) ?? [];
+      },
+      /** A new rotation. Refusals: `ID_TAKEN`, `CONFIG_INVALID` (on `members.<n>`), `FORBIDDEN`. */
+      create: (
+        workspace: string,
+        input: { id: string; settings: RotationSettings; members: RotationMemberInput[] },
+      ): Promise<RotationView> =>
+        rotationLists.write(workspace, {
+          send: () => call((options) => api.rotations.create({ workspace, ...input, mutationId: mintId() }, options)),
+          land: (items, rotation) => upsertFirst(rotation)(items),
+        }),
+      /**
+       * Changes the settings given, and the members when given (replacing
+       * the list), in the list at once. Refusals: `CONFIG_INVALID` (on its
+       * field), `NOT_FOUND`, `FORBIDDEN`.
+       */
+      update: (
+        workspace: string,
+        rotationId: string,
+        change: { settings: Partial<RotationSettings>; members?: RotationMemberInput[] },
+      ): Promise<RotationView> =>
+        rotationLists.write(workspace, {
+          send: () =>
+            call((options) =>
+              api.rotations.update(
+                {
+                  workspace,
+                  rotationId,
+                  settings: change.settings,
+                  ...(change.members === undefined ? {} : { members: change.members }),
+                  mutationId: mintId(),
+                },
+                options,
+              ),
+            ),
+          ...shownPatch(rotationLists.items(workspace), rotationId, (rotation) => ({
+            ...rotation,
+            ...change.settings,
+            ...(change.members === undefined
+              ? {}
+              : {
+                  members: change.members.map((member) => {
+                    const before = rotation.members.find((each) => each.memberId === member.memberId);
+                    return { ...member, name: before?.name ?? '', hasCalendar: before?.hasCalendar ?? false };
+                  }),
+                }),
+          })),
+          land: (items, rotation) => patchItem<RotationView>(rotationId, () => rotation)(items),
+        }),
+      /** A rotation's Distribution tab (spec 0037, AC-1330): read when the tab opens and again after an adjustment. */
+      distribution: (workspace: string, rotationId: string): Promise<RotationDistribution> =>
+        call((options) => api.rotations.distribution({ workspace, rotationId }, options)),
+      /**
+       * Adjusts a member's count with a note (AC-1329), waiting for the server; the rotations read again, so every
+       * share shows the new count.
+       */
+      adjust: (
+        workspace: string,
+        rotationId: string,
+        change: { readonly memberId: string; readonly units: number; readonly note: string },
+      ): Promise<RotationAdjustment> =>
+        call((options) =>
+          api.rotations.adjust({ workspace, rotationId, ...change, mutationId: mintId() }, options),
+        ).then((made) => {
+          rotationLists.view(workspace).reload();
+          return made;
+        }),
+      /**
+       * Hands a member's upcoming bookings in the rotation to the others (AC-750), waiting for the server; Bookings and
+       * the rotations read again.
+       */
+      reassignUpcoming: (workspace: string, rotationId: string, memberId: string): Promise<ReassignedUpcoming> =>
+        call((options) =>
+          api.rotations.reassignUpcoming({ workspace, rotationId, memberId, mutationId: mintId() }, options),
+        ).then((done) => {
+          rotationLists.view(workspace).reload();
+          bookingsLists.reloadAll(workspace);
+          return done;
+        }),
+      /** Undoes an adjustment (AC-1329); the rotations read again. */
+      undoAdjustment: (workspace: string, rotationId: string, adjustmentId: string): Promise<RotationAdjustment> =>
+        call((options) =>
+          api.rotations.undoAdjustment({ workspace, rotationId, adjustmentId, mutationId: mintId() }, options),
+        ).then((undone) => {
+          rotationLists.view(workspace).reload();
+          return undone;
+        }),
+      /** Deletes a rotation no page books from, gone at once and back on a refusal (`IN_USE`, "Used by 2 pages"). */
+      remove: (workspace: string, rotationId: string): Promise<{ rotationId: string }> =>
+        rotationLists.write(workspace, {
+          send: () => call((options) => api.rotations.delete({ workspace, rotationId, mutationId: mintId() }, options)),
+          ...shownDrop(rotationLists.items(workspace), rotationId),
+        }),
+    },
+    routing: {
+      /**
+       * A form's or a team page's per rule report (spec 0043, AC-1612): read when its card opens and when the window
+       * changes. Counts, not records, so nothing here is held between reads.
+       */
+      report: (workspace: string, surface: RoutingReportInput['surface'], days: 30 | 90): Promise<RoutingReport> =>
+        call((options) => api.routing.report({ workspace, surface, days }, options)),
+    },
     bookings: {
+      /** Why a round robin booking went to its host (spec 0029, AC-742): for its host and admins. */
+      assignments: (workspace: string, bookingId: string): Promise<BookingAssignment[]> =>
+        call((options) => api.bookings.assignments({ workspace, bookingId }, options)),
+      /**
+       * Gives one seat of a round robin booking to someone else (spec 0029, AC-748): the named member, or the next in
+       * its rotation. Bookings read again after it, so every list shows the new host.
+       */
+      reassign: async (
+        workspace: string,
+        bookingId: string,
+        to: { readonly rotationId?: string; readonly memberId?: string; readonly memberName?: string },
+      ): Promise<ReassignedBooking> => {
+        // A named host shows at once, by name; "next in rotation" waits for the server to say who.
+        const { memberId, memberName } = to;
+        const restore =
+          memberId === undefined
+            ? () => undefined
+            : bookingsLists.patchBooking(workspace, bookingId, (booking) => ({
+                ...booking,
+                hostMemberId: memberId,
+                hostName: memberName ?? booking.hostName,
+                needsHost: false,
+              }));
+        try {
+          const done = await call((options) =>
+            api.bookings.reassign(
+              {
+                workspace,
+                bookingId,
+                ...(to.rotationId === undefined ? {} : { rotationId: to.rotationId }),
+                ...(memberId === undefined ? {} : { memberId }),
+                mutationId: mintId(),
+              },
+              options,
+            ),
+          );
+          bookingsLists.reloadAll(workspace);
+          return done;
+        } catch (error) {
+          restore();
+          bookingsLists.reloadAll(workspace);
+          throw error;
+        }
+      },
+      /**
+       * Marks a past booking as a no show, or takes the mark back (spec 0043, AC-1613): in every list at once,
+       * put back with the refusal when the server says no.
+       */
+      markNoShow: async (workspace: string, bookingId: string, noShow: boolean): Promise<void> => {
+        const restore = bookingsLists.patchBooking(workspace, bookingId, (booking) => {
+          const { noShow: _was, ...rest } = booking;
+          return noShow ? { ...rest, noShow: true } : rest;
+        });
+        try {
+          await call((options) =>
+            api.bookings.markNoShow({ workspace, bookingId, noShow, mutationId: mintId() }, options),
+          );
+        } catch (error) {
+          restore();
+          throw error;
+        }
+      },
       /** A page's bookings: upcoming soonest first, or past latest first, at most 100. */
       list: (workspace: string, pageId: string, when: 'upcoming' | 'past'): Promise<BookingView[]> =>
         call((options) => api.bookings.list({ workspace, pageId, when }, options)),

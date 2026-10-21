@@ -69,6 +69,13 @@
     overflow-wrap: anywhere;
   }
 
+  /* A team page has no host line: its title ("Intro call with Acme") takes the host line's weight. */
+  .names[data-team] > .title {
+    color: var(--text);
+    font: var(--text-heading);
+    letter-spacing: var(--tracking-heading);
+  }
+
   .description {
     margin: 0;
     color: var(--text-secondary);

@@ -40,6 +40,7 @@ const draft: FormDocument = {
   buttonText: 'Send it',
   language: 'en',
   after: { kind: 'message', message: 'Thanks, we will write back.' },
+  routing: { rules: [] },
   spam: { minFillMs: 2_000, scoreThreshold: 0.3 },
 };
 

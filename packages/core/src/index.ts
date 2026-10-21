@@ -387,6 +387,7 @@ export { listMeetings, listWorkspaceBookings, readBookingsCalendar } from './boo
 export {
   bookingGuestPath,
   cancelBooking,
+  markNoShow,
   hostTarget,
   MAX_GUESTS,
   MAX_RESCHEDULES,
@@ -563,5 +564,13 @@ export {
   type EmailLinkKey,
   type EmailLinkPurpose,
 } from './emails/preferences.ts';
+// Round robin (spec 0029): rotations, and why a booking went to its host.
+export { createRotation, deleteRotation, listRotations, updateRotation } from './rotation/rotations.ts';
+export { bookingAssignments } from './rotation/assignments.ts';
+export { reassignBooking, reassignUpcoming, type Reseated } from './rotation/reassign.ts';
+export { adjustCount, rotationDistribution, undoAdjustment } from './rotation/distribution.ts';
+// Lead routing (spec 0043): deciding a route, a surface's report.
+export { decideRoute, recordFactKeys, type RouteDecision } from './routing/decide.ts';
+export { routingReport } from './routing/report.ts';
 export { searchWorkspace, type GlobalSearchInput } from './search/search.ts';
 export { listRecents, visitRecent, RECENTS_KEPT, type RecentVisit } from './search/recents.ts';

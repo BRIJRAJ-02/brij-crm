@@ -24,6 +24,7 @@ Meetings show up on the records of the people in them, and booking can read and 
 Share new leads and meetings fairly across a team, automatically.
 **Done when:** an admin sets up a rotation of members, with optional weights, caps per day and per member availability (working hours, time off, and calendar free or busy from #44); a new record from a form, a booking or an import can be given an owner by the rotation, or by rules first (for example by region or company size) and the rotation as the fallback; an existing customer goes back to their current owner instead of the rotation; assignment stays fair and never gives the same lead to two members, even when many arrive at once; every assignment says why it went to that member; members see their share and admins can rebalance.
 - [ ] Design it (spec): `/architect round robin assignment`
+- Rules first routing by qualification and meeting type, shared with forms: spec [0043](../specs/0043-lead-routing/index.md) (Proposed)
 
 ### 59. Booking pages · GA · planned
 Let people outside the workspace book time with a member or a team, and land every booking on the right records.
@@ -69,7 +70,7 @@ Public web forms that feed the CRM: each submission becomes linked records, land
 - [ ] Test it: `/test forms`
 - [ ] Review it (fresh model): `/check review forms`
 - [ ] Document it: `/document forms`
-Spec [0023](../specs/0023-forms/index.md)
+Spec [0023](../specs/0023-forms/index.md); Show when and routing rules: spec [0043](../specs/0043-lead-routing/index.md) (Proposed)
 
 ### 49. Slack and Zapier · needs a decision
 Connect the CRM to the tools customers already use.

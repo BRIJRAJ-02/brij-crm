@@ -40,6 +40,7 @@ export {
 export { formSubmissionRecords, formSubmissions, formVersions, forms } from './forms.ts';
 export {
   availabilitySchedules,
+  bookingHosts,
   bookingMemberHours,
   bookingPageMembers,
   bookingPages,
@@ -49,3 +50,5 @@ export {
 export { exportChunks, exports } from './exports.ts';
 export { auditEvents, invitations, joinRequests, workspaceDomains } from './team.ts';
 export { emailPreferences, emails, emailStatus } from './emails.ts';
+export { bookingPageRotations, rotationAssignments, rotationMembers, rotations } from './rotation.ts';
+export { routingDecisions } from './routing.ts';

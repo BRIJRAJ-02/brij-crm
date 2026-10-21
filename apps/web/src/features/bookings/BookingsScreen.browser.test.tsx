@@ -64,6 +64,8 @@ function bookingOf(): BookingListItem {
     location: { type: 'video' },
     guests: [],
     reschedules: 0,
+    hostName: 'Ada Lovelace',
+    needsHost: false,
   } as unknown as BookingListItem;
 }
 
@@ -145,6 +147,10 @@ async function renderWeek(blocks: readonly TimeBlockOccurrence[], bookings: read
     moveSlots: vi.fn(),
     guestLink: vi.fn(() => Promise.resolve({ path: '/b/key/manage' })),
     notify,
+    assignments: vi.fn(() => Promise.resolve([])),
+    reassign: vi.fn(),
+    rotations: vi.fn(() => Promise.resolve([])),
+    markNoShow: vi.fn(() => Promise.resolve()),
   };
   const data = {} as Partial<DataLayer>;
   const toasts = createToasts();
@@ -360,6 +366,10 @@ describe('cancelling from the list', () => {
       moveSlots: vi.fn(),
       guestLink: vi.fn(),
       notify: vi.fn(),
+      assignments: vi.fn(() => Promise.resolve([])),
+      reassign: vi.fn(),
+      rotations: vi.fn(() => Promise.resolve([])),
+      markNoShow: vi.fn(() => Promise.resolve()),
     };
     shown = await renderInApp(
       () => (

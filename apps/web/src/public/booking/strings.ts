@@ -6,6 +6,10 @@ export const strings = {
   poweredBy: 'Powered by',
   madeWith: 'Made with Timefix',
   product: 'Timefix',
+  /** A team page's avatar stack, as screen readers name it (spec 0029, AC-759). */
+  teamOf: (count: number) => `Team of ${String(count)}`,
+  /** A team page's title line (spec 0037, AC-1339): "Intro call with Acme". */
+  teamTitle: (title: string, workspace: string) => `${title} with ${workspace}`,
   minutesShort: (count: number) => `${String(count)} min`,
   meeting: (minutes: number, where: string) => `${String(minutes)} min · ${where}`,
   locations: { video: 'Video call', phone: 'Phone call' },

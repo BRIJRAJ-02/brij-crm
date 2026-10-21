@@ -8,7 +8,7 @@
 // connection at all once idle for `WORKER_IDLE_SLEEP_SECONDS`, so Neon's
 // compute can suspend; the poke and a timer for scheduled work wake it.
 import { workspaceChannel } from '@crm/contracts';
-import { jobKinds, type QueueRows } from '@crm/core';
+import { connectedCalendar, jobKinds, NO_CALENDAR, type QueueRows } from '@crm/core';
 import {
   audiences,
   meetingFacts,
@@ -251,12 +251,26 @@ const bookingLinks =
         linkKey: bookingLinkKey(env),
         organizerEmail: parseSender(env.MAIL_FROM).email,
       };
+// A booking whose host left is reseated against the hosts' calendars, the api's own way (spec 0029, AC-749).
+const bookingCalendar =
+  env.calendar === undefined
+    ? NO_CALENDAR
+    : connectedCalendar({
+        db,
+        providers: {
+          google: createGoogleCalendar({ clientId: env.calendar.clientId, clientSecret: env.calendar.clientSecret }),
+        },
+        tokenKey: env.calendar.tokenKey,
+        hooks: backgroundHooks(),
+        isFreeDomain: createFreeDomains(),
+      });
 const bookingMail = (payload: unknown) =>
   runBookingMail(
     {
       systemScope: (workspaceId) => systemScope(db, workspaceId),
       mailer,
       links: bookingLinks,
+      reseat: { calendar: bookingCalendar, log },
       log,
     },
     payload,

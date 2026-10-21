@@ -24,6 +24,8 @@ function booking(id: string, startsAt: string, endsAt: string, extra: Partial<Bo
     location: { type: 'video' },
     guests: [],
     reschedules: 0,
+    hostName: 'Sam Lee',
+    needsHost: false,
     ...extra,
   };
 }

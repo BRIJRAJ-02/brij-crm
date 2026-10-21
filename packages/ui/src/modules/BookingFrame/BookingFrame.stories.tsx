@@ -62,6 +62,33 @@ export const Details: Story = {
   ),
 };
 
+/** A team page (spec 0037, AC-1339): 4 faces of 6 in place of the picture, and "Intro call with Acme". */
+export const TeamPage: Story = {
+  args: {
+    title: 'Intro call with Acme',
+    host: {
+      name: 'Acme',
+      team: {
+        people: [
+          { id: 't1', name: 'S L' },
+          { id: 't2', name: 'K P' },
+          { id: 't3', name: 'M R' },
+          { id: 't4', name: 'J B' },
+        ],
+        total: 6,
+        label: 'Team of 6',
+      },
+    },
+  },
+  render: (args) => <Interactive {...args} />,
+  play: async ({ canvas }) => {
+    const stack = canvas.getByRole('group', { name: 'Team of 6' });
+    await expect(stack).toHaveTextContent('SL');
+    await expect(stack).toHaveTextContent('+2');
+    await expect(canvas.getByRole('heading', { level: 1, name: 'Intro call with Acme' })).toBeInTheDocument();
+  },
+};
+
 /** While the page's facts load. */
 export const Loading: Story = {
   args: { host: undefined, title: undefined },

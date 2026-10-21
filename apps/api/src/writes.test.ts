@@ -7,8 +7,9 @@
 import { readdir, readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { contract } from '@crm/contracts';
-import { newId } from '@crm/core';
+import { contract, defaultAvailability } from '@crm/contracts';
+import { newId, NO_CALENDAR } from '@crm/core';
+import { bookPublicSlot, enterBookingPage } from '@crm/core/public';
 import type { Database, IdentityStore } from '@crm/db';
 import { testQuery } from '@crm/db/testing';
 import { afterAll, beforeAll, describe, expect, inject, it } from 'vitest';
@@ -129,8 +130,14 @@ const READS: ReadonlySet<string> = new Set([
   'schedules.members',
   'schedules.list',
   'schedules.get',
+  // Round robin (spec 0029): the rotations a member may see, and why a booking went to its host.
+  'rotations.list',
+  'rotations.distribution',
+  'bookings.assignments',
   // The sidebar (spec 0034).
   'nav.get',
+  // Lead routing's report (spec 0043).
+  'routing.report',
 ]);
 
 let db: Database;
@@ -1326,6 +1333,18 @@ const WRITES: Record<string, (m: Member, mutationId: string) => Promise<readonly
     await m.client.bookings.cancel({ workspace: m.slug, bookingId, reason: 'Clash', mutationId });
     return [{ kind: 'records', object_id: m.people.id }];
   },
+  // A no show (spec 0043): on a booking moved into the past by hand; settings like a cancel's, but no record changes.
+  'bookings.markNoShow': async (m, mutationId) => {
+    const bookingId = await hostBooking(m);
+    await testQuery(
+      ownerUrl,
+      `update bookings set starts_at = now() - interval '2 hours', ends_at = now() - interval '90 minutes',
+         during = tstzrange(now() - interval '2 hours', now() - interval '90 minutes', '[)') where id = $1`,
+      [bookingId],
+    );
+    await m.client.bookings.markNoShow({ workspace: m.slug, bookingId, noShow: true, mutationId });
+    return [];
+  },
   'bookings.move': async (m, mutationId) => {
     const bookingId = await hostBooking(m);
     // To a time the page offers (a move refuses any other), read first: a read, so no poke.
@@ -1555,6 +1574,153 @@ Object.assign(WRITES, {
   },
 });
 
+/** A rotation of the member and a second member, both with their own hours (spec 0029: a rotation needs 2). */
+async function rotationOn(m: Member, mutationId = newId()) {
+  // Hours seeded by hand (spec 0035's default schedules), so the only writes counted are the rotation's own.
+  const availability = defaultAvailability('UTC');
+  const [me] = await testQuery<{ id: string }>(
+    ownerUrl,
+    `select id::text from members where workspace_id = $1 and status = 'active' limit 1`,
+    [m.workspace.id],
+  );
+  const other = newId();
+  await testQuery(
+    ownerUrl,
+    `insert into members (workspace_id, id, name, email, role, created_by_type, updated_by_type)
+     values ($1, $2, 'Kim Park', 'kim@acme.dev', 'member', 'system', 'system')`,
+    [m.workspace.id, other],
+  );
+  await testQuery(
+    ownerUrl,
+    `insert into availability_schedules (workspace_id, member_id, name, is_default, availability, created_by_type, updated_by_type)
+     values ($1, $2, 'Working hours', true, $4, 'system', 'system'), ($1, $3, 'Working hours', true, $4, 'system', 'system')`,
+    [m.workspace.id, other, me?.id ?? '', JSON.stringify(availability)],
+  );
+  const pooled = (memberId: string) => ({
+    memberId,
+    weight: 100,
+    priority: 2,
+    dailyCap: null,
+    weeklyCap: null,
+    isOn: true,
+  });
+  return m.client.rotations.create({
+    workspace: m.slug,
+    id: newId(),
+    settings: { name: 'Sales', strategy: 'fair', windowDays: 30, evenGap: 3, returning: 'owner' },
+    members: [pooled(me?.id ?? ''), pooled(other)],
+    mutationId,
+  });
+}
+
+/** A guest's booking on a round robin page of the member's rotation, at 10:00 UTC on the next weekday but one. */
+async function teamBooking(m: Member): Promise<{ readonly bookingId: string; readonly rotationId: string }> {
+  const rotation = await rotationOn(m);
+  const page = await m.client.bookingPages.create({
+    workspace: m.slug,
+    id: newId(),
+    title: 'Team call',
+    timeZone: 'UTC',
+    kind: 'round_robin',
+    hosts: { fixed: [], rotations: [rotation.id] },
+    mutationId: newId(),
+  });
+  const day = new Date(Date.now() + 2 * 86_400_000);
+  while (day.getUTCDay() === 0 || day.getUTCDay() === 6) day.setUTCDate(day.getUTCDate() + 1);
+  day.setUTCHours(10, 0, 0, 0);
+  const booked = await bookPublicSlot(
+    await enterBookingPage({ db }, page.publicKey),
+    { calendar: NO_CALENDAR, linkKey: Buffer.alloc(32, 7) },
+    {
+      idempotencyKey: newId(),
+      start: day.toISOString(),
+      duration: 30,
+      name: 'Grace Hopper',
+      email: 'grace@navy.example',
+      timeZone: 'UTC',
+    },
+  );
+  return { bookingId: booked.bookingId, rotationId: rotation.id };
+}
+
+// Rotations (spec 0029): settings, not CRM data, so no outbox row; one poke per write.
+Object.assign(WRITES, {
+  // The seat to the other member of the rotation, the next in it (spec 0029, AC-748).
+  'bookings.reassign': async (m: Member, mutationId: string) => {
+    const { bookingId } = await teamBooking(m);
+    await m.client.bookings.reassign({ workspace: m.slug, bookingId, mutationId });
+    return [];
+  },
+  // A count adjustment, and one undone (spec 0037, AC-1329): settings like the rotation, so no outbox row.
+  // A member's upcoming bookings in the rotation handed on (spec 0029, AC-750).
+  'rotations.reassignUpcoming': async (m: Member, mutationId: string) => {
+    const { bookingId, rotationId } = await teamBooking(m);
+    const [host] = await testQuery<{ id: string }>(
+      ownerUrl,
+      `select host_member_id::text as id from bookings where id = $1`,
+      [bookingId],
+    );
+    // Switched off first: a member still on would only be seated again.
+    await testQuery(ownerUrl, `update rotation_members set is_on = false where rotation_id = $1 and member_id = $2`, [
+      rotationId,
+      host?.id ?? '',
+    ]);
+    await m.client.rotations.reassignUpcoming({ workspace: m.slug, rotationId, memberId: host?.id ?? '', mutationId });
+    return [];
+  },
+  'rotations.adjust': async (m: Member, mutationId: string) => {
+    const rotation = await rotationOn(m);
+    const [first] = rotation.members;
+    await m.client.rotations.adjust({
+      workspace: m.slug,
+      rotationId: rotation.id,
+      memberId: first?.memberId ?? '',
+      units: 2,
+      note: 'Covered for Kim last week',
+      mutationId,
+    });
+    return [];
+  },
+  'rotations.undoAdjustment': async (m: Member, mutationId: string) => {
+    const rotation = await rotationOn(m);
+    const [first] = rotation.members;
+    const made = await m.client.rotations.adjust({
+      workspace: m.slug,
+      rotationId: rotation.id,
+      memberId: first?.memberId ?? '',
+      units: -1,
+      note: 'Too many this week',
+      mutationId: newId(),
+    });
+    await m.client.rotations.undoAdjustment({
+      workspace: m.slug,
+      rotationId: rotation.id,
+      adjustmentId: made.id,
+      mutationId,
+    });
+    return [];
+  },
+  'rotations.create': async (m: Member, mutationId: string) => {
+    await rotationOn(m, mutationId);
+    return [];
+  },
+  'rotations.update': async (m: Member, mutationId: string) => {
+    const rotation = await rotationOn(m);
+    await m.client.rotations.update({
+      workspace: m.slug,
+      rotationId: rotation.id,
+      settings: { name: 'AEs' },
+      mutationId,
+    });
+    return [];
+  },
+  'rotations.delete': async (m: Member, mutationId: string) => {
+    const rotation = await rotationOn(m);
+    await m.client.rotations.delete({ workspace: m.slug, rotationId: rotation.id, mutationId });
+    return [];
+  },
+});
+
 /** A comment by the member on a new person of theirs, made in its own write: its record and thread. */
 async function commentOn(m: Member): Promise<{ readonly recordId: string; readonly threadId: string }> {
   const recordId = await personFor(m);
@@ -1740,10 +1906,18 @@ const WRITES_MADE: Readonly<Record<string, number>> = {
   'calendar.destination.dismissNotice': 2,
   'calendar.pageDestination.set': 3,
   'bookingPages.update': 2,
+  'rotations.create': 1,
+  'bookings.reassign': 3,
+  'rotations.adjust': 2,
+  'rotations.reassignUpcoming': 3,
+  'rotations.undoAdjustment': 3,
+  'rotations.update': 2,
+  'rotations.delete': 2,
   'bookingPages.delete': 2,
   'bookings.blocks.remove': 2,
   'bookings.bookAsHost': 2,
   'bookings.cancel': 3,
+  'bookings.markNoShow': 3,
   'bookings.move': 3,
   // A schedule made first, then the write (spec 0035).
   'schedules.update': 2,

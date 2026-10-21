@@ -630,6 +630,9 @@ function fakeApi(overrides: Partial<Behaviour> = {}, auth: (path: string, body: 
       move: os.bookings.move.handler(notServed),
       moveSlots: os.bookings.moveSlots.handler(notServed),
       guestLink: os.bookings.guestLink.handler(notServed),
+      assignments: os.bookings.assignments.handler(notServed),
+      reassign: os.bookings.reassign.handler(notServed),
+      markNoShow: os.bookings.markNoShow.handler(notServed),
       blocks: {
         create: os.bookings.blocks.create.handler(notServed),
         remove: os.bookings.blocks.remove.handler(notServed),
@@ -645,9 +648,22 @@ function fakeApi(overrides: Partial<Behaviour> = {}, auth: (path: string, body: 
       duplicate: os.schedules.duplicate.handler(notServed),
       delete: os.schedules.delete.handler(notServed),
     },
+    rotations: {
+      list: os.rotations.list.handler(notServed),
+      create: os.rotations.create.handler(notServed),
+      update: os.rotations.update.handler(notServed),
+      distribution: os.rotations.distribution.handler(notServed),
+      adjust: os.rotations.adjust.handler(notServed),
+      undoAdjustment: os.rotations.undoAdjustment.handler(notServed),
+      reassignUpcoming: os.rotations.reassignUpcoming.handler(notServed),
+      delete: os.rotations.delete.handler(notServed),
+    },
     nav: {
       get: os.nav.get.handler(notServed),
       change: os.nav.change.handler(notServed),
+    },
+    routing: {
+      report: os.routing.report.handler(notServed),
     },
   });
   const handler = new RPCHandler(router);

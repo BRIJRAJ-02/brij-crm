@@ -80,6 +80,8 @@ export const ERROR_MAP = {
   STALE: CONFLICT,
   DEFAULT_SCHEDULE: CONFLICT,
   SCHEDULE_NOT_ALLOWED: UNPROCESSABLE,
+  IN_USE: CONFLICT,
+  HOSTS_INVALID: UNPROCESSABLE,
   // The sidebar (spec 0034, AC-934): "You have 50 favourites. Remove one first."
   NAV_LIMIT: CONFLICT,
   // Domain join (spec 0031, AC-819).

@@ -64,11 +64,13 @@ function itemOf(
     pageTitle,
     location,
     hostStatus,
+    hostName,
   }: {
     readonly booking: typeof bookings.$inferSelect;
     readonly pageTitle: string;
     readonly location: unknown;
     readonly hostStatus?: string | null;
+    readonly hostName: string | null;
   },
   seen: ReadonlySet<string>,
 ): BookingListItem {
@@ -79,6 +81,9 @@ function itemOf(
     pageTitle,
     location: place.success ? place.data : { type: 'video' },
     hostMemberId: row.hostMemberId,
+    hostName: hostName ?? '',
+    needsHost: row.needsHostAt !== null,
+    ...(row.noShowAt === null ? {} : { noShow: true }),
     startsAt: row.startsAt.toISOString(),
     endsAt: row.endsAt.toISOString(),
     visitorName: row.visitorName,
@@ -120,6 +125,7 @@ export async function listWorkspaceBookings(
         location: bookingPages.location,
         // Whether the host is still here (spec 0031, AC-815): a removed host's bookings say so.
         hostStatus: members.status,
+        hostName: members.name,
       })
       .from(bookings)
       .innerJoin(bookingPages, eq(bookingPages.id, bookings.pageId))
@@ -175,9 +181,15 @@ export async function readBookingsCalendar(
   const to = new Date(input.to);
   return inWorkspace(scope, async (tx) => {
     const rows = await tx
-      .select({ booking: bookings, pageTitle: bookingPages.title, location: bookingPages.location })
+      .select({
+        booking: bookings,
+        pageTitle: bookingPages.title,
+        location: bookingPages.location,
+        hostName: members.name,
+      })
       .from(bookings)
       .innerJoin(bookingPages, eq(bookingPages.id, bookings.pageId))
+      .leftJoin(members, and(eq(members.workspaceId, bookings.workspaceId), eq(members.id, bookings.hostMemberId)))
       .where(and(lt(bookings.startsAt, to), gt(bookings.endsAt, from), visibleTo(reader)))
       .orderBy(asc(bookings.startsAt), asc(bookings.id))
       .limit(BOOKINGS_LIST_MAX);
@@ -332,9 +344,20 @@ export async function listMeetings(
       source === 'calendar'
         ? []
         : await tx
-            .select({ booking: bookings, pageTitle: bookingPages.title, location: bookingPages.location })
+            .select({
+              booking: bookings,
+              pageTitle: bookingPages.title,
+              location: bookingPages.location,
+              // The host, for a colleague's booking and a removed host's (spec 0031, AC-815; spec 0037).
+              hostStatus: members.status,
+              hostName: members.name,
+            })
             .from(bookings)
             .innerJoin(bookingPages, eq(bookingPages.id, bookings.pageId))
+            .leftJoin(
+              members,
+              and(eq(members.workspaceId, bookings.workspaceId), eq(members.id, bookings.hostMemberId)),
+            )
             .where(and(shown, visibleTo(reader), past))
             .orderBy(
               ascending ? asc(bookings.startsAt) : desc(bookings.startsAt),

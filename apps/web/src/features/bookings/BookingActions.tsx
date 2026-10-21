@@ -4,10 +4,18 @@
 // Main task: move a booking to another time its page offers, or cancel it with a reason the guest is emailed.
 // Leaves out: Request reschedule (offering the guest times), editing the location and adding guests from here; the
 // guest does those from their own page.
-import { isDataError, type BookingListItem, type PublicSlots } from '@crm/data';
+import {
+  isDataError,
+  type BookingAssignment,
+  type BookingListItem,
+  type PublicSlots,
+  type ReassignedBooking,
+  type RotationView,
+} from '@crm/data';
 import { Button, ButtonGroup, Callout, DayStrip, Field, focusLater, Modal, SlotList } from '@crm/ui';
 import { useEffect, useRef, useState } from 'react';
 import { strings } from './strings.ts';
+import { useNow } from './useNow.ts';
 
 /** What the card's changes call: the data layer's, bound to the workspace by the route. */
 export interface HostBookingActions {
@@ -15,6 +23,17 @@ export interface HostBookingActions {
   readonly move: (bookingId: string, start: string) => Promise<void>;
   readonly moveSlots: (bookingId: string, from: string, to: string) => Promise<PublicSlots>;
   readonly guestLink: (bookingId: string) => Promise<{ readonly path: string }>;
+  /** Why a round robin booking went to its host (spec 0029, AC-742); none for a personal page's booking. */
+  readonly assignments: (bookingId: string) => Promise<readonly BookingAssignment[]>;
+  /** Gives one round robin seat to someone else (spec 0029, AC-748). */
+  readonly reassign: (
+    bookingId: string,
+    to: { readonly rotationId?: string; readonly memberId?: string; readonly memberName?: string },
+  ) => Promise<ReassignedBooking>;
+  /** The rotations the reader may see, for the reassign dialog's names. */
+  readonly rotations: () => Promise<readonly RotationView[]>;
+  /** Marks a past booking as a no show, or takes the mark back (spec 0043, AC-1613). */
+  readonly markNoShow: (bookingId: string, noShow: boolean) => Promise<void>;
   /** Says how a change outside the card went (Copy guest link). */
   readonly notify: (tone: 'success' | 'danger', message: string) => void;
 }
@@ -53,6 +72,7 @@ export function BookingActions({
   locale,
   onAsk,
   focusOnMount,
+  onReassign,
 }: {
   readonly booking: BookingListItem;
   readonly actions: HostBookingActions;
@@ -61,6 +81,8 @@ export function BookingActions({
   readonly onAsk?: (ask: BookingAsk) => void;
   /** The button to focus as the card opens again after the screen's dialog was dismissed. */
   readonly focusOnMount?: BookingAsk;
+  /** Opens Reassign for a round robin booking an admin may hand to someone else (spec 0029, AC-748). */
+  readonly onReassign?: () => void;
 }) {
   const [open, setOpen] = useState<BookingAsk | undefined>(undefined);
   // Each opening mounts a fresh dialog (an empty reason, no old refusal).
@@ -102,9 +124,32 @@ export function BookingActions({
       setCopying(false);
     }
   };
+  // A no show (spec 0043, AC-1613): once the meeting has started, its host marks it, and can take it back.
+  const [marking, setMarking] = useState(false);
+  const now = useNow();
+  const hasStarted = Date.parse(booking.startsAt) <= now.getTime();
+  const markNoShow = async () => {
+    const noShow = booking.noShow !== true;
+    setMarking(true);
+    try {
+      await actions.markNoShow(booking.id, noShow);
+      actions.notify('success', noShow ? strings.markedNoShow : strings.unmarkedNoShow);
+    } catch (error) {
+      actions.notify('danger', messageOf(error));
+    } finally {
+      setMarking(false);
+    }
+  };
   return (
     <>
-      {booking.status === 'confirmed' && (
+      {booking.status === 'confirmed' && hasStarted && (
+        <ButtonGroup label={strings.changeBooking} layout="row">
+          <Button icon="user-x" isPending={marking} onPress={() => void markNoShow()}>
+            {booking.noShow === true ? strings.undoNoShow : strings.markNoShow}
+          </Button>
+        </ButtonGroup>
+      )}
+      {booking.status === 'confirmed' && !hasStarted && (
         <ButtonGroup label={strings.changeBooking} layout="row">
           {booking.reschedules < 5 && (
             <Button ref={moveRef} icon="calendar-clock" onPress={() => ask('move')}>
@@ -114,6 +159,11 @@ export function BookingActions({
           <Button icon="link" isPending={copying} onPress={() => void copy()}>
             {strings.copyGuestLink}
           </Button>
+          {onReassign !== undefined && (
+            <Button icon="users-round" onPress={onReassign}>
+              {strings.reassignAction}
+            </Button>
+          )}
           <Button ref={cancelRef} variant="danger" icon="circle-x" onPress={() => ask('cancel')}>
             {strings.cancelBooking}
           </Button>

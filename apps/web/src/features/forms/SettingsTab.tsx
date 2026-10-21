@@ -35,6 +35,9 @@ import { isRedirectAddress } from './draft.ts';
 import { formHref } from './paths.ts';
 import { firstRefusal } from './refusals.ts';
 import { strings } from './strings.ts';
+import { questionFacts } from '../routing/facts.ts';
+import { RulesCard } from '../routing/RulesCard.tsx';
+import { strings as routingStrings } from '../routing/strings.ts';
 
 const NOBODY = 'nobody';
 
@@ -262,6 +265,22 @@ export function SettingsTab({
     }));
   };
 
+  // Routing (spec 0043): a team page's people, for rules that narrow who takes the booking.
+  const rotations = useCaptureList(data.rotations.view(slug));
+  const rotationList = rotations.status === 'ready' ? rotations.items : [];
+  const poolOf = (pageId: string) => {
+    const page = pageList.find((each) => each.id === pageId);
+    if (page?.kind !== 'round_robin') return [];
+    const ids = new Set(page.hosts?.rotations ?? []);
+    const pool = rotationList
+      .filter((rotation) => ids.has(rotation.id))
+      .flatMap((rotation) => rotation.members.map((member) => ({ id: member.memberId, name: member.name })));
+    return pool.filter((member, at) => pool.findIndex((each) => each.id === member.id) === at);
+  };
+  const live = form.live;
+  const routingChanged =
+    live !== undefined && JSON.stringify(live.routing.rules) !== JSON.stringify(draft.routing.rules);
+
   const bookingPage = after.kind === 'booking' ? pageList.find((page) => page.id === after.bookingPageId) : undefined;
   // Where each question's answer goes: the target's attribute, or kept with the submission only.
   const isFiling = draft.targets.main !== undefined && target.objectName !== undefined;
@@ -423,6 +442,24 @@ export function SettingsTab({
           />
         )}
       </Card>
+      <RulesCard
+        data={data}
+        slug={slug}
+        surface={{ kind: 'form', pages: usable, poolOf }}
+        report={{ kind: 'form', formId: form.id }}
+        rules={draft.routing.rules}
+        facts={questionFacts(draft.questions)}
+        factLabel={routingStrings.question}
+        emptyFacts={routingStrings.noQuestions}
+        description={routingStrings.formRoutingLine(draft.routing.rules.length)}
+        isReadOnly={isReadOnly}
+        waitsForPublish={routingChanged}
+        nameOf={(memberId) => members.find((member) => member.id === memberId)?.name ?? ''}
+        onRulesChange={(rules) => {
+          onDraftChange((before) => ({ ...before, routing: { rules: [...rules] } }));
+          return Promise.resolve();
+        }}
+      />
       <Card title={strings.crmTitle} isBusy={isRetargeting}>
         <Switch
           label={strings.addToCrmSwitch}

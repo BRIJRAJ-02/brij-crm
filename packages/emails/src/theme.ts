@@ -44,6 +44,8 @@ const ROLES = {
   quote: { borderColor: 'border', color: 'text-secondary' },
   /** A hairline between parts. */
   rule: { borderColor: 'border-subtle' },
+  /** A person's initials tile (a booking's host): the accent's soft fill, as the app's avatars sit on a tint. */
+  avatar: { backgroundColor: 'accent-soft', color: 'text' },
 } as const satisfies Record<string, Paint>;
 
 /** A part of an email that has colours. */
@@ -81,7 +83,14 @@ export const SPACE = {
 } as const;
 
 /** The radii an email uses: the card's (cards take 12px corners) and a control's. */
-export const RADIUS = { card: radiusToken('radius-xl'), control: radiusToken('radius-md') } as const;
+export const RADIUS = {
+  card: radiusToken('radius-xl'),
+  control: radiusToken('radius-md'),
+  full: radiusToken('radius-full'),
+} as const;
+
+/** A person's initials tile: a control's height, round. */
+export const AVATAR = sizeToken('size-control');
 
 /** The one line width: the hairline every outline and divider uses. */
 export const HAIRLINE = borderWidthToken('border-width-hairline');

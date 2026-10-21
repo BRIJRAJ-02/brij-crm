@@ -16,6 +16,7 @@ import {
   type DeleteBookingPageInput,
   type GetBookingPageInput,
   type ListBookingsInput,
+  type TeamHosts,
   type UpdateBookingPageInput,
   BOOKINGS_PAGE_MAX,
 } from '@crm/contracts';
@@ -27,12 +28,15 @@ import type { EngineScope } from '../access/mint.ts';
 import { can } from '../access/policy.ts';
 import { inWorkspace } from '../access/run.ts';
 import { postgresError, refuse, refuseOn } from '../engine/refusals.ts';
+import { writeAudit } from '../members/audit.ts';
+import { changedRuleIds, checkPageRoutes, rulesChanged } from '../routing/check.ts';
 import { actorRow } from '../engine/scope.ts';
 import type { RemovalEffect } from '../members/removal-effect.ts';
 import { linksOf, seenLinks } from './links.ts';
+import { ROTATION_ROLES, TEAM_LIMITS } from '../rotation/team.ts';
 import { loadPage, pagesOf, type PageRecord } from './slots.ts';
 
-const { bookingPageMembers, bookingPages, bookings } = schema;
+const { bookingPageMembers, bookingPageRotations, bookingPages, bookings, members, rotations } = schema;
 
 /** A public key: 16 URL safe characters from 12 random bytes. */
 export function newPublicKey(): string {
@@ -44,9 +48,14 @@ function memberOf(scope: EngineScope): string | undefined {
   return scope.access.principal.kind === 'member' ? scope.access.principal.memberId : undefined;
 }
 
-/** Whether the reader may see and change the page: their own with `booking.manage`, anyone's with `booking.admin`. */
-function mayChange(scope: EngineScope, page: Pick<PageRecord, 'ownerMemberId'>): boolean {
-  return can(scope.access, 'booking.admin') || page.ownerMemberId === memberOf(scope);
+/**
+ * Whether the reader may see and change the page: their own with
+ * `booking.manage`, anyone's with `booking.admin`. A round robin page is
+ * `booking.admin`'s alone (spec 0029, AC-751), whoever made it.
+ */
+function mayChange(scope: EngineScope, page: { readonly ownerMemberId: string; readonly kind: string }): boolean {
+  if (can(scope.access, 'booking.admin')) return true;
+  return page.kind !== 'round_robin' && page.ownerMemberId === memberOf(scope);
 }
 
 const NOT_FOUND_MESSAGE = 'That booking page doesn’t exist, or isn’t yours.';
@@ -67,7 +76,7 @@ export async function bookingTargetProblem(
 ): Promise<'missing' | 'hidden' | 'paused' | undefined> {
   if (check === 'seen' && !can(scope.access, 'booking.manage') && !can(scope.access, 'booking.admin')) return 'hidden';
   const [row] = await tx
-    .select({ ownerMemberId: bookingPages.ownerMemberId, status: bookingPages.status })
+    .select({ ownerMemberId: bookingPages.ownerMemberId, kind: bookingPages.kind, status: bookingPages.status })
     .from(bookingPages)
     .where(and(eq(bookingPages.id, pageId), isNull(bookingPages.deletedAt)));
   if (row === undefined) return 'missing';
@@ -119,8 +128,36 @@ async function monthCounts(
   return new Map(rows.map((row) => [row.pageId, row.count]));
 }
 
+/** Each round robin page's hosts (spec 0037, AC-1319): its fixed hosts and its rotations, each by position. */
+async function pageHosts(
+  tx: WorkspaceTx,
+  pages: readonly Pick<PageRecord, 'id' | 'kind'>[],
+): Promise<ReadonlyMap<string, TeamHosts>> {
+  const ids = pages.filter((page) => page.kind === 'round_robin').map((page) => page.id);
+  if (ids.length === 0) return new Map();
+  const linked = await tx
+    .select({ pageId: bookingPageRotations.pageId, rotationId: bookingPageRotations.rotationId })
+    .from(bookingPageRotations)
+    .where(inArray(bookingPageRotations.pageId, ids))
+    .orderBy(asc(bookingPageRotations.position));
+  const fixed = await tx
+    .select({ pageId: bookingPageMembers.pageId, memberId: bookingPageMembers.memberId })
+    .from(bookingPageMembers)
+    .where(inArray(bookingPageMembers.pageId, ids))
+    .orderBy(asc(bookingPageMembers.position));
+  return new Map(
+    ids.map((id) => [
+      id,
+      {
+        fixed: fixed.filter((row) => row.pageId === id).map((row) => row.memberId),
+        rotations: linked.filter((row) => row.pageId === id).map((row) => row.rotationId),
+      },
+    ]),
+  );
+}
+
 /** A page as the reader sees it. */
-function viewOf(scope: EngineScope, page: PageRecord, count: number): BookingPageView {
+function viewOf(scope: EngineScope, page: PageRecord, count: number, hosts?: TeamHosts): BookingPageView {
   return {
     id: page.id,
     publicKey: page.publicKey,
@@ -142,8 +179,11 @@ function viewOf(scope: EngineScope, page: PageRecord, count: number): BookingPag
     status: page.status,
     scheduleId: page.scheduleId,
     scheduleName: page.scheduleName,
+    rescheduleHost: page.rescheduleHost,
     isPrivate: page.isPrivate,
     ...(page.status === 'paused' && page.pausedReason !== undefined ? { pausedReason: page.pausedReason } : {}),
+    ...(hosts === undefined ? {} : { hosts }),
+    ...(page.kind === 'round_robin' ? { routing: { rules: [...(page.routingRules ?? [])] } } : {}),
     bookingsThisMonth: count,
     canChange: mayChange(scope, page),
     createdAt: page.createdAt.toISOString(),
@@ -167,12 +207,10 @@ export async function listBookingPages(
       .orderBy(desc(bookingPages.createdAt), asc(bookingPages.id))
       .limit(500);
     const pages = await pagesOf(tx, rows);
-    const counts = await monthCounts(
-      tx,
-      pages.map((page) => page.id),
-      now,
-    );
-    return pages.map((page) => viewOf(scope, page, counts.get(page.id) ?? 0));
+    const ids = pages.map((page) => page.id);
+    const counts = await monthCounts(tx, ids, now);
+    const hosts = await pageHosts(tx, pages);
+    return pages.map((page) => viewOf(scope, page, counts.get(page.id) ?? 0, hosts.get(page.id)));
   });
 }
 
@@ -185,9 +223,85 @@ export async function getBookingPage(
   requirePermission(scope, 'booking.manage');
   return inWorkspace(scope, async (tx) => {
     const page = await pageToChange(tx, scope, input.pageId, false);
-    const counts = await monthCounts(tx, [page.id], now);
-    return viewOf(scope, page, counts.get(page.id) ?? 0);
+    return viewWithCounts(tx, scope, page, now);
   });
+}
+
+/** One page's view with its month's count and rotation. */
+async function viewWithCounts(tx: WorkspaceTx, scope: EngineScope, page: PageRecord, now: Date) {
+  const counts = await monthCounts(tx, [page.id], now);
+  const hosts = await pageHosts(tx, [page]);
+  return viewOf(scope, page, counts.get(page.id) ?? 0, hosts.get(page.id));
+}
+
+const HOSTS_INVALID = 'A round robin page needs 1 to 3 rotations and at most 8 hosts in all.';
+
+/**
+ * Sets a round robin page's hosts (spec 0037, AC-1319), replacing them: 0 to
+ * 7 fixed hosts (active members, not guests, each once) and 1 to 3 live
+ * rotations (each once), at most 8 people a booking can seat. HOSTS_INVALID
+ * otherwise; a rotation that is gone is NOT_FOUND.
+ */
+async function setPageHosts(tx: WorkspaceTx, workspaceId: string, pageId: string, hosts: TeamHosts): Promise<void> {
+  const fixed = [...new Set(hosts.fixed)];
+  const linked = [...new Set(hosts.rotations)];
+  if (
+    fixed.length !== hosts.fixed.length ||
+    linked.length !== hosts.rotations.length ||
+    linked.length < 1 ||
+    linked.length > TEAM_LIMITS.rotations ||
+    fixed.length > TEAM_LIMITS.fixed ||
+    fixed.length + linked.length > TEAM_LIMITS.hosts
+  ) {
+    throw refuseOn('HOSTS_INVALID', HOSTS_INVALID, 'hosts');
+  }
+  const live = await tx
+    .select({ id: rotations.id })
+    .from(rotations)
+    .where(and(inArray(rotations.id, linked), isNull(rotations.deletedAt)))
+    // Shares the row with deleteRotation's lock, so a rotation is never deleted while a page takes it up.
+    .for('share');
+  if (live.length !== linked.length) {
+    throw refuseOn('NOT_FOUND', 'That rotation doesn’t exist any more. Pick another.', 'hosts');
+  }
+  if (fixed.length > 0) {
+    const people = await tx
+      .select({ id: members.id })
+      .from(members)
+      .where(
+        and(
+          inArray(members.id, fixed),
+          eq(members.status, 'active'),
+          sql`${members.role}::text in (${sql.join(
+            ROTATION_ROLES.map((role) => sql`${role}`),
+            sql`, `,
+          )})`,
+        ),
+      );
+    if (people.length !== fixed.length) {
+      throw refuseOn('HOSTS_INVALID', 'Only active members of this workspace can be fixed hosts.', 'hosts');
+    }
+  }
+  await tx.delete(bookingPageRotations).where(eq(bookingPageRotations.pageId, pageId));
+  await tx.delete(bookingPageMembers).where(eq(bookingPageMembers.pageId, pageId));
+  await tx
+    .insert(bookingPageRotations)
+    .values(linked.map((rotationId, position) => ({ workspaceId, pageId, rotationId, position })));
+  if (fixed.length > 0) {
+    await tx
+      .insert(bookingPageMembers)
+      .values(fixed.map((memberId, position) => ({ workspaceId, pageId, memberId, position })));
+  }
+}
+
+/**
+ * A team page books each member by their own default schedule (spec 0037, AC-1336's rule for members, read for
+ * round robin: the open question in spec 0029 notes it), so it names no schedule of its owner.
+ */
+function checkTeamSchedule(kind: PageRecord['kind'], scheduleId: string | null | undefined): void {
+  if (kind === 'round_robin' && scheduleId !== undefined && scheduleId !== null) {
+    throw refuseOn('CONFIG_INVALID', 'A team page books each member by their own working hours.', 'scheduleId');
+  }
 }
 
 /** A slug free among the workspace's live pages: the wanted one, else it with -2, -3 … */
@@ -209,25 +323,33 @@ async function freeSlug(tx: WorkspaceTx, wanted: string): Promise<string> {
 const slugTaken = () => refuseOn('SLUG_TAKEN', 'Another booking page in this workspace has that web address.', 'slug');
 
 /**
- * A new personal page for the caller (AC-623): the settings given, the rest
- * defaulted, the caller as its one member. The same id again answers the
- * page it made (a retry).
+ * A new page for the caller (AC-623): the settings given, the rest
+ * defaulted. A personal page has the caller as its one member; a round robin
+ * page (spec 0029, AC-732) needs `booking.admin` and books from the rotation
+ * named, each member by their own hours unless told otherwise. The same id
+ * again answers the page it made (a retry).
  */
 export async function createBookingPage(
   scope: EngineScope,
-  input: Pick<CreateBookingPageInput, 'id' | 'title' | 'timeZone' | 'settings'>,
+  input: Pick<CreateBookingPageInput, 'id' | 'title' | 'timeZone' | 'settings' | 'kind' | 'hosts'>,
   now: Date = new Date(),
 ): Promise<BookingPageView> {
   requirePermission(scope, 'booking.manage');
   const owner = memberOf(scope);
   if (owner === undefined) throw refuse('FORBIDDEN', PERMISSIONS['booking.manage'].message);
+  const kind = input.kind ?? 'personal';
+  if (kind === 'round_robin') requirePermission(scope, 'booking.admin');
+  if (kind === 'round_robin' && input.hosts === undefined) {
+    throw refuseOn('VALUE_REQUIRED', 'Pick the rotation this page books from.', 'hosts');
+  }
+  checkTeamSchedule(kind, input.settings?.scheduleId);
   return inWorkspace(scope, async (tx) => {
     const [existing] = await tx.select().from(bookingPages).where(eq(bookingPages.id, input.id));
     if (existing !== undefined) {
       if (existing.ownerMemberId !== owner) throw refuse('ID_TAKEN', 'A booking page with that id already exists.');
       const [page] = await pagesOf(tx, [existing]);
       if (page === undefined) throw refuse('ID_TAKEN', 'A booking page with that id already exists.');
-      return viewOf(scope, page, (await monthCounts(tx, [existing.id], now)).get(existing.id) ?? 0);
+      return viewWithCounts(tx, scope, page, now);
     }
     const given = input.settings ?? {};
     const settings: BookingPageSettings = {
@@ -244,6 +366,7 @@ export async function createBookingPage(
       slotStep: given.slotStep ?? null,
       status: given.status ?? 'live',
       scheduleId: given.scheduleId ?? null,
+      rescheduleHost: given.rescheduleHost ?? 'same',
       isPrivate: given.isPrivate ?? false,
     };
     if (settings.scheduleId !== null) await checkPageSchedule(tx, owner, settings.scheduleId);
@@ -256,7 +379,7 @@ export async function createBookingPage(
           id: input.id,
           publicKey: newPublicKey(),
           slug: settings.slug,
-          kind: 'personal',
+          kind,
           ownerMemberId: owner,
           title: settings.title,
           description: settings.description,
@@ -274,6 +397,7 @@ export async function createBookingPage(
           scheduleId: settings.scheduleId,
           // Mirrored for one release, while `hours_mode` stays readable (spec 0035, AC-975).
           hoursMode: settings.scheduleId === null ? 'mine' : 'own',
+          rescheduleHost: settings.rescheduleHost,
           isPrivate: settings.isPrivate,
           createdByType: by.type,
           createdById: by.id,
@@ -284,6 +408,12 @@ export async function createBookingPage(
         })
         .returning();
       if (row === undefined) throw new Error('The booking page was not created.');
+      if (kind === 'round_robin' && input.hosts !== undefined) {
+        await setPageHosts(tx, scope.workspaceId, row.id, input.hosts);
+        const [team] = await pagesOf(tx, [row]);
+        if (team === undefined) throw new Error('The booking page was not created.');
+        return await viewWithCounts(tx, scope, team, now);
+      }
       await tx
         .insert(bookingPageMembers)
         .values({ workspaceId: scope.workspaceId, pageId: row.id, memberId: owner, position: 0 });
@@ -300,15 +430,40 @@ export async function createBookingPage(
 /** A change to a page the reader may change (AC-623, AC-624): only the settings given. */
 export async function updateBookingPage(
   scope: EngineScope,
-  input: Pick<UpdateBookingPageInput, 'pageId' | 'settings'>,
+  input: Pick<UpdateBookingPageInput, 'pageId' | 'settings' | 'hosts' | 'routing'>,
   now: Date = new Date(),
 ): Promise<BookingPageView> {
   requirePermission(scope, 'booking.manage');
   return inWorkspace(scope, async (tx) => {
     const page = await pageToChange(tx, scope, input.pageId, true);
     const { settings } = input;
+    checkTeamSchedule(page.kind, settings.scheduleId);
     if (settings.scheduleId !== undefined && settings.scheduleId !== null) {
       await checkPageSchedule(tx, page.ownerMemberId, settings.scheduleId);
+    }
+    if (input.hosts !== undefined) {
+      if (page.kind !== 'round_robin') {
+        throw refuseOn('CONFIG_INVALID', 'Only a round robin page books from rotations.', 'hosts');
+      }
+      await setPageHosts(tx, scope.workspaceId, page.id, input.hosts);
+    }
+    // Routing rules (spec 0043, AC-1608): only a round robin page's, each naming members of its rotations; audited.
+    const routing = input.routing;
+    if (routing !== undefined) {
+      if (page.kind !== 'round_robin') {
+        throw refuseOn('CONFIG_INVALID', 'Only a team page has routing rules.', 'routing');
+      }
+      await checkPageRoutes(tx, page.id, routing.rules);
+      const before = page.routingRules ?? [];
+      if (rulesChanged(before, routing.rules)) {
+        await writeAudit(tx, scope.workspaceId, scope.actor, {
+          action: 'routing.changed',
+          targetType: 'booking_page',
+          targetId: page.id,
+          before: { rules: before.length },
+          after: { rules: routing.rules.length, changed: changedRuleIds(before, routing.rules) },
+        });
+      }
     }
     const by = actorRow(scope.actor);
     try {
@@ -331,7 +486,9 @@ export async function updateBookingPage(
           ...(settings.scheduleId === undefined
             ? {}
             : { scheduleId: settings.scheduleId, hoursMode: settings.scheduleId === null ? 'mine' : 'own' }),
+          ...(settings.rescheduleHost === undefined ? {} : { rescheduleHost: settings.rescheduleHost }),
           ...(settings.isPrivate === undefined ? {} : { isPrivate: settings.isPrivate }),
+          ...(routing === undefined ? {} : { routing }),
           updatedAt: sql`now()`,
           updatedByType: by.type,
           updatedById: by.id,
@@ -341,7 +498,7 @@ export async function updateBookingPage(
         .returning();
       const [changed] = row === undefined ? [] : await pagesOf(tx, [row]);
       if (changed === undefined) throw refuse('NOT_FOUND', NOT_FOUND_MESSAGE);
-      return viewOf(scope, changed, (await monthCounts(tx, [changed.id], now)).get(changed.id) ?? 0);
+      return await viewWithCounts(tx, scope, changed, now);
     } catch (error) {
       if (postgresError(error)?.constraint === 'booking_pages_slug') throw slugTaken();
       throw error;

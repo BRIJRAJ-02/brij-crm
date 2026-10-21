@@ -15,7 +15,7 @@
 // - reminders: the visitor, 24 hours and 1 hour before, only while the
 //   booking is confirmed and that close (a stale reminder sends nothing).
 // A guest never gets the visitor's link: it is the visitor's key.
-import { eq, sql } from 'drizzle-orm';
+import { and, eq, sql } from 'drizzle-orm';
 import { DateTime } from 'luxon';
 import { schema } from '@crm/db';
 import type { EngineScope } from '../access/mint.ts';
@@ -26,7 +26,7 @@ import type { BookingMailKind } from './mail-queue.ts';
 import { loadPage } from './slots.ts';
 import { ensureManageToken, managePath, type ManageLinkKey } from './tokens.ts';
 
-const { bookings, members, workspaces } = schema;
+const { bookingHosts, bookings, members, rotationAssignments, workspaces } = schema;
 
 /** One label and value row of an email. */
 export interface MailRow {
@@ -51,6 +51,8 @@ export interface BookingMail {
   readonly why: string;
   /** The calendar file, when the message carries one. */
   readonly ics?: { readonly filename: string; readonly content: string; readonly method: 'REQUEST' | 'CANCEL' };
+  /** Who they meet, by name beside their initials: a round robin booking's assigned host (owner decision, 22 Oct). */
+  readonly host?: { readonly label: string; readonly name: string };
 }
 
 /** What the emails need: the app's origin for links, the guest page key, the sender for the calendar file, the clock. */
@@ -132,10 +134,33 @@ export async function prepareBookingMail(
       .select({ name: members.name, email: members.email })
       .from(members)
       .where(eq(members.id, row.hostMemberId));
+    // A round robin booking's every host (spec 0037, AC-1322): the organiser first, each told, all named.
+    const team =
+      page.kind === 'round_robin'
+        ? await tx
+            .select({ id: members.id, name: members.name, email: members.email })
+            .from(bookingHosts)
+            .innerJoin(
+              members,
+              and(eq(members.workspaceId, bookingHosts.workspaceId), eq(members.id, bookingHosts.memberId)),
+            )
+            .where(eq(bookingHosts.bookingId, row.id))
+        : [];
+    const hosts =
+      team.length === 0
+        ? host === undefined
+          ? []
+          : [host]
+        : [...team].sort((a, b) =>
+            a.id === row.hostMemberId ? -1 : b.id === row.hostMemberId ? 1 : a.name.localeCompare(b.name),
+          );
     const [workspace] = await tx.select({ slug: workspaces.slug }).from(workspaces).limit(1);
-    const hostName = host?.name ?? 'Your host';
+    const names = hosts.map((each) => each.name);
+    const hostName =
+      names.length <= 1 ? (host?.name ?? 'Your host') : `${names.slice(0, -1).join(', ')} and ${names.at(-1) ?? ''}`;
     const { kind } = input;
     const cancelled = row.status === 'cancelled';
+    const isTeam = page.kind === 'round_robin';
 
     if (kind !== 'cancelled' && cancelled) return { messages: [], invited: [], skipped: 'cancelled' };
     if (kind === 'reminder_24h' || kind === 'reminder_1h') {
@@ -238,36 +263,35 @@ export async function prepareBookingMail(
           rows: [
             { label: 'What', value: page.title },
             when(row.visitorTimeZone),
-            { label: 'With', value: hostName },
+            // A round robin booking names its assigned host beside their initials instead (`host`).
+            ...(isTeam ? [] : [{ label: 'With', value: hostName }]),
             { label: 'Where', value: where },
             ...(bookedByHost && note !== undefined ? [{ label: 'Message', value: `“${note}”` }] : []),
           ],
+          ...(isTeam ? { host: { label: 'Your host', name: hostName } } : {}),
           button: { label: 'View your booking', url: manageUrl },
           footnote: change,
           why: visitorWhy,
           ...ics('REQUEST', [visitor]),
         };
-        const toHost: BookingMail[] =
-          bookedByHost || host === undefined
-            ? []
-            : [
-                {
-                  to: host.email,
-                  subject: `New booking: ${page.title} with ${row.visitorName}`,
-                  preview: preview(hostZone),
-                  heading: 'New booking',
-                  intro: `${row.visitorName} booked ${page.title}.`,
-                  rows: [
-                    when(hostZone),
-                    { label: 'Who', value: `${row.visitorName} (${row.visitorEmail})` },
-                    ...(guests.length === 0 ? [] : [{ label: 'Guests', value: guests.join(', ') }]),
-                    { label: 'Where', value: where },
-                    ...(note === undefined ? [] : [{ label: 'Note', value: note }]),
-                  ],
-                  button: { label: 'Open Bookings', url: bookingsUrl },
-                  why: hostWhy,
-                },
-              ];
+        const toHost: BookingMail[] = bookedByHost
+          ? []
+          : hosts.map((each): BookingMail => ({
+              to: each.email,
+              subject: `New booking: ${page.title} with ${row.visitorName}`,
+              preview: preview(hostZone),
+              heading: 'New booking',
+              intro: `${row.visitorName} booked ${page.title}.`,
+              rows: [
+                when(hostZone),
+                { label: 'Who', value: `${row.visitorName} (${row.visitorEmail})` },
+                ...(guests.length === 0 ? [] : [{ label: 'Guests', value: guests.join(', ') }]),
+                { label: 'Where', value: where },
+                ...(note === undefined ? [] : [{ label: 'Note', value: note }]),
+              ],
+              button: { label: 'Open Bookings', url: bookingsUrl },
+              why: hostWhy,
+            }));
         return { messages: [toVisitor, ...toHost, ...invitations(false)], invited: newGuests };
       }
       case 'guests':
@@ -302,25 +326,22 @@ export async function prepareBookingMail(
           why: guestWhy,
           ...guestFile('REQUEST', guest),
         }));
-        const toHost: BookingMail[] =
-          byGuest && host !== undefined
-            ? [
-                {
-                  to: host.email,
-                  subject: `Moved by guest: ${page.title} with ${row.visitorName}`,
-                  preview: preview(hostZone),
-                  heading: 'A booking moved',
-                  intro: `${row.visitorName} moved ${page.title} to a new time.`,
-                  rows: [
-                    when(hostZone),
-                    ...was(hostZone),
-                    { label: 'Who', value: `${row.visitorName} (${row.visitorEmail})` },
-                  ],
-                  button: { label: 'Open Bookings', url: bookingsUrl },
-                  why: hostWhy,
-                },
-              ]
-            : [];
+        const toHost: BookingMail[] = !byGuest
+          ? []
+          : hosts.map((each): BookingMail => ({
+              to: each.email,
+              subject: `Moved by guest: ${page.title} with ${row.visitorName}`,
+              preview: preview(hostZone),
+              heading: 'A booking moved',
+              intro: `${row.visitorName} moved ${page.title} to a new time.`,
+              rows: [
+                when(hostZone),
+                ...was(hostZone),
+                { label: 'Who', value: `${row.visitorName} (${row.visitorEmail})` },
+              ],
+              button: { label: 'Open Bookings', url: bookingsUrl },
+              why: hostWhy,
+            }));
         return { messages: [toVisitor, ...toGuests, ...toHost], invited: [] };
       }
       case 'cancelled': {
@@ -349,25 +370,111 @@ export async function prepareBookingMail(
           why: guestWhy,
           ...guestFile('CANCEL', guest),
         }));
-        const toHost: BookingMail[] =
-          !byHost && host !== undefined
-            ? [
-                {
-                  to: host.email,
-                  subject: `Cancelled by guest: ${page.title} with ${row.visitorName}`,
-                  preview: preview(hostZone),
-                  heading: 'A booking was cancelled',
-                  intro: `${row.visitorName} cancelled ${page.title}. The time is free again.`,
-                  rows: [
-                    when(hostZone),
-                    { label: 'Who', value: `${row.visitorName} (${row.visitorEmail})` },
-                    ...reasonRow,
-                  ],
-                  why: hostWhy,
-                },
-              ]
-            : [];
+        const toHost: BookingMail[] = byHost
+          ? []
+          : hosts.map((each): BookingMail => ({
+              to: each.email,
+              subject: `Cancelled by guest: ${page.title} with ${row.visitorName}`,
+              preview: preview(hostZone),
+              heading: 'A booking was cancelled',
+              intro: `${row.visitorName} cancelled ${page.title}. The time is free again.`,
+              rows: [when(hostZone), { label: 'Who', value: `${row.visitorName} (${row.visitorEmail})` }, ...reasonRow],
+              why: hostWhy,
+            }));
         return { messages: [toVisitor, ...toGuests, ...toHost], invited: [] };
+      }
+      case 'host_changed':
+        // Not an email: the worker writes the new organiser's calendar event (`remakeEvent`).
+        return { messages: [], invited: [], skipped: 'not an email' };
+      case 'needs_host': {
+        // A booking whose host left with nobody free to take it (spec 0029, AC-749): the admins are told.
+        if (row.needsHostAt === null) return { messages: [], invited: [], skipped: 'has a host' };
+        const admins = await tx
+          .select({ email: members.email })
+          .from(members)
+          .where(and(eq(members.status, 'active'), sql`${members.role} in ('owner', 'admin')`));
+        return {
+          messages: admins.map((admin) => ({
+            to: admin.email,
+            subject: `Needs a host: ${page.title} with ${row.visitorName}`,
+            preview: preview(hostZone),
+            heading: 'A booking needs a host',
+            intro: `Its host left the workspace and nobody else was free to take ${page.title} with ${row.visitorName}. Reassign it or cancel it from Bookings.`,
+            rows: [when(hostZone), { label: 'Who', value: `${row.visitorName} (${row.visitorEmail})` }],
+            button: { label: 'Open Bookings', url: bookingsUrl },
+            why: 'You got this email because you manage scheduling in this workspace.',
+          })),
+          invited: [],
+        };
+      }
+      case 'reassigned': {
+        // Who left and who came, from the ledger's latest change (spec 0029, AC-746, AC-748, AC-749).
+        const rows = await tx
+          .select({
+            memberId: rotationAssignments.memberId,
+            createdAt: rotationAssignments.createdAt,
+            voidedAt: rotationAssignments.voidedAt,
+            name: members.name,
+            email: members.email,
+            status: members.status,
+          })
+          .from(rotationAssignments)
+          .innerJoin(
+            members,
+            and(eq(members.workspaceId, rotationAssignments.workspaceId), eq(members.id, rotationAssignments.memberId)),
+          )
+          .where(eq(rotationAssignments.bookingId, row.id));
+        const lastVoid = Math.max(0, ...rows.map((each) => each.voidedAt?.getTime() ?? 0));
+        const current = new Set(team.map((each) => each.id));
+        const left = rows.filter(
+          (each) => each.voidedAt?.getTime() === lastVoid && !current.has(each.memberId) && each.status === 'active',
+        );
+        const came = team.filter((each) =>
+          rows.some(
+            (ledger) =>
+              ledger.memberId === each.id && ledger.voidedAt === null && ledger.createdAt.getTime() >= lastVoid,
+          ),
+        );
+        if (lastVoid === 0 || came.length === 0) return { messages: [], invited: [], skipped: 'no change' };
+        const toVisitor: BookingMail = {
+          to: row.visitorEmail,
+          subject: `Your meeting is now with ${hostName}`,
+          preview: preview(row.visitorTimeZone),
+          heading: `Your meeting is now with ${hostName}`,
+          intro: `${page.title} has a new host. The time and place stay the same, and a new calendar invitation is on its way.`,
+          rows: [{ label: 'What', value: page.title }, when(row.visitorTimeZone), { label: 'Where', value: where }],
+          host: { label: 'Your new host', name: hostName },
+          button: { label: 'View your booking', url: manageUrl },
+          footnote: change,
+          why: visitorWhy,
+          ...ics('REQUEST', [visitor]),
+        };
+        const toCame: BookingMail[] = came.map((each) => ({
+          to: each.email,
+          subject: `New booking: ${page.title} with ${row.visitorName}`,
+          preview: preview(hostZone),
+          heading: 'A booking is now yours',
+          intro: `${page.title} with ${row.visitorName} came to you through its rotation.`,
+          rows: [
+            when(hostZone),
+            { label: 'Who', value: `${row.visitorName} (${row.visitorEmail})` },
+            { label: 'Where', value: where },
+            ...(note === undefined ? [] : [{ label: 'Note', value: note }]),
+          ],
+          button: { label: 'Open Bookings', url: bookingsUrl },
+          why: hostWhy,
+        }));
+        const toLeft: BookingMail[] = left.map((each) => ({
+          to: each.email,
+          subject: `Reassigned: ${page.title} with ${row.visitorName}`,
+          preview: preview(hostZone),
+          heading: 'A booking moved to someone else',
+          intro: `${page.title} with ${row.visitorName} is now with ${hostName}. It’s off your calendar.`,
+          rows: [when(hostZone), { label: 'Who', value: `${row.visitorName} (${row.visitorEmail})` }],
+          button: { label: 'Open Bookings', url: bookingsUrl },
+          why: `You got this email because you hosted ${page.title}.`,
+        }));
+        return { messages: [toVisitor, ...toCame, ...toLeft], invited: [] };
       }
       case 'reminder_24h':
       case 'reminder_1h': {

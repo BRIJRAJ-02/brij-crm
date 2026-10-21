@@ -154,6 +154,10 @@ const NO_SCOPE: ReadonlySet<string> = new Set([
   'prepareBookingMail',
   'markInvited',
   'whenLine',
+  // Round robin (spec 0029, AC-749): the booking mail job's needs_host step hands a leaving member's booking on, as
+  // the system in its workspace.
+  'handOnBooking',
+  'remakeEvent',
   // Calendar sync milestones 2 and 3 (spec 0024): a push notice comes from outside any workspace and reads as the
   // system in the one its channel token names; the events factory takes no scope (its services run as the system).
   'takeCalendarNotice',
@@ -368,6 +372,14 @@ describe('the walk: a principal without the access is refused', () => {
           // A member's change target and the guest link name a booking, not a page; the row decides (change.test.ts).
           'hostTarget',
           'bookingGuestPath',
+          // Rotations aren't pages: a member lists only the ones they're in (rotations.test.ts); a booking's
+          // assignments are its host's (assignments are checked on the row, rotations.test.ts); a reassign is checked
+          // on the booking and over both hosts (rotation.test.ts).
+          'listRotations',
+          'bookingAssignments',
+          'reassignBooking',
+          // A rotation's distribution: checked on the rotation (rotation.test.ts).
+          'rotationDistribution',
         ].includes(name)
       )
         return;

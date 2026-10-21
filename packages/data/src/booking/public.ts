@@ -39,7 +39,14 @@ export interface BookingClient {
   page(publicKey: string): Promise<PublicBookingPage>;
   slots(
     publicKey: string,
-    query: { readonly from: string; readonly to: string; readonly duration: number; readonly tz: string },
+    query: {
+      readonly from: string;
+      readonly to: string;
+      readonly duration: number;
+      readonly tz: string;
+      /** A form's hand off (spec 0043, AC-1609): a team page then offers only the hosts its routing chose. */
+      readonly p?: string;
+    },
     signal?: AbortSignal,
   ): Promise<PublicSlots>;
   /** Books; the answer carries the guest page's token. */
@@ -121,6 +128,7 @@ export function createBookingClient(options: PublicClientOptions): BookingClient
           to: query.to,
           duration: String(query.duration),
           tz: query.tz,
+          ...(query.p === undefined ? {} : { p: query.p }),
         }).toString()}`,
         { credentials: 'same-origin', ...(signal === undefined ? {} : { signal }) },
       ),

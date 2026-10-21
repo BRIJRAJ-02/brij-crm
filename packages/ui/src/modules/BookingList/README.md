@@ -4,7 +4,7 @@ Bookings as rows under day bands: the host's Bookings page (spec 0025, `0025-cal
 
 ## Why it exists
 
-New. The alignment asks for rows under grey day bands ("TODAY"), each with a date column (the day bold, the time muted, a Join link with the meeting's provider), the title, the visitor's note and "You and <guest>", and the row's actions at the end. Table moves by cell and has one header for every row, which can't hold bands or a stacked date column; LinkList is one line of facts per link with no date column and no bands, and a variant would change most of its markup.
+New. The alignment asks for rows under grey day bands ("TODAY"), each with a date column (the day bold, the time muted, a Join link with the meeting's provider), the title, the visitor's note and "You and <guest>" (or "Sam Lee and <guest>" when `hostName` says a colleague hosts it), a badge (`badgeTone="accent"` for one that asks for action, "Needs a host"), and the row's actions at the end. Table moves by cell and has one header for every row, which can't hold bands or a stacked date column; LinkList is one line of facts per link with no date column and no bands, and a variant would change most of its markup.
 
 ## Use
 

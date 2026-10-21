@@ -20,10 +20,11 @@ Ported from the artifact's Avatar card. Record chips, the record header, presenc
 - `src` loads only from our origin, `data:image` or `blob:` (`safeImageSrc`, AC-14); anything else, or a broken picture, shows the initials.
 - `isDecorative` hides it from screen readers when the name is written beside it (chips do this). Otherwise it reads as an image named after the person.
 - `AvatarStack` shows `max` avatars and "+N", and names everyone in it for screen readers.
+- `total` counts people the stack stands for but wasn't given (a public team page sends only 4 faces and how many more), so "+N" counts them too. `label` replaces the names as the stack's accessible name ("Team of 6") where names aren't for reading out.
 
 ## States
 
-Picture, initials, a picture that failed (initials).
+Picture, initials, a picture that failed (initials). A stack: names read out, or its `label` with "+N" counting `total` (a team page).
 
 ## Keyboard
 

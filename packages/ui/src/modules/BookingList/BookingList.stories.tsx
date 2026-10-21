@@ -84,6 +84,31 @@ export const Empty: Story = {
   },
 };
 
+/** A colleague's bookings (an admin's view of a team page): the host is named in place of "You", and one needs a host. */
+export const Colleagues: Story = {
+  parameters: { crm: { screenshot: false } },
+  render: (args) => (
+    <Stage width="fill">
+      <BookingList
+        {...args}
+        groups={groups().map((group) => ({
+          ...group,
+          rows: group.rows.map((row) => ({
+            ...row,
+            hostName: 'Sam Lee',
+            badge: 'Needs a host',
+            badgeTone: 'accent' as const,
+          })),
+        }))}
+      />
+    </Stage>
+  ),
+  play: async ({ canvas }) => {
+    await expect(canvas.getAllByText(/^Sam Lee and/u)).toHaveLength(2);
+    await expect(canvas.queryByText(/^You and/u)).not.toBeInTheDocument();
+  },
+};
+
 /** Home's Today, in its Card: the card is the frame; one day's bookings and the member's own events, the time in a narrow date column; an event has no guest, so no "You and" line; an all day event has no length. */
 export const Agenda: Story = {
   render: (args) => (

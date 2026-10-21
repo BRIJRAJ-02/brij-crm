@@ -60,6 +60,10 @@ export const ENGINE_REFUSAL_CODES = [
   'STALE',
   'DEFAULT_SCHEDULE',
   'SCHEDULE_NOT_ALLOWED',
+  // Round robin (spec 0029, AC-758): a rotation a page or form still books from can't be deleted.
+  'IN_USE',
+  // A round robin page's hosts don't fit (spec 0037): 1 to 3 rotations and at most 8 hosts in all.
+  'HOSTS_INVALID',
   // The sidebar (spec 0034, AC-934): 50 favourites, or 400 stored items.
   'NAV_LIMIT',
   // Domain join (spec 0031, AC-819): a domain the admin's own verified email isn't at, or a public mail domain.

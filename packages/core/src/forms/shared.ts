@@ -273,6 +273,7 @@ export function publicFormOf(document: FormDocument, context: PublicFormContext)
         ? {}
         : { placeholder: question.placeholder }),
       required: question.required,
+      ...(question.showWhen === undefined ? {} : { showWhen: question.showWhen }),
     })),
     ...(document.after.kind === 'message' && document.after.message !== '' ? { thanks: document.after.message } : {}),
     offersMeeting: false,

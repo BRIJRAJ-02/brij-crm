@@ -33,7 +33,7 @@ import { schema, type WorkspaceTx } from '@crm/db';
 import type { BookingEntry } from '../access/door.ts';
 import { checkScope } from '../access/mint.ts';
 import { inWorkspace } from '../access/run.ts';
-import { postgresError, refuse, refuseOn } from '../engine/refusals.ts';
+import { isRefusal, postgresError, refuse, refuseOn } from '../engine/refusals.ts';
 import { runWrite, type AfterWrite } from '../engine/write.ts';
 import type { BookingCalendar, BusyReader } from './calendar.ts';
 import {
@@ -45,16 +45,28 @@ import {
   membersOf,
   pageSlots,
   pickHost,
+  type MembersBusy,
   type PageRecord,
 } from './slots.ts';
-import { hostLockKey, lockKey } from './locks.ts';
+import { lockKey } from './locks.ts';
+import { chooseHosts, lockHosts, lockRotations, SLOT_TAKEN_MESSAGE, type ChosenHosts } from '../rotation/assign.ts';
+import { writeAssignment } from '../rotation/ledger.ts';
+import { loadTeam, memberBusy, readTeam, teamMemberIds, teamSlots, type Team } from '../rotation/team.ts';
 import { buildBookingIcs } from './ics.ts';
 import { matchVisitor } from './visitor.ts';
 import { MAX_RESCHEDULES } from './change.ts';
+import {
+  allowFor,
+  handoffHosts,
+  narrowTeam,
+  recordBookingRouting,
+  routeBooking,
+  type BookingRouting,
+} from '../routing/booking.ts';
 import { enqueueBookingMail, recordEvent } from './mail-queue.ts';
 import { ensureManageToken, manageTokenFor, type ManageLinkKey } from './tokens.ts';
 
-const { bookings, members, workspaces } = schema;
+const { bookingHosts, bookings, members, workspaces } = schema;
 
 /** What the public services need: the calendar calls, the manage link key, and the clock. */
 export interface PublicBookingDeps {
@@ -87,10 +99,73 @@ function liveOf(page: PageRecord | undefined): PageRecord {
   return page;
 }
 
+/** Every host's name, in order, as one line ("Sam Lee and Kim Park"); a team booking's confirmation names them all. */
+export async function hostNames(tx: WorkspaceTx, memberIds: readonly string[]): Promise<string> {
+  if (memberIds.length === 0) return '';
+  const rows = await tx
+    .select({ id: members.id, name: members.name })
+    .from(members)
+    .where(inArray(members.id, [...memberIds]));
+  const names = memberIds.map((id) => rows.find((row) => row.id === id)?.name ?? '').filter((name) => name !== '');
+  return names.length <= 1 ? (names[0] ?? '') : `${names.slice(0, -1).join(', ')} and ${names.at(-1) ?? ''}`;
+}
+
+/** Who a booking names as its host: on a round robin page every host it occupies, organiser first; else its host. */
+async function bookingHostName(
+  tx: WorkspaceTx,
+  page: Pick<PageRecord, 'kind'>,
+  row: { readonly id: string; readonly hostMemberId: string },
+): Promise<string> {
+  if (page.kind !== 'round_robin') return hostName(tx, row.hostMemberId);
+  const held = await tx
+    .select({ memberId: bookingHosts.memberId })
+    .from(bookingHosts)
+    .where(eq(bookingHosts.bookingId, row.id));
+  const others = held.map((each) => each.memberId).filter((id) => id !== row.hostMemberId);
+  return hostNames(tx, [row.hostMemberId, ...others.sort()]);
+}
+
 /** The host's name as the workspace shows it, never their email. */
 export async function hostName(tx: WorkspaceTx, memberId: string): Promise<string> {
   const [row] = await tx.select({ name: members.name }).from(members).where(eq(members.id, memberId));
   return row?.name ?? '';
+}
+
+/** The workspace's name, which hosts a team page before a host is chosen. */
+async function workspaceName(tx: WorkspaceTx): Promise<string> {
+  const [row] = await tx.select({ name: workspaces.name }).from(workspaces).limit(1);
+  return row?.name ?? '';
+}
+
+/** The most team avatars the rail shows before "+N" (AC-733). */
+const TEAM_AVATARS_MAX = 4;
+
+/** A team page's avatar stack (AC-733): up to 4 of its members' initials, and how many more; no names, no emails. */
+async function teamAvatars(tx: WorkspaceTx, team: Team): Promise<NonNullable<PublicBookingPage['team']>> {
+  const ids = teamMemberIds(team);
+  const rows =
+    ids.length === 0
+      ? []
+      : await tx
+          .select({ id: members.id, name: members.name })
+          .from(members)
+          .where(inArray(members.id, ids.slice(0, TEAM_AVATARS_MAX)));
+  const names = new Map(rows.map((row) => [row.id, row.name]));
+  return {
+    avatars: ids.slice(0, TEAM_AVATARS_MAX).map((id) => ({ initials: initialsOf(names.get(id) ?? '') })),
+    more: Math.max(0, ids.length - TEAM_AVATARS_MAX),
+  };
+}
+
+/** Up to two initials of a name ("Sam Lee" is "SL"), upper case; none for an empty name. */
+function initialsOf(name: string): string {
+  const words = name
+    .trim()
+    .split(/\s+/)
+    .filter((word) => word !== '');
+  const first = words[0]?.[0] ?? '';
+  const last = words.length > 1 ? (words.at(-1)?.[0] ?? '') : '';
+  return `${first}${last}`.toUpperCase();
 }
 
 /** The location a visitor may see. */
@@ -103,15 +178,18 @@ export async function getPublicBookingPage(entry: BookingEntry): Promise<PublicB
   checkEntry(entry);
   return inWorkspace(entry.scope, async (tx) => {
     const page = await livePage(tx, entry);
+    const team = await loadTeam(tx, page);
     return {
       publicKey: page.publicKey,
       title: page.title,
       description: page.description,
-      hostName: await hostName(tx, page.ownerMemberId),
+      // A team page names no member before booking (AC-754): the workspace hosts it.
+      hostName: team === undefined ? await hostName(tx, page.ownerMemberId) : await workspaceName(tx),
       durations: page.durations,
       location: publicLocation(page),
       hostTimeZone: page.availability.timeZone,
       windowDays: page.windowDays,
+      ...(team === undefined ? {} : { team: await teamAvatars(tx, team) }),
     };
   });
 }
@@ -125,7 +203,10 @@ export async function isPageHost(entry: BookingEntry, userId: string): Promise<b
   return inWorkspace(entry.scope, async (tx) => {
     const page = await loadPage(tx, entry.pageId);
     if (page === undefined) return false;
-    const hosts = [...new Set([page.ownerMemberId, ...(await membersOf(tx, page))])];
+    const team = await loadTeam(tx, page);
+    const hosts = [
+      ...new Set([page.ownerMemberId, ...(team === undefined ? await membersOf(tx, page) : teamMemberIds(team))]),
+    ];
     const found = await tx
       .select({ id: members.id })
       .from(members)
@@ -147,16 +228,47 @@ export async function readPublicSlots(
   entry: BookingEntry,
   deps: PublicBookingDeps,
   query: PublicSlotsQuery,
+  /** A verified form hand off (spec 0043, AC-1609): a team page then offers only the times of the hosts it chose. */
+  link?: { readonly submissionId: string },
 ): Promise<PublicSlots> {
   checkEntry(entry);
   const now = deps.now?.() ?? new Date();
   const from = new Date(query.from);
   const to = new Date(query.to);
-  const { page, memberIds } = await inWorkspace(entry.scope, async (tx) => {
+  const { page, memberIds, team } = await inWorkspace(entry.scope, async (tx) => {
     const live = await livePage(tx, entry);
     checkDuration(live, query.duration);
-    return { page: live, memberIds: await membersOf(tx, live) };
+    const loaded = await loadTeam(tx, live);
+    const handed =
+      link === undefined || loaded?.kind !== 'round_robin'
+        ? undefined
+        : await handoffHosts(tx, link.submissionId, live.id);
+    const found =
+      loaded?.kind === 'round_robin' && handed?.hosts !== undefined ? narrowTeam(loaded, handed.hosts).team : loaded;
+    return {
+      page: live,
+      team: found,
+      memberIds: found === undefined ? await membersOf(tx, live) : teamMemberIds(found),
+    };
   });
+  if (team !== undefined) {
+    // A team page: every member's own slots, combined (AC-734 to AC-736). Calendars first, outside the transaction.
+    const busyByMember = await memberBusy(
+      deps.calendar.busy,
+      entry.scope.workspaceId,
+      memberIds,
+      new Date(from.getTime() - BUSY_MARGIN_MS),
+      new Date(to.getTime() + BUSY_MARGIN_MS),
+    );
+    const reads = await inWorkspace(entry.scope, (tx) =>
+      readTeam(tx, page, team, busyByMember, { from, to, margin: BUSY_MARGIN_MS, now }),
+    );
+    const found = teamSlots(page, team, reads, { duration: query.duration, from, to, now });
+    return {
+      slots: found.slots.map((slot) => ({ start: slot.start.toISOString(), end: slot.end.toISOString() })),
+      calendar: found.blocked ? 'unreachable' : 'ok',
+    };
+  }
   // Calendars first, outside the database transaction.
   const busy = await membersBusy(
     deps.calendar.busy,
@@ -225,6 +337,13 @@ interface Booked {
  * `hooks` are the write's (the outbox hook, so the records it makes reach
  * screens live). Refuses SLOT_TAKEN when the slot is gone, BOOKING_CLOSED for
  * a paused page or a host whose calendar can't be read.
+ *
+ * A team page (spec 0029) reads every member's calendars, and books under the
+ * locks of `chooseHost` (round robin: the rotation's, then every member free
+ * at the slot) or of every required member (collective), each rechecked
+ * against their own hours, bookings on every page and blocks. A collective
+ * booking occupies each required member (`booking_hosts`); a round robin one
+ * its picked host, with a ledger row saying why.
  */
 export async function bookPublicSlot(
   entry: BookingEntry,
@@ -254,17 +373,17 @@ export async function bookPublicSlot(
         start: row.startsAt.toISOString(),
         end: row.endsAt.toISOString(),
         title: page.title,
-        hostName: await hostName(tx, row.hostMemberId),
+        hostName: await bookingHostName(tx, page, row),
         location: publicLocation(page),
         timeZone: row.visitorTimeZone,
       },
     };
   };
 
-  // 1. The page, the length, a retry.
+  // 1. The page, the length, a retry, and who it books.
   type First =
     | { readonly again: Booked }
-    | { readonly page: PageRecord; readonly memberIds: readonly string[]; readonly host: string };
+    | { readonly page: PageRecord; readonly memberIds: readonly string[]; readonly team: Team | undefined };
   const first = await inWorkspace(entry.scope, async (tx): Promise<First> => {
     const page = await loadPage(tx, entry.pageId);
     const again = page === undefined ? undefined : await replay(tx, page);
@@ -274,57 +393,123 @@ export async function bookPublicSlot(
     if (live.location.type === 'phone' && (input.phone ?? '').trim() === '') {
       throw refuseOn('VALUE_REQUIRED', 'Give a number to call you on.', 'phone');
     }
-    const memberIds = await membersOf(tx, live);
-    return { page: live, memberIds, host: pickHost(live, memberIds) };
+    const team = await loadTeam(tx, live);
+    const memberIds = team === undefined ? await membersOf(tx, live) : teamMemberIds(team);
+    if (team === undefined) pickHost(live, memberIds);
+    return { page: live, memberIds, team };
   });
   if ('again' in first) return first.again;
-  const { page, memberIds, host } = first;
+  const { page, memberIds, team } = first;
+  if (team !== undefined && memberIds.length === 0) throw refuse('SLOT_TAKEN', SLOT_TAKEN_MESSAGE);
 
   // 2. The calendars, outside any lock: the day around the slot, read fresh.
   const dayFrom = new Date(start.getTime() - 86_400_000);
   const dayTo = new Date(start.getTime() + 86_400_000);
-  const busy = await membersBusy(
-    deps.calendar.busy.fresh ?? deps.calendar.busy,
-    workspaceId,
-    memberIds,
-    new Date(dayFrom.getTime() - BUSY_MARGIN_MS),
-    new Date(dayTo.getTime() + BUSY_MARGIN_MS),
-  );
-  if (busy.blocked) throw refuse('BOOKING_CLOSED', 'This page can’t take bookings right now. Try again later.');
+  const busyFrom = new Date(dayFrom.getTime() - BUSY_MARGIN_MS);
+  const busyTo = new Date(dayTo.getTime() + BUSY_MARGIN_MS);
+  const reader = deps.calendar.busy.fresh ?? deps.calendar.busy;
+  const closedMessage = 'This page can’t take bookings right now. Try again later.';
+  let busy: MembersBusy = { busy: [], blocked: false, noCalendar: true };
+  let teamBusy: ReadonlyMap<string, MembersBusy> = new Map();
+  if (team === undefined) {
+    busy = await membersBusy(reader, workspaceId, memberIds, busyFrom, busyTo);
+    if (busy.blocked) throw refuse('BOOKING_CLOSED', closedMessage);
+  } else {
+    teamBusy = await memberBusy(reader, workspaceId, memberIds, busyFrom, busyTo);
+  }
+  const range = { duration: input.duration, from: dayFrom, to: dayTo, now };
+  const offeredAt = (slots: readonly { readonly start: Date }[]) =>
+    slots.some((slot) => slot.start.getTime() === start.getTime());
 
-  // 3. Check and reserve, atomically, under the hosts' locks. The id is made here, so the token derives from it.
+  // A team page's slot before any lock: closed when calendars close it (a collective page needs everyone; a round robin
+  // page goes on without a member whose calendar refuses us), and a round robin page's candidates per rotation, every
+  // one of whom is locked under the write (spec 0037, AC-1321).
+  let candidates: readonly (readonly string[])[] = [];
+  if (team !== undefined) {
+    const offered = await inWorkspace(entry.scope, async (tx) =>
+      teamSlots(page, team, await readTeam(tx, page, team, teamBusy, { ...range, margin: BUSY_MARGIN_MS }), range),
+    );
+    if (offered.blocked) throw refuse('BOOKING_CLOSED', closedMessage);
+    const slot = offered.slots.find((each) => each.start.getTime() === start.getTime());
+    if (slot === undefined) throw refuse('SLOT_TAKEN', SLOT_TAKEN_MESSAGE);
+    candidates = slot.candidates;
+  }
+
+  // 3. Check and reserve, atomically, under the locks. The id is made here, so the token derives from it.
   const newId = randomUUID();
   const { token, hash: tokenHash } = manageTokenFor(deps.linkKey, newId);
-  const name = await inWorkspace(entry.scope, (tx) => hostName(tx, host));
   const { result } = await runWrite(
     entry.scope,
     async (context) => {
       const { tx } = context;
-      for (const memberId of [...memberIds].sort()) await lockKey(tx, hostLockKey(workspaceId, memberId));
-      const again = await replay(tx, page);
-      if (again !== undefined) return again;
-      const held = await bookedSpans(tx, memberIds, page.id, dayFrom, dayTo);
-      const closed = await membersClosed(
-        tx,
-        memberIds,
-        page,
-        new Date(dayFrom.getTime() - BUSY_MARGIN_MS),
-        new Date(dayTo.getTime() + BUSY_MARGIN_MS),
-      );
-      const offered = pageSlots(page, {
-        duration: input.duration,
-        from: dayFrom,
-        to: dayTo,
-        now,
-        busy,
-        bookings: held,
-        closed,
-      });
-      if (!offered.some((slot) => slot.start.getTime() === start.getTime())) {
-        throw refuse('SLOT_TAKEN', 'That time was just taken. Pick another.');
+      let host: string;
+      let hosts: readonly string[];
+      let chosen: ChosenHosts | undefined;
+      let routing: BookingRouting | undefined;
+      let narrowed = false;
+      if (team?.kind === 'round_robin') {
+        // The rotations' locks first, so a retry finds its booking before anything else waits.
+        await lockRotations(
+          tx,
+          workspaceId,
+          team.rotations.map((rotation) => rotation.rules.id),
+        );
+        const again = await replay(tx, page);
+        if (again !== undefined) return again;
+        const choice = {
+          workspaceId,
+          start,
+          duration: input.duration,
+          candidates,
+          busy: teamBusy,
+          from: dayFrom,
+          to: dayTo,
+          now,
+          guest: { email: input.email, peopleObjectId: entry.people },
+        };
+        // Routing (spec 0043, AC-1609, AC-1610): a hand off's hosts, else the page's rules, narrow who may take it;
+        // when none of them is free here, the whole rotation picks, so a rule never refuses a booking.
+        routing = await routeBooking(tx, {
+          page,
+          objects: { people: entry.people, companies: entry.companies },
+          email: input.email,
+          ...(link === undefined ? {} : { submissionId: link.submissionId }),
+        });
+        const routed = routing.hosts;
+        if (routed !== undefined && narrowTeam(team, routed).narrowed) {
+          try {
+            chosen = await chooseHosts(tx, page, team, { ...choice, allow: allowFor(team, routed) });
+            narrowed = true;
+          } catch (error) {
+            if (!isRefusal(error) || error.refusal.code !== 'SLOT_TAKEN') throw error;
+          }
+        }
+        chosen ??= await chooseHosts(tx, page, team, choice);
+        host = chosen.organiser;
+        hosts = chosen.hosts;
+      } else if (team?.kind === 'collective') {
+        await lockHosts(tx, workspaceId, memberIds);
+        const again = await replay(tx, page);
+        if (again !== undefined) return again;
+        const reads = await readTeam(tx, page, team, teamBusy, { ...range, margin: BUSY_MARGIN_MS });
+        if (!offeredAt(teamSlots(page, team, reads, range).slots)) throw refuse('SLOT_TAKEN', SLOT_TAKEN_MESSAGE);
+        host = pickHost(page, memberIds);
+        hosts = memberIds;
+      } else {
+        await lockHosts(tx, workspaceId, memberIds);
+        const again = await replay(tx, page);
+        if (again !== undefined) return again;
+        const held = await bookedSpans(tx, memberIds, page.id, dayFrom, dayTo);
+        const closed = await membersClosed(tx, memberIds, page, busyFrom, busyTo);
+        if (!offeredAt(pageSlots(page, { ...range, busy, bookings: held, closed }))) {
+          throw refuse('SLOT_TAKEN', SLOT_TAKEN_MESSAGE);
+        }
+        host = pickHost(page, memberIds);
+        hosts = [host];
       }
       const blockStart = new Date(start.getTime() - page.bufferBefore * 60_000);
       const blockEnd = new Date(end.getTime() + page.bufferAfter * 60_000);
+      const during = sql`tstzrange(${blockStart.toISOString()}::timestamptz, ${blockEnd.toISOString()}::timestamptz, '[)')`;
       const actor = { type: 'booking' as const, id: page.id, memberId: null };
       let bookingId: string;
       try {
@@ -340,7 +525,7 @@ export async function bookPublicSlot(
             hostMemberId: host,
             startsAt: start,
             endsAt: end,
-            during: sql`tstzrange(${blockStart.toISOString()}::timestamptz, ${blockEnd.toISOString()}::timestamptz, '[)')`,
+            during,
             visitorName: input.name,
             visitorEmail: input.email,
             visitorTimeZone: input.timeZone,
@@ -359,21 +544,51 @@ export async function bookPublicSlot(
           .returning({ id: bookings.id });
         if (row === undefined) throw new Error('The booking was not stored.');
         bookingId = row.id;
+        if (routing !== undefined) {
+          await recordBookingRouting(tx, { workspaceId, pageId: page.id, bookingId, routing, narrowed });
+        }
+        // The organiser's own `booking_hosts` row comes with the booking (its trigger); every other host's here.
+        const others = hosts.filter((memberId) => memberId !== host);
+        if (others.length > 0) {
+          await tx
+            .insert(bookingHosts)
+            .values(others.map((memberId) => ({ workspaceId, bookingId, memberId, during, status: 'confirmed' })));
+        }
         // The reminders with the booking; the confirmation after its event, so it knows whether the calendar invited them.
         await enqueueBookingMail(tx, bookingId, ['reminder_24h', 'reminder_1h']);
       } catch (error) {
-        // The lock should make this unreachable: a write that skipped it, refused by the database.
-        if (postgresError(error)?.code === '23P01')
-          throw refuse('SLOT_TAKEN', 'That time was just taken. Pick another.');
+        // The locks should make this unreachable: a write that skipped them, refused by the database.
+        if (postgresError(error)?.code === '23P01') throw refuse('SLOT_TAKEN', SLOT_TAKEN_MESSAGE);
         throw error;
       }
-      // The visitor's records, under a lock on their email, in a savepoint: a refusal keeps the booking.
+      // One ledger row per rotation, saying why (AC-742, AC-1321).
+      if (chosen !== undefined && team?.kind === 'round_robin') {
+        for (const pick of chosen.picks) {
+          const rules = team.rotations.find((rotation) => rotation.rules.id === pick.rotationId)?.rules;
+          await writeAssignment(tx, entry.scope, {
+            rotationId: pick.rotationId,
+            memberId: pick.memberId,
+            source: 'booking',
+            bookingId,
+            reason: pick.reason,
+            detail: { ...pick.detail, windowDays: rules?.windowDays ?? 30 },
+          });
+        }
+      }
+      // The visitor's records, under a lock on their email, in a savepoint: a refusal keeps the booking. On a round
+      // robin page, a person or company made now is the assigned host's (AC-744); one that exists keeps its owner.
       await lockKey(tx, `booking:email:${workspaceId}:${input.email}`);
       const matched = await context.perRecord((step) =>
         matchVisitor(
           step,
           { people: entry.people, companies: entry.companies },
-          { name: input.name, email: input.email, timeZone: input.timeZone },
+          {
+            name: input.name,
+            email: input.email,
+            timeZone: input.timeZone,
+            // The first rotation's pick: the member the round robin assigned it to.
+            ...(chosen?.picks[0] === undefined ? {} : { ownerMemberId: chosen.picks[0].memberId }),
+          },
         ),
       );
       if (matched.ok && (matched.value.personId !== undefined || matched.value.companyId !== undefined)) {
@@ -386,28 +601,40 @@ export async function bookPublicSlot(
         bookingId,
         replayed: false,
         manageToken: token,
+        hostMemberId: host,
+        hosts,
         booking: {
           start: start.toISOString(),
           end: end.toISOString(),
           title: page.title,
-          hostName: name,
+          hostName: chosen === undefined ? await hostName(tx, host) : await hostNames(tx, hosts),
           location: publicLocation(page),
           timeZone: input.timeZone,
         },
-      } satisfies Booked;
+      } satisfies Booked & { readonly hostMemberId: string; readonly hosts: readonly string[] };
     },
     hooks,
   );
   if (result.replayed) return result;
+  const {
+    hostMemberId: host,
+    hosts,
+    ...booked
+  } = result as Booked & { readonly hostMemberId: string; readonly hosts: readonly string[] };
 
-  // 4. The calendar event, after the commit: three tries, then the booking stands without one.
+  // 4. The calendar event on the host's calendar, after the commit: three tries, then the booking stands without one.
+  // A team booking's other hosts are invited beside the visitor (AC-627, AC-1322).
+  const coHosts = await memberEmails(
+    entry,
+    hosts.filter((id) => id !== host),
+  );
   let written: Awaited<ReturnType<BookingCalendar['events']>> | undefined;
   for (let attempt = 1; attempt <= 3 && written === undefined; attempt += 1) {
     try {
       written = await deps.calendar.events({
         workspaceId,
         hostMemberId: host,
-        bookingId: result.bookingId,
+        bookingId: booked.bookingId,
         pageId: entry.pageId,
         title: `${page.title} with ${input.name}`,
         description: eventDescription(page, input),
@@ -418,13 +645,14 @@ export async function bookPublicSlot(
           ...(input.guests ?? [])
             .filter((guest) => guest !== input.email)
             .map((guest) => ({ email: guest, name: guest })),
+          ...coHosts,
         ],
         video: page.location.type === 'video',
         ...(eventLocation(page, input) === undefined ? {} : { location: eventLocation(page, input) }),
       });
     } catch (error) {
       deps.log?.warn('booking.event_failed', {
-        bookingId: result.bookingId,
+        bookingId: booked.bookingId,
         attempt,
         error: error instanceof Error ? error.name : 'unknown',
       });
@@ -432,10 +660,24 @@ export async function bookPublicSlot(
   }
   // The outcome, and the emails (after the event, so the confirmation knows whether the calendar already invited them).
   await inWorkspace(entry.scope, async (tx) => {
-    await recordEvent(tx, result.bookingId, written);
-    await enqueueBookingMail(tx, result.bookingId, ['confirmed']);
+    await recordEvent(tx, booked.bookingId, written);
+    await enqueueBookingMail(tx, booked.bookingId, ['confirmed']);
   });
-  return result;
+  return booked;
+}
+
+/** Members' names and emails, for a collective event's attendees (the calendar invites them; no visitor sees them). */
+async function memberEmails(
+  entry: BookingEntry,
+  memberIds: readonly string[],
+): Promise<readonly { readonly email: string; readonly name: string }[]> {
+  if (memberIds.length === 0) return [];
+  return inWorkspace(entry.scope, (tx) =>
+    tx
+      .select({ email: members.email, name: members.name })
+      .from(members)
+      .where(inArray(members.id, [...memberIds])),
+  );
 }
 
 /** The answers a booking keeps, read back as the guest page shows them. */
@@ -487,7 +729,7 @@ export async function readManagedBooking(
       state: row.status === 'cancelled' ? 'cancelled' : row.endsAt.getTime() <= now.getTime() ? 'past' : 'confirmed',
       publicKey: page.publicKey,
       title: page.title,
-      hostName: await hostName(tx, row.hostMemberId),
+      hostName: await bookingHostName(tx, page, row),
       start: row.startsAt.toISOString(),
       end: row.endsAt.toISOString(),
       timeZone: row.visitorTimeZone,

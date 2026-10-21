@@ -1,5 +1,5 @@
 import { useEffect, useRef, type ReactNode } from 'react';
-import { Avatar } from '../../atoms/Avatar/Avatar.tsx';
+import { Avatar, AvatarStack, type AvatarStackPerson } from '../../atoms/Avatar/Avatar.tsx';
 import { Button } from '../../atoms/Button/Button.tsx';
 import { Icon } from '../../atoms/Icon/Icon.tsx';
 import type { IconName } from '../../atoms/Icon/icons.ts';
@@ -17,9 +17,22 @@ export interface BookingFact {
 
 /** Who is booked, as the rail heads it. */
 export interface BookingHost {
+  /** The host: the line above the meeting. A team page's is the workspace, named in its title instead. */
   readonly name: string;
   readonly image?: string;
+  /** A team page's hosts (spec 0037, AC-1339): their faces stack in place of the one picture. */
+  readonly team?: BookingTeam;
 }
+
+/** A team page's stack: up to 4 faces, everyone it stands for, and its accessible name ("Team of 6"). */
+export interface BookingTeam {
+  readonly people: readonly AvatarStackPerson[];
+  readonly total: number;
+  readonly label: string;
+}
+
+/** The most faces a team page's rail shows before "+N". */
+const TEAM_FACES = 4;
 
 /** Props for BookingFrame. */
 export interface BookingFrameProps {
@@ -87,14 +100,25 @@ export function BookingFrame({
             </div>
           ) : (
             <div className={styles.identity}>
-              <Avatar
-                name={host.name}
-                size="xl"
-                isDecorative
-                {...(host.image === undefined ? {} : { src: host.image })}
-              />
-              <div className={styles.names}>
-                <p className={styles.host}>{host.name}</p>
+              {host.team === undefined ? (
+                <Avatar
+                  name={host.name}
+                  size="xl"
+                  isDecorative
+                  {...(host.image === undefined ? {} : { src: host.image })}
+                />
+              ) : (
+                <AvatarStack
+                  people={host.team.people}
+                  total={host.team.total}
+                  label={host.team.label}
+                  max={TEAM_FACES}
+                  size="lg"
+                />
+              )}
+              <div className={styles.names} data-team={host.team === undefined ? undefined : ''}>
+                {/* A team page's title already names the workspace ("Intro call with Acme"). */}
+                {host.team === undefined && <p className={styles.host}>{host.name}</p>}
                 <h1 className={styles.title}>{title}</h1>
               </div>
               {description !== undefined && description !== '' && <p className={styles.description}>{description}</p>}

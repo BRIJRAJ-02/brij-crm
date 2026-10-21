@@ -4,6 +4,7 @@
 // Leaves out: changing a booking from here (the actions arrive next), the new meeting dialog, team views and filing, and live arrival (it reads again when the page is shown again).
 import {
   isDataError,
+  type BookingAssignment,
   type BookingListItem,
   type BookingPageView,
   type BookingsCalendarHeld,
@@ -61,6 +62,9 @@ import { DrawCard } from './DrawCard.tsx';
 import { NewMeetingDialog, type NewMeeting } from './NewMeetingDialog.tsx';
 import { instantOf, spanNames, type DrawnSpan } from './span.ts';
 import type { BookingsSearch } from './search.ts';
+import { useCan, useMyAccess } from '../workspace/WorkspacePage.tsx';
+import { assignedItems } from './assignment.ts';
+import { ReassignDialog } from './ReassignDialog.tsx';
 import { BookingActions, BookingDialog, type BookingAsk, type HostBookingActions } from './BookingActions.tsx';
 import { strings } from './strings.ts';
 import { useBookingsToolbarSlot } from './toolbarSlot.ts';
@@ -175,12 +179,30 @@ function BookingCard({
   /** The button to focus as the card opens again after the screen's dialog was dismissed. */
   readonly focusOnMount?: BookingAsk | undefined;
 }) {
-  const now = useNow();
+  // Read again when its host changes (a reassign or a move through the rotation lands).
+  // Read again after a reassign here (a second rotation's seat leaves the organiser as it was).
+  const [reads, setReads] = useState(0);
+  const read = useAssignments(booking.id, actions, `${booking.hostMemberId}:${String(reads)}`);
+  const assigned =
+    read === undefined
+      ? []
+      : 'failed' in read
+        ? [{ term: strings.assignedTerm, description: strings.assignedFailed }]
+        : assignedItems(read.rows, locale);
+  const seats = read === undefined || 'failed' in read ? [] : read.rows.filter((row) => row.voidedAt === undefined);
+  // Admins reassign a round robin seat (AC-748; Manage over both hosts, today booking.admin's, AC-1337).
+  const canReassign = useCan('booking.admin');
+  const [reassigning, setReassigning] = useState(false);
   return (
     <>
       <Badge text={strings.status[booking.status]} tone={booking.status === 'confirmed' ? 'accent' : 'neutral'} />
       {booking.hostRemoved === true && <Badge text={strings.hostRemoved} />}
       {booking.eventFailed && booking.status === 'confirmed' && <Callout tone="warning">{strings.eventFailed}</Callout>}
+      {booking.needsHost && booking.status === 'confirmed' && (
+        <Callout tone="warning" title={strings.needsHost}>
+          {strings.needsHostText}
+        </Callout>
+      )}
       <DescriptionList
         layout="stacked"
         items={[
@@ -208,6 +230,7 @@ function BookingCard({
           ...(booking.cancelReason === undefined
             ? []
             : [{ term: strings.cancelReason, description: booking.cancelReason }]),
+          ...assigned,
         ]}
       />
       {booking.status === 'confirmed' && booking.videoUrl !== undefined && (
@@ -215,17 +238,72 @@ function BookingCard({
       )}
       {/* Its buttons show for a confirmed booking only; it stays mounted so a cancel's confirm outlives the
           booking showing cancelled at once, until the server answers. */}
-      {actions !== undefined && Date.parse(booking.startsAt) > now.getTime() && (
+      {/* Before the meeting: change it; once it has started: mark a no show (spec 0043). */}
+      {actions !== undefined && (
         <BookingActions
           booking={booking}
           actions={actions}
           locale={locale}
           {...(onAsk === undefined ? {} : { onAsk })}
           {...(focusOnMount === undefined ? {} : { focusOnMount })}
+          {...(canReassign && seats.length > 0
+            ? {
+                onReassign: () => {
+                  setReassigning(true);
+                },
+              }
+            : {})}
+        />
+      )}
+      {reassigning && actions !== undefined && (
+        <ReassignDialog
+          booking={booking}
+          seats={seats}
+          actions={actions}
+          onClose={() => {
+            setReassigning(false);
+          }}
+          onReassigned={() => {
+            setReassigning(false);
+            setReads((count) => count + 1);
+          }}
         />
       )}
     </>
   );
+}
+
+/**
+ * The booking's ledger rows (spec 0029, AC-742): read once per opened booking, newest first; none for a personal
+ * page's booking. Undefined while the read is under way, so the Assigned lines simply appear.
+ */
+function useAssignments(
+  bookingId: string,
+  actions: HostBookingActions | undefined,
+  /** Changes when the rows may have: the host, or a reassign done here. */
+  version: string,
+): { readonly rows: readonly BookingAssignment[] } | { readonly failed: true } | undefined {
+  const [read, setRead] = useState<
+    | { readonly id: string; readonly rows: readonly BookingAssignment[] }
+    | { readonly id: string; readonly failed: true }
+    | undefined
+  >(undefined);
+  useEffect(() => {
+    if (actions === undefined) return;
+    let isCurrent = true;
+    actions.assignments(bookingId).then(
+      (rows) => {
+        if (isCurrent) setRead({ id: bookingId, rows });
+      },
+      () => {
+        if (isCurrent) setRead({ id: bookingId, failed: true });
+      },
+    );
+    return () => {
+      isCurrent = false;
+    };
+  }, [actions, bookingId, version]);
+  return read === undefined || read.id !== bookingId ? undefined : read;
 }
 
 /** One of the member's own calendar events: what, when, which calendar, and that Timefix doesn't manage it. */
@@ -1055,6 +1133,7 @@ function groupsOf(
   items: readonly MeetingListItem[],
   calendarOf: (calendarId: string) => { readonly name: string; readonly hue: Hue } | undefined,
   locale: string,
+  me: string | undefined,
 ): readonly BookingListGroup[] {
   const now = new Date();
   const today = dayKeyOf(now);
@@ -1090,6 +1169,18 @@ function groupsOf(
             ...shared,
             title: item.booking.visitorName,
             via: strings.bookedVia(item.booking.pageTitle),
+            // A colleague's booking (an admin's view, a team page) says whose it is: "Sam Lee and Ada".
+            ...(me === undefined || item.booking.hostMemberId === me || item.booking.hostName === ''
+              ? {}
+              : { hostName: item.booking.hostName, guestName: item.booking.visitorName }),
+            // Round robin's state (spec 0029, AC-749) and a no show (spec 0043) say so, unless it was cancelled.
+            ...(item.booking.status === 'cancelled'
+              ? {}
+              : item.booking.needsHost
+                ? { badge: strings.needsHost, badgeTone: 'accent' as const }
+                : item.booking.noShow === true
+                  ? { badge: strings.noShow }
+                  : {}),
             ...(item.booking.note === undefined ? {} : { note: item.booking.note }),
             ...(item.booking.guests.length === 0 ? {} : { attendees: item.booking.guests }),
           }
@@ -1237,6 +1328,8 @@ export function BookingsListScreen({
   );
   const hasCalendar = calendarList.status === 'ready' && calendarList.accounts.length > 0;
   // The open meeting by row id, read from the list as it is now: a change shows in the panel.
+  // A colleague's booking (an admin's view, a team page) names its host rather than "You".
+  const me = useMyAccess()?.memberId;
   const [openId, setOpenId] = useState<string | undefined>(undefined);
   const tab = search.tab;
   // One booking page's bookings: calendar events have no page, so the server is asked for bookings only, and paging
@@ -1286,7 +1379,7 @@ export function BookingsListScreen({
       <>
         <BookingList
           label={strings.listLabel[tab]}
-          groups={groupsOf(items, (calendarId) => byCalendar.get(calendarId), locale)}
+          groups={groupsOf(items, (calendarId) => byCalendar.get(calendarId), locale, me)}
           onOpen={setOpenId}
           emptyState={
             search.link !== undefined || search.cal !== undefined ? (

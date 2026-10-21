@@ -73,4 +73,14 @@ describe('a booking email', () => {
     delete (bare as { footnote?: unknown }).footnote;
     expect(bookingDocument(bare, ORIGIN).blocks).toEqual([{ type: 'paragraph', text: WORDS.intro }]);
   });
+
+  it('names a round robin booking’s host beside their initials, after the intro (spec 0029)', async () => {
+    const words = { ...WORDS, host: { label: 'Your host', name: 'Sam Lee' } };
+    expect(bookingDocument(words, ORIGIN).blocks[1]).toEqual({ type: 'person', label: 'Your host', name: 'Sam Lee' });
+    const email = await renderBookingEmail(words, { appOrigin: ORIGIN, medium: 'email_booking' });
+    expect(email.html).toContain('>SL<');
+    expect(email.html).toContain('Sam Lee');
+    expect(email.html).toContain('tf-avatar');
+    expect(email.text).toContain('Your host: Sam Lee');
+  });
 });

@@ -1,0 +1,364 @@
+// Brief
+// Purpose: make or change a rotation (spec 0029, AC-728, AC-729; spec 0037): its name, how it picks, the window it counts over, where returning guests go, and its 2 to 20 members.
+// Main task: add the people who share the meetings, set each one's weight, priority, daily and weekly caps and on or off, then Create or Save.
+// Leaves out: shares and history (the Rotations screen), and teams (#23 brings rotations that follow a team).
+import {
+  isDataError,
+  type DataLayer,
+  type MemberSummary,
+  type RotationMemberInput,
+  type RotationView,
+} from '@crm/data';
+import {
+  Button,
+  Callout,
+  Field,
+  Modal,
+  Radio,
+  RadioGroup,
+  Select,
+  SettingsStack,
+  Switch,
+  Table,
+  type SelectItem,
+  type TableColumn,
+  RecordChip,
+} from '@crm/ui';
+import { useState } from 'react';
+import { strings } from './rotation-strings.ts';
+
+/** Props for the dialog. */
+export interface RotationDialogProps {
+  readonly data: DataLayer;
+  readonly slug: string;
+  /** The workspace's active members, by name. */
+  readonly people: readonly MemberSummary[];
+  /** The rotation being changed; none to make one. */
+  readonly rotation?: RotationView;
+  readonly isOpen: boolean;
+  readonly onClose: () => void;
+  readonly onSaved: (rotation: RotationView) => void;
+}
+
+type Strategy = 'fair' | 'priority' | 'even';
+type Returning = 'owner' | 'last_host' | 'none';
+type Window = 7 | 30 | 90;
+
+const PRIORITIES: SelectItem[] = strings.priorities.map((label, index) => ({ id: String(index), label }));
+const CAPS: SelectItem[] = [
+  { id: 'none', label: strings.noCap },
+  ...[1, 2, 3, 4, 5, 6, 8, 10, 12, 15, 20].map((value) => ({ id: String(value), label: String(value) })),
+];
+const WEEKLY: SelectItem[] = [
+  { id: 'none', label: strings.noCap },
+  ...[2, 3, 5, 8, 10, 15, 20, 25, 30, 40, 50].map((value) => ({ id: String(value), label: String(value) })),
+];
+const GAPS: SelectItem[] = Array.from({ length: 10 }, (_, index) => ({
+  id: String(index + 1),
+  label: strings.meetings(index + 1),
+}));
+const RETURNING: SelectItem[] = (['owner', 'last_host', 'none'] as const).map((id) => ({
+  id,
+  label: strings.returningChoices[id],
+}));
+const WINDOWS: SelectItem[] = [7, 30, 90].map((days) => ({ id: String(days), label: strings.days(days) }));
+
+/** A member row as the dialog edits it: the weight as typed. */
+interface Draft extends Omit<RotationMemberInput, 'weight'> {
+  readonly weight: string;
+}
+
+const draftOf = (member: RotationMemberInput): Draft => ({ ...member, weight: String(member.weight) });
+const weightOf = (text: string): number | undefined => {
+  const value = Number(text.trim());
+  return Number.isInteger(value) && value >= 1 && value <= 100 ? value : undefined;
+};
+
+const COLUMNS: readonly TableColumn[] = [
+  { id: 'member', label: strings.columns.member, isRowHeader: true },
+  { id: 'weight', label: strings.columns.weight },
+  { id: 'priority', label: strings.columns.priority },
+  { id: 'cap', label: strings.columns.cap },
+  { id: 'weekly', label: strings.columns.weekly },
+  { id: 'on', label: strings.columns.on },
+  { id: 'remove', label: strings.columns.remove, isLabelHidden: true, align: 'end' },
+];
+
+/** The dialog. The id is minted once per opening, so a retry makes one rotation. */
+export function RotationDialog({ data, slug, people, rotation, isOpen, onClose, onSaved }: RotationDialogProps) {
+  const [name, setName] = useState(rotation?.name ?? '');
+  // Too few members shows as the member picker's error once Create or Save was tried.
+  const [hasTried, setTried] = useState(false);
+  const [strategy, setStrategy] = useState<Strategy>(rotation?.strategy ?? 'fair');
+  const [windowDays, setWindowDays] = useState<Window>(rotation?.windowDays ?? 30);
+  const [evenGap, setEvenGap] = useState(rotation?.evenGap ?? 3);
+  const [returning, setReturning] = useState<Returning>(rotation?.returning ?? 'owner');
+  const [members, setMembers] = useState<readonly Draft[]>(() => (rotation?.members ?? []).map(draftOf));
+  const [id] = useState(() => data.rotations.newId());
+  const [isBusy, setBusy] = useState(false);
+  const [isConfirming, setConfirming] = useState(false);
+  const [failure, setFailure] = useState<{ readonly message: string; readonly field?: string } | undefined>(undefined);
+  const [nameError, setNameError] = useState<string | undefined>(undefined);
+  const nameOf = (memberId: string) => people.find((person) => person.id === memberId)?.name ?? memberId;
+  const removed = (rotation?.members ?? []).filter(
+    (member) => !members.some((each) => each.memberId === member.memberId),
+  );
+
+  const change = (memberId: string, patch: Partial<Draft>) =>
+    setMembers((current) => current.map((member) => (member.memberId === memberId ? { ...member, ...patch } : member)));
+  const left: SelectItem[] = people
+    .filter((person) => !members.some((member) => member.memberId === person.id))
+    .map((person) => ({ id: person.id, label: person.name, description: person.email }));
+  const countError = members.length < 2 ? strings.needTwo : members.length > 20 ? strings.tooMany : undefined;
+
+  const submit = () => {
+    if (isBusy) return;
+    setTried(true);
+    const trimmed = name.trim();
+    setNameError(trimmed === '' ? strings.nameRequired : undefined);
+    const weights = members.map((member) => weightOf(member.weight));
+    if (trimmed === '' || countError !== undefined || weights.some((weight) => weight === undefined)) return;
+    if (rotation !== undefined && removed.length > 0 && !isConfirming) {
+      setConfirming(true);
+      return;
+    }
+    save(
+      trimmed,
+      members.map((member, index) => ({ ...member, weight: weights[index] ?? 100 })),
+    );
+  };
+
+  const save = (trimmed: string, list: RotationMemberInput[]) => {
+    setBusy(true);
+    setFailure(undefined);
+    const settings = { name: trimmed, strategy, windowDays, evenGap, returning };
+    const sent =
+      rotation === undefined
+        ? data.rotations.create(slug, { id, settings, members: list })
+        : data.rotations.update(slug, rotation.id, { settings, members: list });
+    sent.then(
+      (saved) => {
+        setBusy(false);
+        setConfirming(false);
+        onSaved(saved);
+      },
+      (error: unknown) => {
+        setBusy(false);
+        setConfirming(false);
+        const field = isDataError(error) ? error.data?.refusals?.[0]?.field : undefined;
+        setFailure({
+          message: isDataError(error) ? error.message : strings.somethingWrong,
+          ...(field === undefined ? {} : { field }),
+        });
+      },
+    );
+  };
+
+  const renderCell = (member: Draft, column: string) => {
+    const who = nameOf(member.memberId);
+    const where = name.trim() === '' ? strings.newRotation : name.trim();
+    switch (column) {
+      case 'member':
+        // A refusal about this member shows in the Callout above the table, which names them.
+        return <RecordChip display={{ type: 'member', id: member.memberId, name: who }} isFlat />;
+      case 'weight':
+        return (
+          <Field
+            label={strings.weightFor(who, where)}
+            isLabelHidden
+            size="sm"
+            inputMode="numeric"
+            maxLength={3}
+            value={member.weight}
+            onChange={(weight) => change(member.memberId, { weight })}
+            {...(weightOf(member.weight) === undefined ? { error: strings.weightInvalid, isErrorFloating: true } : {})}
+          />
+        );
+      case 'priority':
+        return (
+          <Select
+            label={strings.priorityFor(who, where)}
+            isLabelHidden
+            size="sm"
+            items={PRIORITIES}
+            value={String(member.priority)}
+            onChange={(value) => change(member.memberId, { priority: Number(value ?? 2) })}
+          />
+        );
+      case 'cap':
+        return (
+          <Select
+            label={strings.capFor(who, where)}
+            isLabelHidden
+            size="sm"
+            items={CAPS}
+            value={member.dailyCap === null ? 'none' : String(member.dailyCap)}
+            onChange={(value) =>
+              change(member.memberId, { dailyCap: value === null || value === 'none' ? null : Number(value) })
+            }
+          />
+        );
+      case 'weekly':
+        return (
+          <Select
+            label={strings.weeklyFor(who, where)}
+            isLabelHidden
+            size="sm"
+            items={WEEKLY}
+            value={member.weeklyCap === null ? 'none' : String(member.weeklyCap)}
+            onChange={(value) =>
+              change(member.memberId, { weeklyCap: value === null || value === 'none' ? null : Number(value) })
+            }
+          />
+        );
+      case 'on':
+        return (
+          <Switch
+            label={strings.onFor(who, where)}
+            isLabelHidden
+            isSelected={member.isOn}
+            onChange={(isOn) => change(member.memberId, { isOn })}
+          />
+        );
+      default:
+        return (
+          <Button
+            variant="ghost"
+            icon="x"
+            label={strings.remove(who)}
+            onPress={() => setMembers((current) => current.filter((each) => each.memberId !== member.memberId))}
+          />
+        );
+    }
+  };
+
+  return (
+    <>
+      <Modal
+        title={rotation === undefined ? strings.newRotation : strings.editRotation}
+        variant="window"
+        isOpen={isOpen && !isConfirming}
+        isDismissable={false}
+        isBusy={isBusy}
+        onOpenChange={(open) => {
+          if (!open && !isBusy) onClose();
+        }}
+        actions={
+          <>
+            <Button slot="close" isDisabled={isBusy} kbd="ESC">
+              {strings.cancel}
+            </Button>
+            <Button variant="primary" isPending={isBusy} onPress={submit}>
+              {rotation === undefined
+                ? isBusy
+                  ? strings.creating
+                  : strings.create
+                : isBusy
+                  ? strings.saving
+                  : strings.save}
+            </Button>
+          </>
+        }
+      >
+        <SettingsStack>
+          {failure !== undefined && failure.field === undefined && <Callout tone="danger">{failure.message}</Callout>}
+          {failure?.field?.startsWith('members.') === true && <Callout tone="danger">{failure.message}</Callout>}
+          <Field
+            label={strings.name}
+            placeholder={strings.namePlaceholder}
+            value={name}
+            onChange={setName}
+            maxLength={80}
+            isRequired
+            {...(nameError === undefined ? {} : { error: nameError })}
+          />
+          <RadioGroup
+            label={strings.strategy}
+            value={strategy}
+            onChange={(value) => {
+              if (value === 'fair' || value === 'priority' || value === 'even') setStrategy(value);
+            }}
+          >
+            <Radio value="fair">{strings.fair}</Radio>
+            <Radio value="priority">{strings.priority}</Radio>
+            <Radio value="even">{strings.even}</Radio>
+          </RadioGroup>
+          {strategy === 'even' && (
+            <Select
+              label={strings.evenGap}
+              items={GAPS}
+              value={String(evenGap)}
+              onChange={(value) => setEvenGap(Number(value ?? 3))}
+            />
+          )}
+          <Select
+            label={strings.window}
+            items={WINDOWS}
+            value={String(windowDays)}
+            onChange={(value) => setWindowDays(value === '7' ? 7 : value === '90' ? 90 : 30)}
+          />
+          <Select
+            label={strings.returning}
+            hint={strings.returningHint}
+            items={RETURNING}
+            value={returning}
+            onChange={(value) => {
+              if (value === 'owner' || value === 'last_host' || value === 'none') setReturning(value);
+            }}
+          />
+          <Select
+            label={strings.addMember}
+            placeholder={left.length === 0 ? strings.noMembersLeft : strings.addMemberPlaceholder}
+            items={left}
+            isSearchable
+            isDisabled={left.length === 0 || members.length >= 20}
+            value={null}
+            hint={strings.membersCount(members.length)}
+            {...(hasTried && countError !== undefined ? { error: countError } : {})}
+            onChange={(memberId) => {
+              if (memberId === null) return;
+              setMembers((current) => [
+                ...current,
+                { memberId, weight: '100', priority: 2, dailyCap: null, weeklyCap: null, isOn: true },
+              ]);
+            }}
+          />
+          {members.length > 0 && (
+            <Table
+              label={strings.members(name.trim() === '' ? strings.newRotation : name.trim())}
+              isScrollable
+              columns={COLUMNS}
+              rows={members}
+              getRowId={(member) => member.memberId}
+              renderCell={renderCell}
+            />
+          )}
+        </SettingsStack>
+      </Modal>
+      <Modal
+        title={strings.removeTitle(
+          removed.map((member) => member.name),
+          rotation?.name ?? '',
+        )}
+        tone="danger"
+        isOpen={isOpen && isConfirming}
+        isBusy={isBusy}
+        onOpenChange={(open) => {
+          if (!open && !isBusy) setConfirming(false);
+        }}
+        actions={
+          <>
+            <Button slot="close" isDisabled={isBusy} kbd="ESC">
+              {strings.cancel}
+            </Button>
+            <Button variant="danger-solid" isPending={isBusy} onPress={submit}>
+              {isBusy ? strings.saving : strings.removeAction}
+            </Button>
+          </>
+        }
+      >
+        {strings.removeText}
+      </Modal>
+    </>
+  );
+}

@@ -95,19 +95,21 @@ export function HostedForm({
             state.submit();
           }}
         >
-          {form.questions.map((question) => (
-            <QuestionSlot key={`${String(state.round)}-${question.key}`} question={question} state={state}>
-              <Question
-                question={question}
-                words={words}
-                value={state.answers[question.key]}
-                error={state.errors[question.key]}
-                countryGuess={countryGuess}
-                countryNames={state.countryNames}
-                onChange={(value) => state.change(question, value)}
-              />
-            </QuestionSlot>
-          ))}
+          {form.questions
+            .filter((question) => state.shown.has(question.key))
+            .map((question) => (
+              <QuestionSlot key={`${String(state.round)}-${question.key}`} question={question} state={state}>
+                <Question
+                  question={question}
+                  words={words}
+                  value={state.answers[question.key]}
+                  error={state.errors[question.key]}
+                  countryGuess={countryGuess}
+                  countryNames={state.countryNames}
+                  onChange={(value) => state.change(question, value)}
+                />
+              </QuestionSlot>
+            ))}
           <FormTrap form={form} state={state} />
           <div className={styles.actions}>
             <ErrorSummary state={state} />

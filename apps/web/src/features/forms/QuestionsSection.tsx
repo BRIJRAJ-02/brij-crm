@@ -24,6 +24,8 @@ import {
   OptionsEditor,
   QuestionList,
   Select,
+  SettingsRow,
+  SettingsSection,
   SubmenuTrigger,
   Tooltip,
   type IconName,
@@ -46,6 +48,9 @@ import {
   type QuestionChange,
 } from './draft.ts';
 import { strings } from './strings.ts';
+import { ConditionsEditor, firstConditions } from '../routing/ConditionsEditor.tsx';
+import { conditionsLine, questionFacts, storedShowWhen } from '../routing/facts.ts';
+import { strings as routingStrings } from '../routing/strings.ts';
 
 /** Each answer type's icon, on the tile that starts its question's row. */
 const TYPE_ICONS = {
@@ -172,6 +177,16 @@ export function QuestionsSection(props: QuestionsSectionProps) {
       ? {}
       : {
           filed: question.filedOn === undefined ? strings.notFiledShort : filedLine(question, objectName, attributes),
+        }),
+    ...(question.showWhen === undefined
+      ? {}
+      : {
+          condition: routingStrings.shownWhen(
+            conditionsLine(
+              question.showWhen,
+              questionFacts(draft.questions.slice(0, draft.questions.indexOf(question))),
+            ),
+          ),
         }),
     hasProblem: problem?.questionId === question.id || refused.has(question.id),
   }));
@@ -415,6 +430,7 @@ function QuestionEditor({
           }}
         />
       )}
+      {!isLocked && <ShowWhenEditor question={question} draft={draft} isReadOnly={isReadOnly} onChange={onChange} />}
       {isFiling && (
         <Select
           label={strings.whereItGoes}
@@ -537,5 +553,62 @@ function ChoicesEditor({ choices, isReadOnly, onChange, onInvalidChange }: Choic
         commit(moveOne(rowIds), moveOne(choices));
       }}
     />
+  );
+}
+
+/** Props for a question's Show when. */
+interface ShowWhenEditorProps {
+  readonly question: FormQuestion;
+  readonly draft: FormDocument;
+  readonly isReadOnly: boolean;
+  readonly onChange: (change: QuestionChange) => void;
+}
+
+/**
+ * Show when (spec 0043, AC-1615): off, a line saying the question always shows and Add a condition; on, its
+ * conditions over the questions before it, and Always show it. A form's first question has nothing to read.
+ */
+function ShowWhenEditor({ question, draft, isReadOnly, onChange }: ShowWhenEditorProps) {
+  const earlier = questionFacts(
+    draft.questions.slice(
+      0,
+      draft.questions.findIndex((each) => each.id === question.id),
+    ),
+  );
+  const { showWhen } = question;
+  if (showWhen === undefined) {
+    return (
+      <SettingsRow
+        title={routingStrings.showWhen}
+        description={earlier.length === 0 ? routingStrings.noEarlier : routingStrings.alwaysShown}
+      >
+        {!isReadOnly && (
+          <Button
+            variant="dashed"
+            icon="plus"
+            isDisabled={earlier.length === 0}
+            onPress={() => onChange({ showWhen: storedShowWhen(firstConditions(earlier)) })}
+          >
+            {routingStrings.addShowWhen}
+          </Button>
+        )}
+      </SettingsRow>
+    );
+  }
+  return (
+    <SettingsSection title={routingStrings.showWhen} description={routingStrings.showWhenHint}>
+      <ConditionsEditor
+        value={showWhen}
+        facts={earlier}
+        factLabel={routingStrings.question}
+        isReadOnly={isReadOnly}
+        onChange={(next) => onChange({ showWhen: storedShowWhen(next) })}
+      />
+      {!isReadOnly && (
+        <Button variant="ghost" icon="x" onPress={() => onChange({ showWhen: null })}>
+          {routingStrings.clearShowWhen}
+        </Button>
+      )}
+    </SettingsSection>
   );
 }

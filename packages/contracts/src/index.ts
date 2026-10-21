@@ -4,10 +4,12 @@ import { attributesContract } from './attributes.ts';
 import { bookingPagesContract, bookingsContract } from './booking/pages.ts';
 import { schedulesContract } from './booking/schedules.ts';
 import { preferencesContract } from './preferences.ts';
+import { rotationsContract } from './booking/rotations.ts';
 import { bulkRecordsContract } from './bulk.ts';
 import { calendarContract } from './calendar.ts';
 import { commentsContract } from './comments.ts';
 import { formsContract, submissionsContract } from './forms/forms.ts';
+import { routingContract } from './forms/routing.ts';
 import { jobsContract } from './jobs.ts';
 import { meContract } from './me.ts';
 import { navContract } from './navigation.ts';
@@ -39,6 +41,7 @@ export * from './booking/index.ts';
 export * from './booking/blocks.ts';
 export * from './booking/pages.ts';
 export * from './booking/schedules.ts';
+export * from './booking/rotations.ts';
 export * from './bulk.ts';
 export * from './bulk-ops.ts';
 export * from './calendar.ts';
@@ -121,10 +124,13 @@ export const contract = {
   bookingPages: bookingPagesContract,
   bookings: bookingsContract,
   schedules: schedulesContract,
+  rotations: rotationsContract,
   search: searchContract,
   recents: recentsContract,
   // The sidebar (spec 0034): each member's own order, folds, hidden items, favourites and rail.
   nav: navContract,
   // Settings › Account › Preferences: the caller's own time zone, date format, week start and landing page.
   preferences: preferencesContract,
+  // Lead routing (spec 0043): the per rule report.
+  routing: routingContract,
 };

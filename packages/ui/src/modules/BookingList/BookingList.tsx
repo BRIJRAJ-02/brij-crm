@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react';
-import { Badge } from '../../atoms/Badge/Badge.tsx';
+import { Badge, type BadgeTone } from '../../atoms/Badge/Badge.tsx';
 import { Button } from '../../atoms/Button/Button.tsx';
 import { Icon } from '../../atoms/Icon/Icon.tsx';
 import { Link } from '../../atoms/Link/Link.tsx';
@@ -26,6 +26,8 @@ export interface BookingListRow {
    * of the member's own calendar events (Home's Today), which has no visitor: the row has no "You and" line.
    */
   readonly guestName?: string;
+  /** Who hosts it, when that isn't the reader: "Sam Lee and <guest>" in place of "You and". */
+  readonly hostName?: string;
   /** The guest's person page; only read with `guestName` (a row with no guest links nobody). */
   readonly guestHref?: string;
   /** Who else is in it, as chips (a calendar event's attendees, a booking's guests), and how many more. */
@@ -37,6 +39,8 @@ export interface BookingListRow {
   readonly via?: string;
   /** A state worth saying ("Cancelled"). */
   readonly badge?: string;
+  /** `accent` for a state that asks for action ("Needs a host"); `neutral`, the default, for one that only says. */
+  readonly badgeTone?: BadgeTone;
   /** The row's actions at its end (Cancel, an Edit menu). */
   readonly actions?: ReactNode;
 }
@@ -100,7 +104,7 @@ export function BookingList({ label, groups, onOpen, emptyState, placement = 'pa
                     <Button variant="ghost" onPress={() => onOpen(row.id)}>
                       {row.title}
                     </Button>
-                    {row.badge !== undefined && <Badge text={row.badge} />}
+                    {row.badge !== undefined && <Badge text={row.badge} tone={row.badgeTone ?? 'neutral'} />}
                   </div>
                   {hasDetails(row) && (
                     // Everything else on one muted line: Join first so it never gets cut off, then who, then the rest.
@@ -113,7 +117,7 @@ export function BookingList({ label, groups, onOpen, emptyState, placement = 'pa
                       )}
                       {row.guestName !== undefined && (
                         <span className={`${styles.text} ${styles.who}`}>
-                          {strings.youAnd}{' '}
+                          {row.hostName === undefined ? strings.youAnd : strings.hostAnd(row.hostName)}{' '}
                           {row.guestHref === undefined ? (
                             row.guestName
                           ) : (

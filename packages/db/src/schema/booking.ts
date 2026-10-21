@@ -61,6 +61,8 @@ export const bookingPages = pgTable(
     slotStep: smallint('slot_step'),
     /** The forms question shape (milestone 2). */
     questions: jsonb('questions').notNull().default([]),
+    /** A team page's routing rules (spec 0043, AC-1608): `RoutingRules`, tried at each booking. */
+    routing: jsonb('routing').notNull().default({ rules: [] }),
     /** `{ mode: 'create' | 'move_open', stageOptionId }` (milestone 2). */
     deal: jsonb('deal'),
     status: text('status').notNull().default('live'),
@@ -81,6 +83,8 @@ export const bookingPages = pgTable(
      * drizzle can't say `set null (schedule_id)`, and a plain set null would null `workspace_id` too.
      */
     scheduleId: uuid('schedule_id'),
+    /** A round robin page's reschedule rule (spec 0029, AC-746): `same` keeps the host when free, `rotation` asks again. */
+    rescheduleHost: text('reschedule_host').notNull().default('same'),
     /** A private page (spec 0027, AC-707, AC-708): it may book inside the host's holds, and waives its minimum notice. */
     isPrivate: boolean('is_private').notNull().default(false),
     /**
@@ -116,6 +120,7 @@ export const bookingPages = pgTable(
     check('booking_pages_status', sql`${t.status} in ('live', 'paused')`),
     check('booking_pages_paused_reason', sql`${t.pausedReason} is null or ${t.pausedReason} = 'host_removed'`),
     check('booking_pages_hours_mode', sql`${t.hoursMode} in ('mine', 'own')`),
+    check('booking_pages_reschedule_host', sql`${t.rescheduleHost} in ('same', 'rotation')`),
     check('booking_pages_title', sql`char_length(${t.title}) between 1 and 120`),
     check('booking_pages_description', sql`char_length(${t.description}) <= 2000`),
     check(
@@ -223,7 +228,10 @@ export const availabilitySchedules = pgTable(
   ],
 );
 
-/** The members a page books, in order: the owner alone for a personal page; 2 to 8 required members for a collective one. */
+/**
+ * The members a page books, in order: the owner alone for a personal page; 2 to 8 required members for a collective
+ * one; 0 to 7 fixed hosts, who attend every meeting, for a round robin one (spec 0037, AC-1319).
+ */
 export const bookingPageMembers = pgTable(
   'booking_page_members',
   {
@@ -290,6 +298,11 @@ export const bookings = pgTable(
     companyRecordId: uuid('company_record_id'),
     dealRecordId: uuid('deal_record_id'),
     submissionId: uuid('submission_id'),
+    /** A round robin booking whose host left and nobody could take it (spec 0029, AC-749): Bookings flags it. */
+    needsHostAt: timestamptz('needs_host_at'),
+    /** Marked by a host or a booking admin after the meeting when the guest didn't come (spec 0043, AC-1613). */
+    noShowAt: timestamptz('no_show_at'),
+    noShowByMemberId: uuid('no_show_by_member_id'),
     ...auditColumns(),
   },
   (t) => [
@@ -304,6 +317,12 @@ export const bookings = pgTable(
       columns: [t.workspaceId, t.hostMemberId],
       foreignColumns: [members.workspaceId, members.id],
     }),
+    foreignKey({
+      name: 'bookings_no_show_by',
+      columns: [t.workspaceId, t.noShowByMemberId],
+      foreignColumns: [members.workspaceId, members.id],
+    }),
+    check('bookings_no_show', sql`(${t.noShowAt} is null) = (${t.noShowByMemberId} is null)`),
     uniqueIndex('bookings_attempt').on(t.workspaceId, t.pageId, t.idempotencyKey),
     // The guest page finds its booking by the hashed token before the workspace is known, so it is unique everywhere.
     uniqueIndex('bookings_manage_token').on(t.manageTokenHash),
@@ -423,5 +442,50 @@ export const bookingTimeBlocks = pgTable(
       id: t.updatedById,
       memberId: t.updatedByMemberId,
     }),
+  ],
+);
+
+/**
+ * Who a booking occupies (spec 0029, AC-745): one row per member, the host's
+ * kept by the trigger `crm_booking_hosts_mirror` (migration 0058) with the
+ * booking's range and status, a collective page's other required members
+ * written beside it by the booking. Its exclusion constraint
+ * `booking_hosts_no_overlap` (hand written) refuses two confirmed rows of one
+ * member whose ranges overlap, so a member is never double booked across
+ * every page they are on.
+ */
+export const bookingHosts = pgTable(
+  'booking_hosts',
+  {
+    workspaceId: workspaceId(),
+    bookingId: uuid('booking_id').notNull(),
+    memberId: uuid('member_id').notNull(),
+    /** The booking's `during`: its meeting widened by its page's buffers. */
+    during: tstzrange('during').notNull(),
+    /** `during`'s ends, kept beside it: plain comparisons reach a btree index under row level security, `&&` doesn't. */
+    startsAt: timestamptz('starts_at').generatedAlwaysAs(sql`lower(during)`),
+    endsAt: timestamptz('ends_at').generatedAlwaysAs(sql`upper(during)`),
+    /** The booking's status, mirrored. */
+    status: text('status').notNull(),
+    createdAt: timestamptz('created_at').notNull().defaultNow(),
+    updatedAt: timestamptz('updated_at').notNull().defaultNow(),
+  },
+  (t) => [
+    primaryKey({ name: 'booking_hosts_pkey', columns: [t.workspaceId, t.bookingId, t.memberId] }),
+    foreignKey({
+      name: 'booking_hosts_booking',
+      columns: [t.workspaceId, t.bookingId],
+      foreignColumns: [bookings.workspaceId, bookings.id],
+    }).onDelete('cascade'),
+    foreignKey({
+      name: 'booking_hosts_member',
+      columns: [t.workspaceId, t.memberId],
+      foreignColumns: [members.workspaceId, members.id],
+    }),
+    // A member's confirmed time in a range: every slots read and recheck.
+    index('booking_hosts_by_member')
+      .on(t.workspaceId, t.memberId, t.startsAt)
+      .where(sql`${t.status} = 'confirmed'`),
+    check('booking_hosts_status', sql`${t.status} in ('confirmed', 'cancelled')`),
   ],
 );

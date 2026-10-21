@@ -26,6 +26,8 @@ export interface QuestionListItem {
    * on a form that keeps its submissions only, where no answer is filed.
    */
   readonly filed?: string;
+  /** Its Show when, last on the second line (spec 0043): "Shows when Budget is Large". Left out when it always shows. */
+  readonly condition?: string;
   /** The question a publish refused: marked, and the caller keeps it open until it is fixed. */
   readonly hasProblem?: boolean;
 }
@@ -168,6 +170,7 @@ export function QuestionList({
                           ? []
                           : [item.choiceCount === 0 ? strings.noChoices : strings.choices(item.choiceCount)]),
                         ...(item.filed === undefined ? [] : [item.filed]),
+                        ...(item.condition === undefined ? [] : [item.condition]),
                       ].map((part, at) => (
                         // The separator stays outside the part, so its spaces are where a line may break.
                         <Fragment key={at}>

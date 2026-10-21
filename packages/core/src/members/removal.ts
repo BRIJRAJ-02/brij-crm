@@ -12,6 +12,7 @@ import { calendarsRemoval } from '../calendar/connections.ts';
 import type { WriteContext } from '../engine/write.ts';
 import { navRemoval } from '../navigation/navigation.ts';
 import { notificationsRemoval } from '../notifications/inbox.ts';
+import { rotationsRemoval } from '../rotation/removal.ts';
 import { recentsRemoval } from '../search/recents.ts';
 import { viewsRemoval } from '../views/manage.ts';
 import type { RemovalCounts, RemovalEffect } from './removal-effect.ts';
@@ -64,6 +65,8 @@ export const REMOVAL_EFFECTS: readonly RemovalEffect[] = [
   viewsRemoval,
   calendarsRemoval,
   bookingPagesRemoval,
+  // After the member row is marked removed: it flags their upcoming round robin bookings and queues needs_host.
+  rotationsRemoval,
   tasksRemoval,
   recordsRemoval,
   recentsRemoval,
@@ -113,6 +116,10 @@ export const KEPT_ON_REMOVAL: Readonly<Record<string, string>> = {
   comments_resolved_by: 'history: who resolved a thread',
   comments_deleted_by: 'history: who deleted a comment',
   notifications_actor: 'history: who a notification is about',
+  rotation_assignments_member: 'history: who a booking or lead went to, and the fairness counts',
+  booking_hosts_member:
+    'their bookings stay for admins to hand on; round robin ones are reseated by the worker (AC-749)',
+  bookings_no_show_by: 'history: who marked a booking a no show',
   member_onboarding_member: 'their first run answers (spec 0036): nobody reads them, in the app or after',
 };
 

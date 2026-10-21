@@ -293,3 +293,39 @@ export const BookAfterAtOnce: Story = {
     await expect(canvas.getAllByText('Taking you to book a time…').length).toBeGreaterThan(0);
   },
 };
+
+/** Show when (spec 0043): Team size shows only once the budget is Large, and a hidden required question never blocks Send. */
+export const ShowWhen: Story = {
+  parameters: { crm: { screenshot: false } },
+  args: {
+    onSubmit: fn(() => Promise.resolve({ kind: 'done' as const, next: { kind: 'message' as const, text: '' } })),
+    form: {
+      ...LEAD,
+      questions: [
+        {
+          id: 'budget',
+          key: 'budget',
+          label: 'Budget',
+          answerType: 'choice',
+          choices: ['Small', 'Large'],
+          required: true,
+        },
+        {
+          id: 'team',
+          key: 'team',
+          label: 'Team size',
+          answerType: 'number',
+          required: true,
+          showWhen: { join: 'all', rules: [{ key: 'budget', op: 'is', value: 'Large' }] },
+        },
+      ],
+    },
+  },
+  play: async ({ canvas }) => {
+    await expect(canvas.queryByLabelText('Team size')).not.toBeInTheDocument();
+    await userEvent.click(canvas.getByRole('radio', { name: 'Large' }));
+    await expect(await canvas.findByLabelText('Team size')).toBeInTheDocument();
+    await userEvent.click(canvas.getByRole('radio', { name: 'Small' }));
+    await waitFor(() => expect(canvas.queryByLabelText('Team size')).not.toBeInTheDocument());
+  },
+};
