@@ -51,6 +51,8 @@ export interface BookingMail {
   readonly why: string;
   /** The calendar file, when the message carries one. */
   readonly ics?: { readonly filename: string; readonly content: string; readonly method: 'REQUEST' | 'CANCEL' };
+  /** Who they meet, by name beside their initials: a round robin booking's assigned host (owner decision, 22 Oct). */
+  readonly host?: { readonly label: string; readonly name: string };
 }
 
 /** What the emails need: the app's origin for links, the guest page key, the sender for the calendar file, the clock. */
@@ -158,6 +160,7 @@ export async function prepareBookingMail(
       names.length <= 1 ? (host?.name ?? 'Your host') : `${names.slice(0, -1).join(', ')} and ${names.at(-1) ?? ''}`;
     const { kind } = input;
     const cancelled = row.status === 'cancelled';
+    const isTeam = page.kind === 'round_robin';
 
     if (kind !== 'cancelled' && cancelled) return { messages: [], invited: [], skipped: 'cancelled' };
     if (kind === 'reminder_24h' || kind === 'reminder_1h') {
@@ -260,10 +263,12 @@ export async function prepareBookingMail(
           rows: [
             { label: 'What', value: page.title },
             when(row.visitorTimeZone),
-            { label: 'With', value: hostName },
+            // A round robin booking names its assigned host beside their initials instead (`host`).
+            ...(isTeam ? [] : [{ label: 'With', value: hostName }]),
             { label: 'Where', value: where },
             ...(bookedByHost && note !== undefined ? [{ label: 'Message', value: `“${note}”` }] : []),
           ],
+          ...(isTeam ? { host: { label: 'Your host', name: hostName } } : {}),
           button: { label: 'View your booking', url: manageUrl },
           footnote: change,
           why: visitorWhy,
@@ -434,12 +439,8 @@ export async function prepareBookingMail(
           preview: preview(row.visitorTimeZone),
           heading: `Your meeting is now with ${hostName}`,
           intro: `${page.title} has a new host. The time and place stay the same, and a new calendar invitation is on its way.`,
-          rows: [
-            { label: 'What', value: page.title },
-            when(row.visitorTimeZone),
-            { label: 'With', value: hostName },
-            { label: 'Where', value: where },
-          ],
+          rows: [{ label: 'What', value: page.title }, when(row.visitorTimeZone), { label: 'Where', value: where }],
+          host: { label: 'Your new host', name: hostName },
           button: { label: 'View your booking', url: manageUrl },
           footnote: change,
           why: visitorWhy,

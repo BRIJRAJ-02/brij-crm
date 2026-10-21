@@ -20,6 +20,8 @@ export interface BookingWords {
   readonly footnote?: string;
   /** Why the reader got it, for the footer. */
   readonly why: string;
+  /** Who they meet, shown by name beside their initials (a round robin booking's host, spec 0029). */
+  readonly host?: { readonly label: string; readonly name: string };
 }
 
 /** Whether a link is on the app's origin; a link that doesn't parse isn't (and the layout refuses it). */
@@ -38,6 +40,7 @@ function sameOrigin(link: string, appOrigin: string): boolean {
  */
 export function bookingDocument(words: BookingWords, appOrigin: string): EmailDocument {
   const blocks: EmailBlock[] = [{ type: 'paragraph', text: words.intro }];
+  if (words.host !== undefined) blocks.push({ type: 'person', label: words.host.label, name: words.host.name });
   if (words.rows.length > 0) blocks.push({ type: 'rows', layout: 'compact', rows: words.rows });
   if (words.button !== undefined) {
     blocks.push({

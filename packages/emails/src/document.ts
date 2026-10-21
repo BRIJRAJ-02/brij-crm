@@ -33,7 +33,9 @@ export type EmailBlock =
   /** Someone's words, set apart: a message, an excerpt. */
   | { readonly type: 'quote'; readonly text: string }
   /** A quieter line: what happens next, what to do if it wasn't you. */
-  | { readonly type: 'note'; readonly text: string };
+  | { readonly type: 'note'; readonly text: string }
+  /** Who someone is with, by name beside their initials (a round robin booking's host, spec 0029). */
+  | { readonly type: 'person'; readonly label: string; readonly name: string };
 
 /** A whole email's words. */
 export interface EmailDocument {

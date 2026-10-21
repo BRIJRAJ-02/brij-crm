@@ -11,6 +11,7 @@ import { callUrl, onAppOrigin, poweredByUrl, wordmarkUrls, type EmailMedium } fr
 import { Button, Container, Head, Heading, Html, Link, Section, Text, renderHtml } from './react-email.ts';
 import {
   EMAIL_WIDTH,
+  AVATAR,
   emailStylesheet,
   HAIRLINE,
   LABEL_COLUMN,
@@ -67,6 +68,19 @@ function lines(text: string): ReactNode {
     null,
     ...each.flatMap((line, index) => (index === 0 ? [line] : [h('br', { key: `b${String(index)}` }), line])),
   );
+}
+
+/** Up to two initials of a name ("Sam Lee" is "SL"), as the app's avatars draw them. */
+function initialsOf(name: string): string {
+  const words = name
+    .trim()
+    .split(/\s+/u)
+    .filter((word) => word !== '');
+  const first = words[0];
+  if (first === undefined) return '';
+  const last = words.length > 1 ? words.at(-1) : undefined;
+  const letter = (word: string) => Array.from(word)[0]?.toLocaleUpperCase() ?? '';
+  return `${letter(first)}${last === undefined ? '' : letter(last)}`;
 }
 
 /** A table with no table semantics, for layout only. */
@@ -224,6 +238,56 @@ function block(item: EmailBlock, origin: string): ReactNode {
           },
         },
         item.label,
+      );
+    }
+    case 'person': {
+      const tile = role('avatar');
+      const text = role('text');
+      const label = role('secondary');
+      return h(
+        'table',
+        { role: 'presentation', cellPadding: 0, cellSpacing: 0, border: 0 },
+        h(
+          'tbody',
+          null,
+          h(
+            'tr',
+            null,
+            h(
+              'td',
+              {
+                className: tile.className,
+                'aria-hidden': 'true',
+                width: pixels(AVATAR),
+                height: pixels(AVATAR),
+                style: {
+                  ...type(TYPE.labelStrong),
+                  ...tile.style,
+                  width: AVATAR,
+                  height: AVATAR,
+                  borderRadius: RADIUS.full,
+                  textAlign: 'center',
+                  verticalAlign: 'middle',
+                },
+              },
+              initialsOf(item.name),
+            ),
+            h(
+              'td',
+              { style: { padding: `0 0 0 ${SPACE[12]}`, verticalAlign: 'middle' } },
+              h(
+                Text,
+                { className: label.className, style: { ...type(TYPE.label), ...label.style, margin: '0' } },
+                item.label,
+              ),
+              h(
+                Text,
+                { className: text.className, style: { ...type(TYPE.bodyStrong), ...text.style, margin: '0' } },
+                item.name,
+              ),
+            ),
+          ),
+        ),
       );
     }
     case 'quote': {
@@ -498,6 +562,9 @@ export function documentText(document: EmailDocument, options: RenderOptions): s
       case 'paragraph':
       case 'note':
         out.push(item.text, '');
+        break;
+      case 'person':
+        out.push(`${item.label}: ${item.name}`, '');
         break;
       case 'quote':
         out.push(...item.text.split(/\r?\n/).map((line) => `> ${line}`), '');

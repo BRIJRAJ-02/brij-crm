@@ -829,6 +829,23 @@ describe('a round robin page (AC-732 to AC-734, AC-738, AC-742 to AC-745, AC-754
     expect((await hostsOf(w, [booked.bookingId])).get(booked.bookingId)).toBe(other);
   });
 
+  it('names the assigned host beside their initials in the confirmation (owner decision, 22 October)', async () => {
+    const w = await workspace();
+    const sam = await w.addMember('Sam Lee');
+    const kim = await w.addMember('Kim Park');
+    const { entry } = await roundRobin(w, [sam.id, kim.id]);
+    const booked = await bookPublicSlot(entry, deps(), bookInput(at('09:00')));
+    const host = (await hostsOf(w, [booked.bookingId])).get(booked.bookingId) === sam.id ? 'Sam Lee' : 'Kim Park';
+    const mail = await prepareBookingMail(
+      systemScope(db, w.workspaceId),
+      { appOrigin: 'https://app.example', linkKey: LINK_KEY, organizerEmail: 'bookings@app.example', now: () => NOW },
+      { bookingId: booked.bookingId, kind: 'confirmed' },
+    );
+    expect(mail.messages[0]?.host).toEqual({ label: 'Your host', name: host });
+    expect(mail.messages[0]?.rows.map((row) => row.label)).not.toContain('With');
+    expect(mail.messages[0]?.subject).toBe(`Booked: Demo with ${host}`);
+  });
+
   it('voids the ledger row of a cancelled booking, so it stops counting (AC-747)', async () => {
     const w = await workspace();
     const sam = await w.addMember('Sam Lee');
