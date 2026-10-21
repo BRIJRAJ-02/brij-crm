@@ -8,6 +8,7 @@ import {
   Button,
   Callout,
   Card,
+  Code,
   CopyButton,
   DescriptionList,
   Disclosure,
@@ -17,7 +18,7 @@ import {
 } from '@crm/ui';
 import { useRouteContext } from '@tanstack/react-router';
 import { useState } from 'react';
-import { RotateSecretDialog } from './FormConfirms.tsx';
+import { RemoveSiteDialog, RotateSecretDialog } from './FormConfirms.tsx';
 import { firstRefusal } from './refusals.ts';
 import { embedSnippet, EMBED_MODES, ownFormHtml, type EmbedMode } from './snippets.ts';
 import { strings } from './strings.ts';
@@ -67,7 +68,8 @@ export function InstallTab({ slug, form, isReadOnly, onFormChange }: InstallTabP
       publicKey: form.publicKey,
       title: shown.headline,
       theme: shown.look.colour,
-      buttonText: shown.buttonText,
+      // A button on a site's page reads as an invitation, not as the form's own Submit.
+      buttonText: strings.embedButtonText,
     },
     mode,
   );
@@ -76,20 +78,28 @@ export function InstallTab({ slug, form, isReadOnly, onFormChange }: InstallTabP
   const [siteError, setSiteError] = useState<string | undefined>(undefined);
   const [isRevealed, setRevealed] = useState(false);
   const [isRotating, setRotating] = useState(false);
+  const [removing, setRemoving] = useState<string | undefined>(undefined);
+  // One change to the sites or the switch at a time, so each builds on the last saved list.
+  const [saving, setSaving] = useState<'sites' | 'unsigned' | undefined>(undefined);
 
-  const saveSites = (list: readonly string[]) =>
-    data.forms.updateSettings(slug, form.id, { allowedOrigins: list }).then(
+  /** Saves the list; resolves with the saved form, rejects with the refusal. */
+  const saveSites = (list: readonly string[]) => {
+    setSaving('sites');
+    return data.forms.updateSettings(slug, form.id, { allowedOrigins: list }).then(
       (view) => {
+        setSaving(undefined);
         onFormChange(view);
         toasts.toast({ tone: 'success', message: strings.sitesSaved });
-        return true;
+        return view;
       },
       (error: unknown) => {
-        setSiteError(firstRefusal(error).message);
-        return false;
+        setSaving(undefined);
+        throw error;
       },
     );
+  };
   const addSite = () => {
+    if (saving !== undefined) return;
     const { origin, problem } = siteOrigin(site);
     if (origin === undefined) {
       setSiteError(problem);
@@ -103,9 +113,14 @@ export function InstallTab({ slug, form, isReadOnly, onFormChange }: InstallTabP
       setSiteError(strings.sitesFull);
       return;
     }
-    void saveSites([...form.allowedOrigins, origin]).then((saved) => {
-      if (saved) setSite('');
-    });
+    saveSites([...form.allowedOrigins, origin]).then(
+      () => {
+        setSite('');
+      },
+      (error: unknown) => {
+        setSiteError(firstRefusal(error).message);
+      },
+    );
   };
 
   return (
@@ -158,7 +173,11 @@ export function InstallTab({ slug, form, isReadOnly, onFormChange }: InstallTabP
           />
           <Callout tone="info" title={strings.taggingTitle}>
             <p>{strings.taggingText}</p>
-            <p>{strings.taggingConsent}</p>
+            <p>
+              {strings.taggingConsent((text) => (
+                <Code key={text}>{text}</Code>
+              ))}
+            </p>
           </Callout>
         </Card>
         <Card
@@ -168,7 +187,7 @@ export function InstallTab({ slug, form, isReadOnly, onFormChange }: InstallTabP
             ? {}
             : {
                 footer: (
-                  <Button icon="plus" onPress={addSite}>
+                  <Button icon="plus" isPending={saving === 'sites'} onPress={addSite}>
                     {strings.siteAdd}
                   </Button>
                 ),
@@ -188,7 +207,7 @@ export function InstallTab({ slug, form, isReadOnly, onFormChange }: InstallTabP
                     variant="ghost"
                     label={strings.siteRemove(origin)}
                     onPress={() => {
-                      void saveSites(form.allowedOrigins.filter((each) => each !== origin));
+                      if (saving === undefined) setRemoving(origin);
                     }}
                   />
                 ),
@@ -211,54 +230,88 @@ export function InstallTab({ slug, form, isReadOnly, onFormChange }: InstallTabP
             />
           )}
         </Card>
-        <Card title={strings.refuseUnsigned} description={strings.refuseUnsignedHint}>
+        <Card
+          title={strings.refuseUnsigned}
+          description={strings.refuseUnsignedHint}
+          {...(form.signingSecret === undefined
+            ? {}
+            : {
+                // The secret's own actions, together under it: Reveal, then Rotate last.
+                footer: (
+                  <>
+                    <Button
+                      icon={isRevealed ? 'eye-off' : 'eye'}
+                      onPress={() => {
+                        setRevealed((shown) => !shown);
+                      }}
+                    >
+                      {isRevealed ? strings.secretHide : strings.secretReveal}
+                    </Button>
+                    {!isReadOnly && (
+                      <Button
+                        icon="refresh-cw"
+                        variant="danger"
+                        onPress={() => {
+                          setRotating(true);
+                        }}
+                      >
+                        {strings.secretRotate}
+                      </Button>
+                    )}
+                  </>
+                ),
+              })}
+        >
           <Switch
             label={strings.refuseUnsigned}
             isLabelHidden
             isSelected={form.requireSignature}
             isReadOnly={isReadOnly}
             onChange={(requireSignature) => {
-              data.forms.updateSettings(slug, form.id, { requireSignature }).then(onFormChange, (error: unknown) => {
-                toasts.toast({ tone: 'danger', message: firstRefusal(error).message });
-              });
+              if (saving !== undefined) return;
+              setSaving('unsigned');
+              data.forms.updateSettings(slug, form.id, { requireSignature }).then(
+                (view) => {
+                  setSaving(undefined);
+                  onFormChange(view);
+                  toasts.toast({
+                    tone: 'success',
+                    message: requireSignature ? strings.unsignedRefused : strings.unsignedAllowed,
+                  });
+                },
+                (error: unknown) => {
+                  setSaving(undefined);
+                  toasts.toast({ tone: 'danger', message: firstRefusal(error).message });
+                },
+              );
             }}
           />
           <Disclosure title={strings.signHowTitle}>
-            <p>{strings.signHowText}</p>
+            <p>
+              {strings.signHowText((text) => (
+                <Code key={text}>{text}</Code>
+              ))}
+            </p>
           </Disclosure>
           {form.signingSecret !== undefined && (
-            <>
-              <Field
-                label={strings.secret}
-                variant="copy"
-                type={isRevealed ? 'text' : 'password'}
-                copyLabel={strings.copySecret}
-                hint={strings.secretReason}
-                value={form.signingSecret}
-              />
-              <Button
-                icon={isRevealed ? 'eye-off' : 'eye'}
-                onPress={() => {
-                  setRevealed((shown) => !shown);
-                }}
-              >
-                {isRevealed ? strings.secretHide : strings.secretReveal}
-              </Button>
-              {!isReadOnly && (
-                <Button
-                  icon="refresh-cw"
-                  variant="ghost-danger"
-                  onPress={() => {
-                    setRotating(true);
-                  }}
-                >
-                  {strings.secretRotate}
-                </Button>
-              )}
-            </>
+            <Field
+              label={strings.secret}
+              variant="copy"
+              type={isRevealed ? 'text' : 'password'}
+              copyLabel={strings.copySecret}
+              hint={strings.secretReason}
+              value={form.signingSecret}
+            />
           )}
         </Card>
       </Disclosure>
+      <RemoveSiteDialog
+        site={removing}
+        onRemove={(origin) => saveSites(form.allowedOrigins.filter((each) => each !== origin))}
+        onClose={() => {
+          setRemoving(undefined);
+        }}
+      />
       <RotateSecretDialog
         data={data}
         slug={slug}

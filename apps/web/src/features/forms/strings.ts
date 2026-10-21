@@ -260,7 +260,9 @@ export const strings = {
   embedInlineHint: 'Fills the width of the space you put it in and grows with the form, so it never scrolls inside.',
   embedPopupHint:
     'Your own button opens the form in a dialog; on a phone it fills the screen. Style the button as you like.',
-  embedFloatingHint: 'A button in the corner of every page that opens the form, in the form’s button words.',
+  embedFloatingHint: 'A button in the corner of every page that opens the form. Change its words in data-timefix-text.',
+  /** The words on the popup's and the corner's button, until the site changes them. */
+  embedButtonText: 'Contact us',
   embedSnippet: 'Embed snippet',
   embedText: 'Put the form on a page of your own site.',
   advancedTitle: 'Advanced: for a developer',
@@ -270,8 +272,16 @@ export const strings = {
   taggingTitle: 'How tagging works',
   taggingText:
     'The form names your workspace, this form and its version. Each field’s name is its question’s key, so renaming a question never breaks your page. With each post the script sends the page, its title, the visit’s first page and referrer, and the UTM tags, shown on the submission as Came from.',
-  taggingConsent:
-    'No cookie is set until your site allows it: add data-timefix-consent="granted" to the script tag, or call Timefix.consent(true) from your cookie banner. Then a first party tfx_vid cookie links one visitor’s submissions.',
+  /** The consent line, with its code names drawn by `code` so they read and copy exactly. */
+  taggingConsent: <T>(code: (text: string) => T): readonly (string | T)[] => [
+    'No cookie is set until your site allows it: add ',
+    code('data-timefix-consent="granted"'),
+    ' to the script tag, or call ',
+    code('Timefix.consent(true)'),
+    ' from your cookie banner. Then a first party ',
+    code('tfx_vid'),
+    ' cookie links one visitor’s submissions.',
+  ],
   ownFormChooseOne: 'Choose one',
   ownFormTrapNote: 'Leave this hidden field in place: it keeps bots out.',
   ownFormTrapLabel: 'Leave this empty',
@@ -284,16 +294,28 @@ export const strings = {
   siteNewHint: 'Its https address, such as https://acme.com.',
   siteAdd: 'Add site',
   siteRemove: (origin: string) => `Remove ${origin}`,
+  siteRemoveTitle: (origin: string) => `Remove ${origin}?`,
+  siteRemoveText:
+    'Your own HTML on that site stops posting to the form at once. Embeds and the hosted page keep working.',
+  siteRemoveAction: 'Remove site',
   siteNotHttps: 'Use the site’s https address, such as https://acme.com.',
   siteTaken: 'That site is in the list already.',
   sitesFull: 'A form lists at most 20 sites.',
   sitesSaved: 'Sites saved.',
+  unsignedRefused: 'Unsigned posts are refused now.',
+  unsignedAllowed: 'Unsigned posts are taken again.',
   refuseUnsigned: 'Refuse unsigned posts',
   refuseUnsignedHint:
     'Turn this on when only your site’s server posts to the form. Each post must then carry a signature made with the secret below, so your own HTML posting from a browser is refused. The hosted page and embeds keep working.',
   signHowTitle: 'How to sign a post',
-  signHowText:
-    'On your server, take the exact body you send, make its HMAC with SHA 256 and the signing secret, and send it in the x-crm-signature header as sha256= and the hex digest.',
+  /** How to sign, with its code names drawn by `code`. */
+  signHowText: <T>(code: (text: string) => T): readonly (string | T)[] => [
+    'On your server, take the exact body you send, make its HMAC with SHA 256 and the signing secret, and send it in the ',
+    code('x-crm-signature'),
+    ' header as ',
+    code('sha256='),
+    ' and the hex digest.',
+  ],
   secret: 'Signing secret',
   secretReason: 'Keep it on your server only. Anyone who has it can post as your site.',
   secretReveal: 'Reveal',
@@ -342,6 +364,7 @@ export const strings = {
   submission: 'Submission',
   cameFrom: 'Where it came from',
   cameFromPage: 'Page',
+  cameFromHome: 'Home page',
   cameFromTitle: 'Page title',
   cameFromLanding: 'First page of the visit',
   cameFromReferrer: 'Referrer',
@@ -353,7 +376,6 @@ export const strings = {
     floating: 'An embed’s corner button',
     own: 'The site’s own HTML',
   } as const,
-  cameFromVisitor: 'Visitor id',
   utmSource: 'UTM source',
   utmMedium: 'UTM medium',
   utmCampaign: 'UTM campaign',
@@ -379,7 +401,7 @@ export const strings = {
       : `Adding ${count(queued, 'submission', 'submissions')} to the CRM. ${String(skipped)} skipped: already in it or held.`,
   nothingToAdd: 'Nothing to add: these are already in the CRM or held.',
   /** Asks before many submissions go to the CRM at once: "Add 12 submissions to the CRM?". */
-  addManyTitle: (n: number) => `Add ${count(n, 'submission', 'submissions')} to the CRM?`,
+  addManyTitle: (n: number, max: number) => `Add ${count(Math.min(n, max), 'submission', 'submissions')} to the CRM?`,
   addManyText: (n: number, max: number) =>
     n > max
       ? `Each is filed the way the form files now, making new records or updating the ones it matches. The first ${String(max)} go now; add the rest after.`

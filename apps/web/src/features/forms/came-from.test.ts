@@ -17,12 +17,13 @@ describe('where a submission came from', () => {
           utm_campaign: 'spring',
           params: { plan: 'pro' },
           mode: 'popup',
+          visitor_id: 'v_0123456789abcdef',
         },
       }),
     ).toEqual([
       { term: 'Page', description: '/pricing?plan=pro on acme.com' },
       { term: 'Page title', description: 'Pricing' },
-      { term: 'First page of the visit', description: '/ on acme.com' },
+      { term: 'First page of the visit', description: 'Home page on acme.com' },
       { term: 'Referrer', description: '/item on news.example.com' },
       { term: 'UTM campaign', description: 'spring' },
       { term: 'plan', description: 'pro' },
@@ -36,6 +37,8 @@ describe('where a submission came from', () => {
       { term: 'UTM source', description: 'mail' },
     ]);
     expect(cameFromOf({ hidden: {} })).toEqual([]);
+    // A mode a later script names is left out, never shown blank.
+    expect(cameFromOf({ hidden: {}, context: { mode: 'sidebar' } as never })).toEqual([]);
     expect(pageName('not an address')).toBe('not an address');
   });
 });

@@ -679,7 +679,7 @@ export function SubmissionsTab({
         <p>{strings.deleteSubmissionText}</p>
       </Modal>
       <Modal
-        title={strings.addManyTitle(addingMany.length)}
+        title={strings.addManyTitle(addingMany.length, ADD_MAX)}
         isOpen={isAddingMany}
         isBusy={busy === 'add'}
         onOpenChange={(isOpen) => {
@@ -747,6 +747,7 @@ function SubmissionDetail({
       {source.length > 0 && (
         <>
           <h3>{strings.cameFrom}</h3>
+          {/* Plain text, never links: a page's address came from the visitor's browser. */}
           <DescriptionList items={[...source]} />
         </>
       )}
