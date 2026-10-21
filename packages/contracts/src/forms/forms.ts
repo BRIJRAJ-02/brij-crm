@@ -387,16 +387,16 @@ export const ADD_TO_CRM_MAX = 500;
  * held, filing, already linked) are left out and counted in `skipped`.
  */
 export const AddToCrmInput = WorkspaceScoped.extend({
-  formId: z.uuid(),
-  submissionIds: z.array(z.uuid()).min(1).max(ADD_TO_CRM_MAX),
-  mutationId: z.uuid(),
+  formId: Uuid,
+  submissionIds: z.array(Uuid).min(1).max(ADD_TO_CRM_MAX),
+  mutationId: Uuid,
 });
 /** Add to CRM. */
 export type AddToCrmInput = z.infer<typeof AddToCrmInput>;
 
 /** What Add to CRM started: its job (absent when nothing qualified), how many it files and how many it left out. */
 export const AddToCrmResult = z.object({
-  jobId: z.uuid().optional(),
+  jobId: Uuid.optional(),
   queued: z.number().int().min(0),
   skipped: z.number().int().min(0),
 });
@@ -413,7 +413,7 @@ export const SyncScope = z.enum(['all', 'unfiled']);
 export type SyncScope = z.infer<typeof SyncScope>;
 
 /** A sync's preview, or its scope. */
-export const SyncInput = WorkspaceScoped.extend({ formId: z.uuid(), scope: SyncScope });
+export const SyncInput = WorkspaceScoped.extend({ formId: Uuid, scope: SyncScope });
 /** A sync's preview. */
 export type SyncInput = z.infer<typeof SyncInput>;
 
@@ -446,12 +446,12 @@ export const SyncPreview = SyncCounts.extend({
 export type SyncPreview = z.infer<typeof SyncPreview>;
 
 /** Starting a sync: its scope, and the job's id (client minted, so a retry starts one job). */
-export const SyncStartInput = SyncInput.extend({ jobId: z.uuid(), mutationId: z.uuid() });
+export const SyncStartInput = SyncInput.extend({ jobId: Uuid, mutationId: Uuid });
 /** Starting a sync. */
 export type SyncStartInput = z.infer<typeof SyncStartInput>;
 
 /** A started sync: its `forms.sync` job (whose `result` ends as `SyncCounts` plus `skipped`) and how many it will go through. */
-export const SyncStarted = z.object({ jobId: z.uuid(), total: z.number().int().min(0) });
+export const SyncStarted = z.object({ jobId: Uuid, total: z.number().int().min(0) });
 /** A started sync. */
 export type SyncStarted = z.infer<typeof SyncStarted>;
 
@@ -469,23 +469,23 @@ export const SubmissionSelection = z.discriminatedUnion('kind', [
     from: Timestamp.optional(),
     to: Timestamp.optional(),
   }),
-  z.object({ kind: z.literal('ids'), submissionIds: z.array(z.uuid()).min(1).max(EXPORT_IDS_MAX) }),
+  z.object({ kind: z.literal('ids'), submissionIds: z.array(Uuid).min(1).max(EXPORT_IDS_MAX) }),
 ]);
 /** Which submissions an export holds. */
 export type SubmissionSelection = z.infer<typeof SubmissionSelection>;
 
 /** Exporting a form's submissions as CSV: the export's id (client minted, so a retry makes one), the form, the selection. */
 export const ExportSubmissionsInput = WorkspaceScoped.extend({
-  id: z.uuid(),
-  formId: z.uuid(),
+  id: Uuid,
+  formId: Uuid,
   select: SubmissionSelection,
-  mutationId: z.uuid(),
+  mutationId: Uuid,
 });
 /** Exporting a form's submissions. */
 export type ExportSubmissionsInput = z.infer<typeof ExportSubmissionsInput>;
 
 /** One export by id (only its starter sees it). */
-export const ExportIdInput = WorkspaceScoped.extend({ exportId: z.uuid() });
+export const ExportIdInput = WorkspaceScoped.extend({ exportId: Uuid });
 /** One export by id. */
 export type ExportIdInput = z.infer<typeof ExportIdInput>;
 
@@ -495,10 +495,10 @@ export type ExportIdInput = z.infer<typeof ExportIdInput>;
  * succeeded (`GET`, the session's cookie; 404 for anyone but its starter).
  */
 export const ExportView = z.object({
-  id: z.uuid(),
-  formId: z.uuid(),
+  id: Uuid,
+  formId: Uuid,
   fileName: z.string(),
-  jobId: z.uuid(),
+  jobId: Uuid,
   rowCount: z.number().int().min(0).optional(),
   expiresAt: Timestamp,
   downloadPath: z.string(),
