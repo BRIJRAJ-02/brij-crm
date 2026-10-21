@@ -59,15 +59,20 @@ export function RecordDetails({
   const memberDisplays = useMemo(() => toActorDisplays(members), [members]);
   // An option a table's cell just made (spec 0012, AC-238) shows by its label here too, until the attribute lists it.
   const { data } = useRouteContext({ from: '__root__' });
-  const { slug = '' } = useParams({ strict: false });
+  // The object's API name from the route: a network's editor tells a company from a person by it.
+  const { slug = '', object: objectKey } = useParams({ strict: false });
   const pendingOptions = usePendingOptions(data.options.pending);
   const fields = useMemo(
     () =>
       attributes.map((definition) => ({
         definition,
-        attribute: withPendingOptions(toFieldAttribute(definition, strings.referenceReadOnly), slug, pendingOptions),
+        attribute: withPendingOptions(
+          toFieldAttribute(definition, strings.referenceReadOnly, objectKey),
+          slug,
+          pendingOptions,
+        ),
       })),
-    [attributes, slug, pendingOptions],
+    [attributes, slug, objectKey, pendingOptions],
   );
   // A record reference edits through its picker and goes as link deltas (spec 0014), never a whole value.
   const links = useLinkEditing(slug);

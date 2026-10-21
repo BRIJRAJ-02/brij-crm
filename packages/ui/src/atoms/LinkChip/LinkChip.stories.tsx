@@ -79,18 +79,14 @@ export const Long: Story = {
   ),
 };
 
-/** With a brand's mark: a social profile, the network's mark and then the handle; the link is named for both, and the whole link is the tooltip. */
+/** With a brand's mark: a social profile, the network's mark and then the handle; the link is named for both. */
 export const WithMark: Story = {
   render: () => (
     <Stage>
-      <LinkChip
-        href="https://linkedin.com/in/ada-lovelace"
-        mark="linkedin"
-        title="https://linkedin.com/in/ada-lovelace"
-      >
+      <LinkChip href="https://linkedin.com/in/ada-lovelace" mark="linkedin">
         ada-lovelace
       </LinkChip>
-      <LinkChip href="https://x.com/adalovelace" mark="x" title="https://x.com/adalovelace">
+      <LinkChip href="https://x.com/adalovelace" mark="x">
         @adalovelace
       </LinkChip>
       <LinkChip href="https://github.com/octocat" mark="github" isFlat>
@@ -101,7 +97,6 @@ export const WithMark: Story = {
   play: async ({ canvas }) => {
     const linkedin = canvas.getByRole('link', { name: 'LinkedIn ada-lovelace' });
     await expect(linkedin).toHaveAttribute('target', '_blank');
-    await expect(linkedin).toHaveAttribute('title', 'https://linkedin.com/in/ada-lovelace');
     await expect(canvas.getByRole('link', { name: 'X @adalovelace' })).toBeInTheDocument();
   },
 };

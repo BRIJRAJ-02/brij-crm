@@ -43,18 +43,12 @@ New (spec 0005, pulled forward from spec 0003's milestone 4). Sign in, verify, t
       </>
     }
   >
-    <Form
-      id="new-person"
-      isBusy={pending}
-      isDisabled={!canAdd}
-      refusals={refusals}
-      fieldFor={toField}
-      onSubmit={add}
-    >
+    <Form id="new-person" isBusy={pending} isDisabled={!canAdd} refusals={refusals} fieldFor={toField} onSubmit={add}>
       <Field label="Name" name="name" />
     </Form>
   </Modal>
   ```
+
 - It checks nothing itself and the browser's checks are off: a module or screen says what is wrong in the library's words, as a refusal (SignInForm turns its "Enter your email address." into one) or a Field `error`.
 - `label` names the form for screen readers when no heading near it does.
 - `columns={2}` lays the fields out two to a row, each at least `size-column-wide`, and one to a row when the form is too narrow for two: a settings form across a full width page (an object's names, look and IDs in Settings), so no field stretches across the whole page. The refusal above the fields and the submit span the row. Why a variant and not a layout around the Form: the fields are the Form's own children, and the banner and submit it draws have to span the columns, which only the Form can arrange. Leave it out in a dialog or a sign in card, where one field to a row reads best.

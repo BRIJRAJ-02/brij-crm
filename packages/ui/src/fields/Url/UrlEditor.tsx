@@ -3,7 +3,7 @@ import { TextLikeEditor } from '../TextLikeEditor.tsx';
 import type { EditorProps, FieldAttribute } from '../types.ts';
 import { asList, isCompactSurface, toCommittable } from '../values.ts';
 import { urlHref } from './href.ts';
-import { checkLink, checkSocial, describeLink, exampleHandle, networkName, networkOfAttribute } from './social.ts';
+import { checkLink, checkSocial, describeLink, exampleHandle, networkOfAttribute, profileKindOf } from './social.ts';
 import { strings } from './strings.ts';
 
 /**
@@ -13,10 +13,12 @@ import { strings } from './strings.ts';
  */
 export function checkUrl(
   draft: string,
-  attribute?: Pick<FieldAttribute, 'apiSlug'>,
+  attribute?: Pick<FieldAttribute, 'apiSlug' | 'objectKey' | 'name'>,
 ): { readonly ok: true; readonly value: string } | { readonly ok: false; readonly message: string } {
   const network = attribute === undefined ? undefined : networkOfAttribute(attribute);
-  return network === undefined ? checkLink(draft) : checkSocial(network, draft);
+  return attribute === undefined || network === undefined
+    ? checkLink(draft)
+    : checkSocial(network, draft, { label: attribute.name, kind: profileKindOf(attribute) });
 }
 
 /** The placeholder and hint for this attribute: a network's handle, or an example domain. */
@@ -24,15 +26,20 @@ function guidance(attribute: FieldAttribute) {
   const network = networkOfAttribute(attribute);
   return network === undefined
     ? { placeholder: strings.placeholder, hint: strings.hint }
-    : { placeholder: exampleHandle(network), hint: strings.socialHint(networkName(network)) };
+    : {
+        placeholder: exampleHandle(network, profileKindOf(attribute)),
+        hint: strings.socialHint(attribute.name),
+      };
 }
 
 /** Url: a Field checked on blur; several values are removable chips with a field to add one. */
 export function UrlEditor(props: EditorProps<'url'>) {
   const values = asList<string>(props.value);
   const { placeholder, hint } = guidance(props.attribute);
-  // The hint sits under a boxed field; a cell or a panel row has no room for it, the placeholder says it there.
-  const shownHint = isCompactSurface(props.surface) ? {} : { hint };
+  // The hint sits under a boxed field; a cell, a panel row or a filter has no room for it.
+  const guided = isCompactSurface(props.surface) ? { placeholder } : { placeholder, hint };
+  // A plain link brings the phone's web address keyboard; a handle needs the ordinary one.
+  const keyboard = networkOfAttribute(props.attribute) === undefined ? { inputMode: 'url' as const } : {};
   const check = (draft: string) => checkUrl(draft, props.attribute);
   if (props.attribute.allowMultiple) {
     return (
@@ -41,12 +48,11 @@ export function UrlEditor(props: EditorProps<'url'>) {
         values={values}
         labelOf={(item) => describeLink(item).label}
         markOf={(item) => describeLink(item).network}
-        titleOf={(item) => item}
         hrefOf={urlHref}
         checkOne={check}
         type="text"
-        placeholder={placeholder}
-        {...shownHint}
+        {...keyboard}
+        {...guided}
       />
     );
   }
@@ -56,8 +62,8 @@ export function UrlEditor(props: EditorProps<'url'>) {
       initial={values[0] ?? ''}
       // Text, not url: a handle or a bare domain is welcome, and the browser's url check would refuse it.
       type="text"
-      placeholder={placeholder}
-      {...shownHint}
+      {...keyboard}
+      {...guided}
       check={(draft) => {
         if (draft.trim() === '') return toCommittable<'url'>(props.attribute, null);
         const one = check(draft);

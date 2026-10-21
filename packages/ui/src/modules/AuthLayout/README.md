@@ -9,7 +9,11 @@ New (spec 0005, pulled forward from spec 0003's milestone 4). Sign in, verify an
 ## Use
 
 ```tsx
-<AuthLayout productName="Timefix" logo={{ light: '/brand/timefix-wordmark-light.png', dark: '/brand/timefix-wordmark-dark.png' }} title="Sign in">
+<AuthLayout
+  productName="Timefix"
+  logo={{ light: '/brand/timefix-wordmark-light.png', dark: '/brand/timefix-wordmark-dark.png' }}
+  title="Sign in"
+>
   <SignInForm onContinue={sendCode} onGoogle={google} />
 </AuthLayout>
 ```

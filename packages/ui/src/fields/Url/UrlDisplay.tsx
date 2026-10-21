@@ -8,8 +8,7 @@ import { describeLink } from './social.ts';
 /**
  * Url: a link chip, or a row of them with "+N" when the attribute holds
  * several. A profile on a social network shows the network's mark and the
- * handle; any other link shows its domain. The whole link is the tooltip,
- * and it opens in a new tab.
+ * handle; any other link shows its domain and path. It opens in a new tab.
  */
 export function UrlDisplay({ attribute, value, surface, maxVisible }: DisplayProps<'url'>) {
   const values = asList<string>(value);
@@ -26,7 +25,6 @@ export function UrlDisplay({ attribute, value, surface, maxVisible }: DisplayPro
             <LinkChip
               href={urlHref(item)}
               isFlat={isFlatSurface(surface)}
-              title={item}
               {...(network === undefined ? {} : { mark: network })}
             >
               {label}

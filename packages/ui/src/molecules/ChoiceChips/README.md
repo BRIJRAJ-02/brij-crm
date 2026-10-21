@@ -11,7 +11,10 @@ New. The experience note shows durations as chips, more than one allowed. Segmen
 ```tsx
 <ChoiceChips
   label="Duration"
-  choices={[{ id: '15', label: '15 min' }, { id: '30', label: '30 min' }]}
+  choices={[
+    { id: '15', label: '15 min' },
+    { id: '30', label: '30 min' },
+  ]}
   selected={['30']}
   onChange={setSelected}
 />

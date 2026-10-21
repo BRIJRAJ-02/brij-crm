@@ -21,14 +21,12 @@ export interface LinkChipProps {
    * labelled, so the link's name is "LinkedIn ada-lovelace".
    */
   readonly mark?: ProviderName;
-  /** The whole value, as a tooltip, when the words are shorter than it: a link shown as its domain or handle. */
-  readonly title?: string;
 }
 
 /** An email, phone, domain or URL value as a link chip: the one display for those types. */
-export function LinkChip({ href, children, isFlat = false, mark, title }: LinkChipProps) {
+export function LinkChip({ href, children, isFlat = false, mark }: LinkChipProps) {
   const safe = safeHref(href);
-  const flat = { ...(isFlat ? { 'data-flat': '' } : {}), ...(title === undefined ? {} : { title }) };
+  const flat = isFlat ? { 'data-flat': '' } : {};
   const brand = mark === undefined ? null : <ProviderMark provider={mark} size="sm" isLabelled />;
   if (safe === undefined) {
     return (

@@ -77,6 +77,7 @@ References (Mobbin, 20 October 2026):
 ## States
 
 **States:**
+
 - default (live);
 - off (no Open);
 - not published (badge, no switch, no address, no Copy link or Open);

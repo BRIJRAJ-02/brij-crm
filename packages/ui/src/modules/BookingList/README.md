@@ -11,7 +11,23 @@ New. The alignment asks for rows under grey day bands ("TODAY"), each with a dat
 ```tsx
 <BookingList
   label="Upcoming bookings"
-  groups={[{ id: '2026-10-20', label: 'Today', rows: [{ id, date: 'Tue, 20 Oct', time: '9:00 – 9:30 AM', join: { href, provider: 'Google Meet' }, title: 'Quick chat', guestName: 'Grace Hopper', guestHref: '/w/acme/people/…' }] }]}
+  groups={[
+    {
+      id: '2026-10-20',
+      label: 'Today',
+      rows: [
+        {
+          id,
+          date: 'Tue, 20 Oct',
+          time: '9:00 – 9:30 AM',
+          join: { href, provider: 'Google Meet' },
+          title: 'Quick chat',
+          guestName: 'Grace Hopper',
+          guestHref: '/w/acme/people/…',
+        },
+      ],
+    },
+  ]}
   onOpen={(id) => open(id)}
   emptyState={<EmptyState title="No upcoming bookings" />}
 />

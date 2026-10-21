@@ -3,6 +3,7 @@
 // profile's one canonical link. Plain functions, no React, so the display, the
 // editor and the text conversion (paste, CSV, the import preview) share them.
 import { UrlValue } from '@crm/contracts/values';
+import { strings as markStrings } from '../../atoms/ProviderMark/strings.ts';
 import { strings } from './strings.ts';
 
 /** The networks whose profile links show the network's mark and the handle. */
@@ -16,8 +17,6 @@ interface Profile {
 }
 
 interface NetworkDef {
-  /** The network's name, as a mark's label and a message say it. */
-  readonly name: string;
   /** The hosts its links live on; the first is the one canonical links use. */
   readonly hosts: readonly string[];
   /** Shown before the handle: `@` where the network writes handles that way. */
@@ -30,6 +29,8 @@ interface NetworkDef {
   readonly profileOf: (segments: readonly string[]) => Profile | undefined;
   /** A handle the editor's placeholder shows. */
   readonly example: string;
+  /** A company's handle to its page's path, where a company's differs from a person's (LinkedIn, AngelList). */
+  readonly companyPathOf?: (handle: string) => string;
 }
 
 /** A one segment path as the handle, unless it is one of the network's own pages. */
@@ -55,16 +56,15 @@ const kindAndHandle =
 
 const NETWORKS: { readonly [N in SocialNetwork]: NetworkDef } = {
   linkedin: {
-    name: 'LinkedIn',
     hosts: ['linkedin.com'],
     at: false,
     handle: /^[\p{L}\p{N}_-]{2,100}$/u,
     pathOf: (handle) => `in/${handle}`,
+    companyPathOf: (handle) => `company/${handle}`,
     profileOf: kindAndHandle(['in', 'company', 'school', 'showcase']),
     example: 'ada-lovelace',
   },
   x: {
-    name: 'X',
     hosts: ['x.com', 'twitter.com'],
     at: true,
     handle: /^\w{1,15}$/,
@@ -73,7 +73,6 @@ const NETWORKS: { readonly [N in SocialNetwork]: NetworkDef } = {
     example: 'adalovelace',
   },
   instagram: {
-    name: 'Instagram',
     hosts: ['instagram.com'],
     at: true,
     handle: /^[\w.]{1,30}$/,
@@ -82,7 +81,6 @@ const NETWORKS: { readonly [N in SocialNetwork]: NetworkDef } = {
     example: 'ada.lovelace',
   },
   github: {
-    name: 'GitHub',
     hosts: ['github.com'],
     at: false,
     handle: /^[a-z\d](?:[a-z\d-]{0,38})$/i,
@@ -91,7 +89,6 @@ const NETWORKS: { readonly [N in SocialNetwork]: NetworkDef } = {
     example: 'adalovelace',
   },
   facebook: {
-    name: 'Facebook',
     hosts: ['facebook.com', 'fb.com'],
     at: false,
     handle: /^[\w.-]{1,50}$/,
@@ -100,7 +97,6 @@ const NETWORKS: { readonly [N in SocialNetwork]: NetworkDef } = {
     example: 'ada.lovelace',
   },
   youtube: {
-    name: 'YouTube',
     hosts: ['youtube.com'],
     at: true,
     handle: /^[\w.-]{3,30}$/,
@@ -109,16 +105,15 @@ const NETWORKS: { readonly [N in SocialNetwork]: NetworkDef } = {
     example: 'adalovelace',
   },
   angellist: {
-    name: 'AngelList',
     hosts: ['wellfound.com', 'angel.co'],
     at: false,
     handle: /^[\w-]{1,100}$/,
     pathOf: (handle) => `u/${handle}`,
+    companyPathOf: (handle) => `company/${handle}`,
     profileOf: kindAndHandle(['u', 'company', 'p']),
     example: 'ada-lovelace',
   },
   tiktok: {
-    name: 'TikTok',
     hosts: ['tiktok.com'],
     at: true,
     handle: /^[\w.]{2,24}$/,
@@ -127,7 +122,6 @@ const NETWORKS: { readonly [N in SocialNetwork]: NetworkDef } = {
     example: 'adalovelace',
   },
   threads: {
-    name: 'Threads',
     hosts: ['threads.com', 'threads.net'],
     at: true,
     handle: /^[\w.]{1,30}$/,
@@ -155,10 +149,21 @@ const NETWORK_SLUGS: Readonly<Record<string, SocialNetwork>> = {
 /** Every network, in a stable order. */
 export const SOCIAL_NETWORKS = Object.keys(NETWORKS) as readonly SocialNetwork[];
 
-/** A network's name ("LinkedIn"). */
+/** A network's name ("LinkedIn"), as its mark is labelled. */
 export function networkName(network: SocialNetwork): string {
-  return NETWORKS[network].name;
+  return markStrings.names[network];
 }
+
+/** Whose profiles an attribute holds: a company's on the Companies object, else a person's. */
+export type ProfileKind = 'person' | 'company';
+
+/** Whose profiles this attribute holds, from its object (`objectKey`). */
+export function profileKindOf(attribute: { readonly objectKey?: string | undefined }): ProfileKind {
+  return attribute.objectKey === 'companies' ? 'company' : 'person';
+}
+
+/** The example handle for a company's page. */
+const COMPANY_EXAMPLE = 'northwind';
 
 /** The network an attribute holds profiles of, from its API name, or `undefined` for a plain link. */
 export function networkOfAttribute(attribute: { readonly apiSlug?: string | undefined }): SocialNetwork | undefined {
@@ -198,9 +203,9 @@ function decoded(text: string): string {
   }
 }
 
-/** What a link shows: its network and handle, or its domain. */
+/** What a link shows: its network and handle, or its domain and path. */
 export interface LinkLabel {
-  /** The chip's words: "@adalovelace", "ada-lovelace", or the domain ("northwind.com"). */
+  /** The chip's words: "@adalovelace", "ada-lovelace", or the domain and path ("northwind.com/pricing"). */
   readonly label: string;
   /** The network whose mark goes before the words, when the link is to one of them. */
   readonly network?: SocialNetwork;
@@ -208,17 +213,18 @@ export interface LinkLabel {
 
 /**
  * How a stored link reads: a profile on a known network is its mark and the
- * handle; anything else is its domain, without `www.`. A link that doesn't
- * parse reads as itself.
+ * handle; anything else is its domain, without `www.`, and its path, without
+ * the protocol, query or a trailing slash (the chip cuts a long one from the
+ * end, so the domain stays). A link that doesn't parse reads as itself.
  */
 export function describeLink(url: string): LinkLabel {
   const parsed = parse(url);
   if (parsed === undefined) return { label: url };
-  const domain = bareHost(parsed.hostname);
+  const shown = `${bareHost(parsed.hostname)}${decoded(parsed.pathname).replace(/\/+$/, '')}`;
   const network = networkOfHost(parsed.hostname);
-  if (network === undefined) return { label: domain };
+  if (network === undefined) return { label: shown };
   const profile = NETWORKS[network].profileOf(segmentsOf(parsed));
-  if (profile === undefined) return { label: domain, network };
+  if (profile === undefined) return { label: shown, network };
   const handle = decoded(profile.handle);
   return { label: NETWORKS[network].at ? `@${handle}` : handle, network };
 }
@@ -252,33 +258,56 @@ function canonicalProfile(network: SocialNetwork, url: string): string {
   return profile === undefined ? url : `https://${NETWORKS[network].hosts[0] ?? ''}/${profile.path}`;
 }
 
+/** How a network's field names itself in its copy, and whose profiles it holds. */
+export interface SocialContext {
+  /** The attribute's name ("Twitter"), as its label reads, so the message matches the field. */
+  readonly label: string;
+  readonly kind: ProfileKind;
+}
+
 /**
  * A network's profile, typed as a handle (`ada`, `@ada`, `company/acme` on
  * LinkedIn) or as a link (`linkedin.com/in/ada/`, `twitter.com/ada?s=20`),
  * to its one canonical link: the network's own host, the profile's path, no
- * tracking. A link to anywhere else is kept as a link, checked as one.
+ * tracking. A bare handle on a company is its company page where the
+ * network tells the two apart (LinkedIn, AngelList). A link to another
+ * network is refused; a link to anywhere else (a link page) is kept, checked
+ * as a link.
  */
-export function checkSocial(network: SocialNetwork, draft: string): Checked {
+export function checkSocial(network: SocialNetwork, draft: string, context: SocialContext): Checked {
   const text = draft.trim();
   const def = NETWORKS[network];
+  const invalid = {
+    ok: false,
+    message: strings.invalidSocial(context.label, exampleHandle(network, context.kind)),
+  } as const;
   if (network === 'linkedin') {
     const kind = kindAndHandle(['in', 'company', 'school', 'showcase'])(text.split('/'));
     if (kind !== undefined && def.handle.test(kind.handle))
       return { ok: true, value: `https://linkedin.com/${kind.path}` };
   }
+  // The network's bare host ("facebook.com") is no one's profile.
+  if (def.hosts.includes(bareHost(text.replace(/^[a-z][a-z\d+.-]*:\/\//i, '').replace(/\/+$/, '')))) return invalid;
   if (isLinkLike(text)) {
     const link = checkLink(text);
-    return link.ok
-      ? { ok: true, value: canonicalProfile(network, link.value) }
-      : { ok: false, message: strings.invalidSocial(def.name, exampleHandle(network)) };
+    if (!link.ok) return invalid;
+    const host = parse(link.value)?.hostname;
+    const elsewhere = host === undefined ? undefined : networkOfHost(host);
+    if (elsewhere !== undefined && elsewhere !== network) {
+      return { ok: false, message: strings.otherNetwork(networkName(elsewhere), context.label) };
+    }
+    return { ok: true, value: canonicalProfile(network, link.value) };
   }
   const handle = text.replace(/^@/, '');
-  if (!def.handle.test(handle)) return { ok: false, message: strings.invalidSocial(def.name, exampleHandle(network)) };
-  return { ok: true, value: `https://${def.hosts[0] ?? ''}/${def.pathOf(handle)}` };
+  if (!def.handle.test(handle)) return invalid;
+  const path =
+    context.kind === 'company' && def.companyPathOf !== undefined ? def.companyPathOf(handle) : def.pathOf(handle);
+  return { ok: true, value: `https://${def.hosts[0] ?? ''}/${path}` };
 }
 
 /** The handle a network's editor shows as its placeholder, written the network's way ("@adalovelace"). */
-export function exampleHandle(network: SocialNetwork): string {
+export function exampleHandle(network: SocialNetwork, kind: ProfileKind = 'person'): string {
   const def = NETWORKS[network];
-  return def.at ? `@${def.example}` : def.example;
+  const example = kind === 'company' && def.companyPathOf !== undefined ? COMPANY_EXAMPLE : def.example;
+  return def.at ? `@${example}` : example;
 }

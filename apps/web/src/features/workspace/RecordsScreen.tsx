@@ -140,12 +140,16 @@ const isCellKnown = (row: RecordView, columnId: string) => Object.hasOwn(row.val
  * view's order, at its kept width or its type's, hidden as the view says.
  * An attribute the layout names that isn't live any more is left out.
  */
-function columnsFor(attributes: readonly AttributeDefinition[], layout: readonly ShownColumn[]): readonly GridColumn[] {
+function columnsFor(
+  attributes: readonly AttributeDefinition[],
+  layout: readonly ShownColumn[],
+  objectKey: string,
+): readonly GridColumn[] {
   const byId = new Map(attributes.filter((each) => !each.isArchived).map((each) => [each.id, each]));
   return layout.flatMap((column) => {
     const definition = byId.get(column.id);
     if (definition === undefined) return [];
-    const attribute = toFieldAttribute(definition, strings.referenceReadOnly);
+    const attribute = toFieldAttribute(definition, strings.referenceReadOnly, objectKey);
     return [
       {
         id: definition.id,
@@ -233,7 +237,11 @@ export function RecordsScreen({
   }
   // Asks for the wanted records again after their first rows failed to load (the toast's Retry).
   const [attempt, setAttempt] = useState(0);
-  const columns = useMemo(() => columnsFor(attributes, layout.columns), [attributes, layout.columns]);
+  const objectKey = object.standardKey ?? object.apiSlug;
+  const columns = useMemo(
+    () => columnsFor(attributes, layout.columns, objectKey),
+    [attributes, layout.columns, objectKey],
+  );
   // Options a cell just made (spec 0012, AC-238) show by their label until the attribute lists them.
   const pendingOptions = usePendingOptions(data.options.pending);
   const gridColumns = useMemo(
@@ -670,6 +678,7 @@ export function RecordsScreen({
               newId={data.records.newId}
               onCreate={(id, values) => data.records.create(slug, object.id, id, values)}
               singularName={object.singularName}
+              objectKey={objectKey}
               onCreated={(record) => {
                 setCreating(false);
                 // A record made here sits first (spec 0006, AC-56).

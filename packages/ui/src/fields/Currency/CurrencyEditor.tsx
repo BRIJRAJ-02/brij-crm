@@ -57,7 +57,7 @@ export function CurrencyEditor(props: EditorProps<'currency'>) {
       align="end"
       prefix={picker}
       placeholder={example}
-      {...(isCompactSurface(props.surface) ? {} : { hint: strings.hint(example) })}
+      {...(isCompactSurface(props.surface) ? {} : { hint: strings.hint })}
       check={(draft) => {
         if (draft.trim() === '') return toCommittable<'currency'>(props.attribute, null);
         const canonical = parseLocaleDecimal(draft, locale);

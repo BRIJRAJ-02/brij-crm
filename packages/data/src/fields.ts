@@ -28,6 +28,8 @@ export interface FieldAttributeShape {
   readonly name: string;
   /** Its API name, from which a standard attribute takes its own icon (a time zone's globe). */
   readonly apiSlug?: string;
+  /** The object it belongs to, by standard key or API name ("companies"): a LinkedIn handle on a company is its company page. */
+  readonly objectKey?: string;
   readonly type: AttributeType;
   readonly allowMultiple: boolean;
   readonly isRequired: boolean;
@@ -67,8 +69,14 @@ export const isEditableHere = (definition: Pick<AttributeDefinition, 'type' | 'i
  * says the person may only read (`readOnly`, spec 0009, AC-142) is read only
  * with the server's reason, which wins over the screen's: the cell shows it
  * in the library's read only state. The server still checks every write.
+ * `objectKey` (the object's standard key, else its API name) tells a
+ * network's editor a company from a person.
  */
-export function toFieldAttribute(definition: AttributeDefinition, readOnlyReason?: string): FieldAttributeShape {
+export function toFieldAttribute(
+  definition: AttributeDefinition,
+  readOnlyReason?: string,
+  objectKey?: string,
+): FieldAttributeShape {
   // Members stay read only here; a record reference edits through its picker (spec 0014) unless it can't link.
   const isReference = READ_ONLY_IN_THIS_LOOP.includes(definition.type) || isUnlinkable(definition);
   const currency = definition.config.defaultCurrency;
@@ -78,6 +86,7 @@ export function toFieldAttribute(definition: AttributeDefinition, readOnlyReason
     id: definition.id,
     name: definition.title,
     apiSlug: definition.apiSlug,
+    ...(objectKey === undefined || objectKey === '' ? {} : { objectKey }),
     type: definition.type,
     allowMultiple: definition.isMulti,
     isRequired: definition.isRequired,

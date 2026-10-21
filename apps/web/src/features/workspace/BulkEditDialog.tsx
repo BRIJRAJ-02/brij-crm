@@ -346,7 +346,11 @@ function BulkEditForm({
           {!isCheckbox && opTakesValue(shownOp) && !isRuledOut && (
             <AttributeEditor
               key={`${definition.id}:${shownOp === 'set' || shownOp === 'replace' ? 'whole' : 'items'}`}
-              attribute={{ ...toFieldAttribute(definition), name: bulkStrings.value, isRequired: true }}
+              attribute={{
+                ...toFieldAttribute(definition, undefined, object.standardKey ?? object.apiSlug),
+                name: bulkStrings.value,
+                isRequired: true,
+              }}
               value={value ?? null}
               surface="form"
               onCommit={(next) => {

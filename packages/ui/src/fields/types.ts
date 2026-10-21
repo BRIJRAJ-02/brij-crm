@@ -22,6 +22,8 @@ export interface FieldAttribute {
   readonly name: string;
   /** Its API name: a standard attribute whose type's icon says too little (a time zone is text) takes its own (`iconOf`). */
   readonly apiSlug?: string;
+  /** The object it belongs to, by standard key or API name ("companies"): a LinkedIn or AngelList handle on a company is its company page. */
+  readonly objectKey?: string;
   readonly type: AttributeType;
   readonly allowMultiple: boolean;
   /** A select's options or a status attribute's statuses, in order (a StatusOption has the same shape). */

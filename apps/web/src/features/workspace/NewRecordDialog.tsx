@@ -26,6 +26,8 @@ export interface NewRecordDialogProps {
   readonly more: readonly AttributeDefinition[];
   /** The object's name for one record ("Person"), for the dialog's own messages and its Create. */
   readonly singularName: string;
+  /** The object's standard key, else its API name: a network's editor tells a company from a person by it. */
+  readonly objectKey?: string;
   /** Mints the new record's id, once per opening: a second press after a lost answer sends the same one. */
   readonly newId: () => string;
   /** Makes the record (optimistic: the row is in the table while this waits); rejects with the refusals. */
@@ -44,10 +46,10 @@ const LIST_TYPES: readonly string[] = ['email', 'phone', 'url', 'domain'];
  * never grows under the pointer on its way to Create, as the chips did when
  * a blur added one), and its label says one ("Email address").
  */
-function askedFor(definition: AttributeDefinition) {
+function askedFor(definition: AttributeDefinition, objectKey: string | undefined) {
   // Required is checked on Create, never as focus leaves an empty field (a message appearing on blur pushed
   // "Add more fields" and Create down under the pointer); the field still reads as required.
-  const attribute = { ...toFieldAttribute(definition), isRequiredOnSubmit: true };
+  const attribute = { ...toFieldAttribute(definition, undefined, objectKey), isRequiredOnSubmit: true };
   if (!LIST_TYPES.includes(definition.type)) return attribute;
   const single = { ...attribute, allowMultiple: false };
   return definition.type === 'email' && definition.isMulti ? { ...single, name: strings.emailAddress } : single;
@@ -120,6 +122,7 @@ export function NewRecordDialog({
   onOpenChange,
   title,
   singularName,
+  objectKey,
   first,
   more,
   newId,
@@ -158,6 +161,7 @@ export function NewRecordDialog({
         formId={formId}
         label={title}
         singularName={singularName}
+        {...(objectKey === undefined ? {} : { objectKey })}
         newId={newId}
         first={first}
         more={more}
@@ -173,7 +177,7 @@ export function NewRecordDialog({
 /** Props for the dialog's form. */
 interface NewRecordFormProps extends Pick<
   NewRecordDialogProps,
-  'first' | 'more' | 'onCreate' | 'onCreated' | 'singularName' | 'newId'
+  'first' | 'more' | 'onCreate' | 'onCreated' | 'singularName' | 'newId' | 'objectKey'
 > {
   readonly formId: string;
   readonly label: string;
@@ -186,6 +190,7 @@ function NewRecordForm({
   formId,
   label,
   singularName,
+  objectKey,
   newId,
   first,
   more,
@@ -251,7 +256,7 @@ function NewRecordForm({
     return (
       <AttributeEditor
         key={definition.id}
-        attribute={askedFor(definition)}
+        attribute={askedFor(definition, objectKey)}
         value={values[definition.id] ?? null}
         surface="form"
         onCommit={(value) => {
