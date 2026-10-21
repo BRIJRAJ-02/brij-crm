@@ -197,6 +197,11 @@ export default defineConfig({
     sourcemap: 'hidden',
     // dist/.vite/manifest.json: the first load budget reads the index route's static graph from it.
     manifest: true,
+    // An SVG over 2 kB ships as its own file. Inlined, ProviderMark's Apple Calendar and Google Calendar marks
+    // rode in the shared Button chunk on every page, the booking page and the hosted form too (2.5 kB gzipped
+    // each, 21 October 2026), though only calendar screens and the booking receipt draw them, as an image
+    // fetched like Outlook's. The small marks that paint at once (Google's G, Timefix's) stay inline.
+    assetsInlineLimit: (file, content) => (file.endsWith('.svg') && content.length > 2048 ? false : undefined),
     // The app, the hosted form page (spec 0023) and the public booking page (spec 0025), which share nothing with it.
     rollupOptions: {
       input: {
