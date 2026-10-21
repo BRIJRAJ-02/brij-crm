@@ -1,5 +1,5 @@
 // Brief
-// Purpose: Settings › Account › Security (spec 0033): the devices signed in to this account, and ending them.
+// Purpose: Settings › Account › Security (spec 0033): how this account signs in, the devices signed in to it, and what happened lately.
 // Main task: see each device (browser and system, rough place, last use) and sign one out, or every other one, after a confirm.
 // Leaves out: signing this device out (the account menu does).
 import { STEP_UP_MINUTES, type AccountSession, type ActivityPage, type DataLayer } from '@crm/data';
@@ -37,8 +37,8 @@ export interface SecurityScreenProps {
   readonly data: DataLayer;
   /** The app's toast queue (router context), for how a sign out went. */
   readonly toasts: Toasts;
-  /** Recent activity's first page (the route's loader), or undefined when that read failed. */
-  readonly activity?: ActivityPage | undefined;
+  /** Recent activity's first page as the route's loader started it: undefined once read when that read failed. */
+  readonly activity?: Promise<ActivityPage | undefined>;
   /** Reads Recent activity again after a failure. */
   readonly onActivityRetry?: () => void;
 }
@@ -195,7 +195,7 @@ export function SecurityScreen({ data, toasts, activity, onActivityRetry = () =>
       <TwoFactorSection data={data} security={security} toasts={toasts} onFocusLost={focusTitle} />
       <PasskeysSection data={data} security={security} toasts={toasts} onFocusLost={focusTitle} />
       {body}
-      <RecentActivitySection data={data} first={activity} onRetry={onActivityRetry} />
+      {activity !== undefined && <RecentActivitySection data={data} first={activity} onRetry={onActivityRetry} />}
       <DeleteAccountSection data={data} security={security} />
       <Modal
         title={one === undefined ? strings.signOutOthersTitle : strings.signOutTitle(deviceName(one))}

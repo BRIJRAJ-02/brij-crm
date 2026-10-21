@@ -89,6 +89,22 @@ describe('sign in alerts and recent activity (spec 0033)', () => {
     expect(JSON.stringify(page)).not.toMatch(/"ip"/);
   });
 
+  it('alerts an account made before devices were kept, from a new device (no silent first)', async () => {
+    const email = newEmail();
+    await signInWith(email, CHROME_MAC);
+    // As every account looked when devices started being kept: older than now, and no device on file.
+    await testQuery(identityUrl, `update auth."user" set created_at = now() - interval '30 days' where email = $1`, [
+      email,
+    ]);
+    await testQuery(
+      identityUrl,
+      `delete from auth.known_device where user_id = (select id from auth."user" where email = $1)`,
+      [email],
+    );
+    await signInWith(email, FIREFOX_WINDOWS);
+    expect(alertsTo(email)).toHaveLength(1);
+  });
+
   it('refuses a cursor that is not its own', async () => {
     const cookie = await signInWith(newEmail(), CHROME_MAC);
     await expect(rpcClient(made.app, cookie).account.activity.list({ cursor: 'nope' })).rejects.toMatchObject({

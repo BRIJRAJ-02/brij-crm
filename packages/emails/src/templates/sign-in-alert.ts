@@ -17,16 +17,16 @@ export interface SignInAlertParams {
 /** The alert's words. */
 export const signInAlert: Template<SignInAlertParams> = ({ when, device, place }) => ({
   subject: SIGN_IN_ALERT_SUBJECT,
-  preheader: `${device} signed in on ${when}.`,
+  preheader: `New sign in on ${when} from ${device}.`,
   heading: SIGN_IN_ALERT_SUBJECT,
   blocks: [
     {
       type: 'paragraph',
-      text: `Your account was signed in to on ${when}, from ${device}${place === undefined ? '' : ` near ${place}`}.`,
+      text: `Someone signed in to your account on ${when} using ${device}${place === undefined ? '' : ` near ${place}`}.`,
     },
     {
       type: 'note',
-      text: 'If this wasn’t you, open Settings › Account › Security in Timefix to sign that device out and turn on two factor sign in.',
+      text: 'If this wasn’t you, open Settings › Account › Security in Timefix and sign that device out. Then check that your email account is secure, and turn on two factor sign in if it’s off.',
     },
   ],
   why: 'You got this email because a device your account hasn’t used lately signed in.',

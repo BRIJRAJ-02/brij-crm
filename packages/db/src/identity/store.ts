@@ -156,6 +156,10 @@ export interface SessionFacts {
   readonly city: string | null;
   readonly deviceLabel: string | null;
   readonly createdAt: Date;
+  /** When the account itself was made: a sign in moments after it is the account's first (sign up). */
+  readonly userCreatedAt: Date;
+  /** Whether the account kept a sign in before this session's. */
+  readonly signedInBefore: boolean;
 }
 
 /** Global identity: the directory, users, and Better Auth's storage. Reads no tenant data. */
@@ -301,16 +305,10 @@ export interface IdentityStore {
   ): Promise<readonly StoredSecurityEvent[]>;
   /** A live session of this user's facts, or undefined once it is gone (a sign in held back for its second step). */
   sessionFacts(userId: string, sessionId: string): Promise<SessionFacts | undefined>;
-  /**
-   * Notes that this user signed in from `deviceKey` now (AC-897). Answers
-   * whether it was new to them (absent, or not seen since `freshSince`), and
-   * whether they had no device at all before (their first sign in).
-   */
-  noteDevice(
-    userId: string,
-    deviceKey: string,
-    freshSince: Date,
-  ): Promise<{ readonly isNew: boolean; readonly isFirst: boolean }>;
+  /** When this user last signed in from `deviceKey` (AC-897), or undefined for a device new to them. */
+  deviceLastSeen(userId: string, deviceKey: string): Promise<Date | undefined>;
+  /** Notes that this user signed in from `deviceKey` now (AC-897). */
+  noteDevice(userId: string, deviceKey: string): Promise<void>;
   /**
    * Deletes security events and known devices last seen before `before`, at
    * most `limit` of each (AC-898's year). Answers how many went.
@@ -811,36 +809,34 @@ export function createIdentityStore(options: DatabaseOptions): IdentityStore {
           city: session.city,
           deviceLabel: session.deviceLabel,
           createdAt: session.createdAt,
+          userCreatedAt: user.createdAt,
+          signedInBefore: sql<boolean>`exists (select 1 from ${securityEvent} e where e.user_id = ${session.userId} and e.kind = 'sign_in' and e.session_id is distinct from ${session.id})`,
         })
         .from(session)
+        .innerJoin(user, eq(user.id, session.userId))
         .where(and(eq(session.id, sessionId), eq(session.userId, userId), sql`${session.expiresAt} > now()`))
         .limit(1);
-      return row === undefined ? undefined : { ...row, createdAt: new Date(row.createdAt) };
+      return row === undefined
+        ? undefined
+        : { ...row, createdAt: new Date(row.createdAt), userCreatedAt: new Date(row.userCreatedAt) };
     },
 
-    async noteDevice(userId, deviceKey, freshSince) {
-      if (!UUID.test(userId) || !/^[0-9a-f]{64}$/.test(deviceKey)) return { isNew: false, isFirst: false };
-      return db.transaction(async (tx) => {
-        const [any] = await tx
-          .select({ key: knownDevice.deviceKey })
-          .from(knownDevice)
-          .where(eq(knownDevice.userId, userId))
-          .limit(1);
-        const [was] = await tx
-          .select({ lastSeen: knownDevice.lastSeen })
-          .from(knownDevice)
-          .where(and(eq(knownDevice.userId, userId), eq(knownDevice.deviceKey, deviceKey)))
-          .for('update');
-        await tx
-          .insert(knownDevice)
-          .values({ userId, deviceKey })
-          .onConflictDoUpdate({
-            target: [knownDevice.userId, knownDevice.deviceKey],
-            set: { lastSeen: sql`now()` },
-          });
-        const isNew = was === undefined || new Date(was.lastSeen).getTime() < freshSince.getTime();
-        return { isNew, isFirst: any === undefined };
-      });
+    async deviceLastSeen(userId, deviceKey) {
+      if (!UUID.test(userId) || !/^[0-9a-f]{64}$/.test(deviceKey)) return undefined;
+      const [row] = await db
+        .select({ lastSeen: knownDevice.lastSeen })
+        .from(knownDevice)
+        .where(and(eq(knownDevice.userId, userId), eq(knownDevice.deviceKey, deviceKey)))
+        .limit(1);
+      return row === undefined ? undefined : new Date(row.lastSeen);
+    },
+
+    async noteDevice(userId, deviceKey) {
+      if (!UUID.test(userId) || !/^[0-9a-f]{64}$/.test(deviceKey)) return;
+      await db
+        .insert(knownDevice)
+        .values({ userId, deviceKey })
+        .onConflictDoUpdate({ target: [knownDevice.userId, knownDevice.deviceKey], set: { lastSeen: sql`now()` } });
     },
 
     async sweepAuthHistory(before, limit) {

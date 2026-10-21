@@ -13,7 +13,7 @@ export const strings = {
     kinds: {
       sign_in: 'Signed in',
       sign_out: 'Signed out',
-      session_revoked: 'Signed a device out',
+      session_revoked: 'Signed out a device',
       sessions_revoked: 'Signed out of other devices',
       two_factor_on: 'Turned on two factor sign in',
       two_factor_off: 'Turned off two factor sign in',
@@ -26,6 +26,7 @@ export const strings = {
     methods: { email_code: 'with an email code', google: 'with Google', passkey: 'with a passkey' },
     empty: 'No activity in the last 90 days',
     failedTitle: 'Couldn’t load your recent activity',
+    failedMore: 'Couldn’t load older activity',
     showMore: 'Show more',
   },
   columns: { device: 'Device', place: 'Location', lastActive: 'Last active', actions: 'Actions' },

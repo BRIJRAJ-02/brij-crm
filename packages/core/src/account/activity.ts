@@ -94,10 +94,26 @@ export interface SignInAlert {
 
 /** What the new device alert needs. */
 export interface SignInAlertDeps {
-  readonly identity: Pick<IdentityStore, 'sessionFacts' | 'noteDevice' | 'getUser' | 'recordSecurityEvent'>;
+  readonly identity: Pick<
+    IdentityStore,
+    'sessionFacts' | 'deviceLastSeen' | 'noteDevice' | 'getUser' | 'recordSecurityEvent'
+  >;
   /** Sends the alert to the account's address; the session id is its idempotency key. */
   readonly send: (to: string, alert: SignInAlert, sessionId: string) => Promise<void>;
   readonly now?: () => number;
+}
+
+/** A sign in this close to the account's making is its sign up, with nothing to alert about. */
+const FIRST_SIGN_IN_MS = 5 * 60 * 1000;
+
+/** A country's English name for the email ("India"), or the code when it has none. */
+function regionName(code: string | null): string | null {
+  if (code === null || code === '') return null;
+  try {
+    return new Intl.DisplayNames(['en'], { type: 'region' }).of(code) ?? code;
+  } catch {
+    return code;
+  }
 }
 
 /** The device's name for the email, when the session couldn't tell. */
@@ -106,7 +122,8 @@ export const UNKNOWN_DEVICE = 'a device we couldn’t name';
 /**
  * After a sign in made its session (AC-897): notes the device, and emails the
  * account when the device (browser family, system, country) is new to it or
- * unseen for 90 days. Never on the account's first sign in, never for a
+ * unseen for 90 days. Never on the account's first sign in (its sign up),
+ * never for a
  * session already gone (a sign in held back for its second step makes its
  * own session when it passes), and once per session. Answers what it did.
  */
@@ -117,16 +134,23 @@ export async function alertNewDevice(
   const facts = await deps.identity.sessionFacts(signedIn.userId, signedIn.sessionId);
   if (facts === undefined) return 'gone';
   const now = (deps.now ?? Date.now)();
-  const noted = await deps.identity.noteDevice(
-    signedIn.userId,
-    deviceKey(facts.userAgent, facts.country),
-    new Date(now - ALERT_AFTER_DAYS * DAY),
-  );
-  if (noted.isFirst) return 'first';
-  if (!noted.isNew) return 'known';
+  const key = deviceKey(facts.userAgent, facts.country);
+  // The account's first sign in is its sign up: no sign in kept before, and the account made moments before. Not
+  // "no device known yet", which every account had when devices started being kept.
+  if (!facts.signedInBefore && Math.abs(facts.createdAt.getTime() - facts.userCreatedAt.getTime()) < FIRST_SIGN_IN_MS) {
+    await deps.identity.noteDevice(signedIn.userId, key);
+    return 'first';
+  }
+  const seen = await deps.identity.deviceLastSeen(signedIn.userId, key);
+  if (seen !== undefined && seen.getTime() >= now - ALERT_AFTER_DAYS * DAY) {
+    await deps.identity.noteDevice(signedIn.userId, key);
+    return 'known';
+  }
   const person = await deps.identity.getUser(signedIn.userId);
   if (person === undefined) return 'gone';
-  const place = [facts.city, facts.country].filter((part): part is string => part !== null && part !== '').join(', ');
+  const place = [facts.city, regionName(facts.country)]
+    .filter((part): part is string => part !== null && part !== '')
+    .join(', ');
   await deps.send(
     person.email,
     {
@@ -136,12 +160,15 @@ export async function alertNewDevice(
     },
     signedIn.sessionId,
   );
+  // Known only once the email went: a send that failed alerts again on the device's next sign in.
+  await deps.identity.noteDevice(signedIn.userId, key);
   await deps.identity.recordSecurityEvent({
     userId: signedIn.userId,
     kind: 'alert_sent',
     sessionId: signedIn.sessionId,
     ...(facts.country === null ? {} : { country: facts.country }),
     ...(facts.deviceLabel === null ? {} : { deviceLabel: facts.deviceLabel }),
+    ...(facts.city === null || facts.city === '' ? {} : { detail: { city: facts.city } }),
   });
   return 'sent';
 }

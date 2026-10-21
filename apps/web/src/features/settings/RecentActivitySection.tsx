@@ -4,7 +4,8 @@
 // Leaves out: IP addresses (never shown), other people's activity, and anything older than 90 days.
 import { isDataError, type ActivityPage, type DataLayer, type SecurityActivity } from '@crm/data';
 import { Button, EmptyState, RelativeTime, SettingsSection, Table, type TableColumn } from '@crm/ui';
-import { useState } from 'react';
+import { Suspense, use, useState } from 'react';
+import { deviceName, devicePlace } from './security-lines.ts';
 import { strings } from './security-strings.ts';
 
 const copy = strings.activity;
@@ -13,7 +14,7 @@ const COLUMNS: readonly TableColumn[] = [
   { id: 'what', label: copy.columns.what, isRowHeader: true },
   { id: 'device', label: copy.columns.device },
   { id: 'place', label: copy.columns.place },
-  { id: 'when', label: copy.columns.when, align: 'end' },
+  { id: 'when', label: copy.columns.when },
 ];
 
 /** What happened, in words: the kind, and for a sign in how. */
@@ -22,39 +23,65 @@ export function activityLine(event: SecurityActivity): string {
   return event.kind === 'sign_in' && event.method !== undefined ? `${what} ${copy.methods[event.method]}` : what;
 }
 
-/** Roughly where, "Berlin, DE", or nothing. */
-const placeOf = (event: SecurityActivity): string =>
-  [event.city, event.country].filter((part): part is string => part !== undefined).join(', ');
-
 /** Props for Recent activity. */
 export interface RecentActivitySectionProps {
   readonly data: DataLayer;
-  /** The first page, as the route's loader read it; undefined when that read failed. */
-  readonly first: ActivityPage | undefined;
-  /** Reads the page again (the route's loader), after a failure. */
+  /** The first page as the route's loader started it; undefined once read when that read failed. */
+  readonly first: Promise<ActivityPage | undefined>;
+  /** Reads the first page again (this route's loader alone), after a failure. */
   readonly onRetry: () => void;
 }
 
-/** Recent activity: a table of the account's security events, with Show more for older ones. */
-export function RecentActivitySection({ data, first, onRetry }: RecentActivitySectionProps) {
-  const [more, setMore] = useState<{ readonly items?: readonly SecurityActivity[]; readonly cursor?: string }>({});
+/** Recent activity: its own loading rows while the first page arrives, then the table. */
+export function RecentActivitySection(props: RecentActivitySectionProps) {
+  return (
+    <SettingsSection title={copy.section} description={copy.description}>
+      <Suspense
+        fallback={
+          <Table
+            label={copy.section}
+            columns={COLUMNS}
+            rows={[]}
+            getRowId={() => ''}
+            renderCell={() => null}
+            isLoading
+          />
+        }
+      >
+        <ActivityTable {...props} />
+      </Suspense>
+    </SettingsSection>
+  );
+}
+
+function ActivityTable({ data, first, onRetry }: RecentActivitySectionProps) {
+  const page = use(first);
+  if (page === undefined) return <EmptyState tone="error" title={copy.failedTitle} onRetry={onRetry} />;
+  // A new first page (a retry) starts the older pages over.
+  return <ActivityRows key={page.items[0]?.id ?? 'none'} data={data} page={page} />;
+}
+
+function ActivityRows({ data, page }: { readonly data: DataLayer; readonly page: ActivityPage }) {
+  const [more, setMore] = useState<{ readonly items: readonly SecurityActivity[]; readonly cursor?: string }>({
+    items: [],
+    ...(page.nextCursor === undefined ? {} : { cursor: page.nextCursor }),
+  });
   const [isLoading, setLoading] = useState(false);
   const [failure, setFailure] = useState<string | undefined>(undefined);
-  const items = [...(first?.items ?? []), ...(more.items ?? [])];
-  const cursor = more.items === undefined ? first?.nextCursor : more.cursor;
+  const items = [...page.items, ...more.items];
 
   const showMore = async () => {
-    if (cursor === undefined) return;
+    if (more.cursor === undefined) return;
     setLoading(true);
     setFailure(undefined);
     try {
-      const page = await data.account.activity(cursor);
+      const next = await data.account.activity(more.cursor);
       setMore((was) => ({
-        items: [...(was.items ?? []), ...page.items],
-        ...(page.nextCursor === undefined ? {} : { cursor: page.nextCursor }),
+        items: [...was.items, ...next.items],
+        ...(next.nextCursor === undefined ? {} : { cursor: next.nextCursor }),
       }));
     } catch (error) {
-      setFailure(isDataError(error) ? error.message : copy.failedTitle);
+      setFailure(isDataError(error) && error.code !== 'INTERNAL' ? error.message : '');
     } finally {
       setLoading(false);
     }
@@ -62,33 +89,31 @@ export function RecentActivitySection({ data, first, onRetry }: RecentActivitySe
 
   const renderCell = (event: SecurityActivity, column: string) => {
     if (column === 'what') return activityLine(event);
-    if (column === 'device') return event.deviceLabel ?? '';
-    if (column === 'place') return placeOf(event);
+    if (column === 'device') return deviceName({ deviceLabel: event.deviceLabel ?? '' });
+    if (column === 'place') return devicePlace(event) ?? strings.unknownPlace;
     return <RelativeTime value={event.at} />;
   };
 
   return (
-    <SettingsSection title={copy.section} description={copy.description}>
-      {first === undefined ? (
-        <EmptyState tone="error" title={copy.failedTitle} onRetry={onRetry} />
-      ) : (
-        <>
-          <Table
-            label={copy.section}
-            columns={COLUMNS}
-            rows={items}
-            getRowId={(event) => event.id}
-            renderCell={renderCell}
-            emptyState={<EmptyState icon="shield-check" title={copy.empty} />}
-          />
-          {failure !== undefined && <EmptyState tone="error" title={failure} onRetry={() => void showMore()} />}
-          {cursor !== undefined && failure === undefined && (
-            <Button isPending={isLoading} onPress={() => void showMore()}>
-              {copy.showMore}
-            </Button>
-          )}
-        </>
+    <>
+      <Table
+        label={copy.section}
+        columns={COLUMNS}
+        rows={items}
+        getRowId={(event) => event.id}
+        renderCell={renderCell}
+        emptyState={<EmptyState icon="shield-check" title={copy.empty} />}
+      />
+      {failure !== undefined && (
+        <EmptyState layout="row" tone="error" title={copy.failedMore} onRetry={() => void showMore()}>
+          {failure}
+        </EmptyState>
       )}
-    </SettingsSection>
+      {more.cursor !== undefined && failure === undefined && (
+        <Button isPending={isLoading} onPress={() => void showMore()}>
+          {copy.showMore}
+        </Button>
+      )}
+    </>
   );
 }
