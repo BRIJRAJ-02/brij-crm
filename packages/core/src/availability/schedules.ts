@@ -7,7 +7,7 @@
 // one `schedules` row (ids only) and the member's other tabs read again
 // (AC-977). A change applies to the next slot read of every page using the
 // schedule; bookings already made never move (AC-968).
-import { and, asc, eq, isNull, ne, sql } from 'drizzle-orm';
+import { and, asc, eq, inArray, isNull, ne, sql } from 'drizzle-orm';
 import {
   DEFAULT_SCHEDULE_NAME,
   PERMISSIONS,
@@ -22,6 +22,7 @@ import { schema, type WorkspaceTx } from '@crm/db';
 import { requirePermission } from '../access/check.ts';
 import type { EngineScope } from '../access/mint.ts';
 import { can } from '../access/policy.ts';
+import { canActFor, schedulingReach, type SchedulingReach } from '../access/scheduling.ts';
 import { inWorkspace } from '../access/run.ts';
 import { isUuidV7, newId } from '../engine/ids.ts';
 import { postgresError, refuse, refuseOn } from '../engine/refusals.ts';
@@ -52,17 +53,22 @@ function mayEditOwnHours(scope: EngineScope): boolean {
 }
 
 /**
- * Whether the reader may change `memberId`'s schedules (AC-971): their own (`mayEditOwnHours`), or anyone's with
- * `booking.admin`. The one colleague check, with `targetMember`: spec 0037's J4 swaps `booking.admin` for its reach.
+ * Whether the reader may change `memberId`'s schedules: their own (`mayEditOwnHours`), or a colleague's they
+ * manage (`canActFor`, spec 0037; today everyone's with `booking.admin`, AC-971).
  */
-function mayChange(scope: EngineScope, memberId: string): boolean {
-  return memberId === memberOf(scope) ? mayEditOwnHours(scope) : can(scope.access, 'booking.admin');
+function mayChange(scope: EngineScope, reach: SchedulingReach, memberId: string): boolean {
+  return memberId === memberOf(scope) ? mayEditOwnHours(scope) : canActFor(reach, memberId, 'manage');
 }
 
+/** Refused when the reader may see a colleague's scheduling but not change it (spec 0037, AC-1258). */
+const seeOnly = () => refuse('FORBIDDEN', 'You can see this person’s scheduling but not change it.');
+
+const NO_MEMBER_MESSAGE = 'That member isn’t in this workspace.';
+
 /**
- * The member whose schedules a call is about: the caller (`booking.manage`),
- * or with `memberId` another member (`booking.admin`), who must be active in
- * the workspace (else NOT_FOUND, never saying whether they exist).
+ * The member whose schedules a call is about: the caller (`booking.manage`, and to write `mayEditOwnHours`), or
+ * with `memberId` an active colleague in the reader's reach (`canActFor`): outside it, or not active, NOT_FOUND,
+ * the same as a member who doesn't exist; seen but not managed, FORBIDDEN for a write.
  */
 async function targetMember(
   tx: WorkspaceTx,
@@ -77,13 +83,14 @@ async function targetMember(
     }
     return caller;
   }
-  // The colleague check (AC-971), as `mayChange` makes it.
-  requirePermission(scope, 'booking.admin');
+  const reach = await schedulingReach(tx, scope);
+  if (!canActFor(reach, memberId, 'view')) throw refuse('NOT_FOUND', NO_MEMBER_MESSAGE);
   const [row] = await tx
     .select({ id: members.id })
     .from(members)
     .where(and(eq(members.id, memberId), eq(members.status, 'active')));
-  if (row === undefined) throw refuse('NOT_FOUND', 'That member isn’t in this workspace.');
+  if (row === undefined) throw refuse('NOT_FOUND', NO_MEMBER_MESSAGE);
+  if (use === 'write' && !canActFor(reach, memberId, 'manage')) throw seeOnly();
   return row.id;
 }
 
@@ -241,10 +248,13 @@ export async function listScheduleMembers(scope: EngineScope): Promise<ScheduleM
   const caller = memberOf(scope);
   if (caller === undefined) throw refuse('FORBIDDEN', PERMISSIONS['booking.manage'].message);
   return inWorkspace(scope, async (tx) => {
+    const reach = await schedulingReach(tx, scope);
+    // Everyone when the reach is; else the reader and the colleagues it names (spec 0037: teams, delegations).
+    const named = [caller, ...[...reach.members.keys()].filter((id) => canActFor(reach, id, 'view'))];
     const rows = await tx
       .select({ id: members.id, name: members.name })
       .from(members)
-      .where(and(eq(members.status, 'active'), can(scope.access, 'booking.admin') ? undefined : eq(members.id, caller)))
+      .where(and(eq(members.status, 'active'), reach.all === undefined ? inArray(members.id, named) : undefined))
       .orderBy(sql`lower(${members.name})`, asc(members.id))
       .limit(1000);
     return { members: rows };
@@ -309,7 +319,8 @@ export async function getSchedule(scope: EngineScope, input: { readonly id: stri
     const [row] = await tx.select().from(availabilitySchedules).where(eq(availabilitySchedules.id, input.id));
     if (row === undefined) throw refuse('NOT_FOUND', NOT_FOUND_MESSAGE);
     const reader = memberOf(scope);
-    if (mayChange(scope, row.memberId)) return viewOf(row, await pagesOfMember(tx, row.memberId), reader);
+    const reach = await schedulingReach(tx, scope);
+    if (canActFor(reach, row.memberId, 'view')) return viewOf(row, await pagesOfMember(tx, row.memberId), reader);
     const through = reader === undefined ? [] : await pagesReaderBooksOn(tx, reader, row);
     if (through.length === 0) throw refuse('NOT_FOUND', NOT_FOUND_MESSAGE);
     return viewOf(row, through, reader);
@@ -326,7 +337,9 @@ async function scheduleToChange(tx: WorkspaceTx, scope: EngineScope, id: string)
     .select({ memberId: availabilitySchedules.memberId })
     .from(availabilitySchedules)
     .where(eq(availabilitySchedules.id, id));
-  if (peek === undefined || !mayChange(scope, peek.memberId)) throw refuse('NOT_FOUND', NOT_FOUND_MESSAGE);
+  const reach = await schedulingReach(tx, scope);
+  if (peek === undefined || !canActFor(reach, peek.memberId, 'view')) throw refuse('NOT_FOUND', NOT_FOUND_MESSAGE);
+  if (!mayChange(scope, reach, peek.memberId)) throw seeOnly();
   await schedulesLock(tx, scope.workspaceId, peek.memberId);
   const [row] = await tx
     .select()

@@ -323,7 +323,7 @@ describe('the walk: a principal without the access is refused', () => {
   );
 
   it.each(entries.filter(([, entry]) => 'schedules' in entry).map(([name]) => name))(
-    '%s refuses a principal without booking.manage, and answers another member’s schedule as absent',
+    '%s refuses a principal without booking.manage, and answers another member and their schedule as absent',
     async (name) => {
       const { scope, workspaceId, ownerId } = await memberOf('member');
       const key = testScope({ db, workspaceId, actor: { type: 'api_key', id: core.newId() }, scopes: [] });
@@ -344,7 +344,7 @@ describe('the walk: a principal without the access is refused', () => {
       if (['listSchedules', 'createSchedule'].includes(name)) {
         expect(
           await refusalOf(service(name)(scope, { memberId: ownerId, timeZone: 'UTC', id: core.newId(), name: 'Mine' })),
-        ).toMatchObject({ code: 'FORBIDDEN' });
+        ).toMatchObject({ code: 'NOT_FOUND' });
         return;
       }
       expect(
