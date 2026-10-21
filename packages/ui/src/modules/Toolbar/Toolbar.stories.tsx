@@ -250,6 +250,94 @@ export const GroupedAndLocked: Story = {
   },
 };
 
+/**
+ * The view's own actions under "This view" at the end of the switcher's menu (the bar's "···" button folded in,
+ * 21 October 2026): plain menu items, grouped by hairlines, one disabled with its short reason, the danger one
+ * last; the menu stays narrow, its reasons wrapping under their items.
+ */
+export const WithViewActions: Story = {
+  render: () => (
+    <ViewBar
+      views={VIEWS}
+      currentViewId="all"
+      onViewChange={fn()}
+      onCreateView={fn()}
+      actions={[
+        { id: 'rename', label: 'Rename', icon: 'pencil' },
+        { id: 'duplicate', label: 'Duplicate', icon: 'copy' },
+        { id: 'copy-link', label: 'Copy link', icon: 'link' },
+        {
+          id: 'make-private',
+          label: 'Make private',
+          icon: 'lock',
+          startsGroup: true,
+          reason: 'Make another view the default first.',
+        },
+        { id: 'lock', label: 'Lock', icon: 'lock' },
+        {
+          id: 'delete',
+          label: 'Delete view',
+          icon: 'trash',
+          isDanger: true,
+          startsGroup: true,
+          reason: 'Make another view the default first.',
+        },
+      ]}
+      onAction={fn()}
+    >
+      <Button variant="ghost" icon="settings">
+        View settings
+      </Button>
+    </ViewBar>
+  ),
+  play: async ({ canvas, userEvent }) => {
+    await userEvent.click(canvas.getByRole('button', { name: 'All companies' }));
+    const menu = await waitFor(() => {
+      const found = document.querySelector('[role="menu"]');
+      if (found === null) throw new Error('No menu yet.');
+      return found as HTMLElement;
+    });
+    const section = within(menu).getByRole('group', { name: 'This view' });
+    await expect(within(section).getByRole('menuitem', { name: 'Rename' })).toBeInTheDocument();
+    await expect(within(section).getByRole('menuitem', { name: /Delete view/ })).toHaveAttribute(
+      'aria-disabled',
+      'true',
+    );
+    // Long reasons wrap under their items rather than widening the menu.
+    await expect(menu.getBoundingClientRect().width).toBeLessThan(300);
+    await Promise.all(document.getAnimations().map((animation) => animation.finished.catch(() => undefined)));
+  },
+};
+
+/** A bar whose view actions say which one ran, for the story below. */
+function RunsActions() {
+  const [ran, setRan] = useState('');
+  return (
+    <>
+      <ViewBar
+        views={VIEWS}
+        currentViewId="all"
+        onViewChange={fn()}
+        actions={[{ id: 'duplicate', label: 'Duplicate', icon: 'copy' }]}
+        onAction={setRan}
+      />
+      <output>{ran}</output>
+    </>
+  );
+}
+
+/** Choosing one of the view's actions runs it by its id, and the menu closes. */
+export const RunViewAction: Story = {
+  parameters: { crm: { screenshot: false } },
+  render: () => <RunsActions />,
+  play: async ({ canvas, userEvent }) => {
+    await userEvent.click(canvas.getByRole('button', { name: 'All companies' }));
+    await userEvent.click(await within(document.body).findByRole('menuitem', { name: 'Duplicate' }));
+    await waitFor(() => expect(canvas.getByRole('status')).toHaveTextContent('duplicate'));
+    await waitFor(() => expect(document.querySelector('[role="menu"]')).toBeNull());
+  },
+};
+
 /** The sort chip in the filter chips' shape: one sort, more, a long name, and read only. */
 export const SortChips: Story = {
   render: () => (

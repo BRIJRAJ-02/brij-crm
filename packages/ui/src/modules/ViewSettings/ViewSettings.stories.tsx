@@ -1,6 +1,7 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
 import { useState } from 'react';
 import { expect, fn, waitFor } from 'storybook/test';
+import { Button } from '../../atoms/Button/Button.tsx';
 import { attributeOf } from '../../workbench/attributes.ts';
 import { Stage } from '../../workbench/Stage/Stage.tsx';
 import { ViewSettings, type ViewField } from './ViewSettings.tsx';
@@ -25,10 +26,11 @@ interface SampleProps {
   readonly isReadOnly?: boolean;
   readonly initial?: readonly ViewField[];
   readonly onChange?: (next: readonly ViewField[]) => void;
+  readonly onAdd?: () => void;
 }
 
 /** The settings holding their own fields, as a view's settings popover would. */
-function SampleSettings({ initial = FIELDS, onChange, isReadOnly = false }: SampleProps) {
+function SampleSettings({ initial = FIELDS, onChange, onAdd, isReadOnly = false }: SampleProps) {
   const [fields, setFields] = useState(initial);
   return (
     <Stage width="narrow">
@@ -36,6 +38,15 @@ function SampleSettings({ initial = FIELDS, onChange, isReadOnly = false }: Samp
         label="Columns"
         fields={fields}
         isReadOnly={isReadOnly}
+        {...(onAdd === undefined
+          ? {}
+          : {
+              footer: (
+                <Button variant="ghost" icon="plus" onPress={onAdd}>
+                  Add attribute
+                </Button>
+              ),
+            })}
         onChange={(next) => {
           setFields(next);
           onChange?.(next);
@@ -132,5 +143,14 @@ export const NameStaysFirst: Story = {
     await userEvent.keyboard('{ArrowUp}');
     await userEvent.keyboard('{Enter}');
     await waitFor(() => expect(canvas.getAllByRole('row')[0]).toHaveTextContent('Name'));
+  },
+};
+
+/** A table's footer: Add attribute under the columns, apart from them after a hairline. */
+export const WithFooter: Story = {
+  args: { onAdd: fn() },
+  play: async ({ canvas, args, userEvent }) => {
+    await userEvent.click(canvas.getByRole('button', { name: 'Add attribute' }));
+    await expect(args.onAdd).toHaveBeenCalledTimes(1);
   },
 };

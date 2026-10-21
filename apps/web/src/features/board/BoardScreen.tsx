@@ -28,6 +28,7 @@ import {
   type BoardCard,
   type BoardColumn,
   type ListSource,
+  type ViewAction,
   type ViewChoice,
 } from '@crm/ui';
 import { useNavigate, useRouteContext } from '@tanstack/react-router';
@@ -56,8 +57,10 @@ export interface BoardScreenProps {
   readonly onViewChange: (viewId: string) => void;
   /** The switcher's Create view. */
   readonly onCreateView?: () => void;
-  /** The view's own actions in the view bar (the lock line, the view menu). */
+  /** The view bar's end before the Table and Board switch: the lock line. */
   readonly viewActions?: ReactNode;
+  /** The view's own actions, under "This view" in the switcher's menu, and what runs one (spec 0020). */
+  readonly viewMenu?: { readonly actions: readonly ViewAction[]; readonly onAction: (id: string) => void };
   /** The Table and Board switch, at the end of the view bar. */
   readonly layoutSwitch: ReactNode;
   /** The view's Toolbar (sorts, filters, Save) and any notice under it, given what to say to screen readers. */
@@ -79,6 +82,7 @@ export function BoardScreen(props: BoardScreenProps) {
     onViewChange,
     onCreateView,
     viewActions,
+    viewMenu,
     layoutSwitch,
     toolbar,
   } = props;
@@ -99,6 +103,7 @@ export function BoardScreen(props: BoardScreenProps) {
             currentViewId={currentViewId}
             onViewChange={onViewChange}
             {...(onCreateView === undefined ? {} : { onCreateView })}
+            {...(viewMenu === undefined ? {} : { actions: viewMenu.actions, onAction: viewMenu.onAction })}
           >
             {live === 'paused' && (
               <Callout placement="bar" isAnnounced>

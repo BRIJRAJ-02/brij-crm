@@ -3,6 +3,8 @@ export const strings = {
   views: 'Views',
   chooseView: (name: string) => `${name}, choose a view`,
   createView: 'Create view',
+  /** The heading over the current view's own actions in the switcher's menu. */
+  thisView: 'This view',
   loadingViews: 'Loading views',
   locked: 'Locked',
   /** A sort chip's name: "Sort: Funding raised, descending, and 1 more". */
