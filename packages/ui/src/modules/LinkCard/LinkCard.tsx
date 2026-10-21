@@ -21,6 +21,8 @@ export interface LinkCardToggle {
   readonly isDisabled?: boolean;
   /** Why it can't, shown in a tooltip on the switch ("Publish it first"). */
   readonly disabledReason?: string;
+  /** What it does, in a few words, shown in a tooltip while it can be switched ("Accepting submissions"). */
+  readonly hint?: string;
 }
 
 /** Props for LinkCard. */
@@ -43,8 +45,11 @@ export interface LinkCardProps {
   readonly titleLevel?: 2 | 3;
   /** Short facts on one line under the title ("30 min · One on one"; "12 submissions · 2 spam"). */
   readonly facts: readonly string[];
-  /** The public link, muted ("/b/k3x9", "/f/contact-us"). It can be selected, and Copy link selects it if the clipboard refuses. */
-  readonly address: string;
+  /**
+   * The public link, muted ("/b/k3x9", "/f/contact-us"). It can be selected, and Copy link selects it if the
+   * clipboard refuses. Left out when there is no link yet (a form never published).
+   */
+  readonly address?: string;
   /** A state the switch can't say, beside the title ("Not published", "Private", "Copying…"). Never "Off". */
   readonly badge?: string;
   /** Off (not taking people): the card reads quieter, its title muted. Its edge keeps its colour: the edge never says a state. */
@@ -112,9 +117,11 @@ export function LinkCard({
           {toggle !== undefined && <CardSwitch toggle={toggle} isPending={isPending} />}
         </div>
         {facts.length > 0 && <p className={styles.facts}>{facts.join(' · ')}</p>}
-        <p ref={addressRef} className={styles.address}>
-          {address}
-        </p>
+        {address !== undefined && (
+          <p ref={addressRef} className={styles.address}>
+            {address}
+          </p>
+        )}
       </div>
       {hasFoot && (
         <div className={styles.foot} role="group" aria-label={strings.actionsFor(title)}>
@@ -153,9 +160,11 @@ function CardSwitch({ toggle, isPending }: { readonly toggle: LinkCardToggle; re
       isDisabled={isDisabled}
     />
   );
-  if (!isDisabled || toggle.disabledReason === undefined) return <span className={styles.control}>{control}</span>;
+  // Disabled, the tooltip says why; otherwise, when it has one, what it does.
+  const tip = isDisabled ? toggle.disabledReason : toggle.hint;
+  if (tip === undefined) return <span className={styles.control}>{control}</span>;
   return (
-    <Tooltip content={toggle.disabledReason} isTextTrigger>
+    <Tooltip content={tip} isTextTrigger>
       <span className={styles.control}>{control}</span>
     </Tooltip>
   );

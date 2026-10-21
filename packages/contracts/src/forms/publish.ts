@@ -65,13 +65,13 @@ export function publishProblem(input: PublishInput): PublishProblem | undefined 
   if (emailQuestion === undefined) {
     return {
       code: 'EMAIL_MISSING',
-      message: 'Keep an email question. It is how an enquiry becomes a person in Timefix.',
+      message: 'Keep an email question. It is how a submission becomes a person in Timefix.',
     };
   }
   if (!emailQuestion.required) {
     return {
       code: 'EMAIL_MISSING',
-      message: 'Make the email question one visitors must answer. It is how an enquiry becomes a person in Timefix.',
+      message: 'Make the email question one visitors must answer. It is how a submission becomes a person in Timefix.',
       questionId: emailQuestion.id,
     };
   }

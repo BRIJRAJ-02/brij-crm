@@ -1,5 +1,5 @@
 // Brief
-// Purpose: Captures › Forms: the workspace's forms as cards, the same cards as Links, with their enquiries and whether they take more (spec 0023).
+// Purpose: Captures › Forms: the workspace's forms as cards, the same cards as Links, with their submissions and whether they take more (spec 0023).
 // Main task: open a form, make a new one at once, copy its link, or pause and resume it from its menu.
 // Leaves out: anything inside one form (its builder), and archived forms (a later pass).
 import { isDataError, type FormSummary } from '@crm/data';
@@ -18,9 +18,14 @@ export interface FormsScreenProps {
   readonly slug: string;
 }
 
-/** A form's facts: its responses, and spam when there is some ("12 responses · 2 spam"). */
+/**
+ * A form's facts: what to do first while it is a draft; then its submissions, with spam when there is some
+ * ("12 submissions · 2 spam"), or "No submissions yet".
+ */
 function factsOf(form: FormSummary): readonly string[] {
-  return [strings.responses(form.submissionCount), ...(form.spamCount > 0 ? [strings.spam(form.spamCount)] : [])];
+  if (form.liveVersionNumber === undefined) return [strings.publishToShare];
+  if (form.submissionCount === 0) return [strings.noSubmissionsYet];
+  return [strings.submissionCount(form.submissionCount), ...(form.spamCount > 0 ? [strings.spam(form.spamCount)] : [])];
 }
 
 /** Its grey badge: Not published until its first publish. Off needs none (the muted title and the switch say it). */
@@ -76,20 +81,29 @@ export function FormsScreen({ slug }: FormsScreenProps) {
       id: form.id,
       title: form.name,
       href: formHref(slug, form.id),
+      // Each form keeps one colour, picked from its id, as a booking page does.
+      colourKey: form.id,
       facts: factsOf(form),
-      address: isPending ? strings.addressPending : `/f/${form.publicKey}`,
+      // A draft has no link yet: its generated address only becomes real on the first publish.
+      ...(isPending ? { address: strings.addressPending } : isPublished ? { address: `/f/${form.publicKey}` } : {}),
       ...(isPending ? { badge: strings.copying } : badgeOf(form)),
       isOff: !isLive,
       isPending,
-      toggle: {
-        label: strings.acceptingOf(form.name),
-        isSelected: isLive,
-        onChange: (isOn: boolean) => {
-          setAccepting(form, isOn);
-        },
-        isDisabled: !canManage || !isPublished,
-        disabledReason: isPublished ? strings.manageOnly : strings.publishFirst,
-      },
+      // Accepting is a published form's: a draft shows no switch, its badge and facts say what to do.
+      ...(isPublished || isPending
+        ? {
+            toggle: {
+              label: strings.acceptingOf(form.name),
+              isSelected: isLive,
+              onChange: (isOn: boolean) => {
+                setAccepting(form, isOn);
+              },
+              isDisabled: !canManage,
+              disabledReason: strings.manageOnly,
+              hint: isLive ? strings.accepting : strings.notAccepting,
+            },
+          }
+        : {}),
       // Not published, there is nothing to copy or open: the badge says why.
       ...(isPublished ? { copyValue: data.forms.hostedUrl(form.publicKey) } : {}),
       actions: (

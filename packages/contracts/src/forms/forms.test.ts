@@ -141,7 +141,7 @@ describe('FormDocument and publishProblem (AC-655)', () => {
     expect(check({ slug: 'A' })).toBe('The address needs 2 to 40 lowercase letters, numbers or hyphens.');
     const without = { ...document, questions: document.questions.filter((question) => question.key !== 'email') };
     expect(check({ document: without })).toBe(
-      'Keep an email question. It is how an enquiry becomes a person in Timefix.',
+      'Keep an email question. It is how a submission becomes a person in Timefix.',
     );
     const unlabelled = {
       ...document,
