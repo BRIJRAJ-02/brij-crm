@@ -41,8 +41,18 @@ export function monthName(month: string, locale: string): string {
   );
 }
 
-/** The locale's first day of the week, 0 Sunday to 6 Saturday (Monday where the browser can't say). */
-export function firstDayOfWeek(locale: string): number {
+/** The day a week starts on, as a member chose it (Settings › Account › Preferences): `auto` is the language's. */
+export type WeekStart = 'auto' | 'monday' | 'sunday' | 'saturday';
+
+const CHOSEN_DAY = { monday: 1, sunday: 0, saturday: 6 } as const;
+const DAY_NAMES = ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat'] as const;
+
+/**
+ * The first day of the week, 0 Sunday to 6 Saturday: the member's choice, else
+ * the locale's (Monday where the browser can't say).
+ */
+export function firstDayOfWeek(locale: string, weekStart: WeekStart = 'auto'): number {
+  if (weekStart !== 'auto') return CHOSEN_DAY[weekStart];
   try {
     const info = new Intl.Locale(locale) as Intl.Locale & {
       getWeekInfo?: () => { firstDay: number };
@@ -55,11 +65,20 @@ export function firstDayOfWeek(locale: string): number {
   }
 }
 
-/** The month's cells from the locale's first weekday: blanks, then each day key. */
-export function monthCells(month: string, locale: string): readonly (string | undefined)[] {
+/** The first day of the week as React Aria's calendars and `startOfWeek` take it (`mon`), or the locale's. */
+export function weekStartDay(weekStart: WeekStart = 'auto'): (typeof DAY_NAMES)[number] | undefined {
+  return weekStart === 'auto' ? undefined : DAY_NAMES[CHOSEN_DAY[weekStart]];
+}
+
+/** The month's cells from the first weekday: blanks, then each day key. */
+export function monthCells(
+  month: string,
+  locale: string,
+  weekStart: WeekStart = 'auto',
+): readonly (string | undefined)[] {
   const [year = 1970, number = 1] = month.split('-').map(Number);
   const days = new Date(Date.UTC(year, number, 0)).getUTCDate();
-  const lead = (new Date(Date.UTC(year, number - 1, 1)).getUTCDay() - firstDayOfWeek(locale) + 7) % 7;
+  const lead = (new Date(Date.UTC(year, number - 1, 1)).getUTCDay() - firstDayOfWeek(locale, weekStart) + 7) % 7;
   return [
     ...Array.from({ length: lead }, () => undefined),
     ...Array.from({ length: days }, (_, index) => `${month}-${String(index + 1).padStart(2, '0')}`),
@@ -67,8 +86,11 @@ export function monthCells(month: string, locale: string): readonly (string | un
 }
 
 /** The weekday names in grid order: short ("Mon") and long ("Monday"). */
-export function weekdayNames(locale: string): readonly { readonly short: string; readonly long: string }[] {
-  const first = firstDayOfWeek(locale);
+export function weekdayNames(
+  locale: string,
+  weekStart: WeekStart = 'auto',
+): readonly { readonly short: string; readonly long: string }[] {
+  const first = firstDayOfWeek(locale, weekStart);
   // 4 January 2026 is a Sunday.
   return Array.from({ length: 7 }, (_, index) => {
     const date = new Date(Date.UTC(2026, 0, 4 + ((first + index) % 7), 12));

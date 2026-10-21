@@ -4,11 +4,13 @@ Spec 0012, milestone 1 (objects and attributes, #13), spec 0008 (background jobs
 
 ## Settings › Account › Preferences (`/w/$slug/settings/account/preferences`, PreferencesScreen)
 
-- **Purpose**: how the app looks for this person (spec 0026, AC-684).
-- **Main task**: pick the theme (System preference, Light or Dark) in the Appearance section's one row, "Saved on this browser."; it applies the moment it changes, with no Save, and is kept in this browser by the theme controller (spec 0003), so another tab follows.
-- **Leaves out**: time format, start of week, language and time zone, which need a stored per member preference (a later spec).
+- **Purpose**: how the app looks and reads for this person (spec 0026, AC-684).
+- **Main task**: pick the theme (Appearance, "Saved on this browser.", kept by the theme controller, spec 0003), then the member's own time zone (searchable, "This browser’s" first), date format (Automatic, 8 Oct 2026, Oct 8, 2026, 2026-10-08, each shown as today reads), week start (Automatic, Monday, Sunday, Saturday) and start page (Home, Tasks, or any live object). Each applies the moment it changes, with no Save; the member's choices go through `data.preferences.change` (shown at once, put back with a toast if refused) and a quiet "Preferences saved" toast with Undo follows once it lands.
+- **Leaves out**: the language (the browser's) and the clock's 12 or 24 hours.
 
-Built from library parts only: SettingsLayout (through `SettingsPage`), SettingsSection ("Appearance") around a Card, SettingsRow and Select (`isLabelHidden`, its label the row's title).
+The member's preferences are kept per member per workspace on the server (`member_preferences`, `preferences.get` and `preferences.update`, the caller's own only, each change audited). The workspace frame (`routes/w.$slug.tsx`) reads them before its first page and wraps every page in `PreferencesScope` (`features/workspace`), a `FormatScope` over UiProvider's browser defaults: dates, relative times, date pickers, month grids and "today" follow the time zone, date format and week start. Opening `/w/$slug` (so signing in too) lands on the start page (`landing.ts`); Home is the first live object until the Home page lands. Bookings' week starts on the week start (`first-day.ts`); its grid and the schedules still read the browser's zone, as do the records layer's relative filters (today, this week).
+
+Built from library parts only: SettingsLayout (through `SettingsPage`), SettingsSection ("Appearance", "Dates and time", "Start page") around a Card, SettingsRow and Select (`isLabelHidden`, its label the row's title), Skeleton while loading and EmptyState if the read failed.
 
 ## Settings, Objects (`/w/$slug/settings/objects`, ObjectsScreen)
 

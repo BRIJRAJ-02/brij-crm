@@ -31,6 +31,7 @@ import {
 } from 'react-aria-components';
 import { Button } from '../../atoms/Button/Button.tsx';
 import { Icon } from '../../atoms/Icon/Icon.tsx';
+import { weekStartDay, type WeekStart } from '../../lib/month.ts';
 import { useFormatSettings, useNow } from '../../provider/context.ts';
 import { InPopover, Popover } from '../Popover/Popover.tsx';
 import styles from './DatePicker.module.css';
@@ -48,6 +49,14 @@ function fromDate(value: DateValue | null): DateString | null {
   return value === null ? null : value.toString().slice(0, 10);
 }
 
+/** The calendar's first day: the member's week start, or (absent) the language's. */
+function firstDay(weekStart: WeekStart | undefined): {
+  readonly firstDayOfWeek?: NonNullable<ReturnType<typeof weekStartDay>>;
+} {
+  const day = weekStartDay(weekStart);
+  return day === undefined ? {} : { firstDayOfWeek: day };
+}
+
 /** Today in the time zone, from an instant in milliseconds. */
 export function dayIn(now: number, timeZone: string): CalendarDate {
   return toCalendarDate(fromAbsolute(now, timeZone));
@@ -63,11 +72,12 @@ function useToday(): CalendarDate {
 export function quickPicks(
   today: CalendarDate,
   locale: string,
+  weekStart: WeekStart = 'auto',
 ): readonly { readonly label: string; readonly date: CalendarDate }[] {
   return [
     { label: strings.today, date: today },
     { label: strings.tomorrow, date: today.add({ days: 1 }) },
-    { label: strings.nextWeek, date: startOfWeek(today.add({ weeks: 1 }), locale) },
+    { label: strings.nextWeek, date: startOfWeek(today.add({ weeks: 1 }), locale, weekStartDay(weekStart)) },
     { label: strings.endOfMonth, date: endOfMonth(today) },
   ];
 }
@@ -109,11 +119,11 @@ function Grid({ today }: { readonly today: CalendarDate }) {
 
 function QuickPicks({ isClearable, today }: { readonly isClearable: boolean; readonly today: CalendarDate }) {
   const state = useContext(DatePickerStateContext);
-  const { locale } = useFormatSettings();
+  const { locale, weekStart } = useFormatSettings();
   if (state === null) return null;
   return (
     <footer className={styles.quick}>
-      {quickPicks(today, locale).map((pick) => (
+      {quickPicks(today, locale, weekStart).map((pick) => (
         <Button
           key={pick.label}
           variant="ghost"
@@ -215,6 +225,7 @@ export function DatePicker({ value, defaultValue, onChange, showQuickPicks = tru
   const controlled = toDate(value);
   const initial = toDate(defaultValue);
   const today = useToday();
+  const { weekStart } = useFormatSettings();
   return (
     <AriaDatePicker
       {...lookProps(look, isInPopover)}
@@ -252,7 +263,11 @@ export function DatePicker({ value, defaultValue, onChange, showQuickPicks = tru
       </Group>
       <FieldParts look={look} />
       <Popover label={strings.calendar}>
-        <Calendar className={styles.calendar} defaultFocusedValue={controlled ?? initial ?? today}>
+        <Calendar
+          className={styles.calendar}
+          defaultFocusedValue={controlled ?? initial ?? today}
+          {...firstDay(weekStart)}
+        >
           <MonthHeader />
           <Grid today={today} />
         </Calendar>
@@ -286,6 +301,7 @@ export function DateRangePicker({ value, defaultValue, onChange, ...look }: Date
   const controlled = toRange(value);
   const initial = toRange(defaultValue);
   const today = useToday();
+  const { weekStart } = useFormatSettings();
   return (
     <AriaDateRangePicker
       {...lookProps(look, isInPopover)}
@@ -318,6 +334,7 @@ export function DateRangePicker({ value, defaultValue, onChange, ...look }: Date
           className={styles.calendar}
           data-range=""
           defaultFocusedValue={controlled?.start ?? initial?.start ?? today}
+          {...firstDay(weekStart)}
         >
           <MonthHeader />
           <Grid today={today} />

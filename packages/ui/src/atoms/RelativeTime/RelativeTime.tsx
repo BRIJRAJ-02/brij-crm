@@ -18,14 +18,14 @@ export interface RelativeTimeProps {
  * relative time by screen readers, so it never needs a hover.
  */
 export function RelativeTime({ value }: RelativeTimeProps) {
-  const { locale, timeZone } = useFormatSettings();
+  const { locale, timeZone, dateFormat } = useFormatSettings();
   const now = useNow();
   const exact = formatExactTime(value, locale, timeZone);
   return (
     <Tooltip content={exact} isTextTrigger>
       <>
         <time className={styles.root} dateTime={value}>
-          {formatRelative(value, now, locale, timeZone)}
+          {formatRelative(value, now, locale, timeZone, dateFormat)}
         </time>
         <VisuallyHidden>{strings.exact(exact)}</VisuallyHidden>
       </>

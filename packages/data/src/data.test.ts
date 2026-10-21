@@ -426,6 +426,10 @@ function fakeApi(overrides: Partial<Behaviour> = {}, auth: (path: string, body: 
         sent.push(input);
       }),
     },
+    preferences: {
+      get: os.preferences.get.handler(notServed),
+      update: os.preferences.update.handler(notServed),
+    },
     access: { mine: os.access.mine.handler(() => behaviour.access()) },
     realtime: {
       connectionToken: os.realtime.connectionToken.handler(() => ({ token: 'connection-token' })),

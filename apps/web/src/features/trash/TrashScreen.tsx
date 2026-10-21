@@ -23,6 +23,7 @@ import {
   Toolbar,
   TopBar,
   VisuallyHidden,
+  useFormatSettings,
 } from '@crm/ui';
 import {
   allMatching,
@@ -85,7 +86,8 @@ export function TrashScreen({ slug, objects, members, view, objectId }: TrashScr
   const navigate = useNavigate();
   const state = useTrash(view);
   const byId = useMemo(() => new Map(objects.map((object) => [object.id, object])), [objects]);
-  const timeZone = useMemo(() => Intl.DateTimeFormat().resolvedOptions().timeZone, []);
+  // The member's own zone (Settings › Account › Preferences), else the browser's.
+  const { timeZone } = useFormatSettings();
   // The rows ticked, for this view only: another object filter starts with none.
   const [held, setHeld] = useState<{
     readonly view: TrashView;

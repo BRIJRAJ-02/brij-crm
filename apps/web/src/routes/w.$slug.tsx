@@ -12,6 +12,7 @@ import { signInHref } from '../features/auth/redirect.ts';
 import { CommandMenuProvider } from '../features/command/CommandMenuProvider.tsx';
 import { UnreadTitle } from '../features/inbox/UnreadTitle.tsx';
 import { failedPage, missingPage, pendingPage } from '../features/workspace/ObjectScreen.tsx';
+import { PreferencesScope } from '../features/workspace/PreferencesScope.tsx';
 import { strings } from '../features/workspace/strings.ts';
 import { useWorkspaceName, WorkspaceLayout, WorkspacePage } from '../features/workspace/WorkspacePage.tsx';
 
@@ -34,11 +35,13 @@ export const Route = createFileRoute('/w/$slug')({
     try {
       // The person's role and permissions come with the objects (spec 0009): screens hide what they can't use. Their
       // own sidebar comes in the same round (spec 0034, AC-936), so it never draws the default order first; a failed
-      // sidebar read draws the defaults rather than failing the workspace.
+      // sidebar read draws the defaults rather than failing the workspace. The member's preferences (time zone, date
+      // format, week start) come too, before the first page draws a date; a failed read keeps the browser's defaults.
       const [objects, access] = await Promise.all([
         context.data.objects.list(params.slug),
         context.data.access.mine(params.slug),
         context.data.nav.load(params.slug).catch(() => undefined),
+        context.data.preferences.load(params.slug).catch(() => undefined),
       ]);
       return { workspaceName: workspaceName ?? params.slug, objects, access };
     } catch (error) {
@@ -64,6 +67,7 @@ function WorkspaceRoute() {
   const isPreview = useMatch({ from: '/w/$slug/forms_/$formId_/preview', shouldThrow: false }) !== undefined;
   // The frame is mounted here, once, so moving between the pages inside never remounts the sidebar or a menu or
   // confirm open in it; each page fills its bars (WorkspaceLayout).
+  const { data } = Route.useRouteContext();
   if (objects === undefined) {
     return (
       <WorkspaceLayout>
@@ -74,16 +78,18 @@ function WorkspaceRoute() {
   // The command menu (spec 0039): ⌘K and `/` on every page inside the workspace, and `useCommandMenu()` for the
   // sidebar's Quick actions and search. The unread count rides in the tab's title (spec 0038).
   return (
-    <CommandMenuProvider slug={slug}>
-      <UnreadTitle slug={slug} />
-      {isPreview ? (
-        <Outlet />
-      ) : (
-        <WorkspaceLayout>
+    <PreferencesScope data={data} slug={slug}>
+      <CommandMenuProvider slug={slug}>
+        <UnreadTitle slug={slug} />
+        {isPreview ? (
           <Outlet />
-        </WorkspaceLayout>
-      )}
-    </CommandMenuProvider>
+        ) : (
+          <WorkspaceLayout>
+            <Outlet />
+          </WorkspaceLayout>
+        )}
+      </CommandMenuProvider>
+    </PreferencesScope>
   );
 }
 

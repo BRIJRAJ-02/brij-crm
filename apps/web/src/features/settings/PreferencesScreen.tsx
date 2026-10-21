@@ -1,10 +1,25 @@
 // Brief
-// Purpose: Settings › Account › Preferences (spec 0026): how the app looks for this person.
-// Main task: pick the interface theme (System preference, Light or Dark), applied the moment it changes; open Customise sidebar (spec 0034).
-// Leaves out: time format, start of week, language and time zone (they need a stored per member preference, a later spec).
-import { Card, Select, SettingsRow, SettingsSection } from '@crm/ui';
+// Purpose: Settings › Account › Preferences (spec 0026): how the app looks and reads for this person.
+// Main task: pick the theme, time zone, date format, week start and start page; each applies the moment it changes;
+// open Customise sidebar (spec 0034).
+// Leaves out: the language (the browser's) and the clock's 12 or 24 hours (both later).
+import type { MemberPreferences, ObjectSummary, PreferencesChange, PreferencesState } from '@crm/data';
+import {
+  Card,
+  EmptyState,
+  Select,
+  SettingsRow,
+  SettingsSection,
+  Skeleton,
+  useFormatSettings,
+  type Toasts,
+} from '@crm/ui';
 import { parseThemeChoice, type ThemeChoice, type ThemeController } from '@crm/ui/theme';
-import { useSyncExternalStore, type ReactNode } from 'react';
+import { useMemo, useState, useSyncExternalStore, type ReactNode } from 'react';
+import { zoneItems, zoneLabel, zoneMatches } from '../booking/hours.ts';
+import { browserZone } from '../booking/zone.ts';
+import { dayAt } from '../tasks/day.ts';
+import { BROWSER_ZONE, dateFormatChoices, editOf, landingChoices, landingId, weekStartChoices } from './preferences.ts';
 import { strings } from './preferences-strings.ts';
 import { SettingsPage } from './SettingsPage.tsx';
 
@@ -19,12 +34,26 @@ const THEMES = [
 export interface PreferencesScreenProps {
   /** The app's theme controller (router context): it keeps the choice in this browser and applies it at once. */
   readonly theme: ThemeController;
+  /** The member's own preferences in this workspace, through the data layer. */
+  readonly preferences: PreferencesState;
+  /** The workspace's objects, for the start page's choices. */
+  readonly objects: readonly ObjectSummary[];
+  /** Sends a change (shown at once, put back with a toast if refused); answers whether it landed. */
+  readonly onChange: (change: PreferencesChange) => Promise<boolean>;
+  readonly toasts: Toasts;
   /** The way into Customise sidebar (spec 0034): the route hands it in, over the workspace's sidebar. */
   readonly customiseSidebar?: ReactNode;
 }
 
-/** Settings › Account › Preferences: Appearance (the Interface theme, AC-684), then the Sidebar's way into Customise sidebar. */
-export function PreferencesScreen({ theme, customiseSidebar }: PreferencesScreenProps) {
+/** Settings › Account › Preferences: Appearance (the theme), Dates and time, the Start page, then the Sidebar. */
+export function PreferencesScreen({
+  theme,
+  preferences,
+  objects,
+  onChange,
+  toasts,
+  customiseSidebar,
+}: PreferencesScreenProps) {
   // The controller is the one source: a change here, in another tab or on the status page shows at once.
   const choice = useSyncExternalStore(
     (listener) => theme.subscribe(listener),
@@ -48,6 +77,13 @@ export function PreferencesScreen({ theme, customiseSidebar }: PreferencesScreen
           </SettingsRow>
         </Card>
       </SettingsSection>
+      {preferences.status === 'ready' ? (
+        <MemberSections preferences={preferences.preferences} objects={objects} onChange={onChange} toasts={toasts} />
+      ) : preferences.status === 'loading' ? (
+        <Skeleton lines={3} />
+      ) : (
+        <EmptyState tone="error" title={preferences.message} />
+      )}
       {customiseSidebar !== undefined && (
         <SettingsSection title={strings.sidebar} description={strings.sidebarDescription}>
           <Card>
@@ -58,5 +94,99 @@ export function PreferencesScreen({ theme, customiseSidebar }: PreferencesScreen
         </SettingsSection>
       )}
     </SettingsPage>
+  );
+}
+
+/** The member's own preferences: each select saves at once, with a quiet toast whose Undo puts it back. */
+function MemberSections({
+  preferences,
+  objects,
+  onChange,
+  toasts,
+}: {
+  readonly preferences: MemberPreferences;
+  readonly objects: readonly ObjectSummary[];
+  readonly onChange: (change: PreferencesChange) => Promise<boolean>;
+  readonly toasts: Toasts;
+}) {
+  const { locale, timeZone } = useFormatSettings();
+  const browser = useMemo(() => browserZone(), []);
+  const zones = useMemo(
+    () => [
+      { id: BROWSER_ZONE, label: strings.browserZone(zoneLabel(browser)) },
+      ...zoneItems(preferences.timeZone ?? browser, new Date()),
+    ],
+    [browser, preferences.timeZone],
+  );
+  // Today, for the date formats' examples: read once when the page opens.
+  const [openedAt] = useState(() => Date.now());
+  const today = dayAt(openedAt, timeZone);
+  const formats = useMemo(() => dateFormatChoices(today, locale), [today, locale]);
+  const weeks = useMemo(() => weekStartChoices(locale), [locale]);
+  const landings = useMemo(() => landingChoices(objects), [objects]);
+
+  const pick = (field: 'timeZone' | 'dateFormat' | 'weekStart' | 'landing', id: string | null) => {
+    if (id === null) return;
+    const edit = editOf(preferences, field, id);
+    if (edit === undefined) return;
+    void onChange(edit.change).then((landed) => {
+      if (!landed) return;
+      toasts.toast({
+        tone: 'success',
+        message: strings.saved,
+        action: { label: strings.undo, onAction: () => void onChange(edit.undo) },
+      });
+    });
+  };
+
+  return (
+    <>
+      <SettingsSection title={strings.dates}>
+        <Card>
+          <SettingsRow title={strings.timeZone} description={strings.timeZoneDescription}>
+            <Select
+              label={strings.timeZone}
+              isLabelHidden
+              items={zones}
+              filter={zoneMatches}
+              isSearchable
+              value={preferences.timeZone ?? BROWSER_ZONE}
+              onChange={(id) => pick('timeZone', id)}
+            />
+          </SettingsRow>
+          <SettingsRow title={strings.dateFormat}>
+            <Select
+              label={strings.dateFormat}
+              isLabelHidden
+              items={formats}
+              value={preferences.dateFormat}
+              onChange={(id) => pick('dateFormat', id)}
+            />
+          </SettingsRow>
+          <SettingsRow title={strings.weekStart}>
+            <Select
+              label={strings.weekStart}
+              isLabelHidden
+              items={weeks}
+              value={preferences.weekStart}
+              onChange={(id) => pick('weekStart', id)}
+            />
+          </SettingsRow>
+        </Card>
+      </SettingsSection>
+      <SettingsSection title={strings.startPage}>
+        <Card>
+          <SettingsRow title={strings.landing} description={strings.landingDescription}>
+            <Select
+              label={strings.landing}
+              isLabelHidden
+              items={landings}
+              value={landingId(preferences.landing, objects)}
+              onChange={(id) => pick('landing', id)}
+            />
+          </SettingsRow>
+        </Card>
+      </SettingsSection>
+    </>
   );
 }

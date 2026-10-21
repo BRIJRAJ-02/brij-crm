@@ -56,10 +56,10 @@ export function parseBookingsSearch(search: Record<string, unknown>): RawBooking
 }
 
 /** The address as the screens read it, defaults filled in from `now`. */
-export function bookingsSearchOf(raw: RawBookingsSearch, now: Date = new Date()): BookingsSearch {
+export function bookingsSearchOf(raw: RawBookingsSearch, now: Date = new Date(), firstDay = 1): BookingsSearch {
   const day = raw.d ?? raw.w ?? dayKeyOf(now);
   return {
-    week: raw.w ?? weekOf(day),
+    week: raw.w ?? weekOf(day, firstDay),
     day,
     tab: raw.tab ?? 'upcoming',
     page: raw.page ?? 1,

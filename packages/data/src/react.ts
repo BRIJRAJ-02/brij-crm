@@ -17,6 +17,7 @@ import type {
 import type { JobView } from '@crm/contracts';
 import type { JobsSnapshot, JobsView } from './jobs/store.ts';
 import type { SchedulesState, SchedulesView } from './schedules/store.ts';
+import type { PreferencesHeld, PreferencesState } from './preferences/store.ts';
 import type { LiveStatus } from './live/live.ts';
 import type { NavSnapshot, NavSource } from './navigation/store.ts';
 import type { DueTasksSnapshot, DueTasksSource } from './tasks/due.ts';
@@ -314,6 +315,11 @@ export function useCalendar(view: CalendarView): CalendarState {
 
 /** The workspace's calendar settings (spec 0024, AC-609), read when the screen first holds them. */
 export function useCalendarSettings(held: CalendarSettingsHeld): CalendarSettingsState {
+  return useRetained(held);
+}
+
+/** The member's own preferences in a workspace (Settings › Account › Preferences), read when first held. */
+export function usePreferences(held: PreferencesHeld): PreferencesState {
   return useRetained(held);
 }
 

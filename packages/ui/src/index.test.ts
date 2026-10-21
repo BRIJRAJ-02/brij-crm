@@ -70,6 +70,7 @@ describe('@crm/ui', () => {
       'FilterChip',
       'FloatingBar',
       'Form',
+      'FormatScope',
       'GRID_SHORTCUTS',
       'HUES',
       'HostedFormPreview',
@@ -185,7 +186,10 @@ describe('@crm/ui', () => {
       'editorRuleOf',
       'fieldTypeOf',
       'fileIconName',
+      'firstDayOfWeek',
       'focusLater',
+      'formatDate',
+      'formatDay',
       'formatFileSize',
       'iconOf',
       'isRefusal',
@@ -198,6 +202,7 @@ describe('@crm/ui', () => {
       'safeImageSrc',
       'typeLabelOf',
       'useDelayedLoading',
+      'useFormatSettings',
       'useKeyboardPlatform',
     ]);
   });

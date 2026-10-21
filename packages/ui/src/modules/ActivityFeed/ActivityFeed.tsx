@@ -306,7 +306,7 @@ export function ActivityFeed({
   onAddPerson,
 }: ActivityFeedProps) {
   const isInline = layout === 'inline';
-  const { locale, timeZone } = useFormatSettings();
+  const { locale, timeZone, weekStart } = useFormatSettings();
   const now = useNow();
   const labelOf = usePeriodLabel();
   const showSkeleton = useDelayedLoading(status === 'loading');
@@ -488,14 +488,16 @@ export function ActivityFeed({
             return (
               next !== undefined &&
               before !== undefined &&
-              periodOf(next.at, now, timeZone, locale) !== periodOf(before.at, now, timeZone, locale)
+              periodOf(next.at, now, timeZone, locale, weekStart) !==
+                periodOf(before.at, now, timeZone, locale, weekStart)
             );
           };
           const previous = item.index === 0 ? undefined : entries.getItem(item.index - 1);
-          const period = entry === undefined ? undefined : periodOf(entry.at, now, timeZone, locale);
+          const period = entry === undefined ? undefined : periodOf(entry.at, now, timeZone, locale, weekStart);
           const startsPeriod =
             period !== undefined &&
-            (item.index === 0 || (previous !== undefined && periodOf(previous.at, now, timeZone, locale) !== period));
+            (item.index === 0 ||
+              (previous !== undefined && periodOf(previous.at, now, timeZone, locale, weekStart) !== period));
           return (
             <div
               key={entry === undefined ? `index:${String(item.index)}` : entries.getKey(entry)}

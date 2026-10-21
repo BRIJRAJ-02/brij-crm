@@ -148,7 +148,7 @@ function groupRows(
 
 /** A due day as "Today", "Tomorrow", "Yesterday" or the date, and whether it has passed. */
 function useDueOf(): (dueOn: string) => { readonly text: string; readonly isPast: boolean } {
-  const { locale, timeZone } = useFormatSettings();
+  const { locale, timeZone, dateFormat } = useFormatSettings();
   const today = dayIn(useNow(), timeZone);
   return (dueOn) => {
     const days = parseDate(dueOn).compare(today);
@@ -159,7 +159,7 @@ function useDueOf(): (dueOn: string) => { readonly text: string; readonly isPast
           ? strings.tomorrow
           : days === -1
             ? strings.yesterday
-            : formatDate(dueOn, locale);
+            : formatDate(dueOn, locale, dateFormat);
     return { text, isPast: days < 0 };
   };
 }
