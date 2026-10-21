@@ -18,7 +18,7 @@ New. Settings pages (#39, #42), dashboard tiles (#52) and the template and onboa
 </Card>
 ```
 
-- `actions` sit at the end of the header; `footer` holds a form's Save.
+- `actions` sit at the end of the header, standing on the title's line: their box is one title line tall and centres what it holds, so a button taller than the line ("View all") sits level with the title, not below it (the owner, 21 October 2026), and the header keeps the title's height. `footer` holds a form's Save.
 - `tone="sunken"` for a quieter group inside a page.
 - `placement="page"` is the one frame for a page outside the app shell: the status page and the not found page now, and `AuthLayout` (sign in, sign up, verify email, accept invite) builds on it later rather than drawing a second centred frame. The card is then the page's `main` landmark, its title (required) an `h1` that takes focus by script after a route change (`tabIndex={-1}`, never in the tab order, no ring), centred, capped at `size-page-card` (520px), and kept 16 px (`--space-16`) from each edge on a phone. Inline cards keep `section` and `h3`.
 - An inline card's title is an `h3`, under a page's `h2`. Inside a `SettingsLayout` whose title is the page's `h1` (`titleLevel={1}`, spec 0026) it is an `h2`, set by the layout through `CardTitleLevel`, so headings never skip a level. Inside a `SettingsSection` it is one level under the section's heading (an `h3` under an `h2` section, an `h4` under an `h3` one). Why: the settings pages lost the TopBar's h1 when the settings sidebar arrived, and their Cards would otherwise jump from h1 to h3.

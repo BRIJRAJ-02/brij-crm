@@ -12,7 +12,14 @@ export function UrlDisplay({ attribute, value, surface, maxVisible }: DisplayPro
     <ChipRow
       label={attribute.name}
       {...(maxVisible === undefined ? {} : { maxVisible })}
-      chips={values.map((item) => ({ key: item, node: <LinkChip href={urlHref(item)}>{item}</LinkChip> }))}
+      chips={values.map((item) => ({
+        key: item,
+        node: (
+          <LinkChip href={urlHref(item)} isFlat={surface === 'card'}>
+            {item}
+          </LinkChip>
+        ),
+      }))}
     />
   );
 }

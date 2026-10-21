@@ -12,7 +12,14 @@ export function EmailDisplay({ attribute, value, surface, maxVisible }: DisplayP
     <ChipRow
       label={attribute.name}
       {...(maxVisible === undefined ? {} : { maxVisible })}
-      chips={values.map((item) => ({ key: item, node: <LinkChip href={emailHref(item)}>{item}</LinkChip> }))}
+      chips={values.map((item) => ({
+        key: item,
+        node: (
+          <LinkChip href={emailHref(item)} isFlat={surface === 'card'}>
+            {item}
+          </LinkChip>
+        ),
+      }))}
     />
   );
 }
