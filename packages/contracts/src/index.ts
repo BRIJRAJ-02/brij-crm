@@ -4,6 +4,7 @@ import { bookingPagesContract, bookingsContract } from './booking/pages.ts';
 import { bulkRecordsContract } from './bulk.ts';
 import { calendarContract } from './calendar.ts';
 import { formsContract, submissionsContract } from './forms/forms.ts';
+import { exportsContract, importsContract } from './imports.ts';
 import { jobsContract } from './jobs.ts';
 import { meContract } from './me.ts';
 import { membersContract } from './members.ts';
@@ -33,6 +34,7 @@ export * from './calendar.ts';
 export * from './change-event.ts';
 export * from './errors.ts';
 export * from './forms/index.ts';
+export * from './imports.ts';
 export * from './jobs.ts';
 export * from './csv.ts';
 export * from './me.ts';
@@ -83,4 +85,6 @@ export const contract = {
   submissions: submissionsContract,
   bookingPages: bookingPagesContract,
   bookings: bookingsContract,
+  imports: importsContract,
+  exports: exportsContract,
 };
