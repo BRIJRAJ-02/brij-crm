@@ -452,6 +452,24 @@ function fakeApi(overrides: Partial<Behaviour> = {}, auth: (path: string, body: 
       delete: os.notes.delete.handler(notServed),
       restore: os.notes.restore.handler(notServed),
     },
+    comments: {
+      list: os.comments.list.handler(notServed),
+      get: os.comments.get.handler(notServed),
+      create: os.comments.create.handler(notServed),
+      update: os.comments.update.handler(notServed),
+      delete: os.comments.delete.handler(notServed),
+      resolve: os.comments.resolve.handler(notServed),
+      react: os.comments.react.handler(notServed),
+      versions: os.comments.versions.handler(notServed),
+    },
+    notifications: {
+      list: os.notifications.list.handler(notServed),
+      count: os.notifications.count.handler(notServed),
+      mark: os.notifications.mark.handler(notServed),
+      markAllRead: os.notifications.markAllRead.handler(notServed),
+      settings: os.notifications.settings.handler(notServed),
+      setSettings: os.notifications.setSettings.handler(notServed),
+    },
     calendar: {
       connections: {
         list: os.calendar.connections.list.handler(() => ({
