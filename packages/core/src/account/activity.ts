@@ -8,7 +8,7 @@ import { ACTIVITY_DAYS, SignInMethod, type ActivityPage, type ListActivityInput 
 import type { IdentityStore } from '@crm/db';
 import * as z from 'zod';
 import { inputInvalid } from '../engine/refusals.ts';
-import { deviceParts } from './device.ts';
+import { deviceLabel } from './device.ts';
 import type { SessionCaller } from './sessions.ts';
 
 const DAY = 24 * 60 * 60 * 1000;
@@ -77,11 +77,15 @@ export async function listMyActivity(
   };
 }
 
-/** A device as known devices keep it: the SHA-256 of browser family, system and country, never the agent itself. */
+/**
+ * A device as known devices keep it: the SHA-256 of its label (browser family
+ * and system, "Chrome on macOS") and country, never the agent itself. Migration
+ * 0079 computes the same key in SQL from each live session's `device_label`
+ * and `country`, so keep the two in step.
+ */
 export function deviceKey(userAgent: string | null, country: string | null): string {
-  const { browser, system } = deviceParts(userAgent);
   return createHash('sha256')
-    .update(`${browser}|${system}|${country ?? ''}`, 'utf8')
+    .update(`${deviceLabel(userAgent)}|${country ?? ''}`, 'utf8')
     .digest('hex');
 }
 

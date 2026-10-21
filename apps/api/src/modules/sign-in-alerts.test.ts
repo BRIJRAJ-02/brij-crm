@@ -89,7 +89,7 @@ describe('sign in alerts and recent activity (spec 0033)', () => {
     expect(JSON.stringify(page)).not.toMatch(/"ip"/);
   });
 
-  it('notes an account’s first device quietly when none is kept yet (accounts from before 0079)', async () => {
+  it('notes an account’s first device quietly when none is kept yet (no live session when 0079 ran)', async () => {
     const email = newEmail();
     await signInWith(email, CHROME_MAC);
     await testQuery(
@@ -102,6 +102,22 @@ describe('sign in alerts and recent activity (spec 0033)', () => {
     // Known from then on: another browser is new.
     await signInWith(email, FIREFOX_WINDOWS);
     expect(alertsTo(email)).toHaveLength(1);
+  });
+
+  it('keys a device in SQL as the alert does, so 0079’s backfill knows today’s devices', async () => {
+    const email = newEmail();
+    await signInWith(email, FIREFOX_WINDOWS);
+    const rows = await testQuery<{ same: boolean }>(
+      identityUrl,
+      `select bool_and(exists (
+          select 1 from auth.known_device d
+          where d.user_id = s.user_id
+            and d.device_key = encode(sha256(convert_to(coalesce(s.device_label, '') || '|' || coalesce(s.country, ''), 'UTF8')), 'hex')
+        )) as same
+        from auth.session s where s.user_id = (select id from auth."user" where email = $1)`,
+      [email],
+    );
+    expect(rows).toEqual([{ same: true }]);
   });
 
   it('refuses a cursor that is not its own', async () => {
