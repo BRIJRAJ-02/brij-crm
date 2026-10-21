@@ -1,4 +1,5 @@
 import { createContext, useContext, type ReactNode } from 'react';
+import { PageEdge } from '../../lib/page-edge.ts';
 import styles from './Card.module.css';
 
 /**
@@ -107,7 +108,12 @@ export function Card({
           )}
         </header>
       )}
-      {children !== undefined && <div className={styles.body}>{children}</div>}
+      {children !== undefined && (
+        // A card frames its own content: a Table in it keeps to the card, never the page's edges.
+        <div className={styles.body}>
+          <PageEdge value={false}>{children}</PageEdge>
+        </div>
+      )}
       {footer !== undefined && <footer className={styles.foot}>{footer}</footer>}
     </>
   );

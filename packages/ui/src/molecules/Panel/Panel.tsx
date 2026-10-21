@@ -4,6 +4,7 @@ import { Dialog, Heading } from 'react-aria-components';
 import { Button } from '../../atoms/Button/Button.tsx';
 import styles from './Panel.module.css';
 import { strings } from './strings.ts';
+import { PageEdge } from '../../lib/page-edge.ts';
 
 /** How wide a panel is: `md` (`size-panel`, 400px) for a record, `lg` (`size-panel-wide`, 520px) for notes, email and larger tasks. */
 export type PanelWidth = 'md' | 'lg';
@@ -111,7 +112,8 @@ export function Panel({
             </span>
           </header>
           <div className={styles.body} data-flush={isFlush || undefined}>
-            {children}
+            {/* Opened from a settings page, its content keeps to the panel, never the page's edges. */}
+            <PageEdge value={false}>{children}</PageEdge>
           </div>
           {footer !== undefined && <footer className={styles.foot}>{footer}</footer>}
         </Dialog>

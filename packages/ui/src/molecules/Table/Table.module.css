@@ -80,6 +80,39 @@
     padding-inline: var(--space-4) 0;
   }
 
+  /* Directly in a settings page's body (PageEdge): the rows run out through the page's space-16 gutter to its
+     edges, so their hairlines meet the sidebar's, and the first and last columns' text sit on the content edges,
+     in line with the section headings, the Tabs' first label and a Card's border. */
+  .frame[data-edge='page'] {
+    margin-inline: calc(-1 * var(--space-16));
+  }
+
+  .frame[data-edge='page'] .column:first-child,
+  .frame[data-edge='page'] .cell:first-child {
+    padding-inline-start: var(--space-16);
+  }
+
+  .frame[data-edge='page'] .column:last-child,
+  .frame[data-edge='page'] .cell:last-child {
+    padding-inline-end: var(--space-16);
+  }
+
+  /* There, a row's handle sits in its first cell's gutter, before the content edge, not in a column of its own,
+     so a table that reorders keeps its text where one that doesn't has it. */
+  .cell[data-gutter-handle] {
+    position: relative;
+  }
+
+  .gutter {
+    position: absolute;
+    inset-block: 0;
+    inset-inline-start: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    inline-size: var(--space-16);
+  }
+
   /* A sticky header stays in view while the page scrolls under it, on the page's surface. */
   .column[data-sticky] {
     position: sticky;
@@ -116,6 +149,11 @@
     flex-direction: column;
     gap: var(--space-16);
     padding: var(--space-12) var(--space-8);
+  }
+
+  /* Directly in a settings page's body, the skeleton rows start on the content edge too. */
+  .frame[data-edge='page'] .loading {
+    padding-inline: var(--space-16);
   }
 
   @media (forced-colors: active) {

@@ -8,6 +8,7 @@ import type { IconName } from '../../atoms/Icon/icons.ts';
 import { InPopover } from '../Popover/Popover.tsx';
 import styles from './Modal.module.css';
 import { strings } from './strings.ts';
+import { PageEdge } from '../../lib/page-edge.ts';
 
 /** Props for ModalTrigger. */
 export interface ModalTriggerProps {
@@ -170,7 +171,8 @@ export function Modal({
           {/* A dialog opened from inside a popover is a page of its own: its fields keep their halo. */}
           <InPopover value={false}>
             <div className={styles.body} id={bodyId}>
-              {children}
+              {/* Opened from a settings page, its content keeps to the dialog, never the page's edges. */}
+              <PageEdge value={false}>{children}</PageEdge>
             </div>
           </InPopover>
           {actions !== undefined && <div className={styles.foot}>{actions}</div>}

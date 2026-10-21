@@ -14,6 +14,7 @@ import { VisuallyHidden } from '../../atoms/VisuallyHidden/VisuallyHidden.tsx';
 import type { Hue } from '../../hue.ts';
 import { Breadcrumbs, type Crumb } from '../../molecules/Breadcrumbs/Breadcrumbs.tsx';
 import { CardTitleLevel } from '../../molecules/Card/Card.tsx';
+import { PageEdge } from '../../lib/page-edge.ts';
 import { useDelayedLoading } from '../../provider/useDelayedLoading.ts';
 import { NavItem } from '../Sidebar/Sidebar.tsx';
 import styles from './SettingsLayout.module.css';
@@ -52,8 +53,10 @@ export interface SettingsLayoutProps {
    */
   readonly trail?: readonly Crumb[];
   /**
-   * The body opens with Tabs (an object's Attributes and Configuration): the
-   * header drops its hairline, since the tabs' own underline divides the page.
+   * The body opens with Tabs (Members and Invitations, an object's Attributes
+   * and Configuration): the header drops its hairline, since the tabs' own
+   * underline divides the page. Under a TopBar (`header="bar"`) the tabs sit
+   * right under it, the page's second bar, with no gap above them.
    */
   readonly hasTabs?: boolean;
   /** A tile before the title: an object's icon, on its hue. */
@@ -120,11 +123,19 @@ export function SettingsLayout({
     return (
       <div className={styles.root} data-has-nav={nav === undefined ? undefined : true}>
         {nav !== undefined && <SettingsNav nav={nav} currentNavId={currentNavId} navLabel={navLabel} />}
-        <div className={styles.page} data-header="bar" aria-busy={isLoading || undefined}>
+        <div
+          className={styles.page}
+          data-header="bar"
+          data-has-tabs={hasTabs || undefined}
+          aria-busy={isLoading || undefined}
+        >
           {isLoading && <VisuallyHidden>{strings.loading}</VisuallyHidden>}
-          {/* Under the bar's h1, the body's sections and Cards take h2 titles. */}
+          {/* Under the bar's h1, the body's sections and Cards take h2 titles. Its rows (Tables, Tabs, a
+              Disclosure) run out to the page's edges and keep their text on the content edge (PageEdge). */}
           <div className={styles.body}>
-            <CardTitleLevel value={2}>{children}</CardTitleLevel>
+            <PageEdge value>
+              <CardTitleLevel value={2}>{children}</CardTitleLevel>
+            </PageEdge>
           </div>
         </div>
       </div>
@@ -184,7 +195,9 @@ export function SettingsLayout({
         )}
         {/* Under an h1 title, the body's Cards take h2 titles. */}
         <div className={styles.body}>
-          {titleLevel === 1 ? <CardTitleLevel value={2}>{children}</CardTitleLevel> : children}
+          <PageEdge value>
+            {titleLevel === 1 ? <CardTitleLevel value={2}>{children}</CardTitleLevel> : children}
+          </PageEdge>
         </div>
       </div>
     </div>

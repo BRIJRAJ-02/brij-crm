@@ -2,6 +2,7 @@ import { createContext, type ReactNode, type RefObject } from 'react';
 import { useFocusVisible } from 'react-aria';
 import { Dialog, Popover as AriaPopover, type PopoverProps as AriaPopoverProps } from 'react-aria-components';
 import styles from './Popover.module.css';
+import { PageEdge } from '../../lib/page-edge.ts';
 
 /**
  * True inside a Popover. A field or a select there draws its focus with its
@@ -63,13 +64,16 @@ export function Popover({
       {...(isNonModal === undefined ? {} : { isNonModal })}
     >
       <InPopover value>
-        {label === undefined ? (
-          children
-        ) : (
-          <Dialog className={styles.dialog} aria-label={label}>
-            {children}
-          </Dialog>
-        )}
+        {/* Opened from a settings page, its content keeps to the popover, never the page's edges. */}
+        <PageEdge value={false}>
+          {label === undefined ? (
+            children
+          ) : (
+            <Dialog className={styles.dialog} aria-label={label}>
+              {children}
+            </Dialog>
+          )}
+        </PageEdge>
       </InPopover>
     </AriaPopover>
   );

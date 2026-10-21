@@ -1,4 +1,4 @@
-import type { ReactNode } from 'react';
+import { useContext, type ReactNode } from 'react';
 import {
   Cell,
   Column,
@@ -14,6 +14,7 @@ import { Checkbox } from '../../atoms/Checkbox/Checkbox.tsx';
 import { DragHandle } from '../../atoms/DragHandle/DragHandle.tsx';
 import { Skeleton } from '../../atoms/Skeleton/Skeleton.tsx';
 import { VisuallyHidden } from '../../atoms/VisuallyHidden/VisuallyHidden.tsx';
+import { PageEdge } from '../../lib/page-edge.ts';
 import { useDelayedLoading } from '../../provider/useDelayedLoading.ts';
 import { strings } from './strings.ts';
 import styles from './Table.module.css';
@@ -123,15 +124,20 @@ export function Table<T>({
     // Where the row would land: an accent line between rows, for a pointer and for the keyboard alike.
     renderDropIndicator: (target) => <DropIndicator target={target} className={styles.dropLine} />,
   });
+  // Directly in a settings page's body the rows run out into the page's gutter, the first column's text on the
+  // content edge, and a row's handle sits in that gutter, inside its first cell, rather than in a column of its own.
+  const atPageEdge = useContext(PageEdge);
+  const handleInGutter = atPageEdge && onReorder !== undefined;
+  const firstColumnId = columns[0]?.id;
   const lead: TableColumn[] = [
-    ...(onReorder === undefined ? [] : [{ id: HANDLE, label: strings.reorder, isLabelHidden: true }]),
+    ...(onReorder === undefined || handleInGutter ? [] : [{ id: HANDLE, label: strings.reorder, isLabelHidden: true }]),
     ...(isSelectable ? [{ id: SELECT, label: strings.selection, isLabelHidden: true }] : []),
   ];
   const shown: readonly TableColumn[] = [...lead, ...columns];
   // The frame scrolls a table wider than its slot sideways on its own (a phone), never the page around it.
   // A sticky header sticks to the page's scroll, so its frame lets the table run on instead.
   return (
-    <div className={styles.frame} data-sticky={isHeaderSticky || undefined}>
+    <div className={styles.frame} data-sticky={isHeaderSticky || undefined} data-edge={atPageEdge ? 'page' : undefined}>
       <AriaTable
         className={styles.root}
         aria-label={label}
@@ -205,7 +211,16 @@ export function Table<T>({
                     />
                   </Cell>
                 ) : (
-                  <Cell className={styles.cell} data-align={column.align ?? 'start'}>
+                  <Cell
+                    className={styles.cell}
+                    data-align={column.align ?? 'start'}
+                    data-gutter-handle={(handleInGutter && column.id === firstColumnId) || undefined}
+                  >
+                    {handleInGutter && column.id === firstColumnId && (
+                      <span className={styles.gutter}>
+                        <DragHandle label={strings.move(getRowLabel(item.row))} />
+                      </span>
+                    )}
                     {column.isInline === true ? (
                       <span className={styles.inline}>{renderCell(item.row, column.id)}</span>
                     ) : (

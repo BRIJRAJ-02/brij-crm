@@ -4,8 +4,11 @@
    text-secondary, and the actions at the end) sits over the body. The page
    takes the view's whole width inside the space-16 gutter, like every other
    page (20 Oct 2026): sections put their heading above their cards, one
-   column across the width (21 Oct 2026), and lists run the full width. In a
-   narrow slot the navigation sits above the page. */
+   column across the width (21 Oct 2026), and lists run the full width. One
+   content edge (22 Oct 2026): headings, Cards, a Meter and Callouts start on
+   the gutter's inner edge, and the body's rows (a Table's, Tabs, a
+   Disclosure's title) run out into the gutter, their text on that same edge
+   (PageEdge). In a narrow slot the navigation sits above the page. */
 @layer components {
   .root {
     display: grid;
@@ -41,6 +44,13 @@
     inline-size: 100%;
     min-inline-size: 0;
     padding: var(--space-16);
+  }
+
+  /* Under a TopBar, a body that opens with Tabs puts them right under the bar, as the page's second bar
+     (Bookings, Captures): no gap above them, their hairline across the page. Every other body starts
+     space-16 under the bar, the one top gap every settings page shares. */
+  .page[data-header='bar'][data-has-tabs] {
+    padding-block-start: 0;
   }
 
   /* The header ends in a hairline (spec 0026, AC-683), the body below it. */

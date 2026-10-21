@@ -9,6 +9,8 @@ import {
 } from 'react-aria-components';
 import { Badge } from '../../atoms/Badge/Badge.tsx';
 import { Icon } from '../../atoms/Icon/Icon.tsx';
+import { PageEdge } from '../../lib/page-edge.ts';
+import { CardTitleLevel } from '../Card/Card.tsx';
 import styles from './Disclosure.module.css';
 
 /** Props for Disclosure. */
@@ -45,17 +47,23 @@ export function Disclosure({
   isDisabled,
   variant = 'default',
 }: DisclosureProps) {
+  // Directly in a settings page's body, the title row runs to the page's edges, its chevron on the content edge.
+  const atPageEdge = useContext(PageEdge) && variant === 'default';
+  // Its title is a heading at the level a card's title takes where it sits (an h2 right under a settings page's
+  // TopBar), so headings never skip a level.
+  const level = useContext(CardTitleLevel);
   return (
     <AriaDisclosure
       className={styles.root}
       data-variant={variant}
+      data-edge={atPageEdge ? 'page' : undefined}
       {...(id === undefined ? {} : { id })}
       {...(isExpanded === undefined ? {} : { isExpanded })}
       {...(defaultExpanded === undefined ? {} : { defaultExpanded })}
       {...(onExpandedChange === undefined ? {} : { onExpandedChange })}
       {...(isDisabled === undefined ? {} : { isDisabled })}
     >
-      <Heading className={styles.heading}>
+      <Heading className={styles.heading} level={level}>
         <AriaButton slot="trigger" className={styles.trigger}>
           <span className={styles.chevron}>
             <Icon name="chevron-right" size={variant === 'label' ? 'xs' : 'sm'} />

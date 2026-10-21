@@ -75,6 +75,27 @@
     padding-inline: var(--space-4);
   }
 
+  /* Directly in a settings page's body (PageEdge): the title row runs out through the page's space-16 gutter
+     like a Table's rows, its chevron on the content edge and its count at the far one. The panel runs out too,
+     its content back on the content edge, so a Table in it can run out as well without the panel's clip
+     cutting it. */
+  .root[data-edge='page'] .trigger,
+  .root[data-edge='page'] .panel {
+    margin-inline: calc(-1 * var(--space-16));
+    padding-inline: var(--space-16);
+  }
+
+  /* A button sizes to its content, so it takes the gutters' width on top of its own. */
+  .root[data-edge='page'] .trigger {
+    inline-size: calc(100% + 2 * var(--space-16));
+    block-size: var(--size-row);
+    border-radius: 0;
+  }
+
+  .root[data-edge='page'] .content {
+    padding-inline: 0;
+  }
+
   /* The fields variant: more fields inside a form, stacked as the form stacks its own. */
   .root[data-variant='fields'] .content {
     display: flex;
