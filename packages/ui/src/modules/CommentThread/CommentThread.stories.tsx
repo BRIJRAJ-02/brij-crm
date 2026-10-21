@@ -107,7 +107,7 @@ export const Replying: Story = {
   args: { onReply: fn((_body: string): Promise<string | undefined> => Promise.resolve(undefined)) },
   play: async ({ args, canvas, userEvent }) => {
     await userEvent.click(canvas.getByRole('button', { name: 'Reply' }));
-    const field = canvas.getByRole('combobox', { name: 'Reply' });
+    const field = canvas.getByRole('textbox', { name: 'Reply' });
     await waitFor(() => expect(field).toHaveFocus());
     await userEvent.keyboard('On it{Meta>}{Enter}{/Meta}');
     await expect(args.onReply).toHaveBeenCalledWith('On it');
@@ -136,7 +136,7 @@ export const Editing: Story = {
     await userEvent.click(canvas.getAllByRole('button', { name: 'More actions' })[0] as HTMLElement);
     await userEvent.click(await within(document.body).findByRole('menuitem', { name: 'Edit' }));
     await waitFor(() =>
-      expect(canvas.getByRole('combobox', { name: 'Edit comment' })).toHaveValue(
+      expect(canvas.getByRole('textbox', { name: 'Edit comment' })).toHaveValue(
         'Can we close this before the board pack? @Grace Hopper has the numbers.',
       ),
     );

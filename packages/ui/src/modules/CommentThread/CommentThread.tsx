@@ -127,7 +127,13 @@ export function CommentText({
     }
     if (at < segment.text.length) parts.push(segment.text.slice(at));
   });
-  return <span className={styles.text} data-quiet={isQuiet || undefined}>{parts.map((part, index) => <Fragment key={index}>{part}</Fragment>)}</span>;
+  return (
+    <span className={styles.text} data-quiet={isQuiet || undefined}>
+      {parts.map((part, index) => (
+        <Fragment key={index}>{part}</Fragment>
+      ))}
+    </span>
+  );
 }
 
 /** The "edited" button and its popover of earlier versions, loaded as it opens. */
@@ -214,11 +220,13 @@ function CommentRow({
   const canAct = !isReadOnly && comment.isSending !== true;
   const menuItems = [
     ...(comment.canEdit ? [{ id: 'edit', label: strings.edit, icon: 'pencil' as const }] : []),
-    ...(isFirst ? [{ id: 'resolve', label: isResolved ? strings.reopen : strings.resolve, icon: 'circle-check' as const }] : []),
+    ...(isFirst
+      ? [{ id: 'resolve', label: isResolved ? strings.reopen : strings.resolve, icon: 'circle-check' as const }]
+      : []),
     ...(comment.canDelete ? [{ id: 'delete', label: strings.delete, icon: 'trash' as const, isDanger: true }] : []),
   ];
   return (
-    <li className={styles.comment} data-sending={comment.isSending === true || undefined}>
+    <li className={styles.comment} aria-busy={comment.isSending === true || undefined}>
       <Avatar
         name={name}
         id={author?.id ?? name}
@@ -284,6 +292,7 @@ function CommentRow({
             members={props.members}
             initialBody={comment.body}
             formerMember={props.formerMember}
+            // eslint-disable-next-line jsx-a11y-x/no-autofocus -- Edit was pressed on purpose; the text to change takes focus
             autoFocus
             onCancel={onStopEdit}
             onSubmit={async (body) => {
@@ -384,6 +393,7 @@ export function CommentThread(props: CommentThreadProps) {
               mode="reply"
               members={members}
               formerMember={formerMember}
+              // eslint-disable-next-line jsx-a11y-x/no-autofocus -- Reply was pressed on purpose; the reply field takes focus
               autoFocus
               onCancel={() => {
                 setIsReplying(false);

@@ -4,7 +4,7 @@ A comment being written: a field one line tall at rest that grows to ten, the `@
 
 ## Why it exists
 
-New (spec 0038, the inventory's CommentComposer). No library piece writes a message with mentions: Field's multiline variant is a long text value (three lines at rest, no list), and the rich text editor (`@crm/ui/editor`) is Tiptap, which the record page doesn't load. This composes the existing parts: Field (its new `composer` variant and `combobox` wiring), the editor's MentionList (the same `@` rows the note editor shows), Button and Callout.
+New (spec 0038, the inventory's CommentComposer). No library piece writes a message with mentions: Field's multiline variant is a long text value (three lines at rest, no list), and the rich text editor (`@crm/ui/editor`) is Tiptap, which the record page doesn't load. This composes the existing parts: Field (its new `composer` variant and its list wiring), the editor's MentionList (the same `@` rows the note editor shows), Button and Callout.
 
 ## Use
 
@@ -24,7 +24,7 @@ Empty (Comment disabled), typing, the `@` list open (with nobody matching), a re
 
 ## Keyboard
 
-Typing `@` at the start or after a space opens the list: Up and Down move, Enter or Tab pick, Esc closes it. ⌘Enter (Ctrl+Enter) sends. Esc clears focus, or cancels a reply or an edit. Up in an empty reply composer edits the person's last comment (`onEditLast`). The field is a combobox, its highlighted option named by `aria-activedescendant`.
+Typing `@` at the start or after a space opens the list: Up and Down move, Enter or Tab pick, Esc closes it. ⌘Enter (Ctrl+Enter) sends. Esc clears focus, or cancels a reply or an edit. Up in an empty reply composer edits the person's last comment (`onEditLast`). The field names the open list with `aria-controls` and its highlighted option with `aria-activedescendant`.
 
 ## Differences from the artifact
 

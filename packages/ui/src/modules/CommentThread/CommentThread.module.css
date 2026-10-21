@@ -50,10 +50,6 @@
     min-inline-size: 0;
   }
 
-  .comment[data-sending] {
-    opacity: var(--opacity-busy);
-  }
-
   .main {
     display: flex;
     flex: 1;
@@ -99,9 +95,13 @@
       transition: opacity var(--duration-hover) var(--ease-hover);
     }
 
-    .comment:hover .tools,
-    .comment:focus-within .tools,
+    /* Its menu is open: the tools stay while the pointer is in the menu. */
     .tools:has([aria-expanded='true']) {
+      opacity: 1;
+    }
+
+    .comment:hover .tools,
+    .comment:focus-within .tools {
       opacity: 1;
     }
   }

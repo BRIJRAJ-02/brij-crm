@@ -1,4 +1,11 @@
-import { useLayoutEffect, useRef, type KeyboardEvent as ReactKeyboardEvent, type ReactNode, type Ref, type SyntheticEvent } from 'react';
+import {
+  useLayoutEffect,
+  useRef,
+  type KeyboardEvent as ReactKeyboardEvent,
+  type ReactNode,
+  type Ref,
+  type SyntheticEvent,
+} from 'react';
 import { FieldError, Input, Label, Text, TextArea, TextField } from 'react-aria-components';
 import { CopyButton } from '../../atoms/Button/CopyButton.tsx';
 import { Icon } from '../../atoms/Icon/Icon.tsx';
@@ -22,8 +29,8 @@ export type FieldSize = 'md' | 'sm';
 export type FieldVariant = 'default' | 'search' | 'cell' | 'copy' | 'title' | 'composer';
 
 /**
- * A text field that names a list it suggests from (a combobox): the comment
- * composer's `@` members. Focus stays in the field; the list's highlighted
+ * A text field that names a list it suggests from: the comment composer's
+ * `@` members. Focus stays in the field; the list's highlighted
  * option is named by `activeId`, so a screen reader hears each one.
  */
 export interface FieldCombobox {
@@ -100,7 +107,7 @@ export interface FieldProps {
    * rest, growing with its text to ten lines, then scrolling.
    */
   readonly variant?: FieldVariant;
-  /** The list this field suggests from, which makes it a combobox. */
+  /** The list this field suggests from (aria-autocomplete, aria-controls, aria-activedescendant). */
   readonly combobox?: FieldCombobox;
   /**
    * Every key pressed in the field, before the field's own handling: a
@@ -201,6 +208,7 @@ export function Field({
     className: styles.input,
     // A multiline value to copy is code: it takes the Code atom's face.
     ...(isCopy && isMultiline ? { 'data-code': true } : {}),
+    ...(variant === 'composer' && isMultiline ? { 'data-composer': true } : {}),
     ...(placeholder === undefined ? {} : { placeholder }),
     ...(ref === undefined ? {} : { ref }),
     // A list's search field takes focus as the list opens, the pattern React Aria expects.
@@ -220,10 +228,11 @@ export function Field({
     ...(combobox === undefined
       ? {}
       : {
-          role: 'combobox',
+          // A textarea may not take role="combobox" (axe aria-allowed-role), so it stays a multiline
+          // textbox that suggests from a list: aria-autocomplete, and while the list is open, the list
+          // it controls and the option it has highlighted.
           'aria-autocomplete': 'list' as const,
-          'aria-expanded': combobox.isExpanded,
-          'aria-controls': combobox.listId,
+          ...(combobox.isExpanded ? { 'aria-controls': combobox.listId } : {}),
           ...(combobox.isExpanded && combobox.activeId !== undefined
             ? { 'aria-activedescendant': combobox.activeId }
             : {}),

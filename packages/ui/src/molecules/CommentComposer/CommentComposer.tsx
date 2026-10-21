@@ -4,7 +4,7 @@
 // Ctrl+Enter) sends; Esc clears focus, or cancels a reply or an edit.
 import type { ActorDisplay } from '@crm/contracts/values';
 import { COMMENT_MAX } from '@crm/contracts/mentions';
-import { useId, useLayoutEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react';
+import { useId, useMemo, useRef, useState, type KeyboardEvent } from 'react';
 import { Button } from '../../atoms/Button/Button.tsx';
 import { MentionList, mentionOptionId } from '../../editor/MentionList.tsx';
 import { Callout } from '../Callout/Callout.tsx';
@@ -44,7 +44,7 @@ export interface CommentComposerProps {
 }
 
 /**
- * The comment composer: the growing field (a combobox for the `@` list), the
+ * The comment composer: the growing field (it suggests from the `@` list), the
  * count past 9,000 characters, Comment with ⌘↵, and Cancel on a reply or an
  * edit. A refused comment comes back with its reason and a Retry.
  */
@@ -66,7 +66,6 @@ export function CommentComposer({
     initialBody === undefined ? EMPTY_DRAFT : draftOf(initialBody, (id) => names.get(id) ?? formerMember),
   );
   const [caret, setCaret] = useState(draft.text.length);
-  const [placeCaret, setPlaceCaret] = useState<number | undefined>(undefined);
   const [active, setActive] = useState(0);
   const [dismissedAt, setDismissedAt] = useState<number | undefined>(undefined);
   const [refusal, setRefusal] = useState<{ readonly reason: string; readonly draft: Draft } | undefined>(undefined);
@@ -74,18 +73,19 @@ export function CommentComposer({
 
   const query = queryAt(draft, caret);
   const isOpen = query !== undefined && query.start !== dismissedAt && !isDisabled;
+  const typed = query?.query;
   const shown = useMemo(
-    () => (query === undefined ? [] : matchingMembers(members, query.query, SHOWN_MEMBERS)),
-    [members, query?.query, query],
+    () => (typed === undefined ? [] : matchingMembers(members, typed, SHOWN_MEMBERS)),
+    [members, typed],
   );
   const activeIndex = Math.min(active, Math.max(shown.length - 1, 0));
 
-  // A pick or a cut mention moves the caret where the text changed.
-  useLayoutEffect(() => {
-    if (placeCaret === undefined) return;
-    field.current?.setSelectionRange(placeCaret, placeCaret);
-    setPlaceCaret(undefined);
-  }, [placeCaret]);
+  // A pick or a cut mention moves the caret where the text changed, once React has written the new text.
+  const placeCaret = (at: number) => {
+    requestAnimationFrame(() => {
+      field.current?.setSelectionRange(at, at);
+    });
+  };
 
   const change = (text: string) => {
     const next = edited(draft, text);
@@ -93,7 +93,7 @@ export function CommentComposer({
     setRefusal(undefined);
     const at = next.caret ?? field.current?.selectionStart ?? text.length;
     setCaret(at);
-    if (next.caret !== undefined) setPlaceCaret(next.caret);
+    if (next.caret !== undefined) placeCaret(next.caret);
     setActive(0);
   };
 
@@ -102,7 +102,7 @@ export function CommentComposer({
     const next = picked(draft, query.start, caret, { id: member.id, name: member.name });
     setDraft(next.draft);
     setCaret(next.caret);
-    setPlaceCaret(next.caret);
+    placeCaret(next.caret);
     setActive(0);
   };
 
@@ -184,6 +184,7 @@ export function CommentComposer({
           maxLength={COMMENT_MAX}
           showCounter
           isDisabled={isDisabled}
+          // eslint-disable-next-line jsx-a11y-x/no-autofocus -- only a reply or an edit someone just opened asks for it
           autoFocus={autoFocus}
           combobox={{
             listId,
