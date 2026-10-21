@@ -443,6 +443,7 @@ export const OptionBadge: Story = {
     await userEvent.click(canvas.getByRole('button', { name: /Working hours/ }));
     const list = await listbox();
     if (!(list instanceof HTMLElement)) throw new Error('the list is not an element');
-    await expect(within(list).getByRole('option', { name: /Working hours.*Default/ })).toBeVisible();
+    // Once the popover has faded in.
+    await waitFor(() => expect(within(list).getByRole('option', { name: /Working hours.*Default/ })).toBeVisible());
   },
 };

@@ -24,7 +24,13 @@ const CALENDAR_GRACE = '1 day';
 const MARGIN = '1 hour';
 
 /** The tables the purge functions clear, and the workspace itself: never in the worker's own pass. */
-const OWN_STEPS: readonly string[] = ['workspaces', 'audit_events', 'outbox', 'workspace_milestones'];
+const OWN_STEPS: readonly string[] = [
+  'workspaces',
+  'audit_events',
+  'outbox',
+  'workspace_milestones',
+  'member_onboarding',
+];
 
 /** Where the purge logs: ids, counts and times only. */
 export interface PurgeLog {

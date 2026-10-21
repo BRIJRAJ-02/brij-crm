@@ -106,7 +106,7 @@ describe('the member procedures (AC-623, AC-645)', () => {
       m.client.bookingPages.update({
         workspace: m.slug,
         pageId: page.id,
-        settings: { durations: [20 as 15] },
+        settings: { durations: [7] },
         mutationId: newId(),
       }),
     );

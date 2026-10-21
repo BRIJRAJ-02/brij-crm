@@ -70,6 +70,8 @@ export const ByDialCode: Story = {
     );
     await userEvent.keyboard('{Enter}');
     await expect(args.onChange).toHaveBeenCalledWith('GB');
+    // The list gone before the accessibility check, so it never catches the list mid exit (WebKit did).
+    await waitFor(() => expect(document.querySelector('[role="listbox"]')).toBeNull());
   },
 };
 

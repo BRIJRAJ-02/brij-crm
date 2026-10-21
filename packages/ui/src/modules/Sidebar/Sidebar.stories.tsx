@@ -165,9 +165,9 @@ export const Collapsed: Story = {
   args: { isCollapsed: true },
   play: async ({ canvas, userEvent }) => {
     const nav = canvas.getByRole('navigation', { name: 'Main navigation' });
-    // No keycap squeezed into the rail, and no hue tile beside the plain icons.
+    // No keycap squeezed into the rail, and no hue tile beside the plain icons (the workspace's ink mark aside).
     await expect(nav.querySelector('kbd')).toBeNull();
-    await expect(nav.querySelector('[data-hue]')).toBeNull();
+    await expect(nav.querySelector('[data-hue]:not([data-hue="ink"])')).toBeNull();
     // Expand comes first after the workspace, then Quick actions, at the top.
     const controls = [...nav.querySelectorAll('a[href], button')].map((each) => each.textContent.trim());
     await expect(controls.slice(1, 3)).toEqual(['Expand the sidebar', 'Quick actions']);

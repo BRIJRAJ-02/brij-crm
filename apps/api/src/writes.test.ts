@@ -74,6 +74,11 @@ const READS: ReadonlySet<string> = new Set([
   'realtime.catchUp',
   'jobs.list',
   'jobs.get',
+  // Imports and exports (spec 0040): one import or export, its staged rows and the far records it would link.
+  'imports.get',
+  'imports.rows',
+  'imports.links',
+  'exports.get',
   'usage.get',
   'views.list',
   'views.get',
@@ -199,6 +204,38 @@ async function outboxOf(workspaceId: string): Promise<OutboxRow[]> {
 }
 
 type Member = Awaited<ReturnType<typeof memberWithWorkspace>>;
+
+/** An import of one Job title column into People, made through the API (its own write first, unless it is the case's). */
+async function importOf(m: Member, mutationId = newId()): Promise<string> {
+  const id = newId();
+  await m.client.imports.create({
+    workspace: m.slug,
+    id,
+    objectId: m.people.id,
+    fileName: 'people.csv',
+    rowCount: 1,
+    errorRows: 0,
+    settings: {
+      columns: [{ header: 'Job title', target: { attributeId: m.attribute('job_title') } }],
+      onMatch: 'skip',
+      onNoMatch: 'create',
+    },
+    mutationId,
+  });
+  return id;
+}
+
+/** An import with its one row staged (two writes before the case's). */
+async function stagedImportOf(m: Member): Promise<string> {
+  const importId = await importOf(m);
+  await m.client.imports.stage({
+    workspace: m.slug,
+    importId,
+    rows: [{ rowNumber: 2, values: { [m.attribute('job_title')]: 'Engineer' } }],
+    mutationId: newId(),
+  });
+  return importId;
+}
 
 /** A select attribute "Tier" on People with two options, made with them in one write (one definitions row). */
 async function tierOn(m: Member): Promise<{ readonly id: string; readonly options: readonly string[] }> {
@@ -521,7 +558,8 @@ const WRITES: Record<string, (m: Member, mutationId: string) => Promise<readonly
     const client = rpcClient(app, person.cookie);
     await client.invitations.accept({ token: invitationTokens.get(person.email) ?? '' });
     await client.account.deletion.confirm({ email: person.email });
-    return [{ kind: 'members' }, { kind: 'members' }];
+    // Like a leave, it also names whose access changed, so their own tabs are cut off (AC-817).
+    return [{ kind: 'members' }, { kind: 'members' }, { kind: 'access' }];
   },
   'workspaces.create': async (m) => {
     await m.client.workspaces.create({
@@ -1345,7 +1383,8 @@ const WRITES: Record<string, (m: Member, mutationId: string) => Promise<readonly
       [bookingId],
     );
     await m.client.bookings.markNoShow({ workspace: m.slug, bookingId, noShow: true, mutationId });
-    return [];
+    // Only the booking's own row (its person filed by the host's booking): the mark itself stores none.
+    return [{ kind: 'records', object_id: m.people.id }];
   },
   'bookings.move': async (m, mutationId) => {
     const bookingId = await hostBooking(m);
@@ -1389,6 +1428,47 @@ const WRITES: Record<string, (m: Member, mutationId: string) => Promise<readonly
     });
     await m.client.bookings.blocks.remove({ workspace: m.slug, id: block.id, mutationId });
     return [];
+  },
+  // Imports (spec 0040): made, staged and started through the one write path; start and undo each start a job.
+  'imports.create': async (m, mutationId) => {
+    await importOf(m, mutationId);
+    return [];
+  },
+  'imports.stage': async (m, mutationId) => {
+    const importId = await importOf(m);
+    await m.client.imports.stage({
+      workspace: m.slug,
+      importId,
+      rows: [{ rowNumber: 2, values: { [m.attribute('job_title')]: 'Engineer' } }],
+      mutationId,
+    });
+    return [];
+  },
+  'imports.start': async (m, mutationId) => {
+    const importId = await stagedImportOf(m);
+    await m.client.imports.start({ workspace: m.slug, importId, mutationId });
+    return [{ kind: 'jobs', mutation_id: mutationId }];
+  },
+  'imports.undo': async (m, mutationId) => {
+    const importId = await stagedImportOf(m);
+    const started = await m.client.imports.start({ workspace: m.slug, importId, mutationId: newId() });
+    // An import still running can't be undone: its job cancelled first.
+    await m.client.jobs.cancel({ workspace: m.slug, jobId: started.jobId ?? '', mutationId: newId() });
+    // As if the job had written its row before the cancel: the undo has something to take back.
+    await testQuery(ownerUrl, `update import_rows set outcome = 'created' where import_id = $1`, [importId]);
+    await m.client.imports.undo({ workspace: m.slug, importId, mutationId });
+    return [{ kind: 'jobs' }, { kind: 'jobs' }, { kind: 'jobs', mutation_id: mutationId }];
+  },
+  'exports.start': async (m, mutationId) => {
+    await m.client.exports.start({
+      workspace: m.slug,
+      id: newId(),
+      objectId: m.people.id,
+      attributeIds: [m.attribute('name')],
+      timeZone: 'UTC',
+      mutationId,
+    });
+    return [{ kind: 'jobs', mutation_id: mutationId }];
   },
   // Background jobs (spec 0008): one jobs row per write, naming the job.
   'jobs.startTest': async (m, mutationId) => {
@@ -1857,6 +1937,10 @@ Object.assign(WRITES, {
 
 /** How many writes (each one poke) a case in WRITES makes before and with its own. */
 const WRITES_MADE: Readonly<Record<string, number>> = {
+  // Imports (spec 0040): the import made (and its rows staged) first, then the write.
+  'imports.stage': 2,
+  'imports.start': 3,
+  'imports.undo': 5,
   'members.setRole': 3,
   'members.remove': 3,
   'members.leave': 3,

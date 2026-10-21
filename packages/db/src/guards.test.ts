@@ -1886,7 +1886,7 @@ describe('the audit log (spec 0031, AC-830)', () => {
 });
 
 describe('first run answers (spec 0036)', () => {
-  it('let the app insert only a member’s answers and never read them, and no other role anything', async () => {
+  it('let the app insert only a member’s answers and never read them, and the purge only clear them', async () => {
     const table = await owner.query<{ privileges: string | null }>(`
       select string_agg(p.privilege, ',' order by p.privilege) as privileges
       from unnest(array['SELECT', 'INSERT', 'UPDATE', 'DELETE', 'TRUNCATE', 'REFERENCES', 'TRIGGER']) p(privilege)
@@ -1905,12 +1905,14 @@ describe('first run answers (spec 0036)', () => {
       'crm_app INSERT answers',
       'crm_app INSERT member_id',
       'crm_app INSERT workspace_id',
+      // The purge (0078): crm_purge_workspace_begin finds a workspace's rows and deletes them.
+      'crm_purge SELECT workspace_id',
     ]);
-    const others = await owner.query<{ grantee: string }>(`
-      select coalesce(pg_get_userbyid(nullif(a.grantee, 0)), 'PUBLIC') as grantee
+    const others = await owner.query<{ grantee: string; privilege: string }>(`
+      select coalesce(pg_get_userbyid(nullif(a.grantee, 0)), 'PUBLIC') as grantee, a.privilege_type as privilege
       from pg_class c, aclexplode(c.relacl) a
       where c.oid = 'public.member_onboarding'::regclass and a.grantee not in (c.relowner, 'crm_app'::regrole)
     `);
-    expect(others.rows).toEqual([]);
+    expect(others.rows).toEqual([{ grantee: 'crm_purge', privilege: 'DELETE' }]);
   });
 });

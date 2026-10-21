@@ -293,11 +293,21 @@ describe("migration 0018's closing check", () => {
     check = await closingCheck('0018_auth_privileges_by_membership.sql');
   });
 
+  /**
+   * Migration 0067 gave crm_purge its narrow reach into schema auth (spec 0031; guards.test.ts holds it to exactly
+   * that). 0017's and 0018's checks ran before then, so each run first takes it back, as the database stood then.
+   */
+  const AT_0018 = [
+    'revoke all on auth.workspace_membership, auth.workspace_directory, auth.user_prefs from crm_purge',
+    'revoke all (workspace_id) on auth.workspace_membership, auth.workspace_directory from crm_purge',
+    'revoke all (last_workspace_id) on auth.user_prefs from crm_purge',
+  ];
+
   /** Runs `sql` (the check) after `setup`, in a transaction that is rolled back, so nothing outlives the test. */
   async function checkAfter(setup: readonly string[], sql = check): Promise<void> {
     await admin.query('begin');
     try {
-      for (const statement of setup) await admin.query(statement);
+      for (const statement of [...AT_0018, ...setup]) await admin.query(statement);
       await admin.query(sql);
     } finally {
       await admin.query('rollback');

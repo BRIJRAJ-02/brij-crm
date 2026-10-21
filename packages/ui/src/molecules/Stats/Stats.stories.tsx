@@ -32,7 +32,8 @@ export const Default: Story = {
   play: async ({ canvas }) => {
     await expect(canvas.getByRole('group', { name: 'This week' })).toBeInTheDocument();
     await expect(canvas.getAllByRole('term')).toHaveLength(5);
-    await expect(canvas.getByText(/Up from/)).toBeInTheDocument();
+    // Two figures rose: meetings booked and deals won.
+    await expect(canvas.getAllByText(/Up from/)).toHaveLength(2);
   },
 };
 
