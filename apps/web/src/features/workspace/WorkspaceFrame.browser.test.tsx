@@ -534,9 +534,18 @@ describe('the app’s sidebar (spec 0034)', () => {
       grip.focus();
       await new Promise((resolve) => setTimeout(resolve, 20));
     });
-    await press(grip, ' ');
-    await press(grip, 'ArrowUp');
-    await press(grip, ' ');
+    // The library's drag wrapper (dnd-kit) reads the key's code, and moves focus off the grip once it lifts.
+    const key = async (key: string, code: string) => {
+      await act(async () => {
+        (document.activeElement ?? grip).dispatchEvent(
+          new KeyboardEvent('keydown', { key, code, bubbles: true, cancelable: true }),
+        );
+        await new Promise((resolve) => setTimeout(resolve, 50));
+      });
+    };
+    await key(' ', 'Space');
+    await key('ArrowUp', 'ArrowUp');
+    await key(' ', 'Space');
     expect(sent).toEqual([{ op: 'move', kind: 'object', id: COMPANIES, toIndex: 0 }]);
     const said = [...document.querySelectorAll('[role="status"]')].map((each) => each.textContent).join(' ');
     expect(said).toContain('Companies, moved to position 1 of 2.');

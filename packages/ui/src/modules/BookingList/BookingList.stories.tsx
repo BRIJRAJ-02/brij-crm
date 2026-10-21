@@ -213,7 +213,8 @@ export const Meetings: Story = {
     </Stage>
   ),
   play: async ({ canvas }) => {
-    await expect(canvas.getByText('Grace Hopper')).toBeInTheDocument();
+    // Named with whoever hosts it: "You and Grace Hopper".
+    await expect(canvas.getByText(/and Grace Hopper$/)).toBeInTheDocument();
     await expect(canvas.getByText('cy@globex.com, di@globex.com and 3 more')).toBeInTheDocument();
     await expect(canvas.getByText('Team')).toBeInTheDocument();
   },
