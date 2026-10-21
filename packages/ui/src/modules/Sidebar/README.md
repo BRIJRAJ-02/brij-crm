@@ -39,7 +39,7 @@ Ported from the artifact's Sidebar card. Every screen inside the app shell (#10 
 
 - It is the navigation landmark (`<nav>`, "Main navigation", or `label`).
 - `NavItem` is a routed link with `href` (`isCurrent` adds `aria-current="page"`), or a button with `onPress` (Invite teammates). Record objects and lists pass `hue` for their tile; a list may pass its emoji as `leading`. `meta` names a favourite's object, or where a link leads ("In Captures"); on the rail, where it has no room, it joins the name and the tooltip ("Booking pages · In Captures"); `badge` is for counts that need action, never totals.
-- `NavSection` folds under its label. `isLoading` draws skeleton rows after the loading delay, and on the rail a `tile` Skeleton where each icon will go, so a folded sidebar shows it is loading too (it used to stay blank); `emptyLabel` says what goes there when it has no items.
+- `NavSection` folds under its label. `isFolded` with `onFoldChange` keeps the fold where the screen says: the app stores each member's folds on the server, so they follow the person to every device (spec 0034, AC-931); without them the section folds on its own (`defaultExpanded`). Why props and not a variant: the fold is the same Disclosure, only owned by the screen. `isLoading` draws skeleton rows after the loading delay, and on the rail a `tile` Skeleton where each icon will go, so a folded sidebar shows it is loading too (it used to stay blank); `emptyLabel` says what goes there when it has no items.
 - `NavGroup` sets fixed destinations apart after the sections without a label on screen (Bookings, Captures and Trash after Records): a section's space above it open, a section's hairline on the rail, and `role="group"` named by `label` for screen readers. Why a new part: a bare `NavItem` after a section sat flush under its last item and read as one of its rows, and a `NavSection` would add a label and a fold these destinations don't want.
 - `mark` replaces the workspace's letter avatar with the product's mark (the app passes Timefix's `ProviderMark` at `lg`, F29), as timefix heads its sidebar; it is decoration, so the switcher keeps the workspace's name, and its menu works as before.
 - `isWorkspaceLoading` draws the workspace's mark and name as skeletons (after the loading delay, so a quick load flashes nothing), with no menu, while its name isn't known, so no stand in name (the product's) flashes before the real one.
@@ -72,7 +72,7 @@ The current item takes `surface-selected`; hover (pointer only) `surface-hover`;
 
 ## Keyboard
 
-Tab moves through the workspace switcher, the collapse button, Quick actions, each item and each section label. Enter follows a link or presses a button; Enter or Space folds a section. With `keyboard="arrows"`, the items are one tab stop and the arrow keys, Home and End move between them.
+Tab moves through the workspace switcher, the collapse button, Quick actions, each item and each section label. Enter follows a link or presses a button; Enter or Space folds a section (with `onFoldChange`, the screen is told and keeps it). With `keyboard="arrows"`, the items are one tab stop and the arrow keys, Home and End move between them.
 
 ## Differences from the artifact
 

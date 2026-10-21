@@ -4,9 +4,11 @@ import { expect, fn, waitFor, within } from 'storybook/test';
 import { AvatarStack } from '../../atoms/Avatar/Avatar.tsx';
 import { Button } from '../../atoms/Button/Button.tsx';
 import { SplitButton } from '../../atoms/Button/SplitButton.tsx';
+import { Badge } from '../../atoms/Badge/Badge.tsx';
 import { Tag } from '../../atoms/Tag/Tag.tsx';
 import { FilterChip } from '../../molecules/FilterChip/FilterChip.tsx';
 import { Menu, MenuItem } from '../../molecules/Menu/Menu.tsx';
+import { LinkListToolbar } from '../LinkList/LinkList.tsx';
 import { SortChip, Toolbar, TopBar, ViewBar, type ViewChoice } from './Toolbar.tsx';
 
 const VIEWS: readonly ViewChoice[] = [
@@ -274,3 +276,53 @@ export const SortChips: Story = {
     await userEvent.click(canvas.getByRole('button', { name: '+2' }));
   },
 };
+
+/** A list page with no saved views (Booking pages, Forms; spec 0034): the tile, title, count and New, then the search. */
+function ListPage() {
+  const [query, setQuery] = useState('');
+  return (
+    <div>
+      <TopBar
+        title="Booking pages"
+        icon="link"
+        hue="orange"
+        meta={<Badge count={3} max={Infinity} label="booking pages" />}
+      >
+        <Button variant="primary" icon="plus" label="New booking page">
+          New
+        </Button>
+      </TopBar>
+      <ViewBar>
+        <LinkListToolbar searchLabel="Search booking pages" query={query} onQueryChange={setQuery} size="sm" />
+      </ViewBar>
+      <ViewBar views={VIEWS} currentViewId="all" onViewChange={fn()} />
+    </div>
+  );
+}
+
+/**
+ * The bar with no switcher: the page's search at its end, in the same bar an object's views take, so the page's
+ * content starts where a view's does (the second bar is drawn under it to compare).
+ */
+export const ToolsOnly: Story = {
+  render: () => <ListPage />,
+  play: async ({ canvas }) => {
+    await expect(canvas.getByRole('heading', { level: 1, name: 'Booking pages' })).toBeInTheDocument();
+    await expect(canvas.getByRole('button', { name: 'New booking page' })).toHaveTextContent('New');
+    const search = canvas.getByRole('searchbox', { name: 'Search booking pages' });
+    const tools = barOf(search);
+    const views = tools.nextElementSibling;
+    await expect(views).toContainElement(canvas.getByRole('button', { name: 'All companies' }));
+    // The same height as the switcher's bar: nothing moves between a list page and an object's view.
+    await expect(tools.getBoundingClientRect().height).toBe(views?.getBoundingClientRect().height);
+  },
+};
+
+/** The bar holding `element`: its ancestor that sits beside the TopBar's header. */
+function barOf(element: HTMLElement): HTMLElement {
+  let bar = element;
+  while (bar.parentElement !== null && bar.parentElement.querySelector(':scope > header') === null) {
+    bar = bar.parentElement;
+  }
+  return bar;
+}

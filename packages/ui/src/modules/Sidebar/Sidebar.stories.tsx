@@ -357,3 +357,42 @@ export const FooterShortcut: Story = {
     await expect(switcher.querySelector('img')).not.toBeNull();
   },
 };
+
+/** A section whose fold the screen keeps (spec 0034: stored for each member): only `onFoldChange` changes it. */
+function KeptFoldSidebar() {
+  const [isFolded, setFolded] = useState(true);
+  return (
+    <Stage height="page">
+      <Sidebar workspace="Brightline">
+        <NavSection title="Scheduling" isFolded={isFolded} onFoldChange={setFolded}>
+          <NavItem icon="calendar-days" href="/bookings">
+            Bookings
+          </NavItem>
+          <NavItem icon="clock" href="/availability">
+            Availability
+          </NavItem>
+        </NavSection>
+      </Sidebar>
+    </Stage>
+  );
+}
+
+/**
+ * Folded where the screen says; pressing the label (or Enter on it) tells the screen, and the section follows what
+ * the screen keeps, so it opens and folds only through `onFoldChange`.
+ */
+export const KeptFold: Story = {
+  render: () => <KeptFoldSidebar />,
+  play: async ({ canvas, userEvent }) => {
+    const label = canvas.getByRole('button', { name: 'Scheduling' });
+    await expect(label).toHaveAttribute('aria-expanded', 'false');
+    // Folded, its items are out of reach.
+    await expect(canvas.queryByRole('link', { name: 'Bookings' })).toBeNull();
+    label.focus();
+    await userEvent.keyboard('{Enter}');
+    await expect(label).toHaveAttribute('aria-expanded', 'true');
+    await expect(canvas.getByRole('link', { name: 'Bookings' })).toBeInTheDocument();
+    await userEvent.click(label);
+    await expect(label).toHaveAttribute('aria-expanded', 'false');
+  },
+};

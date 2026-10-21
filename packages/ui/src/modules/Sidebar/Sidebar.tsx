@@ -453,7 +453,15 @@ export interface NavSectionProps {
   readonly isLoading?: boolean;
   /** What it says when it has no items ("Star a record to keep it here"). */
   readonly emptyLabel?: string;
+  /** Open at first, when the section keeps its own fold (no `isFolded`). */
   readonly defaultExpanded?: boolean;
+  /**
+   * Folded, when the screen keeps the fold (spec 0034: stored for each
+   * member, so it follows them to every device). Pass `onFoldChange` with it.
+   */
+  readonly isFolded?: boolean;
+  /** The label was pressed: fold (true) or open (false) the section. */
+  readonly onFoldChange?: (isFolded: boolean) => void;
 }
 
 /** A folding group of nav items under a quiet label. Collapsed, the sidebar draws its items without the label, and tile marks while they load. */
@@ -463,6 +471,8 @@ export function NavSection({
   isLoading = false,
   emptyLabel,
   defaultExpanded = true,
+  isFolded,
+  onFoldChange,
 }: NavSectionProps) {
   const { isCollapsed } = useContext(SidebarContext);
   const showSkeleton = useDelayedLoading(isLoading);
@@ -502,7 +512,18 @@ export function NavSection({
   }
   return (
     <div className={styles.section}>
-      <Disclosure title={title} variant="label" defaultExpanded={defaultExpanded}>
+      <Disclosure
+        title={title}
+        variant="label"
+        {...(isFolded === undefined ? { defaultExpanded } : { isExpanded: !isFolded })}
+        {...(onFoldChange === undefined
+          ? {}
+          : {
+              onExpandedChange: (isExpanded: boolean) => {
+                onFoldChange(!isExpanded);
+              },
+            })}
+      >
         <div className={styles.items} aria-busy={isLoading || undefined}>
           {body}
         </div>
