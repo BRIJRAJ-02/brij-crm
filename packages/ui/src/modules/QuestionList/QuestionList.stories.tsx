@@ -39,7 +39,7 @@ const QUESTIONS: readonly QuestionListItem[] = [
     typeLabel: 'Short text',
     typeIcon: 'type',
     isRequired: false,
-    filed: 'Not filed, kept with the enquiry',
+    filed: 'Not filed, kept with the submission',
   },
 ];
 

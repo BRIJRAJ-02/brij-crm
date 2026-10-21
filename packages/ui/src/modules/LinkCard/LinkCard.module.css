@@ -1,10 +1,11 @@
 /* LinkCard (the owner's card grid, 20 October 2026, after Calendly's event types): a raised card in Card's
    own look (hairline border-subtle, radius-lg, surface-raised, shadow-xs) with a 4px colour edge on the
-   start side, dot-<hue>, or dot-gray for a link with no colour (a form). The edge never says a state.
+   start side, dot-<hue>, or dot-gray for a link with no colour. The edge never says a state.
    The body: the title (text-title, two lines at most) with a state Badge beside it and the switch at the top
    end; the facts in text-secondary; the public link muted in the label type.
-   The foot, on surface-subtle over a hairline like Card's: Copy link at the start, the actions at the end,
-   space-8 apart, every control drawn at size-input (30px) and pressed at 32 (Button lg's hit area).
+   The foot, on the card's own surface (one surface, 21 October 2026: the tinted band made the card read as
+   two boxes, darker below in dark mode): Copy link at the start, the actions at the end, space-8 apart,
+   every control drawn at size-input (30px) and pressed at 32 (Button lg's hit area).
    The title is the card's one link: its ::after covers the card's body, so a press there opens it. The
    switch (in a 32px box, so a near miss does nothing rather than opening the card), the address (so it can
    be selected) and the foot sit above it; a miss in the foot does nothing. Hover (a fine pointer only) raises the border to border-strong; focus on the title rings the
@@ -88,7 +89,7 @@
     flex: 1;
     flex-direction: column;
     gap: var(--space-4);
-    padding-block: var(--space-16);
+    padding-block: var(--space-16) var(--space-12);
     padding-inline: calc(var(--space-16) + var(--space-4)) var(--space-16);
   }
 
@@ -190,10 +191,8 @@
     align-items: center;
     justify-content: space-between;
     gap: var(--space-8);
-    padding-block: var(--space-8);
+    padding-block: 0 var(--space-12);
     padding-inline: calc(var(--space-16) + var(--space-4)) var(--space-16);
-    border-block-start: var(--border-width-hairline) solid var(--border-subtle);
-    background: var(--surface-subtle);
   }
 
   .actions {

@@ -89,6 +89,7 @@ export function LinksScreen({ data, slug }: LinksScreenProps) {
         },
         isDisabled: !page.canChange,
         disabledReason: strings.notYours,
+        hint: page.status === 'live' ? strings.takingBookings : strings.notTakingBookings,
       },
       copyValue: publicBookingUrl(page.publicKey),
       actions: (

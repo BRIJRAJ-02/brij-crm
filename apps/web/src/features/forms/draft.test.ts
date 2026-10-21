@@ -120,7 +120,9 @@ describe('the builder’s draft changes', () => {
     const [name] = base.questions;
     if (name === undefined) throw new Error('no question');
     expect(filedLine(name, 'Person', ATTRIBUTES)).toBe('Person › Name');
-    expect(filedLine({ ...name, filedOn: undefined }, 'Person', ATTRIBUTES)).toBe('Not filed, kept with the enquiry');
+    expect(filedLine({ ...name, filedOn: undefined }, 'Person', ATTRIBUTES)).toBe(
+      'Not filed, kept with the submission',
+    );
   });
 
   it('keeps the match email question', () => {

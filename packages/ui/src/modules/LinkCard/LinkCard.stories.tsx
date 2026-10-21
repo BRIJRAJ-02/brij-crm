@@ -1,5 +1,5 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
-import { expect, fn, userEvent } from 'storybook/test';
+import { expect, fn, userEvent, within } from 'storybook/test';
 import { Button } from '../../atoms/Button/Button.tsx';
 import { Tooltip } from '../../atoms/Tooltip/Tooltip.tsx';
 import { Stage } from '../../workbench/Stage/Stage.tsx';
@@ -29,7 +29,7 @@ const meta = {
     facts: ['30 min', 'One on one'],
     address: '/acme/intro-call',
     copyValue: 'https://example.com/b/intro',
-    toggle: { label: 'Intro call is on', isSelected: true, onChange: fn() },
+    toggle: { label: 'Intro call is on', isSelected: true, onChange: fn(), hint: 'Taking bookings' },
   },
   render: (args) => (
     <Stage width="narrow">
@@ -53,7 +53,7 @@ export const Default: Story = {
   },
 };
 
-/** Off: quieter, its title muted and its edge grey, with no Off badge (the switch says it). */
+/** Off: quieter, its title muted (its edge keeps its colour), with no Off badge (the switch says it). */
 export const Off: Story = {
   args: {
     isOff: true,
@@ -66,30 +66,60 @@ export const Off: Story = {
   },
 };
 
-/** A form never published: the badge beside the title, its switch disabled with the reason in a tooltip. */
+/** A form never published: the badge beside the title and what to do, with no switch, no address and nothing to copy. */
 export const NotPublished: Story = {
   args: {
     title: 'Untitled form',
     href: '/w/acme/captures/forms/untitled',
     hue: undefined,
-    facts: ['0 submissions'],
-    address: '/f/untitled-form',
+    colourKey: '01a15d53-7271-7fec-919b-2575bf34beea',
+    facts: ['Publish it to start taking submissions'],
+    address: undefined,
     badge: 'Not published',
     isOff: true,
     copyValue: undefined,
+    toggle: undefined,
+  },
+  render: (args) => (
+    <Stage width="narrow">
+      <LinkCard
+        {...args}
+        actions={<Button variant="ghost" size="lg" icon="ellipsis" label={`More for ${args.title}`} />}
+      />
+    </Stage>
+  ),
+  play: async ({ canvas }) => {
+    await expect(canvas.getByText('Not published')).toBeInTheDocument();
+    await expect(canvas.getByText('Publish it to start taking submissions')).toBeInTheDocument();
+    // Nothing to switch, copy or open until it is published.
+    await expect(canvas.queryByRole('switch')).not.toBeInTheDocument();
+    await expect(canvas.queryByText(/^\/f\//)).not.toBeInTheDocument();
+    await expect(canvas.queryByRole('button', { name: 'Copy link' })).not.toBeInTheDocument();
+  },
+};
+
+/** A form taking submissions: its colour from its id, its counts, and its switch's hint on hover. */
+export const Form: Story = {
+  args: {
+    title: 'Contact us',
+    href: '/w/acme/captures/forms/contact',
+    hue: undefined,
+    colourKey: '01a15d53-7271-7fec-919b-2575bf34beea',
+    facts: ['12 submissions', '2 spam'],
+    address: '/f/contact-us',
+    copyValue: 'https://example.com/f/contact-us',
     toggle: {
-      label: 'Accepting submissions on Untitled form',
-      isSelected: false,
+      label: 'Accepting submissions on Contact us',
+      isSelected: true,
       onChange: fn(),
-      isDisabled: true,
-      disabledReason: 'Publish it first',
+      hint: 'Accepting submissions',
     },
   },
   play: async ({ canvas }) => {
-    await expect(canvas.getByText('Not published')).toBeInTheDocument();
-    await expect(canvas.getByRole('switch', { name: 'Accepting submissions on Untitled form' })).toBeDisabled();
-    // Nothing to copy or open until it is published.
-    await expect(canvas.queryByRole('button', { name: 'Copy link' })).not.toBeInTheDocument();
+    await expect(canvas.getByText('12 submissions · 2 spam')).toBeInTheDocument();
+    await userEvent.hover(canvas.getByRole('switch', { name: 'Accepting submissions on Contact us' }));
+    await expect(await within(document.body).findByRole('tooltip')).toHaveTextContent('Accepting submissions');
+    await userEvent.unhover(canvas.getByRole('switch', { name: 'Accepting submissions on Contact us' }));
   },
 };
 

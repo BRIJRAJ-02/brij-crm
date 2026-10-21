@@ -14,6 +14,9 @@ export const strings = {
   on: 'On: the link works',
   off: 'Off: the link stops working',
   isOn: (title: string) => `${title} is on`,
+  /** The switch's hint on a link's card: what it does now. */
+  takingBookings: 'Taking bookings',
+  notTakingBookings: 'Not taking bookings',
   openPage: (title: string) => `Open ${title} in a new tab`,
   /** Open's tooltip on a link card. */
   openInNewTab: 'Open in a new tab',

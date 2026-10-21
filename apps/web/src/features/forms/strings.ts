@@ -5,12 +5,13 @@ const count = (n: number, one: string, many: string) => `${new Intl.NumberFormat
 
 export const strings = {
   forms: 'Forms',
-  formsDescription: 'A form makes a person in Timefix from every enquiry, from a link, your site or your own form.',
+  formsDescription:
+    'A form collects submissions from a link, your site or your own form, and can add each one to your CRM.',
   /** The create button's name; it reads `newButton`, the same word as Links', so switching tabs moves nothing. */
   newForm: 'New form',
   newButton: 'New',
   noForms: 'No forms yet',
-  noFormsText: 'A form collects enquiries from a link or your site and files each one as a person.',
+  noFormsText: 'A form collects submissions from a link or your site, and can add each one to your CRM.',
   failedTitle: 'Forms didn’t load',
   failedText: 'Something went wrong. Try again.',
   formFailedTitle: 'This form didn’t load',
@@ -21,7 +22,6 @@ export const strings = {
   // The list (Captures › Forms draws the same rows as Links)
   copying: 'Copying…',
   moreFor: (name: string) => `More for ${name}`,
-  publishFirst: 'Publish it first',
   /** Open's tooltip on a form's card. */
   openInNewTab: 'Open in a new tab',
   manageOnly: 'Only members who manage forms can change it',
@@ -30,16 +30,18 @@ export const strings = {
   turnOnFailed: (name: string) => `Couldn’t turn on ${name}. It’s off again.`,
   duplicateFailed: (name: string) => `Couldn’t duplicate ${name}.`,
   deleteFailed: (name: string) => `Couldn’t delete ${name}. It’s back in the list.`,
-  responses: (n: number) => count(n, 'response', 'responses'),
+  submissionCount: (n: number) => count(n, 'submission', 'submissions'),
+  noSubmissionsYet: 'No submissions yet',
+  publishToShare: 'Publish it to start taking submissions',
   openForm: (name: string) => `Open ${name} in a new tab`,
   searchForms: 'Search forms',
   addressPending: '/f/…',
-  thisMonth: (n: number) => `${count(n, 'enquiry', 'enquiries')} this month`,
+  thisMonth: (n: number) => `${count(n, 'submission', 'submissions')} this month`,
   spam: (n: number) => `${new Intl.NumberFormat().format(n)} spam`,
-  accepting: 'Accepting enquiries',
-  notAccepting: 'Not accepting',
+  accepting: 'Accepting submissions',
+  notAccepting: 'Not accepting submissions',
   notPublishedYet: 'Not published',
-  acceptingOf: (name: string) => `Accepting enquiries on ${name}`,
+  acceptingOf: (name: string) => `Accepting submissions on ${name}`,
   formActions: (name: string) => `Actions for ${name}`,
   open: 'Open',
   copyAddress: 'Copy the address',
@@ -55,8 +57,8 @@ export const strings = {
       : `Its address stops working, and its ${count(submissions, 'submission', 'submissions')} go with it. The people and records they made stay.`,
   deleted: (name: string) => `Deleted “${name}”.`,
   cancel: 'Cancel',
-  paused: (name: string) => `${name} isn’t taking enquiries now.`,
-  resumed: (name: string) => `${name} is taking enquiries again.`,
+  paused: (name: string) => `${name} isn’t taking submissions now.`,
+  resumed: (name: string) => `${name} is taking submissions again.`,
 
   // The editor
   untitledForm: 'Untitled form',
@@ -103,14 +105,14 @@ export const strings = {
   placeholder: 'Placeholder',
   placeholderHint: 'Shown until they type',
   whereItGoes: 'Where it goes',
-  notFiled: 'Not filed, kept with the enquiry',
+  notFiled: 'Not filed, kept with the submission',
   notFiledShort: 'Not filed',
   takenBy: (label: string) => `Used by “${label}”; choosing it moves it here`,
   cantWrite: 'You can’t write to this',
   mustAnswer: 'Visitors must answer',
   duplicateQuestion: 'Duplicate',
   deleteQuestion: 'Delete',
-  emailStays: 'The email question stays while the form files onto People: it is how an enquiry becomes a person.',
+  emailStays: 'The email question stays while the form files onto People: it is how a submission becomes a person.',
   questionDeleted: (label: string) => `Deleted “${label}”.`,
   questionDeletedFiled: (label: string, filed: string) => `Deleted “${label}”. Its answers went to ${filed}.`,
   undo: 'Undo',
@@ -146,7 +148,7 @@ export const strings = {
   back: 'Back',
   close: 'Close',
   fileOnto: 'The object it files onto',
-  fileOntoHint: 'Each enquiry becomes one of these, matched by email.',
+  fileOntoHint: 'Each submission becomes one of these, matched by email.',
   buildObject: 'Build one out of this form',
   buildObjectButton: (name: string, attributes: number) =>
     `Create ${name} with ${count(attributes, 'attribute', 'attributes')}`,
@@ -197,19 +199,19 @@ export const strings = {
   delayComing: 'Five seconds for now: choosing the wait comes with booking from a form.',
   answersSummary: (object: string, filed: number) =>
     filed === 0
-      ? `Each enquiry adds or updates a ${object}`
-      : `Each enquiry adds or updates a ${object}, with ${count(filed, 'answer', 'answers')} on it`,
-  eachSend: 'Each enquiry',
+      ? `Each submission adds or updates a ${object}`
+      : `Each submission adds or updates a ${object}, with ${count(filed, 'answer', 'answers')} on it`,
+  eachSend: 'Each submission',
   createsOrUpdates: (object: string, match: string | undefined) =>
     match === undefined ? `Creates a ${object}` : `Creates a ${object}, or updates the one with the same ${match}`,
   filedOn: (object: string, attribute: string) => `${object} › ${attribute}`,
-  keptOnly: 'Kept with the enquiry only',
+  keptOnly: 'Kept with the submission only',
   owner: 'Owner',
   ownerHint: 'New records get this owner; a record that already has one keeps it.',
   nobody: 'Nobody',
   spamTitle: 'Spam protection',
   spamSummary: 'On. Bots and junk are caught for you, and doubtful sends wait for your review.',
-  spamReview: 'Review enquiries that need a look',
+  spamReview: 'Review submissions that need a look',
   settingsFailed: 'That didn’t save.',
 
   // Install tab
@@ -244,10 +246,10 @@ export const strings = {
   notLiveYet: 'Publish the form first.',
 
   // Submissions tab
-  allStates: 'All enquiries',
+  allStates: 'All submissions',
   filterStates: 'State',
-  filterLabel: 'Filter enquiries',
-  noSubmissions: 'No enquiries yet',
+  filterLabel: 'Filter submissions',
+  noSubmissions: 'No submissions yet',
   noneIn: {
     received: 'Nothing waiting.',
     processing: 'Nothing in progress.',
@@ -277,49 +279,49 @@ export const strings = {
   release: 'Not spam',
   markSpam: 'Mark as spam',
   notSpam: 'Not spam',
-  moreSubmissionActions: 'More enquiry actions',
+  moreSubmissionActions: 'More submission actions',
   exportCsv: 'Export as CSV',
   exportFilter: 'What this filter shows, every answer as a column',
   exportShown: 'What the table shows for this search, every answer as a column',
-  exportPicked: (n: number) => `The ${count(n, 'picked enquiry', 'picked enquiries')}, every answer as a column`,
+  exportPicked: (n: number) => `The ${count(n, 'picked submission', 'picked submissions')}, every answer as a column`,
   exportStarted: 'Preparing your CSV. A Download button shows here when it is ready.',
   exportReady: (file: string) => `${file} is ready.`,
   download: 'Download',
   addToCrm: 'Add to CRM',
   addQueued: (queued: number, skipped: number) =>
     skipped === 0
-      ? `Adding ${count(queued, 'enquiry', 'enquiries')} to the CRM.`
-      : `Adding ${count(queued, 'enquiry', 'enquiries')} to the CRM. ${String(skipped)} skipped: already in it or held.`,
+      ? `Adding ${count(queued, 'submission', 'submissions')} to the CRM.`
+      : `Adding ${count(queued, 'submission', 'submissions')} to the CRM. ${String(skipped)} skipped: already in it or held.`,
   nothingToAdd: 'Nothing to add: these are already in the CRM or held.',
   addDone: (done: number, refused: number) =>
     refused === 0
-      ? `${count(done, 'enquiry', 'enquiries')} added to the CRM.`
-      : `${count(done, 'enquiry', 'enquiries')} added to the CRM; ${String(refused)} couldn’t be.`,
+      ? `${count(done, 'submission', 'submissions')} added to the CRM.`
+      : `${count(done, 'submission', 'submissions')} added to the CRM; ${String(refused)} couldn’t be.`,
   jobFailed: (label: string) => `${label} didn’t finish. Background jobs in Settings says why.`,
-  syncOld: 'Sync earlier enquiries',
-  syncOldText: 'File earlier enquiries the way the form files now',
-  syncStarted: 'Syncing earlier enquiries. You can keep working.',
+  syncOld: 'Sync earlier submissions',
+  syncOldText: 'File earlier submissions the way the form files now',
+  syncStarted: 'Syncing earlier submissions. You can keep working.',
   syncDone: (done: number, refused: number) =>
     refused === 0
-      ? `${count(done, 'enquiry', 'enquiries')} synced.`
-      : `${count(done, 'enquiry', 'enquiries')} synced; ${String(refused)} couldn’t be.`,
-  syncTitle: 'Sync earlier enquiries?',
-  syncTextPublished: 'The form now files its answers differently. Earlier enquiries can be filed the same way.',
-  syncTextMenu: 'File earlier enquiries the way the form files its answers now.',
-  syncInScope: (total: number) => `${count(total, 'earlier enquiry', 'earlier enquiries')} in scope.`,
-  syncNothing: 'Every earlier enquiry here already follows the form.',
+      ? `${count(done, 'submission', 'submissions')} synced.`
+      : `${count(done, 'submission', 'submissions')} synced; ${String(refused)} couldn’t be.`,
+  syncTitle: 'Sync earlier submissions?',
+  syncTextPublished: 'The form now files its answers differently. Earlier submissions can be filed the same way.',
+  syncTextMenu: 'File earlier submissions the way the form files its answers now.',
+  syncInScope: (total: number) => `${count(total, 'earlier submission', 'earlier submissions')} in scope.`,
+  syncNothing: 'Every earlier submission here already follows the form.',
   syncFailuresText: 'Some can’t be filed, such as when the CRM needs a field the form doesn’t ask.',
-  syncScope: 'Which enquiries',
+  syncScope: 'Which submissions',
   syncUnfiled: 'Only unfiled',
   syncUnfiledText: 'The ones not in the CRM yet',
   syncAll: 'All',
-  syncAllText: 'Every enquiry except spam and ones waiting for review',
+  syncAllText: 'Every submission except spam and ones waiting for review',
   syncCreates: 'New records',
   syncUpdates: 'Records updated',
   syncUnchanged: 'Nothing to change',
   syncFailures: 'Can’t be synced',
   syncCapped: (checked: number) =>
-    `These counts cover the newest ${new Intl.NumberFormat().format(checked)} enquiries.`,
+    `These counts cover the newest ${new Intl.NumberFormat().format(checked)} submissions.`,
   syncStart: 'Sync',
   syncStarting: 'Starting…',
   notNow: 'Not now',
@@ -329,12 +331,12 @@ export const strings = {
   settledSome: (done: number, of: number) => `Changed ${String(done)} of ${String(of)}; the rest are still picked.`,
   markingSpam: 'Marking as spam…',
   markingNotSpam: 'Marking as not spam…',
-  markedSpamMany: (n: number) => `${count(n, 'enquiry', 'enquiries')} marked as spam.`,
-  releasedMany: (n: number) => `${count(n, 'enquiry', 'enquiries')} marked as not spam. They are being processed.`,
+  markedSpamMany: (n: number) => `${count(n, 'submission', 'submissions')} marked as spam.`,
+  releasedMany: (n: number) => `${count(n, 'submission', 'submissions')} marked as not spam. They are being processed.`,
   review: 'Review',
-  needReview: (n: number) => `${count(n, 'enquiry needs', 'enquiries need')} your review.`,
-  searchSubmissions: 'Search enquiries',
-  noMatch: (query: string) => `No enquiries match “${query}”`,
+  needReview: (n: number) => `${count(n, 'submission needs', 'submissions need')} your review.`,
+  searchSubmissions: 'Search submissions',
+  noMatch: (query: string) => `No submissions match “${query}”`,
   noSubmissionsText: 'Share the link and the first one shows here.',
   retry: 'Retry',
   deleteSubmission: 'Delete',
