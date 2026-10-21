@@ -43,6 +43,8 @@ export function CapturesCreateProvider({ slug, tab, children }: CapturesCreatePr
   const { data, toasts } = useRouteContext({ from: '__root__' });
   const navigate = useNavigate();
   const canManageForms = useCan('forms.manage');
+  // Round robin pages are booking.admin's (spec 0029, AC-751).
+  const canBookTeams = useCan('booking.admin');
   const [isAddingPage, setAddingPage] = useState(false);
   const [makingForm, setMakingForm] = useState<string | undefined>(undefined);
 
@@ -87,6 +89,7 @@ export function CapturesCreateProvider({ slug, tab, children }: CapturesCreatePr
       <NewPageDialog
         data={data}
         slug={slug}
+        canBookTeams={canBookTeams}
         isOpen={isAddingPage}
         onClose={() => {
           setAddingPage(false);

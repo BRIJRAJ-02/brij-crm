@@ -13,12 +13,13 @@ import {
 } from './nav.ts';
 
 describe('settingsNav', () => {
-  it('lists Account and Workspace, in order, with their pages', () => {
+  it('lists Account, Workspace and Scheduling, in order, with their pages', () => {
     const groups = settingsNav('acme');
-    expect(groups.map((group) => group.label)).toEqual(['Account', 'Workspace']);
+    expect(groups.map((group) => group.label)).toEqual(['Account', 'Workspace', 'Scheduling']);
     expect(groups.map((group) => group.entries.map((entry) => entry.label))).toEqual([
       ['Preferences', 'Calendars'],
       ['Members', 'Objects', 'Background jobs'],
+      ['Rotations'],
     ]);
   });
 
@@ -30,6 +31,7 @@ describe('settingsNav', () => {
       members: '/w/acme/settings/members',
       objects: '/w/acme/settings/objects',
       jobs: '/w/acme/settings/jobs',
+      rotations: '/w/acme/settings/scheduling/rotations',
     });
     expect(entries.every((entry) => entry.href.startsWith('/w/acme/settings/'))).toBe(true);
     expect(entries.filter((entry) => entry.meta !== undefined)).toEqual([]);
@@ -55,8 +57,9 @@ describe('visibleSettingsNav', () => {
     },
   ];
 
-  it('shows every page today: none needs a permission', () => {
-    expect(visibleSettingsNav(settingsNav('acme'), [])).toEqual(settingsNav('acme'));
+  it('shows Rotations only to someone who makes booking pages; every other page needs nothing', () => {
+    expect(visibleSettingsNav(settingsNav('acme'), ['booking.manage'])).toEqual(settingsNav('acme'));
+    expect(visibleSettingsNav(settingsNav('acme'), []).map((group) => group.id)).toEqual(['account', 'workspace']);
   });
 
   it('leaves out a page the member may not open, keeping the rest of its group', () => {
@@ -81,6 +84,7 @@ describe('settingsPageOf', () => {
     expect(settingsPageOf('/w/acme/settings/objects/people/attributes')).toBe('objects');
     expect(settingsPageOf('/w/acme/settings/jobs/')).toBe('jobs');
     expect(settingsPageOf('/w/acme/settings/members')).toBe('members');
+    expect(settingsPageOf('/w/acme/settings/scheduling/rotations')).toBe('rotations');
   });
 
   it('keeps the old Calendar address current on Calendars while it redirects', () => {
@@ -98,6 +102,7 @@ describe('settingsPageOf', () => {
     const groups = settingsNav('acme');
     expect(settingsGroupOf(groups, 'preferences')?.label).toBe('Account');
     expect(settingsGroupOf(groups, 'jobs')?.label).toBe('Workspace');
+    expect(settingsGroupOf(groups, 'rotations')?.label).toBe('Scheduling');
     expect(settingsGroupOf(groups, undefined)).toBeUndefined();
   });
 });

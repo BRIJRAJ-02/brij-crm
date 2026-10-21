@@ -4,7 +4,7 @@
 // Main task: move a booking to another time its page offers, or cancel it with a reason the guest is emailed.
 // Leaves out: Request reschedule (offering the guest times), editing the location and adding guests from here; the
 // guest does those from their own page.
-import { isDataError, type BookingListItem, type PublicSlots } from '@crm/data';
+import { isDataError, type BookingAssignment, type BookingListItem, type PublicSlots } from '@crm/data';
 import { Button, ButtonGroup, Callout, DayStrip, Field, focusLater, Modal, SlotList } from '@crm/ui';
 import { useEffect, useRef, useState } from 'react';
 import { strings } from './strings.ts';
@@ -15,6 +15,8 @@ export interface HostBookingActions {
   readonly move: (bookingId: string, start: string) => Promise<void>;
   readonly moveSlots: (bookingId: string, from: string, to: string) => Promise<PublicSlots>;
   readonly guestLink: (bookingId: string) => Promise<{ readonly path: string }>;
+  /** Why a round robin booking went to its host (spec 0029, AC-742); none for a personal page's booking. */
+  readonly assignments: (bookingId: string) => Promise<readonly BookingAssignment[]>;
   /** Says how a change outside the card went (Copy guest link). */
   readonly notify: (tone: 'success' | 'danger', message: string) => void;
 }

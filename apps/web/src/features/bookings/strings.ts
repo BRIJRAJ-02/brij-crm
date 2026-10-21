@@ -199,4 +199,25 @@ export const strings = {
   cancelling: 'Cancelling…',
   movedToast: (name: string) => `Moved. ${name} is emailed the new time.`,
   cancelledToast: (name: string) => `Cancelled. ${name} is emailed.`,
+  /** The detail's line for why a round robin booking went to its host (spec 0029, AC-742). */
+  assignedTerm: 'Assigned',
+  assignedIn: (rotation: string) => `Assigned in ${rotation}`,
+  assignedLine: (member: string, why: string) => `${member} ${why}`,
+  noLongerCounts: (line: string) => `${line} (no longer counts)`,
+  assignedFailed: 'Couldn’t load why this booking went to its host.',
+  assignedWhy: {
+    fair: (count: string, days: string, weight: string) =>
+      `had the fewest meetings in the last ${days} days: ${count}, at weight ${weight}`,
+    fairPlain: 'had the fewest meetings lately',
+    priority: 'was the first free by priority',
+    even: 'was next in turn for an even share',
+    owner: 'owns this person’s record',
+    last_host: 'hosted this person last time',
+    standin: 'stood in for the usual host',
+    only_free: 'was the only one free then',
+    routed: 'was chosen by the routing form',
+    manual: 'was picked by hand',
+    reassigned: 'was reassigned by hand',
+    adjustment: 'had their count adjusted by hand',
+  },
 } as const;

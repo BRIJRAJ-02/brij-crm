@@ -6,6 +6,7 @@ import type { ObjectSummary, Permission } from '@crm/data';
 import { jobsHref, settingsHomeHref } from '../workspace/objects.ts';
 import { strings as calendar } from './calendar-strings.ts';
 import { strings as jobs } from './jobs-strings.ts';
+import { strings as rotations } from '../booking/rotation-strings.ts';
 import { strings as members } from './members-strings.ts';
 import { strings } from './strings.ts';
 
@@ -36,8 +37,11 @@ export const calendarSettingsHref = (slug: string) => `/w/${slug}/settings/accou
 /** Settings › Workspace › Members (spec 0031): who is in the workspace, roles and invitations. */
 export const membersSettingsHref = (slug: string) => `/w/${slug}/settings/members`;
 
-/** The settings navigation's pages: Account's, then Workspace's. */
-export type SettingsPageId = 'preferences' | 'calendars' | 'members' | 'objects' | 'jobs';
+/** Settings › Scheduling › Rotations (spec 0029; spec 0037, AC-1433): the pools round robin pages book from. */
+export const rotationsSettingsHref = (slug: string) => `/w/${slug}/settings/scheduling/rotations`;
+
+/** The settings navigation's pages: Account's, Workspace's, then Scheduling's. */
+export type SettingsPageId = 'preferences' | 'calendars' | 'members' | 'objects' | 'jobs' | 'rotations';
 
 /**
  * The settings navigation's groups, in order (spec 0026, AC-682). Scheduling
@@ -51,7 +55,7 @@ export interface SettingsNavEntry {
   readonly id: SettingsPageId;
   readonly label: string;
   readonly href: string;
-  readonly icon: 'sliders-horizontal' | 'calendar' | 'users' | 'box' | 'list-checks';
+  readonly icon: 'sliders-horizontal' | 'calendar' | 'users' | 'box' | 'list-checks' | 'users-round';
   /** A quiet word after the name. Every entry opens a page in Settings, so none leaves it (20 Oct 2026). */
   readonly meta?: string;
   /** A permission the page needs before the member may open it at all; absent, every member may. */
@@ -94,6 +98,20 @@ export function settingsNav(slug: string): readonly SettingsNavGroup[] {
         { id: 'jobs', label: jobs.title, href: jobsHref(slug), icon: 'list-checks' },
       ],
     },
+    {
+      id: 'scheduling',
+      label: rotations.group,
+      entries: [
+        // Anyone who makes booking pages sees the rotations they're in; admins make and change them.
+        {
+          id: 'rotations',
+          label: rotations.title,
+          href: rotationsSettingsHref(slug),
+          icon: 'users-round',
+          requires: 'booking.manage',
+        },
+      ],
+    },
   ];
 }
 
@@ -125,6 +143,7 @@ export function settingsPageOf(pathname: string): SettingsPageId | undefined {
   if (rest === 'objects' || rest.startsWith('objects/')) return 'objects';
   if (rest === 'jobs') return 'jobs';
   if (rest === 'members') return 'members';
+  if (rest === 'scheduling/rotations') return 'rotations';
   return undefined;
 }
 

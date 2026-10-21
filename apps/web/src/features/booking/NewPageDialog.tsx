@@ -1,11 +1,14 @@
 // Brief
 // Purpose: New booking page (spec 0025 experience, AC-678): a centred dialog, "Add a booking page" (the owner's call on 19 October 2026, over the side panel).
 // Main task: a title, the address it suggests, the lengths and the schedule it books by, then Continue into the editor.
+// An admin also chooses who it books: themselves, or one host from a rotation (spec 0029, AC-732); a round robin page's other hosts are set in its editor.
 // Leaves out: everything else a page has (its editor), and Make it private (pages are on or off until a public profile lists them).
 import { isDataError, type BookingPageView, type DataLayer } from '@crm/data';
-import { useSchedules } from '@crm/data/react';
-import { Button, Callout, ChoiceChips, Field, Modal, Select, SettingsStack } from '@crm/ui';
+import { useCaptureList, useSchedules } from '@crm/data/react';
+import { Button, Callout, ChoiceChips, Field, Link, Modal, Radio, RadioGroup, Select, SettingsStack } from '@crm/ui';
 import { useState } from 'react';
+import { rotationsSettingsHref } from '../settings/nav.ts';
+import { strings as rotationStrings } from './rotation-strings.ts';
 import { browserZone } from './zone.ts';
 import { scheduleStrings } from './schedule-strings.ts';
 import { strings } from './strings.ts';
@@ -29,13 +32,15 @@ function slugOf(title: string): string {
 export interface NewPageDialogProps {
   readonly data: DataLayer;
   readonly slug: string;
+  /** The reader holds `booking.admin`: they may make a round robin page. */
+  readonly canBookTeams?: boolean;
   readonly isOpen: boolean;
   readonly onClose: () => void;
   readonly onCreated: (page: BookingPageView) => void;
 }
 
 /** The dialog: Title, Address, Duration, Hours, then Cancel or Continue. The id is minted once per opening, so a retry makes one page. */
-export function NewPageDialog({ data, slug, isOpen, onClose, onCreated }: NewPageDialogProps) {
+export function NewPageDialog({ data, slug, canBookTeams = false, isOpen, onClose, onCreated }: NewPageDialogProps) {
   const [title, setTitle] = useState('');
   const [address, setAddress] = useState<string | undefined>(undefined);
   const [durations, setDurations] = useState<readonly Duration[]>([30]);
@@ -45,6 +50,19 @@ export function NewPageDialog({ data, slug, isOpen, onClose, onCreated }: NewPag
   const schedules = useSchedules(isOpen ? data.schedules.view(slug, undefined, browserZone()) : undefined);
   const choices = schedules.status === 'ready' ? schedules.schedules : [];
   const fallback = choices.find((each) => each.isDefault);
+  const [who, setWho] = useState<'me' | 'rotation'>('me');
+  const [rotationId, setRotationId] = useState<string | null>(null);
+  const [rotationError, setRotationError] = useState<string | undefined>(undefined);
+  const rotations = useCaptureList(data.rotations.view(slug));
+  const rotationItems =
+    rotations.status === 'ready'
+      ? rotations.items.map((each) => ({
+          id: each.id,
+          label: each.name,
+          description: rotationStrings.summary(each.strategy, each.windowDays, each.pages),
+        }))
+      : [];
+  const isTeam = canBookTeams && who === 'rotation';
   const [id, setId] = useState(() => data.bookingPages.newId());
   const [isBusy, setBusy] = useState(false);
   const [errors, setErrors] = useState<{
@@ -59,6 +77,9 @@ export function NewPageDialog({ data, slug, isOpen, onClose, onCreated }: NewPag
     setAddress(undefined);
     setDurations([30]);
     setHours('default');
+    setWho('me');
+    setRotationId(null);
+    setRotationError(undefined);
     setErrors({});
     setFailure(undefined);
     setId(data.bookingPages.newId());
@@ -71,7 +92,9 @@ export function NewPageDialog({ data, slug, isOpen, onClose, onCreated }: NewPag
       ...(durations.length === 0 ? { durations: strings.durationRequired } : {}),
     };
     setErrors(found);
-    if (Object.keys(found).length > 0) return;
+    const missingRotation = isTeam && rotationId === null;
+    setRotationError(missingRotation ? rotationStrings.rotationRequired : undefined);
+    if (Object.keys(found).length > 0 || missingRotation) return;
     setBusy(true);
     setFailure(undefined);
     const zone = browserZone();
@@ -80,11 +103,16 @@ export function NewPageDialog({ data, slug, isOpen, onClose, onCreated }: NewPag
         id,
         title: title.trim(),
         timeZone: zone,
-        settings: {
-          slug: shownAddress,
-          durations: [...durations],
-          scheduleId: hours === 'default' ? null : hours,
-        },
+        settings: isTeam
+          ? { slug: shownAddress, durations: [...durations] }
+          : {
+              slug: shownAddress,
+              durations: [...durations],
+              scheduleId: hours === 'default' ? null : hours,
+            },
+        ...(isTeam && rotationId !== null
+          ? { kind: 'round_robin' as const, hosts: { fixed: [], rotations: [rotationId] } }
+          : {}),
       })
       .then(
         (page) => {
@@ -152,18 +180,51 @@ export function NewPageDialog({ data, slug, isOpen, onClose, onCreated }: NewPag
           onChange={(ids) => setDurations(DURATIONS.filter((minutes) => ids.includes(String(minutes))))}
           {...(errors.durations === undefined ? {} : { error: errors.durations })}
         />
-        <Select
-          label={strings.hours}
-          items={[
-            { id: 'default', label: scheduleStrings.defaultSchedule(fallback?.name) },
-            ...choices.flatMap((each) => (each.id === null ? [] : [{ id: each.id, label: each.name }])),
-          ]}
-          value={hours}
-          hint={scheduleStrings.hoursFromSchedule}
-          onChange={(id) => {
-            if (id !== null) setHours(id);
-          }}
-        />
+        {canBookTeams && (
+          <RadioGroup
+            label={rotationStrings.whoBooks}
+            value={who}
+            onChange={(value) => {
+              if (value === 'me' || value === 'rotation') setWho(value);
+            }}
+          >
+            <Radio value="me">{rotationStrings.bookMe}</Radio>
+            <Radio value="rotation">{rotationStrings.bookRotation}</Radio>
+          </RadioGroup>
+        )}
+        {isTeam &&
+          (rotationItems.length === 0 && rotations.status === 'ready' ? (
+            <Callout
+              tone="info"
+              actions={<Link href={rotationsSettingsHref(slug)}>{rotationStrings.manageRotations}</Link>}
+            >
+              {rotationStrings.noRotations}
+            </Callout>
+          ) : (
+            <Select
+              label={rotationStrings.rotation}
+              placeholder={rotationStrings.pickRotation}
+              items={rotationItems}
+              value={rotationId}
+              onChange={setRotationId}
+              isRequired
+              {...(rotationError === undefined ? {} : { error: rotationError })}
+            />
+          ))}
+        {!isTeam && (
+          <Select
+            label={strings.hours}
+            items={[
+              { id: 'default', label: scheduleStrings.defaultSchedule(fallback?.name) },
+              ...choices.flatMap((each) => (each.id === null ? [] : [{ id: each.id, label: each.name }])),
+            ]}
+            value={hours}
+            hint={scheduleStrings.hoursFromSchedule}
+            onChange={(id) => {
+              if (id !== null) setHours(id);
+            }}
+          />
+        )}
       </SettingsStack>
     </Modal>
   );

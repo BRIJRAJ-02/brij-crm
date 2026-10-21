@@ -4,6 +4,7 @@
 // Leaves out: changing a booking from here (the actions arrive next), the new meeting dialog, team views and filing, and live arrival (it reads again when the page is shown again).
 import {
   isDataError,
+  type BookingAssignment,
   type BookingListItem,
   type BookingPageView,
   type BookingsCalendarHeld,
@@ -55,6 +56,7 @@ import { DrawCard } from './DrawCard.tsx';
 import { NewMeetingDialog, type NewMeeting } from './NewMeetingDialog.tsx';
 import { instantOf, spanNames, type DrawnSpan } from './span.ts';
 import { PAGE_SIZES, type BookingsSearch } from './search.ts';
+import { assignedItems } from './assignment.ts';
 import { BookingActions, BookingDialog, type BookingAsk, type HostBookingActions } from './BookingActions.tsx';
 import { strings } from './strings.ts';
 import { useBookingsToolbarSlot } from './toolbarSlot.ts';
@@ -222,6 +224,7 @@ function BookingCard({
   readonly focusOnMount?: BookingAsk | undefined;
 }) {
   const now = useNow();
+  const assigned = useAssignedItems(booking.id, actions, locale);
   return (
     <>
       <Badge text={strings.status[booking.status]} tone={booking.status === 'confirmed' ? 'accent' : 'neutral'} />
@@ -253,6 +256,7 @@ function BookingCard({
           ...(booking.cancelReason === undefined
             ? []
             : [{ term: strings.cancelReason, description: booking.cancelReason }]),
+          ...assigned,
         ]}
       />
       {booking.status === 'confirmed' && booking.videoUrl !== undefined && (
@@ -271,6 +275,40 @@ function BookingCard({
       )}
     </>
   );
+}
+
+/**
+ * The detail's Assigned lines (spec 0029, AC-742): read once per opened booking, newest first, and nothing at all
+ * for a personal page's booking (no ledger rows) or while the read is under way.
+ */
+function useAssignedItems(
+  bookingId: string,
+  actions: HostBookingActions | undefined,
+  locale: string,
+): readonly { readonly term: string; readonly description: string }[] {
+  const [read, setRead] = useState<
+    | { readonly id: string; readonly rows: readonly BookingAssignment[] }
+    | { readonly id: string; readonly failed: true }
+    | undefined
+  >(undefined);
+  useEffect(() => {
+    if (actions === undefined) return;
+    let isCurrent = true;
+    actions.assignments(bookingId).then(
+      (rows) => {
+        if (isCurrent) setRead({ id: bookingId, rows });
+      },
+      () => {
+        if (isCurrent) setRead({ id: bookingId, failed: true });
+      },
+    );
+    return () => {
+      isCurrent = false;
+    };
+  }, [actions, bookingId]);
+  if (read === undefined || read.id !== bookingId) return [];
+  if ('failed' in read) return [{ term: strings.assignedTerm, description: strings.assignedFailed }];
+  return assignedItems(read.rows, locale);
 }
 
 /** One of the member's own calendar events: what, when, which calendar, and that Timefix doesn't manage it. */

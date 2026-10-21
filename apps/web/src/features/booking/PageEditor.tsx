@@ -3,15 +3,17 @@
 // Main task: change the page, the meeting, its hours and limits, and Save from the bar that appears while anything is unsaved.
 // Each group's header carries a live summary of what it holds (the meeting's lengths and place, the week it books on).
 // The hours are a schedule's (spec 0035, AC-965): the card picks one of the owner's, says its week, and links to it.
-// Leaves out: questions and the deal step (milestone 2), team members (milestone 3), and scrolling to a group from the preview.
+// A round robin page (spec 0029, AC-732) adds Hosts: its fixed hosts, its rotations, and who reschedules go to.
+// Leaves out: questions and the deal step (milestone 2), collective members, and scrolling to a group from the preview.
 import {
   isDataError,
   type BookingPageSettings,
   type BookingPageView,
   type DataLayer,
+  type MemberSummary,
   type SchedulesView,
 } from '@crm/data';
-import { useCalendar, useSchedules } from '@crm/data/react';
+import { useCalendar, useCaptureList, useSchedules } from '@crm/data/react';
 import {
   Callout,
   Card,
@@ -37,9 +39,11 @@ import { useEffect, useState } from 'react';
 import { pageHeading } from '../navigation/focus.ts';
 import { WorkspacePage } from '../workspace/WorkspacePage.tsx';
 import { CalendarNote, readDismissed, writeDismissed } from './CalendarNote.tsx';
+import { HostsCard } from './HostsCard.tsx';
 import { weekSummary, zoneLabel } from './hours.ts';
 import { linksHref, publicBookingUrl, scheduleHref } from './links.ts';
 import { scheduleStrings } from './schedule-strings.ts';
+import { strings as rotationStrings } from './rotation-strings.ts';
 import { strings } from './strings.ts';
 
 /** Props for the editor: the page its route loaded. */
@@ -53,6 +57,8 @@ export interface PageEditorProps {
   readonly schedules?: SchedulesView;
   /** The owner's id as `?member=` takes it, when the owner isn't the reader (an admin's view). */
   readonly ownerMember?: string;
+  /** The workspace's active members, on a round robin page: its fixed host picker. */
+  readonly people?: readonly MemberSummary[];
 }
 
 const DURATIONS = [15, 30, 45, 60, 90] as const;
@@ -95,6 +101,7 @@ const settingsOf = (page: BookingPageView): BookingPageSettings => ({
   slotStep: page.slotStep,
   status: page.status,
   scheduleId: page.scheduleId,
+  rescheduleHost: page.rescheduleHost,
   isPrivate: page.isPrivate,
 });
 
@@ -118,7 +125,7 @@ function sendable(draft: BookingPageSettings): boolean {
 }
 
 /** The editor. */
-export function PageEditor({ data, slug, page: loaded, locale, schedules, ownerMember }: PageEditorProps) {
+export function PageEditor({ data, slug, page: loaded, locale, schedules, ownerMember, people = [] }: PageEditorProps) {
   const [page, setPage] = useState(loaded);
   // A page the reader can't change shows as it is, every control read only, with no Save.
   const isLocked = !page.canChange;
@@ -193,8 +200,12 @@ export function PageEditor({ data, slug, page: loaded, locale, schedules, ownerM
   ]
     .filter((part) => part !== '')
     .join(' · ');
+  const isTeam = page.kind === 'round_robin';
   const hours = useHours(schedules, draft.scheduleId, page, slug, ownerMember);
-  const hoursSummary = [...weekSummary(hours.availability, locale), zoneLabel(hours.availability.timeZone)].join(' · ');
+  // A team page books each member by their own default schedule (spec 0037), so it names none of its own.
+  const hoursSummary = isTeam
+    ? rotationStrings.hoursMembers
+    : [...weekSummary(hours.availability, locale), zoneLabel(hours.availability.timeZone)].join(' · ');
   // Page: who can book it.
   const pageSummary =
     page.status === 'paused' ? strings.pausedSummary : draft.isPrivate ? strings.privateSummary : strings.publicSummary;
@@ -208,6 +219,8 @@ export function PageEditor({ data, slug, page: loaded, locale, schedules, ownerM
     draft.dailyLimit === null ? '' : strings.dailySummary(draft.dailyLimit),
   ].filter((part) => part !== '');
   const limitsSummary = limitParts.join(' · ');
+  const rotations = useCaptureList(data.rotations.view(slug));
+  const rotationList = rotations.status === 'ready' ? rotations.items : [];
 
   return (
     <WorkspacePage
@@ -370,6 +383,19 @@ export function PageEditor({ data, slug, page: loaded, locale, schedules, ownerM
                 />
               )}
             </Card>
+            {isTeam && (
+              <HostsCard
+                data={data}
+                slug={slug}
+                page={page}
+                people={people}
+                rotations={rotationList}
+                isLocked={isLocked}
+                rescheduleHost={draft.rescheduleHost}
+                onRescheduleChange={(rescheduleHost) => change({ rescheduleHost })}
+                onSaved={setPage}
+              />
+            )}
             <div id="hours">
               <Card
                 title={strings.hours}
@@ -378,17 +404,19 @@ export function PageEditor({ data, slug, page: loaded, locale, schedules, ownerM
                   ? {}
                   : { actions: <Link href={hours.editHref}>{scheduleStrings.editHours}</Link> })}
               >
-                <Select
-                  label={scheduleStrings.schedule}
-                  items={hours.items}
-                  value={draft.scheduleId ?? 'default'}
-                  isReadOnly={isLocked || hours.items.length === 0}
-                  {...(hours.items.length === 0 ? { readOnlyReason: strings.followOwnerHint } : {})}
-                  hint={scheduleStrings.hoursFromSchedule}
-                  onChange={(id) => {
-                    if (id !== null) change({ scheduleId: id === 'default' ? null : id });
-                  }}
-                />
+                {!isTeam && (
+                  <Select
+                    label={scheduleStrings.schedule}
+                    items={hours.items}
+                    value={draft.scheduleId ?? 'default'}
+                    isReadOnly={isLocked || hours.items.length === 0}
+                    {...(hours.items.length === 0 ? { readOnlyReason: strings.followOwnerHint } : {})}
+                    hint={scheduleStrings.hoursFromSchedule}
+                    onChange={(id) => {
+                      if (id !== null) change({ scheduleId: id === 'default' ? null : id });
+                    }}
+                  />
+                )}
               </Card>
             </div>
             <Card title={strings.limits} description={limitsSummary}>

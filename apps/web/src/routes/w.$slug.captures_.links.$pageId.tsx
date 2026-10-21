@@ -43,10 +43,15 @@ export const Route = createFileRoute('/w/$slug/captures_/links/$pageId')({
           .ready()
           .catch(() => undefined);
       }
-      return { page, mayRead, ownerMember };
+      // A round robin page's Hosts card: the members it can seat, and the rotations it can book from.
+      const people =
+        page.kind === 'round_robin'
+          ? (await Promise.all([context.data.members.list(params.slug), context.data.rotations.held(params.slug)]))[0]
+          : undefined;
+      return { page, mayRead, ownerMember, people };
     } catch (error) {
       if (isDataError(error) && error.code === 'NOT_FOUND') {
-        return { page: undefined, mayRead: false, ownerMember: undefined };
+        return { page: undefined, mayRead: false, ownerMember: undefined, people: undefined };
       }
       throw error;
     }
@@ -120,7 +125,7 @@ function Missing({
 }
 
 function EditorRoute() {
-  const { page, mayRead, ownerMember } = Route.useLoaderData();
+  const { page, mayRead, ownerMember, people } = Route.useLoaderData();
   const { slug } = Route.useParams();
   const { data } = Route.useRouteContext();
   if (page === undefined) return <Missing title={strings.notFoundTitle} text={strings.notFoundText} />;
@@ -134,6 +139,7 @@ function EditorRoute() {
       locale={navigator.languages[0] ?? 'en-US'}
       {...(mayRead ? { schedules: data.schedules.view(slug, ownerMember, browserZone()) } : {})}
       {...(ownerMember === undefined ? {} : { ownerMember })}
+      {...(people === undefined ? {} : { people })}
     />
   );
 }
