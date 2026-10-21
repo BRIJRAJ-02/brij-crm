@@ -1,6 +1,6 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
 import { useState } from 'react';
-import { expect, waitFor } from 'storybook/test';
+import { expect, fn, waitFor } from 'storybook/test';
 import { Button } from '../../atoms/Button/Button.tsx';
 import { Checkbox } from '../../atoms/Checkbox/Checkbox.tsx';
 import { RecordChip } from '../../atoms/RecordChip/RecordChip.tsx';
@@ -34,7 +34,9 @@ function DeleteConfirm({ onDelete }: { readonly onDelete?: () => void }) {
       tone="danger"
       actions={
         <>
-          <Button slot="close">Cancel</Button>
+          <Button slot="close" kbd="ESC">
+            Cancel
+          </Button>
           <Button
             variant="danger-solid"
             icon="trash"
@@ -46,7 +48,7 @@ function DeleteConfirm({ onDelete }: { readonly onDelete?: () => void }) {
         </>
       }
     >
-      Their notes, tasks and history are deleted too. You can't undo this.
+      Their notes, tasks and history are deleted too. This can’t be undone.
     </Modal>
   );
 }
@@ -70,6 +72,10 @@ export const Confirm: Story = {
     const dialog = await openDialog();
     await expect(dialog).toHaveAttribute('role', 'alertdialog');
     await expect(dialog).toHaveAccessibleName('Delete 3 records?');
+    // What happens is the alert's description, said with its question.
+    await expect(dialog).toHaveAccessibleDescription(
+      'Their notes, tasks and history are deleted too. This can’t be undone.',
+    );
     await waitFor(() => expect(dialog.contains(document.activeElement)).toBe(true));
     await userEvent.keyboard('{Escape}');
     await waitFor(() => expect(document.querySelector('[role="alertdialog"]')).toBeNull());
@@ -192,14 +198,16 @@ export const FormDialog: Story = {
   },
 };
 
-/** Saving: the title bar's close is disabled, and so is a click on the scrim, so what was typed stays. */
+/** Saving: the title bar's close is disabled, and a click on the scrim and Esc wait, so what was typed stays. */
 export const Busy: Story = {
-  render: () => (
+  args: { onOpenChange: fn() },
+  render: (args) => (
     <Stage>
       <Modal
         title="New person"
         isOpen
         isBusy
+        {...(args.onOpenChange === undefined ? {} : { onOpenChange: args.onOpenChange })}
         actions={
           <>
             <Button slot="close" isDisabled>
@@ -215,9 +223,12 @@ export const Busy: Story = {
       </Modal>
     </Stage>
   ),
-  play: async () => {
+  play: async ({ args, userEvent }) => {
     const dialog = await openDialog();
     await expect(dialog.querySelector('button[aria-label="Close"]')).toHaveAttribute('disabled');
+    await waitFor(() => expect(dialog.contains(document.activeElement)).toBe(true));
+    await userEvent.keyboard('{Escape}');
+    await expect(args.onOpenChange).not.toHaveBeenCalled();
   },
 };
 
