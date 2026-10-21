@@ -5,7 +5,8 @@
 import type { MemberSummary, NoteList as NoteListSource, NoteSummary } from '@crm/data';
 import { useNoteList } from '@crm/data/react';
 import { Button, NoteList, type ListSource, type NoteListItem } from '@crm/ui';
-import { useMemo } from 'react';
+import { useEffect, useMemo } from 'react';
+import { preloadNoteEditor } from './editor.ts';
 import { toNoteItem } from './entries.ts';
 import { strings } from './strings.ts';
 
@@ -45,6 +46,10 @@ function useNoteItems(source: ReturnType<typeof useNoteList>['source'], members:
 export function NotesTab({ list, members, canAdd, onOpenNote }: NotesTabProps) {
   const state = useNoteList(list);
   const notes = useNoteItems(state.source, members);
+  // The editor's chunk starts loading with the tab, so a note opened from it is ready to type into at once.
+  useEffect(() => {
+    preloadNoteEditor();
+  }, []);
   return (
     <NoteList
       label={strings.listLabel}

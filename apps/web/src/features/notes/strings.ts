@@ -10,14 +10,20 @@ export const strings = {
   // The note window.
   note: 'Note',
   title: 'Title',
-  titlePlaceholder: 'Untitled note',
+  titlePlaceholder: 'Untitled',
   body: 'Note',
+  /** The bar's word for a note opened again: "Edited 3 hours ago". */
+  edited: 'Edited',
   close: 'Close',
   more: 'More actions',
   copyLink: 'Copy link',
   linkCopied: 'Link copied',
   copyFailed: 'Couldn’t copy the link. Copy it from the address bar.',
   deleteNote: 'Delete note',
+  /** The delete's confirm (the owner's rule of 21 October 2026): its question names the note. */
+  deleteQuestion: (title: string) => (title.trim() === '' ? 'Delete this note?' : `Delete ${title.trim()}?`),
+  deleteText: 'The note is deleted for everyone, and you can undo it for 10 seconds only.',
+  cancel: 'Cancel',
   noteDeleted: 'Note deleted',
   undo: 'Undo',
   notDeleted: 'The note wasn’t deleted.',
