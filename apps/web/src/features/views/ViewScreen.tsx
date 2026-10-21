@@ -5,6 +5,7 @@
 import {
   BOARD_MAX_CARD_FIELDS,
   boardDefaults,
+  groupableAttributes,
   isDataError,
   isSortable,
   toActorDisplays,
@@ -27,6 +28,7 @@ import {
   focusLater,
   Modal,
   Popover,
+  Select,
   ViewSettings,
   type ViewChoice,
   type ViewField,
@@ -330,6 +332,26 @@ export function ViewScreen(props: ViewScreenProps) {
     if (view === undefined) return;
     data.views.setLayout(slug, view.id, boardLayout(view, patch, isLockedForMe), { isLocal: isLockedForMe });
   };
+  // A table's grouping (13 Oct reference batch 4), saved with the view as any layout change is; `null` is one list.
+  const changeGroupBy = (groupBy: string | null) => {
+    if (view === undefined) return;
+    data.views.setLayout(
+      slug,
+      view.id,
+      { ...boardLayout(view, {}, isLockedForMe), groupBy },
+      { isLocal: isLockedForMe },
+    );
+  };
+  const groupChoices = useMemo(
+    () => [
+      { id: 'none', label: strings.noGrouping },
+      ...groupableAttributes(attributes).map((attribute) => ({
+        id: attribute.id,
+        label: attribute.title,
+      })),
+    ],
+    [attributes],
+  );
   const viewId = view?.id;
   useEffect(
     () => () => {
@@ -698,6 +720,25 @@ export function ViewScreen(props: ViewScreenProps) {
           {...(boardPlan === undefined
             ? { label: strings.columns, fields }
             : { label: strings.cardFields, fields: cardFields, maxShown: BOARD_MAX_CARD_FIELDS })}
+          {...(boardPlan === undefined && groupChoices.length > 1
+            ? {
+                header: (
+                  <Select
+                    label={strings.groupBy}
+                    size="sm"
+                    items={groupChoices}
+                    value={
+                      groupChoices.some((choice) => choice.id === view?.config.groupBy)
+                        ? (view?.config.groupBy ?? 'none')
+                        : 'none'
+                    }
+                    onChange={(id) => {
+                      changeGroupBy(id === null || id === 'none' ? null : id);
+                    }}
+                  />
+                ),
+              }
+            : {})}
           onChange={(next) => {
             if (boardPlan !== undefined) {
               changeCardFields(next);
@@ -786,6 +827,7 @@ export function ViewScreen(props: ViewScreenProps) {
         members={members}
         view={table.records}
         viewQuery={table.query}
+        {...(view?.config.groupBy === undefined ? {} : { groupBy: view.config.groupBy })}
         query={query}
         onSort={(rule) => {
           draft.set(

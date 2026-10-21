@@ -113,14 +113,18 @@ export function configOf(stored: unknown): ViewConfig {
 }
 
 /**
- * The config as this caller may see it: columns and card fields naming an
- * attribute hidden from them left out (AC-479). The stored config keeps them.
+ * The config as this caller may see it: columns, card fields and the table's
+ * grouping naming an attribute hidden from them left out (AC-479). The stored
+ * config keeps them.
  */
 function visibleConfig(access: Access, objectId: string, config: ViewConfig): ViewConfig {
   const shown = (id: string) => fieldLevel(access, { id, objectId }) !== 'hidden';
   const columns = config.columns.filter((column) => shown(column.attributeId));
-  if (config.board === undefined) return { ...config, columns };
-  return { ...config, columns, board: { ...config.board, cardFields: config.board.cardFields.filter(shown) } };
+  // A grouping attribute hidden from them groups nothing for them: their table is one list.
+  const { groupBy, ...rest } = config;
+  const grouped = groupBy !== undefined && shown(groupBy) ? { ...rest, groupBy } : rest;
+  if (config.board === undefined) return { ...grouped, columns };
+  return { ...grouped, columns, board: { ...config.board, cardFields: config.board.cardFields.filter(shown) } };
 }
 
 export function summaryOf(row: ViewRow & { readonly objectId: string }): ViewSummary {

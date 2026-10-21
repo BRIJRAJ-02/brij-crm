@@ -216,6 +216,16 @@ export const GetRecordsInput = WorkspaceScoped.extend({
 /** Records by id. */
 export type GetRecordsInput = z.infer<typeof GetRecordsInput>;
 
+/** A record and one of its status attributes: when did it enter the stage it is in now (a deal's stage age). */
+export const StageSinceInput = WorkspaceScoped.extend({ recordId: Uuid, attributeId: Uuid });
+/** A record and one of its status attributes. */
+export type StageSinceInput = z.infer<typeof StageSinceInput>;
+
+/** When the record entered its current stage; absent while it is in none. */
+export const StageSince = z.object({ since: Timestamp.optional() });
+/** When the record entered its current stage. */
+export type StageSince = z.infer<typeof StageSince>;
+
 /** Values by attribute id, as a write gives them. */
 const ValuesById = z.record(z.uuid(), z.unknown());
 
@@ -453,6 +463,7 @@ export const recordsContract = {
   setValues: oc.input(SetValuesInput).output(WrittenRecord),
   setValuesBatch: oc.input(SetValuesBatchInput).output(BatchResults),
   activity: oc.input(RecordActivityInput).output(RecordActivity),
+  stageSince: oc.input(StageSinceInput).output(StageSince),
   getTrashed: oc.input(GetTrashedInput).output(TrashedRecord),
   search: oc.input(SearchRecordsInput).output(SearchResults),
 };

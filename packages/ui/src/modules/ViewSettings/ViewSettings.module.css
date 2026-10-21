@@ -32,6 +32,14 @@
   }
 
   /* The footer under the list: its action ("Add attribute"), apart from the rows. */
+  /* Above the list: a table's Group by, apart from the columns after a hairline. */
+  .lead {
+    display: flex;
+    flex-direction: column;
+    padding-block-end: var(--space-12);
+    border-block-end: var(--border-width-hairline) solid var(--border-subtle);
+  }
+
   .foot {
     display: flex;
     padding-block-start: var(--space-8);

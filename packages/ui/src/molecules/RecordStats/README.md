@@ -18,7 +18,7 @@ New (13 Oct reference batch 4, the record panel and lists). The owner's referenc
 />
 ```
 
-- Each `RecordStat` holds a `count` (a floor with `isCountAtLeast`, "10,000+"), or a `time` (ISO 8601, shown by `RelativeTime` as "3 hours ago"), or neither ("None"). `isLoading` draws a skeleton in place of the value.
+- Each `RecordStat` holds a `count` (a floor with `isCountAtLeast`, "10,000+"), a `time` (ISO 8601, shown by `RelativeTime` as "3 hours ago" or "in 2 days"), a `value` the screen draws through its field's one display (a deal's value, `AttributeDisplay`), or none of them ("None"). `isLoading` draws a skeleton in place of the value.
 - `onPress` makes the whole tile pressable: the label is the button and its target covers the tile; the value stays outside it (a time's tooltip is never inside a control) and is read with it (`aria-describedby`).
 - `label` names the strip, a group, for screen readers.
 - Usually passed through `RecordHeader`'s or `RecordPanel`'s `stats`.

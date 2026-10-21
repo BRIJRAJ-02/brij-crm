@@ -75,17 +75,7 @@ function SamplePanel({ startOpen = true, onOpenPage, status = 'ready', stats = '
           stats === 'none'
             ? []
             : [
-                {
-                  id: 'tasks',
-                  label: 'Open tasks',
-                  icon: 'list-checks',
-                  count: SAMPLE_TASKS.length,
-                  isLoading: isLoadingStats,
-                  onPress: () => {
-                    setTab('tasks');
-                  },
-                },
-                { id: 'notes', label: 'Notes', icon: 'notebook', count: 0, isLoading: isLoadingStats },
+                { id: 'meeting', label: 'Next meeting', icon: 'calendar', isLoading: isLoadingStats },
                 {
                   id: 'activity',
                   label: 'Last activity',
@@ -174,13 +164,13 @@ export const StepThrough: Story = {
   },
 };
 
-/** A stat that goes somewhere opens its tab: Open tasks shows the Tasks tab. */
+/** A stat that goes somewhere opens its tab: Last activity shows the Activity tab. */
 export const StatOpensTab: Story = {
   parameters: { crm: { screenshot: false } },
   play: async ({ canvas, userEvent }) => {
     await expect(canvas.getByRole('group', { name: 'About Northwind Traders' })).toBeInTheDocument();
-    await userEvent.click(canvas.getByRole('button', { name: 'Open tasks' }));
-    await expect(canvas.getByRole('tab', { name: /Tasks/ })).toHaveAttribute('aria-selected', 'true');
+    await userEvent.click(canvas.getByRole('button', { name: 'Last activity' }));
+    await expect(canvas.getByRole('tab', { name: /Activity/ })).toHaveAttribute('aria-selected', 'true');
   },
 };
 

@@ -5,10 +5,13 @@ import { Button } from '../../atoms/Button/Button.tsx';
 import { LinkChip } from '../../atoms/LinkChip/LinkChip.tsx';
 import { SAMPLE_COMPANIES, SAMPLE_MEMBERS } from '../../workbench/field-samples.ts';
 import { Stage } from '../../workbench/Stage/Stage.tsx';
+import { AttributeDisplay } from '../../fields/AttributeDisplay.tsx';
 import type { RecordStat } from '../../molecules/RecordStats/RecordStats.tsx';
+import { attributeOf } from '../../workbench/attributes.ts';
 import { RecordHeader } from './RecordHeader.tsx';
 
 const NORTHWIND = SAMPLE_COMPANIES[0] as RecordRefDisplay;
+const VALUE = attributeOf('currency', 'Value');
 const PERSON: RecordRefDisplay = {
   objectId: 'people',
   recordId: 'p1',
@@ -30,13 +33,28 @@ interface SampleProps {
   readonly stats?: 'shown' | 'loading' | 'none';
 }
 
-/** A company's stats: open tasks and notes (each opening its tab), comments, and the last activity. */
+/** A deal's stats, what its tabs don't say: its value, how long in its stage, its next meeting and last activity. */
 function sampleStats(isLoading: boolean): readonly RecordStat[] {
   return [
-    { id: 'tasks', label: 'Open tasks', icon: 'list-checks', count: 3, isLoading, onPress: () => undefined },
-    { id: 'notes', label: 'Notes', icon: 'notebook', count: 12, isLoading, onPress: () => undefined },
-    { id: 'comments', label: 'Comments', icon: 'message-square', count: 0, isLoading },
-    { id: 'activity', label: 'Last activity', icon: 'activity', time: '2026-10-08T11:30:00.000Z', isLoading },
+    {
+      id: 'value',
+      label: 'Value',
+      icon: 'banknote',
+      value: (
+        <AttributeDisplay attribute={VALUE} value={{ amount: '48000', currency: 'USD' } as never} surface="panel" />
+      ),
+      isLoading,
+    },
+    { id: 'stage', label: 'Entered Proposal', icon: 'circle-dot', time: '2026-09-29T10:00:00.000Z', isLoading },
+    { id: 'meeting', label: 'Next meeting', icon: 'calendar', time: '2026-10-09T15:00:00.000Z', isLoading },
+    {
+      id: 'activity',
+      label: 'Last activity',
+      icon: 'activity',
+      time: '2026-10-08T11:30:00.000Z',
+      isLoading,
+      onPress: () => undefined,
+    },
   ];
 }
 
@@ -104,7 +122,7 @@ export const Narrow: Story = {
 export const StatsLoading: Story = {
   args: { stats: 'loading' },
   play: async ({ canvas }) => {
-    await expect(canvas.getByText('Open tasks')).toBeInTheDocument();
+    await expect(canvas.getByText('Next meeting')).toBeInTheDocument();
     const strip = canvas.getByRole('group', { name: 'About Northwind Traders' });
     const values = within(strip).getAllByRole('definition');
     await expect(values.every((value) => value.getAttribute('aria-busy') === 'true')).toBe(true);
@@ -126,7 +144,7 @@ export const StatsNarrow: Story = {
   parameters: { crm: { screenshot: false } },
   play: async ({ canvas }) => {
     await expect(canvas.getByRole('group', { name: 'About Northwind Traders' })).toBeInTheDocument();
-    await expect(canvas.getByRole('button', { name: 'Open tasks' })).toBeInTheDocument();
-    await expect(canvas.queryByRole('button', { name: 'Comments' })).not.toBeInTheDocument();
+    await expect(canvas.getByRole('button', { name: 'Last activity' })).toBeInTheDocument();
+    await expect(canvas.queryByRole('button', { name: 'Value' })).not.toBeInTheDocument();
   },
 };

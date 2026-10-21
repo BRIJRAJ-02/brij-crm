@@ -22,9 +22,10 @@ export const strings = {
   activity: 'Activity',
   details: 'Details',
   recentActivity: 'Recent activity',
-  /** The stat strip under the header: the record's open tasks, and when it last changed. */
-  openTasks: 'Open tasks',
+  /** The stat strip under the header (the tabs keep the counts): when it last changed, its next meeting, its stage. */
   lastActivity: 'Last activity',
+  nextMeeting: 'Next meeting',
+  enteredStage: (stage: string) => `Entered ${stage}`,
   viewAll: 'View all',
   copyLink: 'Copy link',
   linkCopied: 'Link copied',

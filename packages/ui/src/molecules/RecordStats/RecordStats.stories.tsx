@@ -1,6 +1,10 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
 import { expect, fn, within } from 'storybook/test';
+import { AttributeDisplay } from '../../fields/AttributeDisplay.tsx';
+import { attributeOf } from '../../workbench/attributes.ts';
 import { Stage } from '../../workbench/Stage/Stage.tsx';
+
+const VALUE = attributeOf('currency', 'Value');
 import { RecordStats, type RecordStat } from './RecordStats.tsx';
 
 interface SampleProps {
@@ -26,7 +30,23 @@ function SampleStats({ state = 'shown', width = 'auto', onOpen }: SampleProps) {
       onPress: open('tasks'),
     },
     { id: 'notes', label: 'Notes', icon: 'notebook', count: 12_400, isCountAtLeast: true, isLoading },
-    { id: 'comments', label: 'Comments', icon: 'message-square', ...(isNone ? {} : { count: 0 }), isLoading },
+    {
+      id: 'value',
+      label: 'Value',
+      icon: 'banknote',
+      ...(isNone
+        ? {}
+        : {
+            value: (
+              <AttributeDisplay
+                attribute={VALUE}
+                value={{ amount: '48000', currency: 'USD' } as never}
+                surface="panel"
+              />
+            ),
+          }),
+      isLoading,
+    },
     {
       id: 'activity',
       label: 'Last activity',
@@ -51,7 +71,7 @@ const meta = {
 export default meta;
 type Story = StoryObj<typeof meta>;
 
-/** Counts, a floor ("12,400+"), and the last activity; Open tasks and Last activity go somewhere. */
+/** A count, a floor ("12,400+"), a value through its field's display, and the last activity; Open tasks and Last activity go somewhere. */
 export const Default: Story = {
   parameters: { crm: { preview: true } },
   play: async ({ canvas }) => {

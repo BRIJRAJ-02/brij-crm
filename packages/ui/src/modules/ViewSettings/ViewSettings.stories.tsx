@@ -1,7 +1,8 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
 import { useState } from 'react';
-import { expect, fn, waitFor } from 'storybook/test';
+import { expect, fn, screen, waitFor } from 'storybook/test';
 import { Button } from '../../atoms/Button/Button.tsx';
+import { Select } from '../../molecules/Select/Select.tsx';
 import { attributeOf } from '../../workbench/attributes.ts';
 import { Stage } from '../../workbench/Stage/Stage.tsx';
 import { ViewSettings, type ViewField } from './ViewSettings.tsx';
@@ -28,11 +29,21 @@ interface SampleProps {
   readonly onChange?: (next: readonly ViewField[]) => void;
   readonly onAdd?: () => void;
   readonly maxShown?: number;
+  /** A table's Group by above the columns. */
+  readonly withGroupBy?: boolean;
 }
 
 /** The settings holding their own fields, as a view's settings popover would. */
-function SampleSettings({ initial = FIELDS, onChange, onAdd, isReadOnly = false, maxShown }: SampleProps) {
+function SampleSettings({
+  initial = FIELDS,
+  onChange,
+  onAdd,
+  isReadOnly = false,
+  maxShown,
+  withGroupBy = false,
+}: SampleProps) {
   const [fields, setFields] = useState(initial);
+  const [groupBy, setGroupBy] = useState<string | null>(null);
   return (
     <Stage width="narrow">
       <ViewSettings
@@ -40,6 +51,24 @@ function SampleSettings({ initial = FIELDS, onChange, onAdd, isReadOnly = false,
         fields={fields}
         isReadOnly={isReadOnly}
         {...(maxShown === undefined ? {} : { maxShown })}
+        {...(withGroupBy
+          ? {
+              header: (
+                <Select
+                  label="Group by"
+                  size="sm"
+                  items={[
+                    { id: 'none', label: 'None' },
+                    { id: 'stage', label: 'Stage', icon: 'circle-dot' },
+                  ]}
+                  value={groupBy ?? 'none'}
+                  onChange={(id) => {
+                    setGroupBy(id === 'none' ? null : id);
+                  }}
+                />
+              ),
+            }
+          : {})}
         {...(onAdd === undefined
           ? {}
           : {
@@ -180,5 +209,16 @@ export const AtTheLimit: Story = {
     await userEvent.click(canvas.getByRole('switch', { name: 'Show Owner' }));
     await expect(canvas.getByText('2 of 3 shown')).toBeInTheDocument();
     await expect(canvas.getByRole('switch', { name: 'Show ARR' })).toBeEnabled();
+  },
+};
+
+/** A table's Group by above its columns (13 Oct reference batch 4): None, or a status or single select. */
+export const WithGroupBy: Story = {
+  args: { withGroupBy: true },
+  play: async ({ canvas, userEvent }) => {
+    const pick = canvas.getByRole('button', { name: /Group by/ });
+    await userEvent.click(pick);
+    await userEvent.click(await screen.findByRole('option', { name: 'Stage' }));
+    await waitFor(() => expect(canvas.getByRole('button', { name: /Group by/ })).toHaveTextContent('Stage'));
   },
 };

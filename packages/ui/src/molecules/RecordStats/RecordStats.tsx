@@ -7,13 +7,14 @@ import { RelativeTime } from '../../atoms/RelativeTime/RelativeTime.tsx';
 import { Skeleton } from '../../atoms/Skeleton/Skeleton.tsx';
 import { memoIntl } from '../../lib/intl-memo.ts';
 import { useFormatSettings } from '../../provider/context.ts';
-import { useId } from 'react';
+import { useId, type ReactNode } from 'react';
 import styles from './RecordStats.module.css';
 import { strings } from './strings.ts';
 
 /**
- * One stat: a count (`count`, a floor with `isCountAtLeast`), or a moment
- * (`time`, shown as "3 hours ago"). Neither, and not loading, reads "None".
+ * One stat: a count (`count`, a floor with `isCountAtLeast`), a moment
+ * (`time`, shown as "3 hours ago"), or a value the screen draws (`value`).
+ * None of them, and not loading, reads "None".
  * With `onPress` it is a button that goes where the stat comes from (its tab).
  */
 export interface RecordStat {
@@ -22,8 +23,10 @@ export interface RecordStat {
   readonly icon?: IconName;
   readonly count?: number;
   readonly isCountAtLeast?: boolean;
-  /** An instant, ISO 8601 in UTC. */
+  /** An instant, ISO 8601 in UTC: shown as "3 hours ago", or "in 2 days" ahead. */
   readonly time?: string;
+  /** Any other value, drawn by the screen through its field's one display (a deal's value: `AttributeDisplay`). */
+  readonly value?: ReactNode;
   /** Still coming: a skeleton in place of the value. */
   readonly isLoading?: boolean;
   readonly onPress?: () => void;
@@ -56,6 +59,7 @@ export function RecordStats({ label, stats }: RecordStatsProps) {
           else if (stat.count !== undefined)
             value = stat.isCountAtLeast === true ? strings.atLeast(number(stat.count)) : number(stat.count);
           else if (stat.time !== undefined) value = <RelativeTime value={stat.time} />;
+          else if (stat.value !== undefined && stat.value !== null) value = stat.value;
           else value = <span className={styles.none}>{strings.none}</span>;
           const head = (
             <>

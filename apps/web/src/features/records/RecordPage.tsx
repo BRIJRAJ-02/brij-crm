@@ -15,9 +15,11 @@ import type {
   TaskList as TaskListSource,
   TrashedState,
 } from '@crm/data';
+import { toFieldAttribute } from '@crm/data';
 import {
   useActivityStatus,
   useLatestActivityAt,
+  useRecordFacts,
   useCommentCount,
   useLiveStatus,
   useNoteTotal,
@@ -37,6 +39,7 @@ import {
   RecordLayout,
   TaskList,
   TopBar,
+  AttributeDisplay,
   type RecordStat,
 } from '@crm/ui';
 import { useNavigate, useParams, useRouteContext, useRouter } from '@tanstack/react-router';
@@ -368,6 +371,27 @@ function RecordScreen({
   const commentCount = useCommentCount(comments);
   const latestAt = useLatestActivityAt(recent);
   const recentStatus = useActivityStatus(recent);
+  // The stat strip says what the tabs don't (owner's call, 22 Oct): the last activity, the next meeting, and on a
+  // record with a stage (a deal) its value and how long it has been in that stage. The tabs keep their own counts.
+  const stageAttribute = useMemo(
+    () =>
+      attributes
+        .filter((each) => each.type === 'status' && !each.isArchived)
+        .sort((a, b) => a.position - b.position)[0],
+    [attributes],
+  );
+  const valueAttribute = useMemo(
+    () => attributes.find((each) => each.apiSlug === 'value' && each.type === 'currency' && !each.isArchived),
+    [attributes],
+  );
+  // A stage change reads the facts afresh: the age restarts.
+  const stageNow = stageAttribute === undefined ? undefined : state.record?.values[stageAttribute.id];
+  const stageKey = typeof stageNow === 'string' ? stageNow : undefined;
+  const facts = useMemo(
+    () => data.records.facts(slug, recordId, stageAttribute?.id, stageKey),
+    [data, slug, recordId, stageAttribute?.id, stageKey],
+  );
+  const factState = useRecordFacts(facts);
   // Whether the task dialog was opened from this page, so closing it steps Back rather than adding a step.
   const openedHere = useRef(false);
   // A `?task=` that arrived while the page was open (a timeline entry's link, or `openTask`) was pushed: closing
@@ -472,47 +496,6 @@ function RecordScreen({
       replace: true,
     });
   };
-  // The stat strip under the header (13 Oct reference batch 4): counts the page already holds, each opening its tab.
-  const counted = (total: { readonly count: number; readonly atLeast: boolean } | undefined) =>
-    total === undefined ? { isLoading: true } : { count: total.count, isCountAtLeast: total.atLeast };
-  const stats: readonly RecordStat[] = [
-    {
-      id: 'tasks',
-      label: strings.openTasks,
-      icon: 'list-checks',
-      ...counted(openTotal),
-      onPress: () => {
-        openTab('tasks');
-      },
-    },
-    {
-      id: 'notes',
-      label: noteStrings.notes,
-      icon: 'notebook',
-      ...counted(notesTotal),
-      onPress: () => {
-        openTab('notes');
-      },
-    },
-    {
-      id: 'comments',
-      label: commentStrings.comments,
-      icon: 'message-square',
-      ...counted(commentCount === undefined ? undefined : { count: commentCount, atLeast: false }),
-      onPress: () => {
-        openTab('comments');
-      },
-    },
-    {
-      id: 'activity',
-      label: strings.lastActivity,
-      icon: 'activity',
-      ...(recentStatus === 'loading' ? { isLoading: true } : latestAt === undefined ? {} : { time: latestAt }),
-      onPress: () => {
-        openTab('activity');
-      },
-    },
-  ];
   // The page's own record as a task links it: its chip in the lists, and a new task's first link.
   const pageRecord = (() => {
     const shownRecord = state.status === 'ready' || state.status === 'deleted' ? state.record : undefined;
@@ -671,6 +654,60 @@ function RecordScreen({
   const canEdit = !isTrashed && !isLost && object.access === 'write';
   const name = recordName(shown, object, unnamed);
   const display = { ...shown.display, name };
+  const isFactsLoading = factState.status === 'loading';
+  const stageOption =
+    stageAttribute === undefined
+      ? undefined
+      : stageAttribute.options?.find((option) => option.id === shown.values[stageAttribute.id]);
+  const stats: readonly RecordStat[] = [
+    ...(valueAttribute === undefined
+      ? []
+      : [
+          {
+            id: 'value',
+            label: valueAttribute.title,
+            icon: 'banknote' as const,
+            ...(shown.values[valueAttribute.id] === undefined || shown.values[valueAttribute.id] === null
+              ? {}
+              : {
+                  value: (
+                    <AttributeDisplay
+                      attribute={toFieldAttribute(valueAttribute)}
+                      value={shown.values[valueAttribute.id] as never}
+                      surface="panel"
+                    />
+                  ),
+                }),
+          },
+        ]),
+    ...(stageAttribute === undefined || stageOption === undefined
+      ? []
+      : [
+          {
+            id: 'stage',
+            label: strings.enteredStage(stageOption.label),
+            icon: 'circle-dot' as const,
+            isLoading: isFactsLoading,
+            ...(factState.stageSince === undefined ? {} : { time: factState.stageSince }),
+          },
+        ]),
+    {
+      id: 'meeting',
+      label: strings.nextMeeting,
+      icon: 'calendar' as const,
+      isLoading: isFactsLoading,
+      ...(factState.nextMeeting === undefined ? {} : { time: factState.nextMeeting.startsAt }),
+    },
+    {
+      id: 'activity',
+      label: strings.lastActivity,
+      icon: 'activity' as const,
+      ...(recentStatus === 'loading' ? { isLoading: true } : latestAt === undefined ? {} : { time: latestAt }),
+      onPress: () => {
+        openTab('activity');
+      },
+    },
+  ];
 
   const copyLink = () => {
     const href = new URL(recordHref(slug, object.apiSlug, recordId, tab), window.location.origin).href;

@@ -169,6 +169,8 @@ export function boardLayout(view: View, patch: BoardPatch, isLocal: boolean): Vi
     columns: view.config.columns,
     pinnedCount: view.config.pinnedCount,
     ...(board === undefined ? {} : { board: { ...board, cardFields: [...board.cardFields] } }),
+    // A layout kept in this tab replaces the one before it, so it carries the table's grouping too.
+    ...(isLocal && view.config.groupBy !== undefined ? { groupBy: view.config.groupBy } : {}),
   };
 }
 

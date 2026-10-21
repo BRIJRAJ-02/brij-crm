@@ -44,6 +44,8 @@ export interface ViewSettingsProps {
    * bar until the bar was simplified, 21 October 2026).
    */
   readonly footer?: ReactNode;
+  /** Above the list, apart from it after a hairline: a table's Group by (a `Select`, 13 Oct reference batch 4). */
+  readonly header?: ReactNode;
 }
 
 /** Past this many attributes, a search field narrows the list. */
@@ -54,7 +56,15 @@ const SEARCH_AFTER = 8;
  * shows or hides it, and its handle reorders it. A locked row (the record's
  * name) is always shown and stays first. Long lists get a search field.
  */
-export function ViewSettings({ label, fields, onChange, isReadOnly = false, maxShown, footer }: ViewSettingsProps) {
+export function ViewSettings({
+  label,
+  fields,
+  onChange,
+  isReadOnly = false,
+  maxShown,
+  footer,
+  header,
+}: ViewSettingsProps) {
   const { locale } = useFormatSettings();
   const [query, setQuery] = useState('');
   const needle = query.trim().toLocaleLowerCase(locale);
@@ -70,6 +80,7 @@ export function ViewSettings({ label, fields, onChange, isReadOnly = false, maxS
       : strings.shown(number(shownFree), number(maxShown));
   return (
     <div className={styles.root}>
+      {header !== undefined && <div className={styles.lead}>{header}</div>}
       <div className={styles.head}>
         <span className={styles.label}>{label}</span>
         <span className={styles.count}>{countText}</span>

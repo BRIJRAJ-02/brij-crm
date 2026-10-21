@@ -259,3 +259,22 @@ export async function getTimeInStages(
     return [...byOption].map(([optionId, entry]) => ({ optionId, ...entry }));
   });
 }
+
+/**
+ * When a record entered the stage it is in now on a status attribute (13 Oct
+ * reference batch 4: a deal's stage age), or nothing when it is in none. Reads
+ * as `getTimeInStages` does: a record or attribute hidden from the caller
+ * answers as absent (`NOT_FOUND`), and an attribute that isn't a status is
+ * `CONFIG_INVALID`.
+ */
+export async function getStageSince(
+  scope: EngineScope,
+  input: { readonly recordId: string; readonly attributeId: string },
+): Promise<{ readonly since?: string }> {
+  const stages = await getTimeInStages(scope, { recordId: input.recordId, attributeId: input.attributeId });
+  for (const stage of stages) {
+    const current = stage.visits.find((visit) => visit.leftAt === null);
+    if (current !== undefined) return { since: current.enteredAt };
+  }
+  return {};
+}

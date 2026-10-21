@@ -18,7 +18,7 @@ import {
   type ViewSummary,
   type ViewVisibility,
 } from '@crm/contracts';
-import { boardConfigProblem, type BoardSettings } from '@crm/contracts/board';
+import { boardConfigProblem, isGroupable, type BoardAttribute, type BoardSettings } from '@crm/contracts/board';
 import { mergeLayout, viewRule, type ViewAction, type ViewRuleReason } from '@crm/contracts/views';
 import { schema, type WorkspaceTx } from '@crm/db';
 import { touched } from '../engine/definitions.ts';
@@ -227,13 +227,14 @@ async function visibleAttributeIds(
 
 /** Refuses a layout naming an attribute that isn't one of the object's the caller sees (`CONFIG_INVALID`). */
 function checkLayoutIds(
-  layout: Pick<ViewLayout, 'columns' | 'board'>,
+  layout: Pick<ViewLayout, 'columns' | 'board' | 'groupBy'>,
   visible: ReadonlySet<string>,
   pluralName: string,
 ): void {
   const ids = [
     ...layout.columns.map((column) => column.attributeId),
     ...(layout.board === undefined ? [] : [layout.board.groupByAttributeId, ...layout.board.cardFields]),
+    ...(typeof layout.groupBy === 'string' ? [layout.groupBy] : []),
   ];
   if (ids.some((id) => !visible.has(id.toLowerCase()))) {
     throw refuse('CONFIG_INVALID', `That attribute isn’t on ${pluralName}.`);
@@ -253,11 +254,31 @@ async function checkBoard(
   board: BoardSettings | undefined,
 ): Promise<void> {
   if (board === undefined) return;
+  const problem = boardConfigProblem(board, await boardAttributes(tx, scope, objectId));
+  if (problem !== undefined) throw refuse('CONFIG_INVALID', problem);
+}
+
+/** Refuses a table grouped by anything but a live status or single select of the object (`CONFIG_INVALID`). */
+async function checkGroupBy(
+  tx: WorkspaceTx,
+  scope: EngineScope,
+  objectId: string,
+  groupBy: string | null | undefined,
+): Promise<void> {
+  if (typeof groupBy !== 'string') return;
+  const attribute = (await boardAttributes(tx, scope, objectId)).find((each) => each.id === groupBy.toLowerCase());
+  if (attribute === undefined || !isGroupable(attribute)) {
+    throw refuse('CONFIG_INVALID', 'Tables group by a status or single select field.');
+  }
+}
+
+/** The object's attributes the caller sees, as the board rules read them. */
+async function boardAttributes(tx: WorkspaceTx, scope: EngineScope, objectId: string): Promise<BoardAttribute[]> {
   const [object] = await tx
     .select({ primaryAttributeId: objects.primaryAttributeId })
     .from(objects)
     .where(and(eq(objects.workspaceId, scope.workspaceId), eq(objects.id, objectId)));
-  const attributes = [...(await loadAttributes(tx, objectId)).values()]
+  return [...(await loadAttributes(tx, objectId)).values()]
     .filter((attribute) => fieldLevel(scope.access, { id: attribute.id, objectId }) !== 'hidden')
     .map((attribute) => ({
       id: attribute.id,
@@ -268,14 +289,13 @@ async function checkBoard(
       isArchived: attribute.archivedAt !== null || attribute.archivedBy !== null,
       position: attribute.position,
     }));
-  const problem = boardConfigProblem(board, attributes);
-  if (problem !== undefined) throw refuse('CONFIG_INVALID', problem);
 }
 
 /** A layout with every attribute id in its canonical (lower case) spelling, so stored ids match the attributes'. */
-function canonicalLayout<L extends Pick<ViewLayout, 'columns' | 'board'>>(layout: L): L {
+function canonicalLayout<L extends Pick<ViewLayout, 'columns' | 'board' | 'groupBy'>>(layout: L): L {
   return {
     ...layout,
+    ...(typeof layout.groupBy === 'string' ? { groupBy: layout.groupBy.toLowerCase() } : {}),
     columns: layout.columns.map((column) => ({ ...column, attributeId: column.attributeId.toLowerCase() })),
     ...(layout.board === undefined
       ? {}
@@ -365,6 +385,7 @@ export async function createView(
       const visible = await visibleAttributeIds(tx, scope, object.id);
       checkLayoutIds(config.data, visible.any, object.pluralName);
       await checkBoard(tx, scope, object.id, config.data.board);
+      await checkGroupBy(tx, scope, object.id, config.data.groupBy);
       const filter =
         config.data.filter === undefined || config.data.filter.conditions.length === 0 ? undefined : config.data.filter;
       await checkViewQuery(tx, scope, {
@@ -490,6 +511,7 @@ export async function setViewLayout(
       const pluralName = await pluralOf(tx, scope, row.objectId);
       checkLayoutIds(layout, visible.any, pluralName);
       await checkBoard(tx, scope, row.objectId, layout.board);
+      await checkGroupBy(tx, scope, row.objectId, layout.groupBy);
       const stored = configOf(row.config);
       const merged = mergeLayout(stored.columns, layout, visible.live);
       const board =
@@ -503,11 +525,22 @@ export async function setViewLayout(
                 return [...layout.board.cardFields.slice(0, Math.max(0, 6 - kept.length)), ...kept];
               })(),
             };
+      // A grouping hidden from the caller stays when they change the layout; `null` clears it, a new one replaces it.
+      const { groupBy: storedGroupBy, ...unGrouped } = stored;
+      const groupBy =
+        layout.groupBy === undefined
+          ? storedGroupBy
+          : layout.groupBy === null
+            ? storedGroupBy !== undefined && !visible.live.has(storedGroupBy)
+              ? storedGroupBy
+              : undefined
+            : layout.groupBy;
       const next = ViewConfig.safeParse({
-        ...stored,
+        ...unGrouped,
         columns: merged.columns,
         pinnedCount: merged.pinnedCount,
         ...(board === undefined ? {} : { board }),
+        ...(groupBy === undefined ? {} : { groupBy }),
       });
       if (!next.success) throw refuse('CONFIG_INVALID', 'This view’s settings are not valid.');
       checkSize(next.data);

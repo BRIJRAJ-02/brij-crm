@@ -4,6 +4,7 @@
 import { useCallback, useEffect, useMemo, useRef, useSyncExternalStore } from 'react';
 import type { BoardStatus, BoardStore } from './records/board.ts';
 import type { DataError } from './errors.ts';
+import type { RecordFacts, RecordFactsState } from './records/facts.ts';
 import type { ActivityFeed, ActivityState } from './activity/feed.ts';
 import type { AccountSecurityState, AccountSecurityView } from './account/security.ts';
 import type { AccountSessionsState, AccountSessionsView } from './account/sessions.ts';
@@ -472,4 +473,12 @@ export function useInboxList(list: InboxList): InboxListState {
 /** The member's notification settings (spec 0038), re-rendering when they change. Held while mounted. */
 export function useNotificationSettings(settings: InboxSettings): InboxSettingsState {
   return useRetained(settings);
+}
+
+/**
+ * A record's facts for its stat strip (13 Oct reference batch 4): its next
+ * meeting and its stage age, read each time the screen holds them.
+ */
+export function useRecordFacts(facts: RecordFacts): RecordFactsState {
+  return useRetained(facts);
 }
