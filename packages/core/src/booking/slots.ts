@@ -14,6 +14,7 @@ import {
 } from '@crm/contracts';
 import { schema, type WorkspaceTx } from '@crm/db';
 import { resolveMany, virtualDefault, type ResolvedSchedule } from '../availability/resolve.ts';
+import { FREE_BUSY_MAX_DAYS } from '../calendar/events.ts';
 import { refuse } from '../engine/refusals.ts';
 import { blockedTime } from './blocks.ts';
 import type { BusyReader } from './calendar.ts';
@@ -252,8 +253,15 @@ export async function membersBusy(
   from: Date,
   to: Date,
 ): Promise<MembersBusy> {
+  // A reader answers at most 62 days at once; a page's 62 day chunk plus its margins can be a few hours more
+  // (any read made before 06:00 in the visitor's zone), so a longer range is read in pieces.
+  const windows = busyWindows(from, to);
   const answers = await Promise.all(
-    memberIds.map((memberId) => read({ workspaceId, memberId, from: from.toISOString(), to: to.toISOString() })),
+    memberIds.flatMap((memberId) =>
+      windows.map((window) =>
+        read({ workspaceId, memberId, from: window.from.toISOString(), to: window.to.toISOString() }),
+      ),
+    ),
   );
   return {
     busy: answers.flatMap((answer) =>
@@ -264,6 +272,16 @@ export async function membersBusy(
     blocked: answers.some((answer) => answer.status === 'blocked'),
     noCalendar: answers.every((answer) => answer.status === 'none'),
   };
+}
+
+/** [from, to) cut into back to back pieces no longer than one free and busy read takes. */
+export function busyWindows(from: Date, to: Date): readonly { readonly from: Date; readonly to: Date }[] {
+  const most = FREE_BUSY_MAX_DAYS * 86_400_000;
+  const pieces: { readonly from: Date; readonly to: Date }[] = [];
+  for (let start = from.getTime(); start < to.getTime(); start += most) {
+    pieces.push({ from: new Date(start), to: new Date(Math.min(start + most, to.getTime())) });
+  }
+  return pieces.length === 0 ? [{ from, to }] : pieces;
 }
 
 /** The margin read around a range for busy times and bookings: a slot's buffers reach past it. */
