@@ -42,8 +42,6 @@ export const strings = {
   retrying: 'Retrying',
   /** A prepared job waiting for its confirm: "Expires in 59 minutes" (AC-109). */
   expires: 'Expires',
-  /** Runs a prepared job (`ready`) on exactly the items it counted. */
-  confirm: 'Confirm',
   notYet: 'Not yet',
   cancel: 'Cancel',
   /** Cancel's confirm, naming the job: "Cancel “Bulk delete”?". */
@@ -82,10 +80,14 @@ export const strings = {
   },
   /** A kind the screen has no words for (the test job): its label, and how many items it counted. */
   runOther: {
-    title: 'Run this job?',
-    text: (label: string, items: string) => `${label} runs on the ${items} items it counted.`,
+    title: (label: string) => `Run “${label}”?`,
+    text: (items: string) => `It runs on the ${items} items it counted.`,
     action: 'Run job',
   },
+  /** An owner or admin asked about another member's job: whose it is. */
+  startedByText: (name: string) => `${name} started it.`,
+  /** A counted change waiting for its confirm: Review opens the confirm, as the table's bar names the step. */
+  review: 'Review',
   /** Confirm's dismiss: the job keeps waiting for its confirm. */
   notNow: 'Not now',
   starting: 'Starting…',

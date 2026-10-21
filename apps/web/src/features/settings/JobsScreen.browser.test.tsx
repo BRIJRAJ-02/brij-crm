@@ -72,11 +72,22 @@ async function renderJobs(jobs: readonly JobView[], writes: Partial<DataLayer['j
   return { change };
 }
 
-const confirmButton = () => page.getByRole('button', { name: 'Confirm', exact: true });
+const confirmButton = () => page.getByRole('button', { name: 'Review', exact: true });
 const alert = () => openDialog('alertdialog');
 const dialog = () => openDialog();
 
-describe('Confirm on a counted change', () => {
+describe('Review on a counted change', () => {
+  it('closes its confirm when the job stops waiting for one elsewhere', async () => {
+    const job = jobOf({});
+    const confirm = vi.fn();
+    const { change } = await renderJobs([job], { confirm, cancel: vi.fn() });
+    await userEvent.click(confirmButton());
+    await expect.poll(alert).not.toBeNull();
+    change([{ ...job, status: 'queued' }]);
+    await expect.poll(dialog).toBeNull();
+    expect(confirm).not.toHaveBeenCalled();
+  });
+
   it('asks first, in the change’s own words, and Esc or Not now change nothing', async () => {
     const confirm = vi.fn(() => Promise.resolve(true));
     await renderJobs([jobOf({})], { confirm, cancel: vi.fn() });
@@ -92,7 +103,7 @@ describe('Confirm on a counted change', () => {
 
     await userEvent.keyboard('{Escape}');
     await expect.poll(dialog).toBeNull();
-    await expect.poll(() => document.activeElement?.textContent).toBe('Confirm');
+    await expect.poll(() => document.activeElement?.textContent).toBe('Review');
     await userEvent.click(confirmButton());
     await expect.poll(alert).not.toBeNull();
     await userEvent.click(page.getByRole('button', { name: /^Not now/ }));
@@ -126,14 +137,21 @@ describe('Confirm on a counted change', () => {
   });
 
   it('closes on a refusal too: the jobs store says why and puts the row back', async () => {
-    const confirm = vi.fn(() => Promise.resolve(false));
-    await renderJobs([jobOf({})], { confirm, cancel: vi.fn() });
+    const job = jobOf({});
+    const answer = deferred<boolean>();
+    const confirm = vi.fn(() => answer.promise);
+    const { change } = await renderJobs([job], { confirm, cancel: vi.fn() });
     await userEvent.click(confirmButton());
     await userEvent.click(page.getByRole('button', { name: 'Delete 12,345 records' }));
+    // As the store does: queued at once, then put back when the server refuses.
+    change([{ ...job, status: 'queued' }]);
+    await expect.poll(() => alert()?.textContent).toContain('Starting…');
+    change([job]);
+    answer.resolve(false);
     await expect.poll(dialog).toBeNull();
     expect(confirm).toHaveBeenCalledTimes(1);
-    // The row still offers Confirm, and focus is back on it.
-    await expect.poll(() => document.activeElement?.textContent).toBe('Confirm');
+    // The row offers Review again, and focus is back on it.
+    await expect.poll(() => document.activeElement?.textContent).toBe('Review');
   });
 
   it('asks a restore plainly, with a primary commit', async () => {
