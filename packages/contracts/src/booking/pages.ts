@@ -15,7 +15,7 @@ import {
 } from './blocks.ts';
 import { CANCEL_REASON_MAX, PublicSlots } from './public.ts';
 import { ScheduleHours } from './schedules.ts';
-import { BookingAssignment, BookingAssignmentsInput } from './rotations.ts';
+import { BookingAssignment, BookingAssignmentsInput, ReassignBookingInput, ReassignedBooking } from './rotations.ts';
 import { BookingAvailability, BookingLocation, BookingPageSettings, TimeZoneName } from './settings.ts';
 import { Uuid, uuidV7 } from '../values/ids.ts';
 
@@ -338,6 +338,8 @@ export const bookingsContract = {
   guestLink: oc.input(BookingGuestLinkInput).output(z.object({ path: z.string() })),
   /** Why a round robin booking went to its host (spec 0029, AC-742): its ledger rows, newest first. */
   assignments: oc.input(BookingAssignmentsInput).output(z.array(BookingAssignment)),
+  /** Give one seat of a round robin booking to someone else (spec 0029, AC-748): Manage over both hosts. */
+  reassign: oc.input(ReassignBookingInput).output(ReassignedBooking),
   /** Time the caller closed on their own calendar (spec 0027). */
   blocks: {
     create: oc.input(CreateTimeBlockInput).output(TimeBlockView),

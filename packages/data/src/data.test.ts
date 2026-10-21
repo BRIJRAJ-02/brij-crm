@@ -521,6 +521,7 @@ function fakeApi(overrides: Partial<Behaviour> = {}, auth: (path: string, body: 
       moveSlots: os.bookings.moveSlots.handler(notServed),
       guestLink: os.bookings.guestLink.handler(notServed),
       assignments: os.bookings.assignments.handler(notServed),
+      reassign: os.bookings.reassign.handler(notServed),
       blocks: {
         create: os.bookings.blocks.create.handler(notServed),
         remove: os.bookings.blocks.remove.handler(notServed),

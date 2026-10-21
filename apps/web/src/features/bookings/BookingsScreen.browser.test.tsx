@@ -144,6 +144,8 @@ async function renderWeek(blocks: readonly TimeBlockOccurrence[], bookings: read
     guestLink: vi.fn(() => Promise.resolve({ path: '/b/key/manage' })),
     notify,
     assignments: vi.fn(() => Promise.resolve([])),
+    reassign: vi.fn(),
+    rotations: vi.fn(() => Promise.resolve([])),
   };
   const data = {} as Partial<DataLayer>;
   const toasts = createToasts();
@@ -345,6 +347,8 @@ describe('cancelling from the list', () => {
       guestLink: vi.fn(),
       notify: vi.fn(),
       assignments: vi.fn(() => Promise.resolve([])),
+      reassign: vi.fn(),
+      rotations: vi.fn(() => Promise.resolve([])),
     };
     shown = await renderInApp(
       () => (

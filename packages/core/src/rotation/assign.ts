@@ -56,6 +56,8 @@ export interface HostChoice {
   readonly keep?: ReadonlyMap<string, string>;
   /** A booking being moved or reseated: its own time never blocks its hosts, and its own ledger row isn't a cap. */
   readonly except?: string;
+  /** Who a seat picked now may go to (a reassign: members the actor may Manage, or the one they named, AC-1337). */
+  readonly allow?: (rotationId: string, memberId: string) => boolean;
 }
 
 /** The booking's hosts: the organiser (first fixed host, else the first rotation's host), everyone, and the new picks. */
@@ -114,7 +116,11 @@ export async function chooseHosts(
   const seats = [];
   for (const [index, rotation] of team.rotations.entries()) {
     if (kept.has(rotation.rules.id)) continue;
-    const free = new Set((sets[index] ?? []).filter((memberId) => !keptMembers.has(memberId)));
+    const free = new Set(
+      (sets[index] ?? []).filter(
+        (memberId) => !keptMembers.has(memberId) && (choice.allow?.(rotation.rules.id, memberId) ?? true),
+      ),
+    );
     const lastHostId =
       choice.guest !== undefined && rotation.rules.returning === 'last_host'
         ? await lastHostOf(tx, rotation.rules.id, choice.guest.email, choice.now)

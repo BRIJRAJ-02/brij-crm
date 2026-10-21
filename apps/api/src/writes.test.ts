@@ -8,7 +8,8 @@ import { readdir, readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { contract, defaultAvailability } from '@crm/contracts';
-import { newId } from '@crm/core';
+import { newId, NO_CALENDAR } from '@crm/core';
+import { bookPublicSlot, enterBookingPage } from '@crm/core/public';
 import type { Database, IdentityStore } from '@crm/db';
 import { testQuery } from '@crm/db/testing';
 import { afterAll, beforeAll, describe, expect, inject, it } from 'vitest';
@@ -1361,8 +1362,44 @@ async function rotationOn(m: Member, mutationId = newId()) {
   });
 }
 
+/** A guest's booking on a round robin page of the member's rotation, at 10:00 UTC on the next weekday but one. */
+async function teamBooking(m: Member): Promise<string> {
+  const rotation = await rotationOn(m);
+  const page = await m.client.bookingPages.create({
+    workspace: m.slug,
+    id: newId(),
+    title: 'Team call',
+    timeZone: 'UTC',
+    kind: 'round_robin',
+    hosts: { fixed: [], rotations: [rotation.id] },
+    mutationId: newId(),
+  });
+  const day = new Date(Date.now() + 2 * 86_400_000);
+  while (day.getUTCDay() === 0 || day.getUTCDay() === 6) day.setUTCDate(day.getUTCDate() + 1);
+  day.setUTCHours(10, 0, 0, 0);
+  const booked = await bookPublicSlot(
+    await enterBookingPage({ db }, page.publicKey),
+    { calendar: NO_CALENDAR, linkKey: Buffer.alloc(32, 7) },
+    {
+      idempotencyKey: newId(),
+      start: day.toISOString(),
+      duration: 30,
+      name: 'Grace Hopper',
+      email: 'grace@navy.example',
+      timeZone: 'UTC',
+    },
+  );
+  return booked.bookingId;
+}
+
 // Rotations (spec 0029): settings, not CRM data, so no outbox row; one poke per write.
 Object.assign(WRITES, {
+  // The seat to the other member of the rotation, the next in it (spec 0029, AC-748).
+  'bookings.reassign': async (m: Member, mutationId: string) => {
+    const bookingId = await teamBooking(m);
+    await m.client.bookings.reassign({ workspace: m.slug, bookingId, mutationId });
+    return [];
+  },
   'rotations.create': async (m: Member, mutationId: string) => {
     await rotationOn(m, mutationId);
     return [];
@@ -1417,6 +1454,7 @@ const WRITES_MADE: Readonly<Record<string, number>> = {
   'calendar.meetings.addAttendee': 2,
   'bookingPages.update': 2,
   'rotations.create': 1,
+  'bookings.reassign': 3,
   'rotations.update': 2,
   'rotations.delete': 2,
   'bookingPages.delete': 2,

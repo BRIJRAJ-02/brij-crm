@@ -163,6 +163,24 @@ export const BookingAssignmentsInput = WorkspaceScoped.extend({ bookingId: Uuid 
 /** A booking's assignments. */
 export type BookingAssignmentsInput = z.infer<typeof BookingAssignmentsInput>;
 
+/**
+ * Reassigning one seat of an upcoming round robin booking (spec 0029, AC-748; spec 0037, AC-1337): to the named
+ * member, or the next in its rotation; the first rotation's seat when `rotationId` is left out.
+ */
+export const ReassignBookingInput = WorkspaceScoped.extend({
+  bookingId: Uuid,
+  rotationId: Uuid.optional(),
+  memberId: Uuid.optional(),
+  mutationId: Uuid,
+});
+/** Reassigning a booking's seat. */
+export type ReassignBookingInput = z.infer<typeof ReassignBookingInput>;
+
+/** What a reassign did: the booking's organiser now, and whether any seat changed. */
+export const ReassignedBooking = z.object({ hostMemberId: Uuid, changed: z.boolean() });
+/** What a reassign did. */
+export type ReassignedBooking = z.infer<typeof ReassignedBooking>;
+
 /** Member procedures for rotations. */
 export const rotationsContract = {
   list: oc.input(ListRotationsInput).output(z.array(RotationView)),

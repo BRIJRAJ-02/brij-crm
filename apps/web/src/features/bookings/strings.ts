@@ -201,6 +201,19 @@ export const strings = {
   cancelledToast: (name: string) => `Cancelled. ${name} is emailed.`,
   /** The detail's line for why a round robin booking went to its host (spec 0029, AC-742). */
   assignedTerm: 'Assigned',
+  /** Reassigning a round robin seat (spec 0029, AC-748). */
+  reassignAction: 'Reassign',
+  reassignTitle: (page: string, visitor: string) => `Reassign ${page} with ${visitor}`,
+  seat: 'Rotation',
+  newHost: 'New host',
+  nowWith: (member: string, rotation: string) =>
+    `Now with ${member} from ${rotation}. The guest and both hosts are emailed.`,
+  nextInRotation: 'Next in rotation',
+  nextInRotationHint: 'Whoever is free then and next by the rotation’s rules',
+  keepHost: 'Keep host',
+  reassign: 'Reassign',
+  reassigning: 'Reassigning…',
+  reassigned: 'Reassigned. The guest and both hosts are emailed.',
   assignedIn: (rotation: string) => `Assigned in ${rotation}`,
   assignedLine: (member: string, why: string) => `${member} ${why}`,
   noLongerCounts: (line: string) => `${line} (no longer counts)`,

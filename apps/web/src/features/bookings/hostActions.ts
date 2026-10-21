@@ -13,6 +13,8 @@ export function hostActions(data: DataLayer, toasts: Toasts, slug: string): Host
     moveSlots: (bookingId, from, to) => data.bookings.moveSlots(slug, bookingId, from, to),
     guestLink: (bookingId) => data.bookings.guestLink(slug, bookingId),
     assignments: (bookingId) => data.bookings.assignments(slug, bookingId),
+    reassign: (bookingId, to) => data.bookings.reassign(slug, bookingId, to),
+    rotations: () => data.rotations.held(slug),
     notify: (tone, message) => toasts.toast({ tone, message }),
   };
 }

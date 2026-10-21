@@ -1,6 +1,7 @@
 import {
   bookAsHost,
   bookingAssignments,
+  reassignBooking,
   createRotation,
   deleteRotation,
   listRotations,
@@ -149,6 +150,20 @@ export const bookingsRouter = member.bookings.router({
   assignments: member.bookings.assignments.handler(async ({ context, input }) => [
     ...(await bookingAssignments(context.scope, { bookingId: input.bookingId })),
   ]),
+  // Giving a round robin seat to someone else (spec 0029, AC-748): Manage over the current and the new host.
+  reassign: member.bookings.reassign.handler(({ context, input }) =>
+    commitWrite(context, { mutationId: input.mutationId }, () =>
+      reassignBooking(
+        context.scope,
+        { calendar: context.bookingCalendar, log },
+        {
+          bookingId: input.bookingId,
+          ...(input.rotationId === undefined ? {} : { rotationId: input.rotationId }),
+          ...(input.memberId === undefined ? {} : { memberId: input.memberId }),
+        },
+      ),
+    ),
+  ),
   // The guest page's address, read only when the member asks: it carries the guest's key.
   guestLink: member.bookings.guestLink.handler(({ context, input }) =>
     bookingGuestPath(context.scope, { linkKey: context.bookingLinkKey }, { bookingId: input.bookingId }),

@@ -28,6 +28,7 @@ import { prepareBookingMail } from '../booking/mail.ts';
 import { loadPage } from '../booking/slots.ts';
 import { chooseHosts } from './assign.ts';
 import { bookingAssignments } from './assignments.ts';
+import { reassignBooking } from './reassign.ts';
 import { createRotation, deleteRotation, listRotations, updateRotation } from './rotations.ts';
 import { loadTeam } from './team.ts';
 
@@ -664,6 +665,37 @@ describe('a round robin page (AC-732 to AC-734, AC-738, AC-742 to AC-745, AC-754
     if (hostScope === undefined) throw new Error('No host.');
     const own = await bookingAssignments(hostScope, { bookingId: booked.bookingId });
     expect(own.map((row) => row.memberId)).toEqual([host]);
+  });
+
+  it('reassigns a seat to a named member or the next in rotation, by someone who manages both (AC-748, AC-1337)', async () => {
+    const w = await workspace();
+    const sam = await w.addMember('Sam Lee');
+    const kim = await w.addMember('Kim Park');
+    const mo = await w.addMember('Mo Ali', { from: '13:00', to: '17:00' });
+    const { rotation, entry } = await roundRobin(w, [sam.id, kim.id, mo.id]);
+    const booked = await bookPublicSlot(entry, deps(), bookInput(at('09:00')));
+    const first = (await hostsOf(w, [booked.bookingId])).get(booked.bookingId);
+    const other = first === sam.id ? kim.id : sam.id;
+    // A member can't hand their meeting to a colleague they don't manage.
+    const host = [sam, kim].find((member) => member.id === first);
+    if (host === undefined) throw new Error('No host.');
+    const denied = await refusalOf(
+      reassignBooking(host.scope, deps(), { bookingId: booked.bookingId, memberId: other }),
+    );
+    expect(denied.code).toBe('FORBIDDEN');
+    // Mo isn't free at 09:00.
+    const busy = await refusalOf(reassignBooking(w.owner, deps(), { bookingId: booked.bookingId, memberId: mo.id }));
+    expect(busy.code).toBe('SLOT_TAKEN');
+    // Named: to the other free member, recorded as manual with who did it.
+    const named = await reassignBooking(w.owner, deps(), { bookingId: booked.bookingId, memberId: other });
+    expect(named).toEqual({ hostMemberId: other, changed: true });
+    const rows = await bookingAssignments(w.owner, { bookingId: booked.bookingId });
+    expect(rows[0]).toMatchObject({ memberId: other, reason: 'manual', rotationId: rotation.id });
+    expect(rows[1]?.voidedAt).toBeDefined();
+    // Next in rotation: back to the only other free member.
+    const next = await reassignBooking(w.owner, deps(), { bookingId: booked.bookingId });
+    expect(next).toEqual({ hostMemberId: first, changed: true });
+    expect((await bookingAssignments(w.owner, { bookingId: booked.bookingId }))[0]?.reason).toBe('reassigned');
   });
 
   it('voids the ledger row of a cancelled booking, so it stops counting (AC-747)', async () => {

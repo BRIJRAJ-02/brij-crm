@@ -15,6 +15,7 @@ import type {
   AttributeDefinition,
   BookAsHostInput,
   BookingAssignment,
+  ReassignedBooking,
   RotationMemberInput,
   RotationSettings,
   RotationView,
@@ -169,6 +170,7 @@ export type {
   BookingPageView,
   BookingView,
   BookingAssignment,
+  ReassignedBooking,
   RotationMemberInput,
   RotationMemberView,
   RotationSettings,
@@ -2380,6 +2382,42 @@ export function createDataLayer({
       /** Why a round robin booking went to its host (spec 0029, AC-742): for its host and admins. */
       assignments: (workspace: string, bookingId: string): Promise<BookingAssignment[]> =>
         call((options) => api.bookings.assignments({ workspace, bookingId }, options)),
+      /**
+       * Gives one seat of a round robin booking to someone else (spec 0029, AC-748): the named member, or the next in
+       * its rotation. Bookings read again after it, so every list shows the new host.
+       */
+      reassign: async (
+        workspace: string,
+        bookingId: string,
+        to: { readonly rotationId?: string; readonly memberId?: string },
+      ): Promise<ReassignedBooking> => {
+        // A named host shows at once; "next in rotation" waits for the server to say who.
+        const { memberId } = to;
+        const restore =
+          memberId === undefined
+            ? () => undefined
+            : bookingsLists.patchBooking(workspace, bookingId, (booking) => ({ ...booking, hostMemberId: memberId }));
+        try {
+          const done = await call((options) =>
+            api.bookings.reassign(
+              {
+                workspace,
+                bookingId,
+                ...(to.rotationId === undefined ? {} : { rotationId: to.rotationId }),
+                ...(memberId === undefined ? {} : { memberId }),
+                mutationId: mintId(),
+              },
+              options,
+            ),
+          );
+          bookingsLists.reloadAll(workspace);
+          return done;
+        } catch (error) {
+          restore();
+          bookingsLists.reloadAll(workspace);
+          throw error;
+        }
+      },
       /** A page's bookings: upcoming soonest first, or past latest first, at most 100. */
       list: (workspace: string, pageId: string, when: 'upcoming' | 'past'): Promise<BookingView[]> =>
         call((options) => api.bookings.list({ workspace, pageId, when }, options)),

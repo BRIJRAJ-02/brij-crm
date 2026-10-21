@@ -268,4 +268,6 @@ export const ACCESS_TABLE = {
   updateRotation: { permission: 'booking.admin' },
   deleteRotation: { permission: 'booking.admin' },
   bookingAssignments: { bookingPages: true },
+  // Reassigning a seat (AC-748, AC-1337): booking.manage, then Manage over the current and the new host.
+  reassignBooking: { bookingPages: true },
 } as const satisfies Record<string, AccessEntry>;

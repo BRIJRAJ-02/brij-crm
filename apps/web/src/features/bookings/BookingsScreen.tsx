@@ -56,7 +56,9 @@ import { DrawCard } from './DrawCard.tsx';
 import { NewMeetingDialog, type NewMeeting } from './NewMeetingDialog.tsx';
 import { instantOf, spanNames, type DrawnSpan } from './span.ts';
 import { PAGE_SIZES, type BookingsSearch } from './search.ts';
+import { useCan } from '../workspace/WorkspacePage.tsx';
 import { assignedItems } from './assignment.ts';
+import { ReassignDialog } from './ReassignDialog.tsx';
 import { BookingActions, BookingDialog, type BookingAsk, type HostBookingActions } from './BookingActions.tsx';
 import { strings } from './strings.ts';
 import { useBookingsToolbarSlot } from './toolbarSlot.ts';
@@ -224,7 +226,18 @@ function BookingCard({
   readonly focusOnMount?: BookingAsk | undefined;
 }) {
   const now = useNow();
-  const assigned = useAssignedItems(booking.id, actions, locale);
+  // Read again when its host changes (a reassign or a move through the rotation lands).
+  const read = useAssignments(booking.id, actions, booking.hostMemberId);
+  const assigned =
+    read === undefined
+      ? []
+      : 'failed' in read
+        ? [{ term: strings.assignedTerm, description: strings.assignedFailed }]
+        : assignedItems(read.rows, locale);
+  const seats = read === undefined || 'failed' in read ? [] : read.rows.filter((row) => row.voidedAt === undefined);
+  // Admins reassign a round robin seat (AC-748; Manage over both hosts, today booking.admin's, AC-1337).
+  const canReassign = useCan('booking.admin');
+  const [reassigning, setReassigning] = useState(false);
   return (
     <>
       <Badge text={strings.status[booking.status]} tone={booking.status === 'confirmed' ? 'accent' : 'neutral'} />
@@ -273,19 +286,43 @@ function BookingCard({
           {...(focusOnMount === undefined ? {} : { focusOnMount })}
         />
       )}
+      {actions !== undefined &&
+        canReassign &&
+        seats.length > 0 &&
+        booking.status === 'confirmed' &&
+        Date.parse(booking.startsAt) > now.getTime() && (
+          <Button
+            icon="users-round"
+            onPress={() => {
+              setReassigning(true);
+            }}
+          >
+            {strings.reassignAction}
+          </Button>
+        )}
+      {reassigning && actions !== undefined && (
+        <ReassignDialog
+          booking={booking}
+          seats={seats}
+          actions={actions}
+          onClose={() => {
+            setReassigning(false);
+          }}
+        />
+      )}
     </>
   );
 }
 
 /**
- * The detail's Assigned lines (spec 0029, AC-742): read once per opened booking, newest first, and nothing at all
- * for a personal page's booking (no ledger rows) or while the read is under way.
+ * The booking's ledger rows (spec 0029, AC-742): read once per opened booking, newest first; none for a personal
+ * page's booking. Undefined while the read is under way, so the Assigned lines simply appear.
  */
-function useAssignedItems(
+function useAssignments(
   bookingId: string,
   actions: HostBookingActions | undefined,
-  locale: string,
-): readonly { readonly term: string; readonly description: string }[] {
+  hostMemberId: string,
+): { readonly rows: readonly BookingAssignment[] } | { readonly failed: true } | undefined {
   const [read, setRead] = useState<
     | { readonly id: string; readonly rows: readonly BookingAssignment[] }
     | { readonly id: string; readonly failed: true }
@@ -305,10 +342,8 @@ function useAssignedItems(
     return () => {
       isCurrent = false;
     };
-  }, [actions, bookingId]);
-  if (read === undefined || read.id !== bookingId) return [];
-  if ('failed' in read) return [{ term: strings.assignedTerm, description: strings.assignedFailed }];
-  return assignedItems(read.rows, locale);
+  }, [actions, bookingId, hostMemberId]);
+  return read === undefined || read.id !== bookingId ? undefined : read;
 }
 
 /** One of the member's own calendar events: what, when, which calendar, and that Timefix doesn't manage it. */
