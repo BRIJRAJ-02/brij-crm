@@ -236,7 +236,10 @@ export const GroupedAndLocked: Story = {
     />
   ),
   play: async ({ canvas, userEvent }) => {
-    await userEvent.click(canvas.getByRole('button', { name: 'Pipeline' }));
+    const trigger = canvas.getByRole('button', { name: 'Pipeline' });
+    await userEvent.click(trigger);
+    // The pointer leaves the trigger, so the picture never catches its hover tint (it flaked in CI).
+    await userEvent.unhover(trigger);
     const menu = await waitFor(() => {
       const found = document.querySelector('[role="menu"]');
       if (found === null) throw new Error('No menu yet.');
