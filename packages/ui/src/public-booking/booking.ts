@@ -8,6 +8,8 @@ import { UiProvider } from '../provider/UiProvider.tsx';
 import { createToasts } from '../provider/toasts.tsx';
 
 export { Avatar } from '../atoms/Avatar/Avatar.tsx';
+/** The tagged timefix.ai link under every public page's footer, shared with the hosted form. */
+export { poweredByHref, type PoweredByPage } from '../lib/powered-by.ts';
 export { Button, ButtonLink } from '../atoms/Button/Button.tsx';
 export { Switch } from '../atoms/Switch/Switch.tsx';
 export { Callout } from '../molecules/Callout/Callout.tsx';

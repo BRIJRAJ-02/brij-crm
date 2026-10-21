@@ -4,6 +4,7 @@ import { Button } from '../atoms/Button/Button.tsx';
 import { Icon } from '../atoms/Icon/Icon.tsx';
 import { Link } from '../atoms/Link/Link.tsx';
 import { VisuallyHidden } from '../atoms/VisuallyHidden/VisuallyHidden.tsx';
+import { poweredByHref } from '../lib/powered-by.ts';
 import { Callout } from '../molecules/Callout/Callout.tsx';
 import type { ProductLogo } from '../modules/AuthLayout/AuthLayout.tsx';
 import styles from './FormParts.module.css';
@@ -286,7 +287,7 @@ export function FormFoot({
       {form.recaptchaSiteKey !== undefined && <p className={styles.notice}>{state.words.recaptchaNotice}</p>}
       <a
         className={styles.brand}
-        href="https://timefix.ai"
+        href={poweredByHref('form')}
         rel="noopener noreferrer"
         {...(mode === 'embed' ? { target: '_blank' } : {})}
       >

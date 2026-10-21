@@ -20,11 +20,11 @@ import {
   SlotList,
   type CancelOutcome,
   type GuestsOutcome,
+  poweredByHref,
 } from '@crm/ui/public-booking';
 import { useEffect, useMemo, useState } from 'react';
 import { saveHour12, savedHour12 } from './prefs.ts';
 import { changeStrings } from './change-strings.ts';
-import { poweredByHref } from './powered-by.ts';
 import { strings } from './strings.ts';
 import {
   dayKey,

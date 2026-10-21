@@ -14,3 +14,12 @@ describe('poweredByHref', () => {
     });
   });
 });
+
+describe('poweredByHref on a hosted form', () => {
+  it('tags the form footer the same way, with no referrer when the page has none', () => {
+    const url = new URL(poweredByHref('form'));
+    expect(url.searchParams.get('utm_medium')).toBe('form');
+    expect(url.searchParams.get('utm_campaign')).toBe('powered_by');
+    expect(url.searchParams.has('ref')).toBe(false);
+  });
+});
