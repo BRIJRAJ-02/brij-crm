@@ -3,8 +3,9 @@
 // (one that failed, filed with the current mapping as the member; spam left
 // out; a member without forms.manage refused), Sync old records (a preview,
 // the job, and a second run that changes nothing), the CSV export (the file,
-// the formula guard, only its starter reads it), and the filing and export
-// jobs under their member's own rules (spec 0009, AC-147).
+// the formula guard, only its starter reads it), the filing and export jobs
+// under their member's own rules (spec 0009, AC-147), and a submission whose
+// record was deleted forever (spec 0022's purge), which can be filed again.
 import { sql } from 'drizzle-orm';
 import { afterAll, beforeAll, describe, expect, inject, it } from 'vitest';
 import { FormDocument, type FormQuestion, type SubmitBody } from '@crm/contracts';
@@ -12,10 +13,12 @@ import { createDatabase, type Database } from '@crm/db';
 import { enterPublicForm, NO_RULE_SOURCE, type RuleSource } from '../access/door.ts';
 import { NO_RULES, type AccessRules } from '../access/policy.ts';
 import { editAttribute } from '../attributes/attributes.ts';
+import { deleteForever } from '../bulk/start.ts';
 import { newId } from '../engine/ids.ts';
 import { isRefusal } from '../engine/refusals.ts';
 import { createRecord, getRecords } from '../engine/records.ts';
 import { SYSTEM_ACTOR } from '../engine/scope.ts';
+import { deleteRecords } from '../engine/trash.ts';
 import { createWorkspace } from '../engine/workspaces.ts';
 import { runWrite } from '../engine/write.ts';
 import { getJob } from '../jobs/service.ts';
@@ -592,5 +595,60 @@ describe('a member’s filing and export jobs on the worker (spec 0009, AC-147)'
       state: 'linked',
       record: { recordId: grace },
     });
+  });
+});
+
+describe('a submission whose record was deleted forever (spec 0022’s purge)', () => {
+  it('is out of the CRM and can be added again; while the form keeps submissions only, Add to CRM says why not', async () => {
+    const w = await workspace();
+    const live = await liveForm(w, true);
+    await submit(live.publicKey, body({ name: 'Ada Lovelace', email: 'ada@example.com', title: 'Engineer' }));
+    const [submission] = await submissionIds(w, live.id);
+    if (submission === undefined) throw new Error('A submission expected.');
+    await processNow(w, submission.id);
+    const filed = (await getSubmission(w.scope, { submissionId: submission.id })).crm;
+    if (filed.state !== 'linked') throw new Error('A linked submission expected.');
+    const first = filed.record.recordId;
+    // A member who can read People sees it while its record is there.
+    expect((await getSubmission(w.other, { submissionId: submission.id })).crm.state).toBe('linked');
+
+    // To the trash, then deleted forever: the purge clears the submission's record and its link to it.
+    await deleteRecords(w.scope, { objectId: w.people, recordIds: [first], batchId: newId() });
+    await deleteForever(w.scope, { recordIds: [first] });
+    expect(
+      await w.query(sql`select main_record_id::text as main from form_submissions where id = ${submission.id}`),
+    ).toEqual([{ main: null }]);
+    const purged = await getSubmission(w.scope, { submissionId: submission.id });
+    expect(purged).toMatchObject({ state: 'processed', crm: { state: 'not_in_crm', canAddToCrm: true }, records: [] });
+    expect(purged.mainRecord).toBeUndefined();
+    // With no record, it is for members who manage forms, like every submission not in the CRM.
+    expect(await refusalOf(getSubmission(w.other, { submissionId: submission.id }))).toMatchObject([
+      { code: 'NOT_FOUND' },
+    ]);
+
+    // While the form keeps its submissions only, there is nothing to add it to, and Add to CRM says so.
+    const kept = await setFormTarget(w.scope, { formId: live.id, mainObjectId: null, expectedRevision: live.revision });
+    const keptLive = await publishForm(w.scope, { formId: live.id, expectedRevision: kept.revision });
+    expect((await getSubmission(w.scope, { submissionId: submission.id })).crm).toEqual({
+      state: 'not_in_crm',
+      canAddToCrm: false,
+    });
+    expect(
+      await refusalOf(addToCrm(w.scope, registry, { formId: live.id, submissionIds: [submission.id] })),
+    ).toMatchObject([{ code: 'FORM_STATE', message: NOT_MAPPED }]);
+
+    // Back on People and published: Add to CRM files it again, onto a new record.
+    const pointed = await setFormTarget(w.scope, {
+      formId: live.id,
+      mainObjectId: w.people,
+      expectedRevision: keptLive.revision,
+    });
+    await publishForm(w.scope, { formId: live.id, expectedRevision: pointed.revision });
+    const started = await addToCrm(w.scope, registry, { formId: live.id, submissionIds: [submission.id] });
+    expect(started).toMatchObject({ queued: 1, skipped: 0 });
+    expect(await runJob(w, started.jobId ?? '')).toBe('succeeded');
+    const again = (await getSubmission(w.scope, { submissionId: submission.id })).crm;
+    expect(again).toMatchObject({ state: 'linked', record: { name: 'Ada Lovelace' } });
+    expect(again.state === 'linked' ? again.record.recordId : first).not.toBe(first);
   });
 });
