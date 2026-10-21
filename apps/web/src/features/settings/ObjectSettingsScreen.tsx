@@ -97,7 +97,6 @@ export function ObjectSettingsScreen({
     >
       <Tabs
         // The first tab's label on the page's edge, over the attributes table's first column.
-        inset="none"
         label={strings.objectTabs(object.pluralName)}
         selectedKey={tab}
         onSelectionChange={(next) => {
@@ -158,7 +157,6 @@ export function ObjectSettingsPending() {
     <SettingsPage title={strings.loading} crumbs={settingsCrumbs(slug)} hasTabs isLoading hasTile>
       <Tabs
         // The first tab's label on the page's edge, over the attributes table's first column.
-        inset="none"
         label={strings.loading}
         selectedKey={isObjectTab(tab) ? tab : 'attributes'}
         tabs={[

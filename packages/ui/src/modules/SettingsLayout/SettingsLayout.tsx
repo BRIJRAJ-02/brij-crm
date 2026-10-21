@@ -290,7 +290,12 @@ export interface SettingsGridProps {
  * the panel's width (one on a phone), every card the same width.
  */
 export function SettingsGrid({ children }: SettingsGridProps) {
-  return <div className={styles.grid}>{children}</div>;
+  // Columns frame their own content: a Table in one keeps to its column, never the page's edges.
+  return (
+    <div className={styles.grid}>
+      <PageEdge value={false}>{children}</PageEdge>
+    </div>
+  );
 }
 
 /** Props for SettingsRow. */

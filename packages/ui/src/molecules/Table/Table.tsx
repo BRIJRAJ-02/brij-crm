@@ -127,7 +127,8 @@ export function Table<T>({
   // Directly in a settings page's body the rows run out into the page's gutter, the first column's text on the
   // content edge, and a row's handle sits in that gutter, inside its first cell, rather than in a column of its own.
   const atPageEdge = useContext(PageEdge);
-  const handleInGutter = atPageEdge && onReorder !== undefined;
+  // A table that also selects keeps the handle column: its checkboxes take the first cell's place.
+  const handleInGutter = atPageEdge && onReorder !== undefined && !isSelectable;
   const firstColumnId = columns[0]?.id;
   const lead: TableColumn[] = [
     ...(onReorder === undefined || handleInGutter ? [] : [{ id: HANDLE, label: strings.reorder, isLabelHidden: true }]),

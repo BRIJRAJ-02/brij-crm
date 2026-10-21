@@ -49,8 +49,8 @@ export function Disclosure({
 }: DisclosureProps) {
   // Directly in a settings page's body, the title row runs to the page's edges, its chevron on the content edge.
   const atPageEdge = useContext(PageEdge) && variant === 'default';
-  // Its title is a heading at the level a card's title takes where it sits (an h2 right under a settings page's
-  // TopBar), so headings never skip a level.
+  // At the page edge its title is a heading at the level a card's title takes there (an h2 right under a
+  // settings page's TopBar), so headings never skip a level; anywhere else an h3, as before.
   const level = useContext(CardTitleLevel);
   return (
     <AriaDisclosure
@@ -63,7 +63,7 @@ export function Disclosure({
       {...(onExpandedChange === undefined ? {} : { onExpandedChange })}
       {...(isDisabled === undefined ? {} : { isDisabled })}
     >
-      <Heading className={styles.heading} level={level}>
+      <Heading className={styles.heading} level={atPageEdge ? level : 3}>
         <AriaButton slot="trigger" className={styles.trigger}>
           <span className={styles.chevron}>
             <Icon name="chevron-right" size={variant === 'label' ? 'xs' : 'sm'} />
