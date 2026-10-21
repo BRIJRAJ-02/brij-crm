@@ -96,6 +96,23 @@ export const strings = {
   removeFailed: 'That time couldn’t be opened again. Try again.',
   reopened: 'That time is open again.',
   removeEvery: (weekday: string) => `Remove every ${weekday}`,
+  // Removing closed time asks first (the house rule in Modal's README): nothing brings a removed block back.
+  removeBlockTitle: (label: string | undefined) =>
+    label === undefined ? 'Remove this block?' : `Remove the “${label}” block?`,
+  removeWeeklyTitle: (label: string | undefined) =>
+    label === undefined ? 'Remove this weekly block?' : `Remove the weekly “${label}” block?`,
+  releaseHoldTitle: (label: string | undefined) =>
+    label === undefined ? 'Release this hold?' : `Release the “${label}” hold?`,
+  reopensOnce: (day: string, from: string, to: string) =>
+    `${day}, ${from} to ${to}, opens for booking again. This can’t be undone.`,
+  reopensWeekly: (weekday: string, from: string, to: string) =>
+    `Every ${weekday}, ${from} to ${to}, opens for booking again. This can’t be undone.`,
+  releasesHold: (day: string, from: string, to: string) =>
+    `${day}, ${from} to ${to}, opens to every booking page again. This can’t be undone.`,
+  removeBlockAction: 'Remove block',
+  releaseHoldAction: 'Release hold',
+  removing: 'Removing…',
+  releasing: 'Releasing…',
   bookingPages: 'Booking pages',
   from: 'From',
   to: 'To',
@@ -171,11 +188,13 @@ export const strings = {
   slotName: (time: string, day: string, minutes: number) => `${time}, ${day}, ${String(minutes)} minutes`,
   timeGone: 'That time has just gone. Pick another.',
   changeFailed: 'That didn’t go through. Try again in a moment.',
-  cancelTitle: 'Cancel this booking?',
+  /** Names the booking, as Reschedule's title does: "Cancel Quick chat with Ada Lovelace?" */
+  cancelTitle: (title: string, name: string) => `Cancel ${title} with ${name}?`,
   cancelText: (name: string) => `${name} will be emailed and it comes off your calendar. This can’t be undone.`,
   reason: 'Reason',
   reasonHint: (name: string) => `Optional. ${name} sees it in their email.`,
-  keepBooking: 'Keep it',
+  /** Cancel's dismiss: it can't be called Cancel too. */
+  keepBooking: 'Keep booking',
   confirmCancel: 'Cancel booking',
   cancelling: 'Cancelling…',
   movedToast: (name: string) => `Moved. ${name} is emailed the new time.`,
