@@ -29,7 +29,7 @@ A sidebar destination after Records, as Timefix's rail has it.
 
 ## A booking's card (both tabs)
 
-- While a booking is ahead, its card ends with **Reschedule** (the page's free times for the next two weeks, days over times, and a commit that names the new time), **Copy guest link** (read only when pressed: it is the guest's key) and **Cancel booking** (asks first, with an optional reason the guest's email carries), in a row (`BookingActions.tsx`, `hostActions.ts`, spec 0025 AC-640). A change shows at once in every list and range, says so in a toast, and is undone on a refusal.
+- While a booking is ahead, its card ends with **Reschedule** (the page's free times for the next two weeks, days over times, and a commit that names the new time), **Copy guest link** (read only when pressed: it is the guest's key) and **Cancel booking** (asks first, naming the booking, with an optional reason the guest's email carries; the confirm stays busy until the server answers and keeps a refusal), in a row (`BookingActions.tsx`, `hostActions.ts`, spec 0025 AC-640). A change shows at once in every list and range, says so in a toast, and is undone on a refusal. On the week the card is a popover, which React Aria draws above any dialog, so Reschedule and Cancel booking close the card and the week draws the dialog itself (`BookingDialog`); Cancel or Esc opens the card again on the button that asked, and once the change goes through focus goes to its day. A closed time's Remove (Release for a hold, Remove every <weekday> for a weekly block) asks first the same way: "Remove the “Dentist” block?", what reopens, and that it can't be undone.
 
 ## Notes
 

@@ -5,7 +5,7 @@
 // Leaves out: Request reschedule (offering the guest times), editing the location and adding guests from here; the
 // guest does those from their own page.
 import { isDataError, type BookingListItem, type PublicSlots } from '@crm/data';
-import { Button, ButtonGroup, Callout, DayStrip, Field, Modal, SlotList } from '@crm/ui';
+import { Button, ButtonGroup, Callout, DayStrip, Field, focusLater, Modal, SlotList } from '@crm/ui';
 import { useEffect, useRef, useState } from 'react';
 import { strings } from './strings.ts';
 
@@ -37,18 +37,51 @@ function dayOf(instant: string, zone: string): string {
   return parts;
 }
 
-/** The card's changes: Reschedule, Copy guest link and Cancel booking; Reschedule and Cancel each open a dialog. */
+/** A dialog the card's buttons open: Reschedule, or Cancel booking (a confirm). */
+export type BookingAsk = 'move' | 'cancel';
+
+/**
+ * The card's changes: Reschedule, Copy guest link and Cancel booking; Reschedule and Cancel each open a dialog.
+ * The buttons are for a confirmed booking only. In a panel the dialogs open here, and stay while the booking shows
+ * cancelled at once (the layer's optimistic cancel), so Cancel's confirm stays busy until the server answers. In a
+ * popover (the week's card) they can't: React Aria draws popovers above every dialog, so `onAsk` hands them to the
+ * screen, which closes the card and draws `BookingDialog` itself.
+ */
 export function BookingActions({
   booking,
   actions,
   locale,
+  onAsk,
+  focusOnMount,
 }: {
   readonly booking: BookingListItem;
   readonly actions: HostBookingActions;
   readonly locale: string;
+  /** Hands Reschedule and Cancel booking to the screen; left out, they open here. */
+  readonly onAsk?: (ask: BookingAsk) => void;
+  /** The button to focus as the card opens again after the screen's dialog was dismissed. */
+  readonly focusOnMount?: BookingAsk;
 }) {
-  const [open, setOpen] = useState<'move' | 'cancel' | undefined>(undefined);
+  const [open, setOpen] = useState<BookingAsk | undefined>(undefined);
+  // Each opening mounts a fresh dialog (an empty reason, no old refusal).
+  const [opens, setOpens] = useState(0);
   const [copying, setCopying] = useState(false);
+  const moveRef = useRef<HTMLButtonElement>(null);
+  const cancelRef = useRef<HTMLButtonElement>(null);
+  useEffect(() => {
+    if (focusOnMount === undefined) return;
+    focusLater(() => (focusOnMount === 'move' ? moveRef.current : cancelRef.current));
+    // Only as the card opens again.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+  const ask = (kind: BookingAsk) => {
+    if (onAsk !== undefined) {
+      onAsk(kind);
+      return;
+    }
+    setOpens((count) => count + 1);
+    setOpen(kind);
+  };
   // The link is read on demand (it is the guest's key), so the clipboard is handed the read itself while the press
   // still counts as the person's (Safari refuses a write made after an awaited request).
   const copy = async () => {
@@ -71,25 +104,70 @@ export function BookingActions({
   };
   return (
     <>
-      <ButtonGroup label={strings.changeBooking} layout="row">
-        {booking.reschedules < 5 && (
-          <Button icon="calendar-clock" onPress={() => setOpen('move')}>
-            {strings.reschedule}
+      {booking.status === 'confirmed' && (
+        <ButtonGroup label={strings.changeBooking} layout="row">
+          {booking.reschedules < 5 && (
+            <Button ref={moveRef} icon="calendar-clock" onPress={() => ask('move')}>
+              {strings.reschedule}
+            </Button>
+          )}
+          <Button icon="link" isPending={copying} onPress={() => void copy()}>
+            {strings.copyGuestLink}
           </Button>
-        )}
-        <Button icon="link" isPending={copying} onPress={() => void copy()}>
-          {strings.copyGuestLink}
-        </Button>
-        <Button variant="danger" icon="circle-x" onPress={() => setOpen('cancel')}>
-          {strings.cancelBooking}
-        </Button>
-      </ButtonGroup>
-      {open === 'move' && (
-        <MoveDialog booking={booking} actions={actions} locale={locale} onClose={() => setOpen(undefined)} />
+          <Button ref={cancelRef} variant="danger" icon="circle-x" onPress={() => ask('cancel')}>
+            {strings.cancelBooking}
+          </Button>
+        </ButtonGroup>
       )}
-      {open === 'cancel' && <CancelDialog booking={booking} actions={actions} onClose={() => setOpen(undefined)} />}
+      {onAsk === undefined && opens > 0 && (
+        <BookingDialog
+          key={opens}
+          booking={booking}
+          actions={actions}
+          locale={locale}
+          ask={open}
+          onClose={() => setOpen(undefined)}
+          onDone={() => setOpen(undefined)}
+        />
+      )}
     </>
   );
+}
+
+/**
+ * Reschedule or Cancel booking for one booking, drawn by its card (a panel) or by the screen once the card closed
+ * (the week's popover). Mount one per opening (key it), and keep it while it closes, so Cancel's exit plays.
+ */
+export function BookingDialog({
+  booking,
+  actions,
+  locale,
+  ask,
+  onClose,
+  onDone,
+}: {
+  readonly booking: BookingListItem;
+  readonly actions: HostBookingActions;
+  readonly locale: string;
+  /** The dialog open now; undefined while it closes. */
+  readonly ask: BookingAsk | undefined;
+  /** Dismissed: Keep booking, Keep this time, or Esc. */
+  readonly onClose: () => void;
+  /** It went through: the button that opened it may be gone, so the screen says where focus goes. */
+  readonly onDone: () => void;
+}) {
+  // The dialog stays while it plays its exit.
+  const [last, setLast] = useState(ask);
+  if (ask !== undefined && ask !== last) setLast(ask);
+  const shown = ask ?? last;
+  if (shown === 'move') {
+    return ask === 'move' ? (
+      <MoveDialog booking={booking} actions={actions} locale={locale} onClose={onClose} onDone={onDone} />
+    ) : null;
+  }
+  return shown === 'cancel' ? (
+    <CancelDialog booking={booking} actions={actions} isOpen={ask === 'cancel'} onClose={onClose} onDone={onDone} />
+  ) : null;
 }
 
 /** Reschedule: the page's times for the next two weeks, days over times, and a commit that names the new time. */
@@ -98,11 +176,13 @@ function MoveDialog({
   actions,
   locale,
   onClose,
+  onDone,
 }: {
   readonly booking: BookingListItem;
   readonly actions: HostBookingActions;
   readonly locale: string;
   readonly onClose: () => void;
+  readonly onDone: () => void;
 }) {
   const zone = Intl.DateTimeFormat().resolvedOptions().timeZone;
   const [slots, setSlots] = useState<readonly string[] | undefined>(undefined);
@@ -165,7 +245,7 @@ function MoveDialog({
     actions.move(booking.id, time).then(
       () => {
         actions.notify('success', strings.movedToast(booking.visitorName));
-        onClose();
+        onDone();
       },
       (caught: unknown) => {
         // The card (and this dialog) may be gone: the refusal still has to be said.
@@ -193,7 +273,7 @@ function MoveDialog({
       }}
       actions={
         <>
-          <Button slot="close" isDisabled={busy}>
+          <Button slot="close" isDisabled={busy} kbd="ESC">
             {strings.keepTime}
           </Button>
           <Button variant="primary" isDisabled={time === undefined} isPending={busy} onPress={move}>
@@ -263,26 +343,35 @@ function MoveDialog({
   );
 }
 
-/** Cancel booking: asks first, with a reason the guest's email carries. */
+/**
+ * Cancel booking: asks first, naming the booking, with a reason the guest's email carries. The commit stays busy
+ * until the server answers (the booking already shows cancelled behind it), and a refusal shows here.
+ */
 function CancelDialog({
   booking,
   actions,
+  isOpen,
   onClose,
+  onDone,
 }: {
   readonly booking: BookingListItem;
   readonly actions: HostBookingActions;
+  readonly isOpen: boolean;
   readonly onClose: () => void;
+  readonly onDone: () => void;
 }) {
   const [reason, setReason] = useState('');
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
   const cancel = () => {
+    if (busy) return;
     setBusy(true);
     setError('');
     actions.cancel(booking.id, reason.trim()).then(
       () => {
         actions.notify('success', strings.cancelledToast(booking.visitorName));
-        onClose();
+        setBusy(false);
+        onDone();
       },
       (caught: unknown) => {
         setBusy(false);
@@ -292,19 +381,19 @@ function CancelDialog({
   };
   return (
     <Modal
-      title={strings.cancelTitle}
+      title={strings.cancelTitle(booking.pageTitle, booking.visitorName)}
       tone="danger"
-      isOpen
+      isOpen={isOpen}
       isBusy={busy}
-      onOpenChange={(isOpen) => {
-        if (!isOpen && !busy) onClose();
+      onOpenChange={(open) => {
+        if (!open && !busy) onClose();
       }}
       actions={
         <>
-          <Button slot="close" isDisabled={busy}>
+          <Button slot="close" isDisabled={busy} kbd="ESC">
             {strings.keepBooking}
           </Button>
-          <Button variant="danger-solid" isPending={busy} onPress={cancel}>
+          <Button variant="danger-solid" icon="circle-x" isPending={busy} onPress={cancel}>
             {busy ? strings.cancelling : strings.confirmCancel}
           </Button>
         </>

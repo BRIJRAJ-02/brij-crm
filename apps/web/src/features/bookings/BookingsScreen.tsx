@@ -2,17 +2,18 @@
 // Purpose: Bookings › Calendar and Bookings › List (spec 0025, AC-646), on the reference product's bookings page: a week calendar (bookings and the member's own calendar events) and a list (Upcoming, Past, Canceled) with sort and pages.
 // Main task: see the week at a glance, open a booking or an event for its details, or page through the list.
 // Leaves out: changing a booking from here (the actions arrive next), the new meeting dialog, team views and filing, and live arrival (it reads again when the page is shown again).
-import type {
-  BookingListItem,
-  BookingPageView,
-  BookingsCalendarHeld,
-  BookingsTab,
-  BookingsView,
-  CalendarConnectionView,
-  CalendarEventItem,
-  ObjectSummary,
-  CreateTimeBlockInput,
-  TimeBlockOccurrence,
+import {
+  isDataError,
+  type BookingListItem,
+  type BookingPageView,
+  type BookingsCalendarHeld,
+  type BookingsTab,
+  type BookingsView,
+  type CalendarConnectionView,
+  type CalendarEventItem,
+  type ObjectSummary,
+  type CreateTimeBlockInput,
+  type TimeBlockOccurrence,
 } from '@crm/data';
 import { useBookings, useBookingsCalendar } from '@crm/data/react';
 import {
@@ -28,12 +29,14 @@ import {
   MenuSection,
   MenuSeparator,
   MenuTrigger,
+  Modal,
   PageColumn,
   Pagination,
   Panel,
   SectionBar,
   SegmentedControl,
   useKeyboardPlatform,
+  focusLater,
   Skeleton,
   WeekCalendar,
   type BookingListGroup,
@@ -52,7 +55,7 @@ import { DrawCard } from './DrawCard.tsx';
 import { NewMeetingDialog, type NewMeeting } from './NewMeetingDialog.tsx';
 import { instantOf, spanNames, type DrawnSpan } from './span.ts';
 import { PAGE_SIZES, type BookingsSearch } from './search.ts';
-import { BookingActions, type HostBookingActions } from './BookingActions.tsx';
+import { BookingActions, BookingDialog, type BookingAsk, type HostBookingActions } from './BookingActions.tsx';
 import { strings } from './strings.ts';
 import { useBookingsToolbarSlot } from './toolbarSlot.ts';
 import {
@@ -206,11 +209,17 @@ function BookingCard({
   personHref,
   locale,
   actions,
+  onAsk,
+  focusOnMount,
 }: {
   readonly booking: BookingListItem;
   readonly personHref: string | undefined;
   readonly locale: string;
   readonly actions?: HostBookingActions | undefined;
+  /** In the week's popover: Reschedule and Cancel booking are drawn by the screen (see BookingActions). */
+  readonly onAsk?: ((ask: BookingAsk) => void) | undefined;
+  /** The button to focus as the card opens again after the screen's dialog was dismissed. */
+  readonly focusOnMount?: BookingAsk | undefined;
 }) {
   const now = useNow();
   return (
@@ -249,8 +258,16 @@ function BookingCard({
       {booking.status === 'confirmed' && booking.videoUrl !== undefined && (
         <Link href={booking.videoUrl}>{`${strings.joinCall}: ${providerOf(booking.videoUrl)}`}</Link>
       )}
-      {actions !== undefined && booking.status === 'confirmed' && Date.parse(booking.startsAt) > now.getTime() && (
-        <BookingActions booking={booking} actions={actions} locale={locale} />
+      {/* Its buttons show for a confirmed booking only; it stays mounted so a cancel's confirm outlives the
+          booking showing cancelled at once, until the server answers. */}
+      {actions !== undefined && Date.parse(booking.startsAt) > now.getTime() && (
+        <BookingActions
+          booking={booking}
+          actions={actions}
+          locale={locale}
+          {...(onAsk === undefined ? {} : { onAsk })}
+          {...(focusOnMount === undefined ? {} : { focusOnMount })}
+        />
       )}
     </>
   );
@@ -306,21 +323,69 @@ function BusyCard({
   );
 }
 
+/** What removing closed time asks: its title, what reopens, and the commit's words, busy and not. */
+function removeWords(
+  turn: Pick<TimeBlockOccurrence, 'kind' | 'repeat' | 'label' | 'startsAt' | 'endsAt'>,
+  locale: string,
+): { readonly title: string; readonly text: string; readonly action: string; readonly busy: string } {
+  const start = new Date(turn.startsAt);
+  const clock = new Intl.DateTimeFormat(locale, { hour: 'numeric', minute: '2-digit' });
+  const from = clock.format(start);
+  const to = clock.format(new Date(turn.endsAt));
+  const weekday = new Intl.DateTimeFormat(locale, { weekday: 'long' }).format(start);
+  const day = new Intl.DateTimeFormat(locale, { weekday: 'long', day: 'numeric', month: 'long' }).format(start);
+  if (turn.kind === 'hold') {
+    return {
+      title: strings.releaseHoldTitle(turn.label),
+      text: strings.releasesHold(day, from, to),
+      action: strings.releaseHoldAction,
+      busy: strings.releasing,
+    };
+  }
+  if (turn.repeat === 'weekly') {
+    return {
+      title: strings.removeWeeklyTitle(turn.label),
+      text: strings.reopensWeekly(weekday, from, to),
+      action: strings.removeEvery(weekday),
+      busy: strings.removing,
+    };
+  }
+  return {
+    title: strings.removeBlockTitle(turn.label),
+    text: strings.reopensOnce(day, from, to),
+    action: strings.removeBlockAction,
+    busy: strings.removing,
+  };
+}
+
 /**
  * A block's or hold's card: when, why, whether it repeats, what it does, and
- * Remove (Release for a hold; for a weekly block, every week). Removing closes
- * the card at once and says how it went in a toast, since the block is gone.
+ * Remove (Release for a hold; for a weekly block, every week). Remove asks
+ * first, since nothing brings a removed block back (the house rule in Modal's
+ * README): the screen closes this card and draws the confirm (a dialog can't
+ * sit over the card's popover), and opens the card again, focus on Remove,
+ * when the confirm is dismissed.
  */
 function BlockCard({
   turn,
   locale,
   onRemove,
+  isRemoveFocused = false,
 }: {
   readonly turn: TimeBlockOccurrence;
   readonly locale: string;
+  /** Asks to remove the block: the screen's confirm. */
   readonly onRemove: () => void;
+  /** Focus Remove as the card opens: its confirm was just dismissed. */
+  readonly isRemoveFocused?: boolean;
 }) {
   const weekday = new Intl.DateTimeFormat(locale, { weekday: 'long' }).format(new Date(turn.startsAt));
+  const remove = useRef<HTMLButtonElement>(null);
+  useEffect(() => {
+    if (isRemoveFocused) focusLater(() => remove.current);
+    // Only as the card opens again.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
   return (
     <>
       <DescriptionList
@@ -332,7 +397,7 @@ function BlockCard({
           { term: strings.bookingPages, description: turn.kind === 'hold' ? strings.heldNote : strings.blockedNote },
         ]}
       />
-      <Button onPress={onRemove}>
+      <Button ref={remove} onPress={onRemove}>
         {turn.kind === 'hold'
           ? strings.releaseHold
           : turn.repeat === 'weekly'
@@ -340,6 +405,73 @@ function BlockCard({
             : strings.removeBlock}
       </Button>
     </>
+  );
+}
+
+/**
+ * Removing closed time, asked first: what reopens and that it can't be undone. The commit stays busy until the
+ * server answers (the block left the week at once), a refusal shows here with the block back, and the screen
+ * hands focus on either way. Mount one per question (key it), and keep it while it closes, so its exit plays.
+ */
+function RemoveBlockDialog({
+  turn,
+  isOpen,
+  locale,
+  onRemove,
+  onClose,
+}: {
+  readonly turn: TimeBlockOccurrence;
+  readonly isOpen: boolean;
+  readonly locale: string;
+  /** Removes it: settles once the server has it, rejects with why on a refusal. */
+  readonly onRemove: () => Promise<void>;
+  /** Dismissed: Cancel or Esc. */
+  readonly onClose: () => void;
+}) {
+  const [isBusy, setBusy] = useState(false);
+  const [failure, setFailure] = useState<string | undefined>(undefined);
+  const words = removeWords(turn, locale);
+  const remove = () => {
+    if (isBusy) return;
+    setBusy(true);
+    setFailure(undefined);
+    onRemove().then(
+      () => {
+        setBusy(false);
+      },
+      (error: unknown) => {
+        setBusy(false);
+        setFailure(isDataError(error) && error.message !== '' ? error.message : strings.removeFailed);
+      },
+    );
+  };
+  return (
+    <Modal
+      title={words.title}
+      tone="danger"
+      isOpen={isOpen}
+      isBusy={isBusy}
+      onOpenChange={(open) => {
+        if (!open && !isBusy) onClose();
+      }}
+      actions={
+        <>
+          <Button slot="close" isDisabled={isBusy} kbd="ESC">
+            {strings.cancel}
+          </Button>
+          <Button variant="danger-solid" icon="trash" isPending={isBusy} onPress={remove}>
+            {isBusy ? words.busy : words.action}
+          </Button>
+        </>
+      }
+    >
+      {failure !== undefined && (
+        <Callout tone="danger" isAnnounced>
+          {failure}
+        </Callout>
+      )}
+      {words.text}
+    </Modal>
   );
 }
 
@@ -430,6 +562,24 @@ function weekDayItems(days: readonly string[], today: string, locale: string) {
   });
 }
 
+/** A dialog a card on the week asked for: removing its block's time, or rescheduling or cancelling its booking. */
+type CardQuestion =
+  | {
+      readonly kind: 'remove';
+      readonly turn: TimeBlockOccurrence;
+      readonly pieceId: string;
+      readonly dayKey: string;
+    }
+  | {
+      readonly kind: BookingAsk;
+      readonly booking: BookingListItem;
+      readonly pieceId: string;
+      readonly dayKey: string;
+    };
+
+/** A question as the week holds it: numbered, so each one mounts its dialog afresh. */
+type CardAsk = CardQuestion & { readonly opening: number };
+
 /** The week view's toolbar, grid and count. */
 function WeekView(props: BookingsCalendarScreenProps) {
   const { slug, objects, search, week, pages, connections, locale, onSearch, onRemoveBlock, onBlock } = props;
@@ -441,6 +591,18 @@ function WeekView(props: BookingsCalendarScreenProps) {
   const state = useBookingsCalendar(week);
   const now = useNow();
   const [openId, setOpenId] = useState<string | undefined>(undefined);
+  // A dialog a card asked for, drawn here rather than over the card's popover (React Aria draws popovers above every
+  // dialog): the card closes while it is open, opens again when it is dismissed, and once its change went through
+  // focus goes to the day it was on. `opening` keys each one, so it mounts afresh and keeps its exit.
+  const [asking, setAsking] = useState<CardAsk | undefined>(undefined);
+  const [lastAsked, setLastAsked] = useState<CardAsk | undefined>(undefined);
+  if (asking !== undefined && asking !== lastAsked) setLastAsked(asking);
+  // The card's button to focus when it opens again after its dialog was dismissed.
+  const [refocus, setRefocus] = useState<{ readonly pieceId: string; readonly button: CardAsk['kind'] } | undefined>(
+    undefined,
+  );
+  const [focusDay, setFocusDay] = useState<{ readonly dayKey: string } | undefined>(undefined);
+  const openings = useRef(0);
   const [draft, setDraft] = useState<DrawnSpan | undefined>(undefined);
   // Each new drawing gets a fresh card; moving the span with From and To keeps the card as it is.
   const [drawCount, setDrawCount] = useState(0);
@@ -640,6 +802,26 @@ function WeekView(props: BookingsCalendarScreenProps) {
     ];
   });
   const open = pieces.find(({ piece }) => piece.id === openId);
+  /** A card's question: the card closes and its dialog opens here. */
+  const ask = (question: CardQuestion) => {
+    openings.current += 1;
+    setRefocus(undefined);
+    setOpenId(undefined);
+    setAsking({ ...question, opening: openings.current });
+  };
+  /** Dismissed: the card opens again, focus on the button that asked; its block gone meanwhile, its day. */
+  const dismiss = (asked: CardAsk) => {
+    setAsking(undefined);
+    if (pieces.some(({ piece }) => piece.id === asked.pieceId)) {
+      setRefocus({ pieceId: asked.pieceId, button: asked.kind });
+      setOpenId(asked.pieceId);
+    } else setFocusDay({ dayKey: asked.dayKey });
+  };
+  /** Gone through: the button that asked may be gone, so focus goes to the day it was on. */
+  const done = (asked: CardAsk) => {
+    setAsking(undefined);
+    setFocusDay({ dayKey: asked.dayKey });
+  };
   const openBooking = open?.kind === 'booking' ? byBooking.get(open.piece.sourceId) : undefined;
   const openEvent = open?.kind === 'event' ? byEvent.get(open.piece.sourceId) : undefined;
   const openTurn = open?.kind === 'closed' ? byTurn.get(open.piece.sourceId) : undefined;
@@ -675,17 +857,14 @@ function WeekView(props: BookingsCalendarScreenProps) {
               connection={connections.find((connection) => connection.id === openBusy.connectionId)}
               locale={locale}
             />
-          ) : openTurn !== undefined ? (
+          ) : openTurn !== undefined && open !== undefined ? (
             <BlockCard
               key={openTurn.key}
               turn={openTurn}
               locale={locale}
+              isRemoveFocused={refocus?.pieceId === open.piece.id && refocus.button === 'remove'}
               onRemove={() => {
-                setOpenId(undefined);
-                onRemoveBlock(openTurn.blockId).then(
-                  () => toasts.toast({ tone: 'success', message: strings.reopened }),
-                  () => toasts.toast({ tone: 'danger', message: strings.removeFailed }),
-                );
+                ask({ kind: 'remove', turn: openTurn, pieceId: open.piece.id, dayKey: open.piece.dayKey });
               }}
             />
           ) : openBooking === undefined ? (
@@ -702,14 +881,28 @@ function WeekView(props: BookingsCalendarScreenProps) {
               personHref={personHref(openBooking)}
               locale={locale}
               actions={props.actions}
+              {...(open === undefined
+                ? {}
+                : {
+                    onAsk: (kind: BookingAsk) => {
+                      ask({ kind, booking: openBooking, pieceId: open.piece.id, dayKey: open.piece.dayKey });
+                    },
+                    focusOnMount:
+                      refocus?.pieceId === open.piece.id && refocus.button !== 'remove' ? refocus.button : undefined,
+                  })}
             />
           )
         }
         onOpen={(id) => {
           setDraft(undefined);
+          setRefocus(undefined);
           setOpenId(id);
         }}
-        onClose={() => setOpenId(undefined)}
+        onClose={() => {
+          setRefocus(undefined);
+          setOpenId(undefined);
+        }}
+        {...(focusDay === undefined ? {} : { focusRequest: focusDay })}
         onDraw={(span) => {
           setOpenId(undefined);
           setDrawCount((count) => count + 1);
@@ -801,6 +994,40 @@ function WeekView(props: BookingsCalendarScreenProps) {
         }}
       />
       <p>{strings.weekSummary(live)}</p>
+      {/* The dialogs a card asked for, each mounted afresh per question and kept while it closes. */}
+      {lastAsked?.kind === 'remove' && (
+        <RemoveBlockDialog
+          key={lastAsked.opening}
+          turn={lastAsked.turn}
+          isOpen={asking === lastAsked}
+          locale={locale}
+          onRemove={() =>
+            onRemoveBlock(lastAsked.turn.blockId).then(() => {
+              done(lastAsked);
+              toasts.toast({ tone: 'success', message: strings.reopened });
+            })
+          }
+          onClose={() => {
+            dismiss(lastAsked);
+          }}
+        />
+      )}
+      {lastAsked !== undefined && lastAsked.kind !== 'remove' && props.actions !== undefined && (
+        <BookingDialog
+          key={lastAsked.opening}
+          // The booking as the week holds it now (cancelled at once behind its confirm), or as it was asked about.
+          booking={byBooking.get(lastAsked.booking.id) ?? lastAsked.booking}
+          actions={props.actions}
+          locale={locale}
+          ask={asking === lastAsked ? lastAsked.kind : undefined}
+          onClose={() => {
+            dismiss(lastAsked);
+          }}
+          onDone={() => {
+            done(lastAsked);
+          }}
+        />
+      )}
       {meeting !== undefined && (
         <NewMeetingDialog
           span={meeting}
