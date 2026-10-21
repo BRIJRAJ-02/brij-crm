@@ -166,6 +166,7 @@ export function Field({
   // edge in its last column, no wider than a phone's grid, over the cell when
   // the rows below run out. Placed again as the error or the window changes.
   const errorRef = useRef<HTMLElement>(null);
+  const suggestionsRef = useRef<HTMLDivElement>(null);
   useLayoutEffect(() => {
     const element = errorRef.current;
     const anchor = element?.parentElement;
@@ -325,13 +326,15 @@ export function Field({
               )}
             </FieldError>
             {suggestions !== undefined && suggestions.items.length > 0 && (
-              <div role="group" aria-label={suggestions.label} className={styles.suggestions}>
+              <div ref={suggestionsRef} role="group" aria-label={suggestions.label} className={styles.suggestions}>
                 {suggestions.items.map((item) => (
                   <Button
                     key={item}
                     size="sm"
                     onPress={() => {
+                      // The picked one fills the field, and focus goes back to it: the buttons may go with the answer.
                       suggestions.onPick(item);
+                      suggestionsRef.current?.parentElement?.querySelector<HTMLElement>('input, textarea')?.focus();
                     }}
                   >
                     {item}

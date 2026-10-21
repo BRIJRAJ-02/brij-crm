@@ -359,6 +359,7 @@ export {
 export { VerifyEmail, type VerifyEmailProps } from './modules/VerifyEmail/VerifyEmail.tsx';
 export {
   WorkspacePreview,
+  type WorkspacePreviewArea,
   type WorkspacePreviewFocus,
   type WorkspacePreviewProps,
 } from './modules/WorkspacePreview/WorkspacePreview.tsx';

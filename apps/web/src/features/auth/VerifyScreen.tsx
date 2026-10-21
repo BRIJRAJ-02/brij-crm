@@ -9,6 +9,7 @@ import { useState } from 'react';
 import { resendRefusal, verifyRefusal } from './messages.ts';
 import { clearPending, saveLastEmail, savePending, sessionStore, type PendingSignIn } from './pending.ts';
 import { safeRedirect } from './redirect.ts';
+import { signInFrame } from './AuthStates.tsx';
 import { strings } from './strings.ts';
 import { useSecondsLeft } from './useSecondsLeft.ts';
 import { PRODUCT_LOGO } from '../../brand.ts';
@@ -96,7 +97,7 @@ export function VerifyScreen({ data, pending, redirect }: VerifyScreenProps) {
   };
 
   return (
-    <AuthLayout productName={strings.product} logo={PRODUCT_LOGO} title={strings.verifyTitle}>
+    <AuthLayout productName={strings.product} logo={PRODUCT_LOGO} title={strings.verifyTitle} {...signInFrame('code')}>
       <VerifyEmail
         email={pending.email}
         onVerify={verify}

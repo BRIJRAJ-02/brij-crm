@@ -44,13 +44,17 @@ export function WorkspaceStep({ name, onName, address, onSlug, isCreating, refus
         ? strings.addressChecking
         : state === 'free'
           ? strings.addressFree
-          : undefined;
+          : state === 'unknown'
+            ? strings.addressUnknown
+            : undefined;
   const create = () => {
     // A known taken address is refused here too, so the Form moves focus to it and says it again; Create waits.
     const found: WelcomeRefusal[] = [
       ...(name.trim() === '' ? [{ code: 'MISSING', message: strings.workspaceNameMissing, field: FIELDS.name }] : []),
       ...(state === 'invalid' ? [{ code: 'INVALID', message: strings.slugInvalid, field: FIELDS.slug }] : []),
-      ...(state === 'taken' ? [{ code: 'SLUG_TAKEN', message: strings.addressTaken, field: FIELDS.slug }] : []),
+      ...(state === 'taken'
+        ? [{ code: 'SLUG_TAKEN', message: strings.addressTakenSaid(slug), field: FIELDS.slug }]
+        : []),
     ];
     setProblems(found);
     if (found.length > 0) return;
@@ -101,7 +105,17 @@ export function WorkspaceStep({ name, onName, address, onSlug, isCreating, refus
       {/* The answer is said once it settles; the hint under the field carries it on screen. */}
       <VisuallyHidden>
         <span role="status">
-          {state === 'free' ? strings.addressFreeSaid(slug) : state === 'taken' ? strings.addressTakenSaid(slug) : ''}
+          {state === 'free'
+            ? [
+                strings.addressFreeSaid(slug),
+                ...(suggestions.length > 0 ? [strings.addressOthers(suggestions)] : []),
+              ].join(' ')
+            : state === 'taken'
+              ? [
+                  strings.addressTakenSaid(slug),
+                  ...(suggestions.length > 0 ? [strings.addressOthers(suggestions)] : []),
+                ].join(' ')
+              : ''}
         </span>
       </VisuallyHidden>
     </>

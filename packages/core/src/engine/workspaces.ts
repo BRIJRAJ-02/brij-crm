@@ -7,7 +7,8 @@
 // A signed in user's workspace (spec 0005, AC-30) is the same write with the
 // client's id, plus the directory rows in the same transaction, and a repeated
 // request returns the workspace it already made.
-import { and, eq } from 'drizzle-orm';
+import type { OnboardingAnswers } from '@crm/contracts';
+import { and, eq, sql } from 'drizzle-orm';
 import { addWorkspaceToDirectory, DIRECTORY_SLUG_CONSTRAINT, schema } from '@crm/db';
 import { STANDARD_OBJECTS, STANDARD_RELATIONSHIPS, STANDARD_TEMPLATE_VERSION } from '../templates/standard-v1.ts';
 import { insertAttribute, insertObject } from './definitions.ts';
@@ -141,6 +142,8 @@ export interface UserWorkspaceInput {
   readonly slug: string;
   /** The signed in user (`auth.user.id`), and the name and email their member row gets. */
   readonly firstMember: { readonly userId: string; readonly name: string; readonly email: string };
+  /** First run's About you answers (spec 0036), kept for the first member alone; left out when nothing was answered. */
+  readonly onboarding?: OnboardingAnswers | undefined;
 }
 
 /** The workspace as the directory lists it, its first member, and whether this was a repeat. */
@@ -198,8 +201,34 @@ export async function createUserWorkspace(
     const reachedAt = await reachMilestone(tx, input.id, 'workspace_created');
     milestones = reachedAt === undefined ? [] : [{ milestone: 'workspace_created', workspaceId: input.id, reachedAt }];
   };
+  // The answers go in with the member, by hand: the app may insert only these three columns.
+  const given = input.onboarding;
+  const answers =
+    given === undefined
+      ? {}
+      : {
+          ...(given.role === undefined ? {} : { role: given.role }),
+          ...(given.teamSize === undefined ? {} : { teamSize: given.teamSize }),
+          ...(given.areas === undefined || given.areas.length === 0 ? {} : { areas: given.areas }),
+        };
+  const onboarding: readonly AfterWrite[] =
+    Object.keys(answers).length === 0
+      ? []
+      : [
+          async (_change, tx) => {
+            await tx.execute(
+              sql`insert into ${schema.memberOnboarding} (workspace_id, member_id, answers)
+                  values (${input.id}, ${memberId}, ${JSON.stringify(answers)}::jsonb)`,
+            );
+          },
+        ];
   try {
-    await insertWorkspace(db, input, { workspaceId: input.id, memberId }, [directory, reached, ...hooks]);
+    await insertWorkspace(db, input, { workspaceId: input.id, memberId }, [
+      directory,
+      reached,
+      ...onboarding,
+      ...hooks,
+    ]);
     return { workspace: { id: input.id, slug: input.slug, name }, memberId, replayed: false, milestones };
   } catch (error) {
     const pg = postgresError(error);

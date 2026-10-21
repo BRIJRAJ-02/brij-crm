@@ -18,13 +18,14 @@ New (spec 0036). First run shows the workspace taking shape as the person types 
 
 - `workspaceName` and `personName` are what the person has typed; while one is empty, a bar stands in for it (and a tile or a circle for its avatar).
 - `workspaceId` and `personId` seed the avatars' hues, so a colour holds while the name changes, and the person keeps the hue they have everywhere else.
-- `focus` rings the part the step is about: `person` (About you), `workspace` (Your workspace) or `calendar` (Connect your calendar). The ring eases from one part to the next in `duration-move`; under reduced motion it moves at once.
+- `focus` rings the part the step is about: `person` (Your name), `areas` (About you), `workspace` (Your workspace) or `calendar` (Connect your calendar).
+- `areas` adds a sidebar row for each part of the product picked on About you (`booking` a calendar clock, `forms` a clipboard), under the calendar row, so the sketch shows the app shaped by the answers; the sketch with none picked is the calm one first run and sign in start with. The ring eases from one part to the next in `duration-move`; under reduced motion it moves at once.
 - It is decoration: hidden from assistive technology, since every word in it is something the person just typed and the form beside it already holds. It takes no focus.
 - It fills its slot, with a window that starts `space-32` in from the top and the start and runs off the end and the foot. Give it a slot at least as tall as `size-panel` plus twice `space-32` (it asks for that much itself).
 
 ## States
 
-Empty (bars for both names), the person named, the workspace named, both named, a long name (cut with an ellipsis), and each `focus`: person, workspace, calendar, or none. Light and dark. Loading, error, read only and disabled don't apply: it has no data of its own and takes no input.
+Empty (bars for both names), the person named, the workspace named, both named, a long name (cut with an ellipsis), with areas picked, and each `focus`: person, areas, workspace, calendar, or none. Light and dark. Loading, error, read only and disabled don't apply: it has no data of its own and takes no input.
 
 ## Keyboard
 

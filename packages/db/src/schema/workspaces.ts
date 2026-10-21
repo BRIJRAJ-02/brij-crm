@@ -5,6 +5,7 @@ import {
   bigint,
   foreignKey,
   integer,
+  jsonb,
   pgEnum,
   pgTable,
   primaryKey,
@@ -106,6 +107,30 @@ export const members = pgTable(
       .where(sql`${t.status} = 'active'`),
     actorCheck('members_created_by_actor', { type: t.createdByType, id: t.createdById, memberId: t.createdByMemberId }),
     actorCheck('members_updated_by_actor', { type: t.updatedByType, id: t.updatedById, memberId: t.updatedByMemberId }),
+  ],
+);
+
+/**
+ * A member's first run answers (spec 0036, About you): their role, team size
+ * and the areas they mean to use, as `OnboardingAnswers` in
+ * `@crm/contracts`. One row per member, written once with the workspace they
+ * start; read only for that member, never shown to others.
+ */
+export const memberOnboarding = pgTable(
+  'member_onboarding',
+  {
+    workspaceId: workspaceId(),
+    memberId: uuid('member_id').notNull(),
+    answers: jsonb('answers').notNull(),
+    createdAt: timestamptz('created_at').notNull().defaultNow(),
+  },
+  (t) => [
+    primaryKey({ name: 'member_onboarding_pkey', columns: [t.workspaceId, t.memberId] }),
+    foreignKey({
+      name: 'member_onboarding_member',
+      columns: [t.workspaceId, t.memberId],
+      foreignColumns: [members.workspaceId, members.id],
+    }),
   ],
 );
 

@@ -31,7 +31,7 @@ Ported from the artifact's Field card. Every text, number and link attribute is 
 - Typed numbers are parsed by the field set, never here (the input stays text, so nothing is lost to a JS number).
 - Stack fields with `space-16` between them in modals and panels.
 
-- `suggestions` offers values under the field as small secondary Buttons in a labelled group (`label`, `items`, `onPick`): first run's web address shows free addresses when the typed one is taken or the first choice was (spec 0036). Why a prop: the values belong to the field (they fill it), sit under its hint or error, and a Tag can't be pressed; the Buttons are the library's own, only the row is Field's CSS.
+- `suggestions` offers values under the field as small secondary Buttons in a labelled group (`label`, `items`, `onPick`; focus goes back to the field after a pick, since the buttons may go with the answer): first run's web address shows free addresses when the typed one is taken or the first choice was (spec 0036). Why a prop: the values belong to the field (they fill it), sit under its hint or error, and a Tag can't be pressed; the Buttons are the library's own, only the row is Field's CSS.
 - `autoFocus` takes focus as it mounts, for the search field at the top of a list that just opened.
 - Inside a `Form`, a refusal the form holds under the field's `name` shows here like `error`, until the person changes the field. A given `error` wins. The browser's own checks (`required`, `type="email"`) never show their messages: a required field is marked `aria-required`, and the screen or module says what is wrong in the library's words.
 

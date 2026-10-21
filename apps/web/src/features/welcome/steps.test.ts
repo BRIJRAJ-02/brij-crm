@@ -12,35 +12,43 @@ import {
 } from './steps.ts';
 
 describe('first run’s steps', () => {
-  it('are About you, Your workspace and Connect your calendar, without the calendar where sync is off', () => {
-    expect(welcomeSteps(true)).toEqual(['about', 'workspace', 'calendar']);
-    expect(welcomeSteps(false)).toEqual(['about', 'workspace']);
+  it('are Your name, About you, Your workspace, Invite your team and the calendar, without it where sync is off', () => {
+    expect(welcomeSteps(true)).toEqual(['about', 'details', 'workspace', 'invite', 'calendar']);
+    expect(welcomeSteps(false)).toEqual(['about', 'details', 'workspace', 'invite']);
     // Another workspace counts its own steps.
-    expect(welcomeSteps(true, true)).toEqual(['workspace', 'calendar']);
+    expect(welcomeSteps(true, true)).toEqual(['workspace', 'invite', 'calendar']);
   });
 
   it('go back from Your workspace only: the first step has nothing before it, and the workspace is made by then', () => {
     expect(previousStep('about')).toBeUndefined();
-    expect(previousStep('workspace')).toBe('about');
+    expect(previousStep('details')).toBe('about');
+    expect(previousStep('workspace')).toBe('details');
+    expect(previousStep('invite')).toBeUndefined();
     expect(previousStep('calendar')).toBeUndefined();
   });
 
   it('go on in order, and end after the last', () => {
-    expect(nextStep(welcomeSteps(true), 'about')).toBe('workspace');
-    expect(nextStep(welcomeSteps(true), 'workspace')).toBe('calendar');
-    expect(nextStep(welcomeSteps(false), 'workspace')).toBeUndefined();
+    expect(nextStep(welcomeSteps(true), 'about')).toBe('details');
+    expect(nextStep(welcomeSteps(true), 'details')).toBe('workspace');
+    expect(nextStep(welcomeSteps(true), 'workspace')).toBe('invite');
+    expect(nextStep(welcomeSteps(true), 'invite')).toBe('calendar');
+    expect(nextStep(welcomeSteps(false), 'invite')).toBeUndefined();
   });
 
-  it('show the calendar step once the workspace exists, and never before', () => {
+  it('show Invite your team and the calendar step once the workspace exists, and never before', () => {
     expect(shownStep(undefined, false)).toBe('about');
+    expect(shownStep('details', false)).toBe('details');
     expect(shownStep('workspace', false)).toBe('workspace');
     expect(shownStep('calendar', false)).toBe('about');
-    expect(shownStep('about', true)).toBe('calendar');
+    expect(shownStep('invite', false)).toBe('about');
+    expect(shownStep('about', true)).toBe('invite');
+    expect(shownStep('invite', true)).toBe('invite');
+    expect(shownStep('calendar', true)).toBe('calendar');
   });
 
   it('start another workspace at Your workspace (spec 0031)', () => {
     expect(shownStep(undefined, false, true)).toBe('workspace');
-    expect(shownStep('about', true, true)).toBe('calendar');
+    expect(shownStep('about', true, true)).toBe('invite');
   });
 });
 
@@ -55,7 +63,7 @@ describe('first run’s search', () => {
   });
 
   it('drops anything else: an unknown step, an address that breaks the rule, a result it doesn’t know', () => {
-    expect(welcomeSearch({ step: 'invite', workspace: '../evil', calendar: 'pwned' })).toEqual({});
+    expect(welcomeSearch({ step: 'nope', workspace: '../evil', calendar: 'pwned' })).toEqual({});
     expect(welcomeSearch({ step: 3, workspace: ['acme'], calendar: { connected: true } })).toEqual({});
   });
 
@@ -72,26 +80,25 @@ describe('where /welcome goes', () => {
   const beta = { id: 'w2', slug: 'beta', name: 'Beta' };
 
   it('starts the steps for someone with no workspace, whatever the address asks', () => {
-    expect(welcomeLanding([], undefined, true)).toEqual({ kind: 'steps', workspace: undefined });
-    expect(welcomeLanding([], 'acme', true)).toEqual({ kind: 'steps', workspace: undefined });
+    expect(welcomeLanding([], undefined)).toEqual({ kind: 'steps', workspace: undefined });
+    expect(welcomeLanding([], 'acme')).toEqual({ kind: 'steps', workspace: undefined });
   });
 
-  it('shows the calendar step for a workspace of their own, only where calendar sync is on', () => {
-    expect(welcomeLanding([acme, beta], 'beta', true)).toEqual({ kind: 'steps', workspace: beta });
-    expect(welcomeLanding([acme, beta], 'beta', false)).toEqual({ kind: 'open', slug: 'beta' });
+  it('keeps the steps after the workspace for one of their own', () => {
+    expect(welcomeLanding([acme, beta], 'beta')).toEqual({ kind: 'steps', workspace: beta });
   });
 
   it('passes over a workspace that isn’t theirs, opening their own', () => {
-    expect(welcomeLanding([acme], 'someone-elses', true)).toEqual({ kind: 'open', slug: 'acme' });
+    expect(welcomeLanding([acme], 'someone-elses')).toEqual({ kind: 'open', slug: 'acme' });
   });
 
   it('opens the first workspace for someone who has one and asks for none', () => {
-    expect(welcomeLanding([acme, beta], undefined, true)).toEqual({ kind: 'open', slug: 'acme' });
+    expect(welcomeLanding([acme, beta], undefined)).toEqual({ kind: 'open', slug: 'acme' });
   });
 
   it('opens the last used workspace it is given, and keeps the steps open for another (spec 0031)', () => {
-    expect(welcomeLanding([acme, beta], undefined, true, beta)).toEqual({ kind: 'open', slug: 'beta' });
-    expect(welcomeLanding([acme, beta], undefined, true, beta, true)).toEqual({ kind: 'steps', workspace: undefined });
-    expect(welcomeLanding([acme, beta], 'beta', false, acme, true)).toEqual({ kind: 'open', slug: 'beta' });
+    expect(welcomeLanding([acme, beta], undefined, beta)).toEqual({ kind: 'open', slug: 'beta' });
+    expect(welcomeLanding([acme, beta], undefined, beta, true)).toEqual({ kind: 'steps', workspace: undefined });
+    expect(welcomeLanding([acme, beta], 'beta', acme, true)).toEqual({ kind: 'steps', workspace: beta });
   });
 });

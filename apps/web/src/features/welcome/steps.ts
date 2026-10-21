@@ -14,10 +14,16 @@ export function isConnectResult(value: unknown): value is ConnectResult {
   return typeof value === 'string' && CONNECT_RESULTS.includes(value);
 }
 
-/** First run's steps, in order. "Invite your team" joins after spec 0031 slice 2. */
-export type WelcomeStep = 'about' | 'workspace' | 'calendar';
+/**
+ * First run's steps, in order: Your name (`about`), About you (`details`),
+ * Your workspace, Invite your team, Connect your calendar.
+ */
+export type WelcomeStep = 'about' | 'details' | 'workspace' | 'invite' | 'calendar';
 
-const STEPS: readonly WelcomeStep[] = ['about', 'workspace', 'calendar'];
+const STEPS: readonly WelcomeStep[] = ['about', 'details', 'workspace', 'invite', 'calendar'];
+
+/** The steps that come once the workspace exists. */
+const AFTER_WORKSPACE: readonly WelcomeStep[] = ['invite', 'calendar'];
 
 /**
  * The steps this deployment shows: Connect your calendar only where calendar
@@ -25,7 +31,9 @@ const STEPS: readonly WelcomeStep[] = ['about', 'workspace', 'calendar'];
  * workspace, so the steps about the person are left out of its count.
  */
 export function welcomeSteps(calendarSync: boolean, another = false): readonly WelcomeStep[] {
-  return STEPS.filter((step) => (calendarSync || step !== 'calendar') && (!another || step !== 'about'));
+  return STEPS.filter(
+    (step) => (calendarSync || step !== 'calendar') && (!another || (step !== 'about' && step !== 'details')),
+  );
 }
 
 /**
@@ -33,7 +41,7 @@ export function welcomeSteps(calendarSync: boolean, another = false): readonly W
  * the workspace exists the steps before it are done (AC-1209).
  */
 export function previousStep(step: WelcomeStep): WelcomeStep | undefined {
-  return step === 'workspace' ? 'about' : undefined;
+  return step === 'workspace' ? 'details' : step === 'details' ? 'about' : undefined;
 }
 
 /** The step after `step` in `steps`, or undefined after the last. */
@@ -66,15 +74,15 @@ export function welcomeSearch(search: Record<string, unknown>): WelcomeSearch {
 }
 
 /**
- * The step to show: the calendar step once the workspace is made (it is the
- * only step after it), else the step asked for, never the calendar step
- * without a workspace; About you when none is asked for.
+ * The step to show: once the workspace is made, Invite your team or the
+ * calendar step (the only steps after it); before, the step asked for, never
+ * one that needs the workspace; Your name when none is asked for.
  */
 export function shownStep(asked: WelcomeStep | undefined, hasWorkspace: boolean, another = false): WelcomeStep {
-  if (hasWorkspace) return 'calendar';
+  if (hasWorkspace) return asked === 'calendar' ? 'calendar' : 'invite';
   // Another workspace (spec 0031): the person is known already, so it starts at Your workspace.
   if (another) return 'workspace';
-  return asked === undefined || asked === 'calendar' ? 'about' : asked;
+  return asked === undefined || AFTER_WORKSPACE.includes(asked) ? 'about' : asked;
 }
 
 /** Where `/welcome` goes for a signed in person: first run's steps (with the workspace just made), or a workspace. */
@@ -92,13 +100,12 @@ export type WelcomeLanding<W> =
 export function welcomeLanding<W extends { readonly slug: string }>(
   workspaces: readonly W[],
   asked: string | undefined,
-  calendarSync: boolean,
   home: W | undefined = workspaces[0],
   another = false,
 ): WelcomeLanding<W> {
   const made = asked === undefined ? undefined : workspaces.find((each) => each.slug === asked);
-  if (made !== undefined && calendarSync) return { kind: 'steps', workspace: made };
-  if (made === undefined && another) return { kind: 'steps', workspace: undefined };
-  const opened = made ?? home;
-  return opened === undefined ? { kind: 'steps', workspace: undefined } : { kind: 'open', slug: opened.slug };
+  // Invite your team always follows the workspace, so the one just made keeps the steps open.
+  if (made !== undefined) return { kind: 'steps', workspace: made };
+  if (another) return { kind: 'steps', workspace: undefined };
+  return home === undefined ? { kind: 'steps', workspace: undefined } : { kind: 'open', slug: home.slug };
 }

@@ -19,10 +19,35 @@ export const strings = {
   skip: 'Skip',
   signOut: 'Sign out',
 
-  aboutTitle: 'About you',
-  aboutDescription: 'This is how your team sees you in Timefix.',
+  aboutTitle: 'Your name',
+  aboutDescription: 'How your team sees you in Timefix.',
   yourName: 'Your name',
   nameMissing: 'Enter your name, or skip this step.',
+
+  detailsTitle: 'About you',
+  detailsDescription: 'So Timefix starts with what you need. Only you see this.',
+  role: 'Your role',
+  roles: { founder: 'Founder', sales: 'Sales', marketing: 'Marketing', operations: 'Operations', other: 'Other' },
+  teamSize: 'Team size',
+  teamSizes: { solo: 'Just me', '2-10': '2 to 10', '11-50': '11 to 50', '51+': '51+' },
+  areas: 'What you’ll use Timefix for',
+  areaNames: { crm: 'CRM', booking: 'Booking meetings', forms: 'Forms', all: 'All of it' },
+
+  inviteTitle: 'Invite your team',
+  inviteDescription: 'They get an email with a link to join.',
+  inviteEmails: 'Emails',
+  inviteHint: 'Separate addresses with commas.',
+  invitePlaceholder: 'ada@example.com, grace@example.com',
+  sendInvites: 'Send invites',
+  sendingInvites: 'Sending invites',
+  noEmails: 'Add an email address, or skip this step.',
+  badEmails: (pieces: string) => `These aren’t email addresses: ${pieces}`,
+  tooManyEmails: 'Invite at most 20 people at once.',
+  invited: (count: number) =>
+    count === 0 ? 'No invites sent.' : count === 1 ? 'Invite sent.' : `${String(count)} invites sent.`,
+  invitedText: 'You can invite more from Settings › Members.',
+  inviteRefused: (emails: string) => `Already in the workspace: ${emails}`,
+  inviteUnsent: (emails: string) => `Not sent yet, try again from Settings › Members: ${emails}`,
 
   workspaceTitle: 'Your workspace',
   workspaceDescription: 'Your records live here. Name it for your team or company.',
@@ -41,6 +66,9 @@ export const strings = {
   /** Announced once a check settles, naming the address, so a screen reader hears which one it was. */
   addressFreeSaid: (slug: string) => `${slug} is free.`,
   addressTakenSaid: (slug: string) => `${slug} is taken.`,
+  addressOthers: (slugs: readonly string[]) => `Also free: ${slugs.join(', ')}.`,
+  /** The check couldn't answer (offline, too many checks): Create still has the last word. */
+  addressUnknown: 'Not checked. Create will check it.',
   possessive: (word: string) => `${word}’s workspace`,
   create: 'Create workspace',
   creating: 'Creating workspace',

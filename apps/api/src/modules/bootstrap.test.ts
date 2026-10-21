@@ -5,6 +5,7 @@ import { ORPCError } from '@orpc/client';
 import { afterAll, beforeAll, describe, expect, inject, it } from 'vitest';
 import type { Database, IdentityStore } from '@crm/db';
 import { testQuery } from '@crm/db/testing';
+import type { OnboardingAnswers } from '@crm/contracts';
 import { newId } from '@crm/core';
 import { newEmail, rpcClient, signIn, signInApp, testConnections } from '../../test/sign-in.ts';
 
@@ -87,6 +88,45 @@ describe('workspaces.create', () => {
       [input.id],
     );
     expect(events).toEqual([{ events: 0, seq: 0 }]);
+  });
+
+  it('keeps first run’s About you answers with the first member, once, and refuses an unknown answer', async () => {
+    const { client } = await signedIn();
+    const onboarding: OnboardingAnswers = { role: 'founder', teamSize: '2-10', areas: ['booking', 'crm'] };
+    const input = { id: newId(), name: 'Halcyon', slug: `halcyon-${tag()}`, memberName: 'Ada', onboarding };
+    await client.workspaces.create(input);
+    // A replay (a dropped response) writes nothing twice.
+    await client.workspaces.create(input);
+    const rows = await testQuery<{ answers: unknown; member: boolean }>(
+      ownerUrl,
+      `select o.answers, m.user_id is not null as member from member_onboarding o
+        join members m on m.workspace_id = o.workspace_id and m.id = o.member_id where o.workspace_id = $1`,
+      [input.id],
+    );
+    expect(rows).toEqual([{ answers: onboarding, member: true }]);
+    // Nothing answered: no row.
+    const skipped = {
+      id: newId(),
+      name: 'Quiet',
+      slug: `quiet-${tag()}`,
+      memberName: 'Ada',
+      onboarding: { areas: [] },
+    };
+    await client.workspaces.create(skipped);
+    expect(await testQuery(ownerUrl, 'select 1 from member_onboarding where workspace_id = $1', [skipped.id])).toEqual(
+      [],
+    );
+    const unknown = await failure(() =>
+      client.workspaces.create({
+        id: newId(),
+        name: 'Acme',
+        slug: `acme-${tag()}`,
+        memberName: 'Ada',
+        // @ts-expect-error: an answer first run never offers
+        onboarding: { role: 'astronaut' },
+      }),
+    );
+    expect(unknown).toMatchObject({ code: 'INPUT_INVALID', data: { issues: [{ path: ['onboarding', 'role'] }] } });
   });
 
   it('pokes the relay once the workspace is made, and not for a refused create', async () => {

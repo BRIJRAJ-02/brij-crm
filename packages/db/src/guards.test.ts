@@ -1649,3 +1649,33 @@ describe('the audit log (spec 0031, AC-830)', () => {
     );
   });
 });
+
+describe('first run answers (spec 0036)', () => {
+  it('let the app insert only a member’s answers and never read them, and no other role anything', async () => {
+    const table = await owner.query<{ privileges: string | null }>(`
+      select string_agg(p.privilege, ',' order by p.privilege) as privileges
+      from unnest(array['SELECT', 'INSERT', 'UPDATE', 'DELETE', 'TRUNCATE', 'REFERENCES', 'TRIGGER']) p(privilege)
+      where has_table_privilege('crm_app', 'public.member_onboarding', p.privilege)
+    `);
+    // Nothing on the table as a whole: the inserts are column grants.
+    expect(table.rows).toEqual([{ privileges: null }]);
+    const columns = await owner.query<{ grant: string }>(`
+      select coalesce(pg_get_userbyid(nullif(a.grantee, 0)), 'PUBLIC') || ' ' || a.privilege_type || ' ' || att.attname
+        as grant
+      from pg_attribute att, aclexplode(att.attacl) a
+      where att.attrelid = 'public.member_onboarding'::regclass and att.attnum > 0 and not att.attisdropped
+      order by att.attname, a.privilege_type
+    `);
+    expect(columns.rows.map((row) => row.grant)).toEqual([
+      'crm_app INSERT answers',
+      'crm_app INSERT member_id',
+      'crm_app INSERT workspace_id',
+    ]);
+    const others = await owner.query<{ grantee: string }>(`
+      select coalesce(pg_get_userbyid(nullif(a.grantee, 0)), 'PUBLIC') as grantee
+      from pg_class c, aclexplode(c.relacl) a
+      where c.oid = 'public.member_onboarding'::regclass and a.grantee not in (c.relowner, 'crm_app'::regrole)
+    `);
+    expect(others.rows).toEqual([]);
+  });
+});

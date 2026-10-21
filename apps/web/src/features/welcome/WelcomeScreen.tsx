@@ -2,9 +2,15 @@
 // Purpose: first run (spec 0036): a new person says who they are, names their workspace and may connect a calendar,
 // or (spec 0031) someone with a workspace makes another, starting at Your workspace,
 // watching the workspace take shape beside each step.
-// Main task: About you, then Your workspace (Create workspace), then Connect your calendar or skip, into People.
-// Leaves out: inviting the team (after spec 0031 slice 2), a photo (file storage), templates and use case questions.
-import { isDataError, type DataLayer, type SignedInUser, type WorkspaceSummary } from '@crm/data';
+// Main task: Your name, About you, Your workspace (Create workspace), Invite your team, then Connect your calendar,
+// into the workspace. Leaves out: a photo (file storage) and templates.
+import {
+  isDataError,
+  type DataLayer,
+  type OnboardingAnswers,
+  type SignedInUser,
+  type WorkspaceSummary,
+} from '@crm/data';
 import { AuthLayout, Button, ButtonLink, Steps, WorkspacePreview, type WorkspacePreviewFocus } from '@crm/ui';
 import { useNavigate, useRouter } from '@tanstack/react-router';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
@@ -15,6 +21,9 @@ import { focusPage } from '../navigation/focus.ts';
 import { PRODUCT_LOGO } from '../../brand.ts';
 import { AboutStep } from './AboutStep.tsx';
 import { CalendarStep } from './CalendarStep.tsx';
+import { answersToSend } from './details.ts';
+import { DetailsStep } from './DetailsStep.tsx';
+import { InviteStep } from './InviteStep.tsx';
 import { clearDraft, readDraft, saveDraft } from './draft.ts';
 import { addressCandidates, memberNameFor, suggestedWorkspaceName } from './names.ts';
 import { refusalsOf, type WelcomeRefusal } from './refusals.ts';
@@ -26,14 +35,18 @@ import { WorkspaceStep } from './WorkspaceStep.tsx';
 /** Each step's title and the line under it. */
 const COPY: Readonly<Record<WelcomeStep, { readonly title: string; readonly description: string }>> = {
   about: { title: strings.aboutTitle, description: strings.aboutDescription },
+  details: { title: strings.detailsTitle, description: strings.detailsDescription },
   workspace: { title: strings.workspaceTitle, description: strings.workspaceDescription },
+  invite: { title: strings.inviteTitle, description: strings.inviteDescription },
   calendar: { title: strings.calendarTitle, description: strings.calendarDescription },
 };
 
 /** The part of the preview each step is about. */
 const FOCUS: Readonly<Record<WelcomeStep, WorkspacePreviewFocus>> = {
   about: 'person',
+  details: 'areas',
   workspace: 'workspace',
+  invite: 'workspace',
   calendar: 'calendar',
 };
 
@@ -78,6 +91,7 @@ export function WelcomeScreen({
   const [draft] = useState(() => readDraft(storage, user.id));
   const [id, setId] = useState(() => draft?.workspaceId ?? data.workspaces.newId());
   const [memberName, setMemberName] = useState(draft?.memberName ?? user.name);
+  const [answers, setAnswers] = useState<OnboardingAnswers>(draft?.answers ?? {});
   // The workspace name follows the person's name, and the address the workspace name, until each is edited.
   const [typedName, setTypedName] = useState<string | undefined>(draft?.workspaceName);
   const [typedSlug, setTypedSlug] = useState<string | undefined>(draft?.slug);
@@ -104,8 +118,9 @@ export function WelcomeScreen({
       memberName,
       ...(typedName === undefined ? {} : { workspaceName: typedName }),
       ...(typedSlug === undefined ? {} : { slug: typedSlug }),
+      answers,
     });
-  }, [storage, user.id, id, memberName, typedName, typedSlug, workspace]);
+  }, [storage, user.id, id, memberName, typedName, typedSlug, answers, workspace]);
 
   // Back from Google with the browser's back button, the page comes out of the back/forward cache as it was
   // left: "Opening Google". Start over.
@@ -125,6 +140,7 @@ export function WelcomeScreen({
   useEffect(() => {
     if (focusedStep.current === step) return;
     focusedStep.current = step;
+    // The calendar and Invite your team's sent state put focus on their own first button.
     if (step !== 'calendar') focusPage(document, '/welcome');
   }, [step]);
 
@@ -138,6 +154,8 @@ export function WelcomeScreen({
     cameFrom.current = step;
     void navigate({ to: '/welcome', search: { step: next } });
   };
+  // Another workspace keeps its own count (and its way back) through the steps after the workspace.
+  const another = leaveTo === undefined ? {} : { another: true as const };
   const goBack = () => {
     if (back === undefined) return;
     if (cameFrom.current === back) {
@@ -147,8 +165,8 @@ export function WelcomeScreen({
     }
     void navigate({ to: '/welcome', search: { step: back }, replace: true });
   };
-  const afterAbout = () => {
-    const next = nextStep(steps, 'about');
+  const after = (done: WelcomeStep) => {
+    const next = nextStep(steps, done);
     if (next !== undefined) goTo(next);
   };
 
@@ -156,25 +174,43 @@ export function WelcomeScreen({
     setCreating(true);
     setRefusals([]);
     const memberNameSent = memberNameFor(memberName, user.name, user.email);
-    data.workspaces.create({ id, name: name.trim(), slug, memberName: memberNameSent }).then(
-      async ({ workspace: made }) => {
-        clearDraft(storage);
-        if (!calendarSync) {
-          void navigate({ to: '/w/$slug', params: { slug: made.slug }, replace: true });
-          return;
-        }
-        // The calendar step loads with the new workspace before it shows, so the card goes straight to it.
-        const calendarStep = { to: '/welcome', search: { step: 'calendar', workspace: made.slug } } as const;
-        await router.preloadRoute(calendarStep).catch(() => undefined);
-        void navigate({ ...calendarStep, replace: true });
-      },
-      (failure: unknown) => {
-        // Someone else's workspace has this id (vanishingly rare): the next try gets a new one.
-        if (isDataError(failure) && failure.code === 'ID_TAKEN') setId(data.workspaces.newId());
-        setCreating(false);
-        setRefusals(refusalsOf(failure));
-      },
-    );
+    const onboarding = answersToSend(answers);
+    data.workspaces
+      .create({
+        id,
+        name: name.trim(),
+        slug,
+        memberName: memberNameSent,
+        ...(onboarding === undefined ? {} : { onboarding }),
+      })
+      .then(
+        async ({ workspace: made }) => {
+          clearDraft(storage);
+          // Invite your team loads with the new workspace before it shows, so the card goes straight to it.
+          const inviteStep = { to: '/welcome', search: { step: 'invite', workspace: made.slug, ...another } } as const;
+          await router.preloadRoute(inviteStep).catch(() => undefined);
+          void navigate({ ...inviteStep, replace: true });
+        },
+        (failure: unknown) => {
+          // Someone else's workspace has this id (vanishingly rare): the next try gets a new one.
+          if (isDataError(failure) && failure.code === 'ID_TAKEN') setId(data.workspaces.newId());
+          setCreating(false);
+          setRefusals(refusalsOf(failure));
+        },
+      );
+  };
+
+  const afterInvite = () => {
+    if (workspace === undefined) return;
+    if (!calendarSync) {
+      void navigate({ to: '/w/$slug', params: { slug: workspace.slug }, replace: true });
+      return;
+    }
+    void navigate({
+      to: '/welcome',
+      search: { step: 'calendar', workspace: workspace.slug, ...another },
+      replace: true,
+    });
   };
 
   const connect = () => {
@@ -234,11 +270,14 @@ export function WelcomeScreen({
             personName={shownName}
             personId={user.id}
             focus={FOCUS[step]}
+            areas={(answers.areas ?? []).filter((area) => area !== 'crm')}
           />
         }
         account={user.email}
         footer={
-          leaveTo === undefined ? (
+          // Back leaves for the workspace the person came from, only until the new one exists: after that, the
+          // steps' own Skip for now opens the new one.
+          leaveTo === undefined || workspace !== undefined ? (
             <Button
               variant="link"
               onPress={() => {
@@ -261,8 +300,25 @@ export function WelcomeScreen({
             onMemberName={setMemberName}
             shownName={shownName}
             userId={user.id}
-            onContinue={afterAbout}
-            onSkip={afterAbout}
+            onContinue={() => {
+              after('about');
+            }}
+            onSkip={() => {
+              after('about');
+            }}
+          />
+        )}
+        {step === 'details' && (
+          <DetailsStep
+            answers={answers}
+            onAnswers={setAnswers}
+            onContinue={() => {
+              after('details');
+            }}
+            onSkip={() => {
+              setAnswers({});
+              after('details');
+            }}
           />
         )}
         {step === 'workspace' && (
@@ -275,6 +331,9 @@ export function WelcomeScreen({
             refusals={refusals}
             onCreate={create}
           />
+        )}
+        {step === 'invite' && workspace !== undefined && (
+          <InviteStep data={data} slug={workspace.slug} onDone={afterInvite} />
         )}
         {step === 'calendar' && (
           <CalendarStep result={calendarResult} onConnect={connect} isConnecting={isConnecting} onFinish={finish} />

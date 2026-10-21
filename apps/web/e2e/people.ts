@@ -56,29 +56,45 @@ export async function checkScreen(page: Page, name: string): Promise<void> {
   await page.emulateMedia({ colorScheme: 'light' });
 }
 
+/** First run's About you (spec 0036): every answer is optional, so Skip goes on to Your workspace. */
+export async function skipDetailsStep(page: Page): Promise<void> {
+  await expect(page.getByRole('heading', { level: 1, name: 'About you' })).toBeVisible();
+  await page.getByRole('button', { name: 'Skip', exact: true }).click();
+}
+
 /**
- * Where calendar sync is on, first run asks for a calendar last (spec 0036): Skip for now opens People. Where it is
- * off (CI), Create workspace opens People itself. Either way, this waits for one or the other and goes on to People.
+ * After Create workspace, first run asks to invite the team, then (where calendar sync is on) for a calendar (spec
+ * 0036): Skip for now on each opens People. This waits for whichever comes and goes on to People.
  */
 export async function skipCalendarStep(page: Page): Promise<void> {
+  const invite = page.getByRole('heading', { level: 1, name: 'Invite your team' });
   const calendar = page.getByRole('heading', { level: 1, name: 'Connect your calendar' });
+  const settled = async () =>
+    /\/objects\/people/.test(page.url()) || (await invite.isVisible()) || (await calendar.isVisible());
   await expect
-    .poll(async () => /\/objects\/people/.test(page.url()) || (await calendar.isVisible()), {
-      timeout: WORKSPACE_MADE_MS,
-      message: 'People, or first run’s calendar step',
-    })
+    .poll(settled, { timeout: WORKSPACE_MADE_MS, message: 'People, or first run’s invite or calendar step' })
     .toBe(true);
+  if (await invite.isVisible()) {
+    await page.getByRole('button', { name: 'Skip for now' }).click();
+    await expect
+      .poll(async () => /\/objects\/people/.test(page.url()) || (await calendar.isVisible()), {
+        timeout: WORKSPACE_MADE_MS,
+        message: 'People, or first run’s calendar step',
+      })
+      .toBe(true);
+  }
   if (await calendar.isVisible()) await page.getByRole('button', { name: 'Skip for now' }).click();
 }
 
 /**
- * First run (spec 0036) from its first step: About you as `name`, then Your workspace at `slug` (its name following
+ * First run (spec 0036) from its first step: Your name as `name`, About you skipped, then Your workspace at `slug` (its name following
  * yours), then past the calendar step where there is one, landing on People.
  */
 export async function firstRun(page: Page, slug: string, name = 'Ada Lovelace'): Promise<void> {
   await expect(page).toHaveURL(/\/welcome$/);
   await page.getByLabel('Your name').fill(name);
   await page.getByRole('button', { name: 'Continue', exact: true }).click();
+  await skipDetailsStep(page);
   await page.getByLabel('Web address').fill(slug);
   await page.getByRole('button', { name: 'Create workspace' }).click();
   await skipCalendarStep(page);
