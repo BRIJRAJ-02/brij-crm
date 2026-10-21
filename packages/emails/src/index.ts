@@ -3,13 +3,14 @@
 // layout draws the words as HTML and plain text, and nothing here sends: the
 // api's mailer does, from the request (a sign in code, an invitation) or the
 // worker (a booking's emails, and the queued kinds through `crm_email`).
-import { EMAIL_PARAMS, MemberInviteEmail, type EmailKind } from '@crm/contracts/emails';
+import { EMAIL_PARAMS, MemberInviteEmail, NotificationsEmail, type EmailKind } from '@crm/contracts/emails';
 import { CATALOG, topicOf } from './catalog.ts';
 import { appUrl, type EmailMedium } from './links.ts';
 import { renderDocument, type RenderedEmail } from './render.ts';
 import type { Template, TemplateContext } from './template.ts';
 import { bookingDocument, type BookingWords } from './templates/booking.ts';
 import { memberInvite } from './templates/invite.ts';
+import { notifications } from './templates/notifications.ts';
 import { SIGN_IN_CODE_MINUTES, signInCode } from './templates/sign-in-code.ts';
 
 export { CATALOG, topicOf, type Catalog, type CatalogEntry } from './catalog.ts';
@@ -29,7 +30,7 @@ export { emailStylesheet, paint, ROLE_NAMES, type Role } from './theme.ts';
 export type { Template, TemplateContext } from './template.ts';
 export { SIGN_IN_CODE_MINUTES, SIGN_IN_CODE_SUBJECT } from './templates/sign-in-code.ts';
 export type { BookingWords } from './templates/booking.ts';
-export type { MemberInviteEmail } from '@crm/contracts/emails';
+export type { MemberInviteEmail, NotificationsEmail } from '@crm/contracts/emails';
 
 /** What drawing an email needs besides its params, filled in by its sender at send time. */
 export interface EmailContext {
@@ -113,4 +114,23 @@ export async function renderMemberInvite(
     }),
     { appOrigin: context.appOrigin, medium: 'email_invite' },
   );
+}
+
+/**
+ * The notifications email (spec 0038), from the worker's email task: its
+ * params checked by `NotificationsEmail` (every link an app path), drawn on the
+ * shared layout with the member's notification settings in the footer, and
+ * tagged `email_mention`.
+ */
+export async function renderNotificationsEmail(
+  params: NotificationsEmail,
+  context: { readonly appOrigin: string; readonly workspaceName: string },
+): Promise<RenderedEmail> {
+  const parsed = NotificationsEmail.parse(params);
+  const link = (path: string) => appUrl(context.appOrigin, path);
+  return renderDocument(notifications(parsed, { workspaceName: context.workspaceName, link }), {
+    appOrigin: context.appOrigin,
+    medium: 'email_mention',
+    preferencesUrl: link(parsed.settingsPath),
+  });
 }

@@ -13,13 +13,6 @@ import type { NotificationKind } from '@crm/contracts';
 import { uuidList } from '../engine/ids.ts';
 import type { WriteContext } from '../engine/write.ts';
 
-/**
- * Whether writes queue the email task (milestone 3). Off until the worker's
- * `crm_notification_email` task ships, so no job waits for a task nobody runs
- * and then sends weeks of old notifications at once.
- */
-const emailOn = (): boolean => false;
-
 /** The settings column that says whether a kind is emailed. */
 const EMAIL_COLUMN: Readonly<Record<NotificationKind, string>> = {
   mention: 'email_mentions',
@@ -98,18 +91,16 @@ export async function notifyComment(context: WriteContext, notice: CommentNotice
   if (made.length === 0) return [];
   const recipients = made.map((row) => row.member_id);
   context.record({ notifications: recipients });
-  if (emailOn()) {
-    await queueEmail(
-      context,
-      made.filter((row) => row.kind === 'mention').map((row) => row.member_id),
-      'mention',
-    );
-    await queueEmail(
-      context,
-      made.filter((row) => row.kind === 'reply').map((row) => row.member_id),
-      'reply',
-    );
-  }
+  await queueEmail(
+    context,
+    made.filter((row) => row.kind === 'mention').map((row) => row.member_id),
+    'mention',
+  );
+  await queueEmail(
+    context,
+    made.filter((row) => row.kind === 'reply').map((row) => row.member_id),
+    'reply',
+  );
   return recipients;
 }
 
@@ -168,7 +159,7 @@ export async function notifyTaskAssigned(
     `);
     const recipients = made.rows.map((row) => row.member_id);
     changed.push(...recipients);
-    if (emailOn()) await queueEmail(context, recipients, 'task_assigned');
+    await queueEmail(context, recipients, 'task_assigned');
   }
   if (changed.length > 0) context.record({ notifications: changed });
 }

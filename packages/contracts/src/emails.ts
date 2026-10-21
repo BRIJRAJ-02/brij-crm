@@ -313,3 +313,32 @@ export const EmailUnsubscribed = z.strictObject({
 });
 /** A one click unsubscribe's answer. */
 export type EmailUnsubscribed = z.infer<typeof EmailUnsubscribed>;
+/** One notification as an email lists it: what happened, about what, its words, and where it opens. */
+export const NotificationEmailItem = z.strictObject({
+  /** "Ada Lovelace mentioned you". */
+  sentence: Line,
+  /** The record it is about, by name, when there is one. */
+  recordName: Line.optional(),
+  /** The comment's start, mentions as "@Name", or the task's title; at most 200 characters. */
+  excerpt: z.string().max(200),
+  /** Where it opens: the comment's thread on its record, or the task over the inbox. */
+  path: AppPath,
+});
+/** One notification in an email. */
+export type NotificationEmailItem = z.infer<typeof NotificationEmailItem>;
+
+/**
+ * The notifications email (spec 0038, AC-1176, AC-1177): a member's unread
+ * notifications not yet emailed, newest first, read as that member when the
+ * email task runs, so it never holds what they can't read at that moment.
+ */
+export const NotificationsEmail = z.strictObject({
+  items: z.array(NotificationEmailItem).min(1).max(20),
+  /** More waiting past the ones listed, which the inbox shows. */
+  more: z.number().int().min(0),
+  inboxPath: AppPath,
+  /** Settings › Account › Notifications, the footer's preferences link. */
+  settingsPath: AppPath,
+});
+/** The notifications email's params. */
+export type NotificationsEmail = z.infer<typeof NotificationsEmail>;

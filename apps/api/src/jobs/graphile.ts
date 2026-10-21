@@ -32,6 +32,7 @@ import * as z from 'zod';
 import { errorFields } from '../log.ts';
 import { BOOKING_MAIL_TASK } from './booking-mail.ts';
 import { EMAIL_TASK, EmailPayload, type EmailRun, type EmailTry } from './email.ts';
+import { NOTIFICATION_EMAIL_TASK } from './notification-email.ts';
 
 /** The two lanes: their task and how many slices each runs at once (AC-108). */
 export const LANES = {
@@ -59,7 +60,13 @@ export const CALENDAR_TASK = 'crm_calendar_sync';
  * them, and `EMAIL_TASK` when queued email is on (`runnerTasks`); off, their
  * rows wait and never wake a worker that won't run them.
  */
-export const RUNNER_TASKS: readonly string[] = [LANES.heavy.task, LANES.light.task, DAILY_TASK, BOOKING_MAIL_TASK];
+export const RUNNER_TASKS: readonly string[] = [
+  LANES.heavy.task,
+  LANES.light.task,
+  DAILY_TASK,
+  BOOKING_MAIL_TASK,
+  NOTIFICATION_EMAIL_TASK,
+];
 
 /**
  * The tasks this worker runs: calendar sync's when it is on, and queued
@@ -151,6 +158,11 @@ export interface JobRunnersOptions {
    * `crm_email`, and throws plainly on `retry` for Graphile's backoff.
    */
   readonly email?: (payload: unknown, attempt: EmailTry) => Promise<EmailRun>;
+   * Notifications emails (spec 0038, milestone 3): one member's email
+   * (`runNotificationEmail` with the worker's deps). With it, the light runner
+   * takes `crm_notification_email`; it throws plainly for a retry.
+   */
+  readonly notificationEmail?: (payload: unknown) => Promise<void>;
   /**
    * Hears every task call start and end (the worker's idle clock starts
    * again, spec 0008's sleep): a slice, or the daily task.
@@ -373,6 +385,7 @@ export async function startJobRunners(options: JobRunnersOptions): Promise<JobRu
       const calendar = lane === LANES.light ? options.calendar : undefined;
       const bookingMail = lane === LANES.light ? options.bookingMail : undefined;
       const email = lane === LANES.light ? options.email : undefined;
+      const notificationEmail = lane === LANES.light ? options.notificationEmail : undefined;
       runners.push(
         watch(
           await run({
@@ -395,6 +408,15 @@ export async function startJobRunners(options: JobRunnersOptions): Promise<JobRu
               ...(email === undefined
                 ? {}
                 : { [EMAIL_TASK]: counted(emailTask(options, email), inFlight, options.onActivity) }),
+              ...(notificationEmail === undefined
+                ? {}
+                : {
+                    [NOTIFICATION_EMAIL_TASK]: counted(
+                      (payload) => notificationEmail(payload),
+                      inFlight,
+                      options.onActivity,
+                    ),
+                  }),
             },
             ...(daily === undefined ? {} : { crontab: DAILY_CRONTAB }),
             // Completions and failures go through Graphile's batcher (with no wait), which a stop flushes before

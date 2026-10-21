@@ -477,3 +477,59 @@ export async function deleteMemberNotifications(context: WriteContext, memberId:
   await context.tx.execute(sql`delete from notification_settings where member_id = ${memberId}::uuid`);
   if ((removed.rowCount ?? 0) > 0) context.record({ notifications: [memberId] });
 }
+
+/** At most this many notifications in one email; the rest wait for the next one. */
+export const NOTIFICATION_EMAIL_MAX = 20;
+
+/** How far one email's read looks: unemailed rows past this wait for the next email. */
+const NOTIFICATION_EMAIL_READ = 200;
+
+/** What one email holds: the caller's notifications to send, newest first, and how many more wait. */
+export interface NotificationEmailBatch {
+  readonly items: readonly NotificationView[];
+  readonly more: number;
+}
+
+/**
+ * The caller's notifications an email may carry now (AC-1176, AC-1177): unread,
+ * not done, not yet emailed, of a kind whose email the caller has on, and that
+ * they may see at this moment (the inbox's own rule, read as them). At most
+ * `NOTIFICATION_EMAIL_MAX`, newest first; `more` counts the rest.
+ */
+export async function unemailedNotifications(scope: EngineScope): Promise<NotificationEmailBatch> {
+  checkScope(scope);
+  const me = callerOf(scope);
+  if (me === undefined) return { items: [], more: 0 };
+  return inWorkspace(scope, async (tx) => {
+    const settings = settingsOf(await settingsRow(tx, me));
+    const kinds: NotificationKind[] = [
+      ...(settings.emailMentions ? (['mention'] as const) : []),
+      ...(settings.emailReplies ? (['reply'] as const) : []),
+      ...(settings.emailAssignments ? (['task_assigned'] as const) : []),
+    ];
+    if (kinds.length === 0) return { items: [], more: 0 };
+    const rows = await tx.execute<NotificationRow>(sql`
+      select ${NOTIFICATION_COLUMNS}, ${micros('n.created_at')} as at
+      from notifications n ${COMMENT_JOIN}
+      where n.member_id = ${me}::uuid and n.read_at is null and n.done_at is null and n.emailed_at is null
+        and n.kind = any(${`{${kinds.join(',')}}`}::notification_kind[])
+      order by n.created_at desc, n.id desc
+      limit ${NOTIFICATION_EMAIL_READ}
+    `);
+    const views = await visibleViews(tx, scope, rows.rows);
+    return { items: views.slice(0, NOTIFICATION_EMAIL_MAX), more: Math.max(views.length - NOTIFICATION_EMAIL_MAX, 0) };
+  });
+}
+
+/** Marks the caller's notifications emailed, once an email holding them went (never twice: AC-1176). */
+export async function markEmailed(scope: EngineScope, ids: readonly string[]): Promise<void> {
+  checkScope(scope);
+  const me = callerOf(scope);
+  if (me === undefined || ids.length === 0) return;
+  await inWorkspace(scope, async (tx) => {
+    await tx.execute(sql`
+      update notifications set emailed_at = now()
+      where member_id = ${me}::uuid and id = any(${uuidList(ids)}) and emailed_at is null
+    `);
+  });
+}

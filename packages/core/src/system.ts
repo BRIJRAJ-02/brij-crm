@@ -42,3 +42,5 @@ export { BOOKING_MAIL_KINDS, type BookingMailKind } from './booking/mail-queue.t
 // signs the preferences link it draws into an optional email.
 export { finishEmail, loadEmail, type EmailOutcome, type EmailToSend, type LoadedEmail } from './emails/send.ts';
 export { emailLinkToken } from './emails/preferences.ts';
+export { prepareNotificationEmail, type PreparedNotificationEmail } from './notifications/email.ts';
+export { markEmailed, NOTIFICATION_EMAIL_MAX } from './notifications/inbox.ts';

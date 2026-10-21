@@ -9,6 +9,7 @@ import { sql } from 'drizzle-orm';
 import { afterAll, beforeAll, describe, expect, inject, it } from 'vitest';
 import { mentionToken } from '@crm/contracts';
 import { createDatabase, type Database } from '@crm/db';
+import { NO_RULE_SOURCE } from '../access/door.ts';
 import type { AccessRules } from '../access/policy.ts';
 import { deleteRecord, purgeRecords, restoreRecord } from '../engine/deletion.ts';
 import { newId } from '../engine/ids.ts';
@@ -23,9 +24,11 @@ import {
   getNotificationSettings,
   listNotifications,
   markAllRead,
+  markEmailed,
   markNotifications,
   setNotificationSettings,
 } from '../notifications/inbox.ts';
+import { prepareNotificationEmail } from '../notifications/email.ts';
 import { createTask, updateTask } from '../tasks/tasks.ts';
 import { rescope, testScope } from '../testing.ts';
 import {
@@ -528,5 +531,47 @@ describe('the purge and removed members (AC-1160, AC-1168)', () => {
       tx.execute(sql`select 1 from notification_settings`),
     );
     expect(settings.rows).toEqual([]);
+  });
+});
+
+describe('the notifications email (AC-1176, AC-1177)', () => {
+  it('holds what is due as the member sees it, mentions named, and never sends one twice', async () => {
+    const w = await workspace();
+    const acme = await w.company('Acme');
+    const thread = await createComment(
+      w.scope,
+      { id: newId(), recordId: acme, body: `Over to ${mentionToken(w.bea)} and ${mentionToken(w.cal)}` },
+      hooks(),
+    );
+    const door = { db, rules: NO_RULE_SOURCE };
+    const prepared = await prepareNotificationEmail(door, { workspaceId: w.scope.workspaceId, memberId: w.bea });
+    if (prepared.skipped !== undefined) throw new Error(`Skipped: ${prepared.skipped}`);
+    expect(prepared.to.email).toBe('bea@example.com');
+    const [item, ...others] = prepared.params.items;
+    expect(others).toEqual([]);
+    expect(item?.sentence).toBe('Ada mentioned you');
+    expect(item?.recordName).toBe('Acme');
+    expect(item?.excerpt).toBe('Over to @Bea and @Cal');
+    expect(item?.path).toMatch(
+      new RegExp(`^/w/comments-[^/]+/objects/companies/${acme}/comments\\?thread=${thread.id}$`),
+    );
+    expect(prepared.params.inboxPath).toMatch(/^\/w\/comments-[^/]+\/inbox$/);
+    await markEmailed(prepared.scope, prepared.ids);
+    expect((await prepareNotificationEmail(door, { workspaceId: w.scope.workspaceId, memberId: w.bea })).skipped).toBe(
+      'nothing',
+    );
+    // Replies are off by default; a read one is left out; a removed member gets nothing.
+    await markNotifications(
+      w.as(w.cal),
+      { ids: (await listNotifications(w.as(w.cal), { status: 'inbox' })).items.map((n) => n.id), read: true },
+      hooks(),
+    );
+    expect((await prepareNotificationEmail(door, { workspaceId: w.scope.workspaceId, memberId: w.cal })).skipped).toBe(
+      'nothing',
+    );
+    await removeMember(w.scope, { memberId: w.bea }, hooks());
+    expect((await prepareNotificationEmail(door, { workspaceId: w.scope.workspaceId, memberId: w.bea })).skipped).toBe(
+      'removed',
+    );
   });
 });
