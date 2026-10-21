@@ -216,10 +216,22 @@ export function Field({
     // A value to copy is taken whole: focusing it selects all of it, ready for ⌘C.
     ...(isCopy
       ? {
-          // After the press that focused it, whose mouseup would otherwise drop the selection.
-          onFocus: (event: { readonly currentTarget: HTMLInputElement | HTMLTextAreaElement }) => {
+          // A press that would focus it focuses and selects it itself: the browser's own press would
+          // place a caret on mouseup and drop the selection (Firefox does, whenever the mouseup comes
+          // after a frame). A press inside a focused value still places a caret, to select a part.
+          onMouseDown: (event: {
+            readonly currentTarget: HTMLInputElement | HTMLTextAreaElement;
+            readonly preventDefault: () => void;
+          }) => {
             const input = event.currentTarget;
-            requestAnimationFrame(() => input.select());
+            if (input.ownerDocument.activeElement === input) return;
+            event.preventDefault();
+            input.focus();
+            input.select();
+          },
+          // Keyboard focus (Tab) selects it too.
+          onFocus: (event: { readonly currentTarget: HTMLInputElement | HTMLTextAreaElement }) => {
+            event.currentTarget.select();
           },
         }
       : {}),

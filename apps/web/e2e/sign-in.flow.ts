@@ -126,8 +126,12 @@ async function confirmSignOut(page: Page): Promise<void> {
   await page.keyboard.press('Enter');
 }
 
-/** Signs out from the workspace menu, by keyboard, and waits for /sign-in. */
+/**
+ * Signs out from the workspace menu, by keyboard, and waits for /sign-in. It waits for the page's heading first:
+ * a page still loading draws its own frame, which the loaded page replaces, menu and confirm with it.
+ */
 async function signOut(page: Page): Promise<void> {
+  await expect(page.getByRole('main').getByRole('heading', { level: 1 })).toBeVisible();
   const button = page.getByRole('button', { name: /workspace menu/ });
   await button.focus();
   await page.keyboard.press('Enter');
