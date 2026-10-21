@@ -92,6 +92,11 @@ export const strings = {
   records: (count: string) => `${count} records`,
   showMore: 'Show more',
   emptyTitle: 'No background jobs yet',
+  /** Under the empty title: what shows here, every job for owners and admins, the person's own for everyone else. */
+  emptyText: 'Long work in this workspace, such as bulk changes, shows here as it runs.',
+  emptyTextMine: 'Long work you start, such as bulk changes, shows here as it runs.',
+  /** Beside the title for members, who see only the jobs they started (the page had no description after 21 October 2026). */
+  mineBadge: 'Only yours',
   failedTitle: 'Couldn’t load the background jobs',
   failedText: 'Something went wrong. Try again in a moment.',
   /** Local and previews only (AC-123). */

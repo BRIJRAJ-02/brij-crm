@@ -227,8 +227,9 @@ export function JobsScreen({ data, slug, view, isAll, members: loaded, canRunTes
           renderCell={renderCell}
           isLoading={snapshot.status === 'loading'}
           emptyState={
-            // The page's description already says what runs here.
-            <EmptyState icon="list-checks" title={strings.emptyTitle} />
+            <EmptyState icon="list-checks" title={strings.emptyTitle}>
+              {isAll ? strings.emptyText : strings.emptyTextMine}
+            </EmptyState>
           }
         />
         {snapshot.hasMore && (
@@ -252,6 +253,7 @@ export function JobsScreen({ data, slug, view, isAll, members: loaded, canRunTes
   return (
     <SettingsPage
       title={strings.title}
+      {...(isAll ? {} : { meta: <Badge text={strings.mineBadge} /> })}
       {...(canRunTest
         ? {
             actions: (
@@ -418,10 +420,10 @@ function JobConfirm({
 
 /** Settings, Background jobs while it loads: the frame, the header and skeleton rows in their places. */
 export function JobsPending() {
-  // The description the page arrives with, so the table doesn't move down when it does.
+  // The columns and badge the page arrives with, so nothing moves when it does.
   const isAll = useCan('jobs.manage');
   return (
-    <SettingsPage title={strings.title}>
+    <SettingsPage title={strings.title} {...(isAll ? {} : { meta: <Badge text={strings.mineBadge} /> })}>
       <Table
         label={strings.tableLabel}
         columns={isAll ? COLUMNS : COLUMNS.filter((column) => column.id !== 'startedBy')}
