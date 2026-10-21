@@ -114,6 +114,7 @@ interface Behaviour {
   me: () => Me | Promise<Me>;
   objects: (workspace: string) => ObjectSummary[];
   create: () => { workspace: Me['workspaces'][number] };
+  slugAvailable: (slug: string) => { available: boolean };
   members: () => MemberView[];
   access: () => MyAccess;
   attributes: () => AttributeDefinition[];
@@ -175,6 +176,7 @@ function fakeApi(overrides: Partial<Behaviour> = {}, auth: (path: string, body: 
     me: () => ME,
     objects: () => [PEOPLE],
     create: () => ({ workspace: { id: '0199a6f2-0000-7000-8000-000000000009', slug: 'new', name: 'New' } }),
+    slugAvailable: (slug) => ({ available: slug !== 'acme' }),
     members: () => [ADA_MEMBER],
     access: () => ({ memberId: ADA_MEMBER.id, role: 'member', roleLabel: 'Member', permissions: ['records.export'] }),
     attributes: () => [TITLE],
@@ -222,6 +224,7 @@ function fakeApi(overrides: Partial<Behaviour> = {}, auth: (path: string, body: 
         environment: 'local' as const,
         database: { serverVersion: '18.0', latencyMs: 1 },
         providers: { google: false },
+        calendarSync: false,
         checkedAt: '2026-10-03T09:00:00.000Z',
       })),
       testFault: os.system.testFault.handler(notServed),
@@ -232,7 +235,10 @@ function fakeApi(overrides: Partial<Behaviour> = {}, auth: (path: string, body: 
         calls.push(`me.setLastWorkspace:${input.workspace}`);
       }),
     },
-    workspaces: { create: os.workspaces.create.handler(() => behaviour.create()) },
+    workspaces: {
+      create: os.workspaces.create.handler(() => behaviour.create()),
+      slugAvailable: os.workspaces.slugAvailable.handler(({ input }) => behaviour.slugAvailable(input.slug)),
+    },
     objects: {
       list: os.objects.list.handler(({ input }) => behaviour.objects(input.workspace)),
       create: os.objects.create.handler(({ input }) => {
@@ -1569,6 +1575,25 @@ describe('workspaces.create', () => {
     await data.workspaces.create(input);
     await data.me.get();
     expect(count(api.calls, '/api/rpc/me/get')).toBe(2);
+  });
+
+  it('asks whether an address is free each time, never from a cache (spec 0036)', async () => {
+    const api = fakeApi();
+    const { data } = layer(api);
+    expect(await data.workspaces.slugAvailable('acme')).toBe(false);
+    expect(await data.workspaces.slugAvailable('halcyon')).toBe(true);
+    expect(await data.workspaces.slugAvailable('halcyon')).toBe(true);
+    expect(count(api.calls, '/api/rpc/workspaces/slugAvailable')).toBe(3);
+  });
+
+  it('carries a refused check as a DataError, with its wait', async () => {
+    const api = fakeApi({
+      slugAvailable: () => {
+        throw new ORPCError('RATE_LIMITED', { status: 429, message: 'Too many address checks. Wait a moment.' });
+      },
+    });
+    const { data } = layer(api);
+    expect(await failure(data.workspaces.slugAvailable('acme'))).toMatchObject({ code: 'RATE_LIMITED' });
   });
 
   it('mints UUID v7 ids from the clock and the random source', () => {

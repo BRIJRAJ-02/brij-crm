@@ -55,10 +55,29 @@ export const CreatedWorkspace = z.object({
 /** The workspace just made. */
 export type CreatedWorkspace = z.infer<typeof CreatedWorkspace>;
 
+/** Asking whether a web address is free, as first run's address field is typed (spec 0036). */
+export const SlugAvailableInput = z.object({
+  slug: WorkspaceSlug,
+});
+/** Asking whether a web address is free. */
+export type SlugAvailableInput = z.infer<typeof SlugAvailableInput>;
+
+/** Whether no workspace has ever used the address: `create` would take it, unless someone takes it first. */
+export const SlugAvailability = z.object({
+  available: z.boolean(),
+});
+/** Whether no workspace has ever used the address. */
+export type SlugAvailability = z.infer<typeof SlugAvailability>;
+
 /**
  * Workspaces before you are in one: `create` needs a session and a verified
  * email, and refuses `SLUG_TAKEN` (on the `slug` field) and `ID_TAKEN`.
+ * `slugAvailable` needs the same, answers from the directory alone (an
+ * address once used is never free again), and refuses `RATE_LIMITED` past 60
+ * checks a minute per person (spec 0036, AC-1215). `create` still has the
+ * last word.
  */
 export const workspacesContract = {
   create: oc.input(CreateWorkspaceInput).output(CreatedWorkspace),
+  slugAvailable: oc.input(SlugAvailableInput).output(SlugAvailability),
 };

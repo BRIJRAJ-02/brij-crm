@@ -1,165 +1,264 @@
 // Brief
-// Purpose: a signed in person makes a workspace: their first, or another from the workspace menu (spec 0031).
-// Main task: confirm your name and the workspace's name and address, then Create workspace.
-// Leaves out: inviting teammates (Settings › Members does that), picking a template and settings.
-import { isDataError, type DataLayer, type SignedInUser } from '@crm/data';
-import { AuthLayout, Button, ButtonLink, Field, Form, type Toasts } from '@crm/ui';
-import { useNavigate } from '@tanstack/react-router';
-import { useState } from 'react';
-import { addressAsTyped, SLUG_MAX, SLUG_RULE, slugFrom, suggestedWorkspaceName } from './names.ts';
-import { strings } from './strings.ts';
+// Purpose: first run (spec 0036): a new person says who they are, names their workspace and may connect a calendar,
+// watching the workspace take shape beside each step.
+// Main task: About you, then Your workspace (Create workspace), then Connect your calendar or skip, into People.
+// Leaves out: inviting the team (after spec 0031 slice 2), a photo (file storage), templates and use case questions.
+import { isDataError, type DataLayer, type SignedInUser, type WorkspaceSummary } from '@crm/data';
+import { AuthLayout, Button, Steps, WorkspacePreview, type WorkspacePreviewFocus } from '@crm/ui';
+import { useNavigate, useRouter } from '@tanstack/react-router';
+import { useEffect, useRef, useState } from 'react';
+import { sessionStore } from '../auth/pending.ts';
+import { SignOutDialog } from '../auth/SignOutDialog.tsx';
+import { strings as authStrings } from '../auth/strings.ts';
+import { focusPage } from '../navigation/focus.ts';
 import { PRODUCT_LOGO } from '../../brand.ts';
+import { AboutStep } from './AboutStep.tsx';
+import { CalendarStep } from './CalendarStep.tsx';
+import { clearDraft, readDraft, saveDraft } from './draft.ts';
+import { memberNameFor, slugFrom, suggestedWorkspaceName } from './names.ts';
+import { refusalsOf, type WelcomeRefusal } from './refusals.ts';
+import { nextStep, previousStep, welcomeSteps, type ConnectResult, type WelcomeStep } from './steps.ts';
+import { strings } from './strings.ts';
+import { WorkspaceStep } from './WorkspaceStep.tsx';
 
-/** A refusal for this form: the field it is about by `name`, or none (shown above the fields). */
-interface WelcomeRefusal {
-  readonly code: string;
-  readonly message: string;
-  readonly field?: string;
-}
+/** Each step's title and the line under it. */
+const COPY: Readonly<Record<WelcomeStep, { readonly title: string; readonly description: string }>> = {
+  about: { title: strings.aboutTitle, description: strings.aboutDescription },
+  workspace: { title: strings.workspaceTitle, description: strings.workspaceDescription },
+  calendar: { title: strings.calendarTitle, description: strings.calendarDescription },
+};
 
-const FIELDS = { memberName: 'memberName', name: 'name', slug: 'slug' } as const;
+/** The part of the preview each step is about. */
+const FOCUS: Readonly<Record<WelcomeStep, WorkspacePreviewFocus>> = {
+  about: 'person',
+  workspace: 'workspace',
+  calendar: 'calendar',
+};
 
-/** The server's refusals and input problems as this form's refusals; anything else above the fields. */
-function refusalsOf(error: unknown): WelcomeRefusal[] {
-  if (!isDataError(error)) return [{ code: 'INTERNAL', message: strings.somethingWrong }];
-  const refusals = (error.data?.refusals ?? []).map((refusal) => ({
-    code: refusal.code,
-    message: refusal.message,
-    ...(refusal.field === undefined ? {} : { field: refusal.field }),
-  }));
-  const issues = (error.data?.issues ?? []).map((issue) => {
-    const [field] = issue.path;
-    return { code: error.code, message: issue.message, ...(typeof field === 'string' ? { field } : {}) };
-  });
-  const all = [...refusals, ...issues];
-  return all.length > 0 ? all : [{ code: error.code, message: error.message }];
-}
-
-/** What is wrong with the typed values before they are sent, in the server's words. */
-function problemsWith(memberName: string, name: string, slug: string): WelcomeRefusal[] {
-  return [
-    ...(memberName.trim() === '' ? [{ code: 'MISSING', message: strings.nameMissing, field: FIELDS.memberName }] : []),
-    ...(name.trim() === '' ? [{ code: 'MISSING', message: strings.workspaceNameMissing, field: FIELDS.name }] : []),
-    ...(SLUG_RULE.test(slug) ? [] : [{ code: 'INVALID', message: strings.slugInvalid, field: FIELDS.slug }]),
-  ];
-}
-
-/** Props for the welcome screen. */
+/** Props for first run. */
 export interface WelcomeScreenProps {
   readonly data: DataLayer;
-  readonly toasts: Toasts;
   readonly user: SignedInUser;
-  /** Where Cancel goes when the person already has a workspace (creating another, spec 0031, AC-801). */
-  readonly back?: { readonly slug: string; readonly name: string } | undefined;
+  /** The step to show (the route keeps the calendar step for after the workspace exists). */
+  readonly step: WelcomeStep;
+  /** Whether calendar sync is set up here: without it, there is no calendar step. */
+  readonly calendarSync: boolean;
+  /** The workspace once it is made: the calendar step's. */
+  readonly workspace?: WorkspaceSummary | undefined;
+  /** What a calendar connect came back with (`?calendar=`). */
+  readonly calendarResult?: ConnectResult | undefined;
 }
 
-/** The welcome page: AuthLayout and a Form that creates the workspace, then opens it. */
-export function WelcomeScreen({ data, toasts, user, back }: WelcomeScreenProps) {
+/**
+ * First run: AuthLayout's split card, the step on the left and the workspace
+ * taking shape on the right, with Back and "Step N of M" above each step's
+ * title, and who is signed in with Sign out (which asks first) at its foot.
+ * What is typed is kept in this tab (`draft.ts`) until the workspace is made.
+ */
+export function WelcomeScreen({ data, user, step, calendarSync, workspace, calendarResult }: WelcomeScreenProps) {
   const navigate = useNavigate();
-  // One id per visit, sent again on every try, so a retry after a lost answer makes nothing twice.
-  const [id, setId] = useState(() => data.workspaces.newId());
-  const [memberName, setMemberName] = useState(user.name);
-  // The workspace name follows "Your name", and the address follows the workspace name, until each is edited.
-  const [typedName, setTypedName] = useState<string | undefined>(undefined);
-  const [typedSlug, setTypedSlug] = useState<string | undefined>(undefined);
-  const name = typedName ?? suggestedWorkspaceName(memberName, strings.possessive);
+  const router = useRouter();
+  const storage = sessionStore(window);
+  // What was typed before a reload, with the workspace's id: minted once, and sent again on every try.
+  const [draft] = useState(() => readDraft(storage, user.id));
+  const [id, setId] = useState(() => draft?.workspaceId ?? data.workspaces.newId());
+  const [memberName, setMemberName] = useState(draft?.memberName ?? user.name);
+  // The workspace name follows the person's name, and the address the workspace name, until each is edited.
+  const [typedName, setTypedName] = useState<string | undefined>(draft?.workspaceName);
+  const [typedSlug, setTypedSlug] = useState<string | undefined>(draft?.slug);
+  const shownName = memberNameFor(memberName, '', user.email);
+  const name = typedName ?? suggestedWorkspaceName(shownName, strings.possessive);
   const slug = typedSlug ?? slugFrom(name);
-  const [isBusy, setBusy] = useState(false);
+  const [isCreating, setCreating] = useState(false);
   const [refusals, setRefusals] = useState<readonly WelcomeRefusal[]>([]);
+  const [isConnecting, setConnecting] = useState(false);
+  const [isSignOutOpen, setSignOutOpen] = useState(false);
   const [isSigningOut, setSigningOut] = useState(false);
+  const [signOutFailure, setSignOutFailure] = useState<string | undefined>(undefined);
+
+  // Kept until the workspace is made, so a reload keeps what was typed.
+  useEffect(() => {
+    if (workspace !== undefined) return;
+    saveDraft(storage, {
+      userId: user.id,
+      workspaceId: id,
+      memberName,
+      ...(typedName === undefined ? {} : { workspaceName: typedName }),
+      ...(typedSlug === undefined ? {} : { slug: typedSlug }),
+    });
+  }, [storage, user.id, id, memberName, typedName, typedSlug, workspace]);
+
+  // Back from Google with the browser's back button, the page comes out of the back/forward cache as it was
+  // left: "Opening Google". Start over.
+  useEffect(() => {
+    const onPageShow = (event: PageTransitionEvent) => {
+      if (event.persisted) setConnecting(false);
+    };
+    window.addEventListener('pageshow', onPageShow);
+    return () => {
+      window.removeEventListener('pageshow', onPageShow);
+    };
+  }, []);
+
+  // A step change keeps the page, so the route moves no focus: the new step's first field takes it here (the
+  // calendar step puts it on its first button itself). The first step shown is the route's to focus.
+  const focusedStep = useRef(step);
+  useEffect(() => {
+    if (focusedStep.current === step) return;
+    focusedStep.current = step;
+    if (step !== 'calendar') focusPage(document, '/welcome');
+  }, [step]);
+
+  const steps = welcomeSteps(calendarSync);
+  const back = previousStep(step);
+  // The step this one was reached from by Continue: Back then goes back through the browser's history, so the
+  // browser's own back button and ours agree.
+  const cameFrom = useRef<WelcomeStep | undefined>(undefined);
+  const goTo = (next: WelcomeStep) => {
+    cameFrom.current = step;
+    void navigate({ to: '/welcome', search: { step: next } });
+  };
+  const goBack = () => {
+    if (back === undefined) return;
+    if (cameFrom.current === back) {
+      cameFrom.current = undefined;
+      router.history.back();
+      return;
+    }
+    void navigate({ to: '/welcome', search: { step: back }, replace: true });
+  };
+  const afterAbout = () => {
+    const next = nextStep(steps, 'about');
+    if (next !== undefined) goTo(next);
+  };
 
   const create = () => {
-    const problems = problemsWith(memberName, name, slug);
-    setRefusals(problems);
-    if (problems.length > 0) return;
-    setBusy(true);
-    data.workspaces.create({ id, name: name.trim(), slug, memberName: memberName.trim() }).then(
-      ({ workspace }) => {
-        void navigate({ to: '/w/$slug', params: { slug: workspace.slug }, replace: true });
+    setCreating(true);
+    setRefusals([]);
+    const memberNameSent = memberNameFor(memberName, user.name, user.email);
+    data.workspaces.create({ id, name: name.trim(), slug, memberName: memberNameSent }).then(
+      async ({ workspace: made }) => {
+        clearDraft(storage);
+        if (!calendarSync) {
+          void navigate({ to: '/w/$slug', params: { slug: made.slug }, replace: true });
+          return;
+        }
+        // The calendar step loads with the new workspace before it shows, so the card goes straight to it.
+        const calendarStep = { to: '/welcome', search: { step: 'calendar', workspace: made.slug } } as const;
+        await router.preloadRoute(calendarStep).catch(() => undefined);
+        void navigate({ ...calendarStep, replace: true });
       },
       (failure: unknown) => {
         // Someone else's workspace has this id (vanishingly rare): the next try gets a new one.
         if (isDataError(failure) && failure.code === 'ID_TAKEN') setId(data.workspaces.newId());
-        setBusy(false);
+        setCreating(false);
         setRefusals(refusalsOf(failure));
       },
     );
   };
 
+  const connect = () => {
+    if (workspace === undefined) return;
+    setConnecting(true);
+    // The browser goes to the API, which sends it on to Google's consent and back to this step.
+    window.location.assign(data.calendar.connectUrl(workspace.slug, 'welcome'));
+  };
+  const finish = () => {
+    if (workspace !== undefined) void navigate({ to: '/w/$slug', params: { slug: workspace.slug }, replace: true });
+  };
+
   const signOut = () => {
+    if (isSigningOut) return;
     setSigningOut(true);
+    setSignOutFailure(undefined);
     data.auth.signOut().then(
       () => {
+        clearDraft(storage);
         void navigate({ to: '/sign-in', replace: true });
       },
       () => {
         setSigningOut(false);
-        toasts.toast({ tone: 'danger', message: strings.signOutFailed });
+        setSignOutFailure(authStrings.signOutFailed);
       },
     );
   };
 
+  const { title, description } = COPY[step];
   return (
-    <AuthLayout
-      productName={strings.product}
-      logo={PRODUCT_LOGO}
-      title={back === undefined ? strings.title : strings.anotherTitle}
-      description={back === undefined ? strings.description : strings.anotherDescription}
-      footer={
-        back === undefined ? (
-          <Button variant="ghost" onPress={signOut} isPending={isSigningOut}>
+    <>
+      <AuthLayout
+        productName={strings.product}
+        logo={PRODUCT_LOGO}
+        title={title}
+        description={description}
+        eyebrow={
+          <>
+            {back !== undefined && <Button variant="ghost" icon="arrow-left" label={strings.back} onPress={goBack} />}
+            <Steps
+              variant="count"
+              label={strings.steps}
+              steps={steps.map((each) => ({ id: each, label: COPY[each].title }))}
+              current={step}
+            />
+          </>
+        }
+        preview={
+          <WorkspacePreview
+            workspaceName={workspace?.name ?? name}
+            workspaceId={workspace?.id ?? id}
+            personName={shownName}
+            personId={user.id}
+            focus={FOCUS[step]}
+          />
+        }
+        account={user.email}
+        footer={
+          <Button
+            variant="ghost"
+            onPress={() => {
+              setSignOutFailure(undefined);
+              setSignOutOpen(true);
+            }}
+          >
             {strings.signOut}
           </Button>
-        ) : (
-          <ButtonLink variant="ghost" href={`/w/${back.slug}`}>
-            {strings.backTo(back.name)}
-          </ButtonLink>
-        )
-      }
-    >
-      <Form<WelcomeRefusal>
-        submitLabel={strings.create}
-        busyLabel={strings.creating}
-        isBusy={isBusy}
-        refusals={refusals}
-        fieldFor={(refusal) => refusal.field}
-        onSubmit={create}
+        }
       >
-        <Field
-          label={strings.yourName}
-          name={FIELDS.memberName}
-          autoComplete="name"
-          isRequired
-          maxLength={80}
-          value={memberName}
-          // The workspace name, and the address after it, follow "Your name"
-          // until edited. A refusal goes once its field's value changes, even
-          // one that follows another: the Form drops it, for this answer.
-          onChange={setMemberName}
-        />
-        <Field
-          label={strings.workspaceName}
-          name={FIELDS.name}
-          autoComplete="organization"
-          isRequired
-          maxLength={80}
-          value={name}
-          onChange={setTypedName}
-        />
-        <Field
-          label={strings.webAddress}
-          name={FIELDS.slug}
-          autoComplete="off"
-          isRequired
-          maxLength={SLUG_MAX}
-          value={slug}
-          onChange={(next) => {
-            setTypedSlug(addressAsTyped(next));
-          }}
-          // Field puts a refusal in the hint's place while it shows one.
-          hint={strings.webAddressHint(SLUG_RULE.test(slug) ? slug : '')}
-        />
-      </Form>
-    </AuthLayout>
+        {step === 'about' && (
+          <AboutStep
+            memberName={memberName}
+            onMemberName={setMemberName}
+            shownName={shownName}
+            userId={user.id}
+            onContinue={afterAbout}
+            onSkip={afterAbout}
+          />
+        )}
+        {step === 'workspace' && (
+          <WorkspaceStep
+            data={data}
+            name={name}
+            onName={setTypedName}
+            slug={slug}
+            onSlug={setTypedSlug}
+            isCreating={isCreating}
+            refusals={refusals}
+            onCreate={create}
+          />
+        )}
+        {step === 'calendar' && (
+          <CalendarStep result={calendarResult} onConnect={connect} isConnecting={isConnecting} onFinish={finish} />
+        )}
+      </AuthLayout>
+      <SignOutDialog
+        isOpen={isSignOutOpen}
+        isBusy={isSigningOut}
+        failure={signOutFailure}
+        onSignOut={signOut}
+        onClose={() => {
+          setSignOutOpen(false);
+        }}
+      />
+    </>
   );
 }

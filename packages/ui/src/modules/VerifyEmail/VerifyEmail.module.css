@@ -1,4 +1,5 @@
-/* VerifyEmail: where the code went (the address in body-strong), the code
+/* VerifyEmail: where the code went (the address in body-strong, on a line
+   of its own), the code
    boxes with their refusal, why verifying is off when it is, "Checking the
    code" with a spinner while it is checked, then the foot: the resend and
    back buttons in a row, a refused resend's danger Callout and the resend
@@ -30,7 +31,9 @@
     gap: var(--space-8);
   }
 
+  /* The address on a line of its own, wrapping only where it has to. */
   .email {
+    display: block;
     color: var(--text);
     font: var(--text-body-strong);
     letter-spacing: var(--tracking-body-strong);

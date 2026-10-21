@@ -29,7 +29,7 @@ export const Default: Story = {
   parameters: { crm: { preview: true } },
   play: async ({ args, canvas, userEvent }) => {
     await expect(canvas.getByText('maya@halcyonlabs.io').parentElement).toHaveTextContent(
-      'Enter the code we sent to maya@halcyonlabs.io.',
+      'Enter the code we sent to maya@halcyonlabs.io',
     );
     await userEvent.click(canvas.getByRole('textbox', { name: 'Code' }));
     await userEvent.keyboard('481593');

@@ -21,11 +21,12 @@ New. Imports (#30), two factor setup (#25) and onboarding (#40) walk through ste
 ```
 
 - Steps before `current` are done; `failed` marks the one that failed.
+- `variant="count"` is one quiet line, "Step 2 of 3", for a flow whose own title names the step: first run's split card (spec 0036), where it leads the title in Card's `eyebrow`. Why a variant: the same flow and the same current step, said in a line where a list of every step would crowd a narrow column and repeat the title.
 - It is an ordered list; the current step is `aria-current="step"`, and done and failed steps say so to screen readers.
 
 ## States
 
-Done (accent tick), current (accent ring), upcoming, failed (danger cross).
+Done (accent tick), current (accent ring), upcoming, failed (danger cross). Counted ("Step 2 of 3").
 
 ## Keyboard
 

@@ -1,5 +1,6 @@
 /* Skeleton: grey placeholders in the content's shape, pulsing once per
-   duration-pulse. Under reduced motion they hold still. A column of lines
+   duration-pulse. Under reduced motion, or drawn still for a sketch, they
+   hold still. A column of lines
    starts at the start, or centres under centred text. */
 @layer components {
   .root {
@@ -39,6 +40,11 @@
   .root[data-shape='block'] {
     block-size: var(--size-toolbar);
     border-radius: var(--radius-md);
+  }
+
+  /* A sketch, not a load: the shape holds still. */
+  .root[data-still] {
+    animation: none;
   }
 
   .lines {

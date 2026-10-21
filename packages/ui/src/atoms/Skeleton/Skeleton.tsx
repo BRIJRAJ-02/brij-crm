@@ -17,6 +17,11 @@ export interface SkeletonProps {
   readonly lines?: number;
   /** Where the lines sit, matching the text they stand in for: `center` under a centred title (EmptyState). Lines only. */
   readonly align?: SkeletonAlign;
+  /**
+   * Draws the shape without the pulse: a sketch of content, not content on
+   * its way (first run's workspace preview), so it never reads as loading.
+   */
+  readonly isStill?: boolean;
 }
 
 /**
@@ -24,7 +29,14 @@ export interface SkeletonProps {
  * hidden from screen readers: the region it sits in says it is busy. Show it
  * through `useDelayedLoading`, so it never flashes for a fast load.
  */
-export function Skeleton({ shape = 'line', width = 'full', lines = 1, align = 'start' }: SkeletonProps) {
+export function Skeleton({
+  shape = 'line',
+  width = 'full',
+  lines = 1,
+  align = 'start',
+  isStill = false,
+}: SkeletonProps) {
+  const still = isStill ? '' : undefined;
   if (shape === 'line' && lines > 1) {
     return (
       <span className={styles.lines} data-align={align === 'start' ? undefined : align} aria-hidden="true">
@@ -34,10 +46,11 @@ export function Skeleton({ shape = 'line', width = 'full', lines = 1, align = 's
             className={styles.root}
             data-shape="line"
             data-width={index === lines - 1 ? 'medium' : width}
+            data-still={still}
           />
         ))}
       </span>
     );
   }
-  return <span className={styles.root} data-shape={shape} data-width={width} aria-hidden="true" />;
+  return <span className={styles.root} data-shape={shape} data-width={width} data-still={still} aria-hidden="true" />;
 }

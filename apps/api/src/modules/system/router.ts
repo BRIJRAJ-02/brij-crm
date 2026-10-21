@@ -18,7 +18,12 @@ const switchedOn = os.$context<RequestContext>().middleware(({ context, next }) 
 
 export const systemRouter = pub.system.router({
   status: pub.system.status.handler(({ context }) =>
-    getSystemStatus({ db: context.db, environment: context.environment, providers: context.auth.providers }),
+    getSystemStatus({
+      db: context.db,
+      environment: context.environment,
+      providers: context.auth.providers,
+      calendarSync: context.calendar !== undefined,
+    }),
   ),
   // Spec 0010, AC-168: proves a production error reaches Sentry with its request id, then is switched off.
   testFault: pub.system.testFault

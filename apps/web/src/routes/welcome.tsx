@@ -2,35 +2,36 @@ import { LoadingNow } from '@crm/ui';
 import { createFileRoute, redirect } from '@tanstack/react-router';
 import { AuthError, AuthPending } from '../features/auth/AuthStates.tsx';
 import { signInHref } from '../features/auth/redirect.ts';
+import { shownStep, welcomeSearch } from '../features/welcome/steps.ts';
 import { strings } from '../features/welcome/strings.ts';
 import { WelcomeScreen } from '../features/welcome/WelcomeScreen.tsx';
-import { homeWorkspace } from '../features/workspace/home.ts';
 
-/** `?another=1`: the workspace menu's Create workspace (spec 0031, AC-801), for someone who already has one. */
-interface WelcomeSearch {
-  readonly another?: true;
-}
-
-// Signed in, without a workspace yet: signed out goes to /sign-in (and comes
-// back here), and someone who has a workspace goes to it, unless they came
-// from the workspace menu to create another (`?another=1`).
+// First run (spec 0036), for a signed in person: signed out goes to /sign-in
+// (and comes back here). Before the workspace exists, someone who already has
+// one goes to it. After, `?workspace=` names the one just made, for the
+// calendar step, which shows only where calendar sync is set up; a workspace
+// that isn't theirs is passed over. `?step=` picks the step and changes
+// without a new load; a new `?workspace=` loads again.
 export const Route = createFileRoute('/welcome')({
-  validateSearch: (search: Record<string, unknown>): WelcomeSearch =>
-    search.another === 1 || search.another === '1' || search.another === true ? { another: true } : {},
-  loaderDeps: ({ search }) => ({ another: search.another === true }),
+  validateSearch: welcomeSearch,
+  loaderDeps: ({ search }) => ({ workspace: search.workspace }),
   loader: async ({ context, deps }) => {
     const me = await context.data.me.get();
-    if (me === undefined)
-      throw redirect({ href: signInHref(deps.another ? '/welcome?another=1' : '/welcome'), replace: true });
-    const home = homeWorkspace(me);
-    if (home !== undefined && !deps.another) {
-      throw redirect({ to: '/w/$slug', params: { slug: home.slug }, replace: true });
-    }
-    return { user: me.user, back: home };
+    if (me === undefined) throw redirect({ href: signInHref('/welcome'), replace: true });
+    const calendarSync = await context.data.system.status().then(
+      (status) => status.calendarSync,
+      () => false,
+    );
+    const made = me.workspaces.find((each) => each.slug === deps.workspace);
+    if (made !== undefined && calendarSync) return { user: me.user, calendarSync, workspace: made };
+    const [first] = me.workspaces;
+    const home = made ?? first;
+    if (home !== undefined) throw redirect({ to: '/w/$slug', params: { slug: home.slug }, replace: true });
+    return { user: me.user, calendarSync, workspace: undefined };
   },
   pendingComponent: () => (
     <LoadingNow>
-      <AuthPending title={strings.title} />
+      <AuthPending title={strings.title} isSplit />
     </LoadingNow>
   ),
   errorComponent: () => <AuthError title={strings.title} />,
@@ -38,7 +39,17 @@ export const Route = createFileRoute('/welcome')({
 });
 
 function WelcomeRoute() {
-  const { user, back } = Route.useLoaderData();
-  const { data, toasts } = Route.useRouteContext();
-  return <WelcomeScreen data={data} toasts={toasts} user={user} back={back} />;
+  const { user, calendarSync, workspace } = Route.useLoaderData();
+  const { step, calendar } = Route.useSearch();
+  const { data } = Route.useRouteContext();
+  return (
+    <WelcomeScreen
+      data={data}
+      user={user}
+      step={shownStep(step, workspace !== undefined)}
+      calendarSync={calendarSync}
+      workspace={workspace}
+      calendarResult={calendar}
+    />
+  );
 }

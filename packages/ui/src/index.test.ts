@@ -166,6 +166,7 @@ describe('@crm/ui', () => {
       'VisitorBar',
       'VisuallyHidden',
       'WeekCalendar',
+      'WorkspacePreview',
       'arraySource',
       'columnWidthOf',
       'completeFilters',

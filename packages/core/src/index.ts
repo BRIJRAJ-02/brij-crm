@@ -49,8 +49,10 @@ export {
   getMe,
   setLastWorkspace,
   startWorkspace,
+  workspaceSlugAvailable,
   type AccountUser,
   type LastWorkspaceDeps,
+  type SlugCheckDeps,
   type StartedWorkspace,
   type StartWorkspaceDeps,
 } from './account/account.ts';

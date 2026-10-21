@@ -77,7 +77,13 @@ import {
   type EmailPreferencesStore,
   type EmailUnsubscribeStore,
 } from './email-preferences.ts';
-import { connectUrl, createCalendarStore, type CalendarSettingsHeld, type CalendarView } from './calendar/store.ts';
+import {
+  connectUrl,
+  createCalendarStore,
+  type CalendarSettingsHeld,
+  type CalendarView,
+  type ConnectReturn,
+} from './calendar/store.ts';
 import {
   createCaptureList,
   dropItem,
@@ -241,7 +247,7 @@ export type {
 } from './email-preferences.ts';
 export type { CalendarSettingsHeld, CalendarSettingsState, CalendarState, CalendarView } from './calendar/store.ts';
 export type { CaptureListState, CaptureListView } from './captures/list.ts';
-export { connectUrl, needsReconnect } from './calendar/store.ts';
+export { connectUrl, needsReconnect, type ConnectReturn } from './calendar/store.ts';
 export type { Hue, ObjectIcon, RichTextDoc } from '@crm/contracts/values';
 // The API name rule and the new object's defaults (spec 0012): plain modules with no Zod, so the dialogs share
 // the server's own functions without loading the schema library.
@@ -2018,6 +2024,16 @@ export function createDataLayer({
         me = undefined;
         return created;
       },
+      /**
+       * Whether no workspace has ever used the address (first run checks it as
+       * it is typed, spec 0036). Never cached: someone may take it at any
+       * moment, and `create` has the last word. Rejects with a DataError
+       * (`RATE_LIMITED` past 60 checks a minute, offline).
+       */
+      async slugAvailable(slug: string): Promise<boolean> {
+        const { available } = await call((options) => api.workspaces.slugAvailable({ slug }, options));
+        return available;
+      },
     },
     /**
      * Booking pages (spec 0025): settings, not CRM data, with no live event.
@@ -3085,8 +3101,11 @@ export function createDataLayer({
         calendar.makeDefault(workspace, connectionId),
       /** Disconnects a connection: gone at once, back with a toast if refused. Answers whether it landed. */
       remove: (workspace: string, connectionId: string): Promise<boolean> => calendar.remove(workspace, connectionId),
-      /** Where the browser goes to connect a Google calendar (the API sends it on to Google's consent). */
-      connectUrl: (workspace: string): string => connectUrl(workspace),
+      /**
+       * Where the browser goes to connect a Google calendar (the API sends it on to Google's consent), and where it
+       * comes back to: Settings › Calendar, or first run's calendar step (`welcome`, spec 0036).
+       */
+      connectUrl: (workspace: string, then?: ConnectReturn): string => connectUrl(workspace, then),
       /** Sync now: brings a connection's next sync forward; the list reads again shortly after. */
       syncNow: (workspace: string, connectionId: string): Promise<boolean> => calendar.syncNow(workspace, connectionId),
       /** The workspace's calendar settings (spec 0024, AC-609), read when a screen first holds them. */

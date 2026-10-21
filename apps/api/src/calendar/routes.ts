@@ -16,6 +16,9 @@
 // sends the member back to Settings › Calendar with what happened in
 // `?calendar=`: `connected`, `denied`, `scope` (a permission was unticked),
 // `limit`, `off` or `failed`. Nothing the provider said is shown or logged.
+// `?then=welcome` on the start (spec 0036, AC-1217) sends them back to first
+// run's calendar step instead: the one other place known, carried inside the
+// signed state, so the callback never takes a return address from the query.
 //
 // `POST /api/calendar/google/notify` (milestone 2, AC-602) is where Google
 // posts a change notice for a push channel: no session and no Origin, so the
@@ -54,6 +57,14 @@ type DoorScope = Parameters<typeof connectCalendar>[0];
 /** What Settings › Calendar is told happened. */
 export type ConnectResult = 'connected' | 'denied' | 'scope' | 'limit' | 'off' | 'failed';
 
+/** Where a connect comes back to: Settings › Calendar (the default), or first run's calendar step (spec 0036). */
+export type ConnectReturn = 'settings' | 'welcome';
+
+/** The return place a query or a signed state names: `welcome` only when it says exactly that. */
+function returnOf(value: unknown): ConnectReturn {
+  return value === 'welcome' ? 'welcome' : 'settings';
+}
+
 /** What the connect routes need. */
 export interface CalendarRouteDeps {
   /**
@@ -82,10 +93,19 @@ type RouteContext = Context<{
 /** A workspace address as the door takes it: anything else sends nobody anywhere. */
 const SLUG = /^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/;
 
-/** The calendar settings page of a workspace, with what happened. */
-function settingsUrl(appUrl: string, slug: string | undefined, result: ConnectResult): string {
-  const path = slug === undefined ? '/' : `/w/${slug}/settings/calendar`;
-  const url = new URL(path, new URL(appUrl).origin);
+/** The page in the app a connect for `slug` comes back to, before what happened is added. */
+function returnPath(slug: string, then: ConnectReturn): string {
+  return then === 'welcome' ? `/welcome?step=calendar&workspace=${slug}` : `/w/${slug}/settings/calendar`;
+}
+
+/** The calendar settings page of a workspace (or first run's calendar step), with what happened. */
+function settingsUrl(
+  appUrl: string,
+  slug: string | undefined,
+  result: ConnectResult,
+  then: ConnectReturn = 'settings',
+): string {
+  const url = new URL(slug === undefined ? '/' : returnPath(slug, then), new URL(appUrl).origin);
   url.searchParams.set('calendar', result);
   return url.toString();
 }
@@ -115,17 +135,19 @@ export function createCalendarRoutes(deps: CalendarRouteDeps) {
     /** `GET /api/calendar/google/start?workspace=<slug>`. */
     async start(c: RouteContext): Promise<Response> {
       const slug = c.req.query('workspace');
+      const then = returnOf(c.req.query('then'));
       if (slug === undefined || !SLUG.test(slug)) return c.redirect(settingsUrl(deps.appUrl, undefined, 'failed'));
-      if (deps.calendar === undefined) return c.redirect(settingsUrl(deps.appUrl, slug, 'off'));
+      if (deps.calendar === undefined) return c.redirect(settingsUrl(deps.appUrl, slug, 'off', then));
       const member = await memberIn(deps, c, slug);
       if (member === undefined) {
         const signIn = new URL('/sign-in', new URL(deps.appUrl).origin);
-        signIn.searchParams.set('redirect', `/w/${slug}/settings/calendar`);
+        signIn.searchParams.set('redirect', returnPath(slug, then));
         return c.redirect(signIn.toString());
       }
       const nonce = randomBytes(18).toString('base64url');
       const memberId = member.scope.actor.id ?? '';
-      const state = signValue(deps.calendar.stateKey, STATE_VERSION, { w: slug, m: memberId, n: nonce }, STATE_SECONDS);
+      const payload = { w: slug, m: memberId, n: nonce, ...(then === 'welcome' ? { t: then } : {}) };
+      const state = signValue(deps.calendar.stateKey, STATE_VERSION, payload, STATE_SECONDS);
       setCookie(c, STATE_COOKIE, nonce, {
         path: '/api/calendar/',
         httpOnly: true,
@@ -161,25 +183,27 @@ export function createCalendarRoutes(deps: CalendarRouteDeps) {
       const payload =
         calendar === undefined ? undefined : verifyValue(calendar.stateKey, STATE_VERSION, c.req.query('state'));
       const slug = typeof payload?.w === 'string' && SLUG.test(payload.w) ? payload.w : undefined;
+      // Only the signed state says where to go back to: never the callback's own query.
+      const then = returnOf(payload?.t);
       const sameBrowser =
         nonce !== undefined &&
         typeof payload?.n === 'string' &&
         payload.n.length === nonce.length &&
         timingSafeEqual(Buffer.from(payload.n), Buffer.from(nonce));
-      if (calendar === undefined) return c.redirect(settingsUrl(deps.appUrl, slug, 'off'));
+      if (calendar === undefined) return c.redirect(settingsUrl(deps.appUrl, slug, 'off', then));
       if (payload === undefined || slug === undefined || !sameBrowser || typeof payload.m !== 'string') {
         log.warn('calendar.connect.refused', { requestId: c.get('requestId'), reason: 'state' });
-        return c.redirect(settingsUrl(deps.appUrl, slug, 'failed'));
+        return c.redirect(settingsUrl(deps.appUrl, slug, 'failed', then));
       }
       // The member said no on Google's screen.
-      if (c.req.query('error') !== undefined) return c.redirect(settingsUrl(deps.appUrl, slug, 'denied'));
+      if (c.req.query('error') !== undefined) return c.redirect(settingsUrl(deps.appUrl, slug, 'denied', then));
       const code = c.req.query('code');
-      if (code === undefined || code.length > 2048) return c.redirect(settingsUrl(deps.appUrl, slug, 'failed'));
+      if (code === undefined || code.length > 2048) return c.redirect(settingsUrl(deps.appUrl, slug, 'failed', then));
       const member = await memberIn(deps, c, slug);
       // Signed out meanwhile, or now someone else: the state was for the member who started.
       if (member === undefined || member.scope.actor.id !== payload.m) {
         log.warn('calendar.connect.refused', { requestId: c.get('requestId'), reason: 'member' });
-        return c.redirect(settingsUrl(deps.appUrl, slug, 'failed'));
+        return c.redirect(settingsUrl(deps.appUrl, slug, 'failed', then));
       }
       let result: ConnectResult = 'connected';
       try {
@@ -201,7 +225,7 @@ export function createCalendarRoutes(deps: CalendarRouteDeps) {
           result = 'failed';
         }
       }
-      return c.redirect(settingsUrl(deps.appUrl, slug, result));
+      return c.redirect(settingsUrl(deps.appUrl, slug, result, then));
     },
   };
 }

@@ -83,6 +83,36 @@ export const PageSmall: Story = {
 };
 
 /**
+ * A page card with a preview beside it (first run's split card): the content keeps its narrow column, and the preview,
+ * decoration, sits beside it out of the accessibility tree from 1024px up. An eyebrow leads the title.
+ */
+export const PageWithPreview: Story = {
+  args: {
+    placement: 'page',
+    size: 'sm',
+    title: 'Your workspace',
+    description: 'Name it for your team or company.',
+    eyebrow: <Button variant="ghost" icon="arrow-left" label="Back" />,
+    preview: <DescriptionList items={[{ term: 'Workspace', description: 'Halcyon Labs' }]} />,
+  },
+  render: (args) => (
+    <Card {...args}>
+      <Button variant="primary" size="lg" isFullWidth="center">
+        Continue
+      </Button>
+    </Card>
+  ),
+  play: async ({ canvas, canvasElement }) => {
+    await expect(canvas.getByRole('heading', { level: 1, name: 'Your workspace' })).toBeInTheDocument();
+    await expect(canvas.getByRole('button', { name: 'Back' })).toBeInTheDocument();
+    const preview = canvasElement.querySelector('[inert]');
+    await expect(preview).toHaveAttribute('aria-hidden', 'true');
+    // Out of the accessibility tree: its words aren't found by role or text queries that respect aria-hidden.
+    await expect(canvas.queryByRole('term')).toBeNull();
+  },
+};
+
+/**
  * A Select first: React Aria's hidden template before it doesn't count, so the air under the header is the
  * same as with any other first child.
  */

@@ -2,7 +2,7 @@
 // workspaces they are in, and making their first workspace. These run before
 // any workspace is chosen, so they never build a member's scope; the engine's
 // workspace bootstrap builds its own system scope.
-import type { CreateWorkspaceInput, CreatedWorkspace, Me } from '@crm/contracts';
+import type { CreateWorkspaceInput, CreatedWorkspace, Me, SlugAvailability } from '@crm/contracts';
 import type { Database, IdentityStore } from '@crm/db';
 import { enterWorkspace, type DoorLog, type RuleSource } from '../access/door.ts';
 import { createUserWorkspace } from '../engine/workspaces.ts';
@@ -92,4 +92,19 @@ export async function startWorkspace(
   });
   await deps.identity.setUserNameIfEmpty(user.id, input.memberName);
   return { workspace: created.workspace, milestones: created.milestones };
+}
+
+/** What checking a web address needs: the directory's lookup, and nothing else. */
+export interface SlugCheckDeps {
+  readonly identity: Pick<IdentityStore, 'findWorkspace'>;
+}
+
+/**
+ * Whether no workspace has ever used `slug` (spec 0036, AC-1215), from the
+ * directory alone: it keeps every address a workspace has had, so one once
+ * used is never offered again, as `createUserWorkspace` refuses it. It grants
+ * nothing and reads nothing else; `create` still has the last word.
+ */
+export async function workspaceSlugAvailable(deps: SlugCheckDeps, slug: string): Promise<SlugAvailability> {
+  return { available: (await deps.identity.findWorkspace(slug)) === undefined };
 }

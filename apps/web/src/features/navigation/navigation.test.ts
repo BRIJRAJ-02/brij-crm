@@ -39,7 +39,8 @@ describe('focusPage', () => {
     'main h1': { textContent: 'Sign in' },
     'main input[name="email"]': {},
     'main input[autocomplete="one-time-code"]': {},
-    'main input[name="memberName"]': {},
+    // First run's first field: About you's name, or Your workspace's after a reload on that step (spec 0036).
+    'main input[name="memberName"], main input[name="name"]': {},
   };
 
   it('puts focus in the email field on /sign-in, the code on /verify and your name on /welcome', () => {
@@ -51,7 +52,7 @@ describe('focusPage', () => {
     expect(verify.focused).toEqual(['main input[autocomplete="one-time-code"]']);
     const welcome = fakeDocument(page);
     focusPage(welcome.asDocument, '/welcome');
-    expect(welcome.focused).toEqual(['main input[name="memberName"]']);
+    expect(welcome.focused).toEqual(['main input[name="memberName"], main input[name="name"]']);
   });
 
   it('leaves focus in a tab list, where the arrow keys chose a tab that is its own address', () => {
@@ -90,7 +91,8 @@ describe('focusFirstLoad', () => {
     'main h1': { textContent: 'Sign in' },
     'main input[name="email"]': {},
     'main input[autocomplete="one-time-code"]': {},
-    'main input[name="memberName"]': {},
+    // First run's first field: About you's name, or Your workspace's after a reload on that step (spec 0036).
+    'main input[name="memberName"], main input[name="name"]': {},
   };
 
   it('puts focus in the first field on /sign-in, /verify and /welcome, as after a route change', () => {
@@ -102,7 +104,7 @@ describe('focusFirstLoad', () => {
     expect(verify.focused).toEqual(['main input[autocomplete="one-time-code"]']);
     const welcome = fakeDocument(page);
     focusFirstLoad(welcome.asDocument, '/welcome');
-    expect(welcome.focused).toEqual(['main input[name="memberName"]']);
+    expect(welcome.focused).toEqual(['main input[name="memberName"], main input[name="name"]']);
   });
 
   it('leaves focus alone everywhere else, never moving it to the title', () => {

@@ -1,5 +1,6 @@
 /* Steps: a column of numbered 20px markers joined by a hairline. Done is an
-   accent tick, current an accent ring, failed a danger cross. */
+   accent tick, current an accent ring, failed a danger cross. The count
+   variant is one line in text-secondary. */
 @layer components {
   .root {
     display: flex;
@@ -77,6 +78,15 @@
     color: var(--text-secondary);
     font: var(--text-label);
     letter-spacing: var(--tracking-label);
+  }
+
+  /* The count variant: one quiet line in label type. */
+  .count {
+    margin: 0;
+    color: var(--text-secondary);
+    font: var(--text-label-strong);
+    letter-spacing: var(--tracking-label-strong);
+    font-variant-numeric: tabular-nums;
   }
 
   @media (forced-colors: active) {

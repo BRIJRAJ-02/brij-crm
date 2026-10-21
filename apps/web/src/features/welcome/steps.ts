@@ -1,0 +1,69 @@
+// First run's steps and its address (spec 0036): which step shows, the
+// workspace once it is made, and what a calendar connect came back with.
+// Pure, so the rules are tested on their own. The route's search reads it, so
+// it stays in the first load: no screen code, no copy.
+import { SLUG_RULE } from './names.ts';
+
+/** What a calendar connect comes back with in `?calendar=` (the API's `ConnectResult`). */
+export type ConnectResult = 'connected' | 'denied' | 'scope' | 'limit' | 'off' | 'failed';
+
+const CONNECT_RESULTS: readonly string[] = ['connected', 'denied', 'scope', 'limit', 'off', 'failed'];
+
+/** True when `value` is one of the results a connect comes back with. */
+export function isConnectResult(value: unknown): value is ConnectResult {
+  return typeof value === 'string' && CONNECT_RESULTS.includes(value);
+}
+
+/** First run's steps, in order. "Invite your team" joins after spec 0031 slice 2. */
+export type WelcomeStep = 'about' | 'workspace' | 'calendar';
+
+const STEPS: readonly WelcomeStep[] = ['about', 'workspace', 'calendar'];
+
+/** The steps this deployment shows: Connect your calendar only where calendar sync is set up (AC-1204). */
+export function welcomeSteps(calendarSync: boolean): readonly WelcomeStep[] {
+  return calendarSync ? STEPS : STEPS.filter((step) => step !== 'calendar');
+}
+
+/**
+ * The step Back returns to, or undefined: the first step has none, and once
+ * the workspace exists the steps before it are done (AC-1209).
+ */
+export function previousStep(step: WelcomeStep): WelcomeStep | undefined {
+  return step === 'workspace' ? 'about' : undefined;
+}
+
+/** The step after `step` in `steps`, or undefined after the last. */
+export function nextStep(steps: readonly WelcomeStep[], step: WelcomeStep): WelcomeStep | undefined {
+  const index = steps.indexOf(step);
+  return index === -1 ? undefined : steps[index + 1];
+}
+
+/**
+ * First run's search: the step, the workspace once it is made (the calendar
+ * step needs it), and what a calendar connect came back with (`?calendar=`).
+ */
+export interface WelcomeSearch {
+  readonly step?: WelcomeStep;
+  readonly workspace?: string;
+  readonly calendar?: ConnectResult;
+}
+
+/** The search as given, keeping only values first run knows: a step name, an address, a connect result. */
+export function welcomeSearch(search: Record<string, unknown>): WelcomeSearch {
+  const { step, workspace, calendar } = search;
+  return {
+    ...(typeof step === 'string' && (STEPS as readonly string[]).includes(step) ? { step: step as WelcomeStep } : {}),
+    ...(typeof workspace === 'string' && SLUG_RULE.test(workspace) ? { workspace } : {}),
+    ...(isConnectResult(calendar) ? { calendar } : {}),
+  };
+}
+
+/**
+ * The step to show: the calendar step once the workspace is made (it is the
+ * only step after it), else the step asked for, never the calendar step
+ * without a workspace; About you when none is asked for.
+ */
+export function shownStep(asked: WelcomeStep | undefined, hasWorkspace: boolean): WelcomeStep {
+  if (hasWorkspace) return 'calendar';
+  return asked === undefined || asked === 'calendar' ? 'about' : asked;
+}

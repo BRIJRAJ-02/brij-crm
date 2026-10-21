@@ -10,6 +10,13 @@ export interface Step {
   readonly description?: string;
 }
 
+/**
+ * `list` (the default): every step named, with its marker. `count`: one
+ * quiet line, "Step 2 of 3", where the flow's own title names the step
+ * (first run's split card).
+ */
+export type StepsVariant = 'list' | 'count';
+
 /** Props for Steps. */
 export interface StepsProps {
   /** What the steps are for ("Import progress"). */
@@ -19,13 +26,19 @@ export interface StepsProps {
   readonly current: string;
   /** The step that failed, if one did. */
   readonly failed?: string;
+  /** `list` (the default) or `count`. */
+  readonly variant?: StepsVariant;
 }
 
 type StepState = 'done' | 'current' | 'upcoming' | 'failed';
 
 /** Numbered steps through a flow (import, two factor setup, onboarding): done, current and still to come, or failed. */
-export function Steps({ label, steps, current, failed }: StepsProps) {
+export function Steps({ label, steps, current, failed, variant = 'list' }: StepsProps) {
   const currentIndex = steps.findIndex((step) => step.id === current);
+  if (variant === 'count') {
+    // One line, read where it stands; the flow's title names the step. A step not in the list counts from the first.
+    return <p className={styles.count}>{strings.count(Math.max(currentIndex, 0) + 1, steps.length)}</p>;
+  }
   const stateOf = (index: number, id: string): StepState => {
     if (id === failed) return 'failed';
     if (index < currentIndex) return 'done';

@@ -5,12 +5,13 @@
 // answered here (it sends the browser straight back to the callback, as
 // Google does once you pick an account), and the api, started with
 // `--import ./test/fake-google.ts`, answers the code exchange with the
-// person the code names. A new person lands on /welcome with Google's name
-// filled in and makes a workspace; signing in with Google again opens it,
+// person the code names. A new person lands on first run with Google's name
+// in About you and makes a workspace; signing in with Google again opens it,
 // and a deep link comes back after Google too.
 import { Buffer } from 'node:buffer';
 import { randomUUID } from 'node:crypto';
 import { expect, test, type Page } from '@playwright/test';
+import { skipCalendarStep } from './people.ts';
 
 /** Making a workspace writes its standard objects in one transaction; on a busy machine that takes a while. */
 const WORKSPACE_MADE_MS = 30_000;
@@ -82,9 +83,13 @@ test('signs a new person in with Google, makes their workspace, and Google opens
   expect(authorize?.searchParams.get('client_id')).not.toBe('');
   expect(authorize?.searchParams.get('code_challenge_method')).toBe('S256');
   expect(new URL(authorize?.searchParams.get('redirect_uri') ?? '').pathname).toBe('/api/auth/callback/google');
+  // First run (spec 0036): About you starts from Google's name, and the workspace follows it.
   await expect(page.getByLabel('Your name')).toHaveValue(person.name);
+  await page.getByRole('button', { name: 'Continue', exact: true }).click();
+  await expect(page.getByLabel('Workspace name')).toHaveValue(`Grace’s workspace`);
   await page.getByLabel('Web address').fill(slug);
   await page.getByRole('button', { name: 'Create workspace' }).click();
+  await skipCalendarStep(page);
   await expect(page).toHaveURL(new RegExp(`/w/${slug}/objects/people(/views/[0-9a-f-]+)?$`), {
     timeout: WORKSPACE_MADE_MS,
   });
@@ -116,8 +121,11 @@ test('a deep link opened while signed out comes back after Google', async ({ pag
   await page.goto('/sign-in');
   await continueWithGoogle(page);
   await expect(page).toHaveURL(/\/welcome$/);
+  // Skip About you: Google's name stands.
+  await page.getByRole('button', { name: 'Skip', exact: true }).click();
   await page.getByLabel('Web address').fill(slug);
   await page.getByRole('button', { name: 'Create workspace' }).click();
+  await skipCalendarStep(page);
   await expect(page).toHaveURL(new RegExp(`/w/${slug}/objects/people(/views/[0-9a-f-]+)?$`), {
     timeout: WORKSPACE_MADE_MS,
   });

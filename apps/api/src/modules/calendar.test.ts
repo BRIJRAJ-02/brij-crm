@@ -184,6 +184,44 @@ describe('connecting a Google calendar (AC-597)', () => {
     );
   });
 
+  it('comes back to first run’s calendar step when the start asks, and only from the signed state (spec 0036, AC-1217)', async () => {
+    const m = await memberWithWorkspace(app);
+    const started = await navigate(app, `/api/calendar/google/start?workspace=${m.slug}&then=welcome`, m.cookie);
+    const state = new URL(started.headers.get('location') ?? '').searchParams.get('state') ?? '';
+    const browser = stateCookie(started);
+    const back = await navigate(
+      app,
+      `${GOOGLE_CALLBACK_PATH}?code=${encodeURIComponent('code:ada@acme.dev')}&state=${encodeURIComponent(state)}&then=settings`,
+      `${m.cookie}; ${browser}`,
+    );
+    expect(back.headers.get('location')).toBe(
+      `${APP_URL}/welcome?step=calendar&workspace=${m.slug}&calendar=connected`,
+    );
+
+    // A start without it, and a callback that asks for first run in its own query, still go to Settings.
+    const plain = await start(m.slug, m.cookie);
+    const declined = await navigate(
+      app,
+      `${GOOGLE_CALLBACK_PATH}?error=access_denied&then=welcome&state=${encodeURIComponent(plain.state)}`,
+      `${m.cookie}; ${plain.browser}`,
+    );
+    expect(declined.headers.get('location')).toBe(`${APP_URL}/w/${m.slug}/settings/calendar?calendar=denied`);
+
+    // Any other value is Settings; signed out, sign in comes back to the step asked for.
+    const odd = await navigate(app, `/api/calendar/google/start?workspace=${m.slug}&then=https://evil.example`);
+    expect(odd.headers.get('location')).toBe(
+      `${APP_URL}/sign-in?redirect=${encodeURIComponent(`/w/${m.slug}/settings/calendar`)}`,
+    );
+    const signedOut = await navigate(app, `/api/calendar/google/start?workspace=${m.slug}&then=welcome`);
+    expect(signedOut.headers.get('location')).toBe(
+      `${APP_URL}/sign-in?redirect=${encodeURIComponent(`/welcome?step=calendar&workspace=${m.slug}`)}`,
+    );
+    const offWelcome = await navigate(off, `/api/calendar/google/start?workspace=${m.slug}&then=welcome`, m.cookie);
+    expect(offWelcome.headers.get('location')).toBe(
+      `${APP_URL}/welcome?step=calendar&workspace=${m.slug}&calendar=off`,
+    );
+  });
+
   it('says calendar sync is off where it isn’t set up, and lists no providers', async () => {
     const m = await memberWithWorkspace(off);
     const response = await navigate(off, `/api/calendar/google/start?workspace=${m.slug}`, m.cookie);
@@ -194,6 +232,13 @@ describe('connecting a Google calendar (AC-597)', () => {
       connections: [],
       max: 3,
     });
+  });
+});
+
+describe('system.status (spec 0036, AC-1216)', () => {
+  it('says whether calendar sync is set up here, so first run offers a calendar only where it can', async () => {
+    expect((await rpcClient(app).system.status()).calendarSync).toBe(true);
+    expect((await rpcClient(off).system.status()).calendarSync).toBe(false);
   });
 });
 

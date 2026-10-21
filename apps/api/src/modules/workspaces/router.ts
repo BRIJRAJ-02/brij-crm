@@ -1,15 +1,22 @@
-import { startWorkspace } from '@crm/core';
+import { startWorkspace, workspaceSlugAvailable } from '@crm/core';
 import { apiError, withInputFields } from '../../errors.ts';
 import { commitWrite } from '../../hooks.ts';
 import { sendMilestones } from '../../monitoring/milestones.ts';
 import { authed } from '../../orpc.ts';
 
+/**
+ * Web address checks one person may make a minute (spec 0036, AC-1215): far
+ * more than anyone types, since first run asks 300 ms after the last key, and
+ * far too few to walk the directory.
+ */
+export const SLUG_CHECKS_PER_MINUTE = { window: 60, max: 60 } as const;
+
+const VERIFY_FIRST = 'Verify your email by signing in with a code, then create a workspace.';
+
 // Bootstrap: a session and a verified email; the workspace doesn't exist yet.
 export const workspacesRouter = authed.workspaces.router({
   create: authed.workspaces.create.handler(async ({ context, input }) => {
-    if (!context.user.emailVerified) {
-      throw apiError('EMAIL_UNVERIFIED', 'Verify your email by signing in with a code, then create a workspace.');
-    }
+    if (!context.user.emailVerified) throw apiError('EMAIL_UNVERIFIED', VERIFY_FIRST);
     // While sign up is closed, an account an invitation let in joins that workspace and starts none of its own
     // (spec 0031, owner decision 3), so one invitation can't grow into more people sending invitations.
     if (!context.mayStartWorkspace(context.user.email)) {
@@ -27,5 +34,12 @@ export const workspacesRouter = authed.workspaces.router({
     // Committed: `workspace_created` when this request made it (spec 0010, AC-175), nothing on a replay.
     sendMilestones(context, started.milestones);
     return { workspace: started.workspace };
+  }),
+  // First run's address field, as it is typed: the directory alone, counted per person across instances.
+  slugAvailable: authed.workspaces.slugAvailable.handler(async ({ context, input }) => {
+    if (!context.user.emailVerified) throw apiError('EMAIL_UNVERIFIED', VERIFY_FIRST);
+    const limit = await context.identity.consumeRateLimit(`workspace-slug:${context.user.id}`, SLUG_CHECKS_PER_MINUTE);
+    if (!limit.allowed) throw apiError('RATE_LIMITED', 'Too many address checks. Wait a minute, then try again.');
+    return workspaceSlugAvailable({ identity: context.identity }, input.slug);
   }),
 });

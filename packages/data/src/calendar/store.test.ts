@@ -122,6 +122,9 @@ describe('the calendar store (spec 0024)', () => {
     expect(view.getSnapshot()).toMatchObject({ status: 'ready', enabled: true, connections: [{ id: A }] });
     release();
     expect(connectUrl('my team')).toBe('/api/calendar/google/start?workspace=my%20team');
+    // First run's calendar step asks to come back to it (spec 0036, AC-1217); Settings is the default.
+    expect(connectUrl('acme', 'welcome')).toBe('/api/calendar/google/start?workspace=acme&then=welcome');
+    expect(connectUrl('acme', 'settings')).toBe('/api/calendar/google/start?workspace=acme');
   });
 
   it('shows a sharing change and a new default at once, and puts each back with a toast when refused', async () => {

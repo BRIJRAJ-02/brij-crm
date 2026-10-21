@@ -30,6 +30,7 @@ const BOOTSTRAP: ReadonlySet<string> = new Set([
   'invitations.peek',
   'invitations.accept',
   'workspaces.create',
+  'workspaces.slugAvailable',
   'realtime.connectionToken',
 ]);
 
@@ -54,8 +55,8 @@ const RAW_DATABASE_FILES: ReadonlySet<string> = new Set([
 
 /**
  * The module files holding the bootstrap handlers that read global identity:
- * `me.get` and `workspaces.create`, and `invitations.peek` (its per address
- * limit, spec 0031). No other module file may.
+ * `me.get`, `workspaces.create` and `workspaces.slugAvailable`, and
+ * `invitations.peek` (its per address limit, spec 0031). No other module file may.
  */
 const RAW_IDENTITY_FILES: ReadonlySet<string> = new Set([
   'me/router.ts',

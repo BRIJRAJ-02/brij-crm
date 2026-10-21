@@ -56,6 +56,34 @@ export async function checkScreen(page: Page, name: string): Promise<void> {
   await page.emulateMedia({ colorScheme: 'light' });
 }
 
+/**
+ * Where calendar sync is on, first run asks for a calendar last (spec 0036): Skip for now opens People. Where it is
+ * off (CI), Create workspace opens People itself. Either way, this waits for one or the other and goes on to People.
+ */
+export async function skipCalendarStep(page: Page): Promise<void> {
+  const calendar = page.getByRole('heading', { level: 1, name: 'Connect your calendar' });
+  await expect
+    .poll(async () => /\/objects\/people/.test(page.url()) || (await calendar.isVisible()), {
+      timeout: WORKSPACE_MADE_MS,
+      message: 'People, or first run’s calendar step',
+    })
+    .toBe(true);
+  if (await calendar.isVisible()) await page.getByRole('button', { name: 'Skip for now' }).click();
+}
+
+/**
+ * First run (spec 0036) from its first step: About you as `name`, then Your workspace at `slug` (its name following
+ * yours), then past the calendar step where there is one, landing on People.
+ */
+export async function firstRun(page: Page, slug: string, name = 'Ada Lovelace'): Promise<void> {
+  await expect(page).toHaveURL(/\/welcome$/);
+  await page.getByLabel('Your name').fill(name);
+  await page.getByRole('button', { name: 'Continue', exact: true }).click();
+  await page.getByLabel('Web address').fill(slug);
+  await page.getByRole('button', { name: 'Create workspace' }).click();
+  await skipCalendarStep(page);
+}
+
 /** Signs a new person in through Mailpit and makes their workspace, landing on its People page; answers the code used. */
 export async function newWorkspace(page: Page, email: string, slug: string): Promise<string> {
   await page.goto('/sign-in');
@@ -64,10 +92,7 @@ export async function newWorkspace(page: Page, email: string, slug: string): Pro
   await expect(page).toHaveURL(/\/verify/);
   const code = await codeFor(page.request, email);
   await page.getByLabel('Code').fill(code);
-  await expect(page).toHaveURL(/\/welcome$/);
-  await page.getByLabel('Your name').fill('Ada Lovelace');
-  await page.getByLabel('Web address').fill(slug);
-  await page.getByRole('button', { name: 'Create workspace' }).click();
+  await firstRun(page, slug);
   await expect(page).toHaveURL(objectUrl(slug, 'people'), { timeout: WORKSPACE_MADE_MS });
   return code;
 }

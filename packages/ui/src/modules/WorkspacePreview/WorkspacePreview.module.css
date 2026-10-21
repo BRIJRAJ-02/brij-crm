@@ -1,0 +1,185 @@
+/* WorkspacePreview: a sketch of the app in a window that starts space-32 in
+   from the top and the start of its slot and runs off the end and the foot,
+   which cut it. The window is the app's own size: a size-sidebar sidebar on
+   surface-sidebar beside the page on surface, with the app's head height
+   (size-bar) and row heights (size-nav-item, size-row). Words are what the
+   person typed; everything else is still Skeleton bars. The part a step is
+   about takes the focus ring (accent-line and the faint halo), easing to it
+   as the step changes. */
+@layer components {
+  .root {
+    position: relative;
+    inline-size: 100%;
+    block-size: 100%;
+    min-block-size: calc(var(--size-panel) + 2 * var(--space-32));
+    overflow: hidden;
+  }
+
+  .window {
+    position: absolute;
+    inset-block: var(--space-32) calc(-1 * var(--space-32));
+    inset-inline-start: var(--space-32);
+    display: grid;
+    grid-template-columns: var(--size-sidebar) minmax(0, 1fr);
+    inline-size: calc(var(--size-sidebar) + var(--size-panel));
+    overflow: hidden;
+    border: var(--border-width-hairline) solid var(--border-subtle);
+    border-radius: var(--radius-lg);
+    background: var(--surface);
+    box-shadow: var(--shadow-md);
+  }
+
+  .sidebar {
+    display: flex;
+    flex-direction: column;
+    min-inline-size: 0;
+    border-inline-end: var(--border-width-hairline) solid var(--border-subtle);
+    background: var(--surface-sidebar);
+  }
+
+  .head {
+    display: flex;
+    flex: none;
+    align-items: center;
+    block-size: var(--size-bar);
+    padding-inline: var(--space-8);
+    border-block-end: var(--border-width-hairline) solid var(--border-subtle);
+  }
+
+  /* A ringed part: the workspace at the head, the person at the foot. */
+  .part {
+    display: flex;
+    flex: 1;
+    gap: var(--space-6);
+    align-items: center;
+    min-inline-size: 0;
+    block-size: var(--size-nav-item);
+    padding-inline: var(--space-4);
+    border-radius: var(--radius-sm);
+    outline: var(--border-width-hairline) solid transparent;
+    transition:
+      outline-color var(--duration-move) var(--ease-out),
+      box-shadow var(--duration-move) var(--ease-out);
+  }
+
+  .part[data-focused],
+  .row[data-focused] {
+    box-shadow: var(--shadow-focus);
+    outline-color: var(--accent-line);
+  }
+
+  .name,
+  .person {
+    flex: 1;
+    min-inline-size: 0;
+    overflow: hidden;
+    color: var(--text);
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .name {
+    font: var(--text-title);
+    letter-spacing: var(--tracking-title);
+  }
+
+  .person {
+    font: var(--text-body-strong);
+    letter-spacing: var(--tracking-body-strong);
+  }
+
+  .search {
+    display: flex;
+    gap: var(--space-6);
+    align-items: center;
+    margin: var(--space-8);
+    padding-inline: var(--space-6);
+    block-size: var(--size-nav-item);
+    border: var(--border-width-hairline) solid var(--border-subtle);
+    border-radius: var(--radius-sm);
+    background: var(--surface-raised);
+  }
+
+  .list {
+    display: flex;
+    flex-direction: column;
+    margin: 0;
+    padding-block: 0;
+    padding-inline: var(--space-8);
+    list-style: none;
+  }
+
+  .row {
+    display: flex;
+    gap: var(--space-8);
+    align-items: center;
+    block-size: var(--size-nav-item);
+    padding-inline: var(--space-6);
+    border-radius: var(--radius-sm);
+    outline: var(--border-width-hairline) solid transparent;
+    transition:
+      outline-color var(--duration-move) var(--ease-out),
+      box-shadow var(--duration-move) var(--ease-out);
+  }
+
+  .label {
+    display: flex;
+    padding-block: var(--space-12) var(--space-4);
+    padding-inline: var(--space-12);
+  }
+
+  .foot {
+    display: flex;
+    margin-block-start: auto;
+    padding: var(--space-8);
+    padding-block-end: calc(var(--space-32) + var(--space-8));
+  }
+
+  .main {
+    display: flex;
+    flex-direction: column;
+    min-inline-size: 0;
+  }
+
+  .bar {
+    display: flex;
+    flex: none;
+    align-items: center;
+    block-size: var(--size-bar);
+    padding-inline: var(--space-16);
+    border-block-end: var(--border-width-hairline) solid var(--border-subtle);
+  }
+
+  .table {
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+
+  .line {
+    display: flex;
+    gap: var(--space-8);
+    align-items: center;
+    block-size: var(--size-row);
+    padding-inline: var(--space-16);
+    border-block-end: var(--border-width-hairline) solid var(--border-subtle);
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .part,
+    .row {
+      transition: none;
+    }
+  }
+
+  @media (forced-colors: active) {
+    .window {
+      border-color: CanvasText;
+    }
+
+    .part[data-focused],
+    .row[data-focused] {
+      outline: var(--border-width-thick) solid Highlight;
+    }
+  }
+}

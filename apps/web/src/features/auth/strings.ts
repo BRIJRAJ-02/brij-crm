@@ -39,4 +39,11 @@ export const strings = {
   signedOutUnsaved: 'You were signed out, so your last change wasn’t saved. Sign in again to carry on.',
   googleUnverified: 'Google hasn’t verified that account’s email, so it can’t sign you in. Use your email instead.',
   googleFailed: 'Couldn’t sign in with Google. Try again, or use your email.',
+  /** Sign out's confirm (the owner, 21 October 2026: anything that ends something asks first). */
+  signOutTitle: 'Sign out?',
+  signOutText: 'You’ll need to sign in again on this device.',
+  cancel: 'Cancel',
+  signOut: 'Sign out',
+  signingOut: 'Signing out',
+  signOutFailed: 'Couldn’t sign out. Check your connection, then try again.',
 } as const;

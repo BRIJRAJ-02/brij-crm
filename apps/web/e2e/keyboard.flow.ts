@@ -76,10 +76,12 @@ test.describe('the core loop by keyboard', () => {
     await focusedWithRing(page, page.getByLabel('Code'), 'the code field', page.locator('main [data-next]'));
     await page.keyboard.type(await codeFor(page.request, email));
 
-    // Welcome: the first field has focus (F33), Enter creates.
+    // First run (spec 0036): each step's first field has focus (F33), and Enter goes on.
     await expect(page).toHaveURL(/\/welcome$/);
     await focusedWithRing(page, page.getByLabel('Your name'), 'Your name');
     await page.keyboard.type('Ada Lovelace');
+    await page.keyboard.press('Enter');
+    await focusedWithRing(page, page.getByLabel('Workspace name'), 'Workspace name');
     await tabTo(page, page.getByLabel('Web address'));
     await page.keyboard.press('ControlOrMeta+A');
     await page.keyboard.type(slug);
@@ -89,6 +91,18 @@ test.describe('the core loop by keyboard', () => {
     // A primary's edge is already blue, so its ring is the 1px outline just outside it, not the faint halo alone.
     expect(await create.evaluate((element) => getComputedStyle(element).outlineStyle)).toBe('solid');
     await page.keyboard.press('Enter');
+    // Where calendar sync is on, the calendar step's first button has focus: Tab on to Skip for now, and Enter.
+    const calendar = page.getByRole('heading', { level: 1, name: 'Connect your calendar' });
+    await expect
+      .poll(async () => /\/objects\/people/.test(page.url()) || (await calendar.isVisible()), {
+        timeout: WORKSPACE_MADE_MS,
+      })
+      .toBe(true);
+    if (await calendar.isVisible()) {
+      await focusedWithRing(page, page.getByRole('button', { name: 'Connect Google Calendar' }), 'Connect Google');
+      await tabTo(page, page.getByRole('button', { name: 'Skip for now' }));
+      await page.keyboard.press('Enter');
+    }
     await expect(page).toHaveURL(new RegExp(`/w/${slug}/objects/people/views/[0-9a-f-]{36}$`), {
       timeout: WORKSPACE_MADE_MS,
     });

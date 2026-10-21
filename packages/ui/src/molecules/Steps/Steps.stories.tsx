@@ -42,3 +42,21 @@ export const Failed: Story = {
     </Stage>
   ),
 };
+
+/** Counted: one quiet line where the flow's own title names the step (first run). */
+export const Count: Story = {
+  args: {
+    label: 'Setting up',
+    variant: 'count',
+    steps: [
+      { id: 'about', label: 'About you' },
+      { id: 'workspace', label: 'Your workspace' },
+      { id: 'calendar', label: 'Connect your calendar' },
+    ],
+    current: 'workspace',
+  },
+  play: async ({ canvas }) => {
+    await expect(canvas.getByText('Step 2 of 3')).toBeInTheDocument();
+    await expect(canvas.queryByRole('list')).toBeNull();
+  },
+};

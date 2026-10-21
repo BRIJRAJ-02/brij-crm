@@ -16,7 +16,12 @@ export const SignInProviders = z.object({
 /** The sign in methods offered beyond the email code. */
 export type SignInProviders = z.infer<typeof SignInProviders>;
 
-/** The status screen's answer: where it runs, whether the database answers and how fast, and how to sign in. */
+/**
+ * The status screen's answer: where it runs, whether the database answers and
+ * how fast, how to sign in, and whether calendar sync is set up here
+ * (`CALENDAR_SYNC=on`), so first run offers to connect a calendar only where
+ * it can (spec 0036, AC-1216).
+ */
 export const SystemStatus = z.object({
   environment: AppEnvironment,
   database: z.object({
@@ -24,6 +29,7 @@ export const SystemStatus = z.object({
     latencyMs: z.number().int().nonnegative(),
   }),
   providers: SignInProviders,
+  calendarSync: z.boolean(),
   checkedAt: z.iso.datetime(),
 });
 /** The status screen's answer. */

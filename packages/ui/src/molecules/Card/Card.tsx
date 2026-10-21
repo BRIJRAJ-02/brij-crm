@@ -12,6 +12,8 @@ export const CardTitleLevel = createContext<2 | 3 | 4>(3);
 interface CardBase {
   /** A line under the title. */
   readonly description?: string;
+  /** A line above the title, in the header: where a flow stands (first run's Back and "Step 2 of 3"). */
+  readonly eyebrow?: ReactNode;
   readonly children?: ReactNode;
   /** Buttons, or a status, at the end of the header. */
   readonly actions?: ReactNode;
@@ -38,13 +40,27 @@ export type CardPageSize = 'sm' | 'md';
  */
 export type CardProps = CardBase &
   (
-    | { readonly placement?: 'inline'; /** Its heading. */ readonly title?: string; readonly size?: never }
+    | {
+        readonly placement?: 'inline';
+        /** Its heading. */
+        readonly title?: string;
+        readonly size?: never;
+        readonly preview?: never;
+      }
     | {
         readonly placement: 'page';
         /** Its heading, the page's `h1`. */
         readonly title: string;
         /** How wide the page card is: `md` (the default) or `sm`. */
         readonly size?: CardPageSize;
+        /**
+         * A live preview beside the card's content, from `bp-page-compact` up
+         * (first run's workspace sketch): the card widens to hold both, the
+         * content keeps `size-panel`, and the preview fills the rest on
+         * `surface-subtle`. Narrower, the preview is left out. It is
+         * decoration: hidden from assistive technology, and inert.
+         */
+        readonly preview?: ReactNode;
       }
   );
 
@@ -52,28 +68,25 @@ export type CardProps = CardBase &
 export function Card({
   title,
   description,
+  eyebrow,
   children,
   actions,
   footer,
   tone = 'default',
   placement = 'inline',
   size,
+  preview,
   isBusy = false,
 }: CardProps) {
   const level = useContext(CardTitleLevel);
   const Root = placement === 'page' ? 'main' : 'section';
   const Title = placement === 'page' ? 'h1' : level === 2 ? 'h2' : level === 4 ? 'h4' : 'h3';
-  return (
-    <Root
-      className={styles.root}
-      data-tone={tone}
-      data-placement={placement}
-      data-size={placement === 'page' ? (size ?? 'md') : undefined}
-      aria-busy={isBusy || undefined}
-    >
-      {(title !== undefined || actions !== undefined) && (
+  const content = (
+    <>
+      {(title !== undefined || actions !== undefined || eyebrow !== undefined) && (
         <header className={styles.head}>
           <span className={styles.heading}>
+            {eyebrow !== undefined && <span className={styles.eyebrow}>{eyebrow}</span>}
             {title !== undefined &&
               (placement === 'page' ? (
                 // The page's heading: the app moves focus here after a route
@@ -91,6 +104,27 @@ export function Card({
       )}
       {children !== undefined && <div className={styles.body}>{children}</div>}
       {footer !== undefined && <footer className={styles.foot}>{footer}</footer>}
+    </>
+  );
+  return (
+    <Root
+      className={styles.root}
+      data-tone={tone}
+      data-placement={placement}
+      data-size={placement === 'page' ? (size ?? 'md') : undefined}
+      data-preview={preview === undefined ? undefined : ''}
+      aria-busy={isBusy || undefined}
+    >
+      {preview === undefined ? (
+        content
+      ) : (
+        <>
+          <div className={styles.column}>{content}</div>
+          <div className={styles.preview} aria-hidden="true" inert>
+            {preview}
+          </div>
+        </>
+      )}
     </Root>
   );
 }

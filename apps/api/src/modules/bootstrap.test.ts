@@ -170,3 +170,37 @@ describe('workspaces.create', () => {
     await expect(signIn(closed.app)).rejects.toThrow(/403/);
   });
 });
+
+describe('workspaces.slugAvailable (spec 0036, AC-1215)', () => {
+  it('says an address is free until any workspace has it, from anyone', async () => {
+    const owner = await signedIn();
+    const other = await signedIn();
+    const slug = `free-${tag()}`;
+    expect(await other.client.workspaces.slugAvailable({ slug })).toEqual({ available: true });
+    await owner.client.workspaces.create({ id: newId(), name: 'Mine', slug, memberName: 'Ada' });
+    expect(await other.client.workspaces.slugAvailable({ slug })).toEqual({ available: false });
+    expect(await owner.client.workspaces.slugAvailable({ slug })).toEqual({ available: false });
+  });
+
+  it('refuses an address that breaks the rule, a caller with no session, and an unverified email', async () => {
+    const { email, client } = await signedIn();
+    const error = await failure(() => client.workspaces.slugAvailable({ slug: 'No Spaces' }));
+    expect(error).toMatchObject({ code: 'INPUT_INVALID', status: 400, data: { issues: [{ path: ['slug'] }] } });
+    const signedOut = await failure(() => rpcClient(app).workspaces.slugAvailable({ slug: `free-${tag()}` }));
+    expect(signedOut).toMatchObject({ code: 'UNAUTHENTICATED', status: 401 });
+    await testQuery(identityUrl, 'update auth."user" set email_verified = false where email = $1', [email]);
+    const unverified = await failure(() => client.workspaces.slugAvailable({ slug: `free-${tag()}` }));
+    expect(unverified).toMatchObject({ code: 'EMAIL_UNVERIFIED', status: 403 });
+  });
+
+  it('answers 60 checks a minute per person, then RATE_LIMITED with a wait, and counts each person apart', async () => {
+    const { client } = await signedIn();
+    for (let check = 0; check < 60; check += 1) {
+      await client.workspaces.slugAvailable({ slug: `walk-${String(check)}-${tag()}` });
+    }
+    const limited = await failure(() => client.workspaces.slugAvailable({ slug: `walk-${tag()}` }));
+    expect(limited).toMatchObject({ code: 'RATE_LIMITED', status: 429 });
+    const other = await signedIn();
+    expect(await other.client.workspaces.slugAvailable({ slug: `walk-${tag()}` })).toEqual({ available: true });
+  });
+});

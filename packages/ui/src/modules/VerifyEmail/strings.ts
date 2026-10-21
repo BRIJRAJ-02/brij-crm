@@ -1,14 +1,15 @@
 /** VerifyEmail's built in copy. */
 export const strings = {
   /**
-   * The line over the boxes, with the address in it: the words before the
+   * The lines over the boxes, with the address in them: the words before the
    * address, the address as given, and the words after it, so a translation
-   * can put the address anywhere in the sentence. The address shows in bold.
+   * can put the address anywhere. The address shows in the strong weight on a
+   * line of its own, so a long one never splits partway along a line of words.
    */
   sentTo: <T>(email: T): readonly [before: string, email: T, after: string] => [
     'Enter the code we sent to ',
     email,
-    '.',
+    '',
   ],
   /** The boxes' name for screen readers: the line over them says it on screen. */
   code: 'Code',

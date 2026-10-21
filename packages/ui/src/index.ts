@@ -88,8 +88,8 @@ export { safeImageSrc } from './lib/safe-image-src.ts';
 export { Breadcrumbs, type BreadcrumbsProps, type Crumb } from './molecules/Breadcrumbs/Breadcrumbs.tsx';
 export { Callout, type CalloutPlacement, type CalloutProps, type CalloutTone } from './molecules/Callout/Callout.tsx';
 export { FloatingBar, type FloatingBarProps } from './molecules/FloatingBar/FloatingBar.tsx';
-export { Card, type CardProps } from './molecules/Card/Card.tsx';
-export { CodeInput, type CodeInputProps } from './molecules/CodeInput/CodeInput.tsx';
+export { Card, type CardPageSize, type CardProps } from './molecules/Card/Card.tsx';
+export { CodeInput, type CodeInputProps, type CodeInputSize } from './molecules/CodeInput/CodeInput.tsx';
 export {
   DatePicker,
   DateRangePicker,
@@ -156,7 +156,7 @@ export {
 } from './molecules/SegmentedControl/SegmentedControl.tsx';
 export { Select, type SelectItem, type SelectOptionStyle, type SelectProps } from './molecules/Select/Select.tsx';
 export { ChoiceChips, type ChoiceChip, type ChoiceChipsProps } from './molecules/ChoiceChips/ChoiceChips.tsx';
-export { Steps, type Step, type StepsProps } from './molecules/Steps/Steps.tsx';
+export { Steps, type Step, type StepsProps, type StepsVariant } from './molecules/Steps/Steps.tsx';
 export { Table, type TableColumn, type TableProps } from './molecules/Table/Table.tsx';
 export { TabPanel, Tabs, type TabItem, type TabPanelProps, type TabsProps } from './molecules/Tabs/Tabs.tsx';
 export {
@@ -357,6 +357,11 @@ export {
   type TaskSection,
 } from './modules/TaskList/TaskList.tsx';
 export { VerifyEmail, type VerifyEmailProps } from './modules/VerifyEmail/VerifyEmail.tsx';
+export {
+  WorkspacePreview,
+  type WorkspacePreviewFocus,
+  type WorkspacePreviewProps,
+} from './modules/WorkspacePreview/WorkspacePreview.tsx';
 export { ViewSettings, type ViewField, type ViewSettingsProps } from './modules/ViewSettings/ViewSettings.tsx';
 export {
   SortChip,

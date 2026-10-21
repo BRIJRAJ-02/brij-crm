@@ -4,6 +4,8 @@ import { Button } from '../../atoms/Button/Button.tsx';
 import { Skeleton } from '../../atoms/Skeleton/Skeleton.tsx';
 import { Field } from '../../molecules/Field/Field.tsx';
 import { Form } from '../../molecules/Form/Form.tsx';
+import { Steps } from '../../molecules/Steps/Steps.tsx';
+import { WorkspacePreview } from '../WorkspacePreview/WorkspacePreview.tsx';
 import { Stage } from '../../workbench/Stage/Stage.tsx';
 import { AuthLayout } from './AuthLayout.tsx';
 
@@ -91,4 +93,37 @@ export const Narrow: Story = {
       </AuthLayout>
     </Stage>
   ),
+};
+
+/** First run's steps, as Steps' count names them. */
+const FIRST_RUN = [
+  { id: 'about', label: 'About you' },
+  { id: 'workspace', label: 'Your workspace' },
+  { id: 'calendar', label: 'Connect your calendar' },
+];
+
+/**
+ * Split (first run, spec 0036): from 1024px up, the step on the left and the workspace's sketch on the right, Back and
+ * the step count above the title, and who is signed in at the foot beside Sign out. Narrower, the sketch is left out.
+ */
+export const Split: Story = {
+  args: {
+    title: 'Your workspace',
+    description: 'Your records live here. Name it for your team or company.',
+    eyebrow: (
+      <>
+        <Button variant="ghost" icon="arrow-left" label="Back" />
+        <Steps variant="count" label="Setting up" steps={FIRST_RUN} current="workspace" />
+      </>
+    ),
+    preview: <WorkspacePreview workspaceName="Halcyon Labs" personName="Maya Chen" focus="workspace" />,
+    account: 'maya@halcyonlabs.io',
+    footer: <Button variant="ghost">Sign out</Button>,
+  },
+  play: async ({ canvas }) => {
+    await expect(canvas.getByRole('heading', { level: 1, name: 'Your workspace' })).toBeInTheDocument();
+    await expect(canvas.getByText('Step 2 of 3')).toBeInTheDocument();
+    await expect(canvas.getByText('Signed in as maya@halcyonlabs.io')).toBeInTheDocument();
+    await expect(canvas.getByRole('button', { name: 'Back' })).toBeInTheDocument();
+  },
 };

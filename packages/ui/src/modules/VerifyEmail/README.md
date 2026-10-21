@@ -34,7 +34,7 @@ New (spec 0005, pulled forward from spec 0003's milestone 4), restyled by spec 0
 - `isResending` spins "Resend code" as "Resending code". When it turns false again, the new code is out: the boxes and any old refusal clear, focus moves from the button to the boxes (once per new code, and not while `isDisabled`; turning it off and on again never moves focus), and "New code sent" is announced and leads the wait line ("New code sent. You can resend it in 60 seconds."). Typing hides it.
 - `resendError` is why a resend failed (sent too often, offline). Pass it in the same answer that turns `isResending` false: then nothing clears, focus stays, "New code sent" is never said, and the reason shows under the buttons as a danger `Callout`, announced. It never goes on the boxes, which belong to the code. Clear it when the next resend starts.
 - `isDisabled` turns the boxes and both buttons off; `disabledReason` says why in a line under the boxes, which also describes both buttons.
-- The line over the boxes is one sentence in `strings.ts` (`sentTo`), which returns the words before the address, the address and the words after it, so a translation can put the address anywhere; the address shows in bold.
+- The lines over the boxes come from `strings.ts` (`sentTo`), which returns the words before the address, the address and the words after it, so a translation can put the address anywhere. The address shows in the strong weight on a line of its own, wrapping only where it has to, so a long address never splits partway along the sentence (at its hyphen, say).
 
 ## States
 

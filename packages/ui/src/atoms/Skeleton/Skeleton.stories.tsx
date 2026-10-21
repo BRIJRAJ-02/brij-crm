@@ -54,3 +54,19 @@ export const Shapes: Story = {
     }
   },
 };
+
+/** Still: a sketch of content (first run's workspace preview), drawn without the pulse so it never reads as loading. */
+export const Still: Story = {
+  render: () => (
+    <Stage direction="column" width="narrow">
+      <Skeleton shape="tile" isStill />
+      <Skeleton width="medium" isStill />
+      <Skeleton lines={2} isStill />
+    </Stage>
+  ),
+  play: async ({ canvasElement }) => {
+    for (const skeleton of canvasElement.querySelectorAll('[data-shape]')) {
+      await expect(skeleton.getAnimations()).toHaveLength(0);
+    }
+  },
+};

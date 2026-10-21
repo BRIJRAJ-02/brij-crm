@@ -1,12 +1,12 @@
-/* AuthLayout: a column centred across its container and held at the top, at
-   least its full height (like AppShell, it fills what the app gives it, and
-   grows past it on a short screen): the product's mark and name in
-   body-strong, then the page card, which keeps its own width, space-16
-   gutter and space-32 above and below. The mark sits a fixed twice space-32
-   from the top, never centred down the window, so the card doesn't move
-   between steps, or when a refusal makes it taller. The card's own margin is
-   the space below. The page's background and text colour come from the base
-   layer. */
+/* AuthLayout: a column centred across its container, at least its full
+   height (like AppShell, it fills what the app gives it, and grows past it on
+   a short screen): the product's mark and name in body-strong, then the page
+   card, which keeps its own width, space-16 gutter and space-32 above and
+   below. On a phone the mark sits a fixed twice space-32 from the top; on a
+   wide screen the block sits a little above the middle, at an offset from the
+   window's height alone, so the card doesn't move between steps, or when a
+   refusal makes it taller. The card's own margin is the space below. The
+   page's background and text colour come from the base layer. */
 @layer components {
   .root {
     display: flex;
@@ -19,6 +19,22 @@
     padding-block-start: calc(2 * var(--space-32));
   }
 
+  /* A wide screen: optically centred, a little above the middle. The offset
+     is half of what the window's height leaves around a reference block (the
+     narrow card's: size-panel; the split card's: size-page-card and a bar),
+     never the card's own height, so the card holds still between steps and
+     as a refusal makes it taller. A phone keeps the fixed offset above, so
+     the card stays put when the keyboard opens. */
+  @media (width >= 1024px) {
+    .root {
+      padding-block-start: max(calc(2 * var(--space-32)), calc((100dvh - var(--size-panel)) / 2));
+    }
+
+    .root[data-split] {
+      padding-block-start: max(calc(2 * var(--space-32)), calc((100dvh - var(--size-page-card) - var(--size-bar)) / 2));
+    }
+  }
+
   .brand {
     display: inline-flex;
     gap: var(--space-8);
@@ -28,6 +44,19 @@
   .name {
     font: var(--text-body-strong);
     letter-spacing: var(--tracking-body-strong);
+  }
+
+  /* Who is signed in, at the start of the footer: quiet, cut with an ellipsis before it crowds the footer's actions. */
+  .account {
+    flex: 1;
+    align-self: center;
+    min-inline-size: 0;
+    overflow: hidden;
+    color: var(--text-secondary);
+    font: var(--text-label);
+    letter-spacing: var(--tracking-label);
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
 
   /* The wordmark: one image per theme, at control height, its width from its

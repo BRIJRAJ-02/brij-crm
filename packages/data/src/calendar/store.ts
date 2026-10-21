@@ -110,9 +110,16 @@ export function needsReconnect(connection: Pick<CalendarConnectionView, 'status'
 export const SYNC_POLL_MS = 5_000;
 export const SYNC_POLL_FOR_MS = 5 * 60_000;
 
+/**
+ * Where a connect comes back to: Settings › Calendar (the default), or first
+ * run's calendar step (`welcome`, spec 0036). The only values the API takes.
+ */
+export type ConnectReturn = 'settings' | 'welcome';
+
 /** The address that starts connecting a Google calendar: the browser goes there, the API sends it on to Google. */
-export function connectUrl(workspace: string): string {
-  return `/api/calendar/google/start?workspace=${encodeURIComponent(workspace)}`;
+export function connectUrl(workspace: string, then: ConnectReturn = 'settings'): string {
+  const address = `/api/calendar/google/start?workspace=${encodeURIComponent(workspace)}`;
+  return then === 'settings' ? address : `${address}&then=${then}`;
 }
 
 /** The calendar store: every workspace's list, and the member's changes to it. */
