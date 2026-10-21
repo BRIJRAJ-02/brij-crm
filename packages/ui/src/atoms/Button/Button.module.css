@@ -109,6 +109,19 @@
     inline-size: var(--size-chip);
   }
 
+  /* A collapsible label in a narrow bar (its container, a phone): the icon
+     alone, square like an icon only button; `label` keeps the name. */
+  @container (inline-size < 480px) {
+    .root[data-collapsible] {
+      inline-size: var(--size-control);
+      padding-inline: 0;
+    }
+
+    .root[data-collapsible] .label {
+      display: none;
+    }
+  }
+
   /* Variants */
   .root[data-variant='primary'] {
     border-color: var(--accent-hover);

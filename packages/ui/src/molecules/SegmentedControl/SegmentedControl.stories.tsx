@@ -123,3 +123,26 @@ export const ThemeVertical: Story = {
 export const Disabled: Story = {
   args: { isDisabled: true },
 };
+
+/**
+ * `size="compact"`: exactly a button's height, for a bar (the view bar's Table and Board). With
+ * `isLabelCollapsible`, a phone shows the icons alone, each segment keeping its name.
+ */
+export const CompactAndCollapsible: Story = {
+  render: (args) => (
+    <Stage direction="column">
+      <SegmentedControl {...args} size="compact" isLabelCollapsible />
+      <Stage width="phone">
+        <SegmentedControl {...args} label="Phone layout" size="compact" isLabelCollapsible />
+      </Stage>
+    </Stage>
+  ),
+  play: async ({ canvas, userEvent }) => {
+    const wide = canvas.getByRole('radiogroup', { name: 'View' });
+    const narrow = canvas.getByRole('radiogroup', { name: 'Phone layout' });
+    await expect(narrow.getBoundingClientRect().width).toBeLessThan(wide.getBoundingClientRect().width);
+    await expect(canvas.getAllByRole('radio', { name: 'Board' })).toHaveLength(2);
+    await userEvent.click(canvas.getAllByRole('radio', { name: 'Board' })[1] ?? narrow);
+    await expect(canvas.getAllByRole('radio', { name: 'Board' })[1]).toBeChecked();
+  },
+};

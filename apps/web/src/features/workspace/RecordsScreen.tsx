@@ -34,6 +34,8 @@ import {
   ViewBar,
   type ViewAction,
   type ViewChoice,
+  type ViewLayoutSwitch,
+  type ViewSettingsTrigger,
 } from '@crm/ui';
 import { columnWidthFor, DataGrid, type GridColumn } from '@crm/ui/grid';
 import { useNavigate, useRouteContext } from '@tanstack/react-router';
@@ -73,8 +75,10 @@ export interface RecordsScreenProps {
   readonly onViewChange?: (viewId: string) => void;
   /** The switcher's Create view. */
   readonly onCreateView?: () => void;
-  /** The view bar's end before the Table and Board switch: the lock line and View settings. */
+  /** The view bar's end before View settings: the lock line. */
   readonly viewActions?: ReactNode;
+  /** The view bar's View settings button, which opens the view's columns. */
+  readonly viewSettings?: ViewSettingsTrigger;
   /** The view's own actions, under "This view" in the switcher's menu, and what runs one (spec 0020). */
   readonly viewMenu?: { readonly actions: readonly ViewAction[]; readonly onAction: (id: string) => void };
   /**
@@ -91,7 +95,7 @@ export interface RecordsScreenProps {
   /** An attribute made here (Add attribute, the grid's "+"): the view shows it (AC-471). */
   readonly onAttributeCreated?: (attributeId: string) => void;
   /** At the end of the view bar: the Table and Board switch (spec 0021). */
-  readonly viewBarEnd?: ReactNode;
+  readonly layoutSwitch?: ViewLayoutSwitch;
   /**
    * The view's Toolbar (its sorts, filters and Save), and any notice under it, given what to say to screen
    * readers: `announce`'s words for the count, once the rows for a new question are in (never for the first,
@@ -210,7 +214,8 @@ export function RecordsScreen({
   layout,
   onLayoutChange,
   onAttributeCreated,
-  viewBarEnd,
+  viewSettings,
+  layoutSwitch,
   toolbar,
   announce,
   filteredEmpty,
@@ -475,6 +480,8 @@ export function RecordsScreen({
             onViewChange={onViewChange ?? (() => undefined)}
             {...(onCreateView === undefined ? {} : { onCreateView })}
             {...(viewMenu === undefined ? {} : { actions: viewMenu.actions, onAction: viewMenu.onAction })}
+            {...(viewSettings === undefined ? {} : { settings: viewSettings })}
+            {...(layoutSwitch === undefined ? {} : { layout: layoutSwitch })}
           >
             {isReordering && <Spinner label={strings.updating} />}
             {/* In the bar, so the table never moves when the connection drops and comes back. */}
@@ -484,7 +491,6 @@ export function RecordsScreen({
               </Callout>
             )}
             {viewActions}
-            {viewBarEnd}
           </ViewBar>
         ),
         ...(toolbar === undefined ? {} : { toolbar: toolbar(announced.text) }),

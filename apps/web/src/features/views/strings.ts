@@ -69,6 +69,9 @@ export const strings = {
   /** Under View settings' columns: a new attribute is one more column. */
   addAttribute: 'Add attribute',
   columns: 'Columns',
+  /** A board's View settings: what its cards show. */
+  cardFields: 'Card fields',
+  cardFieldsFull: (max: number) => `A card shows up to ${String(max)} fields. Hide one to show another.`,
   rename: 'Rename',
   renameTitle: 'Rename view',
   duplicate: 'Duplicate',

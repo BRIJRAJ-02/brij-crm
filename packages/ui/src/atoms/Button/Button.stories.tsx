@@ -97,6 +97,30 @@ export const IconOnly: Story = {
   },
 };
 
+/**
+ * `isLabelCollapsible`: the words show in a wide bar, and in a narrow one (a phone) the icon stands alone, square,
+ * its `label` still its name.
+ */
+export const LabelCollapsible: Story = {
+  render: () => (
+    <Stage direction="column">
+      <Button icon="settings" label="View settings" isLabelCollapsible>
+        View settings
+      </Button>
+      <Stage width="phone">
+        <Button icon="settings" label="View settings" isLabelCollapsible>
+          View settings
+        </Button>
+      </Stage>
+    </Stage>
+  ),
+  play: async ({ canvas }) => {
+    const [wide, narrow] = canvas.getAllByRole('button', { name: 'View settings' });
+    await expect(wide).toHaveTextContent('View settings');
+    await expect(narrow?.getBoundingClientRect().width).toBeLessThan(40);
+  },
+};
+
 /** `lg` matches a 30px input beside it. */
 export const Large: Story = {
   render: () => (

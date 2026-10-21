@@ -34,7 +34,21 @@ export interface SegmentedControlProps {
    * folded sidebar's rail. The arrow keys move either way.
    */
   readonly orientation?: SegmentOrientation;
+  /**
+   * `md` (the default) sits on its own; `compact` is exactly a button's
+   * `size-control` tall, track and all, so it lines up with the buttons
+   * beside it in a bar: the view bar's Table and Board.
+   */
+  readonly size?: SegmentSize;
+  /**
+   * In a narrow bar (its container under 480px, a phone) the segments that
+   * have an icon show it alone; the label stays each one's name.
+   */
+  readonly isLabelCollapsible?: boolean;
 }
+
+/** How tall the control is: `compact` matches a button. */
+export type SegmentSize = 'md' | 'compact';
 
 /** Which way the segments run. */
 export type SegmentOrientation = 'horizontal' | 'vertical';
@@ -52,6 +66,8 @@ export function SegmentedControl({
   onChange,
   isDisabled = false,
   orientation = 'horizontal',
+  size = 'md',
+  isLabelCollapsible = false,
 }: SegmentedControlProps) {
   const { isFocusVisible } = useFocusVisible();
   return (
@@ -60,6 +76,8 @@ export function SegmentedControl({
       aria-label={label}
       orientation={orientation}
       data-orientation={orientation}
+      data-size={size}
+      data-collapsible={isLabelCollapsible || undefined}
       isDisabled={isDisabled}
       data-instant={isFocusVisible || undefined}
       {...(value === undefined ? {} : { value })}
@@ -85,6 +103,14 @@ export function SegmentedControl({
               ))}
             {segment.isIconOnly === true ? (
               <VisuallyHidden>{segment.label}</VisuallyHidden>
+            ) : isLabelCollapsible && segment.icon !== undefined ? (
+              // The words may hide in a narrow bar, so the name comes from a copy that never does.
+              <>
+                <span className={styles.label} aria-hidden="true" data-collapsible="">
+                  {segment.label}
+                </span>
+                <VisuallyHidden>{segment.label}</VisuallyHidden>
+              </>
             ) : (
               <span className={styles.label}>{segment.label}</span>
             )}

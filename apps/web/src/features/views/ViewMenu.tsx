@@ -187,6 +187,7 @@ export function useViewMenu({
         );
       },
     }),
+    // Export CSV (wip/import) goes here, after Copy link and before the moves: the view's first group.
     ...(canMove('up')
       ? [
           {

@@ -49,6 +49,25 @@
     padding-inline: var(--space-4);
   }
 
+  /* Compact: the whole control, track and hairline included, is a button's
+     size-control tall, so it shares a bar's line with the buttons beside it. */
+  .root[data-size='compact'] .segment {
+    block-size: calc(var(--size-control) - 2 * var(--space-2) - 2 * var(--border-width-hairline));
+    padding-inline: var(--space-8);
+  }
+
+  /* A collapsible label in a narrow bar: the icon alone, its name kept by a
+     hidden copy. */
+  @container (inline-size < 480px) {
+    .label[data-collapsible] {
+      display: none;
+    }
+
+    .root[data-collapsible] .segment {
+      padding-inline: var(--space-6);
+    }
+  }
+
   .label,
   .icon {
     position: relative;

@@ -12,6 +12,7 @@ import { VisuallyHidden } from '../../atoms/VisuallyHidden/VisuallyHidden.tsx';
 import type { Hue } from '../../hue.ts';
 import { Breadcrumbs, type Crumb } from '../../molecules/Breadcrumbs/Breadcrumbs.tsx';
 import { FilterChip } from '../../molecules/FilterChip/FilterChip.tsx';
+import { SegmentedControl, type Segment } from '../../molecules/SegmentedControl/SegmentedControl.tsx';
 import { Menu, MenuItem, MenuSection, MenuSeparator, MenuTrigger, type MenuKey } from '../../molecules/Menu/Menu.tsx';
 import { useDelayedLoading } from '../../provider/useDelayedLoading.ts';
 import styles from './Toolbar.module.css';
@@ -118,6 +119,29 @@ export interface ViewAction {
   readonly startsGroup?: boolean;
 }
 
+/** The view bar's View settings button: what opens the settings, and its anchor for the popover. */
+export interface ViewSettingsTrigger {
+  readonly onPress: () => void;
+  /** The button, for the popover the screen opens from it, and for focus to come back to. */
+  readonly ref?: Ref<HTMLButtonElement>;
+  /** The settings are open: the button reads as expanded. */
+  readonly isOpen?: boolean;
+  /** Nothing to show yet (the view still coming): the button stays in place, disabled. */
+  readonly isDisabled?: boolean;
+}
+
+/** The view bar's layout switch: Table or Board. */
+export interface ViewLayoutSwitch {
+  /** What it switches ("Layout"). Read by screen readers. */
+  readonly label: string;
+  /** Give each an icon: on a phone the icons stand alone. */
+  readonly segments: readonly Segment[];
+  readonly value: string;
+  readonly onChange: (value: string) => void;
+  /** The layout can't change now: the switch shows it, disabled. */
+  readonly isDisabled?: boolean;
+}
+
 /** ViewBar's switcher, on an object's page: its saved views. */
 interface ViewBarSwitcher {
   readonly views: readonly ViewChoice[];
@@ -134,6 +158,13 @@ interface ViewBarSwitcher {
   readonly onAction?: (id: string) => void;
   /** The views are still coming: the switcher is a skeleton until they arrive. */
   readonly isLoading?: boolean;
+  /**
+   * View settings, the one button at the end of the bar (Attio's): a
+   * secondary button the switcher's height, icon alone on a phone.
+   */
+  readonly settings?: ViewSettingsTrigger;
+  /** Table or Board, last in the bar: a compact SegmentedControl, icons alone on a phone. */
+  readonly layout?: ViewLayoutSwitch;
 }
 
 /** A page with no saved views (Booking pages, Forms): the bar holds the page's tools at its end, and no switcher. */
@@ -145,16 +176,22 @@ interface ViewBarToolsOnly {
   readonly actions?: never;
   readonly onAction?: never;
   readonly isLoading?: never;
+  readonly settings?: never;
+  readonly layout?: never;
 }
 
 /** Props for ViewBar: an object's view switcher, or (left out) a page's tools only. */
 export type ViewBarProps = (ViewBarSwitcher | ViewBarToolsOnly) & {
-  /** The end of the bar: View settings, Import / Export, the Table and Board switch; a list page's search. */
+  /**
+   * The end of the bar: on a view, notices before View settings (the lock line, a paused connection); on a list
+   * page, its search.
+   */
   readonly children?: ReactNode;
 };
 
 /**
- * The bar under the top bar: the view switcher (with the view's own actions in its menu) at the start, and the page's tools at the end. Without
+ * The bar under the top bar: the view switcher (with the view's own actions in its menu) at the start, and at the
+ * end any notices, View settings, then Table or Board, all on one size-control line. Without
  * `views`, a page that has no views (Booking pages, Forms) keeps the same bar for its tools, so its content starts
  * where an object's view does and nothing moves between them.
  */
@@ -172,6 +209,8 @@ export function ViewBar(props: ViewBarProps) {
     actions = [],
     onAction: onViewAction,
     isLoading = false,
+    settings,
+    layout,
   } = props;
   const current = views.find((view) => view.id === currentViewId) ?? views[0];
   const actionIds = new Set(actions.map((action) => `${ACTION}${action.id}`));
@@ -238,7 +277,35 @@ export function ViewBar(props: ViewBarProps) {
           </Menu>
         </MenuTrigger>
       )}
-      {children !== undefined && <div className={styles.end}>{children}</div>}
+      {(children !== undefined || settings !== undefined || layout !== undefined) && (
+        <div className={styles.end}>
+          {children}
+          {settings !== undefined && (
+            <Button
+              icon="settings"
+              label={strings.viewSettings}
+              isLabelCollapsible
+              onPress={settings.onPress}
+              {...(settings.ref === undefined ? {} : { ref: settings.ref })}
+              {...(settings.isOpen === undefined ? {} : { isExpanded: settings.isOpen })}
+              {...(settings.isDisabled === true ? { isDisabled: true } : {})}
+            >
+              {strings.viewSettings}
+            </Button>
+          )}
+          {layout !== undefined && (
+            <SegmentedControl
+              label={layout.label}
+              segments={layout.segments}
+              value={layout.value}
+              onChange={layout.onChange}
+              size="compact"
+              isLabelCollapsible
+              {...(layout.isDisabled === true ? { isDisabled: true } : {})}
+            />
+          )}
+        </div>
+      )}
     </div>
   );
 }

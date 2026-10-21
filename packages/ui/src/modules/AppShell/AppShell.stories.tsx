@@ -36,9 +36,12 @@ function SampleShell({
         }
         topBar={<TopBar title="Companies" icon="building" hue="blue" />}
         viewBar={
-          <ViewBar views={[{ id: 'all', name: 'All companies' }]} currentViewId="all" onViewChange={() => undefined}>
-            <Button icon="settings">View settings</Button>
-          </ViewBar>
+          <ViewBar
+            views={[{ id: 'all', name: 'All companies' }]}
+            currentViewId="all"
+            onViewChange={() => undefined}
+            settings={{ onPress: () => undefined }}
+          />
         }
         toolbar={
           <Toolbar label="View options">

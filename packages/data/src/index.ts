@@ -335,6 +335,7 @@ export {
   viewRule,
 } from '@crm/contracts/views';
 export {
+  BOARD_MAX_CARD_FIELDS,
   BOARD_MAX_COLUMNS,
   boardColumnIds,
   boardDefaults,
