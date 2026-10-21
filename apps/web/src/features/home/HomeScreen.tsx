@@ -226,10 +226,10 @@ function SetupCard({ slug, facts }: { readonly slug: string; readonly facts: Set
         void navigate({ to: '/w/$slug/settings/account/calendars', params: { slug } });
         return;
       case 'bookingPage':
-        void navigate({ to: '/w/$slug/captures/links', params: { slug } });
+        void navigate({ to: '/w/$slug/booking-pages', params: { slug } });
         return;
       case 'form':
-        void navigate({ to: '/w/$slug/captures/forms', params: { slug } });
+        void navigate({ to: '/w/$slug/forms', params: { slug } });
         return;
       case 'invite':
         void navigate({ to: '/w/$slug/settings/members', params: { slug } });
@@ -281,9 +281,9 @@ function hrefOf(slug: string, id: SetupStepId): string {
     case 'calendar':
       return `/w/${slug}/settings/account/calendars`;
     case 'bookingPage':
-      return `/w/${slug}/captures/links`;
+      return `/w/${slug}/booking-pages`;
     case 'form':
-      return `/w/${slug}/captures/forms`;
+      return `/w/${slug}/forms`;
     case 'invite':
       return `/w/${slug}/settings/members`;
   }
