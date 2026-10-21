@@ -26,6 +26,20 @@ afterAll(async () => {
 });
 
 const { team, runnerFor, drive, itemStates } = jobTestKit(db, ownerUrl);
+
+/**
+ * Now by the database's clock, as an ISO time with microseconds: an `asOf` a
+ * test compares with `created_at` or `deleted_at`, which the database stamps,
+ * so a clock a millisecond apart from this machine's never moves a record
+ * across it.
+ */
+const databaseNow = async (): Promise<string> =>
+  (
+    await testQuery<{ now: string }>(
+      ownerUrl,
+      `select to_char(clock_timestamp() at time zone 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.US"Z"') as now`,
+    )
+  )[0]?.now ?? '';
 const registry = jobKinds({ environment: 'local' });
 
 async function world() {
@@ -62,7 +76,7 @@ describe('bulk jobs (AC-528, AC-531)', () => {
       conjunction: 'and',
       conditions: [{ attributeId: w.attribute('job_title'), operator: 'is', value: 'Eng' }],
     } as FilterGroup;
-    const asOf = new Date().toISOString();
+    const asOf = await databaseNow();
     const later = await w.person('Ed', 'Eng');
     const [kept = '', ...gone] = eng;
     const id = newId();
@@ -153,7 +167,7 @@ describe('bulk jobs (AC-528, AC-531)', () => {
     await startBulk(w.owner, registry, {
       id,
       action: 'restore',
-      target: { kind: 'trash', objectId: w.people, except: [], asOf: new Date().toISOString() },
+      target: { kind: 'trash', objectId: w.people, except: [], asOf: await databaseNow() },
     });
     const run = runnerFor(registry);
     await drive(run, w.workspaceId, id);

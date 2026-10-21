@@ -27,6 +27,20 @@ afterAll(async () => {
 });
 
 const { team, runnerFor, drive } = jobTestKit(db, ownerUrl);
+
+/**
+ * Now by the database's clock, as an ISO time with microseconds: an `asOf` a
+ * test compares with `created_at` or `deleted_at`, which the database stamps,
+ * so a clock a millisecond apart from this machine's never moves a record
+ * across it.
+ */
+const databaseNow = async (): Promise<string> =>
+  (
+    await testQuery<{ now: string }>(
+      ownerUrl,
+      `select to_char(clock_timestamp() at time zone 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.US"Z"') as now`,
+    )
+  )[0]?.now ?? '';
 const registry = jobKinds({ environment: 'local' });
 
 async function world() {
@@ -96,7 +110,7 @@ describe('Delete forever (AC-535, AC-538)', () => {
     await startBulk(w.admin, registry, {
       id,
       action: 'purge',
-      target: { kind: 'trash', except: [], asOf: new Date().toISOString() },
+      target: { kind: 'trash', except: [], asOf: await databaseNow() },
     });
     expect(
       await refusalOf(
