@@ -149,7 +149,8 @@ export function WorkspaceFrame({
       viewBar={viewBar}
       toolbar={toolbar}
       // A calendar that stopped syncing says so on every page (spec 0024, AC-619).
-      banner={isMissing ? undefined : <CalendarBanner data={data} slug={slug} />}
+      // Not on Settings › Calendars, where the stopped calendar's own row offers Reconnect (the owner, 21 Oct).
+      banner={isMissing || settings?.current === 'calendars' ? undefined : <CalendarBanner data={data} slug={slug} />}
       sidebar={
         settings !== undefined ? (
           <SettingsNavigation slug={slug} settings={settings} permissions={permissions} />
