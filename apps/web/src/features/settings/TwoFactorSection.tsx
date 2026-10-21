@@ -165,9 +165,10 @@ export function TwoFactorSection({ data, security, toasts, onFocusLost }: TwoFac
     }
   };
 
-  const plain = useStepUp(data, security, { onComplete: () => void startSetup() });
+  const plain = useStepUp(data, security, { onComplete: () => void startSetup(), isBusy });
   const strict = useStepUp(data, security, {
     secondFactor: true,
+    isBusy,
     onComplete: () => void (dialog.kind === 'off' ? turnOff() : makeCodes()),
   });
   // The handlers above run after render, so they read the latest checks.
@@ -249,7 +250,7 @@ export function TwoFactorSection({ data, security, toasts, onFocusLost }: TwoFac
       <Modal
         title={step === 'codes' ? copy.codesTitle : copy.setupTitle}
         isOpen={isOpen}
-        isBusy={isBusy}
+        isBusy={isBusy || plain.isAsking || strict.isAsking}
         // The codes won't be shown again: a click outside never closes them; the close button and Esc still do.
         isDismissable={step !== 'codes'}
         onOpenChange={(next) => {
@@ -308,7 +309,7 @@ export function TwoFactorSection({ data, security, toasts, onFocusLost }: TwoFac
         title={copy.turnOffTitle}
         tone="danger"
         isOpen={isOpen}
-        isBusy={isBusy}
+        isBusy={isBusy || plain.isAsking || strict.isAsking}
         onOpenChange={(next) => {
           if (!next) close();
         }}
@@ -334,7 +335,7 @@ export function TwoFactorSection({ data, security, toasts, onFocusLost }: TwoFac
       <Modal
         title={step === 'codes' ? copy.codesTitle : copy.newCodesTitle}
         isOpen={isOpen}
-        isBusy={isBusy}
+        isBusy={isBusy || plain.isAsking || strict.isAsking}
         isDismissable={step !== 'codes'}
         onOpenChange={(next) => {
           if (!next) close();

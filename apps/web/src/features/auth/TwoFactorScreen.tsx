@@ -61,6 +61,8 @@ export function TwoFactorScreen({ data, redirect }: TwoFactorScreenProps) {
   // A passkey signs in on its own (AC-888): offered here too, where the browser has passkeys.
   const [hasPasskeys, setHasPasskeys] = useState(false);
   const [isAsking, setAsking] = useState(false);
+  // A passkey's own failure: above the form, never on the code's field.
+  const [passkeyError, setPasskeyError] = useState<string | undefined>(undefined);
   useEffect(() => {
     let live = true;
     void data.auth.passkeys
@@ -75,7 +77,7 @@ export function TwoFactorScreen({ data, redirect }: TwoFactorScreenProps) {
   }, [data]);
   const usePasskeyInstead = () => {
     setAsking(true);
-    setError(undefined);
+    setPasskeyError(undefined);
     data.auth.passkeys.signIn(false).then(
       (outcome) => {
         setAsking(false);
@@ -83,7 +85,7 @@ export function TwoFactorScreen({ data, redirect }: TwoFactorScreenProps) {
       },
       (failure: unknown) => {
         setAsking(false);
-        setError(isDataError(failure) && failure.code !== 'INTERNAL' ? failure.message : strings.failed);
+        setPasskeyError(isDataError(failure) && failure.code !== 'INTERNAL' ? failure.message : strings.failed);
       },
     );
   };
@@ -112,13 +114,15 @@ export function TwoFactorScreen({ data, redirect }: TwoFactorScreenProps) {
       description={kind === 'totp' ? strings.appHint : strings.backupHint}
       isBusy={isChecking}
     >
+      {passkeyError !== undefined && <Callout tone="danger">{passkeyError}</Callout>}
       <Form
         submitLabel={strings.continue}
+        isDisabled={isAsking}
         busyLabel={strings.checking}
         isBusy={isChecking}
         actions={
           <>
-            <Button variant="ghost" onPress={() => switchTo(kind === 'totp' ? 'backup' : 'totp')}>
+            <Button variant="ghost" isDisabled={isAsking} onPress={() => switchTo(kind === 'totp' ? 'backup' : 'totp')}>
               {kind === 'totp' ? strings.useBackup : strings.useApp}
             </Button>
             {hasPasskeys && (
@@ -151,7 +155,7 @@ export function TwoFactorScreen({ data, redirect }: TwoFactorScreenProps) {
           label={strings.remember}
           isSelected={remember}
           onChange={setRemember}
-          isDisabled={isChecking}
+          isDisabled={isChecking || isAsking}
         />
         {kind === 'totp' ? (
           <CodeInput

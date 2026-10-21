@@ -6,7 +6,7 @@
 import type { DataLayer } from '@crm/data';
 import { AuthLayout, Button, SignInForm, type SignInStatus } from '@crm/ui';
 import { useNavigate } from '@tanstack/react-router';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { googleRefusal, isAboutAddress, sendRefusal } from './messages.ts';
 import { safeRedirect } from './redirect.ts';
 import { savePending, sessionStore } from './pending.ts';
@@ -73,30 +73,33 @@ export function SignInScreen({ data, google, redirect, returnTo, googleError, si
     available: false,
     autofill: false,
   });
-  const [isPasskeyBusy, setPasskeyBusy] = useState(false);
   const signedInWithPasskey = () => {
     void navigate({ href: safeRedirect(redirect), replace: true });
   };
+  const live = useRef(true);
+  /** Waits for a passkey picked from the email field's suggestions, where the browser offers them. */
+  const startAutofill = () => {
+    data.auth.passkeys.signIn(true).then(
+      (outcome) => {
+        if (live.current && outcome === 'done') signedInWithPasskey();
+      },
+      (failure: unknown) => {
+        if (live.current) setNotice(sendRefusal(failure));
+      },
+    );
+  };
   useEffect(() => {
-    let live = true;
+    live.current = true;
     void data.auth.passkeys
       .support()
       .then((support) => {
-        if (!live) return;
+        if (!live.current) return;
         setPasskeys(support);
-        if (!support.autofill) return;
-        data.auth.passkeys.signIn(true).then(
-          (outcome) => {
-            if (live && outcome === 'done') signedInWithPasskey();
-          },
-          (failure: unknown) => {
-            if (live) setNotice(sendRefusal(failure));
-          },
-        );
+        if (support.autofill) startAutofill();
       })
       .catch(() => undefined);
     return () => {
-      live = false;
+      live.current = false;
       data.auth.passkeys.cancel();
     };
     // Once per visit: the waiting prompt belongs to the page, not to a render.
@@ -106,16 +109,21 @@ export function SignInScreen({ data, google, redirect, returnTo, googleError, si
   const signInWithPasskey = () => {
     setNotice(undefined);
     setError(undefined);
-    setPasskeyBusy(true);
-    // Starting this prompt stops the suggestions' one.
+    setStatus('passkey');
+    // Starting this prompt stops the suggestions' one; it waits again unless this one signed in.
     data.auth.passkeys.signIn(false).then(
       (outcome) => {
-        setPasskeyBusy(false);
-        if (outcome === 'done') signedInWithPasskey();
+        if (outcome === 'done') {
+          signedInWithPasskey();
+          return;
+        }
+        setStatus('idle');
+        if (passkeys.autofill) startAutofill();
       },
       (failure: unknown) => {
-        setPasskeyBusy(false);
+        setStatus('idle');
         setNotice(sendRefusal(failure));
+        if (passkeys.autofill) startAutofill();
       },
     );
   };
@@ -168,8 +176,8 @@ export function SignInScreen({ data, google, redirect, returnTo, googleError, si
                   variant="ghost"
                   icon="key"
                   isFullWidth="center"
-                  isPending={isPasskeyBusy}
-                  isDisabled={status !== 'idle'}
+                  isPending={status === 'passkey'}
+                  isDisabled={status === 'sending' || status === 'google'}
                   onPress={signInWithPasskey}
                 >
                   {strings.passkey}

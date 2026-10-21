@@ -138,13 +138,22 @@ async function unwrap<T>(
 /** The browser's ways of saying the person closed or ignored its prompt, or another prompt replaced it. */
 const CANCELLED = new Set(['NotAllowedError', 'AbortError', 'ERROR_CEREMONY_ABORTED']);
 
-/** Whether an error from a passkey prompt only means the person said no. */
-function wasCancelled(error: unknown): boolean {
+/** Whether an error from a passkey prompt carries one of these names or codes. */
+function isNamed(error: unknown, names: Iterable<string>): boolean {
   if (typeof error !== 'object' || error === null) return false;
-  const named = 'name' in error && typeof error.name === 'string' && CANCELLED.has(error.name);
-  const coded = 'code' in error && typeof error.code === 'string' && CANCELLED.has(error.code);
+  const known = new Set(names);
+  const named = 'name' in error && typeof error.name === 'string' && known.has(error.name);
+  const coded = 'code' in error && typeof error.code === 'string' && known.has(error.code);
   return named || coded;
 }
+
+/** Whether an error from a passkey prompt only means the person said no. */
+const wasCancelled = (error: unknown): boolean => isNamed(error, CANCELLED);
+
+/** What adding a passkey answers when this device already holds one for the account. */
+const PASSKEY_EXISTS = 'This device already has a passkey for your account.';
+/** What adding a passkey answers for any other failure of the browser's prompt. */
+const PASSKEY_NOT_ADDED = 'Your passkey wasn’t added. Try again.';
 
 /** What a passkey prompt that failed for another reason answers (no passkey here, a browser fault). */
 const PASSKEY_FAILED = 'Your passkey didn’t work here. Try again, or use your email.';
@@ -250,7 +259,11 @@ export function createBetterAuthClient({ origin, fetch, report }: AuthClientOpti
         response = await startRegistration({ optionsJSON: options });
       } catch (error) {
         if (wasCancelled(error)) return 'cancelled';
-        throw dataError('CODE_INVALID', PASSKEY_FAILED);
+        // The browser refuses a second passkey for one account on one authenticator.
+        if (isNamed(error, ['InvalidStateError', 'ERROR_AUTHENTICATOR_PREVIOUSLY_REGISTERED'])) {
+          throw dataError('INPUT_INVALID', PASSKEY_EXISTS);
+        }
+        throw dataError('CODE_INVALID', PASSKEY_NOT_ADDED);
       }
       await unwrap(
         (fetchOptions) =>

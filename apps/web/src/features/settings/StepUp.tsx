@@ -13,6 +13,8 @@ export interface StepUpNeed {
   readonly secondFactor?: boolean;
   /** The dialog's commit, run when a code is complete (the boxes filled), as Enter would. */
   readonly onComplete?: () => void;
+  /** The dialog's commit is running: "Use a passkey" waits for it. */
+  readonly isBusy?: boolean;
 }
 
 /** A step up's state inside a dialog: whether it is needed, its fields, and `prove`, which checks what was typed. */
@@ -26,6 +28,8 @@ export interface StepUp {
   readonly prove: () => Promise<boolean>;
   /** Clears what was typed (the dialog opened again). */
   readonly reset: () => void;
+  /** The browser's passkey prompt is open: the dialog holds still (busy) until it answers. */
+  readonly isAsking: boolean;
 }
 
 /** Whether this session must step up before the change. */
@@ -120,7 +124,13 @@ export function useStepUp(data: DataLayer, security: AccountSecurityState, need:
 
   const errorProps = error === undefined ? {} : { error };
   const passkeyButton = hasPasskey ? (
-    <Button variant="ghost" icon="key" isPending={isAsking} onPress={() => void askPasskey()}>
+    <Button
+      variant="ghost"
+      icon="key"
+      isPending={isAsking}
+      isDisabled={need.isBusy === true}
+      onPress={() => void askPasskey()}
+    >
       {strings.stepUp.usePasskey}
     </Button>
   ) : null;
@@ -206,5 +216,5 @@ export function useStepUp(data: DataLayer, security: AccountSecurityState, need:
       </>
     );
   }
-  return { isNeeded, willSend: isNeeded && !twoFactorOn && !sent, fields, prove, reset };
+  return { isNeeded, willSend: isNeeded && !twoFactorOn && !sent, fields, prove, reset, isAsking };
 }

@@ -37,7 +37,11 @@ export function DeleteAccountSection({ data, security }: DeleteAccountSectionPro
   const twoFactorOn = security.status === 'ready' && security.twoFactor.on;
   const commit = useRef<() => void>(() => undefined);
   const emailField = useRef<HTMLInputElement & HTMLTextAreaElement>(null);
-  const stepUp = useStepUp(data, security, { secondFactor: twoFactorOn, onComplete: () => commit.current() });
+  const stepUp = useStepUp(data, security, {
+    secondFactor: twoFactorOn,
+    onComplete: () => commit.current(),
+    isBusy,
+  });
 
   const check = () => {
     setCheckFailed(false);
@@ -152,7 +156,7 @@ export function DeleteAccountSection({ data, security }: DeleteAccountSectionPro
         title={blocked ? copy.blockedTitleOne : copy.title}
         tone="danger"
         isOpen={isOpen}
-        isBusy={isBusy}
+        isBusy={isBusy || stepUp.isAsking}
         onOpenChange={(next) => {
           if (!next && !isBusy) setIsOpen(false);
         }}

@@ -202,7 +202,7 @@ export interface IdentityStore {
    * the user row (its sessions, Google link, two factor, preferences,
    * directory rows and security history go with it, by their foreign keys),
    * then the rows no key reaches: remembered devices, held back sign ins,
-   * step up codes and passkey challenges, sign in codes for the address, and the address's rate
+   * step up codes and passkey challenges (ours, and the plugin's, which name the user), sign in codes for the address, and the address's rate
    * limit rows. One transaction. True when there was a user to delete.
    */
   deleteUser(userId: string): Promise<boolean>;
@@ -231,6 +231,8 @@ export interface IdentityStore {
   putPasskeyChallenge(sessionId: string, challenge: string, expiresAt: Date): Promise<void>;
   /** Takes (and uses up) this session's live passkey challenge, or undefined. */
   takePasskeyChallenge(sessionId: string): Promise<string | undefined>;
+  /** Names the user's unnamed passkeys after the device this session is on ("Chrome on macOS"), when it knows one. */
+  nameUnnamedPasskeys(userId: string, sessionId: string): Promise<void>;
   /** Notes that a passkey of the user just signed in or stepped up (AC-887). */
   touchPasskey(userId: string, credentialId: string): Promise<void>;
   /**
@@ -451,6 +453,7 @@ export function createIdentityStore(options: DatabaseOptions): IdentityStore {
           sql`${verification.value} = ${userId}
               or ${verification.identifier} in (select 'step-up-' || ${session.id}::text from ${session} where ${session.userId} = ${userId})
               or ${verification.identifier} in (select 'step-up-passkey-' || ${session.id}::text from ${session} where ${session.userId} = ${userId})
+              or strpos(${verification.value}, '"userData":{"id":"' || ${userId} || '"') > 0
               or ${verification.identifier} in (${sql.join(
                 OTP_TYPES.map((type) => sql`${`${type}-otp-${email}`}`),
                 sql`, `,
@@ -460,7 +463,8 @@ export function createIdentityStore(options: DatabaseOptions): IdentityStore {
         await tx.delete(rateLimit).where(
           sql`starts_with(${rateLimit.key}, 'email:' || ${email} || '|')
               or starts_with(${rateLimit.key}, 'step-up:' || ${userId} || '|')
-              or starts_with(${rateLimit.key}, 'step-up-send:' || ${userId} || '|')`,
+              or starts_with(${rateLimit.key}, 'step-up-send:' || ${userId} || '|')
+              or starts_with(${rateLimit.key}, 'step-up-passkey:' || ${userId} || '|')`,
         );
         await tx.delete(user).where(eq(user.id, userId));
         return true;
@@ -568,9 +572,10 @@ export function createIdentityStore(options: DatabaseOptions): IdentityStore {
 
     async passkeyUsed(passkeyId, counter) {
       if (!UUID.test(passkeyId)) return;
+      // Never back: a sign in saving the counter at the same moment can't be undone by a slower write.
       await db
         .update(passkey)
-        .set({ counter, lastUsedAt: sql`now()` })
+        .set({ counter: sql`greatest(${passkey.counter}, ${counter})`, lastUsedAt: sql`now()` })
         .where(eq(passkey.id, passkeyId));
     },
 
@@ -591,6 +596,16 @@ export function createIdentityStore(options: DatabaseOptions): IdentityStore {
         .returning({ value: verification.value, expiresAt: verification.expiresAt });
       const live = taken.find((row) => row.expiresAt > new Date());
       return live?.value;
+    },
+
+    async nameUnnamedPasskeys(userId, sessionId) {
+      if (!UUID.test(userId) || !UUID.test(sessionId)) return;
+      await db.execute(sql`
+        update ${passkey} set name = left(s.device_label, 60)
+          from ${session} s
+         where s.id = ${sessionId} and s.user_id = ${userId} and s.device_label is not null
+           and s.device_label <> '' and ${passkey.userId} = ${userId} and ${passkey.name} is null
+      `);
     },
 
     async touchPasskey(userId, credentialId) {

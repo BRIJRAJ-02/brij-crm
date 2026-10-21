@@ -89,6 +89,8 @@ export async function authErrorResponse(response: Response, route = ''): Promise
   // The passkey plugin answers 500 for a passkey that didn't check out (a wrong site, a bad signature): a refusal.
   const ours = code === undefined ? undefined : TWO_FACTOR_CODES[code];
   if (response.status >= 500 && code === 'FAILED_TO_VERIFY_REGISTRATION' && ours !== undefined) {
+    // Logged all the same: the plugin answers this for a database fault too, which must not pass as a failed try.
+    log.warn('Passkey not added', { status: response.status, code });
     return json(ours, errorStatus(ours.code), response.headers);
   }
   if (response.status >= 500) {

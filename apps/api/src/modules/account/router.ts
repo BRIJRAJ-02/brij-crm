@@ -29,6 +29,8 @@ export const STEP_UP_CHECKS = { window: 5 * 60, max: 5 } as const;
 export const STEP_UP_CHECKS_HOUR = { window: 60 * 60, max: 15 } as const;
 /** Step up emails per person: 3 in 10 minutes. */
 export const STEP_UP_SENDS = { window: 10 * 60, max: 3 } as const;
+/** Passkey step up challenges per person: 20 in 10 minutes (each replaces the last, so this only stops a flood). */
+export const STEP_UP_PASSKEY_CHALLENGES = { window: 10 * 60, max: 20 } as const;
 
 // Bootstrap: a session, no workspace (spec 0033). Each procedure reaches only the caller's own sessions, by id.
 
@@ -151,9 +153,15 @@ export const accountRouter = authed.account.router({
       );
       return verifyStepUp(stepUpDeps(context), callerOf(context), input);
     }),
-    passkeyOptions: authed.account.stepUp.passkeyOptions.handler(({ context }) =>
-      passkeyStepUpOptions(passkeyDeps(context), callerOf(context)),
-    ),
+    passkeyOptions: authed.account.stepUp.passkeyOptions.handler(async ({ context }) => {
+      await limit(
+        context,
+        `step-up-passkey:${context.user.id}`,
+        [STEP_UP_PASSKEY_CHALLENGES],
+        'Too many tries. Wait a few minutes.',
+      );
+      return passkeyStepUpOptions(passkeyDeps(context), callerOf(context));
+    }),
     verifyPasskey: authed.account.stepUp.verifyPasskey.handler(async ({ context, input }) => {
       // The same per person count as a code: a step up is never guessed at by switching method.
       await limit(

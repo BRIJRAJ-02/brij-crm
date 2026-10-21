@@ -18,6 +18,7 @@ import {
   signIn,
   signInApp,
   testConnections,
+  turnOnTwoFactor,
   withCookies,
 } from '../../test/sign-in.ts';
 
@@ -126,6 +127,42 @@ describe('passkeys (spec 0033, milestone 3)', () => {
     const refused = await addPasskey(cookie, createTestAuthenticator(RP_ID, APP_URL));
     expect(refused.status).toBe(403);
     expect(await refused.json()).toMatchObject({ code: 'STEP_UP_REQUIRED' });
+  });
+
+  it('with two factor on, refuses adding a passkey on a session checked by email alone', async () => {
+    const first = await signIn(app);
+    const { cookie } = await turnOnTwoFactor(app, first.cookie);
+    // As a remembered device's sign in leaves it: fresh, but by email code only.
+    await testQuery(
+      identityUrl,
+      `update auth.session set verified_at = now(), verified_with = 'email'
+        where user_id = (select id from auth."user" where email = $1)`,
+      [first.email],
+    );
+    const options = await authGet('/passkey/generate-register-options', cookie);
+    expect(options.status).toBe(403);
+    expect(await options.json()).toMatchObject({ code: 'SECOND_FACTOR_REQUIRED' });
+    const verify = await authPost(
+      app,
+      '/passkey/verify-registration',
+      { response: createTestAuthenticator(RP_ID, APP_URL).register({ challenge: 'x' }) },
+      { cookie },
+    );
+    expect(verify.status).toBe(403);
+    expect(await verify.json()).toMatchObject({ code: 'SECOND_FACTOR_REQUIRED' });
+  });
+
+  it('names an unnamed passkey after the device, and refuses a query with free text', async () => {
+    const { email, cookie } = await signIn(app);
+    await testQuery(
+      identityUrl,
+      `update auth.session set device_label = 'Chrome on macOS' where user_id = (select id from auth."user" where email = $1)`,
+      [email],
+    );
+    expect((await addPasskey(cookie, createTestAuthenticator(RP_ID, APP_URL))).status).toBe(200);
+    const [made] = (await rpcClient(app, cookie).account.security.get()).passkeys;
+    expect(made?.name).toBe('Chrome on macOS');
+    expect((await authGet('/passkey/generate-register-options?context=anything', cookie)).status).toBe(400);
   });
 
   it('refuses a body that asks for a new session or names a passkey too long', async () => {

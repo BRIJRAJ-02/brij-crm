@@ -76,7 +76,21 @@ export function PasskeysSection({ data, security, toasts, onFocusLost }: Passkey
   // A passkey signs in alone, so adding or removing one takes a second factor while two factor is on.
   const proveRef = useRef<() => Promise<boolean>>(() => Promise.resolve(true));
   const commitRef = useRef<() => void>(() => undefined);
-  const stepUp = useStepUp(data, security, { secondFactor: twoFactorOn, onComplete: () => commitRef.current() });
+  const stepUp = useStepUp(data, security, {
+    secondFactor: twoFactorOn,
+    onComplete: () => commitRef.current(),
+    isBusy,
+  });
+  const busy = isBusy || stepUp.isAsking;
+  // After a removal (or a refused one, whose row came back as a new element) focus stays in this card: on Add.
+  const addRef = useRef<HTMLButtonElement>(null);
+  const [focusAdd, setFocusAdd] = useState(0);
+  useEffect(() => {
+    if (focusAdd === 0) return;
+    const add = addRef.current;
+    if (add !== null && !add.disabled) add.focus();
+    else onFocusLost();
+  }, [focusAdd, onFocusLost]);
   useEffect(() => {
     proveRef.current = stepUp.prove;
   });
@@ -89,7 +103,9 @@ export function PasskeysSection({ data, security, toasts, onFocusLost }: Passkey
     setIsOpen(true);
   };
   const close = () => {
-    if (!isBusy) setIsOpen(false);
+    if (busy) return;
+    setIsOpen(false);
+    if (dialog.kind === 'remove') setFocusAdd((count) => count + 1);
   };
 
   const add = async () => {
@@ -133,7 +149,7 @@ export function PasskeysSection({ data, security, toasts, onFocusLost }: Passkey
     setBusy(false);
     if (answer.ok) {
       setIsOpen(false);
-      onFocusLost();
+      setFocusAdd((count) => count + 1);
       toasts.toast({ tone: 'success', message: copy.removed(passkeyName(passkey)) });
     } else if (answer.code === 'STEP_UP_REQUIRED' || answer.code === 'SECOND_FACTOR_REQUIRED') {
       // The check ran out meanwhile: read the state again, so the dialog asks for it inline.
@@ -166,12 +182,7 @@ export function PasskeysSection({ data, security, toasts, onFocusLost }: Passkey
     );
   } else {
     const addButton = (
-      <Button
-        variant={security.passkeys.length === 0 ? 'primary' : 'secondary'}
-        icon="plus"
-        isDisabled={supported !== true}
-        onPress={() => open({ kind: 'add' })}
-      >
+      <Button ref={addRef} icon="plus" isDisabled={supported !== true} onPress={() => open({ kind: 'add' })}>
         {copy.add}
       </Button>
     );
@@ -208,23 +219,25 @@ export function PasskeysSection({ data, security, toasts, onFocusLost }: Passkey
       <Modal
         title={copy.addTitle}
         isOpen={isOpen}
-        isBusy={isBusy}
+        isBusy={busy}
         onOpenChange={(next) => {
           if (!next) close();
         }}
         actions={
           <>
-            <Button slot="close" kbd="ESC" isDisabled={isBusy}>
+            <Button slot="close" kbd="ESC" isDisabled={busy}>
               {copy.cancel}
             </Button>
             <Button variant="primary" isPending={isBusy} onPress={() => commitRef.current()}>
-              {isBusy ? copy.adding : stepUp.willSend ? strings.stepUp.send : copy.continue}
+              {isBusy ? copy.adding : stepUp.willSend ? strings.stepUp.send : copy.add}
             </Button>
           </>
         }
       >
         {errorNote}
-        {copy.addDialogText}
+        {security.status === 'ready' && security.passkeys.length > 0 && stepUp.isNeeded
+          ? copy.addDialogTwice
+          : copy.addDialogText}
         <Field
           label={copy.nameLabel}
           hint={copy.nameHint}
@@ -279,13 +292,13 @@ export function PasskeysSection({ data, security, toasts, onFocusLost }: Passkey
         title={copy.removeTitle(passkeyName(passkey))}
         tone="danger"
         isOpen={isOpen}
-        isBusy={isBusy}
+        isBusy={busy}
         onOpenChange={(next) => {
           if (!next) close();
         }}
         actions={
           <>
-            <Button slot="close" kbd="ESC" isDisabled={isBusy}>
+            <Button slot="close" kbd="ESC" isDisabled={busy}>
               {copy.cancel}
             </Button>
             <Button variant="danger-solid" isPending={isBusy} onPress={() => commitRef.current()}>

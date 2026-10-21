@@ -54,7 +54,7 @@ export function SecurityScreen({ data, toasts }: SecurityScreenProps) {
   const security = useAccountSecurity(data.account.security());
   // A complete code in the confirm runs it, as its button would.
   const commit = useRef<() => void>(() => undefined);
-  const stepUp = useStepUp(data, security, { onComplete: () => commit.current() });
+  const stepUp = useStepUp(data, security, { onComplete: () => commit.current(), isBusy });
 
   const ask = (next: Confirm) => {
     setConfirm(next);
@@ -195,9 +195,9 @@ export function SecurityScreen({ data, toasts }: SecurityScreenProps) {
         title={one === undefined ? strings.signOutOthersTitle : strings.signOutTitle(deviceName(one))}
         tone="danger"
         isOpen={isOpen}
-        isBusy={isBusy}
+        isBusy={isBusy || stepUp.isAsking}
         onOpenChange={(open) => {
-          if (!open && !isBusy) setIsOpen(false);
+          if (!open && !isBusy && !stepUp.isAsking) setIsOpen(false);
         }}
         actions={
           <>

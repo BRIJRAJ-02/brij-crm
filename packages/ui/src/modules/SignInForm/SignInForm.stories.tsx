@@ -189,7 +189,25 @@ export const WithPasskey: Story = {
   },
   play: async ({ canvas }) => {
     await expect(canvas.getByRole('textbox', { name: 'Email' })).toHaveAttribute('autocomplete', 'email webauthn');
+    await expect(canvas.getByRole('button', { name: 'Continue with email' })).toBeEnabled();
     await expect(canvas.getByRole('button', { name: 'Sign in with a passkey' })).toBeEnabled();
+  },
+};
+
+/** The browser's passkey prompt is open: Google and the email's submit are off until it answers. */
+export const PasskeyPending: Story = {
+  args: {
+    status: 'passkey',
+    isPasskeyAutofill: true,
+    afterEmail: (
+      <Button variant="ghost" icon="key" isFullWidth="center" isPending onPress={fn()}>
+        Sign in with a passkey
+      </Button>
+    ),
+  },
+  play: async ({ canvas }) => {
+    await expect(canvas.getByRole('button', { name: 'Continue with email' })).toBeDisabled();
+    await expect(canvas.getByRole('button', { name: 'Continue with Google' })).toBeDisabled();
   },
 };
 

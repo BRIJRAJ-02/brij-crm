@@ -398,6 +398,11 @@ const PasskeyRegistrationBody = z.strictObject({
   name: PasskeyName.optional(),
 });
 
+/** What asking to add a passkey may say in its query: the authenticator kind, nothing else. */
+const RegisterOptionsQuery = z.strictObject({
+  authenticatorAttachment: z.enum(['platform', 'cross-platform']).optional(),
+});
+
 /** Whether a session's user has two factor on (the plugin's field on Better Auth's loose user). */
 function isTwoFactorUser(user: unknown): boolean {
   return typeof user === 'object' && user !== null && 'twoFactorEnabled' in user && user.twoFactorEnabled === true;
@@ -702,12 +707,17 @@ export function createAuth({ env, identity, mailer, analytics = NO_ANALYTICS, in
             if (ctx.path === '/passkey/verify-registration' && !PasskeyRegistrationBody.safeParse(ctx.body).success) {
               throw inputInvalid();
             }
-            const state = await identity.twoFactorState(userId);
-            await requireFreshSession(userId, current.session.id, { secondFactor: state.enabled });
+            // Only the authenticator kind may come in the query: no free text kept with the challenge.
             if (
               ctx.path === '/passkey/generate-register-options' &&
-              (await identity.listPasskeys(userId)).length >= PASSKEYS_MAX
+              !RegisterOptionsQuery.safeParse(ctx.query ?? {}).success
             ) {
+              throw inputInvalid();
+            }
+            const state = await identity.twoFactorState(userId);
+            await requireFreshSession(userId, current.session.id, { secondFactor: state.enabled });
+            // Checked at both steps, so options asked for in parallel can't add past the cap.
+            if ((await identity.listPasskeys(userId)).length >= PASSKEYS_MAX) {
               throw new APIError('BAD_REQUEST', {
                 code: 'INPUT_INVALID',
                 message: `You have ${String(PASSKEYS_MAX)} passkeys, the most an account keeps. Remove one first.`,
@@ -835,6 +845,12 @@ export function createAuth({ env, identity, mailer, analytics = NO_ANALYTICS, in
       after: createAuthMiddleware(async (ctx) => {
         if (ctx.request === undefined || ctx.context.returned instanceof Error) return;
         if (ctx.path === '/passkey/verify-registration' && ctx.context.session !== null) {
+          // A passkey left unnamed takes the device it was made on ("Chrome on macOS"), so the list tells them apart.
+          await identity
+            .nameUnnamedPasskeys(ctx.context.session.user.id, ctx.context.session.session.id)
+            .catch((error: unknown) => {
+              log.error('Passkey not named', { error: error instanceof Error ? error.name : typeof error });
+            });
           await keepEvent({
             userId: ctx.context.session.user.id,
             kind: 'passkey_added',
