@@ -1,6 +1,6 @@
 // The notifications email task (spec 0038, AC-1176, AC-1177):
 // `crm_notification_email`, which `crm_enqueue_notification_email` queues
-// (migration 0052) five minutes after a notification, keyed per member and
+// (migration 0058) five minutes after a notification, keyed per member and
 // workspace so a burst queues one. It enters as the member (one removed since
 // gets nothing), reads every notification still due and visible to them now,
 // claims them (marked emailed, committed), then draws one email and sends it;

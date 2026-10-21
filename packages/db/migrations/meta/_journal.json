@@ -407,6 +407,13 @@
       "when": 1792602041205,
       "tag": "0057_availability_schedules",
       "breakpoints": true
+    },
+    {
+      "idx": 58,
+      "version": "7",
+      "when": 1792604546135,
+      "tag": "0058_comments_notifications",
+      "breakpoints": true
     }
   ]
 }

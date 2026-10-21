@@ -162,6 +162,7 @@ export interface JobRunnersOptions {
    * `crm_email`, and throws plainly on `retry` for Graphile's backoff.
    */
   readonly email?: (payload: unknown, attempt: EmailTry) => Promise<EmailRun>;
+  /**
    * Notifications emails (spec 0038, milestone 3): one member's email
    * (`runNotificationEmail` with the worker's deps). With it, the light runner
    * takes `crm_notification_email`; it throws plainly for a retry.

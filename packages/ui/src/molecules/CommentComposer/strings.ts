@@ -16,6 +16,8 @@ export const strings = {
   retry: 'Retry',
   /** Saving an edit with no text left (AC-1155). */
   emptyEdit: 'A comment can’t be empty. Delete it instead.',
-  /** Announced while the list of members shows. */
-  members: 'People to mention',
+  /** The `@` list's name, as the note editor's. */
+  members: 'Members',
+  /** The `@` list with nobody matching. */
+  noMembers: 'No one matches',
 } as const;

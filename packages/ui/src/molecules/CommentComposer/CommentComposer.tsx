@@ -6,8 +6,7 @@ import type { ActorDisplay } from '@crm/contracts/values';
 import { COMMENT_MAX } from '@crm/contracts/mentions';
 import { useId, useMemo, useRef, useState, type KeyboardEvent, type RefObject } from 'react';
 import { Button } from '../../atoms/Button/Button.tsx';
-import { strings as editorStrings } from '../../editor/strings.ts';
-import { SuggestionList, suggestionOptionId, type SuggestionRow } from '../../editor/SuggestionList.tsx';
+import { SuggestionList, suggestionOptionId, type SuggestionRow } from '../SuggestionList/SuggestionList.tsx';
 import { Avatar } from '../../atoms/Avatar/Avatar.tsx';
 import { Callout } from '../Callout/Callout.tsx';
 import { Field } from '../Field/Field.tsx';
@@ -232,10 +231,10 @@ export function CommentComposer({
           <SuggestionList
             anchorRef={field}
             id={listId}
-            label={editorStrings.members}
+            label={strings.members}
             rows={rows}
             activeIndex={activeIndex}
-            emptyText={editorStrings.noMembers}
+            emptyText={strings.noMembers}
             onPick={(index) => {
               const member = shown[index];
               if (member !== undefined) pick(member);

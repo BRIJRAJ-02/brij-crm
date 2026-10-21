@@ -364,6 +364,7 @@ function kindRows(change: CappedChange): OutboxEvent[] {
   }
   if (change.schedules.length > 0) {
     rows.push({ kind: 'schedules', ...NO_IDS, itemIds: [...new Set(change.schedules)].sort(byId), coarse: false });
+  }
   // Comments (spec 0038): one row per object, its records and threads; coarse with no ids past `CHANGE_CAP` threads.
   const byObject = new Map<string, { recordIds: Set<string>; threadIds: Set<string> }>();
   for (const comment of change.comments) {
