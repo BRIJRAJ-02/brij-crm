@@ -4,7 +4,7 @@
 // their order and folds, then Trash, Settings and Help at the foot (AC-921, AC-928, AC-930); a fold or the rail goes
 // through the data layer (AC-931, AC-935), and [ toggles the rail outside a text field; while the member's sidebar
 // loads nothing guesses at their order, and one that couldn't be read draws the defaults.
-import type { DataLayer, NavOperation, NavSnapshot, NavState } from '@crm/data';
+import type { DataLayer, DueTasksSnapshot, NavOperation, NavSnapshot, NavState } from '@crm/data';
 import { createToasts, UiProvider } from '@crm/ui';
 import {
   createMemoryHistory,
@@ -69,8 +69,16 @@ const navSource = {
   },
   getSnapshot: () => snapshot,
 };
+/** The Tasks badge's count (AC-924): none due unless a test says otherwise. */
+let dueSnapshot: DueTasksSnapshot = { status: 'ready', count: 0, atLeast: false };
+const dueSource = {
+  retain: () => () => undefined,
+  subscribe: () => () => undefined,
+  getSnapshot: () => dueSnapshot,
+};
 const data = {
   calendar: { view: () => calendarView },
+  tasks: { due: () => dueSource },
   nav: {
     source: () => navSource,
     change: (_workspace: string, op: NavOperation) => {
@@ -103,6 +111,7 @@ const OBJECTS = [
 
 beforeEach(() => {
   snapshot = { status: 'ready', nav: STORED };
+  dueSnapshot = { status: 'ready', count: 0, atLeast: false };
   sent = [];
   held = 0;
   try {
@@ -451,5 +460,14 @@ describe('the app’s sidebar (spec 0034)', () => {
     expect(dialog?.textContent).toContain('Your work');
     // Tasks, People, Companies and the four Scheduling pages, each with its switch.
     expect(dialog?.querySelectorAll('[role="switch"]')).toHaveLength(7);
+  });
+
+  it('badges Tasks with my open tasks overdue or due today, and draws none at zero (AC-924)', async () => {
+    dueSnapshot = { status: 'ready', count: 4, atLeast: false };
+    await renderFrame(undefined, { objects: OBJECTS });
+    const tasks = [...document.querySelectorAll<HTMLAnchorElement>('nav a')].find(
+      (each) => each.getAttribute('href') === '/w/acme/tasks',
+    );
+    expect(tasks?.textContent).toContain('4');
   });
 });

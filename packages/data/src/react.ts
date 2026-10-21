@@ -12,6 +12,7 @@ import type { JobView } from '@crm/contracts';
 import type { JobsSnapshot, JobsView } from './jobs/store.ts';
 import type { LiveStatus } from './live/live.ts';
 import type { NavSnapshot, NavSource } from './navigation/store.ts';
+import type { DueTasksSnapshot, DueTasksSource } from './tasks/due.ts';
 import type { PendingOptions } from './options.ts';
 import type { RecordsView, ViewReader, ViewState } from './records/layer.ts';
 import type { RecordState, RecordSubscription } from './records/one.ts';
@@ -337,5 +338,13 @@ export function useNoteSession(session: NoteSession): NoteSessionState {
  * while the frame is mounted, so another tab's change reaches it live.
  */
 export function useNav(source: NavSource): NavSnapshot {
+  return useRetained(source);
+}
+
+/**
+ * The sidebar's Tasks badge (spec 0034, AC-924): how many of my open tasks
+ * are overdue or due today, live. Held while the frame is mounted.
+ */
+export function useDueTasks(source: DueTasksSource): DueTasksSnapshot {
   return useRetained(source);
 }

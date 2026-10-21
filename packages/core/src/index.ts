@@ -153,6 +153,7 @@ export {
   type SaveNoteInput,
 } from './notes/notes.ts';
 export {
+  countDueTasks,
   createTask,
   deleteTask,
   getTasks,

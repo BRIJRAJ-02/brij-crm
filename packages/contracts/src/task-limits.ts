@@ -19,3 +19,6 @@ export const TASK_GET_MAX = 100;
 
 /** How far a list's count goes before it says "at least" (shown as "10,000+"). */
 export const TASK_COUNT_CAP = 10_000;
+
+/** How far the sidebar's Tasks badge counts before it says "at least" (spec 0034, AC-924; shown as "99+"). */
+export const TASK_DUE_CAP = 99;

@@ -3,7 +3,7 @@
 // Main task: move between Tasks, the member's sections (Records, then Scheduling) in their own order, and the trash; fold, reorder or hide, or fold the whole sidebar, kept for the member on every device (spec 0034); open Settings (⌘,), the shortcuts (?) and sign out; undo (⌘Z).
 // Leaves out: the workspace menu's contents (spec 0031), Quick actions (the command menu), Inbox, Lists and Invite teammates (features still to come), starring (spec 0034's milestone 3), and the theme (Settings › Preferences).
 import type { DataLayer, NavSnapshot, NavSource, NavState, NavUniverse, ObjectSummary, Permission } from '@crm/data';
-import { useNav } from '@crm/data/react';
+import { useDueTasks, useNav } from '@crm/data/react';
 import {
   AppShell,
   AppShellContext,
@@ -23,6 +23,7 @@ import { useNavigate } from '@tanstack/react-router';
 import { LazyCustomiseSidebarDialog } from './LazyCustomiseSidebarDialog.tsx';
 import { Suspense, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
 import { settingsNav, visibleSettingsNav, type SettingsPageId } from '../settings/nav.ts';
+import { useToday } from '../tasks/day.ts';
 import { strings as settingsStrings } from '../settings/strings.ts';
 import { CalendarBanner } from './CalendarBanner.tsx';
 import { settingsHomeHref, trashHref } from './objects.ts';
@@ -248,6 +249,7 @@ export function WorkspaceFrame({
           >
             {!isMissing && nav !== undefined && (
               <TopPages
+                data={data}
                 slug={slug}
                 nav={nav}
                 universe={universe}
@@ -313,18 +315,25 @@ export function WorkspaceFrame({
 
 /** The pages above the sections (AC-921, AC-924): Tasks today, Inbox once notifications exist; one hidden isn't drawn, and its menu hides it. */
 function TopPages({
+  data,
   slug,
   nav,
   universe,
   currentPage,
   onHide,
 }: {
+  readonly data: DataLayer;
   readonly slug: string;
   readonly nav: NavState;
   readonly universe: NavUniverse;
   readonly currentPage: SidebarPage | undefined;
   readonly onHide: (page: string) => void;
 }) {
+  // Tasks' badge (AC-924): my open tasks overdue or due today by my local date, live; none at zero.
+  const timeZone = useMemo(() => Intl.DateTimeFormat().resolvedOptions().timeZone, []);
+  const today = useToday(timeZone);
+  const due = useDueTasks(data.tasks.due(slug, today));
+  const tasksBadge = due.status === 'ready' && due.count > 0 ? (due.atLeast ? due.count + 1 : due.count) : undefined;
   const items = topEntries(nav, universe)
     .filter((entry) => !entry.hidden)
     .flatMap((entry) => {
@@ -336,6 +345,7 @@ function TopPages({
           icon={page.icon}
           href={page.href(slug)}
           isCurrent={currentPage === entry.id}
+          {...(entry.id === 'tasks' && tasksBadge !== undefined ? { badge: tasksBadge } : {})}
           menu={itemMenu(page.label, strings.hideFromSidebar, () => {
             onHide(entry.id);
           })}

@@ -48,6 +48,7 @@ const READS: ReadonlySet<string> = new Set([
   'trash.count',
   'tasks.get',
   'tasks.list',
+  'tasks.due',
   'notes.get',
   'notes.list',
   'calendar.connections.list',

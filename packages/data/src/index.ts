@@ -82,6 +82,7 @@ import {
   type ViewsListSource,
 } from './views/store.ts';
 import type { NewTask, TaskChange, TaskList, TasksStore, TaskSubscription } from './tasks/store.ts';
+import { createDueTasks, type DueTasksSource } from './tasks/due.ts';
 import type { NoteList, NoteSession, NotesStore } from './notes/store.ts';
 import type { createLive, Granted, Live, LiveStatus } from './live/live.ts';
 import { createMutationLog } from './live/mutations.ts';
@@ -235,6 +236,7 @@ export {
 export type { FetchLike } from './fetch.ts';
 export type { NavFavourite, NavState } from '@crm/contracts';
 export type { NavChangeOptions, NavSnapshot, NavSource } from './navigation/store.ts';
+export type { DueTasksSnapshot, DueTasksSource } from './tasks/due.ts';
 export type {
   NavEntry,
   NavItemKind,
@@ -721,6 +723,7 @@ export function createDataLayer({
     jobs.clear();
     views.clear();
     navStore?.clear();
+    dueTasks.clear();
     void activity?.then((feeds) => {
       feeds.clear();
     });
@@ -1035,6 +1038,17 @@ export function createDataLayer({
       Math.round(random() * SPREAD_MS),
     );
   };
+  // The sidebar's Tasks badge (spec 0034, AC-924): small and plain, so it sits in the first load with the sidebar.
+  const dueTasks = createDueTasks({
+    count: (workspace, today) =>
+      beforeRead(workspace).then(() => call((options) => api.tasks.due({ workspace, today }, options))),
+  });
+  /** This tab's own task write landed (its echo never comes back): the badge reads again at once. */
+  const taskLanded = <T>(workspace: string, answer: Promise<T>): Promise<T> =>
+    answer.then((value) => {
+      dueTasks.changed(workspace);
+      return value;
+    });
   const readMembers = (workspace: string) =>
     cached(members, workspace, () => call((options) => api.members.list({ workspace }, options)));
   const readAccess = (workspace: string) =>
@@ -1150,6 +1164,12 @@ export function createDataLayer({
     void tasks?.then((store) => {
       store.changed(workspace, event);
     });
+    // A tasks event names no assignee, so a held badge reads again, spread so a whole team doesn't read in step.
+    if (dueTasks.isHeld(workspace)) {
+      spread(`due ${workspace}`, () => {
+        dueTasks.changed(workspace);
+      });
+    }
   });
   router.on('notes', (workspace, event) => {
     void notes?.then((store) => {
@@ -1178,6 +1198,7 @@ export function createDataLayer({
     jobs.resync(workspace);
     views.resync(workspace);
     navStore?.resync(workspace);
+    dueTasks.changed(workspace);
     void trash?.then((held) => {
       held.reload(workspace);
     });
@@ -1950,23 +1971,37 @@ export function createDataLayer({
           get: (input) =>
             call((options) => api.tasks.get({ workspace: input.workspace, ids: [...input.ids] }, options)),
           create: ({ recordIds, ...input }) =>
-            call((options) =>
-              api.tasks.create(
-                { ...input, ...(recordIds === undefined ? {} : { recordIds: [...recordIds] }) },
-                options,
+            taskLanded(
+              input.workspace,
+              call((options) =>
+                api.tasks.create(
+                  { ...input, ...(recordIds === undefined ? {} : { recordIds: [...recordIds] }) },
+                  options,
+                ),
               ),
             ),
-          delete: (input) => call((options) => api.tasks.delete({ ...input }, options)),
-          restore: (input) => call((options) => api.tasks.restore({ ...input }, options)),
+          delete: (input) =>
+            taskLanded(
+              input.workspace,
+              call((options) => api.tasks.delete({ ...input }, options)),
+            ),
+          restore: (input) =>
+            taskLanded(
+              input.workspace,
+              call((options) => api.tasks.restore({ ...input }, options)),
+            ),
           update: ({ addRecordIds, removeRecordIds, ...input }) =>
-            call((options) =>
-              api.tasks.update(
-                {
-                  ...input,
-                  ...(addRecordIds === undefined ? {} : { addRecordIds: [...addRecordIds] }),
-                  ...(removeRecordIds === undefined ? {} : { removeRecordIds: [...removeRecordIds] }),
-                },
-                options,
+            taskLanded(
+              input.workspace,
+              call((options) =>
+                api.tasks.update(
+                  {
+                    ...input,
+                    ...(addRecordIds === undefined ? {} : { addRecordIds: [...addRecordIds] }),
+                    ...(removeRecordIds === undefined ? {} : { removeRecordIds: [...removeRecordIds] }),
+                  },
+                  options,
+                ),
               ),
             ),
         },
@@ -2965,6 +3000,12 @@ export function createDataLayer({
         (await activityFeeds()).recent(workspace, recordId, objectId),
     },
     tasks: {
+      /**
+       * The sidebar's Tasks badge (spec 0034, AC-924): how many of my open
+       * tasks are due on or before `today` (my local date, `YYYY-MM-DD`),
+       * live while a screen holds it. Read it through `useDueTasks`.
+       */
+      due: (workspace: string, today: string): DueTasksSource => dueTasks.source(workspace, today),
       /**
        * A record's open tasks (by due date) or done ones (newest done first),
        * the same list for every screen that asks (spec 0019): 50 at a time as

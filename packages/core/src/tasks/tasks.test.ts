@@ -17,7 +17,16 @@ import { createWorkspace } from '../engine/workspaces.ts';
 import { rescope, testScope } from '../testing.ts';
 import { readTaskFacts } from './facts.ts';
 import { archiveObject } from '../objects/objects.ts';
-import { createTask, deleteTask, getTasks, listTasks, POSITION_RENUMBER, restoreTask, updateTask } from './tasks.ts';
+import {
+  countDueTasks,
+  createTask,
+  deleteTask,
+  getTasks,
+  listTasks,
+  POSITION_RENUMBER,
+  restoreTask,
+  updateTask,
+} from './tasks.ts';
 
 const { appUrl } = inject('testDatabase');
 let db: Database;
@@ -823,5 +832,35 @@ describe('access walk helpers', () => {
       'B',
       'A',
     ]);
+  });
+});
+
+describe('countDueTasks, the sidebar’s Tasks badge (spec 0034, AC-924)', () => {
+  it('counts my open tasks due on or before my today, never another’s, a done or deleted one, or one with no date', async () => {
+    const w = await workspace();
+    const bea = w.as(w.bea);
+    const due = (dueOn: string | undefined, assigneeMemberId: string) =>
+      createTask(w.scope, {
+        id: newId(),
+        title: 'Due',
+        assigneeMemberId,
+        ...(dueOn === undefined ? {} : { dueOn }),
+      });
+    const overdue = await due('2026-10-19', w.ownerId);
+    await due('2026-10-21', w.ownerId);
+    await due('2026-10-22', w.ownerId);
+    await due(undefined, w.ownerId);
+    await due('2026-10-20', w.bea);
+    const done = await due('2026-10-20', w.ownerId);
+    const deleted = await due('2026-10-20', w.ownerId);
+    await updateTask(w.scope, { taskId: done.id, isDone: true });
+    await deleteTask(w.scope, { taskId: deleted.id });
+    expect(await countDueTasks(w.scope, { today: '2026-10-21' })).toEqual({ count: 2, atLeast: false });
+    // Tomorrow, by the browser's date, one more is due.
+    expect(await countDueTasks(w.scope, { today: '2026-10-22' })).toEqual({ count: 3, atLeast: false });
+    expect(await countDueTasks(bea, { today: '2026-10-21' })).toEqual({ count: 1, atLeast: false });
+    await updateTask(w.scope, { taskId: overdue.id, isDone: true });
+    expect(await countDueTasks(w.scope, { today: '2026-10-21' })).toEqual({ count: 1, atLeast: false });
+    expect(await refusalOf(countDueTasks(w.scope, { today: 'yesterday' }))).toMatchObject({ code: 'INPUT_INVALID' });
   });
 });
