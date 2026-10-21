@@ -27,19 +27,19 @@ New (20 October 2026). Bookings › Availability and the booking page editor eac
 - Put it in a page's `footer` (PageColumn, PreviewLayout), and keep it there while nothing is unsaved (`status="hidden"`), so it can play its exit. While hidden it draws nothing, but the footer's own slot stays (the column's gap under the last card). The footer sticks to the foot of the view and sits in the flow after the last card, so the bar never hides it; the bar centres itself there.
 - `status`: `unsaved` says "Unsaved changes"; `saving` keeps every word and width in place while Save's check gives way to a spinner; `saved` says "Saved" with a check for a moment, then the bar sinks out; `error` says `error` in the danger colour and Save becomes Try again; `hidden` sends it away (after a discard).
 - `blockedReason` says why the changes can't be saved yet, in place of "Unsaved changes", and Save waits.
-- `onDiscard` adds Discard (ghost), before Save. Esc never discards.
-- `onFocusAway` says where focus goes when Discard or Save leaves while it had focus (after a discard or a save), so it never falls to the page: the page's title.
+- `onDiscard` adds Discard (ghost), before Save. Esc never discards, and Discard asks first (the house rule in Modal's README, 21 October 2026: what it throws away can't come back): "Discard your unsaved changes?", a danger confirm with Keep editing (ESC) and Discard changes. Only Discard changes calls `onDiscard`; Esc or Keep editing put focus back on Discard. The bar owns the confirm, so a page never wraps `onDiscard` in one of its own.
+- `onFocusAway` says where focus goes when Discard or Save leaves while it had focus (after a discard or a save), so it never falls to the page: the page's title. After a discard it runs once the confirm has gone.
 - The status is a polite live region, born with its first words: "Unsaved changes" arriving with your first edit stays quiet, and Saved or the failure is said.
 - ⌘S (Ctrl+S on other keyboards) saves from anywhere on the page while the bar shows, and ⌘↵ does too outside a form (a form's ⌘↵ submits that form). Inside a dialog, a popover or an open list the keys stay theirs, so they never save the page under it. Save shows the ⌘S keycap (hidden on touch only devices, as every keycap is).
 - On a narrow view it spans the width inside the gutter, the status first and the buttons at the end; a failure's reason wraps them onto a second line.
 
 ## States
 
-Unsaved, unsaved with a reason it can't save, saving, saved, failed, and leaving; wide and narrow.
+Unsaved, unsaved with a reason it can't save, saving, saved, failed, and leaving; wide and narrow; Discard's confirm open.
 
 ## Keyboard
 
-Tab reaches Discard, then Save, after the page's content. ⌘S or ⌘↵ saves. Esc does nothing here.
+Tab reaches Discard, then Save, after the page's content. ⌘S or ⌘↵ saves. Esc does nothing here. Enter on Discard opens its confirm, where focus starts; Esc closes it and focus goes back to Discard.
 
 ## Differences from the artifact
 

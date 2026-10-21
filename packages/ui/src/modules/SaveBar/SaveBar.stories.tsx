@@ -1,8 +1,18 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
 import { useState } from 'react';
-import { expect, fn, waitFor } from 'storybook/test';
+import { expect, fn, screen, waitFor, within } from 'storybook/test';
 import { Stage } from '../../workbench/Stage/Stage.tsx';
 import { SaveBar, type SaveBarStatus } from './SaveBar.tsx';
+
+/** Discard's confirm, once it has opened (it portals out of the story). */
+function discardConfirm() {
+  return screen.findByRole('alertdialog', { name: 'Discard your unsaved changes?' });
+}
+
+/** Waits until Discard's confirm has gone, exit and all. */
+function confirmGone() {
+  return waitFor(() => expect(screen.queryByRole('alertdialog')).toBeNull());
+}
 
 const meta = {
   title: 'Modules/SaveBar',
@@ -18,15 +28,89 @@ const meta = {
 export default meta;
 type Story = StoryObj<typeof meta>;
 
-/** Unsaved: the quiet status, Discard and Save with its keycap. */
+/** Unsaved: the quiet status, Discard (which asks first) and Save with its keycap. */
 export const Unsaved: Story = {
   parameters: { crm: { preview: true } },
   play: async ({ args, canvas, userEvent }) => {
     await expect(canvas.getByRole('status')).toHaveTextContent('Unsaved changes');
     await userEvent.click(canvas.getByRole('button', { name: 'Discard' }));
-    await expect(args.onDiscard).toHaveBeenCalled();
+    const confirm = await discardConfirm();
+    await userEvent.click(within(confirm).getByRole('button', { name: 'Discard changes' }));
+    await expect(args.onDiscard).toHaveBeenCalledTimes(1);
+    await confirmGone();
     await userEvent.click(canvas.getByRole('button', { name: 'Save' }));
     await expect(args.onSave).toHaveBeenCalledTimes(1);
+  },
+};
+
+/**
+ * Discard asks first, as anything that can't be taken back does: Esc and Keep editing leave the changes and put
+ * focus back on Discard; Discard changes discards, once.
+ */
+export const DiscardAsksFirst: Story = {
+  parameters: { crm: { screenshot: false } },
+  play: async ({ args, canvas, userEvent }) => {
+    const discard = canvas.getByRole('button', { name: 'Discard' });
+    discard.focus();
+    await userEvent.keyboard('{Enter}');
+    const confirm = await discardConfirm();
+    await expect(confirm).toHaveTextContent('You can’t undo this.');
+    // The safe answer comes first, and focus starts inside.
+    const [keep, commit] = within(confirm).getAllByRole('button');
+    await expect(keep).toHaveAccessibleName(/^Keep editing/);
+    await expect(commit).toHaveAccessibleName('Discard changes');
+    await waitFor(() => expect(confirm.contains(document.activeElement)).toBe(true));
+    await userEvent.keyboard('{Escape}');
+    await confirmGone();
+    await waitFor(() => expect(discard).toHaveFocus());
+    await expect(args.onDiscard).not.toHaveBeenCalled();
+    await userEvent.keyboard('{Enter}');
+    await userEvent.click(within(await discardConfirm()).getByRole('button', { name: /^Keep editing/ }));
+    await confirmGone();
+    await waitFor(() => expect(discard).toHaveFocus());
+    await expect(args.onDiscard).not.toHaveBeenCalled();
+    await userEvent.keyboard('{Enter}');
+    await userEvent.click(within(await discardConfirm()).getByRole('button', { name: 'Discard changes' }));
+    await confirmGone();
+    await expect(args.onDiscard).toHaveBeenCalledTimes(1);
+  },
+};
+
+/** A discard that goes through: the bar leaves, and focus, which was on Discard, goes where the page says. */
+export const DiscardRound: Story = {
+  parameters: { crm: { screenshot: false } },
+  args: { onFocusAway: fn() },
+  render: function Render(args) {
+    const [status, setStatus] = useState<SaveBarStatus>('unsaved');
+    return (
+      <Stage>
+        <SaveBar
+          {...args}
+          status={status}
+          onDiscard={() => {
+            args.onDiscard?.();
+            setStatus('hidden');
+          }}
+        />
+      </Stage>
+    );
+  },
+  play: async ({ args, canvas, userEvent }) => {
+    canvas.getByRole('button', { name: 'Discard' }).focus();
+    await userEvent.keyboard('{Enter}');
+    const confirm = await discardConfirm();
+    const commit = within(confirm).getByRole('button', { name: 'Discard changes' });
+    await waitFor(() => expect(confirm.contains(document.activeElement)).toBe(true));
+    // From the keyboard alone: Tab past Keep editing to the commit, then Enter.
+    for (let presses = 0; presses < 3 && document.activeElement !== commit; presses += 1) {
+      await userEvent.keyboard('{Tab}');
+    }
+    await expect(commit).toHaveFocus();
+    await userEvent.keyboard('{Enter}');
+    await confirmGone();
+    await expect(args.onDiscard).toHaveBeenCalledTimes(1);
+    await waitFor(() => expect(canvas.queryByRole('status')).toBeNull());
+    await waitFor(() => expect(args.onFocusAway).toHaveBeenCalledTimes(1));
   },
 };
 
