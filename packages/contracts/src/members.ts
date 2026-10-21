@@ -29,7 +29,7 @@ export const MemberView = MemberSummary.extend({
   /** A picture on our own origin (a path, never another site's address); absent until #32, so screens show initials. */
   avatarUrl: z
     .string()
-    .regex(/^\/(?![/\\])/)
+    .regex(/^\/(?![/\\])[^\s\\]*$/)
     .optional(),
   /** Their time zone in this workspace (an IANA name); absent means the browser's. */
   timeZone: z.string().optional(),

@@ -91,7 +91,31 @@ describe('removing and leaving (AC-811, AC-812)', () => {
         a.client.members.remove({ workspace: a.slug, memberId: theirs.memberId, mutationId: newId() }),
       ),
     ).toMatchObject(NOT_FOUND);
+    expect(
+      await refusal(() =>
+        a.client.members.transferOwnership({ workspace: a.slug, memberId: theirs.memberId, mutationId: newId() }),
+      ),
+    ).toMatchObject(NOT_FOUND);
     expect((await b.client.members.list({ workspace: b.slug })).total).toBe(2);
+  });
+
+  it('refuses an admin handing the workspace on, and changes no role', async () => {
+    const owner = await memberWithWorkspace(app);
+    const admin = await teammate(owner);
+    await owner.client.members.setRole({
+      workspace: owner.slug,
+      memberId: admin.memberId,
+      role: 'admin',
+      mutationId: newId(),
+    });
+    const mate = await teammate(owner);
+    expect(
+      await refusal(() =>
+        admin.client.members.transferOwnership({ workspace: owner.slug, memberId: mate.memberId, mutationId: newId() }),
+      ),
+    ).toMatchObject({ code: 'FORBIDDEN', status: 403 });
+    const roles = (await owner.client.members.list({ workspace: owner.slug })).members.map((each) => each.role).sort();
+    expect(roles).toEqual(['admin', 'member', 'owner']);
   });
 
   it('lets a member change no role, not even their own, and refuses the only owner leaving', async () => {

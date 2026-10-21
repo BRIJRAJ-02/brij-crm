@@ -76,7 +76,8 @@ const IDENTITY_FROM_CONTEXT =
  * removed person's switcher entry. Only the members module may reach it, and
  * only with ids its own removal answered.
  */
-const DIRECTORY_FROM_CONTEXT = /\bcontext\s*\.\s*directory\b|\bdirectory\b[^}]*\}\s*=\s*context\b/;
+const DIRECTORY_FROM_CONTEXT =
+  /\bcontext\s*\.\s*directory\b|\bdirectory\b[^}]*\}\s*=\s*context\b|\bcontext\s*:\s*\{[^}]*\bdirectory\b|\bcontext\s*\[\s*['"]directory/;
 
 /** The module files allowed the directory's write. */
 const DIRECTORY_FILES: ReadonlySet<string> = new Set(['members/router.ts']);
@@ -193,6 +194,7 @@ describe('the door is the only way in', () => {
         { path: 'lists/router.ts', source: handler('({ context: { db } }) => list(db)') },
         { path: 'notes/router.ts', source: handler('({ context }) => { const { db, identity } = context; }') },
         { path: 'calls/router.ts', source: handler('({ context }) => context.directory.dropMembership(a, b)') },
+        { path: 'notes2/router.ts', source: handler('({ context: { directory } }) => directory.dropMembership(a, b)') },
         { path: 'tasks/router.ts', source: handler('({ context }) => withWorkspace(context.scope.workspaceId)') },
         { path: 'deals/router.ts', source: handler('({ context }) => readDeals(context.scope)') },
         { path: 'system/router.ts', source: handler('({ context }) => status({ db: context.db })') },
@@ -212,6 +214,7 @@ describe('the door is the only way in', () => {
       'lists/router.ts',
       'notes/router.ts',
       'calls/router.ts',
+      'notes2/router.ts',
       'tasks/router.ts',
       'people/router.ts',
       'teams/router.ts',

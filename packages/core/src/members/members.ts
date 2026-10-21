@@ -477,7 +477,7 @@ export async function transferOwnership(
           action: 'workspace.ownership_transferred',
           targetType: 'member',
           targetId: target.id,
-          before: { toRole: target.role, fromRole: 'owner' },
+          before: { toRole: target.role, fromRole: 'owner', from: principal.memberId },
           after: { toRole: 'owner', fromRole: 'admin', from: principal.memberId },
         },
         options.source,
