@@ -192,6 +192,18 @@ jobs:
           PGPORT: "5433"
           PGUSER: postgres
           PGPASSWORD: postgres
+      # Migrate as production does: first up to main's journal, then the new migrations in a session of their own,
+      # as the owner (never a superuser). One fresh session for every migration hides one that only works because
+      # an earlier one loaded something, like 0058's pg_trgm setting (22 October 2026).
+      - name: Migrate to main first, then the rest
+        run: |
+          journal=packages/db/migrations/meta/_journal.json
+          if git fetch --no-tags --depth=1 origin main; then
+            git show FETCH_HEAD:"$journal" > "$RUNNER_TEMP/journal.json"
+            cp "$RUNNER_TEMP/journal.json" "$journal"
+            pnpm db:migrate
+            git checkout -- "$journal"
+          fi
       - run: pnpm db:setup
       - run: pnpm exec turbo run build --filter=@crm/web
       - name: Read the Playwright version
