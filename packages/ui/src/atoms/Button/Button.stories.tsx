@@ -248,7 +248,11 @@ export const PendingKeepsWidth: Story = {
     await expect(idle).toHaveAccessibleName('New form');
     await expect(pending).toHaveAccessibleName('New form In progress');
     await expect(pending).toHaveAttribute('aria-disabled', 'true');
-    await expect(idle?.getBoundingClientRect().width).toBe(pending?.getBoundingClientRect().width);
+    // Within half a pixel, which no one sees: Firefox lays out in sixtieths of a pixel, so the two widths can
+    // differ in the fifth decimal (66.03334 against 66.03333 on CI).
+    const widths = [idle, pending].map((button) => button?.getBoundingClientRect().width ?? 0);
+    await expect(Math.abs((widths[0] ?? 0) - (widths[1] ?? 0))).toBeLessThan(0.5);
+    await expect(widths[0]).toBeGreaterThan(0);
   },
 };
 
