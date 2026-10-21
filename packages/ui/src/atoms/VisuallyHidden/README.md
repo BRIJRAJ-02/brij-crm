@@ -16,6 +16,7 @@ New. Counts, archived marks and status words need a word for screen readers that
 
 - Use it to add words, never to hide a control. A control's name comes from its `label`.
 - `isFocusable` shows what it holds while focus is inside it, for a skip link: hidden until Tab reaches it.
+- `id` lets a control name it in `aria-describedby`: why a button is off, when what shows on screen already says it to sight (Empty trash while a change runs, its progress in the bar).
 
 ## States
 

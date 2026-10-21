@@ -56,7 +56,7 @@ export const Horizontal: Story = {
 export const States: Story = {
   render: () => (
     <Stage direction="column">
-      <RadioGroup label="Plan" error="Pick a plan to continue.">
+      <RadioGroup label="Plan" error="Pick a plan to continue." errorId="plan-error">
         <Radio value="team">Team</Radio>
         <Radio value="business">Business</Radio>
       </RadioGroup>
@@ -72,5 +72,10 @@ export const States: Story = {
   ),
   play: async ({ canvas }) => {
     await expect(canvas.getByText('Pick a plan to continue.')).toBeInTheDocument();
+    // The error line keeps the id it was given, and the group is described by it.
+    await expect(document.getElementById('plan-error')).toHaveTextContent('Pick a plan to continue.');
+    await expect(canvas.getByRole('radiogroup', { name: 'Plan' })).toHaveAccessibleDescription(
+      'Pick a plan to continue.',
+    );
   },
 };

@@ -34,6 +34,8 @@ export interface SelectItem {
   readonly description?: string;
   /** An archived option shows muted and can't be chosen, but stays shown when it is the current value. */
   readonly isArchived?: boolean;
+  /** Can't be chosen now: shown muted, its `description` saying why (a field a rule rules out). */
+  readonly isDisabled?: boolean;
   /** Anything else to draw before the label: an Avatar for people. */
   readonly leading?: ReactNode;
   /** What the `prefix` trigger shows instead of the label, beside `leading`: a country's "+91". */
@@ -200,7 +202,9 @@ export function Select({
     );
   }
 
-  const disabledKeys = items.filter((item) => item.isArchived === true && item.id !== current).map((item) => item.id);
+  const disabledKeys = items
+    .filter((item) => item.isDisabled === true || (item.isArchived === true && item.id !== current))
+    .map((item) => item.id);
   const typed = query.trim();
   const canCreate =
     onCreate !== undefined &&

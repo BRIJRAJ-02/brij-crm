@@ -50,6 +50,8 @@ export interface RadioGroupProps {
   readonly isReadOnly?: boolean;
   /** Why the choice is invalid, as a sentence that says how to fix it. */
   readonly error?: string;
+  /** The `id` of the error line, so a control nearby can name it in `aria-describedby` (a submit it turns off). */
+  readonly errorId?: string;
   readonly name?: string;
 }
 
@@ -65,6 +67,7 @@ export function RadioGroup({
   isDisabled = false,
   isReadOnly = false,
   error,
+  errorId,
   name,
 }: RadioGroupProps) {
   return (
@@ -84,7 +87,10 @@ export function RadioGroup({
       <span className={styles.choices} data-orientation={orientation}>
         {children}
       </span>
-      <FieldError className={styles.error}>{error}</FieldError>
+      {/* React Aria takes a given id over its own, and the group's aria-describedby follows it. */}
+      <FieldError className={styles.error} {...(errorId === undefined ? {} : { id: errorId })}>
+        {error}
+      </FieldError>
     </AriaRadioGroup>
   );
 }

@@ -1,5 +1,6 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
 import { expect } from 'storybook/test';
+import { Button } from '../Button/Button.tsx';
 import { Stage } from '../../workbench/Stage/Stage.tsx';
 import { VisuallyHidden } from './VisuallyHidden.tsx';
 
@@ -26,5 +27,22 @@ export const Default: Story = {
     const hidden = canvas.getByText('Read aloud only');
     await expect(hidden).toBeInTheDocument();
     await expect(hidden.getBoundingClientRect().width).toBeLessThanOrEqual(1);
+  },
+};
+
+/** With an `id`: a disabled button says why it is off to screen readers. */
+export const DescribesAControl: Story = {
+  render: () => (
+    <Stage>
+      <Button isDisabled aria-describedby="why-off">
+        Empty trash
+      </Button>
+      <VisuallyHidden id="why-off">Wait for the change under way to finish.</VisuallyHidden>
+    </Stage>
+  ),
+  play: async ({ canvas }) => {
+    await expect(canvas.getByRole('button', { name: 'Empty trash' })).toHaveAccessibleDescription(
+      'Wait for the change under way to finish.',
+    );
   },
 };

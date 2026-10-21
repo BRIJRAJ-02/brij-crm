@@ -161,6 +161,42 @@ export const Styles: Story = {
   },
 };
 
+/** An option a rule rules out: muted, its reason under it, and it can't be chosen. */
+export const DisabledOption: Story = {
+  parameters: { crm: { screenshot: false } },
+  args: {
+    label: 'Field',
+    optionStyle: 'plain',
+    placeholder: 'Choose a field',
+    defaultOpen: true,
+    items: [
+      { id: 'stage', label: 'Stage', icon: 'circle-dot' },
+      {
+        id: 'code',
+        label: 'Deal code',
+        icon: 'type',
+        isDisabled: true,
+        description: 'Deal code is unique, so several records can’t share one value.',
+      },
+    ],
+  },
+  render: (args) => (
+    <Stage width="narrow">
+      <Select {...args} />
+    </Stage>
+  ),
+  play: async ({ args, userEvent }) => {
+    const list = await listbox();
+    const ruled = [...list.querySelectorAll('[role="option"]')].find((option) =>
+      option.textContent.includes('Deal code'),
+    );
+    await expect(ruled).toHaveAttribute('aria-disabled', 'true');
+    await expect(ruled).toHaveTextContent('several records can’t share one value');
+    if (ruled instanceof HTMLElement) await userEvent.click(ruled);
+    await expect(args.onChange).not.toHaveBeenCalled();
+  },
+};
+
 /** Searchable, for a long list: the search field takes focus as it opens, and typing narrows the options. */
 export const Searchable: Story = {
   args: { label: 'Stage', isSearchable: true, optionStyle: 'plain' },

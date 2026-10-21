@@ -17,6 +17,7 @@ Ported from the artifact's Select card (version 8). It is the editor for select 
 - `optionStyle`: `plain` (the default), `tag` (select attributes) or `dot` (statuses).
 - `variant="cell"` is the trigger a grid cell becomes while its list is open: it fills the cell and shows the value where the display had it, with no box or ring of its own (the cell draws the one ring), and the list opens at least a menu wide, so options never cut to the cell's width.
 - An archived option (`isArchived`) can't be chosen, but still shows, muted, when it is the current value.
+- A disabled option (`isDisabled`) shows muted and can't be chosen, with its `description` saying why: a field a rule rules out for this change (a unique field in a bulk edit of several records). Why a variant: leaving the field out of the list hid the reason with it.
 - `isClearable` adds a "Clear" option while something is chosen; leave it off for a required attribute.
 - `isReadOnly` shows the value in a filled box with a lock, and `readOnlyReason` says why.
 - `onChange` gets the chosen id, or `null` when cleared.
@@ -30,7 +31,7 @@ Ported from the artifact's Select card (version 8). It is the editor for select 
 
 ## States
 
-Placeholder, chosen, searching, offering Create, focus and open (a 1px `accent-line` border and the faint halo), outlined in `control-border` at rest like a Field (3:1 on every surface), invalid, read only, disabled. The list opens from the keyboard at once and grows from the trigger for a pointer.
+Placeholder, chosen, searching, offering Create, an option that can't be chosen (with its reason), focus and open (a 1px `accent-line` border and the faint halo), outlined in `control-border` at rest like a Field (3:1 on every surface), invalid, read only, disabled. The list opens from the keyboard at once and grows from the trigger for a pointer.
 
 - `showsDescription` keeps the chosen option's `description` after its label in the closed field, muted: a time zone shows its offset ("Asia/Kolkata GMT+05:30") without opening the list.
 
