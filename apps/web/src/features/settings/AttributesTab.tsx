@@ -11,6 +11,7 @@ import {
   Disclosure,
   EmptyState,
   iconOf,
+  InfoTip,
   Icon,
   Menu,
   MenuItem,
@@ -108,7 +109,14 @@ function isDefaultArchived(attribute: AttributeDefinition): boolean {
 function AttributeRules({ attribute }: { readonly attribute: AttributeDefinition }) {
   return (
     <>
-      {attribute.isPrimary && <Badge text={strings.primary} />}
+      {attribute.isPrimary && (
+        <>
+          <Badge text={strings.primary} />
+          <InfoTip label={strings.primary} example={strings.primaryExample}>
+            {strings.primaryHelp}
+          </InfoTip>
+        </>
+      )}
       {attribute.isRequired && <Badge text={strings.required} />}
       {attribute.isUnique && <Badge text={strings.unique} />}
       {(attribute.validation?.rules.length ?? 0) > 0 && (

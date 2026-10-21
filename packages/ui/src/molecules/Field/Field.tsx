@@ -27,6 +27,8 @@ export interface FieldProps {
   /** What the field is ("Domain"). Always given; `isLabelHidden` keeps it for screen readers only (cell editors). */
   readonly label: string;
   readonly isLabelHidden?: boolean;
+  /** An InfoTip beside the label, for a setting whose label alone isn't clear ("Minimum notice"). */
+  readonly info?: ReactNode;
   readonly value?: string;
   readonly defaultValue?: string;
   readonly onChange?: (value: string) => void;
@@ -107,6 +109,7 @@ export interface FieldProps {
 export function Field({
   label,
   isLabelHidden = false,
+  info,
   value,
   defaultValue,
   onChange,
@@ -260,7 +263,15 @@ export function Field({
         const description = reason ?? (isInvalid ? undefined : hint);
         return (
           <>
-            {!isLabelHidden && <Label className={styles.label}>{label}</Label>}
+            {!isLabelHidden &&
+              (info === undefined ? (
+                <Label className={styles.label}>{label}</Label>
+              ) : (
+                <span className={styles.labelRow}>
+                  <Label className={styles.label}>{label}</Label>
+                  <span className={styles.info}>{info}</span>
+                </span>
+              ))}
             <span
               className={styles.box}
               data-multiline={isMultiline || undefined}

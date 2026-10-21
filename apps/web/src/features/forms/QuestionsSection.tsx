@@ -15,6 +15,7 @@ import {
   Button,
   Checkbox,
   Field,
+  InfoTip,
   LockReason,
   Menu,
   MenuItem,
@@ -417,6 +418,11 @@ function QuestionEditor({
       {isFiling && (
         <Select
           label={strings.whereItGoes}
+          info={
+            <InfoTip label={strings.whereItGoes} example={strings.whereItGoesExample}>
+              {strings.whereItGoesHelp}
+            </InfoTip>
+          }
           items={[
             { id: 'none', label: strings.notFiled },
             ...fitting.map((attribute) => {

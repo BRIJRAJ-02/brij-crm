@@ -23,7 +23,7 @@ export const strings = {
   /** A page's kind, among its facts on its card. */
   kindLabel: { personal: 'One on one', collective: 'Collective', round_robin: 'Round robin' },
   searchPages: 'Search booking pages',
-  copying: 'Copying…',
+  copying: 'Copying',
   duplicated: (title: string) => `Made “${title}”.`,
   turnOffFailed: (title: string) => `Couldn’t turn off ${title}. It’s back on.`,
   turnOnFailed: (title: string) => `Couldn’t turn on ${title}. It’s off again.`,
@@ -50,7 +50,7 @@ export const strings = {
   deleteTitle: (title: string) => `Delete “${title}”?`,
   deleteText: 'The link stops working, and this can’t be undone. Bookings already made stay.',
   deleteAction: 'Delete page',
-  deleting: 'Deleting…',
+  deleting: 'Deleting',
   cancel: 'Cancel',
   somethingWrong: 'Something went wrong. Try again.',
   // New booking page.
@@ -65,7 +65,7 @@ export const strings = {
   duration: 'Duration',
   durationRequired: 'Pick at least one length.',
   continue: 'Continue',
-  creating: 'Creating…',
+  creating: 'Creating',
   // The editor.
   live: 'Live',
   page: 'Page',
@@ -95,6 +95,37 @@ export const strings = {
   pausedSummary: 'Off, nobody can book it',
   noticeSummary: (notice: string) => `${notice} notice`,
   privateHint: 'Only people with the link book it. It may book inside the time you hold, and skips the minimum notice.',
+  /** InfoTips on the editor's settings that a new member wouldn't read from the label alone. */
+  tips: {
+    schedule: {
+      text: 'Which weekly hours this page offers times in. Default schedule follows whichever schedule is marked default in Availability, even if that changes later.',
+      example: 'Pick Evenings and the page offers only your evening hours.',
+    },
+    bufferBefore: {
+      text: 'Time kept free before each meeting, so nobody books right up to its start.',
+      example: 'With 15 minutes, a 10:00 AM meeting keeps 9:45 to 10:00 clear.',
+    },
+    bufferAfter: {
+      text: 'Time kept free after each meeting, for notes or a break.',
+      example: 'With 10 minutes, nothing can start before 11:10 AM after a meeting that ends at 11:00.',
+    },
+    notice: {
+      text: 'How far ahead someone has to book. Times closer than this are hidden.',
+      example: 'With 4 hours, a 2:00 PM slot can’t be booked after 10:00 AM that day.',
+    },
+    window: {
+      text: 'How many days ahead people can book. The window moves forward each day.',
+      example: 'With 30 days, on 1 March people can book up to 31 March.',
+    },
+    dailyLimit: {
+      text: 'The most bookings this page takes in one day. Once a day is full, it shows no times. Meetings from your other pages don’t count.',
+      example: 'With 3, the fourth person that day sees it as full.',
+    },
+    step: {
+      text: 'How often a start time is offered. Meeting length puts each start one meeting after the last.',
+      example: 'With 15 minutes, a 30 minute meeting offers 9:00, 9:15, 9:30 and so on.',
+    },
+  },
   bufferBefore: 'Buffer before',
   bufferAfter: 'Buffer after',
   notice: 'Minimum notice',

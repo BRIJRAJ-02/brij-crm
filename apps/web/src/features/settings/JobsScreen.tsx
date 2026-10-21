@@ -6,6 +6,7 @@ import type { DataLayer, JobsView, JobView, MemberSummary } from '@crm/data';
 import { useJobs } from '@crm/data/react';
 import {
   Badge,
+  InfoTip,
   Button,
   EmptyState,
   focusLater,
@@ -177,6 +178,19 @@ export function JobsScreen({ data, slug, view, isAll, members: loaded, canRunTes
       case 'startedBy':
         return starterName(job, members);
       case 'status':
+        if (job.status === 'preparing' || job.status === 'ready') {
+          return (
+            <>
+              <Badge text={strings.status[job.status]} />{' '}
+              <InfoTip
+                label={strings.status[job.status]}
+                {...(job.status === 'ready' ? { example: strings.readyExample } : {})}
+              >
+                {strings.statusHelp[job.status]}
+              </InfoTip>
+            </>
+          );
+        }
         return <Badge text={strings.status[job.status]} />;
       case 'progress':
         return <Progress job={job} />;

@@ -18,6 +18,7 @@ Ported from the artifact's Radio card (version 8). Roles, plans, export formats 
 ```
 
 - `label` is the question; `isLabelHidden` keeps it for screen readers only.
+- `info` puts an InfoTip beside the question, when the choices need a word of help (a view's Who can see it). Why a variant: the help belongs to the group's own question, as Field's and Select's `info` does. Focus reaches the tip before the choices.
 - `orientation="horizontal"` puts a few short choices in a row.
 - `error` marks the group invalid and says how to fix it. `errorId` names its line, so a control it turns off (a dialog's submit) can point `aria-describedby` at the reason.
 

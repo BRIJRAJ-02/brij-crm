@@ -49,6 +49,8 @@ export interface SelectProps {
   /** What is chosen ("Stage"). Always given; `isLabelHidden` keeps it for screen readers only. */
   readonly label: string;
   readonly isLabelHidden?: boolean;
+  /** An InfoTip beside the label, for a setting whose label alone isn't clear ("Minimum notice"). */
+  readonly info?: ReactNode;
   readonly items: readonly SelectItem[];
   readonly optionStyle?: SelectOptionStyle;
   readonly value?: string | null;
@@ -163,6 +165,7 @@ function Face({ item, optionStyle }: { readonly item: SelectItem; readonly optio
 export function Select({
   label,
   isLabelHidden = false,
+  info,
   items,
   optionStyle = 'plain',
   value,
@@ -223,7 +226,15 @@ export function Select({
   if (isReadOnly) {
     return (
       <span className={styles.root} data-size={size} data-readonly="">
-        {!isLabelHidden && <span className={styles.label}>{label}</span>}
+        {!isLabelHidden &&
+          (info === undefined ? (
+            <span className={styles.label}>{label}</span>
+          ) : (
+            <span className={styles.labelRow}>
+              <span className={styles.label}>{label}</span>
+              <span className={styles.info}>{info}</span>
+            </span>
+          ))}
         <span className={styles.trigger} role="group" aria-label={label}>
           <span className={styles.value}>
             {chosen === undefined ? (
@@ -321,7 +332,15 @@ export function Select({
         onChange?.(next === CLEAR || next === null ? null : String(next));
       }}
     >
-      {!isLabelHidden && <Label className={styles.label}>{label}</Label>}
+      {!isLabelHidden &&
+        (info === undefined ? (
+          <Label className={styles.label}>{label}</Label>
+        ) : (
+          <span className={styles.labelRow}>
+            <Label className={styles.label}>{label}</Label>
+            <span className={styles.info}>{info}</span>
+          </span>
+        ))}
       <AriaButton className={styles.trigger} {...(triggerRef === undefined ? {} : { ref: triggerRef })}>
         <SelectValue<SelectItem> className={styles.value}>
           {({ selectedItems, isPlaceholder, defaultChildren }) => {

@@ -19,6 +19,9 @@ export const strings = {
   noArchivedText: 'Archived attributes show here, with their values kept.',
   /** Badges (AC-227). */
   primary: 'Primary',
+  /** Primary's InfoTip in the Rules column. */
+  primaryHelp: 'The attribute that names each record. It shows as the record’s title in tables, links and search.',
+  primaryExample: 'On People it’s Name, so Ana Lima’s chip reads Ana Lima.',
   required: 'Required',
   unique: 'Unique',
   /** How many validation rules an attribute holds (spec 0013). */

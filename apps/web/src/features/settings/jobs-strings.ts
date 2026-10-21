@@ -26,6 +26,14 @@ export const strings = {
     failed: 'Failed',
     cancelled: 'Cancelled',
   } satisfies Record<JobStatus, string>,
+  /** InfoTips beside the two statuses a new member wouldn't read from the word alone. */
+  statusHelp: {
+    preparing: 'It’s gathering the records it will work on. Nothing has changed yet.',
+    ready:
+      'It’s gathered its records and waits for you to press Review and confirm. If it expires first, nothing changes.',
+  },
+  /** An example for Needs confirm's InfoTip. */
+  readyExample: 'A bulk delete of 2,000 people waits here until you confirm it.',
   system: 'System',
   removedMember: 'A removed member',
   /** "250 of 1,000", the counts formatted in the browser's language. */

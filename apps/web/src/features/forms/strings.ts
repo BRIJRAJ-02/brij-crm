@@ -105,6 +105,10 @@ export const strings = {
   placeholder: 'Placeholder',
   placeholderHint: 'Shown until they type',
   whereItGoes: 'Where it goes',
+  /** Where it goes' InfoTip on a question. */
+  whereItGoesHelp:
+    'The field on the record that this answer fills in. Not filed keeps the answer on the submission only.',
+  whereItGoesExample: 'Point a Job title question at Job title, and each person who answers gets it on their record.',
   notFiled: 'Not filed, kept with the submission',
   notFiledShort: 'Not filed',
   takenBy: (label: string) => `Used by “${label}”; choosing it moves it here`,

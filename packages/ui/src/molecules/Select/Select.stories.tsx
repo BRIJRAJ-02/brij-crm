@@ -2,6 +2,7 @@ import type { Meta, StoryObj } from '@storybook/react-vite';
 import { expect, fn, waitFor } from 'storybook/test';
 import { Avatar } from '../../atoms/Avatar/Avatar.tsx';
 import { Stage } from '../../workbench/Stage/Stage.tsx';
+import { InfoTip } from '../InfoTip/InfoTip.tsx';
 import { Select, type SelectItem } from './Select.tsx';
 
 const STAGES: readonly SelectItem[] = [
@@ -303,5 +304,35 @@ export const DescriptionInField: Story = {
   ),
   play: async ({ canvas }) => {
     await expect(canvas.getByRole('button', { name: /Time zone/ })).toHaveTextContent('GMT+05:30');
+  },
+};
+
+/** With `info`: an InfoTip beside the label. It opens its help and never the list, and the trigger still opens the list. */
+export const WithInfo: Story = {
+  args: {
+    label: 'Minimum notice',
+    items: [
+      { id: '0', label: 'None' },
+      { id: '240', label: '4 hours' },
+    ],
+    optionStyle: 'plain',
+    value: '240',
+    info: (
+      <InfoTip label="Minimum notice" example="With 4 hours, a 2:00 PM slot can’t be booked after 10:00 AM.">
+        How far ahead someone has to book.
+      </InfoTip>
+    ),
+  },
+  render: (args) => (
+    <Stage width="narrow">
+      <Select {...args} />
+    </Stage>
+  ),
+  play: async ({ canvas, userEvent }) => {
+    await userEvent.click(canvas.getByRole('button', { name: 'About Minimum notice' }));
+    await waitFor(() => expect(document.querySelector('[role="dialog"]')).not.toBeNull());
+    await expect(document.querySelector('[role="listbox"]')).toBeNull();
+    await userEvent.keyboard('{Escape}');
+    await waitFor(() => expect(document.querySelector('[role="dialog"]')).toBeNull());
   },
 };

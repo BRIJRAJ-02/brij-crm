@@ -59,6 +59,9 @@ export const strings = {
   typeTable: 'Table',
   typeBoard: 'Board',
   whoCanSee: 'Who can see it',
+  /** Who can see it's InfoTip. */
+  whoCanSeeHelp:
+    'Only me keeps the view in your own list. Everyone puts it in every member’s list, and anyone can change it unless an admin locks it.',
   onlyMe: 'Only me',
   everyone: 'Everyone in the workspace',
   startFromView: 'Start from this view’s columns and filters',

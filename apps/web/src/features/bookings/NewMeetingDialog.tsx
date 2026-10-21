@@ -3,7 +3,7 @@
 // Main task: name who it is with and their email, set the time, then Book it: a confirmed booking in the member's own time.
 // Leaves out: picking a person from the workspace as you type, and the email invitation (the calendar invites them).
 import { isDataError, type BookingPageView } from '@crm/data';
-import { Button, Callout, Field, Form, Modal, Select, type FormRefusal } from '@crm/ui';
+import { Button, Callout, Field, Form, InfoTip, Modal, Select, type FormRefusal } from '@crm/ui';
 import { useId, useState, useMemo } from 'react';
 import { zoneItems, zoneMatches } from '../booking/hours.ts';
 import { browserZone } from '../booking/zone.ts';
@@ -183,6 +183,11 @@ export function NewMeetingDialog({
         {pages.length > 1 && (
           <Select
             label={strings.about}
+            info={
+              <InfoTip label={strings.about} example={strings.aboutExample}>
+                {strings.aboutHelp}
+              </InfoTip>
+            }
             items={pages.map((page) => ({ id: page.id, label: page.title }))}
             value={pageId}
             isDisabled={busy}

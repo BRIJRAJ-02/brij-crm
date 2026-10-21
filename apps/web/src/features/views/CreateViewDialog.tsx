@@ -11,7 +11,7 @@ import {
   type ViewKind,
   type ViewVisibility,
 } from '@crm/data';
-import { Button, Checkbox, Field, Form, Modal, Radio, RadioGroup, type FormRefusal } from '@crm/ui';
+import { Button, Checkbox, Field, Form, InfoTip, Modal, Radio, RadioGroup, type FormRefusal } from '@crm/ui';
 import { useId, useState } from 'react';
 import { strings } from './strings.ts';
 
@@ -183,6 +183,7 @@ function CreateViewForm({
       )}
       <RadioGroup
         label={strings.whoCanSee}
+        info={<InfoTip label={strings.whoCanSee}>{strings.whoCanSeeHelp}</InfoTip>}
         value={visibility}
         onChange={(next) => {
           if (next === 'private' || next === 'workspace') setVisibility(next);

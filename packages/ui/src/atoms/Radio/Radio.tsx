@@ -39,6 +39,8 @@ export interface RadioGroupProps {
   /** The question the choices answer. */
   readonly label: string;
   readonly isLabelHidden?: boolean;
+  /** An InfoTip beside the question, when the choices need a word of help ("Who can see it"). */
+  readonly info?: ReactNode;
   /** The Radio choices. */
   readonly children: ReactNode;
   readonly value?: string | null;
@@ -59,6 +61,7 @@ export interface RadioGroupProps {
 export function RadioGroup({
   label,
   isLabelHidden = false,
+  info,
   children,
   value,
   defaultValue,
@@ -83,7 +86,15 @@ export function RadioGroup({
       {...(onChange === undefined ? {} : { onChange })}
       {...(name === undefined ? {} : { name })}
     >
-      {!isLabelHidden && <Label className={styles.legend}>{label}</Label>}
+      {!isLabelHidden &&
+        (info === undefined ? (
+          <Label className={styles.legend}>{label}</Label>
+        ) : (
+          <span className={styles.legendRow}>
+            <Label className={styles.legend}>{label}</Label>
+            <span className={styles.info}>{info}</span>
+          </span>
+        ))}
       <span className={styles.choices} data-orientation={orientation}>
         {children}
       </span>

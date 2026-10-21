@@ -19,6 +19,7 @@ import {
   Callout,
   Form,
   iconOf,
+  InfoTip,
   Modal,
   Radio,
   RadioGroup,
@@ -328,6 +329,15 @@ function BulkEditForm({
               <RadioGroup
                 label={bulkStrings.change}
                 orientation="horizontal"
+                {...(chosen.ops.includes('add')
+                  ? {
+                      info: (
+                        <InfoTip label={bulkStrings.change} example={bulkStrings.changeExample}>
+                          {bulkStrings.changeHelp}
+                        </InfoTip>
+                      ),
+                    }
+                  : {})}
                 value={shownOp}
                 {...ruleOut}
                 onChange={(next) => {
