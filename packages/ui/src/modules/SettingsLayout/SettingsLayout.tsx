@@ -233,17 +233,17 @@ export function SettingsStack({ children }: SettingsStackProps) {
 export interface SettingsSectionProps {
   /** What the section holds ("Appearance"): its heading, one level under the page's title. */
   readonly title: string;
-  /** One or two muted lines on what the settings in it change. */
+  /** One short muted line, only when the heading alone doesn't say what the settings change. */
   readonly description?: ReactNode;
   /** The section's settings: Cards (of SettingsRows, or a Form), a SettingsGrid of Cards, a Callout. */
   readonly children: ReactNode;
 }
 
 /**
- * One group of settings across the page's width (20 Oct 2026): its title and
- * description in a column at the start, its cards across the rest, and a
- * hairline before the next section. Below the page breakpoint the title sits
- * above the cards. A list (a Table) needs no section: it runs the full width.
+ * One group of settings across the page's width: its heading, and a line of
+ * description only when the heading needs one, above its cards (21 Oct 2026:
+ * one column, no label column beside them), and a hairline before the next
+ * section. A list (a Table) needs no section: it runs the full width.
  */
 export function SettingsSection({ title, description, children }: SettingsSectionProps) {
   const headingId = useId();
@@ -282,11 +282,15 @@ export function SettingsGrid({ children }: SettingsGridProps) {
 
 /** Props for SettingsRow. */
 export interface SettingsRowProps {
-  /** What the setting is ("Interface theme"); also name the control with it (its hidden label). */
+  /** What the setting is ("Interface theme"), or the thing the row stands for (a calendar's account); also name the control with it. */
   readonly title: string;
-  /** One muted line on what it changes. */
-  readonly description?: string;
-  /** The control, at the end of the row: a Select, a Switch, a Button. */
+  /** One muted line on what it changes, or the thing's state ("Connected, synced 4 minutes ago"). */
+  readonly description?: ReactNode;
+  /** Before the text: a provider's mark, for a row that stands for a connected account. */
+  readonly leading?: ReactNode;
+  /** Beside the title: a Badge ("Default"), or an InfoTip when the title needs a word of help. */
+  readonly meta?: ReactNode;
+  /** The control, at the end of the row: a Select, a Switch, a Button, a row's "···" menu. */
   readonly children: ReactNode;
 }
 
@@ -294,13 +298,21 @@ export interface SettingsRowProps {
  * One setting as a row (spec 0026, AC-683): its title over a muted
  * description, and its control at the end. Rows stack inside a Card, a
  * hairline between them; on a narrow page the control drops under the text.
+ * A row can also stand for one thing of a kind (a connected calendar): a
+ * mark before its text, a badge beside its title, its controls at the end.
  */
-export function SettingsRow({ title, description, children }: SettingsRowProps) {
+export function SettingsRow({ title, description, leading, meta, children }: SettingsRowProps) {
   return (
     <div className={styles.row}>
-      <span className={styles.rowText}>
-        <span className={styles.rowTitle}>{title}</span>
-        {description !== undefined && <span className={styles.description}>{description}</span>}
+      <span className={styles.rowMain}>
+        {leading !== undefined && <span className={styles.rowLeading}>{leading}</span>}
+        <span className={styles.rowText}>
+          <span className={styles.rowHeading}>
+            <span className={styles.rowTitle}>{title}</span>
+            {meta}
+          </span>
+          {description !== undefined && <span className={styles.description}>{description}</span>}
+        </span>
       </span>
       <span className={styles.rowControl}>{children}</span>
     </div>
