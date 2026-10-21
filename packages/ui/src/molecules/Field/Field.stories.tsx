@@ -197,8 +197,9 @@ export const Copy: Story = {
 };
 
 /**
- * The title variant: a page's own title, such as a note's. Empty with its placeholder, filled and wrapping, and read
- * only: no box, border, fill, ring or lock in any state, in the note title type.
+ * The title variant: a page's own title, such as a note's. Empty with its placeholder, filled and wrapping, read
+ * only, refused and disabled: no box, border, fill, ring or lock in any state, in the note title type. A refusal
+ * shows as the line under it; read only, keyboard focus outlines it, as there is no caret.
  */
 export const Title: Story = {
   render: () => (
@@ -212,6 +213,15 @@ export const Title: Story = {
         defaultValue="Kickoff call with the Northwind buying committee about seats, the EU workspace and the security review"
       />
       <Field label="Read only title" isLabelHidden variant="title" isWrapping isReadOnly defaultValue="Kickoff call" />
+      <Field
+        label="Refused title"
+        isLabelHidden
+        variant="title"
+        isWrapping
+        defaultValue="Kickoff call"
+        error="Keep the title to 200 characters."
+      />
+      <Field label="Disabled title" isLabelHidden variant="title" isWrapping isDisabled defaultValue="Kickoff call" />
     </Stage>
   ),
   play: async ({ canvas, userEvent }) => {
@@ -226,6 +236,18 @@ export const Title: Story = {
     await expect(getComputedStyle(box).boxShadow).toBe('none');
     await expect(getComputedStyle(title).fontSize).toBe('28px');
     await expect(canvas.queryByRole('img', { name: 'Read only' })).toBeNull();
-    await expect(canvas.getByRole('textbox', { name: 'Read only title' })).toHaveAttribute('readonly');
+    const readOnly = canvas.getByRole('textbox', { name: 'Read only title' });
+    await expect(readOnly).toHaveAttribute('readonly');
+    await expect(canvas.getByRole('textbox', { name: 'Refused title' })).toHaveAccessibleDescription(
+      'Keep the title to 200 characters.',
+    );
+    await expect(canvas.getByRole('textbox', { name: 'Disabled title' })).toBeDisabled();
+    // Tab onto the read only title: no caret shows there, so keyboard focus outlines it.
+    await userEvent.tab();
+    await userEvent.tab();
+    await waitFor(() => expect(readOnly).toHaveFocus());
+    const readOnlyBox = readOnly.parentElement;
+    if (readOnlyBox === null) throw new Error('No box.');
+    await expect(getComputedStyle(readOnlyBox).outlineStyle).toBe('solid');
   },
 };

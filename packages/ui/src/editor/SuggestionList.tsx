@@ -6,6 +6,7 @@
 // both, since their rows differ only in what they hold: a member's Avatar,
 // name and email; a block's icon, name and markdown.
 import type { ReactNode, RefObject } from 'react';
+import { Kbd } from '../atoms/Kbd/Kbd.tsx';
 import { Popover } from '../molecules/Popover/Popover.tsx';
 import styles from './SuggestionList.module.css';
 
@@ -17,7 +18,7 @@ export interface SuggestionRow {
   readonly label: string;
   /** A second line of meaning after the name, in the secondary colour: a member's email. */
   readonly detail?: string;
-  /** A quiet hint at the row's end: the markdown that makes a block. */
+  /** A keycap at the row's end, as a MenuItem's shortcut: the markdown that makes a block. */
   readonly hint?: string;
 }
 
@@ -90,7 +91,7 @@ export function SuggestionList({
               {row.detail !== undefined && <span className={styles.detail}>{row.detail}</span>}
               {row.hint !== undefined && (
                 <span className={styles.hint} aria-hidden="true">
-                  {row.hint}
+                  <Kbd tone="soft">{row.hint}</Kbd>
                 </span>
               )}
             </div>

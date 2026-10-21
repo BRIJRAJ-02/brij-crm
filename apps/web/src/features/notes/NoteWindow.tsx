@@ -283,7 +283,15 @@ export function NoteWindow(props: NoteWindowProps) {
               : strings.savedOverTheirs(nameOf(state.notice.by))}
           </Callout>
         )}
-        <Suspense fallback={<Skeleton lines={6} />}>
+        <Suspense
+          fallback={
+            // The page's shape while the editor's chunk loads: a title line over the text's lines.
+            <>
+              <Skeleton width="medium" />
+              <Skeleton lines={6} />
+            </>
+          }
+        >
           <NoteEditor
             // Someone else's save replaced the body: the editor starts again from it, and the old one's last
             // text (handed over as it unmounts) is dropped by its key.

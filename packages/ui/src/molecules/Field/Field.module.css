@@ -281,6 +281,14 @@
     box-shadow: var(--shadow-focus);
   }
 
+  /* A read only title reached with Tab shows no caret, so keyboard focus
+     outlines it in accent-line; writing in an editable one stays ring free. */
+  .root[data-variant='title'][data-readonly] .box:has([data-focus-visible]) {
+    border-radius: var(--radius-sm);
+    outline: var(--border-width-thick) solid var(--accent-line);
+    outline-offset: var(--space-4);
+  }
+
   .copy {
     display: inline-flex;
     flex: none;

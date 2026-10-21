@@ -1,8 +1,9 @@
 /* SuggestionList: a Menu's rows (size-nav-item tall, the popover's 4px
    inset, body-strong names) for members to mention and blocks to make; the
-   highlighted row takes surface-hover, as a Menu's focused item does. A
-   member's email trails in text-secondary; a block's markdown sits at the
-   row's end in text-tertiary. At most ten rows show before it scrolls. */
+   highlighted row takes surface-hover and the inset focus ring, as a Menu's
+   focused item does. A member's email trails in text-secondary; a block's
+   markdown sits at the row's end as a soft Kbd. At most ten rows show before
+   it scrolls. */
 @layer components {
   .root {
     box-sizing: border-box;
@@ -27,8 +28,11 @@
     outline: none;
   }
 
+  /* The row Enter picks: the hover fill and the inset accent ring a Menu's
+     focused item takes, since focus itself stays in the editor. */
   .option[data-active] {
     background: var(--surface-hover);
+    box-shadow: var(--shadow-focus-inset);
   }
 
   .name {
@@ -50,12 +54,11 @@
     white-space: nowrap;
   }
 
+  /* The block's markdown, a soft Kbd at the row's end as a MenuItem's shortcut. */
   .hint {
+    display: inline-flex;
     flex: none;
     margin-inline-start: auto;
-    color: var(--text-tertiary);
-    font: var(--text-code);
-    letter-spacing: var(--tracking-code);
   }
 
   .empty {
