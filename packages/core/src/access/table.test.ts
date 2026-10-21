@@ -45,6 +45,9 @@ const NO_SCOPE: ReadonlySet<string> = new Set([
   'createUserWorkspace',
   // Pure access functions.
   'can',
+  // Calendar health's reach (spec 0037, AC-1307), read off a scope readCalendarHealth checks, and a colour mapping.
+  'healthReach',
+  'nearestHue',
   'objectLevel',
   'fieldLevel',
   'recordRule',
@@ -277,12 +280,14 @@ describe('the walk: a principal without the access is refused', () => {
       };
       const owner = testScope({ db, workspaceId, actor: { type: 'member', id: ownerId } });
       const theirs = await core.connectCalendar(owner, { provider: 'google', exchanged, tokenKey });
+      // Their main calendar (spec 0024 milestone 5), for the services that name a calendar.
+      const [calendar] = (await core.listMemberCalendars(owner)).accounts.flatMap((account) => account.calendars);
       const key = testScope({ db, workspaceId, actor: { type: 'api_key', id: core.newId() } });
       const call = service(name) as unknown as (...args: unknown[]) => Promise<unknown>;
       const input =
         name === 'connectCalendar'
           ? { provider: 'google', exchanged: { ...exchanged, accountEmail: 'bea@example.com' }, tokenKey }
-          : { connectionId: theirs.id, sharing: 'private' };
+          : { connectionId: theirs.id, calendarId: calendar?.id, sharing: 'private', showInWeek: false };
       expect(await refusalOf(call(key, input))).toMatchObject({ code: 'FORBIDDEN' });
       if (name === 'connectCalendar') return;
       expect(await refusalOf(call(scope, input))).toMatchObject({ code: 'NOT_FOUND' });
@@ -332,6 +337,7 @@ describe('the walk: a principal without the access is refused', () => {
         [
           'listBookingPages',
           'listWorkspaceBookings',
+          'listMeetings',
           'readBookingsCalendar',
           'createBookingPage',
           'createTimeBlock',

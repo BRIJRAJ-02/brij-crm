@@ -37,6 +37,7 @@ function event(
   return {
     id,
     connectionId: 'conn',
+    calendarId: 'cal',
     title: 'Team sync',
     startsAt,
     endsAt,

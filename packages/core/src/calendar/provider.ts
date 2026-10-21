@@ -11,7 +11,16 @@
 // 401 or 403) usually needs the same; everything else (`CALENDAR_UNAVAILABLE`:
 // a 5xx, a 429, the network, a body that won't parse) is the minute we asked
 // in, and is tried again. A sync token the provider no longer honours
-// (`CALENDAR_SYNC_TOKEN_GONE`, Google's 410) means a full sync.
+// (`CALENDAR_SYNC_TOKEN_GONE`, Google's 410, Graph's `syncStateNotFound`)
+// means a full sync; a calendar the provider no longer has
+// (`CALENDAR_GONE`, a 404 on it) means the account's calendars are listed
+// again.
+//
+// Milestone 5 (amendment of 20 October 2026): every call names its calendar
+// (`listCalendars` gives their ids; `PRIMARY_CALENDAR`, `primary`, is the
+// account's main calendar until the first listing gives its real id), and
+// free and busy answers each calendar on its own, so one failing calendar
+// never hides the rest (AC-994, AC-995).
 
 /** An attendee's answer, as the provider says it. */
 export type ProviderResponse = 'accepted' | 'declined' | 'tentative' | 'needs_action';
@@ -87,10 +96,36 @@ export interface ProviderChanges {
   readonly nextSyncToken: string;
 }
 
+/** What the member may do with a calendar at the provider (AC-991). */
+export type CalendarAccessRole = 'owner' | 'writer' | 'reader' | 'free_busy';
+
+/** One calendar of an account, as `listCalendars` answers it. */
+export interface ProviderCalendar {
+  readonly id: string;
+  readonly name: string;
+  /** `#rrggbb`, lower case, when the provider gives one. */
+  readonly colour?: string;
+  readonly accessRole: CalendarAccessRole;
+  /** The account's main calendar. */
+  readonly isPrimary: boolean;
+  readonly timeZone?: string;
+}
+
+/** The account's main calendar before a listing gave its real id: an alias both adapters take. */
+export const PRIMARY_CALENDAR = 'primary';
+
 /** A busy span, ISO 8601 in UTC. */
 export interface BusyInterval {
   readonly start: string;
   readonly end: string;
+}
+
+/** One calendar's free and busy answer: its busy spans, or the code it failed with. */
+export type CalendarBusy = { readonly busy: readonly BusyInterval[] } | { readonly error: CalendarErrorCode };
+
+/** What a created event says beyond the event: a video link was asked for and the account can't make one (AC-1011). */
+export interface CreatedProviderEvent extends ProviderEvent {
+  readonly videoUnavailable?: boolean;
 }
 
 /** An event the CRM writes (milestone 3). */
@@ -127,6 +162,8 @@ export interface CalendarProvider {
   readonly exchangeCode: (code: string, redirectUri: string) => Promise<ExchangedTokens>;
   /** A fresh access token; `CALENDAR_AUTH_REVOKED` on the provider's invalid grant. */
   readonly refresh: (tokens: CalendarTokens) => Promise<CalendarTokens>;
+  /** Every calendar of the account (milestone 5, AC-991), the main one marked. */
+  readonly listCalendars: (tokens: CalendarTokens) => Promise<readonly ProviderCalendar[]>;
   /**
    * Every changed event since `syncToken`, or every event in `window` when
    * there is none (a full sync), each recurring event as its instances.
@@ -138,10 +175,24 @@ export interface CalendarProvider {
     syncToken: string | undefined,
     window: SyncWindow,
   ) => Promise<ProviderChanges>;
-  readonly freeBusy: (tokens: CalendarTokens, from: string, to: string) => Promise<readonly BusyInterval[]>;
-  readonly createEvent: (tokens: CalendarTokens, input: NewEvent) => Promise<ProviderEvent>;
-  readonly updateEvent: (tokens: CalendarTokens, eventId: string, input: Partial<NewEvent>) => Promise<ProviderEvent>;
-  readonly cancelEvent: (tokens: CalendarTokens, eventId: string) => Promise<void>;
+  /**
+   * Free and busy for each of `calendarIds` in one request (AC-994): every calendar answers on its own, its busy
+   * spans or the code it failed with (AC-995). A failure of the whole request throws.
+   */
+  readonly freeBusy: (
+    tokens: CalendarTokens,
+    calendarIds: readonly string[],
+    from: string,
+    to: string,
+  ) => Promise<ReadonlyMap<string, CalendarBusy>>;
+  readonly createEvent: (tokens: CalendarTokens, calendarId: string, input: NewEvent) => Promise<CreatedProviderEvent>;
+  readonly updateEvent: (
+    tokens: CalendarTokens,
+    calendarId: string,
+    eventId: string,
+    input: Partial<NewEvent>,
+  ) => Promise<ProviderEvent>;
+  readonly cancelEvent: (tokens: CalendarTokens, calendarId: string, eventId: string) => Promise<void>;
   readonly watch: (
     tokens: CalendarTokens,
     calendarId: string,
@@ -164,6 +215,7 @@ export const CALENDAR_ERROR_CODES = [
   'CALENDAR_SYNC_TOKEN_GONE',
   'CALENDAR_UNAVAILABLE',
   'CALENDAR_SCOPE_DECLINED',
+  'CALENDAR_GONE',
 ] as const;
 
 /** One code a provider fails with. */

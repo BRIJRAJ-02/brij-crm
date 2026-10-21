@@ -6,18 +6,18 @@ export const strings = {
   pageTabs: { calendar: 'Calendar', list: 'List' },
   tabsLabel: 'Which bookings',
   tabs: { upcoming: 'Upcoming', past: 'Past', cancelled: 'Canceled' },
-  listLabel: { upcoming: 'Upcoming bookings', past: 'Past bookings', cancelled: 'Canceled bookings' },
-  /** Each tab's own empty state. */
+  listLabel: { upcoming: 'Upcoming meetings', past: 'Past meetings', cancelled: 'Canceled meetings' },
+  sourceLabel: 'Show',
+  sources: { all: 'All', bookings: 'Bookings', calendar: 'Events' },
+  noMatch: 'Nothing matches these filters',
+  bookedVia: (page: string) => `Booked via ${page}`,
+  more: 'Show more',
+  moreFailed: 'Couldn’t load more. Try again',
+  /** Each tab's own empty state: one line. */
   empty: {
-    upcoming: {
-      title: 'Nothing coming up',
-      text: 'Bookings made through your links will appear here.',
-    },
-    past: { title: 'Nothing behind you yet', text: 'Bookings move here once they have happened.' },
-    cancelled: {
-      title: 'Nothing has been called off',
-      text: 'Bookings you or your guests cancel are kept here rather than deleted.',
-    },
+    upcoming: { title: 'Nothing coming up' },
+    past: { title: 'Nothing behind you yet' },
+    cancelled: { title: 'Nothing has been called off' },
   },
   /** The way to the booking pages (Scheduling › Booking pages, spec 0034). */
   openLinks: 'Go to your booking pages',
@@ -43,14 +43,17 @@ export const strings = {
   providers: { google: 'Google Meet', microsoft: 'Microsoft Teams', zoom: 'Zoom', other: 'the call' },
   /** Filters. */
   filter: 'Filter',
-  filterCount: (count: number) => `Filter (${String(count)})`,
+  filterCount: (count: number) => `Filter · ${String(count)}`,
   filterMenu: 'Filter bookings',
   links: 'Link',
   allLinks: 'All links',
   calendars: 'Calendars',
+  calendarsFailed: 'Couldn’t load your calendars.',
+  connectCalendar: 'Connect a calendar',
+  noCalendarConnected: 'No calendar connected.',
+  dismiss: 'Dismiss',
+  movedTo: (now: string, was: string) => `New bookings now go to ${now}. ${was} stopped taking them.`,
   clearFilters: 'Clear filters',
-  noCalendarsTitle: 'No calendars selected',
-  noCalendarsText: 'Choose at least one calendar in Filter to see its events.',
   /** Sort. */
   sortSoonest: 'Soonest first',
   sortLatest: 'Latest first',
@@ -139,7 +142,6 @@ export const strings = {
   /** Why the TopBar's New is off: a meeting goes on a booking page that is on. */
   turnOnPageFirst: 'Turn on a booking page to book someone in',
   /** What the TopBar's count counts, for screen readers: "4 upcoming bookings". */
-  upcomingCount: 'upcoming bookings',
   with: 'With',
   theirName: 'Their name',
   email: 'Email',

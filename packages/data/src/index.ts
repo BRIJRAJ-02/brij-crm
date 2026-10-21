@@ -7,6 +7,7 @@
 // while a screen shows a workspace (the realtime client loads with the first).
 import type {
   AddToCrmResult,
+  CalendarProvider,
   ExportView,
   SubmissionSelection,
   SyncPreview,
@@ -114,6 +115,14 @@ export type {
   WeekStart,
 } from './preferences/store.ts';
 import type { SchedulesView } from './schedules/store.ts';
+import { createMeetingsStore, type MeetingsHeld, type MeetingsQuery } from './bookings/meetings.ts';
+import {
+  createCalendarsStore,
+  type CalendarChange,
+  type CalendarListState,
+  type CalendarsHeld,
+  type PageDestinationState,
+} from './calendar/calendars.ts';
 import {
   createCaptureList,
   dropItem,
@@ -191,7 +200,12 @@ export type {
   CalendarConnections,
   CalendarSharing,
   CalendarStatus,
+  CalendarProvider,
+  CalendarAccountView,
+  CalendarList,
+  CalendarView as CalendarItem,
   MeetingView,
+  PageDestinationView,
 } from '@crm/contracts';
 export type {
   ActorDisplay,
@@ -204,6 +218,8 @@ export type {
   BookingsCalendarView,
   BookingsTab,
   CalendarEventItem,
+  MeetingListItem,
+  MeetingSource,
   BookingPageSettings,
   BookingPageView,
   BookingView,
@@ -309,7 +325,15 @@ export type {
 } from './email-preferences.ts';
 export type { ScheduleList, ScheduleMember, ScheduleUser, ScheduleView } from '@crm/contracts';
 export type { SchedulesState, SchedulesView } from './schedules/store.ts';
+export type { MeetingsHeld, MeetingsQuery, MeetingsState } from './bookings/meetings.ts';
 export type { CalendarSettingsHeld, CalendarSettingsState, CalendarState, CalendarView } from './calendar/store.ts';
+export type {
+  CalendarChange,
+  CalendarListState,
+  CalendarsHeld,
+  CalendarsHeldState,
+  PageDestinationState,
+} from './calendar/calendars.ts';
 export type { CaptureListState, CaptureListView } from './captures/list.ts';
 export { connectUrl, needsReconnect, type ConnectReturn } from './calendar/store.ts';
 export type { Hue, ObjectIcon, RichTextDoc } from '@crm/contracts/values';
@@ -873,6 +897,9 @@ export function createDataLayer({
     views.clear();
     navStore?.clear();
     dueTasks.clear();
+    // The last person's meetings and calendars (names, attendees) never show to the next one in this tab.
+    meetings.clear();
+    calendars.clear();
     void activity?.then((feeds) => {
       feeds.clear();
     });
@@ -1610,6 +1637,17 @@ export function createDataLayer({
       schedules.changed(workspace);
       return answer;
     };
+  // Bookings' list of every meeting, a page at a time (the owner's ask of 21 October 2026).
+  const meetings = createMeetingsStore({
+    api: {
+      page: (input) => beforeRead(input.workspace).then(() => call((options) => api.bookings.meetings(input, options))),
+    },
+  });
+  /** A booking or a calendar changed: every held Bookings read of the workspace reads again. */
+  const reloadBookings = (workspace: string) => {
+    bookingsLists.reloadAll(workspace);
+    meetings.reloadAll(workspace);
+  };
 
   // Settings › Account › Preferences: the member's own, one copy per workspace.
   const preferences = createPreferencesStore({
@@ -1636,6 +1674,24 @@ export function createDataLayer({
     },
     mintId,
     notify,
+  });
+
+  // Each calendar of the member's accounts (spec 0024 milestone 5): their switches, colours and destination, and a
+  // booking page's own. Showing or hiding one on the week reads the held weeks again.
+  const calendars = createCalendarsStore({
+    api: {
+      list: (input) =>
+        beforeRead(input.workspace).then(() => call((options) => api.calendar.calendars.list(input, options))),
+      update: (input) => call((options) => api.calendar.calendars.update(input, options)),
+      setDestination: (input) => call((options) => api.calendar.destination.set(input, options)),
+      dismissNotice: (input) => call((options) => api.calendar.destination.dismissNotice(input, options)),
+      pageDestination: (input) =>
+        beforeRead(input.workspace).then(() => call((options) => api.calendar.pageDestination.get(input, options))),
+      setPageDestination: (input) => call((options) => api.calendar.pageDestination.set(input, options)),
+    },
+    mintId,
+    notify,
+    onShownChange: (workspace) => reloadBookings(workspace),
   });
 
   // Captures › Links and Forms: one held list per workspace each, patched by every write below (the list's menu, the
@@ -2688,9 +2744,14 @@ export function createDataLayer({
        */
       calendar: (workspace: string, from: string, to: string): BookingsCalendarHeld =>
         bookingsLists.calendar(workspace, from, to),
+      /**
+       * Bookings' list: every meeting on a tab (bookings and the member's own calendar events), narrowed to a source
+       * and the calendars panel's pick, a page at a time (`useMeetings`; More reads the next).
+       */
+      meetings: (workspace: string, query: MeetingsQuery): MeetingsHeld => meetings.list(workspace, query),
       /** Reads every bookings list and range a screen holds again. */
       reloadAll: (workspace: string): void => {
-        bookingsLists.reloadAll(workspace);
+        reloadBookings(workspace);
       },
       /** The member's default schedule's hours; never saved, weekdays 09:00 to 17:00 in `timeZone`. */
       hours: (workspace: string, timeZone: string): Promise<{ availability: BookingAvailability }> =>
@@ -2715,7 +2776,7 @@ export function createDataLayer({
         const booked = await call((options) =>
           api.bookings.bookAsHost({ ...input, workspace, mutationId: mintId() }, options),
         );
-        bookingsLists.reloadAll(workspace);
+        reloadBookings(workspace);
         return booked;
       },
       /** A new booking's idempotency key: mint it once per dialog. */
@@ -2742,10 +2803,10 @@ export function createDataLayer({
         } catch (error) {
           restore();
           // A refusal after the server may have changed it (an email queue that failed): read what it holds.
-          bookingsLists.reloadAll(workspace);
+          reloadBookings(workspace);
           throw error;
         }
-        bookingsLists.reloadAll(workspace);
+        reloadBookings(workspace);
       },
       /**
        * Moves a booking to a time its page offers (AC-640): at its new time at
@@ -2766,10 +2827,10 @@ export function createDataLayer({
           await call((options) => api.bookings.move({ workspace, bookingId, start, mutationId: mintId() }, options));
         } catch (error) {
           restore();
-          bookingsLists.reloadAll(workspace);
+          reloadBookings(workspace);
           throw error;
         }
-        bookingsLists.reloadAll(workspace);
+        reloadBookings(workspace);
       },
       /** Where a booking could move in a range: its page's times of its length, its own time free. */
       moveSlots: (workspace: string, bookingId: string, from: string, to: string): Promise<PublicSlots> =>
@@ -2803,7 +2864,7 @@ export function createDataLayer({
             const made = await call((options) =>
               api.bookings.blocks.create({ ...draft, id, workspace, mutationId: mintId() }, options),
             );
-            bookingsLists.reloadAll(workspace);
+            reloadBookings(workspace);
             return made;
           } catch (error) {
             restore();
@@ -2820,7 +2881,7 @@ export function createDataLayer({
             await call((options) =>
               api.bookings.blocks.remove({ workspace, id: blockId, mutationId: mintId() }, options),
             );
-            bookingsLists.reloadAll(workspace);
+            reloadBookings(workspace);
           } catch (error) {
             restore();
             throw error;
@@ -3913,18 +3974,22 @@ export function createDataLayer({
         calendar.setSharing(workspace, connectionId, sharing),
       /** Makes a connection the member's default: shown at once, put back with a toast if refused. */
       makeDefault: (workspace: string, connectionId: string): Promise<boolean> =>
-        calendar.makeDefault(workspace, connectionId),
+        // The default moves to its main calendar: the calendars list (Default) reads again.
+        calendar.makeDefault(workspace, connectionId).finally(() => calendars.list(workspace).reload()),
       /**
        * Disconnects a connection: gone at once, back with a toast if refused. Answers whether it landed. From a
        * confirm (`asksFirst`), the row stays until the server answers and a refusal throws its DataError instead.
+       * Its calendars go, and the default may move with a notice: the calendars list reads again.
        */
       remove: (workspace: string, connectionId: string, options?: { readonly asksFirst?: boolean }): Promise<boolean> =>
-        calendar.remove(workspace, connectionId, options),
+        calendar.remove(workspace, connectionId, options).finally(() => calendars.list(workspace).reload()),
       /**
-       * Where the browser goes to connect a Google calendar (the API sends it on to Google's consent), and where it
-       * comes back to: Settings › Calendar, or first run's calendar step (`welcome`, spec 0036).
+       * Where the browser goes to connect a calendar, Google's or Outlook's (`microsoft`), as the API sends it on to
+       * the provider's consent, and where it comes back to: Settings › Calendars, or first run's calendar step
+       * (`welcome`, spec 0036).
        */
-      connectUrl: (workspace: string, then?: ConnectReturn): string => connectUrl(workspace, then),
+      connectUrl: (workspace: string, then?: ConnectReturn, provider?: CalendarProvider): string =>
+        connectUrl(workspace, then, provider),
       /** Sync now: brings a connection's next sync forward; the list reads again shortly after. */
       syncNow: (workspace: string, connectionId: string): Promise<boolean> => calendar.syncNow(workspace, connectionId),
       /** The workspace's calendar settings (spec 0024, AC-609), read when a screen first holds them. */
@@ -3941,6 +4006,28 @@ export function createDataLayer({
         workspace: string,
         input: { readonly recordId: string; readonly meetingId: string; readonly email: string },
       ): Promise<string | undefined> => calendar.addAttendee(workspace, input),
+      /**
+       * The member's accounts with each of their calendars (spec 0024 milestone 5, AC-993): three switches, a hue
+       * and whether new bookings go there; read when a screen first holds it (`useCalendarList`).
+       */
+      calendars: (workspace: string): CalendarsHeld<CalendarListState> => calendars.list(workspace),
+      /**
+       * Changes one calendar's switches or colour: at once, put back with a toast if refused. Showing or hiding it on
+       * the week reads the held weeks again once it lands. Answers whether it landed.
+       */
+      updateCalendar: (workspace: string, calendarId: string, change: CalendarChange): Promise<boolean> =>
+        calendars.update(workspace, calendarId, change),
+      /** Where the member's new bookings go (AC-996): at once, put back with a toast if refused. */
+      setDestination: (workspace: string, calendarId: string): Promise<boolean> =>
+        calendars.setDestination(workspace, calendarId),
+      /** Puts away the notice that new bookings moved to another calendar (AC-1005): at once, back if refused. */
+      dismissCalendarNotice: (workspace: string): Promise<boolean> => calendars.dismissNotice(workspace),
+      /** A booking page's own "Add events to" (AC-997), read when a screen first holds it (`usePageDestination`). */
+      pageDestination: (workspace: string, pageId: string): CalendarsHeld<PageDestinationState> =>
+        calendars.pageDestination(workspace, pageId),
+      /** Sets a booking page's own "Add events to" (`null`: the owner's default): at once, put back if refused. */
+      setPageDestination: (workspace: string, pageId: string, calendarId: string | null): Promise<boolean> =>
+        calendars.setPageDestination(workspace, pageId, calendarId),
     },
     forms: {
       /**

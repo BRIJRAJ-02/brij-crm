@@ -14,7 +14,7 @@ import { afterAll, beforeAll, describe, expect, inject, it } from 'vitest';
 import { rpcClient, signIn, signInApp, testConnections } from '../../test/sign-in.ts';
 import { failure, memberWithWorkspace } from '../../test/workspace.ts';
 import { STATE_COOKIE } from '../calendar/routes.ts';
-import { createCalendarServices, GOOGLE_CALLBACK_PATH } from '../calendar/services.ts';
+import { createCalendarServices, GOOGLE_CALLBACK_PATH, MICROSOFT_CALLBACK_PATH } from '../calendar/services.ts';
 import { EDGE_HEADER, ORIGIN_HEADER } from '../edge.ts';
 import { APP_URL, TEST_EDGE_SECRET } from '../testing.ts';
 import { decodeTokenKey } from '@crm/core';
@@ -23,12 +23,28 @@ const { ownerUrl } = inject('testDatabase');
 let db: Database;
 let identity: IdentityStore;
 const fake = createFakeCalendarProvider();
+// Outlook's adapter in these tests: the same fake, standing in for Graph.
+const outlookFake = createFakeCalendarProvider({ noVideo: true });
+const outlook = createCalendarServices(
+  {
+    clientId: 'test-client',
+    clientSecret: 'test-secret',
+    tokenKey: decodeTokenKey(Buffer.alloc(32, 5).toString('base64')),
+    webhookOrigin: undefined,
+    microsoft: { clientId: 'app', clientSecret: 'app-secret', tenant: 'common' },
+  },
+  APP_URL,
+  fake.provider,
+  undefined,
+  outlookFake.provider,
+);
 const calendar = createCalendarServices(
   {
     clientId: 'test-client',
     clientSecret: 'test-secret',
     tokenKey: decodeTokenKey(Buffer.alloc(32, 5).toString('base64')),
     webhookOrigin: undefined,
+    microsoft: undefined,
   },
   APP_URL,
   fake.provider,
@@ -36,10 +52,12 @@ const calendar = createCalendarServices(
 let pokes = 0;
 let app: ReturnType<typeof signInApp>['app'];
 let off: ReturnType<typeof signInApp>['app'];
+let withOutlook: ReturnType<typeof signInApp>['app'];
 
 beforeAll(() => {
   ({ db, identity } = testConnections());
   ({ app } = signInApp({ db, identity }, {}, { calendar, wakeRelay: () => (pokes += 1) }));
+  ({ app: withOutlook } = signInApp({ db, identity }, {}, { calendar: outlook, wakeRelay: () => (pokes += 1) }));
   ({ app: off } = signInApp({ db, identity }));
 });
 afterAll(async () => {
@@ -102,7 +120,7 @@ describe('connecting a Google calendar (AC-597)', () => {
     expect(pokes).toBe(before + 1);
 
     const listed = await m.client.calendar.connections.list({ workspace: m.slug });
-    expect(listed).toMatchObject({ enabled: true, providers: ['google'], max: 3 });
+    expect(listed).toMatchObject({ enabled: true, providers: ['google'], max: 6 });
     expect(listed.connections).toEqual([
       expect.objectContaining({ accountEmail: 'ada@acme.dev', status: 'syncing', sharing: 'shared', isDefault: true }),
     ]);
@@ -173,10 +191,10 @@ describe('connecting a Google calendar (AC-597)', () => {
     };
     fake.failNext('exchangeCode', 'CALENDAR_SCOPE_DECLINED');
     expect(resultOf(await connect('ada@acme.dev'))).toBe('scope');
-    for (const account of ['a@acme.dev', 'b@acme.dev', 'c@acme.dev']) {
+    for (const account of ['a@acme.dev', 'b@acme.dev', 'c@acme.dev', 'd@acme.dev', 'e@acme.dev', 'f@acme.dev']) {
       expect(resultOf(await connect(account))).toBe('connected');
     }
-    expect(resultOf(await connect('d@acme.dev'))).toBe('limit');
+    expect(resultOf(await connect('g@acme.dev'))).toBe('limit');
 
     const signedOut = await navigate(app, `/api/calendar/google/start?workspace=${m.slug}`);
     expect(signedOut.headers.get('location')).toBe(
@@ -230,8 +248,11 @@ describe('connecting a Google calendar (AC-597)', () => {
       enabled: false,
       providers: [],
       connections: [],
-      max: 3,
+      max: 6,
     });
+    // Outlook too, where it isn't on (AC-1012).
+    const outlook = await navigate(app, `/api/calendar/microsoft/start?workspace=${m.slug}`, m.cookie);
+    expect(outlook.headers.get('location')).toBe(`${APP_URL}/w/${m.slug}/settings/calendar?calendar=off`);
   });
 });
 
@@ -317,11 +338,13 @@ describe('push notices and milestone 2 procedures (AC-602, AC-609)', () => {
     const [connection] = (await m.client.calendar.connections.list({ workspace: m.slug })).connections;
     const id = connection?.id ?? '';
     const secret = 'notice-secret';
+    // A channel from before milestone 5: its token names the connection, and it lives on the main calendar now.
+    await testQuery(ownerUrl, `update calendar_connections set status = 'connected' where id = $1`, [id]);
     await testQuery(
       ownerUrl,
-      `update calendar_connections set status = 'connected', channel = jsonb_build_object('id', 'channel-1',
+      `update calendar_calendars set channel = jsonb_build_object('id', 'channel-1',
         'resourceId', 'resource-1', 'expiresAt', (now() + interval '7 days')::text, 'tokenHash', $2::text)
-       where id = $1`,
+       where connection_id = $1 and is_primary`,
       [id, createHash('sha256').update(secret).digest('hex')],
     );
     const key = `crm-calendar:${m.workspace.id}:${id}`;
@@ -371,5 +394,155 @@ describe('push notices and milestone 2 procedures (AC-602, AC-609)', () => {
       }),
     );
     expect(missing.code).toBe('NOT_FOUND');
+  });
+});
+
+describe('Outlook, calendars and health (spec 0024 milestones 4 and 5, spec 0037 AC-1307)', () => {
+  /** Graph's post to the notify address: no Origin, no session. */
+  const graphPost = (path: string, body?: unknown) =>
+    Promise.resolve(
+      withOutlook.fetch(
+        new Request(`${APP_URL}/api/calendar/microsoft/notify${path}`, {
+          method: 'POST',
+          headers: { [EDGE_HEADER]: TEST_EDGE_SECRET, 'content-type': 'application/json' },
+          ...(body === undefined ? {} : { body: JSON.stringify(body) }),
+        }),
+      ),
+    );
+
+  it('connects Outlook through its own callback, a Google state never finishing it, and lists both providers', async () => {
+    const m = await memberWithWorkspace(withOutlook);
+    const started = await navigate(withOutlook, `/api/calendar/microsoft/start?workspace=${m.slug}`, m.cookie);
+    const location = new URL(started.headers.get('location') ?? '');
+    expect(location.searchParams.get('redirect_uri')).toBe(`${APP_URL}${MICROSOFT_CALLBACK_PATH}`);
+    const state = location.searchParams.get('state') ?? '';
+    const browser = stateCookie(started);
+    // The state was Outlook's: Google's callback refuses it.
+    const crossed = await navigate(
+      withOutlook,
+      `${GOOGLE_CALLBACK_PATH}?code=${encodeURIComponent('code:ada@outlook.example')}&state=${encodeURIComponent(state)}`,
+      `${m.cookie}; ${browser}`,
+    );
+    expect(resultOf(crossed)).toBe('failed');
+    const again = await navigate(withOutlook, `/api/calendar/microsoft/start?workspace=${m.slug}`, m.cookie);
+    const back = await navigate(
+      withOutlook,
+      `${MICROSOFT_CALLBACK_PATH}?code=${encodeURIComponent('code:ada@outlook.example')}&state=${encodeURIComponent(
+        new URL(again.headers.get('location') ?? '').searchParams.get('state') ?? '',
+      )}`,
+      `${m.cookie}; ${stateCookie(again)}`,
+    );
+    expect(resultOf(back)).toBe('connected');
+    const list = await m.client.calendar.calendars.list({ workspace: m.slug });
+    expect(list).toMatchObject({ enabled: true, providers: ['google', 'microsoft'], max: 6 });
+    expect(list.accounts).toEqual([
+      expect.objectContaining({ provider: 'microsoft', accountEmail: 'ada@outlook.example' }),
+    ]);
+    expect(list.accounts[0]?.calendars).toEqual([expect.objectContaining({ isPrimary: true, isDestination: true })]);
+  });
+
+  it('answers Graph’s validation with its token, and takes a notice only with the subscription’s client state', async () => {
+    const SUBSCRIPTION = '7f105c7d-2dc5-4530-97cd-4e7ae6534c07';
+    const validated = await graphPost(`?validationToken=${encodeURIComponent('Validation: token 123')}`);
+    expect(validated.status).toBe(200);
+    expect(validated.headers.get('content-type')).toMatch(/^text\/plain/);
+    // Text a stranger chose, on the app's origin: never sniffed as a page.
+    expect(validated.headers.get('x-content-type-options')).toBe('nosniff');
+    expect(validated.headers.get('content-security-policy')).toBe("default-src 'none'");
+    // Larger than any real post: refused before it is read.
+    expect((await graphPost('', { value: [], pad: 'x'.repeat(300 * 1024) })).status).toBe(413);
+    expect(await validated.text()).toBe('Validation: token 123');
+    expect((await graphPost('?validationToken=%00bad')).status).toBe(400);
+
+    const m = await memberWithWorkspace(withOutlook);
+    const started = await navigate(withOutlook, `/api/calendar/microsoft/start?workspace=${m.slug}`, m.cookie);
+    await navigate(
+      withOutlook,
+      `${MICROSOFT_CALLBACK_PATH}?code=${encodeURIComponent('code:bea@outlook.example')}&state=${encodeURIComponent(
+        new URL(started.headers.get('location') ?? '').searchParams.get('state') ?? '',
+      )}`,
+      `${m.cookie}; ${stateCookie(started)}`,
+    );
+    const [account] = (await m.client.calendar.calendars.list({ workspace: m.slug })).accounts;
+    const main = account?.calendars[0]?.id ?? '';
+    const secret = 'graph-secret';
+    await testQuery(ownerUrl, `update calendar_connections set status = 'connected' where id = $1`, [account?.id]);
+    await testQuery(
+      ownerUrl,
+      `update calendar_calendars set channel = jsonb_build_object('id', $3::text, 'resourceId', 'me/calendar/events',
+        'expiresAt', (now() + interval '2 days')::text, 'tokenHash', $2::text) where id = $1`,
+      [main, createHash('sha256').update(secret).digest('hex'), SUBSCRIPTION],
+    );
+    const key = `crm-calendar:${m.workspace.id}:${account?.id ?? ''}`;
+    await testQuery(ownerUrl, `select graphile_worker.remove_job($1)`, [key]);
+    const queued = () => testQuery(ownerUrl, `select 1 from graphile_worker.jobs where key = $1`, [key]);
+    const forged = await graphPost('', {
+      value: [{ subscriptionId: SUBSCRIPTION, clientState: `${m.workspace.id}.${main}.wrong`, changeType: 'updated' }],
+    });
+    expect(forged.status).toBe(202);
+    expect(await queued()).toEqual([]);
+    expect((await graphPost('', { value: 'nonsense' })).status).toBe(202);
+    const real = await graphPost('', {
+      value: [
+        {
+          subscriptionId: SUBSCRIPTION,
+          clientState: `${m.workspace.id}.${main}.${secret}`,
+          lifecycleEvent: 'reauthorizationRequired',
+        },
+      ],
+    });
+    expect(real.status).toBe(202);
+    expect(await queued()).toHaveLength(1);
+    // The lifecycle notice marked the subscription for renewal.
+    const [channel] = await testQuery<{ expires: string }>(
+      ownerUrl,
+      `select channel ->> 'expiresAt' as expires from calendar_calendars where id = $1`,
+      [main],
+    );
+    expect(Date.parse(channel?.expires ?? '')).toBeLessThanOrEqual(Date.now() + 1000);
+  });
+
+  it('changes only the member’s own calendars, picks a writable destination, and answers health without names', async () => {
+    const m = await memberWithWorkspace(app);
+    const { state, browser } = await start(m.slug, m.cookie);
+    await navigate(
+      app,
+      `${GOOGLE_CALLBACK_PATH}?code=${encodeURIComponent('code:cy@acme.dev')}&state=${encodeURIComponent(state)}`,
+      `${m.cookie}; ${browser}`,
+    );
+    const [account] = (await m.client.calendar.calendars.list({ workspace: m.slug })).accounts;
+    const main = account?.calendars[0];
+    expect(
+      await m.client.calendar.calendars.update({
+        workspace: m.slug,
+        calendarId: main?.id ?? '',
+        showInWeek: false,
+        colourOverride: 'purple',
+        mutationId: newId(),
+      }),
+    ).toMatchObject({ showInWeek: false, hue: 'purple', checkConflicts: true });
+    expect(
+      await m.client.calendar.destination.set({ workspace: m.slug, calendarId: main?.id ?? '', mutationId: newId() }),
+    ).toEqual({ destinationId: main?.id });
+    const missing = await failure(() =>
+      m.client.calendar.calendars.update({ workspace: m.slug, calendarId: newId(), sync: true, mutationId: newId() }),
+    );
+    expect(missing.code).toBe('NOT_FOUND');
+    expect(
+      await m.client.calendar.connections.refresh({
+        workspace: m.slug,
+        connectionId: account?.id ?? '',
+        mutationId: newId(),
+      }),
+    ).toEqual({ queued: true });
+    // Health: a status and nothing else (spec 0037, AC-1307).
+    const [self] = await testQuery<{ id: string }>(
+      ownerUrl,
+      `select id::text as id from members where workspace_id = $1`,
+      [m.workspace.id],
+    );
+    const health = await m.client.calendar.health({ workspace: m.slug, memberIds: [self?.id ?? '', newId()] });
+    expect(health).toEqual({ members: [{ memberId: self?.id, status: 'connected' }] });
+    expect(JSON.stringify(health)).not.toContain('acme.dev');
   });
 });

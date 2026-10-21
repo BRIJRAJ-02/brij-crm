@@ -8,14 +8,19 @@ import {
   type BookingPageView,
   type BookingsCalendarHeld,
   type BookingsTab,
-  type BookingsView,
+  type MeetingListItem,
+  type MeetingSource,
+  type MeetingsHeld,
+  type MeetingsQuery,
   type CalendarConnectionView,
+  type CalendarListState,
+  type CalendarsHeld,
   type CalendarEventItem,
   type ObjectSummary,
   type CreateTimeBlockInput,
   type TimeBlockOccurrence,
 } from '@crm/data';
-import { useBookings, useBookingsCalendar } from '@crm/data/react';
+import { useBookingsCalendar, useCalendarList, useMeetings } from '@crm/data/react';
 import {
   Badge,
   BookingList,
@@ -26,12 +31,9 @@ import {
   Link,
   Menu,
   MenuItem,
-  MenuSection,
-  MenuSeparator,
   MenuTrigger,
   Modal,
   PageColumn,
-  Pagination,
   Panel,
   SectionBar,
   SegmentedControl,
@@ -53,10 +55,12 @@ import { availabilityHref } from '../booking/links.ts';
 import { linksHref } from '../captures/pages.ts';
 import { recordLinks, type RecordLink } from '../records/timeline.ts';
 import { belongsElsewhere, isUndoKey, type KeyTarget } from '../workspace/undo.ts';
+import { CalendarsFrame, CalendarsToggle, useCalendarsPanel, type CalendarsPanel } from './CalendarsAside.tsx';
+import { calendarSettingsHref } from '../settings/nav.ts';
 import { DrawCard } from './DrawCard.tsx';
 import { NewMeetingDialog, type NewMeeting } from './NewMeetingDialog.tsx';
 import { instantOf, spanNames, type DrawnSpan } from './span.ts';
-import { PAGE_SIZES, type BookingsSearch } from './search.ts';
+import type { BookingsSearch } from './search.ts';
 import { BookingActions, BookingDialog, type BookingAsk, type HostBookingActions } from './BookingActions.tsx';
 import { strings } from './strings.ts';
 import { useBookingsToolbarSlot } from './toolbarSlot.ts';
@@ -110,85 +114,46 @@ function whenOf(startsAt: string, endsAt: string, locale: string): string {
   return `${day} · ${timeRange(startsAt, endsAt, locale)}`;
 }
 
-/** The filters in force: a link, and the calendars shown. */
-function filterCount(search: BookingsSearch): number {
-  return (search.link === undefined ? 0 : 1) + (search.conn === undefined ? 0 : 1);
-}
-
-/** Filter: one link's bookings, and which calendars' events show. */
+/**
+ * Filter: one link's bookings (the calendars are the panel beside the view). With fewer than two links there is
+ * nothing to filter, and no button. Filtered, it reads "Filter · 1", with a quiet clear beside it.
+ */
 function FilterMenu({
   search,
   pages,
-  connections,
   onSearch,
 }: {
   readonly search: BookingsSearch;
   readonly pages: readonly BookingPageView[];
-  readonly connections: readonly CalendarConnectionView[];
   readonly onSearch: (next: Partial<BookingsSearch>) => void;
 }) {
-  if (pages.length < 2 && connections.length < 2) return null;
-  const shown = new Set(search.conn ?? connections.map((connection) => connection.id));
-  const count = filterCount(search);
-  const selected = [
-    ...(search.link === undefined ? ['link:all'] : [`link:${search.link}`]),
-    ...[...shown].map((id) => `conn:${id}`),
-  ];
+  if (pages.length < 2) return null;
+  const count = search.link === undefined ? 0 : 1;
   return (
-    <MenuTrigger>
-      <Button icon="list-filter">{count === 0 ? strings.filter : strings.filterCount(count)}</Button>
-      <Menu
-        label={strings.filterMenu}
-        selectionMode="multiple"
-        selectedKeys={selected}
-        onSelectionChange={(keys) => {
-          const next = new Set([...keys].map(String));
-          const added = [...next].find((key) => !selected.includes(key));
-          const removed = selected.find((key) => !next.has(key));
-          const touched = added ?? removed;
-          if (touched === undefined) return;
-          if (touched.startsWith('link:')) {
-            const id = touched.slice(5);
-            onSearch({ link: id === 'all' || added === undefined ? undefined : id, page: 1 });
-            return;
-          }
-          const id = touched.slice(5);
-          const conn = new Set(shown);
-          if (added === undefined) conn.delete(id);
-          else conn.add(id);
-          onSearch({ conn: conn.size === connections.length ? undefined : [...conn] });
-        }}
-        onAction={(key) => {
-          if (key === 'clear') onSearch({ link: undefined, conn: undefined, page: 1 });
-        }}
-      >
-        {pages.length >= 2 && (
-          <MenuSection label={strings.links}>
-            <MenuItem id="link:all">{strings.allLinks}</MenuItem>
-            {pages.map((page) => (
-              <MenuItem key={page.id} id={`link:${page.id}`}>
-                {page.title}
-              </MenuItem>
-            ))}
-          </MenuSection>
-        )}
-        {connections.length >= 2 && (
-          <MenuSection label={strings.calendars}>
-            {connections.map((connection) => (
-              <MenuItem key={connection.id} id={`conn:${connection.id}`}>
-                {connection.accountEmail}
-              </MenuItem>
-            ))}
-          </MenuSection>
-        )}
-        {count > 0 && (
-          <>
-            <MenuSeparator />
-            <MenuItem id="clear">{strings.clearFilters}</MenuItem>
-          </>
-        )}
-      </Menu>
-    </MenuTrigger>
+    <>
+      <MenuTrigger>
+        <Button icon="list-filter">{count === 0 ? strings.filter : strings.filterCount(count)}</Button>
+        <Menu
+          label={strings.filterMenu}
+          selectionMode="single"
+          selectedKeys={[search.link ?? 'all']}
+          onSelectionChange={(keys) => {
+            const [key] = [...keys].map(String);
+            onSearch({ link: key === undefined || key === 'all' ? undefined : key });
+          }}
+        >
+          <MenuItem id="all">{strings.allLinks}</MenuItem>
+          {pages.map((page) => (
+            <MenuItem key={page.id} id={page.id}>
+              {page.title}
+            </MenuItem>
+          ))}
+        </Menu>
+      </MenuTrigger>
+      {count > 0 && (
+        <Button variant="ghost" icon="x" label={strings.clearFilters} onPress={() => onSearch({ link: undefined })} />
+      )}
+    </>
   );
 }
 
@@ -485,6 +450,12 @@ export interface BookingsCalendarScreenProps {
   readonly objects: readonly ObjectSummary[];
   readonly pages: readonly BookingPageView[];
   readonly connections: readonly CalendarConnectionView[];
+  /** The member's accounts and calendars (spec 0024 milestone 5): each event's colour, and the calendars panel. */
+  readonly calendars: CalendarsHeld<CalendarListState>;
+  /** Make default: new bookings go to this calendar (at once, put back with a toast when refused). */
+  readonly onMakeDefault: (calendarId: string) => void;
+  /** Puts away the notice that new bookings moved to another calendar. */
+  readonly onDismissNotice: () => void;
   readonly locale: string;
   readonly onSearch: (next: Partial<BookingsSearch>) => void;
   /** Reopens the time a block closed (spec 0027); settles once the server has it, throws on a refusal. */
@@ -552,6 +523,8 @@ type CardAsk = CardQuestion & { readonly opening: number };
 function WeekView(props: BookingsCalendarScreenProps) {
   const { slug, objects, search, week, pages, connections, locale, onSearch, onRemoveBlock, onBlock } = props;
   const { workingStart, toasts, onBookAsHost, newBookingKey } = props;
+  const calendarList = useCalendarList(props.calendars);
+  const accounts = calendarList.status === 'ready' ? calendarList.accounts : [];
   // Book someone in: the span the New meeting dialog books.
   const [meeting, setMeeting] = useState<DrawnSpan | undefined>(undefined);
   const bookable = pages.filter((page) => page.status === 'live');
@@ -614,9 +587,31 @@ function WeekView(props: BookingsCalendarScreenProps) {
   const today = dayKeyOf(now);
   const isThisWeek = weekOf(today, firstDay) === search.week;
   const range = rangeLabel(search.week, locale);
-  const shownConnections = new Set(search.conn ?? connections.map((connection) => connection.id));
-  const hueOf = new Map(
+  // Each event in its calendar's colour (the member's pick, else the provider's); before the list reads, its account's.
+  const connectionHue = new Map(
     connections.map((connection, index) => [connection.id, CALENDAR_HUES[index % CALENDAR_HUES.length] ?? 'blue']),
+  );
+  const calendarById = new Map(
+    accounts.flatMap((account) => account.calendars.map((calendar) => [calendar.id, calendar] as const)),
+  );
+  // The calendars the panel shows (`cal`, the view only), of those on the member's week.
+  const pickedCalendars = search.cal === undefined ? undefined : new Set(search.cal);
+  const isShownEvent = (item: { readonly calendarId: string }) =>
+    calendarById.get(item.calendarId)?.showInWeek !== false &&
+    (pickedCalendars === undefined || pickedCalendars.has(item.calendarId));
+  const panel = useCalendarsPanel();
+  const framed = (content: ReactNode) => (
+    <CalendarsFrame
+      slug={slug}
+      search={search}
+      calendars={props.calendars}
+      panel={panel}
+      onSearch={onSearch}
+      onMakeDefault={props.onMakeDefault}
+      onDismissNotice={props.onDismissNotice}
+    >
+      {content}
+    </CalendarsFrame>
   );
   const providerOf = new Map(
     connections.map(
@@ -628,6 +623,7 @@ function WeekView(props: BookingsCalendarScreenProps) {
       title={range}
       end={
         <>
+          <CalendarsToggle panel={panel} />
           <Button
             variant="ghost"
             icon="chevron-left"
@@ -648,7 +644,7 @@ function WeekView(props: BookingsCalendarScreenProps) {
             label={strings.nextWeek}
             onPress={() => onSearch({ week: addDays(search.week, 7), day: addDays(search.day, 7) })}
           />
-          <FilterMenu search={search} pages={pages} connections={connections} onSearch={onSearch} />
+          <FilterMenu search={search} pages={pages} onSearch={onSearch} />
         </>
       }
     />
@@ -658,19 +654,23 @@ function WeekView(props: BookingsCalendarScreenProps) {
     return (
       <>
         <Toolbar>{toolbar}</Toolbar>
-        <WeekCalendar
-          label={strings.weekLabel(range)}
-          days={weekDayItems(days, today, locale)}
-          blocks={[]}
-          isLoading
-          selectedDay={days.includes(search.day) ? search.day : (days[0] ?? search.week)}
-          onSelectDay={(day) => onSearch({ day })}
-          hourLabel={(hour) => new Intl.DateTimeFormat(locale, { hour: 'numeric' }).format(new Date(2000, 0, 1, hour))}
-          now={{ dayKey: today, minute: now.getHours() * 60 + now.getMinutes() }}
-          scrollToMinute={scrollMinute(days, now, [])}
-          onOpen={() => undefined}
-          onClose={() => undefined}
-        />
+        {framed(
+          <WeekCalendar
+            label={strings.weekLabel(range)}
+            days={weekDayItems(days, today, locale)}
+            blocks={[]}
+            isLoading
+            selectedDay={days.includes(search.day) ? search.day : (days[0] ?? search.week)}
+            onSelectDay={(day) => onSearch({ day })}
+            hourLabel={(hour) =>
+              new Intl.DateTimeFormat(locale, { hour: 'numeric' }).format(new Date(2000, 0, 1, hour))
+            }
+            now={{ dayKey: today, minute: now.getHours() * 60 + now.getMinutes() }}
+            scrollToMinute={scrollMinute(days, now, [])}
+            onOpen={() => undefined}
+            onClose={() => undefined}
+          />,
+        )}
       </>
     );
   }
@@ -678,19 +678,21 @@ function WeekView(props: BookingsCalendarScreenProps) {
     return (
       <>
         <Toolbar>{toolbar}</Toolbar>
-        <EmptyState tone="error" title={strings.failedTitle} onRetry={() => week.reload()}>
-          {state.message === '' ? strings.failedText : state.message}
-        </EmptyState>
+        {framed(
+          <EmptyState tone="error" title={strings.failedTitle} onRetry={() => week.reload()}>
+            {state.message === '' ? strings.failedText : state.message}
+          </EmptyState>,
+        )}
       </>
     );
   }
   const bookings = state.bookings.filter((booking) => search.link === undefined || booking.pageId === search.link);
-  const events = state.events.filter((event) => shownConnections.has(event.connectionId));
+  const events = state.events.filter(isShownEvent);
   const byBooking = new Map(bookings.map((booking) => [booking.id, booking]));
   const byEvent = new Map(events.map((event) => [event.id, event]));
   const byTurn = new Map(state.blocks.map((turn) => [turn.key, turn]));
   // Busy time (spec 0024): the member's own calendar time with nobody else invited, by its time alone.
-  const busyTimes = state.busy.filter((busy) => shownConnections.has(busy.connectionId));
+  const busyTimes = state.busy.filter(isShownEvent);
   const byBusy = new Map(busyTimes.map((busy) => [`busy:${busy.connectionId}:${busy.startsAt}:${busy.endsAt}`, busy]));
   const pieces = [
     ...bookingPieces(bookings, days).map((piece) => ({ piece, kind: 'booking' as const })),
@@ -756,7 +758,7 @@ function WeekView(props: BookingsCalendarScreenProps) {
     }
     const event = byEvent.get(piece.sourceId);
     if (event === undefined) return [];
-    const hue = hueOf.get(event.connectionId);
+    const hue = calendarById.get(event.calendarId)?.hue ?? connectionHue.get(event.connectionId);
     const provider = providerOf.get(event.connectionId);
     return [
       {
@@ -803,169 +805,170 @@ function WeekView(props: BookingsCalendarScreenProps) {
   return (
     <>
       <Toolbar>{toolbar}</Toolbar>
-      {search.conn !== undefined && search.conn.length === 0 && connections.length > 0 && (
-        <Callout tone="info" title={strings.noCalendarsTitle}>
-          {strings.noCalendarsText}
-        </Callout>
-      )}
-      <WeekCalendar
-        label={strings.weekLabel(range)}
-        days={weekDayItems(days, today, locale)}
-        blocks={blocks}
-        selectedDay={days.includes(search.day) ? search.day : (days[0] ?? search.week)}
-        onSelectDay={(day) => onSearch({ day })}
-        hourLabel={(hour) => hourFormat.format(new Date(2000, 0, 1, hour))}
-        now={{ dayKey: today, minute: now.getHours() * 60 + now.getMinutes() }}
-        scrollToMinute={scrollMinute(
-          days,
-          now,
-          pieces.map(({ piece }) => piece),
-        )}
-        {...(openId === undefined ? {} : { openId })}
-        detail={
-          openBusy !== undefined ? (
-            <BusyCard
-              busy={openBusy}
-              connection={connections.find((connection) => connection.id === openBusy.connectionId)}
-              locale={locale}
-            />
-          ) : openTurn !== undefined && open !== undefined ? (
-            <BlockCard
-              key={openTurn.key}
-              turn={openTurn}
-              locale={locale}
-              isRemoveFocused={refocus?.pieceId === open.piece.id && refocus.button === 'remove'}
-              onRemove={() => {
-                ask({ kind: 'remove', turn: openTurn, pieceId: open.piece.id, dayKey: open.piece.dayKey });
-              }}
-            />
-          ) : openBooking === undefined ? (
-            openEvent === undefined ? undefined : (
-              <EventCard
-                event={openEvent}
-                connection={connections.find((connection) => connection.id === openEvent.connectionId)}
-                locale={locale}
-              />
-            )
-          ) : (
-            <BookingCard
-              booking={openBooking}
-              personHref={personHref(openBooking)}
-              locale={locale}
-              actions={props.actions}
-              {...(open === undefined
+      {framed(
+        <>
+          <WeekCalendar
+            label={strings.weekLabel(range)}
+            days={weekDayItems(days, today, locale)}
+            blocks={blocks}
+            selectedDay={days.includes(search.day) ? search.day : (days[0] ?? search.week)}
+            onSelectDay={(day) => onSearch({ day })}
+            hourLabel={(hour) => hourFormat.format(new Date(2000, 0, 1, hour))}
+            now={{ dayKey: today, minute: now.getHours() * 60 + now.getMinutes() }}
+            scrollToMinute={scrollMinute(
+              days,
+              now,
+              pieces.map(({ piece }) => piece),
+            )}
+            {...(openId === undefined ? {} : { openId })}
+            detail={
+              openBusy !== undefined ? (
+                <BusyCard
+                  busy={openBusy}
+                  connection={connections.find((connection) => connection.id === openBusy.connectionId)}
+                  locale={locale}
+                />
+              ) : openTurn !== undefined && open !== undefined ? (
+                <BlockCard
+                  key={openTurn.key}
+                  turn={openTurn}
+                  locale={locale}
+                  isRemoveFocused={refocus?.pieceId === open.piece.id && refocus.button === 'remove'}
+                  onRemove={() => {
+                    ask({ kind: 'remove', turn: openTurn, pieceId: open.piece.id, dayKey: open.piece.dayKey });
+                  }}
+                />
+              ) : openBooking === undefined ? (
+                openEvent === undefined ? undefined : (
+                  <EventCard
+                    event={openEvent}
+                    connection={connections.find((connection) => connection.id === openEvent.connectionId)}
+                    locale={locale}
+                  />
+                )
+              ) : (
+                <BookingCard
+                  booking={openBooking}
+                  personHref={personHref(openBooking)}
+                  locale={locale}
+                  actions={props.actions}
+                  {...(open === undefined
+                    ? {}
+                    : {
+                        onAsk: (kind: BookingAsk) => {
+                          ask({ kind, booking: openBooking, pieceId: open.piece.id, dayKey: open.piece.dayKey });
+                        },
+                        focusOnMount:
+                          refocus?.pieceId === open.piece.id && refocus.button !== 'remove'
+                            ? refocus.button
+                            : undefined,
+                      })}
+                />
+              )
+            }
+            onOpen={(id) => {
+              setDraft(undefined);
+              setRefocus(undefined);
+              setOpenId(id);
+            }}
+            onClose={() => {
+              setRefocus(undefined);
+              setOpenId(undefined);
+            }}
+            {...(focusDay === undefined ? {} : { focusDay })}
+            onDraw={(span) => {
+              setOpenId(undefined);
+              setDrawCount((count) => count + 1);
+              setDraft(span);
+            }}
+            {...(meeting !== undefined
+              ? // The span stays drawn behind New meeting, so the week shows where it will go.
+                { draft: meeting, draftLabel: strings.drawCard(spanNames(meeting, locale).title) }
+              : draft === undefined
                 ? {}
                 : {
-                    onAsk: (kind: BookingAsk) => {
-                      ask({ kind, booking: openBooking, pieceId: open.piece.id, dayKey: open.piece.dayKey });
-                    },
-                    focusOnMount:
-                      refocus?.pieceId === open.piece.id && refocus.button !== 'remove' ? refocus.button : undefined,
-                  })}
-            />
-          )
-        }
-        onOpen={(id) => {
-          setDraft(undefined);
-          setRefocus(undefined);
-          setOpenId(id);
-        }}
-        onClose={() => {
-          setRefocus(undefined);
-          setOpenId(undefined);
-        }}
-        {...(focusDay === undefined ? {} : { focusDay })}
-        onDraw={(span) => {
-          setOpenId(undefined);
-          setDrawCount((count) => count + 1);
-          setDraft(span);
-        }}
-        {...(meeting !== undefined
-          ? // The span stays drawn behind New meeting, so the week shows where it will go.
-            { draft: meeting, draftLabel: strings.drawCard(spanNames(meeting, locale).title) }
-          : draft === undefined
-            ? {}
-            : {
-                draft,
-                draftLabel: strings.drawCard(spanNames(draft, locale).title),
-                draftCard: (
-                  <DrawCard
-                    key={drawCount}
-                    span={draft}
-                    locale={locale}
-                    privatePages={pages
-                      .filter((page) => page.isPrivate)
-                      .map((page) => ({ id: page.id, title: page.title }))}
-                    overlapping={overlapping(bookings, draft)}
-                    onSpanChange={setDraft}
-                    onClose={({ kind, repeat, label, pageId }) => {
-                      const drawn = draft;
-                      const preview: BlockPreview = {
-                        kind,
-                        repeat,
-                        ...(label === undefined ? {} : { label }),
-                        startsAt: instantOf(drawn.dayKey, drawn.startMinute).toISOString(),
-                        endsAt: instantOf(drawn.dayKey, drawn.endMinute).toISOString(),
-                      };
-                      return onBlock(
-                        {
-                          kind,
-                          repeat,
-                          date: drawn.dayKey,
-                          startMinute: drawn.startMinute,
-                          endMinute: drawn.endMinute,
-                          timeZone: browserZone(),
-                          ...(label === undefined ? {} : { label }),
-                          ...(pageId === undefined ? {} : { pageId }),
-                        },
-                        [preview],
-                      ).then(
-                        (made) => {
-                          // Saved: the card closes, and the toast offers Undo (as calendars do).
-                          if (draftRef.current === drawn) setDraft(undefined);
-                          const toast = toasts.toast({
-                            tone: 'success',
-                            message: kind === 'hold' ? strings.timeHeld : strings.timeBlocked,
-                            action: {
-                              label: strings.undo,
-                              onAction: () => undoBlock(made.id),
+                    draft,
+                    draftLabel: strings.drawCard(spanNames(draft, locale).title),
+                    draftCard: (
+                      <DrawCard
+                        key={drawCount}
+                        span={draft}
+                        locale={locale}
+                        privatePages={pages
+                          .filter((page) => page.isPrivate)
+                          .map((page) => ({ id: page.id, title: page.title }))}
+                        overlapping={overlapping(bookings, draft)}
+                        onSpanChange={setDraft}
+                        onClose={({ kind, repeat, label, pageId }) => {
+                          const drawn = draft;
+                          const preview: BlockPreview = {
+                            kind,
+                            repeat,
+                            ...(label === undefined ? {} : { label }),
+                            startsAt: instantOf(drawn.dayKey, drawn.startMinute).toISOString(),
+                            endsAt: instantOf(drawn.dayKey, drawn.endMinute).toISOString(),
+                          };
+                          return onBlock(
+                            {
+                              kind,
+                              repeat,
+                              date: drawn.dayKey,
+                              startMinute: drawn.startMinute,
+                              endMinute: drawn.endMinute,
+                              timeZone: browserZone(),
+                              ...(label === undefined ? {} : { label }),
+                              ...(pageId === undefined ? {} : { pageId }),
                             },
-                          });
-                          lastBlock.current = { id: made.id, toast };
-                        },
-                        (error: unknown) => {
-                          // The card shows a refusal while it is open; once closed, only a toast can.
-                          if (draftRef.current !== drawn) {
-                            toasts.toast({
-                              tone: 'danger',
-                              message: kind === 'hold' ? strings.holdFailed : strings.blockFailed,
-                            });
-                          }
-                          throw error;
-                        },
-                      );
-                    }}
-                    {...(bookable.length === 0 || instantOf(draft.dayKey, draft.startMinute) < now
-                      ? {}
-                      : {
-                          onBook: () => {
-                            setMeeting(draft);
-                            setDraft(undefined);
-                          },
-                        })}
-                  />
-                ),
-              })}
-        onDraftClose={() => setDraft(undefined)}
-        drawMinutes={pages[0]?.durations[0] ?? 30}
-        drawStartMinute={workingStart}
-        minuteLabel={(minute) => {
-          const at = new Date(2000, 0, 1);
-          at.setMinutes(minute);
-          return new Intl.DateTimeFormat(locale, { hour: 'numeric', minute: '2-digit' }).format(at);
-        }}
-      />
-      <p>{strings.weekSummary(live)}</p>
+                            [preview],
+                          ).then(
+                            (made) => {
+                              // Saved: the card closes, and the toast offers Undo (as calendars do).
+                              if (draftRef.current === drawn) setDraft(undefined);
+                              const toast = toasts.toast({
+                                tone: 'success',
+                                message: kind === 'hold' ? strings.timeHeld : strings.timeBlocked,
+                                action: {
+                                  label: strings.undo,
+                                  onAction: () => undoBlock(made.id),
+                                },
+                              });
+                              lastBlock.current = { id: made.id, toast };
+                            },
+                            (error: unknown) => {
+                              // The card shows a refusal while it is open; once closed, only a toast can.
+                              if (draftRef.current !== drawn) {
+                                toasts.toast({
+                                  tone: 'danger',
+                                  message: kind === 'hold' ? strings.holdFailed : strings.blockFailed,
+                                });
+                              }
+                              throw error;
+                            },
+                          );
+                        }}
+                        {...(bookable.length === 0 || instantOf(draft.dayKey, draft.startMinute) < now
+                          ? {}
+                          : {
+                              onBook: () => {
+                                setMeeting(draft);
+                                setDraft(undefined);
+                              },
+                            })}
+                      />
+                    ),
+                  })}
+            onDraftClose={() => setDraft(undefined)}
+            drawMinutes={pages[0]?.durations[0] ?? 30}
+            drawStartMinute={workingStart}
+            minuteLabel={(minute) => {
+              const at = new Date(2000, 0, 1);
+              at.setMinutes(minute);
+              return new Intl.DateTimeFormat(locale, { hour: 'numeric', minute: '2-digit' }).format(at);
+            }}
+          />
+          <p>{strings.weekSummary(live)}</p>
+        </>,
+      )}
       {/* The dialogs a card asked for, each mounted afresh per question and kept while it closes. */}
       {lastAsked?.kind === 'remove' && (
         <RemoveBlockDialog
@@ -1032,13 +1035,25 @@ function overlapping(bookings: readonly BookingListItem[], span: DrawnSpan): num
   ).length;
 }
 
-/** The local day a booking starts on, as a key. */
+/** The local day a meeting starts on, as a key. */
 const dayKeyOfInstant = (instant: string) => dayKeyOf(new Date(instant));
 
-/** The bookings under their day bands (Today, Tomorrow, then the date), in the order given. */
+/** A meeting's start and end, whichever kind it is. */
+const spanOf = (item: MeetingListItem) =>
+  item.kind === 'booking'
+    ? { startsAt: item.booking.startsAt, endsAt: item.booking.endsAt }
+    : { startsAt: item.event.startsAt, endsAt: item.event.endsAt };
+
+/** A meeting's row id: its kind and its id, so a booking and an event never share one. */
+const rowIdOf = (item: MeetingListItem) => (item.kind === 'booking' ? `b:${item.booking.id}` : `e:${item.event.id}`);
+
+/**
+ * Meetings under their day bands (Today, Tomorrow, then the date), in the order given: a booking titled by its
+ * guest with "Booked via <page>", an event by its title with its calendar's colour and name and its attendees.
+ */
 function groupsOf(
-  bookings: readonly BookingListItem[],
-  personHref: (booking: BookingListItem) => string | undefined,
+  items: readonly MeetingListItem[],
+  calendarOf: (calendarId: string) => { readonly name: string; readonly hue: Hue } | undefined,
   locale: string,
 ): readonly BookingListGroup[] {
   const now = new Date();
@@ -1052,26 +1067,42 @@ function groupsOf(
       ...(date.getFullYear() === now.getFullYear() ? {} : { year: 'numeric' }),
     }).format(date);
   const groups: { id: string; label: string; rows: BookingListGroup['rows'][number][] }[] = [];
-  for (const booking of bookings) {
-    const start = new Date(booking.startsAt);
-    const id = dayKeyOfInstant(booking.startsAt);
-    const href = personHref(booking);
-    const row = {
-      id: booking.id,
+  for (const item of items) {
+    const { startsAt, endsAt } = spanOf(item);
+    const start = new Date(startsAt);
+    const id = dayKeyOfInstant(startsAt);
+    const videoUrl = item.kind === 'booking' ? item.booking.videoUrl : item.event.videoUrl;
+    const isCancelled =
+      item.kind === 'booking' ? item.booking.status === 'cancelled' : item.event.status === 'cancelled';
+    const shared = {
+      id: rowIdOf(item),
       date: shortDate(start),
-      time: timeRange(booking.startsAt, booking.endsAt, locale),
+      time: timeRange(startsAt, endsAt, locale),
       // Join only while it can still be joined: not once cancelled, nor once it has ended.
-      ...(booking.videoUrl === undefined ||
-      booking.status === 'cancelled' ||
-      Date.parse(booking.endsAt) <= now.getTime()
+      ...(videoUrl === undefined || isCancelled || Date.parse(endsAt) <= now.getTime()
         ? {}
-        : { join: { href: booking.videoUrl, provider: providerOf(booking.videoUrl) } }),
-      title: booking.pageTitle,
-      ...(booking.note === undefined ? {} : { note: booking.note }),
-      guestName: booking.visitorName,
-      ...(href === undefined ? {} : { guestHref: href }),
-      ...(booking.status === 'cancelled' ? { badge: strings.cancelled } : {}),
+        : { join: { href: videoUrl, provider: providerOf(videoUrl) } }),
+      ...(isCancelled ? { badge: strings.cancelled } : {}),
     };
+    const row =
+      item.kind === 'booking'
+        ? {
+            ...shared,
+            title: item.booking.visitorName,
+            via: strings.bookedVia(item.booking.pageTitle),
+            ...(item.booking.note === undefined ? {} : { note: item.booking.note }),
+            ...(item.booking.guests.length === 0 ? {} : { attendees: item.booking.guests }),
+          }
+        : (() => {
+            const calendar = calendarOf(item.event.calendarId);
+            return {
+              ...shared,
+              title: item.event.title,
+              ...(calendar === undefined ? {} : { calendar }),
+              attendees: item.attendees,
+              moreAttendees: item.attendeeCount - item.attendees.length,
+            };
+          })();
     const last = groups.at(-1);
     if (last?.id === id) last.rows.push(row);
     else
@@ -1084,16 +1115,16 @@ function groupsOf(
   return groups;
 }
 
-/** The list's bar: Upcoming · Past · Canceled, then the sort (when there is something to sort) and Filter. */
+/** The list's bar: Upcoming · Past · Canceled, then All · Bookings · Calendar, the calendars and Filter. */
 function ListBar({
   search,
   pages,
-  sort,
+  panel,
   onSearch,
 }: {
   readonly search: BookingsSearch;
   readonly pages: readonly BookingPageView[];
-  readonly sort?: { readonly label: string; readonly next: 'asc' | 'desc' };
+  readonly panel: CalendarsPanel;
   readonly onSearch: (next: Partial<BookingsSearch>) => void;
 }) {
   return (
@@ -1104,30 +1135,43 @@ function ListBar({
           value={search.tab}
           onChange={(value) => {
             const tab = TABS.find((each) => each === value);
-            if (tab !== undefined && tab !== search.tab) onSearch({ tab, page: 1, sort: undefined });
+            if (tab !== undefined && tab !== search.tab) onSearch({ tab });
           }}
           segments={TABS.map((id) => ({ value: id, label: strings.tabs[id] }))}
         />
       }
       end={
         <>
-          {sort !== undefined && (
-            <Button variant="ghost" icon="chevrons-up-down" onPress={() => onSearch({ sort: sort.next, page: 1 })}>
-              {sort.label}
-            </Button>
-          )}
-          <FilterMenu search={search} pages={pages} connections={[]} onSearch={onSearch} />
+          <SegmentedControl
+            label={strings.sourceLabel}
+            value={search.source}
+            onChange={(value) => {
+              const source = SOURCES.find((each) => each === value);
+              if (source !== undefined) onSearch({ source });
+            }}
+            segments={SOURCES.map((id) => ({ value: id, label: strings.sources[id] }))}
+          />
+          {search.source !== 'bookings' && search.link === undefined && <CalendarsToggle panel={panel} />}
+          <FilterMenu search={search} pages={pages} onSearch={onSearch} />
         </>
       }
     />
   );
 }
 
-/** Props for the list: its three held reads, the address, and what Filter offers. */
+/** The list's sources, in order. */
+const SOURCES: readonly MeetingSource[] = ['all', 'bookings', 'calendar'];
+
+/** Props for the list: its held pages, the address, the calendars and what Filter offers. */
 export interface BookingsListScreenProps {
   readonly slug: string;
   readonly search: BookingsSearch;
-  readonly lists: Readonly<Record<BookingsTab, BookingsView>>;
+  /** The data layer's held list for a question (tab, source, the calendars picked): the same one every time. */
+  readonly meetings: (query: MeetingsQuery) => MeetingsHeld;
+  /** The member's accounts and calendars: each event's colour and name, and the calendars panel. */
+  readonly calendars: CalendarsHeld<CalendarListState>;
+  readonly onMakeDefault: (calendarId: string) => void;
+  readonly onDismissNotice: () => void;
   readonly objects: readonly ObjectSummary[];
   readonly pages: readonly BookingPageView[];
   readonly locale: string;
@@ -1137,14 +1181,46 @@ export interface BookingsListScreenProps {
 }
 
 /**
- * Bookings › List: Upcoming, Past or Canceled, each with its own empty state,
- * a page of bookings under day bands, the sort and the pages; a row opens its
- * card in a Panel.
+ * Keeps focus when the last page lands and "Show more" goes with it: focus moves to the title of the first row it
+ * added, so a keyboard user carries on where the new rows start instead of falling back to the page.
+ */
+function useFocusAfterMore(label: string, isReady: boolean, isShown: boolean, count: number) {
+  const pressed = useRef<number | undefined>(undefined);
+  useEffect(() => {
+    // A reload (the list reading again) took the button, not the last page: nothing to carry on from.
+    if (!isReady) pressed.current = undefined;
+    const before = pressed.current;
+    if (isShown || before === undefined) return;
+    pressed.current = undefined;
+    const frame = requestAnimationFrame(() => {
+      // Only when focus went with the button: someone who moved on keeps their place.
+      if (document.activeElement !== null && document.activeElement !== document.body) return;
+      const rows = document.querySelectorAll<HTMLElement>(`section[aria-label="${CSS.escape(label)}"] li`);
+      const row = rows[Math.min(before, rows.length - 1)];
+      row?.querySelector<HTMLElement>('button')?.focus();
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [isReady, isShown, label]);
+  return {
+    /** Show more was pressed with this many rows shown. */
+    press: () => {
+      pressed.current = count;
+    },
+  };
+}
+
+/**
+ * Bookings › List: every meeting on Upcoming, Past or Canceled (bookings and the member's own calendar events),
+ * narrowed to All, Bookings or Calendar and to the calendars the panel picks, under day bands, a page at a time
+ * (More); a row opens its card in a Panel.
  */
 export function BookingsListScreen({
   slug,
   search,
-  lists,
+  meetings,
+  calendars,
+  onMakeDefault,
+  onDismissNotice,
   objects,
   pages,
   locale,
@@ -1152,12 +1228,40 @@ export function BookingsListScreen({
   actions,
 }: BookingsListScreenProps) {
   const personHref = usePersonHref(slug, objects);
-  // The open booking by id, read from the list as it is now: a change (here or by the guest) shows in the panel.
+  const panel = useCalendarsPanel();
+  const calendarList = useCalendarList(calendars);
+  const byCalendar = new Map(
+    (calendarList.status === 'ready' ? calendarList.accounts : []).flatMap((account) =>
+      account.calendars.map((calendar) => [calendar.id, { name: calendar.name, hue: calendar.hue }] as const),
+    ),
+  );
+  const hasCalendar = calendarList.status === 'ready' && calendarList.accounts.length > 0;
+  // The open meeting by row id, read from the list as it is now: a change shows in the panel.
   const [openId, setOpenId] = useState<string | undefined>(undefined);
   const tab = search.tab;
-  const view = lists[tab];
-  const state = useBookings(view);
-  const open = state.status === 'ready' ? state.bookings.find((booking) => booking.id === openId) : undefined;
+  // One booking page's bookings: calendar events have no page, so the server is asked for bookings only, and paging
+  // stays whole.
+  const source = search.link === undefined ? search.source : 'bookings';
+  const list = meetings({
+    when: tab,
+    source,
+    ...(search.cal === undefined ? {} : { calendarIds: search.cal }),
+  });
+  const state = useMeetings(list);
+  // One booking page: its bookings only (calendar events have no page).
+  const items =
+    state.status === 'ready'
+      ? state.items.filter(
+          (item) => search.link === undefined || (item.kind === 'booking' && item.booking.pageId === search.link),
+        )
+      : [];
+  const open = items.find((item) => rowIdOf(item) === openId);
+  const more = useFocusAfterMore(
+    strings.listLabel[tab],
+    state.status === 'ready',
+    state.status === 'ready' && (state.hasMore || state.moreFailed),
+    items.length,
+  );
   // A change closes the panel: the lists are read again, and the booking may move tabs.
   const panelActions = useMemo(
     () =>
@@ -1170,95 +1274,96 @@ export function BookingsListScreen({
           },
     [actions],
   );
-  const body = (() => {
-    if (state.status === 'loading')
-      return { bar: <ListBar search={search} pages={pages} onSearch={onSearch} />, list: <Skeleton shape="block" /> };
-    if (state.status === 'error') {
-      return {
-        bar: <ListBar search={search} pages={pages} onSearch={onSearch} />,
-        list: (
-          <EmptyState tone="error" title={strings.failedTitle} onRetry={() => view.reload()}>
-            {state.message === '' ? strings.failedText : state.message}
-          </EmptyState>
-        ),
-      };
-    }
-    // The server answers upcoming soonest first, past and canceled latest first; the toggle flips it.
-    const natural = tab === 'upcoming' ? 'asc' : 'desc';
-    const sort = tab === 'cancelled' ? 'desc' : (search.sort ?? natural);
-    const filtered = state.bookings.filter((booking) => search.link === undefined || booking.pageId === search.link);
-    const ordered = sort === natural ? filtered : [...filtered].reverse();
-    const count = Math.max(1, Math.ceil(ordered.length / search.per));
-    const page = Math.min(search.page, count);
-    const shown = ordered.slice((page - 1) * search.per, page * search.per);
-    const byId = new Map(shown.map((booking) => [booking.id, booking]));
-    const sortLabel =
-      tab === 'upcoming'
-        ? sort === 'asc'
-          ? strings.sortSoonest
-          : strings.sortLatest
-        : sort === 'desc'
-          ? strings.sortRecent
-          : strings.sortOldest;
-    return {
-      bar: (
-        <ListBar
-          search={search}
-          pages={pages}
-          onSearch={onSearch}
-          {...(tab !== 'cancelled' && ordered.length >= 2
-            ? { sort: { label: sortLabel, next: sort === 'asc' ? ('desc' as const) : ('asc' as const) } }
-            : {})}
-        />
-      ),
-      list: (
-        <>
-          <BookingList
-            label={strings.listLabel[tab]}
-            groups={groupsOf(shown, personHref, locale)}
-            onOpen={(id) => {
-              const booking = byId.get(id);
-              if (booking !== undefined) setOpenId(booking.id);
-            }}
-            emptyState={
+  const bar = <ListBar search={search} pages={pages} panel={panel} onSearch={onSearch} />;
+  const body =
+    state.status === 'loading' ? (
+      <Skeleton shape="block" />
+    ) : state.status === 'error' ? (
+      <EmptyState tone="error" title={strings.failedTitle} onRetry={() => list.reload()}>
+        {state.message === '' ? strings.failedText : state.message}
+      </EmptyState>
+    ) : (
+      <>
+        <BookingList
+          label={strings.listLabel[tab]}
+          groups={groupsOf(items, (calendarId) => byCalendar.get(calendarId), locale)}
+          onOpen={setOpenId}
+          emptyState={
+            search.link !== undefined || search.cal !== undefined ? (
+              <EmptyState
+                icon="calendar-days"
+                title={strings.noMatch}
+                actions={
+                  <Button variant="secondary" onPress={() => onSearch({ link: undefined, cal: undefined })}>
+                    {strings.clearFilters}
+                  </Button>
+                }
+              />
+            ) : tab === 'upcoming' && source === 'bookings' ? (
               <EmptyState
                 icon="calendar-days"
                 title={strings.empty[tab].title}
-                {...(tab === 'upcoming'
-                  ? {
-                      actions: (
-                        <>
-                          <Link href={linksHref(slug)}>{strings.openLinks}</Link>
-                          <Link href={availabilityHref(slug)}>{strings.openAvailability}</Link>
-                        </>
-                      ),
-                    }
-                  : {})}
+                actions={
+                  <>
+                    <Link href={linksHref(slug)}>{strings.openLinks}</Link>
+                    <Link href={availabilityHref(slug)}>{strings.openAvailability}</Link>
+                  </>
+                }
+              />
+            ) : !hasCalendar && calendarList.status === 'ready' && source !== 'bookings' ? (
+              <EmptyState
+                icon="calendar-days"
+                title={strings.empty[tab].title}
+                actions={<Link href={calendarSettingsHref(slug)}>{strings.connectCalendar}</Link>}
               >
-                {strings.empty[tab].text}
+                {strings.noCalendarConnected}
               </EmptyState>
-            }
-          />
-          <Pagination
-            label={strings.listLabel[tab]}
-            page={page}
-            pageSize={search.per}
-            total={ordered.length}
-            pageSizes={PAGE_SIZES}
-            onPage={(next) => onSearch({ page: next })}
-            onPageSize={(per) => onSearch({ per, page: 1 })}
-          />
-        </>
-      ),
-    };
-  })();
+            ) : (
+              <EmptyState icon="calendar-days" title={strings.empty[tab].title} />
+            )
+          }
+        />
+        {(state.hasMore || state.moreFailed) && (
+          <Button
+            variant="secondary"
+            isPending={state.isLoadingMore}
+            onPress={() => {
+              more.press();
+              list.loadMore();
+            }}
+          >
+            {state.moreFailed ? strings.moreFailed : strings.more}
+          </Button>
+        )}
+      </>
+    );
   return (
     <PageColumn>
-      <Toolbar>{body.bar}</Toolbar>
-      {body.list}
+      <Toolbar>{bar}</Toolbar>
+      <CalendarsFrame
+        slug={slug}
+        search={search}
+        calendars={calendars}
+        panel={panel}
+        onSearch={onSearch}
+        onMakeDefault={onMakeDefault}
+        onDismissNotice={onDismissNotice}
+        isHidden={source === 'bookings'}
+      >
+        {body}
+      </CalendarsFrame>
       {open !== undefined && (
         <Panel title={strings.details} isOpen onClose={() => setOpenId(undefined)}>
-          <BookingCard booking={open} personHref={personHref(open)} locale={locale} actions={panelActions} />
+          {open.kind === 'booking' ? (
+            <BookingCard
+              booking={open.booking}
+              personHref={personHref(open.booking)}
+              locale={locale}
+              actions={panelActions}
+            />
+          ) : (
+            <EventCard event={open.event} connection={undefined} locale={locale} />
+          )}
         </Panel>
       )}
     </PageColumn>

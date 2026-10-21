@@ -89,6 +89,9 @@ const READS: ReadonlySet<string> = new Set([
   'calendar.connections.list',
   'calendar.meetings.forRecord',
   'calendar.settings.get',
+  'calendar.calendars.list',
+  'calendar.pageDestination.get',
+  'calendar.health',
   'forms.list',
   'forms.get',
   'forms.attributes',
@@ -103,6 +106,7 @@ const READS: ReadonlySet<string> = new Set([
   'bookingPages.get',
   'bookings.list',
   'bookings.listAll',
+  'bookings.meetings',
   'bookings.calendar',
   'bookings.hours',
   // Where a booking could move (its page's slots), and the guest page's address: both read only.
@@ -304,6 +308,14 @@ async function heldMeeting(m: Member): Promise<{ connectionId: string; meetingId
     `insert into meeting_sources (workspace_id, meeting_id, connection_id, provider_event_id, calendar_id)
      values ($1, $2, $3, 'intro', 'primary')`,
     [m.workspace.id, meetingId, connectionId],
+  );
+  // Its main calendar (spec 0024 milestone 5), syncing, shown and taking bookings.
+  await testQuery(
+    ownerUrl,
+    `insert into calendar_calendars (workspace_id, connection_id, member_id, provider_calendar_id, name, access_role,
+       is_primary, check_conflicts, show_in_week, sync, is_destination, created_by_type, updated_by_type)
+     values ($1, $2, $3, 'primary', 'ada@acme.dev', 'owner', true, true, true, true, true, 'calendar', 'calendar')`,
+    [m.workspace.id, connectionId, memberId],
   );
   await testQuery(
     ownerUrl,
@@ -1065,6 +1077,70 @@ const WRITES: Record<string, (m: Member, mutationId: string) => Promise<readonly
     await m.client.calendar.connections.syncNow({ workspace: m.slug, connectionId, mutationId });
     return [{ kind: 'records', record_ids: [recordId] }];
   },
+  // Refresh (milestone 5) queues the connection's sync, as Sync now does: no outbox row.
+  'calendar.connections.refresh': async (m, mutationId) => {
+    const { connectionId, recordId } = await heldMeeting(m);
+    await m.client.calendar.connections.refresh({ workspace: m.slug, connectionId, mutationId });
+    return [{ kind: 'records', record_ids: [recordId] }];
+  },
+  // Sync meetings off while the calendar still shows: its meeting leaves its records (AC-1002).
+  'calendar.calendars.update': async (m, mutationId) => {
+    const { connectionId, meetingId, recordId } = await heldMeeting(m);
+    const [main] = await testQuery<{ id: string }>(
+      ownerUrl,
+      `select id::text from calendar_calendars where connection_id = $1`,
+      [connectionId],
+    );
+    await m.client.calendar.calendars.update({
+      workspace: m.slug,
+      calendarId: main?.id ?? '',
+      sync: false,
+      mutationId,
+    });
+    return [
+      { kind: 'records', record_ids: [recordId] },
+      { kind: 'meetings', item_ids: [meetingId], record_ids: [recordId], mutation_id: mutationId },
+    ];
+  },
+  // Where bookings go: the member's own setting, no outbox row.
+  'calendar.destination.set': async (m, mutationId) => {
+    const { connectionId, recordId } = await heldMeeting(m);
+    const [main] = await testQuery<{ id: string }>(
+      ownerUrl,
+      `select id::text from calendar_calendars where connection_id = $1`,
+      [connectionId],
+    );
+    await m.client.calendar.destination.set({ workspace: m.slug, calendarId: main?.id ?? '', mutationId });
+    return [{ kind: 'records', record_ids: [recordId] }];
+  },
+  'calendar.destination.dismissNotice': async (m, mutationId) => {
+    const { recordId } = await heldMeeting(m);
+    await m.client.calendar.destination.dismissNotice({ workspace: m.slug, mutationId });
+    return [{ kind: 'records', record_ids: [recordId] }];
+  },
+  // A page's own destination: a booking page setting, no outbox row.
+  'calendar.pageDestination.set': async (m, mutationId) => {
+    const { connectionId, recordId } = await heldMeeting(m);
+    const [main] = await testQuery<{ id: string }>(
+      ownerUrl,
+      `select id::text from calendar_calendars where connection_id = $1`,
+      [connectionId],
+    );
+    const page = await m.client.bookingPages.create({
+      workspace: m.slug,
+      id: newId(),
+      title: 'Intro',
+      timeZone: 'UTC',
+      mutationId: newId(),
+    });
+    await m.client.calendar.pageDestination.set({
+      workspace: m.slug,
+      pageId: page.id,
+      calendarId: main?.id ?? '',
+      mutationId,
+    });
+    return [{ kind: 'records', record_ids: [recordId] }];
+  },
   // Add as person (milestone 2): the new person's record, and the meeting now on the person's timeline too.
   'calendar.meetings.addAttendee': async (m, mutationId) => {
     const { meetingId, recordId } = await heldMeeting(m);
@@ -1630,6 +1706,11 @@ const WRITES_MADE: Readonly<Record<string, number>> = {
   'calendar.connections.remove': 2,
   'calendar.connections.syncNow': 2,
   'calendar.meetings.addAttendee': 2,
+  'calendar.connections.refresh': 2,
+  'calendar.calendars.update': 2,
+  'calendar.destination.set': 2,
+  'calendar.destination.dismissNotice': 2,
+  'calendar.pageDestination.set': 3,
   'bookingPages.update': 2,
   'bookingPages.delete': 2,
   'bookings.blocks.remove': 2,

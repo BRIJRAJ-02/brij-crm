@@ -1,11 +1,19 @@
-// Settings › Account › Calendars: the page's copy (spec 0024), apart from the other settings pages' own.
+// Settings › Scheduling › Calendars: the page's copy (spec 0024), apart from the other settings pages' own.
 import type { CalendarStatus } from '@crm/data';
 
-/** Settings › Account › Calendars: the page's copy (spec 0024, AC-597, AC-599, AC-611, AC-621). */
+/** Settings › Scheduling › Calendars: the page's copy (spec 0024, AC-597, AC-599, AC-611, AC-621). */
 export const strings = {
+  /** The loading state's name, read by screen readers. */
+  loading: 'Loading your calendars',
   /** The page's title, and its entry in the settings navigation. */
   title: 'Calendars',
   connectGoogle: 'Connect Google calendar',
+  connectOutlook: 'Connect Outlook calendar',
+  /** One button that offers both providers, when both are on. */
+  connect: 'Connect calendar',
+  connectMenu: 'Connect a calendar',
+  google: 'Google Calendar',
+  outlook: 'Outlook',
   /** The page's sections. */
   connectionsSection: 'Connected calendars',
   workspaceSection: 'Workspace',
@@ -19,7 +27,41 @@ export const strings = {
   /** How many accounts may be connected, when the limit is reached. */
   limitReached: (max: string) => `You’ve connected ${max} calendars, the most you can. Disconnect one to add another.`,
   defaultBadge: 'Default',
-  defaultHelp: 'New bookings from your booking pages are added to this calendar.',
+  /** The one word of help on the page: how the default works across accounts. */
+  defaultHelpLabel: 'How your default calendar works',
+  defaultHelp:
+    'New bookings from your booking pages are added to your default calendar, whichever account it is in. A booking page can pick another calendar in its editor.',
+  defaultHelpExample:
+    'With Google and Outlook connected, bookings go on the one default. Every calendar with Check for conflicts on, in either account, keeps its busy times from being booked.',
+  calendarsGroup: 'Calendars',
+  calendarsLoading: 'Loading this account’s calendars',
+  calendarsFailed: 'Couldn’t load this account’s calendars.',
+  tryAgain: 'Try again',
+  noCalendars: 'No calendars found in this account yet.',
+  /** A calendar's row. */
+  colour: (name: string) => `${name} colour`,
+  readOnly: 'Read only, so it can’t take bookings',
+  checkConflicts: 'Check for conflicts',
+  showInWeek: 'Show on my week',
+  sync: 'Sync meetings',
+  /** What screen readers hear after each switch's name, so the rows' switches tell apart. */
+  switchOn: (name: string) => `on ${name}`,
+  /** The quiet toasts a switch raises once saved, each with Undo. */
+  saved: {
+    checkConflicts: (name: string, on: boolean) =>
+      on ? `${name} is checked for conflicts` : `${name} is no longer checked for conflicts`,
+    showInWeek: (name: string, on: boolean) => (on ? `${name} shows on your week` : `${name} is hidden from your week`),
+    sync: (name: string, on: boolean) => (on ? `${name}’s meetings sync` : `${name}’s meetings stop syncing`),
+  },
+  colourSaved: (name: string) => `${name}’s colour changed`,
+  defaultSaved: (name: string) => `New bookings now go to ${name}`,
+  sharingSaved: (account: string) => `What teammates see of ${account}’s meetings changed`,
+  undo: 'Undo',
+  /** New bookings moved off a calendar the provider removed (AC-1005). */
+  fellBackTitle: 'Your default calendar changed',
+  fellBackText: (now: string, was: string) => `New bookings now go to ${now}. ${was} stopped taking them.`,
+  fellBackNone: (was: string) =>
+    `${was} stopped taking bookings and no other calendar can take them. Make one of your calendars the default.`,
   /** A connection's "···" menu. */
   rowActions: (account: string) => `Actions for ${account}`,
   status: {
@@ -31,13 +73,16 @@ export const strings = {
   } satisfies Record<CalendarStatus, string>,
   synced: 'Synced',
   notSyncedYet: 'Not synced yet',
-  sharingLabel: 'Who sees this calendar’s meetings',
-  shared: 'Shared',
-  private: 'Private',
+  /** What teammates see of an account's meetings (the owner asked what Shared and Private meant, 22 Oct 2026). */
+  sharingLabel: 'Teammates see',
+  shared: 'Full details',
+  private: 'Busy only',
   sharingHelp: {
-    shared: 'Others see the title, attendees and link',
-    private: 'Others see “Private meeting” and the time',
+    shared: 'Title, attendees and link',
+    private: 'Shown as “Private meeting” with the time',
   },
+  sharingInfo:
+    'Controls what other members of this workspace see of meetings from this calendar account, on their calendar and in Bookings. You always see everything.',
   makeDefault: 'Make default',
   reconnect: 'Reconnect',
   /** Local development only: Google's notices can't reach a laptop, so sync waits for the 15 minute poll. */
@@ -84,7 +129,7 @@ export const strings = {
     failed: {
       tone: 'danger',
       title: 'Calendar not connected',
-      text: 'Something went wrong on the way back from Google. Try again.',
+      text: 'Something went wrong on the way back from your calendar. Try again.',
     },
   },
 } as const;

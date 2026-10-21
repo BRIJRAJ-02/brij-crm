@@ -231,6 +231,16 @@ export const ACCESS_TABLE = {
   updateCalendarConnection: { ownConnection: true },
   removeCalendarConnection: { ownConnection: true },
   syncCalendarNow: { ownConnection: true },
+  // Milestone 5: a member's own calendars only (spec 0037, AC-1306); a page's own destination through the page.
+  listMemberCalendars: { anyMember: true },
+  updateMemberCalendar: { ownConnection: true },
+  setCalendarDestination: { ownConnection: true },
+  dismissCalendarNotice: { anyMember: true },
+  refreshCalendarConnection: { ownConnection: true },
+  readPageDestination: { bookingPages: true },
+  setPageDestination: { bookingPages: true },
+  // Spec 0037 (AC-1307): any member, for the members in their reach; everyone else is left out, never refused.
+  readCalendarHealth: { anyMember: true },
   listMeetingsForRecord: { data: 'read' },
   meetingFacts: { system: true },
   // Spec 0031, AC-817: the relay's read of whom a removal cuts off.
@@ -288,6 +298,7 @@ export const ACCESS_TABLE = {
   deleteBookingPage: { bookingPages: true },
   listBookings: { bookingPages: true },
   listWorkspaceBookings: { bookingPages: true },
+  listMeetings: { bookingPages: true },
   readBookingsCalendar: { bookingPages: true },
   readDefaultHours: { schedules: true },
   saveDefaultHours: { schedules: true },

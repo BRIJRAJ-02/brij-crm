@@ -9,6 +9,17 @@
 // by record and start. A link's foreign key to its record has no `on delete`
 // action: the purge deletes the links (and clears an attendee's person) first,
 // in the same transaction, as it does for tasks.
+//
+// Milestone 5 (the amendment of 20 October 2026): every calendar of each
+// account is a row of `calendar_calendars`, with its own switches (check for
+// conflicts, show on my week, sync meetings), colour, sync token and push
+// channel; one per member is where new bookings go (`is_destination`). A
+// meeting's sources and a member's busy times are kept per calendar (the
+// provider's calendar id, `calendar_id`), so the same event in two calendars
+// of one account is two copies, and one calendar leaving never drops the
+// other's. The connection's own `sync_state`, `channel` and `is_default`
+// stay for the release the expand migration (0052) ships in; nothing reads
+// them, and the contract migration a release later drops them.
 import { sql } from 'drizzle-orm';
 import {
   boolean,
@@ -53,10 +64,13 @@ export const attendeeResponse = pgEnum('attendee_response', ['accepted', 'declin
  */
 export const attendeeMatch = pgEnum('attendee_match', ['linked', 'ambiguous', 'unknown', 'member']);
 
+/** What a member may do with one calendar at its provider (AC-991): a destination must be `owner` or `writer`. */
+export const calendarAccessRole = pgEnum('calendar_access_role', ['owner', 'writer', 'reader', 'free_busy']);
+
 /** Why a meeting is on a record: an attendee is that person, or an attendee's email domain is that company's. */
 export const meetingLinkVia = pgEnum('meeting_link_via', ['attendee', 'domain']);
 
-/** One member's connection to one calendar account. At most 3 per member, checked by the service. */
+/** One member's connection to one calendar account. At most 6 per member (AC-1000), checked by the service. */
 export const calendarConnections = pgTable(
   'calendar_connections',
   {
@@ -83,6 +97,11 @@ export const calendarConnections = pgTable(
     lastError: jsonb('last_error'),
     /** When the failures in a row began (milestone 2's 6 hour rule). */
     failingSince: timestamptz('failing_since'),
+    /**
+     * When the account's calendars were last listed (milestone 5, AC-991): null asks the next sync to list
+     * them first (a new connection, or Refresh), and the sync lists them again once a day.
+     */
+    calendarsListedAt: timestamptz('calendars_listed_at'),
     ...auditColumns(),
     updatedByType: calendarActorType('updated_by'),
   },
@@ -95,6 +114,8 @@ export const calendarConnections = pgTable(
     }),
     // One connection per member per provider account (AC-599); also the member's list.
     uniqueIndex('calendar_connections_account').on(t.workspaceId, t.memberId, t.provider, t.accountEmail),
+    // The connection with its member: what a calendar's own foreign key names, so a calendar is its account's member's.
+    uniqueIndex('calendar_connections_with_member').on(t.workspaceId, t.id, t.memberId),
     uniqueIndex('calendar_connections_default')
       .on(t.workspaceId, t.memberId)
       .where(sql`${t.isDefault}`),
@@ -177,7 +198,10 @@ export const meetings = pgTable(
   ],
 );
 
-/** Which connection holds a meeting, under which provider event id. A meeting goes with its last source. */
+/**
+ * Which calendar of which connection holds a meeting, under which provider event id (milestone 5: one row per
+ * calendar, so the same event in two calendars of one account is two copies). A meeting goes with its last source.
+ */
 export const meetingSources = pgTable(
   'meeting_sources',
   {
@@ -185,15 +209,21 @@ export const meetingSources = pgTable(
     meetingId: uuid('meeting_id').notNull(),
     connectionId: uuid('connection_id').notNull(),
     providerEventId: text('provider_event_id').notNull(),
+    /** The provider's calendar id (`calendar_calendars.provider_calendar_id`). */
     calendarId: text('calendar_id').notNull(),
     etag: text('etag'),
     /** This copy of the event is marked private in its calendar (AC-612). */
     markedPrivate: boolean('marked_private').notNull().default(false),
+    /** The copy `createEvent` made (milestone 3): where a booking's move and cancel act (AC-998). */
+    createdByCrm: boolean('created_by_crm').notNull().default(false),
     createdAt: timestamptz('created_at').notNull().defaultNow(),
     updatedAt: timestamptz('updated_at').notNull().defaultNow(),
   },
   (t) => [
-    primaryKey({ name: 'meeting_sources_pkey', columns: [t.workspaceId, t.meetingId, t.connectionId] }),
+    primaryKey({
+      name: 'meeting_sources_pkey',
+      columns: [t.workspaceId, t.meetingId, t.connectionId, t.calendarId],
+    }),
     foreignKey({
       name: 'meeting_sources_meeting',
       columns: [t.workspaceId, t.meetingId],
@@ -204,8 +234,8 @@ export const meetingSources = pgTable(
       columns: [t.workspaceId, t.connectionId],
       foreignColumns: [calendarConnections.workspaceId, calendarConnections.id],
     }).onDelete('cascade'),
-    // A cancelled event comes back by its event id alone; also the connection's foreign key check.
-    uniqueIndex('meeting_sources_event').on(t.workspaceId, t.connectionId, t.providerEventId),
+    // A cancelled event comes back by its calendar and event id alone; also the connection's foreign key check.
+    uniqueIndex('meeting_sources_event').on(t.workspaceId, t.connectionId, t.calendarId, t.providerEventId),
   ],
 );
 
@@ -327,13 +357,18 @@ export const calendarBusyTimes = pgTable(
   {
     workspaceId: workspaceId(),
     connectionId: uuid('connection_id').notNull(),
+    /** The provider's calendar id (milestone 5): the calendar that holds it, which tints it on the week. */
+    calendarId: text('calendar_id').notNull(),
     providerEventId: text('provider_event_id').notNull(),
     startsAt: timestamptz('starts_at').notNull(),
     endsAt: timestamptz('ends_at').notNull(),
     updatedAt: timestamptz('updated_at').notNull().defaultNow(),
   },
   (t) => [
-    primaryKey({ name: 'calendar_busy_times_pkey', columns: [t.workspaceId, t.connectionId, t.providerEventId] }),
+    primaryKey({
+      name: 'calendar_busy_times_pkey',
+      columns: [t.workspaceId, t.connectionId, t.calendarId, t.providerEventId],
+    }),
     foreignKey({
       name: 'calendar_busy_times_connection',
       columns: [t.workspaceId, t.connectionId],
@@ -341,7 +376,103 @@ export const calendarBusyTimes = pgTable(
     }).onDelete('cascade'),
     check('calendar_busy_times_times', sql`${t.endsAt} > ${t.startsAt}`),
     check('calendar_busy_times_event', sql`char_length(${t.providerEventId}) between 1 and 1024`),
-    // The week calendar's read: one connection's busy times ending after the week starts.
-    index('calendar_busy_times_by_end').on(t.workspaceId, t.connectionId, t.endsAt),
+    // The week calendar's read: one calendar's busy times ending after the week starts.
+    index('calendar_busy_times_by_end').on(t.workspaceId, t.connectionId, t.calendarId, t.endsAt),
+  ],
+);
+
+/**
+ * One calendar of a connected account (milestone 5, AC-991 to AC-1005), listed from the provider after connecting,
+ * once a day and on Refresh. Its switches: `check_conflicts` (free and busy reads it, AC-994), `show_in_week` (the
+ * member's Bookings week shows it, AC-1001) and `sync` (its meetings reach records, AC-1002). A calendar with
+ * `sync` or `show_in_week` on is pulled: it has its own sync token and push channel (AC-1003); one that only checks
+ * for conflicts is read live and never stored. One per member is where new bookings go (`is_destination`), always
+ * one they can write. Gone with its connection.
+ */
+export const calendarCalendars = pgTable(
+  'calendar_calendars',
+  {
+    workspaceId: workspaceId(),
+    id: id(),
+    connectionId: uuid('connection_id').notNull(),
+    /** Copied from the connection: the destination's index and the member's reads. */
+    memberId: uuid('member_id').notNull(),
+    /** Google's calendar id, or Graph's. */
+    providerCalendarId: text('provider_calendar_id').notNull(),
+    name: text('name').notNull(),
+    /** The provider's colour (`#rrggbb`), only ever shown through the nearest calendar hue. */
+    providerColour: text('provider_colour'),
+    /** A calendar hue the member picked (a tag hue's name), over the provider's. */
+    colourOverride: text('colour_override'),
+    accessRole: calendarAccessRole('access_role').notNull(),
+    /** The account's main calendar. */
+    isPrimary: boolean('is_primary').notNull().default(false),
+    checkConflicts: boolean('check_conflicts').notNull().default(false),
+    showInWeek: boolean('show_in_week').notNull().default(false),
+    sync: boolean('sync').notNull().default(false),
+    timeZone: text('time_zone'),
+    /** Where the member's new bookings go (AC-996): one per member. */
+    isDestination: boolean('is_destination').notNull().default(false),
+    /**
+     * On the destination: the name of the calendar it replaced when the provider removed that one, or it stopped
+     * taking events (AC-1005), until the member dismisses the notice or picks another.
+     */
+    fellBackFrom: text('fell_back_from'),
+    /** This calendar's sync token (or delta link), stored only once its batch committed. */
+    syncState: jsonb('sync_state')
+      .notNull()
+      .default(sql`'{}'::jsonb`),
+    /** The push channel (Google) or subscription (Graph): its id, resource, expiry and hashed secret. */
+    channel: jsonb('channel'),
+    /** The last failure reading it, as `{ code, message, source }`, never a token or the provider's words. */
+    lastError: jsonb('last_error'),
+    failingSince: timestamptz('failing_since'),
+    ...auditColumns(),
+    createdByType: calendarActorType('created_by'),
+    updatedByType: calendarActorType('updated_by'),
+  },
+  (t) => [
+    primaryKey({ name: 'calendar_calendars_pkey', columns: [t.workspaceId, t.id] }),
+    // The account and its member together: a calendar's member is always its connection's member.
+    foreignKey({
+      name: 'calendar_calendars_connection',
+      columns: [t.workspaceId, t.connectionId, t.memberId],
+      foreignColumns: [calendarConnections.workspaceId, calendarConnections.id, calendarConnections.memberId],
+    }).onDelete('cascade'),
+    foreignKey({
+      name: 'calendar_calendars_member',
+      columns: [t.workspaceId, t.memberId],
+      foreignColumns: [members.workspaceId, members.id],
+    }),
+    uniqueIndex('calendar_calendars_account').on(t.workspaceId, t.connectionId, t.providerCalendarId),
+    uniqueIndex('calendar_calendars_destination')
+      .on(t.workspaceId, t.memberId)
+      .where(sql`${t.isDestination}`),
+    // A member's calendars, for free and busy and the week.
+    index('calendar_calendars_by_member').on(t.workspaceId, t.memberId),
+    check(
+      'calendar_calendars_destination_writable',
+      sql`not ${t.isDestination} or ${t.accessRole} in ('owner', 'writer')`,
+    ),
+    check('calendar_calendars_name', sql`char_length(${t.name}) between 1 and 255`),
+    check('calendar_calendars_provider_id', sql`char_length(${t.providerCalendarId}) between 1 and 1024`),
+    check('calendar_calendars_colour', sql`${t.providerColour} ~ '^#[0-9a-f]{6}$'`),
+    check('calendar_calendars_hue', sql`char_length(${t.colourOverride}) between 1 and 32`),
+    check('calendar_calendars_zone', sql`char_length(${t.timeZone}) <= 64`),
+    check('calendar_calendars_fell_back', sql`char_length(${t.fellBackFrom}) between 1 and 255`),
+    ...actorConstraints(
+      'calendar_calendars',
+      'created_by',
+      t.workspaceId,
+      { type: t.createdByType, id: t.createdById, memberId: t.createdByMemberId },
+      { withCalendar: true },
+    ),
+    ...actorConstraints(
+      'calendar_calendars',
+      'updated_by',
+      t.workspaceId,
+      { type: t.updatedByType, id: t.updatedById, memberId: t.updatedByMemberId },
+      { withCalendar: true },
+    ),
   ],
 );

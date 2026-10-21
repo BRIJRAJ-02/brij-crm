@@ -13,6 +13,7 @@ Ported from the artifact's Switch card (version 8). Notification preferences, fe
 ```
 
 - **`isLabelHidden`:** the label is read by screen readers only (a link card's switch).
+- **`labelContext`:** words only screen readers hear after the visible label, where rows repeat the same switches (Settings › Calendars: "Check for conflicts" on each calendar, heard as "Check for conflicts on Work"). Why: a visible name per switch would repeat the calendar's name three times a row.
   - The switch is then just its 28px track, so an invisible hit area grows it to 32 by 34. A press just beside the track still toggles it, and nothing drawn changes (the owner asked for controls that can't be missed, 20 October 2026).
   - It uses Button sm's technique, an `::after` on the control. Give it about 2px of room across and 8px up and down before another target.
 

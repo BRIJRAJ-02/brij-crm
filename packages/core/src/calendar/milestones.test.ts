@@ -197,6 +197,7 @@ describe('busy times (the owner’s call, 20 October 2026)', () => {
     // Nothing of the event but its time is kept.
     const [kept] = await w.query<Record<string, unknown>>(sql`select * from calendar_busy_times limit 1`);
     expect(Object.keys(kept ?? {}).sort()).toEqual([
+      'calendar_id',
       'connection_id',
       'ends_at',
       'provider_event_id',
@@ -231,9 +232,22 @@ describe('busy times (the owner’s call, 20 October 2026)', () => {
     await w.sync(beas.id);
     const range = { from: day(0, 0), to: day(7, 0) };
     const week = await readBookingsCalendar(w.owner, range);
+    const [main] = await w.query<{ id: string }>(
+      sql`select id::text as id from calendar_calendars where connection_id = ${mine.id}::uuid and is_primary`,
+    );
     expect(week.busy).toEqual([
-      { connectionId: mine.id, startsAt: new Date(day(1)).toISOString(), endsAt: plus(day(1), 30) },
-      { connectionId: mine.id, startsAt: new Date(day(2)).toISOString(), endsAt: plus(day(2), 30) },
+      {
+        connectionId: mine.id,
+        calendarId: main?.id,
+        startsAt: new Date(day(1)).toISOString(),
+        endsAt: plus(day(1), 30),
+      },
+      {
+        connectionId: mine.id,
+        calendarId: main?.id,
+        startsAt: new Date(day(2)).toISOString(),
+        endsAt: plus(day(2), 30),
+      },
     ]);
     expect((await readBookingsCalendar(w.as(w.bea), range)).busy.map((each) => each.connectionId)).toEqual([beas.id]);
     // A token the provider no longer honours: the full sync drops what it no longer lists.
@@ -282,16 +296,19 @@ describe('push channels (AC-602, AC-622)', () => {
     expect(w.fake.calls('watch')).toBe(1);
     const [opened] = w.fake.watched();
     expect(opened?.address).toBe(PUSH);
-    expect(opened?.token.startsWith(`${w.workspaceId}.${conn.id}.`)).toBe(true);
-    const [stored] = await w.query<{ channel: Record<string, unknown> }>(sql`select channel from calendar_connections`);
-    expect(stored?.channel).toMatchObject({ id: opened?.channel.id, resourceId: 'fake-resource' });
+    const [stored] = await w.query<{ id: string; channel: Record<string, unknown> }>(
+      sql`select id::text as id, channel from calendar_calendars where is_primary`,
+    );
+    // Milestone 5: a channel per calendar, its token naming the calendar (AC-1003).
+    expect(opened?.token.startsWith(`${w.workspaceId}.${stored?.id ?? '-'}.`)).toBe(true);
+    expect(stored?.channel).toMatchObject({ id: opened?.channel.id, resourceId: 'fake-resource:ada@acme.dev' });
     // Only a hash of the secret is kept.
     expect(JSON.stringify(stored?.channel)).not.toContain(opened?.token.split('.')[2] ?? '-');
     await w.sync(conn.id);
     expect(w.fake.calls('watch')).toBe(1);
     // Within 48 hours of its end: a new one, and the old one stopped.
     await w.query(
-      sql`update calendar_connections set channel = jsonb_set(channel, '{expiresAt}', to_jsonb((now() + interval '1 day')::text))`,
+      sql`update calendar_calendars set channel = jsonb_set(channel, '{expiresAt}', to_jsonb((now() + interval '1 day')::text))`,
     );
     await w.sync(conn.id);
     expect(w.fake.calls('watch')).toBe(2);
@@ -307,7 +324,7 @@ describe('push channels (AC-602, AC-622)', () => {
     const other = await pushed.connect(pushed.ownerId, 'ada@acme.dev');
     pushed.fake.failNext('watch', 'CALENDAR_UNAVAILABLE');
     expect(await pushed.sync(other.id)).toMatchObject({ kind: 'synced' });
-    const [stored] = await pushed.query<{ channel: unknown }>(sql`select channel from calendar_connections`);
+    const [stored] = await pushed.query<{ channel: unknown }>(sql`select channel from calendar_calendars`);
     expect(stored?.channel).toBeNull();
   });
 
@@ -476,10 +493,12 @@ describe('free and busy, and events (AC-615 to AC-618)', () => {
     expect(w.fake.calls('freeBusy')).toBe(1);
     await w.events.freeBusy(w.system, ask, { fresh: true });
     expect(w.fake.calls('freeBusy')).toBe(2);
+    // Its only conflict calendar failing closes the member (AC-995), and the calendar is named for its member.
     w.fake.failNext('freeBusy', 'CALENDAR_UNAVAILABLE');
     expect(await w.events.freeBusy(w.system, ask, { fresh: true })).toContainEqual({
       memberId: w.ownerId,
-      status: 'unavailable',
+      status: 'blocked',
+      skipped: [expect.objectContaining({ code: 'CALENDAR_UNAVAILABLE', reason: 'unavailable' })],
     });
     const tooWide = { ...ask, to: new Date(Date.parse(ask.from) + 63 * 86_400_000).toISOString() };
     expect(await refusalOf(w.events.freeBusy(w.system, tooWide))).toMatchObject({ code: 'INPUT_INVALID', field: 'to' });

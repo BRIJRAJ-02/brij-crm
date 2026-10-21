@@ -145,13 +145,26 @@ const allowlist = z
 // OAuth client with the Calendar API enabled (it may be sign in's client, with the redirect URI
 // `<APP_URL>/api/calendar/google/callback` added), the 32 byte key members' tokens are sealed with, and (outside
 // local) the public https origin Google posts push notices to. Both the api and the worker read them: the worker
-// refreshes tokens and syncs.
+// refreshes tokens and syncs. Outlook (spec 0024 milestone 4, AC-1012) is off unless `CALENDAR_OUTLOOK=on` too, and
+// then needs the Entra app's client id and secret (`MICROSOFT_TENANT` is `common` unless set): an app registered for
+// "accounts in any organizational directory and personal Microsoft accounts", with the redirect URI
+// `<APP_URL>/api/calendar/microsoft/callback` and the delegated permissions offline_access, User.Read and
+// Calendars.ReadWrite.
 const calendarFields = {
   CALENDAR_SYNC: optional(z.enum(['on', 'off'])),
   GOOGLE_CALENDAR_CLIENT_ID: optional(z.string().trim().min(1)),
   GOOGLE_CALENDAR_CLIENT_SECRET: optional(z.string().trim().min(1)),
   CALENDAR_TOKEN_KEY: optional(z.string()),
   CALENDAR_WEBHOOK_ORIGIN: optional(z.url()),
+  CALENDAR_OUTLOOK: optional(z.enum(['on', 'off'])),
+  MICROSOFT_CLIENT_ID: optional(z.string().trim().min(1)),
+  MICROSOFT_CLIENT_SECRET: optional(z.string().trim().min(1)),
+  MICROSOFT_TENANT: optional(
+    z
+      .string()
+      .trim()
+      .regex(/^[A-Za-z0-9.-]{1,100}$/, 'MICROSOFT_TENANT is `common`, `organizations`, a tenant id or a domain.'),
+  ),
 };
 
 /** The calendar variables as parsed, before they are checked together. */
@@ -161,6 +174,18 @@ interface CalendarFields {
   readonly GOOGLE_CALENDAR_CLIENT_SECRET?: string | undefined;
   readonly CALENDAR_TOKEN_KEY?: string | undefined;
   readonly CALENDAR_WEBHOOK_ORIGIN?: string | undefined;
+  readonly CALENDAR_OUTLOOK?: 'on' | 'off' | undefined;
+  readonly MICROSOFT_CLIENT_ID?: string | undefined;
+  readonly MICROSOFT_CLIENT_SECRET?: string | undefined;
+  readonly MICROSOFT_TENANT?: string | undefined;
+}
+
+/** Outlook's Entra app once checked (spec 0024 milestone 4). */
+export interface MicrosoftSettings {
+  readonly clientId: string;
+  readonly clientSecret: string;
+  /** `common` unless set: work or school accounts and personal ones. */
+  readonly tenant: string;
 }
 
 /** Calendar sync's settings once checked: its Google client, the token key, and where Google posts notices. */
@@ -170,6 +195,8 @@ export interface CalendarSettings {
   readonly tokenKey: TokenKey;
   /** The public https origin for push notices (milestone 2); unset locally, where sync runs on the poll. */
   readonly webhookOrigin: string | undefined;
+  /** Outlook (milestone 4), where `CALENDAR_OUTLOOK=on`; else Connect Outlook isn't offered. */
+  readonly microsoft: MicrosoftSettings | undefined;
 }
 
 /** Refuses calendar sync switched on without what it needs; nothing is asked of it while it is off. */
@@ -177,7 +204,21 @@ function checkCalendar(
   env: CalendarFields & { readonly APP_ENV: string },
   missing: (path: string, message: string) => void,
 ): void {
+  if (env.CALENDAR_OUTLOOK === 'on' && env.CALENDAR_SYNC !== 'on') {
+    missing('CALENDAR_SYNC', 'CALENDAR_OUTLOOK=on needs CALENDAR_SYNC=on too.');
+  }
   if (env.CALENDAR_SYNC !== 'on') return;
+  if (env.CALENDAR_OUTLOOK === 'on') {
+    if (env.MICROSOFT_CLIENT_ID === undefined) {
+      missing(
+        'MICROSOFT_CLIENT_ID',
+        'CALENDAR_OUTLOOK=on needs MICROSOFT_CLIENT_ID: the Entra app registration for Outlook calendars.',
+      );
+    }
+    if (env.MICROSOFT_CLIENT_SECRET === undefined) {
+      missing('MICROSOFT_CLIENT_SECRET', 'CALENDAR_OUTLOOK=on needs MICROSOFT_CLIENT_SECRET.');
+    }
+  }
   if (env.GOOGLE_CALENDAR_CLIENT_ID === undefined) {
     missing(
       'GOOGLE_CALENDAR_CLIENT_ID',
@@ -226,6 +267,16 @@ function calendarOf(env: CalendarFields): CalendarSettings | undefined {
     clientSecret: env.GOOGLE_CALENDAR_CLIENT_SECRET,
     tokenKey: decodeTokenKey(env.CALENDAR_TOKEN_KEY),
     webhookOrigin: env.CALENDAR_WEBHOOK_ORIGIN === undefined ? undefined : new URL(env.CALENDAR_WEBHOOK_ORIGIN).origin,
+    microsoft:
+      env.CALENDAR_OUTLOOK === 'on' &&
+      env.MICROSOFT_CLIENT_ID !== undefined &&
+      env.MICROSOFT_CLIENT_SECRET !== undefined
+        ? {
+            clientId: env.MICROSOFT_CLIENT_ID,
+            clientSecret: env.MICROSOFT_CLIENT_SECRET,
+            tenant: env.MICROSOFT_TENANT ?? 'common',
+          }
+        : undefined,
   };
 }
 
@@ -369,13 +420,13 @@ export const ApiEnv = z
       missing('BETTER_AUTH_URL', `BETTER_AUTH_URL must have the same origin as APP_URL in ${env.APP_ENV}.`);
     }
   })
-  .transform(({ CALENDAR_TOKEN_KEY, GOOGLE_CALENDAR_CLIENT_SECRET, ...env }) => ({
+  .transform(({ CALENDAR_TOKEN_KEY, GOOGLE_CALENDAR_CLIENT_SECRET, MICROSOFT_CLIENT_SECRET, ...env }) => ({
     ...env,
     MAIL_FROM: namedSender(env.MAIL_FROM ?? DEFAULT_LOCAL_SENDER),
     // Mailpit is a laptop's inbox; a deployed API never sends there.
     MAILPIT_URL: env.APP_ENV === 'local' ? env.MAILPIT_URL : undefined,
-    // Calendar sync (spec 0024), when on: the key and the secret live only in here, the key decoded.
-    calendar: calendarOf({ ...env, CALENDAR_TOKEN_KEY, GOOGLE_CALENDAR_CLIENT_SECRET }),
+    // Calendar sync (spec 0024), when on: the key and the secrets live only in here, the key decoded.
+    calendar: calendarOf({ ...env, CALENDAR_TOKEN_KEY, GOOGLE_CALENDAR_CLIENT_SECRET, MICROSOFT_CLIENT_SECRET }),
   }));
 export type ApiEnv = z.infer<typeof ApiEnv>;
 
@@ -463,11 +514,12 @@ export const WorkerEnv = z
       JOBS_RUNNER,
       CALENDAR_TOKEN_KEY,
       GOOGLE_CALENDAR_CLIENT_SECRET,
+      MICROSOFT_CLIENT_SECRET,
       ...rest
     }) => ({
       ...rest,
       // Calendar sync (spec 0024), when on: the worker refreshes tokens and syncs.
-      calendar: calendarOf({ ...rest, CALENDAR_TOKEN_KEY, GOOGLE_CALENDAR_CLIENT_SECRET }),
+      calendar: calendarOf({ ...rest, CALENDAR_TOKEN_KEY, GOOGLE_CALENDAR_CLIENT_SECRET, MICROSOFT_CLIENT_SECRET }),
       WORKER_PORT: WORKER_PORT ?? PORT ?? 3001,
       JOBS_RUNNER: JOBS_RUNNER ?? (rest.APP_ENV === 'production' ? 'off' : 'on'),
       WORKER_IDLE_SLEEP_SECONDS: rest.WORKER_IDLE_SLEEP_SECONDS ?? DEFAULT_IDLE_SLEEP_SECONDS,

@@ -7,6 +7,11 @@ export interface SwitchProps {
   /** What it turns on, in sentence case. */
   readonly label: string;
   readonly isLabelHidden?: boolean;
+  /**
+   * Words only screen readers hear after the label, where several switches share one ("on Work calendar"): each
+   * row's "Check for conflicts" then names its own calendar.
+   */
+  readonly labelContext?: string;
   /** A line under the label that says more. */
   readonly description?: string;
   readonly isSelected?: boolean;
@@ -21,6 +26,7 @@ export interface SwitchProps {
 export function Switch({
   label,
   isLabelHidden = false,
+  labelContext,
   description,
   isSelected,
   defaultSelected,
@@ -50,6 +56,7 @@ export function Switch({
             {label}
           </span>
         )}
+        {labelContext !== undefined && <VisuallyHidden> {labelContext}</VisuallyHidden>}
       </SwitchButton>
       {description !== undefined && (
         <Text slot="description" className={styles.description}>

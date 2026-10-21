@@ -244,6 +244,21 @@ export {
   type ConnectCalendarInput,
   type UpdateCalendarConnectionInput,
 } from './calendar/connections.ts';
+// Calendars (spec 0024 milestone 5): every calendar of each account, its switches, and where bookings go.
+export {
+  dismissCalendarNotice,
+  listMemberCalendars,
+  refreshCalendarConnection,
+  setCalendarDestination,
+  updateMemberCalendar,
+  type MemberCalendars,
+  type UpdateCalendarInput,
+  type UpdatedCalendar,
+} from './calendar/calendars.ts';
+export { readPageDestination, setPageDestination, type PageDestination } from './calendar/page-destination.ts';
+// Calendar health for a team (spec 0037, AC-1307): statuses only.
+export { healthReach, readCalendarHealth } from './calendar/health.ts';
+export { nearestHue } from './calendar/hues.ts';
 export { listMeetingsForRecord, type ListMeetingsInput } from './calendar/meetings.ts';
 export {
   addMeetingAttendee,
@@ -268,15 +283,20 @@ export {
 export {
   isProviderError,
   normaliseEmail,
+  PRIMARY_CALENDAR,
   providerError,
   type BusyInterval,
+  type CalendarAccessRole,
+  type CalendarBusy,
   type CalendarChannel,
   type CalendarErrorCode,
   type CalendarProvider,
   type CalendarProviderError,
   type CalendarTokens,
+  type CreatedProviderEvent,
   type ExchangedTokens,
   type NewEvent,
+  type ProviderCalendar,
   type ProviderAttendee,
   type ProviderChanges,
   type ProviderEvent,
@@ -312,7 +332,7 @@ export {
 export { defaultSchedule, scheduleFor, type ResolvedSchedule } from './availability/resolve.ts';
 export { createTimeBlock, removeTimeBlock, type TimeBlockDraft } from './booking/blocks.ts';
 export { bookAsHost, HOST_BOOKING_MINUTES, type HostBookingDeps, type HostBookingInput } from './booking/host.ts';
-export { listWorkspaceBookings, readBookingsCalendar } from './booking/list.ts';
+export { listMeetings, listWorkspaceBookings, readBookingsCalendar } from './booking/list.ts';
 // Changing a booking from Bookings (spec 0025, AC-640): its host moves or cancels it, or copies the guest's link.
 export {
   bookingGuestPath,

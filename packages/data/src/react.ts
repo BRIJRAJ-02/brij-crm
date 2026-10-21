@@ -6,7 +6,9 @@ import type { BoardStatus, BoardStore } from './records/board.ts';
 import type { DataError } from './errors.ts';
 import type { ActivityFeed, ActivityState } from './activity/feed.ts';
 import type { BookingsCalendarHeld, BookingsCalendarState, BookingsState, BookingsView } from './bookings/store.ts';
+import type { MeetingsHeld, MeetingsState } from './bookings/meetings.ts';
 import type { CalendarSettingsHeld, CalendarSettingsState, CalendarState, CalendarView } from './calendar/store.ts';
+import type { CalendarListState, CalendarsHeld, PageDestinationState } from './calendar/calendars.ts';
 import type { CaptureListState, CaptureListView } from './captures/list.ts';
 import type {
   EmailPreferencesState,
@@ -304,6 +306,11 @@ export function useBookingsCalendar(view: BookingsCalendarHeld): BookingsCalenda
   return useRetained(view);
 }
 
+/** Bookings' list of every meeting, a page at a time, re-rendering as pages land. Held while the screen is mounted. */
+export function useMeetings(list: MeetingsHeld): MeetingsState {
+  return useRetained(list);
+}
+
 /**
  * The member's calendar connections (spec 0024, Settings › Calendar),
  * re-rendering when they change. Held while the screen is mounted, so a
@@ -311,6 +318,16 @@ export function useBookingsCalendar(view: BookingsCalendarHeld): BookingsCalenda
  */
 export function useCalendar(view: CalendarView): CalendarState {
   return useRetained(view);
+}
+
+/** The member's accounts and each of their calendars (spec 0024 milestone 5), read when the screen first holds them. */
+export function useCalendarList(held: CalendarsHeld<CalendarListState>): CalendarListState {
+  return useRetained(held);
+}
+
+/** A booking page's own "Add events to" (spec 0024, AC-997), read when the screen first holds it. */
+export function usePageDestination(held: CalendarsHeld<PageDestinationState>): PageDestinationState {
+  return useRetained(held);
 }
 
 /** The workspace's calendar settings (spec 0024, AC-609), read when the screen first holds them. */

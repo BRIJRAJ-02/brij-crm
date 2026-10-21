@@ -15,24 +15,33 @@
 // grant marks the connection `expired` and stops it (AC-619); any other
 // failure that has lasted 6 hours marks it `failed` (AC-620), and the sync
 // keeps trying at the poll's pace, so a long outage heals by itself. With a
-// push address, a successful sync also opens (or renews) the connection's
+// push address, a successful sync also opens (or renews) each calendar's
 // push channel (`push.ts`), whose notices bring the next run forward.
+//
+// Milestone 5 (AC-991, AC-1003): a run first lists the account's calendars
+// when it never has, when the member pressed Refresh, or once a day
+// (`storeCalendars`), then syncs each pulled calendar (one that syncs
+// meetings or shows on the member's week) by its own sync token, one after
+// another, and stops the channel of any calendar no longer pulled. One
+// calendar failing is recorded on that calendar and never stops the others;
+// a refused grant, or every pulled calendar failing, is the connection's.
 import { sql } from 'drizzle-orm';
 import type { EngineScope } from '../access/mint.ts';
 import { inWorkspace } from '../access/run.ts';
 import { queueCalendarDisconnected } from '../emails/queue.ts';
 import { runWrite, type AfterWrite } from '../engine/write.ts';
 import { applyEvents, dropBusyTimes, dropSources } from './apply.ts';
+import { CALENDARS_LIST_EVERY_MS, isPulled, moveDestinationOff, storeCalendars } from './calendars.ts';
 import { isBusyOnly } from './match.ts';
 import {
   isProviderError,
   type CalendarErrorCode,
   type CalendarProvider,
   type CalendarTokens,
-  type ProviderEvent,
+  type ProviderChanges,
   type SyncWindow,
 } from './provider.ts';
-import { needsChannel, openChannel, storedChannel } from './push.ts';
+import { needsChannel, openChannel, stopChannel, storedChannel } from './push.ts';
 import { openTokens, sealTokens, type TokenBinding, type TokenKey } from './tokens.ts';
 
 /** How far back and ahead a full sync reads (spec 0024's call). */
@@ -56,9 +65,6 @@ export const FAILED_AFTER_MS = 6 * 3_600_000;
 
 /** The statuses a connection syncs in: a `failed` one keeps trying, and heals on its next success. */
 export const SYNCING_STATUSES = ['syncing', 'connected', 'failed'] as const;
-
-/** The only calendar milestone 1 syncs (a Follow-up adds more). */
-export const PRIMARY_CALENDAR = 'primary';
 
 const DAY_MS = 86_400_000;
 
@@ -86,6 +92,10 @@ export interface CalendarSyncDeps {
    * Absent (local development, no public origin), no channel opens and the poll alone keeps calendars current.
    */
   readonly pushAddress?: string;
+  /** Each provider's notify address (Graph's is `/api/calendar/microsoft/notify`); Google's falls back to `pushAddress`. */
+  readonly pushAddresses?: Readonly<Partial<Record<'google' | 'microsoft', string>>>;
+  /** A write stored a change event outside the batches (a listing removed a calendar's meetings): wake the relay. */
+  readonly onStored?: () => void;
   readonly now?: () => Date;
 }
 
@@ -112,19 +122,33 @@ interface ConnectionRow extends Record<string, unknown> {
   readonly account_email: string;
   readonly status: string;
   readonly tokens: Buffer;
-  readonly sync_token: string | null;
   readonly failing_since: string | null;
+  /** Whether its calendars are due to be listed: never yet, Refresh, or a day since. */
+  readonly list_due: boolean;
+  /** Its workspace was deleted (spec 0031, AC-823): the sync stops until a restore. */
+  readonly workspace_deleted: boolean;
+}
+
+/** One calendar as the sync reads it. */
+interface CalendarSyncRow extends Record<string, unknown> {
+  readonly id: string;
+  readonly provider_calendar_id: string;
+  readonly name: string;
+  readonly sync: boolean;
+  readonly show_in_week: boolean;
+  readonly sync_token: string | null;
   readonly channel: unknown;
   readonly workspace_deleted: boolean;
 }
 
 /** The failure messages a connection shows in Settings: plain, and never the provider's own words. */
-const FAILURE_MESSAGES: Readonly<Record<CalendarErrorCode, string>> = {
-  CALENDAR_AUTH_REVOKED: 'Google no longer lets Timefix read this calendar. Reconnect it.',
-  CALENDAR_AUTH: 'Google refused the calendar request. If it keeps happening, reconnect it.',
+export const FAILURE_MESSAGES: Readonly<Record<CalendarErrorCode, string>> = {
+  CALENDAR_AUTH_REVOKED: 'The calendar account no longer lets Timefix read it. Reconnect it.',
+  CALENDAR_AUTH: 'The calendar account refused the request. If it keeps happening, reconnect it.',
   CALENDAR_SYNC_TOKEN_GONE: 'The calendar asked for a full sync.',
-  CALENDAR_UNAVAILABLE: 'Google’s calendar didn’t answer. Timefix tries again shortly.',
+  CALENDAR_UNAVAILABLE: 'The calendar didn’t answer. Timefix tries again shortly.',
   CALENDAR_SCOPE_DECLINED: 'The calendar was connected without the access Timefix needs. Reconnect it.',
+  CALENDAR_GONE: 'This calendar is no longer in the account.',
 };
 
 /** A failure as `recordFailure` stored it: when failures began, and the status before and after. */
@@ -180,10 +204,12 @@ async function recordFailure(scope: EngineScope, connectionId: string, code: Cal
           provider: row.provider,
           accountEmail: row.account_email,
           reason: row.status,
-          settingsPath: `/w/${encodeURIComponent(workspace.rows[0]?.slug ?? '')}/settings/account/calendars`,
+          settingsPath: `/w/${encodeURIComponent(workspace.rows[0]?.slug ?? '')}/settings/scheduling/calendars`,
         },
       });
     }
+    // A stopped account no longer takes bookings: they move to the member's other account, and they are told.
+    if (row?.status === 'expired' || row?.status === 'failed') await moveDestinationOff(tx, connectionId);
     return stored;
   });
   return rows.rows[0]?.failing_since ?? new Date().toISOString();
@@ -200,7 +226,7 @@ export async function liveTokens(
   deps: Pick<CalendarSyncDeps, 'tokenKey'>,
   scope: EngineScope,
   provider: CalendarProvider,
-  row: Pick<ConnectionRow, 'id' | 'tokens'>,
+  row: { readonly id: string; readonly tokens: Buffer },
   binding: TokenBinding,
   now: Date,
 ): Promise<CalendarTokens> {
@@ -216,6 +242,28 @@ export async function liveTokens(
   );
   return fresh;
 }
+
+/** What a main calendar says when its account's grant can't list the account's other calendars. */
+export const LIST_REFUSED = 'Reconnect this account to choose from its other calendars.';
+
+/** Records one calendar's sync failure on it (AC-995's warning reads it), keeping when the failures began. */
+async function recordCalendarFailure(scope: EngineScope, calendarRowId: string, code: CalendarErrorCode) {
+  await inWorkspace(scope, (tx) =>
+    tx.execute(sql`
+      update calendar_calendars set
+        last_error = jsonb_build_object('code', ${code}::text, 'message', ${FAILURE_MESSAGES[code]}::text,
+          'source', 'sync', 'at', to_char(now() at time zone 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"')),
+        failing_since = coalesce(failing_since, now())
+      where id = ${calendarRowId}::uuid
+    `),
+  );
+}
+
+/** What syncing one calendar did. */
+type CalendarRun =
+  | { readonly kind: 'synced'; readonly full: boolean; readonly events: number }
+  | { readonly kind: 'off' }
+  | { readonly kind: 'failed'; readonly code: CalendarErrorCode };
 
 /**
  * Ends a revoked connection (spec 0031, AC-815): the provider ends its grant,
@@ -246,10 +294,85 @@ async function revokeConnection(
 }
 
 /**
- * Syncs one connection: its changes since the last sync, or its whole window.
- * Expected provider failures are recorded on the connection and answered as
- * `retry` (or `stopped` for a refused grant, which marks it `expired`);
- * anything else throws, and the task's own retries take it.
+ * Syncs one pulled calendar: its changes since its token, or its whole window. Every batch is written before its
+ * next token is stored. A provider failure is answered, not thrown.
+ */
+async function syncCalendar(
+  deps: CalendarSyncDeps,
+  scope: EngineScope,
+  provider: CalendarProvider,
+  tokens: CalendarTokens,
+  connection: { readonly id: string; readonly memberId: string },
+  calendar: CalendarSyncRow,
+  window: SyncWindow,
+): Promise<CalendarRun> {
+  let changes: ProviderChanges;
+  let full = calendar.sync_token === null;
+  try {
+    try {
+      changes = await provider.listChanges(
+        tokens,
+        calendar.provider_calendar_id,
+        calendar.sync_token ?? undefined,
+        window,
+      );
+    } catch (error) {
+      // The token expired (410 Gone, Graph's syncStateNotFound): sync the whole window again.
+      if (!isProviderError(error, 'CALENDAR_SYNC_TOKEN_GONE') || full) throw error;
+      full = true;
+      changes = await provider.listChanges(tokens, calendar.provider_calendar_id, undefined, window);
+    }
+  } catch (error) {
+    if (!isProviderError(error)) throw error;
+    return { kind: 'failed', code: error.code };
+  }
+  const synced = { ...connection, calendarId: calendar.provider_calendar_id, syncs: calendar.sync };
+  const { events } = changes;
+  for (let start = 0; start < events.length; start += APPLY_BATCH) {
+    const batch = events.slice(start, start + APPLY_BATCH);
+    const { result } = await runWrite(
+      scope,
+      (context) => applyEvents(context, synced, batch, deps.isFreeDomain),
+      deps.hooks,
+    );
+    if (result === 'gone') return { kind: 'off' };
+  }
+  if (full) {
+    // The provider listed every event in the window: this calendar's copies of any other there are gone.
+    const listed = events.filter((event) => event.status !== 'cancelled').map((event) => event.id);
+    const busy = events.filter(isBusyOnly).map((event) => event.id);
+    await runWrite(
+      scope,
+      async (context) => {
+        context.record({
+          meetings: await dropSources(context.tx, connection.id, calendar.provider_calendar_id, {
+            allBut: listed,
+            ...window,
+          }),
+        });
+        await dropBusyTimes(context.tx, connection.id, calendar.provider_calendar_id, { allBut: busy, ...window });
+      },
+      deps.hooks,
+    );
+  }
+  // Only now, with every batch committed, the next sync token; and the calendar's own sync failure, if any, healed.
+  const stored = await inWorkspace(scope, (tx) =>
+    tx.execute(sql`
+      update calendar_calendars set sync_state = ${JSON.stringify({ syncToken: changes.nextSyncToken })}::jsonb,
+        last_error = case when last_error ->> 'source' = 'sync' then null else last_error end,
+        failing_since = case when last_error ->> 'source' = 'sync' then null else failing_since end
+      where id = ${calendar.id}::uuid and (sync or show_in_week)
+    `),
+  );
+  if (stored.rowCount === 0) return { kind: 'off' };
+  return { kind: 'synced', full, events: events.length };
+}
+
+/**
+ * Syncs one connection: its calendars listed when due, then each pulled calendar's changes since its last sync,
+ * or its whole window. Expected provider failures are recorded (on the connection, or on the one calendar) and
+ * answered as `retry` (or `stopped` for a refused grant, which marks the connection `expired`); anything else
+ * throws, and the task's own retries take it.
  */
 export async function syncConnection(deps: CalendarSyncDeps, input: CalendarSyncInput): Promise<CalendarSyncOutcome> {
   const now = deps.now?.() ?? new Date();
@@ -257,8 +380,9 @@ export async function syncConnection(deps: CalendarSyncDeps, input: CalendarSync
   const found = await inWorkspace(scope, (tx) =>
     tx.execute<ConnectionRow>(sql`
       select id::text as id, member_id::text as member_id, provider, account_email, status, tokens,
-        sync_state #>> ${`{${PRIMARY_CALENDAR},syncToken}`} as sync_token, failing_since::text as failing_since,
-        channel,
+        failing_since::text as failing_since,
+        (calendars_listed_at is null
+          or calendars_listed_at <= now() - make_interval(secs => ${CALENDARS_LIST_EVERY_MS / 1000})) as list_due,
         exists (select 1 from workspaces w where w.id = calendar_connections.workspace_id and w.deleted_at is not null)
           as workspace_deleted
       from calendar_connections where id = ${input.connectionId}::uuid
@@ -280,72 +404,133 @@ export async function syncConnection(deps: CalendarSyncDeps, input: CalendarSync
   if (!(SYNCING_STATUSES as readonly string[]).includes(row.status)) return { kind: 'stopped', reason: 'not-syncing' };
   if (provider === undefined) return { kind: 'stopped', reason: 'no-provider' };
   const window = syncWindow(now);
+  const connection = { id: row.id, memberId: row.member_id };
+  const failed = async (code: CalendarErrorCode): Promise<CalendarSyncOutcome> => {
+    const since = await recordFailure(scope, row.id, code);
+    if (code === 'CALENDAR_AUTH_REVOKED') return { kind: 'stopped', reason: 'expired' };
+    return { kind: 'retry', code, nextInMs: retryDelay(since, now) };
+  };
 
-  let changes: { readonly events: readonly ProviderEvent[]; readonly nextSyncToken: string };
   let tokens: CalendarTokens;
-  let full = row.sync_token === null;
   try {
     tokens = await liveTokens(deps, scope, provider, row, binding, now);
-    try {
-      changes = await provider.listChanges(tokens, PRIMARY_CALENDAR, row.sync_token ?? undefined, window);
-    } catch (error) {
-      // The token expired (410 Gone): sync the whole window again.
-      if (!isProviderError(error, 'CALENDAR_SYNC_TOKEN_GONE') || full) throw error;
-      full = true;
-      changes = await provider.listChanges(tokens, PRIMARY_CALENDAR, undefined, window);
-    }
   } catch (error) {
     if (!isProviderError(error)) throw error;
-    const since = await recordFailure(scope, row.id, error.code);
-    if (error.code === 'CALENDAR_AUTH_REVOKED') return { kind: 'stopped', reason: 'expired' };
-    return { kind: 'retry', code: error.code, nextInMs: retryDelay(since, now) };
+    return failed(error.code);
+  }
+  if (row.list_due) {
+    try {
+      const listed = await provider.listCalendars(tokens);
+      const stored = await runWrite(
+        scope,
+        async (context) => {
+          const result = await storeCalendars(context, connection, listed);
+          context.record({ meetings: result.meetings });
+          return result;
+        },
+        deps.hooks,
+      );
+      if (stored.result.meetings.length > 0) deps.onStored?.();
+    } catch (error) {
+      if (!isProviderError(error)) throw error;
+      if (error.code === 'CALENDAR_AUTH_REVOKED') return failed(error.code);
+      // A grant from before milestone 5 can't list calendars (Google's calendar list scope): the calendars it has
+      // keep syncing, its main one says to reconnect, and the listing is tried again tomorrow. A passing failure
+      // leaves the listing due.
+      if (error.code === 'CALENDAR_AUTH' || error.code === 'CALENDAR_SCOPE_DECLINED') {
+        await inWorkspace(scope, async (tx) => {
+          await tx.execute(sql`update calendar_connections set calendars_listed_at = now() where id = ${row.id}::uuid`);
+          await tx.execute(sql`
+            update calendar_calendars set last_error = jsonb_build_object('code', 'CALENDAR_SCOPE_DECLINED',
+              'message', ${LIST_REFUSED}::text, 'source', 'list',
+              'at', to_char(now() at time zone 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"'))
+            where connection_id = ${row.id}::uuid and is_primary and last_error is null
+          `);
+        });
+      }
+    }
   }
 
-  const { events } = changes;
-  const connection = { id: row.id, memberId: row.member_id };
-  for (let start = 0; start < events.length; start += APPLY_BATCH) {
-    const batch = events.slice(start, start + APPLY_BATCH);
-    const { result } = await runWrite(
-      scope,
-      (context) => applyEvents(context, connection, batch, deps.isFreeDomain),
-      deps.hooks,
-    );
-    if (result === 'gone') return { kind: 'stopped', reason: 'gone' };
+  const calendars = (
+    await inWorkspace(scope, (tx) =>
+      tx.execute<CalendarSyncRow>(sql`
+        select id::text as id, provider_calendar_id, name, sync, show_in_week,
+          sync_state ->> 'syncToken' as sync_token, channel
+        from calendar_calendars where connection_id = ${row.id}::uuid
+        order by is_primary desc, name, id
+      `),
+    )
+  ).rows;
+  const pulled = calendars.filter(isPulled);
+  const pushAddress = deps.pushAddresses?.[row.provider] ?? (row.provider === 'google' ? deps.pushAddress : undefined);
+  let events = 0;
+  let full = false;
+  let failures = 0;
+  let relist = false;
+  let lastCode: CalendarErrorCode | undefined;
+  for (const calendar of pulled) {
+    const run = await syncCalendar(deps, scope, provider, tokens, connection, calendar, window);
+    if (run.kind === 'synced') {
+      events += run.events;
+      full ||= run.full;
+      // Push (AC-602, AC-622, AC-1003): a channel opened once the calendar is current, and renewed before it runs out.
+      const channel = storedChannel(calendar.channel);
+      if (pushAddress !== undefined && needsChannel(channel, now)) {
+        await openChannel(scope, {
+          provider,
+          tokens,
+          calendarRowId: calendar.id,
+          calendarId: calendar.provider_calendar_id,
+          address: pushAddress,
+          previous: channel,
+        });
+      }
+      continue;
+    }
+    if (run.kind === 'off') continue;
+    // A refused grant is the whole account's.
+    if (
+      run.code === 'CALENDAR_AUTH_REVOKED' ||
+      run.code === 'CALENDAR_AUTH' ||
+      run.code === 'CALENDAR_SCOPE_DECLINED'
+    ) {
+      return failed(run.code);
+    }
+    failures += 1;
+    lastCode = run.code;
+    if (run.code === 'CALENDAR_GONE') relist = true;
+    await recordCalendarFailure(scope, calendar.id, run.code);
   }
-  if (full) {
-    // The provider listed every event in the window: this connection's copies of any other there are gone.
-    const listed = events.filter((event) => event.status !== 'cancelled').map((event) => event.id);
-    const busy = events.filter(isBusyOnly).map((event) => event.id);
-    await runWrite(
-      scope,
-      async (context) => {
-        context.record({ meetings: await dropSources(context.tx, row.id, { allBut: listed, ...window }) });
-        await dropBusyTimes(context.tx, row.id, { allBut: busy, ...window });
-      },
-      deps.hooks,
+  // A calendar no longer pulled stops its channel at the provider.
+  for (const calendar of calendars.filter((each) => !isPulled(each))) {
+    const channel = storedChannel(calendar.channel);
+    if (channel === undefined) continue;
+    await stopChannel(provider, tokens, channel);
+    await inWorkspace(scope, (tx) =>
+      tx.execute(sql`update calendar_calendars set channel = null where id = ${calendar.id}::uuid`),
     );
   }
-  // Only now, with every batch committed, the next sync token.
+  if (relist) {
+    // A calendar the provider no longer has: the next run lists the account's calendars again.
+    await inWorkspace(scope, (tx) =>
+      tx.execute(sql`update calendar_connections set calendars_listed_at = null where id = ${row.id}::uuid`),
+    );
+  }
+  // Every pulled calendar failing is the connection's failure: it backs off, and fails after 6 hours (AC-620).
+  if (pulled.length > 0 && failures === pulled.length && lastCode !== undefined) return failed(lastCode);
   const stored = await inWorkspace(scope, (tx) =>
     tx.execute(sql`
       update calendar_connections set
-        sync_state = jsonb_set(sync_state, ${`{${PRIMARY_CALENDAR}}`}, ${JSON.stringify({ syncToken: changes.nextSyncToken })}::jsonb),
         status = 'connected', last_synced_at = now(), last_error = null, failing_since = null,
         updated_at = now(), updated_by_type = 'calendar', updated_by_id = null, updated_by_member_id = null
       where id = ${row.id}::uuid and status in ('syncing', 'connected', 'failed')
     `),
   );
   if (stored.rowCount === 0) return { kind: 'stopped', reason: 'gone' };
-  // Push (AC-602, AC-622): a channel opened once the calendar is current, and renewed before it runs out.
-  const channel = storedChannel(row.channel);
-  if (deps.pushAddress !== undefined && needsChannel(channel, now)) {
-    await openChannel(scope, {
-      provider,
-      tokens,
-      connectionId: row.id,
-      address: deps.pushAddress,
-      previous: channel,
-    });
-  }
-  return { kind: 'synced', full, events: events.length, nextInMs: POLL_INTERVAL_MS };
+  return {
+    kind: 'synced',
+    full,
+    events,
+    nextInMs: relist ? RETRY_FIRST_MS : POLL_INTERVAL_MS,
+  };
 }

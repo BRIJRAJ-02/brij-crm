@@ -1,0 +1,24 @@
+/* AsideLayout: the aside at the start in a size-measure column, space-16 from
+   the main column, which takes the rest. Without the aside (folded, or on a
+   narrow page, where it opens as a sheet) the main column takes the width. */
+@layer components {
+  .root {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    gap: var(--space-16);
+    align-items: start;
+    min-inline-size: 0;
+  }
+
+  .root[data-aside] {
+    grid-template-columns: var(--size-measure) minmax(0, 1fr);
+  }
+
+  .aside {
+    min-inline-size: 0;
+  }
+
+  .main {
+    min-inline-size: 0;
+  }
+}

@@ -223,7 +223,7 @@ function SetupCard({ slug, facts }: { readonly slug: string; readonly facts: Set
   const open = (id: SetupStepId) => {
     switch (id) {
       case 'calendar':
-        void navigate({ to: '/w/$slug/settings/account/calendars', params: { slug } });
+        void navigate({ to: '/w/$slug/settings/scheduling/calendars', params: { slug } });
         return;
       case 'bookingPage':
         void navigate({ to: '/w/$slug/booking-pages', params: { slug } });
@@ -279,7 +279,7 @@ function SetupCard({ slug, facts }: { readonly slug: string; readonly facts: Set
 function hrefOf(slug: string, id: SetupStepId): string {
   switch (id) {
     case 'calendar':
-      return `/w/${slug}/settings/account/calendars`;
+      return `/w/${slug}/settings/scheduling/calendars`;
     case 'bookingPage':
       return `/w/${slug}/booking-pages`;
     case 'form':

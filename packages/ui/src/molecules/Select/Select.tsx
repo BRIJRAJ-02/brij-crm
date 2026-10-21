@@ -4,8 +4,10 @@ import {
   Button as AriaButton,
   FieldError,
   Label,
+  Header,
   ListBox,
   ListBoxItem,
+  ListBoxSection,
   Select as AriaSelect,
   SelectValue,
   Text,
@@ -42,6 +44,11 @@ export interface SelectItem {
   readonly short?: string;
   /** Set apart under a hairline: a choice unlike the rest, last in the list ("Don't add to the CRM" after the objects). */
   readonly isApart?: boolean;
+  /**
+   * The heading it sits under in the list: options with the same group follow one heading, in the order they come
+   * (a booking page's calendars, by account). Options without one come first, under no heading.
+   */
+  readonly group?: string;
 }
 
 /** Props for Select. */
@@ -275,7 +282,55 @@ export function Select({
     return item === undefined ? contains(textValue, input) : filter(item, input);
   };
 
-  const list = (
+  const option = (item: SelectItem) => (
+    <ListBoxItem
+      key={item.id}
+      id={item.id}
+      textValue={item.label}
+      className={styles.option}
+      data-clear={item.id === CLEAR || item.id === CREATE || undefined}
+      data-apart={item.isApart === true || undefined}
+    >
+      {({ isSelected }) => (
+        <>
+          <Face item={item} optionStyle={item.id === CLEAR || item.id === CREATE ? 'plain' : optionStyle} />
+          {item.description !== undefined && <span className={styles.description}>{item.description}</span>}
+          {isSelected && (
+            <span className={styles.check}>
+              <Icon name="check" size="sm" />
+            </span>
+          )}
+        </>
+      )}
+    </ListBoxItem>
+  );
+  // Grouped options: those with no group first, then a headed section per group, in the order they come.
+  const groups = [...new Set(options.flatMap((item) => (item.group === undefined ? [] : [item.group])))];
+  const grouped =
+    groups.length === 0 ? undefined : (
+      <ListBox
+        ref={listRef}
+        className={styles.list}
+        renderEmptyState={() => <span className={styles.empty}>{strings.noMatches}</span>}
+      >
+        {options
+          .filter(
+            (item) => item.group === undefined && item.isApart !== true && item.id !== CLEAR && item.id !== CREATE,
+          )
+          .map(option)}
+        {groups.map((group) => (
+          <ListBoxSection key={group} id={`group:${group}`} className={styles.section}>
+            <Header className={styles.groupHeading}>{group}</Header>
+            {options.filter((item) => item.group === group).map(option)}
+          </ListBoxSection>
+        ))}
+        {/* A choice set apart, then Clear and Create, last, as in an ungrouped list. */}
+        {options.filter((item) => item.group === undefined && item.isApart === true).map(option)}
+        {options.filter((item) => item.id === CLEAR || item.id === CREATE).map(option)}
+      </ListBox>
+    );
+
+  const list = grouped ?? (
     <ListBox
       ref={listRef}
       className={styles.list}

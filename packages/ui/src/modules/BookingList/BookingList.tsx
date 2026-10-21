@@ -3,6 +3,8 @@ import { Badge } from '../../atoms/Badge/Badge.tsx';
 import { Button } from '../../atoms/Button/Button.tsx';
 import { Icon } from '../../atoms/Icon/Icon.tsx';
 import { Link } from '../../atoms/Link/Link.tsx';
+import { StatusDot } from '../../atoms/StatusDot/StatusDot.tsx';
+import type { Hue } from '../../hue.ts';
 import styles from './BookingList.module.css';
 import { strings } from './strings.ts';
 
@@ -26,6 +28,13 @@ export interface BookingListRow {
   readonly guestName?: string;
   /** The guest's person page; only read with `guestName` (a row with no guest links nobody). */
   readonly guestHref?: string;
+  /** Who else is in it, as chips (a calendar event's attendees, a booking's guests), and how many more. */
+  readonly attendees?: readonly string[];
+  readonly moreAttendees?: number;
+  /** The calendar it is on, by its colour and name (a synced calendar event). */
+  readonly calendar?: { readonly name: string; readonly hue: Hue };
+  /** Where it came from, as a small tag ("Booked via Intro call"). */
+  readonly via?: string;
   /** A state worth saying ("Cancelled"). */
   readonly badge?: string;
   /** The row's actions at its end (Cancel, an Edit menu). */
@@ -56,11 +65,21 @@ export interface BookingListProps {
   readonly placement?: 'page' | 'card';
 }
 
+/** Whether a row has anything for its second line. */
+const hasDetails = (row: BookingListRow) =>
+  row.join !== undefined ||
+  row.calendar !== undefined ||
+  row.via !== undefined ||
+  row.guestName !== undefined ||
+  (row.attendees !== undefined && row.attendees.length > 0) ||
+  row.note !== undefined;
+
 /**
  * Bookings as rows under day bands (spec 0025, the Cal.com alignment, 5.
- * Bookings list): a date column with the day in bold, the time muted and the
- * meeting's Join link; the title (a button that opens it), the visitor's note
- * and "You and <guest>"; and the row's actions at the end.
+ * Bookings list), two lines a row: a date column with the day in bold over the
+ * time; the title (a button that opens it) over one muted line of the rest
+ * (Join, calendar, where it came from, who, the note); and the row's actions
+ * at the end.
  */
 export function BookingList({ label, groups, onOpen, emptyState, placement = 'page' }: BookingListProps) {
   if (groups.every((group) => group.rows.length === 0)) return <>{emptyState}</>;
@@ -75,7 +94,6 @@ export function BookingList({ label, groups, onOpen, emptyState, placement = 'pa
                 <div className={styles.when}>
                   <span className={styles.date}>{row.date}</span>
                   {row.time !== '' && <span className={styles.time}>{row.time}</span>}
-                  {placement !== 'card' && <Join join={row.join} />}
                 </div>
                 <div className={styles.main}>
                   <div className={styles.titleLine}>
@@ -84,13 +102,38 @@ export function BookingList({ label, groups, onOpen, emptyState, placement = 'pa
                     </Button>
                     {row.badge !== undefined && <Badge text={row.badge} />}
                   </div>
-                  {row.note !== undefined && <span className={styles.note}>{strings.quoted(row.note)}</span>}
-                  {placement === 'card' && <Join join={row.join} />}
-                  {row.guestName !== undefined && (
-                    <span className={styles.who}>
-                      {strings.youAnd}{' '}
-                      {row.guestHref === undefined ? row.guestName : <Link href={row.guestHref}>{row.guestName}</Link>}
-                    </span>
+                  {hasDetails(row) && (
+                    // Everything else on one muted line: Join first so it never gets cut off, then who, then the rest.
+                    <div className={styles.details}>
+                      {row.join !== undefined && (
+                        <span className={styles.join}>
+                          <Icon name="video" size="sm" />
+                          <Link href={row.join.href}>{strings.join(row.join.provider)}</Link>
+                        </span>
+                      )}
+                      {row.guestName !== undefined && (
+                        <span className={`${styles.text} ${styles.who}`}>
+                          {strings.youAnd}{' '}
+                          {row.guestHref === undefined ? (
+                            row.guestName
+                          ) : (
+                            <Link href={row.guestHref}>{row.guestName}</Link>
+                          )}
+                        </span>
+                      )}
+                      {row.calendar !== undefined && (
+                        <span className={styles.text}>
+                          <StatusDot hue={row.calendar.hue}>{row.calendar.name}</StatusDot>
+                        </span>
+                      )}
+                      {row.via !== undefined && <Badge text={row.via} />}
+                      {row.attendees !== undefined && row.attendees.length > 0 && (
+                        <span className={styles.text}>
+                          {strings.attendeesLine(row.attendees, row.moreAttendees ?? 0)}
+                        </span>
+                      )}
+                      {row.note !== undefined && <span className={styles.text}>{strings.quoted(row.note)}</span>}
+                    </div>
                   )}
                 </div>
                 {row.actions !== undefined && <div className={styles.actions}>{row.actions}</div>}
@@ -100,16 +143,5 @@ export function BookingList({ label, groups, onOpen, emptyState, placement = 'pa
         </div>
       ))}
     </section>
-  );
-}
-
-/** A meeting's Join link with its provider: in the date column, or under the title in a card (no room beside a time). */
-function Join({ join }: { readonly join: BookingListRow['join'] }) {
-  if (join === undefined) return null;
-  return (
-    <span className={styles.join}>
-      <Icon name="video" size="sm" />
-      <Link href={join.href}>{strings.join(join.provider)}</Link>
-    </span>
   );
 }

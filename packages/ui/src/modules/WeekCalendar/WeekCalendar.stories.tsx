@@ -482,3 +482,84 @@ export const DrawByDragging: Story = {
     );
   },
 };
+
+/** A Thursday packed full, laid out like Google Calendar. */
+function crowded(): WeekCalendarBlock[] {
+  const thursday = '2026-10-08';
+  const block = (
+    id: string,
+    from: number,
+    to: number,
+    title: string,
+    kind: WeekCalendarBlock['kind'],
+    hue?: WeekCalendarBlock['hue'],
+  ): WeekCalendarBlock => ({
+    id,
+    dayKey: thursday,
+    startMinute: from * 60,
+    endMinute: to * 60,
+    title,
+    time: `${String(from)}:00`,
+    kind,
+    ...(hue === undefined ? {} : { hue }),
+  });
+  return [
+    // Side by side: they start together.
+    block('planning', 9, 11, 'Planning', 'event', 'green'),
+    block('ada', 9, 10, 'Ada Lovelace', 'booking'),
+    // Indented over Planning: it starts an hour after.
+    block('review', 10, 11, 'Design review', 'event', 'purple'),
+    // Six at once: two lanes and "+4".
+    block('one', 13, 14, 'One', 'event', 'blue'),
+    block('two', 13, 14, 'Two', 'event', 'orange'),
+    block('three', 13, 14, 'Three', 'event', 'sky'),
+    block('four', 13, 14, 'Four', 'booking'),
+    block('five', 13, 14, 'Five', 'event', 'red'),
+    block('six', 13, 14, 'Six', 'event', 'lime'),
+  ];
+}
+
+/** Overlaps: side by side when they start together, indented over an earlier one when they start well after it, and "+N" when a lane would be too narrow; the "+N" list opens each block's card. */
+export const Overlap: Story = {
+  // Its screenshot baseline comes from CI's run in the pinned image.
+  parameters: { crm: { screenshot: false } },
+  render: function Render(args) {
+    const [openId, setOpenId] = useState<string>();
+    return (
+      <Stage width="fill">
+        <WeekCalendar
+          {...args}
+          days={days()}
+          blocks={crowded()}
+          scrollToMinute={9 * 60}
+          openId={openId}
+          detail={<span>{openId}</span>}
+          onOpen={setOpenId}
+          onClose={() => setOpenId(undefined)}
+        />
+      </Stage>
+    );
+  },
+  play: async ({ canvas, canvasElement }) => {
+    const day = canvas.getByRole('group', { name: 'Thursday, 8 October, 9 items' });
+    const review = within(day).getByRole('button', { name: 'Design review, 10:00' });
+    await expect(review).toHaveAttribute('data-nested');
+    await expect(within(day).queryByRole('button', { name: 'Five, 13:00' })).not.toBeInTheDocument();
+    const chip = within(day).getByRole('button', { name: '4 more items at 13:00' });
+    await userEvent.click(chip);
+    const body = within(canvasElement.ownerDocument.body);
+    await userEvent.click(await body.findByRole('menuitem', { name: /Five/ }));
+    await waitFor(() => expect(body.getByRole('dialog', { name: 'Details' })).toBeInTheDocument());
+    // While a folded block's card is open, its chip shows as open.
+    await expect(chip).toHaveAttribute('aria-expanded', 'true');
+    // Escape: focus goes back to the chip, the list item it came from being gone.
+    await userEvent.keyboard('{Escape}');
+    await waitFor(() => expect(body.queryByRole('dialog', { name: 'Details' })).not.toBeInTheDocument());
+    await waitFor(() => expect(chip).toHaveFocus());
+    // From the keyboard: Enter opens the list on its first item, and Enter on it opens that block's card.
+    await userEvent.keyboard('{Enter}');
+    await waitFor(() => expect(body.getByRole('menuitem', { name: /Three/ })).toHaveFocus());
+    await userEvent.keyboard('{Enter}');
+    await waitFor(() => expect(body.getByRole('dialog', { name: 'Details' })).toHaveTextContent('three'));
+  },
+};

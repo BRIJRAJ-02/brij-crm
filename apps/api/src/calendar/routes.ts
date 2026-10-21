@@ -26,6 +26,15 @@
 // only key (`takeCalendarNotice`). It answers 200 with no body whatever the
 // notice was, so a caller learns nothing, and a notice that queued a sync
 // pokes the worker. A channel sent more than 120 a minute is told to wait.
+//
+// Outlook (milestone 4, AC-1006, AC-1008) has the same three addresses under
+// `/api/calendar/microsoft/`: the connect leg is the same, through Microsoft's
+// consent screen, and the state names the provider, so a state started for one
+// can't finish the other. Its notify address first answers Graph's validation
+// request (`?validationToken=`, echoed as plain text), then takes notices from
+// a JSON body: each is checked by its subscription id and `clientState` (the
+// channel's token), and a lifecycle notice marks the subscription for renewal.
+// It answers 202 whatever the notices were.
 import { randomBytes, timingSafeEqual } from 'node:crypto';
 import { connectCalendar, isProviderError, isRefusal, signValue, takeCalendarNotice, verifyValue } from '@crm/core';
 import type { Database } from '@crm/db';
@@ -37,13 +46,22 @@ import { errorFields, log } from '../log.ts';
 import type { Analytics } from '../monitoring/posthog.ts';
 import type { PublicLimiter } from '../public/limits.ts';
 import type { WakeRelay } from '../realtime/wake.ts';
-import type { CalendarServices } from './services.ts';
+import type { CalendarServices, ConnectProvider } from './services.ts';
 
 /** The cookie holding the nonce of a connect under way. */
 export const STATE_COOKIE = 'crm_calendar_state';
 
 /** Notices one caller may post a minute. */
 export const NOTICE_LIMIT = { max: 120, windowMs: 60_000 } as const;
+
+/**
+ * Graph's notice posts from one address in a minute, before any is parsed: generous, since Microsoft sends every
+ * tenant's notices from a few addresses (a post refused here is retried by Graph), but a ceiling on forged posts.
+ */
+export const NOTIFY_POST_LIMIT = { max: 1_200, windowMs: 60_000 } as const;
+
+/** A Graph subscription id: a GUID. Anything else is refused before the database is asked. */
+const SUBSCRIPTION_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 /** The state's version: a later scheme reads its own. */
 const STATE_VERSION = 'cs1';
@@ -93,6 +111,12 @@ type RouteContext = Context<{
 /** A workspace address as the door takes it: anything else sends nobody anywhere. */
 const SLUG = /^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/;
 
+/** Notices one Graph post may carry that are read; the rest are dropped (Graph batches far fewer). */
+const NOTICES_MAX = 50;
+
+/** The longest validation token echoed back. */
+const VALIDATION_MAX = 1024;
+
 /** The page in the app a connect for `slug` comes back to, before what happened is added. */
 function returnPath(slug: string, then: ConnectReturn): string {
   return then === 'welcome' ? `/welcome?step=calendar&workspace=${slug}` : `/w/${slug}/settings/calendar`;
@@ -132,12 +156,15 @@ async function memberIn(
 /** The connect routes' two handlers. */
 export function createCalendarRoutes(deps: CalendarRouteDeps) {
   return {
-    /** `GET /api/calendar/google/start?workspace=<slug>`. */
-    async start(c: RouteContext): Promise<Response> {
+    /** `GET /api/calendar/<provider>/start?workspace=<slug>`. */
+    async start(c: RouteContext, provider: ConnectProvider = 'google'): Promise<Response> {
       const slug = c.req.query('workspace');
       const then = returnOf(c.req.query('then'));
       if (slug === undefined || !SLUG.test(slug)) return c.redirect(settingsUrl(deps.appUrl, undefined, 'failed'));
-      if (deps.calendar === undefined) return c.redirect(settingsUrl(deps.appUrl, slug, 'off', then));
+      const adapter = deps.calendar?.providers[provider];
+      if (deps.calendar === undefined || adapter === undefined) {
+        return c.redirect(settingsUrl(deps.appUrl, slug, 'off', then));
+      }
       const member = await memberIn(deps, c, slug);
       if (member === undefined) {
         const signIn = new URL('/sign-in', new URL(deps.appUrl).origin);
@@ -146,7 +173,7 @@ export function createCalendarRoutes(deps: CalendarRouteDeps) {
       }
       const nonce = randomBytes(18).toString('base64url');
       const memberId = member.scope.actor.id ?? '';
-      const payload = { w: slug, m: memberId, n: nonce, ...(then === 'welcome' ? { t: then } : {}) };
+      const payload = { w: slug, m: memberId, n: nonce, p: provider, ...(then === 'welcome' ? { t: then } : {}) };
       const state = signValue(deps.calendar.stateKey, STATE_VERSION, payload, STATE_SECONDS);
       setCookie(c, STATE_COOKIE, nonce, {
         path: '/api/calendar/',
@@ -155,7 +182,60 @@ export function createCalendarRoutes(deps: CalendarRouteDeps) {
         secure: deps.secure,
         maxAge: STATE_SECONDS,
       });
-      return c.redirect(deps.calendar.providers.google.authorizeUrl(state, deps.calendar.redirectUri));
+      return c.redirect(adapter.authorizeUrl(state, deps.calendar.redirectUris[provider]));
+    },
+
+    /**
+     * `POST /api/calendar/microsoft/notify`: Graph's validation request, or its change and lifecycle notices
+     * (AC-1008), by each notice's subscription id and client state alone.
+     */
+    async notifyMicrosoft(c: RouteContext): Promise<Response> {
+      const validation = c.req.query('validationToken');
+      // Outlook off: nothing here answers, not even the echo.
+      if (deps.calendar?.providers.microsoft === undefined) return c.body(null, validation === undefined ? 202 : 404);
+      if (validation !== undefined) {
+        // Graph waits for the token back as plain text before it makes the subscription. Never sniffed as a page:
+        // it is text a stranger chose, echoed on the app's origin.
+        if (validation.length > VALIDATION_MAX || !/^[\x20-\x7e]*$/.test(validation)) return c.body(null, 400);
+        return c.text(validation, 200, {
+          'content-type': 'text/plain; charset=utf-8',
+          'x-content-type-options': 'nosniff',
+          'content-security-policy': "default-src 'none'",
+        });
+      }
+      if (!deps.limiter(`calendar-notify-post:${c.get('clientIp') ?? 'unknown'}`, NOTIFY_POST_LIMIT).allowed)
+        return c.body(null, 429);
+      let body: unknown;
+      try {
+        body = await c.req.json();
+      } catch {
+        return c.body(null, 202);
+      }
+      const notices = Array.isArray((body as { value?: unknown } | null)?.value)
+        ? (body as { value: unknown[] }).value.slice(0, NOTICES_MAX)
+        : [];
+      let queued = false;
+      let refused = 0;
+      for (const notice of notices) {
+        if (typeof notice !== 'object' || notice === null) continue;
+        const { subscriptionId, clientState, lifecycleEvent } = notice as Record<string, unknown>;
+        if (typeof subscriptionId !== 'string' || !SUBSCRIPTION_ID.test(subscriptionId)) {
+          refused += 1;
+          continue;
+        }
+        if (!deps.limiter(`calendar-notice:${subscriptionId.slice(0, 64)}`, NOTICE_LIMIT).allowed) continue;
+        const outcome = await takeCalendarNotice(deps.db, {
+          channelId: subscriptionId,
+          token: typeof clientState === 'string' ? clientState : undefined,
+          state: typeof lifecycleEvent === 'string' ? lifecycleEvent : 'exists',
+        });
+        if (outcome === 'queued') queued = true;
+        else if (outcome === 'refused') refused += 1;
+      }
+      // One line a post, however many of its notices were refused.
+      if (refused > 0) log.warn('calendar.notice.refused', { requestId: c.get('requestId'), count: refused });
+      if (queued) deps.wakeRelay();
+      return c.body(null, 202);
     },
 
     /** `POST /api/calendar/google/notify`: Google's change notice, by its headers alone. */
@@ -174,8 +254,8 @@ export function createCalendarRoutes(deps: CalendarRouteDeps) {
       return c.body(null, 200);
     },
 
-    /** `GET /api/calendar/google/callback?code=…&state=…` (or `error=…`). */
-    async callback(c: RouteContext): Promise<Response> {
+    /** `GET /api/calendar/<provider>/callback?code=…&state=…` (or `error=…`). */
+    async callback(c: RouteContext, provider: ConnectProvider = 'google'): Promise<Response> {
       const nonce = getCookie(c, STATE_COOKIE);
       // Single use: whatever happens next, this browser's state is spent.
       deleteCookie(c, STATE_COOKIE, { path: '/api/calendar/', secure: deps.secure });
@@ -190,8 +270,18 @@ export function createCalendarRoutes(deps: CalendarRouteDeps) {
         typeof payload?.n === 'string' &&
         payload.n.length === nonce.length &&
         timingSafeEqual(Buffer.from(payload.n), Buffer.from(nonce));
-      if (calendar === undefined) return c.redirect(settingsUrl(deps.appUrl, slug, 'off', then));
-      if (payload === undefined || slug === undefined || !sameBrowser || typeof payload.m !== 'string') {
+      const adapter = calendar?.providers[provider];
+      if (calendar === undefined || adapter === undefined)
+        return c.redirect(settingsUrl(deps.appUrl, slug, 'off', then));
+      // A state from before Outlook names no provider: it was Google's.
+      const statedProvider = typeof payload?.p === 'string' ? payload.p : 'google';
+      if (
+        payload === undefined ||
+        slug === undefined ||
+        !sameBrowser ||
+        typeof payload.m !== 'string' ||
+        statedProvider !== provider
+      ) {
         log.warn('calendar.connect.refused', { requestId: c.get('requestId'), reason: 'state' });
         return c.redirect(settingsUrl(deps.appUrl, slug, 'failed', then));
       }
@@ -207,12 +297,11 @@ export function createCalendarRoutes(deps: CalendarRouteDeps) {
       }
       let result: ConnectResult = 'connected';
       try {
-        const exchanged = await calendar.providers.google.exchangeCode(code, calendar.redirectUri);
+        const exchanged = await adapter.exchangeCode(code, calendar.redirectUris[provider]);
         await commitWrite(
           { wakeRelay: deps.wakeRelay, analytics: deps.analytics, user: { id: member.userId } },
           { mutationId: crypto.randomUUID() },
-          (hooks) =>
-            connectCalendar(member.scope, { provider: 'google', exchanged, tokenKey: calendar.tokenKey }, hooks),
+          (hooks) => connectCalendar(member.scope, { provider, exchanged, tokenKey: calendar.tokenKey }, hooks),
         );
       } catch (error) {
         if (isProviderError(error)) {

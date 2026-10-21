@@ -1,4 +1,5 @@
 import { CheckboxButton, CheckboxField, FieldError, Text } from 'react-aria-components';
+import type { Hue } from '../../hue.ts';
 import { Icon } from '../Icon/Icon.tsx';
 import { VisuallyHidden } from '../VisuallyHidden/VisuallyHidden.tsx';
 import styles from './Checkbox.module.css';
@@ -27,6 +28,11 @@ export interface CheckboxProps {
    */
   readonly slot?: 'selection';
   readonly value?: string;
+  /**
+   * Draws the box in a data hue instead of the accent: a calendar's colour in the calendars list, where the box is
+   * both the switch and the calendar's key.
+   */
+  readonly hue?: Hue;
 }
 
 /**
@@ -48,6 +54,7 @@ export function Checkbox({
   name,
   value,
   slot,
+  hue,
 }: CheckboxProps) {
   return (
     <CheckboxField
@@ -63,7 +70,7 @@ export function Checkbox({
       {...(name === undefined ? {} : { name })}
       {...(value === undefined ? {} : { value })}
     >
-      <CheckboxButton className={styles.root}>
+      <CheckboxButton className={styles.root} data-hue={hue}>
         {({ isSelected: checked, isIndeterminate: partial }) => (
           <>
             <span className={styles.box} aria-hidden="true">

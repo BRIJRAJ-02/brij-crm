@@ -7,6 +7,13 @@
 // (rewritten). A meeting goes with its last source. Every meeting touched
 // lands in the change with every record it showed on before or after, so the
 // outbox stores one `meetings` row for the batch (AC-610).
+//
+// Milestone 5: a batch is one calendar's, and a source is that calendar's
+// copy. A calendar is pulled when it syncs meetings or shows on the member's
+// week; only a meeting some syncing calendar holds (or that the CRM made)
+// shows on records (AC-1002), and only a syncing calendar makes people for
+// unknown attendees, so a calendar the member only shows on their week never
+// reaches the CRM's records.
 import { sql } from 'drizzle-orm';
 import { EmailTimeZone } from '@crm/contracts/emails';
 import type { WorkspaceTx } from '@crm/db';
@@ -26,10 +33,17 @@ import {
 import { createsUnknownPeople, fileUnknownAttendees } from './people.ts';
 import type { ProviderEvent } from './provider.ts';
 
-/** The connection a batch syncs for: what the writes need of it. */
+/** The calendar a batch syncs for: its connection, member and provider calendar id, and what it may do. */
 export interface SyncedConnection {
+  /** The connection's id. */
   readonly id: string;
   readonly memberId: string;
+  /** The provider's calendar id. */
+  readonly calendarId: string;
+  /** Its meetings reach records (the calendar's Sync meetings, AC-1002). */
+  readonly syncs: boolean;
+  /** The event is one `createEvent` made (milestone 3): its copy is marked, and it shows on records. */
+  readonly madeByCrm?: boolean;
 }
 
 /** The longest title, location and video link kept (the table's checks). */
@@ -102,7 +116,7 @@ const EVENT_ID_MAX = 1024;
  * of every other event in the batch (cancelled, declined, now with someone
  * invited, or shown as free).
  */
-async function writeBusyTimes(context: WriteContext, connectionId: string, events: readonly ProviderEvent[]) {
+async function writeBusyTimes(context: WriteContext, calendar: SyncedConnection, events: readonly ProviderEvent[]) {
   const { tx } = context;
   const busy = new Map<string, { event_id: string; starts_at: string; ends_at: string }>();
   for (const event of events) {
@@ -117,66 +131,89 @@ async function writeBusyTimes(context: WriteContext, connectionId: string, event
   if (others.length > 0) {
     await tx.execute(sql`
       delete from calendar_busy_times
-      where connection_id = ${connectionId}::uuid and provider_event_id = any(${textList(others)})
+      where connection_id = ${calendar.id}::uuid and calendar_id = ${calendar.calendarId}
+        and provider_event_id = any(${textList(others)})
     `);
   }
   if (busy.size === 0) return;
   await tx.execute(sql`
-    insert into calendar_busy_times (workspace_id, connection_id, provider_event_id, starts_at, ends_at)
-    select ${context.scope.workspaceId}::uuid, ${connectionId}::uuid, x.event_id, x.starts_at, x.ends_at
+    insert into calendar_busy_times (workspace_id, connection_id, calendar_id, provider_event_id, starts_at, ends_at)
+    select ${context.scope.workspaceId}::uuid, ${calendar.id}::uuid, ${calendar.calendarId}, x.event_id, x.starts_at,
+      x.ends_at
     from jsonb_to_recordset(${JSON.stringify([...busy.values()])}::jsonb) as x(event_id text, starts_at timestamptz, ends_at timestamptz)
-    on conflict (workspace_id, connection_id, provider_event_id) do update set
+    on conflict (workspace_id, connection_id, calendar_id, provider_event_id) do update set
       starts_at = excluded.starts_at, ends_at = excluded.ends_at, updated_at = now()
   `);
 }
 
 /**
- * After a full sync: drops this connection's busy times in the window whose
- * events the provider no longer listed.
+ * After a full sync: drops this calendar's busy times in the window whose
+ * events the provider no longer listed; with `all`, every one it holds (it
+ * stopped being pulled, or the provider removed it).
  */
 export async function dropBusyTimes(
   tx: WorkspaceTx,
   connectionId: string,
-  where: { readonly allBut: readonly string[]; readonly from: string; readonly to: string },
+  calendarId: string,
+  where: { readonly allBut: readonly string[]; readonly from: string; readonly to: string } | 'all',
 ): Promise<void> {
-  await tx.execute(sql`
-    delete from calendar_busy_times
-    where connection_id = ${connectionId}::uuid
-      and starts_at < ${where.to}::timestamptz and ends_at >= ${where.from}::timestamptz
-      and not (provider_event_id = any(${textList(where.allBut)}))
-  `);
+  await tx.execute(
+    where === 'all'
+      ? sql`delete from calendar_busy_times where connection_id = ${connectionId}::uuid and calendar_id = ${calendarId}`
+      : sql`
+        delete from calendar_busy_times
+        where connection_id = ${connectionId}::uuid and calendar_id = ${calendarId}
+          and starts_at < ${where.to}::timestamptz and ends_at >= ${where.from}::timestamptz
+          and not (provider_event_id = any(${textList(where.allBut)}))
+      `,
+  );
 }
 
 /**
- * Removes this connection's copies of the events `eventIds` names, and with
- * them each meeting no source holds any more. Answers the meetings touched,
+ * Removes one calendar's copies of the events `eventIds` names (or, after a
+ * full sync, of every event in the window but `allBut`; or, with `all`,
+ * every copy it holds), and with them each meeting no source holds any more.
+ * A meeting some other calendar still holds may stop showing on records
+ * (when no syncing calendar holds it now). Answers the meetings touched,
  * each with the records it showed on (before the removal).
  */
 export async function dropSources(
   tx: WorkspaceTx,
   connectionId: string,
+  calendarId: string,
   where:
     | { readonly eventIds: readonly string[] }
-    | { readonly allBut: readonly string[]; readonly from: string; readonly to: string },
+    | { readonly allBut: readonly string[]; readonly from: string; readonly to: string }
+    | 'all',
   options: { readonly cancelBookings?: boolean } = {},
 ): Promise<readonly MeetingChange[]> {
-  const dropped = await tx.execute<{ meeting_id: string }>(
-    'eventIds' in where
+  const dropped = await tx.execute<{ meeting_id: string; created_by_crm: boolean }>(
+    where === 'all'
       ? sql`
         delete from meeting_sources
-        where connection_id = ${connectionId}::uuid and provider_event_id = any(${textList(where.eventIds)})
-        returning meeting_id::text as meeting_id`
-      : sql`
+        where connection_id = ${connectionId}::uuid and calendar_id = ${calendarId}
+        returning meeting_id::text as meeting_id, created_by_crm`
+      : 'eventIds' in where
+        ? sql`
+        delete from meeting_sources
+        where connection_id = ${connectionId}::uuid and calendar_id = ${calendarId}
+          and provider_event_id = any(${textList(where.eventIds)})
+        returning meeting_id::text as meeting_id, created_by_crm`
+        : sql`
         delete from meeting_sources s using meetings m
-        where s.connection_id = ${connectionId}::uuid and m.workspace_id = s.workspace_id and m.id = s.meeting_id
+        where s.connection_id = ${connectionId}::uuid and s.calendar_id = ${calendarId}
+          and m.workspace_id = s.workspace_id and m.id = s.meeting_id
           and m.starts_at < ${where.to}::timestamptz and m.ends_at >= ${where.from}::timestamptz
           and not (s.provider_event_id = any(${textList(where.allBut)}))
-        returning s.meeting_id::text as meeting_id`,
+        returning s.meeting_id::text as meeting_id, s.created_by_crm`,
   );
   const meetingIds = [...new Set(dropped.rows.map((row) => row.meeting_id))];
   if (meetingIds.length === 0) return [];
   const before = await recordsOf(tx, meetingIds);
-  if (options.cancelBookings !== false) await cancelRemovedBookings(tx, connectionId, meetingIds);
+  if (options.cancelBookings !== false) {
+    const origins = [...new Set(dropped.rows.filter((row) => row.created_by_crm).map((row) => row.meeting_id))];
+    await cancelRemovedBookings(tx, origins, meetingIds);
+  }
   // A meeting goes with its last source (its attendees and record links go with it).
   const gone = await tx.execute<{ id: string }>(sql`
     delete from meetings m where m.id = any(${uuidList(meetingIds)})
@@ -191,7 +228,49 @@ export async function dropSources(
     `);
   }
   await recomputePrivacy(tx, meetingIds);
+  // Those another calendar still holds show on records only while a syncing calendar (or the CRM) holds them.
+  await unlinkUnsynced(tx, meetingIds);
   return meetingIds.map((meetingId) => ({ meetingId, recordIds: before.get(meetingId) ?? [] }));
+}
+
+/** Among `meetingIds`, the meetings that show on records: a syncing calendar holds them, or the CRM made them. */
+export async function linkedMeetings(tx: WorkspaceTx, meetingIds: readonly string[]): Promise<ReadonlySet<string>> {
+  if (meetingIds.length === 0) return new Set();
+  const rows = await tx.execute<{ id: string }>(sql`
+    select m.id::text as id from meetings m
+    where m.id = any(${uuidList(meetingIds)}) and (
+      m.created_by_crm or exists (
+        select 1 from meeting_sources s
+        join calendar_calendars k on k.workspace_id = s.workspace_id and k.connection_id = s.connection_id
+          and k.provider_calendar_id = s.calendar_id
+        where s.workspace_id = m.workspace_id and s.meeting_id = m.id and (k.sync or s.created_by_crm)
+      )
+    )
+  `);
+  return new Set(rows.rows.map((row) => row.id));
+}
+
+/**
+ * Takes the meetings among `meetingIds` that no syncing calendar holds off every record (AC-1002): they stay for
+ * the member's own week while a calendar that shows there holds them. Answers the meetings it took off, each with
+ * the records it showed on.
+ */
+export async function unlinkUnsynced(
+  tx: WorkspaceTx,
+  meetingIds: readonly string[],
+): Promise<readonly MeetingChange[]> {
+  if (meetingIds.length === 0) return [];
+  const linked = await linkedMeetings(tx, meetingIds);
+  const unlinked = meetingIds.filter((id) => !linked.has(id));
+  if (unlinked.length === 0) return [];
+  const before = await recordsOf(tx, unlinked);
+  const gone = await tx.execute<{ meeting_id: string }>(sql`
+    delete from meeting_records where meeting_id = any(${uuidList(unlinked)}) returning meeting_id::text as meeting_id
+  `);
+  const touched = new Set(gone.rows.map((row) => row.meeting_id));
+  return unlinked
+    .filter((id) => touched.has(id))
+    .map((meetingId) => ({ meetingId, recordIds: before.get(meetingId) ?? [] }));
 }
 
 /** Why a booking whose event the host removed from their calendar is cancelled. */
@@ -200,9 +279,10 @@ export const REMOVED_FROM_CALENDAR = 'Removed from the host calendar';
 /**
  * Cancels the upcoming confirmed bookings whose event just left the host's
  * calendar (spec 0025, the owner's report of 20 October 2026): the dropped
- * copy was the host's own, or no calendar holds the meeting any more. A co
- * host's copy going while the host's stays changes nothing, and a booking
- * that already began stays as it was. The slot frees with the status (the
+ * copy was the one the CRM made (`origins`, in the calendar the booking went
+ * to, AC-998), or no calendar holds the meeting any more. Another copy going
+ * while that one stays changes nothing (a co host's, or another calendar of
+ * the host's), and a booking that already began stays as it was. The slot frees with the status (the
  * exclusion constraint holds confirmed bookings only). It runs in the
  * sync's own transaction, recorded as the system: the bookings table admits
  * no `calendar` actor. The host is told by email, queued in the same
@@ -210,7 +290,7 @@ export const REMOVED_FROM_CALENDAR = 'Removed from the host calendar';
  * Timefix: Google already offered to tell the attendees when the host deleted
  * the event.
  */
-async function cancelRemovedBookings(tx: WorkspaceTx, connectionId: string, meetingIds: readonly string[]) {
+async function cancelRemovedBookings(tx: WorkspaceTx, origins: readonly string[], meetingIds: readonly string[]) {
   // The bookings these meetings are for, each found by an index: the booking's meeting, or the meeting's booking.
   const cancelled = await tx.execute<{ id: string }>(sql`
     update bookings b set status = 'cancelled', cancel_reason = ${REMOVED_FROM_CALENDAR},
@@ -225,7 +305,7 @@ async function cancelRemovedBookings(tx: WorkspaceTx, connectionId: string, meet
       and (b.meeting_id = m.id or m.booking_id = b.id)
       and b.status = 'confirmed' and b.starts_at > now()
       and (
-        b.host_member_id = (select c.member_id from calendar_connections c where c.id = ${connectionId}::uuid)
+        m.id = any(${uuidList(origins)})
         or not exists (select 1 from meeting_sources s where s.workspace_id = m.workspace_id and s.meeting_id = m.id)
       )
     returning b.id::text as id
@@ -339,11 +419,13 @@ function plan(
 }
 
 /**
- * Applies one batch of a connection's events in the write's transaction. The
- * connection is locked `for key share` first, so a disconnect waits for the
- * batch (and the batch sees it gone, writing nothing, once it ran first).
- * Answers how many events it kept, or `gone` when the connection no longer
- * syncs.
+ * Applies one batch of a calendar's events in the write's transaction. The
+ * connection and the calendar are locked `for key share` first, so a
+ * disconnect or a switch turned off waits for the batch (and the batch sees
+ * it gone, writing nothing, once it ran first). Answers how many events it
+ * kept, or `gone` when the connection no longer syncs or the calendar is no
+ * longer pulled (an event the CRM made is written whatever its calendar's
+ * switches).
  */
 export async function applyEvents(
   context: WriteContext,
@@ -358,13 +440,24 @@ export async function applyEvents(
   const status = held.rows[0]?.status;
   const isPrivateCalendar = held.rows[0]?.sharing === 'private';
   if (status !== 'syncing' && status !== 'connected' && status !== 'failed') return 'gone';
+  const madeByCrm = connection.madeByCrm === true;
+  if (!madeByCrm) {
+    const calendar = await tx.execute<{ pulled: boolean }>(sql`
+      select (sync or show_in_week) as pulled from calendar_calendars
+      where connection_id = ${connection.id}::uuid and provider_calendar_id = ${connection.calendarId}
+      for key share
+    `);
+    if (calendar.rows[0]?.pulled !== true) return 'gone';
+  }
 
-  await writeBusyTimes(context, connection.id, events);
+  await writeBusyTimes(context, connection, events);
   const syncing = events.filter(shouldSync);
   let lookups = await readLookups(tx, syncing, isFreeDomain);
   // The workspace makes people for unknown attendees (AC-609): made first, so the meetings link them. Never from
-  // a private calendar or a private event (AC-611, AC-612): a person made from one would tell everyone who it was with.
-  const shareable = isPrivateCalendar ? [] : syncing.filter((event) => !event.isPrivate);
+  // a private calendar or a private event (AC-611, AC-612): a person made from one would tell everyone who it was
+  // with; nor from a calendar that only shows on the member's week (AC-1002).
+  const shareable =
+    isPrivateCalendar || !(connection.syncs || madeByCrm) ? [] : syncing.filter((event) => !event.isPrivate);
   if (shareable.length > 0 && (await createsUnknownPeople(tx))) {
     const made = await fileUnknownAttendees(context, shareable, connection.memberId, lookups);
     if (made > 0) lookups = await readLookups(tx, syncing, isFreeDomain);
@@ -373,7 +466,7 @@ export async function applyEvents(
   // Events that no longer sync here (cancelled, declined, alone): this connection's copies go.
   const keptIds = new Set([...planned.values()].map((each) => each.eventId));
   const changes: MeetingChange[] = [
-    ...(await dropSources(tx, connection.id, {
+    ...(await dropSources(tx, connection.id, connection.calendarId, {
       eventIds: events.map((event) => event.id).filter((id) => !keptIds.has(id)),
     })),
   ];
@@ -422,16 +515,19 @@ export async function applyEvents(
   });
   const moved = await tx.execute<{ meeting_id: string }>(sql`
     delete from meeting_sources s using jsonb_to_recordset(${JSON.stringify(sources)}::jsonb) as x(meeting_id uuid, event_id text)
-    where s.connection_id = ${connection.id}::uuid and s.provider_event_id = x.event_id and s.meeting_id <> x.meeting_id
+    where s.connection_id = ${connection.id}::uuid and s.calendar_id = ${connection.calendarId}
+      and s.provider_event_id = x.event_id and s.meeting_id <> x.meeting_id
     returning s.meeting_id::text as meeting_id
   `);
   await tx.execute(sql`
-    insert into meeting_sources (workspace_id, meeting_id, connection_id, provider_event_id, calendar_id, etag, marked_private)
-    select ${context.scope.workspaceId}::uuid, x.meeting_id, ${connection.id}::uuid, x.event_id, 'primary', x.etag, x.marked_private
+    insert into meeting_sources (workspace_id, meeting_id, connection_id, provider_event_id, calendar_id, etag,
+      marked_private, created_by_crm)
+    select ${context.scope.workspaceId}::uuid, x.meeting_id, ${connection.id}::uuid, x.event_id, ${connection.calendarId},
+      x.etag, x.marked_private, ${madeByCrm}
     from jsonb_to_recordset(${JSON.stringify(sources)}::jsonb) as x(meeting_id uuid, event_id text, etag text, marked_private boolean)
-    on conflict (workspace_id, meeting_id, connection_id) do update set
+    on conflict (workspace_id, meeting_id, connection_id, calendar_id) do update set
       provider_event_id = excluded.provider_event_id, etag = excluded.etag, marked_private = excluded.marked_private,
-      updated_at = now()
+      created_by_crm = meeting_sources.created_by_crm or excluded.created_by_crm, updated_at = now()
   `);
   if (moved.rows.length > 0) {
     changes.push(
@@ -471,11 +567,13 @@ export async function applyEvents(
     `);
   }
 
-  // The records each shows on, rewritten, with its start (what timelines page by).
+  // The records each shows on, rewritten, with its start (what timelines page by): only a meeting a syncing calendar
+  // holds, or that the CRM made, shows on any (AC-1002).
   await tx.execute(sql`delete from meeting_records where meeting_id = any(${uuidList(meetingIds)})`);
+  const linked = madeByCrm || connection.syncs ? undefined : await linkedMeetings(tx, meetingIds);
   const links = rows.flatMap((each) => {
     const meetingId = idOf.get(each.key);
-    return meetingId === undefined
+    return meetingId === undefined || (linked !== undefined && !linked.has(meetingId))
       ? []
       : each.links.map((link) => ({
           meeting_id: meetingId,

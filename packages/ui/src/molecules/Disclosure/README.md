@@ -17,6 +17,7 @@ New. Attribute groups on the record panel (#18), advanced settings and import op
 ```
 
 - `count` shows a Badge after the title.
+- `leading` goes before the title, inside the toggle: an account's ProviderMark in the calendars list. Why a slot: the account's heading is its fold, and the mark names the provider at a glance.
 - In a `DisclosureGroup`, opening one closes the others unless `allowsMultipleExpanded`.
 - `variant="fields"` stacks the panel's content `space-16` apart, as a `Form` stacks its fields: more fields folded inside a form ("Add more fields" in a create dialog, spec 0012). Why a variant: a Disclosure's panel lays out nothing, so fields inside it sat flush, unlike the form's own.
 - `variant="label"` draws the title as a sidebar section label (11px, `text-secondary`, the chevron after it) with its items flush under it: the sidebar's Favorites, Records and Lists.

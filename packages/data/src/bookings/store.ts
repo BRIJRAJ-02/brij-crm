@@ -62,7 +62,7 @@ export type BookingsView = HeldView<BookingsState>;
 export type BookingsCalendarHeld = HeldView<BookingsCalendarState>;
 
 /** The browser's return signal: the window's focus and the document becoming visible. */
-function browserReturn(refresh: () => void): () => void {
+export function browserReturn(refresh: () => void): () => void {
   if (typeof window === 'undefined' || typeof document === 'undefined') return () => undefined;
   const onVisible = () => {
     if (document.visibilityState === 'visible') refresh();

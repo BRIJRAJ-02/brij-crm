@@ -68,7 +68,7 @@ export const CATALOG: Catalog = {
       provider: 'google',
       accountEmail: 'ada@acme.example',
       reason: 'expired',
-      settingsPath: '/w/acme/settings/account/calendars',
+      settingsPath: '/w/acme/settings/scheduling/calendars',
     },
   },
   booking_calendar_removed: {

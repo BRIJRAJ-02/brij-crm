@@ -22,6 +22,7 @@ import {
   SettingsGrid,
   SettingsLayout,
   SettingsRow,
+  SettingsRowGroup,
   SettingsSection,
   SettingsStack,
   type SettingsNavEntry,
@@ -652,5 +653,41 @@ export const ContentEdge: Story = {
     // The handle sits before the content edge, in the gutter, not in a column of its own.
     const handle = canvas.getByRole('button', { name: 'Move People' }).getBoundingClientRect();
     await expect(handle.right).toBeLessThanOrEqual(edge + 1);
+  },
+};
+
+/** Rows in groups inside one Card, one with an InfoTip beside its title (a booking page's Limits). */
+export const RowGroups: Story = {
+  parameters: { crm: { screenshot: false } },
+  render: () => (
+    <Stage>
+      <Card title="Limits">
+        <SettingsRowGroup title="Buffers">
+          <SettingsRow
+            title="Before"
+            meta={<InfoTip label="Buffer before">Free time kept before each meeting.</InfoTip>}
+          >
+            <Select label="Before" isLabelHidden items={[{ id: '0', label: 'None' }]} defaultValue="0" />
+          </SettingsRow>
+          <SettingsRow title="After">
+            <Select label="After" isLabelHidden items={[{ id: '0', label: 'None' }]} defaultValue="0" />
+          </SettingsRow>
+        </SettingsRowGroup>
+        <SettingsRowGroup title="Pace">
+          <SettingsRow title="Bookings a day">
+            <Select
+              label="Bookings a day"
+              isLabelHidden
+              items={[{ id: 'none', label: 'No limit' }]}
+              defaultValue="none"
+            />
+          </SettingsRow>
+        </SettingsRowGroup>
+      </Card>
+    </Stage>
+  ),
+  play: async ({ canvas }) => {
+    await expect(canvas.getByRole('group', { name: 'Buffers' })).toBeInTheDocument();
+    await expect(canvas.getByRole('button', { name: 'About Buffer before' })).toBeInTheDocument();
   },
 };

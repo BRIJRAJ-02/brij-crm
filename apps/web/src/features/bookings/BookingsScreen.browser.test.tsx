@@ -10,9 +10,11 @@ import {
   type BookingListItem,
   type BookingsCalendarHeld,
   type BookingsCalendarState,
-  type BookingsState,
-  type BookingsView,
+  type CalendarListState,
+  type CalendarsHeld,
   type DataLayer,
+  type MeetingsHeld,
+  type MeetingsState,
   type TimeBlockOccurrence,
 } from '@crm/data';
 import { createToasts } from '@crm/ui';
@@ -150,11 +152,14 @@ async function renderWeek(blocks: readonly TimeBlockOccurrence[], bookings: read
     () => (
       <BookingsCalendarScreen
         slug="acme"
-        search={{ week, day: wednesday, tab: 'upcoming', page: 1, per: 25 }}
+        search={{ week, day: wednesday, tab: 'upcoming', source: 'all' }}
         week={held}
         objects={[]}
         pages={[]}
         connections={[]}
+        calendars={noCalendars}
+        onMakeDefault={() => undefined}
+        onDismissNotice={() => undefined}
         locale="en-GB"
         onSearch={() => undefined}
         onRemoveBlock={onRemoveBlock}
@@ -170,6 +175,19 @@ async function renderWeek(blocks: readonly TimeBlockOccurrence[], bookings: read
   );
   return { onRemoveBlock, removals, actions, cancels, notify };
 }
+
+/** The calendars list, still loading: the panel waits, and the screens draw without it. One snapshot, the same each
+ * read, as a store's must be (a new one each read loops React). */
+const CALENDARS_LOADING: CalendarListState = { status: 'loading' };
+const noCalendars: CalendarsHeld<CalendarListState> = {
+  subscribe: () => () => undefined,
+  getSnapshot: () => CALENDARS_LOADING,
+  retain: () => () => undefined,
+  reload: () => undefined,
+};
+
+/** A list read with every page in. */
+const ready = { status: 'ready', hasMore: false, isLoadingMore: false, moreFailed: false } as const;
 
 const alert = () => openDialog('alertdialog');
 /** The open card: the week's popover, a plain dialog. */
@@ -313,12 +331,12 @@ describe('cancelling a booking', () => {
 
 describe('cancelling from the list', () => {
   it('asks inside the booking’s panel, stays busy, then the panel closes and focus goes back to its row', async () => {
-    let state: BookingsState = { status: 'ready', bookings: [bookingOf()] };
+    let state: MeetingsState = { ...ready, items: [{ kind: 'booking', booking: bookingOf() }] };
     const listeners = new Set<() => void>();
     const tell = () => {
       for (const listener of listeners) listener();
     };
-    const upcoming: BookingsView = {
+    const upcoming: MeetingsHeld = {
       subscribe: (listener) => {
         listeners.add(listener);
         return () => listeners.delete(listener);
@@ -326,14 +344,13 @@ describe('cancelling from the list', () => {
       getSnapshot: () => state,
       retain: () => () => undefined,
       ready: () => Promise.resolve(),
+      loadMore: () => undefined,
       reload: () => undefined,
     };
-    const none: BookingsState = { status: 'ready', bookings: [] };
-    const empty: BookingsView = { ...upcoming, subscribe: () => () => undefined, getSnapshot: () => none };
     const answer = deferred<undefined>();
     const cancel = vi.fn(() => {
       // Shown cancelled at once, as the layer does.
-      state = { status: 'ready', bookings: [{ ...bookingOf(), status: 'cancelled' }] };
+      state = { ...ready, items: [{ kind: 'booking', booking: { ...bookingOf(), status: 'cancelled' } }] };
       tell();
       return answer.promise;
     });
@@ -348,8 +365,11 @@ describe('cancelling from the list', () => {
       () => (
         <BookingsListScreen
           slug="acme"
-          search={{ week, day: wednesday, tab: 'upcoming', page: 1, per: 25 }}
-          lists={{ upcoming, past: empty, cancelled: empty }}
+          search={{ week, day: wednesday, tab: 'upcoming', source: 'all' }}
+          meetings={() => upcoming}
+          calendars={noCalendars}
+          onMakeDefault={() => undefined}
+          onDismissNotice={() => undefined}
           objects={[]}
           pages={[]}
           locale="en-GB"
@@ -359,7 +379,8 @@ describe('cancelling from the list', () => {
       ),
       { data: {}, pattern: '/w/$slug/bookings/list', at: '/w/acme/bookings/list' },
     );
-    await userEvent.click(page.getByRole('button', { name: 'Quick chat' }));
+    // A booking's row is titled by its visitor, "Booked via Quick chat" under it.
+    await userEvent.click(page.getByRole('button', { name: 'Ada Lovelace', exact: true }));
     await userEvent.click(page.getByRole('button', { name: 'Cancel booking' }));
     await expect.poll(alert).not.toBeNull();
     expect(alert()?.textContent).toContain('Cancel Quick chat with Ada Lovelace?');
@@ -376,6 +397,6 @@ describe('cancelling from the list', () => {
     expect(cancel).toHaveBeenCalledTimes(1);
     answer.resolve(undefined);
     await expect.poll(alert).toBeNull();
-    await expect.poll(() => document.activeElement?.textContent).toBe('Quick chat');
+    await expect.poll(() => document.activeElement?.textContent).toBe('Ada Lovelace');
   });
 });

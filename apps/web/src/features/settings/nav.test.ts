@@ -13,21 +13,22 @@ import {
 } from './nav.ts';
 
 describe('settingsNav', () => {
-  it('lists Account and Workspace, in order, with their pages', () => {
+  it('lists Account, Scheduling and Workspace, in order, with their pages', () => {
     const groups = settingsNav('acme');
-    expect(groups.map((group) => group.label)).toEqual(['Account', 'Workspace']);
+    expect(groups.map((group) => group.label)).toEqual(['Account', 'Scheduling', 'Workspace']);
     expect(groups.map((group) => group.entries.map((entry) => entry.label))).toEqual([
-      ['Profile', 'Preferences', 'Calendars', 'Notifications'],
+      ['Profile', 'Preferences', 'Notifications'],
+      ['Calendars'],
       ['General', 'Members', 'Objects', 'Background jobs'],
     ]);
   });
 
-  it('puts Calendars under Account, and every entry opens a page in Settings', () => {
+  it('puts Calendars under Scheduling, and every entry opens a page in Settings', () => {
     const entries = settingsNav('acme').flatMap((group) => group.entries);
     expect(Object.fromEntries(entries.map((entry) => [entry.id, entry.href]))).toEqual({
       profile: '/w/acme/settings/account/profile',
       preferences: '/w/acme/settings/account/preferences',
-      calendars: '/w/acme/settings/account/calendars',
+      calendars: '/w/acme/settings/scheduling/calendars',
       notifications: '/w/acme/settings/account/notifications',
       general: '/w/acme/settings/general',
       members: '/w/acme/settings/members',
@@ -37,7 +38,7 @@ describe('settingsNav', () => {
     expect(entries.every((entry) => entry.href.startsWith('/w/acme/settings/'))).toBe(true);
     expect(entries.filter((entry) => entry.meta !== undefined)).toEqual([]);
     expect(preferencesHref('acme')).toBe('/w/acme/settings/account/preferences');
-    expect(calendarSettingsHref('acme')).toBe('/w/acme/settings/account/calendars');
+    expect(calendarSettingsHref('acme')).toBe('/w/acme/settings/scheduling/calendars');
   });
 });
 
@@ -81,6 +82,7 @@ describe('settingsPageOf', () => {
     expect(settingsPageOf('/w/acme/settings/account/preferences')).toBe('preferences');
     expect(settingsPageOf('/w/acme/settings/account/profile')).toBe('profile');
     expect(settingsPageOf('/w/acme/settings/general')).toBe('general');
+    expect(settingsPageOf('/w/acme/settings/scheduling/calendars')).toBe('calendars');
     expect(settingsPageOf('/w/acme/settings/account/calendars')).toBe('calendars');
     expect(settingsPageOf('/w/acme/settings/objects')).toBe('objects');
     expect(settingsPageOf('/w/acme/settings/objects/people/attributes')).toBe('objects');
@@ -102,6 +104,7 @@ describe('settingsPageOf', () => {
   it('finds the group a page sits in, for its trail', () => {
     const groups = settingsNav('acme');
     expect(settingsGroupOf(groups, 'preferences')?.label).toBe('Account');
+    expect(settingsGroupOf(groups, 'calendars')?.label).toBe('Scheduling');
     expect(settingsGroupOf(groups, 'jobs')?.label).toBe('Workspace');
     expect(settingsGroupOf(groups, undefined)).toBeUndefined();
   });

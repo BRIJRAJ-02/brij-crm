@@ -281,6 +281,19 @@
     color: var(--text-secondary);
   }
 
+  /* A group's heading over its options (`group`): quiet, as a Menu section's. */
+  .groupHeading {
+    padding-block: var(--space-4) var(--space-2);
+    padding-inline: var(--space-8);
+    color: var(--text-secondary);
+    font: var(--text-label-strong);
+    letter-spacing: var(--tracking-label-strong);
+  }
+
+  .section + .section {
+    margin-block-start: var(--space-4);
+  }
+
   .description {
     color: var(--text-secondary);
     font: var(--text-label);

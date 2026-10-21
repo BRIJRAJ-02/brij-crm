@@ -1,0 +1,46 @@
+/* CalendarList: each account a label Disclosure (its mark and address), its
+   calendars as rows: the checkbox in the calendar's hue taking the room,
+   Default, then the options button, always shown (touch has no hover). Show
+   all follows the accounts while any calendar is hidden. */
+@layer components {
+  .root {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-8);
+    min-inline-size: 0;
+  }
+
+  .foot {
+    display: flex;
+  }
+
+  .list {
+    display: flex;
+    flex-direction: column;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+
+  .row {
+    display: flex;
+    align-items: center;
+    gap: var(--space-4);
+    min-block-size: var(--size-nav-item);
+    padding-inline-start: var(--space-4);
+    border-radius: var(--radius-sm);
+  }
+
+  .check {
+    display: flex;
+    flex: 1;
+    min-inline-size: 0;
+    overflow: hidden;
+  }
+
+  @media (hover: hover) and (pointer: fine) {
+    .row:hover {
+      background: var(--surface-hover);
+    }
+  }
+}

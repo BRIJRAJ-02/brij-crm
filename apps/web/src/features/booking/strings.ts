@@ -85,8 +85,9 @@ export const strings = {
   weeklyHours: 'Weekly hours',
   limits: 'Limits',
   buffersSummary: (before: number, after: number) =>
-    before === after ? `${String(before)} min either side` : `${String(before)} min before, ${String(after)} after`,
-  aheadSummary: (days: number) => `Up to ${days === 1 ? '1 day' : `${String(days)} days`} ahead`,
+    before === after ? `${String(before)} min buffers` : `${String(before)} min before, ${String(after)} min after`,
+  aheadSummary: (days: number) => `up to ${days === 1 ? '1 day' : `${String(days)} days`} ahead`,
+  stepSummary: (minutes: number) => `starts every ${String(minutes)} min`,
   dailySummary: (count: number) => (count === 1 ? '1 a day' : `${String(count)} a day`),
   private: 'Private',
   // A page the system paused when its last host was removed (spec 0031, AC-814).
@@ -96,6 +97,34 @@ export const strings = {
   publicSummary: 'Anyone can book it',
   pausedSummary: 'Off, nobody can book it',
   noticeSummary: (notice: string) => `${notice} notice`,
+  /** The Limits card's groups, and a word of help on each setting (its InfoTip). */
+  limitGroups: { buffers: 'Buffers', window: 'Booking window', pace: 'Pace' },
+  limitHelp: {
+    before: {
+      text: 'Free time kept before each meeting, so a booking can’t start right after another event.',
+      example: 'With 15 min, after a meeting ending at 10:00 the first slot is 10:15.',
+    },
+    after: {
+      text: 'Free time kept after each meeting, to wrap up or get to the next one.',
+      example: 'With 10 min, a 9:00 to 9:30 booking keeps 9:30 to 9:40 free.',
+    },
+    notice: {
+      text: 'How soon someone can book.',
+      example: 'With 4 hours, at 13:00 the first slot offered is 17:00.',
+    },
+    ahead: {
+      text: 'How many days ahead people can book.',
+      example: 'With 60 days, on 1 March the last day offered is 30 April.',
+    },
+    daily: {
+      text: 'The most bookings this page takes in one day. Once reached, the day offers no more slots.',
+      example: 'With 3, a day with three bookings is full.',
+    },
+    step: {
+      text: 'How often slots start.',
+      example: 'On Meeting length, a 30 min meeting offers 9:00, 9:30 and 10:00.',
+    },
+  },
   privateHint: 'Only people with the link book it. It may book inside the time you hold, and skips the minimum notice.',
   /** InfoTips on the editor's settings that a new member wouldn't read from the label alone. */
   tips: {
@@ -143,6 +172,31 @@ export const strings = {
   fixHours: 'Fix the hours marked in red to save.',
   fixPage: 'Fix what’s marked in red to save.',
   leaveConfirm: 'You have unsaved changes. Leave without saving?',
+  /** Add events to: the page's own destination calendar (spec 0024, AC-997). */
+  addEventsTo: 'Add events to',
+  addEventsHint: 'Saves as soon as you choose. New bookings from this page go on this calendar.',
+  myDefaultCalendar: 'Your default calendar',
+  yourDefault: (name: string) => `Your default (${name})`,
+  conflicts: 'Conflicts',
+  checksCalendars: (count: number) =>
+    count === 0
+      ? 'Checks no calendars, so this page can double book.'
+      : count === 1
+        ? 'Checks 1 calendar.'
+        : `Checks ${String(count)} calendars.`,
+  calendarSettings: 'Change in Calendar settings',
+  followsDefault: 'Follows your default in Settings',
+  ownersDefault: 'Owner’s default',
+  ownersPick: 'A calendar the owner picked',
+  /** The page's pick stopped taking bookings: the page uses the owner's default until it can again. */
+  destinationFellBack: (name: string | undefined) =>
+    name === undefined
+      ? 'Your pick can’t take bookings now, so this page uses your default.'
+      : `${name} can’t take bookings now, so this page uses your default.`,
+  destinationUnusableColleague: 'The owner’s pick can’t take bookings now, so they go on the owner’s default.',
+  destinationFailed: 'Couldn’t load calendars. Reload the page to try again.',
+  destinationOwnerOnly: 'Only the page’s owner sees their calendars.',
+  destinationLoading: 'Loading calendars…',
   noCalendarTitle: 'No calendar connected',
   connectCalendar: 'Connect a calendar',
   notNow: 'Not now',

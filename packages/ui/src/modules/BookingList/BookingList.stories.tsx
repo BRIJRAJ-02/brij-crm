@@ -151,3 +151,45 @@ export const AgendaNarrow: Story = {
     await expect(canvas.getByRole('button', { name: 'Quick chat' })).toBeInTheDocument();
   },
 };
+
+/** Every meeting: a booking with its link's tag, and synced calendar events with their calendar and attendees. */
+export const Meetings: Story = {
+  parameters: { crm: { screenshot: false } },
+  render: (args) => (
+    <Stage width="fill">
+      <BookingList
+        {...args}
+        label="Upcoming meetings"
+        groups={[
+          {
+            id: '2026-10-08',
+            label: 'Today',
+            rows: [
+              {
+                id: 'b1',
+                date: 'Thu, 8 Oct',
+                time: '9:00 – 9:30 AM',
+                title: 'Grace Hopper',
+                via: 'Booked via Intro call',
+              },
+              {
+                id: 'e1',
+                date: 'Thu, 8 Oct',
+                time: '1:00 – 2:00 PM',
+                title: 'Pipeline sync',
+                calendar: { name: 'Team', hue: 'green' },
+                attendees: ['cy@globex.com', 'di@globex.com'],
+                moreAttendees: 3,
+              },
+            ],
+          },
+        ]}
+      />
+    </Stage>
+  ),
+  play: async ({ canvas }) => {
+    await expect(canvas.getByText('Booked via Intro call')).toBeInTheDocument();
+    await expect(canvas.getByText('cy@globex.com, di@globex.com and 3 more')).toBeInTheDocument();
+    await expect(canvas.getByText('Team')).toBeInTheDocument();
+  },
+};

@@ -32,8 +32,11 @@ export const objectSettingsHref = (
 /** Settings › Account › Preferences (spec 0026): the interface theme. Where Settings opens. */
 export const preferencesHref = settingsHomeHref;
 
-/** Settings › Account › Calendars (specs 0024 and 0026): the member's own calendar connections. */
-export const calendarSettingsHref = (slug: string) => `/w/${slug}/settings/account/calendars`;
+/**
+ * Settings › Scheduling › Calendars (specs 0024 and 0026): the member's own calendar connections. Its older
+ * addresses (`account/calendars`, `calendar`) send here.
+ */
+export const calendarSettingsHref = (slug: string) => `/w/${slug}/settings/scheduling/calendars`;
 
 /** Settings › Account › Profile (spec 0031, AC-821): the member's own name, picture and time zone here. */
 export const profileHref = (slug: string) => `/w/${slug}/settings/account/profile`;
@@ -80,8 +83,8 @@ export interface SettingsNavGroup {
 
 /**
  * The settings navigation (spec 0026, AC-682): Account (Profile, spec 0031;
- * Preferences, Calendars, Notifications, spec 0038) and Workspace (General and
- * Members, spec 0031; Objects, Background jobs).
+ * Preferences, Notifications, spec 0038), Scheduling (Calendars, 21 Oct 2026)
+ * and Workspace (General and Members, spec 0031; Objects, Background jobs).
  * Every entry is a page in Settings: the Booking pages and Forms links into
  * Captures went on 20 Oct 2026, as neither has workspace wide settings yet
  * (each page's and each form's own settings live in its editor). Every
@@ -97,9 +100,13 @@ export function settingsNav(slug: string): readonly SettingsNavGroup[] {
         // Profile first (spec 0031, AC-832): every member has one.
         { id: 'profile', label: workspace.profileTitle, href: profileHref(slug), icon: 'user-round' },
         { id: 'preferences', label: strings.preferences, href: preferencesHref(slug), icon: 'sliders-horizontal' },
-        { id: 'calendars', label: calendar.title, href: calendarSettingsHref(slug), icon: 'calendar' },
         { id: 'notifications', label: notifications.title, href: notificationSettingsHref(slug), icon: 'bell' },
       ],
+    },
+    {
+      id: 'scheduling',
+      label: strings.scheduling,
+      entries: [{ id: 'calendars', label: calendar.title, href: calendarSettingsHref(slug), icon: 'calendar' }],
     },
     {
       id: 'workspace',
@@ -142,7 +149,7 @@ export function settingsPageOf(pathname: string): SettingsPageId | undefined {
   if (rest === 'account/profile') return 'profile';
   if (rest === 'account/preferences') return 'preferences';
   if (rest === 'general') return 'general';
-  if (rest === 'account/calendars' || rest === 'calendar') return 'calendars';
+  if (rest === 'scheduling/calendars' || rest === 'account/calendars' || rest === 'calendar') return 'calendars';
   if (rest === 'account/notifications') return 'notifications';
   if (rest === 'objects' || rest.startsWith('objects/')) return 'objects';
   if (rest === 'jobs') return 'jobs';

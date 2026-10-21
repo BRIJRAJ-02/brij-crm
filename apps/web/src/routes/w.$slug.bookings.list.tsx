@@ -1,38 +1,29 @@
-import {
-  isDataError,
-  type BookingPageView,
-  type BookingsTab,
-  type BookingsView,
-  type DataLayer,
-  type ObjectSummary,
-} from '@crm/data';
+import { isDataError, type BookingPageView, type MeetingsQuery, type ObjectSummary } from '@crm/data';
 import { LoadingNow } from '@crm/ui';
 import { useMemo } from 'react';
 import { createFileRoute, useNavigate, useRouter, type ErrorComponentProps } from '@tanstack/react-router';
 import { BookingsFailed, BookingsListScreen } from '../features/bookings/BookingsScreen.tsx';
-import { bookingsSearchOf, parseBookingsSearch, rawOf } from '../features/bookings/search.ts';
+import { bookingsSearchOf, parseBookingsSearch, rawOf, type BookingsSearch } from '../features/bookings/search.ts';
 import { strings } from '../features/bookings/strings.ts';
 import { hostActions } from '../features/bookings/hostActions.ts';
 import { useFirstDay } from '../features/workspace/first-day.ts';
 
-// Bookings › List (spec 0025, AC-646): Upcoming, Past (`tab=past`) or Canceled (`tab=cancelled`), a page of them
-// (`page`, `per`), the sort (`sort`) and one booking page (`link`). The loader waits for the tab's first read
-// through the data layer, and reads the other two behind it; the screen holds the three lists, so each is read again
-// whenever the person comes back to the page. Upcoming, Past and Canceled change only the search, never the loader's
-// deps, so switching between them keeps the screen rather than giving way to the pending page. The Bookings layout
-// draws the frame, the TopBar and the tabs.
+// Bookings › List (spec 0025, AC-646; every meeting, the owner's ask of 21 October 2026): Upcoming, Past (`tab=past`)
+// or Canceled (`tab=cancelled`), All, Bookings or Calendar (`src`), one booking page (`link`) and the calendars the
+// panel picks (`cal`), a page at a time (More). The loader waits for the list's first page through the data layer;
+// the screen holds it, so it is read again whenever the person comes back to the page. Changing the tab or the source
+// changes only the search, never the loader's deps, so the screen stays. The Bookings layout draws the frame, the
+// TopBar and the tabs.
 export const Route = createFileRoute('/w/$slug/bookings/list')({
   validateSearch: parseBookingsSearch,
   loaderDeps: () => ({}),
   loader: async ({ context, params, location }) => {
     const { data } = context;
-    const lists = listsOf(data, params.slug);
-    const shown = parseBookingsSearch(location.search).tab ?? 'upcoming';
-    for (const tab of BOOKINGS_LISTS) if (tab !== shown) lists[tab].ready().catch(() => undefined);
+    const search = bookingsSearchOf(parseBookingsSearch(location.search));
     const [objects, pages] = await Promise.all([
       data.objects.list(params.slug),
       data.bookingPages.held(params.slug).catch(() => []),
-      lists[shown].ready(),
+      data.bookings.meetings(params.slug, queryOf(search)).ready(),
     ]);
     return { objects, pages };
   },
@@ -41,15 +32,12 @@ export const Route = createFileRoute('/w/$slug/bookings/list')({
   component: ListRoute,
 });
 
-/** The three lists the screen switches between. */
-const BOOKINGS_LISTS: readonly BookingsTab[] = ['upcoming', 'past', 'cancelled'];
-
-/** The data layer's held lists, one per tab: the same ones every time. */
-function listsOf(data: DataLayer, slug: string): Readonly<Record<BookingsTab, BookingsView>> {
+/** The list's question from the address: the tab, the source and the calendars picked. */
+function queryOf(search: BookingsSearch): MeetingsQuery {
   return {
-    upcoming: data.bookings.view(slug, 'upcoming'),
-    past: data.bookings.view(slug, 'past'),
-    cancelled: data.bookings.view(slug, 'cancelled'),
+    when: search.tab,
+    source: search.source,
+    ...(search.cal === undefined ? {} : { calendarIds: search.cal }),
   };
 }
 
@@ -86,7 +74,10 @@ function List({ objects, pages }: ListLoaded) {
     <BookingsListScreen
       slug={slug}
       search={search}
-      lists={listsOf(data, slug)}
+      meetings={(query) => data.bookings.meetings(slug, query)}
+      calendars={data.calendar.calendars(slug)}
+      onMakeDefault={(calendarId) => void data.calendar.setDestination(slug, calendarId)}
+      onDismissNotice={() => void data.calendar.dismissCalendarNotice(slug)}
       objects={objects}
       pages={pages}
       locale={navigator.languages[0] ?? 'en-GB'}

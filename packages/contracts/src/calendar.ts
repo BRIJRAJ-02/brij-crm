@@ -6,15 +6,30 @@
 // `.addAttendee` adds an unknown attendee as a person; `calendar.settings`
 // reads and changes the workspace's calendar settings. A
 // connection's tokens never leave the server: no shape here carries them.
+//
+// Milestone 5 (amendment of 20 October 2026): `calendar.calendars.*` lists
+// the member's accounts with every calendar in them and changes one
+// calendar's switches and colour; `calendar.destination.*` picks where new
+// bookings go; `calendar.connections.refresh` lists an account's calendars
+// again. Spec 0037's `calendar.health` (AC-1307) is the only calendar read
+// about other members: a status and when it began, never an account's
+// address, a calendar's name, a provider's words or an event.
 import { oc } from '@orpc/contract';
 import * as z from 'zod';
 import { Timestamp } from './values/attribute-values.ts';
+import { Hue } from './values/hues.ts';
 import { RecordRefDisplay } from './values/options.ts';
 import { WorkspaceScoped } from './workspaces.ts';
 import { Uuid } from './values/ids.ts';
 
-/** The most calendar accounts one member may connect (AC-599). */
-export const MAX_CALENDAR_CONNECTIONS = 3;
+/** The most calendar accounts one member may connect (AC-1000, which raised AC-599's 3). */
+export const MAX_CALENDAR_CONNECTIONS = 6;
+
+/** The most calendars kept per account (AC-991): the main one first, then by name. */
+export const MAX_CALENDARS_PER_ACCOUNT = 50;
+
+/** The most members one `calendar.health` asks about (spec 0037, AC-1307). */
+export const MAX_HEALTH_MEMBERS = 50;
 
 /** Meetings one `calendar.meetings.forRecord` page holds at most, and by default. */
 export const MEETING_PAGE = 20;
@@ -76,13 +91,172 @@ export type CalendarConnectionView = z.infer<typeof CalendarConnectionView>;
  */
 export const CalendarConnections = z.object({
   enabled: z.boolean(),
-  /** Providers the member may connect here (Google now). */
+  /** Providers the member may connect here: Google, and Outlook where `CALENDAR_OUTLOOK=on`. */
   providers: z.array(CalendarProvider),
   connections: z.array(CalendarConnectionView),
   max: z.number().int().positive(),
 });
 /** The member's own connections. */
 export type CalendarConnections = z.infer<typeof CalendarConnections>;
+
+/** What the member may do with a calendar at its provider (AC-991): only `owner` and `writer` take new bookings. */
+export const CalendarAccessRole = z.enum(['owner', 'writer', 'reader', 'free_busy']);
+/** What the member may do with a calendar at its provider. */
+export type CalendarAccessRole = z.infer<typeof CalendarAccessRole>;
+
+/**
+ * Why a calendar was left out (AC-995): it couldn't be read for free and busy, or synced, at `at`, said in plain
+ * words that name no provider error.
+ */
+export const CalendarWarning = z.object({ code: z.string(), message: z.string(), at: Timestamp });
+/** Why a calendar was left out. */
+export type CalendarWarning = z.infer<typeof CalendarWarning>;
+
+/**
+ * One calendar of one of the member's accounts (AC-993): its name, the hue it draws in (the member's pick, else the
+ * provider's colour's nearest), its three switches, and whether new bookings go there. Only its member ever reads it.
+ */
+export const CalendarView = z.object({
+  id: Uuid,
+  connectionId: Uuid,
+  name: z.string(),
+  hue: Hue,
+  /** The member's pick; absent, the hue comes from the provider's colour. */
+  colourOverride: Hue.optional(),
+  accessRole: CalendarAccessRole,
+  isPrimary: z.boolean(),
+  checkConflicts: z.boolean(),
+  showInWeek: z.boolean(),
+  sync: z.boolean(),
+  isDestination: z.boolean(),
+  /** An owner or writer calendar on an account that still works (AC-1004). */
+  canBeDestination: z.boolean(),
+  timeZone: z.string().optional(),
+  warning: CalendarWarning.optional(),
+});
+/** One calendar of one of the member's accounts. */
+export type CalendarView = z.infer<typeof CalendarView>;
+
+/** One of the member's accounts with its calendars, the main one first, then by name. */
+export const CalendarAccountView = CalendarConnectionView.extend({ calendars: z.array(CalendarView) });
+/** One of the member's accounts with its calendars. */
+export type CalendarAccountView = z.infer<typeof CalendarAccountView>;
+
+/**
+ * The member's accounts and calendars (AC-993), newest account first, and where new bookings go. `fellBack` names
+ * the calendar that was the destination when the provider removed it, until the member dismisses it or picks
+ * another (AC-1005).
+ */
+export const CalendarList = z.object({
+  enabled: z.boolean(),
+  providers: z.array(CalendarProvider),
+  max: z.number().int().positive(),
+  accounts: z.array(CalendarAccountView),
+  destinationId: Uuid.optional(),
+  fellBack: z.object({ removedName: z.string() }).optional(),
+});
+/** The member's accounts and calendars. */
+export type CalendarList = z.infer<typeof CalendarList>;
+
+/** The member's accounts and calendars. */
+export const ListCalendarsInput = WorkspaceScoped;
+/** The member's accounts and calendars. */
+export type ListCalendarsInput = z.infer<typeof ListCalendarsInput>;
+
+/**
+ * A change to one of the member's own calendars (AC-993): any of its three switches, and its colour (`null` goes
+ * back to the provider's). Only the fields given.
+ */
+export const UpdateCalendarInput = WorkspaceScoped.extend({
+  calendarId: Uuid,
+  checkConflicts: z.boolean().optional(),
+  showInWeek: z.boolean().optional(),
+  sync: z.boolean().optional(),
+  colourOverride: Hue.nullable().optional(),
+  mutationId: Uuid,
+});
+/** A change to one of the member's own calendars. */
+export type UpdateCalendarInput = z.infer<typeof UpdateCalendarInput>;
+
+/** Where the member's new bookings go (AC-996): one of their calendars they can write. */
+export const SetCalendarDestinationInput = WorkspaceScoped.extend({ calendarId: Uuid, mutationId: Uuid });
+/** Where the member's new bookings go. */
+export type SetCalendarDestinationInput = z.infer<typeof SetCalendarDestinationInput>;
+
+/** The member read the notice that their destination fell back (AC-1005). */
+export const DismissCalendarNoticeInput = WorkspaceScoped.extend({ mutationId: Uuid });
+/** The member read the notice that their destination fell back. */
+export type DismissCalendarNoticeInput = z.infer<typeof DismissCalendarNoticeInput>;
+
+/** Where new bookings go now. */
+export const CalendarDestination = z.object({ destinationId: Uuid.optional() });
+/** Where new bookings go now. */
+export type CalendarDestination = z.infer<typeof CalendarDestination>;
+
+/** Refresh: lists one of the member's accounts' calendars again on its next sync, brought forward to now (AC-991). */
+export const RefreshCalendarConnectionInput = WorkspaceScoped.extend({ connectionId: Uuid, mutationId: Uuid });
+/** Refresh an account's calendars. */
+export type RefreshCalendarConnectionInput = z.infer<typeof RefreshCalendarConnectionInput>;
+
+/**
+ * A member's calendar health as a colleague may see it (spec 0037, AC-1307): `connected`; `skipped` (some
+ * conflict calendar can't be read); `reconnect` (the destination's account, or every conflict calendar, has
+ * stopped); `none` (no calendar). Never an address, a calendar's name, a provider's words or an event.
+ */
+export const CalendarHealthStatus = z.enum(['connected', 'skipped', 'reconnect', 'none']);
+/** A member's calendar health. */
+export type CalendarHealthStatus = z.infer<typeof CalendarHealthStatus>;
+
+/** One member's calendar health, and since when (absent for `none`, and for `connected` when nothing ever broke). */
+export const MemberCalendarHealth = z.object({
+  memberId: Uuid,
+  status: CalendarHealthStatus,
+  since: Timestamp.optional(),
+});
+/** One member's calendar health. */
+export type MemberCalendarHealth = z.infer<typeof MemberCalendarHealth>;
+
+/** Asking after members' calendar health: those the reader may not see are left out of the answer. */
+export const CalendarHealthInput = WorkspaceScoped.extend({
+  memberIds: z
+    .array(Uuid)
+    .min(1)
+    .max(MAX_HEALTH_MEMBERS, `Ask about at most ${String(MAX_HEALTH_MEMBERS)} members.`),
+});
+/** Asking after members' calendar health. */
+export type CalendarHealthInput = z.infer<typeof CalendarHealthInput>;
+
+/** The asked members' calendar health, in the order asked. */
+export const CalendarHealth = z.object({ members: z.array(MemberCalendarHealth) });
+/** The asked members' calendar health. */
+export type CalendarHealth = z.infer<typeof CalendarHealth>;
+
+/**
+ * A booking page's own "Add events to" (AC-997): the calendar it names (one of the page owner's), and whether
+ * bookings can go there now. `default` follows the owner's own destination; `unusable` names a calendar that can't
+ * take bookings, so they go to the owner's. Never a calendar's name: the owner reads names from their own list.
+ */
+export const PageDestinationView = z.object({
+  calendarId: Uuid.optional(),
+  status: z.enum(['default', 'page', 'unusable']),
+  isOwner: z.boolean(),
+});
+/** A booking page's own "Add events to". */
+export type PageDestinationView = z.infer<typeof PageDestinationView>;
+
+/** A booking page's own "Add events to". */
+export const GetPageDestinationInput = WorkspaceScoped.extend({ pageId: Uuid });
+/** A booking page's own "Add events to". */
+export type GetPageDestinationInput = z.infer<typeof GetPageDestinationInput>;
+
+/** Setting a booking page's own "Add events to": one of the owner's writable calendars, or `null` for theirs. */
+export const SetPageDestinationInput = WorkspaceScoped.extend({
+  pageId: Uuid,
+  calendarId: Uuid.nullable(),
+  mutationId: Uuid,
+});
+/** Setting a booking page's own "Add events to". */
+export type SetPageDestinationInput = z.infer<typeof SetPageDestinationInput>;
 
 /** The member's connections. */
 export const ListCalendarConnectionsInput = WorkspaceScoped;
@@ -270,7 +444,21 @@ export const calendarContract = {
     update: oc.input(UpdateCalendarConnectionInput).output(CalendarConnectionView),
     remove: oc.input(RemoveCalendarConnectionInput).output(RemovedCalendarConnection),
     syncNow: oc.input(SyncCalendarNowInput).output(SyncCalendarNowResult),
+    refresh: oc.input(RefreshCalendarConnectionInput).output(SyncCalendarNowResult),
   },
+  calendars: {
+    list: oc.input(ListCalendarsInput).output(CalendarList),
+    update: oc.input(UpdateCalendarInput).output(CalendarView),
+  },
+  destination: {
+    set: oc.input(SetCalendarDestinationInput).output(CalendarDestination),
+    dismissNotice: oc.input(DismissCalendarNoticeInput).output(CalendarDestination),
+  },
+  pageDestination: {
+    get: oc.input(GetPageDestinationInput).output(PageDestinationView),
+    set: oc.input(SetPageDestinationInput).output(PageDestinationView),
+  },
+  health: oc.input(CalendarHealthInput).output(CalendarHealth),
   meetings: {
     forRecord: oc.input(MeetingsForRecordInput).output(MeetingPage),
     addAttendee: oc.input(AddMeetingAttendeeInput).output(AddedMeetingAttendee),

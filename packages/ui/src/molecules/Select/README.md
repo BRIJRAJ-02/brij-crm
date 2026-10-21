@@ -33,6 +33,8 @@ Ported from the artifact's Select card (version 8). It is the editor for select 
 - `onCreate(label)` adds "Create "<typed>"" (a plus) last in that search when what is typed matches no live option's label, ignoring case; choosing it hands the label over and closes the list. When it is the only item it isn't focused first, so one Enter on a typo makes nothing; an arrow reaches it. Each opening searches afresh. It turns the search on; `defaultSearch` starts it with the key that opened a grid cell. Why a variant: a select or status cell offers it to someone who may shape the schema (spec 0012, AC-238), in the same list the person was already choosing from, rather than a second control.
 - `labelAside` puts a quiet word after the label, such as "(optional)" on a public form: `text-tertiary`, on the same line, and part of the field's accessible name.
 
+- `group` on an option puts it under a heading: options with the same group follow one heading, in the order they come, after any without a group. Why a field: a booking page's "Add events to" lists each account's calendars under the account, as the Bookings calendars panel does.
+
 ## States
 
 Placeholder, chosen, searching, offering Create, an option that can't be chosen (with its reason), focus and open (a 1px `accent-line` border and the faint halo; in a popover the border alone, as a Field's there), outlined in `control-border` at rest like a Field (3:1 on every surface), invalid, read only, disabled. The list opens from the keyboard at once and grows from the trigger for a pointer.

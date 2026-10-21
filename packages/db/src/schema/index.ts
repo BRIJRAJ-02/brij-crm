@@ -22,7 +22,9 @@ export { memberPreferences } from './preferences.ts';
 export {
   attendeeMatch,
   attendeeResponse,
+  calendarAccessRole,
   calendarBusyTimes,
+  calendarCalendars,
   calendarConnections,
   calendarProvider,
   calendarSettings,

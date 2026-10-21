@@ -467,4 +467,29 @@ describe('calendar sync (spec 0024)', () => {
       ApiEnv.parse({ ...production, ...on, CALENDAR_WEBHOOK_ORIGIN: 'https://api.app.test' }).calendar?.webhookOrigin,
     ).toBe('https://api.app.test');
   });
+
+  it('asks for the Entra app only with CALENDAR_OUTLOOK=on, refuses to boot without it, and keeps its secret inside (AC-1012)', () => {
+    expect(ApiEnv.parse({ ...local, ...on }).calendar?.microsoft).toBeUndefined();
+    expect(ApiEnv.parse({ ...local, ...on, CALENDAR_OUTLOOK: 'off' }).calendar?.microsoft).toBeUndefined();
+    expect(problems({ ...local, ...on, CALENDAR_OUTLOOK: 'on' }).sort()).toEqual([
+      'MICROSOFT_CLIENT_ID',
+      'MICROSOFT_CLIENT_SECRET',
+    ]);
+    expect(problems({ ...local, ...on, CALENDAR_OUTLOOK: 'on', MICROSOFT_CLIENT_ID: 'app' })).toEqual([
+      'MICROSOFT_CLIENT_SECRET',
+    ]);
+    expect(
+      problems({ ...local, CALENDAR_OUTLOOK: 'on', MICROSOFT_CLIENT_ID: 'app', MICROSOFT_CLIENT_SECRET: 's' }),
+    ).toEqual(['CALENDAR_SYNC']);
+    const outlook = { ...on, CALENDAR_OUTLOOK: 'on', MICROSOFT_CLIENT_ID: 'app', MICROSOFT_CLIENT_SECRET: 'shh' };
+    const env = ApiEnv.parse({ ...local, ...outlook });
+    expect(env.calendar?.microsoft).toEqual({ clientId: 'app', clientSecret: 'shh', tenant: 'common' });
+    expect(env).not.toHaveProperty('MICROSOFT_CLIENT_SECRET');
+    expect(ApiEnv.parse({ ...local, ...outlook, MICROSOFT_TENANT: 'organizations' }).calendar?.microsoft?.tenant).toBe(
+      'organizations',
+    );
+    expect(problems({ ...local, ...outlook, MICROSOFT_TENANT: 'not/a tenant' })).toEqual(['MICROSOFT_TENANT']);
+    expect(WorkerEnv.parse({ ...worker, ...outlook }).calendar?.microsoft?.clientId).toBe('app');
+    expect(workerProblems({ ...worker, ...on, CALENDAR_OUTLOOK: 'on' })).toHaveLength(2);
+  });
 });

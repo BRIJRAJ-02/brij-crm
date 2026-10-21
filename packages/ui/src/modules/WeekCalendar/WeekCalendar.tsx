@@ -11,8 +11,10 @@ import {
 } from 'react';
 import { ProviderMark, type ProviderName } from '../../atoms/ProviderMark/ProviderMark.tsx';
 import { focusLater } from '../../lib/focus-later.ts';
+import { Menu, MenuItem } from '../../molecules/Menu/Menu.tsx';
 import { Popover, type PopoverPlacement } from '../../molecules/Popover/Popover.tsx';
 import type { Hue } from '../../hue.ts';
+import { placeBlocks, type More, type Placed as PlacedSlot, type Slot } from './placeBlocks.ts';
 import styles from './WeekCalendar.module.css';
 import { strings } from './strings.ts';
 
@@ -147,42 +149,11 @@ function placementBeside(block: HTMLElement): PopoverPlacement {
   return Number.isFinite(narrow) && week.clientWidth < narrow ? 'bottom start' : 'end top';
 }
 
-/** A block with its lane: overlapping blocks share their cluster's width, side by side. */
-interface Placed extends WeekCalendarBlock {
-  readonly lane: number;
-  readonly lanes: number;
-}
+/** A block with its slot: overlapping blocks side by side, or a later start indented over an earlier one. */
+type Placed = PlacedSlot<WeekCalendarBlock>;
 
-/**
- * Lanes for one day's blocks: sorted by start then end, clustered while they
- * overlap, each taking the first lane free at its start; every block in a
- * cluster divides the width by the cluster's lane count.
- */
-export function placeBlocks(blocks: readonly WeekCalendarBlock[]): readonly Placed[] {
-  const sorted = [...blocks].sort((a, b) => a.startMinute - b.startMinute || a.endMinute - b.endMinute);
-  const placed: Placed[] = [];
-  let cluster: { block: WeekCalendarBlock; lane: number }[] = [];
-  let laneEnds: number[] = [];
-  let clusterEnd = -1;
-  const close = () => {
-    for (const each of cluster) placed.push({ ...each.block, lane: each.lane, lanes: laneEnds.length });
-    cluster = [];
-    laneEnds = [];
-    clusterEnd = -1;
-  };
-  for (const block of sorted) {
-    if (cluster.length > 0 && block.startMinute >= clusterEnd) close();
-    let lane = laneEnds.findIndex((end) => end <= block.startMinute);
-    if (lane === -1) {
-      lane = laneEnds.length;
-      laneEnds.push(block.endMinute);
-    } else laneEnds[lane] = block.endMinute;
-    cluster.push({ block, lane });
-    clusterEnd = Math.max(clusterEnd, block.endMinute);
-  }
-  close();
-  return placed;
-}
+/** Closed time's slot: the whole column, under bookings and events. */
+const WHOLE: Slot = { left: 0, width: 1, indent: 0, lane: 0, lanes: 1, span: 1 };
 
 const HOURS = Array.from({ length: 24 }, (_, hour) => hour);
 
@@ -237,6 +208,14 @@ export function WeekCalendar({
     drag.current = next;
     setDraggingState(next);
   };
+  // The "+N" list that is open: the blocks folded there, and its chip, which the list and then a block's card anchor to.
+  const [moreList, setMoreList] = useState<{
+    readonly id: string;
+    readonly dayKey: string;
+    readonly hidden: readonly WeekCalendarBlock[];
+    readonly anchor: HTMLButtonElement;
+  } | null>(null);
+  const moreRef = useMemo(() => ({ current: moreList?.anchor ?? null }), [moreList]);
   const [ghost, setGhost] = useState<HTMLDivElement | null>(null);
   const ghostRef = useMemo(() => ({ current: ghost }), [ghost]);
   // A span drawn out of view (from the keyboard, or moved with From and To) scrolls into it, its card beside it.
@@ -324,7 +303,11 @@ export function WeekCalendar({
     onSelectDay(next.key);
     requestAnimationFrame(() => columns.current.get(next.key)?.focus());
   };
-  const onColumnKey = (event: KeyboardEvent<HTMLDivElement>, day: WeekCalendarDay, dayBlocks: readonly Placed[]) => {
+  const onColumnKey = (
+    event: KeyboardEvent<HTMLDivElement>,
+    day: WeekCalendarDay,
+    dayBlocks: readonly { readonly id: string; readonly startMinute: number }[],
+  ) => {
     if (onDraw !== undefined && event.target === event.currentTarget && (event.key === 'Enter' || event.key === ' ')) {
       event.preventDefault();
       onDraw(defaultSpan(day.key, drawStartMinute?.(day.key) ?? 9 * 60));
@@ -377,9 +360,13 @@ export function WeekCalendar({
           {days.map((day) => {
             const ofDay = blocks.filter((block) => block.dayKey === day.key);
             // Closed time sits under bookings and events, full width, out of their lanes (AC-705).
-            const closed = ofDay.filter((block) => isClosed(block)).map((block) => ({ ...block, lane: 0, lanes: 1 }));
-            const placed = placeBlocks(ofDay.filter((block) => !isClosed(block)));
-            const dayBlocks = [...closed, ...placed];
+            const closed: Placed[] = ofDay.filter((block) => isClosed(block)).map((block) => ({ ...block, ...WHOLE }));
+            const layout = placeBlocks(ofDay.filter((block) => !isClosed(block)));
+            const dayBlocks = [...closed, ...layout.blocks];
+            // Up and Down walk what shows, "+N" chips among the blocks, by start.
+            const stops = [...dayBlocks, ...layout.more].sort(
+              (a, b) => a.startMinute - b.startMinute || a.indent - b.indent || a.lane - b.lane,
+            );
             return (
               // A composite: the day takes focus, and the arrow keys move between days and their blocks.
               // eslint-disable-next-line jsx-a11y-x/no-noninteractive-element-interactions
@@ -390,7 +377,7 @@ export function WeekCalendar({
                   else columns.current.set(day.key, element);
                 }}
                 role="group"
-                aria-label={isLoading ? strings.dayLoading(day.label) : strings.dayBlocks(day.label, dayBlocks.length)}
+                aria-label={isLoading ? strings.dayLoading(day.label) : strings.dayBlocks(day.label, ofDay.length)}
                 {...(onDraw === undefined
                   ? {}
                   : { 'aria-description': strings.drawHint, 'aria-keyshortcuts': 'Enter' })}
@@ -400,7 +387,7 @@ export function WeekCalendar({
                 data-today={day.isToday || undefined}
                 data-past={day.isPast || undefined}
                 data-drawable={onDraw === undefined ? undefined : true}
-                onKeyDown={(event) => onColumnKey(event, day, dayBlocks)}
+                onKeyDown={(event) => onColumnKey(event, day, stops)}
                 {...(onDraw === undefined
                   ? {}
                   : {
@@ -491,6 +478,8 @@ export function WeekCalendar({
                       data-kind={block.kind}
                       data-hue={block.hue}
                       data-cancelled={block.isCancelled || undefined}
+                      data-nested={block.indent > 0 || undefined}
+                      data-narrow={(block.span / block.lanes) * block.width < 0.5 || undefined}
                       data-open={block.id === openId || undefined}
                       data-size={sizeOf(length)}
                       aria-haspopup="dialog"
@@ -498,9 +487,13 @@ export function WeekCalendar({
                       aria-label={strings.blockName(block.title, block.time)}
                       style={{
                         '--start': String(block.startMinute),
-                        '--length': String(Math.max(length, 15)),
+                        '--length': String(Math.max(block.endMinute - block.startMinute, 15)),
+                        '--left': String(block.left),
+                        '--width': String(block.width),
+                        '--indent': String(block.indent),
                         '--lane': String(block.lane),
                         '--lanes': String(block.lanes),
+                        '--span': String(block.span),
                       }}
                       onClick={(event) => {
                         if (block.id === openId) {
@@ -526,6 +519,25 @@ export function WeekCalendar({
                     </button>
                   );
                 })}
+                {layout.more.map((more) => (
+                  <MoreChip
+                    key={more.id}
+                    more={more}
+                    isOpen={more.id === moreList?.id || more.hidden.some((block) => block.id === openId)}
+                    at={minuteLabel?.(more.startMinute) ?? more.hidden[0]?.time ?? ''}
+                    ref={(element) => {
+                      if (element === null) blockRefs.current.delete(more.id);
+                      else blockRefs.current.set(more.id, element);
+                    }}
+                    onPress={(element) =>
+                      setMoreList(
+                        more.id === moreList?.id
+                          ? null
+                          : { id: more.id, dayKey: day.key, hidden: more.hidden, anchor: element },
+                      )
+                    }
+                  />
+                ))}
                 {now?.dayKey === day.key && (
                   <span className={styles.now} style={{ '--start': String(now.minute) }} aria-hidden="true" />
                 )}
@@ -551,6 +563,40 @@ export function WeekCalendar({
           {draftCard}
         </Popover>
       )}
+      {moreList !== null && (
+        <Popover
+          triggerRef={moreRef}
+          isOpen
+          onOpenChange={(isOpen) => {
+            if (!isOpen) setMoreList(null);
+          }}
+          placement="end top"
+          width="menu"
+        >
+          {/* The Menu is the popover's content (no dialog around it), focused on its first item: a list it opened. */}
+          <Menu
+            isInline
+            // eslint-disable-next-line jsx-a11y-x/no-autofocus -- the list the chip just opened, as a MenuTrigger's would
+            autoFocus="first"
+            label={strings.moreList}
+            onAction={(key) => {
+              const chosen = moreList.hidden.find((block) => block.id === key);
+              if (chosen === undefined) return;
+              // The block's card opens where its list did, on the chip.
+              setAnchor(moreList.anchor);
+              anchorDay.current = moreList.dayKey;
+              setMoreList(null);
+              onOpen(chosen.id);
+            }}
+          >
+            {moreList.hidden.map((block) => (
+              <MenuItem key={block.id} id={block.id} description={block.time}>
+                {block.title}
+              </MenuItem>
+            ))}
+          </Menu>
+        </Popover>
+      )}
       {openId !== undefined && detail !== undefined && anchor !== null && (
         <Popover
           triggerRef={anchorRef}
@@ -568,6 +614,52 @@ export function WeekCalendar({
         </Popover>
       )}
     </section>
+  );
+}
+
+/** "+N": blocks folded where a lane would be too narrow, a quiet chip in the last lane that fits; it opens their list. */
+function MoreChip({
+  more,
+  isOpen,
+  at,
+  ref,
+  onPress,
+}: {
+  readonly more: More<WeekCalendarBlock>;
+  /** Its list or one of its blocks' cards is open. */
+  readonly isOpen: boolean;
+  /** When its first block starts ("9:30 AM"), for its name. */
+  readonly at: string;
+  readonly ref: Ref<HTMLButtonElement>;
+  readonly onPress: (element: HTMLButtonElement) => void;
+}) {
+  return (
+    <button
+      ref={ref}
+      type="button"
+      tabIndex={-1}
+      className={styles.block}
+      data-kind="more"
+      data-nested={more.indent > 0 || undefined}
+      data-size="compact"
+      data-open={isOpen || undefined}
+      aria-haspopup="menu"
+      aria-expanded={isOpen}
+      aria-label={strings.moreName(more.hidden.length, at)}
+      style={{
+        '--start': String(more.startMinute),
+        '--length': String(Math.max(more.endMinute - more.startMinute, 15)),
+        '--left': String(more.left),
+        '--width': String(more.width),
+        '--indent': String(more.indent),
+        '--lane': String(more.lane),
+        '--lanes': String(more.lanes),
+        '--span': String(more.span),
+      }}
+      onClick={(event) => onPress(event.currentTarget)}
+    >
+      <span className={styles.blockTitle}>{strings.more(more.hidden.length)}</span>
+    </button>
   );
 }
 

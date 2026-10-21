@@ -125,6 +125,7 @@ describe('the calendar store (spec 0024)', () => {
     // First run's calendar step asks to come back to it (spec 0036, AC-1217); Settings is the default.
     expect(connectUrl('acme', 'welcome')).toBe('/api/calendar/google/start?workspace=acme&then=welcome');
     expect(connectUrl('acme', 'settings')).toBe('/api/calendar/google/start?workspace=acme');
+    expect(connectUrl('acme', 'settings', 'microsoft')).toBe('/api/calendar/microsoft/start?workspace=acme');
   });
 
   it('shows a sharing change and a new default at once, and puts each back with a toast when refused', async () => {
@@ -216,12 +217,20 @@ describe('milestone 2: the workspace setting and Add as person', () => {
     const turning = store.setCreateUnknownPeople(WS, true);
     expect(held.getSnapshot()).toMatchObject({ createUnknownPeople: true });
     expect(await turning).toBe(true);
-    refuse(true);
-    const refused = store.setCreateUnknownPeople(WS, false);
-    expect(held.getSnapshot()).toMatchObject({ createUnknownPeople: false });
-    expect(await refused).toBe(false);
-    expect(held.getSnapshot()).toMatchObject({ createUnknownPeople: true });
+    // Saved: a quiet toast with Undo, which turns it back.
     expect(notices).toHaveLength(1);
+    expect(notices[0]).toMatchObject({ tone: 'success', action: { label: 'Undo' } });
+    notices[0]?.action?.onAction();
+    await flush();
+    expect(held.getSnapshot()).toMatchObject({ createUnknownPeople: false });
+    expect(notices).toHaveLength(2);
+    refuse(true);
+    const refused = store.setCreateUnknownPeople(WS, true);
+    expect(held.getSnapshot()).toMatchObject({ createUnknownPeople: true });
+    expect(await refused).toBe(false);
+    expect(held.getSnapshot()).toMatchObject({ createUnknownPeople: false });
+    expect(notices.at(-1)).toMatchObject({ tone: 'danger' });
+    expect(notices).toHaveLength(3);
   });
 
   it('adds an attendee and answers the person, or says why not', async () => {

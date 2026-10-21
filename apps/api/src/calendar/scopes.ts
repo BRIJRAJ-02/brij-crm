@@ -23,9 +23,18 @@ const EVENTS_SCOPES = [
   'https://www.googleapis.com/auth/calendar',
 ] as const;
 
-/** The calendar scopes requested, in the order Google shows them: the read, then the write. */
+/** Listing the account's calendars (spec 0024 milestone 5, AC-991): what we request, and the wider scopes. */
+const CALENDAR_LIST_SCOPES = [
+  'https://www.googleapis.com/auth/calendar.calendarlist.readonly',
+  'https://www.googleapis.com/auth/calendar.calendarlist',
+  'https://www.googleapis.com/auth/calendar.readonly',
+  'https://www.googleapis.com/auth/calendar',
+] as const;
+
+/** The calendar scopes requested, in the order Google shows them: the reads, then the write. */
 export const CALENDAR_SCOPES = [
   'https://www.googleapis.com/auth/calendar.freebusy',
+  'https://www.googleapis.com/auth/calendar.calendarlist.readonly',
   'https://www.googleapis.com/auth/calendar.events',
 ] as const;
 
@@ -64,7 +73,12 @@ export function grantsFreeBusy(granted: ReadonlySet<string>): boolean {
   return FREEBUSY_SCOPES.some((scope) => granted.has(scope));
 }
 
-/** Whether a grant can list, read, write, move and cancel events on the primary calendar. */
+/** Whether a grant can list the account's calendars (milestone 5). */
+export function grantsCalendarList(granted: ReadonlySet<string>): boolean {
+  return CALENDAR_LIST_SCOPES.some((scope) => granted.has(scope));
+}
+
+/** Whether a grant can list, read, write, move and cancel events on the account's calendars. */
 export function grantsCalendarEvents(granted: ReadonlySet<string>): boolean {
   return EVENTS_SCOPES.some((scope) => granted.has(scope));
 }
@@ -73,6 +87,7 @@ export function grantsCalendarEvents(granted: ReadonlySet<string>): boolean {
 export function missingCalendarCapabilities(granted: ReadonlySet<string>): readonly string[] {
   return [
     ...(grantsFreeBusy(granted) ? [] : ['see when you are busy']),
+    ...(grantsCalendarList(granted) ? [] : ['see your list of calendars']),
     ...(grantsCalendarEvents(granted) ? [] : ['see and add events']),
   ];
 }

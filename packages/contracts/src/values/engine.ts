@@ -67,6 +67,8 @@ export const ENGINE_REFUSAL_CODES = [
   'DOMAIN_PUBLIC',
   // Deleting a workspace (spec 0031, AC-823): the typed name isn't the workspace's.
   'CONFIRM_MISMATCH',
+  // Milestone 5 (AC-996, AC-1004): a destination the member can only read, or whose account stopped.
+  'CALENDAR_NOT_WRITABLE',
 ] as const;
 
 /** One of the engine's refusal codes. */

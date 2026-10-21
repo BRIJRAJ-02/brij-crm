@@ -83,6 +83,12 @@ export const bookingPages = pgTable(
     scheduleId: uuid('schedule_id'),
     /** A private page (spec 0027, AC-707, AC-708): it may book inside the host's holds, and waives its minimum notice. */
     isPrivate: boolean('is_private').notNull().default(false),
+    /**
+     * Where this page's bookings go (spec 0024 milestone 5, AC-997): one of the owner's writable calendars, or null
+     * for the owner's own "Add events to". Its foreign key (hand written in 0052) sets only this column to null when
+     * the calendar goes.
+     */
+    destinationCalendarId: uuid('destination_calendar_id'),
     ...auditColumns(),
     deletedAt: timestamptz('deleted_at'),
   },
