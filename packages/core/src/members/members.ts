@@ -10,6 +10,7 @@ import {
   ROLE_LABELS,
   ROLE_PERMISSIONS,
   type MemberSummary,
+  type MemberView,
   type MyAccess,
   type Role,
 } from '@crm/contracts';
@@ -27,16 +28,33 @@ import { deleteMemberCalendars } from '../calendar/connections.ts';
 
 const { members } = schema;
 
-/** The workspace's active members (id, name, email), by name. Removed members are left out. */
-export async function listMembers(scope: EngineScope): Promise<MemberSummary[]> {
-  return inWorkspace(scope, (tx) =>
+/**
+ * The workspace's active members, by name (spec 0031, AC-810): each with
+ * their role and when they joined. Removed members are left out. Every
+ * member may read it.
+ */
+export async function listMembers(scope: EngineScope): Promise<MemberView[]> {
+  const rows = await inWorkspace(scope, (tx) =>
     tx
-      .select({ id: members.id, name: members.name, email: members.email })
+      .select({
+        id: members.id,
+        name: members.name,
+        email: members.email,
+        role: members.role,
+        joinedAt: members.createdAt,
+      })
       .from(members)
       // Row level security keeps the read to this workspace; the filter says so too (house style).
       .where(and(eq(members.workspaceId, scope.workspaceId), eq(members.status, 'active')))
       .orderBy(asc(sql`lower(${members.name})`), asc(members.id)),
   );
+  return rows.map((row) => ({
+    id: row.id,
+    name: row.name,
+    email: row.email,
+    role: storedRole(row.role),
+    joinedAt: new Date(row.joinedAt).toISOString(),
+  }));
 }
 
 /**

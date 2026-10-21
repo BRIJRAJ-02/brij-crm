@@ -14,6 +14,7 @@ import type { Database, IdentityStore } from '@crm/db';
 import type { AnyRouter } from '@orpc/server';
 import { Hono, type Context } from 'hono';
 import { bodyLimit } from 'hono/body-limit';
+import { createAllowlist } from './auth/allowlist.ts';
 import { AUTH_BASE_PATH, AUTH_ROUTES, type Auth } from './auth/auth.ts';
 import { createCalendarRoutes } from './calendar/routes.ts';
 import { createFreeDomains } from './calendar/free-domains.ts';
@@ -28,6 +29,7 @@ import { bookingLinkKey } from './booking-link.ts';
 import { LOCAL_FORMS_IP_SALT, wakesOnUse, type ApiEnv } from './env.ts';
 import { createReadGate } from './gate.ts';
 import { errorFields, log } from './log.ts';
+import type { Mailer } from './mail/mailer.ts';
 import { type Analytics, NO_ANALYTICS } from './monitoring/posthog.ts';
 import { captureFault, nameRequest, withRequestScope } from './monitoring/sentry.ts';
 import { mountPublicBooking } from './public/booking.ts';
@@ -145,7 +147,15 @@ export interface AppServices {
   readonly bookingLimiter?: PublicLimiter;
   /** The clock the public booking routes read, for tests. */
   readonly now?: () => Date;
+  /** Where invitation emails go (spec 0031): the server's mailer; absent, every send fails and is reported unsent. */
+  readonly mailer?: Mailer;
 }
+
+/** A mailer that sends nothing and says so: an app built without one reports every invitation unsent. */
+const NO_MAILER: Mailer = {
+  transport: 'mailpit',
+  send: () => Promise.reject(new Error('No mailer was given to this app.')),
+};
 
 /** The API. `router` is the app's own unless a test passes one. */
 export function createApp({
@@ -158,6 +168,9 @@ export function createApp({
   router?: AnyRouter;
 }) {
   const { db, identity, auth, wakeRelay, rules, timing, analytics = NO_ANALYTICS } = services;
+  const mailer = services.mailer ?? NO_MAILER;
+  // Who may start a workspace of their own (spec 0031, owner decision 3): the addresses sign up lets in by the list.
+  const signupAllowlist = createAllowlist(env.APP_ENV, env.SIGNUP_ALLOWLIST);
   // The job kinds (spec 0008): the test kind only locally and in previews.
   const jobs = services.jobs ?? jobKinds({ environment: env.APP_ENV });
   const rpc = createRpcHandler(router);
@@ -299,6 +312,11 @@ export function createApp({
         bookingCalendar: booking,
         bookingLinkKey: linkKey,
         rules,
+        mailer,
+        appUrl: env.APP_URL,
+        // Only the limiter's one call, so a member handler holds nothing else of global identity at run time.
+        limiter: { consumeRateLimit: (key, rule, cost) => identity.consumeRateLimit(key, rule, cost) },
+        mayStartWorkspace: (email) => signupAllowlist.allows(email),
       },
     });
     return matched ? c.newResponse(response.body, response) : c.notFound();

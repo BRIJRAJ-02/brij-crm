@@ -5,6 +5,7 @@ import { formsRouter } from './modules/forms/router.ts';
 import { bookingPagesRouter, bookingsRouter } from './modules/booking/router.ts';
 import { jobsRouter } from './modules/jobs/router.ts';
 import { linksRouter } from './modules/links/router.ts';
+import { invitationsRouter } from './modules/invitations/router.ts';
 import { meRouter } from './modules/me/router.ts';
 import { membersRouter } from './modules/members/router.ts';
 import { objectsRouter } from './modules/objects/router.ts';
@@ -34,6 +35,7 @@ export const router = base.router({
   relationships: relationshipsRouter,
   links: linksRouter,
   members: membersRouter,
+  invitations: invitationsRouter,
   access: accessRouter,
   realtime: realtimeRouter,
   jobs: jobsRouter,

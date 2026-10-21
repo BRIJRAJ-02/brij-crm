@@ -241,6 +241,7 @@ jobs:
           e2e/timeline.flow.ts
           e2e/switching.flow.ts
           e2e/forms-publish.flow.ts
+          e2e/members.flow.ts
       - name: Keep the traces and the logs
         if: failure()
         uses: actions/upload-artifact@v7

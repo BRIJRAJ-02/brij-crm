@@ -79,6 +79,11 @@ export const ACCESS_TABLE = {
   setMemberRole: { ownerRules: true },
   removeMember: { ownerRules: true },
   listMembers: { anyMember: true },
+  // Invitations (spec 0031, slice 2).
+  inviteMembers: { permission: 'members.invite' },
+  listInvitations: { permission: 'members.invite' },
+  resendInvite: { permission: 'members.invite' },
+  revokeInvite: { permission: 'members.invite' },
   getMyAccess: { anyMember: true },
   // The limits' usage (spec 0012, AC-243): any member, filtered by their access inside.
   getUsage: { anyMember: true },

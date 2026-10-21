@@ -1,7 +1,8 @@
 // The workspace frame's sidebar in Chromium (spec 0026, AC-681, AC-685): the
 // theme switch left its footer for Settings, which sits there with ⌘, and
 // opens on that shortcut (but not from a text field); inside Settings the
-// settings sidebar takes its place.
+// settings sidebar takes its place. Sign out asks first (the owner, 21
+// October 2026).
 import type { DataLayer } from '@crm/data';
 import { createToasts, UiProvider } from '@crm/ui';
 import {
@@ -48,12 +49,12 @@ afterEach(() => {
 });
 
 /** Renders the frame at `/w/acme/start` inside a memory router, with a settings page to go to. */
-async function renderFrame(settings?: SettingsSidebar): Promise<AnyRouter> {
+async function renderFrame(settings?: SettingsSidebar, layer: DataLayer = data): Promise<AnyRouter> {
   const toasts = createToasts();
   const rootRoute = createRootRoute();
   const frame = () => (
     <WorkspaceFrame
-      data={data}
+      data={layer}
       toasts={toasts}
       slug="acme"
       workspaceName="Acme"
@@ -69,8 +70,9 @@ async function renderFrame(settings?: SettingsSidebar): Promise<AnyRouter> {
     path: '/w/acme/settings/account/preferences',
     component: () => <p>Preferences page</p>,
   });
+  const signIn = createRoute({ getParentRoute: () => rootRoute, path: '/sign-in', component: () => <p>Sign in</p> });
   const router = createRouter({
-    routeTree: rootRoute.addChildren([start, preferences]),
+    routeTree: rootRoute.addChildren([start, preferences, signIn]),
     history: createMemoryHistory({ initialEntries: ['/w/acme/start'] }),
   });
   const host = document.createElement('div');
@@ -150,5 +152,62 @@ describe('the workspace frame’s sidebar', () => {
     // Nothing of the app's sidebar: no records, no Settings entry at the foot.
     expect(nav?.textContent).not.toContain('Records');
     expect(nav?.querySelector('kbd')).toBeNull();
+  });
+});
+
+describe('signing out from the workspace menu', () => {
+  /** A data layer whose sign out is counted, and answers when `release` is called. */
+  function signOutLayer() {
+    let calls = 0;
+    let release: () => void = () => undefined;
+    const layer = {
+      ...data,
+      auth: {
+        signOut: () => {
+          calls += 1;
+          return new Promise<void>((resolve) => {
+            release = resolve;
+          });
+        },
+      },
+    } as unknown as DataLayer;
+    return { layer, calls: () => calls, release: () => release() };
+  }
+
+  /** Opens the workspace menu and picks Sign out. */
+  async function pickSignOut(): Promise<void> {
+    await page.getByRole('button', { name: /workspace menu/ }).click();
+    await page.getByRole('menuitem', { name: 'Sign out' }).click();
+  }
+
+  it('asks first: Cancel signs nobody out and puts focus back on the menu’s button', async () => {
+    const counted = signOutLayer();
+    await renderFrame(undefined, counted.layer);
+    await pickSignOut();
+    const dialog = page.getByRole('dialog', { name: 'Sign out?' });
+    await expect.element(dialog).toBeVisible();
+    expect(dialog.element().textContent).toContain('You’ll need to sign in again on this device.');
+    await dialog.getByRole('button', { name: 'Cancel' }).click();
+    await expect.element(dialog).not.toBeInTheDocument();
+    expect(counted.calls()).toBe(0);
+    await expect.element(page.getByRole('button', { name: /workspace menu/ })).toHaveFocus();
+  });
+
+  it('signs out once on Sign out, busy while it runs, then opens sign in', async () => {
+    const counted = signOutLayer();
+    const router = await renderFrame(undefined, counted.layer);
+    await pickSignOut();
+    const dialog = page.getByRole('dialog', { name: 'Sign out?' });
+    const commit = dialog.getByRole('button', { name: /Sign(ing)? out/ });
+    await commit.click();
+    // Busy: the commit spins, and a second press does nothing.
+    await expect.element(dialog.getByRole('button', { name: 'Signing out' })).toBeVisible();
+    await commit.click({ force: true });
+    expect(counted.calls()).toBe(1);
+    await act(async () => {
+      counted.release();
+      await new Promise((resolve) => setTimeout(resolve, 50));
+    });
+    expect(router.state.location.pathname).toBe('/sign-in');
   });
 });

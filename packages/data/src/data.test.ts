@@ -13,7 +13,7 @@ import {
   type TrashPage,
   type JobView,
   type Me,
-  type MemberSummary,
+  type MemberView,
   type MyAccess,
   type ObjectSummary,
   type RecordActivity,
@@ -82,7 +82,13 @@ const TITLE: AttributeDefinition = {
   position: 3,
 };
 
-const ADA_MEMBER: MemberSummary = { id: '0199a6f2-0000-7000-8000-000000000006', name: 'Ada', email: 'ada@example.com' };
+const ADA_MEMBER: MemberView = {
+  id: '0199a6f2-0000-7000-8000-000000000006',
+  name: 'Ada',
+  email: 'ada@example.com',
+  role: 'member',
+  joinedAt: '2026-10-01T09:00:00.000Z',
+};
 
 /** A person as the API answers one. */
 const personRow = (index: number, title = 'Engineer'): RecordView => {
@@ -108,7 +114,7 @@ interface Behaviour {
   me: () => Me | Promise<Me>;
   objects: (workspace: string) => ObjectSummary[];
   create: () => { workspace: Me['workspaces'][number] };
-  members: () => MemberSummary[];
+  members: () => MemberView[];
   access: () => MyAccess;
   attributes: () => AttributeDefinition[];
   addAttribute: () => AttributeDefinition;
@@ -389,7 +395,17 @@ function fakeApi(overrides: Partial<Behaviour> = {}, auth: (path: string, body: 
       }),
       deleteForever: os.trash.deleteForever.handler(() => notServed()),
     },
-    members: { list: os.members.list.handler(() => behaviour.members()) },
+    members: {
+      list: os.members.list.handler(() => behaviour.members()),
+    },
+    invitations: {
+      create: os.invitations.create.handler(notServed),
+      list: os.invitations.list.handler(notServed),
+      resend: os.invitations.resend.handler(notServed),
+      revoke: os.invitations.revoke.handler(notServed),
+      peek: os.invitations.peek.handler(notServed),
+      accept: os.invitations.accept.handler(notServed),
+    },
     access: { mine: os.access.mine.handler(() => behaviour.access()) },
     realtime: {
       connectionToken: os.realtime.connectionToken.handler(() => ({ token: 'connection-token' })),
@@ -1170,7 +1186,13 @@ describe('live updates', () => {
   });
 
   it('tells this tab, by name, when another member replaced a value it saved (spec 0006, AC-46)', async () => {
-    const BEA: MemberSummary = { id: '0199a6f2-0000-7000-8000-0000000000b0', name: 'Bea', email: 'bea@example.com' };
+    const BEA: MemberView = {
+      id: '0199a6f2-0000-7000-8000-0000000000b0',
+      name: 'Bea',
+      email: 'bea@example.com',
+      role: 'member',
+      joinedAt: '2026-10-02T09:00:00.000Z',
+    };
     const MINE = '0199a6f2-0003-7000-8000-000000000000';
     const replaced: ReplacedValue[] = [];
     let memberReads = 0;
@@ -1182,7 +1204,7 @@ describe('live updates', () => {
     );
     data.records.setValue('acme', { rowId: saved.id, columnId: TITLE.id, value: 'Lead' });
     await settled();
-    const by = (member: MemberSummary) => ({
+    const by = (member: MemberView) => ({
       ...changed(1, [saved.id]),
       replaced: {
         by: { type: 'member' as const, id: member.id },
@@ -1367,7 +1389,13 @@ describe('live updates', () => {
   });
 
   it('reads the members again on a members change, and the person’s own access when it names them (AC-82)', async () => {
-    const BEA: MemberSummary = { id: '0199a6f2-0000-7000-8000-0000000000b0', name: 'Bea', email: 'bea@example.com' };
+    const BEA: MemberView = {
+      id: '0199a6f2-0000-7000-8000-0000000000b0',
+      name: 'Bea',
+      email: 'bea@example.com',
+      role: 'member',
+      joinedAt: '2026-10-02T09:00:00.000Z',
+    };
     let memberReads = 0;
     const { api, client, data, definitionChanges } = await liveLayer({
       members: () => (memberReads++ === 0 ? [ADA_MEMBER] : [ADA_MEMBER, BEA]),

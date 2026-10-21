@@ -17,13 +17,16 @@ export function AuthPending({ title }: { readonly title: string }) {
   );
 }
 
-/** The page's frame and title when the check failed, with a retry that runs the route again. */
-export function AuthError({ title }: { readonly title: string }) {
+/**
+ * The page's frame and title when the check failed, with a retry that runs
+ * the route again; `text` says why when the server said (a rate limit).
+ */
+export function AuthError({ title, text }: { readonly title: string; readonly text?: string | undefined }) {
   const router = useRouter();
   return (
     <AuthLayout productName={strings.product} logo={PRODUCT_LOGO} title={title}>
       <EmptyState tone="error" title={strings.failedTitle} onRetry={() => void router.invalidate()}>
-        {strings.failedText}
+        {text ?? strings.failedText}
       </EmptyState>
     </AuthLayout>
   );

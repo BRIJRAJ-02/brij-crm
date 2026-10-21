@@ -144,6 +144,12 @@ export interface AuthDeps {
   readonly mailer: Mailer;
   /** Where `user_signed_up` goes (spec 0010, AC-174); absent, nothing is sent. */
   readonly analytics?: Analytics;
+  /**
+   * Whether an open email invitation names this address (spec 0031, owner
+   * decision 3, AC-807): such an address may sign up though it isn't on
+   * `SIGNUP_ALLOWLIST`. Absent, only the list decides.
+   */
+  readonly invited?: (email: string) => Promise<boolean>;
 }
 
 /**
@@ -288,9 +294,12 @@ function libraryDetail(message: unknown): string {
 }
 
 /** Builds sign in for this environment. */
-export function createAuth({ env, identity, mailer, analytics = NO_ANALYTICS }: AuthDeps): Auth {
+export function createAuth({ env, identity, mailer, analytics = NO_ANALYTICS, invited }: AuthDeps): Auth {
   const local = env.APP_ENV === 'local';
   const allowlist = createAllowlist(env.APP_ENV, env.SIGNUP_ALLOWLIST);
+  /** Whether a new account may be made for `email`: on the list, or holding an open email invitation (AC-807). */
+  const mayJoin = async (email: string): Promise<boolean> =>
+    allowlist.allows(email) || (invited !== undefined && (await invited(email)));
   const google =
     env.GOOGLE_CLIENT_ID !== undefined && env.GOOGLE_CLIENT_SECRET !== undefined
       ? { clientId: env.GOOGLE_CLIENT_ID, clientSecret: env.GOOGLE_CLIENT_SECRET }
@@ -363,15 +372,14 @@ export function createAuth({ env, identity, mailer, analytics = NO_ANALYTICS }: 
       user: {
         create: {
           // Every way an account is made (a code, Google) passes here.
-          before: (user) => {
-            if (!allowlist.allows(user.email)) throw signupClosed();
+          before: async (user) => {
+            if (!(await mayJoin(user.email))) throw signupClosed();
             // Every account starts from a proven email: a code proves it, and Google only when it says verified.
             // An unverified one could be someone else's address, waiting for its owner to sign in by code
             // (pre registration takeover), so it makes no account.
             // Typed boolean, but a provider's profile could carry the string "false": only true passes.
             const verified: unknown = user.emailVerified;
             if (verified !== true) throw emailUnverified();
-            return Promise.resolve();
           },
           // Once the account is written (Better Auth runs this after its transaction commits), and only for a new
           // one: signing in again creates no user. The user id only, never the email or name (AC-174).
@@ -444,7 +452,12 @@ export function createAuth({ env, identity, mailer, analytics = NO_ANALYTICS }: 
           );
         }
         // Before any email goes out: a new email off the list gets no code. An existing user always does.
-        if (!allowlist.allows(email) && (await ctx.context.internalAdapter.findUserByEmail(email)) === null) {
+        // An invited address (spec 0031, AC-807) gets its code too.
+        if (
+          !allowlist.allows(email) &&
+          (await ctx.context.internalAdapter.findUserByEmail(email)) === null &&
+          !(await mayJoin(email))
+        ) {
           throw signupClosed();
         }
       }),

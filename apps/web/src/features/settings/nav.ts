@@ -6,6 +6,7 @@ import type { ObjectSummary, Permission } from '@crm/data';
 import { jobsHref, settingsHomeHref } from '../workspace/objects.ts';
 import { strings as calendar } from './calendar-strings.ts';
 import { strings as jobs } from './jobs-strings.ts';
+import { strings as members } from './members-strings.ts';
 import { strings } from './strings.ts';
 
 /** An object's settings tabs, in order. */
@@ -32,8 +33,11 @@ export const preferencesHref = settingsHomeHref;
 /** Settings › Account › Calendars (specs 0024 and 0026): the member's own calendar connections. */
 export const calendarSettingsHref = (slug: string) => `/w/${slug}/settings/account/calendars`;
 
+/** Settings › Workspace › Members (spec 0031): who is in the workspace, roles and invitations. */
+export const membersSettingsHref = (slug: string) => `/w/${slug}/settings/members`;
+
 /** The settings navigation's pages: Account's, then Workspace's. */
-export type SettingsPageId = 'preferences' | 'calendars' | 'objects' | 'jobs';
+export type SettingsPageId = 'preferences' | 'calendars' | 'members' | 'objects' | 'jobs';
 
 /**
  * The settings navigation's groups, in order (spec 0026, AC-682). Scheduling
@@ -47,7 +51,7 @@ export interface SettingsNavEntry {
   readonly id: SettingsPageId;
   readonly label: string;
   readonly href: string;
-  readonly icon: 'sliders-horizontal' | 'calendar' | 'box' | 'list-checks';
+  readonly icon: 'sliders-horizontal' | 'calendar' | 'users' | 'box' | 'list-checks';
   /** A quiet word after the name. Every entry opens a page in Settings, so none leaves it (20 Oct 2026). */
   readonly meta?: string;
   /** A permission the page needs before the member may open it at all; absent, every member may. */
@@ -63,11 +67,12 @@ export interface SettingsNavGroup {
 
 /**
  * The settings navigation (spec 0026, AC-682): Account (Preferences,
- * Calendars) and Workspace (Objects, Background jobs). Every entry is a page
- * in Settings: the Booking pages and Forms links into Captures went on 20 Oct
- * 2026, as neither has workspace wide settings yet (each page's and each
- * form's own settings live in its editor). Every member may open each page
- * today: members read Objects and see their own jobs.
+ * Calendars) and Workspace (Members, spec 0031; Objects, Background jobs).
+ * Every entry is a page in Settings: the Booking pages and Forms links into
+ * Captures went on 20 Oct 2026, as neither has workspace wide settings yet
+ * (each page's and each form's own settings live in its editor). Every
+ * member may open each page today: everyone reads Members and Objects and
+ * sees their own jobs.
  */
 export function settingsNav(slug: string): readonly SettingsNavGroup[] {
   return [
@@ -83,6 +88,8 @@ export function settingsNav(slug: string): readonly SettingsNavGroup[] {
       id: 'workspace',
       label: strings.workspace,
       entries: [
+        // Members first (spec 0031, AC-832): every member may open it; what they may change is the server's call.
+        { id: 'members', label: members.title, href: membersSettingsHref(slug), icon: 'users' },
         { id: 'objects', label: strings.objects, href: objectsSettingsHref(slug), icon: 'box' },
         { id: 'jobs', label: jobs.title, href: jobsHref(slug), icon: 'list-checks' },
       ],
@@ -117,6 +124,7 @@ export function settingsPageOf(pathname: string): SettingsPageId | undefined {
   if (rest === 'account/calendars' || rest === 'calendar') return 'calendars';
   if (rest === 'objects' || rest.startsWith('objects/')) return 'objects';
   if (rest === 'jobs') return 'jobs';
+  if (rest === 'members') return 'members';
   return undefined;
 }
 

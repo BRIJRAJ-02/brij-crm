@@ -3,6 +3,7 @@
 // row lock, so two concurrent creates can't both pass the last free slot.
 // #38 later reads the numbers from the workspace's plan.
 import { and, count, eq, isNull, sql } from 'drizzle-orm';
+import { INVITES_LIMIT, SEAT_LIMIT } from '@crm/contracts';
 import { schema, type WorkspaceTx } from '@crm/db';
 import { checkId } from './ids.ts';
 import { refuse, refuseAll } from './refusals.ts';
@@ -28,6 +29,10 @@ export const LIMITS = {
   sharedViewsPerObject: 100,
   /** One member's private views on one object (spec 0020, AC-472). */
   privateViewsPerObject: 50,
+  /** Seats: active non guest members plus open non guest email invitations (spec 0031, AC-809). Unlimited until #38. */
+  seats: SEAT_LIMIT,
+  /** Open invitations at once (spec 0031, AC-808). */
+  openInvitations: INVITES_LIMIT,
 } as const;
 
 /** One set of limits. */

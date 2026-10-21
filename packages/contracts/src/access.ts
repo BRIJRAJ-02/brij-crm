@@ -6,23 +6,16 @@
 // same list only to hide controls a person can't use.
 import { oc } from '@orpc/contract';
 import * as z from 'zod';
+import { ROLES } from './roles.ts';
 import { WorkspaceScoped } from './workspaces.ts';
 import { Uuid } from './values/ids.ts';
 
-/** The roles a member can hold, from most to least power. `#23` may add a fourth. */
-export const ROLES = ['owner', 'admin', 'member'] as const;
+export { ROLE_DESCRIPTIONS, ROLE_LABELS, ROLES } from './roles.ts';
 
 /** A member's role in a workspace. An unknown role grants nothing (the door refuses it). */
 export const Role = z.enum(ROLES);
 /** A member's role in a workspace. */
 export type Role = z.infer<typeof Role>;
-
-/** Each role's name as the screens show it. */
-export const ROLE_LABELS = {
-  owner: 'Owner',
-  admin: 'Admin',
-  member: 'Member',
-} as const satisfies Record<Role, string>;
 
 /**
  * Every workspace permission, with the sentence a refusal for it carries

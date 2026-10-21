@@ -93,7 +93,7 @@ export interface IdentityStore {
    * older than the longest window it knows of) never drops a window still
    * open, however long.
    */
-  consumeRateLimit(key: string, rule: RateLimitRule): Promise<RateLimitDecision>;
+  consumeRateLimit(key: string, rule: RateLimitRule, cost?: number): Promise<RateLimitDecision>;
   /**
    * Refuses (throws) unless this store is connected as an identity login: a
    * member of `crm_identity`, outside `crm_app`, unable to bypass row level
@@ -205,7 +205,9 @@ export function createIdentityStore(options: DatabaseOptions): IdentityStore {
       return saved.length > 0;
     },
 
-    async consumeRateLimit(key, rule) {
+    async consumeRateLimit(key, rule, cost = 1) {
+      // `cost` uses at once (an invite to 20 addresses is 20 sends); at least one.
+      const uses = Math.max(1, Math.floor(cost));
       const now = Date.now();
       const closes = now + rule.window * 1000;
       // A fixed window: `last_request` holds when the window closes (not when it
@@ -213,9 +215,9 @@ export function createIdentityStore(options: DatabaseOptions): IdentityStore {
       // `last_request` is older than its longest window, so a row here goes
       // only once its window is long over, whatever its length.
       const result = await db.execute<{ count: number; window_end: string }>(sql`
-        insert into ${rateLimit} as r (key, count, last_request) values (${key}, 1, ${closes})
+        insert into ${rateLimit} as r (key, count, last_request) values (${key}, ${uses}, ${closes})
         on conflict (key) do update set
-          count = case when r.last_request <= ${now} then 1 else r.count + 1 end,
+          count = case when r.last_request <= ${now} then ${uses} else r.count + ${uses} end,
           last_request = case when r.last_request <= ${now} then ${closes} else r.last_request end
         returning r.count, r.last_request as window_end
       `);

@@ -16,7 +16,7 @@ import { schema, type Database, type IdentityStore, type WorkspaceTx } from '@cr
 import { isUuid } from '../engine/ids.ts';
 import { refuse, type RefusalError } from '../engine/refusals.ts';
 import { SYSTEM_ACTOR, type Actor } from '../engine/scope.ts';
-import { FORM_SLUG } from '@crm/contracts';
+import { FORM_SLUG, INVITE_INVALID_MESSAGE } from '@crm/contracts';
 import { mintScope, rescope, type EngineScope } from './mint.ts';
 import {
   bookingAccess,
@@ -258,6 +258,64 @@ export function enterAsForm(scope: EngineScope, formId: string, access: Access):
  */
 export function systemScope(db: Database, workspaceId: string): EngineScope {
   return mintScope({ db, workspaceId, actor: SYSTEM_ACTOR, access: SYSTEM_ACCESS });
+}
+
+/** The SHA-256 of an invitation token, as the database stores it (64 lowercase hex digits). */
+export function inviteTokenHash(token: string): string {
+  return createHash('sha256').update(token, 'utf8').digest('hex');
+}
+
+/** An invitation token's shape (spec 0031): 32 random bytes, base64url. Anything else names nothing. */
+const INVITE_TOKEN = /^[A-Za-z0-9_-]{43}$/;
+
+/** What every invalid invitation answers (AC-805), whatever the reason. */
+export function inviteInvalid(): RefusalError {
+  return refuse('INVITE_INVALID', INVITE_INVALID_MESSAGE);
+}
+
+/**
+ * The system's scope in the workspace an invitation token names, and the
+ * invitation's id (spec 0031, AC-805, AC-806): found by the token's SHA-256
+ * through `crm_invitation_by_token` (ids only), before any member scope can
+ * exist. A malformed or unknown token is `INVITE_INVALID`; whether the
+ * invitation still works, and for whom, is the caller's next read, inside
+ * the workspace. Exported to the invitation services only.
+ */
+export async function enterInvitation(
+  deps: { readonly db: Database },
+  token: string,
+): Promise<{ readonly scope: EngineScope } & EnteredInvitation> {
+  if (!INVITE_TOKEN.test(token)) throw inviteInvalid();
+  const hash = inviteTokenHash(token);
+  const found = await deps.db.withWorkspace(NO_WORKSPACE, (tx) =>
+    tx.execute<{ workspace_id: string; invitation_id: string }>(
+      sql`select workspace_id::text as workspace_id, invitation_id::text as invitation_id from crm_invitation_by_token(${hash})`,
+    ),
+  );
+  const [row] = found.rows;
+  if (row === undefined) throw inviteInvalid();
+  return { scope: systemScope(deps.db, row.workspace_id), invitationId: row.invitation_id, tokenHash: hash };
+}
+
+/** The invitation a token named: its id, and the token's hash, read again with it so a replaced link opens nothing. */
+export interface EnteredInvitation {
+  readonly invitationId: string;
+  readonly tokenHash: string;
+}
+
+/**
+ * Whether an open, unexpired email invitation names `email` in any
+ * workspace (spec 0031, owner decision 3, AC-807): sign up lets such an
+ * address make an account though it isn't on the allowlist. A yes or no
+ * through `crm_invitation_open_for`, never which workspace.
+ */
+export async function isInvitedEmail(deps: { readonly db: Database }, email: string): Promise<boolean> {
+  const address = email.trim().toLowerCase();
+  if (address === '' || address.length > 254) return false;
+  const found = await deps.db.withWorkspace(NO_WORKSPACE, (tx) =>
+    tx.execute<{ invited: boolean }>(sql`select crm_invitation_open_for(${address}) as invited`),
+  );
+  return found.rows[0]?.invited === true;
 }
 
 /** The ids crm_booking_page_by_key reads past row level security: a page's workspace and id, nothing else. */
