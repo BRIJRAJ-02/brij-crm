@@ -5,7 +5,7 @@ Spec 0012, milestone 1 (objects and attributes, #13), spec 0008 (background jobs
 ## Settings › Account › Preferences (`/w/$slug/settings/account/preferences`, PreferencesScreen)
 
 - **Purpose**: how the app looks for this person (spec 0026, AC-684).
-- **Main task**: pick the interface theme (System preference, Light or Dark) in a Select row; it applies the moment it changes, with no Save, and is kept in this browser by the theme controller (spec 0003), so another tab follows.
+- **Main task**: pick the theme (System preference, Light or Dark) in the Appearance section's one row, "Saved on this browser."; it applies the moment it changes, with no Save, and is kept in this browser by the theme controller (spec 0003), so another tab follows.
 - **Leaves out**: time format, start of week, language and time zone, which need a stored per member preference (a later spec).
 
 Built from library parts only: SettingsLayout (through `SettingsPage`), SettingsSection ("Appearance") around a Card, SettingsRow and Select (`isLabelHidden`, its label the row's title).
@@ -76,7 +76,7 @@ Built from library parts only: SettingsLayout (through `SettingsPage`), Table, B
 ## Settings › Account › Calendars (`/w/$slug/settings/account/calendars`, CalendarScreen)
 
 - **Purpose**: Settings › Account › Calendars (specs 0024 and 0026): the member's own calendar connections, so their meetings reach the people and companies they meet.
-- **Main task**: connect a Google calendar (the button carries the Google Calendar mark; the browser goes to the API's start address, on to Google's consent and back with `?calendar=` saying how it went, shown once in a Callout), see each connection's account, status and last sync, choose who sees its meetings (Shared or Private, a SegmentedControl), make one the default, and disconnect one (a danger confirm).
+- **Main task**: connect a Google calendar (the button carries the Google Calendar mark; the browser goes to the API's start address, on to Google's consent and back with `?calendar=` saying how it went, shown once in a Callout), then manage each connection on its own compact row (the owner, 21 October 2026, as Attio and Calendly list them): the provider's mark, the account, a Default badge with an InfoTip (new bookings go to it), its state as a Badge with a dot (green connected, blue syncing, orange expired, red revoked or failed) and its last sync, Reconnect on the row when it stopped, who sees its meetings (a Select whose Shared and Private choices say what others see), and a "···" menu with Make default and Disconnect. Disconnect asks first; from the confirm the row stays until the server answers (`remove(…, { asksFirst: true })`), and a refusal shows inside the confirm. Owners and admins see a Workspace section with Add people from meetings (a Switch, with an InfoTip and an example).
 - **Leaves out**: other members' connections, Outlook (milestone 4), the disconnected banner, the workspace's "Create people for unknown attendees" setting and Add as person (milestone 2).
 
 Its old address, `/w/$slug/settings/calendar`, where the API's Google callback still sends the browser, redirects here with its search (`?calendar=`) kept (AC-686).
