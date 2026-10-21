@@ -98,7 +98,7 @@ function cell(member: Member, column: string) {
 /** The screen's body while it loads. */
 export function RotationsPending() {
   return (
-    <SettingsPage title={strings.title} description={strings.description} isLoading>
+    <SettingsPage title={strings.title} isLoading>
       <Card isBusy>
         <Skeleton width="long" />
         <Skeleton width="medium" />
@@ -188,11 +188,7 @@ export function RotationsScreen({ data, slug, people, canManage }: RotationsScre
   ) : undefined;
 
   return (
-    <SettingsPage
-      title={strings.title}
-      description={canManage ? strings.description : strings.memberDescription}
-      {...(newButton === undefined ? {} : { actions: newButton })}
-    >
+    <SettingsPage title={strings.title} {...(newButton === undefined ? {} : { actions: newButton })}>
       {state.status === 'loading' ? (
         <Card isBusy>
           <Skeleton width="long" />

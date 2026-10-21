@@ -73,3 +73,23 @@ export function listFromText<V>(text: string, one: (part: string) => V | TextRef
 export function isCompactSurface(surface: Surface): boolean {
   return surface === 'cell' || surface === 'filter' || surface === 'panel';
 }
+
+/**
+ * Whether a display's chips are flat on `surface`: on a card (a board card, a
+ * line of the timeline) a link is its text alone and a record's or member's
+ * chip is grey with no edge, so values sit in the line like the words around
+ * them. Decided here once for every chip display.
+ */
+export function isFlatSurface(surface: Surface): boolean {
+  return surface === 'card';
+}
+
+/**
+ * Whether a member shows plain on `surface`: on a record's panel an owner or
+ * assignee is the avatar and the name as text, like the values around it. A
+ * record stays a framed chip there, since it opens its own page; a member is
+ * not a link.
+ */
+export function isPlainActorSurface(surface: Surface): boolean {
+  return surface === 'panel';
+}

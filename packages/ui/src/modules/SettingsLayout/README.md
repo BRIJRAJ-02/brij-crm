@@ -23,8 +23,10 @@ New (spec 0012, pulled forward from spec 0003's milestone 4; in the inventory as
 ```
 
 - The app's settings pages (since 21 October 2026) sit under a `TopBar` that carries their trail and h1, like every other page, so they pass no `nav` and keep the default `titleLevel`; the bar's hairline lines up with the settings sidebar's head. Without a TopBar, a page can pass `titleLevel={1}` and its `trail`: the trail ("Account › Preferences"; a place without `href` is a group's name, plain text) sits over the title, which is then the page's h1 (no TopBar above), and the header ends in a hairline before the body. Cards in the body then take h2 titles (`CardTitleLevel`). While loading, the trail stays and the h1 stays (visually hidden), so the header doesn't shift and the app's focus and the tab's title have it.
+- `header="bar"` (the app's settings pages, the owner's call on 21 October 2026): the TopBar above holds the trail, an object's tile and badge, and the page's one primary action at its end (where People's "New person" sits), so the layout draws no title block and the sections follow at once, their headings h2 under the bar's h1. Why: a big title with a line of description under it repeated the trail and the first section. A page that needs context gets it from its first section's heading, not a title.
 - `hasTabs` says the body opens with Tabs (an object's page): the header drops its hairline, as the tabs' underline divides the page, so two rules never stack.
 - `SettingsRow` is one setting in a Card: its title over a muted description, its control at the end (a Select with `isLabelHidden` and the same label, a Switch, a Button), a hairline between rows, and the control dropping under the text when the row is narrow. Why a new part: no molecule drew a setting as title, description and a control on the right (Field puts its label above its box, DescriptionList is terms and values with no control, and Card is the group around the rows). It lives beside SettingsStack because the rhythm belongs to the settings page.
+- A `SettingsRow` can also stand for one thing of a kind in a Card of them (a connected calendar each, the compact row Attio and Calendly use): `leading` puts a mark before the text (a `ProviderMark`), `meta` sits beside the title (a `Default` Badge, or an `InfoTip` when the title needs a word of help), the `description` carries its state (a `Badge` with a state `dot`, and when it last synced), and the controls and a "···" menu sit at the end. Why not a card per thing: a card of label and value pairs per account read heavy and left half the page empty (the owner, 21 October 2026).
 - `nav` (optional) lists the settings pages as a column beside the page, in order; `currentNavId` marks the one shown (`aria-current="page"`). The navigation is a `nav` landmark named by `navLabel` ("Settings").
 - `titleRef` reaches the visible title, which takes focus by script (never a tab stop) when the control in use went away with its change (an archived row, a cancelled job's Cancel); the TopBar's h1 is visually hidden under a trail, so focus there would show nothing.
 - `title` is the page's second level heading by default: the `TopBar` above holds the h1 (as the crumbs' current place), which takes focus after a route change, as on a record page.
@@ -39,10 +41,10 @@ New (spec 0012, pulled forward from spec 0003's milestone 4; in the inventory as
 
 Every settings page builds its body from three pieces, so Profile, Security, Workspace › General, Members and the rest read as one product:
 
-1. **Settings in sections.** `SettingsSection` takes a `title` and an optional `description`, and holds the section's Cards. From the page breakpoint (`bp-page-compact`, 1024px, a media query, so the split matches on every settings page at one window width) the title and description take a `size-column-wide` column at the start and the cards the rest of the width, as Vercel and Linear lay out their settings; below it the title sits above the cards. A hairline sits between one section and the next. The title is an h2 under the page's h1 (an h3 under a TopBar), the section is a region named by it, and Cards inside take titles one level under it (h3, or h4 under a TopBar). In a narrow slot (under 480px, a container query) the title sits above the cards whatever the window's width. Inside a section:
+1. **Settings in sections.** `SettingsSection` takes a `title` and an optional `description`, and holds the section's Cards. The heading sits above the cards, one column across the page's width at every size (the owner, 21 October 2026: a label column beside the cards took a third of the width for a short line and left the rest empty), and a `description` comes only when the heading alone doesn't say what the settings change. A hairline sits between one section and the next. The title is an h2 under the page's h1 (an h3 under a TopBar), the section is a region named by it, and Cards inside take titles one level under it (h3, or h4 under a TopBar). Inside a section:
    - a **Card of `SettingsRow`s**, one setting per row (title and description at the start, its control at the end): Preferences › Appearance.
    - a **Card holding a `Form` with `columns={2}`**, its Save in the Card's `footer`: the fields sit two to a row, so none stretches across the page. Leave the Card's `title` out when the section's title already says it (an object's Names and look).
-   - **`SettingsGrid`** for several cards of one kind (a card per calendar, per integration): as many columns as keep each card at least `size-panel` wide, one on a phone.
+   - **`SettingsGrid`** for several cards of one kind (a card per calendar, per integration): as many columns as keep each card at least `size-panel` wide, one on a phone. It is TileGrid's `fill` variant (spec 0041), so the library has one grid of cards.
    - a **danger section last** (Archive, Delete): a Card with a `danger` Button in its `actions`.
 2. **Lists run the full width.** A `Table` (Objects, an object's attributes, Background jobs, Members) goes straight in the body with no section, so its columns get the room.
 3. **Page level notes and states span the width too:** a read only `Callout`, a result `Callout`, and an `EmptyState` for empty and failed reads sit in the body outside any section.
@@ -50,7 +52,13 @@ Every settings page builds its body from three pieces, so Profile, Security, Wor
 ```tsx
 <SettingsLayout titleLevel={1} trail={trail} title="General" description="Your workspace’s name and address.">
   <SettingsSection title="Workspace" description="What members see in the sidebar and in emails.">
-    <Card footer={<Button variant="primary" type="submit" form="workspace">Save</Button>}>
+    <Card
+      footer={
+        <Button variant="primary" type="submit" form="workspace">
+          Save
+        </Button>
+      }
+    >
       <Form id="workspace" columns={2} onSubmit={save}>
         <Field label="Name" name="name" />
         <Field label="Web address" name="slug" />
@@ -67,7 +75,7 @@ Inside an object's tabs, wrap the sections in `SettingsStack` as before. Why `Se
 
 ## States
 
-Loaded, loading (the trail stays, skeletons for the title and description), sections (wide: title beside the cards; narrow: above them), a grid of cards, with and without the navigation column, a trail, a tile, badge, description and actions, current entry, hover and focus on the entries (NavItem's), narrow. Empty, error and read only states are the body's (EmptyState, Callout). SettingsRow: with and without a description, wide (control at the end) and narrow (control under the text); disabled and read only are its control's.
+Loaded, loading (the trail stays, skeletons for the title and description), sections (the heading above the cards), a grid of cards, with and without the navigation column, a trail, a tile, badge, description and actions, current entry, hover and focus on the entries (NavItem's), narrow. Empty, error and read only states are the body's (EmptyState, Callout). SettingsRow: with and without a description, wide (control at the end) and narrow (control under the text); disabled and read only are its control's.
 
 ## Keyboard
 

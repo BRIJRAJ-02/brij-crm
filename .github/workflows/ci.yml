@@ -109,14 +109,13 @@ jobs:
   # Google sign in that succeeds (F34), against the fake Google the api loads
   # here (apps/api/test/fake-google.ts; the browser half is in the flow).
   # Then My tasks, notes, the record's timeline, moving between pages (layout
-  # shift) and a form's first publish. They run in Chromium (1280 and 375
-  # wide); the live flow's reader opens in WebKit, so a change crosses two
-  # browser engines. The longer ones (catch up, settle, versions, scale,
-  # hidden, timeline scale, fonts) stay for the final thorough run, and so do
-  # attributes (its phone width run is red: Restore sits off screen in the
-  # archived list) and loading shape (Calendars' skeleton draws a card where a
-  # member with no calendars gets an empty state). Nothing here touches a
-  # deployed environment.
+  # shift), a form's first publish and attributes without setup. They run in
+  # Chromium (1280 and 375 wide); the live flow's reader opens in WebKit, so a
+  # change crosses two browser engines. The longer ones (catch up, settle,
+  # versions, scale, hidden, timeline scale, fonts) stay for the final
+  # thorough run, and so does loading shape (Calendars' skeleton draws a card
+  # where a member with no calendars gets an empty state). Nothing here
+  # touches a deployed environment.
   flows:
     runs-on: ubuntu-latest
     timeout-minutes: 20
@@ -243,6 +242,13 @@ jobs:
           e2e/forms-publish.flow.ts
           e2e/members.flow.ts
           e2e/schedules.flow.ts
+          e2e/command.flow.ts
+          e2e/attributes.flow.ts
+          e2e/forms-confirms.flow.ts
+          e2e/form-to-booking.flow.ts
+          e2e/embed.flow.ts
+          e2e/sidebar.flow.ts
+          e2e/comments.flow.ts
       - name: Keep the traces and the logs
         if: failure()
         uses: actions/upload-artifact@v7

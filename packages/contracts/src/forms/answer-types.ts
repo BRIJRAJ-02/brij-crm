@@ -129,3 +129,43 @@ export function freeKey(key: string, taken: ReadonlySet<string>): string {
     if (!taken.has(next)) return next;
   }
 }
+
+/** A choice's key: lowercase, snake case, 1 to 40, a letter or digit first (an option value a site's own form posts). */
+export const OPTION_KEY = /^[a-z0-9][a-z0-9_]{0,39}$/;
+
+/** A choice key made from its words: `Under $5k` gives `under_5k`, `10 to 50` gives `10_to_50`, nothing gives `option`. */
+export function optionKeyFromLabel(label: string): string {
+  const key = label
+    .toLowerCase()
+    .normalize('NFKD')
+    .replace(/[̀-ͯ]/g, '')
+    .replace(/[^a-z0-9]+/g, '_')
+    .replace(/^_+|_+$/g, '')
+    .slice(0, 40)
+    .replace(/_+$/g, '');
+  return key === '' ? 'option' : key;
+}
+
+/**
+ * Each choice's stable key, in the choices' order: the stored key where the
+ * question has one, else one made from the choice's words, never two alike.
+ * A question saved before keys existed reads the same keys every time, until
+ * the builder stores them.
+ */
+export function choiceKeysOf(question: {
+  readonly choices?: readonly string[] | undefined;
+  readonly choiceKeys?: readonly string[] | undefined;
+}): string[] {
+  const choices = question.choices ?? [];
+  const stored = question.choiceKeys ?? [];
+  const taken = new Set<string>();
+  return choices.map((label, index) => {
+    const given = stored[index];
+    const key =
+      given !== undefined && OPTION_KEY.test(given) && !taken.has(given)
+        ? given
+        : freeKey(optionKeyFromLabel(label), taken);
+    taken.add(key);
+    return key;
+  });
+}

@@ -8,15 +8,19 @@ import { linksRouter } from './modules/links/router.ts';
 import { invitationsRouter } from './modules/invitations/router.ts';
 import { meRouter } from './modules/me/router.ts';
 import { membersRouter } from './modules/members/router.ts';
+import { navRouter } from './modules/nav/router.ts';
 import { objectsRouter } from './modules/objects/router.ts';
 import { optionsRouter } from './modules/options/router.ts';
 import { realtimeRouter } from './modules/realtime/router.ts';
 import { recordsRouter } from './modules/records/router.ts';
 import { relationshipsRouter } from './modules/relationships/router.ts';
+import { recentsRouter, searchRouter } from './modules/search/router.ts';
 import { submissionsRouter } from './modules/submissions/router.ts';
 import { systemRouter } from './modules/system/router.ts';
 import { trashRouter } from './modules/trash/router.ts';
+import { commentsRouter } from './modules/comments/router.ts';
 import { notesRouter } from './modules/notes/router.ts';
+import { notificationsRouter } from './modules/notifications/router.ts';
 import { tasksRouter } from './modules/tasks/router.ts';
 import { usageRouter } from './modules/usage/router.ts';
 import { viewsRouter } from './modules/views/router.ts';
@@ -44,6 +48,8 @@ export const router = base.router({
   trash: trashRouter,
   tasks: tasksRouter,
   notes: notesRouter,
+  comments: commentsRouter,
+  notifications: notificationsRouter,
   calendar: calendarRouter,
   forms: formsRouter,
   submissions: submissionsRouter,
@@ -51,4 +57,7 @@ export const router = base.router({
   bookings: bookingsRouter,
   schedules: schedulesRouter,
   rotations: rotationsRouter,
+  search: searchRouter,
+  recents: recentsRouter,
+  nav: navRouter,
 });

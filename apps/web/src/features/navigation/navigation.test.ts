@@ -15,6 +15,7 @@ function fakeDocument(
   const doc = {
     title: 'Timefix',
     body,
+    documentElement: { dataset: {} },
     activeElement: active === 'body' ? body : {},
     querySelector: (selector: string) => {
       const element = found[selector];
@@ -133,6 +134,12 @@ describe('the document title', () => {
 
   it('says the product once when the page is named after it (a failed load before the workspace is known)', () => {
     expect(documentTitle('Timefix')).toBe('Timefix');
+  });
+
+  it('leads with the inbox unread count while there is one, "99+" past 99 (AC-1174)', () => {
+    expect(documentTitle('People', 3)).toBe('(3) People · Timefix');
+    expect(documentTitle('People', 100)).toBe('(99+) People · Timefix');
+    expect(documentTitle('People', 0)).toBe('People · Timefix');
   });
 
   it('follows the h1 from the first load, at most once a frame', () => {

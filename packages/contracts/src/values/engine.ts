@@ -64,6 +64,8 @@ export const ENGINE_REFUSAL_CODES = [
   'IN_USE',
   // A round robin page's hosts don't fit (spec 0037): 1 to 3 rotations and at most 8 hosts in all.
   'HOSTS_INVALID',
+  // The sidebar (spec 0034, AC-934): 50 favourites, or 400 stored items.
+  'NAV_LIMIT',
 ] as const;
 
 /** One of the engine's refusal codes. */

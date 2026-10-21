@@ -62,11 +62,11 @@ test.describe('availability schedules', () => {
     const code = await newWorkspace(page, email, slug);
 
     // A booking page, which follows the default: the virtual "Working hours", weekdays 9 to 5 in New York.
-    await page.goto(`/w/${slug}/captures/links`);
+    await page.goto(`/w/${slug}/booking-pages`);
     await page.getByRole('button', { name: 'New booking page' }).first().click();
     await page.getByLabel('Title').fill('Intro call');
     await page.getByRole('button', { name: 'Continue' }).click();
-    await expect(page).toHaveURL(/captures\/links\/[0-9a-f-]{36}/, { timeout: 60_000 });
+    await expect(page).toHaveURL(/booking-pages\/[0-9a-f-]{36}/, { timeout: 60_000 });
     const pageUrl = page.url();
     await expect(page.getByText('Default schedule (Working hours)').first()).toBeVisible();
     const key = /\/b\/([A-Za-z0-9_-]{16})/.exec((await page.getByLabel('Public link').inputValue()) || '')?.[1];
@@ -74,14 +74,14 @@ test.describe('availability schedules', () => {
     expect(await localStarts(page.request, key ?? '')).toEqual(halfHours(9, 17));
 
     // Availability lists the default; New schedule asks for a name and opens the new one.
-    await page.goto(`/w/${slug}/bookings/availability`);
+    await page.goto(`/w/${slug}/availability`);
     const schedules = page.getByRole('grid', { name: 'Schedules' });
     await expect(schedules.getByRole('row').filter({ hasText: 'Working hours' })).toContainText('Default');
     await page.getByRole('button', { name: 'New schedule' }).click();
     const dialog = page.getByRole('dialog', { name: 'New schedule' });
     await dialog.getByLabel('Name').fill('Evenings');
     await dialog.getByRole('button', { name: 'Create schedule' }).click();
-    await expect(page).toHaveURL(/bookings\/availability\/[0-9a-f-]{36}$/);
+    await expect(page).toHaveURL(/availability\/[0-9a-f-]{36}$/);
     const editorUrl = page.url();
     await pick(page, 'All days start', '6:00 PM');
     await pick(page, 'All days end', '8:00 PM');
@@ -119,7 +119,7 @@ test.describe('availability schedules', () => {
     expect(await localStarts(page.request, key ?? '')).toEqual(halfHours(18, 21));
 
     // Deleting asks first, naming the page it moves; Cancel changes nothing.
-    await page.goto(`/w/${slug}/bookings/availability`);
+    await page.goto(`/w/${slug}/availability`);
     const evenings = schedules.getByRole('row').filter({ hasText: 'Evenings' });
     await expect(evenings).toContainText('Used by 1 booking page');
     const remove = async () => {

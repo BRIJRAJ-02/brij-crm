@@ -1,7 +1,7 @@
 // Writing and reading one attribute's value (spec 0004, the write protocol):
 // the owner row is locked first, an unchanged value writes nothing, and a new
 // version's time never runs before the one it replaces.
-import { and, eq, inArray, isNull, sql } from 'drizzle-orm';
+import { and, eq, inArray, isNull, or, sql } from 'drizzle-orm';
 import { schema, type WorkspaceTx } from '@crm/db';
 import { parseAttributeValue, SYSTEM_ONLY_TYPES, type AttributeType } from '@crm/contracts/values';
 import { encodeValue, sameItems, type ItemColumns, type StoredItem } from './columns.ts';
@@ -118,6 +118,33 @@ export async function loadAttribute(tx: WorkspaceTx, attributeId: string, lock =
 export async function loadAttributes(tx: WorkspaceTx, objectId: string): Promise<ReadonlyMap<string, AttributeDef>> {
   const rows = await tx.select(DEF_COLUMNS).from(attributes).where(eq(attributes.objectId, objectId));
   return new Map(rows.map((row) => [row.id, row]));
+}
+
+/**
+ * The attributes a search of several objects may read, by object then id, in
+ * one statement (the command menu's search, spec 0039): each object's name
+ * attribute (`primaryIds`) and its email and domain attributes, never the rest.
+ */
+export async function loadSearchAttributes(
+  tx: WorkspaceTx,
+  objectIds: readonly string[],
+  primaryIds: readonly string[],
+): Promise<ReadonlyMap<string, ReadonlyMap<string, AttributeDef>>> {
+  if (objectIds.length === 0) return new Map();
+  const rows = await tx
+    .select(DEF_COLUMNS)
+    .from(attributes)
+    .where(
+      and(
+        inArray(attributes.objectId, [...objectIds]),
+        primaryIds.length === 0
+          ? inArray(attributes.type, ['email', 'domain'])
+          : or(inArray(attributes.type, ['email', 'domain']), inArray(attributes.id, [...primaryIds])),
+      ),
+    );
+  const byObject = new Map<string, Map<string, AttributeDef>>(objectIds.map((id) => [id, new Map()]));
+  for (const row of rows) if (row.objectId !== null) byObject.get(row.objectId)?.set(row.id, row);
+  return byObject;
 }
 
 /** Some attributes by id, wherever they sit (a filter through a relationship names the far object's). */

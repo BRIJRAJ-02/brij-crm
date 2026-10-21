@@ -75,7 +75,7 @@ test('tasks on a record: quick add, the dialog, links, ticks and the timeline, l
   // Overview's Open tasks block starts empty.
   const openTasks = page.getByRole('heading', { name: 'Open tasks' });
   await expect(openTasks).toBeVisible();
-  await expect(page.getByText('No open tasks.')).toBeVisible();
+  await expect(page.getByText('No open tasks', { exact: true })).toBeVisible();
 
   // The second browser: the same person, on Grace's Tasks tab.
   const readerContext = await browser.newContext({ viewport: page.viewportSize() ?? { width: 1280, height: 800 } });

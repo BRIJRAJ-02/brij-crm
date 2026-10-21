@@ -30,6 +30,7 @@ import { backgroundHooks } from './hooks.ts';
 import { runBookingMail } from './jobs/booking-mail.ts';
 import { runEmail, type EmailTry } from './jobs/email.ts';
 import { emailLinkKey } from './email-link.ts';
+import { runNotificationEmail } from './jobs/notification-email.ts';
 import { createMailer, pacedMailer } from './mail/mailer.ts';
 import { parseSender } from './mail/mailpit.ts';
 import { createFreeDomains } from './calendar/free-domains.ts';
@@ -277,6 +278,19 @@ if (emailDeps === undefined || mailer === undefined) {
 const email =
   emailDeps === undefined ? undefined : (payload: unknown, attempt: EmailTry) => runEmail(emailDeps, payload, attempt);
 
+// Notifications emails (spec 0038, milestone 3): one email a member, entered as that member, through the same
+// transport and links as the queued emails. Without APP_URL or a transport each queued email is logged and dropped.
+const notificationEmail = (payload: unknown) =>
+  runNotificationEmail(
+    {
+      door: { db, rules: APP_RULES },
+      mailer,
+      appOrigin: emailDeps?.appOrigin,
+      log,
+    },
+    payload,
+  );
+
 /** Opens the queue pool and starts the runners: what waking means. The NOTIFY check proves the direct host first. */
 async function openWorker(hooks: {
   readonly onActivity: () => void;
@@ -304,6 +318,7 @@ async function openWorker(hooks: {
       ...(calendarSync === undefined ? {} : { calendar: calendarSync }),
       bookingMail,
       ...(email === undefined ? {} : { email }),
+      notificationEmail,
       // The daily cleanup (milestone 3): the outbox, the dead queue rows, then one maintenance job a workspace.
       daily: (input) =>
         runDailyCleanup(

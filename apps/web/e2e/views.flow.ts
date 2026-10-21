@@ -76,6 +76,14 @@ test.describe('saved views', () => {
     await expect(grid(writer).getByText('Grace Hopper', { exact: true })).toBeVisible();
     await expect(grid(writer).getByText('Alan Turing', { exact: true })).toBeHidden();
 
+    // Discard asks first, naming the view; Cancel keeps the draft.
+    await toolbar.getByRole('button', { name: 'Discard changes' }).click();
+    const discard = writer.getByRole('alertdialog', { name: /^Discard changes to / });
+    await expect(discard).toBeVisible();
+    await discard.getByRole('button', { name: 'Cancel' }).click();
+    await expect(discard).toBeHidden();
+    await expect(writer).toHaveURL(/\?draft=/);
+
     // The reader still sees everyone until the writer saves; then follows within moments (AC-468).
     await expect(grid(reader).getByText('Alan Turing', { exact: true })).toBeVisible();
     await toolbar.getByRole('button', { name: 'Save', exact: true }).click();

@@ -1,5 +1,13 @@
 import { useMemo, type Ref } from 'react';
-import { allCountriesIn, countriesIn, flagOf, matchesCountry, type Country } from '../../lib/countries.ts';
+import {
+  allCountriesIn,
+  countriesIn,
+  countryRank,
+  flagOf,
+  mainCountriesOf,
+  matchesCountry,
+  type Country,
+} from '../../lib/countries.ts';
 import { useFormatSettings } from '../../provider/context.ts';
 import { Select, type SelectItem } from '../Select/Select.tsx';
 import styles from './CountryPicker.module.css';
@@ -10,6 +18,8 @@ export interface CountryPickerProps {
   /** What is asked ("Country"). Always given; `isLabelHidden` keeps it for screen readers only. */
   readonly label: string;
   readonly isLabelHidden?: boolean;
+  /** A quiet word after the label, such as "(optional)" on a public form. */
+  readonly labelAside?: string;
   /** The chosen country's ISO code ("IN"), or `null` for none. */
   readonly value?: string | null;
   readonly defaultValue?: string | null;
@@ -86,6 +96,7 @@ function itemOf(country: Country): SelectItem {
 export function CountryPicker({
   label,
   isLabelHidden = false,
+  labelAside,
   value,
   defaultValue,
   onChange,
@@ -117,9 +128,12 @@ export function CountryPicker({
     return pinned === undefined ? all : [pinned, ...all.filter((item) => item !== pinned)];
   }, [countries, guess, isPlace]);
   const byCode = useMemo(() => new Map(countries.map((country) => [country.code, country])), [countries]);
+  // Each shared dial code's own country, worked out once per list rather than on every key of a search.
+  const mains = useMemo(() => mainCountriesOf(countries), [countries]);
   return (
     <Select
       label={label}
+      {...(labelAside === undefined ? {} : { labelAside })}
       isLabelHidden={isLabelHidden || variant === 'prefix'}
       items={items}
       placeholder={placeholder}
@@ -130,6 +144,10 @@ export function CountryPicker({
       filter={(item, query) => {
         const country = byCode.get(item.id);
         return country !== undefined && matchesCountry(country, query);
+      }}
+      rank={(item, query) => {
+        const country = byCode.get(item.id);
+        return country === undefined ? 1 : countryRank(country, query, mains);
       }}
       isRequired={isRequired}
       isReadOnly={isReadOnly}

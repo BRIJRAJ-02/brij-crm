@@ -17,6 +17,7 @@
 //    their email, in a savepoint, so a record refusal never loses the booking.
 // 4. After the commit, the calendar event (three tries); a booking whose event
 //    failed stays confirmed and is marked for the host.
+import { handoffSubmission, handoffVisitor } from '../forms/public.ts';
 import { randomUUID } from 'node:crypto';
 import { and, eq, inArray, sql } from 'drizzle-orm';
 import type {
@@ -333,6 +334,8 @@ export async function bookPublicSlot(
   deps: PublicBookingDeps,
   input: PublicBookInput,
   hooks: readonly AfterWrite[] = [],
+  /** The form submission a verified hand off named (AC-1058): stored on the booking when it is this workspace's. */
+  link?: { readonly submissionId: string },
 ): Promise<Booked> {
   checkEntry(entry);
   const now = deps.now?.() ?? new Date();
@@ -474,6 +477,9 @@ export async function bookPublicSlot(
       const actor = { type: 'booking' as const, id: page.id, memberId: null };
       let bookingId: string;
       try {
+        // A hand off names a submission; it is linked only when it is this workspace's and its form sends its
+        // visitors on to this very page.
+        const submissionId = link === undefined ? undefined : await handoffSubmission(tx, link.submissionId, page.id);
         const [row] = await tx
           .insert(bookings)
           .values({
@@ -488,6 +494,7 @@ export async function bookPublicSlot(
             visitorEmail: input.email,
             visitorTimeZone: input.timeZone,
             answers: answersOf(input),
+            ...(submissionId === undefined ? {} : { submissionId }),
             manageTokenHash: tokenHash,
             manageTokenDerived: true,
             idempotencyKey: input.idempotencyKey,
@@ -642,6 +649,19 @@ function storedAnswers(answers: unknown): { readonly note?: string; readonly gue
       ? answers.guests.filter((guest): guest is string => typeof guest === 'string')
       : [];
   return { ...(note === undefined ? {} : { note }), guests };
+}
+
+/**
+ * The name and email a form's hand off names (spec 0023 AC-1058), for the
+ * booking page's prefill: read from the stored submission in this page's
+ * workspace, never from the link. Empty for a submission that isn't there.
+ */
+export async function readHandoffPrefill(
+  entry: BookingEntry,
+  submissionId: string,
+): Promise<{ readonly name?: string; readonly email?: string }> {
+  checkEntry(entry);
+  return inWorkspace(entry.scope, (tx) => handoffVisitor(tx, submissionId, entry.pageId));
 }
 
 /**

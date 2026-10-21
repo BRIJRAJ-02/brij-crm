@@ -27,7 +27,7 @@ New. Nothing in the library places things on a time axis. Board and DataGrid are
 
 - An hour is `--size-toolbar` tall; the body shows twelve hours at a time and scrolls. It opens with `scrollToMinute` a quarter hour below its top (the screen passes an hour before now, or 8 AM).
 - Today's column is tinted all the way down (`--surface-column`) and its date is solid accent; on another week nothing is.
-- A short block (under 45 minutes) puts its title and time on one line; from 75 minutes it shows `detail` (the guest) on a third.
+- A short block (under 45 minutes) puts its title and time on one line; from 75 minutes it shows `detail` (the guest) on a third. A quarter hour (under 30 minutes) is shorter than a label's line, so its one line is centred in the block and clipped at its edge, with no brand mark and tighter corners, the way Google Calendar draws a 15 minute event: its words never run over its border (the owner, 21 October 2026).
 - Blocks that overlap share their cluster's width side by side (`placeBlocks`: sorted by start, each in the first lane free at its start).
 - `kind: 'booking'` is accent; `kind: 'event'` is quieter, in the tag colours of its `hue` (one per connected calendar). `isCancelled` is struck through.
 - `kind: 'blocked'` and `kind: 'held'` are time the member closed (spec 0027): hatched on the subtle surface in secondary text, a solid edge for a block and a dashed one for a hold. They open a card like any block.
@@ -41,7 +41,7 @@ New. Nothing in the library places things on a time axis. Board and DataGrid are
 
 ## States
 
-Blocks (bookings, events, closed and busy time), none (an empty grid: the caller says "Nothing booked this week" under it), an open block (ringed, its card open), focused day and block rings, and loading (`isLoading`: the grid itself, busy, with no blocks, so the week arrives in place; each day reads "loading" rather than "nothing on"). Failure belongs to the screen.
+Blocks (bookings, events, closed and busy time) of every length, a quarter hour one compact centred line, none (an empty grid: the caller says "Nothing booked this week" under it), an open block (ringed, its card open), focused day and block rings, and loading (`isLoading`: the grid itself, busy, with no blocks, so the week arrives in place; each day reads "loading" rather than "nothing on"). Failure belongs to the screen.
 
 ## Keyboard
 
@@ -59,4 +59,4 @@ Not in the artifact. Dragging on the grid to make a meeting comes with the new m
 
 ## Drawing (spec 0027)
 
-With `onDraw` set, empty time draws a span: a mouse or pen drags across one day (snapped to 15 minutes, never leaving the day, the cursor a crosshair), a click or a span under 15 minutes draws `drawMinutes`, a finger taps (a drag would fight scrolling), and Enter or Space on a day draws `drawMinutes` from `drawStartMinute(day)`. The screen gets the span from `onDraw`, sets it as `draft`, and passes `draftCard` (a SpanCard), which opens in a Popover beside the solid ghost; Escape or a press outside calls `onDraftClose`. `minuteLabel` names the ghost's start and end corners. Blocks keep their own presses, so a drag can only start on empty time.
+A drawn span shows its start at its top and, from an hour, its end at its foot; a quarter hour shows its start on one line centred in the span, clipped, never over its border. With `onDraw` set, empty time draws a span: a mouse or pen drags across one day (snapped to 15 minutes, never leaving the day, the cursor a crosshair), a click or a span under 15 minutes draws `drawMinutes`, a finger taps (a drag would fight scrolling), and Enter or Space on a day draws `drawMinutes` from `drawStartMinute(day)`. The screen gets the span from `onDraw`, sets it as `draft`, and passes `draftCard` (a SpanCard), which opens in a Popover beside the solid ghost; Escape or a press outside calls `onDraftClose`. `minuteLabel` names the ghost's start and end corners. Blocks keep their own presses, so a drag can only start on empty time.

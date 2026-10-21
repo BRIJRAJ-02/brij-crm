@@ -8,6 +8,7 @@ import { strings as calendar } from './calendar-strings.ts';
 import { strings as jobs } from './jobs-strings.ts';
 import { strings as rotations } from '../booking/rotation-strings.ts';
 import { strings as members } from './members-strings.ts';
+import { strings as notifications } from './notifications-strings.ts';
 import { strings } from './strings.ts';
 
 /** An object's settings tabs, in order. */
@@ -40,8 +41,12 @@ export const membersSettingsHref = (slug: string) => `/w/${slug}/settings/member
 /** Settings › Scheduling › Rotations (spec 0029; spec 0037, AC-1433): the pools round robin pages book from. */
 export const rotationsSettingsHref = (slug: string) => `/w/${slug}/settings/scheduling/rotations`;
 
+/** Settings › Account › Notifications (spec 0038): the member's email for this workspace. */
+export const notificationSettingsHref = (slug: string) => `/w/${slug}/settings/account/notifications`;
+
 /** The settings navigation's pages: Account's, Workspace's, then Scheduling's. */
-export type SettingsPageId = 'preferences' | 'calendars' | 'members' | 'objects' | 'jobs' | 'rotations';
+export type SettingsPageId =
+  'preferences' | 'calendars' | 'notifications' | 'members' | 'objects' | 'jobs' | 'rotations';
 
 /**
  * The settings navigation's groups, in order (spec 0026, AC-682). Scheduling
@@ -55,7 +60,7 @@ export interface SettingsNavEntry {
   readonly id: SettingsPageId;
   readonly label: string;
   readonly href: string;
-  readonly icon: 'sliders-horizontal' | 'calendar' | 'users' | 'box' | 'list-checks' | 'users-round';
+  readonly icon: 'sliders-horizontal' | 'calendar' | 'bell' | 'users' | 'box' | 'list-checks' | 'users-round';
   /** A quiet word after the name. Every entry opens a page in Settings, so none leaves it (20 Oct 2026). */
   readonly meta?: string;
   /** A permission the page needs before the member may open it at all; absent, every member may. */
@@ -71,7 +76,7 @@ export interface SettingsNavGroup {
 
 /**
  * The settings navigation (spec 0026, AC-682): Account (Preferences,
- * Calendars) and Workspace (Members, spec 0031; Objects, Background jobs).
+ * Calendars, Notifications) and Workspace (Members, spec 0031; Objects, Background jobs).
  * Every entry is a page in Settings: the Booking pages and Forms links into
  * Captures went on 20 Oct 2026, as neither has workspace wide settings yet
  * (each page's and each form's own settings live in its editor). Every
@@ -86,6 +91,7 @@ export function settingsNav(slug: string): readonly SettingsNavGroup[] {
       entries: [
         { id: 'preferences', label: strings.preferences, href: preferencesHref(slug), icon: 'sliders-horizontal' },
         { id: 'calendars', label: calendar.title, href: calendarSettingsHref(slug), icon: 'calendar' },
+        { id: 'notifications', label: notifications.title, href: notificationSettingsHref(slug), icon: 'bell' },
       ],
     },
     {
@@ -140,6 +146,7 @@ export function settingsPageOf(pathname: string): SettingsPageId | undefined {
   const rest = match?.[1] ?? '';
   if (rest === 'account/preferences') return 'preferences';
   if (rest === 'account/calendars' || rest === 'calendar') return 'calendars';
+  if (rest === 'account/notifications') return 'notifications';
   if (rest === 'objects' || rest.startsWith('objects/')) return 'objects';
   if (rest === 'jobs') return 'jobs';
   if (rest === 'members') return 'members';

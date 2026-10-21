@@ -66,6 +66,17 @@ export interface WeekCalendarSpan {
 /** Drawing snaps to the quarter hour: the finest span anybody drags on purpose. */
 const SNAP = 15;
 
+/**
+ * How a block or span of `length` minutes lays out its words: under half an hour (a quarter hour, an
+ * --hour/4 box shorter than a label's line) one compact line, centred and clipped; under 45 minutes its
+ * title and time on one line; under 75 the title over the time; longer, the detail too.
+ */
+function sizeOf(length: number): 'tiny' | 'compact' | 'short' | 'tall' {
+  if (length < 2 * SNAP) return 'tiny';
+  if (length < 3 * SNAP) return 'compact';
+  return length < 5 * SNAP ? 'short' : 'tall';
+}
+
 /** How far a finger may move, in CSS pixels, and still be a tap rather than a scroll. */
 const TAP_SLOP = 8;
 
@@ -481,7 +492,7 @@ export function WeekCalendar({
                       data-hue={block.hue}
                       data-cancelled={block.isCancelled || undefined}
                       data-open={block.id === openId || undefined}
-                      data-size={length < 45 ? 'compact' : length < 75 ? 'short' : 'tall'}
+                      data-size={sizeOf(length)}
                       aria-haspopup="dialog"
                       aria-expanded={block.id === openId}
                       aria-label={strings.blockName(block.title, block.time)}
@@ -503,7 +514,11 @@ export function WeekCalendar({
                       }}
                     >
                       <span className={styles.blockHead}>
-                        {block.provider !== undefined && <ProviderMark provider={block.provider} size="sm" />}
+                        {block.provider !== undefined && (
+                          <span className={styles.blockMark}>
+                            <ProviderMark provider={block.provider} size="sm" />
+                          </span>
+                        )}
                         <span className={styles.blockTitle}>{block.title}</span>
                       </span>
                       <span className={styles.blockTime}>{block.time}</span>
@@ -575,6 +590,7 @@ function Ghost({
       ref={ref}
       className={styles.ghost}
       data-drawing={isDrawing || undefined}
+      data-size={sizeOf(length)}
       aria-hidden="true"
       style={{ '--start': String(span.startMinute), '--length': String(Math.max(length, 4)) }}
     >

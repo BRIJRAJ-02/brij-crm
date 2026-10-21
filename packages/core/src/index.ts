@@ -159,6 +159,8 @@ export {
   type CreateViewInput,
   type UpdateViewInput,
 } from './views/manage.ts';
+// The sidebar (spec 0034): each member's own row, read through the door and changed one operation at a time.
+export { changeNav, readNav } from './navigation/navigation.ts';
 export {
   deleteNote,
   getNote,
@@ -170,6 +172,34 @@ export {
   type SaveNoteInput,
 } from './notes/notes.ts';
 export {
+  commentVersions,
+  createComment,
+  deleteComment,
+  getThreads,
+  listThreads,
+  NOT_YOUR_COMMENT,
+  setThreadResolved,
+  THREAD_FULL,
+  toggleReaction,
+  UNKNOWN_COMMENT,
+  updateComment,
+  type CreateCommentInput,
+} from './comments/comments.ts';
+export {
+  countUnread,
+  DEFAULT_NOTIFICATION_SETTINGS,
+  getNotificationSettings,
+  listNotifications,
+  markAllRead,
+  markNotifications,
+  setNotificationSettings,
+  UNKNOWN_NOTIFICATION,
+  type ListNotificationsInput,
+  type MarkNotificationsInput,
+  type SetNotificationSettingsInput,
+} from './notifications/inbox.ts';
+export {
+  countDueTasks,
   createTask,
   deleteTask,
   getTasks,
@@ -348,6 +378,7 @@ export {
   newPublicKey,
   previewForm,
   publishForm,
+  rotateFormSecret,
   saveFormDraft,
   setFormStatus,
   setFormTarget,
@@ -360,12 +391,16 @@ export {
   type PublishInput,
   type SaveDraftInput,
 } from './forms/forms.ts';
+export { workspacePublicKey } from './forms/shared.ts';
 export {
   FORM_CLOSED_MESSAGE,
   getPublicForm,
   postingRules,
   submitForm,
+  visitorOf,
+  type BookingHandoff,
   type PostingRules,
+  type SignHandoff,
   type SubmitInput,
   type SubmitOutcome,
 } from './forms/public.ts';
@@ -408,7 +443,6 @@ export {
   queueFormConfirmation,
   queueFormSubmissionNotice,
   queueImportFinished,
-  queueMention,
   type EmailReader,
   type QueuedEmail,
   type QueueEmailInput,
@@ -426,3 +460,5 @@ export { createRotation, deleteRotation, listRotations, updateRotation } from '.
 export { bookingAssignments } from './rotation/assignments.ts';
 export { reassignBooking, reassignUpcoming, type Reseated } from './rotation/reassign.ts';
 export { adjustCount, rotationDistribution, undoAdjustment } from './rotation/distribution.ts';
+export { searchWorkspace, type GlobalSearchInput } from './search/search.ts';
+export { listRecents, visitRecent, RECENTS_KEPT, type RecentVisit } from './search/recents.ts';

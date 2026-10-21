@@ -24,7 +24,7 @@ export { SplitButton, type SplitButtonProps } from './atoms/Button/SplitButton.t
 export { Checkbox, type CheckboxProps } from './atoms/Checkbox/Checkbox.tsx';
 export { Code, type CodeProps } from './atoms/Code/Code.tsx';
 export { Currency, type CurrencyProps } from './atoms/Currency/Currency.tsx';
-export { DragHandle, type DragHandleProps } from './atoms/DragHandle/DragHandle.tsx';
+export { DragHandle, type DragHandleManual, type DragHandleProps } from './atoms/DragHandle/DragHandle.tsx';
 export { FileIcon, fileIconName, type FileIconProps } from './atoms/FileIcon/FileIcon.tsx';
 export { Icon, type IconProps, type IconSize, type IconTone } from './atoms/Icon/Icon.tsx';
 export type { IconName } from './atoms/Icon/icons.ts';
@@ -145,6 +145,7 @@ export {
 } from './molecules/Modal/Modal.tsx';
 export { Panel, type PanelProps, type PanelVariant, type PanelWidth } from './molecules/Panel/Panel.tsx';
 export { PhoneField, type PhoneFieldProps, type PhoneFieldValue } from './molecules/PhoneField/PhoneField.tsx';
+export { InfoTip, type InfoTipProps } from './molecules/InfoTip/InfoTip.tsx';
 export { Popover, type PopoverPlacement, type PopoverProps, type PopoverWidth } from './molecules/Popover/Popover.tsx';
 export {
   SegmentedControl,
@@ -234,6 +235,7 @@ export {
 } from './modules/VisitorBar/VisitorBar.tsx';
 export { SectionBar, type SectionBarProps, type SectionBarVariant } from './molecules/SectionBar/SectionBar.tsx';
 export { PageColumn, type PageColumnProps } from './modules/PageColumn/PageColumn.tsx';
+export { TileGrid, type TileGridProps } from './molecules/TileGrid/TileGrid.tsx';
 export {
   EditorStatus,
   PreviewDeviceSwitch,
@@ -274,6 +276,7 @@ export {
   CommandPalette,
   type CommandPaletteProps,
   type PaletteItem,
+  type PaletteSection,
 } from './modules/CommandPalette/CommandPalette.tsx';
 export {
   ConditionChip,
@@ -321,6 +324,33 @@ export {
   type SidebarState,
 } from './modules/Sidebar/Sidebar.tsx';
 export { NoteList, type NoteListItem, type NoteListProps } from './modules/NoteList/NoteList.tsx';
+export {
+  CustomiseSidebar,
+  type CustomiseSidebarItem,
+  type CustomiseSidebarProps,
+  type CustomiseSidebarSection,
+} from './modules/CustomiseSidebar/CustomiseSidebar.tsx';
+export {
+  CommentComposer,
+  type CommentComposerMode,
+  type CommentComposerProps,
+} from './molecules/CommentComposer/CommentComposer.tsx';
+export {
+  CommentText,
+  CommentThread,
+  type CommentItem,
+  type CommentReactionItem,
+  type CommentThreadItem,
+  type CommentThreadProps,
+  type CommentVersionItem,
+} from './modules/CommentThread/CommentThread.tsx';
+export {
+  NotificationList,
+  type NotificationItem,
+  type NotificationItemKind,
+  type NotificationListProps,
+  type NotificationMark,
+} from './modules/NotificationList/NotificationList.tsx';
 export { RecordHeader, type RecordHeaderProps } from './modules/RecordHeader/RecordHeader.tsx';
 export { RecordLayout, type RecordLayoutProps } from './modules/RecordLayout/RecordLayout.tsx';
 export { RecordPanel, type RecordPanelProps, type RecordPanelTab } from './modules/RecordPanel/RecordPanel.tsx';
@@ -372,6 +402,7 @@ export {
   type SortChipProps,
   type ToolbarProps,
   type TopBarProps,
+  type ViewAction,
   type ViewBarProps,
   type ViewChoice,
 } from './modules/Toolbar/Toolbar.tsx';

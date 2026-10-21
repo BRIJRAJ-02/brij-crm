@@ -11,7 +11,7 @@ export interface BookingListRow {
   readonly id: string;
   /** The day, bold in the date column ("Mon, 28 Apr"). */
   readonly date: string;
-  /** The time, muted under it ("9:00 – 9:30 AM"). */
+  /** The time, muted under it ("9:00 – 9:30 AM"); empty draws nothing (an all day event). */
   readonly time: string;
   /** The meeting's link and who provides it ("Google Meet"), once the event has one. */
   readonly join?: { readonly href: string; readonly provider: string };
@@ -19,10 +19,14 @@ export interface BookingListRow {
   readonly title: string;
   /** The visitor's note, quoted and cut to one line. */
   readonly note?: string;
-  /** The visitor's name, after "You and", linked to their person when `guestHref` is given. */
-  readonly guestName: string;
+  /**
+   * The visitor's name, after "You and", linked to their person when `guestHref` is given. Left out for one
+   * of the member's own calendar events (Home's Today), which has no visitor: the row has no "You and" line.
+   */
+  readonly guestName?: string;
   /** Who hosts it, when that isn't the reader: "Sam Lee and <guest>" in place of "You and". */
   readonly hostName?: string;
+  /** The guest's person page; only read with `guestName` (a row with no guest links nobody). */
   readonly guestHref?: string;
   /** A state worth saying ("Cancelled"). */
   readonly badge?: string;
@@ -49,6 +53,11 @@ export interface BookingListProps {
   readonly onOpen: (id: string) => void;
   /** Shown with no rows: the tab's own EmptyState. */
   readonly emptyState?: ReactNode;
+  /**
+   * `page` (the default) draws the list in its own bordered box (Bookings' list). `card` leaves the box to the
+   * Card around it (Home's Today): rows inset, bands kept, a narrower date column for a time alone.
+   */
+  readonly placement?: 'page' | 'card';
 }
 
 /**
@@ -57,10 +66,10 @@ export interface BookingListProps {
  * meeting's Join link; the title (a button that opens it), the visitor's note
  * and "You and <guest>"; and the row's actions at the end.
  */
-export function BookingList({ label, groups, onOpen, emptyState }: BookingListProps) {
+export function BookingList({ label, groups, onOpen, emptyState, placement = 'page' }: BookingListProps) {
   if (groups.every((group) => group.rows.length === 0)) return <>{emptyState}</>;
   return (
-    <section className={styles.root} aria-label={label}>
+    <section className={styles.root} aria-label={label} data-placement={placement === 'card' ? placement : undefined}>
       {groups.map((group) => (
         <div key={group.id} className={styles.group}>
           <h3 className={styles.band}>{group.label}</h3>
@@ -69,13 +78,8 @@ export function BookingList({ label, groups, onOpen, emptyState }: BookingListPr
               <li key={row.id} className={styles.row}>
                 <div className={styles.when}>
                   <span className={styles.date}>{row.date}</span>
-                  <span className={styles.time}>{row.time}</span>
-                  {row.join !== undefined && (
-                    <span className={styles.join}>
-                      <Icon name="video" size="sm" />
-                      <Link href={row.join.href}>{strings.join(row.join.provider)}</Link>
-                    </span>
-                  )}
+                  {row.time !== '' && <span className={styles.time}>{row.time}</span>}
+                  {placement !== 'card' && <Join join={row.join} />}
                 </div>
                 <div className={styles.main}>
                   <div className={styles.titleLine}>
@@ -85,10 +89,13 @@ export function BookingList({ label, groups, onOpen, emptyState }: BookingListPr
                     {row.badge !== undefined && <Badge text={row.badge} tone={row.badgeTone ?? 'neutral'} />}
                   </div>
                   {row.note !== undefined && <span className={styles.note}>{strings.quoted(row.note)}</span>}
-                  <span className={styles.who}>
-                    {row.hostName === undefined ? strings.youAnd : strings.hostAnd(row.hostName)}{' '}
-                    {row.guestHref === undefined ? row.guestName : <Link href={row.guestHref}>{row.guestName}</Link>}
-                  </span>
+                  {placement === 'card' && <Join join={row.join} />}
+                  {row.guestName !== undefined && (
+                    <span className={styles.who}>
+                      {row.hostName === undefined ? strings.youAnd : strings.hostAnd(row.hostName)}{' '}
+                      {row.guestHref === undefined ? row.guestName : <Link href={row.guestHref}>{row.guestName}</Link>}
+                    </span>
+                  )}
                 </div>
                 {row.actions !== undefined && <div className={styles.actions}>{row.actions}</div>}
               </li>
@@ -97,5 +104,16 @@ export function BookingList({ label, groups, onOpen, emptyState }: BookingListPr
         </div>
       ))}
     </section>
+  );
+}
+
+/** A meeting's Join link with its provider: in the date column, or under the title in a card (no room beside a time). */
+function Join({ join }: { readonly join: BookingListRow['join'] }) {
+  if (join === undefined) return null;
+  return (
+    <span className={styles.join}>
+      <Icon name="video" size="sm" />
+      <Link href={join.href}>{strings.join(join.provider)}</Link>
+    </span>
   );
 }

@@ -58,7 +58,7 @@ export function searchMode(query: string): 'recent' | 'prefix' | 'contains' {
 }
 
 /** The object's live attributes a contains term may search: its name, and its email and domain attributes (3 at most). */
-function searchedAttributes(
+export function searchedAttributes(
   scope: EngineScope,
   primary: AttributeDef | undefined,
   attributes: ReadonlyMap<string, AttributeDef>,

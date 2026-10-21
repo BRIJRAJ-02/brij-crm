@@ -32,6 +32,7 @@ import {
   PublicMoveInput,
   PublicMoveSlotsQuery,
   PublicRemoveGuestInput,
+  type PublicPrefill,
   PublicSlotsQuery,
   type ErrorCode,
   type PublicSlots,
@@ -53,6 +54,7 @@ import {
   addGuests,
   bookPublicSlot,
   cancelBooking,
+  readHandoffPrefill,
   enterBookingByToken,
   guestTarget,
   moveBooking,
@@ -76,6 +78,7 @@ import { toApiError } from '../errors.ts';
 import { errorFields, log } from '../log.ts';
 import type { WakeRelay } from '../realtime/wake.ts';
 import type { TicketBook } from '../forms/ticket.ts';
+import { handoffForPage } from '../forms/handoff.ts';
 import { BOOKING_LIMITS, looksLikeBot, type LimitRule, type PublicLimiter } from './limits.ts';
 import {
   findVisitor,
@@ -105,6 +108,8 @@ export interface PublicBookingServices {
   readonly now?: () => Date;
   /** The key every booking's guest page token derives from (`booking-link.ts`). */
   readonly linkKey: ManageLinkKey;
+  /** Reads a form's hand off (spec 0023 AC-1058): the prefill and the submission a booking links to. */
+  readonly handoffKey?: Buffer;
   /** Where calendar files say they come from: the app's origin and the sending address. */
   readonly ics: IcsOrigin;
   /** Knowing the visitor (spec 0028): sign in, the member door, and the guest leg where calendar sync is on. */
@@ -485,6 +490,31 @@ export function mountPublicBooking(app: Hono<{ Variables: Variables }>, services
     }
   });
 
+  /** A form's hand off for this page, or undefined: signed by us, unexpired, and naming this very page. */
+  const handoffFor = (entry: BookingEntry, token: string | undefined) =>
+    handoffForPage(services.handoffKey, token, entry.pageId, services.now?.() ?? new Date());
+
+  // The name and email a form handed over (AC-1058): only from a token we signed for this page, never plain parameters.
+  app.get('/public/booking/:publicKey/prefill', async (c) => {
+    const address = addressKey(c.get('clientIp'));
+    const key = c.req.param('publicKey');
+    const refused = limited([[`booking:read:${address}`, BOOKING_LIMITS.readsPerAddress]]);
+    if (refused !== undefined) return refused;
+    try {
+      const entry = await enterBookingPage({ db }, key);
+      const handoff = handoffFor(entry, c.req.query('p'));
+      // The name and email come from the stored submission, never from the link.
+      const visitor = handoff === undefined ? {} : await readHandoffPrefill(entry, handoff.submissionId);
+      const prefill: PublicPrefill = {
+        ...(visitor.name === undefined ? {} : { name: visitor.name }),
+        ...(visitor.email === undefined ? {} : { email: visitor.email }),
+      };
+      return ok(prefill);
+    } catch (error) {
+      return refusalAnswer(error);
+    }
+  });
+
   app.get('/public/booking/:publicKey/slots', async (c) => {
     const address = addressKey(c.get('clientIp'));
     const key = c.req.param('publicKey');
@@ -620,7 +650,14 @@ export function mountPublicBooking(app: Hono<{ Variables: Variables }>, services
     }
     try {
       const entry = await enterBookingPage({ db }, key);
-      const booked = await bookPublicSlot(entry, deps, input.data, [outboxHook()]);
+      const handoff = handoffFor(entry, input.data.prefill);
+      const booked = await bookPublicSlot(
+        entry,
+        deps,
+        input.data,
+        [outboxHook()],
+        handoff === undefined ? undefined : { submissionId: handoff.submissionId },
+      );
       // The records it made reach screens live: wake the relay once the write committed.
       if (!booked.replayed) wakeRelay();
       return ok({ booking: booked.booking, manageToken: booked.manageToken });

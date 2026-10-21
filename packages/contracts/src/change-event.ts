@@ -186,6 +186,35 @@ export const SchedulesEvent = z.object({
   mutationId,
 });
 
+/**
+ * Comments changed (spec 0038): new, replied, edited, deleted, resolved or
+ * reopened, or a reaction, on these records of the object, in these threads.
+ * A screen holding one of the records reads the threads again; `coarse` means
+ * every held record's threads.
+ */
+export const CommentsEvent = z.object({
+  ...place,
+  kind: z.literal('comments'),
+  objectId: Uuid.optional(),
+  recordIds: ids,
+  threadIds: ids,
+  coarse,
+  mutationId,
+});
+
+/**
+ * These members' notifications or notification settings changed (spec 0038,
+ * AC-1167): the members, and nothing else, so it carries no more than a
+ * `members` event. Every audience receives it; a client acts only on its own
+ * member id and reads its inbox again through the access door.
+ */
+export const NotificationsEvent = z.object({
+  ...place,
+  kind: z.literal('notifications'),
+  memberIds: ids,
+  mutationId,
+});
+
 /** Members changed (#23): joined, left, renamed, or a role changed. */
 export const MembersEvent = z.object({
   ...place,
@@ -198,6 +227,19 @@ export const MembersEvent = z.object({
 export const AccessEvent = z.object({
   ...place,
   kind: z.literal('access'),
+  memberIds: ids,
+  mutationId,
+});
+
+/**
+ * A member's own sidebar changed (spec 0034, AC-937): the member, and nothing
+ * else, so it carries no more than a `members` event. Only the audience the
+ * member is in receives it (any other gets the stub); a client acts only on
+ * its own member id and reads `nav.get` again.
+ */
+export const NavEvent = z.object({
+  ...place,
+  kind: z.literal('nav'),
   memberIds: ids,
   mutationId,
 });
@@ -237,6 +279,9 @@ export const ChangeEvent = z.discriminatedUnion('kind', [
   MembersEvent,
   AccessEvent,
   JobsEvent,
+  NavEvent,
+  CommentsEvent,
+  NotificationsEvent,
   RestrictedEvent,
 ]);
 /** One change event on a workspace's channel, or in a catch up. */
@@ -255,6 +300,9 @@ export const CHANGE_EVENT_KINDS = [
   'members',
   'access',
   'jobs',
+  'nav',
+  'comments',
+  'notifications',
   'restricted',
 ] as const satisfies readonly ChangeEvent['kind'][];
 

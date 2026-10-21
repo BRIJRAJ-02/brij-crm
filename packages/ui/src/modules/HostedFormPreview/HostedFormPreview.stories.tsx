@@ -61,7 +61,12 @@ export const Default: Story = {
     await expect(frame).not.toBeNull();
     await expect(canvas.getByRole('button', { name: 'Send' }).closest('[inert]')).toBe(frame);
     // An optional question says so after its label; an unanswered dropdown asks, never looks answered.
-    await expect(canvas.getByText('Phone or WhatsApp (optional)')).toBeInTheDocument();
+    // The quiet "(optional)" is its own muted span inside the label, so the label reads whole.
+    await expect(
+      canvas.getByText(
+        (_, element) => element?.tagName === 'LABEL' && element.textContent === 'Phone or WhatsApp (optional)',
+      ),
+    ).toBeInTheDocument();
     await expect(canvas.getByRole('button', { name: /^Choose one Budget \(optional\)/ })).toBeInTheDocument();
   },
 };

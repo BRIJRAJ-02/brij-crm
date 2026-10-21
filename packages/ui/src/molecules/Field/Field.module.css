@@ -21,6 +21,11 @@
     letter-spacing: var(--tracking-label);
   }
 
+  /* "(optional)" after a label: the same line, a step quieter. */
+  .aside {
+    color: var(--text-tertiary);
+  }
+
   .box {
     display: flex;
     align-items: center;
@@ -117,10 +122,27 @@
     overflow-wrap: anywhere;
   }
 
+  /* A composer (a comment being written): one body line at rest, a line more as its text grows, ten at most
+     (a body line is space-20), then it scrolls. */
+  .root[data-variant='composer'] .box[data-multiline] {
+    padding-block: var(--space-4);
+  }
+
+  .input[data-composer] {
+    min-block-size: var(--space-20);
+    max-block-size: calc(10 * var(--space-20));
+    overflow-y: auto;
+  }
+
   /* A multiline value to copy is code (an embed snippet, a form's HTML): the Code atom's monospace face. */
   .input[data-code] {
     font: var(--text-code);
     letter-spacing: var(--tracking-code);
+    /* Code shows every character as typed: no ligatures ("</" and "://" stay apart). */
+    font-variant-ligatures: none;
+    font-feature-settings:
+      'liga' 0,
+      'calt' 0;
   }
 
   .prefix,
@@ -296,6 +318,13 @@
 
   .root[data-align='end'] .input {
     text-align: end;
+  }
+
+  /* In a popover (a grid cell's editor, a list's search) the popover's own edge frames the field: its focus is
+     the accent edge alone, since a halo inside the popover read as a second ring around it. A refused field
+     keeps its halo: its edge stays danger, so the halo is its only sign of focus. */
+  .root[data-in-popover]:not([data-invalid]) .box:focus-within {
+    box-shadow: none;
   }
 
   @media (forced-colors: active) {

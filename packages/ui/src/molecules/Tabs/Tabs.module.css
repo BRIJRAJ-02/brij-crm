@@ -77,8 +77,31 @@
     block-size: calc(var(--size-bar) - var(--border-width-hairline));
   }
 
+  /* No inset (a settings page): the first tab's label lines up with the table's first column, the tools end
+     at its edge. */
+  .bar[data-inset='none'] .list,
+  .bar[data-inset='none'] .end {
+    padding-inline: 0;
+  }
+
+  /* The tabs keep their whole width (up to the row's), so a lone search, which can shrink, wraps under them on
+     a phone rather than squeezing the last tab out of sight. */
+  .bar[data-inset='none'] .list {
+    flex: 1 0 auto;
+    max-inline-size: 100%;
+  }
+
   .bar[data-variant='bar'] .end {
     min-block-size: calc(var(--size-bar) - var(--border-width-hairline));
+  }
+
+  /* In the bar, the first tab's label starts at the page's gutter, under the TopBar's title (the tab's own
+     padding makes up the rest), and the tabs keep their whole width: on a phone the tools wrap under them
+     rather than cutting the last tab (Tasks, Bookings; the owner, 21 October 2026). */
+  .bar[data-variant='bar'] .list {
+    flex: 1 0 auto;
+    max-inline-size: 100%;
+    padding-inline: calc(var(--space-16) - var(--space-8));
   }
 
   .tab[data-selected] {

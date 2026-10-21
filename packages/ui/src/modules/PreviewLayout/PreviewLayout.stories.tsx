@@ -33,6 +33,17 @@ const FORM: PublicForm = {
   ],
 };
 
+/**
+ * A stand in wordmark, as HostedFormPreview's own stories use: the default
+ * logo is a file the web app serves, which Storybook doesn't, so it drew as a
+ * broken image with its alt text showing.
+ */
+const wordmark = (fill: string) =>
+  `data:image/svg+xml,${encodeURIComponent(
+    `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 860 210"><rect x="0" y="40" width="130" height="130" rx="65" fill="${fill}"/><rect x="170" y="70" width="660" height="70" rx="12" fill="${fill}"/></svg>`,
+  )}`;
+const LOGO = { light: wordmark('black'), dark: wordmark('white') };
+
 const meta = {
   title: 'Modules/PreviewLayout',
   component: PreviewLayout,
@@ -101,7 +112,7 @@ function FormEditorExample() {
           />
         </>
       }
-      preview={<HostedFormPreview form={FORM} />}
+      preview={<HostedFormPreview form={FORM} logo={LOGO} />}
     >
       <Card title="The basics" description="Contact us · /f/contact-us">
         <Field label="Name" value="Contact us" />
@@ -161,7 +172,7 @@ export const WithFooter: Story = {
 export const Narrow: Story = {
   render: () => (
     <Stage width="narrow">
-      <PreviewLayout preview={<HostedFormPreview form={FORM} />}>
+      <PreviewLayout preview={<HostedFormPreview form={FORM} logo={LOGO} />}>
         <Card title="The basics">
           <Field label="Name" value="Contact us" />
         </Card>
@@ -193,7 +204,7 @@ export const WithNote: Story = {
     <Stage height="page" width="fill">
       <PreviewLayout
         previewNote={<Callout tone="info">This page is off, so visitors see it closed.</Callout>}
-        preview={<HostedFormPreview form={FORM} />}
+        preview={<HostedFormPreview form={FORM} logo={LOGO} />}
       >
         <Card title="Page" description="Anyone can book it">
           <Field label="Description" value="" isMultiline />
@@ -220,7 +231,7 @@ export const FullWidth: Story = {
 export const Grid: Story = {
   render: () => (
     <Stage height="page" width="fill">
-      <PreviewLayout bodyLayout="grid" preview={<HostedFormPreview form={FORM} />}>
+      <PreviewLayout bodyLayout="grid" preview={<HostedFormPreview form={FORM} logo={LOGO} />}>
         <Card title="After someone sends it" description="Shows a thank you message">
           <Field label="Thank you message" value="" isMultiline />
         </Card>

@@ -103,6 +103,34 @@ export const Open: Story = {
   },
 };
 
+/** A pending row says where something stands: full contrast in the secondary colour, never highlighted or chosen. */
+export const PendingRow: Story = {
+  parameters: { crm: { screenshot: false } },
+  render: (args) => (
+    <Stage>
+      <MenuTrigger defaultOpen>
+        <Button icon="ellipsis" label="Records" />
+        <Menu label="Records" {...(args.onAction === undefined ? {} : { onAction: args.onAction })}>
+          <MenuItem id="pending" isPending>
+            Searching…
+          </MenuItem>
+          <MenuItem id="ada">Ada Lovelace</MenuItem>
+        </Menu>
+      </MenuTrigger>
+    </Stage>
+  ),
+  play: async ({ args, userEvent }) => {
+    const menu = await openMenu();
+    const pending = menu.querySelector('[data-pending]');
+    await expect(pending).toHaveAttribute('aria-disabled', 'true');
+    await expect(pending).toHaveAttribute('data-loading');
+    const ada = [...menu.querySelectorAll('[role="menuitem"]')].find((item) => item.textContent.includes('Ada'));
+    if (!(ada instanceof HTMLElement)) throw new Error('no Ada row');
+    await userEvent.click(ada);
+    await waitFor(() => expect(args.onAction).toHaveBeenCalledWith('ada'));
+  },
+};
+
 /** The right arrow opens the submenu, the left arrow closes it. */
 export const Submenu: Story = {
   parameters: { crm: { screenshot: false } },

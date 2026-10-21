@@ -21,6 +21,20 @@
     block-size: var(--size-bar);
   }
 
+  /* The bar is the trail's container: on a narrow one, Breadcrumbs keeps only
+     the parent and the current place. */
+  .top {
+    container-type: inline-size;
+  }
+
+  /* On a phone the switcher, View settings and the layout switch are wider
+     than the bar: the bar scrolls sideways on its own, never the page. */
+  .view {
+    overflow-x: auto;
+    overscroll-behavior-inline: contain;
+    scrollbar-width: none;
+  }
+
   .toolbar {
     flex-wrap: wrap;
     min-block-size: var(--size-toolbar);

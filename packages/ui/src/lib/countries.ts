@@ -66,8 +66,33 @@ export function matchesCountry(country: Country, query: string): boolean {
   const typed = fold(query.trim());
   if (typed === '') return true;
   const digits = typed.replace(/^\+/, '');
+  // A "+" alone starts a dial code: every country with one, never "No matches" before the digits come.
+  if (typed === '+') return country.dial !== '';
   if (/^\d+$/.test(digits)) return country.dial !== '' && country.dial.startsWith(digits);
   return fold(country.name).includes(typed) || country.code.toLowerCase() === typed;
+}
+
+/** The countries each named by their own dial code (the United Kingdom for +44, not Guernsey): worked out once per list. */
+export function mainCountriesOf(countries: readonly Country[]): ReadonlySet<string> {
+  return new Set(
+    countries
+      .filter((country) => country.dial !== '' && countryOfNumber(`+${country.dial}`) === country.code)
+      .map((country) => country.code),
+  );
+}
+
+/**
+ * Where a country goes in a search's list, lower first: 0 when its name
+ * starts with what is typed or its ISO code is it, or, for a dial code, when
+ * it is the country its own code names (`mainCountriesOf`: the United Kingdom
+ * for +44, not Guernsey; the US for +1), so "+44" lists the United Kingdom
+ * first; 1 for the rest.
+ */
+export function countryRank(country: Country, query: string, mains: ReadonlySet<string>): number {
+  const typed = fold(query.trim());
+  const digits = typed.replace(/^\+/, '');
+  if (/^\d+$/.test(digits)) return mains.has(country.code) ? 0 : 1;
+  return fold(country.name).startsWith(typed) || country.code.toLowerCase() === typed ? 0 : 1;
 }
 
 /** The countries a search keeps, with the pinned one (the visitor's own) first. */
@@ -78,9 +103,25 @@ export function searchCountries(countries: readonly Country[], query: string, pi
 }
 
 /**
+ * The main country of a dial code several countries share, where it isn't the
+ * first by ISO code (the order the codes are listed in): +358 is Finland, not
+ * Åland, as libphonenumber names them. The others (+44 the United Kingdom,
+ * +47 Norway, +61 Australia, +262 Réunion) come first already.
+ */
+const MAIN_COUNTRY: ReadonlyMap<string, string> = new Map([
+  ['1', 'US'],
+  ['7', 'RU'],
+  ['212', 'MA'],
+  ['358', 'FI'],
+  ['590', 'GP'],
+  ['599', 'CW'],
+]);
+
+/**
  * The country a number written with "+" names: the longest dial code it
- * starts with. Several countries share +1 and +7, so the current one is kept
- * when its code fits, and otherwise the first listed (US for +1, RU for +7).
+ * starts with. Several countries share some codes (+1, +7, +44), so the
+ * current one is kept when its code fits, and otherwise the code's main
+ * country (US for +1, RU for +7, Finland for +358).
  * `undefined` when the text holds no "+" code at all.
  */
 export function countryOfNumber(text: string, current?: string): string | undefined {
@@ -90,7 +131,7 @@ export function countryOfNumber(text: string, current?: string): string | undefi
   for (let length = Math.min(4, digits.length); length > 0; length -= 1) {
     const prefix = digits.slice(0, length);
     if (current !== undefined && DIAL_CODES.get(current) === prefix) return current;
-    const fallback = prefix === '1' ? 'US' : prefix === '7' ? 'RU' : undefined;
+    const fallback = MAIN_COUNTRY.get(prefix);
     if (fallback !== undefined) return fallback;
     for (const [code, dial] of DIAL_CODES) if (dial === prefix) return code;
   }

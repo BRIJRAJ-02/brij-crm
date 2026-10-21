@@ -1,8 +1,7 @@
 // Booking pages' copy for members (spec 0025, 0025-experience.md).
 export const strings = {
-  // Captures › Links.
-  linksTitle: 'Links',
-  captures: 'Captures',
+  // Scheduling › Booking pages (spec 0034; Captures › Links before).
+  linksTitle: 'Booking pages',
   listLabel: 'Booking pages',
   /** The create button's name; it reads `newButton`, the same word as Forms', so switching tabs moves nothing. */
   newPage: 'New booking page',

@@ -2,12 +2,21 @@
 // Cancel on a job each ask first (the house rule in Modal's README). The
 // confirm opens from its row, Esc and its dismiss change nothing and hand
 // focus back, the commit runs once and shows busy until the answer, and the
-// page's title takes focus when the row's button went with the change.
+// jobs table takes focus when the row's button went with the change (the
+// page's title is hidden under the bar's trail).
 import type { DataLayer, JobsSnapshot, JobsView, JobView } from '@crm/data';
 import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 import { page, userEvent } from 'vitest/browser';
 import { deferred, openDialog, renderInApp, type InApp } from '../../testing/renderInApp.tsx';
 import { JobsScreen } from './JobsScreen.tsx';
+
+/** What holds focus: the jobs table by its name, anything else by its text. */
+const focusedName = (): string | undefined => {
+  const focused = document.activeElement;
+  return focused?.getAttribute('aria-label') === 'Background jobs'
+    ? 'Background jobs'
+    : (focused?.textContent ?? undefined);
+};
 
 /** A job as the store holds it, with what a test changes. */
 function jobOf(overrides: Partial<JobView>): JobView {
@@ -130,9 +139,9 @@ describe('Review on a counted change', () => {
     answer.resolve(true);
     await expect.poll(dialog).toBeNull();
     // Confirm went with the change: focus never falls to the page. It lands on what the row offers now when the
-    // table hands it on, else on the page's title.
+    // table hands it on, else on the jobs table.
     await expect
-      .poll(() => document.activeElement?.textContent)
+      .poll(focusedName)
       .toSatisfy((text: string | undefined) => text === 'Cancel' || text === 'Background jobs');
   });
 
@@ -151,9 +160,9 @@ describe('Review on a counted change', () => {
     await expect.poll(dialog).toBeNull();
     expect(confirm).toHaveBeenCalledTimes(1);
     // The row offers Review again; focus never falls to the page: back on Review when the table hands it on, else
-    // on the page's title (the Review that opened the confirm went and came back as a new button).
+    // on the jobs table (the Review that opened the confirm went and came back as a new button).
     await expect
-      .poll(() => document.activeElement?.textContent)
+      .poll(focusedName)
       .toSatisfy((text: string | undefined) => text === 'Review' || text === 'Background jobs');
     expect(page.getByRole('button', { name: 'Review', exact: true }).element()).toBeTruthy();
   });

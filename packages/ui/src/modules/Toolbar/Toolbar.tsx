@@ -17,8 +17,10 @@ import { useDelayedLoading } from '../../provider/useDelayedLoading.ts';
 import styles from './Toolbar.module.css';
 import { strings } from './strings.ts';
 
-// Keys no view or crumb can have: the switcher's Create view, and the trail's current place.
+// Keys no view or crumb can have: the switcher's Create view, the current view's actions, and the trail's current
+// place.
 const CREATE = '\u0000create';
+const ACTION = '\u0000action:';
 const CURRENT = '\u0000current';
 
 /** Props for TopBar. */
@@ -104,32 +106,78 @@ function sectionsOf(views: readonly ViewChoice[]) {
   return { loose, named: named.map((label) => ({ label, views: views.filter((view) => view.section === label) })) };
 }
 
-/** Props for ViewBar. */
-export interface ViewBarProps {
+/** One of the current view's actions in the switcher's menu: Rename, Duplicate, Delete view. */
+export interface ViewAction {
+  readonly id: string;
+  readonly label: string;
+  readonly icon: IconName;
+  /** Why it can't run now, shown under it, the item disabled; only where the person could act after a change. */
+  readonly reason?: string;
+  readonly isDanger?: boolean;
+  /** Starts a group of its own after a hairline: Rename, Duplicate and Copy link; then sharing; then Delete. */
+  readonly startsGroup?: boolean;
+}
+
+/** ViewBar's switcher, on an object's page: its saved views. */
+interface ViewBarSwitcher {
   readonly views: readonly ViewChoice[];
   readonly currentViewId: string;
   readonly onViewChange: (id: string) => void;
   /** Adds Create view at the end of the switcher's menu. */
   readonly onCreateView?: () => void;
+  /**
+   * The current view's own actions, under its name at the end of the
+   * switcher's menu (the view menu that was a "···" button of its own), and
+   * what runs one. Leave out what can never apply; a disabled one says why.
+   */
+  readonly actions?: readonly ViewAction[];
+  readonly onAction?: (id: string) => void;
   /** The views are still coming: the switcher is a skeleton until they arrive. */
   readonly isLoading?: boolean;
-  /** The end of the bar: View settings, Import / Export, the Table and Board switch. */
-  readonly children?: ReactNode;
 }
 
-/** The bar under the top bar: the view switcher at the start, and the view's own actions at the end. */
-export function ViewBar({
-  views,
-  currentViewId,
-  onViewChange,
-  onCreateView,
-  isLoading = false,
-  children,
-}: ViewBarProps) {
-  const showSkeleton = useDelayedLoading(isLoading);
+/** A page with no saved views (Booking pages, Forms): the bar holds the page's tools at its end, and no switcher. */
+interface ViewBarToolsOnly {
+  readonly views?: never;
+  readonly currentViewId?: never;
+  readonly onViewChange?: never;
+  readonly onCreateView?: never;
+  readonly actions?: never;
+  readonly onAction?: never;
+  readonly isLoading?: never;
+}
+
+/** Props for ViewBar: an object's view switcher, or (left out) a page's tools only. */
+export type ViewBarProps = (ViewBarSwitcher | ViewBarToolsOnly) & {
+  /** The end of the bar: View settings, Import / Export, the Table and Board switch; a list page's search. */
+  readonly children?: ReactNode;
+};
+
+/**
+ * The bar under the top bar: the view switcher (with the view's own actions in its menu) at the start, and the page's tools at the end. Without
+ * `views`, a page that has no views (Booking pages, Forms) keeps the same bar for its tools, so its content starts
+ * where an object's view does and nothing moves between them.
+ */
+export function ViewBar(props: ViewBarProps) {
+  const { children } = props;
+  const showSkeleton = useDelayedLoading(props.isLoading ?? false);
+  if (props.views === undefined) {
+    return <div className={styles.view}>{children !== undefined && <div className={styles.end}>{children}</div>}</div>;
+  }
+  const {
+    views,
+    currentViewId,
+    onViewChange,
+    onCreateView,
+    actions = [],
+    onAction: onViewAction,
+    isLoading = false,
+  } = props;
   const current = views.find((view) => view.id === currentViewId) ?? views[0];
+  const actionIds = new Set(actions.map((action) => `${ACTION}${action.id}`));
   const onAction = (key: MenuKey) => {
     if (key === CREATE) onCreateView?.();
+    else if (actionIds.has(String(key))) onViewAction?.(String(key).slice(ACTION.length));
     else onViewChange(String(key));
   };
   const { loose, named } = sectionsOf(views);
@@ -167,6 +215,25 @@ export function ViewBar({
               <MenuItem id={CREATE} icon="plus">
                 {strings.createView}
               </MenuItem>
+            )}
+            {actions.length > 0 && <MenuSeparator />}
+            {actions.length > 0 && (
+              // The view's own actions are plain actions, never choices like the views above them.
+              <MenuSection label={strings.thisView} selectionMode="none">
+                {actions.flatMap((action, index) => [
+                  ...(action.startsGroup === true && index > 0 ? [<MenuSeparator key={`group-${action.id}`} />] : []),
+                  <MenuItem
+                    key={action.id}
+                    id={`${ACTION}${action.id}`}
+                    icon={action.icon}
+                    isDisabled={action.reason !== undefined}
+                    {...(action.reason === undefined ? {} : { description: action.reason })}
+                    {...(action.isDanger === true ? { isDanger: true } : {})}
+                  >
+                    {action.label}
+                  </MenuItem>,
+                ])}
+              </MenuSection>
             )}
           </Menu>
         </MenuTrigger>

@@ -35,6 +35,7 @@ import { refuse, refuseOn } from '../engine/refusals.ts';
 import { actorRow, type EngineScope } from '../engine/scope.ts';
 import { runWrite, type AfterWrite } from '../engine/write.ts';
 import { requirePermission } from '../access/check.ts';
+import { bookingTargetProblem } from '../booking/pages.ts';
 import { can, fieldLevel, objectLevel } from '../access/policy.ts';
 import { inWorkspace } from '../access/run.ts';
 import { checkObject, UNKNOWN_OBJECT } from '../access/visibility.ts';
@@ -48,6 +49,7 @@ import {
   objectName,
   publicFormOf,
   publishAttributes,
+  workspacePublicKey,
   type FormRow,
 } from './shared.ts';
 
@@ -150,6 +152,7 @@ async function viewOf(tx: WorkspaceTx, scope: EngineScope, form: FormRow): Promi
     allowedOrigins: [...form.allowedOrigins],
     requireSignature: form.requireSignature,
     ...(canManage ? { signingSecret: form.signingSecret } : {}),
+    workspaceKey: workspacePublicKey(scope.workspaceId),
     canManage,
   };
 }
@@ -473,6 +476,31 @@ export async function createForm(
   return result;
 }
 
+/** The refusal on `after` when the booking page a draft points at can't be used (AC-1056). */
+async function checkBookingTarget(
+  tx: WorkspaceTx,
+  scope: EngineScope,
+  document: FormDocument,
+  check: 'seen' | 'live',
+): Promise<void> {
+  const { after } = document;
+  if (after.kind !== 'booking') return;
+  const problem = await bookingTargetProblem(tx, scope, after.bookingPageId, check);
+  if (problem === undefined) return;
+  throw refuseOn(
+    'CONFIG_INVALID',
+    check === 'seen'
+      ? 'Pick a booking page you can see that is taking bookings.'
+      : 'The booking page this form sends visitors to is paused or gone. Pick another, or thank them instead.',
+    'after',
+  );
+}
+
+/** The booking page a document sends visitors to, if any. */
+function bookingPageOf(document: FormDocument | undefined): string | undefined {
+  return document?.after.kind === 'booking' ? document.after.bookingPageId : undefined;
+}
+
 /** Refuses a document filed onto another object than the form's draft is set to (setFormTarget changes it). */
 function checkDraft(form: FormRow, document: FormDocument): void {
   if ((document.targets.main?.objectId ?? null) !== form.mainObjectId) {
@@ -536,6 +564,12 @@ export async function saveFormDraft(
       if (form.status === 'archived') throw refuse('FORM_STATE', 'Restore this form before you change it.');
       checkRevision(form, input.expectedRevision);
       checkDraft(form, input.document);
+      // A newly chosen booking page goes through the access door; one already chosen stays, so others can still edit.
+      const chosen = bookingPageOf(input.document);
+      if (chosen !== undefined && form.draftVersionId !== null) {
+        const before = (await loadVersions(tx, [form.draftVersionId])).get(form.draftVersionId);
+        if (bookingPageOf(before?.document) !== chosen) await checkBookingTarget(tx, scope, input.document, 'seen');
+      } else if (chosen !== undefined) await checkBookingTarget(tx, scope, input.document, 'seen');
       await writeDraft(tx, scope, form, input.document);
       const saved = await loadForm(tx, form.id);
       if (saved === undefined) throw new Error('The form went away under its save.');
@@ -581,6 +615,7 @@ export async function publishForm(
       const draft = (await loadVersions(tx, [form.draftVersionId])).get(form.draftVersionId);
       if (draft === undefined) throw new Error('The draft version went away.');
       checkDraft(form, draft.document);
+      await checkBookingTarget(tx, scope, draft.document, 'live');
       const problem = publishProblem({
         name: form.name,
         slug: form.publicKey,
@@ -657,6 +692,31 @@ export async function updateFormSettings(
         ...(input.requireSignature === undefined ? {} : { requireSignature: input.requireSignature }),
       };
       if (Object.keys(set).length > 0) await touchForm(tx, scope, form.id, set, false);
+      const changed = await loadForm(tx, form.id);
+      if (changed === undefined) throw new Error('The form went away under its change.');
+      return viewOf(tx, scope, changed);
+    },
+    hooks,
+  );
+  return result;
+}
+
+/**
+ * Gives a form a new signing secret (`forms.manage`; Install, Your own HTML):
+ * the old one stops working at once, so a site's server signing with it is
+ * refused from the next post. Answers the form with the new secret.
+ */
+export async function rotateFormSecret(
+  scope: EngineScope,
+  input: { readonly formId: string },
+  hooks: readonly AfterWrite[] = [],
+): Promise<FormView> {
+  requirePermission(scope, 'forms.manage');
+  const { result } = await runWrite(
+    scope,
+    async ({ tx }) => {
+      const form = await visibleForm(tx, scope, input.formId, true);
+      await touchForm(tx, scope, form.id, { signingSecret: newSecret() }, false);
       const changed = await loadForm(tx, form.id);
       if (changed === undefined) throw new Error('The form went away under its change.');
       return viewOf(tx, scope, changed);
@@ -818,7 +878,12 @@ export async function setFormTarget(
   return result;
 }
 
-/** Copies a form's draft as a new, never published form with its own address, named "<name> copy". */
+/**
+ * Copies a form's draft as a new, never published form with its own address,
+ * named "<name> copy". A booking page the draft sends visitors to comes along
+ * as chosen (AC-1056 checks a page when it is chosen), and publishing the copy
+ * still refuses one that is paused or gone.
+ */
 export async function duplicateForm(
   scope: EngineScope,
   input: { readonly formId: string; readonly id: string },

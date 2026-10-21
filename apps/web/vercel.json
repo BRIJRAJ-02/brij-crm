@@ -19,13 +19,13 @@
       "destination": "/book.html"
     },
     {
-      "source": "/((?!api/|api$|f/|b/).*)",
+      "source": "/((?!api/|api$|f/|b/|embed/).*)",
       "destination": "/index.html"
     }
   ],
   "headers": [
     {
-      "source": "/((?!api/|api$|f/).*)",
+      "source": "/((?!api/|api$|f/|b/[^/]+$|embed/).*)",
       "headers": [
         {
           "key": "Content-Security-Policy",
@@ -59,6 +59,44 @@
         {
           "key": "Referrer-Policy",
           "value": "strict-origin-when-cross-origin"
+        }
+      ]
+    },
+    {
+      "source": "/b/:publicKey",
+      "headers": [
+        {
+          "key": "Content-Security-Policy",
+          "value": "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data: blob:; font-src 'self'; connect-src 'self' wss://centrifugo-production-68df.up.railway.app; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors *"
+        },
+        {
+          "key": "X-Content-Type-Options",
+          "value": "nosniff"
+        },
+        {
+          "key": "Referrer-Policy",
+          "value": "strict-origin-when-cross-origin"
+        }
+      ]
+    },
+    {
+      "source": "/embed/(.*)",
+      "headers": [
+        {
+          "key": "Cache-Control",
+          "value": "public, max-age=3600, stale-while-revalidate=86400"
+        },
+        {
+          "key": "Content-Type",
+          "value": "text/javascript; charset=utf-8"
+        },
+        {
+          "key": "X-Content-Type-Options",
+          "value": "nosniff"
+        },
+        {
+          "key": "Cross-Origin-Resource-Policy",
+          "value": "cross-origin"
         }
       ]
     },

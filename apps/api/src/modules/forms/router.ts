@@ -8,6 +8,7 @@ import {
   listForms,
   previewForm,
   publishForm,
+  rotateFormSecret,
   saveFormDraft,
   setFormStatus,
   setFormTarget,
@@ -86,6 +87,11 @@ export const formsRouter = member.forms.router({
         },
         hooks,
       ),
+    ),
+  ),
+  rotateSecret: member.forms.rotateSecret.handler(({ context, input }) =>
+    commitWrite(context, { mutationId: input.mutationId }, (hooks) =>
+      rotateFormSecret(context.scope, { formId: input.formId }, hooks),
     ),
   ),
   setStatus: member.forms.setStatus.handler(({ context, input }) =>

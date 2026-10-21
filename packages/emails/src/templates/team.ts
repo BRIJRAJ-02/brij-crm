@@ -1,8 +1,8 @@
 // Emails for the lanes still to come, ready for them to queue: an import's
 // result (#30) and a mention (#29).
-import type { ImportFinishedEmail, MentionEmail } from '@crm/contracts/emails';
+import type { ImportFinishedEmail } from '@crm/contracts/emails';
 import { plural } from '../format.ts';
-import { clip, workspaceOf, type Template } from '../template.ts';
+import { workspaceOf, type Template } from '../template.ts';
 
 /** An import's ending, in a heading's words. */
 const ENDINGS: Readonly<Record<ImportFinishedEmail['outcome'], string>> = {
@@ -41,26 +41,5 @@ export const importFinished: Template<ImportFinishedEmail> = (params, context) =
       { type: 'button', label: 'View the results', url: context.link(params.resultPath) },
     ],
     why: `You got this email because you started this import in ${workspaceOf(context)}.`,
-  };
-};
-
-/** Someone mentioned the member. */
-export const mention: Template<MentionEmail> = (params, context) => {
-  const where = params.place === 'comment' ? `a comment on ${params.subjectName}` : params.subjectName;
-  return {
-    subject: `${params.authorName} mentioned you in ${where}`,
-    preheader: clip(params.excerpt, 140),
-    eyebrow: workspaceOf(context),
-    heading: `${params.authorName} mentioned you`,
-    blocks: [
-      { type: 'paragraph', text: `In ${where}:` },
-      { type: 'quote', text: params.excerpt },
-      {
-        type: 'button',
-        label: params.place === 'comment' ? 'Open comment' : 'Open note',
-        url: context.link(params.path),
-      },
-    ],
-    why: `You got this email because ${params.authorName} mentioned you in ${workspaceOf(context)}.`,
   };
 };

@@ -1,7 +1,7 @@
 // Brief
 // Purpose: the visitor's booking page at /b/<publicKey> (spec 0025, 0025-experience.md): book time with a member.
 // Main task: see the first open day's times at once, pick a time, press Book, give a name and email, confirm.
-// Leaves out: questions (milestone 2), the forms hand off's signed prefill (milestone 3, a seam), analytics and captcha.
+// Leaves out: questions (milestone 2), analytics and captcha. A form's signed hand off fills the name and email (AC-1058).
 //
 // The visitor's own calendar (spec 0028): signed in to Timefix here, they are known (the bar on top, their name and
 // email filled, their calendar laid over the times); anyone else may connect Google for the visit. Clashing times
@@ -65,6 +65,8 @@ export interface BookingPageProps {
   readonly timeZone: string;
   readonly now: () => number;
   readonly prefill?: Prefill;
+  /** A form's signed hand off (spec 0023 AC-1058): its name and email come from the API, and it rides on the booking. */
+  readonly handoff?: string;
   /** Opens the guest page once booked. */
   readonly onBooked: (manageToken: string) => void;
 }
@@ -91,8 +93,24 @@ const locationLabel = (location: PublicBookingPage['location']) =>
       : location.value;
 
 /** The page: its facts load once, then the steps; each state as the experience note writes it. */
-export function BookingPage({ publicKey, locale, timeZone, now, prefill, onBooked }: BookingPageProps) {
+export function BookingPage({ publicKey, locale, timeZone, now, prefill: given, handoff, onBooked }: BookingPageProps) {
   const client = useMemo(() => createBookingClient({ origin: globalThis.location.origin }), []);
+  // A form's hand off fills the name and email once the API vouches for it; anything else leaves them empty.
+  const [handed, setHanded] = useState<Prefill | undefined>(undefined);
+  useEffect(() => {
+    if (handoff === undefined) return;
+    let isCurrent = true;
+    client.prefill(publicKey, handoff).then(
+      (answer) => {
+        if (isCurrent && (answer.name !== undefined || answer.email !== undefined)) setHanded(answer);
+      },
+      () => undefined,
+    );
+    return () => {
+      isCurrent = false;
+    };
+  }, [client, publicKey, handoff]);
+  const prefill = given ?? handed;
   const [startedAt] = useState(now);
   // What a return from Google carried (the choices and what happened), read once; the address is then tidied.
   const [back] = useState(() => readReturn(new URL(globalThis.location.href)));
@@ -143,6 +161,7 @@ export function BookingPage({ publicKey, locale, timeZone, now, prefill, onBooke
           isPreview={isPreview}
           {...(back.result === undefined ? {} : { connected: back.result })}
           {...(prefill === undefined ? {} : { prefill })}
+          {...(handoff === undefined ? {} : { handoff })}
         />
       );
     case 'loading':
@@ -195,11 +214,13 @@ function Booking({
   now,
   startedAt,
   prefill,
+  handoff,
   onBooked,
   chosen,
   connected,
   isPreview,
 }: {
+  readonly handoff?: string;
   readonly chosen: Chosen;
   /** What a guest connect just answered. */
   readonly connected?: ConnectResult;
@@ -408,6 +429,7 @@ function Booking({
         ...(values.note === '' ? {} : { note: values.note }),
         company_url: values.trap,
         startedAt,
+        ...(handoff === undefined ? {} : { prefill: handoff }),
       })
       .then(
         (booked): BookingDetailsOutcome => {

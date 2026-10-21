@@ -1,4 +1,4 @@
-import { useMemo, type ReactElement, type ReactNode, type RefObject } from 'react';
+import { createContext, useContext, useMemo, type ReactElement, type ReactNode, type RefObject } from 'react';
 import {
   Autocomplete,
   Header,
@@ -309,7 +309,7 @@ export function Menu<T extends object>(props: MenuProps<T>) {
       </div>
     );
 
-  const body =
+  const framed =
     header === undefined ? (
       content
     ) : (
@@ -318,6 +318,9 @@ export function Menu<T extends object>(props: MenuProps<T>) {
         {content}
       </div>
     );
+  const body = (
+    <HasChecks.Provider value={selectionMode === 'single' || selectionMode === 'multiple'}>{framed}</HasChecks.Provider>
+  );
   if (isInline) return body;
   return (
     <Popover
@@ -354,6 +357,12 @@ export interface MenuItemProps {
   readonly onAction?: () => void;
   readonly isDisabled?: boolean;
   /**
+   * A row that says where something stands ("Searching…"), not a control:
+   * never highlighted or chosen, drawn in the secondary text colour at full
+   * contrast, with the arrow cursor (not the disabled look).
+   */
+  readonly isPending?: boolean;
+  /**
    * What is in effect now, in a menu of actions (a column's current sort): a
    * check at the end, named for screen readers. A menu of choices uses
    * `selectionMode` instead.
@@ -367,7 +376,7 @@ interface ItemState {
   readonly hasSubmenu: boolean;
 }
 
-function itemProps({ id, children, isDanger = false, href, onAction, isDisabled }: MenuItemProps) {
+function itemProps({ id, children, isDanger = false, href, onAction, isDisabled, isPending = false }: MenuItemProps) {
   const safe = safeHref(href);
   return {
     id: id ?? children,
@@ -377,14 +386,22 @@ function itemProps({ id, children, isDanger = false, href, onAction, isDisabled 
     ...(safe === undefined ? {} : { href: safe }),
     ...(onAction === undefined ? {} : { onAction }),
     ...(isDisabled === undefined ? {} : { isDisabled }),
+    ...(isPending ? { isDisabled: true, 'data-loading': '', 'data-pending': '' } : {}),
   };
 }
 
+/**
+ * The menu chooses (`single` or `multiple`), so its items keep a check column: a plain action in it (a
+ * `selectionMode="none"` section) keeps the empty column too, and its icon lines up with the choices' icons.
+ */
+const HasChecks = createContext(false);
+
 function ItemFace({ look, state }: { readonly look: Omit<MenuItemProps, 'id'>; readonly state: ItemState }) {
   const { children, icon, leading, isLabelInLeading = false, description, meta, kbd, isChecked = false } = look;
+  const hasChecks = useContext(HasChecks);
   return (
     <>
-      {state.selectionMode !== 'none' && (
+      {(state.selectionMode !== 'none' || hasChecks) && (
         <span className={styles.check}>{state.isSelected && <Icon name="check" size="sm" />}</span>
       )}
       {leading ?? (icon !== undefined && <Icon name={icon} size="sm" />)}
@@ -420,12 +437,18 @@ export interface MenuSectionProps {
   /** The section's heading ("Company attributes"). */
   readonly label: string;
   readonly children: ReactNode;
+  /**
+   * The section's own selection, over the menu's: `none` makes its items
+   * plain actions in a menu of choices (a view's Rename under the views to
+   * switch to), so they read as menu items, never as choices.
+   */
+  readonly selectionMode?: 'none' | 'single' | 'multiple';
 }
 
 /** A labelled group of items in a Menu. */
-export function MenuSection({ label, children }: MenuSectionProps) {
+export function MenuSection({ label, children, selectionMode }: MenuSectionProps) {
   return (
-    <AriaMenuSection className={styles.section}>
+    <AriaMenuSection className={styles.section} {...(selectionMode === undefined ? {} : { selectionMode })}>
       <Header className={styles.heading}>{label}</Header>
       {children}
     </AriaMenuSection>

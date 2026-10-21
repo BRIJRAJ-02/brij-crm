@@ -1,10 +1,19 @@
-import { useLayoutEffect, useRef, type ReactNode, type Ref } from 'react';
+import {
+  use,
+  useLayoutEffect,
+  useRef,
+  type KeyboardEvent as ReactKeyboardEvent,
+  type ReactNode,
+  type Ref,
+  type SyntheticEvent,
+} from 'react';
 import { FieldError, Input, Label, Text, TextArea, TextField } from 'react-aria-components';
 import { CopyButton } from '../../atoms/Button/CopyButton.tsx';
 import { Icon } from '../../atoms/Icon/Icon.tsx';
 import type { IconName } from '../../atoms/Icon/icons.ts';
 import { keepInside } from '../../lib/float-inside.ts';
 import { useFormatSettings } from '../../provider/context.ts';
+import { InPopover } from '../Popover/Popover.tsx';
 import styles from './Field.module.css';
 import { strings } from './strings.ts';
 
@@ -19,13 +28,28 @@ export type FieldSize = 'md' | 'sm';
  * `copy` a value to copy, never to change: a public link, an embed code; `title` a page's own title (a note's),
  * with no box at all.
  */
-export type FieldVariant = 'default' | 'search' | 'cell' | 'copy' | 'title';
+export type FieldVariant = 'default' | 'search' | 'cell' | 'copy' | 'title' | 'composer';
+
+/**
+ * A text field that names a list it suggests from: the comment composer's
+ * `@` members. Focus stays in the field; the list's highlighted
+ * option is named by `activeId`, so a screen reader hears each one.
+ */
+export interface FieldCombobox {
+  /** The listbox's id. */
+  readonly listId: string;
+  readonly isExpanded: boolean;
+  /** The highlighted option's id, while the list is open. */
+  readonly activeId?: string;
+}
 
 /** Props for Field. */
 export interface FieldProps {
   /** What the field is ("Domain"). Always given; `isLabelHidden` keeps it for screen readers only (cell editors). */
   readonly label: string;
   readonly isLabelHidden?: boolean;
+  /** A quiet word after the label, such as "(optional)" on a public form: muted, and part of the field's name. */
+  readonly labelAside?: string;
   readonly value?: string;
   readonly defaultValue?: string;
   readonly onChange?: (value: string) => void;
@@ -83,8 +107,20 @@ export interface FieldProps {
    * `title` is a page's own title, such as a note's: no box, border, fill or
    * ring, in the note title type, so it reads as the page's heading; the caret
    * marks focus, as in a document. Read only, it stays plain text (no lock).
+   * `composer` (with `isMultiline`) is a message being written: one line at
+   * rest, growing with its text to ten lines, then scrolling.
    */
   readonly variant?: FieldVariant;
+  /** The list this field suggests from (aria-autocomplete, aria-controls, aria-activedescendant). */
+  readonly combobox?: FieldCombobox;
+  /**
+   * Every key pressed in the field, before the field's own handling: a
+   * composer's ⌘Enter, and the arrows, Enter, Tab and Esc while its list is
+   * open. Call `preventDefault()` on a key it took.
+   */
+  readonly onKeyDown?: (event: ReactKeyboardEvent<HTMLInputElement | HTMLTextAreaElement>) => void;
+  /** The caret moved or the selection changed: a composer looks for an `@` before it. */
+  readonly onSelect?: (event: SyntheticEvent<HTMLInputElement | HTMLTextAreaElement>) => void;
   /** The `copy` variant's button name ("Copy link"); "Copy" when left out. */
   readonly copyLabel?: string;
   /** Where the typed text sits: `end` for numbers, which a cell aligns to its end. */
@@ -106,6 +142,7 @@ export interface FieldProps {
 export function Field({
   label,
   isLabelHidden = false,
+  labelAside,
   value,
   defaultValue,
   onChange,
@@ -138,9 +175,14 @@ export function Field({
   align = 'start',
   isErrorFloating = false,
   autoFocus = false,
+  combobox,
+  onKeyDown,
+  onSelect,
   ref,
 }: FieldProps) {
   const { locale } = useFormatSettings();
+  // In a popover the popover's edge frames the field, so its focus is the accent edge alone.
+  const isInPopover = use(InPopover);
   const isCopy = variant === 'copy';
   // A value to copy is never typed over.
   const isReadOnly = isReadOnlyGiven || isCopy;
@@ -173,6 +215,11 @@ export function Field({
     className: styles.input,
     // A multiline value to copy is code: it takes the Code atom's face.
     ...(isCopy && isMultiline ? { 'data-code': true } : {}),
+    // Autofill off (a contact's phone, a search): password managers leave the field alone too, as browsers do.
+    ...(autoComplete === 'off'
+      ? { 'data-1p-ignore': true, 'data-lpignore': 'true', 'data-bwignore': true, 'data-form-type': 'other' }
+      : {}),
+    ...(variant === 'composer' && isMultiline ? { 'data-composer': true } : {}),
     ...(placeholder === undefined ? {} : { placeholder }),
     ...(ref === undefined ? {} : { ref }),
     // A list's search field takes focus as the list opens, the pattern React Aria expects.
@@ -180,15 +227,41 @@ export function Field({
     // A value to copy is taken whole: focusing it selects all of it, ready for ⌘C.
     ...(isCopy
       ? {
-          // After the press that focused it, whose mouseup would otherwise drop the selection.
-          onFocus: (event: { readonly currentTarget: HTMLInputElement | HTMLTextAreaElement }) => {
+          // A press that would focus it focuses and selects it itself: the browser's own press would
+          // place a caret on mouseup and drop the selection (Firefox does, whenever the mouseup comes
+          // after a frame). A press inside a focused value still places a caret, to select a part.
+          onMouseDown: (event: {
+            readonly currentTarget: HTMLInputElement | HTMLTextAreaElement;
+            readonly preventDefault: () => void;
+          }) => {
             const input = event.currentTarget;
-            requestAnimationFrame(() => input.select());
+            if (input.ownerDocument.activeElement === input) return;
+            event.preventDefault();
+            input.focus();
+            input.select();
+          },
+          // Keyboard focus (Tab) selects it too.
+          onFocus: (event: { readonly currentTarget: HTMLInputElement | HTMLTextAreaElement }) => {
+            event.currentTarget.select();
           },
         }
       : {}),
     // A wrapping field starts one line tall; its CSS grows it with its text.
-    ...(isWrapping ? { rows: 1 } : {}),
+    ...(isWrapping || variant === 'composer' ? { rows: 1 } : {}),
+    ...(combobox === undefined
+      ? {}
+      : {
+          // A textarea may not take role="combobox" (axe aria-allowed-role), so it stays a multiline
+          // textbox that suggests from a list: aria-autocomplete, and while the list is open, the list
+          // it controls and the option it has highlighted.
+          'aria-autocomplete': 'list' as const,
+          ...(combobox.isExpanded ? { 'aria-controls': combobox.listId } : {}),
+          ...(combobox.isExpanded && combobox.activeId !== undefined
+            ? { 'aria-activedescendant': combobox.activeId }
+            : {}),
+        }),
+    ...(onKeyDown === undefined ? {} : { onKeyDown }),
+    ...(onSelect === undefined ? {} : { onSelect }),
   };
   return (
     <TextField
@@ -197,6 +270,7 @@ export function Field({
       data-variant={variant}
       data-align={align === 'end' ? 'end' : undefined}
       data-error-floats={isErrorFloating || undefined}
+      data-in-popover={isInPopover || undefined}
       isReadOnly={isReadOnly}
       isDisabled={isDisabled}
       isRequired={isRequired}
@@ -252,7 +326,17 @@ export function Field({
         const description = reason ?? (isInvalid ? undefined : hint);
         return (
           <>
-            {!isLabelHidden && <Label className={styles.label}>{label}</Label>}
+            {!isLabelHidden && (
+              <Label className={styles.label}>
+                {label}
+                {labelAside !== undefined && (
+                  <>
+                    {' '}
+                    <span className={styles.aside}>{labelAside}</span>
+                  </>
+                )}
+              </Label>
+            )}
             <span
               className={styles.box}
               data-multiline={isMultiline || undefined}

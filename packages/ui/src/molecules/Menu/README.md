@@ -28,7 +28,8 @@ Ported from the artifact's Menu card. Every dropdown of actions or choices in th
 ```
 
 - **Items**: `MenuItem` takes a label, and optionally an `icon` (or any `leading` piece: an Avatar, a Tag, a StatusDot), a `description`, a `meta` count, a `kbd` shortcut, `isDanger`, `href` and `isChecked` (a check at the end, read as "Current", for what is in effect now in a menu of actions: a column's current sort). With `isLabelInLeading` the leading piece shows the label itself (a select option's Tag), so the label is kept for screen readers and typing only and never drawn twice.
-- **Groups**: `MenuSection` with a `label`, and `MenuSeparator` between groups.
+- **Groups**: `MenuSection` with a `label`, and `MenuSeparator` between groups. A section's `selectionMode` overrides the menu's: `none` makes its items plain actions in a menu of choices (the view switcher's "This view" actions under its views). In a menu that chooses, those plain items keep the empty check column, so their icons line up with the choices' icons (21 October 2026).
+- A `description` wraps within the menu's width and never sets it: the labels and the menu's minimum width size the menu, so a long reason on a disabled item can't stretch it across the page and pull it away from its trigger (the owner, 21 October 2026: the view menu opened 825px wide, far left of its button, and grew in from the right).
 - **Choices**: `selectionMode="single"` or `"multiple"` shows checks; `selectedKeys` and `onSelectionChange` hold the choice.
 - **Search**: `search={{ label: 'Search attributes' }}` puts a field above the items and filters them here. With `onSearch`, the caller searches (async) and sends back new items. `isFirstUnfocused` leaves the first item unfocused while typing: a lone "Create" item (spec 0012), which one Enter shouldn't choose. Why a variant: the select editor's Create is the one item an Enter must not reach by accident.
 - **Long lists**: `items` with `isVirtualized` draws only the rows on screen; `source` (a `ListSource`) does the same for lists loaded from outside, with skeleton rows until each loads (AC-9). Rows are `size-nav-item` tall, read from tokens.json.
@@ -41,7 +42,7 @@ Ported from the artifact's Menu card. Every dropdown of actions or choices in th
 
 ## States
 
-Focused (keyboard or pointer, `surface-hover`; keyboard adds the inset ring), selected (a check), disabled, danger, submenu open, empty ("No matches"), loading rows (skeletons). It opens from the keyboard at once, grows from its trigger for a pointer, and fades out faster than it came.
+Focused (keyboard or pointer, `surface-hover`; keyboard adds the inset ring), selected (a check), disabled, pending (`isPending`: a status row such as "Searching…", in the secondary text colour at full contrast with the arrow cursor, never highlighted or chosen), danger, submenu open, empty ("No matches"), loading rows (skeletons). It opens from the keyboard at once, grows from its trigger for a pointer, and fades out faster than it came.
 
 ## Keyboard
 

@@ -43,6 +43,31 @@ export const Refused: Story = {
   },
 };
 
+/**
+ * Flat (`isFlat`, a card or a line of the timeline): the link's text alone on the chip's line, a refused one
+ * plain text; keyboard focus still draws its ring.
+ */
+export const Flat: Story = {
+  render: () => (
+    <Stage>
+      <LinkChip href="tel:+917710986909" isFlat>
+        +91 77109 86909
+      </LinkChip>
+      <LinkChip href="mailto:ada@example.com" isFlat>
+        ada@example.com
+      </LinkChip>
+      <LinkChip href="javascript:alert(1)" isFlat>
+        javascript:alert(1)
+      </LinkChip>
+    </Stage>
+  ),
+  play: async ({ canvas, userEvent }) => {
+    await userEvent.tab();
+    await expect(canvas.getByRole('link', { name: '+91 77109 86909' })).toHaveFocus();
+    await expect(canvas.getAllByRole('link')).toHaveLength(2);
+  },
+};
+
 /** A long URL is cut inside a narrow slot. */
 export const Long: Story = {
   render: () => (

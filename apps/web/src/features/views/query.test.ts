@@ -1,6 +1,14 @@
 import type { AttributeDefinition, View } from '@crm/data';
 import { describe, expect, it } from 'vitest';
-import { landingView, relationTarget, runningQuery, savableQuery, savedQuery, toViewQuery } from './query.ts';
+import {
+  createView,
+  landingView,
+  relationTarget,
+  runningQuery,
+  savableQuery,
+  savedQuery,
+  toViewQuery,
+} from './query.ts';
 
 const attribute = (id: string, extra: Partial<AttributeDefinition> = {}): AttributeDefinition => ({
   id,
@@ -77,5 +85,19 @@ describe('landingView (AC-462)', () => {
     expect(landingView({ views, defaultViewId: 'b', lastOpenedViewId: 'gone' })).toBe('b');
     expect(landingView({ views, defaultViewId: 'gone' })).toBe('a');
     expect(landingView({ views: [] })).toBeUndefined();
+  });
+});
+
+describe('createView (spec 0039, AC-1086)', () => {
+  const views = [
+    { id: 'board', kind: 'board' },
+    { id: 'a', kind: 'table' },
+    { id: 'b', kind: 'table' },
+  ];
+  it('opens the landing view when a table, else the default table, else the first table, else none', () => {
+    expect(createView({ views, lastOpenedViewId: 'b', defaultViewId: 'a' })).toBe('b');
+    expect(createView({ views, lastOpenedViewId: 'board', defaultViewId: 'b' })).toBe('b');
+    expect(createView({ views, lastOpenedViewId: 'board', defaultViewId: 'board' })).toBe('a');
+    expect(createView({ views: [{ id: 'board', kind: 'board' }] })).toBeUndefined();
   });
 });

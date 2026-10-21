@@ -8,6 +8,7 @@ import { ANSWER_TYPES, FORM_SLUG } from './answer-types.ts';
 import { AttributeType, Timestamp } from '../values/attribute-values.ts';
 import { RecordRefDisplay } from '../values/options.ts';
 import { WorkspaceScoped } from '../workspaces.ts';
+import { SubmissionContext } from './context.ts';
 import { FormDocument } from './document.ts';
 import { PublicForm } from './public.ts';
 import { Uuid, uuidV7 } from '../values/ids.ts';
@@ -97,6 +98,8 @@ export const FormView = FormSummary.extend({
   requireSignature: z.boolean(),
   /** The secret a site signs its posts with: only for `forms.manage`. */
   signingSecret: z.string().optional(),
+  /** The workspace's public key (`ws_…`), what a snippet's `data-timefix-workspace` names: never an internal id. */
+  workspaceKey: z.string(),
   canManage: z.boolean(),
   createdAt: Timestamp,
 });
@@ -184,6 +187,14 @@ export type FormIdInput = z.infer<typeof FormIdInput>;
 export const FormWriteInput = FormIdInput.extend({ mutationId: Uuid });
 /** A change that names one form. */
 export type FormWriteInput = z.infer<typeof FormWriteInput>;
+
+/**
+ * Gives the form a new signing secret (`forms.manage`): the old one stops
+ * working at once, so every post signed with it is refused from then on.
+ */
+export const RotateFormSecretInput = FormIdInput.extend({ mutationId: Uuid });
+/** Gives the form a new signing secret. */
+export type RotateFormSecretInput = z.infer<typeof RotateFormSecretInput>;
 
 /** A copy of a form's draft, as a new never published form with its own address. */
 export const DuplicateFormInput = FormIdInput.extend({
@@ -320,6 +331,8 @@ export const SubmissionView = SubmissionSummary.extend({
   versionNumber: z.number().int().min(1),
   answers: z.array(SubmissionAnswer),
   hidden: z.record(z.string(), z.string()),
+  /** Where it came from, as the embed or the hosted page told it (page, landing, referrer, UTM tags, visitor). */
+  context: SubmissionContext.optional(),
   signals: z.array(z.string()),
   records: z.array(SubmissionRecord),
   failure: z.string().optional(),
@@ -523,6 +536,7 @@ export const formsContract = {
   saveDraft: oc.input(SaveFormDraftInput).output(FormView),
   publish: oc.input(PublishFormInput).output(FormView),
   updateSettings: oc.input(UpdateFormSettingsInput).output(FormView),
+  rotateSecret: oc.input(RotateFormSecretInput).output(FormView),
   setStatus: oc.input(SetFormStatusInput).output(FormView),
   setTarget: oc.input(SetFormTargetInput).output(FormView),
   duplicate: oc.input(DuplicateFormInput).output(FormView),

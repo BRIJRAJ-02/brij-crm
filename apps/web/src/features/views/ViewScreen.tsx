@@ -19,12 +19,23 @@ import {
   type View,
 } from '@crm/data';
 import { useSavedView, useViewsList } from '@crm/data/react';
-import { Button, Callout, EmptyState, Popover, SegmentedControl, ViewSettings, type ViewChoice } from '@crm/ui';
+import {
+  Button,
+  Callout,
+  EmptyState,
+  focusLater,
+  Modal,
+  Popover,
+  SegmentedControl,
+  ViewSettings,
+  type ViewChoice,
+} from '@crm/ui';
 import { useNavigate, useRouteContext } from '@tanstack/react-router';
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { BoardScreen } from '../board/BoardScreen.tsx';
 import { planBoard } from '../board/plan.ts';
 import { strings as boardStrings } from '../board/strings.ts';
+import { FavouriteButton } from '../workspace/FavouriteButton.tsx';
 import { RecordsScreen } from '../workspace/RecordsScreen.tsx';
 import { objectPendingPage } from '../workspace/ObjectScreen.tsx';
 import { useCan, useMyAccess, WorkspacePage } from '../workspace/WorkspacePage.tsx';
@@ -45,7 +56,7 @@ import { farAttributesFrom, relationTarget, runningQuery, savableQuery, savedQue
 import { strings } from './strings.ts';
 import { useViewDraft } from './useViewDraft.ts';
 import { ViewChangedDialog } from './ViewChangedDialog.tsx';
-import { memberName, ViewMenu } from './ViewMenu.tsx';
+import { memberName, useViewMenu } from './ViewMenu.tsx';
 import { ViewToolbar } from './ViewToolbar.tsx';
 
 /** What the route opened with: the link's draft, read and checked, and what became of it. */
@@ -72,6 +83,10 @@ export interface ViewScreenProps {
   /** The `draft` search param now, and how to write it. */
   readonly param: string | undefined;
   readonly writeParam: (param: string | undefined, replace: boolean) => void;
+  /** The command menu's Create a <object> (spec 0039, AC-1086): open the new record dialog once the table shows. */
+  readonly isCreateRequested?: boolean;
+  /** The request was taken (the dialog opened, or this view can't): drop it from the address. */
+  readonly onCreateRequestTaken?: () => void;
 }
 
 /** The attributes of the objects a through filter leads to, read through the data layer as they are asked for. */
@@ -137,7 +152,10 @@ export function ViewScreen(props: ViewScreenProps) {
   // The view is the person's last opened one for its object (AC-478), at most once per 10 seconds.
   const openedId = view?.id;
   useEffect(() => {
-    if (openedId !== undefined) data.views.markOpened(slug, openedId);
+    if (openedId === undefined) return;
+    data.views.markOpened(slug, openedId);
+    // And the person's recent items in the command menu (spec 0039, AC-1088): fire and forget, throttled there.
+    data.search.visit(slug, 'view', openedId);
   }, [data, slug, openedId]);
 
   const latestSaved = useMemo(() => (view === undefined ? { sorts: [] } : savedQuery(view)), [view]);
@@ -170,6 +188,8 @@ export function ViewScreen(props: ViewScreenProps) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [latestSaved]);
   const canManage = useCan('views.manage');
+  // Add attribute, under View settings' columns (spec 0012: owners and admins, schema.manage).
+  const canChangeSchema = useCan('schema.manage');
   // A locked view the person may not change (AC-476): their filters, sorts and columns stay in this tab, unsaved.
   const isLockedForMe = view !== undefined && view.visibility === 'workspace' && view.isLocked && !canManage;
   const draft = useViewDraft({
@@ -246,6 +266,11 @@ export function ViewScreen(props: ViewScreenProps) {
     draft.discard();
     setShowDropped(false);
     setFocusRequest({});
+  };
+  // Discard throws the draft away for good, so it asks first (the owner's rule for ending actions).
+  const [isDiscarding, setDiscarding] = useState(false);
+  const askDiscard = () => {
+    setDiscarding(true);
   };
   const [isSaving, setSaving] = useState(false);
   const [clash, setClash] = useState<string | undefined>(undefined);
@@ -403,6 +428,16 @@ export function ViewScreen(props: ViewScreenProps) {
     />
   );
   const storedBoard = view?.config.board;
+  // A board has no new record dialog: the command menu's request is dropped, so the address doesn't keep it.
+  const { isCreateRequested, onCreateRequestTaken } = props;
+  // Read through a ref, so a new callback each render never hands the request back twice.
+  const takeRequest = useRef(onCreateRequestTaken);
+  useEffect(() => {
+    takeRequest.current = onCreateRequestTaken;
+  });
+  useEffect(() => {
+    if (isCreateRequested === true && kind === 'board') takeRequest.current?.();
+  }, [isCreateRequested, kind]);
   const boardOutcome = useMemo(
     () => (kind === 'board' ? planBoard(attributes, storedBoard) : undefined),
     [kind, attributes, storedBoard],
@@ -461,7 +496,35 @@ export function ViewScreen(props: ViewScreenProps) {
   const createView = () => {
     setCreateMode('create');
   };
-  // The view's own actions in the view bar: the lock line, View settings (the table's columns) and the view menu.
+  // The view's own actions (Rename, Duplicate, Delete…): under "This view" in the switcher's menu, with their dialogs.
+  const viewMenu = useViewMenu({
+    slug,
+    object,
+    view,
+    list,
+    members,
+    memberId: access?.memberId,
+    canManage,
+    copyLinkReason: draft.isDraft && !draft.isLinkable ? strings.linkTooLong : undefined,
+    onDuplicate: duplicate,
+    onDeleting: (isDeleting) => {
+      // This tab's own delete: the view going away is no news here.
+      leaving.current = isDeleting;
+    },
+    onDeleted: (name) => {
+      toasts.toast({ tone: 'success', message: strings.deleted(name) });
+      void navigate({
+        to: '/w/$slug/objects/$object',
+        params: { slug, object: object.apiSlug },
+        replace: true,
+      });
+    },
+  });
+  // A table's "Add attribute" from View settings: asked of the table, which owns the attribute dialog.
+  const [addRequest, setAddRequest] = useState<object | undefined>(undefined);
+  // The view bar's end before the Table and Board switch: the lock line, and on a table View settings, the one
+  // quiet entry left (the owner, 21 October 2026: the view menu and Add attribute moved into the switcher's menu
+  // and into View settings).
   const viewActionsFor = (withSettings: boolean): ReactNode =>
     view === undefined ? undefined : (
       <>
@@ -484,29 +547,7 @@ export function ViewScreen(props: ViewScreenProps) {
             {strings.viewSettings}
           </Button>
         )}
-        <ViewMenu
-          slug={slug}
-          object={object}
-          view={view}
-          list={list}
-          members={members}
-          memberId={access?.memberId}
-          canManage={canManage}
-          copyLinkReason={draft.isDraft && !draft.isLinkable ? strings.linkTooLong : undefined}
-          onDuplicate={duplicate}
-          onDeleting={(isDeleting) => {
-            // This tab's own delete: the view going away is no news here.
-            leaving.current = isDeleting;
-          }}
-          onDeleted={(name) => {
-            toasts.toast({ tone: 'success', message: strings.deleted(name) });
-            void navigate({
-              to: '/w/$slug/objects/$object',
-              params: { slug, object: object.apiSlug },
-              replace: true,
-            });
-          }}
-        />
+        <FavouriteButton data={data} slug={slug} kind="view" id={view.id} />
       </>
     );
   const toolbarFor = (announced: string | undefined): ReactNode => (
@@ -522,7 +563,7 @@ export function ViewScreen(props: ViewScreenProps) {
         canSave={canSave}
         isSaving={isSaving}
         onChange={draft.set}
-        onDiscard={discard}
+        onDiscard={askDiscard}
         onSave={() => {
           save(false);
         }}
@@ -557,6 +598,31 @@ export function ViewScreen(props: ViewScreenProps) {
   // The clash dialog, Create view (and Save as new view), and the table's View settings: one set for both layouts.
   const dialogs = (
     <>
+      {viewMenu.dialogs}
+      <Modal
+        title={strings.discardTitle(view?.name ?? strings.thisView)}
+        tone="danger"
+        isOpen={isDiscarding}
+        onOpenChange={setDiscarding}
+        actions={
+          <>
+            <Button slot="close" kbd="ESC">
+              {strings.cancel}
+            </Button>
+            <Button
+              variant="danger-solid"
+              onPress={() => {
+                setDiscarding(false);
+                discard();
+              }}
+            >
+              {strings.discard}
+            </Button>
+          </>
+        }
+      >
+        {strings.discardText}
+      </Modal>
       <ViewChangedDialog
         sentence={clash}
         isReplacing={isSaving}
@@ -620,6 +686,23 @@ export function ViewScreen(props: ViewScreenProps) {
               pinnedCount: layout.pinnedCount,
             });
           }}
+          // A new attribute is one more column: Add attribute sits under them, for whoever may change the schema.
+          {...(canChangeSchema
+            ? {
+                footer: (
+                  <Button
+                    variant="ghost"
+                    icon="plus"
+                    onPress={() => {
+                      setSettingsOpen(false);
+                      setAddRequest({});
+                    }}
+                  >
+                    {strings.addAttribute}
+                  </Button>
+                ),
+              }
+            : {})}
         />
       </Popover>
     </>
@@ -640,6 +723,7 @@ export function ViewScreen(props: ViewScreenProps) {
           onViewChange={switchView}
           onCreateView={createView}
           viewActions={viewActionsFor(false)}
+          viewMenu={viewMenu}
           layoutSwitch={layoutSwitch}
           toolbar={toolbarFor}
           onShowEmptyColumnsChange={showEmptyColumns}
@@ -657,6 +741,8 @@ export function ViewScreen(props: ViewScreenProps) {
     <>
       <RecordsScreen
         slug={slug}
+        {...(props.isCreateRequested === true ? { isCreateRequested: true } : {})}
+        {...(props.onCreateRequestTaken === undefined ? {} : { onCreateRequestTaken: props.onCreateRequestTaken })}
         object={object}
         attributes={attributes}
         members={members}
@@ -688,6 +774,14 @@ export function ViewScreen(props: ViewScreenProps) {
           }
         }}
         viewActions={viewActionsFor(true)}
+        viewMenu={viewMenu}
+        {...(addRequest === undefined ? {} : { addAttributeRequest: addRequest })}
+        onAddAttributeClosed={(isMade) => {
+          // Its dialog opened from View settings, which closed: a cancel goes back to View settings (a new
+          // attribute's column takes focus itself).
+          if (!isMade) focusLater(() => settingsAnchor.current);
+          setAddRequest(undefined);
+        }}
         currentViewId={view?.id ?? ''}
         onViewChange={switchView}
         viewBarEnd={layoutSwitch}
@@ -709,7 +803,7 @@ export function ViewScreen(props: ViewScreenProps) {
                   title={strings.noMatchesTitle(object.pluralName)}
                   actions={
                     draft.isDraft ? (
-                      <Button onPress={discard}>{strings.discard}</Button>
+                      <Button onPress={askDiscard}>{strings.discard}</Button>
                     ) : (
                       <Button
                         onPress={() => {

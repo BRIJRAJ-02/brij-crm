@@ -4,9 +4,11 @@ import { expect, fn, waitFor, within } from 'storybook/test';
 import { AvatarStack } from '../../atoms/Avatar/Avatar.tsx';
 import { Button } from '../../atoms/Button/Button.tsx';
 import { SplitButton } from '../../atoms/Button/SplitButton.tsx';
+import { Badge } from '../../atoms/Badge/Badge.tsx';
 import { Tag } from '../../atoms/Tag/Tag.tsx';
 import { FilterChip } from '../../molecules/FilterChip/FilterChip.tsx';
 import { Menu, MenuItem } from '../../molecules/Menu/Menu.tsx';
+import { LinkListToolbar } from '../LinkList/LinkList.tsx';
 import { SortChip, Toolbar, TopBar, ViewBar, type ViewChoice } from './Toolbar.tsx';
 
 const VIEWS: readonly ViewChoice[] = [
@@ -236,7 +238,10 @@ export const GroupedAndLocked: Story = {
     />
   ),
   play: async ({ canvas, userEvent }) => {
-    await userEvent.click(canvas.getByRole('button', { name: 'Pipeline' }));
+    const trigger = canvas.getByRole('button', { name: 'Pipeline' });
+    await userEvent.click(trigger);
+    // The pointer leaves the trigger, so the picture never catches its hover tint (it flaked in CI).
+    await userEvent.unhover(trigger);
     const menu = await waitFor(() => {
       const found = document.querySelector('[role="menu"]');
       if (found === null) throw new Error('No menu yet.');
@@ -247,6 +252,94 @@ export const GroupedAndLocked: Story = {
     await expect(within(menu).getByRole('menuitemradio', { name: 'Create view' })).toBeInTheDocument();
     // The menu fades in; axe reads colours next, so let the fade end (Firefox was measuring mid fade).
     await Promise.all(document.getAnimations().map((animation) => animation.finished.catch(() => undefined)));
+  },
+};
+
+/**
+ * The view's own actions under "This view" at the end of the switcher's menu (the bar's "···" button folded in,
+ * 21 October 2026): plain menu items, grouped by hairlines, one disabled with its short reason, the danger one
+ * last; the menu stays narrow, its reasons wrapping under their items.
+ */
+export const WithViewActions: Story = {
+  render: () => (
+    <ViewBar
+      views={VIEWS}
+      currentViewId="all"
+      onViewChange={fn()}
+      onCreateView={fn()}
+      actions={[
+        { id: 'rename', label: 'Rename', icon: 'pencil' },
+        { id: 'duplicate', label: 'Duplicate', icon: 'copy' },
+        { id: 'copy-link', label: 'Copy link', icon: 'link' },
+        {
+          id: 'make-private',
+          label: 'Make private',
+          icon: 'lock',
+          startsGroup: true,
+          reason: 'Make another view the default first.',
+        },
+        { id: 'lock', label: 'Lock', icon: 'lock' },
+        {
+          id: 'delete',
+          label: 'Delete view',
+          icon: 'trash',
+          isDanger: true,
+          startsGroup: true,
+          reason: 'Make another view the default first.',
+        },
+      ]}
+      onAction={fn()}
+    >
+      <Button variant="ghost" icon="settings">
+        View settings
+      </Button>
+    </ViewBar>
+  ),
+  play: async ({ canvas, userEvent }) => {
+    await userEvent.click(canvas.getByRole('button', { name: 'All companies' }));
+    const menu = await waitFor(() => {
+      const found = document.querySelector('[role="menu"]');
+      if (found === null) throw new Error('No menu yet.');
+      return found as HTMLElement;
+    });
+    const section = within(menu).getByRole('group', { name: 'This view' });
+    await expect(within(section).getByRole('menuitem', { name: 'Rename' })).toBeInTheDocument();
+    await expect(within(section).getByRole('menuitem', { name: /Delete view/ })).toHaveAttribute(
+      'aria-disabled',
+      'true',
+    );
+    // Long reasons wrap under their items rather than widening the menu.
+    await expect(menu.getBoundingClientRect().width).toBeLessThan(300);
+    await Promise.all(document.getAnimations().map((animation) => animation.finished.catch(() => undefined)));
+  },
+};
+
+/** A bar whose view actions say which one ran, for the story below. */
+function RunsActions() {
+  const [ran, setRan] = useState('');
+  return (
+    <>
+      <ViewBar
+        views={VIEWS}
+        currentViewId="all"
+        onViewChange={fn()}
+        actions={[{ id: 'duplicate', label: 'Duplicate', icon: 'copy' }]}
+        onAction={setRan}
+      />
+      <output>{ran}</output>
+    </>
+  );
+}
+
+/** Choosing one of the view's actions runs it by its id, and the menu closes. */
+export const RunViewAction: Story = {
+  parameters: { crm: { screenshot: false } },
+  render: () => <RunsActions />,
+  play: async ({ canvas, userEvent }) => {
+    await userEvent.click(canvas.getByRole('button', { name: 'All companies' }));
+    await userEvent.click(await within(document.body).findByRole('menuitem', { name: 'Duplicate' }));
+    await waitFor(() => expect(canvas.getByRole('status')).toHaveTextContent('duplicate'));
+    await waitFor(() => expect(document.querySelector('[role="menu"]')).toBeNull());
   },
 };
 
@@ -274,3 +367,53 @@ export const SortChips: Story = {
     await userEvent.click(canvas.getByRole('button', { name: '+2' }));
   },
 };
+
+/** A list page with no saved views (Booking pages, Forms; spec 0034): the tile, title, count and New, then the search. */
+function ListPage() {
+  const [query, setQuery] = useState('');
+  return (
+    <div>
+      <TopBar
+        title="Booking pages"
+        icon="link"
+        hue="orange"
+        meta={<Badge count={3} max={Infinity} label="booking pages" />}
+      >
+        <Button variant="primary" icon="plus" label="New booking page">
+          New
+        </Button>
+      </TopBar>
+      <ViewBar>
+        <LinkListToolbar searchLabel="Search booking pages" query={query} onQueryChange={setQuery} size="sm" />
+      </ViewBar>
+      <ViewBar views={VIEWS} currentViewId="all" onViewChange={fn()} />
+    </div>
+  );
+}
+
+/**
+ * The bar with no switcher: the page's search at its end, in the same bar an object's views take, so the page's
+ * content starts where a view's does (the second bar is drawn under it to compare).
+ */
+export const ToolsOnly: Story = {
+  render: () => <ListPage />,
+  play: async ({ canvas }) => {
+    await expect(canvas.getByRole('heading', { level: 1, name: 'Booking pages' })).toBeInTheDocument();
+    await expect(canvas.getByRole('button', { name: 'New booking page' })).toHaveTextContent('New');
+    const search = canvas.getByRole('searchbox', { name: 'Search booking pages' });
+    const tools = barOf(search);
+    const views = tools.nextElementSibling;
+    await expect(views).toContainElement(canvas.getByRole('button', { name: 'All companies' }));
+    // The same height as the switcher's bar: nothing moves between a list page and an object's view.
+    await expect(tools.getBoundingClientRect().height).toBe(views?.getBoundingClientRect().height);
+  },
+};
+
+/** The bar holding `element`: its ancestor that sits beside the TopBar's header. */
+function barOf(element: HTMLElement): HTMLElement {
+  let bar = element;
+  while (bar.parentElement !== null && bar.parentElement.querySelector(':scope > header') === null) {
+    bar = bar.parentElement;
+  }
+  return bar;
+}

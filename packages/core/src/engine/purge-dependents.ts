@@ -45,6 +45,10 @@ export const PURGE_DEPENDENTS: readonly PurgeDependent[] = Object.freeze([
   // The records' notes, deleted ones too, go with them (spec 0019, AC-446); notes' foreign key refuses a removal
   // that skipped this.
   removing('notes', (ids) => sql`delete from notes where record_id = any(${ids})`),
+  // The records' comments go with them, their versions and reactions by cascade, and the notifications about them
+  // first, since a notification's record has no foreign key action (spec 0038, AC-1160).
+  removing('notifications', (ids) => sql`delete from notifications where record_id = any(${ids})`),
+  removing('comments', (ids) => sql`delete from comments where record_id = any(${ids})`),
   removing('meeting_records', (ids) => sql`delete from meeting_records where record_id = any(${ids})`),
   removing(
     'meeting_attendees',

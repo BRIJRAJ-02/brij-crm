@@ -187,10 +187,20 @@ const OVERSCAN = 4;
 /** How far down the list a prepend is looked for: a live refresh adds at most a page (50) above. */
 const PREPEND_SEARCH = 200;
 
+/**
+ * A checkbox's change: its verb says it all ("checked Email opt out"), so no
+ * values draw under it. Two boxes and an arrow read as controls to tick and
+ * took a line of their own (the owner, 21 October 2026).
+ */
+function isToggle(entry: ActivityEntry): boolean {
+  return entry.kind === 'change' && entry.attribute.type === 'checkbox';
+}
+
 /** The verb after the actor: "changed", "set" or "cleared" for a value, "added" or "removed" for links, or what was added. */
 function verbOf(entry: ActivityEntry): string {
   switch (entry.kind) {
     case 'change':
+      if (isToggle(entry)) return entry.to === true ? strings.verbs.checked : strings.verbs.unchecked;
       if (isEmptyValue(entry.from)) return strings.verbs.set;
       return isEmptyValue(entry.to) ? strings.verbs.cleared : strings.verbs.changed;
     case 'created':
@@ -471,6 +481,16 @@ export function ActivityFeed({
       >
         {drawn.map((item) => {
           const entry = entries.getItem(item.index);
+          // Whether the entry at `index` opens a new period under its own heading (unknown while it loads: no).
+          const startsNewPeriod = (index: number) => {
+            const next = entries.getItem(index);
+            const before = entries.getItem(index - 1);
+            return (
+              next !== undefined &&
+              before !== undefined &&
+              periodOf(next.at, now, timeZone, locale) !== periodOf(before.at, now, timeZone, locale)
+            );
+          };
           const previous = item.index === 0 ? undefined : entries.getItem(item.index - 1);
           const period = entry === undefined ? undefined : periodOf(entry.at, now, timeZone, locale);
           const startsPeriod =
@@ -504,14 +524,18 @@ export function ActivityFeed({
                     ].join(' '),
                   })}
             >
-              {startsPeriod && <Heading className={styles.period}>{labelOf(period)}</Heading>}
+              {startsPeriod && (
+                <Heading className={styles.period} data-first={(isInline && item.index === 0) || undefined}>
+                  {labelOf(period)}
+                </Heading>
+              )}
               {entry === undefined ? (
                 <SkeletonEntry />
               ) : (
                 <Entry
                   entry={entry}
                   lineId={`${idBase}-${String(item.index)}`}
-                  isLast={item.index === shownCount - 1}
+                  endsRail={item.index === shownCount - 1 || startsNewPeriod(item.index + 1)}
                   onAddPerson={onAddPerson}
                 />
               )}
@@ -584,7 +608,8 @@ interface EntryProps {
   readonly entry: ActivityEntry;
   /** Names the article: the actor and what they did. */
   readonly lineId: string;
-  readonly isLast: boolean;
+  /** No rail under it: the last entry drawn, or the last of its period (the next sits under a heading). */
+  readonly endsRail: boolean;
   readonly onAddPerson: ActivityFeedProps['onAddPerson'];
 }
 
@@ -756,42 +781,55 @@ function tabbableBeside(feed: HTMLElement, side: 'after' | 'before'): HTMLElemen
 
 /** Whether an entry draws a detail under its line: a change's values, a note's or task's title and text, a meeting. */
 function hasDetail(entry: ActivityEntry): boolean {
+  if (isToggle(entry)) return false;
   if (entry.kind === 'change') return !isEmptyValue(entry.from) || !isEmptyValue(entry.to);
   if (entry.kind === 'meeting') return true;
   if (entry.kind === 'created' || entry.kind === 'links' || entry.kind === 'submission') return false;
   return entry.title !== undefined || entry.excerpt !== undefined;
 }
 
+/** A change's old value, the arrow and the new value, each through the field set's one display (the card surface). */
+function ChangeDetail({
+  entry,
+  detailId,
+}: {
+  readonly entry: Extract<ActivityEntry, { kind: 'change' }>;
+  readonly detailId: string;
+}) {
+  const valueOf = (value: unknown, display: unknown) => (
+    <AttributeDisplay
+      attribute={entry.attribute}
+      value={value ?? null}
+      // One line per value, chips flat as the names around them: a long text is cut, Details holds it whole.
+      surface="card"
+      {...(display === undefined ? {} : { display: display as never })}
+    />
+  );
+  const hasFrom = !isEmptyValue(entry.from);
+  const hasTo = !isEmptyValue(entry.to);
+  return (
+    <span id={detailId} className={styles.change}>
+      {hasFrom && valueOf(entry.from, entry.fromDisplay)}
+      {hasFrom && (
+        <>
+          <Icon name="arrow-right" size="xs" tone="muted" />
+          <VisuallyHidden>{strings.to}</VisuallyHidden>
+        </>
+      )}
+      {/* A clear reads as the old value going to the empty mark, never as a value still held. */}
+      {(hasTo || hasFrom) && valueOf(hasTo ? entry.to : null, hasTo ? entry.toDisplay : undefined)}
+    </span>
+  );
+}
+
 /** One entry: its marker on the rail, the actor and verb, the time, and what changed or was added. */
 /** Drawn again only when its entry changes, not with every scroll step of the feed. */
-const Entry = memo(function Entry({ entry, lineId, isLast, onAddPerson }: EntryProps) {
+const Entry = memo(function Entry({ entry, lineId, endsRail, onAddPerson }: EntryProps) {
   const icon = entry.kind === 'change' || entry.kind === 'links' ? iconOf(entry.attribute) : KIND_ICONS[entry.kind];
   let detail: ReactNode;
   if (entry.kind === 'change') {
-    const valueOf = (value: unknown, display: unknown) => (
-      <AttributeDisplay
-        attribute={entry.attribute}
-        value={value ?? null}
-        // One line per value, chips flat as the names around them: a long text is cut, Details holds it whole.
-        surface="card"
-        {...(display === undefined ? {} : { display: display as never })}
-      />
-    );
-    const hasFrom = !isEmptyValue(entry.from);
-    const hasTo = !isEmptyValue(entry.to);
-    detail = (
-      <span id={`${lineId}-detail`} className={styles.change}>
-        {hasFrom && valueOf(entry.from, entry.fromDisplay)}
-        {hasFrom && (
-          <>
-            <Icon name="arrow-right" size="xs" tone="muted" />
-            <VisuallyHidden>{strings.to}</VisuallyHidden>
-          </>
-        )}
-        {/* A clear reads as the old value going to the empty mark, never as a value still held. */}
-        {(hasTo || hasFrom) && valueOf(hasTo ? entry.to : null, hasTo ? entry.toDisplay : undefined)}
-      </span>
-    );
+    // A checkbox's change draws nothing under its line: the verb says checked or unchecked.
+    detail = isToggle(entry) ? undefined : <ChangeDetail entry={entry} detailId={`${lineId}-detail`} />;
   } else if (entry.kind === 'meeting') {
     detail = <MeetingDetail entry={entry} detailId={`${lineId}-detail`} onAddPerson={onAddPerson} />;
   } else if (entry.kind === 'task' && entry.title !== undefined) {
@@ -815,7 +853,7 @@ const Entry = memo(function Entry({ entry, lineId, isLast, onAddPerson }: EntryP
     );
   }
   return (
-    <div className={styles.entry} data-last={isLast || undefined}>
+    <div className={styles.entry} data-rail-end={endsRail || undefined}>
       <span className={styles.marker}>
         <Icon name={icon} size="xs" tone="muted" />
       </span>

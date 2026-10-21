@@ -1,0 +1,90 @@
+/* Sent, and on to book (spec 0023 AC-1059), inside the shared confirmation:
+   the countdown line with its number inside a ring that drains over the
+   countdown (and holds while the visitor is on the buttons), then Book now
+   beside Stay here. Under reduced motion the ring is gone and only the number
+   changes; in forced colours the ring draws in the system's text colour. */
+@layer components {
+  .line {
+    display: inline-flex;
+    align-items: center;
+    margin: 0;
+    color: var(--text-secondary);
+  }
+
+  /* The number centred in its ring; "…" sits right after it. */
+  .count {
+    /* Only a fallback: the component sets the countdown's length from its seconds. */
+    --countdown: var(--duration-modal);
+
+    display: inline-grid;
+    place-items: center;
+    margin-inline-start: var(--space-6);
+    inline-size: var(--space-32);
+    block-size: var(--space-32);
+  }
+
+  .ring,
+  .number {
+    grid-area: 1 / 1;
+  }
+
+  .ring {
+    inline-size: 100%;
+    block-size: 100%;
+    rotate: -90deg;
+  }
+
+  .track,
+  .drain {
+    fill: none;
+    stroke-width: var(--border-width-thick);
+  }
+
+  .track {
+    stroke: var(--border-subtle);
+  }
+
+  .drain {
+    stroke: var(--accent);
+    stroke-dasharray: 100;
+    stroke-linecap: round;
+    animation: drain var(--countdown) linear both;
+  }
+
+  .count[data-held] .drain {
+    animation-play-state: paused;
+  }
+
+  .number {
+    color: var(--text);
+    font: var(--text-body-strong);
+    letter-spacing: var(--tracking-body-strong);
+    font-variant-numeric: tabular-nums;
+  }
+
+  .actions {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: var(--space-8);
+  }
+
+  @keyframes drain {
+    to {
+      stroke-dashoffset: 100;
+    }
+  }
+
+  /* Only the number changes. */
+  @media (prefers-reduced-motion: reduce) {
+    .ring {
+      display: none;
+    }
+  }
+
+  @media (forced-colors: active) {
+    .drain {
+      stroke: CanvasText;
+    }
+  }
+}

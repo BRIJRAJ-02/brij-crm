@@ -26,10 +26,8 @@ export const strings = {
   openInNewTab: 'Open in a new tab',
   manageOnly: 'Only members who manage forms can change it',
   createFailed: 'Couldn’t make the form.',
-  turnOffFailed: (name: string) => `Couldn’t turn off ${name}. It’s back on.`,
   turnOnFailed: (name: string) => `Couldn’t turn on ${name}. It’s off again.`,
   duplicateFailed: (name: string) => `Couldn’t duplicate ${name}.`,
-  deleteFailed: (name: string) => `Couldn’t delete ${name}. It’s back in the list.`,
   submissionCount: (n: number) => count(n, 'submission', 'submissions'),
   noSubmissionsYet: 'No submissions yet',
   publishToShare: 'Publish it to start taking submissions',
@@ -50,11 +48,18 @@ export const strings = {
   duplicated: (name: string) => `Made “${name}”.`,
   delete: 'Delete',
   deleteForm: 'Delete this form',
-  deleteTitle: (name: string) => `Delete “${name}”?`,
+  /** A destructive confirm names the thing in its question (the owner's rule, 21 October 2026). */
+  deleteTitle: (name: string) => `Delete the ${name} form?`,
   deleteText: (submissions: number) =>
     submissions === 0
-      ? 'Its address stops working. Nothing was sent to it yet.'
-      : `Its address stops working, and its ${count(submissions, 'submission', 'submissions')} go with it. The people and records they made stay.`,
+      ? 'The form and its link are gone for good; nothing was sent to it yet.'
+      : `The form, its link and its ${count(submissions, 'submission', 'submissions')} are gone for good; the people and records they made stay.`,
+  /** The confirm's commit: the verb last, never OK. */
+  deleteFormAction: 'Delete form',
+  /** Pausing ends a live form's submissions until it is resumed, so it asks first (a plain dialog, not a danger one). */
+  pauseTitle: (name: string) => `Pause the ${name} form?`,
+  pauseText: 'Its link shows a closed notice and takes no submissions until you resume it; nothing is deleted.',
+  pauseAction: 'Pause form',
   deleted: (name: string) => `Deleted “${name}”.`,
   cancel: 'Cancel',
   paused: (name: string) => `${name} isn’t taking submissions now.`,
@@ -69,10 +74,10 @@ export const strings = {
   moreActions: 'More actions',
   pause: 'Pause',
   resume: 'Resume',
-  statusLive: (version: number) => `Published · v${String(version)}`,
-  statusChanged: 'Published · Unpublished changes',
-  statusDraft: 'Not published',
-  statusPaused: 'Not accepting',
+  statusLive: (version: number) => `Live · v${String(version)}`,
+  statusChanged: 'Live · edited',
+  statusDraft: 'Draft',
+  statusPaused: 'Paused',
   tabs: 'Form sections',
   tabForm: 'Form',
   tabSettings: 'Settings',
@@ -175,30 +180,42 @@ export const strings = {
   buttonDefault: 'Send',
   wordsTitle: 'The words on the form',
   waitsForPublish: 'Changed, goes live when you publish',
-  afterTitle: 'What people see after sending',
+  afterTitle: 'After sending',
+  afterTip:
+    'What a visitor sees once they press Send: your thank you message, another web page, or one of your booking pages to book a meeting, with their name and email already filled in.',
+  afterTipExample:
+    'Book a meeting with “After 5 seconds” shows the thank you message and a countdown with Book now and Stay here, then opens the booking page.',
   afterChoice: 'What they see next',
   showMessage: 'A thank you message',
-  showsMessage: 'Shows a thank you message',
   sendToAddress: 'Another web page',
-  noAddressYet: 'Sends them to a page, no address yet',
-  sendsTo: (address: string) => `Sends them to ${address}`,
   thankYou: 'Thank you message',
   thankYouDefault: 'Thank you. We will come back to you at the address you gave.',
   redirectUrl: 'Web address',
   redirectHint: 'Starts with https://',
+  // Book a meeting after sending (AC-1055 to AC-1059)
+  bookMeeting: 'Book a meeting',
+  bookingPage: 'Booking page',
+  pageItem: (title: string, minutes: number) => `${title} · ${String(minutes)} min`,
+  pageNotUsable: 'Paused, or not yours to use: pick another',
+  noBookingPages: 'Needs a booking page that is on',
+  bookingPagesFailed: 'Your booking pages didn’t load',
+  createBookingPage: 'Create a booking page',
+  countdown: 'Send them there',
+  countdownAtOnce: 'At once',
+  countdownAfter: (seconds: number) => `After ${String(seconds)} seconds`,
+  bookingPreview: (seconds: number) =>
+    seconds === 0
+      ? 'Visitors go straight on to book once they send.'
+      : `Visitors see “Taking you to book a time in ${String(seconds)}…” with Book now and Stay here.`,
+  bookingThankYouHint: 'Shown above the countdown, and on its own if the booking page is off when they send.',
   addToCrmSwitch: 'Add each submission to the CRM',
   addToCrmOn: (object: string, match: string | undefined) =>
     match === undefined
       ? `Each submission makes a ${object}.`
       : `Each submission makes a ${object}, or updates the one with the same ${match}.`,
   addToCrmOff: 'Submissions stay in the Submissions tab. Nothing is added to the CRM.',
-  keptOnlySummary: 'Kept in Submissions only',
   whichObject: 'Where submissions go',
   retargetFailed: 'That didn’t change where submissions go.',
-  answersSummary: (object: string, filed: number) =>
-    filed === 0
-      ? `Adds or updates a ${object}`
-      : `Adds or updates a ${object} · ${count(filed, 'answer', 'answers')} filed`,
   eachSend: 'Each submission',
   createsOrUpdates: (object: string, match: string | undefined) =>
     match === undefined ? `Creates a ${object}` : `Creates a ${object}, or updates the one with the same ${match}`,
@@ -215,7 +232,7 @@ export const strings = {
   // Install tab
   readOnlyTitle: 'You can view this form',
   readOnlyText: 'Only people who manage forms can change it.',
-  shareTitle: 'Share your form',
+  shareTitle: 'Share',
   link: 'Link',
   copy: 'Copy',
   copyLink: 'Copy link',
@@ -223,22 +240,80 @@ export const strings = {
   copyEmbed: 'Copy snippet',
   copyFormHtml: 'Copy form HTML',
   copySecret: 'Copy signing secret',
-  websiteTitle: 'Put it on your website',
-  websiteText: 'Paste this where the form should appear. It fits the space it is given.',
+  websiteTitle: 'Put it on your site',
+  websiteTip:
+    'Paste the snippet where the form should show. One script tag serves every form and booking page on your site, so add it once.',
+  embedMode: 'How it shows',
+  embedInline: 'In the page',
+  embedPopup: 'Popup',
+  embedFloating: 'Corner button',
+  embedInlineHint: 'Fills the width of the space you put it in and grows with the form, so it never scrolls inside.',
+  embedPopupHint:
+    'Your own button opens the form in a dialog; on a phone it fills the screen. Style the button as you like.',
+  embedFloatingHint: 'A button in the corner of every page that opens the form. Change its words in data-timefix-text.',
+  /** The words on the popup's and the corner's button, until the site changes them. */
+  embedButtonText: 'Contact us',
   embedSnippet: 'Embed snippet',
   embedText: 'Put the form on a page of your own site.',
-  advancedTitle: 'Advanced: for a developer',
+  advancedTitle: 'For developers',
   ownFormTitle: 'Your own HTML',
-  advancedText: 'Your own HTML form, the sites it may post from, and signed posts.',
   ownFormSnippet: 'Form HTML',
+  taggingText:
+    'The form names your workspace, this form and its version. Each field’s name is its question’s key, so renaming a question never breaks your page. With each post the script sends the page, its title, the visit’s first page and referrer, and the UTM tags, shown on the submission as Came from.',
+  /** The consent line, with its code names drawn by `code` so they read and copy exactly. */
+  taggingConsent: <T>(code: (text: string) => T): readonly (string | T)[] => [
+    'No cookie is set until your site allows it: add ',
+    code('data-timefix-consent="granted"'),
+    ' to the script tag, or call ',
+    code('Timefix.consent(true)'),
+    ' from your cookie banner. Then a first party ',
+    code('tfx_vid'),
+    ' cookie links one visitor’s submissions.',
+  ],
+  ownFormChooseOne: 'Choose one',
+  ownFormTrapNote: 'Leave this hidden field in place: it keeps bots out.',
+  ownFormTrapLabel: 'Leave this empty',
+  ownFormNoFiles: (label: string) => `${label}: file questions work on the hosted form only.`,
   copied: 'Copied.',
-  sitesLabel: 'Sites that may send answers',
-  sitesHint: 'One address per line, such as https://acme.com. Your own HTML only works from these.',
+  sitesTitle: 'Allowed sites',
+  sitesTip: 'Your own HTML only posts from these addresses. Embeds and the hosted page work on any site.',
+  sitesEmpty: 'None yet, so your own HTML can’t post.',
+  siteNew: 'Site address',
+  siteNewPlaceholder: 'https://acme.com',
+  siteAdd: 'Add site',
+  siteRemove: (origin: string) => `Remove ${origin}`,
+  siteRemoveTitle: (origin: string) => `Remove ${origin}?`,
+  siteRemoveText:
+    'Your own HTML on that site stops posting to the form at once. Embeds and the hosted page keep working.',
+  siteRemoveAction: 'Remove site',
+  siteNotHttps: 'Use the site’s https address, such as https://acme.com.',
+  siteTaken: 'That site is in the list already.',
+  sitesFull: 'A form lists at most 20 sites.',
   sitesSaved: 'Sites saved.',
+  unsignedRefused: 'Unsigned posts are refused now.',
+  unsignedAllowed: 'Unsigned posts are taken again.',
   refuseUnsigned: 'Refuse unsigned posts',
-  refuseUnsignedHint: 'For sites that sign each post on their server with the form’s secret.',
+  signedTitle: 'Signed posts',
+  refuseUnsignedHint:
+    'Turn on Refuse unsigned posts when only your server posts to the form. Each post must then carry a signature made with the secret, so your own HTML in a browser is refused. The hosted page and embeds keep working.',
+  /** How to sign, with its code names drawn by `code`. */
+  signHowText: <T>(code: (text: string) => T): readonly (string | T)[] => [
+    'On your server, take the exact body you send, make its HMAC with SHA 256 and the signing secret, and send it in the ',
+    code('x-crm-signature'),
+    ' header as ',
+    code('sha256='),
+    ' and the hex digest.',
+  ],
   secret: 'Signing secret',
-  secretReason: 'Made for this form. Copy it to your site’s server.',
+  secretReason: 'Keep it on your server only. Anyone who has it can post as your site.',
+  secretReveal: 'Reveal',
+  secretHide: 'Hide',
+  secretRotate: 'Rotate secret',
+  secretRotateTitle: 'Rotate the signing secret?',
+  secretRotateText:
+    'A new secret takes over at once and posts signed with the old one are refused. This can’t be undone, so update your server right after.',
+  secretRotateAction: 'Rotate secret',
+  secretRotated: 'New signing secret made. Update your server.',
   pausedTitle: 'This form is paused',
   pausedText: 'The link shows a closed notice until you turn it back on.',
   notLiveYet: 'Publish the form first.',
@@ -276,6 +351,24 @@ export const strings = {
   stateKept: 'Received',
   submission: 'Submission',
   cameFrom: 'Where it came from',
+  cameFromPage: 'Page',
+  cameFromHome: 'Home page',
+  cameFromTitle: 'Page title',
+  cameFromLanding: 'First page of the visit',
+  cameFromReferrer: 'Referrer',
+  cameFromHow: 'Sent from',
+  cameFromMode: {
+    page: 'The form’s own page',
+    inline: 'An embed in the page',
+    popup: 'An embed’s popup',
+    floating: 'An embed’s corner button',
+    own: 'The site’s own HTML',
+  } as const,
+  utmSource: 'UTM source',
+  utmMedium: 'UTM medium',
+  utmCampaign: 'UTM campaign',
+  utmTerm: 'UTM term',
+  utmContent: 'UTM content',
   records: 'Records',
   recordAction: { created: 'Created', updated: 'Updated', matched: 'Matched', linked: 'Linked' },
   release: 'Not spam',
@@ -283,6 +376,7 @@ export const strings = {
   notSpam: 'Not spam',
   moreSubmissionActions: 'More submission actions',
   exportCsv: 'Export as CSV',
+  exportButton: 'Export CSV',
   exportFilter: 'What this filter shows, every answer as a column',
   exportShown: 'What the table shows for this search, every answer as a column',
   exportPicked: (n: number) => `The ${count(n, 'picked submission', 'picked submissions')}, every answer as a column`,
@@ -295,6 +389,12 @@ export const strings = {
       ? `Adding ${count(queued, 'submission', 'submissions')} to the CRM.`
       : `Adding ${count(queued, 'submission', 'submissions')} to the CRM. ${String(skipped)} skipped: already in it or held.`,
   nothingToAdd: 'Nothing to add: these are already in the CRM or held.',
+  /** Asks before many submissions go to the CRM at once: "Add 12 submissions to the CRM?". */
+  addManyTitle: (n: number, max: number) => `Add ${count(Math.min(n, max), 'submission', 'submissions')} to the CRM?`,
+  addManyText: (n: number, max: number) =>
+    n > max
+      ? `Each is filed the way the form files now, making new records or updating the ones it matches. The first ${String(max)} go now; add the rest after.`
+      : 'Each is filed the way the form files now, making new records or updating the ones it matches.',
   addDone: (done: number, refused: number) =>
     refused === 0
       ? `${count(done, 'submission', 'submissions')} added to the CRM.`
@@ -341,8 +441,11 @@ export const strings = {
   noSubmissionsText: 'Share the link and the first one shows here.',
   retry: 'Retry',
   deleteSubmission: 'Delete',
-  deleteSubmissionTitle: 'Delete this submission?',
-  deleteSubmissionText: 'The people and records it made stay.',
+  /** Names the submission by who sent it: "Delete the submission from Grace Hopper?". */
+  deleteSubmissionTitle: (who: string | undefined) =>
+    who === undefined ? 'Delete this submission?' : `Delete the submission from ${who}?`,
+  deleteSubmissionText: 'Its answers are gone for good; the people and records it made stay.',
+  deleteSubmissionAction: 'Delete submission',
   notFiledMark: 'Not filed',
   yes: 'Yes',
   no: 'No',

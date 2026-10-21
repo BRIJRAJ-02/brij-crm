@@ -1,15 +1,17 @@
 // Brief
 // Purpose: Captures › Forms: the workspace's forms as cards, the same cards as Links, with their submissions and whether they take more (spec 0023).
-// Main task: open a form, make a new one at once, copy its link, or pause and resume it from its menu.
+// Main task: open a form, make a new one at once, copy its link, or pause and resume it from its switch.
 // Leaves out: anything inside one form (its builder), and archived forms (a later pass).
 import { isDataError, type FormSummary } from '@crm/data';
 import { useCaptureList } from '@crm/data/react';
-import { Button, Menu, MenuItem, MenuSeparator, MenuTrigger, Modal, Tooltip, type LinkGridCard } from '@crm/ui';
+import { Button, focusLater, Menu, MenuItem, MenuSeparator, MenuTrigger, Tooltip, type LinkGridCard } from '@crm/ui';
 import { useRouteContext } from '@tanstack/react-router';
 import { useState } from 'react';
 import { CapturesList } from '../captures/CapturesList.tsx';
 import { useCapturesCreate } from '../captures/create.tsx';
+import { pageHeading } from '../navigation/focus.ts';
 import { useCan } from '../workspace/WorkspacePage.tsx';
+import { DeleteFormDialog, PauseFormDialog } from './FormConfirms.tsx';
 import { formHref } from './paths.ts';
 import { strings } from './strings.ts';
 
@@ -40,17 +42,17 @@ export function FormsScreen({ slug }: FormsScreenProps) {
   const list = useCaptureList(data.forms.view(slug));
   const create = useCapturesCreate();
   const [deleting, setDeleting] = useState<FormSummary | undefined>(undefined);
+  // Turning a live form off asks first (it ends its submissions); turning one on is one click.
+  const [pausing, setPausing] = useState<FormSummary | undefined>(undefined);
 
   // A refusal says what was put back, then why.
   const failed = (what: string) => (error: unknown) => {
     toasts.toast({ tone: 'danger', message: `${what} ${isDataError(error) ? error.message : strings.failedText}` });
   };
 
-  // Each change shows in the list at once; a refusal puts it back there, and the toast says why.
-  const setAccepting = (form: FormSummary, isAccepting: boolean) => {
-    data.forms
-      .setStatus(slug, form.id, isAccepting ? 'live' : 'paused')
-      .catch(failed(isAccepting ? strings.turnOnFailed(form.name) : strings.turnOffFailed(form.name)));
+  // Turning one on shows in the list at once; a refusal puts it back there, and the toast says why.
+  const resume = (form: FormSummary) => {
+    data.forms.setStatus(slug, form.id, 'live').catch(failed(strings.turnOnFailed(form.name)));
   };
 
   const duplicate = (form: FormSummary) => {
@@ -59,16 +61,6 @@ export function FormsScreen({ slug }: FormsScreenProps) {
         toasts.toast({ tone: 'success', message: strings.duplicated(copy.name) });
       },
       failed(strings.duplicateFailed(form.name)),
-    );
-  };
-
-  const remove = (form: FormSummary) => {
-    setDeleting(undefined);
-    data.forms.delete(slug, form.id).then(
-      () => {
-        toasts.toast({ tone: 'success', message: strings.deleted(form.name) });
-      },
-      failed(strings.deleteFailed(form.name)),
     );
   };
 
@@ -96,7 +88,8 @@ export function FormsScreen({ slug }: FormsScreenProps) {
               label: strings.acceptingOf(form.name),
               isSelected: isLive,
               onChange: (isOn: boolean) => {
-                setAccepting(form, isOn);
+                if (isOn) resume(form);
+                else setPausing(form);
               },
               isDisabled: !canManage,
               disabledReason: strings.manageOnly,
@@ -174,53 +167,34 @@ export function FormsScreen({ slug }: FormsScreenProps) {
       onRetry={() => {
         data.forms.view(slug).reload();
       }}
-      dialogs={<DeleteFormDialog form={deleting} onClose={() => setDeleting(undefined)} onDelete={remove} />}
-    />
-  );
-}
-
-/** Delete “<name>”?: its address stops working and its submissions go; the row leaves at once, back on a refusal. */
-function DeleteFormDialog({
-  form,
-  onClose,
-  onDelete,
-}: {
-  readonly form: FormSummary | undefined;
-  readonly onClose: () => void;
-  readonly onDelete: (form: FormSummary) => void;
-}) {
-  // The last form stays while the Modal plays its exit.
-  const [last, setLast] = useState(form);
-  if (form !== undefined && form !== last) setLast(form);
-  const shown = form ?? last;
-  if (shown === undefined) return null;
-  return (
-    <Modal
-      title={strings.deleteTitle(shown.name)}
-      tone="danger"
-      isOpen={form !== undefined}
-      onOpenChange={(isOpen) => {
-        if (!isOpen) onClose();
-      }}
-      actions={
+      dialogs={
         <>
-          <Button slot="close" kbd="ESC">
-            {strings.cancel}
-          </Button>
-          <Button
-            variant="danger-solid"
-            icon="trash"
-            onPress={() => {
-              onDelete(shown);
+          <DeleteFormDialog
+            data={data}
+            slug={slug}
+            form={deleting}
+            onClose={() => setDeleting(undefined)}
+            onDone={(form) => {
+              setDeleting(undefined);
+              toasts.toast({ tone: 'success', message: strings.deleted(form.name) });
+              // The card and its menu went with the form: focus goes to the page's title rather than to a card
+              // that is about to leave, or to the page.
+              focusLater(() => pageHeading(document));
             }}
-          >
-            {strings.delete}
-          </Button>
+          />
+          <PauseFormDialog
+            data={data}
+            slug={slug}
+            form={pausing}
+            onClose={() => setPausing(undefined)}
+            onDone={(form) => {
+              setPausing(undefined);
+              toasts.toast({ tone: 'success', message: strings.paused(form.name) });
+            }}
+          />
         </>
       }
-    >
-      {strings.deleteText(shown.submissionCount)}
-    </Modal>
+    />
   );
 }
 

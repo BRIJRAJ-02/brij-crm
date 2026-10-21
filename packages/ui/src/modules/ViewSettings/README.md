@@ -17,10 +17,11 @@ New. The view bar's View settings (#20, #21) opens it. It is a React Aria `GridL
 - `onChange` hands back the whole list after a switch or a move.
 - Past eight attributes, a search field narrows the list; moving waits until the search is cleared, so you always see where things land.
 - The head counts what is shown: "4 of 5 shown".
+- `footer` sits under the list after a hairline: the table's "Add attribute", since a new attribute is one more column (it moved here from the view bar when the bar was simplified, the owner's call on 21 October 2026). Why a slot: what to add, and who may, is the screen's to say.
 
 ## States
 
-Default, with a locked row, read only, searching, no matches. Hover (pointer only), focus (the inset ring), a row being dragged (faded), the drop target (the inset ring).
+Default, with a locked row, read only, searching, no matches, with a footer. Hover (pointer only), focus (the inset ring), a row being dragged (faded), the drop target (the inset ring).
 
 ## Keyboard
 

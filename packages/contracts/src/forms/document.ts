@@ -7,9 +7,16 @@
 // map", 21 October 2026). The form's name, address, owner and the sites that
 // may post to it live on the form itself and apply at once.
 import * as z from 'zod';
-import { ANSWER_TYPES, CHOICE_TYPES, FORM_CHOICES_MAX, FORM_QUESTIONS_MAX, QUESTION_KEY } from './answer-types.ts';
+import {
+  ANSWER_TYPES,
+  CHOICE_TYPES,
+  FORM_CHOICES_MAX,
+  FORM_QUESTIONS_MAX,
+  OPTION_KEY,
+  QUESTION_KEY,
+} from './answer-types.ts';
 import { FORM_LANGUAGES } from './public.ts';
-import { Uuid } from '../values/ids.ts';
+import { Uuid, uuidWith } from '../values/ids.ts';
 
 /** A question's id inside its document: stable across versions, never shown. */
 export const QuestionId = z
@@ -18,6 +25,11 @@ export const QuestionId = z
 
 /** A question's key: its input name and the key its answer is stored under. */
 export const QuestionKey = z.string().regex(QUESTION_KEY, { error: 'Use lowercase letters, numbers and underscores.' });
+
+/** A choice's key: the value a site's own form posts for it, kept when the choice is renamed. */
+export const OptionKey = z
+  .string()
+  .regex(OPTION_KEY, { error: 'A choice key is 1 to 40 lowercase letters, numbers or underscores.' });
 
 /** Where an answer is filed: an attribute of the form's main target (later milestones add person, company, deal). */
 export const FiledOn = z.strictObject({ objectRole: z.literal('main'), attributeId: Uuid });
@@ -35,6 +47,13 @@ export const FormQuestion = z.strictObject({
     .array(z.string().trim().max(80, { error: 'Keep a choice to 80 characters.' }))
     .max(FORM_CHOICES_MAX, { error: `A question holds at most ${String(FORM_CHOICES_MAX)} choices.` })
     .optional(),
+  /**
+   * Each choice's stable key, in the same order as `choices` (one per choice):
+   * the option value a site's own form posts, so renaming a choice never breaks
+   * a site. Absent on questions saved before keys existed; `choiceKeysOf` makes
+   * them from the words until the builder stores them.
+   */
+  choiceKeys: z.array(OptionKey).max(FORM_CHOICES_MAX).optional(),
   placeholder: z.string().trim().max(80, { error: 'Keep a placeholder to 80 characters.' }).optional(),
   required: z.boolean(),
   /** Absent: not filed, kept with the enquiry. */
@@ -65,9 +84,23 @@ export const RedirectUrl = z
     { error: 'Give a full address that starts with https://.' },
   );
 
+/** The countdown before a visitor goes on to book (AC-1056): 5 seconds unless set, 0 for at once, at most 30. */
+export const BOOKING_COUNTDOWN = { default: 5, min: 0, max: 30 } as const;
+
+/** Seconds before the visitor goes on to the booking page; 0 sends them at once. */
+export const BookingCountdown = z
+  .number()
+  .int({ error: 'Give the countdown in whole seconds.' })
+  .min(BOOKING_COUNTDOWN.min, { error: 'The countdown can’t be negative.' })
+  .max(BOOKING_COUNTDOWN.max, { error: `Keep the countdown to ${String(BOOKING_COUNTDOWN.max)} seconds.` });
+
 /**
- * What follows a submit (AC-570): the thank you, optionally offering a meeting
- * on a booking page (#59, hidden until booking pages exist), or a redirect.
+ * What follows a submit (AC-570, AC-1055): the thank you, a redirect, or on
+ * to one of the workspace's booking pages after a short countdown, with the
+ * visitor's name and email filled in there. `message` on `booking` is the
+ * thank you shown when the page is paused or gone at send time.
+ * `offerMeeting` on `message` is the old, never shown offer, kept so older
+ * documents still read.
  */
 export const FormAfter = z.discriminatedUnion('kind', [
   z.strictObject({
@@ -76,6 +109,12 @@ export const FormAfter = z.discriminatedUnion('kind', [
     offerMeeting: z.strictObject({ bookingPageId: Uuid }).optional(),
   }),
   z.strictObject({ kind: z.literal('redirect'), url: RedirectUrl }),
+  z.strictObject({
+    kind: z.literal('booking'),
+    bookingPageId: uuidWith('Pick a booking page.'),
+    countdownSeconds: BookingCountdown.default(BOOKING_COUNTDOWN.default),
+    message: z.string().trim().max(2_000).default(''),
+  }),
 ]);
 /** What follows a submit. */
 export type FormAfter = z.infer<typeof FormAfter>;
@@ -125,6 +164,17 @@ export const FormDocument = z
           path: [...at, 'key'],
           message: `Two questions both use the key “${question.key}”.`,
         });
+      }
+      if (question.choiceKeys !== undefined) {
+        if (question.choiceKeys.length !== (question.choices ?? []).length) {
+          context.addIssue({
+            code: 'custom',
+            path: [...at, 'choiceKeys'],
+            message: 'Each choice needs exactly one key.',
+          });
+        } else if (new Set(question.choiceKeys).size !== question.choiceKeys.length) {
+          context.addIssue({ code: 'custom', path: [...at, 'choiceKeys'], message: 'Two choices share one key.' });
+        }
       }
       const attributeId = question.filedOn?.attributeId;
       if (attributeId !== undefined && document.targets.main === undefined) {

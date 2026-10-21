@@ -1,7 +1,7 @@
 // Moving between pages (the owner, 20 October 2026: "the switch between pages creates issues, like it loads
-// something then it swaps"): through Captures (Links, Forms, a form's editor, a booking page's editor) and Bookings
-// (Calendar, List, Availability) by the sidebar, the tabs and the rows, the way a person does (a pointer resting on
-// each before the click, so the page preloads). Every switch keeps its layout still (layout shift under 0.01, recent
+// something then it swaps"): through the Scheduling pages (Booking pages, Forms, a form's editor, a booking page's
+// editor, Bookings' Calendar and List, and Availability) by the sidebar, the tabs and the cards, the way a person does
+// (a pointer resting on each before the click, so the page preloads). Every switch keeps its layout still (layout shift under 0.01, recent
 // input or not), and a page visited before shows its rows at once: no skeleton on a return visit. With
 // FLOW_SCREENSHOTS naming a folder, each switch's painted frames are kept for a strip.
 import { writeFileSync } from 'node:fs';
@@ -16,8 +16,8 @@ const SHOTS = process.env.FLOW_SCREENSHOTS;
 interface Step {
   readonly name: string;
   readonly isReturn: boolean;
-  /** Captures or Bookings: its chrome must stand as People's does, and stay put between its tabs. */
-  readonly section?: 'captures' | 'bookings';
+  /** Booking pages, Forms or Bookings: its chrome must stand as People's does, and stay put between its tabs. */
+  readonly section?: 'links' | 'forms' | 'bookings';
   readonly target: (page: Page) => Locator;
   readonly ready: (page: Page) => Locator;
   readonly probe: { readonly css: string; readonly text?: string };
@@ -25,7 +25,7 @@ interface Step {
 
 const sidebar = (name: string) => (page: Page) => page.getByRole('navigation').getByRole('link', { name, exact: true });
 const tab = (name: string) => (page: Page) => page.getByRole('tab', { name, exact: true });
-/** A Captures card, by its title: the title is the link to its editor. */
+/** A booking page's or a form's card, by its title: the title is the link to its editor. */
 const card = (name: string) => (page: Page) => page.getByRole('link', { name, exact: true }).first();
 
 const LINKS: Pick<Step, 'ready' | 'probe'> = {
@@ -59,29 +59,28 @@ const PAGE_EDITOR: Pick<Step, 'ready' | 'probe'> = {
 };
 
 const STEPS: readonly Step[] = [
-  { name: 'sidebar to Links', section: 'captures', isReturn: false, target: sidebar('Captures'), ...LINKS },
-  { name: 'tab to Forms', section: 'captures', isReturn: false, target: tab('Forms'), ...FORMS },
+  { name: 'sidebar to Booking pages', section: 'links', isReturn: false, target: sidebar('Booking pages'), ...LINKS },
+  { name: 'sidebar to Forms', section: 'forms', isReturn: false, target: sidebar('Forms'), ...FORMS },
   { name: 'card to a form', isReturn: false, target: card('Untitled form'), ...FORM_EDITOR },
   { name: 'sidebar to Calendar', section: 'bookings', isReturn: false, target: sidebar('Bookings'), ...CALENDAR },
   { name: 'tab to List', section: 'bookings', isReturn: false, target: tab('List'), ...LIST },
-  { name: 'tab to Availability', section: 'bookings', isReturn: false, target: tab('Availability'), ...AVAILABILITY },
-  { name: 'sidebar back to Links', section: 'captures', isReturn: true, target: sidebar('Captures'), ...LINKS },
+  { name: 'sidebar to Availability', isReturn: false, target: sidebar('Availability'), ...AVAILABILITY },
+  {
+    name: 'sidebar back to Booking pages',
+    section: 'links',
+    isReturn: true,
+    target: sidebar('Booking pages'),
+    ...LINKS,
+  },
   { name: 'card to a booking page', isReturn: false, target: card('Intro call'), ...PAGE_EDITOR },
   { name: 'sidebar back to Calendar', section: 'bookings', isReturn: true, target: sidebar('Bookings'), ...CALENDAR },
   { name: 'tab back to List', section: 'bookings', isReturn: true, target: tab('List'), ...LIST },
-  {
-    name: 'tab back to Availability',
-    section: 'bookings',
-    isReturn: true,
-    target: tab('Availability'),
-    ...AVAILABILITY,
-  },
-  { name: 'sidebar back to Captures', section: 'captures', isReturn: true, target: sidebar('Captures'), ...LINKS },
-  { name: 'tab back to Forms', section: 'captures', isReturn: true, target: tab('Forms'), ...FORMS },
+  { name: 'sidebar back to Availability', isReturn: true, target: sidebar('Availability'), ...AVAILABILITY },
+  { name: 'sidebar back to Forms', section: 'forms', isReturn: true, target: sidebar('Forms'), ...FORMS },
   { name: 'card back to the form', isReturn: true, target: card('Untitled form'), ...FORM_EDITOR },
 ];
 
-test('moving through Captures and Bookings keeps the layout still and shows a visited page at once', async ({
+test('moving through the Scheduling pages keeps the layout still and shows a visited page at once', async ({
   page,
 }, info) => {
   test.setTimeout(300_000);
@@ -101,9 +100,9 @@ test('moving through Captures and Bookings keeps the layout still and shows a vi
   const cdp = await page.context().newCDPSession(page);
   // A fresh app, so the first visit to each page is a cold one.
   await page.goto(`/w/${slug}/objects/people`);
-  await sidebar('Captures')(page).waitFor();
+  await sidebar('Booking pages')(page).waitFor();
   await page.getByRole('grid', { name: 'People' }).waitFor();
-  // People's chrome, which Captures and Bookings take: the TopBar, and the bar under it at the same height.
+  // People's chrome, which Booking pages, Forms and Bookings take: the TopBar, and the bar under it at the same height.
   const people = await chromeOf(page);
   const results: Switch[] = [];
   let previous: { readonly section: string; readonly chrome: Awaited<ReturnType<typeof chromeOf>> } | undefined;
@@ -128,7 +127,9 @@ test('moving through Captures and Bookings keeps the layout still and shows a vi
     }
     const chrome = await chromeOf(page);
     expect.soft(chrome.topBar, `${step.name}: the TopBar stands as People's`).toEqual(people.topBar);
-    expect.soft(chrome.secondBar, `${step.name}: the tabs' bar stands as People's ViewBar`).toEqual(people.secondBar);
+    expect
+      .soft(chrome.secondBar, `${step.name}: the bar under the TopBar stands as People's ViewBar`)
+      .toEqual(people.secondBar);
     if (previous?.section === step.section) {
       expect.soft(chrome.newButton, `${step.name}: New stays where it was`).toEqual(previous.chrome.newButton);
     }

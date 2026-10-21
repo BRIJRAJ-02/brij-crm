@@ -12,6 +12,7 @@ import { createDatabase, type Database } from '@crm/db';
 import { enterPublicForm } from '../access/door.ts';
 import type { AccessRules } from '../access/policy.ts';
 import { createAttribute, editAttribute } from '../attributes/attributes.ts';
+import { bookingTargetProblem, createBookingPage, updateBookingPage } from '../booking/pages.ts';
 import { getActivity } from '../engine/activity.ts';
 import { newId } from '../engine/ids.ts';
 import { isRefusal } from '../engine/refusals.ts';
@@ -20,6 +21,8 @@ import { SYSTEM_ACTOR } from '../engine/scope.ts';
 import { createWorkspace } from '../engine/workspaces.ts';
 import { runWrite } from '../engine/write.ts';
 import { jobKinds } from '../jobs/kinds/index.ts';
+import { inWorkspace } from '../access/run.ts';
+import type { EngineScope } from '../engine/scope.ts';
 import { rescope, testScope } from '../testing.ts';
 import {
   createForm,
@@ -30,12 +33,14 @@ import {
   isSlugAvailable,
   listForms,
   publishForm,
+  rotateFormSecret,
   saveFormDraft,
   setFormStatus,
   updateFormSettings,
 } from './forms.ts';
 import { processSubmission } from './process.ts';
-import { getPublicForm, postingRules, submitForm } from './public.ts';
+import { getPublicForm, postingRules, submitForm, visitorOf, type BookingHandoff } from './public.ts';
+import { workspacePublicKey } from './shared.ts';
 import type { CaptchaVerdict } from './spam.ts';
 import {
   deleteSubmission,
@@ -362,6 +367,86 @@ describe('the public form and submit (AC-553 to AC-556, AC-659)', () => {
   });
 });
 
+describe('tagging: where a submission came from (spec 0023, the embeds)', () => {
+  it('stores the context the embed sent, checked field by field, and shows it on the submission', async () => {
+    const w = await workspace();
+    const live = await liveForm(w);
+    const view = await getForm(w.scope, { formId: live.id });
+    expect(view.workspaceKey).toBe(workspacePublicKey(w.scope.workspaceId));
+    expect(view.workspaceKey).toMatch(/^ws_[a-f0-9]{16}$/);
+    expect(view.workspaceKey).not.toContain(w.scope.workspaceId);
+    await submit(
+      live.publicKey,
+      body(
+        { name: 'Ada', email: 'ada@example.com' },
+        {
+          context: {
+            page_url: 'https://user:secret@acme.com/pricing?plan=pro',
+            page_title: 'Pricing',
+            landing_url: 'javascript:alert(1)',
+            referrer: 'https://news.example.com/',
+            utm_campaign: 'spring',
+            utm_source: 'x'.repeat(201),
+            params: { plan: 'pro' },
+            visitor_id: 'short',
+            workspace: view.workspaceKey,
+            mode: 'inline',
+            version: '1',
+          },
+        },
+      ),
+    );
+    const [row] = await w.query<{ context: unknown }>(sql`select context from form_submissions`);
+    // Credentials leave the address, a script address and an overlong tag and a malformed visitor id are dropped,
+    // and the workspace key is checked, never kept.
+    expect(row?.context).toEqual({
+      page_url: 'https://acme.com/pricing?plan=pro',
+      page_title: 'Pricing',
+      referrer: 'https://news.example.com/',
+      utm_campaign: 'spring',
+      params: { plan: 'pro' },
+      mode: 'inline',
+    });
+    const [stored] = await submissionIds(w, live.id);
+    const shown = await getSubmission(w.scope, { submissionId: stored?.id ?? '' });
+    expect(shown.context).toMatchObject({ page_url: 'https://acme.com/pricing?plan=pro', utm_campaign: 'spring' });
+  });
+
+  it('stores no context when none came, and refuses a snippet naming another workspace as not found', async () => {
+    const w = await workspace();
+    const live = await liveForm(w);
+    await submit(live.publicKey, body({ name: 'Ada', email: 'ada@example.com' }));
+    expect(await w.query(sql`select context from form_submissions`)).toEqual([{ context: null }]);
+    const elsewhere = await workspace();
+    expect(
+      await refusalOf(
+        submit(
+          live.publicKey,
+          body(
+            { name: 'Ada', email: 'ada@example.com' },
+            { context: { workspace: workspacePublicKey(elsewhere.scope.workspaceId) } },
+          ),
+        ),
+      ),
+    ).toMatchObject([{ code: 'NOT_FOUND' }]);
+    expect(await w.query(sql`select id from form_submissions`)).toHaveLength(1);
+  });
+
+  it('rotates the signing secret for forms.manage only, the old one gone at once', async () => {
+    const w = await workspace();
+    const live = await liveForm(w);
+    const before = await getForm(w.scope, { formId: live.id });
+    const rotated = await rotateFormSecret(w.scope, { formId: live.id });
+    expect(rotated.signingSecret).toMatch(/^[A-Za-z0-9_-]{43}$/);
+    expect(rotated.signingSecret).not.toBe(before.signingSecret);
+    const { scope } = await enterPublicForm({ db }, live.publicKey);
+    expect((await postingRules(scope, { formId: live.id })).signingSecret).toBe(rotated.signingSecret);
+    const member = rescope(w.scope, { role: 'member' });
+    expect(await refusalOf(rotateFormSecret(member, { formId: live.id }))).toMatchObject([{ code: 'FORBIDDEN' }]);
+    expect((await getForm(w.scope, { formId: live.id })).signingSecret).toBe(rotated.signingSecret);
+  });
+});
+
 describe('the content checks and Needs review (AC-563, AC-584, the spam follow-up)', () => {
   it('holds a doubtful one in Needs review and makes spam of a repeated, doubtful one, with no job', async () => {
     const w = await workspace();
@@ -635,5 +720,184 @@ describe('the submissions screen’s reads (AC-572, AC-573)', () => {
       submissionsThisMonth: 2,
       spamCount: 1,
     });
+  });
+});
+
+describe('book a meeting after sending (AC-1055 to AC-1057)', () => {
+  /** A draft of `form` that sends visitors on to `pageId`, saved; answers its new revision. */
+  async function pointAt(w: Workspace, pageId: string, seconds = 5) {
+    const created = await createForm(w.scope, { id: newId(), name: 'Book after' });
+    const document: FormDocument = {
+      ...created.draft,
+      after: { kind: 'booking', bookingPageId: pageId, countdownSeconds: seconds, message: 'Thanks, Ada.' },
+    };
+    const saved = await saveFormDraft(w.scope, { formId: created.id, document, expectedRevision: created.revision });
+    return { formId: created.id, saved };
+  }
+
+  it('refuses a page that is not there on save, and a page paused since on publish, on `after`', async () => {
+    const w = await workspace();
+    const created = await createForm(w.scope, { id: newId() });
+    const missing: FormDocument = {
+      ...created.draft,
+      after: { kind: 'booking', bookingPageId: newId(), countdownSeconds: 5, message: '' },
+    };
+    expect(
+      await refusalOf(
+        saveFormDraft(w.scope, { formId: created.id, document: missing, expectedRevision: created.revision }),
+      ),
+    ).toMatchObject([{ code: 'CONFIG_INVALID', field: 'after' }]);
+    // Another workspace's page is as good as missing: row level security never shows it.
+    const elsewhere = await workspace();
+    const theirs = await createBookingPage(elsewhere.scope, { id: newId(), title: 'Theirs', timeZone: 'UTC' });
+    const foreign: FormDocument = {
+      ...created.draft,
+      after: { kind: 'booking', bookingPageId: theirs.id, countdownSeconds: 5, message: '' },
+    };
+    expect(
+      await refusalOf(
+        saveFormDraft(w.scope, { formId: created.id, document: foreign, expectedRevision: created.revision }),
+      ),
+    ).toMatchObject([{ code: 'CONFIG_INVALID', field: 'after' }]);
+    const page = await createBookingPage(w.scope, { id: newId(), title: 'Intro call', timeZone: 'UTC' });
+    const { formId, saved } = await pointAt(w, page.id);
+    await updateBookingPage(w.scope, { pageId: page.id, settings: { status: 'paused' } });
+    expect(await refusalOf(publishForm(w.scope, { formId, expectedRevision: saved.revision }))).toMatchObject([
+      { code: 'CONFIG_INVALID', field: 'after' },
+    ]);
+  });
+
+  it('hands a visitor on with a signed token naming the submission, name and email; a paused page thanks instead', async () => {
+    const w = await workspace();
+    const page = await createBookingPage(w.scope, { id: newId(), title: 'Intro call', timeZone: 'UTC' });
+    const { formId, saved } = await pointAt(w, page.id, 3);
+    const live = await publishForm(w.scope, { formId, expectedRevision: saved.revision });
+    const signed: BookingHandoff[] = [];
+    const sign = (handoff: BookingHandoff) => {
+      signed.push(handoff);
+      return 'signed-token';
+    };
+    const attempt = body({ name: 'Ada Lovelace', email: 'ada@example.com' });
+    const { scope, formId: publicId } = await enterPublicForm({ db }, live.publicKey);
+    const first = await submitForm(scope, registry, {
+      formId: publicId,
+      body: attempt,
+      captcha: off,
+      signHandoff: sign,
+    });
+    expect(first.next).toEqual({
+      kind: 'booking',
+      url: `/b/${page.publicKey}?p=signed-token`,
+      countdownSeconds: 3,
+      text: 'Thanks, Ada.',
+    });
+    const [stored] = await submissionIds(w, formId);
+    // The token names the submission and the page only: nothing personal rides in the link.
+    expect(signed[0]).toEqual({ submissionId: stored?.id, bookingPageId: page.id });
+    // A retry hands off the same submission.
+    const again = await submitForm(scope, registry, {
+      formId: publicId,
+      body: attempt,
+      captcha: off,
+      signHandoff: sign,
+    });
+    expect(again.replayed).toBe(true);
+    expect(signed[1]?.submissionId).toBe(stored?.id);
+    // The same key with other answers, or from another address, is someone else: the thank you, and no token
+    // for this visitor's name and email (the security review, 21 October 2026).
+    const other = await submitForm(scope, registry, {
+      formId: publicId,
+      body: { ...attempt, answers: { name: 'Mallory', email: 'mallory@example.com' } },
+      captcha: off,
+      answersKey: 'k',
+      signHandoff: sign,
+    });
+    expect(other).toMatchObject({ replayed: true, next: { kind: 'message', text: 'Thanks, Ada.' } });
+    const elsewhere = await submitForm(scope, registry, {
+      formId: publicId,
+      body: attempt,
+      captcha: off,
+      ipHash: 'another-address',
+      signHandoff: sign,
+    });
+    expect(elsewhere).toMatchObject({ replayed: true, next: { kind: 'message', text: 'Thanks, Ada.' } });
+    expect(signed).toHaveLength(2);
+    // Paused at send time: the form's own thank you, never a dead page.
+    await updateBookingPage(w.scope, { pageId: page.id, settings: { status: 'paused' } });
+    const later = await submitForm(scope, registry, {
+      formId: publicId,
+      body: body({ name: 'Grace', email: 'grace@example.com' }),
+      captcha: off,
+      signHandoff: sign,
+    });
+    expect(later.next).toEqual({ kind: 'message', text: 'Thanks, Ada.', offersMeeting: false });
+  });
+
+  it('lets only someone who may use a page choose it, and keeps a page chosen before (the access door, AC-1056)', async () => {
+    const w = await workspace();
+    // A member (booking.manage: their own pages only) and their page; the owner's page.
+    const memberId = newId();
+    await w.query(
+      sql`insert into members (workspace_id, id, name, email, role, created_by_type, updated_by_type)
+          values (${w.scope.workspaceId}, ${memberId}, 'Bea', ${`${memberId}@example.com`}, 'member', 'system', 'system')`,
+    );
+    const member = rescope(w.scope, { actor: { type: 'member', id: memberId }, role: 'member' });
+    const hers = await createBookingPage(member, { id: newId(), title: 'Bea’s call', timeZone: 'UTC' });
+    const owners = await createBookingPage(w.scope, { id: newId(), title: 'Intro call', timeZone: 'UTC' });
+    const seen = (scope: EngineScope, pageId: string) =>
+      inWorkspace(scope, (tx) => bookingTargetProblem(tx, scope, pageId, 'seen'));
+    expect(await seen(member, hers.id)).toBeUndefined();
+    expect(await seen(member, owners.id)).toBe('hidden');
+    // An owner (booking.admin) may use anyone's.
+    expect(await seen(w.scope, hers.id)).toBeUndefined();
+    // A key that manages forms but holds no booking right may choose no page at all.
+    const key = testScope({
+      db,
+      workspaceId: w.scope.workspaceId,
+      actor: { type: 'api_key', id: newId() },
+      scopes: ['forms.manage', 'data.write'],
+    });
+    expect(await seen(key, owners.id)).toBe('hidden');
+    // Saving as that key keeps the page chosen before, but switching to another is refused on `after`.
+    const { formId, saved } = await pointAt(w, owners.id);
+    const kept = await saveFormDraft(key, {
+      formId,
+      document: { ...saved.draft, headline: 'Still booking' },
+      expectedRevision: saved.revision,
+    });
+    expect(kept.draft.after).toMatchObject({ kind: 'booking', bookingPageId: owners.id });
+    expect(
+      await refusalOf(
+        saveFormDraft(key, {
+          formId,
+          document: {
+            ...kept.draft,
+            after: { kind: 'booking', bookingPageId: hers.id, countdownSeconds: 5, message: '' },
+          },
+          expectedRevision: kept.revision,
+        }),
+      ),
+    ).toMatchObject([{ code: 'CONFIG_INVALID', field: 'after' }]);
+  });
+
+  it('never takes a company’s or a team’s name for the visitor’s', () => {
+    const questions = [
+      question({ id: 'c', key: 'company', label: 'Company name', answerType: 'short_text' }),
+      question({ id: 'n', key: 'who', label: 'Your name', answerType: 'short_text' }),
+    ];
+    expect(visitorOf({ questions }, { company: 'Analytical', who: 'Ada' })).toEqual({ name: 'Ada' });
+    expect(visitorOf({ questions: questions.slice(0, 1) }, { company: 'Analytical' })).toEqual({});
+  });
+
+  it('reads the visitor’s name by key, else by label, and their email from the email question', () => {
+    const questions = [
+      question({ id: 'a', key: 'who', label: 'Your full name', answerType: 'short_text' }),
+      question({ id: 'b', key: 'mail', label: 'Email', answerType: 'email' }),
+    ];
+    expect(visitorOf({ questions }, { who: ' Ada ', mail: 'ada@example.com' })).toEqual({
+      name: 'Ada',
+      email: 'ada@example.com',
+    });
+    expect(visitorOf({ questions }, {})).toEqual({});
   });
 });

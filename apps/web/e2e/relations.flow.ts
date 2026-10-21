@@ -99,9 +99,14 @@ test.describe('relations', () => {
     await page.getByRole('link', { name: 'Companies' }).first().click();
     await expect(page.getByRole('grid', { name: 'Companies' })).toBeVisible();
 
-    // By keyboard alone: Add attribute, a name, Relationship from the type picker, then Esc puts focus back on
-    // Add attribute (AC-305).
-    const addAttribute = page.getByRole('button', { name: 'Add attribute' }).first();
+    // By keyboard alone: Add attribute (at the foot of View settings since 21 October 2026), a name, Relationship
+    // from the type picker, then Esc puts focus back on what opened it, View settings (AC-305).
+    const viewSettings = page.getByRole('button', { name: 'View settings' });
+    await viewSettings.focus();
+    await page.keyboard.press('Enter');
+    const addAttribute = page
+      .getByRole('dialog', { name: 'View settings' })
+      .getByRole('button', { name: 'Add attribute' });
     await addAttribute.focus();
     await page.keyboard.press('Enter');
     const byKeys = page.getByRole('dialog', { name: 'New attribute' });
@@ -116,7 +121,7 @@ test.describe('relations', () => {
     await expect(handedOver.getByRole('button', { name: /Related object/ })).toBeFocused();
     await page.keyboard.press('Escape');
     await expect(handedOver).toBeHidden();
-    await expect(addAttribute).toBeFocused();
+    await expect(viewSettings).toBeFocused();
 
     // Add attribute, a name, then Relationship: the dialog takes over with the name on this side (AC-282).
     const dialog = await newRelationship(page, 'Investors');

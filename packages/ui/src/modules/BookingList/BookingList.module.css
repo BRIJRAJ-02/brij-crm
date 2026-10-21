@@ -109,13 +109,52 @@
     gap: var(--space-4);
   }
 
+  /* In a Card (Home's Today): the card is the frame, so no box of its own; rows inset like a Table's cells,
+     the bands kept, and a narrower date column, since the time alone sits in it. */
+  .root[data-placement='card'] {
+    overflow: visible;
+    border: none;
+    border-radius: 0;
+    background: none;
+  }
+
+  /* Quiet bands: a plain small label over its rows, no bar. */
+  .root[data-placement='card'] .band {
+    padding: var(--space-8) var(--space-8) var(--space-2);
+    border-block-end: none;
+    background: none;
+    color: var(--text-tertiary);
+    font: var(--text-label);
+    letter-spacing: var(--tracking-label);
+  }
+
+  .root[data-placement='card'] .row {
+    padding-inline: var(--space-8);
+  }
+
+  .root[data-placement='card'] .when {
+    inline-size: var(--size-column-min);
+  }
+
   @container (inline-size < 480px) {
-    .row {
+    .root:not([data-placement='card']) .row {
       flex-direction: column;
       gap: var(--space-6);
     }
 
-    .when {
+    .root:not([data-placement='card']) .when {
+      inline-size: auto;
+    }
+  }
+
+  /* A card keeps the time beside the meeting down to a phone's card. */
+  @container (inline-size < 320px) {
+    .root[data-placement='card'] .row {
+      flex-direction: column;
+      gap: var(--space-6);
+    }
+
+    .root[data-placement='card'] .when {
       inline-size: auto;
     }
   }

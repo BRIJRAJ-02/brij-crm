@@ -13,6 +13,7 @@ import { Uuid, uuidV7 } from './values/ids.ts';
 
 export {
   TASK_COUNT_CAP,
+  TASK_DUE_CAP,
   TASK_GET_MAX,
   TASK_PAGE,
   TASK_PAGE_MAX,
@@ -194,12 +195,22 @@ export const TaskLifecycleInput = WorkspaceScoped.extend({ taskId: Uuid, mutatio
 /** Deleting or restoring one task. */
 export type TaskLifecycleInput = z.infer<typeof TaskLifecycleInput>;
 
+/**
+ * The sidebar's Tasks badge (spec 0034, AC-924): how many open tasks
+ * assigned to me are due on or before `today`, my local date, which the
+ * browser sends. Counted up to `TASK_DUE_CAP` (`atLeast` past it).
+ */
+export const DueTasksInput = WorkspaceScoped.extend({ today: DateValue });
+/** The sidebar's Tasks badge: my local date. */
+export type DueTasksInput = z.infer<typeof DueTasksInput>;
+
 /** The tasks procedures (spec 0019). Every one takes `WorkspaceScoped` input and is served behind the member door. */
 export const tasksContract = {
   create: oc.input(CreateTaskInput).output(TaskView),
   update: oc.input(UpdateTaskInput).output(TaskView),
   get: oc.input(GetTasksInput).output(z.array(TaskView)),
   list: oc.input(ListTasksInput).output(TaskPage),
+  due: oc.input(DueTasksInput).output(TaskTotal),
   delete: oc.input(TaskLifecycleInput).output(z.object({ ok: z.literal(true) })),
   restore: oc.input(TaskLifecycleInput).output(TaskView),
 };

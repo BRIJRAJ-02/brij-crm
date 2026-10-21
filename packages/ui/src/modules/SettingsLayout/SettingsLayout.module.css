@@ -3,10 +3,9 @@
    the title in text-heading with a badge, a line of description in
    text-secondary, and the actions at the end) sits over the body. The page
    takes the view's whole width inside the space-16 gutter, like every other
-   page (20 Oct 2026): sections put their title and description in a
-   size-column-wide column at the start and their cards across the rest, and
-   lists run the full width. In a narrow slot the navigation sits above the
-   page, and a section's title sits above its cards. */
+   page (20 Oct 2026): sections put their heading above their cards, one
+   column across the width (21 Oct 2026), and lists run the full width. In a
+   narrow slot the navigation sits above the page. */
 @layer components {
   .root {
     display: grid;
@@ -144,16 +143,39 @@
   }
 
   /* Never wider than a column's most, so a description keeps a readable line on a wide page. */
-  .rowText {
+  .rowMain {
     display: flex;
     flex: 1 1 var(--size-measure);
+    gap: var(--space-12);
     max-inline-size: var(--size-column-max);
+    min-inline-size: 0;
+  }
+
+  .rowText {
+    display: flex;
+    flex: 1;
     flex-direction: column;
     gap: var(--space-2);
     min-inline-size: 0;
   }
 
+  /* A mark before the text (a calendar's provider), on the title's line. */
+  .rowLeading {
+    display: flex;
+    flex: none;
+    align-self: flex-start;
+  }
+
+  .rowHeading {
+    display: flex;
+    gap: var(--space-6);
+    align-items: center;
+    min-inline-size: 0;
+  }
+
   .rowTitle {
+    min-inline-size: 0;
+    overflow-wrap: anywhere;
     color: var(--text);
     font: var(--text-body-strong);
     letter-spacing: var(--tracking-body-strong);
@@ -162,17 +184,18 @@
   .rowControl {
     display: flex;
     flex: none;
+    gap: var(--space-8);
+    align-items: center;
     justify-content: flex-end;
   }
 
-  /* A section: its title and description over its cards, a hairline between
-     one section and the next. From the page breakpoint the title takes a
-     column at the start and the cards the rest of the width. */
+  /* A section: its heading (and a line of description, when it needs one) over its cards, one column across
+     the page's width, a hairline between one section and the next. The owner (21 October 2026): a label column
+     beside the cards took a third of the width for a short line and left the rest empty. */
   .section {
-    display: grid;
-    grid-template-columns: minmax(0, 1fr);
-    gap: var(--space-12) var(--space-32);
-    align-items: start;
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-12);
   }
 
   .section + .section {
@@ -208,21 +231,6 @@
     min-inline-size: 0;
   }
 
-  /* Cards side by side: as many columns as keep each at least the panel's width, one on a phone. */
-  .grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(min(100%, var(--size-panel)), 1fr));
-    gap: var(--space-16);
-    align-items: start;
-  }
-
-  /* Page layout: the media query, so the split is the same on every settings page at one window width. */
-  @media (width >= 1024px) {
-    .section {
-      grid-template-columns: minmax(0, var(--size-column-wide)) minmax(0, 1fr);
-    }
-  }
-
   @container (width < 480px) {
     .root {
       grid-template-columns: minmax(0, 1fr);
@@ -231,11 +239,6 @@
     .nav {
       border-block-end: var(--border-width-hairline) solid var(--border-subtle);
       border-inline-end: none;
-    }
-
-    /* A narrow slot on a wide window: the title above the cards, whatever the window's width. */
-    .section {
-      grid-template-columns: minmax(0, 1fr);
     }
   }
 }

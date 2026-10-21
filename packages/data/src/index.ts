@@ -62,7 +62,9 @@ import type {
   View,
   ViewLayout,
   ViewVisibility,
+  RecentItem,
 } from '@crm/contracts';
+import type { GlobalSearch } from './search/global.ts';
 import { createORPCClient } from '@orpc/client';
 import { RPCLink } from '@orpc/client/fetch';
 import type { ContractRouterClient } from '@orpc/contract';
@@ -105,6 +107,8 @@ import {
   upsertFirst,
   type CaptureListView,
 } from './captures/list.ts';
+import type { NavOperation, NavUniverse } from '@crm/contracts/navigation';
+import type { NavChangeOptions, NavSnapshot, NavSource, NavStore } from './navigation/store.ts';
 import { draftParam, isSameQuery, readDraft, type DraftQuery } from './views/draft.ts';
 import {
   createViewsStore,
@@ -114,7 +118,19 @@ import {
   type ViewsListSource,
 } from './views/store.ts';
 import type { NewTask, TaskChange, TaskList, TasksStore, TaskSubscription } from './tasks/store.ts';
+import { createDueTasks, type DueTasksSource } from './tasks/due.ts';
 import type { NoteList, NoteSession, NotesStore } from './notes/store.ts';
+import type { CommentEmoji, CommentVersion, NotificationKind, NotificationStatus } from '@crm/contracts';
+import type { CommentsStore, NewComment, RecordComments } from './comments/store.ts';
+import type {
+  InboxFilter,
+  InboxList,
+  InboxMark,
+  InboxSettings,
+  InboxStore,
+  NotificationSettingsChange,
+} from './inbox/store.ts';
+import { createUnreadCounts, type UnreadSource } from './inbox/unread.ts';
 import type { createLive, Granted, Live, LiveStatus } from './live/live.ts';
 import { createMutationLog } from './live/mutations.ts';
 import { createLiveRouter } from './live/router.ts';
@@ -144,6 +160,8 @@ import type {
   ViewQuery,
 } from './records/layer.ts';
 
+export type { GlobalSearch, GlobalSearchState } from './search/global.ts';
+export type { RecentItem, RecordHit, SearchMatch, ViewHit } from '@crm/contracts';
 export type {
   CreateTimeBlockInput,
   TimeBlockKind,
@@ -215,6 +233,10 @@ export type {
   MemberSummary,
   MemberView,
   MyAccess,
+  NotificationKind,
+  NotificationSettings,
+  NotificationStatus,
+  NotificationView,
   ObjectSummary,
   Permission,
   Role,
@@ -302,6 +324,18 @@ export {
   type SignInCode,
 } from './errors.ts';
 export type { FetchLike } from './fetch.ts';
+export type { NavFavourite, NavState } from '@crm/contracts';
+export type { NavChangeOptions, NavSnapshot, NavSource } from './navigation/store.ts';
+export type { DueTasksSnapshot, DueTasksSource } from './tasks/due.ts';
+export type {
+  NavEntry,
+  NavItemKind,
+  NavOperation,
+  NavPage,
+  NavPrefs,
+  NavSectionKey,
+  NavUniverse,
+} from '@crm/contracts/navigation';
 export type { JobsScope, JobsSnapshot, JobsView, TestJobSettings } from './jobs/store.ts';
 export { purgeLeftOf, type PurgeLeftEntry } from './jobs/left.ts';
 export type { View, ViewColumn, ViewConfig, ViewKind, ViewLayout, ViewSummary, ViewVisibility } from '@crm/contracts';
@@ -355,6 +389,27 @@ export type {
   NoteSession,
   NoteSessionState,
 } from './notes/store.ts';
+export type { CommentsState, NewComment, RecordComments, ShownComment, ShownThread } from './comments/store.ts';
+export {
+  bodySegments,
+  COMMENT_EMOJI,
+  COMMENT_MAX,
+  excerptOf,
+  mentionToken,
+  THREAD_COMMENTS_MAX,
+  type BodySegment,
+  type CommentEmoji,
+} from '@crm/contracts/mentions';
+export type {
+  InboxFilter,
+  InboxList,
+  InboxListState,
+  InboxMark,
+  InboxSettings,
+  InboxSettingsState,
+  NotificationSettingsChange,
+} from './inbox/store.ts';
+export { UNREAD_PAST_CAP, type UnreadSource } from './inbox/unread.ts';
 export { isEditableHere, toActorDisplays, toFieldAttribute, type FieldAttributeShape } from './fields.ts';
 export { createIdMinter, type IdSources } from './ids.ts';
 export type { LiveStatus } from './live/live.ts';
@@ -466,6 +521,8 @@ const resendAfter = (ms: number): Promise<void> =>
 
 /** How long a read waits for the workspace's head before going ahead without it (spec 0007: the token call is usually beside `me.get`). */
 const HEAD_WAIT_MS = 5_000;
+/** How long one tab waits before it sends the same recent item again (spec 0039, AC-1088). */
+const VISIT_EVERY_MS = 10_000;
 /** The longest spread before a reread every tab of a workspace makes at once (a members or access event), in ms. */
 const SPREAD_MS = 2_000;
 
@@ -729,6 +786,10 @@ export function createDataLayer({
   let tasks: Promise<TasksStore> | undefined;
   // Notes (spec 0019), loaded with the first screen that shows one.
   let notes: Promise<NotesStore> | undefined;
+  // Comments (spec 0038), loaded with the first Comments tab.
+  let comments: Promise<CommentsStore> | undefined;
+  // The inbox's lists and settings (spec 0038), loaded with the inbox or the notification settings.
+  let inbox: Promise<InboxStore> | undefined;
   // Records looked up in the trash (spec 0017): a missing record's page.
   const trashedLookups = createTrashedLookups((workspace, recordId) =>
     call((options) => api.records.getTrashed({ workspace, recordId }, options)),
@@ -778,6 +839,8 @@ export function createDataLayer({
     });
     jobs.clear();
     views.clear();
+    navStore?.clear();
+    dueTasks.clear();
     void activity?.then((feeds) => {
       feeds.clear();
     });
@@ -787,6 +850,13 @@ export function createDataLayer({
     void notes?.then((store) => {
       store.clear();
     });
+    void comments?.then((store) => {
+      store.clear();
+    });
+    void inbox?.then((store) => {
+      store.clear();
+    });
+    unreadCounts.clear();
     trashedLookups.clear();
     void trash?.then((held) => {
       held.clear();
@@ -991,6 +1061,9 @@ export function createDataLayer({
     return asking;
   };
 
+  // When each recent item was last sent (spec 0039), so opening the same record again sends nothing for 10 seconds.
+  const visited = new Map<string, number>();
+
   /**
    * Waits for the workspace's head before a read, at most 5 seconds; nothing
    * waits when live is off. A read that goes ahead without it (the call
@@ -1096,6 +1169,17 @@ export function createDataLayer({
       Math.round(random() * SPREAD_MS),
     );
   };
+  // The sidebar's Tasks badge (spec 0034, AC-924): small and plain, so it sits in the first load with the sidebar.
+  const dueTasks = createDueTasks({
+    count: (workspace, today) =>
+      beforeRead(workspace).then(() => call((options) => api.tasks.due({ workspace, today }, options))),
+  });
+  /** This tab's own task write landed (its echo never comes back): the badge reads again at once. */
+  const taskLanded = <T>(workspace: string, answer: Promise<T>): Promise<T> =>
+    answer.then((value) => {
+      dueTasks.changed(workspace);
+      return value;
+    });
   const readMembers = (workspace: string) =>
     cached(members, workspace, () => call((options) => api.members.list({ workspace }, options)));
   const readAccess = (workspace: string) =>
@@ -1130,6 +1214,20 @@ export function createDataLayer({
     void notes?.then((store) => {
       store.recordsChanged(workspace, event);
     });
+    // A trashed record's comments and the notifications about them go with it, and come back with it (spec 0038,
+    // AC-1160, AC-1166): its held threads read again, and the inbox and its count.
+    const moved = [...(event.deletedIds ?? []), ...(event.restoredIds ?? [])];
+    if (moved.length > 0 || event.coarse === true) {
+      void comments?.then((store) => {
+        store.records(workspace, moved);
+      });
+      spread(`inbox ${workspace}`, () => {
+        unreadCounts.refresh(workspace);
+        void inbox?.then((store) => {
+          store.resync(workspace);
+        });
+      });
+    }
     // Open timelines (spec 0017) read their first page again for a change naming their record; a coarse one,
     // for every record of the object, waits a random moment first so a whole team doesn't read in step.
     if (activity === undefined) return;
@@ -1227,10 +1325,29 @@ export function createDataLayer({
     void tasks?.then((store) => {
       store.changed(workspace, event);
     });
+    // A tasks event names no assignee, so a held badge reads again, coalesced and spread (`changedLater`).
+    dueTasks.changedLater(workspace);
   });
   router.on('notes', (workspace, event) => {
     void notes?.then((store) => {
       store.changed(workspace, event);
+    });
+  });
+  // Comments (spec 0038, AC-1159): the held records' named threads read again.
+  router.on('comments', (workspace, event) => {
+    void comments?.then((store) => {
+      store.changed(workspace, event);
+    });
+  });
+  // A member's notifications or settings changed (spec 0038, AC-1172, AC-1174, AC-1180): only the person's own
+  // count, lists and settings read again; every other member's tab drops the event.
+  router.on('notifications', (workspace, event) => {
+    void namesMe(workspace, event.memberIds).then((named) => {
+      if (!named) return;
+      unreadCounts.refresh(workspace);
+      void inbox?.then((store) => {
+        store.changed(workspace, event);
+      });
     });
   });
   // Meetings synced, moved, cancelled or made private (spec 0024, AC-610): the open timelines of the records they
@@ -1255,6 +1372,8 @@ export function createDataLayer({
     schedules.changed(workspace);
     jobs.resync(workspace);
     views.resync(workspace);
+    navStore?.resync(workspace);
+    dueTasks.changedLater(workspace);
     void trash?.then((held) => {
       held.reload(workspace);
     });
@@ -1264,6 +1383,13 @@ export function createDataLayer({
     void notes?.then((store) => {
       store.resync(workspace);
     });
+    void comments?.then((store) => {
+      store.resync(workspace);
+    });
+    void inbox?.then((store) => {
+      store.resync(workspace);
+    });
+    unreadCounts.refresh(workspace);
     void records?.then((layer) => {
       layer.reload(workspace);
     });
@@ -1314,6 +1440,17 @@ export function createDataLayer({
       release?.();
     };
   };
+
+  // The inbox's unread count (spec 0038, AC-1174), in the first load: the person's access is read first, so the
+  // `notifications` events that don't name them are dropped without a read.
+  const unreadCounts = createUnreadCounts({
+    read: (workspace) =>
+      readAccess(workspace)
+        .catch(() => undefined)
+        .then(() => beforeRead(workspace))
+        .then(() => call((options) => api.notifications.count({ workspace }, options))),
+    watch,
+  });
 
   // Background jobs (spec 0008): one store for the app, its views per workspace and scope.
   const jobs = createJobsStore({
@@ -1498,6 +1635,133 @@ export function createDataLayer({
     onLayoutRefused: (error) => {
       notify({ tone: 'danger', message: error.message });
     },
+  });
+
+  // The member's own sidebar (spec 0034): one copy per workspace, changes shown at once and sent one at a time,
+  // read again when another tab of theirs changes it (`nav`), and when a starred view or record may have changed.
+  // Loaded with a dynamic import on first use (the workspace route's loader asks for it beside the objects), so it
+  // stays out of the first load.
+  let navStore: NavStore | undefined;
+  let navLoading: Promise<NavStore> | undefined;
+  // The store's code didn't load (offline, or a deploy moved it): the sidebar reads as failed, so screens draw the
+  // defaults rather than loading for ever, and the next use loads it again.
+  let navUnloaded: NavSnapshot | undefined;
+  const navWaiting = new Set<() => void>();
+  const loadNav = (): Promise<NavStore> => {
+    navLoading ??= import('./navigation/store.ts').then(({ createNavStore, NAV_WORDS }) => {
+      navStore = createNavStore({
+        api: {
+          get: (workspace) => beforeRead(workspace).then(() => call((options) => api.nav.get({ workspace }, options))),
+          change: (workspace, op, mutationId) =>
+            call((options) => api.nav.change({ workspace, op, mutationId }, options)),
+        },
+        mintId,
+        mutations,
+        watch,
+        namesMe: (workspace, memberIds) => namesMe(workspace, memberIds),
+        // What was put back, then why ("Your sidebar wasn’t changed. You have 50 favourites. Remove one first.").
+        onRefused: (error, retry) => {
+          notify({
+            tone: 'danger',
+            message: `${NAV_WORDS.notChanged} ${error.message}`,
+            ...(retry === undefined ? {} : { action: { label: NAV_WORDS.retry, onAction: retry } }),
+          });
+        },
+        onUnavailable: (_error, retry) => {
+          notify({
+            tone: 'danger',
+            message: NAV_WORDS.unavailable,
+            action: { label: NAV_WORDS.retry, onAction: retry },
+          });
+        },
+      });
+      navUnloaded = undefined;
+      // Screens that subscribed before the store arrived hear it now.
+      for (const listener of navWaiting) listener();
+      navWaiting.clear();
+      return navStore;
+    });
+    navLoading.catch((error: unknown) => {
+      navLoading = undefined;
+      navUnloaded = { status: 'error', error: toDataError(error) };
+      for (const listener of navWaiting) listener();
+    });
+    return navLoading;
+  };
+  /** One workspace's sidebar as `useNav` holds it: the same object each time, so React keeps one subscription. */
+  const navSources = new Map<string, NavSource>();
+  const loadingNav: NavSnapshot = { status: 'loading' };
+  const navSource = (workspace: string): NavSource => {
+    const found = navSources.get(workspace);
+    if (found !== undefined) return found;
+    const made: NavSource = {
+      retain: () => {
+        let release: (() => void) | undefined;
+        let isReleased = false;
+        loadNav().then(
+          (store) => {
+            if (!isReleased) release = store.retain(workspace);
+          },
+          () => undefined,
+        );
+        return () => {
+          isReleased = true;
+          release?.();
+        };
+      },
+      subscribe: (listener) => {
+        if (navStore !== undefined) return navStore.subscribe(workspace, listener);
+        let stop: (() => void) | undefined;
+        const arrived = () => {
+          listener();
+          stop = navStore?.subscribe(workspace, listener);
+        };
+        navWaiting.add(arrived);
+        return () => {
+          navWaiting.delete(arrived);
+          stop?.();
+        };
+      },
+      getSnapshot: () => navStore?.snapshot(workspace) ?? navUnloaded ?? loadingNav,
+    };
+    navSources.set(workspace, made);
+    return made;
+  };
+  // Live events reach the sidebar only once a screen loaded it: before that there is nothing held to change.
+  router.on('nav', (workspace, event) => {
+    navStore?.navChanged(workspace, event);
+  });
+  // What other people change reaches the sidebar spread over a moment, as members do, so a whole team doesn't read
+  // in step; the member's own changes (above) read at once.
+  const refreshNav = (workspace: string) => {
+    spread(`nav ${workspace}`, () => {
+      navStore?.refresh(workspace);
+    });
+  };
+  router.on('views', (workspace, event) => {
+    const change = {
+      kind: 'view' as const,
+      ids: event.viewIds,
+      objectId: event.objectId,
+      coarse: event.coarse === true,
+    };
+    if (navStore?.touchesFavourites(workspace, change) === true) refreshNav(workspace);
+  });
+  // An object made, archived or restored (not an attribute's change): the sidebar reads again, so one coming back
+  // takes the place the member gave it, and stays hidden if they hid it (AC-926, AC-939).
+  router.on('definitions', (workspace, event) => {
+    if (event.listId !== undefined || (event.attributeIds !== undefined && event.attributeIds.length > 0)) return;
+    if (navStore !== undefined) refreshNav(workspace);
+  });
+  router.on('records', (workspace, event) => {
+    // A favourite record's name, trash state or access may have moved: deleted, restored, edited, or coarse.
+    const change = {
+      kind: 'record' as const,
+      ids: [...(event.deletedIds ?? []), ...(event.restoredIds ?? []), ...event.recordIds],
+      objectId: event.objectId,
+      coarse: event.coarse === true,
+    };
+    if (navStore?.touchesFavourites(workspace, change) === true) refreshNav(workspace);
   });
 
   /**
@@ -1877,7 +2141,10 @@ export function createDataLayer({
             landed(
               input.workspace,
               call((options) => api.trash.restore({ ...input, recordIds: [...input.recordIds] }, options)),
-            ),
+            ).then((answer) => {
+              favouritesMoved(input.workspace);
+              return answer;
+            }),
           deleteForever: (input) =>
             landed(
               input.workspace,
@@ -1893,11 +2160,24 @@ export function createDataLayer({
     return trash;
   };
 
+  /**
+   * This tab deleted or restored records: its own echoes never come back, so the sidebar reads again (coarsely, at
+   * most once a second, at once rather than spread) and a favourite trashed or restored here follows (AC-939). A
+   * delete of named records reads only when one is a favourite; a restore, or a change whose records aren't named
+   * (a job, an undo), always reads: a favourite in the trash is out of every read, so after a reload this tab can't
+   * know it is waiting.
+   */
+  const favouritesMoved = (workspace: string, deleted?: readonly string[]): void => {
+    if (navStore === undefined) return;
+    if (deleted === undefined || navStore.touchedHere(workspace, deleted)) navStore.refresh(workspace);
+  };
+
   /** This tab deleted or restored records: its own echoes never come back, so an open trash settles now. */
-  const trashMoved = (workspace: string): void => {
+  const trashMoved = (workspace: string, deleted?: readonly string[]): void => {
     void trash?.then((held) => {
       held.reload(workspace);
     });
+    favouritesMoved(workspace, deleted);
   };
 
   const tasksStore = (): Promise<TasksStore> => {
@@ -1922,23 +2202,37 @@ export function createDataLayer({
           get: (input) =>
             call((options) => api.tasks.get({ workspace: input.workspace, ids: [...input.ids] }, options)),
           create: ({ recordIds, ...input }) =>
-            call((options) =>
-              api.tasks.create(
-                { ...input, ...(recordIds === undefined ? {} : { recordIds: [...recordIds] }) },
-                options,
+            taskLanded(
+              input.workspace,
+              call((options) =>
+                api.tasks.create(
+                  { ...input, ...(recordIds === undefined ? {} : { recordIds: [...recordIds] }) },
+                  options,
+                ),
               ),
             ),
-          delete: (input) => call((options) => api.tasks.delete({ ...input }, options)),
-          restore: (input) => call((options) => api.tasks.restore({ ...input }, options)),
+          delete: (input) =>
+            taskLanded(
+              input.workspace,
+              call((options) => api.tasks.delete({ ...input }, options)),
+            ),
+          restore: (input) =>
+            taskLanded(
+              input.workspace,
+              call((options) => api.tasks.restore({ ...input }, options)),
+            ),
           update: ({ addRecordIds, removeRecordIds, ...input }) =>
-            call((options) =>
-              api.tasks.update(
-                {
-                  ...input,
-                  ...(addRecordIds === undefined ? {} : { addRecordIds: [...addRecordIds] }),
-                  ...(removeRecordIds === undefined ? {} : { removeRecordIds: [...removeRecordIds] }),
-                },
-                options,
+            taskLanded(
+              input.workspace,
+              call((options) =>
+                api.tasks.update(
+                  {
+                    ...input,
+                    ...(addRecordIds === undefined ? {} : { addRecordIds: [...addRecordIds] }),
+                    ...(removeRecordIds === undefined ? {} : { removeRecordIds: [...removeRecordIds] }),
+                  },
+                  options,
+                ),
               ),
             ),
         },
@@ -2006,6 +2300,50 @@ export function createDataLayer({
       }),
     );
     return notes;
+  };
+
+  const commentsStore = (): Promise<CommentsStore> => {
+    comments ??= import('./comments/store.ts').then(({ createCommentsStore }) =>
+      createCommentsStore({
+        api: {
+          list: (input) =>
+            beforeRead(input.workspace).then(() => call((options) => api.comments.list({ ...input }, options))),
+          get: (input) => call((options) => api.comments.get({ ...input, threadIds: [...input.threadIds] }, options)),
+          create: (input) => call((options) => api.comments.create({ ...input }, options)),
+          update: (input) => call((options) => api.comments.update({ ...input }, options)),
+          delete: (input) => call((options) => api.comments.delete({ ...input }, options)),
+          resolve: (input) => call((options) => api.comments.resolve({ ...input }, options)),
+          react: (input) => call((options) => api.comments.react({ ...input }, options)),
+          versions: (input) => call((options) => api.comments.versions({ ...input }, options)),
+        },
+        mintId,
+        mutations,
+        notify,
+        watch,
+      }),
+    );
+    return comments;
+  };
+
+  const inboxStore = (): Promise<InboxStore> => {
+    inbox ??= import('./inbox/store.ts').then(({ createInboxStore }) =>
+      createInboxStore({
+        api: {
+          list: (input) =>
+            beforeRead(input.workspace).then(() => call((options) => api.notifications.list({ ...input }, options))),
+          mark: (input) => call((options) => api.notifications.mark({ ...input, ids: [...input.ids] }, options)),
+          markAllRead: (input) => call((options) => api.notifications.markAllRead({ ...input }, options)),
+          settings: (input) => call((options) => api.notifications.settings({ ...input }, options)),
+          setSettings: (input) => call((options) => api.notifications.setSettings({ ...input }, options)),
+        },
+        mintId,
+        mutations,
+        notify,
+        watch,
+        unread: unreadCounts,
+      }),
+    );
+    return inbox;
   };
 
   const recordsLayer = (): Promise<RecordsLayer> => {
@@ -3135,7 +3473,7 @@ export function createDataLayer({
        */
       deleteMany: async (workspace: string, objectId: string, recordIds: readonly string[]): Promise<DeleteResult> => {
         const result = await (await recordsLayer()).deleteMany(workspace, objectId, recordIds);
-        if (result.kind === 'done' && result.deleted > 0) trashMoved(workspace);
+        if (result.kind === 'done' && result.deleted > 0) trashMoved(workspace, recordIds);
         return result;
       },
       /**
@@ -3254,6 +3592,12 @@ export function createDataLayer({
     },
     tasks: {
       /**
+       * The sidebar's Tasks badge (spec 0034, AC-924): how many of my open
+       * tasks are due on or before `today` (my local date, `YYYY-MM-DD`),
+       * live while a screen holds it. Read it through `useDueTasks`.
+       */
+      due: (workspace: string, today: string): DueTasksSource => dueTasks.source(workspace, today),
+      /**
        * A record's open tasks (by due date) or done ones (newest done first),
        * the same list for every screen that asks (spec 0019): 50 at a time as
        * it scrolls, with the open count, live, and settling 1.5 seconds after
@@ -3343,6 +3687,74 @@ export function createDataLayer({
       restore: async (workspace: string, recordId: string, noteId: string): Promise<DataError | undefined> =>
         (await notesStore()).restore(workspace, recordId, noteId),
     },
+    comments: {
+      /**
+       * A record's threads (spec 0038, AC-1151): the open ones oldest first,
+       * the newest 20 at first and 20 more on asking, the resolved ones once
+       * the disclosure opens, with the counts for the tab's label; live, and
+       * the same for every screen that asks. Read it through `useComments`.
+       */
+      forRecord: async (workspace: string, recordId: string): Promise<RecordComments> =>
+        (await commentsStore()).forRecord(workspace, recordId),
+      /** Sends a comment or a reply, shown at once as sending; a refusal comes back for the composer. */
+      create: async (workspace: string, recordId: string, comment: NewComment): Promise<DataError | undefined> =>
+        (await commentsStore()).create(workspace, recordId, comment),
+      /** Edits the member's own comment at once; a refusal puts it back with a toast. */
+      edit: async (
+        workspace: string,
+        recordId: string,
+        commentId: string,
+        body: string,
+      ): Promise<DataError | undefined> => (await commentsStore()).edit(workspace, recordId, commentId, body),
+      /** Deletes a comment at once (a placeholder while its thread has other live comments). */
+      remove: async (workspace: string, recordId: string, commentId: string): Promise<DataError | undefined> =>
+        (await commentsStore()).remove(workspace, recordId, commentId),
+      /** Resolves or reopens a thread at once. */
+      resolve: async (
+        workspace: string,
+        recordId: string,
+        threadId: string,
+        resolved: boolean,
+      ): Promise<DataError | undefined> => (await commentsStore()).resolve(workspace, recordId, threadId, resolved),
+      /** Adds or takes back the member's reaction at once. */
+      react: async (
+        workspace: string,
+        recordId: string,
+        commentId: string,
+        emoji: CommentEmoji,
+        on: boolean,
+        memberId: string,
+      ): Promise<DataError | undefined> =>
+        (await commentsStore()).react(workspace, recordId, commentId, emoji, on, memberId),
+      /** A comment's earlier texts, newest first (the "edited" popover). */
+      versions: async (workspace: string, commentId: string): Promise<readonly CommentVersion[]> =>
+        (await commentsStore()).versions(workspace, commentId),
+    },
+    inbox: {
+      /**
+       * The member's unread count in the workspace (spec 0038, AC-1174), in the
+       * first load: what the sidebar's Inbox badge shows through
+       * `useInboxUnread`. Live while held, on every page.
+       */
+      unread: (workspace: string): UnreadSource => unreadCounts.unread(workspace),
+      /** One tab and filter of the member's inbox (AC-1169, AC-1170), 50 at a time, live. Read it through `useInboxList`. */
+      list: async (workspace: string, filter: InboxFilter): Promise<InboxList> =>
+        (await inboxStore()).list(workspace, filter),
+      /** Marks notifications read or unread, done or back in the inbox, at once (AC-1171). */
+      mark: async (workspace: string, ids: readonly string[], mark: InboxMark): Promise<DataError | undefined> =>
+        (await inboxStore()).mark(workspace, ids, mark),
+      /** Marks every unread notification of a tab (and kind) read. */
+      markAllRead: async (
+        workspace: string,
+        status: NotificationStatus,
+        kind?: NotificationKind,
+      ): Promise<DataError | undefined> => (await inboxStore()).markAllRead(workspace, status, kind),
+      /** The member's email settings for the workspace (AC-1179). Read it through `useNotificationSettings`. */
+      settings: async (workspace: string): Promise<InboxSettings> => (await inboxStore()).settings(workspace),
+      /** Saves some switches at once; a refusal puts them back with a toast. */
+      setSettings: async (workspace: string, change: NotificationSettingsChange): Promise<DataError | undefined> =>
+        (await inboxStore()).setSettings(workspace, change),
+    },
     undo: {
       /**
        * Undoes this tab's last confirmed change in the workspace (spec 0006,
@@ -3423,8 +3835,12 @@ export function createDataLayer({
       /** Makes a connection the member's default: shown at once, put back with a toast if refused. */
       makeDefault: (workspace: string, connectionId: string): Promise<boolean> =>
         calendar.makeDefault(workspace, connectionId),
-      /** Disconnects a connection: gone at once, back with a toast if refused. Answers whether it landed. */
-      remove: (workspace: string, connectionId: string): Promise<boolean> => calendar.remove(workspace, connectionId),
+      /**
+       * Disconnects a connection: gone at once, back with a toast if refused. Answers whether it landed. From a
+       * confirm (`asksFirst`), the row stays until the server answers and a refusal throws its DataError instead.
+       */
+      remove: (workspace: string, connectionId: string, options?: { readonly asksFirst?: boolean }): Promise<boolean> =>
+        calendar.remove(workspace, connectionId, options),
       /**
        * Where the browser goes to connect a Google calendar (the API sends it on to Google's consent), and where it
        * comes back to: Settings › Calendar, or first run's calendar step (`welcome`, spec 0036).
@@ -3541,6 +3957,12 @@ export function createDataLayer({
               }))),
           land: landForm(formId),
         }),
+      /** Gives the form a new signing secret (the old one stops working at once); answers the form with it. */
+      rotateSecret: (workspace: string, formId: string) =>
+        formLists.write(workspace, {
+          send: () => call((options) => api.forms.rotateSecret({ workspace, formId, mutationId: mintId() }, options)),
+          land: landForm(formId),
+        }),
       /** Pauses or resumes (Accepting), archives or restores a form (AC-549): in the list at once, put back on a refusal. */
       setStatus: (workspace: string, formId: string, status: FormStatus) =>
         formLists.write(workspace, {
@@ -3605,7 +4027,7 @@ export function createDataLayer({
       /** The hosted page's address for a form's address, on this origin. */
       hostedUrl: (publicKey: string): string => `${origin}/f/${encodeURIComponent(publicKey)}`,
       /** The embed script's address, on this origin. */
-      embedUrl: (): string => `${origin}/embed.js`,
+      embedUrl: (): string => `${origin}/embed/v1.js`,
       /** The public submit endpoint, for a site's own form or server. */
       submitUrl: (publicKey: string): string =>
         `${origin}/api/public/forms/${encodeURIComponent(publicKey)}/submissions`,
@@ -3689,6 +4111,77 @@ export function createDataLayer({
        * Answers whether it landed.
        */
       confirm: (workspace: string, jobId: string): Promise<boolean> => jobs.confirm(workspace, jobId),
+    },
+    search: {
+      /**
+       * The command menu's search (spec 0039): every readable object's
+       * records and the views the person sees, as they type (150 ms after the
+       * last key, the request before aborted, answers kept for the menu's
+       * life). Its code loads on first use, never in the first load. Read it
+       * through `useGlobalSearch`, and `dispose` it when the menu closes.
+       */
+      /** Loads the search's code ahead of use (the menu's idle prefetch), so the first search waits on no chunk. */
+      preload: (): Promise<void> => import('./search/global.ts').then(() => undefined),
+      open: async (workspace: string): Promise<GlobalSearch> =>
+        (await import('./search/global.ts')).createGlobalSearch({
+          run: (query, signal) =>
+            beforeRead(workspace).then(() =>
+              call((options) => api.search.query({ workspace, query }, options), signal),
+            ),
+        }),
+      /** The person's recent records and views they may still see, newest first (read fresh each time the menu opens). */
+      recents: (workspace: string): Promise<readonly RecentItem[]> =>
+        beforeRead(workspace)
+          .then(() => call((options) => api.recents.list({ workspace }, options)))
+          .then((answer) => answer.items),
+      /**
+       * Keeps a record or view the person just opened as recent (AC-1088):
+       * fire and forget, once per item per 10 seconds per tab, silent on failure.
+       */
+      visit: (workspace: string, kind: 'record' | 'view', id: string): void => {
+        const key = `${workspace}:${kind}:${id}`;
+        const now = Date.now();
+        if ((visited.get(key) ?? 0) > now - VISIT_EVERY_MS) return;
+        // Delete first, so the map's order is the order of last sends and the oldest goes past 200.
+        visited.delete(key);
+        visited.set(key, now);
+        if (visited.size > 200) visited.delete(visited.keys().next().value ?? key);
+        void call((options) => api.recents.visit({ workspace, kind, id }, options)).catch(() => undefined);
+      },
+    },
+    /**
+     * The member's own sidebar (spec 0034): `load` for the workspace route's
+     * loader (the first paint has their order, AC-936), `source` for
+     * `useNav`, and `change` to apply one operation at once and send it
+     * (rolled back with a toast and Retry on a refusal, AC-937).
+     */
+    nav: {
+      load: (workspace: string) => loadNav().then((store) => store.load(workspace)),
+      source: (workspace: string): NavSource => navSource(workspace),
+      /**
+       * Answers a promise that settles when the change lands, or rejects with its refusal, already rolled back; a
+       * screen that waits on it may say the refusal itself (`isSaidHere`), and no toast is raised.
+       */
+      change: (
+        workspace: string,
+        op: NavOperation,
+        universe: NavUniverse,
+        options: NavChangeOptions = {},
+      ): Promise<void> => {
+        const made = loadNav().then(
+          (store) => store.change(workspace, op, universe, options),
+          // The store's code didn't load: nothing changed. Say so (unless the screen does), with the layer's words.
+          (error: unknown) => {
+            const failure = toDataError(error);
+            if (options.isSaidHere !== true) notify({ tone: 'danger', message: failure.message });
+            throw failure;
+          },
+        );
+        // Most screens don't wait on a change: its refusal is said by the toast, never left unhandled.
+        made.catch(() => undefined);
+        return made;
+      },
+      reload: (workspace: string) => loadNav().then((store) => store.reload(workspace)),
     },
     views: {
       /**

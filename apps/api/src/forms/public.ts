@@ -33,6 +33,7 @@ import type { WakeRelay } from '../realtime/wake.ts';
 import { FORM_LIMITS, type LimitRule, type PublicLimiter } from '../limits.ts';
 import type { CaptchaVerifier } from './recaptcha.ts';
 import type { TicketBook } from './ticket.ts';
+import { signHandoff } from './handoff.ts';
 
 /** The header a site's server signs its posts in: `sha256=` and the hex HMAC of the body with the form's secret. */
 export const SIGNATURE_HEADER = 'x-crm-signature';
@@ -54,6 +55,8 @@ export interface PublicFormsDeps {
   readonly ipSalt: string;
   /** The key answers are hashed with to find repeats (derived from the salt). */
   readonly answersKey: string;
+  /** Signs the hand off to a booking page after a send (AC-1057); `handoffKey` from the session secret. */
+  readonly handoffKey?: Buffer;
 }
 
 interface Variables {
@@ -154,6 +157,7 @@ function postFrom(
 
 /** Mounts the public form endpoints on the app (`/api` is its base path). */
 export function mountPublicForms(app: Hono<{ Variables: Variables }>, deps: PublicFormsDeps): void {
+  const { handoffKey } = deps;
   const allowedHosts = new Set([new URL(deps.publicOrigin).hostname]);
 
   app.get('/public/forms/:publicKey', async (c) => {
@@ -263,6 +267,7 @@ export function mountPublicForms(app: Hono<{ Variables: Variables }>, deps: Publ
               emailOverLimit,
               answersKey: deps.answersKey,
               ...(ipHash === undefined ? {} : { ipHash }),
+              ...(handoffKey === undefined ? {} : { signHandoff: (handoff) => signHandoff(handoffKey, handoff) }),
             },
             hooks,
           ),

@@ -2,7 +2,7 @@ import type { PhoneValue } from '@crm/contracts/values';
 import { LinkChip } from '../../atoms/LinkChip/LinkChip.tsx';
 import { ChipRow, EmptyValue } from '../parts.tsx';
 import type { DisplayProps } from '../types.ts';
-import { asList } from '../values.ts';
+import { asList, isFlatSurface } from '../values.ts';
 import { usePhoneLibrary, type PhoneLibrary } from './phone-library.ts';
 
 /** The number written the international way (+44 20 7123 4567), or as stored until the library loads. */
@@ -21,7 +21,11 @@ export function PhoneDisplay({ attribute, value, surface, maxVisible }: DisplayP
       {...(maxVisible === undefined ? {} : { maxVisible })}
       chips={phones.map((phone) => ({
         key: phone.number,
-        node: <LinkChip href={`tel:${phone.number}`}>{formatPhone(phone, library)}</LinkChip>,
+        node: (
+          <LinkChip href={`tel:${phone.number}`} isFlat={isFlatSurface(surface)}>
+            {formatPhone(phone, library)}
+          </LinkChip>
+        ),
       }))}
     />
   );

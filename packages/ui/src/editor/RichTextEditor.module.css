@@ -153,6 +153,11 @@
     color: var(--text);
     font: var(--text-code);
     letter-spacing: var(--tracking-code);
+    /* Code shows every character as typed: no ligatures ("</" and "://" stay apart). */
+    font-variant-ligatures: none;
+    font-feature-settings:
+      'liga' 0,
+      'calt' 0;
     white-space: pre;
   }
 
@@ -171,6 +176,11 @@
     color: var(--text);
     font: var(--text-code);
     letter-spacing: var(--tracking-code);
+    /* Code shows every character as typed: no ligatures ("</" and "://" stay apart). */
+    font-variant-ligatures: none;
+    font-feature-settings:
+      'liga' 0,
+      'calt' 0;
   }
 
   .highlight {

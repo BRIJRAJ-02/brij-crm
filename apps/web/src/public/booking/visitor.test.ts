@@ -22,8 +22,10 @@ describe('the return address', () => {
     expect(readReturn(back)).toEqual({ chosen: {} });
   });
 
-  it('tidies the address after, keeping anything else', () => {
-    expect(tidiedAddress(new URL(`https://app.test/b/${KEY}?d=30&calendar=denied&p=x`))).toBe(`/b/${KEY}?p=x`);
+  it('tidies the address after, keeping anything else, and never a hand off', () => {
+    expect(tidiedAddress(new URL(`https://app.test/b/${KEY}?d=30&calendar=denied&p=x&utm_source=news`))).toBe(
+      `/b/${KEY}?utm_source=news`,
+    );
     expect(tidiedAddress(new URL(`https://app.test/b/${KEY}`))).toBeUndefined();
   });
 });

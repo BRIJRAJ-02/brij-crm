@@ -18,6 +18,9 @@ export const strings = {
     changed: 'changed',
     set: 'set',
     cleared: 'cleared',
+    /** A checkbox's change says itself in the verb: "checked Email opt out", no boxes under it. */
+    checked: 'checked',
+    unchecked: 'unchecked',
     created: 'created this record',
     note: 'added a note',
     task: 'added a task',

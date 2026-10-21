@@ -76,6 +76,24 @@ export function savableQuery(query: DraftQuery, effective: Extract<EffectiveQuer
 }
 
 /** The views a person is opened onto from the object's address: the default, else the first in switcher order. */
+/**
+ * The view the command menu's Create a <object> opens (spec 0039, AC-1086):
+ * the landing view when it is a table, else the default view when it is one,
+ * else the first table in switcher order. A board has no new record dialog,
+ * so with no table at all there is none, and the caller lands as usual.
+ */
+export function createView(list: {
+  readonly views: readonly { readonly id: string; readonly kind: string }[];
+  readonly defaultViewId?: string | undefined;
+  readonly lastOpenedViewId?: string | undefined;
+}): string | undefined {
+  const tables = list.views.filter((view) => view.kind === 'table');
+  const landing = landingView(list);
+  if (tables.some((view) => view.id === landing)) return landing;
+  if (tables.some((view) => view.id === list.defaultViewId)) return list.defaultViewId;
+  return tables[0]?.id;
+}
+
 export function landingView(list: {
   readonly views: readonly { readonly id: string }[];
   readonly defaultViewId?: string | undefined;

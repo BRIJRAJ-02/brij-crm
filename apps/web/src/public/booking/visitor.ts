@@ -19,7 +19,10 @@ const RESULTS: readonly ConnectResult[] = ['connected', 'denied', 'scope', 'off'
 const DAY = /^\d{4}-\d{2}-\d{2}$/;
 const ZONE = /^[A-Za-z_]+(?:\/[A-Za-z0-9_+-]+){0,2}$|^UTC$/;
 
-/** The page's own address with what was chosen, for the connect leg to come back to. */
+/**
+ * The page's own address with what was chosen, for the connect leg to come back to. A form's hand off never rides
+ * along (it would reach Google's sign in): the tab's session storage keeps it (prefill.ts).
+ */
 export function returnPath(publicKey: string, chosen: Chosen): string {
   const query = new URLSearchParams();
   if (chosen.duration !== undefined) query.set('d', String(chosen.duration));
@@ -49,7 +52,7 @@ export function readReturn(address: URL): { readonly chosen: Chosen; readonly re
 /** The address without what the return carried, so a reload starts clean; undefined when there is nothing to tidy. */
 export function tidiedAddress(address: URL): string | undefined {
   const next = new URL(address.href);
-  for (const key of ['d', 'day', 'tz', 'calendar']) next.searchParams.delete(key);
+  for (const key of ['d', 'day', 'tz', 'calendar', 'p']) next.searchParams.delete(key);
   if (next.href === address.href) return undefined;
   return `${next.pathname}${next.search}${next.hash}`;
 }

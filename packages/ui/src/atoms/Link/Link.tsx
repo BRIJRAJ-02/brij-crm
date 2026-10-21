@@ -8,6 +8,12 @@ export interface LinkProps {
   /** A path in the app (`/people/1`, routed), or an `http`, `https`, `mailto` or `tel` link. Anything else renders as text. */
   readonly href: string;
   readonly children: ReactNode;
+  /**
+   * Does something in the page instead of going anywhere (a form's summary
+   * link that focuses its question). The link keeps its look, focus ring and
+   * keys; `href` is not rendered then.
+   */
+  readonly onPress?: () => void;
 }
 
 /** Where a checked href goes: inside the app, or out to another site in a new tab. */
@@ -20,7 +26,14 @@ export function linkTarget(href: string) {
  * in a new tab. A link that fails `safeHref` (a `javascript:` URL) renders as
  * plain text (AC-14).
  */
-export function Link({ href, children }: LinkProps) {
+export function Link({ href, children, onPress }: LinkProps) {
+  if (onPress !== undefined) {
+    return (
+      <AriaLink className={styles.root} onPress={onPress}>
+        {children}
+      </AriaLink>
+    );
+  }
   const safe = safeHref(href);
   if (safe === undefined) return <span className={styles.text}>{children}</span>;
   return (

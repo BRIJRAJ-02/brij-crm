@@ -57,15 +57,16 @@ export async function checkScreen(page: Page, name: string): Promise<void> {
 }
 
 /**
- * Where calendar sync is on, first run asks for a calendar last (spec 0036): Skip for now opens People. Where it is
- * off (CI), Create workspace opens People itself. Either way, this waits for one or the other and goes on to People.
+ * Where calendar sync is on, first run asks for a calendar last (spec 0036): Skip for now opens the workspace, on
+ * Home. Where it is off (CI), Create workspace opens Home itself. Either way, this waits for one or the other and
+ * goes on to Home.
  */
 export async function skipCalendarStep(page: Page): Promise<void> {
   const calendar = page.getByRole('heading', { level: 1, name: 'Connect your calendar' });
   await expect
-    .poll(async () => /\/objects\/people/.test(page.url()) || (await calendar.isVisible()), {
+    .poll(async () => /\/home$/.test(page.url()) || (await calendar.isVisible()), {
       timeout: WORKSPACE_MADE_MS,
-      message: 'People, or first run’s calendar step',
+      message: 'Home, or first run’s calendar step',
     })
     .toBe(true);
   if (await calendar.isVisible()) await page.getByRole('button', { name: 'Skip for now' }).click();
@@ -73,7 +74,7 @@ export async function skipCalendarStep(page: Page): Promise<void> {
 
 /**
  * First run (spec 0036) from its first step: About you as `name`, then Your workspace at `slug` (its name following
- * yours), then past the calendar step where there is one, landing on People.
+ * yours), then past the calendar step where there is one, landing on Home.
  */
 export async function firstRun(page: Page, slug: string, name = 'Ada Lovelace'): Promise<void> {
   await expect(page).toHaveURL(/\/welcome$/);
@@ -84,7 +85,10 @@ export async function firstRun(page: Page, slug: string, name = 'Ada Lovelace'):
   await skipCalendarStep(page);
 }
 
-/** Signs a new person in through Mailpit and makes their workspace, landing on its People page; answers the code used. */
+/**
+ * Signs a new person in through Mailpit and makes their workspace, which opens on Home (owner, 21 October 2026),
+ * then opens its People page from the sidebar; answers the code used.
+ */
 export async function newWorkspace(page: Page, email: string, slug: string): Promise<string> {
   await page.goto('/sign-in');
   await page.getByLabel('Email').fill(email);
@@ -93,7 +97,14 @@ export async function newWorkspace(page: Page, email: string, slug: string): Pro
   const code = await codeFor(page.request, email);
   await page.getByLabel('Code').fill(code);
   await firstRun(page, slug);
-  await expect(page).toHaveURL(objectUrl(slug, 'people'), { timeout: WORKSPACE_MADE_MS });
+  await expect(page).toHaveURL(homeUrl(slug), { timeout: WORKSPACE_MADE_MS });
+  await page
+    .getByRole('navigation', { name: 'Main navigation' })
+    .getByRole('link', { name: 'People', exact: true })
+    .click();
+  await expect(page).toHaveURL(objectUrl(slug, 'people'));
+  // The page takes focus to its title once it has loaded; wait for that, so a press after this lands where it's aimed.
+  await expect(page.getByRole('heading', { level: 1, name: 'People' })).toBeFocused();
   return code;
 }
 
@@ -107,6 +118,11 @@ export async function signInAgain(page: Page, email: string, path: string, seen:
   await page.getByLabel('Code').fill(await codeFor(page.request, email, seen));
   // An object's address opens its default view (spec 0020): the address grows its view.
   await expect(page).toHaveURL(new RegExp(`${path}(/views/[0-9a-f-]{36})?$`));
+}
+
+/** Home's address: where a workspace opens (owner, 21 October 2026). */
+export function homeUrl(slug: string): RegExp {
+  return new RegExp(`/w/${slug}/home$`);
 }
 
 /** An object's page: its address, or the view it opened (spec 0020, AC-462). */
@@ -155,4 +171,11 @@ export async function addPerson(page: Page, first: string, last: string, email: 
   await dialog.getByLabel('Email address', { exact: true }).fill(email);
   await dialog.getByRole('button', { name: 'Create' }).click();
   await expect(dialog).toBeHidden();
+}
+
+/** Opens the trash from the workspace menu, where it lives (owner, 21 October 2026). */
+export async function openTrash(page: Page): Promise<void> {
+  await page.getByRole('button', { name: /workspace menu/ }).click();
+  await page.getByRole('menuitem', { name: 'Trash' }).click();
+  await expect(page.getByRole('grid', { name: 'Trash' })).toBeVisible();
 }

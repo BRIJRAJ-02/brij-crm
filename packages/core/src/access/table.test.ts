@@ -3,7 +3,7 @@
 // taking no scope; and every entry is refused to a principal without the
 // access, before anything is written.
 import { sql } from 'drizzle-orm';
-import { PERMISSIONS } from '@crm/contracts';
+import { PERMISSIONS, type GlobalSearchResults } from '@crm/contracts';
 import { afterAll, beforeAll, describe, expect, inject, it } from 'vitest';
 import { createDatabase, type Database } from '@crm/db';
 import * as core from '../index.ts';
@@ -104,6 +104,10 @@ const NO_SCOPE: ReadonlySet<string> = new Set([
   'processSubmission',
   'chooseOwner',
   'newPublicKey',
+  // The visitor a form hands to a booking page, read from its answers: a pure helper, no scope.
+  'visitorOf',
+  // A workspace's public key for a snippet's tagging: a one way digest of its id, no scope.
+  'workspacePublicKey',
   // Booking pages (spec 0025): the busy cache wraps the reader the api passes in; it takes no scope. The connected
   // calendar reads a host's connections as the system for the public page, which has no scope of its own.
   'createBusyCache',
@@ -142,7 +146,6 @@ const NO_SCOPE: ReadonlySet<string> = new Set([
   'queueCalendarDisconnected',
   'queueBookingCalendarRemoved',
   'queueImportFinished',
-  'queueMention',
   'loadEmail',
   'finishEmail',
   'emailLinkToken',
@@ -279,6 +282,24 @@ describe('the walk: a principal without the access is refused', () => {
       expect(await refusalOf(call(key, input))).toMatchObject({ code: 'FORBIDDEN' });
       if (name === 'connectCalendar') return;
       expect(await refusalOf(call(scope, input))).toMatchObject({ code: 'NOT_FOUND' });
+    },
+  );
+
+  it.each(entries.filter(([, entry]) => 'ownNav' in entry).map(([name]) => name))(
+    '%s keeps to the caller’s own sidebar: a key reads the defaults and can’t change one',
+    async (name) => {
+      const { scope, workspaceId, ownerId } = await memberOf('member');
+      const owner = testScope({ db, workspaceId, actor: { type: 'member', id: ownerId } });
+      await core.changeNav(owner, { op: 'rail', on: true });
+      const key = testScope({ db, workspaceId, actor: { type: 'api_key', id: core.newId() } });
+      if (name === 'changeNav') {
+        expect(await refusalOf(core.changeNav(key, { op: 'rail', on: true }))).toMatchObject({ code: 'FORBIDDEN' });
+        return;
+      }
+      expect((await core.readNav(key)).rail).toBe(false);
+      // Another member never sees the owner's rail: each reads their own row.
+      expect((await core.readNav(scope)).rail).toBe(false);
+      expect((await core.readNav(owner)).rail).toBe(true);
     },
   );
 
@@ -644,6 +665,34 @@ const DATA_CASES: Readonly<Record<string, DataCase>> = {
   searchRecords: refused('NOT_FOUND', (scope, world) =>
     core.searchRecords(scope, { objectId: world.people, query: '' }),
   ),
+  // The command menu (spec 0039): a record or view on an object the principal can't see is never found, listed as
+  // recent (even one they opened while they could), or kept by a visit.
+  searchWorkspace: empty(
+    (scope) => core.searchWorkspace(scope, { query: 'Pilot' }),
+    (value, world) => {
+      const found = value as GlobalSearchResults;
+      return (
+        found.records.every((hit) => hit.ref.recordId !== world.recordId) &&
+        found.views.every((view) => view.objectId !== world.people)
+      );
+    },
+  ),
+  listRecents: empty(
+    async (scope, world) => {
+      await core.visitRecent(world.readOnly, { kind: 'record', id: world.recordId });
+      await core.visitRecent(world.readOnly, { kind: 'view', id: world.peopleView });
+      return core.listRecents(scope);
+    },
+    (value) => Array.isArray(value) && value.length === 0,
+  ),
+  visitRecent: empty(
+    async (scope, world) => {
+      await core.visitRecent(scope, { kind: 'record', id: world.recordId });
+      await core.visitRecent(scope, { kind: 'view', id: world.peopleView });
+      return core.listRecents(world.readOnly);
+    },
+    (value) => Array.isArray(value) && value.length === 0,
+  ),
   // Saved views (spec 0020): a view on an object the principal can't see is absent, and so can't be saved.
   listViews: refused('NOT_FOUND', (scope, world) => core.listViews(scope, world.people)),
   getView: refused('NOT_FOUND', (scope, world) => core.getView(scope, world.peopleView)),
@@ -707,6 +756,11 @@ const DATA_CASES: Readonly<Record<string, DataCase>> = {
   ),
   exportPart: refused('NOT_FOUND', async (scope, world) =>
     core.exportPart(scope, { exportId: await ownerExport(world), part: 0 }),
+  ),
+  // The sidebar's Tasks badge (spec 0034): a principal that can't read counts nothing.
+  countDueTasks: empty(
+    (scope) => core.countDueTasks(scope, { today: '2026-10-21' }),
+    (value) => typeof value === 'object' && value !== null && 'count' in value && value.count === 0,
   ),
   listTasks: refused('NOT_FOUND', (scope, world) =>
     core.listTasks(scope, { scope: { recordId: world.recordId }, status: 'open' }),

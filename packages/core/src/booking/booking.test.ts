@@ -6,7 +6,10 @@ import { sql } from 'drizzle-orm';
 import { afterAll, beforeAll, describe, expect, inject, it } from 'vitest';
 import type { PublicBookInput } from '@crm/contracts';
 import { createDatabase, type Database } from '@crm/db';
-import { enterBookingByToken, enterBookingPage, type BookingEntry } from '../access/door.ts';
+import { enterBookingByToken, enterBookingPage, enterPublicForm, type BookingEntry } from '../access/door.ts';
+import { createForm, publishForm, saveFormDraft } from '../forms/forms.ts';
+import { submitForm } from '../forms/public.ts';
+import { jobKinds } from '../jobs/kinds/index.ts';
 import { newId } from '../engine/ids.ts';
 import { isRefusal } from '../engine/refusals.ts';
 import { createRecord } from '../engine/records.ts';
@@ -26,6 +29,7 @@ import { readDefaultHours as getMemberHours, saveDefaultHours as setMemberHours 
 import {
   bookPublicSlot,
   getPublicBookingPage,
+  readHandoffPrefill,
   managedBookingIcs,
   readManagedBooking,
   readPublicSlots,
@@ -298,6 +302,102 @@ describe('booking (AC-632, AC-633, AC-634)', () => {
     );
     expect(stored.rows[0]?.meeting_id).toMatch(/^[0-9a-f-]{36}$/);
     expect(stored.rows[0]?.manage_token_hash).toMatch(/^[0-9a-f]{64}$/);
+  });
+
+  it('links the booking to the form submission a hand off names, only when its form sends visitors to this page (AC-1058)', async () => {
+    const w = await workspace();
+    const { page, entry } = await livePage(w);
+    const form = await createForm(w.owner, { id: newId(), name: 'Talk to us' });
+    const saved = await saveFormDraft(w.owner, {
+      formId: form.id,
+      document: { ...form.draft, after: { kind: 'booking', bookingPageId: page.id, countdownSeconds: 5, message: '' } },
+      expectedRevision: form.revision,
+    });
+    const live = await publishForm(w.owner, { formId: form.id, expectedRevision: saved.revision });
+    const door = await enterPublicForm({ db }, live.publicKey);
+    await submitForm(door.scope, jobKinds({ environment: 'local' }), {
+      formId: door.formId,
+      body: {
+        idempotencyKey: newId(),
+        answers: { name: 'Grace', email: 'grace@navy.example' },
+        hidden: {},
+        fillMs: 9_000,
+      },
+      captcha: { kind: 'off' },
+    });
+    const [submission] = (
+      await db.withWorkspace(w.workspaceId, (tx) =>
+        tx.execute<{ id: string }>(sql`select id::text from form_submissions where form_id = ${form.id}`),
+      )
+    ).rows;
+    // Another workspace's real submission: row level security keeps it out of the link and the prefill.
+    const other = await workspace();
+    const theirForm = await createForm(other.owner, { id: newId(), name: 'Theirs' });
+    const theirSaved = await saveFormDraft(other.owner, {
+      formId: theirForm.id,
+      document: theirForm.draft,
+      expectedRevision: theirForm.revision,
+    });
+    const theirLive = await publishForm(other.owner, { formId: theirForm.id, expectedRevision: theirSaved.revision });
+    const theirDoor = await enterPublicForm({ db }, theirLive.publicKey);
+    await submitForm(theirDoor.scope, jobKinds({ environment: 'local' }), {
+      formId: theirDoor.formId,
+      body: {
+        idempotencyKey: newId(),
+        answers: { name: 'Mallory', email: 'mallory@example.com' },
+        hidden: {},
+        fillMs: 9_000,
+      },
+      captcha: { kind: 'off' },
+    });
+    const [foreign] = (
+      await db.withWorkspace(other.workspaceId, (tx) =>
+        tx.execute<{ id: string }>(sql`select id::text from form_submissions where form_id = ${theirForm.id}`),
+      )
+    ).rows;
+    expect(await readHandoffPrefill(entry, submission?.id ?? '')).toEqual({
+      name: 'Grace',
+      email: 'grace@navy.example',
+    });
+    expect(await readHandoffPrefill(entry, foreign?.id ?? '')).toEqual({});
+    // This workspace's submission to a form that thanks rather than sending its visitors here: not this page's to
+    // read or link, whatever a token says (the security review, 21 October 2026).
+    const thanks = await createForm(w.owner, { id: newId(), name: 'Just thanks' });
+    const thanksLive = await publishForm(w.owner, { formId: thanks.id, expectedRevision: thanks.revision });
+    const thanksDoor = await enterPublicForm({ db }, thanksLive.publicKey);
+    await submitForm(thanksDoor.scope, jobKinds({ environment: 'local' }), {
+      formId: thanksDoor.formId,
+      body: {
+        idempotencyKey: newId(),
+        answers: { name: 'Alan', email: 'alan@example.com' },
+        hidden: {},
+        fillMs: 9_000,
+      },
+      captcha: { kind: 'off' },
+    });
+    const [unrelated] = (
+      await db.withWorkspace(w.workspaceId, (tx) =>
+        tx.execute<{ id: string }>(sql`select id::text from form_submissions where form_id = ${thanks.id}`),
+      )
+    ).rows;
+    expect(await readHandoffPrefill(entry, unrelated?.id ?? '')).toEqual({});
+    const linked = await bookPublicSlot(entry, deps(), bookInput(), [], { submissionId: submission?.id ?? '' });
+    const stranger = await bookPublicSlot(entry, deps(), bookInput({ start: '2026-11-02T10:00:00.000Z' }), [], {
+      submissionId: foreign?.id ?? '',
+    });
+    const elsewhere = await bookPublicSlot(entry, deps(), bookInput({ start: '2026-11-02T11:00:00.000Z' }), [], {
+      submissionId: unrelated?.id ?? '',
+    });
+    const rows = (
+      await db.withWorkspace(w.workspaceId, (tx) =>
+        tx.execute<{ id: string; submission: string | null }>(
+          sql`select id::text, submission_id::text as submission from bookings`,
+        ),
+      )
+    ).rows;
+    expect(rows.find((row) => row.id === linked.bookingId)?.submission).toBe(submission?.id);
+    expect(rows.find((row) => row.id === stranger.bookingId)?.submission).toBeNull();
+    expect(rows.find((row) => row.id === elsewhere.bookingId)?.submission).toBeNull();
   });
 
   it('matches the same person again, makes no company for a free email domain, and never overwrites a person', async () => {

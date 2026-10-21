@@ -28,7 +28,7 @@ import {
   queueEmails,
   queueFormConfirmation,
   queueFormSubmissionNotice,
-  queueMention,
+  queueImportFinished,
   type QueuedEmail,
 } from './queue.ts';
 import { finishEmail, loadEmail } from './send.ts';
@@ -86,28 +86,36 @@ async function workspace() {
   return { ...created, bea, system, rows };
 }
 
-const MENTION = {
-  authorName: 'Grace',
-  place: 'comment',
-  subjectName: 'Northwind',
-  excerpt: '@Bea can you take this?',
-  path: '/w/mail/objects/companies/x',
+const IMPORT = {
+  objectName: 'People',
+  outcome: 'done',
+  created: 3,
+  updated: 0,
+  skipped: 0,
+  failed: 0,
+  resultPath: '/w/mail/objects/people',
 } as const;
 
 describe('queueing an email', () => {
   it('stores it once per key in the caller’s transaction, and answers the same email again', async () => {
     const w = await workspace();
-    const mentionId = newId();
+    const importId = newId();
     const first = await inWorkspace(w.system, (tx) =>
-      queueMention(tx, { mentionId, memberId: w.bea, params: MENTION }),
+      queueImportFinished(tx, { importId, memberId: w.bea, params: IMPORT }),
     );
     const again = await inWorkspace(w.system, (tx) =>
-      queueMention(tx, { mentionId, memberId: w.bea, params: MENTION }),
+      queueImportFinished(tx, { importId, memberId: w.bea, params: IMPORT }),
     );
     expect(first.outcome).toBe('queued');
     expect(again).toEqual({ outcome: 'exists', emailId: idOf(first) });
     expect(await w.rows()).toMatchObject([
-      { id: idOf(first), kind: 'mention', key: `mention:${mentionId}:${w.bea}`, status: 'queued', params: MENTION },
+      {
+        id: idOf(first),
+        kind: 'import_finished',
+        key: `import_finished:${importId}`,
+        status: 'queued',
+        params: IMPORT,
+      },
     ]);
   });
 
@@ -115,7 +123,7 @@ describe('queueing an email', () => {
     const w = await workspace();
     await expect(
       inWorkspace(w.system, async (tx) => {
-        await queueMention(tx, { mentionId: newId(), memberId: w.bea, params: MENTION });
+        await queueImportFinished(tx, { importId: newId(), memberId: w.bea, params: IMPORT });
         throw new Error('The change was refused.');
       }),
     ).rejects.toThrow('The change was refused.');
@@ -125,7 +133,11 @@ describe('queueing an email', () => {
   it('refuses params its template doesn’t know (a link off the app) without throwing, and an address in the key', async () => {
     const w = await workspace();
     const offApp = await inWorkspace(w.system, (tx) =>
-      queueMention(tx, { mentionId: newId(), memberId: w.bea, params: { ...MENTION, path: '//evil.example' } }),
+      queueImportFinished(tx, {
+        importId: newId(),
+        memberId: w.bea,
+        params: { ...IMPORT, resultPath: '//evil.example' },
+      }),
     );
     expect(offApp).toEqual({ outcome: 'refused', code: 'PARAMS_INVALID' });
     const badAddress = await inWorkspace(w.system, (tx) =>
@@ -139,10 +151,10 @@ describe('queueing an email', () => {
     // A key is ids only: a value in it is a bug, thrown.
     await expect(
       inWorkspace(w.system, (tx) =>
-        queueEmail(tx, { kind: 'mention', ids: ['ada@example.com'], to: { memberId: w.bea }, params: MENTION }),
+        queueEmail(tx, { kind: 'import_finished', ids: ['ada@example.com'], to: { memberId: w.bea }, params: IMPORT }),
       ),
     ).rejects.toThrow();
-    expect(() => emailKey('mention', [])).toThrow();
+    expect(() => emailKey('import_finished', [])).toThrow();
     expect(await w.rows()).toEqual([]);
   });
 
@@ -150,14 +162,14 @@ describe('queueing an email', () => {
     const w = await workspace();
     const before = newId();
     const earlier = await inWorkspace(w.system, (tx) =>
-      queueMention(tx, { mentionId: before, memberId: w.bea, params: MENTION }),
+      queueImportFinished(tx, { importId: before, memberId: w.bea, params: IMPORT }),
     );
     const fresh = newId();
     const answers = await inWorkspace(w.system, (tx) =>
       queueEmails(tx, [
-        { kind: 'mention', ids: [fresh, w.bea], to: { memberId: w.bea }, params: MENTION },
-        { kind: 'mention', ids: [before, w.bea], to: { memberId: w.bea }, params: MENTION },
-        { kind: 'mention', ids: [newId(), w.bea], to: { memberId: w.bea }, params: { ...MENTION, path: 'x' } },
+        { kind: 'import_finished', ids: [fresh], to: { memberId: w.bea }, params: IMPORT },
+        { kind: 'import_finished', ids: [before], to: { memberId: w.bea }, params: IMPORT },
+        { kind: 'import_finished', ids: [newId()], to: { memberId: w.bea }, params: { ...IMPORT, resultPath: 'x' } },
       ]),
     );
     expect(answers).toEqual([
@@ -165,7 +177,7 @@ describe('queueing an email', () => {
       { outcome: 'exists', emailId: idOf(earlier) },
       { outcome: 'refused', code: 'PARAMS_INVALID' },
     ]);
-    expect((await w.rows()).map((row) => row.key)).toEqual([`mention:${before}:${w.bea}`, `mention:${fresh}:${w.bea}`]);
+    expect((await w.rows()).map((row) => row.key)).toEqual([`import_finished:${before}`, `import_finished:${fresh}`]);
   });
 });
 
@@ -226,7 +238,11 @@ describe('sending a queued email (the worker’s half)', () => {
   it('skips a removed member, a topic turned off and an email too old to send, and counts a failed try', async () => {
     const w = await workspace();
     const queue = async (memberId: string) =>
-      idOf(await inWorkspace(w.system, (tx) => queueMention(tx, { mentionId: newId(), memberId, params: MENTION })));
+      idOf(
+        await inWorkspace(w.system, (tx) =>
+          queueFormSubmissionNotice(tx, { submissionId: newId(), memberId, params: NOTICE }),
+        ),
+      );
     const removed = await queue(w.bea);
     await db.withWorkspace(w.workspaceId, (tx) =>
       tx.execute(sql`update members set status = 'removed' where id = ${w.bea}::uuid`),
@@ -234,8 +250,11 @@ describe('sending a queued email (the worker’s half)', () => {
     expect(await loadEmail(w.system, removed)).toEqual({ kind: 'skip', reason: 'recipient_gone' });
 
     const off = await queue(w.memberId);
-    const owner = await enterEmailLink({ db }, { workspaceId: w.workspaceId, memberId: w.memberId, topic: 'mentions' });
-    await setEmailPreference(owner, { topic: 'mentions', subscribed: false }, 'mentions');
+    const owner = await enterEmailLink(
+      { db },
+      { workspaceId: w.workspaceId, memberId: w.memberId, topic: 'form_submissions' },
+    );
+    await setEmailPreference(owner, { topic: 'form_submissions', subscribed: false }, 'form_submissions');
     expect(await loadEmail(w.system, off)).toEqual({ kind: 'skip', reason: 'opted_out' });
     const [choice] = (
       await db.withWorkspace(w.workspaceId, (tx) =>
@@ -249,7 +268,7 @@ describe('sending a queued email (the worker’s half)', () => {
     const [, failed] = await w.rows();
     expect(failed).toMatchObject({ status: 'failed', attempts: 2, error_code: 'send_failed', params: {} });
 
-    await setEmailPreference(owner, { topic: 'mentions', subscribed: true }, 'mentions');
+    await setEmailPreference(owner, { topic: 'form_submissions', subscribed: true }, 'form_submissions');
     const old = await queue(w.memberId);
     await db.withWorkspace(w.workspaceId, (tx) =>
       tx.execute(sql`update emails set created_at = now() - interval '25 hours' where id = ${old}::uuid`),

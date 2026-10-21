@@ -230,7 +230,10 @@ const SHAPES: Readonly<Record<ChangeEventKind, Shape>> = {
   schedules: { lists: ['scheduleIds'], coarse: true },
   members: { lists: ['memberIds'] },
   access: { lists: ['memberIds'] },
+  nav: { lists: ['memberIds'] },
   jobs: { lists: ['jobIds'], coarse: true },
+  comments: { optionalRefs: ['objectId'], lists: ['recordIds', 'threadIds'], coarse: true },
+  notifications: { lists: ['memberIds'] },
   restricted: {},
 };
 

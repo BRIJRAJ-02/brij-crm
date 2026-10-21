@@ -98,10 +98,23 @@ export function outboxEvent(row: OutboxRow): EventRow | undefined {
         ...coarse,
         ...(row.actorMemberId === undefined ? {} : { actorMemberId: row.actorMemberId }),
       };
+    case 'comments':
+      return {
+        ...place,
+        kind: 'comments',
+        ...objectId,
+        recordIds: copy(row.recordIds),
+        threadIds: copy(row.itemIds),
+        ...coarse,
+      };
+    case 'notifications':
+      return { ...place, kind: 'notifications', memberIds: copy(row.itemIds) };
     case 'members':
       return { ...place, kind: 'members', memberIds: copy(row.itemIds) };
     case 'access':
       return { ...place, kind: 'access', memberIds: copy(row.itemIds) };
+    case 'nav':
+      return { ...place, kind: 'nav', memberIds: copy(row.itemIds) };
     case 'jobs':
       return {
         ...place,

@@ -107,9 +107,15 @@ async function newWorkspace(page: Page, email: string, name: string, slug: strin
   await page.getByLabel('Web address').fill(slug);
   await page.getByRole('button', { name: 'Create workspace' }).click();
   await skipCalendarStep(page);
-  await expect(page).toHaveURL(new RegExp(`/w/${slug}/objects/people(/views/[0-9a-f-]+)?$`), {
-    timeout: WORKSPACE_MADE_MS,
-  });
+  // The workspace opens on Home (owner, 21 October 2026); People is a row away.
+  await expect(page).toHaveURL(new RegExp(`/w/${slug}/home$`), { timeout: WORKSPACE_MADE_MS });
+  await page.getByRole('navigation', { name: 'Main navigation' }).getByRole('link', { name: 'People' }).click();
+  await expect(page).toHaveURL(new RegExp(`/w/${slug}/objects/people(/views/[0-9a-f-]+)?$`));
+  // People draws its own frame once loaded and then moves focus to its title; a menu or confirm opened over the
+  // skeleton, or before that focus move, would close with it (at 375 most often).
+  const title = page.getByRole('heading', { level: 1, name: 'People' });
+  await expect(title).toBeVisible();
+  await expect(title).toBeFocused();
 }
 
 /**
@@ -216,13 +222,14 @@ test('signs in by code, names the workspace, lands on People, signs out, and com
   await page.goForward();
   await expect(page.getByLabel('Web address')).toHaveValue(slug);
 
-  // Create workspace lands on the empty People page (past the calendar step where calendar sync is on), with focus
-  // on its title.
+  // Create workspace (past the calendar step where calendar sync is on) lands on Home (owner, 21 October 2026), with focus on its title; People is a row away, and
+  // opens empty with focus on its title.
   await page.getByRole('button', { name: 'Create workspace' }).click();
   await skipCalendarStep(page);
-  await expect(page).toHaveURL(new RegExp(`/w/${slug}/objects/people(/views/[0-9a-f-]+)?$`), {
-    timeout: WORKSPACE_MADE_MS,
-  });
+  await expect(page).toHaveURL(new RegExp(`/w/${slug}/home$`), { timeout: WORKSPACE_MADE_MS });
+  await expect(page.getByRole('heading', { level: 1, name: 'Home' })).toBeFocused();
+  await page.getByRole('navigation', { name: 'Main navigation' }).getByRole('link', { name: 'People' }).click();
+  await expect(page).toHaveURL(new RegExp(`/w/${slug}/objects/people(/views/[0-9a-f-]+)?$`));
   const title = page.getByRole('heading', { level: 1, name: 'People' });
   await expect(title).toBeVisible();
   await expect(title).toBeFocused();
@@ -231,13 +238,20 @@ test('signs in by code, names the workspace, lands on People, signs out, and com
   const nav = page.getByRole('navigation', { name: 'Main navigation' });
   await expect(nav.getByRole('link', { name: 'People' })).toHaveAttribute('aria-current', 'page');
   await expect(nav.getByText('Ada’s workspace')).toBeAttached();
-  // Settings sits at the sidebar's foot, inside it at every width (on the rail too). The theme switch left the
-  // sidebar for Settings › Preferences (spec 0026).
+  // The sidebar (spec 0034, AC-921; owner, 21 October 2026): Home, Records, then Scheduling with its four pages,
+  // Tasks, then the foot's Settings and Help and shortcuts, inside the sidebar at every width (on the rail, each a
+  // named icon in its group); the trash is in the workspace menu. The theme switch left the sidebar for Settings ›
+  // Preferences (spec 0026).
+  await expect(nav.getByRole('group', { name: 'Scheduling' })).toBeVisible();
+  for (const name of ['Home', 'Tasks', 'Bookings', 'Availability', 'Booking pages', 'Forms']) {
+    await expect(nav.getByRole('link', { name, exact: true })).toBeVisible();
+  }
   const settings = nav.getByRole('link', { name: 'Settings', exact: true });
   const [settingsBox, navBox] = [await settings.boundingBox(), await nav.boundingBox()];
   expect(settingsBox !== null && navBox !== null && settingsBox.x + settingsBox.width <= navBox.x + navBox.width).toBe(
     true,
   );
+  await expect(nav.getByRole('button', { name: 'Help and shortcuts' })).toBeVisible();
   await expect(nav.getByRole('radiogroup', { name: 'Theme' })).toHaveCount(0);
   await checkScreen(page, '5-people-empty');
 
@@ -275,9 +289,9 @@ test('signs in by code, names the workspace, lands on People, signs out, and com
   await expect(page).toHaveURL(new RegExp(`/w/${slug}/objects/people(/views/[0-9a-f-]+)?$`));
   await expect(page.getByText('No people yet')).toBeVisible();
 
-  // Signed in, / opens the workspace.
+  // Signed in, / opens the workspace, on Home.
   await page.goto('/');
-  await expect(page).toHaveURL(new RegExp(`/w/${slug}/objects/people(/views/[0-9a-f-]+)?$`));
+  await expect(page).toHaveURL(new RegExp(`/w/${slug}/home$`));
 });
 
 test('says each refusal on its field and drops it as the field changes, so one press goes on', async ({ page }) => {
@@ -330,9 +344,8 @@ test('says each refusal on its field and drops it as the field changes, so one p
   await expect(page.getByText('That address is free.')).toBeVisible();
   await page.getByRole('button', { name: 'Create workspace' }).click();
   await skipCalendarStep(page);
-  await expect(page).toHaveURL(new RegExp(`/w/${taken}-two/objects/people(/views/[0-9a-f-]+)?$`), {
-    timeout: WORKSPACE_MADE_MS,
-  });
+  // The workspace opens on Home (owner, 21 October 2026).
+  await expect(page).toHaveURL(new RegExp(`/w/${taken}-two/home$`), { timeout: WORKSPACE_MADE_MS });
 });
 
 test('a refused resend says why under its button and waits as long as the server asks', async ({ page }) => {

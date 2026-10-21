@@ -8,6 +8,8 @@ import {
   type AttributeOption,
   type ChangeEvent,
   type DeleteManyResults,
+  type GlobalSearchResults,
+  type RecentItem,
   type RestoreResults,
   type UpdateManyResults,
   type TrashPage,
@@ -28,7 +30,7 @@ import {
 } from '@crm/contracts';
 import { implement, ORPCError } from '@orpc/server';
 import { RPCHandler } from '@orpc/server/fetch';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { dataError, isUnseenFault, parseRetryAfter, refusalFor, refusalSummary } from './errors.ts';
 import {
   createDataLayer,
@@ -161,6 +163,9 @@ interface Behaviour {
   trashQuery: () => TrashPage;
   trashCount: () => { count: number; atLeast: boolean };
   trashRestore: (recordIds: readonly string[]) => RestoreResults['results'];
+  /** The command menu (spec 0039): a search's answer, the recent items, and each visit as sent. */
+  globalSearch: (query: string) => GlobalSearchResults;
+  recents: () => RecentItem[];
 }
 
 const unauthenticated = () => new ORPCError('UNAUTHENTICATED', { status: 401, message: 'Sign in to continue.' });
@@ -210,6 +215,8 @@ function fakeApi(overrides: Partial<Behaviour> = {}, auth: (path: string, body: 
     trashQuery: () => ({ items: [] }),
     trashCount: () => ({ count: 0, atLeast: false }),
     trashRestore: notServed,
+    globalSearch: () => ({ records: [], views: [] }),
+    recents: () => [],
     ...overrides,
   };
   const calls: string[] = [];
@@ -412,6 +419,13 @@ function fakeApi(overrides: Partial<Behaviour> = {}, auth: (path: string, body: 
       peek: os.invitations.peek.handler(notServed),
       accept: os.invitations.accept.handler(notServed),
     },
+    search: { query: os.search.query.handler(({ input }) => behaviour.globalSearch(input.query)) },
+    recents: {
+      list: os.recents.list.handler(() => ({ items: behaviour.recents() })),
+      visit: os.recents.visit.handler(({ input }) => {
+        sent.push(input);
+      }),
+    },
     access: { mine: os.access.mine.handler(() => behaviour.access()) },
     realtime: {
       connectionToken: os.realtime.connectionToken.handler(() => ({ token: 'connection-token' })),
@@ -441,6 +455,7 @@ function fakeApi(overrides: Partial<Behaviour> = {}, auth: (path: string, body: 
       update: os.tasks.update.handler(notServed),
       get: os.tasks.get.handler(notServed),
       list: os.tasks.list.handler(notServed),
+      due: os.tasks.due.handler(notServed),
       delete: os.tasks.delete.handler(notServed),
       restore: os.tasks.restore.handler(notServed),
     },
@@ -451,6 +466,24 @@ function fakeApi(overrides: Partial<Behaviour> = {}, auth: (path: string, body: 
       list: os.notes.list.handler(notServed),
       delete: os.notes.delete.handler(notServed),
       restore: os.notes.restore.handler(notServed),
+    },
+    comments: {
+      list: os.comments.list.handler(notServed),
+      get: os.comments.get.handler(notServed),
+      create: os.comments.create.handler(notServed),
+      update: os.comments.update.handler(notServed),
+      delete: os.comments.delete.handler(notServed),
+      resolve: os.comments.resolve.handler(notServed),
+      react: os.comments.react.handler(notServed),
+      versions: os.comments.versions.handler(notServed),
+    },
+    notifications: {
+      list: os.notifications.list.handler(notServed),
+      count: os.notifications.count.handler(notServed),
+      mark: os.notifications.mark.handler(notServed),
+      markAllRead: os.notifications.markAllRead.handler(notServed),
+      settings: os.notifications.settings.handler(notServed),
+      setSettings: os.notifications.setSettings.handler(notServed),
     },
     calendar: {
       connections: {
@@ -484,6 +517,7 @@ function fakeApi(overrides: Partial<Behaviour> = {}, auth: (path: string, body: 
       setStatus: os.forms.setStatus.handler(notServed),
       slugAvailable: os.forms.slugAvailable.handler(notServed),
       updateSettings: os.forms.updateSettings.handler(notServed),
+      rotateSecret: os.forms.rotateSecret.handler(notServed),
       setTarget: os.forms.setTarget.handler(notServed),
       duplicate: os.forms.duplicate.handler(notServed),
       delete: os.forms.delete.handler(notServed),
@@ -546,6 +580,10 @@ function fakeApi(overrides: Partial<Behaviour> = {}, auth: (path: string, body: 
       undoAdjustment: os.rotations.undoAdjustment.handler(notServed),
       reassignUpcoming: os.rotations.reassignUpcoming.handler(notServed),
       delete: os.rotations.delete.handler(notServed),
+    },
+    nav: {
+      get: os.nav.get.handler(notServed),
+      change: os.nav.change.handler(notServed),
     },
   });
   const handler = new RPCHandler(router);
@@ -2507,5 +2545,57 @@ describe('views (spec 0020)', () => {
       sorts: [],
     };
     expect(data.views.draftParam(long)).toBeUndefined();
+  });
+});
+
+describe('search (spec 0039)', () => {
+  it('searches through search.query once the pause is over, and reads recent items fresh each time', async () => {
+    const api = fakeApi({
+      globalSearch: (query) => ({
+        records: [
+          { ref: { objectId: PEOPLE.id, recordId: ADA_MEMBER.id, name: query, kind: 'person' }, match: 'prefix' },
+        ],
+        views: [],
+      }),
+      recents: () => [],
+    });
+    const { data } = layer(api);
+    const search = await data.search.open('acme');
+    const settled = new Promise<void>((resolve) => {
+      const stop = search.subscribe(() => {
+        if (search.getSnapshot().status !== 'ready') return;
+        stop();
+        resolve();
+      });
+    });
+    search.ask('ada');
+    await settled;
+    expect(search.getSnapshot().records.map((hit) => hit.ref.name)).toEqual(['ada']);
+    expect(count(api.calls, '/api/rpc/search/query')).toBe(1);
+    expect(await data.search.recents('acme')).toEqual([]);
+    expect(await data.search.recents('acme')).toEqual([]);
+    expect(count(api.calls, '/api/rpc/recents/list')).toBe(2);
+    search.dispose();
+  });
+
+  it('sends a visit once per item per 10 seconds, and stays silent when it fails', async () => {
+    const api = fakeApi();
+    const { data, notices } = layer(api);
+    const recordId = '0199a6f2-0000-7000-8000-0000000000a1';
+    data.search.visit('acme', 'record', recordId);
+    data.search.visit('acme', 'record', recordId);
+    data.search.visit('acme', 'view', recordId);
+    await vi.waitFor(() => {
+      expect(count(api.calls, '/api/rpc/recents/visit')).toBe(2);
+    });
+    expect(api.sent).toEqual([
+      { workspace: 'acme', kind: 'record', id: recordId },
+      { workspace: 'acme', kind: 'view', id: recordId },
+    ]);
+    data.search.visit('acme', 'record', 'not an id');
+    await vi.waitFor(() => {
+      expect(count(api.calls, '/api/rpc/recents/visit')).toBe(3);
+    });
+    expect(notices).toEqual([]);
   });
 });

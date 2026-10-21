@@ -7,7 +7,8 @@ import { failedPage, missingPage, ObjectPendingPage } from '../features/workspac
 import { navObjects } from '../features/workspace/objects.ts';
 import { strings } from '../features/workspace/strings.ts';
 import { useWorkspaceName, WorkspacePage } from '../features/workspace/WorkspacePage.tsx';
-import { landingView } from '../features/views/query.ts';
+import { createView, landingView } from '../features/views/query.ts';
+import { strings as commandStrings } from '../features/command/strings.ts';
 
 // Any live object's address (`people`, `projects`; spec 0012, AC-240) opens
 // one of its views (spec 0020, AC-462): the address is replaced with the
@@ -17,7 +18,7 @@ import { landingView } from '../features/views/query.ts';
 // views come through the data layer; the screens load with this route's
 // component, outside the first load.
 export const Route = createFileRoute('/w/$slug/objects/$object')({
-  loader: async ({ context, params }) => {
+  loader: async ({ context, params, location }) => {
     const objects = await context.data.objects.all(params.slug).catch((error: unknown) => {
       // The frame above shows "workspace not found" for this one.
       if (isDataError(error) && error.code === 'NOT_FOUND') return [];
@@ -35,11 +36,20 @@ export const Route = createFileRoute('/w/$slug/objects/$object')({
     await views.ready();
     const list = views.getSnapshot();
     if (list.status === 'error') throw list.error ?? new Error('The views did not load.');
-    const viewId = list.status === 'ready' ? landingView(list) : undefined;
+    // The command menu's Create a <object> (spec 0039, AC-1086) rides along as `new`, so the view opens its dialog:
+    // on a table, since a board has none.
+    const isNew = (location.search as { readonly new?: unknown }).new !== undefined;
+    const table = isNew && list.status === 'ready' ? createView(list) : undefined;
+    // Only boards here: they have no new record dialog, so the menu's request says so rather than doing nothing.
+    if (isNew && table === undefined) {
+      context.toasts.toast({ tone: 'info', message: commandStrings.openTableToCreate(object.singularName) });
+    }
+    const viewId = list.status !== 'ready' ? undefined : (table ?? landingView(list));
     if (viewId !== undefined) {
       throw redirect({
         to: '/w/$slug/objects/$object/views/$viewId',
         params: { slug: params.slug, object: params.object, viewId },
+        search: table === undefined ? {} : { new: true },
         replace: true,
       });
     }

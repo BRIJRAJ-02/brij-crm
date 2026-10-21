@@ -43,6 +43,9 @@ export const EVENT_KINDS = [
   'members',
   'access',
   'jobs',
+  'nav',
+  'comments',
+  'notifications',
 ] as const satisfies readonly EventRow['kind'][];
 
 /** One member of an audience: who, and what they may do. */
@@ -350,9 +353,25 @@ export function filterEvent(audience: Audience, row: EventRow, facts: EventFacts
       if (audience.members.length > 0 && audience.members.every(readsSchedules)) return event;
       return settle({ ...event, scheduleIds: [], coarse: true }, true);
     }
+    // Comments (spec 0038) follow their records as notes do: none for an object the audience can't read, and under a
+    // record rule coarse with no ids, so nothing names a record outside the rule.
+    case 'comments': {
+      if (level(row.objectId) === 'none') return undefined;
+      const ruled = row.objectId === undefined ? restricted : recordRule({ data: policy }, row.objectId) !== undefined;
+      if (!ruled) return row;
+      return settle({ ...row, recordIds: [], threadIds: [], coarse: true }, true);
+    }
+    // A member's notifications (spec 0038) name member ids and nothing else, the same exposure as a `members` event,
+    // so every audience receives it and only that member's clients act on it.
     case 'members':
     case 'access':
+    case 'notifications':
       return row;
+    // A member's own sidebar (spec 0034) names one member id and nothing else. Only the audience that member is in
+    // receives it (their own clients act on it); any other gets the stub, so a sidebar click is no feed of when a
+    // colleague is about.
+    case 'nav':
+      return audience.members.some((member) => row.memberIds.includes(member.memberId)) ? row : undefined;
     case 'jobs': {
       const { actorMemberId, ...event } = row;
       const readsJob = (member: AudienceMember) =>

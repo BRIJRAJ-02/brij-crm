@@ -5,8 +5,11 @@
 // small. With reCAPTCHA on (optional everywhere), it also loads Google's
 // script and asks it for a token. Every answer is a plain union a screen
 // switches on; nothing throws for an answer the endpoint gives on purpose.
-import type { PublicForm, SubmitBody, SubmitNext } from '@crm/contracts/forms';
+import type { FillTicket, PublicForm, SubmitBody, SubmitNext } from '@crm/contracts/forms';
 import type { FetchLike } from '../fetch.ts';
+
+/** Where a submission came from, as the hosted page sends it beside the answers (`SubmitBody.context`). */
+export type { SubmitContext } from '@crm/contracts/forms';
 
 /** What reading a form answered. */
 export type FormLoad =
@@ -30,6 +33,12 @@ export type SubmitOutcome =
 export interface PublicFormClient {
   load(address: string): Promise<FormLoad>;
   submit(address: string, body: SubmitBody): Promise<SubmitOutcome>;
+  /**
+   * A fill ticket for the address (the spam checks: the server's note of when
+   * the page loaded), never cached; undefined when it can't be had, and the
+   * submit goes without one.
+   */
+  ticket(address: string): Promise<string | undefined>;
 }
 
 const path = (address: string) => `/api/public/forms/${encodeURIComponent(address)}`;
@@ -62,6 +71,19 @@ export function createPublicFormClient(
         return isForm(body) ? { kind: 'form', form: body } : { kind: 'failed' };
       } catch {
         return { kind: 'failed' };
+      }
+    },
+    async ticket(address) {
+      try {
+        const response = await call(`${base}${path(address)}/ticket`, {
+          headers: { accept: 'application/json' },
+          cache: 'no-store',
+        });
+        if (!response.ok) return undefined;
+        const body: unknown = await response.json();
+        return isObject(body) && typeof body.ticket === 'string' ? (body as FillTicket).ticket : undefined;
+      } catch {
+        return undefined;
       }
     },
     async submit(address, body) {

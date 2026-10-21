@@ -57,6 +57,30 @@ function mayChange(scope: EngineScope, page: { readonly ownerMemberId: string; r
 
 const NOT_FOUND_MESSAGE = 'That booking page doesn’t exist, or isn’t yours.';
 
+/**
+ * Whether a form may send its visitors on to a booking page (spec 0023,
+ * AC-1056): `seen` asks the access door too (the member has
+ * `booking.manage` and the page is theirs, or they have `booking.admin`),
+ * as a save does; `live` asks only that the page exists here, isn't deleted
+ * and takes bookings, as a publish does. Answers `missing`, `hidden` or
+ * `paused`, or undefined when it may.
+ */
+export async function bookingTargetProblem(
+  tx: WorkspaceTx,
+  scope: EngineScope,
+  pageId: string,
+  check: 'seen' | 'live',
+): Promise<'missing' | 'hidden' | 'paused' | undefined> {
+  if (check === 'seen' && !can(scope.access, 'booking.manage') && !can(scope.access, 'booking.admin')) return 'hidden';
+  const [row] = await tx
+    .select({ ownerMemberId: bookingPages.ownerMemberId, kind: bookingPages.kind, status: bookingPages.status })
+    .from(bookingPages)
+    .where(and(eq(bookingPages.id, pageId), isNull(bookingPages.deletedAt)));
+  if (row === undefined) return 'missing';
+  if (check === 'seen' && !mayChange(scope, row)) return 'hidden';
+  return row.status === 'live' ? undefined : 'paused';
+}
+
 /** The page, live and the reader's to change, or NOT_FOUND. */
 async function pageToChange(tx: WorkspaceTx, scope: EngineScope, pageId: string, lock: boolean): Promise<PageRecord> {
   const query = tx

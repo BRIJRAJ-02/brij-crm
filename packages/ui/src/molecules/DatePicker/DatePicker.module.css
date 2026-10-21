@@ -43,6 +43,12 @@
     box-shadow: var(--shadow-focus);
   }
 
+  /* In a popover the popover's own edge frames the box: focus is the accent edge alone, as a Field's there; a
+     refused one keeps its halo, its only sign of focus beside the danger edge. */
+  .root[data-in-popover]:not([data-invalid]) .box[data-focus-within] {
+    box-shadow: none;
+  }
+
   .root[data-size='sm'] .box {
     block-size: var(--size-control);
   }

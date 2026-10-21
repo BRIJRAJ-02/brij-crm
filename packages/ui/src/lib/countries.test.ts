@@ -4,6 +4,8 @@ import {
   allCountriesIn,
   countriesIn,
   countryOfNumber,
+  countryRank,
+  mainCountriesOf,
   flagOf,
   matchesCountry,
   searchCountries,
@@ -39,6 +41,30 @@ describe('the country list', () => {
     expect(searchCountries(countries, 'cote').map((country) => country.code)).toEqual(['CI']);
   });
 
+  it('keeps every country with a dial code while only a "+" is typed', () => {
+    if (india === undefined) throw new Error('no India');
+    expect(matchesCountry(india, '+')).toBe(true);
+    expect(countries.filter((country) => matchesCountry(country, '+'))).toHaveLength(countries.length);
+  });
+
+  it("ranks a name that starts with the search, its ISO code, and a shared code's main country first", () => {
+    const mains = mainCountriesOf(countries);
+    const ranked = (query: string) =>
+      countries
+        .filter((country) => matchesCountry(country, query))
+        .sort((a, b) => countryRank(a, query, mains) - countryRank(b, query, mains))
+        .map((country) => country.code);
+    expect(mains.has('GB') && !mains.has('GG') && mains.has('FI') && !mains.has('AX')).toBe(true);
+    expect(ranked('ind').slice(0, 3)).toEqual(['IN', 'ID', 'IO']);
+    expect(ranked('an')[0]).toBe('AD');
+    expect(ranked('IN')[0]).toBe('IN');
+    expect(ranked('+44')[0]).toBe('GB');
+    expect(ranked('+4')).toContain('GG');
+    expect(ranked('+4').indexOf('GB')).toBeLessThan(ranked('+4').indexOf('GG'));
+    expect(ranked('+358')[0]).toBe('FI');
+    expect(ranked('+1')[0]).toBe('US');
+  });
+
   it('pins the guessed country first, while it still matches', () => {
     expect(searchCountries(countries, '', 'IN')[0]?.code).toBe('IN');
     expect(searchCountries(countries, 'germ', 'IN').map((country) => country.code)).toEqual(['DE']);
@@ -51,6 +77,12 @@ describe('a number with its "+" code', () => {
     expect(countryOfNumber('+971 50 123 4567')).toBe('AE');
     expect(countryOfNumber('+1 415 555 0100')).toBe('US');
     expect(countryOfNumber('+1 416 555 0100', 'CA')).toBe('CA');
+    // A shared code's main country, as libphonenumber names it, not the first by ISO code.
+    expect(countryOfNumber('+358 40 123 4567')).toBe('FI');
+    expect(countryOfNumber('+358 18 12345', 'AX')).toBe('AX');
+    expect(countryOfNumber('+212 650 123456')).toBe('MA');
+    expect(countryOfNumber('+590 690 001122')).toBe('GP');
+    expect(countryOfNumber('+599 9 123 4567')).toBe('CW');
     expect(countryOfNumber('07700 900123')).toBeUndefined();
   });
 

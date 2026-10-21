@@ -7,6 +7,7 @@ import type { FormDocument, FormLanguage, PublicForm } from '@crm/contracts/form
 export {
   ANSWER_TYPES,
   CHOICE_TYPES,
+  choiceKeysOf,
   FILES_ONTO,
   FORM_CHOICES_MAX,
   FORM_QUESTIONS_MAX,

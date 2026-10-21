@@ -1,6 +1,21 @@
 /* Table: a 36px header in text-secondary over 34px rows split by hairlines;
    a hovered row takes surface-hover, a focused row or cell an inset ring. */
 @layer components {
+  /* Rings are inset, so the scrolling frame never clips one. Positioned, so
+     what a cell places absolutely (a visually hidden label) scrolls inside it
+     too and never widens the page. */
+  .frame {
+    position: relative;
+    min-inline-size: 0;
+    overflow-x: auto;
+    overscroll-behavior-inline: contain;
+  }
+
+  /* A scrolling frame would hold a sticky header to itself; that table scrolls with the page. */
+  .frame[data-sticky] {
+    overflow-x: visible;
+  }
+
   .root {
     inline-size: 100%;
     border-collapse: collapse;
@@ -10,14 +25,8 @@
     outline: none;
   }
 
-  /* A scrollable table's box: it scrolls sideways when its columns are wider, and only then. */
-  .scroll {
-    inline-size: 100%;
-    overflow-x: auto;
-    overscroll-behavior-inline: contain;
-  }
-
-  .scroll > .root {
+  /* A scrollable table keeps its columns' widths, so its frame scrolls sideways when they're wider. */
+  .frame[data-scrollable] > .root {
     inline-size: max-content;
     min-inline-size: 100%;
   }

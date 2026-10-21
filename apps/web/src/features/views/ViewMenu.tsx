@@ -1,6 +1,8 @@
 // Brief
-// Purpose: everything you can do to the view you're on (spec 0020, AC-473 to AC-477, AC-490).
-// Main task: pick an action from "More view actions"; one you can't take is there, disabled, saying why.
+// Purpose: everything you can do to the view you're on (spec 0020, AC-473 to AC-477, AC-490), under "This view" in
+// the view switcher's menu (it was a "···" button of its own until the view bar was simplified, 21 October 2026).
+// Main task: pick an action; one you could take after a change is there, disabled, saying why; one that can never
+// apply here is left out.
 // Leaves out: the view's columns (View settings) and its filters and sorts (the Toolbar).
 import {
   isDataError,
@@ -12,16 +14,17 @@ import {
   type ViewRuleReason,
   type ViewsListSnapshot,
 } from '@crm/data';
-import { Button, Field, Form, Menu, MenuItem, MenuSeparator, MenuTrigger, Modal, type FormRefusal } from '@crm/ui';
+import { Button, Callout, Field, Form, Modal, type FormRefusal, type ViewAction as ViewMenuAction } from '@crm/ui';
 import { useRouteContext } from '@tanstack/react-router';
-import { useId, useState } from 'react';
+import { useId, useState, type ReactNode } from 'react';
 import { strings } from './strings.ts';
 
-/** Props for the view menu. */
+/** Props for the view's actions. */
 export interface ViewMenuProps {
   readonly slug: string;
   readonly object: ObjectSummary;
-  readonly view: View;
+  /** The view open; undefined while it loads (nothing to act on yet). */
+  readonly view: View | undefined;
   readonly list: ViewsListSnapshot;
   /** The workspace's active members: names, and whether a creator is still here. */
   readonly members: readonly MemberSummary[];
@@ -43,8 +46,27 @@ export function memberName(members: readonly MemberSummary[], memberId: string |
   return members.find((member) => member.id === memberId)?.name ?? strings.removedMember;
 }
 
-/** "More view actions": the view's Menu, its Rename dialog and its Delete confirm. */
-export function ViewMenu({
+/** What the switcher's "This view" section holds, what runs each action, and the dialogs they open. */
+export interface ViewMenu {
+  readonly actions: readonly ViewMenuAction[];
+  readonly onAction: (id: string) => void;
+  /** The Rename dialog and the Delete confirm, drawn by the screen beside the bar. */
+  readonly dialogs: ReactNode;
+}
+
+/**
+ * Reasons that mean an action can never apply to this view (the default view moving, the workspace's own view
+ * going private, nothing to do): the action is left out of the menu, not shown disabled (the owner, 21 October
+ * 2026). An action the person could take after a change (Delete once another view is the default) stays,
+ * disabled, with its short reason.
+ */
+const NEVER: ReadonlySet<ViewRuleReason> = new Set<ViewRuleReason>(['defaultFirst', 'seeded', 'manage', 'already']);
+
+/**
+ * The view's own actions for the switcher's menu (it was the "More view actions" button), its Rename dialog
+ * and its Delete confirm.
+ */
+export function useViewMenu({
   slug,
   object,
   view,
@@ -56,11 +78,17 @@ export function ViewMenu({
   onDuplicate,
   onDeleting,
   onDeleted,
-}: ViewMenuProps) {
+}: ViewMenuProps): ViewMenu {
   const { data, toasts } = useRouteContext({ from: '__root__' });
   const [isRenaming, setRenaming] = useState(false);
   const [isDeleting, setDeleting] = useState(false);
   const [isBusy, setBusy] = useState(false);
+  const [deleteFailure, setDeleteFailure] = useState<string | undefined>(undefined);
+  // Make private ends everyone else's use of the view, so it asks first, as Delete does.
+  const [isGoingPrivate, setGoingPrivate] = useState(false);
+  const [isPrivateBusy, setPrivateBusy] = useState(false);
+  const [privateFailure, setPrivateFailure] = useState<string | undefined>(undefined);
+  if (view === undefined) return { actions: [], onAction: () => undefined, dialogs: null };
   const caller = {
     memberId,
     canManage,
@@ -72,18 +100,20 @@ export function ViewMenu({
     isLocked: view.isLocked,
     isDefault: list.defaultViewId === view.id,
   };
-  const reasonFor = (action: ViewAction): string | undefined => {
+  // An action's reason, or `null` when it can never apply here and is left out.
+  const reasonFor = (action: ViewAction): string | undefined | null => {
     const reason: ViewRuleReason | undefined = viewRule(action, caller, facts);
     if (reason === undefined) return undefined;
+    if (NEVER.has(reason)) return null;
     switch (reason) {
       case 'locked':
         return strings.viewLocked;
+      // Only someone who may choose the default can act on "make another view the default first"; and the
+      // workspace's own view (no creator) stays shared whatever the default is.
       case 'default':
-        return action === 'delete' ? strings.deleteDefault(object.pluralName) : strings.defaultShared;
-      case 'defaultFirst':
-        return strings.defaultFirst;
-      case 'seeded':
-        return strings.seededShared;
+        return canManage && !(action === 'makePrivate' && view.creatorMemberId === undefined)
+          ? strings.defaultFirstFix
+          : null;
       case 'creatorGone':
         return strings.creatorGone;
       case 'notCreator':
@@ -92,23 +122,16 @@ export function ViewMenu({
         return strings.unlockFirst;
       case 'private':
         return strings.shareFirst;
-      case 'manage':
-      case 'already':
-        return strings.nothingToDo;
+      default:
+        return null;
     }
   };
-  // Move up and down within its group: the shared views after the default, or this person's private ones.
+  // Move up and down within its group (the shared views after the default, or this person's private ones), only
+  // where the view can go that way now.
   const group = list.views.filter((each) => each.visibility === view.visibility && each.id !== list.defaultViewId);
   const at = group.findIndex((each) => each.id === view.id);
-  const moveReason = (direction: 'up' | 'down') =>
-    reasonFor('move') ??
-    (at === -1
-      ? strings.nothingToDo
-      : direction === 'up' && at === 0
-        ? strings.alreadyFirst
-        : direction === 'down' && at === group.length - 1
-          ? strings.alreadyLast
-          : undefined);
+  const canMove = (direction: 'up' | 'down') =>
+    reasonFor('move') === undefined && at !== -1 && (direction === 'up' ? at > 0 : at < group.length - 1);
 
   const run = (work: Promise<unknown>, done?: string) => {
     work.then(
@@ -121,29 +144,39 @@ export function ViewMenu({
     );
   };
 
-  type Item = {
-    readonly id: string;
-    readonly label: string;
-    readonly icon: Parameters<typeof MenuItem>[0]['icon'];
-    readonly reason?: string | undefined;
-    readonly isDanger?: boolean;
-    readonly onAction: () => void;
-  };
-  const items: (Item | 'separator')[] = [
-    {
-      id: 'rename',
-      label: strings.rename,
-      icon: 'pencil',
-      reason: reasonFor('edit'),
-      onAction: () => setRenaming(true),
-    },
-    { id: 'duplicate', label: strings.duplicate, icon: 'copy', onAction: onDuplicate },
-    {
+  type Entry = ViewMenuAction & { readonly run: () => void };
+  /** An entry, or nothing when its action can never apply here. */
+  const entry = (reason: string | undefined | null, rest: Omit<Entry, 'reason'>): readonly Entry[] =>
+    reason === null ? [] : [{ ...rest, ...(reason === undefined ? {} : { reason }) }];
+  const sharing =
+    view.visibility === 'private'
+      ? entry(reasonFor('share'), {
+          id: 'share',
+          label: strings.shareWithEveryone,
+          icon: 'users',
+          startsGroup: true,
+          run: () => {
+            run(data.views.update(slug, view.id, { visibility: 'workspace' }), strings.shared(view.name));
+          },
+        })
+      : entry(reasonFor('makePrivate'), {
+          id: 'make-private',
+          label: strings.makePrivate,
+          icon: 'lock',
+          startsGroup: true,
+          run: () => {
+            setPrivateFailure(undefined);
+            setGoingPrivate(true);
+          },
+        });
+  const entries: readonly Entry[] = [
+    ...entry(reasonFor('edit'), { id: 'rename', label: strings.rename, icon: 'pencil', run: () => setRenaming(true) }),
+    { id: 'duplicate', label: strings.duplicate, icon: 'copy', run: onDuplicate },
+    ...entry(copyLinkReason, {
       id: 'copy-link',
       label: strings.copyLink,
       icon: 'link',
-      reason: copyLinkReason,
-      onAction: () => {
+      run: () => {
         navigator.clipboard.writeText(window.location.href).then(
           () => {
             toasts.toast({ tone: 'success', message: strings.linkCopied });
@@ -153,172 +186,179 @@ export function ViewMenu({
           },
         );
       },
-    },
-    'separator',
-    {
-      id: 'move-up',
-      label: strings.moveUp,
-      icon: 'arrow-up',
-      reason: moveReason('up'),
-      onAction: () => {
-        run(data.views.move(slug, object.id, view.id, 'up'), strings.movedUp(view.name));
-      },
-    },
-    {
-      id: 'move-down',
-      label: strings.moveDown,
-      icon: 'arrow-down',
-      reason: moveReason('down'),
-      onAction: () => {
-        run(data.views.move(slug, object.id, view.id, 'down'), strings.movedDown(view.name));
-      },
-    },
-    'separator',
-    view.visibility === 'private'
-      ? {
-          id: 'share',
-          label: strings.shareWithEveryone,
-          icon: 'users',
-          reason: reasonFor('share'),
-          onAction: () => {
-            run(data.views.update(slug, view.id, { visibility: 'workspace' }), strings.shared(view.name));
-          },
-        }
-      : {
-          id: 'make-private',
-          label: strings.makePrivate,
-          icon: 'lock',
-          reason: reasonFor('makePrivate'),
-          onAction: () => {
-            run(data.views.update(slug, view.id, { visibility: 'private' }), strings.madePrivate(view.name));
-          },
-        },
-    // Lock and the default are owners' and admins' (views.manage): hidden for members.
-    ...(canManage
+    }),
+    ...(canMove('up')
       ? [
-          view.isLocked
-            ? {
-                id: 'unlock',
-                label: strings.unlock,
-                icon: 'lock-open' as const,
-                reason: reasonFor('lock'),
-                onAction: () => {
-                  run(data.views.setLocked(slug, view.id, false), strings.unlocked(view.name));
-                },
-              }
-            : {
-                id: 'lock',
-                label: strings.lock,
-                icon: 'lock' as const,
-                reason: reasonFor('lock'),
-                onAction: () => {
-                  run(data.views.setLocked(slug, view.id, true), strings.locked(view.name));
-                },
-              },
           {
-            id: 'set-default',
-            label: strings.setDefault,
-            icon: 'star' as const,
-            reason: facts.isDefault ? strings.alreadyDefault : reasonFor('setDefault'),
-            onAction: () => {
-              run(data.views.setDefault(slug, object.id, view.id), strings.isDefaultNow(view.name, object.pluralName));
+            id: 'move-up',
+            label: strings.moveUp,
+            icon: 'arrow-up' as const,
+            startsGroup: true,
+            run: () => {
+              run(data.views.move(slug, object.id, view.id, 'up'), strings.movedUp(view.name));
             },
           },
         ]
       : []),
-    'separator',
-    {
+    ...(canMove('down')
+      ? [
+          {
+            id: 'move-down',
+            label: strings.moveDown,
+            icon: 'arrow-down' as const,
+            startsGroup: !canMove('up'),
+            run: () => {
+              run(data.views.move(slug, object.id, view.id, 'down'), strings.movedDown(view.name));
+            },
+          },
+        ]
+      : []),
+    ...sharing,
+    // Lock and the default are owners' and admins' (views.manage): absent for members, never disabled.
+    ...(canManage
+      ? [
+          ...entry(reasonFor('lock'), {
+            id: view.isLocked ? 'unlock' : 'lock',
+            label: view.isLocked ? strings.unlock : strings.lock,
+            icon: view.isLocked ? 'lock-open' : 'lock',
+            startsGroup: sharing.length === 0,
+            run: () => {
+              run(
+                data.views.setLocked(slug, view.id, !view.isLocked),
+                view.isLocked ? strings.unlocked(view.name) : strings.locked(view.name),
+              );
+            },
+          }),
+          // Already the default: nothing to set, so it is left out.
+          ...(facts.isDefault
+            ? []
+            : entry(reasonFor('setDefault'), {
+                id: 'set-default',
+                label: strings.setDefault,
+                icon: 'star',
+                run: () => {
+                  run(
+                    data.views.setDefault(slug, object.id, view.id),
+                    strings.isDefaultNow(view.name, object.pluralName),
+                  );
+                },
+              })),
+        ]
+      : []),
+    ...entry(reasonFor('delete'), {
       id: 'delete',
       label: strings.deleteView,
       icon: 'trash',
       isDanger: true,
-      reason: reasonFor('delete'),
-      onAction: () => setDeleting(true),
-    },
+      startsGroup: true,
+      run: () => {
+        setDeleteFailure(undefined);
+        setDeleting(true);
+      },
+    }),
   ];
-  const actions = new Map(items.flatMap((item) => (item === 'separator' ? [] : [[item.id, item] as const])));
+  const runs = new Map(entries.map((each) => [each.id, each.run]));
+  const remove = () => {
+    if (isBusy) return;
+    setBusy(true);
+    setDeleteFailure(undefined);
+    onDeleting(true);
+    data.views.remove(slug, object.id, view.id).then(
+      () => {
+        setBusy(false);
+        setDeleting(false);
+        onDeleted(view.name);
+      },
+      (error: unknown) => {
+        // The confirm stays open with what went wrong, so the person can try again or cancel.
+        setBusy(false);
+        onDeleting(false);
+        setDeleteFailure(isDataError(error) ? error.message : strings.actionFailed);
+      },
+    );
+  };
 
-  return (
-    <>
-      <MenuTrigger>
-        <Button variant="ghost" icon="ellipsis" label={strings.moreViewActions} />
-        <Menu
-          label={strings.moreViewActions}
-          onAction={(key) => {
-            actions.get(String(key))?.onAction();
+  const makePrivate = () => {
+    if (isPrivateBusy) return;
+    setPrivateBusy(true);
+    setPrivateFailure(undefined);
+    data.views.update(slug, view.id, { visibility: 'private' }).then(
+      () => {
+        setPrivateBusy(false);
+        setGoingPrivate(false);
+        toasts.toast({ tone: 'success', message: strings.madePrivate(view.name) });
+      },
+      (error: unknown) => {
+        // The confirm stays open with what went wrong, so the person can try again or cancel.
+        setPrivateBusy(false);
+        setPrivateFailure(isDataError(error) ? error.message : strings.actionFailed);
+      },
+    );
+  };
+
+  return {
+    actions: entries.map(({ run: _run, ...action }) => action),
+    onAction: (id) => {
+      runs.get(id)?.();
+    },
+    dialogs: (
+      <>
+        <RenameViewDialog
+          isOpen={isRenaming}
+          name={view.name}
+          onClose={() => setRenaming(false)}
+          onRename={(name) => data.views.update(slug, view.id, { name })}
+        />
+        <Modal
+          title={
+            view.visibility === 'workspace'
+              ? strings.deleteSharedTitle(view.name)
+              : strings.deletePrivateTitle(view.name)
+          }
+          tone="danger"
+          isOpen={isDeleting}
+          isBusy={isBusy}
+          onOpenChange={(open) => {
+            if (!open && !isBusy) setDeleting(false);
           }}
+          actions={
+            <>
+              <Button slot="close" isDisabled={isBusy} kbd="ESC">
+                {strings.cancel}
+              </Button>
+              <Button variant="danger-solid" isPending={isBusy} onPress={remove}>
+                {isBusy ? strings.deleting : strings.deleteView}
+              </Button>
+            </>
+          }
         >
-          {items.map((item, index) =>
-            item === 'separator' ? (
-              <MenuSeparator key={`separator-${String(index)}`} />
-            ) : (
-              <MenuItem
-                key={item.id}
-                id={item.id}
-                icon={item.icon}
-                isDisabled={item.reason !== undefined}
-                {...(item.reason === undefined ? {} : { description: item.reason })}
-                {...(item.isDanger === true ? { isDanger: true } : {})}
-              >
-                {item.label}
-              </MenuItem>
-            ),
-          )}
-        </Menu>
-      </MenuTrigger>
-      <RenameViewDialog
-        isOpen={isRenaming}
-        name={view.name}
-        onClose={() => setRenaming(false)}
-        onRename={(name) => data.views.update(slug, view.id, { name })}
-      />
-      <Modal
-        title={
-          view.visibility === 'workspace' ? strings.deleteSharedTitle(view.name) : strings.deletePrivateTitle(view.name)
-        }
-        tone="danger"
-        isOpen={isDeleting}
-        onOpenChange={(open) => {
-          if (!open && !isBusy) setDeleting(false);
-        }}
-        actions={
-          <>
-            <Button slot="close" isDisabled={isBusy} kbd="ESC">
-              {strings.cancel}
-            </Button>
-            <Button
-              variant="danger-solid"
-              isPending={isBusy}
-              onPress={() => {
-                setBusy(true);
-                onDeleting(true);
-                data.views.remove(slug, object.id, view.id).then(
-                  () => {
-                    setBusy(false);
-                    setDeleting(false);
-                    onDeleted(view.name);
-                  },
-                  (error: unknown) => {
-                    setBusy(false);
-                    setDeleting(false);
-                    onDeleting(false);
-                    toasts.toast({
-                      tone: 'danger',
-                      message: isDataError(error) ? error.message : strings.actionFailed,
-                    });
-                  },
-                );
-              }}
-            >
-              {isBusy ? strings.deleting : strings.deleteView}
-            </Button>
-          </>
-        }
-      >
-        {view.visibility === 'workspace' ? strings.deleteSharedText : strings.deletePrivateText}
-      </Modal>
-    </>
-  );
+          {deleteFailure !== undefined && <Callout tone="danger">{deleteFailure}</Callout>}
+          {view.visibility === 'workspace' ? strings.deleteSharedText : strings.deletePrivateText}
+        </Modal>
+        <Modal
+          title={strings.makePrivateTitle(view.name)}
+          isOpen={isGoingPrivate}
+          isBusy={isPrivateBusy}
+          onOpenChange={(open) => {
+            if (!open && !isPrivateBusy) setGoingPrivate(false);
+          }}
+          actions={
+            <>
+              <Button slot="close" isDisabled={isPrivateBusy} kbd="ESC">
+                {strings.cancel}
+              </Button>
+              <Button variant="primary" isPending={isPrivateBusy} onPress={makePrivate}>
+                {isPrivateBusy ? strings.makingPrivate : strings.makePrivate}
+              </Button>
+            </>
+          }
+        >
+          {privateFailure !== undefined && <Callout tone="danger">{privateFailure}</Callout>}
+          {strings.makePrivateText}
+        </Modal>
+      </>
+    ),
+  };
 }
 
 /** Props for the rename dialog. */

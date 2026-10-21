@@ -60,11 +60,16 @@
 
   .period {
     margin: 0;
-    padding-block: var(--space-12) var(--space-6);
+    padding-block: var(--space-12) var(--space-4);
     padding-inline: var(--space-4);
     color: var(--text-tertiary);
     font: var(--text-label-strong);
     letter-spacing: var(--tracking-label-strong);
+  }
+
+  /* Inline, under its block's own heading (a Card's title and padding): the first period needs no air of its own. */
+  .period[data-first] {
+    padding-block-start: 0;
   }
 
   .entry {
@@ -73,19 +78,20 @@
     grid-template-columns: var(--size-chip) minmax(0, 1fr);
     column-gap: var(--space-8);
     padding: var(--space-4);
-    padding-block-end: var(--space-12);
+    padding-block-end: var(--space-8);
   }
 
-  /* The rail: from under this entry's marker to the next entry's. */
+  /* The rail: from under this entry's marker all the way to the next entry's, through that entry's top padding,
+     so it runs unbroken down a period; it stops under the last entry and the last of a period. */
   .entry::before {
     position: absolute;
-    inset-block: calc(var(--space-4) + var(--size-chip)) 0;
+    inset-block: calc(var(--space-4) + var(--size-chip)) calc(-1 * var(--space-4));
     inset-inline-start: calc(var(--space-4) + var(--size-chip) / 2);
     border-inline-start: var(--border-width-hairline) solid var(--border);
     content: '';
   }
 
-  .entry[data-last]::before {
+  .entry[data-rail-end]::before {
     content: none;
   }
 
@@ -103,7 +109,7 @@
   .main {
     display: flex;
     flex-direction: column;
-    gap: var(--space-6);
+    gap: var(--space-4);
     min-inline-size: 0;
   }
 

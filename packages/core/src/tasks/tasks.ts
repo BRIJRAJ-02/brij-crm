@@ -12,6 +12,7 @@
 import { sql, type SQL } from 'drizzle-orm';
 import {
   TASK_COUNT_CAP,
+  TASK_DUE_CAP,
   TASK_GET_MAX,
   TASK_PAGE,
   TASK_PAGE_MAX,
@@ -21,6 +22,7 @@ import {
   type TaskMine,
   type TaskPage,
   type TaskStatus,
+  type TaskTotal,
   type TaskView,
 } from '@crm/contracts';
 import { DateValue, type RecordRefDisplay } from '@crm/contracts/values';
@@ -30,6 +32,7 @@ import { readRecords } from '../engine/records.ts';
 import { inputInvalid, refuse } from '../engine/refusals.ts';
 import type { Actor, EngineScope } from '../engine/scope.ts';
 import { runWrite, type AfterWrite, type WriteContext } from '../engine/write.ts';
+import { notifyTaskAssigned } from '../notifications/notify.ts';
 import { checkScope } from '../access/mint.ts';
 import { isOpen, objectLevel, type Access } from '../access/policy.ts';
 import { inWorkspace } from '../access/run.ts';
@@ -145,7 +148,7 @@ async function taskRows(tx: WorkspaceTx, ids: readonly string[], lock = false): 
 }
 
 /** The linked records the reader may see, live (not in the trash, not on an archived object), with their displays, by id. */
-async function linkedDisplays(
+export async function linkedDisplays(
   tx: WorkspaceTx,
   access: Access,
   recordIds: readonly string[],
@@ -242,7 +245,7 @@ function viewOf(
  * sight (an unlink of the only link they could see): they get its view once,
  * and its event then takes it off their screens.
  */
-async function readTaskViews(
+export async function readTaskViews(
   tx: WorkspaceTx,
   scope: Pick<EngineScope, 'access' | 'actor'>,
   ids: readonly string[],
@@ -390,6 +393,8 @@ export async function createTask(
           from unnest(${uuidList(recordIds)}) with ordinality as x(id, n)
         `);
       }
+      // Someone else assigned: they hear of it (spec 0038, AC-1165).
+      if (assignee !== undefined) await notifyTaskAssigned(context, { taskId: id, assignee, previous: null });
       context.record({ tasks: [{ taskId: id, recordIds }] });
       return readTaskViews(tx, scope, [id], true);
     },
@@ -445,7 +450,11 @@ export async function updateTask(
       if (dueOn !== undefined && dueOn !== row.due_on) sets.push(sql`due_on = ${dueOn}::date`);
       if (input.assigneeMemberId !== undefined) {
         const assignee = input.assigneeMemberId === null ? null : await checkAssignee(context, input.assigneeMemberId);
-        if (assignee !== row.assignee_member_id) sets.push(sql`assignee_member_id = ${assignee}::uuid`);
+        if (assignee !== row.assignee_member_id) {
+          sets.push(sql`assignee_member_id = ${assignee}::uuid`);
+          // The new assignee hears of it, and the earlier one's unread notice goes (spec 0038, AC-1165).
+          await notifyTaskAssigned(context, { taskId, assignee, previous: row.assignee_member_id });
+        }
       }
       const actor = scope.actor;
       const memberId = actor.type === 'member' ? actor.id : null;
@@ -816,5 +825,31 @@ export async function listTasks(scope: EngineScope, input: ListTasksInput): Prom
       ...(nextCursor === undefined ? {} : { nextCursor }),
       total: { count: Math.min(n, TASK_COUNT_CAP), atLeast: n > TASK_COUNT_CAP },
     };
+  });
+}
+
+/**
+ * The sidebar's Tasks badge (spec 0034, AC-924): how many open, live tasks
+ * are assigned to me and due on or before `today` (my local date, which the
+ * browser sends), on `tasks_assigned_open` and counted up to `TASK_DUE_CAP`.
+ * A task assigned to me is always mine to see (the task rule), so no rule
+ * runs. An API key has no tasks of its own: none. A `today` that isn't a date
+ * is 400 `INPUT_INVALID` on `today`.
+ */
+export async function countDueTasks(scope: EngineScope, input: { readonly today: string }): Promise<TaskTotal> {
+  checkScope(scope);
+  if (!DateValue.safeParse(input.today).success) throw inputInvalid('today', 'Send today as a date.');
+  const me = memberOf(scope.access);
+  if (me === undefined || !principalReaches(scope.access, 'read')) return { count: 0, atLeast: false };
+  return inWorkspace(scope, async (tx) => {
+    const counted = await tx.execute<{ n: number }>(sql`
+      select count(*)::int as n from (
+        select 1 from tasks t
+        where t.workspace_id = ${scope.workspaceId}::uuid and t.assignee_member_id = ${me}::uuid
+          and t.deleted_at is null and not t.is_done and t.due_on <= ${input.today}::date
+        limit ${TASK_DUE_CAP + 1}
+      ) c`);
+    const n = counted.rows[0]?.n ?? 0;
+    return { count: Math.min(n, TASK_DUE_CAP), atLeast: n > TASK_DUE_CAP };
   });
 }

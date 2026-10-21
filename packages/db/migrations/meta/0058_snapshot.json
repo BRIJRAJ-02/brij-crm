@@ -1,5 +1,5 @@
 {
-  "id": "b082a0b6-54ee-4c86-a876-b7b058f75e68",
+  "id": "3213ff6f-fdda-41cc-8513-e196efc385ab",
   "prevId": "251f5e77-ff7e-4de8-aaff-144fdbe9089a",
   "version": "7",
   "dialect": "postgresql",
@@ -1132,157 +1132,6 @@
       },
       "isRLSEnabled": false
     },
-    "public.booking_hosts": {
-      "name": "booking_hosts",
-      "schema": "",
-      "columns": {
-        "workspace_id": {
-          "name": "workspace_id",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "booking_id": {
-          "name": "booking_id",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "member_id": {
-          "name": "member_id",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "during": {
-          "name": "during",
-          "type": "tstzrange",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "starts_at": {
-          "name": "starts_at",
-          "type": "timestamp (6) with time zone",
-          "primaryKey": false,
-          "notNull": false,
-          "generated": {
-            "as": "lower(during)",
-            "type": "stored"
-          }
-        },
-        "ends_at": {
-          "name": "ends_at",
-          "type": "timestamp (6) with time zone",
-          "primaryKey": false,
-          "notNull": false,
-          "generated": {
-            "as": "upper(during)",
-            "type": "stored"
-          }
-        },
-        "status": {
-          "name": "status",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "created_at": {
-          "name": "created_at",
-          "type": "timestamp (6) with time zone",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "now()"
-        },
-        "updated_at": {
-          "name": "updated_at",
-          "type": "timestamp (6) with time zone",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "now()"
-        }
-      },
-      "indexes": {
-        "booking_hosts_by_member": {
-          "name": "booking_hosts_by_member",
-          "columns": [
-            {
-              "expression": "workspace_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            },
-            {
-              "expression": "member_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            },
-            {
-              "expression": "starts_at",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "where": "\"booking_hosts\".\"status\" = 'confirmed'",
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        }
-      },
-      "foreignKeys": {
-        "booking_hosts_booking": {
-          "name": "booking_hosts_booking",
-          "tableFrom": "booking_hosts",
-          "tableTo": "bookings",
-          "columnsFrom": [
-            "workspace_id",
-            "booking_id"
-          ],
-          "columnsTo": [
-            "workspace_id",
-            "id"
-          ],
-          "onDelete": "cascade",
-          "onUpdate": "no action"
-        },
-        "booking_hosts_member": {
-          "name": "booking_hosts_member",
-          "tableFrom": "booking_hosts",
-          "tableTo": "members",
-          "columnsFrom": [
-            "workspace_id",
-            "member_id"
-          ],
-          "columnsTo": [
-            "workspace_id",
-            "id"
-          ],
-          "onDelete": "no action",
-          "onUpdate": "no action"
-        }
-      },
-      "compositePrimaryKeys": {
-        "booking_hosts_pkey": {
-          "name": "booking_hosts_pkey",
-          "columns": [
-            "workspace_id",
-            "booking_id",
-            "member_id"
-          ]
-        }
-      },
-      "uniqueConstraints": {},
-      "policies": {},
-      "checkConstraints": {
-        "booking_hosts_status": {
-          "name": "booking_hosts_status",
-          "value": "\"booking_hosts\".\"status\" in ('confirmed', 'cancelled')"
-        }
-      },
-      "isRLSEnabled": false
-    },
     "public.booking_member_hours": {
       "name": "booking_member_hours",
       "schema": "",
@@ -1533,137 +1382,6 @@
       },
       "isRLSEnabled": false
     },
-    "public.booking_page_rotations": {
-      "name": "booking_page_rotations",
-      "schema": "",
-      "columns": {
-        "workspace_id": {
-          "name": "workspace_id",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "page_id": {
-          "name": "page_id",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "rotation_id": {
-          "name": "rotation_id",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "position": {
-          "name": "position",
-          "type": "smallint",
-          "primaryKey": false,
-          "notNull": true
-        }
-      },
-      "indexes": {
-        "booking_page_rotations_position": {
-          "name": "booking_page_rotations_position",
-          "columns": [
-            {
-              "expression": "workspace_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            },
-            {
-              "expression": "page_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            },
-            {
-              "expression": "position",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": true,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        },
-        "booking_page_rotations_by_rotation": {
-          "name": "booking_page_rotations_by_rotation",
-          "columns": [
-            {
-              "expression": "workspace_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            },
-            {
-              "expression": "rotation_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        }
-      },
-      "foreignKeys": {
-        "booking_page_rotations_page": {
-          "name": "booking_page_rotations_page",
-          "tableFrom": "booking_page_rotations",
-          "tableTo": "booking_pages",
-          "columnsFrom": [
-            "workspace_id",
-            "page_id"
-          ],
-          "columnsTo": [
-            "workspace_id",
-            "id"
-          ],
-          "onDelete": "cascade",
-          "onUpdate": "no action"
-        },
-        "booking_page_rotations_rotation": {
-          "name": "booking_page_rotations_rotation",
-          "tableFrom": "booking_page_rotations",
-          "tableTo": "rotations",
-          "columnsFrom": [
-            "workspace_id",
-            "rotation_id"
-          ],
-          "columnsTo": [
-            "workspace_id",
-            "id"
-          ],
-          "onDelete": "restrict",
-          "onUpdate": "no action"
-        }
-      },
-      "compositePrimaryKeys": {
-        "booking_page_rotations_pkey": {
-          "name": "booking_page_rotations_pkey",
-          "columns": [
-            "workspace_id",
-            "page_id",
-            "rotation_id"
-          ]
-        }
-      },
-      "uniqueConstraints": {},
-      "policies": {},
-      "checkConstraints": {
-        "booking_page_rotations_position_range": {
-          "name": "booking_page_rotations_position_range",
-          "value": "\"booking_page_rotations\".\"position\" between 0 and 2"
-        }
-      },
-      "isRLSEnabled": false
-    },
     "public.booking_pages": {
       "name": "booking_pages",
       "schema": "",
@@ -1809,13 +1527,6 @@
           "type": "uuid",
           "primaryKey": false,
           "notNull": false
-        },
-        "reschedule_host": {
-          "name": "reschedule_host",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "'same'"
         },
         "is_private": {
           "name": "is_private",
@@ -2050,10 +1761,6 @@
         "booking_pages_hours_mode": {
           "name": "booking_pages_hours_mode",
           "value": "\"booking_pages\".\"hours_mode\" in ('mine', 'own')"
-        },
-        "booking_pages_reschedule_host": {
-          "name": "booking_pages_reschedule_host",
-          "value": "\"booking_pages\".\"reschedule_host\" in ('same', 'rotation')"
         },
         "booking_pages_title": {
           "name": "booking_pages_title",
@@ -2560,12 +2267,6 @@
         "submission_id": {
           "name": "submission_id",
           "type": "uuid",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "needs_host_at": {
-          "name": "needs_host_at",
-          "type": "timestamp (6) with time zone",
           "primaryKey": false,
           "notNull": false
         },
@@ -7381,6 +7082,130 @@
       },
       "isRLSEnabled": false
     },
+    "public.member_recents": {
+      "name": "member_recents",
+      "schema": "",
+      "columns": {
+        "workspace_id": {
+          "name": "workspace_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "member_id": {
+          "name": "member_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "kind": {
+          "name": "kind",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "target_id": {
+          "name": "target_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "visited_at": {
+          "name": "visited_at",
+          "type": "timestamp (6) with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "member_recents_by_time": {
+          "name": "member_recents_by_time",
+          "columns": [
+            {
+              "expression": "workspace_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "member_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "visited_at",
+              "isExpression": false,
+              "asc": false,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "member_recents_by_target": {
+          "name": "member_recents_by_target",
+          "columns": [
+            {
+              "expression": "workspace_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "target_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "member_recents_member": {
+          "name": "member_recents_member",
+          "tableFrom": "member_recents",
+          "tableTo": "members",
+          "columnsFrom": [
+            "workspace_id",
+            "member_id"
+          ],
+          "columnsTo": [
+            "workspace_id",
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {
+        "member_recents_pkey": {
+          "name": "member_recents_pkey",
+          "columns": [
+            "workspace_id",
+            "member_id",
+            "kind",
+            "target_id"
+          ]
+        }
+      },
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {
+        "member_recents_kind": {
+          "name": "member_recents_kind",
+          "value": "\"member_recents\".\"kind\" in ('record', 'view')"
+        }
+      },
+      "isRLSEnabled": false
+    },
     "public.member_view_state": {
       "name": "member_view_state",
       "schema": "",
@@ -9740,857 +9565,6 @@
         "relationships_updated_by_actor": {
           "name": "relationships_updated_by_actor",
           "value": "(\"relationships\".\"updated_by_type\" is null and \"relationships\".\"updated_by_id\" is null and \"relationships\".\"updated_by_member_id\" is null)\n      or (\"relationships\".\"updated_by_type\" = 'system' and \"relationships\".\"updated_by_id\" is null and \"relationships\".\"updated_by_member_id\" is null)\n      or (\"relationships\".\"updated_by_type\" = 'member' and \"relationships\".\"updated_by_id\" is not null and \"relationships\".\"updated_by_member_id\" = \"relationships\".\"updated_by_id\")\n      or (\"relationships\".\"updated_by_type\"::text not in ('member', 'system', 'calendar') and \"relationships\".\"updated_by_id\" is not null and \"relationships\".\"updated_by_member_id\" is null)"
-        }
-      },
-      "isRLSEnabled": false
-    },
-    "public.rotation_assignments": {
-      "name": "rotation_assignments",
-      "schema": "",
-      "columns": {
-        "workspace_id": {
-          "name": "workspace_id",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "id": {
-          "name": "id",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "uuidv7()"
-        },
-        "rotation_id": {
-          "name": "rotation_id",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "member_id": {
-          "name": "member_id",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "source": {
-          "name": "source",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "booking_id": {
-          "name": "booking_id",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "record_id": {
-          "name": "record_id",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "reason": {
-          "name": "reason",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "units": {
-          "name": "units",
-          "type": "smallint",
-          "primaryKey": false,
-          "notNull": true,
-          "default": 1
-        },
-        "detail": {
-          "name": "detail",
-          "type": "jsonb",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "'{}'::jsonb"
-        },
-        "assigned_at": {
-          "name": "assigned_at",
-          "type": "timestamp (6) with time zone",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "now()"
-        },
-        "voided_at": {
-          "name": "voided_at",
-          "type": "timestamp (6) with time zone",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "created_at": {
-          "name": "created_at",
-          "type": "timestamp (6) with time zone",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "now()"
-        },
-        "created_by_type": {
-          "name": "created_by_type",
-          "type": "actor_type",
-          "typeSchema": "public",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "created_by_id": {
-          "name": "created_by_id",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "created_by_member_id": {
-          "name": "created_by_member_id",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "updated_at": {
-          "name": "updated_at",
-          "type": "timestamp (6) with time zone",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "now()"
-        },
-        "updated_by_type": {
-          "name": "updated_by_type",
-          "type": "actor_type",
-          "typeSchema": "public",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "updated_by_id": {
-          "name": "updated_by_id",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "updated_by_member_id": {
-          "name": "updated_by_member_id",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": false
-        }
-      },
-      "indexes": {
-        "rotation_assignments_window": {
-          "name": "rotation_assignments_window",
-          "columns": [
-            {
-              "expression": "workspace_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            },
-            {
-              "expression": "rotation_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            },
-            {
-              "expression": "assigned_at",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "where": "\"rotation_assignments\".\"voided_at\" is null",
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        },
-        "rotation_assignments_booking_live": {
-          "name": "rotation_assignments_booking_live",
-          "columns": [
-            {
-              "expression": "workspace_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            },
-            {
-              "expression": "booking_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            },
-            {
-              "expression": "rotation_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": true,
-          "where": "\"rotation_assignments\".\"voided_at\" is null and \"rotation_assignments\".\"booking_id\" is not null",
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        },
-        "rotation_assignments_record_live": {
-          "name": "rotation_assignments_record_live",
-          "columns": [
-            {
-              "expression": "workspace_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            },
-            {
-              "expression": "record_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            },
-            {
-              "expression": "rotation_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": true,
-          "where": "\"rotation_assignments\".\"voided_at\" is null and \"rotation_assignments\".\"record_id\" is not null",
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        },
-        "rotation_assignments_by_booking": {
-          "name": "rotation_assignments_by_booking",
-          "columns": [
-            {
-              "expression": "workspace_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            },
-            {
-              "expression": "booking_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "where": "\"rotation_assignments\".\"booking_id\" is not null",
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        },
-        "rotation_assignments_by_member": {
-          "name": "rotation_assignments_by_member",
-          "columns": [
-            {
-              "expression": "workspace_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            },
-            {
-              "expression": "member_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            },
-            {
-              "expression": "assigned_at",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        }
-      },
-      "foreignKeys": {
-        "rotation_assignments_rotation": {
-          "name": "rotation_assignments_rotation",
-          "tableFrom": "rotation_assignments",
-          "tableTo": "rotations",
-          "columnsFrom": [
-            "workspace_id",
-            "rotation_id"
-          ],
-          "columnsTo": [
-            "workspace_id",
-            "id"
-          ],
-          "onDelete": "no action",
-          "onUpdate": "no action"
-        },
-        "rotation_assignments_member": {
-          "name": "rotation_assignments_member",
-          "tableFrom": "rotation_assignments",
-          "tableTo": "members",
-          "columnsFrom": [
-            "workspace_id",
-            "member_id"
-          ],
-          "columnsTo": [
-            "workspace_id",
-            "id"
-          ],
-          "onDelete": "no action",
-          "onUpdate": "no action"
-        },
-        "rotation_assignments_booking": {
-          "name": "rotation_assignments_booking",
-          "tableFrom": "rotation_assignments",
-          "tableTo": "bookings",
-          "columnsFrom": [
-            "workspace_id",
-            "booking_id"
-          ],
-          "columnsTo": [
-            "workspace_id",
-            "id"
-          ],
-          "onDelete": "no action",
-          "onUpdate": "no action"
-        },
-        "rotation_assignments_created_by": {
-          "name": "rotation_assignments_created_by",
-          "tableFrom": "rotation_assignments",
-          "tableTo": "members",
-          "columnsFrom": [
-            "workspace_id",
-            "created_by_member_id"
-          ],
-          "columnsTo": [
-            "workspace_id",
-            "id"
-          ],
-          "onDelete": "no action",
-          "onUpdate": "no action"
-        },
-        "rotation_assignments_updated_by": {
-          "name": "rotation_assignments_updated_by",
-          "tableFrom": "rotation_assignments",
-          "tableTo": "members",
-          "columnsFrom": [
-            "workspace_id",
-            "updated_by_member_id"
-          ],
-          "columnsTo": [
-            "workspace_id",
-            "id"
-          ],
-          "onDelete": "no action",
-          "onUpdate": "no action"
-        }
-      },
-      "compositePrimaryKeys": {
-        "rotation_assignments_pkey": {
-          "name": "rotation_assignments_pkey",
-          "columns": [
-            "workspace_id",
-            "id"
-          ]
-        }
-      },
-      "uniqueConstraints": {},
-      "policies": {},
-      "checkConstraints": {
-        "rotation_assignments_source": {
-          "name": "rotation_assignments_source",
-          "value": "\"rotation_assignments\".\"source\" in ('booking', 'form', 'adjustment')"
-        },
-        "rotation_assignments_subject": {
-          "name": "rotation_assignments_subject",
-          "value": "(\"rotation_assignments\".\"source\" = 'booking' and \"rotation_assignments\".\"booking_id\" is not null and \"rotation_assignments\".\"reason\" <> 'adjustment')\n        or (\"rotation_assignments\".\"source\" = 'form' and \"rotation_assignments\".\"record_id\" is not null and \"rotation_assignments\".\"reason\" <> 'adjustment')\n        or (\"rotation_assignments\".\"source\" = 'adjustment' and \"rotation_assignments\".\"reason\" = 'adjustment' and \"rotation_assignments\".\"booking_id\" is null and \"rotation_assignments\".\"record_id\" is null)"
-        },
-        "rotation_assignments_reason": {
-          "name": "rotation_assignments_reason",
-          "value": "\"rotation_assignments\".\"reason\" in ('fair', 'priority', 'even', 'owner', 'last_host', 'standin', 'only_free', 'routed', 'manual', 'reassigned', 'adjustment')"
-        },
-        "rotation_assignments_units": {
-          "name": "rotation_assignments_units",
-          "value": "(\"rotation_assignments\".\"reason\" = 'adjustment' and \"rotation_assignments\".\"units\" between -20 and 20 and \"rotation_assignments\".\"units\" <> 0) or \"rotation_assignments\".\"units\" = 1"
-        },
-        "rotation_assignments_voided": {
-          "name": "rotation_assignments_voided",
-          "value": "\"rotation_assignments\".\"voided_at\" is null or \"rotation_assignments\".\"voided_at\" >= \"rotation_assignments\".\"assigned_at\""
-        },
-        "rotation_assignments_created_by_actor": {
-          "name": "rotation_assignments_created_by_actor",
-          "value": "(\"rotation_assignments\".\"created_by_type\" is null and \"rotation_assignments\".\"created_by_id\" is null and \"rotation_assignments\".\"created_by_member_id\" is null)\n      or (\"rotation_assignments\".\"created_by_type\" = 'system' and \"rotation_assignments\".\"created_by_id\" is null and \"rotation_assignments\".\"created_by_member_id\" is null)\n      or (\"rotation_assignments\".\"created_by_type\" = 'member' and \"rotation_assignments\".\"created_by_id\" is not null and \"rotation_assignments\".\"created_by_member_id\" = \"rotation_assignments\".\"created_by_id\")\n      or (\"rotation_assignments\".\"created_by_type\"::text not in ('member', 'system', 'calendar') and \"rotation_assignments\".\"created_by_id\" is not null and \"rotation_assignments\".\"created_by_member_id\" is null)"
-        },
-        "rotation_assignments_updated_by_actor": {
-          "name": "rotation_assignments_updated_by_actor",
-          "value": "(\"rotation_assignments\".\"updated_by_type\" is null and \"rotation_assignments\".\"updated_by_id\" is null and \"rotation_assignments\".\"updated_by_member_id\" is null)\n      or (\"rotation_assignments\".\"updated_by_type\" = 'system' and \"rotation_assignments\".\"updated_by_id\" is null and \"rotation_assignments\".\"updated_by_member_id\" is null)\n      or (\"rotation_assignments\".\"updated_by_type\" = 'member' and \"rotation_assignments\".\"updated_by_id\" is not null and \"rotation_assignments\".\"updated_by_member_id\" = \"rotation_assignments\".\"updated_by_id\")\n      or (\"rotation_assignments\".\"updated_by_type\"::text not in ('member', 'system', 'calendar') and \"rotation_assignments\".\"updated_by_id\" is not null and \"rotation_assignments\".\"updated_by_member_id\" is null)"
-        }
-      },
-      "isRLSEnabled": false
-    },
-    "public.rotation_members": {
-      "name": "rotation_members",
-      "schema": "",
-      "columns": {
-        "workspace_id": {
-          "name": "workspace_id",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "rotation_id": {
-          "name": "rotation_id",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "member_id": {
-          "name": "member_id",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "weight": {
-          "name": "weight",
-          "type": "smallint",
-          "primaryKey": false,
-          "notNull": true,
-          "default": 100
-        },
-        "priority": {
-          "name": "priority",
-          "type": "smallint",
-          "primaryKey": false,
-          "notNull": true,
-          "default": 2
-        },
-        "daily_cap": {
-          "name": "daily_cap",
-          "type": "smallint",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "weekly_cap": {
-          "name": "weekly_cap",
-          "type": "smallint",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "is_on": {
-          "name": "is_on",
-          "type": "boolean",
-          "primaryKey": false,
-          "notNull": true,
-          "default": true
-        },
-        "calibration": {
-          "name": "calibration",
-          "type": "numeric(10, 2)",
-          "primaryKey": false,
-          "notNull": true,
-          "default": 0
-        },
-        "position": {
-          "name": "position",
-          "type": "smallint",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "created_at": {
-          "name": "created_at",
-          "type": "timestamp (6) with time zone",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "now()"
-        },
-        "created_by_type": {
-          "name": "created_by_type",
-          "type": "actor_type",
-          "typeSchema": "public",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "created_by_id": {
-          "name": "created_by_id",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "created_by_member_id": {
-          "name": "created_by_member_id",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "updated_at": {
-          "name": "updated_at",
-          "type": "timestamp (6) with time zone",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "now()"
-        },
-        "updated_by_type": {
-          "name": "updated_by_type",
-          "type": "actor_type",
-          "typeSchema": "public",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "updated_by_id": {
-          "name": "updated_by_id",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "updated_by_member_id": {
-          "name": "updated_by_member_id",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": false
-        }
-      },
-      "indexes": {
-        "rotation_members_by_member": {
-          "name": "rotation_members_by_member",
-          "columns": [
-            {
-              "expression": "workspace_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            },
-            {
-              "expression": "member_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        }
-      },
-      "foreignKeys": {
-        "rotation_members_rotation": {
-          "name": "rotation_members_rotation",
-          "tableFrom": "rotation_members",
-          "tableTo": "rotations",
-          "columnsFrom": [
-            "workspace_id",
-            "rotation_id"
-          ],
-          "columnsTo": [
-            "workspace_id",
-            "id"
-          ],
-          "onDelete": "cascade",
-          "onUpdate": "no action"
-        },
-        "rotation_members_member": {
-          "name": "rotation_members_member",
-          "tableFrom": "rotation_members",
-          "tableTo": "members",
-          "columnsFrom": [
-            "workspace_id",
-            "member_id"
-          ],
-          "columnsTo": [
-            "workspace_id",
-            "id"
-          ],
-          "onDelete": "no action",
-          "onUpdate": "no action"
-        },
-        "rotation_members_created_by": {
-          "name": "rotation_members_created_by",
-          "tableFrom": "rotation_members",
-          "tableTo": "members",
-          "columnsFrom": [
-            "workspace_id",
-            "created_by_member_id"
-          ],
-          "columnsTo": [
-            "workspace_id",
-            "id"
-          ],
-          "onDelete": "no action",
-          "onUpdate": "no action"
-        },
-        "rotation_members_updated_by": {
-          "name": "rotation_members_updated_by",
-          "tableFrom": "rotation_members",
-          "tableTo": "members",
-          "columnsFrom": [
-            "workspace_id",
-            "updated_by_member_id"
-          ],
-          "columnsTo": [
-            "workspace_id",
-            "id"
-          ],
-          "onDelete": "no action",
-          "onUpdate": "no action"
-        }
-      },
-      "compositePrimaryKeys": {
-        "rotation_members_pkey": {
-          "name": "rotation_members_pkey",
-          "columns": [
-            "workspace_id",
-            "rotation_id",
-            "member_id"
-          ]
-        }
-      },
-      "uniqueConstraints": {},
-      "policies": {},
-      "checkConstraints": {
-        "rotation_members_weight": {
-          "name": "rotation_members_weight",
-          "value": "\"rotation_members\".\"weight\" between 1 and 100"
-        },
-        "rotation_members_priority": {
-          "name": "rotation_members_priority",
-          "value": "\"rotation_members\".\"priority\" between 0 and 4"
-        },
-        "rotation_members_daily_cap": {
-          "name": "rotation_members_daily_cap",
-          "value": "\"rotation_members\".\"daily_cap\" is null or \"rotation_members\".\"daily_cap\" between 1 and 50"
-        },
-        "rotation_members_weekly_cap": {
-          "name": "rotation_members_weekly_cap",
-          "value": "\"rotation_members\".\"weekly_cap\" is null or \"rotation_members\".\"weekly_cap\" between 1 and 200"
-        },
-        "rotation_members_calibration": {
-          "name": "rotation_members_calibration",
-          "value": "\"rotation_members\".\"calibration\" >= 0"
-        },
-        "rotation_members_position": {
-          "name": "rotation_members_position",
-          "value": "\"rotation_members\".\"position\" between 0 and 19"
-        },
-        "rotation_members_created_by_actor": {
-          "name": "rotation_members_created_by_actor",
-          "value": "(\"rotation_members\".\"created_by_type\" is null and \"rotation_members\".\"created_by_id\" is null and \"rotation_members\".\"created_by_member_id\" is null)\n      or (\"rotation_members\".\"created_by_type\" = 'system' and \"rotation_members\".\"created_by_id\" is null and \"rotation_members\".\"created_by_member_id\" is null)\n      or (\"rotation_members\".\"created_by_type\" = 'member' and \"rotation_members\".\"created_by_id\" is not null and \"rotation_members\".\"created_by_member_id\" = \"rotation_members\".\"created_by_id\")\n      or (\"rotation_members\".\"created_by_type\"::text not in ('member', 'system', 'calendar') and \"rotation_members\".\"created_by_id\" is not null and \"rotation_members\".\"created_by_member_id\" is null)"
-        },
-        "rotation_members_updated_by_actor": {
-          "name": "rotation_members_updated_by_actor",
-          "value": "(\"rotation_members\".\"updated_by_type\" is null and \"rotation_members\".\"updated_by_id\" is null and \"rotation_members\".\"updated_by_member_id\" is null)\n      or (\"rotation_members\".\"updated_by_type\" = 'system' and \"rotation_members\".\"updated_by_id\" is null and \"rotation_members\".\"updated_by_member_id\" is null)\n      or (\"rotation_members\".\"updated_by_type\" = 'member' and \"rotation_members\".\"updated_by_id\" is not null and \"rotation_members\".\"updated_by_member_id\" = \"rotation_members\".\"updated_by_id\")\n      or (\"rotation_members\".\"updated_by_type\"::text not in ('member', 'system', 'calendar') and \"rotation_members\".\"updated_by_id\" is not null and \"rotation_members\".\"updated_by_member_id\" is null)"
-        }
-      },
-      "isRLSEnabled": false
-    },
-    "public.rotations": {
-      "name": "rotations",
-      "schema": "",
-      "columns": {
-        "workspace_id": {
-          "name": "workspace_id",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "id": {
-          "name": "id",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "uuidv7()"
-        },
-        "name": {
-          "name": "name",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "strategy": {
-          "name": "strategy",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "'fair'"
-        },
-        "even_gap": {
-          "name": "even_gap",
-          "type": "smallint",
-          "primaryKey": false,
-          "notNull": true,
-          "default": 3
-        },
-        "window_days": {
-          "name": "window_days",
-          "type": "smallint",
-          "primaryKey": false,
-          "notNull": true,
-          "default": 30
-        },
-        "returning": {
-          "name": "returning",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "'owner'"
-        },
-        "created_at": {
-          "name": "created_at",
-          "type": "timestamp (6) with time zone",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "now()"
-        },
-        "created_by_type": {
-          "name": "created_by_type",
-          "type": "actor_type",
-          "typeSchema": "public",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "created_by_id": {
-          "name": "created_by_id",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "created_by_member_id": {
-          "name": "created_by_member_id",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "updated_at": {
-          "name": "updated_at",
-          "type": "timestamp (6) with time zone",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "now()"
-        },
-        "updated_by_type": {
-          "name": "updated_by_type",
-          "type": "actor_type",
-          "typeSchema": "public",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "updated_by_id": {
-          "name": "updated_by_id",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "updated_by_member_id": {
-          "name": "updated_by_member_id",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "deleted_at": {
-          "name": "deleted_at",
-          "type": "timestamp (6) with time zone",
-          "primaryKey": false,
-          "notNull": false
-        }
-      },
-      "indexes": {
-        "rotations_live": {
-          "name": "rotations_live",
-          "columns": [
-            {
-              "expression": "workspace_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            },
-            {
-              "expression": "created_at",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "where": "\"rotations\".\"deleted_at\" is null",
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        }
-      },
-      "foreignKeys": {
-        "rotations_created_by": {
-          "name": "rotations_created_by",
-          "tableFrom": "rotations",
-          "tableTo": "members",
-          "columnsFrom": [
-            "workspace_id",
-            "created_by_member_id"
-          ],
-          "columnsTo": [
-            "workspace_id",
-            "id"
-          ],
-          "onDelete": "no action",
-          "onUpdate": "no action"
-        },
-        "rotations_updated_by": {
-          "name": "rotations_updated_by",
-          "tableFrom": "rotations",
-          "tableTo": "members",
-          "columnsFrom": [
-            "workspace_id",
-            "updated_by_member_id"
-          ],
-          "columnsTo": [
-            "workspace_id",
-            "id"
-          ],
-          "onDelete": "no action",
-          "onUpdate": "no action"
-        }
-      },
-      "compositePrimaryKeys": {
-        "rotations_pkey": {
-          "name": "rotations_pkey",
-          "columns": [
-            "workspace_id",
-            "id"
-          ]
-        }
-      },
-      "uniqueConstraints": {},
-      "policies": {},
-      "checkConstraints": {
-        "rotations_name": {
-          "name": "rotations_name",
-          "value": "char_length(\"rotations\".\"name\") between 1 and 80"
-        },
-        "rotations_strategy": {
-          "name": "rotations_strategy",
-          "value": "\"rotations\".\"strategy\" in ('fair', 'priority', 'even')"
-        },
-        "rotations_even_gap": {
-          "name": "rotations_even_gap",
-          "value": "\"rotations\".\"even_gap\" between 1 and 10"
-        },
-        "rotations_returning": {
-          "name": "rotations_returning",
-          "value": "\"rotations\".\"returning\" in ('owner', 'last_host', 'none')"
-        },
-        "rotations_window": {
-          "name": "rotations_window",
-          "value": "\"rotations\".\"window_days\" in (7, 30, 90)"
-        },
-        "rotations_created_by_actor": {
-          "name": "rotations_created_by_actor",
-          "value": "(\"rotations\".\"created_by_type\" is null and \"rotations\".\"created_by_id\" is null and \"rotations\".\"created_by_member_id\" is null)\n      or (\"rotations\".\"created_by_type\" = 'system' and \"rotations\".\"created_by_id\" is null and \"rotations\".\"created_by_member_id\" is null)\n      or (\"rotations\".\"created_by_type\" = 'member' and \"rotations\".\"created_by_id\" is not null and \"rotations\".\"created_by_member_id\" = \"rotations\".\"created_by_id\")\n      or (\"rotations\".\"created_by_type\"::text not in ('member', 'system', 'calendar') and \"rotations\".\"created_by_id\" is not null and \"rotations\".\"created_by_member_id\" is null)"
-        },
-        "rotations_updated_by_actor": {
-          "name": "rotations_updated_by_actor",
-          "value": "(\"rotations\".\"updated_by_type\" is null and \"rotations\".\"updated_by_id\" is null and \"rotations\".\"updated_by_member_id\" is null)\n      or (\"rotations\".\"updated_by_type\" = 'system' and \"rotations\".\"updated_by_id\" is null and \"rotations\".\"updated_by_member_id\" is null)\n      or (\"rotations\".\"updated_by_type\" = 'member' and \"rotations\".\"updated_by_id\" is not null and \"rotations\".\"updated_by_member_id\" = \"rotations\".\"updated_by_id\")\n      or (\"rotations\".\"updated_by_type\"::text not in ('member', 'system', 'calendar') and \"rotations\".\"updated_by_id\" is not null and \"rotations\".\"updated_by_member_id\" is null)"
         }
       },
       "isRLSEnabled": false

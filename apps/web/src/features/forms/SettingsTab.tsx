@@ -4,13 +4,22 @@
 // Main task: read each group's one line summary, change only what needs changing (the defaults already work), and
 // save the name, address and owner from the SaveBar; the words, what follows a send and where submissions go go live
 // on Publish.
-// Leaves out: email notifications (no backend yet), booking a meeting after sending (arrives with the visitor's
-// countdown), each question's filing (set on the question, linked from here), and the look (beside the preview).
-import type { FormDocument, FormTargetChoices, FormView, MemberSummary, ObjectSummary } from '@crm/data';
+// Leaves out: email notifications (no backend yet), each question's filing (set on the question, linked from here),
+// and the look (beside the preview).
+import type {
+  BookingPageView,
+  FormDocument,
+  FormTargetChoices,
+  FormView,
+  MemberSummary,
+  ObjectSummary,
+} from '@crm/data';
+import { useCaptureList } from '@crm/data/react';
 import {
   Card,
   DescriptionList,
   Field,
+  InfoTip,
   Link,
   Radio,
   RadioGroup,
@@ -21,6 +30,7 @@ import {
 } from '@crm/ui';
 import { useRouteContext } from '@tanstack/react-router';
 import { useState } from 'react';
+import { linksHref } from '../booking/links.ts';
 import { pageHeading } from '../navigation/focus.ts';
 import { sameDocument } from './draft.ts';
 import { formHref } from './paths.ts';
@@ -29,17 +39,18 @@ import { strings } from './strings.ts';
 
 const NOBODY = 'nobody';
 
+/** The countdowns a form offers before it sends its visitor on to book (AC-1056): 0 is at once. */
+const COUNTDOWNS = [0, 3, 5, 10, 15, 30] as const;
+
+/** What sending a form leads to: a thank you, another web page, or on to book (AC-1055). */
+type AfterKind = FormDocument['after']['kind'];
+
 /**
  * One form's Form tab with one question open and in view: the map of where answers go links each line here.
  * Kept beside its one link rather than in paths.ts, which the routes load up front.
  */
 const questionHref = (slug: string, formId: string, questionId: string) =>
-  `/w/${slug}/captures/forms/${formId}?question=${encodeURIComponent(questionId)}`;
-
-/** A web address without its scheme, for a summary ("acme.com/thanks"). */
-function shortUrl(url: string): string {
-  return url.replace(/^https?:\/\//, '').replace(/\/$/, '');
-}
+  `/w/${slug}/forms/${formId}?question=${encodeURIComponent(questionId)}`;
 
 /** The settings that apply when saved: the name, the address and the owner. */
 interface Applied {
@@ -168,9 +179,15 @@ export function SettingsTab({
   const { data } = useRouteContext({ from: '__root__' });
   // What each follow up last held, so switching back and forth keeps what was typed.
   const [kept, setKept] = useState({
-    message: draft.after.kind === 'message' ? draft.after.message : '',
+    message: draft.after.kind === 'redirect' ? '' : draft.after.message,
     url: draft.after.kind === 'redirect' ? draft.after.url : 'https://',
+    bookingPageId: draft.after.kind === 'booking' ? draft.after.bookingPageId : undefined,
+    countdownSeconds: draft.after.kind === 'booking' ? draft.after.countdownSeconds : 5,
   });
+  // The booking pages a visitor can be sent on to: the reader's own, or everyone's with booking.admin, live ones.
+  const pages = useCaptureList(data.bookingPages.view(slug));
+  const pageList: readonly BookingPageView[] = pages.status === 'ready' ? pages.items : [];
+  const usable = pageList.filter((page) => page.canChange && page.status === 'live');
 
   const after = draft.after;
   const live = form.live;
@@ -182,25 +199,38 @@ export function SettingsTab({
   const afterChanged = live !== undefined && !sameDocument({ ...draft, after }, { ...draft, after: live.after });
   const targetChanged = live !== undefined && live.targets.main?.objectId !== draft.targets.main?.objectId;
 
-  const choose = (next: 'message' | 'redirect') => {
+  const choose = (next: AfterKind) => {
     if (next === after.kind) return;
     // Keep what the other choice held, then bring back what this one held.
     setKept((before) =>
-      after.kind === 'redirect' ? { ...before, url: after.url } : { ...before, message: after.message },
+      after.kind === 'redirect'
+        ? { ...before, url: after.url }
+        : after.kind === 'booking'
+          ? {
+              ...before,
+              message: after.message,
+              bookingPageId: after.bookingPageId,
+              countdownSeconds: after.countdownSeconds,
+            }
+          : { ...before, message: after.message },
     );
+    // On to book takes the page it last had while it can still be used, else the first that can.
+    const pageId = usable.some((page) => page.id === kept.bookingPageId) ? kept.bookingPageId : usable[0]?.id;
+    if (next === 'booking' && pageId === undefined) return;
+    // The thank you and on to book share their words: the ones on screen carry over.
+    const message = after.kind === 'redirect' ? kept.message : after.message;
     onDraftChange((before) => ({
       ...before,
-      after: next === 'redirect' ? { kind: 'redirect', url: kept.url } : { kind: 'message', message: kept.message },
+      after:
+        next === 'redirect'
+          ? { kind: 'redirect', url: kept.url }
+          : next === 'booking' && pageId !== undefined
+            ? { kind: 'booking', bookingPageId: pageId, countdownSeconds: kept.countdownSeconds, message }
+            : { kind: 'message', message },
     }));
   };
 
-  const afterSummary =
-    after.kind === 'redirect'
-      ? shortUrl(after.url) === ''
-        ? strings.noAddressYet
-        : strings.sendsTo(shortUrl(after.url))
-      : strings.showsMessage;
-
+  const bookingPage = after.kind === 'booking' ? pageList.find((page) => page.id === after.bookingPageId) : undefined;
   // Where each question's answer goes: the target's attribute, or kept with the submission only.
   const isFiling = draft.targets.main !== undefined && target.objectName !== undefined;
   const objectName = target.objectName ?? '';
@@ -222,26 +252,20 @@ export function SettingsTab({
       ),
     };
   });
-  const filedCount = draft.questions.filter(
-    (question) => attributeTitle(question.filedOn?.attributeId) !== undefined,
-  ).length;
   // The object a submission goes to when the switch is turned on: People, else the first live object.
   const liveObjects = objects.filter((object) => !object.isArchived && object.access === 'write');
   const firstObject = liveObjects.find((object) => object.standardKey === 'people') ?? liveObjects[0];
-  const answersSummary = [
-    isFiling ? strings.answersSummary(objectName, filedCount) : strings.keptOnlySummary,
-    targetChanged ? strings.waitsForPublish : '',
-  ]
-    .filter((part) => part !== '')
-    .join(' · ');
 
   return (
     <>
       <Card
         title={strings.afterTitle}
-        description={[afterSummary, afterChanged ? strings.waitsForPublish : '']
-          .filter((part) => part !== '')
-          .join(' · ')}
+        {...(afterChanged ? { description: strings.waitsForPublish } : {})}
+        actions={
+          <InfoTip label={strings.afterTitle} example={strings.afterTipExample}>
+            {strings.afterTip}
+          </InfoTip>
+        }
       >
         <RadioGroup
           label={strings.afterChoice}
@@ -250,12 +274,78 @@ export function SettingsTab({
           value={after.kind}
           isReadOnly={isReadOnly}
           onChange={(value) => {
-            if (value === 'message' || value === 'redirect') choose(value);
+            if (value === 'message' || value === 'redirect' || value === 'booking') choose(value);
           }}
         >
           <Radio value="message">{strings.showMessage}</Radio>
           <Radio value="redirect">{strings.sendToAddress}</Radio>
+          <Radio
+            value="booking"
+            // Without a live page of their own to send visitors to, the choice says why it can't be picked.
+            isDisabled={after.kind !== 'booking' && usable.length === 0}
+            {...(after.kind !== 'booking' && usable.length === 0
+              ? { description: pages.status === 'error' ? strings.bookingPagesFailed : strings.noBookingPages }
+              : {})}
+          >
+            {strings.bookMeeting}
+          </Radio>
         </RadioGroup>
+        {after.kind !== 'booking' && usable.length === 0 && pages.status === 'ready' && !isReadOnly && (
+          <Link href={linksHref(slug)}>{strings.createBookingPage}</Link>
+        )}
+        {after.kind === 'booking' && (
+          <>
+            <Select
+              label={strings.bookingPage}
+              items={[
+                ...usable.map((page) => ({
+                  id: page.id,
+                  label: strings.pageItem(page.title, page.durations[0] ?? 30),
+                })),
+                // The page chosen before, now paused or no longer the reader's, stays shown, muted, with why.
+                ...(bookingPage !== undefined && !usable.includes(bookingPage)
+                  ? [
+                      {
+                        id: bookingPage.id,
+                        label: bookingPage.title,
+                        description: strings.pageNotUsable,
+                        isArchived: true,
+                      },
+                    ]
+                  : []),
+              ]}
+              value={after.bookingPageId}
+              isReadOnly={isReadOnly}
+              onChange={(id) => {
+                if (id === null) return;
+                onDraftChange((before) =>
+                  before.after.kind === 'booking'
+                    ? { ...before, after: { ...before.after, bookingPageId: id } }
+                    : before,
+                );
+              }}
+            />
+            <Select
+              label={strings.countdown}
+              hint={strings.bookingPreview(after.countdownSeconds)}
+              items={COUNTDOWNS.map((seconds) => ({
+                id: String(seconds),
+                label: seconds === 0 ? strings.countdownAtOnce : strings.countdownAfter(seconds),
+              }))}
+              value={String(after.countdownSeconds)}
+              isReadOnly={isReadOnly}
+              onChange={(id) => {
+                const seconds = Number(id);
+                if (!Number.isInteger(seconds)) return;
+                onDraftChange((before) =>
+                  before.after.kind === 'booking'
+                    ? { ...before, after: { ...before.after, countdownSeconds: seconds } }
+                    : before,
+                );
+              }}
+            />
+          </>
+        )}
         {after.kind === 'redirect' ? (
           <Field
             label={strings.redirectUrl}
@@ -272,18 +362,26 @@ export function SettingsTab({
           <Field
             label={strings.thankYou}
             placeholder={strings.thankYouDefault}
+            {...(after.kind === 'booking' ? { hint: strings.bookingThankYouHint } : {})}
             isMultiline
             showCounter
             value={after.message}
             maxLength={2_000}
             isReadOnly={isReadOnly}
             onChange={(message) => {
-              onDraftChange((before) => ({ ...before, after: { kind: 'message', message } }));
+              onDraftChange((before) => ({
+                ...before,
+                after: before.after.kind === 'booking' ? { ...before.after, message } : { kind: 'message', message },
+              }));
             }}
           />
         )}
       </Card>
-      <Card title={strings.answersTitle} description={answersSummary} isBusy={isRetargeting}>
+      <Card
+        title={strings.answersTitle}
+        {...(targetChanged ? { description: strings.waitsForPublish } : {})}
+        isBusy={isRetargeting}
+      >
         <Switch
           label={strings.addToCrmSwitch}
           description={isFiling ? strings.addToCrmOn(objectName, matchTitle) : strings.addToCrmOff}

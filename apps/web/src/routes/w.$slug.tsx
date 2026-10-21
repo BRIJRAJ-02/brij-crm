@@ -2,6 +2,8 @@ import { isDataError } from '@crm/data';
 import { LoadingNow } from '@crm/ui';
 import { createFileRoute, Outlet, redirect, useRouter, type ErrorComponentProps } from '@tanstack/react-router';
 import { signInHref } from '../features/auth/redirect.ts';
+import { CommandMenuProvider } from '../features/command/CommandMenuProvider.tsx';
+import { UnreadTitle } from '../features/inbox/UnreadTitle.tsx';
 import { failedPage, missingPage, pendingPage } from '../features/workspace/ObjectScreen.tsx';
 import { strings } from '../features/workspace/strings.ts';
 import { useWorkspaceName, WorkspacePage } from '../features/workspace/WorkspacePage.tsx';
@@ -23,10 +25,13 @@ export const Route = createFileRoute('/w/$slug')({
   loader: async ({ context, params }) => {
     const workspaceName = context.me.workspaces.find((workspace) => workspace.slug === params.slug)?.name;
     try {
-      // The person's role and permissions come with the objects (spec 0009): screens hide what they can't use.
+      // The person's role and permissions come with the objects (spec 0009): screens hide what they can't use. Their
+      // own sidebar comes in the same round (spec 0034, AC-936), so it never draws the default order first; a failed
+      // sidebar read draws the defaults rather than failing the workspace.
       const [objects, access] = await Promise.all([
         context.data.objects.list(params.slug),
         context.data.access.mine(params.slug),
+        context.data.nav.load(params.slug).catch(() => undefined),
       ]);
       return { workspaceName: workspaceName ?? params.slug, objects, access };
     } catch (error) {
@@ -47,10 +52,18 @@ export const Route = createFileRoute('/w/$slug')({
 
 function WorkspaceRoute() {
   const { objects } = Route.useLoaderData();
+  const { slug } = Route.useParams();
   if (objects === undefined) {
     return <WorkspacePage page={missingPage(strings.workspaceMissingTitle, strings.workspaceMissingText)} />;
   }
-  return <Outlet />;
+  // The command menu (spec 0039): ⌘K and `/` on every page inside the workspace, and `useCommandMenu()` for the
+  // sidebar's Quick actions and search. The unread count rides in the tab's title (spec 0038).
+  return (
+    <CommandMenuProvider slug={slug}>
+      <UnreadTitle slug={slug} />
+      <Outlet />
+    </CommandMenuProvider>
+  );
 }
 
 function WorkspaceError({ error }: ErrorComponentProps) {

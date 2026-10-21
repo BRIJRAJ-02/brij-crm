@@ -6,6 +6,7 @@
 import * as z from 'zod';
 import { ANSWER_TYPES } from './answer-types.ts';
 import { Uuid } from '../values/ids.ts';
+import { SubmitContext } from './context.ts';
 
 /** The languages a hosted form speaks (spec 0023, value sourcing); English for anything missing. */
 export const FORM_LANGUAGES = ['en', 'es', 'fr', 'de', 'pt', 'it', 'nl', 'hi'] as const;
@@ -19,6 +20,8 @@ export const PublicQuestion = z.object({
   label: z.string(),
   answerType: z.enum(ANSWER_TYPES),
   choices: z.array(z.string()).optional(),
+  /** Each choice's stable key, in the choices' order: the option value a site's own form posts. */
+  choiceKeys: z.array(z.string()).optional(),
   placeholder: z.string().optional(),
   required: z.boolean(),
 });
@@ -101,14 +104,29 @@ export const SubmitBody = z.object({
   company_url: z.string().max(1_000).optional(),
   ticket: z.string().max(FILL_TICKET_MAX).optional(),
   fillMs: z.number().int().min(0).max(86_400_000).optional(),
+  /** Where it came from (the embed script or the hosted page): checked field by field, a bad one dropped, never the lead. */
+  context: SubmitContext.optional(),
 });
 /** The submit body. */
 export type SubmitBody = z.input<typeof SubmitBody>;
 
-/** What the visitor gets next (AC-570): the thank you, or where to go. */
+/**
+ * What the visitor gets next (AC-570, AC-1057): the thank you, where to go,
+ * or the booking page to go on to after `countdownSeconds` (0: at once). The
+ * booking `url` is same origin (`/b/<page>?p=<token>`), its token signed by
+ * the server and holding the submission id and the page id only: nothing
+ * personal rides in the link (the page asks the API for the name and email).
+ */
 export const SubmitNext = z.discriminatedUnion('kind', [
   z.object({ kind: z.literal('message'), text: z.string(), offersMeeting: z.boolean().optional() }),
   z.object({ kind: z.literal('redirect'), url: z.string() }),
+  z.object({
+    kind: z.literal('booking'),
+    url: z.string(),
+    countdownSeconds: z.number().int().min(0).max(30),
+    /** The thank you's own words, shown above the countdown when the form has them. */
+    text: z.string(),
+  }),
 ]);
 /** What the visitor gets next. */
 export type SubmitNext = z.infer<typeof SubmitNext>;

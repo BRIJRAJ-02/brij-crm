@@ -1,6 +1,7 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
 import { expect, fn, userEvent } from 'storybook/test';
 import { Button } from '../../atoms/Button/Button.tsx';
+import { Card } from '../../molecules/Card/Card.tsx';
 import { EmptyState } from '../../molecules/EmptyState/EmptyState.tsx';
 import { Stage } from '../../workbench/Stage/Stage.tsx';
 import { BookingList, type BookingListGroup } from './BookingList.tsx';
@@ -105,5 +106,73 @@ export const Colleagues: Story = {
   play: async ({ canvas }) => {
     await expect(canvas.getAllByText(/^Sam Lee and/u)).toHaveLength(2);
     await expect(canvas.queryByText(/^You and/u)).not.toBeInTheDocument();
+  },
+};
+
+/** Home's Today, in its Card: the card is the frame; one day's bookings and the member's own events, the time in a narrow date column; an event has no guest, so no "You and" line; an all day event has no length. */
+export const Agenda: Story = {
+  render: (args) => (
+    <Stage width="fill">
+      <Card title="Today">
+        <BookingList
+          {...args}
+          label="Today"
+          placement="card"
+          groups={[
+            {
+              id: 'earlier',
+              label: 'Earlier',
+              rows: [{ id: 'standup', date: '9:00 AM', time: '15 min', title: 'Team standup' }],
+            },
+            {
+              id: 'next',
+              label: 'Coming up',
+              rows: [
+                { id: 'offsite', date: 'All day', time: '', title: 'Offsite' },
+                {
+                  id: 'grace',
+                  date: '4:00 PM',
+                  time: '30 min',
+                  join: { href: 'https://meet.google.com/abc-defg-hij', provider: 'Google Meet' },
+                  title: 'Quick chat',
+                  guestName: 'Grace Hopper',
+                },
+              ],
+            },
+          ]}
+        />
+      </Card>
+    </Stage>
+  ),
+  play: async ({ canvas }) => {
+    // The who line is one element holding "You and" and the guest's name.
+    await expect(canvas.getAllByText(/^You and/)).toHaveLength(1);
+    await expect(canvas.getByRole('button', { name: 'Team standup' })).toBeInTheDocument();
+    await expect(canvas.getByText('All day')).toBeInTheDocument();
+  },
+};
+
+/** Home's Today on a phone: under 320px of card the time sits above the meeting. */
+export const AgendaNarrow: Story = {
+  render: (args) => (
+    <Stage width="narrow">
+      <Card title="Today">
+        <BookingList
+          {...args}
+          label="Today"
+          placement="card"
+          groups={[
+            {
+              id: 'next',
+              label: 'Coming up',
+              rows: [{ id: 'grace', date: '4:00 PM', time: '30 min', title: 'Quick chat', guestName: 'Grace Hopper' }],
+            },
+          ]}
+        />
+      </Card>
+    </Stage>
+  ),
+  play: async ({ canvas }) => {
+    await expect(canvas.getByRole('button', { name: 'Quick chat' })).toBeInTheDocument();
   },
 };

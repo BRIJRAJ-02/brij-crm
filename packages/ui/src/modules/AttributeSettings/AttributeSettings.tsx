@@ -544,6 +544,7 @@ function AttributeForm({
         value={typeKey}
         onChange={chooseType}
         {...(isCreating ? {} : { isReadOnly: true, readOnlyReason: strings.typeLater })}
+        {...(isCreating && strings.typeHints[type] !== undefined ? { hint: strings.typeHints[type] } : {})}
         {...(errorOf('type') === undefined ? {} : { error: errorOf('type') })}
       />
       <TypeSettings

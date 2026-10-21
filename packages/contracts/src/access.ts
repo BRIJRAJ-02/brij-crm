@@ -45,6 +45,8 @@ export const PERMISSIONS = {
   // Booking pages (spec 0025): your own pages, and every page in the workspace (team pages, others').
   'booking.manage': { message: 'Your role can’t make booking pages.' },
   'booking.admin': { message: 'Only workspace owners and admins can change other people’s booking pages.' },
+  // Comments (spec 0038, decision 4): removing another member's comment. Nobody edits another's.
+  'comments.manage': { message: 'Only workspace owners and admins can delete other people’s comments.' },
 } as const satisfies Record<string, { readonly message: string }>;
 
 /** Every permission's name, in catalog order. */

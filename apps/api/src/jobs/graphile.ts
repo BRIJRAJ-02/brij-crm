@@ -26,12 +26,13 @@
 import { QueuePayload } from '@crm/contracts';
 import type { Runner } from '@crm/core';
 import type { CalendarSyncInput, CalendarSyncOutcome, DailyCleanupInput, DailyCleanupReport } from '@crm/core/system';
-import type { QueueConnection } from '@crm/db';
+import type { DigestMember, QueueConnection } from '@crm/db';
 import { Logger, run, type Runner as GraphileRunner, type Task } from 'graphile-worker';
 import * as z from 'zod';
 import { errorFields } from '../log.ts';
 import { BOOKING_MAIL_TASK } from './booking-mail.ts';
 import { EMAIL_TASK, EmailPayload, type EmailRun, type EmailTry } from './email.ts';
+import { NOTIFICATION_EMAIL_TASK } from './notification-email.ts';
 
 /** The two lanes: their task and how many slices each runs at once (AC-108). */
 export const LANES = {
@@ -50,6 +51,9 @@ export const DAILY_CRON_HOUR_UTC = 3;
 /** The daily cleanup's task (light lane): the cron's, and its continuations'. */
 export const DAILY_TASK = 'crm_cron_daily';
 
+/** The digest fan out's name on Graphile's queue. */
+export const DIGEST_TASK = 'crm_notification_digest';
+
 /** Calendar sync's task (spec 0024, light lane): one connection's sync. */
 export const CALENDAR_TASK = 'crm_calendar_sync';
 
@@ -59,7 +63,14 @@ export const CALENDAR_TASK = 'crm_calendar_sync';
  * them, and `EMAIL_TASK` when queued email is on (`runnerTasks`); off, their
  * rows wait and never wake a worker that won't run them.
  */
-export const RUNNER_TASKS: readonly string[] = [LANES.heavy.task, LANES.light.task, DAILY_TASK, BOOKING_MAIL_TASK];
+export const RUNNER_TASKS: readonly string[] = [
+  LANES.heavy.task,
+  LANES.light.task,
+  DAILY_TASK,
+  BOOKING_MAIL_TASK,
+  NOTIFICATION_EMAIL_TASK,
+  DIGEST_TASK,
+];
 
 /**
  * The tasks this worker runs: calendar sync's when it is on, and queued
@@ -152,6 +163,12 @@ export interface JobRunnersOptions {
    */
   readonly email?: (payload: unknown, attempt: EmailTry) => Promise<EmailRun>;
   /**
+   * Notifications emails (spec 0038, milestone 3): one member's email
+   * (`runNotificationEmail` with the worker's deps). With it, the light runner
+   * takes `crm_notification_email`; it throws plainly for a retry.
+   */
+  readonly notificationEmail?: (payload: unknown) => Promise<void>;
+  /**
    * Hears every task call start and end (the worker's idle clock starts
    * again, spec 0008's sleep): a slice, or the daily task.
    */
@@ -166,6 +183,61 @@ export interface JobRunners {
   stop(): Promise<void>;
   /** How many task calls are in flight now: the worker never sleeps while one runs. */
   busy(): number;
+}
+
+// The daily digest's hourly fan out (spec 0038, milestone 4, AC-1178):
+// `crm_notification_digest`, on the light runner's crontab every hour. It
+// reads, on the worker's own login, the members whose digest is on and whose
+// day has reached 08:00 in their time zone without one
+// (`crm_notification_digests_due`, ids only), and queues each one's digest as
+// a `crm_notification_email` with `digest`, keyed per member, so a member has
+// one waiting at most. The email claims the member's day before it goes, so a
+// second hour, or a run after a sleep, never sends a second digest that day.
+
+/**
+ * The crontab line: every hour on the hour, with an hour of fill (a missed
+ * hour runs once on waking), its own identifier, and 5 tries.
+ */
+export const DIGEST_CRONTAB = `0 * * * * ${DIGEST_TASK} ?fill=1h&id=notification_digest&max=5`;
+
+/** How many members one page names (the function caps it at 500), and how many pages one call reads. */
+const DIGEST_PAGE = 500;
+const DIGEST_PAGES_A_CALL = 10;
+
+/** The payload: the cron's, or a continuation's (the last member a call reached). Ids only. */
+const DigestPayload = z.object({
+  after: z.strictObject({ workspaceId: z.uuid(), memberId: z.uuid() }).optional(),
+});
+
+/** Queues every due member's digest, a page at a time; a call that reads its pages hands the rest on. */
+export function digestTask(
+  queue: Pick<QueueConnection, 'digestsDue'>,
+  log: { info(message: string, fields?: Record<string, unknown>): void },
+): Task {
+  return async (payload, helpers) => {
+    const parsed = DigestPayload.safeParse(payload ?? {});
+    let after: DigestMember | undefined = parsed.success ? parsed.data.after : undefined;
+    let queued = 0;
+    for (let page = 0; page < DIGEST_PAGES_A_CALL; page += 1) {
+      const due = await queue.digestsDue(after, DIGEST_PAGE);
+      for (const member of due) {
+        await helpers.addJob(
+          NOTIFICATION_EMAIL_TASK,
+          { workspaceId: member.workspaceId, memberId: member.memberId, digest: true },
+          { jobKey: `crm-digest:${member.workspaceId}:${member.memberId}`, maxAttempts: 5 },
+        );
+        queued += 1;
+      }
+      after = due.at(-1) ?? after;
+      if (due.length < DIGEST_PAGE) {
+        log.info('notification.digest.queued', { queued });
+        return;
+      }
+    }
+    // More than a call reads: the rest in a continuation, after the last member reached.
+    await helpers.addJob(DIGEST_TASK, { after }, { jobKey: 'crm-digest-continue', maxAttempts: 5 });
+    log.info('notification.digest.continues', { queued });
+  };
 }
 
 /** A task that counts itself in flight and tells `onActivity` when it starts and ends. */
@@ -373,6 +445,7 @@ export async function startJobRunners(options: JobRunnersOptions): Promise<JobRu
       const calendar = lane === LANES.light ? options.calendar : undefined;
       const bookingMail = lane === LANES.light ? options.bookingMail : undefined;
       const email = lane === LANES.light ? options.email : undefined;
+      const notificationEmail = lane === LANES.light ? options.notificationEmail : undefined;
       runners.push(
         watch(
           await run({
@@ -395,8 +468,26 @@ export async function startJobRunners(options: JobRunnersOptions): Promise<JobRu
               ...(email === undefined
                 ? {}
                 : { [EMAIL_TASK]: counted(emailTask(options, email), inFlight, options.onActivity) }),
+              ...(notificationEmail === undefined
+                ? {}
+                : {
+                    [NOTIFICATION_EMAIL_TASK]: counted(
+                      (payload) => notificationEmail(payload),
+                      inFlight,
+                      options.onActivity,
+                    ),
+                    [DIGEST_TASK]: counted(digestTask(options.queue, options.log), inFlight, options.onActivity),
+                  }),
             },
-            ...(daily === undefined ? {} : { crontab: DAILY_CRONTAB }),
+            // The daily cleanup's line, and the digest's hourly one beside the email task that sends it.
+            ...(daily === undefined && notificationEmail === undefined
+              ? {}
+              : {
+                  crontab: [
+                    ...(daily === undefined ? [] : [DAILY_CRONTAB]),
+                    ...(notificationEmail === undefined ? [] : [DIGEST_CRONTAB]),
+                  ].join('\n'),
+                }),
             // Completions and failures go through Graphile's batcher (with no wait), which a stop flushes before
             // the pool closes: unbatched, they're sent and not awaited, so a stop right after a slice handed its job
             // over could close the pool first and leave the finished call's row locked (key cleared, so harmless,

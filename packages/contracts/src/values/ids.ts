@@ -12,6 +12,11 @@ export const Uuid = z.uuid().toLowerCase();
 /** A UUID, in lower case. */
 export type Uuid = z.infer<typeof Uuid>;
 
+/** A UUID in any case, answered in lower case, and refused with `message` when it isn't one (a choice the person made). */
+export function uuidWith(message: string): z.ZodUUID {
+  return z.uuid({ message }).toLowerCase();
+}
+
 /** A UUID v7 a client mints for a new row, answered in lower case, and refused with `message` when it isn't one. */
 export function uuidV7(message: string): z.ZodUUID {
   return z.uuid({ version: 'v7', message }).toLowerCase();

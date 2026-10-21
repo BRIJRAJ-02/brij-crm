@@ -368,9 +368,26 @@ export function createCalendarStore(deps: CalendarDeps) {
         return false;
       }
     },
-    /** Disconnects a connection (AC-599): gone from the list at once, back with a toast if refused. */
-    async remove(workspace: string, connectionId: string): Promise<boolean> {
+    /**
+     * Disconnects a connection (AC-599): gone from the list at once, back with a toast if refused. From a confirm
+     * (`asksFirst`), the row stays until the server answers and a refusal is thrown as a DataError, for the
+     * confirm to show inside itself, with no toast behind it.
+     */
+    async remove(
+      workspace: string,
+      connectionId: string,
+      options: { readonly asksFirst?: boolean } = {},
+    ): Promise<boolean> {
       const view = viewOf(workspace);
+      if (options.asksFirst === true) {
+        try {
+          await deps.api.remove({ workspace, connectionId, mutationId: deps.mintId() });
+        } catch (error) {
+          throw toDataError(error);
+        }
+        view.reload();
+        return true;
+      }
       const undo = view.patch(connectionId, () => []);
       try {
         await deps.api.remove({ workspace, connectionId, mutationId: deps.mintId() });

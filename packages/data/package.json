@@ -6,6 +6,7 @@
     ".": "./src/index.ts",
     "./records": "./src/records/index.ts",
     "./react": "./src/react.ts",
+    "./navigation": "./src/navigation/index.ts",
     "./public-form": "./src/public-form/client.ts",
     "./forms": "./src/forms/builder.ts",
     "./booking": "./src/booking/public.ts",

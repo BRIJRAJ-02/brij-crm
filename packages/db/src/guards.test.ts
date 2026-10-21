@@ -131,7 +131,7 @@ describe('every tenant table', () => {
 });
 
 describe('the holes in row level security (crm_search_text, spec 0004 AC-24; the outbox relay, spec 0005; the daily cleanup, spec 0008)', () => {
-  it('has exactly twelve security definer functions, each owned by its own narrow role', async () => {
+  it('has exactly fourteen security definer functions, each owned by its own narrow role', async () => {
     const definers = await owner.query<{ name: string; owner: string }>(`
       select p.proname as name, pg_get_userbyid(p.proowner) as owner
       from pg_proc p join pg_namespace n on n.oid = p.pronamespace
@@ -146,11 +146,14 @@ describe('the holes in row level security (crm_search_text, spec 0004 AC-24; the
       { name: 'crm_enqueue_calendar_sync', owner: 'crm_queue' },
       { name: 'crm_enqueue_email', owner: 'crm_queue' },
       { name: 'crm_enqueue_job', owner: 'crm_queue' },
+      { name: 'crm_enqueue_notification_email', owner: 'crm_queue' },
       { name: 'crm_form_by_key', owner: 'crm_form_lookup' },
       { name: 'crm_invitation_by_token', owner: 'crm_invitation_lookup' },
       { name: 'crm_invitation_open_for', owner: 'crm_invitation_lookup' },
+      { name: 'crm_notification_digests_due', owner: 'crm_sweep' },
       { name: 'crm_outbox_prune', owner: 'crm_relay' },
       { name: 'crm_outbox_workspaces', owner: 'crm_relay' },
+      { name: 'crm_search_similar', owner: 'crm_search' },
       { name: 'crm_search_text', owner: 'crm_search' },
       { name: 'crm_workspace_ids', owner: 'crm_sweep' },
     ]);
@@ -169,11 +172,18 @@ describe('the holes in row level security (crm_search_text, spec 0004 AC-24; the
       { name: 'crm_enqueue_calendar_sync', config: ['search_path=pg_catalog, pg_temp'], atomic: false },
       { name: 'crm_enqueue_email', config: ['search_path=pg_catalog, pg_temp'], atomic: false },
       { name: 'crm_enqueue_job', config: ['search_path=pg_catalog, pg_temp'], atomic: false },
+      { name: 'crm_enqueue_notification_email', config: ['search_path=pg_catalog, pg_temp'], atomic: false },
       { name: 'crm_form_by_key', config: ['search_path=pg_catalog, pg_temp'], atomic: true },
       { name: 'crm_invitation_by_token', config: ['search_path=pg_catalog, pg_temp'], atomic: true },
       { name: 'crm_invitation_open_for', config: ['search_path=pg_catalog, pg_temp'], atomic: true },
+      { name: 'crm_notification_digests_due', config: ['search_path=pg_catalog, pg_temp'], atomic: true },
       { name: 'crm_outbox_prune', config: ['search_path=pg_catalog, pg_temp', 'lock_timeout=1s'], atomic: true },
       { name: 'crm_outbox_workspaces', config: ['search_path=pg_catalog, pg_temp'], atomic: true },
+      {
+        name: 'crm_search_similar',
+        config: ['search_path=pg_catalog, pg_temp', 'pg_trgm.word_similarity_threshold=0.5'],
+        atomic: true,
+      },
       { name: 'crm_search_text', config: ['search_path=pg_catalog, pg_temp'], atomic: true },
       { name: 'crm_workspace_ids', config: ['search_path=pg_catalog, pg_temp'], atomic: true },
     ]);
@@ -202,7 +212,12 @@ describe('the holes in row level security (crm_search_text, spec 0004 AC-24; the
   // prune is the worker's alone from the start (spec 0007, milestone 3), and so is the daily cleanup's workspace
   // listing (spec 0008, milestone 3).
   it.each([
-    ['crm_search', ['crm_search_text'], ['crm_search_text(uuid, text, integer)'], ['app']],
+    [
+      'crm_search',
+      ['crm_search_text', 'crm_search_similar'],
+      ['crm_search_text(uuid, text, integer)', 'crm_search_similar(uuid[], text, integer)'],
+      ['app', 'app'],
+    ],
     [
       'crm_relay',
       ['crm_outbox_workspaces', 'crm_outbox_prune'],
@@ -211,16 +226,28 @@ describe('the holes in row level security (crm_search_text, spec 0004 AC-24; the
     ],
     [
       'crm_queue',
-      ['crm_enqueue_job', 'crm_enqueue_calendar_sync', 'crm_enqueue_booking_mail', 'crm_enqueue_email'],
+      [
+        'crm_enqueue_job',
+        'crm_enqueue_calendar_sync',
+        'crm_enqueue_booking_mail',
+        'crm_enqueue_email',
+        'crm_enqueue_notification_email',
+      ],
       [
         'crm_enqueue_job(uuid, timestamp with time zone)',
         'crm_enqueue_calendar_sync(uuid, timestamp with time zone)',
         'crm_enqueue_booking_mail(uuid, text)',
         'crm_enqueue_email(uuid)',
+        'crm_enqueue_notification_email(uuid)',
       ],
-      ['app', 'app', 'app', 'app'],
+      ['app', 'app', 'app', 'app', 'app'],
     ],
-    ['crm_sweep', ['crm_workspace_ids'], ['crm_workspace_ids(uuid, integer)'], ['worker']],
+    [
+      'crm_sweep',
+      ['crm_workspace_ids', 'crm_notification_digests_due'],
+      ['crm_workspace_ids(uuid, integer)', 'crm_notification_digests_due(uuid, uuid, integer)'],
+      ['worker', 'worker'],
+    ],
     ['crm_form_lookup', ['crm_form_by_key'], ['crm_form_by_key(text)'], ['app']],
     [
       'crm_invitation_lookup',
@@ -582,7 +609,7 @@ describe('the holes in row level security (crm_search_text, spec 0004 AC-24; the
   });
 
   describe('crm_workspace_ids (spec 0008, milestone 3, AC-112, AC-115)', () => {
-    it('gives crm_sweep select on workspaces.id and workspaces.deleted_at and nothing else', async () => {
+    it('gives crm_sweep select on workspaces.id and deleted_at, and the digest’s columns, and nothing else', async () => {
       // From the catalog, by every route, as for crm_relay: no table privilege, two column grants, no role.
       const tables = await owner.query<{ table: string }>(`
         select n.nspname || '.' || c.relname as table
@@ -599,6 +626,14 @@ describe('the holes in row level security (crm_search_text, spec 0004 AC-24; the
         where a.grantee = 'crm_sweep'::regrole order by 1
       `);
       expect(columns.rows).toEqual([
+        { column: 'members.id', privilege: 'SELECT' },
+        { column: 'members.status', privilege: 'SELECT' },
+        { column: 'members.workspace_id', privilege: 'SELECT' },
+        { column: 'notification_settings.digest', privilege: 'SELECT' },
+        { column: 'notification_settings.digest_sent_on', privilege: 'SELECT' },
+        { column: 'notification_settings.member_id', privilege: 'SELECT' },
+        { column: 'notification_settings.time_zone', privilege: 'SELECT' },
+        { column: 'notification_settings.workspace_id', privilege: 'SELECT' },
         { column: 'workspaces.deleted_at', privilege: 'SELECT' },
         { column: 'workspaces.id', privilege: 'SELECT' },
       ]);
@@ -865,6 +900,46 @@ describe('isolation', () => {
     });
   });
 
+  it("reads none of another workspace's recent items, and refuses one for its member (spec 0039, AC-1103)", async () => {
+    const a = await workspaceWithMember('recents-a');
+    const b = await workspaceWithMember('recents-b');
+    const visit = (workspaceId: string, memberId: string) =>
+      db.withWorkspace(workspaceId, (tx) =>
+        tx.execute(
+          sql`insert into member_recents (workspace_id, member_id, kind, target_id) values (${workspaceId}, ${memberId}, 'record', ${randomUUID()})`,
+        ),
+      );
+    await visit(a.workspaceId, a.memberId);
+    await visit(b.workspaceId, b.memberId);
+    const fromA = await db.withWorkspace(a.workspaceId, (tx) =>
+      tx.execute<{ member_id: string }>(sql`select member_id from member_recents`),
+    );
+    expect(fromA.rows).toEqual([{ member_id: a.memberId }]);
+    // A row in A for B's member: the composite key finds no such member in A.
+    await expect(visit(a.workspaceId, b.memberId)).rejects.toMatchObject({
+      cause: { code: '23503', constraint: 'member_recents_member' },
+    });
+    // Only records and views.
+    await expect(
+      db.withWorkspace(a.workspaceId, (tx) =>
+        tx.execute(
+          sql`insert into member_recents (workspace_id, member_id, kind, target_id) values (${a.workspaceId}, ${a.memberId}, 'task', ${randomUUID()})`,
+        ),
+      ),
+    ).rejects.toMatchObject({ cause: { code: '23514', constraint: 'member_recents_kind' } });
+  });
+
+  it('finds nothing through crm_search_similar with no workspace set (spec 0039)', async () => {
+    const client = new pg.Client({ connectionString: appUrl });
+    await client.connect();
+    try {
+      const found = await client.query('select * from crm_search_similar(array[gen_random_uuid()], $1, 10)', ['acme']);
+      expect(found.rowCount).toBe(0);
+    } finally {
+      await client.end();
+    }
+  });
+
   it("reads none of another workspace's tasks or task links, and refuses a link to its record (spec 0019)", async () => {
     /** A task linking one record, made inside the workspace. */
     const tasked = async (workspaceId: string) => {
@@ -943,6 +1018,73 @@ describe('isolation', () => {
     await expect(
       db.withWorkspace(a.workspaceId, (tx) => tx.execute(sql`delete from records where id = ${inA.recordId}`)),
     ).rejects.toMatchObject({ cause: { code: '23503', constraint: 'notes_record' } });
+  });
+
+  it("reads none of another workspace's comments or notifications, and refuses either on its record (spec 0038, AC-1182)", async () => {
+    /** A comment on one record, a reaction, an earlier version and a notification for the member, made inside the workspace. */
+    const commented = async (workspaceId: string, memberId: string) => {
+      const objectId = await objectIn(workspaceId);
+      const recordId = randomUUID();
+      const commentId = randomUUID();
+      await db.withWorkspace(workspaceId, async (tx) => {
+        await tx.execute(
+          sql`insert into records (workspace_id, id, object_id, created_by_type, updated_by_type) values (${workspaceId}, ${recordId}, ${objectId}, 'system', 'system')`,
+        );
+        await tx.execute(
+          sql`insert into comments (workspace_id, id, record_id, thread_id, body, created_by_type, updated_by_type) values (${workspaceId}, ${commentId}, ${recordId}, ${commentId}, 'Hello', 'system', 'system')`,
+        );
+        await tx.execute(
+          sql`insert into comment_versions (workspace_id, comment_id, version, body, created_at, created_by_type) values (${workspaceId}, ${commentId}, 1, 'Hi', now(), 'system')`,
+        );
+        await tx.execute(
+          sql`insert into comment_reactions (workspace_id, comment_id, member_id, emoji) values (${workspaceId}, ${commentId}, ${memberId}, '👍')`,
+        );
+        await tx.execute(
+          sql`insert into notifications (workspace_id, member_id, kind, actor_type, record_id, thread_id, comment_id) values (${workspaceId}, ${memberId}, 'mention', 'system', ${recordId}, ${commentId}, ${commentId})`,
+        );
+        await tx.execute(
+          sql`insert into notification_settings (workspace_id, member_id, email_replies) values (${workspaceId}, ${memberId}, true)`,
+        );
+      });
+      return { recordId, commentId };
+    };
+    const a = await workspaceWithMember('comments-a');
+    const b = await workspaceWithMember('comments-b');
+    const inA = await commented(a.workspaceId, a.memberId);
+    const inB = await commented(b.workspaceId, b.memberId);
+    const fromA = await db.withWorkspace(a.workspaceId, async (tx) => ({
+      comments: (await tx.execute<{ id: string }>(sql`select id from comments`)).rows,
+      versions: (await tx.execute<{ id: string }>(sql`select comment_id as id from comment_versions`)).rows,
+      reactions: (await tx.execute<{ id: string }>(sql`select comment_id as id from comment_reactions`)).rows,
+      notifications: (await tx.execute<{ id: string }>(sql`select comment_id as id from notifications`)).rows,
+      settings: (await tx.execute<{ id: string }>(sql`select member_id as id from notification_settings`)).rows,
+    }));
+    expect(fromA).toEqual({
+      comments: [{ id: inA.commentId }],
+      versions: [{ id: inA.commentId }],
+      reactions: [{ id: inA.commentId }],
+      notifications: [{ id: inA.commentId }],
+      settings: [{ id: a.memberId }],
+    });
+    // A comment in A on B's record, or a notification in A for B's member: the composite keys find no such row in A.
+    await expect(
+      db.withWorkspace(a.workspaceId, (tx) =>
+        tx.execute(
+          sql`insert into comments (workspace_id, id, record_id, thread_id, body, created_by_type, updated_by_type) values (${a.workspaceId}, ${inB.commentId}, ${inB.recordId}, ${inB.commentId}, 'Hello', 'system', 'system')`,
+        ),
+      ),
+    ).rejects.toMatchObject({ cause: { code: '23503', constraint: 'comments_record' } });
+    await expect(
+      db.withWorkspace(a.workspaceId, (tx) =>
+        tx.execute(
+          sql`insert into notifications (workspace_id, member_id, kind, actor_type, record_id, thread_id, comment_id) values (${a.workspaceId}, ${b.memberId}, 'mention', 'system', ${inA.recordId}, ${inA.commentId}, ${inA.commentId})`,
+        ),
+      ),
+    ).rejects.toMatchObject({ cause: { code: '23503', constraint: 'notifications_member' } });
+    // A record removed for good while it still has a comment fails: the key has no cascade (AC-1160).
+    await expect(
+      db.withWorkspace(a.workspaceId, (tx) => tx.execute(sql`delete from records where id = ${inA.recordId}`)),
+    ).rejects.toMatchObject({ cause: { code: '23503' } });
   });
 
   it("reads none of another workspace's calendar rows, and refuses a link to its record (spec 0024)", async () => {

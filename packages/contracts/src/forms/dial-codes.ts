@@ -31,3 +31,35 @@ export function toE164(country: string, national: string): string {
   if (national.trim().startsWith('+')) return `+${digits}`;
   return `+${code}${digits.replace(/^0+/, '')}`;
 }
+
+/** The country a code is read as when several share it: the North American plan is US, +7 is Russia, +44 the UK. */
+const SHARED_CODE_HOMES: ReadonlyMap<string, string> = new Map([
+  ['1', 'US'],
+  ['7', 'RU'],
+  ['44', 'GB'],
+  ['61', 'AU'],
+  ['212', 'MA'],
+  ['262', 'RE'],
+  ['358', 'FI'],
+  ['39', 'IT'],
+  ['47', 'NO'],
+  ['590', 'GP'],
+  ['599', 'CW'],
+  ['64', 'NZ'],
+]);
+
+/**
+ * The country an international number (`+` and digits) was dialled to, by
+ * its longest matching code; a code several countries share reads as its
+ * home (`+1` is US). Undefined when no code matches.
+ */
+export function countryOfE164(number: string): string | undefined {
+  const digits = number.replace(/^\+/, '');
+  for (let length = 4; length >= 1; length -= 1) {
+    const code = digits.slice(0, length);
+    const home = SHARED_CODE_HOMES.get(code);
+    if (home !== undefined) return home;
+    for (const [country, dial] of DIAL_CODES) if (dial === code) return country;
+  }
+  return undefined;
+}

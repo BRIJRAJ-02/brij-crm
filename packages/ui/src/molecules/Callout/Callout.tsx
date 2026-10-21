@@ -25,6 +25,12 @@ export interface CalloutProps {
    * announced, as an alert.
    */
   readonly isAnnounced?: boolean;
+  /**
+   * A danger callout the person caused by their own action (a form's list of
+   * answers to fix after Send): said politely, as a status, rather than as an
+   * alert, since focus already went to the first problem.
+   */
+  readonly isPolite?: boolean;
   /** One short line in bold. */
   readonly title?: string;
   /** The message: what it means and what to do. */
@@ -50,11 +56,12 @@ export function Callout({
   tone = 'info',
   placement = 'inline',
   isAnnounced = false,
+  isPolite = false,
   title,
   children,
   actions,
 }: CalloutProps) {
-  const role = tone === 'danger' ? 'alert' : isAnnounced ? 'status' : 'note';
+  const role = tone === 'danger' && !isPolite ? 'alert' : isAnnounced || isPolite ? 'status' : 'note';
   // A status region announces what changes inside it, not what it was born with: its words go in a frame later.
   const [isFilled, setFilled] = useState(role !== 'status');
   useEffect(() => {

@@ -235,7 +235,7 @@ export function PageEditor({
 
   return (
     <WorkspacePage
-      currentPage="captures"
+      currentPage="booking_pages"
       page={{
         topBar: (
           <TopBar
@@ -488,7 +488,7 @@ export function PageEditor({
 export function PageEditorPending() {
   return (
     <WorkspacePage
-      currentPage="captures"
+      currentPage="booking_pages"
       page={{
         topBar: <TopBar title={strings.listLabel} icon="link" isLoading />,
         body: (

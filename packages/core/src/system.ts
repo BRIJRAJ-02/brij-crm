@@ -46,3 +46,5 @@ export type { ReseatDeps } from './rotation/reassign.ts';
 // signs the preferences link it draws into an optional email.
 export { finishEmail, loadEmail, type EmailOutcome, type EmailToSend, type LoadedEmail } from './emails/send.ts';
 export { emailLinkToken } from './emails/preferences.ts';
+export { prepareNotificationEmail, type PreparedNotificationEmail } from './notifications/email.ts';
+export { markEmailed, NOTIFICATION_EMAIL_MAX, queueNextEmail, releaseEmailed } from './notifications/inbox.ts';

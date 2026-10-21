@@ -10,7 +10,7 @@ The field set gives every attribute type exactly one display and one editor (spe
 
 Screens never import it; they render values through `AttributeDisplay` and `AttributeEditor` with a `FieldAttribute` of this type.
 
-- **Display**: a LinkChip to the URL itself; several values are a row of chips with "+N".
+- **Display**: a LinkChip to the URL itself; several values are a row of chips with "+N". On a card (a board card, a line of the timeline) the chip is flat, the link's text alone: a blue chip there read heavier than the words around it (the owner, 21 October 2026).
 - **Editor**: a Field checked on blur. Text without a protocol gets `https://`; only `http` and `https` links are taken, up to 2,048 characters; the scheme and host are lowercased and the path keeps its case.
 - **Text out / in** (copy, paste, CSV, the import preview): the URL / the same check.
 - **Filter operators**: is, contains, is empty, is not empty.

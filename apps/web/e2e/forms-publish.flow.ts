@@ -17,9 +17,9 @@ test.describe('a form’s first publish', () => {
     const tag = randomUUID().slice(0, 8);
     const slug = `publish-${tag}`;
     await newWorkspace(page, `publish-${tag}@example.com`, slug);
-    await page.goto(`/w/${slug}/captures/forms`);
+    await page.goto(`/w/${slug}/forms`);
     await page.getByRole('button', { name: 'New form' }).first().click();
-    await expect(page).toHaveURL(/\/captures\/forms\/[0-9a-f-]{36}/, { timeout: 30_000 });
+    await expect(page).toHaveURL(/\/forms\/[0-9a-f-]{36}/, { timeout: 30_000 });
 
     await page.getByRole('button', { name: 'Publish', exact: true }).click();
     const setUp = page.getByRole('dialog', { name: 'Set up your form' });
@@ -42,6 +42,6 @@ test.describe('a form’s first publish', () => {
     await expect(page.getByRole('dialog')).toHaveCount(0);
     // Publish left once the form went live; focus is on More actions, beside where it was.
     await expect(page.getByRole('button', { name: 'More actions' })).toBeFocused();
-    await expect(page.getByText(/Published · v1/)).toBeVisible();
+    await expect(page.getByText(/Live · v1/)).toBeVisible();
   });
 });

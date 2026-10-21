@@ -22,6 +22,16 @@ const TYPES = [
 
 type TypeCase = (typeof TYPES)[number];
 
+/** Dismisses every toast on screen, newest first. */
+async function dismissToasts(page: Page): Promise<void> {
+  const dismiss = page.getByRole('region', { name: 'Notifications' }).getByRole('button', { name: 'Dismiss' });
+  // By key: a toast slides while the one above it leaves, so a click would wait for it to stand still.
+  for (let left = await dismiss.count(); left > 0; left -= 1) {
+    await dismiss.first().press('Enter');
+    await expect(dismiss).toHaveCount(left - 1);
+  }
+}
+
 /** Opens New attribute, fills it in for one case, creates it and waits for the toast. */
 async function createAttribute(page: Page, each: TypeCase): Promise<void> {
   await page.getByRole('button', { name: 'New attribute' }).click();
@@ -49,6 +59,8 @@ async function createAttribute(page: Page, each: TypeCase): Promise<void> {
 }
 
 test('an owner adds, edits, moves, archives and restores attributes without setup', async ({ page }) => {
+  // Ten attributes made one by one, then the table: past the default minute at 375 wide.
+  test.slow();
   const tag = Date.now().toString(36);
   await newWorkspace(page, `attributes-${tag}@example.com`, `attributes-${tag}`);
   const slug = `attributes-${tag}`;
@@ -106,6 +118,8 @@ test('an owner adds, edits, moves, archives and restores attributes without setu
   await confirm.getByRole('button', { name: 'Archive Background' }).click();
   await expect(page.getByText('Background archived.')).toBeVisible();
   await expect(own.getByRole('row', { name: /Background/ })).toHaveCount(0);
+  // At 375 the toasts span the foot of the screen, over the Archived section: dismiss them, as a person would.
+  await dismissToasts(page);
   await page.getByRole('button', { name: /Archived/ }).click();
   await page.getByRole('button', { name: 'Restore' }).first().click();
   await expect(page.getByText(/restored\./)).toBeVisible();
