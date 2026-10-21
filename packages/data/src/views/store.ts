@@ -652,6 +652,15 @@ export function createViewsStore(deps: ViewsDeps) {
       servers.delete(bodyKey);
       layers.delete(bodyKey);
       bodies.get(bodyKey)?.set({ status: 'not-found' });
+      // The held list lets go of it now, and of the last opened mark on it, so the object's address can't land
+      // on it while the list is read again (the delete's own navigation to the address raced that read).
+      const list = lists.get(key(workspace, objectId));
+      const held = list?.get();
+      if (list !== undefined && held?.status === 'ready') {
+        const { lastOpenedViewId, ...rest } = held;
+        const views = held.views.filter((each) => each.id !== viewId);
+        list.set(lastOpenedViewId === viewId ? { ...rest, views } : { ...held, views });
+      }
       refreshList(workspace, objectId);
     },
     /**

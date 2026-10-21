@@ -39,11 +39,14 @@ function harness() {
   let now = 0;
   /** How the next layout save answers: the saved view, or a refusal. */
   const layout = { refuse: false };
+  /** While set, list reads wait for it: a read still on its way. */
+  const lists: { held?: Promise<void> } = {};
   const api: ViewsApi = {
-    list: () => {
+    list: async () => {
       reads.push('list');
+      await lists.held;
       const answer: ViewsList = { views: [...server.values()], defaultViewId: A };
-      return Promise.resolve(answer);
+      return answer;
     },
     get: ({ viewId }) => {
       reads.push(`get ${viewId}`);
@@ -117,7 +120,17 @@ function harness() {
     await new Promise((resolve) => setTimeout(resolve, 0));
   };
   const settle = () => new Promise((resolve) => setTimeout(resolve, 0));
-  return { server, reads, writes, refused, layout, store, advance, settle };
+  /** Holds list reads until the answer is called. */
+  const holdLists = () => {
+    const { promise, resolve } = Promise.withResolvers<undefined>();
+    lists.held = promise.then(() => {
+      delete lists.held;
+    });
+    return () => {
+      resolve(undefined);
+    };
+  };
+  return { server, reads, writes, refused, layout, store, advance, settle, holdLists };
 }
 
 const event = (viewIds: readonly string[], coarse = false) => ({
@@ -302,6 +315,35 @@ describe('the views store’s writes (milestone 2)', () => {
     await h.store.remove('acme', OBJECT, id);
     await h.settle();
     expect(body.getSnapshot().status).toBe('not-found');
+    expect(list.getSnapshot().views.map((each) => each.id)).not.toContain(id);
+  });
+
+  it('lets go of a deleted view in the held list at once, before the list is read again', async () => {
+    const h = harness();
+    const list = h.store.list('acme', OBJECT);
+    list.retain();
+    await list.ready();
+    const id = '0199a6f2-0000-7000-8000-0000000000c2';
+    await h.store.create('acme', {
+      id,
+      objectId: OBJECT,
+      name: 'Pipeline',
+      kind: 'table',
+      visibility: 'workspace',
+      config: { columns: [], showNewAttributes: false, pinnedCount: 1, sorts: [] },
+    });
+    await h.settle();
+    h.store.get('acme', id).retain();
+    await h.settle();
+    h.store.markOpened('acme', id);
+    expect(list.getSnapshot().lastOpenedViewId).toBe(id);
+    // The list's read after the delete is still on its way when the object's address reads the list.
+    const release = h.holdLists();
+    await h.store.remove('acme', OBJECT, id);
+    expect(list.getSnapshot().views.map((each) => each.id)).not.toContain(id);
+    expect(list.getSnapshot().lastOpenedViewId).toBeUndefined();
+    release();
+    await h.settle();
     expect(list.getSnapshot().views.map((each) => each.id)).not.toContain(id);
   });
 
