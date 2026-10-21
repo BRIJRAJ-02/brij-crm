@@ -10,15 +10,7 @@ import { BookingMessage, BookingProvider } from '@crm/ui/public-booking';
 import { lazy, StrictMode, Suspense } from 'react';
 import { createRoot } from 'react-dom/client';
 import { BookingPage } from './BookingPage.tsx';
-import {
-  closeOnEscape,
-  embedOf,
-  framedUrl,
-  naturalHeight,
-  reportHeight,
-  watchTree,
-  type PostToHost,
-} from '../frame.ts';
+import { closeOnEscape, embedOf, naturalHeight, reportHeight, watchTree, type PostToHost } from '../frame.ts';
 import { forgetHandoff, takeHandoff, type HandoffStorage } from './prefill.ts';
 import { strings } from './strings.ts';
 
@@ -93,8 +85,10 @@ createRoot(root).render(
           onBooked={(token) => {
             forgetHandoff(publicKey, storage);
             const manage = `/b/${encodeURIComponent(publicKey)}/manage?${new URLSearchParams({ t: token, welcome: '1' }).toString()}`;
-            // Inside an embed the guest page stays in the frame, still sized to its content.
-            globalThis.location.assign(embed === undefined ? manage : framedUrl(manage, embed));
+            // Inside an embed the guest page opens on the whole tab: it carries the guest's token, so it is
+            // never framed.
+            if (embed === undefined) globalThis.location.assign(manage);
+            else globalThis.open(manage, '_top');
           }}
         />
       )}

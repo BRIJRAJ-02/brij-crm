@@ -19,7 +19,7 @@
       "destination": "/book.html"
     },
     {
-      "source": "/((?!api/|api$|f/|b/).*)",
+      "source": "/((?!api/|api$|f/|b/|embed/).*)",
       "destination": "/index.html"
     }
   ],

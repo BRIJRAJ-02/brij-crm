@@ -49,6 +49,26 @@
     return String(text).slice(0, max);
   }
 
+  // A page's address as a submission keeps it: no query but its UTM tags, no fragment.
+  // A site's own query values (a reset link's token, a session) never leave the page.
+  function bare(href) {
+    var url = new URL(href);
+    var kept = new URLSearchParams();
+    url.searchParams.forEach(function (value, name) {
+      if (UTM.indexOf(name) !== -1) kept.append(name, value);
+    });
+    var query = kept.toString();
+    return cut(url.origin + url.pathname + (query ? '?' + query : ''), 2048);
+  }
+
+  // Query names a question may prefill from: plain keys, never ones that look like a credential.
+  var SECRETISH = /token|code|session|secret|key|auth|pass|sig|nonce|state|csrf|jwt|otp|ticket/i;
+  function passable(name) {
+    return (
+      /^[a-z][a-z0-9_]{0,39}$/i.test(name) && !SECRETISH.test(name) && name !== 'embed' && name !== 'p' && name !== 't'
+    );
+  }
+
   // The visit's first landing in this tab: its address, referrer and UTM tags.
   function landing() {
     var stored;
@@ -59,7 +79,7 @@
     }
     if (stored && typeof stored === 'object') return stored;
     var query = new URLSearchParams(location.search);
-    var info = { landing_url: cut(location.href, 2048) };
+    var info = { landing_url: bare(location.href) };
     if (document.referrer) info.referrer = cut(document.referrer, 2048);
     UTM.forEach(function (key) {
       var value = query.get(key);
@@ -109,7 +129,7 @@
   function context(element, mode) {
     var first = landing();
     var query = new URLSearchParams(location.search);
-    var out = { page_url: cut(location.href, 2048), mode: mode, version: '1' };
+    var out = { page_url: bare(location.href), mode: mode, version: '1' };
     if (document.title) out.page_title = cut(document.title, 300);
     ['landing_url', 'referrer'].concat(UTM).forEach(function (key) {
       if (first[key]) out[key] = first[key];
@@ -150,7 +170,8 @@
     '[data-ready] .sk{display:none}' +
     '@keyframes tfx-pulse{from{opacity:.55}to{opacity:1}}' +
     '.veil{position:fixed;inset:0;z-index:2147483000;display:flex;align-items:center;justify-content:center;' +
-    'background:rgba(15,18,25,.55);opacity:0;transition:opacity 240ms ease-out}' +
+    'background:rgba(15,18,25,.55);opacity:0;transition:opacity 240ms ease-out;overscroll-behavior:contain}' +
+    '.veil:not([data-open]){transition-duration:120ms}' +
     '.veil[hidden]{display:none}.veil[data-open]{opacity:1}' +
     '.panel{position:relative;box-sizing:border-box;inline-size:min(560px,calc(100% - 32px));max-block-size:calc(100% - 64px);' +
     'overflow:hidden;border-radius:12px;background:var(--tfx-bg);box-shadow:0 24px 64px rgba(0,0,0,.28);' +
@@ -159,7 +180,9 @@
     '.panel iframe{opacity:1;max-block-size:calc(100vh - 64px);block-size:var(--tfx-h,480px)}' +
     '.x{position:absolute;inset-block-start:8px;inset-inline-end:8px;z-index:1;display:grid;place-items:center;inline-size:32px;block-size:32px;' +
     'padding:0;border:0;border-radius:8px;background:var(--tfx-bg);color:var(--tfx-fg);cursor:pointer}' +
-    '.x:focus-visible,.fab:focus-visible{outline:2px solid #2563eb;outline-offset:2px}' +
+    '.x:focus-visible,.fab:focus-visible,.off a:focus-visible{outline:2px solid #fff;outline-offset:2px;box-shadow:0 0 0 4px #111318}' +
+    '.off{position:absolute;inset:0;display:grid;place-items:center;padding:24px;box-sizing:border-box;' +
+    'font:15px/1.4 system-ui,-apple-system,"Segoe UI",sans-serif;color:var(--tfx-fg)}.off a{color:inherit}' +
     '.fab{position:fixed;inset-block-end:16px;inset-inline-end:16px;z-index:2147482999;box-sizing:border-box;min-block-size:44px;' +
     'max-inline-size:calc(100vw - 32px);padding:0 20px;border:0;border-radius:22px;background:var(--tfx-accent);color:var(--tfx-on);' +
     'font:600 15px/1.2 system-ui,-apple-system,"Segoe UI",sans-serif;box-shadow:0 8px 24px rgba(0,0,0,.2);cursor:pointer;' +
@@ -194,8 +217,8 @@
     var src = new URL((kind === 'booking' ? '/b/' : '/f/') + encodeURIComponent(key), ORIGIN);
     var query = new URLSearchParams(location.search);
     query.forEach(function (value, name) {
-      // The site's own address passes its parameters along: a question's key prefills it.
-      if (name !== 'embed' && name !== 'p' && name !== 't') src.searchParams.set(name, cut(value, 500));
+      // The site's own address passes plain parameters along, so a question's key prefills it.
+      if (passable(name)) src.searchParams.set(name, cut(value, 500));
     });
     src.searchParams.set('embed', '1');
     src.searchParams.set('mode', mode);
@@ -230,6 +253,7 @@
     box.appendChild(skeleton);
     parts.root.appendChild(box);
     holder.appendChild(parts.host);
+    stall(box, skeleton, kind, key, made.frame);
     track({
       frame: made.frame,
       height: function (height) {
@@ -237,6 +261,36 @@
         box.setAttribute('data-ready', '');
       },
     });
+  }
+
+  // A frame that never says its height (offline, blocked) gives way to a plain link to its own page.
+  function stall(box, skeleton, kind, key, frame) {
+    var waited = function () {
+      if (box.hasAttribute('data-ready')) return;
+      skeleton.className = 'off';
+      skeleton.removeAttribute('aria-hidden');
+      skeleton.textContent = '';
+      var link = document.createElement('a');
+      link.href = new URL((kind === 'booking' ? '/b/' : '/f/') + encodeURIComponent(key), ORIGIN).href;
+      link.target = '_blank';
+      link.rel = 'noopener';
+      link.textContent = 'Open ' + frame.title + ' in a new tab';
+      skeleton.appendChild(link);
+    };
+    // Lazy frames start their clock when they come near the screen.
+    if (typeof IntersectionObserver === 'function') {
+      var near = new IntersectionObserver(function (entries) {
+        if (
+          !entries.some(function (entry) {
+            return entry.isIntersecting;
+          })
+        )
+          return;
+        near.disconnect();
+        setTimeout(waited, 15000);
+      });
+      near.observe(box);
+    } else setTimeout(waited, 15000);
   }
 
   var dialogs = {};
@@ -268,7 +322,13 @@
     panel.appendChild(start);
     panel.appendChild(close);
     panel.appendChild(made.frame);
+    var skeleton = document.createElement('div');
+    skeleton.className = 'sk';
+    skeleton.setAttribute('aria-hidden', 'true');
+    skeleton.innerHTML = '<i></i><i></i><i></i><i></i><i></i>';
+    panel.appendChild(skeleton);
     panel.appendChild(end);
+    stall(panel, skeleton, kind, key, made.frame);
     veil.appendChild(panel);
     parts.root.appendChild(veil);
     document.body.appendChild(parts.host);
@@ -329,6 +389,7 @@
       height: function (height) {
         made.frame.style.setProperty('--tfx-h', height + 'px');
         panel.style.setProperty('--tfx-h', height + 'px');
+        panel.setAttribute('data-ready', '');
       },
       close: shut,
     });
