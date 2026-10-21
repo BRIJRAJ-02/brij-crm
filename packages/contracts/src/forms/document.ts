@@ -7,7 +7,14 @@
 // map", 21 October 2026). The form's name, address, owner and the sites that
 // may post to it live on the form itself and apply at once.
 import * as z from 'zod';
-import { ANSWER_TYPES, CHOICE_TYPES, FORM_CHOICES_MAX, FORM_QUESTIONS_MAX, QUESTION_KEY } from './answer-types.ts';
+import {
+  ANSWER_TYPES,
+  CHOICE_TYPES,
+  FORM_CHOICES_MAX,
+  FORM_QUESTIONS_MAX,
+  OPTION_KEY,
+  QUESTION_KEY,
+} from './answer-types.ts';
 import { FORM_LANGUAGES } from './public.ts';
 import { Uuid, uuidWith } from '../values/ids.ts';
 
@@ -18,6 +25,11 @@ export const QuestionId = z
 
 /** A question's key: its input name and the key its answer is stored under. */
 export const QuestionKey = z.string().regex(QUESTION_KEY, { error: 'Use lowercase letters, numbers and underscores.' });
+
+/** A choice's key: the value a site's own form posts for it, kept when the choice is renamed. */
+export const OptionKey = z
+  .string()
+  .regex(OPTION_KEY, { error: 'A choice key is 1 to 40 lowercase letters, numbers or underscores.' });
 
 /** Where an answer is filed: an attribute of the form's main target (later milestones add person, company, deal). */
 export const FiledOn = z.strictObject({ objectRole: z.literal('main'), attributeId: Uuid });
@@ -35,6 +47,13 @@ export const FormQuestion = z.strictObject({
     .array(z.string().trim().max(80, { error: 'Keep a choice to 80 characters.' }))
     .max(FORM_CHOICES_MAX, { error: `A question holds at most ${String(FORM_CHOICES_MAX)} choices.` })
     .optional(),
+  /**
+   * Each choice's stable key, in the same order as `choices` (one per choice):
+   * the option value a site's own form posts, so renaming a choice never breaks
+   * a site. Absent on questions saved before keys existed; `choiceKeysOf` makes
+   * them from the words until the builder stores them.
+   */
+  choiceKeys: z.array(OptionKey).max(FORM_CHOICES_MAX).optional(),
   placeholder: z.string().trim().max(80, { error: 'Keep a placeholder to 80 characters.' }).optional(),
   required: z.boolean(),
   /** Absent: not filed, kept with the enquiry. */
@@ -145,6 +164,17 @@ export const FormDocument = z
           path: [...at, 'key'],
           message: `Two questions both use the key “${question.key}”.`,
         });
+      }
+      if (question.choiceKeys !== undefined) {
+        if (question.choiceKeys.length !== (question.choices ?? []).length) {
+          context.addIssue({
+            code: 'custom',
+            path: [...at, 'choiceKeys'],
+            message: 'Each choice needs exactly one key.',
+          });
+        } else if (new Set(question.choiceKeys).size !== question.choiceKeys.length) {
+          context.addIssue({ code: 'custom', path: [...at, 'choiceKeys'], message: 'Two choices share one key.' });
+        }
       }
       const attributeId = question.filedOn?.attributeId;
       if (attributeId !== undefined && document.targets.main === undefined) {

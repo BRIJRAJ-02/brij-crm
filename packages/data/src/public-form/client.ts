@@ -8,6 +8,9 @@
 import type { FillTicket, PublicForm, SubmitBody, SubmitNext } from '@crm/contracts/forms';
 import type { FetchLike } from '../fetch.ts';
 
+/** Where a submission came from, as the hosted page sends it beside the answers (`SubmitBody.context`). */
+export type { SubmitContext } from '@crm/contracts/forms';
+
 /** What reading a form answered. */
 export type FormLoad =
   { readonly kind: 'form'; readonly form: PublicForm } | { readonly kind: 'missing' } | { readonly kind: 'failed' };

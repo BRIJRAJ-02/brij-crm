@@ -316,6 +316,7 @@ export {
   newPublicKey,
   previewForm,
   publishForm,
+  rotateFormSecret,
   saveFormDraft,
   setFormStatus,
   setFormTarget,
@@ -328,6 +329,7 @@ export {
   type PublishInput,
   type SaveDraftInput,
 } from './forms/forms.ts';
+export { workspacePublicKey } from './forms/shared.ts';
 export {
   FORM_CLOSED_MESSAGE,
   getPublicForm,

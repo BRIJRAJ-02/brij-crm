@@ -186,6 +186,12 @@ export const formSubmissions = pgTable(
     answers: jsonb('answers').notNull(),
     /** UTM tags, the page and the referrer, and prefill (milestone 3 fills more). */
     hidden: jsonb('hidden').notNull().default({}),
+    /**
+     * Where it came from (spec 0023, the embeds): the page, its title, the visit's first landing, the referrer,
+     * the UTM tags, the parameters the site passed, the embed's mode and, only where the site allowed it, the
+     * first party visitor id. Checked field by field on the way in (`SubmitContext`); null when none came.
+     */
+    context: jsonb('context'),
     /** The bot checks' verdict, score and signals. */
     spam: jsonb('spam').notNull().default({}),
     /** Set once processing found or made the main record. No foreign key: the purge clears it. */

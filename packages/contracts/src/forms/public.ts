@@ -6,6 +6,7 @@
 import * as z from 'zod';
 import { ANSWER_TYPES } from './answer-types.ts';
 import { Uuid } from '../values/ids.ts';
+import { SubmitContext } from './context.ts';
 
 /** The languages a hosted form speaks (spec 0023, value sourcing); English for anything missing. */
 export const FORM_LANGUAGES = ['en', 'es', 'fr', 'de', 'pt', 'it', 'nl', 'hi'] as const;
@@ -19,6 +20,8 @@ export const PublicQuestion = z.object({
   label: z.string(),
   answerType: z.enum(ANSWER_TYPES),
   choices: z.array(z.string()).optional(),
+  /** Each choice's stable key, in the choices' order: the option value a site's own form posts. */
+  choiceKeys: z.array(z.string()).optional(),
   placeholder: z.string().optional(),
   required: z.boolean(),
 });
@@ -101,6 +104,8 @@ export const SubmitBody = z.object({
   company_url: z.string().max(1_000).optional(),
   ticket: z.string().max(FILL_TICKET_MAX).optional(),
   fillMs: z.number().int().min(0).max(86_400_000).optional(),
+  /** Where it came from (the embed script or the hosted page): checked field by field, a bad one dropped, never the lead. */
+  context: SubmitContext.optional(),
 });
 /** The submit body. */
 export type SubmitBody = z.input<typeof SubmitBody>;

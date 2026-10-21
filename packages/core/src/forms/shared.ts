@@ -2,8 +2,9 @@
 // the target object's attributes as filing choices and as the publish check
 // sees them, and turning a version's document into what a visitor's page
 // renders (`PublicForm`): no attribute ids, filing, owner or routing.
+import { createHash } from 'node:crypto';
 import { and, asc, eq, inArray, isNull, sql } from 'drizzle-orm';
-import { FormDocument, type PublicForm, type PublishAttribute } from '@crm/contracts';
+import { choiceKeysOf, FormDocument, type PublicForm, type PublishAttribute } from '@crm/contracts';
 import { Hue } from '@crm/contracts/values';
 import { schema, type WorkspaceTx } from '@crm/db';
 import { isArchivedNow, loadAttributes, type AttributeDef } from '../engine/values.ts';
@@ -42,6 +43,16 @@ export function liveObjectOf() {
   return sql<
     string | null
   >`(select lower(v.document->'targets'->'main'->>'objectId') from ${formVersions} v where v.workspace_id = ${forms.workspaceId} and v.id = ${forms.liveVersionId})`;
+}
+
+/**
+ * A workspace's public key (`ws_` and 16 hex), what a snippet's
+ * `data-timefix-workspace` names (spec 0023, tagging): a one way digest of
+ * its id, so a site's markup never carries an internal id, the same key
+ * every time, and nothing to store or migrate.
+ */
+export function workspacePublicKey(workspaceId: string): string {
+  return `ws_${createHash('sha256').update(`timefix-workspace:${workspaceId}`).digest('hex').slice(0, 16)}`;
 }
 
 /** A moment as fixed width UTC text with milliseconds, as the views carry it. */
@@ -220,6 +231,23 @@ export interface PublicFormContext {
 }
 
 /**
+ * A question's choices as a visitor sees them, blank ones left out, each
+ * with its stable key (the option value a site's own form posts), kept in
+ * step: a key is made over every choice first, so leaving out a blank one
+ * never moves another's key.
+ */
+function choicesOf(question: FormDocument['questions'][number]): {
+  readonly choices: string[];
+  readonly choiceKeys: string[];
+} {
+  const keys = choiceKeysOf(question);
+  const kept = (question.choices ?? []).flatMap((choice, at) =>
+    choice.trim() === '' ? [] : [{ choice, key: keys[at] ?? '' }],
+  );
+  return { choices: kept.map((each) => each.choice), choiceKeys: kept.map((each) => each.key) };
+}
+
+/**
  * A version's document as the visitor's page renders it: every question with
  * its key, label, type, choices and placeholder, the words and the look; no
  * attribute ids, filing, owner or routing. "Book a quick meeting" stays off
@@ -240,7 +268,7 @@ export function publicFormOf(document: FormDocument, context: PublicFormContext)
       key: question.key,
       label: question.label,
       answerType: question.answerType,
-      ...(question.choices === undefined ? {} : { choices: question.choices.filter((choice) => choice.trim() !== '') }),
+      ...(question.choices === undefined ? {} : choicesOf(question)),
       ...(question.placeholder === undefined || question.placeholder === ''
         ? {}
         : { placeholder: question.placeholder }),

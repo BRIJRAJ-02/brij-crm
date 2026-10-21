@@ -2,6 +2,7 @@
 // shapes the hosted page and the submit endpoint share.
 export * from './answer-types.ts';
 export * from './check.ts';
+export * from './context.ts';
 export * from './dial-codes.ts';
 export * from './email-hint.ts';
 export * from './document.ts';

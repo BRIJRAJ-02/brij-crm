@@ -20,4 +20,5 @@ export type {
   SubmitNext,
   SubmitResult,
 } from './public.ts';
+export type { SubmissionContext, SubmitContext } from './context.ts';
 export type { FiledOn, FormAfter, FormDocument, FormLook, FormQuestion } from './document.ts';
