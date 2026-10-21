@@ -18,6 +18,8 @@ import type { JobView } from '@crm/contracts';
 import type { JobsSnapshot, JobsView } from './jobs/store.ts';
 import type { SchedulesState, SchedulesView } from './schedules/store.ts';
 import type { LiveStatus } from './live/live.ts';
+import type { NavSnapshot, NavSource } from './navigation/store.ts';
+import type { DueTasksSnapshot, DueTasksSource } from './tasks/due.ts';
 import type { PendingOptions } from './options.ts';
 import type { RecordsView, ViewReader, ViewState } from './records/layer.ts';
 import type { RecordState, RecordSubscription } from './records/one.ts';
@@ -365,4 +367,21 @@ const SCHEDULES_LOADING: SchedulesState = { status: 'loading' };
  */
 export function useSchedules(view: SchedulesView | undefined): SchedulesState {
   return useRetained(view ?? NO_SCHEDULES);
+}
+
+/**
+ * The member's own sidebar in a workspace (spec 0034), with their changes
+ * waiting for an answer already applied, re-rendering when it changes. Held
+ * while the frame is mounted, so another tab's change reaches it live.
+ */
+export function useNav(source: NavSource): NavSnapshot {
+  return useRetained(source);
+}
+
+/**
+ * The sidebar's Tasks badge (spec 0034, AC-924): how many of my open tasks
+ * are overdue or due today, live. Held while the frame is mounted.
+ */
+export function useDueTasks(source: DueTasksSource): DueTasksSnapshot {
+  return useRetained(source);
 }

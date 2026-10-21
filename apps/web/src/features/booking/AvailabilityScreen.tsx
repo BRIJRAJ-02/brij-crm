@@ -1,5 +1,5 @@
 // Brief
-// Purpose: Bookings › Availability (spec 0035, AC-969): the member's schedules, each with its Default badge, its week, its zone and how many booking pages use it.
+// Purpose: Scheduling › Availability (spec 0035, AC-969; a page of its own since spec 0034): the member's schedules, each with its Default badge, its week, its zone and how many booking pages use it.
 // Main task: open a schedule to edit it, make a new one, or set the default, duplicate or delete one from its menu.
 // Leaves out: editing hours (each schedule's own editor) and a calendar view of a schedule (a follow up).
 import { isDataError, type DataLayer, type ScheduleMember, type ScheduleView } from '@crm/data';
@@ -9,6 +9,7 @@ import { useNavigate, useRouteContext } from '@tanstack/react-router';
 import { useState, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import { useBookingsToolbarSlot } from '../bookings/toolbarSlot.ts';
+import { SCHEDULING_HUE } from '../scheduling.ts';
 import { useCan, WorkspacePage } from '../workspace/WorkspacePage.tsx';
 import { DeleteScheduleDialog } from './DeleteScheduleDialog.tsx';
 import { weekSummary, zoneLabel } from './hours.ts';
@@ -136,9 +137,12 @@ export function AvailabilityScreen({ data, slug, locale, member, members, me }: 
   );
   return (
     <WorkspacePage
-      currentPage="bookings"
+      currentPage="availability"
       page={{
-        topBar: <TopBar title={strings.availability} icon="clock" />,
+        topBar: (
+          // A page of its own under Scheduling (spec 0034), no longer a Bookings tab: the scheduling tile, no trail.
+          <TopBar title={strings.availability} icon="clock" hue={SCHEDULING_HUE} />
+        ),
         body: (
           <>
             {slot !== null && createPortal(tools, slot)}
@@ -278,9 +282,9 @@ export function AvailabilityPending() {
   );
   return (
     <WorkspacePage
-      currentPage="bookings"
+      currentPage="availability"
       page={{
-        topBar: <TopBar title={strings.availability} icon="clock" isLoading />,
+        topBar: <TopBar title={strings.availability} icon="clock" hue={SCHEDULING_HUE} isLoading />,
         body: (
           <>
             {slot !== null && createPortal(tools, slot)}

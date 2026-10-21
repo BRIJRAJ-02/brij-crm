@@ -70,6 +70,7 @@ const MERGED: Readonly<Record<Kind, readonly IdField[]>> = {
   schedules: ['scheduleIds'],
   members: ['memberIds'],
   access: ['memberIds'],
+  nav: ['memberIds'],
   jobs: ['jobIds'],
 };
 
@@ -85,6 +86,7 @@ const CAPPED: Readonly<Record<Kind, readonly IdField[]>> = {
   schedules: ['scheduleIds'],
   members: [],
   access: [],
+  nav: [],
   jobs: ['jobIds'],
 };
 

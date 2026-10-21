@@ -98,6 +98,8 @@ import {
   upsertFirst,
   type CaptureListView,
 } from './captures/list.ts';
+import type { NavOperation, NavUniverse } from '@crm/contracts/navigation';
+import type { NavChangeOptions, NavSnapshot, NavSource, NavStore } from './navigation/store.ts';
 import { draftParam, isSameQuery, readDraft, type DraftQuery } from './views/draft.ts';
 import {
   createViewsStore,
@@ -107,6 +109,7 @@ import {
   type ViewsListSource,
 } from './views/store.ts';
 import type { NewTask, TaskChange, TaskList, TasksStore, TaskSubscription } from './tasks/store.ts';
+import { createDueTasks, type DueTasksSource } from './tasks/due.ts';
 import type { NoteList, NoteSession, NotesStore } from './notes/store.ts';
 import type { createLive, Granted, Live, LiveStatus } from './live/live.ts';
 import { createMutationLog } from './live/mutations.ts';
@@ -287,6 +290,18 @@ export {
   type SignInCode,
 } from './errors.ts';
 export type { FetchLike } from './fetch.ts';
+export type { NavFavourite, NavState } from '@crm/contracts';
+export type { NavChangeOptions, NavSnapshot, NavSource } from './navigation/store.ts';
+export type { DueTasksSnapshot, DueTasksSource } from './tasks/due.ts';
+export type {
+  NavEntry,
+  NavItemKind,
+  NavOperation,
+  NavPage,
+  NavPrefs,
+  NavSectionKey,
+  NavUniverse,
+} from '@crm/contracts/navigation';
 export type { JobsScope, JobsSnapshot, JobsView, TestJobSettings } from './jobs/store.ts';
 export { purgeLeftOf, type PurgeLeftEntry } from './jobs/left.ts';
 export type { View, ViewColumn, ViewConfig, ViewKind, ViewLayout, ViewSummary, ViewVisibility } from '@crm/contracts';
@@ -765,6 +780,8 @@ export function createDataLayer({
     });
     jobs.clear();
     views.clear();
+    navStore?.clear();
+    dueTasks.clear();
     void activity?.then((feeds) => {
       feeds.clear();
     });
@@ -1086,6 +1103,17 @@ export function createDataLayer({
       Math.round(random() * SPREAD_MS),
     );
   };
+  // The sidebar's Tasks badge (spec 0034, AC-924): small and plain, so it sits in the first load with the sidebar.
+  const dueTasks = createDueTasks({
+    count: (workspace, today) =>
+      beforeRead(workspace).then(() => call((options) => api.tasks.due({ workspace, today }, options))),
+  });
+  /** This tab's own task write landed (its echo never comes back): the badge reads again at once. */
+  const taskLanded = <T>(workspace: string, answer: Promise<T>): Promise<T> =>
+    answer.then((value) => {
+      dueTasks.changed(workspace);
+      return value;
+    });
   const readMembers = (workspace: string) =>
     cached(members, workspace, () => call((options) => api.members.list({ workspace }, options)));
   const readAccess = (workspace: string) =>
@@ -1217,6 +1245,8 @@ export function createDataLayer({
     void tasks?.then((store) => {
       store.changed(workspace, event);
     });
+    // A tasks event names no assignee, so a held badge reads again, coalesced and spread (`changedLater`).
+    dueTasks.changedLater(workspace);
   });
   router.on('notes', (workspace, event) => {
     void notes?.then((store) => {
@@ -1245,6 +1275,8 @@ export function createDataLayer({
     schedules.changed(workspace);
     jobs.resync(workspace);
     views.resync(workspace);
+    navStore?.resync(workspace);
+    dueTasks.changedLater(workspace);
     void trash?.then((held) => {
       held.reload(workspace);
     });
@@ -1484,6 +1516,133 @@ export function createDataLayer({
     onLayoutRefused: (error) => {
       notify({ tone: 'danger', message: error.message });
     },
+  });
+
+  // The member's own sidebar (spec 0034): one copy per workspace, changes shown at once and sent one at a time,
+  // read again when another tab of theirs changes it (`nav`), and when a starred view or record may have changed.
+  // Loaded with a dynamic import on first use (the workspace route's loader asks for it beside the objects), so it
+  // stays out of the first load.
+  let navStore: NavStore | undefined;
+  let navLoading: Promise<NavStore> | undefined;
+  // The store's code didn't load (offline, or a deploy moved it): the sidebar reads as failed, so screens draw the
+  // defaults rather than loading for ever, and the next use loads it again.
+  let navUnloaded: NavSnapshot | undefined;
+  const navWaiting = new Set<() => void>();
+  const loadNav = (): Promise<NavStore> => {
+    navLoading ??= import('./navigation/store.ts').then(({ createNavStore, NAV_WORDS }) => {
+      navStore = createNavStore({
+        api: {
+          get: (workspace) => beforeRead(workspace).then(() => call((options) => api.nav.get({ workspace }, options))),
+          change: (workspace, op, mutationId) =>
+            call((options) => api.nav.change({ workspace, op, mutationId }, options)),
+        },
+        mintId,
+        mutations,
+        watch,
+        namesMe: (workspace, memberIds) => namesMe(workspace, memberIds),
+        // What was put back, then why ("Your sidebar wasn’t changed. You have 50 favourites. Remove one first.").
+        onRefused: (error, retry) => {
+          notify({
+            tone: 'danger',
+            message: `${NAV_WORDS.notChanged} ${error.message}`,
+            ...(retry === undefined ? {} : { action: { label: NAV_WORDS.retry, onAction: retry } }),
+          });
+        },
+        onUnavailable: (_error, retry) => {
+          notify({
+            tone: 'danger',
+            message: NAV_WORDS.unavailable,
+            action: { label: NAV_WORDS.retry, onAction: retry },
+          });
+        },
+      });
+      navUnloaded = undefined;
+      // Screens that subscribed before the store arrived hear it now.
+      for (const listener of navWaiting) listener();
+      navWaiting.clear();
+      return navStore;
+    });
+    navLoading.catch((error: unknown) => {
+      navLoading = undefined;
+      navUnloaded = { status: 'error', error: toDataError(error) };
+      for (const listener of navWaiting) listener();
+    });
+    return navLoading;
+  };
+  /** One workspace's sidebar as `useNav` holds it: the same object each time, so React keeps one subscription. */
+  const navSources = new Map<string, NavSource>();
+  const loadingNav: NavSnapshot = { status: 'loading' };
+  const navSource = (workspace: string): NavSource => {
+    const found = navSources.get(workspace);
+    if (found !== undefined) return found;
+    const made: NavSource = {
+      retain: () => {
+        let release: (() => void) | undefined;
+        let isReleased = false;
+        loadNav().then(
+          (store) => {
+            if (!isReleased) release = store.retain(workspace);
+          },
+          () => undefined,
+        );
+        return () => {
+          isReleased = true;
+          release?.();
+        };
+      },
+      subscribe: (listener) => {
+        if (navStore !== undefined) return navStore.subscribe(workspace, listener);
+        let stop: (() => void) | undefined;
+        const arrived = () => {
+          listener();
+          stop = navStore?.subscribe(workspace, listener);
+        };
+        navWaiting.add(arrived);
+        return () => {
+          navWaiting.delete(arrived);
+          stop?.();
+        };
+      },
+      getSnapshot: () => navStore?.snapshot(workspace) ?? navUnloaded ?? loadingNav,
+    };
+    navSources.set(workspace, made);
+    return made;
+  };
+  // Live events reach the sidebar only once a screen loaded it: before that there is nothing held to change.
+  router.on('nav', (workspace, event) => {
+    navStore?.navChanged(workspace, event);
+  });
+  // What other people change reaches the sidebar spread over a moment, as members do, so a whole team doesn't read
+  // in step; the member's own changes (above) read at once.
+  const refreshNav = (workspace: string) => {
+    spread(`nav ${workspace}`, () => {
+      navStore?.refresh(workspace);
+    });
+  };
+  router.on('views', (workspace, event) => {
+    const change = {
+      kind: 'view' as const,
+      ids: event.viewIds,
+      objectId: event.objectId,
+      coarse: event.coarse === true,
+    };
+    if (navStore?.touchesFavourites(workspace, change) === true) refreshNav(workspace);
+  });
+  // An object made, archived or restored (not an attribute's change): the sidebar reads again, so one coming back
+  // takes the place the member gave it, and stays hidden if they hid it (AC-926, AC-939).
+  router.on('definitions', (workspace, event) => {
+    if (event.listId !== undefined || (event.attributeIds !== undefined && event.attributeIds.length > 0)) return;
+    if (navStore !== undefined) refreshNav(workspace);
+  });
+  router.on('records', (workspace, event) => {
+    // A favourite record's name, trash state or access may have moved: deleted, restored, edited, or coarse.
+    const change = {
+      kind: 'record' as const,
+      ids: [...(event.deletedIds ?? []), ...(event.restoredIds ?? []), ...event.recordIds],
+      objectId: event.objectId,
+      coarse: event.coarse === true,
+    };
+    if (navStore?.touchesFavourites(workspace, change) === true) refreshNav(workspace);
   });
 
   /**
@@ -1863,7 +2022,10 @@ export function createDataLayer({
             landed(
               input.workspace,
               call((options) => api.trash.restore({ ...input, recordIds: [...input.recordIds] }, options)),
-            ),
+            ).then((answer) => {
+              favouritesMoved(input.workspace);
+              return answer;
+            }),
           deleteForever: (input) =>
             landed(
               input.workspace,
@@ -1879,11 +2041,24 @@ export function createDataLayer({
     return trash;
   };
 
+  /**
+   * This tab deleted or restored records: its own echoes never come back, so the sidebar reads again (coarsely, at
+   * most once a second, at once rather than spread) and a favourite trashed or restored here follows (AC-939). A
+   * delete of named records reads only when one is a favourite; a restore, or a change whose records aren't named
+   * (a job, an undo), always reads: a favourite in the trash is out of every read, so after a reload this tab can't
+   * know it is waiting.
+   */
+  const favouritesMoved = (workspace: string, deleted?: readonly string[]): void => {
+    if (navStore === undefined) return;
+    if (deleted === undefined || navStore.touchedHere(workspace, deleted)) navStore.refresh(workspace);
+  };
+
   /** This tab deleted or restored records: its own echoes never come back, so an open trash settles now. */
-  const trashMoved = (workspace: string): void => {
+  const trashMoved = (workspace: string, deleted?: readonly string[]): void => {
     void trash?.then((held) => {
       held.reload(workspace);
     });
+    favouritesMoved(workspace, deleted);
   };
 
   const tasksStore = (): Promise<TasksStore> => {
@@ -1908,23 +2083,37 @@ export function createDataLayer({
           get: (input) =>
             call((options) => api.tasks.get({ workspace: input.workspace, ids: [...input.ids] }, options)),
           create: ({ recordIds, ...input }) =>
-            call((options) =>
-              api.tasks.create(
-                { ...input, ...(recordIds === undefined ? {} : { recordIds: [...recordIds] }) },
-                options,
+            taskLanded(
+              input.workspace,
+              call((options) =>
+                api.tasks.create(
+                  { ...input, ...(recordIds === undefined ? {} : { recordIds: [...recordIds] }) },
+                  options,
+                ),
               ),
             ),
-          delete: (input) => call((options) => api.tasks.delete({ ...input }, options)),
-          restore: (input) => call((options) => api.tasks.restore({ ...input }, options)),
+          delete: (input) =>
+            taskLanded(
+              input.workspace,
+              call((options) => api.tasks.delete({ ...input }, options)),
+            ),
+          restore: (input) =>
+            taskLanded(
+              input.workspace,
+              call((options) => api.tasks.restore({ ...input }, options)),
+            ),
           update: ({ addRecordIds, removeRecordIds, ...input }) =>
-            call((options) =>
-              api.tasks.update(
-                {
-                  ...input,
-                  ...(addRecordIds === undefined ? {} : { addRecordIds: [...addRecordIds] }),
-                  ...(removeRecordIds === undefined ? {} : { removeRecordIds: [...removeRecordIds] }),
-                },
-                options,
+            taskLanded(
+              input.workspace,
+              call((options) =>
+                api.tasks.update(
+                  {
+                    ...input,
+                    ...(addRecordIds === undefined ? {} : { addRecordIds: [...addRecordIds] }),
+                    ...(removeRecordIds === undefined ? {} : { removeRecordIds: [...removeRecordIds] }),
+                  },
+                  options,
+                ),
               ),
             ),
         },
@@ -2934,7 +3123,7 @@ export function createDataLayer({
        */
       deleteMany: async (workspace: string, objectId: string, recordIds: readonly string[]): Promise<DeleteResult> => {
         const result = await (await recordsLayer()).deleteMany(workspace, objectId, recordIds);
-        if (result.kind === 'done' && result.deleted > 0) trashMoved(workspace);
+        if (result.kind === 'done' && result.deleted > 0) trashMoved(workspace, recordIds);
         return result;
       },
       /**
@@ -3052,6 +3241,12 @@ export function createDataLayer({
         (await activityFeeds()).recent(workspace, recordId, objectId),
     },
     tasks: {
+      /**
+       * The sidebar's Tasks badge (spec 0034, AC-924): how many of my open
+       * tasks are due on or before `today` (my local date, `YYYY-MM-DD`),
+       * live while a screen holds it. Read it through `useDueTasks`.
+       */
+      due: (workspace: string, today: string): DueTasksSource => dueTasks.source(workspace, today),
       /**
        * A record's open tasks (by due date) or done ones (newest done first),
        * the same list for every screen that asks (spec 0019): 50 at a time as
@@ -3535,6 +3730,40 @@ export function createDataLayer({
         if (visited.size > 200) visited.delete(visited.keys().next().value ?? key);
         void call((options) => api.recents.visit({ workspace, kind, id }, options)).catch(() => undefined);
       },
+    },
+    /**
+     * The member's own sidebar (spec 0034): `load` for the workspace route's
+     * loader (the first paint has their order, AC-936), `source` for
+     * `useNav`, and `change` to apply one operation at once and send it
+     * (rolled back with a toast and Retry on a refusal, AC-937).
+     */
+    nav: {
+      load: (workspace: string) => loadNav().then((store) => store.load(workspace)),
+      source: (workspace: string): NavSource => navSource(workspace),
+      /**
+       * Answers a promise that settles when the change lands, or rejects with its refusal, already rolled back; a
+       * screen that waits on it may say the refusal itself (`isSaidHere`), and no toast is raised.
+       */
+      change: (
+        workspace: string,
+        op: NavOperation,
+        universe: NavUniverse,
+        options: NavChangeOptions = {},
+      ): Promise<void> => {
+        const made = loadNav().then(
+          (store) => store.change(workspace, op, universe, options),
+          // The store's code didn't load: nothing changed. Say so (unless the screen does), with the layer's words.
+          (error: unknown) => {
+            const failure = toDataError(error);
+            if (options.isSaidHere !== true) notify({ tone: 'danger', message: failure.message });
+            throw failure;
+          },
+        );
+        // Most screens don't wait on a change: its refusal is said by the toast, never left unhandled.
+        made.catch(() => undefined);
+        return made;
+      },
+      reload: (workspace: string) => loadNav().then((store) => store.reload(workspace)),
     },
     views: {
       /**

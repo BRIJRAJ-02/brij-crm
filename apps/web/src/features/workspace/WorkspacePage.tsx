@@ -25,6 +25,11 @@ export function useWorkspaceName(): string | undefined {
   return frame?.loaderData?.workspaceName ?? me?.workspaces.find((workspace) => workspace.slug === slug)?.name;
 }
 
+/** The open workspace's objects, as the frame loaded them; undefined while they load. */
+export function useWorkspaceObjects() {
+  return useMatch({ from: '/w/$slug', shouldThrow: false })?.loaderData?.objects;
+}
+
 /** The person's own access in the open workspace, as the frame loaded it; undefined while it loads. */
 export function useMyAccess(): MyAccess | undefined {
   return useMatch({ from: '/w/$slug', shouldThrow: false })?.loaderData?.access;
@@ -44,7 +49,7 @@ export interface WorkspacePageProps {
   readonly page: FramedPage;
   /** The `apiSlug` of the object whose page is open. */
   readonly currentObject?: string;
-  /** A page of the sidebar's that isn't an object's: Bookings, Captures or the trash (spec 0022). */
+  /** A page of the sidebar's that isn't an object's: Tasks, a Scheduling page or the trash (spec 0034). */
   readonly currentPage?: SidebarPage;
   /** Inside Settings: the settings sidebar in place of the app's (spec 0026). */
   readonly settings?: SettingsSidebar;

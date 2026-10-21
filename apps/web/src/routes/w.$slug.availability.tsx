@@ -6,12 +6,14 @@ import { browserZone } from '../features/booking/zone.ts';
 import { memberSearch } from '../features/booking/links.ts';
 import { scheduleStrings } from '../features/booking/schedule-strings.ts';
 import { strings } from '../features/booking/strings.ts';
+import { SCHEDULING_HUE } from '../features/scheduling.ts';
 import { WorkspacePage } from '../features/workspace/WorkspacePage.tsx';
 
-// Bookings › Availability (spec 0035, AC-969): the member's schedules, from the data layer's held list (the virtual
+// Scheduling › Availability (spec 0035, AC-969; a page of its own since spec 0034, AC-928, and
+// `/bookings/availability` redirects here): the member's schedules, from the data layer's held list (the virtual
 // default, weekdays 09:00 to 17:00 in the browser's zone, until they save any), read again live, so another tab's
-// save shows here. Each opens in its editor (`bookings_.availability.$scheduleId`).
-export const Route = createFileRoute('/w/$slug/bookings/availability')({
+// save shows here. Each opens in its editor (`availability_.$scheduleId`).
+export const Route = createFileRoute('/w/$slug/availability')({
   // `?member=`: an admin viewing a colleague's schedules (AC-971); anyone else sees their own.
   validateSearch: memberSearch,
   loaderDeps: ({ search }) => ({ member: search.member }),
@@ -59,9 +61,9 @@ function AvailabilityError({ error }: ErrorComponentProps) {
   const router = useRouter();
   return (
     <WorkspacePage
-      currentPage="bookings"
+      currentPage="availability"
       page={{
-        topBar: <TopBar title={strings.availability} icon="clock" />,
+        topBar: <TopBar title={strings.availability} icon="clock" hue={SCHEDULING_HUE} />,
         body: (
           <PageColumn>
             <EmptyState tone="error" title={scheduleStrings.schedulesFailed} onRetry={() => void router.invalidate()}>

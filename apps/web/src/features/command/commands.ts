@@ -7,7 +7,9 @@ import type { ObjectSummary, Permission } from '@crm/data';
 import type { IconName } from '@crm/ui';
 import type { ThemeChoice } from '@crm/ui/theme';
 import { settingsNav, visibleSettingsNav } from '../settings/nav.ts';
-import { bookingsHref, capturesHref, navObjects, objectHref, tasksHref, trashHref } from '../workspace/objects.ts';
+import { availabilityHref } from '../booking/links.ts';
+import { formsHref, linksHref } from '../captures/pages.ts';
+import { bookingsHref, homeHref, navObjects, objectHref, tasksHref, trashHref } from '../workspace/objects.ts';
 import { strings } from './strings.ts';
 
 /** What choosing a command does: go somewhere, open an object's new record dialog, or set the theme. */
@@ -33,11 +35,13 @@ export interface Command {
 export type CommandMode = 'commands' | 'search';
 
 /**
- * The pages (AC-1075): each live object's page in the workspace's order, then
- * My tasks, Bookings, Captures, Trash and Settings.
+ * The pages (AC-1075): Home, each live object's page in the workspace's order,
+ * then Tasks and Scheduling's pages as the sidebar has them (spec 0034:
+ * Bookings, Availability, Booking pages, Forms), Trash and Settings.
  */
 export function pageCommands(slug: string, objects: readonly ObjectSummary[]): readonly Command[] {
   return [
+    { id: 'page:home', name: strings.home, icon: 'house', terms: strings.homeTerms, run: go(homeHref(slug)) },
     ...navObjects(objects).map((object): Command => ({
       id: `page:object:${object.id}`,
       name: object.pluralName,
@@ -60,11 +64,25 @@ export function pageCommands(slug: string, objects: readonly ObjectSummary[]): r
       run: go(bookingsHref(slug)),
     },
     {
-      id: 'page:captures',
-      name: strings.captures,
+      id: 'page:availability',
+      name: strings.availability,
+      icon: 'clock',
+      terms: strings.availabilityTerms,
+      run: go(availabilityHref(slug)),
+    },
+    {
+      id: 'page:booking-pages',
+      name: strings.bookingPages,
       icon: 'link',
-      terms: strings.capturesTerms,
-      run: go(capturesHref(slug)),
+      terms: strings.bookingPagesTerms,
+      run: go(linksHref(slug)),
+    },
+    {
+      id: 'page:forms',
+      name: strings.forms,
+      icon: 'clipboard-list',
+      terms: strings.formsTerms,
+      run: go(formsHref(slug)),
     },
     { id: 'page:trash', name: strings.trash, icon: 'trash', terms: strings.trashTerms, run: go(trashHref(slug)) },
     {

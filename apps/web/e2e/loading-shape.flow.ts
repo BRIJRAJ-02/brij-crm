@@ -18,11 +18,13 @@ interface Screen {
   readonly start: (workspace: SwitchingWorkspace) => string;
   /** What the person clicks: a link, a tab or a row. */
   readonly target: (page: Page) => Locator;
+  /** What opens first to show the target (a menu), if anything. */
+  readonly reveal?: (page: Page) => Promise<void>;
 }
 
 const sidebar = (name: string) => (page: Page) => page.getByRole('navigation').getByRole('link', { name, exact: true });
 const tab = (name: string) => (page: Page) => page.getByRole('tab', { name, exact: true });
-/** A Captures card, by its title: the title is the link to its editor. */
+/** A booking page's or a form's card, by its title: the title is the link to its editor. */
 const card = (name: string) => (page: Page) => page.getByRole('link', { name, exact: true }).first();
 const at =
   (where: string) =>
@@ -57,16 +59,16 @@ const ALL_SCREENS: readonly Screen[] = [
   },
   { name: 'bookings calendar', start: at('trash'), target: sidebar('Bookings') },
   { name: 'bookings list', start: at('bookings/calendar'), target: tab('List') },
-  { name: 'bookings availability', start: at('bookings/calendar'), target: tab('Availability') },
+  { name: 'availability', start: at('bookings/calendar'), target: sidebar('Availability') },
   {
     name: 'schedule editor',
-    start: at('bookings/availability'),
+    start: at('availability'),
     target: (page) => page.getByRole('row').filter({ hasText: 'Working hours' }).first(),
   },
-  { name: 'captures links', start: at('trash'), target: sidebar('Captures') },
-  { name: 'captures forms', start: at('captures/links'), target: tab('Forms') },
-  { name: 'booking page editor', start: at('captures/links'), target: card('Intro call') },
-  { name: 'form editor', start: at('captures/forms'), target: card('Untitled form') },
+  { name: 'booking pages', start: at('trash'), target: sidebar('Booking pages') },
+  { name: 'forms', start: at('booking-pages'), target: sidebar('Forms') },
+  { name: 'booking page editor', start: at('booking-pages'), target: card('Intro call') },
+  { name: 'form editor', start: at('forms'), target: card('Untitled form') },
   {
     name: 'settings preferences',
     start: at('trash'),
@@ -86,7 +88,13 @@ const ALL_SCREENS: readonly Screen[] = [
     target: tab('Configuration'),
   },
   { name: 'settings jobs', start: at('settings/account/preferences'), target: sidebar('Background jobs') },
-  { name: 'trash', start: at('captures/links'), target: sidebar('Trash') },
+  // The trash is a row of the workspace menu (owner, 21 October 2026).
+  {
+    name: 'trash',
+    start: at('booking-pages'),
+    reveal: (page) => page.getByRole('button', { name: /workspace menu/ }).click(),
+    target: (page) => page.getByRole('menuitem', { name: 'Trash' }),
+  },
 ];
 
 const ONLY = process.env.FLOW_SCREEN;
@@ -133,6 +141,7 @@ test('every screen’s loading state stands where its loaded page will', async (
     // A fresh app each time, on the page the move starts from, so the screen's own data isn't held yet.
     await page.goto(screen.start(workspace));
     // The page the move starts from has drawn what is clicked, before any call is held.
+    await screen.reveal?.(page);
     const target = screen.target(page);
     await target.waitFor({ timeout: 60_000 });
     await page.waitForTimeout(800);

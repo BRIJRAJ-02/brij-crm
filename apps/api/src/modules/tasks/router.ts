@@ -1,4 +1,4 @@
-import { createTask, deleteTask, getTasks, listTasks, restoreTask, updateTask } from '@crm/core';
+import { countDueTasks, createTask, deleteTask, getTasks, listTasks, restoreTask, updateTask } from '@crm/core';
 import { withInputFields } from '../../errors.ts';
 import { commitWrite } from '../../hooks.ts';
 import { member } from '../../orpc.ts';
@@ -16,6 +16,7 @@ export const tasksRouter = member.tasks.router({
       ...(input.limit === undefined ? {} : { limit: input.limit }),
     }),
   ),
+  due: member.tasks.due.handler(({ context, input }) => countDueTasks(context.scope, { today: input.today })),
   create: member.tasks.create.handler(async ({ context, input }) => {
     try {
       return await commitWrite(context, { mutationId: input.mutationId }, (hooks) =>

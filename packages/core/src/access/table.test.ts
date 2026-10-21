@@ -282,6 +282,24 @@ describe('the walk: a principal without the access is refused', () => {
     },
   );
 
+  it.each(entries.filter(([, entry]) => 'ownNav' in entry).map(([name]) => name))(
+    '%s keeps to the caller’s own sidebar: a key reads the defaults and can’t change one',
+    async (name) => {
+      const { scope, workspaceId, ownerId } = await memberOf('member');
+      const owner = testScope({ db, workspaceId, actor: { type: 'member', id: ownerId } });
+      await core.changeNav(owner, { op: 'rail', on: true });
+      const key = testScope({ db, workspaceId, actor: { type: 'api_key', id: core.newId() } });
+      if (name === 'changeNav') {
+        expect(await refusalOf(core.changeNav(key, { op: 'rail', on: true }))).toMatchObject({ code: 'FORBIDDEN' });
+        return;
+      }
+      expect((await core.readNav(key)).rail).toBe(false);
+      // Another member never sees the owner's rail: each reads their own row.
+      expect((await core.readNav(scope)).rail).toBe(false);
+      expect((await core.readNav(owner)).rail).toBe(true);
+    },
+  );
+
   it.each(entries.filter(([, entry]) => 'publicForm' in entry).map(([name]) => name))(
     '%s refuses any scope but its form’s public one',
     async (name) => {
@@ -727,6 +745,11 @@ const DATA_CASES: Readonly<Record<string, DataCase>> = {
   ),
   exportPart: refused('NOT_FOUND', async (scope, world) =>
     core.exportPart(scope, { exportId: await ownerExport(world), part: 0 }),
+  ),
+  // The sidebar's Tasks badge (spec 0034): a principal that can't read counts nothing.
+  countDueTasks: empty(
+    (scope) => core.countDueTasks(scope, { today: '2026-10-21' }),
+    (value) => typeof value === 'object' && value !== null && 'count' in value && value.count === 0,
   ),
   listTasks: refused('NOT_FOUND', (scope, world) =>
     core.listTasks(scope, { scope: { recordId: world.recordId }, status: 'open' }),

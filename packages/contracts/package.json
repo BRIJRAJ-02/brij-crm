@@ -19,6 +19,7 @@
     "./monitoring": "./src/monitoring/index.ts",
     "./events": "./src/monitoring/events.ts",
     "./views": "./src/view-model.ts",
+    "./navigation": "./src/nav-model.ts",
     "./board": "./src/board-model.ts",
     "./bulk-ops": "./src/bulk-ops.ts",
     "./forms": "./src/forms/browser.ts",

@@ -58,6 +58,7 @@ test('My tasks: the four groups, the switches in the address, a tick, and midnig
   await make('Read the brief');
   await make('Nobody’s task', undefined, null);
 
+  // Tasks in the sidebar opens My tasks (spec 0034, AC-924).
   await page
     .getByRole('navigation', { name: 'Main navigation' })
     .getByRole('link', { name: 'Tasks', exact: true })

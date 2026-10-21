@@ -455,6 +455,7 @@ function fakeApi(overrides: Partial<Behaviour> = {}, auth: (path: string, body: 
       update: os.tasks.update.handler(notServed),
       get: os.tasks.get.handler(notServed),
       list: os.tasks.list.handler(notServed),
+      due: os.tasks.due.handler(notServed),
       delete: os.tasks.delete.handler(notServed),
       restore: os.tasks.restore.handler(notServed),
     },
@@ -549,6 +550,10 @@ function fakeApi(overrides: Partial<Behaviour> = {}, auth: (path: string, body: 
       setDefault: os.schedules.setDefault.handler(notServed),
       duplicate: os.schedules.duplicate.handler(notServed),
       delete: os.schedules.delete.handler(notServed),
+    },
+    nav: {
+      get: os.nav.get.handler(notServed),
+      change: os.nav.change.handler(notServed),
     },
   });
   const handler = new RPCHandler(router);

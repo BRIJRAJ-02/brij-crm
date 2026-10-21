@@ -60,6 +60,8 @@ export const ENGINE_REFUSAL_CODES = [
   'STALE',
   'DEFAULT_SCHEDULE',
   'SCHEDULE_NOT_ALLOWED',
+  // The sidebar (spec 0034, AC-934): 50 favourites, or 400 stored items.
+  'NAV_LIMIT',
 ] as const;
 
 /** One of the engine's refusal codes. */

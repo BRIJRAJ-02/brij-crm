@@ -38,7 +38,12 @@ export type AccessEntry =
    * schedules, or anyone's with `booking.admin`; another member's schedule answers as absent, and naming another
    * member without `booking.admin` is `FORBIDDEN`.
    */
-  | { readonly schedules: true };
+  | { readonly schedules: true }
+  /**
+   * The caller's own sidebar (spec 0034): a member reads and changes only their own row (no member id is ever
+   * taken), and a principal that isn't a member gets the defaults on a read and `FORBIDDEN` on a change.
+   */
+  | { readonly ownNav: true };
 
 /** Every exported service that takes a scope, and what it checks. */
 export const ACCESS_TABLE = {
@@ -90,6 +95,9 @@ export const ACCESS_TABLE = {
   listInvitations: { permission: 'members.invite' },
   resendInvite: { permission: 'members.invite' },
   revokeInvite: { permission: 'members.invite' },
+  // The sidebar (spec 0034): the caller's own row only.
+  readNav: { ownNav: true },
+  changeNav: { ownNav: true },
   getMyAccess: { anyMember: true },
   // The limits' usage (spec 0012, AC-243): any member, filtered by their access inside.
   getUsage: { anyMember: true },
@@ -180,6 +188,8 @@ export const ACCESS_TABLE = {
   // each linked record's object.
   getTasks: { data: 'read' },
   listTasks: { data: 'read' },
+  // The sidebar's Tasks badge (spec 0034): the caller's own assigned tasks only; an API key counts none.
+  countDueTasks: { data: 'read' },
   createTask: { data: 'write' },
   updateTask: { data: 'write' },
   deleteTask: { data: 'write' },

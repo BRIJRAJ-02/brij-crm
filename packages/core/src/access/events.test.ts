@@ -74,7 +74,7 @@ const records: EventRow = {
 };
 
 describe('every kind has a rule', () => {
-  it('names the nine kinds of spec 0007, spec 0024’s meetings and spec 0035’s schedules, and asks for facts only for views, tasks and meetings', () => {
+  it('names the nine kinds of spec 0007, spec 0024’s meetings, spec 0034’s nav and spec 0035’s schedules, and asks for facts only for views, tasks and meetings', () => {
     expect([...EVENT_KINDS].sort()).toEqual(
       [
         'access',
@@ -83,6 +83,7 @@ describe('every kind has a rule', () => {
         'jobs',
         'meetings',
         'members',
+        'nav',
         'notes',
         'records',
         'schedules',
@@ -95,6 +96,21 @@ describe('every kind has a rule', () => {
     expect(eventFacts({ seq: 1, at, kind: 'views', viewIds: [], coarse: false })).toEqual(['views']);
     expect(eventFacts({ seq: 1, at, kind: 'tasks', recordIds: [], taskIds: [] })).toEqual(['tasks']);
     expect(eventFacts(records)).toEqual([]);
+    expect(eventFacts({ seq: 1, at, kind: 'nav', memberIds: [] })).toEqual([]);
+  });
+
+  it('passes a nav event, which names one member and nothing else, only to that member’s audience (spec 0034)', () => {
+    const nav = {
+      seq: 4,
+      at,
+      kind: 'nav' as const,
+      memberIds: [ADA],
+      mutationId: '00000000-0000-7000-8000-0000000000aa',
+    };
+    expect(filterEvent(open, nav)).toEqual(nav);
+    expect(filterEvent(hiddenObject, nav)).toEqual(nav);
+    // Another member's audience gets the stub: no feed of when Ada folds her sidebar.
+    expect(filterEvent(audience([{ id: BEA, role: 'member' }]), nav)).toBeUndefined();
   });
 
   it("has a rule for every kind of spec 0007's ChangeEvent but the stub (AC-79)", () => {

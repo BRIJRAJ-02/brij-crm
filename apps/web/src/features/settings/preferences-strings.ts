@@ -9,4 +9,9 @@ export const strings = {
   system: 'System preference',
   light: 'Light',
   dark: 'Dark',
+  /** The sidebar (spec 0034): what it shows, kept for the person on every device. */
+  sidebar: 'Sidebar',
+  sidebarDescription: 'Kept for you on every device.',
+  customise: 'Items in your sidebar',
+  customiseDescription: 'Show or hide each object and Scheduling page, or put the default back.',
 } as const;

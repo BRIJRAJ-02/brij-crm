@@ -118,8 +118,8 @@ export interface ViewAction {
   readonly startsGroup?: boolean;
 }
 
-/** Props for ViewBar. */
-export interface ViewBarProps {
+/** ViewBar's switcher, on an object's page: its saved views. */
+interface ViewBarSwitcher {
   readonly views: readonly ViewChoice[];
   readonly currentViewId: string;
   readonly onViewChange: (id: string) => void;
@@ -134,22 +134,45 @@ export interface ViewBarProps {
   readonly onAction?: (id: string) => void;
   /** The views are still coming: the switcher is a skeleton until they arrive. */
   readonly isLoading?: boolean;
-  /** The end of the bar: View settings, Import / Export, the Table and Board switch. */
-  readonly children?: ReactNode;
 }
 
-/** The bar under the top bar: the view switcher at the start, and the view's own actions at the end. */
-export function ViewBar({
-  views,
-  currentViewId,
-  onViewChange,
-  onCreateView,
-  actions = [],
-  onAction: onViewAction,
-  isLoading = false,
-  children,
-}: ViewBarProps) {
-  const showSkeleton = useDelayedLoading(isLoading);
+/** A page with no saved views (Booking pages, Forms): the bar holds the page's tools at its end, and no switcher. */
+interface ViewBarToolsOnly {
+  readonly views?: never;
+  readonly currentViewId?: never;
+  readonly onViewChange?: never;
+  readonly onCreateView?: never;
+  readonly actions?: never;
+  readonly onAction?: never;
+  readonly isLoading?: never;
+}
+
+/** Props for ViewBar: an object's view switcher, or (left out) a page's tools only. */
+export type ViewBarProps = (ViewBarSwitcher | ViewBarToolsOnly) & {
+  /** The end of the bar: View settings, Import / Export, the Table and Board switch; a list page's search. */
+  readonly children?: ReactNode;
+};
+
+/**
+ * The bar under the top bar: the view switcher (with the view's own actions in its menu) at the start, and the page's tools at the end. Without
+ * `views`, a page that has no views (Booking pages, Forms) keeps the same bar for its tools, so its content starts
+ * where an object's view does and nothing moves between them.
+ */
+export function ViewBar(props: ViewBarProps) {
+  const { children } = props;
+  const showSkeleton = useDelayedLoading(props.isLoading ?? false);
+  if (props.views === undefined) {
+    return <div className={styles.view}>{children !== undefined && <div className={styles.end}>{children}</div>}</div>;
+  }
+  const {
+    views,
+    currentViewId,
+    onViewChange,
+    onCreateView,
+    actions = [],
+    onAction: onViewAction,
+    isLoading = false,
+  } = props;
   const current = views.find((view) => view.id === currentViewId) ?? views[0];
   const actionIds = new Set(actions.map((action) => `${ACTION}${action.id}`));
   const onAction = (key: MenuKey) => {

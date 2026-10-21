@@ -24,10 +24,13 @@ export const Route = createFileRoute('/w/$slug')({
   loader: async ({ context, params }) => {
     const workspaceName = context.me.workspaces.find((workspace) => workspace.slug === params.slug)?.name;
     try {
-      // The person's role and permissions come with the objects (spec 0009): screens hide what they can't use.
+      // The person's role and permissions come with the objects (spec 0009): screens hide what they can't use. Their
+      // own sidebar comes in the same round (spec 0034, AC-936), so it never draws the default order first; a failed
+      // sidebar read draws the defaults rather than failing the workspace.
       const [objects, access] = await Promise.all([
         context.data.objects.list(params.slug),
         context.data.access.mine(params.slug),
+        context.data.nav.load(params.slug).catch(() => undefined),
       ]);
       return { workspaceName: workspaceName ?? params.slug, objects, access };
     } catch (error) {

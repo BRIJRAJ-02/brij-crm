@@ -211,7 +211,7 @@ export function PageEditor({ data, slug, page: loaded, locale, schedules, ownerM
 
   return (
     <WorkspacePage
-      currentPage="captures"
+      currentPage="booking_pages"
       page={{
         topBar: (
           <TopBar
@@ -446,7 +446,7 @@ export function PageEditor({ data, slug, page: loaded, locale, schedules, ownerM
 export function PageEditorPending() {
   return (
     <WorkspacePage
-      currentPage="captures"
+      currentPage="booking_pages"
       page={{
         topBar: <TopBar title={strings.listLabel} icon="link" isLoading />,
         body: (

@@ -11,6 +11,8 @@
 //    ends `failed` (`queue_lost`), then emails made more than 30 days ago go,
 //    whatever became of them, 500 a batch. A sent one kept only its kind, key
 //    and outcome; one never sent goes too, with what it would have said.
+// 1d. `nav` (spec 0034, AC-940): each member's stored sidebar loses the views
+//    and records that point at nothing any more, 500 rows a batch.
 // 2. `expired`: jobs left `ready` past their hour end `cancelled` with
 //    `JOB_EXPIRED` (the queue row at the expiry normally does it first).
 // 3. `items`: the items of jobs that finished since the last cleanup, all
@@ -24,6 +26,7 @@
 import { sql } from 'drizzle-orm';
 import * as z from 'zod';
 import { purgeBatch, type RemovedCounts } from '../../engine/deletion.ts';
+import { pruneNavRows } from '../../navigation/navigation.ts';
 import { RESTORE_WINDOW } from '../../engine/limits.ts';
 import type { WriteContext } from '../../engine/write.ts';
 import { defineKind, MAX_ATTEMPTS, type KindDefinition, type StepOutcome } from '../registry.ts';
@@ -44,7 +47,7 @@ export const MaintenanceParams = z.strictObject({ day: z.iso.date() });
 export type MaintenanceParams = z.infer<typeof MaintenanceParams>;
 
 /** The phases, in the order they run. */
-const PHASES = ['purge', 'notes_tasks', 'emails', 'expired', 'items', 'jobs', 'requeue', 'exports'] as const;
+const PHASES = ['purge', 'notes_tasks', 'emails', 'nav', 'expired', 'items', 'jobs', 'requeue', 'exports'] as const;
 
 /** How many items one `items` or `jobs` batch deletes at most, and how many finished jobs one `items` batch visits. */
 const ITEM_BATCH = 5_000;
@@ -69,6 +72,8 @@ const Totals = z.object({
   tasks: Count.default(0),
   // Added by the emails lane: a checkpoint stored before it reads as none removed yet.
   emails: Count.default(0),
+  // Added by spec 0034: the sidebars that lost an item pointing at nothing.
+  sidebars: Count.default(0),
   expired: Count,
   items: Count,
   jobs: Count,
@@ -86,6 +91,7 @@ const NO_TOTALS: Totals = {
   notes: 0,
   tasks: 0,
   emails: 0,
+  sidebars: 0,
   expired: 0,
   items: 0,
   jobs: 0,
@@ -140,6 +146,7 @@ const plus = (totals: Totals, more: Partial<Totals>): Totals => ({
   notes: totals.notes + (more.notes ?? 0),
   tasks: totals.tasks + (more.tasks ?? 0),
   emails: totals.emails + (more.emails ?? 0),
+  sidebars: totals.sidebars + (more.sidebars ?? 0),
   expired: totals.expired + (more.expired ?? 0),
   items: totals.items + (more.items ?? 0),
   jobs: totals.jobs + (more.jobs ?? 0),
@@ -208,6 +215,19 @@ async function oldEmails(context: WriteContext, at: Checkpoint, limit: number): 
   const totals = plus(at.totals, { emails: removed.rowCount ?? 0 });
   const full = (lost.rowCount ?? 0) >= limit || (removed.rowCount ?? 0) >= limit;
   return outcome(full ? { ...at, totals } : nextPhase(at, totals), at, totals, count);
+}
+
+/**
+ * Phase 1d (spec 0034, AC-940): the members' stored sidebars, `limit` rows a batch by member id, each losing the
+ * views and records that point at nothing any more (a view deleted, a record purged, today's purge included). Their
+ * items were already left out of every read, so no event is stored, and none is needed: a browser takes a read at
+ * the row's new version as newer than the copy it holds.
+ */
+async function navRows(context: WriteContext, at: Checkpoint, limit: number): Promise<StepOutcome> {
+  const { seen, changed, last } = await pruneNavRows(context, at.after, limit);
+  const totals = plus(at.totals, { sidebars: changed });
+  const next = seen === limit && last !== undefined ? { ...at, totals, after: last } : nextPhase(at, totals);
+  return outcome(next, at, totals, changed);
 }
 
 /** Phase 2: ends jobs left `ready` past their hour, as the queue row at their expiry would, with their events. */
@@ -432,6 +452,8 @@ export function maintenanceDaily(queue?: QueueRows): KindDefinition<MaintenanceP
           return notesAndTasks(context, at, limit);
         case 'emails':
           return oldEmails(context, at, limit);
+        case 'nav':
+          return navRows(context, at, limit);
         case 'expired':
           return expired(context, at, limit);
         case 'items':

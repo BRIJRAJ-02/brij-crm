@@ -38,6 +38,7 @@ import { OpenTasksCard } from '../tasks/OpenTasksCard.tsx';
 import { strings as taskStrings } from '../tasks/strings.ts';
 import { TaskDialog } from '../tasks/TaskDialog.tsx';
 import { TasksTab } from '../tasks/TasksTab.tsx';
+import { FavouriteButton } from '../workspace/FavouriteButton.tsx';
 import { objectHref } from '../workspace/objects.ts';
 import { strings as workspaceStrings } from '../workspace/strings.ts';
 import { WorkspacePage } from '../workspace/WorkspacePage.tsx';
@@ -610,6 +611,7 @@ function RecordScreen({
             <RecordLayout
               header={
                 <RecordHeader record={display} objectName={object.singularName}>
+                  <FavouriteButton data={data} slug={slug} kind="record" id={recordId} />
                   <Button variant="ghost" icon="link" onPress={copyLink}>
                     {strings.copyLink}
                   </Button>

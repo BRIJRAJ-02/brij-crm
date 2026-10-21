@@ -421,6 +421,13 @@
       "when": 1792610484284,
       "tag": "0059_form_submission_context",
       "breakpoints": true
+    },
+    {
+      "idx": 60,
+      "version": "7",
+      "when": 1792610691275,
+      "tag": "0060_member_nav_prefs",
+      "breakpoints": true
     }
   ]
 }

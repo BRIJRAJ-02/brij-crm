@@ -621,7 +621,7 @@ export function FormEditor(props: FormEditorProps) {
 
   return (
     <WorkspacePage
-      currentPage="captures"
+      currentPage="forms"
       page={{
         topBar,
         body: (

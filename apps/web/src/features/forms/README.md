@@ -1,6 +1,6 @@
 # Forms
 
-Captures, Forms (spec 0023, `0023-experience.md`): forms that collect submissions from a link or a site, and add each one to the CRM unless the form keeps them only. The routes are `/w/$slug/captures/forms` (the list) and `/w/$slug/captures/forms/$formId` (the editor: `?tab=` settings, install or submissions, `&state=` and `&submission=` on Submissions, `?question=<id>` to open one question); the Captures frame and its Links · Forms tabs come from the shell.
+Scheduling › Forms (spec 0023, `0023-experience.md`; a page of its own since spec 0034): forms that collect submissions from a link or a site, and add each one to the CRM unless the form keeps them only. The routes are `/w/$slug/forms` (the list) and `/w/$slug/forms/$formId` (the editor: `?tab=` settings, install or submissions, `&state=` and `&submission=` on Submissions, `?question=<id>` to open one question, and its `preview`); the page's frame, TopBar and search bar come from the shared layout (`captures/CapturesLayout.tsx`), and every old `/captures/forms` address redirects here.
 
 ## Screens
 

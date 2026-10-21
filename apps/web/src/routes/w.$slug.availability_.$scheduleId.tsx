@@ -8,11 +8,11 @@ import { scheduleStrings } from '../features/booking/schedule-strings.ts';
 import { strings } from '../features/booking/strings.ts';
 import { WorkspacePage } from '../features/workspace/WorkspacePage.tsx';
 
-// One availability schedule's editor (spec 0035, AC-970), outside the Bookings layout (`bookings_`) as a page's editor
-// sits outside Captures: it has its own TopBar, with the trail back to Availability. `default` opens whichever
+// One availability schedule's editor (spec 0035, AC-970), a page beside Scheduling › Availability (`availability_`)
+// as a booking page's editor sits beside its list: it has its own TopBar, with the trail back to Availability. `default` opens whichever
 // schedule is the default, the virtual one included. The schedules come from the data layer's held list, so a save
 // in another tab shows here while nothing is being edited.
-export const Route = createFileRoute('/w/$slug/bookings_/availability/$scheduleId')({
+export const Route = createFileRoute('/w/$slug/availability_/$scheduleId')({
   // `?member=`: an admin editing a colleague's schedule (AC-971); anyone else edits their own.
   validateSearch: memberSearch,
   loaderDeps: ({ search }) => ({ member: search.member }),
@@ -50,7 +50,7 @@ function ScheduleError({ error }: ErrorComponentProps) {
   const router = useRouter();
   return (
     <WorkspacePage
-      currentPage="bookings"
+      currentPage="availability"
       page={{
         topBar: <TopBar title={scheduleStrings.schedule} icon="clock" />,
         body: (

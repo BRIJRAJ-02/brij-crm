@@ -22,6 +22,7 @@ const SAMPLES: Readonly<Record<ChangeEvent['kind'], ChangeEvent>> = {
   members: { seq: 1, at: AT, kind: 'members', memberIds: [ID] },
   access: { seq: 1, at: AT, kind: 'access', memberIds: [ID] },
   jobs: { seq: 1, at: AT, kind: 'jobs', jobIds: [ID] },
+  nav: { seq: 1, at: AT, kind: 'nav', memberIds: [ID] },
   restricted: { seq: 1, at: AT, kind: 'restricted' },
 };
 

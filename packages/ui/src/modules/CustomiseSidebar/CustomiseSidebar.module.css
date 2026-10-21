@@ -1,0 +1,53 @@
+/* CustomiseSidebar: the dialog's sections, each a quiet label over rows of an
+   icon, the name and a switch at the end. The reset's confirm is a Modal of its own. */
+@layer components {
+  .intro,
+  .empty {
+    margin: 0 0 var(--space-12);
+    color: var(--text-secondary);
+    font: var(--text-body);
+    letter-spacing: var(--tracking-body);
+  }
+
+  .section + .section {
+    margin-block-start: var(--space-16);
+  }
+
+  .heading {
+    margin: 0 0 var(--space-4);
+    color: var(--text-secondary);
+    font: var(--text-label-strong);
+    letter-spacing: var(--tracking-label-strong);
+  }
+
+  .list {
+    display: flex;
+    flex-direction: column;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+
+  .row {
+    display: flex;
+    gap: var(--space-8);
+    align-items: center;
+    min-block-size: var(--size-nav-item);
+    border-block-end: var(--border-width-hairline) solid var(--border-subtle);
+  }
+
+  .row:last-child {
+    border-block-end: none;
+  }
+
+  .name {
+    flex: 1;
+    min-inline-size: 0;
+    overflow: hidden;
+    color: var(--text);
+    font: var(--text-body);
+    letter-spacing: var(--tracking-body);
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+}

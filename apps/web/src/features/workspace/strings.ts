@@ -22,18 +22,41 @@ export const strings = {
   signOutTitle: 'Sign out?',
   signOutText: 'You’ll need to sign in again on this device.',
   records: 'Records',
-  /** The sidebar's way to the trash, at the foot of Records (spec 0022). */
+  /** The sidebar's way to the trash (spec 0022), at its foot (spec 0034, AC-930). */
   trash: 'Trash',
-  /** The sidebar's way to the upcoming bookings, after Records. */
+  /** The sidebar's way to the bookings, first under Scheduling (spec 0034, AC-928). */
   bookings: 'Bookings',
-  /** The sidebar's way to the booking links and the forms, after Bookings. */
-  captures: 'Captures',
-  /** The group holding Bookings, Captures and Trash after Records, for screen readers. */
-  destinations: 'Workspace pages',
-  /** The sidebar group above Records holding My tasks (spec 0019). */
-  personal: 'Your work',
-  /** The tasks page's row (the owner, 21 October 2026: the page is Tasks, with All tasks among its tabs). */
-  myTasks: 'Tasks',
+  /** The Scheduling section's pages (spec 0034, AC-928). */
+  availability: 'Availability',
+  bookingPages: 'Booking pages',
+  forms: 'Forms',
+  /** The sidebar's first row and the workspace's landing page (owner, 21 October 2026). */
+  home: 'Home',
+  /** The tasks page's row (spec 0019), after the sections, as timefix has it; Tasks, as the page is named (owner, 21 October 2026). */
+  tasks: 'Tasks',
+  /** The group above the sections holding Tasks (and Inbox once it exists), for screen readers. */
+  yourWork: 'Your work',
+  /** The sidebar's sections (spec 0034). */
+  favourites: 'Favourites',
+  lists: 'Lists',
+  scheduling: 'Scheduling',
+  /** The foot's way to the shortcut list (AC-930: it opens the keyboard shortcuts until a help centre exists). */
+  help: 'Help and shortcuts',
+  /** Item and section menus (spec 0034, AC-932, AC-933). */
+  hideFromSidebar: 'Hide from sidebar',
+  removeFavourite: 'Remove from favourites',
+  /** The star on a record's or a view's header (AC-934). */
+  addFavourite: 'Add to favourites',
+  moveUp: 'Move up',
+  moveDown: 'Move down',
+  customiseSidebar: 'Customise sidebar',
+  /** Customise sidebar's code didn't load. */
+  customiseUnavailable: 'Couldn’t open Customise sidebar. Reload the page, then try again.',
+  /** An item's and a section's menu, for screen readers: "Deals options". */
+  itemOptions: (name: string) => `${name} options`,
+  sectionOptions: (title: string) => `${title} options`,
+  /** A favourite record with no name (spec 0034, AC-925): "Unnamed person". */
+  unnamedRecord: (singular: string) => `Unnamed ${singular.toLowerCase()}`,
   /** The workspace menu's way into settings (spec 0012), above Sign out. */
   settings: 'Settings',
   noObjects: 'No objects yet',
@@ -111,4 +134,5 @@ export const strings = {
   emailAddress: 'Email address',
   undoShortcut: 'Undo your last change',
   showShortcuts: 'Show keyboard shortcuts',
+  toggleRail: 'Fold the sidebar to icons, or open it',
 } as const;

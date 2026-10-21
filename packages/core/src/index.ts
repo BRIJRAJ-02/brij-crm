@@ -159,6 +159,8 @@ export {
   type CreateViewInput,
   type UpdateViewInput,
 } from './views/manage.ts';
+// The sidebar (spec 0034): each member's own row, read through the door and changed one operation at a time.
+export { changeNav, readNav } from './navigation/navigation.ts';
 export {
   deleteNote,
   getNote,
@@ -170,6 +172,7 @@ export {
   type SaveNoteInput,
 } from './notes/notes.ts';
 export {
+  countDueTasks,
   createTask,
   deleteTask,
   getTasks,

@@ -101,6 +101,14 @@ describe('tasks.*', () => {
       mutationId: newId(),
     });
     const loose = await m.client.tasks.create({ workspace: m.slug, id: newId(), title: 'Loose', mutationId: newId() });
+    // The sidebar's Tasks badge (spec 0034, AC-924): due on or before the browser's date, mine only.
+    await m.client.tasks.update({ workspace: m.slug, taskId: mine.id, dueOn: '2026-10-20', mutationId: newId() });
+    expect(await m.client.tasks.due({ workspace: m.slug, today: '2026-10-21' })).toEqual({ count: 1, atLeast: false });
+    expect(await m.client.tasks.due({ workspace: m.slug, today: '2026-10-19' })).toEqual({ count: 0, atLeast: false });
+    expect(await failure(() => m.client.tasks.due({ workspace: m.slug, today: 'today' }))).toMatchObject({
+      code: 'INPUT_INVALID',
+      status: 400,
+    });
     const list = (mine: 'assigned' | 'created' | 'all', status: 'open' | 'done' = 'open') =>
       m.client.tasks.list({ workspace: m.slug, scope: { mine }, status });
     expect((await list('assigned')).items.map((task) => task.id)).toEqual([mine.id]);

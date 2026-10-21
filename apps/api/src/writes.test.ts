@@ -59,6 +59,7 @@ const READS: ReadonlySet<string> = new Set([
   'trash.count',
   'tasks.get',
   'tasks.list',
+  'tasks.due',
   'notes.get',
   'notes.list',
   'calendar.connections.list',
@@ -87,6 +88,8 @@ const READS: ReadonlySet<string> = new Set([
   'schedules.members',
   'schedules.list',
   'schedules.get',
+  // The sidebar (spec 0034).
+  'nav.get',
 ]);
 
 let db: Database;
@@ -797,6 +800,12 @@ const WRITES: Record<string, (m: Member, mutationId: string) => Promise<readonly
       { kind: 'views', item_ids: [viewId] },
       { kind: 'views', object_id: m.people.id, item_ids: [viewId], mutation_id: mutationId },
     ];
+  },
+  // The sidebar (spec 0034, AC-937): one nav row naming the member, and nothing of what changed.
+  'nav.change': async (m, mutationId) => {
+    const { memberId } = await m.client.access.mine({ workspace: m.slug });
+    await m.client.nav.change({ workspace: m.slug, op: { op: 'rail', on: true }, mutationId });
+    return [{ kind: 'nav', item_ids: [memberId], mutation_id: mutationId }];
   },
   // Tasks (spec 0019, AC-448): one tasks row per write, naming the task and every record linked before or after.
   'tasks.create': async (m, mutationId) => {
