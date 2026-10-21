@@ -110,9 +110,9 @@ function OnePhone({ attribute, value, surface, onCommit, onCancel, error, startT
       size={isCompact ? 'sm' : 'md'}
       variant={surface === 'cell' ? 'cell' : 'default'}
       isErrorFloating={surface === 'cell'}
-      // A phone number, so a password manager never takes the field for a login ("off" left it guessing, the owner,
-      // 21 October 2026); national, as the code sits in its own picker.
-      autoComplete="tel-national"
+      // A contact's number, never the viewer's own: no browser autofill, and (through Field) the password managers'
+      // own opt outs, so none draws its login icon here (the owner, 21 October 2026).
+      autoComplete="off"
       // Opened from its value (a cell, a details row): the number takes focus, not the code before it.
       autoFocus={surface === 'cell' || surface === 'panel'}
       guess={start}
@@ -166,9 +166,9 @@ function SeveralPhones(props: EditorProps<'phone'>) {
           }}
           onSubmit={field.onAdd}
           onLeave={field.onAdd}
-          // A phone number, so a password manager never takes the field for a login ("off" left it guessing, the owner,
-          // 21 October 2026); national, as the code sits in its own picker.
-          autoComplete="tel-national"
+          // A contact's number, never the viewer's own: no browser autofill, and (through Field) the password managers'
+          // own opt outs, so none draws its login icon here (the owner, 21 October 2026).
+          autoComplete="off"
           // eslint-disable-next-line jsx-a11y-x/no-autofocus -- opened from a grid cell: keys go to the add field
           autoFocus={field.autoFocus}
           guess={start}
