@@ -3,7 +3,7 @@
 // AC-974), the default moves pages that follow it (AC-962, AC-965), deleting
 // a schedule in use points its pages at the default (AC-967), who may touch
 // whose (AC-966, AC-971), bookings stay put (AC-968), and the outbox row.
-import { readFileSync } from 'node:fs';
+import { readdirSync, readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { sql } from 'drizzle-orm';
 import { afterAll, beforeAll, describe, expect, inject, it } from 'vitest';
@@ -708,5 +708,17 @@ describe('slots by schedule: zones, daylight saving and date overrides (AC-961, 
     expect(answers.stored.id).toEqual(expect.any(String));
     expect(answers.named).toMatchObject({ id: evenings.id, name: 'Evenings', isDefault: false });
     expect(answers.someoneElses).toMatchObject({ id: answers.stored.id, name: 'Working hours' });
+  });
+});
+
+describe('one write path (spec 0037, AC-1444)', () => {
+  it('writes availability_schedules only from the schedules module, so audit and notices attach in one place', () => {
+    const root = fileURLToPath(new URL('../', import.meta.url));
+    const writers = readdirSync(root, { recursive: true, encoding: 'utf8' })
+      .filter((file) => file.endsWith('.ts') && !file.endsWith('.test.ts'))
+      .filter((file) =>
+        /\.(insert|update|delete)\(availabilitySchedules\)/.test(readFileSync(`${root}${file}`, 'utf8')),
+      );
+    expect(writers).toEqual(['availability/schedules.ts']);
   });
 });

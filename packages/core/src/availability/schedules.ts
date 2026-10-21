@@ -25,7 +25,7 @@ import { inWorkspace } from '../access/run.ts';
 import { isUuidV7, newId } from '../engine/ids.ts';
 import { postgresError, refuse, refuseOn } from '../engine/refusals.ts';
 import { actorRow } from '../engine/scope.ts';
-import { runWrite, type AfterWrite } from '../engine/write.ts';
+import { runWrite, type AfterWrite, type WriteContext } from '../engine/write.ts';
 import { lockKey } from '../booking/locks.ts';
 import { hoursOf, virtualDefault, withoutNotes } from './resolve.ts';
 import { fallbackZoneOf } from '../booking/slots.ts';
@@ -42,9 +42,20 @@ function memberOf(scope: EngineScope): string | undefined {
   return scope.access.principal.kind === 'member' ? scope.access.principal.memberId : undefined;
 }
 
-/** Whether the reader may change `memberId`'s schedules: their own, or anyone's with `booking.admin` (AC-971). */
+/**
+ * Whether the reader may change their own schedules: `booking.manage` today. Spec 0037 adds `availability.own`
+ * here (AC-1260), the one place a member's own edit is decided.
+ */
+function mayEditOwnHours(scope: EngineScope): boolean {
+  return can(scope.access, 'booking.manage');
+}
+
+/**
+ * Whether the reader may change `memberId`'s schedules (AC-971): their own (`mayEditOwnHours`), or anyone's with
+ * `booking.admin`. The one colleague check, with `targetMember`: spec 0037's J4 swaps `booking.admin` for its reach.
+ */
 function mayChange(scope: EngineScope, memberId: string): boolean {
-  return memberId === memberOf(scope) || can(scope.access, 'booking.admin');
+  return memberId === memberOf(scope) ? mayEditOwnHours(scope) : can(scope.access, 'booking.admin');
 }
 
 /**
@@ -52,12 +63,20 @@ function mayChange(scope: EngineScope, memberId: string): boolean {
  * or with `memberId` another member (`booking.admin`), who must be active in
  * the workspace (else NOT_FOUND, never saying whether they exist).
  */
-async function targetMember(tx: WorkspaceTx, scope: EngineScope, memberId: string | undefined): Promise<string> {
+async function targetMember(
+  tx: WorkspaceTx,
+  scope: EngineScope,
+  memberId: string | undefined,
+  use: 'read' | 'write',
+): Promise<string> {
   const caller = memberOf(scope);
   if (memberId === undefined || memberId === caller) {
-    if (caller === undefined) throw refuse('FORBIDDEN', PERMISSIONS['booking.manage'].message);
+    if (caller === undefined || (use === 'write' && !mayEditOwnHours(scope))) {
+      throw refuse('FORBIDDEN', PERMISSIONS['booking.manage'].message);
+    }
     return caller;
   }
+  // The colleague check (AC-971), as `mayChange` makes it.
   requirePermission(scope, 'booking.admin');
   const [row] = await tx
     .select({ id: members.id })
@@ -65,6 +84,50 @@ async function targetMember(tx: WorkspaceTx, scope: EngineScope, memberId: strin
     .where(and(eq(members.id, memberId), eq(members.status, 'active')));
   if (row === undefined) throw refuse('NOT_FOUND', 'That member isn’t in this workspace.');
   return row.id;
+}
+
+/**
+ * What one schedule write changed, for the seam after it: whose schedules, the kind of write, and each schedule it
+ * touched as it was and as it is now (no `before` on a schedule it made, no `after` on one it deleted).
+ */
+interface ScheduleChange {
+  readonly kind: 'create' | 'update' | 'set_default' | 'duplicate' | 'delete' | 'default_hours';
+  readonly memberId: string;
+  readonly schedules: readonly { readonly id: string; readonly before?: ScheduleRow; readonly after?: ScheduleRow }[];
+}
+
+/**
+ * After a schedule write, inside its transaction, with what it changed: nothing yet. Spec 0037 (AC-1444) writes the
+ * `schedule.changed` audit row here, with before and after summaries, and queues the member's notice when the actor
+ * isn't the schedule's member (AC-1263, AC-1264).
+ */
+function afterScheduleChange(_context: WriteContext, _scope: EngineScope, _change: ScheduleChange): void {
+  // The seam (spec 0037, AC-1444): the audit row and the member's notice attach here.
+}
+
+/**
+ * Every schedule write's one way in (spec 0037, AC-1444): `body` runs as one write and answers what it changed;
+ * the outbox records its schedule ids (one `schedules` row) and `afterScheduleChange` sees it, in the same
+ * transaction. A write that changes nothing (a retried create, the default set as default) answers no change.
+ */
+async function writeSchedules<T>(
+  scope: EngineScope,
+  hooks: readonly AfterWrite[],
+  body: (context: WriteContext) => Promise<{ readonly result: T; readonly change?: ScheduleChange }>,
+): Promise<T> {
+  const { result } = await runWrite(
+    scope,
+    async (context) => {
+      const { result: answer, change } = await body(context);
+      if (change !== undefined) {
+        context.record({ schedules: change.schedules.map((each) => each.id) });
+        afterScheduleChange(context, scope, change);
+      }
+      return answer;
+    },
+    hooks,
+  );
+  return result;
 }
 
 /** The lock on one member's schedules: every write to them takes it, so the limit, default and names hold. */
@@ -178,7 +241,7 @@ export async function listSchedules(
 ): Promise<ScheduleList> {
   requirePermission(scope, 'booking.manage');
   return inWorkspace(scope, async (tx) => {
-    const memberId = await targetMember(tx, scope, input.memberId);
+    const memberId = await targetMember(tx, scope, input.memberId, 'read');
     return listOf(tx, memberId, input.timeZone, memberOf(scope));
   });
 }
@@ -294,12 +357,22 @@ async function storedDefault(tx: WorkspaceTx, memberId: string): Promise<Schedul
   return row;
 }
 
-/** Clears the member's default mark, so another may take it (one transaction with the new mark, AC-962). */
-async function clearDefault(tx: WorkspaceTx, memberId: string): Promise<void> {
-  await tx
+/**
+ * Clears the member's default mark, so another may take it (one transaction with the new mark, AC-962), and answers
+ * the schedule it cleared, as it was and as it is.
+ */
+async function clearDefault(
+  tx: WorkspaceTx,
+  memberId: string,
+): Promise<readonly { readonly id: string; readonly before: ScheduleRow; readonly after: ScheduleRow }[]> {
+  const before = await storedDefault(tx, memberId);
+  if (before === undefined) return [];
+  const [after] = await tx
     .update(availabilitySchedules)
     .set({ isDefault: false })
-    .where(and(eq(availabilitySchedules.memberId, memberId), eq(availabilitySchedules.isDefault, true)));
+    .where(eq(availabilitySchedules.id, before.id))
+    .returning();
+  return after === undefined ? [] : [{ id: before.id, before, after }];
 }
 
 /** Inserts one schedule as the scope's actor. */
@@ -393,48 +466,47 @@ export async function createSchedule(
   requirePermission(scope, 'booking.manage');
   if (!isUuidV7(input.id)) throw refuse('CONFIG_INVALID', 'The schedule id must be a UUID v7.');
   const name = input.name.trim();
-  const { result } = await runWrite(
-    scope,
-    async (context) => {
-      const { tx } = context;
-      const memberId = await targetMember(tx, scope, input.memberId);
-      await schedulesLock(tx, scope.workspaceId, memberId);
-      const [earlier] = await tx.select().from(availabilitySchedules).where(eq(availabilitySchedules.id, input.id));
-      if (earlier !== undefined) {
-        if (earlier.memberId !== memberId) throw refuse('ID_TAKEN', 'A schedule with that id already exists.');
-        return viewOf(earlier, await pagesOfMember(tx, memberId), memberOf(scope));
-      }
-      const isDefault = input.isDefault === true;
-      const current = await storedDefault(tx, memberId);
-      // The virtual default's zone: the caller's own for their schedules; for a colleague's (an admin, AC-971), the
-      // zone their pages already book the virtual default in, so storing it moves none of their slots.
-      const zone =
-        memberId === memberOf(scope) ? input.timeZone : ((await newestPageZone(tx, memberId)) ?? input.timeZone);
-      // The first schedule a member adds beside the virtual default stores that default too, "Working hours" in
-      // their zone (AC-963: stored the first time they change anything), so it stays in their list as the default.
-      const keepsVirtual = !isDefault && current === undefined;
-      // A member's first default is never refused for room (pages from before spec 0035 may have filled it); a
-      // schedule added beside the virtual default needs room for both.
-      if (!(isDefault && current === undefined)) await checkRoom(tx, memberId, keepsVirtual ? 2 : 1);
-      const kept = keepsVirtual ? await storeVirtualDefault(tx, scope, memberId, zone) : undefined;
-      await checkNameFree(tx, memberId, name);
-      const availability =
-        input.availability ??
-        (current === undefined ? virtualDefault(zone).availability : hoursOf(current.availability, zone));
-      if (isDefault) await clearDefault(tx, memberId);
-      const row = await insertSchedule(tx, scope, { id: input.id, memberId, name, isDefault, availability });
-      context.record({
+  return writeSchedules(scope, hooks, async (context) => {
+    const { tx } = context;
+    const memberId = await targetMember(tx, scope, input.memberId, 'write');
+    await schedulesLock(tx, scope.workspaceId, memberId);
+    const [earlier] = await tx.select().from(availabilitySchedules).where(eq(availabilitySchedules.id, input.id));
+    if (earlier !== undefined) {
+      if (earlier.memberId !== memberId) throw refuse('ID_TAKEN', 'A schedule with that id already exists.');
+      return { result: viewOf(earlier, await pagesOfMember(tx, memberId), memberOf(scope)) };
+    }
+    const isDefault = input.isDefault === true;
+    const current = await storedDefault(tx, memberId);
+    // The virtual default's zone: the caller's own for their schedules; for a colleague's (an admin, AC-971), the
+    // zone their pages already book the virtual default in, so storing it moves none of their slots.
+    const zone =
+      memberId === memberOf(scope) ? input.timeZone : ((await newestPageZone(tx, memberId)) ?? input.timeZone);
+    // The first schedule a member adds beside the virtual default stores that default too, "Working hours" in
+    // their zone (AC-963: stored the first time they change anything), so it stays in their list as the default.
+    const keepsVirtual = !isDefault && current === undefined;
+    // A member's first default is never refused for room (pages from before spec 0035 may have filled it); a
+    // schedule added beside the virtual default needs room for both.
+    if (!(isDefault && current === undefined)) await checkRoom(tx, memberId, keepsVirtual ? 2 : 1);
+    const kept = keepsVirtual ? await storeVirtualDefault(tx, scope, memberId, zone) : undefined;
+    await checkNameFree(tx, memberId, name);
+    const availability =
+      input.availability ??
+      (current === undefined ? virtualDefault(zone).availability : hoursOf(current.availability, zone));
+    const cleared = isDefault ? await clearDefault(tx, memberId) : [];
+    const row = await insertSchedule(tx, scope, { id: input.id, memberId, name, isDefault, availability });
+    return {
+      result: viewOf(row, await pagesOfMember(tx, memberId), memberOf(scope)),
+      change: {
+        kind: 'create',
+        memberId,
         schedules: [
-          row.id,
-          ...(kept === undefined ? [] : [kept.id]),
-          ...(isDefault && current !== undefined ? [current.id] : []),
+          { id: row.id, after: row },
+          ...(kept === undefined ? [] : [{ id: kept.id, after: kept }]),
+          ...cleared,
         ],
-      });
-      return viewOf(row, await pagesOfMember(tx, memberId), memberOf(scope));
-    },
-    hooks,
-  );
-  return result;
+      },
+    };
+  });
 }
 
 /**
@@ -454,43 +526,40 @@ export async function updateSchedule(
 ): Promise<ScheduleView> {
   requirePermission(scope, 'booking.manage');
   const name = input.name?.trim();
-  const { result } = await runWrite(
-    scope,
-    async (context) => {
-      const { tx } = context;
-      const row = await scheduleToChange(tx, scope, input.id);
-      if (row.updatedAt.getTime() !== Date.parse(input.updatedAt)) {
-        throw refuse('STALE', 'This schedule was changed in another tab or by someone else. Reload it to see.');
-      }
-      if (name !== undefined && name !== row.name) await checkNameFree(tx, row.memberId, name, row.id);
-      const by = actorRow(scope.actor);
-      const availability =
-        input.availability === undefined || row.memberId === memberOf(scope)
-          ? input.availability
-          : withNotesKept(input.availability, hoursOf(row.availability, input.availability.timeZone));
-      try {
-        const [updated] = await tx
-          .update(availabilitySchedules)
-          .set({
-            ...(name === undefined ? {} : { name }),
-            ...(availability === undefined ? {} : { availability }),
-            updatedAt: sql`now()`,
-            updatedByType: by.type,
-            updatedById: by.id,
-            updatedByMemberId: by.memberId,
-          })
-          .where(eq(availabilitySchedules.id, row.id))
-          .returning();
-        if (updated === undefined) throw refuse('NOT_FOUND', NOT_FOUND_MESSAGE);
-        context.record({ schedules: [updated.id] });
-        return viewOf(updated, await pagesOfMember(tx, updated.memberId), memberOf(scope));
-      } catch (error) {
-        throw nameClash(error, name ?? row.name);
-      }
-    },
-    hooks,
-  );
-  return result;
+  return writeSchedules(scope, hooks, async (context) => {
+    const { tx } = context;
+    const row = await scheduleToChange(tx, scope, input.id);
+    if (row.updatedAt.getTime() !== Date.parse(input.updatedAt)) {
+      throw refuse('STALE', 'This schedule was changed in another tab or by someone else. Reload it to see.');
+    }
+    if (name !== undefined && name !== row.name) await checkNameFree(tx, row.memberId, name, row.id);
+    const by = actorRow(scope.actor);
+    const availability =
+      input.availability === undefined || row.memberId === memberOf(scope)
+        ? input.availability
+        : withNotesKept(input.availability, hoursOf(row.availability, input.availability.timeZone));
+    try {
+      const [updated] = await tx
+        .update(availabilitySchedules)
+        .set({
+          ...(name === undefined ? {} : { name }),
+          ...(availability === undefined ? {} : { availability }),
+          updatedAt: sql`now()`,
+          updatedByType: by.type,
+          updatedById: by.id,
+          updatedByMemberId: by.memberId,
+        })
+        .where(eq(availabilitySchedules.id, row.id))
+        .returning();
+      if (updated === undefined) throw refuse('NOT_FOUND', NOT_FOUND_MESSAGE);
+      return {
+        result: viewOf(updated, await pagesOfMember(tx, updated.memberId), memberOf(scope)),
+        change: { kind: 'update', memberId: row.memberId, schedules: [{ id: row.id, before: row, after: updated }] },
+      };
+    } catch (error) {
+      throw nameClash(error, name ?? row.name);
+    }
+  });
 }
 
 /**
@@ -504,33 +573,33 @@ export async function setDefaultSchedule(
   hooks: readonly AfterWrite[] = [],
 ): Promise<ScheduleView> {
   requirePermission(scope, 'booking.manage');
-  const { result } = await runWrite(
-    scope,
-    async (context) => {
-      const { tx } = context;
-      const row = await scheduleToChange(tx, scope, input.id);
-      if (row.isDefault) return viewOf(row, await pagesOfMember(tx, row.memberId), memberOf(scope));
-      const old = await storedDefault(tx, row.memberId);
-      await clearDefault(tx, row.memberId);
-      const by = actorRow(scope.actor);
-      const [updated] = await tx
-        .update(availabilitySchedules)
-        .set({
-          isDefault: true,
-          updatedAt: sql`now()`,
-          updatedByType: by.type,
-          updatedById: by.id,
-          updatedByMemberId: by.memberId,
-        })
-        .where(eq(availabilitySchedules.id, row.id))
-        .returning();
-      if (updated === undefined) throw refuse('NOT_FOUND', NOT_FOUND_MESSAGE);
-      context.record({ schedules: [updated.id, ...(old === undefined ? [] : [old.id])] });
-      return viewOf(updated, await pagesOfMember(tx, updated.memberId), memberOf(scope));
-    },
-    hooks,
-  );
-  return result;
+  return writeSchedules(scope, hooks, async (context) => {
+    const { tx } = context;
+    const row = await scheduleToChange(tx, scope, input.id);
+    if (row.isDefault) return { result: viewOf(row, await pagesOfMember(tx, row.memberId), memberOf(scope)) };
+    const cleared = await clearDefault(tx, row.memberId);
+    const by = actorRow(scope.actor);
+    const [updated] = await tx
+      .update(availabilitySchedules)
+      .set({
+        isDefault: true,
+        updatedAt: sql`now()`,
+        updatedByType: by.type,
+        updatedById: by.id,
+        updatedByMemberId: by.memberId,
+      })
+      .where(eq(availabilitySchedules.id, row.id))
+      .returning();
+    if (updated === undefined) throw refuse('NOT_FOUND', NOT_FOUND_MESSAGE);
+    return {
+      result: viewOf(updated, await pagesOfMember(tx, updated.memberId), memberOf(scope)),
+      change: {
+        kind: 'set_default',
+        memberId: row.memberId,
+        schedules: [{ id: row.id, before: row, after: updated }, ...cleared],
+      },
+    };
+  });
 }
 
 /** "<name> copy", or "<name> copy 2", "… 3", the first free one, within 60 characters. */
@@ -550,31 +619,28 @@ export async function duplicateSchedule(
 ): Promise<ScheduleView> {
   requirePermission(scope, 'booking.manage');
   if (!isUuidV7(input.newId)) throw refuse('CONFIG_INVALID', 'The schedule id must be a UUID v7.');
-  const { result } = await runWrite(
-    scope,
-    async (context) => {
-      const { tx } = context;
-      const row = await scheduleToChange(tx, scope, input.id);
-      const [earlier] = await tx.select().from(availabilitySchedules).where(eq(availabilitySchedules.id, input.newId));
-      if (earlier !== undefined) {
-        if (earlier.memberId !== row.memberId) throw refuse('ID_TAKEN', 'A schedule with that id already exists.');
-        return viewOf(earlier, await pagesOfMember(tx, row.memberId), memberOf(scope));
-      }
-      await checkRoom(tx, row.memberId);
-      const taken = new Set((await storedOf(tx, row.memberId)).map((each) => each.name.toLowerCase()));
-      const copy = await insertSchedule(tx, scope, {
-        id: input.newId,
-        memberId: row.memberId,
-        name: copyName(row.name, taken),
-        isDefault: false,
-        availability: hoursOf(row.availability, 'UTC'),
-      });
-      context.record({ schedules: [copy.id] });
-      return viewOf(copy, await pagesOfMember(tx, row.memberId), memberOf(scope));
-    },
-    hooks,
-  );
-  return result;
+  return writeSchedules(scope, hooks, async (context) => {
+    const { tx } = context;
+    const row = await scheduleToChange(tx, scope, input.id);
+    const [earlier] = await tx.select().from(availabilitySchedules).where(eq(availabilitySchedules.id, input.newId));
+    if (earlier !== undefined) {
+      if (earlier.memberId !== row.memberId) throw refuse('ID_TAKEN', 'A schedule with that id already exists.');
+      return { result: viewOf(earlier, await pagesOfMember(tx, row.memberId), memberOf(scope)) };
+    }
+    await checkRoom(tx, row.memberId);
+    const taken = new Set((await storedOf(tx, row.memberId)).map((each) => each.name.toLowerCase()));
+    const copy = await insertSchedule(tx, scope, {
+      id: input.newId,
+      memberId: row.memberId,
+      name: copyName(row.name, taken),
+      isDefault: false,
+      availability: hoursOf(row.availability, 'UTC'),
+    });
+    return {
+      result: viewOf(copy, await pagesOfMember(tx, row.memberId), memberOf(scope)),
+      change: { kind: 'duplicate', memberId: row.memberId, schedules: [{ id: copy.id, after: copy }] },
+    };
+  });
 }
 
 /**
@@ -588,33 +654,30 @@ export async function deleteSchedule(
   hooks: readonly AfterWrite[] = [],
 ): Promise<{ readonly id: string; readonly repointed: { readonly pages: number } }> {
   requirePermission(scope, 'booking.manage');
-  const { result } = await runWrite(
-    scope,
-    async (context) => {
-      const { tx } = context;
-      const row = await scheduleToChange(tx, scope, input.id);
-      if (row.isDefault) throw refuse('DEFAULT_SCHEDULE', 'Set another schedule as default first.');
-      const by = actorRow(scope.actor);
-      // Deleted pages too: none may name a schedule that is gone, and the foreign key would only null it anyway.
-      const moved = await tx
-        .update(bookingPages)
-        .set({
-          scheduleId: null,
-          hoursMode: 'mine',
-          updatedAt: sql`now()`,
-          updatedByType: by.type,
-          updatedById: by.id,
-          updatedByMemberId: by.memberId,
-        })
-        .where(eq(bookingPages.scheduleId, row.id))
-        .returning({ id: bookingPages.id, deletedAt: bookingPages.deletedAt });
-      await tx.delete(availabilitySchedules).where(eq(availabilitySchedules.id, row.id));
-      context.record({ schedules: [row.id] });
-      return { id: row.id, repointed: { pages: moved.filter((page) => page.deletedAt === null).length } };
-    },
-    hooks,
-  );
-  return result;
+  return writeSchedules(scope, hooks, async (context) => {
+    const { tx } = context;
+    const row = await scheduleToChange(tx, scope, input.id);
+    if (row.isDefault) throw refuse('DEFAULT_SCHEDULE', 'Set another schedule as default first.');
+    const by = actorRow(scope.actor);
+    // Deleted pages too: none may name a schedule that is gone, and the foreign key would only null it anyway.
+    const moved = await tx
+      .update(bookingPages)
+      .set({
+        scheduleId: null,
+        hoursMode: 'mine',
+        updatedAt: sql`now()`,
+        updatedByType: by.type,
+        updatedById: by.id,
+        updatedByMemberId: by.memberId,
+      })
+      .where(eq(bookingPages.scheduleId, row.id))
+      .returning({ id: bookingPages.id, deletedAt: bookingPages.deletedAt });
+    await tx.delete(availabilitySchedules).where(eq(availabilitySchedules.id, row.id));
+    return {
+      result: { id: row.id, repointed: { pages: moved.filter((page) => page.deletedAt === null).length } },
+      change: { kind: 'delete', memberId: row.memberId, schedules: [{ id: row.id, before: row }] },
+    };
+  });
 }
 
 /**
@@ -646,44 +709,47 @@ export async function saveDefaultHours(
   hooks: readonly AfterWrite[] = [],
 ): Promise<{ readonly availability: BookingAvailability }> {
   requirePermission(scope, 'booking.manage');
-  const caller = memberOf(scope);
-  if (caller === undefined) throw refuse('FORBIDDEN', PERMISSIONS['booking.manage'].message);
-  const { result } = await runWrite(
-    scope,
-    async (context) => {
-      const { tx } = context;
-      await schedulesLock(tx, scope.workspaceId, caller);
-      const current = await storedDefault(tx, caller);
-      if (current === undefined) {
-        // A member's first default is never refused for room (pages from before spec 0035 may have filled it).
-        await checkNameFree(tx, caller, DEFAULT_SCHEDULE_NAME);
-        const row = await insertSchedule(tx, scope, {
-          id: newId(),
-          memberId: caller,
-          name: DEFAULT_SCHEDULE_NAME,
-          isDefault: true,
-          availability: input.availability,
-        });
-        context.record({ schedules: [row.id] });
-        return { availability: input.availability };
-      }
-      const by = actorRow(scope.actor);
-      await tx
-        .update(availabilitySchedules)
-        .set({
-          availability: input.availability,
-          updatedAt: sql`now()`,
-          updatedByType: by.type,
-          updatedById: by.id,
-          updatedByMemberId: by.memberId,
-        })
-        .where(eq(availabilitySchedules.id, current.id));
-      context.record({ schedules: [current.id] });
-      return { availability: input.availability };
-    },
-    hooks,
-  );
-  return result;
+  return writeSchedules(scope, hooks, async (context) => {
+    const { tx } = context;
+    const caller = await targetMember(tx, scope, undefined, 'write');
+    await schedulesLock(tx, scope.workspaceId, caller);
+    const current = await storedDefault(tx, caller);
+    if (current === undefined) {
+      // A member's first default is never refused for room (pages from before spec 0035 may have filled it).
+      await checkNameFree(tx, caller, DEFAULT_SCHEDULE_NAME);
+      const row = await insertSchedule(tx, scope, {
+        id: newId(),
+        memberId: caller,
+        name: DEFAULT_SCHEDULE_NAME,
+        isDefault: true,
+        availability: input.availability,
+      });
+      return {
+        result: { availability: input.availability },
+        change: { kind: 'default_hours', memberId: caller, schedules: [{ id: row.id, after: row }] },
+      };
+    }
+    const by = actorRow(scope.actor);
+    const [updated] = await tx
+      .update(availabilitySchedules)
+      .set({
+        availability: input.availability,
+        updatedAt: sql`now()`,
+        updatedByType: by.type,
+        updatedById: by.id,
+        updatedByMemberId: by.memberId,
+      })
+      .where(eq(availabilitySchedules.id, current.id))
+      .returning();
+    return {
+      result: { availability: input.availability },
+      change: {
+        kind: 'default_hours',
+        memberId: caller,
+        schedules: [{ id: current.id, before: current, ...(updated === undefined ? {} : { after: updated }) }],
+      },
+    };
+  });
 }
 
 /** The caller's default schedule's hours; never saved, weekdays 09:00 to 17:00 in `timeZone` (AC-963). */
