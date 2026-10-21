@@ -1,3 +1,4 @@
+import { clearAnnouncer } from '@react-aria/live-announcer';
 import type { Meta, StoryObj } from '@storybook/react-vite';
 import { expect, fn, waitFor, within } from 'storybook/test';
 import { CustomiseSidebar } from './CustomiseSidebar.tsx';
@@ -105,6 +106,9 @@ export const ConfirmingReset: Story = {
     await userEvent.click(commit);
     await expect(args.onReset).toHaveBeenCalledTimes(1);
     await waitFor(() => expect(document.querySelector('[role="alertdialog"]')).toBeNull());
+    // The pending button React Aria announced is gone with its confirm, so the
+    // announcement's label points at nothing for its 7 s; clear it for axe.
+    clearAnnouncer('assertive');
   },
 };
 

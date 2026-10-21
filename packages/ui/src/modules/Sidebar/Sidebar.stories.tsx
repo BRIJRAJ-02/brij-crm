@@ -457,6 +457,13 @@ function CustomisableSidebar({
   );
 }
 
+/** Waits until one of the reorder's live regions says `text` (each message lands a frame after the region clears). */
+const said = (text: string) =>
+  waitFor(() => {
+    const regions = [...document.querySelectorAll('[role="status"]')];
+    if (!regions.some((region) => region.textContent.includes(text))) throw new Error(`Not said: ${text}`);
+  });
+
 /**
  * Reorder from the keyboard (AC-932): Space on an item's grip lifts it, the
  * arrows move it, Space drops it; each step is announced. Esc puts it back.
@@ -469,16 +476,16 @@ export const Reorder: Story = {
     await userEvent.keyboard(' ');
     await expect(grip).toHaveAttribute('aria-pressed', 'true');
     await userEvent.keyboard('{ArrowUp}{ArrowUp}');
-    await expect(canvas.getAllByRole('status')[0]).toHaveTextContent('Deals, position 1 of 3.');
+    await said('Deals, position 1 of 3.');
     await userEvent.keyboard(' ');
-    await expect(canvas.getAllByRole('status')[0]).toHaveTextContent('Deals, moved to position 1 of 3.');
+    await said('Deals, moved to position 1 of 3.');
     const links = canvas.getAllByRole('link').map((link) => link.textContent);
     await expect(links.slice(0, 3)).toEqual(['Deals', 'Companies', 'People']);
     // Esc puts a lifted item back.
     const people = canvas.getByRole('button', { name: 'Move People' });
     people.focus();
     await userEvent.keyboard(' {ArrowUp}{Escape}');
-    await expect(canvas.getAllByRole('status')[0]).toHaveTextContent('People, put back at position 3 of 3.');
+    await said('People, put back at position 3 of 3.');
   },
 };
 
@@ -514,11 +521,7 @@ export const MoveSection: Story = {
     const grip = canvas.getByRole('button', { name: 'Move the Scheduling section' });
     grip.focus();
     await userEvent.keyboard(' {ArrowUp} ');
-    await expect(
-      canvas
-        .getAllByRole('status')
-        .some((status) => status.textContent.includes('Scheduling, moved to position 1 of 2.')),
-    ).toBe(true);
+    await said('Scheduling, moved to position 1 of 2.');
     const labels = canvas
       .getAllByRole('button', { name: /^(Records|Scheduling)$/ })
       .map((button) => button.textContent);

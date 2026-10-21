@@ -41,6 +41,8 @@ export const strings = {
   moveUp: 'Move up',
   moveDown: 'Move down',
   customiseSidebar: 'Customise sidebar',
+  /** Customise sidebar's code didn't load. */
+  customiseUnavailable: 'Couldn’t open Customise sidebar. Reload the page, then try again.',
   /** An item's and a section's menu, for screen readers: "Deals options". */
   itemOptions: (name: string) => `${name} options`,
   sectionOptions: (title: string) => `${title} options`,

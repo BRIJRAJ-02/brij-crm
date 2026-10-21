@@ -632,15 +632,49 @@ export function NavSection({
             <span id={reorder?.context.describedBy ?? sectionMove?.describedBy}>{strings.reorderHelp}</span>
           </VisuallyHidden>
           <VisuallyHidden>
+            <span role="status" aria-live="polite" aria-atomic="true">
+              {reorder?.announcement.isPolite === true ? reorder.announcement.text : ''}
+              {sectionMove?.announcement.isPolite === true ? sectionMove.announcement.text : ''}
+            </span>
             <span role="status" aria-live="assertive" aria-atomic="true">
-              {reorder?.announcement ?? ''}
-              {sectionMove?.announcement ?? ''}
+              {reorder?.announcement.isPolite === false ? reorder.announcement.text : ''}
+              {sectionMove?.announcement.isPolite === false ? sectionMove.announcement.text : ''}
             </span>
           </VisuallyHidden>
         </>
       )}
     </div>
   );
+}
+
+/** What a reorder last said, and whether it waits its turn (a position step) or cuts in (a lift, drop or cancel). */
+interface Announcement {
+  readonly text: string;
+  readonly isPolite: boolean;
+}
+
+/**
+ * A reorder's words for screen readers. Each message clears the region first
+ * and lands a frame later, so the same words twice are said twice.
+ */
+function useAnnouncement() {
+  const [announcement, setAnnouncement] = useState<Announcement>({ text: '', isPolite: false });
+  const frame = useRef<number | undefined>(undefined);
+  useEffect(
+    () => () => {
+      if (frame.current !== undefined) cancelAnimationFrame(frame.current);
+    },
+    [],
+  );
+  const say = (text: string, isPolite = false) => {
+    if (frame.current !== undefined) cancelAnimationFrame(frame.current);
+    setAnnouncement({ text: '', isPolite });
+    frame.current = requestAnimationFrame(() => {
+      frame.current = undefined;
+      setAnnouncement({ text, isPolite });
+    });
+  };
+  return [announcement, say] as const;
 }
 
 /** A keyboard lift: the item, where it started, and where it is now. */
@@ -672,7 +706,7 @@ function dropIndexAt(rows: readonly { readonly id: string; readonly middle: numb
 function useReorder(children: ReactNode, onReorder: ((id: string, toIndex: number) => void) | undefined) {
   const [lift, setLift] = useState<Lift | undefined>(undefined);
   const [drag, setDrag] = useState<{ readonly id: string; readonly to: number } | undefined>(undefined);
-  const [announcement, setAnnouncement] = useState('');
+  const [announcement, say] = useAnnouncement();
   const describedBy = useId();
   const ids = idsOf(children);
   // A pointer drag's listeners read the latest order and callback when it ends, and end with the section.
@@ -714,9 +748,6 @@ function useReorder(children: ReactNode, onReorder: ((id: string, toIndex: numbe
     ),
   );
   const ordered = order.map((id) => byId.get(id));
-  const say = (text: string) => {
-    setAnnouncement(text);
-  };
   const drop = (id: string, from: number, to: number) => {
     const name = nameOf.get(id) ?? id;
     if (to !== from) onReorder(id, to);
@@ -739,7 +770,7 @@ function useReorder(children: ReactNode, onReorder: ((id: string, toIndex: numbe
         event.preventDefault();
         const to = Math.min(Math.max(lift.to + (key === 'ArrowUp' ? -1 : 1), 0), count - 1);
         setLift({ ...lift, to });
-        say(strings.reorderPosition(name, to + 1, count));
+        say(strings.reorderPosition(name, to + 1, count), true);
         return;
       }
       if (key === ' ' || key === 'Enter') {
@@ -839,7 +870,7 @@ function useSectionMove(
   onMoveSection: ((toIndex: number) => void) | undefined,
 ) {
   const [lift, setLift] = useState<{ readonly to: number } | undefined>(undefined);
-  const [announcement, setAnnouncement] = useState('');
+  const [announcement, setAnnouncement] = useAnnouncement();
   const describedBy = useId();
   // A pointer drag reads the latest callback when it ends, and ends with the section.
   const latest = useRef(onMoveSection);
@@ -871,7 +902,7 @@ function useSectionMove(
         event.preventDefault();
         const to = Math.min(Math.max(lift.to + (key === 'ArrowUp' ? -1 : 1), 0), count - 1);
         setLift({ to });
-        setAnnouncement(strings.reorderPosition(title, to + 1, count));
+        setAnnouncement(strings.reorderPosition(title, to + 1, count), true);
         return;
       }
       if (key === ' ' || key === 'Enter') {
