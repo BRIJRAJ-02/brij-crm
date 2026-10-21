@@ -20,7 +20,7 @@ import { StatusDot } from '../../atoms/StatusDot/StatusDot.tsx';
 import { Tag } from '../../atoms/Tag/Tag.tsx';
 import type { Hue } from '../../hue.ts';
 import { Field } from '../Field/Field.tsx';
-import { InPopover, Popover } from '../Popover/Popover.tsx';
+import { InPopover, Popover, type PopoverPlacement } from '../Popover/Popover.tsx';
 import styles from './Select.module.css';
 import { strings } from './strings.ts';
 
@@ -104,6 +104,18 @@ export interface SelectProps {
   readonly variant?: 'default' | 'cell' | 'prefix' | 'inline' | 'time';
   /** The chosen option's `description` after its label in the closed field, muted (a time zone's "GMT+05:30"). */
   readonly showsDescription?: boolean;
+  /**
+   * Where each option's `description` sits in the list: `after` its label on the same line (a time zone's offset,
+   * the default), or `below` it, wrapping, in a list a menu wide that opens under the trigger's end (a role and
+   * what it can do). Why `below`: a role's line after its name made the list as wide as the longest line, so it
+   * spilled out of the dialog it opened in and covered its buttons (the owner, 22 October 2026).
+   */
+  readonly optionDescription?: 'after' | 'below';
+  /**
+   * Where the list opens (under the trigger by default; React Aria flips it when there's no room). `top end` keeps
+   * a short list above a dialog's footer when the trigger sits just over it (the Invite dialog's role per row).
+   */
+  readonly placement?: PopoverPlacement;
   /** A search field over the options, for long lists such as countries. */
   readonly isSearchable?: boolean;
   /**
@@ -196,6 +208,8 @@ export function Select({
   size = 'md',
   variant = 'default',
   showsDescription = false,
+  optionDescription = 'after',
+  placement,
   autoFocus = false,
   defaultOpen,
   onOpenChange,
@@ -348,6 +362,7 @@ export function Select({
           className={styles.option}
           data-clear={item.id === CLEAR || item.id === CREATE || undefined}
           data-apart={item.isApart === true || undefined}
+          data-description={item.description === undefined ? undefined : optionDescription}
         >
           {({ isSelected }) => (
             <>
@@ -452,7 +467,14 @@ export function Select({
         <Icon name="circle-alert" size="xs" />
         {error}
       </FieldError>
-      <Popover width={variant === 'default' || variant === 'time' ? 'trigger' : 'menu'}>
+      <Popover
+        {...(optionDescription === 'below'
+          ? { width: 'list' as const, placement: placement ?? ('bottom end' as const) }
+          : {
+              width: variant === 'default' || variant === 'time' ? 'trigger' : 'menu',
+              ...(placement === undefined ? {} : { placement }),
+            })}
+      >
         {hasSearch ? (
           // The search takes focus through the list's own focus scope, once that scope is in place: an input's
           // own autoFocus fired while the popover was still mounting, so a popover around this one (a grid cell's

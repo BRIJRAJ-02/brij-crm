@@ -13,7 +13,7 @@ import { PageEdge } from '../../lib/page-edge.ts';
 export const InPopover = createContext(false);
 
 /** How wide a popover is: its content (the default), a menu (240px, or the trigger's width if wider), or its trigger's width, wider when an option needs it (a select). */
-export type PopoverWidth = 'content' | 'menu' | 'trigger' | 'builder';
+export type PopoverWidth = 'content' | 'menu' | 'list' | 'trigger' | 'builder';
 
 /** Where a popover sits against its trigger, as React Aria names it ("bottom start", "top", "end"). */
 export type PopoverPlacement = NonNullable<AriaPopoverProps['placement']>;

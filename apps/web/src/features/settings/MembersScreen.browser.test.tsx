@@ -299,23 +299,12 @@ describe('changing roles', () => {
     await expect.element(page.getByText('Linus Torvalds is now an Admin.')).toBeVisible();
   });
 
-  it('asks before lowering one’s own role, and shows LAST_OWNER’s sentence inside, staying open', async () => {
-    const counted = layerWith(() =>
-      Promise.reject(refusal('LAST_OWNER', 'A workspace needs an owner. Make someone else an owner first.')),
-    );
+  it('shows your own role as text, with no picker: an owner hands on through Transfer (owner, 22 October 2026)', async () => {
+    const counted = layerWith(() => Promise.resolve());
     await renderMembers(counted.layer);
-    await page.getByRole('button', { name: /Role for Ada Lovelace/ }).click();
-    await page.getByRole('option', { name: 'Admin' }).click();
-    const dialog = page.getByRole('alertdialog', { name: 'Change your own role to Admin?' });
-    await expect.element(dialog).toBeVisible();
+    await expect.element(page.getByRole('button', { name: /Role for Linus Torvalds/ })).toBeVisible();
+    expect(page.getByRole('button', { name: /Role for Ada Lovelace/ }).elements()).toHaveLength(0);
     expect(counted.calls.setRole).toBe(0);
-    await dialog.getByRole('button', { name: 'Change my role' }).click();
-    await expect.element(dialog.getByRole('alert')).toBeVisible();
-    expect(dialog.element().textContent).toContain('A workspace needs an owner.');
-    expect(counted.calls.setRole).toBe(1);
-    await dialog.getByRole('button', { name: 'Cancel' }).click();
-    await expect.element(dialog).not.toBeInTheDocument();
-    expect(counted.calls.setRole).toBe(1);
   });
 });
 

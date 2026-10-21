@@ -32,21 +32,21 @@ export const Default: Story = {
 };
 
 /** A row's picker and its remove button in the suffix: the Invite dialog's address with its role. */
-export const SuffixPicker: Story = {
+export const AfterControls: Story = {
   args: { label: 'Email', placeholder: 'name@company.com', defaultValue: 'grace@example.com' },
   render: (args) => (
     <Stage width="narrow">
       <Field
         {...args}
-        suffix={
+        after={
           <>
             <Select
               label="Role for grace@example.com"
               isLabelHidden
-              variant="inline"
+              optionDescription="below"
               items={[
-                { id: 'admin', label: 'Admin', description: 'Manages members and settings.' },
-                { id: 'member', label: 'Member', description: 'Works with records.' },
+                { id: 'admin', label: 'Admin', description: 'Manages members, settings and every record.' },
+                { id: 'member', label: 'Member', description: "Works with records; can't change settings or members." },
               ]}
               defaultValue="member"
             />
@@ -57,7 +57,10 @@ export const SuffixPicker: Story = {
     </Stage>
   ),
   play: async ({ canvas }) => {
-    await expect(canvas.getByRole('button', { name: 'Remove grace@example.com' })).toBeInTheDocument();
+    // The role and remove sit beside the box, not in it.
+    const input = canvas.getByRole('textbox', { name: 'Email' });
+    const remove = canvas.getByRole('button', { name: 'Remove grace@example.com' });
+    await expect(input.parentElement?.contains(remove)).toBe(false);
   },
 };
 

@@ -29,7 +29,7 @@
     align-items: center;
     justify-content: start;
     min-block-size: var(--size-input);
-    padding-inline: var(--space-4);
+    padding-inline: calc(var(--popover-text-inset) - var(--popover-panel-inset));
     border-radius: var(--radius-sm);
     outline: none;
   }

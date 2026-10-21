@@ -71,6 +71,11 @@ export interface FieldProps {
   readonly prefix?: ReactNode;
   /** Something at the end of the box: a clear button, a picker trigger. */
   readonly suffix?: ReactNode;
+  /**
+   * Controls beside the box, outside it, on the box's line: a row's own role Select and remove button in a list
+   * of invites. The box takes the room left; the label, hint and error stay the box's.
+   */
+  readonly after?: ReactNode;
   /** A leading icon (the search variant shows `search`). */
   readonly icon?: IconName;
   /** A textarea that grows with its content (long text). */
@@ -171,6 +176,7 @@ export function Field({
   error,
   prefix,
   suffix,
+  after,
   icon,
   isMultiline = false,
   isWrapping = false,
@@ -343,6 +349,33 @@ export function Field({
         // An error takes the hint's place, so the field never carries two
         // lines under it; a read only or disabled reason always shows.
         const description = reason ?? (isInvalid ? undefined : hint);
+        const box = (
+          <span
+            className={styles.box}
+            data-multiline={isMultiline || undefined}
+            data-wrapping={(isWrapping && !isMultiline) || undefined}
+          >
+            {leading !== undefined && <Icon name={leading} size="sm" tone="muted" />}
+            {prefix !== undefined && <span className={styles.prefix}>{prefix}</span>}
+            {isTextArea ? <TextArea {...inputProps} /> : <Input {...inputProps} />}
+            {isReadOnly && !isCopy && variant !== 'title' && (
+              <span className={styles.lock}>
+                <Icon name="lock" size="xs" label={strings.readOnly} />
+              </span>
+            )}
+            {suffix !== undefined && <span className={styles.suffix}>{suffix}</span>}
+            {isCopy && (
+              <span className={styles.copy}>
+                <CopyButton
+                  value={value ?? defaultValue ?? ''}
+                  isIconOnly
+                  variant="ghost"
+                  {...(copyLabel === undefined ? {} : { label: copyLabel })}
+                />
+              </span>
+            )}
+          </span>
+        );
         return (
           <>
             {!isLabelHidden &&
@@ -370,31 +403,14 @@ export function Field({
                   <span className={styles.info}>{info}</span>
                 </span>
               ))}
-            <span
-              className={styles.box}
-              data-multiline={isMultiline || undefined}
-              data-wrapping={(isWrapping && !isMultiline) || undefined}
-            >
-              {leading !== undefined && <Icon name={leading} size="sm" tone="muted" />}
-              {prefix !== undefined && <span className={styles.prefix}>{prefix}</span>}
-              {isTextArea ? <TextArea {...inputProps} /> : <Input {...inputProps} />}
-              {isReadOnly && !isCopy && variant !== 'title' && (
-                <span className={styles.lock}>
-                  <Icon name="lock" size="xs" label={strings.readOnly} />
-                </span>
-              )}
-              {suffix !== undefined && <span className={styles.suffix}>{suffix}</span>}
-              {isCopy && (
-                <span className={styles.copy}>
-                  <CopyButton
-                    value={value ?? defaultValue ?? ''}
-                    isIconOnly
-                    variant="ghost"
-                    {...(copyLabel === undefined ? {} : { label: copyLabel })}
-                  />
-                </span>
-              )}
-            </span>
+            {after === undefined ? (
+              box
+            ) : (
+              <span className={styles.line}>
+                {box}
+                <span className={styles.after}>{after}</span>
+              </span>
+            )}
             {(description !== undefined || countedMax !== undefined) && (
               <span className={styles.foot}>
                 {description !== undefined && (

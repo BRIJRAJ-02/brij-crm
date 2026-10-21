@@ -124,6 +124,35 @@ export const Open: Story = {
   },
 };
 
+/**
+ * Each option's line under its label, wrapping, in a list a menu wide that opens under the trigger's end: a role
+ * and what it can do, from a compact trigger beside an email in the Invite dialog.
+ */
+export const DescriptionBelow: Story = {
+  args: {
+    label: 'Role',
+    isLabelHidden: true,
+    optionDescription: 'below',
+    defaultValue: 'member',
+    defaultOpen: true,
+    items: [
+      { id: 'owner', label: 'Owner', description: 'Everything, including billing and deleting the workspace.' },
+      { id: 'admin', label: 'Admin', description: 'Manages members, settings and every record.' },
+      { id: 'member', label: 'Member', description: "Works with records; can't change settings or members." },
+    ],
+  },
+  render: (args) => (
+    <Stage>
+      <Select {...args} />
+    </Stage>
+  ),
+  play: async () => {
+    const list = await listbox();
+    const option = list.querySelector('[role="option"]');
+    await expect(option).toHaveAttribute('data-description', 'below');
+  },
+};
+
 /** A choice unlike the rest, set apart under a hairline: a form's "Don't add to the CRM" after the objects. */
 export const ApartItem: Story = {
   args: {

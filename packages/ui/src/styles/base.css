@@ -32,16 +32,32 @@
       'calt' 0;
   }
 
+  /* The overlay padding scale (the owner, 22 October 2026: "the popup has the same padding issues across"), built
+     from space tokens in one place so every dialog and popover shares it:
+     - overlay-inset: a Modal's header, body and footer all start their content this far from the dialog's side,
+       and the body's top padding (the gap under the header's hairline) is the same.
+     - popover-inset: a list popover's inner edge (Menu, Select's options), where each row's highlight starts.
+     - popover-item-block and popover-item-inline: every row's padding inside that edge.
+     - popover-text-inset: where text starts in every popover, the inset plus a row's padding.
+     - popover-panel-inset: a Popover dialog's inner edge (pickers, tips, view settings, filters, sorts); a row
+       inside one pads up to popover-text-inset, so its text lines up with a menu's. */
+  :root {
+    /* Only toasts take part in view transitions (below), never the page. */
+    view-transition-name: none;
+    --overlay-inset: var(--space-16);
+    --popover-inset: var(--space-4);
+    --popover-item-block: var(--space-4);
+    --popover-item-inline: var(--space-8);
+    --popover-text-inset: calc(var(--popover-inset) + var(--popover-item-inline));
+    --popover-panel-inset: var(--space-8);
+  }
+
   /* Toasts are view transitions (see provider/toasts.tsx): a new one rises
      from below over duration-modal, a leaving one drops away faster, and the
      rest slide to their new places. Reduced motion skips the transition.
      Only the toasts take part: the page itself is never captured (its name is
      none), and the transition's overlay lets every click and key through, so
      the page never freezes while a toast moves. */
-  :root {
-    view-transition-name: none;
-  }
-
   ::view-transition {
     pointer-events: none;
   }
