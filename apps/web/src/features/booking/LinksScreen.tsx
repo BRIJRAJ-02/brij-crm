@@ -18,12 +18,15 @@ export interface LinksScreenProps {
   readonly slug: string;
 }
 
-/** A page's facts: its lengths, its kind, own hours, and a location that isn't video ("30 or 60 min · One on one"). */
+/**
+ * A page's facts: its lengths, its kind, the schedule it names when it doesn't follow the default (spec 0035), and
+ * a location that isn't video ("30 or 60 min · One on one · Evenings").
+ */
 function factsOf(page: BookingPageView): readonly string[] {
   return [
     ...(page.durations.length === 0 ? [] : [strings.minutesChoice(page.durations)]),
     strings.kindLabel[page.kind],
-    ...(page.hoursMode === 'own' ? [strings.ownHours] : []),
+    ...(page.scheduleId === null ? [] : [page.scheduleName]),
     ...(page.location.type === 'video' ? [] : [strings.locationChip[page.location.type]]),
   ];
 }

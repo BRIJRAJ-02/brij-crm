@@ -74,10 +74,23 @@ const records: EventRow = {
 };
 
 describe('every kind has a rule', () => {
-  it('names the nine kinds of spec 0007 and spec 0024’s meetings, and asks for facts only for views, tasks and meetings', () => {
+  it('names the nine kinds of spec 0007, spec 0024’s meetings and spec 0035’s schedules, and asks for facts only for views, tasks and meetings', () => {
     expect([...EVENT_KINDS].sort()).toEqual(
-      ['access', 'definitions', 'entries', 'jobs', 'meetings', 'members', 'notes', 'records', 'tasks', 'views'].sort(),
+      [
+        'access',
+        'definitions',
+        'entries',
+        'jobs',
+        'meetings',
+        'members',
+        'notes',
+        'records',
+        'schedules',
+        'tasks',
+        'views',
+      ].sort(),
     );
+    expect(eventFacts({ seq: 1, at, kind: 'schedules', scheduleIds: [] })).toEqual([]);
     expect(eventFacts({ seq: 1, at, kind: 'meetings', recordIds: [], meetingIds: [] })).toEqual(['meetings']);
     expect(eventFacts({ seq: 1, at, kind: 'views', viewIds: [], coarse: false })).toEqual(['views']);
     expect(eventFacts({ seq: 1, at, kind: 'tasks', recordIds: [], taskIds: [] })).toEqual(['tasks']);
@@ -428,5 +441,60 @@ describe('members, access and jobs', () => {
     ]);
     expect(filterEvent(withMember, job)).toEqual({ seq: 49, at, kind: 'jobs', jobIds: [], coarse: true });
     expect(filterEvent(audience([]), job)).toEqual({ seq: 49, at, kind: 'jobs', jobIds: [], coarse: true });
+  });
+});
+
+describe('schedules (spec 0035, AC-971, AC-977)', () => {
+  const schedules: EventRow = {
+    seq: 50,
+    at,
+    kind: 'schedules',
+    scheduleIds: ['s1', 's2'],
+    actorMemberId: ADA,
+    mutationId: 'm',
+  };
+
+  it('names schedules only to an audience whose every member wrote them or holds booking.admin, never the writer', () => {
+    expect(filterEvent(open, schedules)).toEqual({
+      seq: 50,
+      at,
+      kind: 'schedules',
+      scheduleIds: ['s1', 's2'],
+      mutationId: 'm',
+    });
+    const admins = audience([
+      { id: BEA, role: 'admin' },
+      { id: OTHER, role: 'owner' },
+    ]);
+    expect(filterEvent(admins, schedules)).toEqual({
+      seq: 50,
+      at,
+      kind: 'schedules',
+      scheduleIds: ['s1', 's2'],
+      mutationId: 'm',
+    });
+  });
+
+  it('tells anyone else only that schedules changed: no ids, no mutation id', () => {
+    const colleague = audience([{ id: BEA, role: 'member' }]);
+    expect(filterEvent(colleague, schedules)).toEqual({
+      seq: 50,
+      at,
+      kind: 'schedules',
+      scheduleIds: [],
+      coarse: true,
+    });
+    const mixed = audience([
+      { id: ADA, role: 'member' },
+      { id: BEA, role: 'member' },
+    ]);
+    expect(filterEvent(mixed, schedules)).toEqual({ seq: 50, at, kind: 'schedules', scheduleIds: [], coarse: true });
+    expect(filterEvent(audience([]), schedules)).toEqual({
+      seq: 50,
+      at,
+      kind: 'schedules',
+      scheduleIds: [],
+      coarse: true,
+    });
   });
 });

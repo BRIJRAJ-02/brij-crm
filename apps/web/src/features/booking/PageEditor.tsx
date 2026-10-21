@@ -2,14 +2,16 @@
 // Purpose: one booking page's editor (spec 0025, 0025-experience.md, AC-623, AC-624, AC-679): its groups beside a live preview.
 // Main task: change the page, the meeting, its hours and limits, and Save from the bar that appears while anything is unsaved.
 // Each group's header carries a live summary of what it holds (the meeting's lengths and place, the week it books on).
+// The hours are a schedule's (spec 0035, AC-965): the card picks one of the owner's, says its week, and links to it.
 // Leaves out: questions and the deal step (milestone 2), team members (milestone 3), and scrolling to a group from the preview.
 import {
   isDataError,
-  type BookingAvailability,
   type BookingPageSettings,
   type BookingPageView,
   type DataLayer,
+  type SchedulesView,
 } from '@crm/data';
+import { useCalendar, useSchedules } from '@crm/data/react';
 import {
   Callout,
   Card,
@@ -17,13 +19,10 @@ import {
   CopyButton,
   EditorStatus,
   Field,
-  HoursEditor,
   Link,
   PreviewDeviceSwitch,
   PreviewFrame,
   PreviewLayout,
-  Radio,
-  RadioGroup,
   SaveBar,
   Select,
   Skeleton,
@@ -33,15 +32,14 @@ import {
   type PreviewDevice,
   type SelectItem,
 } from '@crm/ui';
-import { useCalendar } from '@crm/data/react';
 import { useBlocker } from '@tanstack/react-router';
-import { useEffect, useState, useMemo } from 'react';
+import { useEffect, useState } from 'react';
 import { pageHeading } from '../navigation/focus.ts';
 import { WorkspacePage } from '../workspace/WorkspacePage.tsx';
 import { CalendarNote, readDismissed, writeDismissed } from './CalendarNote.tsx';
-import { DaysOff } from './DaysOff.tsx';
-import { availabilityIsValid, weekRows, weekSummary, withDay, zoneItems, zoneMatches } from './hours.ts';
+import { weekSummary, zoneLabel } from './hours.ts';
 import { availabilityHref, linksHref, publicBookingUrl } from './links.ts';
+import { scheduleStrings } from './schedule-strings.ts';
 import { strings } from './strings.ts';
 
 /** Props for the editor: the page its route loaded. */
@@ -51,8 +49,10 @@ export interface PageEditorProps {
   readonly page: BookingPageView;
   /** The reader's language, for the hours summary's days and clock. */
   readonly locale: string;
-  /** The reader's own hours, on their own page: what "Follow my hours" follows. */
-  readonly myHours?: BookingAvailability;
+  /** The page owner's schedules (spec 0035), when the reader may read them: the Hours card's choices. */
+  readonly schedules?: SchedulesView;
+  /** The owner's id as `?member=` takes it, when the owner isn't the reader (an admin's view). */
+  readonly ownerMember?: string;
 }
 
 const DURATIONS = [15, 30, 45, 60, 90] as const;
@@ -87,7 +87,6 @@ const settingsOf = (page: BookingPageView): BookingPageSettings => ({
   slug: page.slug,
   durations: page.durations,
   location: page.location,
-  availability: page.availability,
   bufferBefore: page.bufferBefore,
   bufferAfter: page.bufferAfter,
   minNoticeMinutes: page.minNoticeMinutes,
@@ -95,7 +94,7 @@ const settingsOf = (page: BookingPageView): BookingPageSettings => ({
   dailyLimit: page.dailyLimit,
   slotStep: page.slotStep,
   status: page.status,
-  hoursMode: page.hoursMode,
+  scheduleId: page.scheduleId,
   isPrivate: page.isPrivate,
 });
 
@@ -114,13 +113,12 @@ function sendable(draft: BookingPageSettings): boolean {
     draft.title.trim() !== '' &&
     /^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(draft.slug) &&
     draft.durations.length > 0 &&
-    (draft.location.type === 'video' || draft.location.type === 'phone' || draft.location.value.trim() !== '') &&
-    availabilityIsValid(draft.availability)
+    (draft.location.type === 'video' || draft.location.type === 'phone' || draft.location.value.trim() !== '')
   );
 }
 
 /** The editor. */
-export function PageEditor({ data, slug, page: loaded, locale, myHours }: PageEditorProps) {
+export function PageEditor({ data, slug, page: loaded, locale, schedules, ownerMember }: PageEditorProps) {
   const [page, setPage] = useState(loaded);
   // A page the reader can't change shows as it is, every control read only, with no Save.
   const isLocked = !page.canChange;
@@ -135,7 +133,6 @@ export function PageEditor({ data, slug, page: loaded, locale, myHours }: PageEd
     setJustSaved(false);
     setDraft((current) => ({ ...current, ...patch }));
   };
-  const setAvailability = (availability: BookingAvailability) => change({ availability });
   const [device, setDevice] = useState<PreviewDevice>('phone');
   // The calendar note shows only to someone with no calendar connected yet (their own connections, spec 0024).
   const calendar = useCalendar(data.calendar.view(slug));
@@ -196,8 +193,8 @@ export function PageEditor({ data, slug, page: loaded, locale, myHours }: PageEd
   ]
     .filter((part) => part !== '')
     .join(' · ');
-  const followed = draft.hoursMode === 'mine' ? myHours : draft.availability;
-  const hoursSummary = followed === undefined ? strings.followOwnerHint : weekSummary(followed, locale).join(' · ');
+  const hours = useHours(schedules, draft.scheduleId, page, slug, ownerMember === undefined);
+  const hoursSummary = [...weekSummary(hours.availability, locale), zoneLabel(hours.availability.timeZone)].join(' · ');
   // Page: who can book it.
   const pageSummary =
     page.status === 'paused' ? strings.pausedSummary : draft.isPrivate ? strings.privateSummary : strings.publicSummary;
@@ -211,7 +208,6 @@ export function PageEditor({ data, slug, page: loaded, locale, myHours }: PageEd
     draft.dailyLimit === null ? '' : strings.dailySummary(draft.dailyLimit),
   ].filter((part) => part !== '');
   const limitsSummary = limitParts.join(' · ');
-  const zones = useMemo(() => zoneItems(draft.availability.timeZone, new Date()), [draft.availability.timeZone]);
 
   return (
     <WorkspacePage
@@ -378,56 +374,23 @@ export function PageEditor({ data, slug, page: loaded, locale, myHours }: PageEd
               <Card
                 title={strings.hours}
                 description={hoursSummary}
-                {...(draft.hoursMode === 'mine' && myHours !== undefined
-                  ? { actions: <Link href={availabilityHref(slug)}>{strings.editMyHours}</Link> }
-                  : {})}
+                {...(hours.editHref === undefined
+                  ? {}
+                  : { actions: <Link href={hours.editHref}>{scheduleStrings.editHours}</Link> })}
               >
-                {/* A saved setting, so a RadioGroup: SegmentedControl only switches how a screen shows. */}
-                <RadioGroup
-                  label={strings.hours}
-                  isLabelHidden
-                  orientation="horizontal"
-                  value={draft.hoursMode}
-                  isReadOnly={isLocked}
-                  onChange={(value) => {
-                    if (value === 'mine' || value === 'own') change({ hoursMode: value });
+                <Select
+                  label={scheduleStrings.schedule}
+                  items={hours.items}
+                  value={draft.scheduleId ?? 'default'}
+                  isReadOnly={isLocked || hours.items.length === 0}
+                  {...(hours.items.length === 0 ? { readOnlyReason: strings.followOwnerHint } : {})}
+                  hint={scheduleStrings.hoursFromSchedule}
+                  onChange={(id) => {
+                    if (id !== null) change({ scheduleId: id === 'default' ? null : id });
                   }}
-                >
-                  <Radio value="mine">{strings.followMine}</Radio>
-                  <Radio value="own">{strings.ownHoursMode}</Radio>
-                </RadioGroup>
-                {draft.hoursMode === 'own' && (
-                  <>
-                    <Select
-                      label={strings.timeZone}
-                      items={zones}
-                      filter={zoneMatches}
-                      isSearchable
-                      isReadOnly={isLocked}
-                      value={draft.availability.timeZone}
-                      onChange={(zone) => {
-                        if (zone !== null) setAvailability({ ...draft.availability, timeZone: zone });
-                      }}
-                    />
-                    <HoursEditor
-                      label={strings.weeklyHours}
-                      rows={weekRows(draft.availability)}
-                      isReadOnly={isLocked}
-                      onChange={(day, ranges) => {
-                        setJustSaved(false);
-                        setDraft((current) => ({
-                          ...current,
-                          availability: withDay(current.availability, day, ranges),
-                        }));
-                      }}
-                    />
-                  </>
-                )}
+                />
               </Card>
             </div>
-            {draft.hoursMode === 'own' && (
-              <DaysOff availability={draft.availability} isReadOnly={isLocked} onChange={setAvailability} />
-            )}
             <Card title={strings.limits} description={limitsSummary}>
               <Select
                 label={strings.bufferBefore}
@@ -494,4 +457,42 @@ export function PageEditorPending() {
       }}
     />
   );
+}
+
+/**
+ * The Hours card's choices and what the chosen one holds (spec 0035, AC-965): "Default schedule (<name>)" first,
+ * then each of the owner's stored schedules by name. A page naming a schedule that is gone books by the default, as
+ * the server reads it. Until the owner's schedules load (or when they can't be read), the page's own answer stands
+ * in: the hours it books by now. Edit hours opens the default schedule on the owner's Availability.
+ */
+function useHours(
+  view: SchedulesView | undefined,
+  scheduleId: string | null,
+  page: BookingPageView,
+  slug: string,
+  isOwn: boolean,
+) {
+  const state = useSchedulesOrNone(view);
+  if (state === undefined) {
+    return { items: [], availability: page.availability, editHref: undefined } as const;
+  }
+  const fallback = state.find((each) => each.isDefault);
+  const named = scheduleId === null ? undefined : state.find((each) => each.id === scheduleId);
+  const chosen = named ?? fallback;
+  // The virtual default books in each page's own zone, which the server read for a page that follows it.
+  const isVirtualSaved = chosen?.id === null && page.scheduleId === null;
+  return {
+    items: [
+      { id: 'default', label: scheduleStrings.defaultSchedule(fallback?.name) },
+      ...state.flatMap((each) => (each.id === null ? [] : [{ id: each.id, label: each.name }])),
+    ],
+    availability: isVirtualSaved ? page.availability : (chosen?.availability ?? page.availability),
+    editHref: isOwn && chosen?.isDefault === true ? availabilityHref(slug) : undefined,
+  };
+}
+
+/** The owner's schedules once read, or undefined (none read for a reader who can't read them). */
+function useSchedulesOrNone(view: SchedulesView | undefined) {
+  const state = useSchedules(view);
+  return state.status === 'ready' ? state.schedules : undefined;
 }

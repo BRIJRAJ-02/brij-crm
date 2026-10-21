@@ -2,6 +2,7 @@ import { isDataError } from '@crm/data';
 import { useCalendar } from '@crm/data/react';
 import { EmptyState, Link, PageColumn, TopBar, LoadingNow } from '@crm/ui';
 import { createFileRoute, useParams, useRouter, type ErrorComponentProps } from '@tanstack/react-router';
+import { browserZone } from '../features/booking/hours.ts';
 import { linksHref } from '../features/booking/links.ts';
 import { CalendarNote, readDismissed } from '../features/booking/CalendarNote.tsx';
 import { PageEditor } from '../features/booking/PageEditor.tsx';
@@ -11,8 +12,11 @@ import { WorkspacePage } from '../features/workspace/WorkspacePage.tsx';
 
 // One booking page's editor (spec 0025, AC-623, AC-624): the page read through the data layer; one that was
 // deleted or isn't the reader's answers NOT_FOUND, said in the page with the way back. It sits outside the
-// Captures layout (`captures_`), as a form's editor does: it needs the whole width and its own TopBar. On the reader's own page
-// their hours load too, so "Follow my hours" shows the week it follows.
+// Captures layout (`captures_`), as a form's editor does: it needs the whole width and its own TopBar. The owner's
+// schedules load too (spec 0035, AC-965) when the reader may read them (their own page, or any with `booking.admin`):
+// the Hours card picks one and says its week. The reader's own are read beside the page, since most pages are
+// theirs; a colleague's, once the page names its owner. Either way the page shows: a failed read of the schedules
+// leaves the card with the hours the page books by now.
 export const Route = createFileRoute('/w/$slug/captures_/links/$pageId')({
   loader: async ({ context, params }) => {
     try {
@@ -25,14 +29,25 @@ export const Route = createFileRoute('/w/$slug/captures_/links/$pageId')({
           .view(params.slug)
           .ready()
           .catch(() => undefined),
+        context.data.schedules
+          .view(params.slug, undefined, browserZone())
+          .ready()
+          .catch(() => undefined),
       ]);
-      const myHours =
-        page.ownerMemberId === mine.memberId
-          ? (await context.data.bookings.hours(params.slug, page.availability.timeZone)).availability
-          : undefined;
-      return { page, myHours };
+      const isMine = page.ownerMemberId === mine.memberId;
+      const ownerMember = isMine ? undefined : page.ownerMemberId;
+      const mayRead = isMine || mine.permissions.includes('booking.admin');
+      if (mayRead && !isMine) {
+        await context.data.schedules
+          .view(params.slug, ownerMember, browserZone())
+          .ready()
+          .catch(() => undefined);
+      }
+      return { page, mayRead, ownerMember };
     } catch (error) {
-      if (isDataError(error) && error.code === 'NOT_FOUND') return { page: undefined, myHours: undefined };
+      if (isDataError(error) && error.code === 'NOT_FOUND') {
+        return { page: undefined, mayRead: false, ownerMember: undefined };
+      }
       throw error;
     }
   },
@@ -105,7 +120,7 @@ function Missing({
 }
 
 function EditorRoute() {
-  const { page, myHours } = Route.useLoaderData();
+  const { page, mayRead, ownerMember } = Route.useLoaderData();
   const { slug } = Route.useParams();
   const { data } = Route.useRouteContext();
   if (page === undefined) return <Missing title={strings.notFoundTitle} text={strings.notFoundText} />;
@@ -117,7 +132,8 @@ function EditorRoute() {
       slug={slug}
       page={page}
       locale={navigator.languages[0] ?? 'en-US'}
-      {...(myHours === undefined ? {} : { myHours })}
+      {...(mayRead ? { schedules: data.schedules.view(slug, ownerMember, browserZone()) } : {})}
+      {...(ownerMember === undefined ? {} : { ownerMember })}
     />
   );
 }

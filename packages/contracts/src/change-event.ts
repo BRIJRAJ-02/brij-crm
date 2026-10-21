@@ -171,6 +171,21 @@ export const MeetingsEvent = z.object({
   mutationId,
 });
 
+/**
+ * Availability schedules changed (spec 0035, AC-977): made, renamed, their
+ * hours changed, the default moved, or deleted. Screens holding a member's
+ * schedules, or a page editor showing one, read them again. Ids only, and
+ * only to an audience that may read them (the writer, `booking.admin`);
+ * everyone else hears `coarse` with none.
+ */
+export const SchedulesEvent = z.object({
+  ...place,
+  kind: z.literal('schedules'),
+  scheduleIds: ids,
+  coarse,
+  mutationId,
+});
+
 /** Members changed (#23): joined, left, renamed, or a role changed. */
 export const MembersEvent = z.object({
   ...place,
@@ -218,6 +233,7 @@ export const ChangeEvent = z.discriminatedUnion('kind', [
   NotesEvent,
   TasksEvent,
   MeetingsEvent,
+  SchedulesEvent,
   MembersEvent,
   AccessEvent,
   JobsEvent,
@@ -235,6 +251,7 @@ export const CHANGE_EVENT_KINDS = [
   'notes',
   'tasks',
   'meetings',
+  'schedules',
   'members',
   'access',
   'jobs',

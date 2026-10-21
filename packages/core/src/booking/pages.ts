@@ -6,7 +6,6 @@
 import { randomBytes } from 'node:crypto';
 import { and, asc, desc, eq, gte, inArray, isNull, like, lt, sql } from 'drizzle-orm';
 import {
-  BookingAvailability,
   defaultAvailability,
   PERMISSIONS,
   slugFromTitle,
@@ -22,15 +21,17 @@ import {
 } from '@crm/contracts';
 import { schema, type WorkspaceTx } from '@crm/db';
 import { requirePermission } from '../access/check.ts';
+import { withoutNotes } from '../availability/resolve.ts';
+import { checkPageSchedule } from '../availability/schedules.ts';
 import type { EngineScope } from '../access/mint.ts';
 import { can } from '../access/policy.ts';
 import { inWorkspace } from '../access/run.ts';
 import { postgresError, refuse, refuseOn } from '../engine/refusals.ts';
 import { actorRow } from '../engine/scope.ts';
 import { linksOf, seenLinks } from './links.ts';
-import { loadPage, pageOf, type PageRecord } from './slots.ts';
+import { loadPage, pagesOf, type PageRecord } from './slots.ts';
 
-const { bookingMemberHours, bookingPageMembers, bookingPages, bookings } = schema;
+const { bookingPageMembers, bookingPages, bookings } = schema;
 
 /** A public key: 16 URL safe characters from 12 random bytes. */
 export function newPublicKey(): string {
@@ -56,9 +57,9 @@ async function pageToChange(tx: WorkspaceTx, scope: EngineScope, pageId: string,
     .from(bookingPages)
     .where(and(eq(bookingPages.id, pageId), isNull(bookingPages.deletedAt)));
   const [row] = lock ? await query.for('no key update') : await query;
-  if (row === undefined) throw refuse('NOT_FOUND', NOT_FOUND_MESSAGE);
-  const page = pageOf(row);
-  if (!mayChange(scope, page)) throw refuse('NOT_FOUND', NOT_FOUND_MESSAGE);
+  if (row === undefined || !mayChange(scope, row)) throw refuse('NOT_FOUND', NOT_FOUND_MESSAGE);
+  const [page] = await pagesOf(tx, [row]);
+  if (page === undefined) throw refuse('NOT_FOUND', NOT_FOUND_MESSAGE);
   return page;
 }
 
@@ -105,7 +106,8 @@ function viewOf(scope: EngineScope, page: PageRecord, count: number): BookingPag
     slug: page.slug,
     durations: page.durations,
     location: page.location,
-    availability: page.availability,
+    // A day off's note is its owner's alone (spec 0035, AC-971): an admin reading the page sees the days, not why.
+    availability: memberOf(scope) === page.ownerMemberId ? page.availability : withoutNotes(page.availability),
     bufferBefore: page.bufferBefore,
     bufferAfter: page.bufferAfter,
     minNoticeMinutes: page.minNoticeMinutes,
@@ -113,7 +115,8 @@ function viewOf(scope: EngineScope, page: PageRecord, count: number): BookingPag
     dailyLimit: page.dailyLimit,
     slotStep: page.slotStep,
     status: page.status,
-    hoursMode: page.hoursMode,
+    scheduleId: page.scheduleId,
+    scheduleName: page.scheduleName,
     isPrivate: page.isPrivate,
     bookingsThisMonth: count,
     canChange: mayChange(scope, page),
@@ -137,7 +140,7 @@ export async function listBookingPages(
       .where(and(isNull(bookingPages.deletedAt), mine === undefined ? undefined : eq(bookingPages.ownerMemberId, mine)))
       .orderBy(desc(bookingPages.createdAt), asc(bookingPages.id))
       .limit(500);
-    const pages = rows.map(pageOf);
+    const pages = await pagesOf(tx, rows);
     const counts = await monthCounts(
       tx,
       pages.map((page) => page.id),
@@ -196,7 +199,9 @@ export async function createBookingPage(
     const [existing] = await tx.select().from(bookingPages).where(eq(bookingPages.id, input.id));
     if (existing !== undefined) {
       if (existing.ownerMemberId !== owner) throw refuse('ID_TAKEN', 'A booking page with that id already exists.');
-      return viewOf(scope, pageOf(existing), (await monthCounts(tx, [existing.id], now)).get(existing.id) ?? 0);
+      const [page] = await pagesOf(tx, [existing]);
+      if (page === undefined) throw refuse('ID_TAKEN', 'A booking page with that id already exists.');
+      return viewOf(scope, page, (await monthCounts(tx, [existing.id], now)).get(existing.id) ?? 0);
     }
     const given = input.settings ?? {};
     const settings: BookingPageSettings = {
@@ -205,7 +210,6 @@ export async function createBookingPage(
       slug: given.slug ?? (await freeSlug(tx, slugFromTitle(input.title))),
       durations: given.durations ?? [30],
       location: given.location ?? { type: 'video' },
-      availability: given.availability ?? defaultAvailability(input.timeZone),
       bufferBefore: given.bufferBefore ?? 0,
       bufferAfter: given.bufferAfter ?? 0,
       minNoticeMinutes: given.minNoticeMinutes ?? 0,
@@ -213,9 +217,10 @@ export async function createBookingPage(
       dailyLimit: given.dailyLimit ?? null,
       slotStep: given.slotStep ?? null,
       status: given.status ?? 'live',
-      hoursMode: given.hoursMode ?? 'own',
+      scheduleId: given.scheduleId ?? null,
       isPrivate: given.isPrivate ?? false,
     };
+    if (settings.scheduleId !== null) await checkPageSchedule(tx, owner, settings.scheduleId);
     const by = actorRow(scope.actor);
     try {
       const [row] = await tx
@@ -231,7 +236,8 @@ export async function createBookingPage(
           description: settings.description,
           durations: [...settings.durations],
           location: settings.location,
-          availability: settings.availability,
+          // The creator's zone, which the virtual default takes on this page until its owner saves hours (spec 0035).
+          availability: defaultAvailability(input.timeZone),
           bufferBefore: settings.bufferBefore,
           bufferAfter: settings.bufferAfter,
           minNoticeMinutes: settings.minNoticeMinutes,
@@ -239,7 +245,9 @@ export async function createBookingPage(
           dailyLimit: settings.dailyLimit,
           slotStep: settings.slotStep,
           status: settings.status,
-          hoursMode: settings.hoursMode,
+          scheduleId: settings.scheduleId,
+          // Mirrored for one release, while `hours_mode` stays readable (spec 0035, AC-975).
+          hoursMode: settings.scheduleId === null ? 'mine' : 'own',
           isPrivate: settings.isPrivate,
           createdByType: by.type,
           createdById: by.id,
@@ -253,7 +261,9 @@ export async function createBookingPage(
       await tx
         .insert(bookingPageMembers)
         .values({ workspaceId: scope.workspaceId, pageId: row.id, memberId: owner, position: 0 });
-      return viewOf(scope, pageOf(row), 0);
+      const [page] = await pagesOf(tx, [row]);
+      if (page === undefined) throw new Error('The booking page was not created.');
+      return viewOf(scope, page, 0);
     } catch (error) {
       if (postgresError(error)?.constraint === 'booking_pages_slug') throw slugTaken();
       throw error;
@@ -269,8 +279,11 @@ export async function updateBookingPage(
 ): Promise<BookingPageView> {
   requirePermission(scope, 'booking.manage');
   return inWorkspace(scope, async (tx) => {
-    await pageToChange(tx, scope, input.pageId, true);
+    const page = await pageToChange(tx, scope, input.pageId, true);
     const { settings } = input;
+    if (settings.scheduleId !== undefined && settings.scheduleId !== null) {
+      await checkPageSchedule(tx, page.ownerMemberId, settings.scheduleId);
+    }
     const by = actorRow(scope.actor);
     try {
       const [row] = await tx
@@ -281,7 +294,6 @@ export async function updateBookingPage(
           ...(settings.slug === undefined ? {} : { slug: settings.slug }),
           ...(settings.durations === undefined ? {} : { durations: [...settings.durations] }),
           ...(settings.location === undefined ? {} : { location: settings.location }),
-          ...(settings.availability === undefined ? {} : { availability: settings.availability }),
           ...(settings.bufferBefore === undefined ? {} : { bufferBefore: settings.bufferBefore }),
           ...(settings.bufferAfter === undefined ? {} : { bufferAfter: settings.bufferAfter }),
           ...(settings.minNoticeMinutes === undefined ? {} : { minNoticeMinutes: settings.minNoticeMinutes }),
@@ -289,7 +301,9 @@ export async function updateBookingPage(
           ...(settings.dailyLimit === undefined ? {} : { dailyLimit: settings.dailyLimit }),
           ...(settings.slotStep === undefined ? {} : { slotStep: settings.slotStep }),
           ...(settings.status === undefined ? {} : { status: settings.status }),
-          ...(settings.hoursMode === undefined ? {} : { hoursMode: settings.hoursMode }),
+          ...(settings.scheduleId === undefined
+            ? {}
+            : { scheduleId: settings.scheduleId, hoursMode: settings.scheduleId === null ? 'mine' : 'own' }),
           ...(settings.isPrivate === undefined ? {} : { isPrivate: settings.isPrivate }),
           updatedAt: sql`now()`,
           updatedByType: by.type,
@@ -298,8 +312,9 @@ export async function updateBookingPage(
         })
         .where(eq(bookingPages.id, input.pageId))
         .returning();
-      if (row === undefined) throw refuse('NOT_FOUND', NOT_FOUND_MESSAGE);
-      return viewOf(scope, pageOf(row), (await monthCounts(tx, [row.id], now)).get(row.id) ?? 0);
+      const [changed] = row === undefined ? [] : await pagesOf(tx, [row]);
+      if (changed === undefined) throw refuse('NOT_FOUND', NOT_FOUND_MESSAGE);
+      return viewOf(scope, changed, (await monthCounts(tx, [changed.id], now)).get(changed.id) ?? 0);
     } catch (error) {
       if (postgresError(error)?.constraint === 'booking_pages_slug') throw slugTaken();
       throw error;
@@ -366,64 +381,5 @@ export async function listBookings(
       eventFailed: row.eventFailedAt !== null,
       createdAt: row.createdAt.toISOString(),
     }));
-  });
-}
-
-/** The member a scope acts for, or FORBIDDEN (hours are a member's own). */
-function hoursOwner(scope: EngineScope): string {
-  requirePermission(scope, 'booking.manage');
-  const member = memberOf(scope);
-  if (member === undefined) throw refuse('FORBIDDEN', PERMISSIONS['booking.manage'].message);
-  return member;
-}
-
-/** The caller's own hours and days off; never set yet, weekdays 09:00 to 17:00 in `timeZone`. */
-export async function getMemberHours(
-  scope: EngineScope,
-  input: { readonly timeZone: string },
-): Promise<{ readonly availability: BookingAvailability }> {
-  const member = hoursOwner(scope);
-  return inWorkspace(scope, async (tx) => {
-    const [row] = await tx
-      .select({ availability: bookingMemberHours.availability })
-      .from(bookingMemberHours)
-      .where(eq(bookingMemberHours.memberId, member));
-    const parsed = row === undefined ? undefined : BookingAvailability.safeParse(row.availability);
-    return { availability: parsed?.success === true ? parsed.data : defaultAvailability(input.timeZone) };
-  });
-}
-
-/** Replaces the caller's own hours and days off: every page that follows them books by them at once. */
-export async function setMemberHours(
-  scope: EngineScope,
-  input: { readonly availability: BookingAvailability },
-): Promise<{ readonly availability: BookingAvailability }> {
-  const member = hoursOwner(scope);
-  const by = actorRow(scope.actor);
-  return inWorkspace(scope, async (tx) => {
-    await tx
-      .insert(bookingMemberHours)
-      .values({
-        workspaceId: scope.workspaceId,
-        memberId: member,
-        availability: input.availability,
-        createdByType: by.type,
-        createdById: by.id,
-        createdByMemberId: by.memberId,
-        updatedByType: by.type,
-        updatedById: by.id,
-        updatedByMemberId: by.memberId,
-      })
-      .onConflictDoUpdate({
-        target: [bookingMemberHours.workspaceId, bookingMemberHours.memberId],
-        set: {
-          availability: input.availability,
-          updatedAt: sql`now()`,
-          updatedByType: by.type,
-          updatedById: by.id,
-          updatedByMemberId: by.memberId,
-        },
-      });
-    return { availability: input.availability };
   });
 }

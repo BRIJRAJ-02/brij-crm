@@ -32,7 +32,13 @@ export type AccessEntry =
    * Booking pages (spec 0025): `booking.manage` first (403 `FORBIDDEN`), then the reader's own pages, or anyone's
    * with `booking.admin`; another's page answers as absent.
    */
-  | { readonly bookingPages: true };
+  | { readonly bookingPages: true }
+  /**
+   * Availability schedules (spec 0035, AC-971): `booking.manage` first (403 `FORBIDDEN`), then the reader's own
+   * schedules, or anyone's with `booking.admin`; another member's schedule answers as absent, and naming another
+   * member without `booking.admin` is `FORBIDDEN`.
+   */
+  | { readonly schedules: true };
 
 /** Every exported service that takes a scope, and what it checks. */
 export const ACCESS_TABLE = {
@@ -224,8 +230,15 @@ export const ACCESS_TABLE = {
   listBookings: { bookingPages: true },
   listWorkspaceBookings: { bookingPages: true },
   readBookingsCalendar: { bookingPages: true },
-  getMemberHours: { bookingPages: true },
-  setMemberHours: { bookingPages: true },
+  readDefaultHours: { schedules: true },
+  saveDefaultHours: { schedules: true },
+  listSchedules: { schedules: true },
+  getSchedule: { schedules: true },
+  createSchedule: { schedules: true },
+  updateSchedule: { schedules: true },
+  setDefaultSchedule: { schedules: true },
+  duplicateSchedule: { schedules: true },
+  deleteSchedule: { schedules: true },
   createTimeBlock: { bookingPages: true },
   removeTimeBlock: { bookingPages: true },
   bookAsHost: { bookingPages: true },

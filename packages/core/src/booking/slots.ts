@@ -5,23 +5,33 @@
 // booking's recheck under the host lock.
 import { and, asc, eq, gt, inArray, lt, ne, sql } from 'drizzle-orm';
 import {
-  BookingAvailability,
   BookingLocation,
-  defaultAvailability,
+  isTimeZone,
   minutesOf,
   WEEKDAYS,
+  type BookingAvailability,
   type BookingPageSettings,
 } from '@crm/contracts';
 import { schema, type WorkspaceTx } from '@crm/db';
+import { resolveMany, virtualDefault, type ResolvedSchedule } from '../availability/resolve.ts';
 import { refuse } from '../engine/refusals.ts';
 import { blockedTime } from './blocks.ts';
 import type { BusyReader } from './calendar.ts';
 import { computeSlots, type BookedSpan, type DateOverride, type Span, type WeeklyRule } from './engine.ts';
 
-const { bookingMemberHours, bookingPageMembers, bookingPages, bookings } = schema;
+const { bookingPageMembers, bookingPages, bookings } = schema;
 
-/** A page as the services read it: its row, the settings parsed. */
+/** A page as the services read it: its row, the settings parsed, and the hours it books by. */
 export interface PageRecord extends BookingPageSettings {
+  /**
+   * The hours the page books by (spec 0035, AC-965): its schedule's, else its
+   * owner's default's, else the virtual default in `fallbackZone`.
+   */
+  readonly availability: BookingAvailability;
+  /** That schedule's name ("Working hours" for the virtual default), for the page's views. */
+  readonly scheduleName: string;
+  /** The zone the virtual default takes on this page: its own stored hours' zone (its creator's, AC-963). */
+  readonly fallbackZone: string;
   readonly id: string;
   readonly publicKey: string;
   readonly kind: 'personal' | 'collective' | 'round_robin';
@@ -36,8 +46,35 @@ export interface PageRecord extends BookingPageSettings {
 const SLOT_STEPS = new Set([15, 30, 60]);
 const KINDS = new Set(['personal', 'collective', 'round_robin']);
 
-/** A stored row as a `PageRecord`: settings parsed with the shared schemas, a damaged one refused loudly. */
-export function pageOf(row: typeof bookingPages.$inferSelect): PageRecord {
+/** A page's stored row (`booking_pages`). */
+export type PageRow = typeof bookingPages.$inferSelect;
+
+/**
+ * The zone of a page's own stored hours, which the virtual default takes on it (UTC when they are damaged). Read
+ * with no schema: only the zone matters, and a page whose old hours no longer parse still has one. `known` holds
+ * the zones one call already checked, so a list of pages checks each zone once (a check builds an `Intl` format).
+ */
+export function fallbackZoneOf(row: Pick<PageRow, 'availability'>, known?: Map<string, boolean>): string {
+  const stored: unknown = row.availability;
+  const zone =
+    typeof stored === 'object' && stored !== null && 'timeZone' in stored && typeof stored.timeZone === 'string'
+      ? stored.timeZone
+      : undefined;
+  if (zone === undefined) return 'UTC';
+  const valid = known?.get(zone) ?? isTimeZone(zone);
+  known?.set(zone, valid);
+  return valid ? zone : 'UTC';
+}
+
+/**
+ * A stored row as a `PageRecord`, given the schedule it books by and its zone for the virtual default (`pagesOf`
+ * resolves both): settings parsed with the shared schemas.
+ */
+export function pageOf(
+  row: PageRow,
+  schedule: Pick<ResolvedSchedule, 'name' | 'availability'>,
+  fallbackZone: string = fallbackZoneOf(row),
+): PageRecord {
   const step = row.slotStep;
   return {
     id: row.id,
@@ -51,7 +88,10 @@ export function pageOf(row: typeof bookingPages.$inferSelect): PageRecord {
       [15, 30, 45, 60, 90].includes(minutes),
     ),
     location: BookingLocation.parse(row.location),
-    availability: BookingAvailability.parse(row.availability),
+    availability: schedule.availability,
+    scheduleName: schedule.name,
+    fallbackZone,
+    scheduleId: row.scheduleId,
     bufferBefore: row.bufferBefore,
     bufferAfter: row.bufferAfter,
     minNoticeMinutes: row.minNoticeMinutes,
@@ -59,7 +99,6 @@ export function pageOf(row: typeof bookingPages.$inferSelect): PageRecord {
     dailyLimit: row.dailyLimit,
     slotStep: step !== null && SLOT_STEPS.has(step) ? (step as 15 | 30 | 60) : null,
     status: row.status === 'paused' ? 'paused' : 'live',
-    hoursMode: row.hoursMode === 'mine' ? 'mine' : 'own',
     isDeleted: row.deletedAt !== null,
     isPrivate: row.isPrivate,
     createdAt: row.createdAt,
@@ -68,24 +107,34 @@ export function pageOf(row: typeof bookingPages.$inferSelect): PageRecord {
 }
 
 /**
- * One page by id, deleted ones too, or undefined, with the hours it books by:
- * a page that follows its owner's hours takes theirs (in their zone), or
- * weekdays 09:00 to 17:00 in the page's zone until they set any.
+ * Stored rows as `PageRecord`s, in order, each with the hours it books by
+ * (spec 0035, AC-965): the schedule it names when that is its owner's, else
+ * whichever schedule is the owner's default now, else the virtual default
+ * (weekdays 09:00 to 17:00) in the page's own zone. One query for them all.
  */
+export async function pagesOf(tx: WorkspaceTx, rows: readonly PageRow[]): Promise<readonly PageRecord[]> {
+  const known = new Map<string, boolean>();
+  const zones = rows.map((row) => fallbackZoneOf(row, known));
+  const hours = await resolveMany(
+    tx,
+    rows.map((row, index) => ({
+      memberId: row.ownerMemberId,
+      scheduleId: row.scheduleId ?? undefined,
+      fallbackZone: zones[index] ?? 'UTC',
+    })),
+  );
+  return rows.map((row, index) => {
+    const zone = zones[index] ?? 'UTC';
+    return pageOf(row, hours[index] ?? virtualDefault(zone), zone);
+  });
+}
+
+/** One page by id, deleted ones too, or undefined, with the hours it books by (`pagesOf`). */
 export async function loadPage(tx: WorkspaceTx, pageId: string): Promise<PageRecord | undefined> {
   const [row] = await tx.select().from(bookingPages).where(eq(bookingPages.id, pageId));
   if (row === undefined) return undefined;
-  const page = pageOf(row);
-  if (page.hoursMode === 'own') return page;
-  const [hours] = await tx
-    .select({ availability: bookingMemberHours.availability })
-    .from(bookingMemberHours)
-    .where(eq(bookingMemberHours.memberId, page.ownerMemberId));
-  const parsed = hours === undefined ? undefined : BookingAvailability.safeParse(hours.availability);
-  return {
-    ...page,
-    availability: parsed?.success === true ? parsed.data : defaultAvailability(page.availability.timeZone),
-  };
+  const [page] = await pagesOf(tx, [row]);
+  return page;
 }
 
 /** The page's hours as the engine takes them: weekday ranges (0 Sunday) and date overrides, in minutes. */

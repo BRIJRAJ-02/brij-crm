@@ -1,35 +1,27 @@
 // Brief
-// Purpose: Bookings › Availability (spec 0025 experience, AC-680): the member's own weekly hours and days off, which their pages follow.
+// Purpose: Bookings › Availability (spec 0025 experience, AC-680; spec 0035): the member's default schedule, its weekly hours, zone and days off, which every page following the default books by.
 // Main task: set the week's windows (all days at once, per day, or copied across), the zone and the days off, then Save.
-// Leaves out: a page's own hours (its editor) and anyone else's hours.
-import { isDataError, type BookingAvailability, type BookingPageView, type DataLayer } from '@crm/data';
-import {
-  Card,
-  HoursEditor,
-  LinkList,
-  PageColumn,
-  SaveBar,
-  Select,
-  Skeleton,
-  TopBar,
-  type SaveBarStatus,
-} from '@crm/ui';
+// Leaves out: the member's other schedules (their list and editor are milestone 2), a page's choice of schedule (its editor) and anyone else's hours.
+import type { BookingPageView, DataLayer, ScheduleView } from '@crm/data';
+import { useSchedules } from '@crm/data/react';
+import { Card, HoursEditor, LinkList, PageColumn, SaveBar, Select, Skeleton, TopBar } from '@crm/ui';
 import { useBlocker, useNavigate } from '@tanstack/react-router';
-import { useState, useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import { bookingsHref } from '../workspace/objects.ts';
 import { pageHeading } from '../navigation/focus.ts';
 import { WorkspacePage } from '../workspace/WorkspacePage.tsx';
 import { DaysOff } from './DaysOff.tsx';
 import { pageEditorHref } from './links.ts';
 import { PagesHours } from './PagesHours.tsx';
-import { availabilityIsValid, weekRows, WEEKDAYS, withDay, zoneItems, zoneMatches } from './hours.ts';
+import { browserZone, weekRows, WEEKDAYS, withDay, zoneItems, zoneMatches } from './hours.ts';
+import { useScheduleDraft } from './scheduleDraft.ts';
+import { scheduleStrings } from './schedule-strings.ts';
 import { strings } from './strings.ts';
 
-/** Props for the screen: the member's hours its route loaded. */
+/** Props for the screen: the member's pages its route loaded; the schedules come from the data layer. */
 export interface AvailabilityScreenProps {
   readonly data: DataLayer;
   readonly slug: string;
-  readonly availability: BookingAvailability;
   /** The member's own pages, listed under the week with the hours each books on. */
   readonly pages: readonly BookingPageView[];
   /** `error` when the pages didn't load: the list says so, with Try again. */
@@ -38,65 +30,58 @@ export interface AvailabilityScreenProps {
   readonly locale: string;
 }
 
+/**
+ * The member's default schedule (spec 0035), read from the data layer's held list, so a save in another tab shows
+ * here while nothing is being edited (AC-977). Until they save any hours it is the virtual default, weekdays 9 to 5
+ * in the browser's zone, stored the first time they save (AC-963).
+ */
+export function AvailabilityScreen(props: AvailabilityScreenProps) {
+  const { data, slug } = props;
+  const view = data.schedules.view(slug, undefined, browserZone());
+  const state = useSchedules(view);
+  // The id the virtual default is being stored under: the same editor stays for it as it lands.
+  const [adopted, setAdopted] = useState<string | undefined>(undefined);
+  const schedule = state.status === 'ready' ? state.schedules.find((each) => each.isDefault) : undefined;
+  if (state.status !== 'ready' || schedule === undefined) return <AvailabilityPending />;
+  // One editor per schedule, so a draft never crosses from one to another should the default move elsewhere.
+  return (
+    <Loaded
+      key={schedule.id === null || schedule.id === adopted ? 'virtual' : schedule.id}
+      {...props}
+      schedule={schedule}
+      schedules={state.schedules}
+      onReload={() => view.reload()}
+      onAdopt={setAdopted}
+    />
+  );
+}
+
 /** The week and the days off, saved together. */
-export function AvailabilityScreen({
+function Loaded({
   data,
   slug,
-  availability: loaded,
   pages,
   pagesStatus,
   onRetryPages,
   locale,
-}: AvailabilityScreenProps) {
+  schedule,
+  schedules,
+  onReload,
+  onAdopt,
+}: AvailabilityScreenProps & {
+  readonly schedule: ScheduleView;
+  readonly schedules: readonly ScheduleView[];
+  readonly onReload: () => void;
+  readonly onAdopt: (id: string) => void;
+}) {
   const navigate = useNavigate();
-  const [saved, setSaved] = useState(loaded);
-  const [draft, setDraft] = useState(loaded);
-  const [isSaving, setSaving] = useState(false);
-  const [failure, setFailure] = useState<string | undefined>(undefined);
-  const [justSaved, setJustSaved] = useState(false);
-  const isDirty = JSON.stringify(saved) !== JSON.stringify(draft);
+  const draft = useScheduleDraft({ data, slug, schedule, forMember: false, reload: onReload, onAdopt });
   useBlocker({
-    shouldBlockFn: () => isDirty && !globalThis.confirm(strings.leaveConfirm),
-    enableBeforeUnload: () => isDirty,
+    shouldBlockFn: () => draft.isDirty && !globalThis.confirm(strings.leaveConfirm),
+    enableBeforeUnload: () => draft.isDirty,
   });
-  const update = (next: BookingAvailability) => {
-    setDraft(next);
-    setJustSaved(false);
-  };
-  const save = () => {
-    if (isSaving) return;
-    setSaving(true);
-    setFailure(undefined);
-    const sent = draft;
-    data.bookings.setHours(slug, sent).then(
-      ({ availability }) => {
-        setSaving(false);
-        setSaved(availability);
-        // An edit made while it saved stays, still unsaved.
-        setDraft((current) => (JSON.stringify(current) === JSON.stringify(sent) ? availability : current));
-        setJustSaved(true);
-      },
-      (error: unknown) => {
-        setSaving(false);
-        setFailure(isDataError(error) ? error.message : strings.somethingWrong);
-      },
-    );
-  };
-  const discard = () => {
-    setDraft(saved);
-    setFailure(undefined);
-    setJustSaved(false);
-  };
-  const status: SaveBarStatus = isSaving
-    ? 'saving'
-    : isDirty
-      ? failure === undefined
-        ? 'unsaved'
-        : 'error'
-      : justSaved
-        ? 'saved'
-        : 'hidden';
-  const zones = useMemo(() => zoneItems(draft.timeZone, new Date()), [draft.timeZone]);
+  const shown = draft.shown;
+  const zones = useMemo(() => zoneItems(shown.timeZone, new Date()), [shown.timeZone]);
   return (
     <WorkspacePage
       currentPage="bookings"
@@ -122,34 +107,33 @@ export function AvailabilityScreen({
                     items={zones}
                     filter={zoneMatches}
                     isSearchable
-                    value={draft.timeZone}
+                    value={shown.timeZone}
                     onChange={(zone) => {
-                      if (zone !== null) update({ ...draft, timeZone: zone });
+                      if (zone !== null) draft.change((current) => ({ ...current, timeZone: zone }));
                     }}
                   />
                 </Card>
-                <DaysOff availability={draft} onChange={update} />
+                <DaysOff availability={shown} onChange={(next) => draft.change(() => next)} />
               </>
             }
             footer={
               <SaveBar
-                status={status}
-                {...(failure === undefined ? {} : { error: failure })}
-                {...(availabilityIsValid(draft) ? {} : { blockedReason: strings.fixHours })}
-                onSave={save}
-                onDiscard={discard}
+                status={draft.status}
+                {...(draft.error === undefined ? {} : { error: draft.error })}
+                {...(draft.isValid ? {} : { blockedReason: strings.fixHours })}
+                onSave={draft.save}
+                onDiscard={draft.discard}
                 // When Save or Discard goes with focus on it, the page's title takes it.
                 onFocusAway={() => pageHeading(document)?.focus()}
               />
             }
           >
-            <Card title={strings.weeklyHours} description={strings.availabilityText}>
+            <Card title={strings.weeklyHours} description={scheduleStrings.defaultHoursText}>
               <HoursEditor
                 label={strings.weeklyHours}
-                rows={weekRows(draft)}
+                rows={weekRows(shown)}
                 onChange={(day, ranges) => {
-                  setJustSaved(false);
-                  setDraft((current) => withDay(current, day, ranges));
+                  draft.change((current) => withDay(current, day, ranges));
                 }}
               />
             </Card>
@@ -158,7 +142,8 @@ export function AvailabilityScreen({
               pages={pages}
               status={pagesStatus}
               onRetry={onRetryPages}
-              mine={draft}
+              mine={shown}
+              schedules={schedules}
               locale={locale}
               onOpen={(pageId) => void navigate({ href: pageEditorHref(slug, pageId) })}
             />
@@ -191,7 +176,7 @@ export function AvailabilityPending() {
               </>
             }
           >
-            <Card title={strings.weeklyHours} description={strings.availabilityText} isBusy>
+            <Card title={strings.weeklyHours} description={scheduleStrings.defaultHoursText} isBusy>
               <HoursEditor
                 label={strings.weeklyHours}
                 rows={WEEKDAYS.map((day) => ({ id: day, label: strings.weekday[day], ranges: [] }))}

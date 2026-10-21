@@ -51,14 +51,15 @@ export const LIFECYCLE_CAP = MAX_LIFECYCLE_IDS;
 
 /** One outbox row before it gets its number. */
 export interface OutboxEvent {
-  readonly kind: 'records' | 'entries' | 'definitions' | 'members' | 'jobs' | 'views' | 'tasks' | 'notes' | 'meetings';
+  readonly kind:
+    'records' | 'entries' | 'definitions' | 'members' | 'jobs' | 'views' | 'tasks' | 'notes' | 'meetings' | 'schedules';
   /** The object: a `records` row's, an `entries` row's list's parent, a `definitions` row's when it names one. */
   readonly objectId?: string;
   /** The list: an `entries` row's, a `definitions` row's when it names one. */
   readonly listId?: string;
   readonly recordIds: readonly string[];
   readonly attributeIds: readonly string[];
-  /** The row's own items: entry ids for `entries`, member ids for `members`, task ids for `tasks`, meeting ids for `meetings`. */
+  /** The row's own items: entry ids for `entries`, member ids for `members`, task ids for `tasks`, meeting ids for `meetings`, schedule ids for `schedules`. */
   readonly itemIds: readonly string[];
   /** On a `records` row: the records the write created, deleted and restored, at most `LIFECYCLE_CAP` together. */
   readonly createdIds: readonly string[];
@@ -299,7 +300,8 @@ function definitionRows(change: CappedChange): OutboxEvent[] {
  * (spec 0008) one `jobs` row per starter, its job ids in `itemIds`, and
  * (spec 0020) one `views` row per object, (spec 0019) one `tasks` row, its task ids in `itemIds` and in `recordIds`
  * every record they linked before or after the write, and (spec 0024) one `meetings` row the same way, coarse with
- * no ids past `CHANGE_CAP` meetings or records.
+ * no ids past `CHANGE_CAP` meetings or records, and (spec 0035) one `schedules` row, its schedule ids in `itemIds`
+ * (a write touches a handful: one member's at most 20).
  */
 function kindRows(change: CappedChange): OutboxEvent[] {
   const rows: OutboxEvent[] = [];
@@ -348,6 +350,9 @@ function kindRows(change: CappedChange): OutboxEvent[] {
       recordIds: coarse ? [] : recordIds,
       coarse,
     });
+  }
+  if (change.schedules.length > 0) {
+    rows.push({ kind: 'schedules', ...NO_IDS, itemIds: [...new Set(change.schedules)].sort(byId), coarse: false });
   }
   return rows;
 }

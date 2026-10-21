@@ -15,6 +15,7 @@ export const LIVE_KINDS = [
   'notes',
   'tasks',
   'meetings',
+  'schedules',
   'members',
   'access',
   'jobs',

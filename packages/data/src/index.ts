@@ -61,6 +61,8 @@ import type { FetchLike } from './fetch.ts';
 import { delivered } from './delivered.ts';
 import { createJobsStore, type JobsScope, type JobsView, type TestJobSettings } from './jobs/store.ts';
 import { createBookingsStore, type BookingsCalendarHeld, type BookingsView } from './bookings/store.ts';
+import { lazySchedules } from './schedules/lazy.ts';
+import type { SchedulesView } from './schedules/store.ts';
 import { connectUrl, createCalendarStore, type CalendarSettingsHeld, type CalendarView } from './calendar/store.ts';
 import {
   createCaptureList,
@@ -201,6 +203,8 @@ export type {
   MeetingAttendeeShape,
 } from './activity/feed.ts';
 export type { BookingsCalendarHeld, BookingsCalendarState, BookingsState, BookingsView } from './bookings/store.ts';
+export type { ScheduleList, ScheduleUser, ScheduleView } from '@crm/contracts';
+export type { SchedulesState, SchedulesView } from './schedules/store.ts';
 export type { CalendarSettingsHeld, CalendarSettingsState, CalendarState, CalendarView } from './calendar/store.ts';
 export type { CaptureListState, CaptureListView } from './captures/list.ts';
 export { connectUrl, needsReconnect } from './calendar/store.ts';
@@ -723,6 +727,7 @@ export function createDataLayer({
     pendingOptions.clear();
     bookingPageLists.clear();
     formLists.clear();
+    schedules.clear();
   };
   const reset = () => {
     forget();
@@ -1126,6 +1131,22 @@ export function createDataLayer({
       });
     });
   });
+  // Schedules saved in another tab or by anyone else (spec 0035, AC-977): every held list of the workspace reads
+  // again, once for a burst. The event names no member to most audiences, so every tab holding a list (Availability,
+  // a page editor, an open New page dialog) hears every save: spread over 100 to 400 ms, inside AC-977's second, so
+  // a team never reads in step.
+  const schedulesDue = new Set<string>();
+  router.on('schedules', (workspace) => {
+    if (schedulesDue.has(workspace)) return;
+    schedulesDue.add(workspace);
+    setTimeout(
+      () => {
+        schedulesDue.delete(workspace);
+        schedules.changed(workspace);
+      },
+      100 + Math.round(random() * 300),
+    );
+  });
   router.on('jobs', (workspace, event) => {
     jobs.changed(workspace, event);
   });
@@ -1161,6 +1182,7 @@ export function createDataLayer({
     });
   });
   router.onResync((workspace) => {
+    schedules.changed(workspace);
     jobs.resync(workspace);
     views.resync(workspace);
     void trash?.then((held) => {
@@ -1300,6 +1322,38 @@ export function createDataLayer({
         beforeRead(input.workspace).then(() => call((options) => api.bookings.calendar(input, options))),
     },
   });
+
+  // Availability schedules (spec 0035): a held list per workspace and member, patched by every write, read again on
+  // a `schedules` event.
+  const schedules = lazySchedules(() =>
+    import('./schedules/store.ts').then(({ createSchedulesStore }) =>
+      createSchedulesStore({
+        api: {
+          list: (input) =>
+            beforeRead(input.workspace).then(() => call((options) => api.schedules.list(input, options))),
+          create: (input) => call((options) => api.schedules.create({ ...input, mutationId: mintId() }, options)),
+          update: (input) => call((options) => api.schedules.update({ ...input, mutationId: mintId() }, options)),
+          setDefault: (input) =>
+            call((options) => api.schedules.setDefault({ ...input, mutationId: mintId() }, options)),
+          duplicate: (input) => call((options) => api.schedules.duplicate({ ...input, mutationId: mintId() }, options)),
+          remove: (input) => call((options) => api.schedules.delete({ ...input, mutationId: mintId() }, options)),
+        },
+        mintId,
+        watch: (workspace) => watch(workspace),
+      }),
+    ),
+  );
+
+  /**
+   * A page made, deleted or moved to another schedule (spec 0035): the held schedules lists read again, since their
+   * "Used by" counts the pages; booking pages have no live event of their own.
+   */
+  const usedBy =
+    (workspace: string) =>
+    <T>(answer: T): T => {
+      schedules.changed(workspace);
+      return answer;
+    };
 
   // Calendar sync (spec 0024): the member's connections, Settings › Calendar's one list per workspace.
   const calendar = createCalendarStore({
@@ -1958,6 +2012,30 @@ export function createDataLayer({
       },
     },
     /**
+     * Availability schedules (spec 0035): a member's named hours, one of them
+     * their default, held per workspace and member and read again live.
+     * Writes show at once and put back what they changed on a refusal:
+     * `NAME_TAKEN` on `name`, `SCHEDULE_LIMIT`, `STALE` (changed in another
+     * tab), `DEFAULT_SCHEDULE` (the default can't be deleted).
+     */
+    schedules: {
+      /** A new schedule's id: mint it once per save, and send the same one again on a retry. */
+      newId: () => mintId(),
+      /** The caller's own schedules (`memberId` undefined), or a colleague's with `booking.admin`. */
+      view: (workspace: string, memberId: string | undefined, timeZone: string): SchedulesView =>
+        schedules.view(workspace, memberId, timeZone),
+      create: schedules.create,
+      update: schedules.update,
+      setDefault: schedules.setDefault,
+      duplicate: schedules.duplicate,
+      /** Deletes one; the pages it moved to the default read again, so Links drops the schedule's name from them. */
+      remove: (...args: Parameters<typeof schedules.remove>) =>
+        schedules.remove(...args).then((moved) => {
+          if (moved.pages > 0) bookingPageLists.view(args[0]).reload();
+          return moved;
+        }),
+    },
+    /**
      * Booking pages (spec 0025): settings, not CRM data, with no live event.
      * Captures › Links reads the held list (`view`), the one copy every write
      * here patches: `update` (a pause from the list, the builder saving as you
@@ -1992,20 +2070,27 @@ export function createDataLayer({
       ): Promise<BookingPageView> =>
         bookingPageLists.write(workspace, {
           send: () =>
-            call((options) => api.bookingPages.create({ workspace, ...input, mutationId: mintId() }, options)),
+            call((options) => api.bookingPages.create({ workspace, ...input, mutationId: mintId() }, options)).then(
+              usedBy(workspace),
+            ),
           land: (items, page) => upsertFirst(page)(items),
         }),
       /** Changes only the settings given, in the list at once. Refusals: `SLUG_TAKEN` (field `slug`), `INPUT_INVALID` (with issues). */
       update: (workspace: string, pageId: string, settings: Partial<BookingPageSettings>): Promise<BookingPageView> =>
         bookingPageLists.write(workspace, {
           send: () =>
-            call((options) => api.bookingPages.update({ workspace, pageId, settings, mutationId: mintId() }, options)),
+            call((options) =>
+              api.bookingPages.update({ workspace, pageId, settings, mutationId: mintId() }, options),
+            ).then(settings.scheduleId === undefined ? (page: BookingPageView) => page : usedBy(workspace)),
           ...shownPatch(bookingPageLists.items(workspace), pageId, (page) => ({ ...page, ...settings })),
           land: (items, page) => patchItem<BookingPageView>(pageId, () => page)(items),
         }),
       /**
        * A copy of a page the list holds, titled `title`: first in the list at
-       * once (pending until the server made it), gone again on a refusal.
+       * once (pending until the server made it), gone again on a refusal. The
+       * copy is the reader's own, so it keeps the schedule only when the page
+       * was theirs too; an admin's copy of a colleague's page follows the
+       * admin's default (spec 0035, AC-966).
        */
       duplicate: (workspace: string, page: BookingPageView, title: string): Promise<BookingPageView> => {
         const id = mintId();
@@ -2019,6 +2104,9 @@ export function createDataLayer({
           createdAt: _created,
           updatedAt: _updated,
           slug: _slug,
+          // Read only: the hours and name of the schedule the page books by now (spec 0035).
+          availability: _hours,
+          scheduleName: _scheduleName,
           ...settings
         } = page;
         const at = new Date().toISOString();
@@ -2038,19 +2126,31 @@ export function createDataLayer({
         };
         return bookingPageLists.write(workspace, {
           send: () =>
-            call((options) =>
-              api.bookingPages.create(
-                {
-                  workspace,
-                  id,
-                  title,
-                  timeZone: page.availability.timeZone,
-                  settings: { ...settings, title },
-                  mutationId: mintId(),
-                },
-                options,
-              ),
-            ),
+            readAccess(workspace)
+              .then(
+                (mine) => mine.memberId,
+                () => undefined,
+              )
+              .then((me) =>
+                call((options) =>
+                  api.bookingPages.create(
+                    {
+                      workspace,
+                      id,
+                      title,
+                      timeZone: page.availability.timeZone,
+                      settings: {
+                        ...settings,
+                        title,
+                        scheduleId: page.ownerMemberId === me ? page.scheduleId : null,
+                      },
+                      mutationId: mintId(),
+                    },
+                    options,
+                  ),
+                ),
+              )
+              .then(usedBy(workspace)),
           show: upsertFirst(draft),
           pendingId: id,
           undo: dropItem<BookingPageView>(id),
@@ -2060,7 +2160,10 @@ export function createDataLayer({
       /** Deletes a page, gone from the list at once and back on a refusal: its link stops working, its bookings stay. */
       remove: (workspace: string, pageId: string): Promise<{ pageId: string }> =>
         bookingPageLists.write(workspace, {
-          send: () => call((options) => api.bookingPages.delete({ workspace, pageId, mutationId: mintId() }, options)),
+          send: () =>
+            call((options) => api.bookingPages.delete({ workspace, pageId, mutationId: mintId() }, options)).then(
+              usedBy(workspace),
+            ),
           ...shownDrop(bookingPageLists.items(workspace), pageId),
         }),
     },
@@ -2085,10 +2188,10 @@ export function createDataLayer({
       reloadAll: (workspace: string): void => {
         bookingsLists.reloadAll(workspace);
       },
-      /** The member's own hours and days off; never set yet, weekdays 09:00 to 17:00 in `timeZone`. */
+      /** The member's default schedule's hours; never saved, weekdays 09:00 to 17:00 in `timeZone`. */
       hours: (workspace: string, timeZone: string): Promise<{ availability: BookingAvailability }> =>
         call((options) => api.bookings.hours({ workspace, timeZone }, options)),
-      /** Replaces the member's own hours and days off; their pages that follow them book by them at once. */
+      /** Replaces the member's default schedule's hours; their pages that follow the default book by them at once. */
       setHours: (
         workspace: string,
         availability: BookingAvailability,

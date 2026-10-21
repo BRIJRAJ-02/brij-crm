@@ -48,6 +48,12 @@ export const ENGINE_REFUSAL_CODES = [
   'BOOKING_CLOSED',
   // Calendar sync (spec 0024, AC-618): the member has no connected calendar to write an event to.
   'CALENDAR_NOT_CONNECTED',
+  // Availability schedules (spec 0035): a member's 20 are used; the schedule was saved by someone else since the
+  // editor began; the default can't be deleted; a page may only book by a schedule of its owner.
+  'SCHEDULE_LIMIT',
+  'STALE',
+  'DEFAULT_SCHEDULE',
+  'SCHEDULE_NOT_ALLOWED',
 ] as const;
 
 /** One of the engine's refusal codes. */

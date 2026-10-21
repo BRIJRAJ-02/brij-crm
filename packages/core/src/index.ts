@@ -217,12 +217,24 @@ export {
   createBookingPage,
   deleteBookingPage,
   getBookingPage,
-  getMemberHours,
   listBookingPages,
   listBookings,
-  setMemberHours,
   updateBookingPage,
 } from './booking/pages.ts';
+// Availability schedules (spec 0035): a member's named hours, the one the slot engine resolves for a page, and the
+// default schedule's hours behind `bookings.hours` and `bookings.setHours`.
+export {
+  createSchedule,
+  deleteSchedule,
+  duplicateSchedule,
+  getSchedule,
+  listSchedules,
+  readDefaultHours,
+  saveDefaultHours,
+  setDefaultSchedule,
+  updateSchedule,
+} from './availability/schedules.ts';
+export { defaultSchedule, scheduleFor, type ResolvedSchedule } from './availability/resolve.ts';
 export { createTimeBlock, removeTimeBlock, type TimeBlockDraft } from './booking/blocks.ts';
 export { bookAsHost, HOST_BOOKING_MINUTES, type HostBookingDeps, type HostBookingInput } from './booking/host.ts';
 export { listWorkspaceBookings, readBookingsCalendar } from './booking/list.ts';

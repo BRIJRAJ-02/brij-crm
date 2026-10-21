@@ -1,16 +1,17 @@
 // Brief
 // Purpose: New booking page (spec 0025 experience, AC-678): a centred dialog, "Add a booking page" (the owner's call on 19 October 2026, over the side panel).
-// Main task: a title, the address it suggests, the lengths and the hours, then Continue into the editor.
+// Main task: a title, the address it suggests, the lengths and the schedule it books by, then Continue into the editor.
 // Leaves out: everything else a page has (its editor), and Make it private (pages are on or off until a public profile lists them).
 import { isDataError, type BookingPageView, type DataLayer } from '@crm/data';
-import { Button, Callout, ChoiceChips, Field, Modal, Radio, RadioGroup, SettingsStack } from '@crm/ui';
+import { useSchedules } from '@crm/data/react';
+import { Button, Callout, ChoiceChips, Field, Modal, Select, SettingsStack } from '@crm/ui';
 import { useState } from 'react';
-import { anyTime, browserZone } from './hours.ts';
+import { browserZone } from './hours.ts';
+import { scheduleStrings } from './schedule-strings.ts';
 import { strings } from './strings.ts';
 
 const DURATIONS = [15, 30, 45, 60, 90] as const;
 type Duration = (typeof DURATIONS)[number];
-type HoursChoice = 'mine' | 'any' | 'custom';
 
 /** A web address part from a title: lowercase, hyphens for anything else. */
 function slugOf(title: string): string {
@@ -38,7 +39,12 @@ export function NewPageDialog({ data, slug, isOpen, onClose, onCreated }: NewPag
   const [title, setTitle] = useState('');
   const [address, setAddress] = useState<string | undefined>(undefined);
   const [durations, setDurations] = useState<readonly Duration[]>([30]);
-  const [hours, setHours] = useState<HoursChoice>('mine');
+  // `default` follows the member's default schedule (spec 0035); any other id names one of their schedules.
+  const [hours, setHours] = useState('default');
+  // The member's schedules, held only while the dialog is open: it is mounted, closed, under all of Captures.
+  const schedules = useSchedules(isOpen ? data.schedules.view(slug, undefined, browserZone()) : undefined);
+  const choices = schedules.status === 'ready' ? schedules.schedules : [];
+  const fallback = choices.find((each) => each.isDefault);
   const [id, setId] = useState(() => data.bookingPages.newId());
   const [isBusy, setBusy] = useState(false);
   const [errors, setErrors] = useState<{
@@ -52,7 +58,7 @@ export function NewPageDialog({ data, slug, isOpen, onClose, onCreated }: NewPag
     setTitle('');
     setAddress(undefined);
     setDurations([30]);
-    setHours('mine');
+    setHours('default');
     setErrors({});
     setFailure(undefined);
     setId(data.bookingPages.newId());
@@ -77,8 +83,7 @@ export function NewPageDialog({ data, slug, isOpen, onClose, onCreated }: NewPag
         settings: {
           slug: shownAddress,
           durations: [...durations],
-          hoursMode: hours === 'mine' ? 'mine' : 'own',
-          ...(hours === 'any' ? { availability: anyTime(zone) } : {}),
+          scheduleId: hours === 'default' ? null : hours,
         },
       })
       .then(
@@ -147,17 +152,18 @@ export function NewPageDialog({ data, slug, isOpen, onClose, onCreated }: NewPag
           onChange={(ids) => setDurations(DURATIONS.filter((minutes) => ids.includes(String(minutes))))}
           {...(errors.durations === undefined ? {} : { error: errors.durations })}
         />
-        <RadioGroup
+        <Select
           label={strings.hours}
+          items={[
+            { id: 'default', label: scheduleStrings.defaultSchedule(fallback?.name) },
+            ...choices.flatMap((each) => (each.id === null ? [] : [{ id: each.id, label: each.name }])),
+          ]}
           value={hours}
-          onChange={(value) => {
-            if (value === 'mine' || value === 'any' || value === 'custom') setHours(value);
+          hint={scheduleStrings.hoursFromSchedule}
+          onChange={(id) => {
+            if (id !== null) setHours(id);
           }}
-        >
-          <Radio value="mine">{strings.hoursChoice.mine}</Radio>
-          <Radio value="any">{strings.hoursChoice.any}</Radio>
-          <Radio value="custom">{strings.hoursChoice.custom}</Radio>
-        </RadioGroup>
+        />
       </SettingsStack>
     </Modal>
   );

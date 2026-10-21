@@ -3,6 +3,7 @@
 // browser parses the builder's input with the same schemas the server checks.
 import * as z from 'zod';
 import { DateValue } from '../values/attribute-values.ts';
+import { Uuid } from '../values/ids.ts';
 
 /** The meeting lengths a page may offer, in minutes. */
 export const BOOKING_DURATIONS = [15, 30, 45, 60, 90] as const;
@@ -116,7 +117,7 @@ export const BookingAvailability = z.object({
 /** When a page can be booked. */
 export type BookingAvailability = z.infer<typeof BookingAvailability>;
 
-/** Weekdays 09:00 to 17:00 in the zone: a new page's hours. */
+/** Weekdays 09:00 to 17:00 in the zone: the virtual default schedule's hours (spec 0035, AC-963). */
 export function defaultAvailability(timeZone: string): BookingAvailability {
   const workday: TimeRange[] = [['09:00', '17:00']];
   return {
@@ -163,7 +164,7 @@ export const BookingPageStatus = z.enum(['live', 'paused']);
 /** Live or paused. */
 export type BookingPageStatus = z.infer<typeof BookingPageStatus>;
 
-/** Every setting a member edits (AC-623, AC-624). */
+/** Every setting a member edits (AC-623, AC-624); the hours are the schedule's (spec 0035). */
 export const BookingPageSettings = z.object({
   title: z.string().trim().min(1, 'Give the page a title.').max(120, 'Keep the title to 120 characters.'),
   description: z.string().trim().max(2000, 'Keep the description to 2,000 characters.'),
@@ -174,7 +175,6 @@ export const BookingPageSettings = z.object({
     .max(BOOKING_DURATIONS.length)
     .refine((durations) => new Set(durations).size === durations.length, { error: 'Offer each length once.' }),
   location: BookingLocation,
-  availability: BookingAvailability,
   bufferBefore: z.number().int().min(0).max(60, 'Buffers are 0 to 60 minutes.'),
   bufferAfter: z.number().int().min(0).max(60, 'Buffers are 0 to 60 minutes.'),
   minNoticeMinutes: z.number().int().min(0).max(BOOKING_NOTICE_MAX, 'Notice is at most 14 days.'),
@@ -189,8 +189,11 @@ export const BookingPageSettings = z.object({
     )
     .nullable(),
   status: BookingPageStatus,
-  /** `mine` follows the owner's own hours (Bookings › Availability); `own` uses `availability`. */
-  hoursMode: z.enum(['mine', 'own']),
+  /**
+   * The owner's schedule the page books by (spec 0035, AC-965); null follows whichever schedule is the owner's
+   * default at each slot read. A schedule of anyone else is refused `SCHEDULE_NOT_ALLOWED` (AC-966).
+   */
+  scheduleId: Uuid.nullable(),
   /** A private page (spec 0027, AC-708): reached by its link, it books inside its host's holds and waives notice. */
   isPrivate: z.boolean(),
 });
