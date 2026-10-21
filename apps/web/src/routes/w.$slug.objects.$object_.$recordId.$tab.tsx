@@ -2,6 +2,7 @@ import { isDataError } from '@crm/data';
 import { LoadingNow } from '@crm/ui';
 import { createFileRoute, redirect, useRouter, type ErrorComponentProps } from '@tanstack/react-router';
 import { detailAttributes, isRecordId, isRecordTab } from '../features/records/details.ts';
+import { isThreadParam } from '../features/comments/entries.ts';
 import { isNoteParam } from '../features/notes/entries.ts';
 import { isTaskParam } from '../features/tasks/entries.ts';
 import { RecordPage, RecordPendingPage } from '../features/records/RecordPage.tsx';
@@ -23,13 +24,15 @@ import { useWorkspaceName, WorkspacePage } from '../features/workspace/Workspace
 interface RecordSearch {
   readonly task?: string;
   readonly note?: string;
+  readonly thread?: string;
 }
 
-/** Reads `?task=` and `?note=` when they name one or a new one. */
+/** Reads `?task=` and `?note=` when they name one or a new one, and `?thread=` when it names a thread. */
 function recordSearch(search: Record<string, unknown>): RecordSearch {
   return {
     ...(isTaskParam(search.task) ? { task: search.task } : {}),
     ...(isNoteParam(search.note) ? { note: search.note } : {}),
+    ...(isThreadParam(search.thread) ? { thread: search.thread } : {}),
   };
 }
 
@@ -76,10 +79,11 @@ export const Route = createFileRoute('/w/$slug/objects/$object_/$recordId/$tab')
           recent: undefined,
           open: undefined,
           notes: undefined,
+          comments: undefined,
         },
       };
     }
-    const [record, feed, recent, open, notes] = await Promise.all([
+    const [record, feed, recent, open, notes, comments] = await Promise.all([
       context.data.records.one(
         params.slug,
         params.recordId,
@@ -90,6 +94,8 @@ export const Route = createFileRoute('/w/$slug/objects/$object_/$recordId/$tab')
       // With the record's object, so a background job on another object's records leaves them alone (spec 0022).
       context.data.tasks.forRecord(params.slug, params.recordId, 'open', object.id),
       context.data.notes.forRecord(params.slug, params.recordId, object.id),
+      // Comments (spec 0038): the store loads in its own chunk, and the tab's count arrives with the page.
+      context.data.comments.forRecord(params.slug, params.recordId),
     ]);
     // The open tasks start loading now; the page draws them (and the tab's count) as they arrive.
     void open.ready();
@@ -104,7 +110,9 @@ export const Route = createFileRoute('/w/$slug/objects/$object_/$recordId/$tab')
       }),
     ]);
     clearTimeout(timer);
-    return { page: { object, objects, attributes: shown, members, meId, record, feed, recent, open, notes } };
+    return {
+      page: { object, objects, attributes: shown, members, meId, record, feed, recent, open, notes, comments },
+    };
   },
   pendingComponent: () => (
     <LoadingNow>
@@ -129,6 +137,7 @@ function RecordRoute() {
       recordId={params.recordId}
       {...(search.task === undefined ? {} : { task: search.task })}
       {...(search.note === undefined ? {} : { note: search.note })}
+      {...(search.thread === undefined ? {} : { thread: search.thread })}
       {...page}
     />
   );
