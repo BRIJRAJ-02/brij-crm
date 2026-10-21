@@ -2,7 +2,9 @@
 import { useEffect, useRef, useState } from 'react';
 import { Button } from '../../atoms/Button/Button.tsx';
 import { Icon } from '../../atoms/Icon/Icon.tsx';
+import { focusLater } from '../../lib/focus-later.ts';
 import { FloatingBar } from '../../molecules/FloatingBar/FloatingBar.tsx';
+import { Modal, ModalTrigger } from '../../molecules/Modal/Modal.tsx';
 import { useKeyboardPlatform } from '../../provider/context.ts';
 import styles from './SaveBar.module.css';
 import { strings } from './strings.ts';
@@ -21,7 +23,11 @@ export interface SaveBarProps {
   readonly error?: string;
   /** Saves; ⌘S (and ⌘↵ outside a form) press it from anywhere on the page. */
   readonly onSave: () => void;
-  /** Puts the page back as it was saved. Left out, the bar has no Discard. */
+  /**
+   * Puts the page back as it was saved, once the person says so in Discard's
+   * confirm (what it throws away can't come back). Left out, the bar has no
+   * Discard.
+   */
   readonly onDiscard?: () => void;
   /**
    * The changes can't be saved yet: Save waits, and the bar says this in
@@ -44,7 +50,7 @@ const SAVED_MS = 1600;
  * keeps its place and width while it saves; a save that fails says why in the
  * bar and Save becomes Try again; one that lands says Saved for a moment, then
  * the bar sinks out. Status changes are said politely. ⌘S saves from anywhere
- * on the page; Esc never discards.
+ * on the page; Esc never discards, and Discard asks first.
  */
 export function SaveBar({ status, error, onSave, onDiscard, blockedReason, onFocusAway }: SaveBarProps) {
   const platform = useKeyboardPlatform();
@@ -97,6 +103,20 @@ export function SaveBar({ status, error, onSave, onDiscard, blockedReason, onFoc
   useEffect(() => {
     focusAway.current = onFocusAway;
   }, [onFocusAway]);
+
+  // Discard asks first: the changes it throws away can't come back.
+  const [isAsking, setAsking] = useState(false);
+  const discard = () => {
+    setAsking(false);
+    onDiscard?.();
+    // The Discard the confirm would hand focus back to leaves with the bar: once the confirm has gone, focus goes
+    // where the page says, unless it already found a place of its own.
+    focusLater(() => {
+      const active = document.activeElement;
+      if (active === null || active === document.body || active.closest('[inert]') !== null) focusAway.current?.();
+      return undefined;
+    });
+  };
   useEffect(() => {
     if (status !== 'saved' && status !== 'hidden') return;
     const active = document.activeElement;
@@ -138,9 +158,27 @@ export function SaveBar({ status, error, onSave, onDiscard, blockedReason, onFoc
       {shown !== 'saved' && (
         <span className={styles.actions}>
           {onDiscard !== undefined && (
-            <Button variant="ghost" isDisabled={shown === 'saving'} onPress={onDiscard}>
-              {strings.discard}
-            </Button>
+            <ModalTrigger isOpen={isAsking} onOpenChange={setAsking}>
+              <Button variant="ghost" isDisabled={shown === 'saving'}>
+                {strings.discard}
+              </Button>
+              <Modal
+                title={strings.discardTitle}
+                tone="danger"
+                actions={
+                  <>
+                    <Button slot="close" kbd="ESC">
+                      {strings.keepEditing}
+                    </Button>
+                    <Button variant="danger-solid" icon="undo-2" onPress={discard}>
+                      {strings.discardChanges}
+                    </Button>
+                  </>
+                }
+              >
+                {strings.discardText}
+              </Modal>
+            </ModalTrigger>
           )}
           {/* The check's place takes the spinner while it saves, so Save never changes width. */}
           <Button
