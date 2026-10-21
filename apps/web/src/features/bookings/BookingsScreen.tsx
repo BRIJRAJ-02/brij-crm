@@ -1141,11 +1141,13 @@ const rowIdOf = (item: MeetingListItem) => (item.kind === 'booking' ? `b:${item.
 
 /**
  * Meetings under their day bands (Today, Tomorrow, then the date), in the order given: a booking titled by its
- * guest with "Booked via <page>", an event by its title with its calendar's colour and name and its attendees.
+ * page with "You and <guest>", the guest linked to their person; an event by its title with its calendar's colour
+ * and name and its attendees.
  */
 function groupsOf(
   items: readonly MeetingListItem[],
   calendarOf: (calendarId: string) => { readonly name: string; readonly hue: Hue } | undefined,
+  personHref: (booking: BookingListItem) => string | undefined,
   locale: string,
   me: string | undefined,
 ): readonly BookingListGroup[] {
@@ -1179,25 +1181,30 @@ function groupsOf(
     };
     const row =
       item.kind === 'booking'
-        ? {
-            ...shared,
-            title: item.booking.visitorName,
-            via: strings.bookedVia(item.booking.pageTitle),
-            // A colleague's booking (an admin's view, a team page) says whose it is: "Sam Lee and Ada".
-            ...(me === undefined || item.booking.hostMemberId === me || item.booking.hostName === ''
-              ? {}
-              : { hostName: item.booking.hostName, guestName: item.booking.visitorName }),
-            // Round robin's state (spec 0029, AC-749) and a no show (spec 0043) say so, unless it was cancelled.
-            ...(item.booking.status === 'cancelled'
-              ? {}
-              : item.booking.needsHost
-                ? { badge: strings.needsHost, badgeTone: 'accent' as const }
-                : item.booking.noShow === true
-                  ? { badge: strings.noShow }
-                  : {}),
-            ...(item.booking.note === undefined ? {} : { note: item.booking.note }),
-            ...(item.booking.guests.length === 0 ? {} : { attendees: item.booking.guests }),
-          }
+        ? (() => {
+            // As in round 6: the page's title, then the guest, a link to their person.
+            const href = personHref(item.booking);
+            return {
+              ...shared,
+              title: item.booking.pageTitle,
+              guestName: item.booking.visitorName,
+              ...(href === undefined ? {} : { guestHref: href }),
+              // A colleague's booking (an admin's view, a team page) says whose it is: "Sam Lee and Ada".
+              ...(me === undefined || item.booking.hostMemberId === me || item.booking.hostName === ''
+                ? {}
+                : { hostName: item.booking.hostName }),
+              // Round robin's state (spec 0029, AC-749) and a no show (spec 0043) say so, unless it was cancelled.
+              ...(item.booking.status === 'cancelled'
+                ? {}
+                : item.booking.needsHost
+                  ? { badge: strings.needsHost, badgeTone: 'accent' as const }
+                  : item.booking.noShow === true
+                    ? { badge: strings.noShow }
+                    : {}),
+              ...(item.booking.note === undefined ? {} : { note: item.booking.note }),
+              ...(item.booking.guests.length === 0 ? {} : { attendees: item.booking.guests }),
+            };
+          })()
         : (() => {
             const calendar = calendarOf(item.event.calendarId);
             return {
@@ -1393,7 +1400,7 @@ export function BookingsListScreen({
       <>
         <BookingList
           label={strings.listLabel[tab]}
-          groups={groupsOf(items, (calendarId) => byCalendar.get(calendarId), locale, me)}
+          groups={groupsOf(items, (calendarId) => byCalendar.get(calendarId), personHref, locale, me)}
           onOpen={setOpenId}
           emptyState={
             search.link !== undefined || search.cal !== undefined ? (

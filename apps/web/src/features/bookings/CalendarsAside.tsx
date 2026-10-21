@@ -58,10 +58,14 @@ export type CalendarsPanel = ReturnType<typeof useCalendarsPanel>;
 
 /** The bar's Calendars button: folds or opens the panel beside the view, or opens it as a sheet on a phone. */
 export function CalendarsToggle({ panel }: { readonly panel: CalendarsPanel }) {
+  // On a phone the label folds away (the icon stays, named Calendars), so the week's range and arrows wrap less, as
+  // they sat before the panel came (round 6).
   return (
     <Button
       variant="ghost"
       icon={panel.isOpen && !panel.isNarrow ? 'panel-left-close' : 'panel-left-open'}
+      label={strings.calendars}
+      isLabelCollapsible
       isExpanded={panel.isOpen}
       onPress={panel.toggle}
     >

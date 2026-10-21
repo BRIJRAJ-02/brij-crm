@@ -10,7 +10,6 @@ export const strings = {
   sourceLabel: 'Show',
   sources: { all: 'All', bookings: 'Bookings', calendar: 'Events' },
   noMatch: 'Nothing matches these filters',
-  bookedVia: (page: string) => `Booked via ${page}`,
   more: 'Show more',
   moreFailed: 'Couldn’t load more. Try again',
   /** Each tab's own empty state: one line. */
