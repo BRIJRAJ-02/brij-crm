@@ -25,6 +25,11 @@
   samp,
   pre {
     font-family: var(--font-mono);
+    /* Code shows every character as typed: no ligatures ("</" and "://" stay apart). */
+    font-variant-ligatures: none;
+    font-feature-settings:
+      'liga' 0,
+      'calt' 0;
   }
 
   /* Toasts are view transitions (see provider/toasts.tsx): a new one rises
