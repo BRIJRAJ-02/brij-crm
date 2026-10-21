@@ -98,7 +98,6 @@ export const strings = {
   somethingWrong: 'Something went wrong. Try again.',
   // Summary (AC-1125, AC-1127)
   summaryTitle: (fileName: string) => fileName,
-  importsCrumb: 'Import',
   progress: (done: number, total: number) => `${n(done)} of ${n(total)} rows`,
   running: 'Importing',
   queued: 'Waiting to start',
@@ -112,7 +111,9 @@ export const strings = {
     skipped: 'Skipped',
     refused: 'Refused',
     errorRows: 'Left out with errors',
+    undone: 'Taken back',
   },
+  undoneSplit: (undone: number) => `${n(undone)} ${undone === 1 ? 'row' : 'rows'} taken back`,
   split: (created: number, updated: number) => `${n(created)} new, ${n(updated)} matched existing records`,
   finished: 'Import finished',
   failed: 'Import failed',
@@ -122,7 +123,6 @@ export const strings = {
   refusedTitle: 'Rows that were not imported',
   refusedLabel: 'Refused rows',
   reasonColumn: 'Why',
-  noRefused: 'Every row was imported.',
   showMore: 'Show more',
   downloadRefused: 'Download refused rows',
   refusedFile: (fileName: string) => `${fileName.replace(/\.[^.]+$/u, '')} refused.csv`,
@@ -141,12 +141,8 @@ export const strings = {
       .filter((line) => line !== '')
       .join(' '),
   undoUntil: 'Undo open until',
-  undoClosed: 'Undo has closed for this import.',
   keepImport: 'Keep it',
   missingTitle: 'Import not found',
   missingText: "That import doesn't exist, or you can't see it.",
   failedTitle: "The import didn't load",
-  /** The finish toast's link (AC-1125). */
-  viewImport: 'View import',
-  importFinished: (fileName: string) => `Import of ${fileName} finished`,
 } as const;

@@ -288,10 +288,7 @@ export function ImportScreen({ data, slug, object, attributes, members }: Import
       title={strings.title(object.pluralName)}
       icon={object.icon}
       hue={object.hue}
-      crumbs={[
-        { id: 'object', label: object.pluralName, href: objectHref(slug, object) },
-        { id: 'import', label: strings.menuItem },
-      ]}
+      crumbs={[{ id: 'object', label: object.pluralName, href: objectHref(slug, object) }]}
     />
   );
 
@@ -544,7 +541,8 @@ const choiceLabel = (choice: ImportChoice): string =>
 /** Match columns (AC-1115): every column, its first values, and where it goes. */
 function ColumnsStep({ loaded, choices, targets, matched, onTarget, onBack, onContinue }: ColumnsStepProps) {
   const { headers } = loaded.table;
-  const rows = headers.map((header, column) => ({ id: String(column), header, column }));
+  // Row ids never clash with the column ids, which share React Aria's one collection.
+  const rows = headers.map((header, column) => ({ id: `column-${String(column)}`, header, column }));
   const itemsFor = (column: number): readonly SelectItem[] => {
     const others = targets.map((target, index) => (index === column ? undefined : target));
     return [
@@ -652,7 +650,7 @@ function PreviewTable({ loaded, targets, fields, context, errors, filter, page, 
   const columns: readonly TableColumn[] = [
     { id: 'row', label: strings.rowColumn, isRowHeader: true, align: 'end' },
     ...matchedColumns.map(({ column }) => ({
-      id: String(column),
+      id: `cell-${String(column)}`,
       label: headers[column] ?? '',
     })),
     ...(errors.length > 0 ? [{ id: 'problems', label: strings.problemsColumn }] : []),
@@ -662,12 +660,12 @@ function PreviewTable({ loaded, targets, fields, context, errors, filter, page, 
       label={strings.rowsLabel}
       columns={columns}
       rows={shown}
-      getRowId={(row) => String(row.rowNumber)}
+      getRowId={(row) => `row-${String(row.rowNumber)}`}
       emptyState={<EmptyState title={strings.noRows}>{strings.noRowsText}</EmptyState>}
       renderCell={(row, columnId) => {
         if (columnId === 'row') return n(row.rowNumber);
         if (columnId === 'problems') return row.error === undefined ? '' : problemText(row.error);
-        const column = Number(columnId);
+        const column = Number(columnId.slice('cell-'.length));
         const target = targets[column];
         const text = cellText(row.cells[column]);
         const attribute = target === undefined ? undefined : fields.get(target.attributeId);

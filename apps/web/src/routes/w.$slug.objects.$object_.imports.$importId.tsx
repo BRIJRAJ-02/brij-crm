@@ -12,6 +12,8 @@ import { useWorkspaceName, WorkspacePage } from '../features/workspace/Workspace
 // through the data layer. One the person may not see, or that doesn't exist,
 // shows the same not found page (AC-1137).
 export const Route = createFileRoute('/w/$slug/objects/$object_/imports/$importId')({
+  // Coming back reads the import afresh: its job may have ended since, changing its counts and its undo.
+  shouldReload: ({ cause }) => cause === 'enter',
   loader: async ({ context, params }) => {
     try {
       const objects = await context.data.objects.all(params.slug);

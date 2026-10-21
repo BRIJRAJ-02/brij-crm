@@ -102,7 +102,10 @@ export async function createImport(
         );
       }
       if (input.rowCount > limitsOf(scope).importRows) {
-        throw refuse('LIMIT_REACHED', `Import at most ${limitsOf(scope).importRows.toLocaleString('en')} rows at a time.`);
+        throw refuse(
+          'LIMIT_REACHED',
+          `Import at most ${limitsOf(scope).importRows.toLocaleString('en')} rows at a time.`,
+        );
       }
       const [row] = await tx
         .insert(imports)
@@ -186,13 +189,17 @@ export async function stageImportRows(
     scope,
     async ({ tx }) => {
       const row = await readImport(tx, scope, input.importId, { lock: 'share', starterOnly: true });
-      if (row.status !== 'staging') throw refuse('IMPORT_STARTED', 'This import has started, so it takes no more rows.');
+      if (row.status !== 'staging')
+        throw refuse('IMPORT_STARTED', 'This import has started, so it takes no more rows.');
       const settings = ImportSettings.parse(row.settings);
-      const targets = new Set(settings.columns.flatMap((column) => (column.target === undefined ? [] : [column.target.attributeId])));
+      const targets = new Set(
+        settings.columns.flatMap((column) => (column.target === undefined ? [] : [column.target.attributeId])),
+      );
       const attributes = await loadAttributes(tx, row.objectId);
       const match = settings.matchAttributeId === undefined ? undefined : attributes.get(settings.matchAttributeId);
       const staged = input.rows.map((each) => {
-        if (each.rowNumber > row.rowCount + 1) throw refuse('CONFIG_INVALID', `Row ${String(each.rowNumber)} is past the end of the file.`);
+        if (each.rowNumber > row.rowCount + 1)
+          throw refuse('CONFIG_INVALID', `Row ${String(each.rowNumber)} is past the end of the file.`);
         const values = Object.fromEntries(Object.entries(each.values).map(([id, value]) => [canonicalId(id), value]));
         for (const attributeId of Object.keys(values)) {
           if (!targets.has(attributeId)) {
@@ -258,7 +265,8 @@ export async function startImport(
         select id::text from import_rows where workspace_id = ${scope.workspaceId} and import_id = ${row.id}
         order by row_number
       `);
-      if (ids.rows.length === 0) throw refuse('CONFIG_INVALID', 'No rows are ready to import. Fix the file and try again.');
+      if (ids.rows.length === 0)
+        throw refuse('CONFIG_INVALID', 'No rows are ready to import. Fix the file and try again.');
       const { jobId } = await startJob(context, registry, {
         kind: RECORDS_IMPORT,
         params: { importId: row.id },
@@ -339,7 +347,8 @@ export async function undoImport(
           and outcome in ('created', 'updated')
         order by row_number
       `);
-      if (ids.rows.length === 0) throw refuse('CONFIG_INVALID', 'This import created and changed nothing, so there is nothing to undo.');
+      if (ids.rows.length === 0)
+        throw refuse('CONFIG_INVALID', 'This import created and changed nothing, so there is nothing to undo.');
       const { jobId } = await startJob(context, registry, {
         kind: RECORDS_IMPORT_UNDO,
         params: { importId: row.id },

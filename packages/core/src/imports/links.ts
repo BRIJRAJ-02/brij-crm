@@ -50,7 +50,10 @@ export async function farObjects(tx: WorkspaceTx, attribute: AttributeDef): Prom
 /** The keys a written name might be held under: as typed (lower case), and as a bare domain. */
 function keysOf(name: string): readonly string[] {
   const lower = name.trim().toLowerCase();
-  const domain = lower.replace(/^[a-z]+:\/\//, '').replace(/^www\./, '').replace(/[/?#].*$/, '');
+  const domain = lower
+    .replace(/^[a-z]+:\/\//, '')
+    .replace(/^www\./, '')
+    .replace(/[/?#].*$/, '');
   return [...new Set([lower, domain].filter((key) => key !== ''))];
 }
 
@@ -107,14 +110,15 @@ async function resolveOne(
   const readable = candidates.filter((each) => seen.has(each.record_id));
   const [only] = readable;
   if (only === undefined) return { ok: false, reason: `No record called “${name.trim()}” to link.` };
-  if (readable.length > 1) return { ok: false, reason: `Several records are called “${name.trim()}”, so none was linked.` };
+  if (readable.length > 1)
+    return { ok: false, reason: `Several records are called “${name.trim()}”, so none was linked.` };
   return { ok: true, objectId: only.object_id, recordId: only.record_id };
 }
 
 /** A staged relation cell: `{ names }`, or undefined for anything else. */
 export function namesOf(value: unknown): readonly string[] | undefined {
   if (typeof value !== 'object' || value === null || !('names' in value)) return undefined;
-  const names = (value as { names: unknown }).names;
+  const { names } = value;
   if (!Array.isArray(names)) return undefined;
   return names.filter((name): name is string => typeof name === 'string' && name.trim() !== '').slice(0, 50);
 }

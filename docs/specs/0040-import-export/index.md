@@ -66,7 +66,7 @@ Reasoning and options: see [rationale.md](rationale.md).
 
 *Preview*
 - **AC-1120**: Every cell is turned into a value by the field set's `fromText` for its attribute's type (one parser per type for paste, copy and import), in the browser's language and time zone, with members matched by email or name and phones read with the attribute's default country. A row with any cell that can't be read is an error row; its other cells are not imported either.
-- **AC-1121**: The preview shows the totals ("4,812 ready, 188 with errors") and, once the rows are staged, the server's split of the ready rows ("4,200 new, 612 match existing records"), then a table of the rows (virtualised, all rows reachable) filtered by All, Ready or With errors: row number, the matched columns' values, and on an error row each bad cell's reason. **Download rows with errors** saves them as a CSV with an Error column, to fix and import again.
+- **AC-1121**: The preview shows the totals ("4,812 ready, 188 with errors") and, once the rows are staged, the server's split of the ready rows ("4,200 new, 612 match existing records"), then a paged table of the rows (all rows reachable, a page at a time: the library's Table holds every row it is given, so it is never handed all of them) filtered by All, Ready or With errors: row number, the matched columns' values, and on an error row each bad cell's reason. **Download rows with errors** saves them as a CSV with an Error column, to fix and import again.
 - **AC-1122**: A select or status column whose labels name no option shows "3 values aren't options of Stage" with **Create 3 options** for members who may manage the attribute; creating them reads the column again (Attio's "Create missing select options").
 
 *Running*
@@ -85,7 +85,7 @@ Reasoning and options: see [rationale.md](rationale.md).
 - **AC-1131**: The export runs as a `records.export` job on the heavy lane, cancellable, paging the view by its keyset cursor through the engine's page read as the member, so record rules apply and hidden fields are absent. A toast shows its progress, and when it ends it offers **Download**; the Background jobs page shows it too.
 - **AC-1132**: More than 100,000 matching rows is refused before the job starts, with the count ("This view has 240,000 people. Export at most 100,000 at a time; narrow the filter.").
 - **AC-1133**: The download is `GET /api/exports/<id>/download?workspace=<slug>`: a signed in member of the workspace who started the export gets the file (`text/csv; charset=utf-8`, `Content-Disposition: attachment`, `X-Content-Type-Options: nosniff`, no caching); anyone else gets 404. It is named "<Object> - <View> - <YYYY-MM-DD>.csv", starts with a UTF-8 byte order mark (so Excel reads it), quotes as RFC 4180 and ends lines with CRLF.
-- **AC-1134**: Cells are written so the importer reads them back: option labels, a name's full name, members by name, linked records by name, dates as `YYYY-MM-DD`, timestamps in UTC ISO 8601, numbers plain, money as `<amount> <CODE>`, several values joined by ", ". Any text cell starting with `=`, `+`, `-`, `@`, a tab or a carriage return gets a leading apostrophe, so no spreadsheet runs it as a formula; numbers, dates and money are written plain.
+- **AC-1134**: Cells are written so the importer reads them back: option labels, a name's full name, members by name, linked records by name, dates as `YYYY-MM-DD`, timestamps in UTC ISO 8601, numbers plain, money as `<CODE> <amount>` (what Currency's `fromText` reads), several values joined by ", ". Any text cell starting with `=`, `+`, `-`, `@`, a tab or a carriage return gets a leading apostrophe, so no spreadsheet runs it as a formula; numbers, dates and money are written plain.
 - **AC-1135**: An export file is kept 7 days, then deleted by the daily cleanup; a download after that answers 404 with "This export has expired. Export the view again."
 
 *Limits, access and quality*
@@ -110,7 +110,7 @@ Build import as a browser side reader plus a server side item job, and export as
 ### Flow
 
 1. **Upload** (browser): the file is read as bytes, decoded, split into rows by a small RFC 4180 reader in `packages/data/src/imports/csv.ts` (pure, no dependency), and checked against the limits.
-2. **Match columns** (browser): `autoMatch(headers, samples, attributes)` (pure, in `packages/data/src/imports/matching.ts`) proposes a target per column; the member adjusts.
+2. **Match columns** (browser): `autoMatch(headers, samples, choices, reads)` (pure, in `apps/web/src/features/imports/matching.ts`, beside the field set it samples with) proposes a target per column; the member adjusts.
 3. **Match records** (browser): the match attribute and the two rules.
 4. **Preview** (browser, then server): every cell through `fieldTypeOf(type).fromText`; error rows set aside. On **Start import**: `imports.create`, then `imports.stage` for each chunk of ready rows (the server answers how many of the chunk's keys match a readable record), then `imports.start`.
 5. **Run** (worker): the `records.import` job walks the staged rows.
@@ -169,13 +169,13 @@ All tenant tables: `workspace_id` first, forced row level security with the stan
 ### Client (`packages/data/src/imports/`)
 
 - `csv.ts`: decode (UTF-8 with Windows-1252 fallback), detect the separator, read rows (RFC 4180), with the limits checked as it reads.
-- `matching.ts`: `autoMatch`, the synonyms, and `matchStats` (sampled `fromText` successes per column).
-- `rows.ts`: `readRows(rows, columns, attributes, context)`: each cell through the field set's `fromText`, the name parts joined, answering ready rows and error rows.
+- `stage.ts`: the staging chunks (1,000 rows and `TRANSFER_LIMITS.stageBytes` each).
+- Matching (`autoMatch`, the synonyms, the sampled `fromText` check) and reading rows (`readRows`: each cell through the field set's `fromText`, the name parts joined) live in `apps/web/src/features/imports/` (`matching.ts`, `rows.ts`), since `fieldTypeOf` is in `@crm/ui`, which the data layer never imports.
 - `data.imports`: `create`, `stage(importId, rows)` (chunks of 1,000, in order, each retried once on a network failure), `start`, `get`, `rows`, `undo`; `data.exports`: `start`, `get`, `downloadUrl(workspace, exportId)`. Both are thin calls; the import page follows its jobs through `data.jobs`.
 
 ### Screens (`apps/web/src/features/imports/`)
 
-- `ImportScreen.tsx` (lazy, route `w.$slug.objects.$object_.import.tsx`): the Steps bar; Upload (FileDrop), Match columns (a Table of columns with a Select each and samples), Match records (a Select of the match attribute and two RadioGroups), Preview (totals, the SegmentedControl filter, a virtualised Table of rows), then the progress Card (ProgressBar, counts, Cancel).
+- `ImportScreen.tsx` (lazy, route `w.$slug.objects.$object_.import.tsx`): the Steps bar; Upload (FileDrop), Match columns (a Table of columns with a Select each and samples), Match records (a Select of the match attribute and two RadioGroups), Preview (totals, the SegmentedControl filter, a paged Table of rows with Pagination), then the progress Card (ProgressBar, counts, Cancel).
 - `ImportSummary.tsx` (route `w.$slug.objects.$object_.imports.$importId.tsx`): the counts, the refused rows Table, Download refused rows, View records, Undo import with its confirm Modal, the undo's progress.
 - The view's More menu gains Import CSV and Export CSV; the export's progress and Download ride the toast.
 

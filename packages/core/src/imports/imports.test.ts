@@ -13,12 +13,12 @@ import type { RuleSource } from '../access/door.ts';
 import { NO_RULES, type AccessRules } from '../access/policy.ts';
 import { newId } from '../engine/ids.ts';
 import { outboxHook } from '../engine/outbox.ts';
-import { createRecord, getRecords } from '../engine/records.ts';
+import { createRecord, getRecords, setRecordValues } from '../engine/records.ts';
 import { jobKinds } from '../jobs/kinds/index.ts';
 import { rescope } from '../testing.ts';
 import { jobTestKit, refusalOf } from '../../test/jobs-kit.ts';
 import { mergeValue } from './kind.ts';
-import { createImport, getImport, listImportRefusals, stageImportRows, startImport } from './service.ts';
+import { createImport, getImport, listImportRefusals, stageImportRows, startImport, undoImport } from './service.ts';
 
 const { appUrl, ownerUrl } = inject('testDatabase');
 const db = createDatabase({ url: appUrl, applicationName: 'crm-imports-tests' });
@@ -95,12 +95,7 @@ async function byEmail(w: World) {
 }
 
 /** Creates, stages, starts and drives an import to its end, answering its view. */
-async function runImport(
-  w: World,
-  scope: World['owner'],
-  settings: ImportSettings,
-  rows: ReturnType<World['row']>[],
-) {
+async function runImport(w: World, scope: World['owner'], settings: ImportSettings, rows: ReturnType<World['row']>[]) {
   const id = newId();
   await createImport(scope, {
     id,
@@ -168,15 +163,10 @@ describe('imports (AC-1117 to AC-1127)', () => {
     ]);
     expect(skipped.view.counts).toMatchObject({ updated: 1, skipped: 1, created: 0 });
     const columns = w.settings().columns.filter((column) => column.header !== 'Email');
-    const always = await runImport(
-      w,
-      w.owner,
-      { columns, onMatch: 'fill', onNoMatch: 'create' },
-      [
-        { rowNumber: 2, values: { [w.attribute('name')]: { firstName: 'Cy' } } },
-        { rowNumber: 3, values: { [w.attribute('name')]: { firstName: 'Cy' } } },
-      ],
-    );
+    const always = await runImport(w, w.owner, { columns, onMatch: 'fill', onNoMatch: 'create' }, [
+      { rowNumber: 2, values: { [w.attribute('name')]: { firstName: 'Cy' } } },
+      { rowNumber: 3, values: { [w.attribute('name')]: { firstName: 'Cy' } } },
+    ]);
     expect(always.view.counts).toMatchObject({ created: 2 });
   });
 
@@ -198,7 +188,14 @@ describe('imports (AC-1117 to AC-1127)', () => {
     const w = await world();
     const own: AccessRules = {
       levels: [],
-      records: [{ subject: { type: 'role', role: 'member' }, objectId: w.people, kind: 'own', attributeId: w.attribute('owner') }],
+      records: [
+        {
+          subject: { type: 'role', role: 'member' },
+          objectId: w.people,
+          kind: 'own',
+          attributeId: w.attribute('owner'),
+        },
+      ],
     };
     rulesByWorkspace.set(w.workspaceId, own);
     const member = rescope(w.member, { rules: own });
@@ -270,7 +267,9 @@ describe('imports (AC-1117 to AC-1127)', () => {
     };
     expect(await refusalOf(create(w.owner, system))).toMatchObject({ code: 'CONFIG_INVALID' });
     const readOnly: AccessRules = {
-      levels: [{ subject: { type: 'role', role: 'member' }, target: { type: 'object', objectId: w.people }, level: 'read' }],
+      levels: [
+        { subject: { type: 'role', role: 'member' }, target: { type: 'object', objectId: w.people }, level: 'read' },
+      ],
       records: [],
     };
     expect(await refusalOf(create(rescope(w.member, { rules: readOnly }), w.settings()))).toMatchObject({
@@ -281,7 +280,14 @@ describe('imports (AC-1117 to AC-1127)', () => {
   it('holds the limits: rows past the file, a staged row too large, a fourth unfinished import', async () => {
     const w = await world();
     const id = newId();
-    await createImport(w.owner, { id, objectId: w.people, fileName: 'a.csv', rowCount: 1, errorRows: 0, settings: w.settings() });
+    await createImport(w.owner, {
+      id,
+      objectId: w.people,
+      fileName: 'a.csv',
+      rowCount: 1,
+      errorRows: 0,
+      settings: w.settings(),
+    });
     expect(await refusalOf(stageImportRows(w.owner, { importId: id, rows: [w.row(3, 'Ada')] }))).toMatchObject({
       code: 'CONFIG_INVALID',
     });
@@ -294,11 +300,25 @@ describe('imports (AC-1117 to AC-1127)', () => {
       code: 'CONFIG_INVALID',
     });
     for (let n = 0; n < 2; n += 1) {
-      await createImport(w.owner, { id: newId(), objectId: w.people, fileName: 'a.csv', rowCount: 1, errorRows: 0, settings: w.settings() });
+      await createImport(w.owner, {
+        id: newId(),
+        objectId: w.people,
+        fileName: 'a.csv',
+        rowCount: 1,
+        errorRows: 0,
+        settings: w.settings(),
+      });
     }
     expect(
       await refusalOf(
-        createImport(w.owner, { id: newId(), objectId: w.people, fileName: 'a.csv', rowCount: 1, errorRows: 0, settings: w.settings() }),
+        createImport(w.owner, {
+          id: newId(),
+          objectId: w.people,
+          fileName: 'a.csv',
+          rowCount: 1,
+          errorRows: 0,
+          settings: w.settings(),
+        }),
       ),
     ).toMatchObject({ code: 'LIMIT_REACHED' });
   });
@@ -306,7 +326,14 @@ describe('imports (AC-1117 to AC-1127)', () => {
   it('answers a second start with the import as it is, and takes no rows after it', async () => {
     const w = await world();
     const id = newId();
-    await createImport(w.owner, { id, objectId: w.people, fileName: 'a.csv', rowCount: 2, errorRows: 0, settings: w.settings() });
+    await createImport(w.owner, {
+      id,
+      objectId: w.people,
+      fileName: 'a.csv',
+      rowCount: 2,
+      errorRows: 0,
+      settings: w.settings(),
+    });
     await stageImportRows(w.owner, { importId: id, rows: [w.row(2, 'Ada', 'ada@example.com')] });
     // The same chunk again changes nothing.
     expect(await stageImportRows(w.owner, { importId: id, rows: [w.row(2, 'Ada', 'ada@example.com')] })).toEqual({
@@ -319,6 +346,70 @@ describe('imports (AC-1117 to AC-1127)', () => {
     expect(await refusalOf(stageImportRows(w.owner, { importId: id, rows: [w.row(3, 'Bob')] }))).toMatchObject({
       code: 'IMPORT_STARTED',
     });
+  });
+});
+
+describe('undo (AC-1128, AC-1129)', () => {
+  /** The live people's emails, and the trashed ones with their batch. */
+  async function trash(w: World) {
+    return testQuery<{ email: string; batch: string | null }>(
+      ownerUrl,
+      `select e.text_value as email, r.deleted_batch_id::text as batch from records r
+       join "values" e on e.record_id = r.id and e.attribute_id = $2 and e.active_until is null and not e.is_cleared
+       where r.workspace_id = $1 and r.deleted_at is not null order by 1`,
+      [w.workspaceId, w.attribute('email_addresses')],
+    );
+  }
+
+  it('trashes what it created, puts back what it changed, and keeps a value edited since', async () => {
+    const w = await world();
+    await w.person('Ada', 'ada@example.com', 'Engineer');
+    const bob = await w.person('Bob', 'bob@example.com', 'Designer');
+    const { id } = await runImport(w, w.owner, w.settings({ onMatch: 'overwrite' }), [
+      w.row(2, 'Ada', 'ada@example.com', 'Manager'),
+      w.row(3, 'Bob', 'bob@example.com', 'Lead'),
+      w.row(4, 'Cy', 'cy@example.com', 'Intern'),
+    ]);
+    // Someone changes Bob's title after the import: undo keeps theirs.
+    await setRecordValues(w.owner, { recordId: bob, values: { [w.attribute('job_title')]: { value: 'Chief' } } });
+    const undoing = await undoImport(w.owner, registry, id, [outboxHook()]);
+    expect(undoing.status).toBe('undone');
+    expect(undoing.canUndo).toBe(false);
+    const outcomes = await drive(runnerFor(registry), w.workspaceId, undoing.undoJobId ?? '');
+    expect(outcomes.at(-1)).toBe('succeeded');
+    expect(await byEmail(w)).toEqual({
+      'ada@example.com': { title: 'Engineer', n: 1 },
+      'bob@example.com': { title: 'Chief', n: 1 },
+    });
+    expect(await trash(w)).toEqual([{ email: 'cy@example.com', batch: id }]);
+    const view = await getImport(w.owner, id);
+    expect(view.counts).toMatchObject({ undone: 2, updated: 1 });
+    expect((await listImportRefusals(w.owner, { importId: id })).rows).toEqual([
+      { rowNumber: 3, code: 'VERSION_CHANGED', message: '1 value changed since, kept.' },
+    ]);
+    // Asking again answers the undo already started.
+    expect((await undoImport(w.owner, registry, id)).undoJobId).toBe(undoing.undoJobId);
+  });
+
+  it('refuses while the import is unstarted or running, after its window, and for someone else', async () => {
+    const w = await world();
+    const id = newId();
+    await createImport(w.owner, {
+      id,
+      objectId: w.people,
+      fileName: 'a.csv',
+      rowCount: 1,
+      errorRows: 0,
+      settings: w.settings(),
+    });
+    await stageImportRows(w.owner, { importId: id, rows: [w.row(2, 'Ada', 'ada@example.com')] });
+    expect(await refusalOf(undoImport(w.owner, registry, id))).toMatchObject({ code: 'IMPORT_RUNNING' });
+    await startImport(w.owner, registry, id);
+    expect(await refusalOf(undoImport(w.owner, registry, id))).toMatchObject({ code: 'IMPORT_RUNNING' });
+    expect(await refusalOf(undoImport(w.member, registry, id))).toMatchObject({ code: 'NOT_FOUND' });
+    const done = await runImport(w, w.owner, w.settings(), [w.row(2, 'Bob', 'bob@example.com')]);
+    await testQuery(ownerUrl, `update imports set undo_until = now() - interval '1 minute' where id = $1`, [done.id]);
+    expect(await refusalOf(undoImport(w.owner, registry, done.id))).toMatchObject({ code: 'IMPORT_UNDO_CLOSED' });
   });
 });
 

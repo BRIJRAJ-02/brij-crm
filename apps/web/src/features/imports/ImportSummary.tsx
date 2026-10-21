@@ -17,7 +17,6 @@ import {
   Callout,
   Card,
   DescriptionList,
-  EmptyState,
   Modal,
   PageColumn,
   ProgressBar,
@@ -31,7 +30,6 @@ import { useEffect, useRef, useState } from 'react';
 import { objectHref } from '../workspace/objects.ts';
 import { WorkspacePage } from '../workspace/WorkspacePage.tsx';
 import { saveCsv } from './download.ts';
-import { importHref } from './paths.ts';
 import { n, strings } from './strings.ts';
 
 /** Props for an import's summary: what its route loaded through the data layer. */
@@ -87,7 +85,8 @@ export function ImportSummary({ data, slug, object, initial, refused: firstRefus
   const isUndoRunning = view.undoJobId !== undefined && undoJob !== undefined && !isOver(undoJob);
 
   // A job ending reads the import again: its counts by outcome, its refused rows, and whether undo is open.
-  const wasRunning = useRef(isRunning || isUndoRunning);
+  // A view read while its job ran, shown after the job ended (the job finished before the page drew), counts as running.
+  const wasRunning = useRef(isRunning || isUndoRunning || (view.status === 'started' && view.counts.pending > 0));
   useEffect(() => {
     const running = isRunning || isUndoRunning;
     if (wasRunning.current && !running) {
@@ -154,6 +153,7 @@ export function ImportSummary({ data, slug, object, initial, refused: firstRefus
     { term: strings.counts.updated, description: n(counts.updated) },
     { term: strings.counts.skipped, description: n(counts.skipped) },
     { term: strings.counts.refused, description: n(counts.refused) },
+    ...(counts.undone > 0 ? [{ term: strings.counts.undone, description: n(counts.undone) }] : []),
     ...(view.errorRows > 0 ? [{ term: strings.counts.errorRows, description: n(view.errorRows) }] : []),
     ...(view.canUndo && view.undoUntil !== undefined
       ? [{ term: strings.undoUntil, description: <RelativeTime value={view.undoUntil} /> }]
@@ -165,11 +165,7 @@ export function ImportSummary({ data, slug, object, initial, refused: firstRefus
       title={strings.summaryTitle(view.fileName)}
       icon={object.icon}
       hue={object.hue}
-      crumbs={[
-        { id: 'object', label: object.pluralName, href: objectHref(slug, object) },
-        { id: 'import', label: strings.importsCrumb, href: importHref(slug, object) },
-        { id: 'file', label: view.fileName },
-      ]}
+      crumbs={[{ id: 'object', label: object.pluralName, href: objectHref(slug, object) }]}
     />
   );
 
@@ -187,7 +183,11 @@ export function ImportSummary({ data, slug, object, initial, refused: firstRefus
       ) : (
         <Card
           title={isUndoRunning ? strings.undoing : outcomeTitle(view, job)}
-          description={strings.split(counts.created, counts.updated)}
+          description={
+            view.status === 'undone'
+              ? strings.undoneSplit(counts.undone)
+              : strings.split(counts.created, counts.updated)
+          }
           footer={
             <>
               <Button onPress={() => void navigate({ href: objectHref(slug, object) })}>
@@ -211,34 +211,33 @@ export function ImportSummary({ data, slug, object, initial, refused: firstRefus
           <DescriptionList items={summary} />
         </Card>
       )}
-      <Card
-        title={strings.refusedTitle}
-        actions={
-          refused.length > 0 ? (
+      {refused.length > 0 && (
+        <Card
+          title={strings.refusedTitle}
+          actions={
             <Button variant="ghost" icon="download" onPress={() => void downloadRefused()}>
               {strings.downloadRefused}
             </Button>
-          ) : undefined
-        }
-        {...(cursor === undefined
-          ? {}
-          : {
-              footer: (
-                <Button isPending={isMoreLoading} onPress={showMore}>
-                  {strings.showMore}
-                </Button>
-              ),
-            })}
-      >
-        <Table
-          label={strings.refusedLabel}
-          columns={REFUSED_COLUMNS}
-          rows={refused}
-          getRowId={(row) => String(row.rowNumber)}
-          emptyState={<EmptyState title={strings.noRefused} layout="row" />}
-          renderCell={(row, columnId) => (columnId === 'row' ? n(row.rowNumber) : row.message)}
-        />
-      </Card>
+          }
+          {...(cursor === undefined
+            ? {}
+            : {
+                footer: (
+                  <Button isPending={isMoreLoading} onPress={showMore}>
+                    {strings.showMore}
+                  </Button>
+                ),
+              })}
+        >
+          <Table
+            label={strings.refusedLabel}
+            columns={REFUSED_COLUMNS}
+            rows={refused}
+            getRowId={(row) => `row-${String(row.rowNumber)}`}
+            renderCell={(row, columnId) => (columnId === 'row' ? n(row.rowNumber) : row.message)}
+          />
+        </Card>
+      )}
       <Modal
         title={strings.undoTitle}
         tone="danger"

@@ -1,6 +1,6 @@
 # Imports
 
-Spec 0040, milestone 1. A CSV into any live object, through the browser's reader and the `records.import` job.
+Spec 0040, milestones 1 and 2. A CSV into any live object, through the browser's reader and the `records.import` job.
 
 ## The import page (`/w/$slug/objects/$object/import`, ImportScreen)
 
@@ -21,4 +21,5 @@ Spec 0040, milestone 1. A CSV into any live object, through the browser's reader
 - `matching.ts` proposes each column's attribute by header, API name and a short synonym list, then keeps it only when half or more of a 50 value sample reads as the type. One attribute takes one column, and a name whole never sits beside its parts.
 - `rows.ts` reads every cell through the field set's `fromText` (the parser paste uses), in the browser's language and time zone, with members by email or name and phones through the phone library. Empty cells are left out, so they never clear a value. A row with a cell that can't be read is an error row, and none of its cells import.
 - Start import confirms, then makes the import, sends its ready rows in chunks (`data.imports.stage`, a progress bar with Stop, which asks first), starts its job and opens the summary. Leaving before then asks first and drops the file.
-- The summary follows the job live (`useJob`): progress with Cancel (asks first), then the counts, the refused rows paged with Show more and Download refused rows, View records, and Undo import (a danger confirm) while undo is open. The job's end toast links here.
+- The summary follows the job live (`useJob`): progress with Cancel (asks first), then the counts, the refused rows paged with Show more and Download refused rows, View records, and Undo import (a danger confirm) while undo is open: the `records.import_undo` job moves the created records to the trash (the import's id their batch) and puts changed values back, keeping any edited since ("1 value changed since, kept." on its row). The jobs' end toasts link here.
+- `e2e/import.flow.ts` runs the whole loop (5,000 rows at 1280 by default, 300 at phone width; CI runs 1,000 to stay in its time), with axe in light and dark at each step.

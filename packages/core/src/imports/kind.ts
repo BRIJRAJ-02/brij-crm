@@ -82,7 +82,7 @@ export function mergeValue(
     const held: readonly unknown[] = Array.isArray(current) ? current : [];
     const seen = new Set(held.map(identity));
     const added = file.filter((item) => !seen.has(identity(item)));
-    return added.length === 0 ? undefined : [...held, ...added];
+    return added.length === 0 ? undefined : [...held, ...(added as readonly unknown[])];
   }
   if (!isEmpty(current) && rule === 'fill') return undefined;
   return identity(current) === identity(file) ? undefined : file;

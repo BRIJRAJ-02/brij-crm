@@ -57,7 +57,8 @@ export async function readImport(
     .where(and(eq(imports.workspaceId, scope.workspaceId), eq(imports.id, id)));
   const [row] = options.lock === undefined ? await query : await query.for(options.lock);
   const allowed =
-    row !== undefined && (options.starterOnly === true ? memberOf(scope) === row.createdByMemberId : maySee(scope, row));
+    row !== undefined &&
+    (options.starterOnly === true ? memberOf(scope) === row.createdByMemberId : maySee(scope, row));
   if (row === undefined || !allowed) throw refuse('NOT_FOUND', IMPORT_NOT_FOUND);
   return row;
 }
@@ -168,8 +169,10 @@ export function checkSettings(
     }
     const key = `${target.attributeId}:${target.part ?? 'whole'}`;
     const clash =
-      taken.has(key) || (target.part === undefined ? taken.has(`${target.attributeId}:part`) : whole.has(target.attributeId));
-    if (clash) throw refuse('CONFIG_INVALID', `${attribute.title} takes one column. Choose another for “${column.header}”.`);
+      taken.has(key) ||
+      (target.part === undefined ? taken.has(`${target.attributeId}:part`) : whole.has(target.attributeId));
+    if (clash)
+      throw refuse('CONFIG_INVALID', `${attribute.title} takes one column. Choose another for “${column.header}”.`);
     taken.add(key);
     if (target.part === undefined) whole.add(target.attributeId);
     else taken.add(`${target.attributeId}:part`);
