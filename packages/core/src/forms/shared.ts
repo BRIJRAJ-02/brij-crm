@@ -22,6 +22,11 @@ export interface FormRow {
   readonly publicKey: string;
   readonly draftVersionId: string | null;
   readonly liveVersionId: string | null;
+  /**
+   * The live version's target object (lower case, as access keys it); null with no live version, or while it
+   * keeps its submissions only. It differs from `mainObjectId` once a published form's draft points elsewhere.
+   */
+  readonly liveObjectId: string | null;
   readonly revision: number;
   readonly ownerMemberId: string | null;
   readonly allowedOrigins: readonly string[];
@@ -30,6 +35,13 @@ export interface FormRow {
   readonly createdById: string | null;
   readonly createdAt: string;
   readonly updatedAt: string;
+}
+
+/** The live version's target object as a select reads it beside its form (see `FormRow.liveObjectId`). */
+export function liveObjectOf() {
+  return sql<
+    string | null
+  >`(select lower(v.document->'targets'->'main'->>'objectId') from ${formVersions} v where v.workspace_id = ${forms.workspaceId} and v.id = ${forms.liveVersionId})`;
 }
 
 /** A moment as fixed width UTC text with milliseconds, as the views carry it. */
@@ -45,6 +57,7 @@ const FORM_COLUMNS = {
   publicKey: forms.publicKey,
   draftVersionId: forms.draftVersionId,
   liveVersionId: forms.liveVersionId,
+  liveObjectId: liveObjectOf(),
   revision: forms.revision,
   ownerMemberId: forms.ownerMemberId,
   allowedOrigins: forms.allowedOrigins,
@@ -71,13 +84,20 @@ export interface VersionRow {
   readonly updatedByMemberId: string | null;
 }
 
+/** What deciding whether a member may see a form reads: the objects its draft and its live version file onto. */
+export type FormObjects = Pick<FormRow, 'mainObjectId' | 'liveVersionId' | 'liveObjectId'>;
+
 /**
- * Whether a member may see a form (spec 0023: forms on objects they can see). A form that keeps its
- * submissions only is on no object, so no object rule reaches it: it is for members who manage forms, as
- * the submissions it holds are (a submission with no record reads only with `forms.manage`). Fail closed.
+ * Whether a member may see a form (spec 0023: forms on objects they can see): every object its draft and its
+ * live version file onto, which differ once a published form's draft points elsewhere (security review,
+ * 21 October 2026: the live document names its object and attributes). A version that keeps its submissions
+ * only is on no object, so no object rule reaches it: such a form is for members who manage forms, as the
+ * submissions it holds are (a submission with no record reads only with `forms.manage`). Fail closed.
  */
-export function canSeeForm(access: Access, mainObjectId: string | null): boolean {
-  return mainObjectId === null ? can(access, 'forms.manage') : objectLevel(access, mainObjectId) !== 'none';
+export function canSeeForm(access: Access, form: FormObjects): boolean {
+  const named = [form.mainObjectId, ...(form.liveVersionId === null ? [] : [form.liveObjectId])];
+  if (named.includes(null) && !can(access, 'forms.manage')) return false;
+  return named.every((objectId) => objectId === null || objectLevel(access, objectId) !== 'none');
 }
 
 /** Parses a stored document. One that no longer parses is a programming error (documents are checked on save). */

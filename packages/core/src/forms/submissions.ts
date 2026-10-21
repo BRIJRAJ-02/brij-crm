@@ -208,7 +208,7 @@ function summaryOf(
 /** A form the reader may see (`canSeeForm`), or NOT_FOUND. */
 export async function readableForm(tx: WorkspaceTx, scope: EngineScope, formId: string) {
   const form = await loadForm(tx, checkId(formId, UNKNOWN_FORM));
-  if (form === undefined || !canSeeForm(scope.access, form.mainObjectId)) throw refuse('NOT_FOUND', UNKNOWN_FORM);
+  if (form === undefined || !canSeeForm(scope.access, form)) throw refuse('NOT_FOUND', UNKNOWN_FORM);
   return form;
 }
 
@@ -288,7 +288,7 @@ async function viewIn(tx: WorkspaceTx, scope: EngineScope, submissionId: string)
     .where(eq(formSubmissions.id, checkId(submissionId, UNKNOWN_SUBMISSION)));
   if (row === undefined) throw refuse('NOT_FOUND', UNKNOWN_SUBMISSION);
   const form = await loadForm(tx, row.formId);
-  if (form === undefined || !canSeeForm(scope.access, form.mainObjectId)) {
+  if (form === undefined || !canSeeForm(scope.access, form)) {
     throw refuse('NOT_FOUND', UNKNOWN_SUBMISSION);
   }
   const [visible] = await visibleRows(tx, scope, [row]);

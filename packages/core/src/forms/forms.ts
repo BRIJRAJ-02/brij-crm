@@ -41,6 +41,7 @@ import { checkObject, UNKNOWN_OBJECT } from '../access/visibility.ts';
 import {
   canSeeForm,
   fileable,
+  liveObjectOf,
   loadForm,
   loadVersions,
   millis,
@@ -185,7 +186,7 @@ async function countsOf(
 async function visibleForm(tx: WorkspaceTx, scope: EngineScope, formId: string, lock = false): Promise<FormRow> {
   const id = checkId(formId, UNKNOWN_FORM);
   const form = await loadForm(tx, id, lock);
-  if (form === undefined || !canSeeForm(scope.access, form.mainObjectId)) {
+  if (form === undefined || !canSeeForm(scope.access, form)) {
     throw refuse('NOT_FOUND', UNKNOWN_FORM);
   }
   return form;
@@ -203,6 +204,8 @@ export async function listForms(
         name: forms.name,
         status: sql<FormStatus>`${forms.status}`,
         mainObjectId: forms.mainObjectId,
+        liveVersionId: forms.liveVersionId,
+        liveObjectId: liveObjectOf(),
         publicKey: forms.publicKey,
         liveNumber: sql<
           number | null
@@ -213,7 +216,7 @@ export async function listForms(
       .where(input.archived ? eq(forms.status, 'archived') : ne(forms.status, 'archived'))
       .orderBy(desc(forms.createdAt), desc(forms.id))
       .limit(FORMS_LIST_MAX);
-    const shown = rows.filter((row) => canSeeForm(scope.access, row.mainObjectId));
+    const shown = rows.filter((row) => canSeeForm(scope.access, row));
     const counts = await countsOf(
       tx,
       shown.map((row) => row.id),
