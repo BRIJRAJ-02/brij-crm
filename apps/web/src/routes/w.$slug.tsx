@@ -1,12 +1,19 @@
 import { isDataError } from '@crm/data';
 import { LoadingNow } from '@crm/ui';
-import { createFileRoute, Outlet, redirect, useRouter, type ErrorComponentProps } from '@tanstack/react-router';
+import {
+  createFileRoute,
+  Outlet,
+  redirect,
+  useMatch,
+  useRouter,
+  type ErrorComponentProps,
+} from '@tanstack/react-router';
 import { signInHref } from '../features/auth/redirect.ts';
 import { CommandMenuProvider } from '../features/command/CommandMenuProvider.tsx';
 import { UnreadTitle } from '../features/inbox/UnreadTitle.tsx';
 import { failedPage, missingPage, pendingPage } from '../features/workspace/ObjectScreen.tsx';
 import { strings } from '../features/workspace/strings.ts';
-import { useWorkspaceName, WorkspacePage } from '../features/workspace/WorkspacePage.tsx';
+import { useWorkspaceName, WorkspaceLayout, WorkspacePage } from '../features/workspace/WorkspacePage.tsx';
 
 // The workspace frame (spec 0005): signed in and a member. Signed out goes to
 // /sign-in and comes back; a workspace that doesn't exist, or that the person
@@ -53,15 +60,29 @@ export const Route = createFileRoute('/w/$slug')({
 function WorkspaceRoute() {
   const { objects } = Route.useLoaderData();
   const { slug } = Route.useParams();
+  // A form's preview stands outside the app frame, as a visitor sees it (its own main landmark).
+  const isPreview = useMatch({ from: '/w/$slug/captures_/forms/$formId_/preview', shouldThrow: false }) !== undefined;
+  // The frame is mounted here, once, so moving between the pages inside never remounts the sidebar or a menu or
+  // confirm open in it; each page fills its bars (WorkspaceLayout).
   if (objects === undefined) {
-    return <WorkspacePage page={missingPage(strings.workspaceMissingTitle, strings.workspaceMissingText)} />;
+    return (
+      <WorkspaceLayout>
+        <WorkspacePage page={missingPage(strings.workspaceMissingTitle, strings.workspaceMissingText)} />
+      </WorkspaceLayout>
+    );
   }
   // The command menu (spec 0039): ⌘K and `/` on every page inside the workspace, and `useCommandMenu()` for the
   // sidebar's Quick actions and search. The unread count rides in the tab's title (spec 0038).
   return (
     <CommandMenuProvider slug={slug}>
       <UnreadTitle slug={slug} />
-      <Outlet />
+      {isPreview ? (
+        <Outlet />
+      ) : (
+        <WorkspaceLayout>
+          <Outlet />
+        </WorkspaceLayout>
+      )}
     </CommandMenuProvider>
   );
 }

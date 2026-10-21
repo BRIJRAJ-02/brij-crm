@@ -1,7 +1,7 @@
 // The frame every screen inside the app sits in (spec 0003, the app shell):
 // the sidebar, then the main column of the three bars over the view, with an
 // optional side panel. Below bp-page-compact the sidebar folds to its rail.
-import { createContext, useId, useSyncExternalStore, type ReactElement, type ReactNode } from 'react';
+import { createContext, useId, useSyncExternalStore, type ReactElement, type ReactNode, type Ref } from 'react';
 import { VisuallyHidden } from '../../atoms/VisuallyHidden/VisuallyHidden.tsx';
 import { breakpointToken } from '../../lib/token-values.ts';
 import styles from './AppShell.module.css';
@@ -41,6 +41,24 @@ export interface AppShellProps {
   readonly children: ReactNode;
   /** A side panel beside the view: a record's details, a settings pane. */
   readonly panel?: ReactNode;
+  /** The view's scroll box, for a frame that stays mounted across pages and puts each new page at its top. */
+  readonly viewRef?: Ref<HTMLDivElement>;
+}
+
+/** Props for AppShellSlot. */
+export interface AppShellSlotProps {
+  /** The element pages portal into. */
+  readonly ref?: Ref<HTMLDivElement>;
+}
+
+/**
+ * An empty place in one of the shell's bars that a page fills through a
+ * portal, for a frame that stays mounted while its pages change. It draws no
+ * box of its own (`display: contents`), so what lands in it lays out as if it
+ * were passed to the bar directly.
+ */
+export function AppShellSlot({ ref }: AppShellSlotProps) {
+  return <div ref={ref} className={styles.slot} />;
 }
 
 /**
@@ -49,7 +67,7 @@ export interface AppShellProps {
  * A skip link, first in the tab order, jumps past the sidebar to the main
  * column. The view adapts to its width with container queries.
  */
-export function AppShell({ sidebar, topBar, viewBar, toolbar, banner, children, panel }: AppShellProps) {
+export function AppShell({ sidebar, topBar, viewBar, toolbar, banner, children, panel, viewRef }: AppShellProps) {
   const mainId = useId();
   const isCompact = useSyncExternalStore(subscribe, isCompactNow, () => false);
   return (
@@ -67,7 +85,9 @@ export function AppShell({ sidebar, topBar, viewBar, toolbar, banner, children, 
           {toolbar}
           {banner}
           <div className={styles.content}>
-            <div className={styles.view}>{children}</div>
+            <div ref={viewRef} className={styles.view}>
+              {children}
+            </div>
             {panel !== undefined && <aside className={styles.panel}>{panel}</aside>}
           </div>
         </main>
