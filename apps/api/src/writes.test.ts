@@ -26,6 +26,7 @@ const READS: ReadonlySet<string> = new Set([
   'me.get',
   // The caller's own preference in schema auth (spec 0031, AC-802): no tenant change, no outbox row.
   'me.setLastWorkspace',
+  'workspaces.slugAvailable',
   'objects.list',
   'attributes.list',
   'members.list',
