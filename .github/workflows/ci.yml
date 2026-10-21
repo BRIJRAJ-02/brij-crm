@@ -17,8 +17,8 @@ concurrency:
 jobs:
   check:
     runs-on: ubuntu-latest
-    # A hung browser once held a job for over 40 minutes; a normal run takes under 10.
-    timeout-minutes: 25
+    # A hung browser once held a job for over 40 minutes; a normal run takes under 10 (every step runs since round 9).
+    timeout-minutes: 35
     permissions:
       contents: read
     # A real Postgres for the integration tests (never a mocked one), the same
@@ -66,40 +66,53 @@ jobs:
         with:
           node-version-file: .nvmrc
           cache: pnpm
-      - run: pnpm install --frozen-lockfile
+      - id: install
+        run: pnpm install --frozen-lockfile
+      # Every step below runs even when one before it failed, so one push shows every red check at once.
       - run: pnpm check
+        if: ${{ !cancelled() && steps.install.outcome == 'success' }}
       # A migration stamped before one already deployed is skipped for good (packages/db/scripts/journal.ts), so
       # every push checks its journal against the commit it replaced.
       - name: Migrations stay in deploy order
+        if: ${{ !cancelled() && steps.install.outcome == 'success' }}
         env:
           BEFORE: ${{ github.event.before }}
         run: |
           git fetch --no-tags --depth=1 origin "$BEFORE" || true
           node packages/db/scripts/journal.ts "$BEFORE"
       - name: Read the Playwright version
+        if: ${{ !cancelled() && steps.install.outcome == 'success' }}
         id: playwright
         run: echo "version=$(node -p "require('./packages/ui/node_modules/playwright/package.json').version")" >> "$GITHUB_OUTPUT"
       - uses: actions/cache@v6
+        if: ${{ !cancelled() && steps.install.outcome == 'success' }}
         with:
           path: ~/.cache/ms-playwright
           key: playwright-${{ runner.os }}-${{ steps.playwright.outputs.version }}-chromium
       - run: pnpm --filter @crm/ui exec playwright install --with-deps chromium
+        if: ${{ !cancelled() && steps.install.outcome == 'success' }}
       # Every package's tests; the library's stories run in their own jobs below.
       # The library runs after the rest, on its own: its scroll perf test counts
       # long tasks, and the database suites beside it on a small runner make them.
-      - run: pnpm exec turbo run test --filter='!@crm/ui' --filter='!@crm/core'
+      - run: pnpm exec turbo run test --continue --filter='!@crm/ui' --filter='!@crm/core'
+        if: ${{ !cancelled() && steps.install.outcome == 'success' }}
       # The engine's suite alone, after the rest: its 70,000 and 200,000 link tests are heavy for a small
       # runner. Its count cancel test locks the records table, so query.test.ts has a database of its own
       # (test/global-setup.ts): in the shared one the lock stalled every file (main, 13 October 2026).
       - run: pnpm --filter @crm/core run test
+        if: ${{ !cancelled() && steps.install.outcome == 'success' }}
       - run: pnpm --filter @crm/ui exec vitest run --project stories --project unit --project browser
+        if: ${{ !cancelled() && steps.install.outcome == 'success' }}
         env:
           CRM_STORY_BROWSERS: none
       # The scroll perf test alone, last: vitest runs projects side by side, and the browser suites
       # beside it made long tasks of their own on the 2 core runner (3 of 4 runs on 8 October 2026).
       - run: pnpm --filter @crm/ui exec vitest run --project perf
+        if: ${{ !cancelled() && steps.install.outcome == 'success' }}
       - run: pnpm size
+        if: ${{ !cancelled() && steps.install.outcome == 'success' }}
       - run: pnpm ui:artifact --check
+        if: ${{ !cancelled() && steps.install.outcome == 'success' }}
 
   # The core loop's flows (spec 0005, milestone 4): the built app, the api and
   # the worker on the local ports against their own services, driven by
@@ -118,7 +131,8 @@ jobs:
   # touches a deployed environment.
   flows:
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    # 42 flows ran past 20 minutes once round 9 had them all (run 39688130047).
+    timeout-minutes: 40
     permissions:
       contents: read
     services:
@@ -271,7 +285,7 @@ jobs:
           e2e/booking-chat.flow.ts
           e2e/import.flow.ts
       - name: Keep the traces and the logs
-        if: failure()
+        if: failure() || cancelled()
         uses: actions/upload-artifact@v7
         with:
           name: flow-results
@@ -286,8 +300,8 @@ jobs:
   stories:
     name: stories (${{ matrix.browser }})
     runs-on: ubuntu-latest
-    # A hung browser once held a job for over 40 minutes; a normal run takes under 10.
-    timeout-minutes: 25
+    # A hung browser once held a job for over 40 minutes; a normal run takes under 10 (every step runs since round 9).
+    timeout-minutes: 35
     permissions:
       contents: read
     strategy:
@@ -319,8 +333,8 @@ jobs:
   # `pnpm test:visual` uses locally, so fonts and rendering match exactly.
   visual:
     runs-on: ubuntu-latest
-    # A hung browser once held a job for over 40 minutes; a normal run takes under 10.
-    timeout-minutes: 25
+    # A hung browser once held a job for over 40 minutes; a normal run takes under 10 (every step runs since round 9).
+    timeout-minutes: 35
     permissions:
       contents: read
     container:
