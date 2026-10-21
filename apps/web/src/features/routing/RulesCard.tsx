@@ -52,6 +52,8 @@ export interface RulesCardProps {
   readonly waitsForPublish?: boolean;
   /** A member's name, for routes that narrow to people. */
   readonly nameOf: (memberId: string) => string;
+  /** Why there is nothing a condition could read yet ("Add a question first"). */
+  readonly emptyFacts: string;
   /** Keeps the new list: a form's draft at once; a page's saved (rejecting with the refusal's words). */
   readonly onRulesChange: (rules: readonly RoutingRule[]) => Promise<void>;
 }
@@ -79,6 +81,7 @@ export function RulesCard({
   isReadOnly,
   waitsForPublish = false,
   nameOf,
+  emptyFacts,
   onRulesChange,
 }: RulesCardProps) {
   const [editing, setEditing] = useState<Editing>();
@@ -189,6 +192,9 @@ export function RulesCard({
             {strings.addRule}
           </Button>
         )}
+        {!isReadOnly && (rules.length >= RULES_MAX || facts.length === 0) && (
+          <Callout tone="info">{rules.length >= RULES_MAX ? strings.ruleLimit : emptyFacts}</Callout>
+        )}
         {report !== undefined && rules.length > 0 && (
           <RuleReport data={data} slug={slug} surface={report} rules={rules} />
         )}
@@ -242,7 +248,8 @@ export function RulesCard({
           </>
         }
       >
-        {failure ?? strings.removeText}
+        {failure !== undefined && <Callout tone="danger">{failure}</Callout>}
+        {strings.removeText}
       </Modal>
     </Card>
   );

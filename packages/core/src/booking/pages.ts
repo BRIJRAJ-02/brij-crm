@@ -29,7 +29,7 @@ import { can } from '../access/policy.ts';
 import { inWorkspace } from '../access/run.ts';
 import { postgresError, refuse, refuseOn } from '../engine/refusals.ts';
 import { writeAudit } from '../members/audit.ts';
-import { checkPageRoutes, rulesChanged } from '../routing/check.ts';
+import { changedRuleIds, checkPageRoutes, rulesChanged } from '../routing/check.ts';
 import { actorRow } from '../engine/scope.ts';
 import { linksOf, seenLinks } from './links.ts';
 import { ROTATION_ROLES, TEAM_LIMITS } from '../rotation/team.ts';
@@ -459,7 +459,7 @@ export async function updateBookingPage(
           targetType: 'booking_page',
           targetId: page.id,
           before: { rules: before.length },
-          after: { rules: routing.rules.length },
+          after: { rules: routing.rules.length, changed: changedRuleIds(before, routing.rules) },
         });
       }
     }

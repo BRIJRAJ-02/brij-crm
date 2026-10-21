@@ -423,15 +423,16 @@ export function PageEditor({
                 }}
               />
             )}
-            {isTeam && !isLocked && (
+            {isTeam && (
               <RulesCard
                 data={data}
                 slug={slug}
                 surface={{ kind: 'page', pool: teamPool }}
-                report={{ kind: 'booking_page', pageId: page.id }}
+                {...(isLocked ? {} : { report: { kind: 'booking_page' as const, pageId: page.id } })}
                 rules={page.routing?.rules ?? []}
                 facts={recordFields === undefined ? [] : recordFacts(recordFields.person, recordFields.company)}
                 factLabel={routingStrings.questionOrField}
+                emptyFacts={routingStrings.noFields}
                 description={routingStrings.pageRoutingLine(page.routing?.rules.length ?? 0)}
                 isReadOnly={isLocked}
                 nameOf={(memberId) => people.find((person) => person.id === memberId)?.name ?? ''}

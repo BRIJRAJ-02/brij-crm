@@ -403,6 +403,7 @@ export function SettingsTab({
         rules={draft.routing.rules}
         facts={questionFacts(draft.questions)}
         factLabel={routingStrings.question}
+        emptyFacts={routingStrings.noQuestions}
         description={routingStrings.formRoutingLine(draft.routing.rules.length)}
         isReadOnly={isReadOnly}
         waitsForPublish={routingChanged}

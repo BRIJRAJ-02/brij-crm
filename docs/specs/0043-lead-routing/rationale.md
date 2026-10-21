@@ -20,3 +20,4 @@
 
 - Round 7's hand off token now carries a decision id; an older token without one still books from the whole rotation.
 - A rule naming hosts who later leave the rotation narrows to nobody; the booking then falls back to the whole rotation, and publish or save says so next time.
+- A team page's rules read the CRM by the email the visitor types, which nobody has checked. A visitor can type someone else's email and see which host the booking goes to, so learn a little about that person's record (security review, 22 October 2026). Nothing else reaches them. This is the risk spec 0037 accepted with host rules (decision 25); the follow up is to read record fields only for a visitor whose email is vouched for (a signed in guest, spec 0028).

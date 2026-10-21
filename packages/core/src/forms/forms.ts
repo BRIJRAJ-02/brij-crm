@@ -37,7 +37,7 @@ import { runWrite, type AfterWrite } from '../engine/write.ts';
 import { requirePermission } from '../access/check.ts';
 import { bookingTargetProblem } from '../booking/pages.ts';
 import { writeAudit } from '../members/audit.ts';
-import { checkFormRoutes, rulesChanged } from '../routing/check.ts';
+import { changedRuleIds, checkFormRoutes, rulesChanged } from '../routing/check.ts';
 import { can, fieldLevel, objectLevel } from '../access/policy.ts';
 import { inWorkspace } from '../access/run.ts';
 import { checkObject, UNKNOWN_OBJECT } from '../access/visibility.ts';
@@ -653,7 +653,11 @@ export async function publishForm(
           targetType: 'form',
           targetId: form.id,
           before: { rules: rulesBefore.length },
-          after: { rules: draft.document.routing.rules.length, version: draft.number },
+          after: {
+            rules: draft.document.routing.rules.length,
+            version: draft.number,
+            changed: changedRuleIds(rulesBefore, draft.document.routing.rules),
+          },
         });
       }
       const by = actorRow(scope.actor);

@@ -213,7 +213,6 @@ function BookingCard({
   /** The button to focus as the card opens again after the screen's dialog was dismissed. */
   readonly focusOnMount?: BookingAsk | undefined;
 }) {
-  const now = useNow();
   // Read again when its host changes (a reassign or a move through the rotation lands).
   // Read again after a reassign here (a second rotation's seat leaves the organiser as it was).
   const [reads, setReads] = useState(0);
@@ -272,7 +271,8 @@ function BookingCard({
       )}
       {/* Its buttons show for a confirmed booking only; it stays mounted so a cancel's confirm outlives the
           booking showing cancelled at once, until the server answers. */}
-      {actions !== undefined && Date.parse(booking.startsAt) > now.getTime() && (
+      {/* Before the meeting: change it; once it has started: mark a no show (spec 0043). */}
+      {actions !== undefined && (
         <BookingActions
           booking={booking}
           actions={actions}

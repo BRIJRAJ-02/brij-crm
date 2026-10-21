@@ -91,6 +91,7 @@ function RuleDialogBody({
   const problem = (): string | undefined => {
     if (!isComplete(when)) return strings.conditionsIncomplete;
     if (route.kind === 'redirect' && !isWebAddress(route.url)) return strings.urlInvalid;
+    if (route.kind === 'hosts' && pool.length === 0) return strings.poolEmpty;
     if (route.kind === 'hosts' && route.hosts.length === 0) return strings.hostsNeeded;
     return undefined;
   };
@@ -134,7 +135,12 @@ function RuleDialogBody({
           <Button slot="close" isDisabled={isBusy} kbd="ESC">
             {strings.cancel}
           </Button>
-          <Button variant="primary" isPending={isBusy} onPress={save}>
+          <Button
+            variant="primary"
+            isPending={isBusy}
+            isDisabled={surface.kind === 'page' && pool.length === 0}
+            onPress={save}
+          >
             {isBusy ? strings.saving : rule === undefined ? strings.addRuleAction : strings.save}
           </Button>
         </>
@@ -182,9 +188,10 @@ function RuleDialogBody({
             }}
           />
         )}
+        {surface.kind === 'page' && pool.length === 0 && <Callout tone="info">{strings.poolEmpty}</Callout>}
         {pool.length > 0 && (
           <ChoiceChips
-            label={strings.hosts}
+            label={route.kind === 'book' ? strings.hostsOptional : strings.hosts}
             choices={pool.map((member) => ({ id: member.id, label: member.name }))}
             selected={hosts}
             onChange={setHosts}

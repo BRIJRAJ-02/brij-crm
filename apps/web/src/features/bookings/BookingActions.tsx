@@ -140,18 +140,16 @@ export function BookingActions({
       setMarking(false);
     }
   };
-  if (booking.status === 'confirmed' && hasStarted) {
-    return (
-      <ButtonGroup label={strings.changeBooking} layout="row">
-        <Button icon="user-x" isPending={marking} onPress={() => void markNoShow()}>
-          {booking.noShow === true ? strings.undoNoShow : strings.markNoShow}
-        </Button>
-      </ButtonGroup>
-    );
-  }
   return (
     <>
-      {booking.status === 'confirmed' && (
+      {booking.status === 'confirmed' && hasStarted && (
+        <ButtonGroup label={strings.changeBooking} layout="row">
+          <Button icon="user-x" isPending={marking} onPress={() => void markNoShow()}>
+            {booking.noShow === true ? strings.undoNoShow : strings.markNoShow}
+          </Button>
+        </ButtonGroup>
+      )}
+      {booking.status === 'confirmed' && !hasStarted && (
         <ButtonGroup label={strings.changeBooking} layout="row">
           {booking.reschedules < 5 && (
             <Button ref={moveRef} icon="calendar-clock" onPress={() => ask('move')}>

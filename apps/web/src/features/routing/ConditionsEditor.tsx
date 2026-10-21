@@ -121,7 +121,7 @@ export function ConditionsEditor({
       })}
       {!isReadOnly && value.rules.length < CONDITIONS_MAX && (
         <Button
-          variant="ghost"
+          variant="dashed"
           icon="plus"
           onPress={() => onChange({ ...value, rules: [...value.rules, conditionOn(facts[0])] })}
         >

@@ -206,9 +206,9 @@ export const strings = {
   // A no show (spec 0043, AC-1613).
   noShow: 'No show',
   markNoShow: 'Mark as no show',
-  undoNoShow: 'They came after all',
+  undoNoShow: 'Undo no show',
   markedNoShow: 'Marked as a no show',
-  unmarkedNoShow: 'No show taken back',
+  unmarkedNoShow: 'No show removed',
   needsHostText: 'Its host left the workspace and nobody else was free then. Reassign it, or cancel it.',
   reassignAction: 'Reassign',
   reassignTitle: (page: string, visitor: string) => `Reassign ${page} with ${visitor}`,

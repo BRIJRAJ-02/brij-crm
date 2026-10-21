@@ -81,12 +81,18 @@ export async function checkFormRoutes(
   check: 'seen' | 'live',
   before: readonly RoutingRule[] = [],
 ): Promise<void> {
-  const known = new Set(before.flatMap((rule) => (rule.then.kind === 'book' ? [rule.then.bookingPageId] : [])));
+  // A route already set (its page and its hosts) stays for others to edit; a new page, or new hosts on a page, goes
+  // through the door, so only someone who may use the page decides whose leads it gets.
+  const routeKey = (pageId: string, hosts: readonly string[] | undefined) =>
+    `${pageId}|${[...(hosts ?? [])].sort().join(',')}`;
+  const known = new Set(
+    before.flatMap((rule) => (rule.then.kind === 'book' ? [routeKey(rule.then.bookingPageId, rule.then.hosts)] : [])),
+  );
   for (const [index, rule] of rules.entries()) {
     if (rule.then.kind !== 'book') continue;
     const name = ruleName(rule, index);
     const pageId = rule.then.bookingPageId;
-    if (check === 'live' || !known.has(pageId)) {
+    if (check === 'live' || !known.has(routeKey(pageId, rule.then.hosts))) {
       const problem = await bookingTargetProblem(tx, scope, pageId, check);
       if (problem !== undefined) {
         throw refuseOn(
@@ -120,4 +126,11 @@ export async function checkPageRoutes(tx: WorkspaceTx, pageId: string, rules: re
 /** True when two rule lists differ (what an audit row is written for). */
 export function rulesChanged(before: readonly RoutingRule[], after: readonly RoutingRule[]): boolean {
   return JSON.stringify(before) !== JSON.stringify(after);
+}
+
+/** The ids of rules added, changed or removed between two lists, for the audit row (spec 0043, AC-1616). */
+export function changedRuleIds(before: readonly RoutingRule[], after: readonly RoutingRule[]): readonly string[] {
+  const was = new Map(before.map((rule) => [rule.id, JSON.stringify(rule)]));
+  const now = new Map(after.map((rule) => [rule.id, JSON.stringify(rule)]));
+  return [...new Set([...was.keys(), ...now.keys()])].filter((id) => was.get(id) !== now.get(id));
 }

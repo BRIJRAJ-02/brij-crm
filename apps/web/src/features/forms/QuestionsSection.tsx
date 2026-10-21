@@ -578,7 +578,7 @@ function ShowWhenEditor({ question, draft, isReadOnly, onChange }: ShowWhenEdito
       >
         {!isReadOnly && (
           <Button
-            variant="secondary"
+            variant="dashed"
             icon="plus"
             isDisabled={earlier.length === 0}
             onPress={() => onChange({ showWhen: storedShowWhen(firstConditions(earlier)) })}
