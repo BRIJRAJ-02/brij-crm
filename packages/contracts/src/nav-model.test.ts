@@ -134,6 +134,19 @@ describe('the sidebar model', () => {
     const starred = applyNavOp(full, { op: 'star', kind: 'view', id: VIEW }, lost);
     expect(starred.ok).toBe(true);
     if (starred.ok) expect(starred.prefs.items).toHaveLength(MAX_NAV_FAVOURITES + 1);
+    // Out of sight ones are held to as many again: a hundred stars in all refuses the next, whatever is seen.
+    const hundred: NavPrefs = {
+      ...DEFAULT_NAV_PREFS,
+      items: Array.from({ length: 2 * MAX_NAV_FAVOURITES }, (_, index) => ({
+        kind: 'record' as const,
+        id: `01900000-0000-7000-8000-${String(index).padStart(12, '0')}`,
+        pinned: true,
+      })),
+    };
+    expect(applyNavOp(hundred, { op: 'star', kind: 'view', id: VIEW }, universe)).toEqual({
+      ok: false,
+      refusal: { code: 'NAV_LIMIT', message: NAV_FAVOURITES_LIMIT_MESSAGE },
+    });
   });
 
   it('folds, moves sections, sets the rail, and answers the same row for a change that changes nothing', () => {

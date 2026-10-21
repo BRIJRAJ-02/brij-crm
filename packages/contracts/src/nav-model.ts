@@ -319,11 +319,12 @@ export function applyNavOp(prefs: NavPrefs, op: NavOperation, universe: NavUnive
         return invalid('Only views and records can be favourites.');
       if (prefs.items.some((item) => matches(op.kind, op.id)(item) && item.pinned === true)) return ok(prefs);
       // The cap counts the favourites the member can see: one they lost access to (or that sits in the trash) is
-      // kept for its return, but doesn't hold a place they can't see to free.
-      const starred = prefs.items.filter(
-        (item) => item.pinned === true && universe.favourites.has(navKey(item)),
-      ).length;
-      if (starred >= MAX_NAV_FAVOURITES) {
+      // kept for its return, but doesn't hold a place they can't see to free. Stars kept out of sight are held to
+      // as many again, so trashing and starring over and over can't pile them up. A restore can still bring the
+      // shown ones past fifty; the cap then holds new stars until some go.
+      const pinned = prefs.items.filter((item) => item.pinned === true);
+      const starred = pinned.filter((item) => universe.favourites.has(navKey(item))).length;
+      if (starred >= MAX_NAV_FAVOURITES || pinned.length >= 2 * MAX_NAV_FAVOURITES) {
         return { ok: false, refusal: { code: 'NAV_LIMIT', message: NAV_FAVOURITES_LIMIT_MESSAGE } };
       }
       // A new favourite goes last among the favourites.

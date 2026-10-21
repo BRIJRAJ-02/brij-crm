@@ -102,6 +102,9 @@ export interface NavChangeOptions {
   readonly isSaidHere?: boolean;
 }
 
+/** How many favourites that dropped out of a read are still listened for, latest first. */
+const DEPARTED_KEPT = 50;
+
 /** A favourite that dropped out of a read (trashed, access lost), remembered so its return is noticed. */
 interface Departed {
   readonly kind: 'view' | 'record';
@@ -216,6 +219,10 @@ export function createNavStore(deps: NavStoreDeps) {
         }
       }
       for (const key of now) entry.departed.delete(key);
+      // Unstarred in another tab or gone for good look the same from here: keep only the latest few.
+      for (const key of [...entry.departed.keys()].slice(0, Math.max(entry.departed.size - DEPARTED_KEPT, 0))) {
+        entry.departed.delete(key);
+      }
     }
     entry.confirmed = state;
     entry.error = undefined;
@@ -458,8 +465,26 @@ export function createNavStore(deps: NavStoreDeps) {
         favourite.kind === change.kind &&
         (change.ids.includes(favourite.id) ||
           (change.coarse && (change.objectId === undefined || change.objectId === favourite.objectId)));
-      // One that dropped out (the trash, lost access) counts too, so its restore brings it back.
-      return nav.favourites.some(touches) || [...entry.departed.values()].some(touches);
+      // One that dropped out (the trash, lost access) counts too, so its restore brings it back: named, or coarse
+      // on its own object, never for every coarse change in the workspace (it may be gone for good).
+      const touchesDeparted = (favourite: Departed) =>
+        favourite.kind === change.kind &&
+        (change.ids.includes(favourite.id) || (change.coarse && change.objectId === favourite.objectId));
+      return nav.favourites.some(touches) || [...entry.departed.values()].some(touchesDeparted);
+    },
+    /**
+     * Whether this tab's own delete or restore of `ids` (all of them unknown, for an undo) may move a favourite:
+     * its echo never comes back, so the layer then reads the sidebar again at once.
+     */
+    touchedHere: (workspace: string, ids: readonly string[] | undefined): boolean => {
+      const entry = entries.get(workspace);
+      const nav = entry?.confirmed;
+      if (entry === undefined || nav === undefined) return false;
+      const records = [
+        ...nav.favourites.filter((favourite) => favourite.kind === 'record'),
+        ...[...entry.departed.values()].filter((favourite) => favourite.kind === 'record'),
+      ];
+      return ids === undefined ? records.length > 0 : records.some((favourite) => ids.includes(favourite.id));
     },
     /**
      * Reads again, coarsely (at most once a second): a favourite may have been renamed, deleted, trashed or

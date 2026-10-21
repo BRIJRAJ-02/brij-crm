@@ -1892,7 +1892,7 @@ export function createDataLayer({
               input.workspace,
               call((options) => api.trash.restore({ ...input, recordIds: [...input.recordIds] }, options)),
             ).then((answer) => {
-              favouritesMoved(input.workspace);
+              favouritesMoved(input.workspace, input.recordIds);
               return answer;
             }),
           deleteForever: (input) =>
@@ -1915,17 +1915,17 @@ export function createDataLayer({
    * while it holds a record favourite, or one that dropped out, so a favourite trashed or restored here follows
    * (AC-939).
    */
-  const favouritesMoved = (workspace: string): void => {
-    const change = { kind: 'record' as const, ids: [], objectId: undefined, coarse: true };
-    if (navStore?.touchesFavourites(workspace, change) === true) refreshNav(workspace);
+  const favouritesMoved = (workspace: string, ids?: readonly string[]): void => {
+    // The member's own change: read at once (coarsely, at most once a second), not spread like other people's.
+    if (navStore?.touchedHere(workspace, ids) === true) navStore.refresh(workspace);
   };
 
   /** This tab deleted or restored records: its own echoes never come back, so an open trash settles now. */
-  const trashMoved = (workspace: string): void => {
+  const trashMoved = (workspace: string, ids?: readonly string[]): void => {
     void trash?.then((held) => {
       held.reload(workspace);
     });
-    favouritesMoved(workspace);
+    favouritesMoved(workspace, ids);
   };
 
   const tasksStore = (): Promise<TasksStore> => {
@@ -2847,7 +2847,7 @@ export function createDataLayer({
        */
       deleteMany: async (workspace: string, objectId: string, recordIds: readonly string[]): Promise<DeleteResult> => {
         const result = await (await recordsLayer()).deleteMany(workspace, objectId, recordIds);
-        if (result.kind === 'done' && result.deleted > 0) trashMoved(workspace);
+        if (result.kind === 'done' && result.deleted > 0) trashMoved(workspace, recordIds);
         return result;
       },
       /**

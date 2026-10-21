@@ -169,6 +169,12 @@ describe('the sidebar store', () => {
     // Its restore still names something the sidebar waits for; another record's change doesn't.
     expect(w.store.touchesFavourites('acme', restored)).toBe(true);
     expect(w.store.touchesFavourites('acme', { ...restored, ids: [DEALS] })).toBe(false);
+    // A coarse change on another object, or one naming no object, doesn't wake it (it may be gone for good).
+    expect(w.store.touchesFavourites('acme', { ...restored, ids: [], coarse: true, objectId: undefined })).toBe(false);
+    expect(w.store.touchesFavourites('acme', { ...restored, ids: [], coarse: true })).toBe(true);
+    // This tab's own restore of it reads at once; one of another record doesn't.
+    expect(w.store.touchedHere('acme', [ADA])).toBe(true);
+    expect(w.store.touchedHere('acme', [DEALS])).toBe(false);
     // Back in a read, then unstarred: nothing is waited for any more.
     void w.store.reload('acme');
     w.gets[1]?.(state({ version: 2, items: [starred], favourites: [favourite] }));

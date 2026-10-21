@@ -286,6 +286,15 @@ describe('the sidebar', { timeout: 120_000 }, () => {
       message: NAV_FAVOURITES_LIMIT_MESSAGE,
     });
     expect((await readNav(w.bea)).version).toBe(before.version);
+    // One of the fifty in the trash frees a star, and its own place waits for its restore, out of the read.
+    const trashed = ids[0] ?? '';
+    await db.withWorkspace(w.workspaceId, (tx) =>
+      tx.execute(sql`update records set deleted_at = now(), deleted_by_type = 'system' where id = ${trashed}`),
+    );
+    await changeNav(w.bea, { op: 'star', kind: 'record', id: ids[MAX_NAV_FAVOURITES] ?? '' });
+    const after = await readNav(w.bea);
+    expect(after.favourites).toHaveLength(MAX_NAV_FAVOURITES);
+    expect(JSON.stringify(after)).not.toContain(trashed);
   });
 
   it('prunes a starred view deleted for good on the next write (AC-940)', async () => {
