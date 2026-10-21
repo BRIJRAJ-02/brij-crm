@@ -118,9 +118,14 @@
     background: none;
   }
 
+  /* Quiet bands: a plain small label over its rows, no bar. */
   .root[data-placement='card'] .band {
-    border-radius: var(--radius-md);
+    padding: var(--space-8) var(--space-8) var(--space-2);
     border-block-end: none;
+    background: none;
+    color: var(--text-tertiary);
+    font: var(--text-label);
+    letter-spacing: var(--tracking-label);
   }
 
   .root[data-placement='card'] .row {
@@ -128,7 +133,7 @@
   }
 
   .root[data-placement='card'] .when {
-    inline-size: var(--size-column-narrow);
+    inline-size: var(--size-column-min);
   }
 
   @container (inline-size < 480px) {

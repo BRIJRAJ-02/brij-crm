@@ -120,7 +120,8 @@ export const Agenda: Story = {
     </Stage>
   ),
   play: async ({ canvas }) => {
-    await expect(canvas.getAllByText('You and')).toHaveLength(1);
+    // The who line is one element holding "You and" and the guest's name.
+    await expect(canvas.getAllByText(/^You and/)).toHaveLength(1);
     await expect(canvas.getByRole('button', { name: 'Team standup' })).toBeInTheDocument();
     await expect(canvas.getByText('All day')).toBeInTheDocument();
   },
