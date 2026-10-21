@@ -24,6 +24,7 @@ import {
   Callout,
   EmptyState,
   focusLater,
+  Modal,
   Popover,
   SegmentedControl,
   ViewSettings,
@@ -264,6 +265,11 @@ export function ViewScreen(props: ViewScreenProps) {
     draft.discard();
     setShowDropped(false);
     setFocusRequest({});
+  };
+  // Discard throws the draft away for good, so it asks first (the owner's rule for ending actions).
+  const [isDiscarding, setDiscarding] = useState(false);
+  const askDiscard = () => {
+    setDiscarding(true);
   };
   const [isSaving, setSaving] = useState(false);
   const [clash, setClash] = useState<string | undefined>(undefined);
@@ -555,7 +561,7 @@ export function ViewScreen(props: ViewScreenProps) {
         canSave={canSave}
         isSaving={isSaving}
         onChange={draft.set}
-        onDiscard={discard}
+        onDiscard={askDiscard}
         onSave={() => {
           save(false);
         }}
@@ -591,6 +597,30 @@ export function ViewScreen(props: ViewScreenProps) {
   const dialogs = (
     <>
       {viewMenu.dialogs}
+      <Modal
+        title={strings.discardTitle(view?.name ?? strings.thisView)}
+        tone="danger"
+        isOpen={isDiscarding}
+        onOpenChange={setDiscarding}
+        actions={
+          <>
+            <Button slot="close" kbd="ESC">
+              {strings.cancel}
+            </Button>
+            <Button
+              variant="danger-solid"
+              onPress={() => {
+                setDiscarding(false);
+                discard();
+              }}
+            >
+              {strings.discard}
+            </Button>
+          </>
+        }
+      >
+        {strings.discardText}
+      </Modal>
       <ViewChangedDialog
         sentence={clash}
         isReplacing={isSaving}
@@ -771,7 +801,7 @@ export function ViewScreen(props: ViewScreenProps) {
                   title={strings.noMatchesTitle(object.pluralName)}
                   actions={
                     draft.isDraft ? (
-                      <Button onPress={discard}>{strings.discard}</Button>
+                      <Button onPress={askDiscard}>{strings.discard}</Button>
                     ) : (
                       <Button
                         onPress={() => {

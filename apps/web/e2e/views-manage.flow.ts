@@ -117,6 +117,14 @@ test.describe('saved views: many views and their layout', () => {
     if (!LIVE) await bea.reload();
     await expect(header(bea, 'Job title')).toBeHidden({ timeout: 10_000 });
 
+    // Make private asks first, naming the view; Cancel keeps it shared.
+    await openSwitcher(ada, 'Pipeline');
+    await ada.getByRole('menuitem', { name: 'Make private', exact: true }).click();
+    const goPrivate = ada.getByRole('dialog', { name: 'Make Pipeline private?' });
+    await expect(goPrivate).toBeVisible();
+    await goPrivate.getByRole('button', { name: 'Cancel' }).click();
+    await expect(goPrivate).toBeHidden();
+
     // Ada locks Pipeline; Bea's column change stays in her tab, and she may only save a draft as a view of her own
     // (AC-475, AC-476).
     // The view's own actions sit under "This view" in the switcher's menu (21 October 2026).

@@ -6,6 +6,9 @@ export const strings = {
   sorts: 'Sorts',
   filters: 'Filters',
   discard: 'Discard changes',
+  /** Discard asks first: the unsaved filters and sort go for good (the owner's rule for ending actions, 21 October 2026). */
+  discardTitle: (name: string) => `Discard changes to ${name}?`,
+  discardText: 'Your unsaved filters and sort go, and the view goes back to how it was saved.',
   save: 'Save',
   saving: 'Saving',
   /** After Save: the view now runs this for everyone who sees it. */
@@ -80,6 +83,10 @@ export const strings = {
   makePrivate: 'Make private',
   shared: (name: string) => `${name} is shared with everyone.`,
   madePrivate: (name: string) => `${name} is only yours now.`,
+  /** Make private asks first: everyone else loses the view (the owner's rule for ending actions, 21 October 2026). */
+  makePrivateTitle: (name: string) => `Make ${name} private?`,
+  makePrivateText: 'Only you will see this view, and everyone else loses it from their list.',
+  makingPrivate: 'Making private',
   lock: 'Lock',
   unlock: 'Unlock',
   locked: (name: string) => `${name} is locked.`,

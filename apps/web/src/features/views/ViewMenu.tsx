@@ -84,6 +84,10 @@ export function useViewMenu({
   const [isDeleting, setDeleting] = useState(false);
   const [isBusy, setBusy] = useState(false);
   const [deleteFailure, setDeleteFailure] = useState<string | undefined>(undefined);
+  // Make private ends everyone else's use of the view, so it asks first, as Delete does.
+  const [isGoingPrivate, setGoingPrivate] = useState(false);
+  const [isPrivateBusy, setPrivateBusy] = useState(false);
+  const [privateFailure, setPrivateFailure] = useState<string | undefined>(undefined);
   if (view === undefined) return { actions: [], onAction: () => undefined, dialogs: null };
   const caller = {
     memberId,
@@ -161,7 +165,8 @@ export function useViewMenu({
           icon: 'lock',
           startsGroup: true,
           run: () => {
-            run(data.views.update(slug, view.id, { visibility: 'private' }), strings.madePrivate(view.name));
+            setPrivateFailure(undefined);
+            setGoingPrivate(true);
           },
         });
   const entries: readonly Entry[] = [
@@ -273,6 +278,24 @@ export function useViewMenu({
     );
   };
 
+  const makePrivate = () => {
+    if (isPrivateBusy) return;
+    setPrivateBusy(true);
+    setPrivateFailure(undefined);
+    data.views.update(slug, view.id, { visibility: 'private' }).then(
+      () => {
+        setPrivateBusy(false);
+        setGoingPrivate(false);
+        toasts.toast({ tone: 'success', message: strings.madePrivate(view.name) });
+      },
+      (error: unknown) => {
+        // The confirm stays open with what went wrong, so the person can try again or cancel.
+        setPrivateBusy(false);
+        setPrivateFailure(isDataError(error) ? error.message : strings.actionFailed);
+      },
+    );
+  };
+
   return {
     actions: entries.map(({ run: _run, ...action }) => action),
     onAction: (id) => {
@@ -311,6 +334,27 @@ export function useViewMenu({
         >
           {deleteFailure !== undefined && <Callout tone="danger">{deleteFailure}</Callout>}
           {view.visibility === 'workspace' ? strings.deleteSharedText : strings.deletePrivateText}
+        </Modal>
+        <Modal
+          title={strings.makePrivateTitle(view.name)}
+          isOpen={isGoingPrivate}
+          isBusy={isPrivateBusy}
+          onOpenChange={(open) => {
+            if (!open && !isPrivateBusy) setGoingPrivate(false);
+          }}
+          actions={
+            <>
+              <Button slot="close" isDisabled={isPrivateBusy} kbd="ESC">
+                {strings.cancel}
+              </Button>
+              <Button variant="primary" isPending={isPrivateBusy} onPress={makePrivate}>
+                {isPrivateBusy ? strings.makingPrivate : strings.makePrivate}
+              </Button>
+            </>
+          }
+        >
+          {privateFailure !== undefined && <Callout tone="danger">{privateFailure}</Callout>}
+          {strings.makePrivateText}
         </Modal>
       </>
     ),
