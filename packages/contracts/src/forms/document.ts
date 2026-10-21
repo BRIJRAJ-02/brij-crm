@@ -9,7 +9,7 @@
 import * as z from 'zod';
 import { ANSWER_TYPES, CHOICE_TYPES, FORM_CHOICES_MAX, FORM_QUESTIONS_MAX, QUESTION_KEY } from './answer-types.ts';
 import { FORM_LANGUAGES } from './public.ts';
-import { Uuid } from '../values/ids.ts';
+import { Uuid, uuidWith } from '../values/ids.ts';
 
 /** A question's id inside its document: stable across versions, never shown. */
 export const QuestionId = z
@@ -92,7 +92,7 @@ export const FormAfter = z.discriminatedUnion('kind', [
   z.strictObject({ kind: z.literal('redirect'), url: RedirectUrl }),
   z.strictObject({
     kind: z.literal('booking'),
-    bookingPageId: z.uuid({ error: 'Pick a booking page.' }),
+    bookingPageId: uuidWith('Pick a booking page.'),
     countdownSeconds: BookingCountdown.default(BOOKING_COUNTDOWN.default),
     message: z.string().trim().max(2_000).default(''),
   }),
