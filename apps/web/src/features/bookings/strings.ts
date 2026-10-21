@@ -209,10 +209,11 @@ export const strings = {
   seat: 'Rotation',
   newHost: 'New host',
   nowWith: (member: string, rotation: string) =>
-    `Now with ${member} from ${rotation}. The guest and both hosts are emailed.`,
+    `With ${member} in ${rotation} today. The new host, the guest and ${member} are emailed.`,
   nextInRotation: 'Next in rotation',
   nextInRotationHint: 'Whoever is free then and next by the rotation’s rules',
   keepHost: 'Keep host',
+  reassignNamesFailed: 'Couldn’t load the rotation’s members, so only Next in rotation is offered.',
   reassign: 'Reassign',
   reassigning: 'Reassigning…',
   reassigned: 'Reassigned. The guest and both hosts are emailed.',

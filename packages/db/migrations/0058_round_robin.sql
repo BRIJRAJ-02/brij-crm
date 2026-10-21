@@ -283,6 +283,12 @@ where m.member_id <> b.host_member_id
 on conflict do nothing;
 --> statement-breakpoint
 
+-- The Distribution tab's adjustments, live and undone, newest first: only adjustment rows, so it stays small however
+-- long the ledger grows (the window index covers live rows only).
+create index rotation_assignments_adjustments on rotation_assignments (workspace_id, rotation_id, assigned_at desc)
+  where source = 'adjustment';
+--> statement-breakpoint
+
 -- A round robin booking that gets new hosts (a move through its rotation, a reassign, a member who left) tells its
 -- guest and both hosts: `reassigned` joins the kinds crm_enqueue_booking_mail queues, run now like `moved`; and
 -- `needs_host`, a booking whose host left the workspace, which the worker reseats through its rotations or, when

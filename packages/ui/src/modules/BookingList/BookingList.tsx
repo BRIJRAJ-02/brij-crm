@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react';
-import { Badge } from '../../atoms/Badge/Badge.tsx';
+import { Badge, type BadgeTone } from '../../atoms/Badge/Badge.tsx';
 import { Button } from '../../atoms/Button/Button.tsx';
 import { Icon } from '../../atoms/Icon/Icon.tsx';
 import { Link } from '../../atoms/Link/Link.tsx';
@@ -26,6 +26,8 @@ export interface BookingListRow {
   readonly guestHref?: string;
   /** A state worth saying ("Cancelled"). */
   readonly badge?: string;
+  /** `accent` for a state that asks for action ("Needs a host"); `neutral`, the default, for one that only says. */
+  readonly badgeTone?: BadgeTone;
   /** The row's actions at its end (Cancel, an Edit menu). */
   readonly actions?: ReactNode;
 }
@@ -80,7 +82,7 @@ export function BookingList({ label, groups, onOpen, emptyState }: BookingListPr
                     <Button variant="ghost" onPress={() => onOpen(row.id)}>
                       {row.title}
                     </Button>
-                    {row.badge !== undefined && <Badge text={row.badge} />}
+                    {row.badge !== undefined && <Badge text={row.badge} tone={row.badgeTone ?? 'neutral'} />}
                   </div>
                   {row.note !== undefined && <span className={styles.note}>{strings.quoted(row.note)}</span>}
                   <span className={styles.who}>

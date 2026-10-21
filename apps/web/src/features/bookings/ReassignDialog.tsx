@@ -18,13 +18,15 @@ export interface ReassignDialogProps {
   readonly seats: readonly BookingAssignment[];
   readonly actions: HostBookingActions;
   readonly onClose: () => void;
+  /** It went through: the detail reads its seats again. */
+  readonly onReassigned: () => void;
 }
 
 /** The dialog, mounted fresh each time it opens. */
-export function ReassignDialog({ booking, seats, actions, onClose }: ReassignDialogProps) {
+export function ReassignDialog({ booking, seats, actions, onClose, onReassigned }: ReassignDialogProps) {
   const [seatId, setSeatId] = useState(seats[0]?.rotationId ?? '');
   const [to, setTo] = useState<string>(NEXT);
-  const [rotations, setRotations] = useState<readonly RotationView[]>([]);
+  const [rotations, setRotations] = useState<readonly RotationView[] | 'loading' | 'failed'>('loading');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | undefined>(undefined);
   useEffect(() => {
@@ -33,14 +35,16 @@ export function ReassignDialog({ booking, seats, actions, onClose }: ReassignDia
       (list) => {
         if (isCurrent) setRotations(list);
       },
-      () => undefined,
+      () => {
+        if (isCurrent) setRotations('failed');
+      },
     );
     return () => {
       isCurrent = false;
     };
   }, [actions]);
   const seat = seats.find((each) => each.rotationId === seatId) ?? seats[0];
-  const rotation = rotations.find((each) => each.id === seat?.rotationId);
+  const rotation = typeof rotations === 'string' ? undefined : rotations.find((each) => each.id === seat?.rotationId);
   const people: SelectItem[] = [
     { id: NEXT, label: strings.nextInRotation, description: strings.nextInRotationHint },
     ...(rotation?.members ?? [])
@@ -51,11 +55,13 @@ export function ReassignDialog({ booking, seats, actions, onClose }: ReassignDia
     if (seat === undefined || busy) return;
     setBusy(true);
     setError(undefined);
-    actions.reassign(booking.id, { rotationId: seat.rotationId, ...(to === NEXT ? {} : { memberId: to }) }).then(
+    const named = rotation?.members.find((member) => member.memberId === to);
+    const choice = to === NEXT ? {} : { memberId: to, ...(named === undefined ? {} : { memberName: named.name }) };
+    actions.reassign(booking.id, { rotationId: seat.rotationId, ...choice }).then(
       () => {
         setBusy(false);
         actions.notify('success', strings.reassigned);
-        onClose();
+        onReassigned();
       },
       (failure: unknown) => {
         setBusy(false);
@@ -105,11 +111,13 @@ export function ReassignDialog({ booking, seats, actions, onClose }: ReassignDia
             }}
           />
         )}
+        {rotations === 'failed' && <Callout tone="warning">{strings.reassignNamesFailed}</Callout>}
         <Select
           label={strings.newHost}
           hint={seat === undefined ? undefined : strings.nowWith(seat.memberName, seat.rotationName)}
           items={people}
           value={to}
+          isDisabled={rotations === 'loading'}
           isSearchable={people.length > 8}
           onChange={(id) => {
             if (id !== null) setTo(id);

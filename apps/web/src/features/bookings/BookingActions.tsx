@@ -27,7 +27,7 @@ export interface HostBookingActions {
   /** Gives one round robin seat to someone else (spec 0029, AC-748). */
   readonly reassign: (
     bookingId: string,
-    to: { readonly rotationId?: string; readonly memberId?: string },
+    to: { readonly rotationId?: string; readonly memberId?: string; readonly memberName?: string },
   ) => Promise<ReassignedBooking>;
   /** The rotations the reader may see, for the reassign dialog's names. */
   readonly rotations: () => Promise<readonly RotationView[]>;
@@ -69,6 +69,7 @@ export function BookingActions({
   locale,
   onAsk,
   focusOnMount,
+  onReassign,
 }: {
   readonly booking: BookingListItem;
   readonly actions: HostBookingActions;
@@ -77,6 +78,8 @@ export function BookingActions({
   readonly onAsk?: (ask: BookingAsk) => void;
   /** The button to focus as the card opens again after the screen's dialog was dismissed. */
   readonly focusOnMount?: BookingAsk;
+  /** Opens Reassign for a round robin booking an admin may hand to someone else (spec 0029, AC-748). */
+  readonly onReassign?: () => void;
 }) {
   const [open, setOpen] = useState<BookingAsk | undefined>(undefined);
   // Each opening mounts a fresh dialog (an empty reason, no old refusal).
@@ -130,6 +133,11 @@ export function BookingActions({
           <Button icon="link" isPending={copying} onPress={() => void copy()}>
             {strings.copyGuestLink}
           </Button>
+          {onReassign !== undefined && (
+            <Button icon="users-round" onPress={onReassign}>
+              {strings.reassignAction}
+            </Button>
+          )}
           <Button ref={cancelRef} variant="danger" icon="circle-x" onPress={() => ask('cancel')}>
             {strings.cancelBooking}
           </Button>

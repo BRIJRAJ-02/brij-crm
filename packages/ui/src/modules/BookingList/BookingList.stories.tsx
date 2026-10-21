@@ -92,7 +92,12 @@ export const Colleagues: Story = {
         {...args}
         groups={groups().map((group) => ({
           ...group,
-          rows: group.rows.map((row) => ({ ...row, hostName: 'Sam Lee', badge: 'Needs a host' })),
+          rows: group.rows.map((row) => ({
+            ...row,
+            hostName: 'Sam Lee',
+            badge: 'Needs a host',
+            badgeTone: 'accent' as const,
+          })),
         }))}
       />
     </Stage>

@@ -88,13 +88,15 @@ async function viewsOf(
     group by a.rotation_id, a.member_id
   `);
   const counts = new Map(counted.rows.map((row) => [`${row.rotation_id}:${row.member_id}`, row.count]));
-  // Each member's upcoming confirmed bookings each rotation seats them on (AC-750's "their N upcoming bookings").
+  // Each member's upcoming confirmed bookings each rotation seats them on (AC-750's "their N upcoming bookings"):
+  // from the bookings ahead, never the ledger's whole history, through its live row per booking.
   const ahead = await tx.execute<{ rotation_id: string; member_id: string; count: number }>(sql`
     select a.rotation_id::text as rotation_id, a.member_id::text as member_id, count(*)::int as count
-    from rotation_assignments a
-    join bookings b on b.workspace_id = a.workspace_id and b.id = a.booking_id
-    where a.rotation_id = any(${uuidArray(ids)}) and a.voided_at is null and a.source = 'booking'
-      and b.status = 'confirmed' and b.starts_at > ${now.toISOString()}::timestamptz
+    from bookings b
+    join rotation_assignments a on a.workspace_id = b.workspace_id and a.booking_id = b.id
+      and a.voided_at is null and a.booking_id is not null
+    where b.status = 'confirmed' and b.starts_at > ${now.toISOString()}::timestamptz
+      and a.rotation_id = any(${uuidArray(ids)})
     group by a.rotation_id, a.member_id
   `);
   const upcoming = new Map(ahead.rows.map((row) => [`${row.rotation_id}:${row.member_id}`, row.count]));

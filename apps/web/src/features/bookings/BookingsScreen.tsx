@@ -227,7 +227,9 @@ function BookingCard({
 }) {
   const now = useNow();
   // Read again when its host changes (a reassign or a move through the rotation lands).
-  const read = useAssignments(booking.id, actions, booking.hostMemberId);
+  // Read again after a reassign here (a second rotation's seat leaves the organiser as it was).
+  const [reads, setReads] = useState(0);
+  const read = useAssignments(booking.id, actions, `${booking.hostMemberId}:${String(reads)}`);
   const assigned =
     read === undefined
       ? []
@@ -289,22 +291,15 @@ function BookingCard({
           locale={locale}
           {...(onAsk === undefined ? {} : { onAsk })}
           {...(focusOnMount === undefined ? {} : { focusOnMount })}
+          {...(canReassign && seats.length > 0
+            ? {
+                onReassign: () => {
+                  setReassigning(true);
+                },
+              }
+            : {})}
         />
       )}
-      {actions !== undefined &&
-        canReassign &&
-        seats.length > 0 &&
-        booking.status === 'confirmed' &&
-        Date.parse(booking.startsAt) > now.getTime() && (
-          <Button
-            icon="users-round"
-            onPress={() => {
-              setReassigning(true);
-            }}
-          >
-            {strings.reassignAction}
-          </Button>
-        )}
       {reassigning && actions !== undefined && (
         <ReassignDialog
           booking={booking}
@@ -312,6 +307,10 @@ function BookingCard({
           actions={actions}
           onClose={() => {
             setReassigning(false);
+          }}
+          onReassigned={() => {
+            setReassigning(false);
+            setReads((count) => count + 1);
           }}
         />
       )}
@@ -326,7 +325,8 @@ function BookingCard({
 function useAssignments(
   bookingId: string,
   actions: HostBookingActions | undefined,
-  hostMemberId: string,
+  /** Changes when the rows may have: the host, or a reassign done here. */
+  version: string,
 ): { readonly rows: readonly BookingAssignment[] } | { readonly failed: true } | undefined {
   const [read, setRead] = useState<
     | { readonly id: string; readonly rows: readonly BookingAssignment[] }
@@ -347,7 +347,7 @@ function useAssignments(
     return () => {
       isCurrent = false;
     };
-  }, [actions, bookingId, hostMemberId]);
+  }, [actions, bookingId, version]);
   return read === undefined || read.id !== bookingId ? undefined : read;
 }
 
@@ -1187,7 +1187,7 @@ function groupsOf(
       ...(booking.status === 'cancelled'
         ? { badge: strings.cancelled }
         : booking.needsHost
-          ? { badge: strings.needsHost }
+          ? { badge: strings.needsHost, badgeTone: 'accent' as const }
           : {}),
     };
     const last = groups.at(-1);

@@ -162,9 +162,9 @@ export const strings = {
     off: 'Off',
     howLine: (reasons: Readonly<Partial<Record<string, number>>>) => {
       const words: Readonly<Record<string, string>> = {
-        fair: 'fair',
+        fair: 'by fair share',
         priority: 'by priority',
-        even: 'even',
+        even: 'by even turns',
         owner: 'owner',
         last_host: 'last host',
         standin: 'stand in',
@@ -180,6 +180,9 @@ export const strings = {
       );
       return parts.join(', ');
     },
+    shareTitle: (days: number) => `Share of meetings, last ${String(days)} days`,
+    weeksTitle: 'Each week',
+    adjustmentsTitle: 'Adjustments',
     shareLabel: (rotation: string) => `Share of meetings in ${rotation}`,
     weeksLabel: (rotation: string) => `Meetings each week in ${rotation}, last 12 weeks`,
     adjustmentsLabel: (rotation: string) => `Count adjustments in ${rotation}`,

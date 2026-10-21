@@ -6,13 +6,13 @@ import { isDataError, type DataLayer, type RotationDistribution, type RotationVi
 import {
   Badge,
   Button,
-  ButtonGroup,
   Callout,
   EmptyState,
   Field,
   Modal,
   RecordChip,
   RelativeTime,
+  SectionBar,
   Select,
   SettingsStack,
   Skeleton,
@@ -42,6 +42,11 @@ const SHARE_COLUMNS: readonly TableColumn[] = [
   { id: 'adjusted', label: strings.distribution.adjusted, align: 'end' },
   { id: 'how', label: strings.distribution.how },
 ];
+
+/** A member's own view: their count and how, without the share, which comes from everyone's total. */
+const OWN_COLUMNS: readonly TableColumn[] = SHARE_COLUMNS.filter(
+  (column) => column.id !== 'fair' && column.id !== 'difference',
+);
 
 const ADJUSTMENT_COLUMNS: readonly TableColumn[] = [
   { id: 'member', label: strings.columns.member, isRowHeader: true },
@@ -155,6 +160,7 @@ export function DistributionPanel({ data, slug, rotation, onNotice }: Distributi
             variant="ghost"
             size="sm"
             isPending={undoing === row.id}
+            isDisabled={undoing !== undefined && undoing !== row.id}
             onPress={() => {
               undo(row);
             }}
@@ -167,26 +173,30 @@ export function DistributionPanel({ data, slug, rotation, onNotice }: Distributi
   return (
     <SettingsStack>
       <Callout tone="info">{strings.distribution.intro(value.windowDays)}</Callout>
-      {value.canAdjust && (
-        <ButtonGroup label={strings.distribution.adjust}>
-          <Button
-            icon="sliders-horizontal"
-            onPress={() => {
-              setAdjusting(true);
-            }}
-          >
-            {strings.distribution.adjust}
-          </Button>
-        </ButtonGroup>
-      )}
+      <SectionBar
+        title={strings.distribution.shareTitle(value.windowDays)}
+        end={
+          value.canAdjust ? (
+            <Button
+              icon="sliders-horizontal"
+              onPress={() => {
+                setAdjusting(true);
+              }}
+            >
+              {strings.distribution.adjust}
+            </Button>
+          ) : undefined
+        }
+      />
       <Table
         label={strings.distribution.shareLabel(rotation.name)}
-        columns={SHARE_COLUMNS}
+        columns={value.canAdjust ? SHARE_COLUMNS : OWN_COLUMNS}
         rows={value.rows}
         getRowId={(row) => row.memberId}
         renderCell={shareCell}
         isScrollable
       />
+      <SectionBar title={strings.distribution.weeksTitle} />
       <Table
         label={strings.distribution.weeksLabel(rotation.name)}
         columns={weekColumns}
@@ -200,14 +210,17 @@ export function DistributionPanel({ data, slug, rotation, onNotice }: Distributi
         isScrollable
       />
       {value.adjustments.length > 0 && (
-        <Table
-          label={strings.distribution.adjustmentsLabel(rotation.name)}
-          columns={ADJUSTMENT_COLUMNS}
-          rows={value.adjustments}
-          getRowId={(row) => row.id}
-          renderCell={adjustmentCell}
-          isScrollable
-        />
+        <>
+          <SectionBar title={strings.distribution.adjustmentsTitle} />
+          <Table
+            label={strings.distribution.adjustmentsLabel(rotation.name)}
+            columns={ADJUSTMENT_COLUMNS}
+            rows={value.adjustments}
+            getRowId={(row) => row.id}
+            renderCell={adjustmentCell}
+            isScrollable
+          />
+        </>
       )}
       {isAdjusting && (
         <AdjustDialog

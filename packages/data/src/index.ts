@@ -2433,14 +2433,19 @@ export function createDataLayer({
       reassign: async (
         workspace: string,
         bookingId: string,
-        to: { readonly rotationId?: string; readonly memberId?: string },
+        to: { readonly rotationId?: string; readonly memberId?: string; readonly memberName?: string },
       ): Promise<ReassignedBooking> => {
-        // A named host shows at once; "next in rotation" waits for the server to say who.
-        const { memberId } = to;
+        // A named host shows at once, by name; "next in rotation" waits for the server to say who.
+        const { memberId, memberName } = to;
         const restore =
           memberId === undefined
             ? () => undefined
-            : bookingsLists.patchBooking(workspace, bookingId, (booking) => ({ ...booking, hostMemberId: memberId }));
+            : bookingsLists.patchBooking(workspace, bookingId, (booking) => ({
+                ...booking,
+                hostMemberId: memberId,
+                hostName: memberName ?? booking.hostName,
+                needsHost: false,
+              }));
         try {
           const done = await call((options) =>
             api.bookings.reassign(
