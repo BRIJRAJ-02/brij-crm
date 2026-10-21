@@ -4,7 +4,7 @@
 // Ctrl+Enter) sends; Esc clears focus, or cancels a reply or an edit.
 import type { ActorDisplay } from '@crm/contracts/values';
 import { COMMENT_MAX } from '@crm/contracts/mentions';
-import { useId, useMemo, useRef, useState, type KeyboardEvent } from 'react';
+import { useId, useMemo, useRef, useState, type KeyboardEvent, type RefObject } from 'react';
 import { Button } from '../../atoms/Button/Button.tsx';
 import { MentionList, mentionOptionId } from '../../editor/MentionList.tsx';
 import { Callout } from '../Callout/Callout.tsx';
@@ -41,6 +41,8 @@ export interface CommentComposerProps {
   readonly autoFocus?: boolean;
   /** Read only (the record is in the trash): nothing to send. */
   readonly isDisabled?: boolean;
+  /** Its text field, for a screen that sends focus here (after a delete took the focused comment away). */
+  readonly fieldRef?: RefObject<HTMLTextAreaElement | null>;
 }
 
 /**
@@ -58,6 +60,7 @@ export function CommentComposer({
   onEditLast,
   autoFocus = false,
   isDisabled = false,
+  fieldRef,
 }: CommentComposerProps) {
   const listId = useId();
   const field = useRef<HTMLInputElement & HTMLTextAreaElement>(null);
@@ -176,7 +179,10 @@ export function CommentComposer({
     <div className={styles.root} data-mode={mode}>
       <div className={styles.field}>
         <Field
-          ref={field}
+          ref={(element) => {
+            field.current = element;
+            if (fieldRef !== undefined) fieldRef.current = element;
+          }}
           label={mode === 'reply' ? strings.reply : mode === 'edit' ? strings.editComment : strings.newComment}
           isLabelHidden
           variant="composer"

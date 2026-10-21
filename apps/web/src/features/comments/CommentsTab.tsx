@@ -11,13 +11,14 @@ import {
   CommentThread,
   Disclosure,
   EmptyState,
+  focusLater,
   Modal,
   Skeleton,
   VisuallyHidden,
   type CommentThreadItem,
 } from '@crm/ui';
 import { useRouteContext } from '@tanstack/react-router';
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { memberDisplays, toThreadItem } from './entries.ts';
 import { strings } from './strings.ts';
 
@@ -78,6 +79,12 @@ export function CommentsTab({ slug, recordId, comments, members, meId, isReadOnl
   const [lit, setLit] = useState<string | undefined>(undefined);
   const [isMissing, setIsMissing] = useState(false);
   const canWrite = !isReadOnly && meId !== undefined;
+  // A delete or a resolve takes the focused comment's menu away (the comment goes, or the thread folds): focus
+  // goes to the new thread's composer once the menu or the confirm has closed, never to the page.
+  const composerField = useRef<HTMLTextAreaElement>(null);
+  const refocus = () => {
+    focusLater(() => composerField.current);
+  };
 
   // A link to a thread (AC-1161): load until the thread is held, unfold the resolved ones when it is there, and
   // light it for two seconds. A thread that is gone or hidden says so in the tab.
@@ -118,6 +125,7 @@ export function CommentsTab({ slug, recordId, comments, members, meId, isReadOnl
     onDelete: setDeleting,
     onResolve: (resolved: boolean) => {
       void data.comments.resolve(slug, recordId, shown.id, resolved);
+      refocus();
     },
     onReact: (commentId: string, emoji: Parameters<typeof data.comments.react>[3], on: boolean) => {
       if (meId !== undefined) void data.comments.react(slug, recordId, commentId, emoji, on, meId);
@@ -152,6 +160,7 @@ export function CommentsTab({ slug, recordId, comments, members, meId, isReadOnl
     <CommentComposer
       members={displays}
       formerMember={strings.formerMember}
+      fieldRef={composerField}
       onSubmit={async (body) => reason(await data.comments.create(slug, recordId, { body, authorId: meId }))}
     />
   ) : undefined;
@@ -230,6 +239,7 @@ export function CommentsTab({ slug, recordId, comments, members, meId, isReadOnl
               onPress={() => {
                 if (deleting !== undefined) void data.comments.remove(slug, recordId, deleting);
                 setDeleting(undefined);
+                refocus();
               }}
             >
               {strings.delete}

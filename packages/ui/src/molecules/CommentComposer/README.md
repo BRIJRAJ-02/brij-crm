@@ -16,6 +16,7 @@ New (spec 0038, the inventory's CommentComposer). No library piece writes a mess
 
 - The text holds mentions as `<@member-uuid>` tokens (`@crm/contracts/mentions`); the person sees "@Name". Removing any character of "@Name" removes the whole mention. A token naming someone not in `members` shows as `formerMember`.
 - `onSubmit(body)` answers a refusal's reason, or nothing. A new comment or reply clears at once (the thread shows it as sending); a refusal puts the text back with its reason and Retry. An edit keeps its text and shows Save pending until the answer.
+- `fieldRef` hands the screen the text field, to send focus there when the focused comment went away (a delete, a thread resolved into its fold).
 - The count shows past 9,000 characters (Field's counter at nine tenths of 10,000).
 
 ## States
