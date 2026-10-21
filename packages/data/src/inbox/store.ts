@@ -183,6 +183,8 @@ interface HeldList {
   holders: number;
   /** A read under way: its generation, so a later reread wins. */
   generation: number;
+  /** A read is on its way. */
+  reading: boolean;
   stale: boolean;
   stopWatch?: () => void;
   cancelDrop?: () => void;
@@ -234,11 +236,21 @@ export function createInboxStore(deps: InboxDeps): InboxStore {
 
   const listsOf = (workspace: string) => [...lists.values()].filter((held) => held.workspace === workspace);
 
-  /** Reads a list from the top, as far as it had loaded (at least one page). */
+  /** Where a notification sorts in its list, newest first: when it was made (Inbox) or done (Done). */
+  const sortKey = (held: HeldList, item: NotificationView) =>
+    `${(held.filter.status === 'done' ? item.doneAt : undefined) ?? item.createdAt}|${item.id}`;
+
+  /**
+   * Reads a list's first page again. Rows already loaded below it are kept as
+   * they are (an event changes the newest ones), so a reread is one call however
+   * far the person scrolled; `more` loads the next page.
+   */
   const read = (held: HeldList, from: 'top' | 'more') => {
     held.generation += 1;
+    held.reading = true;
     const generation = held.generation;
-    const wanted = from === 'top' ? Math.max(held.state.items.length, 1) : 0;
+    const below = from === 'top' && held.state.status === 'ready' ? held.state.items : [];
+    const belowCursor = held.cursor;
     const items: NotificationView[] = from === 'more' ? [...held.state.items] : [];
     let cursor = from === 'more' ? held.cursor : undefined;
     if (from === 'more') {
@@ -258,12 +270,23 @@ export function createInboxStore(deps: InboxDeps): InboxStore {
           if (held.generation !== generation) return;
           items.push(...page.items);
           cursor = page.nextCursor;
-          if (from === 'top' && cursor !== undefined && items.length < wanted) return step();
+          const last = page.items.at(-1);
+          if (from === 'top' && cursor !== undefined && last !== undefined) {
+            // The held rows past the fresh page's end stay, with the cursor that follows them.
+            const after = sortKey(held, last);
+            const fresh = new Set(page.items.map((item) => item.id));
+            const kept = below.filter((item) => !fresh.has(item.id) && sortKey(held, item) < after);
+            if (kept.length > 0) {
+              items.push(...kept);
+              cursor = belowCursor;
+            }
+          }
           return undefined;
         });
     step().then(
       () => {
         if (held.generation !== generation) return;
+        held.reading = false;
         held.cursor = cursor;
         held.stale = false;
         held.state = { status: 'ready', items, hasMore: cursor !== undefined, isLoadingMore: false };
@@ -271,6 +294,7 @@ export function createInboxStore(deps: InboxDeps): InboxStore {
       },
       (failed: unknown) => {
         if (held.generation !== generation) return;
+        held.reading = false;
         const error = toDataError(failed);
         // A failed next page keeps what shows; a failed first read shows the error state.
         held.state =
@@ -280,6 +304,23 @@ export function createInboxStore(deps: InboxDeps): InboxStore {
         announce(held);
       },
     );
+  };
+
+  /**
+   * A mark is about to show: a reread already on its way to a shown list read
+   * the rows before it, so it is dropped. Answers whether one was, so the mark
+   * reads again once the server has it.
+   */
+  const settle = (workspace: string): boolean => {
+    let dropped = false;
+    for (const held of listsOf(workspace)) {
+      if (held.reading && held.state.status === 'ready' && !held.state.isLoadingMore) {
+        held.generation += 1;
+        held.reading = false;
+        dropped = true;
+      }
+    }
+    return dropped;
   };
 
   const listOf = (workspace: string, filter: InboxFilter): HeldList => {
@@ -292,6 +333,7 @@ export function createInboxStore(deps: InboxDeps): InboxStore {
       filter,
       holders: 0,
       generation: 0,
+      reading: false,
       stale: true,
       listeners,
       state: { status: 'loading', items: [], hasMore: false, isLoadingMore: false },
@@ -475,6 +517,7 @@ export function createInboxStore(deps: InboxDeps): InboxStore {
         if (wasUnread !== isUnread) delta += isUnread ? 1 : -1;
       }
       const putBack = snapshot(workspace);
+      const dropped = settle(workspace);
       show(workspace, (item) => (wanted.has(item.id) ? applied(item, mark, at) : item));
       deps.unread.adjust(workspace, delta);
       const mutationId = deps.mintId();
@@ -483,7 +526,7 @@ export function createInboxStore(deps: InboxDeps): InboxStore {
         const answer = await deps.api.mark({ workspace, ids: [...wanted], ...mark, mutationId });
         deps.mutations.answered(mutationId, answer.changed > 0 ? 1 : 0);
         // A list it now belongs in (Done after Mark done, the inbox after Move to inbox) reads it in.
-        if (mark.done !== undefined || mark.read === false) reread(workspace);
+        if (dropped || mark.done !== undefined || mark.read === false) reread(workspace);
         deps.unread.refresh(workspace);
         return undefined;
       } catch (failed) {
@@ -509,6 +552,8 @@ export function createInboxStore(deps: InboxDeps): InboxStore {
         }
       }
       const putBack = snapshot(workspace);
+      // It reads again once answered in any case, so a reread on its way now is dropped.
+      settle(workspace);
       show(workspace, (item) => (touched.has(item.id) ? applied(item, { read: true }, at) : item));
       const delta = status === 'inbox' ? -touched.size : 0;
       deps.unread.adjust(workspace, delta);

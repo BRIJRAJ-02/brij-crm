@@ -297,6 +297,57 @@ describe('the inbox and its count', () => {
     expect(counts - before).toBe(1);
   });
 
+  it('rereads only the first page on an event, keeping the rows loaded below it', async () => {
+    const time = clock();
+    // Newest first: a later minute sorts first.
+    const at = (minute: number, notificationId: string): NotificationView => ({
+      ...item(notificationId),
+      createdAt: `2026-10-21T10:${String(minute).padStart(2, '0')}:00.000Z`,
+    });
+    let rows = [at(50, id()), at(40, id()), at(30, id()), at(20, id())];
+    const calls: (string | undefined)[] = [];
+    const api: InboxApi = {
+      list: (input) => {
+        calls.push(input.cursor);
+        const start = input.cursor === undefined ? 0 : Number(input.cursor);
+        const page = rows.slice(start, start + 2);
+        return Promise.resolve({
+          items: page,
+          ...(start + 2 < rows.length ? { nextCursor: String(start + 2) } : {}),
+        });
+      },
+      mark: () => Promise.resolve({ changed: 1 }),
+      markAllRead: () => Promise.resolve({ changed: 0 }),
+      settings: () => Promise.reject(dataError('NOT_FOUND', 'Gone.')),
+      setSettings: () => Promise.reject(dataError('NOT_FOUND', 'Gone.')),
+    };
+    const store = createInboxStore({
+      api,
+      mintId: id,
+      mutations: createMutationLog(),
+      notify: () => undefined,
+      watch: () => () => undefined,
+      unread: { adjust: () => undefined, refresh: () => undefined },
+      later: time.later,
+    });
+    const list = store.list(WS, { status: 'inbox' });
+    list.retain();
+    await flush();
+    list.loadMore();
+    await flush();
+    expect(list.getSnapshot().items).toHaveLength(4);
+    // A new one arrives at the top.
+    const fresh = at(59, id());
+    rows = [fresh, ...rows];
+    calls.length = 0;
+    store.changed(WS, { kind: 'notifications', seq: 1, at: '2026-10-21T11:00:00.000Z', memberIds: [ME] });
+    await time.advance(250);
+    expect(calls).toEqual([undefined]);
+    const shown = list.getSnapshot();
+    expect(shown.items.map((x) => x.createdAt.slice(14, 16))).toEqual(['59', '50', '40', '30', '20']);
+    expect(shown.hasMore).toBe(false);
+  });
+
   it('shows 100 for more than 99, and nothing before the first answer', async () => {
     const time = clock();
     let answer = { count: 100, atLeast: true };

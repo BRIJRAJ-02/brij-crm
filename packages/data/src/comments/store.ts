@@ -505,6 +505,10 @@ export function createCommentsStore(deps: CommentsDeps): CommentsStore {
       },
     };
     held.set(key, entry);
+    // One nobody holds yet (a route preloaded on hover, a write) goes after a while too, unless a screen holds it.
+    entry.cancelDrop = later(() => {
+      if (entry.holders === 0 && held.get(key) === entry) held.delete(key);
+    }, UNUSED_MS);
     return entry;
   };
 
@@ -708,7 +712,10 @@ export function createCommentsStore(deps: CommentsDeps): CommentsStore {
       } catch (failed) {
         deps.mutations.forget(mutationId);
         if (comment.threadId === undefined) place(entry, id, undefined);
-        else if (threadBefore !== undefined) place(entry, threadBefore.id, threadBefore);
+        else if (threadBefore !== undefined) {
+          place(entry, threadBefore.id, threadBefore);
+          gather(workspace, [recordId], [threadBefore.id]);
+        }
         return toDataError(failed);
       }
     },
@@ -725,7 +732,10 @@ export function createCommentsStore(deps: CommentsDeps): CommentsStore {
       const { answer, error } = await send(
         (mutationId) => deps.api.update({ workspace, commentId, body, mutationId }),
         () => {
-          if (changed !== undefined) place(entry, changed.before.id, changed.before);
+          if (changed === undefined) return;
+          place(entry, changed.before.id, changed.before);
+          // The thread as it stood before may miss what arrived live meanwhile: read it again.
+          gather(workspace, [recordId], [changed.before.id]);
         },
         COMMENT_WORDS.editFailed,
       );
@@ -750,7 +760,9 @@ export function createCommentsStore(deps: CommentsDeps): CommentsStore {
       const { error } = await send(
         (mutationId) => deps.api.delete({ workspace, commentId, mutationId }),
         () => {
-          if (changed !== undefined) place(entry, changed.before.id, changed.before);
+          if (changed === undefined) return;
+          place(entry, changed.before.id, changed.before);
+          gather(workspace, [recordId], [changed.before.id]);
         },
         COMMENT_WORDS.deleteFailed,
       );
@@ -777,7 +789,9 @@ export function createCommentsStore(deps: CommentsDeps): CommentsStore {
       const { answer, error } = await send(
         (mutationId) => deps.api.resolve({ workspace, threadId, resolved, mutationId }),
         () => {
-          if (before !== undefined) place(entry, threadId, before);
+          if (before === undefined) return;
+          place(entry, threadId, before);
+          gather(workspace, [recordId], [threadId]);
         },
         COMMENT_WORDS.resolveFailed,
       );
@@ -796,7 +810,9 @@ export function createCommentsStore(deps: CommentsDeps): CommentsStore {
       const { answer, error } = await send(
         (mutationId) => deps.api.react({ workspace, commentId, emoji, on, mutationId }),
         () => {
-          if (changed !== undefined) place(entry, changed.before.id, changed.before);
+          if (changed === undefined) return;
+          place(entry, changed.before.id, changed.before);
+          gather(workspace, [recordId], [changed.before.id]);
         },
         COMMENT_WORDS.reactFailed,
       );
