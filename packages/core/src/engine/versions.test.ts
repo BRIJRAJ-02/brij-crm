@@ -377,6 +377,8 @@ describe('a save that replaced a value its author never saw (spec 0006, AC-46)',
         notes: [],
         meetings: [],
         schedules: [],
+        comments: [],
+        notifications: [],
         references: [],
         definitions: [],
         values: Array.from({ length: records }, () => newId()).flatMap((ownerId) =>

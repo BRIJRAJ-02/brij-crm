@@ -14,6 +14,8 @@ export { validationRuleKind, validationRules } from './validation.ts';
 export { memberViewState, viewKind, views, viewVisibility } from './views.ts';
 export { notes } from './notes.ts';
 export { taskRecords, tasks } from './tasks.ts';
+export { commentReactions, comments, commentVersions } from './comments.ts';
+export { notificationKind, notifications, notificationSettings } from './notifications.ts';
 export {
   attendeeMatch,
   attendeeResponse,

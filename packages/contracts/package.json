@@ -16,6 +16,7 @@
     "./activity-keys": "./src/activity-keys.ts",
     "./task-limits": "./src/task-limits.ts",
     "./note-limits": "./src/note-limits.ts",
+    "./mentions": "./src/mentions.ts",
     "./monitoring": "./src/monitoring/index.ts",
     "./events": "./src/monitoring/events.ts",
     "./views": "./src/view-model.ts",

@@ -1214,6 +1214,8 @@ describe('deletion', () => {
       notes: [],
       meetings: [],
       schedules: [],
+      comments: [],
+      notifications: [],
       values: ids.slice(half).map((ownerId) => ({
         ownerId,
         ownerKind: 'record' as const,

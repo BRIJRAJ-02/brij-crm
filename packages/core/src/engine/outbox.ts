@@ -52,7 +52,18 @@ export const LIFECYCLE_CAP = MAX_LIFECYCLE_IDS;
 /** One outbox row before it gets its number. */
 export interface OutboxEvent {
   readonly kind:
-    'records' | 'entries' | 'definitions' | 'members' | 'jobs' | 'views' | 'tasks' | 'notes' | 'meetings' | 'schedules';
+    | 'records'
+    | 'entries'
+    | 'definitions'
+    | 'members'
+    | 'jobs'
+    | 'views'
+    | 'tasks'
+    | 'notes'
+    | 'meetings'
+    | 'schedules'
+    | 'comments'
+    | 'notifications';
   /** The object: a `records` row's, an `entries` row's list's parent, a `definitions` row's when it names one. */
   readonly objectId?: string;
   /** The list: an `entries` row's, a `definitions` row's when it names one. */
@@ -353,6 +364,33 @@ function kindRows(change: CappedChange): OutboxEvent[] {
   }
   if (change.schedules.length > 0) {
     rows.push({ kind: 'schedules', ...NO_IDS, itemIds: [...new Set(change.schedules)].sort(byId), coarse: false });
+  // Comments (spec 0038): one row per object, its records and threads; coarse with no ids past `CHANGE_CAP` threads.
+  const byObject = new Map<string, { recordIds: Set<string>; threadIds: Set<string> }>();
+  for (const comment of change.comments) {
+    const held = byObject.get(comment.objectId) ?? { recordIds: new Set<string>(), threadIds: new Set<string>() };
+    held.recordIds.add(comment.recordId);
+    held.threadIds.add(comment.threadId);
+    byObject.set(comment.objectId, held);
+  }
+  for (const [objectId, held] of [...byObject].sort(([a], [b]) => byId(a, b))) {
+    const coarse = held.threadIds.size > CHANGE_CAP || held.recordIds.size > CHANGE_CAP;
+    rows.push({
+      kind: 'comments',
+      ...NO_IDS,
+      objectId,
+      recordIds: coarse ? [] : [...held.recordIds].sort(byId),
+      itemIds: coarse ? [] : [...held.threadIds].sort(byId),
+      coarse,
+    });
+  }
+  // A member's notifications or their settings (spec 0038): one row naming the members, nothing else.
+  if (change.notifications.length > 0) {
+    rows.push({
+      kind: 'notifications',
+      ...NO_IDS,
+      itemIds: [...new Set(change.notifications)].sort(byId),
+      coarse: false,
+    });
   }
   return rows;
 }
