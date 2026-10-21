@@ -7,8 +7,9 @@
 // column per question (the newest published wording first, then questions
 // only older versions asked), then the CRM link and where it came from.
 // Every text cell is guarded against spreadsheet formulas (`csvCell`). Only
-// the member who started an export reads it, for 7 days; the daily cleanup
-// deletes it after.
+// the member who started an export reads it, for 7 days, and only while their
+// access is the one it was written under (`exportAccessKey`); the daily
+// cleanup deletes it after.
 import { and, desc, eq, inArray, lt, lte, or, sql, type SQL } from 'drizzle-orm';
 import * as z from 'zod';
 import {
@@ -24,7 +25,7 @@ import { checkId } from '../engine/ids.ts';
 import { isRefusal, refuse } from '../engine/refusals.ts';
 import type { EngineScope } from '../engine/scope.ts';
 import { runWrite, type AfterWrite, type WriteContext } from '../engine/write.ts';
-import { fieldLevel } from '../access/policy.ts';
+import { can, fieldLevel, type Access } from '../access/policy.ts';
 import { inWorkspace } from '../access/run.ts';
 import { defineKind, MAX_ATTEMPTS, type KindDefinition, type StepOutcome } from '../jobs/registry.ts';
 import type { JobRegistry } from '../jobs/registry.ts';
@@ -51,6 +52,23 @@ export const EXPORTS_KEPT_MAX = 5;
 
 /** What one more export past the cap answers. */
 export const TOO_MANY_EXPORTS = `Keep at most ${String(EXPORTS_KEPT_MAX)} exports at a time; each goes ${String(EXPORT_KEPT_DAYS)} days after it was made.`;
+
+/** The most text one export writes (in Postgres until R2 arrives): past it the job stops and says why. */
+export const EXPORT_BYTES_MAX = 100 * 1024 * 1024;
+
+/** What an export that grew past a limit while it was written answers. */
+export const EXPORT_GREW = `This export grew past ${EXPORT_ROWS_MAX.toLocaleString('en')} submissions or 100 MB while it was written; narrow the filter and export again.`;
+
+/**
+ * What an export is written and read under (security review, 21 October 2026): the starter's data policy
+ * (object, field and record levels), whether they manage forms (a submission with no record is in the file only
+ * then), and their teams (a team rule's reach). Kept on the export; a read or a batch under anything else finds
+ * nothing, so a starter who lost access loses the file too.
+ */
+export function exportAccessKey(access: Access): string {
+  const teams = access.principal.kind === 'member' ? [...access.principal.teamIds].sort().join(',') : '';
+  return `${access.data.key}|${can(access, 'forms.manage') ? 'manage' : 'read'}|${teams}`;
+}
 
 /** How many submissions one batch reads, and the most text one chunk holds before a new one starts. */
 const PAGE = 200;
@@ -153,8 +171,9 @@ async function ownExport(tx: WorkspaceTx, scope: EngineScope, exportId: string) 
       ),
     );
   // Hidden means absent: under a different access than it was written with (an object, a field or a record
-  // rule changed), or with its form out of sight, the file is gone for its starter too.
-  if (row === undefined || row.formId === null || row.policyKey !== scope.access.data.key) {
+  // rule changed, forms.manage lost, another team), or with its form out of sight, the file is gone for its
+  // starter too.
+  if (row === undefined || row.formId === null || row.policyKey !== exportAccessKey(scope.access)) {
     throw refuse('NOT_FOUND', UNKNOWN_EXPORT);
   }
   try {
@@ -184,17 +203,22 @@ export async function startSubmissionsExport(
     scope,
     async (context) => {
       const { tx } = context;
-      const [held] = await tx.select(EXPORT_COLUMNS).from(exports).where(eq(exports.id, exportId));
-      if (held !== undefined) {
-        if (held.createdByMemberId !== me) throw refuse('NOT_FOUND', UNKNOWN_EXPORT);
-        return viewOf(held);
-      }
+      const [held] = await tx.select({ id: exports.id }).from(exports).where(eq(exports.id, exportId));
+      // The same id again: the same export, through every check a read makes (its starter, kept, the same access).
+      if (held !== undefined) return viewOf(await ownExport(tx, scope, exportId));
       const form = await readableForm(tx, scope, input.formId);
-      const [kept] = await tx
-        .select({ n: sql<number>`count(*)::int` })
-        .from(exports)
-        .where(and(eq(exports.createdByMemberId, me), sql`${exports.expiresAt} > now()`));
-      if ((kept?.n ?? 0) >= EXPORTS_KEPT_MAX) throw refuse('LIMIT_REACHED', TOO_MANY_EXPORTS);
+      // One start at a time per member, so two at once can't both pass the cap.
+      await tx.execute(sql`select pg_advisory_xact_lock(hashtextextended(${`exports:${me}`}, 0))`);
+      // Exports still kept, leaving out any whose job failed or was cancelled: those never give a file.
+      const kept = await tx.execute<{ n: number }>(sql`
+        select count(*)::int as n from exports e
+        where e.created_by_member_id = ${me} and e.expires_at > now()
+          and not exists (
+            select 1 from jobs j
+            where j.workspace_id = e.workspace_id and j.id = e.job_id and j.status in ('failed', 'cancelled')
+          )
+      `);
+      if ((kept.rows[0]?.n ?? 0) >= EXPORTS_KEPT_MAX) throw refuse('LIMIT_REACHED', TOO_MANY_EXPORTS);
       const counted = await tx.execute<{ n: number }>(sql`
         select count(*)::int as n from (
           select 1 from ${formSubmissions}
@@ -218,7 +242,7 @@ export async function startSubmissionsExport(
           fileName: fileNameFor(form.name, day.rows[0]?.day ?? 'today'),
           jobId,
           createdByMemberId: me,
-          policyKey: scope.access.data.key,
+          policyKey: exportAccessKey(scope.access),
           expiresAt: sql`now() + make_interval(days => ${EXPORT_KEPT_DAYS})`,
         })
         .returning(EXPORT_COLUMNS);
@@ -365,7 +389,7 @@ async function exportStep(context: WriteContext, exportId: string, checkpoint: u
   if (principal.kind !== 'member' || principal.memberId !== held.createdByMemberId) {
     return { finished: true, failed: { code: 'NOT_FOUND', message: 'The export was deleted before it finished.' } };
   }
-  if (held.policyKey !== scope.access.data.key) {
+  if (held.policyKey !== exportAccessKey(scope.access)) {
     return {
       finished: true,
       failed: { code: 'FORBIDDEN', message: 'Your access changed while this export was being written. Export again.' },
@@ -452,6 +476,11 @@ async function exportStep(context: WriteContext, exportId: string, checkpoint: u
   let tail = at.tail;
   let bytes = at.bytes;
   const text = lines.join('');
+  // The start counted at most EXPORT_ROWS_MAX; a file that grew past it, or past EXPORT_BYTES_MAX, stops here and
+  // says so, rather than ending as a cut file (it never downloads: its row count stays unset).
+  if (at.rows + shown.length > EXPORT_ROWS_MAX || at.bytes + Buffer.byteLength(text) > EXPORT_BYTES_MAX) {
+    return { finished: true, failed: { code: 'JOB_TOO_LARGE', message: EXPORT_GREW } };
+  }
   if (text !== '') {
     const size = Buffer.byteLength(text);
     if (part > 1 && tail + size <= CHUNK_BYTES) {

@@ -27,7 +27,10 @@ export const exports = pgTable(
     rowCount: integer('row_count'),
     byteCount: integer('byte_count'),
     createdByMemberId: uuid('created_by_member_id').notNull(),
-    /** The starter's data policy key when it started: a download under a different policy finds nothing. */
+    /**
+     * The starter's access when it started (core's `exportAccessKey`: their data policy, whether they manage
+     * forms, their teams): a download or a batch under any other finds nothing.
+     */
     policyKey: text('policy_key').notNull(),
     expiresAt: timestamptz('expires_at').notNull(),
     createdAt: timestamptz('created_at').notNull().defaultNow(),

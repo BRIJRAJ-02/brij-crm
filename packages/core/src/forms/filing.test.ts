@@ -21,12 +21,12 @@ import { SYSTEM_ACTOR } from '../engine/scope.ts';
 import { deleteRecords } from '../engine/trash.ts';
 import { createWorkspace } from '../engine/workspaces.ts';
 import { runWrite } from '../engine/write.ts';
-import { getJob } from '../jobs/service.ts';
+import { cancelJob, getJob } from '../jobs/service.ts';
 import { jobKinds } from '../jobs/kinds/index.ts';
 import { rescope, startJobForTest, testScope } from '../testing.ts';
 import { jobTestKit } from '../../test/jobs-kit.ts';
 import { exportFile, exportPart, getExport, startSubmissionsExport } from './export.ts';
-import { addToCrm, NOT_MAPPED, previewSync, startSync } from './filing.ts';
+import { addToCrm, NOT_MAPPED, ON_ANOTHER_OBJECT, previewSync, startSync } from './filing.ts';
 import { createForm, getForm, listForms, publishForm, saveFormDraft, setFormTarget } from './forms.ts';
 import { HIDDEN_TARGET, processSubmission } from './process.ts';
 import { submitForm } from './public.ts';
@@ -256,6 +256,26 @@ describe('Sync old records', () => {
     expect(await refusalOf(previewSync(blind, { formId: live.id, scope: 'all' }))).toMatchObject([
       { code: 'NOT_FOUND' },
     ]);
+    // A manager whose rules hide the job title compares only what they may write, so its value is never read:
+    // nothing to update for them.
+    const titleHidden = rescope(w.scope, {
+      role: 'admin',
+      rules: {
+        levels: [
+          {
+            subject: { type: 'role', role: 'admin' },
+            target: { type: 'attribute', objectId: w.people, attributeId: title },
+            level: 'hidden',
+          },
+        ],
+        records: [],
+      },
+    });
+    expect(await previewSync(titleHidden, { formId: live.id, scope: 'all' })).toMatchObject({
+      total: 1,
+      updates: 0,
+      unchanged: 1,
+    });
 
     const jobId = newId();
     const started = await startSync(w.scope, registry, { formId: live.id, scope: 'all', jobId });
@@ -369,15 +389,34 @@ describe('the CSV export', () => {
       },
     });
     expect(await refusalOf(exportFile(narrower, { exportId }))).toMatchObject([{ code: 'NOT_FOUND' }]);
-    // At most five kept at once.
-    for (let index = 0; index < 4; index += 1) {
-      await startSubmissionsExport(w.scope, registry, { id: newId(), formId: live.id, select: { kind: 'filter' } });
-    }
+    // A starter who no longer manages forms reads none of it (its submissions with no record were theirs only
+    // then), and the same id again finds nothing either.
+    const demoted = rescope(w.scope, { role: 'member' });
+    expect(await refusalOf(exportFile(demoted, { exportId }))).toMatchObject([{ code: 'NOT_FOUND' }]);
+    expect(await refusalOf(getExport(demoted, { exportId }))).toMatchObject([{ code: 'NOT_FOUND' }]);
     expect(
       await refusalOf(
+        startSubmissionsExport(demoted, registry, { id: exportId, formId: live.id, select: { kind: 'filter' } }),
+      ),
+    ).toMatchObject([{ code: 'NOT_FOUND' }]);
+    // At most five kept at once, even started together; one whose job was cancelled no longer counts.
+    const more = await Promise.allSettled(
+      [1, 2, 3, 4, 5].map(() =>
         startSubmissionsExport(w.scope, registry, { id: newId(), formId: live.id, select: { kind: 'filter' } }),
       ),
-    ).toMatchObject([{ code: 'LIMIT_REACHED' }]);
+    );
+    const startedMore = more.flatMap((each) => (each.status === 'fulfilled' ? [each.value] : []));
+    expect(startedMore).toHaveLength(4);
+    expect(
+      more.flatMap((each) =>
+        each.status === 'rejected' && isRefusal(each.reason) ? each.reason.refusals.map((r) => r.code) : [],
+      ),
+    ).toEqual(['LIMIT_REACHED']);
+    await cancelJob(w.scope, registry, startedMore[0]?.jobId ?? '');
+    expect(
+      (await startSubmissionsExport(w.scope, registry, { id: newId(), formId: live.id, select: { kind: 'filter' } }))
+        .formId,
+    ).toBe(live.id);
   });
 });
 
@@ -650,5 +689,122 @@ describe('a submission whose record was deleted forever (spec 0022’s purge)', 
     const again = (await getSubmission(w.scope, { submissionId: submission.id })).crm;
     expect(again).toMatchObject({ state: 'linked', record: { name: 'Ada Lovelace' } });
     expect(again.state === 'linked' ? again.record.recordId : first).not.toBe(first);
+  });
+});
+
+describe('submissions whose record the member can’t see (security review, 21 October 2026)', () => {
+  it('are left out of Add to CRM, the sync preview and the sync, even while that record is in the trash', async () => {
+    const w = await workspace();
+    const live = await liveForm(w, true);
+    // An admin (forms.manage) whose rules show them only the people they own.
+    const adminId = newId();
+    await w.query(
+      sql`insert into members (workspace_id, id, name, email, role, created_by_type, updated_by_type)
+          values (${w.workspaceId}, ${adminId}, 'Hedy', ${`${adminId}@example.com`}, 'admin', 'system', 'system')`,
+    );
+    const rules: AccessRules = {
+      levels: [],
+      records: [
+        {
+          subject: { type: 'role', role: 'admin' },
+          objectId: w.people,
+          kind: 'own',
+          attributeId: w.attribute('people.owner'),
+        },
+      ],
+    };
+    rulesByWorkspace.set(w.workspaceId, rules);
+    const admin = rescope(w.scope, { actor: { type: 'member', id: adminId }, role: 'admin', rules });
+    await submit(live.publicKey, body({ name: 'Grace Hopper', email: 'grace@example.com', title: 'Admiral' }));
+    const [graces] = await submissionIds(w, live.id);
+    if (graces === undefined) throw new Error('A submission expected.');
+    await processNow(w, graces.id);
+    const filed = (await getSubmission(w.scope, { submissionId: graces.id })).crm;
+    if (filed.state !== 'linked') throw new Error('A linked submission expected.');
+    const person = filed.record.recordId;
+    // Her person, not the admin's, goes to the trash: the submission is out of the CRM, still on a record the
+    // admin can't see, so it is not theirs to file, count or name.
+    await deleteRecords(w.scope, { objectId: w.people, recordIds: [person], batchId: newId() });
+    expect(await refusalOf(getSubmission(admin, { submissionId: graces.id }))).toMatchObject([{ code: 'NOT_FOUND' }]);
+    expect(await addToCrm(admin, registry, { formId: live.id, submissionIds: [graces.id] })).toEqual({
+      queued: 0,
+      skipped: 1,
+    });
+    expect(await previewSync(admin, { formId: live.id, scope: 'unfiled' })).toMatchObject({ total: 0, checked: 0 });
+    expect(await previewSync(admin, { formId: live.id, scope: 'all' })).toMatchObject({ total: 0, checked: 0 });
+    const started = await startSync(admin, registry, { formId: live.id, scope: 'unfiled', jobId: newId() });
+    expect(started.total).toBe(0);
+    expect(await runJob(w, started.jobId, storedRules)).toBe('succeeded');
+    expect(
+      await w.query(sql`select main_record_id::text as main from form_submissions where id = ${graces.id}`),
+    ).toEqual([{ main: person }]);
+    // The owner, who sees every person, still can.
+    expect(await previewSync(w.scope, { formId: live.id, scope: 'unfiled' })).toMatchObject({ total: 1 });
+  });
+});
+
+describe('a submission in the CRM on another object than the form files onto now', () => {
+  it('is left as it is by Sync old records, and counted unchanged by its preview', async () => {
+    const w = await workspace();
+    const live = await liveForm(w, true);
+    await submit(live.publicKey, body({ name: 'Ada Lovelace', email: 'ada@example.com', title: 'Engineer' }));
+    const [submission] = await submissionIds(w, live.id);
+    if (submission === undefined) throw new Error('A submission expected.');
+    await processNow(w, submission.id);
+    // As if an earlier version had filed it onto Companies.
+    const companies = (await w.query<{ id: string }>(sql`select id::text from objects where api_slug = 'companies'`))[0]
+      ?.id;
+    if (companies === undefined) throw new Error('Companies expected.');
+    const company = (
+      await createRecord(w.scope, { objectId: companies, values: { [w.attribute('companies.name')]: 'Analytical' } })
+    ).recordId;
+    await w.query(sql`update form_submissions set main_record_id = ${company} where id = ${submission.id}`);
+
+    expect(await previewSync(w.scope, { formId: live.id, scope: 'all' })).toMatchObject({
+      total: 1,
+      creates: 0,
+      updates: 0,
+      unchanged: 1,
+      failures: 0,
+    });
+    const started = await startSync(w.scope, registry, { formId: live.id, scope: 'all', jobId: newId() });
+    expect(await runJob(w, started.jobId)).toBe('succeeded');
+    expect(await getJob(w.scope, registry, started.jobId)).toMatchObject({ result: { filing: { skipped: 1 } } });
+    const items = await w.query<{ message: string | null }>(
+      sql`select message from job_items where job_id = ${started.jobId}`,
+    );
+    expect(items).toEqual([{ message: ON_ANOTHER_OBJECT }]);
+    expect(
+      await w.query(sql`select main_record_id::text as main from form_submissions where id = ${submission.id}`),
+    ).toEqual([{ main: company }]);
+  });
+});
+
+describe('a form whose draft and live version file onto different objects (security review, 21 October 2026)', () => {
+  it('is for members who can see both objects', async () => {
+    const w = await workspace();
+    const live = await liveForm(w, false);
+    const companies = (await w.query<{ id: string }>(sql`select id::text from objects where api_slug = 'companies'`))[0]
+      ?.id;
+    if (companies === undefined) throw new Error('Companies expected.');
+    const moved = await setFormTarget(w.scope, {
+      formId: live.id,
+      mainObjectId: companies,
+      expectedRevision: live.revision,
+    });
+    expect(moved.live?.targets.main?.objectId).toBe(w.people);
+    // A member who sees Companies but not People: the live version names People's object and attributes.
+    const noPeople = rescope(w.other, {
+      rules: {
+        levels: [
+          { subject: { type: 'role', role: 'member' }, target: { type: 'object', objectId: w.people }, level: 'none' },
+        ],
+        records: [],
+      },
+    });
+    expect(await refusalOf(getForm(noPeople, { formId: live.id }))).toMatchObject([{ code: 'NOT_FOUND' }]);
+    expect((await listForms(noPeople, { archived: false })).items.map((form) => form.id)).not.toContain(live.id);
+    // Seeing both, they read it as before.
+    expect((await getForm(w.other, { formId: live.id })).id).toBe(live.id);
   });
 });
