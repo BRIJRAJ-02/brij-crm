@@ -84,6 +84,17 @@ describe('checkSocialProfile', () => {
   });
 });
 
+describe('long input', () => {
+  it('refuses text past 2,048 characters before any pattern runs, quickly', () => {
+    const slashes = `${'/'.repeat(500_000)}x`;
+    const started = performance.now();
+    expect(checkSocialProfile('linkedin', slashes, 'person')).toEqual(invalid);
+    expect(checkSocialProfile('x', `x.com/${'/'.repeat(2_000)}ada`, 'person')).toHaveProperty('ok');
+    expect(checkWebLink(slashes)).toEqual({ ok: false, reason: 'too_long' });
+    expect(performance.now() - started).toBeLessThan(500);
+  });
+});
+
 describe('describeLink', () => {
   it('shows a profile as the handle with its network, and any other link as domain and path', () => {
     expect(describeLink('https://x.com/adalovelace')).toEqual({ label: '@adalovelace', network: 'x' });

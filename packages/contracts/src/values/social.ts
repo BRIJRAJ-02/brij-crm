@@ -200,6 +200,16 @@ function segmentsOf(url: URL): readonly string[] {
   return url.pathname.split('/').filter((segment) => segment !== '');
 }
 
+/** The text without trailing slashes, in linear time (a `/\/+$/` replace is quadratic on a long run of slashes). */
+function trimSlashes(text: string): string {
+  let end = text.length;
+  while (end > 0 && text[end - 1] === '/') end -= 1;
+  return text.slice(0, end);
+}
+
+/** The longest link kept (as `UrlValue`): longer input is refused before any pattern runs on it. */
+const MAX_LINK = 2_048;
+
 function decoded(text: string): string {
   try {
     return decodeURIComponent(text);
@@ -225,7 +235,7 @@ export interface LinkLabel {
 export function describeLink(url: string): LinkLabel {
   const parsed = parse(url);
   if (parsed === undefined) return { label: url };
-  const shown = `${bareHost(parsed.hostname)}${decoded(parsed.pathname).replace(/\/+$/, '')}`;
+  const shown = `${bareHost(parsed.hostname)}${trimSlashes(decoded(parsed.pathname))}`;
   const network = networkOfHost(parsed.hostname);
   if (network === undefined) return { label: shown };
   const profile = NETWORKS[network].profileOf(segmentsOf(parsed));
@@ -250,10 +260,11 @@ function isLinkLike(text: string): boolean {
  */
 export function checkWebLink(draft: string): WebLinkChecked {
   const text = draft.trim();
+  if (text.length > MAX_LINK) return { ok: false, reason: 'too_long' };
   const withProtocol = /^[a-z][a-z\d+.-]*:/i.test(text) ? text : `https://${text}`;
   const parsed = UrlValue.safeParse(withProtocol);
   if (parsed.success) return { ok: true, value: parsed.data };
-  return { ok: false, reason: text.length > 2_048 ? 'too_long' : 'invalid' };
+  return { ok: false, reason: 'invalid' };
 }
 
 /** A link on the network's host, as its one canonical profile link (`https://x.com/ada`), or as checked when it isn't a profile. */
@@ -287,13 +298,14 @@ export function checkSocialProfile(network: SocialNetwork, draft: string, kind: 
   const text = draft.trim();
   const def = NETWORKS[network];
   const invalid = { ok: false, reason: 'invalid' } as const;
+  if (text.length > MAX_LINK) return invalid;
   if (network === 'linkedin') {
     const named = kindAndHandle(['in', 'company', 'school', 'showcase'])(text.split('/'));
     if (named !== undefined && def.handle.test(named.handle))
       return { ok: true, value: `https://linkedin.com/${named.path}` };
   }
   // The network's bare host ("facebook.com") is no one's profile.
-  if (def.hosts.includes(bareHost(text.replace(/^[a-z][a-z\d+.-]*:\/\//i, '').replace(/\/+$/, '')))) return invalid;
+  if (def.hosts.includes(bareHost(trimSlashes(text.replace(/^[a-z][a-z\d+.-]*:\/\//i, ''))))) return invalid;
   if (isLinkLike(text)) {
     const link = checkWebLink(text);
     if (!link.ok) return invalid;
