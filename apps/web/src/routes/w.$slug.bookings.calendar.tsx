@@ -18,6 +18,7 @@ import { openHoursOf, workingStartOf } from '../features/bookings/span.ts';
 import { addDays, weekRange } from '../features/bookings/week.ts';
 import { memberZone } from '../features/booking/zone.ts';
 import { firstDayFor, useFirstDay } from '../features/workspace/first-day.ts';
+import { peopleSearchOf } from '../features/bookings/people.ts';
 
 // Bookings › Calendar (spec 0025, AC-646): the week (`w`, its Monday; `d`, the day picked) with the reader's own
 // calendar events beside the bookings, filtered by `link` (one booking page) and `cal` (the calendars the panel shows). The
@@ -134,6 +135,8 @@ function Calendar({ objects, pages, connections, availability }: CalendarLoaded)
       onBookAsHost={async (meeting) => {
         await data.bookings.bookAsHost(slug, { ...meeting, guests: [...meeting.guests] });
       }}
+      peopleSearch={peopleSearchOf(data, slug, objects)}
+      pageDestination={(pageId) => data.calendar.pageDestination(slug, pageId)}
       newBookingKey={data.bookings.newKey}
       toasts={toasts}
       actions={actions}

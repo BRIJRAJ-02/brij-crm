@@ -1,10 +1,18 @@
 /* ListEditor: the values as chips with remove buttons, stacked over the add
-   field. */
+   field; on a form, under the field's name. */
 @layer components {
   .root {
     display: flex;
     flex-direction: column;
     gap: var(--space-8);
+    min-inline-size: 0;
+  }
+
+  /* A form's name over the chips, as close as a Field's label sits over its box. */
+  .labelled {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-4);
     min-inline-size: 0;
   }
 

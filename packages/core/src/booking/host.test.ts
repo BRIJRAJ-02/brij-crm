@@ -225,3 +225,101 @@ describe('book someone in (AC-709, AC-710)', () => {
     expect(week.bookings[0]).not.toHaveProperty('companyRecordId');
   });
 });
+
+describe('several guests and the calendar the member picks (spec 0027’s follow ups)', () => {
+  /** One account for `memberId` in `status`, with each calendar named and its access role. */
+  async function account(
+    workspaceId: string,
+    memberId: string,
+    status: 'connected' | 'revoked',
+    calendars: readonly { readonly id: string; readonly role: 'owner' | 'writer' | 'reader' }[],
+  ) {
+    const connection = newId();
+    await db.withWorkspace(workspaceId, async (tx) => {
+      await tx.execute(sql`
+        insert into calendar_connections (workspace_id, id, member_id, provider, account_email, status, is_default, tokens,
+          created_by_type, updated_by_type)
+        values (${workspaceId}, ${connection}, ${memberId}, 'google', ${`${connection}@example.com`}, ${status}, false,
+          '\\x00', 'system', 'system')
+      `);
+      for (const [index, calendar] of calendars.entries()) {
+        await tx.execute(sql`
+          insert into calendar_calendars (workspace_id, id, connection_id, member_id, provider_calendar_id, name,
+            access_role, is_primary, check_conflicts, show_in_week, sync, is_destination, created_by_type, updated_by_type)
+          values (${workspaceId}, ${calendar.id}, ${connection}, ${memberId}, ${calendar.id}, ${`Calendar ${String(index)}`},
+            ${calendar.role}, ${index === 0}, true, true, true, false, 'system', 'system')
+        `);
+      }
+    });
+  }
+
+  it('invites several guests once each, in the order given, leaving out who it is with', async () => {
+    const w = await workspace();
+    const page = await pageOf(w.owner);
+    const cal = calendar();
+    const booked = await bookAsHost(
+      w.owner,
+      cal.deps,
+      input(page.id, {
+        guests: [
+          'alan@example.com',
+          'Katherine@Nasa.example',
+          'alan@example.com',
+          'GRACE@navy.example',
+          'bea@example.com',
+        ],
+      }),
+    );
+    expect(cal.events[0]?.attendees.map((each) => each.email)).toEqual([
+      'grace@navy.example',
+      'alan@example.com',
+      'katherine@nasa.example',
+      'bea@example.com',
+    ]);
+    const week = await readBookingsCalendar(w.owner, {
+      from: '2026-11-02T00:00:00.000Z',
+      to: '2026-11-03T00:00:00.000Z',
+    });
+    expect(week.bookings.find((each) => each.id === booked.bookingId)?.guests).toEqual([
+      'alan@example.com',
+      'katherine@nasa.example',
+      'bea@example.com',
+    ]);
+  });
+
+  it('puts the event on the calendar picked, and refuses one that isn’t the member’s to write (AC-712)', async () => {
+    const w = await workspace();
+    const page = await pageOf(w.owner);
+    const bea = await w.addMember('Bea');
+    const [work, holidays, gone, beas] = [newId(), newId(), newId(), newId()];
+    await account(w.workspaceId, w.memberId, 'connected', [
+      { id: work, role: 'writer' },
+      { id: holidays, role: 'reader' },
+    ]);
+    await account(w.workspaceId, w.memberId, 'revoked', [{ id: gone, role: 'owner' }]);
+    await account(w.workspaceId, bea.actor.id ?? '', 'connected', [{ id: beas, role: 'owner' }]);
+    const cal = calendar();
+    await bookAsHost(w.owner, cal.deps, input(page.id, { calendarId: work }));
+    expect(cal.events[0]?.calendarId).toBe(work);
+    // A calendar they may only read, one on an account whose grant is gone, a colleague's, and one that doesn't
+    // exist all answer alike, and nothing is booked.
+    for (const [index, calendarId] of [holidays, gone, beas, newId()].entries()) {
+      const refused = calendar();
+      expect(
+        await refusalOf(
+          bookAsHost(
+            w.owner,
+            refused.deps,
+            input(page.id, { calendarId, start: new Date(Date.UTC(2026, 10, 3 + index, 20)) }),
+          ),
+        ),
+      ).toMatchObject({ code: 'NOT_FOUND', field: 'calendarId' });
+      expect(refused.events).toEqual([]);
+    }
+    const week = await readBookingsCalendar(w.owner, {
+      from: '2026-11-02T00:00:00.000Z',
+      to: '2026-11-09T00:00:00.000Z',
+    });
+    expect(week.bookings).toHaveLength(1);
+  });
+});

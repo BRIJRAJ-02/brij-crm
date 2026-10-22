@@ -377,12 +377,15 @@ export type SearchRecordsInput = z.infer<typeof SearchRecordsInput>;
  * One search result: the record as a chip shows it, whether it is already
  * linked from `forRecordId`, and the record holding it on a far side that
  * holds one ("At Acme"), or `{ hidden: true }` when the caller can't see
- * that record ("Linked elsewhere").
+ * that record ("Linked elsewhere"). `detail` is its first email or domain
+ * the caller may see (a person's address, a company's domain): New meeting
+ * fills in the guest's email from it (spec 0027's follow up).
  */
 export const SearchResult = z.object({
   ref: RecordRefDisplay,
   linked: z.boolean(),
   takenBy: z.union([RecordRefDisplay, z.object({ hidden: z.literal(true) })]).optional(),
+  detail: z.string().optional(),
 });
 /** One search result. */
 export type SearchResult = z.infer<typeof SearchResult>;

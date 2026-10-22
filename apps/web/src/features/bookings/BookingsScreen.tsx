@@ -17,6 +17,8 @@ import {
   type CalendarListState,
   type CalendarsHeld,
   type CalendarEventItem,
+  type PageDestinationState,
+  type RecordSearch,
   type ObjectSummary,
   type CreateTimeBlockInput,
   type TimeBlockOccurrence,
@@ -783,6 +785,10 @@ export interface BookingsCalendarScreenProps {
   readonly onBlock: (draft: BlockDraft, preview: readonly BlockPreview[]) => Promise<{ readonly id: string }>;
   /** Books someone into a drawn span (spec 0027); settles once made, throws a data error on a refusal. */
   readonly onBookAsHost: (meeting: NewMeeting) => Promise<void>;
+  /** New meeting's With: People as the member types, when they may see People (one search per dialog). */
+  readonly peopleSearch?: (() => RecordSearch) | undefined;
+  /** A booking page's own "Add events to", which New meeting's Calendar starts on. */
+  readonly pageDestination?: ((pageId: string) => CalendarsHeld<PageDestinationState>) | undefined;
   /** Mints a new booking's idempotency key, once per New meeting dialog. */
   readonly newBookingKey: () => string;
   /** Where the member's day starts, for a span drawn from the keyboard (their hours; 9:00 when unknown). */
@@ -1453,6 +1459,9 @@ function WeekView(props: BookingsCalendarScreenProps) {
           hasCalendar={connections.length > 0}
           pages={bookable}
           newKey={newBookingKey}
+          people={props.peopleSearch}
+          calendars={calendarList}
+          pageDestination={props.pageDestination}
           onBook={async (input) => {
             await onBookAsHost(input);
             toasts.toast({

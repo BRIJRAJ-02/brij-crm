@@ -57,6 +57,11 @@ export interface BookingEvent {
   readonly bookingId: string;
   /** The page booked: its own "Add events to" wins when it names a calendar of the host (spec 0024, AC-997). */
   readonly pageId?: string;
+  /**
+   * The host's own pick for this one event (New meeting's Calendar, spec 0027): wins over the page's and their
+   * default while it is still a calendar of theirs they can write, on an account that works.
+   */
+  readonly calendarId?: string;
   readonly title: string;
   /** The visitor's answers, as plain text. */
   readonly description: string;

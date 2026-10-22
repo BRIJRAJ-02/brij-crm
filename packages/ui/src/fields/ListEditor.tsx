@@ -2,8 +2,9 @@
 // domains, URLs): the values as removable chips, and a Field to add one more.
 // Each change commits the whole list, checked with the attribute's schema.
 import type { AttributeType } from '@crm/contracts/values';
-import { useState, type ReactNode } from 'react';
+import { useId, useState, type ReactNode } from 'react';
 import { Button } from '../atoms/Button/Button.tsx';
+import { FieldLabel } from '../atoms/FieldLabel/FieldLabel.tsx';
 import { LinkChip } from '../atoms/LinkChip/LinkChip.tsx';
 import type { ProviderName } from '../atoms/ProviderMark/ProviderMark.tsx';
 import { Field, type FieldProps } from '../molecules/Field/Field.tsx';
@@ -76,6 +77,7 @@ export function ListEditor<T extends AttributeType, V>({
 }: ListEditorProps<T, V>) {
   // Opened from a grid cell by typing: the add field starts with that key.
   const [draft, setDraft] = useState(startText ?? '');
+  const labelId = useId();
   const [message, setMessage] = useState<string | undefined>(undefined);
   const commitList = (next: readonly V[]) => {
     const result = toCommittable<T>(attribute, next);
@@ -103,31 +105,45 @@ export function ListEditor<T extends AttributeType, V>({
   };
   const emptyPlaceholder =
     isCompact || placeholder === undefined ? fieldStrings.setAttribute(attribute.name) : placeholder;
+  // On a form the name leads, over the chips (as every field's label sits over its value); the add field under them
+  // keeps the name for screen readers. A cell or a panel row names it already.
+  const isLabelledAbove = !isCompact && values.length > 0;
+  const chips = values.length > 0 && (
+    <ul
+      className={styles.list}
+      {...(isLabelledAbove ? { 'aria-labelledby': labelId } : { 'aria-label': attribute.name })}
+    >
+      {values.map((value, index) => (
+        <li key={`${String(index)}-${labelOf(value)}`} className={styles.item}>
+          <LinkChip href={hrefOf(value)} {...chipExtras(value)}>
+            {labelOf(value)}
+          </LinkChip>
+          <Button
+            variant="ghost"
+            icon="x"
+            label={strings.remove(labelOf(value))}
+            onPress={() => {
+              commitList(values.filter((_, at) => at !== index));
+            }}
+          />
+        </li>
+      ))}
+    </ul>
+  );
   return (
     <div className={styles.root}>
-      {values.length > 0 && (
-        <ul className={styles.list} aria-label={attribute.name}>
-          {values.map((value, index) => (
-            <li key={`${String(index)}-${labelOf(value)}`} className={styles.item}>
-              <LinkChip href={hrefOf(value)} {...chipExtras(value)}>
-                {labelOf(value)}
-              </LinkChip>
-              <Button
-                variant="ghost"
-                icon="x"
-                label={strings.remove(labelOf(value))}
-                onPress={() => {
-                  commitList(values.filter((_, at) => at !== index));
-                }}
-              />
-            </li>
-          ))}
-        </ul>
+      {isLabelledAbove ? (
+        <div className={styles.labelled}>
+          <FieldLabel label={attribute.name} as="text" id={labelId} />
+          {chips}
+        </div>
+      ) : (
+        chips
       )}
       {renderAdd === undefined ? (
         <Field
           label={attribute.name}
-          isLabelHidden={isCompact}
+          isLabelHidden={isCompact || isLabelledAbove}
           size={isCompact ? 'sm' : 'md'}
           // The copy style's empty value, then an invitation to add one more.
           placeholder={values.length === 0 ? emptyPlaceholder : strings.addAnotherPlaceholder}
@@ -137,6 +153,11 @@ export function ListEditor<T extends AttributeType, V>({
             setMessage(undefined);
           }}
           onSubmit={add}
+          // Enter with an address typed adds it, and only that: in a form (a create dialog, New meeting) it must not
+          // also submit the form around it. An empty add field lets Enter through, so the form still submits.
+          onKeyDown={(event) => {
+            if (event.key === 'Enter' && !event.nativeEvent.isComposing && draft.trim() !== '') event.preventDefault();
+          }}
           // A record's value, never the viewer's own: no browser autofill, and no password manager taking it for a login.
           autoComplete="off"
           onBlur={add}
@@ -153,7 +174,7 @@ export function ListEditor<T extends AttributeType, V>({
       ) : (
         renderAdd({
           label: attribute.name,
-          isLabelHidden: isCompact,
+          isLabelHidden: isCompact || isLabelledAbove,
           size: isCompact ? 'sm' : 'md',
           placeholder: values.length === 0 ? emptyPlaceholder : strings.addAnotherPlaceholder,
           value: draft,

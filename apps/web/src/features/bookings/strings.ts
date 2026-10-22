@@ -178,6 +178,11 @@ export const strings = {
   /** What the TopBar's count counts, for screen readers: "4 upcoming bookings". */
   with: 'With',
   theirName: 'Their name',
+  /** With, when it searches People as you type. */
+  withPlaceholder: 'Their name, or someone in People',
+  /** The rows under With, for screen readers. */
+  fromPeople: 'People',
+  noPeopleMatch: 'No one in People matches',
   email: 'Email',
   emailPlaceholder: 'them@example.com',
   theirTimeZone: 'Their time zone',
@@ -188,8 +193,9 @@ export const strings = {
   aboutExample: 'Pick Demo to book Ana in, and the meeting is called Demo with Ana.',
   length: 'Length',
   alsoInvite: 'Also invite',
-  alsoInviteHint: 'Emails, separated by commas. Everyone gets the calendar invitation.',
-  guestPlaceholder: 'colleague@example.com',
+  guestsFull: (max: number) => `Invite at most ${String(max)} more people.`,
+  /** New meeting's Calendar, with two or more calendars that take events: where its event goes. */
+  calendarChoice: 'Calendar',
   message: 'Message',
   messagePlaceholder: 'Grabbing the hour we talked about.',
   cancel: 'Cancel',

@@ -131,6 +131,7 @@ export const bookingsRouter = member.bookings.router({
           timeZone: input.timeZone,
           guests: input.guests,
           message: input.message,
+          calendarId: input.calendarId,
         },
         hooks,
       );

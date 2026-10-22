@@ -1,9 +1,21 @@
 // Brief
-// Purpose: Book someone in from a span drawn on Bookings › Calendar (spec 0027, AC-709 to AC-711).
-// Main task: name who it is with and their email, set the time, then Book it: a confirmed booking in the member's own time.
-// Leaves out: picking a person from the workspace as you type, and the email invitation (the calendar invites them).
-import { isDataError, type BookingPageView } from '@crm/data';
+// Purpose: Book someone in from a span drawn on Bookings › Calendar, or from New (spec 0027, AC-709 to AC-711, and its follow ups).
+// Main task: pick someone from People as you type (or name someone new) and their email, set the time, then Book it.
+// Leaves out: Timefix's own invitation email (the calendar invites them), and required person fields.
 import {
+  isDataError,
+  type BookingPageView,
+  type CalendarListState,
+  type CalendarsHeld,
+  type PageDestinationState,
+  type RecordSearch,
+  type RecordSearchState,
+  type SearchResult,
+} from '@crm/data';
+import { usePageDestination } from '@crm/data/react';
+import {
+  AttributeEditor,
+  Avatar,
   Button,
   Callout,
   DatePicker,
@@ -12,10 +24,23 @@ import {
   InfoTip,
   Modal,
   Select,
+  SuggestionList,
+  suggestionOptionId,
   useFormatSettings,
+  type FieldAttribute,
   type FormRefusal,
+  type SuggestionRow,
 } from '@crm/ui';
-import { useId, useState, useMemo } from 'react';
+import {
+  useEffect,
+  useId,
+  useMemo,
+  useRef,
+  useState,
+  useSyncExternalStore,
+  type KeyboardEvent as ReactKeyboardEvent,
+} from 'react';
+import { calendarOptions } from '../calendars/calendar-options.ts';
 import { zoneItems, zoneMatches } from '../booking/hours.ts';
 import { zoneDisplay } from '../../public/booking/time.ts';
 import { instantOf, type DrawnSpan } from './span.ts';
@@ -23,10 +48,27 @@ import { SpanTimes } from './SpanTimes.tsx';
 import { strings } from './strings.ts';
 
 /** The fields a refusal may land on, by the server's names; any other (the time, the page) shows above them. */
-const FIELDS = ['name', 'email', 'guests', 'message'] as const;
+const FIELDS = ['name', 'email', 'message', 'calendarId'] as const;
 
 /** The longest meeting a member books in (the server holds the same bound). */
 const MAX_MINUTES = 480;
+
+/** The most people Also invite takes (the server holds the same bound). */
+const MAX_GUESTS = 10;
+
+/** How many people from People show under With at once. */
+const SHOWN_PEOPLE = 6;
+
+/** Also invite, drawn by the field set's Email editor with several values: each address a removable chip. */
+const GUESTS: FieldAttribute = {
+  id: 'guests',
+  name: strings.alsoInvite,
+  type: 'email',
+  allowMultiple: true,
+  isRequired: false,
+  isUnique: false,
+  isReadOnly: false,
+};
 
 /** What Book it sends. */
 export interface NewMeeting {
@@ -40,6 +82,8 @@ export interface NewMeeting {
   readonly timeZone: string;
   readonly guests: readonly string[];
   readonly message?: string;
+  /** The member's own calendar the event goes on, only when they picked one; else the page's, else their default. */
+  readonly calendarId?: string;
 }
 
 /** Props for NewMeetingDialog. */
@@ -58,19 +102,70 @@ export interface NewMeetingDialogProps {
   readonly onBook: (meeting: NewMeeting) => Promise<void>;
   /** Closes the dialog: after Book it, or Close. */
   readonly onClose: () => void;
+  /**
+   * People as the member types in With: the record picker's search over People, made once as the dialog opens and
+   * let go as it closes. Left out when they can't see People, and With is a plain name.
+   */
+  readonly people?: (() => RecordSearch) | undefined;
+  /** The member's own accounts and calendars: Calendar shows when two or more can take the event. */
+  readonly calendars?: CalendarListState | undefined;
+  /** A booking page's own "Add events to": Calendar starts on it when it is one of the member's calendars. */
+  readonly pageDestination?: ((pageId: string) => CalendarsHeld<PageDestinationState>) | undefined;
 }
 
-/** "Name <a@b>, c@d" as emails, lower case, each once. */
-export function guestEmails(text: string): readonly string[] {
-  const found = text
-    .split(/[,;\n]/)
-    .map((part) => /<([^>]+)>/.exec(part)?.[1] ?? part)
-    .map((part) => part.trim().toLowerCase())
-    .filter((part) => part !== '');
-  return [...new Set(found)];
+/** Someone from People to book in: their record, name and the email to invite them at. */
+interface Person {
+  readonly recordId: string;
+  readonly name: string;
+  readonly email: string;
+  readonly result: SearchResult;
 }
 
-/** New meeting: with whom, their email and zone, on which page, how long, who else, and a message. */
+/** The results that carry an email, as people to book in (one with no email can't be invited). */
+function peopleOf(results: readonly SearchResult[]): readonly Person[] {
+  return results
+    .flatMap((result) =>
+      result.detail?.includes('@') === true && result.ref.name !== ''
+        ? [{ recordId: result.ref.recordId, name: result.ref.name, email: result.detail, result }]
+        : [],
+    )
+    .slice(0, SHOWN_PEOPLE);
+}
+
+const noSubscribe = () => () => undefined;
+
+/**
+ * The people With offers for what is typed: the answer once it is in, and while the next query is out, the last
+ * answer when the text only grew (so the list doesn't blink as each key goes out); nothing for a fresh word.
+ */
+function usePeople(people: (() => RecordSearch) | undefined, typed: string): readonly Person[] {
+  // One search for the dialog's life: made as it opens, let go as it closes.
+  const [search] = useState(() => people?.());
+  useEffect(
+    () => () => {
+      search?.dispose();
+    },
+    [search],
+  );
+  const state: RecordSearchState | undefined = useSyncExternalStore(search?.subscribe ?? noSubscribe, () =>
+    search?.getSnapshot(),
+  );
+  useEffect(() => {
+    if (typed !== '') search?.ask(typed);
+  }, [search, typed]);
+  const [last, setLast] = useState<{ readonly query: string; readonly people: readonly Person[] }>({
+    query: '',
+    people: [],
+  });
+  if (state?.status === 'ready' && state.query !== last.query && state.query !== '') {
+    setLast({ query: state.query, people: peopleOf(state.results) });
+  }
+  if (typed === '') return [];
+  if (last.query === typed) return last.people;
+  return last.query !== '' && typed.toLowerCase().startsWith(last.query.toLowerCase()) ? last.people : [];
+}
+
+/** New meeting: with whom, their email and zone, on which page and calendar, how long, who else, and a message. */
 export function NewMeetingDialog({
   span,
   onSpanChange,
@@ -80,8 +175,13 @@ export function NewMeetingDialog({
   newKey,
   onBook,
   onClose,
+  people,
+  calendars,
+  pageDestination,
 }: NewMeetingDialogProps) {
   const formId = useId();
+  const listId = useId();
+  const withRef = useRef<HTMLInputElement & HTMLTextAreaElement>(null);
   const [idempotencyKey] = useState(newKey);
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
@@ -89,15 +189,64 @@ export function NewMeetingDialog({
   const { timeZone: memberTimeZone } = useFormatSettings();
   const [timeZone, setTimeZone] = useState(memberTimeZone);
   const [pageId, setPageId] = useState(pages[0]?.id ?? '');
-  const [guests, setGuests] = useState('');
+  const [guests, setGuests] = useState<readonly string[]>([]);
+  const [guestsError, setGuestsError] = useState<string | undefined>(undefined);
   const [message, setMessage] = useState('');
+  // A calendar the member picked; undefined follows the page's own, else their default (the server's own rule).
+  const [calendarId, setCalendarId] = useState<string | undefined>(undefined);
   const [busy, setBusy] = useState(false);
   const [refusals, setRefusals] = useState<readonly FormRefusal[]>([]);
   const start = instantOf(span.dayKey, span.startMinute, memberTimeZone);
   const minutes = span.endMinute - span.startMinute;
   // Once anything is typed, a stray click outside won't throw it away; Cancel and Esc still do.
-  const isDirty = [name, email, guests, message].some((value) => value.trim() !== '');
+  const isDirty = [name, email, message].some((value) => value.trim() !== '') || guests.length > 0;
   const zones = useMemo(() => zoneItems(timeZone, new Date()), [timeZone]);
+  // People as you type in With: shown under it until one is picked, Esc puts them away, or focus leaves.
+  const typed = name.trim();
+  const found = usePeople(people, typed);
+  const [putAway, setPutAway] = useState<string | undefined>(undefined);
+  const [active, setActive] = useState(-1);
+  const shown = putAway === typed ? [] : found;
+  const isListOpen = shown.length > 0 && !busy;
+  const activeIndex = active < shown.length ? active : -1;
+  const writable = (calendars?.status === 'ready' ? calendars.accounts : []).flatMap((account) =>
+    account.calendars.filter((calendar) => calendar.canBeDestination),
+  );
+
+  const pick = (person: Person) => {
+    setName(person.name);
+    setEmail(person.email);
+    // The list stays away for the name picked, until the member types on.
+    setPutAway(person.name.trim());
+    setActive(-1);
+  };
+
+  const keyDown = (event: ReactKeyboardEvent<HTMLInputElement | HTMLTextAreaElement>) => {
+    if (!isListOpen || event.nativeEvent.isComposing) return;
+    if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
+      event.preventDefault();
+      const step = event.key === 'ArrowDown' ? 1 : -1;
+      setActive(
+        activeIndex === -1 && step === -1 ? shown.length - 1 : (activeIndex + step + shown.length) % shown.length,
+      );
+      return;
+    }
+    if (event.key === 'Enter' && activeIndex !== -1) {
+      const person = shown[activeIndex];
+      if (person === undefined) return;
+      // The pick, never a submit: Book it waits for the member.
+      event.preventDefault();
+      pick(person);
+      return;
+    }
+    if (event.key === 'Escape') {
+      // Esc puts the list away; the dialog stays (a second Esc closes it).
+      event.preventDefault();
+      event.stopPropagation();
+      setPutAway(typed);
+      setActive(-1);
+    }
+  };
 
   const book = () => {
     if (busy) return;
@@ -111,6 +260,7 @@ export function NewMeetingDialog({
     }
     setBusy(true);
     setRefusals([]);
+    setGuestsError(undefined);
     onBook({
       idempotencyKey,
       pageId,
@@ -119,8 +269,10 @@ export function NewMeetingDialog({
       name: name.trim(),
       email: email.trim(),
       timeZone,
-      guests: guestEmails(guests),
+      guests,
       ...(message.trim() === '' ? {} : { message: message.trim() }),
+      // Sent only when picked, and only while Calendar is offered.
+      ...(calendarId === undefined || writable.length < 2 ? {} : { calendarId }),
     }).then(
       () => {
         setBusy(false);
@@ -128,7 +280,10 @@ export function NewMeetingDialog({
       },
       (error: unknown) => {
         setBusy(false);
-        setRefusals(refusalsOf(error));
+        const all = refusalsOf(error);
+        // A guest's address is refused under Also invite, which the field set draws (no Form field holds it).
+        setGuestsError(all.find((refusal) => refusal.attributeId === 'guests')?.message);
+        setRefusals(all.filter((refusal) => refusal.attributeId !== 'guests'));
       },
     );
   };
@@ -165,15 +320,61 @@ export function NewMeetingDialog({
         {/* First, so it is read before the form is filled in, and never below the dialog's fold. */}
         {!hasCalendar && <Callout tone="info">{strings.noCalendar}</Callout>}
         <Field
+          ref={withRef}
           label={strings.with}
           name="name"
-          placeholder={strings.theirName}
+          placeholder={people === undefined ? strings.theirName : strings.withPlaceholder}
           autoComplete="off"
           isRequired
           maxLength={200}
           value={name}
-          onChange={setName}
+          onChange={(next) => {
+            setName(next);
+            setActive(-1);
+          }}
+          onBlur={() => {
+            setPutAway(typed);
+          }}
+          onKeyDown={keyDown}
+          {...(people === undefined
+            ? {}
+            : {
+                combobox: {
+                  listId,
+                  isExpanded: isListOpen,
+                  ...(isListOpen && activeIndex !== -1 ? { activeId: suggestionOptionId(listId, activeIndex) } : {}),
+                },
+              })}
         />
+        {isListOpen && (
+          <SuggestionList
+            anchorRef={withRef}
+            id={listId}
+            label={strings.fromPeople}
+            rows={shown.map((person): SuggestionRow => ({
+              key: person.recordId,
+              leading: (
+                <Avatar
+                  name={person.name}
+                  id={person.recordId}
+                  size="xs"
+                  isDecorative
+                  {...(person.result.ref.imageSrc === undefined ? {} : { src: person.result.ref.imageSrc })}
+                  {...(person.result.ref.hue === undefined ? {} : { hue: person.result.ref.hue })}
+                />
+              ),
+              label: person.name,
+              detail: person.email,
+            }))}
+            activeIndex={activeIndex}
+            emptyText={strings.noPeopleMatch}
+            onPick={(index) => {
+              const person = shown[index];
+              if (person !== undefined) pick(person);
+            }}
+            onHighlight={setActive}
+          />
+        )}
         <Field
           label={strings.email}
           name="email"
@@ -234,14 +435,35 @@ export function NewMeetingDialog({
             }}
           />
         )}
-        <Field
-          label={strings.alsoInvite}
-          name="guests"
-          placeholder={strings.guestPlaceholder}
-          hint={strings.alsoInviteHint}
-          autoComplete="off"
-          value={guests}
-          onChange={setGuests}
+        {/* Where the event goes, only with two or more calendars that take events (spec 0024 milestone 5). */}
+        {calendars?.status === 'ready' && writable.length > 1 && pageDestination !== undefined && (
+          <CalendarChoice
+            calendars={calendars}
+            destination={pageDestination(pageId)}
+            calendarId={calendarId}
+            onChange={setCalendarId}
+            isDisabled={busy}
+          />
+        )}
+        <AttributeEditor
+          attribute={GUESTS}
+          value={guests.length === 0 ? null : guests}
+          surface="form"
+          onCommit={(value) => {
+            // The Email editor commits the whole list of addresses, checked by the email type.
+            const next: readonly string[] = Array.isArray(value)
+              ? value.filter((item): item is string => typeof item === 'string')
+              : typeof value === 'string'
+                ? [value]
+                : [];
+            if (next.length > MAX_GUESTS) {
+              setGuestsError(strings.guestsFull(MAX_GUESTS));
+              return;
+            }
+            setGuestsError(undefined);
+            setGuests(next);
+          }}
+          {...(guestsError === undefined ? {} : { error: guestsError })}
         />
         <Field
           label={strings.message}
@@ -257,11 +479,52 @@ export function NewMeetingDialog({
   );
 }
 
-/** A refusal on its field, or above the form. */
+/**
+ * Calendar: the member's calendars that take events, each in its colour (an account with two or more under its
+ * address). It starts on the page's own "Add events to" when that is one of theirs, else their default, as the
+ * server picks with no choice made; only a pick is sent.
+ */
+function CalendarChoice({
+  calendars,
+  destination,
+  calendarId,
+  onChange,
+  isDisabled,
+}: {
+  readonly calendars: Extract<CalendarListState, { readonly status: 'ready' }>;
+  readonly destination: CalendarsHeld<PageDestinationState>;
+  readonly calendarId: string | undefined;
+  readonly onChange: (calendarId: string) => void;
+  readonly isDisabled: boolean;
+}) {
+  const held = usePageDestination(destination);
+  const writable = calendars.accounts.flatMap((account) =>
+    account.calendars.filter((calendar) => calendar.canBeDestination),
+  );
+  const pageOwn = held.status === 'ready' ? held.destination.calendarId : undefined;
+  const fallback =
+    writable.find((calendar) => calendar.id === pageOwn) ??
+    writable.find((calendar) => calendar.isDestination) ??
+    writable[0];
+  return (
+    <Select
+      label={strings.calendarChoice}
+      items={calendarOptions({ accounts: calendars.accounts, include: (calendar) => calendar.canBeDestination })}
+      optionStyle="dot"
+      value={calendarId ?? fallback?.id ?? null}
+      isDisabled={isDisabled}
+      onChange={(id) => {
+        if (id !== null) onChange(id);
+      }}
+    />
+  );
+}
+
+/** A refusal on its field, or above the form; a guest's under Also invite. */
 function refusalsOf(error: unknown): readonly FormRefusal[] {
   if (!isDataError(error)) return [{ code: 'INTERNAL', message: strings.bookFailed }];
   const onField = (field: string | undefined) =>
-    field !== undefined && (FIELDS as readonly string[]).includes(field) ? field : undefined;
+    field === 'guests' || (field !== undefined && (FIELDS as readonly string[]).includes(field)) ? field : undefined;
   const refusals = (error.data?.refusals ?? []).map((refusal): FormRefusal => {
     const field = onField(refusal.field);
     return { code: refusal.code, message: refusal.message, ...(field === undefined ? {} : { attributeId: field }) };

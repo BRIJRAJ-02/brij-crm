@@ -2,6 +2,8 @@ import type { Meta, StoryObj } from '@storybook/react-vite';
 import { FieldSurfaces } from '../../workbench/FieldSurfaces/FieldSurfaces.tsx';
 import { Stage } from '../../workbench/Stage/Stage.tsx';
 import { FIELD_SAMPLES } from '../../workbench/field-samples.ts';
+import { useState } from 'react';
+import { Form } from '../../molecules/Form/Form.tsx';
 import { AttributeEditor } from '../AttributeEditor.tsx';
 import { expect, fn } from 'storybook/test';
 
@@ -84,5 +86,50 @@ export const Guidance: Story = {
   ),
   play: async ({ canvas }) => {
     await expect(canvas.getByRole('textbox', { name: 'Email' })).toHaveAttribute('placeholder', 'ada@example.com');
+  },
+};
+
+const submitted = fn();
+
+/** Several emails in a form, as New meeting's Also invite. */
+function SeveralForm({ onSubmit }: { readonly onSubmit: () => void }) {
+  const several = sample.several?.attribute ?? sample.attribute;
+  const [value, setValue] = useState<readonly string[]>(['ada@example.com', 'ada@work.example.com']);
+  return (
+    <Stage width="narrow">
+      <Form label="Invite" submitLabel="Send" onSubmit={onSubmit}>
+        <AttributeEditor
+          attribute={several}
+          value={value}
+          surface="form"
+          onCommit={(next) => {
+            setValue(Array.isArray(next) ? next.filter((item): item is string => typeof item === 'string') : []);
+          }}
+        />
+      </Form>
+    </Stage>
+  );
+}
+
+/**
+ * Several values in a form: the name leads, over the chips; Enter with an address typed adds it and never submits
+ * the form around it, while Enter in the empty add field still does.
+ */
+export const SeveralInAForm: Story = {
+  render: () => <SeveralForm onSubmit={submitted} />,
+  play: async ({ canvas, userEvent }) => {
+    submitted.mockClear();
+    const list = canvas.getByRole('list', { name: 'Emails' });
+    await expect(list.querySelectorAll('li')).toHaveLength(2);
+    // The name comes before the chips, as a Field's label comes before its box.
+    const name = canvas.getByText('Emails', { selector: 'span' });
+    await expect(name.compareDocumentPosition(list) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    const add = canvas.getByRole('textbox', { name: 'Emails' });
+    await userEvent.click(add);
+    await userEvent.keyboard('lovelace@example.org{Enter}');
+    await expect(canvas.getByRole('list', { name: 'Emails' }).querySelectorAll('li')).toHaveLength(3);
+    await expect(submitted).not.toHaveBeenCalled();
+    await userEvent.keyboard('{Enter}');
+    await expect(submitted).toHaveBeenCalledTimes(1);
   },
 };
