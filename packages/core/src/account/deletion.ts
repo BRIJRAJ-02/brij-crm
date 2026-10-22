@@ -10,9 +10,9 @@
 // `auth` rows go, the person's open join requests in workspaces they never
 // joined are closed (`closeJoinRequests`), so no admin is left deciding on
 // someone who no longer exists. A deleted workspace still inside its window
-// is left the same way (`enterDeletedWorkspaceToLeave`), so a restore never
-// brings them back: it never blocks, since a deleted workspace needs no
-// owner. Every step can run again: a workspace already left is skipped.
+// is left the same way (`enterWorkspaceToLeave`), so a restore never brings
+// them back: it never blocks, since a deleted workspace needs no owner. Every
+// step can run again: a workspace already left is skipped.
 import {
   MEMBERS_PAGE_MAX,
   type AccountDeletionCheck,
@@ -21,7 +21,7 @@ import {
 } from '@crm/contracts';
 import { schema, type Database, type IdentityStore } from '@crm/db';
 import { and, eq, sql } from 'drizzle-orm';
-import { enterDeletedWorkspaceToLeave, enterWorkspace, LEAVING, type DoorDeps } from '../access/door.ts';
+import { enterWorkspace, enterWorkspaceToLeave, LEAVING, type DoorDeps } from '../access/door.ts';
 import type { EngineScope } from '../access/mint.ts';
 import { inWorkspace } from '../access/run.ts';
 import type { CalendarTokens } from '../calendar/provider.ts';
@@ -62,7 +62,7 @@ export interface AccountDeletionDeps {
   readonly db: Database;
   readonly identity: Pick<
     IdentityStore,
-    'findWorkspace' | 'workspacesOf' | 'deletedWorkspacesOf' | 'sessionVerification' | 'twoFactorState' | 'deleteUser'
+    'findWorkspace' | 'workspacesOf' | 'allWorkspacesOf' | 'sessionVerification' | 'twoFactorState' | 'deleteUser'
   >;
   readonly rules: DoorDeps['rules'];
   /** The hooks each workspace's removal runs in its transaction (the outbox), as a background write's. */
@@ -116,18 +116,21 @@ async function myWorkspaces(
 }
 
 /**
- * The person's member scope in each deleted workspace, still inside its window, that they are still in: left too,
- * never a blocker. One past its window, or already left, is skipped; anything else fails the request.
+ * The person's member scope in every other workspace they are still in, beside `seen` (the live ones already
+ * judged): deleted ones inside their window, and any deleted or restored since, read in one directory list so none
+ * falls between two reads. Left too, never a blocker: a deleted workspace needs no owner, and one restored meanwhile
+ * has its restorer as an owner. One past its window, or already left, is skipped; anything else fails the request.
  */
-async function myDeletedWorkspaces(
+async function myOtherWorkspaces(
   deps: AccountDeletionDeps,
   userId: string,
+  seen: ReadonlySet<string>,
 ): Promise<readonly { readonly scope: EngineScope }[]> {
-  const listed = await deps.identity.deletedWorkspacesOf(userId);
+  const listed = (await deps.identity.allWorkspacesOf(userId)).filter((workspace) => !seen.has(workspace.id));
   const entered = await Promise.all(
     listed.map(async (workspace) => {
       try {
-        return { scope: await enterDeletedWorkspaceToLeave({ db: deps.db }, { userId, workspaceId: workspace.id }) };
+        return { scope: await enterWorkspaceToLeave({ db: deps.db }, { userId, workspaceId: workspace.id }) };
       } catch (error) {
         if (isRefusal(error) && error.refusal.code === 'NOT_FOUND') return undefined;
         throw error;
@@ -219,7 +222,8 @@ export async function deleteMyAccount(
   const standing = await standingIn(await myWorkspaces(deps, caller.userId));
   const blockers = standing.filter((each) => each.last).map(({ entry }) => entry.name);
   if (blockers.length > 0) throw refuse('LAST_OWNER', lastOwnerMessage(blockers));
-  const deleted = await myDeletedWorkspaces(deps, caller.userId);
+  const seen = new Set(standing.map(({ entry }) => entry.scope.workspaceId));
+  const deleted = await myOtherWorkspaces(deps, caller.userId, seen);
   // Owned workspaces first: should an owner be demoted meanwhile, `removeMember`'s own last owner guard refuses
   // before any other workspace is left. Deleted ones next: the guard passes them, unless one is restored meanwhile.
   const ordered = [

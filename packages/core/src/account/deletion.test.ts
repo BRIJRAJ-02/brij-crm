@@ -37,7 +37,7 @@ function deletionDeps(revoked: CalendarGrant[]) {
     identity: {
       findWorkspace: (slug: string) => identity.findWorkspace(slug),
       workspacesOf: (userId: string) => identity.workspacesOf(userId),
-      deletedWorkspacesOf: (userId: string) => identity.deletedWorkspacesOf(userId),
+      allWorkspacesOf: (userId: string) => identity.allWorkspacesOf(userId),
       twoFactorState: (userId: string) => identity.twoFactorState(userId),
       deleteUser: (userId: string) => identity.deleteUser(userId),
       sessionVerification: () => Promise.resolve({ at: new Date().toISOString(), with: 'email' as const }),
@@ -174,6 +174,41 @@ describe('deleting your account while in a deleted workspace (spec 0033, AC-903)
       deleteMyAccount(deps, { userId: w.aUser, sessionId: randomUUID(), email: w.aEmail }, { email: w.aEmail }),
     ).resolves.toEqual({ deleted: true });
     expect(await memberRow(w.aMember)).toMatchObject({ name: DELETED_USER_NAME, user_id: null, status: 'removed' });
+    const [row] = await testQuery<{ deleted: boolean }>(
+      ownerUrl,
+      'select deleted_at is not null as deleted from workspaces where id = $1',
+      [w.workspaceId],
+    );
+    expect(row).toEqual({ deleted: true });
+  });
+
+  it('leaves one restored while the deletion ran, which the live list had missed', async () => {
+    const w = await workspace({ secondOwner: true });
+    // B's restore commits between the deletion's reads: the tenant row is live, and the directory still says deleted
+    // (its mark follows after), so `workspacesOf` leaves it out.
+    await restoreWorkspace((await enterDeletedWorkspace(w.doorDeps, { userId: w.bUser ?? '', slug: w.slug })).scope);
+    expect((await identity.workspacesOf(w.aUser)).map((each) => each.id)).not.toContain(w.workspaceId);
+    await expect(
+      deleteMyAccount(
+        deletionDeps([]),
+        { userId: w.aUser, sessionId: randomUUID(), email: w.aEmail },
+        { email: w.aEmail },
+      ),
+    ).resolves.toEqual({ deleted: true });
+    expect(await memberRow(w.aMember)).toMatchObject({ name: DELETED_USER_NAME, user_id: null, status: 'removed' });
+  });
+
+  it('refuses a restore by an owner who has left since entering it, so it never comes back with no owner', async () => {
+    const w = await workspace({ secondOwner: false });
+    const entry = await enterDeletedWorkspace(w.doorDeps, { userId: w.aUser, slug: w.slug });
+    await expect(
+      deleteMyAccount(
+        deletionDeps([]),
+        { userId: w.aUser, sessionId: randomUUID(), email: w.aEmail },
+        { email: w.aEmail },
+      ),
+    ).resolves.toEqual({ deleted: true });
+    await expect(restoreWorkspace(entry.scope)).rejects.toMatchObject({ refusal: { code: 'NOT_FOUND' } });
     const [row] = await testQuery<{ deleted: boolean }>(
       ownerUrl,
       'select deleted_at is not null as deleted from workspaces where id = $1',

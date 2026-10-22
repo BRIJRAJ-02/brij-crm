@@ -292,6 +292,24 @@ export async function restoreWorkspace(
   const { result } = await runWrite(
     scope,
     async ({ tx }) => {
+      // The restorer is still an active owner now (any active owner, for a system scope): one who left meanwhile
+      // (deleting their account leaves a deleted workspace, spec 0033) can't bring it back with nobody to own it.
+      // Member rows are locked before the workspace's, in the order a removal takes them, so the two take turns.
+      const actor = scope.actor.type === 'member' ? scope.actor.id : null;
+      const [owner] = await tx
+        .select({ id: members.id })
+        .from(members)
+        .where(
+          and(
+            eq(members.workspaceId, scope.workspaceId),
+            eq(members.status, 'active'),
+            eq(members.role, 'owner'),
+            ...(actor === null ? [] : [eq(members.id, actor)]),
+          ),
+        )
+        .limit(1)
+        .for('share');
+      if (owner === undefined) throw refuse('NOT_FOUND', NOT_A_MEMBER);
       const [row] = await tx
         .update(workspaces)
         .set({ deletedAt: null, purgeAfter: null, ...touched(scope) })
@@ -304,24 +322,6 @@ export async function restoreWorkspace(
         )
         .returning(SETTINGS);
       if (row === undefined) throw refuse('NOT_FOUND', NOT_A_MEMBER);
-      // The restorer is still an active owner now, read after the update took the workspace's row lock: one who
-      // left meanwhile (deleting their account leaves a deleted workspace, spec 0033) can't bring it back with nobody
-      // to own it. A removal takes that row `for share` before it commits, so the two take turns; no member row is
-      // locked here, since a removal locks those before the workspace's.
-      if (scope.actor.type === 'member' && scope.actor.id !== null) {
-        const [owner] = await tx
-          .select({ id: members.id })
-          .from(members)
-          .where(
-            and(
-              eq(members.workspaceId, scope.workspaceId),
-              eq(members.id, scope.actor.id),
-              eq(members.status, 'active'),
-              eq(members.role, 'owner'),
-            ),
-          );
-        if (owner === undefined) throw refuse('NOT_FOUND', NOT_A_MEMBER);
-      }
       // Calendar sync stopped while it was deleted: each connection that syncs starts again.
       await tx.execute(sql`
         select crm_enqueue_calendar_sync(c.id) from calendar_connections c

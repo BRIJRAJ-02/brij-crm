@@ -288,16 +288,17 @@ export async function enterDeletedWorkspace(
 }
 
 /**
- * Account deletion's way into a deleted workspace (spec 0033, AC-903): the
- * person's own active member row, in a workspace deleted but still inside its
- * window, so they can leave it and be forgotten there too. Any role, since
- * leaving needs none; their role's access, with no rules, as
- * `enterDeletedWorkspace` mints. A live workspace, one past its window, a
- * removed member, someone who isn't a member and a role the code doesn't
- * know are all NOT_FOUND. Only `deleteMyAccount` calls it: it is not
- * exported from `@crm/core`.
+ * Account deletion's way into a workspace it leaves (spec 0033, AC-903): the
+ * person's own active member row, in a live workspace or a deleted one still
+ * inside its window, so they can leave it and be forgotten there too, even
+ * one deleted or restored while the deletion runs. Any role, since leaving
+ * needs none; their role's access, with no rules, as `enterDeletedWorkspace`
+ * mints, and no sign in rules, as `LEAVING`. One past its window, a removed
+ * member, someone who isn't a member and a role the code doesn't know are
+ * all NOT_FOUND. Only `deleteMyAccount` calls it: it is not exported from
+ * `@crm/core`.
  */
-export async function enterDeletedWorkspaceToLeave(
+export async function enterWorkspaceToLeave(
   deps: Pick<DoorDeps, 'db' | 'log'>,
   input: { readonly userId: string; readonly workspaceId: string },
 ): Promise<EngineScope> {
@@ -309,9 +310,10 @@ export async function enterDeletedWorkspaceToLeave(
       .innerJoin(workspaces, eq(workspaces.id, members.workspaceId))
       .where(
         and(
+          eq(members.workspaceId, input.workspaceId),
           eq(members.userId, input.userId),
           eq(members.status, 'active'),
-          sql`${workspaces.deletedAt} is not null and ${workspaces.purgeAfter} > now()`,
+          sql`(${workspaces.deletedAt} is null or ${workspaces.purgeAfter} > now())`,
         ),
       )
       .limit(1);

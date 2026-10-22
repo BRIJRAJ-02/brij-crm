@@ -10,7 +10,7 @@
 import { drizzleAdapter } from 'better-auth/adapters/drizzle';
 import { isIP } from 'node:net';
 import type { SecurityEventKind } from '@crm/contracts';
-import { and, asc, desc, eq, gte, inArray, isNotNull, isNull, ne, sql } from 'drizzle-orm';
+import { and, asc, desc, eq, gte, inArray, isNull, ne, sql } from 'drizzle-orm';
 import { drizzle } from 'drizzle-orm/node-postgres';
 import pg from 'pg';
 import type { DatabaseOptions } from '../client.ts';
@@ -150,12 +150,14 @@ export interface IdentityStore {
   /** The workspaces this user was added to, oldest first (by when the directory row was made); deleted ones left out. */
   workspacesOf(userId: string): Promise<readonly DirectoryWorkspace[]>;
   /**
-   * The deleted workspaces this user is still noted in, oldest first: for
-   * account deletion only, which leaves them too (spec 0033, AC-903). Never
-   * a list to show, and it grants nothing: the door reads the tenant row,
-   * which decides whether the workspace is still inside its window.
+   * Every workspace this user is noted in, deleted ones included, oldest
+   * first: for account deletion only, which leaves them all (spec 0033,
+   * AC-903), in one read, so a workspace deleted or restored meanwhile can't
+   * fall between two lists. Never a list to show, and it grants nothing: the
+   * door reads the tenant row, which decides whether it is live or inside its
+   * window.
    */
-  deletedWorkspacesOf(userId: string): Promise<readonly DirectoryWorkspace[]>;
+  allWorkspacesOf(userId: string): Promise<readonly DirectoryWorkspace[]>;
   /** The workspace this user last opened (spec 0031, AC-802), or undefined. Where to go, never access. */
   lastWorkspaceOf(userId: string): Promise<string | undefined>;
   /**
@@ -366,13 +368,13 @@ export function createIdentityStore(options: DatabaseOptions): IdentityStore {
         .orderBy(asc(workspaceDirectory.createdAt), asc(workspaceDirectory.workspaceId));
     },
 
-    async deletedWorkspacesOf(userId) {
+    async allWorkspacesOf(userId) {
       if (!UUID.test(userId)) return [];
       return db
         .select(directoryColumns)
         .from(workspaceMembership)
         .innerJoin(workspaceDirectory, eq(workspaceDirectory.workspaceId, workspaceMembership.workspaceId))
-        .where(and(eq(workspaceMembership.userId, userId), isNotNull(workspaceDirectory.deletedAt)))
+        .where(eq(workspaceMembership.userId, userId))
         .orderBy(asc(workspaceDirectory.createdAt), asc(workspaceDirectory.workspaceId));
     },
 
