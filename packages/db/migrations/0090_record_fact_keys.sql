@@ -7,8 +7,11 @@
 -- nothing on a database that never took one.
 --
 -- Hand written, data only. Migrations run as the owner, past row level security, so this reaches every workspace,
--- each row keeping its own. jsonb prints a pair as `"key": "value"`; a string holding a quote prints it as `\"`, so
--- only a condition's own key matches.
+-- each row keeping its own. Row security off: a role it would filter fails here rather than rewriting nothing, like
+-- 0082. jsonb prints a pair as `"key": "value"`; a string holding a quote prints it as `\"`, so only a condition's
+-- own key matches.
+set local row_security = off;
+--> statement-breakpoint
 update form_versions
 set document = regexp_replace(
   document::text,
