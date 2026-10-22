@@ -61,6 +61,7 @@ import { Route as WSlugSettingsFormsFormIdRouteImport } from './routes/w.$slug.s
 import { Route as WSlugSettingsObjectsIndexRouteImport } from './routes/w.$slug.settings.objects.index.tsx'
 import { Route as WSlugSettingsSchedulingCalendarsRouteImport } from './routes/w.$slug.settings.scheduling.calendars.tsx'
 import { Route as WSlugSettingsSchedulingRotationsRouteImport } from './routes/w.$slug.settings.scheduling.rotations.tsx'
+import { Route as WSlugSettingsSchedulingRoundRobinRouteImport } from './routes/w.$slug.settings.scheduling.round-robin.tsx'
 import { Route as WSlugCapturesFormsFormIdPreviewRouteImport } from './routes/w.$slug.captures_.forms.$formId_.preview.tsx'
 import { Route as WSlugObjectsObjectRecordIdIndexRouteImport } from './routes/w.$slug.objects.$object_.$recordId.index.tsx'
 import { Route as WSlugObjectsObjectRecordIdTabRouteImport } from './routes/w.$slug.objects.$object_.$recordId.$tab.tsx'
@@ -346,6 +347,12 @@ const WSlugSettingsSchedulingRotationsRoute =
     path: '/scheduling/rotations',
     getParentRoute: () => WSlugSettingsRoute,
   } as any)
+const WSlugSettingsSchedulingRoundRobinRoute =
+  WSlugSettingsSchedulingRoundRobinRouteImport.update({
+    id: '/scheduling/round-robin',
+    path: '/scheduling/round-robin',
+    getParentRoute: () => WSlugSettingsRoute,
+  } as any)
 const WSlugCapturesFormsFormIdPreviewRoute =
   WSlugCapturesFormsFormIdPreviewRouteImport.update({
     id: '/captures_/forms/$formId_/preview',
@@ -436,6 +443,7 @@ export interface FileRoutesByFullPath {
   '/w/$slug/settings/forms/$formId': typeof WSlugSettingsFormsFormIdRoute
   '/w/$slug/settings/scheduling/calendars': typeof WSlugSettingsSchedulingCalendarsRoute
   '/w/$slug/settings/scheduling/rotations': typeof WSlugSettingsSchedulingRotationsRoute
+  '/w/$slug/settings/scheduling/round-robin': typeof WSlugSettingsSchedulingRoundRobinRoute
   '/w/$slug/captures/forms/': typeof WSlugCapturesFormsIndexRoute
   '/w/$slug/captures/links/': typeof WSlugCapturesLinksIndexRoute
   '/w/$slug/settings/account/': typeof WSlugSettingsAccountIndexRoute
@@ -493,6 +501,7 @@ export interface FileRoutesByTo {
   '/w/$slug/settings/forms/$formId': typeof WSlugSettingsFormsFormIdRoute
   '/w/$slug/settings/scheduling/calendars': typeof WSlugSettingsSchedulingCalendarsRoute
   '/w/$slug/settings/scheduling/rotations': typeof WSlugSettingsSchedulingRotationsRoute
+  '/w/$slug/settings/scheduling/round-robin': typeof WSlugSettingsSchedulingRoundRobinRoute
   '/w/$slug/captures/forms': typeof WSlugCapturesFormsIndexRoute
   '/w/$slug/captures/links': typeof WSlugCapturesLinksIndexRoute
   '/w/$slug/settings/account': typeof WSlugSettingsAccountIndexRoute
@@ -555,6 +564,7 @@ export interface FileRoutesById {
   '/w/$slug/settings/forms/$formId': typeof WSlugSettingsFormsFormIdRoute
   '/w/$slug/settings/scheduling/calendars': typeof WSlugSettingsSchedulingCalendarsRoute
   '/w/$slug/settings/scheduling/rotations': typeof WSlugSettingsSchedulingRotationsRoute
+  '/w/$slug/settings/scheduling/round-robin': typeof WSlugSettingsSchedulingRoundRobinRoute
   '/w/$slug/captures/forms/': typeof WSlugCapturesFormsIndexRoute
   '/w/$slug/captures/links/': typeof WSlugCapturesLinksIndexRoute
   '/w/$slug/settings/account/': typeof WSlugSettingsAccountIndexRoute
@@ -618,6 +628,7 @@ export interface FileRouteTypes {
     | '/w/$slug/settings/forms/$formId'
     | '/w/$slug/settings/scheduling/calendars'
     | '/w/$slug/settings/scheduling/rotations'
+    | '/w/$slug/settings/scheduling/round-robin'
     | '/w/$slug/captures/forms/'
     | '/w/$slug/captures/links/'
     | '/w/$slug/settings/account/'
@@ -675,6 +686,7 @@ export interface FileRouteTypes {
     | '/w/$slug/settings/forms/$formId'
     | '/w/$slug/settings/scheduling/calendars'
     | '/w/$slug/settings/scheduling/rotations'
+    | '/w/$slug/settings/scheduling/round-robin'
     | '/w/$slug/captures/forms'
     | '/w/$slug/captures/links'
     | '/w/$slug/settings/account'
@@ -736,6 +748,7 @@ export interface FileRouteTypes {
     | '/w/$slug/settings/forms/$formId'
     | '/w/$slug/settings/scheduling/calendars'
     | '/w/$slug/settings/scheduling/rotations'
+    | '/w/$slug/settings/scheduling/round-robin'
     | '/w/$slug/captures/forms/'
     | '/w/$slug/captures/links/'
     | '/w/$slug/settings/account/'
@@ -1130,6 +1143,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof WSlugSettingsSchedulingRotationsRouteImport
       parentRoute: typeof WSlugSettingsRoute
     }
+    '/w/$slug/settings/scheduling/round-robin': {
+      id: '/w/$slug/settings/scheduling/round-robin'
+      path: '/scheduling/round-robin'
+      fullPath: '/w/$slug/settings/scheduling/round-robin'
+      preLoaderRoute: typeof WSlugSettingsSchedulingRoundRobinRouteImport
+      parentRoute: typeof WSlugSettingsRoute
+    }
     '/w/$slug/captures_/forms/$formId_/preview': {
       id: '/w/$slug/captures_/forms/$formId_/preview'
       path: '/captures/forms/$formId/preview'
@@ -1232,6 +1252,7 @@ interface WSlugSettingsRouteChildren {
   WSlugSettingsFormsFormIdRoute: typeof WSlugSettingsFormsFormIdRoute
   WSlugSettingsSchedulingCalendarsRoute: typeof WSlugSettingsSchedulingCalendarsRoute
   WSlugSettingsSchedulingRotationsRoute: typeof WSlugSettingsSchedulingRotationsRoute
+  WSlugSettingsSchedulingRoundRobinRoute: typeof WSlugSettingsSchedulingRoundRobinRoute
   WSlugSettingsAccountIndexRoute: typeof WSlugSettingsAccountIndexRoute
   WSlugSettingsBookingPagesIndexRoute: typeof WSlugSettingsBookingPagesIndexRoute
   WSlugSettingsFormsIndexRoute: typeof WSlugSettingsFormsIndexRoute
@@ -1257,6 +1278,8 @@ const WSlugSettingsRouteChildren: WSlugSettingsRouteChildren = {
   WSlugSettingsFormsFormIdRoute: WSlugSettingsFormsFormIdRoute,
   WSlugSettingsSchedulingCalendarsRoute: WSlugSettingsSchedulingCalendarsRoute,
   WSlugSettingsSchedulingRotationsRoute: WSlugSettingsSchedulingRotationsRoute,
+  WSlugSettingsSchedulingRoundRobinRoute:
+    WSlugSettingsSchedulingRoundRobinRoute,
   WSlugSettingsAccountIndexRoute: WSlugSettingsAccountIndexRoute,
   WSlugSettingsBookingPagesIndexRoute: WSlugSettingsBookingPagesIndexRoute,
   WSlugSettingsFormsIndexRoute: WSlugSettingsFormsIndexRoute,

@@ -50,8 +50,8 @@ export const generalSettingsHref = (slug: string) => `/w/${slug}/settings/genera
 /** Settings › Workspace › Members (spec 0031): who is in the workspace, roles and invitations. */
 export const membersSettingsHref = (slug: string) => `/w/${slug}/settings/members`;
 
-/** Settings › Scheduling › Rotations (spec 0029; spec 0037, AC-1433): the pools round robin pages book from. */
-export const rotationsSettingsHref = (slug: string) => `/w/${slug}/settings/scheduling/rotations`;
+/** Settings › Scheduling › Round robin (spec 0029; spec 0037, AC-1433): the groups round robin pages book from. */
+export const rotationsSettingsHref = (slug: string) => `/w/${slug}/settings/scheduling/round-robin`;
 
 /** Settings › Account › Notifications (spec 0038): the member's email for this workspace. */
 export const notificationSettingsHref = (slug: string) => `/w/${slug}/settings/account/notifications`;
@@ -211,7 +211,7 @@ export function settingsPageOf(pathname: string): SettingsPageId | undefined {
   if (rest === 'objects' || rest.startsWith('objects/')) return 'objects';
   if (rest === 'jobs') return 'jobs';
   if (rest === 'members') return 'members';
-  if (rest === 'scheduling/rotations') return 'rotations';
+  if (rest === 'scheduling/round-robin' || rest === 'scheduling/rotations') return 'rotations';
   if (rest === 'security') return 'workspace-security';
   return undefined;
 }

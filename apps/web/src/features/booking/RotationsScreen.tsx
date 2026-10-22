@@ -1,12 +1,15 @@
 // Brief
-// Purpose: Settings › Scheduling › Rotations (spec 0029, AC-728, AC-752, AC-758): the groups of people round robin pages share meetings across.
-// Main task: an admin makes a rotation and changes or deletes one; a member sees the rotations they are in and their own share.
+// Purpose: Settings › Scheduling › Round robin (spec 0029, AC-728, AC-752, AC-758): the groups of people round robin pages share meetings across (rotations in code), with a How round robin works help beside the title.
+// Main task: an admin makes a group and changes or deletes one; a member sees the groups they are in and their own share.
 // Leaves out: editing in place, the share bars and the reassign offer (milestone 2), and a rotation's history (spec 0037).
 import type { DataLayer, MemberSummary, RotationView } from '@crm/data';
 import { useCaptureList } from '@crm/data/react';
 import {
   Badge,
   Button,
+  ButtonLink,
+  InfoTip,
+  Link,
   Callout,
   Card,
   EmptyState,
@@ -25,6 +28,8 @@ import {
 } from '@crm/ui';
 import { useRouteContext } from '@tanstack/react-router';
 import { useState } from 'react';
+import { linksHref } from '../captures/tabs.ts';
+import { membersSettingsHref } from '../settings/nav.ts';
 import { SettingsPage } from '../settings/SettingsPage.tsx';
 import { DistributionPanel } from './DistributionPanel.tsx';
 import { RotationDialog } from './RotationDialog.tsx';
@@ -93,6 +98,28 @@ function cell(member: Member, column: string) {
     default:
       return member.isOn ? strings.isOn : strings.isOff;
   }
+}
+
+/**
+ * How round robin works, in four plain steps, beside the title and in the empty state (the owner, 22 October 2026):
+ * true to how the server assigns (spec 0029, `rotation/pick.ts`): a time shows when someone in the group is free,
+ * and the booking goes to a free member by the group's rule, Fair by default.
+ */
+function RoundRobinHelp({ slug }: { readonly slug: string }) {
+  return (
+    <InfoTip label={strings.helpLabel}>
+      {/* InfoTip's text is a paragraph, so its title and the steps are lines in it, the link last. */}
+      <strong>{strings.helpLabel}</strong>
+      {strings.helpSteps.map((step, index) => (
+        <span key={step}>
+          <br />
+          {`${String(index + 1)}. ${step}`}
+        </span>
+      ))}
+      <br />
+      <Link href={linksHref(slug)}>{strings.createPage}</Link>
+    </InfoTip>
+  );
 }
 
 /** The screen's body while it loads. */
@@ -187,8 +214,14 @@ export function RotationsScreen({ data, slug, people, canManage }: RotationsScre
     </Button>
   ) : undefined;
 
+  const isAloneEmpty = canManage && people.length < 2 && state.status === 'ready' && state.items.length === 0;
   return (
-    <SettingsPage title={strings.title} {...(newButton === undefined ? {} : { actions: newButton })}>
+    <SettingsPage
+      title={strings.title}
+      meta={<RoundRobinHelp slug={slug} />}
+      // Alone with no groups, Invite teammates is the one primary, in the empty state.
+      {...(newButton === undefined || isAloneEmpty ? {} : { actions: newButton })}
+    >
       {state.status === 'loading' ? (
         <Card isBusy>
           <Skeleton width="long" />
@@ -198,9 +231,36 @@ export function RotationsScreen({ data, slug, people, canManage }: RotationsScre
           {strings.failedText}
         </EmptyState>
       ) : state.items.length === 0 ? (
-        <EmptyState title={strings.emptyTitle} {...(newButton === undefined ? {} : { actions: newButton })}>
-          {canManage ? strings.emptyText : strings.emptyMemberText}
-        </EmptyState>
+        isAloneEmpty ? (
+          // Alone in the workspace: round robin needs teammates first.
+          <EmptyState
+            icon="users-round"
+            title={strings.emptyAloneTitle}
+            actions={
+              <>
+                <ButtonLink variant="primary" icon="user-plus" href={membersSettingsHref(slug)}>
+                  {strings.inviteTeammates}
+                </ButtonLink>
+                <RoundRobinHelp slug={slug} />
+              </>
+            }
+          >
+            {strings.emptyAloneText}
+          </EmptyState>
+        ) : (
+          <EmptyState
+            icon="users-round"
+            title={strings.emptyTitle}
+            actions={
+              <>
+                {newButton}
+                <RoundRobinHelp slug={slug} />
+              </>
+            }
+          >
+            {canManage ? strings.emptyText : strings.emptyMemberText}
+          </EmptyState>
+        )
       ) : (
         <SettingsStack>
           {state.items.map((rotation) => (
