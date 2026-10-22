@@ -93,17 +93,39 @@
   }
 
   @media (hover: hover) and (pointer: fine) {
-    .value[data-editable]:hover {
+    .row:hover .value[data-editable] {
       background: var(--surface-hover);
     }
 
-    .editable:hover > .action {
+    .row:hover .action {
       opacity: 1;
     }
   }
 
   .placeholder {
     color: var(--text-tertiary);
+  }
+
+  /* Folded lists: an empty value stays blank until its row is under a pointer or holds focus (Attio's way), so a
+     column of "Set Name…" never crowds the filled values. Touch screens, with no hover, keep it shown. */
+  @media (hover: hover) and (pointer: fine) {
+    .placeholder[data-quiet] {
+      opacity: 0;
+    }
+
+    .row:hover .placeholder[data-quiet] {
+      opacity: 1;
+    }
+  }
+
+  .row:focus-within .placeholder[data-quiet] {
+    opacity: 1;
+  }
+
+  /* The fold's button, at the list's foot, lined up with the names. */
+  .more {
+    display: flex;
+    margin-inline-start: calc(-1 * var(--space-6));
   }
 
   .toggle {

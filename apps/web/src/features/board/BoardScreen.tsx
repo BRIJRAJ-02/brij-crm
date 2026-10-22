@@ -460,6 +460,8 @@ function LoadedBoard({
       count: state?.count.count ?? 0,
       ...(state?.count.atLeast === true ? { isCountAtLeast: true } : {}),
       ...(option?.isArchived === true ? { isArchived: true } : {}),
+      // The no value column stays a slim strip while it holds nothing (once its count is in, so it never flickers).
+      ...(column.id === null && state !== undefined ? { isCollapsedWhenEmpty: true } : {}),
       // A required field's no value column takes no card (AC-502).
       ...(column.id === null && plan.groupBy.isRequired
         ? { refusesDrop: { reason: strings.requiredRefuses(plan.groupBy.title) } }
