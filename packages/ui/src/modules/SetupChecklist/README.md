@@ -30,7 +30,7 @@ New. The owner asked for a compact checklist (22 October 2026): a progress bar (
 ## States
 
 - Loading: skeleton lines, the card `aria-busy`.
-- Error: an EmptyState with Try again (`onRetry`).
+- Error: a row EmptyState with Try again (`onRetry`), as Home's other cards draw theirs.
 - No access: a locked row.
 - No steps: nothing at all, so the screen leaves the section out.
 - Read only and disabled don't apply: a step the member may not take is left out by the screen, not shown disabled.

@@ -474,6 +474,29 @@ export const InlineEmpty: Story = {
   },
 };
 
+/** Framed (a quick add above) and failed: the toolbar stays, the failure takes one row under it. */
+export const FramedFailed: Story = {
+  args: { onRetry: fn() },
+  render: function Render(args) {
+    return (
+      <Stage>
+        <TaskList
+          label="Open tasks"
+          tasks={arraySource([], (task: TaskEntry) => task.id)}
+          status="error"
+          toolbar={<Button>Add task</Button>}
+          onToggle={() => undefined}
+          {...(args.onRetry === undefined ? {} : { onRetry: args.onRetry })}
+        />
+      </Stage>
+    );
+  },
+  play: async ({ canvas }) => {
+    await expect(canvas.getByRole('alert')).toHaveAttribute('data-layout', 'row');
+    await expect(canvas.getByRole('button', { name: 'Add task' })).toBeVisible();
+  },
+};
+
 /** In place (a card on Home), failed: one row with Try again, like the inline empty list. */
 export const InlineFailed: Story = {
   args: { onRetry: fn() },
