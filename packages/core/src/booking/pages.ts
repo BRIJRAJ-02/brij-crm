@@ -527,7 +527,7 @@ export async function updateBookingPage(
       if (page.kind !== 'round_robin') {
         throw refuseOn('CONFIG_INVALID', 'Only a team page has routing rules.', 'routing');
       }
-      await checkPageRoutes(tx, page.id, routing.rules);
+      await checkPageRoutes(tx, page.id, routing.rules, { access: scope.access, before: page.routingRules ?? [] });
       const before = page.routingRules ?? [];
       if (rulesChanged(before, routing.rules)) {
         await writeAudit(tx, scope.workspaceId, scope.actor, {

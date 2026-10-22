@@ -619,6 +619,97 @@ describe('routing leftovers', () => {
       { surface_kind: 'booking_page', rule_id: 'spring', host: w.cy.id },
       { surface_kind: 'form', rule_id: 'ads', host: w.cy.id },
     ]);
+    // Another team page with the same rule, given the same hand off: the form didn't send the visitor there, so its
+    // hidden fields never reach it.
+    const other = await createBookingPage(
+      w.owner,
+      {
+        id: newId(),
+        title: 'Other',
+        timeZone: 'UTC',
+        kind: 'round_robin',
+        hosts: { fixed: [], rotations: [...(w.page.hosts?.rotations ?? [])] },
+      },
+      NOW,
+    );
+    await updateBookingPage(w.owner, {
+      pageId: other.id,
+      settings: {},
+      routing: {
+        rules: [
+          rule('spring', {
+            when: { join: 'all', rules: [{ key: 'hidden.utm_campaign', op: 'is', value: 'spring' }] },
+            then: { kind: 'hosts', hosts: [w.cy.id] },
+          }),
+        ],
+      },
+    });
+    const elsewhere = await bookPublicSlot(
+      await enterBookingPage({ db }, other.publicKey),
+      deps(),
+      bookInput(at('11:00'), String(fromAds.answers.email)),
+      [],
+      { submissionId: decisions[0]?.submission_id ?? '' },
+    );
+    expect(
+      await w.query(sql`select rule_id from routing_decisions where booking_id = ${elsewhere.bookingId}::uuid`),
+    ).toEqual([{ rule_id: null }]);
+  });
+
+  it('refuses a team page rule over a field its writer can’t see, but keeps one another admin wrote', async () => {
+    const w = await world();
+    const jobTitle = `person.${w.attribute('people.job_title')}`;
+    const cto = rule('cto', {
+      when: { join: 'all', rules: [{ key: jobTitle, op: 'is', value: 'cto' }] },
+      then: { kind: 'hosts', hosts: [w.cy.id] },
+    });
+    await updateBookingPage(w.owner, { pageId: w.page.id, settings: {}, routing: { rules: [cto] } });
+    // An admin whose role can't see People at all.
+    const blind = rescope(w.owner, {
+      actor: { type: 'member', id: w.bea.id },
+      role: 'admin',
+      rules: {
+        levels: [
+          { subject: { type: 'role', role: 'admin' }, target: { type: 'object', objectId: w.people }, level: 'none' },
+        ],
+        records: [],
+      },
+    });
+    const ads = rule('ads', {
+      when: { join: 'all', rules: [{ key: 'hidden.utm_source', op: 'is', value: 'google' }] },
+      then: { kind: 'hosts', hosts: [w.bea.id] },
+    });
+    // The owner's rule kept as it was: the blind admin can still change the rest.
+    await updateBookingPage(blind, { pageId: w.page.id, settings: {}, routing: { rules: [cto, ads] } });
+    const changed = await refusalOf(
+      updateBookingPage(blind, {
+        pageId: w.page.id,
+        settings: {},
+        routing: {
+          rules: [{ ...cto, when: { join: 'all', rules: [{ key: jobTitle, op: 'is', value: 'ceo' }] } }, ads],
+        },
+      }),
+    );
+    expect(changed).toMatchObject({
+      code: 'CONFIG_INVALID',
+      message: 'Rule 1 reads a field you can’t use. Pick another field.',
+    });
+    // A number comparison on a hidden field is refused on a page as on a form.
+    const counted = await refusalOf(
+      updateBookingPage(w.owner, {
+        pageId: w.page.id,
+        settings: {},
+        routing: {
+          rules: [
+            rule('many', {
+              when: { join: 'all', rules: [{ key: 'hidden.utm_term', op: 'more_than', value: '3' }] },
+              then: { kind: 'hosts', hosts: [w.cy.id] },
+            }),
+          ],
+        },
+      }),
+    );
+    expect(counted.message).toBe('Rule 1 compares a hidden field as a number, but it holds text.');
   });
 
   it('reads record facts only in the page’s own workspace: another’s person or field is never found', async () => {
@@ -638,13 +729,16 @@ describe('routing leftovers', () => {
         when: { join: 'all', rules: [{ key: `person.${attributeId}`, op: 'is', value: 'cto' }] },
         then: { kind: 'hosts', hosts: [a.cy.id] },
       });
-    await updateBookingPage(a.owner, {
-      pageId: a.page.id,
-      settings: {},
-      routing: {
-        rules: [cto('foreign', b.attribute('people.job_title')), cto('own', a.attribute('people.job_title'))],
-      },
-    });
+    const rules = [cto('foreign', b.attribute('people.job_title')), cto('own', a.attribute('people.job_title'))];
+    // Saving a rule over B's field is refused in A: the field can't be found there.
+    const refused = await refusalOf(
+      updateBookingPage(a.owner, { pageId: a.page.id, settings: {}, routing: { rules } }),
+    );
+    expect(refused.message).toBe('Rule 1 reads a field you can’t use. Pick another field.');
+    // One stored before that check is skipped at the booking, never read.
+    await a.query(
+      sql`update booking_pages set routing = ${JSON.stringify({ rules })}::jsonb where id = ${a.page.id}::uuid`,
+    );
     const entry = await enterBookingPage({ db }, a.page.publicKey);
     const booked = await bookPublicSlot(entry, deps(), bookInput(at('09:00'), 'grace@navy.example'));
     const [row] = await a.query<{ rule_id: string | null; skipped: string[] }>(

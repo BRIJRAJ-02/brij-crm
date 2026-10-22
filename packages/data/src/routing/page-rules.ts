@@ -1,28 +1,77 @@
 // A team page's routing rules as the data layer holds them (spec 0043, AC-1608), for the page's Routing card: one
-// entry of the held booking page list, the one copy every page write patches. A rule added, moved or removed
-// (`bookingPages.update` with `routing`) shows at once, goes back on a refusal, and the server's answer is put in
-// place, so the card never waits on, or keeps, a copy of its own. Booking pages have no live event; the list is read
-// again when held after a while away, like Captures › Links.
+// entry per workspace and page, filled by every answer that carries the page (the editor's `bookingPages.get` on
+// arrival, an update's answer) and patched by `bookingPages.update` with rules: shown at once, put back on a refusal
+// (only while it still shows that change), the answer put in place. It reads nothing itself: booking pages have no
+// live event, and the editor's loader reads the page each time it opens, so no page list is read for it and no list
+// cap can leave a page out.
 import type { BookingPageView, RoutingRule } from '@crm/contracts';
-import type { CaptureListView } from '../captures/list.ts';
 
-/** One page's rules as a card retains them: the held list's entry, or undefined until the list holds the page. */
+/** One page's rules as a card retains them: undefined until an answer carrying the page arrives. */
 export interface PageRulesHeld {
   readonly subscribe: (listener: () => void) => () => void;
-  /** The page's rules as last shown; the same array until a write or a read changes the page. */
+  /** The page's rules as last shown; the same array until a write or an answer changes them. */
   readonly getSnapshot: () => readonly RoutingRule[] | undefined;
-  /** Holds the booking page list while the card shows: read when first held, unless a read just landed. */
+  /** Nothing to read: the entry is filled by the page's own answers. */
   readonly retain: () => () => void;
 }
 
-/** The rules of page `pageId`, read from a held booking page list (`bookingPages.view`). */
-export function pageRulesOf(list: CaptureListView<BookingPageView>, pageId: string): PageRulesHeld {
+interface Entry {
+  rules: readonly RoutingRule[] | undefined;
+  readonly listeners: Set<() => void>;
+  readonly held: PageRulesHeld;
+}
+
+/** The pages' rules: one entry per workspace and page, for the session (`clear` on sign out). */
+export function createPageRules() {
+  const entries = new Map<string, Entry>();
+
+  const entryOf = (workspace: string, pageId: string): Entry => {
+    const key = `${workspace} ${pageId}`;
+    const found = entries.get(key);
+    if (found !== undefined) return found;
+    const listeners = new Set<() => void>();
+    const entry: Entry = {
+      rules: undefined,
+      listeners,
+      held: {
+        subscribe: (listener) => {
+          listeners.add(listener);
+          return () => {
+            listeners.delete(listener);
+          };
+        },
+        getSnapshot: () => entry.rules,
+        retain: () => () => undefined,
+      },
+    };
+    entries.set(key, entry);
+    return entry;
+  };
+
+  const set = (entry: Entry, rules: readonly RoutingRule[] | undefined) => {
+    entry.rules = rules;
+    for (const listener of entry.listeners) listener();
+  };
+
   return {
-    subscribe: list.subscribe,
-    getSnapshot: () => {
-      const state = list.getSnapshot();
-      return state.status === 'ready' ? state.items.find((page) => page.id === pageId)?.routing?.rules : undefined;
+    /** One page's rules, the same held view for the session. */
+    view: (workspace: string, pageId: string): PageRulesHeld => entryOf(workspace, pageId).held,
+    /** A page as the server answered it: a team page's rules replace what is held. */
+    receive: (workspace: string, page: BookingPageView): void => {
+      if (page.routing !== undefined) set(entryOf(workspace, page.id), page.routing.rules);
     },
-    retain: list.retain,
+    /** Shows `rules` at once; answers how to put back what was there, only while it still shows them. */
+    show: (workspace: string, pageId: string, rules: readonly RoutingRule[]): (() => void) => {
+      const entry = entryOf(workspace, pageId);
+      const before = entry.rules;
+      set(entry, rules);
+      return () => {
+        if (entry.rules === rules) set(entry, before);
+      };
+    },
+    /** Forgets every page (sign in, sign out, a 401): a new session reads its pages afresh. */
+    clear: (): void => {
+      entries.clear();
+    },
   };
 }

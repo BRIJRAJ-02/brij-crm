@@ -121,7 +121,7 @@ import {
   type RoutingReportHeld,
   type RoutingReportSurface,
 } from './routing/reports.ts';
-import { pageRulesOf, type PageRulesHeld } from './routing/page-rules.ts';
+import { createPageRules, type PageRulesHeld } from './routing/page-rules.ts';
 import {
   createAccountSecurityStore,
   isFresh as isSessionFresh,
@@ -1044,6 +1044,7 @@ export function createDataLayer({
     });
     pendingOptions.clear();
     bookingPageLists.clear();
+    pageRules.clear();
     formLists.clear();
     schedules.clear();
     preferences.clear();
@@ -1744,9 +1745,8 @@ export function createDataLayer({
     report: (workspace, surface, days) =>
       beforeRead(workspace).then(() => call((options) => api.routing.report({ workspace, surface, days }, options))),
   });
-  // A team page's rules as its Routing card reads them: one read per workspace and page over the held booking page
-  // list, kept so a screen's subscription stays the same across renders.
-  const pageRules = new Map<string, PageRulesHeld>();
+  // A team page's rules as its Routing card reads them: filled by the page's answers, patched by its updates.
+  const pageRules = createPageRules();
 
   // Availability schedules (spec 0035): a held list per workspace and member, patched by every write, read again on
   // a `schedules` event.
@@ -2846,7 +2846,10 @@ export function createDataLayer({
       },
       /** One page. `NOT_FOUND` for one the reader may not change. */
       get: (workspace: string, pageId: string): Promise<BookingPageView> =>
-        call((options) => api.bookingPages.get({ workspace, pageId }, options)),
+        call((options) => api.bookingPages.get({ workspace, pageId }, options)).then((page) => {
+          pageRules.receive(workspace, page);
+          return page;
+        }),
       /** A new page with defaults. Refusals: `ID_TAKEN`, `SLUG_TAKEN` (field `slug`). */
       create: (
         workspace: string,
@@ -2876,30 +2879,45 @@ export function createDataLayer({
         pageId: string,
         settings: Partial<BookingPageSettings>,
         extra: { hosts?: TeamHosts; routing?: RoutingRules } = {},
-      ): Promise<BookingPageView> =>
-        bookingPageLists.write(workspace, {
-          send: () =>
-            call((options) =>
-              api.bookingPages.update(
-                {
-                  workspace,
-                  pageId,
-                  settings,
-                  ...(extra.hosts === undefined ? {} : { hosts: extra.hosts }),
-                  ...(extra.routing === undefined ? {} : { routing: extra.routing }),
-                  mutationId: mintId(),
-                },
-                options,
-              ),
-            ).then(settings.scheduleId === undefined ? (page: BookingPageView) => page : usedBy(workspace)),
-          ...shownPatch(bookingPageLists.items(workspace), pageId, (page) => ({
-            ...page,
-            ...settings,
-            ...(extra.hosts === undefined ? {} : { hosts: extra.hosts }),
-            ...(extra.routing === undefined ? {} : { routing: extra.routing }),
-          })),
-          land: (items, page) => patchItem<BookingPageView>(pageId, () => page)(items),
-        }),
+      ): Promise<BookingPageView> => {
+        // A team page's rules show at once on its Routing card too, and go back there on a refusal.
+        const putBack =
+          extra.routing === undefined ? undefined : pageRules.show(workspace, pageId, extra.routing.rules);
+        return bookingPageLists
+          .write(workspace, {
+            send: () =>
+              call((options) =>
+                api.bookingPages.update(
+                  {
+                    workspace,
+                    pageId,
+                    settings,
+                    ...(extra.hosts === undefined ? {} : { hosts: extra.hosts }),
+                    ...(extra.routing === undefined ? {} : { routing: extra.routing }),
+                    mutationId: mintId(),
+                  },
+                  options,
+                ),
+              ).then(settings.scheduleId === undefined ? (page: BookingPageView) => page : usedBy(workspace)),
+            ...shownPatch(bookingPageLists.items(workspace), pageId, (page) => ({
+              ...page,
+              ...settings,
+              ...(extra.hosts === undefined ? {} : { hosts: extra.hosts }),
+              ...(extra.routing === undefined ? {} : { routing: extra.routing }),
+            })),
+            land: (items, page) => patchItem<BookingPageView>(pageId, () => page)(items),
+          })
+          .then(
+            (page) => {
+              pageRules.receive(workspace, page);
+              return page;
+            },
+            (error: unknown) => {
+              putBack?.();
+              throw error;
+            },
+          );
+      },
       /**
        * A copy of a page the list holds, titled `title`: first in the list at
        * once (pending until the server made it), gone again on a refusal. The
@@ -3106,17 +3124,12 @@ export function createDataLayer({
       report: (workspace: string, surface: RoutingReportSurface, days: RoutingReportDays): RoutingReportHeld =>
         routingReports.view(workspace, surface, days),
       /**
-       * A team page's routing rules as the layer holds them (spec 0043, AC-1608), for its Routing card: the page's
-       * entry in the held booking page list (`bookingPages.view`), which `bookingPages.update` patches at once and
-       * puts back on a refusal, so a rule added, moved or removed shows before the server answers. Held while the
-       * card shows (`usePageRules`); undefined until the list holds the page.
+       * A team page's routing rules as the layer holds them (spec 0043, AC-1608), for its Routing card: filled by
+       * the page's answers (the editor's `bookingPages.get`, an update's), and patched by `bookingPages.update` at
+       * once and put back on a refusal, so a rule added, moved or removed shows before the server answers. Read with
+       * `usePageRules`; undefined until an answer carrying the page arrives.
        */
-      pageRules: (workspace: string, pageId: string): PageRulesHeld => {
-        const key = `${workspace} ${pageId}`;
-        const held = pageRules.get(key) ?? pageRulesOf(bookingPageLists.view(workspace), pageId);
-        pageRules.set(key, held);
-        return held;
-      },
+      pageRules: (workspace: string, pageId: string): PageRulesHeld => pageRules.view(workspace, pageId),
     },
     home: {
       /**

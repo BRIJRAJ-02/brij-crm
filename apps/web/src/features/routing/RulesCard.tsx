@@ -65,6 +65,7 @@ export interface RulesCardProps {
   readonly onRulesChange: (rules: readonly RoutingRule[]) => Promise<void>;
 }
 
+// The rule being edited or removed goes by its id, so a list read landing meanwhile never moves the change to another.
 type Editing = { readonly index: number; readonly rule?: RoutingRule } | undefined;
 
 const REPORT_COLUMNS: readonly TableColumn[] = [
@@ -88,10 +89,14 @@ export function RulesCard(props: RulesCardProps) {
   );
 }
 
-/** A team page's card: its rules as the data layer holds the page, the caller's until the layer holds it. */
+/**
+ * A team page's card: its rules as the data layer holds the page, the caller's until the layer holds it, and its line
+ * counted from those same rules, so it never trails a change.
+ */
 function PageRulesCard({ pageId, ...props }: RulesCardProps & { readonly pageId: string }) {
   const held = usePageRules(props.data.routing.pageRules(props.slug, pageId));
-  return <RulesCardBody {...props} rules={held ?? props.rules} />;
+  const rules = held ?? props.rules;
+  return <RulesCardBody {...props} rules={rules} description={strings.pageRoutingLine(rules.length)} />;
 }
 
 function RulesCardBody({
@@ -110,7 +115,8 @@ function RulesCardBody({
   onRulesChange,
 }: RulesCardProps) {
   const [editing, setEditing] = useState<Editing>();
-  const [removing, setRemoving] = useState<number | undefined>();
+  const [removing, setRemoving] = useState<string | undefined>();
+  const removingAt = rules.findIndex((rule) => rule.id === removing);
   const [busy, setBusy] = useState(false);
   const [failure, setFailure] = useState<string | undefined>();
   // Every rule may also read the visit's hidden fields; on a team page they come from the form that sent the visitor.
@@ -189,7 +195,7 @@ function RulesCardBody({
                     if (key === 'edit') setEditing({ index, rule });
                     if (key === 'up') move(index, -1);
                     if (key === 'down') move(index, 1);
-                    if (key === 'remove') setRemoving(index);
+                    if (key === 'remove') setRemoving(rule.id);
                   }}
                 >
                   <MenuItem id="edit" icon="pencil">
@@ -249,16 +255,16 @@ function RulesCardBody({
           setFailure(undefined);
         }}
         onSave={(saved) => {
-          const at = editing?.index ?? rules.length;
+          const editedId = editing?.rule?.id;
           const next =
-            editing?.rule === undefined ? [...rules, saved] : rules.map((each, i) => (i === at ? saved : each));
+            editedId === undefined ? [...rules, saved] : rules.map((each) => (each.id === editedId ? saved : each));
           void keep(next).then((ok) => {
             if (ok) setEditing(undefined);
           });
         }}
       />
       <Modal
-        title={strings.removeTitle(strings.ruleTitle(removing ?? 0, rules[removing ?? 0]?.name))}
+        title={strings.removeTitle(strings.ruleTitle(Math.max(removingAt, 0), rules[removingAt]?.name))}
         tone="danger"
         isOpen={removing !== undefined}
         isBusy={busy}
@@ -274,7 +280,7 @@ function RulesCardBody({
               variant="danger-solid"
               isPending={busy}
               onPress={() => {
-                void keep(rules.filter((_, i) => i !== removing)).then((ok) => {
+                void keep(rules.filter((rule) => rule.id !== removing)).then((ok) => {
                   if (ok) setRemoving(undefined);
                 });
               }}
