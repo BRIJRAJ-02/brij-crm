@@ -3,6 +3,7 @@
 // on its row before anything is sent (spec 0025, AC-624, AC-680). Plain
 // functions.
 import { clockLabel, type BookingAvailability, type DateOverride, type TimeRange, type Weekday } from '@crm/data';
+import { currentZone, offsetLabel, zoneDisplay, zoneName } from '../../public/booking/time.ts';
 import { strings } from './strings.ts';
 
 /** The weekdays, Monday first, as the availability keys them. */
@@ -121,7 +122,7 @@ export function timeZones(current: string): readonly string[] {
   return listed.includes(current) ? listed : [current, ...listed];
 }
 
-/** A zone as a picker shows it: the place, with its offset from GMT now beside it ("GMT+05:30"). */
+/** A zone as a picker shows it: the place as people say it ("Kolkata time"), its short offset beside it ("GMT+5:30"). */
 export interface ZoneItem {
   readonly id: string;
   readonly label: string;
@@ -138,32 +139,21 @@ export function zoneOffset(zone: string, at: Date): string {
 }
 
 /**
- * Zones some browsers still name by their old spelling (Chrome answers Asia/Calcutta where Firefox and Safari answer
- * Asia/Kolkata). The picker shows the current name and lists each place once; the stored value stays as it was.
+ * A zone as people read it, the one form the app shows (the public booking page's): "Kolkata time (GMT+5:30)".
+ * An old spelling some browsers answer (Asia/Calcutta) reads by its current name; the stored value stays as it was.
  */
-const RENAMED: Readonly<Record<string, string>> = Object.freeze({
-  'Asia/Calcutta': 'Asia/Kolkata',
-  'Asia/Katmandu': 'Asia/Kathmandu',
-  'Asia/Rangoon': 'Asia/Yangon',
-  'Asia/Saigon': 'Asia/Ho_Chi_Minh',
-  'Europe/Kiev': 'Europe/Kyiv',
-  'America/Godthab': 'America/Nuuk',
-  'Atlantic/Faeroe': 'Atlantic/Faroe',
-});
-
-/** A zone as people read it: its current name, with spaces ("Asia/Kolkata", "America/New York"). */
-export function zoneLabel(zone: string): string {
-  return (RENAMED[zone] ?? zone).replaceAll('_', ' ');
+export function zoneLabel(zone: string, at: Date = new Date()): string {
+  return zoneDisplay(zone, at.getTime());
 }
 
-/** The picker's zones, the current one first, each with its offset (as timefix lists them), each place once. */
+/** The picker's zones, the current one first, each place once: "Kolkata time" with "GMT+5:30" beside it. */
 export function zoneItems(current: string, at: Date): readonly ZoneItem[] {
   const seen = new Set<string>();
   return [current, ...timeZones(current)].flatMap((zone) => {
-    const label = zoneLabel(zone);
-    if (seen.has(label)) return [];
-    seen.add(label);
-    return [{ id: zone, label, description: zoneOffset(zone, at) }];
+    const place = currentZone(zone);
+    if (seen.has(place)) return [];
+    seen.add(place);
+    return [{ id: zone, label: zoneName(zone), description: offsetLabel(zone, at.getTime()) }];
   });
 }
 
@@ -176,9 +166,28 @@ function offsetWord(word: string): string {
     .replace(/([+-]\d\d)(\d\d)$/, '$1:$2');
 }
 
-/** A zone search: every word typed is in the place or the offset ("new york", "gmt+5", "+5:30", "utc-8"). */
-export function zoneMatches(item: { readonly label: string; readonly description?: string }, query: string): boolean {
-  const text = `${item.label} ${item.description ?? ''}`.toLowerCase();
+/** A short offset written long, so either form finds it: "GMT+5:30" is also "GMT+05:30", "GMT" is "GMT+00:00". */
+function longOffset(short: string): string {
+  const match = /^GMT(?:([+-])(\d{1,2})(?::(\d\d))?)?$/.exec(short);
+  if (match === null) return '';
+  const [, sign = '+', hours = '0', minutes = '00'] = match;
+  return `GMT${sign}${hours.padStart(2, '0')}:${minutes}`;
+}
+
+/**
+ * A zone search: every word typed is in the place, the zone's id or the offset ("kolkata", "asia/kolkata",
+ * "new york", "gmt+5:30", "gmt+05:30", "+5:30", "utc+5").
+ */
+export function zoneMatches(
+  item: { readonly id?: string; readonly label: string; readonly description?: string },
+  query: string,
+): boolean {
+  const id = item.id ?? '';
+  const offset = item.description ?? '';
+  const place = currentZone(id);
+  const text = [item.label, id, place, place.replaceAll(/[/_]/g, ' '), offset, longOffset(offset)]
+    .join(' ')
+    .toLowerCase();
   return query
     .toLowerCase()
     .split(/\s+/)

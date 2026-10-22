@@ -48,7 +48,11 @@ export function PageColumn({
 }: PageColumnProps) {
   const hasAside = aside !== undefined && aside !== null && aside !== false;
   return (
-    <div className={styles.root} data-align={align === 'start' ? undefined : align}>
+    <div
+      className={styles.root}
+      data-align={align === 'start' ? undefined : align}
+      data-footer={footer !== undefined && footer !== null && footer !== false ? '' : undefined}
+    >
       {actions !== undefined && actions !== null && actions !== false && (
         <div className={styles.actions}>{actions}</div>
       )}

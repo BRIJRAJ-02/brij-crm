@@ -199,7 +199,7 @@ export const strings = {
   rescheduleTitle: (title: string, name: string) => `Reschedule ${title} with ${name}`,
   tryAgain: 'Try again',
   copyFailed: 'Couldn’t copy the link. Try again.',
-  timesIn: (zone: string) => `Times in ${zone.replace(/_/g, ' ')}`,
+  timesIn: (zone: string) => `Times in ${zone}`,
   keepTime: 'Keep this time',
   pickTime: 'Pick a new time',
   moving: 'Moving',

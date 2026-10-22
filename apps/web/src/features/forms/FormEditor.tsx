@@ -328,7 +328,7 @@ export function FormEditor(props: FormEditorProps) {
     >
       <EditorActions
         link={data.forms.hostedUrl(form.publicKey)}
-        isLinkDisabled={!isPublished}
+        {...(isPublished ? {} : { linkOffReason: strings.linkAfterPublish })}
         preview={
           <Button
             icon="eye"

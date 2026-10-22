@@ -1,6 +1,7 @@
 // Brief
 // Purpose: an object's Configuration tab: its names and look, its API name and id, and archiving it.
-// Main task: owners and admins rename or restyle the object and Save; or archive (or restore) it from the danger zone.
+// Main task: owners and admins rename or restyle the object and save from the SaveBar at the view's foot; or archive
+// (or restore) it from the danger zone.
 // Leaves out: changing the API name (never, AC-224) and the attributes (the Attributes tab).
 import { isDataError, type Hue, type ObjectIcon, type ObjectSummary } from '@crm/data';
 import {
@@ -12,11 +13,14 @@ import {
   InfoTip,
   Form,
   type FormRefusal,
+  SaveBar,
+  type SaveBarStatus,
   SettingsSection,
   SettingsStack,
 } from '@crm/ui';
 import { useRouteContext } from '@tanstack/react-router';
-import { useId, useState } from 'react';
+import { useId, useState, type ReactNode } from 'react';
+import { pageHeading } from '../navigation/focus.ts';
 import { focusTitle } from '../navigation/focus-title.ts';
 import { useCan } from '../workspace/WorkspacePage.tsx';
 import { ArchiveObjectDialog } from './ArchiveObjectDialog.tsx';
@@ -27,31 +31,42 @@ import { strings } from './strings.ts';
 /** The form's field names, as the server names them on its refusals. */
 const FIELDS = ['singularName', 'pluralName', 'icon', 'hue'] as const;
 
-/** Props for the Configuration tab. */
-export interface ConfigurationTabProps {
-  readonly slug: string;
-  readonly object: ObjectSummary;
+/**
+ * The object's names and look as edited, held by the object's page (not the tab), so the SaveBar at the view's foot
+ * says "Unsaved changes" on either tab and a tab change keeps what was typed.
+ */
+export interface ObjectConfiguration {
+  readonly singular: string;
+  readonly plural: string;
+  readonly icon: ObjectIcon;
+  readonly hue: Hue;
+  readonly setSingular: (value: string) => void;
+  readonly setPlural: (value: string) => void;
+  readonly setIcon: (value: ObjectIcon) => void;
+  readonly setHue: (value: Hue) => void;
+  readonly isBusy: boolean;
+  readonly isChanged: boolean;
+  readonly refusals: readonly FormRefusal[];
+  readonly save: () => void;
+  /** The SaveBar for the page's footer; undefined for a reader who may not change the object. */
+  readonly footer: ReactNode;
 }
 
 /**
- * The Configuration tab: the names and look as a form whose Save is on only
- * when something changed (busy while it waits, the fields kept as typed,
- * refusals on their field or in the banner), the API name and id read only
- * with copy buttons, and the danger zone. Members read it all, with nothing to
- * change.
+ * The names and look of an object being edited, and their SaveBar: Save on only when something changed (busy while
+ * it waits, the fields kept as typed, refusals on their field or in the form's banner), Discard putting back what the
+ * server holds. A live change from elsewhere moves the fields that weren't edited here.
  */
-export function ConfigurationTab({ slug, object }: ConfigurationTabProps) {
-  const { data, toasts } = useRouteContext({ from: '__root__' });
+export function useObjectConfiguration(slug: string, object: ObjectSummary): ObjectConfiguration {
+  const { data } = useRouteContext({ from: '__root__' });
   const canManage = useCan('schema.manage');
-  const formId = useId();
   const [singular, setSingular] = useState(object.singularName);
   const [plural, setPlural] = useState(object.pluralName);
   const [icon, setIcon] = useState<ObjectIcon>(object.icon);
   const [hue, setHue] = useState<Hue>(object.hue);
   const [isBusy, setBusy] = useState(false);
+  const [justSaved, setJustSaved] = useState(false);
   const [refusals, setRefusals] = useState<readonly FormRefusal[]>([]);
-  const [isArchiving, setArchiving] = useState(false);
-  const [isRestoring, setRestoring] = useState(false);
   // What the server holds now: a live change from elsewhere moves it, and the form follows unless edited here.
   const [base, setBase] = useState(object);
   if (base !== object) {
@@ -68,6 +83,7 @@ export function ConfigurationTab({ slug, object }: ConfigurationTabProps) {
     ...(hue === object.hue ? {} : { hue }),
   };
   const isChanged = Object.keys(changes).length > 0;
+  const isNameMissing = singular.trim() === '' || plural.trim() === '';
 
   const save = () => {
     if (isBusy || !isChanged) return;
@@ -83,9 +99,9 @@ export function ConfigurationTab({ slug, object }: ConfigurationTabProps) {
     setRefusals([]);
     // Only what changed is sent (AC-224); the API name never is.
     data.objects.update(slug, object.id, changes).then(
-      (saved) => {
+      () => {
         setBusy(false);
-        toasts.toast({ tone: 'success', message: strings.saved(saved.pluralName) });
+        setJustSaved(true);
       },
       (error: unknown) => {
         setBusy(false);
@@ -93,6 +109,76 @@ export function ConfigurationTab({ slug, object }: ConfigurationTabProps) {
       },
     );
   };
+  // An edit starts afresh: no "Saved", no failure said for the last answer.
+  const edited =
+    <T,>(set: (value: T) => void) =>
+    (value: T) => {
+      set(value);
+      setJustSaved(false);
+    };
+  const failure = refusals[0]?.message;
+  const status: SaveBarStatus = isBusy
+    ? 'saving'
+    : isChanged
+      ? failure === undefined
+        ? 'unsaved'
+        : 'error'
+      : justSaved
+        ? 'saved'
+        : 'hidden';
+  const footer = canManage ? (
+    <SaveBar
+      status={status}
+      {...(failure === undefined ? {} : { error: failure })}
+      {...(isNameMissing && isChanged ? { blockedReason: strings.nameMissing } : {})}
+      onSave={save}
+      onDiscard={() => {
+        setSingular(object.singularName);
+        setPlural(object.pluralName);
+        setIcon(object.icon);
+        setHue(object.hue);
+        setRefusals([]);
+      }}
+      onFocusAway={() => pageHeading(document)?.focus()}
+    />
+  ) : undefined;
+  return {
+    singular,
+    plural,
+    icon,
+    hue,
+    setSingular: edited(setSingular),
+    setPlural: edited(setPlural),
+    setIcon: edited(setIcon),
+    setHue: edited(setHue),
+    isBusy,
+    isChanged,
+    refusals,
+    save,
+    footer,
+  };
+}
+
+/** Props for the Configuration tab. */
+export interface ConfigurationTabProps {
+  readonly slug: string;
+  readonly object: ObjectSummary;
+  /** The names and look as edited, from useObjectConfiguration on the object's page. */
+  readonly configuration: ObjectConfiguration;
+}
+
+/**
+ * The Configuration tab: the names and look as a form (saved from the SaveBar at the view's foot), the API name and
+ * id read only with copy buttons, and the danger zone. Members read it all, with nothing to change.
+ */
+export function ConfigurationTab({ slug, object, configuration }: ConfigurationTabProps) {
+  const { data, toasts } = useRouteContext({ from: '__root__' });
+  const canManage = useCan('schema.manage');
+  const formId = useId();
+  const { singular, plural, icon, hue, setSingular, setPlural, setIcon, setHue, isBusy, isChanged, refusals, save } =
+    configuration;
+  const [isArchiving, setArchiving] = useState(false);
+  const [isRestoring, setRestoring] = useState(false);
 
   const restore = () => {
     if (isRestoring) return;
@@ -116,24 +202,7 @@ export function ConfigurationTab({ slug, object }: ConfigurationTabProps) {
     <SettingsStack>
       {!canManage && <Callout>{strings.readOnlyNote}</Callout>}
       <SettingsSection title={strings.lookSection}>
-        <Card
-          {...(canManage
-            ? {
-                footer: (
-                  <Button
-                    variant="primary"
-                    type="submit"
-                    form={formId}
-                    isPending={isBusy}
-                    isDisabled={!isChanged}
-                    kbd="⌘↵"
-                  >
-                    {isBusy ? strings.saving : strings.save}
-                  </Button>
-                ),
-              }
-            : {})}
-        >
+        <Card>
           <Form
             id={formId}
             isBusy={isBusy}

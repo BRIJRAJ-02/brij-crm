@@ -14,6 +14,7 @@ import { TabPanel, Tabs } from '../../molecules/Tabs/Tabs.tsx';
 import { Disclosure } from '../../molecules/Disclosure/Disclosure.tsx';
 import { Table } from '../../molecules/Table/Table.tsx';
 import { Stage } from '../../workbench/Stage/Stage.tsx';
+import { SaveBar } from '../SaveBar/SaveBar.tsx';
 import { TopBar } from '../Toolbar/Toolbar.tsx';
 import { Select } from '../../molecules/Select/Select.tsx';
 import { Field } from '../../molecules/Field/Field.tsx';
@@ -521,6 +522,35 @@ export const UnderTheBar: Story = {
     await expect(canvas.getByRole('heading', { level: 2, name: 'Connected calendars' })).toBeInTheDocument();
     await expect(canvas.queryByRole('heading', { level: 2, name: 'Calendars' })).toBeNull();
     await expect(canvas.getByRole('button', { name: 'Connect Google calendar' })).toBeInTheDocument();
+  },
+};
+
+/**
+ * Unsaved changes (Profile, General): the SaveBar in the `footer`, at the view's foot under a short body, not under
+ * the last card; on a long page it sticks there and follows the last section once scrolled to the end.
+ */
+export const WithSaveBar: Story = {
+  parameters: { crm: { screenshot: false } },
+  render: () => (
+    <Stage width="fill" height="page" direction="column">
+      <TopBar title="Profile" crumbs={[{ id: 'settings', label: 'Settings' }]} />
+      <SettingsLayout
+        header="bar"
+        title="Profile"
+        footer={<SaveBar status="unsaved" onSave={() => undefined} onDiscard={() => undefined} />}
+      >
+        <Card>
+          <SettingsRow title="Your name" control="field">
+            <Field label="Your name" isLabelHidden defaultValue="Ada King" />
+          </SettingsRow>
+        </Card>
+      </SettingsLayout>
+    </Stage>
+  ),
+  play: async ({ canvas }) => {
+    await expect(canvas.getByText('Unsaved changes')).toBeInTheDocument();
+    await expect(canvas.getByRole('button', { name: /^Save/ })).toBeInTheDocument();
+    await expect(canvas.getByRole('button', { name: 'Discard' })).toBeInTheDocument();
   },
 };
 

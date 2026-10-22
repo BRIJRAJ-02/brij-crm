@@ -43,7 +43,7 @@ Built from library parts only: Table (Device with a Badge, Location, Last active
 - **Purpose**: one object, standard or custom alike, under its tile, name and Standard or Custom badge, in two tabs.
 - **Main task**: add, edit, move, archive and restore its attributes (Attributes), and rename, restyle, archive or restore it (Configuration).
 - **Leaves out**: changing a type (#14), and changing the API name (never).
-- **Layout**: the Configuration tab follows the settings page pattern (SettingsLayout's README): a Names and look section whose Form sits two fields to a row with Save in its footer, an Identifiers section with the read only API name and object ID, then a Danger zone section (Restore once archived) with the archive Card. The Attributes tab's tables run the full width.
+- **Layout**: the Configuration tab follows the settings page pattern (SettingsLayout's README): a Names and look section whose Form sits two fields to a row, saved from the library SaveBar at the view's foot (the object's page holds the edits, `useObjectConfiguration`, so the bar shows on either tab and a tab change keeps them; Discard puts back what the server holds), an Identifiers section with the read only API name and object ID, then a Danger zone section (Restore once archived) with the archive Card. The Attributes tab's tables run the full width.
 
 ## An object's attributes (the Attributes tab, AttributesTab)
 
@@ -152,5 +152,5 @@ Lean, as the owner's settings pages are: no page description, one Email card (it
 ## Notes
 
 - Every write here waits for the server (definition writes are never optimistic): the button spins with its ongoing verb, a refusal lands on the field it names (`NAME_TAKEN` on the name, `SLUG_TAKEN` and a reserved API name on API name) or in the form's banner, and once a write lands the data layer reads the objects again and every page reloads, so the sidebar and this page show the change, as every other member's do.
-- Members open every page read only: no New object, meter, handles, Archive or Save, a quiet Callout saying only owners and admins can change objects, and the row menu holds Open alone. The server refuses them 403 anyway.
+- Members open every page read only: no New object, meter, handles, Archive or SaveBar, a quiet Callout saying only owners and admins can change objects, and the row menu holds Open alone. The server refuses them 403 anyway.
 - States: while a page loads its header and rows hold their places (skeletons); a failed read shows an EmptyState with Retry in place of the page's body, and the navigation stays usable. An unknown object or tab says so inside the frame, with the way back to Objects.

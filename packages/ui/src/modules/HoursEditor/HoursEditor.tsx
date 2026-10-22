@@ -101,6 +101,11 @@ function nextRange(ranges: readonly HoursRange[]): HoursRange {
   return [clock(start), clock(Math.min(start + 60, 1440))];
 }
 
+/** The whole day, 12:00 AM to Midnight, in one window. */
+function isAllDay(ranges: readonly HoursRange[]): boolean {
+  return ranges.length === 1 && ranges[0]?.[0] === '00:00' && ranges[0][1] === '24:00';
+}
+
 /** Whether the day has room for another window after its last: an hour's gap and half an hour, before midnight. */
 function hasRoomAfter(ranges: readonly HoursRange[]): boolean {
   const last = ranges.at(-1);
@@ -365,7 +370,21 @@ export function HoursEditor({
                 />
               </div>
               <div className={styles.ranges}>
-                {isOn ? (
+                {isAllDay(row.ranges) ? (
+                  // 12:00 AM to Midnight reads as what it is, with a way back to hours.
+                  <span className={styles.allDay}>
+                    {strings.allDay}
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      label={strings.setHoursFor(row.label)}
+                      isDisabled={isDisabled}
+                      onPress={() => onChange(row.id, [nextRange([])])}
+                    >
+                      {strings.setHours}
+                    </Button>
+                  </span>
+                ) : isOn ? (
                   row.ranges.map((range, index) => (
                     <div key={`${String(index)}-${range[0]}`} className={styles.range}>
                       {time(strings.from(row.label, index + 1), starts, range[0], (id) =>
@@ -376,15 +395,19 @@ export function HoursEditor({
                         replace(index, [range[0], id]),
                       )}
                       {index === 0 ? (
-                        <Tooltip content={hasRoomAfter(row.ranges) ? strings.addHint : strings.noRoom}>
-                          <Button
-                            variant="ghost"
-                            icon="plus"
-                            label={strings.addRange(row.label)}
-                            isDisabled={isDisabled || !hasRoomAfter(row.ranges)}
-                            onPress={() => onChange(row.id, [...row.ranges, nextRange(row.ranges)])}
-                          />
-                        </Tooltip>
+                        // No room for another window (the day runs to its end): no + at all, rather than one off
+                        // with no way to say why (the owner, 22 October 2026).
+                        hasRoomAfter(row.ranges) && (
+                          <Tooltip content={strings.addHint}>
+                            <Button
+                              variant="ghost"
+                              icon="plus"
+                              label={strings.addRange(row.label)}
+                              isDisabled={isDisabled}
+                              onPress={() => onChange(row.id, [...row.ranges, nextRange(row.ranges)])}
+                            />
+                          </Tooltip>
+                        )
                       ) : (
                         <Tooltip content={strings.removeHint}>
                           <Button

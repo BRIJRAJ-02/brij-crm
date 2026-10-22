@@ -71,6 +71,8 @@ function ObjectSettingsRoute() {
   if (page === undefined) return <SettingsMissing />;
   return (
     <ObjectSettingsScreen
+      // Another object starts with its own names and look, not the last one's edits.
+      key={page.object.id}
       slug={slug}
       {...page}
       selectedAttribute={page.tab === 'attributes' ? attribute : undefined}

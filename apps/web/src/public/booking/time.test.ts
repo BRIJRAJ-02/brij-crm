@@ -13,6 +13,7 @@ import {
   timeLabel,
   weekdayNames,
   zoneDisplay,
+  zoneName,
 } from './time.ts';
 
 describe('the visitor’s days', () => {
@@ -57,6 +58,9 @@ describe('the month, the zone and the clock', () => {
     expect(zoneDisplay('Asia/Dubai', at)).toBe('Dubai time (GMT+4)');
     expect(zoneDisplay('America/New_York', at)).toBe('New York time (GMT-5)');
     expect(zoneDisplay('UTC', at)).toBe('UTC');
+    expect(zoneName('America/New_York')).toBe('New York time');
+    expect(zoneName('Asia/Calcutta')).toBe('Kolkata time');
+    expect(zoneName('UTC')).toBe('UTC');
     expect(timeLabel('2026-11-02T09:30:00.000Z', 'UTC', 'en-US', true)).toBe('9:30 AM');
     expect(timeLabel('2026-11-02T09:30:00.000Z', 'UTC', 'en-US', false)).toBe('09:30');
   });

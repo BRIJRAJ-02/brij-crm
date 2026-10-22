@@ -22,6 +22,32 @@
     grid-template-columns: var(--size-menu) minmax(0, 1fr);
   }
 
+  /* With a footer, the layout takes at least the view's height (its parent is the view's flex column), and the
+     page stretches down its grid row, so the footer can sit at the view's foot even when the body is short, as
+     PageColumn's and PreviewLayout's do. */
+  .root[data-footer] {
+    flex: 1 0 auto;
+  }
+
+  /* At the view's foot whatever the body's length: pushed down by the page's column (a short body), held there by
+     sticky (a long one, where it follows the last section, so it never covers it once scrolled to the end). */
+  .footer {
+    position: sticky;
+    z-index: var(--z-sticky);
+    inset-block-end: var(--space-16);
+    margin-block-start: auto;
+    pointer-events: none;
+  }
+
+  .footer > * {
+    pointer-events: auto;
+  }
+
+  /* A bar with nothing to say (a SaveBar with nothing unsaved) draws nothing, so it leaves no gap under the body. */
+  .footer:empty {
+    display: none;
+  }
+
   .nav {
     padding: var(--space-12) var(--space-8);
     border-inline-end: var(--border-width-hairline) solid var(--border-subtle);

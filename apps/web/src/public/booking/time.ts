@@ -155,12 +155,25 @@ const RENAMED: Readonly<Record<string, string>> = Object.freeze({
   'Atlantic/Faeroe': 'Atlantic/Faroe',
 });
 
+/** A zone by its current name, for an old spelling some browsers still answer ("Asia/Calcutta" is "Asia/Kolkata"). */
+export const currentZone = (zone: string): string => RENAMED[zone] ?? zone;
+
+/** Whether a zone names a place: "Asia/Dubai" does, "UTC" and "Etc/GMT+4" don't. */
+const hasCity = (zone: string): boolean => zone.includes('/') && !zone.startsWith('Etc/');
+
+/** "Asia/Dubai" as a person names it, without its offset: "Dubai time"; a zone with no city keeps its name ("UTC"). */
+export function zoneName(zone: string): string {
+  if (!hasCity(zone)) return zone.replaceAll('_', ' ');
+  const city = currentZone(zone).split('/').pop()?.replaceAll('_', ' ') ?? zone;
+  return `${city} time`;
+}
+
 /** "Asia/Dubai" as a person says it: "Dubai time (GMT+4)"; a zone with no city keeps its name. */
 export function zoneDisplay(zone: string, at: number): string {
-  if (!zone.includes('/') || zone.startsWith('Etc/')) return zone.replaceAll('_', ' ');
-  const city = (RENAMED[zone] ?? zone).split('/').pop()?.replaceAll('_', ' ') ?? zone;
+  const name = zoneName(zone);
+  if (!hasCity(zone)) return name;
   const offset = offsetLabel(zone, at);
-  return offset === '' ? `${city} time` : `${city} time (${offset})`;
+  return offset === '' ? name : `${name} (${offset})`;
 }
 
 /** Whether the locale writes times in 12 hours. */

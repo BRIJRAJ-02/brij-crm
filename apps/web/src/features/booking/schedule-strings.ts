@@ -20,7 +20,7 @@ export const scheduleStrings = {
   defaultSchedule: (name: string | undefined) =>
     name === undefined ? 'Default schedule' : `Default schedule (${name})`,
   usedBy: (count: number) => (count === 1 ? 'Used by 1 booking page' : `Used by ${String(count)} booking pages`),
-  usedByNone: 'No booking pages',
+  usedByNone: 'No booking pages use this schedule',
   usedByLabel: 'Used by',
   usedByText: 'The booking pages that book inside these hours. Open one to pick another schedule for it.',
   usedByDefaultText: 'Pages that follow your default, and pages that pick this schedule. Open one to change it.',

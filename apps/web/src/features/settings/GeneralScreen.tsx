@@ -1,6 +1,6 @@
 // Brief
 // Purpose: Settings › Workspace › General (spec 0031, AC-822, AC-823): the workspace's name, time zone and address.
-// Main task: rename it or move its web address (one Save, shown once either changed; a new address asks first), or
+// Main task: rename it or move its web address (the SaveBar at the view's foot, once either changed; a new address asks first), or
 // pick its time zone (saved at once); owners can delete it.
 // Leaves out: the logo (no row until upload arrives with #32), and members (their own page).
 import { isDataError, type DataLayer, type WorkspaceSettings } from '@crm/data';
@@ -10,12 +10,14 @@ import {
   Field,
   Icon,
   InfoTip,
+  SaveBar,
   Select,
   SettingsRow,
   SettingsSection,
   Skeleton,
   Spinner,
   VisuallyHidden,
+  type SaveBarStatus,
   type Toasts,
 } from '@crm/ui';
 import { useBlocker } from '@tanstack/react-router';
@@ -25,6 +27,7 @@ import { useAddress, type Address } from '../address/useAddress.ts';
 import { zoneItems, zoneLabel, zoneMatches } from '../booking/hours.ts';
 import { ChangeAddressDialog } from './ChangeAddressDialog.tsx';
 import { DeleteWorkspaceDialog } from './DeleteWorkspaceDialog.tsx';
+import { pageHeading } from '../navigation/focus.ts';
 import { generalChange, isChanged } from './general-form.ts';
 import { useCan } from '../workspace/WorkspacePage.tsx';
 import { SettingsPage } from './SettingsPage.tsx';
@@ -52,8 +55,8 @@ export interface GeneralScreenProps {
 
 /**
  * A Card of rows (name, web address, time zone), the whole link in a Card of
- * its own, Save in the bar only while the name or the address differs (a new
- * address opens the confirm first), and for owners a Danger zone section
+ * its own, the SaveBar at the view's foot only while the name or the address
+ * differs (a new address opens the confirm first; Discard puts both back), and for owners a Danger zone section
  * with Delete workspace, which opens the typed name confirm.
  */
 export function GeneralScreen({
@@ -71,6 +74,9 @@ export function GeneralScreen({
   const [name, setName] = useState(settings.name);
   const [slugDraft, setSlugDraft] = useState(settings.slug);
   const [isSaving, setSaving] = useState(false);
+  const [justSaved, setJustSaved] = useState(false);
+  // Why the last save failed, said in the bar (a refused field says it on the field too).
+  const [failure, setFailure] = useState<string | undefined>(undefined);
   const [nameError, setNameError] = useState<string | undefined>(undefined);
   const [slugError, setSlugError] = useState<string | undefined>(undefined);
   const [isConfirming, setConfirming] = useState(false);
@@ -122,6 +128,7 @@ export function GeneralScreen({
   const commit = () => {
     if (isSaving) return;
     setSaving(true);
+    setFailure(undefined);
     data.workspace
       .update(slug, change)
       .then(async (updated) => {
@@ -133,7 +140,7 @@ export function GeneralScreen({
           return;
         }
         await onChanged();
-        toasts.toast({ tone: 'success', message: strings.saved });
+        setJustSaved(true);
       })
       .catch((error: unknown) => {
         setConfirming(false);
@@ -142,7 +149,7 @@ export function GeneralScreen({
         const field = isDataError(error) ? error.data?.refusals?.[0]?.field : undefined;
         if (isDataError(error) && (error.code === 'SLUG_TAKEN' || field === 'slug')) setSlugError(message);
         else if (field === 'name') setNameError(message);
-        else toasts.toast({ tone: 'danger', message });
+        setFailure(message);
       })
       .finally(() => {
         setSaving(false);
@@ -176,14 +183,39 @@ export function GeneralScreen({
       });
   };
 
+  // The bar speaks for the name and the address; the time zone saves on its own.
+  const status: SaveBarStatus = isSaving
+    ? 'saving'
+    : isDirty
+      ? failure === undefined
+        ? 'unsaved'
+        : 'error'
+      : justSaved
+        ? 'saved'
+        : 'hidden';
+  const edited = () => {
+    setFailure(undefined);
+    setJustSaved(false);
+  };
+
   return (
     <SettingsPage
       title={strings.generalTitle}
-      actions={
-        mayManage && isDirty ? (
-          <Button variant="primary" isPending={isSaving} onPress={save}>
-            {strings.save}
-          </Button>
+      footer={
+        mayManage ? (
+          <SaveBar
+            status={status}
+            {...(failure === undefined ? {} : { error: failure })}
+            onSave={save}
+            onDiscard={() => {
+              setName(settings.name);
+              setSlugDraft(settings.slug);
+              setNameError(undefined);
+              setSlugError(undefined);
+              setFailure(undefined);
+            }}
+            onFocusAway={() => pageHeading(document)?.focus()}
+          />
         ) : undefined
       }
     >
@@ -197,6 +229,7 @@ export function GeneralScreen({
               onChange={(next) => {
                 setName(next);
                 setNameError(undefined);
+                edited();
               }}
               onSubmit={save}
               maxLength={64}
@@ -215,6 +248,7 @@ export function GeneralScreen({
               onChange={(next) => {
                 setSlugDraft(next);
                 setSlugError(undefined);
+                edited();
               }}
               onSubmit={save}
             />

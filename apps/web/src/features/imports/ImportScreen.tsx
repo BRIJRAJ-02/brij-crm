@@ -36,6 +36,7 @@ import {
   Select,
   Steps,
   Table,
+  Tooltip,
   TopBar,
   type FieldAttribute,
   type PhoneParser,
@@ -864,9 +865,18 @@ function ColumnsStep({
       footer={
         <>
           <Button onPress={onBack}>{strings.chooseAnother}</Button>
-          <Button variant="primary" isDisabled={matched === 0 || busyColumn !== undefined} onPress={onContinue}>
-            {strings.continue}
-          </Button>
+          {matched === 0 ? (
+            // Off until a column has somewhere to go, and says so on hover and focus.
+            <Tooltip content={strings.matchOneFirst}>
+              <Button variant="primary" isDisabled>
+                {strings.continue}
+              </Button>
+            </Tooltip>
+          ) : (
+            <Button variant="primary" isDisabled={busyColumn !== undefined} onPress={onContinue}>
+              {strings.continue}
+            </Button>
+          )}
         </>
       }
     >

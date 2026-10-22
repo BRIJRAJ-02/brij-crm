@@ -137,7 +137,15 @@ export function HostsCard({
         {failure !== undefined && <Callout tone="danger">{failure}</Callout>}
         <Select
           label={strings.addFixed}
-          hint={fixed.length === 0 ? strings.noFixed : strings.fixedHint}
+          hint={
+            isFull
+              ? strings.hostsFull(LIMITS.hosts)
+              : fixed.length >= LIMITS.fixed
+                ? strings.fixedFull(LIMITS.fixed)
+                : fixed.length === 0
+                  ? strings.noFixed
+                  : strings.fixedHint
+          }
           placeholder={strings.addMemberPlaceholder}
           items={peopleLeft}
           isSearchable
@@ -229,7 +237,7 @@ export function HostsCard({
         {linked.length < LIMITS.rotations && (
           <Select
             label={linked.length === 0 ? strings.rotation : strings.addRotation}
-            hint={strings.rotationsHint}
+            hint={isFull ? strings.hostsFull(LIMITS.hosts) : strings.rotationsHint}
             placeholder={strings.pickRotation}
             items={rotationItems()}
             value={null}

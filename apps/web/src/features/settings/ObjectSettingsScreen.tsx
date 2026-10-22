@@ -21,7 +21,7 @@ import { useState } from 'react';
 import { useCan } from '../workspace/WorkspacePage.tsx';
 import { strings as attributeStrings } from './attribute-strings.ts';
 import { AttributesTab } from './AttributesTab.tsx';
-import { ConfigurationTab } from './ConfigurationTab.tsx';
+import { ConfigurationTab, useObjectConfiguration } from './ConfigurationTab.tsx';
 import { isObjectTab, objectSettingsHref, type ObjectTab } from './nav.ts';
 import { settingsCrumbs, SettingsPage } from './SettingsPage.tsx';
 import { strings } from './strings.ts';
@@ -73,8 +73,11 @@ export function ObjectSettingsScreen({
   const [isCreating, setCreating] = useState(false);
   const [isMoving, setMoving] = useState(false);
   const showsNew = canManage && tab === 'attributes' && attributesPage !== undefined;
+  // The Configuration tab's names and look, held here so its SaveBar sits at the view's foot on either tab.
+  const configuration = useObjectConfiguration(slug, object);
   return (
     <SettingsPage
+      footer={configuration.footer}
       title={object.pluralName}
       crumbs={settingsCrumbs(slug)}
       hasTabs
@@ -129,7 +132,7 @@ export function ObjectSettingsScreen({
             ))}
         </TabPanel>
         <TabPanel id="configuration">
-          {tab === 'configuration' && <ConfigurationTab slug={slug} object={object} />}
+          {tab === 'configuration' && <ConfigurationTab slug={slug} object={object} configuration={configuration} />}
         </TabPanel>
       </Tabs>
     </SettingsPage>

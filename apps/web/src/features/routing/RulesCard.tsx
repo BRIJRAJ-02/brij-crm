@@ -155,7 +155,6 @@ export function RulesCard({
                 <Button variant="ghost" icon="ellipsis" label={strings.ruleMore(index)} />
                 <Menu
                   label={strings.ruleMore(index)}
-                  disabledKeys={[...(index === 0 ? ['up'] : []), ...(index === rules.length - 1 ? ['down'] : [])]}
                   onAction={(key) => {
                     // A change still saving finishes first; the menu stays reachable so focus is never lost.
                     if (busy) return;
@@ -168,12 +167,17 @@ export function RulesCard({
                   <MenuItem id="edit" icon="pencil">
                     {strings.edit}
                   </MenuItem>
-                  <MenuItem id="up" icon="arrow-up">
-                    {strings.moveUp}
-                  </MenuItem>
-                  <MenuItem id="down" icon="arrow-down">
-                    {strings.moveDown}
-                  </MenuItem>
+                  {/* Only the moves there is room for: the first has no Move up, the last no Move down. */}
+                  {index > 0 && (
+                    <MenuItem id="up" icon="arrow-up">
+                      {strings.moveUp}
+                    </MenuItem>
+                  )}
+                  {index < rules.length - 1 && (
+                    <MenuItem id="down" icon="arrow-down">
+                      {strings.moveDown}
+                    </MenuItem>
+                  )}
                   <MenuSeparator />
                   <MenuItem id="remove" icon="trash" isDanger>
                     {strings.remove}

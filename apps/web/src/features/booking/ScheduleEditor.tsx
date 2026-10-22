@@ -6,7 +6,7 @@ import type { BookingAvailability, DataLayer, ScheduleView } from '@crm/data';
 import {
   Card,
   HoursEditor,
-  Link,
+  LinkList,
   PageColumn,
   SaveBar,
   Select,
@@ -14,7 +14,7 @@ import {
   useFormatSettings,
   type SaveBarStatus,
 } from '@crm/ui';
-import { useBlocker } from '@tanstack/react-router';
+import { useBlocker, useNavigate } from '@tanstack/react-router';
 import { useMemo, type ReactNode } from 'react';
 import { DaysOff } from './DaysOff.tsx';
 import { weekRows, WEEKDAYS, withDay, zoneItems, zoneMatches } from './hours.ts';
@@ -167,18 +167,30 @@ function usedByNames(pages: ScheduleView['pages']): readonly { readonly id: stri
 
 /** The booking pages that book by the schedule, each a quiet link to its editor; none says so. */
 function UsedBy({ slug, schedule }: { readonly slug: string; readonly schedule: ScheduleView }) {
+  const navigate = useNavigate();
   if (schedule.pages.length === 0) {
     return <Card title={scheduleStrings.usedByLabel} description={scheduleStrings.usedByNone} />;
   }
+  const hrefOf = (id: string) => pageEditorHref(slug, id);
+  // Clean rows, not a bulleted list of links (the owner, 22 October 2026): each page's title, Live (only live pages
+  // book by a schedule), and the row opens its editor.
   return (
     <Card title={scheduleStrings.usedByLabel}>
-      <ul aria-label={scheduleStrings.usedByLabel}>
-        {usedByNames(schedule.pages).map((page) => (
-          <li key={page.id}>
-            <Link href={pageEditorHref(slug, page.id)}>{page.name}</Link>
-          </li>
-        ))}
-      </ul>
+      <LinkList
+        label={scheduleStrings.usedByLabel}
+        density="compact"
+        placement="card"
+        isToolbarHidden
+        searchLabel={scheduleStrings.usedByLabel}
+        rows={usedByNames(schedule.pages).map((page) => ({
+          id: page.id,
+          title: page.name,
+          address: '',
+          chips: [strings.live],
+          href: hrefOf(page.id),
+        }))}
+        onOpen={(id) => void navigate({ href: hrefOf(id) })}
+      />
     </Card>
   );
 }

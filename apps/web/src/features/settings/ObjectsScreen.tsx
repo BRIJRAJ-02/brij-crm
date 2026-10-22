@@ -148,12 +148,17 @@ export function ObjectsScreen({ slug, objects, usage }: ObjectsScreenProps) {
               </MenuItem>
               {canManage && (
                 <>
-                  <MenuItem id="up" icon="chevron-up" isDisabled={at <= 0 || isMoving}>
-                    {strings.moveUp}
-                  </MenuItem>
-                  <MenuItem id="down" icon="chevron-down" isDisabled={at >= live.length - 1 || isMoving}>
-                    {strings.moveDown}
-                  </MenuItem>
+                  {/* Only the moves there is room for: the first has no Move up, the last no Move down. */}
+                  {at > 0 && (
+                    <MenuItem id="up" icon="chevron-up" isDisabled={isMoving}>
+                      {strings.moveUp}
+                    </MenuItem>
+                  )}
+                  {at >= 0 && at < live.length - 1 && (
+                    <MenuItem id="down" icon="chevron-down" isDisabled={isMoving}>
+                      {strings.moveDown}
+                    </MenuItem>
+                  )}
                   <MenuSeparator />
                   <MenuItem id="archive" icon="archive" isDanger>
                     {strings.archive}

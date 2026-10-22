@@ -18,7 +18,8 @@ import {
 } from '@crm/ui';
 import { parseThemeChoice, type ThemeChoice, type ThemeController } from '@crm/ui/theme';
 import { useEffect, useMemo, useRef, useState, useSyncExternalStore, type ReactNode } from 'react';
-import { zoneItems, zoneLabel, zoneMatches, zoneOffset } from '../booking/hours.ts';
+import { zoneItems, zoneMatches } from '../booking/hours.ts';
+import { offsetLabel, zoneName } from '../../public/booking/time.ts';
 import { browserZone } from '../booking/zone.ts';
 import { dayAt } from '../tasks/day.ts';
 import {
@@ -131,7 +132,11 @@ function MemberSections({
     const at = new Date();
     const pinned = preferences.timeZone;
     return [
-      { id: BROWSER_ZONE, label: strings.automatic(zoneLabel(browser)), description: zoneOffset(browser, at) },
+      {
+        id: BROWSER_ZONE,
+        label: strings.automatic(zoneName(browser)),
+        description: offsetLabel(browser, at.getTime()),
+      },
       ...zoneItems(pinned ?? browser, at).filter((item) => pinned !== undefined || item.id !== browser),
     ];
   }, [browser, preferences.timeZone]);

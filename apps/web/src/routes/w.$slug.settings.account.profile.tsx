@@ -27,14 +27,13 @@ export const Route = createFileRoute('/w/$slug/settings/account/profile')({
 function ProfileRoute() {
   const { profile } = Route.useLoaderData();
   const { slug } = Route.useParams();
-  const { data, toasts } = Route.useRouteContext();
+  const { data } = Route.useRouteContext();
   const router = useRouter();
   if (profile === undefined) return <SettingsMissing backTo="home" />;
   return (
     <ProfileScreen
       key={profile.memberId}
       data={data}
-      toasts={toasts}
       slug={slug}
       profile={profile}
       onChanged={() => router.invalidate()}

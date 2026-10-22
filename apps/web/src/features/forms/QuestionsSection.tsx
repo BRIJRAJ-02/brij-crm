@@ -200,9 +200,18 @@ export function QuestionsSection(props: QuestionsSectionProps) {
         <>
           {!isReadOnly && (
             <>
-              <Button icon="plus" onPress={add} isDisabled={isFull}>
-                {strings.addQuestion}
-              </Button>
+              {isFull ? (
+                // Off at the most a form holds, and says so on hover and focus.
+                <Tooltip content={strings.tooManyQuestions}>
+                  <Button icon="plus" isDisabled>
+                    {strings.addQuestion}
+                  </Button>
+                </Tooltip>
+              ) : (
+                <Button icon="plus" onPress={add}>
+                  {strings.addQuestion}
+                </Button>
+              )}
               <MenuTrigger>
                 <Button variant="ghost" icon="ellipsis" label={strings.questionMenu} />
                 <Menu
@@ -212,7 +221,11 @@ export function QuestionsSection(props: QuestionsSectionProps) {
                   }}
                 >
                   <SubmenuTrigger>
-                    <MenuItem icon="list-plus" isDisabled={isFull}>
+                    <MenuItem
+                      icon="list-plus"
+                      isDisabled={isFull}
+                      {...(isFull ? { description: strings.tooManyQuestions } : {})}
+                    >
                       {strings.addFromPresets}
                     </MenuItem>
                     <Menu
