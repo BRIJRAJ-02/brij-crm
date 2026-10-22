@@ -38,6 +38,7 @@ import type { JobRegistry } from '../jobs/registry.ts';
 import { UNKNOWN_FORM } from './forms.ts';
 import {
   answersOf,
+  assignmentOf,
   changesFor,
   chooseOwner,
   fileAnswers,
@@ -48,13 +49,18 @@ import {
   ownerAttribute,
   plan,
   settle,
+  withPrevious,
 } from './process.ts';
 import { canSeeForm, loadForm, loadVersions, type FormRow } from './shared.ts';
+import { lockRotation } from '../rotation/ledger.ts';
 
 /** The Add to CRM job's name. */
 export const FORMS_FILE = 'forms.file';
 /** The Sync old records job's name. */
 export const FORMS_SYNC = 'forms.sync';
+
+/** The owner a preview supposes a form's rotation gives: a stand in, compared only, never written. */
+const ROTATION_STAND_IN = { type: 'member', id: 'rotation' } as const;
 
 /** What a form with no published version answers to filing. */
 export const NOT_PUBLISHED = 'Publish the form first: filing uses its published questions.';
@@ -149,6 +155,7 @@ interface ScopedRow extends Record<string, unknown> {
   readonly id: string;
   readonly state: string;
   readonly answers: unknown;
+  readonly assignment?: unknown;
   readonly live_record_id: string | null;
   readonly live_object_id: string | null;
 }
@@ -211,10 +218,16 @@ async function fileBatch(
       failed: { code: 'FORM_STATE', message: 'The form is gone or no longer published, so nothing more was filed.' },
     };
   }
+  // A form whose owner is a rotation takes the rotation's lock before any submission's row, held to commit, so two
+  // batches over overlapping submissions never hold one each and wait on the other (filing takes it again, at no cost).
+  if (mapping.form.ownerRotationId !== null) {
+    await lockRotation(tx, context.scope.workspaceId, mapping.form.ownerRotationId);
+  }
   const outcomes: ItemOutcome[] = [];
   for (const item of input.items) {
     const found = await tx.execute<ScopedRow>(sql`
-      select s.id::text, s.state, s.answers, r.id::text as live_record_id, r.object_id::text as live_object_id
+      select s.id::text, s.state, s.answers, s.assignment, r.id::text as live_record_id,
+        r.object_id::text as live_object_id
       from form_submissions s
       left join records r on r.workspace_id = s.workspace_id and r.id = s.main_record_id and r.deleted_at is null
       where s.id = ${item.itemId} and s.form_id = ${input.formId} and ${scopeTest(input.scope, context.scope.access)}
@@ -241,6 +254,8 @@ async function fileBatch(
       attributes: mapping.attributes,
       options: mapping.options,
       ...(row.live_record_id === null ? {} : { keepRecordId: row.live_record_id }),
+      // A rotation's pick for it is never made twice: filed again, it keeps the member it was given.
+      ...withPrevious(assignmentOf(row.assignment)),
       // The member writes, through their own access: the mapping's answers only, into records they can see.
       writer: () => context,
       canUse: async (recordId) => (await seenBy(tx, context.scope, mapping.objectId, [recordId])).has(recordId),
@@ -404,8 +419,14 @@ export async function previewSync(
     const writes = (each: (typeof planned)[number]) => each.planned.filter((item) => writable(item.attribute));
     const ownerAll = ownerAttribute(attributes);
     const owner = ownerAll !== undefined && writable(ownerAll) ? ownerAll : undefined;
-    const assignment = await chooseOwner(tx, form.ownerMemberId);
-    const ownerValue = assignment.memberId === undefined ? undefined : { type: 'member', id: assignment.memberId };
+    // A rotation's pick is never made for a preview: a record with no owner counts as changing, as it would.
+    const assignment = form.ownerRotationId === null ? await chooseOwner(tx, form.ownerMemberId) : undefined;
+    const ownerValue =
+      form.ownerRotationId !== null
+        ? ROTATION_STAND_IN
+        : assignment?.memberId === undefined
+          ? undefined
+          : { type: 'member', id: assignment.memberId };
     // Filed on another object before the form's target changed: the run leaves it as it is (ON_ANOTHER_OBJECT).
     const elsewhere = (each: (typeof planned)[number]) =>
       each.row.live_record_id !== null && each.row.live_object_id !== objectId;

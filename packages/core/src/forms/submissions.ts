@@ -366,6 +366,7 @@ async function viewIn(tx: WorkspaceTx, scope: EngineScope, submissionId: string)
           assignment: {
             reason: assignment.reason,
             ...(typeof assignment.memberId === 'string' ? { memberId: assignment.memberId } : {}),
+            ...(typeof assignment.rotationId === 'string' ? { rotationId: assignment.rotationId } : {}),
           },
         }
       : {}),
