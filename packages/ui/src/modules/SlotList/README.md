@@ -34,3 +34,5 @@ Tab reaches each time; Enter or Space picks. The clock switch is a SegmentedCont
 ## Differences from the artifact
 
 Not in the artifact.
+
+Every time keeps one height (a row and a step, about 40px) whatever the count: the list's rows size to their buttons and sit at the top, so a day with one or two times never stretches them to fill the pane (the owner, 22 October 2026; story TwoSlots).

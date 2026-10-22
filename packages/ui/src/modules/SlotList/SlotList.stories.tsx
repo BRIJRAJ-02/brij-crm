@@ -45,6 +45,31 @@ export const Default: Story = {
   },
 };
 
+/** One time in a tall column (the owner's Thu Oct 22): a long list's height at the top, the space below left empty. */
+export const OneSlot: Story = {
+  args: { slots: slots(1) },
+  render: (args) => <Interactive {...args} />,
+  play: async ({ canvas }) => {
+    const only = canvas.getByRole('button', { name: /^9:00 AM/ });
+    await expect(only.getBoundingClientRect().height).toBeLessThan(60);
+  },
+};
+
+/** Two times in a tall column: each keeps a long list's height at the top, never stretched to fill the pane. */
+export const TwoSlots: Story = {
+  args: { slots: slots(2) },
+  render: (args) => <Interactive {...args} />,
+  play: async ({ canvas }) => {
+    const first = canvas.getByRole('button', { name: /^9:00 AM/ });
+    const second = canvas.getByRole('button', { name: /^9:30 AM/ });
+    // The size of a time in a long list (a row and a step), not half the pane.
+    await expect(first.getBoundingClientRect().height).toBeLessThan(60);
+    await expect(Math.round(second.getBoundingClientRect().height)).toBe(
+      Math.round(first.getBoundingClientRect().height),
+    );
+  },
+};
+
 /** With the visitor's calendar on: Best times tagged; asked to show every time, the busy ones read quieter. */
 export const Overlay: Story = {
   args: { slots: slots(6, { 1: { isBest: true }, 2: { isBest: true }, 4: { isBusy: true }, 5: { isBusy: true } }) },
