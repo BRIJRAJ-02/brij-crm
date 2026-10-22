@@ -61,6 +61,8 @@ export const PublicAddress = z.object({
   publicKey: PublicKey,
   /** The owner's current handle: an old one's address moves to it. */
   handle: z.string(),
+  /** The page's current slug: an old one's address moves to it (slug history, 22 Oct 2026). */
+  slug: z.string(),
 });
 /** The page a handle address names. */
 export type PublicAddress = z.infer<typeof PublicAddress>;

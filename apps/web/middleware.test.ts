@@ -2,7 +2,9 @@
 // the API is told about the caller. Vercel reads the rewrite and the upstream
 // request headers from the response's x-middleware-* headers.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { sourcePattern } from './csp.ts';
 import middleware, { apiTarget, config, EDGE_HEADER, GEO_HEADERS, ORIGIN_HEADER, TRACE_HEADERS } from './middleware.ts';
+import { MIDDLEWARE_MATCHER } from './public-paths.ts';
 
 const API = 'https://api-production.up.railway.app';
 
@@ -24,8 +26,24 @@ afterEach(() => {
 });
 
 describe('api proxy middleware', () => {
-  it('matches /api and everything under it, and nothing else', () => {
-    expect(config.matcher).toEqual(['/api', '/api/:path*']);
+  it('runs for every path but the built files, as public-paths.ts says', () => {
+    expect(config.matcher).toEqual([MIDDLEWARE_MATCHER]);
+    const matched = sourcePattern(MIDDLEWARE_MATCHER);
+    for (const pathname of ['/', '/api', '/api/rpc/x', '/sign-in', '/ada/30min', '/b/AbCdEfGhIjKlMnOp', '/x.js']) {
+      expect(matched.test(pathname), pathname).toBe(true);
+    }
+    for (const pathname of ['/assets/index-abc.js', '/brand/timefix-mark.svg', '/favicon.ico', '/theme-boot.js']) {
+      expect(matched.test(pathname), pathname).toBe(false);
+    }
+  });
+
+  it('passes any other path on untouched, with none of the API’s headers', () => {
+    vi.stubEnv('API_ORIGIN_INTERNAL', API);
+    vi.stubEnv('EDGE_SECRET', 'a'.repeat(40));
+    const response = call('/w/acme/objects/people');
+    expect(response.headers.get('x-middleware-next')).toBe('1');
+    expect(response.headers.get('x-middleware-rewrite')).toBeNull();
+    expect(upstreamHeader(response, EDGE_HEADER)).toBeNull();
   });
 
   it('rewrites an /api request to the same path and query on the Railway API', () => {
@@ -241,5 +259,56 @@ describe('the api switch (spec 0045)', () => {
     const response = call('/api/health');
     expect(response.status).toBe(503);
     expect(response.headers.get('x-middleware-next')).toBeNull();
+  });
+});
+
+describe('the public booking host (BOOKING_PUBLIC_ORIGIN)', () => {
+  const at = (url: string) => middleware(new Request(url));
+
+  beforeEach(() => {
+    vi.stubEnv('APP_URL', 'https://app.timefix.ai');
+    vi.stubEnv('BOOKING_PUBLIC_ORIGIN', 'https://timefix.com');
+    vi.stubEnv('PUBLIC_HOST_HOME_URL', 'https://timefix.ai');
+    vi.stubEnv('API_ORIGIN_INTERNAL', API);
+  });
+
+  it.each(['/', '/sign-in', '/settings/profile', '/w/acme', '/api/rpc/system/status', '/book.html'])(
+    'moves %s there to the marketing site, for good',
+    (pathname) => {
+      const response = at(`https://timefix.com${pathname}`);
+      expect(response.status).toBe(308);
+      expect(response.headers.get('location')).toBe('https://timefix.ai/');
+      expect(response.headers.get('cache-control')).toBe('public, max-age=3600');
+    },
+  );
+
+  it.each(['/ada', '/ada/30min', '/b/AbCdEfGhIjKlMnOp', '/f/contact', '/embed/v1.js', '/embed.js'])(
+    'keeps %s there',
+    (pathname) => {
+      const response = at(`https://timefix.com${pathname}`);
+      expect(response.status).not.toBe(308);
+      expect(response.headers.get('x-middleware-next')).toBe('1');
+    },
+  );
+
+  it('proxies the public API there as anywhere', () => {
+    const response = at('https://timefix.com/api/public/handles/ada/30min');
+    expect(response.headers.get('x-middleware-rewrite')).toBe(`${API}/api/public/handles/ada/30min`);
+  });
+
+  it('leaves the app’s own host alone', () => {
+    expect(at('https://app.timefix.ai/').status).not.toBe(308);
+    expect(at('https://app.timefix.ai/settings/profile').status).not.toBe(308);
+  });
+
+  it('changes nothing with PUBLIC_HOST_HOME_URL or APP_URL unset, or when the public origin is the app’s own', () => {
+    vi.stubEnv('PUBLIC_HOST_HOME_URL', '');
+    expect(at('https://timefix.com/').status).not.toBe(308);
+    vi.stubEnv('PUBLIC_HOST_HOME_URL', 'https://timefix.ai');
+    vi.stubEnv('APP_URL', '');
+    expect(at('https://timefix.com/').status).not.toBe(308);
+    vi.stubEnv('APP_URL', 'https://app.timefix.ai');
+    vi.stubEnv('BOOKING_PUBLIC_ORIGIN', 'https://app.timefix.ai');
+    expect(at('https://app.timefix.ai/').status).not.toBe(308);
   });
 });

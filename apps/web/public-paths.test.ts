@@ -5,7 +5,16 @@ import path from 'node:path';
 import { RESERVED_HANDLES } from '@crm/contracts/handles';
 import { describe, expect, it } from 'vitest';
 import { directiveSources, policyForPath, sourcePattern } from './csp.ts';
-import { APP_HEADER_SOURCE, HANDLE_HEADER_SOURCE, HANDLE_PATH, PAGE_SOURCE, PROFILE_SOURCE } from './public-paths.ts';
+import {
+  APP_HEADER_SOURCE,
+  HANDLE_HEADER_SOURCE,
+  HANDLE_PATH,
+  PAGE_SOURCE,
+  PROFILE_SOURCE,
+  publicHostRedirect,
+  servedOnPublicHost,
+  TOP_LEVEL_FILES,
+} from './public-paths.ts';
 
 const config = JSON.parse(readFileSync(path.join(import.meta.dirname, 'vercel.json'), 'utf8')) as {
   readonly rewrites: readonly { readonly source: string; readonly destination: string }[];
@@ -75,5 +84,92 @@ describe('the reserved words', () => {
   it('hold every top level file and folder the build serves', () => {
     const served = readdirSync(path.join(import.meta.dirname, 'public')).map((name) => name.split('.')[0] ?? '');
     for (const word of [...served, 'api', 'assets', 'embed', 'b', 'f']) expect(RESERVED_HANDLES, word).toContain(word);
+  });
+});
+
+describe('the public booking host', () => {
+  it.each([
+    '/ada',
+    '/ada/30min',
+    '/ada/30min/',
+    '/b/AbCdEfGhIjKlMnOp',
+    '/b/AbCdEfGhIjKlMnOp/manage',
+    '/f/contact',
+    '/embed/v1.js',
+    '/embed.js',
+    '/assets/book-abc123.js',
+    '/brand/timefix-mark.svg',
+    '/theme-boot.js',
+    '/favicon.ico',
+    '/api/public/handles/ada',
+  ])('serves %s', (pathname) => {
+    expect(servedOnPublicHost(pathname)).toBe(true);
+  });
+
+  it.each([
+    '/',
+    '/sign-in',
+    '/settings/profile',
+    '/w/acme/objects/people',
+    '/index.html',
+    '/book.html',
+    '/x.js',
+    '/robots.txt',
+    '/api',
+    '/api/rpc/system/status',
+    '/api/publication',
+    '/ada/30min/extra',
+    '/ab',
+  ])('sends %s away', (pathname) => {
+    expect(servedOnPublicHost(pathname)).toBe(false);
+  });
+
+  it('lists every top level file the build serves from public/', () => {
+    const files = readdirSync(path.join(import.meta.dirname, 'public'), { withFileTypes: true })
+      .filter((entry) => entry.isFile())
+      .map((entry) => entry.name)
+      .sort();
+    expect([...TOP_LEVEL_FILES].sort()).toEqual(files);
+    const folders = readdirSync(path.join(import.meta.dirname, 'public'), { withFileTypes: true })
+      .filter((entry) => entry.isDirectory())
+      .map((entry) => entry.name);
+    for (const folder of folders) expect(servedOnPublicHost(`/${folder}/anything.svg`), folder).toBe(true);
+  });
+
+  it('keeps every path vercel.json sends to the booking or form bundle', () => {
+    for (const pathname of ['/ada', '/ada-lovelace/30min', '/b/AbCdEfGhIjKlMnOp', '/f/contact']) {
+      expect(['/book.html', '/form.html']).toContain(destinationOf(pathname));
+      expect(servedOnPublicHost(pathname), pathname).toBe(true);
+    }
+  });
+
+  const env = {
+    PUBLIC_HOST_HOME_URL: 'https://timefix.ai',
+    BOOKING_PUBLIC_ORIGIN: 'https://timefix.com',
+    APP_URL: 'https://app.timefix.ai',
+  };
+
+  it('moves anything else on that host to the marketing site, and nothing on another host', () => {
+    expect(publicHostRedirect(new URL('https://timefix.com/'), env)).toBe('https://timefix.ai/');
+    expect(publicHostRedirect(new URL('https://timefix.com/sign-in?next=/w'), env)).toBe('https://timefix.ai/');
+    expect(publicHostRedirect(new URL('https://timefix.com/ada/30min'), env)).toBeUndefined();
+    expect(publicHostRedirect(new URL('https://app.timefix.ai/'), env)).toBeUndefined();
+  });
+
+  it('does nothing unless both origins are set, https, and apart from the app’s', () => {
+    const root = new URL('https://timefix.com/');
+    expect(publicHostRedirect(root, { ...env, PUBLIC_HOST_HOME_URL: undefined })).toBeUndefined();
+    expect(publicHostRedirect(root, { ...env, PUBLIC_HOST_HOME_URL: '' })).toBeUndefined();
+    expect(publicHostRedirect(root, { ...env, PUBLIC_HOST_HOME_URL: 'http://timefix.ai' })).toBeUndefined();
+    expect(publicHostRedirect(root, { ...env, PUBLIC_HOST_HOME_URL: 'not a url' })).toBeUndefined();
+    expect(publicHostRedirect(root, { ...env, BOOKING_PUBLIC_ORIGIN: undefined })).toBeUndefined();
+    expect(publicHostRedirect(root, { ...env, APP_URL: 'https://timefix.com' })).toBeUndefined();
+    expect(publicHostRedirect(root, { ...env, APP_URL: undefined })).toBeUndefined();
+    // With no APP_URL the app's own host is never moved, even were it named the public origin.
+    const appRoot = new URL('https://app.timefix.ai/settings');
+    expect(
+      publicHostRedirect(appRoot, { ...env, APP_URL: undefined, BOOKING_PUBLIC_ORIGIN: 'https://app.timefix.ai' }),
+    ).toBeUndefined();
+    expect(publicHostRedirect(root, { ...env, PUBLIC_HOST_HOME_URL: 'https://timefix.com/home' })).toBeUndefined();
   });
 });

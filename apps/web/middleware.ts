@@ -5,9 +5,19 @@
 // app and the API share one origin (host only cookies, no CORS), and either way
 // the request carries the edge secret and the caller's address from here: the
 // function, like a proxied API, admits only requests this middleware vouched for.
+//
+// It also keeps the public booking origin's host (BOOKING_PUBLIC_ORIGIN, timefix.com, served by this same
+// deployment) to what belongs there: with PUBLIC_HOST_HOME_URL set, any other path on that host, `/` included,
+// moves (308) to the marketing site. So it runs for every path but the built files; any other request passes on
+// untouched. The move may be cached for an hour, so a path that later joins the public host is reachable soon.
 import { geolocation, ipAddress, next, rewrite } from '@vercel/functions';
+import { publicHostRedirect } from './public-paths.ts';
 
-export const config = { matcher: ['/api', '/api/:path*'] };
+/** Every path but the built files, which belong on every host: public-paths.ts's MIDDLEWARE_MATCHER, written out. */
+export const config = { matcher: ['/((?!assets/|brand/|embed\\.js$|favicon\\.ico$|theme-boot\\.js$).*)'] };
+
+/** Whether a path is the API's: only these get the edge's headers, the proxy or the function. */
+const isApiPath = (pathname: string) => pathname === '/api' || pathname.startsWith('/api/');
 
 /**
  * The header carrying the edge secret, which proves to the API that a request
@@ -52,6 +62,13 @@ export function apiTarget(env: { readonly API_ORIGIN_INTERNAL?: string | undefin
 }
 
 export default function middleware(request: Request): Response {
+  const url = new URL(request.url);
+  const home = publicHostRedirect(url, process.env);
+  if (home !== undefined) {
+    return new Response(null, { status: 308, headers: { location: home, 'cache-control': 'public, max-age=3600' } });
+  }
+  if (!isApiPath(url.pathname)) return next();
+
   const origin = process.env.API_ORIGIN_INTERNAL ?? '';
   const proxied = apiTarget(process.env) === 'proxy';
 
@@ -77,7 +94,6 @@ export default function middleware(request: Request): Response {
     );
   }
 
-  const url = new URL(request.url);
   // Replace these, never append to them: a client can send its own values.
   const headers = new Headers(request.headers);
   headers.set('x-forwarded-host', url.host);
