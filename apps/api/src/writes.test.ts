@@ -1142,21 +1142,26 @@ const WRITES: Record<string, (m: Member, mutationId: string) => Promise<readonly
     ];
   },
   // Calendar sync (spec 0024): a sharing change names the connection's meetings and their records; so does a
-  // disconnect, for the meetings it removed.
+  // disconnect, for the meetings it removed. Each also names the member in a `calendars` row, so their other tabs
+  // read their connections again.
   'calendar.connections.update': async (m, mutationId) => {
+    const { memberId } = await m.client.access.mine({ workspace: m.slug });
     const { connectionId, meetingId, recordId } = await heldMeeting(m);
     await m.client.calendar.connections.update({ workspace: m.slug, connectionId, sharing: 'private', mutationId });
     return [
       { kind: 'records', record_ids: [recordId] },
       { kind: 'meetings', item_ids: [meetingId], record_ids: [recordId], mutation_id: mutationId },
+      { kind: 'calendars', item_ids: [memberId], mutation_id: mutationId },
     ];
   },
   'calendar.connections.remove': async (m, mutationId) => {
+    const { memberId } = await m.client.access.mine({ workspace: m.slug });
     const { connectionId, meetingId, recordId } = await heldMeeting(m);
     await m.client.calendar.connections.remove({ workspace: m.slug, connectionId, mutationId });
     return [
       { kind: 'records', record_ids: [recordId] },
       { kind: 'meetings', item_ids: [meetingId], record_ids: [recordId], mutation_id: mutationId },
+      { kind: 'calendars', item_ids: [memberId], mutation_id: mutationId },
     ];
   },
   // Sync now queues the connection's sync: a job row, no outbox row, and one poke so the worker wakes for it.
@@ -1173,6 +1178,7 @@ const WRITES: Record<string, (m: Member, mutationId: string) => Promise<readonly
   },
   // Sync meetings off while the calendar still shows: its meeting leaves its records (AC-1002).
   'calendar.calendars.update': async (m, mutationId) => {
+    const { memberId } = await m.client.access.mine({ workspace: m.slug });
     const { connectionId, meetingId, recordId } = await heldMeeting(m);
     const [main] = await testQuery<{ id: string }>(
       ownerUrl,
@@ -1188,6 +1194,7 @@ const WRITES: Record<string, (m: Member, mutationId: string) => Promise<readonly
     return [
       { kind: 'records', record_ids: [recordId] },
       { kind: 'meetings', item_ids: [meetingId], record_ids: [recordId], mutation_id: mutationId },
+      { kind: 'calendars', item_ids: [memberId], mutation_id: mutationId },
     ];
   },
   // Where bookings go: the member's own setting, no outbox row.
