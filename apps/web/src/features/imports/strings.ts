@@ -130,7 +130,7 @@ export const strings = {
   confirmText: (errors: number) =>
     errors === 0
       ? 'It runs in the background, and you can undo it for 7 days.'
-      : `${rowsWord(errors)} with errors stay out. It runs in the background, and you can undo it for 7 days.`,
+      : `${rowsWord(errors)} with errors ${errors === 1 ? 'stays' : 'stay'} out. It runs in the background, and you can undo it for 7 days.`,
   notYet: 'Not yet',
   sent: (sent: number, total: number) => `Sending rows: ${n(sent)} of ${n(total)}`,
   stopSending: 'Stop',
