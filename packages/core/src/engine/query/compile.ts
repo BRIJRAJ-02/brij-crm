@@ -16,6 +16,7 @@ import {
   FilterGroup,
   SortRules,
   toCanonicalDecimal,
+  urlContainsNeedles,
   type FilterCondition,
   type RelativeRange,
   type SortRule,
@@ -521,6 +522,14 @@ function valuePredicate(context: CompileContext, attribute: AttributeDef, condit
   const { type } = attribute;
   const op = condition.operator;
   const json = (key: string) => sql`lower(v.json_value->>${key})`;
+  if (op === 'contains' && type === 'url') {
+    // A handle typed with @ ("@ada") also finds the profile link it is stored as (https://x.com/ada).
+    const needles = urlContainsNeedles(operandText(valueOf(condition)));
+    return sql`(${sql.join(
+      needles.map((needle) => sql`lower(left(v.text_value, 2048)) like ${`%${likeLiteral(needle)}%`}`),
+      sql` or `,
+    )})`;
+  }
   if (op === 'contains' && CONTAINS.has(type)) {
     return sql`lower(left(v.text_value, 2048)) like ${containsPattern(valueOf(condition))}`;
   }
@@ -619,6 +628,8 @@ function searchTermOf(context: CompileContext, condition: FilterCondition): Sear
     (positive.operator === 'name_contains' && attribute.type === 'file');
   const value = valueOf(positive);
   if (!searchable || typeof value !== 'string') return undefined;
+  // A url contains with more than one needle (an @ handle) is matched row by row: the search looks for one text.
+  if (attribute.type === 'url' && urlContainsNeedles(value).length > 1) return undefined;
   const text = value.trim().toLowerCase();
   if (text === '' || value.length > MAX_OPERAND || !TRIGRAM_RUN.test(text)) return undefined;
   return { attributeId: attribute.id, text };

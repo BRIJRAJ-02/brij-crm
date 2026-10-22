@@ -403,6 +403,8 @@ describe('the compiler matches the reference evaluator', () => {
     ['text contains a literal wildcard', () => and(is('name', 'contains', 'a_b%'))],
     ['long text does not contain', () => and(is('notes', 'does_not_contain', 'oyag'))],
     ['url is', () => and(is('site', 'is', 'https://beta.example.com'))],
+    ['url contains an @ handle, as a path', () => and(is('site', 'contains', '@beta'))],
+    ['url does not contain an @ handle', () => and(is('site', 'does_not_contain', '@gamma'))],
     ['multi email contains any item', () => and(is('contacts', 'contains', 'dan'))],
     ['either of two contains', () => or(is('name', 'contains', 'gemini'), is('notes', 'contains', 'mercury'))],
     [
