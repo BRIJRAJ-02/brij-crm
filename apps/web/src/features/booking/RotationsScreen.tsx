@@ -29,8 +29,10 @@ import {
 import { useRouteContext } from '@tanstack/react-router';
 import { useState } from 'react';
 import { linksHref } from '../captures/tabs.ts';
+import { InviteTeamDialog } from '../settings/InviteTeamDialog.tsx';
 import { membersSettingsHref } from '../settings/nav.ts';
 import { SettingsPage } from '../settings/SettingsPage.tsx';
+import { useCan } from '../workspace/WorkspacePage.tsx';
 import { DistributionPanel } from './DistributionPanel.tsx';
 import { RotationDialog } from './RotationDialog.tsx';
 import { strings } from './rotation-strings.ts';
@@ -144,6 +146,10 @@ export function RotationsScreen({ data, slug, people, canManage }: RotationsScre
   const [deleteError, setDeleteError] = useState<string | undefined>(undefined);
   // A fresh dialog per opening, so its draft and its id start afresh.
   const [opened, setOpened] = useState(0);
+  // Invite teammates opens the one Invite dialog in place for someone who may invite; anyone else is sent to
+  // Settings › Members, which says who can.
+  const canInvite = useCan('members.invite');
+  const [isInviting, setInviting] = useState(false);
   // Members whose upcoming bookings an admin may hand on, one prompt at a time (every member a save removed).
   const [queue, setQueue] = useState<readonly Handing[]>([]);
   const handing = queue[0];
@@ -238,9 +244,21 @@ export function RotationsScreen({ data, slug, people, canManage }: RotationsScre
             title={strings.emptyAloneTitle}
             // The help sits once, beside the page's title.
             actions={
-              <ButtonLink variant="primary" icon="user-plus" href={membersSettingsHref(slug)}>
-                {strings.inviteTeammates}
-              </ButtonLink>
+              canInvite ? (
+                <Button
+                  variant="primary"
+                  icon="user-plus"
+                  onPress={() => {
+                    setInviting(true);
+                  }}
+                >
+                  {strings.inviteTeammates}
+                </Button>
+              ) : (
+                <ButtonLink variant="primary" icon="user-plus" href={membersSettingsHref(slug)}>
+                  {strings.inviteTeammates}
+                </ButtonLink>
+              )
             }
           >
             {strings.emptyAloneText}
@@ -410,6 +428,16 @@ export function RotationsScreen({ data, slug, people, canManage }: RotationsScre
           {strings.deleteText}
         </SettingsStack>
       </Modal>
+      {canInvite && (
+        <InviteTeamDialog
+          data={data}
+          slug={slug}
+          isOpen={isInviting}
+          onClose={() => {
+            setInviting(false);
+          }}
+        />
+      )}
     </SettingsPage>
   );
 }

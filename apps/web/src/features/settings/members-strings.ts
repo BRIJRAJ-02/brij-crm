@@ -166,4 +166,7 @@ export const strings = {
   inviteMore: 'Invite more',
   done: 'Done',
   unsent: (list: string) => `Saved, but the email didn’t go out to ${list}. Use Resend on the Invitations tab.`,
+  // The invite dialog opened outside Settings › Members (InviteTeamDialog), when its first read fails.
+  inviteLoadFailed: 'Couldn’t load your team. Check your connection, then try again.',
+  inviteTryAgain: 'Try again',
 } as const;

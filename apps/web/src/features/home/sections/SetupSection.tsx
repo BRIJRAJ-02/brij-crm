@@ -4,8 +4,9 @@
 import type { CaptureListView, InvitationView, MemberView, Permission } from '@crm/data';
 import { useCalendar, useCaptureList } from '@crm/data/react';
 import { SetupChecklist, type SetupChecklistStep } from '@crm/ui';
-import { useNavigate, useRouteContext } from '@tanstack/react-router';
-import { useMemo } from 'react';
+import { useNavigate, useRouteContext, useRouter } from '@tanstack/react-router';
+import { useMemo, useState } from 'react';
+import { InviteTeamDialog } from '../../settings/InviteTeamDialog.tsx';
 import type { HomeSectionProps } from '../registry.ts';
 import { setupSteps, type SetupFacts, type SetupStepId } from '../setup.ts';
 import { strings } from '../strings.ts';
@@ -96,6 +97,10 @@ function detailOf(id: SetupStepId, facts: SetupFacts): string {
 export function SetupSection({ context, onHide }: HomeSectionProps) {
   const { slug, meId, permissions, members, invitations } = context;
   const navigate = useNavigate();
+  const router = useRouter();
+  const { data } = useRouteContext({ from: '__root__' });
+  // Invite your team opens the one Invite dialog here, rather than leaving Home for Settings › Members.
+  const [isInviting, setInviting] = useState(false);
   const setup = useSetupFacts(slug, meId, permissions, members, invitations);
   const steps: readonly SetupChecklistStep[] = setupSteps(setup.facts).map((step) => ({
     id: step.id,
@@ -117,17 +122,31 @@ export function SetupSection({ context, onHide }: HomeSectionProps) {
         void navigate({ to: '/w/$slug/captures/forms', params: { slug } });
         return;
       case 'invite':
-        void navigate({ to: '/w/$slug/settings/members', params: { slug } });
+        setInviting(true);
     }
   };
   return (
-    <SetupChecklist
-      title={strings.setupTitle}
-      steps={steps}
-      status={setup.status}
-      onRetry={setup.retry}
-      onAction={open}
-      {...(onHide === undefined ? {} : { onHide })}
-    />
+    <>
+      <SetupChecklist
+        title={strings.setupTitle}
+        steps={steps}
+        status={setup.status}
+        onRetry={setup.retry}
+        onAction={open}
+        {...(onHide === undefined ? {} : { onHide })}
+      />
+      <InviteTeamDialog
+        data={data}
+        slug={slug}
+        isOpen={isInviting}
+        onClose={() => {
+          setInviting(false);
+        }}
+        // The step's line ("1 invited") reads the route's invitations, so the route reads them again.
+        onInvited={() => {
+          void router.invalidate();
+        }}
+      />
+    </>
   );
 }
