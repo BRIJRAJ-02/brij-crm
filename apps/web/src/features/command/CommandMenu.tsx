@@ -19,6 +19,7 @@ import { recordHref } from '../records/details.ts';
 import {
   actionCommands,
   matchCommands,
+  namesACommand,
   pageCommands,
   settingsCommands,
   viewHref,
@@ -91,18 +92,23 @@ export function CommandMenu({ slug, mode, isOpen, onOpenChange }: CommandMenuPro
         : found.status === 'error'
           ? 'failed'
           : undefined;
-    return [
-      {
-        id: 'records',
-        label: strings.records,
-        items: isCurrent ? found.records.map((hit) => recordRow(hit, byId)) : [],
-        ...(status === undefined ? {} : { status }),
-      },
+    const records: PaletteSection = {
+      id: 'records',
+      label: strings.records,
+      items: isCurrent ? found.records.map((hit) => recordRow(hit, byId)) : [],
+      ...(status === undefined ? {} : { status }),
+    };
+    const browserSide: readonly PaletteSection[] = [
       { id: 'views', label: strings.views, items: isCurrent ? found.views.map((view) => viewRow(view, byId)) : [] },
       { id: 'pages', label: strings.pages, items: matchCommands(pages, text).map(row) },
       { id: 'settings', label: strings.settingsSection, items: matchCommands(settings, text).map(row) },
       { id: 'actions', label: strings.actions, items: matchCommands(actions, text).map(row) },
     ];
+    // Records only guessed at (close matches) wait behind a page, Settings page or action the text names.
+    const onlyGuesses = isCurrent && found.records.length > 0 && found.records.every((hit) => hit.match === 'similar');
+    return onlyGuesses && namesACommand([...pages, ...settings, ...actions], text)
+      ? [...browserSide, records]
+      : [records, ...browserSide];
   }, [text, found, hasFailed, recents, actions, pages, settings, byId, themeChoice]);
 
   const choose = (item: PaletteItem) => {

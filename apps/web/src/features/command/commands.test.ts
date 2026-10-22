@@ -5,7 +5,15 @@ import { readdirSync } from 'node:fs';
 import path from 'node:path';
 import type { ObjectSummary } from '@crm/data';
 import { describe, expect, it } from 'vitest';
-import { actionCommands, createHref, matchCommands, pageCommands, settingsCommands, viewHref } from './commands.ts';
+import {
+  actionCommands,
+  createHref,
+  matchCommands,
+  namesACommand,
+  pageCommands,
+  settingsCommands,
+  viewHref,
+} from './commands.ts';
 import { commandKey, isCommandMenuKey, isSearchKey } from './keys.ts';
 
 const object = (apiSlug: string, singular: string, plural: string, position: number, access: 'read' | 'write') =>
@@ -102,6 +110,16 @@ describe('matching what is typed (AC-1077, AC-1082)', () => {
   it('answers every command for blank, and none for nonsense', () => {
     expect(matchCommands(all, '  ')).toHaveLength(all.length);
     expect(names('qqqq')).toEqual([]);
+  });
+  it('knows when the text names a command, so typo guesses wait behind it', () => {
+    expect(namesACommand(all, 'trash')).toBe(true);
+    expect(namesACommand(all, ' Book')).toBe(true);
+    expect(namesACommand(all, 'set')).toBe(true);
+    // Held inside a name, or only another word for it, is too loose to outrank a record.
+    expect(namesACommand(all, 'ash')).toBe(false);
+    expect(namesACommand(all, 'deleted')).toBe(false);
+    expect(namesACommand(all, 'northwind')).toBe(false);
+    expect(namesACommand(all, '   ')).toBe(false);
   });
 });
 
