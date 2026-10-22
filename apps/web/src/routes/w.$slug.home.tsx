@@ -1,7 +1,7 @@
 import { isDataError, type MemberView } from '@crm/data';
 import { Card, LoadingNow, PageColumn, Skeleton, TileGrid, TopBar } from '@crm/ui';
 import { createFileRoute, useRouter, type ErrorComponentProps } from '@tanstack/react-router';
-import { dayKeyOf } from '../features/bookings/week.ts';
+import { dayAt } from '../features/tasks/day.ts';
 import { aheadRange, dayRange } from '../features/home/agenda.ts';
 import { weekStartOf } from '../features/home/metrics.ts';
 import { HomeScreen } from '../features/home/HomeScreen.tsx';
@@ -25,15 +25,18 @@ export const Route = createFileRoute('/w/$slug/home')({
     const { data } = context;
     const slug = params.slug;
     try {
-      const [objects, members, access, tasks] = await Promise.all([
+      const [objects, members, access, tasks, preferences] = await Promise.all([
         data.objects.list(slug),
         // A failed list draws its own card's failure rather than Home's: Tasks due offers Try again.
         data.members.list(slug).catch((): readonly MemberView[] => []),
         data.access.mine(slug).catch(() => undefined),
         data.tasks.mine(slug, 'assigned', 'open').catch(() => undefined),
+        // The member's time zone decides which day Home's sections read; the frame holds these already.
+        data.preferences.load(slug).catch(() => undefined),
       ]);
       const permissions = access?.permissions ?? [];
-      const today = dayKeyOf(new Date());
+      // The same day the sections work out (useToday in the member's zone), so the prewarmed reads are theirs.
+      const today = dayAt(Date.now(), preferences?.timeZone ?? Intl.DateTimeFormat().resolvedOptions().timeZone);
       const day = dayRange(today);
       const ahead = aheadRange(today);
       const invitations = permissions.includes('members.invite')
@@ -45,7 +48,6 @@ export const Route = createFileRoute('/w/$slug/home')({
           tasks?.ready(),
           data.bookings.calendar(slug, ahead.from, ahead.to).ready(),
           data.home.recents(slug).ready(),
-          data.preferences.load(slug),
           // Team today and the metrics row, so a quick answer arrives with the first paint.
           members.length > 1 && permissions.includes('booking.manage')
             ? data.home.teamToday(slug, day.from, day.to).ready()

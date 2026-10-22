@@ -114,6 +114,17 @@ describe('a member’s preferences', () => {
     });
     expect(await updateMyPreferences(w.member, { homeHidden: [] })).not.toHaveProperty('homeHidden');
     expect(await readMyPreferences(w.member)).toEqual(DEFAULT_PREFERENCES);
+    // Clearing an empty list changes nothing, so it writes nothing; each real change writes one audit row.
+    await updateMyPreferences(w.member, { homeHidden: [] });
+    const rows = await testQuery<{ before: unknown; after: unknown }>(
+      ownerUrl,
+      'select before, after from audit_events where workspace_id = $1 order by at',
+      [w.workspaceId],
+    );
+    expect(rows).toEqual([
+      { before: { homeHidden: null }, after: { homeHidden: ['setup'] } },
+      { before: { homeHidden: ['setup'] }, after: { homeHidden: null } },
+    ]);
   });
 
   it('refuses a principal that isn’t a member', async () => {

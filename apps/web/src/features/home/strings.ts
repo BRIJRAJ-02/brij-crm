@@ -9,6 +9,10 @@ export const strings = {
     evening: (name: string | undefined) => (name === undefined ? 'Good evening' : `Good evening, ${name}`),
   },
 
+  // Putting a section away
+  hidden: 'Hidden from Home. Bring it back from Preferences in Settings.',
+  undo: 'Undo',
+
   // Finish setting up
   setupTitle: 'Finish setting up',
   steps: {
@@ -30,7 +34,6 @@ export const strings = {
   bookings: 'Bookings',
   earlier: 'Earlier',
   comingUp: 'Coming up',
-  later: 'Next',
   allDay: 'All day',
   minutes: (count: number) => `${String(count)} min`,
   hours: (hours: number, minutes: number) =>
@@ -46,6 +49,7 @@ export const strings = {
   noTasksDueText: 'Tasks due today or overdue show here.',
   moreDue: (count: number) => (count === 1 ? '1 more due' : `${count.toLocaleString('en')} more due`),
   moreInTasks: 'More in My tasks',
+  seeAll: 'See all',
 
   // Recently viewed
   recent: 'Recently viewed',
@@ -59,7 +63,7 @@ export const strings = {
   noCapturesText: 'Forms that take a submission show here, newest first.',
   capturesFailed: 'Forms didn’t load',
   captureLine: (count: number, when: string) =>
-    count === 0 ? `Last one ${when}` : `${count.toLocaleString('en')} this month, last one ${when}`,
+    count === 0 ? `Last submission ${when}` : `${count.toLocaleString('en')} this month, last on ${when}`,
 
   // Team today
   teamToday: 'Team today',
@@ -68,7 +72,7 @@ export const strings = {
   inMeeting: 'In a meeting',
   busy: 'Busy',
   freeNow: 'Free now',
-  teamDescription: 'By their calendars, on your clock',
+  teamDescription: 'Times in your time zone',
   aTeammate: 'A teammate',
   until: (time: string) => `Until ${time}`,
   titleUntil: (title: string, time: string) => `${title} until ${time}`,

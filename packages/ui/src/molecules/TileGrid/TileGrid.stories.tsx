@@ -148,3 +148,24 @@ export const TwoColumns: Story = {
     await expect((third ?? 0) > (first ?? 0)).toBe(true);
   },
 };
+
+/** Two columns on a phone: one column, each card at the grid's full width. */
+export const TwoColumnsPhone: Story = {
+  parameters: { crm: { screenshot: false } },
+  render: () => (
+    <Stage width="phone">
+      <TileGrid columns="two">
+        <Card title="Today">
+          <p>Three meetings</p>
+        </Card>
+        <Card title="My tasks">
+          <p>Call Ada back</p>
+        </Card>
+      </TileGrid>
+    </Stage>
+  ),
+  play: async ({ canvas }) => {
+    const [first, second] = canvas.getAllByRole('heading').map((heading) => heading.getBoundingClientRect());
+    await expect((second?.top ?? 0) > (first?.bottom ?? 0)).toBe(true);
+  },
+};

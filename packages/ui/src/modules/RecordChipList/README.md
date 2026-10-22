@@ -24,9 +24,10 @@ New. Recently viewed shows the member's last records as chips, the way a record 
 ## States
 
 - Default: the chips, wrapping.
-- Loading: two skeleton lines, `aria-busy`, read as "Loading records".
+- Loading: two skeleton lines, read as "Loading records" (the card around it carries `aria-busy`).
 - Empty: a row EmptyState with `emptyTitle` and `emptyText`.
-- Error: an EmptyState with Try again (`onRetry`).
+- Error: a row EmptyState with Try again (`onRetry`), the same height as the empty row.
+- Read only and disabled don't apply: the chips only open their records.
 - No access: a locked row EmptyState.
 
 ## Keyboard

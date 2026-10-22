@@ -95,15 +95,19 @@ describe('the home store', () => {
     expect(calls).toEqual(['metrics:2026-11-02T00:00:00.000Z']);
   });
 
-  it('reads Recently viewed each time a screen first holds it, not while it stays held', async () => {
-    const { store, calls, comeBackSoon } = harness([]);
+  it('reads Recently viewed when first held after a while away, never twice for a fresh answer', async () => {
+    const { store, calls, comeBack, comeBackSoon } = harness([]);
     const view = store.recents('acme');
+    // The route's prewarm answers; the screen holding it right after asks nothing more.
+    await view.ready();
     const release = view.retain();
     await settle();
     expect(view.getSnapshot()).toEqual({ status: 'ready', items: [] });
     comeBackSoon();
     await settle();
+    expect(calls).toEqual(['recents:acme']);
     release();
+    comeBack();
     view.retain();
     await settle();
     expect(calls).toEqual(['recents:acme', 'recents:acme']);

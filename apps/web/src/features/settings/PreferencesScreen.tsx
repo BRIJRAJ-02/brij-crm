@@ -12,6 +12,7 @@ import {
   SettingsRow,
   SettingsSection,
   Skeleton,
+  Switch,
   useFormatSettings,
   type Toasts,
 } from '@crm/ui';
@@ -212,6 +213,17 @@ function MemberSections({
               items={landings}
               value={landingId(preferences.landing, objects)}
               onChange={(id) => pick('landing', id)}
+            />
+          </SettingsRow>
+          <SettingsRow title={strings.homeSetup} description={strings.homeSetupDescription}>
+            <Switch
+              label={strings.homeSetup}
+              isLabelHidden
+              isSelected={!(preferences.homeHidden ?? []).includes('setup')}
+              onChange={(isOn) => {
+                const others = (preferences.homeHidden ?? []).filter((key) => key !== 'setup');
+                void onChange({ homeHidden: isOn ? others : [...others, 'setup'] });
+              }}
             />
           </SettingsRow>
         </Card>

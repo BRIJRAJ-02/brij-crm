@@ -40,7 +40,7 @@ export function RecordChipList({
 }: RecordChipListProps) {
   if (status === 'loading') {
     return (
-      <div aria-busy="true">
+      <div>
         <VisuallyHidden>{strings.loading}</VisuallyHidden>
         <Skeleton lines={2} />
       </div>
@@ -48,7 +48,7 @@ export function RecordChipList({
   }
   if (status === 'error') {
     return (
-      <EmptyState tone="error" title={strings.failed} {...(onRetry === undefined ? {} : { onRetry })}>
+      <EmptyState tone="error" title={strings.failed} layout="row" {...(onRetry === undefined ? {} : { onRetry })}>
         {strings.failedBody}
       </EmptyState>
     );

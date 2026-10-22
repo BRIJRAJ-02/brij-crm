@@ -122,7 +122,8 @@ export function createHomeStore(deps: HomeDeps) {
       retain() {
         held += 1;
         if (held === 1) {
-          void read();
+          // A read that just answered (the route's prewarm, or a visit a moment ago) stands: no second request.
+          if (clock() - readAt >= RETURN_GAP_MS) void read();
           // Coming back within RETURN_GAP_MS of the last answer reads nothing: focus fires on every click back.
           release = onReturn(() => {
             if (clock() - readAt >= RETURN_GAP_MS) void read();

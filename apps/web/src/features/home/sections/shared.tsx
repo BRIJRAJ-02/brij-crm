@@ -17,7 +17,7 @@ export function Failed({
   readonly onRetry: () => void;
 }) {
   return (
-    <EmptyState tone="error" title={title} onRetry={onRetry}>
+    <EmptyState tone="error" title={title} onRetry={onRetry} layout="row">
       {message ?? strings.failedText}
     </EmptyState>
   );

@@ -43,7 +43,11 @@ export const memberPreferences = pgTable(
     check('member_preferences_time_zone', sql`char_length(${t.timeZone}) between 1 and 64`),
     check('member_preferences_date_format', sql`${t.dateFormat} in ('auto', 'dmy', 'mdy', 'ymd')`),
     check('member_preferences_week_start', sql`${t.weekStart} in ('auto', 'monday', 'sunday', 'saturday')`),
-    check('member_preferences_home_hidden', sql`cardinality(${t.homeHidden}) <= 32`),
+    // At most 32 keys, each a section key as the contract has it, so no writer can store anything else.
+    check(
+      'member_preferences_home_hidden',
+      sql`cardinality(${t.homeHidden}) <= 32 and array_to_string(${t.homeHidden}, ',') ~ '^([a-z][a-zA-Z]{0,31}(,|$))*$'`,
+    ),
     check(
       'member_preferences_landing',
       sql`(${t.landing} in ('home', 'tasks') and ${t.landingId} is null) or (${t.landing} = 'object' and ${t.landingId} is not null)`,

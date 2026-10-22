@@ -75,3 +75,11 @@ export const Error: Story = {
     await expect(args.onRetry).toHaveBeenCalled();
   },
 };
+
+/** The reader may not see these records: a locked row. */
+export const NoAccess: Story = {
+  args: { status: 'no-access', records: [] },
+  play: async ({ canvas }) => {
+    await expect(canvas.getByText('You can’t see these records')).toBeInTheDocument();
+  },
+};

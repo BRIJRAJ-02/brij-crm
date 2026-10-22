@@ -2,7 +2,6 @@ import { Icon } from '../../atoms/Icon/Icon.tsx';
 import { Button } from '../../atoms/Button/Button.tsx';
 import { ProgressBar } from '../../atoms/ProgressBar/ProgressBar.tsx';
 import { Skeleton } from '../../atoms/Skeleton/Skeleton.tsx';
-import { TruncatedText } from '../../atoms/TruncatedText/TruncatedText.tsx';
 import { VisuallyHidden } from '../../atoms/VisuallyHidden/VisuallyHidden.tsx';
 import type { LoadStatus } from '../../lib/load-status.ts';
 import { Callout } from '../../molecules/Callout/Callout.tsx';
@@ -55,6 +54,7 @@ export function SetupChecklist({
   onHide,
   defaultDoneExpanded = false,
 }: SetupChecklistProps) {
+  if (status === 'ready' && steps.length === 0) return null;
   const open = steps.filter((step) => !step.isDone);
   const done = steps.filter((step) => step.isDone);
   if (status === 'ready' && steps.length > 0 && open.length === 0) {
@@ -99,7 +99,9 @@ export function SetupChecklist({
           <Skeleton width="short" />
           <Skeleton lines={3} />
         </div>
-      ) : status === 'error' || status === 'no-access' ? (
+      ) : status === 'no-access' ? (
+        <EmptyState tone="locked" title={strings.noAccess} layout="row" />
+      ) : status === 'error' ? (
         <EmptyState tone="error" title={strings.failed} {...(onRetry === undefined ? {} : { onRetry })}>
           {strings.failedBody}
         </EmptyState>
@@ -116,7 +118,7 @@ export function SetupChecklist({
             ))}
           </ul>
           {done.length > 0 && (
-            <Disclosure title={strings.doneCount(done.length)} defaultExpanded={defaultDoneExpanded}>
+            <Disclosure title={strings.doneCount(done.length)} defaultExpanded={defaultDoneExpanded} headingLevel={4}>
               <ul className={styles.list} aria-label={strings.doneCount(done.length)}>
                 {done.map((step) => (
                   <Row key={step.id} step={step} isNext={false} onAction={onAction} />
@@ -147,7 +149,7 @@ function Row({
       </span>
       <span className={styles.text}>
         <span className={styles.title}>
-          <TruncatedText>{step.title}</TruncatedText>
+          {step.title}
           <VisuallyHidden>{step.isDone ? strings.isDone : strings.isOpen}</VisuallyHidden>
         </span>
         {step.detail !== undefined && <span className={styles.detail}>{step.detail}</span>}

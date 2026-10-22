@@ -1,2 +1,2 @@
 ALTER TABLE "member_preferences" ADD COLUMN "home_hidden" text[] DEFAULT '{}'::text[] NOT NULL;--> statement-breakpoint
-ALTER TABLE "member_preferences" ADD CONSTRAINT "member_preferences_home_hidden" CHECK (cardinality("member_preferences"."home_hidden") <= 32);
+ALTER TABLE "member_preferences" ADD CONSTRAINT "member_preferences_home_hidden" CHECK (cardinality("member_preferences"."home_hidden") <= 32 and array_to_string("member_preferences"."home_hidden", ',') ~ '^([a-z][a-zA-Z]{0,31}(,|$))*$');

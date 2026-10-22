@@ -25,7 +25,7 @@ export function CapturesSection({ context }: HomeSectionProps) {
     return latestCaptures(state.items).map((form) => ({
       id: form.id,
       title: form.name,
-      address: strings.captureLine(form.submissionsThisMonth, when.format(new Date(form.lastSubmissionAt ?? 0))),
+      address: strings.captureLine(form.submissionsThisMonth, when.format(new Date(form.lastSubmissionAt))),
       chips: [],
       href: `/w/${slug}/captures/forms/${form.id}?tab=submissions`,
     }));

@@ -71,12 +71,12 @@ export function TasksSection({ context }: HomeSectionProps) {
   const state = useTaskList(list ?? FAILED_TASKS);
   const all = useTaskEntries(state.source, members);
   // Every loaded task is read at most once a render: the open list holds 50 a page.
-  const due = duePrefix(all.getItem, all.count, today, all.count);
+  const due = useMemo(() => duePrefix(all.getItem, all.count, today, all.count), [all, today]);
   const entries = useDueEntries(all, due);
   const link = useMemo(() => recordLinks(slug, objects), [slug, objects]);
   const hidden = due - TASKS_SHOWN;
   const runsOn = state.status === 'ready' && due === all.count && state.hasMore;
-  const footer =
+  const more =
     state.status !== 'ready'
       ? undefined
       : runsOn
@@ -84,6 +84,13 @@ export function TasksSection({ context }: HomeSectionProps) {
         : hidden > 0
           ? strings.moreDue(hidden)
           : undefined;
+  // The overflow line is the way to the rest, not just a count.
+  const footer =
+    more === undefined ? undefined : (
+      <ButtonLink variant="link" href={`/w/${slug}/tasks`}>
+        {more}
+      </ButtonLink>
+    );
   return (
     <Card
       title={strings.myTasks}

@@ -16,5 +16,6 @@ export const strings = {
   dismiss: 'Dismiss',
   loading: 'Loading setup',
   failed: 'Setup didn’t load',
+  noAccess: 'You can’t see setup for this workspace',
   failedBody: 'Check your connection and try again.',
 } as const;

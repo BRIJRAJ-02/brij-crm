@@ -2,10 +2,12 @@
    a phone gets one column with no overflow), tiles keeping their own height. */
 @layer components {
   .root {
+    --tile-gap: var(--space-16);
+
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(min(var(--size-panel), 100%), 1fr));
     align-items: start;
-    gap: var(--space-16);
+    gap: var(--tile-gap);
     min-inline-size: 0;
   }
 
@@ -19,7 +21,7 @@
   .root[data-columns='two'] {
     grid-template-columns: repeat(
       auto-fit,
-      minmax(min(100%, max(var(--size-panel), calc((100% - var(--space-16)) / 2))), 1fr)
+      minmax(min(100%, max(var(--size-panel), calc((100% - var(--tile-gap)) / 2))), 1fr)
     );
   }
 }

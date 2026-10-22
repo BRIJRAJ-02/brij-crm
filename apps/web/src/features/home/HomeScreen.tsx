@@ -31,7 +31,7 @@ export interface HomeScreenProps {
 /** Home: the greeting, then the registry's sections, each loading on its own. */
 export function HomeScreen(props: HomeScreenProps) {
   const { slug, members, meId } = props;
-  const { data } = useRouteContext({ from: '__root__' });
+  const { data, toasts } = useRouteContext({ from: '__root__' });
   const preferences = usePreferences(data.preferences.of(slug));
   const context: HomeContext = props;
   // Until the member's preferences arrive, a section they may have put away waits rather than showing and going.
@@ -39,11 +39,28 @@ export function HomeScreen(props: HomeScreenProps) {
   const sections = visibleSections(HOME_SECTIONS, context, hidden ?? []).filter(
     (section) => hidden !== undefined || preferences.status === 'error' || section.isHideable !== true,
   );
-  const hide = (id: string) => {
-    void data.preferences.change(slug, { homeHidden: [...withHidden(hidden ?? [], id)] });
-    // The section's own control goes with it: focus goes back to the page's title.
-    focusLater(() => document.querySelector<HTMLElement>('h1'));
-  };
+  // Only once the preferences are in can a section be put away (and brought back with Undo, or in Preferences).
+  const hide =
+    hidden === undefined
+      ? undefined
+      : (id: string) => {
+          const before = hidden;
+          void data.preferences.change(slug, { homeHidden: [...withHidden(before, id)] }).then((landed) => {
+            if (!landed) return;
+            toasts.toast({
+              tone: 'success',
+              message: strings.hidden,
+              action: {
+                label: strings.undo,
+                onAction: () => {
+                  void data.preferences.change(slug, { homeHidden: [...before] });
+                },
+              },
+            });
+          });
+          // The section's own control goes with it: focus goes back to the page's title.
+          focusLater(() => document.querySelector<HTMLElement>('h1'));
+        };
   const me = members.find((member) => member.id === meId);
   return (
     <WorkspacePage
@@ -79,14 +96,14 @@ function Section({
 }: {
   readonly section: HomeSection | undefined;
   readonly context: HomeContext;
-  readonly onHide: (id: string) => void;
+  readonly onHide: ((id: string) => void) | undefined;
 }) {
   if (section === undefined) return null;
   const { Component } = section;
   return (
     <Component
       context={context}
-      {...(section.isHideable === true
+      {...(section.isHideable === true && onHide !== undefined
         ? {
             onHide: () => {
               onHide(section.id);

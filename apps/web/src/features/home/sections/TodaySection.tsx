@@ -32,6 +32,14 @@ export function TodaySection({ context }: HomeSectionProps) {
   );
   const now = useNow();
   const link = useMemo(() => recordLinks(slug, objects), [slug, objects]);
+  const time = useMemo(
+    () => new Intl.DateTimeFormat(locale(), { hour: 'numeric', minute: '2-digit', timeZone }),
+    [timeZone],
+  );
+  const dayName = useMemo(
+    () => new Intl.DateTimeFormat(locale(), { weekday: 'short', day: 'numeric', month: 'short', timeZone }),
+    [timeZone],
+  );
   const agenda = useMemo(() => (state.status === 'ready' ? agendaOf(state, meId) : []), [state, meId]);
   const frame = (body: ReactNode, extra: { readonly isBusy?: boolean; readonly description?: string } = {}) => (
     <Card
@@ -68,13 +76,6 @@ export function TodaySection({ context }: HomeSectionProps) {
     );
   }
   const { earlier, next } = splitAgenda(todays, now);
-  const time = new Intl.DateTimeFormat(locale(), { hour: 'numeric', minute: '2-digit', timeZone });
-  const dayAndTime = new Intl.DateTimeFormat(locale(), {
-    weekday: 'short',
-    hour: 'numeric',
-    minute: '2-digit',
-    timeZone,
-  });
   const people = objects.find((object) => object.standardKey === 'people');
   const rowOf = (item: AgendaItem, isLater = false): BookingListGroup['rows'][number] => {
     const href =
@@ -82,7 +83,7 @@ export function TodaySection({ context }: HomeSectionProps) {
     const start = new Date(item.startsAt);
     return {
       id: item.id,
-      date: item.allDay ? strings.allDay : isLater ? dayAndTime.format(start) : time.format(start),
+      date: item.allDay ? strings.allDay : time.format(start),
       time: item.allDay ? '' : lengthOf(minutesOf(item)),
       title: item.title,
       ...(item.videoUrl === undefined || isLater || Date.parse(item.endsAt) <= now.getTime()
@@ -97,7 +98,9 @@ export function TodaySection({ context }: HomeSectionProps) {
       ? []
       : [{ id: 'earlier', label: strings.earlier, rows: earlier.map((item) => rowOf(item)) }]),
     ...(next.length === 0 ? [] : [{ id: 'next', label: strings.comingUp, rows: next.map((item) => rowOf(item)) }]),
-    ...(after === undefined ? [] : [{ id: 'later', label: strings.later, rows: [rowOf(after, true)] }]),
+    ...(after === undefined
+      ? []
+      : [{ id: 'later', label: dayName.format(new Date(after.startsAt)), rows: [rowOf(after, true)] }]),
   ];
   const openDay = (id: string) => {
     const item = agenda.find((each) => each.id === id);

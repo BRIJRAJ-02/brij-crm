@@ -21,7 +21,8 @@ New. The owner asked for a compact checklist (22 October 2026): a progress bar (
 ```
 
 - Open steps come first, in their order; the first one's button is primary, the rest secondary. Each button's name starts with its verb and names its step ("Invite, Invite your team"), so several read apart.
-- Done steps fold under a Disclosure titled "3 done", each with a green check and its detail. A step's state is also read out ("Done", "Not done yet"), so the icon never carries it alone.
+- A long step title wraps rather than being cut, so its button keeps its place on a phone.
+- Done steps fold under a Disclosure titled "3 done" (an h4 under the card's h3), each with a green check and its detail. A step's state is also read out ("Done", "Not done yet"), so the icon never carries it alone.
 - When every step is done, the card becomes one success Callout, "You're all set", with Dismiss. Without `onHide` there is no menu and no Dismiss.
 - The ⋯ menu holds Hide setup. Where hiding is remembered (a member preference) is the screen's call.
 
@@ -29,6 +30,9 @@ New. The owner asked for a compact checklist (22 October 2026): a progress bar (
 
 - Loading: skeleton lines, the card `aria-busy`.
 - Error: an EmptyState with Try again (`onRetry`).
+- No access: a locked row.
+- No steps: nothing at all, so the screen leaves the section out.
+- Read only and disabled don't apply: a step the member may not take is left out by the screen, not shown disabled.
 - Some done: the bar, the open steps, the done fold closed (or open with `defaultDoneExpanded`).
 - None done: the bar empty, no fold.
 - All done: the one line note.

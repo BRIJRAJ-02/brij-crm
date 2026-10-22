@@ -6,10 +6,13 @@ import type { FormSummary } from '@crm/data';
 /** How many forms New captures shows. */
 export const CAPTURES_SHOWN = 5;
 
+/** A form that has taken a submission. */
+export type CapturedForm = FormSummary & { readonly lastSubmissionAt: string };
+
 /** The forms with a submission, by their latest first, at most `limit`. */
-export function latestCaptures(forms: readonly FormSummary[], limit = CAPTURES_SHOWN): readonly FormSummary[] {
+export function latestCaptures(forms: readonly FormSummary[], limit = CAPTURES_SHOWN): readonly CapturedForm[] {
   return forms
-    .filter((form) => form.lastSubmissionAt !== undefined)
-    .toSorted((a, b) => Date.parse(b.lastSubmissionAt ?? '') - Date.parse(a.lastSubmissionAt ?? ''))
+    .filter((form): form is CapturedForm => form.lastSubmissionAt !== undefined)
+    .toSorted((a, b) => Date.parse(b.lastSubmissionAt) - Date.parse(a.lastSubmissionAt))
     .slice(0, limit);
 }

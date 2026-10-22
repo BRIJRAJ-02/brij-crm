@@ -1,5 +1,5 @@
 {
-  "id": "5b710856-5dd9-4267-af42-b0781e66e3f8",
+  "id": "94f4a007-3661-4225-8141-cfcb8425e8a5",
   "prevId": "fe776a7c-c65a-40fd-af7b-563b5974e04d",
   "version": "7",
   "dialect": "postgresql",
@@ -9649,7 +9649,7 @@
         },
         "member_preferences_home_hidden": {
           "name": "member_preferences_home_hidden",
-          "value": "cardinality(\"member_preferences\".\"home_hidden\") <= 32"
+          "value": "cardinality(\"member_preferences\".\"home_hidden\") <= 32 and array_to_string(\"member_preferences\".\"home_hidden\", ',') ~ '^([a-z][a-zA-Z]{0,31}(,|$))*$'"
         },
         "member_preferences_landing": {
           "name": "member_preferences_landing",

@@ -92,3 +92,37 @@ export const Error: Story = {
     await expect(args.onRetry).toHaveBeenCalled();
   },
 };
+
+/** The reader may not see setup: a locked row. */
+export const NoAccess: Story = {
+  args: { status: 'no-access', steps: [] },
+  parameters: { crm: { screenshot: false } },
+  play: async ({ canvas }) => {
+    await expect(canvas.getByText('You can’t see setup for this workspace')).toBeInTheDocument();
+  },
+};
+
+/** On a phone: a long title wraps beside its button, nothing past the edge. */
+export const Phone: Story = {
+  args: {
+    steps: [
+      {
+        id: 'calendar',
+        title: 'Connect your work calendar and your personal one',
+        detail: 'Not connected',
+        isDone: false,
+        action: 'Connect',
+      },
+      ...STEPS.slice(1),
+    ],
+  },
+  render: (args) => (
+    <Stage width="phone">
+      <SetupChecklist {...args} />
+    </Stage>
+  ),
+  play: async ({ canvas, canvasElement }) => {
+    await expect(canvas.getByRole('button', { name: /^Connect, / })).toBeVisible();
+    await expect(canvasElement.scrollWidth <= canvasElement.clientWidth).toBe(true);
+  },
+};
