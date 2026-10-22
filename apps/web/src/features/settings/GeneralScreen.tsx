@@ -7,6 +7,7 @@ import { isDataError, type DataLayer, type WorkspaceSettings } from '@crm/data';
 import {
   Button,
   Card,
+  CopyButton,
   Field,
   Icon,
   InfoTip,
@@ -54,8 +55,8 @@ export interface GeneralScreenProps {
 }
 
 /**
- * A Card of rows (name, web address, time zone), the whole link in a Card of
- * its own, the SaveBar at the view's foot only while the name or the address
+ * A Card of rows (name, web address with the whole link and its copy under it, time zone), the
+ * SaveBar at the view’s foot only while the name or the address
  * differs (a new address opens the confirm first; Discard puts both back), and for owners a Danger zone section
  * with Delete workspace, which opens the typed name confirm.
  */
@@ -238,7 +239,23 @@ export function GeneralScreen({
               {...(nameError === undefined ? {} : { error: nameError })}
             />
           </SettingsRow>
-          <SettingsRow title={strings.webAddress} control="field">
+          <SettingsRow
+            title={strings.webAddress}
+            control="field"
+            // The whole link under the row's title, with its copy: one place for the address, not a second card.
+            description={
+              <>
+                {`${origin}/w/${settings.slug}`}{' '}
+                <CopyButton
+                  value={`${origin}/w/${settings.slug}`}
+                  label={strings.copyAddress}
+                  isIconOnly
+                  variant="ghost"
+                  size="sm"
+                />
+              </>
+            }
+          >
             <AddressField
               value={slugDraft}
               saved={settings.slug}
@@ -274,17 +291,6 @@ export function GeneralScreen({
               }}
             />
           </SettingsRow>
-        </Card>
-        {/* The whole link in a Card of its own, wrapping where it must: a row's end would cut it off. */}
-        <Card title={strings.address}>
-          <Field
-            label={strings.address}
-            isLabelHidden
-            variant="copy"
-            isWrapping
-            copyLabel={strings.copyAddress}
-            value={`${origin}/w/${settings.slug}`}
-          />
         </Card>
       </SettingsSection>
       {mayDelete && (
@@ -421,9 +427,6 @@ export function GeneralPending() {
           <SettingsRow title={strings.timeZone} control="field">
             <Skeleton shape="field" />
           </SettingsRow>
-        </Card>
-        <Card title={strings.address} isBusy>
-          <Skeleton shape="field" width="full" />
         </Card>
       </SettingsSection>
       {mayDelete && (
