@@ -227,6 +227,20 @@ export const FullWidth: Story = {
   ),
 };
 
+/** A tab of fields across the whole width (the booking page editor): as many columns as fit, no input stretched. */
+export const Columns: Story = {
+  render: () => (
+    <Stage height="page" width="fill">
+      <PreviewLayout bodyWidth="columns">
+        <Field label="Title" value="Intro call" />
+        <Field label="Web address" value="intro-call" prefix="/ada/" />
+        <Field label="Description" value="" isMultiline />
+        <Field label="Section" value="Sales" />
+      </PreviewLayout>
+    </Stage>
+  ),
+};
+
 /** Groups in as many columns as fit (a settings tab), the preview beside them. */
 export const Grid: Story = {
   render: () => (

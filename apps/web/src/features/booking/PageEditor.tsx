@@ -474,7 +474,7 @@ export function PageEditor({
                   2026): the tabs take the page's width and the fields keep a readable column, as Settings' do. */}
               <TabPanel id={shown} variant="fill">
                 <PreviewLayout
-                  bodyWidth="form"
+                  bodyWidth="columns"
                   notices={
                     <>
                       {page.status === 'paused' && <Callout tone="info">{strings.pausedNote}</Callout>}
@@ -525,11 +525,22 @@ export function PageEditor({
                 >
                   {shown === 'page' && (
                     <>
+                      {/* The same compact row as a form's Share: the link with Copy inside it, and Open. */}
                       <Field
                         label={strings.publicLink}
                         variant="copy"
                         copyLabel={strings.copyLink}
                         value={publicBookingUrl(page)}
+                        after={
+                          <Button
+                            icon="external-link"
+                            onPress={() => {
+                              globalThis.open(publicBookingUrl(page), '_blank', 'noopener');
+                            }}
+                          >
+                            {strings.openLink}
+                          </Button>
+                        }
                       />
                       <Field
                         label={strings.slug}
@@ -954,7 +965,7 @@ export function PageEditorPending({ tab, notices }: PageEditorPendingProps) {
             selectedKey={shown}
           >
             <TabPanel id={shown} variant="fill">
-              <PreviewLayout bodyWidth="form" {...(notices === undefined ? {} : { notices })}>
+              <PreviewLayout bodyWidth="columns" {...(notices === undefined ? {} : { notices })}>
                 <Skeleton lines={6} />
               </PreviewLayout>
             </TabPanel>

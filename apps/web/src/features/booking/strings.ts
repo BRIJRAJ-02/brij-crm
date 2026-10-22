@@ -21,6 +21,8 @@ export const strings = {
   openPage: (title: string) => `Open ${title} in a new tab`,
   /** Open's tooltip on a link card. */
   openInNewTab: 'Open in a new tab',
+  /** Beside the Public link field: opens the page in a new tab. */
+  openLink: 'Open',
   /** A page's kind, among its facts on its card. */
   kindLabel: { personal: 'One on one', collective: 'Collective', round_robin: 'Round robin' },
   searchPages: 'Search booking pages',

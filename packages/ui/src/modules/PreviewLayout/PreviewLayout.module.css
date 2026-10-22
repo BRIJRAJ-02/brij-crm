@@ -68,6 +68,15 @@
     max-inline-size: var(--size-column-max);
   }
 
+  /* A tab of fields across the whole width: as many columns as fit, each at least the wide panel's width, so no
+     one input runs across a wide view. */
+  .columns {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(min(100%, var(--size-panel-wide)), 1fr));
+    gap: var(--space-16) var(--space-24);
+    align-items: start;
+  }
+
   /* The wrapper lets presses through to the body under it; the bar inside takes its own. */
   /* As many columns of groups as fit, each at least the panel's width: no container query needed. */
   .main[data-layout='grid'] {
