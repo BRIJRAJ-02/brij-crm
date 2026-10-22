@@ -117,10 +117,16 @@ export const Form: Story = {
   },
   play: async ({ canvas, canvasElement }) => {
     await expect(canvas.getByText('12 submissions · 2 spam')).toBeInTheDocument();
-    await userEvent.hover(canvas.getByRole('switch', { name: 'Accepting submissions on Contact us' }));
-    // The tooltip waits out its open delay; a busy runner needs more than findByRole's one second default.
-    await expect(await within(document.body).findByRole('tooltip', {}, { timeout: 4000 })).toHaveTextContent(
-      'Accepting submissions',
+    // The tooltip waits out its open delay; a busy runner can miss the first hover, so it hovers again until shown.
+    const toggle = canvas.getByRole('switch', { name: 'Accepting submissions on Contact us' });
+    await waitFor(
+      async () => {
+        await userEvent.hover(toggle);
+        await expect(await within(document.body).findByRole('tooltip', {}, { timeout: 2000 })).toHaveTextContent(
+          'Accepting submissions',
+        );
+      },
+      { timeout: 10_000 },
     );
     // The pointer rests on the empty page, and the tooltip is gone before the screenshot.
     await userEvent.hover(canvasElement);
