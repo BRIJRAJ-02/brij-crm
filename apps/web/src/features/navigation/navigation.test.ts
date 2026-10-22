@@ -40,9 +40,8 @@ describe('focusPage', () => {
     'main h1': { textContent: 'Sign in' },
     'main input[name="email"]': {},
     'main input[autocomplete="one-time-code"]': {},
-    // First run's first control on each step: About you's name or role, Your workspace's name, or Invite your team's addresses (spec 0036).
-    'main input[name="memberName"], main form [role="radio"], main input[name="name"], main textarea[name="emails"]':
-      {},
+    // First run's first control on each step: Your name, Your workspace's name, or Invite your team's first email (spec 0036).
+    'main input[name="memberName"], main input[name="name"], main input[name^="invite-"]': {},
   };
 
   it('puts focus in the email field on /sign-in, the code on /verify and your name on /welcome', () => {
@@ -55,7 +54,7 @@ describe('focusPage', () => {
     const welcome = fakeDocument(page);
     focusPage(welcome.asDocument, '/welcome');
     expect(welcome.focused).toEqual([
-      'main input[name="memberName"], main form [role="radio"], main input[name="name"], main textarea[name="emails"]',
+      'main input[name="memberName"], main input[name="name"], main input[name^="invite-"]',
     ]);
   });
 
@@ -114,9 +113,8 @@ describe('focusFirstLoad', () => {
     'main h1': { textContent: 'Sign in' },
     'main input[name="email"]': {},
     'main input[autocomplete="one-time-code"]': {},
-    // First run's first control on each step: About you's name or role, Your workspace's name, or Invite your team's addresses (spec 0036).
-    'main input[name="memberName"], main form [role="radio"], main input[name="name"], main textarea[name="emails"]':
-      {},
+    // First run's first control on each step: Your name, Your workspace's name, or Invite your team's first email (spec 0036).
+    'main input[name="memberName"], main input[name="name"], main input[name^="invite-"]': {},
   };
 
   it('puts focus in the first field on /sign-in, /verify and /welcome, as after a route change', () => {
@@ -129,7 +127,7 @@ describe('focusFirstLoad', () => {
     const welcome = fakeDocument(page);
     focusFirstLoad(welcome.asDocument, '/welcome');
     expect(welcome.focused).toEqual([
-      'main input[name="memberName"], main form [role="radio"], main input[name="name"], main textarea[name="emails"]',
+      'main input[name="memberName"], main input[name="name"], main input[name^="invite-"]',
     ]);
   });
 

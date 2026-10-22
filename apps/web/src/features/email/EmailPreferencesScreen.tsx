@@ -5,9 +5,9 @@
 // that always come (sign in, account, bookings), other members, and signing in.
 import type { DataError, EmailPreferencesStore, EmailTopic } from '@crm/data';
 import { useEmailPreferences } from '@crm/data/react';
-import { AuthLayout, Callout, EmptyState, Skeleton, Switch } from '@crm/ui';
-import { useRouter } from '@tanstack/react-router';
+import { AuthLayout, Callout, Skeleton, Switch } from '@crm/ui';
 import { PRODUCT_LOGO } from '../../brand.ts';
+import { AuthError } from '../auth/AuthStates.tsx';
 import { strings } from './strings.ts';
 
 /** The link's topic first (the email it came from), then the rest in their own order. */
@@ -57,18 +57,21 @@ export function EmailPreferencesPending() {
   );
 }
 
-/** A link that opens nothing says so; any other failure offers a retry that runs the route again. */
+/**
+ * A link that opens nothing says so as the page's title, why under it, as the
+ * invitation page's dead link does; any other failure is the pages before the
+ * app's own (AuthError: one announced sentence and Try again).
+ */
 export function EmailPreferencesError({ error }: { readonly error: DataError | undefined }) {
-  const router = useRouter();
+  if (error?.code !== 'NOT_FOUND') return <AuthError title={strings.title} />;
   return (
-    <AuthLayout productName={strings.product} logo={PRODUCT_LOGO} title={strings.title}>
-      {error?.code === 'NOT_FOUND' ? (
-        <EmptyState title={strings.goneTitle}>{strings.goneText}</EmptyState>
-      ) : (
-        <EmptyState tone="error" title={strings.failedTitle} onRetry={() => void router.invalidate()}>
-          {strings.failedText}
-        </EmptyState>
-      )}
+    <AuthLayout
+      productName={strings.product}
+      logo={PRODUCT_LOGO}
+      title={strings.goneTitle}
+      description={strings.goneText}
+    >
+      {null}
     </AuthLayout>
   );
 }

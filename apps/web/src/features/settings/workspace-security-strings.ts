@@ -41,7 +41,7 @@ export const strings = {
   signOutEveryoneTitle: 'Sign out everyone?',
   signOutEveryoneText: (workspace: string) =>
     `Everyone in ${workspace} has to sign in again to open it, on every device. Anything unsaved is lost. You stay signed in on this device.`,
-  signingOut: 'Signing out…',
+  signingOut: 'Signing out',
   sendCode: 'Email me a code',
   confirmLengthTitle: (count: number) => `Make sessions last ${days(count)}?`,
   confirmLengthText: (count: number, workspace: string) =>

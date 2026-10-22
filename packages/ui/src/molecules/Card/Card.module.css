@@ -25,6 +25,21 @@
     box-shadow: none;
   }
 
+  /* No frame: the layout around it is the frame. A bare page card takes its slot's width and no margin, and its
+     content starts at its edges, so the heading lines up with what the layout puts above it (the logo). */
+  .root[data-tone='bare'] {
+    overflow: visible;
+    border: 0;
+    border-radius: 0;
+    background: transparent;
+    box-shadow: none;
+  }
+
+  .root[data-placement='page'][data-tone='bare'] {
+    inline-size: 100%;
+    margin: 0;
+  }
+
   .head {
     display: flex;
     align-items: flex-start;
@@ -143,6 +158,20 @@
   .root[data-placement='page'][data-size='sm'] .body {
     padding-block: var(--space-20) var(--space-24);
     padding-inline: var(--space-24);
+  }
+
+  .root[data-placement='page'][data-size='sm'][data-tone='bare'] {
+    inline-size: 100%;
+  }
+
+  .root[data-placement='page'][data-tone='bare'] .head {
+    padding-block-start: 0;
+    padding-inline: 0;
+  }
+
+  .root[data-placement='page'][data-tone='bare'] .body {
+    padding-inline: 0;
+    padding-block-end: 0;
   }
 
   /* With a preview: the content in its own column, the preview beside it. Below bp-page-compact the preview is

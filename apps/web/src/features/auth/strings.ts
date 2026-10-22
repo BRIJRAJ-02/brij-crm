@@ -14,13 +14,17 @@ export const strings = {
   product: 'Timefix',
   /** One way in for both (spec 0036): the server decides whether it signs in or signs up. */
   signInTitle: 'Sign in or sign up',
-  /** Spec 0033's passkey sign in, under the email field where the browser has passkeys (AC-888). */
+  /** Spec 0033's passkey sign in, beside Google, above the "or", where the browser has passkeys (AC-888). */
   passkey: 'Sign in with a passkey',
   verifyTitle: 'Check your email',
-  failedTitle: 'Can’t reach Timefix',
-  failedText: 'Check your connection, then try again.',
+  /** A page before the app whose check failed, with no sentence from the server. */
+  unreachable: 'Can’t reach Timefix. Check your connection, then try again.',
+  retry: 'Try again',
   /** `/` while it works out where to send you. */
-  openingTitle: 'Opening your workspace',
+  openingTitle: 'Opening Timefix',
+  /** `/` when that check failed: the title says what failed, so the line under it only says what to do. */
+  openFailedTitle: 'Can’t open Timefix',
+  openFailedText: 'Check your connection, then try again.',
   duration,
   /** A code send refused for sending too often, with the server's wait. */
   sendLimited: (seconds: number) => `Too many codes sent to this email. Try again in ${duration(seconds)}.`,

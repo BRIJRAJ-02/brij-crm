@@ -15,12 +15,14 @@ export function isConnectResult(value: unknown): value is ConnectResult {
 }
 
 /**
- * First run's steps, in order: Your name (`about`), About you (`details`),
- * Your workspace, Invite your team, Connect your calendar.
+ * First run's steps, in order: Your name (`about`), Your workspace, Invite
+ * your team, Connect your calendar. (About you, the questionnaire, was taken
+ * out on 22 October 2026 by the owner, to cut friction; an old `?step=details`
+ * link starts at Your name.)
  */
-export type WelcomeStep = 'about' | 'details' | 'workspace' | 'invite' | 'calendar';
+export type WelcomeStep = 'about' | 'workspace' | 'invite' | 'calendar';
 
-const STEPS: readonly WelcomeStep[] = ['about', 'details', 'workspace', 'invite', 'calendar'];
+const STEPS: readonly WelcomeStep[] = ['about', 'workspace', 'invite', 'calendar'];
 
 /** The steps that come once the workspace exists. */
 const AFTER_WORKSPACE: readonly WelcomeStep[] = ['invite', 'calendar'];
@@ -31,9 +33,7 @@ const AFTER_WORKSPACE: readonly WelcomeStep[] = ['invite', 'calendar'];
  * workspace, so the steps about the person are left out of its count.
  */
 export function welcomeSteps(calendarSync: boolean, another = false): readonly WelcomeStep[] {
-  return STEPS.filter(
-    (step) => (calendarSync || step !== 'calendar') && (!another || (step !== 'about' && step !== 'details')),
-  );
+  return STEPS.filter((step) => (calendarSync || step !== 'calendar') && (!another || step !== 'about'));
 }
 
 /**
@@ -41,7 +41,7 @@ export function welcomeSteps(calendarSync: boolean, another = false): readonly W
  * the workspace exists the steps before it are done (AC-1209).
  */
 export function previousStep(step: WelcomeStep): WelcomeStep | undefined {
-  return step === 'workspace' ? 'details' : step === 'details' ? 'about' : undefined;
+  return step === 'workspace' ? 'about' : undefined;
 }
 
 /** The step after `step` in `steps`, or undefined after the last. */

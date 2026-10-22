@@ -1,0 +1,57 @@
+/* InviteRows: one grid for the column names and every row, so the columns line up whatever the role names'
+   widths: the email takes the room, the role its picker's width, and, from two rows, a square remove button. Each row is
+   display: contents, so its three cells sit in the grid's columns. A row's cells start at its top, so an
+   email's error under it pushes only its own row down. */
+@layer components {
+  .root {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    gap: var(--space-8);
+    align-items: start;
+    min-inline-size: 0;
+  }
+
+  .root[data-roles] {
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+
+  /* From two rows each row ends in its remove button; one row has none, so its fields reach the column's end. */
+  .root[data-removable] {
+    grid-template-columns: minmax(0, 1fr) var(--size-control);
+  }
+
+  .root[data-roles][data-removable] {
+    grid-template-columns: minmax(0, 1fr) auto var(--size-control);
+  }
+
+  .head {
+    display: flex;
+    align-items: center;
+    min-inline-size: 0;
+    margin-block-end: calc(-1 * var(--space-4));
+  }
+
+  .row {
+    display: contents;
+  }
+
+  .email,
+  .role {
+    min-inline-size: 0;
+  }
+
+  /* "+ Add another" under the email column, its icon in line with the addresses' text. */
+  .add {
+    display: flex;
+    grid-column: 1 / -1;
+    margin-block-start: calc(-1 * var(--space-4));
+  }
+
+  /* The remove button, level with the field beside it. */
+  .end {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    block-size: var(--size-input);
+  }
+}

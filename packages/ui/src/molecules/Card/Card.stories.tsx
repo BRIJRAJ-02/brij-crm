@@ -36,6 +36,20 @@ export const Default: Story = {
   },
 };
 
+/** No frame: a page card inside a layout that frames it (AuthLayout's split screen). */
+export const Bare: Story = {
+  args: { tone: 'bare', placement: 'page', size: 'sm', title: 'Sign in', children: 'The page’s task.' },
+  parameters: { crm: { screenshot: false } },
+  render: (args) => (
+    <Stage width="narrow">
+      <Card {...args} />
+    </Stage>
+  ),
+  play: async ({ canvas }) => {
+    await expect(canvas.getByRole('main')).toHaveAttribute('data-tone', 'bare');
+  },
+};
+
 /** The quieter tone, inside a page. */
 export const Sunken: Story = {
   args: { tone: 'sunken', children: 'No digests sent yet.' },

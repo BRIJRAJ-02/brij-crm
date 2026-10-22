@@ -203,6 +203,8 @@ export function ObjectsScreen({ slug, objects, usage }: ObjectsScreenProps) {
     rows: live,
     getRowId: (object: ObjectSummary) => object.id,
     renderCell: liveCell,
+    // On a phone the table scrolls sideways in its own frame, so names stay on one line and the rules stay whole.
+    isScrollable: true,
     onRowAction: (id: string) => {
       const object = live.find((each) => each.id === id);
       if (object !== undefined) open(object);

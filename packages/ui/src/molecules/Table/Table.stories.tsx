@@ -88,8 +88,17 @@ export const ColumnInfo: Story = {
   },
   play: async ({ canvas, userEvent }) => {
     await expect(canvas.getByRole('columnheader', { name: 'Role' })).toBeInTheDocument();
-    await userEvent.click(canvas.getByRole('button', { name: 'About Role' }));
+    const help = canvas.getByRole('button', { name: 'About Role' });
+    // By keyboard: Tab lands on the first row, Up reaches the header row, Right reaches the help's button.
+    await userEvent.tab();
+    await userEvent.keyboard('{ArrowUp}{ArrowRight}');
+    await expect(help).toHaveFocus();
+    await userEvent.keyboard('{Enter}');
     // The help opens in a popover, outside the story's canvas.
+    await expect(await screen.findByRole('dialog', { name: 'About Role' })).toBeInTheDocument();
+    await userEvent.keyboard('{Escape}');
+    await waitFor(() => expect(help).toHaveFocus());
+    await userEvent.click(help);
     await expect(await screen.findByRole('dialog', { name: 'About Role' })).toBeInTheDocument();
   },
 };

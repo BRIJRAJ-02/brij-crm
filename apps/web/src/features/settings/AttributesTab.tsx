@@ -319,6 +319,8 @@ export function AttributesTab({
     rows: live,
     getRowId: (attribute: AttributeDefinition) => attribute.id,
     renderCell: liveCell,
+    // On a phone the table scrolls sideways in its own frame, so names stay on one line and the rules stay whole.
+    isScrollable: true,
     onRowAction: (id: string) => {
       onSelect(id);
     },

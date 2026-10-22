@@ -4,9 +4,10 @@
 export const strings = {
   title: 'Notifications',
   email: 'Email',
+  /** Under the Email heading: the inbox is always on (AC-1179), said where it's seen. */
+  emailDescription: 'Every notification shows in your Inbox here. Choose which ones also come by email.',
   /** The Email section's InfoTip: what an email holds, and that the inbox is always on. */
-  emailInfo:
-    'An email a few minutes after something new, holding everything still unread. Your inbox always gets every notification.',
+  emailInfo: 'An email a few minutes after something new, holding everything still unread.',
   mentions: 'Mentions',
   replies: 'Replies',
   assignments: 'Task assignments',

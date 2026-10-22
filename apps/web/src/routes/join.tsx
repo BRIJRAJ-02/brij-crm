@@ -17,7 +17,7 @@ export const Route = createFileRoute('/join')({
   },
   pendingComponent: () => (
     <LoadingNow>
-      <AuthPending title={strings.title} />
+      <AuthPending title={strings.title} isSplit />
     </LoadingNow>
   ),
   errorComponent: JoinError,
@@ -32,5 +32,5 @@ function JoinRoute() {
 
 /** The read failed: the server's words when it gave any, with a retry. */
 function JoinError({ error }: ErrorComponentProps) {
-  return <AuthError title={strings.title} text={isDataError(error) ? error.message : undefined} />;
+  return <AuthError title={strings.title} text={isDataError(error) ? error.message : undefined} isSplit />;
 }

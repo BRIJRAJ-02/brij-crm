@@ -220,3 +220,21 @@ describe('Cancel on a job', () => {
     expect(cancel).toHaveBeenCalledTimes(1);
   });
 });
+
+describe('the status and progress cells', () => {
+  it('marks each state with its dot and leaves a finished empty job’s progress blank', async () => {
+    await renderJobs(
+      [
+        jobOf({ id: '0199f0a0-0000-7000-8000-000000000011', status: 'succeeded', total: undefined }),
+        jobOf({ id: '0199f0a0-0000-7000-8000-000000000012', status: 'failed', total: undefined, done: 4 }),
+      ],
+      { confirm: vi.fn(), cancel: vi.fn() },
+    );
+    await expect.element(page.getByText('Done', { exact: true })).toBeVisible();
+    const dots = [...document.querySelectorAll('[data-hue]')].map((dot) => dot.getAttribute('data-hue'));
+    expect(dots).toEqual(['green', 'red']);
+    // The failed job handled 4, so it says so; the done one handled nothing and says nothing.
+    expect(document.body.textContent).toContain('4 so far');
+    expect(document.body.textContent).not.toContain('0 so far');
+  });
+});

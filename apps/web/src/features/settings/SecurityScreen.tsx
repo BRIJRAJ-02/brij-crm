@@ -4,7 +4,18 @@
 // Leaves out: signing this device out (the account menu does).
 import { STEP_UP_MINUTES, type AccountSession, type ActivityPage, type DataLayer } from '@crm/data';
 import { useAccountSecurity, useAccountSessions } from '@crm/data/react';
-import { Badge, Button, EmptyState, InfoTip, Modal, RelativeTime, Table, type TableColumn, type Toasts } from '@crm/ui';
+import {
+  Badge,
+  Button,
+  EmptyState,
+  InfoTip,
+  Modal,
+  RelativeTime,
+  SettingsSection,
+  Table,
+  type TableColumn,
+  type Toasts,
+} from '@crm/ui';
 import { useEffect, useRef, useState } from 'react';
 import { currentFirst, deviceName, devicePlace } from './security-lines.ts';
 import { strings } from './security-strings.ts';
@@ -20,7 +31,6 @@ const CONFIRM_EXIT_MS = 200;
 
 const COLUMNS: readonly TableColumn[] = [
   { id: 'device', label: strings.columns.device, isRowHeader: true, isInline: true },
-  { id: 'place', label: strings.columns.place },
   { id: 'lastActive', label: strings.columns.lastActive },
   { id: 'actions', label: strings.columns.actions, isLabelHidden: true, align: 'end' },
 ];
@@ -28,8 +38,23 @@ const COLUMNS: readonly TableColumn[] = [
 /** The Devices table while it loads: skeleton rows in the loaded table's place. */
 export function SecurityLoading() {
   return (
-    <Table label={strings.devices} columns={COLUMNS} rows={[]} getRowId={() => ''} renderCell={() => null} isLoading />
+    <SettingsSection title={strings.devices} description={strings.devicesDescription}>
+      <Table
+        label={strings.devices}
+        columns={COLUMNS}
+        rows={[]}
+        getRowId={() => ''}
+        renderCell={() => null}
+        isLoading
+      />
+    </SettingsSection>
   );
+}
+
+/** A device's row header: its name, and its rough place when the edge knew it ("Chrome on macOS, Berlin"). */
+function deviceLine(session: AccountSession): string {
+  const place = devicePlace(session);
+  return place === undefined ? deviceName(session) : `${deviceName(session)}, ${place}`;
 }
 
 /** Props for the Security screen. */
@@ -75,13 +100,26 @@ export function SecurityScreen({ data, toasts, activity, onActivityRetry = () =>
     }, CONFIRM_EXIT_MS);
   };
 
+  /**
+   * After one device's sign out: Sign out of all other devices, beside the rows, while it is still there, so the
+   * next sign out is a Tab away; the page's title once it went too.
+   */
+  const othersRef = useRef<HTMLButtonElement>(null);
+  const focusDevices = () => {
+    const target = () => (othersRef.current?.isConnected === true ? othersRef.current : titleRef.current);
+    requestAnimationFrame(() => target()?.focus());
+    setTimeout(() => {
+      if (document.activeElement === document.body) target()?.focus();
+    }, CONFIRM_EXIT_MS);
+  };
+
   const signOutOne = async (session: AccountSession) => {
     setIsBusy(true);
     const proven = await stepUp.prove();
     setIsBusy(false);
     if (!proven) return;
     setIsOpen(false);
-    focusTitle();
+    focusDevices();
     // Gone from the table at once; a refusal puts it back with a toast from the data layer.
     void data.account.signOut(session.id).then((landed) => {
       if (landed) toasts.toast({ tone: 'success', message: strings.signedOut(deviceName(session)) });
@@ -115,18 +153,19 @@ export function SecurityScreen({ data, toasts, activity, onActivityRetry = () =>
     if (column === 'device') {
       return (
         <>
-          {deviceName(session)}
+          {/* The place rides with the name, so a phone sees each row's Sign out without scrolling sideways. */}
+          {deviceLine(session)}
           {session.current && <Badge text={strings.thisDevice} />}
         </>
       );
     }
-    if (column === 'place') return devicePlace(session) ?? strings.unknownPlace;
     if (column === 'lastActive') return session.current ? strings.now : <RelativeTime value={session.lastActiveAt} />;
     if (session.current) return null;
     const place = devicePlace(session);
     return (
       <Button
-        variant="danger"
+        // Quiet in every row: the danger confirm carries the weight, so the list isn't a column of red buttons.
+        variant="secondary"
         // Two devices can share a name: the place tells them apart for a screen reader too.
         label={strings.signOutLabel(place === undefined ? deviceName(session) : `${deviceName(session)}, ${place}`)}
         onPress={() => ask({ kind: 'one', session })}
@@ -140,20 +179,40 @@ export function SecurityScreen({ data, toasts, activity, onActivityRetry = () =>
   if (state.status === 'loading') {
     body = <SecurityLoading />;
   } else if (state.status === 'error') {
+    // The section keeps its heading when the list fails, so the page holds its shape in every state.
     body = (
-      <EmptyState tone="error" title={strings.failedTitle} onRetry={() => view.reload()}>
-        {state.message}
-      </EmptyState>
+      <SettingsSection title={strings.devices} description={strings.devicesDescription}>
+        <EmptyState tone="error" title={strings.failedTitle} onRetry={() => view.reload()}>
+          {state.message}
+        </EmptyState>
+      </SettingsSection>
     );
   } else {
     body = (
-      <>
+      <SettingsSection
+        title={strings.devices}
+        description={strings.devicesDescription}
+        // The one action over the whole list sits at its heading, beside the rows it ends.
+        {...(hasOthers
+          ? {
+              actions: (
+                <>
+                  <Button ref={othersRef} variant="danger" onPress={() => ask({ kind: 'others' })}>
+                    {strings.signOutOthers}
+                  </Button>
+                  <InfoTip label={strings.signOutOthers}>{strings.signOutOthersInfo(STEP_UP_MINUTES)}</InfoTip>
+                </>
+              ),
+            }
+          : {})}
+      >
         <Table
           label={strings.devices}
           columns={COLUMNS}
           rows={currentFirst(state.items)}
           getRowId={(session) => session.id}
           renderCell={renderCell}
+          isScrollable
           emptyState={<EmptyState icon="monitor" title={strings.noDevices} />}
         />
         {state.nextCursor !== undefined && (
@@ -161,7 +220,7 @@ export function SecurityScreen({ data, toasts, activity, onActivityRetry = () =>
             {strings.showMore}
           </Button>
         )}
-      </>
+      </SettingsSection>
     );
   }
 
@@ -176,22 +235,7 @@ export function SecurityScreen({ data, toasts, activity, onActivityRetry = () =>
   });
   const onePlace = one === undefined ? undefined : devicePlace(one);
   return (
-    <SettingsPage
-      title={strings.title}
-      titleRef={titleRef}
-      {...(hasOthers
-        ? {
-            actions: (
-              <>
-                <InfoTip label={strings.signOutOthers}>{strings.signOutOthersInfo(STEP_UP_MINUTES)}</InfoTip>
-                <Button variant="danger" onPress={() => ask({ kind: 'others' })}>
-                  {strings.signOutOthers}
-                </Button>
-              </>
-            ),
-          }
-        : {})}
-    >
+    <SettingsPage title={strings.title} titleRef={titleRef}>
       <TwoFactorSection data={data} security={security} toasts={toasts} onFocusLost={focusTitle} />
       <PasskeysSection data={data} security={security} toasts={toasts} onFocusLost={focusTitle} />
       {body}

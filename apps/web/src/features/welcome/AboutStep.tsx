@@ -1,5 +1,5 @@
 // Brief
-// Purpose: first run's About you (spec 0036): the name a new person's team sees, beside their initials.
+// Purpose: first run's Your name (spec 0036): the name a new person's team sees, beside their initials.
 // Main task: type your name (Google's is there already) and Continue, or Skip.
 // Leaves out: a photo until file storage arrives (the initials stand in), and anything about the workspace.
 import { Avatar, Button, Field, Form } from '@crm/ui';
@@ -15,7 +15,7 @@ interface AboutRefusal {
 
 const MEMBER_NAME = 'memberName';
 
-/** Props for About you. */
+/** Props for Your name. */
 export interface AboutStepProps {
   /** The name as typed (Google's to start with, or empty). */
   readonly memberName: string;
@@ -28,7 +28,7 @@ export interface AboutStepProps {
   readonly onSkip: () => void;
 }
 
-/** About you: the initials that follow the name, "Your name", Continue (Enter), and Skip. */
+/** Your name: the initials that follow the name, "Your name", Continue (Enter), and Skip. */
 export function AboutStep({ memberName, onMemberName, shownName, userId, onContinue, onSkip }: AboutStepProps) {
   const [refusals, setRefusals] = useState<readonly AboutRefusal[]>([]);
   return (
