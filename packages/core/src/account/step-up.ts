@@ -53,6 +53,8 @@ export interface FreshnessDeps {
 export const CODE_INVALID_MESSAGE = 'That code didn’t work. Try the newest code in your app.';
 /** What an email or backup code that didn't check out answers. */
 export const EMAIL_CODE_INVALID_MESSAGE = 'That code didn’t work. Check the newest email, or send a new code.';
+/** What an email code answers once it ran out, was used up by wrong tries, or was never sent to this session. */
+export const EMAIL_CODE_EXPIRED_MESSAGE = 'That code has expired. Send a new code.';
 /** What a step up by email answers while two factor is on: the app or a passkey proves it. */
 export const USE_SECOND_FACTOR = 'Two factor sign in is on: use your passkey, a code from your app or a backup code.';
 
@@ -138,12 +140,14 @@ export async function startStepUp(
   if (await hasSecondFactor(deps.identity, caller.userId)) throw inputInvalid('method', USE_SECOND_FACTOR);
   const code = deps.mintCode();
   const now = (deps.now ?? Date.now)();
+  // Sent first: a send that fails leaves the code already in the person's inbox working. A code checks out only
+  // once stored, so the mail arriving a moment earlier opens nothing.
+  await deps.sendCode(caller.email, code);
   await deps.identity.putStepUpCode(
     caller.sessionId,
     deps.hashCode(code),
     new Date(now + STEP_UP_CODE_MINUTES * MINUTE),
   );
-  await deps.sendCode(caller.email, code);
   return { sent: true };
 }
 
@@ -165,6 +169,7 @@ export async function verifyStepUp(
     }
     if (!/^\d{6}$/.test(input.code)) throw refuse('CODE_INVALID', EMAIL_CODE_INVALID_MESSAGE);
     const checked = await deps.identity.checkStepUpCode(caller.sessionId, deps.hashCode(input.code));
+    if (checked === 'missing') throw refuse('CODE_INVALID', EMAIL_CODE_EXPIRED_MESSAGE);
     if (checked !== 'ok') throw refuse('CODE_INVALID', EMAIL_CODE_INVALID_MESSAGE);
     await deps.identity.markSessionVerified(caller.userId, caller.sessionId, 'email');
   } else {

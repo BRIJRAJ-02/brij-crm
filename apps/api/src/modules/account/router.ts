@@ -22,7 +22,9 @@ import {
 import { renderAccountDeleted, renderSignInCode } from '@crm/emails';
 import { backgroundHooks, commitWrite } from '../../hooks.ts';
 import { apiError } from '../../errors.ts';
+import { refusalOf } from '../../mail/mailer.ts';
 import { log } from '../../log.ts';
+import { captureFault } from '../../monitoring/sentry.ts';
 import { authed, memberDoor, type RequestContext, type SessionContext } from '../../orpc.ts';
 
 /** Step up checks per person (AC-882's limits, for a step up too): 5 in 5 minutes, 15 in an hour. */
@@ -53,8 +55,21 @@ function stepUpDeps(context: RequestContext): StepUpDeps {
     backupCodesLeft: (userId) => context.auth.backupCodesLeft(userId),
     sendCode: async (email, code) => {
       // The code goes only to the account's own address; the log names neither.
-      const message = await renderSignInCode(code, { appOrigin: new URL(context.appUrl).origin });
-      await context.mailer.send({ to: email, ...message });
+      try {
+        const message = await renderSignInCode(code, { appOrigin: new URL(context.appUrl).origin });
+        await context.mailer.send({ to: email, ...message });
+      } catch (error) {
+        // Only the error's name and the mail service's refusal code: never its message, which could quote the
+        // recipient. Reported, since every step up waits on this mail; the person is told the code didn't go.
+        const refusal = refusalOf(error)?.code;
+        log.error('Step up code not sent', {
+          mail: context.mailer.transport,
+          error: error instanceof Error ? error.name : typeof error,
+          ...(refusal === undefined ? {} : { refusal }),
+        });
+        captureFault(error, { requestId: context.requestId, task: 'step up mail' });
+        throw apiError('API_UNAVAILABLE', CODE_NOT_SENT_MESSAGE);
+      }
       log.info('Step up code sent', { mail: context.mailer.transport });
     },
     mintCode: () => String(randomInt(0, 1_000_000)).padStart(6, '0'),
@@ -109,17 +124,37 @@ function deletionDeps(context: RequestContext): AccountDeletionDeps {
   };
 }
 
-/** Counts one use of a per person limit; refuses RATE_LIMITED when any window is spent. */
+/** What a step up answers when its code email couldn't be sent: plain, and what to do next. */
+export const CODE_NOT_SENT_MESSAGE = 'We couldn’t send the code just now. Try again in a few minutes.';
+
+/** How long to wait, in whole minutes (at least one), or hours from an hour up, as a refusal says it. */
+export function waitFor(seconds: number | undefined): string {
+  const minutes = Math.max(1, Math.ceil((seconds ?? 60) / 60));
+  if (minutes >= 60) {
+    const hours = Math.round(minutes / 60);
+    return hours === 1 ? '1 hour' : `${String(hours)} hours`;
+  }
+  return minutes === 1 ? '1 minute' : `${String(minutes)} minutes`;
+}
+
+/**
+ * Counts one use of a per person limit; refuses RATE_LIMITED when any window
+ * is spent, saying `lead` and how many minutes until the longest spent window
+ * lets a try through again.
+ */
 async function limit(
   context: RequestContext,
   key: string,
   windows: readonly { readonly window: number; readonly max: number }[],
-  message: string,
+  lead: string,
 ): Promise<void> {
   const decisions = await Promise.all(
     windows.map((each, index) => context.identity.consumeRateLimit(`${key}|${String(index)}`, each)),
   );
-  if (decisions.some((decision) => !decision.allowed)) throw apiError('RATE_LIMITED', message);
+  const spent = decisions.filter((decision) => !decision.allowed);
+  if (spent.length === 0) return;
+  const wait = Math.max(...spent.map((decision) => decision.retryAfterSeconds ?? 60));
+  throw apiError('RATE_LIMITED', `${lead} Wait ${waitFor(wait)}, then try again.`);
 }
 
 export const accountRouter = authed.account.router({
@@ -145,41 +180,21 @@ export const accountRouter = authed.account.router({
   },
   stepUp: {
     start: authed.account.stepUp.start.handler(async ({ context }) => {
-      await limit(
-        context,
-        `step-up-send:${context.user.id}`,
-        [STEP_UP_SENDS],
-        'Too many codes sent. Wait a few minutes.',
-      );
+      await limit(context, `step-up-send:${context.user.id}`, [STEP_UP_SENDS], 'Too many codes sent.');
       return startStepUp(stepUpDeps(context), { ...callerOf(context), email: context.user.email });
     }),
     verify: authed.account.stepUp.verify.handler(async ({ context, input }) => {
       // Counted per person whatever the method, so neither an app code nor a backup code can be guessed at.
-      await limit(
-        context,
-        `step-up:${context.user.id}`,
-        [STEP_UP_CHECKS, STEP_UP_CHECKS_HOUR],
-        'Too many tries. Wait 15 minutes, then try again.',
-      );
+      await limit(context, `step-up:${context.user.id}`, [STEP_UP_CHECKS, STEP_UP_CHECKS_HOUR], 'Too many tries.');
       return verifyStepUp(stepUpDeps(context), callerOf(context), input);
     }),
     passkeyOptions: authed.account.stepUp.passkeyOptions.handler(async ({ context }) => {
-      await limit(
-        context,
-        `step-up-passkey:${context.user.id}`,
-        [STEP_UP_PASSKEY_CHALLENGES],
-        'Too many tries. Wait a few minutes.',
-      );
+      await limit(context, `step-up-passkey:${context.user.id}`, [STEP_UP_PASSKEY_CHALLENGES], 'Too many tries.');
       return passkeyStepUpOptions(passkeyDeps(context), callerOf(context));
     }),
     verifyPasskey: authed.account.stepUp.verifyPasskey.handler(async ({ context, input }) => {
       // The same per person count as a code: a step up is never guessed at by switching method.
-      await limit(
-        context,
-        `step-up:${context.user.id}`,
-        [STEP_UP_CHECKS, STEP_UP_CHECKS_HOUR],
-        'Too many tries. Wait 15 minutes, then try again.',
-      );
+      await limit(context, `step-up:${context.user.id}`, [STEP_UP_CHECKS, STEP_UP_CHECKS_HOUR], 'Too many tries.');
       return verifyPasskeyStepUp(passkeyDeps(context), callerOf(context), input);
     }),
   },

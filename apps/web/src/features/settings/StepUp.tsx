@@ -53,6 +53,8 @@ export function useStepUp(data: DataLayer, security: AccountSecurityState, need:
   const [kind, setKind] = useState<'totp' | 'backup'>('totp');
   const [code, setCode] = useState('');
   const [error, setError] = useState<string | undefined>(undefined);
+  // A send that didn't go (mail down, too many codes): said in its own alert, never on the code field.
+  const [sendError, setSendError] = useState<string | undefined>(undefined);
   const [sent, setSent] = useState(false);
   const [isSending, setSending] = useState(false);
   const field = useRef<HTMLInputElement & HTMLTextAreaElement>(null);
@@ -69,19 +71,21 @@ export function useStepUp(data: DataLayer, security: AccountSecurityState, need:
     setKind('totp');
     setCode('');
     setError(undefined);
+    setSendError(undefined);
     setSent(false);
   };
 
   const send = async () => {
     setSending(true);
-    setError(undefined);
+    setSendError(undefined);
     const answer = await data.account.stepUp.sendCode();
     setSending(false);
     if (answer.ok) {
+      setError(undefined);
       setSent(true);
       refocus();
     } else {
-      setError(answer.message);
+      setSendError(answer.message);
     }
   };
 
@@ -215,9 +219,8 @@ export function useStepUp(data: DataLayer, security: AccountSecurityState, need:
               {strings.stepUp.sendAgain}
             </Button>
           </>
-        ) : (
-          error !== undefined && <Callout tone="danger">{error}</Callout>
-        )}
+        ) : null}
+        {sendError !== undefined && <Callout tone="danger">{sendError}</Callout>}
         {passkeyButton}
         {passkeyNote}
       </>
