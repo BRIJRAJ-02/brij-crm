@@ -22,7 +22,7 @@ New. The owner asked for a compact checklist (22 October 2026): a progress bar (
 
 - Open steps come first, in their order; the first one's button is primary, the rest secondary. Each button's name starts with its verb and names its step ("Invite, Invite your team"), so several read apart.
 - A long step title wraps rather than being cut, so its button keeps its place on a phone.
-- Done steps fold under a Disclosure titled "3 done" (an h4 under the card's h3), each with a green check and its detail. A step's state is also read out ("Done", "Not done yet"), so the icon never carries it alone.
+- Done steps fold under a quiet Disclosure titled "3 done" (`variant="quiet"`, an h4 under the card's h3), each with a green check and its detail. The fold is a control sized to its words, grey only under the pointer: its chevron sits in the steps' icon column and its words on their titles' line. Open, the done rows line up with the open rows above, icon on icon and title on title, and are as tall (the owner, 22 October 2026). A step's state is also read out ("Done", "Not done yet"), so the icon never carries it alone.
 - With one step left, the card becomes one info Callout row: "One setup step left: Invite your team", that step's primary button and the ⋯ menu (the owner, 22 October 2026: compact once nearly done, and it stays first until done or hidden).
 - When every step is done, the card becomes one success Callout, "You're all set", with Dismiss. Without `onHide` there is no menu and no Dismiss.
 - The ⋯ menu holds Hide setup. Where hiding is remembered (a member preference) is the screen's call.

@@ -35,13 +35,61 @@ export const Default: Story = {
   },
 };
 
-/** The done fold open: each done step with its check and detail. */
+/** An element's box; a missing element fails the story. */
+function box(element: Element | null | undefined): DOMRect {
+  if (element === null || element === undefined) throw new globalThis.Error('Expected an element to measure');
+  return element.getBoundingClientRect();
+}
+
+/**
+ * The done fold open: each done step with its check and detail. A done row lines up with an open row, check on
+ * circle and title on title, and is as tall; the fold is a quiet control sized to its words, its chevron in the
+ * marks' column and its words on the titles' line, with the done rows flush under it (the owner, 22 October 2026).
+ */
 export const DoneExpanded: Story = {
   args: { defaultDoneExpanded: true },
   play: async ({ canvas }) => {
     const done = canvas.getByRole('list', { name: '2 done' });
     await expect(within(done).getByText('Connect your calendar')).toBeVisible();
     await expect(within(done).queryByRole('button')).toBeNull();
+    const openTitle = canvas.getByText('Create a form');
+    const doneTitle = within(done).getByText('Connect your calendar');
+    const openRow = openTitle.closest('li');
+    const doneRow = doneTitle.closest('li');
+    const openMark = box(openRow?.querySelector('svg'));
+    await expect(box(doneRow?.querySelector('svg')).left).toBeCloseTo(openMark.left, 0);
+    await expect(box(doneTitle).left).toBeCloseTo(box(openTitle).left, 0);
+    await expect(box(doneRow).height).toBeCloseTo(box(openRow).height, 0);
+    const fold = canvas.getByRole('button', { name: '2 done' });
+    await expect(getComputedStyle(fold).backgroundColor).toBe('rgba(0, 0, 0, 0)');
+    await expect(box(fold).width).toBeLessThan(box(done).width / 2);
+    const chevron = box(fold.querySelector('svg'));
+    await expect(chevron.left + chevron.width / 2).toBeCloseTo(openMark.left + openMark.width / 2, 0);
+    await expect(box(within(fold).getByText('2 done')).left).toBeCloseTo(box(openTitle).left, 0);
+    await expect(box(done).top).toBeCloseTo(box(fold).bottom, 0);
+  },
+};
+
+/** The done fold by keyboard: Tab reaches it after the ⋯ menu and the steps' buttons, Enter opens it, Space closes it. */
+export const DoneKeyboard: Story = {
+  parameters: { crm: { screenshot: false } },
+  play: async ({ canvas }) => {
+    const fold = canvas.getByRole('button', { name: '2 done' });
+    await userEvent.tab();
+    await expect(canvas.getByRole('button', { name: 'More setup actions' })).toHaveFocus();
+    await userEvent.tab();
+    await expect(canvas.getByRole('button', { name: 'Create, Create a form' })).toHaveFocus();
+    await userEvent.tab();
+    await expect(canvas.getByRole('button', { name: 'Invite, Invite your team' })).toHaveFocus();
+    await userEvent.tab();
+    await expect(fold).toHaveFocus();
+    await expect(fold).toHaveAttribute('data-focus-visible');
+    await expect(fold).toHaveAttribute('aria-expanded', 'false');
+    await userEvent.keyboard('{Enter}');
+    await expect(fold).toHaveAttribute('aria-expanded', 'true');
+    await expect(within(canvas.getByRole('list', { name: '2 done' })).getByText('Connect your calendar')).toBeVisible();
+    await userEvent.keyboard(' ');
+    await expect(fold).toHaveAttribute('aria-expanded', 'false');
   },
 };
 

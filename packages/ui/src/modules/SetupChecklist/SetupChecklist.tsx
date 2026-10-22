@@ -146,7 +146,12 @@ export function SetupChecklist({
             ))}
           </ul>
           {done.length > 0 && (
-            <Disclosure title={strings.doneCount(done.length)} defaultExpanded={defaultDoneExpanded} headingLevel={4}>
+            <Disclosure
+              title={strings.doneCount(done.length)}
+              variant="quiet"
+              defaultExpanded={defaultDoneExpanded}
+              headingLevel={4}
+            >
               <ul className={styles.list} aria-label={strings.doneCount(done.length)}>
                 {done.map((step) => (
                   <Row key={step.id} step={step} isNext={false} onAction={onAction} />

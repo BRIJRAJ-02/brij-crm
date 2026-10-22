@@ -319,7 +319,7 @@ export const WithQuickAdd: Story = {
             </>
           }
           footer={
-            <Disclosure title="Completed" count={done.length}>
+            <Disclosure title="Completed" count={done.length} variant="quiet">
               <TaskList
                 label="Completed"
                 layout="inline"
@@ -339,8 +339,21 @@ export const WithQuickAdd: Story = {
     // One composer row: the field's box and its button at one height, side by side.
     const box = field.parentElement?.getBoundingClientRect();
     await expect(Math.round(box?.height ?? 0)).toBe(Math.round(add.getBoundingClientRect().height));
-    await userEvent.click(canvas.getByRole('button', { name: /Completed/ }));
+    const fold = canvas.getByRole('button', { name: /Completed/ });
+    await userEvent.click(fold);
     await waitFor(() => expect(canvas.getByRole('grid', { name: 'Completed' })).toBeInTheDocument());
+    // The quiet fold lines up with the rows above (RowInset): its chevron on their checkboxes, its words on their
+    // titles, and its pill inside the footer, which scrolls and would clip it.
+    const row = canvas.getAllByRole('row')[0];
+    const check = row?.querySelector('[class*="checkbox-box"]')?.getBoundingClientRect();
+    const title = row?.querySelector('[class*="task-list-title"]')?.getBoundingClientRect();
+    const chevron = fold.querySelector('[class*="disclosure-chevron"]')?.getBoundingClientRect();
+    const words = fold.querySelector('[class*="disclosure-title"]')?.getBoundingClientRect();
+    const footer = fold.closest('[class*="task-list-footer"]')?.getBoundingClientRect();
+    const middle = (rect: DOMRect | undefined) => (rect === undefined ? 0 : rect.left + rect.width / 2);
+    await expect(Math.abs(middle(chevron) - middle(check))).toBeLessThanOrEqual(1);
+    await expect(Math.abs((words?.left ?? 0) - (title?.left ?? 0))).toBeLessThanOrEqual(1);
+    await expect(fold.getBoundingClientRect().left).toBeGreaterThanOrEqual((footer?.left ?? 0) - 0.5);
   },
 };
 
@@ -366,7 +379,7 @@ export const EmptyWithQuickAdd: Story = {
             </>
           }
           footer={
-            <Disclosure title="Completed" count={done.length}>
+            <Disclosure title="Completed" count={done.length} variant="quiet">
               <TaskList
                 label="Completed"
                 layout="inline"

@@ -32,6 +32,7 @@ import { itemOfKey, keyedRows, type KeyedRow } from '../../lib/keyed-rows.ts';
 import type { ListSource } from '../../lib/list-source.ts';
 import type { LoadStatus } from '../../lib/load-status.ts';
 import { RowShown, useRangeReporter } from '../../lib/range-reporter.tsx';
+import { RowInset } from '../../lib/row-inset.ts';
 import { sizeToken } from '../../lib/token-values.ts';
 import { dayIn } from '../../molecules/DatePicker/DatePicker.tsx';
 import { EmptyState } from '../../molecules/EmptyState/EmptyState.tsx';
@@ -251,7 +252,12 @@ export function TaskList({
       <div className={styles.body} data-empty={(status === 'ready' && tasks.count === 0) || undefined}>
         {content}
       </div>
-      {footer !== undefined && <div className={styles.footer}>{footer}</div>}
+      {footer !== undefined && (
+        // The fold under the rows (Completed) lines up with them: its chevron on the checkboxes, its words on the titles.
+        <RowInset value>
+          <div className={styles.footer}>{footer}</div>
+        </RowInset>
+      )}
     </div>
   );
 }
