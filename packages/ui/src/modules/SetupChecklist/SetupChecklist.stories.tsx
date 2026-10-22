@@ -126,3 +126,14 @@ export const Phone: Story = {
     await expect(canvasElement.scrollWidth <= canvasElement.clientWidth).toBe(true);
   },
 };
+
+/** One step left: a single row with that step's button and the menu. */
+export const OneLeft: Story = {
+  args: { steps: STEPS.map((step) => (step.id === 'invite' ? step : { ...step, isDone: true })) },
+  play: async ({ canvas, args }) => {
+    await expect(canvas.getByText('One setup step left: Invite your team')).toBeInTheDocument();
+    await expect(canvas.queryByRole('progressbar')).toBeNull();
+    await userEvent.click(canvas.getByRole('button', { name: 'Invite, Invite your team' }));
+    await expect(args.onAction).toHaveBeenCalledWith('invite');
+  },
+};

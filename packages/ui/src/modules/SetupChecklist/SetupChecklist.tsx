@@ -43,7 +43,8 @@ export interface SetupChecklistProps {
 /**
  * Home's setup checklist: a progress bar, the open steps with their buttons
  * (the first one primary), and the done steps folded into one "3 done" line.
- * When every step is done it is one quiet "You're all set" line to dismiss.
+ * With one step left it is one row with that step's button; when every step
+ * is done it is one quiet "You're all set" line to dismiss.
  */
 export function SetupChecklist({
   title,
@@ -91,6 +92,33 @@ export function SetupChecklist({
         </Menu>
       </MenuTrigger>
     );
+  const last = open[0];
+  // One step left: a single row with that step's button, not the whole card (the owner, 22 October 2026).
+  if (status === 'ready' && open.length === 1 && last !== undefined) {
+    return (
+      <Callout
+        tone="info"
+        actions={
+          <>
+            {last.action !== undefined && (
+              <Button
+                variant="primary"
+                label={strings.actionName(last.action, last.title)}
+                onPress={() => {
+                  onAction(last.id);
+                }}
+              >
+                {last.action}
+              </Button>
+            )}
+            {menu}
+          </>
+        }
+      >
+        {strings.oneLeft(last.title)}
+      </Callout>
+    );
+  }
   return (
     <Card title={title} isBusy={status === 'loading'} {...(menu === undefined ? {} : { actions: menu })}>
       {status === 'loading' ? (

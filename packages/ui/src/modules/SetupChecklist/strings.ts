@@ -10,6 +10,8 @@ export const strings = {
   isOpen: 'Not done yet',
   /** An open step's button, named with its step (it starts with the visible verb): "Connect, Connect your calendar". */
   actionName: (action: string, title: string) => `${action}, ${title}`,
+  /** The one row left when a single step is open: "One setup step left: Invite your team". */
+  oneLeft: (title: string) => `One setup step left: ${title}`,
   more: 'More setup actions',
   hide: 'Hide setup',
   allSet: 'You’re all set. Every setup step is done.',
