@@ -162,7 +162,7 @@ export const strings = {
     undone: 'Undone',
   },
   countsInfo:
-    'Rows with errors were left out in the preview. Rows not imported were turned down while importing, for example by a rule or a value another record holds.',
+    'Skipped rows matched a record and had nothing new for it, or you chose to skip them. Rows with errors were left out in the preview. Rows not imported were turned down while importing, for example by a rule or a value another record holds.',
   finished: 'Import finished',
   failed: 'Import failed',
   cancelled: 'Import cancelled',
