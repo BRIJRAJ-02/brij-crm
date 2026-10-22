@@ -119,7 +119,7 @@ export const strings = {
   domainOff: (domain: string) => `Let people at @${domain} ask to join.`,
   domainOn: (domain: string) => `People at @${domain} can ask to join. You approve each one.`,
   domainTurnedOn: (domain: string) => `People at @${domain} can now ask to join.`,
-  domainSaving: (domain: string) => `Turning on for @${domain}…`,
+  domainSaving: (domain: string) => `Turning on for @${domain}`,
   domainPublic: 'Your address is at a public mail domain, so it can’t be used.',
   domainUnverified: 'Verify your email address to use its domain.',
   requestsTab: 'Join requests',
