@@ -121,9 +121,17 @@
     object-position: top;
   }
 
-  /* A phone: the window is 3:4 and shows the top of the app's own phone screen, readable at the phone's width;
-     the pill sits closer to the foot. */
+  /* A phone: the address goes; the window is 3:4 and shows the top of the app's own phone screen, readable at the
+     phone's width; the pill sits closer to the foot. */
   @media (width < 1024px) {
+    .bar {
+      grid-template-columns: 1fr;
+    }
+
+    .address {
+      display: none;
+    }
+
     .viewport {
       aspect-ratio: 3 / 4;
     }
