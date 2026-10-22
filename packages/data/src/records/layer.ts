@@ -1189,6 +1189,8 @@ export function createRecordsLayer({
     let mode: WindowMode = 'position';
     // The window's clock (spec 0006, AC-51): one `now` for every block and count, refreshed at each settle.
     let clock = now();
+    // The zone is frozen with the clock, so every block and count of one window agree on "today".
+    let zone = timeZone(workspace);
     // A refused cursor restarts the chain once; a read that lands allows it again.
     let hasRestarted = false;
     const isOpen = () => views.get(key)?.view === view;
@@ -1273,7 +1275,7 @@ export function createRecordsLayer({
     };
 
     /** The clock and filter every block and count of this window carries. */
-    const clockInput = () => ({ now: new Date(clock).toISOString(), timeZone: timeZone(workspace) });
+    const clockInput = () => ({ now: new Date(clock).toISOString(), timeZone: zone });
 
     const windows = createWindows({
       mode: () => mode,
@@ -1444,6 +1446,7 @@ export function createRecordsLayer({
       dirtySince = undefined;
       isSettling = true;
       clock = now();
+      zone = timeZone(workspace);
       const controller = new AbortController();
       settleController = controller;
       // Rows the member edited here and can see now: each keeps the screen row it is at.

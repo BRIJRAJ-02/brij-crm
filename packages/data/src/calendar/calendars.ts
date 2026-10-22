@@ -160,6 +160,31 @@ export function createCalendarsStore(deps: CalendarsDeps) {
     accounts: list.accounts.map((account) => ({ ...account, calendars: account.calendars.map(edit) })),
   });
 
+  /** Reads again what the workspace holds that was already read. */
+  const readAgain = (workspace: string) => {
+    const list = lists.get(workspace);
+    if (list?.getSnapshot().status === 'ready') list.reload();
+    for (const [key, page] of pages) {
+      if (key.startsWith(`${workspace}:`) && page.getSnapshot().status === 'ready') page.reload();
+    }
+  };
+  // Writes on their way per workspace, and the workspaces whose live change waits for them to land.
+  const pending = new Map<string, number>();
+  const stale = new Set<string>();
+  const writing = async <T>(workspace: string, run: () => Promise<T>): Promise<T> => {
+    pending.set(workspace, (pending.get(workspace) ?? 0) + 1);
+    try {
+      return await run();
+    } finally {
+      const left = (pending.get(workspace) ?? 1) - 1;
+      if (left > 0) pending.set(workspace, left);
+      else {
+        pending.delete(workspace);
+        if (stale.delete(workspace)) readAgain(workspace);
+      }
+    }
+  };
+
   /** Tells the person why a change didn't land. */
   const refused = (error: unknown) => {
     deps.notify({ tone: 'danger', message: refusalSummary(toDataError(error)) });
@@ -176,11 +201,12 @@ export function createCalendarsStore(deps: CalendarsDeps) {
      * lists and page destinations already read in the workspace read again; nothing unread is fetched.
      */
     changed(workspace: string): void {
-      const list = lists.get(workspace);
-      if (list?.getSnapshot().status === 'ready') list.reload();
-      for (const [key, page] of pages) {
-        if (key.startsWith(`${workspace}:`) && page.getSnapshot().status === 'ready') page.reload();
+      // A write of this tab still on its way: read once it lands, so the read never lands over the next toggle.
+      if ((pending.get(workspace) ?? 0) > 0) {
+        stale.add(workspace);
+        return;
       }
+      readAgain(workspace);
     },
     /** The member's accounts and calendars in a workspace, read when a screen first holds them. */
     list: (workspace: string): CalendarsHeld<CalendarListState> => listOf(workspace),
@@ -203,7 +229,9 @@ export function createCalendarsStore(deps: CalendarsDeps) {
         }),
       );
       try {
-        const landed = await deps.api.update({ workspace, calendarId, ...change, mutationId: deps.mintId() });
+        const landed = await writing(workspace, () =>
+          deps.api.update({ workspace, calendarId, ...change, mutationId: deps.mintId() }),
+        );
         held.patch((list) => mapCalendars(list, (calendar) => (calendar.id === landed.id ? landed : calendar)));
         if (change.showInWeek !== undefined) deps.onShownChange?.(workspace);
         return true;
@@ -221,7 +249,7 @@ export function createCalendarsStore(deps: CalendarsDeps) {
         destinationId: calendarId,
       }));
       try {
-        await deps.api.setDestination({ workspace, calendarId, mutationId: deps.mintId() });
+        await writing(workspace, () => deps.api.setDestination({ workspace, calendarId, mutationId: deps.mintId() }));
         return true;
       } catch (error) {
         undo();
@@ -237,7 +265,7 @@ export function createCalendarsStore(deps: CalendarsDeps) {
         return rest;
       });
       try {
-        await deps.api.dismissNotice({ workspace, mutationId: deps.mintId() });
+        await writing(workspace, () => deps.api.dismissNotice({ workspace, mutationId: deps.mintId() }));
         return true;
       } catch (error) {
         undo();
