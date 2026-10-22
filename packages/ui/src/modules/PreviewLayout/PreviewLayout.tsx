@@ -7,10 +7,12 @@ import styles from './PreviewLayout.module.css';
 import { strings } from './strings.ts';
 
 /**
- * The phone the preview is drawn in, in CSS pixels: the page is laid out at this size, then scaled down to fit the
- * column's width and the view's height (never above 1).
+ * The phone the preview is drawn in, in CSS pixels: the page is laid out at its width, then scaled down to fit the
+ * column's width (never above 1). It is as tall as the room under the heading allows, from `minHeight` up to a real
+ * phone's `height`: on a laptop's view the phone gets shorter rather than smaller, so the page in it stays readable
+ * (the owner, 23 Oct 2026: "increase preview a bit"). With less room than `minHeight`, it scales down to fit.
  */
-const PHONE = { width: 375, height: 812 } as const;
+const PHONE = { width: 375, height: 812, minHeight: 640 } as const;
 
 /** Props for PreviewLayout. */
 export interface PreviewLayoutProps {
@@ -110,10 +112,16 @@ export function PreviewFrame({ src, title, version, draft }: PreviewFrameProps) 
   );
 }
 
-/** The scale that fits the phone into the stage's width and height (never above 1). */
-function usePhoneScale() {
+/** How the phone fits the stage: its scale (never above 1) and the height its page is laid out at. */
+interface PhoneFit {
+  readonly scale: number;
+  readonly height: number;
+}
+
+/** The scale that fits the phone into the stage's width, and the height the stage leaves it (see `PHONE`). */
+function usePhoneFit() {
   const ref = useRef<HTMLDivElement>(null);
-  const [scale, setScale] = useState(1);
+  const [fit, setFit] = useState<PhoneFit>({ scale: 1, height: PHONE.height });
   useEffect(() => {
     const element = ref.current;
     if (element === null) return;
@@ -122,14 +130,15 @@ function usePhoneScale() {
       const { width, height } = entry.contentRect;
       if (width === 0 || height === 0) return;
       // Less the phone's two hairlines, so its outline fits too.
-      setScale(Math.min(1, (width - 2) / PHONE.width, (height - 2) / PHONE.height));
+      const scale = Math.min(1, (width - 2) / PHONE.width, (height - 2) / PHONE.minHeight);
+      setFit({ scale, height: Math.min(PHONE.height, Math.floor((height - 2) / scale)) });
     });
     observer.observe(element);
     return () => {
       observer.disconnect();
     };
   }, []);
-  return { ref, scale };
+  return { ref, ...fit };
 }
 
 /** Whether the screen's content runs past its foot (a long form), so it scrolls and takes focus to be scrolled. */
@@ -172,7 +181,7 @@ interface PhoneColumnProps {
  * screen scrolls, and takes focus so the keyboard can scroll it too.
  */
 function PhoneColumn({ place, headingId, controls, note, children }: PhoneColumnProps) {
-  const { ref, scale } = usePhoneScale();
+  const { ref, scale, height } = usePhoneFit();
   const { ref: screenRef, isOverflowing } = useOverflow();
   return (
     <div
@@ -180,7 +189,7 @@ function PhoneColumn({ place, headingId, controls, note, children }: PhoneColumn
       data-place={place}
       style={{
         '--phone-width': `${String(PHONE.width)}px`,
-        '--phone-height': `${String(PHONE.height)}px`,
+        '--phone-height': `${String(height)}px`,
         '--phone-scale': String(scale),
       }}
     >
