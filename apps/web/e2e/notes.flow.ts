@@ -43,7 +43,7 @@ test('notes on a record: write, list, timeline, a second browser, delete and und
   // The Notes tab, empty, then "New note": nothing is stored until a letter is typed.
   await page.getByRole('tab', { name: /Notes/ }).click();
   await expect(page).toHaveURL(new RegExp(`${notesPath}$`));
-  await expect(page.getByText('No notes yet. Write the first one.')).toBeVisible();
+  await expect(page.getByText('No notes yet', { exact: true })).toBeVisible();
   await checkScreen(page, 'notes-tab-empty');
   const saves: string[] = [];
   page.on('request', (request) => {

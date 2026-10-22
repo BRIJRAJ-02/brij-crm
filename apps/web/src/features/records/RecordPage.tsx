@@ -32,6 +32,7 @@ import {
   Button,
   Callout,
   Card,
+  CopyButton,
   EmptyState,
   Link,
   RecordHeader,
@@ -716,17 +717,8 @@ function RecordScreen({
     },
   ];
 
-  const copyLink = () => {
-    const href = new URL(recordHref(slug, object.apiSlug, recordId, tab), window.location.origin).href;
-    navigator.clipboard.writeText(href).then(
-      () => {
-        toasts.toast({ tone: 'success', message: strings.linkCopied });
-      },
-      () => {
-        toasts.toast({ tone: 'danger', message: strings.copyFailed });
-      },
-    );
-  };
+  // The library's CopyButton (A77): a check and "Copied" for two seconds, said to screen readers, a toast only on failure.
+  const pageLink = new URL(recordHref(slug, object.apiSlug, recordId, tab), window.location.origin).href;
 
   let notice: ReactNode;
   if (isTrashed) {
@@ -754,9 +746,13 @@ function RecordScreen({
               header={
                 <RecordHeader record={display} objectName={object.singularName} stats={stats}>
                   <FavouriteButton data={data} slug={slug} kind="record" id={recordId} />
-                  <Button variant="ghost" icon="link" onPress={copyLink}>
-                    {strings.copyLink}
-                  </Button>
+                  <CopyButton
+                    variant="ghost"
+                    value={pageLink}
+                    label={strings.copyLink}
+                    announcement={strings.linkCopied}
+                    isLabelCollapsible
+                  />
                 </RecordHeader>
               }
               tabs={tabs}
