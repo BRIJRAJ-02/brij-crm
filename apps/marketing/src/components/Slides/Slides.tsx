@@ -8,10 +8,12 @@ export interface SlidesProps {
   readonly area: ShowcaseArea;
   /** The first area on the page: its first screen loads with the page, ahead of everything else. */
   readonly isFirst: boolean;
+  /** Called when the play has shown the last screen for its time: the showcase moves on to the next area. */
+  readonly onEnd?: () => void;
 }
 
 /** How long each screen stays before the next. */
-const DWELL_MS = 5000;
+const DWELL_MS = 2000;
 
 const REDUCED_MOTION = '(prefers-reduced-motion: reduce)';
 
@@ -47,7 +49,7 @@ function usePageHidden() {
  * its foot (the owner, 23 October 2026: nothing cut, faded). The play stops while the pointer or focus is on the window, while the
  * page is hidden, when paused, and for anyone who asked for reduced motion.
  */
-export function Slides({ area, isFirst }: SlidesProps) {
+export function Slides({ area, isFirst, onEnd }: SlidesProps) {
   const [current, setCurrent] = useState(area.slides[0]?.id ?? '');
   const [isPaused, setIsPaused] = useState(false);
   const [isHeld, setIsHeld] = useState(false);
@@ -60,18 +62,15 @@ export function Slides({ area, isFirst }: SlidesProps) {
 
   useEffect(() => {
     if (!isPlaying) return undefined;
-    const timer = window.setInterval(() => {
-      setCurrent((id) => {
-        const index = area.slides.findIndex((slide) => slide.id === id);
-        for (let step = 1; step < area.slides.length; step += 1) {
-          const next = area.slides[(index + step) % area.slides.length];
-          if (next !== undefined && !broken.includes(next.id)) return next.id;
-        }
-        return id;
-      });
+    const timer = window.setTimeout(() => {
+      const index = area.slides.findIndex((slide) => slide.id === current);
+      // The next screen after this one, or, past the last, the next area.
+      const next = area.slides.slice(index + 1).find((slide) => !broken.includes(slide.id));
+      if (next === undefined) onEnd?.();
+      else setCurrent(next.id);
     }, DWELL_MS);
-    return () => window.clearInterval(timer);
-  }, [isPlaying, area.slides, current, broken]);
+    return () => window.clearTimeout(timer);
+  }, [isPlaying, area.slides, current, broken, onEnd]);
 
   const shown = area.slides.find((slide) => slide.id === current) ?? area.slides[0];
 

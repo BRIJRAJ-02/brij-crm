@@ -25,6 +25,12 @@ interface Point {
   y: number;
 }
 
+/** A fixed pseudo random number for a cell, 0 to 1, the same every frame, so the pattern holds still as it moves. */
+function noise(row: number, column: number) {
+  const value = Math.sin(row * 12.9898 + column * 78.233) * 43758.5453;
+  return value - Math.floor(value);
+}
+
 /**
  * Draws the field once for a moment in time: each dash's alpha is its place (fading upward and toward the window)
  * times a slow wave that drifts across the rows, times the reveal, which uncovers the rows from the foot up.
@@ -51,27 +57,31 @@ function draw(
     // Rows are uncovered from the foot up.
     if (down < 1 - eased) continue;
     for (let column = 0; column < columns; column += 1) {
+      // A random pattern: a third of the cells are empty, and the dashes differ in length and weight.
+      const grain = noise(row, column);
+      if (grain < 0.34) continue;
       const across = column / columns;
       const toward = side === 'start' ? across : 1 - across;
-      const place = down ** 1.3 * (1 - toward * toward);
+      const place = down ** 1.3 * (1 - toward * toward) * (0.55 + grain * 0.45);
+      const length = DASH_WIDTH - 2 + Math.round(noise(column, row) * 6);
       // Two waves: one climbing the rows, one drifting across the columns.
       const wave =
         0.5 +
         0.3 * Math.sin(row * 0.45 - drift * 1.8 + column * 0.08) +
         0.2 * Math.sin(column * 0.3 + drift * 0.7 - row * 0.1);
-      const x = column * STEP_X + (STEP_X - DASH_WIDTH) / 2;
+      const x = column * STEP_X + (STEP_X - length) / 2;
       const y = row * STEP_Y + (STEP_Y - DASH_HEIGHT) / 2;
       // Under the pointer the dashes light up, the nearest fully, fading out over the glow's reach.
       let lift = 0;
       if (glow !== undefined) {
-        const dx = x + DASH_WIDTH / 2 - glow.x;
+        const dx = x + length / 2 - glow.x;
         const dy = y + DASH_HEIGHT / 2 - glow.y;
         lift = Math.exp(-(dx * dx + dy * dy) / reach) * eased;
       }
       const alpha = Math.min(1, place * wave + lift) * STRENGTH;
       if (alpha < 0.015) continue;
       context.globalAlpha = alpha;
-      context.fillRect(x, y, DASH_WIDTH, DASH_HEIGHT);
+      context.fillRect(x, y, length, DASH_HEIGHT);
     }
   }
   context.globalAlpha = 1;
