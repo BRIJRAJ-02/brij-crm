@@ -20,6 +20,7 @@ import {
   CopyButton,
   DescriptionList,
   EmptyState,
+  FieldGroup,
   Modal,
   Panel,
   RecordChip,
@@ -569,6 +570,7 @@ export function SubmissionsTab({
       {open !== undefined && (
         <Panel
           title={strings.submission}
+          isStacked
           isOpen
           onClose={() => {
             go(undefined);
@@ -704,24 +706,23 @@ function SubmissionDetail({
           { term: strings.when, description: <RelativeTime value={submission.receivedAt} /> },
         ]}
       />
-      <h3>{strings.answers}</h3>
-      <DescriptionList
-        layout="stacked"
-        items={submission.answers.map((answer) => ({
-          term: answer.attributeId === undefined ? `${answer.label} · ${strings.notFiledMark}` : answer.label,
-          description: answerText(answer),
-        }))}
-      />
+      <FieldGroup label={strings.answers} tone="strong">
+        <DescriptionList
+          layout="stacked"
+          items={submission.answers.map((answer) => ({
+            term: answer.attributeId === undefined ? `${answer.label} · ${strings.notFiledMark}` : answer.label,
+            description: answerText(answer),
+          }))}
+        />
+      </FieldGroup>
       {source.length > 0 && (
-        <>
-          <h3>{strings.cameFrom}</h3>
+        <FieldGroup label={strings.cameFrom} tone="strong">
           {/* Plain text, never links: a page's address came from the visitor's browser. */}
           <DescriptionList items={[...source]} />
-        </>
+        </FieldGroup>
       )}
       {submission.records.length > 0 && (
-        <>
-          <h3>{strings.records}</h3>
+        <FieldGroup label={strings.records} tone="strong">
           <DescriptionList
             items={submission.records.map((touched) => {
               const href = link(touched.record.objectId, touched.record.recordId);
@@ -731,7 +732,7 @@ function SubmissionDetail({
               };
             })}
           />
-        </>
+        </FieldGroup>
       )}
     </>
   );
