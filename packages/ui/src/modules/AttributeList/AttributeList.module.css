@@ -43,11 +43,11 @@
     letter-spacing: var(--tracking-label);
   }
 
+  /* A long name ("Associated company") takes a second line rather than an ellipsis with no way to read the rest;
+     two label lines fit the row. */
   .name {
     min-inline-size: 0;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
+    overflow-wrap: anywhere;
   }
 
   /* The value's first line (size-control tall) sits space-4 down: centred in a size-row, level with the name. */

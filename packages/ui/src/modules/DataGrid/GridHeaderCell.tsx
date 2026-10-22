@@ -10,6 +10,7 @@ import { Tooltip } from '../../atoms/Tooltip/Tooltip.tsx';
 import { TruncatedText } from '../../atoms/TruncatedText/TruncatedText.tsx';
 import { fieldTypeOf, iconOf, readOnlyReasonOf } from '../../fields/registry.ts';
 import { useDragTarget, type DragWords } from '../../lib/drag/drag.tsx';
+import { sizeToken } from '../../lib/token-values.ts';
 import { Menu, MenuItem, MenuSeparator, MenuTrigger } from '../../molecules/Menu/Menu.tsx';
 import type { CellPlace } from './GridCell.tsx';
 import type { GridColumn } from './grid-columns.ts';
@@ -146,7 +147,9 @@ export function GridHeaderCell({
       style={{ '--col-width': `${String(place.width)}px`, '--col-offset': `${String(place.stickyOffset ?? 0)}px` }}
       onPointerDown={onPointerDown}
     >
-      <Icon name={iconOf(attribute)} size="sm" tone="muted" />
+      {/* A column narrower than the default (a date, a number) gives its type icon's room to the name, which read
+          "Close d…" and "Probab…" beside it (QA, 22 October 2026). The icon is decorative; the menu stays. */}
+      {place.width >= sizeToken('size-column') && <Icon name={iconOf(attribute)} size="sm" tone="muted" />}
       <span className={styles.name}>
         {/* While resizing, the keys are on show, and the grid announces the width. */}
         <Tooltip content={strings.resizeHint} isTextTrigger isOpen={isResizing}>

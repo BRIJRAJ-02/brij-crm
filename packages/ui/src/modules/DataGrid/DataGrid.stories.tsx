@@ -340,6 +340,10 @@ export const Default: Story = {
     await expect(grid).toHaveAttribute('aria-colcount', '10');
     await expect(canvas.getAllByRole('row').length).toBeLessThan(100);
     await expect(canvas.getByRole('rowheader', { name: /Northwind Traders/ })).toBeInTheDocument();
+    // A narrow column (a number) gives its type icon's room to its name (the menu's chevron is its one icon); a
+    // default one keeps its icon.
+    await expect(canvas.getByRole('columnheader', { name: /Employees/ }).querySelectorAll('svg')).toHaveLength(1);
+    await expect(canvas.getByRole('columnheader', { name: /Domain/ }).querySelectorAll('svg')).toHaveLength(2);
   },
 };
 

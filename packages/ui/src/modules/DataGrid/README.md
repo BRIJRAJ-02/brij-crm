@@ -50,6 +50,8 @@ import { DataGrid } from '@crm/ui/grid';
 
 ## States
 
+- A header narrower than the default column (a date, a number) leaves out its type icon, so the name gets that room: "Close date" and "Probability" read in full rather than "Close d…" (QA, 22 October 2026). The menu chevron stays, so the column's actions stay in sight.
+
 - `status`: `loading` (the header, marked busy, with rows at the columns' own widths from the first frame, so the rows that arrive take their place with no jump, their skeleton bars once the loading delay has passed, and "Loading rows" for screen readers), `error` (with `onRetry`) and `no-access` (the locked empty state), both drawn instead of the grid, and `ready`. Retry leaves with the error state: when the grid comes back and focus fell to the page with it, the grid takes focus (or hands it to its cell), so the keyboard carries on there.
 - Grouped: headers tinted by hue, open (chevron down) or folded (chevron right, the rows gone, the count kept); every group folded draws the headers alone, with no empty state.
 - No rows: the header stays, so the columns and their menus do too, with `emptyState` (or "No records yet") under it.
