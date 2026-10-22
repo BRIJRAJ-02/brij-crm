@@ -9,6 +9,7 @@ The one modular API (Hono + oRPC) that every read and write goes through, and th
 | File | Owns |
 |---|---|
 | `src/server.ts` | The api entrypoint: parse env, connect, refuse a role that can bypass row level security, serve, shut down on SIGTERM |
+| `src/launch.ts` | Render's free plan (spec 0044): one container runs the migration, then the api and the worker as two child processes with heap caps (192 and 128 MB), forwards SIGTERM and SIGINT, and exits 1 when either child dies on its own or the migration fails |
 | `src/worker.ts` | The worker entrypoint: the direct connection for jobs (#8) and the relay (#7), plus its own `/health` |
 | `src/jobs/graphile.ts` | The one `graphile-worker` import: the two lanes' runners, stale lock release, and (on the light runner only) the crontab line `crm_cron_daily` at 03:00 UTC with one day of fill, whose task runs the daily cleanup's fan out (`runDailyCleanup` from `@crm/core/system`) and queues a continuation when its time budget runs out (spec 0008, milestone 3) |
 | `src/jobs/lifecycle.ts` | The worker's awake and asleep states with the jobs on (spec 0008, milestone 3): one idle clock (`WORKER_IDLE_SLEEP_SECONDS`, 180, 0 never) for the runners and the relay; asleep it holds no connection, and a wake call or its timer (next due row, the cron less 30 seconds, or a day) wakes it; a failed wake or a lost runner retries with backoff and never exits |
@@ -67,7 +68,7 @@ docker build -f apps/api/Dockerfile .   # from the repo root
 - `WORKER_INTERNAL_URL` and `CENTRIFUGO_API_URL` take https, or plain http to a `*.railway.internal` host or localhost; with `APP_ENV=local` or on Render (`RENDER=true`) only, also to a one label host: a compose service name (`http://worker:3101`, `http://centrifugo:9000`), as the load stack (`docker-compose.load.yml`) uses, or a Render private address. A bare `host:port` (Render's Blueprint `hostport`) reads as plain http (spec 0044).
 - `/api/health` and Sentry name the release from `releaseOf`: `RENDER_GIT_COMMIT`, else `RAILWAY_GIT_COMMIT_SHA`, else `local`.
 - `CENTRIFUGO_TOKEN_SECRET` (the Centrifugo service's `CENTRIFUGO_CLIENT_TOKEN_HMAC_SECRET_KEY`, set on the api service as a reference to it) is optional everywhere, so the API boots without it; where it is unset both `realtime.*` procedures answer 503 `API_UNAVAILABLE`, and the web app, without `VITE_REALTIME_URL`, never asks.
-- The relay needs `CENTRIFUGO_API_URL` and `CENTRIFUGO_API_KEY` outside local; locally, without them the worker boots with the relay off (it logs so).
+- The relay needs `CENTRIFUGO_API_URL` and `CENTRIFUGO_API_KEY` outside local, unless `LIVE_UPDATES=off` (Render's free plan, spec 0044); locally, without them the worker boots with the relay off (it logs so). With the relay off, nothing prunes the outbox.
 - Locally the api owns `PORT` and the worker uses `WORKER_PORT` (default 3001). On Railway, each service gets its own `PORT`.
 - Turbo runs tasks in strict env mode, so shell variables don't reach `dev`. The scripts read the root `.env` themselves (`--env-file-if-exists`).
 - Railway runs migrations as the api's pre deploy step, on the owner role.

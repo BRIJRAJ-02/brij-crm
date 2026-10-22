@@ -1,31 +1,37 @@
-# Render Blueprint for the CRM's api, worker and Centrifugo (spec 0044), replacing .railway/railway.ts.
-# Apply it once from the Render dashboard (New, Blueprint, this repo); the runbook is docs/runbooks/render-cutover.md.
+# Render Blueprint for the CRM's backend on Render's free plan, for the test phase (spec 0044), replacing
+# .railway/railway.ts. Apply it once from the Render dashboard (New, Blueprint, this repo); the steps are in
+# docs/runbooks/render-cutover.md.
+#
+# One free web service runs everything: apps/api/src/launch.ts migrates, then starts the api and the worker as two
+# processes in the one container (the free plan has no pre deploy step and no private services). Live updates are
+# off: there is no Centrifugo. The paid layout (three Starter services with Centrifugo) is the upgrade path in
+# spec 0044.
 #
 # Secrets are never committed. `sync: false` makes Render ask for the value when the Blueprint is first applied,
-# and later syncs leave it alone. `generateValue: true` makes Render create a random 256 bit value once. Shared
-# secrets live on one service and the others reference it (`fromService` with `envVarKey`), so they always match.
+# and later syncs leave it alone. `generateValue: true` makes Render create a random 256 bit value once; the api
+# and the worker share it, since both run in this one service.
 #
-# Region: Singapore, beside the Neon database (aws ap-southeast-1). Plan 0.5c-512mb (Starter, $7 a month each):
-# the smallest paid size, which the pre deploy command and receiving private network traffic both need.
-# Deploys: from `main`, only after its CI checks pass, and only when a file the service builds from changed.
+# Region: Singapore, beside the Neon database (aws ap-southeast-1). Deploys: from `main`, only after its CI checks
+# pass, and only when a file the image builds from changed.
 
 services:
-  # The API. Public web service: Vercel's Routing Middleware proxies /api to its onrender.com address.
   - type: web
     name: brij-crm-api
     runtime: docker
     region: singapore
-    plan: 0.5c-512mb
+    plan: free
     branch: main
     autoDeployTrigger: checksPass
     dockerfilePath: apps/api/Dockerfile
     dockerContext: .
-    # Migrations run on the direct connection as the owner, before the new version takes traffic. A failed
-    # migration fails the deploy and the running version stays up.
-    preDeployCommand: node packages/db/scripts/migrate.ts
-    # Sentry's instrument loads first (spec 0010); it starts nothing without SENTRY_DSN_SERVER.
-    dockerCommand: node --import ./apps/api/src/monitoring/instrument.ts apps/api/src/server.ts
-    healthCheckPath: /api/health/ready
+    # Migrations, then the api and the worker, each with Sentry's instrument and its own heap cap.
+    dockerCommand: node apps/api/src/launch.ts
+    # The liveness check, which never queries: Render checks every few seconds, and a query each time would keep
+    # Neon's compute awake around the clock. A database that is down still fails the boot (migrations, the role
+    # check), so a broken deploy never goes live.
+    healthCheckPath: /api/health
+    # SIGTERM to SIGKILL: the worker's slices finish their batch and hand their jobs back.
+    maxShutdownDelaySeconds: 30
     buildFilter:
       paths:
         - apps/api/**
@@ -33,10 +39,21 @@ services:
         - pnpm-lock.yaml
         - pnpm-workspace.yaml
     envVars:
+      # The api's port, which Render routes public traffic to. The worker's port stays inside the container.
       - key: PORT
         value: "8080"
+      - key: WORKER_PORT
+        value: "8081"
+      - key: WORKER_INTERNAL_URL
+        value: http://127.0.0.1:8081
       - key: APP_ENV
         value: production
+      # No Centrifugo on the free plan: the worker runs with the relay off.
+      - key: LIVE_UPDATES
+        value: "off"
+      # Graphile's cron is UTC whatever the zone; the logs' times and anything else local read UTC too.
+      - key: TZ
+        value: UTC
       # https://brij-crm-phi.vercel.app (the web app's origin; the api is only reached through it).
       - key: APP_URL
         sync: false
@@ -46,14 +63,17 @@ services:
       # The edge guard's shared secret (spec 0005). Copy this generated value into Vercel's EDGE_SECRET.
       - key: EDGE_SECRET
         generateValue: true
-      # The pooled app login (Neon's -pooler host) and the owner's direct connection, which only migrations use.
+      # Neon: the app login (pooler host), the owner (direct host, migrations only), the identity login (pooler
+      # host) and the worker login (direct host, for Graphile's LISTEN).
       - key: DATABASE_URL
         sync: false
       - key: DATABASE_URL_OWNER
         sync: false
-      # Sign in (spec 0005): the identity login, Better Auth, the allowlist and mail.
       - key: IDENTITY_DATABASE_URL
         sync: false
+      - key: DATABASE_URL_DIRECT
+        sync: false
+      # Sign in (spec 0005): Better Auth, the allowlist and mail.
       - key: BETTER_AUTH_SECRET
         generateValue: true
       - key: BETTER_AUTH_URL
@@ -68,30 +88,20 @@ services:
         sync: false
       - key: GOOGLE_CLIENT_SECRET
         sync: false
-      # The relay's wake up call (spec 0005): the worker's private address (host:port, read as http), and the
-      # secret the worker holds.
-      - key: WORKER_INTERNAL_URL
-        fromService:
-          type: pserv
-          name: brij-crm-worker
-          property: hostport
+      # The api's wake call to the worker (spec 0005), and guest page links in booking emails (spec 0025).
       - key: WORKER_WAKE_SECRET
-        fromService:
-          type: pserv
-          name: brij-crm-worker
-          envVarKey: WORKER_WAKE_SECRET
+        generateValue: true
+      - key: BOOKING_LINK_SECRET
+        generateValue: true
       # Spec 0008: `on` lets signed in requests wake the worker once a minute. Off in production until set.
       - key: WORKER_WAKE_ON_USE
         sync: false
-      # Guest page links in booking emails (spec 0025): the api and the worker hold the same key.
-      - key: BOOKING_LINK_SECRET
-        generateValue: true
-      # Live updates (spec 0005): Centrifugo's token secret, read from the Centrifugo service.
-      - key: CENTRIFUGO_TOKEN_SECRET
-        fromService:
-          type: web
-          name: brij-crm-centrifugo
-          envVarKey: CENTRIFUGO_CLIENT_TOKEN_HMAC_SECRET_KEY
+      # Background jobs (spec 0008): `on` to run them (off in production when unset), and the idle seconds before
+      # the worker sleeps (180 when unset, 0 never).
+      - key: JOBS_RUNNER
+        sync: false
+      - key: WORKER_IDLE_SLEEP_SECONDS
+        sync: false
       # Monitoring (spec 0010): the brij-crm-server DSN. Unset means off. The release is RENDER_GIT_COMMIT.
       - key: SENTRY_DSN_SERVER
         sync: false
@@ -124,144 +134,4 @@ services:
       - key: CALENDAR_TOKEN_KEY
         sync: false
       - key: CALENDAR_WEBHOOK_ORIGIN
-        sync: false
-
-  # The worker: jobs (Graphile Worker) and the outbox relay. A private service, not a background worker, because
-  # the api's wake call has to reach its port over the private network, and background workers take no inbound
-  # traffic. Render has no health check path for private services; it watches that the port is open.
-  - type: pserv
-    name: brij-crm-worker
-    runtime: docker
-    region: singapore
-    plan: 0.5c-512mb
-    branch: main
-    autoDeployTrigger: checksPass
-    dockerfilePath: apps/api/Dockerfile
-    dockerContext: .
-    dockerCommand: node --import ./apps/api/src/monitoring/instrument.ts apps/api/src/worker.ts
-    # SIGTERM to SIGKILL: time for the slices in hand to finish their batch and hand their jobs back.
-    maxShutdownDelaySeconds: 30
-    buildFilter:
-      paths:
-        - apps/api/**
-        - packages/**
-        - pnpm-lock.yaml
-        - pnpm-workspace.yaml
-    envVars:
-      # The port the wake call and /health answer on, which the api's WORKER_INTERNAL_URL names.
-      - key: PORT
-        value: "8080"
-      - key: APP_ENV
-        value: production
-      - key: DATABASE_URL
-        fromService:
-          type: web
-          name: brij-crm-api
-          envVarKey: DATABASE_URL
-      # The worker login's direct (non pooler) connection, for Graphile's LISTEN.
-      - key: DATABASE_URL_DIRECT
-        sync: false
-      # The relay (spec 0005): Centrifugo's server API on its private port 9000, like
-      # http://brij-crm-centrifugo-xxxx:9000 (the host is on the Centrifugo service's Connect menu), and its key.
-      - key: CENTRIFUGO_API_URL
-        sync: false
-      - key: CENTRIFUGO_API_KEY
-        fromService:
-          type: web
-          name: brij-crm-centrifugo
-          envVarKey: CENTRIFUGO_HTTP_API_KEY
-      - key: WORKER_WAKE_SECRET
-        generateValue: true
-      # Booking emails (spec 0025): links point at APP_URL, signed with the api's key, sent through Resend.
-      - key: APP_URL
-        fromService:
-          type: web
-          name: brij-crm-api
-          envVarKey: APP_URL
-      - key: BOOKING_LINK_SECRET
-        fromService:
-          type: web
-          name: brij-crm-api
-          envVarKey: BOOKING_LINK_SECRET
-      - key: RESEND_API_KEY
-        fromService:
-          type: web
-          name: brij-crm-api
-          envVarKey: RESEND_API_KEY
-      - key: MAIL_FROM
-        fromService:
-          type: web
-          name: brij-crm-api
-          envVarKey: MAIL_FROM
-      # The same Sentry project as the api, tagged service=worker.
-      - key: SENTRY_DSN_SERVER
-        fromService:
-          type: web
-          name: brij-crm-api
-          envVarKey: SENTRY_DSN_SERVER
-      # Background jobs (spec 0008): `on` to run them (off in production when unset), and the idle seconds before
-      # the worker sleeps (180 when unset, 0 never).
-      - key: JOBS_RUNNER
-        sync: false
-      - key: WORKER_IDLE_SLEEP_SECONDS
-        sync: false
-      # Calendar sync (spec 0024): the worker refreshes tokens and syncs, with the api's values.
-      - key: CALENDAR_SYNC
-        fromService:
-          type: web
-          name: brij-crm-api
-          envVarKey: CALENDAR_SYNC
-      - key: GOOGLE_CALENDAR_CLIENT_ID
-        fromService:
-          type: web
-          name: brij-crm-api
-          envVarKey: GOOGLE_CALENDAR_CLIENT_ID
-      - key: GOOGLE_CALENDAR_CLIENT_SECRET
-        fromService:
-          type: web
-          name: brij-crm-api
-          envVarKey: GOOGLE_CALENDAR_CLIENT_SECRET
-      - key: CALENDAR_TOKEN_KEY
-        fromService:
-          type: web
-          name: brij-crm-api
-          envVarKey: CALENDAR_TOKEN_KEY
-      - key: CALENDAR_WEBHOOK_ORIGIN
-        fromService:
-          type: web
-          name: brij-crm-api
-          envVarKey: CALENDAR_WEBHOOK_ORIGIN
-      # Graphile's cron is UTC whatever the zone; the logs' times and anything else local read UTC too.
-      - key: TZ
-        value: UTC
-
-  # Centrifugo, one node on the memory engine. Public web service on port 8000 (client websockets only, at
-  # wss://brij-crm-centrifugo.onrender.com). Its HTTP API, admin and /health stay on port 9000, which only the
-  # private network reaches, so there is no health check path: Render checks that port 8000 is open.
-  - type: web
-    name: brij-crm-centrifugo
-    runtime: docker
-    region: singapore
-    plan: 0.5c-512mb
-    branch: main
-    autoDeployTrigger: checksPass
-    dockerfilePath: infra/centrifugo/Dockerfile
-    dockerContext: .
-    buildFilter:
-      paths:
-        - infra/centrifugo/**
-    envVars:
-      # The public port Render routes to. Centrifugo itself reads its ports from config.json.
-      - key: PORT
-        value: "8000"
-      - key: CENTRIFUGO_HTTP_API_KEY
-        generateValue: true
-      - key: CENTRIFUGO_CLIENT_TOKEN_HMAC_SECRET_KEY
-        generateValue: true
-      - key: CENTRIFUGO_ADMIN_PASSWORD
-        generateValue: true
-      - key: CENTRIFUGO_ADMIN_SECRET
-        generateValue: true
-      # https://brij-crm-phi.vercel.app (space separated if more than one web origin).
-      - key: CENTRIFUGO_CLIENT_ALLOWED_ORIGINS
         sync: false

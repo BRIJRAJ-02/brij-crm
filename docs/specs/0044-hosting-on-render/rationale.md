@@ -28,7 +28,15 @@ The three services as they run today, with nothing rewritten: a Docker build fro
 
 ## The pick
 
-Render, on three Starter (0.5 CPU, 512 MB) services, on the free Hobby workspace: $21 a month, plus $0.15 per GB past 5 GB of outbound traffic a month. The Pro workspace ($25 a month) is only needed for full stack preview environments or teammates.
+Render. For the test phase, its free plan (owner's call, 22 October 2026: no card, $0): one free web service with the api and the worker in one container, and live updates off. Render's free plan allows web services only (no private services or background workers, no pre deploy step), which is why the worker runs as a second process beside the api and the migrations run in the launcher.
+
+Why not keep three services on free: the worker and Centrifugo would each need a public web service that sleeps after 15 idle minutes; a sleeping worker misses the api's wake call, Centrifugo's sockets drop when it sleeps, and the 750 free hours a month cover one always on service, not three.
+
+The upgrade path is three Starter (0.5 CPU, 512 MB) services on the free Hobby workspace: $21 a month, plus $0.15 per GB past 5 GB of outbound traffic a month. The Pro workspace ($25 a month) is only needed for full stack preview environments or teammates.
+
+## The health check and Neon
+
+Railway checked `/api/health/ready` only while a deploy started. Render checks the health path every few seconds for as long as the service runs. `/ready` queries Postgres, so on Render it would keep Neon's compute from ever suspending and use up the free Neon plan's compute hours. Render checks `/api/health` instead (no query), and the keepalive workflow asks for the same path. A deploy whose database is unreachable still never goes live: the launcher's migration and the api's boot both connect first.
 
 ## What Render does differently
 

@@ -435,6 +435,9 @@ export const WorkerEnv = z
     // Both or neither; required outside local. Locally, without them the worker boots with the relay off.
     CENTRIFUGO_API_URL: optional(internalUrl('CENTRIFUGO_API_URL')),
     CENTRIFUGO_API_KEY: optional(z.string()),
+    // `off` runs a deployed worker with the relay off and no Centrifugo (spec 0044, Render's free plan): nothing is
+    // published, and the outbox keeps its rows (only the relay prunes it). Unset or `on`, the relay needs both above.
+    LIVE_UPDATES: optional(z.enum(['on', 'off'])),
     // The api's poke must carry it (spec 0005). Required outside local; locally, unset takes any poke.
     WORKER_WAKE_SECRET: wakeSecret,
     // Booking emails (spec 0025, milestone 2): the app's address for their links, the guest page key, and the mail
@@ -465,15 +468,19 @@ export const WorkerEnv = z
     }
     if (url !== key)
       missing('CENTRIFUGO_API_KEY', 'Set CENTRIFUGO_API_URL and CENTRIFUGO_API_KEY together, or neither.');
-    if (env.APP_ENV !== 'local' && url) {
-      missing('CENTRIFUGO_API_URL', `CENTRIFUGO_API_URL is required in ${env.APP_ENV}: the relay publishes there.`);
+    const liveOff = env.LIVE_UPDATES === 'off';
+    if (env.APP_ENV !== 'local' && url && !liveOff) {
+      missing(
+        'CENTRIFUGO_API_URL',
+        `CENTRIFUGO_API_URL is required in ${env.APP_ENV}: the relay publishes there. Set LIVE_UPDATES=off to run without it.`,
+      );
     }
     if (!oneLabelAllowed(env) && isComposeServiceUrl(env.CENTRIFUGO_API_URL)) {
       missing('CENTRIFUGO_API_URL', composeOnlyLocally('CENTRIFUGO_API_URL', env.APP_ENV));
     }
     if (env.APP_ENV === 'local') return;
     if (key) {
-      missing('CENTRIFUGO_API_KEY', `CENTRIFUGO_API_KEY is required in ${env.APP_ENV}.`);
+      if (!liveOff) missing('CENTRIFUGO_API_KEY', `CENTRIFUGO_API_KEY is required in ${env.APP_ENV}.`);
     } else if (env.CENTRIFUGO_API_KEY === LOCAL_CENTRIFUGO_API_KEY) {
       missing('CENTRIFUGO_API_KEY', "That is the local key. Use the Centrifugo service's CENTRIFUGO_HTTP_API_KEY.");
     } else if ((env.CENTRIFUGO_API_KEY?.length ?? 0) < 32) {
@@ -491,6 +498,7 @@ export const WorkerEnv = z
       PORT,
       CENTRIFUGO_API_URL,
       CENTRIFUGO_API_KEY,
+      LIVE_UPDATES,
       JOBS_RUNNER,
       CALENDAR_TOKEN_KEY,
       GOOGLE_CALENDAR_CLIENT_SECRET,
@@ -507,7 +515,7 @@ export const WorkerEnv = z
       MAILPIT_URL: rest.APP_ENV === 'local' ? rest.MAILPIT_URL : undefined,
       // The relay's Centrifugo, when it is on.
       centrifugo:
-        CENTRIFUGO_API_URL === undefined || CENTRIFUGO_API_KEY === undefined
+        LIVE_UPDATES === 'off' || CENTRIFUGO_API_URL === undefined || CENTRIFUGO_API_KEY === undefined
           ? undefined
           : { apiUrl: CENTRIFUGO_API_URL, apiKey: CENTRIFUGO_API_KEY },
     }),

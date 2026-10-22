@@ -311,6 +311,16 @@ describe('the worker environment (spec 0005, the relay)', () => {
     ]);
   });
 
+  it('runs a deployed worker without Centrifugo only when LIVE_UPDATES=off (spec 0044, the free plan)', () => {
+    const bare = { ...worker, APP_ENV: 'production', WORKER_WAKE_SECRET: deployed.WORKER_WAKE_SECRET };
+    expect(workerProblems(bare)).toEqual(['CENTRIFUGO_API_URL', 'CENTRIFUGO_API_KEY']);
+    expect(workerProblems({ ...bare, LIVE_UPDATES: 'off' })).toEqual([]);
+    expect(WorkerEnv.parse({ ...bare, LIVE_UPDATES: 'off' }).centrifugo).toBeUndefined();
+    // Off wins over a configured Centrifugo: nothing is published.
+    expect(WorkerEnv.parse({ ...deployed, LIVE_UPDATES: 'off' }).centrifugo).toBeUndefined();
+    expect(WorkerEnv.parse(deployed).centrifugo).toBeDefined();
+  });
+
   it("takes Centrifugo's Render private address over plain http on Render only (spec 0044)", () => {
     const url = 'http://brij-crm-centrifugo-c3d4:9000';
     expect(workerProblems({ ...deployed, RENDER: 'true', CENTRIFUGO_API_URL: url })).toEqual([]);

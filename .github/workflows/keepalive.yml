@@ -1,0 +1,27 @@
+# Keeps the free Render api awake (spec 0044): a free web service sleeps after 15 minutes without traffic, and the
+# next request then waits about a minute for it to start. Every 10 minutes this asks for the api's liveness through
+# Vercel (the same path users take, so no Render address lives in the repo). /api/health never queries, so Neon's
+# compute still suspends when nobody uses the app.
+#
+# GitHub may start a scheduled run late, or skip one when it is busy, so a cold start is still possible. Render's
+# 750 free hours a month cover one service that is always on. Delete this file when the api moves to a paid plan.
+name: Keep alive
+
+on:
+  schedule:
+    - cron: "*/10 * * * *"
+  workflow_dispatch:
+
+permissions: {}
+
+concurrency:
+  group: keepalive
+  cancel-in-progress: true
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Ask the api for its liveness
+        run: curl -fsS --retry 3 --retry-delay 20 --max-time 90 https://brij-crm-phi.vercel.app/api/health
