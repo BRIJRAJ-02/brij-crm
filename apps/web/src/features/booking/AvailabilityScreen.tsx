@@ -121,7 +121,6 @@ export function AvailabilityScreen({ data, slug, scheduleId, member, members, me
         schedules={schedules}
         current={current}
         isFull={isFull}
-        isOwn={member === undefined}
         triggerRef={switcherRef}
         onOpen={(schedule) => open(schedule.id)}
         onCreate={() => setCreating(true)}
@@ -137,9 +136,11 @@ export function AvailabilityScreen({ data, slug, scheduleId, member, members, me
     <NewScheduleButton isDisabled={memberId === undefined || isFull} onPress={() => setCreating(true)} />
   );
   const newAction = isFull ? <Tooltip content={scheduleStrings.limitReached}>{newButton}</Tooltip> : newButton;
-  // The strip's end: an admin's compact member filter (AC-971), as the Calendar tab's tools are.
+  // The strip's end, as the Calendar tab's tools are (the owner, 22 October 2026: no row of its own over the card):
+  // the schedule switcher, and an admin's compact member filter (AC-971).
   const tools = (
     <SectionBar
+      start={switcher}
       end={
         <>
           {isAdmin && (
@@ -172,7 +173,7 @@ export function AvailabilityScreen({ data, slug, scheduleId, member, members, me
                 </EmptyState>
               </PageColumn>
             ) : current === undefined ? (
-              <ScheduleEditorPending switcher={switcher} />
+              <ScheduleEditorPending />
             ) : (
               <ScheduleEditor
                 // One editor per schedule, so unsaved hours never cross from one to another; the virtual default
@@ -182,7 +183,6 @@ export function AvailabilityScreen({ data, slug, scheduleId, member, members, me
                 slug={slug}
                 member={member}
                 schedule={current}
-                switcher={switcher}
                 onReload={() => view.reload()}
                 onAdopt={setAdopted}
                 onNotice={toast}
@@ -305,6 +305,7 @@ export function AvailabilityPending() {
   const waiting = <NewScheduleButton isDisabled onPress={() => undefined} />;
   const tools = (
     <SectionBar
+      start={<SwitcherPending />}
       end={
         <>
           {isAdmin && (
@@ -325,7 +326,7 @@ export function AvailabilityPending() {
             {slot !== null && createPortal(tools, slot)}
             {actionSlot !== null && createPortal(waiting, actionSlot)}
             {slot === null && tools}
-            <ScheduleEditorPending switcher={<SwitcherPending />} />
+            <ScheduleEditorPending />
           </>
         ),
       }}
