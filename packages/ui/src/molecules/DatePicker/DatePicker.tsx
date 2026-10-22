@@ -84,13 +84,14 @@ export function quickPicks(
 
 function MonthHeader() {
   return (
-    <header className={styles.nav}>
+    // A plain block, not a header: inline (MonthCalendar) a header would be a page banner landmark.
+    <div className={styles.nav}>
       <Heading className={styles.month} />
       <span className={styles.arrows}>
         <Button slot="previous" variant="ghost" icon="chevron-left" label={strings.previousMonth} />
         <Button slot="next" variant="ghost" icon="chevron-right" label={strings.nextMonth} />
       </span>
-    </header>
+    </div>
   );
 }
 

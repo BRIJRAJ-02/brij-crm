@@ -561,6 +561,7 @@ export function WeekCalendar({
                         <span
                           key={range.startMinute}
                           className={styles.offHours}
+                          data-off-hours=""
                           aria-hidden="true"
                           style={{
                             '--start': String(range.startMinute),
