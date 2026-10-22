@@ -22,15 +22,19 @@ export {
   type PublishAttribute,
   type PublishProblem,
   type QuestionPreset,
-  // Show when and routing conditions (spec 0043): the editor's comparisons, summaries and the preview's hiding.
+  // Show when and routing conditions (spec 0043): the editor's comparisons, summaries and the preview's hiding,
+  // and the visit's hidden fields (UTM tags, page, referrer) a rule may read.
   CONDITION_OPS,
   CONDITIONS_MAX,
+  HIDDEN_FIELDS,
+  hiddenFactKey,
   matchesShowWhen,
   summarizeShowWhen,
   VALUELESS_OPS,
   visibleQuestions,
   type Condition,
   type ConditionOp,
+  type HiddenField,
   type ShowWhen,
 } from '@crm/contracts/forms';
 export type { FormAfter, FormLanguage, FormLook, PublicQuestion } from '@crm/contracts/forms';

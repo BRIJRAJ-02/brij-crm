@@ -1,13 +1,14 @@
 // Routing on a team booking page (spec 0043, AC-1609 to AC-1611): the hosts
 // a form's hand off chose, else the page's own rules over the visitor's record
-// facts and that form's answers, narrow the page's rotations to some of their
-// members. Narrowing only ever chooses among hosts; when none of them is free
-// the whole rotation picks, so a rule never refuses a booking.
+// facts and that form's answers and hidden fields (UTM tags, page, referrer),
+// narrow the page's rotations to some of their members. Narrowing only ever
+// chooses among hosts; when none of them is free the whole rotation picks, so
+// a rule never refuses a booking.
 import { and, eq, isNull } from 'drizzle-orm';
 import { PAGE_ROUTES } from '@crm/contracts';
 import { schema, type WorkspaceTx } from '@crm/db';
 import type { PageRecord } from '../booking/slots.ts';
-import { handoffAnswers } from '../forms/public.ts';
+import { handoffFacts } from '../forms/public.ts';
 import type { Team } from '../rotation/team.ts';
 import { decideRoute, recordFactKeys } from './decide.ts';
 import { recordFacts, type RecordFactObjects } from './facts.ts';
@@ -72,8 +73,10 @@ export interface BookingRouting {
 
 /**
  * Routes one team booking (AC-1609, AC-1610): a hand off's hosts first;
- * else the page's rules over the guest's record facts (by email) and the hand
- * off's answers. Read in the booking's transaction, under the rotation locks.
+ * else the page's rules over the guest's record facts (by the email they
+ * typed, unchecked: an accepted risk, spec 0043 rationale) and the hand off's
+ * answers and hidden fields. Read in the page's own workspace, before the
+ * booking's locks.
  */
 export async function routeBooking(
   tx: WorkspaceTx,
@@ -90,11 +93,11 @@ export async function routeBooking(
   const handed = handoff === undefined ? {} : { handoffDecisionId: handoff.decisionId };
   const rules = input.page.routingRules ?? [];
   if (rules.length === 0) return handed;
-  const answers = input.submissionId === undefined ? {} : await handoffAnswers(tx, input.submissionId, input.page.id);
+  const fromForm = input.submissionId === undefined ? {} : await handoffFacts(tx, input.submissionId, input.page.id);
   const read = await recordFacts(tx, input.objects, input.email, recordFactKeys(rules));
   const decision = decideRoute(
     rules,
-    { ...answers, ...read.facts },
+    { ...fromForm, ...read.facts },
     { routes: PAGE_ROUTES, unreadable: read.unreadable },
   );
   const page = {
@@ -111,8 +114,9 @@ export async function routeBooking(
 
 /**
  * Records what routing did for a booking (AC-1607, AC-1611): the form's
- * decision gets its booking; the page's own decision is stored with it,
- * `hosts` null when the routed hosts weren't free and the rotation picked.
+ * decision gets its booking; the page's own decision is stored with it, one
+ * per booking (migration 0088), `hosts` null when the routed hosts weren't
+ * free and the rotation picked.
  */
 export async function recordBookingRouting(
   tx: WorkspaceTx,
@@ -132,14 +136,17 @@ export async function recordBookingRouting(
       .where(and(eq(routingDecisions.id, routing.handoffDecisionId), isNull(routingDecisions.bookingId)));
   }
   if (routing.page === undefined) return;
-  await tx.insert(routingDecisions).values({
-    workspaceId: input.workspaceId,
-    surfaceKind: 'booking_page',
-    surfaceId: input.pageId,
-    ruleId: routing.page.ruleId ?? null,
-    qualified: routing.page.qualified ?? null,
-    skipped: [...routing.page.skipped],
-    hosts: input.narrowed && routing.hosts !== undefined ? [...routing.hosts] : null,
-    bookingId: input.bookingId,
-  });
+  await tx
+    .insert(routingDecisions)
+    .values({
+      workspaceId: input.workspaceId,
+      surfaceKind: 'booking_page',
+      surfaceId: input.pageId,
+      ruleId: routing.page.ruleId ?? null,
+      qualified: routing.page.qualified ?? null,
+      skipped: [...routing.page.skipped],
+      hosts: input.narrowed && routing.hosts !== undefined ? [...routing.hosts] : null,
+      bookingId: input.bookingId,
+    })
+    .onConflictDoNothing();
 }

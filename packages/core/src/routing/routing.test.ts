@@ -3,6 +3,9 @@
 // visitors on with a decision row, a team page's rules narrowing hosts by a
 // record field, a hand off's hosts narrowing the slots, the fallback when the
 // routed hosts are busy, the report's counts, and the no show mark's door.
+// Then the leftovers: one decision per submission, is any of, a company read
+// only through the person's Company field, UTM and hidden field facts, and
+// record facts that never cross workspaces.
 import { sql } from 'drizzle-orm';
 import { afterAll, beforeAll, describe, expect, inject, it } from 'vitest';
 import {
@@ -22,14 +25,18 @@ import { createBookingPage, updateBookingPage } from '../booking/pages.ts';
 import { bookPublicSlot, readPublicSlots } from '../booking/public.ts';
 import { newId } from '../engine/ids.ts';
 import { isRefusal } from '../engine/refusals.ts';
-import { createRecord } from '../engine/records.ts';
+import { archiveAttribute } from '../engine/definitions.ts';
+import { postgresError } from '../engine/refusals.ts';
+import { createRecord, setValues } from '../engine/records.ts';
 import { createWorkspace } from '../engine/workspaces.ts';
 import { createForm, publishForm, saveFormDraft } from '../forms/forms.ts';
 import { submitForm } from '../forms/public.ts';
 import { jobKinds } from '../jobs/kinds/index.ts';
 import { createRotation } from '../rotation/rotations.ts';
+import { createRelationship } from '../relationships/relationships.ts';
 import { rescope, testScope } from '../testing.ts';
 import { decideRoute } from './decide.ts';
+import { routeSubmission } from './forms.ts';
 import { routingReport } from './report.ts';
 
 const { appUrl } = inject('testDatabase');
@@ -428,5 +435,316 @@ describe('a team page’s routing', () => {
     });
     const refused = await refusalOf(routingReport(blind, { surface: { kind: 'form', formId: form.id }, days: 30 }));
     expect(refused.code).toBe('NOT_FOUND');
+  });
+});
+
+describe('routing leftovers', () => {
+  const sizeRules: RoutingRule[] = [
+    rule('large', {
+      when: { join: 'all', rules: [{ key: 'budget', op: 'is', value: 'Large' }] },
+      then: { kind: 'message', message: 'Big' },
+    }),
+    rule('small', {
+      when: { join: 'all', rules: [{ key: 'budget', op: 'is', value: 'Small' }] },
+      then: { kind: 'message', message: 'Small' },
+    }),
+  ];
+
+  it('decides a submission once: a doubled submit stores one decision, and routing it again keeps the first', async () => {
+    const w = await world();
+    const form = await routedForm(w, sizeRules);
+    const input = body({ budget: 'Large' });
+    const [first, second] = await Promise.all([submit(form.publicKey, input), submit(form.publicKey, input)]);
+    expect(first.next).toMatchObject({ kind: 'message', text: 'Big' });
+    expect(second.next).toMatchObject({ kind: 'message', text: 'Big' });
+    const [stored] = await w.query<{ submission_id: string }>(sql`select submission_id::text from routing_decisions`);
+    const submissionId = stored?.submission_id ?? '';
+    // Routed again with other answers (a retried step, a second path): the first decision stands, and is answered.
+    const again = await db.withWorkspace(w.workspaceId, (tx) =>
+      routeSubmission(tx, {
+        workspaceId: w.workspaceId,
+        formId: form.id,
+        submissionId,
+        document: { routing: { rules: sizeRules } },
+        answers: { budget: 'Small' },
+      }),
+    );
+    expect(again).toEqual({ kind: 'message', message: 'Big' });
+    expect(await w.query(sql`select rule_id from routing_decisions`)).toEqual([{ rule_id: 'large' }]);
+    // The database holds to it too: a second row for the submission is refused.
+    const doubled = await db
+      .withWorkspace(w.workspaceId, (tx) =>
+        tx.execute(sql`insert into routing_decisions (workspace_id, surface_kind, surface_id, submission_id)
+          values (${w.workspaceId}::uuid, 'form', ${form.id}::uuid, ${submissionId}::uuid)`),
+      )
+      .then(
+        () => undefined,
+        (error: unknown) => postgresError(error),
+      );
+    expect(doubled).toMatchObject({ code: '23505', constraint: 'routing_decisions_one_per_submission' });
+  });
+
+  it('matches is any of: Large or Huge go on, Small falls back', async () => {
+    const w = await world();
+    const form = await routedForm(
+      w,
+      [
+        rule('big', {
+          when: { join: 'all', rules: [{ key: 'budget', op: 'is_any_of', value: ['Large', 'Huge'] }] },
+          then: { kind: 'message', message: 'Big' },
+        }),
+      ],
+      (d) => ({
+        ...d,
+        questions: d.questions.map((q) => (q.key === 'budget' ? { ...q, choices: ['Small', 'Large', 'Huge'] } : q)),
+      }),
+    );
+    expect((await submit(form.publicKey, body({ budget: 'Huge' }))).next).toMatchObject({ text: 'Big' });
+    await submit(form.publicKey, body({ budget: 'Small' }));
+    const rows = await w.query<{ rule_id: string | null }>(
+      sql`select d.rule_id from routing_decisions d join form_submissions s on s.id = d.submission_id
+          order by s.answers ->> 'budget'`,
+    );
+    expect(rows).toEqual([{ rule_id: 'big' }, { rule_id: null }]);
+  });
+
+  it('reads a company only through the person’s Company field, and skips the rule once that field is archived', async () => {
+    const w = await world();
+    const companies = w.objects.companies ?? '';
+    const range = w.attribute('companies.employee_range');
+    const options = await w.query<{ id: string; label: string }>(
+      sql`select id::text, label from attribute_options where attribute_id = ${range}::uuid`,
+    );
+    const optionOf = (label: string) => options.find((option) => option.label === label)?.id ?? '';
+    // A second link between People and Companies that isn't where anyone works.
+    const advisor = await createRelationship(w.owner, {
+      id: newId(),
+      cardinality: 'many_to_one',
+      from: { objectId: w.people, title: 'Advisor of' },
+      to: { objectId: companies, title: 'Advisors' },
+    });
+    const company = (name: string, label: string) =>
+      createRecord(w.owner, {
+        objectId: companies,
+        values: { [w.attribute('companies.name')]: name, [range]: optionOf(label) },
+      });
+    const startup = await company('Tiny', '1 to 10');
+    const employer = await company('Mid', '51 to 200');
+    const grace = await createRecord(w.owner, {
+      objectId: w.people,
+      values: {
+        [w.attribute('people.name')]: { firstName: 'Grace' },
+        [w.attribute('people.email_addresses')]: ['grace@navy.example'],
+        [advisor.from.id]: { objectId: companies, recordId: startup.recordId },
+      },
+    });
+    // The employer is set later, so the advisor link is the older one.
+    await setValues(w.owner, {
+      recordId: grace.recordId,
+      values: { [w.attribute('people.company')]: { value: { objectId: companies, recordId: employer.recordId } } },
+    });
+    await updateBookingPage(w.owner, {
+      pageId: w.page.id,
+      settings: {},
+      routing: {
+        rules: [
+          rule('mid', {
+            when: {
+              join: 'all',
+              rules: [
+                { key: `company.${range}`, op: 'is_any_of', value: [optionOf('51 to 200'), optionOf('201 to 500')] },
+              ],
+            },
+            then: { kind: 'hosts', hosts: [w.cy.id] },
+          }),
+        ],
+      },
+    });
+    const entry = await enterBookingPage({ db }, w.page.publicKey);
+    const decided = async (start: string) => {
+      const booked = await bookPublicSlot(entry, deps(), bookInput(at(start), 'grace@navy.example'));
+      const [row] = await w.query<{ host: string; rule_id: string | null; skipped: string[] }>(
+        sql`select b.host_member_id::text as host, d.rule_id, d.skipped from bookings b
+            join routing_decisions d on d.booking_id = b.id where b.id = ${booked.bookingId}::uuid`,
+      );
+      return row;
+    };
+    expect(await decided('09:00')).toEqual({ host: w.cy.id, rule_id: 'mid', skipped: [] });
+    // With People's Company field archived the company can't be read: the rule is skipped, never matched by accident.
+    await archiveAttribute(w.owner, w.attribute('people.company'));
+    expect(await decided('10:00')).toMatchObject({ rule_id: null, skipped: ['mid'] });
+  });
+
+  it('routes by the visit’s UTM tags: a form’s rule, then the team page’s through the hand off', async () => {
+    const w = await world();
+    await updateBookingPage(w.owner, {
+      pageId: w.page.id,
+      settings: {},
+      routing: {
+        rules: [
+          rule('spring', {
+            when: { join: 'all', rules: [{ key: 'hidden.utm_campaign', op: 'is', value: 'spring' }] },
+            then: { kind: 'hosts', hosts: [w.cy.id] },
+          }),
+        ],
+      },
+    });
+    const form = await routedForm(w, [
+      rule('ads', {
+        when: { join: 'all', rules: [{ key: 'hidden.utm_source', op: 'is', value: 'google' }] },
+        then: { kind: 'book', bookingPageId: w.page.id, message: '' },
+      }),
+    ]);
+    // The source tag in the submission's context (as the hosted page sends it), the campaign in its older hidden fields.
+    const fromAds: SubmitBody = {
+      ...body({ budget: 'Small' }),
+      context: { mode: 'page', version: '1', utm_source: 'Google' },
+      hidden: { utm_campaign: 'Spring' },
+    };
+    expect((await submit(form.publicKey, fromAds)).next.kind).toBe('booking');
+    await submit(form.publicKey, body({ budget: 'Small' }));
+    const decisions = await w.query<{ submission_id: string; rule_id: string | null }>(
+      sql`select submission_id::text, rule_id from routing_decisions order by decided_at`,
+    );
+    expect(decisions.map((row) => row.rule_id)).toEqual(['ads', null]);
+    const entry = await enterBookingPage({ db }, w.page.publicKey);
+    const booked = await bookPublicSlot(entry, deps(), bookInput(at('09:00'), String(fromAds.answers.email)), [], {
+      submissionId: decisions[0]?.submission_id ?? '',
+    });
+    const rows = await w.query<{ surface_kind: string; rule_id: string | null; host: string }>(
+      sql`select d.surface_kind, d.rule_id, b.host_member_id::text as host from routing_decisions d
+          join bookings b on b.id = d.booking_id where b.id = ${booked.bookingId}::uuid order by d.surface_kind`,
+    );
+    expect(rows).toEqual([
+      { surface_kind: 'booking_page', rule_id: 'spring', host: w.cy.id },
+      { surface_kind: 'form', rule_id: 'ads', host: w.cy.id },
+    ]);
+    // Another team page with the same rule, given the same hand off: the form didn't send the visitor there, so its
+    // hidden fields never reach it.
+    const other = await createBookingPage(
+      w.owner,
+      {
+        id: newId(),
+        title: 'Other',
+        timeZone: 'UTC',
+        kind: 'round_robin',
+        hosts: { fixed: [], rotations: [...(w.page.hosts?.rotations ?? [])] },
+      },
+      NOW,
+    );
+    await updateBookingPage(w.owner, {
+      pageId: other.id,
+      settings: {},
+      routing: {
+        rules: [
+          rule('spring', {
+            when: { join: 'all', rules: [{ key: 'hidden.utm_campaign', op: 'is', value: 'spring' }] },
+            then: { kind: 'hosts', hosts: [w.cy.id] },
+          }),
+        ],
+      },
+    });
+    const elsewhere = await bookPublicSlot(
+      await enterBookingPage({ db }, other.publicKey),
+      deps(),
+      bookInput(at('11:00'), String(fromAds.answers.email)),
+      [],
+      { submissionId: decisions[0]?.submission_id ?? '' },
+    );
+    expect(
+      await w.query(sql`select rule_id from routing_decisions where booking_id = ${elsewhere.bookingId}::uuid`),
+    ).toEqual([{ rule_id: null }]);
+  });
+
+  it('refuses a team page rule over a field its writer can’t see, but keeps one another admin wrote', async () => {
+    const w = await world();
+    const jobTitle = `person.${w.attribute('people.job_title')}`;
+    const cto = rule('cto', {
+      when: { join: 'all', rules: [{ key: jobTitle, op: 'is', value: 'cto' }] },
+      then: { kind: 'hosts', hosts: [w.cy.id] },
+    });
+    await updateBookingPage(w.owner, { pageId: w.page.id, settings: {}, routing: { rules: [cto] } });
+    // An admin whose role can't see People at all.
+    const blind = rescope(w.owner, {
+      actor: { type: 'member', id: w.bea.id },
+      role: 'admin',
+      rules: {
+        levels: [
+          { subject: { type: 'role', role: 'admin' }, target: { type: 'object', objectId: w.people }, level: 'none' },
+        ],
+        records: [],
+      },
+    });
+    const ads = rule('ads', {
+      when: { join: 'all', rules: [{ key: 'hidden.utm_source', op: 'is', value: 'google' }] },
+      then: { kind: 'hosts', hosts: [w.bea.id] },
+    });
+    // The owner's rule kept as it was: the blind admin can still change the rest.
+    await updateBookingPage(blind, { pageId: w.page.id, settings: {}, routing: { rules: [cto, ads] } });
+    const changed = await refusalOf(
+      updateBookingPage(blind, {
+        pageId: w.page.id,
+        settings: {},
+        routing: {
+          rules: [{ ...cto, when: { join: 'all', rules: [{ key: jobTitle, op: 'is', value: 'ceo' }] } }, ads],
+        },
+      }),
+    );
+    expect(changed).toMatchObject({
+      code: 'CONFIG_INVALID',
+      message: 'Rule 1 reads a field you can’t use. Pick another field.',
+    });
+    // A number comparison on a hidden field is refused on a page as on a form.
+    const counted = await refusalOf(
+      updateBookingPage(w.owner, {
+        pageId: w.page.id,
+        settings: {},
+        routing: {
+          rules: [
+            rule('many', {
+              when: { join: 'all', rules: [{ key: 'hidden.utm_term', op: 'more_than', value: '3' }] },
+              then: { kind: 'hosts', hosts: [w.cy.id] },
+            }),
+          ],
+        },
+      }),
+    );
+    expect(counted.message).toBe('Rule 1 compares a hidden field as a number, but it holds text.');
+  });
+
+  it('reads record facts only in the page’s own workspace: another’s person or field is never found', async () => {
+    const a = await world();
+    const b = await world();
+    // In workspace B, Grace is a CTO.
+    await createRecord(b.owner, {
+      objectId: b.people,
+      values: {
+        [b.attribute('people.name')]: { firstName: 'Grace' },
+        [b.attribute('people.email_addresses')]: ['grace@navy.example'],
+        [b.attribute('people.job_title')]: 'CTO',
+      },
+    });
+    const cto = (id: string, attributeId: string) =>
+      rule(id, {
+        when: { join: 'all', rules: [{ key: `person.${attributeId}`, op: 'is', value: 'cto' }] },
+        then: { kind: 'hosts', hosts: [a.cy.id] },
+      });
+    const rules = [cto('foreign', b.attribute('people.job_title')), cto('own', a.attribute('people.job_title'))];
+    // Saving a rule over B's field is refused in A: the field can't be found there.
+    const refused = await refusalOf(
+      updateBookingPage(a.owner, { pageId: a.page.id, settings: {}, routing: { rules } }),
+    );
+    expect(refused.message).toBe('Rule 1 reads a field you can’t use. Pick another field.');
+    // One stored before that check is skipped at the booking, never read.
+    await a.query(
+      sql`update booking_pages set routing = ${JSON.stringify({ rules })}::jsonb where id = ${a.page.id}::uuid`,
+    );
+    const entry = await enterBookingPage({ db }, a.page.publicKey);
+    const booked = await bookPublicSlot(entry, deps(), bookInput(at('09:00'), 'grace@navy.example'));
+    const [row] = await a.query<{ rule_id: string | null; skipped: string[] }>(
+      sql`select rule_id, skipped from routing_decisions where booking_id = ${booked.bookingId}::uuid`,
+    );
+    // B's field can't be read from A (skipped), and A holds no Grace: nothing matched.
+    expect(row).toEqual({ rule_id: null, skipped: ['foreign'] });
   });
 });

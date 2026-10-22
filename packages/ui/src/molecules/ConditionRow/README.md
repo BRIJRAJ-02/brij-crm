@@ -17,6 +17,7 @@ New. A condition is three controls that read as one sentence ("Budget · is · L
 ```
 
 - Give each control its own label with `isLabelHidden`, so a screen reader names it.
+- For "is any of", the value is a Select with `selectionMode="multiple"`: it keeps the row's look and names every chosen value in one line.
 - Leave out `onRemove` on a list's only row, or when the rule is read only.
 - Under 480px of its container the controls stack under the lead word.
 

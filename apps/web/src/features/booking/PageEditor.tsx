@@ -852,7 +852,7 @@ export function PageEditor({
                       <RulesCard
                         data={data}
                         slug={slug}
-                        surface={{ kind: 'page', pool: teamPool }}
+                        surface={{ kind: 'page', pageId: page.id, pool: teamPool }}
                         {...(isLocked ? {} : { report: { kind: 'booking_page' as const, pageId: page.id } })}
                         rules={page.routing?.rules ?? []}
                         facts={recordFields === undefined ? [] : recordFacts(recordFields.person, recordFields.company)}
