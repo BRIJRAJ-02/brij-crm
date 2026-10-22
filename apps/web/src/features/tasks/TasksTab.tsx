@@ -134,6 +134,8 @@ function Completed({
   return (
     <Disclosure
       title={strings.completed}
+      // The quiet fold, as the Home checklist's done steps: a grey bar here read as a stuck selected row.
+      variant="quiet"
       isExpanded={isOpen}
       onExpandedChange={setOpen}
       {...(count === undefined ? {} : { count })}
