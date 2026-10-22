@@ -76,6 +76,13 @@
     letter-spacing: var(--tracking-body);
   }
 
+  /* Stacked: a column of sections (a DescriptionList, FieldGroups), each set apart without markup of the caller's. */
+  .body[data-stacked] {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-20);
+  }
+
   .body[data-flush] {
     display: flex;
     flex-direction: column;

@@ -118,3 +118,24 @@ export const LongRow: Story = {
     await expect(canvas.getByText('Board meetings')).toBeInTheDocument();
   },
 };
+
+/** `tone="strong"`: a section's heading over labelled values, medium beside the terms under it. */
+export const Strong: Story = {
+  args: { label: 'Answers', tone: 'strong' },
+  render: (args) => (
+    <Stage>
+      <FieldGroup {...args}>
+        <DescriptionList
+          layout="stacked"
+          items={[
+            { term: 'Your name', description: 'Grace Hopper' },
+            { term: 'Work email', description: 'grace@navy.mil' },
+          ]}
+        />
+      </FieldGroup>
+    </Stage>
+  ),
+  play: async ({ canvas }) => {
+    await expect(canvas.getByRole('group', { name: 'Answers' })).toHaveTextContent('Grace Hopper');
+  },
+};

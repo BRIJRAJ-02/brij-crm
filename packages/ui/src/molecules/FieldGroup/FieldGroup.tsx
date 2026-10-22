@@ -13,6 +13,8 @@ export interface FieldGroupProps {
   readonly hint?: string;
   /** `row` sets the content in a wrapping row, `space-6` apart (a few Badges, then a Button); `block` stacks it. */
   readonly layout?: 'block' | 'row';
+  /** `strong` sets the label medium, for a section heading over labelled values (a submission's Answers in a Panel). */
+  readonly tone?: 'label' | 'strong';
   readonly children: ReactNode;
 }
 
@@ -21,7 +23,7 @@ export interface FieldGroupProps {
  * end, the content, then one hint line. For what a form shows but doesn't edit in place (a schedule's week, the
  * calendars checked for conflicts), so it lines up with the fields around it.
  */
-export function FieldGroup({ label, meta, action, hint, layout = 'block', children }: FieldGroupProps) {
+export function FieldGroup({ label, meta, action, hint, layout = 'block', tone = 'label', children }: FieldGroupProps) {
   const labelId = useId();
   const hintId = useId();
   return (
@@ -32,7 +34,7 @@ export function FieldGroup({ label, meta, action, hint, layout = 'block', childr
       {...(hint === undefined ? {} : { 'aria-describedby': hintId })}
     >
       <div className={styles.head}>
-        <span className={styles.label}>
+        <span className={styles.label} data-tone={tone === 'strong' ? 'strong' : undefined}>
           <span id={labelId}>{label}</span>
           {meta !== undefined && <span className={styles.meta}> · {meta}</span>}
         </span>
