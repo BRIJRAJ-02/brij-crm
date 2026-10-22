@@ -290,7 +290,8 @@ export function mountPublicBooking(app: Hono<{ Variables: Variables }>, services
     c: Context<{ Variables: Variables }>,
     picture: AccountPicture | undefined,
   ): Promise<Response> => {
-    if (picture === undefined || c.req.query('v') !== picture.version) return noPicture();
+    // The whole query, exactly: anything added would miss the edge's copy and cost a fetch of Google each time.
+    if (picture === undefined || new URL(c.req.url).search !== `?v=${picture.version}`) return noPicture();
     const fetched = await services.pictures.fetch(picture.url);
     if (fetched.ok) return pictureResponse(fetched);
     // Why, never the URL: it names the account.

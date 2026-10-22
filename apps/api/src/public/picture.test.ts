@@ -192,7 +192,8 @@ describe('GET /api/public/booking/:publicKey/picture', () => {
     expect(body).not.toContain('googleusercontent');
     // Only the current version: a stale or made up one is never fetched (nor cached under it).
     const before = fetched.length;
-    for (const stale of ['', '?v=000000000000', `?v=${pictureVersion(randomUUID(), GOOGLE)}`]) {
+    const current = `?v=${pictureVersion(userId, GOOGLE)}`;
+    for (const stale of ['', '?v=000000000000', `?v=${pictureVersion(randomUUID(), GOOGLE)}`, `${current}&x=1`]) {
       const refused = await visit(`booking/${page.publicKey}/picture${stale}`);
       expect(refused.status, stale).toBe(404);
       expect(refused.headers.get('cache-control')).toBe('no-store');
