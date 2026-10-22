@@ -1,6 +1,6 @@
 # SiteFooter
 
-Every page's footer: the brand with the way into the dashboard, the product's areas, the ways in, the legal pages, and the copyright line.
+Every page's footer: the brand with the way into the dashboard, the ways in, the legal pages, and the copyright line with every feature a click away.
 
 ## Why it exists
 
@@ -12,7 +12,7 @@ The owner asked for "a proper footer" with the link to the dashboard, aligned wi
 <SiteFooter year={2026} />
 ```
 
-Product links go to `/#<area>`, which the live demo opens on that area.
+The owner asked for the product's areas to come out of the footer (23 October 2026); they live in the All features panel.
 
 ## States
 

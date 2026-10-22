@@ -33,8 +33,8 @@ function Row({ href, children }: { readonly href: string; readonly children: str
 }
 
 /**
- * Every page's footer: the brand with the way into the dashboard, then the product's areas (each opens in the live
- * demo), the ways in, and the legal pages; the copyright line under them.
+ * Every page's footer: the brand with the way into the dashboard, the ways in and the legal pages, then the
+ * copyright line with every feature a click away.
  */
 export function SiteFooter({ year }: SiteFooterProps) {
   return (
@@ -48,16 +48,6 @@ export function SiteFooter({ year }: SiteFooterProps) {
           </ButtonLink>
         </div>
         <nav className={styles.columns} aria-label="Footer">
-          <Column title="Product">
-            {FEATURE_GROUPS.map((group) => (
-              <Row key={group.id} href={`/#${group.id}`}>
-                {group.title}
-              </Row>
-            ))}
-            <li>
-              <AllFeatures groups={FEATURE_GROUPS} />
-            </li>
-          </Column>
           <Column title="Get started">
             <Row href={LINKS.getStarted}>Claim your page</Row>
             <Row href={LINKS.signIn}>Sign in</Row>
@@ -71,7 +61,7 @@ export function SiteFooter({ year }: SiteFooterProps) {
       </div>
       <div className={styles.bottom}>
         <p className={styles.legal}>© {year} Timefix</p>
-        <p className={styles.legal}>Book the meeting. Keep the customer.</p>
+        <AllFeatures groups={FEATURE_GROUPS} />
       </div>
     </footer>
   );

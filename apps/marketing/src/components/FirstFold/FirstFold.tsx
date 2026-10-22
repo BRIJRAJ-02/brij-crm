@@ -1,12 +1,12 @@
 import { ButtonLink } from '@crm/ui';
 import { LINKS, SAMPLE_BOOKING_ADDRESS } from '../../site.ts';
-import { LiveDemo } from '../../live/LiveDemo.tsx';
+import { Showcase } from '../Showcase/Showcase.tsx';
 import { SiteHeader } from '../SiteHeader/SiteHeader.tsx';
 import styles from './FirstFold.module.css';
 
 /**
  * The home page's first screen, exactly one screen tall: the bar, the promise, the one call to action (claim your
- * booking address), and the live demo, which takes whatever height is left.
+ * booking address), and the showcase (the product's areas as tabs, each with its screen), which takes whatever height is left.
  */
 export function FirstFold() {
   return (
@@ -38,7 +38,7 @@ export function FirstFold() {
           </div>
         </div>
         <div className={styles.demo}>
-          <LiveDemo />
+          <Showcase />
         </div>
       </main>
     </div>

@@ -1,5 +1,5 @@
-/* FirstFold: exactly one screen (100svh: the smallest the browser's own bars leave, so nothing hides behind
-   them): the bar, then a centred two tone headline, one line of copy and one call to action (claim your booking
+/* FirstFold: at least one screen (100svh: the smallest the browser's own bars leave), growing when the showcase's
+   screen needs more (it is shown whole, full width): the bar, then a centred two tone headline, one line of copy and one call to action (claim your booking
    address, as Cal claims a username), then the product filling the rest of the screen. Display sizes are built
    from tokens, as the library's base layer builds its overlay scale; the headline is set in the display face
    (styles/fonts.css). The gutters come from SiteFrame (`--site-inline`). */
@@ -10,14 +10,15 @@
     --lead-leading: 1.5;
 
     display: grid;
-    grid-template-rows: auto minmax(0, 1fr);
-    block-size: 100vh;
-    block-size: 100svh;
+    grid-template-rows: auto 1fr;
+    min-block-size: 100vh;
+    min-block-size: 100svh;
   }
 
   .main {
     display: grid;
-    grid-template-rows: auto minmax(0, 1fr);
+    grid-template-rows: auto auto;
+    align-content: start;
     gap: clamp(var(--space-16), 4svh, var(--space-32));
     min-block-size: 0;
     padding-block: clamp(var(--space-16), 5svh, calc(var(--space-32) * 2)) clamp(var(--space-12), 3svh, var(--space-24));
@@ -89,7 +90,6 @@
   }
 
   .demo {
-    container-type: size;
-    min-block-size: 0;
+    min-inline-size: 0;
   }
 }
