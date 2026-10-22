@@ -84,11 +84,14 @@ export function publicBookingOrigin(): string {
 export const publicBookingPath = (page: Pick<BookingPageView, 'handle' | 'slug' | 'publicKey' | 'isPrivate'>) =>
   bookingPagePath(page);
 
-/** The page with its owner's handle as a newer read has it: claimed, changed, or gone. */
-export function withHandle(page: BookingPageView, handle: string | undefined): BookingPageView {
-  const { handle: _held, ...rest } = page;
-  return handle === undefined ? rest : { ...rest, handle };
-}
+/**
+ * Whether a read of a page is at least as new as the copy held: every write to a page moves its `updatedAt`, and a
+ * handle claimed in Profile leaves it as it was, so an equal one is taken too.
+ */
+export const isNotOlder = (
+  read: Pick<BookingPageView, 'updatedAt'>,
+  held: Pick<BookingPageView, 'updatedAt'>,
+): boolean => Date.parse(read.updatedAt) >= Date.parse(held.updatedAt);
 
 /** The page's public link, on the public booking origin. */
 export const publicBookingUrl = (page: Pick<BookingPageView, 'handle' | 'slug' | 'publicKey' | 'isPrivate'>) =>
