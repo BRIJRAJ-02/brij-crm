@@ -13,7 +13,7 @@ The one way the app draws an icon. It comes from the design system artifact's Ic
 
 - `name`: the icon as lucide.dev names it. Only names in `icons.ts` type check.
 - `size`: `md` (16, the default) for nav, menus and attribute rows; `sm` (14) in buttons, chips, table headers and card rows; `xs` (12) in card footers and variables.
-- `tone`: `inherit` (the default), `muted` (`text-secondary`, for attribute and column header icons) `ai` (the sparkle only) or `success` (something checked and found right, such as PhoneField's check on a valid number; why a tone: the check needs the success colour, and a component module colouring an icon would be new CSS for what Icon owns).
+- `tone`: `inherit` (the default), `muted` (`text-secondary`, for attribute and column header icons) `ai` (the sparkle only) `success` (something checked and found right, such as PhoneField's check on a valid number; why a tone: the check needs the success colour, and a component module colouring an icon would be new CSS for what Icon owns) or `danger` (something checked and found wrong, such as an import preview's row that can't go in, beside its reason; QA, 22 October 2026).
 - `label`: only when the icon is the whole content of a control. It then reads as an image with that name; without it, the icon is hidden from screen readers.
 - `tile`: a hue (`gray`, `red`, `orange`, `yellow`, `lime`, `green`, `sky`, `blue`, `purple`) to set the icon on its tile. A tile always holds an `sm` icon in the hue's text colour, so `size` and `tone` can't be combined with it. Objects take their hue (the sidebar, the top bar); an attribute's name in a record's details takes `gray` (AttributeList).
 

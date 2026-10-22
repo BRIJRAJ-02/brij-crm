@@ -80,6 +80,7 @@ export const Tones: Story = {
       <Icon name="tag" tone="muted" />
       <Icon name="sparkles" tone="ai" />
       <Icon name="circle-check" tone="success" />
+      <Icon name="circle-alert" tone="danger" />
     </Stage>
   ),
 };
