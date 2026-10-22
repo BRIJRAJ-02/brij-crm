@@ -1,6 +1,5 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
 import { expect, fn } from 'storybook/test';
-import { HUES } from '../../hue.ts';
 import { Stage } from '../../workbench/Stage/Stage.tsx';
 import { Checkbox, CheckboxMark } from './Checkbox.tsx';
 
@@ -68,23 +67,5 @@ export const Mark: Story = {
   play: async ({ canvas }) => {
     await expect(canvas.getByText('Is customer, checked')).toBeInTheDocument();
     await expect(canvas.queryByRole('checkbox')).toBeNull();
-  },
-};
-
-/** Every data hue (`hue`), checked and not: the calendars list's boxes. */
-export const Hues: Story = {
-  parameters: { crm: { screenshot: false } },
-  render: () => (
-    <Stage direction="column">
-      {HUES.map((hue) => (
-        <Stage key={hue}>
-          <Checkbox label={`${hue} checked`} hue={hue} defaultSelected />
-          <Checkbox label={`${hue} not checked`} hue={hue} />
-        </Stage>
-      ))}
-    </Stage>
-  ),
-  play: async ({ canvas }) => {
-    await expect(canvas.getByRole('checkbox', { name: 'yellow checked' })).toBeChecked();
   },
 };

@@ -1,14 +1,25 @@
 // Brief
-// Purpose: the open schedule in the Availability tab (spec 0035, AC-970): its weekly hours, its time zone, its days off and the booking pages that use it, each saved as it changes.
-// Main task: change the hours (add, remove or copy a day's ranges), the zone or the days off; each change saves on its own, with Undo.
-// Leaves out: which schedule is open and what to do with it (the switcher handed in), and which schedule a page uses (each page picks in its own editor).
+// Purpose: the open schedule in the Availability tab (spec 0035, AC-970): its weekly hours, its time zone, its days off and the booking pages that use it.
+// Main task: change the hours (add, remove or copy a day's ranges), the zone or the days off, then Save in the Unsaved changes bar (or Discard), as in the booking page editor.
+// Leaves out: which schedule is open and what to do with it (the switcher, in the tab strip), and which schedule a page uses (each page picks in its own editor).
 import type { BookingAvailability, DataLayer, ScheduleView } from '@crm/data';
-import { Badge, Card, HoursEditor, Link, PageColumn, SectionBar, Select, Skeleton, useFormatSettings } from '@crm/ui';
+import {
+  Card,
+  HoursEditor,
+  Link,
+  PageColumn,
+  SaveBar,
+  Select,
+  Skeleton,
+  useFormatSettings,
+  type SaveBarStatus,
+} from '@crm/ui';
+import { useBlocker } from '@tanstack/react-router';
 import { useMemo, type ReactNode } from 'react';
 import { DaysOff } from './DaysOff.tsx';
 import { weekRows, WEEKDAYS, withDay, zoneItems, zoneMatches } from './hours.ts';
 import { pageEditorHref } from './links.ts';
-import { useScheduleAutosave, type ScheduleSaveNotice } from './scheduleDraft.ts';
+import { useScheduleDraft, type ScheduleSaveNotice } from './scheduleDraft.ts';
 import { scheduleStrings } from './schedule-strings.ts';
 import { strings } from './strings.ts';
 
@@ -19,31 +30,21 @@ export interface ScheduleEditorProps {
   /** Whose, when they aren't the reader's: an admin editing a colleague's schedule (AC-971). */
   readonly member: string | undefined;
   readonly schedule: ScheduleView;
-  /** The schedule switcher, at the head of the editor. */
-  readonly switcher: ReactNode;
   /** Reads the member's schedules again: a save another tab beat shows theirs. */
   readonly onReload: () => void;
   /** The virtual default is about to be stored under this id: the screen keeps this editor for it. */
   readonly onAdopt: (id: string) => void;
-  /** A save landed or failed: the screen raises it as a toast. */
+  /** A save landed, or another tab's beat it: the screen raises it as a toast. */
   readonly onNotice: (notice: ScheduleSaveNotice) => void;
 }
 
 /**
- * The editor, the Calendly way: the switcher and the time zone on one row, the week below, the days off and the
- * pages that use it beside it. Every change saves on its own (the owner's save rule), so there is no Save to find.
+ * The editor, the Calendly way: the week with its time zone at its head, the days off and the pages that use it
+ * beside it. Changes wait on screen until Save in the Unsaved changes bar (⌘S), and Discard puts them back; leaving
+ * with changes asks first (the owner, 22 October 2026: it saves like the booking page editor).
  */
-export function ScheduleEditor({
-  data,
-  slug,
-  member,
-  schedule,
-  switcher,
-  onReload,
-  onAdopt,
-  onNotice,
-}: ScheduleEditorProps) {
-  const autosave = useScheduleAutosave({
+export function ScheduleEditor({ data, slug, member, schedule, onReload, onAdopt, onNotice }: ScheduleEditorProps) {
+  const draft = useScheduleDraft({
     data,
     slug,
     schedule,
@@ -52,33 +53,48 @@ export function ScheduleEditor({
     onAdopt,
     onNotice,
   });
-  const shown = autosave.shown;
-  const change = (next: BookingAvailability) => autosave.change(() => next);
+  const shown = draft.shown;
+  const change = (next: BookingAvailability) => draft.change(() => next);
+  // Leaving with unsaved changes asks first, in the app and when the tab closes, as the booking page editor does.
+  useBlocker({
+    shouldBlockFn: () => draft.isDirty && !globalThis.confirm(strings.leaveConfirm),
+    enableBeforeUnload: () => draft.isDirty,
+  });
+  const status: SaveBarStatus = !draft.isDirty
+    ? 'hidden'
+    : draft.isSaving
+      ? 'saving'
+      : draft.error === undefined
+        ? 'unsaved'
+        : 'error';
   return (
     <Layout
-      bar={
-        <SectionBar
-          start={switcher}
-          end={
-            <>
-              {/* Where the hours stand, quietly: a toast says each landed save, with Undo. */}
-              {autosave.status === 'saving' && <Badge text={scheduleStrings.saving} />}
-              {autosave.status === 'failed' && <Badge text={scheduleStrings.notSaved} />}
-              <ZoneSelect
-                value={shown.timeZone}
-                onChange={(zone) => autosave.change((current) => ({ ...current, timeZone: zone }))}
-              />
-            </>
-          }
+      footer={
+        <SaveBar
+          status={status}
+          {...(draft.error === undefined ? {} : { error: draft.error })}
+          {...(draft.isValid ? {} : { blockedReason: scheduleStrings.invalidLeft })}
+          onSave={draft.save}
+          onDiscard={draft.discard}
         />
       }
       week={
-        <Card title={strings.weeklyHours}>
+        <Card
+          title={strings.weeklyHours}
+          // The zone the week reads in, at the card's head (the switcher is in the tab strip, as the other tabs'
+          // tools are: the owner, 22 October 2026).
+          actions={
+            <ZoneSelect
+              value={shown.timeZone}
+              onChange={(zone) => draft.change((current) => ({ ...current, timeZone: zone }))}
+            />
+          }
+        >
           <HoursEditor
             label={strings.weeklyHours}
             rows={weekRows(shown)}
             onChange={(day, ranges) => {
-              autosave.change((current) => withDay(current, day, ranges));
+              draft.change((current) => withDay(current, day, ranges));
             }}
           />
         </Card>
@@ -95,17 +111,16 @@ export function ScheduleEditor({
 
 /** The editor's places, shared with its loading shape so the page lands where the skeleton was. */
 function Layout({
-  bar,
   week,
   aside,
+  footer,
 }: {
-  readonly bar: ReactNode;
   readonly week: ReactNode;
   readonly aside: ReactNode;
+  readonly footer?: ReactNode;
 }) {
   return (
-    <PageColumn stack="main-first" aside={aside}>
-      {bar}
+    <PageColumn stack="main-first" aside={aside} {...(footer === undefined ? {} : { footer })}>
       {week}
     </PageColumn>
   );
@@ -168,15 +183,18 @@ function UsedBy({ slug, schedule }: { readonly slug: string; readonly schedule: 
   );
 }
 
-/** The editor while the schedules load: its row, its week and its side cards in their places. */
-export function ScheduleEditorPending({ switcher }: { readonly switcher: ReactNode }) {
+/** The editor while the schedules load: its week and its side cards in their places. */
+export function ScheduleEditorPending() {
   // The member's zone (Preferences), as the schedule will show once it loads.
   const { timeZone } = useFormatSettings();
   return (
     <Layout
-      bar={<SectionBar start={switcher} end={<ZoneSelect value={timeZone} onChange={() => undefined} isDisabled />} />}
       week={
-        <Card title={strings.weeklyHours} isBusy>
+        <Card
+          title={strings.weeklyHours}
+          isBusy
+          actions={<ZoneSelect value={timeZone} onChange={() => undefined} isDisabled />}
+        >
           <HoursEditor
             label={strings.weeklyHours}
             rows={WEEKDAYS.map((day) => ({ id: day, label: strings.weekday[day], ranges: [] }))}

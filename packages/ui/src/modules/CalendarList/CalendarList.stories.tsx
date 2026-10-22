@@ -12,16 +12,16 @@ function accounts(): CalendarListAccount[] {
       provider: 'google-calendar',
       email: 'ada@acme.dev',
       calendars: [
-        { id: 'ada', name: 'Ada Lovelace', hue: 'blue', isShown: true, isDefault: true, canBeDefault: true },
-        { id: 'team', name: 'Team', hue: 'green', isShown: true, isDefault: false, canBeDefault: true },
-        { id: 'holidays', name: 'Holidays', hue: 'orange', isShown: true, isDefault: false, canBeDefault: false },
+        { id: 'ada', name: 'Ada Lovelace', hue: 'blue', isShown: true },
+        { id: 'team', name: 'Team', hue: 'green', isShown: true },
+        { id: 'holidays', name: 'Holidays', hue: 'orange', isShown: true },
       ],
     },
     {
       id: 'outlook',
       provider: 'outlook',
       email: 'ada@lovelace.example',
-      calendars: [{ id: 'cal', name: 'Calendar', hue: 'purple', isShown: true, isDefault: false, canBeDefault: true }],
+      calendars: [{ id: 'cal', name: 'Calendar', hue: 'purple', isShown: true }],
     },
   ];
 }
@@ -29,15 +29,15 @@ function accounts(): CalendarListAccount[] {
 const meta = {
   title: 'Modules/CalendarList',
   component: CalendarList,
-  args: { accounts: [], onShownChange: fn(), onShowOnly: fn(), onShowAll: fn(), onMakeDefault: fn() },
+  args: { accounts: [], onShownChange: fn(), onShowOnly: fn(), onShowAll: fn() },
 } satisfies Meta<typeof CalendarList>;
 
 export default meta;
 type Story = StoryObj<typeof meta>;
 
-/** Every calendar shown, Default on the one bookings go to. */
+/** Every calendar shown: Outlook's one calendar is one row, Google's three fold under its address. */
 export const Default: Story = {
-  parameters: { crm: { preview: true, screenshot: false } },
+  parameters: { crm: { preview: true } },
   render: (args) => (
     <Stage width="narrow">
       <CalendarList {...args} accounts={accounts()} />
@@ -88,24 +88,20 @@ export const Toggling: Story = {
   },
 };
 
-/** Make default is offered on a writable calendar that isn't the default, never on a read only one. */
-export const MakeDefault: Story = {
+/** An account with one calendar is one row, with no heading; its box is filled with its colour; no Default chip. */
+export const OneCalendarAccount: Story = {
   parameters: { crm: { screenshot: false } },
   render: (args) => (
     <Stage width="narrow">
       <CalendarList {...args} accounts={accounts()} />
     </Stage>
   ),
-  play: async ({ canvas, canvasElement, args }) => {
-    const body = within(canvasElement.ownerDocument.body);
-    await expect(canvas.getByText('Default')).toBeInTheDocument();
-    await userEvent.click(canvas.getByRole('button', { name: 'Holidays options' }));
-    await waitFor(() => expect(body.getByRole('menuitem', { name: 'Show only this' })).toBeInTheDocument());
-    await expect(body.queryByRole('menuitem', { name: 'Make default' })).not.toBeInTheDocument();
-    await userEvent.keyboard('{Escape}');
-    await userEvent.click(canvas.getByRole('button', { name: 'Team options' }));
-    await userEvent.click(await body.findByRole('menuitem', { name: 'Make default' }));
-    await expect(args.onMakeDefault).toHaveBeenCalledWith('team');
+  play: async ({ canvas }) => {
+    await expect(canvas.getByRole('heading', { name: 'My calendars' })).toBeInTheDocument();
+    await expect(canvas.queryByRole('button', { name: /ada@lovelace\.example/ })).not.toBeInTheDocument();
+    await expect(canvas.getByRole('checkbox', { name: 'Calendar' })).toBeChecked();
+    await expect(canvas.getByRole('button', { name: /ada@acme\.dev/ })).toBeInTheDocument();
+    await expect(canvas.queryByText('Default')).not.toBeInTheDocument();
   },
 };
 
@@ -120,5 +116,33 @@ export const Folded: Story = {
   play: async ({ canvas }) => {
     await userEvent.click(canvas.getByRole('button', { name: /ada@acme\.dev/ }));
     await waitFor(() => expect(canvas.queryByRole('checkbox', { name: 'Team' })).not.toBeInTheDocument());
+  },
+};
+
+/** A long address: cut with an ellipsis before the options button's room, never mid letter, hovered or not. */
+export const LongName: Story = {
+  render: (args) => (
+    <Stage width="narrow">
+      <CalendarList
+        {...args}
+        accounts={[
+          {
+            id: 'school',
+            provider: 'google-calendar',
+            email: '1032201225@tcetmumbai.in',
+            calendars: [{ id: 'school', name: '1032201225@tcetmumbai.in.example.edu', hue: 'sky', isShown: true }],
+          },
+          ...accounts(),
+        ]}
+      />
+    </Stage>
+  ),
+  play: async ({ canvas }) => {
+    // The visible name (the StatusDot's); the checkbox's own label is for screen readers.
+    const [name] = canvas.getAllByText('1032201225@tcetmumbai.in.example.edu');
+    if (name === undefined) throw new Error('no name');
+    await expect(getComputedStyle(name).textOverflow).toBe('ellipsis');
+    await userEvent.click(name);
+    await expect(canvas.getByRole('checkbox', { name: '1032201225@tcetmumbai.in.example.edu' })).not.toBeChecked();
   },
 };

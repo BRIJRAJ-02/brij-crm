@@ -104,6 +104,7 @@ describe('@crm/ui', () => {
       'Meter',
       'Modal',
       'ModalTrigger',
+      'MonthCalendar',
       'MonthTiles',
       'NavGroup',
       'NavItem',

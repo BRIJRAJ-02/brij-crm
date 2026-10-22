@@ -271,6 +271,15 @@ function Booking({
         ),
   );
   const [reload, setReload] = useState(0);
+  // Coming back to the page reads the times again, so hours the host changed meanwhile show (the owner, 22 October
+  // 2026): the server answers with no-store, and nothing else would read them until a reload.
+  useEffect(() => {
+    const again = () => {
+      if (document.visibilityState === 'visible') setReload((count) => count + 1);
+    };
+    document.addEventListener('visibilitychange', again);
+    return () => document.removeEventListener('visibilitychange', again);
+  }, []);
   const readKey = `${zone}|${String(duration)}|${String(reload)}`;
   const [pickedDay, setDay] = useState<string | undefined>(
     chosen.day !== undefined && chosen.day >= today ? chosen.day : undefined,

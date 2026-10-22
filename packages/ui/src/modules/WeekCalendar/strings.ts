@@ -10,5 +10,7 @@ export const strings = {
   moreName: (count: number, at: string) =>
     count === 1 ? `1 more item at ${at}` : `${String(count)} more items at ${at}`,
   moreList: 'More items at this time',
+  allDay: 'All day',
+  allDayOn: (day: string) => `all day ${day}`,
   drawHint: 'Press Enter to add time here, or drag across the day.',
 } as const;

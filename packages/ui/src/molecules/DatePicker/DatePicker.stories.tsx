@@ -1,8 +1,9 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
+import { useState } from 'react';
 import { expect, fn, userEvent, waitFor } from 'storybook/test';
 import { Stage } from '../../workbench/Stage/Stage.tsx';
 import { Form } from '../Form/Form.tsx';
-import { DatePicker, DateRangePicker } from './DatePicker.tsx';
+import { DatePicker, DateRangePicker, MonthCalendar } from './DatePicker.tsx';
 
 const meta = {
   title: 'Molecules/DatePicker',
@@ -99,6 +100,24 @@ export const Range: Story = {
     const calendar = await dialog();
     await expect(calendar.querySelector('[data-selection-start]')).toHaveTextContent('5');
     await expect(calendar.querySelector('[data-selection-end]')).toHaveTextContent('16');
+  },
+};
+
+/** MonthCalendar: the calendar inline and compact, for jumping to a date beside a view; picking a day calls back. */
+export const Inline: Story = {
+  render: function Render() {
+    const [day, setDay] = useState('2026-10-15');
+    return (
+      <Stage width="narrow">
+        <MonthCalendar label="Go to date" value={day} onChange={setDay} />
+      </Stage>
+    );
+  },
+  play: async ({ canvas, canvasElement }) => {
+    await expect(canvas.getByRole('application', { name: /Go to date/ })).toBeInTheDocument();
+    await expect(canvasElement.querySelector('[data-selected]')).toHaveTextContent('15');
+    await userEvent.click(canvas.getByRole('button', { name: /October 20, 2026|20 October 2026/ }));
+    await expect(canvasElement.querySelector('[data-selected]')).toHaveTextContent('20');
   },
 };
 

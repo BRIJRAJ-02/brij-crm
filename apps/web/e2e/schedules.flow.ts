@@ -1,5 +1,5 @@
 // Availability schedules (spec 0035), end to end: the Availability tab opens the default in its editor; a member makes
-// a second schedule from it, gives it evening hours (each change saves on its own, with Undo), picks it for a booking
+// a second schedule from it, gives it evening hours (saved with the Unsaved changes bar's Save), picks it for a booking
 // page, and the page's public slots follow it; a save in one browser shows in another browser's editor (AC-977);
 // deleting it from the switcher asks first, naming the page it moves, Cancel changes nothing, and once it is gone the
 // tab opens the default and the page books by it again (AC-964, AC-965, AC-967, AC-969, AC-970).
@@ -106,9 +106,16 @@ test.describe('availability schedules', () => {
     await expect(page).toHaveURL(/availability\?schedule=[0-9a-f-]{36}$/);
     await expect(switcher('Evenings')).toBeVisible();
     const editorUrl = page.url();
-    // Each change saves on its own, said in a toast with Undo: no Save to press.
+    // Changes wait in the Unsaved changes bar until Save, said in a toast (the owner, 22 October 2026).
     await setAllDays(page, '6:00 PM', '8:00 PM');
+    await expect(page.getByText('Saved Evenings.')).toHaveCount(0);
+    await page.getByRole('button', { name: 'Save', exact: true }).click();
     await expect(page.getByText('Saved Evenings.').first()).toBeVisible();
+    // Discard puts the saved hours back.
+    await setAllDays(page, '6:00 PM', '7:00 PM');
+    await page.getByRole('button', { name: 'Discard', exact: true }).click();
+    await page.getByRole('alertdialog').getByRole('button', { name: 'Discard changes' }).click();
+    await expect(page.getByRole('button', { name: /Monday until/ }).first()).toContainText('8:00 PM');
 
     // The page picks Evenings, and its public slots follow.
     await page.goto(pageUrl);
@@ -131,6 +138,7 @@ test.describe('availability schedules', () => {
     await expect(reader.getByRole('button', { name: /Monday until/ }).first()).toContainText('8:00 PM');
     await page.goto(editorUrl);
     await setAllDays(page, '6:00 PM', '9:00 PM');
+    await page.getByRole('button', { name: 'Save', exact: true }).click();
     await expect(page.getByText('Saved Evenings.').first()).toBeVisible();
     if (!LIVE) await reader.reload();
     await expect(reader.getByRole('button', { name: /Monday until/ }).first()).toContainText('9:00 PM', {

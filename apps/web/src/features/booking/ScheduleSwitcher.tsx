@@ -4,7 +4,7 @@
 // Leaves out: the hours (the tab's editor), and acting on the virtual default before its first save.
 import type { ScheduleView } from '@crm/data';
 import type { Ref } from 'react';
-import { Badge, Button, Menu, MenuItem, MenuSection, MenuSeparator, MenuTrigger } from '@crm/ui';
+import { Badge, Button, Menu, MenuItem, MenuSection, MenuSeparator, MenuTrigger, type IconName } from '@crm/ui';
 import { scheduleStrings } from './schedule-strings.ts';
 
 /** Props for ScheduleSwitcher. */
@@ -13,12 +13,10 @@ export interface ScheduleSwitcherProps {
   readonly schedules: readonly ScheduleView[];
   /** The one open in the tab. */
   readonly current: ScheduleView;
-  /** The member holds as many schedules as they may: New schedule and Duplicate wait, and say why. */
+  /** The member holds as many schedules as they may: New schedule and Duplicate are left out (the TopBar's New says why). */
   readonly isFull: boolean;
   /** Nothing is ready to act on yet (the switcher while the tab loads). */
   readonly isDisabled?: boolean;
-  /** Whether the schedules are the reader's own, for the words ("your default", "their default"). */
-  readonly isOwn?: boolean;
   /** The trigger, so the screen can bring focus back to it after a switch remounts the editor. */
   readonly triggerRef?: Ref<HTMLButtonElement>;
   readonly onOpen: (schedule: ScheduleView) => void;
@@ -37,17 +35,18 @@ const ACT = '@act:';
 const keyOf = (schedule: ScheduleView) => schedule.id ?? 'default';
 
 /**
- * The open schedule's name as a menu button, with Default beside it. The menu lists the schedules to switch to
- * (the open one checked), New schedule, then this schedule's own actions. An action the schedule can't take stays,
- * disabled, with its reason as its second line: the default is already the default and can't be deleted; a full
- * list can't take another; the virtual default has nothing to act on until its hours are saved.
+ * The open schedule's name as a menu button, with Default beside it. The menu lists the schedules to switch to (the
+ * open one checked, the default tagged), New schedule, then this schedule's own actions: Rename, Duplicate, Set as
+ * default, Delete. An action that can't apply is left out rather than shown disabled with a reason (the owner, 22
+ * October 2026): no Set as default on the default, no Delete on the default or the only schedule, no New schedule or
+ * Duplicate once the list is full, and nothing to act on while the schedule isn't saved yet. The headings show only
+ * with two or more schedules.
  */
 export function ScheduleSwitcher({
   schedules,
   current,
   isFull,
   isDisabled = false,
-  isOwn = true,
   triggerRef,
   onOpen,
   onCreate,
@@ -58,29 +57,36 @@ export function ScheduleSwitcher({
 }: ScheduleSwitcherProps) {
   const isVirtual = current.id === null;
   const isPending = !isVirtual && current.updatedAt === null;
-  const unsaved = isVirtual || isPending;
-  const reason = (id: string): string | undefined => {
-    if (unsaved && id !== 'default') return isVirtual ? scheduleStrings.saveDefaultFirst : scheduleStrings.copying;
-    if (id === 'default' && current.isDefault)
-      return isOwn ? scheduleStrings.alreadyDefault : scheduleStrings.alreadyTheirDefault;
-    if (id === 'delete' && current.isDefault) return scheduleStrings.cantDeleteDefault;
-    if (id === 'duplicate' && isFull) return scheduleStrings.limitReached;
-    return undefined;
-  };
-  const actions = [
-    { id: 'rename', icon: 'pencil', label: scheduleStrings.rename },
-    { id: 'default', icon: 'star', label: scheduleStrings.setDefault },
-    { id: 'duplicate', icon: 'copy', label: scheduleStrings.duplicate },
-  ] as const;
-  const deleteReason = reason('delete');
-  const disabled = [
-    ...(isFull ? [CREATE] : []),
-    ...[...actions.map((each) => each.id), 'delete']
-      .filter((id) => reason(id) !== undefined)
-      .map((id) => `${ACT}${id}`),
-    // A copy on its way can't be opened until the server made it.
-    ...schedules.filter((each) => each.id !== null && each.updatedAt === null).map(keyOf),
+  const isSaved = !isVirtual && !isPending;
+  const all: readonly {
+    readonly id: string;
+    readonly icon: IconName;
+    readonly label: string;
+    readonly isDanger: boolean;
+    /** It can apply to this schedule now; otherwise it is left out. */
+    readonly applies: boolean;
+  }[] = [
+    { id: 'rename', icon: 'pencil', label: scheduleStrings.rename, isDanger: false, applies: isSaved },
+    { id: 'duplicate', icon: 'copy', label: scheduleStrings.duplicate, isDanger: false, applies: isSaved && !isFull },
+    {
+      id: 'default',
+      icon: 'star',
+      label: scheduleStrings.setDefault,
+      isDanger: false,
+      applies: isSaved && !current.isDefault,
+    },
+    {
+      id: 'delete',
+      icon: 'trash',
+      label: scheduleStrings.delete,
+      isDanger: true,
+      applies: isSaved && !current.isDefault && schedules.length > 1,
+    },
   ];
+  const actions = all.filter((action) => action.applies);
+  const hasHeadings = schedules.length > 1;
+  // A copy on its way can't be opened until the server made it.
+  const disabled = schedules.filter((each) => each.id !== null && each.updatedAt === null).map(keyOf);
   return (
     <>
       <MenuTrigger>
@@ -95,6 +101,7 @@ export function ScheduleSwitcher({
         </Button>
         <Menu
           label={scheduleStrings.switchSchedule}
+          width="trigger"
           selectionMode="single"
           selectedKeys={[keyOf(current)]}
           disabledKeys={disabled}
@@ -111,50 +118,35 @@ export function ScheduleSwitcher({
             }
           }}
         >
-          <MenuSection label={scheduleStrings.schedules}>
+          <MenuSection label={scheduleStrings.schedules} isLabelHidden={!hasHeadings}>
             {schedules.map((schedule) => (
               <MenuItem
                 key={keyOf(schedule)}
                 id={keyOf(schedule)}
-                icon="clock"
                 {...(schedule.isDefault ? { meta: scheduleStrings.defaultBadge } : {})}
               >
                 {schedule.name}
               </MenuItem>
             ))}
           </MenuSection>
-          <MenuSeparator />
-          <MenuItem id={CREATE} icon="plus" {...(isFull ? { description: scheduleStrings.limitReached } : {})}>
-            {scheduleStrings.newSchedule}
-          </MenuItem>
-          <MenuSeparator />
-          <MenuSection label={scheduleStrings.thisSchedule} selectionMode="none">
-            {[
-              ...actions.map((action) => {
-                const why = reason(action.id);
-                return (
-                  <MenuItem
-                    key={action.id}
-                    id={`${ACT}${action.id}`}
-                    icon={action.icon}
-                    {...(why === undefined ? {} : { description: why })}
-                  >
-                    {action.label}
-                  </MenuItem>
-                );
-              }),
-              <MenuSeparator key="separator" />,
-              <MenuItem
-                key="delete"
-                id={`${ACT}delete`}
-                icon="trash"
-                isDanger
-                {...(deleteReason === undefined ? {} : { description: deleteReason })}
-              >
-                {scheduleStrings.delete}
-              </MenuItem>,
-            ]}
-          </MenuSection>
+          {isFull ? null : <MenuSeparator />}
+          {isFull ? null : (
+            <MenuSection label={scheduleStrings.newSchedule} isLabelHidden selectionMode="none">
+              <MenuItem id={CREATE} icon="plus">
+                {scheduleStrings.newSchedule}
+              </MenuItem>
+            </MenuSection>
+          )}
+          {actions.length === 0 ? null : <MenuSeparator />}
+          {actions.length === 0 ? null : (
+            <MenuSection label={scheduleStrings.thisSchedule} isLabelHidden={!hasHeadings} selectionMode="none">
+              {actions.map((action) => (
+                <MenuItem key={action.id} id={`${ACT}${action.id}`} icon={action.icon} isDanger={action.isDanger}>
+                  {action.label}
+                </MenuItem>
+              ))}
+            </MenuSection>
+          )}
         </Menu>
       </MenuTrigger>
       {current.isDefault && <Badge text={scheduleStrings.defaultBadge} />}

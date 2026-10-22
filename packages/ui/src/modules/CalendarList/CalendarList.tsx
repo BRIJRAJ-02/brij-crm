@@ -1,7 +1,7 @@
-import { Badge } from '../../atoms/Badge/Badge.tsx';
 import { Button } from '../../atoms/Button/Button.tsx';
 import { Checkbox } from '../../atoms/Checkbox/Checkbox.tsx';
 import { ProviderMark, type ProviderName } from '../../atoms/ProviderMark/ProviderMark.tsx';
+import { StatusDot } from '../../atoms/StatusDot/StatusDot.tsx';
 import type { Hue } from '../../hue.ts';
 import { Disclosure } from '../../molecules/Disclosure/Disclosure.tsx';
 import { Menu, MenuItem, MenuTrigger } from '../../molecules/Menu/Menu.tsx';
@@ -15,17 +15,13 @@ export interface CalendarListCalendar {
   readonly hue: Hue;
   /** Its events show on the view. */
   readonly isShown: boolean;
-  /** New bookings go here. */
-  readonly isDefault: boolean;
-  /** It can take bookings (the member can write it): Make default is offered. */
-  readonly canBeDefault: boolean;
 }
 
 /** One account with its calendars. */
 export interface CalendarListAccount {
   readonly id: string;
   readonly provider: ProviderName;
-  /** The account's address, its heading. */
+  /** The account's address, its heading when it holds two or more calendars. */
   readonly email: string;
   readonly calendars: readonly CalendarListCalendar[];
 }
@@ -39,25 +35,87 @@ export interface CalendarListProps {
   readonly onShowOnly: (calendarId: string) => void;
   /** Show all: every calendar again. Offered while any is hidden. */
   readonly onShowAll: () => void;
-  /** Make default: new bookings go to this calendar. Left out, nobody may move it. */
-  readonly onMakeDefault?: (calendarId: string) => void;
+  /** The list's small label over the calendars. Default "My calendars". */
+  readonly label?: string;
+}
+
+/** One calendar's row: its box in its colour, its name, and its options, shown on hover or focus. */
+function Row({
+  calendar,
+  shownCount,
+  onShownChange,
+  onShowOnly,
+}: {
+  readonly calendar: CalendarListCalendar;
+  readonly shownCount: number;
+  readonly onShownChange: CalendarListProps['onShownChange'];
+  readonly onShowOnly: CalendarListProps['onShowOnly'];
+}) {
+  const canShowOnly = !(calendar.isShown && shownCount === 1);
+  return (
+    <li className={styles.row}>
+      <span className={styles.check}>
+        {/* The plain box, then the calendar's colour as a dot before its name, cut with an ellipsis when long. */}
+        <Checkbox
+          label={calendar.name}
+          isLabelHidden
+          leading={<StatusDot hue={calendar.hue}>{calendar.name}</StatusDot>}
+          isSelected={calendar.isShown}
+          onChange={(isShown) => onShownChange(calendar.id, isShown)}
+        />
+      </span>
+      {canShowOnly && (
+        <span className={styles.options}>
+          <MenuTrigger>
+            <Button variant="ghost" size="sm" icon="ellipsis" label={strings.options(calendar.name)} />
+            <Menu
+              label={strings.options(calendar.name)}
+              onAction={(key) => {
+                if (key === 'only') onShowOnly(calendar.id);
+              }}
+            >
+              <MenuItem id="only" icon="eye">
+                {strings.showOnly}
+              </MenuItem>
+            </Menu>
+          </MenuTrigger>
+        </span>
+      )}
+    </li>
+  );
 }
 
 /**
- * The member's calendars by account, as Google Calendar lists them beside its grid: each account a fold headed by
- * its provider's mark and address, each calendar a checkbox in its own colour with its name, Default on the one new
- * bookings go to, and its own options button (Show only this, Make default). Show all follows the list while any
- * calendar is hidden.
+ * The member's calendars, as Google Calendar lists them beside its grid: a small label, then each calendar a
+ * plain checkbox, its colour as a dot and its name (cut with an ellipsis when long). An account with one calendar is that one row; an account with
+ * two or more folds under its provider's mark and address. Each row's options (Show only this) show on hover or
+ * focus, and always on touch. Show all follows the list while any calendar is hidden. Which calendar takes new
+ * bookings is a setting, so it lives in Settings, not here.
  */
-export function CalendarList({ accounts, onShownChange, onShowOnly, onShowAll, onMakeDefault }: CalendarListProps) {
+export function CalendarList({ accounts, onShownChange, onShowOnly, onShowAll, label }: CalendarListProps) {
   const anyHidden = accounts.some((account) => account.calendars.some((calendar) => !calendar.isShown));
   const shownCount = accounts.reduce(
     (sum, account) => sum + account.calendars.filter((each) => each.isShown).length,
     0,
   );
+  const singles = accounts.filter((account) => account.calendars.length === 1);
+  const groups = accounts.filter((account) => account.calendars.length > 1);
+  const row = (calendar: CalendarListCalendar) => (
+    <Row
+      key={calendar.id}
+      calendar={calendar}
+      shownCount={shownCount}
+      onShownChange={onShownChange}
+      onShowOnly={onShowOnly}
+    />
+  );
   return (
     <div className={styles.root}>
-      {accounts.map((account) => (
+      <h2 className={styles.label}>{label ?? strings.label}</h2>
+      {singles.length > 0 && (
+        <ul className={styles.list}>{singles.flatMap((account) => account.calendars.map(row))}</ul>
+      )}
+      {groups.map((account) => (
         <Disclosure
           key={account.id}
           title={account.email}
@@ -65,42 +123,7 @@ export function CalendarList({ accounts, onShownChange, onShowOnly, onShowAll, o
           variant="label"
           defaultExpanded
         >
-          <ul className={styles.list}>
-            {account.calendars.map((calendar) => (
-              <li key={calendar.id} className={styles.row}>
-                <span className={styles.check}>
-                  <Checkbox
-                    label={calendar.name}
-                    hue={calendar.hue}
-                    isSelected={calendar.isShown}
-                    onChange={(isShown) => onShownChange(calendar.id, isShown)}
-                  />
-                </span>
-                {calendar.isDefault && <Badge text={strings.default} label={strings.defaultName} />}
-                <MenuTrigger>
-                  <Button variant="ghost" size="sm" icon="ellipsis" label={strings.options(calendar.name)} />
-                  <Menu
-                    label={strings.options(calendar.name)}
-                    onAction={(key) => {
-                      if (key === 'only') onShowOnly(calendar.id);
-                      if (key === 'default') onMakeDefault?.(calendar.id);
-                    }}
-                  >
-                    {calendar.isShown && shownCount === 1 ? null : (
-                      <MenuItem id="only" icon="eye">
-                        {strings.showOnly}
-                      </MenuItem>
-                    )}
-                    {onMakeDefault !== undefined && calendar.canBeDefault && !calendar.isDefault ? (
-                      <MenuItem id="default" icon="calendar-check">
-                        {strings.makeDefault}
-                      </MenuItem>
-                    ) : null}
-                  </Menu>
-                </MenuTrigger>
-              </li>
-            ))}
-          </ul>
+          <ul className={styles.list}>{account.calendars.map(row)}</ul>
         </Disclosure>
       ))}
       {/* At the end, so the rows never move under the pointer when it comes and goes. */}

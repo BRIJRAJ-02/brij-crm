@@ -1,11 +1,12 @@
 /* BookingList: day bands in small capitals on the subtle surface, each over
-   its rows; a row is two lines: the date column (half a measure wide: the day
+   its rows and sticking to the top of the view while they scroll; a row is two lines: the date column (half a measure wide: the day
    bold over the time), the title over one muted line of details cut to fit,
    then the actions. On a narrow container the date and time share a line
    above the rest. */
 @layer components {
+  /* Clipped, not hidden, so it is no scroll box and its bands stick to the view that scrolls it. */
   .root {
-    overflow: hidden;
+    overflow: clip;
     border: var(--border-width-hairline) solid var(--border);
     border-radius: var(--radius-lg);
     background: var(--surface-raised);
@@ -16,7 +17,11 @@
     border-block-start: var(--border-width-hairline) solid var(--border);
   }
 
+  /* Each day's band sticks to the top of the view while its rows scroll under it. */
   .band {
+    position: sticky;
+    inset-block-start: 0;
+    z-index: var(--z-sticky);
     margin: 0;
     padding: var(--space-6) var(--space-16);
     border-block-end: var(--border-width-hairline) solid var(--border);
@@ -116,6 +121,11 @@
     max-inline-size: 50%;
   }
 
+  /* Alone on its line, who it's with takes the line (half of it cut "You and Alan" short on a phone). */
+  .details > .who:only-child {
+    max-inline-size: 100%;
+  }
+
   .details > .text:last-child {
     flex-shrink: 100;
   }
@@ -138,6 +148,7 @@
 
   /* Quiet bands: a plain small label over its rows, no bar. */
   .root[data-placement='card'] .band {
+    position: static;
     padding: var(--space-8) var(--space-8) var(--space-2);
     border-block-end: none;
     background: none;

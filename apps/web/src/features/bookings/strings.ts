@@ -8,25 +8,25 @@ export const strings = {
   tabs: { upcoming: 'Upcoming', past: 'Past', cancelled: 'Canceled' },
   listLabel: { upcoming: 'Upcoming meetings', past: 'Past meetings', cancelled: 'Canceled meetings' },
   sourceLabel: 'Show',
-  sources: { all: 'All', bookings: 'Bookings', calendar: 'Events' },
+  sources: { all: 'Everything', bookings: 'Bookings only', calendar: 'Calendar events only' },
   noMatch: 'Nothing matches these filters',
   more: 'Show more',
   moreFailed: 'Couldn’t load more. Try again',
   /** Each tab's own empty state: one line. */
   empty: {
-    upcoming: { title: 'Nothing coming up' },
-    past: { title: 'Nothing behind you yet' },
-    cancelled: { title: 'Nothing has been called off' },
+    upcoming: { title: 'Nothing coming up', text: 'Bookings from your booking pages show up here.' },
+    past: { title: 'Nothing behind you yet', text: 'Meetings that have happened show up here.' },
+    cancelled: { title: 'Nothing has been called off', text: 'Canceled bookings show up here.' },
   },
-  /** The way to the booking links, under Captures. */
-  openLinks: 'Go to your booking links',
-  /** The way to the member's own weekly hours and days off. */
-  openAvailability: 'Set your availability',
+  /** The list's way to share a booking page when nothing is coming up. */
+  shareBookingPage: 'Share a booking page',
   failedTitle: 'Bookings didn’t load',
   failedText: 'Check your connection and try again.',
   today: 'Today',
   todayOn: (day: string) => `Today · ${day}`,
   tomorrow: 'Tomorrow',
+  allDay: 'All day',
+  dayToDay: (first: string, last: string) => `${first} to ${last}`,
   previousWeek: 'Previous week',
   nextWeek: 'Next week',
   weekLabel: (range: string) => `Bookings, ${range}`,
@@ -37,6 +37,10 @@ export const strings = {
         ? '1 booking this week.'
         : `${String(count)} bookings this week.`,
   weekLoading: 'Loading this week…',
+  /** The week grid's quiet line when nothing is on it. */
+  noMeetingsWeek: 'No meetings this week',
+  /** The calendars panel's small month. */
+  goToDate: 'Go to date',
   cancelled: 'Canceled',
   /** Who provides a meeting link, by its host. */
   providers: { google: 'Google Meet', microsoft: 'Microsoft Teams', zoom: 'Zoom', other: 'the call' },
@@ -89,7 +93,6 @@ export const strings = {
   phone: 'Phone call to their number',
   calendar: 'Calendar',
   fromCalendar: 'From your calendar. Timefix keeps the time blocked but doesn’t manage this event.',
-  allDay: 'All day',
   // The member's own calendar time with nobody else invited (spec 0024, the owner's call on 20 October 2026).
   busy: 'Busy',
   busyNote:

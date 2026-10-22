@@ -1,6 +1,7 @@
 /* EmptyState: a 32px icon tile, a title, a line of text and the next step,
    centred in its slot. The error tone's icon is danger. The row layout is one
-   quiet line at a list row's height, at the start. */
+   quiet line at a list row's height, at the start. The fill layout grows to
+   its slot's height and centres the block in it. */
 @layer components {
   .root {
     display: flex;
@@ -55,6 +56,13 @@
     justify-content: center;
     gap: var(--space-8);
     margin-block-start: var(--space-8);
+  }
+
+  /* Fill: the block grown to its slot's height, centred in it (an empty view with the whole area). */
+  .root[data-layout='fill'] {
+    flex: 1;
+    justify-content: center;
+    min-block-size: 100%;
   }
 
   /* A row: one quiet line at a list row's height, at the start, its icon bare. */

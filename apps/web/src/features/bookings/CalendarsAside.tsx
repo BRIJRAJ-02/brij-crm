@@ -1,7 +1,7 @@
 // Brief
-// Purpose: Bookings' calendars beside the week and the list (spec 0024 milestone 5), as Google Calendar keeps them: each account's calendars as boxes in their colours, and which one takes new bookings.
-// Main task: show one calendar, several or all on this view, and move new bookings to another calendar (Make default).
-// Leaves out: the calendars' own switches (Settings › Calendars), and a month to jump dates (the week's arrows and Today do that).
+// Purpose: Bookings' calendars beside the week and the list (spec 0024 milestone 5), as Google Calendar keeps them: a small month to jump to a date (the week), then each calendar as a box in its colour.
+// Main task: show one calendar, several or all on this view.
+// Leaves out: the calendars' own switches and which one takes new bookings (settings, in Settings › Calendars).
 import type { CalendarAccountView, CalendarListState, CalendarsHeld } from '@crm/data';
 import { useCalendarList } from '@crm/data/react';
 import {
@@ -11,6 +11,7 @@ import {
   Callout,
   CalendarList,
   Link,
+  MonthCalendar,
   Skeleton,
   type CalendarListAccount,
 } from '@crm/ui';
@@ -130,14 +131,16 @@ export interface CalendarsFrameProps {
   readonly calendars: CalendarsHeld<CalendarListState>;
   readonly panel: CalendarsPanel;
   readonly onSearch: (next: Partial<BookingsSearch>) => void;
-  /** Make default: new bookings go to this calendar (at once, put back with a toast when refused). */
-  readonly onMakeDefault: (calendarId: string) => void;
+  /** The small month over the calendars, for jumping to a date (the week); left out, no month. */
+  readonly jumpTo?: { readonly value: string; readonly onChange: (day: string) => void };
   /** Puts away the notice that new bookings moved to another calendar. */
   readonly onDismissNotice: () => void;
   /** No calendars panel: the view shows no calendar events (List › Bookings), so the boxes would change nothing. */
   readonly isHidden?: boolean;
-  /** Fills the view's height (the week grid). */
+  /** Fills the view's height (the week grid, the list). */
   readonly isFill?: boolean;
+  /** Edge to edge, with no gap (the week). */
+  readonly isFlush?: boolean;
   readonly children: ReactNode;
 }
 
@@ -148,10 +151,11 @@ export function CalendarsFrame({
   calendars,
   panel,
   onSearch,
-  onMakeDefault,
+  jumpTo,
   onDismissNotice,
   isHidden = false,
   isFill = false,
+  isFlush = false,
   children,
 }: CalendarsFrameProps) {
   const state = useCalendarList(calendars);
@@ -167,8 +171,6 @@ export function CalendarsFrame({
       name: calendar.name,
       hue: calendar.hue,
       isShown: picked === undefined || picked.has(calendar.id),
-      isDefault: calendar.isDestination,
-      canBeDefault: calendar.canBeDestination,
     })),
   }));
   const destination =
@@ -209,18 +211,27 @@ export function CalendarsFrame({
           }}
           onShowOnly={(calendarId) => onSearch({ cal: [calendarId] })}
           onShowAll={() => onSearch({ cal: undefined })}
-          onMakeDefault={onMakeDefault}
         />
+      </>
+    );
+  const withMonth =
+    jumpTo === undefined ? (
+      aside
+    ) : (
+      <>
+        <MonthCalendar label={strings.goToDate} value={jumpTo.value} onChange={jumpTo.onChange} />
+        {aside}
       </>
     );
   return (
     <AsideLayout
-      aside={aside}
+      aside={withMonth}
       asideLabel={strings.calendars}
       isAsideOpen={panel.isOpen && !isHidden}
       onAsideClose={panel.closeSheet}
       onNarrowChange={panel.setNarrow}
       isFill={isFill}
+      isFlush={isFlush}
     >
       {children}
     </AsideLayout>

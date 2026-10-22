@@ -97,10 +97,12 @@ export {
   DatePicker,
   DateRangePicker,
   dayIn,
+  MonthCalendar,
   quickPicks,
   type DatePickerProps,
   type DateRange,
   type DateRangePickerProps,
+  type MonthCalendarProps,
 } from './molecules/DatePicker/DatePicker.tsx';
 export {
   DescriptionList,

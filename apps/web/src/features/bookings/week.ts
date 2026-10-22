@@ -101,21 +101,25 @@ const DAY_START = 8 * 60;
 const DAY_END = 20 * 60;
 
 /**
- * The minute the week opens with at its top: this week, an hour before now
- * within the working day (8 AM to 8 PM), else 8 AM; another week, an hour
- * before its first booking or event when that is earlier than 8 AM, else 8 AM.
+ * The minute the week opens with at its top, always on the hour so its label shows whole: this week, the hour
+ * before now within the working day (8 AM to 8 PM), else the start of the member's day (`startOfDay`, 8 AM unknown);
+ * another week, the hour before its first booking or event when that is earlier than the day's start, else the
+ * start.
  */
 export function scrollMinute(
   days: readonly string[],
   now: Date,
   pieces: readonly Pick<DayPiece, 'startMinute' | 'endMinute'>[],
+  startOfDay: number = DAY_START,
 ): number {
+  const hourBefore = (minute: number) => Math.max(0, Math.floor(minute / 60) * 60 - 60);
+  const start = Math.floor(startOfDay / 60) * 60;
   if (days.includes(dayKeyOf(now))) {
     const minute = now.getHours() * 60 + now.getMinutes();
-    return minute >= DAY_START && minute < DAY_END ? Math.max(0, minute - 60) : DAY_START;
+    return minute >= DAY_START && minute < DAY_END ? hourBefore(minute) : start;
   }
-  const first = pieces.length === 0 ? DAY_START : Math.min(...pieces.map((piece) => piece.startMinute));
-  return first < DAY_START ? Math.max(0, first - 60) : DAY_START;
+  const first = pieces.length === 0 ? start : Math.min(...pieces.map((piece) => piece.startMinute));
+  return first < start ? hourBefore(first) : start;
 }
 
 /** The bookings of the week a list shows, by day piece, for the grid (cancelled ones too). */
@@ -128,4 +132,19 @@ export function eventPieces(events: readonly CalendarEventItem[], days: readonly
   return events
     .filter((event) => !event.allDay)
     .flatMap((event) => piecesOf(event.id, event.startsAt, event.endsAt, days));
+}
+
+/**
+ * The week's days an all day event covers. Its dates are calendar dates, kept as midnight UTC with the end day
+ * excluded (as the calendars give them), so they are read by date, never moved into the member's zone, where a
+ * zone west of UTC would put them on the day before.
+ */
+export function allDayKeys(
+  event: Pick<CalendarEventItem, 'startsAt' | 'endsAt'>,
+  days: readonly string[],
+): readonly string[] {
+  const first = event.startsAt.slice(0, 10);
+  const end = event.endsAt.slice(0, 10);
+  // A one day event whose end was stored on its own date still covers that day.
+  return days.filter((key) => key >= first && (key < end || key === first));
 }

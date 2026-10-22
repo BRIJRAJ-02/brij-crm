@@ -164,7 +164,6 @@ async function renderWeek(blocks: readonly TimeBlockOccurrence[], bookings: read
         pages={[]}
         connections={[]}
         calendars={noCalendars}
-        onMakeDefault={() => undefined}
         onDismissNotice={() => undefined}
         locale="en-GB"
         onSearch={() => undefined}
@@ -378,7 +377,6 @@ describe('cancelling from the list', () => {
           search={{ week, day: wednesday, tab: 'upcoming', source: 'all' }}
           meetings={() => upcoming}
           calendars={noCalendars}
-          onMakeDefault={() => undefined}
           onDismissNotice={() => undefined}
           objects={[]}
           pages={[]}
@@ -444,7 +442,6 @@ describe('the list rows', () => {
           search={{ week, day: wednesday, tab: 'upcoming', source: 'all' }}
           meetings={() => upcoming}
           calendars={noCalendars}
-          onMakeDefault={() => undefined}
           onDismissNotice={() => undefined}
           objects={[people]}
           pages={[]}
@@ -500,7 +497,6 @@ describe('the list rows', () => {
           search={{ week, day: wednesday, tab: 'upcoming', source: 'all' }}
           meetings={() => upcoming}
           calendars={noneConnected}
-          onMakeDefault={() => undefined}
           onDismissNotice={() => undefined}
           objects={[]}
           pages={[]}

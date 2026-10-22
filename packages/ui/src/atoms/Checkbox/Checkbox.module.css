@@ -5,6 +5,8 @@
   .field {
     display: inline-flex;
     flex-direction: column;
+    min-inline-size: 0;
+    max-inline-size: 100%;
   }
 
   /* Positioned, so React Aria's visually hidden input stays inside the control
@@ -20,54 +22,6 @@
     -webkit-tap-highlight-color: transparent;
   }
 
-  /* A data hue (`hue`): the box tinted with the hue's tag background, and
-     checked, edged and ticked in its tag text, the pair tags already hold to
-     contrast in both themes. The unchecked edge stays control-border. */
-  .root[data-hue='gray'] {
-    --check-fill: var(--tag-gray-bg);
-    --check-ink: var(--tag-gray-text);
-  }
-
-  .root[data-hue='blue'] {
-    --check-fill: var(--tag-blue-bg);
-    --check-ink: var(--tag-blue-text);
-  }
-
-  .root[data-hue='green'] {
-    --check-fill: var(--tag-green-bg);
-    --check-ink: var(--tag-green-text);
-  }
-
-  .root[data-hue='purple'] {
-    --check-fill: var(--tag-purple-bg);
-    --check-ink: var(--tag-purple-text);
-  }
-
-  .root[data-hue='orange'] {
-    --check-fill: var(--tag-orange-bg);
-    --check-ink: var(--tag-orange-text);
-  }
-
-  .root[data-hue='sky'] {
-    --check-fill: var(--tag-sky-bg);
-    --check-ink: var(--tag-sky-text);
-  }
-
-  .root[data-hue='yellow'] {
-    --check-fill: var(--tag-yellow-bg);
-    --check-ink: var(--tag-yellow-text);
-  }
-
-  .root[data-hue='red'] {
-    --check-fill: var(--tag-red-bg);
-    --check-ink: var(--tag-red-text);
-  }
-
-  .root[data-hue='lime'] {
-    --check-fill: var(--tag-lime-bg);
-    --check-ink: var(--tag-lime-text);
-  }
-
   .box {
     display: grid;
     flex: none;
@@ -77,9 +31,9 @@
     margin-block-start: var(--space-2);
     border: var(--border-width-hairline) solid var(--control-border);
     border-radius: var(--radius-xs);
-    background: var(--check-fill, var(--surface-raised));
+    background: var(--surface-raised);
     box-shadow: var(--shadow-xs);
-    color: var(--check-ink, var(--on-accent));
+    color: var(--on-accent);
     transition:
       background-color var(--duration-hover) var(--ease-hover),
       border-color var(--duration-hover) var(--ease-hover);
@@ -88,8 +42,8 @@
   /* The edge is accent-line, which holds 3:1 on selected rows too. */
   .root[data-selected] .box,
   .root[data-indeterminate] .box {
-    border-color: var(--check-ink, var(--accent-line));
-    background: var(--check-fill, var(--accent));
+    border-color: var(--accent-line);
+    background: var(--accent);
   }
 
   @media (hover: hover) and (pointer: fine) {
@@ -120,6 +74,22 @@
   .root[data-invalid][data-focus-visible] .box {
     outline: var(--border-width-hairline) solid var(--accent-line);
     outline-offset: var(--border-width-hairline);
+  }
+
+  /* `leading`: after the box (a calendar's colour dot and name), centred on the first line, shrinking so a long
+     name is cut with an ellipsis rather than mid letter. */
+  .root:has(> .leading) {
+    min-inline-size: 0;
+    max-inline-size: 100%;
+  }
+
+  .leading {
+    display: inline-flex;
+    flex: 0 1 auto;
+    align-items: center;
+    min-inline-size: 0;
+    min-block-size: calc(var(--size-check) + var(--space-4));
+    overflow: hidden;
   }
 
   .label[data-described] {

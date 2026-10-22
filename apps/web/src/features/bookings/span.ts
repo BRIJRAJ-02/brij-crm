@@ -48,3 +48,47 @@ export function workingStartOf(availability: BookingAvailability | undefined, da
   const [hours = 9, minutes = 0] = first.split(':').map(Number);
   return hours * 60 + minutes;
 }
+
+/** "09:30" as minutes from midnight ("24:00" is 1440). */
+function minuteOf(clock: string): number {
+  const [hours = 0, minutes = 0] = clock.split(':').map(Number);
+  return hours * 60 + minutes;
+}
+
+/**
+ * Whether two zones read the same clock on a day: the same name, or the same offset at its noon (a browser may name
+ * India "Asia/Calcutta" while the schedule says "Asia/Kolkata").
+ */
+function sameClock(a: string, b: string, dayKey: string): boolean {
+  if (a === b) return true;
+  const noon = dayStart(dayKey);
+  noon.setHours(12);
+  const offset = (timeZone: string) => {
+    try {
+      return new Intl.DateTimeFormat('en-US', { timeZone, timeZoneName: 'longOffset' })
+        .formatToParts(noon)
+        .find((part) => part.type === 'timeZoneName')?.value;
+    } catch {
+      return undefined;
+    }
+  };
+  const first = offset(a);
+  return first !== undefined && first === offset(b);
+}
+
+/**
+ * The member's open hours on a day, for shading the rest of the week grid: that date's override when there is one
+ * (no ranges is a day off), else their weekly hours for its weekday. Undefined (no shading) when the hours are
+ * unknown, or kept in another zone than the one the week is drawn in, where they would shade the wrong hours.
+ */
+export function openHoursOf(
+  availability: BookingAvailability | undefined,
+  dayKey: string,
+  zone: string,
+): readonly { readonly startMinute: number; readonly endMinute: number }[] | undefined {
+  if (availability === undefined || !sameClock(availability.timeZone, zone, dayKey)) return undefined;
+  const weekday = WEEKDAY_KEYS[dayStart(dayKey).getDay()] ?? 'mon';
+  const ranges =
+    availability.overrides.find((override) => override.date === dayKey)?.ranges ?? availability.weekly[weekday];
+  return ranges.map(([start, end]) => ({ startMinute: minuteOf(start), endMinute: minuteOf(end) }));
+}

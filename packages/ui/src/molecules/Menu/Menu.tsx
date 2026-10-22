@@ -442,6 +442,11 @@ export function MenuItem(props: MenuItemProps) {
 export interface MenuSectionProps {
   /** The section's heading ("Company attributes"). */
   readonly label: string;
+  /**
+   * Keeps the heading for screen readers only (the section's name): a group whose heading would only add height,
+   * such as a schedule's actions when there is one schedule (the owner, 22 October 2026).
+   */
+  readonly isLabelHidden?: boolean;
   readonly children: ReactNode;
   /**
    * The section's own selection, over the menu's: `none` makes its items
@@ -449,13 +454,32 @@ export interface MenuSectionProps {
    * switch to), so they read as menu items, never as choices.
    */
   readonly selectionMode?: 'none' | 'single' | 'multiple';
+  /**
+   * The section's own chosen items, with `selectionMode`: a menu of two groups that each take one choice (Bookings'
+   * Filter: which meetings show, and which link), so each reads and behaves as its own single choice.
+   */
+  readonly selectedKeys?: Iterable<MenuKey>;
+  readonly onSelectionChange?: (keys: ReadonlySet<MenuKey>) => void;
 }
 
 /** A labelled group of items in a Menu. */
-export function MenuSection({ label, children, selectionMode }: MenuSectionProps) {
+export function MenuSection({
+  label,
+  isLabelHidden = false,
+  children,
+  selectionMode,
+  selectedKeys,
+  onSelectionChange,
+}: MenuSectionProps) {
   return (
-    <AriaMenuSection className={styles.section} {...(selectionMode === undefined ? {} : { selectionMode })}>
-      <Header className={styles.heading}>{label}</Header>
+    <AriaMenuSection
+      className={styles.section}
+      {...(isLabelHidden ? { 'aria-label': label } : {})}
+      {...(selectionMode === undefined ? {} : { selectionMode })}
+      {...(selectedKeys === undefined ? {} : { selectedKeys })}
+      {...selectionHandler(onSelectionChange)}
+    >
+      {!isLabelHidden && <Header className={styles.heading}>{label}</Header>}
       {children}
     </AriaMenuSection>
   );

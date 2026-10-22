@@ -1,6 +1,8 @@
-/* AsideLayout: the aside at the start in a size-measure column, space-16 from
-   the main column, which takes the rest. Without the aside (folded, or on a
-   narrow page, where it opens as a sheet) the main column takes the width. */
+/* AsideLayout: the aside at the start in a size-menu column, space-16
+   from the main column, which takes the rest. Without the aside (folded, or
+   on a narrow page, where it opens as a sheet) the main column takes the
+   width. Filling its parent, it is flush: no gap, the aside padded and
+   parted from the main column by a hairline, scrolling on its own. */
 @layer components {
   .root {
     display: grid;
@@ -11,7 +13,7 @@
   }
 
   .root[data-aside] {
-    grid-template-columns: var(--size-measure) minmax(0, 1fr);
+    grid-template-columns: var(--size-menu) minmax(0, 1fr);
   }
 
   .aside {
@@ -22,7 +24,8 @@
     min-inline-size: 0;
   }
 
-  /* Filling its parent: one row the height it is given; the main column passes that height on, the aside stays its own. */
+  /* Filling its parent: one row the height it is given; the main column passes that height on and scrolls what
+     overflows it (a long list), so sticky headers inside it stick to its top. */
   .root[data-fill] {
     flex: 1;
     grid-template-rows: minmax(0, 1fr);
@@ -37,6 +40,25 @@
   .root[data-fill] .main {
     display: flex;
     flex-direction: column;
+    gap: var(--space-16);
     min-block-size: 0;
+    overflow-y: auto;
+  }
+
+  /* Flush: no gap, the aside padded and parted from the main column by a hairline, scrolling on its own. */
+  .root[data-flush] {
+    gap: 0;
+  }
+
+  .root[data-flush] .aside {
+    display: flex;
+    flex-direction: column;
+    align-self: stretch;
+    gap: var(--space-16);
+    min-block-size: 0;
+    /* The page gutter at its sides, so its items start on the line the tabs and the title start on. */
+    padding: var(--space-12) var(--space-16);
+    overflow-y: auto;
+    border-inline-end: var(--border-width-hairline) solid var(--border);
   }
 }

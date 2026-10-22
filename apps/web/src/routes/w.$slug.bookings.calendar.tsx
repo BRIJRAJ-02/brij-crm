@@ -14,7 +14,7 @@ import { BookingsCalendarScreen, BookingsFailed } from '../features/bookings/Boo
 import { bookingsSearchOf, parseBookingsSearch, rawOf } from '../features/bookings/search.ts';
 import { strings } from '../features/bookings/strings.ts';
 import { hostActions } from '../features/bookings/hostActions.ts';
-import { workingStartOf } from '../features/bookings/span.ts';
+import { openHoursOf, workingStartOf } from '../features/bookings/span.ts';
 import { addDays, weekRange } from '../features/bookings/week.ts';
 import { browserZone } from '../features/booking/zone.ts';
 import { firstDayFor, useFirstDay } from '../features/workspace/first-day.ts';
@@ -109,12 +109,12 @@ function Calendar({ objects, pages, connections, availability }: CalendarLoaded)
       pages={pages}
       connections={connections}
       calendars={data.calendar.calendars(slug)}
-      onMakeDefault={(calendarId) => void data.calendar.setDestination(slug, calendarId)}
       onDismissNotice={() => void data.calendar.dismissCalendarNotice(slug)}
       locale={navigator.languages[0] ?? 'en-GB'}
       onRemoveBlock={(blockId) => data.bookings.blocks.remove(slug, blockId)}
       onBlock={(draft, preview) => data.bookings.blocks.create(slug, draft, preview)}
       workingStart={(dayKey) => workingStartOf(availability, dayKey)}
+      openHours={(dayKey) => openHoursOf(availability, dayKey, browserZone())}
       onBookAsHost={async (meeting) => {
         await data.bookings.bookAsHost(slug, { ...meeting, guests: [...meeting.guests] });
       }}

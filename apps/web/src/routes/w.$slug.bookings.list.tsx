@@ -76,7 +76,6 @@ function List({ objects, pages }: ListLoaded) {
       search={search}
       meetings={(query) => data.bookings.meetings(slug, query)}
       calendars={data.calendar.calendars(slug)}
-      onMakeDefault={(calendarId) => void data.calendar.setDestination(slug, calendarId)}
       onDismissNotice={() => void data.calendar.dismissCalendarNotice(slug)}
       objects={objects}
       pages={pages}

@@ -1,6 +1,7 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
 import { expect, fn } from 'storybook/test';
 import { Button } from '../../atoms/Button/Button.tsx';
+import { Stage } from '../../workbench/Stage/Stage.tsx';
 import { EmptyState } from './EmptyState.tsx';
 
 const meta = {
@@ -34,6 +35,21 @@ export const Row: Story = {
     const status = canvas.getByRole('status');
     await expect(status).toHaveTextContent('No open tasks.');
     await expect(Math.round(status.getBoundingClientRect().height)).toBe(34);
+  },
+};
+
+/** Fill: centred in the whole height of its slot, for an empty view with the whole area. */
+export const Fill: Story = {
+  parameters: { crm: { screenshot: false } },
+  args: { title: 'Nothing coming up', children: 'Bookings from your booking pages show up here.', layout: 'fill' },
+  render: (args) => (
+    <Stage height="grid">
+      <EmptyState {...args} />
+    </Stage>
+  ),
+  play: async ({ canvas }) => {
+    // It takes the slot's height (a header and twelve rows), far more than its own block needs.
+    await expect(canvas.getByRole('status').getBoundingClientRect().height).toBeGreaterThan(300);
   },
 };
 

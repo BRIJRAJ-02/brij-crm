@@ -5,8 +5,10 @@
    pushed in --indent steps of --nest, then --lane of --lanes, --span wide. Bookings are accent, the member's own calendar events
    quieter in their calendar's hue, the time they closed hatched (a solid
    edge for a block, dashed for a hold), cancelled ones struck through; today's
-   column is tinted and its date solid accent. Below
-   480px of its container only the selected day's column shows. */
+   date is a small accent circle (Google Calendar's), its column untinted.
+   Hours outside the member's open hours are a step darker. An all day row
+   sits over the hours when something is all day. Below 480px of its
+   container only the selected day's column shows. */
 @layer components {
   .root {
     --hour: var(--size-toolbar);
@@ -21,6 +23,7 @@
     --span: 1;
     --nest: var(--space-12);
 
+    position: relative;
     display: flex;
     flex-direction: column;
     overflow: hidden;
@@ -31,6 +34,7 @@
   }
 
   .head,
+  .allDay,
   .body {
     display: grid;
     grid-template-columns: calc(var(--axis) * 2) repeat(7, minmax(0, 1fr));
@@ -40,20 +44,21 @@
     border-block-end: var(--border-width-hairline) solid var(--border);
   }
 
+  /* A day's head: its weekday over its date, the date in a small circle that is accent on today (as Google
+     Calendar marks today) and the selected surface on the picked day. */
   .dayButton {
     display: flex;
-    align-items: baseline;
-    justify-content: center;
-    gap: var(--space-4);
-    margin: var(--space-4);
-    padding: var(--space-4) var(--space-6);
+    flex-direction: column;
+    align-items: center;
+    gap: var(--space-2);
+    margin: var(--space-2);
+    padding: var(--space-2);
     border: none;
-    border-radius: var(--radius-full);
+    border-radius: var(--radius-sm);
     background: transparent;
     color: var(--text);
     font: var(--text-body);
     letter-spacing: var(--tracking-body);
-    transition: background var(--duration-hover) var(--ease-hover);
   }
 
   .dayButton[data-past] {
@@ -61,22 +66,36 @@
   }
 
   .dayNumber {
+    display: grid;
+    place-items: center;
+    min-inline-size: var(--size-control);
+    block-size: var(--size-control);
+    padding-inline: var(--space-2);
+    border-radius: var(--radius-full);
     font: var(--text-body-strong);
+    font-variant-numeric: tabular-nums;
     letter-spacing: var(--tracking-body-strong);
+    transition: background var(--duration-hover) var(--ease-hover);
   }
 
-  .dayButton[aria-pressed='true'] {
+  .dayButton[aria-pressed='true'] .dayNumber {
     background: var(--surface-selected);
   }
 
-  .dayButton[data-today] {
+  .dayButton[data-today] .dayNumber {
     background: var(--accent);
     color: var(--on-accent);
   }
 
+  @media (hover: hover) and (pointer: fine) {
+    .dayButton:hover:not([data-today], [aria-pressed='true']) .dayNumber {
+      background: var(--surface-hover);
+    }
+  }
+
   .dayButton:focus-visible {
     outline: var(--border-width-thick) solid var(--accent-line);
-    outline-offset: var(--border-width-hairline);
+    outline-offset: calc(-1 * var(--border-width-thick));
   }
 
   .weekday {
@@ -86,7 +105,131 @@
   }
 
   .dayButton[data-today] .weekday {
-    color: var(--on-accent);
+    color: var(--link);
+    font: var(--text-label-strong);
+    letter-spacing: var(--tracking-label-strong);
+  }
+
+  /* The all day row: its label in the axis, each day's items stacked as small chips in their calendar's hue. */
+  .allDay {
+    border-block-end: var(--border-width-hairline) solid var(--border);
+  }
+
+  .allDayLabel {
+    align-self: center;
+    padding-inline-end: var(--space-6);
+    color: var(--text-tertiary);
+    font: var(--text-label);
+    letter-spacing: var(--tracking-label);
+    text-align: end;
+  }
+
+  .allDayCell {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-2);
+    min-inline-size: 0;
+    padding: var(--space-2);
+    border-inline-start: var(--border-width-hairline) solid var(--border-subtle);
+  }
+
+  .allDayItem {
+    overflow: hidden;
+    min-inline-size: 0;
+    min-block-size: var(--size-chip);
+    padding: 0 var(--space-6);
+    border: none;
+    border-radius: var(--radius-sm);
+    background: var(--tag-gray-bg);
+    color: var(--tag-gray-text);
+    font: var(--text-label-strong);
+    letter-spacing: var(--tracking-label-strong);
+    text-align: start;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .allDayItem[data-hue='blue'] {
+    background: var(--tag-blue-bg);
+    color: var(--tag-blue-text);
+  }
+
+  .allDayItem[data-hue='green'] {
+    background: var(--tag-green-bg);
+    color: var(--tag-green-text);
+  }
+
+  .allDayItem[data-hue='purple'] {
+    background: var(--tag-purple-bg);
+    color: var(--tag-purple-text);
+  }
+
+  .allDayItem[data-hue='orange'] {
+    background: var(--tag-orange-bg);
+    color: var(--tag-orange-text);
+  }
+
+  .allDayItem[data-hue='sky'] {
+    background: var(--tag-sky-bg);
+    color: var(--tag-sky-text);
+  }
+
+  .allDayItem[data-hue='yellow'] {
+    background: var(--tag-yellow-bg);
+    color: var(--tag-yellow-text);
+  }
+
+  .allDayItem[data-hue='red'] {
+    background: var(--tag-red-bg);
+    color: var(--tag-red-text);
+  }
+
+  .allDayItem[data-hue='lime'] {
+    background: var(--tag-lime-bg);
+    color: var(--tag-lime-text);
+  }
+
+  .allDayItem[data-open],
+  .allDayItem:focus-visible {
+    outline: var(--border-width-hairline) solid var(--accent-line);
+    outline-offset: var(--border-width-hairline);
+    box-shadow: var(--shadow-focus);
+  }
+
+  /* Outside the member's open hours: a step darker than the grid, under everything drawn on it. */
+  .offHours {
+    position: absolute;
+    inset-block-start: calc(var(--start) / 60 * var(--hour));
+    inset-inline: 0;
+    block-size: calc(var(--length) / 60 * var(--hour));
+    /* The hour lines carry on through it, lined up with the column's. */
+    background-color: var(--surface-subtle);
+    background-image: repeating-linear-gradient(
+      to bottom,
+      var(--border-subtle) 0,
+      var(--border-subtle) var(--border-width-hairline),
+      transparent var(--border-width-hairline),
+      transparent var(--hour)
+    );
+    background-position: 0 calc(var(--start) / -60 * var(--hour));
+    pointer-events: none;
+  }
+
+  /* A week with nothing on it: one quiet line in the middle of the grid, never in the way of drawing. */
+  .empty {
+    position: absolute;
+    inset-block-start: 50%;
+    inset-inline-start: 50%;
+    margin: 0;
+    padding: var(--space-4) var(--space-12);
+    border: var(--border-width-hairline) solid var(--border);
+    border-radius: var(--radius-full);
+    background: var(--surface-raised);
+    color: var(--text-secondary);
+    font: var(--text-body);
+    letter-spacing: var(--tracking-body);
+    pointer-events: none;
+    translate: -50% -50%;
   }
 
   .scroller {
@@ -99,9 +242,12 @@
   }
 
   /* Filling its parent: the grid takes the height it is given and the hours scroll inside, never fewer than six. */
+  /* It is the page itself there, so it is flush: no card edge or corners round it (the owner, 22 October 2026). */
   .root[data-fill] {
     flex: 1;
     min-block-size: 0;
+    border: none;
+    border-radius: 0;
   }
 
   .root[data-fill] .scroller {
@@ -137,12 +283,6 @@
       transparent var(--border-width-hairline),
       transparent var(--hour)
     );
-  }
-
-  .column[data-today] {
-    --column-surface: var(--surface-column);
-
-    background-color: var(--surface-column);
   }
 
   .column[data-drawable] {
@@ -414,8 +554,13 @@
       grid-template-columns: calc(var(--axis) * 2) minmax(0, 1fr);
     }
 
-    .column:not([data-selected]) {
+    .column:not([data-selected]),
+    .allDayCell:not([data-selected]) {
       display: none;
+    }
+
+    .allDay {
+      grid-template-columns: calc(var(--axis) * 2) minmax(0, 1fr);
     }
 
     .weekday {

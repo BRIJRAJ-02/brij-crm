@@ -1,5 +1,5 @@
+import type { ReactNode } from 'react';
 import { CheckboxButton, CheckboxField, FieldError, Text } from 'react-aria-components';
-import type { Hue } from '../../hue.ts';
 import { Icon } from '../Icon/Icon.tsx';
 import { VisuallyHidden } from '../VisuallyHidden/VisuallyHidden.tsx';
 import styles from './Checkbox.module.css';
@@ -29,10 +29,11 @@ export interface CheckboxProps {
   readonly slot?: 'selection';
   readonly value?: string;
   /**
-   * Draws the box in a data hue instead of the accent: a calendar's colour in the calendars list, where the box is
-   * both the switch and the calendar's key.
+   * Something after the box, inside the control so pressing it toggles, hidden from screen readers (the label says
+   * it): a calendar's colour dot and name (a StatusDot, with `isLabelHidden`), which shrinks and cuts its name with
+   * an ellipsis when the row is narrow.
    */
-  readonly hue?: Hue;
+  readonly leading?: ReactNode;
 }
 
 /**
@@ -54,7 +55,7 @@ export function Checkbox({
   name,
   value,
   slot,
-  hue,
+  leading,
 }: CheckboxProps) {
   return (
     <CheckboxField
@@ -70,12 +71,17 @@ export function Checkbox({
       {...(name === undefined ? {} : { name })}
       {...(value === undefined ? {} : { value })}
     >
-      <CheckboxButton className={styles.root} data-hue={hue}>
+      <CheckboxButton className={styles.root}>
         {({ isSelected: checked, isIndeterminate: partial }) => (
           <>
             <span className={styles.box} aria-hidden="true">
               {partial ? <Icon name="minus" size="xs" /> : checked && <Icon name="check" size="xs" />}
             </span>
+            {leading !== undefined && (
+              <span className={styles.leading} aria-hidden="true">
+                {leading}
+              </span>
+            )}
             {isLabelHidden ? (
               <VisuallyHidden>{label}</VisuallyHidden>
             ) : (

@@ -58,6 +58,21 @@ export interface WeekCalendarBlock {
   readonly provider?: ProviderName;
 }
 
+/** One all day item on one day of the week (an event that runs over several days is one per day). */
+export interface WeekCalendarAllDay {
+  readonly id: string;
+  readonly dayKey: string;
+  readonly title: string;
+  /** Its calendar's hue, as an event block's. */
+  readonly hue?: Hue;
+}
+
+/** A stretch of a day, in minutes from its midnight, the end exclusive. */
+export interface WeekCalendarRange {
+  readonly startMinute: number;
+  readonly endMinute: number;
+}
+
 /** A span drawn on one day: minutes from its local midnight, the end exclusive (1440 is the next midnight). */
 export interface WeekCalendarSpan {
   readonly dayKey: string;
@@ -141,6 +156,32 @@ export interface WeekCalendarProps {
    * the screen closes a card whose block went.
    */
   readonly focusDay?: { readonly dayKey: string; readonly blockId?: string };
+  /**
+   * All day items, in a row of their own over the hours (shown only when there are some). Each is a chip in its
+   * calendar's hue that opens its card like a block.
+   */
+  readonly allDay?: readonly WeekCalendarAllDay[];
+  /**
+   * The member's open hours on a day (their availability). The hours outside them are shaded a step darker, as
+   * Google Calendar shades outside working hours. Answering undefined shades nothing that day; an empty list shades
+   * the whole day (a day off).
+   */
+  readonly openHours?: (dayKey: string) => readonly WeekCalendarRange[] | undefined;
+  /** A quiet line in the middle of the grid when the week has nothing on it ("No meetings this week"). */
+  readonly emptyHint?: string;
+}
+
+/** The parts of a day outside its open hours, in order. */
+function closedRanges(open: readonly WeekCalendarRange[]): readonly WeekCalendarRange[] {
+  const sorted = [...open].sort((a, b) => a.startMinute - b.startMinute);
+  const closed: WeekCalendarRange[] = [];
+  let at = 0;
+  for (const range of sorted) {
+    if (range.startMinute > at) closed.push({ startMinute: at, endMinute: range.startMinute });
+    at = Math.max(at, range.endMinute);
+  }
+  if (at < 1440) closed.push({ startMinute: at, endMinute: 1440 });
+  return closed;
 }
 
 /**
@@ -197,6 +238,9 @@ export function WeekCalendar({
   isLoading = false,
   isFill = false,
   focusDay,
+  allDay = [],
+  openHours,
+  emptyHint,
 }: WeekCalendarProps) {
   const scroller = useRef<HTMLDivElement>(null);
   const columns = useRef(new Map<string, HTMLDivElement>());
@@ -354,11 +398,55 @@ export function WeekCalendar({
             aria-label={day.isToday ? strings.today(day.label) : day.label}
             onClick={() => onSelectDay(day.key)}
           >
-            <span className={styles.dayNumber}>{day.dayNumber}</span>
             <span className={styles.weekday}>{day.weekday}</span>
+            <span className={styles.dayNumber}>{day.dayNumber}</span>
           </button>
         ))}
       </div>
+      {allDay.length > 0 && (
+        <div className={styles.allDay}>
+          <span className={styles.allDayLabel}>{strings.allDay}</span>
+          {days.map((day) => (
+            <div
+              key={day.key}
+              className={styles.allDayCell}
+              data-selected={day.key === selectedDay || undefined}
+              data-today={day.isToday || undefined}
+            >
+              {allDay
+                .filter((item) => item.dayKey === day.key)
+                .map((item) => (
+                  <button
+                    key={item.id}
+                    ref={(element) => {
+                      if (element === null) blockRefs.current.delete(item.id);
+                      else blockRefs.current.set(item.id, element);
+                    }}
+                    type="button"
+                    className={styles.allDayItem}
+                    data-hue={item.hue}
+                    data-open={item.id === openId || undefined}
+                    aria-haspopup="dialog"
+                    aria-expanded={item.id === openId}
+                    aria-label={strings.blockName(item.title, strings.allDayOn(day.label))}
+                    onClick={(event) => {
+                      if (item.id === openId) {
+                        onClose();
+                        return;
+                      }
+                      setAnchor(event.currentTarget);
+                      setCardPlacement('bottom start');
+                      anchorDay.current = day.key;
+                      onOpen(item.id);
+                    }}
+                  >
+                    {item.title}
+                  </button>
+                ))}
+            </div>
+          ))}
+        </div>
+      )}
       <div ref={scroller} className={styles.scroller}>
         <div className={styles.body}>
           <div className={styles.axis} aria-hidden="true">
@@ -464,6 +552,23 @@ export function WeekCalendar({
                       },
                     })}
               >
+                {/* Outside the member's hours: a step darker, under everything else. */}
+                {(() => {
+                  const open = openHours?.(day.key);
+                  return open === undefined
+                    ? null
+                    : closedRanges(open).map((range) => (
+                        <span
+                          key={range.startMinute}
+                          className={styles.offHours}
+                          aria-hidden="true"
+                          style={{
+                            '--start': String(range.startMinute),
+                            '--length': String(range.endMinute - range.startMinute),
+                          }}
+                        />
+                      ));
+                })()}
                 {/* The span drawn sits under bookings and events, so it never hides what it is drawn across. */}
                 {(dragging?.dayKey === day.key ? dragging : draft?.dayKey === day.key ? draft : undefined) !==
                   undefined && (
@@ -557,6 +662,9 @@ export function WeekCalendar({
           })}
         </div>
       </div>
+      {emptyHint !== undefined && !isLoading && blocks.length === 0 && allDay.length === 0 && (
+        <p className={styles.empty}>{emptyHint}</p>
+      )}
       {draft !== undefined && dragging === null && draftCard !== undefined && ghost !== null && (
         <Popover
           triggerRef={ghostRef}

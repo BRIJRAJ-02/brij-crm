@@ -26,6 +26,7 @@ import {
   Badge,
   BookingList,
   Button,
+  ButtonLink,
   Callout,
   DescriptionList,
   Disclosure,
@@ -33,6 +34,7 @@ import {
   Link,
   Menu,
   MenuItem,
+  MenuSection,
   MenuTrigger,
   Modal,
   PageColumn,
@@ -54,7 +56,6 @@ import { providerOf } from './provider.ts';
 import { useNow } from './useNow.ts';
 import { createPortal } from 'react-dom';
 import { browserZone } from '../booking/zone.ts';
-import { availabilityHref } from '../booking/links.ts';
 import { linksHref } from '../captures/tabs.ts';
 import { recordLinks, type RecordLink } from '../records/timeline.ts';
 import { belongsElsewhere, isUndoKey, type KeyTarget } from '../workspace/undo.ts';
@@ -72,6 +73,7 @@ import { strings } from './strings.ts';
 import { useBookingsToolbarSlot } from './toolbarSlot.ts';
 import {
   addDays,
+  allDayKeys,
   bookingPieces,
   dayKeyOf,
   eventPieces,
@@ -121,43 +123,93 @@ function whenOf(startsAt: string, endsAt: string, locale: string): string {
 }
 
 /**
- * Filter: one link's bookings (the calendars are the panel beside the view). With fewer than two links there is
- * nothing to filter, and no button. Filtered, it reads "Filter · 1", with a quiet clear beside it.
+ * An all day event's days: its dates, read as calendar dates (kept as midnight UTC, the end day left out), never
+ * moved into the local zone. "Friday, October 23 · All day", or "Friday, October 23 to Saturday, October 24".
+ */
+function allDayWhenOf(startsAt: string, endsAt: string, locale: string): string {
+  const format = new Intl.DateTimeFormat(locale, { weekday: 'long', day: 'numeric', month: 'long' });
+  const first = new Date(`${startsAt.slice(0, 10)}T12:00:00`);
+  const last = new Date(`${endsAt.slice(0, 10)}T12:00:00`);
+  last.setDate(last.getDate() - 1);
+  return last <= first
+    ? `${format.format(first)} · ${strings.allDay}`
+    : strings.dayToDay(format.format(first), format.format(last));
+}
+
+/**
+ * Filter: one link's bookings (the calendars are the panel beside the view), and on the list which meetings show
+ * (All, Bookings or Calendar events), each its own group of one choice. With nothing to choose, no button. Filtered,
+ * it reads "Filter · N", with a quiet clear beside it.
  */
 function FilterMenu({
   search,
   pages,
   onSearch,
+  hasSources = false,
 }: {
   readonly search: BookingsSearch;
   readonly pages: readonly BookingPageView[];
   readonly onSearch: (next: Partial<BookingsSearch>) => void;
+  /** The list: which meetings show is chosen here too. */
+  readonly hasSources?: boolean;
 }) {
-  if (pages.length < 2) return null;
-  const count = search.link === undefined ? 0 : 1;
+  const hasLinks = pages.length >= 2;
+  if (!hasLinks && !hasSources) return null;
+  const count =
+    (search.link === undefined ? 0 : 1) + (hasSources && search.source !== 'all' && search.link === undefined ? 1 : 0);
+  // A link's bookings are bookings only (calendar events have no page), so Show says so while one is picked.
+  const shownSource = search.link === undefined ? search.source : 'bookings';
+  const first = (keys: ReadonlySet<string | number>) => [...keys].map(String)[0];
   return (
     <>
       <MenuTrigger>
         <Button icon="list-filter">{count === 0 ? strings.filter : strings.filterCount(count)}</Button>
-        <Menu
-          label={strings.filterMenu}
-          selectionMode="single"
-          selectedKeys={[search.link ?? 'all']}
-          onSelectionChange={(keys) => {
-            const [key] = [...keys].map(String);
-            onSearch({ link: key === undefined || key === 'all' ? undefined : key });
-          }}
-        >
-          <MenuItem id="all">{strings.allLinks}</MenuItem>
-          {pages.map((page) => (
-            <MenuItem key={page.id} id={page.id}>
-              {page.title}
-            </MenuItem>
-          ))}
+        <Menu label={strings.filterMenu}>
+          {hasSources && (
+            <MenuSection
+              label={strings.sourceLabel}
+              selectionMode="single"
+              selectedKeys={[shownSource]}
+              onSelectionChange={(keys) => {
+                const source = SOURCES.find((each) => each === first(keys));
+                if (source !== undefined) onSearch({ source, ...(source === 'bookings' ? {} : { link: undefined }) });
+              }}
+            >
+              {SOURCES.map((id) => (
+                <MenuItem key={id} id={id}>
+                  {strings.sources[id]}
+                </MenuItem>
+              ))}
+            </MenuSection>
+          )}
+          {hasLinks && (
+            <MenuSection
+              label={strings.links}
+              selectionMode="single"
+              // Its own key, apart from Show's "all": one menu holds both groups.
+              selectedKeys={[search.link ?? 'all-links']}
+              onSelectionChange={(keys) => {
+                const link = first(keys);
+                if (link !== undefined) onSearch({ link: link === 'all-links' ? undefined : link });
+              }}
+            >
+              <MenuItem id="all-links">{strings.allLinks}</MenuItem>
+              {pages.map((page) => (
+                <MenuItem key={page.id} id={page.id}>
+                  {page.title}
+                </MenuItem>
+              ))}
+            </MenuSection>
+          )}
         </Menu>
       </MenuTrigger>
       {count > 0 && (
-        <Button variant="ghost" icon="x" label={strings.clearFilters} onPress={() => onSearch({ link: undefined })} />
+        <Button
+          variant="ghost"
+          icon="x"
+          label={strings.clearFilters}
+          onPress={() => onSearch({ link: undefined, ...(hasSources ? { source: 'all' as const } : {}) })}
+        />
       )}
     </>
   );
@@ -336,7 +388,12 @@ function EventCard({
       <DescriptionList
         layout="stacked"
         items={[
-          { term: strings.when, description: whenOf(event.startsAt, event.endsAt, locale) },
+          {
+            term: strings.when,
+            description: event.allDay
+              ? allDayWhenOf(event.startsAt, event.endsAt, locale)
+              : whenOf(event.startsAt, event.endsAt, locale),
+          },
           { term: event.title, description: strings.fromCalendar },
           ...(connection === undefined ? [] : [{ term: strings.calendar, description: connection.accountEmail }]),
           ...(event.location === undefined ? [] : [{ term: strings.where, description: event.location }]),
@@ -545,12 +602,14 @@ export interface BookingsCalendarScreenProps {
   readonly connections: readonly CalendarConnectionView[];
   /** The member's accounts and calendars (spec 0024 milestone 5): each event's colour, and the calendars panel. */
   readonly calendars: CalendarsHeld<CalendarListState>;
-  /** Make default: new bookings go to this calendar (at once, put back with a toast when refused). */
-  readonly onMakeDefault: (calendarId: string) => void;
   /** Puts away the notice that new bookings moved to another calendar. */
   readonly onDismissNotice: () => void;
   readonly locale: string;
   readonly onSearch: (next: Partial<BookingsSearch>) => void;
+  /** The member's open hours on a day (their availability), to shade the rest; undefined when unknown. */
+  readonly openHours?: (
+    dayKey: string,
+  ) => readonly { readonly startMinute: number; readonly endMinute: number }[] | undefined;
   /** Reopens the time a block closed (spec 0027); settles once the server has it, throws on a refusal. */
   readonly onRemoveBlock: (blockId: string) => Promise<void>;
   /**
@@ -573,8 +632,8 @@ export interface BookingsCalendarScreenProps {
 /** Bookings › Calendar: the range, previous week, Today, next week and Filter, then the grid and the week's count. */
 export function BookingsCalendarScreen(props: BookingsCalendarScreenProps) {
   return (
-    // The week fills the view, its hours scrolling inside (the owner, 22 October 2026).
-    <PageColumn align="fill">
+    // The week fills the view edge to edge, its hours scrolling inside (the owner, 22 October 2026).
+    <PageColumn align="flush">
       <WeekView {...props} />
     </PageColumn>
   );
@@ -698,13 +757,17 @@ function WeekView(props: BookingsCalendarScreenProps) {
   const framed = (content: ReactNode) => (
     <CalendarsFrame
       isFill
+      isFlush
       slug={slug}
       search={search}
       calendars={props.calendars}
       panel={panel}
       onSearch={onSearch}
-      onMakeDefault={props.onMakeDefault}
       onDismissNotice={props.onDismissNotice}
+      jumpTo={{
+        value: days.includes(search.day) ? search.day : (days[0] ?? search.week),
+        onChange: (day) => onSearch({ week: weekOf(day, firstDay), day }),
+      }}
     >
       {content}
     </CalendarsFrame>
@@ -761,7 +824,8 @@ function WeekView(props: BookingsCalendarScreenProps) {
               new Intl.DateTimeFormat(locale, { hour: 'numeric' }).format(new Date(2000, 0, 1, hour))
             }
             now={{ dayKey: today, minute: now.getHours() * 60 + now.getMinutes() }}
-            scrollToMinute={scrollMinute(days, now, [])}
+            scrollToMinute={scrollMinute(days, now, [], workingStart(today))}
+            {...(props.openHours === undefined ? {} : { openHours: props.openHours })}
             onOpen={() => undefined}
             onClose={() => undefined}
           />,
@@ -783,6 +847,19 @@ function WeekView(props: BookingsCalendarScreenProps) {
   }
   const bookings = state.bookings.filter((booking) => search.link === undefined || booking.pageId === search.link);
   const events = state.events.filter(isShownEvent);
+  // All day events, one chip a day in the row over the hours (by their dates, never moved into the local zone).
+  const allDay = events
+    .filter((event) => event.allDay)
+    .flatMap((event) =>
+      allDayKeys(event, days).map((dayKey) => ({
+        id: `allday:${event.id}:${dayKey}`,
+        eventId: event.id,
+        dayKey,
+        title: event.title,
+        hue: calendarById.get(event.calendarId)?.hue ?? connectionHue.get(event.connectionId),
+      })),
+    );
+  const byAllDay = new Map(allDay.map((item) => [item.id, item]));
   const byBooking = new Map(bookings.map((booking) => [booking.id, booking]));
   const byEvent = new Map(events.map((event) => [event.id, event]));
   const byTurn = new Map(state.blocks.map((turn) => [turn.key, turn]));
@@ -892,7 +969,13 @@ function WeekView(props: BookingsCalendarScreenProps) {
     setFocusDay({ dayKey: asked.dayKey, ...(asked.kind === 'remove' ? {} : { blockId: asked.pieceId }) });
   };
   const openBooking = open?.kind === 'booking' ? byBooking.get(open.piece.sourceId) : undefined;
-  const openEvent = open?.kind === 'event' ? byEvent.get(open.piece.sourceId) : undefined;
+  const openAllDay = openId === undefined ? undefined : byAllDay.get(openId);
+  const openEvent =
+    open?.kind === 'event'
+      ? byEvent.get(open.piece.sourceId)
+      : openAllDay === undefined
+        ? undefined
+        : byEvent.get(openAllDay.eventId);
   const openTurn = open?.kind === 'closed' ? byTurn.get(open.piece.sourceId) : undefined;
   const openBusy = open?.kind === 'busy' ? byBusy.get(open.piece.sourceId) : undefined;
   const live = bookings.filter((booking) => booking.status === 'confirmed').length;
@@ -906,6 +989,14 @@ function WeekView(props: BookingsCalendarScreenProps) {
             label={strings.weekLabel(range)}
             days={weekDayItems(days, today, locale)}
             blocks={blocks}
+            allDay={allDay.map(({ id, dayKey, title, hue }) => ({
+              id,
+              dayKey,
+              title,
+              ...(hue === undefined ? {} : { hue }),
+            }))}
+            {...(props.openHours === undefined ? {} : { openHours: props.openHours })}
+            emptyHint={strings.noMeetingsWeek}
             isFill
             selectedDay={days.includes(search.day) ? search.day : (days[0] ?? search.week)}
             onSelectDay={(day) => onSearch({ day })}
@@ -915,6 +1006,7 @@ function WeekView(props: BookingsCalendarScreenProps) {
               days,
               now,
               pieces.map(({ piece }) => piece),
+              workingStart(today),
             )}
             {...(openId === undefined ? {} : { openId })}
             detail={
@@ -1169,15 +1261,19 @@ function groupsOf(
   const groups: { id: string; label: string; rows: BookingListGroup['rows'][number][] }[] = [];
   for (const item of items) {
     const { startsAt, endsAt } = spanOf(item);
-    const start = new Date(startsAt);
-    const id = dayKeyOfInstant(startsAt);
+    // An all day event's dates are calendar dates (midnight UTC): read by date, never moved into the local zone.
+    const isAllDay = item.kind === 'event' && item.event.allDay;
+    const id = isAllDay ? startsAt.slice(0, 10) : dayKeyOfInstant(startsAt);
+    const start = isAllDay ? new Date(`${id}T12:00:00`) : new Date(startsAt);
     const videoUrl = item.kind === 'booking' ? item.booking.videoUrl : item.event.videoUrl;
     const isCancelled =
       item.kind === 'booking' ? item.booking.status === 'cancelled' : item.event.status === 'cancelled';
     const shared = {
       id: rowIdOf(item),
-      date: shortDate(start),
-      time: timeRange(startsAt, endsAt, locale),
+      // Under its day's band, a row says its time alone (the band says the day): the time on the date's line, bold,
+      // and nothing under it; an all day event says All day.
+      date: isAllDay ? strings.allDay : timeRange(startsAt, endsAt, locale),
+      time: '',
       // Join only while it can still be joined: not once cancelled, nor once it has ended.
       ...(videoUrl === undefined || isCancelled || Date.parse(endsAt) <= now.getTime()
         ? {}
@@ -1198,14 +1294,18 @@ function groupsOf(
               ...(me === undefined || item.booking.hostMemberId === me || item.booking.hostName === ''
                 ? {}
                 : { hostName: item.booking.hostName }),
-              // Round robin's state (spec 0029, AC-749) and a no show (spec 0043) say so, unless it was cancelled.
+              // Every booking says where it stands (the owner, 22 October 2026): Canceled (above), Needs a host
+              // (round robin, spec 0029, AC-749), No show (spec 0043), else Confirmed while it is ahead (a past one
+              // needs no tag). Calendar events have their calendar's dot instead.
               ...(item.booking.status === 'cancelled'
                 ? {}
                 : item.booking.needsHost
                   ? { badge: strings.needsHost, badgeTone: 'accent' as const }
                   : item.booking.noShow === true
                     ? { badge: strings.noShow }
-                    : {}),
+                    : Date.parse(item.booking.endsAt) > now.getTime()
+                      ? { badge: strings.status.confirmed }
+                      : {}),
               ...(item.booking.note === undefined ? {} : { note: item.booking.note }),
               ...(item.booking.guests.length === 0 ? {} : { attendees: item.booking.guests }),
             };
@@ -1232,7 +1332,7 @@ function groupsOf(
   return groups;
 }
 
-/** The list's bar: Upcoming · Past · Canceled, then All · Bookings · Calendar, the calendars and Filter. */
+/** The list's bar: Upcoming · Past · Canceled, then the calendars and Filter (which meetings, which link). */
 function ListBar({
   slug,
   search,
@@ -1264,19 +1364,10 @@ function ListBar({
       }
       end={
         <>
-          <SegmentedControl
-            label={strings.sourceLabel}
-            value={search.source}
-            onChange={(value) => {
-              const source = SOURCES.find((each) => each === value);
-              if (source !== undefined) onSearch({ source });
-            }}
-            segments={SOURCES.map((id) => ({ value: id, label: strings.sources[id] }))}
-          />
           {search.source !== 'bookings' && search.link === undefined && (
             <CalendarsToggle panel={panel} slug={slug} hasNoCalendar={hasNoCalendar} />
           )}
-          <FilterMenu search={search} pages={pages} onSearch={onSearch} />
+          <FilterMenu search={search} pages={pages} onSearch={onSearch} hasSources />
         </>
       }
     />
@@ -1294,7 +1385,6 @@ export interface BookingsListScreenProps {
   readonly meetings: (query: MeetingsQuery) => MeetingsHeld;
   /** The member's accounts and calendars: each event's colour and name, and the calendars panel. */
   readonly calendars: CalendarsHeld<CalendarListState>;
-  readonly onMakeDefault: (calendarId: string) => void;
   readonly onDismissNotice: () => void;
   readonly objects: readonly ObjectSummary[];
   readonly pages: readonly BookingPageView[];
@@ -1343,7 +1433,6 @@ export function BookingsListScreen({
   search,
   meetings,
   calendars,
-  onMakeDefault,
   onDismissNotice,
   objects,
   pages,
@@ -1424,37 +1513,40 @@ export function BookingsListScreen({
           groups={groupsOf(items, (calendarId) => byCalendar.get(calendarId), personHref, locale, me)}
           onOpen={setOpenId}
           emptyState={
-            search.link !== undefined || search.cal !== undefined ? (
+            search.link !== undefined || search.cal !== undefined || source !== 'all' ? (
               <EmptyState
+                layout="fill"
                 icon="calendar-days"
                 title={strings.noMatch}
                 actions={
-                  <Button variant="secondary" onPress={() => onSearch({ link: undefined, cal: undefined })}>
+                  <Button
+                    variant="secondary"
+                    onPress={() => onSearch({ link: undefined, cal: undefined, source: 'all' })}
+                  >
                     {strings.clearFilters}
                   </Button>
                 }
               />
-            ) : tab === 'upcoming' && source === 'bookings' ? (
+            ) : (
               <EmptyState
+                layout="fill"
                 icon="calendar-days"
                 title={strings.empty[tab].title}
                 actions={
-                  <>
-                    <Link href={linksHref(slug)}>{strings.openLinks}</Link>
-                    <Link href={availabilityHref(slug)}>{strings.openAvailability}</Link>
-                  </>
+                  tab === 'upcoming' ? (
+                    <>
+                      <ButtonLink variant="primary" icon="link" href={linksHref(slug)}>
+                        {strings.shareBookingPage}
+                      </ButtonLink>
+                      {calendarList.status === 'ready' && !hasCalendar && (
+                        <Link href={calendarSettingsHref(slug)}>{strings.connectCalendar}</Link>
+                      )}
+                    </>
+                  ) : undefined
                 }
-              />
-            ) : !hasCalendar && calendarList.status === 'ready' && source !== 'bookings' ? (
-              <EmptyState
-                icon="calendar-days"
-                title={strings.empty[tab].title}
-                actions={<Link href={calendarSettingsHref(slug)}>{strings.connectCalendar}</Link>}
               >
-                {strings.noCalendarConnected}
+                {strings.empty[tab].text}
               </EmptyState>
-            ) : (
-              <EmptyState icon="calendar-days" title={strings.empty[tab].title} />
             )
           }
         />
@@ -1473,15 +1565,16 @@ export function BookingsListScreen({
       </>
     );
   return (
-    <PageColumn>
+    // The list fills the view and scrolls inside it, so its day bands stick and an empty list says so in its middle.
+    <PageColumn align="fill">
       <Toolbar>{bar}</Toolbar>
       <CalendarsFrame
+        isFill
         slug={slug}
         search={search}
         calendars={calendars}
         panel={panel}
         onSearch={onSearch}
-        onMakeDefault={onMakeDefault}
         onDismissNotice={onDismissNotice}
         isHidden={source === 'bookings'}
       >

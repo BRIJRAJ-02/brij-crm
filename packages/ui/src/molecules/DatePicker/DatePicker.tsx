@@ -343,3 +343,38 @@ export function DateRangePicker({ value, defaultValue, onChange, ...look }: Date
     </AriaDateRangePicker>
   );
 }
+
+/** Props for MonthCalendar. */
+export interface MonthCalendarProps {
+  /** What the month is for, its accessible name ("Go to date"). */
+  readonly label: string;
+  /** The chosen day, `YYYY-MM-DD`. */
+  readonly value: DateString;
+  readonly onChange: (value: DateString) => void;
+}
+
+/**
+ * DatePicker's calendar on its own, inline rather than in a popover and compact: a small month for jumping to a
+ * date beside a view (Bookings' calendars panel, as Google Calendar keeps one over its calendars). The month, its
+ * arrows, its keys, today's dot and the chosen day are DatePicker's; the days are shorter, to fit a side column.
+ */
+export function MonthCalendar({ label, value, onChange }: MonthCalendarProps) {
+  const today = useToday();
+  const { weekStart } = useFormatSettings();
+  return (
+    <Calendar
+      className={styles.calendar}
+      data-inline=""
+      aria-label={label}
+      value={parseDate(value)}
+      onChange={(next) => {
+        const day = fromDate(next);
+        if (day !== null) onChange(day);
+      }}
+      {...firstDay(weekStart)}
+    >
+      <MonthHeader />
+      <Grid today={today} />
+    </Calendar>
+  );
+}
