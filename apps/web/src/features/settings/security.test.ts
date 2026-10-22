@@ -1,9 +1,9 @@
-// Settings › Account › Security's device lines (spec 0033, AC-890): a
+// Settings › Account › Sign in and devices's device lines (spec 0033, AC-890): a
 // device's name and rough place, leaving out what the edge didn't know, and
 // this device listed first.
 import type { AccountSession } from '@crm/data';
 import { describe, expect, it } from 'vitest';
-import { currentFirst, deviceName, devicePlace } from './security-lines.ts';
+import { currentFirst, deviceIcon, deviceName, devicePlace } from './security-lines.ts';
 
 const session = (n: number, changes: Partial<AccountSession> = {}): AccountSession => ({
   id: `0199a6f2-0000-7000-8000-00000000000${String(n)}`,
@@ -18,6 +18,14 @@ describe('device lines', () => {
   it('names a device, or says it is unknown', () => {
     expect(deviceName(session(1))).toBe('Chrome on macOS');
     expect(deviceName(session(1, { deviceLabel: ' ' }))).toBe('Unknown device');
+  });
+
+  it('draws a phone, a tablet or a screen by the system the name ends with', () => {
+    expect(deviceIcon(session(1, { deviceLabel: 'Safari on iOS' }))).toBe('smartphone');
+    expect(deviceIcon(session(1, { deviceLabel: 'Chrome on Android' }))).toBe('smartphone');
+    expect(deviceIcon(session(1, { deviceLabel: 'Safari on iPadOS' }))).toBe('tablet');
+    expect(deviceIcon(session(1))).toBe('monitor');
+    expect(deviceIcon(session(1, { deviceLabel: '' }))).toBe('monitor');
   });
 
   it('says roughly where, with only what is known', () => {
