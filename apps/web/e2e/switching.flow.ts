@@ -49,9 +49,10 @@ const LIST: Pick<Step, 'ready' | 'probe'> = {
   probe: { css: '[role="tabpanel"] [role="status"]', text: 'Nothing coming up' },
 };
 // Availability lists the member's schedules (spec 0035): the virtual default, "Working hours", is always there.
+// Availability opens the default schedule in its editor (avail lane): its switcher names it.
 const AVAILABILITY: Pick<Step, 'ready' | 'probe'> = {
-  ready: (page) => page.getByRole('grid', { name: 'Schedules' }).getByRole('row').filter({ hasText: 'Working hours' }),
-  probe: { css: '[role="row"]', text: 'Working hours' },
+  ready: (page) => page.getByRole('button', { name: /^Working hours(, default)?, switch schedule$/ }),
+  probe: { css: 'main button', text: 'Working hours' },
 };
 const PAGE_EDITOR: Pick<Step, 'ready' | 'probe'> = {
   ready: (page) => page.locator('main h1', { hasText: 'Intro call' }),
@@ -130,7 +131,13 @@ test('moving through Captures and Bookings keeps the layout still and shows a vi
     expect.soft(chrome.topBar, `${step.name}: the TopBar stands as People's`).toEqual(people.topBar);
     expect.soft(chrome.secondBar, `${step.name}: the tabs' bar stands as People's ViewBar`).toEqual(people.secondBar);
     if (previous?.section === step.section) {
-      expect.soft(chrome.newButton, `${step.name}: New stays where it was`).toEqual(previous.chrome.newButton);
+      // Where it stands: the bar's end and its row. Its label may name what it makes (New schedule, the owner,
+      // 22 October 2026), so only its far edge has to stay put.
+      const end = (box: { x: number; y: number; width: number; height: number } | undefined) =>
+        box === undefined ? undefined : { right: box.x + box.width, y: box.y, height: box.height };
+      expect
+        .soft(end(chrome.newButton), `${step.name}: New stays where it was`)
+        .toEqual(end(previous.chrome.newButton));
     }
     previous = { section: step.section, chrome };
   }

@@ -40,15 +40,20 @@ const PROBE = () => {
     for (const entry of list.getEntries() as unknown as {
       startTime: number;
       value: number;
-      sources?: { node?: Node | null }[];
+      sources?: { node?: Node | null; previousRect?: DOMRectReadOnly; currentRect?: DOMRectReadOnly }[];
     }[]) {
+      // Each source by its element and, when it moved, from where to where (y and height), to find what pushed it.
+      const at = (rect: DOMRectReadOnly | undefined) =>
+        rect === undefined ? '' : `${String(Math.round(rect.y))}+${String(Math.round(rect.height))}`;
       probe.shifts.push({
         t: entry.startTime - probe.start,
         value: entry.value,
         sources: (entry.sources ?? []).map((source) => {
           const node = source.node;
-          if (!(node instanceof Element)) return node?.nodeName ?? '?';
-          return `${node.tagName.toLowerCase()}.${[...node.classList].join('.')}`;
+          const moved =
+            source.previousRect === undefined ? '' : ` ${at(source.previousRect)}→${at(source.currentRect)}`;
+          if (!(node instanceof Element)) return `${node?.nodeName ?? '?'}${moved}`;
+          return `${node.tagName.toLowerCase()}.${[...node.classList].join('.')}${moved}`;
         }),
       });
     }
@@ -335,11 +340,16 @@ export function shapeDifferences(
     }
     // A card's height, and so the place of the cards after it, follows what it holds (three loading rows, one task):
     // a card is held to being there, at its place across the page.
-    const keys = FIXED_HEIGHT.has(name)
-      ? (['x', 'y', 'width', 'height'] as const)
-      : name.startsWith('card')
-        ? (['x', 'width'] as const)
-        : (['x', 'y', 'width'] as const);
+    // The tab list fills what the tools at its end leave, and those may name what they found (Connect calendar
+    // once none is connected): its tabs stay put, so it is held to its place, not its width.
+    const keys =
+      name === 'tabs'
+        ? (['x', 'y', 'height'] as const)
+        : FIXED_HEIGHT.has(name)
+          ? (['x', 'y', 'width', 'height'] as const)
+          : name.startsWith('card')
+            ? (['x', 'width'] as const)
+            : (['x', 'y', 'width'] as const);
     for (const key of keys) {
       if (Math.abs(shown[key] - box[key]) > tolerance)
         found.push(`${name}.${key} ${String(shown[key])} → ${String(box[key])}`);
