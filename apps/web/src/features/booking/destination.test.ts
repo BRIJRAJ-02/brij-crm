@@ -48,10 +48,10 @@ describe('destinationHint', () => {
   it('says bookings go on no calendar when the default can’t take them either', () => {
     const stopped = [calendar(WORK, 'Work', { canBeDestination: false, isDestination: true })];
     expect(destinationHint({ status: 'unusable', calendarId: WORK, isOwner: true }, stopped)).toBe(
-      'Your calendar Work stopped taking bookings, so new bookings on this page go on no calendar until you pick one.',
+      'Your calendar Work stopped taking bookings, so new bookings on this page aren’t added to any calendar until you pick one.',
     );
     expect(destinationHint({ status: 'unusable', isOwner: true }, [])).toBe(
-      'Your calendar stopped taking bookings, so new bookings on this page go on no calendar until you pick one.',
+      'Your calendar stopped taking bookings, so new bookings on this page aren’t added to any calendar until you pick one.',
     );
   });
 });
@@ -65,10 +65,11 @@ describe('destinationChoice', () => {
     expect(choice.send(MAIN)).toBe(MAIN);
   });
 
-  it('shows a stopped pick as the default, and choosing Default clears it', () => {
+  it('shows a stopped pick as the default, keeping it the page’s pick to go back to (AC-997)', () => {
     const choice = destinationChoice({ status: 'unusable', calendarId: WORK, isOwner: true });
     expect(choice.value).toBe('default');
-    expect(choice.send('default')).toBeNull();
+    // The Select shows Default, so it fires only for another calendar; that one replaces the stopped pick.
+    expect(choice.send(MAIN)).toBe(MAIN);
   });
 
   it('shows no value for a pick that went, so choosing Default fires and clears the note', () => {

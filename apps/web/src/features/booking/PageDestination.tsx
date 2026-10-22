@@ -78,7 +78,7 @@ export function PageDestination({ destination, calendars, isReadOnly, onChange }
       optionDescription="below"
       value={choice.value}
       // A pick that went shows the default as a placeholder, so choosing Default clears the note.
-      placeholder={items[0]?.label}
+      {...(choice.value === null && items[0] !== undefined ? { placeholder: items[0].label } : {})}
       hint={destinationHint(held.destination, all)}
       isReadOnly={isReadOnly}
       onChange={(id) => {

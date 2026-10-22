@@ -230,7 +230,7 @@ export const strings = {
     const stopped =
       name === undefined ? 'Your calendar stopped taking bookings' : `Your calendar ${name} stopped taking bookings`;
     return fallback === undefined
-      ? `${stopped}, so new bookings on this page go on no calendar until you pick one.`
+      ? `${stopped}, so new bookings on this page aren’t added to any calendar until you pick one.`
       : `${stopped}, so this page uses your default calendar ${fallback}.`;
   },
   destinationUnusableColleague: 'The owner’s pick can’t take bookings now, so they go on the owner’s default.',
