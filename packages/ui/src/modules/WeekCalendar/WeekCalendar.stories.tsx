@@ -624,8 +624,8 @@ export const AllDayAndHours: Story = {
     await expect(canvas.getByText('All day')).toBeInTheDocument();
     // Saturday is a day off: one shaded stretch, the whole day; a weekday has two, before 9 and after 5.
     const columns = canvasElement.querySelectorAll('[role="group"]');
-    await expect(columns[5]?.querySelectorAll('[class*="offHours"]').length).toBe(1);
-    await expect(columns[0]?.querySelectorAll('[class*="offHours"]').length).toBe(2);
+    await expect(columns[5]?.querySelectorAll('[data-off-hours]').length).toBe(1);
+    await expect(columns[0]?.querySelectorAll('[data-off-hours]').length).toBe(2);
     await userEvent.click(canvas.getByRole('button', { name: /^Holiday, all day/ }));
     const body = within(canvasElement.ownerDocument.body);
     await waitFor(() => expect(body.getByRole('dialog')).toHaveTextContent('Team offsite'));

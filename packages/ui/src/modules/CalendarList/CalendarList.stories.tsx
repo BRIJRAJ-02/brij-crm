@@ -137,12 +137,13 @@ export const LongName: Story = {
       />
     </Stage>
   ),
-  play: async ({ canvas }) => {
+  play: async ({ canvas, args }) => {
     // The visible name (the StatusDot's); the checkbox's own label is for screen readers.
     const [name] = canvas.getAllByText('1032201225@tcetmumbai.in.example.edu');
     if (name === undefined) throw new Error('no name');
     await expect(getComputedStyle(name).textOverflow).toBe('ellipsis');
+    // Pressing the name toggles its box (the list is the caller's, so it says so rather than changing).
     await userEvent.click(name);
-    await expect(canvas.getByRole('checkbox', { name: '1032201225@tcetmumbai.in.example.edu' })).not.toBeChecked();
+    await expect(args.onShownChange).toHaveBeenCalledWith('school', false);
   },
 };
