@@ -34,6 +34,8 @@ export interface KanbanColumnProps {
   readonly draggingFrom: string | undefined;
   /** A moving card is over this column or one of its cards. */
   readonly isOver: boolean;
+  /** A slim strip: the title down its length and the count, no cards (an empty "No <field>" column). */
+  readonly isCollapsed?: boolean;
   readonly onOpen?: (card: BoardCard) => void;
 }
 
@@ -80,6 +82,7 @@ export function KanbanColumn({
   isReorderable,
   draggingFrom,
   isOver,
+  isCollapsed = false,
   onOpen,
 }: KanbanColumnProps) {
   const { locale } = useFormatSettings();
@@ -106,6 +109,7 @@ export function KanbanColumn({
       data-archived={isArchived || undefined}
       data-refusing={(refusal !== undefined && draggingFrom !== undefined) || undefined}
       data-over={(isOver && refusal === undefined) || undefined}
+      data-collapsed={isCollapsed || undefined}
     >
       <h3 id={titleId} className={styles.head}>
         {column.hue === undefined ? (
@@ -123,62 +127,65 @@ export function KanbanColumn({
         </span>
       </h3>
       {refusal !== undefined && draggingFrom !== undefined && <p className={styles.refusal}>{refusal}</p>}
-      <SortableGroup ids={ids} isShifting={isReorderable && draggingFrom === column.id}>
-        <Virtualizer
-          layout={ListLayout}
-          layoutOptions={{ estimatedRowHeight: 3 * sizeToken('size-row'), gap: spaceToken('space-8') }}
-        >
-          <GridList
-            className={styles.cards}
-            aria-labelledby={titleId}
-            items={rows}
-            // Fonts in: each card built, and so measured, again (a card measured in the fallback face is too short).
-            dependencies={[column.cards, fields, canMove, fontsSettled, refusal]}
-            renderEmptyState={() => <span className={styles.empty}>{strings.noCards}</span>}
-            {...(onOpen === undefined
-              ? {}
-              : {
-                  onAction: (key: Key) => {
-                    const card = cardAt(key);
-                    if (card !== undefined) onOpen(card);
-                  },
-                })}
+      {/* Collapsed, it holds no card: the strip is its title and count alone. */}
+      {!isCollapsed && (
+        <SortableGroup ids={ids} isShifting={isReorderable && draggingFrom === column.id}>
+          <Virtualizer
+            layout={ListLayout}
+            layoutOptions={{ estimatedRowHeight: 3 * sizeToken('size-row'), gap: spaceToken('space-8') }}
           >
-            {(row: KeyedRow) => {
-              const card = column.cards.getItem(row.index);
-              if (card === undefined) {
+            <GridList
+              className={styles.cards}
+              aria-labelledby={titleId}
+              items={rows}
+              // Fonts in: each card built, and so measured, again (a card measured in the fallback face is too short).
+              dependencies={[column.cards, fields, canMove, fontsSettled, refusal]}
+              renderEmptyState={() => <span className={styles.empty}>{strings.noCards}</span>}
+              {...(onOpen === undefined
+                ? {}
+                : {
+                    onAction: (key: Key) => {
+                      const card = cardAt(key);
+                      if (card !== undefined) onOpen(card);
+                    },
+                  })}
+            >
+              {(row: KeyedRow) => {
+                const card = column.cards.getItem(row.index);
+                if (card === undefined) {
+                  return (
+                    <GridListItem className={styles.card} textValue="" isDisabled data-loading="">
+                      <RowShown index={row.index} onShown={onShown} />
+                      <span className={styles.skeleton}>
+                        <Skeleton width="medium" />
+                        <Skeleton width="short" />
+                      </span>
+                    </GridListItem>
+                  );
+                }
                 return (
-                  <GridListItem className={styles.card} textValue="" isDisabled data-loading="">
+                  <GridListItem
+                    className={styles.card}
+                    textValue={card.record.name}
+                    data-pressable={onOpen === undefined ? undefined : ''}
+                    data-locked={card.readOnlyReason === undefined ? undefined : ''}
+                  >
                     <RowShown index={row.index} onShown={onShown} />
-                    <span className={styles.skeleton}>
-                      <Skeleton width="medium" />
-                      <Skeleton width="short" />
-                    </span>
+                    <SortableCard
+                      id={column.cards.getKey(card)}
+                      card={card}
+                      fields={fields}
+                      columnId={column.id}
+                      canMove={canMove}
+                      refusesDrop={refusal !== undefined}
+                    />
                   </GridListItem>
                 );
-              }
-              return (
-                <GridListItem
-                  className={styles.card}
-                  textValue={card.record.name}
-                  data-pressable={onOpen === undefined ? undefined : ''}
-                  data-locked={card.readOnlyReason === undefined ? undefined : ''}
-                >
-                  <RowShown index={row.index} onShown={onShown} />
-                  <SortableCard
-                    id={column.cards.getKey(card)}
-                    card={card}
-                    fields={fields}
-                    columnId={column.id}
-                    canMove={canMove}
-                    refusesDrop={refusal !== undefined}
-                  />
-                </GridListItem>
-              );
-            }}
-          </GridList>
-        </Virtualizer>
-      </SortableGroup>
+              }}
+            </GridList>
+          </Virtualizer>
+        </SortableGroup>
+      )}
     </section>
   );
 }

@@ -10,7 +10,7 @@ The field set gives every attribute type exactly one display and one editor (spe
 
 Screens never import it; they render values through `AttributeDisplay` and `AttributeEditor` with a `FieldAttribute` of this type.
 
-- **Display**: the Currency atom: the code, then the amount in the language's format, with at least the currency's minor units and at most 4 decimals.
+- **Display**: the Currency atom: the symbol and the amount in the language's format (`$58,500`, `$1,234.50`, `CA$12`), with no decimals for a whole amount and otherwise at least the currency's minor units and at most 4 decimals.
 - **Editor**: a Field for the amount (read in the language's format, never through a JS number) with the currency code as a searchable, virtualised picker in front. It starts in the attribute's default currency. The currency sits on each value, so totals can convert mixed currencies (#52). On a form the placeholder is an example amount in the viewer's format, and a hint says: pick the currency, then type the amount.
 - **Text out / in** (copy, paste, CSV, the import preview): `USD 1234.5` / with or without the code (the attribute's default currency when none).
 - **Filter operators**: =, ≠, >, ≥, <, ≤, between, within one currency, then is empty and is not empty.

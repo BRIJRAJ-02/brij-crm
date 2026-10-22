@@ -29,6 +29,33 @@ export function formatAmount(amount: string, currency: string, locale: string): 
   return formatDecimal(amount, locale, Math.min(minorUnits(currency), 4));
 }
 
+/** Whether an exact decimal string has a fraction other than zero ("1234.50" yes, "1234.00" and "1234" no). */
+function hasFraction(amount: string): boolean {
+  const fraction = amount.split('.')[1] ?? '';
+  return /[1-9]/u.test(fraction);
+}
+
+/**
+ * An amount with its currency's symbol, grouped in the language, as Attio and HubSpot show money: "$58,500",
+ * "€1.234,50" in de-DE, "CA$12" for Canadian dollars beside US ones. A whole amount shows no decimals; one with
+ * a fraction shows at least the currency's minor units and at most 4, exact from the decimal string.
+ */
+export function formatMoney(amount: string, currency: string, locale: string): string {
+  const whole = !hasFraction(amount);
+  const minimum = whole ? 0 : Math.min(minorUnits(currency), 4);
+  return memoIntl(
+    `money:${locale}:${currency}:${whole ? 'w' : 'f'}`,
+    () =>
+      new Intl.NumberFormat(locale, {
+        style: 'currency',
+        currency,
+        currencyDisplay: 'symbol',
+        minimumFractionDigits: minimum,
+        maximumFractionDigits: whole ? 0 : 4,
+      }),
+  ).format(amount as DecimalString);
+}
+
 function parts(date: string): readonly [number, number, number] {
   const [year = 0, month = 1, day = 1] = date.split('-').map(Number);
   return [year, month, day];

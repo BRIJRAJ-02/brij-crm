@@ -26,6 +26,11 @@ export interface BoardColumn {
   readonly cards: ListSource<BoardCard>;
   /** An archived option: shown while it has cards, and never a drop target. */
   readonly isArchived?: boolean;
+  /**
+   * Narrow while it holds no card (the "No <field>" column, as Linear and Attio keep it out of the way): its
+   * title runs down a slim strip with its count, and it opens to full width while a card moves, to take a drop.
+   */
+  readonly isCollapsedWhenEmpty?: boolean;
   /** Never a drop target, for this reason, shown while a card is moving (a required field's "No <field>" column). */
   readonly refusesDrop?: { readonly reason: string };
 }

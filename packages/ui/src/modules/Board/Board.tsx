@@ -214,6 +214,7 @@ export function Board({
             isReorderable={isReorderable}
             draggingFrom={draggingFrom}
             isOver={overGroup === column.id}
+            isCollapsed={column.isCollapsedWhenEmpty === true && column.count === 0 && !isMoving}
             {...(onOpen === undefined
               ? {}
               : {
