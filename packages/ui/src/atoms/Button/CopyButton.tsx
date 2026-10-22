@@ -12,6 +12,8 @@ export interface CopyButtonProps {
   readonly label?: string;
   /** Shows the copy icon alone, with `label` as its name. */
   readonly isIconOnly?: boolean;
+  /** In a narrow bar (its container under 480px, a phone) the words hide and the icon stands alone, named by `label`. */
+  readonly isLabelCollapsible?: boolean;
   readonly variant?: ButtonVariant;
   /** `lg` beside other large controls (a link card's footer); `md` by default. */
   readonly size?: ButtonSize;
@@ -45,6 +47,7 @@ export function CopyButton({
   value,
   label = strings.copy,
   isIconOnly = false,
+  isLabelCollapsible = false,
   variant = 'secondary',
   size = 'md',
   sourceRef,
@@ -85,6 +88,7 @@ export function CopyButton({
           onPress={onPress}
           isDisabled={isDisabled}
           labelReserve={isCopied ? label : strings.copiedLabel}
+          {...(isLabelCollapsible ? { isLabelCollapsible: true, label: isCopied ? strings.copiedLabel : label } : {})}
         >
           {isCopied ? strings.copiedLabel : label}
         </Button>

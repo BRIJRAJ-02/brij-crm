@@ -11,16 +11,40 @@ export interface StatusDotProps {
   readonly hue: Hue;
   /** An archived status, still on old values: gray, with "(archived)" for screen readers. */
   readonly isArchived?: boolean;
+  /**
+   * A word or two shown in place of the label in a narrow container (under 480px, a phone's bar), so the dot never
+   * stands alone; screen readers still read the full label. For a status beside a name that must keep its room: an
+   * editor's "Live · edited" becomes Edited in the TopBar.
+   */
+  readonly shortLabel?: string;
 }
 
 /** A status as a dot in its hue and its label: the status attribute's one display. */
-export function StatusDot({ children, hue, isArchived = false }: StatusDotProps) {
+export function StatusDot({ children, hue, isArchived = false, shortLabel }: StatusDotProps) {
   return (
-    <span className={styles.root} data-archived={isArchived || undefined}>
+    <span
+      className={styles.root}
+      data-archived={isArchived || undefined}
+      data-short={shortLabel === undefined ? undefined : ''}
+    >
       <span className={styles.dot} data-hue={isArchived ? 'gray' : hue} aria-hidden="true" />
-      <span className={styles.label} data-truncated="">
-        {children}
-      </span>
+      {shortLabel !== undefined ? (
+        // The full words are read from the hidden copy at every width; the shown ones are for sight: the label in a
+        // wide container, the short word in a narrow one.
+        <>
+          <span className={styles.label} data-truncated="" data-width="wide" aria-hidden="true">
+            {children}
+          </span>
+          <span className={styles.label} data-width="narrow" aria-hidden="true">
+            {shortLabel}
+          </span>
+          <VisuallyHidden>{children}</VisuallyHidden>
+        </>
+      ) : (
+        <span className={styles.label} data-truncated="">
+          {children}
+        </span>
+      )}
       {isArchived && <VisuallyHidden> {strings.archived}</VisuallyHidden>}
     </span>
   );

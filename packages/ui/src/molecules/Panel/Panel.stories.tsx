@@ -4,6 +4,7 @@ import { expect, waitFor, within } from 'storybook/test';
 import { Badge } from '../../atoms/Badge/Badge.tsx';
 import { Button, ButtonGroup } from '../../atoms/Button/Button.tsx';
 import { DescriptionList } from '../DescriptionList/DescriptionList.tsx';
+import { FieldGroup } from '../FieldGroup/FieldGroup.tsx';
 import { Stage } from '../../workbench/Stage/Stage.tsx';
 import { Panel } from './Panel.tsx';
 
@@ -82,7 +83,7 @@ export const Floating: Story = {
   },
 };
 
-/** Stacked: a booking's details from library parts, each piece `space-12` below the one before; the Badge keeps its width. */
+/** Stacked: a booking's details from library parts, each piece `space-20` below the one before; the Badge keeps its width. */
 export const Stacked: Story = {
   parameters: { crm: { screenshot: false } },
   render: () => (
@@ -112,5 +113,40 @@ export const Stacked: Story = {
     await expect(badge.getBoundingClientRect().width).toBeLessThan(panel.getBoundingClientRect().width / 2);
     // The actions sit apart from the last value, not against it.
     await expect(actions.getBoundingClientRect().top - list.getBoundingClientRect().bottom).toBeGreaterThan(12);
+  },
+};
+
+/** Stacked, with a subtitle: sections a set space apart, each a FieldGroup, as a form submission shows them. */
+export const StackedSections: Story = {
+  render: () => (
+    <Stage>
+      <Panel title="Grace Hopper" subtitle="Website enquiry · 5 minutes ago" isOpen onClose={() => undefined} isStacked>
+        <DescriptionList
+          items={[
+            { term: 'State', description: 'Added' },
+            { term: 'When', description: '5 minutes ago' },
+          ]}
+        />
+        <FieldGroup label="Answers" tone="heading" headingLevel={3}>
+          <DescriptionList
+            layout="stacked"
+            items={[
+              { term: 'Your name', description: 'Grace Hopper' },
+              { term: 'Work email', description: 'grace@navy.mil' },
+            ]}
+          />
+        </FieldGroup>
+        <FieldGroup label="Where it came from" tone="heading" headingLevel={3}>
+          <DescriptionList items={[{ term: 'Sent from', description: 'The form’s own page' }]} />
+        </FieldGroup>
+      </Panel>
+    </Stage>
+  ),
+  play: async ({ canvas }) => {
+    await expect(canvas.getByRole('dialog', { name: 'Grace Hopper' })).toHaveTextContent('Website enquiry');
+    const answers = canvas.getByRole('group', { name: 'Answers' });
+    const source = canvas.getByRole('group', { name: 'Where it came from' });
+    const gap = source.getBoundingClientRect().top - answers.getBoundingClientRect().bottom;
+    await expect(gap).toBeGreaterThan(12);
   },
 };

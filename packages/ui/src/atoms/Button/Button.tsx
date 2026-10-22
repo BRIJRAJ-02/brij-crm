@@ -198,8 +198,8 @@ function Face({ face, look, isPending }: { face: ButtonFace; look: ButtonLook; i
 
 /**
  * The one button. Built on React Aria's Button, so it answers to Enter and
- * Space, shows a focus ring only for the keyboard, and scales to 0.97 while
- * pressed. One `primary` per surface.
+ * Space and shows a focus ring only for the keyboard. Pressing it never
+ * shrinks it (the owner's rule). One `primary` per surface.
  */
 export function Button(props: ButtonProps) {
   // A label that collapses to the icon in a narrow bar names the icon in the same tooltip a cut label gets.

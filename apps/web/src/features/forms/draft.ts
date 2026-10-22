@@ -11,11 +11,13 @@ import type {
 } from '@crm/data';
 import {
   CHOICE_TYPES,
+  FORM_SLUG,
   fitsAttribute,
   freeKey,
   keyFromLabel,
   type PublishAttribute,
   type QuestionPreset,
+  slugFromName,
 } from '@crm/data/forms';
 import { strings } from './strings.ts';
 
@@ -328,4 +330,14 @@ export function savableDraft(document: FormDocument, saved: FormDocument): FormD
     document.after.kind === 'redirect' && !isRedirectAddress(document.after.url) ? saved.after : document.after;
   const buttonText = document.buttonText.trim() === '' ? saved.buttonText : document.buttonText;
   return after === document.after && buttonText === document.buttonText ? document : { ...document, after, buttonText };
+}
+
+/**
+ * What the first publish opens with: the form's name (blank while it is still "Untitled form") and an address made
+ * from that name, or the form's own key when the name gives none, so a name given before Publish carries into it.
+ */
+export function publishStart(name: string, publicKey: string): { readonly name: string; readonly address: string } {
+  const named = name === strings.untitledForm ? '' : name;
+  const suggested = named.trim() === '' ? '' : slugFromName(named);
+  return { name: named, address: FORM_SLUG.test(suggested) ? suggested : publicKey };
 }

@@ -50,8 +50,8 @@ export const strings = {
   routing: 'Routing',
   formRoutingLine: (count: number) =>
     count === 0
-      ? 'Send people somewhere else by their answers. Without a rule, After someone sends it applies.'
-      : `${String(count)} ${count === 1 ? 'rule' : 'rules'}, tried in order. When none matches, After someone sends it applies.`,
+      ? 'Send people somewhere else by their answers. Without a rule, After sending applies.'
+      : `${String(count)} ${count === 1 ? 'rule' : 'rules'}, tried in order. When none matches, After sending applies.`,
   pageRoutingLine: (count: number) =>
     count === 0
       ? 'Pick who takes a booking by what you know about the visitor. Without a rule, the whole rotation shares them.'

@@ -17,15 +17,22 @@
     min-inline-size: 0;
   }
 
-  .label {
-    color: var(--text-secondary);
+  /* A section's heading stands a step further from what it heads. */
+  .root[data-tone='heading'] {
+    gap: var(--space-8);
+  }
+
+  /* The label's line keeps the label's own height, the meta after it on the same line. */
+  .title {
     font: var(--text-label);
     letter-spacing: var(--tracking-label);
   }
 
-  /* The label's fact: the label's own style, a step quieter. */
+  /* The label's fact: the label's size, a step quieter. */
   .meta {
     color: var(--text-tertiary);
+    font: var(--text-label);
+    letter-spacing: var(--tracking-label);
   }
 
   .action {

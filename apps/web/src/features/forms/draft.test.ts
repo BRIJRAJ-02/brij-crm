@@ -10,6 +10,7 @@ import {
   isMatchQuestion,
   isRedirectAddress,
   moveQuestion,
+  publishStart,
   removeQuestion,
   restoreQuestion,
   sameDocument,
@@ -213,5 +214,22 @@ describe('Show when and routing follow a question’s key (spec 0043)', () => {
     expect(renamed.routing.rules[0]?.when.rules[0]?.key).toBe('yearly_budget');
     const cleared = changeQuestion(renamed, 'q-size', { showWhen: null });
     expect(cleared.questions[3]).not.toHaveProperty('showWhen');
+  });
+});
+
+describe('the first publish’s start', () => {
+  it('opens on the form’s name with an address made from it', () => {
+    expect(publishStart('Website enquiry', 'form-dnbptb')).toEqual({
+      name: 'Website enquiry',
+      address: 'website-enquiry',
+    });
+  });
+
+  it('leaves an untitled form’s name blank and keeps its own key', () => {
+    expect(publishStart('Untitled form', 'form-dnbptb')).toEqual({ name: '', address: 'form-dnbptb' });
+  });
+
+  it('keeps the form’s key when the name makes no address', () => {
+    expect(publishStart('!!', 'form-dnbptb')).toEqual({ name: '!!', address: 'form-dnbptb' });
   });
 });

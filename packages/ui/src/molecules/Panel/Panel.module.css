@@ -61,6 +61,25 @@
     white-space: nowrap;
   }
 
+  /* With a subtitle: the title over one quiet line, the bar a little taller for it. */
+  .heading {
+    display: flex;
+    flex: 1;
+    flex-direction: column;
+    gap: var(--space-2);
+    min-inline-size: 0;
+    padding-block: var(--space-8);
+  }
+
+  .subtitle {
+    overflow: hidden;
+    color: var(--text-secondary);
+    font: var(--text-label);
+    letter-spacing: var(--tracking-label);
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
   .actions {
     display: inline-flex;
     align-items: center;
@@ -76,10 +95,11 @@
     letter-spacing: var(--tracking-body);
   }
 
-  /* Pieces with no layout of their own, apart in one rhythm. A margin rather than a flex gap, so an inline
-     piece (a Badge) keeps its own width. */
+  /* Stacked: a column of pieces with no layout of their own (a Badge, a DescriptionList, FieldGroups, a row of
+     buttons), each set apart in one rhythm. A margin rather than a flex gap, so an inline piece (a Badge) keeps
+     its own width. */
   .body[data-stacked] > :not(:first-child) {
-    margin-block-start: var(--space-12);
+    margin-block-start: var(--space-20);
   }
 
   .body[data-flush] {

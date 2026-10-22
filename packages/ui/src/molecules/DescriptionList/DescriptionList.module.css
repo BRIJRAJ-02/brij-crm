@@ -16,8 +16,9 @@
     gap: var(--space-4) var(--space-12);
   }
 
+  /* Stacked: one column that never grows past its container, so a long link or word wraps or cuts inside it. */
   .root[data-layout='stacked'] {
-    grid-template-columns: 1fr;
+    grid-template-columns: minmax(0, 1fr);
     gap: var(--space-12);
   }
 
@@ -45,5 +46,35 @@
     margin: 0;
     color: var(--text);
     overflow-wrap: anywhere;
+  }
+
+  /* A value with its copy button after it, on its line; the button keeps its size. */
+  .description[data-copy] {
+    display: flex;
+    align-items: center;
+    gap: var(--space-4);
+  }
+
+  .value {
+    min-inline-size: 0;
+  }
+
+  .copy {
+    display: inline-flex;
+    flex: none;
+    margin-block: calc(var(--space-4) * -1);
+  }
+
+  /* With a pointer the copy button waits for the row's hover or focus; under a finger it always shows. */
+  @media (hover: hover) and (pointer: fine) {
+    .copy {
+      opacity: 0;
+      transition: opacity var(--duration-hover) var(--ease-hover);
+    }
+
+    .row:hover .copy,
+    .row:focus-within .copy {
+      opacity: 1;
+    }
   }
 }

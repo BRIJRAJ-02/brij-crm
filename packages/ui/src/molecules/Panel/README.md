@@ -24,8 +24,9 @@ New. The record panel (#17), notifications (#28) and the assistant (#54) open be
 - `width`: `md` (`size-panel`, 400px) for a record, `lg` (`size-panel-wide`, 520px) for notes, email and larger tasks.
 - `variant`: `sheet` (the default) runs the full height against the end of the page; `floating` sits `space-8` in from the edges on `radius-xl`, for the record panel (`RecordPanel`).
 - `leading` goes before the title, such as the record's avatar.
+- `subtitle` puts one quiet line under the title: what the subject belongs to and when (a form submission's form and its time, as Attio's side panel names the object under a record). Why a prop: a screen can't set a line under the panel's heading itself, and a bare "Submission" title said nothing about who sent it (22 October 2026).
+- `isStacked` sets the content's pieces `space-20` apart, for details built from library parts with no layout of their own: a form submission's state, its answers, where it came from and the records it touched, each a FieldGroup, and Bookings › List's booking card (a Badge, a DescriptionList, a Callout, the actions). Why a variant: those pieces sat flush against each other, section headings on the line before them and actions touching the last value, and screens can't space blocks themselves (22 October 2026). A margin rather than a flex gap, so an inline Badge keeps its width. It is for content that scrolls with the panel; `isFlush` content scrolls itself, so the two are never set together.
 - `isFlush` runs the content to the edges and gives it the panel's height, for Tabs and lists that scroll themselves.
-- `isStacked` sets the content's pieces `space-12` apart, for details built from library parts with no layout of their own (Bookings › List's booking card: a Badge, a DescriptionList, a Callout, the actions). Why a variant: those pieces sat flush against each other, the actions touching the last value, and the app has no CSS of its own to space them. A margin rather than a gap, so an inline Badge keeps its width.
 - It is not modal: the page beside it stays usable, so focus can leave it with Tab or a click.
 
 ## States

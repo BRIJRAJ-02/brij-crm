@@ -1,7 +1,7 @@
 // Brief
 // Purpose: a form's or a team page's routing rules (spec 0043, AC-1601, AC-1604, AC-1608, AC-1612), and how each has done.
 // Main task: read the rules in order, add or change one in its dialog, reorder or remove one, and check each rule's report to tune it.
-// Leaves out: the fallback itself (a form's After someone sends it, a page's rotation, each set in its own card).
+// Leaves out: the fallback itself (a form's After sending, a page's rotation, each set in its own card).
 import type { DataLayer, RoutingRule } from '@crm/data';
 import { useRoutingReport } from '@crm/data/react';
 import {

@@ -18,6 +18,8 @@ export interface PanelProps {
   readonly title: string;
   /** Before the title: the record's avatar. */
   readonly leading?: ReactNode;
+  /** One quiet line under the title: what the subject belongs to and when (a submission's form and time). */
+  readonly subtitle?: ReactNode;
   readonly children: ReactNode;
   readonly isOpen: boolean;
   /** Called when the close button or Esc asks it to close. */
@@ -31,8 +33,9 @@ export interface PanelProps {
   /** The content runs to the edges and fills the height, for Tabs and lists that scroll themselves. */
   readonly isFlush?: boolean;
   /**
-   * The content's pieces sit `space-12` apart (a badge, a description list, a callout, a row of buttons), for
-   * details made of library parts with no layout of their own: a booking's card on Bookings › List.
+   * The content's pieces sit `space-20` apart (a badge, a description list, FieldGroups, a row of buttons), for
+   * details made of library parts with no layout of their own: a booking's card on Bookings › List, a form
+   * submission's state, answers and source.
    */
   readonly isStacked?: boolean;
 }
@@ -71,6 +74,7 @@ function usePresence(isOpen: boolean, element: { readonly current: HTMLElement |
 export function Panel({
   title,
   leading,
+  subtitle,
   children,
   isOpen,
   onClose,
@@ -109,9 +113,18 @@ export function Panel({
         <Dialog className={styles.dialog}>
           <header className={styles.head}>
             {leading}
-            <Heading slot="title" className={styles.title}>
-              {title}
-            </Heading>
+            {subtitle === undefined ? (
+              <Heading slot="title" className={styles.title}>
+                {title}
+              </Heading>
+            ) : (
+              <span className={styles.heading}>
+                <Heading slot="title" className={styles.title}>
+                  {title}
+                </Heading>
+                <span className={styles.subtitle}>{subtitle}</span>
+              </span>
+            )}
             <span className={styles.actions}>
               {actions}
               <Button variant="ghost" icon="x" label={strings.close} onPress={onClose} />
