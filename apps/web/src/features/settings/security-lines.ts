@@ -1,4 +1,4 @@
-// Settings › Account › Sign in and devices's device lines (spec 0033, AC-890): plain
+// Settings › Account › Sign in and devices' device lines (spec 0033, AC-890): plain
 // functions, so they are tested without the screen.
 import type { AccountSession } from '@crm/data';
 import type { IconName } from '@crm/ui';

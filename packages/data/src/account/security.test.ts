@@ -1,4 +1,4 @@
-// Account › Security's state (spec 0033, milestones 2 and 3): read when held,
+// Account › Sign in and devices' state (spec 0033, milestones 2 and 3): read when held,
 // made fresh at once by a step up (a code or a passkey), a refused step up
 // answered, never thrown, and passkeys renamed and removed at once, put back
 // when refused.

@@ -1,4 +1,4 @@
-// Settings › Account › Sign in and devices's device lines (spec 0033, AC-890): a
+// Settings › Account › Sign in and devices' device lines (spec 0033, AC-890): a
 // device's name and rough place, leaving out what the edge didn't know, and
 // this device listed first.
 import type { AccountSession } from '@crm/data';

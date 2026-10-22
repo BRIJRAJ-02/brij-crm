@@ -77,7 +77,7 @@ export const session = auth.table(
     country: text('country'),
     /** City from the edge's geo header at sign in, as the edge spelled it. */
     city: text('city'),
-    /** "Chrome on macOS": the user agent read once at sign in, for Account › Security › Devices. */
+    /** "Chrome on macOS": the user agent read once at sign in, for Account › Sign in and devices › Devices. */
     deviceLabel: text('device_label'),
     /** When this session last proved who it is: at sign in, and on each step up (AC-896). */
     verifiedAt: timestamptz('verified_at'),

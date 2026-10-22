@@ -1,5 +1,5 @@
 // Brief
-// Purpose: Account › Sign in and devices's passkeys (spec 0033, milestone 3, AC-887): sign in with a fingerprint, face or PIN.
+// Purpose: Account › Sign in and devices' passkeys (spec 0033, milestone 3, AC-887): sign in with a fingerprint, face or PIN.
 // Main task: add a passkey (after a check, with an optional name), rename one, or remove one after a confirm.
 // Leaves out: signing in with one (the sign in page), and the workspace's two factor requirement (milestone 4).
 import { PASSKEY_NAME_MAX, type AccountPasskey, type AccountSecurityState, type DataLayer } from '@crm/data';
