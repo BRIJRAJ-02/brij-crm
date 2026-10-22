@@ -11,8 +11,9 @@ import { strings } from './strings.ts';
  * column's width (never above 1). It is as tall as the room under the heading allows, from `minHeight` up to a real
  * phone's `height`: on a laptop's view the phone gets shorter rather than smaller, so the page in it stays readable
  * (the owner, 23 Oct 2026: "increase preview a bit"). With less room than `minHeight`, it scales down to fit.
+ * `minHeight` keeps a booking page's first rows of times above the phone's foot, since the frame doesn't scroll.
  */
-const PHONE = { width: 375, height: 812, minHeight: 640 } as const;
+const PHONE = { width: 375, height: 812, minHeight: 740 } as const;
 
 /** Props for PreviewLayout. */
 export interface PreviewLayoutProps {
@@ -43,7 +44,8 @@ export interface PreviewLayoutProps {
   readonly bodyLayout?: 'stack' | 'grid';
   /**
    * `form` holds the body's groups to `size-column-max`, centred in the body's column, so a Select sits near its
-   * label on a wide view (the booking page editor's tabs); `full` (the default) takes the column's width.
+   * label on a wide view (no screen uses it since the booking page editor went full width, 23 Oct 2026); `full` (the
+   * default) takes the column's width.
    */
   readonly bodyWidth?: 'full' | 'form';
 }
