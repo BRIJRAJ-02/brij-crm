@@ -8,6 +8,7 @@ import { isDataError, type DataLayer } from '@crm/data';
 import { AuthLayout, Button, Callout, Checkbox, CodeInput, Field, Form, Link } from '@crm/ui';
 import { useNavigate } from '@tanstack/react-router';
 import { useEffect, useRef, useState } from 'react';
+import { signInFrame } from './AuthStates.tsx';
 import { safeRedirect, signInHref } from './redirect.ts';
 import { strings as signIn } from './strings.ts';
 import { strings } from './two-factor-strings.ts';
@@ -105,7 +106,7 @@ export function TwoFactorScreen({ data, redirect, passkeyOnly = false }: TwoFact
 
   if (expired !== undefined) {
     return (
-      <AuthLayout productName={signIn.product} logo={PRODUCT_LOGO} title={strings.title}>
+      <AuthLayout productName={signIn.product} logo={PRODUCT_LOGO} title={strings.title} {...signInFrame()}>
         <Callout tone="warning" isAnnounced actions={<Link href="/sign-in">{strings.signInAgain}</Link>}>
           {expired === '' ? strings.expired : expired}
         </Callout>
@@ -121,6 +122,7 @@ export function TwoFactorScreen({ data, redirect, passkeyOnly = false }: TwoFact
         title={strings.title}
         description={strings.passkeyHint}
         isBusy={isAsking}
+        {...signInFrame()}
       >
         {passkeyError !== undefined && (
           <Callout tone="danger" isAnnounced>
@@ -135,7 +137,14 @@ export function TwoFactorScreen({ data, redirect, passkeyOnly = false }: TwoFact
             {strings.passkeyUnavailable}
           </Callout>
         ) : (
-          <Button variant="primary" icon="key" isPending={isAsking || !supportKnown} onPress={usePasskeyInstead}>
+          <Button
+            variant="primary"
+            size="lg"
+            isFullWidth="center"
+            icon="key"
+            isPending={isAsking || !supportKnown}
+            onPress={usePasskeyInstead}
+          >
             {strings.passkeyContinue}
           </Button>
         )}
@@ -150,6 +159,7 @@ export function TwoFactorScreen({ data, redirect, passkeyOnly = false }: TwoFact
       title={strings.title}
       description={kind === 'totp' ? strings.appHint : strings.backupHint}
       isBusy={isChecking}
+      {...signInFrame()}
     >
       {passkeyError !== undefined && (
         <Callout tone="danger" isAnnounced>
@@ -163,12 +173,20 @@ export function TwoFactorScreen({ data, redirect, passkeyOnly = false }: TwoFact
         isBusy={isChecking}
         actions={
           <>
-            <Button variant="ghost" isDisabled={isAsking} onPress={() => switchTo(kind === 'totp' ? 'backup' : 'totp')}>
+            <Button
+              variant="ghost"
+              size="lg"
+              isFullWidth="center"
+              isDisabled={isAsking}
+              onPress={() => switchTo(kind === 'totp' ? 'backup' : 'totp')}
+            >
               {kind === 'totp' ? strings.useBackup : strings.useApp}
             </Button>
             {hasPasskeys && (
               <Button
                 variant="ghost"
+                size="lg"
+                isFullWidth="center"
                 icon="key"
                 isPending={isAsking}
                 isDisabled={isChecking}
