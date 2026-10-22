@@ -44,7 +44,7 @@ function usePageHidden() {
 
 /**
  * An area's screens in the app's window, playing in turn: the bar holds the lights and the address of the screen on
- * show; a glass pill floating at the foot holds a segment per screen (the library's SegmentedControl, so the arrow
+ * show; floating at the foot, a segment per screen (the library's SegmentedControl, so the arrow
  * keys move between them) and a pause. The screens are stacked, whole, cross fading, and the window fades out at
  * its foot (the owner, 23 October 2026: nothing cut, faded). The play stops while the pointer or focus is on the window, while the
  * page is hidden, when paused, and for anyone who asked for reduced motion.
