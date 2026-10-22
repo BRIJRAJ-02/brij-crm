@@ -388,7 +388,7 @@ export function SubmissionsTab({
 
   // One clear action for the rows: Export, only when there are rows. Form wide actions live in the top bar's menu.
   const exportButton = (
-    <Button icon="download" onPress={exportCsv}>
+    <Button icon="download" label={strings.exportButton} isLabelCollapsible onPress={exportCsv}>
       {strings.exportButton}
     </Button>
   );
@@ -706,7 +706,7 @@ function SubmissionDetail({
           { term: strings.when, description: <RelativeTime value={submission.receivedAt} /> },
         ]}
       />
-      <FieldGroup label={strings.answers} tone="strong" headingLevel={3}>
+      <FieldGroup label={strings.answers} tone="heading" headingLevel={3}>
         <DescriptionList
           layout="stacked"
           items={submission.answers.map((answer) => ({
@@ -716,13 +716,13 @@ function SubmissionDetail({
         />
       </FieldGroup>
       {source.length > 0 && (
-        <FieldGroup label={strings.cameFrom} tone="strong" headingLevel={3}>
+        <FieldGroup label={strings.cameFrom} tone="heading" headingLevel={3}>
           {/* Plain text, never links: a page's address came from the visitor's browser. */}
           <DescriptionList items={[...source]} />
         </FieldGroup>
       )}
       {submission.records.length > 0 && (
-        <FieldGroup label={strings.records} tone="strong" headingLevel={3}>
+        <FieldGroup label={strings.records} tone="heading" headingLevel={3}>
           <DescriptionList
             items={submission.records.map((touched) => {
               const href = link(touched.record.objectId, touched.record.recordId);

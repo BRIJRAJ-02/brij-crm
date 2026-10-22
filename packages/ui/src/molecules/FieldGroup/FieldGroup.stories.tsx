@@ -119,9 +119,9 @@ export const LongRow: Story = {
   },
 };
 
-/** `tone="strong"` with `headingLevel`: a section's heading over labelled values, medium beside the terms under it. */
+/** `tone="heading"` with `headingLevel`: a section's heading over labelled values, medium beside the terms under it. */
 export const Strong: Story = {
-  args: { label: 'Answers', tone: 'strong', headingLevel: 3 },
+  args: { label: 'Answers', tone: 'heading', headingLevel: 3 },
   render: (args) => (
     <Stage>
       <FieldGroup {...args}>

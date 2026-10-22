@@ -327,8 +327,8 @@ export function FormEditor(props: FormEditorProps) {
       meta={<EditorStatus tone={status.tone} text={status.text} />}
     >
       <EditorActions
-        link={data.forms.hostedUrl(form.publicKey)}
-        {...(isPublished ? {} : { linkOffReason: strings.linkAfterPublish })}
+        // A draft has no link yet: Copy link shows from the first publish, as the forms list shows it.
+        {...(isPublished ? { link: data.forms.hostedUrl(form.publicKey) } : {})}
         preview={
           <Button
             icon="eye"

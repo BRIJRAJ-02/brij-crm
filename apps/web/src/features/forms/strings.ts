@@ -41,7 +41,6 @@ export const strings = {
   notAccepting: 'Paused',
   notPublishedYet: 'Not published',
   /** Why Copy link is off on a form never published. */
-  linkAfterPublish: 'Publish the form to get its link.',
   acceptingOf: (name: string) => `${name} is live`,
   formActions: (name: string) => `Actions for ${name}`,
   open: 'Open',

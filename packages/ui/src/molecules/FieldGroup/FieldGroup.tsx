@@ -14,8 +14,8 @@ export interface FieldGroupProps {
   readonly hint?: string;
   /** `row` sets the content in a wrapping row, `space-6` apart (a few Badges, then a Button); `block` stacks it. */
   readonly layout?: 'block' | 'row';
-  /** `strong` sets the label medium, for a section heading over labelled values (a submission's Answers in a Panel). */
-  readonly tone?: 'label' | 'strong';
+  /** `heading` draws the label as a section's heading over labelled values (a submission's Answers in a Panel). */
+  readonly tone?: 'label' | 'heading';
   /** Draws the label as a heading of this level, so screen readers can move between sections by heading. */
   readonly headingLevel?: 2 | 3 | 4;
   readonly children: ReactNode;
@@ -40,7 +40,7 @@ export function FieldGroup({
   const hintId = useId();
   // The meta stays outside the label, so the group's name is the label alone.
   const name = (
-    <span>
+    <span className={styles.title}>
       <FieldLabel as="text" id={labelId} label={label} tone={tone} />
       {meta !== undefined && <span className={styles.meta}> · {meta}</span>}
     </span>
@@ -48,6 +48,7 @@ export function FieldGroup({
   return (
     <div
       className={styles.root}
+      data-tone={tone === 'heading' ? 'heading' : undefined}
       role="group"
       aria-labelledby={labelId}
       {...(hint === undefined ? {} : { 'aria-describedby': hintId })}

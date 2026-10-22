@@ -1,9 +1,9 @@
 // Brief
-// Purpose: the one header both Captures editors share (a booking page's, a form's): Copy link, Preview where it
+// Purpose: the one header both Captures editors share (a booking page's, a form's): Copy link once there is a link, Preview where it
 // applies, Publish changes where there are drafts, then a ⋯ menu.
 // Main task: copy the link, and from the menu Pause or Resume, Duplicate, and Delete (which asks first in a Modal).
 // Leaves out: the editor's status (EditorStatus in the TopBar's meta) and what each action does (the editor's).
-import { Button, CopyButton, Menu, MenuItem, MenuSeparator, MenuTrigger, Tooltip, type IconName } from '@crm/ui';
+import { Button, CopyButton, Menu, MenuItem, MenuSeparator, MenuTrigger, type IconName } from '@crm/ui';
 import type { ReactNode, RefObject } from 'react';
 import { strings } from './strings.ts';
 
@@ -18,10 +18,8 @@ export interface EditorExtraAction {
 
 /** Props for EditorActions. */
 export interface EditorActionsProps {
-  /** The public link Copy link copies. */
-  readonly link: string;
-  /** Why Copy link can't copy yet (a form never published has no live link): it turns off and says this on hover. */
-  readonly linkOffReason?: string;
+  /** The public link Copy link copies; left out while there is none yet (a form never published), so Copy link hides. */
+  readonly link?: string;
   /** The editor's Preview button, where it applies (a form's; a booking page shows its preview beside the editor). */
   readonly preview?: ReactNode;
   /** A primary action before the menu: a form's Publish changes, while there are unpublished edits. */
@@ -44,19 +42,13 @@ export interface EditorActionsProps {
 }
 
 /** The editors' header actions, in one order on both: Copy link, Preview, Publish changes, then ⋯. */
-export function EditorActions({ link, linkOffReason, preview, publish, menu }: EditorActionsProps) {
-  const copy = (
-    <CopyButton
-      value={link}
-      label={strings.copyLink}
-      announcement={strings.linkCopied}
-      isLabelCollapsible
-      isDisabled={linkOffReason !== undefined}
-    />
-  );
+export function EditorActions({ link, preview, publish, menu }: EditorActionsProps) {
   return (
     <>
-      {linkOffReason === undefined ? copy : <Tooltip content={linkOffReason}>{copy}</Tooltip>}
+      {link !== undefined && (
+        // On a phone the words fold to the icon, so the name keeps its room.
+        <CopyButton value={link} label={strings.copyLink} announcement={strings.linkCopied} isLabelCollapsible />
+      )}
       {preview}
       {publish}
       {menu !== undefined && (

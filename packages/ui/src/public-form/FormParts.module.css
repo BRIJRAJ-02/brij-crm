@@ -46,7 +46,7 @@
   }
 
   /* A visitor reads each question once, often on a phone: inside the card a question's name, and the line under its
-     field, read at the body size rather than the app's dense 11px label. A choice group's question (the strong
+     field, read at the body size rather than the app's dense label size. A choice group's question (the strong
      label) comes down to the same regular weight, so every question reads alike. The foot keeps the small size. */
   .card {
     --text-label: var(--text-body);

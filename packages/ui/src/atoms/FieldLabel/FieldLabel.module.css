@@ -12,6 +12,13 @@
     letter-spacing: var(--tracking-label-strong);
   }
 
+  /* A section's heading over labelled values: a step above the terms under it in size, weight and colour. */
+  .label[data-tone='heading'] {
+    color: var(--text);
+    font: var(--text-body-strong);
+    letter-spacing: var(--tracking-body-strong);
+  }
+
   .label[data-disabled] {
     opacity: var(--opacity-disabled);
     cursor: not-allowed;

@@ -92,7 +92,11 @@ export function PublishDialog(props: PublishDialogProps) {
     const timer = setTimeout(() => {
       data.forms.slugAvailable(slug, form.id, address).then(
         (isFree) => {
-          if (isCurrent) setTaken(isFree ? undefined : address);
+          if (!isCurrent) return;
+          // An address made from the name that another form holds goes back to the form's own key, rather than
+          // showing an error the person never typed; one they typed says it is taken.
+          if (!isFree && !isAddressTyped) setChosenAddress(form.publicKey);
+          else setTaken(isFree ? undefined : address);
         },
         () => undefined,
       );
@@ -101,7 +105,7 @@ export function PublishDialog(props: PublishDialogProps) {
       isCurrent = false;
       clearTimeout(timer);
     };
-  }, [address, data, slug, form.id, form.publicKey]);
+  }, [address, data, slug, form.id, form.publicKey, isAddressTyped]);
 
   const addressError = !FORM_SLUG.test(address)
     ? strings.addressInvalid

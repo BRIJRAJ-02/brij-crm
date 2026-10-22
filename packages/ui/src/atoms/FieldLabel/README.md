@@ -13,6 +13,7 @@ New, by extraction. Field, Select and RadioGroup each drew the same row (the lab
 ```
 
 - `id` names the label, so a group can point `aria-labelledby` at it (FieldGroup, 22 October 2026, which had its own copy of this style).
+- `tone="heading"` heads a section of labelled values (FieldGroup's `heading` tone, a form submission's Answers): the body size, medium, in `text`, a clear step above the label size terms under it. Why a tone: the strong label sat at the same size and colour as those terms and read as one more of them (22 October 2026).
 - `tone="strong"` for a group's question (RadioGroup); `label` otherwise.
 - `as="text"` for a read only control with nothing to label (a read only Select names its group with `aria-label`).
 - `isDisabled` fades it with the control.

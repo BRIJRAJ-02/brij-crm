@@ -10,8 +10,11 @@ export interface FieldLabelProps {
   readonly aside?: string | undefined;
   /** Help beside it, an InfoTip; the row keeps the label's height. */
   readonly info?: ReactNode;
-  /** `label` (the default) for a field's name, `strong` for a group's question (RadioGroup). */
-  readonly tone?: 'label' | 'strong';
+  /**
+   * `label` (the default) for a field's name, `strong` for a group's question (RadioGroup), `heading` for a section's
+   * heading over labelled values (FieldGroup's `heading` tone): the body size, medium, in the main text colour.
+   */
+  readonly tone?: 'label' | 'strong' | 'heading';
   /**
    * `label` (the default) is React Aria's Label, wired to the control by its context; `text` a plain span, for a
    * read only field with no control to name (a Select read only names its group with `aria-label`).
