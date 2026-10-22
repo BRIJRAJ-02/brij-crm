@@ -128,15 +128,15 @@ export const strings = {
   limitHelp: {
     before: {
       text: 'Free time kept before each meeting, so a booking can’t start right after another event.',
-      example: 'With 15 min, after a meeting ending at 10:00 the first slot is 10:15.',
+      example: 'With 15 minutes, after a meeting ending at 10:00 AM the first slot is 10:15 AM.',
     },
     after: {
       text: 'Free time kept after each meeting, to wrap up or get to the next one.',
-      example: 'With 10 min, a 9:00 to 9:30 booking keeps 9:30 to 9:40 free.',
+      example: 'With 10 minutes, a 9:00 to 9:30 AM booking keeps 9:30 to 9:40 AM free.',
     },
     notice: {
-      text: 'How soon someone can book.',
-      example: 'With 4 hours, at 13:00 the first slot offered is 17:00.',
+      text: 'How much warning you need before a meeting. Times sooner than this are hidden.',
+      example: 'With 4 hours, at 1:00 PM the first slot offered is 5:00 PM.',
     },
     ahead: {
       text: 'How many days ahead people can book.',
@@ -147,8 +147,8 @@ export const strings = {
       example: 'With 3, a day with three bookings is full.',
     },
     step: {
-      text: 'How often slots start.',
-      example: 'On Meeting length, a 30 min meeting offers 9:00, 9:30 and 10:00.',
+      text: 'How often a start time is offered. Meeting length starts one right after another.',
+      example: 'On Meeting length, a 30 minute meeting offers 9:00, 9:30 and 10:00 AM.',
     },
   },
   /**
@@ -230,7 +230,7 @@ export const strings = {
   destinationUnusableColleague: 'The owner’s pick can’t take bookings now, so they go on the owner’s default.',
   destinationFailed: 'Couldn’t load calendars. Reload the page to try again.',
   destinationOwnerOnly: 'Only the page’s owner sees their calendars.',
-  destinationLoading: 'Loading calendars…',
+  destinationLoading: 'Loading calendars',
   noCalendarTitle: 'No calendar connected',
   connectCalendar: 'Connect calendar',
   notNow: 'Not now',

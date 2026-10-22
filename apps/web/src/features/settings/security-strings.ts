@@ -50,7 +50,7 @@ export const strings = {
     `${place === undefined ? '' : `Signed in from ${place}. `}That device has to sign in again. Anything unsaved there is lost.`,
   signOutOthersTitle: 'Sign out of all other devices?',
   signOutOthersText: 'Every other device has to sign in again. You stay signed in here.',
-  signingOut: 'Signing out…',
+  signingOut: 'Signing out',
   cancel: 'Cancel',
   signedOut: (device: string) => `Signed out ${device}.`,
   signedOutOthers: (count: number) =>
@@ -102,7 +102,7 @@ export const strings = {
     copyKey: 'Copy the setup key',
     firstCode: 'Code from your authenticator app',
     turnOn: 'Turn on',
-    turningOn: 'Turning on…',
+    turningOn: 'Turning on',
     codesTitle: 'Save your backup codes',
     codesText: 'Each code signs you in once if you lose your phone. They won’t be shown again.',
     copyCodes: 'Copy the backup codes',
@@ -114,12 +114,12 @@ export const strings = {
     cancel: 'Cancel',
     turnOffTitle: 'Turn off two factor sign in?',
     turnOffText: 'Signing in will need only your email code or Google. Remembered devices are forgotten.',
-    turningOff: 'Turning off…',
+    turningOff: 'Turning off',
     turnedOff: 'Two factor sign in is off.',
     turnedOn: 'Two factor sign in is on.',
     newCodesTitle: 'Make new backup codes?',
     newCodesText: 'Your old codes stop working.',
-    making: 'Making codes…',
+    making: 'Making codes',
     fileName: 'timefix-backup-codes.txt',
   },
   /** Passkeys (milestone 3, AC-887). */
@@ -169,7 +169,7 @@ export const strings = {
     action: 'Delete account',
     title: 'Delete your account?',
     blockedTitleOne: 'Can’t delete your account yet',
-    checking: 'Checking your workspaces…',
+    checking: 'Checking your workspaces',
     blockedText: (names: readonly string[]) =>
       names.length === 1
         ? `You’re the last owner of ${names[0] ?? ''}. Make someone else an owner, or delete the workspace.`
