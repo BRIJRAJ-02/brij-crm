@@ -38,8 +38,6 @@ export const strings = {
   signOut: 'Sign out',
   signOutLabel: (device: string) => `Sign out ${device}`,
   signOutOthers: 'Sign out of all other devices',
-  signOutOthersInfo: (minutes: number) =>
-    `Every other device has to sign in again. If you haven't confirmed it's you in the last ${String(minutes)} minutes, you'll be asked first. Locations are approximate.`,
   showMore: 'Show more',
   failedTitle: 'Couldn’t load your devices',
   noDevices: 'No devices signed in',
@@ -124,14 +122,15 @@ export const strings = {
   /** Passkeys (milestone 3, AC-887). */
   passkeys: {
     section: 'Passkeys',
-    description: 'Sign in with your fingerprint, face or device PIN.',
-    info: 'A passkey lives on your device or in your password manager. It signs you in on its own, with no email code, and counts as two factor sign in. It only works on Timefix, so it can’t be phished.',
+    /** Says what the tip used to, so the page has no tips (the owner, 22 October 2026). */
+    description:
+      'Sign in with your fingerprint, face or device PIN, with no email code. A passkey counts as two factor sign in.',
     unnamed: 'Passkey',
     added: (date: string) => `Added ${date}.`,
     lastUsed: (date: string) => `Last used ${date}.`,
     neverUsed: 'Not used yet.',
     /** With none yet, the row reads as two factor's does: the method, its state, the way to add one. */
-    none: 'Passkey',
+    none: 'Passkeys',
     noneText: 'None yet',
     another: 'Add one for another device',
     addText: 'Add one for each device or password manager you use.',

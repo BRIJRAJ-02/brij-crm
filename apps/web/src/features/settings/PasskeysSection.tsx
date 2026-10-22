@@ -9,7 +9,6 @@ import {
   Card,
   EmptyState,
   Field,
-  InfoTip,
   Modal,
   SettingsRow,
   SettingsSection,
@@ -170,8 +169,11 @@ export function PasskeysSection({ data, security, toasts, onFocusLost }: Passkey
   let card;
   if (security.status === 'loading') {
     card = (
+      // The row as it will stand, so the card keeps its shape from the page's pending state to its own load.
       <Card isBusy>
-        <Skeleton width="long" />
+        <SettingsRow title="" description={<Skeleton width="medium" />}>
+          <Skeleton width="short" />
+        </SettingsRow>
       </Card>
     );
   } else if (security.status === 'error') {
@@ -317,14 +319,7 @@ export function PasskeysSection({ data, security, toasts, onFocusLost }: Passkey
   }
 
   return (
-    <SettingsSection
-      title={copy.section}
-      description={
-        <>
-          {copy.description} <InfoTip label={copy.section}>{copy.info}</InfoTip>
-        </>
-      }
-    >
+    <SettingsSection title={copy.section} description={copy.description}>
       {card}
       {modal}
     </SettingsSection>
