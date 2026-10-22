@@ -12,5 +12,9 @@ export const strings = {
   moreList: 'More items at this time',
   allDay: 'All day',
   allDayOn: (day: string) => `all day ${day}`,
+  allDayMore: (count: number) => `+${String(count)} more`,
+  allDayMoreName: (count: number, day: string) =>
+    count === 1 ? `1 more all day item on ${day}` : `${String(count)} more all day items on ${day}`,
+  allDayList: (day: string) => `All day on ${day}`,
   drawHint: 'Press Enter to add time here, or drag across the day.',
 } as const;

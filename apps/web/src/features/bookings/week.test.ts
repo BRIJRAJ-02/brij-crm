@@ -15,6 +15,7 @@ import {
   piecesOf,
   rangeLabel,
   scrollMinute,
+  shownWeek,
   timeRange,
   weekDays,
   weekOf,
@@ -182,5 +183,15 @@ describe('the member zone', () => {
     // Midnights either side of the change.
     expect(midnightIn('2026-11-01', york).toISOString()).toBe('2026-11-01T04:00:00.000Z');
     expect(midnightIn('2026-11-02', york).toISOString()).toBe('2026-11-02T05:00:00.000Z');
+  });
+});
+
+describe('the week on the small month', () => {
+  it('is its first and last day', () => {
+    expect(shownWeek(weekDays('2026-10-19'))).toEqual({ shown: { start: '2026-10-19', end: '2026-10-25' } });
+  });
+
+  it('is nothing for no days', () => {
+    expect(shownWeek([])).toEqual({});
   });
 });

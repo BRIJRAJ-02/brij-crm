@@ -142,10 +142,11 @@
   }
 
   /* A narrow card: the day and Copy on one line, the windows under them at the card's start, so two times,
-     "to" and + still fit a phone; A day off keeps one line. */
+     "to" and + still fit a phone. A day off keeps one line, Unavailable in the times' column right after the
+     day, where it sits on a wide card, never pushed to the line's end. */
   @container (inline-size < 480px) {
     .rows {
-      grid-template-columns: minmax(0, 1fr) auto;
+      grid-template-columns: var(--size-column-narrow) minmax(0, 1fr) auto;
       justify-content: stretch;
     }
 
@@ -158,8 +159,13 @@
       grid-row: 2;
     }
 
+    .copy {
+      grid-column: 3;
+      grid-row: 1;
+    }
+
     .row[data-off] .ranges {
-      grid-column: 2;
+      grid-column: 2 / -1;
       grid-row: 1;
     }
   }

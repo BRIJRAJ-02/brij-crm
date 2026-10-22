@@ -669,3 +669,62 @@ export const EmptyWeek: Story = {
     await expect(canvas.getByText('No meetings this week')).toBeVisible();
   },
 };
+
+/**
+ * A busy all day row: a day over three items shows two and "+N more", which lists the rest (a Menu in a Popover);
+ * choosing one opens its card on the chip. The chips are in the day's arrow key order, above its blocks.
+ */
+export const AllDayCapped: Story = {
+  parameters: { crm: { screenshot: false } },
+  render: function Render(args) {
+    const [openId, setOpenId] = useState<string | undefined>(undefined);
+    return (
+      <Stage width="fill">
+        <WeekCalendar
+          {...args}
+          days={days()}
+          blocks={blocks()}
+          allDay={[
+            { id: 'mon-1', dayKey: '2026-10-05', title: 'Conference', hue: 'blue' },
+            { id: 'mon-2', dayKey: '2026-10-05', title: 'Out of office', hue: 'purple' },
+            { id: 'mon-3', dayKey: '2026-10-05', title: 'Release week', hue: 'green' },
+            { id: 'mon-4', dayKey: '2026-10-05', title: 'Birthday', hue: 'orange' },
+            { id: 'mon-5', dayKey: '2026-10-05', title: 'On call', hue: 'red' },
+            { id: 'thu-1', dayKey: '2026-10-08', title: 'Team offsite', hue: 'blue' },
+          ]}
+          {...(openId === undefined ? {} : { openId })}
+          detail={<p>{openId}</p>}
+          onOpen={setOpenId}
+          onClose={() => setOpenId(undefined)}
+        />
+      </Stage>
+    );
+  },
+  play: async ({ canvas, canvasElement }) => {
+    const body = within(canvasElement.ownerDocument.body);
+    // The chips are not tab stops; the day's column is.
+    const offsite = canvas.getByRole('button', { name: /^Team offsite, all day/ });
+    await expect(offsite).toHaveAttribute('tabindex', '-1');
+    // Down from Thursday's column: its all day chip first, then its blocks by start.
+    canvas.getByRole('group', { name: 'Thursday, 8 October, 3 items' }).focus();
+    await userEvent.keyboard('{ArrowDown}');
+    await expect(offsite).toHaveFocus();
+    await userEvent.keyboard('{ArrowDown}');
+    await expect(canvas.getByRole('button', { name: 'Team standup, 3:00 – 4:00 PM' })).toHaveFocus();
+    await userEvent.keyboard('{ArrowUp}');
+    await expect(offsite).toHaveFocus();
+    // Monday holds five: two show, the rest fold into "+3 more".
+    await expect(canvas.queryByRole('button', { name: /^Release week/ })).not.toBeInTheDocument();
+    const more = canvas.getByRole('button', { name: '3 more all day items on Monday, 5 October' });
+    await expect(more).toHaveTextContent('+3 more');
+    // Left from a chip moves to the day before, as from its column.
+    await userEvent.keyboard('{ArrowLeft}');
+    await waitFor(() => expect(canvas.getByRole('group', { name: 'Wednesday, 7 October, 1 item' })).toHaveFocus());
+    await userEvent.click(more);
+    await userEvent.click(await body.findByRole('menuitem', { name: 'Birthday' }));
+    await waitFor(() => expect(body.getByRole('dialog', { name: 'Details' })).toHaveTextContent('mon-4'));
+    await expect(more).toHaveAttribute('aria-expanded', 'true');
+    await userEvent.keyboard('{Escape}');
+    await waitFor(() => expect(more).toHaveFocus());
+  },
+};

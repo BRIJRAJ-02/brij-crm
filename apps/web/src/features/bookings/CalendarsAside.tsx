@@ -131,8 +131,15 @@ export interface CalendarsFrameProps {
   readonly calendars: CalendarsHeld<CalendarListState>;
   readonly panel: CalendarsPanel;
   readonly onSearch: (next: Partial<BookingsSearch>) => void;
-  /** The small month over the calendars, for jumping to a date (the week); left out, no month. */
-  readonly jumpTo?: { readonly value: string; readonly onChange: (day: string) => void };
+  /**
+   * The small month over the calendars, for jumping to a date (the week); left out, no month. `shown` is the week on
+   * screen, first and last day, tinted on the month.
+   */
+  readonly jumpTo?: {
+    readonly value: string;
+    readonly onChange: (day: string) => void;
+    readonly shown?: { readonly start: string; readonly end: string };
+  };
   /** Puts away the notice that new bookings moved to another calendar. */
   readonly onDismissNotice: () => void;
   /** No calendars panel: the view shows no calendar events (List › Bookings), so the boxes would change nothing. */
@@ -219,7 +226,12 @@ export function CalendarsFrame({
       aside
     ) : (
       <>
-        <MonthCalendar label={strings.goToDate} value={jumpTo.value} onChange={jumpTo.onChange} />
+        <MonthCalendar
+          label={strings.goToDate}
+          value={jumpTo.value}
+          onChange={jumpTo.onChange}
+          {...(jumpTo.shown === undefined ? {} : { shown: jumpTo.shown })}
+        />
         {aside}
       </>
     );
