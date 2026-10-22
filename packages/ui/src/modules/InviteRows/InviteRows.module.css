@@ -47,6 +47,14 @@
     margin-block-start: calc(-1 * var(--space-4));
   }
 
+  /* Said in place of "+ Add another" once the rows are full. */
+  .limit {
+    grid-column: 1 / -1;
+    color: var(--text-secondary);
+    font: var(--text-label);
+    letter-spacing: var(--tracking-label);
+  }
+
   /* The remove button, level with the field beside it. */
   .end {
     display: flex;

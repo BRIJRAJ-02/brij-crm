@@ -4,11 +4,12 @@
 // Main task: read who may be invited as what once the dialog opens, then hand over to InviteDialog.
 // Leaves out: the invitations list and the invite link (Settings › Members holds those).
 import type { DataLayer, RoleOption } from '@crm/data';
-import { Button, Callout, Modal, Skeleton, useDelayedLoading } from '@crm/ui';
 import { useEffect, useState } from 'react';
 import { InviteDialog } from './InviteDialog.tsx';
 import { invitableRoles } from './members.ts';
-import { strings } from './members-strings.ts';
+
+/** No addresses yet. */
+const NONE: ReadonlySet<string> = new Set();
 
 /** What the dialog reads before it can show the form. */
 interface Ready {
@@ -39,8 +40,6 @@ export function InviteTeamDialog({ data, slug, isOpen, onClose, onInvited }: Inv
   const [ready, setReady] = useState<Ready | undefined>(undefined);
   const [failed, setFailed] = useState(false);
   const [attempt, setAttempt] = useState(0);
-  // The reads are usually held already, so the skeleton shows only for a slow one.
-  const isSlow = useDelayedLoading(isOpen && ready === undefined && !failed);
 
   useEffect(() => {
     if (!isOpen) return;
@@ -73,52 +72,28 @@ export function InviteTeamDialog({ data, slug, isOpen, onClose, onInvited }: Inv
     onClose();
   };
 
-  if (ready === undefined) {
-    return (
-      <Modal
-        title={strings.inviteTitle}
-        isOpen={isOpen}
-        onOpenChange={(open) => {
-          if (!open) close();
-        }}
-        isBusy={!failed}
-        actions={
-          failed ? (
-            <>
-              <Button slot="close" kbd="ESC">
-                {strings.cancel}
-              </Button>
-              <Button
-                variant="primary"
-                onPress={() => {
-                  setFailed(false);
-                  setAttempt(attempt + 1);
-                }}
-              >
-                {strings.inviteTryAgain}
-              </Button>
-            </>
-          ) : (
-            <Button slot="close" kbd="ESC">
-              {strings.cancel}
-            </Button>
-          )
-        }
-      >
-        {failed ? <Callout tone="danger">{strings.inviteLoadFailed}</Callout> : isSlow && <Skeleton lines={2} />}
-      </Modal>
-    );
-  }
+  // One dialog throughout: it opens loading, and the form fills in once the team is read.
   return (
     <InviteDialog
       data={data}
       slug={slug}
       isOpen={isOpen}
       onClose={close}
-      roles={ready.roles}
-      defaultRole={ready.defaultRole}
-      memberEmails={ready.memberEmails}
-      invitedEmails={ready.invitedEmails}
+      roles={ready?.roles}
+      defaultRole={ready?.defaultRole}
+      memberEmails={ready?.memberEmails ?? NONE}
+      invitedEmails={ready?.invitedEmails ?? NONE}
+      read={
+        ready === undefined
+          ? {
+              status: failed ? 'failed' : 'loading',
+              onRetry: () => {
+                setFailed(false);
+                setAttempt(attempt + 1);
+              },
+            }
+          : undefined
+      }
       {...(onInvited === undefined ? {} : { onInvited })}
     />
   );

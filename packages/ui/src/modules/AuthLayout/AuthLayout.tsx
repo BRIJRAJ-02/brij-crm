@@ -122,9 +122,9 @@ export function AuthLayout({
             </div>
           </div>
           {footerRow !== undefined && (
-            <div className={styles.panelFoot}>
+            <footer className={styles.panelFoot}>
               <div className={styles.column}>{footerRow}</div>
-            </div>
+            </footer>
           )}
         </div>
         <div className={styles.side} aria-hidden="true" inert>

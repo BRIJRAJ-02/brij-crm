@@ -261,16 +261,16 @@ describe('first run’s steps', () => {
     // No roles read: no role column, everyone joins as a member.
     expect(page.getByRole('button', { name: /^Role for/ }).query()).toBeNull();
     // Nothing typed: said above the rows, focus on the first.
-    await page.getByRole('button', { name: 'Send invites' }).click();
+    await page.getByRole('button', { name: 'Invite', exact: true }).click();
     await expect.element(page.getByText('Add an email address, or skip this step.')).toBeVisible();
     await expect.element(page.getByRole('textbox', { name: 'Email' })).toHaveFocus();
-    // A pasted list splits into rows; the plus and Enter add more.
-    await page.getByRole('textbox', { name: 'Email' }).fill('ADA@acme.com, grace@acme.com');
+    // A pasted list splits into rows, a mail client's names dropped; the plus and Enter add more.
+    await page.getByRole('textbox', { name: 'Email' }).fill('Ada <ADA@acme.com>, grace@acme.com');
     await expect.element(page.getByRole('textbox', { name: 'Email 2' })).toHaveValue('grace@acme.com');
     await page.getByRole('button', { name: 'Add another person' }).click();
     await expect.element(page.getByRole('textbox', { name: 'Email 3' })).toHaveFocus();
     await page.getByRole('textbox', { name: 'Email 3' }).fill('bob@acme.com');
-    await page.getByRole('button', { name: 'Send invites' }).click();
+    await page.getByRole('button', { name: 'Invite 3 people' }).click();
     await expect.element(page.getByText('2 invites sent.')).toBeVisible();
     await expect.element(page.getByText(/Already in the workspace: grace@acme.com/)).toBeVisible();
     expect(fake.invites).toEqual([
@@ -305,7 +305,7 @@ describe('first run’s steps', () => {
     await page.getByRole('textbox', { name: 'Email 2' }).fill('bob@acme.com');
     await page.getByRole('button', { name: /Role for bob@acme.com/ }).click();
     await page.getByRole('option', { name: 'Admin' }).click();
-    await page.getByRole('button', { name: 'Send invites' }).click();
+    await page.getByRole('button', { name: 'Invite 2 people' }).click();
     await expect.element(page.getByText('2 invites sent.')).toBeVisible();
     expect(fake.invites).toEqual([
       { workspace: 'ada', emails: ['bob@acme.com'], role: 'admin' },

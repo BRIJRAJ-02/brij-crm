@@ -110,6 +110,8 @@ export function useInvite({
   const [isChecking, setChecking] = useState(false);
   const [isBusy, setBusy] = useState(false);
   const [failure, setFailure] = useState<string | undefined>(undefined);
+  // A plain note, not a failure: a paste longer than the rows left kept the first ones.
+  const [notice, setNotice] = useState<string | undefined>(undefined);
   const [sent, setSent] = useState<InviteSent | undefined>(undefined);
   const rowsRef = useRef<InviteRowsHandle>(null);
 
@@ -131,12 +133,14 @@ export function useInvite({
     setTouched(new Set());
     setChecking(false);
     setFailure(undefined);
+    setNotice(undefined);
     setSent(undefined);
   };
 
   const send = () => {
     setChecking(true);
     setFailure(undefined);
+    setNotice(undefined);
     const firstProblem = shown.find((row) => inviteProblem(row, shown, known) !== undefined);
     if (firstProblem !== undefined) {
       // To the first row that needs fixing, so its message is the next thing read.
@@ -150,6 +154,11 @@ export function useInvite({
       return;
     }
     const groups = inviteGroups(valid, roles);
+    // No role this person may invite as (the server lets only owners and admins invite): say so, send nothing.
+    if (groups.length === 0) {
+      setFailure(strings.readOnlyNote);
+      return;
+    }
     setBusy(true);
     // What went through so far, so a call failing part way never sends the earlier ones twice.
     let done: InviteSent = { invited: [], refused: [], unsent: [] };
@@ -199,8 +208,9 @@ export function useInvite({
     rows: shown,
     onChange: (next) => {
       setRows(next);
-      // A paste's note goes once the rows change again.
+      // A refusal or a paste's note goes once the rows change again.
       if (failure !== undefined && !isBusy) setFailure(undefined);
+      if (notice !== undefined) setNotice(undefined);
     },
     ...(roles === undefined ? {} : { roles: roles.map((each) => ({ id: each.id, label: each.label })), rolesInfo }),
     errors,
@@ -212,12 +222,12 @@ export function useInvite({
     onSubmit: send,
     onOverflow: (kept) => {
       // The rest never vanish without a word: they wait for the next batch.
-      setFailure(strings.pasteTooMany(kept));
+      setNotice(strings.pasteTooMany(kept));
     },
   };
 
   /** Whether anything is typed: a dialog keeps a stray click outside from throwing it away. */
   const isEmpty = shown.every((row) => row.email.trim() === '');
 
-  return { rowsProps, valid, isBusy, isEmpty, failure, sent, send, reset };
+  return { rowsProps, valid, isBusy, isEmpty, failure, notice, sent, send, reset };
 }

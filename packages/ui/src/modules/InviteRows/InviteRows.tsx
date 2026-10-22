@@ -3,7 +3,15 @@ import { Button } from '../../atoms/Button/Button.tsx';
 import { FieldLabel } from '../../atoms/FieldLabel/FieldLabel.tsx';
 import { Field } from '../../molecules/Field/Field.tsx';
 import { Select } from '../../molecules/Select/Select.tsx';
-import { addRowAfter, createInviteRow, isList, pasteInto, removeRow, type InviteRow } from './invite-rows.ts';
+import {
+  addRowAfter,
+  createInviteRow,
+  isList,
+  pasteInto,
+  removeRow,
+  splitList,
+  type InviteRow,
+} from './invite-rows.ts';
 import styles from './InviteRows.module.css';
 import { strings } from './strings.ts';
 
@@ -97,8 +105,11 @@ export function InviteRows({
     onChange(next.rows);
   };
   const type = (row: InviteRow, value: string) => {
-    if (!isList(value)) {
-      onChange(rows.map((each) => (each.id === row.id ? { ...each, email: value } : each)));
+    if (!isList(value, row.email)) {
+      // One address pasted the way a mail client copies it ("Ada Lovelace <ada@acme.com>"): the address alone.
+      const [only] = value.length - row.email.length > 1 ? splitList(value) : [];
+      const email = only !== undefined && splitList(value).length === 1 && value.includes('<') ? only : value;
+      onChange(rows.map((each) => (each.id === row.id ? { ...each, email } : each)));
       return;
     }
     const next = pasteInto(rows, row.id, value, max, make);
@@ -169,7 +180,6 @@ export function InviteRows({
                 <Select
                   label={strings.roleFor(what)}
                   isLabelHidden
-                  placement="top end"
                   items={roleItems}
                   value={row.roleId ?? null}
                   isDisabled={isDisabled}
@@ -196,7 +206,9 @@ export function InviteRows({
           </div>
         );
       })}
-      {!isFull && (
+      {isFull ? (
+        <span className={styles.limit}>{strings.atMost(max)}</span>
+      ) : (
         <span className={styles.add}>
           <Button
             variant="ghost"

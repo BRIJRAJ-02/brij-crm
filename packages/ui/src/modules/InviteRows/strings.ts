@@ -17,4 +17,6 @@ export const strings = {
   /** Its fuller name, starting with what it shows. */
   addAnotherName: 'Add another person',
   placeholder: 'name@company.com',
+  /** In place of Add another once the rows are full: "Up to 20 at a time." */
+  atMost: (max: number) => `Up to ${String(max)} at a time.`,
 } as const;

@@ -1,11 +1,12 @@
 // Brief
 // Purpose: first run's Invite your team (spec 0036, spec 0031's invitations): bring colleagues in while the workspace is new.
 // Main task: an address per row (the plus or Enter adds the next, a pasted list splits into rows), each with its role
-// where roles were read, then Send invites, or Skip for now; then on to the calendar step or the workspace.
+// where roles were read, then Invite ("Invite 2 people"), or Skip for now; then on to the calendar step or the workspace.
 // Leaves out: the list of open invitations and the invite link (Settings › Members holds those).
 import type { DataLayer, RoleOption } from '@crm/data';
 import { Button, Callout, Form, InviteRows } from '@crm/ui';
 import { useEffect, useRef } from 'react';
+import { strings as inviteStrings } from '../settings/members-strings.ts';
 import { useInvite } from '../settings/useInvite.tsx';
 import { strings } from './strings.ts';
 
@@ -22,7 +23,7 @@ export interface InviteStepProps {
 
 /**
  * Invite your team: the one invite form (Settings › Members' rows, `useInvite`
- * with InviteRows), Send invites and Skip for now. Once sent, what went out
+ * with InviteRows), Invite ("Invite 2 people", as in the dialog) and Skip for now. Once sent, what went out
  * (and any address already in, or not mailed) and Continue.
  */
 export function InviteStep({ data, slug, roles, onDone }: InviteStepProps) {
@@ -33,7 +34,7 @@ export function InviteStep({ data, slug, roles, onDone }: InviteStepProps) {
     defaultRole: roles?.defaultRole,
     noEmails: strings.noEmails,
   });
-  const { sent, isBusy, failure } = invite;
+  const { sent, isBusy, failure, notice, valid } = invite;
   const next = useRef<HTMLButtonElement>(null);
   useEffect(() => {
     if (sent !== undefined) next.current?.focus();
@@ -64,8 +65,9 @@ export function InviteStep({ data, slug, roles, onDone }: InviteStepProps) {
 
   return (
     <Form
-      submitLabel={strings.sendInvites}
-      busyLabel={strings.sendingInvites}
+      // The same words as Settings › Members' dialog: one way to add people ("Invite 2 people", "Inviting").
+      submitLabel={inviteStrings.inviteCount(valid.length)}
+      busyLabel={inviteStrings.sending}
       isBusy={isBusy}
       refusals={failure === undefined ? [] : [{ code: 'INVITE', message: failure }]}
       onSubmit={invite.send}
@@ -75,6 +77,7 @@ export function InviteStep({ data, slug, roles, onDone }: InviteStepProps) {
         </Button>
       }
     >
+      {notice !== undefined && <Callout isAnnounced>{notice}</Callout>}
       <InviteRows {...invite.rowsProps} />
     </Form>
   );

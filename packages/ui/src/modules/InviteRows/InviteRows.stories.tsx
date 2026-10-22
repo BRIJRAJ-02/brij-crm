@@ -105,9 +105,11 @@ export const PasteList: Story = {
   parameters: { crm: { screenshot: false } },
   play: async ({ canvas, args }) => {
     await userEvent.click(canvas.getByRole('textbox', { name: 'Email' }));
-    await userEvent.paste('ada@acme.com, grace@acme.com\nalan@acme.com');
+    // As a mail client copies it: the names are dropped.
+    await userEvent.paste('Ada Lovelace <ada@acme.com>, grace@acme.com\nAlan <alan@acme.com>');
     await waitFor(() => expect(canvas.getByRole('textbox', { name: 'Email 3' })).toHaveFocus());
     await expect(canvas.getByRole('textbox', { name: 'Email 3' })).toHaveValue('alan@acme.com');
+    await expect(canvas.getByRole('textbox', { name: 'Email' })).toHaveValue('ada@acme.com');
     await expect(args.onOverflow).not.toHaveBeenCalled();
   },
 };
@@ -133,6 +135,7 @@ export const Full: Story = {
   },
   play: async ({ canvas }) => {
     await expect(canvas.queryByRole('button', { name: 'Add another person' })).toBeNull();
+    await expect(canvas.getByText('Up to 2 at a time.')).toBeInTheDocument();
   },
 };
 
