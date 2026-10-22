@@ -488,10 +488,10 @@ function NewTask({ slug, pageRecord, objects, startObjectId, members, meId, onCl
       onClose={onClose}
       actions={
         <>
-          <Button slot="close" onPress={onClose}>
+          <Button slot="close" onPress={onClose} kbd="ESC">
             {strings.cancel}
           </Button>
-          <Button variant="primary" type="submit" form={formId}>
+          <Button variant="primary" type="submit" form={formId} kbd="⌘↵">
             {strings.createTask}
           </Button>
         </>

@@ -37,6 +37,8 @@ New. The record page's Tasks tab, Overview's Open tasks block and the My tasks p
 
 ## States
 
+- In a narrow card (a record's Open tasks on a phone) the checkbox keeps its own box and never shrinks under the title, and a row with no due day gives that column's room to the title (QA, 22 October 2026: the box drew over the title's first letter).
+
 Default, done, overdue, read only, a locked task, several records ("+N"), new, sections (and with rows still loading), inline (loading, empty, failed, and Show more), with the quick add and Completed, loading (skeleton rows after the loading delay), empty (the library's words or the screen's own), failed (with Try again), no access, rows still loading. Hover on a row (pointer only), focus (the inset ring).
 
 ## Keyboard

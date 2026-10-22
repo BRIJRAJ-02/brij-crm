@@ -1,6 +1,6 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
 import { useState } from 'react';
-import { expect, fn, waitFor } from 'storybook/test';
+import { expect, fn, waitFor, within } from 'storybook/test';
 import { arraySource, type ListSource } from '../../lib/list-source.ts';
 import { ADA, SAMPLE_TASKS } from '../../workbench/record-samples.ts';
 import { Stage } from '../../workbench/Stage/Stage.tsx';
@@ -36,6 +36,8 @@ interface SampleProps {
   readonly withLocked?: boolean;
   /** A phone's column: under 480px the record chips step aside so titles keep the row. */
   readonly isPhone?: boolean;
+  /** A card on a phone (a record's Open tasks): the sidebar's width. */
+  readonly isNarrowCard?: boolean;
 }
 
 /** The list holding its own tasks, as the data layer would, in a fixed height slot. */
@@ -51,6 +53,7 @@ function SampleTasks({
   isReadOnly,
   withLocked = false,
   isPhone = false,
+  isNarrowCard = false,
 }: SampleProps) {
   const [tasks, setTasks] = useState<readonly TaskEntry[]>(() =>
     isEmpty
@@ -63,7 +66,10 @@ function SampleTasks({
   );
   const source = isLong ? longSource(onRangeChange ?? (() => undefined)) : arraySource(tasks, (task) => task.id);
   return (
-    <Stage height="grid" {...(isPhone ? { width: 'phone' as const } : {})}>
+    <Stage
+      height="grid"
+      {...(isPhone ? { width: 'phone' as const } : isNarrowCard ? { width: 'narrow-fill' as const } : {})}
+    >
       <TaskList
         label="Tasks"
         tasks={source}
@@ -154,6 +160,24 @@ export const OnAPhone: Story = {
     await expect(row).not.toBeNull();
     await expect(title.getBoundingClientRect().width).toBeGreaterThanOrEqual(120);
     await expect(canvas.getAllByText('Northwind Traders')[0]).toBeVisible();
+  },
+};
+
+/** In a narrow card (a record's Open tasks on a phone): every checkbox keeps its box, clear of the title. */
+export const InANarrowCard: Story = {
+  args: { isNarrowCard: true },
+  parameters: { crm: { screenshot: false } },
+  play: async ({ canvas }) => {
+    // The assignee keeps a size-chip column, with or without an avatar, so the rows' ends line up.
+    const ends = canvas.getAllByRole('row').map((row) => row.querySelector('[class*="task-list-assignee"]'));
+    const widths = new Set(ends.map((end) => Math.round(end?.getBoundingClientRect().width ?? 0)));
+    await expect(widths.size).toBe(1);
+    for (const row of canvas.getAllByRole('row')) {
+      const box = within(row).getByRole('checkbox').closest('label')?.getBoundingClientRect();
+      const title = row.querySelector('[class*="task-list-title"]')?.getBoundingClientRect();
+      await expect(box?.width ?? 0).toBeGreaterThanOrEqual(16);
+      await expect(box?.right ?? 0).toBeLessThanOrEqual(title?.left ?? 0);
+    }
   },
 };
 

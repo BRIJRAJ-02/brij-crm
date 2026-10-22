@@ -190,7 +190,11 @@ export function CommentsTab({ slug, recordId, comments, members, meId, isReadOnl
           {strings.earlierThreads}
         </Button>
       )}
-      {isEmpty && <EmptyState icon="message-square" title={canWrite ? strings.noComments : strings.noCommentsShort} />}
+      {isEmpty && (
+        <EmptyState icon="message-square" title={strings.noComments}>
+          {canWrite ? strings.noCommentsText : undefined}
+        </EmptyState>
+      )}
       {state.open.map((shown) => (
         <CommentThread key={shown.id} {...threadProps(shown)} />
       ))}

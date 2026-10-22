@@ -361,21 +361,32 @@ function TaskListContent({
         data-pressable={onAction === undefined ? undefined : ''}
       >
         <RowShown index={row.index} onShown={onShown} />
-        <Checkbox
-          label={strings.markDone(task.title)}
-          isLabelHidden
-          isSelected={task.isDone}
-          isReadOnly={isReadOnly || task.readOnlyReason !== undefined}
-          onChange={(isDone) => {
-            onToggle(task, isDone);
-          }}
-        />
-        {task.readOnlyReason !== undefined && <LockReason reason={task.readOnlyReason} />}
+        {/* Its own box that never shrinks: in a narrow row the checkbox was squeezed and drew over the title. */}
+        <span className={styles.check}>
+          <Checkbox
+            label={strings.markDone(task.title)}
+            isLabelHidden
+            isSelected={task.isDone}
+            isReadOnly={isReadOnly || task.readOnlyReason !== undefined}
+            onChange={(isDone) => {
+              onToggle(task, isDone);
+            }}
+          />
+        </span>
+        {task.readOnlyReason !== undefined && (
+          <span className={styles.keep}>
+            <LockReason reason={task.readOnlyReason} />
+          </span>
+        )}
         <span className={styles.title}>
           {task.title}
           {task.isDone && <VisuallyHidden>{`, ${strings.done}`}</VisuallyHidden>}
         </span>
-        {isNew && <Badge text={strings.isNew} tone="accent" />}
+        {isNew && (
+          <span className={styles.keep}>
+            <Badge text={strings.isNew} tone="accent" />
+          </span>
+        )}
         {!hideRecord && records.length > 0 && (
           <span className={styles.record}>
             {/* The field set's one row of records: the first chip, then "+N", which opens every one as a link. */}
