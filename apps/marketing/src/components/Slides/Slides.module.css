@@ -1,7 +1,7 @@
 /* Slides: the app’s window at the full width of the content, its screens whole and stacked, the one on show faded
    in over the others (the owner, 23 October 2026: "slides/images moving showing what all we can do"), the frame
    fading out at its foot. The bar is a browser's: the lights and the address; the segments and the pause float at
-   the foot in a glass pill. */
+   the foot. */
 @layer components {
   .window {
     position: relative;
@@ -72,8 +72,8 @@
     white-space: nowrap;
   }
 
-  /* The glass pill: the segments and the pause, floating at the window's foot over the fade (the owner,
-     23 October 2026), the page showing through a blur. */
+  /* The segments and the pause float at the window's foot over the fade, the library's own track as the one edge
+     (the owner, 23 October 2026: no border inside a border). */
   .controls {
     display: flex;
     position: absolute;
@@ -85,11 +85,6 @@
     inline-size: fit-content;
     max-inline-size: calc(100% - 2 * var(--space-16));
     margin-inline: auto;
-    padding: var(--space-4);
-    border-radius: var(--radius-full);
-    background: color-mix(in srgb, var(--surface-raised) 45%, transparent);
-    box-shadow: var(--shadow-lg);
-    backdrop-filter: blur(var(--space-12));
   }
 
   /* The whole 16:10 screen; the frame's fade takes care of the foot. */
