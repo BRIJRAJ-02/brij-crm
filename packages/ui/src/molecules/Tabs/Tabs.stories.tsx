@@ -191,6 +191,93 @@ export const Bar: Story = {
 };
 
 /** On a phone: the tools take a row of their own under the tabs, and the search narrows to fit. */
+/** `feature`: a product's areas on its home page, equal columns with a tile, a label and a line each, the line on top. */
+export const Feature: Story = {
+  render: () => (
+    <Tabs
+      label="What Timefix does"
+      variant="feature"
+      defaultSelectedKey="crm"
+      tabs={[
+        { id: 'crm', label: 'CRM', description: 'People, companies and deals.', icon: 'users', hue: 'green' },
+        {
+          id: 'booking',
+          label: 'Booking pages',
+          description: 'Your address. They pick a time.',
+          icon: 'calendar-check',
+          hue: 'sky',
+        },
+        {
+          id: 'forms',
+          label: 'Forms',
+          description: 'Capture leads, send them to a booking.',
+          icon: 'clipboard-list',
+          hue: 'orange',
+        },
+        {
+          id: 'calendar',
+          label: 'Calendar',
+          description: 'Every meeting beside your own.',
+          icon: 'calendar-days',
+          hue: 'blue',
+        },
+      ]}
+    >
+      <TabPanel id="crm">The People table.</TabPanel>
+      <TabPanel id="booking">A booking page.</TabPanel>
+      <TabPanel id="forms">The form editor.</TabPanel>
+      <TabPanel id="calendar">The Bookings week.</TabPanel>
+    </Tabs>
+  ),
+  play: async ({ canvas }) => {
+    const tabs = canvas.getAllByRole('tab');
+    await expect(tabs).toHaveLength(4);
+    // Equal columns across the width.
+    const widths = tabs.map((tab) => Math.round(tab.getBoundingClientRect().width));
+    await expect(new Set(widths).size).toBe(1);
+    await expect(canvas.getByRole('tab', { name: /Forms/ })).toHaveTextContent('Capture leads');
+    // The description is read from the panel, not as part of the tab's name.
+    await expect(canvas.getByRole('tab', { name: 'Forms' })).toBeInTheDocument();
+  },
+};
+
+/** `feature` in a narrow slot: four equal columns of the sidebar’s width, labels wrapping, nothing cut. */
+export const FeatureNarrow: Story = {
+  render: () => (
+    <Stage width="narrow">
+      <Tabs
+        label="What Timefix does"
+        variant="feature"
+        defaultSelectedKey="crm"
+        tabs={[
+          { id: 'crm', label: 'CRM', description: 'People, companies and deals.', icon: 'users', hue: 'green' },
+          {
+            id: 'booking',
+            label: 'Booking',
+            description: 'Your address. They pick a time.',
+            icon: 'calendar-check',
+            hue: 'sky',
+          },
+          { id: 'forms', label: 'Forms', description: 'Capture leads.', icon: 'clipboard-list', hue: 'orange' },
+          { id: 'calendar', label: 'Calendar', description: 'Every meeting.', icon: 'calendar-days', hue: 'blue' },
+        ]}
+      >
+        <TabPanel id="crm">The People table.</TabPanel>
+        <TabPanel id="booking">A booking page.</TabPanel>
+        <TabPanel id="forms">The form editor.</TabPanel>
+        <TabPanel id="calendar">The Bookings week.</TabPanel>
+      </Tabs>
+    </Stage>
+  ),
+  play: async ({ canvas }) => {
+    const tabs = canvas.getAllByRole('tab');
+    await expect(tabs).toHaveLength(4);
+    // Four equal columns even in the sidebar's width; the compact look itself follows the page's width.
+    const widths = tabs.map((tab) => Math.round(tab.getBoundingClientRect().width));
+    await expect(new Set(widths).size).toBe(1);
+  },
+};
+
 export const WithEndNarrow: Story = {
   render: (args) => (
     <Stage width="narrow">

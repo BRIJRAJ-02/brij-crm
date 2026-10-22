@@ -1,0 +1,12 @@
+/* Showcase: the feature tabs, then the chosen area's Slides at the full width of the content (the owner,
+   23 October 2026: full width, proper height, nothing cut). The fold grows past one screen when it must. */
+@layer components {
+  .root {
+    display: flex;
+    flex-direction: column;
+  }
+
+  .fit {
+    padding-block-start: var(--space-16);
+  }
+}

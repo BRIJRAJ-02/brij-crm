@@ -1,0 +1,101 @@
+/* AllFeatures: the sheet inside the library's wide Modal, laid out as the app's settings page: the areas as a
+   column of quiet rows on the left, held in view at the body's inset while the sections scroll on the right (the
+   Modal's body is the scroll box); one column under the compact width. Each section is a hairline apart, its
+   features two to a row with a check. */
+@layer components {
+  /* The sheet is the size container; the layout inside it answers to its width (a query never styles its own container). */
+  .sheet {
+    container: all-features / inline-size;
+  }
+
+  .layout {
+    display: grid;
+    gap: var(--space-24);
+  }
+
+  .nav {
+    display: grid;
+    align-content: start;
+    gap: var(--space-2);
+  }
+
+  .sections {
+    display: grid;
+    min-inline-size: 0;
+  }
+
+  .section {
+    padding-block: var(--space-20);
+    border-block-start: var(--border-width-hairline) solid var(--border-subtle);
+    outline: none;
+    scroll-margin-block-start: var(--space-16);
+  }
+
+  .section:first-child {
+    padding-block-start: 0;
+    border-block-start: 0;
+  }
+
+  .section:last-child {
+    padding-block-end: 0;
+  }
+
+  .sectionTitle {
+    display: flex;
+    align-items: center;
+    gap: var(--space-8);
+    font: var(--text-title);
+    letter-spacing: var(--tracking-title);
+  }
+
+  .sectionLabel {
+    flex: 1;
+    min-inline-size: 0;
+  }
+
+  .sectionCount {
+    color: var(--text-tertiary);
+    font: var(--text-body);
+    font-variant-numeric: tabular-nums;
+    letter-spacing: var(--tracking-body);
+  }
+
+  .features {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(var(--size-column), 1fr));
+    gap: var(--space-6) var(--space-16);
+    margin-block-start: var(--space-12);
+    padding: 0;
+    list-style: none;
+  }
+
+  .feature {
+    display: flex;
+    align-items: start;
+    gap: var(--space-8);
+    color: var(--text-secondary);
+    font: var(--text-body);
+    letter-spacing: var(--tracking-body);
+  }
+
+  /* The check sits on the first line's centre. */
+  .feature > :first-child {
+    flex: none;
+    margin-block-start: var(--space-2);
+  }
+
+  @container all-features (width >= 480px) {
+    .layout {
+      grid-template-columns: calc(var(--size-column) + var(--space-16)) minmax(0, 1fr);
+      gap: var(--space-32);
+    }
+
+    /* The rail stays in view while the sections scroll (the Modal's body is the scroll box), held the body's own
+       inset under the title bar, where it started, so it never jumps or overlaps. */
+    .nav {
+      position: sticky;
+      inset-block-start: var(--overlay-inset);
+      align-self: start;
+    }
+  }
+}

@@ -1,0 +1,40 @@
+/* The marketing site's own shared custom properties, built from tokens in one place, as the library's base layer
+   builds its overlay scale: every page's gutters, frame lines and bar height. Stylelint knows these names
+   (packages/config/stylelint.js reads this file), so any component on the site may use them. */
+@layer base {
+  :root {
+    /* Where the frame's lines run, in from the window's sides: 16px on a phone; from the wide breakpoint the content
+       is a centred container, 85% of the window (the owner, 23 October 2026), capped at twice a wide dialog. */
+    --site-share: 85vw;
+    --site-edge: var(--space-16);
+    /* The gap from a frame line to the content. */
+    --site-gutter: clamp(var(--space-16), 3vw, calc(var(--space-32) + var(--space-8)));
+    /* The content's inset from the window's side: every row of every page lines up on it. */
+    --site-inline: calc(var(--site-edge) + var(--site-gutter));
+    /* The bar's height, which the frame's crosses sit on. */
+    --site-bar: calc(var(--size-toolbar) + var(--space-8));
+
+    /* The site's type outside the app's scale, declared once: the display face (styles/fonts.css, the owner's choice
+       from a reference, 23 October 2026, pending a token in the artifact), a page's headline and a legal page's title
+       (the scale stops at 28px), the lead under the headline, and the reading size of a legal page. Built from tokens
+       with clamp() and calc(), as the library's base layer builds its overlay scale. */
+    --site-font-display: 'Host Grotesk', var(--font-sans);
+    --site-text-display: clamp(
+      calc(var(--space-32) + var(--space-4)),
+      min(6.4vw, 8svh),
+      calc(var(--space-32) * 2 + var(--space-16))
+    );
+    --site-text-display-sm: clamp(var(--space-32), 5vw, calc(var(--space-32) + var(--space-16)));
+    --site-leading-display: 1.02;
+    --site-text-lead: clamp(var(--space-16), 2svh, var(--space-20));
+    --site-leading-lead: 1.5;
+    --site-text-reading: var(--space-16);
+    --site-leading-reading: 1.65;
+  }
+
+  @media (width >= 1024px) {
+    :root {
+      --site-edge: max(calc((100vw - var(--site-share)) / 2), calc((100vw - var(--size-dialog-wide) * 2) / 2));
+    }
+  }
+}

@@ -19,8 +19,8 @@ import styles from './Button.module.css';
 export type ButtonVariant =
   'secondary' | 'primary' | 'danger' | 'danger-solid' | 'ghost' | 'ghost-danger' | 'dashed' | 'link';
 
-/** `md` is the 26px control height; `lg` matches a 30px input beside it; `sm` is a chip's 20px, for an icon only Remove beside a chip inside a field. */
-export type ButtonSize = 'sm' | 'md' | 'lg';
+/** `md` is the 26px control height; `lg` matches a 30px input beside it; `sm` is a chip's 20px, for an icon only Remove beside a chip inside a field; `xl` is a page's own call to action outside the app (the marketing site's hero and footer), 36px with a title sized label. */
+export type ButtonSize = 'sm' | 'md' | 'lg' | 'xl';
 
 interface ButtonLook {
   readonly variant?: ButtonVariant;

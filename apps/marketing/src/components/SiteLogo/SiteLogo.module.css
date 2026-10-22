@@ -1,0 +1,25 @@
+/* SiteLogo: the mark at an icon tile's scale up, the wordmark beside it at the title's cap height. */
+@layer components {
+  .root {
+    display: inline-flex;
+    flex: none;
+    align-items: center;
+    gap: var(--space-8);
+    border-radius: var(--radius-md);
+    outline: none;
+  }
+
+  .root:focus-visible {
+    box-shadow: var(--shadow-focus-inset), var(--shadow-focus);
+  }
+
+  .mark {
+    inline-size: var(--space-24);
+    block-size: var(--space-24);
+  }
+
+  .wordmark {
+    inline-size: auto;
+    block-size: calc(var(--space-16) + var(--space-2));
+  }
+}
