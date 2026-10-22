@@ -133,3 +133,18 @@ export {
   RichTextNode,
   richTextBytes,
 } from './rich-text.ts';
+export {
+  checkSocialProfile,
+  checkWebLink,
+  describeLink,
+  exampleHandle,
+  networkOfAttribute,
+  profileKindOf,
+  SOCIAL_NETWORKS,
+  urlContainsNeedles,
+  type LinkLabel,
+  type ProfileKind,
+  type SocialChecked,
+  type SocialNetwork,
+  type WebLinkChecked,
+} from './social.ts';

@@ -15,7 +15,6 @@
 import { sql } from 'drizzle-orm';
 import * as z from 'zod';
 import { fitsAttribute, type EngineRefusal, type FormDocument } from '@crm/contracts';
-import { parseAttributeValue } from '@crm/contracts/values';
 import { schema, type WorkspaceTx } from '@crm/db';
 import { decodeValue, encodeValue } from '../engine/columns.ts';
 import { insertRecord, updateRecord } from '../engine/records.ts';
@@ -27,6 +26,7 @@ import { enterAsForm } from '../access/door.ts';
 import { formAccess } from '../access/policy.ts';
 import { defineKind, MAX_ATTEMPTS, type KindDefinition } from '../jobs/registry.ts';
 import { liveOptions, loadForm, loadVersions, type FormRow } from './shared.ts';
+import { parseAttributeInput } from '../engine/parse-value.ts';
 
 const { formSubmissionRecords, formSubmissions, members } = schema;
 
@@ -179,7 +179,7 @@ export function plan(
     const raw = converted.value;
     // A visitor answers one email, domain or address: the attribute holds it as one item of its list.
     const asList = attribute.isMulti && attribute.type !== 'select' && !Array.isArray(raw) ? [raw] : raw;
-    const parsed = parseAttributeValue(attribute.type, asList, { allowMultiple: attribute.isMulti });
+    const parsed = parseAttributeInput(attribute, asList);
     if (!parsed.ok) {
       refused.push({ questionId: question.id, message: parsed.error.message });
       continue;

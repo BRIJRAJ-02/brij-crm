@@ -12,7 +12,6 @@
 import { and, eq, sql } from 'drizzle-orm';
 import * as z from 'zod';
 import { ImportSettings, type EngineRefusal } from '@crm/contracts';
-import { parseAttributeValue } from '@crm/contracts/values';
 import { schema, type WorkspaceTx } from '@crm/db';
 import { canonicalId } from '../engine/ids.ts';
 import { checkObject } from '../access/visibility.ts';
@@ -36,6 +35,7 @@ import {
 } from './links.ts';
 import { RECORDS_IMPORT, readableMatches } from './service.ts';
 import { checkSettings } from './shared.ts';
+import { parseAttributeInput } from '../engine/parse-value.ts';
 
 const { imports, objects, workspaceCounters } = schema;
 
@@ -122,7 +122,7 @@ export function mergeValue(
 /** A value as its type's schema reads it (canonical: lower case emails, trimmed text), or as given when it doesn't parse. */
 function canonical(attribute: AttributeDef, value: unknown): unknown {
   if (attribute.type === 'record_reference') return value;
-  const parsed = parseAttributeValue(attribute.type, value, { allowMultiple: attribute.isMulti });
+  const parsed = parseAttributeInput(attribute, value);
   return parsed.ok ? parsed.value : value;
 }
 

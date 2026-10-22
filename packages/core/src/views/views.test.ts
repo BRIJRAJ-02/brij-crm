@@ -353,6 +353,7 @@ describe('isSortable and compileSorts (AC-465)', () => {
       objectId,
       listId: null,
       apiSlug: type,
+      objectKey: null,
       title: type,
       type,
       isMulti: false,

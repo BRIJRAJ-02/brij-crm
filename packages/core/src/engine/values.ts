@@ -3,8 +3,9 @@
 // version's time never runs before the one it replaces.
 import { and, eq, inArray, isNull, or, sql } from 'drizzle-orm';
 import { schema, type WorkspaceTx } from '@crm/db';
-import { parseAttributeValue, SYSTEM_ONLY_TYPES, type AttributeType } from '@crm/contracts/values';
+import { SYSTEM_ONLY_TYPES, type AttributeType } from '@crm/contracts/values';
 import { encodeValue, sameItems, type ItemColumns, type StoredItem } from './columns.ts';
+import { parseAttributeInput } from './parse-value.ts';
 import { canonicalId, checkId, isUuid, uuidArray } from './ids.ts';
 import { postgresError, refuse, writeConflict } from './refusals.ts';
 import { syncSortKey } from './sort-keys.ts';
@@ -22,6 +23,12 @@ export interface AttributeDef {
   readonly objectId: string | null;
   readonly listId: string | null;
   readonly apiSlug: string;
+  /**
+   * For a url attribute on an object: that object's standard key, else its
+   * API name (`companies`), so a network's profile check knows a company's
+   * page from a person's (`parseAttributeInput`). Null for any other.
+   */
+  readonly objectKey: string | null;
   readonly title: string;
   readonly type: AttributeType;
   readonly isMulti: boolean;
@@ -81,12 +88,24 @@ export function isArchivedNow(attribute: Pick<AttributeDef, 'archivedAt' | 'arch
   return attribute.archivedAt !== null || attribute.archivedBy !== null;
 }
 
+/**
+ * A url attribute's object key as SQL (`AttributeDef.objectKey`): looked up
+ * only for a url attribute on an object, the one type whose parse reads it.
+ */
+const OBJECT_KEY = sql<
+  string | null
+>`(case when "attributes"."type" = 'url' and "attributes"."object_id" is not null then
+  (select coalesce(o.standard_key, o.api_slug) from objects o
+    where o.workspace_id = "attributes"."workspace_id" and o.id = "attributes"."object_id")
+end)`;
+
 /** The columns `AttributeDef` reads. */
 const DEF_COLUMNS = {
   id: attributes.id,
   objectId: attributes.objectId,
   listId: attributes.listId,
   apiSlug: attributes.apiSlug,
+  objectKey: OBJECT_KEY,
   title: attributes.title,
   type: attributes.type,
   isMulti: attributes.isMulti,
@@ -342,7 +361,7 @@ export function parseFor(attribute: AttributeDef, input: unknown): unknown {
       attribute.id,
     );
   }
-  const parsed = parseAttributeValue(attribute.type, input, { allowMultiple: attribute.isMulti });
+  const parsed = parseAttributeInput(attribute, input);
   if (!parsed.ok) throw refuse(parsed.error.code, parsed.error.message, attribute.id);
   if (attribute.isRequired && parsed.value === null) {
     throw refuse('VALUE_REQUIRED', `${attribute.title} is required. Give it a value.`, attribute.id);

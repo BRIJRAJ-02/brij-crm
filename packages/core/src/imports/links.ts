@@ -10,8 +10,8 @@ import { sql } from 'drizzle-orm';
 import type { WorkspaceTx } from '@crm/db';
 import { visibleRecords } from '../access/visibility.ts';
 import type { EngineScope } from '../engine/scope.ts';
-import { parseAttributeValue } from '@crm/contracts/values';
 import { isArchivedNow, type AttributeDef } from '../engine/values.ts';
+import { parseAttributeInput } from '../engine/parse-value.ts';
 
 /** The far objects of a relationship attribute, with each one's unique attributes and its name attribute. */
 export interface FarObject {
@@ -260,7 +260,7 @@ export function madeValues(
   const put = (attribute: AttributeDef | undefined, raw: unknown) => {
     if (attribute === undefined) return;
     const input = attribute.isMulti && !Array.isArray(raw) ? [raw] : raw;
-    const parsed = parseAttributeValue(attribute.type, input, { allowMultiple: attribute.isMulti });
+    const parsed = parseAttributeInput(attribute, input);
     if (parsed.ok) values[attribute.id] = parsed.value;
   };
   const nameAttribute = nameAttributeId === undefined ? undefined : attributes.get(nameAttributeId);
