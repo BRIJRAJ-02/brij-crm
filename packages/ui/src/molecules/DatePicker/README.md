@@ -18,6 +18,10 @@ Ported from the artifact's DatePicker card. It is the date attribute's editor (c
 - The range picker has no quick picks (relative ranges are the filter's own).
 - `isReadOnly` shows the date with a lock and `readOnlyReason`; `error` says how to fix it.
 
+### MonthCalendar
+
+`<MonthCalendar label="Go to date" value={day} onChange={setDay} />` is the same calendar inline and compact: no field and no popover, shorter days, as wide as its column up to a menu's width. Why a variant: Bookings' calendars panel keeps a small month for jumping to a date, as Google Calendar does; it is DatePicker's month, so it reuses its grid, keys and look rather than adding a calendar.
+
 ## States
 
 Empty (placeholder segments), chosen, focus (accent border and ring), invalid, read only, disabled. In the calendar: today, chosen, in range, hover (pointer only), focus.

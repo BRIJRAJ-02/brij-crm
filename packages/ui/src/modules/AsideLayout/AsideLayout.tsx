@@ -4,10 +4,10 @@ import { Panel } from '../../molecules/Panel/Panel.tsx';
 import styles from './AsideLayout.module.css';
 
 /**
- * The width (px) below which the aside leaves the page for a sheet: the aside's own width (`size-measure`) plus a
+ * The width (px) below which the aside leaves the page for a sheet: the aside's own width (`size-menu`) plus a
  * main column of `bp-container-md`, so the main never gets less than a medium container beside it.
  */
-const NARROW_BELOW = breakpointToken('bp-container-md') + sizeToken('size-measure');
+const NARROW_BELOW = breakpointToken('bp-container-md') + sizeToken('size-menu');
 
 /** Props for AsideLayout. */
 export interface AsideLayoutProps {
@@ -23,12 +23,17 @@ export interface AsideLayoutProps {
   readonly onNarrowChange?: (isNarrow: boolean) => void;
   /** Fills the height its parent gives it, so a main column that fills (the week grid) reaches the view's foot. */
   readonly isFill?: boolean;
+  /**
+   * Flush with what is around it (a page with no gutter, the week): no gap, the aside padded and parted from the
+   * main column by a hairline, scrolling on its own.
+   */
+  readonly isFlush?: boolean;
   readonly children: ReactNode;
 }
 
 /**
  * A main column with an aside at its start (the Bookings calendars, as Google Calendar keeps its calendars beside
- * the grid). It follows its own width: wide, the aside is a `size-measure` column the caller folds; narrower than a
+ * the grid). It follows its own width: wide, the aside is a `size-menu` column the caller folds; narrower than a
  * medium container beside it, the aside leaves the page and opens as a sheet (Panel) instead.
  */
 export function AsideLayout({
@@ -38,6 +43,7 @@ export function AsideLayout({
   onAsideClose,
   onNarrowChange,
   isFill = false,
+  isFlush = false,
   children,
 }: AsideLayoutProps) {
   const ref = useRef<HTMLDivElement>(null);
@@ -68,7 +74,13 @@ export function AsideLayout({
   }, []);
   const isBeside = !isNarrow && isAsideOpen;
   return (
-    <div ref={ref} className={styles.root} data-aside={isBeside || undefined} data-fill={isFill || undefined}>
+    <div
+      ref={ref}
+      className={styles.root}
+      data-aside={isBeside || undefined}
+      data-fill={isFill || undefined}
+      data-flush={isFlush || undefined}
+    >
       {isBeside && (
         <aside className={styles.aside} aria-label={asideLabel}>
           {aside}

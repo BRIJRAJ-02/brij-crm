@@ -2,7 +2,17 @@
 // days, and where the grid opens. Run in the test process's own time zone, so
 // every instant is built from local times.
 import { describe, expect, it } from 'vitest';
-import { addDays, dayKeyOf, isDayKey, piecesOf, rangeLabel, scrollMinute, weekDays, weekOf } from './week.ts';
+import {
+  addDays,
+  allDayKeys,
+  dayKeyOf,
+  isDayKey,
+  piecesOf,
+  rangeLabel,
+  scrollMinute,
+  weekDays,
+  weekOf,
+} from './week.ts';
 
 const local = (key: string, hour: number, minute = 0) => {
   const [year = 0, month = 1, day = 1] = key.split('-').map(Number);
@@ -50,16 +60,36 @@ describe('the week', () => {
     expect(piecesOf('c', local('2026-10-30', 9), local('2026-10-30', 10), days)).toEqual([]);
   });
 
-  it('opens an hour before now in the working day, else at 8 AM, or before an early first booking', () => {
+  it('opens on the hour before now in the working day, else at the day start, or before an early first booking', () => {
     const days = weekDays('2026-10-19');
     const now = new Date(2026, 9, 21, 15, 20);
     expect(dayKeyOf(now)).toBe('2026-10-21');
-    expect(scrollMinute(days, now, [])).toBe(860);
+    expect(scrollMinute(days, now, [])).toBe(840);
     expect(scrollMinute(days, new Date(2026, 9, 21, 23, 40), [])).toBe(480);
     expect(scrollMinute(days, new Date(2026, 9, 21, 6, 0), [])).toBe(480);
     const later = new Date(2026, 10, 2, 9);
     expect(scrollMinute(days, later, [{ startMinute: 540, endMinute: 660 }])).toBe(480);
     expect(scrollMinute(days, later, [{ startMinute: 420, endMinute: 450 }])).toBe(360);
     expect(scrollMinute(days, later, [])).toBe(480);
+    // The member's own day start, on the hour, outside the working day and on another week.
+    expect(scrollMinute(days, new Date(2026, 9, 21, 6, 0), [], 9 * 60 + 30)).toBe(540);
+    expect(scrollMinute(days, later, [{ startMinute: 425, endMinute: 450 }], 9 * 60)).toBe(360);
+  });
+});
+
+describe('allDayKeys', () => {
+  it('reads an all day event by its dates, the end day left out, never moved into the local zone', () => {
+    const days = weekDays('2026-10-19');
+    expect(allDayKeys({ startsAt: '2026-10-21T00:00:00.000Z', endsAt: '2026-10-22T00:00:00.000Z' }, days)).toEqual([
+      '2026-10-21',
+    ]);
+    expect(allDayKeys({ startsAt: '2026-10-17T00:00:00.000Z', endsAt: '2026-10-21T00:00:00.000Z' }, days)).toEqual([
+      '2026-10-19',
+      '2026-10-20',
+    ]);
+    expect(allDayKeys({ startsAt: '2026-10-25T00:00:00.000Z', endsAt: '2026-10-25T00:00:00.000Z' }, days)).toEqual([
+      '2026-10-25',
+    ]);
+    expect(allDayKeys({ startsAt: '2026-10-26T00:00:00.000Z', endsAt: '2026-10-27T00:00:00.000Z' }, days)).toEqual([]);
   });
 });

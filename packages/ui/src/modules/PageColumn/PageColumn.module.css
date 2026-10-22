@@ -18,9 +18,15 @@
   }
 
   /* Filling the view: its whole height, for a child that fills it and scrolls inside (the week grid). */
-  .root[data-align='fill'] {
+  .root[data-align='fill'],
+  .root[data-align='flush'] {
     block-size: 100%;
     min-block-size: 0;
+  }
+
+  /* Flush: filling the view edge to edge, with no gutter (the week and its calendars, as Google Calendar's page). */
+  .root[data-align='flush'] {
+    padding: 0;
   }
 
   /* With a side column: the main column and the side one share a row, the main taking what's left; when

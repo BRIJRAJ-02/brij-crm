@@ -37,8 +37,10 @@ export interface EmptyStateProps {
    * one quiet line at a list row's height, at the start: the icon, the title
    * and the text after it, for a list that sits above more (a record's open
    * tasks above Completed), where a block pushed the rest down the page.
+   * `fill` is the block grown to the height of its slot and centred in it, for
+   * a view that is empty and has the whole area (Bookings › List).
    */
-  readonly layout?: 'block' | 'row';
+  readonly layout?: 'block' | 'row' | 'fill';
 }
 
 const TONE_ICONS: Readonly<Record<EmptyStateTone, IconName>> = {

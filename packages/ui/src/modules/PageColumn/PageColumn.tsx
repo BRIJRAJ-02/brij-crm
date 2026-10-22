@@ -7,8 +7,9 @@ export interface PageColumnProps {
   /**
    * `center` fills the view's height and centres its children in it: a list's empty state, alone on the page.
    * `fill` takes the view's whole height for a child that fills it (Bookings' week grid, scrolling inside).
+   * `flush` is `fill` with no gutter, so the child runs edge to edge (the week with its calendars beside it).
    */
-  readonly align?: 'start' | 'center' | 'fill';
+  readonly align?: 'start' | 'center' | 'fill' | 'flush';
   /** The column's own actions ("New booking page"), at its top end, when the page's TopBar belongs to a layout. */
   readonly actions?: ReactNode;
   /**

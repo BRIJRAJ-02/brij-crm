@@ -587,3 +587,60 @@ export const Fill: Story = {
     );
   },
 };
+
+/** Weekday hours of 9 to 5: the rest a step darker. */
+const nineToFive = (dayKey: string) => {
+  const weekday = new Date(`${dayKey}T12:00:00`).getDay();
+  return weekday === 0 || weekday === 6 ? [] : [{ startMinute: 9 * 60, endMinute: 17 * 60 }];
+};
+
+/** All day items in their row over the hours, and the hours outside 9 to 5 shaded; an all day chip opens its card. */
+export const AllDayAndHours: Story = {
+  render: function Render(args) {
+    const [openId, setOpenId] = useState<string | undefined>(undefined);
+    return (
+      <Stage width="fill">
+        <WeekCalendar
+          {...args}
+          days={days()}
+          blocks={blocks()}
+          scrollToMinute={8 * 60}
+          now={{ dayKey: '2026-10-08', minute: 15 * 60 + 30 }}
+          allDay={[
+            { id: 'offsite-9', dayKey: '2026-10-09', title: 'Team offsite', hue: 'blue' },
+            { id: 'offsite-10', dayKey: '2026-10-10', title: 'Team offsite', hue: 'blue' },
+            { id: 'holiday', dayKey: '2026-10-06', title: 'Holiday', hue: 'purple' },
+          ]}
+          openHours={nineToFive}
+          {...(openId === undefined ? {} : { openId })}
+          detail={<p>Team offsite</p>}
+          onOpen={setOpenId}
+          onClose={() => setOpenId(undefined)}
+        />
+      </Stage>
+    );
+  },
+  play: async ({ canvas, canvasElement }) => {
+    await expect(canvas.getByText('All day')).toBeInTheDocument();
+    // Saturday is a day off: one shaded stretch, the whole day; a weekday has two, before 9 and after 5.
+    const columns = canvasElement.querySelectorAll('[role="group"]');
+    await expect(columns[5]?.querySelectorAll('[class*="offHours"]').length).toBe(1);
+    await expect(columns[0]?.querySelectorAll('[class*="offHours"]').length).toBe(2);
+    await userEvent.click(canvas.getByRole('button', { name: /^Holiday, all day/ }));
+    const body = within(canvasElement.ownerDocument.body);
+    await waitFor(() => expect(body.getByRole('dialog')).toHaveTextContent('Team offsite'));
+    await userEvent.keyboard('{Escape}');
+  },
+};
+
+/** A week with nothing on it: one quiet line in the middle of the grid. */
+export const EmptyWeek: Story = {
+  render: (args) => (
+    <Stage width="fill">
+      <WeekCalendar {...args} days={days()} blocks={[]} emptyHint="No meetings this week" />
+    </Stage>
+  ),
+  play: async ({ canvas }) => {
+    await expect(canvas.getByText('No meetings this week')).toBeVisible();
+  },
+};

@@ -18,8 +18,8 @@ function Aside() {
           provider: 'google-calendar',
           email: 'ada@acme.dev',
           calendars: [
-            { id: 'ada', name: 'Ada Lovelace', hue: 'blue', isShown: true, isDefault: true, canBeDefault: true },
-            { id: 'team', name: 'Team', hue: 'green', isShown: true, isDefault: false, canBeDefault: true },
+            { id: 'ada', name: 'Ada Lovelace', hue: 'blue', isShown: true },
+            { id: 'team', name: 'Team', hue: 'green', isShown: true },
           ],
         },
       ]}

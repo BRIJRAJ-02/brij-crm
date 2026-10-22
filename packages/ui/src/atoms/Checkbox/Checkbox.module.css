@@ -20,52 +20,60 @@
     -webkit-tap-highlight-color: transparent;
   }
 
-  /* A data hue (`hue`): the box tinted with the hue's tag background, and
-     checked, edged and ticked in its tag text, the pair tags already hold to
-     contrast in both themes. The unchecked edge stays control-border. */
+  /* A data hue (`hue`), as Google Calendar draws its calendars: unchecked, the
+     box is tinted with the hue's tag background inside the control-border
+     edge; checked, it fills with the hue's solid dot colour, edged in it, and
+     the tick is dark in both themes (text in light, on-inverse in dark), which
+     holds 3:1 on every dot colour. Gray's dark dot is deep, so its tick is the
+     light text there. */
+  .root[data-hue] {
+    --check-tick: light-dark(var(--text), var(--on-inverse));
+  }
+
   .root[data-hue='gray'] {
+    --check-tick: var(--text);
     --check-fill: var(--tag-gray-bg);
-    --check-ink: var(--tag-gray-text);
+    --check-solid: var(--dot-gray);
   }
 
   .root[data-hue='blue'] {
     --check-fill: var(--tag-blue-bg);
-    --check-ink: var(--tag-blue-text);
+    --check-solid: var(--dot-blue);
   }
 
   .root[data-hue='green'] {
     --check-fill: var(--tag-green-bg);
-    --check-ink: var(--tag-green-text);
+    --check-solid: var(--dot-green);
   }
 
   .root[data-hue='purple'] {
     --check-fill: var(--tag-purple-bg);
-    --check-ink: var(--tag-purple-text);
+    --check-solid: var(--dot-purple);
   }
 
   .root[data-hue='orange'] {
     --check-fill: var(--tag-orange-bg);
-    --check-ink: var(--tag-orange-text);
+    --check-solid: var(--dot-orange);
   }
 
   .root[data-hue='sky'] {
     --check-fill: var(--tag-sky-bg);
-    --check-ink: var(--tag-sky-text);
+    --check-solid: var(--dot-sky);
   }
 
   .root[data-hue='yellow'] {
     --check-fill: var(--tag-yellow-bg);
-    --check-ink: var(--tag-yellow-text);
+    --check-solid: var(--dot-yellow);
   }
 
   .root[data-hue='red'] {
     --check-fill: var(--tag-red-bg);
-    --check-ink: var(--tag-red-text);
+    --check-solid: var(--dot-red);
   }
 
   .root[data-hue='lime'] {
     --check-fill: var(--tag-lime-bg);
-    --check-ink: var(--tag-lime-text);
+    --check-solid: var(--dot-lime);
   }
 
   .box {
@@ -79,7 +87,7 @@
     border-radius: var(--radius-xs);
     background: var(--check-fill, var(--surface-raised));
     box-shadow: var(--shadow-xs);
-    color: var(--check-ink, var(--on-accent));
+    color: var(--on-accent);
     transition:
       background-color var(--duration-hover) var(--ease-hover),
       border-color var(--duration-hover) var(--ease-hover);
@@ -88,8 +96,9 @@
   /* The edge is accent-line, which holds 3:1 on selected rows too. */
   .root[data-selected] .box,
   .root[data-indeterminate] .box {
-    border-color: var(--check-ink, var(--accent-line));
-    background: var(--check-fill, var(--accent));
+    border-color: var(--check-solid, var(--accent-line));
+    background: var(--check-solid, var(--accent));
+    color: var(--check-tick, var(--on-accent));
   }
 
   @media (hover: hover) and (pointer: fine) {

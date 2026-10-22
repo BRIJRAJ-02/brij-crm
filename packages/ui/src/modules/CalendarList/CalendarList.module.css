@@ -1,13 +1,23 @@
-/* CalendarList: each account a label Disclosure (its mark and address), its
-   calendars as rows: the checkbox in the calendar's hue taking the room,
-   Default, then the options button, always shown (touch has no hover). Show
-   all follows the accounts while any calendar is hidden. */
+/* CalendarList: a small quiet label, then the calendars as rows (the
+   checkbox in the calendar's hue taking the room, the options button after
+   it), an account with two or more calendars folding under a label
+   Disclosure (its mark and address). The options button shows on hover or
+   focus with a fine pointer, and always on touch. Show all follows the
+   accounts while any calendar is hidden. */
 @layer components {
   .root {
     display: flex;
     flex-direction: column;
-    gap: var(--space-8);
+    gap: var(--space-4);
     min-inline-size: 0;
+  }
+
+  .label {
+    margin: 0;
+    padding-inline: var(--space-4);
+    color: var(--text-secondary);
+    font: var(--text-label-strong);
+    letter-spacing: var(--tracking-label-strong);
   }
 
   .foot {
@@ -38,9 +48,18 @@
     overflow: hidden;
   }
 
+  .options {
+    display: flex;
+  }
+
   @media (hover: hover) and (pointer: fine) {
     .row:hover {
       background: var(--surface-hover);
+    }
+
+    /* Out of sight until the row is hovered or something in it has focus; still in the tab order. */
+    .row:not(:hover, :focus-within) .options {
+      opacity: 0;
     }
   }
 }
