@@ -33,6 +33,8 @@ export type { KeyboardPlatform } from './atoms/Kbd/shortcuts.ts';
 export { Link, type LinkProps } from './atoms/Link/Link.tsx';
 export { LinkChip, type LinkChipProps } from './atoms/LinkChip/LinkChip.tsx';
 export { Mention, type MentionProps } from './atoms/Mention/Mention.tsx';
+/** A small bar chart in a row's height: one bar per period on a shared scale (a rotation's weeks). */
+export { BarStrip, type BarStripBar, type BarStripProps } from './atoms/BarStrip/BarStrip.tsx';
 export { Meter, type MeterProps } from './atoms/Meter/Meter.tsx';
 export { Path, type PathProps } from './atoms/Path/Path.tsx';
 export { ProgressBar, type ProgressBarProps } from './atoms/ProgressBar/ProgressBar.tsx';
