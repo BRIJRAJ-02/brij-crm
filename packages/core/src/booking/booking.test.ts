@@ -292,6 +292,33 @@ describe('the public page and its slots (AC-629, AC-631, AC-644)', () => {
     ).rejects.toThrow();
   });
 
+  it('offers at most four lengths: core refuses a fifth on create and update, and so does the database', async () => {
+    const w = await workspace();
+    const five = [15, 30, 45, 60, 90];
+    expect(
+      await refusalOf(
+        createBookingPage(w.owner, { id: newId(), title: 'Five', timeZone: 'UTC', settings: { durations: five } }, NOW),
+      ),
+    ).toMatchObject({ code: 'CONFIG_INVALID', field: 'durations' });
+    for (const durations of [[], [15, 15]]) {
+      expect(
+        await refusalOf(
+          createBookingPage(w.owner, { id: newId(), title: 'Odd', timeZone: 'UTC', settings: { durations } }, NOW),
+        ),
+      ).toMatchObject({ code: 'CONFIG_INVALID', field: 'durations' });
+    }
+    const { page } = await livePage(w, { durations: [15, 30, 45, 60] });
+    expect(page.durations).toEqual([15, 30, 45, 60]);
+    expect(
+      await refusalOf(updateBookingPage(w.owner, { pageId: page.id, settings: { durations: five } })),
+    ).toMatchObject({ code: 'CONFIG_INVALID', field: 'durations' });
+    await expect(
+      db.withWorkspace(w.workspaceId, (tx) =>
+        tx.execute(sql`update booking_pages set durations = '{15,30,45,60,90}'::smallint[] where id = ${page.id}`),
+      ),
+    ).rejects.toThrow();
+  });
+
   it('stops offering a day at its daily limit', async () => {
     const w = await workspace();
     const { entry } = await livePage(w, { dailyLimit: 1 });

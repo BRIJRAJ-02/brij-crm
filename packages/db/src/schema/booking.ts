@@ -48,7 +48,7 @@ export const bookingPages = pgTable(
     ownerMemberId: uuid('owner_member_id').notNull(),
     title: text('title').notNull(),
     description: text('description').notNull().default(''),
-    /** Meeting lengths offered, in minutes: one to five, each 5 to 480 in steps of 5. */
+    /** Meeting lengths offered, in minutes: one to four, each 5 to 480 in steps of 5. */
     durations: smallint('durations').array().notNull(),
     /** `{ type: 'video' | 'phone' | 'address' | 'custom', value? }`. */
     location: jsonb('location').notNull(),
@@ -127,7 +127,7 @@ export const bookingPages = pgTable(
     check('booking_pages_description', sql`char_length(${t.description}) <= 2000`),
     check(
       'booking_pages_durations',
-      sql`cardinality(${t.durations}) between 1 and 5 and ${t.durations} <@ ${sql.raw(DURATION_SET)}::smallint[]`,
+      sql`cardinality(${t.durations}) between 1 and 4 and ${t.durations} <@ ${sql.raw(DURATION_SET)}::smallint[]`,
     ),
     check('booking_pages_buffers', sql`${t.bufferBefore} between 0 and 60 and ${t.bufferAfter} between 0 and 60`),
     check('booking_pages_notice', sql`${t.minNoticeMinutes} between 0 and 20160`),

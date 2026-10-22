@@ -575,6 +575,13 @@
       "when": 1792648889136,
       "tag": "0081_calendars_live_kind",
       "breakpoints": true
+    },
+    {
+      "idx": 82,
+      "version": "7",
+      "when": 1792650628908,
+      "tag": "0082_booking_four_durations",
+      "breakpoints": true
     }
   ]
 }
