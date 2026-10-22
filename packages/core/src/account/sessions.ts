@@ -15,6 +15,7 @@ import {
   STEP_UP_MINUTES,
 } from '@crm/contracts';
 import type { IdentityStore, SessionListing } from '@crm/db';
+import { deviceLabel } from './device.ts';
 import { inputInvalid, refuse } from '../engine/refusals.ts';
 import { FRESH_MESSAGE, requireFresh } from './step-up.ts';
 
@@ -85,7 +86,8 @@ const iso = (moment: string): string => new Date(moment).toISOString();
 function listingOf(row: SessionListing, currentId: string): AccountSession {
   return {
     id: row.id,
-    deviceLabel: row.deviceLabel ?? '',
+    // A session from before labels were kept (or one whose label is empty) is named from its user agent now.
+    deviceLabel: row.deviceLabel === null || row.deviceLabel === '' ? deviceLabel(row.userAgent) : row.deviceLabel,
     ...(row.country === null ? {} : { country: row.country }),
     ...(row.city === null ? {} : { city: row.city }),
     lastActiveAt: iso(row.updatedAt),
