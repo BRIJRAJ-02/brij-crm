@@ -113,6 +113,7 @@ const NO_SCOPE: ReadonlySet<string> = new Set([
   // feature's own door made); the rest are the kinds, the registry, the runner's factory and pure helpers.
   'startJob',
   'toJobView',
+  'isOverdue',
   'createRegistry',
   'defineKind',
   'kindContractProblems',

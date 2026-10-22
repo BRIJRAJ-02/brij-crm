@@ -126,12 +126,15 @@ const LINKS = [
     id: 'intro',
     title: 'Intro call',
     address: '',
+    href: '/ada/intro',
     description: 'A first chat about what you need.',
     chips: ['15 min'],
   },
-  { id: 'demo', title: 'Product demo', address: '', chips: ['30 min', '60 min'] },
+  { id: 'demo', title: 'Product demo', address: '', href: '/ada/demo', chips: ['30 min', '60 min'] },
 ];
-const TEAM_LINKS = [{ id: 'team', title: 'Talk to sales', address: '', chips: ['30 min', 'Team'] }];
+const TEAM_LINKS = [
+  { id: 'team', title: 'Talk to sales', address: '', href: '/acme/sales', chips: ['30 min', 'Team'] },
+];
 
 /** A person's public profile (`/<handle>`): their card, then their Public links, the whole row opening each. */
 export const Profile: Story = {
