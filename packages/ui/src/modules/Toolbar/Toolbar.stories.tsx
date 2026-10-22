@@ -306,7 +306,7 @@ export const WithViewActions: Story = {
       settings={{ onPress: fn() }}
     />
   ),
-  play: async ({ canvas, userEvent }) => {
+  play: async ({ canvas, canvasElement, userEvent }) => {
     await userEvent.click(canvas.getByRole('button', { name: 'All companies' }));
     const menu = await waitFor(() => {
       const found = document.querySelector('[role="menu"]');
@@ -321,6 +321,8 @@ export const WithViewActions: Story = {
     );
     // Long reasons wrap under their items rather than widening the menu.
     await expect(menu.getBoundingClientRect().width).toBeLessThan(300);
+    // The pointer leaves the switcher for the empty page, so the shot never catches its hover.
+    await userEvent.hover(canvasElement);
     await Promise.all(document.getAnimations().map((animation) => animation.finished.catch(() => undefined)));
   },
 };

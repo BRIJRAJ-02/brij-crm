@@ -187,15 +187,24 @@ test.describe('sidebar', () => {
 
     // Companies first by keyboard on its grip (AC-932): Space lifts, the arrow moves, Space drops.
     const grip = nav(page).getByRole('button', { name: 'Move Companies' });
-    await grip.focus();
-    await page.keyboard.press('Space');
-    await page.keyboard.press('ArrowUp');
-    await page.keyboard.press('Space');
     const records = (on: Page) =>
       nav(on)
         .getByRole('link')
         .filter({ hasText: /^(People|Companies)$/ });
-    await expect(records(page).first()).toHaveText('Companies');
+    // The drag wrapper lifts on the next frame and moves focus to its holder, and measures before it moves: a key
+    // too soon is lost on a busy runner, so the move is made again (from the top) until it has landed.
+    await expect(async () => {
+      if ((await records(page).first().textContent()) !== 'Companies') {
+        await grip.focus();
+        await page.keyboard.press('Space');
+        await expect(grip).not.toBeFocused({ timeout: 2_000 });
+        await page.waitForTimeout(100);
+        await page.keyboard.press('ArrowUp');
+        await page.waitForTimeout(100);
+        await page.keyboard.press('Space');
+      }
+      await expect(records(page).first()).toHaveText('Companies', { timeout: 2_000 });
+    }).toPass({ timeout: 20_000 });
     if (LIVE) await expect(records(second).first()).toHaveText('Companies', { timeout: 10_000 });
 
     // Records below Bookings and Captures from its menu.

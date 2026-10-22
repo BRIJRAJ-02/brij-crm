@@ -1,7 +1,7 @@
 # The check every push must pass: typecheck, lint, format, CSS, module edges,
 # house rules and tests, the first load budget and the artifact build; the
 # core loop's flows in the browser; the library's stories in each engine; and
-# its screenshots. Make `check`, `flows`, `stories (chromium)`,
+# its screenshots. Make `check`, `flows (1/4)` to `flows (4/4)`, `stories (chromium)`,
 # `stories (firefox)`, `stories (webkit)` and `visual` required status checks
 # on `main` (branch protection), so a red build blocks the merge.
 name: CI
@@ -130,9 +130,14 @@ jobs:
   # where a member with no calendars gets an empty state). Nothing here
   # touches a deployed environment.
   flows:
+    name: flows (${{ matrix.shard }}/4)
     runs-on: ubuntu-latest
-    # 42 flows ran past 20 minutes once round 9 had them all (run 39688130047).
-    timeout-minutes: 40
+    # Four shards, each with its own stack: one job ran past 40 minutes once round 9 had every flow (run 39706435009).
+    timeout-minutes: 25
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2, 3, 4]
     permissions:
       contents: read
     services:
@@ -248,7 +253,7 @@ jobs:
         env:
           FLOW_IMPORT_ROWS: "1000"
         run: >-
-          pnpm --filter @crm/web test:flow
+          pnpm --filter @crm/web test:flow --shard=${{ matrix.shard }}/4
           e2e/sign-in.flow.ts
           e2e/people.flow.ts
           e2e/session.flow.ts
@@ -288,7 +293,7 @@ jobs:
         if: failure() || cancelled()
         uses: actions/upload-artifact@v7
         with:
-          name: flow-results
+          name: flow-results-${{ matrix.shard }}
           path: |
             apps/web/test-results/
             logs/

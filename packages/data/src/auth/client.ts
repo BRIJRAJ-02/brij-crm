@@ -296,7 +296,9 @@ export function createBetterAuthClient({ origin, fetch, report }: AuthClientOpti
       try {
         response = await startAuthentication({ optionsJSON: options, useBrowserAutofill: autofill });
       } catch (error) {
-        if (wasCancelled(error)) return 'cancelled';
+        // The email field's waiting offer ends without a word, whatever ended it (another prompt, a browser that
+        // can't hold one): the person asked for nothing, so nothing on the page is replaced (a signed out notice was).
+        if (wasCancelled(error) || autofill) return 'cancelled';
         throw dataError('CODE_INVALID', PASSKEY_FAILED);
       }
       await unwrap(

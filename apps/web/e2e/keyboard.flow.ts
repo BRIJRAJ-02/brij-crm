@@ -196,8 +196,8 @@ test.describe('the core loop by keyboard', () => {
     await page.keyboard.press('Enter');
     // The workspaces come first (spec 0031, AC-801), the open one checked; Sign out is last, so End reaches it.
     await expect(page.getByRole('menuitem').first()).toBeFocused();
-    // Whole once the person's role is known (Leave workspace joins it).
-    await expect(page.getByRole('menuitem', { name: 'Leave workspace' })).toBeVisible();
+    // Whole once the person's role is known (it sits under the open workspace; an only owner gets no Leave workspace).
+    await expect(page.getByRole('menu').getByText('Owner', { exact: true })).toBeVisible();
     await page.keyboard.press('End');
     await expect(page.getByRole('menuitem', { name: 'Sign out' })).toBeFocused();
     await page.keyboard.press('Enter');
