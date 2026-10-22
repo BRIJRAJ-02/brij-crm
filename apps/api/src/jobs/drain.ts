@@ -287,6 +287,12 @@ export const AGAIN_MINIMUM_MS = 5_000;
 export const WAKE_COOLDOWN_MS = 5_000;
 
 /**
+ * What woke the drain: a request that may have queued work (a write, a calendar notice), or a signed in request
+ * looking for due work (`createDueWake`).
+ */
+export type DrainTrigger = 'request' | 'use';
+
+/**
  * The api's wake call on Vercel: where a write would poke the worker, it
  * starts a turn after the response, kept alive by `waitUntil`. Turns start at
  * most once per cooldown in an instance (a wake sooner waits for it, so
@@ -294,21 +300,30 @@ export const WAKE_COOLDOWN_MS = 5_000;
  * turn runs asks for one more once it ends (the running turn's LISTEN already
  * takes most new rows), within the same budget, so a burst of writes is one
  * turn and at most one more, and the whole wake stays inside the function's
- * time limit.
+ * time limit. A turn after a request logs `jobs.drain` when it ran something;
+ * one a wake from use asked for logs it whatever it found, `nothing` and
+ * `busy` included, so the logs say when the queue was last looked at.
  */
-export function createDrainWake(options: DrainWakeOptions): () => void {
+export function createDrainWake(options: DrainWakeOptions): (trigger?: DrainTrigger) => void {
   const { drain, log } = options;
   const now = options.now ?? (() => performance.now());
   const cooldownMs = options.cooldownMs ?? WAKE_COOLDOWN_MS;
   let pending: Promise<void> | undefined;
   let again = false;
+  // A wake from use asked since the last turn began: that turn's outcome is logged, whatever it was.
+  let fromUse = false;
   let lastStart = Number.NEGATIVE_INFINITY;
   const once = async (budgetMs: number) => {
     lastStart = now();
+    const by: DrainTrigger = fromUse ? 'use' : 'request';
+    fromUse = false;
     const report = await drain.run({ budgetMs });
-    if (report.outcome !== 'nothing' && report.outcome !== 'busy') log.info('jobs.drain', { ...report, by: 'request' });
+    if (by === 'use' || (report.outcome !== 'nothing' && report.outcome !== 'busy')) {
+      log.info('jobs.drain', { ...report, by });
+    }
   };
-  return () => {
+  return (trigger = 'request') => {
+    if (trigger === 'use') fromUse = true;
     if (pending !== undefined) {
       again = true;
       return;
@@ -340,8 +355,8 @@ export function createDrainWake(options: DrainWakeOptions): () => void {
 /** What the wake from use needs: the drain's knowledge of the next due row, and the wake to send. */
 export interface DueWakeOptions {
   readonly drain: Pick<JobDrain, 'nextDue'>;
-  /** The after request wake (`createDrainWake`). */
-  readonly wake: () => void;
+  /** The after request wake (`createDrainWake`), told the wake is from use, so its turn's outcome is logged. */
+  readonly wake: (trigger: DrainTrigger) => void;
   /** The longest between two looks while the app is in use (2 minutes): a row another instance queued is seen so. */
   readonly everyMs?: number;
   /** The shortest between two wakes for a row known due (10 seconds), so a busy turn isn't asked again each request. */
@@ -377,6 +392,6 @@ export function createDueWake(options: DueWakeOptions): () => void {
     const gap = due !== undefined && due <= at ? soonestMs : everyMs;
     if (at - last < gap) return;
     last = at;
-    options.wake();
+    options.wake('use');
   };
 }

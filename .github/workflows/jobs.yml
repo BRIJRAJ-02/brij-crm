@@ -9,6 +9,8 @@
 #
 # Each production gets its own run: brij-crm (JOBS_RUN_SECRET) and Timefix at app.timefix.ai (TIMEFIX_JOBS_RUN_SECRET),
 # each the same value as that Vercel project's Production JOBS_RUN_SECRET. A target whose secret is unset does nothing.
+# Timefix, on Vercel Pro, also runs the same turn every 15 minutes from Vercel Cron (GET with CRON_SECRET, a crons entry
+# its deploy patches in; spec 0045), so this run is a second floor there; brij-crm, on Hobby, has only this one.
 name: Jobs
 
 on:
