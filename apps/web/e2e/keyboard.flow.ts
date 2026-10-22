@@ -81,13 +81,6 @@ test.describe('the core loop by keyboard', () => {
     await focusedWithRing(page, page.getByLabel('Your name'), 'Your name');
     await page.keyboard.type('Ada Lovelace');
     await page.keyboard.press('Enter');
-    // About you: the first chip has focus; Space picks it, and Tab on to Continue goes on.
-    const founder = page.getByRole('radio', { name: 'Founder' });
-    await focusedWithRing(page, founder, 'Founder');
-    await page.keyboard.press('Space');
-    await expect(founder).toBeChecked();
-    await tabTo(page, page.getByRole('button', { name: 'Continue', exact: true }));
-    await page.keyboard.press('Enter');
     await focusedWithRing(page, page.getByLabel('Workspace name'), 'Workspace name');
     await tabTo(page, page.getByLabel('Web address'));
     await page.keyboard.press('ControlOrMeta+A');

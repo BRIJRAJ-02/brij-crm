@@ -2,8 +2,8 @@
    in from the top and the start of its slot and running off its end and its
    foot, which cut it on purpose (so it bleeds off the edge at any width, at
    least twice size-panel wide). Only its visible top start corner is round,
-   with a soft lifted shadow. The sidebar is the app's own width
-   (size-sidebar) on surface-sidebar, the page beside it on surface, with the
+   with a soft lifted shadow. The sidebar is a third of the window's least
+   width (about the app's own) on surface-sidebar, the page beside it on surface, with the
    app's head height (size-bar) and row heights (size-nav-item, size-row).
    Rows carry the app's labels; names are what the person typed, or the
    sample workspace; the table is still Skeleton bars until there is a
@@ -23,7 +23,7 @@
     inset-block: calc(2 * var(--space-32)) calc(-1 * var(--space-32));
     inset-inline: calc(2 * var(--space-32)) calc(-1 * var(--space-32));
     display: grid;
-    grid-template-columns: var(--size-sidebar) minmax(0, 1fr);
+    grid-template-columns: calc(2 * var(--size-panel) / 3) minmax(0, 1fr);
     min-inline-size: calc(2 * var(--size-panel));
     overflow: hidden;
     border: var(--border-width-hairline) solid var(--border-subtle);

@@ -124,13 +124,14 @@ export function InviteRows({
       data-roles={roleItems === undefined ? undefined : ''}
       data-removable={rows.length > 1 ? '' : undefined}
     >
-      {/* The columns' names, once: every row's controls carry their own (hidden) names. */}
+      {/* The columns' names, once: every row's controls carry their own (hidden) names. They stay at full strength
+          while the rows are disabled, as plain text over the faded controls keeps its contrast. */}
       <span className={styles.head}>
-        <FieldLabel label={strings.email} as="text" isDisabled={isDisabled} />
+        <FieldLabel label={strings.email} as="text" />
       </span>
       {roleItems !== undefined && (
         <span className={styles.head}>
-          <FieldLabel label={strings.role} as="text" info={rolesInfo} isDisabled={isDisabled} />
+          <FieldLabel label={strings.role} as="text" info={rolesInfo} />
         </span>
       )}
       {rows.length > 1 && <span className={styles.head} />}

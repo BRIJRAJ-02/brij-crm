@@ -168,12 +168,7 @@ export const accountRouter = authed.account.router({
     }),
     verify: authed.account.stepUp.verify.handler(async ({ context, input }) => {
       // Counted per person whatever the method, so neither an app code nor a backup code can be guessed at.
-      await limit(
-        context,
-        `step-up:${context.user.id}`,
-        [STEP_UP_CHECKS, STEP_UP_CHECKS_HOUR],
-        'Too many tries. Wait 15 minutes, then try again.',
-      );
+      await limit(context, `step-up:${context.user.id}`, [STEP_UP_CHECKS, STEP_UP_CHECKS_HOUR], 'Too many tries.');
       return verifyStepUp(stepUpDeps(context), callerOf(context), input);
     }),
   },
