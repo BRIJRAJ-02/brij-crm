@@ -14,6 +14,7 @@ import {
   ProgressBar,
   RelativeTime,
   Table,
+  type Hue,
   type IconName,
   type TableColumn,
 } from '@crm/ui';
@@ -62,6 +63,24 @@ function starterName(job: JobView, members: readonly MemberSummary[]): string {
   return members.find((member) => member.id === job.startedBy.memberId)?.name ?? strings.removedMember;
 }
 
+/** A job's state as a dot's hue (Badge's `dot`): green done, blue under way, orange needs someone, red failed. */
+const STATUS_DOT: Readonly<Record<JobView['status'], Hue | undefined>> = {
+  preparing: 'blue',
+  ready: 'orange',
+  queued: 'blue',
+  running: 'blue',
+  cancelling: 'blue',
+  succeeded: 'green',
+  failed: 'red',
+  cancelled: undefined,
+};
+
+/** The status cell's Badge: the state in words, with its dot where it has one. */
+function StatusBadge({ status }: { readonly status: JobView['status'] }) {
+  const dot = STATUS_DOT[status];
+  return <Badge text={strings.status[status]} {...(dot === undefined ? {} : { dot })} />;
+}
+
 /**
  * The progress cell: the bar and "done of total". Without a total, a running
  * job's bar is indeterminate, and any other job says only how many so far
@@ -70,6 +89,8 @@ function starterName(job: JobView, members: readonly MemberSummary[]): string {
 function Progress({ job }: { readonly job: JobView }) {
   const handled = job.done + job.refused + job.skipped;
   if (job.total === undefined || job.total === 0) {
+    // A finished job that handled nothing has no progress to tell: an empty cell, not "0 so far".
+    if (job.status !== 'running' && handled === 0) return null;
     const label = strings.progressUnknown(format(handled));
     return job.status === 'running' ? <ProgressBar label={label} /> : <>{label}</>;
   }
@@ -210,7 +231,7 @@ export function JobsScreen({ data, slug, view, isAll, members: loaded, canRunTes
         if (job.status === 'preparing' || job.status === 'ready') {
           return (
             <>
-              <Badge text={strings.status[job.status]} />
+              <StatusBadge status={job.status} />
               <InfoTip
                 label={strings.status[job.status]}
                 {...(job.status === 'ready' ? { example: strings.readyExample } : {})}
@@ -220,7 +241,7 @@ export function JobsScreen({ data, slug, view, isAll, members: loaded, canRunTes
             </>
           );
         }
-        return <Badge text={strings.status[job.status]} />;
+        return <StatusBadge status={job.status} />;
       case 'progress':
         return <Progress job={job} />;
       case 'started':
@@ -269,6 +290,7 @@ export function JobsScreen({ data, slug, view, isAll, members: loaded, canRunTes
           rows={snapshot.jobs}
           getRowId={(job) => job.id}
           renderCell={renderCell}
+          isScrollable
           isLoading={snapshot.status === 'loading'}
           emptyState={
             <EmptyState icon="list-checks" title={strings.emptyTitle}>
