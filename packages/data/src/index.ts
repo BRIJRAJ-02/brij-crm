@@ -2284,7 +2284,8 @@ export function createDataLayer({
     // One held already is live: following it again would only read it twice.
     if (jobs.get(workspace, jobId) !== undefined) return;
     const job = await call((options) => api.jobs.get({ workspace, jobId }, options)).catch(() => undefined);
-    if (job !== undefined) jobs.track(workspace, job);
+    // It may have ended before this read (a small export): the app still hears the end, once.
+    if (job !== undefined) jobs.track(workspace, job, true);
   }
 
   /**
