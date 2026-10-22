@@ -37,4 +37,11 @@
       --site-edge: max(calc((100vw - var(--site-share)) / 2), calc((100vw - var(--size-dialog-wide) * 2) / 2));
     }
   }
+
+  /* A phone: no frame, and one 16px gutter from the window's side (the owner, 23 October 2026: 15px; 16 is the token). */
+  @media (width < 1024px) {
+    :root {
+      --site-inline: var(--space-16);
+    }
+  }
 }
