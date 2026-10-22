@@ -232,6 +232,11 @@ function SettingsNav({
 
 /** Props for SettingsStack. */
 export interface SettingsStackProps {
+  /**
+   * `plain` drops the hairline SettingsRows draw between them, space alone setting them apart (the Captures
+   * editors, the owner, 22 Oct 2026: "remove lines as separators"). Settings pages keep the default.
+   */
+  readonly variant?: 'default' | 'plain';
   readonly children: ReactNode;
 }
 
@@ -239,8 +244,12 @@ export interface SettingsStackProps {
  * The page body's rhythm inside a tab's panel: sections (Cards, Tables, a
  * Callout) stacked `space-16` apart, as they are directly in the body.
  */
-export function SettingsStack({ children }: SettingsStackProps) {
-  return <div className={styles.stack}>{children}</div>;
+export function SettingsStack({ variant = 'default', children }: SettingsStackProps) {
+  return (
+    <div className={styles.stack} data-variant={variant === 'plain' ? 'plain' : undefined}>
+      {children}
+    </div>
+  );
 }
 
 /** Props for SettingsSection. */

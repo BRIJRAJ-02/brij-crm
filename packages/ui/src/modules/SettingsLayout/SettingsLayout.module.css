@@ -228,6 +228,12 @@
     border-block-start: none;
   }
 
+  /* A plain stack (the Captures editors): its rows without hairlines between them. */
+  .stack[data-variant='plain'] > .row {
+    padding-block-start: 0;
+    border-block-start: none;
+  }
+
   .rowGroupTitle {
     color: var(--text-secondary);
     font: var(--text-label-strong);
