@@ -264,7 +264,7 @@ export const workspaceDirectory = auth.table(
  * Workspace › General): the primary key keeps an address with the first
  * workspace to claim it for as long as that workspace exists, so a link with
  * an old address still finds it and no other workspace can take it. Written
- * only by `crm_claim_workspace_address` (migration 0082), which acts on the
+ * only by `crm_claim_workspace_address` (migration 0083), which acts on the
  * workspace the transaction is set to; removed with the directory row when a
  * workspace is purged. Never read to grant access.
  */

@@ -382,7 +382,7 @@ export function createIdentityStore(options: DatabaseOptions): IdentityStore {
         .where(eq(workspaceDirectory.slug, slug))
         .limit(1);
       if (row !== undefined) return row;
-      // An address it held before (migration 0082): never another workspace's, by the claim's key.
+      // An address it held before (migration 0083): never another workspace's, by the claim's key.
       const [held] = await db
         .select(directoryColumns)
         .from(workspaceAddresses)

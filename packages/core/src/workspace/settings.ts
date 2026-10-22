@@ -7,7 +7,7 @@
 // door reads the tenant row, so a deleted workspace is shut either way. A new
 // address is the exception: the directory finds the workspace by it, so it
 // moves in the same transaction, through the one function the app may call
-// there (`crm_claim_workspace_address`, migration 0082), which keeps the old
+// there (`crm_claim_workspace_address`, migration 0083), which keeps the old
 // address the workspace's own.
 import {
   namesMatch,
@@ -190,7 +190,7 @@ function addressRefusal(error: unknown): unknown {
   if (pg?.code === '23505' && pg.constraint !== undefined && ADDRESS_TAKEN.has(pg.constraint)) {
     return refuseOn('SLUG_TAKEN', ADDRESS_TAKEN_MESSAGE, 'slug');
   }
-  // The claim keeps at most 20 addresses a workspace (migration 0082), so none can hoard names.
+  // The claim keeps at most 20 addresses a workspace (migration 0083), so none can hoard names.
   if (pg?.code === '54000' && error instanceof Error && /WORKSPACE_ADDRESS_LIMIT/.test(messageChain(error))) {
     return refuseOn(
       'LIMIT_REACHED',

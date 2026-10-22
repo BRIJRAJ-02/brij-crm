@@ -1670,7 +1670,7 @@ describe('the auth schema: global identity, outside row level security (spec 000
       )
     `);
     // But the purge (spec 0031, AC-823), which removes a purged workspace's directory rows through its functions,
-    // and the address claim (migration 0082), which moves a workspace's address through its one function.
+    // and the address claim (migration 0083), which moves a workspace's address through its one function.
     expect(schema.rows.map((row) => row.grantee).sort()).toEqual(['crm_address', 'crm_purge']);
     const tables = await owner.query<{ grant: string }>(`
       select table_name || ' ' || privilege_type as grant from information_schema.role_table_grants

@@ -21,7 +21,7 @@ export interface DirectoryEntry {
 export const DIRECTORY_SLUG_CONSTRAINT = 'workspace_directory_slug';
 
 /**
- * The key of every address a workspace has held (migration 0082). A violation
+ * The key of every address a workspace has held (migration 0083). A violation
  * of it means another workspace holds the address now or held it before.
  */
 export const ADDRESS_CLAIM_CONSTRAINT = 'workspace_addresses_pkey';

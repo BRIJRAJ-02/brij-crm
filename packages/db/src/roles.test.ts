@@ -294,7 +294,7 @@ describe("migration 0018's closing check", () => {
   });
 
   /**
-   * Migrations 0067 and 0082 gave crm_purge and crm_address their narrow reach into schema auth (spec 0031, and the
+   * Migrations 0067 and 0083 gave crm_purge and crm_address their narrow reach into schema auth (spec 0031, and the
    * address change; guards.test.ts holds each to exactly that). 0017's and 0018's checks ran before then, so each
    * run first takes it back, as the database stood then.
    */
@@ -302,7 +302,7 @@ describe("migration 0018's closing check", () => {
     'revoke all on auth.workspace_membership, auth.workspace_directory, auth.user_prefs from crm_purge',
     'revoke all (workspace_id) on auth.workspace_membership, auth.workspace_directory from crm_purge',
     'revoke all (last_workspace_id) on auth.user_prefs from crm_purge',
-    // And migration 0082's address claim, with its own closing check.
+    // And migration 0083's address claim, with its own closing check.
     'revoke all on auth.workspace_addresses from crm_address',
     'revoke all (workspace_id, slug) on auth.workspace_directory from crm_address',
   ];
