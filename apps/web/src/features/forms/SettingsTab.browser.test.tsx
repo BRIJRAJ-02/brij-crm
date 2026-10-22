@@ -1,7 +1,7 @@
 // A form's owner in Chromium (spec 0029 milestone 3, AC-755; spec 0023 AC-567, AC-1050): Settings › Details' Owner
 // lists Nobody, the teammates and, under Round robin, the groups the reader can see with how many are switched on.
 // Choosing a group says who gets each new record and saves the group alone (never a teammate beside it) from the
-// SaveBar; a group with nobody switched on, and one the reader can't list, each say why in the one line under it.
+// SaveBar; a group with nobody switched on, and one the reader can't list, each say so in the one line under it.
 import type { DataLayer, FormDocument, FormView, MemberSummary, ObjectSummary, RotationView } from '@crm/data';
 import { useState } from 'react';
 import { afterEach, beforeAll, describe, expect, it } from 'vitest';
@@ -237,11 +237,11 @@ describe('the owner of a form’s new records', () => {
     await expect.poll(() => fake.saves.at(-1)).toEqual({ ownerMemberId: null, ownerRotationId: null });
   });
 
-  it('keeps a group the reader can’t list in view, muted, with why, and the keyboard reaches every choice', async () => {
+  it('keeps a group the reader can’t list in view, saying new records still go to it, and the keyboard reaches every choice', async () => {
     await show(formView({ ownerRotationId: GONE }), [group(SALES, 'Sales team', [true, true])]);
     const owner = page.getByRole('button', { name: /Owner$/ });
     await expect.element(owner).toHaveTextContent('Round robin group');
-    await expect.element(page.getByText('This round robin group is gone, or you can’t see it.')).toBeVisible();
+    await expect.element(page.getByText('New records go to a round robin group you can’t see.')).toBeVisible();
 
     // Opened from the keyboard, the arrows move through the list; Enter picks a teammate in place of the group.
     (owner.element() as HTMLElement).focus();

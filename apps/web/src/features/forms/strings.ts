@@ -224,7 +224,9 @@ export const strings = {
   groupNobodyOn: (name: string) => `Nobody in ${name} is switched on, so new records get no owner.`,
   /** The group the form names, while the list loads or when the reader can't list it. */
   groupUnknown: 'Round robin group',
-  groupGone: 'This round robin group is gone, or you can’t see it.',
+  /** A group the form names that the reader can't list: it still hands out new records. */
+  groupHidden: 'New records go to a round robin group you can’t see.',
+  groupsFailed: 'Your round robin groups didn’t load.',
   spamTitle: 'Spam',
   spamSummary: 'On. Doubtful sends wait for review.',
   detailsTitle: 'Details',

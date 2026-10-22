@@ -126,14 +126,12 @@ async function openCandidates(tx: WorkspaceTx, rules: RotationRules, now: Date):
   const pool = (await eligibleMembers(tx, [rules.id])).get(rules.id) ?? [];
   const ids = pool.map((member) => member.memberId);
   const counts = await windowCounts(tx, rules.id, windowStart(now, rules.windowDays));
-  // A week either side, so the weekly cap counts the whole of this week in every member's zone.
-  const starts = await capStarts(
-    tx,
-    rules.id,
-    ids,
-    new Date(now.getTime() - 8 * DAY_MS),
-    new Date(now.getTime() + 8 * DAY_MS),
-  );
+  // A week either side, so the weekly cap counts the whole of this week in every member's zone. Read only when
+  // someone in the pool has a cap: it reads the rotation's ledger, which leads grow by one row each.
+  const capped = pool.some((member) => member.dailyCap !== null || member.weeklyCap !== null);
+  const starts = capped
+    ? await capStarts(tx, rules.id, ids, new Date(now.getTime() - 8 * DAY_MS), new Date(now.getTime() + 8 * DAY_MS))
+    : new Map<string, readonly Date[]>();
   const today = await todayOf(tx, ids, now);
   const everyone = candidatesOf({ rules, members: pool }, { counts, starts });
   const waiting = rules.strategy === 'even' ? evenWaiting(everyone, rules.evenGap) : new Set<string>();

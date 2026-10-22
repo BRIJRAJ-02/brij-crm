@@ -361,8 +361,8 @@ export async function fileAnswers(context: WriteContext, input: FileInput): Prom
   const { form, document, attributes, objectId } = input;
   const { planned, refused } = plan(document, attributes, input.options, input.answers);
   const owner = ownerAttribute(attributes);
-  // A rotation's lock comes before any match key's (bookings take it first too), so a batch filing many
-  // submissions and one submission never wait on each other in opposite orders. Held to commit.
+  // A rotation's lock comes before any match key's (bookings take it first too), held to commit. A batch takes it
+  // before its first submission's row (`fileBatch`), so this is the same lock taken again there.
   const rotationId = owner === undefined ? undefined : (form.ownerRotationId ?? undefined);
   if (rotationId !== undefined) await lockRotation(tx, context.scope.workspaceId, rotationId);
 

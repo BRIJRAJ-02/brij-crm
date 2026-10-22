@@ -52,6 +52,7 @@ import {
   withPrevious,
 } from './process.ts';
 import { canSeeForm, loadForm, loadVersions, type FormRow } from './shared.ts';
+import { lockRotation } from '../rotation/ledger.ts';
 
 /** The Add to CRM job's name. */
 export const FORMS_FILE = 'forms.file';
@@ -216,6 +217,11 @@ async function fileBatch(
       finished: true,
       failed: { code: 'FORM_STATE', message: 'The form is gone or no longer published, so nothing more was filed.' },
     };
+  }
+  // A form whose owner is a rotation takes the rotation's lock before any submission's row, held to commit, so two
+  // batches over overlapping submissions never hold one each and wait on the other (filing takes it again, at no cost).
+  if (mapping.form.ownerRotationId !== null) {
+    await lockRotation(tx, context.scope.workspaceId, mapping.form.ownerRotationId);
   }
   const outcomes: ItemOutcome[] = [];
   for (const item of input.items) {

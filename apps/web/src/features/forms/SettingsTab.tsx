@@ -295,7 +295,7 @@ export function SettingsTab({
   const rotationList = rotations.status === 'ready' ? rotations.items : [];
 
   // The owner of new records (AC-567): nobody, a teammate, or a round robin group (spec 0029, AC-755), the groups
-  // the reader can see under their own heading. One the form names that the reader can't list stays shown, muted.
+  // the reader can see under their own heading. One the form names that the reader can't list stays shown, by name.
   const chosenGroupId = groupOf(settings.values.owner);
   const chosenGroup = rotationList.find((rotation) => rotation.id === chosenGroupId);
   const takers = (rotation: (typeof rotationList)[number]) => rotation.members.filter((member) => member.isOn).length;
@@ -309,18 +309,20 @@ export function SettingsTab({
       group: strings.ownerGroups,
     })),
     ...(chosenGroupId !== undefined && chosenGroup === undefined
-      ? [{ id: groupOption(chosenGroupId), label: strings.groupUnknown, isArchived: true, group: strings.ownerGroups }]
+      ? [{ id: groupOption(chosenGroupId), label: strings.groupUnknown, group: strings.ownerGroups }]
       : []),
   ];
   // One line under it: who gets new records, or why nobody will.
   const ownerHint =
-    chosenGroupId === undefined || (chosenGroup === undefined && rotations.status === 'loading')
-      ? strings.ownerHint
-      : chosenGroup === undefined
-        ? strings.groupGone
-        : takers(chosenGroup) === 0
-          ? strings.groupNobodyOn(chosenGroup.name)
-          : strings.groupHint(chosenGroup.name);
+    rotations.status === 'error'
+      ? strings.groupsFailed
+      : chosenGroupId === undefined || (chosenGroup === undefined && rotations.status !== 'ready')
+        ? strings.ownerHint
+        : chosenGroup === undefined
+          ? strings.groupHidden
+          : takers(chosenGroup) === 0
+            ? strings.groupNobodyOn(chosenGroup.name)
+            : strings.groupHint(chosenGroup.name);
   const poolOf = (pageId: string) => {
     const page = pageList.find((each) => each.id === pageId);
     if (page?.kind !== 'round_robin') return [];
