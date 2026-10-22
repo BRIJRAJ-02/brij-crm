@@ -1,4 +1,4 @@
-import { useId, useSyncExternalStore } from 'react';
+import { useId, useRef, useState, useSyncExternalStore } from 'react';
 import { useFocusVisible } from 'react-aria';
 import { RadioButton, RadioField, RadioGroup, SelectionIndicator } from 'react-aria-components';
 import { Icon } from '../../atoms/Icon/Icon.tsx';
@@ -107,6 +107,8 @@ export function SegmentedControl({
                     <Icon name={segment.icon} size="sm" />
                   </span>
                 </Tooltip>
+              ) : isLabelCollapsible ? (
+                <CollapsibleIcon icon={segment.icon} label={segment.label} />
               ) : (
                 <span className={styles.icon}>
                   <Icon name={segment.icon} size="sm" />
@@ -175,5 +177,33 @@ export function ThemeSwitch({ controller, isCompact = false, orientation = 'hori
         controller.set(next as ThemeChoice);
       }}
     />
+  );
+}
+
+/**
+ * A collapsible segment's icon: while its label is hidden in a narrow bar (a phone), hovering it names the
+ * segment in a tooltip, as an icon only segment does; with the label showing, no tooltip opens.
+ */
+function CollapsibleIcon({ icon, label }: { readonly icon: IconName; readonly label: string }) {
+  const [isOpen, setOpen] = useState(false);
+  const own = useRef<HTMLSpanElement>(null);
+  const isCollapsed = () => {
+    const segment = own.current?.closest(`.${styles.segment ?? ''}`);
+    const words = segment?.querySelector<HTMLElement>('[data-collapsible]');
+    return words !== null && words !== undefined && words.getClientRects().length === 0;
+  };
+  return (
+    <Tooltip
+      content={label}
+      isTextTrigger
+      isOpen={isOpen}
+      onOpenChange={(next) => {
+        setOpen(next && isCollapsed());
+      }}
+    >
+      <span ref={own} className={styles.icon}>
+        <Icon name={icon} size="sm" />
+      </span>
+    </Tooltip>
   );
 }
