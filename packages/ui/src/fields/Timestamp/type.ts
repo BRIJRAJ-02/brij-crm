@@ -15,5 +15,7 @@ export const timestampType: AttributeTypeDef<'timestamp'> = {
   fromText: () => refuse('The system sets this time; it can’t be pasted.'),
   align: 'start',
   editIn: 'none',
-  width: 'narrow',
+  // The default width: a narrow column drew its header as "C…" beside the sort, lock and menu icons, and cut a full
+  // date and time short (QA, 22 October 2026).
+  width: 'default',
 };
