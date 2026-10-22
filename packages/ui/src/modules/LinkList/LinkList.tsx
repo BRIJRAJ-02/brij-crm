@@ -197,6 +197,7 @@ export function LinkList({
   rowsAreLinks = false,
 }: LinkListProps) {
   const isCompact = density === 'compact';
+  const isCard = isCompact && placement === 'card';
   const frameProps = {
     className: styles.frame,
     'data-density': density,
@@ -235,9 +236,11 @@ export function LinkList({
           tone="error"
           title={errorTitle ?? strings.failed}
           // In a card the failure takes one row, as the card's other sections draw theirs.
-          layout={isCompact && placement === 'card' ? 'row' : 'block'}
+          layout={isCard ? 'row' : 'block'}
           {...(onRetry === undefined ? {} : { onRetry })}
-        />
+        >
+          {isCard ? strings.failedBody : undefined}
+        </EmptyState>
       </div>
     );
   }

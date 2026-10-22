@@ -60,7 +60,8 @@ export interface SectionRun<Section> {
 
 /**
  * The sections in runs, keeping their order: each full one alone, each stretch of half ones in one grid. A stretch
- * with an odd count gives its last one the full width, so no card sits beside an empty column.
+ * with an odd count gives its last one the full width, so no card sits beside an empty column (QA, 22 October 2026:
+ * a wide card with little in it reads better than a hole; which card that is depends on what the member sees).
  */
 export function sectionRuns<Section extends Pick<HomeSection, 'id' | 'width'>>(
   sections: readonly Section[],

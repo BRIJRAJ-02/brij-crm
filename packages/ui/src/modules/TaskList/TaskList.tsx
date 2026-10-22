@@ -295,10 +295,10 @@ function TaskListContent({
     return (
       <EmptyState
         tone="error"
-        icon="list-todo"
+        // In place (a card on Home) or framed, the failure takes one row, like the empty list would, with the
+        // warning icon every failed row shows.
+        {...(isInline || isFramed ? { layout: 'row' as const } : { icon: 'list-todo' as const })}
         title={strings.failed}
-        // In place (a card on Home) or framed, the failure takes one row, like the empty list would.
-        layout={isInline || isFramed ? 'row' : 'block'}
         {...(onRetry === undefined ? {} : { onRetry })}
       >
         {strings.failedBody}
