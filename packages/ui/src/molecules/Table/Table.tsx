@@ -27,6 +27,17 @@ export interface TableColumn {
   readonly isInline?: boolean;
   /** Help beside the label, an InfoTip, where the header alone isn't clear (what each role may do). */
   readonly info?: ReactNode;
+  /**
+   * `fit` shrinks the column to its widest content (its label, a checkbox), so columns of controls keep one width
+   * from table to table; `fill` takes the room the rest leave and lets its text truncate (TruncatedText) rather
+   * than widen the table. Left out, the browser shares the width as usual.
+   */
+  readonly size?: 'fit' | 'fill';
+  /**
+   * The cell's content shows only while its row is hovered or holds focus (or its menu is open), so a list of
+   * calendars isn't a column of identical buttons; always shown on touch, where nothing hovers.
+   */
+  readonly showsOnHover?: boolean;
 }
 
 /** Rows that can be moved, and each one's name for its handle; or neither. */
@@ -156,6 +167,7 @@ export function Table<T>({
             textValue={column.label}
             {...(column.info === undefined ? {} : { 'aria-label': column.label })}
             data-align={column.align ?? 'start'}
+            data-size={column.size}
             data-handle={column.id === HANDLE || column.id === SELECT || undefined}
             data-sticky={isHeaderSticky || undefined}
           >
@@ -214,6 +226,7 @@ export function Table<T>({
                 <Cell
                   className={styles.cell}
                   data-align={column.align ?? 'start'}
+                  data-size={column.size}
                   data-gutter-handle={(handleInGutter && column.id === firstColumnId) || undefined}
                 >
                   {handleInGutter && column.id === firstColumnId && (
@@ -221,7 +234,9 @@ export function Table<T>({
                       <SortableRowGrip id={item.id} label={strings.move(getRowLabel(item.row))} reach="end" />
                     </span>
                   )}
-                  {column.isInline === true ? (
+                  {column.showsOnHover === true ? (
+                    <span className={styles.reveal}>{renderCell(item.row, column.id)}</span>
+                  ) : column.isInline === true ? (
                     <span className={styles.inline}>{renderCell(item.row, column.id)}</span>
                   ) : (
                     renderCell(item.row, column.id)

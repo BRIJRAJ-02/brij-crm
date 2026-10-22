@@ -161,6 +161,33 @@
     min-inline-size: 0;
   }
 
+  /* A fitted column takes its widest content and no more, so control columns line up from table to table; a
+     filling one takes the rest, and its text truncates instead of widening the table. */
+  .column[data-size='fit'],
+  .cell[data-size='fit'] {
+    inline-size: 1%;
+    white-space: nowrap;
+  }
+
+  .column[data-size='fill'],
+  .cell[data-size='fill'] {
+    inline-size: 100%;
+    max-inline-size: 0;
+  }
+
+  .reveal {
+    display: inline-flex;
+    align-items: center;
+  }
+
+  /* A column shown on hover: its content waits for the row's hover or focus (or an open menu) where a pointer
+     can hover; on touch it is always there. */
+  @media (hover: hover) and (pointer: fine) {
+    .row:not([data-hovered], [data-focus-visible], :focus-within, :has([aria-expanded='true'])) .reveal {
+      opacity: 0;
+    }
+  }
+
   /* The row being moved: lifted above the rest, which slide out of its way. */
   .row[data-dragging] {
     position: relative;
