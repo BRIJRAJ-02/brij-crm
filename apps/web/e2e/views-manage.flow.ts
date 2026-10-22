@@ -147,11 +147,12 @@ test.describe('saved views: many views and their layout', () => {
     await checkScreen(bea, 'views-locked');
 
     // Ada drafts a sort and keeps it as a view of its own from the Save menu (AC-466, AC-472).
-    await ada.getByRole('toolbar', { name: 'View options' }).getByRole('button', { name: 'Created at' }).click();
+    // The default order runs with no chip, so the sort starts from Sort: Created at, which starts ascending.
+    await ada.getByRole('toolbar', { name: 'View options' }).getByRole('button', { name: 'Sort', exact: true }).click();
     const sorts = ada.getByRole('dialog', { name: 'Sorts' });
-    await sorts.getByRole('button', { name: 'Descending' }).click();
-    await ada.getByRole('menuitemradio', { name: 'Ascending' }).click();
-    await expect(sorts.getByRole('button', { name: 'Ascending' })).toBeVisible();
+    await sorts.getByRole('button', { name: 'Add sort' }).click();
+    await ada.getByRole('menuitem', { name: 'Created at' }).click();
+    await expect(sorts.getByRole('button', { name: /Ascending/ })).toBeVisible();
     // The direction menu has closed (its exit takes a moment) before Esc closes the builder.
     await expect(ada.getByRole('menu')).toHaveCount(0);
     await ada.keyboard.press('Escape');

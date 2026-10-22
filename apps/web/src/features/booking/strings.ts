@@ -266,6 +266,8 @@ export const strings = {
   /** A day off row's remove button: the day opens again by the weekly hours. */
   removeDayOff: (date: string) => `Remove the day off on ${date}`,
   noDaysOff: 'No days off yet',
+  /** Days off while the schedules load, for screen readers. */
+  daysOffLoading: 'Loading days off',
   pickDate: 'Pick the day to close.',
   pickLaterDate: 'Pick today or a later day.',
   addDayOff: 'Add day off',

@@ -4,6 +4,7 @@
 // Leaves out: which schedule is open and what to do with it (the switcher, in the tab strip), and which schedule a page uses (each page picks in its own editor).
 import type { BookingAvailability, DataLayer, ScheduleView } from '@crm/data';
 import {
+  Button,
   Card,
   EmptyState,
   HoursEditor,
@@ -11,7 +12,6 @@ import {
   PageColumn,
   SaveBar,
   Select,
-  Skeleton,
   useFormatSettings,
   type SaveBarStatus,
 } from '@crm/ui';
@@ -251,8 +251,12 @@ export function ScheduleEditorPending() {
       week={<WeekCardPending />}
       aside={
         <>
+          {/* Days off in its loaded anatomy: a row's place, then Add day off under it. */}
           <Card title={strings.daysOff} isBusy>
-            <Skeleton lines={2} />
+            <EmptyState layout="row" isLoading title={strings.daysOffLoading} />
+            <Button icon="plus" isDisabled>
+              {strings.addDayOff}
+            </Button>
           </Card>
           {/* The rows Used by draws once loaded, in their loading shape. */}
           <Card title={scheduleStrings.usedByLabel}>

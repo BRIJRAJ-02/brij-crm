@@ -42,6 +42,7 @@ test.describe('a form’s first publish', () => {
     await expect(page.getByRole('dialog')).toHaveCount(0);
     // Publish left once the form went live; focus is on More actions, beside where it was.
     await expect(page.getByRole('button', { name: 'More actions' })).toBeFocused();
-    await expect(page.getByText(/Live · v1/)).toBeVisible();
+    // The status says it once on screen; a cut off label also carries it whole in its tooltip.
+    await expect(page.getByText(/Live · v1/).first()).toBeVisible();
   });
 });

@@ -162,7 +162,7 @@ test.describe('availability schedules', () => {
       return page.getByRole('alertdialog', { name: 'Delete the Evenings schedule?' });
     };
     const confirm = await remove();
-    await expect(confirm).toContainText('Intro call will use Working hours, your default. This can’t be undone.');
+    await expect(confirm).toContainText('Intro call will use Working hours, your default, and this can’t be undone.');
     await confirm.getByRole('button', { name: 'Cancel' }).click();
     await expect(confirm).toBeHidden();
     await expect(switcher('Evenings')).toBeVisible();

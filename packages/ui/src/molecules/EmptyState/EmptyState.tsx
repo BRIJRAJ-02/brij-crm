@@ -69,15 +69,26 @@ export function EmptyState({
     // Busy from the start, so screen readers hear the title at once; the
     // marks wait for the delay.
     return (
-      <div className={styles.root} role="status" aria-busy="true">
-        {showSkeleton && (
-          <>
-            <span className={styles.icon} />
+      <div
+        className={styles.root}
+        // A row keeps its row's place and draws one line there; the block and fill load as the block does.
+        data-layout={layout === 'row' ? 'row' : undefined}
+        role="status"
+        aria-busy="true"
+      >
+        {showSkeleton &&
+          (layout === 'row' ? (
             <span className={styles.lines}>
-              <Skeleton lines={2} align="center" />
+              <Skeleton width="medium" />
             </span>
-          </>
-        )}
+          ) : (
+            <>
+              <span className={styles.icon} />
+              <span className={styles.lines}>
+                <Skeleton lines={2} align="center" />
+              </span>
+            </>
+          ))}
         <VisuallyHidden>{title}</VisuallyHidden>
       </div>
     );
