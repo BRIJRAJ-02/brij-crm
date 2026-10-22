@@ -3,6 +3,7 @@
 // with no React or library imports, so the view route's loader (in the first
 // load) and the screen agree on what runs.
 import {
+  CREATED_AT_SLUG,
   effectiveQuery,
   type AttributeDefinition,
   type DraftQuery,
@@ -11,6 +12,29 @@ import {
   type View,
   type ViewQuery,
 } from '@crm/data';
+
+/**
+ * Whether sorts ask only what every view runs anyway, Created at newest first (AC-57): none at all, or exactly
+ * that one sort. Such a view shows no sort chip, as Attio, Notion and Linear leave their default order unsaid.
+ */
+export function isDefaultSort(
+  sorts: readonly { readonly attributeId: string; readonly direction: 'ascending' | 'descending' }[],
+  attributes: readonly Pick<AttributeDefinition, 'id' | 'isSystem' | 'apiSlug'>[],
+): boolean {
+  if (sorts.length === 0) return true;
+  const [only] = sorts;
+  if (sorts.length !== 1 || only === undefined || only.direction !== 'descending') return false;
+  const createdAt = attributes.find((attribute) => attribute.isSystem && attribute.apiSlug === CREATED_AT_SLUG);
+  return createdAt !== undefined && only.attributeId === createdAt.id;
+}
+
+/** The sort every view runs when it asks none: Created at, newest first; none when the object has no Created at. */
+export function defaultSorts(
+  attributes: readonly Pick<AttributeDefinition, 'id' | 'isSystem' | 'apiSlug'>[],
+): readonly { readonly attributeId: string; readonly direction: 'descending' }[] {
+  const createdAt = attributes.find((attribute) => attribute.isSystem && attribute.apiSlug === CREATED_AT_SLUG);
+  return createdAt === undefined ? [] : [{ attributeId: createdAt.id, direction: 'descending' }];
+}
 
 /** A view's saved filter and sorts. */
 export function savedQuery(view: View): DraftQuery {

@@ -6,6 +6,7 @@ One screen shows any view of any object (spec 0020): the TopBar, the ViewBar wit
 
 - **Purpose**: slice one object the way you work and keep it.
 - **Main task**: filter and sort the table, then save it.
+- **The default order** (owner, 22 October 2026): Created at, newest first, runs silently with no chip, whether the view stores no sorts or exactly that one (`isDefaultSort` in `query.ts`), as Attio, Notion and Linear leave their default order unsaid. A chip shows only for another order, and removing it goes back to the default. The dashed Sort button opens the builder, which shows the default that runs when the view asks none. Filters have no default, so every filter chip is one someone chose.
 - **Leaves out**: grouping inside the table, view search, charts, sharing outside the workspace.
 
 ## Files

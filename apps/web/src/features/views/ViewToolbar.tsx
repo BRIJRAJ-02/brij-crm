@@ -28,6 +28,7 @@ import {
 } from '@crm/ui';
 import { useRouteContext } from '@tanstack/react-router';
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { defaultSorts, isDefaultSort } from './query.ts';
 import { strings } from './strings.ts';
 
 const NO_FILTER: FilterGroup = { conjunction: 'and', conditions: [] };
@@ -171,7 +172,10 @@ export function ViewToolbar({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [filterOn]);
 
-  const [first, ...rest] = query.sorts;
+  // The default order (Created at, newest first) applies silently: no chip, saved or not. A chip shows only for
+  // another order, and removing it goes back to the default.
+  const isDefaultOrder = isDefaultSort(query.sorts, attributes);
+  const [first, ...rest] = isDefaultOrder ? [] : query.sorts;
   const editorProps = (attribute: { readonly type: string }) =>
     attribute.type === 'actor_reference'
       ? {
@@ -293,7 +297,8 @@ export function ViewToolbar({
       >
         <SortBuilder
           attributes={sortFields}
-          value={query.sorts}
+          // With no sorts asked, the builder shows the default that runs, so the order is never a mystery.
+          value={query.sorts.length === 0 ? defaultSorts(attributes) : query.sorts}
           onChange={(sorts) => {
             commit({ ...(query.filter === undefined ? {} : { filter: query.filter }), sorts });
           }}
