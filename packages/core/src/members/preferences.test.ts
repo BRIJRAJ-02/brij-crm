@@ -101,6 +101,32 @@ describe('a member’s preferences', () => {
     expect(await readMyPreferences(w.member)).toMatchObject({ weekStart: 'saturday' });
   });
 
+  it('keeps the Home sections a member put away, theirs alone, and an empty list shows them all again', async () => {
+    const w = await workspace();
+    expect(await updateMyPreferences(w.member, { homeHidden: ['setup'] })).toMatchObject({ homeHidden: ['setup'] });
+    expect(await readMyPreferences(w.member)).toMatchObject({ homeHidden: ['setup'], landing: { kind: 'home' } });
+    // Another member's Home is untouched, and an API key can't put one away for anybody.
+    expect(await readMyPreferences(w.owner)).toEqual(DEFAULT_PREFERENCES);
+    const key = testScope({ db, workspaceId: w.workspaceId, actor: { type: 'api_key', id: newId() } });
+    expect(await refusalOf(updateMyPreferences(key, { homeHidden: ['setup'] }))).toEqual({
+      code: 'FORBIDDEN',
+      message: PREFERENCES_MEMBERS_ONLY,
+    });
+    expect(await updateMyPreferences(w.member, { homeHidden: [] })).not.toHaveProperty('homeHidden');
+    expect(await readMyPreferences(w.member)).toEqual(DEFAULT_PREFERENCES);
+    // Clearing an empty list changes nothing, so it writes nothing; each real change writes one audit row.
+    await updateMyPreferences(w.member, { homeHidden: [] });
+    const rows = await testQuery<{ before: unknown; after: unknown }>(
+      ownerUrl,
+      'select before, after from audit_events where workspace_id = $1 order by at',
+      [w.workspaceId],
+    );
+    expect(rows).toEqual([
+      { before: { homeHidden: null }, after: { homeHidden: ['setup'] } },
+      { before: { homeHidden: ['setup'] }, after: { homeHidden: null } },
+    ]);
+  });
+
   it('refuses a principal that isn’t a member', async () => {
     const w = await workspace();
     const key = testScope({ db, workspaceId: w.workspaceId, actor: { type: 'api_key', id: newId() } });

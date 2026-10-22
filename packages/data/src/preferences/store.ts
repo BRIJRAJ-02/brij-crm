@@ -10,7 +10,7 @@ import type { MemberPreferences, UpdatePreferencesInput } from '@crm/contracts';
 import { refusalSummary, toDataError } from '../errors.ts';
 import type { Notice } from '../notice.ts';
 
-export type { DateFormat, LandingPage, MemberPreferences, WeekStart } from '@crm/contracts';
+export type { DateFormat, HomeHidden, HomeSectionKey, LandingPage, MemberPreferences, WeekStart } from '@crm/contracts';
 
 /** A change to the member's own preferences: only the fields named change; `timeZone` null is the browser's. */
 export type PreferencesChange = Omit<UpdatePreferencesInput, 'workspace' | 'mutationId'>;
@@ -43,11 +43,13 @@ export interface PreferencesDeps {
 
 /** Applies a change to the preferences it names, as the server will. */
 export function applyChange(preferences: MemberPreferences, change: PreferencesChange): MemberPreferences {
-  const { timeZone: _kept, ...rest } = preferences;
+  const { timeZone: _kept, homeHidden: _hidden, ...rest } = preferences;
   const timeZone = change.timeZone === undefined ? preferences.timeZone : (change.timeZone ?? undefined);
+  const homeHidden = change.homeHidden ?? preferences.homeHidden;
   return {
     ...rest,
     ...(timeZone === undefined ? {} : { timeZone }),
+    ...(homeHidden === undefined || homeHidden.length === 0 ? {} : { homeHidden }),
     ...(change.dateFormat === undefined ? {} : { dateFormat: change.dateFormat }),
     ...(change.weekStart === undefined ? {} : { weekStart: change.weekStart }),
     ...(change.landing === undefined ? {} : { landing: change.landing }),

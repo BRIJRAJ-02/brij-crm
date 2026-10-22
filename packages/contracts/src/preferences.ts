@@ -2,7 +2,7 @@
 // workspace. `preferences.get` reads the caller's; `preferences.update`
 // changes only the fields it names, for the caller alone. No row reads as the
 // defaults: the browser's time zone, the language's date format and week
-// start, and Home.
+// start, Home, and every Home section shown.
 import { oc } from '@orpc/contract';
 import * as z from 'zod';
 import { TimeZoneName } from './booking/settings.ts';
@@ -28,12 +28,26 @@ export const LandingPage = z.discriminatedUnion('kind', [
 /** The page a workspace opens on. */
 export type LandingPage = z.infer<typeof LandingPage>;
 
+/** A Home section's key (spec 0041): the id its entry in Home's section registry has, such as `setup`. */
+export const HomeSectionKey = z.string().regex(/^[a-z][a-zA-Z]{0,31}$/);
+/** A Home section's key. */
+export type HomeSectionKey = z.infer<typeof HomeSectionKey>;
+
+/** The Home sections a member put away, by key, at most 32 and each once. Absent while they hid none. */
+export const HomeHidden = z
+  .array(HomeSectionKey)
+  .max(32)
+  .refine((keys) => new Set(keys).size === keys.length, { message: 'Each section is named once.' });
+/** The Home sections a member put away. */
+export type HomeHidden = z.infer<typeof HomeHidden>;
+
 /** One member's preferences in one workspace. `timeZone` is absent while they follow the browser's. */
 export const MemberPreferences = z.object({
   timeZone: TimeZoneName.optional(),
   dateFormat: DateFormat,
   weekStart: WeekStart,
   landing: LandingPage,
+  homeHidden: HomeHidden.optional(),
 });
 /** One member's preferences in one workspace. */
 export type MemberPreferences = z.infer<typeof MemberPreferences>;
@@ -54,6 +68,8 @@ export const UpdatePreferencesInput = WorkspaceScoped.extend({
   dateFormat: DateFormat.optional(),
   weekStart: WeekStart.optional(),
   landing: LandingPage.optional(),
+  /** The whole list of Home sections put away; `[]` shows them all again. */
+  homeHidden: HomeHidden.optional(),
   mutationId: Uuid,
 });
 /** A change to the caller's own preferences. */

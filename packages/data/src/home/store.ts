@@ -1,5 +1,6 @@
 // Home's own reads (spec 0041): Team today, one held read per workspace and
-// day, and the metrics row, one per workspace and week. Neither is CRM data
+// day, the metrics row, one per workspace and week, and Recently viewed, one
+// per workspace. Neither is CRM data
 // with a change event of its own (bookings and synced meetings have none
 // yet), so, like Bookings, each is read when a screen first holds it and
 // again whenever the person comes back to the page (at most once per 30
@@ -7,7 +8,7 @@
 // today holds the whole day, so the screen works out "Free now" from the
 // clock as time passes. A failed read keeps what is shown; only a first read
 // shows the failure. Nothing is ever fetched for a read no screen holds.
-import type { HomeMetricsView, TeamTodayView } from '@crm/contracts';
+import type { HomeMetricsView, RecentItems, TeamTodayView } from '@crm/contracts';
 import { toDataError } from '../errors.ts';
 
 /** The calls the store makes. */
@@ -18,6 +19,8 @@ export interface HomeApi {
     readonly to: string;
   }) => Promise<TeamTodayView>;
   readonly metrics: (input: { readonly workspace: string; readonly weekStart: string }) => Promise<HomeMetricsView>;
+  /** The member's recent records and views (spec 0039's `recents.list`), only what they may still see. */
+  readonly recents: (input: { readonly workspace: string }) => Promise<RecentItems>;
 }
 
 /** What the store needs: the calls, and (for tests) the return signal. */
@@ -40,6 +43,9 @@ export type TeamTodayState = HomeReadState<TeamTodayView>;
 
 /** The metrics row's state. */
 export type HomeMetricsState = HomeReadState<{ readonly metrics: HomeMetricsView }>;
+
+/** Recently viewed's state: the member's recent records and views, newest first. */
+export type HomeRecentsState = HomeReadState<RecentItems>;
 
 /** A held read, as a screen retains it. */
 export interface HomeHeld<State> {
@@ -116,7 +122,8 @@ export function createHomeStore(deps: HomeDeps) {
       retain() {
         held += 1;
         if (held === 1) {
-          void read();
+          // A read that just answered (the route's prewarm, or a visit a moment ago) stands: no second request.
+          if (clock() - readAt >= RETURN_GAP_MS) void read();
           // Coming back within RETURN_GAP_MS of the last answer reads nothing: focus fires on every click back.
           release = onReturn(() => {
             if (clock() - readAt >= RETURN_GAP_MS) void read();
@@ -161,6 +168,10 @@ export function createHomeStore(deps: HomeDeps) {
       return keep(`metrics:${workspace}:${weekStart}`, () =>
         makeHeld(async () => ({ metrics: await deps.api.metrics({ workspace, weekStart }) })),
       );
+    },
+    /** The member's recent records and views (Home's Recently viewed): read each time a screen first holds it. */
+    recents(workspace: string): HomeHeld<HomeRecentsState> {
+      return keep(`recents:${workspace}`, () => makeHeld(() => deps.api.recents({ workspace })));
     },
   };
 }

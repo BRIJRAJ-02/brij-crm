@@ -268,6 +268,16 @@ export { TileGrid, type TileGridProps } from './molecules/TileGrid/TileGrid.tsx'
 export { Stats, type StatItem, type StatsProps } from './molecules/Stats/Stats.tsx';
 export { TeamList, type TeamListProps, type TeamPresence, type TeamRow } from './modules/TeamList/TeamList.tsx';
 export {
+  SetupChecklist,
+  type SetupChecklistProps,
+  type SetupChecklistStep,
+} from './modules/SetupChecklist/SetupChecklist.tsx';
+export {
+  RecordChipList,
+  type RecordChipItem,
+  type RecordChipListProps,
+} from './modules/RecordChipList/RecordChipList.tsx';
+export {
   EditorStatus,
   PreviewDeviceSwitch,
   PreviewFrame,

@@ -75,3 +75,26 @@ export function minutesOf(item: Pick<AgendaItem, 'startsAt' | 'endsAt'>): number
 export function dayRange(today: string): { readonly from: string; readonly to: string } {
   return { from: dayStart(today).toISOString(), to: dayStart(addDays(today, 1)).toISOString() };
 }
+
+/** How many days ahead Today reads, so it can show the next meeting after today. */
+export const AHEAD_DAYS = 7;
+
+/** Today's range and the week after it: local midnight today to midnight `AHEAD_DAYS` days on. */
+export function aheadRange(today: string): { readonly from: string; readonly to: string } {
+  return { from: dayStart(today).toISOString(), to: dayStart(addDays(today, AHEAD_DAYS + 1)).toISOString() };
+}
+
+/** The agenda split at the day's end: today's meetings, and the first one after today. */
+export function todayAndNext(
+  items: readonly AgendaItem[],
+  today: string,
+): { readonly today: readonly AgendaItem[]; readonly next: AgendaItem | undefined } {
+  const end = dayStart(addDays(today, 1)).getTime();
+  return {
+    today: items.filter((item) => Date.parse(item.startsAt) < end),
+    // By start alone: a later day's all day event doesn't jump ahead of an earlier meeting.
+    next: items
+      .filter((item) => Date.parse(item.startsAt) >= end)
+      .toSorted((a, b) => Date.parse(a.startsAt) - Date.parse(b.startsAt))[0],
+  };
+}

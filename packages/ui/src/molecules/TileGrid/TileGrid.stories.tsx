@@ -124,3 +124,48 @@ export const Fill: Story = {
     await expect(card?.getBoundingClientRect().width).toBeLessThan(grid?.getBoundingClientRect().width ?? 0);
   },
 };
+
+/** At most two columns (Home): three cards make two side by side and one below, never three across. */
+export const TwoColumns: Story = {
+  render: () => (
+    <Stage width="fill">
+      <TileGrid columns="two">
+        <Card title="Today">
+          <p>Three meetings</p>
+        </Card>
+        <Card title="My tasks">
+          <p>Call Ada back</p>
+        </Card>
+        <Card title="Recently viewed">
+          <p>Northwind Traders</p>
+        </Card>
+      </TileGrid>
+    </Stage>
+  ),
+  play: async ({ canvas }) => {
+    // However wide the frame, the third card never shares the first one's row.
+    const [first, , third] = canvas.getAllByRole('heading').map((heading) => heading.getBoundingClientRect().top);
+    await expect((third ?? 0) > (first ?? 0)).toBe(true);
+  },
+};
+
+/** Two columns on a phone: one column, each card at the grid's full width. */
+export const TwoColumnsPhone: Story = {
+  parameters: { crm: { screenshot: false } },
+  render: () => (
+    <Stage width="phone">
+      <TileGrid columns="two">
+        <Card title="Today">
+          <p>Three meetings</p>
+        </Card>
+        <Card title="My tasks">
+          <p>Call Ada back</p>
+        </Card>
+      </TileGrid>
+    </Stage>
+  ),
+  play: async ({ canvas }) => {
+    const [first, second] = canvas.getAllByRole('heading').map((heading) => heading.getBoundingClientRect());
+    await expect((second?.top ?? 0) > (first?.bottom ?? 0)).toBe(true);
+  },
+};

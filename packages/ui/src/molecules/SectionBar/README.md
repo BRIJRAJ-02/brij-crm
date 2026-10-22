@@ -17,6 +17,7 @@ New. Screens can't lay out a row of controls themselves (no styles in `apps/web`
 ```
 
 - `title` is an h2: the section's heading under the page's TopBar.
+- `description` is one quiet line after the heading, on its baseline, in `text-secondary`: Home's greeting and today's date (spec 0041). Why a prop: screens can't set text beside a heading themselves, and a Card would frame a single line.
 - `end` sits at the end and moves under the rest when the row wraps.
 - `variant="bar"` draws it as a page's bar under the TopBar, with the toolbar's height, padding and bottom edge (My tasks, spec 0019). Use it rather than Toolbar for controls that keep their own arrow keys, such as SegmentedControls: Toolbar's arrow key roving would move focus off a segment instead of choosing the next one.
 

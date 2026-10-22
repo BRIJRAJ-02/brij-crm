@@ -23,7 +23,8 @@ export const strings = {
   availability: 'Availability',
   bookingPages: 'Booking pages',
   forms: 'Forms',
-  trash: 'Trash',
+  /** The trash, a quick action now it left the sidebar (the owner, 22 October 2026). */
+  trash: 'Open trash',
   settings: 'Settings',
   settingsPage: (page: string) => `Settings › ${page}`,
   /** Other words each page answers to (AC-1082). */

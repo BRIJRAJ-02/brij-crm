@@ -1,5 +1,5 @@
 // The sidebar v2 (spec 0034, milestone 1): the order (Home, Records, Scheduling's two rows, Bookings and Captures,
-// then Tasks, and the trash, Settings and Help at the foot; AC-921, AC-928, AC-930, owner 21 and 22 October 2026);
+// then Tasks, and Settings and Help at the foot (the trash moved to Settings); AC-921, AC-928, AC-930, owner 21 and 22 October 2026);
 // the workspace opens on Home; the member folds Records and turns the rail on with [
 // in one browser, and their second browser follows within a second (AC-931, AC-935, AC-937); a reload keeps both
 // (AC-936); and every address round 7 gave Availability, Booking pages and Forms lands back inside Bookings or
@@ -54,7 +54,7 @@ test.describe('sidebar', () => {
     await expect(nav(page).getByRole('link', { name: 'Deals', exact: true })).toBeVisible();
 
     // The order (AC-921, owner 21 and 22 October 2026): the workspace menu, Home, Records, Scheduling with Bookings
-    // and Captures, Tasks, then the foot with the trash; Availability, Booking pages and Forms are tabs, not rows.
+    // and Captures, Tasks, then the foot (the trash left the sidebar for Settings, owner, 22 October 2026); Availability, Booking pages and Forms are tabs, not rows.
     const names = await order(page);
     const at = (name: string) => names.indexOf(name);
     for (const [before, after] of [
@@ -63,8 +63,7 @@ test.describe('sidebar', () => {
       ['Deals', 'Bookings'],
       ['Bookings', 'Captures'],
       ['Captures', 'Tasks'],
-      ['Tasks', 'Trash'],
-      ['Trash', 'Settings'],
+      ['Tasks', 'Settings'],
       ['Settings', 'Help and shortcuts'],
     ] as const) {
       expect(at(before), `${before} before ${after} in ${names.join(', ')}`).toBeLessThan(at(after));
@@ -73,7 +72,7 @@ test.describe('sidebar', () => {
     for (const tab of ['Availability', 'Booking pages', 'Forms']) expect(names).not.toContain(tab);
     // Bookings and Captures sit under Records with no label, as round 6 had them (the owner, 22 October 2026).
     expect(names).not.toContain('Scheduling');
-    // Home is where the workspace opens; the trash is a row of the foot, and not in the workspace menu.
+    // Home is where the workspace opens; the trash is in neither the workspace menu nor the sidebar.
     await page.goto(`/w/${slug}`);
     await expect(page).toHaveURL(new RegExp(`/w/${slug}/home$`));
     await expect(page.getByRole('heading', { level: 1, name: 'Home' })).toBeVisible();
@@ -83,9 +82,11 @@ test.describe('sidebar', () => {
     await expect(page.getByRole('menuitem', { name: 'Sign out' })).toBeVisible();
     await expect(page.getByRole('menuitem', { name: 'Trash' })).toHaveCount(0);
     await page.keyboard.press('Escape');
-    await nav(page).getByRole('link', { name: 'Trash', exact: true }).click();
+    // No Trash in the sidebar either: it opens from Settings, under Workspace.
+    await expect(nav(page).getByRole('link', { name: 'Trash', exact: true })).toHaveCount(0);
+    await nav(page).getByRole('link', { name: 'Settings', exact: true }).click();
+    await page.getByRole('navigation').getByRole('link', { name: 'Trash', exact: true }).click();
     await expect(page).toHaveURL(new RegExp(`/w/${slug}/trash$`));
-    await expect(nav(page).getByRole('link', { name: 'Trash', exact: true })).toHaveAttribute('aria-current', 'page');
     await page.goto(`/w/${slug}/objects/people`);
     await expect(page).toHaveURL(objectUrl(slug, 'people'));
 

@@ -50,6 +50,13 @@ describe('applyChange', () => {
     expect(applyChange(zoned, { dateFormat: 'ymd' })).toMatchObject({ timeZone: 'Asia/Kolkata', dateFormat: 'ymd' });
     expect(applyChange(zoned, { timeZone: null })).not.toHaveProperty('timeZone');
   });
+
+  it('puts Home sections away and brings them back with an empty list', () => {
+    const hidden = applyChange(DEFAULTS, { homeHidden: ['setup'] });
+    expect(hidden).toEqual({ ...DEFAULTS, homeHidden: ['setup'] });
+    expect(applyChange(hidden, { weekStart: 'monday' })).toMatchObject({ homeHidden: ['setup'] });
+    expect(applyChange(hidden, { homeHidden: [] })).toEqual(DEFAULTS);
+  });
 });
 
 describe('the preferences store', () => {

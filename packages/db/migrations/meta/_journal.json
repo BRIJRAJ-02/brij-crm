@@ -589,6 +589,13 @@
       "when": 1792651652016,
       "tag": "0083_workspace_addresses",
       "breakpoints": true
+    },
+    {
+      "idx": 84,
+      "version": "7",
+      "when": 1792655040393,
+      "tag": "0084_home_hidden",
+      "breakpoints": true
     }
   ]
 }

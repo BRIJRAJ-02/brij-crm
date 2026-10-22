@@ -23,6 +23,8 @@ export const strings = {
   startPage: 'Start page',
   landing: 'Open on',
   landingDescription: 'The page this workspace opens on.',
+  homeSetup: 'Setup checklist on Home',
+  homeSetupDescription: 'Shows the steps left to set up this workspace at the top of Home.',
   /** Becomes "Home" once the Home page lands (the home lane): the workspace opens on its first object until then. */
   home: 'First object in the sidebar',
   tasks: 'Tasks',

@@ -187,11 +187,12 @@ export async function addPerson(page: Page, first: string, last: string, email: 
   await expect(dialog).toBeHidden();
 }
 
-/** Opens the trash from the sidebar's foot, where it lives (owner, 22 October 2026). */
+/** Opens the trash from Settings, under Workspace, where it lives now it left the sidebar (owner, 22 October 2026). */
 export async function openTrash(page: Page): Promise<void> {
   await page
     .getByRole('navigation', { name: 'Main navigation' })
-    .getByRole('link', { name: 'Trash', exact: true })
+    .getByRole('link', { name: 'Settings', exact: true })
     .click();
+  await page.getByRole('navigation').getByRole('link', { name: 'Trash', exact: true }).click();
   await expect(page.getByRole('grid', { name: 'Trash' })).toBeVisible();
 }

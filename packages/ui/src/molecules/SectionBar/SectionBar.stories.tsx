@@ -76,3 +76,16 @@ export const Bar: Story = {
     await userEvent.unhover(assigned);
   },
 };
+
+/** A heading with its quiet line (Home's greeting and today's date). */
+export const WithDescription: Story = {
+  render: () => (
+    <Stage width="fill">
+      <SectionBar title="Good afternoon, Ada" description="Thursday, 8 October" />
+    </Stage>
+  ),
+  play: async ({ canvas }) => {
+    await expect(canvas.getByRole('heading', { level: 2, name: 'Good afternoon, Ada' })).toBeInTheDocument();
+    await expect(canvas.getByText('Thursday, 8 October')).toBeInTheDocument();
+  },
+};

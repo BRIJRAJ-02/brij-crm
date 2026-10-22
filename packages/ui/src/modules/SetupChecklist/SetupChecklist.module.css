@@ -1,0 +1,61 @@
+/* SetupChecklist: the progress bar, then one row per open step (a mark, two
+   lines, the step's button), then the done steps folded under one line. */
+@layer components {
+  .root {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-12);
+    min-inline-size: 0;
+  }
+
+  .list {
+    display: flex;
+    flex-direction: column;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+
+  .row {
+    display: flex;
+    align-items: center;
+    gap: var(--space-12);
+    min-block-size: var(--size-row);
+    padding-block: var(--space-4);
+  }
+
+  .mark {
+    display: inline-flex;
+    flex: none;
+  }
+
+  .text {
+    display: flex;
+    flex: 1;
+    flex-direction: column;
+    gap: var(--space-2);
+    min-inline-size: 0;
+  }
+
+  .title {
+    min-inline-size: 0;
+    overflow-wrap: anywhere;
+    color: var(--text);
+    font: var(--text-body-strong);
+    letter-spacing: var(--tracking-body-strong);
+  }
+
+  .row[data-done] .title {
+    color: var(--text-secondary);
+    font: var(--text-body);
+    letter-spacing: var(--tracking-body);
+  }
+
+  .detail {
+    min-inline-size: 0;
+    color: var(--text-secondary);
+    font: var(--text-label);
+    letter-spacing: var(--tracking-label);
+    overflow-wrap: anywhere;
+  }
+}

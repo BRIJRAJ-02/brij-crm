@@ -2,15 +2,26 @@
    a phone gets one column with no overflow), tiles keeping their own height. */
 @layer components {
   .root {
+    --tile-gap: var(--space-16);
+
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(min(var(--size-panel), 100%), 1fr));
     align-items: start;
-    gap: var(--space-16);
+    gap: var(--tile-gap);
     min-inline-size: 0;
   }
 
   /* Fill: empty tracks stay, so every tile keeps one width however many there are (SettingsGrid). */
   .root[data-fill='fill'] {
     grid-template-columns: repeat(auto-fill, minmax(min(var(--size-panel), 100%), 1fr));
+  }
+
+  /* Two: at most two columns, each at least the panel's width, so the grid's own width decides (as a container
+     query would, with no breakpoint of its own): two side by side from twice the panel's width, one below it. */
+  .root[data-columns='two'] {
+    grid-template-columns: repeat(
+      auto-fit,
+      minmax(min(100%, max(var(--size-panel), calc((100% - var(--tile-gap)) / 2))), 1fr)
+    );
   }
 }

@@ -13,7 +13,7 @@ import type { MeetingsHeld, MeetingsState } from './bookings/meetings.ts';
 import type { CalendarSettingsHeld, CalendarSettingsState, CalendarState, CalendarView } from './calendar/store.ts';
 import type { CalendarListState, CalendarsHeld, PageDestinationState } from './calendar/calendars.ts';
 import type { CaptureListState, CaptureListView } from './captures/list.ts';
-import type { HomeHeld, HomeMetricsState, TeamTodayState } from './home/store.ts';
+import type { HomeHeld, HomeMetricsState, HomeRecentsState, TeamTodayState } from './home/store.ts';
 import type { RoutingReportHeld, RoutingReportState } from './routing/reports.ts';
 import type {
   EmailPreferencesState,
@@ -340,6 +340,11 @@ export function useRoutingReport(view: RoutingReportHeld): RoutingReportState {
 
 /** Home's metrics row (spec 0041), re-rendering when it is read again. Held while the screen is mounted. */
 export function useHomeMetrics(view: HomeHeld<HomeMetricsState>): HomeMetricsState {
+  return useRetained(view);
+}
+
+/** Home's Recently viewed (spec 0041), re-rendering when it is read again. Held while the screen is mounted. */
+export function useHomeRecents(view: HomeHeld<HomeRecentsState>): HomeRecentsState {
   return useRetained(view);
 }
 

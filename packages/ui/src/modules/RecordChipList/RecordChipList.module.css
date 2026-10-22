@@ -1,0 +1,19 @@
+/* RecordChipList: record chips in a row that wraps, a control's gap apart. */
+@layer components {
+  .root {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--space-8);
+    min-inline-size: 0;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+
+  .item {
+    display: inline-flex;
+    min-inline-size: 0;
+    max-inline-size: 100%;
+  }
+}

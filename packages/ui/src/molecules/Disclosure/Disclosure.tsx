@@ -41,6 +41,11 @@ export interface DisclosureProps {
    * row is hovered or holds focus, and always to the keyboard.
    */
   readonly actions?: ReactNode;
+  /**
+   * The title's heading level where the default (3) would sit beside its container's own heading: 4 inside a
+   * Card whose title is an h3 (Home's setup checklist's done steps).
+   */
+  readonly headingLevel?: 2 | 3 | 4 | 5;
 }
 
 /** A section that opens and closes under its title: attribute groups, advanced settings, sidebar sections. */
@@ -56,6 +61,7 @@ export function Disclosure({
   leading,
   variant = 'default',
   actions,
+  headingLevel,
 }: DisclosureProps) {
   // Directly in a settings page's body, the title row runs to the page's edges, its chevron on the content edge.
   const atPageEdge = useContext(PageEdge) && variant === 'default';
@@ -63,7 +69,7 @@ export function Disclosure({
   // settings page's TopBar), so headings never skip a level; anywhere else an h3, as before.
   const level = useContext(CardTitleLevel);
   const heading = (
-    <Heading className={styles.heading} level={atPageEdge ? level : 3}>
+    <Heading className={styles.heading} level={headingLevel ?? (atPageEdge ? level : 3)}>
       <AriaButton slot="trigger" className={styles.trigger}>
         <span className={styles.chevron}>
           <Icon name="chevron-right" size={variant === 'label' ? 'xs' : 'sm'} />

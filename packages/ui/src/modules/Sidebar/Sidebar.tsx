@@ -108,7 +108,7 @@ export type SidebarProps = (WorkspaceHead | HeadingHead) & {
   /** `NavItem`s for the fixed destinations, then `NavSection`s or `NavGroup`s. */
   readonly children: ReactNode;
   /**
-   * the trash, Settings and Help, at the bottom. A function gets whether the
+   * Settings and Help, at the bottom. A function gets whether the
    * sidebar is folded to its rail (by `isCollapsed`, or by the app shell
    * below `bp-page-compact`), so the footer can fit it.
    */
