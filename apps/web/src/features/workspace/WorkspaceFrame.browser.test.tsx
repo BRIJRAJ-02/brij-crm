@@ -302,7 +302,7 @@ describe('signing out from the workspace menu', () => {
     // The shortcuts live in the foot's Help (and on ?), not here.
     expect(names.some((name) => name.startsWith('Keyboard shortcuts'))).toBe(false);
     expect(names).toContain('Sign out');
-    // The trash lives under Settings › Workspace (the owner, 22 October 2026), and no section is headed by the role.
+    // The trash lives in Settings (the owner, 22 October 2026), and no section is headed by the role.
     expect(names.some((name) => name.startsWith('Trash'))).toBe(false);
     const headings = [...document.querySelectorAll('[role="menu"] header, [role="menu"] [role="presentation"]')].map(
       (each) => each.textContent.trim(),
@@ -395,8 +395,8 @@ describe('the app’s sidebar (spec 0034)', () => {
     expect(link('Tasks')?.getAttribute('href')).toBe('/w/acme/tasks');
     expect(link('Bookings')?.getAttribute('href')).toBe('/w/acme/bookings/calendar');
     expect(link('Captures')?.getAttribute('href')).toBe('/w/acme/captures/links');
-    // The trash left the sidebar for Settings › Workspace and ⌘K's Open trash (home2, the owner, 22 October 2026).
-    expect(names).not.toContain('Trash');
+    // The trash left the sidebar for Settings, under Workspace (the owner, 22 October 2026).
+    expect(names.some((name) => name.startsWith('Trash'))).toBe(false);
   });
 
   it('marks the page that is open as current', async () => {
@@ -483,7 +483,7 @@ describe('the app’s sidebar (spec 0034)', () => {
     snapshot = { status: 'error', error: { code: 'INTERNAL', message: 'Down.' } as never };
     await renderFrame(undefined, { objects: OBJECTS });
     const names = sidebarNames();
-    for (const name of ['Tasks', 'Records', 'Bookings', 'Captures']) {
+    for (const name of ['Tasks', 'Records', 'Bookings', 'Captures', 'Settings']) {
       expect(names).toContain(name);
     }
   });
