@@ -56,7 +56,7 @@ export interface SignInFormProps {
   readonly otherWays?: ReactNode;
   /**
    * Under the email field, before its submit: another way in that belongs
-   * with the email, such as spec 0033's "Sign in with a passkey". Empty until
+   * with the address it was given (a passkey goes in `otherWays`). Empty until
    * a screen fills it.
    */
   readonly afterEmail?: ReactNode;
