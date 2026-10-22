@@ -651,7 +651,7 @@ export const ReorderKeyboard: Story = {
   },
 };
 
-/** Rows that move, in the comfortable rows: the grip before the title and its description. */
+/** Rows that move, in the comfortable rows: the grip before the title and its facts. */
 export const ReorderComfortable: Story = {
   args: { label: 'Your pages', searchLabel: 'Search pages' },
   render: (args) => (
@@ -661,10 +661,26 @@ export const ReorderComfortable: Story = {
   ),
   play: async ({ canvas }) => {
     await expect(await canvas.findByRole('button', { name: 'Move Product demo' })).toBeInTheDocument();
-    // A search narrows the rows, and a narrowed list can't say where a row goes: the grips go away.
+    await expect(canvas.getAllByRole('button', { name: /^Move / })).toHaveLength(3);
+  },
+};
+
+/** A search narrows the rows, and a narrowed list can't say where a row goes: the grips go away until it clears. */
+export const ReorderSearched: Story = {
+  args: { label: 'Your pages', searchLabel: 'Search pages' },
+  parameters: { crm: { screenshot: false } },
+  render: (args) => (
+    <Stage width="fill">
+      <MovingRows {...args} onMove={fn()} />
+    </Stage>
+  ),
+  play: async ({ canvas }) => {
+    await expect(await canvas.findByRole('button', { name: 'Move Product demo' })).toBeInTheDocument();
     await userEvent.type(canvas.getByRole('searchbox', { name: 'Search pages' }), 'demo');
     await waitFor(() => expect(canvas.queryByRole('button', { name: /^Move / })).toBeNull());
     await expect(canvas.getAllByRole('row')).toHaveLength(1);
+    await userEvent.clear(canvas.getByRole('searchbox', { name: 'Search pages' }));
+    await expect(await canvas.findByRole('button', { name: 'Move Product demo' })).toBeInTheDocument();
   },
 };
 

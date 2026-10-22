@@ -93,7 +93,10 @@ export function ProfilePagesSection({ data, slug, profile }: ProfilePagesSection
   );
 }
 
-/** The pages while they load: one card of skeleton rows, each grip's place held, after the loading delay. */
+/**
+ * The pages while they load: one card of skeleton rows after the loading delay, each grip's place held. Its `onMove`
+ * is what holds those places, and it starts the drag wrapper loading, so the grips arrive with the rows.
+ */
 export function ProfilePagesLoading() {
   return (
     <Card isBusy>

@@ -228,7 +228,7 @@ export const MenuMove: Story = {
   ),
   play: async ({ canvas, args, userEvent }) => {
     await userEvent.click(canvas.getByRole('button', { name: 'No section options' }));
-    const menu = within(document.body).getByRole('menu', { name: 'No section options' });
+    const menu = await within(document.body).findByRole('menu', { name: 'No section options' });
     await expect(within(menu).queryByRole('menuitem', { name: 'Move down' })).toBeNull();
     await userEvent.click(within(menu).getByRole('menuitem', { name: 'Move up' }));
     await expect(args.onMove).toHaveBeenCalledWith('none', 1);
