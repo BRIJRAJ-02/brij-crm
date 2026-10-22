@@ -84,6 +84,7 @@ import {
   rangeLabel,
   scrollMinute,
   timeRange,
+  weekBounds,
   weekDays,
   weekOf,
 } from './week.ts';
@@ -761,6 +762,8 @@ function WeekView(props: BookingsCalendarScreenProps) {
     return () => document.removeEventListener('keydown', listener, true);
   }, [platform]);
   const days = weekDays(search.week);
+  // The week's midnights in the member's zone, worked out once per week and zone rather than per block.
+  const bounds = useMemo(() => weekBounds(weekDays(search.week), timeZone), [search.week, timeZone]);
   const today = dayKeyOf(now, timeZone);
   const nowMinute = minuteOfDay(now, timeZone);
   // The zone the hours are in, over the hour axis: the member's may not be the device's clock.
@@ -900,13 +903,13 @@ function WeekView(props: BookingsCalendarScreenProps) {
   const busyTimes = state.busy.filter(isShownEvent);
   const byBusy = new Map(busyTimes.map((busy) => [`busy:${busy.connectionId}:${busy.startsAt}:${busy.endsAt}`, busy]));
   const pieces = [
-    ...bookingPieces(bookings, days, timeZone).map((piece) => ({ piece, kind: 'booking' as const })),
-    ...eventPieces(events, days, timeZone).map((piece) => ({ piece, kind: 'event' as const })),
+    ...bookingPieces(bookings, bounds).map((piece) => ({ piece, kind: 'booking' as const })),
+    ...eventPieces(events, bounds).map((piece) => ({ piece, kind: 'event' as const })),
     ...state.blocks
-      .flatMap((turn) => piecesOf(turn.key, turn.startsAt, turn.endsAt, days, timeZone))
+      .flatMap((turn) => piecesOf(turn.key, turn.startsAt, turn.endsAt, bounds))
       .map((piece) => ({ piece, kind: 'closed' as const })),
     ...[...byBusy]
-      .flatMap(([key, busy]) => piecesOf(key, busy.startsAt, busy.endsAt, days, timeZone))
+      .flatMap(([key, busy]) => piecesOf(key, busy.startsAt, busy.endsAt, bounds))
       .map((piece) => ({ piece, kind: 'busy' as const })),
   ];
   const blocks: WeekCalendarBlock[] = pieces.flatMap(({ piece, kind }): WeekCalendarBlock[] => {

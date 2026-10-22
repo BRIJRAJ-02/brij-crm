@@ -8,7 +8,7 @@ import {
   type ObjectSummary,
 } from '@crm/data';
 import { LoadingNow, useFormatSettings } from '@crm/ui';
-import { useMemo } from 'react';
+import { useEffect, useMemo, useRef } from 'react';
 import { createFileRoute, useNavigate, useRouter, type ErrorComponentProps } from '@tanstack/react-router';
 import { BookingsCalendarScreen, BookingsFailed } from '../features/bookings/BookingsScreen.tsx';
 import { bookingsSearchOf, parseBookingsSearch, rawOf } from '../features/bookings/search.ts';
@@ -105,6 +105,17 @@ function Calendar({ objects, pages, connections, availability }: CalendarLoaded)
   // One set of calls per workspace: a dialog holding them never reads again because the route drew again.
   const actions = useMemo(() => hostActions(data, toasts, slug), [data, toasts, slug]);
   const week = heldWeek(search.week, data, slug, timeZone);
+  // The member's zone changed in Preferences while the page is open: the loader primed the weeks either side in the
+  // old one, so prime them again in the new one (each held read is the same one for the same range).
+  const primedZone = useRef(timeZone);
+  useEffect(() => {
+    if (primedZone.current === timeZone) return;
+    primedZone.current = timeZone;
+    for (const step of [-7, 7])
+      heldWeek(addDays(search.week, step), data, slug, timeZone)
+        .ready()
+        .catch(() => undefined);
+  }, [data, slug, timeZone, search.week]);
   return (
     <BookingsCalendarScreen
       slug={slug}

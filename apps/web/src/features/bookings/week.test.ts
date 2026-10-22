@@ -18,6 +18,7 @@ import {
   timeRange,
   weekDays,
   weekOf,
+  weekBounds,
   weekRange,
 } from './week.ts';
 import type { BookingListItem } from '@crm/data';
@@ -64,13 +65,15 @@ describe('the week', () => {
 
   it('clips a booking to its day, and splits one past midnight', () => {
     const days = weekDays('2026-10-19');
-    expect(piecesOf('a', local('2026-10-20', 9, 30), local('2026-10-20', 10), days, ZONE)).toEqual([
+    expect(piecesOf('a', local('2026-10-20', 9, 30), local('2026-10-20', 10), weekBounds(days, ZONE))).toEqual([
       { id: 'a:2026-10-20', sourceId: 'a', dayKey: '2026-10-20', startMinute: 570, endMinute: 600 },
     ]);
     expect(
-      piecesOf('b', local('2026-10-20', 23), local('2026-10-21', 1), days, ZONE).map((piece) => piece.dayKey),
+      piecesOf('b', local('2026-10-20', 23), local('2026-10-21', 1), weekBounds(days, ZONE)).map(
+        (piece) => piece.dayKey,
+      ),
     ).toEqual(['2026-10-20', '2026-10-21']);
-    expect(piecesOf('c', local('2026-10-30', 9), local('2026-10-30', 10), days, ZONE)).toEqual([]);
+    expect(piecesOf('c', local('2026-10-30', 9), local('2026-10-30', 10), weekBounds(days, ZONE))).toEqual([]);
   });
 
   it('opens on the hour before now in the working day, else at the day start, or before an early first booking', () => {
@@ -117,15 +120,15 @@ describe('the member zone', () => {
   it('puts an event at 23:30 UTC on the right day and hour for a member in Asia/Kolkata', () => {
     expect(dayKeyOf(new Date(startsAt), ZONE)).toBe('2026-10-21');
     expect(minuteOfDay(new Date(startsAt), ZONE)).toBe(5 * 60);
-    expect(piecesOf('e', startsAt, endsAt, days, ZONE)).toEqual([
+    expect(piecesOf('e', startsAt, endsAt, weekBounds(days, ZONE))).toEqual([
       { id: 'e:2026-10-21', sourceId: 'e', dayKey: '2026-10-21', startMinute: 300, endMinute: 360 },
     ]);
     const booking = { id: 'b', startsAt, endsAt } as BookingListItem;
-    expect(bookingPieces([booking], days, ZONE).map((piece) => piece.dayKey)).toEqual(['2026-10-21']);
+    expect(bookingPieces([booking], weekBounds(days, ZONE)).map((piece) => piece.dayKey)).toEqual(['2026-10-21']);
   });
 
   it('puts the same event on the day before, in the afternoon, for a member in Los Angeles', () => {
-    expect(piecesOf('e', startsAt, endsAt, days, 'America/Los_Angeles')).toEqual([
+    expect(piecesOf('e', startsAt, endsAt, weekBounds(days, 'America/Los_Angeles'))).toEqual([
       { id: 'e:2026-10-20', sourceId: 'e', dayKey: '2026-10-20', startMinute: 990, endMinute: 1050 },
     ]);
   });
@@ -158,13 +161,26 @@ describe('the member zone', () => {
     expect(midnightIn('2026-10-25', london).toISOString()).toBe('2026-10-24T23:00:00.000Z');
     // 10:00 to 11:00 on the clock (GMT by then) sits at 10:00 on the grid, not an hour late.
     expect(
-      piecesOf('d', '2026-10-25T10:00:00.000Z', '2026-10-25T11:00:00.000Z', weekDays('2026-10-19'), london),
+      piecesOf('d', '2026-10-25T10:00:00.000Z', '2026-10-25T11:00:00.000Z', weekBounds(weekDays('2026-10-19'), london)),
     ).toEqual([{ id: 'd:2026-10-25', sourceId: 'd', dayKey: '2026-10-25', startMinute: 600, endMinute: 660 }]);
     expect(instantAt('2026-10-25', 600, london).toISOString()).toBe('2026-10-25T10:00:00.000Z');
     expect(minuteOfDay(new Date('2026-10-25T10:00:00.000Z'), london)).toBe(600);
     // Across the repeated hour (01:30 BST to 01:30 GMT) the piece keeps its hour.
     expect(
-      piecesOf('r', '2026-10-25T00:30:00.000Z', '2026-10-25T01:30:00.000Z', weekDays('2026-10-19'), london),
+      piecesOf('r', '2026-10-25T00:30:00.000Z', '2026-10-25T01:30:00.000Z', weekBounds(weekDays('2026-10-19'), london)),
     ).toEqual([{ id: 'r:2026-10-25', sourceId: 'r', dayKey: '2026-10-25', startMinute: 90, endMinute: 150 }]);
+  });
+
+  it('reads a time a daylight saving change skips or repeats the same way west of UTC', () => {
+    const york = 'America/New_York';
+    // 8 March 2026 skips 02:00 to 03:00: 02:30 is the clock moved on, 03:30 EDT, as in London.
+    expect(instantAt('2026-03-08', 150, york).toISOString()).toBe('2026-03-08T07:30:00.000Z');
+    expect(instantAt('2026-03-29', 90, 'Europe/London').toISOString()).toBe('2026-03-29T01:30:00.000Z');
+    // 1 November 2026 repeats 01:00 to 02:00: 01:30 is the later one, EST.
+    expect(instantAt('2026-11-01', 90, york).toISOString()).toBe('2026-11-01T06:30:00.000Z');
+    expect(minuteOfDay(new Date('2026-11-01T06:30:00.000Z'), york)).toBe(90);
+    // Midnights either side of the change.
+    expect(midnightIn('2026-11-01', york).toISOString()).toBe('2026-11-01T04:00:00.000Z');
+    expect(midnightIn('2026-11-02', york).toISOString()).toBe('2026-11-02T05:00:00.000Z');
   });
 });
