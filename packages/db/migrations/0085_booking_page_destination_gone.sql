@@ -6,9 +6,10 @@
 -- page fell back, and setting the page's destination again clears it (the service does).
 --
 -- The trigger crm_booking_pages_destination_gone runs before each calendar row is deleted (cascaded deletes too),
--- before the foreign key's own set null, and writes the name on the pages naming it, in the calendar's workspace,
--- through the pages' row level security like any other write. Nothing to backfill: a page whose calendar went before
--- this migration reads as the default, as it did.
+-- before the foreign key's own set null, and writes the name on the pages naming it. Its explicit
+-- `workspace_id = old.workspace_id` is what keeps workspaces apart: a cascade from calendar_connections runs as the
+-- table's owner, past row level security, so never trim that filter as if the policy did it. Nothing to backfill: a
+-- page whose calendar went before this migration reads as the default, as it did.
 ALTER TABLE "booking_pages" ADD COLUMN "destination_removed_name" text;--> statement-breakpoint
 ALTER TABLE "booking_pages" ADD CONSTRAINT "booking_pages_destination_removed_name" CHECK (char_length("booking_pages"."destination_removed_name") <= 255);--> statement-breakpoint
 create function crm_booking_pages_destination_gone()
