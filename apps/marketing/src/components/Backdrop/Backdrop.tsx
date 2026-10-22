@@ -94,40 +94,36 @@ export function Backdrop({ side }: BackdropProps) {
 
     let frame = 0;
     let last = 0;
-    let isOnScreen = true;
     const start = performance.now();
-    const scale = Math.min(window.devicePixelRatio, 2);
     const color = () => getComputedStyle(canvas).getPropertyValue('--accent').trim();
 
-    const fit = () => {
-      const { width, height } = canvas.getBoundingClientRect();
-      canvas.width = Math.round(width * scale);
-      canvas.height = Math.round(height * scale);
-      context.setTransform(scale, 0, 0, scale, 0, 0);
-    };
-
+    // Each frame measures the canvas itself: the earlier observers (resize and intersection) were set up while the
+    // canvas was still hidden behind the still field, and now and then the intersection one never reported it on
+    // screen, so the field stayed blank for the whole visit (the owner, 23 October 2026: "sometimes it goes blank").
     const tick = (now: number) => {
       frame = requestAnimationFrame(tick);
-      if (!isOnScreen || document.visibilityState === 'hidden' || now - last < FRAME_MS) return;
+      if (document.visibilityState === 'hidden' || now - last < FRAME_MS) return;
+      const { width, height, top, bottom } = canvas.getBoundingClientRect();
+      if (width === 0 || height === 0 || bottom <= 0 || top >= window.innerHeight) return;
       last = now;
-      const { width, height } = canvas.getBoundingClientRect();
+      // Setting the size clears the canvas, so it is set only when the size (or the screen's density) changed.
+      const scale = Math.min(window.devicePixelRatio, 2);
+      const pixelWidth = Math.round(width * scale);
+      const pixelHeight = Math.round(height * scale);
+      if (canvas.width !== pixelWidth || canvas.height !== pixelHeight) {
+        canvas.width = pixelWidth;
+        canvas.height = pixelHeight;
+      }
+      context.setTransform(scale, 0, 0, scale, 0, 0);
       draw(context, width, height, side, color(), now - start);
     };
 
-    fit();
-    const watchSize = new ResizeObserver(fit);
-    watchSize.observe(canvas);
-    const watchView = new IntersectionObserver(([entry]) => {
-      isOnScreen = entry?.isIntersecting ?? true;
-    });
-    watchView.observe(canvas);
     frame = requestAnimationFrame(tick);
+    // The canvas replaces the still field one frame later, once it has drawn.
     const show = requestAnimationFrame(() => setIsLive(true));
     return () => {
       cancelAnimationFrame(frame);
       cancelAnimationFrame(show);
-      watchSize.disconnect();
-      watchView.disconnect();
     };
   }, [side]);
 
