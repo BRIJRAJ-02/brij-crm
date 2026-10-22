@@ -7,6 +7,8 @@ import styles from './Currency.module.css';
 export interface CurrencyProps {
   /** The amount and its currency. */
   readonly value: CurrencyValue;
+  /** Always the currency's minor units ($58,500.00), so a table column lines up on its digits. */
+  readonly isFixedDecimals?: boolean;
 }
 
 /**
@@ -15,7 +17,7 @@ export interface CurrencyProps {
  * decimals; one with a fraction shows the currency's minor units at least and
  * 4 at most, exact from the stored decimal.
  */
-export function Currency({ value }: CurrencyProps) {
+export function Currency({ value, isFixedDecimals = false }: CurrencyProps) {
   const { locale } = useFormatSettings();
-  return <span className={styles.root}>{formatMoney(value.amount, value.currency, locale)}</span>;
+  return <span className={styles.root}>{formatMoney(value.amount, value.currency, locale, isFixedDecimals)}</span>;
 }

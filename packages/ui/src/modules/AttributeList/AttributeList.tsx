@@ -59,6 +59,9 @@ export interface AttributeListProps {
   readonly emptyValues?: 'show' | 'fold';
 }
 
+/** At most this many rows with something in them and a folded list opens shown: a new record, still to fill in. */
+const SPARSE_ROWS = 3;
+
 /** Whether a row is folded away with the empty values: nothing in it, and nothing that must be seen. */
 function isFoldable(item: AttributeItem): boolean {
   return (
@@ -86,7 +89,11 @@ export function AttributeList({
   emptyValues = 'show',
 }: AttributeListProps) {
   const showSkeleton = useDelayedLoading(isLoading);
-  const [isShowingEmpty, setShowingEmpty] = useState(false);
+  // A record with almost nothing filled in (one just made) opens with every row shown: filling it in is the task.
+  const [isShowingEmpty, setShowingEmpty] = useState(
+    () => sections.flatMap((section) => section.items.filter((item) => !isFoldable(item))).length <= SPARSE_ROWS,
+  );
+  const listId = useId();
   // Folded: empty rows wait behind the foot's button. A row that has shown with a value stays for good (until the
   // list is given a new key), so clearing it, or emptying a list mid edit, never pulls the row out from under the
   // editor and its focus.
@@ -131,7 +138,7 @@ export function AttributeList({
     </dl>
   );
   return (
-    <section className={styles.root} aria-label={label}>
+    <section id={listId} className={styles.root} aria-label={label}>
       {sections
         // A titled section with every row folded away draws nothing, rather than a heading over an empty list.
         .filter((section) => !isFolding || section.title === undefined || section.items.some((item) => !isFolded(item)))
@@ -150,6 +157,7 @@ export function AttributeList({
             variant="ghost"
             icon={isShowingEmpty ? 'chevron-up' : 'chevron-down'}
             isExpanded={isShowingEmpty}
+            controls={listId}
             onPress={() => {
               setShowingEmpty((was) => !was);
             }}
@@ -301,7 +309,13 @@ function Row({ item, onCommit, editorProps, isQuietEmpty }: RowProps) {
       // Focusable by script only: where focus goes when an open editor is taken away.
       <span ref={readOnlyValue} className={styles.value} data-readonly="" tabIndex={-1}>
         {/* Nothing here and nothing to set: said in words, quietly, never a lone dash. */}
-        {isEmpty ? <span className={styles.placeholder}>{strings.notSet}</span> : shown}
+        {isEmpty ? (
+          <span className={styles.placeholder} data-quiet={isQuietEmpty || undefined}>
+            {strings.notSet}
+          </span>
+        ) : (
+          shown
+        )}
       </span>
     );
   }

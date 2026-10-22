@@ -102,6 +102,13 @@
     }
   }
 
+  /* Four stats or more share a row of their own (a deal's value, stage, meeting and activity, about 140px each):
+     the values take body strong type, so "18 minutes ago" reads whole. */
+  .root[data-many] .value {
+    font: var(--text-body-strong);
+    letter-spacing: var(--tracking-body-strong);
+  }
+
   /* Under 480px (a phone) two stats share the row at about 150px each: the value steps down to body strong
      type, so "13 minutes ago" reads whole rather than cut to "13 minutes ag". */
   @container (inline-size < 480px) {

@@ -93,6 +93,10 @@ export function Board({
   const [draggingFrom, setDraggingFrom] = useState<string | undefined>(undefined);
   // The column a moving card is over (itself or one of its cards): told once per change, not per frame.
   const [overGroup, setOverGroup] = useState<string | undefined>(undefined);
+  // Columns that have held cards while this board is up: a strip that filled never snaps shut under the pointer.
+  const [hasHeld, setHasHeld] = useState<ReadonlySet<string>>(() => new Set());
+  const holding = columns.filter((column) => column.count > 0 && !hasHeld.has(column.id));
+  if (holding.length > 0) setHasHeld(new Set([...hasHeld, ...holding.map((column) => column.id)]));
   // A press that ends a drag never opens the card it dropped.
   const isMovingRef = useRef(false);
   if (status === 'error') {
@@ -214,12 +218,9 @@ export function Board({
             isReorderable={isReorderable}
             draggingFrom={draggingFrom}
             isOver={overGroup === column.id}
-            // A strip opens while a card moves, to take it; one that refuses drops stays a strip, so nothing shifts.
-            isCollapsed={
-              column.isCollapsedWhenEmpty === true &&
-              column.count === 0 &&
-              (!isMoving || refusalOf(column) !== undefined)
-            }
+            // A strip stays a strip while a card moves (it takes the drop as it is, so no column shifts under the
+            // pointer), and one that has held cards on this board stays wide when its last card leaves.
+            isCollapsed={column.isCollapsedWhenEmpty === true && column.count === 0 && !hasHeld.has(column.id)}
             {...(onOpen === undefined
               ? {}
               : {

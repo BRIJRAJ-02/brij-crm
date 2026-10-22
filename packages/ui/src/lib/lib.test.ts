@@ -123,6 +123,8 @@ describe('formats', () => {
     expect(formatMoney('-20.25', 'EUR', 'en-US')).toBe('-€20.25');
     expect(formatMoney('1234.5', 'EUR', 'de-DE')).toBe('1.234,50\u00a0€');
     expect(formatMoney('12', 'NOPE', 'en-US')).toBe('NOPE 12');
+    expect(formatMoney('58500', 'USD', 'en-US', true)).toBe('$58,500.00');
+    expect(formatMoney('500', 'JPY', 'en-US', true)).toBe('¥500');
   });
 
   it('formats a calendar day without shifting it by any time zone', () => {

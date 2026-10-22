@@ -49,9 +49,10 @@ function hasFraction(amount: string): boolean {
  * An amount with its currency's symbol, grouped in the language, as Attio and HubSpot show money: "$58,500",
  * "€1.234,50" in de-DE, "CA$12" for Canadian dollars beside US ones. A whole amount shows no decimals; one with
  * a fraction shows at least the currency's minor units and at most 4, exact from the decimal string.
+ * `isFixedDecimals` always shows the minor units, so a column of amounts lines up on its digits.
  */
-export function formatMoney(amount: string, currency: string, locale: string): string {
-  const whole = !hasFraction(amount);
+export function formatMoney(amount: string, currency: string, locale: string, isFixedDecimals = false): string {
+  const whole = !isFixedDecimals && !hasFraction(amount);
   if (!isCurrencyCode(currency)) return `${currency} ${formatDecimal(amount, locale)}`;
   const minimum = whole ? 0 : Math.min(minorUnits(currency), 4);
   return memoIntl(

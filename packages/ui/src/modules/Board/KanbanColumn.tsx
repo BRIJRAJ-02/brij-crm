@@ -126,7 +126,10 @@ export function KanbanColumn({
           {column.isCountAtLeast === true ? strings.atLeast(number) : number}
         </span>
       </h3>
-      {refusal !== undefined && draggingFrom !== undefined && <p className={styles.refusal}>{refusal}</p>}
+      {/* A strip is too narrow for the sentence: dimmed, it says enough, and a drop there is put back with words. */}
+      {refusal !== undefined && draggingFrom !== undefined && !isCollapsed && (
+        <p className={styles.refusal}>{refusal}</p>
+      )}
       {/* Collapsed, it holds no card: the strip is its title and count alone. */}
       {!isCollapsed && (
         <SortableGroup ids={ids} isShifting={isReorderable && draggingFrom === column.id}>
