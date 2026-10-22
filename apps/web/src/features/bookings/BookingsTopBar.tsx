@@ -3,7 +3,7 @@
 // Main task: book someone in from any tab: New opens New meeting at the next free half hour of the week on screen.
 // Leaves out: drawing a span on the week (the calendar's own way into the same dialog) and the tabs (the layout's).
 import { useCalendar, useCaptureList } from '@crm/data/react';
-import { Button, ButtonLink, TopBar } from '@crm/ui';
+import { Button, ButtonLink, TopBar, useFormatSettings } from '@crm/ui';
 import { useMatch, useNavigate, useRouteContext, useSearch } from '@tanstack/react-router';
 import { useState } from 'react';
 import { SCHEDULING_HUE } from '../scheduling.ts';
@@ -36,7 +36,13 @@ export interface BookingsTopBarProps {
 export function BookingsTopBar({ slug, actionSlot }: BookingsTopBarProps) {
   const { data, toasts } = useRouteContext({ from: '__root__' });
   // The week on screen: the Calendar's, else this week.
-  const { week } = bookingsSearchOf(parseBookingsSearch(useSearch({ strict: false })), new Date(), useFirstDay());
+  const { timeZone } = useFormatSettings();
+  const { week } = bookingsSearchOf(
+    parseBookingsSearch(useSearch({ strict: false })),
+    new Date(),
+    useFirstDay(),
+    timeZone,
+  );
   // The member's hours, when the Calendar has read them; else nine to five on weekdays.
   const availability = useMatch({ from: '/w/$slug/bookings/calendar', shouldThrow: false })?.loaderData?.availability;
   const pages = useCaptureList(data.bookingPages.view(slug));
@@ -52,7 +58,7 @@ export function BookingsTopBar({ slug, actionSlot }: BookingsTopBarProps) {
   const hasNoPage = pages.status === 'ready' && bookable.length === 0;
 
   const open = () => {
-    const range = weekRange(week);
+    const range = weekRange(week, timeZone);
     const shown = data.bookings.calendar(slug, range.from, range.to).getSnapshot();
     setMeeting(
       nextFreeSpan({
@@ -61,6 +67,7 @@ export function BookingsTopBar({ slug, actionSlot }: BookingsTopBarProps) {
         minutes: bookable[0]?.durations[0] ?? 30,
         busy: busyOf(shown.status === 'ready' ? shown : undefined),
         ...(availability === undefined ? {} : { availability }),
+        zone: timeZone,
       }),
     );
   };

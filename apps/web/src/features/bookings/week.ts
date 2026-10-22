@@ -1,25 +1,72 @@
-// Bookings' week, in the member's own time zone (the browser's): the Monday a
-// week starts on, its days, the range's label, and the bookings and calendar
-// events as the grid's blocks, each clipped to the days it covers. Pure: the
-// clock and the locale come in.
+// Bookings' week, in the member's own time zone (Settings › Account ›
+// Preferences, else the browser's): the Monday a week starts on, its days, the
+// range's label, and the bookings and calendar events as the grid's blocks,
+// each clipped to the days it covers. Pure: the clock, the zone and the locale
+// come in. Day keys are calendar dates and need no zone; an instant becomes a
+// day and a minute only through the zone passed in, never the browser's.
 import type { BookingListItem, CalendarEventItem } from '@crm/data';
+import { dayKey, startOfDay } from '../../public/booking/time.ts';
 
-/** A local day as `yyyy-MM-dd`. */
-export function dayKeyOf(date: Date): string {
-  return `${String(date.getFullYear())}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+/** The day an instant falls on in `zone`, as `yyyy-MM-dd`. */
+export function dayKeyOf(date: Date, zone: string): string {
+  return dayKey(date.getTime(), zone);
 }
 
-/** The local midnight a `yyyy-MM-dd` key names. */
+/** The instant a day starts in `zone`: its midnight there (or the first moment after a daylight saving gap). */
+export function midnightIn(key: string, zone: string): Date {
+  return new Date(startOfDay(key, zone));
+}
+
+/** A day key's midnight in UTC, the zero its wall clock minutes count from. */
+function utcMidnight(key: string): number {
+  const [year = 1970, month = 1, day = 1] = key.split('-').map(Number);
+  return Date.UTC(year, month - 1, day);
+}
+
+/** The wall clock of `zone` at an instant, written down as if it were UTC (to the second). */
+function wallClockAt(instant: number, zone: string): number {
+  const parts = new Intl.DateTimeFormat('en-US', {
+    timeZone: zone,
+    hourCycle: 'h23',
+    year: 'numeric',
+    month: 'numeric',
+    day: 'numeric',
+    hour: 'numeric',
+    minute: 'numeric',
+    second: 'numeric',
+  }).formatToParts(new Date(instant));
+  const value = (type: string) => Number(parts.find((each) => each.type === type)?.value ?? '0');
+  return Date.UTC(value('year'), value('month') - 1, value('day'), value('hour'), value('minute'), value('second'));
+}
+
+/** The minute of its day `date` shows on the clock in `zone` (the grid's rows are the clock's hours). */
+export function minuteOfDay(date: Date, zone: string): number {
+  return Math.floor((wallClockAt(date.getTime(), zone) - utcMidnight(dayKeyOf(date, zone))) / 60_000);
+}
+
+/**
+ * The instant the clock in `zone` reads `minute` on day `key` (1440 is the next midnight). In an hour a daylight
+ * saving change repeats, the later one; in an hour it skips, the moment just after the jump.
+ */
+export function instantAt(key: string, minute: number, zone: string): Date {
+  const wall = utcMidnight(key) + minute * 60_000;
+  const first = wall - (wallClockAt(wall, zone) - wall);
+  return new Date(wall - (wallClockAt(first, zone) - first));
+}
+
+/**
+ * A calendar day's Date for its weekday and for naming the date (local midnight). Never an instant to place or
+ * compare times by: that is `midnightIn`.
+ */
 export function dayStart(key: string): Date {
   const [year = 1970, month = 1, day = 1] = key.split('-').map(Number);
   return new Date(year, month - 1, day);
 }
 
-/** `key` moved by `days`. */
+/** `key` moved by `days`, as calendar dates (no zone). */
 export function addDays(key: string, days: number): string {
-  const date = dayStart(key);
-  date.setDate(date.getDate() + days);
-  return dayKeyOf(date);
+  const [year = 1970, month = 1, day = 1] = key.split('-').map(Number);
+  return new Date(Date.UTC(year, month - 1, day + days)).toISOString().slice(0, 10);
 }
 
 /** The first day of the week holding `key`: Monday unless `firstDay` (0 Sunday to 6 Saturday, the member's week start) says. */
@@ -37,9 +84,9 @@ export function weekDays(monday: string): readonly string[] {
   return Array.from({ length: 7 }, (_, index) => addDays(monday, index));
 }
 
-/** The range a week reads, as ISO instants: its Monday's midnight to the next Monday's. */
-export function weekRange(monday: string): { readonly from: string; readonly to: string } {
-  return { from: dayStart(monday).toISOString(), to: dayStart(addDays(monday, 7)).toISOString() };
+/** The range a week reads, as ISO instants: its first day's midnight to the next week's, in `zone`. */
+export function weekRange(monday: string, zone: string): { readonly from: string; readonly to: string } {
+  return { from: midnightIn(monday, zone).toISOString(), to: midnightIn(addDays(monday, 7), zone).toISOString() };
 }
 
 /** The week's range in the locale's own words: "12–18 October 2026" (en-GB), "October 12 – 18, 2026" (en-US). */
@@ -54,9 +101,10 @@ export function rangeLabel(monday: string, locale: string): string {
   }).formatRange(start, end);
 }
 
-/** Minutes from the local midnight of `key` to `instant`, clipped to the day. */
-function minuteIn(key: string, instant: Date): number {
-  const minutes = (instant.getTime() - dayStart(key).getTime()) / 60_000;
+/** The clock minute of `instant` on day `key` in `zone`, clipped to the day (its next midnight is 1440). */
+function minuteIn(key: string, instant: Date, zone: string): number {
+  if (instant.getTime() >= startOfDay(addDays(key, 1), zone)) return 1440;
+  const minutes = (wallClockAt(instant.getTime(), zone) - utcMidnight(key)) / 60_000;
   return Math.max(0, Math.min(1440, Math.round(minutes)));
 }
 
@@ -70,29 +118,37 @@ export interface DayPiece {
   readonly endMinute: number;
 }
 
-/** The pieces of [start, end) on each of `days` it touches. */
+/** The pieces of [start, end) on each of `days` it touches, the days read in `zone`. */
 export function piecesOf(
   sourceId: string,
   startsAt: string,
   endsAt: string,
   days: readonly string[],
+  zone: string,
 ): readonly DayPiece[] {
   const start = new Date(startsAt);
   const end = new Date(endsAt);
   return days.flatMap((key) => {
-    const from = dayStart(key);
-    const to = dayStart(addDays(key, 1));
+    const from = midnightIn(key, zone);
+    const to = midnightIn(addDays(key, 1), zone);
     if (end <= from || start >= to) return [];
-    const startMinute = minuteIn(key, start < from ? from : start);
-    const endMinute = minuteIn(key, end > to ? to : end);
+    const first = start < from ? from : start;
+    const last = end > to ? to : end;
+    const startMinute = minuteIn(key, first, zone);
+    // Across the hour a daylight saving change repeats, the clock runs back: the piece keeps its length.
+    const clockEnd = minuteIn(key, last, zone);
+    const endMinute =
+      clockEnd > startMinute
+        ? clockEnd
+        : Math.min(1440, startMinute + Math.round((last.getTime() - first.getTime()) / 60_000));
     if (endMinute <= startMinute) return [];
     return [{ id: `${sourceId}:${key}`, sourceId, dayKey: key, startMinute, endMinute }];
   });
 }
 
-/** "9:30 – 10:00 AM" in the locale. */
-export function timeRange(startsAt: string, endsAt: string, locale: string): string {
-  const clock = new Intl.DateTimeFormat(locale, { hour: 'numeric', minute: '2-digit' });
+/** "9:30 – 10:00 AM" in the locale, on the clock of `zone`. */
+export function timeRange(startsAt: string, endsAt: string, locale: string, zone: string): string {
+  const clock = new Intl.DateTimeFormat(locale, { hour: 'numeric', minute: '2-digit', timeZone: zone });
   return `${clock.format(new Date(startsAt))} – ${clock.format(new Date(endsAt))}`;
 }
 
@@ -109,13 +165,14 @@ const DAY_END = 20 * 60;
 export function scrollMinute(
   days: readonly string[],
   now: Date,
+  zone: string,
   pieces: readonly Pick<DayPiece, 'startMinute' | 'endMinute'>[],
-  startOfDay: number = DAY_START,
+  dayBegins: number = DAY_START,
 ): number {
   const hourBefore = (minute: number) => Math.max(0, Math.floor(minute / 60) * 60 - 60);
-  const start = Math.floor(startOfDay / 60) * 60;
-  if (days.includes(dayKeyOf(now))) {
-    const minute = now.getHours() * 60 + now.getMinutes();
+  const start = Math.floor(dayBegins / 60) * 60;
+  if (days.includes(dayKeyOf(now, zone))) {
+    const minute = minuteOfDay(now, zone);
     return minute >= DAY_START && minute < DAY_END ? hourBefore(minute) : start;
   }
   const first = pieces.length === 0 ? start : Math.min(...pieces.map((piece) => piece.startMinute));
@@ -123,15 +180,23 @@ export function scrollMinute(
 }
 
 /** The bookings of the week a list shows, by day piece, for the grid (cancelled ones too). */
-export function bookingPieces(bookings: readonly BookingListItem[], days: readonly string[]): readonly DayPiece[] {
-  return bookings.flatMap((booking) => piecesOf(booking.id, booking.startsAt, booking.endsAt, days));
+export function bookingPieces(
+  bookings: readonly BookingListItem[],
+  days: readonly string[],
+  zone: string,
+): readonly DayPiece[] {
+  return bookings.flatMap((booking) => piecesOf(booking.id, booking.startsAt, booking.endsAt, days, zone));
 }
 
 /** The member's calendar events of the week, by day piece (all day events are left to the list). */
-export function eventPieces(events: readonly CalendarEventItem[], days: readonly string[]): readonly DayPiece[] {
+export function eventPieces(
+  events: readonly CalendarEventItem[],
+  days: readonly string[],
+  zone: string,
+): readonly DayPiece[] {
   return events
     .filter((event) => !event.allDay)
-    .flatMap((event) => piecesOf(event.id, event.startsAt, event.endsAt, days));
+    .flatMap((event) => piecesOf(event.id, event.startsAt, event.endsAt, days, zone));
 }
 
 /**

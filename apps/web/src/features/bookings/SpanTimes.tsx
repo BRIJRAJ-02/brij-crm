@@ -1,7 +1,7 @@
 // A drawn span's From and To (spec 0027): the same two fields on the card a
 // span opens and in New meeting, so the time can be set exactly, from the
 // keyboard too, and moved where a clash is reported.
-import { Select } from '@crm/ui';
+import { Select, useFormatSettings } from '@crm/ui';
 import { instantOf, lengthLabel, type DrawnSpan } from './span.ts';
 import { strings } from './strings.ts';
 
@@ -26,8 +26,10 @@ export function SpanTimes({
   showsLength = false,
   isDisabled,
 }: SpanTimesProps) {
-  const clock = new Intl.DateTimeFormat(locale, { hour: 'numeric', minute: '2-digit' });
-  const label = (minute: number) => clock.format(instantOf(span.dayKey, minute));
+  // The times on the member's clock, the zone the week is drawn in.
+  const { timeZone } = useFormatSettings();
+  const clock = new Intl.DateTimeFormat(locale, { hour: 'numeric', minute: '2-digit', timeZone });
+  const label = (minute: number) => clock.format(instantOf(span.dayKey, minute, timeZone));
   const steps = Array.from({ length: 96 }, (_, index) => index * 15);
   const ends = [...steps.slice(1), 1440].filter(
     (minute) => minute > span.startMinute && minute - span.startMinute <= maxMinutes,

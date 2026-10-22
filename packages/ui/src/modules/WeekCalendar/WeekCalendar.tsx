@@ -1,4 +1,5 @@
 import {
+  Fragment,
   useEffect,
   useLayoutEffect,
   useMemo,
@@ -10,6 +11,7 @@ import {
   type Ref,
 } from 'react';
 import { ProviderMark, type ProviderName } from '../../atoms/ProviderMark/ProviderMark.tsx';
+import { VisuallyHidden } from '../../atoms/VisuallyHidden/VisuallyHidden.tsx';
 import { focusLater } from '../../lib/focus-later.ts';
 import { Menu, MenuItem } from '../../molecules/Menu/Menu.tsx';
 import { Popover, type PopoverPlacement } from '../../molecules/Popover/Popover.tsx';
@@ -112,6 +114,11 @@ export interface WeekCalendarProps {
   readonly onSelectDay: (key: string) => void;
   /** The hour axis's labels, 0 to 23 ("9 AM"). */
   readonly hourLabel: (hour: number) => string;
+  /**
+   * The zone the hours are in, over the hour axis: `short` shows ("GMT+5:30"), `name` is read out and shows on
+   * hover ("Times in Kolkata time (GMT+5:30)"). Absent leaves the corner empty.
+   */
+  readonly zone?: { readonly short: string; readonly name: string };
   /** Today's column and the minute now, for the now line. */
   readonly now?: { readonly dayKey: string; readonly minute: number };
   /** The minute the grid opens with at its top (an hour before now, or 8 AM). */
@@ -221,6 +228,7 @@ export function WeekCalendar({
   selectedDay,
   onSelectDay,
   hourLabel,
+  zone,
   now,
   scrollToMinute,
   openId,
@@ -386,7 +394,22 @@ export function WeekCalendar({
       data-fill={isFill || undefined}
     >
       <div className={styles.head}>
-        <span className={styles.corner} aria-hidden="true" />
+        {zone === undefined ? (
+          <span className={styles.corner} aria-hidden="true" />
+        ) : (
+          <span className={styles.corner} title={zone.name}>
+            <span className={styles.zone} aria-hidden="true">
+              {/* "GMT+5:30" is wider than the axis: it may break before its sign, "GMT" over "+5:30". */}
+              {zone.short.split(/(?=[+\-\u2212])/).map((part, index) => (
+                <Fragment key={part}>
+                  {index > 0 && <wbr />}
+                  {part}
+                </Fragment>
+              ))}
+            </span>
+            <VisuallyHidden>{zone.name}</VisuallyHidden>
+          </span>
+        )}
         {days.map((day) => (
           <button
             key={day.key}

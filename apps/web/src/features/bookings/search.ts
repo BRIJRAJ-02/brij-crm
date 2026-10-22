@@ -43,9 +43,9 @@ export function parseBookingsSearch(search: Record<string, unknown>): RawBooking
   };
 }
 
-/** The address as the screens read it, defaults filled in from `now`. */
-export function bookingsSearchOf(raw: RawBookingsSearch, now: Date = new Date(), firstDay = 1): BookingsSearch {
-  const day = raw.d ?? raw.w ?? dayKeyOf(now);
+/** The address as the screens read it, defaults filled in from `now` (today as it is in `zone`, the member's). */
+export function bookingsSearchOf(raw: RawBookingsSearch, now: Date, firstDay: number, zone: string): BookingsSearch {
+  const day = raw.d ?? raw.w ?? dayKeyOf(now, zone);
   return {
     // A link's week starts on the member's week start too, so Today and the grid agree.
     week: weekOf(raw.w ?? day, firstDay),
