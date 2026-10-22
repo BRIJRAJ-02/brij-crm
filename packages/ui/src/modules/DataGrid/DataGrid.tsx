@@ -100,6 +100,11 @@ export interface DataGridProps<Row> {
   /** The column that names a row; always first. */
   readonly rowHeader: string;
   /**
+   * Nothing on the grid edits (the trash): every column is read only through its attribute anyway, and the
+   * headers leave out their one lock each, which on every column only repeats what the screen already says.
+   */
+  readonly isReadOnly?: boolean;
+  /**
    * What a row with no name is called ("Unnamed person"): drawn muted in its
    * row header, and read as its name. "Untitled" when absent.
    */
@@ -307,6 +312,7 @@ export function DataGrid<Row>({
   getValue,
   getDisplay,
   rowHeader,
+  isReadOnly = false,
   untitled = strings.untitled,
   rowAvatar,
   selection,
@@ -1467,6 +1473,7 @@ export function DataGrid<Row>({
       sortColumn={sort?.columnId}
       sortDirection={sort?.direction}
       addColumn={addColumn}
+      isReadOnly={isReadOnly}
     />
   );
 
@@ -1852,6 +1859,8 @@ interface GridHeaderProps {
   readonly sortDirection: 'ascending' | 'descending' | undefined;
   /** The "+" header after the last column (spec 0012): its drawn column, name, whether focus is on it, and its press. */
   readonly addColumn: AddColumnHeader | undefined;
+  /** The whole grid is read only: headers leave out their lock. */
+  readonly isReadOnly: boolean;
 }
 
 /** The "+" header after the last column. */
@@ -1881,6 +1890,7 @@ const GridHeader = memo(function GridHeader({
   sortColumn,
   sortDirection,
   addColumn,
+  isReadOnly,
 }: GridHeaderProps) {
   const runOf = (id: string) => layout.columns.findIndex((each) => each.id === id) < layout.pinnedCount;
   const canMove = (id: string, direction: -1 | 1) => moveColumn(layout, id, direction) !== layout;
@@ -1955,6 +1965,7 @@ const GridHeader = memo(function GridHeader({
               }}
               actions={handlers.actionsFor(each.column)}
               dropSide={over?.id === each.column.id ? over.side : undefined}
+              isGridReadOnly={isReadOnly}
             />,
           ];
         })}
