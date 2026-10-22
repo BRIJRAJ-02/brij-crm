@@ -101,7 +101,11 @@ describe('a deleted workspace’s page', () => {
     await page.getByRole('button', { name: 'Delete your account' }).click();
     const dialog = page.getByRole('alertdialog', { name: 'Delete your account?' });
     await expect.element(dialog).toBeVisible();
-    // Nothing stands in the way: the confirm asks for the email, as Profile's does.
+    // Nothing stands in the way: the confirm asks for the email, as Profile's does, and says first that the deleted
+    // workspace can't be restored by them afterwards.
     await expect.element(dialog.getByRole('textbox', { name: 'Type gone@acme.com to confirm' })).toBeVisible();
+    await expect
+      .element(dialog.getByText('You won’t be able to restore Gone’s workspace after this.', { exact: false }))
+      .toBeVisible();
   });
 });

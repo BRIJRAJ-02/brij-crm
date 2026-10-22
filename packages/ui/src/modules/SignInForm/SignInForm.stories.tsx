@@ -85,6 +85,19 @@ export const GoogleRefused: Story = {
   },
 };
 
+/** After deleting their account: said at the top as a success, announced as a status rather than an alert. */
+export const AccountDeleted: Story = {
+  args: { notice: 'Your account was deleted.', noticeTone: 'success' },
+  parameters: { crm: { screenshot: false } },
+  play: async ({ canvas }) => {
+    // A status region gets its words a frame after it appears, so they are announced; the form holds other live
+    // regions too, so the notice is found by its words.
+    const notice = (await canvas.findByText('Your account was deleted.')).closest('[role]');
+    await expect(notice).toHaveAttribute('role', 'status');
+    await expect(canvas.queryByRole('alert')).toBeNull();
+  },
+};
+
 /** Sign up isn't open to a new email: said at the top, kindly, never on the field. */
 export const SignUpRefused: Story = {
   args: {

@@ -135,6 +135,11 @@ export const strings = {
         ? `You’re the last owner of ${names[0] ?? ''}. Make someone else an owner, or delete the workspace.`
         : `You’re the last owner of ${names.join(', ')}. Make someone else an owner of each, or delete them.`,
     openMembers: (name: string) => `Open ${name} members`,
+    /** Its General settings, where Delete workspace is. */
+    openGeneral: (name: string) => `Open ${name} settings`,
+    /** Deleting the account from a deleted workspace's page: nobody it leaves behind can bring the person back. */
+    lostWorkspace: (name: string) =>
+      `You won’t be able to restore ${name} after this. To keep anything in it, restore it first.`,
     text: 'You’ll leave every workspace, and your sign in, devices and details are deleted. This can’t be undone. Export anything you need from each workspace first.',
     emailLabel: (email: string) => `Type ${email} to confirm`,
     deleting: 'Deleting',

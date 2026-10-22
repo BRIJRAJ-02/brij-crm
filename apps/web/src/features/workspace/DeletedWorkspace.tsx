@@ -5,7 +5,7 @@
 // When it was the person's last workspace, Settings can't open anywhere, so the page also offers a new workspace and
 // Delete your account (the account's confirm sent them here: delete the workspace first).
 import { isDataError, type DataLayer, type DeletedWorkspace } from '@crm/data';
-import { Button, Callout, EmptyState, Link, TopBar } from '@crm/ui';
+import { Button, ButtonLink, Callout, EmptyState, TopBar } from '@crm/ui';
 import { useState } from 'react';
 import { DeleteAccountAction } from '../settings/DeleteAccountSection.tsx';
 import { strings } from './strings.ts';
@@ -58,8 +58,11 @@ function RestoreBody({
           <Button variant="primary" isPending={isBusy} onPress={restore}>
             {strings.restoreWorkspace}
           </Button>
-          <Link href="/">{person.hasOther ? strings.backToWorkspaces : strings.startWorkspace}</Link>
-          {!person.hasOther && <DeleteAccountAction data={person.data} />}
+          {/* Both other ways out look alike: quiet link buttons after Restore. */}
+          <ButtonLink variant="link" href="/">
+            {person.hasOther ? strings.backToWorkspaces : strings.startWorkspace}
+          </ButtonLink>
+          {!person.hasOther && <DeleteAccountAction data={person.data} workspaceName={deleted.name} />}
         </>
       }
     >
