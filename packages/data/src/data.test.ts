@@ -175,6 +175,8 @@ interface Behaviour {
     readonly pageId: string;
     readonly routing?: { readonly rules: readonly RoutingRule[] } | undefined;
   }) => BookingPageView | Promise<BookingPageView>;
+  /** What `account.deletion.confirm` answers (spec 0033). */
+  deleteAccount: () => Promise<{ deleted: true }>;
 }
 
 const unauthenticated = () => new ORPCError('UNAUTHENTICATED', { status: 401, message: 'Sign in to continue.' });
@@ -208,6 +210,7 @@ function fakeApi(overrides: Partial<Behaviour> = {}, auth: (path: string, body: 
     jobGet: notServed,
     jobCancel: notServed,
     jobStartTest: notServed,
+    deleteAccount: notServed,
     objectWrite: notServed,
     usage: () => ({ attributes: { [PEOPLE.id]: { used: 20, limit: 250 } }, optionsPerAttribute: 500 }),
     activity: notServed,
@@ -555,7 +558,7 @@ function fakeApi(overrides: Partial<Behaviour> = {}, auth: (path: string, body: 
       },
       deletion: {
         check: os.account.deletion.check.handler(notServed),
-        confirm: os.account.deletion.confirm.handler(notServed),
+        confirm: os.account.deletion.confirm.handler(() => behaviour.deleteAccount()),
       },
     },
     calendar: {
@@ -939,6 +942,92 @@ describe('objects.list', () => {
     expect(await data.me.get()).toEqual(ME);
     await failure(data.objects.list('acme'));
     expect(signedOut).toHaveLength(2);
+  });
+
+  it('signs nobody out on a 401 while the account is being deleted, or after it', async () => {
+    let session = true;
+    let answer: (deleted: { deleted: true }) => void = () => undefined;
+    let asked: () => void = () => undefined;
+    const confirmAsked = new Promise<void>((resolve) => {
+      asked = resolve;
+    });
+    const api = fakeApi({
+      me: () => {
+        if (!session) throw unauthenticated();
+        return ME;
+      },
+      objects: () => {
+        if (!session) throw unauthenticated();
+        return [PEOPLE];
+      },
+      deleteAccount: () =>
+        new Promise((resolve) => {
+          answer = resolve;
+          asked();
+        }),
+    });
+    const { data, signedOut, events } = layer(api);
+    await data.me.get();
+    const deleting = data.account.deletion.confirm(ME.user.email);
+    await confirmAsked;
+    // The server ends the session before it answers: the live connection asking again hears 401 meanwhile.
+    session = false;
+    expect((await failure(data.objects.list('acme'))).code).toBe('UNAUTHENTICATED');
+    expect(signedOut).toEqual([]);
+    answer({ deleted: true });
+    await deleting;
+    // A call still out answers 401 afterwards: sign in already says the account was deleted.
+    expect((await failure(data.objects.list('beta'))).code).toBe('UNAUTHENTICATED');
+    expect(signedOut).toEqual([]);
+    expect(events).toEqual(['session changed']);
+    expect(await data.me.get()).toBeUndefined();
+  });
+
+  it('ends the session as usual when the deletion itself answers 401, or fails after a 401 was held back', async () => {
+    const api = fakeApi({
+      deleteAccount: () => {
+        throw unauthenticated();
+      },
+    });
+    const { data, signedOut, events } = layer(api);
+    await data.me.get();
+    // Another tab signed out first: the deletion is the call that finds the session gone.
+    expect((await failure(data.account.deletion.confirm(ME.user.email))).code).toBe('UNAUTHENTICATED');
+    expect(signedOut).toEqual(['/w/acme/objects/people?view=all']);
+    expect(events).toEqual(['signed out', 'session changed']);
+
+    let session = true;
+    let fail: (error: unknown) => void = () => undefined;
+    let asked: () => void = () => undefined;
+    const confirmAsked = new Promise<void>((resolve) => {
+      asked = resolve;
+    });
+    const second = fakeApi({
+      me: () => {
+        if (!session) throw unauthenticated();
+        return ME;
+      },
+      objects: () => {
+        if (!session) throw unauthenticated();
+        return [PEOPLE];
+      },
+      deleteAccount: () =>
+        new Promise((_resolve, reject) => {
+          fail = reject;
+          asked();
+        }),
+    });
+    const after = layer(second);
+    await after.data.me.get();
+    const deleting = after.data.account.deletion.confirm(ME.user.email);
+    await confirmAsked;
+    session = false;
+    await failure(after.data.objects.list('acme'));
+    expect(after.signedOut).toEqual([]);
+    // The deletion then fails (the server timed out after ending the session): the held 401 ends it after all.
+    fail(new ORPCError('INTERNAL', { status: 500, message: 'Timed out.' }));
+    expect((await failure(deleting)).code).toBe('INTERNAL');
+    expect(after.signedOut).toEqual(['/w/acme/objects/people?view=all']);
   });
 
   it('asks who is signed in again after a NOT_FOUND, since the person may have left the workspace', async () => {

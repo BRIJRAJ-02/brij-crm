@@ -30,6 +30,13 @@ Spec 0005, milestones 1 to 3; spec 0012 makes the object pages generic. Every pa
 - **Main task**: owners and admins Restore it in place; everyone can go back to the first live object (or Settings when none is live).
 - **Leaves out**: its records, which stay and show again once it is restored.
 
+## A deleted workspace's page (DeletedWorkspace)
+
+- **Purpose**: what an owner sees opening a workspace they deleted, within its 30 days (spec 0031, AC-823): "<Name> is deleted" and the day it goes for good, inside the frame.
+- **Main task**: Restore workspace, which brings it back for everyone; or Back to your workspaces.
+- **When it was the person's last workspace**: Settings opens nowhere, so the way back reads Start a new workspace (first run) and Delete your account follows, opening Profile's own confirm (`DeleteAccountAction`). Why: the account's confirm tells the last owner to delete the workspace first, and they were then stuck on this page with no way to the delete (QA, 22 October 2026; the owner hit it in production).
+- **Leaves out**: anything inside the workspace (nobody can open it), and other members (they see not found).
+
 ## New record (NewRecordDialog)
 
 - **Purpose**: add one record of any object without leaving the table.

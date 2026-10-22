@@ -76,6 +76,8 @@ export const strings = {
   restored: (name: string) => `${name} is back.`,
   restoreFailed: 'Couldn’t restore it. Try again in a moment.',
   backToWorkspaces: 'Back to your workspaces',
+  /** The way home when the deleted workspace was the person's last: first run makes a new one. */
+  startWorkspace: 'Start a new workspace',
   workspaceMissingText: 'That workspace doesn’t exist, or you’re not a member of it.',
   pageMissingTitle: 'Page not found',
   pageMissingText: 'There’s nothing at this address.',

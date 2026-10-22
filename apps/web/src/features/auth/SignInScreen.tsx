@@ -105,6 +105,7 @@ export function SignInScreen({ data, google, redirect, returnTo, googleError, si
         {...(email === undefined ? {} : { defaultEmail: email })}
         {...(error === undefined ? {} : { error })}
         {...(notice === undefined ? {} : { notice })}
+        {...(notice === strings.signedOutDeleted ? { noticeTone: 'success' as const } : {})}
         {...(google ? { onGoogle: signInWithGoogle } : {})}
       />
     </AuthLayout>
