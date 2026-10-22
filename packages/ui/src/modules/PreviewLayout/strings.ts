@@ -8,5 +8,5 @@ export const strings = {
   desktop: 'Desktop',
   previewOf: (title: string) => `Preview of ${title}`,
   /** EditorStatus's word on a phone's bar, in place of its full words. */
-  shortStatus: { live: 'Live', changed: 'Changed', draft: 'Draft', paused: 'Paused' },
+  shortStatus: { live: 'Live', changed: 'Edited', draft: 'Draft', paused: 'Paused' },
 } as const;

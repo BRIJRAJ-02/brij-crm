@@ -15,7 +15,7 @@ Ported from the artifact's StatusDot card. It is the status attribute's one disp
 
 - The label always shows (or its `shortLabel` in a narrow container); the dot's colour is never the only cue.
 - `isArchived` turns the dot gray and adds "(archived)" for screen readers.
-- `shortLabel`: a word or two shown in place of the label in a narrow container (under 480px, a phone's bar), so the dot never stands alone; the full label stays in the accessibility tree as a visually hidden copy (read at every width; the shown words are `aria-hidden`). Why a variant: an editor's status in the TopBar was cut to "D." beside the name on a phone, which said nothing (22 October 2026). The dot alone was tried and turned down: colour would be the only cue, and Draft and Paused share a gray dot (WCAG 1.4.1; decided 22 October 2026). EditorStatus (PreviewLayout) passes Live, Changed, Draft or Paused.
+- `shortLabel`: a word or two shown in place of the label in a narrow container (under 480px, a phone's bar), so the dot never stands alone; the full label stays in the accessibility tree as a visually hidden copy (read at every width; the shown words are `aria-hidden`). Why a variant: an editor's status in the TopBar was cut to "D." beside the name on a phone, which said nothing (22 October 2026). The dot alone was tried and turned down: colour would be the only cue, and Draft and Paused share a gray dot (WCAG 1.4.1; decided 22 October 2026). EditorStatus (PreviewLayout) passes Live, Edited, Draft or Paused.
 
 ## States
 

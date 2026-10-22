@@ -14,7 +14,7 @@ export interface StatusDotProps {
   /**
    * A word or two shown in place of the label in a narrow container (under 480px, a phone's bar), so the dot never
    * stands alone; screen readers still read the full label. For a status beside a name that must keep its room: an
-   * editor's "Published · Unpublished changes" becomes Changed in the TopBar.
+   * editor's "Live · edited" becomes Edited in the TopBar.
    */
   readonly shortLabel?: string;
 }

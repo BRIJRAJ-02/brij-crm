@@ -40,7 +40,7 @@ export const Archived: Story = {
  * label still read by screen readers.
  */
 export const ShortLabel: Story = {
-  args: { children: 'Published · Unpublished changes', hue: 'orange', shortLabel: 'Changed' },
+  args: { children: 'Live · edited', hue: 'orange', shortLabel: 'Edited' },
   render: (args) => (
     <Stage direction="column">
       <span data-testid="wide">
@@ -61,12 +61,11 @@ export const ShortLabel: Story = {
     await expect(shown(wide, 'narrow')).not.toBeVisible();
     await expect(shown(narrow, 'wide')).not.toBeVisible();
     await expect(shown(narrow, 'narrow')).toBeVisible();
-    await expect(shown(narrow, 'narrow')).toHaveTextContent('Changed');
+    await expect(shown(narrow, 'narrow')).toHaveTextContent('Edited');
     // The full label stays in the accessibility tree at both widths: one copy, never aria-hidden.
     for (const root of [wide, narrow]) {
       const readable = Array.from(root.querySelectorAll('*')).filter(
-        (element) =>
-          element.textContent === 'Published · Unpublished changes' && element.closest('[aria-hidden="true"]') === null,
+        (element) => element.textContent === 'Live · edited' && element.closest('[aria-hidden="true"]') === null,
       );
       await expect(readable).toHaveLength(1);
     }
@@ -75,5 +74,13 @@ export const ShortLabel: Story = {
 
 /** Archived with a short label: on a phone a gray dot and the short word, "(archived)" read by screen readers. */
 export const ArchivedShortLabel: Story = {
-  args: { children: 'Paused', hue: 'orange', isArchived: true, shortLabel: 'Paused' },
+  args: { children: 'Paused since 3 October', hue: 'orange', isArchived: true, shortLabel: 'Paused' },
+  render: (args) => (
+    <Stage direction="column">
+      <StatusDot {...args} />
+      <Stage width="phone">
+        <StatusDot {...args} />
+      </Stage>
+    </Stage>
+  ),
 };
