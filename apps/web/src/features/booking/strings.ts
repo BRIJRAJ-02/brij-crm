@@ -138,7 +138,7 @@ export const strings = {
       example: 'On Meeting length, a 30 min meeting offers 9:00, 9:30 and 10:00.',
     },
   },
-  privateHint: 'Only people with the link can book',
+  privateHint: 'Only people with the link can book.',
   /** InfoTips on the editor's settings that a new member wouldn't read from the label alone. */
   tips: {
     schedule: {
@@ -184,6 +184,8 @@ export const strings = {
   days: (count: number) => (count === 1 ? '1 day' : `${String(count)} days`),
   fixHours: 'Fix the hours marked in red to save.',
   fixPage: 'Fix what’s marked in red to save.',
+  /** The save bar's reason, naming the tabs that hold what's red. */
+  fixTabs: (tabs: readonly string[]) => `Fix ${tabs.join(' and ')} to save.`,
   leaveConfirm: 'You have unsaved changes. Leave without saving?',
   /** Add events to: the page's own destination calendar (spec 0024, AC-997). */
   addBookingsTo: 'Add bookings to',

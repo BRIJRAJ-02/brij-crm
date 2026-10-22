@@ -83,3 +83,24 @@ export const WithEnd: Story = {
     await expect(custom).not.toHaveAttribute('aria-pressed');
   },
 };
+
+/** Disabled: the caller disables its `end` with the group. */
+export const WithEndDisabled: Story = {
+  args: { selected: ['30'], isDisabled: true },
+  render: (args) => (
+    <Stage>
+      <ChoiceChips
+        {...args}
+        choices={lengths().slice(0, 4)}
+        end={
+          <Button variant="dashed" icon="plus" isDisabled>
+            Custom
+          </Button>
+        }
+      />
+    </Stage>
+  ),
+  play: async ({ canvas }) => {
+    await expect(canvas.getByRole('button', { name: 'Custom' })).toBeDisabled();
+  },
+};

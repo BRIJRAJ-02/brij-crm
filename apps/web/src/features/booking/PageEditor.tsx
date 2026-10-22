@@ -122,7 +122,6 @@ const STEPS: SelectItem[] = [
 /** The tab each setting sits on, for a refusal that names its field. */
 const FIELD_TABS: Readonly<Record<string, PageTab>> = {
   description: 'page',
-  slug: 'page',
   isPrivate: 'page',
   title: 'meeting',
   durations: 'meeting',
@@ -251,6 +250,7 @@ export function PageEditor({
         setSaving(false);
         setPage(next);
         setDraft((current) => ({ ...settingsOf(next), ...changed(settingsOf(next), current) }));
+        setChipsError(undefined);
         // Saved is said for the groups' save, not the Live switch's.
         if (patch.status === undefined) setJustSaved(true);
       },
@@ -258,6 +258,9 @@ export function PageEditor({
         setSaving(false);
         if (patch.status !== undefined) setDraft((current) => ({ ...current, status: page.status }));
         const field = isDataError(error) ? error.data?.refusals?.[0]?.field : undefined;
+        // A refused setting on another tab: show that tab, where the field says what's wrong.
+        const refused = field === undefined ? undefined : FIELD_TABS[field];
+        if (refused !== undefined) onTabChange(refused);
         setFailure({
           message: isDataError(error) ? error.message : strings.somethingWrong,
           ...(field === undefined ? {} : { field }),
@@ -298,7 +301,7 @@ export function PageEditor({
   const refusedTab = failure?.field === undefined ? undefined : FIELD_TABS[failure.field];
   const isWhereMissing = (location.type === 'address' || location.type === 'custom') && location.value.trim() === '';
   const hasError: Readonly<Record<PageTab, boolean>> = {
-    page: refusedTab === 'page' || !/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(draft.slug),
+    page: refusedTab === 'page',
     meeting:
       refusedTab === 'meeting' ||
       draft.title.trim() === '' ||
@@ -410,11 +413,18 @@ export function PageEditor({
               <SaveBar
                 status={barStatus}
                 {...(barError === undefined ? {} : { error: barError })}
-                {...(sendable(draft) ? {} : { blockedReason: strings.fixPage })}
+                {...(sendable(draft)
+                  ? {}
+                  : {
+                      blockedReason: tabs.some((id) => hasError[id] && id !== shown)
+                        ? strings.fixTabs(tabs.filter((id) => hasError[id]).map((id) => tabLabel[id]))
+                        : strings.fixPage,
+                    })}
                 onSave={() => save(dirty)}
                 onDiscard={() => {
                   setDraft(saved);
                   setFailure(undefined);
+                  setChipsError(undefined);
                   setJustSaved(false);
                 }}
                 onFocusAway={() => pageHeading(document)?.focus()}
@@ -466,36 +476,43 @@ export function PageEditor({
                   onChange={(title) => change({ title })}
                   {...(draft.title.trim() === '' ? { error: strings.titleRequired } : {})}
                 />
-                <ChoiceChips
-                  label={strings.durations}
-                  choices={lengths.map((minutes) => ({ id: String(minutes), label: strings.minutesShort(minutes) }))}
-                  selected={draft.durations.map(String)}
-                  isDisabled={isLocked}
-                  onChange={(ids) => {
-                    const durations = lengths.filter((minutes) => ids.includes(String(minutes)));
-                    // A fifth is refused here as the server would: the public page shows four.
-                    if (durations.length > LENGTHS_MAX) {
-                      setChipsError(strings.lengthsFull);
-                      return;
+                {isLocked ? (
+                  // Read only: the chosen lengths as text, which a viewer can reach and read; disabled chips can't be.
+                  <DescriptionList
+                    items={[
+                      {
+                        term: strings.durations,
+                        description: draft.durations.map((minutes) => strings.minutesShort(minutes)).join(', '),
+                      },
+                    ]}
+                  />
+                ) : (
+                  <ChoiceChips
+                    label={strings.durations}
+                    choices={lengths.map((minutes) => ({ id: String(minutes), label: strings.minutesShort(minutes) }))}
+                    selected={draft.durations.map(String)}
+                    onChange={(ids) => {
+                      const durations = lengths.filter((minutes) => ids.includes(String(minutes)));
+                      // A fifth is refused here as the server would: the public page shows four.
+                      if (durations.length > LENGTHS_MAX) {
+                        setChipsError(strings.lengthsFull);
+                        return;
+                      }
+                      setChipsError(undefined);
+                      change({ durations });
+                    }}
+                    {...(chipsError === undefined
+                      ? draft.durations.length === 0
+                        ? { error: strings.durationRequired }
+                        : {}
+                      : { error: chipsError })}
+                    end={
+                      <Button ref={customRef} variant="dashed" icon="plus" onPress={() => setAddingLength(true)}>
+                        {strings.durationCustom}
+                      </Button>
                     }
-                    setChipsError(undefined);
-                    change({ durations });
-                  }}
-                  {...(chipsError === undefined
-                    ? draft.durations.length === 0
-                      ? { error: strings.durationRequired }
-                      : {}
-                    : { error: chipsError })}
-                  {...(isLocked
-                    ? {}
-                    : {
-                        end: (
-                          <Button ref={customRef} variant="dashed" icon="plus" onPress={() => setAddingLength(true)}>
-                            {strings.durationCustom}
-                          </Button>
-                        ),
-                      })}
-                />
+                  />
+                )}
                 {!isLocked && (
                   <Popover
                     label={strings.addLength}
@@ -511,6 +528,11 @@ export function PageEditor({
                   >
                     <Field
                       label={strings.customMinutes}
+                      // With four lengths already, it says so before anything is typed.
+                      hint={draft.durations.length >= LENGTHS_MAX ? strings.lengthsFull : strings.customMinutesHint}
+                      // The popover opens for this one field: typing starts at once.
+                      // eslint-disable-next-line jsx-a11y-x/no-autofocus
+                      autoFocus
                       inputMode="numeric"
                       maxLength={3}
                       value={lengthText}
@@ -685,8 +707,9 @@ export interface PageEditorPendingProps {
  * the preview's place. Hosts waits for the page, since only a round robin page has it.
  */
 export function PageEditorPending({ tab, notices }: PageEditorPendingProps) {
-  const tabs: readonly PageTab[] = PAGE_TABS.filter((each) => each !== 'hosts');
-  const shown = tabs.includes(tab) ? tab : 'page';
+  // Hosts only when it is the tab asked for (a round robin page's); the page says whether it has it.
+  const tabs: readonly PageTab[] = PAGE_TABS.filter((each) => each !== 'hosts' || tab === 'hosts');
+  const shown = tab;
   const label: Readonly<Record<PageTab, string>> = {
     page: strings.page,
     meeting: strings.meeting,
@@ -704,7 +727,8 @@ export function PageEditorPending({ tab, notices }: PageEditorPendingProps) {
             <Tabs
               label={strings.tabsLabel}
               inset="none"
-              tabs={tabs.map((id) => ({ id, label: label[id] }))}
+              // Only the shown tab while it loads: the others wait for the page.
+              tabs={tabs.map((id) => ({ id, label: label[id], ...(id === shown ? {} : { isDisabled: true }) }))}
               selectedKey={shown}
             >
               <TabPanel id={shown} variant="fields">

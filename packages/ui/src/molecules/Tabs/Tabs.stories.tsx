@@ -244,7 +244,7 @@ export const WithAlert: Story = {
     inset: 'none',
     tabs: [
       { id: 'page', label: 'Page' },
-      { id: 'meeting', label: 'Meeting', alert: 'Needs a fix' },
+      { id: 'meeting', label: 'Meeting', alert: 'needs a fix' },
       { id: 'hours', label: 'Hours' },
       { id: 'limits', label: 'Limits' },
     ],
@@ -268,7 +268,7 @@ export const WithAlert: Story = {
     </Tabs>
   ),
   play: async ({ canvas }) => {
-    await expect(canvas.getByRole('tab', { name: 'Meeting, Needs a fix' })).toBeInTheDocument();
+    await expect(canvas.getByRole('tab', { name: 'Meeting, needs a fix' })).toBeInTheDocument();
     await expect(canvas.getByRole('tab', { name: 'Page' })).toHaveAttribute('aria-selected', 'true');
   },
 };
