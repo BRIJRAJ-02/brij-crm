@@ -87,12 +87,12 @@ const SNAP = 15;
 
 /**
  * How a block or span of `length` minutes lays out its words: under half an hour (a quarter hour, an
- * --hour/4 box shorter than a label's line) one compact line, centred and clipped; under 45 minutes its
- * title and time on one line; under 75 the title over the time; longer, the detail too.
+ * --hour/4 box shorter than a label's line) one line, centred and clipped; under 45 minutes the title over
+ * its start, set flush; under 75 the title over the time; longer, the detail too.
  */
-function sizeOf(length: number): 'tiny' | 'compact' | 'short' | 'tall' {
+function sizeOf(length: number): 'tiny' | 'pair' | 'short' | 'tall' {
   if (length < 2 * SNAP) return 'tiny';
-  if (length < 3 * SNAP) return 'compact';
+  if (length < 3 * SNAP) return 'pair';
   return length < 5 * SNAP ? 'short' : 'tall';
 }
 
@@ -232,8 +232,8 @@ function placementBeside(block: HTMLElement): PopoverPlacement {
 /** A block with its slot: overlapping blocks side by side, or a later start indented over an earlier one. */
 type Placed = PlacedSlot<WeekCalendarBlock>;
 
-/** The fewest minutes a block is drawn as: one line (`size-chip`, 20px) of an hour (`size-toolbar`, 48px). */
-const DRAWN_MINUTES = 25;
+/** The fewest minutes a block is drawn as: one line (`size-chip`, 20px) of an hour (`size-toolbar` plus `space-16`, 64px), rounded up. */
+const DRAWN_MINUTES = 19;
 
 /** Closed time's slot: the whole column, under bookings and events. */
 const WHOLE: Slot = { left: 0, width: 1, indent: 0, lane: 0, lanes: 1, span: 1 };
@@ -639,10 +639,10 @@ export function WeekCalendar({
                 {dayBlocks.map((block) => {
                   const length = block.endMinute - block.startMinute;
                   const size = sizeOf(length);
-                  // On one line (half an hour or less) the start alone, as Google Calendar and Klaviyo write it, so
+                  // Half an hour or less shows the start alone, as Google Calendar and Klaviyo write it, so
                   // the title keeps its room; "10:00 AM – 10:30 AM" was cut to "10:00 A…".
                   const shownTime =
-                    (size === 'tiny' || size === 'compact') && minuteLabel !== undefined
+                    (size === 'tiny' || size === 'pair') && minuteLabel !== undefined
                       ? minuteLabel(block.startMinute)
                       : block.time;
                   return (

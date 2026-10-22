@@ -1,6 +1,7 @@
-// The Bookings week's calendar switch in Chromium: All calendars, Bookings, then each calendar in its colour;
-// past five segments the rest fold into More, which names the chosen one; the choice is kept per workspace in this
-// browser, and a kept calendar counts only once the calendars are read and it is still there.
+// The Bookings week's calendar switch in Chromium: All calendars, then each connected calendar by its name in its
+// colour (no Bookings segment: bookings always show); hidden with one calendar or none; past five segments the rest
+// fold into More, which names the chosen one; the choice is kept per workspace in this browser, and a kept calendar
+// counts only once the calendars are read, it is still there and the switch shows.
 import { afterEach, describe, expect, it } from 'vitest';
 import { page, userEvent } from 'vitest/browser';
 import { renderInApp, type InApp } from '../../testing/renderInApp.tsx';
@@ -55,7 +56,8 @@ describe('the calendar switch', () => {
     await render(FIVE);
     await expect.element(page.getByRole('radio', { name: 'All calendars' })).toBeChecked();
     expect(page.getByRole('radio').all()).toHaveLength(4);
-    await userEvent.click(page.getByRole('button', { name: '3 more calendars' }));
+    await expect.element(page.getByRole('radio', { name: 'Bookings' })).not.toBeInTheDocument();
+    await userEvent.click(page.getByRole('button', { name: '2 more calendars' }));
     await userEvent.click(page.getByRole('menuitemradio', { name: /Gym/ }));
     await expect.element(page.getByText('Showing gym')).toBeInTheDocument();
     // The segments stay put; More names the chosen calendar.
@@ -68,9 +70,20 @@ describe('the calendar switch', () => {
     await render(FIVE.slice(0, 2));
     await userEvent.click(page.getByText('All calendars'));
     await userEvent.keyboard('{ArrowRight}');
-    await expect.element(page.getByText('Showing bookings')).toBeInTheDocument();
-    await userEvent.keyboard('{ArrowRight}');
     await expect.element(page.getByText('Showing work')).toBeInTheDocument();
+    await userEvent.keyboard('{ArrowRight}');
+    await expect.element(page.getByText('Showing home')).toBeInTheDocument();
+  });
+
+  it('hides itself with one calendar or none, and then shows everything', async () => {
+    globalThis.localStorage.setItem(KEY, 'work');
+    await render(FIVE.slice(0, 1));
+    await expect.element(page.getByText('Showing all')).toBeInTheDocument();
+    expect(page.getByRole('radiogroup').all()).toHaveLength(0);
+    shown?.unmount();
+    await render([]);
+    await expect.element(page.getByText('Showing all')).toBeInTheDocument();
+    expect(page.getByRole('radiogroup').all()).toHaveLength(0);
   });
 
   it('reads a kept calendar that left the week, or one kept while the calendars load, as All calendars', async () => {
@@ -80,6 +93,11 @@ describe('the calendar switch', () => {
     shown?.unmount();
     globalThis.localStorage.setItem(KEY, 'work');
     await render(undefined);
+    await expect.element(page.getByText('Showing all')).toBeInTheDocument();
+    shown?.unmount();
+    // The old Bookings segment's kept choice.
+    globalThis.localStorage.setItem(KEY, 'bookings');
+    await render(FIVE);
     await expect.element(page.getByText('Showing all')).toBeInTheDocument();
   });
 });

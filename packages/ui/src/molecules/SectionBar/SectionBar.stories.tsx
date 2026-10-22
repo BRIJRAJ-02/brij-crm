@@ -96,11 +96,12 @@ export const WeekControls: Story = {
           <SegmentedControl
             label="Calendars"
             size="compact"
+            isFitted
             defaultValue="all"
             segments={[
               { value: 'all', label: 'All calendars' },
-              { value: 'bookings', label: 'Bookings' },
               { value: 'work', label: 'Work', hue: 'green' },
+              { value: 'mail', label: 'brijraj@stealth.design', hue: 'purple' },
             ]}
           />
         }

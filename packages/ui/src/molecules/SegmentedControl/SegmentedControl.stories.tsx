@@ -152,18 +152,21 @@ export const CompactAndCollapsible: Story = {
   },
 };
 
-/** Colour dots (`hue`): Bookings' week picks one calendar, each in its colour; the arrow keys still choose. */
+/**
+ * Colour dots (`hue`), fitted: Bookings' week picks one calendar, each in its colour and as wide as its name; an
+ * address stays whole, and only a name past `size-column` is cut; the arrow keys still choose.
+ */
 export const ColourDots: Story = {
   args: {
     label: 'Calendars',
     size: 'compact',
+    isFitted: true,
     defaultValue: 'all',
     segments: [
       { value: 'all', label: 'All calendars' },
-      { value: 'bookings', label: 'Bookings' },
       { value: 'work', label: 'Work', hue: 'green' },
-      { value: 'home', label: 'Home', hue: 'purple' },
-      { value: 'long', label: 'grace.hopper@example.com', hue: 'orange' },
+      { value: 'mail', label: 'brijraj@stealth.design', hue: 'purple' },
+      { value: 'long', label: 'Team offsites and quarterly planning', hue: 'orange' },
     ],
   },
   play: async ({ canvas, userEvent, args }) => {
@@ -171,8 +174,12 @@ export const ColourDots: Story = {
     await expect(all).toBeChecked();
     await userEvent.click(all);
     await userEvent.keyboard('{ArrowRight}');
-    await expect(canvas.getByRole('radio', { name: 'Bookings' })).toBeChecked();
-    await expect(args.onChange).toHaveBeenLastCalledWith('bookings');
+    await expect(canvas.getByRole('radio', { name: 'Work' })).toBeChecked();
+    await expect(args.onChange).toHaveBeenLastCalledWith('work');
+    // Fitted: the short name's segment is narrower than the address's.
+    const work = canvas.getByRole('radio', { name: 'Work' }).closest('label');
+    const mail = canvas.getByRole('radio', { name: 'brijraj@stealth.design' }).closest('label');
+    await expect(work?.getBoundingClientRect().width ?? 0).toBeLessThan(mail?.getBoundingClientRect().width ?? 0);
   },
 };
 

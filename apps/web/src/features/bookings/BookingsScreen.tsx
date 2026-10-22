@@ -72,14 +72,7 @@ import {
   useCalendarsPanel,
   type CalendarsPanel,
 } from './CalendarsAside.tsx';
-import {
-  ALL_CALENDARS,
-  BOOKINGS_ONLY,
-  CalendarSwitch,
-  showsOf,
-  switchCalendars,
-  useCalendarChoice,
-} from './CalendarSwitch.tsx';
+import { ALL_CALENDARS, CalendarSwitch, showsOf, switchCalendars, useCalendarChoice } from './CalendarSwitch.tsx';
 import { calendarSettingsHref } from '../settings/nav.ts';
 import { DrawCard } from './DrawCard.tsx';
 import { NewMeetingDialog, type NewMeeting } from './NewMeetingDialog.tsx';
@@ -1225,9 +1218,7 @@ function WeekView(props: BookingsCalendarScreenProps) {
               choice === ALL_CALENDARS
                 ? strings.noMeetingsWeek
                 : strings.nothingOnWeek(
-                    choice === BOOKINGS_ONLY
-                      ? strings.bookingsOnly
-                      : (switchable?.find((calendar) => calendar.id === choice)?.name ?? strings.calendars),
+                    switchable?.find((calendar) => calendar.id === choice)?.name ?? strings.calendars,
                   )
             }
             isFill

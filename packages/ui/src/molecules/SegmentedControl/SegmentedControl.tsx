@@ -56,6 +56,12 @@ export interface SegmentedControlProps {
    * short form (a new booking page's Duration).
    */
   readonly isLabelVisible?: boolean;
+  /**
+   * Each segment as wide as its words, rather than all of them as wide as the
+   * widest: a row of names of different lengths (Bookings' calendars), where
+   * equal cells left short names in wide empty ones.
+   */
+  readonly isFitted?: boolean;
 }
 
 /** How tall the control is: `compact` matches a button. */
@@ -65,7 +71,7 @@ export type SegmentSize = 'md' | 'compact';
 export type SegmentOrientation = 'horizontal' | 'vertical';
 
 /**
- * Two to five equal segments that switch how you see something: Table or
+ * Two to five segments, equal or (`isFitted`) each as wide as its words, that switch how you see something: Table or
  * Board, Week or Month. A radio group underneath, so the arrow keys move. The
  * thumb slides for a pointer and jumps for the keyboard.
  */
@@ -81,6 +87,7 @@ export function SegmentedControl({
   size = 'md',
   isLabelCollapsible = false,
   isLabelVisible = false,
+  isFitted = false,
 }: SegmentedControlProps) {
   const { isFocusVisible } = useFocusVisible();
   const labelId = useId();
@@ -91,6 +98,7 @@ export function SegmentedControl({
       orientation={orientation}
       data-orientation={orientation}
       data-size={size}
+      data-fitted={isFitted || undefined}
       data-collapsible={isLabelCollapsible || undefined}
       isDisabled={isDisabled}
       isReadOnly={isReadOnly}
@@ -131,11 +139,7 @@ export function SegmentedControl({
             ) : segment.hue === undefined ? (
               <span className={styles.label}>{segment.label}</span>
             ) : (
-              <span className={styles.label} data-hue="">
-                <StatusDot hue={segment.hue} isInherited>
-                  {segment.label}
-                </StatusDot>
-              </span>
+              <HueLabel label={segment.label} hue={segment.hue} />
             )}
           </RadioButton>
         </RadioField>
@@ -194,6 +198,35 @@ export function ThemeSwitch({ controller, isCompact = false, orientation = 'hori
  * A collapsible segment's icon: while its label is hidden in a narrow bar (a phone), hovering it names the
  * segment in a tooltip, as an icon only segment does; with the label showing, no tooltip opens.
  */
+/**
+ * A segment's colour dot and name, cut at its cap with an ellipsis; hovering or focusing a cut name shows it whole
+ * in a tooltip (measured as the tooltip is about to open, as TruncatedText does), and a name that fits shows none.
+ */
+function HueLabel({ label, hue }: { readonly label: string; readonly hue: Hue }) {
+  const [isOpen, setOpen] = useState(false);
+  const own = useRef<HTMLSpanElement>(null);
+  const isCut = () => {
+    const words = own.current?.querySelector<HTMLElement>('[data-truncated]');
+    return words !== null && words !== undefined && words.scrollWidth > words.clientWidth;
+  };
+  return (
+    <Tooltip
+      content={label}
+      isTextTrigger
+      isOpen={isOpen}
+      onOpenChange={(next) => {
+        setOpen(next && isCut());
+      }}
+    >
+      <span ref={own} className={styles.label} data-hue="">
+        <StatusDot hue={hue} isInherited>
+          {label}
+        </StatusDot>
+      </span>
+    </Tooltip>
+  );
+}
+
 function CollapsibleIcon({ icon, label }: { readonly icon: IconName; readonly label: string }) {
   const [isOpen, setOpen] = useState(false);
   const own = useRef<HTMLSpanElement>(null);

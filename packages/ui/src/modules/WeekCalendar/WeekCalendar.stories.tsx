@@ -195,7 +195,7 @@ function wordsInside(piece: HTMLElement, words: HTMLElement): { readonly centred
 /**
  * Short blocks and a short span (the owner's 15 minute click, 21 October 2026): a quarter hour is shorter than
  * a label's line, so its words are one compact line, centred in the block and clipped at its edge, never running
- * over its border; half an hour puts the title and time on one line at the top; 45 minutes the title over the
+ * over its border; half an hour puts the title over its start, flush in the block; 45 minutes the title over the
  * time. The drawn quarter hour on Thursday reads its start inside its box.
  */
 export const ShortBlocks: Story = {

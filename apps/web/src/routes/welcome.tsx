@@ -34,31 +34,21 @@ export const Route = createFileRoute('/welcome')({
       (status) => status.calendarSync,
       () => false,
     );
+    // The loader only reads; the component picks the roles, so that code stays out of the first load.
     const rolesRead =
       made === undefined
         ? Promise.resolve(undefined)
         : Promise.all([context.data.access.mine(made.slug), context.data.roles.list(made.slug)]).then(
-            ([access, roles]) => {
-              const allowed = invitableRoles(access.role);
-              const options = roles.roles.filter(
-                (each) => each.builtIn !== undefined && allowed.includes(each.builtIn),
-              );
-              return options.length === 0
-                ? undefined
-                : {
-                    roles: options,
-                    defaultRole: options.find((each) => each.builtIn === 'member')?.id ?? roles.defaultRole,
-                  };
-            },
+            ([access, roles]) => ({ actor: access.role, roles }),
             () => undefined,
           );
-    const [calendarSync, inviteRoles] = await Promise.all([calendarRead, rolesRead]);
+    const [calendarSync, roleRead] = await Promise.all([calendarRead, rolesRead]);
     return {
       user: me.user,
       calendarSync,
       workspace: landing.workspace,
       leaveTo: deps.another ? home : undefined,
-      inviteRoles,
+      roleRead,
     };
   },
   pendingComponent: () => (
@@ -71,7 +61,16 @@ export const Route = createFileRoute('/welcome')({
 });
 
 function WelcomeRoute() {
-  const { user, calendarSync, workspace, leaveTo, inviteRoles } = Route.useLoaderData();
+  const { user, calendarSync, workspace, leaveTo, roleRead } = Route.useLoaderData();
+  const allowed = roleRead === undefined ? [] : invitableRoles(roleRead.actor);
+  const options = roleRead?.roles.roles.filter((each) => each.builtIn !== undefined && allowed.includes(each.builtIn));
+  const inviteRoles =
+    roleRead === undefined || options === undefined || options.length === 0
+      ? undefined
+      : {
+          roles: options,
+          defaultRole: options.find((each) => each.builtIn === 'member')?.id ?? roleRead.roles.defaultRole,
+        };
   const { step, calendar, another } = Route.useSearch();
   const { data } = Route.useRouteContext();
   return (

@@ -1,5 +1,5 @@
 /* WeekCalendar: a header row of days over a scrolling body of 24 hours, an
-   axis column then seven day columns. An hour is --size-toolbar tall; a
+   axis column then seven day columns. An hour is --size-toolbar plus --space-16 tall; a
    block's place comes from its minutes (--start, --length) and its slot
    (placeBlocks.ts): a region (--left, --width, fractions of the column),
    pushed in --indent steps of --nest, then --lane of --lanes, --span wide. Bookings are a soft fill in their link's
@@ -10,7 +10,9 @@
    container only the selected day's column shows. */
 @layer components {
   .root {
-    --hour: var(--size-toolbar);
+    /* An hour a third taller than a toolbar (the owner, 22 October 2026: "the grid cells were bigger"), so half an
+       hour holds its title over its time. */
+    --hour: calc(var(--size-toolbar) + var(--space-16));
     --axis: var(--size-control);
     --start: 0;
     --length: 30;
@@ -116,23 +118,13 @@
     block-size: calc(var(--length) / 60 * var(--hour));
     /* The hour lines carry on through it, lined up with the column's. Sunken, so the open hours read at a glance. */
     background-color: var(--surface-sunken);
-    background-image:
-      repeating-linear-gradient(
-        to bottom,
-        var(--border-subtle) 0,
-        var(--border-subtle) var(--border-width-hairline),
-        transparent var(--border-width-hairline),
-        transparent var(--hour)
-      ),
-      repeating-linear-gradient(
-        to bottom,
-        transparent 0,
-        transparent calc(var(--hour) / 2),
-        var(--border-subtle) calc(var(--hour) / 2),
-        var(--border-subtle) calc(var(--hour) / 2 + var(--border-width-hairline)),
-        transparent calc(var(--hour) / 2 + var(--border-width-hairline)),
-        transparent var(--hour)
-      );
+    background-image: repeating-linear-gradient(
+      to bottom,
+      var(--border-subtle) 0,
+      var(--border-subtle) var(--border-width-hairline),
+      transparent var(--border-width-hairline),
+      transparent var(--hour)
+    );
     background-position: 0 calc(var(--start) / -60 * var(--hour));
     pointer-events: none;
   }
@@ -201,24 +193,14 @@
 
     position: relative;
     border-inline-start: var(--border-width-hairline) solid var(--border-subtle);
-    /* Hour lines in the lightest border, and fainter half hour ticks between them. */
-    background-image:
-      repeating-linear-gradient(
-        to bottom,
-        var(--border-subtle) 0,
-        var(--border-subtle) var(--border-width-hairline),
-        transparent var(--border-width-hairline),
-        transparent var(--hour)
-      ),
-      repeating-linear-gradient(
-        to bottom,
-        transparent 0,
-        transparent calc(var(--hour) / 2),
-        var(--surface-hover) calc(var(--hour) / 2),
-        var(--surface-hover) calc(var(--hour) / 2 + var(--border-width-hairline)),
-        transparent calc(var(--hour) / 2 + var(--border-width-hairline)),
-        transparent var(--hour)
-      );
+    /* Hour lines in the lightest border, one cell an hour (no half hour ticks: the owner, 22 October 2026). */
+    background-image: repeating-linear-gradient(
+      to bottom,
+      var(--border-subtle) 0,
+      var(--border-subtle) var(--border-width-hairline),
+      transparent var(--border-width-hairline),
+      transparent var(--hour)
+    );
   }
 
   .column[data-drawable] {
@@ -490,12 +472,17 @@
     gap: var(--space-4);
   }
 
+  /* Half an hour: the title over its start, set flush so both lines fit the block. */
+  .block[data-size='pair'] {
+    padding-block: 0;
+  }
+
   .block:is([data-size='tiny'], [data-size='compact']) .blockHead {
     flex: none;
     max-inline-size: 60%;
   }
 
-  .block:is([data-size='tiny'], [data-size='compact'], [data-size='short']) .blockDetail {
+  .block:is([data-size='tiny'], [data-size='compact'], [data-size='pair'], [data-size='short']) .blockDetail {
     display: none;
   }
 

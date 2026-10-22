@@ -39,6 +39,11 @@
     grid-auto-flow: row;
   }
 
+  /* Fitted: each segment as wide as its words (Bookings' calendars), not the widest one's width. */
+  .root[data-fitted] {
+    grid-auto-columns: auto;
+  }
+
   .field {
     display: flex;
   }
@@ -75,12 +80,12 @@
     padding-inline: var(--space-8);
   }
 
-  /* A coloured segment names a calendar, often an email address: capped, and cut with an ellipsis (its name
-     stays whole for screen readers). */
+  /* A coloured segment names a calendar, often an email address: an address stays whole, and only a name past
+     size-column is cut with an ellipsis (whole in a tooltip, and for screen readers). */
   .label[data-hue] {
     display: flex;
     min-inline-size: 0;
-    max-inline-size: var(--size-column-narrow);
+    max-inline-size: var(--size-column);
   }
 
   /* A collapsible label in a narrow bar: the icon alone, its name kept by a
