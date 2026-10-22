@@ -6,7 +6,7 @@ import { schema, type WorkspaceTx } from '@crm/db';
 import { SYSTEM_ONLY_TYPES, type AttributeType } from '@crm/contracts/values';
 import { encodeValue, sameItems, type ItemColumns, type StoredItem } from './columns.ts';
 import { parseAttributeInput } from './parse-value.ts';
-import { canonicalId, checkId, isUuid, uuidArray } from './ids.ts';
+import { canonicalId, checkId, isUuid, uuidArray, uuidList } from './ids.ts';
 import { postgresError, refuse, writeConflict } from './refusals.ts';
 import { syncSortKey } from './sort-keys.ts';
 import { uniqueKeyOf } from './unique.ts';
@@ -181,7 +181,7 @@ export async function loadNameAttributes(
     .from(attributes)
     .where(
       sql`${attributes.id} in (select o.primary_attribute_id from objects o
-        where o.id in (select r.object_id from records r where r.id = any(${uuidArray(recordIds)})))`,
+        where o.id in (select r.object_id from records r where r.id = any(${uuidList(recordIds)})))`,
     );
   return new Map(rows.flatMap((row) => (row.objectId === null ? [] : [[row.objectId, new Map([[row.id, row]])]])));
 }

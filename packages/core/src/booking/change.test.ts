@@ -548,6 +548,31 @@ describe('the host links a booking to a record by hand (polish F2)', () => {
     });
   });
 
+  it('names a linked deal whose name a field rule hides as unnamed, in every read', async () => {
+    const s = await setup();
+    const { deals } = await objectsOf(s.workspaceId);
+    const navy = await createRecord(s.host, { objectId: deals.id, values: { [deals.name_id]: 'Navy rollout' } });
+    const { bea, bookingId } = await beaBooking(s);
+    await linkBookingRecord(bea, { bookingId, recordId: navy.recordId });
+    const nameless = rescope(bea, {
+      rules: {
+        levels: [
+          {
+            subject: { type: 'role', role: 'member' },
+            target: { type: 'attribute', objectId: deals.id, attributeId: deals.name_id },
+            level: 'hidden',
+          },
+        ],
+        records: [],
+      },
+    });
+    const [shown] = (await readBookingsCalendar(nameless, week)).bookings;
+    expect(shown?.linkedRecord).toMatchObject({ recordId: navy.recordId, name: 'Unnamed deal' });
+    const [listed] = await listWorkspaceBookings(nameless, { when: 'upcoming' }, NOW);
+    expect(listed?.linkedRecord).toMatchObject({ recordId: navy.recordId, name: 'Unnamed deal' });
+    expect((await readBookingsCalendar(bea, week)).bookings[0]?.linkedRecord?.name).toBe('Navy rollout');
+  });
+
   it('keeps a link the member can’t see: taking it off changes nothing, and another record is refused without naming it', async () => {
     const s = await setup();
     const { deals } = await objectsOf(s.workspaceId);
