@@ -12,7 +12,7 @@ import {
   type ReassignedBooking,
   type RotationView,
 } from '@crm/data';
-import { Button, Callout, DayStrip, Field, focusLater, Modal, SlotList, Tooltip, useFormatSettings } from '@crm/ui';
+import { Button, Callout, DayStrip, Field, focusLater, Modal, SlotList, useFormatSettings } from '@crm/ui';
 import type { ReactNode } from 'react';
 import { useEffect, useRef, useState } from 'react';
 import { zoneDisplay } from '../../public/booking/time.ts';
@@ -65,7 +65,8 @@ export type BookingAsk = 'move' | 'cancel';
  * The card's changes in its footer, as Google Calendar's and Calendly's event cards hold them (Join, before them, is
  * the card's own, so a reader without these still joins): Reschedule and Copy guest link; once it has started, Mark
  * no show. Cancel booking is apart, at
- * the footer's end (`endAction`), quiet and icon only with its name in a tooltip; it still asks first. Reschedule
+ * the footer's end (`endAction`), quiet (ghost danger) and in words, as Calendly and Cal.com write it; it still
+ * asks first. Reschedule
  * and Cancel each open a dialog. The buttons are for a confirmed booking only. In a panel the dialogs open here, and stay while the booking shows
  * cancelled at once (the layer's optimistic cancel), so Cancel's confirm stays busy until the server answers. In a
  * popover (the week's card) they can't: React Aria draws popovers above every dialog, so `onAsk` hands them to the
@@ -171,16 +172,9 @@ export function useBookingActions({
   );
   const endAction =
     isConfirmed && !hasStarted ? (
-      <Tooltip content={strings.cancelBooking}>
-        <Button
-          ref={cancelRef}
-          variant="ghost-danger"
-          size="lg"
-          icon="circle-x"
-          label={strings.cancelBooking}
-          onPress={() => ask('cancel')}
-        />
-      </Tooltip>
+      <Button ref={cancelRef} variant="ghost-danger" size="lg" icon="circle-x" onPress={() => ask('cancel')}>
+        {strings.cancelBooking}
+      </Button>
     ) : undefined;
   const dialogs =
     onAsk === undefined && opens > 0 ? (

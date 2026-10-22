@@ -70,6 +70,8 @@ export const strings = {
   when: 'When',
   /** New meeting's day: the drawn span's, or the next free one, and changed in place. */
   day: 'Day',
+  /** Under Their time zone: it doesn't move From and To, which are on the member's clock. */
+  theirTimeZoneHint: 'Only changes how their invitation shows the time.',
   who: 'Who',
   page: 'Booking page',
   guests: 'Also invited',

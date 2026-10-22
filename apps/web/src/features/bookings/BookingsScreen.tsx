@@ -310,6 +310,19 @@ function BookingCard({
   });
   const hasActions = actions !== undefined;
   const now = useNow();
+  const isConfirmed = booking.status === 'confirmed';
+  const hasNotice = booking.hostRemoved === true || (isConfirmed && (booking.eventFailed || booking.needsHost));
+  const notices = hasNotice ? (
+    <>
+      {booking.hostRemoved === true && <Callout tone="info">{strings.hostRemoved}</Callout>}
+      {booking.eventFailed && isConfirmed && <Callout tone="warning">{strings.eventFailed}</Callout>}
+      {booking.needsHost && isConfirmed && (
+        <Callout tone="warning" title={strings.needsHost}>
+          {strings.needsHostText}
+        </Callout>
+      )}
+    </>
+  ) : undefined;
   // Join is the card's own, first and primary while the call can be joined, so a reader without host actions
   // still joins.
   const join =
@@ -339,19 +352,7 @@ function BookingCard({
         title={strings.cardTitle(booking.visitorName, booking.pageTitle)}
         when={whenOf(booking.startsAt, booking.endsAt, locale, timeZone)}
         status={statusOf(booking)}
-        notices={
-          <>
-            {booking.hostRemoved === true && <Callout tone="info">{strings.hostRemoved}</Callout>}
-            {booking.eventFailed && booking.status === 'confirmed' && (
-              <Callout tone="warning">{strings.eventFailed}</Callout>
-            )}
-            {booking.needsHost && booking.status === 'confirmed' && (
-              <Callout tone="warning" title={strings.needsHost}>
-                {strings.needsHostText}
-              </Callout>
-            )}
-          </>
-        }
+        {...(notices === undefined ? {} : { notices })}
         peopleLabel={strings.cardPeople}
         people={[
           {
@@ -393,18 +394,20 @@ function BookingCard({
                       {isChatOpen ? strings.hideChat : strings.viewChat(booking.chat.length)}
                     </Button>
                   ),
-                  children: isChatOpen ? (
-                    <div id={chatId}>
-                      <DescriptionList
-                        layout="stacked"
-                        items={booking.chat.map((line, index) => ({
-                          id: String(index),
-                          term: line.role === 'visitor' ? strings.chatVisitor : strings.chatAssistant,
-                          description: line.text,
-                        }))}
-                      />
+                  children: (
+                    <div id={chatId} hidden={!isChatOpen}>
+                      {isChatOpen && (
+                        <DescriptionList
+                          layout="stacked"
+                          items={booking.chat.map((line, index) => ({
+                            id: String(index),
+                            term: line.role === 'visitor' ? strings.chatVisitor : strings.chatAssistant,
+                            description: line.text,
+                          }))}
+                        />
+                      )}
                     </div>
-                  ) : undefined,
+                  ),
                 },
               ]),
           ...(booking.cancelReason === undefined
@@ -477,16 +480,20 @@ function EventCard({
   event,
   connection,
   locale,
+  headingLevel = 3,
 }: {
   readonly event: CalendarEventItem;
   readonly connection: CalendarConnectionView | undefined;
   readonly locale: string;
+  /** 3 in the week's popover or sheet; 4 under the List's panel title. */
+  readonly headingLevel?: 3 | 4;
 }) {
   // The member's zone (their Preferences, else the browser's), as the week is drawn in.
   const { timeZone } = useFormatSettings();
   const now = useNow();
   return (
     <MeetingCard
+      headingLevel={headingLevel}
       title={event.title}
       when={
         event.allDay
@@ -502,15 +509,9 @@ function EventCard({
           : [{ id: 'call', icon: 'video' as const, label: strings.call, value: providerOf(event.videoUrl) }]),
         ...(connection === undefined
           ? []
-          : [
-              {
-                id: 'calendar',
-                icon: 'calendar' as const,
-                label: strings.calendar,
-                value: connection.accountEmail,
-                detail: strings.fromCalendar,
-              },
-            ]),
+          : [{ id: 'calendar', icon: 'calendar' as const, label: strings.calendar, value: connection.accountEmail }]),
+        // Why it has no actions here, with a connection or without.
+        { id: 'managed', icon: 'info' as const, label: strings.calendar, value: strings.fromCalendar },
       ]}
       {...(event.videoUrl === undefined || Date.parse(event.endsAt) <= now.getTime()
         ? {}
@@ -537,25 +538,26 @@ function BusyCard({
   busy,
   connection,
   locale,
+  headingLevel = 3,
 }: {
   readonly busy: { readonly startsAt: string; readonly endsAt: string };
   readonly connection: CalendarConnectionView | undefined;
   readonly locale: string;
+  /** 3 in the week's popover or sheet; 4 under the List's panel title. */
+  readonly headingLevel?: 3 | 4;
 }) {
   // The member's zone (their Preferences, else the browser's), as the week is drawn in.
   const { timeZone } = useFormatSettings();
   return (
     <MeetingCard
+      headingLevel={headingLevel}
       title={strings.busy}
       when={whenOf(busy.startsAt, busy.endsAt, locale, timeZone)}
       rows={[
-        {
-          id: 'calendar',
-          icon: 'calendar' as const,
-          label: strings.calendar,
-          value: connection?.accountEmail ?? strings.busy,
-          detail: strings.busyNote,
-        },
+        ...(connection === undefined
+          ? []
+          : [{ id: 'calendar', icon: 'calendar' as const, label: strings.calendar, value: connection.accountEmail }]),
+        { id: 'why', icon: 'info' as const, label: strings.busy, value: strings.busyNote },
       ]}
     />
   );
@@ -613,11 +615,14 @@ function removeWords(
 function BlockCard({
   turn,
   locale,
+  headingLevel = 3,
   onRemove,
   isRemoveFocused = false,
 }: {
   readonly turn: TimeBlockOccurrence;
   readonly locale: string;
+  /** 3 in the week's popover or sheet; 4 under the List's panel title. */
+  readonly headingLevel?: 3 | 4;
   /** Asks to remove the block: the screen's confirm. */
   readonly onRemove: () => void;
   /** Focus Remove as the card opens: its confirm was just dismissed. */
@@ -634,6 +639,7 @@ function BlockCard({
   }, []);
   return (
     <MeetingCard
+      headingLevel={headingLevel}
       title={turn.label ?? (turn.kind === 'hold' ? strings.held : strings.blocked)}
       when={whenOf(turn.startsAt, turn.endsAt, locale, timeZone)}
       rows={[
@@ -1368,7 +1374,11 @@ function WeekView(props: BookingsCalendarScreenProps) {
       {meeting !== undefined && (
         <NewMeetingDialog
           span={meeting}
-          onSpanChange={setMeeting}
+          onSpanChange={(span) => {
+            setMeeting(span);
+            // A day outside the week on screen moves the week there, so the span still shows and focus has its day.
+            if (!days.includes(span.dayKey)) onSearch({ week: weekOf(span.dayKey, firstDay), day: span.dayKey });
+          }}
           locale={locale}
           hasCalendar={connections.length > 0}
           pages={bookable}
@@ -1768,7 +1778,7 @@ export function BookingsListScreen({
               actions={panelActions}
             />
           ) : (
-            <EventCard event={open.event} connection={undefined} locale={locale} />
+            <EventCard event={open.event} connection={undefined} locale={locale} headingLevel={4} />
           )}
         </Panel>
       )}

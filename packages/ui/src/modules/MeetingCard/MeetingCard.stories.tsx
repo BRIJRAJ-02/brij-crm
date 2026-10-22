@@ -60,7 +60,11 @@ export const Default: Story = {
         ]}
         rows={[where, { id: 'note', icon: 'message-square', label: 'Note', value: '“Can we talk about the pilot?”' }]}
         actions={<Actions />}
-        endAction={<Button variant="ghost-danger" size="lg" icon="circle-x" label="Cancel booking" />}
+        endAction={
+          <Button variant="ghost-danger" size="lg" icon="circle-x">
+            Cancel booking
+          </Button>
+        }
       />
     </Stage>
   ),
@@ -73,10 +77,11 @@ export const Default: Story = {
     // No raw address: Join names the provider.
     await expect(within(card).queryByText(/meet\.google\.com/)).toBeNull();
     await expect(within(card).getByRole('link', { name: 'Join Google Meet' })).toBeInTheDocument();
-    // The ending action sits apart, at the footer's end, after the rest.
+    // The ending action sits apart, at the footer's end.
     const cancel = within(card).getByRole('button', { name: 'Cancel booking' });
-    const copy = within(card).getByRole('button', { name: 'Copy guest link' });
-    await expect(cancel.getBoundingClientRect().left).toBeGreaterThan(copy.getBoundingClientRect().right);
+    await expect(Math.round(cancel.getBoundingClientRect().right)).toBeGreaterThanOrEqual(
+      Math.round(card.getBoundingClientRect().right) - 1,
+    );
     // Every line of text starts on one column: the title, the time, the guest, the place, the note and the footer.
     const left = (element: Element) => Math.round(element.getBoundingClientRect().left);
     const column = left(within(card).getByRole('heading'));
@@ -96,8 +101,9 @@ export const Default: Story = {
       const firstLine = first.getBoundingClientRect().top + line / 2;
       await expect(Math.abs(middle(lead) - firstLine), `lead of ${first.textContent}`).toBeLessThanOrEqual(1);
     }
-    // The ending action centres on the footer's buttons.
-    await expect(Math.abs(middle(cancel) - middle(copy)), 'the ending action').toBeLessThanOrEqual(1);
+    // The ending action sits on the footer's first line, centred on Join.
+    const join = within(card).getByRole('link', { name: 'Join Google Meet' });
+    await expect(Math.abs(middle(cancel) - middle(join)), 'the ending action').toBeLessThanOrEqual(1);
   },
 };
 
@@ -227,7 +233,11 @@ export const Phone: Story = {
         people={[{ id: 'grace', name: 'Grace Hopper', detail: 'grace@navy.mil', isDetailCopyable: true }]}
         rows={[where]}
         actions={<Actions />}
-        endAction={<Button variant="ghost-danger" size="lg" icon="circle-x" label="Cancel booking" />}
+        endAction={
+          <Button variant="ghost-danger" size="lg" icon="circle-x">
+            Cancel booking
+          </Button>
+        }
       />
     </Stage>
   ),

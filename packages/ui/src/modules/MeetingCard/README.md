@@ -23,7 +23,11 @@ New (22 October 2026, the owner's "fix this UI" on the week's booking card). The
       <Button>Reschedule</Button>
     </>
   }
-  endAction={<Button variant="ghost-danger" icon="circle-x" label="Cancel booking" />}
+  endAction={
+    <Button variant="ghost-danger" size="lg" icon="circle-x">
+      Cancel booking
+    </Button>
+  }
 />
 ```
 
@@ -33,7 +37,7 @@ New (22 October 2026, the owner's "fix this UI" on the week's booking card). The
 - `people` is the first row: each person with their avatar, their name (a link with `href`), and a muted `detail` under it (an email, or their part, "Host"), which `isDetailCopyable` follows with an icon only copy button. Emails are never drawn as mailto links.
 - `rows` are the other facts, each `{ icon, label, value, detail?, action?, children? }`: the icon in its column (the `label` is read in its place, so the list stays a real `<dl>`), the value in the text colour, a quieter `detail` line, a quiet control at the row's end (`action`, "View chat (3)") and anything it opens under the row (`children`, the transcript). A long email wraps inside the card rather than being cut.
 - `headingLevel`: 2 by default; 4 under a dialog's own heading (a Panel's or the sheet's, level 3), 3 in a popover with none.
-- `actions` sit at the footer's start, the primary first (Join while a call can be joined); `endAction` sits apart at its end, a quiet ending action such as an icon only `ghost-danger` Cancel booking, which still asks first in a Modal. The footer wraps rather than stretching a button.
+- `actions` sit at the footer's start, the primary first (Join while a call can be joined); `endAction` sits apart at its end, a quiet ending action such as a `ghost-danger` Cancel booking in words (as Calendly and Cal.com write it; an icon alone read as a close on a phone's sheet), which still asks first in a Modal. The footer wraps rather than stretching a button.
 - It has no surface or padding: the Popover, Panel (`isStacked`) or Modal (`variant="sheet"`) around it is the card. Its width is its holder's, at most `size-panel`.
 
 ## Layout
@@ -42,7 +46,7 @@ Google Calendar's alignment (the owner, 22 October 2026: "better alignment"): ev
 
 ## States
 
-Upcoming with a call (Join primary), confirmed with no call, cancelled (status Canceled, a reason row, no footer), needs a host (a notice), long names and emails (the title wraps, an email cuts with an ellipsis inside the card), booked by chat (a row whose View chat opens the transcript under it). Hover, focus, pressed, pending and disabled come from its buttons and links; read only is a footer with Join alone, or none. Loading and failure belong to its holder (a Skeleton or an EmptyState in the Panel or Popover).
+Upcoming with a call (Join primary), confirmed with no call, cancelled (status Canceled, a reason row, no footer), needs a host (a notice), long names and emails (the title and the email wrap inside the card), booked by chat (a row whose View chat opens the transcript under it). Hover, focus, pressed, pending and disabled come from its buttons and links; read only is a footer with Join alone, or none. Loading and failure belong to its holder (a Skeleton or an EmptyState in the Panel or Popover).
 
 ## Keyboard
 

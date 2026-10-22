@@ -123,11 +123,11 @@ export function BookingList({ label, groups, onOpen, emptyState, placement = 'pa
                   </div>
                   <div className={styles.main}>
                     <div className={styles.titleLine}>
-                      {/* Named by its title, then described by its time and who it is with, so each row's button
-                        says which meeting it opens. */}
+                      {/* Named by its title, then described by its time and who it is with (not the note or Join),
+                        so each row's button says which meeting it opens. */}
                       <Button
                         variant="ghost"
-                        aria-describedby={hasDetails(row) ? `${rowId}-when ${rowId}-details` : `${rowId}-when`}
+                        aria-describedby={row.guestName === undefined ? `${rowId}-when` : `${rowId}-when ${rowId}-who`}
                         onPress={() => onOpen(row.id)}
                       >
                         {row.title}
@@ -136,7 +136,7 @@ export function BookingList({ label, groups, onOpen, emptyState, placement = 'pa
                     </div>
                     {hasDetails(row) && (
                       // Everything else on one muted line: Join first so it never gets cut off, then who, then the rest.
-                      <div className={styles.details} id={`${rowId}-details`}>
+                      <div className={styles.details}>
                         {row.join !== undefined && (
                           <span className={styles.join}>
                             <Icon name="video" size="sm" />
@@ -144,7 +144,7 @@ export function BookingList({ label, groups, onOpen, emptyState, placement = 'pa
                           </span>
                         )}
                         {row.guestName !== undefined && (
-                          <span className={`${styles.text} ${styles.who}`}>
+                          <span className={`${styles.text} ${styles.who}`} id={`${rowId}-who`}>
                             {row.hostName === undefined ? strings.youAnd : strings.hostAnd(row.hostName)}{' '}
                             {row.guestHref === undefined ? (
                               row.guestName

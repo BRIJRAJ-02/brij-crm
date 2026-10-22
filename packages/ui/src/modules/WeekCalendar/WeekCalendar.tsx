@@ -302,6 +302,8 @@ export function WeekCalendar({
   const [anchor, setAnchor] = useState<HTMLButtonElement | null>(null);
   // Beside the block on a week of seven days; under it on one day, whose block takes the width.
   const [cardPlacement, setCardPlacement] = useState<PopoverPlacement>('end top');
+  // Decided as a card opens (a phone's sheet or a popover), so a resize while it is open never remounts it.
+  const [isCardSheet, setCardSheet] = useState(false);
   const anchorRef = useMemo(() => ({ current: anchor }), [anchor]);
   // The span being dragged, before it is drawn; and the drawn span's ghost, the draft card's anchor.
   // The drag lives in a ref as well: pointer events can come faster than renders, and each must see the last.
@@ -560,6 +562,7 @@ export function WeekCalendar({
                       }
                       setAnchor(event.currentTarget);
                       setCardPlacement('bottom start');
+                      setCardSheet(isNarrowWeek(event.currentTarget));
                       anchorDay.current = day.key;
                       onOpen(item.id);
                     }}
@@ -781,6 +784,7 @@ export function WeekCalendar({
                         }
                         setAnchor(event.currentTarget);
                         setCardPlacement(placementBeside(event.currentTarget));
+                        setCardSheet(isNarrowWeek(event.currentTarget));
                         anchorDay.current = block.dayKey;
                         onOpen(block.id);
                       }}
@@ -876,6 +880,7 @@ export function WeekCalendar({
               if (chosen === undefined) return;
               // The block's card opens where its list did, on the chip.
               setAnchor(moreList.anchor);
+              setCardSheet(isNarrowWeek(moreList.anchor));
               setCardPlacement(
                 moreList.placement === 'end top' ? placementBeside(moreList.anchor) : moreList.placement,
               );
@@ -897,7 +902,7 @@ export function WeekCalendar({
         anchor !== null &&
         // One day across (a phone), the card is a sheet at the window's foot, as Google Calendar's is, rather than
         // a popover over the day it is about; seven days across, a popover beside the block.
-        (isNarrowWeek(anchor) ? (
+        (isCardSheet ? (
           <Modal
             variant="sheet"
             title={strings.details}
