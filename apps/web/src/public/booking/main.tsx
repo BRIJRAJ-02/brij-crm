@@ -5,7 +5,16 @@
 // provider with the browser's language and zone. No analytics. Inside a
 // site's embed (`?embed=1`, frame.ts) it also tells the site its height, an
 // invisible addition: the page looks the same framed or not.
+//
+// Handle addresses (22 Oct 2026) load it too: `/<handle>` is the person's
+// profile, and `/<handle>/<slug>` one of their pages, found by its public key
+// and then drawn exactly as `/b/<key>` is. An old handle's address moves to
+// the current one in place; a plain `/b/<key>` visit moves to the page's
+// handle address once it has one (never inside an embed, never on a return
+// from Google, whose guest cookie lives on this origin's `/b/` path).
 import '@crm/ui/styles.css';
+import { handleAddressOf } from '@crm/contracts/handles';
+import { createHandleClient, isDataError } from '@crm/data/booking';
 import { BookingMessage, BookingProvider } from '@crm/ui/public-booking';
 import { lazy, StrictMode, Suspense } from 'react';
 import { createRoot } from 'react-dom/client';
@@ -16,6 +25,8 @@ import { strings } from './strings.ts';
 
 // The guest page loads on its own: a visitor booking never downloads its changes (move, guests, cancel).
 const ManagePage = lazy(() => import('./ManagePage.tsx').then((module) => ({ default: module.ManagePage })));
+// A profile loads on its own too: a visitor booking never downloads the list.
+const ProfilePage = lazy(() => import('./ProfilePage.tsx').then((module) => ({ default: module.ProfilePage })));
 
 const root = document.getElementById('root');
 if (root === null) throw new Error('The booking page has no #root.');
@@ -23,7 +34,8 @@ if (root === null) throw new Error('The booking page has no #root.');
 const address = new URL(globalThis.location.href);
 // /b/<publicKey> or /b/<publicKey>/manage, nothing after but an optional slash.
 const path = /^\/b\/([^/]+)(\/manage)?\/?$/.exec(address.pathname);
-const publicKey = decodeURIComponent(path?.[1] ?? '');
+// Else /<handle> or /<handle>/<slug>.
+const handled = path === null ? handleAddressOf(address.pathname) : undefined;
 const isManage = path?.[2] !== undefined;
 const locale = navigator.languages[0] ?? 'en-US';
 const now = () => Date.now();
@@ -35,9 +47,6 @@ const storage = ((): HandoffStorage | undefined => {
     return undefined;
   }
 })();
-const { handoff, tidied } = isManage ? {} : takeHandoff(address, publicKey, storage);
-if (tidied !== undefined) globalThis.history.replaceState(globalThis.history.state, '', tidied);
-
 const timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone;
 
 const embed = embedOf({
@@ -63,35 +72,123 @@ if (embed !== undefined) {
   );
 }
 
-createRoot(root).render(
-  <StrictMode>
-    <BookingProvider locale={locale} timeZone={timeZone}>
-      {isManage ? (
-        <Suspense fallback={<BookingMessage title={strings.loading} isLoading />}>
-          <ManagePage
-            token={address.searchParams.get('t') ?? ''}
-            isWelcome={address.searchParams.get('welcome') === '1'}
+const view = createRoot(root);
+
+/** The address shown, in place, with the query and fragment the visit came with. */
+const showAddress = (pathname: string) => {
+  const next = `${pathname}${globalThis.location.search}${globalThis.location.hash}`;
+  globalThis.history.replaceState(globalThis.history.state, '', next);
+};
+
+/** Whether a plain `/b/<key>` visit moves to the page's handle address: never framed, nor on a return from Google. */
+const mayMove = path !== null && !isManage && embed === undefined && !/[?&](?:calendar|d|day|tz)=/.test(address.search);
+
+/** The booking page (or its guest page) for a public key, as `/b/<key>` has always drawn it. */
+function renderBooking(publicKey: string) {
+  // The address now: a handle address may have moved to the current handle since the visit began.
+  const { handoff, tidied } = isManage ? {} : takeHandoff(new URL(globalThis.location.href), publicKey, storage);
+  if (tidied !== undefined) globalThis.history.replaceState(globalThis.history.state, '', tidied);
+  view.render(
+    <StrictMode>
+      <BookingProvider locale={locale} timeZone={timeZone}>
+        {isManage ? (
+          <Suspense fallback={<BookingMessage title={strings.loading} isLoading />}>
+            <ManagePage
+              token={address.searchParams.get('t') ?? ''}
+              isWelcome={address.searchParams.get('welcome') === '1'}
+              locale={locale}
+              now={now}
+            />
+          </Suspense>
+        ) : (
+          <BookingPage
+            publicKey={publicKey}
             locale={locale}
+            timeZone={timeZone}
             now={now}
+            {...(handoff === undefined ? {} : { handoff })}
+            {...(mayMove
+              ? {
+                  onAddress: (moved: string) => {
+                    globalThis.location.replace(`${moved}${globalThis.location.search}${globalThis.location.hash}`);
+                    return true;
+                  },
+                }
+              : {})}
+            onBooked={(token) => {
+              forgetHandoff(publicKey, storage);
+              const manage = `/b/${encodeURIComponent(publicKey)}/manage?${new URLSearchParams({ t: token, welcome: '1' }).toString()}`;
+              // Inside an embed the guest page opens on the whole tab: it carries the guest's token, so it is
+              // never framed.
+              if (embed === undefined) globalThis.location.assign(manage);
+              else globalThis.open(manage, '_top');
+            }}
           />
+        )}
+      </BookingProvider>
+    </StrictMode>,
+  );
+}
+
+/** A whole page message, in the provider. */
+function renderMessage(title: string, text: string) {
+  view.render(
+    <StrictMode>
+      <BookingProvider locale={locale} timeZone={timeZone}>
+        <BookingMessage title={title}>{text}</BookingMessage>
+      </BookingProvider>
+    </StrictMode>,
+  );
+}
+
+if (path !== null) {
+  renderBooking(decodeURIComponent(path[1] ?? ''));
+} else if (handled?.kind === 'profile') {
+  view.render(
+    <StrictMode>
+      <BookingProvider locale={locale} timeZone={timeZone}>
+        <Suspense fallback={<BookingMessage title={strings.loading} isLoading />}>
+          <ProfilePage handle={handled.handle} onMoved={(current) => showAddress(`/${current}`)} />
         </Suspense>
-      ) : (
-        <BookingPage
-          publicKey={publicKey}
-          locale={locale}
-          timeZone={timeZone}
-          now={now}
-          {...(handoff === undefined ? {} : { handoff })}
-          onBooked={(token) => {
-            forgetHandoff(publicKey, storage);
-            const manage = `/b/${encodeURIComponent(publicKey)}/manage?${new URLSearchParams({ t: token, welcome: '1' }).toString()}`;
-            // Inside an embed the guest page opens on the whole tab: it carries the guest's token, so it is
-            // never framed.
-            if (embed === undefined) globalThis.location.assign(manage);
-            else globalThis.open(manage, '_top');
-          }}
-        />
-      )}
-    </BookingProvider>
-  </StrictMode>,
-);
+      </BookingProvider>
+    </StrictMode>,
+  );
+} else if (handled?.kind === 'page') {
+  view.render(
+    <StrictMode>
+      <BookingProvider locale={locale} timeZone={timeZone}>
+        <BookingMessage title={strings.loading} isLoading />
+      </BookingProvider>
+    </StrictMode>,
+  );
+  const page = handled;
+  const tryAddress = () => {
+    createHandleClient({ origin: globalThis.location.origin })
+      .address(page.handle, page.slug)
+      .then(
+        (found) => {
+          // An old handle's address shows the current one.
+          if (found.handle !== page.handle) showAddress(`/${found.handle}/${page.slug}`);
+          renderBooking(found.publicKey);
+        },
+        (error: unknown) => {
+          if (isDataError(error) && error.code === 'NOT_FOUND') {
+            renderMessage(strings.notFoundTitle, strings.notFoundText);
+            return;
+          }
+          view.render(
+            <StrictMode>
+              <BookingProvider locale={locale} timeZone={timeZone}>
+                <BookingMessage title={strings.failedTitle} onRetry={tryAddress}>
+                  {strings.failedText}
+                </BookingMessage>
+              </BookingProvider>
+            </StrictMode>,
+          );
+        },
+      );
+  };
+  tryAddress();
+} else {
+  renderMessage(strings.notFoundTitle, strings.notFoundText);
+}

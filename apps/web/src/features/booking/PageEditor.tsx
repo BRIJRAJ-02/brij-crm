@@ -128,6 +128,9 @@ const STEPS: SelectItem[] = [
 
 /** The tab each setting sits on, for a refusal that names its field. */
 const FIELD_TABS: Readonly<Record<string, PageTab>> = {
+  slug: 'page',
+  profileSection: 'page',
+  profilePosition: 'page',
   description: 'page',
   isPrivate: 'page',
   title: 'meeting',
@@ -160,7 +163,15 @@ const settingsOf = (page: BookingPageView): BookingPageSettings => ({
   scheduleId: page.scheduleId,
   rescheduleHost: page.rescheduleHost,
   isPrivate: page.isPrivate,
+  profileSection: page.profileSection,
+  profilePosition: page.profilePosition,
 });
+
+/** Why a slug can't be sent, in plain words, or undefined when it can. */
+function slugProblem(value: string): string | undefined {
+  if (value === '') return strings.slugRequired;
+  return /^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(value) && value.length <= 60 ? undefined : strings.slugInvalid;
+}
 
 /** The settings that differ between two drafts. */
 function changed(saved: BookingPageSettings, draft: BookingPageSettings): Partial<BookingPageSettings> {
@@ -175,7 +186,10 @@ function changed(saved: BookingPageSettings, draft: BookingPageSettings): Partia
 function sendable(draft: BookingPageSettings): boolean {
   return (
     draft.title.trim() !== '' &&
-    /^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(draft.slug) &&
+    slugProblem(draft.slug) === undefined &&
+    Number.isInteger(draft.profilePosition) &&
+    draft.profilePosition >= 0 &&
+    draft.profilePosition <= 999 &&
     draft.durations.length > 0 &&
     (draft.location.type === 'video' || draft.location.type === 'phone' || draft.location.value.trim() !== '')
   );
@@ -355,7 +369,10 @@ export function PageEditor({
   const refusedTab = failure?.field === undefined ? undefined : FIELD_TABS[failure.field];
   const isWhereMissing = (location.type === 'address' || location.type === 'custom') && location.value.trim() === '';
   const hasError: Readonly<Record<PageTab, boolean>> = {
-    page: refusedTab === 'page',
+    page:
+      refusedTab === 'page' ||
+      slugProblem(draft.slug) !== undefined ||
+      !(Number.isInteger(draft.profilePosition) && draft.profilePosition >= 0 && draft.profilePosition <= 999),
     meeting:
       refusedTab === 'meeting' ||
       draft.title.trim() === '' ||
@@ -414,8 +431,8 @@ export function PageEditor({
             }
           >
             <EditorActions
-              link={publicBookingUrl(page.publicKey)}
-              viewHref={`/b/${page.publicKey}`}
+              link={publicBookingUrl(page)}
+              viewHref={publicBookingUrl(page)}
               {...(isLocked
                 ? {}
                 : {
@@ -512,7 +529,24 @@ export function PageEditor({
                         label={strings.publicLink}
                         variant="copy"
                         copyLabel={strings.copyLink}
-                        value={publicBookingUrl(page.publicKey)}
+                        value={publicBookingUrl(page)}
+                      />
+                      <Field
+                        label={strings.slug}
+                        value={draft.slug}
+                        // The address after the owner's handle (22 Oct 2026); with no handle yet, the page keeps its
+                        // /b/ link and the description says where to pick one.
+                        {...(page.handle === undefined ? {} : { prefix: `/${page.handle}/` })}
+                        hint={page.handle === undefined ? strings.slugNoHandle : strings.slugHint}
+                        maxLength={60}
+                        isRequired
+                        isReadOnly={isLocked}
+                        onChange={(value) => change({ slug: value.toLowerCase() })}
+                        {...(slugProblem(draft.slug) === undefined
+                          ? failure?.field === 'slug'
+                            ? { error: failure.message }
+                            : {}
+                          : { error: slugProblem(draft.slug) })}
                       />
                       <Field
                         label={strings.description}
@@ -538,6 +572,33 @@ export function PageEditor({
                           onChange={(value) => change({ isPrivate: value === 'link' })}
                         />
                       </FieldGroup>
+                      {!draft.isPrivate && (
+                        // Where it sits on the owner's profile, /<handle> (22 Oct 2026): a small heading, and an order.
+                        <FieldGroup label={strings.onProfile} hint={strings.onProfileHint}>
+                          <Field
+                            label={strings.profileSection}
+                            value={draft.profileSection ?? ''}
+                            hint={strings.profileSectionHint}
+                            maxLength={40}
+                            isReadOnly={isLocked}
+                            onChange={(value) => change({ profileSection: value.trim() === '' ? null : value })}
+                          />
+                          <Field
+                            label={strings.profilePosition}
+                            value={String(draft.profilePosition)}
+                            hint={strings.profilePositionHint}
+                            inputMode="numeric"
+                            maxLength={3}
+                            isReadOnly={isLocked}
+                            onChange={(value) => change({ profilePosition: value === '' ? 0 : Number(value) })}
+                            {...(Number.isInteger(draft.profilePosition) &&
+                            draft.profilePosition >= 0 &&
+                            draft.profilePosition <= 999
+                              ? {}
+                              : { error: strings.profilePositionInvalid })}
+                          />
+                        </FieldGroup>
+                      )}
                     </>
                   )}
                   {shown === 'meeting' && (

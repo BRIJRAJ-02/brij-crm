@@ -7,7 +7,14 @@ import { Stage } from '../../workbench/Stage/Stage.tsx';
 import { BookingDetails } from '../BookingDetails/BookingDetails.tsx';
 import { MonthTiles } from '../MonthTiles/MonthTiles.tsx';
 import { SlotList } from '../SlotList/SlotList.tsx';
-import { BookingFrame, BookingMessage, type BookingFact } from './BookingFrame.tsx';
+import { LinkList } from '../LinkList/LinkList.tsx';
+import {
+  BookingFrame,
+  BookingMessage,
+  BookingProfile,
+  BookingProfileSection,
+  type BookingFact,
+} from './BookingFrame.tsx';
 
 const FACTS: readonly BookingFact[] = [
   { id: 'where', icon: 'video', children: 'Video call' },
@@ -111,6 +118,50 @@ export const Failed: Story = {
   play: async ({ canvas }) => {
     await expect(canvas.getByRole('heading', { name: 'This page didn’t load' })).toHaveFocus();
   },
+};
+
+const LINKS = [
+  {
+    id: 'intro',
+    title: 'Intro call',
+    address: '',
+    description: 'A first chat about what you need.',
+    chips: ['15 min'],
+  },
+  { id: 'demo', title: 'Product demo', address: '', chips: ['30 min', '60 min'] },
+];
+const TEAM_LINKS = [{ id: 'team', title: 'Talk to sales', address: '', chips: ['30 min', 'Team'] }];
+
+/** A person's public profile (`/<handle>`): their card, then their Public links, the whole row opening each. */
+export const Profile: Story = {
+  render: () => (
+    <Stage width="fill" height="page">
+      <BookingProfile
+        person={{ name: 'Ada Lovelace', id: 'ada', bio: 'Product at Acme. Happy to talk about anything.' }}
+        claimHref="https://timefix.ai"
+      >
+        <BookingProfileSection>
+          <LinkList label="Booking links" searchLabel="Search links" isToolbarHidden rows={LINKS} onOpen={fn()} />
+        </BookingProfileSection>
+        <BookingProfileSection title="Sales">
+          <LinkList label="Sales" searchLabel="Search links" isToolbarHidden rows={TEAM_LINKS} onOpen={fn()} />
+        </BookingProfileSection>
+      </BookingProfile>
+    </Stage>
+  ),
+  play: async ({ canvas }) => {
+    await expect(canvas.getByRole('heading', { level: 1, name: 'Ada Lovelace' })).toBeVisible();
+    await expect(canvas.getByRole('heading', { level: 2, name: 'Sales' })).toBeVisible();
+  },
+};
+
+/** A profile while it loads: the card as a skeleton. */
+export const ProfileLoading: Story = {
+  render: () => (
+    <Stage width="fill" height="page">
+      <BookingProfile />
+    </Stage>
+  ),
 };
 
 /** The story's own state, in a component so the artifact's preview can render it too. */

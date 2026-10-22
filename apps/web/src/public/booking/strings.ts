@@ -93,6 +93,17 @@ export const strings = {
     off: 'Connecting a calendar isn’t available on this page yet.',
   },
   loading: 'Loading…',
+  // A person's profile, /<handle> (22 Oct 2026).
+  profileLinks: 'Booking links',
+  searchLinks: 'Search links',
+  team: 'Team',
+  noLinksTitle: 'Nothing to book here yet',
+  noLinksText: 'This person has no public booking links right now.',
+  noMatchesTitle: (query: string) => `No links match “${query}”`,
+  noMatchesText: 'Try fewer or other words.',
+  showMore: 'Show more',
+  moreFailed: 'More links didn’t load. Try again.',
+  profileNotFound: 'No one has this address.',
   // The guest page.
   titles: {
     welcome: 'You’re booked',

@@ -19,6 +19,8 @@
 //   GET  /api/public/booking/:publicKey/connect  ?return: a guest connects Google for this visit
 //   GET  /api/public/booking/connect/callback    Google's answer: the guest's sealed cookie
 //   POST /api/public/booking/connect/forget      drops the guest's calendar
+//   GET  /api/public/handles/:handle             ?after&q: a profile and a page of its Public links (22 Oct 2026)
+//   GET  /api/public/handles/:handle/:slug       the page a handle address names, by its public key
 //
 // A slots read from a recognised visitor with a calendar also reads their
 // busy times (at most 3 seconds, failing open) and answers which slots clash
@@ -32,6 +34,8 @@ import {
   PublicGuestsInput,
   PublicMoveInput,
   PublicMoveSlotsQuery,
+  PROFILE_PAGE_SIZE,
+  PublicProfileQuery,
   PublicRemoveGuestInput,
   type PublicPrefill,
   PublicSlotsQuery,
@@ -62,8 +66,12 @@ import {
   moveBooking,
   readMoveSlots,
   removeGuest,
+  enterBookingAddress,
   enterBookingPage,
+  enterBookingProfile,
   getPublicBookingPage,
+  readAddressedPage,
+  readBookingProfile,
   isPageHost,
   type BookingEntry,
   managedBookingIcs,
@@ -256,6 +264,40 @@ export function mountPublicBooking(app: Hono<{ Variables: Variables }>, services
       return nobody;
     });
   };
+
+  // A handle address (22 Oct 2026): the person by a current or old handle, through the door's definers only.
+  app.get('/public/handles/:handle', async (c) => {
+    const refused = limited([[`booking:read:${addressKey(c.get('clientIp'))}`, BOOKING_LIMITS.readsPerAddress]]);
+    if (refused !== undefined) return refused;
+    const query = PublicProfileQuery.safeParse({
+      after: c.req.query('after'),
+      q: c.req.query('q'),
+    });
+    if (!query.success) return answer('INPUT_INVALID', 'That page of links isn’t right.');
+    const [position, id] = query.data.after?.split('.') ?? [];
+    try {
+      const found = await enterBookingProfile({ db }, c.req.param('handle'), {
+        ...(position === undefined || id === undefined ? {} : { after: { position: Number(position), id } }),
+        ...(query.data.q === undefined ? {} : { search: query.data.q }),
+        // One more than a page, so the answer knows there is more.
+        max: PROFILE_PAGE_SIZE + 1,
+      });
+      return ok(await readBookingProfile(found));
+    } catch (error) {
+      return refusalAnswer(error);
+    }
+  });
+
+  app.get('/public/handles/:handle/:slug', async (c) => {
+    const refused = limited([[`booking:read:${addressKey(c.get('clientIp'))}`, BOOKING_LIMITS.readsPerAddress]]);
+    if (refused !== undefined) return refused;
+    try {
+      const entry = await enterBookingAddress({ db }, c.req.param('handle'), c.req.param('slug'));
+      return ok(await readAddressedPage(entry));
+    } catch (error) {
+      return refusalAnswer(error);
+    }
+  });
 
   // The guest page (before the page routes, so `manage` is never read as a public key).
   app.get('/public/booking/manage/:token', async (c) => {

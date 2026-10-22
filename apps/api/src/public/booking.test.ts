@@ -121,6 +121,44 @@ describe('the member procedures (AC-623, AC-645)', () => {
   });
 });
 
+describe('handle addresses (22 Oct 2026)', () => {
+  /** A request to the handle routes, through the edge. */
+  const handles = (path: string) =>
+    app.request(`/api/public/handles/${path}`, {
+      headers: { [EDGE_HEADER]: TEST_EDGE_SECRET, 'x-forwarded-for': newIp() },
+    });
+
+  it('claims a handle in Settings, then answers the profile and each page by /<handle>/<slug>', async () => {
+    const m = await memberWithWorkspace(app);
+    const page = await pageOf(m);
+    const handle = `ada-${newId().slice(-8)}`;
+    const profile = await m.client.profile.update({ workspace: m.slug, handle, bio: 'Hello.', mutationId: newId() });
+    expect(profile).toMatchObject({ handle, bio: 'Hello.' });
+    const reserved = await failure(() =>
+      m.client.profile.update({ workspace: m.slug, handle: 'settings', mutationId: newId() }),
+    );
+    expect(reserved.code).toBe('INPUT_INVALID');
+    expect((await m.client.bookingPages.get({ workspace: m.slug, pageId: page.id })).handle).toBe(handle);
+
+    const read = await handles(handle);
+    expect(read.status).toBe(200);
+    const body = await read.text();
+    expect(body).not.toContain(m.email);
+    expect(JSON.parse(body)).toMatchObject({
+      handle,
+      bio: 'Hello.',
+      links: [{ slug: 'intro-call', title: 'Intro call' }],
+    });
+    const address = await handles(`${handle}/intro-call`);
+    expect(await address.json()).toEqual({ publicKey: page.publicKey, handle });
+    const facts = (await (await visit(page.publicKey)).json()) as { readonly path?: string };
+    expect(facts.path).toBe(`/${handle}/intro-call`);
+    expect((await handles(`${handle}/nothing-here`)).status).toBe(404);
+    expect((await handles(`nobody-${newId().slice(-8)}`)).status).toBe(404);
+    expect((await handles(`${handle}?after=nonsense`)).status).toBe(400);
+  });
+});
+
 describe('the public page (AC-629, AC-632 to AC-634, AC-643, AC-644)', () => {
   it('answers the facts and the slots, books, and lists the booking with its person', async () => {
     const m = await memberWithWorkspace(app);

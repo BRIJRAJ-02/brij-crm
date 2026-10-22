@@ -191,6 +191,30 @@
     box-shadow: var(--shadow-md);
   }
 
+  /* A profile's card (22 Oct 2026): the picture, then the name and bio, as the rail's identity reads. */
+  .message[data-kind='profile'] {
+    gap: var(--space-16);
+  }
+
+  /* A profile is a list: the column takes the wider measure the list needs. */
+  .narrow[data-width='profile'] {
+    max-inline-size: calc(var(--size-page-card) + var(--size-measure) / 2);
+  }
+
+  .section {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-8);
+  }
+
+  .sectionTitle {
+    margin: 0;
+    padding-inline: var(--space-4);
+    color: var(--text-secondary);
+    font: var(--text-label-strong);
+    letter-spacing: var(--tracking-label-strong);
+  }
+
   .messageTitle {
     margin: 0;
     font: var(--text-heading);

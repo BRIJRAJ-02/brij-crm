@@ -7,6 +7,7 @@ import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { contentSecurityPolicy, directiveSources, isEuIngestHost, sentryDsnProblem } from './csp.ts';
+import { APP_HEADER_SOURCE, HANDLE_HEADER_SOURCE } from './public-paths.ts';
 import { realtimeCspProblem } from './realtime-csp.ts';
 
 const policy = contentSecurityPolicy();
@@ -93,7 +94,8 @@ describe('framing (spec 0023, the embeds)', () => {
     expect(directiveSources(sent('/f/(.*)', 'Content-Security-Policy') ?? '', 'frame-ancestors')).toEqual(['*']);
     expect(directiveSources(sent('/b/:publicKey', 'Content-Security-Policy') ?? '', 'frame-ancestors')).toEqual(['*']);
     const app = rules[0];
-    expect(app?.source).toBe('/((?!api/|api$|f/|b/[^/]+$|embed/).*)');
+    // Every path but the API, the public pages and the embed script; handle addresses are public pages too.
+    expect(app?.source).toBe(APP_HEADER_SOURCE);
     expect(
       directiveSources(
         app?.headers.find((header) => header.key === 'Content-Security-Policy')?.value ?? '',
@@ -105,6 +107,10 @@ describe('framing (spec 0023, the embeds)', () => {
   it("frames a booking page with the app's own policy otherwise, so the page itself changes in nothing", () => {
     const app = rules[0]?.headers.find((header) => header.key === 'Content-Security-Policy')?.value ?? '';
     expect(sent('/b/:publicKey', 'Content-Security-Policy')).toBe(
+      app.replace("frame-ancestors 'self'", 'frame-ancestors *'),
+    );
+    // A handle address (22 Oct 2026) is the same booking page, under the same policy.
+    expect(sent(HANDLE_HEADER_SOURCE, 'Content-Security-Policy')).toBe(
       app.replace("frame-ancestors 'self'", 'frame-ancestors *'),
     );
   });

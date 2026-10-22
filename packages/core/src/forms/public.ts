@@ -22,6 +22,7 @@ import { refuse, refuseAll } from '../engine/refusals.ts';
 import type { EngineScope } from '../engine/scope.ts';
 import { runWrite, type AfterWrite } from '../engine/write.ts';
 import { inWorkspace } from '../access/run.ts';
+import { pagePath } from '../booking/handles.ts';
 import { startJob } from '../jobs/service.ts';
 import type { JobRegistry } from '../jobs/registry.ts';
 import { FORMS_PROCESS } from './process.ts';
@@ -118,12 +119,13 @@ async function bookingNext(
   text: string,
 ): Promise<SubmitNext | undefined> {
   const [page] = await tx
-    .select({ publicKey: bookingPages.publicKey })
+    .select({ publicKey: bookingPages.publicKey, slug: bookingPages.slug, ownerUserId: bookingPages.ownerUserId })
     .from(bookingPages)
     .where(and(eq(bookingPages.id, bookingPageId), eq(bookingPages.status, 'live'), isNull(bookingPages.deletedAt)));
   if (page === undefined) return undefined;
   const token = sign?.({ submissionId, bookingPageId });
-  const url = `/b/${encodeURIComponent(page.publicKey)}${token === undefined ? '' : `?p=${encodeURIComponent(token)}`}`;
+  // The page's own address: `/<handle>/<slug>` once its owner has a handle, else `/b/<key>`.
+  const url = `${await pagePath(tx, page)}${token === undefined ? '' : `?p=${encodeURIComponent(token)}`}`;
   return { kind: 'booking', url, countdownSeconds, text };
 }
 

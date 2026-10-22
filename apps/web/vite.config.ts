@@ -7,6 +7,7 @@ import react from '@vitejs/plugin-react';
 import { defineConfig, type Plugin } from 'vite';
 import { contentSecurityPolicy, directiveSources, policyForPath, sentryDsnProblem } from './csp.ts';
 import { embedScript } from './embed-script.ts';
+import { HANDLE_PATH } from './public-paths.ts';
 import { realtimeCspProblem } from './realtime-csp.ts';
 
 // The api the dev server and `vite preview` proxy /api to. API_DEV_ORIGIN moves it, so a second stack (another
@@ -152,10 +153,13 @@ function uploadSourceMaps(): Plugin[] {
 /** The public booking pages' addresses (spec 0025): `/b/<publicKey>` and its `/manage`, served book.html as Vercel does. */
 const BOOKING_PATH = /^\/b\/[^/?#]+(?:\/manage)?\/?(?:[?#].*)?$/;
 
-/** Serves book.html for `/b/<publicKey>` locally, as vercel.json's rewrite does when deployed. */
+/**
+ * Serves book.html for `/b/<publicKey>`, and for a handle address `/<handle>` or `/<handle>/<slug>` (22 Oct 2026),
+ * locally, as vercel.json's rewrites do when deployed.
+ */
 function publicBookingPage(): Plugin {
   const rewrite = (url: string | undefined): string | undefined =>
-    url !== undefined && BOOKING_PATH.test(url) ? '/book.html' : url;
+    url !== undefined && (BOOKING_PATH.test(url) || HANDLE_PATH.test(url.replace(/[?#].*$/, ''))) ? '/book.html' : url;
   return {
     name: 'crm:public-booking-page',
     configureServer(server) {

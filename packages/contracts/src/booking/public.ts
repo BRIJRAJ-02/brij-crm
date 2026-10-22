@@ -47,9 +47,68 @@ export const PublicBookingPage = z.object({
       more: z.number().int().min(0),
     })
     .optional(),
+  /**
+   * The page's address once its owner has a handle, `/<handle>/<slug>` (22 Oct 2026): a plain `/b/<key>` visit moves
+   * there. Absent while the owner has none.
+   */
+  path: z.string().optional(),
 });
 /** The page's facts. */
 export type PublicBookingPage = z.infer<typeof PublicBookingPage>;
+
+/** `GET /api/public/handles/:handle/:slug`: the page a handle address names, by its key, and the current handle. */
+export const PublicAddress = z.object({
+  publicKey: PublicKey,
+  /** The owner's current handle: an old one's address moves to it. */
+  handle: z.string(),
+});
+/** The page a handle address names. */
+export type PublicAddress = z.infer<typeof PublicAddress>;
+
+/** One booking page on a profile: its title, lengths and kind, opened at `/<handle>/<slug>`. */
+export const PublicProfileLink = z.object({
+  slug: z.string(),
+  title: z.string(),
+  description: z.string(),
+  durations: z.array(BookingDuration),
+  /** A team page books one of several people. */
+  isTeam: z.boolean(),
+  /** The small heading the owner put it under, if any. */
+  section: z.string().optional(),
+});
+/** One booking page on a profile. */
+export type PublicProfileLink = z.infer<typeof PublicProfileLink>;
+
+/** How many links one profile read answers. */
+export const PROFILE_PAGE_SIZE = 20;
+
+/** `GET /api/public/handles/:handle?after&q`: the person and one page of their Public booking links. */
+export const PublicProfile = z.object({
+  /** The current handle: an old one's address moves to it. */
+  handle: z.string(),
+  name: z.string(),
+  /** Up to two initials, for the avatar without a picture. */
+  initials: z.string(),
+  /** An https picture, when the account has one. */
+  image: z.string().optional(),
+  bio: z.string(),
+  links: z.array(PublicProfileLink),
+  /** The cursor of the next page, while there is one. */
+  next: z.string().optional(),
+});
+/** A person's public profile. */
+export type PublicProfile = z.infer<typeof PublicProfile>;
+
+/** A profile read's query: the cursor after which to read, and words the titles hold. */
+export const PublicProfileQuery = z.object({
+  after: z
+    .string()
+    .regex(/^\d{1,3}\.[0-9a-f-]{36}$/, { error: 'That page of links isn’t right.' })
+    .optional(),
+  q: z.string().trim().max(120).optional(),
+});
+/** A profile read's query. */
+export type PublicProfileQuery = z.infer<typeof PublicProfileQuery>;
 
 /** The longest range one slots read covers: 62 days, two months of the month view. */
 export const PUBLIC_SLOTS_MAX_DAYS = 62;

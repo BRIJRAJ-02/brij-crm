@@ -25,6 +25,9 @@ export {
   BookingFoot,
   BookingFrame,
   BookingMessage,
+  BookingProfile,
+  BookingProfileSection,
+  type BookingProfilePerson,
   type BookingFact,
   type BookingHost,
   type BookingTeam,
@@ -32,6 +35,8 @@ export {
 export { BookingReceipt, type BookingReceiptState } from '../modules/BookingReceipt/BookingReceipt.tsx';
 export { BookingChanges, type CancelOutcome, type GuestsOutcome } from '../modules/BookingChanges/BookingChanges.tsx';
 export { DayStrip } from '../modules/DayStrip/DayStrip.tsx';
+/** A profile's booking links (22 Oct 2026): the rows Captures › Links draws, the whole row opening the page. */
+export { LinkList, LinkListToolbar, type LinkRow } from '../modules/LinkList/LinkList.tsx';
 export { MonthTiles } from '../modules/MonthTiles/MonthTiles.tsx';
 export { SlotList, type Slot } from '../modules/SlotList/SlotList.tsx';
 export { VisitorBar, type VisitorBarCalendar } from '../modules/VisitorBar/VisitorBar.tsx';

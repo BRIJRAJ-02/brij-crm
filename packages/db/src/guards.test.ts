@@ -90,6 +90,10 @@ describe('every tenant table', () => {
             // A form's public key finds it before the workspace is known (spec 0023), so it is unique everywhere.
             row.index === 'forms_public_key' ||
             row.index === 'booking_pages_public_key' ||
+            // `/<handle>/<slug>` and a profile's pages are found before the workspace is known (22 Oct 2026), read
+            // only through crm_booking_lookup's crm_booking_page_by_address and crm_booking_profile_pages.
+            row.index === 'booking_pages_owner_slug' ||
+            row.index === 'booking_pages_profile' ||
             row.index === 'bookings_manage_token' ||
             // An invitation's token finds it before the workspace is known, and sign up asks about an address
             // across workspaces (spec 0031): both read only through crm_invitation_lookup's two functions.
@@ -147,7 +151,10 @@ describe('the holes in row level security (crm_search_text, spec 0004 AC-24; the
     `);
     expect(definers.rows).toEqual([
       { name: 'crm_booking_by_token', owner: 'crm_booking_lookup' },
+      { name: 'crm_booking_owner_slugs', owner: 'crm_booking_lookup' },
+      { name: 'crm_booking_page_by_address', owner: 'crm_booking_lookup' },
       { name: 'crm_booking_page_by_key', owner: 'crm_booking_lookup' },
+      { name: 'crm_booking_profile_pages', owner: 'crm_booking_lookup' },
       { name: 'crm_claim_workspace_address', owner: 'crm_address' },
       { name: 'crm_enqueue_booking_mail', owner: 'crm_queue' },
       { name: 'crm_enqueue_calendar_sync', owner: 'crm_queue' },
@@ -155,14 +162,17 @@ describe('the holes in row level security (crm_search_text, spec 0004 AC-24; the
       { name: 'crm_enqueue_job', owner: 'crm_queue' },
       { name: 'crm_enqueue_notification_email', owner: 'crm_queue' },
       { name: 'crm_form_by_key', owner: 'crm_form_lookup' },
+      { name: 'crm_handle_owner', owner: 'crm_handle' },
       { name: 'crm_invitation_by_token', owner: 'crm_invitation_lookup' },
       { name: 'crm_invitation_open_for', owner: 'crm_invitation_lookup' },
       { name: 'crm_join_requests_of', owner: 'crm_domain_lookup' },
       { name: 'crm_notification_digests_due', owner: 'crm_sweep' },
       { name: 'crm_outbox_prune', owner: 'crm_relay' },
       { name: 'crm_outbox_workspaces', owner: 'crm_relay' },
+      { name: 'crm_public_profiles_of', owner: 'crm_handle' },
       { name: 'crm_purge_workspace_begin', owner: 'crm_purge' },
       { name: 'crm_purge_workspace_end', owner: 'crm_purge' },
+      { name: 'crm_save_public_profile', owner: 'crm_handle' },
       { name: 'crm_search_similar', owner: 'crm_search' },
       { name: 'crm_search_text', owner: 'crm_search' },
       { name: 'crm_workspace_has_domain', owner: 'crm_domain_lookup' },
@@ -180,7 +190,10 @@ describe('the holes in row level security (crm_search_text, spec 0004 AC-24; the
     `);
     expect(hardening.rows).toEqual([
       { name: 'crm_booking_by_token', config: ['search_path=pg_catalog, pg_temp'], atomic: true },
+      { name: 'crm_booking_owner_slugs', config: ['search_path=pg_catalog, pg_temp'], atomic: true },
+      { name: 'crm_booking_page_by_address', config: ['search_path=pg_catalog, pg_temp'], atomic: true },
       { name: 'crm_booking_page_by_key', config: ['search_path=pg_catalog, pg_temp'], atomic: true },
+      { name: 'crm_booking_profile_pages', config: ['search_path=pg_catalog, pg_temp'], atomic: true },
       // A plpgsql body: it raises the unique violation a taken address is refused with.
       { name: 'crm_claim_workspace_address', config: ['search_path=pg_catalog, pg_temp'], atomic: false },
       { name: 'crm_enqueue_booking_mail', config: ['search_path=pg_catalog, pg_temp'], atomic: false },
@@ -189,14 +202,18 @@ describe('the holes in row level security (crm_search_text, spec 0004 AC-24; the
       { name: 'crm_enqueue_job', config: ['search_path=pg_catalog, pg_temp'], atomic: false },
       { name: 'crm_enqueue_notification_email', config: ['search_path=pg_catalog, pg_temp'], atomic: false },
       { name: 'crm_form_by_key', config: ['search_path=pg_catalog, pg_temp'], atomic: true },
+      { name: 'crm_handle_owner', config: ['search_path=pg_catalog, pg_temp'], atomic: true },
       { name: 'crm_invitation_by_token', config: ['search_path=pg_catalog, pg_temp'], atomic: true },
       { name: 'crm_invitation_open_for', config: ['search_path=pg_catalog, pg_temp'], atomic: true },
       { name: 'crm_join_requests_of', config: ['search_path=pg_catalog, pg_temp'], atomic: true },
       { name: 'crm_notification_digests_due', config: ['search_path=pg_catalog, pg_temp'], atomic: true },
       { name: 'crm_outbox_prune', config: ['search_path=pg_catalog, pg_temp', 'lock_timeout=1s'], atomic: true },
       { name: 'crm_outbox_workspaces', config: ['search_path=pg_catalog, pg_temp'], atomic: true },
+      { name: 'crm_public_profiles_of', config: ['search_path=pg_catalog, pg_temp'], atomic: true },
       { name: 'crm_purge_workspace_begin', config: ['search_path=pg_catalog, pg_temp'], atomic: true },
       { name: 'crm_purge_workspace_end', config: ['search_path=pg_catalog, pg_temp'], atomic: true },
+      // A plpgsql body: it raises the unique violation a taken handle is refused with.
+      { name: 'crm_save_public_profile', config: ['search_path=pg_catalog, pg_temp'], atomic: false },
       {
         name: 'crm_search_similar',
         config: ['search_path=pg_catalog, pg_temp', 'pg_trgm.word_similarity_threshold=0.5'],
@@ -292,11 +309,29 @@ describe('the holes in row level security (crm_search_text, spec 0004 AC-24; the
     ],
     [
       'crm_booking_lookup',
-      ['crm_booking_page_by_key', 'crm_booking_by_token'],
-      ['crm_booking_page_by_key(text)', 'crm_booking_by_token(text)'],
-      ['app', 'app'],
+      [
+        'crm_booking_page_by_key',
+        'crm_booking_by_token',
+        'crm_booking_page_by_address',
+        'crm_booking_profile_pages',
+        'crm_booking_owner_slugs',
+      ],
+      [
+        'crm_booking_page_by_key(text)',
+        'crm_booking_by_token(text)',
+        'crm_booking_page_by_address(uuid, text)',
+        'crm_booking_profile_pages(uuid, smallint, uuid, text, integer)',
+        'crm_booking_owner_slugs(uuid, text)',
+      ],
+      ['app', 'app', 'app', 'app', 'app'],
     ],
     ['crm_address', ['crm_claim_workspace_address'], ['crm_claim_workspace_address(text)'], ['app']],
+    [
+      'crm_handle',
+      ['crm_save_public_profile', 'crm_public_profiles_of', 'crm_handle_owner'],
+      ['crm_save_public_profile(uuid, text, text)', 'crm_public_profiles_of(uuid[])', 'crm_handle_owner(text)'],
+      ['app', 'app', 'app'],
+    ],
   ])(
     'keeps %s unable to log in, owning only %s, and out of the app’s reach',
     async (name, fns, signatures, callers) => {
@@ -1536,6 +1571,8 @@ describe('the auth schema: global identity, outside row level security (spec 000
     'account',
     'known_device',
     'passkey',
+    'public_handles',
+    'public_profiles',
     'rate_limit',
     'security_event',
     'session',
@@ -1670,8 +1707,9 @@ describe('the auth schema: global identity, outside row level security (spec 000
       )
     `);
     // But the purge (spec 0031, AC-823), which removes a purged workspace's directory rows through its functions,
-    // and the address claim (migration 0083), which moves a workspace's address through its one function.
-    expect(schema.rows.map((row) => row.grantee).sort()).toEqual(['crm_address', 'crm_purge']);
+    // the address claim (migration 0083), which moves a workspace's address through its one function, and the
+    // handles (migration 0086), which claim a person's handle and read it back through theirs.
+    expect(schema.rows.map((row) => row.grantee).sort()).toEqual(['crm_address', 'crm_handle', 'crm_purge']);
     const tables = await owner.query<{ grant: string }>(`
       select table_name || ' ' || privilege_type as grant from information_schema.role_table_grants
       where table_schema = 'auth'
@@ -1681,6 +1719,10 @@ describe('the auth schema: global identity, outside row level security (spec 000
       order by 1
     `);
     expect(tables.rows.map((row) => row.grant)).toEqual([
+      'public_handles INSERT',
+      'public_handles SELECT',
+      'public_profiles INSERT',
+      'public_profiles SELECT',
       'workspace_addresses INSERT',
       'workspace_addresses SELECT',
       'workspace_directory DELETE',
@@ -1711,6 +1753,21 @@ describe('the auth schema: global identity, outside row level security (spec 000
       'auth.workspace_directory.slug SELECT',
       'auth.workspace_directory.slug UPDATE',
       'auth.workspace_directory.workspace_id SELECT',
+    ]);
+    const handles = await owner.query<{ grant: string }>(`
+      select att.attrelid::regclass || '.' || att.attname || ' ' || a.privilege_type as grant
+      from pg_attribute att cross join lateral aclexplode(att.attacl) a
+      where a.grantee = 'crm_handle'::regrole
+      order by 1
+    `);
+    // The handles read a person's name and picture for their profile, and change only the handle and bio.
+    expect(handles.rows.map((row) => row.grant)).toEqual([
+      'auth."user".id SELECT',
+      'auth."user".image SELECT',
+      'auth."user".name SELECT',
+      'auth.public_profiles.bio UPDATE',
+      'auth.public_profiles.handle UPDATE',
+      'auth.public_profiles.updated_at UPDATE',
     ]);
     const search = await owner.query<{ usage: boolean }>(
       `select has_schema_privilege('crm_search', 'auth', 'USAGE') as usage`,

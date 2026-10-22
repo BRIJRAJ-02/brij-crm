@@ -1,4 +1,6 @@
 // Where booking pages are (spec 0025): plain functions, no React, so loaders can use them.
+import { bookingPagePath } from '@crm/contracts/handles';
+import type { BookingPageView } from '@crm/data';
 
 /** Captures › Links: the booking pages list. */
 export const linksHref = (slug: string) => `/w/${slug}/captures/links`;
@@ -59,5 +61,29 @@ export function availabilitySearch(search: Record<string, unknown>): {
   };
 }
 
-/** The page's public link, on this app's origin (the public bundle answers `/b/<publicKey>`). */
-export const publicBookingUrl = (publicKey: string) => `${globalThis.location.origin}/b/${publicKey}`;
+/**
+ * Where the public booking addresses are served: `VITE_BOOKING_PUBLIC_ORIGIN` (Timefix's own domain, beside the
+ * app's), else this app's origin. The same deployment answers on both.
+ */
+export function publicBookingOrigin(): string {
+  const configured = import.meta.env.VITE_BOOKING_PUBLIC_ORIGIN;
+  if (configured !== undefined && configured !== '') {
+    try {
+      return new URL(configured).origin;
+    } catch {
+      // A malformed value falls back to this app's own origin rather than breaking every link.
+    }
+  }
+  return globalThis.location.origin;
+}
+
+/** A page's public path: `/<handle>/<slug>` once its owner has a handle, else `/b/<publicKey>`. */
+export const publicBookingPath = (page: Pick<BookingPageView, 'handle' | 'slug' | 'publicKey'>) =>
+  bookingPagePath(page);
+
+/** The page's public link, on the public booking origin. */
+export const publicBookingUrl = (page: Pick<BookingPageView, 'handle' | 'slug' | 'publicKey'>) =>
+  `${publicBookingOrigin()}${publicBookingPath(page)}`;
+
+/** A person's public profile, `/<handle>`, on the public booking origin. */
+export const publicProfileUrl = (handle: string) => `${publicBookingOrigin()}/${encodeURIComponent(handle)}`;

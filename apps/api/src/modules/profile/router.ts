@@ -13,6 +13,8 @@ export const profileRouter = member.profile.router({
         {
           ...(input.name === undefined ? {} : { name: input.name }),
           ...(input.timeZone === undefined ? {} : { timeZone: input.timeZone }),
+          ...(input.handle === undefined ? {} : { handle: input.handle }),
+          ...(input.bio === undefined ? {} : { bio: input.bio }),
         },
         {},
         hooks,

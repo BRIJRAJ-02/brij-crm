@@ -156,7 +156,7 @@ describe('pages (AC-623, AC-624, AC-645, AC-648)', () => {
       await refusalOf(updateBookingPage(w.owner, { pageId: second.id, settings: { slug: 'intro-call' } })),
     ).toEqual({
       code: 'SLUG_TAKEN',
-      message: 'Another booking page in this workspace has that web address.',
+      message: 'You have another booking page at that address.',
       field: 'slug',
     });
   });

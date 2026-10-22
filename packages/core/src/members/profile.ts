@@ -2,14 +2,17 @@
 // member profile in one workspace, their name there and their time zone. The
 // change is the caller's own row only, written with its audit row and a
 // `members` outbox row, so other members' screens read the name again.
-import type { MyProfile, UpdateMyProfileInput } from '@crm/contracts';
+// The handle and bio (22 Oct 2026) are the person's, the same in every
+// workspace: they live in schema auth, read and claimed through `booking/handles.ts`.
+import { BIO_MAX, handleProblem, type MyProfile, type UpdateMyProfileInput } from '@crm/contracts';
 import { schema, type WorkspaceTx } from '@crm/db';
 import { and, eq } from 'drizzle-orm';
 import { checkScope } from '../access/mint.ts';
 import type { EngineScope } from '../engine/scope.ts';
 import { inWorkspace } from '../access/run.ts';
+import { publicProfilesOf, savePublicProfile, suggestHandle } from '../booking/handles.ts';
 import { touched } from '../engine/definitions.ts';
-import { refuse } from '../engine/refusals.ts';
+import { refuse, refuseOn } from '../engine/refusals.ts';
 import { runWrite, type AfterWrite } from '../engine/write.ts';
 import { writeAudit, type AuditSource } from './audit.ts';
 
@@ -26,6 +29,12 @@ function selfId(scope: EngineScope): string {
   const { principal } = scope.access;
   if (principal.kind !== 'member') throw refuse('FORBIDDEN', 'Only a member has a profile.');
   return principal.memberId;
+}
+
+/** The caller's identity, which their handle belongs to; a member made without one has none. */
+function selfUserId(scope: EngineScope): string | undefined {
+  const { principal } = scope.access;
+  return principal.kind === 'member' ? principal.userId : undefined;
 }
 
 /** A picture we may show: an https address, or nothing (initials on a colour). */
@@ -61,6 +70,10 @@ async function readProfile(
   if (row === undefined) throw refuse('NOT_FOUND', "That workspace doesn't exist, or you're not a member of it.");
   // The member's own picture (Google's, saved at sign in), else what the session knows.
   const image = safeImage(row.avatarUrl ?? undefined) ?? safeImage(extras.image);
+  const userId = selfUserId(scope);
+  const held = userId === undefined ? undefined : (await publicProfilesOf(tx, [userId])).get(userId);
+  // While they have no handle, the field starts from a free one made from their name.
+  const suggested = held === undefined && userId !== undefined ? await suggestHandle(tx, row.name) : undefined;
   return {
     memberId,
     name: row.name,
@@ -68,6 +81,9 @@ async function readProfile(
     workspaceTimeZone: row.workspaceTimeZone,
     ...(row.timeZone === null ? {} : { timeZone: row.timeZone }),
     ...(image === undefined ? {} : { image }),
+    ...(held === undefined ? {} : { handle: held.handle }),
+    ...(suggested === undefined ? {} : { suggestedHandle: suggested }),
+    bio: held?.bio ?? '',
   };
 }
 
@@ -86,7 +102,7 @@ export async function getMyProfile(scope: EngineScope, extras: ProfileExtras = {
  */
 export async function updateMyMemberProfile(
   scope: EngineScope,
-  input: Pick<UpdateMyProfileInput, 'name' | 'timeZone'> = {},
+  input: Pick<UpdateMyProfileInput, 'name' | 'timeZone' | 'handle' | 'bio'> = {},
   extras: ProfileExtras = {},
   hooks: readonly AfterWrite[] = [],
   source: AuditSource = {},
@@ -112,15 +128,43 @@ export async function updateMyMemberProfile(
         before.timeZone = now.timeZone ?? null;
         after.timeZone = zone;
       }
+      // The handle and bio: the person's, in schema auth. An old handle keeps finding them.
+      const wanted = input.handle?.trim().toLowerCase();
+      const handle = wanted === undefined || wanted === now.handle ? undefined : wanted;
+      const given = input.bio?.trim();
+      const bio = given === undefined || given === now.bio ? undefined : given;
+      // The contract checks both at the boundary; a caller in core gets the same refusals.
+      const handleWrong = handle === undefined ? undefined : handleProblem(handle);
+      if (handleWrong !== undefined) throw refuseOn('CONFIG_INVALID', handleWrong, 'handle');
+      if (bio !== undefined && (bio.length > BIO_MAX || /[\r\n]/.test(bio))) {
+        throw refuseOn('CONFIG_INVALID', `Keep your bio to one line of ${String(BIO_MAX)} characters.`, 'bio');
+      }
+      if (handle !== undefined || bio !== undefined) {
+        const userId = selfUserId(scope);
+        if (userId === undefined) throw refuseOn('FORBIDDEN', 'Only a signed in person has a handle.', 'handle');
+        const nextHandle = handle ?? now.handle;
+        if (nextHandle === undefined) throw refuseOn('VALUE_REQUIRED', 'Pick a handle first.', 'handle');
+        await savePublicProfile(tx, userId, nextHandle, bio ?? now.bio);
+        if (handle !== undefined) {
+          before.handle = now.handle ?? null;
+          after.handle = handle;
+        }
+        if (bio !== undefined) {
+          before.bio = now.bio;
+          after.bio = bio;
+        }
+      }
       if (Object.keys(after).length === 0) return now;
-      await tx
-        .update(members)
-        .set({
-          ...(name === undefined || after.name === undefined ? {} : { name }),
-          ...('timeZone' in after ? { timeZone: zone ?? null } : {}),
-          ...touched(scope),
-        })
-        .where(and(eq(members.workspaceId, scope.workspaceId), eq(members.id, memberId)));
+      if (after.name !== undefined || 'timeZone' in after) {
+        await tx
+          .update(members)
+          .set({
+            ...(name === undefined || after.name === undefined ? {} : { name }),
+            ...('timeZone' in after ? { timeZone: zone ?? null } : {}),
+            ...touched(scope),
+          })
+          .where(and(eq(members.workspaceId, scope.workspaceId), eq(members.id, memberId)));
+      }
       await writeAudit(
         tx,
         scope.workspaceId,

@@ -603,6 +603,13 @@
       "when": 1792667173396,
       "tag": "0085_booking_page_destination_gone",
       "breakpoints": true
+    },
+    {
+      "idx": 86,
+      "version": "7",
+      "when": 1792679323242,
+      "tag": "0086_booking_handles",
+      "breakpoints": true
     }
   ]
 }

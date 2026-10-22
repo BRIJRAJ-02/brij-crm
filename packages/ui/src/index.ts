@@ -243,11 +243,16 @@ export {
   BookingFoot,
   BookingFrame,
   BookingMessage,
+  BookingProfile,
+  BookingProfileSection,
   type BookingFact,
   type BookingFootProps,
   type BookingFrameProps,
   type BookingHost,
   type BookingMessageProps,
+  type BookingProfilePerson,
+  type BookingProfileProps,
+  type BookingProfileSectionProps,
   type BookingTeam,
 } from './modules/BookingFrame/BookingFrame.tsx';
 export {

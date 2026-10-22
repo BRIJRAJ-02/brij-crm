@@ -33,6 +33,7 @@ import { writeAudit } from '../members/audit.ts';
 import { changedRuleIds, checkPageRoutes, rulesChanged } from '../routing/check.ts';
 import { actorRow } from '../engine/scope.ts';
 import type { RemovalEffect } from '../members/removal-effect.ts';
+import { ownerSlugs, publicProfilesOf } from './handles.ts';
 import { linksOf, seenLinks } from './links.ts';
 import { ROTATION_ROLES, TEAM_LIMITS } from '../rotation/team.ts';
 import { loadPage, pagesOf, type PageRecord } from './slots.ts';
@@ -158,12 +159,19 @@ async function pageHosts(
 }
 
 /** A page as the reader sees it. */
-function viewOf(scope: EngineScope, page: PageRecord, count: number, hosts?: TeamHosts): BookingPageView {
+function viewOf(
+  scope: EngineScope,
+  page: PageRecord,
+  count: number,
+  hosts: TeamHosts | undefined,
+  handle: string | undefined,
+): BookingPageView {
   return {
     id: page.id,
     publicKey: page.publicKey,
     kind: page.kind,
     ownerMemberId: page.ownerMemberId,
+    ...(handle === undefined ? {} : { handle }),
     title: page.title,
     description: page.description,
     slug: page.slug,
@@ -182,6 +190,8 @@ function viewOf(scope: EngineScope, page: PageRecord, count: number, hosts?: Tea
     scheduleName: page.scheduleName,
     rescheduleHost: page.rescheduleHost,
     isPrivate: page.isPrivate,
+    profileSection: page.profileSection,
+    profilePosition: page.profilePosition,
     ...(page.status === 'paused' && page.pausedReason !== undefined ? { pausedReason: page.pausedReason } : {}),
     ...(hosts === undefined ? {} : { hosts }),
     ...(page.kind === 'round_robin' ? { routing: { rules: [...(page.routingRules ?? [])] } } : {}),
@@ -211,7 +221,19 @@ export async function listBookingPages(
     const ids = pages.map((page) => page.id);
     const counts = await monthCounts(tx, ids, now);
     const hosts = await pageHosts(tx, pages);
-    return pages.map((page) => viewOf(scope, page, counts.get(page.id) ?? 0, hosts.get(page.id)));
+    const handles = await publicProfilesOf(
+      tx,
+      pages.map((page) => page.ownerUserId),
+    );
+    return pages.map((page) =>
+      viewOf(
+        scope,
+        page,
+        counts.get(page.id) ?? 0,
+        hosts.get(page.id),
+        page.ownerUserId === null ? undefined : handles.get(page.ownerUserId)?.handle,
+      ),
+    );
   });
 }
 
@@ -232,7 +254,13 @@ export async function getBookingPage(
 async function viewWithCounts(tx: WorkspaceTx, scope: EngineScope, page: PageRecord, now: Date) {
   const counts = await monthCounts(tx, [page.id], now);
   const hosts = await pageHosts(tx, [page]);
-  return viewOf(scope, page, counts.get(page.id) ?? 0, hosts.get(page.id));
+  return viewOf(scope, page, counts.get(page.id) ?? 0, hosts.get(page.id), await ownerHandle(tx, page));
+}
+
+/** The page owner's handle, when they have one: the page's address is then `/<handle>/<slug>`. */
+async function ownerHandle(tx: WorkspaceTx, page: Pick<PageRecord, 'ownerUserId'>): Promise<string | undefined> {
+  if (page.ownerUserId === null) return undefined;
+  return (await publicProfilesOf(tx, [page.ownerUserId])).get(page.ownerUserId)?.handle;
 }
 
 const HOSTS_INVALID = 'A round robin page needs 1 to 3 rotations and at most 8 hosts in all.';
@@ -321,23 +349,34 @@ export function checkDurations(durations: readonly number[] | undefined): void {
   }
 }
 
-/** A slug free among the workspace's live pages: the wanted one, else it with -2, -3 … */
-async function freeSlug(tx: WorkspaceTx, wanted: string): Promise<string> {
+/**
+ * A slug free among the owner's live pages, so `/<handle>/<slug>` names one page: in this workspace, and in every
+ * workspace their identity has pages in (`crm_booking_owner_slugs`). The wanted one, else it with -2, -3 …
+ */
+async function freeSlug(tx: WorkspaceTx, ownerMemberId: string, wanted: string): Promise<string> {
   const base = wanted.slice(0, 56).replace(/-+$/, '');
-  const taken = new Set(
-    (
-      await tx
-        .select({ slug: bookingPages.slug })
-        .from(bookingPages)
-        .where(and(isNull(bookingPages.deletedAt), like(bookingPages.slug, `${base}%`)))
-    ).map((row) => row.slug),
-  );
+  const [owner] = await tx.select({ userId: members.userId }).from(members).where(eq(members.id, ownerMemberId));
+  const here = await tx
+    .select({ slug: bookingPages.slug })
+    .from(bookingPages)
+    .where(
+      and(
+        isNull(bookingPages.deletedAt),
+        eq(bookingPages.ownerMemberId, ownerMemberId),
+        like(bookingPages.slug, `${base}%`),
+      ),
+    );
+  const elsewhere = owner?.userId === null || owner === undefined ? [] : await ownerSlugs(tx, owner.userId, base);
+  const taken = new Set([...here.map((row) => row.slug), ...elsewhere]);
   if (!taken.has(wanted)) return wanted;
   for (let n = 2; ; n += 1) if (!taken.has(`${base}-${String(n)}`)) return `${base}-${String(n)}`;
 }
 
-/** A slug refusal for a taken slug, on the `slug` field. */
-const slugTaken = () => refuseOn('SLUG_TAKEN', 'Another booking page in this workspace has that web address.', 'slug');
+/** A slug refusal for a taken slug, on the `slug` field: the owner has another page at that address. */
+const slugTaken = () => refuseOn('SLUG_TAKEN', 'You have another booking page at that address.', 'slug');
+
+/** The unique indexes a taken slug is refused on: the owner's in this workspace, and the owner's everywhere. */
+const SLUG_CONSTRAINTS: ReadonlySet<string | undefined> = new Set(['booking_pages_slug', 'booking_pages_owner_slug']);
 
 /**
  * A new page for the caller (AC-623): the settings given, the rest
@@ -373,7 +412,7 @@ export async function createBookingPage(
     const settings: BookingPageSettings = {
       title: input.title,
       description: given.description ?? '',
-      slug: given.slug ?? (await freeSlug(tx, slugFromTitle(input.title))),
+      slug: given.slug ?? (await freeSlug(tx, owner, slugFromTitle(input.title))),
       durations: given.durations ?? [30],
       location: given.location ?? { type: 'video' },
       bufferBefore: given.bufferBefore ?? 0,
@@ -386,6 +425,8 @@ export async function createBookingPage(
       scheduleId: given.scheduleId ?? null,
       rescheduleHost: given.rescheduleHost ?? 'same',
       isPrivate: given.isPrivate ?? false,
+      profileSection: given.profileSection ?? null,
+      profilePosition: given.profilePosition ?? 0,
     };
     if (settings.scheduleId !== null) await checkPageSchedule(tx, owner, settings.scheduleId);
     const by = actorRow(scope.actor);
@@ -417,6 +458,8 @@ export async function createBookingPage(
           hoursMode: settings.scheduleId === null ? 'mine' : 'own',
           rescheduleHost: settings.rescheduleHost,
           isPrivate: settings.isPrivate,
+          profileSection: settings.profileSection,
+          profilePosition: settings.profilePosition,
           createdByType: by.type,
           createdById: by.id,
           createdByMemberId: by.memberId,
@@ -437,9 +480,9 @@ export async function createBookingPage(
         .values({ workspaceId: scope.workspaceId, pageId: row.id, memberId: owner, position: 0 });
       const [page] = await pagesOf(tx, [row]);
       if (page === undefined) throw new Error('The booking page was not created.');
-      return viewOf(scope, page, 0);
+      return viewOf(scope, page, 0, undefined, await ownerHandle(tx, page));
     } catch (error) {
-      if (postgresError(error)?.constraint === 'booking_pages_slug') throw slugTaken();
+      if (SLUG_CONSTRAINTS.has(postgresError(error)?.constraint)) throw slugTaken();
       throw error;
     }
   });
@@ -507,6 +550,8 @@ export async function updateBookingPage(
             : { scheduleId: settings.scheduleId, hoursMode: settings.scheduleId === null ? 'mine' : 'own' }),
           ...(settings.rescheduleHost === undefined ? {} : { rescheduleHost: settings.rescheduleHost }),
           ...(settings.isPrivate === undefined ? {} : { isPrivate: settings.isPrivate }),
+          ...(settings.profileSection === undefined ? {} : { profileSection: settings.profileSection }),
+          ...(settings.profilePosition === undefined ? {} : { profilePosition: settings.profilePosition }),
           ...(routing === undefined ? {} : { routing }),
           updatedAt: sql`now()`,
           updatedByType: by.type,
@@ -519,7 +564,7 @@ export async function updateBookingPage(
       if (changed === undefined) throw refuse('NOT_FOUND', NOT_FOUND_MESSAGE);
       return await viewWithCounts(tx, scope, changed, now);
     } catch (error) {
-      if (postgresError(error)?.constraint === 'booking_pages_slug') throw slugTaken();
+      if (SLUG_CONSTRAINTS.has(postgresError(error)?.constraint)) throw slugTaken();
       throw error;
     }
   });

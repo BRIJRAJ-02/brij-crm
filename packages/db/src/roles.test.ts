@@ -305,6 +305,10 @@ describe("migration 0018's closing check", () => {
     // And migration 0083's address claim, with its own closing check.
     'revoke all on auth.workspace_addresses from crm_address',
     'revoke all (workspace_id, slug) on auth.workspace_directory from crm_address',
+    // And migration 0086's handles, with their own closing check.
+    'revoke all on auth.public_handles, auth.public_profiles from crm_handle',
+    'revoke all (handle, bio, updated_at) on auth.public_profiles from crm_handle',
+    'revoke all (id, name, image) on auth."user" from crm_handle',
   ];
 
   /** Runs `sql` (the check) after `setup`, in a transaction that is rolled back, so nothing outlives the test. */

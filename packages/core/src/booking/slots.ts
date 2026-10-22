@@ -40,6 +40,8 @@ export interface PageRecord extends BookingPageSettings {
   readonly publicKey: string;
   readonly kind: 'personal' | 'collective' | 'round_robin';
   readonly ownerMemberId: string;
+  /** The owner member's identity, which their handle belongs to; null for a member without one. */
+  readonly ownerUserId: string | null;
   readonly isDeleted: boolean;
   /** A private page books inside its host's holds and waives its minimum notice (spec 0027, AC-707). */
   readonly isPrivate: boolean;
@@ -89,6 +91,7 @@ export function pageOf(
     publicKey: row.publicKey,
     kind: KINDS.has(row.kind) ? (row.kind as PageRecord['kind']) : 'personal',
     ownerMemberId: row.ownerMemberId,
+    ownerUserId: row.ownerUserId,
     title: row.title,
     description: row.description,
     slug: row.slug,
@@ -109,6 +112,8 @@ export function pageOf(
     rescheduleHost: row.rescheduleHost === 'rotation' ? 'rotation' : 'same',
     isDeleted: row.deletedAt !== null,
     isPrivate: row.isPrivate,
+    profileSection: row.profileSection,
+    profilePosition: row.profilePosition,
     ...(row.pausedReason === 'host_removed' ? { pausedReason: 'host_removed' as const } : {}),
     routingRules: RoutingRules.safeParse(row.routing).data?.rules ?? [],
     createdAt: row.createdAt,

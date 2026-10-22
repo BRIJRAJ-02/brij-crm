@@ -20,6 +20,7 @@
 import { handoffSubmission, handoffVisitor } from '../forms/public.ts';
 import { randomUUID } from 'node:crypto';
 import { and, eq, inArray, sql } from 'drizzle-orm';
+import { PROFILE_PAGE_SIZE, type PublicAddress, type PublicProfile, type PublicProfileLink } from '@crm/contracts';
 import type {
   PublicBookInput,
   PublicBooking,
@@ -31,7 +32,8 @@ import type {
   PublicSlotsQuery,
 } from '@crm/contracts';
 import { schema, type WorkspaceTx } from '@crm/db';
-import type { BookingEntry } from '../access/door.ts';
+import type { BookingEntry, HandleOwner, ProfilePageEntry } from '../access/door.ts';
+import { pagePath } from './handles.ts';
 import { checkScope } from '../access/mint.ts';
 import { inWorkspace } from '../access/run.ts';
 import { postgresError, refuse, refuseOn } from '../engine/refusals.ts';
@@ -65,9 +67,9 @@ import {
   type BookingRouting,
 } from '../routing/booking.ts';
 import { enqueueBookingMail, recordEvent } from './mail-queue.ts';
-import { ensureManageToken, manageTokenFor, type ManageLinkKey } from './tokens.ts';
+import { ensureManageToken, managePath, manageTokenFor, type ManageLinkKey } from './tokens.ts';
 
-const { bookingHosts, bookings, members, workspaces } = schema;
+const { bookingHosts, bookingPages, bookings, members, workspaces } = schema;
 
 /** What the public services need: the calendar calls, the manage link key, and the clock. */
 export interface PublicBookingDeps {
@@ -180,6 +182,7 @@ export async function getPublicBookingPage(entry: BookingEntry): Promise<PublicB
   return inWorkspace(entry.scope, async (tx) => {
     const page = await livePage(tx, entry);
     const team = await loadTeam(tx, page);
+    const path = await pagePath(tx, page);
     return {
       publicKey: page.publicKey,
       title: page.title,
@@ -191,8 +194,120 @@ export async function getPublicBookingPage(entry: BookingEntry): Promise<PublicB
       hostTimeZone: page.availability.timeZone,
       windowDays: page.windowDays,
       ...(team === undefined ? {} : { team: await teamAvatars(tx, team) }),
+      // Once the owner has a handle, a plain `/b/<key>` visit moves to `/<handle>/<slug>`.
+      ...(path.startsWith('/b/') ? {} : { path }),
     };
   });
+}
+
+/**
+ * The page a handle address names (22 Oct 2026), by its public key, and the owner's current handle: the public
+ * page then reads it as `/b/<key>` does, closed or not. A deleted page is NOT_FOUND.
+ */
+export async function readAddressedPage(entry: BookingEntry & { readonly handle: string }): Promise<PublicAddress> {
+  checkEntry(entry);
+  return inWorkspace(entry.scope, async (tx) => {
+    const page = await loadPage(tx, entry.pageId);
+    if (page === undefined || page.isDeleted) throw refuse('NOT_FOUND', 'This page is no longer available.');
+    return { publicKey: page.publicKey, handle: entry.handle };
+  });
+}
+
+/** Up to two initials of a name, for an avatar without a picture. */
+function profileInitials(name: string, handle: string): string {
+  return initialsOf(name) || handle.slice(0, 1).toUpperCase();
+}
+
+/** A picture a public page may show: an https address, or none. */
+function httpsImage(image: string | undefined): string | undefined {
+  if (image === undefined) return undefined;
+  try {
+    return new URL(image).protocol === 'https:' ? image : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+/**
+ * A profile (22 Oct 2026): the person, and one page of their Public links as the door listed them, in its order
+ * (read `PROFILE_PAGE_SIZE + 1` to know there is more). Each workspace's pages are read in one transaction under
+ * the first of its entries, every entry checked first. The name is the account's, else the owner member's on the
+ * first link, else the handle; never an email.
+ */
+export async function readBookingProfile(found: {
+  readonly owner: HandleOwner;
+  readonly pages: readonly ProfilePageEntry[];
+}): Promise<PublicProfile> {
+  const listed = found.pages.slice(0, PROFILE_PAGE_SIZE);
+  for (const entry of listed) checkEntry(entry);
+  const byWorkspace = new Map<string, ProfilePageEntry[]>();
+  for (const entry of listed) {
+    const group = byWorkspace.get(entry.scope.workspaceId) ?? [];
+    group.push(entry);
+    byWorkspace.set(entry.scope.workspaceId, group);
+  }
+  const links = new Map<string, PublicProfileLink>();
+  const ownerNames = new Map<string, string>();
+  for (const group of byWorkspace.values()) {
+    const [first] = group;
+    if (first === undefined) continue;
+    await inWorkspace(first.scope, async (tx) => {
+      const rows = await tx
+        .select({
+          id: bookingPages.id,
+          slug: bookingPages.slug,
+          title: bookingPages.title,
+          description: bookingPages.description,
+          durations: bookingPages.durations,
+          kind: bookingPages.kind,
+          section: bookingPages.profileSection,
+          ownerName: members.name,
+        })
+        .from(bookingPages)
+        .innerJoin(
+          members,
+          and(eq(members.workspaceId, bookingPages.workspaceId), eq(members.id, bookingPages.ownerMemberId)),
+        )
+        .where(
+          inArray(
+            bookingPages.id,
+            group.map((entry) => entry.pageId),
+          ),
+        );
+      for (const row of rows) {
+        ownerNames.set(row.id, row.ownerName);
+        links.set(row.id, {
+          slug: row.slug,
+          title: row.title,
+          description: row.description,
+          durations: row.durations,
+          isTeam: row.kind === 'round_robin',
+          ...(row.section === null ? {} : { section: row.section }),
+        });
+      }
+    });
+  }
+  const ordered = listed.flatMap((entry) => {
+    const link = links.get(entry.pageId);
+    return link === undefined ? [] : [link];
+  });
+  const last = listed.at(-1);
+  const name =
+    found.owner.name.trim() ||
+    (listed[0] === undefined ? '' : (ownerNames.get(listed[0].pageId) ?? '')).trim() ||
+    found.owner.handle;
+  const image = httpsImage(found.owner.image);
+  return {
+    handle: found.owner.handle,
+    name,
+    initials: profileInitials(name, found.owner.handle),
+    ...(image === undefined ? {} : { image }),
+    bio: found.owner.bio,
+    links: ordered,
+    ...(found.pages.length > PROFILE_PAGE_SIZE && last !== undefined
+      ? { next: `${String(last.position)}.${last.pageId}` }
+      : {}),
+  };
 }
 
 /**
@@ -778,8 +893,10 @@ export async function readManagedBooking(
 
 /** Where the calendar entry is sent from, and the app it points back to. */
 export interface IcsOrigin {
-  /** The app's origin (`https://app.example`): the UID's domain and the guest page's address. */
+  /** The app's origin (`https://app.example`): the UID's domain, and the guest page's while `publicOrigin` is unset. */
   readonly appOrigin: string;
+  /** Where the public booking pages are served (`BOOKING_PUBLIC_ORIGIN`), when not on the app's origin. */
+  readonly publicOrigin?: string;
   readonly organizerEmail: string;
   readonly organizerName: string;
 }
@@ -804,7 +921,7 @@ export async function managedBookingIcs(
     summary: `${booking.title} with ${booking.hostName}`,
     description: booking.note ?? '',
     ...(where === undefined ? {} : { location: where }),
-    url: `${origin.appOrigin}/b/${booking.publicKey}/manage?t=${token}`,
+    url: `${origin.publicOrigin ?? origin.appOrigin}${managePath(booking.publicKey, token)}`,
     organizerEmail: origin.organizerEmail,
     organizerName: origin.organizerName,
     attendees: [{ name: booking.visitorName, email: booking.visitorEmail }],

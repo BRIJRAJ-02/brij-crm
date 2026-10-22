@@ -32,7 +32,7 @@ export interface LinkRow {
   /**
    * The muted text inline after the title: its address ("/acme/intro-call", "/f/contact-us"), or in a list
    * that is about something else, that ("Mon to Fri, 9:00 AM to 5:00 PM", Availability's pages). The search
-   * matches it.
+   * matches it. Empty draws nothing: a profile's rows (BookingProfile) are on the page they open from.
    */
   readonly address: string;
   /** Up to two lines under the title (a page's description). Left out of `density="compact"`'s one line rows. */
@@ -302,7 +302,7 @@ export function LinkList({
                       <Badge text={row.titleBadge} />
                     </span>
                   )}
-                  <span className={styles.address}>{row.address}</span>
+                  {row.address !== '' && <span className={styles.address}>{row.address}</span>}
                 </div>
                 {!isCompact && row.description !== undefined && row.description !== '' && (
                   <p className={styles.description}>{row.description}</p>

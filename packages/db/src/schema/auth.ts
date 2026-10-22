@@ -292,6 +292,53 @@ export const workspaceAddresses = auth.table(
   ],
 );
 
+/**
+ * Every public handle a person has held, their current one included (booking addresses, 22 Oct 2026): the
+ * address `/<handle>` of their profile and `/<handle>/<slug>` of each booking page. Keyed by the handle alone, so
+ * it is unique across every workspace, and an old handle keeps finding its person (the public page then moves to
+ * the current one); none is freed while its person exists. Written only through `crm_save_public_profile`
+ * (migration 0086).
+ */
+export const publicHandles = auth.table(
+  'public_handles',
+  {
+    handle: text('handle').notNull(),
+    userId: uuid('user_id').notNull(),
+    createdAt: createdAt(),
+  },
+  (t) => [
+    primaryKey({ name: 'public_handles_pkey', columns: [t.handle] }),
+    index('public_handles_user').on(t.userId),
+    check(
+      'public_handles_shape',
+      sql`${t.handle} ~ '^[a-z0-9]+(-[a-z0-9]+)*$' and char_length(${t.handle}) between 3 and 40`,
+    ),
+    foreignKey({ name: 'public_handles_user_fk', columns: [t.userId], foreignColumns: [user.id] }).onDelete('cascade'),
+  ],
+);
+
+/** A person's public profile (booking addresses): their current handle and a one line bio. */
+export const publicProfiles = auth.table(
+  'public_profiles',
+  {
+    userId: uuid('user_id').notNull(),
+    handle: text('handle').notNull(),
+    bio: text('bio').notNull().default(''),
+    updatedAt: updatedAt(),
+  },
+  (t) => [
+    primaryKey({ name: 'public_profiles_pkey', columns: [t.userId] }),
+    uniqueIndex('public_profiles_handle').on(t.handle),
+    check('public_profiles_bio', sql`char_length(${t.bio}) <= 160`),
+    foreignKey({ name: 'public_profiles_user_fk', columns: [t.userId], foreignColumns: [user.id] }).onDelete('cascade'),
+    foreignKey({
+      name: 'public_profiles_handle_fk',
+      columns: [t.handle],
+      foreignColumns: [publicHandles.handle],
+    }),
+  ],
+);
+
 /** Which workspaces a user is in, for "my workspaces". Written with the workspace, never read for access. */
 export const workspaceMembership = auth.table(
   'workspace_membership',
