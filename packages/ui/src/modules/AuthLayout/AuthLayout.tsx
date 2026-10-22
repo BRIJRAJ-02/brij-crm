@@ -36,8 +36,10 @@ export interface AuthLayoutProps {
   readonly eyebrow?: ReactNode;
   /**
    * A live preview beside the page's task (first run's WorkspacePreview): the
-   * card splits in two from `bp-page-compact` up, and is the narrow card
-   * below it. Decoration, hidden from assistive technology.
+   * page becomes the split screen, the task's panel and the preview's filling
+   * the window edge to edge from `bp-page-compact` up; below it the preview
+   * is left out and the task's panel fills the screen. Decoration, hidden
+   * from assistive technology.
    */
   readonly preview?: ReactNode;
   /** While a Skeleton stands in for the page's task (the session is still being checked): marks the card busy, so assistive tech waits for it. */
@@ -54,6 +56,12 @@ export interface AuthLayoutProps {
  * height and never the card's own, so it holds still between steps and as
  * its content grows. Kept `space-16` from each edge on a phone. `isBusy`
  * marks the card busy while a Skeleton stands in for its task.
+ *
+ * With a `preview` it is the split screen instead: no card frame (a `bare`
+ * page card), the left panel holding the mark at its top start, the task in
+ * a readable column at the same still offset, and who is signed in with the
+ * footer's actions at its foot; the right panel holding the preview, cropped
+ * at its end and foot. Left about 42% from `bp-page-compact` up.
  */
 export function AuthLayout({
   productName,
@@ -67,40 +75,76 @@ export function AuthLayout({
   preview,
   isBusy = false,
 }: AuthLayoutProps) {
+  const brand = (
+    <header className={styles.brand}>
+      {logo === undefined ? (
+        <>
+          <Avatar name={productName} hue="ink" shape="square" size="md" isDecorative />
+          <span className={styles.name}>{productName}</span>
+        </>
+      ) : (
+        // Both are in the page; CSS shows the one for the theme, and the other is out of the accessibility tree.
+        <>
+          <img className={styles.logo} data-scheme="light" src={logo.light} alt={productName} />
+          <img className={styles.logo} data-scheme="dark" src={logo.dark} alt={productName} />
+        </>
+      )}
+    </header>
+  );
+  const footerRow =
+    footer === undefined && account === undefined ? undefined : (
+      <div className={styles.footer}>
+        {account !== undefined && <span className={styles.account}>{strings.signedInAs(account)}</span>}
+        {footer !== undefined && <span className={styles.actions}>{footer}</span>}
+      </div>
+    );
+
+  if (preview !== undefined) {
+    // The split screen (owner, 22 October 2026: "make left and right full screen"): the task's panel and the
+    // preview's fill the window edge to edge, with no card around them.
+    return (
+      <div className={styles.screen} data-split="">
+        <div className={styles.panel}>
+          {brand}
+          <div className={styles.task}>
+            <div className={styles.column}>
+              <Card
+                placement="page"
+                size="sm"
+                tone="bare"
+                title={title}
+                isBusy={isBusy}
+                {...(description === undefined ? {} : { description })}
+                {...(eyebrow === undefined ? {} : { eyebrow })}
+              >
+                {children}
+              </Card>
+            </div>
+          </div>
+          {footerRow !== undefined && (
+            <div className={styles.panelFoot}>
+              <div className={styles.column}>{footerRow}</div>
+            </div>
+          )}
+        </div>
+        <div className={styles.side} aria-hidden="true" inert>
+          {preview}
+        </div>
+      </div>
+    );
+  }
+
   return (
-    <div className={styles.root} data-split={preview === undefined ? undefined : ''}>
-      <header className={styles.brand}>
-        {logo === undefined ? (
-          <>
-            <Avatar name={productName} hue="ink" shape="square" size="md" isDecorative />
-            <span className={styles.name}>{productName}</span>
-          </>
-        ) : (
-          // Both are in the page; CSS shows the one for the theme, and the other is out of the accessibility tree.
-          <>
-            <img className={styles.logo} data-scheme="light" src={logo.light} alt={productName} />
-            <img className={styles.logo} data-scheme="dark" src={logo.dark} alt={productName} />
-          </>
-        )}
-      </header>
+    <div className={styles.root}>
+      {brand}
       <Card
         placement="page"
         size="sm"
         title={title}
         isBusy={isBusy}
         {...(description === undefined ? {} : { description })}
-        {...(footer === undefined && account === undefined
-          ? {}
-          : {
-              footer: (
-                <div className={styles.footer}>
-                  {account !== undefined && <span className={styles.account}>{strings.signedInAs(account)}</span>}
-                  {footer !== undefined && <span className={styles.actions}>{footer}</span>}
-                </div>
-              ),
-            })}
+        {...(footerRow === undefined ? {} : { footer: footerRow })}
         {...(eyebrow === undefined ? {} : { eyebrow })}
-        {...(preview === undefined ? {} : { preview })}
       >
         {children}
       </Card>

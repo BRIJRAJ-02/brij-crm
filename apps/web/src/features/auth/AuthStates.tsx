@@ -12,7 +12,7 @@ import { PRODUCT_LOGO } from '../../brand.ts';
 /**
  * Sign in's split card, the frame first run continues in (spec 0036): the
  * calm, empty sketch of the app beside the task, which first run then fills
- * in. No step count here; the count starts at first run's Step 1 of 5.
+ * in. No step count here; the count starts at first run's Step 1 of 4.
  */
 export function signInFrame() {
   return { preview: <WorkspacePreview workspaceName="" personName="" /> } as const;

@@ -17,7 +17,7 @@ afterEach(() => {
   shown = undefined;
 });
 
-/** The page's card: the split one carries `data-split` on the layout around it. */
+/** The page's frame: the split screen carries `data-split` on its root. */
 const isSplit = () => document.querySelector('[data-split]') !== null;
 
 describe('AuthError', () => {

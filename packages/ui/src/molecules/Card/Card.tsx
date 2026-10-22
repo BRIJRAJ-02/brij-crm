@@ -20,8 +20,13 @@ interface CardBase {
   readonly actions?: ReactNode;
   /** A footer under a hairline: a settings card's Save, a tile's link. */
   readonly footer?: ReactNode;
-  /** `default` on the raised surface; `sunken` for a quieter group inside a page. */
-  readonly tone?: 'default' | 'sunken';
+  /**
+   * `default` on the raised surface; `sunken` for a quieter group inside a
+   * page; `bare` with no frame at all (no hairline, corners, shadow or
+   * surface), for a page card that a full screen layout already frames
+   * (AuthLayout's split screen): its heading, body and states stay the card's.
+   */
+  readonly tone?: 'default' | 'sunken' | 'bare';
   /** While a Skeleton stands in for its content: marks the card busy, so assistive tech waits for it. */
   readonly isBusy?: boolean;
 }

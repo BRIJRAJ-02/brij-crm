@@ -97,14 +97,16 @@ export const Narrow: Story = {
 
 /** First run's steps, as Steps' count names them. */
 const FIRST_RUN = [
-  { id: 'about', label: 'About you' },
+  { id: 'about', label: 'Your name' },
   { id: 'workspace', label: 'Your workspace' },
   { id: 'calendar', label: 'Connect your calendar' },
 ];
 
 /**
- * Split (first run, spec 0036): from 1024px up, the step on the left and the workspace's sketch on the right, Back and
- * the step count above the title, and who is signed in at the foot beside Sign out. Narrower, the sketch is left out.
+ * Split (first run, spec 0036; full screen since 22 October 2026): from 1024px up the window splits edge to edge, the
+ * step's panel on the left (the mark at its top, Back and the step count above the title, who is signed in at its
+ * foot beside Sign out) and the workspace's sketch filling the right. Narrower, the sketch is left out and the
+ * step's panel is the whole screen.
  */
 export const Split: Story = {
   args: {
@@ -125,5 +127,7 @@ export const Split: Story = {
     await expect(canvas.getByText('Step 2 of 3')).toBeInTheDocument();
     await expect(canvas.getByText('Signed in as maya@halcyonlabs.io')).toBeInTheDocument();
     await expect(canvas.getByRole('button', { name: 'Back' })).toBeInTheDocument();
+    // No card frame around the task: the panels are the frame.
+    await expect(canvas.getByRole('main')).toHaveAttribute('data-tone', 'bare');
   },
 };
