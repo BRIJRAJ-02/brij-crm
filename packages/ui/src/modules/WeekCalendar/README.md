@@ -27,7 +27,7 @@ New. Nothing in the library places things on a time axis. Board and DataGrid are
 
 - An hour is `--size-toolbar` tall; the body shows twelve hours at a time and scrolls. Each hour's label sits centred on its line. It opens with `scrollToMinute` a quarter hour below its top, so that hour's label shows whole (the screen passes the hour before now, or the start of the member's day, always on the hour).
 - Each day's head is its weekday over its date. Today's date is a small accent circle and its weekday is in the link colour, as Google Calendar marks today; its column is not tinted (the owner, 22 October 2026). The picked day's date has the selected surface.
-- `allDay` items sit in a row of their own over the hours, labelled All day, shown only when there are some: each a chip in its calendar's hue, one per day it covers, that opens its card like a block (its name says "all day" and the day). On one day (narrow) the row shows that day alone.
+- `allDay` items sit in a row of their own over the hours, labelled All day, shown only when there are some: each a chip in its calendar's hue, one per day it covers, that opens its card like a block (its name says "all day" and the day). On one day (narrow) the row shows that day alone. The row is capped at three chips' height (`ALL_DAY_CAP`): a day with more shows two and a quiet "+N more" chip, which opens the rest as a list (a Menu in a Popover, under the chip, as the grid's "+N" does), and choosing one opens its card on the chip. Why a list rather than growing the row: a busy week would push the hours off screen, and the grid's own folded blocks already open this way, so one pattern does both.
 - `openHours(dayKey)` gives the member's open hours; the hours outside them are shaded `--surface-subtle`, the hour lines carrying on through, under everything drawn on the grid. Undefined shades nothing that day; an empty list shades the whole day (a day off). Why a prop: only the screen knows the member's availability.
 - `emptyHint` ("No meetings this week") is one quiet line in the middle of the grid while the week has no blocks and nothing all day; it never takes the pointer, so drawing still works under it. Why: an empty week is not an error or a first run, so it gets a hint, not an EmptyState.
 - A short block (under 45 minutes) puts its title and time on one line; from 75 minutes it shows `detail` (the guest) on a third. A quarter hour (under 30 minutes) is shorter than a label's line, so its one line is centred in the block and clipped at its edge, with no brand mark and tighter corners, the way Google Calendar draws a 15 minute event: its words never run over its border (the owner, 21 October 2026).
@@ -52,7 +52,7 @@ Blocks (bookings, events, closed and busy time) of every length, a quarter hour 
 
 - One day column is in the tab order.
 - Left and Right move to the previous or next day (and select it).
-- Up and Down move between that day's blocks.
+- Up and Down move between that day's all day chips (top to bottom, "+N more" last), then its blocks and "+N" chips by start: the order they read down the screen. The chips are not tab stops; Left and Right on a chip move to the day before or after it, as on its column.
 - Enter or Space on a day (not on a block) draws a span there, when drawing is on.
 - Enter or Space opens the focused block.
 - Escape closes its card.

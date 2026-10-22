@@ -95,8 +95,17 @@ function MonthHeader() {
   );
 }
 
-/** The month grid. Today's dot comes from the provider's clock, not React Aria's own reading of the machine's date. */
-function Grid({ today }: { readonly today: CalendarDate }) {
+/**
+ * The month grid. Today's dot comes from the provider's clock, not React Aria's own reading of the machine's date.
+ * `shown` (MonthCalendar's) tints the days the view beside it shows, its ends rounded.
+ */
+function Grid({
+  today,
+  shown,
+}: {
+  readonly today: CalendarDate;
+  readonly shown?: { readonly start: CalendarDate; readonly end: CalendarDate } | undefined;
+}) {
   return (
     <CalendarGrid className={styles.grid} weekdayStyle="short">
       <CalendarGridHeader>
@@ -104,7 +113,15 @@ function Grid({ today }: { readonly today: CalendarDate }) {
       </CalendarGridHeader>
       <CalendarGridBody>
         {(date) => (
-          <CalendarCell date={date} className={styles.day}>
+          <CalendarCell
+            date={date}
+            className={styles.day}
+            data-shown={
+              shown !== undefined && date.compare(shown.start) >= 0 && date.compare(shown.end) <= 0 ? '' : undefined
+            }
+            data-shown-start={shown !== undefined && isSameDay(date, shown.start) ? '' : undefined}
+            data-shown-end={shown !== undefined && isSameDay(date, shown.end) ? '' : undefined}
+          >
             {({ formattedDate }) => (
               <>
                 {formattedDate}
@@ -352,6 +369,11 @@ export interface MonthCalendarProps {
   /** The chosen day, `YYYY-MM-DD`. */
   readonly value: DateString;
   readonly onChange: (value: DateString) => void;
+  /**
+   * The days the view beside it shows (the week on screen, `YYYY-MM-DD` to `YYYY-MM-DD`, both ends kept), tinted as
+   * one band, as Google Calendar's small month marks its week.
+   */
+  readonly shown?: { readonly start: DateString; readonly end: DateString };
 }
 
 /**
@@ -359,7 +381,7 @@ export interface MonthCalendarProps {
  * date beside a view (Bookings' calendars panel, as Google Calendar keeps one over its calendars). The month, its
  * arrows, its keys, today's dot and the chosen day are DatePicker's; the days are shorter, to fit a side column.
  */
-export function MonthCalendar({ label, value, onChange }: MonthCalendarProps) {
+export function MonthCalendar({ label, value, onChange, shown }: MonthCalendarProps) {
   const today = useToday();
   const { weekStart } = useFormatSettings();
   return (
@@ -375,7 +397,10 @@ export function MonthCalendar({ label, value, onChange }: MonthCalendarProps) {
       {...firstDay(weekStart)}
     >
       <MonthHeader />
-      <Grid today={today} />
+      <Grid
+        today={today}
+        shown={shown === undefined ? undefined : { start: parseDate(shown.start), end: parseDate(shown.end) }}
+      />
     </Calendar>
   );
 }

@@ -65,6 +65,30 @@ export const Week: Story = {
   },
 };
 
+/**
+ * At a phone's width: each day and its Copy on one line, the times under them; a day off keeps one line, its
+ * Unavailable in the times' column right after the day, never at the line's end.
+ */
+export const Phone: Story = {
+  parameters: { crm: { screenshot: false } },
+  render: (args) => (
+    <Stage width="phone">
+      <HoursEditor {...args} rows={weekRows()} />
+    </Stage>
+  ),
+  play: async ({ canvas }) => {
+    const [saturday, sunday] = canvas.getAllByText('Unavailable');
+    const day = canvas.getByRole('switch', { name: 'Saturday' }).closest('li');
+    if (saturday === undefined || sunday === undefined || day === null) throw new Error('no day off');
+    const row = day.getBoundingClientRect();
+    const label = saturday.getBoundingClientRect();
+    // On the day's own line, starting in the left half (the times' column), not pushed to the end.
+    await expect(label.top).toBeLessThan(row.top + row.height / 2);
+    await expect(label.left - row.left).toBeLessThan(row.width / 2);
+    await expect(Math.round(label.left)).toBe(Math.round(sunday.getBoundingClientRect().left));
+  },
+};
+
 /** While the hours load: each day's row and Set all days in place, busy, with a skeleton where the times go. */
 export const Loading: Story = {
   parameters: { crm: { screenshot: false } },

@@ -48,6 +48,12 @@
     min-inline-size: 0;
   }
 
+  /* A one calendar account's provider mark, after the name, where a folded account's heading carries it. */
+  .mark {
+    display: flex;
+    flex: none;
+  }
+
   .options {
     display: flex;
   }

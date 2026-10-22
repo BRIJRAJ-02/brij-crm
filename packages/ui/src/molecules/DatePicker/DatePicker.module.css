@@ -273,6 +273,28 @@
     letter-spacing: var(--tracking-label);
   }
 
+  /* The days the view beside it shows: one band in the selected surface, its ends rounded, the chosen day still accent. */
+  .calendar[data-inline] .day[data-shown]:not([data-selected]) {
+    border-radius: 0;
+    background: var(--surface-selected);
+  }
+
+  .calendar[data-inline] .day[data-shown-start]:not([data-selected]) {
+    border-start-start-radius: var(--radius-sm);
+    border-end-start-radius: var(--radius-sm);
+  }
+
+  .calendar[data-inline] .day[data-shown-end]:not([data-selected]) {
+    border-start-end-radius: var(--radius-sm);
+    border-end-end-radius: var(--radius-sm);
+  }
+
+  @media (hover: hover) and (pointer: fine) {
+    .calendar[data-inline] .day[data-shown][data-hovered]:not([data-selected]) {
+      background: var(--surface-hover);
+    }
+  }
+
   .quick {
     display: flex;
     flex-wrap: wrap;

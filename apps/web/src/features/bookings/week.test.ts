@@ -10,6 +10,7 @@ import {
   piecesOf,
   rangeLabel,
   scrollMinute,
+  shownWeek,
   weekDays,
   weekOf,
 } from './week.ts';
@@ -91,5 +92,15 @@ describe('allDayKeys', () => {
       '2026-10-25',
     ]);
     expect(allDayKeys({ startsAt: '2026-10-26T00:00:00.000Z', endsAt: '2026-10-27T00:00:00.000Z' }, days)).toEqual([]);
+  });
+});
+
+describe('the week on the small month', () => {
+  it('is its first and last day', () => {
+    expect(shownWeek(weekDays('2026-10-19'))).toEqual({ shown: { start: '2026-10-19', end: '2026-10-25' } });
+  });
+
+  it('is nothing for no days', () => {
+    expect(shownWeek([])).toEqual({});
   });
 });

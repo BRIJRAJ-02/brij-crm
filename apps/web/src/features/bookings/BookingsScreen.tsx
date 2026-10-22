@@ -81,6 +81,7 @@ import {
   piecesOf,
   rangeLabel,
   scrollMinute,
+  shownWeek,
   timeRange,
   weekDays,
   weekOf,
@@ -768,6 +769,8 @@ function WeekView(props: BookingsCalendarScreenProps) {
       jumpTo={{
         value: days.includes(search.day) ? search.day : (days[0] ?? search.week),
         onChange: (day) => onSearch({ week: weekOf(day, firstDay), day }),
+        // The week on screen, tinted on the month.
+        ...shownWeek(days),
       }}
     >
       {content}

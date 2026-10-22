@@ -39,14 +39,19 @@ export interface CalendarListProps {
   readonly label?: string;
 }
 
-/** One calendar's row: its box in its colour, its name, and its options, shown on hover or focus. */
+/**
+ * One calendar's row: its box in its colour, its name, and its options, shown on hover or focus. A one calendar
+ * account's row carries its provider's mark after the name, as a folded account carries it on its heading.
+ */
 function Row({
   calendar,
+  provider,
   shownCount,
   onShownChange,
   onShowOnly,
 }: {
   readonly calendar: CalendarListCalendar;
+  readonly provider?: ProviderName;
   readonly shownCount: number;
   readonly onShownChange: CalendarListProps['onShownChange'];
   readonly onShowOnly: CalendarListProps['onShowOnly'];
@@ -64,6 +69,11 @@ function Row({
           onChange={(isShown) => onShownChange(calendar.id, isShown)}
         />
       </span>
+      {provider !== undefined && (
+        <span className={styles.mark}>
+          <ProviderMark provider={provider} size="sm" isLabelled />
+        </span>
+      )}
       {canShowOnly && (
         <span className={styles.options}>
           <MenuTrigger>
@@ -87,7 +97,7 @@ function Row({
 
 /**
  * The member's calendars, as Google Calendar lists them beside its grid: a small label, then each calendar a
- * plain checkbox, its colour as a dot and its name (cut with an ellipsis when long). An account with one calendar is that one row; an account with
+ * plain checkbox, its colour as a dot and its name (cut with an ellipsis when long). An account with one calendar is that one row, its provider's mark after the name; an account with
  * two or more folds under its provider's mark and address. Each row's options (Show only this) show on hover or
  * focus, and always on touch. Show all follows the list while any calendar is hidden. Which calendar takes new
  * bookings is a setting, so it lives in Settings, not here.
@@ -100,10 +110,11 @@ export function CalendarList({ accounts, onShownChange, onShowOnly, onShowAll, l
   );
   const singles = accounts.filter((account) => account.calendars.length === 1);
   const groups = accounts.filter((account) => account.calendars.length > 1);
-  const row = (calendar: CalendarListCalendar) => (
+  const row = (calendar: CalendarListCalendar, provider?: ProviderName) => (
     <Row
       key={calendar.id}
       calendar={calendar}
+      {...(provider === undefined ? {} : { provider })}
       shownCount={shownCount}
       onShownChange={onShownChange}
       onShowOnly={onShowOnly}
@@ -113,7 +124,9 @@ export function CalendarList({ accounts, onShownChange, onShowOnly, onShowAll, l
     <div className={styles.root}>
       <h2 className={styles.label}>{label ?? strings.label}</h2>
       {singles.length > 0 && (
-        <ul className={styles.list}>{singles.flatMap((account) => account.calendars.map(row))}</ul>
+        <ul className={styles.list}>
+          {singles.flatMap((account) => account.calendars.map((calendar) => row(calendar, account.provider)))}
+        </ul>
       )}
       {groups.map((account) => (
         <Disclosure
@@ -123,7 +136,7 @@ export function CalendarList({ accounts, onShownChange, onShowOnly, onShowAll, l
           variant="label"
           defaultExpanded
         >
-          <ul className={styles.list}>{account.calendars.map(row)}</ul>
+          <ul className={styles.list}>{account.calendars.map((calendar) => row(calendar))}</ul>
         </Disclosure>
       ))}
       {/* At the end, so the rows never move under the pointer when it comes and goes. */}
