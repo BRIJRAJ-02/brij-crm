@@ -100,6 +100,12 @@ export interface DataGridProps<Row> {
   /** The column that names a row; always first. */
   readonly rowHeader: string;
   /**
+   * The headers leave out their read only lock. For a grid whose every column is read only through its
+   * attribute (the trash), where a lock on each header only repeats what the screen already says. It changes no
+   * cell: a column still edits or not by its attribute.
+   */
+  readonly hideColumnLocks?: boolean;
+  /**
    * What a row with no name is called ("Unnamed person"): drawn muted in its
    * row header, and read as its name. "Untitled" when absent.
    */
@@ -307,6 +313,7 @@ export function DataGrid<Row>({
   getValue,
   getDisplay,
   rowHeader,
+  hideColumnLocks = false,
   untitled = strings.untitled,
   rowAvatar,
   selection,
@@ -1467,6 +1474,7 @@ export function DataGrid<Row>({
       sortColumn={sort?.columnId}
       sortDirection={sort?.direction}
       addColumn={addColumn}
+      hideColumnLocks={hideColumnLocks}
     />
   );
 
@@ -1852,6 +1860,8 @@ interface GridHeaderProps {
   readonly sortDirection: 'ascending' | 'descending' | undefined;
   /** The "+" header after the last column (spec 0012): its drawn column, name, whether focus is on it, and its press. */
   readonly addColumn: AddColumnHeader | undefined;
+  /** The headers leave out their read only lock. */
+  readonly hideColumnLocks: boolean;
 }
 
 /** The "+" header after the last column. */
@@ -1881,6 +1891,7 @@ const GridHeader = memo(function GridHeader({
   sortColumn,
   sortDirection,
   addColumn,
+  hideColumnLocks,
 }: GridHeaderProps) {
   const runOf = (id: string) => layout.columns.findIndex((each) => each.id === id) < layout.pinnedCount;
   const canMove = (id: string, direction: -1 | 1) => moveColumn(layout, id, direction) !== layout;
@@ -1955,6 +1966,7 @@ const GridHeader = memo(function GridHeader({
               }}
               actions={handlers.actionsFor(each.column)}
               dropSide={over?.id === each.column.id ? over.side : undefined}
+              hideLock={hideColumnLocks}
             />,
           ];
         })}

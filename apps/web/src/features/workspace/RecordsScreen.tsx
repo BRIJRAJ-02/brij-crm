@@ -25,6 +25,7 @@ import { useLiveStatus, usePendingOptions, useView } from '@crm/data/react';
 import {
   Badge,
   Button,
+  ButtonLink,
   Callout,
   EmptyState,
   isSystemOnly,
@@ -43,6 +44,8 @@ import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { ArchiveAttributeDialog } from '../settings/ArchiveAttributeDialog.tsx';
 import { AttributeDialog } from '../settings/AttributeDialog.tsx';
 import { useLinkEditing } from '../records/links.ts';
+import { importHref } from '../imports/paths.ts';
+import { strings as importStrings } from '../imports/strings.ts';
 import { strings as attributeStrings } from '../settings/attribute-strings.ts';
 import { useBulkActions, useTableSelection } from './BulkActions.tsx';
 import type { ShownColumn, ShownLayout } from '../views/layout.ts';
@@ -177,7 +180,7 @@ function columnsFor(
  * only those the field set edits in a form here (no system values, and no
  * references or members yet, #15).
  */
-function createEditors(
+export function createEditors(
   object: ObjectSummary,
   attributes: readonly AttributeDefinition[],
 ): { readonly first: readonly AttributeDefinition[]; readonly more: readonly AttributeDefinition[] } {
@@ -639,13 +642,21 @@ export function RecordsScreen({
                   <EmptyState
                     title={strings.emptyTitle(object.pluralName)}
                     icon={object.icon}
-                    // The top bar's New person is the one primary on the page.
+                    // The top bar's New person is the one primary on the page. An empty object is where a list
+                    // gets brought in, so Import CSV (otherwise in the view's menu) stands beside it.
                     {...(object.access === 'write'
                       ? {
                           actions: (
-                            <Button icon="plus" onPress={openCreate}>
-                              {newRecord}
-                            </Button>
+                            <>
+                              <Button icon="plus" onPress={openCreate}>
+                                {newRecord}
+                              </Button>
+                              {!object.isArchived && (
+                                <ButtonLink icon="upload" href={importHref(slug, object)}>
+                                  {importStrings.menuItem}
+                                </ButtonLink>
+                              )}
+                            </>
                           ),
                         }
                       : {})}

@@ -27,6 +27,8 @@ export const strings = {
   nextMeeting: 'Next meeting',
   enteredStage: (stage: string) => `Entered ${stage}`,
   viewAll: 'View all',
+  /** Recent activity's "View all" by its full name, apart from Open tasks' beside it. */
+  viewAllActivity: 'View all activity',
   copyLink: 'Copy link',
   linkCopied: 'Link copied',
   copyFailed: 'Couldn’t copy the link. Copy it from the address bar.',

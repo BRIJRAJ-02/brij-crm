@@ -36,6 +36,8 @@ import {
 import { useNavigate, useRouteContext } from '@tanstack/react-router';
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { AttributeDialog } from '../settings/AttributeDialog.tsx';
+import { NewRecordDialog } from '../workspace/NewRecordDialog.tsx';
+import { createEditors } from '../workspace/RecordsScreen.tsx';
 import { strings as workspaceStrings } from '../workspace/strings.ts';
 import { useCan, WorkspacePage } from '../workspace/WorkspacePage.tsx';
 import type { BoardOutcome, BoardPlan } from './plan.ts';
@@ -76,6 +78,10 @@ export interface BoardScreenProps {
   readonly layoutSwitch: ViewLayoutSwitch;
   /** The view's Toolbar (sorts, filters, Save) and any notice under it, given what to say to screen readers. */
   readonly toolbar: (announced: string | undefined) => ReactNode;
+  /** The command menu asked for a new record: the board opens its New dialog once, as the table does. */
+  readonly isCreateRequested?: boolean;
+  /** The request was taken, so the address drops it. */
+  readonly onCreateRequestTaken?: () => void;
   /** Show empty columns turned on or off: saved with the view's board settings (AC-497). */
   readonly onShowEmptyColumnsChange: (show: boolean) => void;
 }
@@ -99,8 +105,11 @@ export function BoardScreen(props: BoardScreenProps) {
     addAttributeRequest,
     onAddAttributeClosed,
     toolbar,
+    isCreateRequested = false,
+    onCreateRequestTaken,
   } = props;
-  const { data } = useRouteContext({ from: '__root__' });
+  const { data, toasts } = useRouteContext({ from: '__root__' });
+  const navigate = useNavigate();
   const live = useLiveStatus(data.live);
   const canChangeSchema = useCan('schema.manage');
   const [isAdding, setAdding] = useState(false);
@@ -116,11 +125,47 @@ export function BoardScreen(props: BoardScreenProps) {
   };
   // What a move says to screen readers ("Moved Acme renewal to Won."), through the Toolbar's status.
   const [announced, setAnnounced] = useState<string | undefined>(undefined);
+  // New <record> in the top bar, as on the table: the same dialog, so switching to the board never hides the
+  // page's one primary action. The record lands in its column through the board's own live updates.
+  const [isCreating, setCreating] = useState(false);
+  const newRecord = workspaceStrings.newRecord(object.singularName);
+  const { first: firstEditors, more: moreEditors } = useMemo(
+    () => createEditors(object, attributes),
+    [object, attributes],
+  );
+  // Asked for from the command menu: the dialog opens once (a member who may only read gets the board), and
+  // the request is handed back after, read through a ref so a new callback each render never hands it back twice.
+  const [requestSeen, setRequestSeen] = useState(false);
+  if (isCreateRequested !== requestSeen) {
+    setRequestSeen(isCreateRequested);
+    if (isCreateRequested && object.access === 'write') setCreating(true);
+  }
+  const takeRequest = useRef(onCreateRequestTaken);
+  useEffect(() => {
+    takeRequest.current = onCreateRequestTaken;
+  });
+  useEffect(() => {
+    if (isCreateRequested) takeRequest.current?.();
+  }, [isCreateRequested]);
   return (
     <WorkspacePage
       currentObject={object.apiSlug}
       page={{
-        topBar: <TopBar title={object.pluralName} icon={object.icon} hue={object.hue} />,
+        topBar: (
+          <TopBar title={object.pluralName} icon={object.icon} hue={object.hue}>
+            {object.access === 'write' && (
+              <Button
+                variant="primary"
+                icon="plus"
+                onPress={() => {
+                  setCreating(true);
+                }}
+              >
+                {newRecord}
+              </Button>
+            )}
+          </TopBar>
+        ),
         viewBar: (
           <ViewBar
             views={views}
@@ -181,6 +226,36 @@ export function BoardScreen(props: BoardScreenProps) {
               onSaved={() => {
                 // The route reads the attributes again: a status or select field makes the board.
                 closeAdding();
+              }}
+            />
+            <NewRecordDialog
+              isOpen={isCreating}
+              onOpenChange={setCreating}
+              title={newRecord}
+              first={firstEditors}
+              more={moreEditors}
+              newId={data.records.newId}
+              onCreate={(id, values) => data.records.create(slug, object.id, id, values)}
+              singularName={object.singularName}
+              objectKey={object.standardKey ?? object.apiSlug}
+              onCreated={(record) => {
+                setCreating(false);
+                // Its column may be scrolled off or hidden while empty: say it was made, with a way to it.
+                const name =
+                  record.display.name === '' ? workspaceStrings.unnamed(object.singularName) : record.display.name;
+                toasts.toast({
+                  tone: 'success',
+                  message: strings.created(name),
+                  action: {
+                    label: strings.open,
+                    onAction: () => {
+                      void navigate({
+                        to: '/w/$slug/objects/$object/$recordId/$tab',
+                        params: { slug, object: object.apiSlug, recordId: record.id, tab: 'overview' },
+                      });
+                    },
+                  },
+                });
               }}
             />
           </>

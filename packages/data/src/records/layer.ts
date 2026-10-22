@@ -1799,7 +1799,10 @@ export function createRecordsLayer({
             inner.setPins([{ id, index: 0 }, ...inner.pins().map((pin) => ({ ...pin, index: pin.index + 1 }))]);
           }
         } else {
-          if (movedIn.delete(id)) {
+          // A card moved in, or one made here whose server row says it belongs elsewhere (a default stage): it goes.
+          const wasMovedIn = movedIn.delete(id);
+          const wasMade = created.delete(id);
+          if (wasMovedIn || wasMade) {
             const at = inner.pins().find((pin) => pin.id === id)?.index ?? 0;
             inner.setPins(
               inner
@@ -1814,9 +1817,18 @@ export function createRecordsLayer({
       },
       hidesMoved: (id) => movedOut.has(id),
       withdrawn: (id) => {
-        if (!created.delete(id)) return;
-        const rest = inner.pins().filter((pin) => pin.id !== id);
-        inner.setPins(rest.map((pin) => ({ ...pin, index: pin.index - 1 })));
+        // Made here, or (on a board) moved here before the create answered: either pin goes.
+        const wasMade = created.delete(id);
+        const wasMovedIn = movedIn.delete(id);
+        if (!wasMade && !wasMovedIn) return;
+        // Only the pins below it move up one; one above (a newer draft) keeps its place.
+        const at = inner.pins().find((pin) => pin.id === id)?.index ?? 0;
+        inner.setPins(
+          inner
+            .pins()
+            .filter((pin) => pin.id !== id)
+            .map((pin) => (pin.index > at ? { ...pin, index: pin.index - 1 } : pin)),
+        );
       },
       letGo: (ids) => {
         const leaving = inner.pins().filter((pin) => ids.has(pin.id));
@@ -3300,6 +3312,17 @@ export function createRecordsLayer({
        * someone else's move read back), hidden from every other column. Only
        * cards a column holds or hides are placed; the rest wait for a settle.
        */
+      /**
+       * A column's window, taking only the records made here that belong in it: a new record sits first in the
+       * column of its grouping value (the no value column when it has none), never first in every column at once.
+       */
+      const ownColumn = (columnId: string | null, made: ViewEntry): ViewEntry => ({
+        ...made,
+        created: (recordId) => {
+          const value = store.get(recordId)?.values[query.groupBy];
+          if ((typeof value === 'string' ? value : '') === columnKeyOf(columnId)) made.created(recordId);
+        },
+      });
       const place = (id: string) => {
         const entries = [...columns.values()];
         if (!entries.some((entry) => entry.shows(id) || entry.hidesMoved(id))) return;
@@ -3345,7 +3368,7 @@ export function createRecordsLayer({
               });
           const open =
             views.get(columnKey) ??
-            openView(workspace, objectId, columnQuery, attributeIds, { key: columnKey, seed, count });
+            ownColumn(id, openView(workspace, objectId, columnQuery, attributeIds, { key: columnKey, seed, count }));
           views.set(columnKey, open);
           columns.set(columnKeyOf(id), open);
           if (dragging > 0) open.view.holdSettle(true);

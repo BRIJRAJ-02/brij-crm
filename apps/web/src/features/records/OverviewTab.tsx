@@ -30,7 +30,7 @@ export function OverviewTab({ recent, link, taskHref, onViewAll }: OverviewTabPr
     <Card
       title={strings.recentActivity}
       actions={
-        <Button variant="ghost" onPress={onViewAll}>
+        <Button variant="ghost" label={strings.viewAllActivity} onPress={onViewAll}>
           {strings.viewAll}
         </Button>
       }

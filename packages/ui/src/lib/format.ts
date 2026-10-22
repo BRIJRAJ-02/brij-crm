@@ -74,6 +74,29 @@ export function formatDate(date: string, locale: string, dateFormat: DateFormat 
   return writeDay(Date.UTC(year, month - 1, day), locale, 'UTC', dateFormat);
 }
 
+/**
+ * A calendar day within the current year, without its year, as lists of dates show them (Linear, Attio): "Oct 24",
+ * "24 Oct". The numeric format keeps its year, since "10-24" reads as nothing. The caller decides the year is the
+ * current one; a day in another year goes through `formatDate`.
+ */
+export function formatDateInYear(date: string, locale: string, dateFormat: DateFormat = 'auto'): string {
+  const [year, month, day] = parts(date);
+  if (dateFormat === 'ymd') return formatDate(date, locale, dateFormat);
+  const at = Date.UTC(year, month - 1, day);
+  if (dateFormat === 'auto') {
+    return memoIntl(
+      `dayInYear:${locale}`,
+      () => new Intl.DateTimeFormat(locale, { month: 'short', day: 'numeric', timeZone: 'UTC' }),
+    ).format(at);
+  }
+  const shown = memoIntl(
+    `partsInYear:${locale}`,
+    () => new Intl.DateTimeFormat(locale, { month: 'short', day: 'numeric', timeZone: 'UTC' }),
+  ).formatToParts(at);
+  const part = (type: Intl.DateTimeFormatPartTypes) => shown.find((each) => each.type === type)?.value ?? '';
+  return dateFormat === 'dmy' ? `${part('day')} ${part('month')}` : `${part('month')} ${part('day')}`;
+}
+
 /** An instant's day in the time zone and date format: "Oct 8, 2026". */
 export function formatDay(
   timestamp: string,

@@ -59,8 +59,8 @@ export function OpenTasksCard({
               {strings.addTask}
             </Button>
           )}
-          <Button variant="ghost" onPress={onViewAll}>
-            {strings.viewAllTasks}
+          <Button variant="ghost" label={strings.viewAllTasks} onPress={onViewAll}>
+            {strings.viewAll}
           </Button>
         </>
       }

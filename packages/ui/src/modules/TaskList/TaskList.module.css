@@ -12,6 +12,8 @@
     min-block-size: 0;
     overflow: auto;
     outline: none;
+    /* Rows read their own width: a phone, or a narrow card, drops the record chips before the title. */
+    container-type: inline-size;
   }
 
   .row {
@@ -78,9 +80,11 @@
     min-inline-size: 0;
   }
 
+  /* The list takes the height its rows need and no more, so a short list has Completed right under it rather
+     than at the foot of the slot; a long one stops at what the toolbar and Completed leave and scrolls inside. */
   .body {
     display: flex;
-    flex: 1;
+    flex: 0 1 auto;
     flex-direction: column;
     min-block-size: 0;
   }
@@ -116,7 +120,7 @@
 
   .record {
     display: flex;
-    flex: none;
+    flex: 0 1 auto;
     gap: var(--space-4);
     align-items: center;
     max-inline-size: var(--size-column);
@@ -148,11 +152,20 @@
     color: var(--danger);
   }
 
-  .assignee {
-    display: flex;
-    flex: none;
-    justify-content: center;
-    inline-size: var(--size-chip);
+  /* Under 480px (My tasks on a phone, a record's Overview) the title comes first: it keeps a narrow column at
+     least, the record chip holds to the smallest column and is cut short, and nothing else in the row shrinks. */
+  @container (inline-size < 480px) {
+    .row > :not(.title, .record) {
+      flex-shrink: 0;
+    }
+
+    .title {
+      min-inline-size: var(--size-column-narrow);
+    }
+
+    .record {
+      max-inline-size: var(--size-column-min);
+    }
   }
 
   @media (forced-colors: active) {

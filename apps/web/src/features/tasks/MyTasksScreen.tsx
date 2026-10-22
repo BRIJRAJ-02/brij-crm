@@ -61,7 +61,7 @@ export function MyTasksScreen({ slug, filter, status, task, list, objects, membe
   const navigate = useNavigate();
   const router = useRouter();
   const state = useTaskList(list);
-  const entries = useTaskEntries(state.source, members);
+  const entries = useTaskEntries(state.source, members, undefined, filter === 'assigned');
   // The member's own zone (Settings › Account › Preferences), else the browser's.
   const { timeZone } = useFormatSettings();
   const today = useToday(timeZone);

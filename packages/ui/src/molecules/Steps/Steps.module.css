@@ -80,6 +80,60 @@
     letter-spacing: var(--tracking-label);
   }
 
+  /* Horizontal: one row, each step's hairline running on to the next marker, each label beside its marker. */
+  .frame {
+    container-type: inline-size;
+  }
+
+  .root[data-orientation='horizontal'] {
+    flex-direction: row;
+    align-items: center;
+  }
+
+  .root[data-orientation='horizontal'] > .step {
+    align-items: center;
+  }
+
+  .root[data-orientation='horizontal'] > .step:not(:last-child) {
+    flex: 1;
+  }
+
+  .root[data-orientation='horizontal'] > .step:not(:last-child)::after {
+    position: static;
+    flex: 1;
+    min-inline-size: var(--space-16);
+    inline-size: auto;
+    block-size: var(--border-width-hairline);
+  }
+
+  .root[data-orientation='horizontal'] .text {
+    padding-block-start: 0;
+  }
+
+  /* Under 480px (a phone) the row has no room for every label: it turns back into the column. Just above it a
+     long label wraps to a second line beside its marker rather than push the row past its slot. */
+  @container (inline-size < 480px) {
+    .root[data-orientation='horizontal'] {
+      flex-direction: column;
+      align-items: stretch;
+    }
+
+    .root[data-orientation='horizontal'] > .step {
+      align-items: flex-start;
+    }
+
+    .root[data-orientation='horizontal'] > .step:not(:last-child)::after {
+      position: absolute;
+      inline-size: var(--border-width-hairline);
+      block-size: auto;
+      min-inline-size: 0;
+    }
+
+    .root[data-orientation='horizontal'] .text {
+      padding-block-start: var(--space-2);
+    }
+  }
+
   /* The count variant: one quiet line in label type. */
   .count {
     display: block;

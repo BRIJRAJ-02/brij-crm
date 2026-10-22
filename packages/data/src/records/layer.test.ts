@@ -1005,6 +1005,20 @@ describe('creating a record', () => {
     expect(layer.size()).toBe(3);
   });
 
+  it('keeps a newer draft first when an older one is refused', async () => {
+    const { layer, view, creates, frame } = await readyView();
+    const older = layer.create(WS, PEOPLE, { [NAME]: '' });
+    await settle();
+    void layer.create(WS, PEOPLE, { [NAME]: 'Grace' });
+    await settle();
+    const refusal = { code: 'VALUE_REQUIRED' as const, message: 'Name is required.', attributeId: NAME };
+    creates[0]?.fail(dataError('VALUE_REQUIRED', 'Name is required.', { refusals: [refusal] }));
+    await expect(older).rejects.toMatchObject({ code: 'VALUE_REQUIRED' });
+    frame();
+    expect(view.getSnapshot().source.getItem(0)?.values[NAME]).toBe('Grace');
+    expect(view.getSnapshot().source.getItem(1)?.values[NAME]).toBe('P0');
+  });
+
   it('sends a create again with the id the form minted, so a second press makes nothing twice', async () => {
     const { layer, creates } = await readyView();
     const first = layer.create(WS, PEOPLE, { [NAME]: 'Grace' }, idAt(8000));
@@ -2750,6 +2764,65 @@ describe('moving a card (spec 0021, milestone 2)', () => {
     frame();
     expect(idsOf(won)).toEqual([idAt(1)]);
     expect(idsOf(lead)).toEqual([idAt(2)]);
+  });
+
+  it('puts a record made here first in the column of its grouping value only', async () => {
+    const { layer, none, lead, won, creates, frame } = await readyBoard();
+    const made = layer.create(WS, PEOPLE, { [NAME]: 'Grace', [STAGE]: WON });
+    await settle();
+    frame();
+    const id = creates[0]?.input.id ?? '';
+    expect(idsOf(won)).toEqual([id]);
+    expect(idsOf(lead)).toEqual([idAt(1), idAt(2)]);
+    expect(idsOf(none)).toEqual([]);
+    creates[0]?.answer(rowOf(id, { [NAME]: 'Grace', [STAGE]: WON }, { [STAGE]: version(1) }, 30));
+    await made;
+    frame();
+    expect(idsOf(won)).toEqual([id]);
+    expect(idsOf(lead)).toEqual([idAt(1), idAt(2)]);
+  });
+
+  it('puts a record made here with no grouping value in the no value column', async () => {
+    const { layer, none, lead, creates, frame } = await readyBoard();
+    void layer.create(WS, PEOPLE, { [NAME]: 'Ada' });
+    await settle();
+    frame();
+    const id = creates[0]?.input.id ?? '';
+    expect(idsOf(none)).toEqual([id]);
+    expect(idsOf(lead)).toEqual([idAt(1), idAt(2)]);
+  });
+
+  it('moves a record made here with no value to the column its server row names (a default stage)', async () => {
+    const { layer, none, lead, creates, frame } = await readyBoard();
+    const made = layer.create(WS, PEOPLE, { [NAME]: 'Lin' });
+    await settle();
+    frame();
+    const id = creates[0]?.input.id ?? '';
+    expect(idsOf(none)).toEqual([id]);
+    creates[0]?.answer(rowOf(id, { [NAME]: 'Lin', [STAGE]: LEAD }, { [STAGE]: version(1) }, 30));
+    await made;
+    await settle();
+    frame();
+    expect(idsOf(none)).toEqual([]);
+    expect(idsOf(lead)[0]).toBe(id);
+  });
+
+  it('takes a draft moved to another column out of it when its create is refused', async () => {
+    const { layer, board, none, won, creates, frame } = await readyBoard();
+    const made = layer.create(WS, PEOPLE, { [NAME]: 'Ada' });
+    await settle();
+    const id = creates[0]?.input.id ?? '';
+    const moved = board.move(id, WON);
+    await settle();
+    frame();
+    const refusal = { code: 'VALUE_REQUIRED' as const, message: 'Name is required.', attributeId: NAME };
+    creates[0]?.fail(dataError('VALUE_REQUIRED', 'Name is required.', { refusals: [refusal] }));
+    await expect(made).rejects.toMatchObject({ code: 'VALUE_REQUIRED' });
+    await moved.catch(() => false);
+    await settle();
+    frame();
+    expect(idsOf(won)).toEqual([]);
+    expect(idsOf(none)).toEqual([]);
   });
 
   it('puts a refused move back in its old place, restores the counts, and says why with Retry', async () => {

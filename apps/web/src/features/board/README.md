@@ -6,7 +6,7 @@ A view of kind `board` (spec 0021): one column per option of a status or single 
 
 - **Purpose**: see one object's records as a pipeline, a column per stage.
 - **Main task**: see where every record stands and drag a card to its next column, live for everyone.
-- **Leaves out**: Group by and Show empty columns in View settings, and the stuck badge (milestone 3), and creating records from the board.
+- **Leaves out**: Group by and Show empty columns in View settings, and the stuck badge (milestone 3), and creating records from a column (the top bar's New <record> opens the table's create dialog, 22 October 2026, so the page's one primary action stays when the layout switches).
 - **View settings** (22 October 2026): the view bar's one button opens the card's fields (the name first and locked, at most six shown) with Add attribute at its foot for `schema.manage`, which opens this screen's attribute dialog, so a board always has a way to add an attribute. Table or Board sits after it, the same height.
 
 ## Files

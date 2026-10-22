@@ -18,8 +18,8 @@ New, and the one grid of cards: SettingsLayout's `SettingsGrid` drew the same gr
 ```
 
 - As many columns as fit with each at least `size-panel` (400px) wide, sharing the width; under that, one column at the grid's full width, so a phone never scrolls sideways.
-- `columns="two"` holds at most two columns, each at least `size-panel` wide: two side by side from twice that width, one below it (Home's sections, spec 0041). Why a variant: on a wide screen `auto` put three or four narrow cards in a row, and the owner asked for two columns on wide screens and one on phones. The grid's own width decides, so it works in any slot, as a container query would; the container breakpoints (320px, 480px) are both under one panel's width, so no query could say it.
-- Tiles keep their own height (`align-items: start`), so a short card's frame ends at its last row.
+- `columns="two"` holds at most two columns, each at least `size-panel` wide: two side by side from twice that width, one below it (Home's sections, spec 0041). Why a variant: on a wide screen `auto` put three or four narrow cards in a row, and the owner asked for two columns on wide screens and one on phones. The grid's own width decides, so it works in any slot, as a container query would; the container breakpoints (320px, 480px) are both under one panel's width, so no query could say it. Side by side, the two share one height (they stretch), so a pair of cards ends on one line.
+- Tiles keep their own height (except with `columns="two"`, where a pair side by side shares one) (`align-items: start`), so a short card's frame ends at its last row.
 - A tile that renders nothing (`null`) takes no cell, so the rest close up.
 - `fill="fill"` keeps the empty tracks, so every tile has one width however many there are (SettingsGrid: one card per calendar). `fit`, the default, shares the width among the tiles there are.
 - The tiles keep their order: reading and Tab order follow the DOM, left to right, then down.
