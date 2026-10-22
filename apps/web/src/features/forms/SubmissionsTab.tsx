@@ -795,6 +795,7 @@ function SubmissionDetail({
               id: answer.questionId,
               term: filing.marked.has(answer.questionId) ? `${answer.label} · ${filing.mark}` : answer.label,
               description: answerValue(answer),
+              ...(answerText(answer) === '' ? { isPlaceholder: true } : {}),
               ...(copy === undefined ? {} : { copy }),
             };
           })}
@@ -807,6 +808,7 @@ function SubmissionDetail({
             label={strings.records}
             tone="heading"
             headingLevel={3}
+            isLive
             {...(submission.records.length > 0 ? {} : { hint: strings.answersFiling })}
           >
             {submission.records.length > 0 ? (

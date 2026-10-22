@@ -2,6 +2,7 @@ import { useEffect, useId, useRef, useState, type ReactNode } from 'react';
 import { FocusScope, useFocusVisible, useKeyboard } from 'react-aria';
 import { Dialog, Heading } from 'react-aria-components';
 import { Button } from '../../atoms/Button/Button.tsx';
+import { TruncatedText } from '../../atoms/TruncatedText/TruncatedText.tsx';
 import styles from './Panel.module.css';
 import { strings } from './strings.ts';
 import { PageEdge } from '../../lib/page-edge.ts';
@@ -115,12 +116,12 @@ export function Panel({
             {leading}
             {subtitle === undefined ? (
               <Heading slot="title" className={styles.title}>
-                {title}
+                <TruncatedText>{title}</TruncatedText>
               </Heading>
             ) : (
               <span className={styles.heading}>
                 <Heading slot="title" className={styles.title}>
-                  {title}
+                  <TruncatedText>{title}</TruncatedText>
                 </Heading>
                 <span id={subtitleId} className={styles.subtitle}>
                   {subtitle}

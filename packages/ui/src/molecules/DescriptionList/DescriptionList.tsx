@@ -14,6 +14,8 @@ export interface DescriptionItem {
    * phone shown as +91 77109 86909 copies +917710986909).
    */
   readonly copy?: { readonly value: string; readonly label: string };
+  /** The description stands in for a missing value ("No answer"): drawn in the quiet text colour. */
+  readonly isPlaceholder?: boolean;
 }
 
 /** Props for DescriptionList. */
@@ -34,7 +36,11 @@ export function DescriptionList({ items, layout = 'columns' }: DescriptionListPr
       {items.map((item) => (
         <div key={item.id ?? item.term} className={styles.row}>
           <dt className={styles.term}>{item.term}</dt>
-          <dd className={styles.description} data-copy={item.copy === undefined ? undefined : ''}>
+          <dd
+            className={styles.description}
+            data-copy={item.copy === undefined ? undefined : ''}
+            data-placeholder={item.isPlaceholder === true ? '' : undefined}
+          >
             {item.copy === undefined ? (
               item.description
             ) : (
