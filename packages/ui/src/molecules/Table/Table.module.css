@@ -33,6 +33,11 @@
 
   /* Where a scrollable table hides columns past an end, that end fades over space-24, so the frame shows it
      scrolls (only the mask's alpha counts, so the surface token stands in for opaque). */
+  /* Keyboard scrolling stops a focused cell clear of the faded band. */
+  .frame[data-fade] {
+    scroll-padding-inline: var(--space-24);
+  }
+
   .frame[data-fade='end'] {
     mask-image: linear-gradient(to right, var(--surface) calc(100% - var(--space-24)), transparent);
   }

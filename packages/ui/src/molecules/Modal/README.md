@@ -53,6 +53,8 @@ The house rule (the owner's ask, 21 October 2026): anything that ends something,
 - **Two more, for now (the owner may change them).** The bulk bar's Cancel on the change its person just started, while it runs, stays one click: it stops a change rather than makes one, and a confirm would let more batches run while it waits. Background jobs still asks before Cancel, since it lists every member's jobs for owners and admins. And a restore from the trash of up to 500 picked records goes at once: it ends nothing, and past 500 the counted restore asks.
 - Working examples: `ArchiveObjectDialog` and `ArchiveAttributeDialog` in `apps/web/src/features/settings`, the booking page delete in `apps/web/src/features/booking/LinksScreen.tsx`, and SaveBar's Discard.
 
+- The scrim is a named size container, `modal-scrim` (the viewport's width less its padding). It is public: what sits in a dialog may query it, as the footer stacks under 480px and Button hides its keycaps there. Keep the name when changing the scrim.
+
 ## States
 
 Opening grows it from the centre over the scrim in `duration-modal`; closing fades it in `duration-exit`. Opened from the keyboard it appears at once. Reduced motion keeps the fade.
