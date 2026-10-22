@@ -32,7 +32,14 @@ describe('api proxy middleware', () => {
     for (const pathname of ['/', '/api', '/api/rpc/x', '/sign-in', '/ada/30min', '/b/AbCdEfGhIjKlMnOp', '/x.js']) {
       expect(matched.test(pathname), pathname).toBe(true);
     }
-    for (const pathname of ['/assets/index-abc.js', '/brand/timefix-mark.svg', '/favicon.ico', '/theme-boot.js']) {
+    const builtFiles = [
+      '/assets/index-abc.js',
+      '/brand/timefix-mark.svg',
+      '/favicon.ico',
+      '/layers.css',
+      '/theme-boot.js',
+    ];
+    for (const pathname of builtFiles) {
       expect(matched.test(pathname), pathname).toBe(false);
     }
   });

@@ -14,7 +14,9 @@ import { geolocation, ipAddress, next, rewrite } from '@vercel/functions';
 import { publicHostRedirect } from './public-paths.ts';
 
 /** Every path but the built files, which belong on every host: public-paths.ts's MIDDLEWARE_MATCHER, written out. */
-export const config = { matcher: ['/((?!assets/|brand/|embed\\.js$|favicon\\.ico$|theme-boot\\.js$).*)'] };
+export const config = {
+  matcher: ['/((?!assets/|brand/|embed\\.js$|favicon\\.ico$|layers\\.css$|theme-boot\\.js$).*)'],
+};
 
 /** Whether a path is the API's: only these get the edge's headers, the proxy or the function. */
 const isApiPath = (pathname: string) => pathname === '/api' || pathname.startsWith('/api/');

@@ -236,8 +236,11 @@ begin
   end if;
   if has_table_privilege('crm_app', 'public.booking_page_slugs', 'UPDATE')
     or not has_column_privilege('crm_app', 'public.booking_page_slugs', 'updated_at', 'UPDATE')
-    or has_column_privilege('crm_app', 'public.booking_page_slugs', 'slug', 'UPDATE')
-    or has_column_privilege('crm_app', 'public.booking_page_slugs', 'owner_user_id', 'UPDATE') then
+    or exists (
+      select 1 from pg_attribute att
+      where att.attrelid = 'public.booking_page_slugs'::regclass and att.attnum > 0 and not att.attisdropped
+        and att.attname <> 'updated_at' and has_column_privilege('crm_app', att.attrelid, att.attnum, 'UPDATE')
+    ) then
     raise exception 'crm_app may update booking_page_slugs.updated_at alone';
   end if;
 end

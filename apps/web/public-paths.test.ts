@@ -3,6 +3,7 @@
 import { readdirSync, readFileSync } from 'node:fs';
 import path from 'node:path';
 import { RESERVED_HANDLES } from '@crm/contracts/handles';
+import { LAYER_ORDER_FILE } from '@crm/ui/vite';
 import { describe, expect, it } from 'vitest';
 import { directiveSources, policyForPath, sourcePattern } from './csp.ts';
 import {
@@ -101,6 +102,7 @@ describe('the public booking host', () => {
     '/brand/timefix-mark.svg',
     '/theme-boot.js',
     '/favicon.ico',
+    '/layers.css',
     '/api/public/handles/ada',
   ])('serves %s', (pathname) => {
     expect(servedOnPublicHost(pathname)).toBe(true);
@@ -124,12 +126,11 @@ describe('the public booking host', () => {
     expect(servedOnPublicHost(pathname)).toBe(false);
   });
 
-  it('lists every top level file the build serves from public/', () => {
+  it('lists every top level file the build serves: public/’s, and the layer order stylesheet', () => {
     const files = readdirSync(path.join(import.meta.dirname, 'public'), { withFileTypes: true })
       .filter((entry) => entry.isFile())
-      .map((entry) => entry.name)
-      .sort();
-    expect([...TOP_LEVEL_FILES].sort()).toEqual(files);
+      .map((entry) => entry.name);
+    expect([...TOP_LEVEL_FILES].sort()).toEqual([...files, LAYER_ORDER_FILE].sort());
     const folders = readdirSync(path.join(import.meta.dirname, 'public'), { withFileTypes: true })
       .filter((entry) => entry.isDirectory())
       .map((entry) => entry.name);

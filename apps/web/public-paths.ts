@@ -33,17 +33,18 @@ export const APP_HEADER_SOURCE = `/((?!api/|api$|f/|b/[^/]+$|embed/|${HANDLE_SEG
 export const HANDLE_PATH = new RegExp(`^/${HANDLE_SEGMENT}(?:/${SLUG_SEGMENT})?/?$`);
 
 /**
- * The built files at the top level, from `apps/web/public` (its folders are `/brand/…`): served on every host.
- * `public-paths.test.ts` fails until this lists exactly what that folder holds.
+ * The built files at the top level, served on every host: those in `apps/web/public` (its folders are `/brand/…`)
+ * and the layer order stylesheet the build writes beside the pages (`LAYER_ORDER_FILE`, `@crm/ui/vite`), which every
+ * page links. `public-paths.test.ts` and `build.test.ts` fail until this lists exactly those.
  */
-export const TOP_LEVEL_FILES: readonly string[] = ['embed.js', 'favicon.ico', 'theme-boot.js'];
+export const TOP_LEVEL_FILES: readonly string[] = ['embed.js', 'favicon.ico', 'layers.css', 'theme-boot.js'];
 
 /** A string matched as itself inside a regular expression. */
 const literal = (text: string) => text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
 /**
  * What the public booking origin serves (BOOKING_PUBLIC_ORIGIN, timefix.com; 22 Oct 2026): the handle addresses,
- * `/b/…`, `/f/…`, `/embed/…`, the built files (`/assets/…`, `/brand/…` and `TOP_LEVEL_FILES`) and the public API,
+ * `/b/…`, `/f/…`, `/embed/…`, the built files (`/assets/…`, `/brand/…` and `TOP_LEVEL_FILES`, `/layers.css` among them) and the public API,
  * `/api/public/…`. Nothing else belongs on that host.
  */
 const PUBLIC_HOST_PATH = new RegExp(
