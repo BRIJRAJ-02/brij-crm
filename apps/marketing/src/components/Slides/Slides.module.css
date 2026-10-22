@@ -73,7 +73,7 @@
   }
 
   /* The glass pill: the segments and the pause, floating at the window's foot over the fade (the owner,
-     23 October 2026), the page showing through a blur. */
+     23 October 2026), the page showing through a blur; no edge of its own, the track's hairline is the one line. */
   .controls {
     display: flex;
     position: absolute;
@@ -88,7 +88,6 @@
     padding: var(--space-4);
     border-radius: var(--radius-full);
     background: color-mix(in srgb, var(--surface-raised) 45%, transparent);
-    box-shadow: var(--shadow-lg);
     backdrop-filter: blur(var(--space-12));
   }
 
