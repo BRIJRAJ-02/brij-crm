@@ -362,7 +362,9 @@ export function createIdentityStore(options: DatabaseOptions): IdentityStore {
     connectionString: options.url,
     application_name: options.applicationName,
     max: options.maxConnections ?? 5,
+    ...(options.idleTimeoutMs === undefined ? {} : { idleTimeoutMillis: options.idleTimeoutMs }),
   });
+  options.onPool?.(pool);
   pool.on('error', (error) => (options.onPoolError ?? console.error)(error));
   // The session check every request makes waits here too (spec 0011, AC-202).
   if (options.timing !== undefined) timePool(pool, options.timing);

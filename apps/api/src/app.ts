@@ -36,7 +36,7 @@ import { hashAddress, mountPublicForms } from './forms/public.ts';
 import { createCaptchaVerifier, type CaptchaVerifier } from './forms/recaptcha.ts';
 import { createTicketBook, mountTickets } from './forms/ticket.ts';
 import { bookingLinkKey } from './booking-link.ts';
-import { LOCAL_FORMS_IP_SALT, wakesOnUse, type ApiEnv } from './env.ts';
+import { LOCAL_FORMS_IP_SALT, releaseOf, wakesOnUse, type ApiEnv } from './env.ts';
 import { createReadGate } from './gate.ts';
 import { errorFields, log } from './log.ts';
 import type { Mailer } from './mail/mailer.ts';
@@ -292,7 +292,7 @@ export function createApp({
 
   // Liveness: the process is up. Readiness: it can reach Postgres.
   // The release is the deployed commit (or `local`): the web deploy waits until it matches its own.
-  const release = env.RAILWAY_GIT_COMMIT_SHA ?? 'local';
+  const release = releaseOf(env);
   app.get('/health', (c) => c.json({ status: 'ok', release }));
   app.get('/health/ready', async (c) => {
     try {

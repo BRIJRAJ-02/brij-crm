@@ -15,6 +15,18 @@ export interface DatabaseOptions {
   maxConnections?: number;
   onPoolError?: (error: Error) => void;
   /**
+   * How long an idle client stays open, in milliseconds (pg's default, 10
+   * seconds, when absent). A Vercel Function (spec 0045) closes them sooner,
+   * so a suspended instance holds no connection.
+   */
+  idleTimeoutMs?: number;
+  /**
+   * Hears each pool this creates, once, right after: a Vercel Function hands
+   * it to the platform, which keeps the instance alive until idle clients
+   * have closed (spec 0045). Nothing else may use the pool.
+   */
+  onPool?: (pool: pg.Pool) => void;
+  /**
    * Times each checkout for the sink it names (spec 0011, AC-202): the API's
    * load timing header, with `LOAD_TIMING=on` on a laptop only. Absent, the
    * pool is untouched.
@@ -108,6 +120,7 @@ export function createDatabase(options: DatabaseOptions): Database {
     connectionString: options.url,
     application_name: options.applicationName,
     max: options.maxConnections ?? 10,
+    ...(options.idleTimeoutMs === undefined ? {} : { idleTimeoutMillis: options.idleTimeoutMs }),
   });
   // One connection of its own for cancels: a full main pool must never hold a cancel back. It uses the same
   // url as the work (the api's DATABASE_URL, Neon's pooler in production), not a direct one: the api has no
@@ -119,7 +132,10 @@ export function createDatabase(options: DatabaseOptions): Database {
     application_name: `${options.applicationName}-cancel`,
     max: 1,
     connectionTimeoutMillis: CANCEL_CONNECT_TIMEOUT_MS,
+    ...(options.idleTimeoutMs === undefined ? {} : { idleTimeoutMillis: options.idleTimeoutMs }),
   });
+  options.onPool?.(pool);
+  options.onPool?.(cancelPool);
   // An idle client can drop (a deploy, a Neon restart). Report it; the pool replaces it.
   pool.on('error', (error) => (options.onPoolError ?? console.error)(error));
   if (options.timing !== undefined) timePool(pool, options.timing);

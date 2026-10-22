@@ -1,7 +1,11 @@
 // Vercel Routing Middleware. It runs at the edge, before files and rewrites,
-// for /api only, and proxies the request to the Railway API. The app and the
-// API share one origin that way (host only cookies, no CORS).
-import { geolocation, ipAddress, rewrite } from '@vercel/functions';
+// for /api only. With API_ORIGIN_INTERNAL set it proxies the request to that
+// API (Railway or Render); unset, the request goes on to the api's own Vercel
+// Function in this project (spec 0045, apps/web/api/index.mjs). Either way the
+// app and the API share one origin (host only cookies, no CORS), and either way
+// the request carries the edge secret and the caller's address from here: the
+// function, like a proxied API, admits only requests this middleware vouched for.
+import { geolocation, ipAddress, next, rewrite } from '@vercel/functions';
 
 export const config = { matcher: ['/api', '/api/:path*'] };
 
@@ -41,14 +45,15 @@ const EDGE_SECRET_FORMAT = /^[\x21-\x7e]{32,}$/;
 /** Vercel's environments outside development, where the API requires the edge secret. */
 const DEPLOYED: ReadonlySet<string> = new Set(['preview', 'production']);
 
+/** Where /api goes: the API at API_ORIGIN_INTERNAL when it is set, else this project's own function (spec 0045). */
+export function apiTarget(env: { readonly API_ORIGIN_INTERNAL?: string | undefined }): 'proxy' | 'function' {
+  const origin = env.API_ORIGIN_INTERNAL;
+  return origin === undefined || origin === '' ? 'function' : 'proxy';
+}
+
 export default function middleware(request: Request): Response {
-  const origin = process.env.API_ORIGIN_INTERNAL;
-  if (origin === undefined || origin === '') {
-    return Response.json(
-      { code: 'API_UNAVAILABLE', message: 'This deployment has no API address set.' },
-      { status: 503 },
-    );
-  }
+  const origin = process.env.API_ORIGIN_INTERNAL ?? '';
+  const proxied = apiTarget(process.env) === 'proxy';
 
   // The secret travels to the API in a header, so only over https, and only a
   // value a header keeps intact (the API's EDGE_SECRET has the same rule).
@@ -63,7 +68,9 @@ export default function middleware(request: Request): Response {
       { status: 503 },
     );
   }
-  if (vouching && (!EDGE_SECRET_FORMAT.test(edgeSecret) || new URL(origin).protocol !== 'https:')) {
+  // A proxied API must be https; the function is this deployment itself, so the secret never leaves Vercel.
+  const insecureProxy = proxied && (!URL.canParse(origin) || new URL(origin).protocol !== 'https:');
+  if (vouching && (!EDGE_SECRET_FORMAT.test(edgeSecret) || insecureProxy)) {
     return Response.json(
       { code: 'API_UNAVAILABLE', message: 'This deployment’s API settings are invalid.' },
       { status: 503 },
@@ -94,5 +101,6 @@ export default function middleware(request: Request): Response {
   else headers.delete(ORIGIN_HEADER);
   for (const header of TRACE_HEADERS) headers.delete(header);
 
+  if (!proxied) return next({ request: { headers } });
   return rewrite(new URL(url.pathname + url.search, origin), { request: { headers } });
 }

@@ -161,6 +161,22 @@ describe("the relay's wake up call (spec 0005)", () => {
     expect(problems({ ...local, WORKER_INTERNAL_URL: 'http://worker.example.com' })).toEqual(['WORKER_INTERNAL_URL']);
   });
 
+  it("takes Render's private address, a one label host, over plain http on Render only (spec 0044)", () => {
+    const onRender = { ...production, RENDER: 'true' };
+    expect(problems({ ...onRender, WORKER_INTERNAL_URL: 'http://brij-crm-worker-a1b2:10000' })).toEqual([]);
+    // The Blueprint's `hostport` reference comes without a scheme: it reads as plain http.
+    const env = ApiEnv.parse({ ...onRender, WORKER_INTERNAL_URL: 'brij-crm-worker-a1b2:10000' });
+    expect(env.WORKER_INTERNAL_URL).toBe('http://brij-crm-worker-a1b2:10000');
+    // Off Render, the same address is still refused outside local, written either way.
+    for (const url of ['http://brij-crm-worker-a1b2:10000', 'brij-crm-worker-a1b2:10000']) {
+      expect(problems({ ...production, WORKER_INTERNAL_URL: url }), url).toEqual(['WORKER_INTERNAL_URL']);
+    }
+    // A dotted name is never a private address, on Render too.
+    expect(problems({ ...onRender, WORKER_INTERNAL_URL: 'http://worker.example.com' })).toEqual([
+      'WORKER_INTERNAL_URL',
+    ]);
+  });
+
   it('refuses a short secret, or one with spaces, anywhere', () => {
     expect(problems({ ...local, WORKER_WAKE_SECRET: 'short' })).toEqual(['WORKER_WAKE_SECRET']);
     expect(problems({ ...production, WORKER_WAKE_SECRET: 'a wake secret with spaces in it, 32+ long' })).toEqual([
@@ -293,6 +309,12 @@ describe('the worker environment (spec 0005, the relay)', () => {
     expect(workerProblems({ ...local, CENTRIFUGO_API_URL: 'http://centrifugo.example.com:9000' })).toEqual([
       'CENTRIFUGO_API_URL',
     ]);
+  });
+
+  it("takes Centrifugo's Render private address over plain http on Render only (spec 0044)", () => {
+    const url = 'http://brij-crm-centrifugo-c3d4:9000';
+    expect(workerProblems({ ...deployed, RENDER: 'true', CENTRIFUGO_API_URL: url })).toEqual([]);
+    expect(workerProblems({ ...deployed, CENTRIFUGO_API_URL: url })).toEqual(['CENTRIFUGO_API_URL']);
   });
 
   it.each(['preview', 'production'])('refuses a compose service name, however written, in %s', (APP_ENV) => {

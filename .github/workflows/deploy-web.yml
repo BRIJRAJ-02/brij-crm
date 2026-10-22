@@ -1,18 +1,24 @@
-# Production web deploy. Railway deploys api, worker and centrifugo from `main`
-# on its own; this ships the web app to Vercel. Production's variables
-# (API_ORIGIN_INTERNAL and the VITE_* URLs) live in the Vercel project's
-# Production environment, and `vercel pull` brings them into the build. Monitoring (spec 0010):
-# VITE_SENTRY_DSN_WEB lives there too (Production and Preview), and the build uploads its hidden source
-# maps to Sentry only when SENTRY_AUTH_TOKEN is set here; without it the step says so and deploys the same
-# build, maps deleted either way. The release is the commit CI passed (set as GITHUB_SHA for the build).
+# Production web deploy. The api runs in one of two places, chosen by one variable in the Vercel project's
+# Production environment, API_ORIGIN_INTERNAL:
+#   set    the middleware proxies /api to that API (Render, or Railway once it is healthy), which deploys itself
+#          from `main`; this waits until it runs this commit, then ships the web app.
+#   unset  the api runs as a Vercel Function in this same deployment (spec 0045), so it ships with the web app at
+#          once. This applies the migrations first (DATABASE_URL_OWNER, a repository secret), never two at a time
+#          (the workflow's concurrency group), and refuses to deploy when they fail.
+# Production's variables (the api's server ones too, in function mode) live in the Vercel project's Production
+# environment, and `vercel pull` brings them into the build. Monitoring (spec 0010): VITE_SENTRY_DSN_WEB lives there
+# too, and the build uploads its hidden source maps to Sentry only when SENTRY_AUTH_TOKEN is set here; without it
+# the step says so and deploys the same build, maps deleted either way. The release is the commit CI passed (set as
+# GITHUB_SHA for the build). Before the deploy, a check refuses a build whose client files hold any server secret's
+# value (apps/web/client-secrets.ts).
 #
 # Repository variables: VERCEL_ORG_ID, VERCEL_PROJECT_ID, SENTRY_ORG, SENTRY_PROJECT_WEB
-# Secrets: VERCEL_TOKEN, SENTRY_AUTH_TOKEN (optional: an organization token that can only upload releases)
+# Secrets: VERCEL_TOKEN, DATABASE_URL_OWNER (function mode only), SENTRY_AUTH_TOKEN (optional: an organization
+# token that can only upload releases)
 #
-# Order (8 October 2026): the web app ships only after CI passes on main, and only once the API it talks to
-# runs this commit, when the commit changed the API at all. A new web app calling procedures the old API lacks
-# broke the People page for a deploy's length before. Railway deploys the API after CI too, from the same
-# watch paths as below (.railway/railway.ts); /api/health names the API's commit.
+# Order (8 October 2026): the web app ships only after CI passes on main, and, behind a proxied API, only once that
+# API runs this commit, when the commit changed the API at all. A new web app calling procedures the old API lacks
+# broke the People page for a deploy's length before. /api/health names the API's commit.
 name: Deploy web
 
 on:
@@ -41,13 +47,41 @@ jobs:
         with:
           ref: ${{ github.event.workflow_run.head_sha }}
           fetch-depth: 0
+      - uses: pnpm/action-setup@v6
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Read where the api runs
+        id: mode
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+        run: |
+          set -euo pipefail
+          if [ -z "$VERCEL_TOKEN" ]; then
+            echo "::notice::VERCEL_TOKEN isn't set yet, so there's nothing to deploy to."
+            echo "deploy=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          npx -y "$VERCEL_CLI" pull --yes --environment=production --token "$VERCEL_TOKEN"
+          # Whether API_ORIGIN_INTERNAL holds a value, read without printing it.
+          if grep -Eq '^API_ORIGIN_INTERNAL="?[^"[:space:]]' .vercel/.env.production.local; then
+            echo "The api is proxied (API_ORIGIN_INTERNAL is set)."
+            echo "api=proxy" >> "$GITHUB_OUTPUT"
+          else
+            echo "The api runs as a Vercel Function in this deployment (API_ORIGIN_INTERNAL is unset)."
+            echo "api=function" >> "$GITHUB_OUTPUT"
+          fi
+          echo "deploy=true" >> "$GITHUB_OUTPUT"
       - name: Wait for the API to run this commit
+        if: steps.mode.outputs.deploy == 'true' && steps.mode.outputs.api == 'proxy'
         env:
           SHA: ${{ github.event.workflow_run.head_sha }}
           HEALTH_URL: https://brij-crm-phi.vercel.app/api/health
         run: |
           set -euo pipefail
-          # Railway's api watch paths: a commit that changes none of them doesn't redeploy the API.
+          # The api's build filter (render.yaml): a commit that changes none of them doesn't redeploy the API.
           WATCHED=(apps/api packages pnpm-lock.yaml pnpm-workspace.yaml)
           for attempt in $(seq 1 90); do
             release=$(curl -fsS "$HEALTH_URL" | jq -r '.release // empty' || true)
@@ -64,13 +98,19 @@ jobs:
           done
           echo "::error::The API never reached $SHA in 45 minutes, so the web app wasn't deployed."
           exit 1
-      - uses: pnpm/action-setup@v6
-      - uses: actions/setup-node@v7
-        with:
-          node-version-file: .nvmrc
-          cache: pnpm
-      - run: pnpm install --frozen-lockfile
+      - name: Apply migrations (the api runs on Vercel)
+        if: steps.mode.outputs.deploy == 'true' && steps.mode.outputs.api == 'function'
+        env:
+          DATABASE_URL_OWNER: ${{ secrets.DATABASE_URL_OWNER }}
+        run: |
+          set -euo pipefail
+          if [ -z "$DATABASE_URL_OWNER" ]; then
+            echo "::error::The api runs on Vercel, so this deploy applies the migrations, but the DATABASE_URL_OWNER secret isn't set. See docs/runbooks/api-on-vercel.md."
+            exit 1
+          fi
+          node packages/db/scripts/migrate.ts
       - name: Build and deploy
+        if: steps.mode.outputs.deploy == 'true'
         env:
           VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
           # The source map upload (spec 0010), skipped when the token is absent.
@@ -82,14 +122,11 @@ jobs:
           set -euo pipefail
           # Under workflow_run, GITHUB_SHA is main's newest commit, not the one CI passed; the release is that one.
           export GITHUB_SHA="$HEAD_SHA"
-          if [ -z "$VERCEL_TOKEN" ]; then
-            echo "::notice::VERCEL_TOKEN isn't set yet, so there's nothing to deploy to."
-            exit 0
-          fi
           if [ -z "$SENTRY_AUTH_TOKEN" ]; then
             echo "::notice::SENTRY_AUTH_TOKEN isn't set, so source maps aren't uploaded to Sentry (they're deleted all the same)."
           fi
           vercel() { npx -y "$VERCEL_CLI" "$@" --token "$VERCEL_TOKEN"; }
-          vercel pull --yes --environment=production
           vercel build --prod
+          # No server secret may reach a file the browser loads (spec 0045); it names the variable, never the value.
+          node apps/web/client-secrets.ts .vercel/.env.production.local .vercel/output/static
           vercel deploy --prebuilt --prod

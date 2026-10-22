@@ -2,7 +2,7 @@
 // the API is told about the caller. Vercel reads the rewrite and the upstream
 // request headers from the response's x-middleware-* headers.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import middleware, { config, EDGE_HEADER, GEO_HEADERS, ORIGIN_HEADER, TRACE_HEADERS } from './middleware.ts';
+import middleware, { apiTarget, config, EDGE_HEADER, GEO_HEADERS, ORIGIN_HEADER, TRACE_HEADERS } from './middleware.ts';
 
 const API = 'https://api-production.up.railway.app';
 
@@ -188,14 +188,58 @@ describe('api proxy middleware', () => {
     expect(response.headers.get('x-middleware-rewrite')).toBeNull();
   });
 
-  it('answers 503 with the error shape when the deployment has no API address', async () => {
+  it.each([
+    ['unset', undefined],
+    ['empty', ''],
+  ])('sends /api on to the function in this project while API_ORIGIN_INTERNAL is %s (spec 0045)', (_name, origin) => {
+    vi.stubEnv('API_ORIGIN_INTERNAL', origin);
+    const response = call('/api/rpc/system/status?cursor=abc');
+    expect(response.status).toBe(200);
+    expect(response.headers.get('x-middleware-next')).toBe('1');
+    expect(response.headers.get('x-middleware-rewrite')).toBeNull();
+  });
+});
+
+describe('the api switch (spec 0045)', () => {
+  it('proxies when API_ORIGIN_INTERNAL is set, and runs the function when it is unset or empty', () => {
+    expect(apiTarget({ API_ORIGIN_INTERNAL: API })).toBe('proxy');
+    expect(apiTarget({})).toBe('function');
+    expect(apiTarget({ API_ORIGIN_INTERNAL: '' })).toBe('function');
+  });
+
+  it('vouches for a request to the function with the edge secret, replacing a forged copy', () => {
     vi.stubEnv('API_ORIGIN_INTERNAL', '');
+    vi.stubEnv('EDGE_SECRET', 'the-real-edge-secret-of-32-characters');
+    vi.stubEnv('VERCEL_ENV', 'production');
+    const response = call('/api/rpc/system/status', {
+      [EDGE_HEADER]: 'forged-by-the-client',
+      [ORIGIN_HEADER]: 'https://evil.example',
+      origin: 'https://brij-crm.vercel.app',
+      'x-forwarded-for': '6.6.6.6',
+      'sentry-trace': 'caller-chosen',
+    });
+    expect(response.headers.get('x-middleware-next')).toBe('1');
+    expect(upstreamHeader(response, EDGE_HEADER)).toBe('the-real-edge-secret-of-32-characters');
+    expect(upstreamHeader(response, ORIGIN_HEADER)).toBe('https://brij-crm.vercel.app');
+    expect(upstreamHeader(response, 'x-forwarded-for')).toBeNull();
+    expect(response.headers.get('x-middleware-override-headers')?.split(',')).not.toContain('sentry-trace');
+  });
+
+  it('answers 503 in production when the function mode has no edge secret, as the proxy does', async () => {
+    vi.stubEnv('API_ORIGIN_INTERNAL', '');
+    vi.stubEnv('EDGE_SECRET', '');
+    vi.stubEnv('VERCEL_ENV', 'production');
     const response = call('/api/health');
     expect(response.status).toBe(503);
-    expect(response.headers.get('x-middleware-rewrite')).toBeNull();
-    expect(await response.json()).toEqual({
-      code: 'API_UNAVAILABLE',
-      message: 'This deployment has no API address set.',
-    });
+    expect(response.headers.get('x-middleware-next')).toBeNull();
+    expect(((await response.json()) as { code: string }).code).toBe('API_UNAVAILABLE');
+  });
+
+  it('refuses a malformed edge secret in the function mode too', () => {
+    vi.stubEnv('API_ORIGIN_INTERNAL', '');
+    vi.stubEnv('EDGE_SECRET', 'short');
+    const response = call('/api/health');
+    expect(response.status).toBe(503);
+    expect(response.headers.get('x-middleware-next')).toBeNull();
   });
 });

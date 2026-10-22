@@ -21,6 +21,7 @@
     "@orpc/server": "catalog:",
     "@sentry/node": "catalog:",
     "@simplewebauthn/server": "catalog:",
+    "@vercel/functions": "catalog:",
     "better-auth": "catalog:",
     "free-email-domains": "catalog:",
     "graphile-worker": "catalog:",

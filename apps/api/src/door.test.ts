@@ -294,6 +294,7 @@ describe('no scope is built in this app', () => {
     // Only the app passes the services' source on, the request context carries it to the door, and the job runner
     // hands its own to the worker's re-entry; rules.ts names the one source, and the server and the worker pass it.
     const plumbing = new Set(['app.ts', 'orpc.ts', 'testing.ts', 'jobs/runner.ts', 'rules.ts']);
+    const PASSERS = new Set(['server.ts', 'worker.ts', 'vercel/handler.ts', 'jobs/compose.ts']);
     const files = (await readdir(root, { recursive: true }))
       .filter((file) => file.endsWith('.ts') && !file.endsWith('.test.ts'))
       .map((file) => file.split(sep).join('/'))
@@ -305,9 +306,9 @@ describe('no scope is built in this app', () => {
       // door's. That one form, in that one file, is let through.
       const checked =
         file === 'modules/attributes/router.ts' ? source.replaceAll(/\brules: input\.rules\b/g, '') : source;
-      // The server and the worker hand on rules.ts's source, the same one to both, and nothing else.
-      const passed =
-        file === 'server.ts' || file === 'worker.ts' ? checked.replaceAll(/\brules: APP_RULES\b/g, '') : checked;
+      // The server, the worker, the Vercel Function (spec 0045) and the jobs they share hand on rules.ts's source,
+      // the same one to all, and nothing else.
+      const passed = PASSERS.has(file) ? checked.replaceAll(/\brules: APP_RULES\b/g, '') : checked;
       if (/\bRuleSource\b|\brules\s*[:,}]/.test(passed)) offenders.push(file);
     }
     expect(offenders).toEqual([]);

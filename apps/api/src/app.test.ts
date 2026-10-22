@@ -34,6 +34,9 @@ describe('the health check', () => {
     const deployed = createTestApp({ RAILWAY_GIT_COMMIT_SHA: '4ceb92a8a4ae73c9dc81c7ba26989c709200e7d2' });
     const response = await deployed.fetch(new Request(`${APP_URL}/api/health`));
     expect(await response.json()).toEqual({ status: 'ok', release: '4ceb92a8a4ae73c9dc81c7ba26989c709200e7d2' });
+    const render = createTestApp({ RENDER_GIT_COMMIT: 'ef6efa82b4a4ae73c9dc81c7ba26989c709200e7' });
+    const onRender = await render.fetch(new Request(`${APP_URL}/api/health`));
+    expect(await onRender.json()).toEqual({ status: 'ok', release: 'ef6efa82b4a4ae73c9dc81c7ba26989c709200e7' });
     const laptop = await createTestApp().fetch(new Request(`${APP_URL}/api/health`));
     expect(await laptop.json()).toEqual({ status: 'ok', release: 'local' });
   });
