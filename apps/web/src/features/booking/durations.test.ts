@@ -18,6 +18,6 @@ describe('lengthOf', () => {
 
 describe('lengthChoices', () => {
   it('adds a page’s custom lengths among the ready picks, shortest first, once each', () => {
-    expect(lengthChoices([25, 30], [120])).toEqual([15, 25, 30, 45, 60, 90, 120]);
+    expect(lengthChoices([25, 30], [120])).toEqual([15, 25, 30, 45, 60, 120]);
   });
 });

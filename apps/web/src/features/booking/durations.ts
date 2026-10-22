@@ -1,8 +1,8 @@
 // Meeting lengths (22 Oct 2026): the ready picks, and a custom length typed in minutes. Plain functions, so the new
 // page dialog, the editor and tests share them.
 
-/** The lengths offered as ready picks, in minutes. */
-export const PRESET_LENGTHS: readonly number[] = [15, 30, 45, 60, 90];
+/** The lengths offered as ready picks, in minutes: four, as many as a page offers; others come from + Custom. */
+export const PRESET_LENGTHS: readonly number[] = [15, 30, 45, 60];
 /** At most this many lengths on one page (the server's `BOOKING_DURATIONS_MAX`): the public page shows four. */
 export const LENGTHS_MAX = 4;
 

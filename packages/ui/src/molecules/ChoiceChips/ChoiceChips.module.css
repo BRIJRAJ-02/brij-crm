@@ -17,6 +17,14 @@
     opacity: var(--opacity-disabled);
   }
 
+  /* The chips, then any control after them (a "+ Custom" chip), wrapping together. */
+  .row {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--space-6);
+  }
+
   .chips {
     display: flex;
     flex-wrap: wrap;

@@ -27,12 +27,14 @@ Ported from the artifact's Tabs card. A record's Activity, Notes, Tasks, Emails 
 - `inset="none"` (for the strip; the bar keeps its own padding) drops the strip's 16px inset at both ends, for a full width strip outside a settings page (a settings page gets the page edge, below, without asking), so the first tab's label lines up with the full width Table's first column under it, and the tools end at the table's edge (Members and Invitations). The tabs keep their whole width, so on a phone a lone search wraps to a row under them rather than squeezing the last tab. Why a variant: the inset a record panel's tabs need from the panel's edge pushed the labels 24px in from the table's text (owner feedback, 21 October 2026).
 - Directly in a settings page's body (SettingsLayout, which sets the library's page edge) a strip needs neither: it runs out through the page's gutter to its edges, the bar's height, its first label on the content edge where the body's headings and table text start, so every settings page gets it without asking (22 October 2026). Inside a Card, Modal, Popover or Panel the strip keeps its own inset.
 - `end` puts the chosen tab's own tools at the far end of the strip, on its hairline: Captures' search, Bookings' week and its arrows (LinkListToolbar at `size="sm"`). The tabs keep their place; when both don't fit (a phone), the tools wrap to a row of their own under the tabs and shrink to the width, so the tabs are never squeezed.
+- `alert` on a tab draws a small danger dot after its label and says its text to screen readers ("Meeting, Needs a fix"): a field on that tab holds an error the person can't see from the tab they are on. Why: the booking page editor splits its fields across tabs, so an error on another tab was invisible (the owner, 22 October 2026). The dot is never the only cue; the field itself says the error once its tab is open.
+- `TabPanel variant="fields"` stacks the panel's content `space-16` apart, as a Form stacks its fields, `space-16` under the strip, for a tab of fields with no Card around them (the booking page editor). Why a variant: a panel lays out nothing, so its fields sat flush.
 - Only one panel shows at a time; use Disclosure for sections that can all be open.
 - When each tab is a page of its own, give each its `href`. It doesn't navigate (the page's `onSelectionChange` does); it marks the tab with `data-href`, so the app loads that page while a pointer rests on the tab.
 
 ## States
 
-Chosen (text with the underline), hover (pointer only), focus, disabled. The underline slides over `duration-move` for a pointer, and jumps for the keyboard and under reduced motion.
+Chosen (text with the underline), hover (pointer only), focus, disabled, with an alert dot. The underline slides over `duration-move` for a pointer, and jumps for the keyboard and under reduced motion.
 
 ## Keyboard
 

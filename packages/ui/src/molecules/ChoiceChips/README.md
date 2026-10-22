@@ -22,6 +22,7 @@ New. The experience note shows durations as chips, more than one allowed. Segmen
 
 - `isSingle` allows one choice only.
 - `error` shows under the chips and describes the group.
+- `end` puts a control after the last chip, in the same wrapping row and outside the group: a booking page's "+ Custom" length, a dashed Button that opens a Popover. Why: adding a choice isn't choosing one, so it can't be a chip in the group, and a full width field under the chips for a rarely used length took a row and a help line of its own (the owner, 22 October 2026).
 
 ## States
 

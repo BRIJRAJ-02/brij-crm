@@ -67,6 +67,12 @@ export const strings = {
   customMinutesHint: 'Any length from 5 to 480 minutes, in steps of 5.',
   customMinutesInvalid: 'Type 5 to 480 minutes, in steps of 5.',
   addLength: 'Add a length',
+  /** The editor's tabs (22 Oct 2026): one per group, the chosen one in `?tab=`. */
+  tabsLabel: 'Booking page settings',
+  hostsTab: 'Hosts',
+  moreOptions: 'More options',
+  /** Said to screen readers after a tab's name when a field on it holds an error. */
+  needsFix: 'needs a fix',
   add: 'Add',
   lengthsFull: 'A page offers at most 4 lengths. Turn one off to add another.',
   minutesUnit: 'min',
@@ -132,7 +138,7 @@ export const strings = {
       example: 'On Meeting length, a 30 min meeting offers 9:00, 9:30 and 10:00.',
     },
   },
-  privateHint: 'Only people with the link book it. It may book inside the time you hold, and skips the minimum notice.',
+  privateHint: 'Only people with the link can book',
   /** InfoTips on the editor's settings that a new member wouldn't read from the label alone. */
   tips: {
     schedule: {
@@ -180,10 +186,10 @@ export const strings = {
   fixPage: 'Fix what’s marked in red to save.',
   leaveConfirm: 'You have unsaved changes. Leave without saving?',
   /** Add events to: the page's own destination calendar (spec 0024, AC-997). */
-  addEventsTo: 'Add events to',
-  addEventsHint: 'Saves as soon as you choose. New bookings from this page go on this calendar.',
-  myDefaultCalendar: 'Your default calendar',
-  yourDefault: (name: string) => `Your default (${name})`,
+  addBookingsTo: 'Add bookings to',
+  addBookingsHint: 'Saves as soon as you choose.',
+  myDefaultCalendar: 'Default calendar',
+  yourDefault: (name: string) => `Default (${name})`,
   conflicts: 'Conflicts',
   checksCalendars: (count: number) =>
     count === 0

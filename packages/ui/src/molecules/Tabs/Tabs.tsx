@@ -10,6 +10,7 @@ import {
 } from 'react-aria-components';
 import { Badge } from '../../atoms/Badge/Badge.tsx';
 import { Icon } from '../../atoms/Icon/Icon.tsx';
+import { VisuallyHidden } from '../../atoms/VisuallyHidden/VisuallyHidden.tsx';
 import type { IconName } from '../../atoms/Icon/icons.ts';
 import { PageEdge } from '../../lib/page-edge.ts';
 import styles from './Tabs.module.css';
@@ -26,6 +27,11 @@ export interface TabItem {
   /** The count is a floor, not the total ("10,000+" for a capped count). */
   readonly isCountAtLeast?: boolean;
   readonly isDisabled?: boolean;
+  /**
+   * Marks the tab with a small danger dot after its label, and says this text to screen readers ("Needs a fix"):
+   * a field on that tab holds an error the person can't see from the tab they are on (the booking page editor).
+   */
+  readonly alert?: string;
   /**
    * The address choosing it moves to, when each tab is a page of its own (Captures' Links · Forms). It doesn't
    * navigate by itself (`onSelectionChange` still does); it says where the tab leads as `data-href`, so the app
@@ -151,6 +157,11 @@ export function Tabs({
                   {...(tab.isCountAtLeast === true ? { isAtLeast: true } : {})}
                 />
               )}
+              {tab.alert !== undefined && (
+                <span className={styles.alert}>
+                  <VisuallyHidden>{`, ${tab.alert}`}</VisuallyHidden>
+                </span>
+              )}
               <Indicator />
             </Tab>
           )}
@@ -166,13 +177,18 @@ export function Tabs({
 export interface TabPanelProps {
   /** The id of its tab. */
   readonly id: string;
+  /**
+   * `fields` stacks the panel's content `space-16` apart, as a Form stacks its fields, for a tab that holds a
+   * group of fields with no Card around them (the booking page editor's tabs). The default lays out nothing.
+   */
+  readonly variant?: 'default' | 'fields';
   readonly children: ReactNode;
 }
 
 /** The content of one tab. */
-export function TabPanel({ id, children }: TabPanelProps) {
+export function TabPanel({ id, variant = 'default', children }: TabPanelProps) {
   return (
-    <AriaTabPanel id={id} className={styles.panel}>
+    <AriaTabPanel id={id} className={styles.panel} data-variant={variant === 'fields' ? 'fields' : undefined}>
       {children}
     </AriaTabPanel>
   );

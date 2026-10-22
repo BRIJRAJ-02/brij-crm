@@ -233,3 +233,42 @@ export const LineFollowsChoice: Story = {
     }
   },
 };
+
+/**
+ * A tab whose fields hold an error carries a small danger dot, named to screen readers; a `fields` panel stacks its
+ * fields with no Card around them (the booking page editor).
+ */
+export const WithAlert: Story = {
+  args: {
+    label: 'Booking page',
+    inset: 'none',
+    tabs: [
+      { id: 'page', label: 'Page' },
+      { id: 'meeting', label: 'Meeting', alert: 'Needs a fix' },
+      { id: 'hours', label: 'Hours' },
+      { id: 'limits', label: 'Limits' },
+    ],
+    defaultSelectedKey: 'page',
+  },
+  render: (args) => (
+    <Tabs {...args}>
+      <TabPanel id="page" variant="fields">
+        <Field label="Description" value="A short call to see if we fit." />
+        <Field label="Public link" value="https://timefix.app/b/ada" />
+      </TabPanel>
+      <TabPanel id="meeting" variant="fields">
+        <Field label="Title" value="" error="Give it a title" />
+      </TabPanel>
+      <TabPanel id="hours" variant="fields">
+        Weekdays, 9 am to 5 pm.
+      </TabPanel>
+      <TabPanel id="limits" variant="fields">
+        No limits.
+      </TabPanel>
+    </Tabs>
+  ),
+  play: async ({ canvas }) => {
+    await expect(canvas.getByRole('tab', { name: 'Meeting, Needs a fix' })).toBeInTheDocument();
+    await expect(canvas.getByRole('tab', { name: 'Page' })).toHaveAttribute('aria-selected', 'true');
+  },
+};

@@ -21,7 +21,7 @@ import { useState } from 'react';
 import { CapturesList } from '../captures/CapturesList.tsx';
 import { useCapturesCreate } from '../captures/create.tsx';
 import { pageHeading } from '../navigation/focus.ts';
-import { pageEditorHref, publicBookingUrl } from './links.ts';
+import { pageEditorHref, publicBookingUrl, type PageTab } from './links.ts';
 import { strings } from './strings.ts';
 
 /** Props for the list: the data layer, whose held list of pages the route loaded. */
@@ -54,8 +54,7 @@ export function LinksScreen({ data, slug }: LinksScreenProps) {
   const failed = (what: string) => (error: unknown) => {
     toasts.toast({ tone: 'danger', message: `${what} ${isDataError(error) ? error.message : strings.somethingWrong}` });
   };
-  const open = (pageId: string, hash?: string) =>
-    void navigate({ to: pageEditorHref(slug, pageId), ...(hash === undefined ? {} : { hash }) });
+  const open = (pageId: string, tab?: PageTab) => void navigate({ href: pageEditorHref(slug, pageId, tab) });
   // Each change shows in the list at once; a refusal puts it back there, and the toast says why.
   const setStatus = (page: BookingPageView, status: 'live' | 'paused') => {
     data.bookingPages
