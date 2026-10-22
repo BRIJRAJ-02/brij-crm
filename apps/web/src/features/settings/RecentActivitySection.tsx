@@ -102,6 +102,7 @@ function ActivityRows({ data, page }: { readonly data: DataLayer; readonly page:
         rows={items}
         getRowId={(event) => event.id}
         renderCell={renderCell}
+        isScrollable
         emptyState={<EmptyState icon="shield-check" title={copy.empty} />}
       />
       {failure !== undefined && (

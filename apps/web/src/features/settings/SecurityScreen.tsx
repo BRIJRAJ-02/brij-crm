@@ -4,7 +4,18 @@
 // Leaves out: signing this device out (the account menu does).
 import { STEP_UP_MINUTES, type AccountSession, type ActivityPage, type DataLayer } from '@crm/data';
 import { useAccountSecurity, useAccountSessions } from '@crm/data/react';
-import { Badge, Button, EmptyState, InfoTip, Modal, RelativeTime, Table, type TableColumn, type Toasts } from '@crm/ui';
+import {
+  Badge,
+  Button,
+  EmptyState,
+  InfoTip,
+  Modal,
+  RelativeTime,
+  SettingsSection,
+  Table,
+  type TableColumn,
+  type Toasts,
+} from '@crm/ui';
 import { useEffect, useRef, useState } from 'react';
 import { currentFirst, deviceName, devicePlace } from './security-lines.ts';
 import { strings } from './security-strings.ts';
@@ -28,7 +39,16 @@ const COLUMNS: readonly TableColumn[] = [
 /** The Devices table while it loads: skeleton rows in the loaded table's place. */
 export function SecurityLoading() {
   return (
-    <Table label={strings.devices} columns={COLUMNS} rows={[]} getRowId={() => ''} renderCell={() => null} isLoading />
+    <SettingsSection title={strings.devices} description={strings.devicesDescription}>
+      <Table
+        label={strings.devices}
+        columns={COLUMNS}
+        rows={[]}
+        getRowId={() => ''}
+        renderCell={() => null}
+        isLoading
+      />
+    </SettingsSection>
   );
 }
 
@@ -126,7 +146,8 @@ export function SecurityScreen({ data, toasts, activity, onActivityRetry = () =>
     const place = devicePlace(session);
     return (
       <Button
-        variant="danger"
+        // Quiet in every row: the danger confirm carries the weight, so the list isn't a column of red buttons.
+        variant="secondary"
         // Two devices can share a name: the place tells them apart for a screen reader too.
         label={strings.signOutLabel(place === undefined ? deviceName(session) : `${deviceName(session)}, ${place}`)}
         onPress={() => ask({ kind: 'one', session })}
@@ -147,13 +168,30 @@ export function SecurityScreen({ data, toasts, activity, onActivityRetry = () =>
     );
   } else {
     body = (
-      <>
+      <SettingsSection
+        title={strings.devices}
+        description={strings.devicesDescription}
+        // The one action over the whole list sits at its heading, beside the rows it ends.
+        {...(hasOthers
+          ? {
+              actions: (
+                <>
+                  <InfoTip label={strings.signOutOthers}>{strings.signOutOthersInfo(STEP_UP_MINUTES)}</InfoTip>
+                  <Button variant="danger" onPress={() => ask({ kind: 'others' })}>
+                    {strings.signOutOthers}
+                  </Button>
+                </>
+              ),
+            }
+          : {})}
+      >
         <Table
           label={strings.devices}
           columns={COLUMNS}
           rows={currentFirst(state.items)}
           getRowId={(session) => session.id}
           renderCell={renderCell}
+          isScrollable
           emptyState={<EmptyState icon="monitor" title={strings.noDevices} />}
         />
         {state.nextCursor !== undefined && (
@@ -161,7 +199,7 @@ export function SecurityScreen({ data, toasts, activity, onActivityRetry = () =>
             {strings.showMore}
           </Button>
         )}
-      </>
+      </SettingsSection>
     );
   }
 
@@ -176,22 +214,7 @@ export function SecurityScreen({ data, toasts, activity, onActivityRetry = () =>
   });
   const onePlace = one === undefined ? undefined : devicePlace(one);
   return (
-    <SettingsPage
-      title={strings.title}
-      titleRef={titleRef}
-      {...(hasOthers
-        ? {
-            actions: (
-              <>
-                <InfoTip label={strings.signOutOthers}>{strings.signOutOthersInfo(STEP_UP_MINUTES)}</InfoTip>
-                <Button variant="danger" onPress={() => ask({ kind: 'others' })}>
-                  {strings.signOutOthers}
-                </Button>
-              </>
-            ),
-          }
-        : {})}
-    >
+    <SettingsPage title={strings.title} titleRef={titleRef}>
       <TwoFactorSection data={data} security={security} toasts={toasts} onFocusLost={focusTitle} />
       <PasskeysSection data={data} security={security} toasts={toasts} onFocusLost={focusTitle} />
       {body}
