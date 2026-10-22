@@ -24,6 +24,7 @@ const item = useSortableItem(id);
 - `label` names the move for screen readers: "Move Stage".
 - `drag` is the grip of a sortable item (`useSortableItem(...).grip`). The handle is a plain button: it keeps its pointer press and its Space and Enter to itself, so the row around it never presses (opens) when a drag starts. A grip whose item can't move draws nothing; say why somewhere the person can reach (a tooltip on a lock).
 - `manual` (spec 0034): a list outside the wrapper (the sidebar's sections, which no single list holds) drives the handle itself: it passes `isLifted`, `onKeyDown` (Space or Enter lifts and drops, the arrows move, Esc puts it back), `onPointerDown` (a pointer drag) and `onBlur` (put back). Why a variant rather than a new grip: it is the same control, moved by the same keys.
+- `reach="end"` keeps the 24px hit area (WCAG 2.5.8) next to an edge that clips: it starts on the handle and grows toward the inline end, rather than evenly around it. A settings table's gutter handle uses it, since its scrolling frame cut the even hit area to about 21px (22 October 2026). Why a variant: the same control, only its hit area moves.
 
 ## States
 

@@ -589,6 +589,8 @@ export interface SortableRowGripProps {
   readonly isDisabled?: boolean;
   /** Nothing lands on this row's place (a locked first row, a row still being added): the others don't make room. */
   readonly refusesDrop?: boolean;
+  /** Where the grip's hit area grows (see DragHandle's `reach`): `end` against an edge that clips. */
+  readonly reach?: 'around' | 'end';
 }
 
 /**
@@ -597,12 +599,18 @@ export interface SortableRowGripProps {
  * row that can't move. Rendered inside the row, so React Aria's collection
  * pass never runs its hooks.
  */
-export function SortableRowGrip({ id, label, isDisabled = false, refusesDrop = false }: SortableRowGripProps) {
+export function SortableRowGrip({
+  id,
+  label,
+  isDisabled = false,
+  refusesDrop = false,
+  reach = 'around',
+}: SortableRowGripProps) {
   const { bind, grip } = useSortableItem(id, { isDisabled, refusesDrop, within: 'row' });
   return (
     <>
       <span ref={bind} hidden />
-      <DragHandle label={label} drag={grip} />
+      <DragHandle label={label} drag={grip} reach={reach} />
     </>
   );
 }

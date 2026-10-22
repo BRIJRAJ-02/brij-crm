@@ -213,7 +213,7 @@ export function Table<T>({
                 >
                   {handleInGutter && column.id === firstColumnId && (
                     <span className={styles.gutter}>
-                      <SortableRowGrip id={item.id} label={strings.move(getRowLabel(item.row))} />
+                      <SortableRowGrip id={item.id} label={strings.move(getRowLabel(item.row))} reach="end" />
                     </span>
                   )}
                   {column.isInline === true ? (
