@@ -151,7 +151,8 @@ test.describe('availability schedules', () => {
 
     // Deleting from the switcher asks first, naming the page it moves; Cancel changes nothing.
     await page.goto(editorUrl);
-    await expect(page.getByRole('list', { name: 'Used by' })).toContainText('Intro call');
+    // Used by is rows now (availfix): a grid of the pages, each opening its editor.
+    await expect(page.getByRole('grid', { name: 'Used by' })).toContainText('Intro call');
     const remove = async () => {
       await switcher('Evenings').click();
       await page.getByRole('menuitem', { name: 'Delete' }).click();

@@ -140,6 +140,9 @@ test.describe('saved views', () => {
     // One line (the owner, 22 October 2026): View settings is the bar's one button, the switch the same height.
     const settings = page.getByRole('button', { name: 'View settings' });
     const layout = page.getByRole('radiogroup', { name: 'Layout' });
+    // Both drawn before they are measured (a box read too soon is null).
+    await expect(settings).toBeVisible();
+    await expect(layout).toBeVisible();
     const button = await settings.boundingBox();
     const segmented = await layout.boundingBox();
     expect(Math.abs((button?.height ?? 0) - (segmented?.height ?? 1))).toBeLessThan(1);

@@ -218,10 +218,20 @@ export function ScheduleEditorPending() {
       aside={
         <>
           <Card title={strings.daysOff} isBusy>
-            <Skeleton lines={3} />
-          </Card>
-          <Card title={scheduleStrings.usedByLabel} isBusy>
             <Skeleton lines={2} />
+          </Card>
+          {/* The rows Used by draws once loaded, in their loading shape. */}
+          <Card title={scheduleStrings.usedByLabel}>
+            <LinkList
+              label={scheduleStrings.usedByLabel}
+              density="compact"
+              placement="card"
+              isToolbarHidden
+              searchLabel={scheduleStrings.usedByLabel}
+              status="loading"
+              rows={[]}
+              onOpen={() => undefined}
+            />
           </Card>
         </>
       }
