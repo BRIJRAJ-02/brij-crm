@@ -134,7 +134,6 @@ export async function bookAsHost(
       if (page === undefined || onPage === undefined) {
         throw refuseOn('NOT_FOUND', 'That booking page doesn’t exist, or isn’t yours.', 'pageId');
       }
-      if (input.calendarId !== undefined) await checkCalendar(tx, host, input.calendarId);
       await lockKey(tx, hostLockKey(scope.workspaceId, host));
       const [again] = await tx
         .select({ id: bookings.id })
@@ -147,6 +146,8 @@ export async function bookAsHost(
           ),
         );
       if (again !== undefined) return { bookingId: again.id, replayed: true, title: page.title, place: undefined };
+      // After the retry check: a retry answers the booking it made, even once that calendar is disconnected.
+      if (input.calendarId !== undefined) await checkCalendar(tx, host, input.calendarId);
       const by = { type: 'member' as const, id: host, memberId: host };
       let bookingId: string;
       try {

@@ -761,6 +761,9 @@ export async function markNoShow(
 /** What a link to a record nobody may see, or that doesn't exist, answers: the same either way. */
 const NO_SUCH_RECORD = 'That record doesn’t exist, or you can’t see it.';
 
+/** What replacing a booking's link to a record the member can't see answers: never which record it is. */
+const HIDDEN_LINK = 'This booking is linked to a record you can’t see.';
+
 /**
  * Links a booking to a record by hand from its card, or takes the link off with `recordId: null` (polish F2): its
  * host, the page's owner or `booking.admin`, as any change (a booking they can't change answers NOT_FOUND). The
@@ -769,10 +772,11 @@ const NO_SUCH_RECORD = 'That record doesn’t exist, or you can’t see it.';
  * (CONFIG_INVALID): those are the guest's, filed when it was made. A past or cancelled booking may be filed too.
  * Kept in `deal_record_id`, audited; the same link again changes nothing. Answers the record as a chip shows it.
  *
- * Only the new record is checked, never the one linked now: a member who may change the booking but can't see its
- * current link (an object hidden from them, a record rule) may still replace it or take it off. That is on purpose.
- * Refusing would tell them a link is there, and a hidden record is absent (spec 0009); the booking is theirs to file,
- * and the audit row keeps what it was linked to before.
+ * A write never removes what the writer can't see (spec 0009), as a relationship's side of one and a task's links
+ * keep a link hidden from them (spec 0014, spec 0019). So when the record linked now is live on a live object and
+ * hidden from the member (an object hidden from them, a record rule), taking the link off changes nothing and answers
+ * nothing linked, as taking off a link that isn't there does, and naming another record refuses FORBIDDEN on
+ * `recordId` without naming the one linked. A linked record in the trash, or on an archived object, gives way.
  */
 export async function linkBookingRecord(
   scope: EngineScope,
@@ -785,6 +789,14 @@ export async function linkBookingRecord(
     const { row } = await readTarget(tx, target, true);
     const recordId = input.recordId === null ? null : checkId(input.recordId, NO_SUCH_RECORD);
     if (recordId !== null) await checkLinkableRecord(tx, scope, recordId);
+    if (
+      row.dealRecordId !== null &&
+      row.dealRecordId !== recordId &&
+      (await isHiddenLink(tx, scope, row.dealRecordId))
+    ) {
+      if (recordId === null) return {};
+      throw refuseOn('FORBIDDEN', HIDDEN_LINK, 'recordId');
+    }
     if (row.dealRecordId !== recordId) {
       await tx
         .update(bookings)
@@ -806,6 +818,23 @@ export async function linkBookingRecord(
     }
     return handLinkOf({ dealRecordId: recordId }, await linkedRecords(tx, scope.access, [{ dealRecordId: recordId }]));
   });
+}
+
+/**
+ * Whether the record a booking is linked to now is live on a live object and hidden from the member, so a link write
+ * must keep it (spec 0009). One in the trash, on an archived object, or gone reads as absent and gives way.
+ */
+async function isHiddenLink(tx: WorkspaceTx, scope: EngineScope, recordId: string): Promise<boolean> {
+  if (isOpen(scope.access)) return false;
+  const found = await tx.execute<{ id: string; object_id: string }>(sql`
+    select r.id::text as id, r.object_id::text as object_id
+    from records r join objects o on o.workspace_id = r.workspace_id and o.id = r.object_id
+    where r.id = ${recordId}::uuid and r.deleted_at is null and o.archived_at is null
+  `);
+  const [record] = found.rows;
+  if (record === undefined) return false;
+  const seen = await visibleRecords(tx, scope.access, [{ objectId: record.object_id, recordId: record.id }]);
+  return !seen.has(record.id);
 }
 
 /**

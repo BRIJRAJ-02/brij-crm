@@ -468,6 +468,26 @@ describe('the host links a booking to a record by hand (polish F2)', () => {
     expect(await row(s.workspaceId, booked.bookingId)).not.toHaveProperty('deal_record_id', navy.recordId);
   });
 
+  it('answers another workspace’s real deal as one that doesn’t exist, and writes nothing', async () => {
+    const s = await setup();
+    const other = await setup();
+    const booked = await s.book();
+    const { deals: otherDeals } = await objectsOf(other.workspaceId);
+    const theirs = await createRecord(other.host, {
+      objectId: otherDeals.id,
+      values: { [otherDeals.name_id]: 'Their deal' },
+    });
+    expect(
+      await refusalOf(linkBookingRecord(s.host, { bookingId: booked.bookingId, recordId: theirs.recordId })),
+    ).toMatchObject({
+      code: 'NOT_FOUND',
+      field: 'recordId',
+      message: 'That record doesn’t exist, or you can’t see it.',
+    });
+    expect(await row(s.workspaceId, booked.bookingId)).toHaveProperty('deal_record_id', null);
+    expect(await audited(s.workspaceId, booked.bookingId)).toEqual([]);
+  });
+
   it('refuses a deal the member can’t see as missing, and one they may only read; a reader who can’t see it learns nothing', async () => {
     const s = await setup();
     const { deals } = await objectsOf(s.workspaceId);
@@ -528,7 +548,48 @@ describe('the host links a booking to a record by hand (polish F2)', () => {
     });
   });
 
-  it('lets a member who can’t see the current link replace it or take it off, so a refusal never says one is there', async () => {
+  it('keeps a link the member can’t see: taking it off changes nothing, and another record is refused without naming it', async () => {
+    const s = await setup();
+    const { deals } = await objectsOf(s.workspaceId);
+    // Ada's deal (Owner defaults to whoever makes it); Bea sees only the deals she owns.
+    const navy = await createRecord(s.host, { objectId: deals.id, values: { [deals.name_id]: 'Navy rollout' } });
+    const { bea, bookingId } = await beaBooking(s);
+    const own = await dealOwnerOf(s.workspaceId, deals.id);
+    const ruled = rescope(bea, {
+      rules: {
+        levels: [],
+        records: [{ subject: { type: 'role', role: 'member' }, objectId: deals.id, kind: 'own', attributeId: own }],
+      },
+    });
+    const mine = await createRecord(ruled, { objectId: deals.id, values: { [deals.name_id]: 'Bea’s deal' } });
+    // Ada links Bea's booking to Ada's deal; Bea's card shows no link.
+    await linkBookingRecord(s.host, { bookingId, recordId: navy.recordId });
+    const before = await audited(s.workspaceId, bookingId);
+    // Bea's own deal can't replace it, and the refusal names no record.
+    const refused = await refusalOf(linkBookingRecord(ruled, { bookingId, recordId: mine.recordId }));
+    expect(refused).toMatchObject({
+      code: 'FORBIDDEN',
+      field: 'recordId',
+      message: 'This booking is linked to a record you can’t see.',
+    });
+    expect(JSON.stringify(refused)).not.toContain(navy.recordId);
+    expect(JSON.stringify(refused)).not.toContain('Navy');
+    expect(await row(s.workspaceId, bookingId)).toHaveProperty('deal_record_id', navy.recordId);
+    // Taking it off blind changes nothing and answers nothing linked, as a booking with no link does.
+    expect(await linkBookingRecord(ruled, { bookingId, recordId: null })).toEqual({});
+    expect(await row(s.workspaceId, bookingId)).toHaveProperty('deal_record_id', navy.recordId);
+    expect(await audited(s.workspaceId, bookingId)).toEqual(before);
+    // A member who can't see Deals at all keeps it too.
+    const blind = rescope(bea, { rules: dealsAt(deals.id, 'none') });
+    expect(await linkBookingRecord(blind, { bookingId, recordId: null })).toEqual({});
+    expect(await row(s.workspaceId, bookingId)).toHaveProperty('deal_record_id', navy.recordId);
+    // Ada, who sees it, still changes it.
+    expect(await linkBookingRecord(s.host, { bookingId, recordId: mine.recordId })).toMatchObject({
+      linkedRecord: { recordId: mine.recordId },
+    });
+  });
+
+  it('lets a hidden link in the trash, or on an archived object, give way', async () => {
     const s = await setup();
     const { deals } = await objectsOf(s.workspaceId);
     const navy = await createRecord(s.host, { objectId: deals.id, values: { [deals.name_id]: 'Navy rollout' } });
@@ -541,14 +602,17 @@ describe('the host links a booking to a record by hand (polish F2)', () => {
       },
     });
     const mine = await createRecord(ruled, { objectId: deals.id, values: { [deals.name_id]: 'Bea’s deal' } });
-    // Linked to Ada's deal, which Bea can't see: her own deal replaces it.
-    await linkBookingRecord(bea, { bookingId, recordId: navy.recordId });
+    // In the trash: Bea's own deal replaces it.
+    await linkBookingRecord(s.host, { bookingId, recordId: navy.recordId });
+    await deleteRecord(s.host, { recordId: navy.recordId });
     expect(await linkBookingRecord(ruled, { bookingId, recordId: mine.recordId })).toMatchObject({
-      linkedRecord: { recordId: mine.recordId, name: 'Bea’s deal' },
+      linkedRecord: { recordId: mine.recordId },
     });
     expect(await row(s.workspaceId, bookingId)).toHaveProperty('deal_record_id', mine.recordId);
-    // Linked to Ada's deal again: taking it off works too, and answers nothing linked.
-    await linkBookingRecord(bea, { bookingId, recordId: navy.recordId });
+    // Another of Ada's deals, with Deals archived: taking it off works.
+    const orbit = await createRecord(s.host, { objectId: deals.id, values: { [deals.name_id]: 'Orbit' } });
+    await linkBookingRecord(s.host, { bookingId, recordId: orbit.recordId });
+    await setObjectArchived(s.host, { objectId: deals.id, archived: true });
     expect(await linkBookingRecord(ruled, { bookingId, recordId: null })).toEqual({});
     expect(await row(s.workspaceId, bookingId)).toHaveProperty('deal_record_id', null);
   });

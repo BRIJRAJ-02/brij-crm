@@ -11,6 +11,7 @@ import { isOpen, type Access } from '../access/policy.ts';
 import { visibleRecords } from '../access/visibility.ts';
 import { uuidList } from '../engine/ids.ts';
 import { readRecords } from '../engine/records.ts';
+import { loadNameAttributes } from '../engine/values.ts';
 
 /** A booking row's links, as stored. */
 export interface BookingLinks {
@@ -58,7 +59,8 @@ export interface HandLink {
 /**
  * The hand linked records among `rows` the reader may see, live on a live object, as chips show them, by id: one read
  * of their displays, which keeps only what the reader may see, skips the trash, and leaves out an archived object's
- * records from the object rows it loads anyway (no statement of its own for that), however many rows.
+ * records from the object rows it loads anyway (no statement of its own for that), however many rows. Only their
+ * objects' name attributes are loaded, in one statement.
  */
 export async function linkedRecords(
   tx: WorkspaceTx,
@@ -67,7 +69,11 @@ export async function linkedRecords(
 ): Promise<ReadonlyMap<string, RecordRefDisplay>> {
   const ids = [...new Set(rows.flatMap((row) => (row.dealRecordId === null ? [] : [row.dealRecordId])))];
   if (ids.length === 0) return new Map();
-  const views = await readRecords(tx, access, ids, { attributeIds: [], liveObjectsOnly: true });
+  const views = await readRecords(tx, access, ids, {
+    attributeIds: [],
+    attributes: await loadNameAttributes(tx, ids),
+    liveObjectsOnly: true,
+  });
   return new Map(views.map((view) => [view.id, view.display]));
 }
 

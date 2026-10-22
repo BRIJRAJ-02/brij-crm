@@ -322,4 +322,19 @@ describe('several guests and the calendar the member picks (spec 0027’s follow
     });
     expect(week.bookings).toHaveLength(1);
   });
+
+  it('answers a retry with the booking it made, even once the calendar picked is disconnected', async () => {
+    const w = await workspace();
+    const page = await pageOf(w.owner);
+    const work = newId();
+    await account(w.workspaceId, w.memberId, 'connected', [{ id: work, role: 'writer' }]);
+    const asked = input(page.id, { calendarId: work });
+    const first = await bookAsHost(w.owner, calendar().deps, asked);
+    await db.withWorkspace(w.workspaceId, (tx) =>
+      tx.execute(sql`update calendar_connections set status = 'revoked' where member_id = ${w.memberId}::uuid`),
+    );
+    const retried = calendar();
+    expect(await bookAsHost(w.owner, retried.deps, asked)).toEqual({ bookingId: first.bookingId, replayed: true });
+    expect(retried.events).toEqual([]);
+  });
 });

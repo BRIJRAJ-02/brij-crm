@@ -166,13 +166,8 @@ const NO_SCOPE: ReadonlySet<string> = new Set([
   // the system in its workspace.
   'handOnBooking',
   'remakeEvent',
-  // Lead routing (spec 0043): a no show is marked through the booking's target (hostTarget, booking.manage), as a
-  // cancel is; the report checks its surface (the form's or page's own access) itself; the route and the record
-  // facts it reads are pure.
-  'markNoShow',
-  // A booking's hand link to a record (polish F2): through the booking's target too, then the record's own access
-  // (visible, and an object the member may change), checked in change.test.ts.
-  'linkBookingRecord',
+  // Lead routing (spec 0043): the report checks its surface (the form's or page's own access) itself; the route and
+  // the record facts it reads are pure. (A no show is marked through the booking's target: in the table.)
   'routingReport',
   'decideRoute',
   'recordFactKeys',
@@ -407,6 +402,10 @@ describe('the walk: a principal without the access is refused', () => {
           // A member's change target and the guest link name a booking, not a page; the row decides (change.test.ts).
           'hostTarget',
           'bookingGuestPath',
+          // So do a no show (routing.test.ts) and a hand link to a record, then the record's own access
+          // (change.test.ts: the booking another member's, the record hidden, read only or in another workspace).
+          'markNoShow',
+          'linkBookingRecord',
           // Rotations aren't pages: a member lists only the ones they're in (rotations.test.ts); a booking's
           // assignments are its host's (assignments are checked on the row, rotations.test.ts); a reassign is checked
           // on the booking and over both hosts (rotation.test.ts).

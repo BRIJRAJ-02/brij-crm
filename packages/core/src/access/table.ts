@@ -354,6 +354,9 @@ export const ACCESS_TABLE = {
   // Changing a booking from Bookings (spec 0025, milestone 2): booking.manage first, then the booking's row.
   hostTarget: { bookingPages: true },
   bookingGuestPath: { bookingPages: true },
+  // A no show (spec 0043) and a hand link to a record (polish F2): through the booking's target too.
+  markNoShow: { bookingPages: true },
+  linkBookingRecord: { bookingPages: true },
   // Round robin (spec 0029): anyone with booking.manage lists the rotations they're in (their own count only);
   // making, changing and deleting them is booking.admin's (AC-751). A booking's assignments: its host or an admin.
   listRotations: { bookingPages: true },
