@@ -186,6 +186,13 @@ export {
 } from './modules/AppShell/AppShell.tsx';
 export { AuthLayout, type AuthLayoutProps, type ProductLogo } from './modules/AuthLayout/AuthLayout.tsx';
 export {
+  InviteRows,
+  type InviteRole,
+  type InviteRowsHandle,
+  type InviteRowsProps,
+} from './modules/InviteRows/InviteRows.tsx';
+export { createInviteRow, type InviteRow } from './modules/InviteRows/invite-rows.ts';
+export {
   BookingList,
   type BookingListGroup,
   type BookingListProps,
