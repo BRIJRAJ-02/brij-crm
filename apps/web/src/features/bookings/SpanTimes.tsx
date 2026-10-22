@@ -15,7 +15,10 @@ export interface SpanTimesProps {
   /** Lengths beside To's times ("2:00 PM (1 hr)"), for a meeting. */
   readonly showsLength?: boolean;
   readonly isDisabled?: boolean;
-  /** A note under the times: which zone they are in ("Times in Kolkata time (GMT+5:30)"). */
+  /**
+   * A note under To, the last of the two, closing the pair: which zone they are in ("Times in Kolkata time
+   * (GMT+5:30)"). Once under the pair rather than under each, so it reads as one note.
+   */
   readonly hint?: string;
 }
 

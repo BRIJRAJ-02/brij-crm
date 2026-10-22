@@ -245,6 +245,11 @@ export const Zone: Story = {
     const corner = canvasElement.querySelector('[title^="Times in"]');
     await expect(corner?.textContent).toContain('GMT+5:30');
     await expect(corner?.getAttribute('title')).toBe('Times in Kolkata time (GMT+5:30)');
+    // Read out as focus enters the week: the section is described by the zone's full name.
+    const described = canvasElement.querySelector('section')?.getAttribute('aria-describedby') ?? '';
+    await expect(canvasElement.ownerDocument.getElementById(described)?.textContent).toBe(
+      'Times in Kolkata time (GMT+5:30)',
+    );
   },
 };
 
