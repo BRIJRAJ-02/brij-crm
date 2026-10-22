@@ -234,12 +234,15 @@ export type CalendarHealth = z.infer<typeof CalendarHealth>;
 /**
  * A booking page's own "Add events to" (AC-997): the calendar it names (one of the page owner's), and whether
  * bookings can go there now. `default` follows the owner's own destination; `unusable` names a calendar that can't
- * take bookings, so they go to the owner's. Never a calendar's name: the owner reads names from their own list.
+ * take bookings, or the one it named went (no `calendarId`), so they go to the owner's. A colleague never reads a
+ * calendar's name; the owner reads names from their own list, and a gone calendar's from `removedName`.
  */
 export const PageDestinationView = z.object({
   calendarId: Uuid.optional(),
   status: z.enum(['default', 'page', 'unusable']),
   isOwner: z.boolean(),
+  /** The page's calendar went (removed at the provider, or its account disconnected): its name, to the owner only. */
+  removedName: z.string().max(255).optional(),
 });
 /** A booking page's own "Add events to". */
 export type PageDestinationView = z.infer<typeof PageDestinationView>;
