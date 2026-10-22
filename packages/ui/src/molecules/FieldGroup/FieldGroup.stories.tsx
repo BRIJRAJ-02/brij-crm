@@ -16,20 +16,21 @@ const meta = {
 export default meta;
 type Story = StoryObj<typeof meta>;
 
-/** A schedule's week, read only, with a quiet Edit at the label row's end and the zone as its hint. */
+/** A schedule's week, read only: its zone after the label, a quiet Edit at the row's end, the week compact. */
 export const Default: Story = {
   render: (args) => (
     <Stage>
       <FieldGroup
         {...args}
         action={
-          <Button variant="ghost" size="sm">
+          <Button variant="ghost" size="sm" icon="pencil">
             Edit
           </Button>
         }
-        hint="Kolkata time (GMT+5:30)"
+        meta="Kolkata time (GMT+5:30)"
       >
         <DescriptionList
+          layout="compact"
           items={[
             { term: 'Mon to Fri', description: '9:00 AM to 5:00 PM' },
             { term: 'Sat, Sun', description: 'Unavailable' },
@@ -39,9 +40,7 @@ export const Default: Story = {
     </Stage>
   ),
   play: async ({ canvas }) => {
-    await expect(canvas.getByRole('group', { name: 'Weekly hours' })).toHaveAccessibleDescription(
-      'Kolkata time (GMT+5:30)',
-    );
+    await expect(canvas.getByRole('group', { name: 'Weekly hours' })).toHaveTextContent('Kolkata time (GMT+5:30)');
     await expect(canvas.getByRole('button', { name: 'Edit' })).toBeInTheDocument();
   },
 };
@@ -55,13 +54,13 @@ export const Row: Story = {
         {...args}
         layout="row"
         action={
-          <Button variant="ghost" size="sm">
+          <Button variant="ghost" size="sm" icon="settings">
             Manage
           </Button>
         }
       >
-        <Badge text="ada@acme.dev" dot="blue" />
-        <Badge text="Team offsites" dot="green" />
+        <Badge size="chip" text="ada@acme.dev" dot="blue" />
+        <Badge size="chip" text="Team offsites" dot="green" />
       </FieldGroup>
     </Stage>
   ),
@@ -109,7 +108,7 @@ export const LongRow: Story = {
       <FieldGroup {...args} layout="row">
         {['ada@acme.dev', 'Team offsites', 'Holidays in India', 'Birthdays', 'Support rota', 'Board meetings'].map(
           (name) => (
-            <Badge key={name} text={name} dot="purple" />
+            <Badge key={name} size="chip" text={name} dot="purple" />
           ),
         )}
       </FieldGroup>

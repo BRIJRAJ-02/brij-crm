@@ -26,6 +26,13 @@
     overflow: hidden;
   }
 
+  /* A Tag's height, for a Badge in a row of chips. */
+  .root[data-size='chip'] {
+    block-size: var(--size-chip);
+    padding-inline: var(--space-6);
+    border-radius: var(--radius-sm);
+  }
+
   .text {
     overflow: hidden;
     text-overflow: ellipsis;

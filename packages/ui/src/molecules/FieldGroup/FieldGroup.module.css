@@ -23,6 +23,11 @@
     letter-spacing: var(--tracking-label);
   }
 
+  /* The label's fact: the label's own style, a step quieter. */
+  .meta {
+    color: var(--text-tertiary);
+  }
+
   .action {
     display: inline-flex;
     margin-block: calc(var(--space-4) * -1);
@@ -30,6 +35,11 @@
 
   .content {
     min-inline-size: 0;
+  }
+
+  /* A long chip ellipses inside the row rather than running past it. */
+  .content[data-layout='row'] > * {
+    max-inline-size: 100%;
   }
 
   .content[data-layout='row'] {

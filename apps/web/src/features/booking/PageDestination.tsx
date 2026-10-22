@@ -126,14 +126,14 @@ export function PageConflicts({ destination, calendars, settingsHref }: PageConf
       label={strings.checksConflictsIn}
       layout="row"
       action={
-        <ButtonLink href={settingsHref} variant="ghost" size="sm">
+        <ButtonLink href={settingsHref} variant="ghost" size="sm" icon="settings">
           {strings.manage}
         </ButtonLink>
       }
       {...(checked.length === 0 ? { hint: strings.noneChecked } : {})}
     >
       {checked.map((item) => (
-        <Badge key={item.id} text={item.label} dot={item.hue ?? 'gray'} />
+        <Badge key={item.id} size="chip" text={item.label} dot={item.hue ?? 'gray'} />
       ))}
     </FieldGroup>
   );

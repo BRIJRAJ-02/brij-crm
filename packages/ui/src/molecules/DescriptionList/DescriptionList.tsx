@@ -13,7 +13,11 @@ export interface DescriptionItem {
 export interface DescriptionListProps {
   readonly items: readonly DescriptionItem[];
   /** `columns` puts terms beside descriptions (the default); `stacked` puts each term above its description. */
-  readonly layout?: 'columns' | 'stacked';
+  /**
+   * `compact` is columns on a tight rhythm with the terms in one fixed narrow column, so short values line up
+   * (a schedule's week: "Mon to Wed", "Thu").
+   */
+  readonly layout?: 'columns' | 'stacked' | 'compact';
 }
 
 /** Labelled values that are not attributes: an API key's scopes, a webhook's last delivery, an invoice's totals. */

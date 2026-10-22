@@ -10,6 +10,12 @@
     letter-spacing: var(--tracking-body);
   }
 
+  /* Compact: terms in one narrow fixed column, rows space-4 apart, so a short list reads as one block. */
+  .root[data-layout='compact'] {
+    grid-template-columns: var(--size-column-narrow) minmax(0, 1fr);
+    gap: var(--space-4) var(--space-12);
+  }
+
   .root[data-layout='stacked'] {
     grid-template-columns: 1fr;
     gap: var(--space-12);

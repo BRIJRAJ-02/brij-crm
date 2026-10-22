@@ -5,6 +5,8 @@ import styles from './FieldGroup.module.css';
 export interface FieldGroupProps {
   /** The label over the content, in a Field's label style. */
   readonly label: string;
+  /** A short fact after the label on its line, in the same quiet colour ("Kolkata time (GMT+5:30)"). */
+  readonly meta?: string;
   /** A quiet control at the label row's end (a ghost "Edit" or "Manage" Button). */
   readonly action?: ReactNode;
   /** One short line under the content. */
@@ -19,7 +21,7 @@ export interface FieldGroupProps {
  * end, the content, then one hint line. For what a form shows but doesn't edit in place (a schedule's week, the
  * calendars checked for conflicts), so it lines up with the fields around it.
  */
-export function FieldGroup({ label, action, hint, layout = 'block', children }: FieldGroupProps) {
+export function FieldGroup({ label, meta, action, hint, layout = 'block', children }: FieldGroupProps) {
   const labelId = useId();
   const hintId = useId();
   return (
@@ -30,8 +32,9 @@ export function FieldGroup({ label, action, hint, layout = 'block', children }: 
       {...(hint === undefined ? {} : { 'aria-describedby': hintId })}
     >
       <div className={styles.head}>
-        <span id={labelId} className={styles.label}>
-          {label}
+        <span className={styles.label}>
+          <span id={labelId}>{label}</span>
+          {meta !== undefined && <span className={styles.meta}> · {meta}</span>}
         </span>
         {action !== undefined && <span className={styles.action}>{action}</span>}
       </div>

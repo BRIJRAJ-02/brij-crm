@@ -316,7 +316,7 @@ export interface SettingsRowProps {
    * shares (a Field, a Select, a plain value), so a page's inputs start and end on the same lines; on a narrow
    * page it takes the row's full width under the text.
    */
-  readonly control?: 'fit' | 'field';
+  readonly control?: 'fit' | 'field' | 'compact';
   /** The control, at the end of the row: a Select, a Switch, a Button, a row's "···" menu. None for a row that only shows. */
   readonly children?: ReactNode;
 }
@@ -362,6 +362,12 @@ export function SettingsRow({
 export interface SettingsRowGroupProps {
   /** What the rows have in common ("Buffers"): a quiet label over them. */
   readonly title: string;
+  /**
+   * `plain` drops every hairline, between its rows and before it, and sets the rows on a compact rhythm, space
+   * alone setting groups apart (a booking page's Limits tab, the owner, 22 Oct 2026: "remove lines as separators").
+   * Settings pages keep the default, its hairlines.
+   */
+  readonly variant?: 'default' | 'plain';
   /** Its SettingsRows. */
   readonly children: ReactNode;
 }
@@ -371,10 +377,15 @@ export interface SettingsRowGroupProps {
  * Buffers, Booking window, Pace), a hairline before the next group. Why a component: a Card of six rows read as one
  * long list; grouped, each pair reads as one idea.
  */
-export function SettingsRowGroup({ title, children }: SettingsRowGroupProps) {
+export function SettingsRowGroup({ title, variant = 'default', children }: SettingsRowGroupProps) {
   const headingId = useId();
   return (
-    <div className={styles.rowGroup} role="group" aria-labelledby={headingId}>
+    <div
+      className={styles.rowGroup}
+      role="group"
+      aria-labelledby={headingId}
+      data-variant={variant === 'plain' ? 'plain' : undefined}
+    >
       <span className={styles.rowGroupTitle} id={headingId}>
         {title}
       </span>
