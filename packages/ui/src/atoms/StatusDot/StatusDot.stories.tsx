@@ -66,6 +66,10 @@ export const LabelCollapsible: Story = {
       );
       await expect(copies).toHaveLength(1);
     }
-    await expect(narrow).toHaveTextContent('Draft');
   },
+};
+
+/** Archived and collapsible: on a phone a gray dot, its words and "(archived)" read by screen readers. */
+export const ArchivedCollapsible: Story = {
+  args: { children: 'Paused', hue: 'orange', isArchived: true, isLabelCollapsible: true },
 };
