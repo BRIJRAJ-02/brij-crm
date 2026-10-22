@@ -22,6 +22,11 @@ const emulateForcedColors: BrowserCommand<[active: boolean]> = async (context, a
   await context.page.emulateMedia({ forcedColors: active ? 'active' : 'none' });
 };
 
+/** Switches reduced motion on or off for the page, as forced colours above. */
+const emulateReducedMotion: BrowserCommand<[reduce: boolean]> = async (context, reduce) => {
+  await context.page.emulateMedia({ reducedMotion: reduce ? 'reduce' : 'no-preference' });
+};
+
 const headless = { enabled: true, headless: true, provider: playwright() } as const;
 
 /**
@@ -98,7 +103,11 @@ export default mergeConfig(
             name: 'browser',
             fileParallelism: false,
             include: ['src/**/*.browser.test.tsx'],
-            browser: { ...headless, instances: [{ browser: 'chromium' }], commands: { emulateForcedColors } },
+            browser: {
+              ...headless,
+              instances: [{ browser: 'chromium' }],
+              commands: { emulateForcedColors, emulateReducedMotion },
+            },
           },
         },
         {
@@ -152,5 +161,6 @@ declare module 'vitest' {
 declare module 'vitest/browser' {
   interface BrowserCommands {
     emulateForcedColors: (active: boolean) => Promise<void>;
+    emulateReducedMotion: (reduce: boolean) => Promise<void>;
   }
 }
