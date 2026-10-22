@@ -80,7 +80,7 @@
     letter-spacing: var(--tracking-label);
   }
 
-  /* Horizontal: one row, each step's hairline running on to the next marker, the step labels on one line. */
+  /* Horizontal: one row, each step's hairline running on to the next marker, each label beside its marker. */
   .frame {
     container-type: inline-size;
   }
@@ -110,11 +110,8 @@
     padding-block-start: 0;
   }
 
-  .root[data-orientation='horizontal'] .label {
-    white-space: nowrap;
-  }
-
-  /* Under 480px (a phone) the row has no room for every label: it turns back into the column. */
+  /* Under 480px (a phone) the row has no room for every label: it turns back into the column. Just above it a
+     long label wraps to a second line beside its marker rather than push the row past its slot. */
   @container (inline-size < 480px) {
     .root[data-orientation='horizontal'] {
       flex-direction: column;
@@ -134,10 +131,6 @@
 
     .root[data-orientation='horizontal'] .text {
       padding-block-start: var(--space-2);
-    }
-
-    .root[data-orientation='horizontal'] .label {
-      white-space: normal;
     }
   }
 
