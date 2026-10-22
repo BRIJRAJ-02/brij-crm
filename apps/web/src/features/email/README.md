@@ -23,3 +23,4 @@ The emails lane. The pages sit in `AuthLayout`, as the pages before the app do. 
 - The unsubscribe page sends nothing until the reader presses Unsubscribe: link scanners open addresses too, and a page that acted on load would unsubscribe people who never asked.
 - The topic of the email the link came from is listed first.
 - The topics are `EMAIL_TOPICS` in `@crm/contracts/emails`, the one list. Their words are in `strings.ts`, keyed by topic, so a topic added there fails the typecheck here until it has words.
+- A failed load keeps the page's title and says "Can’t reach Timefix. Check your connection, then try again." in an announced danger Callout, with a full width Try again under it, as the pages before the app do (design sweep, 22 October 2026). An expired link keeps its EmptyState.

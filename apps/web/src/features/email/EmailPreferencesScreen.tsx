@@ -5,7 +5,7 @@
 // that always come (sign in, account, bookings), other members, and signing in.
 import type { DataError, EmailPreferencesStore, EmailTopic } from '@crm/data';
 import { useEmailPreferences } from '@crm/data/react';
-import { AuthLayout, Callout, EmptyState, Skeleton, Switch } from '@crm/ui';
+import { AuthLayout, Button, Callout, EmptyState, Skeleton, Switch } from '@crm/ui';
 import { useRouter } from '@tanstack/react-router';
 import { PRODUCT_LOGO } from '../../brand.ts';
 import { strings } from './strings.ts';
@@ -65,9 +65,15 @@ export function EmailPreferencesError({ error }: { readonly error: DataError | u
       {error?.code === 'NOT_FOUND' ? (
         <EmptyState title={strings.goneTitle}>{strings.goneText}</EmptyState>
       ) : (
-        <EmptyState tone="error" title={strings.failedTitle} onRetry={() => void router.invalidate()}>
-          {strings.failedText}
-        </EmptyState>
+        // As the pages before the app say it: one announced sentence and Try again, no second heading.
+        <>
+          <Callout tone="danger" isAnnounced>
+            {strings.unreachable}
+          </Callout>
+          <Button size="lg" isFullWidth="center" icon="refresh-cw" onPress={() => void router.invalidate()}>
+            {strings.retry}
+          </Button>
+        </>
       )}
     </AuthLayout>
   );

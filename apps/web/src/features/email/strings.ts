@@ -20,8 +20,8 @@ export const strings = {
   goneTitle: 'This link has expired',
   goneText:
     'Links in emails stop working after a year, or once you leave the workspace. The next email you get has a new one.',
-  failedTitle: 'Can’t reach Timefix',
-  failedText: 'Check your connection, then try again.',
+  unreachable: 'Can’t reach Timefix. Check your connection, then try again.',
+  retry: 'Try again',
   unsubscribeTitle: 'Unsubscribe',
   unsubscribeAsk: 'Stop getting emails like the one this link came in?',
   unsubscribe: 'Unsubscribe',
