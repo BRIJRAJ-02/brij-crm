@@ -210,8 +210,13 @@ export async function resetLoadWorkspace(
   return { erased: ids.length, restored, ...slots };
 }
 
-async function main(): Promise<void> {
-  const urls = loadUrls(process.env);
+/**
+ * The `load:reset` command: refuses (exit 3) any owner address that isn't
+ * this machine before it reads the manifest or opens a connection, then
+ * resets the seeded workspace and prints what it did.
+ */
+export async function runLoadReset(env: Readonly<Record<string, string | undefined>>): Promise<void> {
+  const urls = loadUrls(env);
   const manifest = await readManifest(LOAD_DIR);
   const target = new URL(urls.LOAD_DATABASE_URL_OWNER);
   console.log(
@@ -230,4 +235,4 @@ async function main(): Promise<void> {
   }
 }
 
-if (import.meta.main) await runLoadCommand(main);
+if (import.meta.main) await runLoadCommand(() => runLoadReset(process.env));
