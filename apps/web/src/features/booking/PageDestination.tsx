@@ -6,6 +6,7 @@ import type { CalendarListState, CalendarsHeld, PageDestinationState } from '@cr
 import { useCalendarList, usePageDestination } from '@crm/data/react';
 import { Badge, ButtonLink, FieldGroup, Select } from '@crm/ui';
 import { calendarOptions } from '../calendars/calendar-options.ts';
+import { destinationHint } from './destination.ts';
 import { strings } from './strings.ts';
 
 /** Props for PageDestination. */
@@ -78,11 +79,7 @@ export function PageDestination({ destination, calendars, isReadOnly, onChange }
       optionStyle="dot"
       optionDescription="below"
       value={value}
-      hint={
-        status === 'unusable'
-          ? strings.destinationFellBack(all.find((calendar) => calendar.id === calendarId)?.name)
-          : strings.addBookingsHint
-      }
+      hint={destinationHint(held.destination, all)}
       isReadOnly={isReadOnly}
       onChange={(id) => {
         // Against the stored pick: choosing the default while it only stands in for a stopped pick clears it.

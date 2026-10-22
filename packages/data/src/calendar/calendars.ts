@@ -277,7 +277,7 @@ export function createCalendarsStore(deps: CalendarsDeps) {
     async setPageDestination(workspace: string, pageId: string, calendarId: string | null): Promise<boolean> {
       const held = pageOf(workspace, pageId);
       const undo = held.patch(({ destination }) => {
-        const { calendarId: _was, ...rest } = destination;
+        const { calendarId: _was, removedName: _gone, ...rest } = destination;
         return {
           destination: calendarId === null ? { ...rest, status: 'default' } : { ...rest, calendarId, status: 'page' },
         };
