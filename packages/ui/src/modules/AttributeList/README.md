@@ -29,6 +29,7 @@ New. The record page and the record panel (#18) list a record's attributes. `Des
 - Each name sits at the top of its row, level with the first line of its value, so a value or an editor that grows taller (a textarea, a hint under a field, chips that wrap) never moves its name.
 - `isLoading` shows skeleton rows after the loading delay.
 - Below 320px wide the name sits above the value (a container query), so it fits a narrow panel.
+- A long name ("Associated company") wraps to a second line instead of ending in an ellipsis that hid the rest; two label lines fit the row (QA, 22 October 2026).
 
 Each name sits after its type's icon on a small gray tile (`Icon` with `tile`, 13 Oct reference batch 4), so a long list reads by its shapes at a glance.
 

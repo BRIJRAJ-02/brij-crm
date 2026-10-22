@@ -4,6 +4,7 @@ export const strings = {
   empty: 'No tasks',
   emptyBody: 'Tasks you add show here, with who has them and when they’re due.',
   failed: 'Tasks didn’t load',
+  failedBody: 'Check your connection and try again.',
   noAccess: 'You can’t see these tasks',
   noAccessBody: 'Ask a workspace admin for access.',
   /** The done checkbox's name: "Mark “Send the order form” as done". */

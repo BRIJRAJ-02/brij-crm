@@ -25,6 +25,8 @@ export const trashHref = (slug: string) => `/w/${slug}/trash`;
 
 /** My tasks' address (spec 0019). */
 export const tasksHref = (slug: string) => `/w/${slug}/tasks`;
+/** The member's inbox: mentions, assignments and replies (spec 0038). */
+export const inboxHref = (slug: string) => `/w/${slug}/inbox`;
 
 /** Home's address: where a workspace opens (owner, 21 October 2026). */
 export const homeHref = (slug: string) => `/w/${slug}/home`;

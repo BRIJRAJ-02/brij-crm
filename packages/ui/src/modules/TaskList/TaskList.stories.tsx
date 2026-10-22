@@ -1,6 +1,6 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
 import { useState } from 'react';
-import { expect, fn, waitFor } from 'storybook/test';
+import { expect, fn, waitFor, within } from 'storybook/test';
 import { arraySource, type ListSource } from '../../lib/list-source.ts';
 import { ADA, SAMPLE_TASKS } from '../../workbench/record-samples.ts';
 import { Stage } from '../../workbench/Stage/Stage.tsx';
@@ -36,6 +36,8 @@ interface SampleProps {
   readonly withLocked?: boolean;
   /** A phone's column: under 480px the record chips step aside so titles keep the row. */
   readonly isPhone?: boolean;
+  /** A card on a phone (a record's Open tasks): the sidebar's width. */
+  readonly isNarrowCard?: boolean;
 }
 
 /** The list holding its own tasks, as the data layer would, in a fixed height slot. */
@@ -51,6 +53,7 @@ function SampleTasks({
   isReadOnly,
   withLocked = false,
   isPhone = false,
+  isNarrowCard = false,
 }: SampleProps) {
   const [tasks, setTasks] = useState<readonly TaskEntry[]>(() =>
     isEmpty
@@ -63,7 +66,10 @@ function SampleTasks({
   );
   const source = isLong ? longSource(onRangeChange ?? (() => undefined)) : arraySource(tasks, (task) => task.id);
   return (
-    <Stage height="grid" {...(isPhone ? { width: 'phone' as const } : {})}>
+    <Stage
+      height="grid"
+      {...(isPhone ? { width: 'phone' as const } : isNarrowCard ? { width: 'narrow-fill' as const } : {})}
+    >
       <TaskList
         label="Tasks"
         tasks={source}
@@ -154,6 +160,24 @@ export const OnAPhone: Story = {
     await expect(row).not.toBeNull();
     await expect(title.getBoundingClientRect().width).toBeGreaterThanOrEqual(120);
     await expect(canvas.getAllByText('Northwind Traders')[0]).toBeVisible();
+  },
+};
+
+/** In a narrow card (a record's Open tasks on a phone): every checkbox keeps its box, clear of the title. */
+export const InANarrowCard: Story = {
+  args: { isNarrowCard: true },
+  parameters: { crm: { screenshot: false } },
+  play: async ({ canvas }) => {
+    // The assignee keeps a size-chip column, with or without an avatar, so the rows' ends line up.
+    const ends = canvas.getAllByRole('row').map((row) => row.querySelector('[class*="task-list-assignee"]'));
+    const widths = new Set(ends.map((end) => Math.round(end?.getBoundingClientRect().width ?? 0)));
+    await expect(widths.size).toBe(1);
+    for (const row of canvas.getAllByRole('row')) {
+      const box = within(row).getByRole('checkbox').closest('label')?.getBoundingClientRect();
+      const title = row.querySelector('[class*="task-list-title"]')?.getBoundingClientRect();
+      await expect(box?.width ?? 0).toBeGreaterThanOrEqual(16);
+      await expect(box?.right ?? 0).toBeLessThanOrEqual(title?.left ?? 0);
+    }
   },
 };
 
@@ -295,7 +319,7 @@ export const WithQuickAdd: Story = {
             </>
           }
           footer={
-            <Disclosure title="Completed" count={done.length}>
+            <Disclosure title="Completed" count={done.length} variant="quiet">
               <TaskList
                 label="Completed"
                 layout="inline"
@@ -315,8 +339,21 @@ export const WithQuickAdd: Story = {
     // One composer row: the field's box and its button at one height, side by side.
     const box = field.parentElement?.getBoundingClientRect();
     await expect(Math.round(box?.height ?? 0)).toBe(Math.round(add.getBoundingClientRect().height));
-    await userEvent.click(canvas.getByRole('button', { name: /Completed/ }));
+    const fold = canvas.getByRole('button', { name: /Completed/ });
+    await userEvent.click(fold);
     await waitFor(() => expect(canvas.getByRole('grid', { name: 'Completed' })).toBeInTheDocument());
+    // The quiet fold lines up with the rows above (RowInset): its chevron on their checkboxes, its words on their
+    // titles, and its pill inside the footer, which scrolls and would clip it.
+    const row = canvas.getAllByRole('row')[0];
+    const check = row?.querySelector('[class*="checkbox-box"]')?.getBoundingClientRect();
+    const title = row?.querySelector('[class*="task-list-title"]')?.getBoundingClientRect();
+    const chevron = fold.querySelector('[class*="disclosure-chevron"]')?.getBoundingClientRect();
+    const words = fold.querySelector('[class*="disclosure-title"]')?.getBoundingClientRect();
+    const footer = fold.closest('[class*="task-list-footer"]')?.getBoundingClientRect();
+    const middle = (rect: DOMRect | undefined) => (rect === undefined ? 0 : rect.left + rect.width / 2);
+    await expect(Math.abs(middle(chevron) - middle(check))).toBeLessThanOrEqual(1);
+    await expect(Math.abs((words?.left ?? 0) - (title?.left ?? 0))).toBeLessThanOrEqual(1);
+    await expect(fold.getBoundingClientRect().left).toBeGreaterThanOrEqual((footer?.left ?? 0) - 0.5);
   },
 };
 
@@ -342,7 +379,7 @@ export const EmptyWithQuickAdd: Story = {
             </>
           }
           footer={
-            <Disclosure title="Completed" count={done.length}>
+            <Disclosure title="Completed" count={done.length} variant="quiet">
               <TaskList
                 label="Completed"
                 layout="inline"
@@ -474,7 +511,30 @@ export const InlineEmpty: Story = {
   },
 };
 
-/** In place, failed, with Try again. */
+/** Framed (a quick add above) and failed: the toolbar stays, the failure takes one row under it. */
+export const FramedFailed: Story = {
+  args: { onRetry: fn() },
+  render: function Render(args) {
+    return (
+      <Stage>
+        <TaskList
+          label="Open tasks"
+          tasks={arraySource([], (task: TaskEntry) => task.id)}
+          status="error"
+          toolbar={<Button>Add task</Button>}
+          onToggle={() => undefined}
+          {...(args.onRetry === undefined ? {} : { onRetry: args.onRetry })}
+        />
+      </Stage>
+    );
+  },
+  play: async ({ canvas }) => {
+    await expect(canvas.getByRole('alert')).toHaveAttribute('data-layout', 'row');
+    await expect(canvas.getByRole('button', { name: 'Add task' })).toBeVisible();
+  },
+};
+
+/** In place (a card on Home), failed: one row with Try again, like the inline empty list. */
 export const InlineFailed: Story = {
   args: { onRetry: fn() },
   render: function Render(args) {
@@ -492,6 +552,7 @@ export const InlineFailed: Story = {
     );
   },
   play: async ({ args, canvas, userEvent }) => {
+    await expect(canvas.getByRole('alert')).toHaveAttribute('data-layout', 'row');
     await userEvent.click(canvas.getByRole('button', { name: 'Try again' }));
     await expect(args.onRetry).toHaveBeenCalled();
   },

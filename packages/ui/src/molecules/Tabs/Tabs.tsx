@@ -13,6 +13,7 @@ import { Icon } from '../../atoms/Icon/Icon.tsx';
 import { VisuallyHidden } from '../../atoms/VisuallyHidden/VisuallyHidden.tsx';
 import type { IconName } from '../../atoms/Icon/icons.ts';
 import { PageEdge } from '../../lib/page-edge.ts';
+import { useScrollEdges } from '../../lib/scroll-edges.ts';
 import styles from './Tabs.module.css';
 
 /** One tab. */
@@ -121,6 +122,9 @@ export function Tabs({
   const { isFocusVisible } = useFocusVisible();
   // Directly in a settings page's body, the strip runs to the page's edges with its first label on the content edge.
   const atPageEdge = useContext(PageEdge) && variant === 'strip';
+  // Tabs past the bar's end (a phone) fade there, so the row shows it scrolls, as a scrollable Table does.
+  const { edges, ref: listRef } = useScrollEdges(true);
+  const fade = edges.start ? (edges.end ? 'both' : 'start') : edges.end ? 'end' : undefined;
   return (
     <AriaTabs
       className={styles.root}
@@ -140,7 +144,14 @@ export function Tabs({
         data-inset={inset === 'none' && !atPageEdge ? 'none' : undefined}
         data-edge={atPageEdge ? 'page' : undefined}
       >
-        <TabList className={styles.list} aria-label={label} items={tabs} data-instant={isFocusVisible || undefined}>
+        <TabList
+          ref={listRef}
+          className={styles.list}
+          aria-label={label}
+          items={tabs}
+          data-instant={isFocusVisible || undefined}
+          data-fade={fade}
+        >
           {(tab) => (
             <Tab
               id={tab.id}

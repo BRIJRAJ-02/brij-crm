@@ -44,7 +44,7 @@ Default, loading (skeleton columns after the loading delay), failed, no access, 
 
 ## Keyboard
 
-Tab enters the first column; the up and down arrows move between cards, and Tab moves to the next column. Right arrow reaches a card's grip; Space or Enter picks the card up, the left and right arrows move it between columns (and on a reorderable board up and down between cards), Space or Enter drops it, and Esc puts it back, each step announced; focus comes back to the card where it landed. Enter on a card opens it.
+Tab enters the first column; the up and down arrows move between cards, and Tab moves to the next column. Right arrow reaches a card's grip; Space or Enter picks the card up, the left and right arrows move it between columns (and on a reorderable board up and down between cards), Space or Enter drops it, and Esc puts it back, each step announced; focus comes back to the card where it landed. Enter on a card opens it. While lifted by keyboard, the column (or card) the moved card overlaps is the drop target, so the column it shows over is the one it drops in, an empty one too.
 
 ## Differences from the artifact
 

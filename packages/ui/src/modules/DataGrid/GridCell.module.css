@@ -171,4 +171,9 @@
     padding-inline-start: var(--space-8);
     pointer-events: none;
   }
+
+  /* "New" is one short word: it keeps its width and the name gives way, rather than reading "N…". */
+  .note[data-note='new'] {
+    flex: none;
+  }
 }

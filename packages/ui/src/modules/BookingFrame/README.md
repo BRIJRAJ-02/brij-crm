@@ -17,11 +17,13 @@ New. The public booking page moved onto the library on 20 October 2026 (as the h
   toolbar={<SegmentedControl … />}
   aside={<SlotList … />}
   footer={<Button variant="primary" size="lg" isFullWidth="center">Book</Button>}
-  claimHref="https://timefix.ai"
+  claimHref={claimPageHref('booking_page')}
 >
   <MonthTiles … />
 </BookingFrame>
 ```
+
+The foot's two links go to timefix.ai with the campaign tags from `@crm/contracts/brand`, the one place the hosted form and the emails take theirs from: the wordmark tags itself (`poweredByHref` with the foot's `page`, the booking page unless BookingProfile, BookingMessage or BookingReceipt's own foot says otherwise), and `claimHref` comes from `claimPageHref` for the same page.
 
 `aside` adds the end pane; leave it off for one wide pane (the details step). `footer` is the band across the card's foot. A fact's `children` may be a control (the time zone's Select). `banner` sits above the card (the visitor's calendar, spec 0028). Without `host` and `title` the frame draws skeletons.
 
@@ -34,14 +36,14 @@ A person's public profile, `/<handle>`, the Cal.com profile the owner pointed at
 Why a variant here rather than a new module: it is the booking pages' own page, so it keeps their background, centred column, card and foot, which live in this folder. The column is wider than BookingMessage's so a row's title and chips fit.
 
 ```tsx
-<BookingProfile person={{ name: 'Ada Lovelace', id: 'ada', bio: 'Product at Acme.' }} claimHref="https://timefix.ai">
+<BookingProfile person={{ name: 'Ada Lovelace', id: 'ada', bio: 'Product at Acme.' }} claimHref={claimPageHref('booking_profile')}>
   <BookingProfileSection title="Sales">
     <LinkList label="Sales" searchLabel="Search" isToolbarHidden rows={rows} onOpen={open} />
   </BookingProfileSection>
 </BookingProfile>
 ```
 
-Without `person` the card draws as a skeleton.
+Without `person` the card draws as a skeleton. Its foot's links are tagged as the profile's (`booking_profile`), and a message on a profile passes `page="booking_profile"` to BookingMessage.
 
 ## States
 

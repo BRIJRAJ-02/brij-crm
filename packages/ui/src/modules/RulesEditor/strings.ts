@@ -12,14 +12,30 @@ export const strings = {
     date_range: 'Date range',
     count: 'Number of values',
   },
+  /** Under each kind in Add rule: what it checks, in a few plain words. */
+  kindHelp: {
+    length: 'The fewest or most characters',
+    pattern: 'Digits only, starts with, or your own pattern',
+    email_domain: 'Allow or block addresses at some domains',
+    phone_country: 'Only numbers from the countries you list',
+    range: 'The smallest and largest number allowed',
+    integer: 'No decimals',
+    currency_in: 'Only amounts in the currencies you list',
+    date_range: 'The earliest and latest date allowed',
+    count: 'The fewest or most values',
+  },
+  /** The ⓘ beside the group's label: what a rule does, with an example. */
+  aboutRules:
+    'Rules check a value before it saves. A value that breaks a rule is refused, and the person sees the rule’s message.',
+  aboutRulesExample: 'A Length rule of at most 12 characters keeps every customer code short.',
   addRule: 'Add rule',
   ruleKinds: 'Kinds of rule',
   noRules: 'No rules yet, so any value is accepted.',
   noKinds: 'This type takes no rules.',
-  usage: (count: number, limit: number) => `${String(count)} of ${String(limit)}`,
+  usage: (count: number, limit: number) => `${String(count)} of ${String(limit)} rules`,
   full: (limit: number) => `An attribute holds at most ${String(limit)} rules.`,
-  /** A rule whose settings aren't finished, in place of its summary. */
-  unfinished: (kind: string) => `${kind} rule isn’t finished.`,
+  /** A rule whose settings aren't finished, in place of its summary (its kind's name sits above it). */
+  unfinished: 'Not set up yet. Fill in its settings, or delete it.',
   /** What a message names while a new attribute has no name yet. */
   untitled: 'This attribute',
   /** Under the group's label in a dialog: rules wait for its Save, unlike options. */
@@ -79,8 +95,9 @@ export const strings = {
   latestDays: 'Latest, in days from today',
   daysHint: 'A negative number counts days before today.',
   integerNote: 'Values must be whole numbers.',
-  message: 'Message',
-  messageHint: 'Shown to anyone whose change breaks this rule. Leave it empty to use the message above.',
-  onlyWhen: 'Only when…',
-  conditionHint: 'The rule applies only to records that match, using this object’s own attributes.',
+  message: 'Error message',
+  optional: '(optional)',
+  messageHint: 'Shown when a value breaks this rule. Leave it empty to show the sentence above.',
+  onlyWhen: 'Only use this rule when…',
+  conditionHint: 'Records that don’t match these conditions skip this rule.',
 } as const;

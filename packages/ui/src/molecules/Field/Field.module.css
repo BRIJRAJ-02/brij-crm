@@ -172,6 +172,21 @@
     letter-spacing: var(--tracking-label-strong);
   }
 
+  /* A text prefix (an address's fixed start, "timefix.com/ada/") gives way first when the box is narrow, cut with
+     an ellipsis, so the input after it keeps room to type in. */
+  .prefix[data-text] {
+    display: block;
+    flex: 0 1 auto;
+    min-inline-size: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .prefix[data-text] + .input {
+    min-inline-size: var(--size-column-min);
+  }
+
   .lock {
     display: inline-flex;
     color: var(--text-tertiary);

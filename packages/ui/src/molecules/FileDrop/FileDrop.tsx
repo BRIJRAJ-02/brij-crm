@@ -75,7 +75,7 @@ export function FileDrop({
           {label}
         </Text>
         <span className={styles.hint}>
-          {strings.dragOr}{' '}
+          {allowsMultiple ? strings.dragOr : strings.dragOneOr}{' '}
           <FileTrigger
             allowsMultiple={allowsMultiple}
             {...(acceptedTypes === undefined ? {} : { acceptedFileTypes: [...acceptedTypes] })}

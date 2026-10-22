@@ -14,6 +14,7 @@ import type { Hue } from '../../hue.ts';
 import { Callout } from '../../molecules/Callout/Callout.tsx';
 import { Field } from '../../molecules/Field/Field.tsx';
 import { Form, type FormRefusal } from '../../molecules/Form/Form.tsx';
+import { InfoTip } from '../../molecules/InfoTip/InfoTip.tsx';
 import { Modal } from '../../molecules/Modal/Modal.tsx';
 import { Select, type SelectItem } from '../../molecules/Select/Select.tsx';
 import { strings } from './strings.ts';
@@ -90,6 +91,15 @@ function nounsOf(object: RelationshipSettingsObject | undefined): Nouns {
 function defaultTitle(other: RelationshipSettingsObject | undefined, holdsOne: boolean): string {
   if (other === undefined) return '';
   return holdsOne ? other.singularName : other.pluralName;
+}
+
+/** The cardinality whose sides hold one record as asked: each side's question answers one half. */
+function cardinalityOf(fromHoldsOne: boolean, toHoldsOne: boolean): CardinalityKey {
+  const found = CARDINALITIES.find((each) => {
+    const sides = sidesHoldingOne(each);
+    return sides.from === fromHoldsOne && sides.to === toHoldsOne;
+  });
+  return found ?? CARDINALITIES[0];
 }
 
 /** The settings drawn with their own `error`; the names land on Form fields by name. */
@@ -293,6 +303,15 @@ function RelationshipForm({
       <Select
         autoFocus={choosable === side}
         label={side === 'from' ? strings.object : strings.relatedObject}
+        {...(side === 'to'
+          ? {
+              info: (
+                <InfoTip label={strings.relatedObject} example={strings.aboutRelatedExample}>
+                  {strings.aboutRelated}
+                </InfoTip>
+              ),
+            }
+          : {})}
         items={itemsWith(id)}
         value={id}
         placeholder={strings.chooseObject}
@@ -366,21 +385,33 @@ function RelationshipForm({
         />
       ) : (
         isShaped && (
-          <RadioGroup
-            label={strings.cardinality}
-            value={cardinality}
-            onChange={(next) => {
-              const found = CARDINALITIES.find((each) => each === next);
-              if (found !== undefined) setCardinality(found);
-            }}
-            {...(cardinalityError === undefined ? {} : { error: cardinalityError })}
-          >
-            {CARDINALITIES.map((each) => (
-              <Radio key={each} value={each}>
-                {choiceOf(each)}
-              </Radio>
-            ))}
-          </RadioGroup>
+          // Two short questions, one per side, rather than four sentences that differ by two words (owner ask A99).
+          <>
+            <RadioGroup
+              label={isSelf ? strings.thisSideHolds : strings.eachHas(near.singular)}
+              info={<InfoTip label={strings.cardinality}>{strings.aboutCardinality}</InfoTip>}
+              orientation="horizontal"
+              value={holdsOne.from ? 'one' : 'many'}
+              onChange={(next) => {
+                setCardinality(cardinalityOf(next === 'one', holdsOne.to));
+              }}
+              {...(cardinalityError === undefined ? {} : { error: cardinalityError })}
+            >
+              <Radio value="one">{strings.one(far.singular)}</Radio>
+              <Radio value="many">{strings.many(far.plural)}</Radio>
+            </RadioGroup>
+            <RadioGroup
+              label={isSelf ? strings.reverseSideHolds : strings.eachHas(far.singular)}
+              orientation="horizontal"
+              value={holdsOne.to ? 'one' : 'many'}
+              onChange={(next) => {
+                setCardinality(cardinalityOf(holdsOne.from, next === 'one'));
+              }}
+            >
+              <Radio value="one">{strings.one(near.singular)}</Radio>
+              <Radio value="many">{strings.many(near.plural)}</Radio>
+            </RadioGroup>
+          </>
         )
       )}
       {isShaped && nameField('from')}

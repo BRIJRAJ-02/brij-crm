@@ -1,5 +1,5 @@
 {
-  "id": "a2df6b9f-faae-4d30-927d-c6dd7e4425be",
+  "id": "8c747969-1974-427f-9f22-60405d812b62",
   "prevId": "ed597a2e-aa05-45ed-8255-5dbe81ad532f",
   "version": "7",
   "dialect": "postgresql",
@@ -1660,6 +1660,109 @@
         "booking_page_rotations_position_range": {
           "name": "booking_page_rotations_position_range",
           "value": "\"booking_page_rotations\".\"position\" between 0 and 2"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.booking_page_slugs": {
+      "name": "booking_page_slugs",
+      "schema": "",
+      "columns": {
+        "workspace_id": {
+          "name": "workspace_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "page_id": {
+          "name": "page_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "owner_user_id": {
+          "name": "owner_user_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "slug": {
+          "name": "slug",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp (6) with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp (6) with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "booking_page_slugs_owner_slug": {
+          "name": "booking_page_slugs_owner_slug",
+          "columns": [
+            {
+              "expression": "owner_user_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "slug",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "booking_page_slugs_page": {
+          "name": "booking_page_slugs_page",
+          "tableFrom": "booking_page_slugs",
+          "tableTo": "booking_pages",
+          "columnsFrom": [
+            "workspace_id",
+            "page_id"
+          ],
+          "columnsTo": [
+            "workspace_id",
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {
+        "booking_page_slugs_pkey": {
+          "name": "booking_page_slugs_pkey",
+          "columns": [
+            "workspace_id",
+            "page_id",
+            "slug"
+          ]
+        }
+      },
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {
+        "booking_page_slugs_slug_shape": {
+          "name": "booking_page_slugs_slug_shape",
+          "value": "\"booking_page_slugs\".\"slug\" ~ '^[a-z0-9]+(-[a-z0-9]+)*$' and char_length(\"booking_page_slugs\".\"slug\") <= 60"
         }
       },
       "isRLSEnabled": false
@@ -6136,12 +6239,6 @@
           "primaryKey": false,
           "notNull": false
         },
-        "owner_rotation_id": {
-          "name": "owner_rotation_id",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": false
-        },
         "allowed_origins": {
           "name": "allowed_origins",
           "type": "text[]",
@@ -6288,28 +6385,6 @@
           "concurrently": false,
           "method": "btree",
           "with": {}
-        },
-        "forms_by_owner_rotation": {
-          "name": "forms_by_owner_rotation",
-          "columns": [
-            {
-              "expression": "workspace_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            },
-            {
-              "expression": "owner_rotation_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "where": "\"forms\".\"owner_rotation_id\" is not null",
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
         }
       },
       "foreignKeys": {
@@ -6335,21 +6410,6 @@
           "columnsFrom": [
             "workspace_id",
             "owner_member_id"
-          ],
-          "columnsTo": [
-            "workspace_id",
-            "id"
-          ],
-          "onDelete": "no action",
-          "onUpdate": "no action"
-        },
-        "forms_owner_rotation": {
-          "name": "forms_owner_rotation",
-          "tableFrom": "forms",
-          "tableTo": "rotations",
-          "columnsFrom": [
-            "workspace_id",
-            "owner_rotation_id"
           ],
           "columnsTo": [
             "workspace_id",
@@ -6416,10 +6476,6 @@
         "forms_public_key_shape": {
           "name": "forms_public_key_shape",
           "value": "\"forms\".\"public_key\" ~ '^[a-z0-9][a-z0-9-]{0,38}[a-z0-9]$'"
-        },
-        "forms_one_owner": {
-          "name": "forms_one_owner",
-          "value": "\"forms\".\"owner_member_id\" is null or \"forms\".\"owner_rotation_id\" is null"
         },
         "forms_live_version": {
           "name": "forms_live_version",

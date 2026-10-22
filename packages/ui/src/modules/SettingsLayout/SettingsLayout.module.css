@@ -240,22 +240,6 @@
     border-block-start: var(--border-width-hairline) solid var(--border-subtle);
   }
 
-  /* Plain (a booking page's Limits): no hairlines at all; rows on a compact rhythm, a wider space before the next
-     group's label than under it. */
-  .rowGroup[data-variant='plain'] {
-    gap: var(--space-8);
-  }
-
-  .rowGroup[data-variant='plain'] + .rowGroup[data-variant='plain'] {
-    padding-block-start: var(--space-16);
-    border-block-start: none;
-  }
-
-  .rowGroup[data-variant='plain'] > .row {
-    padding-block-start: 0;
-    border-block-start: none;
-  }
-
   /* A plain stack (the Captures editors): its rows without hairlines between them. */
   .stack[data-variant='plain'] > .row {
     padding-block-start: 0;

@@ -38,6 +38,11 @@
     color: var(--success);
   }
 
+  /* Something checked and found wrong: an import row that can't go in. */
+  .icon[data-tone='danger'] {
+    color: var(--danger);
+  }
+
   /* An object's icon on its hue: Companies blue, People green, Deals orange. */
   .tile {
     --tile-bg: var(--tag-gray-bg);

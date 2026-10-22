@@ -32,6 +32,7 @@ import { itemOfKey, keyedRows, type KeyedRow } from '../../lib/keyed-rows.ts';
 import type { ListSource } from '../../lib/list-source.ts';
 import type { LoadStatus } from '../../lib/load-status.ts';
 import { RowShown, useRangeReporter } from '../../lib/range-reporter.tsx';
+import { RowInset } from '../../lib/row-inset.ts';
 import { sizeToken } from '../../lib/token-values.ts';
 import { dayIn } from '../../molecules/DatePicker/DatePicker.tsx';
 import { EmptyState } from '../../molecules/EmptyState/EmptyState.tsx';
@@ -251,7 +252,12 @@ export function TaskList({
       <div className={styles.body} data-empty={(status === 'ready' && tasks.count === 0) || undefined}>
         {content}
       </div>
-      {footer !== undefined && <div className={styles.footer}>{footer}</div>}
+      {footer !== undefined && (
+        // The fold under the rows (Completed) lines up with them: its chevron on the checkboxes, its words on the titles.
+        <RowInset value>
+          <div className={styles.footer}>{footer}</div>
+        </RowInset>
+      )}
     </div>
   );
 }
@@ -295,10 +301,14 @@ function TaskListContent({
     return (
       <EmptyState
         tone="error"
-        icon="list-todo"
+        // In place (a card on Home) or framed, the failure takes one row, like the empty list would, with the
+        // warning icon every failed row shows.
+        {...(isInline || isFramed ? { layout: 'row' as const } : { icon: 'list-todo' as const })}
         title={strings.failed}
         {...(onRetry === undefined ? {} : { onRetry })}
-      />
+      >
+        {strings.failedBody}
+      </EmptyState>
     );
   }
   if (status === 'no-access') {
@@ -357,21 +367,32 @@ function TaskListContent({
         data-pressable={onAction === undefined ? undefined : ''}
       >
         <RowShown index={row.index} onShown={onShown} />
-        <Checkbox
-          label={strings.markDone(task.title)}
-          isLabelHidden
-          isSelected={task.isDone}
-          isReadOnly={isReadOnly || task.readOnlyReason !== undefined}
-          onChange={(isDone) => {
-            onToggle(task, isDone);
-          }}
-        />
-        {task.readOnlyReason !== undefined && <LockReason reason={task.readOnlyReason} />}
+        {/* Its own box that never shrinks: in a narrow row the checkbox was squeezed and drew over the title. */}
+        <span className={styles.check}>
+          <Checkbox
+            label={strings.markDone(task.title)}
+            isLabelHidden
+            isSelected={task.isDone}
+            isReadOnly={isReadOnly || task.readOnlyReason !== undefined}
+            onChange={(isDone) => {
+              onToggle(task, isDone);
+            }}
+          />
+        </span>
+        {task.readOnlyReason !== undefined && (
+          <span className={styles.keep}>
+            <LockReason reason={task.readOnlyReason} />
+          </span>
+        )}
         <span className={styles.title}>
           {task.title}
           {task.isDone && <VisuallyHidden>{`, ${strings.done}`}</VisuallyHidden>}
         </span>
-        {isNew && <Badge text={strings.isNew} tone="accent" />}
+        {isNew && (
+          <span className={styles.keep}>
+            <Badge text={strings.isNew} tone="accent" />
+          </span>
+        )}
         {!hideRecord && records.length > 0 && (
           <span className={styles.record}>
             {/* The field set's one row of records: the first chip, then "+N", which opens every one as a link. */}

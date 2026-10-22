@@ -35,6 +35,8 @@ Ported from the artifact's Tabs card. A record's Activity, Notes, Tasks, Emails 
 
 ## States
 
+- Tabs past the bar's end (a phone) fade at that end, and at the start once scrolled, over space-24, as a scrollable Table's frame does (`useScrollEdges`), so the row shows it scrolls (QA, 22 October 2026).
+
 Chosen (text with the underline), hover (pointer only), focus, disabled, with an alert dot. The underline slides over `duration-move` for a pointer, and jumps for the keyboard and under reduced motion.
 
 ## Keyboard

@@ -56,7 +56,8 @@ export function NotesTab({ list, members, canAdd, onOpenNote }: NotesTabProps) {
       notes={notes}
       status={state.status === 'unavailable' ? 'no-access' : state.status}
       onRetry={list.retry}
-      emptyTitle={canAdd ? strings.noNotes : strings.noNotesShort}
+      emptyTitle={strings.noNotes}
+      {...(canAdd ? { emptyBody: strings.noNotesText } : {})}
       onAction={onOpenNote}
       {...(canAdd
         ? {

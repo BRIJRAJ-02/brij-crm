@@ -1,5 +1,5 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
-import { expect } from 'storybook/test';
+import { expect, within } from 'storybook/test';
 import { ProviderMark } from '../../atoms/ProviderMark/ProviderMark.tsx';
 import { Stage } from '../../workbench/Stage/Stage.tsx';
 import { Field } from '../Field/Field.tsx';
@@ -61,6 +61,37 @@ export const Label: Story = {
   ),
   play: async ({ canvas }) => {
     await expect(canvas.getByRole('button', { name: 'Records' })).toHaveAttribute('aria-expanded', 'true');
+  },
+};
+
+/**
+ * The quiet variant, as Home's setup checklist folds its done steps: a control sized to its words, its chevron
+ * centred in a 16px icon's column on the content edge and its words `space-12` after it; the panel flush.
+ * SetupChecklist's stories carry its screenshots.
+ */
+export const Quiet: Story = {
+  parameters: { crm: { screenshot: false } },
+  render: () => (
+    <Stage width="narrow-fill">
+      <Disclosure title="2 done" variant="quiet" defaultExpanded>
+        Connect your calendar and create a booking page.
+      </Disclosure>
+    </Stage>
+  ),
+  play: async ({ canvas }) => {
+    const toggle = canvas.getByRole('button', { name: '2 done' });
+    await expect(toggle).toHaveAttribute('aria-expanded', 'true');
+    const edge = canvas.getByRole('heading', { name: '2 done' }).getBoundingClientRect();
+    // Sized to its words, never a full width bar.
+    await expect(toggle.getBoundingClientRect().width).toBeLessThan(edge.width / 2);
+    // The chevron's centre sits 8px in (a 16px icon's column), the words 28px in (after it, space-12).
+    const chevron = toggle.querySelector('svg')?.getBoundingClientRect();
+    await expect(chevron === undefined ? undefined : chevron.left + chevron.width / 2 - edge.left).toBeCloseTo(8, 0);
+    await expect(within(toggle).getByText('2 done').getBoundingClientRect().left - edge.left).toBeCloseTo(28, 0);
+    // The panel is flush: what it holds starts on the content edge.
+    const content = canvas.getByText('Connect your calendar and create a booking page.');
+    await expect(content.getBoundingClientRect().left).toBeCloseTo(edge.left, 0);
+    await expect(content.getBoundingClientRect().top).toBeCloseTo(toggle.getBoundingClientRect().bottom, 0);
   },
 };
 

@@ -28,7 +28,7 @@ export function IconScope({ icons: scoped, children }: IconScopeProps) {
 export type IconSize = 'md' | 'sm' | 'xs';
 
 /** Icon colour: `inherit` takes the parent's, `muted` is `text-secondary`, `ai` is the AI sparkle only. */
-export type IconTone = 'inherit' | 'muted' | 'ai' | 'success';
+export type IconTone = 'inherit' | 'muted' | 'ai' | 'success' | 'danger';
 
 interface IconBase {
   /** The icon, exactly as lucide.dev names it. Only names in the registry type check. */
