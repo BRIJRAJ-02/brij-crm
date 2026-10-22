@@ -26,7 +26,6 @@ export const strings = {
   failedText: 'Try again in a moment.',
   /** How many accounts may be connected, when the limit is reached. */
   limitReached: (max: string) => `You’ve connected ${max} calendars, the most you can. Disconnect one to add another.`,
-  defaultBadge: 'Default',
   /** The one word of help on the page: how the default works across accounts. */
   defaultHelpLabel: 'How your default calendar works',
   defaultHelp:
@@ -38,12 +37,15 @@ export const strings = {
   addBookingsTo: 'Add bookings to',
   addBookingsHelp: 'New bookings from your booking pages go on this calendar.',
   chooseCalendar: 'Choose a calendar',
-  noWritable: 'None of your calendars can take bookings',
+  noWritable: 'None of your calendars can take bookings. Connect one you can add events to.',
+  calendarsLoadingShort: 'Loading calendars',
+  calendarsFailedAll: 'Couldn’t load your calendars. Try again below.',
+  logsBadge: 'Logs to CRM',
   /** Each account's calendars, a compact table: the column headers once, above the rows. */
   calendarsIn: (account: string) => `Calendars in ${account}`,
   otherCalendarsIn: (account: string) => `Other calendars in ${account}`,
   calendarColumn: 'Calendar',
-  conflictsColumn: 'Conflicts',
+  conflictsColumn: 'Check for conflicts',
   weekColumn: 'Show on my week',
   optionsColumn: 'Options',
   checkFor: (name: string) => `Check ${name} for conflicts`,
@@ -61,12 +63,6 @@ export const strings = {
   noCalendars: 'No calendars found in this account yet.',
   /** A calendar's row. */
   colour: (name: string) => `${name} colour`,
-  readOnly: 'Read only, so it can’t take bookings',
-  checkConflicts: 'Check for conflicts',
-  showInWeek: 'Show on my week',
-  sync: 'Sync meetings',
-  /** What screen readers hear after each switch's name, so the rows' switches tell apart. */
-  switchOn: (name: string) => `on ${name}`,
   /** The quiet toasts a switch raises once saved, each with Undo. */
   saved: {
     checkConflicts: (name: string, on: boolean) =>
@@ -80,10 +76,10 @@ export const strings = {
   sharingSaved: (account: string) => `What teammates see of ${account}’s meetings changed`,
   undo: 'Undo',
   /** New bookings moved off a calendar the provider removed (AC-1005). */
-  fellBackTitle: 'Your default calendar changed',
+  fellBackTitle: 'Where bookings go changed',
   fellBackText: (now: string, was: string) => `New bookings now go to ${now}. ${was} stopped taking them.`,
   fellBackNone: (was: string) =>
-    `${was} stopped taking bookings and no other calendar can take them. Make one of your calendars the default.`,
+    `${was} stopped taking bookings and no other calendar can take them. Pick a calendar under Add bookings to.`,
   /** A connection's "···" menu. */
   rowActions: (account: string) => `Actions for ${account}`,
   status: {
@@ -105,7 +101,6 @@ export const strings = {
   },
   sharingInfo:
     'Controls what other members of this workspace see of meetings from this calendar account, on their calendar and in Bookings. You always see everything.',
-  makeDefault: 'Make default',
   reconnect: 'Reconnect',
   /** Local development only: Google's notices can't reach a laptop, so sync waits for the 15 minute poll. */
   syncNow: 'Sync now',

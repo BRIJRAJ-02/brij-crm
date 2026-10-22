@@ -89,6 +89,12 @@ interface TableBase<T> {
    * `isHeaderSticky`, whose header sticks to the page.
    */
   readonly isScrollable?: boolean;
+  /**
+   * Draws no header row, while the columns keep the widths their labels give them: a second table that continues
+   * one above it (a folded "Other calendars" under the shown ones), so the headers appear once. Each cell's
+   * control names itself in full ("Check Team for conflicts"), since its column header is no longer read.
+   */
+  readonly isHeaderHidden?: boolean;
 }
 
 /** The handle column's id, kept apart from any column the caller names. */
@@ -120,6 +126,7 @@ export function Table<T>({
   getSelectLabel,
   isHeaderSticky = false,
   isScrollable = false,
+  isHeaderHidden = false,
 }: TableProps<T>) {
   const isSelectable = selected !== undefined && onSelectedChange !== undefined;
   // A scrollable frame fades the end that hides columns, so it shows there is more to scroll to.
@@ -157,7 +164,7 @@ export function Table<T>({
           }
         : {})}
     >
-      <TableHeader className={styles.header} columns={shown}>
+      <TableHeader className={styles.header} columns={shown} data-hidden={isHeaderHidden || undefined}>
         {(column) => (
           <Column
             id={column.id}

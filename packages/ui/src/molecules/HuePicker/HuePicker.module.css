@@ -119,6 +119,12 @@
     content: '';
   }
 
+  @media (hover: hover) and (pointer: fine) {
+    .swatch[data-look='dot'][data-hovered] {
+      background: var(--surface-hover);
+    }
+  }
+
   .swatch[data-look='dot']:not([data-static])::after {
     position: absolute;
     inset: calc(-1 * var(--space-4));

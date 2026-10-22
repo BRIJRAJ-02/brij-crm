@@ -145,6 +145,11 @@
     inline-size: var(--space-16);
   }
 
+  /* A hidden header: collapsed, so its labels still size the columns and a table continuing one above lines up. */
+  .header[data-hidden] {
+    visibility: collapse;
+  }
+
   /* A sticky header stays in view while the page scrolls under it, on the page's surface. */
   .column[data-sticky] {
     position: sticky;

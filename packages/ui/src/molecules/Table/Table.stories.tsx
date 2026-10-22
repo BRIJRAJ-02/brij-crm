@@ -219,3 +219,33 @@ export const ControlColumns: Story = {
     );
   },
 };
+
+/** `isHeaderHidden`: a table continuing the one above draws no header, its columns still sized by their labels. */
+export const HeaderHidden: Story = {
+  parameters: { crm: { screenshot: false } },
+  render: () => (
+    <Stage width="phone">
+      <Table<(typeof CALENDARS)[number]>
+        label="Other calendars"
+        isHeaderHidden
+        columns={[
+          { id: 'name', label: 'Calendar', isRowHeader: true, size: 'fill' },
+          { id: 'conflicts', label: 'Conflicts', size: 'fit' },
+        ]}
+        rows={CALENDARS}
+        getRowId={(row) => row.id}
+        renderCell={(row, column) =>
+          column === 'name' ? (
+            <TruncatedText>{row.name}</TruncatedText>
+          ) : (
+            <Checkbox label={`Check ${row.name}`} isLabelHidden />
+          )
+        }
+      />
+    </Stage>
+  ),
+  play: async ({ canvas }) => {
+    await expect(canvas.getByText('Holidays in the United Kingdom')).toBeVisible();
+    await expect(canvas.queryByText('Conflicts')).not.toBeVisible();
+  },
+};

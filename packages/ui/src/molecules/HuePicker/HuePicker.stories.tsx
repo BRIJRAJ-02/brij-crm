@@ -97,6 +97,7 @@ export const CompactDot: Story = {
       <HuePicker {...args} />
       <HuePicker label="Team colour" defaultValue="purple" isCompact look="dot" />
       <HuePicker label="Holidays colour" defaultValue="orange" isCompact look="dot" isReadOnly />
+      <HuePicker label="Archive colour" defaultValue="gray" isCompact look="dot" isDisabled />
     </Stage>
   ),
   play: async ({ canvas }) => {
