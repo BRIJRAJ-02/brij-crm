@@ -515,6 +515,11 @@ export function WeekCalendar({
             className={styles.dayButton}
             data-today={day.isToday || undefined}
             data-past={day.isPast || undefined}
+            data-busy={
+              blocks.some((block) => block.dayKey === day.key) ||
+              allDay.some((item) => item.dayKey === day.key) ||
+              undefined
+            }
             aria-pressed={day.key === selectedDay}
             aria-label={day.isToday ? strings.today(day.label) : day.label}
             onClick={() => onSelectDay(day.key)}

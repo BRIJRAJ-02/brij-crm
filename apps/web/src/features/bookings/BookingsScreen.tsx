@@ -421,7 +421,6 @@ function BookingCard({
           })),
         ]}
         {...(footerActions === undefined ? {} : { actions: footerActions })}
-        {...(hasActions && footer.endAction !== undefined ? { endAction: footer.endAction } : {})}
       />
       {hasActions && footer.dialogs}
       {reassigning && actions !== undefined && (

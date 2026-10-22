@@ -4,6 +4,7 @@ import { expect, userEvent, within } from 'storybook/test';
 import { Button, ButtonLink } from '../../atoms/Button/Button.tsx';
 import { Callout } from '../../molecules/Callout/Callout.tsx';
 import { DescriptionList } from '../../molecules/DescriptionList/DescriptionList.tsx';
+import { Menu, MenuItem, MenuTrigger } from '../../molecules/Menu/Menu.tsx';
 import { Stage } from '../../workbench/Stage/Stage.tsx';
 import { MeetingCard, type MeetingCardRow } from './MeetingCard.tsx';
 
@@ -34,11 +35,29 @@ function Actions() {
       <Button size="lg" icon="calendar-clock">
         Reschedule
       </Button>
-      <Button size="lg" icon="link">
-        Copy guest link
-      </Button>
+      <MenuTrigger>
+        <Button size="lg" variant="ghost" icon="ellipsis" label="More for this booking" />
+        <Menu label="More for this booking">
+          <MenuItem id="copy" icon="link">
+            Copy guest link
+          </MenuItem>
+          <MenuItem id="cancel" icon="circle-x" isDanger>
+            Cancel booking
+          </MenuItem>
+        </Menu>
+      </MenuTrigger>
     </>
   );
+}
+
+/** The footer is one row: every control in it shares one top. */
+function isOneRow(card: HTMLElement): boolean {
+  const footer = card.querySelector('footer');
+  if (footer === null) return false;
+  const tops = [...footer.querySelectorAll('a, button')].map((control) =>
+    Math.round(control.getBoundingClientRect().top),
+  );
+  return tops.length > 0 && tops.every((top) => top === tops[0]);
 }
 
 /** An upcoming booking with a call: the title and time lead, the guest with their email, where, then the actions. */
@@ -60,11 +79,6 @@ export const Default: Story = {
         ]}
         rows={[where, { id: 'note', icon: 'message-square', label: 'Note', value: '“Can we talk about the pilot?”' }]}
         actions={<Actions />}
-        endAction={
-          <Button variant="ghost-danger" size="lg" icon="circle-x">
-            Cancel booking
-          </Button>
-        }
       />
     </Stage>
   ),
@@ -77,18 +91,20 @@ export const Default: Story = {
     // No raw address: Join names the provider.
     await expect(within(card).queryByText(/meet\.google\.com/)).toBeNull();
     await expect(within(card).getByRole('link', { name: 'Join Google Meet' })).toBeInTheDocument();
-    // The ending action sits apart, at the footer's end.
-    const cancel = within(card).getByRole('button', { name: 'Cancel booking' });
-    await expect(Math.round(cancel.getBoundingClientRect().right)).toBeGreaterThanOrEqual(
-      Math.round(card.getBoundingClientRect().right) - 1,
-    );
-    // Every line of text starts on one column: the title, the time, the guest, the place, the note and the footer.
+    // Cancel booking and Copy guest link wait in More, so the footer is one row.
+    await expect(isOneRow(card)).toBe(true);
+    await userEvent.click(within(card).getByRole('button', { name: 'More for this booking' }));
+    const more = within(card.ownerDocument.body).getByRole('menu', { name: 'More for this booking' });
+    await expect(within(more).getByRole('menuitem', { name: 'Cancel booking' })).toBeInTheDocument();
+    await userEvent.keyboard('{Escape}');
+    // Every line of text starts on one column: the title, the time, the guest, the place and the note.
     const left = (element: Element) => Math.round(element.getBoundingClientRect().left);
     const column = left(within(card).getByRole('heading'));
     await expect(left(within(card).getByText(args.when))).toBe(column);
     await expect(left(within(card).getByRole('link', { name: 'Grace Hopper' }))).toBe(column);
     await expect(left(within(card).getByText('Google Meet'))).toBe(column);
-    await expect(left(within(card).getByRole('link', { name: 'Join Google Meet' }))).toBe(column);
+    // The footer spans the content from the gutter's edge, as its hairline does.
+    await expect(left(within(card).getByRole('link', { name: 'Join Google Meet' }))).toBe(left(card));
     // Each lead (avatar or icon) centres on its row's first line.
     const middle = (element: Element) => {
       const box = element.getBoundingClientRect();
@@ -101,9 +117,6 @@ export const Default: Story = {
       const firstLine = first.getBoundingClientRect().top + line / 2;
       await expect(Math.abs(middle(lead) - firstLine), `lead of ${first.textContent}`).toBeLessThanOrEqual(1);
     }
-    // The ending action sits on the footer's first line, centred on Join.
-    const join = within(card).getByRole('link', { name: 'Join Google Meet' });
-    await expect(Math.abs(middle(cancel) - middle(join)), 'the ending action').toBeLessThanOrEqual(1);
   },
 };
 
@@ -222,7 +235,7 @@ export const LongAndNoCall: Story = {
   },
 };
 
-/** At a phone's width the actions wrap among themselves, and the ending action keeps the first line's end. */
+/** At a phone's width the footer is still one row: Join, Reschedule and More. */
 export const Phone: Story = {
   parameters: { crm: { screenshot: false } },
   render: (args) => (
@@ -233,20 +246,13 @@ export const Phone: Story = {
         people={[{ id: 'grace', name: 'Grace Hopper', detail: 'grace@navy.mil', isDetailCopyable: true }]}
         rows={[where]}
         actions={<Actions />}
-        endAction={
-          <Button variant="ghost-danger" size="lg" icon="circle-x">
-            Cancel booking
-          </Button>
-        }
       />
     </Stage>
   ),
   play: async ({ canvas }) => {
-    const join = canvas.getByRole('link', { name: 'Join Google Meet' }).getBoundingClientRect();
-    const cancel = canvas.getByRole('button', { name: 'Cancel booking' }).getBoundingClientRect();
-    await expect(Math.abs(cancel.top - join.top)).toBeLessThanOrEqual(1);
     const card = canvas.getByRole('article');
-    await expect(cancel.right).toBeLessThanOrEqual(card.getBoundingClientRect().right + 1);
+    await expect(isOneRow(card)).toBe(true);
+    await expect(card.scrollWidth).toBeLessThanOrEqual(card.clientWidth + 1);
   },
 };
 
