@@ -1,14 +1,13 @@
 /* PreviewLayout: inside the space-16 page gutter (PageColumn's, so an editor
-   sits under its tab strip exactly as Captures' lists do),
-   the notices and the body. It follows its own width, not the window's: .measure is a size
-   container whose content box is the width left for the body once the
-   preview column (size-panel) and the gutter are taken (half the width when
-   that is less), and its children reach back over that padding to the full
-   width. When the body would keep at least bp-container-md (480px), the
-   preview sits in a sticky column beside it; under that the column hides and
-   the preview waits under the body in a Disclosure. The body takes the
-   whole width (every page is full width). The preview hangs in one
-   hairline frame with lg corners. The footer bar sticks to the body's foot. */
+   sits under its tab strip exactly as Captures' lists do), the notices and
+   the body. It follows its own width, not the window's: .measure is a size
+   container whose content box is as wide as the phone's column would be (a
+   third of the width after the space-32 between the columns), and its
+   children reach back over that padding to the full width. When that column
+   holds at least bp-container-sm, the body takes the first two thirds and the
+   phone preview sits centred and sticky in the last third; under that the
+   column hides and a "Preview" button over the body opens the phone in a
+   sheet. The footer bar sticks to the body's foot. */
 @layer components {
   /* The layout fills the view's height (its parent is the view's flex column), so the footer can sit at the view's
      foot even when the body is short. */
@@ -36,48 +35,48 @@
     flex-direction: column;
     gap: var(--space-16);
     min-inline-size: 0;
-    padding-inline-end: min(calc(var(--size-panel) + var(--space-16)), 50%);
+    padding-inline-end: calc((100% - var(--space-32)) * 2 / 3 + var(--space-32));
     container-type: inline-size;
   }
 
-  /* Back over .measure's padding: the same width, as a share of its content box. */
+  /* Back over .measure's padding: as a share of its content box (the phone's column), the padding is twice that
+     and the space between the columns. */
   .body,
-  .below {
-    margin-inline-end: calc(-1 * min(calc(var(--size-panel) + var(--space-16)), 100%));
+  .bar {
+    margin-inline-end: calc(-2 * 100% - var(--space-32));
+  }
+
+  /* Narrow, the Preview button sits at the end of a row of its own over the body. */
+  .bar {
+    display: flex;
+    justify-content: flex-end;
   }
 
   .body {
     display: grid;
     grid-template-columns: minmax(0, 1fr);
-    gap: var(--space-16);
+    gap: var(--space-32);
     align-items: start;
   }
 
-  /* The body's column runs to the view's foot, so the footer under its content can sit there. */
+  /* The body's column runs to the view's foot, so the footer under its content can sit there. It is a container of
+     its own, so the rows inside it answer to the column's width, not the layout's. */
   .main {
     display: flex;
     flex-direction: column;
     align-self: stretch;
     gap: var(--space-16);
     min-inline-size: 0;
+    container-type: inline-size;
   }
 
-  /* A form's fields: a readable column from the start edge; the footer still spans the body's column. */
+  /* A form's groups: a readable column centred in the body's column; the footer still spans it. */
   .main[data-width='form'] > :not(.footer) {
     inline-size: 100%;
     max-inline-size: var(--size-column-max);
+    margin-inline: auto;
   }
 
-  /* A tab of fields across the whole width: as many columns as fit, each at least the wide panel's width, so no
-     one input runs across a wide view. */
-  .columns {
-    display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(min(100%, var(--size-panel-wide)), 1fr));
-    gap: var(--space-16) var(--space-24);
-    align-items: start;
-  }
-
-  /* The wrapper lets presses through to the body under it; the bar inside takes its own. */
   /* As many columns of groups as fit, each at least the panel's width: no container query needed. */
   .main[data-layout='grid'] {
     display: grid;
@@ -87,7 +86,8 @@
   }
 
   /* At the view's foot, whatever the body's length: pushed down by the column (a short body), held there by sticky
-     (a long one, where it follows the last field, so it never covers it once scrolled to the end). */
+     (a long one, where it follows the last field, so it never covers it once scrolled to the end).
+     The wrapper lets presses through to the body under it; the bar inside takes its own. */
   .footer {
     grid-column: 1 / -1;
     position: sticky;
@@ -110,19 +110,38 @@
     display: none;
   }
 
+  /* The preview's column: as tall as the view allows under the bars and the gutter, its heading row over the
+     phone, the phone taking the room left and centred in it. */
   .preview {
+    /* Set by the component: the phone's size and the scale that fits it. */
+    --phone-width: 100%;
+    --phone-height: 100%;
+    --phone-scale: 1;
+
     display: flex;
     flex-direction: column;
-    gap: var(--space-8);
+    gap: var(--space-12);
+    align-items: center;
+    block-size: max(var(--size-panel), calc(100dvh - 2 * var(--size-bar) - 3 * var(--space-24)));
   }
 
-  /* The column's header row: its heading, then the controls at the end, as tall as an input so it lines up with
-     the body's first header. */
+  /* In the sheet, the window less its bar and the sheet's own. */
+  .preview[data-place='sheet'] {
+    block-size: max(var(--size-panel), calc(100dvh - 3 * var(--size-bar) - 4 * var(--space-24)));
+  }
+
+  /* The heading row: the heading, then the controls at its end, as tall as an input so it lines up with the
+     body's first header. At least as wide as the phone and centred over it, so the heading starts at the phone's
+     edge; wider controls widen it, up to the column. */
   .head {
     display: flex;
+    flex: none;
     flex-wrap: wrap;
     gap: var(--space-8);
     align-items: center;
+    inline-size: max-content;
+    min-inline-size: calc(var(--phone-width) * var(--phone-scale));
+    max-inline-size: 100%;
     min-block-size: var(--size-input);
   }
 
@@ -136,49 +155,71 @@
 
   .controls {
     display: flex;
+    flex-wrap: wrap;
     gap: var(--space-8);
     align-items: center;
   }
 
-  .frame {
-    overflow: hidden;
-    border: var(--border-width-hairline) solid var(--border);
-    border-radius: var(--radius-lg);
+  /* The room the phone has: the column's width, and the height left under the heading and any note. */
+  .stage {
+    display: flex;
+    flex: 1 1 0;
+    justify-content: center;
+    align-self: stretch;
+    min-block-size: 0;
   }
 
-  /* PreviewFrame: the device's layout width, scaled to fit, as tall as the view allows. */
-  .viewport {
-    /* Set by the component: the device's layout width and the scale that fits it. */
-    --device-width: 100%;
-    --preview-scale: 1;
-
+  /* The phone: its outline at the scaled size, the page inside laid out at the phone's own size. */
+  .phone {
+    box-sizing: content-box;
+    flex: none;
     overflow: hidden;
+    inline-size: calc(var(--phone-width) * var(--phone-scale));
+    block-size: calc(var(--phone-height) * var(--phone-scale));
+    border: var(--border-width-hairline) solid var(--border);
+    border-radius: var(--radius-xl);
+    background: var(--surface);
+    box-shadow: var(--shadow-xs);
+  }
+
+  .screen {
+    overflow: auto;
+    outline: none;
+    inline-size: var(--phone-width);
+    block-size: var(--phone-height);
+    transform: scale(var(--phone-scale));
+    transform-origin: 0 0;
+  }
+
+  /* A long preview's screen takes focus to be scrolled: the phone's outline shows it. */
+  .phone:has(> .screen:focus-visible) {
+    border-color: var(--accent-line);
+    box-shadow: var(--shadow-focus);
+  }
+
+  /* PreviewFrame: the page fills the phone's screen. */
+  .viewport {
     inline-size: 100%;
-    block-size: min(
-      calc(var(--size-dialog) + var(--size-panel)),
-      calc(100dvh - 2 * var(--size-bar) - 3 * var(--space-24))
-    );
+    block-size: 100%;
     background: var(--surface-subtle);
   }
 
   .iframe {
     display: block;
-    inline-size: var(--device-width);
-    block-size: calc(100% / var(--preview-scale));
+    inline-size: 100%;
+    block-size: 100%;
     border: 0;
-    transform: scale(var(--preview-scale));
-    transform-origin: 0 0;
   }
 
-  @container (width >= 480px) {
-    /* Wide, the body runs to the view's foot so the footer sits there. Narrow, it keeps its height, so the "Show
-       preview" Disclosure under it stays right under the fields. */
+  @container (width >= 320px) {
+    /* Wide, the body runs to the view's foot so the footer sits there. */
     .body {
       flex: 1 0 auto;
     }
 
+    /* The editor in the first two thirds, the phone in the last. */
     .body[data-preview] {
-      grid-template-columns: minmax(0, 1fr) var(--size-panel);
+      grid-template-columns: minmax(0, 2fr) minmax(0, 1fr);
     }
 
     .side {
@@ -188,8 +229,19 @@
       min-inline-size: 0;
     }
 
-    .below {
+    .bar {
       display: none;
+    }
+  }
+
+  @media (forced-colors: active) {
+    .phone {
+      border-color: CanvasText;
+    }
+
+    .phone:has(> .screen:focus-visible) {
+      outline: var(--border-width-thick) solid Highlight;
+      outline-offset: var(--border-width-hairline);
     }
   }
 }

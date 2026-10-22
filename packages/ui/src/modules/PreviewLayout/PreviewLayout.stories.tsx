@@ -1,7 +1,7 @@
 import type { PublicForm } from '@crm/contracts/forms';
 import type { Meta, StoryObj } from '@storybook/react-vite';
 import { useState } from 'react';
-import { expect, userEvent } from 'storybook/test';
+import { expect, userEvent, waitFor, within } from 'storybook/test';
 import { Button } from '../../atoms/Button/Button.tsx';
 import { Callout } from '../../molecules/Callout/Callout.tsx';
 import { Card } from '../../molecules/Card/Card.tsx';
@@ -10,13 +10,7 @@ import { Select } from '../../molecules/Select/Select.tsx';
 import { TabPanel, Tabs } from '../../molecules/Tabs/Tabs.tsx';
 import { Stage } from '../../workbench/Stage/Stage.tsx';
 import { HostedFormPreview } from '../HostedFormPreview/HostedFormPreview.tsx';
-import {
-  EditorStatus,
-  PreviewDeviceSwitch,
-  PreviewFrame,
-  PreviewLayout,
-  type PreviewDevice,
-} from './PreviewLayout.tsx';
+import { EditorStatus, PreviewFrame, PreviewLayout } from './PreviewLayout.tsx';
 
 const FORM: PublicForm = {
   key: 'contact-us',
@@ -53,14 +47,13 @@ const meta = {
 export default meta;
 type Story = StoryObj<typeof meta>;
 
-/** The booking page editor: its groups beside the page in a frame, with the width switch. */
+/** The booking page editor: its sections in a readable column beside the page in a phone. */
 function PageEditorExample({ hasFooter = false }: { readonly hasFooter?: boolean }) {
-  const [device, setDevice] = useState<PreviewDevice>('phone');
   return (
     <Stage height="page" width="fill">
       <PreviewLayout
-        previewControls={<PreviewDeviceSwitch value={device} onChange={setDevice} />}
-        preview={<PreviewFrame src="about:blank" title="Intro call" device={device} />}
+        bodyWidth="form"
+        preview={<PreviewFrame src="about:blank" title="Intro call" />}
         {...(hasFooter
           ? {
               footer: (
@@ -71,11 +64,11 @@ function PageEditorExample({ hasFooter = false }: { readonly hasFooter?: boolean
             }
           : {})}
       >
-        <Card title="Page" description="/intro-call">
-          <Field label="Description" value="" isMultiline />
+        <Card title="Details">
+          <Field label="Description" value="" placeholder="What the meeting is for" isMultiline />
         </Card>
-        <Card title="Meeting" description="30 min · Video">
-          <Field label="Title" value="Intro call" />
+        <Card title="Sharing">
+          <Field label="Address" value="intro-call" prefix="timefix.com/ada/" />
         </Card>
       </PreviewLayout>
     </Stage>
@@ -137,14 +130,13 @@ function FormEditorExample() {
   );
 }
 
-/** The booking page editor: its groups beside a phone width preview; the switch widens it. */
+/** The booking page editor: its sections in the first two thirds, the page in a phone centred in the last. */
 export const Default: Story = {
   parameters: { crm: { preview: true } },
   render: () => <PageEditorExample />,
   play: async ({ canvas }) => {
-    const [tablet] = canvas.getAllByRole('radio', { name: 'Tablet' });
-    if (tablet !== undefined) await userEvent.click(tablet);
-    await expect(canvas.getAllByTitle('Preview of Intro call').length).toBeGreaterThan(0);
+    await expect(canvas.getByRole('complementary', { name: 'Preview' })).toBeInTheDocument();
+    await expect(canvas.getByTitle('Preview of Intro call')).toBeInTheDocument();
   },
 };
 
@@ -168,7 +160,7 @@ export const WithFooter: Story = {
   },
 };
 
-/** Narrow: the preview waits under the body in "Show preview", drawn once opened. */
+/** Narrow: the phone waits behind a Preview button over the body, and opens in a sheet. */
 export const Narrow: Story = {
   render: () => (
     <Stage width="narrow">
@@ -181,8 +173,11 @@ export const Narrow: Story = {
   ),
   play: async ({ canvas }) => {
     await expect(canvas.queryByRole('complementary', { name: 'Preview' })).not.toBeInTheDocument();
-    await userEvent.click(canvas.getByRole('button', { name: 'Show preview' }));
-    await expect(canvas.getByRole('heading', { name: 'Fill this in and we will come back to you' })).toBeVisible();
+    await userEvent.click(canvas.getByRole('button', { name: 'Preview' }));
+    const sheet = within(document.body).getByRole('dialog', { name: 'Preview' });
+    await expect(
+      within(sheet).getByRole('heading', { name: 'Fill this in and we will come back to you' }),
+    ).toBeInTheDocument();
   },
 };
 
@@ -227,15 +222,17 @@ export const FullWidth: Story = {
   ),
 };
 
-/** A tab of fields across the whole width (the booking page editor): as many columns as fit, no input stretched. */
-export const Columns: Story = {
+/** No preview, a tab of fields (the booking page editor's Hosts): a readable column centred in the width. */
+export const FormWidth: Story = {
   render: () => (
     <Stage height="page" width="fill">
-      <PreviewLayout bodyWidth="columns">
-        <Field label="Title" value="Intro call" />
-        <Field label="Web address" value="intro-call" prefix="/ada/" />
-        <Field label="Description" value="" isMultiline />
-        <Field label="Section" value="Sales" />
+      <PreviewLayout bodyWidth="form">
+        <Card title="Meeting">
+          <Field label="Title" value="Intro call" />
+        </Card>
+        <Card title="Profile">
+          <Field label="Section" value="Sales" />
+        </Card>
       </PreviewLayout>
     </Stage>
   ),
@@ -258,4 +255,33 @@ export const Grid: Story = {
       </PreviewLayout>
     </Stage>
   ),
+};
+
+/** A long form: it runs past the phone's foot, so the screen scrolls and takes focus to be scrolled by keyboard. */
+export const LongPreview: Story = {
+  render: function Render() {
+    const long: PublicForm = {
+      ...FORM,
+      questions: Array.from({ length: 12 }, (_, at) => ({
+        id: `q${String(at)}`,
+        key: `answer${String(at)}`,
+        label: `Question ${String(at + 1)}`,
+        answerType: 'short_text' as const,
+        required: false,
+      })),
+    };
+    return (
+      <Stage height="page" width="fill">
+        <PreviewLayout preview={<HostedFormPreview form={long} logo={LOGO} />}>
+          <Card title="Questions" description="12 questions">
+            <Field label="Headline" value="Fill this in and we will come back to you" />
+          </Card>
+        </PreviewLayout>
+      </Stage>
+    );
+  },
+  play: async ({ canvas }) => {
+    const screen = await waitFor(() => canvas.getByRole('region', { name: 'Phone preview' }));
+    await expect(screen).toHaveAttribute('tabindex', '0');
+  },
 };

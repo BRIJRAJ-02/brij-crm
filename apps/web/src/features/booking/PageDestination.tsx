@@ -4,7 +4,7 @@
 // Leaves out: the member's own default (Settings › Calendars), and calendar names for colleagues, who see "Owner’s default" only (spec 0037).
 import type { CalendarListState, CalendarsHeld, PageDestinationState } from '@crm/data';
 import { useCalendarList, usePageDestination } from '@crm/data/react';
-import { Badge, ButtonLink, FieldGroup, Select } from '@crm/ui';
+import { Badge, ButtonLink, Card, FieldGroup, Select } from '@crm/ui';
 import { calendarOptions } from '../calendars/calendar-options.ts';
 import { DEFAULT_DESTINATION, destinationChoice, destinationHint } from './destination.ts';
 import { strings } from './strings.ts';
@@ -19,14 +19,43 @@ export interface PageDestinationProps {
   readonly isReadOnly: boolean;
   /** Sets it (`null`: the owner's default): at once, put back with a toast if refused. */
   readonly onChange: (calendarId: string | null) => void;
+  /** Settings › Calendars, where an owner with no calendar connects one. */
+  readonly settingsHref: string;
 }
 
 const DEFAULT = DEFAULT_DESTINATION;
 
-/** "Add bookings to": a Select of the owner's writable calendars after their default; colleagues read it only. */
-export function PageDestination({ destination, calendars, isReadOnly, onChange }: PageDestinationProps) {
+/**
+ * The Meeting tab's Calendar section: "Add bookings to", a Select of the owner's writable calendars after their
+ * default; colleagues read it only. An owner with no calendar connected gets the section's empty state, with
+ * Connect calendar to Settings › Calendars.
+ */
+export function PageDestination({ destination, calendars, isReadOnly, onChange, settingsHref }: PageDestinationProps) {
   const held = usePageDestination(destination);
   const list = useCalendarList(calendars);
+  if (held.status === 'ready' && held.destination.isOwner && list.status === 'ready' && list.accounts.length === 0) {
+    return (
+      <Card
+        title={strings.calendarSection}
+        description={strings.noCalendars}
+        actions={
+          <ButtonLink href={settingsHref} size="sm" icon="plus">
+            {strings.connectCalendar}
+          </ButtonLink>
+        }
+      />
+    );
+  }
+  return <Card title={strings.calendarSection}>{destinationField(held, list, isReadOnly, onChange)}</Card>;
+}
+
+/** The section's one field, in each of its states. */
+function destinationField(
+  held: ReturnType<typeof usePageDestination>,
+  list: ReturnType<typeof useCalendarList>,
+  isReadOnly: boolean,
+  onChange: (calendarId: string | null) => void,
+) {
   // A failed read keeps the field in place, saying so, rather than leaving a gap.
   if (held.status === 'error' || (held.status === 'ready' && held.destination.isOwner && list.status === 'error')) {
     return <Select label={strings.addBookingsTo} items={[]} isDisabled error={strings.destinationFailed} />;
@@ -51,7 +80,7 @@ export function PageDestination({ destination, calendars, isReadOnly, onChange }
     );
   }
   const accounts = list.status === 'ready' ? list.accounts : [];
-  // An owner with no calendar has nowhere to choose: the editor's calendar note says how to connect one.
+  // An owner with no calendar has nowhere to choose: the section says so instead (above).
   if (accounts.length === 0) return null;
   const all = accounts.flatMap((account) => account.calendars);
   const current = all.find((calendar) => calendar.isDestination);
@@ -106,30 +135,40 @@ export function PageConflicts({ destination, calendars, settingsHref }: PageConf
   const held = usePageDestination(destination);
   const list = useCalendarList(calendars);
   if (held.status !== 'ready' || !held.destination.isOwner || list.status !== 'ready') return null;
+  // A section of the Hours tab: Conflicts, with Manage (or Connect calendar) at its head, and the calendars as
+  // Badges in one row.
   if (list.accounts.length === 0) {
     return (
-      <FieldGroup label={strings.checksConflictsIn} hint={strings.noCalendars} layout="row">
-        <ButtonLink href={settingsHref} size="sm" icon="plus">
-          {strings.connectCalendar}
-        </ButtonLink>
-      </FieldGroup>
+      <Card
+        title={strings.conflicts}
+        description={strings.noCalendars}
+        actions={
+          <ButtonLink href={settingsHref} size="sm" icon="plus">
+            {strings.connectCalendar}
+          </ButtonLink>
+        }
+      />
     );
   }
   const checked = calendarOptions({ accounts: list.accounts, include: (calendar) => calendar.checkConflicts });
   return (
-    <FieldGroup
-      label={strings.checksConflictsIn}
-      layout="row"
-      action={
+    <Card
+      title={strings.conflicts}
+      actions={
         <ButtonLink href={settingsHref} variant="ghost" size="sm" icon="settings">
           {strings.manage}
         </ButtonLink>
       }
-      {...(checked.length === 0 ? { hint: strings.noneChecked } : {})}
     >
-      {checked.map((item) => (
-        <Badge key={item.id} size="chip" text={item.label} dot={item.hue ?? 'gray'} />
-      ))}
-    </FieldGroup>
+      <FieldGroup
+        label={strings.checksConflictsIn}
+        layout="row"
+        {...(checked.length === 0 ? { hint: strings.noneChecked } : {})}
+      >
+        {checked.map((item) => (
+          <Badge key={item.id} size="chip" text={item.label} dot={item.hue ?? 'gray'} />
+        ))}
+      </FieldGroup>
+    </Card>
   );
 }

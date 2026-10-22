@@ -410,30 +410,19 @@ export function SettingsRow({
 export interface SettingsRowGroupProps {
   /** What the rows have in common ("Buffers"): a quiet label over them. */
   readonly title: string;
-  /**
-   * `plain` drops every hairline, between its rows and before it, and sets the rows on a compact rhythm, space
-   * alone setting groups apart (a booking page's Limits tab, the owner, 22 Oct 2026: "remove lines as separators").
-   * Settings pages keep the default, its hairlines.
-   */
-  readonly variant?: 'default' | 'plain';
   /** Its SettingsRows. */
   readonly children: ReactNode;
 }
 
 /**
- * A few SettingsRows under a quiet label, inside a Card that holds several groups (a booking page's Limits:
- * Buffers, Booking window, Pace), a hairline before the next group. Why a component: a Card of six rows read as one
- * long list; grouped, each pair reads as one idea.
+ * A few SettingsRows under a quiet label, inside a Card that holds several groups (Settings › Calendars), a hairline
+ * before the next group. Why a component: a Card of six rows read as one long list; grouped, each pair reads as one
+ * idea.
  */
-export function SettingsRowGroup({ title, variant = 'default', children }: SettingsRowGroupProps) {
+export function SettingsRowGroup({ title, children }: SettingsRowGroupProps) {
   const headingId = useId();
   return (
-    <div
-      className={styles.rowGroup}
-      role="group"
-      aria-labelledby={headingId}
-      data-variant={variant === 'plain' ? 'plain' : undefined}
-    >
+    <div className={styles.rowGroup} role="group" aria-labelledby={headingId}>
       <span className={styles.rowGroupTitle} id={headingId}>
         {title}
       </span>
