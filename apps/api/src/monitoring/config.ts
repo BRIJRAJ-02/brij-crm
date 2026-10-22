@@ -4,7 +4,7 @@
 import { basename } from 'node:path';
 import { AppEnvironment } from '@crm/contracts';
 import * as z from 'zod';
-import { optional } from '../env.ts';
+import { DeployedCommit, optional } from '../env.ts';
 import type { Service } from './sentry.ts';
 
 /** The entry file each service starts from, for when the start command doesn't set `SERVICE`. */
@@ -14,8 +14,8 @@ export const MonitoringEnv = z.object({
   APP_ENV: AppEnvironment,
   // A DSN is a URL with the project's public key; Sentry ingests over https only. Unset means off.
   SENTRY_DSN_SERVER: optional(z.url({ protocol: /^https$/, error: 'SENTRY_DSN_SERVER must be an https URL.' })),
-  // Railway sets it on every deploy; a laptop has none.
-  RAILWAY_GIT_COMMIT_SHA: optional(z.string().regex(/^[0-9a-f]{7,40}$/i)),
+  // The host sets the commit on every deploy (Render or Railway); a laptop has none.
+  ...DeployedCommit,
   SERVICE: optional(z.enum(['api', 'worker'])),
 });
 export type MonitoringEnv = z.infer<typeof MonitoringEnv>;

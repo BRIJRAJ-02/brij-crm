@@ -18,19 +18,24 @@ const isSentryOrigin = (source: string) =>
   isEuIngestHost(new URL(source).hostname) &&
   new URL(source).origin === source;
 
-/** Whether a connect-src source is the live updates socket's origin: Centrifugo on Railway, nothing else. */
+/**
+ * Whether a connect-src source is the live updates socket's origin: Centrifugo on Render, or on Railway until the
+ * move off it is done (spec 0044), nothing else.
+ */
 const isSocketOrigin = (source: string) =>
   URL.canParse(source) &&
   new URL(source).protocol === 'wss:' &&
-  /^centrifugo[-\w]*\.up\.railway\.app$/u.test(new URL(source).hostname) &&
+  (/^centrifugo[-\w]*\.up\.railway\.app$/u.test(new URL(source).hostname) ||
+    /^brij-crm-centrifugo[-\w]*\.onrender\.com$/u.test(new URL(source).hostname)) &&
   new URL(source).origin === source;
 
 describe("vercel.json's policy", () => {
-  it("lets the browser connect to our own origin, Centrifugo's socket and at most one Sentry host, nothing else", () => {
+  it("lets the browser connect to our own origin, Centrifugo's sockets and at most one Sentry host, nothing else", () => {
     const [self, ...others] = directiveSources(policy, 'connect-src');
     expect(self).toBe("'self'");
     expect(others.filter(isSentryOrigin).length).toBeLessThanOrEqual(1);
-    expect(others.filter(isSocketOrigin).length).toBeLessThanOrEqual(1);
+    // Two while the move to Render runs (spec 0044): Railway's socket for rollback, and Render's.
+    expect(others.filter(isSocketOrigin).length).toBeLessThanOrEqual(2);
     for (const origin of others) expect(isSentryOrigin(origin) || isSocketOrigin(origin)).toBe(true);
   });
 

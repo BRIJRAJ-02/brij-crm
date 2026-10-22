@@ -4,6 +4,10 @@
 #   Vercel preview at brij-crm-pr-N.vercel.app, whose middleware proxies /api to that Railway api
 # Closing the pull request removes the branch, the environment and the alias.
 #
+# Off while the api moves from Railway to Render (spec 0044): Railway's tokens were revoked after its incident,
+# so both jobs run only when the repository variable PREVIEW_BACKEND is `railway`. Unset means no previews. The
+# Neon branch's 14 day expiry still cleans up a preview whose teardown is skipped.
+#
 # Repository variables: NEON_PROJECT_ID, NEON_OWNER_ROLE, RAILWAY_PROJECT_ID,
 #   VERCEL_ORG_ID, VERCEL_PROJECT_ID
 # Repository secrets: NEON_API_KEY, RAILWAY_TOKEN (an account or workspace token),
@@ -33,7 +37,9 @@ env:
 jobs:
   deploy:
     # Forks get no secrets, so they get no preview.
-    if: github.event.action != 'closed' && github.event.pull_request.head.repo.full_name == github.repository
+    if: >-
+      vars.PREVIEW_BACKEND == 'railway' && github.event.action != 'closed' &&
+      github.event.pull_request.head.repo.full_name == github.repository
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -155,7 +161,9 @@ jobs:
             --body "Preview: https://$WEB_HOST (commit ${{ github.event.pull_request.head.sha }}), with its own database branch \`$DB_BRANCH\`."
 
   teardown:
-    if: github.event.action == 'closed' && github.event.pull_request.head.repo.full_name == github.repository
+    if: >-
+      vars.PREVIEW_BACKEND == 'railway' && github.event.action == 'closed' &&
+      github.event.pull_request.head.repo.full_name == github.repository
     runs-on: ubuntu-latest
     permissions:
       contents: read

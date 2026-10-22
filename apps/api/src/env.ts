@@ -21,7 +21,30 @@ const shared = {
   APP_ENV: AppEnvironment,
   NODE_ENV: z.enum(['development', 'production', 'test']).default('development'),
   DATABASE_URL: z.url(),
+  // Render sets `true` on every service (spec 0044): there a one label host is the private network address.
+  RENDER: optional(z.string()),
 };
+
+// A deployed commit's sha, as the host reports it.
+const commitSha = optional(z.string().regex(/^[0-9a-f]{7,40}$/i));
+
+/**
+ * The deployed commit, which the host sets: Render's `RENDER_GIT_COMMIT`, or Railway's `RAILWAY_GIT_COMMIT_SHA`
+ * while production still runs there (spec 0044). A laptop has neither.
+ */
+export const DeployedCommit = { RENDER_GIT_COMMIT: commitSha, RAILWAY_GIT_COMMIT_SHA: commitSha };
+
+/** The release /api/health and Sentry name: the deployed commit from whichever host set one, else `local`. */
+export function releaseOf(env: {
+  readonly RENDER_GIT_COMMIT?: string | undefined;
+  readonly RAILWAY_GIT_COMMIT_SHA?: string | undefined;
+}): string {
+  return env.RENDER_GIT_COMMIT ?? env.RAILWAY_GIT_COMMIT_SHA ?? 'local';
+}
+
+/** Whether a one label host is a private network address: Render's, or a compose service with APP_ENV=local. */
+const oneLabelAllowed = (env: { readonly APP_ENV: string; readonly RENDER?: string | undefined }) =>
+  env.APP_ENV === 'local' || env.RENDER === 'true';
 
 // The edge guard's shared secret (spec 0005, #57): required outside local (see the check below), where an
 // empty value counts as unset, so `.env.example`'s `EDGE_SECRET=` boots on a laptop.
@@ -86,35 +109,43 @@ function isComposeServiceUrl(value: string | undefined): boolean {
  * An address on the private network or this machine, or else https: the
  * relay's key and the wake secret travel in its headers. Plain http only to a
  * Railway private host (`*.railway.internal`, which Railway encrypts),
- * localhost, or a compose service name, which the environment's own check
- * then refuses outside `APP_ENV=local` (`composeOnlyLocally`).
+ * localhost, or a one label name: a compose service, or a Render private
+ * address, which the environment's own check then refuses unless
+ * `APP_ENV=local` or on Render (`composeOnlyLocally`). A bare `host:port`, as
+ * Render's Blueprint hands over a service's `hostport`, is read as plain http.
  */
 function internalUrl(variable: string) {
-  return z.url().refine(
-    (value) => {
-      // z.url() has already said so; one issue is enough.
-      if (!URL.canParse(value)) return true;
-      const url = new URL(value);
-      if (url.protocol === 'https:') return true;
-      const host = url.hostname;
-      return (
-        url.protocol === 'http:' &&
-        (host.endsWith('.railway.internal') ||
-          host === 'localhost' ||
-          host === '127.0.0.1' ||
-          host === '[::1]' ||
-          isComposeService(host))
-      );
-    },
-    {
-      message: `${variable} must be https, or http to a *.railway.internal host or localhost (or, with APP_ENV=local, a one label compose service name).`,
-    },
+  const bareHostPort = /^[a-z][a-z0-9-]*:\d{1,5}$/;
+  const withScheme = (value: unknown) =>
+    typeof value === 'string' && bareHostPort.test(value) ? `http://${value}` : value;
+  return z.preprocess(
+    withScheme,
+    z.url().refine(
+      (value) => {
+        // z.url() has already said so; one issue is enough.
+        if (!URL.canParse(value)) return true;
+        const url = new URL(value);
+        if (url.protocol === 'https:') return true;
+        const host = url.hostname;
+        return (
+          url.protocol === 'http:' &&
+          (host.endsWith('.railway.internal') ||
+            host === 'localhost' ||
+            host === '127.0.0.1' ||
+            host === '[::1]' ||
+            isComposeService(host))
+        );
+      },
+      {
+        message: `${variable} must be https, or http to a *.railway.internal host or localhost (or, with APP_ENV=local or on Render, a one label private host).`,
+      },
+    ),
   );
 }
 
 /** The refusal for plain http to a compose service name outside local. */
 const composeOnlyLocally = (variable: string, appEnv: string) =>
-  `${variable} names a compose service over plain http, which only APP_ENV=local takes (not ${appEnv}). Use https, a *.railway.internal host or localhost.`;
+  `${variable} names a one label host over plain http, which only APP_ENV=local or Render takes (not ${appEnv}). Use https, a *.railway.internal host or localhost.`;
 
 // A sender: `address@domain`, or `Name <address@domain>`.
 const sender = z
@@ -267,8 +298,8 @@ export const ApiEnv = z
     // Live updates (spec 0005): signs Centrifugo's connection and subscription tokens. The Centrifugo service's
     // CENTRIFUGO_CLIENT_TOKEN_HMAC_SECRET_KEY. Unset turns live updates off.
     CENTRIFUGO_TOKEN_SECRET: optional(z.string()),
-    // The deployed commit, which Railway sets: /api/health names it, so the web deploy can wait for this API.
-    RAILWAY_GIT_COMMIT_SHA: optional(z.string().regex(/^[0-9a-f]{7,40}$/i)),
+    // The deployed commit, which the host sets: /api/health names it, so the web deploy can wait for this API.
+    ...DeployedCommit,
     // Monitoring (spec 0010): `on` opens system.testFault, which fails on purpose to prove error reports in
     // production; unset or `off` answers NOT_FOUND, as if it didn't exist. Switch it off again after the proof.
     MONITORING_TEST_FAULT: optional(z.enum(['on', 'off'])),
@@ -316,7 +347,7 @@ export const ApiEnv = z
         `LOAD_TIMING=on is refused in ${env.APP_ENV}: the timing header is for the local load stack only.`,
       );
     }
-    if (env.APP_ENV !== 'local' && isComposeServiceUrl(env.WORKER_INTERNAL_URL)) {
+    if (!oneLabelAllowed(env) && isComposeServiceUrl(env.WORKER_INTERNAL_URL)) {
       missing('WORKER_INTERNAL_URL', composeOnlyLocally('WORKER_INTERNAL_URL', env.APP_ENV));
     }
     if ((env.GOOGLE_CLIENT_ID === undefined) !== (env.GOOGLE_CLIENT_SECRET === undefined)) {
@@ -395,8 +426,8 @@ export const DEFAULT_IDLE_SLEEP_SECONDS = 180;
 export const WorkerEnv = z
   .object({
     ...shared,
-    // Locally the api owns PORT, so the worker uses WORKER_PORT. On Railway
-    // each service gets its own PORT, which the health check calls.
+    // Locally the api owns PORT, so the worker uses WORKER_PORT. Deployed, each
+    // service gets its own PORT, which the health check and the wake call reach.
     WORKER_PORT: port.optional(),
     PORT: port.optional(),
     DATABASE_URL_DIRECT: z.url(),
@@ -437,7 +468,7 @@ export const WorkerEnv = z
     if (env.APP_ENV !== 'local' && url) {
       missing('CENTRIFUGO_API_URL', `CENTRIFUGO_API_URL is required in ${env.APP_ENV}: the relay publishes there.`);
     }
-    if (env.APP_ENV !== 'local' && isComposeServiceUrl(env.CENTRIFUGO_API_URL)) {
+    if (!oneLabelAllowed(env) && isComposeServiceUrl(env.CENTRIFUGO_API_URL)) {
       missing('CENTRIFUGO_API_URL', composeOnlyLocally('CENTRIFUGO_API_URL', env.APP_ENV));
     }
     if (env.APP_ENV === 'local') return;

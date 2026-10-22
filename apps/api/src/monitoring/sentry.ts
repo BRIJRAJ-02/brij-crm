@@ -44,7 +44,7 @@ export type Service = 'api' | 'worker';
 export interface SentryConfig {
   readonly dsn: string;
   readonly environment: AppEnvironment;
-  /** The commit (`RAILWAY_GIT_COMMIT_SHA`), else `local`. */
+  /** The deployed commit (`releaseOf`: Render's or Railway's), else `local`. */
   readonly release: string;
   readonly service: Service;
   /** Tests only: delivers each envelope here instead of to Sentry. */

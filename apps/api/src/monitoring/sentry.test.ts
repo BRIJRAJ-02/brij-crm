@@ -8,6 +8,7 @@ import { promisify } from 'node:util';
 import { serve } from '@hono/node-server';
 import { describe, expect, it } from 'vitest';
 import { memoryTransport } from '../../test/sentry.ts';
+import { releaseOf } from '../env.ts';
 import { APP_URL, createTestApp } from '../testing.ts';
 import { MonitoringEnv, serviceFor } from './config.ts';
 import {
@@ -114,7 +115,13 @@ describe('instrument.ts', () => {
       RAILWAY_GIT_COMMIT_SHA: 'abc1234',
     });
     expect(parsed.SENTRY_DSN_SERVER).toBeUndefined();
-    expect(parsed.RAILWAY_GIT_COMMIT_SHA).toBe('abc1234');
+    expect(releaseOf(parsed)).toBe('abc1234');
+  });
+
+  it('takes the release from Render, and is local with neither host (spec 0044)', () => {
+    expect(releaseOf(MonitoringEnv.parse({ APP_ENV: 'production', RENDER_GIT_COMMIT: 'def5678' }))).toBe('def5678');
+    expect(releaseOf(MonitoringEnv.parse({ APP_ENV: 'production', RENDER_GIT_COMMIT: '' }))).toBe('local');
+    expect(() => MonitoringEnv.parse({ APP_ENV: 'production', RENDER_GIT_COMMIT: 'not a sha' })).toThrow();
   });
 });
 
