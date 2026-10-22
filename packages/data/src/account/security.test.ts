@@ -3,8 +3,9 @@
 // answered, never thrown, and passkeys renamed and removed at once, put back
 // when refused.
 import type { AccountSecurity, PasskeyAssertion } from '@crm/contracts';
+import { ORPCError } from '@orpc/client';
 import { describe, expect, it } from 'vitest';
-import { dataError } from '../errors.ts';
+import { dataError, ERROR_MESSAGES } from '../errors.ts';
 import { type AccountSecurityApi, createAccountSecurityStore, isFresh } from './security.ts';
 
 const NOW = Date.parse('2026-10-21T12:00:00.000Z');
@@ -47,6 +48,24 @@ describe('account security store', () => {
     expect(isFresh(view.getSnapshot(), NOW)).toBe(false);
     expect(await store.verify('totp', '123456')).toEqual({ ok: true });
     expect(isFresh(view.getSnapshot(), NOW)).toBe(true);
+  });
+
+  it('keeps the server’s words for a code that couldn’t be sent, and only the unexpected is generic', async () => {
+    const notSent = 'We couldn’t send the code just now. Try again in a few minutes.';
+    const store = (error: Error) => createAccountSecurityStore(fakeApi({ startStepUp: () => Promise.reject(error) }));
+    expect(await store(new ORPCError('API_UNAVAILABLE', { status: 503, message: notSent })).sendCode()).toEqual({
+      ok: false,
+      code: 'API_UNAVAILABLE',
+      message: notSent,
+    });
+    expect(
+      await store(
+        new ORPCError('RATE_LIMITED', { status: 429, message: 'Too many codes sent. Wait 7 minutes, then try again.' }),
+      ).sendCode(),
+    ).toMatchObject({ code: 'RATE_LIMITED', message: 'Too many codes sent. Wait 7 minutes, then try again.' });
+    expect(
+      await store(new ORPCError('INTERNAL', { status: 500, message: 'No mailer was given to this app.' })).sendCode(),
+    ).toEqual({ ok: false, code: 'INTERNAL', message: ERROR_MESSAGES.internal });
   });
 
   it('answers a refused code with its message', async () => {

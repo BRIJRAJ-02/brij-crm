@@ -75,6 +75,7 @@ export { deviceLabel, deviceParts, type DeviceParts } from './account/device.ts'
 export {
   accountSecurity,
   CODE_INVALID_MESSAGE,
+  EMAIL_CODE_EXPIRED_MESSAGE,
   EMAIL_CODE_INVALID_MESSAGE,
   FRESH_MESSAGE,
   NO_SECOND_FACTOR,
