@@ -1,0 +1,29 @@
+/* ViewHeader: the app's top bar row: its height, a hairline under it, the title's type. */
+@layer components {
+  .root {
+    display: flex;
+    flex: none;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--space-12);
+    block-size: var(--size-bar);
+    padding-inline: var(--space-16);
+    border-block-end: var(--border-width-hairline) solid var(--border-subtle);
+  }
+
+  .title {
+    display: flex;
+    align-items: center;
+    gap: var(--space-8);
+    min-inline-size: 0;
+    font: var(--text-title);
+    letter-spacing: var(--tracking-title);
+    white-space: nowrap;
+  }
+
+  .actions {
+    display: flex;
+    align-items: center;
+    gap: var(--space-8);
+  }
+}

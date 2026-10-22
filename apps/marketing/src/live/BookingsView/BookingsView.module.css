@@ -1,0 +1,17 @@
+/* BookingsView: the header, then the week filling the rest of the view's height. */
+@layer components {
+  .root {
+    display: flex;
+    flex-direction: column;
+    block-size: 100%;
+    min-block-size: 0;
+  }
+
+  /* The week fills by flex (its `isFill`), so its slot is a flex column too. */
+  .calendar {
+    display: flex;
+    flex: 1;
+    flex-direction: column;
+    min-block-size: 0;
+  }
+}

@@ -1,0 +1,18 @@
+/* DealsView: the header, then the board filling the rest of the view (its columns are virtualised, so it needs the
+   height). */
+@layer components {
+  .root {
+    display: flex;
+    flex-direction: column;
+    block-size: 100%;
+    min-block-size: 0;
+  }
+
+  .board {
+    display: flex;
+    flex: 1;
+    flex-direction: column;
+    min-block-size: 0;
+    padding-block-start: var(--space-12);
+  }
+}

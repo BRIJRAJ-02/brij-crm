@@ -1,0 +1,57 @@
+/* LegalPage: one column at a reading measure, the title in the display face, sections spaced by their headings. */
+@layer components {
+  .root {
+    padding-block: clamp(var(--space-32), 8svh, calc(var(--space-32) * 3)) calc(var(--space-32) * 2);
+    padding-inline: var(--site-inline);
+  }
+
+  .article {
+    --font-display: 'Host Grotesk', var(--font-sans);
+    --reading-leading: 1.65;
+
+    max-inline-size: var(--size-dialog-wide);
+    margin-inline: auto;
+  }
+
+  .header {
+    display: grid;
+    gap: var(--space-12);
+    padding-block-end: var(--space-24);
+    border-block-end: var(--border-width-hairline) solid var(--border-subtle);
+  }
+
+  .title {
+    font: var(--text-note-title);
+    font-family: var(--font-display);
+    font-size: clamp(var(--space-32), 5vw, calc(var(--space-32) + var(--space-16)));
+    letter-spacing: var(--tracking-note-title);
+  }
+
+  .updated {
+    color: var(--text-tertiary);
+    font: var(--text-body);
+    letter-spacing: var(--tracking-body);
+  }
+
+  .heading {
+    margin-block-start: var(--space-32);
+    font: var(--text-heading);
+    letter-spacing: var(--tracking-heading);
+  }
+
+  .paragraph,
+  .list {
+    margin-block-start: var(--space-12);
+    color: var(--text-secondary);
+    font: var(--text-body);
+    font-size: var(--space-16);
+    line-height: var(--reading-leading);
+    letter-spacing: var(--tracking-body);
+  }
+
+  .list {
+    display: grid;
+    gap: var(--space-8);
+    padding-inline-start: var(--space-24);
+  }
+}

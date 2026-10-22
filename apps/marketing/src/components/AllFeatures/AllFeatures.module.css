@@ -1,0 +1,146 @@
+/* AllFeatures: the trigger is a footer row like the sidebar's; the panel is drawn as the app's Modal (the raised
+   surface, a hairline, the large shadow, the overlay inset) and opens from the centre over the scrim. */
+@layer components {
+  .trigger {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-6);
+    block-size: var(--size-nav-item);
+    padding-inline: var(--space-8);
+    border: 0;
+    border-radius: var(--radius-md);
+    background: transparent;
+    color: var(--text-secondary);
+    font: var(--text-body);
+    letter-spacing: var(--tracking-body);
+    white-space: nowrap;
+    cursor: pointer;
+    outline: none;
+    transition:
+      background-color var(--duration-hover) var(--ease-hover),
+      color var(--duration-hover) var(--ease-hover);
+  }
+
+  @media (hover: hover) and (pointer: fine) {
+    .trigger:hover {
+      background: var(--surface-hover);
+      color: var(--text);
+    }
+  }
+
+  .trigger:focus-visible {
+    box-shadow: var(--shadow-focus-inset), var(--shadow-focus);
+  }
+
+  .panel {
+    inline-size: min(calc(100vw - 2 * var(--space-16)), var(--size-dialog-wide));
+    max-block-size: calc(100svh - 2 * var(--space-32));
+    margin: auto;
+    padding: 0;
+    overflow: auto;
+    border: var(--border-width-hairline) solid var(--border);
+    border-radius: var(--radius-xl);
+    background: var(--surface-raised);
+    box-shadow: var(--shadow-lg);
+    color: var(--text);
+    overscroll-behavior: contain;
+  }
+
+  .panel:popover-open {
+    animation: open var(--duration-modal) var(--ease-out);
+  }
+
+  .panel::backdrop {
+    background: var(--scrim);
+  }
+
+  .header {
+    position: sticky;
+    inset-block-start: 0;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--space-16);
+    padding: var(--space-12) var(--overlay-inset);
+    border-block-end: var(--border-width-hairline) solid var(--border-subtle);
+    background: var(--surface-raised);
+  }
+
+  .title {
+    font: var(--text-heading);
+    letter-spacing: var(--tracking-heading);
+  }
+
+  .close {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    inline-size: var(--size-control);
+    block-size: var(--size-control);
+    border: 0;
+    border-radius: var(--radius-md);
+    background: transparent;
+    color: var(--text-secondary);
+    cursor: pointer;
+    outline: none;
+  }
+
+  @media (hover: hover) and (pointer: fine) {
+    .close:hover {
+      background: var(--surface-hover);
+      color: var(--text);
+    }
+  }
+
+  .close:focus-visible {
+    box-shadow: var(--shadow-focus-inset), var(--shadow-focus);
+  }
+
+  .groups {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(var(--size-column), 1fr));
+    gap: var(--space-24);
+    padding: var(--overlay-inset);
+  }
+
+  .groupTitle {
+    display: flex;
+    align-items: center;
+    gap: var(--space-8);
+    font: var(--text-body-strong);
+    letter-spacing: var(--tracking-body-strong);
+  }
+
+  .features {
+    display: grid;
+    gap: var(--space-4);
+    margin-block-start: var(--space-8);
+    padding: 0;
+    list-style: none;
+  }
+
+  .feature {
+    color: var(--text-secondary);
+    font: var(--text-body);
+    letter-spacing: var(--tracking-body);
+  }
+
+  @keyframes open {
+    from {
+      opacity: 0;
+      transform: scale(var(--scale-enter));
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .panel:popover-open {
+      animation: fade var(--duration-modal) var(--ease-out);
+    }
+  }
+
+  @keyframes fade {
+    from {
+      opacity: 0;
+    }
+  }
+}

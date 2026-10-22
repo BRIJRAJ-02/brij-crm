@@ -1,0 +1,18 @@
+/* SiteHeader: one row, the site's bar height (`--site-bar`), under a hairline, inside the site's gutters. */
+@layer components {
+  .root {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--space-16);
+    block-size: var(--site-bar);
+    padding-inline: var(--site-inline);
+    border-block-end: var(--border-width-hairline) solid var(--border-subtle);
+  }
+
+  .nav {
+    display: flex;
+    align-items: center;
+    gap: var(--space-8);
+  }
+}

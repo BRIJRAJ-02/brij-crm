@@ -16,6 +16,8 @@ import { SYSTEM_COLORS, systemColors } from './stylelint/system-colors.js';
 const TOKENS_CSS = path.resolve(import.meta.dirname, '../tokens/tokens.css');
 // The library's base layer defines the few shared custom properties built from tokens (the overlay padding scale).
 const BASE_CSS = path.resolve(import.meta.dirname, '../ui/src/styles/base.css');
+// The marketing site's shared custom properties (its gutters, frame and bar), built from tokens the same way.
+const SITE_CSS = path.resolve(import.meta.dirname, '../../apps/marketing/src/styles/site.css');
 
 const TOKEN_PROPERTIES = [
   '/color$/',
@@ -93,7 +95,7 @@ export const stylelintConfig = {
       TOKEN_PROPERTIES,
       { ignoreValues: IGNORED_VALUES, message: 'Expected a token (var(--name)) for "${value}" of "${property}".' },
     ],
-    'csstools/value-no-unknown-custom-properties': [true, { importFrom: [TOKENS_CSS, BASE_CSS] }],
+    'csstools/value-no-unknown-custom-properties': [true, { importFrom: [TOKENS_CSS, BASE_CSS, SITE_CSS] }],
     'crm/breakpoint-tokens': true,
     'crm/system-colors': true,
     'declaration-no-important': true,

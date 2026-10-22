@@ -1,0 +1,15 @@
+/* The marketing site's own shared custom properties, built from tokens in one place, as the library's base layer
+   builds its overlay scale: every page's gutters, frame lines and bar height. Stylelint knows these names
+   (packages/config/stylelint.js reads this file), so any component on the site may use them. */
+@layer base {
+  :root {
+    /* Where the frame's lines run, in from the window's sides: 16px, or wider once the content reaches its cap. */
+    --site-edge: max(var(--space-16), calc((100vw - var(--size-dialog-wide) * 2) / 2));
+    /* The gap from a frame line to the content. */
+    --site-gutter: clamp(var(--space-16), 3vw, calc(var(--space-32) + var(--space-8)));
+    /* The content's inset from the window's side: every row of every page lines up on it. */
+    --site-inline: calc(var(--site-edge) + var(--site-gutter));
+    /* The bar's height, which the frame's crosses sit on. */
+    --site-bar: calc(var(--size-toolbar) + var(--space-8));
+  }
+}

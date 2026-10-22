@@ -1,0 +1,62 @@
+/* SiteFrame: the app's own dark ink with a faint light at the top, quiet as the owner's references are (Cal.com,
+   Attio and Twenty on Mobbin, 23 October 2026), and Twenty's hairline frame: a line down each side of the content
+   and a cross where each meets the bar's hairline (wide screens only). Its lines and the pages' gutters come from the
+   site's shared properties (styles/site.css). */
+@layer components {
+  .root {
+    --cross: var(--space-12);
+    --cross-ink: linear-gradient(var(--text-tertiary), var(--text-tertiary));
+
+    position: relative;
+    isolation: isolate;
+    min-block-size: 100vh;
+    min-block-size: 100svh;
+    overflow-x: clip;
+    background-color: var(--surface-sunken);
+    background-image: radial-gradient(
+      60% 40svh at 50% 0%,
+      color-mix(in srgb, var(--text) 6%, transparent),
+      transparent
+    );
+    color: var(--text);
+  }
+
+  .root::before,
+  .root::after {
+    display: none;
+    position: absolute;
+    content: '';
+    pointer-events: none;
+  }
+
+  .root::before {
+    inset-block: 0;
+    inset-inline: var(--site-edge);
+    border-inline: var(--border-width-hairline) solid var(--border-subtle);
+  }
+
+  .root::after {
+    inset-block-start: calc(var(--site-bar) - var(--cross) / 2);
+    inset-inline: calc(var(--site-edge) - var(--cross) / 2);
+    block-size: var(--cross);
+    background-image: var(--cross-ink), var(--cross-ink), var(--cross-ink), var(--cross-ink);
+    background-repeat: no-repeat;
+    background-position:
+      left center,
+      calc(var(--cross) / 2) top,
+      right center,
+      right calc(var(--cross) / 2) top 0;
+    background-size:
+      var(--cross) var(--border-width-hairline),
+      var(--border-width-hairline) var(--cross),
+      var(--cross) var(--border-width-hairline),
+      var(--border-width-hairline) var(--cross);
+  }
+
+  @media (width >= 1024px) {
+    .root::before,
+    .root::after {
+      display: block;
+    }
+  }
+}
