@@ -1,5 +1,5 @@
-/* Showcase: the feature tabs, then the chosen area's Slides at the full width of the content (the owner,
-   23 October 2026: full width, proper height, nothing cut). The fold grows past one screen when it must. */
+/* Showcase: the chosen area's Slides, then the feature tabs under them as a caption row (the owner, 23 October
+   2026: the tabs below the screen). The fold grows past one screen when it must. */
 @layer components {
   .root {
     display: flex;
@@ -7,6 +7,6 @@
   }
 
   .fit {
-    padding-block-start: var(--space-16);
+    padding-block-end: var(--space-8);
   }
 }

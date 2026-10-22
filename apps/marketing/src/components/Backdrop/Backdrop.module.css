@@ -1,0 +1,90 @@
+/* Backdrop: a field of short accent dashes in each foot of the fold, behind the window. The still field (an SVG
+   pattern under two masks: one fades it out upward, the other toward the window; only the masks' alpha counts, so
+   the surface token stands in for opaque) is in the prerendered page; the live canvas replaces it once it draws.
+   Decorative: no pointer, hidden on a phone. */
+@layer components {
+  .root {
+    display: none;
+    position: absolute;
+    inset-block-end: 0;
+    z-index: 0;
+    inline-size: 36%;
+    block-size: 92%;
+    color: color-mix(in srgb, var(--accent) 85%, transparent);
+    pointer-events: none;
+  }
+
+  .root[data-side='start'] {
+    inset-inline-start: 0;
+  }
+
+  .root[data-side='end'] {
+    inset-inline-end: 0;
+  }
+
+  .still,
+  .live {
+    position: absolute;
+    inset: 0;
+    inline-size: 100%;
+    block-size: 100%;
+  }
+
+  .still {
+    mask-composite: intersect;
+    animation: uncover var(--duration-pulse) var(--ease-out) both;
+  }
+
+  .root[data-side='start'] .still {
+    mask-image:
+      linear-gradient(to top, var(--surface), transparent),
+      linear-gradient(to right, var(--surface) var(--space-32), transparent);
+  }
+
+  .root[data-side='end'] .still {
+    mask-image:
+      linear-gradient(to top, var(--surface), transparent),
+      linear-gradient(to left, var(--surface) var(--space-32), transparent);
+  }
+
+  .field {
+    fill: currentcolor;
+  }
+
+  .live {
+    display: none;
+    color: inherit;
+  }
+
+  .root[data-live] .still {
+    display: none;
+  }
+
+  .root[data-live] .live {
+    display: block;
+  }
+
+  @keyframes uncover {
+    from {
+      opacity: 0;
+      clip-path: inset(100% 0 0 0);
+    }
+
+    to {
+      opacity: 1;
+      clip-path: inset(0);
+    }
+  }
+
+  @media (width >= 1024px) {
+    .root {
+      display: block;
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .still {
+      animation: none;
+    }
+  }
+}

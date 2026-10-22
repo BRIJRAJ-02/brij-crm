@@ -1,13 +1,21 @@
-/* Slides: the app’s window at the full width of the content, its screens at 16:9 and stacked, the one on
-   show faded in over the others (the owner, 23 October 2026: "slides/images moving showing what all we can do").
-   The bar is a browser's: the lights, the address, then the screens' segments and a pause at the end. */
+/* Slides: the app’s window at the full width of the content, its screens whole and stacked, the one on show faded
+   in over the others (the owner, 23 October 2026: "slides/images moving showing what all we can do"), the frame
+   fading out at its foot. The bar is a browser's: the lights and the address; the segments and the pause float at
+   the foot in a glass pill. */
 @layer components {
   .window {
-    display: grid;
-    grid-template-rows: auto auto;
+    position: relative;
     inline-size: 100%;
     margin: 0;
+  }
+
+  /* The frame fades out over its last fifth (only the mask's alpha counts, so the surface token stands in for
+     opaque), so the screen is whole and the window dissolves into the page instead of ending. */
+  .frame {
+    display: grid;
+    grid-template-rows: auto auto;
     overflow: hidden;
+    mask-image: linear-gradient(to bottom, var(--surface) 78%, transparent);
     border: var(--border-width-hairline) solid var(--border);
     border-radius: var(--radius-xl);
     background: var(--surface);
@@ -21,7 +29,7 @@
     gap: var(--space-12);
     min-block-size: var(--size-table-header);
     padding-block: var(--space-4);
-    padding-inline: var(--space-12) var(--space-8);
+    padding-inline: var(--space-12);
     border-block-end: var(--border-width-hairline) solid var(--border-subtle);
     background: var(--surface-sidebar);
   }
@@ -64,29 +72,39 @@
     white-space: nowrap;
   }
 
+  /* The glass pill: the segments and the pause, floating at the window's foot over the fade (the owner,
+     23 October 2026), the page showing through a blur. */
   .controls {
     display: flex;
+    position: absolute;
+    inset-block-end: var(--space-24);
+    inset-inline: 0;
+    z-index: var(--z-raised);
     align-items: center;
-    justify-content: end;
     gap: var(--space-4);
-    min-inline-size: 0;
+    inline-size: fit-content;
+    max-inline-size: calc(100% - 2 * var(--space-16));
+    margin-inline: auto;
+    padding: var(--space-4);
+    border-radius: var(--radius-full);
+    background: color-mix(in srgb, var(--surface-raised) 45%, transparent);
+    box-shadow: var(--shadow-lg);
+    backdrop-filter: blur(var(--space-12));
   }
 
-  /* The window is 16:9 (the owner, 23 October 2026: 16:10 ran too long); the 16:10 screens keep their top and lose
-     a strip at the foot, where the app's screens are emptiest. */
+  /* The whole 16:10 screen; the frame's fade takes care of the foot. */
   .viewport {
     display: grid;
-    aspect-ratio: 16 / 9;
+    aspect-ratio: 16 / 10;
     overflow: hidden;
     background: var(--surface-sunken);
   }
 
   .shot {
+    display: block;
     grid-area: 1 / 1;
     inline-size: 100%;
     block-size: 100%;
-    object-fit: cover;
-    object-position: top;
     opacity: 0;
     transition: opacity var(--duration-modal) var(--ease-out);
   }
@@ -95,14 +113,31 @@
     opacity: 1;
   }
 
-  /* A phone: the address goes, and the segments take the bar. */
+  .image {
+    display: block;
+    inline-size: 100%;
+    block-size: 100%;
+    object-fit: cover;
+    object-position: top;
+  }
+
+  /* A phone: the address goes; the window is 3:4 and shows the top of the app's own phone screen, readable at the
+     phone's width; the pill sits closer to the foot. */
   @media (width < 1024px) {
     .bar {
-      grid-template-columns: auto 1fr;
+      grid-template-columns: 1fr;
     }
 
     .address {
       display: none;
+    }
+
+    .viewport {
+      aspect-ratio: 3 / 4;
+    }
+
+    .controls {
+      inset-block-end: var(--space-16);
     }
   }
 
