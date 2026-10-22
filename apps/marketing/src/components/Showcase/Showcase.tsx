@@ -11,7 +11,7 @@ import styles from './Showcase.module.css';
  */
 export function Showcase() {
   const [selected, setSelected] = useState<string>(SHOWCASE[0]?.id ?? 'crm');
-  // After an area's last screen, the next area (the owner, 23 October 2026: "2s 2s 2s then tab change").
+  // After an area’s last screen, the next area (the owner, 23 October 2026: four seconds a screen, then the tab).
   const moveOn = () => {
     const index = SHOWCASE.findIndex((area) => area.id === selected);
     setSelected(SHOWCASE[(index + 1) % SHOWCASE.length]?.id ?? selected);

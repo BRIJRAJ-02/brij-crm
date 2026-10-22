@@ -16,7 +16,7 @@ The screens, their addresses and captions live in `src/showcase.ts`. `isFirst` l
 
 ## States
 
-- **Playing:** the next screen every 2 seconds, and after the last `onEnd` (the showcase moves to the next area), each fading in over `duration-modal` with `ease-out`. The play stops while the pointer or focus is on the window, while the page is hidden, and for anyone who asked for reduced motion (then the fade goes too; the segments still switch).
+- **Playing:** the next screen every 4 seconds, and after the last `onEnd` (the showcase moves to the next area), each fading in over `duration-modal` with `ease-out`. The play stops while the pointer or focus is on the window, while the page is hidden, and for anyone who asked for reduced motion (then the fade goes too; the segments still switch).
 - **Paused:** the Pause button (its name says what it will do: "Pause the screens", "Play the screens"). WCAG 2.2.2: anything that moves for more than five seconds can be paused.
 - **Picked:** choosing a segment shows that screen; the play carries on from it once the pointer leaves.
 - Screens not on show are `aria-hidden`, so a screen reader hears only the one shown. On a phone the window is 3:4 and shows the top of the app's own phone screen (`<area>-<n>-phone.webp`), readable at the phone's width.

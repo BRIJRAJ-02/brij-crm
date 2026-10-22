@@ -13,7 +13,7 @@ export interface SlidesProps {
 }
 
 /** How long each screen stays before the next. */
-const DWELL_MS = 2000;
+const DWELL_MS = 4000;
 
 const REDUCED_MOTION = '(prefers-reduced-motion: reduce)';
 
