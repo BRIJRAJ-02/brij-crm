@@ -17,10 +17,11 @@ export const strings = {
   /** Spec 0033's passkey sign in, under the email field where the browser has passkeys (AC-888). */
   passkey: 'Sign in with a passkey',
   verifyTitle: 'Check your email',
-  failedTitle: 'Can’t reach Timefix',
-  failedText: 'Check your connection, then try again.',
+  /** A page before the app whose check failed, with no sentence from the server. */
+  unreachable: 'Can’t reach Timefix. Check your connection, then try again.',
+  retry: 'Try again',
   /** `/` while it works out where to send you. */
-  openingTitle: 'Opening your workspace',
+  openingTitle: 'Opening Timefix',
   duration,
   /** A code send refused for sending too often, with the server's wait. */
   sendLimited: (seconds: number) => `Too many codes sent to this email. Try again in ${duration(seconds)}.`,
