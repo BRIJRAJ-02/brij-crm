@@ -33,6 +33,23 @@ export const Default: Story = {
   },
 };
 
+/** In one row across the top of a page (import); a slot under 480px turns it back into the column. */
+export const Horizontal: Story = {
+  args: { steps: STEPS.map(({ id, label }) => ({ id, label })), orientation: 'horizontal' },
+  render: (args) => (
+    <Stage>
+      <Steps {...args} />
+    </Stage>
+  ),
+  play: async ({ canvas }) => {
+    await expect(canvas.getByRole('list', { name: 'Import progress' })).toHaveAttribute(
+      'data-orientation',
+      'horizontal',
+    );
+    await expect(canvas.getByRole('listitem', { current: 'step' })).toHaveTextContent('Map columns');
+  },
+};
+
 /** A step that failed. */
 export const Failed: Story = {
   args: { current: 'review', failed: 'review' },

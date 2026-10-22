@@ -32,6 +32,7 @@ import {
   ProgressBar,
   Radio,
   RadioGroup,
+  SectionBar,
   SegmentedControl,
   Select,
   Steps,
@@ -470,7 +471,7 @@ export function ImportScreen({ data, slug, object, attributes: given, members, o
 
   const body = (
     <PageColumn>
-      <Steps label={strings.stepsLabel} steps={steps} current={step} />
+      <Steps label={strings.stepsLabel} steps={steps} current={step} orientation="horizontal" />
       {step === 'upload' && (
         <Card description={strings.uploadText}>
           <FileDrop
@@ -588,6 +589,7 @@ export function ImportScreen({ data, slug, object, attributes: given, members, o
       )}
       {step === 'preview' && loaded !== undefined && result !== undefined && (
         <Card
+          title={strings.steps.preview}
           description={strings.totals(readyCount, errors)}
           actions={<InfoTip label={strings.rowColumn}>{strings.rowInfo}</InfoTip>}
           footer={
@@ -618,32 +620,41 @@ export function ImportScreen({ data, slug, object, attributes: given, members, o
             </Callout>
           )}
           {readyCount === 0 && <Callout tone="warning">{strings.nothingReady}</Callout>}
-          {errors > 0 && (
-            <Button
-              variant="ghost"
-              icon="download"
-              onPress={() => {
-                saveCsv(
-                  strings.errorsFile(loaded.name),
-                  errorRowsCsv(loaded.table.headers, result.errors, strings.errorHeader),
-                );
-              }}
-            >
-              {strings.downloadErrors}
-            </Button>
-          )}
-          <SegmentedControl
-            label={strings.filterLabel}
-            segments={[
-              { value: 'all', label: strings.filters.all },
-              { value: 'ready', label: strings.filters.ready(readyCount) },
-              { value: 'errors', label: strings.filters.errors(errors) },
-            ]}
-            value={filter}
-            onChange={(value) => {
-              setFilter(value as Filter);
-              setPage(1);
-            }}
+          {/* The filter leads, the download of the rows to fix sits at the end of the same row. */}
+          <SectionBar
+            start={
+              <SegmentedControl
+                label={strings.filterLabel}
+                segments={[
+                  { value: 'all', label: strings.filters.all },
+                  { value: 'ready', label: strings.filters.ready(readyCount) },
+                  { value: 'errors', label: strings.filters.errors(errors) },
+                ]}
+                value={filter}
+                onChange={(value) => {
+                  setFilter(value as Filter);
+                  setPage(1);
+                }}
+              />
+            }
+            {...(errors > 0
+              ? {
+                  end: (
+                    <Button
+                      variant="ghost"
+                      icon="download"
+                      onPress={() => {
+                        saveCsv(
+                          strings.errorsFile(loaded.name),
+                          errorRowsCsv(loaded.table.headers, result.errors, strings.errorHeader),
+                        );
+                      }}
+                    >
+                      {strings.downloadErrors}
+                    </Button>
+                  ),
+                }
+              : {})}
           />
           <PreviewTable
             loaded={loaded}
@@ -1060,7 +1071,7 @@ function PreviewTable({ loaded, targets, fields, context, errors, filter, page, 
   const matchedColumns = targets.flatMap((target, column) => (target === undefined ? [] : [column]));
   const columns: readonly TableColumn[] = [
     { id: 'row', label: strings.rowColumn, isRowHeader: true, align: 'end' },
-    ...(errors.length > 0 ? [{ id: 'problems', label: strings.reasonColumn }] : []),
+    ...(errors.length > 0 ? [{ id: 'problems', label: strings.statusColumn }] : []),
     ...matchedColumns.map((column) => ({ id: `cell-${String(column)}`, label: headers[column] ?? '' })),
   ];
   return (
@@ -1072,7 +1083,8 @@ function PreviewTable({ loaded, targets, fields, context, errors, filter, page, 
       emptyState={<EmptyState title={strings.noRows}>{strings.noRowsText}</EmptyState>}
       renderCell={(row, columnId) => {
         if (columnId === 'row') return n(row.rowNumber);
-        if (columnId === 'problems') return row.error === undefined ? '' : problemText(row.error);
+        // A ready row says so, so the column never reads as missing values beside the errors.
+        if (columnId === 'problems') return row.error === undefined ? strings.readyRow : problemText(row.error);
         const column = Number(columnId.slice('cell-'.length));
         const target = targets[column];
         const text = cellText(row.cells[column]);
